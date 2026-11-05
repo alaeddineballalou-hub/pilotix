@@ -1690,5 +1690,29 @@
     "remove": "Remove the app",
     "added": "Authenticator app on",
     "removed": "Authenticator app removed"
+  },
+  "offsite": {
+    "title": "Off-site copy",
+    "help": "Every night the backup is encrypted here with your passphrase, then sent to a private Backblaze B2 bucket (10 GB free). If this server is lost, your data is not.",
+    "isOff": "Not set up yet: the backups are only on this server",
+    "isOn": "Set up: the next backup will go to Backblaze",
+    "isSent": "Set up: the latest backup is at Backblaze",
+    "last": "Last sent {{when}}: {{file}} ({{size}})",
+    "s1": "On backblaze.com, create an account, then a private bucket (« Private »).",
+    "s2": "In « Application Keys », create a key for this bucket only, allowed to write: copy keyID and applicationKey (shown once).",
+    "s3": "Choose a passphrase (16 characters or more) and keep it away from this server (paper, password manager).",
+    "bucket": "Bucket name",
+    "kept": "Kept: {{v}} (leave empty to keep it)",
+    "keyKept": "Kept (leave empty to keep it)",
+    "keyHint": "Shown only once by Backblaze",
+    "pass": "Passphrase",
+    "passKept": "Kept (leave empty to keep it)",
+    "passHint": "16 characters or more: without it the copies cannot be read (not even by Backblaze)",
+    "read": "To read a copy back: openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in file.sql.gz.enc -out file.sql.gz (same passphrase). The file pilotix-keys.enc holds the key of the saved secrets (DATA_KEY), to put on a new server.",
+    "ownerOnly": "Only Pilotix's owner sets the off-site copy.",
+    "test": "Test",
+    "tested": "Backblaze answers: a small pilotix-test.txt file is in the bucket",
+    "send": "Send now",
+    "sentNow": "Backup sent to Backblaze"
   }
 }

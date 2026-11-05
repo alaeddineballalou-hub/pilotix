@@ -84,6 +84,8 @@ jobs:
         run: node scripts/secrets-test.mjs
       - name: End-to-end test of the control room's authenticator app
         run: node scripts/totp-test.mjs
+      - name: End-to-end test of the off-site copy's settings (Backblaze B2, encrypted, sealed)
+        run: node scripts/offsite-test.mjs
       - name: End-to-end test of Cloudflare's robot check after a few wrong passwords (a second server on port 3040)
         run: node scripts/robot-test.mjs
       - name: End-to-end test of the public Pro marketers page

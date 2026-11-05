@@ -217,7 +217,7 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
   else if (cur === 'agencies') page = <Agencies staff={staff} />;
   else if (cur === 'marketers') page = <Agencies staff={staff} kind="marketer" />;
   else if (cur === 'messages') page = <Messages id={parts[1] && /^\d+$/.test(parts[1]) ? Number(parts[1]) : null} />;
-  else if (cur === 'health') page = <HealthPage />;
+  else if (cur === 'health') page = <HealthPage owner={staff.role === 'owner'} />;
   else if (cur === 'plans') page = <Plans staff={staff} />;
   else if (cur === 'demo') page = <Demo staff={staff} />;
   else if (cur === 'staff') page = <StaffPage staff={staff} />;

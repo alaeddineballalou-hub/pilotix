@@ -10,6 +10,7 @@ import { doctorState } from './doctor';
 import { mailConfigured, sendMail } from './mail';
 import { pilotCoachMail, qualityAlertMail, reminderMail } from './mails';
 import { syncTurnstile } from './turnstile';
+import { sendOffsite } from './offsite';
 
 /**
  * Background work, outside user requests, for every shop that is active and paid (needs REDIS_URL; without it the app
@@ -148,6 +149,12 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
           if (st.lastError) throw new Error(st.lastError);
           return { domains: st.domains, widgets: st.widgets.length };
         }
+        if (job.name === 'offsite-backup') {
+          // the night's backup, encrypted, to Backblaze once it is there (Sauvegardes › Copie hors du serveur)
+          const st = await sendOffsite(this.core);
+          if (st.configured && st.lastError) throw new Error(st.lastError);
+          return { sent: st.sent, file: st.lastFile };
+        }
         if (job.name === 'pilot-ai-night') {
           // started on its own: the AI batch can take a while and must not hold the other jobs (one worker)
           void this.pilotNight();
@@ -211,6 +218,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('sheets-sync', {}, { repeat: { every: SHEETS_EVERY }, jobId: 'sheets-sync', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('spy-scan', {}, { repeat: { pattern: '7 * * * *' }, jobId: 'spy-scan', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('turnstile-sync', {}, { repeat: { every: 30 * 60_000 }, jobId: 'turnstile-sync', removeOnComplete: 20, removeOnFail: 50 });
+    await this.queue.add('offsite-backup', {}, { repeat: { every: 30 * 60_000 }, jobId: 'offsite-backup', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('fraud-reputation', {}, { repeat: { every: 30 * 60_000 }, jobId: 'fraud-reputation', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('partitions', {}, { repeat: { pattern: '0 3 1 * *' }, jobId: 'partitions', removeOnComplete: 10 });
     // 03:40 UTC = 04:40 in Algeria: nobody is visiting the demo

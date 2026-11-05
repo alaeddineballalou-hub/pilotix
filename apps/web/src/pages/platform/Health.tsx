@@ -6,6 +6,7 @@ import { dateTime, n, when } from '../../lib/format';
 import { serverHealth } from '../../lib/platform';
 import { Card, ErrorBox, Kpi, Kpis, Loading } from '../../ui/kit';
 import { Empty } from './bits';
+import { OffsiteBox } from './OffsiteBox';
 
 /** 1 234 567 → « 1,2 Mo » */
 export function bytes(v: number): string {
@@ -20,7 +21,7 @@ export function bytes(v: number): string {
   return `${x.toLocaleString('fr-FR', { maximumFractionDigits: x < 10 ? 1 : 0 })} ${u[i]}`;
 }
 
-export function HealthPage() {
+export function HealthPage({ owner = false }: { owner?: boolean }) {
   const { t } = useTranslation();
   const q = useQuery({ queryKey: ['p-health'], queryFn: serverHealth, refetchInterval: 60_000 });
   if (q.isLoading) return <Loading />;
@@ -47,6 +48,7 @@ export function HealthPage() {
         />
       </Kpis>
       {lastAge !== null && lastAge > 30 && <p className="pp-warn">{t('platform.h.oldBackup')}</p>}
+      <OffsiteBox owner={owner} />
       <div className="pp-grid">
         <Card title={t('platform.h.byStore')} help={t('platform.h.byStoreHelp')}>
           <ul className="pp-mini">

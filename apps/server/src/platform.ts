@@ -17,6 +17,7 @@ import { CoreService } from './core.service';
 import { dismissDoctor, serverDoctor } from './doctor';
 import { saveTurnstileConfig, syncTurnstile, turnstileStatus } from './turnstile';
 import { robotGate } from './robot';
+import { offsiteStatus, saveOffsite, sendOffsite, testOffsite } from './offsite';
 import { otpStatus, saveOtp, testOtp } from './otp';
 import { checkLogin, clearLogin, failedLogin } from './limits';
 import { couriers, runCheck, runCheckAll, testable, watchNow, watchRunning } from './courierWatch';
@@ -300,6 +301,30 @@ export class PlatformController {
         const phone = core.accountPhoneOrBad(body?.phone);
         return await testOtp(this.core, phone);
       }
+    } catch (e) {
+      if (e instanceof core.AppError) throw e;
+      throw new core.AppError('bad_request', (e as Error).message);
+    }
+    throw new core.AppError('not_found', 'Action inconnue');
+  }
+
+  /**
+   * Sauvegardes › Copie hors du serveur (offsite.ts): status (owner and managers), save (owner), test and send now
+   * (owner and managers).
+   */
+  @Post('backup/:action')
+  async backupOffsite(@Param('action') action: string, @Body() body: any, @Req() req: { staff: StaffSession }) {
+    if (req.staff.role === 'support') throw new core.AppError('forbidden', 'Réservé au propriétaire et aux managers');
+    try {
+      if (action === 'status') return await offsiteStatus(this.core);
+      if (action === 'save') {
+        if (req.staff.role !== 'owner') throw new core.AppError('forbidden', 'Réservé au propriétaire');
+        const r = await saveOffsite(this.core, body ?? {});
+        await core.recordAudit(this.core.t, req.staff, 'backup.offsite', null, { bucket: r.bucket, on: r.configured }).catch(() => null);
+        return r;
+      }
+      if (action === 'test') return await testOffsite(this.core);
+      if (action === 'send') return await sendOffsite(this.core, true);
     } catch (e) {
       if (e instanceof core.AppError) throw e;
       throw new core.AppError('bad_request', (e as Error).message);

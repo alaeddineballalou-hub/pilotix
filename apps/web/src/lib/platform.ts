@@ -131,6 +131,26 @@ export const otpSave = (body: { on: boolean; phoneId: string; token?: string; te
 export const otpTest = (phone: string) => req<OtpStatus>('/otp/test', { phone });
 export const turnstileSync = () => req<NonNullable<ServerDoctorReport['turnstile']>>('/turnstile/sync', {});
 
+/** Sauvegardes › Copie hors du serveur (apps/server/src/offsite.ts): Backblaze B2, encrypted with the owner's passphrase. */
+export interface OffsiteStatus {
+  configured: boolean;
+  bucket: string;
+  keyId: string;
+  keySet: boolean;
+  passphraseSet: boolean;
+  lastAt: string | null;
+  lastFile: string | null;
+  lastBytes: number | null;
+  lastError: string | null;
+  lastTryAt: string | null;
+  newest: { name: string; at: string; bytes: number } | null;
+  sent: boolean;
+}
+export const offsiteStatus = () => req<OffsiteStatus>('/backup/status', {});
+export const offsiteSave = (body: { bucket: string; keyId?: string; key?: string; passphrase?: string; clear?: boolean }) => req<OffsiteStatus>('/backup/save', body);
+export const offsiteTest = () => req<OffsiteStatus>('/backup/test', {});
+export const offsiteSend = () => req<OffsiteStatus>('/backup/send', {});
+
 export function staffLogout() {
   token = null;
   store.set('ptoken', null);

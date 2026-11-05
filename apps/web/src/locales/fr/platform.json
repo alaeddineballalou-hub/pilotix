@@ -1690,5 +1690,29 @@
     "remove": "Retirer l’application",
     "added": "Application d’authentification active",
     "removed": "Application d’authentification retirée"
+  },
+  "offsite": {
+    "title": "Copie hors du serveur",
+    "help": "Chaque nuit, la sauvegarde est chiffrée ici avec votre phrase secrète puis envoyée dans un bucket privé Backblaze B2 (10 Go gratuits). Si ce serveur est perdu, vos données ne le sont pas.",
+    "isOff": "Pas encore en place : les sauvegardes ne sont que sur ce serveur",
+    "isOn": "En place : la prochaine sauvegarde partira chez Backblaze",
+    "isSent": "En place : la dernière sauvegarde est chez Backblaze",
+    "last": "Dernier envoi {{when}} : {{file}} ({{size}})",
+    "s1": "Sur backblaze.com, créez un compte puis un bucket privé (« Private »).",
+    "s2": "Dans « Application Keys », créez une clé pour ce bucket seulement, avec le droit d’écrire : copiez keyID et applicationKey (montrée une seule fois).",
+    "s3": "Choisissez une phrase secrète (16 caractères au moins) et gardez-la loin de ce serveur (papier, gestionnaire de mots de passe).",
+    "bucket": "Nom du bucket",
+    "kept": "Gardée : {{v}} (laissez vide pour la garder)",
+    "keyKept": "Gardée (laissez vide pour la garder)",
+    "keyHint": "Montrée une seule fois par Backblaze",
+    "pass": "Phrase secrète",
+    "passKept": "Gardée (laissez vide pour la garder)",
+    "passHint": "16 caractères au moins : sans elle, les copies sont illisibles (même pour Backblaze)",
+    "read": "Pour relire une copie : openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in fichier.sql.gz.enc -out fichier.sql.gz (la même phrase secrète). Le fichier pilotix-keys.enc contient la clé des secrets enregistrés (DATA_KEY), à remettre sur un nouveau serveur.",
+    "ownerOnly": "Seul le propriétaire de Pilotix règle la copie hors du serveur.",
+    "test": "Tester",
+    "tested": "Backblaze répond : un petit fichier pilotix-test.txt est dans le bucket",
+    "send": "Envoyer maintenant",
+    "sentNow": "Sauvegarde envoyée chez Backblaze"
   }
 }

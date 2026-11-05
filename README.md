@@ -195,6 +195,12 @@ curl -fsSL https://raw.githubusercontent.com/alaeddineballalou-hub/pilotix/main/
 It installs Docker, starts PostgreSQL + Redis + the server + the website behind Caddy (automatic HTTPS), asks for the
 first administrator and sets a daily database backup. Run it again to update. By hand, the steps are:
 
+**Off-site copy of the backups**: control room › Sauvegardes › « Copie hors du serveur ». The owner types a private
+Backblaze B2 bucket, a key for that bucket and a passphrase (16+ characters, kept away from the server); each nightly
+backup is then encrypted on the server (`openssl enc -aes-256-cbc -pbkdf2 -iter 200000`, the same command with `-d`
+reads it back) and sent there with `pilotix-keys.enc` (the `DATA_KEY` below, under the same passphrase). Code:
+`apps/server/src/offsite.ts` (job `offsite-backup`, every 30 minutes until the night's backup is sent).
+
 **Saved secrets** (couriers' API keys, Meta / TikTok / WhatsApp tokens, AI keys, the control room's own keys) are kept
 sealed in the database with `DATA_KEY` (AES-256-GCM; `deploy/.env`, made once by the installer, never in the database):
 a copy of the database alone shows none of them. The server seals each one as it is saved and opens it as it is read

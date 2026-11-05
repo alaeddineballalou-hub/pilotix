@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The nightly backup (03:15, set by install.sh): the database dumped and compressed on this server (14 days kept in
-# /opt/pilotix-backups), and — once deploy/.env has the cloud storage's 4 settings — an encrypted copy sent to
-# Backblaze B2, so the data survives even if this server is lost:
+# /opt/pilotix-backups). The off-site copy is set in the control room (Sauvegardes › Copie hors du serveur: the server
+# sends it, apps/server/src/offsite.ts); or here, once deploy/.env has the cloud storage's 4 settings — an encrypted
+# copy sent to Backblaze B2, so the data survives even if this server is lost:
 #   BACKUP_B2_BUCKET=pilotix-backups        the bucket's name (a private bucket)
 #   BACKUP_B2_KEY_ID=...                    the application key's keyID (a key for this bucket only)
 #   BACKUP_B2_KEY=...                       the application key itself

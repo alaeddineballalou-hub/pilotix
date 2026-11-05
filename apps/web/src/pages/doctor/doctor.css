@@ -139,6 +139,9 @@
 .dr-cf-lock small { font-size: 12.5px; color: var(--ink); }
 .dr-cf-lock-i { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: var(--surface); color: var(--ok); flex: 0 0 auto; }
 .dr-cf-lock-i .bji { width: 19px; height: 19px; }
+/* not set up yet: said in the warning colour, not the « all good » green */
+.dr-cf-lock.warn { background: var(--warn-soft); }
+.dr-cf-lock.warn b, .dr-cf-lock.warn .dr-cf-lock-i { color: var(--warn); }
 
 /* Co-Pilot's living icon (CopilotIcon.tsx): 3 s checking (orange, eyes left/right, three dots), 4 s the mood */
 .cp-ic { --cp: #F28C1B; display: inline-grid; place-items: center; flex: none; border-radius: 30%; background: var(--cp); transition: background-color .8s ease; }
