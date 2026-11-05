@@ -6,6 +6,8 @@ import { AppError, Ctx } from './rpc';
 import { publicFetch } from './publicfetch';
 import { AiRequest, AiResponse, DellalChannel, dellalSecret, dellalSettings } from './modules/dellal';
 import { NOTIFY_SMS_SECRET, notifySettings } from './modules/notify';
+import type { MetaForm, MetaLead } from './modules/leads';
+import { linkedPage } from './modules/social';
 
 import { pilotKey, pilotLiveKey, voiceKey } from './platform/pilotai';
 import { recordAiUsage } from './platform/aiusage';
@@ -224,6 +226,78 @@ async function cmPost(ctx: Ctx, a: CmArgs) {
   return { caption: (r?.caption ?? r?.message ?? null) as string | null, permalink: (r?.permalink ?? r?.permalink_url ?? null) as string | null };
 }
 
+// ---------------------------------------------------------------- Marketing › Formulaires: the ads' lead forms (Meta Lead Ads)
+const LEAD_FIELDS = 'id,created_time,field_data,form_id,ad_id,ad_name,adset_id,campaign_id,platform,is_organic';
+/** asked when Facebook refuses the fields of the ad (a permission missing): the answers still come */
+const LEAD_FIELDS_MIN = 'id,created_time,field_data,form_id,platform';
+const FORM_FIELDS = 'id,name,status,questions';
+
+async function leadPageId(ctx: Ctx, given?: string | null): Promise<string> {
+  const id = given || (await linkedPage(ctx.db))?.pageId || (await dellalSettings(ctx.db)).messengerPageId;
+  if (!id) throw new AppError('bad_request', 'Aucune page Facebook liée : reliez-la dans Pilot AI › Comptes.');
+  return id;
+}
+const str = (v: unknown) => (v === null || v === undefined || v === '' ? null : String(v));
+function toMetaLead(r: any): MetaLead {
+  return {
+    id: String(r?.id ?? ''),
+    createdTime: r?.created_time ?? null,
+    formId: str(r?.form_id),
+    adId: str(r?.ad_id),
+    adName: str(r?.ad_name),
+    adsetId: str(r?.adset_id),
+    campaignId: str(r?.campaign_id),
+    platform: str(r?.platform),
+    isOrganic: !!r?.is_organic,
+    fieldData: (Array.isArray(r?.field_data) ? r.field_data : []).map((f: any) => ({ name: String(f?.name ?? ''), values: Array.isArray(f?.values) ? f.values.map((v: unknown) => String(v ?? '')) : [] })),
+  };
+}
+function toMetaForm(r: any): MetaForm {
+  return {
+    id: String(r?.id ?? ''),
+    name: String(r?.name ?? ''),
+    status: String(r?.status ?? 'ACTIVE'),
+    questions: (Array.isArray(r?.questions) ? r.questions : []).map((q: any) => ({ key: String(q?.key ?? ''), label: String(q?.label ?? ''), type: String(q?.type ?? 'CUSTOM') })),
+  };
+}
+/** A Graph list, page after page (`max` pages at most). */
+async function graphPages(url: string, max: number): Promise<any[]> {
+  const out: any[] = [];
+  let next: string | null = url;
+  for (let i = 0; i < max && next; i++) {
+    const r: any = await postJson(next, null, {}, 'Facebook', 'GET');
+    out.push(...(Array.isArray(r?.data) ? r.data : []));
+    next = r?.paging?.next ? String(r.paging.next) : null;
+  }
+  return out;
+}
+
+/** One lead (the webhook gives only its number): its answers and the ad it came from. */
+async function readLead(ctx: Ctx, a: { leadgenId: string }): Promise<MetaLead> {
+  const token = await pageToken(ctx);
+  const get = (fields: string) => postJson(`${GRAPH}/${enc(String(a.leadgenId))}?fields=${fields}&access_token=${enc(token)}`, null, {}, 'Facebook', 'GET');
+  const r = await get(LEAD_FIELDS).catch(() => get(LEAD_FIELDS_MIN));
+  return toMetaLead(r);
+}
+/** The Page's lead forms, with their questions. */
+async function leadForms(ctx: Ctx, a: { pageId?: string | null }): Promise<MetaForm[]> {
+  const token = await pageToken(ctx);
+  const pageId = await leadPageId(ctx, a?.pageId);
+  return (await graphPages(`${GRAPH}/${enc(pageId)}/leadgen_forms?fields=${FORM_FIELDS}&limit=100&access_token=${enc(token)}`, 5)).map(toMetaForm);
+}
+async function leadForm(ctx: Ctx, a: { formId: string }): Promise<MetaForm> {
+  const token = await pageToken(ctx);
+  return toMetaForm(await postJson(`${GRAPH}/${enc(String(a.formId))}?fields=${FORM_FIELDS}&access_token=${enc(token)}`, null, {}, 'Facebook', 'GET'));
+}
+/** A form's leads since a moment (unix seconds): the safety net. */
+async function formLeads(ctx: Ctx, a: { formId: string; since: number }): Promise<MetaLead[]> {
+  const token = await pageToken(ctx);
+  const filtering = enc(JSON.stringify([{ field: 'time_created', operator: 'GREATER_THAN', value: Math.floor(Number(a.since) || 0) }]));
+  const url = (fields: string) => `${GRAPH}/${enc(String(a.formId))}/leads?fields=${fields}&limit=100&filtering=${filtering}&access_token=${enc(token)}`;
+  const rows = await graphPages(url(LEAD_FIELDS), 3).catch(() => graphPages(url(LEAD_FIELDS_MIN), 3));
+  return rows.map(toMetaLead);
+}
+
 // ---------------------------------------------------------------- Delivery AI agent: WhatsApp templates, SMS
 async function waNumber(ctx: Ctx): Promise<{ token: string; phoneId: string }> {
   const token = await dellalSecret(ctx.db, 'waToken');
@@ -311,6 +385,7 @@ async function smsHooks(ctx: Ctx, a: { url: string }) {
  *  - 'send'     → { channel, externalId, accountId, text }: sends a message to the customer
  *  - 'ping'     → checks the AI key
  *  - 'cmReply' / 'cmPrivate' / 'cmHide' / 'cmPost' → the CM AI agent's actions on comments
+ *  - 'lead' / 'leadForms' / 'leadForm' / 'formLeads' → Marketing › Formulaires (the ads' lead forms)
  *  - 'waTemplate' / 'waTemplates' / 'waCreateTemplate' / 'sms' / 'smsHooks' → Delivery AI agent
  */
 export async function runDellal(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
@@ -325,6 +400,10 @@ export async function runDellal(action: string, args: unknown, ctx: Ctx): Promis
   if (action === 'cmPrivate') return cmPrivate(ctx, args as CmArgs);
   if (action === 'cmHide') return cmHide(ctx, args as CmArgs);
   if (action === 'cmPost') return cmPost(ctx, args as CmArgs);
+  if (action === 'lead') return readLead(ctx, args as { leadgenId: string });
+  if (action === 'leadForms') return leadForms(ctx, (args ?? {}) as { pageId?: string | null });
+  if (action === 'leadForm') return leadForm(ctx, args as { formId: string });
+  if (action === 'formLeads') return formLeads(ctx, args as { formId: string; since: number });
   if (action === 'transcribe') return transcribe(ctx, args as VoiceArgs);
   if (action === 'catchUp') return catchUpMeta(args as CatchUpArgs);
   if (action === 'igLogin') return igLogin(String((args as any)?.token ?? ''), (args as any)?.igId ? String((args as any).igId) : null);
@@ -733,6 +812,26 @@ export function parseMetaWebhook(body: any): Incoming[] {
       }
     }
   }
+  return out;
+}
+
+/** Meta's « leadgen » webhook: a form of the Page's ads was sent (only the lead's number: its answers are read after). */
+export function parseMetaLeads(body: any): { leadgenId: string; formId: string; pageId: string; adId: string | null; adsetId: string | null; createdTime: number | null }[] {
+  if (body?.object !== 'page') return [];
+  const out: ReturnType<typeof parseMetaLeads> = [];
+  for (const entry of Array.isArray(body?.entry) ? body.entry : [])
+    for (const ch of Array.isArray(entry?.changes) ? entry.changes : []) {
+      const v = ch?.value;
+      if (ch?.field !== 'leadgen' || !v?.leadgen_id || !/^\d{1,30}$/.test(String(v.leadgen_id))) continue;
+      out.push({
+        leadgenId: String(v.leadgen_id),
+        formId: v.form_id ? String(v.form_id).slice(0, 40) : '',
+        pageId: String(v.page_id ?? entry?.id ?? '').slice(0, 40),
+        adId: v.ad_id ? String(v.ad_id).slice(0, 40) : null,
+        adsetId: v.adgroup_id ? String(v.adgroup_id).slice(0, 40) : null,
+        createdTime: Number.isFinite(Number(v.created_time)) && Number(v.created_time) > 0 ? Math.floor(Number(v.created_time)) : null,
+      });
+    }
   return out;
 }
 

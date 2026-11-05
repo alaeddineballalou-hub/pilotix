@@ -26,6 +26,7 @@ import { sendOffsite } from './offsite';
  *  - Landing pages: abandoned orders (list, Commandes, reminder) and Meta Conversions API events, every minute
  *  - Google Sheets sales channels: new lines become orders, every 2 minutes
  *  - AI Spy: competitors' Facebook ads (paid source), checked every hour, scanned once a day after the chosen hour
+ *  - Formulaires: the leads of the ads' forms Meta did not send (and the forms list every 6 hours), every 10 minutes
  *  - Pilotix: reminders e-mailed to stores' owners before their trial / paid period ends, and when a store locks (daily)
  *  - le réseau Pilotix: what every store learned about fake orders, shared anonymously with the others, every 30 minutes
  *  - Pilotix: « Changements API », what changed at each delivery company's API (daily, 07:20; an e-mail when something did)
@@ -50,6 +51,7 @@ const FEATURE: Record<string, string | null> = {
   'assign-run': null,
   'coverage-refresh': null,
   'spy-scan': 'marketing/spy',
+  'leads-catchup': 'marketing/formulaires',
   'sheets-sync': 'management/canaux',
 };
 
@@ -96,6 +98,11 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     if (name === 'assign-run') return call('assign.run');
     if (name === 'coverage-refresh') return call('coverage.refresh');
     if (name === 'spy-scan') return call('spy.scan');
+    if (name === 'leads-catchup') {
+      const r: any = await call('leads.catchUp');
+      if (r?.errors?.length) new Logger('Formulaires').warn(`${tag} ${r.errors.join(' | ')}`);
+      return r;
+    }
     if (name === 'sheets-sync') {
       const r: any[] = (await call('channels.sheet.syncAll')) as any[];
       const bad = r.filter((c) => c.error || c.errorCount).map((c) => `${c.name}: ${c.error ?? `${c.errorCount} ligne(s) refusée(s)`}`);
@@ -217,6 +224,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     }
     await this.queue.add('sheets-sync', {}, { repeat: { every: SHEETS_EVERY }, jobId: 'sheets-sync', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('spy-scan', {}, { repeat: { pattern: '7 * * * *' }, jobId: 'spy-scan', removeOnComplete: 20, removeOnFail: 50 });
+    // Marketing › Formulaires: the safety net of the ads' lead forms (a webhook Meta did not send)
+    await this.queue.add('leads-catchup', {}, { repeat: { every: 10 * 60_000 }, jobId: 'leads-catchup', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('turnstile-sync', {}, { repeat: { every: 30 * 60_000 }, jobId: 'turnstile-sync', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('offsite-backup', {}, { repeat: { every: 30 * 60_000 }, jobId: 'offsite-backup', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('fraud-reputation', {}, { repeat: { every: 30 * 60_000 }, jobId: 'fraud-reputation', removeOnComplete: 20, removeOnFail: 50 });

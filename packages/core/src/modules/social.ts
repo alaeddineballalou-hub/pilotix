@@ -65,9 +65,15 @@ export const SOCIAL = {
     'instagram_manage_comments',
     'business_management',
     'ads_read',
+    // Marketing › Formulaires: the leads of the ads' forms (leadgen_forms, the leads, the Page's ads)
+    'leads_retrieval',
+    'pages_manage_ads',
+    'ads_management',
   ],
   /** what each Page sends to Pilotix's webhook */
   pageFields: 'messages,messaging_postbacks,messaging_referrals,feed',
+  /** and its ads' lead forms, when the account gave Pilotix their permission (Facebook refuses the whole list without it) */
+  leadFields: 'leadgen',
 } as const;
 
 /** The shop settings a use writes (the agents read them there). */

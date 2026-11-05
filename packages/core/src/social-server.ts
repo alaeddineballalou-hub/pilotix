@@ -76,6 +76,20 @@ async function tiktok(path: string, o: { token?: string; query?: Record<string, 
   return data?.data ?? {};
 }
 
+/**
+ * Subscribes a Page to Pilotix's webhook: its messages and comments, and its ads' lead forms when the account gave their
+ * permission (without it Facebook refuses the whole list: asked again without the forms, so the messages still come).
+ */
+async function subscribePage(pageId: string, token: string): Promise<{ leads: boolean }> {
+  try {
+    await graph(`${pageId}/subscribed_apps`, { subscribed_fields: `${SOCIAL.pageFields},${SOCIAL.leadFields}`, access_token: token }, 'POST');
+    return { leads: true };
+  } catch {
+    await graph(`${pageId}/subscribed_apps`, { subscribed_fields: SOCIAL.pageFields, access_token: token }, 'POST');
+    return { leads: false };
+  }
+}
+
 /** A Facebook login: the account, its Pages (each subscribed to Pilotix's webhook) and its ad accounts. */
 async function metaAccount(t: Tenancy, code: string, publicUrl: string): Promise<FoundAccount> {
   const apps = await socialApps(t);
@@ -107,7 +121,7 @@ async function metaAccount(t: Tenancy, code: string, publicUrl: string): Promise
     if (!p?.id || !p?.access_token) continue;
     // its messages and comments come to Pilotix's webhook
     let hook = true;
-    await graph(`${p.id}/subscribed_apps`, { subscribed_fields: SOCIAL.pageFields, access_token: String(p.access_token) }, 'POST').catch(() => (hook = false));
+    await subscribePage(String(p.id), String(p.access_token)).catch(() => (hook = false));
     const ig = p.instagram_business_account?.id ? { id: String(p.instagram_business_account.id), username: String(p.instagram_business_account.username ?? '') } : undefined;
     assets.push({ kind: 'page', extId: String(p.id), name: String(p.name ?? p.id), extra: { picture: p.picture?.data?.url ?? null, ...(ig ? { ig } : {}), hook }, token: String(p.access_token) });
   }
@@ -332,11 +346,18 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
         const subs = await graphAll(`${page.ext_id}/subscribed_apps`, { access_token: ptoken });
         const mine = subs.find((s) => String(s?.id) === apps.meta.appId);
         const have = new Set<string>((mine?.subscribed_fields ?? []).map(String));
-        if (mine && SOCIAL.pageFields.split(',').every((f) => have.has(f))) add('pageHook', 'ok');
+        // the ads' lead forms (Marketing › Formulaires): asked again when missing, if the account gave their permission
+        let leads = have.has(SOCIAL.leadFields);
+        if (mine && SOCIAL.pageFields.split(',').every((f) => have.has(f)) && leads) add('pageHook', 'ok');
         else {
-          await graph(`${page.ext_id}/subscribed_apps`, { subscribed_fields: SOCIAL.pageFields, access_token: ptoken }, 'POST');
-          add('pageHook', 'ok', { fixed: 1 });
+          const r = await subscribePage(String(page.ext_id), ptoken);
+          if (mine && SOCIAL.pageFields.split(',').every((f) => have.has(f))) add('pageHook', 'ok');
+          else add('pageHook', 'ok', { fixed: 1 });
+          if (r.leads && !leads) add('leadHook', 'ok', { fixed: 1 });
+          leads = r.leads;
         }
+        if (leads && !checks.some((c) => c.key === 'leadHook')) add('leadHook', 'ok');
+        else if (!leads) add('leadHook', 'warn');
         hook = true;
       } catch (e) {
         add('pageHook', 'bad', undefined, why(e));
@@ -423,6 +444,7 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
         add(key, 'ok');
       };
       one('page', ['messages', 'feed'], 'appHook');
+      one('page', ['leadgen'], 'appHookLeads');
       one('instagram', ['messages', 'comments'], 'appHookIg');
     } catch (e) {
       add('appHook', 'warn', { list: 'messages, feed' }, why(e));

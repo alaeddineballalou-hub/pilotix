@@ -3,7 +3,10 @@
    the sections of suivi/phone.css and the chips / buttons of sav/phone.css. Pilotix: navy ink, orange, green / red. ===== */
 .pxm { display: flex; flex-direction: column; gap: 10px; padding-bottom: 24px; }
 .pxm .pxv-road button .bji { width: 14px; height: 14px; }
-.pxm-tabs a { flex: 1; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 13.5px; font-weight: 800; color: var(--muted); text-decoration: none; }
+/* four tabs (Publicité, Formulaires, Marketeurs, AI Spy): each one its word on one line, the bar slides when a phone is narrow */
+.pxm-tabs { overflow-x: auto; scrollbar-width: none; }
+.pxm-tabs::-webkit-scrollbar { display: none; }
+.pxm-tabs a { flex: 1 0 auto; padding: 0 8px; white-space: nowrap; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 13.5px; font-weight: 800; color: var(--muted); text-decoration: none; }
 .pxm-tabs a.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px rgba(27, 42, 71, .12); }
 .pxm-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .pxm-dates label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; font-weight: 700; color: var(--muted); }

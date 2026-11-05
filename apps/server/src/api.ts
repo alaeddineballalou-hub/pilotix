@@ -1482,10 +1482,13 @@ class ApiController {
     const comments: any[] = !linked && m?.parseMetaComments ? m.parseMetaComments(body) : [];
     // Delivery AI agent: what became of its WhatsApp messages (delivered, read, failed → SMS)
     const statuses: any[] = m?.parseWhatsAppStatuses ? m.parseWhatsAppStatuses(body) : [];
+    // the ads' lead forms of a Page linked by hand (its own Meta app)
+    const leads: any[] = !linked && m?.parseMetaLeads ? m.parseMetaLeads(body) : [];
     void this.handleIncoming(ref, list);
     void this.handleComments(ref, comments);
     void this.handleStatuses(ref, statuses);
-    return { ok: true, received: list.length + comments.length + statuses.length };
+    void this.handleLeads(ref, leads);
+    return { ok: true, received: list.length + comments.length + statuses.length + leads.length };
   }
 
   // ---------------------------------------------------------------- linked accounts (Pilot AI › Comptes)
@@ -1564,9 +1567,12 @@ class ApiController {
       if (!ref || ref.shop.status !== 'active') continue;
       const list: any[] = m?.parseMetaWebhook ? m.parseMetaWebhook(r.body) : [];
       const comments: any[] = m?.parseMetaComments ? m.parseMetaComments(r.body) : [];
+      // Marketing › Formulaires: a form of the Page's ads was sent
+      const leads: any[] = m?.parseMetaLeads ? m.parseMetaLeads(r.body) : [];
       void this.handleIncoming(ref, list);
       void this.handleComments(ref, comments);
-      received += list.length + comments.length;
+      void this.handleLeads(ref, leads);
+      received += list.length + comments.length + leads.length;
     }
     return { ok: true, received };
   }
@@ -1680,6 +1686,19 @@ class ApiController {
     }
   }
 
+  /** Marketing › Formulaires: each lead is read from Meta and becomes an order (or waits on the page), one after the other. */
+  private async handleLeads(ref: ShopRef, list: any[]) {
+    if (!list.length) return;
+    const log = new Logger('Formulaires');
+    const session = await this.core.systemSession(ref);
+    for (const l of list) {
+      await this.core.call(ref, 'leads.receive', session, l).catch((e: any) => {
+        // a boutique whose plan has no « Formulaires »: its leads are not taken, without a line in the log each time
+        if (!String(e?.message ?? '').includes(core.FEATURE_OFF)) log.warn(`[${ref.shop.slug}] lead ${l?.leadgenId}: ${e?.message ?? e}`);
+      });
+    }
+  }
+
   /** Called by an external scheduler (e.g. every 30 minutes) to refresh courier statuses. */
   @Public()
   @Post(['hooks/cron', 's/:shop/hooks/cron'])
@@ -1700,6 +1719,7 @@ class ApiController {
     bg('assign.run'); // Affectation automatique: the waiting orders and alerts get their agent (in the background)
     bg('spy.scan'); // AI Spy: the daily scan of competitors' ads, once a day (in the background)
     bg('channels.sheet.syncAll'); // Google Sheets channels: new lines become orders (in the background)
+    bg('leads.catchUp'); // Marketing › Formulaires: the ads' leads Meta did not send (in the background)
     return this.core.call(ref, 'delivery.sync', session, {}).catch((e) => ({ ok: false, message: e.message }));
   }
 }

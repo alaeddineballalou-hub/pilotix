@@ -13,6 +13,8 @@ import { useSession } from '../../lib/session';
 import { store } from '../../lib/store';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
 import { Spy } from './Spy';
+import { Formulaires } from './Formulaires';
+import { featureIsOn } from '../../lib/features';
 import '../confirmation/phone.css';
 import '../suivi/phone.css';
 import '../sav/phone.css';
@@ -54,13 +56,20 @@ const DIAG_ICON: Record<string, string> = { scale: 'trend', cut: 'cut', hook: 'f
 // ---------------------------------------------------------------- the page
 export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; rest?: string[]; noSpy?: boolean; mkLabel?: string }) {
   const { t } = useTranslation();
-  const tab = sub === 'marketer' ? 'mk' : sub === 'spy' && !noSpy ? 'spy' : 'pub';
+  // Formulaires: only a store's own Marketing (not a marketer's space), when its plan has it
+  const forms = !noSpy && featureIsOn('marketing/formulaires');
+  const tab = sub === 'marketer' ? 'mk' : sub === 'spy' && !noSpy ? 'spy' : sub === 'formulaires' && forms ? 'forms' : 'pub';
   return (
     <div className="pxm">
       <div className="pxv-own pxm-tabs" role="tablist">
         <a role="tab" aria-selected={tab === 'pub'} className={tab === 'pub' ? 'on' : ''} href="#/marketing/publicite">
           {t('nav.publicite')}
         </a>
+        {forms && (
+          <a role="tab" aria-selected={tab === 'forms'} className={tab === 'forms' ? 'on' : ''} href="#/marketing/formulaires">
+            {t('nav.formulaires')}
+          </a>
+        )}
         <a role="tab" aria-selected={tab === 'mk'} className={tab === 'mk' ? 'on' : ''} href="#/marketing/marketer">
           {mkLabel ?? t('mkph.marketers')}
         </a>
@@ -71,7 +80,7 @@ export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; re
         )}
       </div>
       {/* AI Spy: the same page as on a computer, in one column */}
-      {tab === 'pub' ? <Pub /> : tab === 'spy' ? <Spy rest={rest} /> : <Marketeurs />}
+      {tab === 'pub' ? <Pub /> : tab === 'spy' ? <Spy rest={rest} /> : tab === 'forms' ? <Formulaires /> : <Marketeurs />}
     </div>
   );
 }

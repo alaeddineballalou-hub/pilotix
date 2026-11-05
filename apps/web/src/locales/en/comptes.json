@@ -137,6 +137,11 @@
       "fixed": "Page subscribed again: its messages and comments reach Pilotix.",
       "bad": "Pilotix cannot subscribe the Page to its messages."
     },
+    "leadHook": {
+      "ok": "Ad lead forms: the Page sends them to Pilotix.",
+      "fixed": "Ad lead forms: Page subscribed again, they reach Pilotix.",
+      "warn": "Ad lead forms: Facebook does not send them yet (the “leads_retrieval” permission is missing). Click “Link again” and accept everything."
+    },
     "ig": {
       "ok": "Instagram @{{username}}: it works.",
       "bad": "Instagram: Pilotix cannot read it."
@@ -174,6 +179,10 @@
     "appHook": {
       "ok": "Meta app: Facebook messages and comments reach Pilotix.",
       "warn": "Meta app, “Page” line of Webhooks: subscribe {{list}}."
+    },
+    "appHookLeads": {
+      "ok": "Meta app: ad lead forms reach Pilotix.",
+      "warn": "Meta app, “Page” line of Webhooks: subscribe {{list}} to receive the ad lead forms."
     },
     "appHookIg": {
       "ok": "Meta app: Instagram messages and comments reach Pilotix.",

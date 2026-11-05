@@ -137,6 +137,11 @@
       "fixed": "Page abonnée à nouveau : ses messages et commentaires arrivent à Pilotix.",
       "bad": "Pilotix n’arrive pas à abonner la page à ses messages."
     },
+    "leadHook": {
+      "ok": "Formulaires de pub : la page les envoie à Pilotix.",
+      "fixed": "Formulaires de pub : page abonnée à nouveau, ils arrivent à Pilotix.",
+      "warn": "Formulaires de pub : Facebook ne les envoie pas encore (autorisation « leads_retrieval » manquante). Cliquez sur « Relier » et acceptez tout."
+    },
     "ig": {
       "ok": "Instagram @{{username}} : il marche.",
       "bad": "Instagram : Pilotix ne peut pas le lire."
@@ -174,6 +179,10 @@
     "appHook": {
       "ok": "App Meta : les messages et commentaires Facebook arrivent à Pilotix.",
       "warn": "App Meta, ligne « Page » des Webhooks : abonnez {{list}}."
+    },
+    "appHookLeads": {
+      "ok": "App Meta : les formulaires de pub arrivent à Pilotix.",
+      "warn": "App Meta, ligne « Page » des Webhooks : abonnez {{list}} pour recevoir les formulaires de pub."
     },
     "appHookIg": {
       "ok": "App Meta : les messages et commentaires Instagram arrivent à Pilotix.",
