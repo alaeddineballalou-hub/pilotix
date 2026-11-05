@@ -129,6 +129,9 @@ test('hand changes follow the Préférences: a strict rule is locked for agents;
   const a = await order(16, 'Hydra', [{ ...BIG, qty: 1 }]);
   assert.equal((await row(a.id)).pilot_by, 'strict');
   const samira = await as(EMAILS.conf);
+  // her own orders (an agent works on the orders given to her)
+  const giveSamira = (id: number) => db.query('UPDATE orders SET agent_id = $2 WHERE id = $1', [id, samira.session.profile.id]);
+  await giveSamira(a.id);
   await assert.rejects(call('orders.assignCompany', samira, { ids: [a.id], companyId: zr }), /règle stricte/);
   await db.query(`UPDATE profiles SET can_assign = true WHERE email = $1`, [EMAILS.manager]);
   const yacine = await as(EMAILS.manager);
@@ -136,6 +139,7 @@ test('hand changes follow the Préférences: a strict rule is locked for agents;
   assert.deepEqual([Number((await row(a.id)).company_id), (await row(a.id)).pilot_by], [zr, 'hand'], 'a manager may');
   // an agent on an order a soft rule placed: allowed (Préférences: agents yes); then the rules leave it alone
   const b = await order(31, 'Oran');
+  await giveSamira(b.id);
   await call('orders.assignCompany', samira, { ids: [b.id], companyId: noest });
   await call('orders.update', admin, { id: b.id, commune: 'Es Senia' });
   assert.deepEqual([Number((await row(b.id)).company_id), (await row(b.id)).pilot_by], [noest, 'hand']);

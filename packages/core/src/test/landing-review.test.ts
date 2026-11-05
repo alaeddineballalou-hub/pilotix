@@ -47,6 +47,8 @@ async function form(over: Record<string, unknown> = {}, slug = SLUG, t0 = Date.n
   return { slug, name: custName(), phone: rndPhone(), wilaya: 16, commune: 'Hydra', variant: slug === SLUG ? variantId : null, qty: 1, hp: '', ch, pw: solve(ch), t: 25_000, ki: 40, wd: false, fp: `fp${Math.random().toString(36).slice(2, 14)}`, did: `d${Math.random()}`, vid: `v${Math.random().toString(36).slice(2, 9)}`, meta: { ip: `10.2.0.${Math.floor(Math.random() * 250)}`, ua: UA }, ...over };
 }
 const orders = async (phone: string) => db.query(`SELECT * FROM orders WHERE phone = $1 ORDER BY id`, [phone]);
+/** orders given to this agent (a confirmation agent works on her own orders) */
+const giveTo = async (ctx: Ctx, ids: unknown[]) => db.query('UPDATE orders SET agent_id = $2 WHERE id = ANY($1::bigint[])', [ids.map(Number), ctx.session.profile.id]);
 
 test('« Abandonnées »: every tab answers, with and without a search', async () => {
   const conf = await as(EMAILS.conf);
@@ -163,7 +165,9 @@ test('Meta: the Purchase of an abandoned order carries the browser it came from;
   await call('landing.capture', at(admin, t0), f);
   await call('landing.run', admin, {});
   const o = (await orders(f.phone as string))[0];
-  await call('orders.setConf', await as(EMAILS.conf), { ids: [Number(o.id)], status: 'confirmed' });
+  const agent = await as(EMAILS.conf);
+  await giveTo(agent, [o.id]);
+  await call('orders.setConf', agent, { ids: [Number(o.id)], status: 'confirmed' });
   const sys = await as(EMAILS.admin, server);
   await call('landing.run', sys, {});
   let ev = (await db.query(`SELECT * FROM meta_events WHERE order_id = $1`, [o.id]))[0];
@@ -193,6 +197,7 @@ test('Meta: an event Meta refuses does not take the others down with it', async 
   await call('landing.submit', admin, good);
   await call('landing.submit', admin, bad);
   const [g, b] = [(await orders(good.phone as string))[0], (await orders(bad.phone as string))[0]];
+  await giveTo(conf, [g.id, b.id]);
   await call('orders.setConf', conf, { ids: [Number(g.id), Number(b.id)], status: 'confirmed' });
   await db.query(`UPDATE orders SET total = 1 WHERE id = $1`, [b.id]);
   await call('landing.run', await as(EMAILS.admin, server), {});
@@ -212,7 +217,9 @@ test('« at order » mode: a borderline order counts once an agent confirms it',
   const second = (await orders(f.phone as string))[0];
   assert.match(second.internal_note, /anti-fraude/);
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM meta_events WHERE order_id = $1`, [second.id]))[0].n, 0);
-  await call('orders.setConf', await as(EMAILS.conf), { ids: [Number(second.id)], status: 'confirmed' });
+  const agent = await as(EMAILS.conf);
+  await giveTo(agent, [second.id]);
+  await call('orders.setConf', agent, { ids: [Number(second.id)], status: 'confirmed' });
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM meta_events WHERE order_id = $1 AND event_name = 'Purchase'`, [second.id]))[0].n, 1);
   // and, in « at order » mode, the agent's confirmation is reported too (for the reports)
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM meta_events WHERE order_id = $1 AND event_name = 'Confirmed'`, [second.id]))[0].n, 1);

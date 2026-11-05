@@ -152,6 +152,10 @@ test('sav: update status / responsable, and role checks', async () => {
   await assert.rejects(call('sav.exchange', ctx, { id: t.id, kind: 'same', lines: [{ itemId: 1, qty: 1 }] }), /aucune commande/);
   await assert.rejects(call('sav.list', await as(EMAILS.livreur), {}), /Accès refusé/);
   await assert.rejects(call('sav.create', await as(EMAILS.marketer), { type: 'help', customerName: 'X' }), /Accès refusé/);
-  const list: any = await call('sav.list', await as(EMAILS.conf), { view: 'all', q: t.ref });
-  assert.equal(list.rows[0].id, t.id);
+  // the depot sees every ticket; a confirmation agent only those of her orders, given to her or made by her
+  const all: any = await call('sav.list', ctx, { view: 'all', q: t.ref });
+  assert.equal(all.rows[0].id, t.id);
+  const hers: any = await call('sav.list', await as(EMAILS.conf), { view: 'all', q: t.ref });
+  assert.equal(hers.rows.length, 0);
+  await assert.rejects(call('sav.get', await as(EMAILS.conf), { id: t.id }), /autre agent/);
 });

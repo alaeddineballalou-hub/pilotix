@@ -68,6 +68,8 @@ test('Meta: a Purchase only when an agent confirms a landing order (never at sub
   const o = await orderOf(input.phone as string);
   assert.equal((await events(`order_id = $1`, [o.id])).length, 0, 'nothing at submit with « at confirmation »');
   const conf = await as(EMAILS.conf);
+  // given to the agent (she works on her own orders)
+  await db.query('UPDATE orders SET agent_id = $2 WHERE id = $1', [o.id, conf.session.profile.id]);
   await call('orders.setConf', conf, { ids: [Number(o.id)], status: 'confirmed' });
   let ev = await events(`order_id = $1`, [o.id]);
   assert.equal(ev.length, 1);
@@ -115,6 +117,7 @@ test('Meta: the outbox sends hashed customer data through the Conversions API, a
   await call('landing.submit', admin, fake);
   const conf = await as(EMAILS.conf);
   const [a, b] = [await orderOf(real.phone as string), await orderOf(fake.phone as string)];
+  await db.query('UPDATE orders SET agent_id = $2 WHERE id = ANY($1)', [[a.id, b.id], conf.session.profile.id]);
   await call('orders.setConf', conf, { ids: [Number(a.id), Number(b.id)], status: 'confirmed' });
   // the agent finds out the second one is fake before the job runs
   await db.query(`UPDATE orders SET conf_status = 'fake' WHERE id = $1`, [b.id]);

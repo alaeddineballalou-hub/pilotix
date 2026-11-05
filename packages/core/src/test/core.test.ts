@@ -37,7 +37,7 @@ test('vendeur gets confirmation, suivi, depot, marketer', async () => {
 });
 
 test('orders.list filters and paginates', async () => {
-  const ctx = await ctxFor('samira@demo.pilotix.dz');
+  const ctx = await ctxFor('admin@demo.pilotix.dz');
   const all: any = await call('orders.list', ctx, { pageSize: 20 });
   assert.equal(all.rows.length, 20);
   assert.ok(all.total >= 400);
@@ -45,6 +45,13 @@ test('orders.list filters and paginates', async () => {
   for (const o of todo.rows) assert.equal(o.confStatus, 'new');
   const byPhone: any = await call('orders.list', ctx, { q: all.rows[0].phone });
   assert.ok(byPhone.rows.some((o: any) => o.id === all.rows[0].id));
+  // a confirmation agent: only her own orders
+  const samira = await ctxFor('samira@demo.pilotix.dz');
+  const hers: any = await call('orders.list', samira, { pageSize: 500 });
+  const me = samira.session.profile.id;
+  assert.ok(hers.total > 0 && hers.total < all.total);
+  const tickets = new Set((await db.query('SELECT order_id FROM complaints WHERE assigned_to = $1 OR created_by = $1', [me])).map((r: any) => Number(r.order_id)));
+  for (const o of hers.rows) assert.ok(o.agentId === me || o.createdBy === me || o.lockedBy?.id === me || tickets.has(o.id), `${o.ref} is hers`);
 });
 
 test('create → confirm → prepare → ship (stock down) → return (stock back)', async () => {

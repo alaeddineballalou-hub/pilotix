@@ -167,7 +167,8 @@ test('delivery choice: bureaus of a wilaya with who delivers, bureau needs a sto
   const conf = await as(EMAILS.conf);
   const w = Number((await db.query('SELECT wilaya_id FROM stopdesks ORDER BY id LIMIT 1'))[0].wilaya_id);
   const o = (await db.query(`SELECT id FROM orders WHERE conf_status = 'new' ORDER BY id LIMIT 1`))[0];
-  await db.query('UPDATE orders SET wilaya_id = $2 WHERE id = $1', [o.id, w]);
+  // given to the agent (she works on her own orders)
+  await db.query('UPDATE orders SET wilaya_id = $2, agent_id = $3 WHERE id = $1', [o.id, w, conf.session.profile.id]);
   o.wilaya_id = w;
   const opts: any = await call('confirmation.deskOptions', conf, { wilayaId: Number(o.wilaya_id) });
   assert.ok(opts.companies.length > 0 && opts.desks.length > 0);

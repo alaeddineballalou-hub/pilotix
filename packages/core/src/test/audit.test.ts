@@ -159,12 +159,16 @@ test('stock leaves even when the courier reports « en livraison » straight fro
 
 test('a parcel at an API courier or cashed: amount and address are frozen (« Modifier le colis » instead)', async () => {
   const conf = await as(EMAILS.conf);
+  // the orders are given to the agent (she works on her own orders)
+  const mine = (id: unknown) => db.query('UPDATE orders SET agent_id = $2 WHERE id = $1', [id, conf.session.profile.id]);
   const zr = await one(`SELECT o.id, o.discount FROM orders o JOIN delivery_companies c ON c.id = o.company_id WHERE c.kind = 'zr' AND o.tracking IS NOT NULL AND o.follow_status = 'out_for_delivery' LIMIT 1`);
+  await mine(zr.id);
   await assert.rejects(call('orders.update', conf, { id: Number(zr.id), discount: Number(zr.discount) + 100 }), /Modifier le colis/);
   // a note still changes, even when the form sends the same products again
   const items = (await db.query('SELECT product_id, variant_id, qty FROM order_items WHERE order_id = $1', [zr.id])).map((r: any) => ({ productId: Number(r.product_id), variantId: r.variant_id == null ? null : Number(r.variant_id), qty: Number(r.qty) }));
   const sent = await one(`SELECT o.id FROM orders o JOIN delivery_companies c ON c.id = o.company_id WHERE c.kind = 'zr' AND o.tracking IS NOT NULL AND o.follow_status = 'prepared' LIMIT 1`);
   if (sent) {
+    await mine(sent.id);
     const its = (await db.query('SELECT product_id, variant_id, qty FROM order_items WHERE order_id = $1', [sent.id])).map((r: any) => ({ productId: Number(r.product_id), variantId: r.variant_id == null ? null : Number(r.variant_id), qty: Number(r.qty) }));
     await call('orders.update', conf, { id: Number(sent.id), customerName: 'Nom corrigé', items: its });
     await assert.rejects(call('orders.update', conf, { id: Number(sent.id), items: its.map((x: any) => ({ ...x, qty: x.qty + 1 })) }), /Modifier le colis/);
@@ -172,6 +176,7 @@ test('a parcel at an API courier or cashed: amount and address are frozen (« Mo
   assert.ok(items.length);
   await call('orders.update', conf, { id: Number(zr.id), internalNote: 'rappeler le client' });
   const cashed = await one(`SELECT id, delivery_fee FROM orders WHERE cashed LIMIT 1`);
+  await mine(cashed.id);
   await assert.rejects(call('orders.update', conf, { id: Number(cashed.id), deliveryFee: Number(cashed.delivery_fee) + 1 }), /encaissée/);
 });
 

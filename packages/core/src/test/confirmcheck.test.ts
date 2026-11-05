@@ -38,8 +38,12 @@ async function setStock(variantId: number, qty: number) {
   // nothing promised to other orders
   await db.query(`UPDATE orders SET conf_status = 'cancelled' WHERE id IN (SELECT order_id FROM order_items WHERE variant_id = $1) AND conf_status IN ('confirmed','no_stock')`, [variantId]);
 }
-const newOrder = async (v: { productId: number; variantId: number }, extra: Record<string, unknown> = {}) =>
-  (await call('orders.create', admin, { customerName: `Check${n} Test`, phone: phone(), wilayaId: 16, commune: 'Kouba', items: [{ ...v, qty: 2 }], ...extra })) as any;
+/** a new order, given to the agent (she works on her own orders) */
+const newOrder = async (v: { productId: number; variantId: number }, extra: Record<string, unknown> = {}) => {
+  const o = (await call('orders.create', admin, { customerName: `Check${n} Test`, phone: phone(), wilayaId: 16, commune: 'Kouba', items: [{ ...v, qty: 2 }], ...extra })) as any;
+  await db.query('UPDATE orders SET agent_id = $2 WHERE id = $1', [o.id, agent.session.profile.id]);
+  return o;
+};
 const conf = async (id: number) => (await db.query('SELECT conf_status, follow_status, confirmed_at FROM orders WHERE id = $1', [id]))[0];
 
 test('the card: each product is ok, empty (nothing left) or off (switched off), and the place is checked', async () => {

@@ -165,7 +165,10 @@ test('a competitor: one device sending a third number in an hour is blocked; a d
   const did2 = `cmp${Math.random()}`;
   await call('landing.submit', admin, await human({ did: did2 }, '0661900111'));
   const o = (await db.query(`SELECT id FROM orders WHERE phone = '0661900111'`))[0];
-  await call('orders.setConf', await as(EMAILS.conf), { ids: [Number(o.id)], status: 'fake', reason: '🕵️ Concurrent' });
+  const agent = await as(EMAILS.conf);
+  // given to the agent (she works on her own orders)
+  await db.query('UPDATE orders SET agent_id = $2 WHERE id = $1', [o.id, agent.session.profile.id]);
+  await call('orders.setConf', agent, { ids: [Number(o.id)], status: 'fake', reason: '🕵️ Concurrent' });
   assert.equal((await db.query(`SELECT reason FROM fraud_marks WHERE order_id = $1`, [o.id]))[0]?.reason, 'competitor');
   await call('landing.submit', admin, await human({ did: did2 }, '0661900222'));
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM orders WHERE phone = '0661900222'`))[0].n, 0);
