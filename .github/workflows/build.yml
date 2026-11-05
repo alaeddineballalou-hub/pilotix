@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       # a failing test shows as one annotation on the run (its name and the assertion), readable without the raw log
       - run: |
           set -o pipefail
@@ -61,7 +61,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - run: npm run build -w @pilotix/shared && npm run build -w @pilotix/core && npm run build -w @pilotix/server
       - run: npm run migrate -w @pilotix/server
       - run: npm run seed:demo -w @pilotix/server
@@ -83,6 +83,21 @@ jobs:
       - if: failure()
         run: cat server.log; tail -50 mails.log
 
+  # the packages the servers run (package-lock.json) against the known security problems: a critical one stops the
+  # change; a high one is shown on the run (its fix may need a bigger update)
+  audit:
+    name: Packages (security audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Known problems in the packages used in production
+        run: |
+          npm audit --package-lock-only --omit=dev --audit-level=critical
+          npm audit --package-lock-only --omit=dev --audit-level=high > audit.txt 2>&1 || { echo "::warning title=Packages::$(grep -E '^[a-z@].*  ' audit.txt | head -5 | tr '\n' ' ')"; cat audit.txt; }
+
   web:
     name: Web app (typecheck + build)
     runs-on: ubuntu-latest
@@ -91,7 +106,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - name: Build for GitHub Pages (with the demo)
         run: npm run build -w @pilotix/web
         env:
@@ -113,7 +128,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - run: npm run build:artifact -w @pilotix/web
       - name: Publish to the artifact-build branch
         run: |

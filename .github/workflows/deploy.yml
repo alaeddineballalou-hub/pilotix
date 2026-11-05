@@ -20,10 +20,14 @@ permissions:
 jobs:
   deploy:
     # Deploy manually, or automatically after successful CI on main.
+    # (only CI of a push to this repository's main: a pull request from a fork whose branch is also called « main »
+    # runs CI too, and must never deploy)
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
        github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -32,6 +36,9 @@ jobs:
         env:
           KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           HOST: ${{ secrets.DEPLOY_HOST }}
+          # the server's own SSH key (« ssh-keyscan <server> » once, saved as the secret DEPLOY_KNOWN_HOSTS): with it, a
+          # machine pretending to be the server is refused
+          KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           if [ -z "$KEY" ] || [ -z "$HOST" ]; then
             echo "Missing the secrets DEPLOY_HOST / DEPLOY_SSH_KEY: run deploy/setup-github-deploy.sh on the server first."
@@ -40,8 +47,10 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$KEY" > ~/.ssh/deploy
           chmod 600 ~/.ssh/deploy
+          if [ -n "$KNOWN" ]; then printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts; CHECK=yes; else CHECK=accept-new; echo "::warning title=SSH::No DEPLOY_KNOWN_HOSTS secret: the server's key is not checked"; fi
           set -o pipefail
-          ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 "root@$HOST" update 2>&1 | tee update.log
+          # (e-mail addresses are hidden in the run's log: anyone can read it while the code is public)
+          ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=$CHECK -o ServerAliveInterval=30 "root@$HOST" update 2>&1 | sed -u -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/***@***/g' | tee update.log
 
       # the server could log in to its e-mail server (red here, but the deploy itself is done: see the line it wrote)
       - name: E-mails work on the server

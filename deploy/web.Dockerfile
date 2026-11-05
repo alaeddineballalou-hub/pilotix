@@ -3,7 +3,8 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY . .
-RUN npm install --no-audit --no-fund
+# the exact versions of package-lock.json, no install scripts run (see apps/server/Dockerfile)
+RUN npm ci --ignore-scripts --no-audit --no-fund
 ARG DOMAIN
 ENV VITE_API_URL=https://${DOMAIN} VITE_BASE=/ VITE_DEMO=0
 RUN npm run build -w @pilotix/web

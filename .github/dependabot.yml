@@ -1,0 +1,17 @@
+# Package updates proposed as pull requests (CI tests each one; nothing reaches the server without a merge):
+# security fixes as soon as they exist, other updates grouped once a week.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
