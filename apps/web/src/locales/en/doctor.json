@@ -57,7 +57,8 @@
     "jobs": "Automatic tasks",
     "code": "Code",
     "shops": "Shops",
-    "config": "Settings"
+    "config": "Settings",
+    "ads": "Ads"
   },
   "c": {
     "stockOut": {
@@ -184,6 +185,15 @@
       "title": "Orders normal",
       "short": "Orders normal",
       "okTitle": "Orders normal: {{yesterday}} yesterday, {{avg}} usually"
+    },
+    "adIssues": {
+      "title_one": "{{count}} ad has a problem at Meta",
+      "title_other": "{{count}} ads have a problem at Meta",
+      "title": "{{count}} ads have a problem at Meta",
+      "why": "Meta rejected or blocked these ads: they no longer run, or not as planned.",
+      "fix": "Open the ad in Ads Manager, fix what Meta asks (text, picture, link) or request a review.",
+      "short": "Ads without problems",
+      "okTitle": "No ad rejected or blocked"
     },
     "cashLate": {
       "title_one": "{{count}} parcel delivered but not paid yet",

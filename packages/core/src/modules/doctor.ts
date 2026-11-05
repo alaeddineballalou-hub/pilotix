@@ -20,14 +20,14 @@ const D = 24 * H;
 const ratio = (a: number, b: number) => (b > 0 ? a / b : null);
 const pts = (x: number) => Math.round(x * 1000) / 10; // 0.123 → 12.3
 
-type CheckId = 'stockOut' | 'stockSoon' | 'notCalled' | 'lateCallbacks' | 'confRate' | 'fakeOrders' | 'weakAgents' | 'meVsTeam' | 'notShipped' | 'stuckParcels' | 'openAlerts' | 'returns' | 'badWilayas' | 'ordersDrop' | 'cashLate';
-const ALL: CheckId[] = ['stockOut', 'stockSoon', 'notCalled', 'lateCallbacks', 'confRate', 'fakeOrders', 'weakAgents', 'notShipped', 'stuckParcels', 'openAlerts', 'returns', 'badWilayas', 'ordersDrop', 'cashLate'];
+type CheckId = 'stockOut' | 'stockSoon' | 'notCalled' | 'lateCallbacks' | 'confRate' | 'fakeOrders' | 'weakAgents' | 'meVsTeam' | 'notShipped' | 'stuckParcels' | 'openAlerts' | 'returns' | 'badWilayas' | 'ordersDrop' | 'adIssues' | 'cashLate';
+const ALL: CheckId[] = ['stockOut', 'stockSoon', 'notCalled', 'lateCallbacks', 'confRate', 'fakeOrders', 'weakAgents', 'notShipped', 'stuckParcels', 'openAlerts', 'returns', 'badWilayas', 'ordersDrop', 'adIssues', 'cashLate'];
 const CONF_TEAM: CheckId[] = ['notCalled', 'lateCallbacks', 'confRate', 'fakeOrders', 'weakAgents'];
 const CONF_MINE: CheckId[] = ['notCalled', 'lateCallbacks', 'confRate', 'meVsTeam'];
 const DEPOT: CheckId[] = ['stockOut', 'stockSoon', 'notShipped'];
 const SUIVI_TEAM: CheckId[] = ['stuckParcels', 'openAlerts', 'returns', 'badWilayas'];
 const SUIVI_MINE: CheckId[] = ['stuckParcels', 'openAlerts', 'returns'];
-const MARKETER: CheckId[] = ['ordersDrop', 'fakeOrders'];
+const MARKETER: CheckId[] = ['ordersDrop', 'fakeOrders', 'adIssues'];
 
 export interface DoctorScope {
   checks: Set<CheckId>;
@@ -291,6 +291,24 @@ export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
   }
   }
 
+  // ------------------------------------------------------------ ads
+  // Meta's ad account webhooks (hooks/meta-app): ads, ad sets or campaigns rejected or with a problem, not fixed yet (14 days)
+  if (want('adIssues')) {
+    const ai = await q(
+      `SELECT i.object_id, i.level, i.kind, i.summary, COALESCE(a.name, s.name) AS name
+         FROM ad_issues i LEFT JOIN ads a ON a.id = i.object_id LEFT JOIN adsets s ON s.id = i.object_id
+        WHERE i.resolved_at IS NULL AND i.at >= $1 ORDER BY (i.kind = 'rejected') DESC, i.at DESC`,
+      [at(14 * D)],
+    );
+    const rejected = ai.filter((r: any) => r.kind === 'rejected').length;
+    const list: DoctorLine[] = ai.slice(0, 6).map((r: any) => ({ label: `${r.name ?? `#${r.object_id}`}${r.summary ? ` · ${r.summary}` : r.kind === 'rejected' ? ' · DISAPPROVED' : ''}`, n: 0, unit: 'text' as const }));
+    items.push(
+      ai.length
+        ? { id: 'adIssues', level: rejected ? 'bad' : 'warn', area: 'ads', params: { count: ai.length, rejected }, list, href: '#/marketing/publicite' }
+        : { id: 'adIssues', level: 'ok', area: 'ads', href: '#/marketing/publicite' },
+    );
+  }
+
   // ------------------------------------------------------------ cash
   if (want('cashLate')) {
   const cash = await one(`SELECT count(*)::int AS n, COALESCE(sum(total),0)::bigint AS v FROM sales WHERE follow_status = 'delivered' AND NOT cashed AND delivered_at < $1`, [at(10 * D)]);
@@ -306,7 +324,33 @@ export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
   return { checkedAt: new Date(now).toISOString(), score: doctorScore(sorted), items: sorted, scope: { whole: scope.whole, mine: scope.mineConf || scope.mineSuivi } };
 }
 
+/** One ad object Meta warned about (an ad account webhook): stored, or marked fixed when Meta says it runs again. */
+export const AdIssueInput = z.object({
+  accountId: z.string().max(40),
+  objectId: z.string().regex(/^\d{1,30}$/),
+  level: z.string().max(20),
+  kind: z.enum(['issue', 'rejected', 'ok']),
+  code: z.string().max(20).nullable(),
+  summary: z.string().max(200).nullable(),
+  message: z.string().max(1000).nullable(),
+});
+export async function adIssue(ctx: Ctx, i: z.infer<typeof AdIssueInput>): Promise<{ ok: true }> {
+  if (i.kind === 'ok') await ctx.db.query(`UPDATE ad_issues SET resolved_at = now() WHERE object_id = $1 AND resolved_at IS NULL`, [i.objectId]);
+  else
+    await ctx.db.query(
+      `INSERT INTO ad_issues (object_id, account_id, level, kind, code, summary, message, at, resolved_at) VALUES ($1,$2,$3,$4,$5,$6,$7, now(), NULL)
+       ON CONFLICT (object_id) DO UPDATE SET account_id = EXCLUDED.account_id, level = EXCLUDED.level,
+         kind = CASE WHEN ad_issues.resolved_at IS NULL AND ad_issues.kind = 'rejected' THEN 'rejected' ELSE EXCLUDED.kind END,
+         code = COALESCE(EXCLUDED.code, ad_issues.code), summary = COALESCE(EXCLUDED.summary, ad_issues.summary),
+         message = COALESCE(EXCLUDED.message, ad_issues.message), at = now(), resolved_at = NULL`,
+      [i.objectId, i.accountId, i.level, i.kind, i.code, i.summary, i.message],
+    );
+  return { ok: true };
+}
+
 export const doctorProcs = {
+  // Meta's ad account webhooks (the server, with the shop's system session)
+  'ads.issue': proc([], AdIssueInput, (ctx, i) => adIssue(ctx, i)),
   // everyone: each person gets the checks of their own work (none for a livreur)
   'stats.doctor': proc(null, z.object({}), (ctx) => shopDoctor(ctx)),
 };

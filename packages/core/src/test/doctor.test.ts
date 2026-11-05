@@ -13,8 +13,8 @@ const D = 24 * H;
 const NOW = Date.parse('2026-10-20T12:00:00Z');
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
 
-const SHOP_IDS = ['stockOut', 'stockSoon', 'notCalled', 'lateCallbacks', 'fakeOrders', 'weakAgents', 'notShipped', 'stuckParcels', 'openAlerts', 'badWilayas', 'cashLate'];
-const AREAS = ['stock', 'confirmation', 'team', 'depot', 'delivery', 'sales', 'cash'];
+const SHOP_IDS = ['stockOut', 'stockSoon', 'notCalled', 'lateCallbacks', 'fakeOrders', 'weakAgents', 'notShipped', 'stuckParcels', 'openAlerts', 'badWilayas', 'adIssues', 'cashLate'];
+const AREAS = ['stock', 'confirmation', 'team', 'depot', 'delivery', 'sales', 'ads', 'cash'];
 const UNITS = ['n', 'pct', 'days', 'hours', 'min', 'da', 'ms', 'mb', 'text'];
 
 // ---------------------------------------------------------------- a small shop built order by order
@@ -151,9 +151,9 @@ describe('who may open Pilotix Doctor', () => {
     x = await ids(EMAILS.manager);
     assert.deepEqual(x.ids, sorted(['notCalled', 'lateCallbacks', 'confRate', 'fakeOrders', 'weakAgents']));
     assert.deepEqual(x.r.scope, { whole: false, mine: false });
-    // marketer: orders dropping, fake orders
+    // marketer: orders dropping, fake orders, ads Meta rejected
     x = await ids(EMAILS.marketer);
-    assert.deepEqual(x.ids, sorted(['ordersDrop', 'fakeOrders']));
+    assert.deepEqual(x.ids, sorted(['ordersDrop', 'fakeOrders', 'adIssues']));
     // livreur: nothing to check, nothing to worry about
     x = await ids(EMAILS.livreur);
     assert.deepEqual(x.ids, []);

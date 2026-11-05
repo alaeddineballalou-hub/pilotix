@@ -128,7 +128,10 @@ async function metaAccount(t: Tenancy, code: string, publicUrl: string): Promise
   for (const a of ads) {
     const idOf = String(a?.account_id ?? String(a?.id ?? '').replace(/^act_/, ''));
     if (!/^\d+$/.test(idOf)) continue;
-    assets.push({ kind: 'ad_account', extId: idOf, name: String(a.name ?? idOf), extra: { currency: a.currency ?? null, status: a.account_status ?? null } });
+    // its ads' problems (rejected, payment…) come to Pilotix's webhook, so Co-Pilot warns (needs the account's admin)
+    let hook = true;
+    await graph(`act_${idOf}/subscribed_apps`, { access_token: token }, 'POST').catch(() => (hook = false));
+    assets.push({ kind: 'ad_account', extId: idOf, name: String(a.name ?? idOf), extra: { currency: a.currency ?? null, status: a.account_status ?? null, hook } });
   }
   return {
     provider: 'meta',
@@ -445,7 +448,11 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
       };
       one('page', ['messages', 'feed'], 'appHook');
       one('page', ['leadgen'], 'appHookLeads');
+      // edited messages and reactions (Dellal reads the new text, the team sees the ❤️)
+      one('page', ['message_edits', 'message_reactions'], 'appHookEdits');
       one('instagram', ['messages', 'comments'], 'appHookIg');
+      // the ad accounts' ads rejected or with a problem (Co-Pilot)
+      one('ad_account', ['with_issues_ad_objects', 'in_process_ad_objects'], 'appHookAds');
     } catch (e) {
       add('appHook', 'warn', { list: 'messages, feed' }, why(e));
     }

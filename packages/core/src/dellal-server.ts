@@ -130,8 +130,9 @@ async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; a
         // Instagram's own login answers as « me »; a Unified login key (a system user's) answers as the account itself
         const s = await dellalSettings(ctx.db);
         const url = s.igLoginKind === 'unified' && s.instagramLoginId ? `${UNI_GRAPH}/${enc(s.instagramLoginId)}/messages` : `${IG_GRAPH}/me/messages`;
-        for (const t of chunks(a.text, 1000)) await postJson(url, { recipient: { id: a.externalId }, ...humanTag(a.tag), message: { text: t } }, { Authorization: `Bearer ${ig}` }, 'Instagram');
-        return { ok: true, via: s.igLoginKind === 'unified' ? 'unified' : 'instagram' };
+        let mid: string | null = null;
+        for (const t of chunks(a.text, 1000)) mid = midOf(await postJson(url, { recipient: { id: a.externalId }, ...humanTag(a.tag), message: { text: t } }, { Authorization: `Bearer ${ig}` }, 'Instagram')) ?? mid;
+        return { ok: true, via: s.igLoginKind === 'unified' ? 'unified' : 'instagram', messageId: mid };
       } catch (e) {
         // the Page can still answer someone with a role on the app; otherwise the Instagram login's reason is the one that counts
         if (!(await dellalSecret(ctx.db, 'pageToken'))) throw e;
@@ -152,10 +153,13 @@ async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; a
 async function sendPage(ctx: Ctx, a: { channel: DellalChannel; externalId: string; text: string; tag?: string }) {
   const token = await dellalSecret(ctx.db, 'pageToken');
   if (!token) throw new AppError('bad_request', 'La page Facebook n’est pas connectée (jeton de page manquant).');
+  // the last piece's message id: the customer's reaction (❤️ 👍) to it finds it again
+  let mid: string | null = null;
   for (const t of chunks(a.text, 1900))
-    await postJson(`${GRAPH}/me/messages?access_token=${encodeURIComponent(token)}`, { recipient: { id: a.externalId }, ...(humanTag(a.tag) ?? { messaging_type: 'RESPONSE' }), message: { text: t } }, {}, a.channel === 'instagram' ? 'Instagram' : 'Messenger');
-  return { ok: true };
+    mid = midOf(await postJson(`${GRAPH}/me/messages?access_token=${encodeURIComponent(token)}`, { recipient: { id: a.externalId }, ...(humanTag(a.tag) ?? { messaging_type: 'RESPONSE' }), message: { text: t } }, {}, a.channel === 'instagram' ? 'Instagram' : 'Messenger')) ?? mid;
+  return { ok: true, messageId: mid };
 }
+const midOf = (r: any): string | null => (r?.message_id ? String(r.message_id).slice(0, 200) : null);
 
 async function complete(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
   // Pilot AI: Pilotix's own key for every shop (the control room); otherwise, on an install without it, the shop's key
@@ -1130,6 +1134,61 @@ export function parseMetaLeads(body: any): { leadgenId: string; formId: string; 
         adsetId: v.adgroup_id ? String(v.adgroup_id).slice(0, 40) : null,
         createdTime: Number.isFinite(Number(v.created_time)) && Number(v.created_time) > 0 ? Math.floor(Number(v.created_time)) : null,
       });
+    }
+  return out;
+}
+
+/** A customer changed a message they had sent (Messenger « message_edits »): its new text, so Dellal reads what they meant. */
+export function parseMetaEdits(body: any): { channel: 'messenger' | 'instagram'; externalId: string; messageId: string; text: string }[] {
+  const obj = body?.object;
+  if (obj !== 'page' && obj !== 'instagram') return [];
+  const out: ReturnType<typeof parseMetaEdits> = [];
+  for (const entry of Array.isArray(body?.entry) ? body.entry : [])
+    for (const ev of Array.isArray(entry?.messaging) ? entry.messaging : []) {
+      const e = ev?.message_edit;
+      const text = String(e?.text ?? '').trim();
+      if (!e?.mid || !text || !ev?.sender?.id) continue;
+      out.push({ channel: obj === 'page' ? 'messenger' : 'instagram', externalId: String(ev.sender.id), messageId: String(e.mid).slice(0, 200), text: text.slice(0, 4000) });
+    }
+  return out;
+}
+
+/** A customer reacted to a message (❤️ 👍…) or took the reaction back (« message_reactions »). */
+export function parseMetaReactions(body: any): { channel: 'messenger' | 'instagram'; externalId: string; messageId: string; emoji: string | null }[] {
+  const obj = body?.object;
+  if (obj !== 'page' && obj !== 'instagram') return [];
+  const out: ReturnType<typeof parseMetaReactions> = [];
+  for (const entry of Array.isArray(body?.entry) ? body.entry : [])
+    for (const ev of Array.isArray(entry?.messaging) ? entry.messaging : []) {
+      const r = ev?.reaction;
+      if (!r?.mid || !ev?.sender?.id) continue;
+      const off = String(r.action ?? 'react') === 'unreact';
+      const emoji = off ? null : String(r.emoji ?? REACTION_EMOJI[String(r.reaction ?? '')] ?? '👍').slice(0, 16);
+      out.push({ channel: obj === 'page' ? 'messenger' : 'instagram', externalId: String(ev.sender.id), messageId: String(r.mid).slice(0, 200), emoji });
+    }
+  return out;
+}
+const REACTION_EMOJI: Record<string, string> = { love: '❤️', like: '👍', smile: '😆', wow: '😮', sad: '😢', angry: '😠', yay: '🎉', other: '👍' };
+
+/**
+ * Ad account webhooks: an ad, ad set or campaign has a problem (« with_issues_ad_objects »: rejected, payment, policy…) or
+ * finished its review (« in_process_ad_objects »: DISAPPROVED = rejected, ACTIVE = fine again). Co-Pilot warns with them.
+ */
+export function parseMetaAdIssues(body: any): { accountId: string; objectId: string; level: string; kind: 'issue' | 'rejected' | 'ok'; code: string | null; summary: string | null; message: string | null }[] {
+  if (body?.object !== 'ad_account') return [];
+  const out: ReturnType<typeof parseMetaAdIssues> = [];
+  for (const entry of Array.isArray(body?.entry) ? body.entry : [])
+    for (const ch of Array.isArray(entry?.changes) ? entry.changes : []) {
+      const v = ch?.value;
+      if (!v?.id || !/^\d{1,30}$/.test(String(v.id))) continue;
+      const base = { accountId: String(entry?.id ?? '').replace(/^act_/, '').slice(0, 40), objectId: String(v.id), level: String(v.level ?? 'AD').toUpperCase().slice(0, 20) };
+      const s = (x: unknown, n: number) => (x === undefined || x === null || x === '' ? null : String(x).slice(0, n));
+      if (ch.field === 'with_issues_ad_objects') out.push({ ...base, kind: 'issue', code: s(v.error_code, 20), summary: s(v.error_summary, 200), message: s(v.error_message, 1000) });
+      else if (ch.field === 'in_process_ad_objects') {
+        const st = String(v.status_name ?? '').toUpperCase();
+        if (st === 'DISAPPROVED') out.push({ ...base, kind: 'rejected', code: null, summary: null, message: null });
+        else if (['ACTIVE', 'PAUSED', 'ARCHIVED', 'DELETED'].includes(st)) out.push({ ...base, kind: 'ok', code: null, summary: null, message: null });
+      }
     }
   return out;
 }

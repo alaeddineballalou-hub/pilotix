@@ -135,4 +135,12 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   await put('ad_insights', ['day', 'adset_id', 'spend_cents', 'impressions', 'reach', 'clicks', 'lpv', 'purchases', 'video_3s', 'thruplays'], sRows, 'ON CONFLICT (day, adset_id) DO NOTHING');
   await put('ad_daily', ['day', 'ad_id', 'adset_id', 'spend_cents', 'impressions', 'reach', 'clicks', 'lpv', 'purchases', 'video_3s', 'thruplays'], aRows, 'ON CONFLICT (day, ad_id) DO NOTHING');
   await db.query('INSERT INTO marketer_prices (profile_id, price) VALUES ($1, 15000) ON CONFLICT (profile_id) DO NOTHING', [users.marketer]);
+  // Co-Pilot › Publicités: what Meta's ad account webhooks said (one ad rejected, one with a problem)
+  const bad = await db.query(`SELECT id FROM ads WHERE status = 'ACTIVE' ORDER BY id LIMIT 2 OFFSET 3`);
+  const issues: [string, string, string | null, string | null, number][] = [
+    [bad[0]?.id, 'rejected', null, 'Pub refusée : le texte promet un résultat (« 100 % garanti »)', 50],
+    [bad[1]?.id, 'issue', '1815', 'Problème de paiement du compte publicitaire', 140],
+  ];
+  for (const [id, kind, code, summary, min] of issues)
+    if (id) await db.query(`INSERT INTO ad_issues (object_id, account_id, level, kind, code, summary, at) VALUES ($1,'120211887','AD',$2,$3,$4,$5) ON CONFLICT (object_id) DO NOTHING`, [id, kind, code, summary, new Date(now - min * 60_000).toISOString()]);
 }

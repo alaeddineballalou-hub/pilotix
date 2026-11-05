@@ -15,6 +15,7 @@ const AREA_ICON: Record<string, string> = {
   depot: 'scanbar',
   delivery: 'truck',
   sales: 'megaphone',
+  ads: 'megaphone',
   cash: 'wallet',
   server: 'sliders',
   database: 'layers',

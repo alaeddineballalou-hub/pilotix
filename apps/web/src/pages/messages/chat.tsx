@@ -86,8 +86,25 @@ export function Bubbles({
           <span className="ai-txt" dir="auto">
             {m.body}
           </span>
+          {/* the customer changed this message (Messenger): the first text stays readable for the team */}
+          {m.meta?.edited && (
+            <span className="ai-edited">
+              <Icon name="pencil" /> {t('messages.thread.edited')}
+            </span>
+          )}
           <time dateTime={m.at}>{clock(m.at)}</time>
+          {/* the customer's reaction to this message (❤️ 👍…) */}
+          {m.meta?.reaction?.emoji && (
+            <span className="ai-react" role="img" aria-label={t('messages.thread.reaction', { emoji: m.meta.reaction.emoji })} title={t('messages.thread.reaction', { emoji: m.meta.reaction.emoji })}>
+              {m.meta.reaction.emoji}
+            </span>
+          )}
         </div>
+        {m.meta?.edited?.before && (
+          <small className="ai-before" dir="auto">
+            {t('messages.thread.editedBefore', { text: String(m.meta.edited.before) })}
+          </small>
+        )}
         {m.sendError && <small className="ai-err">⚠ {m.sendError}</small>}
         {foot?.(m)}
       </div>,

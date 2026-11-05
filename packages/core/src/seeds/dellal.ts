@@ -39,9 +39,10 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     {
       channel: 'messenger', ext: 'psid-demo-1', name: 'Nesrine B.', mode: 'ai', at: now - 12 * 60_000,
       msgs: [
-        ['customer', 'Bonsoir, vous livrez à Tamanrasset ?'],
+        // she changed her message (Messenger « message_edits »): Dellal answered the new text; she liked the answer ❤️
+        ['customer', 'Bonsoir, vous livrez à Tamanrasset ?', undefined, { edited: { before: 'Bonsoir, vous livrez à Ouargla ?', count: 1, at: iso(now - 12 * 60_000) } }],
         ['tool', 'delivery_fee Tamanrasset → domicile 1400 DA · bureau 900 DA'],
-        ['agent', 'Bonsoir 👋 Oui ! Livraison à Tamanrasset : 1400 DA à domicile ou 900 DA au bureau, paiement à la livraison. Quel produit t’intéresse ?'],
+        ['agent', 'Bonsoir 👋 Oui ! Livraison à Tamanrasset : 1400 DA à domicile ou 900 DA au bureau, paiement à la livraison. Quel produit t’intéresse ?', undefined, { reaction: { emoji: '❤️', at: iso(now - 11 * 60_000) } }],
       ],
     },
     {

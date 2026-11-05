@@ -184,9 +184,17 @@
       "ok": "Meta app: ad lead forms reach Pilotix.",
       "warn": "Meta app, “Page” line of Webhooks: subscribe {{list}} to receive the ad lead forms."
     },
+    "appHookEdits": {
+      "ok": "Meta app: edited messages and reactions (❤️ 👍) reach Pilotix.",
+      "warn": "Meta app, “Page” line of Webhooks: subscribe {{list}} to see edited messages and reactions."
+    },
     "appHookIg": {
       "ok": "Meta app: Instagram messages and comments reach Pilotix.",
       "warn": "Meta app, “Instagram” line of Webhooks: subscribe {{list}}."
+    },
+    "appHookAds": {
+      "ok": "Meta app: ad problems (rejected, blocked) reach Co-Pilot.",
+      "warn": "Meta app, “Ad Account” line of Webhooks: subscribe {{list}} so Co-Pilot warns you when an ad is rejected."
     },
     "reach": {
       "ok": "Webhook address: it answers from the Internet.",

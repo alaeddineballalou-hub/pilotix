@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, ServerHooks } from '../index';
-import { catchUpMeta, chunks, igLogin, missedMessages, parseMetaWebhook, runDellal } from '../dellal-server';
+import { catchUpMeta, chunks, igLogin, missedMessages, parseMetaAdIssues, parseMetaEdits, parseMetaReactions, parseMetaWebhook, runDellal } from '../dellal-server';
 import { getRaw, setRaw } from '../modules/admin';
 import { findPlace, playbookFor } from '../modules/dellal';
 import { checkDarija, fixDarija, parseAvoid } from '../modules/darija';
@@ -1111,4 +1111,53 @@ test('the « human agent » tag reaches Meta as Meta asks (Messenger and Instagr
     globalThis.fetch = real;
     await db.query(`DELETE FROM settings WHERE key IN ('secret_dellal_ig_token', 'secret_dellal_page_token')`);
   }
+});
+
+test('Messenger: an edited message takes its new text (the first one kept), a reaction lands on the message it was sent to', async () => {
+  const sent: any[] = [];
+  const server = fakeServer([], sent);
+  server.dellal = async (action, args) => (action === 'send' ? (sent.push(args), { ok: true, messageId: 'm_out_1' }) : { content: [{ type: 'text', text: 'OK' }], stop_reason: 'end_turn' });
+  const sys = await as(EMAILS.admin, server);
+  const r: any = await call('dellal.receive', sys, { channel: 'messenger', externalId: 'psid-edit', text: 'vous livrez à Ouargla ?', messageId: 'm_in_1' });
+  // the webhook shapes
+  const edits = parseMetaEdits({ object: 'page', entry: [{ id: 'p1', messaging: [{ sender: { id: 'psid-edit' }, recipient: { id: 'p1' }, message_edit: { mid: 'm_in_1', text: 'vous livrez à Tamanrasset ?', num_edit: 1 } }] }] });
+  assert.deepEqual(edits, [{ channel: 'messenger', externalId: 'psid-edit', messageId: 'm_in_1', text: 'vous livrez à Tamanrasset ?' }]);
+  const e: any = await call('dellal.edited', sys, edits[0]);
+  assert.equal(e.conversationId, r.conversationId);
+  assert.equal(e.unanswered, true);
+  const row = (await db.query(`SELECT body, meta FROM conv_messages WHERE external_id = 'm_in_1'`))[0];
+  assert.equal(row.body, 'vous livrez à Tamanrasset ?');
+  assert.equal(row.meta.edited.before, 'vous livrez à Ouargla ?');
+  // the team answers: the message id Meta gives back is kept, and the customer's ❤️ finds it
+  await call('dellal.reply', sys, { id: r.conversationId, body: 'Oui, 1400 DA' });
+  const reacts = parseMetaReactions({ object: 'page', entry: [{ id: 'p1', messaging: [{ sender: { id: 'psid-edit' }, reaction: { mid: 'm_out_1', action: 'react', reaction: 'love', emoji: '❤️' } }] }] });
+  assert.equal(reacts[0].emoji, '❤️');
+  await call('dellal.reacted', sys, reacts[0]);
+  assert.equal((await db.query(`SELECT meta FROM conv_messages WHERE external_id = 'm_out_1'`))[0].meta.reaction.emoji, '❤️');
+  const off = parseMetaReactions({ object: 'page', entry: [{ messaging: [{ sender: { id: 'psid-edit' }, reaction: { mid: 'm_out_1', action: 'unreact' } }] }] });
+  assert.equal(off[0].emoji, null);
+  await call('dellal.reacted', sys, off[0]);
+  assert.equal((await db.query(`SELECT meta FROM conv_messages WHERE external_id = 'm_out_1'`))[0].meta?.reaction, undefined);
+  // an edit of a message nobody knows: nothing
+  assert.equal(await call('dellal.edited', sys, { ...edits[0], messageId: 'nope' }), null);
+});
+
+test('ad account webhooks: a rejected ad warns in Co-Pilot until Meta says it runs again', async () => {
+  const admin = await as(EMAILS.admin);
+  await db.query('DELETE FROM ad_issues'); // the demo's own
+  const hook = (field: string, value: object) => parseMetaAdIssues({ object: 'ad_account', entry: [{ id: 'act_777', time: 1, changes: [{ field, value }] }] });
+  const bad = hook('in_process_ad_objects', { id: '9990001', level: 'AD', status_name: 'DISAPPROVED' });
+  assert.deepEqual(bad, [{ accountId: '777', objectId: '9990001', level: 'AD', kind: 'rejected', code: null, summary: null, message: null }]);
+  await call('ads.issue', admin, bad[0]);
+  await call('ads.issue', admin, hook('with_issues_ad_objects', { id: '9990002', level: 'ADSET', error_code: '1815', error_summary: 'Payment issue' })[0]);
+  let d: any = await call('stats.doctor', admin, {});
+  let it = d.items.find((x: any) => x.id === 'adIssues');
+  assert.equal(it.level, 'bad');
+  assert.deepEqual(it.params, { count: 2, rejected: 1 });
+  assert.ok(it.list.some((l: any) => /Payment issue/.test(l.label)));
+  await call('ads.issue', admin, hook('in_process_ad_objects', { id: '9990001', level: 'AD', status_name: 'ACTIVE' })[0]);
+  await call('ads.issue', admin, hook('in_process_ad_objects', { id: '9990002', level: 'ADSET', status_name: 'ACTIVE' })[0]);
+  d = await call('stats.doctor', admin, {});
+  it = d.items.find((x: any) => x.id === 'adIssues');
+  assert.equal(it.level, 'ok');
 });

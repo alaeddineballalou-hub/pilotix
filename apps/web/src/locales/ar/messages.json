@@ -52,7 +52,10 @@
     "modeHuman": "أنت ترد على هذا الزبون: {{name}} متوقف هنا.",
     "handoffBar": "{{name}} يحوّل المحادثة إليك: {{reason}}",
     "info": "بطاقة الزبون",
-    "modeAiHint": "إذا كتبتَ، يتوقف."
+    "modeAiHint": "إذا كتبتَ، يتوقف.",
+    "edited": "معدّلة",
+    "editedBefore": "قبل: {{text}}",
+    "reaction": "تفاعل الزبون {{emoji}}"
   },
   "side": {
     "customer": "الزبون",

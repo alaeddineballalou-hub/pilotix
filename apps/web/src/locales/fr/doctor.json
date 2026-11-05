@@ -57,7 +57,8 @@
     "jobs": "Tâches automatiques",
     "code": "Code",
     "shops": "Boutiques",
-    "config": "Réglages"
+    "config": "Réglages",
+    "ads": "Publicités"
   },
   "c": {
     "stockOut": {
@@ -184,6 +185,15 @@
       "title": "Commandes normales",
       "short": "Commandes normales",
       "okTitle": "Commandes normales : {{yesterday}} hier, {{avg}} d’habitude"
+    },
+    "adIssues": {
+      "title_one": "{{count}} publicité a un problème chez Meta",
+      "title_other": "{{count}} publicités ont un problème chez Meta",
+      "title": "{{count}} publicités ont un problème chez Meta",
+      "why": "Meta a refusé ou bloqué ces publicités : elles ne tournent plus, ou plus comme prévu.",
+      "fix": "Ouvrez la pub dans le Gestionnaire de publicités, corrigez ce que Meta demande (texte, image, lien) ou demandez une révision.",
+      "short": "Pubs sans problème",
+      "okTitle": "Aucune publicité refusée ou bloquée"
     },
     "cashLate": {
       "title_one": "{{count}} colis livré mais pas encore payé",

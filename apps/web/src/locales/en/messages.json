@@ -52,7 +52,10 @@
     "modeHuman": "You answer this customer: {{name}} is paused here.",
     "handoffBar": "{{name}} hands over to you: {{reason}}",
     "info": "Customer details",
-    "modeAiHint": "If you write, it pauses."
+    "modeAiHint": "If you write, it pauses.",
+    "edited": "edited",
+    "editedBefore": "Before: {{text}}",
+    "reaction": "The customer reacted {{emoji}}"
   },
   "side": {
     "customer": "Customer",

@@ -1625,10 +1625,16 @@ class ApiController {
       const comments: any[] = m?.parseMetaComments ? m.parseMetaComments(r.body) : [];
       // Marketing › Formulaires: a form of the Page's ads was sent
       const leads: any[] = m?.parseMetaLeads ? m.parseMetaLeads(r.body) : [];
+      // a customer changed a message, or reacted to one (❤️ 👍); an ad account's ad was rejected or has a problem
+      const edits: any[] = m?.parseMetaEdits ? m.parseMetaEdits(r.body) : [];
+      const reactions: any[] = m?.parseMetaReactions ? m.parseMetaReactions(r.body) : [];
+      const adIssues: any[] = m?.parseMetaAdIssues ? m.parseMetaAdIssues(r.body) : [];
       void this.handleIncoming(ref, list);
       void this.handleComments(ref, comments);
       void this.handleLeads(ref, leads);
-      received += list.length + comments.length + leads.length;
+      void this.handleEdits(ref, edits, reactions);
+      void this.handleAdIssues(ref, adIssues);
+      received += list.length + comments.length + leads.length + edits.length + reactions.length + adIssues.length;
     }
     return { ok: true, received };
   }
@@ -1740,6 +1746,29 @@ class ApiController {
         log.warn(`[${ref.shop.slug}] incoming ${c?.channel} comment refused: ${e?.message ?? e}`);
       }
     }
+  }
+
+  /**
+   * Edited messages and reactions: the conversation shows them. An edited message nobody answered yet is answered with its
+   * new text (the waiting answer reads it); one already answered changes what Dellal reads next time.
+   */
+  private async handleEdits(ref: ShopRef, edits: any[], reactions: any[]) {
+    if (!edits.length && !reactions.length) return;
+    const log = new Logger('Dellal');
+    const session = await this.core.systemSession(ref);
+    for (const e of edits) await this.core.call(ref, 'dellal.edited', session, e).catch((x: any) => log.warn(`[${ref.shop.slug}] edited message: ${x?.message ?? x}`));
+    for (const r of reactions) await this.core.call(ref, 'dellal.reacted', session, r).catch((x: any) => log.warn(`[${ref.shop.slug}] reaction: ${x?.message ?? x}`));
+  }
+
+  /** Co-Pilot › Publicités: what Meta said about the boutique's ads (rejected, a problem, fine again). */
+  private async handleAdIssues(ref: ShopRef, list: any[]) {
+    if (!list.length) return;
+    const log = new Logger('Co-Pilot');
+    const session = await this.core.systemSession(ref);
+    for (const a of list)
+      await this.core.call(ref, 'ads.issue', session, a).catch((e: any) => {
+        if (!String(e?.message ?? '').includes(core.FEATURE_OFF)) log.warn(`[${ref.shop.slug}] ad ${a?.objectId}: ${e?.message ?? e}`);
+      });
   }
 
   /** Marketing › Formulaires: each lead is read from Meta and becomes an order (or waits on the page), one after the other. */

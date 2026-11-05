@@ -71,7 +71,7 @@ export const SOCIAL = {
     'ads_management',
   ],
   /** what each Page sends to Pilotix's webhook */
-  pageFields: 'messages,messaging_postbacks,messaging_referrals,feed',
+  pageFields: 'messages,messaging_postbacks,messaging_referrals,message_edits,message_reactions,feed',
   /** and its ads' lead forms, when the account gave Pilotix their permission (Facebook refuses the whole list without it) */
   leadFields: 'leadgen',
 } as const;
@@ -620,6 +620,19 @@ function hookWhat(entry: any): string {
 
 export async function routeMeta(t: Tenancy, body: any): Promise<{ shopId: number; body: any }[]> {
   const obj = body?.object;
+  // an ad account's webhook (ad rejected, problem…): the boutique that uses this ad account (Co-Pilot warns there)
+  if (obj === 'ad_account') {
+    const byShop = new Map<number, any[]>();
+    for (const entry of Array.isArray(body?.entry) ? body.entry : []) {
+      const id = String(entry?.id ?? '').replace(/^act_/, '');
+      if (!/^\d{1,30}$/.test(id)) continue;
+      for (const r of await t.platform.query(`SELECT shop_id FROM platform.social_uses WHERE kind = 'ad_account' AND ext_id = $1`, [id])) {
+        const s = num(r.shop_id);
+        byShop.set(s, [...(byShop.get(s) ?? []), entry]);
+      }
+    }
+    return [...byShop].map(([shopId, entry]) => ({ shopId, body: { object: obj, entry } }));
+  }
   if (obj !== 'page' && obj !== 'instagram') return [];
   const byShop = new Map<number, any[]>();
   for (const entry of Array.isArray(body?.entry) ? body.entry : []) {

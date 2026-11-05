@@ -184,9 +184,17 @@
       "ok": "App Meta : les formulaires de pub arrivent à Pilotix.",
       "warn": "App Meta, ligne « Page » des Webhooks : abonnez {{list}} pour recevoir les formulaires de pub."
     },
+    "appHookEdits": {
+      "ok": "App Meta : les messages modifiés et les réactions (❤️ 👍) arrivent à Pilotix.",
+      "warn": "App Meta, ligne « Page » des Webhooks : abonnez {{list}} pour voir les messages modifiés et les réactions."
+    },
     "appHookIg": {
       "ok": "App Meta : les messages et commentaires Instagram arrivent à Pilotix.",
       "warn": "App Meta, ligne « Instagram » des Webhooks : abonnez {{list}}."
+    },
+    "appHookAds": {
+      "ok": "App Meta : les problèmes des publicités (refusées, bloquées) arrivent à Co-Pilot.",
+      "warn": "App Meta, ligne « Ad Account » des Webhooks : abonnez {{list}} pour que Co-Pilot vous prévienne quand une pub est refusée."
     },
     "reach": {
       "ok": "Adresse du webhook : elle répond depuis Internet.",

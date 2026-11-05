@@ -275,6 +275,54 @@ export async function receiveMessage(ctx: Ctx, m: z.infer<typeof IncomingInput> 
   return out;
 }
 
+/** The message id a send gave back (Messenger / Instagram), kept so the customer's reaction to it finds it. */
+const sentMid = (r: unknown): string | null => {
+  const id = (r as { messageId?: unknown } | null)?.messageId;
+  return typeof id === 'string' && id ? id.slice(0, 200) : null;
+};
+
+export const EditedInput = z.object({ channel: z.enum(['messenger', 'instagram']), externalId: z.string().min(1).max(120), messageId: z.string().min(1).max(200), text: z.string().min(1).max(4000) });
+/**
+ * A customer changed a message they had sent: its text becomes the new one (Dellal reads the conversation from here, so
+ * it sees what they meant), the first text stays in meta.edited.before for the team. `unanswered`: nobody answered it yet.
+ */
+export async function editedMessage(ctx: Ctx, m: z.infer<typeof EditedInput>): Promise<{ conversationId: number; messageId: number; unanswered: boolean } | null> {
+  const row = (
+    await ctx.db.query(
+      `SELECT m.id, m.body, m.meta, m.conversation_id FROM conv_messages m JOIN conversations c ON c.id = m.conversation_id
+        WHERE c.channel = $1 AND c.external_id = $2 AND m.external_id = $3 AND m.role = 'customer'`,
+      [m.channel, m.externalId, m.messageId],
+    )
+  )[0];
+  if (!row || row.body === m.text) return null;
+  const was = row.meta?.edited;
+  const edited = { before: was?.before ?? row.body, count: num(was?.count) + 1, at: new Date(ctx.now()).toISOString() };
+  await ctx.db.query(`UPDATE conv_messages SET body = $2, meta = COALESCE(meta, '{}'::jsonb) || $3::jsonb WHERE id = $1`, [row.id, m.text, JSON.stringify({ edited })]);
+  const convId = num(row.conversation_id);
+  const after = (await ctx.db.query(`SELECT count(*)::int AS n FROM conv_messages WHERE conversation_id = $1 AND id > $2 AND role IN ('agent','staff')`, [convId, row.id]))[0];
+  if (!num(after?.n)) await ctx.db.query(`UPDATE conversations SET last_preview = $2 WHERE id = $1 AND last_preview = $3`, [convId, m.text.slice(0, 140), String(row.body).slice(0, 140)]);
+  ctx.emit({ type: 'chat', data: { dellal: convId } });
+  return { conversationId: convId, messageId: num(row.id), unanswered: !num(after?.n) };
+}
+
+export const ReactedInput = z.object({ channel: z.enum(['messenger', 'instagram']), externalId: z.string().min(1).max(120), messageId: z.string().min(1).max(200), emoji: z.string().max(16).nullable() });
+/** The customer reacted to a message (theirs, Dellal's or the team's) or took the reaction back: meta.reaction. */
+export async function reactedMessage(ctx: Ctx, m: z.infer<typeof ReactedInput>): Promise<{ conversationId: number } | null> {
+  const row = (
+    await ctx.db.query(
+      `SELECT m.id, m.conversation_id FROM conv_messages m JOIN conversations c ON c.id = m.conversation_id
+        WHERE c.channel = $1 AND c.external_id = $2 AND m.external_id = $3`,
+      [m.channel, m.externalId, m.messageId],
+    )
+  )[0];
+  if (!row) return null;
+  if (m.emoji) await ctx.db.query(`UPDATE conv_messages SET meta = COALESCE(meta, '{}'::jsonb) || $2::jsonb WHERE id = $1`, [row.id, JSON.stringify({ reaction: { emoji: m.emoji, at: new Date(ctx.now()).toISOString() } })]);
+  else await ctx.db.query(`UPDATE conv_messages SET meta = meta - 'reaction' WHERE id = $1 AND meta IS NOT NULL`, [row.id]);
+  const convId = num(row.conversation_id);
+  ctx.emit({ type: 'chat', data: { dellal: convId } });
+  return { conversationId: convId };
+}
+
 /**
  * CM AI agent: the private message sent to someone who commented a post opens (or continues) their conversation here,
  * with the comment as their first words, so Dellal knows what they asked when they answer.
@@ -1356,14 +1404,15 @@ export async function runAgent(
   }
   if (reply) {
     let sendError: string | null = null;
+    let sentId: string | null = null;
     if (!test && ctx.server?.dellal) {
       try {
-        await ctx.server.dellal('send', { conversationId: convId, channel: conv.channel, externalId: conv.externalId, accountId: (await rawConv(ctx.db, convId)).account_id, text: reply }, ctx);
+        sentId = sentMid(await ctx.server.dellal('send', { conversationId: convId, channel: conv.channel, externalId: conv.externalId, accountId: (await rawConv(ctx.db, convId)).account_id, text: reply }, ctx));
       } catch (e: any) {
         sendError = e?.message ?? 'Envoi impossible';
       }
     }
-    await addMessage(ctx.db, convId, { role: 'agent', body: reply, meta: { usage, demo: !useAi, model: inPage ? 'claude (page)' : useAi ? model : null, ...(darija ? { darija } : {}), ...(book ? { pilot: { bookId: book.bookId, version: book.version, arm: book.arm, testId: book.testId, ...(opts.lab ? { lab: opts.lab } : {}) } } : {}) }, sendError });
+    await addMessage(ctx.db, convId, { role: 'agent', body: reply, externalId: sentId, meta: { usage, demo: !useAi, model: inPage ? 'claude (page)' : useAi ? model : null, ...(darija ? { darija } : {}), ...(book ? { pilot: { bookId: book.bookId, version: book.version, arm: book.arm, testId: book.testId, ...(opts.lab ? { lab: opts.lab } : {}) } } : {}) }, sendError });
   }
   if (opts.followUp) await ctx.db.query('UPDATE conversations SET followed_up = true WHERE id = $1', [convId]);
   ctx.emit({ type: 'chat', data: { dellal: convId } });
@@ -2082,14 +2131,15 @@ export const dellalProcs = {
     const win = replyWindow(conv.channel, conv.lastCustomerAt, ctx.now());
     if (win === 'closed') throw new AppError('bad_request', 'Plus de 7 jours depuis le dernier message du client : Meta ne permet plus de lui répondre ici. Vous pourrez répondre dès qu’il écrira à nouveau.');
     let sendError: string | null = null;
+    let sentId: string | null = null;
     if (conv.channel !== 'test' && ctx.server?.dellal) {
       try {
-        await ctx.server.dellal('send', { conversationId: conv.id, channel: conv.channel, externalId: conv.externalId, accountId: (await rawConv(ctx.db, conv.id)).account_id, text: i.body, ...(win === 'human' ? { tag: 'HUMAN_AGENT' } : {}) }, ctx);
+        sentId = sentMid(await ctx.server.dellal('send', { conversationId: conv.id, channel: conv.channel, externalId: conv.externalId, accountId: (await rawConv(ctx.db, conv.id)).account_id, text: i.body, ...(win === 'human' ? { tag: 'HUMAN_AGENT' } : {}) }, ctx));
       } catch (e: any) {
         sendError = e?.message ?? 'Envoi impossible';
       }
     }
-    await addMessage(ctx.db, conv.id, { role: 'staff', body: i.body, userId: me(ctx), sendError });
+    await addMessage(ctx.db, conv.id, { role: 'staff', body: i.body, userId: me(ctx), externalId: sentId, sendError });
     await ctx.db.query(`UPDATE conversations SET mode = 'human', assigned_to = $2, unread = 0 WHERE id = $1`, [conv.id, me(ctx)]);
     ctx.emit({ type: 'chat', data: { dellal: conv.id } });
     return { ok: !sendError, sendError };
@@ -2279,6 +2329,8 @@ export const dellalProcs = {
 
   /** Server: a message arrived on a channel (webhooks). Admin/system only. */
   'dellal.receive': proc([], IncomingInput, (ctx, i) => receiveMessage(ctx, i)),
+  'dellal.edited': proc([], EditedInput, (ctx, i) => editedMessage(ctx, i)),
+  'dellal.reacted': proc([], ReactedInput, (ctx, i) => reactedMessage(ctx, i)),
   /** Server: let Dellal answer a conversation now. */
   'dellal.answer': proc([], z.object({ id }), (ctx, { id }) => runAgent(ctx, id)),
   /** Server (every 15 min): one follow-up for quiet customers. */

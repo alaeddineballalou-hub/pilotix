@@ -52,7 +52,10 @@
     "modeHuman": "Vous répondez à ce client : {{name}} est en pause ici.",
     "handoffBar": "{{name}} vous passe la main : {{reason}}",
     "info": "Fiche client",
-    "modeAiHint": "Si vous écrivez, il se met en pause."
+    "modeAiHint": "Si vous écrivez, il se met en pause.",
+    "edited": "modifié",
+    "editedBefore": "Avant : {{text}}",
+    "reaction": "Le client a réagi {{emoji}}"
   },
   "side": {
     "customer": "Client",
