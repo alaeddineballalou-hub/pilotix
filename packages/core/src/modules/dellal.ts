@@ -1857,7 +1857,7 @@ async function demoBrain(ctx: Ctx, req: AiRequest, convId?: number): Promise<AiR
       if (out.home_delivery === null && out.stopdesk === null) return say(`Pour ${out.wilaya}, je vérifie avec l’équipe.`);
       return say(`Livraison à ${out.commune ? `${out.commune} (${out.wilaya})` : out.wilaya} : ${out.home_delivery ?? '—'} DA à domicile${out.stopdesk ? `, ${out.stopdesk} DA au bureau` : ''}. Paiement à la livraison. ${v1 ? 'Envoie-moi ton prénom et ton numéro : un conseiller t’appelle pour confirmer.' : 'Pour réserver, envoie-moi ton nom, ton numéro et ta commune.'}`);
     }
-    if (tool.name === 'send_photos' && tool.input?.sizes && !out.error && !out.already) return say('Voilà le guide des tailles 👆 Tu portes quelle taille d’habitude ? Dis-moi aussi ta taille et ton poids si tu hésites.');
+    if (tool.name === 'send_photos' && tool.input?.sizes && !out.error && !out.already) return say('Voilà le guide des tailles 👆 Dis-moi la taille et le poids (ou l’âge, pour un bébé) : je te dis laquelle prendre.');
     if (tool.name === 'send_photos') return say(out.already ? 'Je te les ai envoyées juste au-dessus 👆 Laquelle te plaît ?' : `Voilà ${out.of ?? 'le produit'} 👆 Tu es de quelle wilaya ? Je te donne le prix de la livraison.`);
     if (tool.name === 'product_photos') return say(`D’après ses photos, voilà comment il est 👆 Tu veux que je t’envoie les photos ?`);
     if (tool.name === 'search_products') {
