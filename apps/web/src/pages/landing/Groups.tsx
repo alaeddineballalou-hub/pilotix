@@ -1,5 +1,6 @@
 // Landing pages › Groupes: one page with several products. The customer taps one; it opens that product's own landing
 // page (« back to all the products » at its top). Five designs; in « best seller » the shop picks the product shown big.
+import { LandingPreview } from './Preview';
 import { GROUP_THEMES, GroupTheme, LANDING_COLORS, LANDING_DEFAULT_COLOR } from '@pilotix/shared';
 import { ReactElement, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -378,7 +379,7 @@ function Form({ g }: { g: Group | null }) {
             <b>{t('landing.ed.preview')}</b>
             <span className="muted small">{t('landing.gr.previewHint')}</span>
           </div>
-          <div className="lp-pv-box phone">{html ? <iframe ref={frame} title={t('landing.ed.preview')} srcDoc={html} sandbox="allow-scripts allow-forms" /> : <Loading />}</div>
+          <div className="lp-pv-box phone">{html ? <LandingPreview frame={frame} title={t('landing.ed.preview')} html={html} /> : <Loading />}</div>
         </aside>
       </div>
     </div>

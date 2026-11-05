@@ -2,6 +2,7 @@
 // (added to Commandes by themselves), the orders the fake-order check held back, and the settings (Meta pixel,
 // automations). #/landing/pages/new/<product> opens the editor on a product; #/landing/voir/<slug> shows a page as the
 // customer sees it.
+import { LandingPreview } from './Preview';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, rpc, serverUrl, shopApi } from '../../lib/backend';
@@ -248,7 +249,7 @@ function Viewer({ slug, group }: { slug: string; group?: string }) {
         <span className="ltr">/{slug}</span>
         <span className="muted small">{t('landing.view.demo')}</span>
       </div>
-      {page.error && html === null ? <ErrorBox error={page.error} /> : html === null ? <Loading /> : <iframe ref={frame} title={slug} srcDoc={html} sandbox="allow-scripts allow-forms" />}
+      {page.error && html === null ? <ErrorBox error={page.error} /> : html === null ? <Loading /> : <LandingPreview frame={frame} title={slug} html={html} />}
     </div>
   );
 }

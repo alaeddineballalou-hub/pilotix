@@ -1247,6 +1247,26 @@ class ApiController {
     return this.sendLanding(p, slug, req, res);
   }
 
+  /**
+   * The editor's preview of a page (inside the app): a blank page that shows the HTML the app sends it. The app's own
+   * pages only run Pilotix's scripts (Content-Security-Policy), so the page's scripts run here instead: in a frame of
+   * its own, sandboxed (no access to the app, its storage or its session), whether it is framed or opened directly.
+   */
+  @Public()
+  @Get('lp/preview-host')
+  previewHost(@Res() res: any) {
+    const html =
+      '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>' +
+      '<script>addEventListener("message",function(e){var d=e.data;if(e.source!==parent||!d||typeof d.lpHtml!=="string")return;document.open();document.write(d.lpHtml);document.close()});parent.postMessage({lpHost:1},"*")</script></body></html>';
+    return res
+      .status(200)
+      .header('Content-Type', 'text/html; charset=utf-8')
+      .header('Cache-Control', 'public, max-age=3600')
+      .header('Content-Security-Policy', 'sandbox allow-scripts allow-forms')
+      .header('X-Content-Type-Options', 'nosniff')
+      .send(html);
+  }
+
   /** The first addresses of the pages (links already in ads keep working; the page names site/<store>/<page> as its own). */
   @Public()
   @Get(['lp/:slug', 's/:shop/lp/:slug'])

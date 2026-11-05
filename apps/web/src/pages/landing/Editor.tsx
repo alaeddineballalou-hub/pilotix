@@ -1,5 +1,6 @@
 // The editor of one landing page: the form on one side, the page itself on the other (live, desktop or phone), drawn
 // by the very function the server uses, so what is seen here is what customers get.
+import { LandingPreview } from './Preview';
 import { LANDING_COLORS, LANDING_DEFAULT_COLOR, LandingView, renderLanding, WHATSAPP_DEFAULT, WHATSAPP_VARS } from '@pilotix/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -340,7 +341,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
             </div>
           </div>
           <div ref={box} className={`lp-pv-box ${device}`} style={device === 'desktop' ? { ['--s' as string]: scale, ['--dw' as string]: `${DESKTOP_W}px` } : undefined}>
-            {html ? <iframe ref={frame} title={t('landing.ed.preview')} srcDoc={html} sandbox="allow-scripts allow-forms" /> : <p className="muted">{t('landing.ed.pickProduct')}</p>}
+            {html ? <LandingPreview frame={frame} title={t('landing.ed.preview')} html={html} /> : <p className="muted">{t('landing.ed.pickProduct')}</p>}
           </div>
         </aside>
       </div>
