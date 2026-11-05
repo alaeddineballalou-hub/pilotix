@@ -45,6 +45,8 @@ services:
       CORS_ORIGINS: https://${DOMAIN},https://www.${DOMAIN},capacitor://localhost,https://localhost
       TRUST_PROXY: "1"
       PUBLIC_URL: https://${DOMAIN}
+      # the landing pages' own address (deploy/Caddyfile › go.<domain>): used once it answers, else the pages stay on PUBLIC_URL
+      LANDING_URL: https://go.${DOMAIN}
       # shops' own domains point to this server's address: set it when the domain is behind Cloudflare (its DNS shows
       # Cloudflare's addresses, not the server's). Several: comma-separated.
       PUBLIC_IP: ${PUBLIC_IP:-}

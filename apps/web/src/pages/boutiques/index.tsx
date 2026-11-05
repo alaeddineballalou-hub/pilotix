@@ -7,6 +7,7 @@ import type { Boutique } from '@pilotix/shared';
 import { DragEvent, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, serverUrl } from '../../lib/backend';
+import { usePagesBase } from '../../lib/pages';
 import { useAction } from '../../lib/query';
 import { go } from '../../lib/route';
 import { useSession } from '../../lib/session';
@@ -116,6 +117,9 @@ function Editor({ b }: { b: Boutique }) {
   const [opening, setOpening] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const host = siteHost();
+  // the landing pages' own address (go.<domain>) once it answers: the preview shows a page's link there
+  const pagesBase = usePagesBase();
+  const pagesHost = backend.kind === 'demo' ? host : pagesBase.replace(/^https?:\/\//, '').replace(/\/+$/, '') || host;
   const changed = name.trim() !== b.name || logo !== b.logo;
   const save = useAction('boutiques.save', {
     success: t('boutiques.saved'),
@@ -245,7 +249,7 @@ function Editor({ b }: { b: Boutique }) {
             <Icon name="eye" /> {t('boutiques.liveSub')}
           </span>
         </div>
-        <Preview name={shown} logo={logo} slug={b.slug} host={host} person={session?.profile.name ?? ''} role={role} />
+        <Preview name={shown} logo={logo} slug={b.slug} host={pagesHost} person={session?.profile.name ?? ''} role={role} />
         <p className="bqp-sample">{t('boutiques.sample')}</p>
       </section>
     </div>

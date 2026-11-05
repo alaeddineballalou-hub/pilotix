@@ -77,7 +77,8 @@ test('page address: site/<store>/<page>, the store from the shop name or chosen 
   const before: any = await call('landing.store', admin, {});
   assert.match(before.store, /^[a-z0-9-]{2,40}$/);
   await call('landing.settings.save', mk, { ...base, storeSlug: 'Ma-Boutique' });
-  assert.deepEqual(await call('landing.store', admin, {}), { store: 'ma-boutique' });
+  // the pages' own address comes from the server (go.<domain> once it answers): none here
+  assert.deepEqual(await call('landing.store', admin, {}), { store: 'ma-boutique', pagesUrl: '' });
   const r: any = await call('landing.html', admin, { slug: SLUG, mode: 'live', post: '/o', geo: '/g/', imgBase: null, site: 'https://shop.example' });
   assert.ok(r.html.includes(`<link rel="canonical" href="https://shop.example/ma-boutique/${SLUG}">`));
   await assert.rejects(call('landing.settings.save', mk, { ...base, storeSlug: 'api' }), /réservé/);

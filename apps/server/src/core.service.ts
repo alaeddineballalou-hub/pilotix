@@ -1,4 +1,4 @@
-import { Global, Injectable, Logger, Module, OnModuleDestroy } from '@nestjs/common';
+import { Global, Injectable, Logger, Module, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import * as core from '@pilotix/core';
 import type { Ctx, Db, LiveEvent, PCtx, PlatformSettings, ServerHooks, Shop, ShopCtx, ShopStatus, StaffSession, Tenancy } from '@pilotix/core';
 import type { Session } from '@pilotix/shared';
@@ -127,7 +127,7 @@ export interface ShopRef {
 const SHOP_TTL = 15_000;
 
 @Injectable()
-export class CoreService implements OnModuleDestroy {
+export class CoreService implements OnModuleInit, OnModuleDestroy {
   readonly pool = new Pool({ connectionString: config.databaseUrl, max: config.dbPoolMax });
   readonly t = poolTenancy(this.pool);
   private readonly log = new Logger('Core');
@@ -218,7 +218,75 @@ export class CoreService implements OnModuleDestroy {
     turnstileCheck: (siteKey, token, ip) => turnstileCheck(this, siteKey, token, ip),
     hashPassword: (pw) => core.hashPassword(pw),
     publicUrl: config.publicUrl,
+    // the landing pages' address in use (their own once it answers, else the site's)
+    pagesUrl: () => this.landingBase(),
   };
+
+  // ---------------------------------------------------------------- the landing pages' own address (go.<domain>)
+  /** it answers (its DNS, its certificate, Caddy): checked at start and every 5 minutes */
+  private landingOk = false;
+  private landingFails = 0;
+  private landingTimer: NodeJS.Timeout | null = null;
+  private landingStopped = false;
+
+  /** go.<domain> (lower case), null when the server has no LANDING_URL */
+  landingHost(): string | null {
+    try {
+      return config.landingUrl ? new URL(config.landingUrl).hostname.toLowerCase() : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** the pages are served at their own address now (it answered) */
+  landingReady(): boolean {
+    return this.landingOk && !!config.landingUrl;
+  }
+
+  /** the address of the pages in use: their own once it answers, else the site's (as before) */
+  landingBase(): string {
+    return this.landingReady() ? config.landingUrl : config.publicUrl;
+  }
+
+  /**
+   * Asks go.<domain> who answers there (the whole road: DNS, Cloudflare, Caddy, this server): on once it answers, off
+   * after 2 failures in a row (a short glitch changes nothing).
+   */
+  async checkLanding() {
+    if (!config.landingUrl) return;
+    const was = this.landingOk;
+    let ok = false;
+    try {
+      const r = await fetch(`${config.landingUrl}/api/landing-ready`, {
+        signal: AbortSignal.timeout(10_000),
+        headers: { Accept: 'application/json', 'User-Agent': 'Pilotix-landing-check/1' },
+      });
+      ok = !!(r.ok && ((await r.json().catch(() => null)) as { landing?: boolean } | null)?.landing);
+    } catch {
+      ok = false;
+    }
+    this.landingFails = ok ? 0 : this.landingFails + 1;
+    if (ok) this.landingOk = true;
+    else if (this.landingFails >= 2) this.landingOk = false;
+    if (was !== this.landingOk) {
+      this.log.log(this.landingOk ? `Landing pages: served at ${config.landingUrl}` : `Landing pages: ${config.landingUrl} does not answer, served at ${config.publicUrl}`);
+      this.invalidate();
+    }
+  }
+
+  /** the next check: soon after the start (the server listens by then), every 30 s while off, every minute while on */
+  private nextLandingCheck(ms: number) {
+    if (this.landingTimer) clearTimeout(this.landingTimer);
+    if (this.landingStopped) return;
+    this.landingTimer = setTimeout(() => {
+      void this.checkLanding().finally(() => this.nextLandingCheck(this.landingOk ? 60_000 : 30_000));
+    }, ms);
+    this.landingTimer.unref?.();
+  }
+
+  onModuleInit() {
+    if (config.landingUrl) this.nextLandingCheck(2_000);
+  }
 
   // ---------------------------------------------------------------- shops
   private cache = new Map<string, { at: number; p: Promise<ShopRef | null> }>();
@@ -461,6 +529,9 @@ export class CoreService implements OnModuleDestroy {
 
   async onModuleDestroy() {
     if (this.pilotRestLater) clearTimeout(this.pilotRestLater);
+    this.landingStopped = true;
+    if (this.landingTimer) clearTimeout(this.landingTimer);
+    this.landingTimer = null;
     await this.pool.end();
   }
 }

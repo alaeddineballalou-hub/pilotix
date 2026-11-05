@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { backend, rpc, serverUrl, shopApi } from '../../lib/backend';
 import { da, n, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
+import { usePagesBase } from '../../lib/pages';
 import { useSession } from '../../lib/session';
 import { copyText, Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { store } from '../../lib/store';
@@ -32,10 +33,11 @@ const AGENT_TABS: Tab[] = ['protection', 'abandons', 'bloquees'];
 
 /** the store's part of the pages' address (Réglages); undefined while it loads */
 export const useStore = () => useRpc('landing.store', {}, { staleTime: 60_000 }).data?.store;
+export { usePagesBase } from '../../lib/pages';
 
-/** the address customers open: site/<store>/<page> in real use, the in-app view in the demo */
-export function publicUrl(slug: string, store: string | undefined): string {
-  return backend.kind === 'demo' ? `#/landing/voir/${slug}` : store ? `${serverUrl()}/${store}/${slug}` : `${shopApi(serverUrl())}/lp/${slug}`;
+/** the address customers open: <pages' address>/<store>/<page> in real use, the in-app view in the demo */
+export function publicUrl(slug: string, store: string | undefined, base: string = serverUrl()): string {
+  return backend.kind === 'demo' ? `#/landing/voir/${slug}` : store ? `${base}/${store}/${slug}` : `${shopApi(serverUrl())}/lp/${slug}`;
 }
 
 export function Landing({ sub, rest }: PageProps) {
@@ -74,8 +76,9 @@ function Pages() {
   const { t } = useTranslation();
   const list = useRpc('landing.list', {});
   const store = useStore();
+  const base = usePagesBase();
   const copy = async (slug: string) => {
-    if (await copyText(backend.kind === 'demo' ? `${location.origin}${location.pathname}${publicUrl(slug, store)}` : publicUrl(slug, store))) toast(t('landing.copied'), 'ok');
+    if (await copyText(backend.kind === 'demo' ? `${location.origin}${location.pathname}${publicUrl(slug, store, base)}` : publicUrl(slug, store, base))) toast(t('landing.copied'), 'ok');
   };
   return (
     <>
@@ -125,7 +128,7 @@ function Pages() {
                     <a className="btn small" href={`#/landing/pages/${p.id}`}>
                       <Icon name="pencil" /> {t('landing.list.edit')}
                     </a>
-                    <a className="btn small" href={publicUrl(p.slug, store)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer">
+                    <a className="btn small" href={publicUrl(p.slug, store, base)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer">
                       <Icon name="external" /> {t('landing.list.open')}
                     </a>
                     <button type="button" className="btn small" onClick={() => copy(p.slug)} aria-label={t('landing.list.copy')} title={t('landing.list.copy')}>

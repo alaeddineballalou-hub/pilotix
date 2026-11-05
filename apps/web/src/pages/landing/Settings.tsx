@@ -235,7 +235,7 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
         <p className="pd-note">{t('landing.set.linkHelp')}</p>
         <Field label={t('landing.set.storeSlug')} hint={data.storeFixed ? t('landing.set.storeFixed', { name: data.store }) : t('landing.set.storeSlugHint', { name: data.store })}>
           <div className="lp-slug">
-            <span className="ltr">{`${serverUrl() || location.host}/`.replace(/^https?:\/\//, '')}</span>
+            <span className="ltr">{`${data.pagesUrl || serverUrl() || location.host}/`.replace(/^https?:\/\//, '')}</span>
             {data.storeFixed ? (
               // a shop of Pilotix's platform: its link name, chosen once (all its Pilotix addresses use it too)
               <input className="ltr" value={data.store} readOnly />

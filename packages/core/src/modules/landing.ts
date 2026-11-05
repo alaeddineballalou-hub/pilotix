@@ -64,6 +64,9 @@ const CHALLENGE_TTL = 6 * 3600_000;
 /** the Conversions API token (Events Manager › the pixel › Settings); the ads token is used when it is empty */
 export const LANDING_CAPI_SECRET = 'secret_landing_capi_token';
 /** Cloudflare Turnstile's secret key (the site key is in the landing settings): it never leaves the server */
+/** The landing pages' address in use on this server (their own once it answers, else the site's). */
+const pagesUrlOf = (ctx: Ctx) => ctx.server?.pagesUrl?.() || ctx.server?.publicUrl || '';
+
 export const LANDING_TURNSTILE_SECRET = 'secret_landing_turnstile';
 /** the browser preview and the tests have no server: Meta events are only simulated */
 const simulated = (ctx: Ctx) => !ctx.server;
@@ -1674,9 +1677,11 @@ export const landingProcs = {
       /** Cloudflare Turnstile's secret key is saved (it never leaves the server either) */
       turnstile: !!String((await ctx.db.query(`SELECT value FROM settings WHERE key = $1`, [LANDING_TURNSTILE_SECRET]))[0]?.value ?? ''),
       /** Pilotix keeps a Cloudflare widget for the pages' address: protected with nothing to do */
-      turnstileAuto: !!(ctx.server?.publicUrl && (await ctx.server?.turnstileSite?.(hostOf(ctx.server.publicUrl)))),
+      turnstileAuto: !!(pagesUrlOf(ctx) && (await ctx.server?.turnstileSite?.(hostOf(pagesUrlOf(ctx))))),
       /** the store's part of the address in use (the chosen one, else made from the shop's name) */
       store: await landingStore(ctx.db, s),
+      /** where the pages are: their own address (https://go.<domain>), or the site's ('' : the app's own server) */
+      pagesUrl: ctx.server?.pagesUrl?.() ?? '',
       /** a shop of a multi-shop server: its link name was chosen when it was made and never changes (its webhooks use it too) */
       storeFixed: !!ctx.shop,
       /** the token itself never leaves the server */
@@ -1770,7 +1775,8 @@ export const landingProcs = {
 
   'landing.llms': proc([], z.object({ site: z.string().max(500), pagesBase: z.string().max(500).optional() }), async (ctx, i) => ({ text: await landingLlms(ctx.db, i.site, i.pagesBase) })),
   /** the store's part of the pages' address (site/<store>/<page>): for the links shown in Pilotix, and the server's check */
-  'landing.store': proc(null, z.object({}), async (ctx) => ({ store: await landingStore(ctx.db) })),
+  // the store's part of the pages' address, and the address they live at (go.<domain> once it answers; '' in the demo)
+  'landing.store': proc(null, z.object({}), async (ctx) => ({ store: await landingStore(ctx.db), pagesUrl: ctx.server?.pagesUrl?.() ?? '' })),
 
   'landing.image': proc([], z.object({ id, size: z.enum(['160', '320', '480', '720', '960']) }), async (ctx, i) => {
     // a picture from before the compressor has no 720 width: the 960 one instead (and no 320: the 480 one)

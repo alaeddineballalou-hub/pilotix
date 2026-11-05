@@ -115,6 +115,8 @@ export interface ServerHooks {
   push?: (keys: { publicKey: string; privateKey: string }, subs: { endpoint: string; p256dh: string; auth: string }[], payload: Record<string, unknown>) => Promise<{ endpoint: string; ok: boolean; gone: boolean }[]>;
   /** the server's public address (PUBLIC_URL): couriers call it back (webhooks) */
   publicUrl?: string;
+  /** the landing pages' address in use (https://go.<domain> once it answers, else publicUrl) */
+  pagesUrl?: () => string;
   /** the shop's public API address: PUBLIC_URL/api, or PUBLIC_URL/api/s/<shop> for a shop other than the first */
   publicApi?: string;
   /** another shop of the platform already has this name (the first part of its links) */

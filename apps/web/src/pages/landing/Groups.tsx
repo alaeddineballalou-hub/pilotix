@@ -12,7 +12,7 @@ import { toast } from '../../ui/toast';
 import { SaveBar } from '../ai/agent';
 import { useDebounced } from '../depot/OrderList';
 import { useLandingFrame } from './frame';
-import { publicUrl, useStore } from './index';
+import { publicUrl, usePagesBase, useStore } from './index';
 import { PixelSelects } from './Pixels';
 
 type Group = Out<'landing.groups'>[number];
@@ -43,8 +43,9 @@ function GroupList() {
   const { t } = useTranslation();
   const list = useRpc('landing.groups', {});
   const store = useStore();
+  const base = usePagesBase();
   const copy = async (slug: string) => {
-    if (await copyText(backend.kind === 'demo' ? `${location.origin}${location.pathname}${publicUrl(slug, store)}` : publicUrl(slug, store))) toast(t('landing.copied'), 'ok');
+    if (await copyText(backend.kind === 'demo' ? `${location.origin}${location.pathname}${publicUrl(slug, store, base)}` : publicUrl(slug, store, base))) toast(t('landing.copied'), 'ok');
   };
   return (
     <section className="card pd-card">
@@ -94,7 +95,7 @@ function GroupList() {
                   <a className="btn small" href={`#/landing/groupes/${g.id}`}>
                     <Icon name="pencil" /> {t('landing.list.edit')}
                   </a>
-                  <a className="btn small" href={publicUrl(g.slug, store)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer">
+                  <a className="btn small" href={publicUrl(g.slug, store, base)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer">
                     <Icon name="external" /> {t('landing.list.open')}
                   </a>
                   <button type="button" className="btn small" onClick={() => copy(g.slug)} aria-label={t('landing.list.copy')} title={t('landing.list.copy')}>
@@ -137,6 +138,7 @@ type Draft = ReturnType<typeof draftOf>;
 function Form({ g }: { g: Group | null }) {
   const { t } = useTranslation();
   const store = useStore();
+  const base = usePagesBase();
   const pages = useRpc('landing.list', {});
   const [d, setD] = useState<Draft>(() => draftOf(g));
   const [saved, setSaved] = useState(() => JSON.stringify(draftOf(g)));
@@ -210,7 +212,7 @@ function Form({ g }: { g: Group | null }) {
         </a>
         <h1 dir="auto">{g ? d.title || g.title : t('landing.gr.newTitle')}</h1>
         {g && (
-          <a className="btn small" href={publicUrl(g.slug, store)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer">
+          <a className="btn small" href={publicUrl(g.slug, store, base)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer">
             <Icon name="external" /> {t('landing.list.open')}
           </a>
         )}
@@ -233,7 +235,7 @@ function Form({ g }: { g: Group | null }) {
             </Field>
             <Field label={t('landing.ed.slug')} hint={t('landing.gr.slugHint')}>
               <div className="lp-slug">
-                <span className="ltr">{backend.kind === 'demo' ? '…/lp/' : (store ? `${serverUrl() || ''}/${store}/` : `${shopApi(serverUrl() || '')}/lp/`).replace(/^https?:\/\//, '')}</span>
+                <span className="ltr">{backend.kind === 'demo' ? '…/lp/' : (store ? `${base || ''}/${store}/` : `${shopApi(serverUrl() || '')}/lp/`).replace(/^https?:\/\//, '')}</span>
                 <input
                   className="ltr"
                   value={d.slug}

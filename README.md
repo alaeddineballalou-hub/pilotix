@@ -124,6 +124,17 @@ Caddy makes its certificate at the first visit (the server allows that one name,
 to that same address (`BACKUP_DOOR` in `apps/web/src/lib/backend.ts`); Google sign-in is hidden there (e-mail and password).
 The record shows the server's address publicly, as a shop's own domain already does.
 
+### Landing pages' own address (go.pilotix.online)
+
+The landing pages (the links in the ads) live at `https://go.<domain>/<store>/<page>`, apart from the app: that address
+serves only the pages and what they call (`/api/lp/…`, `/api/s/<store>/lp/…`, the lists for AI assistants), never the
+app, its login or its other doors (`deploy/Caddyfile` › `go.{$DOMAIN}`). Setup, once: in Cloudflare › DNS, add a
+**CNAME** record named `go` pointing to the domain (`@`), **proxied** (orange cloud). Caddy makes its certificate at the
+first visit (the server allows that one name, `domain-check`). The server (`LANDING_URL`) asks `go.<domain>` every
+minute whether it reaches it (`/api/landing-ready`); once it does, the app shows and copies the pages' links there and
+the old addresses (`<domain>/<store>/<page>`, `/api/lp/<page>`) move there with what followed them (`?fbclid=…`). If it
+stops answering, the pages are served at `<domain>` again within two minutes. Test: `node scripts/landing-host-test.mjs`.
+
 ## Phone apps
 
 The apps live in `mobile/` (Capacitor 8). They open the live `https://pilotix.online`, so every website change

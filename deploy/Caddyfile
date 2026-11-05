@@ -109,6 +109,50 @@ direct.{$DOMAIN} {
 	import platform
 }
 
+# The landing pages' own address: go.<domain>/<store>/<page>, the links in the ads. Only the pages and what they call
+# live here (their order and lead forms, communes, photos, the lists for AI assistants): not the app, not its login,
+# not its other doors, so nothing a page runs can reach a team's session. The server sends the old addresses
+# (<domain>/<store>/<page>, /api/lp/<page>) here once this name answers it (LANDING_URL, /api/landing-ready). Its
+# certificate is asked for at its first visit (the server allows that one name, domain-check).
+go.{$DOMAIN} {
+	tls {
+		on_demand
+	}
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=()"
+		-Server
+	}
+	# what a page calls: /api/lp/… (shop #1), /api/s/<store>/lp/… (the others), the server's own check
+	@pageapi path_regexp ^/api/(?:lp/|s/[a-z0-9-]{2,40}/lp/|landing-ready$|llms\.txt$|s/[a-z0-9-]{2,40}/llms\.txt$)
+	handle @pageapi {
+		import server
+	}
+	# a page: go.<domain>/<store>/<page> (a group of pages too)
+	@page path_regexp page ^/([a-z0-9-]{2,40})/([a-z0-9-]{2,60})/?$
+	handle @page {
+		rewrite * /api/s/{re.page.1}/{re.page.2}
+		import server
+	}
+	handle /llms.txt {
+		rewrite * /api/llms.txt
+		import server
+	}
+	handle /robots.txt {
+		respond "User-agent: *
+Allow: /
+Disallow: /api/
+" 200
+	}
+	# anything else (the home, the app's addresses, its server): the platform's site, which decides
+	handle {
+		redir https://{$DOMAIN}{uri} 302
+	}
+}
+
 # A shop's own domain: its landing pages (https://myshop.com/<page>; the server finds the shop by the name asked for).
 # The pages call /api on that same domain.
 https:// {

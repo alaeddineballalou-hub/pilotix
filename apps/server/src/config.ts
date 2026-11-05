@@ -48,6 +48,11 @@ export const config = {
   twoStepOff: (process.env.PLATFORM_TWO_STEP || '').trim().toLowerCase() === 'off',
   /** Public address of this server (used to show webhook URLs). */
   publicUrl: (process.env.PUBLIC_URL || '').replace(/\/+$/, ''),
+  /**
+   * The landing pages' own address (LANDING_URL, https://go.<domain>): customers' pages never run on the app's address
+   * (their scripts could reach a logged-in person's session there). Used once it answers (CoreService.checkLanding).
+   */
+  landingUrl: (process.env.LANDING_URL || '').replace(/\/+$/, ''),
   /** Optional: a GitHub token (no rights needed) for « Changements API » to read the open-source couriers' code more often. */
   githubToken: (process.env.GITHUB_TOKEN || '').trim(),
   /**

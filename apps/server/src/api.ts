@@ -267,7 +267,19 @@ function metaSigned(req: RawBodyRequest<any>, body: unknown, sig: string | undef
 }
 
 /** The shop's public API address (links given to customers and to other services). */
-const apiOf = (ref: ShopRef) => `${config.publicUrl}/api${ref.shop.primary ? '' : `/s/${ref.shop.slug}`}`;
+const apiOf = (ref: ShopRef, site = config.publicUrl) => `${site}/api${ref.shop.primary ? '' : `/s/${ref.shop.slug}`}`;
+/** The address a request came to (Caddy passes it on), lower case, without the port. */
+const hostOf = (req: { headers: Record<string, string | undefined> }) =>
+  String(req.headers['x-forwarded-host'] || req.headers.host || '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase()
+    .replace(/:\d+$/, '');
+/** What follows the path of a request (?fbclid=…): kept when a page moves. */
+const queryOf = (req: { url?: string }) => {
+  const q = String(req.url ?? '').indexOf('?');
+  return q >= 0 ? String(req.url).slice(q) : '';
+};
 
 /**
  * Orders, landing pages and parcel statuses keep coming in while a shop is unpaid (locked): no customer order is lost,
@@ -613,7 +625,10 @@ class ApiController {
   async domainAllowed(@Query('domain') domain: string, @Res() res: any) {
     // the backup door (direct.<platform>, deploy/Caddyfile): the same app without Cloudflare, its certificate made at its first visit
     const host = this.platformHost();
-    if (host && String(domain ?? '').trim().toLowerCase() === `direct.${host}`) return res.status(200).send('ok');
+    const asked = String(domain ?? '').trim().toLowerCase();
+    if (host && asked === `direct.${host}`) return res.status(200).send('ok');
+    // the landing pages' own address (go.<platform>, LANDING_URL): its certificate made at its first visit too
+    if (asked && asked === this.core.landingHost()) return res.status(200).send('ok');
     const id = await core.shopIdByDomain(this.core.t, String(domain ?? ''));
     return res.status(id ? 200 : 404).send(id ? 'ok' : 'unknown');
   }
@@ -648,7 +663,7 @@ class ApiController {
     const ref = await this.publicShop(store).catch(() => null);
     if (!ref || ref.shop.demo) return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Boutique introuvable');
     const shop = intake(ref);
-    const r: any = await this.core.call(shop, 'landing.llms', await this.core.systemSession(shop), { site: config.publicUrl });
+    const r: any = await this.core.call(shop, 'landing.llms', await this.core.systemSession(shop), { site: this.core.landingBase() });
     return sendText(req, res.status(200).header('Content-Type', 'text/plain; charset=utf-8').header('Cache-Control', 'public, max-age=3600'), r.text);
   }
 
@@ -1201,12 +1216,14 @@ class ApiController {
     const missing = () => res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
     if (!/^[a-z0-9-]{2,60}$/.test(slug)) return missing();
     try {
-      // on the shop's own domain, the page calls that domain (Caddy forwards /api): no other site involved
-      const base = `${own?.api ?? apiOf(ref)}/lp/`;
+      // a page calls the address it was opened at: the shop's own domain (Caddy forwards /api), the pages' own address
+      // (go.<domain>, whose /api/lp Caddy forwards too) or the app's site. No other site involved, nothing cross-site.
+      const atPages = !!this.core.landingHost() && hostOf(req) === this.core.landingHost();
+      const base = `${own?.api ?? apiOf(ref, atPages ? config.landingUrl : config.publicUrl)}/lp/`;
       // opened from a group page (?g=<group>): the product page shows « back to all the products »
       const g = /[?&]g=([a-z0-9-]{2,60})(?:&|$)/.exec(String(req.url ?? ''))?.[1];
       const r: any = await this.core.call(ref, 'landing.html', await this.core.systemSession(ref), {
-        slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, geo: `${base}geo/`, imgBase: `${base}img/`, site: config.publicUrl, ...(own ? { url: own.url } : {}), ...(g ? { group: g } : {}),
+        slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, geo: `${base}geo/`, imgBase: `${base}img/`, site: atPages ? config.landingUrl : this.core.landingBase(), ...(own ? { url: own.url } : {}), ...(g ? { group: g } : {}),
       });
       res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store');
       // the main photo asked for as soon as these headers arrive, before the page itself
@@ -1228,22 +1245,18 @@ class ApiController {
   async storePage(@Param('store') store: string, @Param('slug') slug: string, @Req() req: { url?: string; headers: Record<string, string | undefined> }, @Res() res: any) {
     // a boutique's former link (« Mes boutiques »: its link changed): its pages moved to the new one
     const moved = core.SLUG_RE.test(store) && !(await this.core.shop({ slug: store }).catch(() => null)) ? await this.core.movedShop(store).catch(() => null) : null;
-    if (moved && moved.shop.status === 'active' && /^[a-z0-9-]{2,60}$/.test(slug)) {
-      const q = String(req.url ?? '').indexOf('?');
-      return res.status(301).header('Location', `${config.publicUrl}/${moved.shop.slug}/${slug}${q >= 0 ? String(req.url).slice(q) : ''}`).send();
-    }
+    if (moved && moved.shop.status === 'active' && /^[a-z0-9-]{2,60}$/.test(slug)) return this.movePage(res, moved.shop.slug, slug, req);
     const ref = await this.core.fromParam(store).catch(() => null);
     if (ref) {
       // a suspended or closed shop: its pages are gone
       if (ref.shop.status !== 'active') return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
+      // the pages live at their own address (go.<domain>): never on the app's (the links in ads follow)
+      if (this.offPages(req) && /^[a-z0-9-]{2,60}$/.test(slug)) return this.movePage(res, store, slug, req);
       return this.sendLanding(intake(ref), slug, req, res);
     }
     const p = await this.core.primary();
     const r: any = await this.core.call(p, 'landing.store', await this.core.systemSession(p), {});
-    if (store !== r.store && /^[a-z0-9-]{2,60}$/.test(slug)) {
-      const q = String(req.url ?? '').indexOf('?');
-      return res.status(301).header('Location', `${config.publicUrl}/${r.store}/${slug}${q >= 0 ? String(req.url).slice(q) : ''}`).send();
-    }
+    if ((store !== r.store || this.offPages(req)) && /^[a-z0-9-]{2,60}$/.test(slug)) return this.movePage(res, r.store, slug, req);
     return this.sendLanding(p, slug, req, res);
   }
 
@@ -1273,7 +1286,30 @@ class ApiController {
   async landingPage(@Param('shop') shop: string | undefined, @Param('slug') slug: string, @Req() req: { url?: string; headers: Record<string, string | undefined> }, @Res() res: any) {
     const ref = await this.publicShop(shop).catch(() => null);
     if (!ref) return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
+    // an old address on the app's site: the page at its own address (go.<domain>/<store>/<page>)
+    if (this.offPages(req) && /^[a-z0-9-]{2,60}$/.test(slug)) {
+      // the store's part of the address: a platform shop's name, or the one shop #1 chose in Réglages
+      const store = ref.shop.primary ? String(((await this.core.call(ref, 'landing.store', await this.core.systemSession(ref), {})) as any).store) : ref.shop.slug;
+      return this.movePage(res, store, slug, req);
+    }
     return this.sendLanding(intake(ref), slug, req, res);
+  }
+
+  /** The pages have their own address now, and this request came to another one (the app's site, its backup door). */
+  private offPages(req: { headers: Record<string, string | undefined> }): boolean {
+    return this.core.landingReady() && hostOf(req) !== this.core.landingHost();
+  }
+
+  /** A page's address now (its store's current link, at the pages' address), what followed it kept (?fbclid=…). */
+  private movePage(res: any, store: string, slug: string, req: { url?: string }) {
+    return res.status(301).header('Location', `${this.core.landingBase()}/${store}/${slug}${queryOf(req)}`).header('Cache-Control', 'no-store').send();
+  }
+
+  /** Answers « yes » only at the pages' own address: the server checks with it that go.<domain> really reaches it. */
+  @Public()
+  @Get('landing-ready')
+  landingReadyCheck(@Req() req: { headers: Record<string, string | undefined> }) {
+    return { landing: !!this.core.landingHost() && hostOf(req) === this.core.landingHost() };
   }
 
   /** /llms.txt (Caddy sends it here): shop #1 and its live landing pages, for AI assistants (cached an hour). */
@@ -1281,13 +1317,13 @@ class ApiController {
   @Get('llms.txt')
   async llmsTxt(@Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
     const p = await this.core.primary();
-    const r: any = await this.core.call(p, 'landing.llms', await this.core.systemSession(p), { site: config.publicUrl });
+    const r: any = await this.core.call(p, 'landing.llms', await this.core.systemSession(p), { site: this.core.landingBase() });
     // the other shops of the server: each one's own list (its pages, prices, descriptions)
     const others = [];
     for (const s of await core.loadShops(this.core.t)) {
       if (s.primary || s.demo || s.status !== 'active') continue;
       const ref = await this.core.shop({ id: s.id });
-      if (ref && !ref.status.locked) others.push(`- [${s.name.replace(/[[\]\\]/g, '')}](${config.publicUrl}/api/s/${s.slug}/llms.txt)`);
+      if (ref && !ref.status.locked) others.push(`- [${s.name.replace(/[[\]\\]/g, '')}](${this.core.landingBase()}/api/s/${s.slug}/llms.txt)`);
     }
     const text = others.length ? `${r.text.trimEnd()}\n\n## Boutiques\n\n${others.join('\n')}\n` : r.text;
     return sendText(req, res.status(200).header('Content-Type', 'text/plain; charset=utf-8').header('Cache-Control', 'public, max-age=3600'), text);
