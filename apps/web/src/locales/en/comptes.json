@@ -41,6 +41,8 @@
   },
   "waiting": "Linking…",
   "waitingHelp": "Finish in the {{name}} tab that opened: log in, choose your Pages and accept.",
+  "confirmWait": "One last step…",
+  "confirmHelp": "In the {{name}} tab, press « Oui, c’est ma boutique » (yes, this is my shop) to link this account.",
   "waitingPreview": "Preview: the login is simulated and takes two seconds.",
   "blocked": "Your browser blocked the new tab. Open it with the button.",
   "open": "Open {{name}}",

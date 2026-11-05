@@ -11,7 +11,7 @@
 // The network part (the login's code turned into a token, the Pages and ad accounts read, the Pages subscribed to
 // Pilotix's webhook) is in social-server.ts, run by the server only. In the browser preview there is no platform: a
 // sample account answers, kept in the page until it is reloaded.
-import { sealPlatformSetting, sealSetting, sealString } from '../secretbox';
+import { sealDeep, sealPlatformSetting, sealSetting, sealString } from '../secretbox';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num } from '../db';
 import { AppError, Ctx, proc } from '../rpc';
@@ -143,6 +143,17 @@ CREATE TABLE IF NOT EXISTS platform.social_states (
   link_id    integer,
   error      text
 );
+`;
+
+/**
+ * « Oui, c'est ma boutique »: what a login brought back waits in its state (its tokens sealed) until the person in the
+ * login's own tab says it is their boutique, with that tab's one-time key (nobody else has it: not even the person who
+ * started the login, should someone else's account come back in it).
+ */
+export const SOCIAL_CONFIRM_SQL = `
+ALTER TABLE platform.social_states ADD COLUMN IF NOT EXISTS found jsonb;
+ALTER TABLE platform.social_states ADD COLUMN IF NOT EXISTS found_at timestamptz;
+ALTER TABLE platform.social_states ADD COLUMN IF NOT EXISTS confirm_hash text;
 `;
 
 /** What Meta last sent Pilotix's webhook for each Page / Instagram account (routeMeta; « Tester » shows it). */
@@ -314,16 +325,35 @@ export interface StateRow {
   by: string;
   expired: boolean;
   done: boolean;
+  /** what the login brought back, waiting for « Oui, c'est ma boutique » (null: not back yet) */
+  found: FoundAccount | null;
+  confirmHash: string | null;
 }
 /** The login tab is back: its state, once (null: unknown, used or too old). */
 export async function takeState(t: Tenancy, state: string): Promise<StateRow | null> {
   if (!state || state.length > 100) return null;
   const r = (await t.platform.query(`SELECT *, expires_at < now() AS expired FROM platform.social_states WHERE state = $1`, [state]))[0];
   if (!r) return null;
-  return { state, provider: r.provider, ownerId: num(r.owner_id), shopId: r.shop_id === null ? null : num(r.shop_id), fromShop: num(r.from_shop), by: String(r.by_name ?? ''), expired: !!r.expired, done: !!r.done_at };
+  return {
+    state,
+    provider: r.provider,
+    ownerId: num(r.owner_id),
+    shopId: r.shop_id === null ? null : num(r.shop_id),
+    fromShop: num(r.from_shop),
+    by: String(r.by_name ?? ''),
+    expired: !!r.expired,
+    done: !!r.done_at,
+    found: r.found_at && r.found ? (typeof r.found === 'string' ? JSON.parse(r.found) : r.found) : null,
+    confirmHash: r.confirm_hash ? String(r.confirm_hash) : null,
+  };
+}
+/** The login came back: what it brought waits (its tokens sealed) for the tab's « Oui, c'est ma boutique ». */
+export async function holdFound(t: Tenancy, state: string, found: FoundAccount, confirmHash: string) {
+  await t.platform.query(`UPDATE platform.social_states SET found = $2, found_at = now(), confirm_hash = $3 WHERE state = $1 AND done_at IS NULL`, [state, JSON.stringify(sealDeep(found)), confirmHash]);
 }
 export async function endState(t: Tenancy, state: string, o: { linkId?: number | null; error?: string | null }) {
-  await t.platform.query(`UPDATE platform.social_states SET done_at = now(), link_id = $2, error = $3 WHERE state = $1`, [state, o.linkId ?? null, o.error ? o.error.slice(0, 300) : null]);
+  // what the login brought goes with it: kept only while it waited for its « oui »
+  await t.platform.query(`UPDATE platform.social_states SET done_at = now(), link_id = $2, error = $3, found = NULL, confirm_hash = NULL WHERE state = $1`, [state, o.linkId ?? null, o.error ? o.error.slice(0, 300) : null]);
 }
 
 // ---------------------------------------------------------------- what a login brought back
@@ -812,9 +842,10 @@ export const socialProcs = {
   /** Where a login is: waiting for its tab, done (its account is in the list), failed or too old. */
   'social.state': proc([], z.object({ state: z.string().min(8).max(100) }), async (ctx, i) => {
     if (!live(ctx)) return demoState(ctx, i.state);
-    const r = (await ctx.t.platform.query(`SELECT done_at, error, link_id, expires_at < now() AS expired FROM platform.social_states WHERE state = $1 AND from_shop = $2`, [i.state, ctx.shop.id]))[0];
+    const r = (await ctx.t.platform.query(`SELECT done_at, error, link_id, found_at, expires_at < now() AS expired FROM platform.social_states WHERE state = $1 AND from_shop = $2`, [i.state, ctx.shop.id]))[0];
     if (!r) throw new AppError('not_found', 'Connexion introuvable');
-    const status: 'waiting' | 'done' | 'error' | 'expired' = r.done_at ? (r.error ? 'error' : 'done') : r.expired ? 'expired' : 'waiting';
+    // confirm: the account is back, its tab asks « Oui, c'est ma boutique ? »
+    const status: 'waiting' | 'confirm' | 'done' | 'error' | 'expired' = r.done_at ? (r.error ? 'error' : 'done') : r.expired ? 'expired' : r.found_at ? 'confirm' : 'waiting';
     return { status, error: r.error ? String(r.error) : null, linkId: r.link_id === null ? null : num(r.link_id) };
   }),
 

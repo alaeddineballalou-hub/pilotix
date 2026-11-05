@@ -6,7 +6,7 @@ import { AI_USAGE_SQL } from './aiusage';
 import { LAHJA_PLATFORM_SQL } from '../modules/lahja';
 import { DARIJA_BOOK_SQL } from '../modules/darijabook';
 import { VOCAB_PLATFORM_SQL } from '../modules/vocab';
-import { SOCIAL_DELETIONS_SQL, SOCIAL_HOOKS_SQL, SOCIAL_PLATFORM_SQL } from '../modules/social';
+import { SOCIAL_CONFIRM_SQL, SOCIAL_DELETIONS_SQL, SOCIAL_HOOKS_SQL, SOCIAL_PLATFORM_SQL } from '../modules/social';
 
 const P001 = `
 CREATE SCHEMA IF NOT EXISTS platform;
@@ -620,6 +620,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ],
   // Meta's data deletion requests: their codes (Facebook Login for Business › Data Deletion Request URL)
   ['p025_social_deletions', SOCIAL_DELETIONS_SQL],
+  // « Oui, c'est ma boutique »: a linked Facebook / TikTok account waits for its tab's yes before a boutique gets it
+  ['p026_social_confirm', SOCIAL_CONFIRM_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

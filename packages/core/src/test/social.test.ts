@@ -8,13 +8,18 @@ import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCal
 import { loadShop, passwordFromLink } from '../platform';
 import { noteBadSignature, noteIgLogin, resetSocialDemo, routeMeta } from '../modules/social';
 import { setRaw } from '../modules/admin';
-import { deletionPage, finishLogin, loginPage, metaDeletion, parseSignedRequest, runSocial } from '../social-server';
+import { confirmLogin, deletionPage, finishLogin, loginPage, metaDeletion, parseSignedRequest, runSocial } from '../social-server';
 import { createHmac } from 'node:crypto';
 
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
 const SELLER = 'karim@bebe.dz';
 const PW = 'Vendeur-Password-1';
 const URL0 = 'https://pilotix.test';
+/** The login tab comes back and the person says « Oui, c'est ma boutique » in it: the account linked (most tests). */
+async function linked(t: Tenancy, provider: 'meta' | 'tiktok', q: Record<string, unknown>, url: string) {
+  const end = await finishLogin(t, provider, q, url);
+  return end.confirm ? confirmLogin(t, end.confirm.state, end.confirm.key, true) : end;
+}
 let t: Tenancy;
 let pctx: PCtx;
 let a: Ctx;
@@ -151,9 +156,19 @@ test('one boutique: the login tab comes back, the account is kept, its first Pag
     ads: [{ id: 'act_3003', account_id: '3003', name: 'Bébé pub', currency: 'USD', account_status: 1 }],
   };
   calls.length = 0;
-  const end = await finishLogin(t, 'meta', { code: 'THE_CODE', state: s.state }, URL0);
+  const back = await finishLogin(t, 'meta', { code: 'THE_CODE', state: s.state }, URL0);
+  // the tab asks « Oui, c'est ma boutique ? »: nothing is linked before, and only that tab's key says yes
+  assert.equal(back.ok, true);
+  assert.deepEqual([back.confirm!.account, back.confirm!.provider, back.confirm!.assets.length], ['Karim Benali', 'meta', 3]);
+  assert.match(loginPage(back), /Karim Benali.*Oui, c’est ma boutique.*Non, ce n’est pas moi/s);
+  assert.ok(!/TOKEN/.test(loginPage(back)), 'no token in the page');
+  assert.equal((await call('social.state', a, { state: s.state })).status, 'confirm');
+  assert.equal(((await call('social.list', a, {})) as any).links.length, 0);
+  assert.equal((await confirmLogin(t, s.state, 'not-the-key-of-this-tab', true)).ok, false);
+  const end = await confirmLogin(t, back.confirm!.state, back.confirm!.key, true);
   assert.deepEqual(end, { ok: true, message: 'Compte lié', account: 'Karim Benali' });
   assert.match(loginPage(end), /Karim Benali.*fermer cet onglet/s);
+  assert.equal((await confirmLogin(t, back.confirm!.state, back.confirm!.key, true)).ok, false, 'a yes serves once');
   // each Page is subscribed to Pilotix's webhook with its own token
   const subs = calls.filter((c) => /subscribed_apps/.test(c.url));
   assert.equal(subs.length, 2);
@@ -180,7 +195,7 @@ test('one boutique: the login tab comes back, the account is kept, its first Pag
   const ds: any = await call('dellal.settings.get', a, {});
   assert.deepEqual(ds.page, { pageId: '9002', name: 'Bébé Confort DZ', igId: '178002', igUsername: 'bebeconfort.dz', account: 'Karim Benali' });
   // a state serves once
-  assert.equal((await finishLogin(t, 'meta', { code: 'AGAIN', state: s.state }, URL0)).ok, false);
+  assert.equal((await linked(t, 'meta', { code: 'AGAIN', state: s.state }, URL0)).ok, false);
 });
 
 test('the Page is chosen by the boutique; a Page cannot be pasted by hand any more', async () => {
@@ -210,7 +225,7 @@ test('all boutiques: each picks its Page in one click, a Page answers for one bo
     ],
     ads: [],
   };
-  assert.equal((await finishLogin(t, 'meta', { code: 'C2', state: s.state }, URL0)).ok, true);
+  assert.equal((await linked(t, 'meta', { code: 'C2', state: s.state }, URL0)).ok, true);
   const la: any = await call('social.list', a, {});
   const shared = la.links.find((l: any) => l.scope === 'all');
   assert.ok(shared.assets.every((x: any) => !x.usedHere && !x.usedBy.length), 'nothing used before a boutique picks');
@@ -253,7 +268,7 @@ test('linked again: the new tokens reach the boutiques, a Page no longer shared 
     ads: [{ id: 'act_3003', account_id: '3003', name: 'Bébé pub', currency: 'USD' }],
   };
   const before: any = await call('social.list', a, {});
-  await finishLogin(t, 'meta', { code: 'C3', state: s.state }, URL0);
+  await linked(t, 'meta', { code: 'C3', state: s.state }, URL0);
   const now: any = await call('social.list', a, {});
   assert.equal(now.links.length, before.links.length, 'the same account, the same row');
   assert.deepEqual(now.links.find((l: any) => l.name === 'Karim Benali').assets.map((x: any) => x.name), ['Bébé pub', 'Bébé Confort DZ']);
@@ -279,7 +294,7 @@ test('linked again with Instagram: a Page first seen without its Instagram gets 
       pages: [{ id: '9002', name: 'Bébé Confort DZ', access_token: 'PAGE_TOKEN_2', ...(ig ? { instagram_business_account: { id: '178002', username: 'bebeconfort.dz' } } : {}) }],
       ads: [],
     };
-    assert.equal((await finishLogin(t, 'meta', { code: ig ? 'IG1' : 'IG0', state: s.state }, URL0)).ok, true);
+    assert.equal((await linked(t, 'meta', { code: ig ? 'IG1' : 'IG0', state: s.state }, URL0)).ok, true);
   };
   // without Instagram's permissions Facebook does not show the Page's Instagram: its messages find no boutique
   await login(false);
@@ -291,18 +306,30 @@ test('linked again with Instagram: a Page first seen without its Instagram gets 
 
 test('a login cancelled, too old, or from another place: nothing is linked', async () => {
   const s: any = await call('social.start', a, { provider: 'meta', scope: 'here' });
-  const no = await finishLogin(t, 'meta', { state: s.state, error: 'access_denied', error_reason: 'user_denied' }, URL0);
+  const no = await linked(t, 'meta', { state: s.state, error: 'access_denied', error_reason: 'user_denied' }, URL0);
   assert.deepEqual(no, { ok: false, message: 'Connexion annulée. Fermez cet onglet.' });
   assert.deepEqual(await call('social.state', a, { state: s.state }), { status: 'error', error: 'Connexion annulée.', linkId: null });
   const old: any = await call('social.start', a, { provider: 'meta', scope: 'here' });
   await t.platform.query(`UPDATE platform.social_states SET expires_at = now() - interval '1 minute' WHERE state = $1`, [old.state]);
-  assert.equal((await finishLogin(t, 'meta', { code: 'X', state: old.state }, URL0)).ok, false);
-  assert.equal((await finishLogin(t, 'meta', { code: 'X', state: 'not-a-real-state-123' }, URL0)).ok, false);
+  assert.equal((await linked(t, 'meta', { code: 'X', state: old.state }, URL0)).ok, false);
+  assert.equal((await linked(t, 'meta', { code: 'X', state: 'not-a-real-state-123' }, URL0)).ok, false);
   // TikTok's state is not Facebook's
   const tt: any = await call('social.start', a, { provider: 'tiktok', scope: 'here' });
-  assert.equal((await finishLogin(t, 'meta', { code: 'X', state: tt.state }, URL0)).ok, false);
+  assert.equal((await linked(t, 'meta', { code: 'X', state: tt.state }, URL0)).ok, false);
   // another boutique does not see this boutique's login
   await assert.rejects(() => call('social.state', b, { state: tt.state }), /introuvable/);
+  // « Non, ce n'est pas moi » in the tab (a login link sent to someone else): nothing linked, the boutique told why
+  const s9: any = await call('social.start', a, { provider: 'meta', scope: 'here' });
+  const links = ((await call('social.list', a, {})) as any).links.length;
+  const back9 = await finishLogin(t, 'meta', { code: 'SOMEONE_ELSE', state: s9.state }, URL0);
+  assert.ok(back9.confirm, back9.message);
+  assert.equal((await confirmLogin(t, back9.confirm!.state, back9.confirm!.key, false)).ok, false);
+  assert.equal(((await call('social.list', a, {})) as any).links.length, links);
+  const st9: any = await call('social.state', a, { state: s9.state });
+  assert.equal(st9.status, 'error');
+  assert.match(String(st9.error), /pas ma boutique/);
+  // what the login brought does not stay behind
+  assert.equal((await t.platform.query('SELECT found FROM platform.social_states WHERE state = $1', [s9.state]))[0].found, null);
 });
 
 test('TikTok for Business: the advertiser’s token and its ad accounts; linked to one boutique, its first ad account is used', async () => {
@@ -312,7 +339,7 @@ test('TikTok for Business: the advertiser’s token and its ad accounts; linked 
   assert.deepEqual([u.searchParams.get('app_id'), u.searchParams.get('redirect_uri')], [APPS.tiktok.appId, `${URL0}/api/oauth/tiktok/callback`]);
   tiktok = { token: 'TT_ADV_TOKEN', ids: ['7001', '7002'], list: [{ advertiser_id: '7001', advertiser_name: 'Bébé TikTok' }, { advertiser_id: '7002', advertiser_name: 'Bébé TikTok 2' }], user: { core_user_id: 'u77', display_name: 'Karim Ads' } };
   calls.length = 0;
-  const end = await finishLogin(t, 'tiktok', { auth_code: 'TT_CODE', state: s.state }, URL0);
+  const end = await linked(t, 'tiktok', { auth_code: 'TT_CODE', state: s.state }, URL0);
   assert.equal(end.ok, true);
   const tok = calls.find((c) => c.url.endsWith('/oauth2/access_token/'))!;
   assert.deepEqual(JSON.parse(tok.body), { app_id: APPS.tiktok.appId, secret: APPS.tiktok.secret, auth_code: 'TT_CODE' });
@@ -358,7 +385,7 @@ test('a Facebook Login for Business configuration: a person’s short token is t
   assert.equal(u.searchParams.get('scope'), null, 'the configuration says what is asked');
   graph = { me: { id: '5099', name: 'Nadia Oran' }, pages: [{ id: '9901', name: 'Bébé Oran Promo', access_token: 'PAGE_TOKEN_9' }], ads: [] };
   calls.length = 0;
-  assert.equal((await finishLogin(t, 'meta', { code: 'CFG_CODE', state: s.state }, URL0)).ok, true);
+  assert.equal((await linked(t, 'meta', { code: 'CFG_CODE', state: s.state }, URL0)).ok, true);
   assert.ok(calls.some((c) => /grant_type=fb_exchange_token/.test(c.url)), 'the short token is turned into a long one');
   const user = await kept('5099');
   assert.deepEqual([user.token, user.token_kind], ['LONG_USER_TOKEN', 'user']);
@@ -369,13 +396,13 @@ test('a Facebook Login for Business configuration: a person’s short token is t
   try {
     const s2: any = await call('social.start', b, { provider: 'meta', scope: 'here' });
     graph = { me: { id: '5100', name: 'Pilotix (système)' }, pages: [{ id: '9902', name: 'Bébé Oran Pro', access_token: 'PAGE_TOKEN_10' }], ads: [] };
-    assert.equal((await finishLogin(t, 'meta', { code: 'SYS_CODE', state: s2.state }, URL0)).ok, true);
+    assert.equal((await linked(t, 'meta', { code: 'SYS_CODE', state: s2.state }, URL0)).ok, true);
     const sys = await kept('5100');
     assert.deepEqual([sys.token, sys.token_kind, sys.expires_at], ['SHORT_USER_TOKEN', 'system', null]);
     // without a configuration, a token Facebook will not turn is an error: nothing half-linked
     await p('p.social.apps.save', { meta: { ...APPS.meta, secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
     const s3: any = await call('social.start', b, { provider: 'meta', scope: 'here' });
-    const end3 = await finishLogin(t, 'meta', { code: 'NO_CFG', state: s3.state }, URL0);
+    const end3 = await linked(t, 'meta', { code: 'NO_CFG', state: s3.state }, URL0);
     assert.equal(end3.ok, false);
   } finally {
     refuseSwap = false;
@@ -386,7 +413,7 @@ test('several ad accounts: a boutique counts them all, Publicité reads each one
   const login = async (ads: any[]) => {
     const s: any = await call('social.start', a, { provider: 'meta', scope: 'here' });
     graph = { me: { id: '5001', name: 'Karim Benali' }, pages: [{ id: '9002', name: 'Bébé Confort DZ', access_token: 'PAGE_TOKEN_2', instagram_business_account: { id: '178002', username: 'bebeconfort.dz' } }], ads };
-    assert.equal((await finishLogin(t, 'meta', { code: `C${ads.length}`, state: s.state }, URL0)).ok, true);
+    assert.equal((await linked(t, 'meta', { code: `C${ads.length}`, state: s.state }, URL0)).ok, true);
   };
   const act = (id: string, name: string, currency = 'USD') => ({ id: `act_${id}`, account_id: id, name, currency, account_status: 1 });
   await login([act('3003', 'Bébé pub'), act('3004', 'Bébé pub 2'), act('3005', 'Promo')]);
@@ -594,7 +621,7 @@ test('Meta’s data deletion request: signed with the app secret, the person’s
   const c = await as(await store('Bébé Annaba', SELLER));
   const s: any = await call('social.start', c, { provider: 'meta', scope: 'here' });
   graph = { me: { id: '7007', name: 'Sara Meziane' }, pages: [{ id: '9100', name: 'Bébé Annaba DZ', access_token: 'PAGE_TOKEN_9' }], ads: [] };
-  assert.equal((await finishLogin(t, 'meta', { code: 'C9', state: s.state }, URL0)).ok, true);
+  assert.equal((await linked(t, 'meta', { code: 'C9', state: s.state }, URL0)).ok, true);
   assert.equal(await setting(c, 'secret_dellal_page_token'), 'PAGE_TOKEN_9');
 
   // not signed with Pilotix's secret, changed on the way, another algorithm, or no signature: nothing goes

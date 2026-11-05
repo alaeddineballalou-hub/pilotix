@@ -1497,6 +1497,25 @@ class ApiController {
     return this.loginEnd('tiktok', q, res);
   }
 
+  /**
+   * « Oui, c'est ma boutique » / « Non » in the login's tab (a form, with that page's one-time key): the account goes to
+   * the boutique, or nothing happens. 20 per 15 minutes per address.
+   */
+  @Public()
+  @Post('oauth/confirm')
+  async oauthConfirm(@Body() body: any, @Req() req: { ip?: string }, @Res() res: any) {
+    const ipKey = `oauthconfirm:${ipOf(req)}`;
+    checkLogin(ipKey, 20);
+    failedLogin(ipKey);
+    const m = optionalSocial();
+    const r = m?.confirmLogin
+      ? await m.confirmLogin(this.core.t, String(body?.state ?? '').slice(0, 100), String(body?.key ?? '').slice(0, 100), body?.choice === 'yes').catch((e: any) => ({ ok: false, message: String(e?.message ?? 'Erreur') }))
+      : { ok: false, message: 'Indisponible sur ce serveur.' };
+    if (!r.ok) new Logger('Comptes').warn(`link not confirmed: ${r.message}`);
+    const html = m?.loginPage ? m.loginPage(r) : `<!DOCTYPE html><meta charset="utf-8"><p>${r.ok ? 'OK' : 'Erreur'}</p>`;
+    return res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store').send(html);
+  }
+
   private async loginEnd(provider: 'meta' | 'tiktok', q: Record<string, string>, res: any) {
     const m = optionalSocial();
     const r = m?.finishLogin ? await m.finishLogin(this.core.t, provider, q ?? {}, config.publicUrl).catch((e: any) => ({ ok: false, message: String(e?.message ?? 'Erreur') })) : { ok: false, message: 'Indisponible sur ce serveur.' };

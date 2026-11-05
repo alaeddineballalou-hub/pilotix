@@ -38,6 +38,8 @@ interface Pending {
   url: string | null;
   win: Window | null;
   blocked: boolean;
+  /** the account is back: its tab asks « Oui, c'est ma boutique ? » */
+  confirm?: boolean;
 }
 
 export function ProviderBadge({ p }: { p: Provider }) {
@@ -78,6 +80,7 @@ export function Comptes(_: PageProps) {
           toast(r.error ?? t(K + 'expired'), 'bad');
           return;
         }
+        if (r.status === 'confirm' && !pending.confirm) setPending({ ...pending, confirm: true });
         if (pending.win?.closed && ++closedTicks.current >= 3) {
           setPending(null);
           toast(t(K + 'closed'), 'bad');
@@ -236,9 +239,9 @@ function ProviderSlot({ p, ready, preview, pending, busy, done, onStart, onReope
         <div className="cpt-slot-wait">
           <p>
             <span className="cpt-spin" aria-hidden="true" />
-            <b>{t(K + 'waiting')}</b>
+            <b>{pending.confirm ? t(K + 'confirmWait') : t(K + 'waiting')}</b>
           </p>
-          <p className="cpt-muted">{preview ? t(K + 'waitingPreview') : pending.blocked ? t(K + 'blocked', { name }) : t(K + 'waitingHelp', { name })}</p>
+          <p className="cpt-muted">{preview ? t(K + 'waitingPreview') : pending.confirm ? t(K + 'confirmHelp', { name }) : pending.blocked ? t(K + 'blocked', { name }) : t(K + 'waitingHelp', { name })}</p>
           <div className="cpt-do">
             {pending.url && (
               <button type="button" className={`btn small ${pending.blocked ? 'primary' : 'ghost'}`} onClick={onReopen}>

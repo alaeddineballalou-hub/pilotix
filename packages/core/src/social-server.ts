@@ -3,11 +3,11 @@
 // expire, or a configuration's « system user » token that does not expire; TikTok: an advertiser's token), then what the account may use
 // is read (Facebook Pages with their Instagram account and their own tokens, Meta ad accounts, TikTok ad accounts) and
 // each Page is subscribed to Pilotix's webhook (its messages and comments come to Pilotix). Tokens never leave the server.
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { num } from './db';
 import { AppError, Ctx } from './rpc';
 import type { Tenancy } from './platform/tenancy';
-import { deletionStatus, endState, FoundAccount, FoundAsset, lastBadSignature, removeLink, saveLink, SOCIAL, SocialCheck, SocialProvider, socialApps, socialSecret, SocialTest, socialUrls, takeState } from './modules/social';
+import { deletionStatus, endState, FoundAccount, FoundAsset, holdFound, lastBadSignature, removeLink, saveLink, SOCIAL, SocialCheck, SocialProvider, socialApps, socialSecret, SocialTest, socialUrls, takeState } from './modules/social';
 
 async function fetchJson(url: string, init: RequestInit, who: string): Promise<any> {
   let res: Response;
@@ -158,11 +158,17 @@ export interface LoginEnd {
   ok: boolean;
   message: string;
   account?: string;
+  /** the account is back: its tab asks « Oui, c'est ma boutique ? » (key: that page's one-time key) */
+  confirm?: { state: string; key: string; provider: SocialProvider; account: string; shop: string | null; by: string; assets: { kind: string; name: string }[] };
 }
+
+const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 
 /**
  * The login tab is back (?code / ?auth_code and ?state): the state is checked (known, from this provider, not used, not
- * older than 20 minutes), the account kept, the boutique's page told (it asks every two seconds and turns green).
+ * older than 20 minutes) and what the login brought waits there. The tab then asks « Oui, c'est ma boutique ? » with
+ * the boutique and the person who asked: a login link sent to someone else (their account would go to a stranger's
+ * boutique) ends here, by their « Non ». Only that tab can say yes (its one-time key).
  */
 export async function finishLogin(t: Tenancy, provider: SocialProvider, q: Record<string, unknown>, publicUrl: string): Promise<LoginEnd> {
   const st = await takeState(t, String(q.state ?? ''));
@@ -180,14 +186,40 @@ export async function finishLogin(t: Tenancy, provider: SocialProvider, q: Recor
   }
   try {
     const found = provider === 'meta' ? await metaAccount(t, code, publicUrl) : await tiktokAccount(t, code);
-    const linkId = await saveLink(t, st, found);
-    await endState(t, st.state, { linkId });
-    return { ok: true, message: 'Compte lié', account: found.name };
+    const key = randomBytes(24).toString('base64url');
+    await holdFound(t, st.state, found, sha256(key));
+    const shop = st.shopId ? String((await t.platform.query('SELECT name FROM platform.shops WHERE id = $1', [st.shopId]))[0]?.name ?? '') : null;
+    return {
+      ok: true,
+      message: 'À confirmer',
+      account: found.name,
+      confirm: { state: st.state, key, provider, account: found.name, shop, by: st.by, assets: found.assets.slice(0, 8).map((a) => ({ kind: a.kind, name: a.name })) },
+    };
   } catch (e: any) {
     const m = String(e?.message ?? 'Erreur').slice(0, 300);
     await endState(t, st.state, { error: m });
     return { ok: false, message: m };
   }
+}
+
+/** « Oui, c'est ma boutique » (or « Non ») in the login's tab: the account goes to the boutique, or nothing happens. */
+export async function confirmLogin(t: Tenancy, state: string, key: string, yes: boolean): Promise<LoginEnd> {
+  const st = await takeState(t, String(state ?? ''));
+  if (!st || st.done || !st.found || !st.confirmHash) return { ok: false, message: 'Cette liaison est déjà faite ou n’existe plus. Fermez cet onglet.' };
+  const want = Buffer.from(st.confirmHash, 'hex');
+  const got = Buffer.from(sha256(String(key ?? '')), 'hex');
+  if (want.length !== got.length || !timingSafeEqual(want, got)) return { ok: false, message: 'Cette page de confirmation n’est pas la bonne. Recommencez depuis Pilotix.' };
+  if (st.expired) {
+    await endState(t, st.state, { error: 'Le temps est passé (20 minutes) : recommencez.' });
+    return { ok: false, message: 'Le temps est passé (20 minutes). Fermez cet onglet et recommencez depuis Pilotix.' };
+  }
+  if (!yes) {
+    await endState(t, st.state, { error: 'Pas lié : « Ce n’est pas ma boutique » dans l’onglet de connexion.' });
+    return { ok: false, message: 'Rien n’a été lié. Si vous n’avez rien demandé, vous pouvez retirer Pilotix de votre compte (Facebook : Paramètres › Intégrations professionnelles).' };
+  }
+  const linkId = await saveLink(t, st, st.found);
+  await endState(t, st.state, { linkId });
+  return { ok: true, message: 'Compte lié', account: st.found.name };
 }
 
 // ---------------------------------------------------------------- « Tester » (Pilot AI › Comptes)
@@ -432,7 +464,10 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 /** The page the login tab shows at its end (it closes itself when the browser lets it). */
+const KIND_WORD: Record<string, string> = { page: 'Page', ad_account: 'Compte pub', advertiser: 'Compte pub TikTok' };
+
 export function loginPage(r: LoginEnd): string {
+  if (r.confirm) return confirmPage(r.confirm);
   const title = r.ok ? 'Compte lié' : 'Connexion non faite';
   const line = r.ok ? `${r.account ? `« ${esc(r.account)} » est lié à Pilotix. ` : ''}Vous pouvez fermer cet onglet : Pilotix est déjà à jour.` : esc(r.message);
   return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Pilotix</title>
@@ -440,6 +475,27 @@ export function loginPage(r: LoginEnd): string {
 main{max-width:420px;margin:24px;padding:28px;border-radius:16px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.08)}h1{margin:0 0 8px;font-size:22px}
 .dot{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:50%;margin-bottom:14px;color:#fff;font-size:24px;background:${r.ok ? '#1f9d55' : '#c2410c'}}p{margin:0;color:#4b5563}</style></head>
 <body><main><div class="dot">${r.ok ? '✓' : '!'}</div><h1>${title}</h1><p>${line}</p></main>${r.ok ? '<script>setTimeout(function(){window.close()},1500)</script>' : ''}</body></html>`;
+}
+
+/** The tab's question: which account, which boutique, asked by whom; « Oui, c'est ma boutique » or « Non ». */
+function confirmPage(c: NonNullable<LoginEnd['confirm']>): string {
+  const net = c.provider === 'meta' ? 'Facebook' : 'TikTok';
+  // a name in « » never leaves its marks alone at the end of a line
+  const q = (x: string) => `«&nbsp;<b>${esc(x)}</b>&nbsp;»`;
+  const where = c.shop ? `la boutique ${q(c.shop)}` : 'toutes les boutiques de la personne qui l’a demandé';
+  const list = c.assets.length ? `<ul>${c.assets.map((a) => `<li>${esc(KIND_WORD[a.kind] ?? a.kind)} : <b>${esc(a.name)}</b></li>`).join('')}</ul>` : '';
+  return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lier ce compte ? · Pilotix</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f5f8;color:#16202e}
+main{max-width:460px;margin:24px;padding:28px;border-radius:16px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.08)}h1{margin:0 0 10px;font-size:22px}p{margin:0 0 12px;color:#374151}
+ul{margin:0 0 14px;padding-left:20px;color:#374151}.who{padding:12px 14px;border-radius:12px;background:#f8fafc;border:1px solid #e5e7eb;margin-bottom:16px}
+.q{font-weight:600;color:#16202e}form{display:grid;gap:10px;margin-top:18px}button{font:inherit;font-weight:600;padding:12px 16px;border-radius:10px;border:1px solid #d1d5db;background:#fff;color:#16202e;cursor:pointer}
+button.yes{background:#1f6feb;border-color:#1f6feb;color:#fff}small{display:block;margin-top:14px;color:#6b7280}</style></head>
+<body><main><h1>Lier ce compte à Pilotix ?</h1>
+<div class="who"><p>Le compte ${net} ${q(c.account)}</p>${list}<p>va être lié à ${where}${c.by ? `, à la demande de ${q(c.by)}` : ''}.</p></div>
+<p class="q">Est-ce bien votre boutique ?</p>
+<form method="post" action="/api/oauth/confirm"><input type="hidden" name="state" value="${esc(c.state)}"><input type="hidden" name="key" value="${esc(c.key)}">
+<button class="yes" type="submit" name="choice" value="yes">Oui, c’est ma boutique</button><button type="submit" name="choice" value="no">Non, ce n’est pas moi</button></form>
+<small>Si vous n’avez rien demandé à Pilotix, choisissez «&nbsp;Non&nbsp;» : rien ne sera lié.</small></main></body></html>`;
 }
 
 // ---------------------------------------------------------------- Meta's data deletion requests

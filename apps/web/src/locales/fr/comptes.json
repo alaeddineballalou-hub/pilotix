@@ -41,6 +41,8 @@
   },
   "waiting": "Connexion en cours…",
   "waitingHelp": "Terminez dans l’onglet {{name}} qui s’est ouvert : connectez-vous, choisissez vos pages et acceptez.",
+  "confirmWait": "Une dernière étape…",
+  "confirmHelp": "Dans l’onglet {{name}}, appuyez sur « Oui, c’est ma boutique » pour lier ce compte.",
   "waitingPreview": "Aperçu : la connexion est simulée, elle prend deux secondes.",
   "blocked": "Votre navigateur a bloqué le nouvel onglet. Ouvrez-le avec le bouton.",
   "open": "Ouvrir {{name}}",
