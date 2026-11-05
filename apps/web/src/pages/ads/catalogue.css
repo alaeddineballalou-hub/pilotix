@@ -3,10 +3,21 @@
 .ct .bji svg { width: 100%; height: 100%; }
 .ct .lf-btn .bji, .ct .lf-link .bji { width: 16px; height: 16px; }
 .ct-main { gap: 14px; }
-.ct-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: -4px 0 0; font-size: 14px; color: var(--sk-count-ink, var(--ink)); }
-.ct-top > span { display: inline-flex; align-items: center; gap: 6px; }
-.ct-top .bji { width: 16px; height: 16px; color: var(--c-muted); }
-.ct-top b { font-weight: 600; }
+
+/* where the lists go: one row per catalog (Meta, TikTok with its switch) */
+.ct-nets { display: flex; flex-direction: column; padding: 4px 16px; border-radius: 18px; background: var(--surface); box-shadow: var(--lf-shadow); }
+html[data-theme="dark"] .ct-nets { border: 1px solid var(--line); }
+.ct-net { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; min-height: 52px; padding: 8px 0; font-size: 14px; }
+.ct-net + .ct-net { border-top: 1px solid var(--line); }
+.ct-net-name { flex: none; min-width: 64px; font-size: 15px; font-weight: 700; }
+.ct-net-facts { flex: 1 1 260px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0; color: var(--sk-count-ink, var(--ink)); }
+.ct-net-facts > span { display: inline-flex; align-items: baseline; gap: 5px; }
+.ct-net-facts > span + span::before { content: "·"; margin-inline: 9px; color: var(--c-muted); }
+.ct-net-facts b { font-weight: 600; }
+.ct-net-facts a { color: var(--c-accent-ink); font-weight: 600; text-underline-offset: 3px; }
+.ct-count { color: var(--c-muted); }
+.ct-net-switch { margin-inline-start: auto; display: inline-flex; align-items: center; gap: 10px; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.ct-nets .ct-warn { margin: 0 0 12px; }
 .ct-warn { display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; border-radius: 16px; background: var(--c-warn-tint); color: var(--c-warn-ink); font-size: 14px; line-height: 1.45; }
 .ct-warn .bji { width: 18px; height: 18px; margin-top: 1px; }
 .ct-warn a { color: inherit; font-weight: 700; text-underline-offset: 3px; }
@@ -78,6 +89,14 @@ html[data-theme="dark"] .ct-col { border: 1px solid var(--line); }
 .ct-col-foot { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-top: 4px; }
 .ct-col-foot .lf-btn { width: 100%; }
 .ct-col-foot small { font-size: 12px; }
+/* the catalogs a sent list is in: a dot says how it is there */
+.ct-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ct-chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px; background: var(--raise); color: var(--ink); font-size: 12.5px; font-weight: 600; }
+.ct-chip i { width: 8px; height: 8px; border-radius: 999px; background: var(--c-muted); }
+.ct-chip.ok i { background: var(--c-ok-fill); }
+.ct-chip.pending i { background: var(--c-info-ink); }
+.ct-chip.fix i { background: var(--c-warn-fill, var(--c-warn-ink)); }
+.ct-chip.fix { background: var(--c-warn-tint); color: var(--c-warn-ink); }
 .ct-new { flex: 1 1 160px; min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 2px dashed var(--line); border-radius: var(--sk-r, 22px); background: transparent; color: var(--c-accent-ink); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
 .ct-new:hover { border-color: var(--c-accent-2, #F28B1E); background: var(--c-accent-tint); }
 .ct-new .bji { width: 22px; height: 22px; }
@@ -86,6 +105,10 @@ html[data-theme="dark"] .ct-col { border: 1px solid var(--line); }
 
 @media (max-width: 640px) {
   .ct-items { max-height: none; }
+  .ct-net-switch { margin-inline-start: 0; }
+  /* a phone: the facts wrap, without a dot at the start of a line */
+  .ct-net-facts { gap: 2px 14px; }
+  .ct-net-facts > span + span::before { content: none; }
   /* a phone: the lists first, the products under them (each with its « + ») */
   .ct-cols { order: -1; }
   .ct-col, .ct-new { flex-basis: 100%; }

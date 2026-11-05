@@ -7,7 +7,8 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypt
 import { num } from './db';
 import { AppError, Ctx } from './rpc';
 import type { Tenancy } from './platform/tenancy';
-import { deletionStatus, endState, FoundAccount, FoundAsset, holdFound, lastBadSignature, removeLink, saveLink, SOCIAL, SocialCheck, SocialProvider, socialApps, socialSecret, SocialTest, socialUrls, takeState } from './modules/social';
+import { getRaw } from './modules/admin';
+import { deletionStatus, endState, FoundAccount, FoundAsset, holdFound, lastBadSignature, removeLink, saveLink, SOCIAL, SOCIAL_KEYS, SocialCheck, SocialProvider, socialApps, socialSecret, SocialTest, socialUrls, takeState } from './modules/social';
 
 async function fetchJson(url: string, init: RequestInit, who: string): Promise<any> {
   let res: Response;
@@ -240,10 +241,137 @@ export async function confirmLogin(t: Tenancy, state: string, key: string, yes: 
 }
 
 // ---------------------------------------------------------------- « Tester » (Pilot AI › Comptes)
-/** The server's hook: 'test' (one linked account, for one boutique). */
+/** The server's hook: 'test' (one linked account, for one boutique); 'ttCatalog…' (Marketing › Catalogue on TikTok). */
 export async function runSocial(action: string, args: any, ctx: Ctx): Promise<unknown> {
   if (action === 'test') return testLink(ctx.t!, num(args?.shopId), num(args?.linkId), ctx.server?.publicUrl ?? '');
+  if (action.startsWith('ttCatalog')) return runTtCatalog(action, args ?? {}, ctx);
   throw new AppError('bad_request', `Action inconnue : ${action}`);
+}
+
+// ---------------------------------------------------------------- Marketing › Catalogue on TikTok
+// The shop's lists go to a TikTok catalog too: made once in the account's Business Center (targeting Algeria, in
+// dinars), the shop's TikTok pixel bound to it; each list is a product set (its products' item_group_id). TikTok takes
+// the products in the background: an upload gives a log id, read again a minute later for what it refused.
+
+/** Algeria and its money: Pilotix's shops sell there. */
+const TT_REGION = 'DZ';
+const TT_CURRENCY = 'DZD';
+export const TT_NO_REGION = 'TikTok ne propose pas encore les publicités catalogue pour l’Algérie. Vos listes restent sur Meta ; réessayez plus tard.';
+
+/** TikTok's refusal, in plain words (its code says why). */
+export function ttCatalogError(code: number, message: string, status = 200): AppError {
+  if ([40102, 40104, 40105, 40106].includes(code) || status === 401)
+    return new AppError('bad_request', 'TikTok a refusé la clé de votre compte. Reliez TikTok à nouveau dans Pilot AI › Comptes.');
+  if (code === 40001)
+    return new AppError(
+      'bad_request',
+      'TikTok refuse : votre compte n’a pas le droit de gérer les catalogues. Il faut être « Admin » du Business Center, et l’app TikTok de Pilotix doit avoir la permission « Catalog Management ».',
+    );
+  if (code === 40118) return new AppError('bad_request', 'TikTok n’ouvre pas encore les catalogues à votre compte (pays ou compte pas encore ouvert).');
+  if ([40016, 40100, 40133, 51021].includes(code) || status === 429) return new AppError('conflict', 'TikTok limite les demandes pour l’instant. Réessayez dans quelques minutes.');
+  return new AppError('bad_request', `TikTok : ${message || 'erreur inconnue'}`.slice(0, 300));
+}
+
+async function ttApi(path: string, token: string, o: { query?: Record<string, string>; body?: unknown } = {}): Promise<any> {
+  const url = `${SOCIAL.tiktokApi}/${path}${o.query ? `?${new URLSearchParams(o.query)}` : ''}`;
+  const { res, data } = await fetchJson(
+    url,
+    o.body !== undefined ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'Access-Token': token }, body: JSON.stringify(o.body) } : { headers: { 'Access-Token': token } },
+    'TikTok',
+  );
+  const code = data?.code === undefined ? (res.ok ? 0 : -1) : Number(data.code);
+  if (res.ok && code === 0) return data?.data ?? {};
+  throw ttCatalogError(code, String(data?.message ?? res.statusText ?? ''), res.status);
+}
+
+/** What TikTok said about one upload: done or not, and the products it refused (TikTok lists 5 per kind of error). */
+export function ttLogOf(data: any): { done: boolean; failed: boolean; errors: { id: string; message: string }[] } {
+  const log = data?.product_feed_log ?? {};
+  const status = String(log.process_status ?? '');
+  const errors: { id: string; message: string }[] = [];
+  for (const e of Array.isArray(log.feed_log_data?.error_affected_products) ? log.feed_log_data.error_affected_products : []) {
+    const message = [e?.issue, e?.suggestion].filter(Boolean).map(String).join(' — ').slice(0, 300) || 'Refusé par TikTok';
+    for (const it of Array.isArray(e?.affected_product_item_list) ? e.affected_product_item_list : []) if (it?.sku_id) errors.push({ id: String(it.sku_id), message });
+  }
+  return { done: status === 'SUCCESS' || status === 'FAILED', failed: status === 'FAILED', errors };
+}
+
+async function runTtCatalog(action: string, args: any, ctx: Ctx): Promise<unknown> {
+  const token = await getRaw<string>(ctx.db, SOCIAL_KEYS.tiktokAdsToken, '');
+  if (!token) throw new AppError('bad_request', 'Reliez d’abord votre compte TikTok Ads dans Pilot AI › Comptes.');
+  const bc = String(args.bcId ?? '');
+  const catalog = String(args.catalogId ?? '');
+
+  if (action === 'ttCatalogSetup') {
+    // the Business Center the catalog lives in: one where the account is an admin, else the first
+    const r = await ttApi('bc/get/', token, { query: { page: '1', page_size: '50' } });
+    const list: any[] = Array.isArray(r?.list) ? r.list : [];
+    const pick = list.find((x) => x?.user_role === 'ADMIN' && x?.bc_info?.bc_id) ?? list.find((x) => x?.bc_info?.bc_id);
+    if (!pick)
+      throw new AppError('bad_request', 'Votre compte TikTok n’a pas de Business Center. Créez-en un (gratuit) sur business.tiktok.com, mettez-y votre compte pub, puis reliez TikTok à nouveau.');
+    const bcId = String(pick.bc_info.bc_id);
+    const bcName = String(pick.bc_info.name ?? '');
+    let catalogId = catalog;
+    if (!catalogId) {
+      // TikTok's catalog ads reach only some countries: Algeria must be one of them
+      const av = await ttApi('catalog/available_country/get/', token, { query: { bc_id: bcId } });
+      const codes: string[] = (Array.isArray(av?.region_codes) ? av.region_codes : []).map(String);
+      if (!codes.includes(TT_REGION)) throw new AppError('bad_request', TT_NO_REGION);
+      const made = await ttApi('catalog/create/', token, {
+        body: { bc_id: bcId, name: String(args.name ?? 'Pilotix').slice(0, 128), catalog_type: 'ECOM', catalog_conf: { region_code: TT_REGION, currency: TT_CURRENCY } },
+      });
+      catalogId = String(made?.catalog_id ?? '');
+      if (!catalogId) throw new AppError('bad_request', 'TikTok n’a pas créé le catalogue. Réessayez dans un moment.');
+    }
+    // the shop's TikTok pixel, so its visitors and orders find the products again (best effort)
+    let pixelBound = false;
+    const ads = await getRaw<any>(ctx.db, SOCIAL_KEYS.tiktokAds, null);
+    const advertiserId = String(ads?.advertiserId ?? '');
+    const pixel = String(args.pixelCode ?? '');
+    if (pixel && advertiserId)
+      pixelBound = await ttApi('catalog/eventsource/bind/', token, { body: { bc_id: bcId, advertiser_id: advertiserId, catalog_id: catalogId, pixel_code: pixel } })
+        .then(() => true)
+        .catch(() => false);
+    return { bcId, bcName, catalogId, pixelBound };
+  }
+
+  if (!bc || !catalog) throw new AppError('bad_request', 'Catalogue TikTok manquant');
+  if (action === 'ttCatalogUpload') {
+    const products = Array.isArray(args.products) ? args.products.slice(0, 5000) : [];
+    const r = await ttApi('catalog/product/upload/', token, { body: { bc_id: bc, catalog_id: catalog, products } });
+    return { logId: r?.feed_log_id ? String(r.feed_log_id) : null };
+  }
+  if (action === 'ttCatalogDelete') {
+    const skuIds = (Array.isArray(args.skuIds) ? args.skuIds : []).map(String).slice(0, 5000);
+    if (!skuIds.length) return { logId: null };
+    const r = await ttApi('catalog/product/delete/', token, { body: { bc_id: bc, catalog_id: catalog, sku_ids: skuIds } });
+    return { logId: r?.feed_log_id ? String(r.feed_log_id) : null };
+  }
+  if (action === 'ttCatalogLog') {
+    const r = await ttApi('catalog/product/log/', token, { query: { bc_id: bc, catalog_id: catalog, feed_log_id: String(args.logId ?? ''), language: 'fr' } });
+    return ttLogOf(r);
+  }
+  if (action === 'ttCatalogSet') {
+    // a list: its products' every colour and size (item_group_id = the product); TikTok takes 1,024 values at most
+    const groups = (Array.isArray(args.groupIds) ? args.groupIds : []).map(String).slice(0, 1024);
+    const body = {
+      bc_id: bc,
+      catalog_id: catalog,
+      product_set_name: String(args.name ?? 'Liste').slice(0, 27),
+      conditions: { and: [{ field: 'item_group_id', operation: 'CONTAIN', value: groups.length ? groups : ['none'] }] },
+    };
+    if (args.setId) {
+      await ttApi('catalog/set/update/', token, { body: { ...body, product_set_id: String(args.setId) } });
+      return { setId: String(args.setId) };
+    }
+    const r = await ttApi('catalog/set/create/', token, { body });
+    return { setId: String(r?.product_set_id ?? '') };
+  }
+  if (action === 'ttCatalogSetDelete') {
+    if (args.setId) await ttApi('catalog/set/delete/', token, { body: { bc_id: bc, catalog_id: catalog, product_set_ids: [String(args.setId)] } }).catch(() => null);
+    return { ok: true };
+  }
+  throw new AppError('bad_request', `Action TikTok inconnue : ${action}`);
 }
 
 /** What the agents need, by what they do (a missing one is named on the test's line). */

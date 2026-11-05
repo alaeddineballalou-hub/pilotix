@@ -1,16 +1,19 @@
 // Marketing › Catalogue: the shop makes its own lists of products (« Promo de la semaine », « Bébé 0-6 mois »), drags
-// products into them, and sends each list to Meta. The shop has one Meta catalog (made by Pilotix in the ad account's
-// business, its pixels linked to it); each list is a product set of that catalog, picked when making a catalog ad.
-// The catalog holds the products that are in a sent list, one line per colour / size (item_group_id = the product, the
-// id the landing pages' pixel sends): their page, pictures (a JPEG copy made by the browser: Meta takes no WebP), price
-// (the page's crossed-out price as the old one), stock and brand. A list « mise à jour toute seule » sends again what
-// changed (a price, the stock, a picture) every few minutes; a product taken out of every list leaves the catalog.
+// products into them, and sends each list to Meta, and to TikTok too when « Envoyer aussi à TikTok » is on. The shop has
+// one Meta catalog (made by Pilotix in the ad account's business, its pixels linked to it) and one TikTok catalog (in
+// its TikTok Business Center, for Algeria in dinars, its TikTok pixel bound to it); each list is a product set of each,
+// picked when making a catalog ad. A catalog holds the products that are in a sent list, one line per colour / size
+// (item_group_id = the product, the id the landing pages' pixels send): their page, pictures (a JPEG copy made by the
+// browser: neither takes WebP), price (the page's crossed-out price as the old one), stock and brand. A list « mise à
+// jour toute seule » sends again what changed (a price, the stock, a picture) every few minutes; a product taken out of
+// every list leaves the catalogs. TikTok's problems never stop Meta's sending: they show on the page.
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, notFound, proc, publicApi } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, META_TOKEN_KEY } from './admin';
 import { landingStore } from './landingquery';
+import { SOCIAL_KEYS } from './social';
 
 const ROLES = ['marketer'] as const;
 const id = z.number().int().positive();
@@ -161,8 +164,28 @@ async function whereOf(ctx: Ctx): Promise<Where> {
 const COLOR = /lon|لون|couleur|color|colour/i;
 const SIZE = /taille|مقاس|size|pointure|عمر|âge|age/i;
 
-/** The lines Meta gets for a product: one per colour / size. */
-export function itemsOf(p: Prod, w: Where): { retailerId: string; variantId: number; data: Record<string, unknown> }[] {
+/** One line of a catalog (a colour / size of a product), before Meta's or TikTok's own names. */
+export interface Line {
+  id: string;
+  variantId: number;
+  /** the product: every colour / size of it shares it (the id the pixels send) */
+  group: string;
+  title: string;
+  description: string;
+  inStock: boolean;
+  /** the price before a sale (the page's crossed-out one), else the price */
+  price: number;
+  salePrice: number | null;
+  link: string;
+  /** the colour's own picture first, then the page's (10 at most) */
+  images: string[];
+  brand: string;
+  color: string | null;
+  size: string | null;
+}
+
+/** A product's lines: one per colour / size (none when it cannot go). */
+export function linesOf(p: Prod, w: Where): Line[] {
   if (problemOf(p, w.demo) || !p.page) return [];
   const page = p.page;
   const link = `${w.pages}/${w.store ? `${w.store}/` : ''}${page.slug}`;
@@ -173,28 +196,77 @@ export function itemsOf(p: Prod, w: Where): { retailerId: string; variantId: num
   return p.variants.map((v) => {
     const now = v.price ?? page.price ?? p.price;
     const old = page.oldPrice && page.oldPrice > now ? page.oldPrice : null;
-    // the colour's own picture first, then the page's
     const own = good.filter((x) => x.v === v.id);
     const pics = [...own, ...good.filter((x) => x.v !== v.id)].slice(0, 10);
-    const label = page.variantLabel;
-    const data: Record<string, unknown> = {
+    const named = many && !!v.title;
+    const color = named && COLOR.test(page.variantLabel);
+    return {
       id: `${p.id}-${v.id}`,
-      item_group_id: String(p.id),
-      title: (many && v.title ? `${page.title} – ${v.title}` : page.title).slice(0, 200),
+      variantId: v.id,
+      group: String(p.id),
+      title: named ? `${page.title} – ${v.title}` : page.title,
       description: text,
-      availability: v.stock > 0 ? 'in stock' : 'out of stock',
-      condition: 'new',
-      price: `${old ?? now} DZD`,
-      ...(old ? { sale_price: `${now} DZD` } : {}),
+      inStock: v.stock > 0,
+      price: old ?? now,
+      salePrice: old ? now : null,
       link,
-      image: pics.map((x) => ({ url: urlOf(x), tag: [] as string[] })),
-      brand: (p.brand || w.brand).slice(0, 100),
+      images: pics.map(urlOf),
+      brand: p.brand || w.brand,
+      color: color ? v.title : null,
+      size: named && !color && SIZE.test(page.variantLabel) ? v.title : null,
     };
-    if (many && v.title) {
-      if (COLOR.test(label)) data.color = v.title.slice(0, 200);
-      else if (SIZE.test(label)) data.size = v.title.slice(0, 200);
-    }
-    return { retailerId: `${p.id}-${v.id}`, variantId: v.id, data };
+  });
+}
+
+/** The lines Meta gets for a product: one per colour / size (Meta's names). */
+export function itemsOf(p: Prod, w: Where): { retailerId: string; variantId: number; data: Record<string, unknown> }[] {
+  return linesOf(p, w).map((l) => {
+    const data: Record<string, unknown> = {
+      id: l.id,
+      item_group_id: l.group,
+      title: l.title.slice(0, 200),
+      description: l.description,
+      availability: l.inStock ? 'in stock' : 'out of stock',
+      condition: 'new',
+      price: `${l.price} DZD`,
+      ...(l.salePrice !== null ? { sale_price: `${l.salePrice} DZD` } : {}),
+      link: l.link,
+      image: l.images.map((url) => ({ url, tag: [] as string[] })),
+      brand: l.brand.slice(0, 100),
+    };
+    if (l.color) data.color = l.color.slice(0, 200);
+    else if (l.size) data.size = l.size.slice(0, 200);
+    return { retailerId: l.id, variantId: l.variantId, data };
+  });
+}
+
+/** Without emoji (TikTok refuses them in a title or a brand). */
+export const noEmoji = (s: string) =>
+  s
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\u{1F1E6}-\u{1F1FF}\u{E0020}-\u{E007F}\u{FE0F}\u{200D}\u{20E3}]/gu, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+/** The products TikTok gets for a product: one per colour / size (TikTok's names). */
+export function ttItemsOf(p: Prod, w: Where): { skuId: string; variantId: number; data: Record<string, unknown> }[] {
+  return linesOf(p, w).map((l) => {
+    const detail: Record<string, string> = { condition: 'NEW' };
+    if (l.color) detail.color = l.color.slice(0, 100);
+    else if (l.size) detail.size = l.size.slice(0, 100);
+    const data: Record<string, unknown> = {
+      sku_id: l.id,
+      item_group_id: l.group,
+      title: (noEmoji(l.title) || noEmoji(p.name) || l.group).slice(0, 500),
+      description: l.description.slice(0, 10_000),
+      availability: l.inStock ? 'IN_STOCK' : 'OUT_OF_STOCK',
+      brand: (noEmoji(l.brand) || 'Boutique').slice(0, 150),
+      image_url: l.images[0],
+      ...(l.images.length > 1 ? { additional_image_urls: l.images.slice(1, 11) } : {}),
+      product_detail: detail,
+      price_info: { price: l.price, currency: 'DZD', ...(l.salePrice !== null ? { sale_price: l.salePrice } : {}) },
+      landing_page: { landing_page_url: l.link },
+    };
+    return { skuId: l.id, variantId: l.variantId, data };
   });
 }
 
@@ -347,45 +419,264 @@ async function checkBatches(ctx: Ctx): Promise<number> {
   return n;
 }
 
-/** Every few minutes: lists « mises à jour toutes seules » send what changed; Meta's answers come back. */
-export async function runCatalog(ctx: Ctx): Promise<{ sent: number; removed: number; checked: number }> {
+// ---------------------------------------------------------------- TikTok: the same lists
+const TT_KEY = 'ttcatalog';
+/** TikTok takes up to 5,000 products a call; 1,000 keeps each call small */
+const TT_BATCH = 1000;
+/** an upload TikTok has not answered after this long is sent again */
+const TT_GIVE_UP = 6 * 3_600_000;
+
+export interface TtSettings {
+  /** « Envoyer aussi à TikTok » */
+  on: boolean;
+  bcId: string;
+  bcName: string;
+  catalogId: string;
+  pixelBound: boolean;
+  /** TikTok's last refusal, shown on the page until TikTok takes the lists again */
+  error: string | null;
+  at: string | null;
+}
+const TT_DEFAULTS: TtSettings = { on: false, bcId: '', bcName: '', catalogId: '', pixelBound: false, error: null, at: null };
+
+export async function ttSettings(db: Db): Promise<TtSettings> {
+  const r = (await db.query(`SELECT value FROM settings WHERE key = $1`, [TT_KEY]))[0];
+  const v = r?.value && typeof r.value === 'object' ? r.value : {};
+  return { ...TT_DEFAULTS, ...v };
+}
+async function ttPatch(db: Db, patch: Partial<TtSettings>): Promise<TtSettings> {
+  const v = { ...(await ttSettings(db)), ...patch };
+  await db.query(`INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [TT_KEY, JSON.stringify(v)]);
+  return v;
+}
+const why = (e: unknown) => String((e as any)?.message ?? e).slice(0, 300);
+
+/** The TikTok Ads account is linked (Pilot AI › Comptes): its key and an ad account. */
+async function ttLinked(ctx: Ctx): Promise<boolean> {
+  if (simulated(ctx)) return true;
+  if (!(await getRaw<string>(ctx.db, SOCIAL_KEYS.tiktokAdsToken, ''))) return false;
+  return !!(await getRaw<any>(ctx.db, SOCIAL_KEYS.tiktokAds, null))?.advertiserId;
+}
+/** Meta can take the lists: the Facebook account and its ad account are linked. */
+async function metaReady(ctx: Ctx): Promise<boolean> {
+  return simulated(ctx) || (!!(await getRaw<string>(ctx.db, META_TOKEN_KEY, '')) && !!(await getSetting(ctx.db, 'meta')).adAccountId);
+}
+/** The shop's TikTok pixel (the default one first), bound to the catalog. */
+async function ttPixel(db: Db): Promise<string> {
+  const r = (await db.query(`SELECT pixel_id FROM tracking_pixels WHERE platform = 'tiktok' ORDER BY is_default DESC, id LIMIT 1`).catch(() => []))[0];
+  const x = String(r?.pixel_id ?? '').trim();
+  return /^[A-Z0-9]{10,30}$/.test(x) ? x : '';
+}
+/** TikTok's API, on the server (social-server.ts); the token never leaves it. */
+async function tt(ctx: Ctx, action: string, args: Record<string, unknown>): Promise<any> {
+  if (!ctx.server?.social) throw bad('TikTok indisponible sur ce serveur');
+  return ctx.server.social(action, args, ctx);
+}
+
+async function ensureTt(ctx: Ctx): Promise<TtSettings> {
+  const s = await ttSettings(ctx.db);
+  if (s.catalogId) return s;
+  const at = iso(new Date(ctx.now()));
+  if (simulated(ctx)) return ttPatch(ctx.db, { bcId: 'demo-bc', bcName: 'BabyJoy DZ', catalogId: 'demo-tt-catalog', pixelBound: true, error: null, at });
+  const shop = String((await getSetting(ctx.db, 'shop')).name ?? '') || 'Boutique';
+  const r = await tt(ctx, 'ttCatalogSetup', { name: `Pilotix · ${shop}`, pixelCode: await ttPixel(ctx.db) });
+  return ttPatch(ctx.db, { bcId: String(r.bcId), bcName: String(r.bcName ?? ''), catalogId: String(r.catalogId), pixelBound: !!r.pixelBound, error: null, at });
+}
+
+/**
+ * Sends to TikTok what changed for these products (also what TikTok refused, with `retry`), and takes out of its
+ * catalog the products no longer in any sent list. TikTok answers later (ttCheck).
+ */
+async function ttSyncProducts(ctx: Ctx, productIds: number[], o: { retry?: boolean } = {}): Promise<{ sent: number; removed: number }> {
+  const db = ctx.db;
+  const at = iso(new Date(ctx.now()));
+  const s = await ensureTt(ctx);
+  const w = await whereOf(ctx);
+  const all = new Set(await wanted(db));
+  const go = productIds.filter((x) => all.has(x));
+  const prods = go.length ? await loadProducts(db, go) : [];
+  const have = new Map<string, { hash: string | null; status: string }>();
+  for (const r of await db.query(`SELECT sku_id, hash, status FROM tiktok_catalog_items`)) have.set(String(r.sku_id), { hash: r.hash ? String(r.hash) : null, status: String(r.status) });
+  const up: Record<string, unknown>[] = [];
+  const rows: { skuId: string; productId: number; variantId: number; hash: string }[] = [];
+  const keep = new Set<string>();
+  for (const p of prods)
+    for (const it of ttItemsOf(p, w)) {
+      keep.add(it.skuId);
+      const hash = hashOf(it.data);
+      const cur = have.get(it.skuId);
+      // unchanged: not again (a refused one waits for a change, or « Envoyer »)
+      if (cur && cur.hash === hash && cur.status !== 'deleted' && (cur.status !== 'error' || !o.retry)) continue;
+      up.push(it.data);
+      rows.push({ skuId: it.skuId, productId: p.id, variantId: it.variantId, hash });
+    }
+  const gone: string[] = [];
+  for (const [sku, cur] of have) {
+    if (cur.status === 'deleted' || keep.has(sku)) continue;
+    const pid = Number(sku.split('-')[0]);
+    if (!all.has(pid) || productIds.includes(pid)) gone.push(sku);
+  }
+  if (!simulated(ctx)) {
+    for (let i = 0; i < up.length; i += TT_BATCH) {
+      const part = up.slice(i, i + TT_BATCH);
+      const r = await tt(ctx, 'ttCatalogUpload', { bcId: s.bcId, catalogId: s.catalogId, products: part });
+      if (r?.logId) await db.query(`INSERT INTO tiktok_catalog_batches (log_id, ids, sent_at) VALUES ($1, $2, $3)`, [String(r.logId), part.map((x) => String(x.sku_id)), at]);
+    }
+    for (let i = 0; i < gone.length; i += TT_BATCH) await tt(ctx, 'ttCatalogDelete', { bcId: s.bcId, catalogId: s.catalogId, skuIds: gone.slice(i, i + TT_BATCH) });
+  }
+  for (const r of rows)
+    await db.query(
+      `INSERT INTO tiktok_catalog_items (sku_id, product_id, variant_id, hash, status, error, sent_at) VALUES ($1,$2,$3,$4,$5,NULL,$6)
+       ON CONFLICT (sku_id) DO UPDATE SET product_id = EXCLUDED.product_id, variant_id = EXCLUDED.variant_id, hash = EXCLUDED.hash,
+         status = EXCLUDED.status, error = NULL, sent_at = EXCLUDED.sent_at, checked_at = NULL`,
+      [r.skuId, r.productId, r.variantId, r.hash, simulated(ctx) ? 'ok' : 'pending', at],
+    );
+  if (gone.length) await db.query(`UPDATE tiktok_catalog_items SET status = 'deleted', hash = NULL, error = NULL, sent_at = $2 WHERE sku_id = ANY($1)`, [gone, at]);
+  return { sent: rows.length, removed: gone.length };
+}
+
+/** The list's product set at TikTok: every colour / size of its products that went. */
+async function ttSyncSet(ctx: Ctx, listId: number): Promise<boolean> {
+  const db = ctx.db;
+  const l = (await db.query(`SELECT * FROM meta_catalog_lists WHERE id = $1`, [listId]))[0];
+  if (!l) return false;
+  const s = await ttSettings(db);
+  const groups = (
+    await db.query(
+      `SELECT DISTINCT i.product_id FROM tiktok_catalog_items i JOIN meta_catalog_list_products lp ON lp.product_id = i.product_id
+       WHERE lp.list_id = $1 AND i.status <> 'deleted' ORDER BY i.product_id`,
+      [listId],
+    )
+  ).map((r: any) => String(r.product_id));
+  let setId = l.tt_set_id ? String(l.tt_set_id) : null;
+  if (simulated(ctx)) setId = setId ?? `demo-tt-set-${listId}`;
+  else if (groups.length || setId) setId = String((await tt(ctx, 'ttCatalogSet', { bcId: s.bcId, catalogId: s.catalogId, setId, name: String(l.name), groupIds: groups })).setId || setId || '') || null;
+  await db.query(`UPDATE meta_catalog_lists SET tt_set_id = $2, tt_sent_at = $3 WHERE id = $1`, [listId, setId, iso(new Date(ctx.now()))]);
+  return true;
+}
+/** TikTok did not take the list's new content: the next run sends it again. */
+const ttLate = (db: Db, listId: number) => db.query(`UPDATE meta_catalog_lists SET tt_sent_at = NULL WHERE id = $1`, [listId]);
+
+/** TikTok's answer about the uploads sent a little while ago (one it never answers is sent again). */
+async function ttCheck(ctx: Ctx): Promise<number> {
+  if (simulated(ctx)) return 0;
+  const db = ctx.db;
+  const s = await ttSettings(db);
+  const now = ctx.now();
+  const open = await db.query(`SELECT * FROM tiktok_catalog_batches WHERE done_at IS NULL AND sent_at < $1 ORDER BY id LIMIT 10`, [iso(new Date(now - 60_000))]);
+  let n = 0;
+  for (const b of open) {
+    const sentAt = new Date(b.sent_at).getTime();
+    const r: any = await tt(ctx, 'ttCatalogLog', { bcId: s.bcId, catalogId: s.catalogId, logId: String(b.log_id) }).catch(() => null);
+    const late = !r?.done && sentAt < now - TT_GIVE_UP;
+    if (!r?.done && !late) continue;
+    const errs = new Map<string, string>((r?.errors ?? []).map((e: any) => [String(e.id), String(e.message)]));
+    const at = iso(new Date(now));
+    for (const sku of b.ids as string[]) {
+      const e = late ? 'TikTok n’a pas répondu : Pilotix renvoie ce produit.' : errs.get(sku) ?? (r.failed ? 'Refusé par TikTok' : null);
+      // only the lines this upload sent (a newer one waits for its own answer); one never answered goes again (no hash)
+      await db.query(
+        `UPDATE tiktok_catalog_items SET status = CASE WHEN $2::text IS NOT NULL THEN 'error' ELSE 'ok' END, error = $2,
+           hash = CASE WHEN $3 THEN NULL ELSE hash END, checked_at = $4
+         WHERE sku_id = $1 AND status <> 'deleted' AND sent_at <= $5`,
+        [sku, e, late, at, iso(new Date(sentAt))],
+      );
+    }
+    await db.query(`UPDATE tiktok_catalog_batches SET done_at = $2 WHERE id = $1`, [b.id, at]);
+    n++;
+  }
+  return n;
+}
+
+/** The lists already sent go to TikTok (« Envoyer aussi à TikTok » just turned on, or TikTok refused them before). */
+async function ttSendSent(ctx: Ctx, o: { retry?: boolean; onlyLate?: boolean } = {}): Promise<number> {
+  const db = ctx.db;
+  const lists = await db.query(`SELECT id FROM meta_catalog_lists WHERE sent_at IS NOT NULL ${o.onlyLate ? 'AND tt_sent_at IS NULL' : ''} ORDER BY position, id`);
+  if (!lists.length) return 0;
+  const pids = (await db.query(`SELECT DISTINCT product_id FROM meta_catalog_list_products WHERE list_id = ANY($1)`, [lists.map((l: any) => num(l.id))])).map((r: any) => num(r.product_id));
+  const r = await ttSyncProducts(ctx, pids, { retry: o.retry });
+  for (const l of lists) await ttSyncSet(ctx, num(l.id));
+  return r.sent;
+}
+
+/** Every few minutes: lists « mises à jour toutes seules » send what changed; Meta's and TikTok's answers come back. */
+export async function runCatalog(ctx: Ctx): Promise<{ sent: number; removed: number; checked: number; tiktok: number }> {
   const db = ctx.db;
   const s = await catalogSettings(db);
-  if (!s.catalogId) return { sent: 0, removed: 0, checked: 0 };
+  const t = await ttSettings(db);
+  // each catalog goes on its own: one whose account is no longer linked waits
+  const metaGo = !!s.catalogId && (await metaReady(ctx));
+  const ttGo = t.on && !!t.catalogId && (await ttLinked(ctx));
+  const out = { sent: 0, removed: 0, checked: 0, tiktok: 0 };
+  if (!metaGo && !ttGo) return out;
+  // a TikTok step that fails is written on the page; it never stops Meta's
+  let ttError: string | null = null;
+  const ttStep = async <T>(fn: () => Promise<T>): Promise<T | null> => {
+    try {
+      return await fn();
+    } catch (e) {
+      ttError = ttError ?? why(e);
+      return null;
+    }
+  };
   const auto = (
     await db.query(`SELECT DISTINCT lp.product_id FROM meta_catalog_list_products lp JOIN meta_catalog_lists l ON l.id = lp.list_id WHERE l.sent_at IS NOT NULL AND l.auto_update`)
   ).map((r: any) => num(r.product_id));
-  const r = await syncProducts(ctx, auto);
+  if (metaGo) {
+    const r = await syncProducts(ctx, auto);
+    out.sent = r.sent;
+    out.removed = r.removed;
+  }
+  if (ttGo) {
+    out.tiktok = (await ttStep(() => ttSyncProducts(ctx, auto)))?.sent ?? 0;
+    // a list TikTok did not take yet (refused, or sent before)
+    out.tiktok += (await ttStep(() => ttSendSent(ctx, { onlyLate: true }))) ?? 0;
+  }
   // the lists whose products changed since they were sent
   for (const l of await db.query(`SELECT id FROM meta_catalog_lists WHERE sent_at IS NOT NULL AND auto_update AND changed_at IS NOT NULL`)) {
-    await syncSet(ctx, num(l.id));
+    if (metaGo) await syncSet(ctx, num(l.id));
+    if (ttGo && !(await ttStep(() => ttSyncSet(ctx, num(l.id))))) await ttLate(db, num(l.id));
     await db.query(`UPDATE meta_catalog_lists SET sent_at = $2, changed_at = NULL WHERE id = $1`, [l.id, iso(new Date(ctx.now()))]);
   }
-  const checked = await checkBatches(ctx);
-  return { sent: r.sent, removed: r.removed, checked };
+  if (metaGo) out.checked = await checkBatches(ctx);
+  if (ttGo) {
+    out.checked += (await ttStep(() => ttCheck(ctx))) ?? 0;
+    if (ttError !== t.error) await ttPatch(db, { error: ttError });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- the page
 const PROBLEM_TEXT = {
-  nopage: 'Meta montre chaque produit avec sa page : créez sa landing page.',
-  photo: `Meta veut une photo d’au moins ${MIN_SIDE} px de côté : ajoutez-en une plus grande sur sa page.`,
-  jpeg: 'Photo en préparation pour Meta.',
+  nopage: 'Meta et TikTok montrent chaque produit avec sa page : créez sa landing page.',
+  photo: `Meta et TikTok veulent une photo d’au moins ${MIN_SIDE} px de côté : ajoutez-en une plus grande sur sa page.`,
+  jpeg: 'Photo en préparation.',
 } as const;
+
+type NetState = 'ok' | 'pending' | 'error' | null;
+/** What a catalog holds of each product: refused (with why), waiting for the answer, or taken. */
+function statesOf(rows: any[], refused: string): Map<number, { state: NetState; error: string | null }> {
+  const by = new Map<number, { ok: number; pending: number; error: string | null }>();
+  for (const r of rows) {
+    const k = by.get(num(r.product_id)) ?? { ok: 0, pending: 0, error: null };
+    if (r.status === 'ok') k.ok++;
+    else if (r.status === 'pending') k.pending++;
+    else if (r.status === 'error') k.error = k.error ?? String(r.error ?? refused);
+    by.set(num(r.product_id), k);
+  }
+  return new Map([...by].map(([pid, k]) => [pid, { state: k.error ? 'error' : k.pending ? 'pending' : k.ok ? 'ok' : null, error: k.error }]));
+}
 
 async function board(ctx: Ctx) {
   const db = ctx.db;
   const s = await catalogSettings(db);
+  const t = await ttSettings(db);
   const w = await whereOf(ctx);
   const prods = await loadProducts(db);
   const items = await db.query(`SELECT retailer_id, product_id, status, error FROM meta_catalog_items WHERE status <> 'deleted'`);
-  const byProduct = new Map<number, { ok: number; pending: number; error: string | null }>();
-  for (const r of items) {
-    const k = byProduct.get(num(r.product_id)) ?? { ok: 0, pending: 0, error: null };
-    if (r.status === 'ok') k.ok++;
-    else if (r.status === 'pending') k.pending++;
-    else if (r.status === 'error') k.error = k.error ?? String(r.error ?? 'Refusé par Meta');
-    byProduct.set(num(r.product_id), k);
-  }
+  const ttItems = t.on ? await db.query(`SELECT sku_id, product_id, status, error FROM tiktok_catalog_items WHERE status <> 'deleted'`) : [];
+  const metaOf = statesOf(items, 'Refusé par Meta');
+  const ttOf = statesOf(ttItems, 'Refusé par TikTok');
   const listRows = await db.query(`SELECT * FROM meta_catalog_lists ORDER BY position, id`);
   const members = await db.query(`SELECT list_id, product_id FROM meta_catalog_list_products ORDER BY position, added_at`);
   const inLists = new Map<number, number[]>();
@@ -393,7 +684,8 @@ async function board(ctx: Ctx) {
   const needJpeg = new Map<number, string | null>();
   const products = prods.map((p) => {
     const problem = problemOf(p, w.demo);
-    const meta = byProduct.get(p.id);
+    const meta = metaOf.get(p.id);
+    const tk = ttOf.get(p.id);
     // a list's product asks the browser for its JPEG copies
     if (p.page && inLists.has(p.id))
       for (const x of p.page.pics) if (x.id && !x.jpg && x.w >= MIN_SIDE && x.h >= MIN_SIDE) needJpeg.set(x.id, ctx.server ? `${publicApi(ctx)}/lp/img/${x.id}/960.webp` : null);
@@ -412,20 +704,26 @@ async function board(ctx: Ctx) {
       slug: p.page?.slug ?? null,
       problem: problem === 'jpeg' ? null : problem,
       preparing: problem === 'jpeg',
-      problemText: problem && problem !== 'jpeg' ? PROBLEM_TEXT[problem] : meta?.error ? `Meta : ${meta.error}` : null,
-      meta: meta?.error ? ('error' as const) : meta?.pending ? ('pending' as const) : meta?.ok ? ('ok' as const) : null,
+      problemText:
+        problem && problem !== 'jpeg' ? PROBLEM_TEXT[problem] : meta?.error ? `Meta : ${meta.error}` : tk?.error ? (/^TikTok/i.test(tk.error) ? tk.error : `TikTok : ${tk.error}`) : null,
+      meta: meta?.state ?? null,
+      /** null when « Envoyer aussi à TikTok » is off */
+      tiktok: tk?.state ?? null,
       lists: inLists.get(p.id) ?? [],
     };
   });
   const pById = new Map(products.map((p) => [p.id, p]));
+  const metaOk = await metaReady(ctx);
+  const ttOk = t.on && (await ttLinked(ctx));
   const lists = listRows.map((l: any) => {
     const pids = members.filter((m: any) => num(m.list_id) === num(l.id)).map((m: any) => num(m.product_id)).filter((x: number) => pById.has(x));
-    const fix = pids.filter((x: number) => {
-      const p = pById.get(x)!;
-      return !!p.problem || p.meta === 'error';
-    }).length;
-    const pending = pids.some((x: number) => pById.get(x)!.meta === 'pending' || pById.get(x)!.preparing);
-    const state = !l.sent_at ? 'new' : fix ? 'fix' : l.changed_at && !l.auto_update ? 'changed' : pending || l.changed_at ? 'pending' : 'ok';
+    const ps = pids.map((x: number) => pById.get(x)!);
+    const fix = ps.filter((p) => !!p.problem || p.meta === 'error' || p.tiktok === 'error').length;
+    const pending = ps.some((p) => p.meta === 'pending' || p.preparing || p.tiktok === 'pending');
+    const state = !l.sent_at ? 'new' : fix ? 'fix' : l.changed_at && !l.auto_update ? 'changed' : pending || l.changed_at || (ttOk && !l.tt_sent_at) ? 'pending' : 'ok';
+    // where the list is: each catalog's own state (the page shows them once TikTok is on)
+    const net = (on: boolean, sent: boolean, k: 'meta' | 'tiktok') =>
+      !on || !l.sent_at ? null : !sent ? ('wait' as const) : ps.some((p) => p[k] === 'error') ? ('fix' as const) : ps.some((p) => p[k] === 'pending') || l.changed_at ? ('pending' as const) : ('ok' as const);
     return {
       id: num(l.id),
       name: String(l.name),
@@ -435,15 +733,26 @@ async function board(ctx: Ctx) {
       productIds: pids,
       fix,
       state: state as 'new' | 'fix' | 'changed' | 'pending' | 'ok',
+      metaState: net(metaOk || !!l.set_id, !!l.set_id, 'meta'),
+      tiktokState: net(t.on, !!l.tt_sent_at, 'tiktok'),
       articles: items.filter((i: any) => pids.includes(num(i.product_id))).length,
     };
   });
-  const ready = simulated(ctx) || (!!(await getRaw<string>(db, META_TOKEN_KEY, '')) && !!(await getSetting(db, 'meta')).adAccountId);
   return {
-    catalog: { connected: !!s.catalogId, businessName: s.businessName, pixelsLinked: s.pixelsLinked, live: !simulated(ctx), ready, base: `${w.pages}/${w.store}` },
+    catalog: { connected: !!s.catalogId, businessName: s.businessName, pixelsLinked: s.pixelsLinked, live: !simulated(ctx), ready: metaOk, base: `${w.pages}/${w.store}` },
+    tiktok: {
+      /** the TikTok Ads account is linked (Pilot AI › Comptes) */
+      linked: await ttLinked(ctx),
+      on: t.on,
+      connected: !!t.catalogId,
+      bcName: t.bcName,
+      pixelBound: t.pixelBound,
+      error: t.error,
+      articles: ttItems.filter((i: any) => i.status === 'ok' || i.status === 'pending').length,
+    },
     products,
     lists,
-    // the pictures the browser turns into JPEG for Meta (Catalogue does it by itself), a few at a time
+    // the pictures the browser turns into JPEG for Meta and TikTok (Catalogue does it by itself), a few at a time
     needJpeg: [...needJpeg].slice(0, 40).map(([pic, url]) => ({ id: pic, url })),
     articles: items.filter((i: any) => i.status === 'ok' || i.status === 'pending').length,
   };
@@ -459,7 +768,7 @@ async function listOf(db: Db, listId: number) {
 }
 
 export const metacatalogProcs = {
-  /** The products (with what stops them from going to Meta), the lists and the catalog. */
+  /** The products (with what stops them from going to Meta and TikTok), the lists and the catalogs. */
   'metacatalog.board': proc([...ROLES], z.object({}), (ctx) => board(ctx)),
 
   /** A new list, or its new name. */
@@ -478,17 +787,23 @@ export const metacatalogProcs = {
     return { id: num(r[0].id) };
   }),
 
-  /** A list goes away (and its product set at Meta; its products leave the catalog if no other sent list has them). */
+  /**
+   * A list goes away (and its product sets at Meta and TikTok; its products leave the catalogs if no other sent list
+   * has them).
+   */
   'metacatalog.listRemove': proc([...ROLES], z.object({ id }), async (ctx, i) => {
     const db = ctx.db;
     const l = await listOf(db, i.id);
     const pids = (await db.query(`SELECT product_id FROM meta_catalog_list_products WHERE list_id = $1`, [i.id])).map((r: any) => num(r.product_id));
+    const t = await ttSettings(db);
     if (l.set_id && !simulated(ctx)) await ctx.server!.meta('catalogSetDelete', { setId: String(l.set_id) }, ctx).catch(() => null);
+    if (l.tt_set_id && t.catalogId && !simulated(ctx)) await tt(ctx, 'ttCatalogSetDelete', { bcId: t.bcId, catalogId: t.catalogId, setId: String(l.tt_set_id) }).catch(() => null);
     await db.query(`DELETE FROM meta_catalog_lists WHERE id = $1`, [i.id]);
     if (l.sent_at && pids.length) {
       const still = new Set(await wanted(db));
       const out = pids.filter((p: number) => !still.has(p));
-      if (out.length) await syncProducts(ctx, out);
+      if (out.length && (await catalogSettings(db)).catalogId && (await metaReady(ctx))) await syncProducts(ctx, out);
+      if (out.length && t.on && t.catalogId && (await ttLinked(ctx))) await ttSyncProducts(ctx, out).catch(async (e) => void (await ttPatch(db, { error: why(e) })));
     }
     return { ok: true };
   }),
@@ -531,27 +846,76 @@ export const metacatalogProcs = {
     return { removed: d.length > 0 };
   }),
 
-  /** « Envoyer à Meta »: the list's products (what changed), then the list as a product set. */
+  /**
+   * « Envoyer »: the list's products (what changed), then the list as a product set, at Meta and, when « Envoyer aussi
+   * à TikTok » is on, at TikTok (what TikTok refuses is written on the page; Meta's sending goes on).
+   */
   'metacatalog.send': proc([...ROLES], z.object({ id }), async (ctx, i) => {
     const db = ctx.db;
     await listOf(db, i.id);
-    if (!simulated(ctx)) {
-      const ready = !!(await getRaw<string>(db, META_TOKEN_KEY, '')) && !!(await getSetting(db, 'meta')).adAccountId;
-      if (!ready) throw bad('Reliez d’abord votre compte Meta et votre compte pub (Pilot AI › Comptes)');
-    }
+    const meta = await metaReady(ctx);
+    const t = await ttSettings(db);
+    const tiktok = t.on && (await ttLinked(ctx));
+    if (!meta && !tiktok) throw bad(t.on ? 'Reliez d’abord votre compte Meta ou TikTok (Pilot AI › Comptes)' : 'Reliez d’abord votre compte Meta et votre compte pub (Pilot AI › Comptes)');
     const pids = (await db.query(`SELECT product_id FROM meta_catalog_list_products WHERE list_id = $1`, [i.id])).map((r: any) => num(r.product_id));
     if (!pids.length) throw bad('La liste est vide : glissez-y des produits');
     const prods = await loadProducts(db, pids);
     const blocked = prods.filter((p) => problemOf(p, simulated(ctx))).map((p) => ({ productId: p.id, name: p.name, why: problemOf(p, simulated(ctx))! }));
     // a list sent the first time: its products are « wanted » from now on
     await db.query(`UPDATE meta_catalog_lists SET sent_at = COALESCE(sent_at, $2) WHERE id = $1`, [i.id, iso(new Date(ctx.now()))]);
-    const r = await syncProducts(ctx, pids);
-    await syncSet(ctx, i.id);
+    let r = { sent: 0, errors: 0 };
+    if (meta) {
+      r = await syncProducts(ctx, pids);
+      await syncSet(ctx, i.id);
+    }
+    let ttOut: { sent: number; error: string | null } | null = null;
+    if (tiktok) {
+      try {
+        const x = await ttSyncProducts(ctx, pids, { retry: true });
+        await ttSyncSet(ctx, i.id);
+        ttOut = { sent: x.sent, error: null };
+        if (t.error) await ttPatch(db, { error: null });
+      } catch (e) {
+        ttOut = { sent: 0, error: why(e) };
+        await ttPatch(db, { error: ttOut.error });
+        await ttLate(db, i.id);
+      }
+    }
     await db.query(`UPDATE meta_catalog_lists SET sent_at = $2, changed_at = NULL, updated_at = $2 WHERE id = $1`, [i.id, iso(new Date(ctx.now()))]);
-    return { sent: r.sent, errors: r.errors, blocked, ready: prods.length - blocked.length };
+    return { sent: r.sent, errors: r.errors, blocked, ready: prods.length - blocked.length, meta, tiktok: ttOut };
   }),
 
-  /** A JPEG copy of a page's picture, made by the browser (Meta takes no WebP). */
+  /**
+   * « Envoyer aussi à TikTok » on or off. On: the TikTok catalog is made the first time (in the account's Business
+   * Center, for Algeria), then the lists already sent go to it at once. What TikTok refuses comes back as `error` (and
+   * stays on the page); the switch stays off when there is no catalog. Off: nothing more goes to TikTok (what is there
+   * stays, for the ads that use it).
+   */
+  'metacatalog.tiktok': proc([...ROLES], z.object({ on: z.boolean() }), async (ctx, i) => {
+    const db = ctx.db;
+    if (!i.on) {
+      await ttPatch(db, { on: false, error: null });
+      return { on: false, sent: 0, error: null as string | null };
+    }
+    if (!(await ttLinked(ctx))) throw bad('Reliez d’abord votre compte TikTok Ads (Pilot AI › Comptes)');
+    try {
+      await ensureTt(ctx);
+    } catch (e) {
+      const error = why(e);
+      await ttPatch(db, { on: false, error });
+      return { on: false, sent: 0, error };
+    }
+    await ttPatch(db, { on: true, error: null });
+    try {
+      return { on: true, sent: await ttSendSent(ctx, { retry: true }), error: null as string | null };
+    } catch (e) {
+      const error = why(e);
+      await ttPatch(db, { error });
+      return { on: true, sent: 0, error };
+    }
+  }),
+
+  /** A JPEG copy of a page's picture, made by the browser (Meta and TikTok take no WebP). */
   'metacatalog.photo': proc([...ROLES], z.object({ imageId: id, jpeg: z.string().min(100).max(4_800_000) }), async (ctx, i) => {
     if (!i.jpeg.startsWith('/9j/')) throw bad('Ce n’est pas une photo JPEG');
     const r = await ctx.db.query(`UPDATE landing_images SET jpg = $2 WHERE id = $1 RETURNING id`, [i.imageId, i.jpeg]);
@@ -559,13 +923,13 @@ export const metacatalogProcs = {
     return { ok: true };
   }),
 
-  /** Server: a picture's JPEG copy, for Meta (/lp/img/<id>/meta.jpg). */
+  /** Server: a picture's JPEG copy, for Meta and TikTok (/lp/img/<id>/meta.jpg). */
   'metacatalog.image': proc([], z.object({ id }), async (ctx, i) => {
     const r = (await ctx.db.query(`SELECT jpg FROM landing_images WHERE id = $1`, [i.id]))[0];
     if (!r?.jpg) throw notFound('Photo introuvable');
     return { base64: String(r.jpg) };
   }),
 
-  /** Server: send what changed and read Meta's answers (every few minutes). */
+  /** Server: send what changed and read Meta's and TikTok's answers (every few minutes). */
   'metacatalog.run': proc([], z.object({}), (ctx) => runCatalog(ctx)),
 };

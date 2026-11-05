@@ -139,6 +139,9 @@ export const NOT_REFS: readonly string[] = [
   // Marketing › Catalogue: what Meta's catalog holds (a mirror, not a link: a product that leaves goes out of it)
   'meta_catalog_items.product_id',
   'meta_catalog_items.variant_id',
+  // and TikTok's
+  'tiktok_catalog_items.product_id',
+  'tiktok_catalog_items.variant_id',
   'stock.variant_id',
   'stock.warehouse_id',
   'spy_watch.product_id',

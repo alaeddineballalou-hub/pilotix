@@ -1,8 +1,9 @@
 // Marketing › Catalogue: the shop's products on the left, its lists on the right. A product dragged into a list (or added
-// with its « + », on a phone or with the keyboard) joins it; dragged from one list to another, it moves. « Envoyer à
-// Meta » sends the list to the shop's Meta catalog as a product set, picked when making a catalog ad. A product that
-// cannot go says why (no page, a picture too small) with the way to fix it. The pictures Meta takes are JPEG: the
-// browser makes those copies by itself. Everything is decided in core (metacatalog.*).
+// with its « + », on a phone or with the keyboard) joins it; dragged from one list to another, it moves. « Envoyer »
+// sends the list to the shop's Meta catalog as a product set, picked when making a catalog ad, and to its TikTok catalog
+// too when « Envoyer aussi à TikTok » is on (each list then says where it is). A product that cannot go says why (no
+// page, a picture too small, refused) with the way to fix it. The pictures Meta and TikTok take are JPEG: the browser
+// makes those copies by itself. Everything is decided in core (metacatalog.*).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
@@ -54,29 +55,8 @@ export function Catalogue() {
         <div className="lf-head">
           <h2 id="ct-title">{t('metacatalog.title')}</h2>
         </div>
-        <p className="ct-top">
-          <span>
-            <Icon name="user" />
-            {d.catalog.connected ? (
-              <>
-                {t('metacatalog.account')} <b>{d.catalog.businessName || '—'}</b>
-              </>
-            ) : (
-              t('metacatalog.notYet')
-            )}
-          </span>
-          {d.catalog.connected && (
-            <span>
-              <Icon name="check" />
-              {d.catalog.pixelsLinked ? t('metacatalog.pixelOn') : t('metacatalog.pixelOff')}
-            </span>
-          )}
-          <span>
-            <Icon name="layers" />
-            {t('metacatalog.counts', { lists: d.lists.length, articles: n(d.articles) })}
-          </span>
-        </p>
-        {!d.catalog.ready && (
+        <Networks d={d} />
+        {!d.catalog.ready && !(d.tiktok.on && d.tiktok.linked) && (
           <div className="cp-warn ct-warn" role="note">
             <Icon name="alert" />
             <span>
@@ -105,6 +85,8 @@ export function Catalogue() {
               <Column
                 key={l.id}
                 l={l}
+                where={d.catalog.ready && d.tiktok.on && d.tiktok.linked ? 'both' : d.tiktok.on && d.tiktok.linked ? 'tiktok' : 'meta'}
+                nets={d.tiktok.on}
                 byId={byId}
                 over={over === l.id}
                 onOver={(on) => setOver(on ? l.id : over === l.id ? null : over)}
@@ -115,6 +97,86 @@ export function Catalogue() {
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- where the lists go: Meta, and TikTok when it is on
+function Networks({ d }: { d: Board }) {
+  const { t } = useTranslation();
+  const sw = useAction('metacatalog.tiktok', {
+    onDone: (r) => {
+      if (r.error) toast(r.error, 'info', 6000);
+      else toast(r.on ? t('metacatalog.tt.onDone', { count: r.sent }) : t('metacatalog.tt.offDone'), 'ok');
+    },
+  });
+  const m = d.catalog;
+  const k = d.tiktok;
+  return (
+    <div className="ct-nets">
+      <div className="ct-net">
+        <b className="ct-net-name">Meta</b>
+        <span className="ct-net-facts">
+          {m.connected ? (
+            <span>
+              {t('metacatalog.account')}{' '}
+              <b>
+                <bdi>{m.businessName || '—'}</bdi>
+              </b>
+            </span>
+          ) : m.ready ? (
+            <span>{t('metacatalog.notYet')}</span>
+          ) : (
+            <span>
+              {t('metacatalog.notLinked')} <a href="#/comptes">{t('metacatalog.readyFix')}</a>
+            </span>
+          )}
+          {m.connected && <span>{m.pixelsLinked ? t('metacatalog.pixelOn') : t('metacatalog.pixelOff')}</span>}
+          {m.connected && <span className="ct-count">{t('metacatalog.articles', { count: d.articles, n: n(d.articles) })}</span>}
+        </span>
+      </div>
+      <div className="ct-net">
+        <b className="ct-net-name">TikTok</b>
+        <span className="ct-net-facts">
+          {!k.linked ? (
+            <span>
+              {t('metacatalog.notLinked')} <a href="#/comptes">{t('metacatalog.readyFix')}</a>
+            </span>
+          ) : !k.on ? (
+            <span>{t('metacatalog.tt.off')}</span>
+          ) : (
+            <>
+              {k.connected ? (
+                <span>
+                  {t('metacatalog.tt.bc')}{' '}
+                  <b>
+                    <bdi>{k.bcName || '—'}</bdi>
+                  </b>
+                </span>
+              ) : (
+                <span>{t('metacatalog.tt.notYet')}</span>
+              )}
+              {k.connected && <span>{k.pixelBound ? t('metacatalog.pixelOn') : t('metacatalog.pixelOff')}</span>}
+              {k.connected && <span className="ct-count">{t('metacatalog.articles', { count: k.articles, n: n(k.articles) })}</span>}
+            </>
+          )}
+        </span>
+        {/* on but no longer linked: it can still be turned off */}
+        {(k.linked || k.on) && (
+          <label className="ct-net-switch">
+            <span>{t('metacatalog.tt.switch')}</span>
+            <button type="button" role="switch" className="lf-switch" aria-checked={k.on} disabled={sw.isPending} onClick={() => sw.mutate({ on: !k.on })}>
+              <span aria-hidden="true" />
+            </button>
+          </label>
+        )}
+      </div>
+      {k.error && (
+        <div className="cp-warn ct-warn" role="note">
+          <Icon name="alert" />
+          <span>{k.error}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -134,16 +196,19 @@ function problemLabel(p: Product, t: (k: string) => string): string | null {
   if (p.problem === 'nopage') return t('metacatalog.pb.nopage');
   if (p.problem === 'photo') return t('metacatalog.pb.photo');
   if (p.meta === 'error') return t('metacatalog.pb.meta');
+  if (p.tiktok === 'error') return t('metacatalog.pb.tiktok');
   if (p.preparing) return t('metacatalog.pb.preparing');
   return null;
 }
+/** Something to fix before the product can go (or Meta / TikTok refused it). */
+const isBad = (p: Product) => !!p.problem || p.meta === 'error' || p.tiktok === 'error';
 
 function LibItem({ p, lists, open, onToggle }: { p: Product; lists: List[]; open: boolean; onToggle: () => void }) {
   const { t } = useTranslation();
   const add = useAction('metacatalog.add', { success: t('metacatalog.added') });
   const page = useAction('landing.quickCreate', { success: t('metacatalog.pageMade') });
   const pb = problemLabel(p, t);
-  const bad = !!p.problem || p.meta === 'error';
+  const bad = isBad(p);
   return (
     <li
       className={`ct-item ${bad ? 'ct-bad' : ''}`}
@@ -207,12 +272,35 @@ function LibItem({ p, lists, open, onToggle }: { p: Product; lists: List[]; open
 }
 
 // ---------------------------------------------------------------- a list
-function Column({ l, byId, over, onOver, onDrop }: { l: List; byId: Map<number, Product>; over: boolean; onOver: (on: boolean) => void; onDrop: (e: React.DragEvent) => void }) {
+type Where = 'meta' | 'tiktok' | 'both';
+
+function Column({
+  l,
+  where,
+  nets,
+  byId,
+  over,
+  onOver,
+  onDrop,
+}: {
+  l: List;
+  /** where « Envoyer » sends the list */
+  where: Where;
+  /** TikTok is on: the list says where it is */
+  nets: boolean;
+  byId: Map<number, Product>;
+  over: boolean;
+  onOver: (on: boolean) => void;
+  onDrop: (e: React.DragEvent) => void;
+}) {
   const { t } = useTranslation();
   const remove = useAction('metacatalog.remove');
   const send = useAction('metacatalog.send', {
     onDone: (r) => {
-      toast(r.blocked.length ? t('metacatalog.sentSome', { count: r.ready, blocked: r.blocked.length }) : t('metacatalog.sentAll', { count: r.ready }), r.blocked.length ? 'info' : 'ok');
+      const to = t(`metacatalog.where.${r.meta && r.tiktok && !r.tiktok.error ? 'both' : r.meta ? 'meta' : 'tiktok'}`);
+      toast(r.blocked.length ? t('metacatalog.sentSome', { count: r.ready, blocked: r.blocked.length }) : t('metacatalog.sentAll', { count: r.ready, where: to }), r.blocked.length ? 'info' : 'ok');
+      // TikTok said no: its reason (Meta's sending went on)
+      if (r.tiktok?.error) toast(r.tiktok.error, 'info', 6000);
     },
   });
   const auto = useAction('metacatalog.listAuto');
@@ -302,7 +390,7 @@ function Column({ l, byId, over, onOver, onDrop }: { l: List; byId: Map<number, 
       )}
       <ul className="ct-in">
         {prods.map((p) => {
-          const bad = !!p.problem || p.meta === 'error';
+          const bad = isBad(p);
           return (
             <li
               key={p.id}
@@ -336,9 +424,15 @@ function Column({ l, byId, over, onOver, onDrop }: { l: List; byId: Map<number, 
       </ul>
       <div className="ct-col-foot">
         <State l={l} />
+        {nets && (l.metaState || l.tiktokState) && (
+          <span className="ct-chips">
+            {l.metaState && <Chip name="Meta" state={l.metaState} />}
+            {l.tiktokState && <Chip name="TikTok" state={l.tiktokState} />}
+          </span>
+        )}
         <button type="button" className={`lf-btn ${primary ? 'primary' : ''}`} disabled={send.isPending || !prods.length} onClick={() => send.mutate({ id: l.id })}>
           <Icon name="send" />
-          {send.isPending ? t('metacatalog.sending') : t('metacatalog.send')}
+          {send.isPending ? t('metacatalog.sending') : t(where === 'both' ? 'metacatalog.sendBoth' : where === 'tiktok' ? 'metacatalog.sendTt' : 'metacatalog.send')}
         </button>
         {l.sentAt && <small className="lf-muted">{t('metacatalog.sentAt', { when: when(l.sentAt) })}</small>}
       </div>
@@ -350,6 +444,19 @@ function State({ l }: { l: List }) {
   const { t } = useTranslation();
   const tone = l.state === 'ok' ? 'ok' : l.state === 'fix' ? 'warn' : l.state === 'pending' ? 'info' : 'mute';
   return <span className={`lf-tag ${tone}`}>{t(`metacatalog.state.${l.state}`, { count: l.fix })}</span>;
+}
+
+/** One catalog the list is in, with its state as a dot (and in words for screen readers and on hover). */
+function Chip({ name, state }: { name: string; state: NonNullable<List['metaState']> }) {
+  const { t } = useTranslation();
+  const label = t('metacatalog.chip', { name, state: t(`metacatalog.net.${state}`) });
+  return (
+    <span className={`ct-chip ${state}`} title={label}>
+      <i aria-hidden="true" />
+      <span aria-hidden="true">{name}</span>
+      <span className="sr-only">{label}</span>
+    </span>
+  );
 }
 
 function NewList() {

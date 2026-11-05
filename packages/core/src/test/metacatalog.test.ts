@@ -1,10 +1,13 @@
-// Marketing › Catalogue: the shop's lists of products sent to its Meta catalog (product sets), the lines Meta gets
-// (one per colour / size), what stops a product (no page, a small or not yet JPEG picture), the demo, and the server.
+// Marketing › Catalogue: the shop's lists of products sent to its Meta catalog (product sets), and to its TikTok catalog
+// when « Envoyer aussi à TikTok » is on; the lines each gets (one per colour / size), what stops a product (no page, a
+// small or not yet JPEG picture), the demo, and the server.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { call } from '../index';
 import { setRaw, META_TOKEN_KEY } from '../modules/admin';
-import { hashOf, itemsOf, plainText, problemOf } from '../modules/metacatalog';
+import { hashOf, itemsOf, noEmoji, plainText, problemOf, ttItemsOf } from '../modules/metacatalog';
+import { AppError } from '../rpc';
+import { ttCatalogError, ttLogOf, TT_NO_REGION } from '../social-server';
 import { EMAILS, setup } from './harness';
 
 const JPEG = '/9j/' + 'A'.repeat(200);
@@ -62,6 +65,35 @@ test('plain text, the lines of a product and the fingerprint', () => {
   assert.equal(problemOf(p), null);
   assert.equal(hashOf({ a: 1 }), hashOf({ a: 1 }));
   assert.notEqual(hashOf({ a: 1 }), hashOf({ a: 2 }));
+  // the same lines in TikTok's names: numbers for the prices, no emoji in the title, the first picture apart
+  const tt = ttItemsOf({ ...p, page: { ...p.page, title: '🔥 عربة أطفال 🔥' } }, w).map((x) => x.data as any);
+  assert.equal(tt.length, 2);
+  assert.equal(tt[0].sku_id, '7-20');
+  assert.equal(tt[0].item_group_id, '7');
+  assert.equal(tt[0].title, 'عربة أطفال – Gris');
+  assert.equal(tt[0].availability, 'IN_STOCK');
+  assert.equal(tt[1].availability, 'OUT_OF_STOCK');
+  assert.deepEqual(tt[0].price_info, { price: 12900, currency: 'DZD', sale_price: 9950 });
+  assert.deepEqual(tt[0].product_detail, { condition: 'NEW', color: 'Gris' });
+  assert.equal(tt[0].image_url, 'https://pilotix.test/api/lp/img/3/meta.jpg');
+  assert.deepEqual(tt[0].additional_image_urls, ['https://pilotix.test/api/lp/img/4/meta.jpg']);
+  assert.equal(tt[1].image_url, 'https://pilotix.test/api/lp/img/4/meta.jpg');
+  assert.deepEqual(tt[0].landing_page, { landing_page_url: 'https://go.test/bebe/poussette' });
+  assert.equal(tt[0].brand, 'Bébé Confort');
+  assert.equal(noEmoji('Promo 🇩🇿 ✅ تخفيض 👶🏽'), 'Promo تخفيض');
+  // TikTok's answers in plain words
+  assert.match(ttCatalogError(40105, 'x').message, /Reliez TikTok/);
+  assert.match(ttCatalogError(40001, 'x').message, /Catalog Management/);
+  assert.equal(ttCatalogError(40100, 'x').code, 'conflict');
+  assert.match(ttCatalogError(40002, 'bad price').message, /TikTok : bad price/);
+  const log = ttLogOf({
+    product_feed_log: {
+      process_status: 'SUCCESS',
+      feed_log_data: { error_affected_products: [{ issue: 'Image trop petite', suggestion: 'Ajoutez une image de 500 px', affected_product_item_list: [{ sku_id: '7-20' }] }] },
+    },
+  });
+  assert.deepEqual(log, { done: true, failed: false, errors: [{ id: '7-20', message: 'Image trop petite — Ajoutez une image de 500 px' }] });
+  assert.deepEqual(ttLogOf({ product_feed_log: { process_status: 'PROCESSING' } }), { done: false, failed: false, errors: [] });
 });
 
 test('demo: the lists, their states and what stops a product', async () => {
@@ -81,6 +113,22 @@ test('demo: the lists, their states and what stops a product', async () => {
   assert.equal(prod('Poussette canne pliable').problem, null);
   assert.equal(prod('Poussette canne pliable').meta, 'ok');
   assert.ok(b.articles >= 10);
+  // the same lists on TikTok
+  assert.equal(b.tiktok.on, true);
+  assert.equal(b.tiktok.connected, true);
+  assert.equal(b.tiktok.articles, b.articles);
+  assert.equal(prod('Poussette canne pliable').tiktok, 'ok');
+  assert.equal(by('Bébé 0-6 mois').metaState, 'ok');
+  assert.equal(by('Bébé 0-6 mois').tiktokState, 'ok');
+  assert.equal(by('Nouveautés').tiktokState, null);
+  // off: nothing more goes to TikTok, the lists say only Meta; on again: the sent lists go at once
+  assert.equal(((await call('metacatalog.tiktok', mk, { on: false })) as any).on, false);
+  const off: any = await call('metacatalog.board', mk, {});
+  assert.equal(off.lists.find((l: any) => l.name === 'Bébé 0-6 mois').tiktokState, null);
+  assert.equal(off.products.find((p: any) => p.name === 'Poussette canne pliable').tiktok, null);
+  const on: any = await call('metacatalog.tiktok', mk, { on: true });
+  assert.equal(on.on, true);
+  assert.equal(on.error, null);
 });
 
 test('lists: make, drop, move, take out, send and remove (preview)', async () => {
@@ -224,4 +272,161 @@ test('server: the catalog is made once, only what changed goes, product sets, Me
   assert.equal(del.length, 3);
   assert.ok(del.every((x: any) => x.method === 'DELETE'));
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM meta_catalog_items WHERE product_id = $1 AND status <> 'deleted'`, [pid]))[0].n, 0);
+});
+
+test('server: the same lists on TikTok — its catalog, products, sets, answers, refusals', async () => {
+  const { db, as } = await setup(120);
+  const calls: { action: string; args: any }[] = [];
+  let setup1: () => any = () => ({ bcId: 'bc1', bcName: 'Ma boutique BC', catalogId: 'tt1', pixelBound: true });
+  let log: any = { done: true, failed: false, errors: [] };
+  let setFails = false;
+  const server: any = {
+    publicUrl: 'https://pilotix.test',
+    publicApi: 'https://pilotix.test/api',
+    pagesUrl: () => 'https://go.pilotix.test',
+    courier: async () => null,
+    hashPassword: async (x: string) => x,
+    meta: async (action: string, args: any) => {
+      calls.push({ action, args });
+      throw new AppError('bad_request', 'Meta n’est pas connecté');
+    },
+    social: async (action: string, args: any) => {
+      calls.push({ action, args });
+      if (action === 'ttCatalogSetup') return setup1();
+      if (action === 'ttCatalogUpload') return { logId: `log${calls.length}` };
+      if (action === 'ttCatalogDelete') return { logId: `del${calls.length}` };
+      if (action === 'ttCatalogLog') return log;
+      if (action === 'ttCatalogSet') {
+        if (setFails) throw new AppError('conflict', 'TikTok limite les demandes pour l’instant.');
+        return { setId: args.setId ?? 'ttset1' };
+      }
+      return { ok: true };
+    },
+  };
+  const mk = await as(EMAILS.marketer, server);
+  const admin = await as(EMAILS.admin, server);
+  // a clean shop: no catalog yet, Meta not linked, TikTok linked (Pilot AI › Comptes) with its pixel
+  await db.query(`DELETE FROM meta_catalog_lists`);
+  await db.query(`DELETE FROM meta_catalog_items`);
+  await db.query(`DELETE FROM tiktok_catalog_items`);
+  await db.query(`DELETE FROM settings WHERE key IN ('metacatalog', 'ttcatalog')`);
+  const list: any = await call('metacatalog.listSave', mk, { name: 'Bébé 0-6 mois · sortie de maternité' });
+  const pid = Number((await db.query(`SELECT id FROM products WHERE sku = 'PX-ENS'`))[0].id);
+  const img = Number((await db.query(`INSERT INTO landing_images (w, h, t160, w480, w960, jpg) VALUES (900, 900, 'x', 'y', 'z', $1) RETURNING id`, [JPEG]))[0].id);
+  await db.query(`UPDATE landing_pages SET images = $2 WHERE product_id = $1`, [pid, JSON.stringify([{ id: img }])]);
+  await call('metacatalog.add', mk, { listId: list.id, productId: pid });
+  // not linked yet: nothing can go
+  let board: any = await call('metacatalog.board', mk, {});
+  assert.equal(board.tiktok.linked, false);
+  await assert.rejects(call('metacatalog.tiktok', mk, { on: true }), /TikTok Ads/);
+  await assert.rejects(call('metacatalog.send', mk, { id: list.id }), /Reliez/);
+  await setRaw(db, 'secret_tiktok_ads_token', 'ttok');
+  await setRaw(db, 'social_tiktok_ads', { advertiserId: '7001', advertisers: [{ advertiserId: '7001', name: 'Pub' }] });
+  await db.query(`INSERT INTO tracking_pixels (platform, name, pixel_id, is_default) VALUES ('tiktok', 'Boutique', 'CABC123DEF4567890', true)`);
+  // TikTok has no catalog ads for Algeria: the switch stays off and the page says why
+  setup1 = () => {
+    throw new AppError('bad_request', TT_NO_REGION);
+  };
+  const no: any = await call('metacatalog.tiktok', mk, { on: true });
+  assert.equal(no.on, false);
+  assert.match(no.error, /Algérie/);
+  board = await call('metacatalog.board', mk, {});
+  assert.equal(board.tiktok.on, false);
+  assert.match(board.tiktok.error, /Algérie/);
+  // it is open: the catalog is made, with the shop's pixel; no list was sent yet
+  setup1 = () => ({ bcId: 'bc1', bcName: 'Ma boutique BC', catalogId: 'tt1', pixelBound: true });
+  calls.length = 0;
+  const yes: any = await call('metacatalog.tiktok', mk, { on: true });
+  assert.deepEqual([yes.on, yes.error], [true, null]);
+  assert.deepEqual(calls.map((c) => c.action), ['ttCatalogSetup']);
+  assert.equal(calls[0].args.pixelCode, 'CABC123DEF4567890');
+  board = await call('metacatalog.board', mk, {});
+  assert.deepEqual([board.tiktok.on, board.tiktok.connected, board.tiktok.bcName, board.tiktok.error], [true, true, 'Ma boutique BC', null]);
+  // « Envoyer »: only TikTok (Meta is not linked): the 3 sizes, then the list as a product set of the product
+  calls.length = 0;
+  const r1: any = await call('metacatalog.send', mk, { id: list.id });
+  assert.equal(r1.meta, false);
+  assert.deepEqual(r1.tiktok, { sent: 3, error: null });
+  assert.deepEqual(calls.map((c) => c.action), ['ttCatalogUpload', 'ttCatalogSet']);
+  const up = calls[0].args;
+  assert.deepEqual([up.bcId, up.catalogId, up.products.length], ['bc1', 'tt1', 3]);
+  const d = up.products[0];
+  assert.equal(d.item_group_id, String(pid));
+  assert.deepEqual(d.price_info, { price: 2900, currency: 'DZD' });
+  assert.equal(d.product_detail.size, '0-3 mois');
+  assert.equal(d.image_url, `https://pilotix.test/api/lp/img/${img}/meta.jpg`);
+  assert.match(d.landing_page.landing_page_url, /^https:\/\/go\.pilotix\.test\/.+\/ensemble-bebe-3-pieces$/);
+  assert.deepEqual(calls[1].args.groupIds, [String(pid)]);
+  assert.equal(calls[1].args.setId, null);
+  let l = (await db.query(`SELECT * FROM meta_catalog_lists WHERE id = $1`, [list.id]))[0];
+  assert.equal(l.tt_set_id, 'ttset1');
+  assert.ok(l.tt_sent_at);
+  assert.equal(l.set_id, null);
+  board = await call('metacatalog.board', mk, {});
+  let bl = board.lists.find((x: any) => x.id === list.id);
+  assert.deepEqual([bl.state, bl.metaState, bl.tiktokState], ['pending', null, 'pending']);
+  // TikTok's answer, a minute later: one size refused
+  const sku = `${pid}-${(await db.query(`SELECT min(id) AS v FROM product_variants WHERE product_id = $1 AND active`, [pid]))[0].v}`;
+  log = { done: true, failed: false, errors: [{ id: sku, message: 'Image trop petite — Ajoutez une image de 500 px' }] };
+  await db.query(`UPDATE tiktok_catalog_batches SET sent_at = sent_at - interval '5 minutes'`);
+  await db.query(`UPDATE tiktok_catalog_items SET sent_at = sent_at - interval '5 minutes'`);
+  calls.length = 0;
+  await call('metacatalog.run', admin, {});
+  assert.deepEqual(calls.map((c) => c.action), ['ttCatalogLog']);
+  const st = await db.query(`SELECT sku_id, status, error FROM tiktok_catalog_items WHERE product_id = $1 ORDER BY sku_id`, [pid]);
+  assert.equal(st.find((x: any) => x.sku_id === sku).status, 'error');
+  assert.ok(st.filter((x: any) => x.sku_id !== sku).every((x: any) => x.status === 'ok'));
+  board = await call('metacatalog.board', mk, {});
+  bl = board.lists.find((x: any) => x.id === list.id);
+  assert.deepEqual([bl.state, bl.tiktokState], ['fix', 'fix']);
+  const bp = board.products.find((p: any) => p.id === pid);
+  assert.equal(bp.tiktok, 'error');
+  assert.match(bp.problemText, /^TikTok : Image trop petite/);
+  // nothing changed: the refused size waits (no upload every few minutes); « Envoyer » tries it again
+  calls.length = 0;
+  await call('metacatalog.run', admin, {});
+  assert.deepEqual(calls.filter((c) => c.action === 'ttCatalogUpload'), []);
+  await call('metacatalog.send', mk, { id: list.id });
+  assert.deepEqual(calls.filter((c) => c.action === 'ttCatalogUpload').map((c) => c.args.products.map((x: any) => x.sku_id)), [[sku]]);
+  // an upload TikTok never answers: after a few hours it goes again
+  log = { done: false, failed: false, errors: [] };
+  await db.query(`UPDATE tiktok_catalog_batches SET sent_at = sent_at - interval '7 hours' WHERE done_at IS NULL`);
+  await db.query(`UPDATE tiktok_catalog_items SET sent_at = sent_at - interval '7 hours' WHERE sku_id = $1`, [sku]);
+  await call('metacatalog.run', admin, {});
+  const late = (await db.query(`SELECT status, error, hash FROM tiktok_catalog_items WHERE sku_id = $1`, [sku]))[0];
+  assert.equal(late.status, 'error');
+  assert.match(late.error, /pas répondu/);
+  assert.equal(late.hash, null);
+  calls.length = 0;
+  await call('metacatalog.run', admin, {});
+  assert.deepEqual(calls.filter((c) => c.action === 'ttCatalogUpload').map((c) => c.args.products.length), [1]);
+  // TikTok refuses the set for a while: Meta's sending goes on, the page says why, the next run sends the list again
+  setFails = true;
+  await db.query(`UPDATE landing_pages SET price = 2700 WHERE product_id = $1`, [pid]);
+  const r2: any = await call('metacatalog.send', mk, { id: list.id });
+  assert.match(r2.tiktok.error, /limite/);
+  assert.equal((await db.query(`SELECT tt_sent_at FROM meta_catalog_lists WHERE id = $1`, [list.id]))[0].tt_sent_at, null);
+  board = await call('metacatalog.board', mk, {});
+  assert.match(board.tiktok.error, /limite/);
+  setFails = false;
+  calls.length = 0;
+  await call('metacatalog.run', admin, {});
+  assert.ok(calls.some((c) => c.action === 'ttCatalogSet' && c.args.setId === 'ttset1'));
+  assert.ok((await db.query(`SELECT tt_sent_at FROM meta_catalog_lists WHERE id = $1`, [list.id]))[0].tt_sent_at);
+  board = await call('metacatalog.board', mk, {});
+  assert.equal(board.tiktok.error, null);
+  // taken out of its only list: the next run takes its sizes out of TikTok's catalog
+  await call('metacatalog.remove', mk, { listId: list.id, productId: pid });
+  calls.length = 0;
+  await call('metacatalog.run', admin, {});
+  const del = calls.filter((c) => c.action === 'ttCatalogDelete');
+  assert.equal(del.length, 1);
+  assert.equal(del[0].args.skuIds.length, 3);
+  assert.equal((await db.query(`SELECT count(*)::int AS n FROM tiktok_catalog_items WHERE product_id = $1 AND status <> 'deleted'`, [pid]))[0].n, 0);
+  // Meta was never asked (not linked)
+  assert.equal(calls.filter((c) => c.action.startsWith('catalog')).length, 0);
+  // the list goes away: its TikTok set too
+  calls.length = 0;
+  await call('metacatalog.listRemove', mk, { id: list.id });
+  assert.deepEqual(calls.filter((c) => c.action === 'ttCatalogSetDelete').map((c) => c.args.setId), ['ttset1']);
 });

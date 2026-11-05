@@ -1247,7 +1247,8 @@ function tiktokEvent(
     properties: {
       currency: 'DZD',
       value: r.value,
-      content_type: 'product',
+      // the content id is the product: every colour / size of it in the TikTok catalog (item_group_id)
+      content_type: 'product_group',
       contents: r.contents.map((x) => ({ content_id: x.id, quantity: x.quantity, price: x.item_price })),
       ...(r.orderId ? { order_id: r.orderId } : {}),
     },

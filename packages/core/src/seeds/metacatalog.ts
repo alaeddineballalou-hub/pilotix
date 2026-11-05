@@ -2,7 +2,8 @@ import type { Db } from '../db';
 import { num } from '../db';
 
 // Demo of Marketing › Catalogue: a few more landing pages (pictures drawn in SVG; the travel cot's is too small for
-// Meta), the shop's catalog at Meta, and four lists: three sent (one with products to fix), one not sent yet.
+// Meta), the shop's catalogs at Meta and TikTok, and four lists: three sent to both (one with products to fix), one not
+// sent yet.
 
 const svg = (body: string, bg: string) =>
   'data:image/svg+xml,' +
@@ -64,7 +65,8 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
         ])
       )[0].id,
     );
-    if (sent) await db.query(`UPDATE meta_catalog_lists SET set_id = $2 WHERE id = $1`, [id, `demo-set-${id}`]);
+    // sent: a Meta product set, and the same list on TikTok
+    if (sent) await db.query(`UPDATE meta_catalog_lists SET set_id = $2, tt_set_id = $3, tt_sent_at = $4 WHERE id = $1`, [id, `demo-set-${id}`, `demo-tt-set-${id}`, sent]);
     for (const [j, sku] of l.skus.entries()) {
       const p = await pid(sku);
       if (p) await db.query(`INSERT INTO meta_catalog_list_products (list_id, product_id, position, added_at) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`, [id, p, j + 1, at(30 - k)]);
@@ -78,11 +80,14 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
      JOIN landing_pages g ON g.product_id = lp.product_id AND g.active
      WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements(g.images) e WHERE (e->>'w')::int < 500)`,
   );
-  for (const r of ok)
-    await db.query(`INSERT INTO meta_catalog_items (retailer_id, product_id, variant_id, status, sent_at, checked_at) VALUES ($1,$2,$3,'ok',$4,$4) ON CONFLICT DO NOTHING`, [
-      `${num(r.pid)}-${num(r.vid)}`,
-      num(r.pid),
-      num(r.vid),
-      at(0.2),
-    ]);
+  for (const r of ok) {
+    const line = [`${num(r.pid)}-${num(r.vid)}`, num(r.pid), num(r.vid), at(0.2)];
+    await db.query(`INSERT INTO meta_catalog_items (retailer_id, product_id, variant_id, status, sent_at, checked_at) VALUES ($1,$2,$3,'ok',$4,$4) ON CONFLICT DO NOTHING`, line);
+    await db.query(`INSERT INTO tiktok_catalog_items (sku_id, product_id, variant_id, status, sent_at, checked_at) VALUES ($1,$2,$3,'ok',$4,$4) ON CONFLICT DO NOTHING`, line);
+  }
+  // « Envoyer aussi à TikTok » is on: its catalog in the shop's Business Center, the TikTok pixel bound to it
+  await db.query(
+    `INSERT INTO settings (key, value) VALUES ('ttcatalog', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [JSON.stringify({ on: true, bcId: 'demo-bc', bcName: 'BabyJoy DZ', catalogId: 'demo-tt-catalog', pixelBound: true, error: null, at: at(28) })],
+  );
 }
