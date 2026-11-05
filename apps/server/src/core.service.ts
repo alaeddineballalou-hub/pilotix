@@ -239,6 +239,39 @@ export class CoreService implements OnModuleDestroy {
    */
   authEpoch = 0;
 
+  // ---------------------------------------------------------------- sessions ended with « Se déconnecter »
+  /** the ids of tokens ended by their logout (until they would have ended anyway), read again every 30 s */
+  private revoked = new Map<string, number>();
+  private revokedAt: Date | null = null;
+  private revokedRead: Promise<void> | null = null;
+
+  private async readRevoked() {
+    const since = this.revokedAt ? new Date(this.revokedAt.getTime() - 5_000) : null;
+    const now = new Date();
+    for (const r of await core.revokedSince(this.t, since)) this.revoked.set(r.jti, r.exp);
+    this.revokedAt = now;
+    const t = Date.now();
+    for (const [k, exp] of this.revoked) if (exp < t) this.revoked.delete(k);
+  }
+
+  /** Is this session's token ended (« Se déconnecter » on that device)? */
+  async isRevoked(jti: string | undefined): Promise<boolean> {
+    if (!jti) return false;
+    if (!this.revokedAt || Date.now() - this.revokedAt.getTime() > 30_000) {
+      this.revokedRead ??= this.readRevoked()
+        .catch((e) => this.log.warn(`ended sessions: ${(e as Error).message}`))
+        .finally(() => (this.revokedRead = null));
+      await this.revokedRead;
+    }
+    return this.revoked.has(jti);
+  }
+
+  /** Ends this token now (its id and when it would have ended). */
+  async revoke(jti: string, exp: Date) {
+    await core.revokeToken(this.t, jti, exp);
+    this.revoked.set(jti, exp.getTime());
+  }
+
   /** Forget what is kept (after a change in the control room: seen at once, sessions included). */
   invalidate() {
     this.cache.clear();

@@ -123,8 +123,13 @@ export class PlatformController {
     }
     clearLogin(mailKey);
     const set = await this.core.settings();
-    // two-step login: a code by e-mail (not on a device remembered for 30 days)
-    if (set.security.twoStep && !config.twoStepOff && mailConfigured() && !(await this.deviceOk(b.data.device, r.staff.id, r.tv))) {
+    // two-step login: a code by e-mail (not on a device remembered for 30 days). Never off by itself: with no e-mail
+    // the control room stays closed (only PLATFORM_TWO_STEP=off in deploy/.env lets the password alone in)
+    if (set.security.twoStep && !config.twoStepOff && !(await this.deviceOk(b.data.device, r.staff.id, r.tv))) {
+      if (!mailConfigured()) {
+        this.log.error('Two-step login: e-mails are not configured on the server (deploy/.env); PLATFORM_TWO_STEP=off is the emergency switch');
+        throw new core.AppError('bad_request', 'Connexion en deux étapes : l’envoi d’e-mails n’est pas configuré sur le serveur. Configurez-le (deploy/.env) ; en urgence seulement : PLATFORM_TWO_STEP=off.');
+      }
       const code = await core.makeStaffCode(this.core.t, r.staff.id);
       // waited for: when the e-mail cannot leave, the person is told now (not left waiting for a code)
       try {

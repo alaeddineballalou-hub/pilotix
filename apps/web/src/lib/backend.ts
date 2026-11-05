@@ -339,6 +339,11 @@ class RemoteBackend implements Backend {
     }
   }
   logout() {
+    // the session ends on the server too (this device only): its token is refused from now on
+    const token = this.token;
+    const base = apiUrl();
+    if (token && base)
+      fetch(`${base}/api/auth/logout`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: '{}', keepalive: true }).catch(() => {});
     this.keep(null);
     this.socket?.disconnect();
   }

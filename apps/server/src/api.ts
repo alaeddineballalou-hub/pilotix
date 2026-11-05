@@ -25,7 +25,7 @@ import { APP_FILTER, Reflector } from '@nestjs/core';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import * as core from '@pilotix/core';
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, maskPhone, normalizePhone, ProCard, Session } from '@pilotix/shared';
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { brotliCompressSync, constants as zlibConst, gzipSync } from 'node:zlib';
 import { z } from 'zod';
 import { config } from './config';
@@ -112,6 +112,8 @@ class AuthGuard implements CanActivate {
     }
     // a staff token, a picker ticket, or a support token of the past (Pilotix no longer opens stores): not a shop's
     if (!c.sub || c.typ || c.imp) throw new UnauthorizedException('Session expirée, reconnectez-vous');
+    // ended with « Se déconnecter » on that device
+    if (await this.core.isRevoked((c as { jti?: string }).jti)) throw new UnauthorizedException('Session terminée, reconnectez-vous');
     const id = Number(c.sub);
     const tv = Number(c.tv ?? 0);
     const ref = c.shop ? await this.core.shop({ id: Number(c.shop) }) : await this.core.primary();
@@ -345,9 +347,9 @@ class ApiController {
     private readonly jwt: JwtService,
   ) {}
 
-  /** A shop token: the person's account in that shop, its token version, its shop. */
+  /** A shop token: the person's account in that shop, its token version, its shop, and its own id (« Se déconnecter »). */
   private async signShop(ref: ShopRef, id: number) {
-    return this.jwt.signAsync({ sub: id, tv: await tokenVersion(ref.db, id), shop: ref.shop.id });
+    return this.jwt.signAsync({ sub: id, tv: await tokenVersion(ref.db, id), shop: ref.shop.id, jti: randomUUID() });
   }
 
   /** The shop of a public link (/api/s/<slug>/…; none = shop #1). A suspended or closed shop answers as unknown. */
@@ -574,6 +576,8 @@ class ApiController {
   async domainSet(@Body() body: any, @Req() req: ShopRequest) {
     if (!req.session.isAdmin) throw new core.AppError('forbidden', 'Réservé à l’administrateur');
     if (req.shop.shop.demo) throw new core.AppError('forbidden', 'Pas dans la boutique démo');
+    // an unpaid (locked) store keeps its pages where they are
+    if (req.shop.status.locked) throw new core.AppError('payment_required', core.SHOP_LOCKED);
     const want = body?.domain === null || body?.domain === '' ? null : String(body?.domain ?? '').slice(0, 260);
     try {
       await core.setShopDomain(this.core.t, req.shop.shop.id, want, this.platformHost());
@@ -686,6 +690,25 @@ class ApiController {
    * "Mot de passe oublié": e-mails a one-time link (for every store of the person). Same answer whether the account
    * exists or not, and the e-mail leaves after the answer (no timing difference). 5 requests per 15 minutes per address.
    */
+  /**
+   * « Se déconnecter »: this device's session ends on the server too (its token is refused from now on, by the API and
+   * the live updates). The person's other devices stay logged in. Always answers ok (an unknown or old token: nothing).
+   */
+  @Public()
+  @Post('auth/logout')
+  async logout(@Req() req: { headers?: Record<string, string | undefined> }) {
+    const h = String(req.headers?.authorization || '');
+    const token = h.startsWith('Bearer ') ? h.slice(7) : '';
+    if (!token) return { ok: true };
+    try {
+      const c = await this.jwt.verifyAsync<{ jti?: string; exp?: number; typ?: string }>(token);
+      if (c.jti && !c.typ && c.exp) await this.core.revoke(String(c.jti), new Date(c.exp * 1000));
+    } catch {
+      // an old or broken token: nothing to end
+    }
+    return { ok: true };
+  }
+
   @Public()
   @Post('auth/forgot')
   async forgot(@Body() body: unknown, @Req() req: { ip?: string }) {

@@ -612,6 +612,12 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   // who chose the account's password: the person ('self'), or a store's admin ('admin': it only opens the stores of
   // that seller, password_owner); accounts made by a store's admin and never proven by their e-mail were such
   ['p023_password_by', P023],
+  // « Se déconnecter »: that session's token stops at once on the server (until it would have ended anyway)
+  [
+    'p024_revoked_tokens',
+    `CREATE TABLE IF NOT EXISTS platform.revoked_tokens (jti text PRIMARY KEY, exp timestamptz NOT NULL, at timestamptz NOT NULL DEFAULT now());
+     CREATE INDEX IF NOT EXISTS revoked_tokens_at ON platform.revoked_tokens (at);`,
+  ],
 ];
 
 /** Creates or updates the platform's tables. */

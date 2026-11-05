@@ -2,8 +2,14 @@
 # Settings come from deploy/.env (made by deploy/install.sh). Run from the repository root:
 #   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 name: pilotix
+# each service's log is kept small: 5 files of 10 MB at most, the oldest dropped (the disk never fills with logs)
+x-logs: &logs
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
 services:
   postgres:
+    <<: *logs
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
@@ -17,12 +23,14 @@ services:
       retries: 20
 
   redis:
+    <<: *logs
     image: redis:7-alpine
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes: [redisdata:/data]
 
   server:
+    <<: *logs
     build:
       context: ..
       dockerfile: apps/server/Dockerfile
@@ -55,6 +63,7 @@ services:
       redis: { condition: service_started }
 
   web:
+    <<: *logs
     build:
       context: ..
       dockerfile: deploy/web.Dockerfile

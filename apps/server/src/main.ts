@@ -37,6 +37,17 @@ async function bootstrap() {
     logger,
     rawBody: true, // Meta webhooks are signed over the raw body
   });
+  // what anyone can send without being logged in stays small: logins and sign-ups, landing page forms, webhooks
+  // (the rest — the app's own actions, its pictures and imports — keeps the 5 MB above)
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .addHook('onRoute', (route: { url?: string; bodyLimit?: number }) => {
+      const url = String(route.url ?? '');
+      if (/^\/api\/(auth|platform\/auth)\//.test(url)) route.bodyLimit = 64 * 1024;
+      else if (/^\/api\/(s\/[^/]+\/)?lp\//.test(url)) route.bodyLimit = 64 * 1024;
+      else if (/^\/api\/(s\/[^/]+\/)?hooks\//.test(url)) route.bodyLimit = 1024 * 1024;
+    });
   app.setGlobalPrefix('api');
   app.enableCors({ origin: config.corsOrigins, credentials: true });
   app.enableShutdownHooks();
