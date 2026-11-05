@@ -14,8 +14,11 @@ type View = Out<'photos.list'>;
 type Photo = View['photos'][number];
 const K = 'produits.hd.';
 
-/** 1,4 Mo / 820 Ko */
-const size = (b: number, lang: string) => (b >= 1_000_000 ? `${(b / 1_000_000).toLocaleString(lang, { maximumFractionDigits: 1 })} Mo` : `${Math.max(1, Math.round(b / 1000))} Ko`);
+/** 1,4 Mo / 820 Ko (MB / KB in English and Arabic), kept left to right inside an Arabic sentence */
+const size = (b: number, lang: string) => {
+  const [mb, kb] = lang === 'fr' ? ['Mo', 'Ko'] : ['MB', 'KB'];
+  return `\u2066${b >= 1_000_000 ? `${(b / 1_000_000).toLocaleString(lang, { maximumFractionDigits: 1 })} ${mb}` : `${Math.max(1, Math.round(b / 1000))} ${kb}`}\u2069`;
+};
 
 export function HdPhotos({ productId, variants }: { productId: number | null; variants: { id: number; title: string }[] }) {
   const { t, i18n } = useTranslation();
