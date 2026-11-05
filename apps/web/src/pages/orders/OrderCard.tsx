@@ -7,7 +7,8 @@ import { rpc } from '../../lib/backend';
 import { da, dateOnly, fromLocalInput, toLocalInput, when, wilaya } from '../../lib/format';
 import { closeModal, openOrder, openOrderForm } from '../../lib/modals';
 import { startTicketFor } from '../sav/NewTicket';
-import { useRpc } from '../../lib/query';
+import { useAction, useRpc } from '../../lib/query';
+import { featureIsOn } from '../../lib/features';
 import { useSession } from '../../lib/session';
 import { ErrorBox, Field, Icon, Loading, StatusBadge, TicketTag } from '../../ui/kit';
 import { askRisk, ScoreCard } from '../../ui/clientScore';
@@ -420,6 +421,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
             </>
           )}
         </dl>
+        {h && featureIsOn('marketing/campagnes') && <WaOffers customerId={h.id} state={h.waOffers} />}
         {h && (
           <div className="oc-score">
             <ScoreCard s={h.score} compact />
@@ -868,3 +870,17 @@ function ActionPanel({ o, panel, busy, companies, onCancel, run, onSendAfter }: 
   );
 }
 
+/** The agent asked during the call: the customer wants the shop's offers on WhatsApp (Marketing › Campagnes). */
+function WaOffers({ customerId, state }: { customerId: number; state: 'yes' | 'stop' | null }) {
+  const { t } = useTranslation();
+  const save = useAction('campaigns.optin', { onDone: (r) => toast(r.on ? t('orders.card.waOffersOn') : t('orders.card.waOffersOff'), 'ok') });
+  return (
+    <label className={`oc-offers ${state === 'yes' ? 'on' : ''}`}>
+      <input type="checkbox" checked={state === 'yes'} disabled={save.isPending} onChange={(e) => save.mutate({ customerId, on: e.target.checked })} />
+      <span>
+        {t('orders.card.waOffers')}
+        {state === 'stop' && <small>{t('orders.card.waOffersStop')}</small>}
+      </span>
+    </label>
+  );
+}

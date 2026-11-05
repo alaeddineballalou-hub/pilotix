@@ -112,7 +112,7 @@ html[data-theme="dark"] .lf-row { border: 1px solid var(--line); }
 
 .lf-none { margin: 8px 0; color: var(--c-muted); }
 .lf-empty { padding: 36px 24px; border-radius: 22px; background: var(--surface); box-shadow: var(--lf-shadow); text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.lf-empty > svg { width: 36px; height: 36px; color: var(--c-accent-ink); }
+.lf-empty > .bji { width: 36px; height: 36px; color: var(--c-accent-ink); }
 .lf-empty h3 { margin: 4px 0 0; font-size: 18px; font-weight: 600; }
 .lf-empty p { margin: 0; max-width: 52ch; color: var(--c-muted); line-height: 1.5; }
 .lf-empty .lf-btn { margin-top: 8px; }

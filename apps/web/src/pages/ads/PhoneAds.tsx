@@ -14,6 +14,7 @@ import { store } from '../../lib/store';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
 import { Spy } from './Spy';
 import { Formulaires } from './Formulaires';
+import { Campagnes } from './Campagnes';
 import { featureIsOn } from '../../lib/features';
 import '../confirmation/phone.css';
 import '../suivi/phone.css';
@@ -58,7 +59,9 @@ export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; re
   const { t } = useTranslation();
   // Formulaires: only a store's own Marketing (not a marketer's space), when its plan has it
   const forms = !noSpy && featureIsOn('marketing/formulaires');
-  const tab = sub === 'marketer' ? 'mk' : sub === 'spy' && !noSpy ? 'spy' : sub === 'formulaires' && forms ? 'forms' : 'pub';
+  // Campagnes (WhatsApp offers): the same, only the store's own Marketing
+  const camps = !noSpy && featureIsOn('marketing/campagnes');
+  const tab = sub === 'marketer' ? 'mk' : sub === 'spy' && !noSpy ? 'spy' : sub === 'formulaires' && forms ? 'forms' : sub === 'campagnes' && camps ? 'camps' : 'pub';
   return (
     <div className="pxm">
       <div className="pxv-own pxm-tabs" role="tablist">
@@ -68,6 +71,11 @@ export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; re
         {forms && (
           <a role="tab" aria-selected={tab === 'forms'} className={tab === 'forms' ? 'on' : ''} href="#/marketing/formulaires">
             {t('nav.formulaires')}
+          </a>
+        )}
+        {camps && (
+          <a role="tab" aria-selected={tab === 'camps'} className={tab === 'camps' ? 'on' : ''} href="#/marketing/campagnes">
+            {t('nav.campagnes')}
           </a>
         )}
         <a role="tab" aria-selected={tab === 'mk'} className={tab === 'mk' ? 'on' : ''} href="#/marketing/marketer">
@@ -80,7 +88,7 @@ export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; re
         )}
       </div>
       {/* AI Spy: the same page as on a computer, in one column */}
-      {tab === 'pub' ? <Pub /> : tab === 'spy' ? <Spy rest={rest} /> : tab === 'forms' ? <Formulaires /> : <Marketeurs />}
+      {tab === 'pub' ? <Pub /> : tab === 'spy' ? <Spy rest={rest} /> : tab === 'forms' ? <Formulaires /> : tab === 'camps' ? <Campagnes /> : <Marketeurs />}
     </div>
   );
 }

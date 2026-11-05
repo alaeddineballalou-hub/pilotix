@@ -56,6 +56,11 @@
 
 /* the customer's full order history in the order card (« Voir tout ») */
 .oc-score { margin-top: 10px; }
+/* the customer wants the shop's WhatsApp offers (Marketing › Campagnes): asked by the agent during the call */
+.oc-offers { display: flex; align-items: flex-start; gap: 10px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.oc-offers.on { border-color: var(--c-ok-line, #1F9D57); background: var(--c-ok-tint, #E3F5EA); }
+.oc-offers input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--c-ok-fill, #15803D); flex: none; }
+.oc-offers small { display: block; margin-top: 2px; font-weight: 500; color: var(--c-warn-ink, #8A5A00); }
 .oc-histmore { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; font-weight: 700; }
 .oc-histmore .bji.flip svg { transform: rotate(180deg); }
 .oc-hist { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; max-height: 360px; overflow-y: auto; }

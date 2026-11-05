@@ -602,13 +602,12 @@ async function waNumber(ctx: Ctx): Promise<{ token: string; phoneId: string }> {
 }
 
 /** A message from an approved template (the only kind a business may send first): { to: '2136…', name, lang, params }. */
-async function waTemplate(ctx: Ctx, a: { to: string; name: string; lang: string; params: string[] }) {
+async function waTemplate(ctx: Ctx, a: { to: string; name: string; lang: string; params: string[]; payloads?: string[] }) {
   const { token, phoneId } = await waNumber(ctx);
-  const template = {
-    name: a.name,
-    language: { code: a.lang },
-    ...(a.params.length ? { components: [{ type: 'body', parameters: a.params.map((t) => ({ type: 'text', text: String(t).slice(0, 1000) })) }] } : {}),
-  };
+  // the quick-reply buttons (a campaign's « Je commande » and « Stop »): what comes back when the customer taps one
+  const buttons = (a.payloads ?? []).map((payload, index) => ({ type: 'button', sub_type: 'quick_reply', index: String(index), parameters: [{ type: 'payload', payload: String(payload).slice(0, 200) }] }));
+  const components = [...(a.params.length ? [{ type: 'body', parameters: a.params.map((t) => ({ type: 'text', text: String(t).slice(0, 1000) })) }] : []), ...buttons];
+  const template = { name: a.name, language: { code: a.lang }, ...(components.length ? { components } : {}) };
   const r = await postJson(`${GRAPH}/${phoneId}/messages`, { messaging_product: 'whatsapp', recipient_type: 'individual', to: a.to, type: 'template', template }, { Authorization: `Bearer ${token}` }, 'WhatsApp');
   return { id: r?.messages?.[0]?.id ? String(r.messages[0].id) : null };
 }
@@ -627,11 +626,19 @@ async function waTemplates(ctx: Ctx, a: { wabaId: string }) {
   return out;
 }
 
-/** Sends a text to Meta for approval as a Utility template (order updates). */
-async function waCreateTemplate(ctx: Ctx, a: { wabaId: string; name: string; lang: string; body: string; example: string[] }) {
+/**
+ * Sends a text to Meta for approval as a template: Utility (order updates), or Marketing (a campaign) with its buttons —
+ * quick replies (« Je commande », « Stop ») and a link (the product's page).
+ */
+async function waCreateTemplate(
+  ctx: Ctx,
+  a: { wabaId: string; name: string; lang: string; body: string; example: string[]; category?: 'UTILITY' | 'MARKETING'; buttons?: ({ type: 'QUICK_REPLY'; text: string } | { type: 'URL'; text: string; url: string })[] },
+) {
   const { token } = await waNumber(ctx);
   const component = { type: 'BODY', text: a.body, ...(a.example.length ? { example: { body_text: [a.example] } } : {}) };
-  const r = await postJson(`${GRAPH}/${enc(a.wabaId)}/message_templates`, { name: a.name, language: a.lang, category: 'UTILITY', components: [component] }, { Authorization: `Bearer ${token}` }, 'WhatsApp');
+  const buttons = (a.buttons ?? []).slice(0, 3).map((b) => (b.type === 'URL' ? { type: 'URL', text: b.text.slice(0, 25), url: b.url } : { type: 'QUICK_REPLY', text: b.text.slice(0, 25) }));
+  const components = [component, ...(buttons.length ? [{ type: 'BUTTONS', buttons }] : [])];
+  const r = await postJson(`${GRAPH}/${enc(a.wabaId)}/message_templates`, { name: a.name, language: a.lang, category: a.category ?? 'UTILITY', components }, { Authorization: `Bearer ${token}` }, 'WhatsApp');
   return { id: r?.id ? String(r.id) : null, status: r?.status ? String(r.status) : 'PENDING' };
 }
 
@@ -1040,6 +1047,8 @@ export interface Incoming {
   source: string | null;
   /** a voice note: where to fetch it (WhatsApp: its media id; Messenger / Instagram: its link) */
   media?: { kind: 'audio'; id?: string; url?: string; mime?: string } | null;
+  /** WhatsApp: the hidden value of the template button the customer tapped (a campaign's « Je commande » / « Stop ») */
+  payload?: string;
 }
 
 const MEDIA: Record<string, string> = {
@@ -1103,6 +1112,8 @@ export function parseMetaWebhook(body: any): Incoming[] {
             name: names.get(String(m.from)) || null,
             text: text.slice(0, 4000),
             messageId: m.id ? String(m.id) : null,
+            // a template's quick reply (a campaign's « Je commande » / « Stop »): what Pilotix put behind the button
+            ...(m.type === 'button' && m.button?.payload ? { payload: String(m.button.payload).slice(0, 200) } : {}),
             ...(m.type === 'audio' && m.audio?.id ? { media: { kind: 'audio' as const, id: String(m.audio.id).slice(0, 200), ...(m.audio.mime_type ? { mime: String(m.audio.mime_type).slice(0, 100) } : {}) } } : {}),
             // the ad's id (to find what it cost) and its title (what Dellal and the team read)
             source: m.referral?.source_id

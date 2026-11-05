@@ -24,6 +24,8 @@ export interface CustomerRow {
   createdAt: string;
   /** out of 100: what the protection knows about this number (clientscore.ts) */
   score: ClientScore;
+  /** WhatsApp offers (Marketing › Campagnes): said yes, said « Stop », or never asked */
+  waOffers: 'yes' | 'stop' | null;
 }
 
 // Counts come from the orders themselves (always right, even after edits / merges).
@@ -49,6 +51,7 @@ const toCustomer = (r: any, score: ClientScore): CustomerRow => ({
   lastOrderAt: isoOrNull(r.last_at ?? r.last_order_at),
   createdAt: iso(r.created_at),
   score,
+  waOffers: r.wa_optout_at ? 'stop' : r.wa_optin_at ? 'yes' : null,
 });
 
 const WHO = ['confirmation', 'suivi'] as const;

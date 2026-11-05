@@ -29,6 +29,7 @@ export const JOB_EVERY: Record<string, number> = {
   'cm-plan': MIN,
   'cm-sweep': 3 * MIN,
   'leads-catchup': 10 * MIN,
+  'campaigns-run': MIN,
   'dellal-catchup': 3 * MIN,
   'dellal-followups': 15 * MIN,
   'spy-scan': H,

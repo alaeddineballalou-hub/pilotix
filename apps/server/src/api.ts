@@ -1683,7 +1683,12 @@ class ApiController {
   private async handleStatuses(ref: ShopRef, list: any[]) {
     if (!list.length) return;
     const session = await this.core.systemSession(ref);
-    for (const st of list) await this.core.call(ref, 'notify.waStatus', session, st).catch((e) => new Logger('Delivery AI').warn(`[${ref.shop.slug}] status ${st?.id}: ${e?.message ?? e}`));
+    for (const st of list) {
+      // a campaign's message (Marketing › Campagnes), else Delivery AI's
+      const c: any = await this.core.call(ref, 'campaigns.waStatus', session, st).catch(() => null);
+      if (c?.ok) continue;
+      await this.core.call(ref, 'notify.waStatus', session, st).catch((e) => new Logger('Delivery AI').warn(`[${ref.shop.slug}] status ${st?.id}: ${e?.message ?? e}`));
+    }
   }
 
   /** TikTok messages (from TikTok's business messaging or a bridge): { user_id, name?, text, message_id? }. Key = Dellal verify token. */
@@ -1703,9 +1708,17 @@ class ApiController {
   /** Stores each message, then lets Dellal answer once the customer stops typing (2 s), one answer at a time per conversation. */
   private async handleIncoming(ref: ShopRef, list: any[]) {
     const log = new Logger('Dellal');
-    for (const msg of list) {
+    for (const raw of list) {
+      let msg = raw;
       try {
         const session = await this.core.systemSession(ref);
+        // Marketing › Campagnes: « Stop » ends the offers (said back to the customer, nothing for Dellal); « Je commande »
+        // goes to Dellal with the campaign's product; any answer counts for the campaign
+        if (msg?.channel === 'whatsapp') {
+          const c: any = await this.core.call(ref, 'campaigns.reply', session, { phone: String(msg.externalId), payload: msg.payload ?? null, text: msg.text ?? null, accountId: msg.accountId ?? null }).catch(() => null);
+          if (c?.stop) continue;
+          if (c?.text) msg = { ...msg, text: c.text };
+        }
         const r: any = await this.core.call(ref, 'dellal.receive', session, msg);
         if (!r) continue;
         const conv = `${ref.shop.id}:${r.conversationId}`;
@@ -1806,6 +1819,7 @@ class ApiController {
     bg('spy.scan'); // AI Spy: the daily scan of competitors' ads, once a day (in the background)
     bg('channels.sheet.syncAll'); // Google Sheets channels: new lines become orders (in the background)
     bg('leads.catchUp'); // Marketing › Formulaires: the ads' leads Meta did not send (in the background)
+    bg('campaigns.run'); // Marketing › Campagnes: the WhatsApp offers due, at the shop's pace (in the background)
     return this.core.call(ref, 'delivery.sync', session, {}).catch((e) => ({ ok: false, message: e.message }));
   }
 }

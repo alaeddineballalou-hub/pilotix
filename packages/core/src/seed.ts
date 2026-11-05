@@ -21,6 +21,7 @@ import { seed as seed_ads } from './seeds/ads';
 import { seed as seed_dellal } from './seeds/dellal';
 import { seed as seed_cm } from './seeds/cm';
 import { seed as seed_leads } from './seeds/leads';
+import { seed as seed_campaigns } from './seeds/campaigns';
 import { seed as seed_cmplan } from './seeds/cmplan';
 import { seed as seed_notify } from './seeds/notify';
 import { seed as seed_landing } from './seeds/landing';
@@ -371,6 +372,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
   await seed_dellal(db, users, now);
   await seed_cm(db, users, now);
   await seed_leads(db, users, now);
+  await seed_campaigns(db, users, now);
   await seed_cmplan(db, now);
   // every demo order (written straight into the database) keeps what the customer first ordered: the upsell is counted against it
   for (const q of UPSELL_BACKFILL) await db.query(q);

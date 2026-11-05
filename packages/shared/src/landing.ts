@@ -43,6 +43,8 @@ export interface LandingView {
   productId?: number;
   /** Cloudflare Turnstile's site key (real pages only, when the shop turned it on): invisible robot check */
   turnstileKey?: string;
+  /** the box « I want the shop's offers on WhatsApp » (Marketing › Campagnes): unticked, the customer ticks it */
+  waOptin?: boolean;
   /** TikTok pixel code (real pages only) */
   tiktokId?: string;
   /** a « contact us on WhatsApp » button on the thank-you screen: the number (international, digits), its label, the message ({nom}, {produit}…) */
@@ -182,6 +184,7 @@ input:focus,select:focus{outline:2px solid var(--c);outline-offset:-1px;border-c
 .ok{text-align:center;padding:26px 10px}.ok i{display:inline-grid;place-items:center;width:64px;height:64px;border-radius:50%;background:var(--c);color:#fff;font-size:34px;font-style:normal}
 .ok h2{margin:12px 0 6px}.ok p{color:var(--m);margin:4px 0}.ok .sum{text-align:start}
 .trust{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;color:var(--m);font-size:13px;margin-top:10px}
+.wo{display:flex;gap:10px;align-items:flex-start;margin:12px 0 14px;font-size:14px;font-weight:500;line-height:1.5;color:var(--t);cursor:pointer}.wo input{width:18px;height:18px;margin:2px 0 0;flex:none;accent-color:var(--c)}
 .so{margin-top:12px;padding:18px;border-radius:12px;background:#f3f4f6;text-align:center}.so b{display:block;font-size:19px;color:#b91c1c}.so p{margin:6px 0 0;color:var(--m)}
 footer{text-align:center;color:var(--m);font-size:12px;padding:18px;display:flex;align-items:center;justify-content:center;gap:8px}footer img{border-radius:6px;object-fit:contain;background:#fff}.brand{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 12px 2px;color:var(--t);font-size:15px}.brand img{border-radius:10px;object-fit:contain;background:#fff;box-shadow:0 0 0 1px var(--b)}
 .wa{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;padding:13px;border-radius:12px;background:#25d366;color:#fff;font-weight:800;font-size:17px;text-decoration:none}.wa:active{background:#1da851}
@@ -238,7 +241,7 @@ w.onchange=function(){cm.innerHTML='<option value="">\\u2026</option>';cm.disabl
 if(vr)vr.onchange=sum;
 $('qm').onclick=function(){qt.value=Math.max(1,qv()-1);sum();lead()};$('qp').onclick=function(){qt.value=Math.min(99,qv()+1);sum();lead()};qt.oninput=sum;
 var done=0,lt=null,last='';
-function form(){return{name:f.nm.value.trim(),phone:nph(f.ph.value),wilaya:+w.value||0,commune:cm.value,variant:vr?+vr.value||null:null,qty:qv(),hp:f.web.value,ch:C.ch,fp:fp,did:did,vid:C.vid,utm:utm,fbp:ck('_fbp'),fbc:ck('_fbc'),ttp:ck('_ttp'),url:C.mode=='live'?location.href.slice(0,500):''}}
+function form(){return{name:f.nm.value.trim(),phone:nph(f.ph.value),wilaya:+w.value||0,commune:cm.value,variant:vr?+vr.value||null:null,qty:qv(),hp:f.web.value,ch:C.ch,fp:fp,did:did,vid:C.vid,utm:utm,fbp:ck('_fbp'),fbc:ck('_fbc'),ttp:ck('_ttp'),url:C.mode=='live'?location.href.slice(0,500):'',wo:!!(f.wo&&f.wo.checked)}}
 function lead(now){if(!C.lead||done||busy)return;var b=form();if(!/^0[567]\\d{8}$/.test(b.phone))return;var k=JSON.stringify([b.name,b.phone,b.wilaya,b.commune,b.variant,b.qty]);if(k==last)return;clearTimeout(lt);lt=null;
 var go=function(){lt=null;last=k;if(px&&!ic){ic=1;fbq('track','InitiateCheckout',{content_ids:[String(C.pid)],content_type:'product',value:unit()*b.qty,currency:'DZD',num_items:b.qty},{eventID:'ic-'+C.vid})}if(C.tt&&!tic){tic=1;ttq.track('InitiateCheckout',{contents:[{content_id:String(C.pid),content_type:'product',quantity:b.qty}],value:unit()*b.qty,currency:'DZD'},{event_id:'ic-'+C.vid})}ask('lead',b,function(){},now)};if(now)go();else lt=setTimeout(go,1500)}
 f.addEventListener('input',function(e){if(e.isTrusted!==false)ki++;lead()});f.ph.addEventListener('paste',function(){ps=true});f.addEventListener('change',function(){lead()});
@@ -364,7 +367,7 @@ ${head}<meta name="theme-color" content="${c}">${img ? `<link rel="preload" as="
 <div><label for="cm">البلدية</label><select id="cm" name="cm" disabled><option value="">اختر الولاية أولاً</option></select><div class="e" id="cme"></div></div></div>
 ${variants}<label for="qt">الكمية</label><div class="q"><button type="button" id="qm" aria-label="-">−</button><input id="qt" name="qt" inputmode="numeric" value="1" maxlength="2"><button type="button" id="qp" aria-label="+">+</button></div>
 <div class="hp" aria-hidden="true"><label for="web">Website</label><input id="web" name="web" tabindex="-1" autocomplete="off"></div>
-<div class="sum"><div><span>سعر المنتج</span><b id="s1"></b></div><div><span>التوصيل</span><b id="s2"></b></div><div class="tt"><span>المجموع</span><b id="s3"></b></div></div>
+${v.waOptin ? `<label class="wo"><input type="checkbox" id="wo" name="wo"><span>أرغب في تلقي العروض والمنتجات الجديدة على واتساب</span></label>` : ''}<div class="sum"><div><span>سعر المنتج</span><b id="s1"></b></div><div><span>التوصيل</span><b id="s2"></b></div><div class="tt"><span>المجموع</span><b id="s3"></b></div></div>
 <button class="go" id="go">${cta}</button><div class="e" id="fe" role="alert"></div><div class="trust"><span>✔ الدفع عند الاستلام</span><span>✔ معاينة المنتج قبل الدفع</span></div></form>
 <div id="ok" class="ok" style="display:none" role="status"><i>✓</i><h2>شكراً <span id="okn"></span>!</h2><p>تم استلام طلبك بنجاح.</p><p>سيتصل بك فريقنا قريباً لتأكيد الطلب.</p>
 <div class="sum"><div><span id="o1"></span></div><div class="tt"><span>المجموع</span><b id="o2"></b></div></div>${

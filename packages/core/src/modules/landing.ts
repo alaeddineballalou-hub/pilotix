@@ -42,6 +42,7 @@ import { lookAlikeOf, trustOf } from './trust';
 import { groupHtml, groupOf } from './landinggroups';
 import { runAttackTest } from './attacktest';
 import { checkPixels, PixelList, pixelsJson, pixelsOf, pixelTestCode, pixelToken, readPixels } from './pixels';
+import { campaignSettings, giveConsent } from './campaigns';
 import { ABANDONED, abandonCutoff, APP_WORD, freeLandingSlug, landingCounts, landingSettings, LandingSettings, landingStore, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
 import { sendInPreview } from './notify';
 import { addEvent, createOrder, noOrderAccess } from './orders';
@@ -349,6 +350,8 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     productId: num(l.product_id),
     // the shop's own Cloudflare keys, else the widget Pilotix keeps for the address the page is served at
     turnstileKey: o.mode === 'live' ? String(s.turnstileSiteKey ?? '').trim() || ((await ctx.server?.turnstileSite?.(hostOf(pageUrl || o.post))) ?? '') : '',
+    // Marketing › Campagnes: the customer may ask for the shop's offers on WhatsApp
+    waOptin: (await campaignSettings(ctx.db)).formOptin,
   };
   if (o.mode === 'live') await ctx.db.query('UPDATE landing_pages SET views = views + 1 WHERE id = $1', [l.id]);
   const group = o.group ? await groupOf(ctx.db, o.group, num(l.id), o.mode === 'live') : null;
@@ -446,6 +449,8 @@ export const SubmitInput = z.object({
   /** TikTok's browser cookie (_ttp) */
   ttp: str(200),
   url: str(500),
+  /** ticked « offers on WhatsApp » (Marketing › Campagnes) */
+  wo: z.any().transform((v) => v === true),
   meta: Meta,
 });
 
@@ -936,6 +941,8 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
       (i.meta.ua ?? '').slice(0, 500) || null, fbp || null, fbc || null, (i.meta.url || i.url || '').slice(0, 500) || null, i.utm ? JSON.stringify(i.utm) : null,
       JSON.stringify(result.reasons), merged, i.ttp || null, fphash],
   );
+  // the box « offers on WhatsApp » ticked, with an order taken (Marketing › Campagnes)
+  if (i.wo && orderId && phone) await giveConsent(db, phone, 'form', isoAt(now));
   // Meta Purchase « when the order is received »: only a clear order (a borderline one counts once a person confirms it);
   // an order sent again is the same sale (queuePurchase is once per order anyway)
   if (orderId && !merged && s.purchaseAt === 'order' && result.verdict === 'allow') await queuePurchase(db, s, orderId, now);
