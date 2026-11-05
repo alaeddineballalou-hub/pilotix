@@ -8,7 +8,6 @@ import { dateOnly, n } from '../../lib/format';
 import type { POut } from '../../lib/platform';
 import { LearnBench } from './learn/LearnBench';
 import { usePilotCall } from './pilotDemo';
-import { PushPanel } from './PilotPush';
 import { Card, Icon } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
@@ -69,9 +68,8 @@ export function LearnCard({ d }: { d: State }) {
   );
 }
 
-/** Dellal's instruction book: the version in service, the one in test, the file (made at the click: the latest), and
- * « Push » (managers): every lesson waiting in service now, as a new version, without a test. */
-export function BookCard({ d, manager }: { d: State; manager: boolean }) {
+/** Dellal's instruction book: the version in service, the one in test, and the file (made at the click: the latest). */
+export function BookCard({ d }: { d: State }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [read, setRead] = useState<string | null>(null);
@@ -112,7 +110,6 @@ export function BookCard({ d, manager }: { d: State; manager: boolean }) {
         </button>
       </div>
       <p className="small muted">{t('platform.pilot.book.always')}</p>
-      {manager && <PushPanel d={d} tryHref="#/platform/pilot/lab" />}
       {read !== null && (
         <Modal title={t('platform.pilot.book.title')} onClose={() => setRead(null)} sheet>
           <pre className="pilot-transcript pl-book-text">{read}</pre>

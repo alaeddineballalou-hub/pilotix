@@ -614,10 +614,33 @@ html[data-theme="dark"] .pp-prot { --pp-c-q: #3B9BC0; }
 .pl-next-empty { margin: 0; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); }
 .pl-next-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 14px; }
 .pl-next-foot p { margin: 0; }
-/* « Push » (PilotPush.tsx): every lesson waiting in service now, under the book card and the next book; the question says
-   what happens before the click, the answer says it is done (and opens the test chat) */
-.pl-push { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
-.pl-push-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+/* ---- Pilot AI's two pushes (PilotRelease.tsx): 1 « Push en test » (the control room only), 2 « Push sur le serveur »
+   (every shop). The step that holds a version in test is the one lit; the question says all of it before the click. */
+.pl-rel { display: flex; flex-direction: column; gap: 12px; }
+/* under the lab's list of sales lessons not in service yet */
+.pl-next + .pl-rel, .pl-next-empty + .pl-rel { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.pl-rel-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.pl-rel-step { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.pl-rel-step.on { border-color: color-mix(in srgb, var(--px-orange) 50%, var(--line)); background: color-mix(in srgb, var(--px-orange) 7%, var(--surface)); }
+.pl-rel-n { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; background: var(--raise); border: 1px solid var(--line); color: var(--navy); }
+.pl-rel-step.on .pl-rel-n { background: var(--px-orange); border-color: transparent; }
+.pl-rel-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pl-rel-h, .pl-rel-what { margin: 0; line-height: 1.5; }
+.pl-rel-by { white-space: nowrap; }
+.pl-rel-do { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.pl-rel-check { align-items: flex-start; font-size: 13.5px; font-weight: 500; line-height: 1.5; }
+.pl-rel-check input { flex: none; margin-top: 3px; }
+.pl-rel-stale { margin: 0; }
+.pl-rel-live { margin: 0; display: flex; align-items: center; gap: 6px; }
+.pl-rel-live .bji { color: var(--ok); }
+@media (max-width: 860px) {
+  .pl-rel-steps { grid-template-columns: minmax(0, 1fr); }
+}
+/* what waits for the push in the Darija rules and the vocabulary (not in service yet) */
+.pl-db-draft, .pl-vc-changes { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 10px 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed color-mix(in srgb, var(--px-orange) 60%, var(--line)); background: color-mix(in srgb, var(--px-orange) 6%, var(--surface)); }
+.pl-db-draft p, .pl-vc-changes p { margin: 0; line-height: 1.5; }
+.pl-db-draft .pl-db-do { margin-top: 2px; }
+.pl-db-trial { margin: 6px 0 0; }
 .pl-push-ask { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--raise); border: 1px solid color-mix(in srgb, var(--px-orange) 40%, var(--line)); }
 .pl-push-ask ul { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; line-height: 1.5; }
 .pl-push-ask .check { align-items: flex-start; font-size: 13.5px; font-weight: 500; line-height: 1.5; }

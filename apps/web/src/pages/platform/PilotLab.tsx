@@ -1,15 +1,17 @@
 // Pilot AI › Test & lessons (control room). Two chats side by side (one at a time on a phone):
 //  - Test Dellal: write like a customer of the shop you pick; Dellal answers with that shop's products and prices and the
-//    lesson book you pick (in service, in test, the next one, none). Your own test chat in that shop: never sent, never
-//    counted, paid by Pilotix (never billed to the shop).
+//    version you pick (in service; the version of « Push en test », with its sales book, Darija rules and lessons and
+//    vocabulary; an A/B test's book; none). Your own test chat in that shop: never sent, never counted, paid by Pilotix
+//    (never billed to the shop).
 //  - Lessons, two kinds in two tabs:
 //    · Sales (how Dellal sells, written here only): say it in your own words; Pilot AI writes it as a short lesson and checks
-//      the rules, you read it and add it. It waits in the next book, tested on a share of new chats like any book.
+//      the rules, you read it and add it. It waits for the next push.
 //    · Darija (how Dellal speaks): the shops' lessons (their team's corrections, what Dellal learned from their customers),
-//      used at once in their own shop, wait here: accept (as is or modified), every shop uses it; refuse, the others never
-//      see it. Pilotix's own: « Darija lesson » under an answer of the test chat, or words typed here: every shop at once.
-// Under them, the next book: the sales lessons waiting for it, « Publish » (tried on a share of new chats) and « Push » (in
-// service now, without a test: the test chat starts again with the new version).
+//      used at once in their own shop, wait here: accept (as is or modified): out with the next push, then every shop uses
+//      it; refuse, the others never see it. Pilotix's own: « Darija lesson » under an answer of the test chat, or words
+//      typed here: accepted at once, out with the next push.
+// Under them, the sales lessons not in service yet and the two pushes (PilotRelease.tsx): « Push en test » (the test chat
+// starts again on the version in test), then « Push sur le serveur » (every shop).
 import { useQueryClient } from '@tanstack/react-query';
 import { Fragment, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -21,13 +23,13 @@ import { toast } from '../../ui/toast';
 import { Bubbles, Composer, Msg, Typing } from '../messages/chat';
 import { LahjaWord, LahjaWords } from '../messages/lahja';
 import { CaseModal } from './pilotCase';
-import { PushPanel, takeFreshPush } from './PilotPush';
+import { ReleasePanel, takeFreshPush } from './PilotRelease';
 import { DarijaBookCard } from './DarijaBook';
 import { VocabPane } from './Vocab';
 import { PilotDemo, usePilotAction, usePilotCall, usePilotRpc } from './pilotDemo';
 
 type State = POut<'p.pilot.state'>;
-type Book = 'live' | 'test' | 'next' | 'none';
+type Book = 'live' | 'trial' | 'test' | 'none';
 type Lesson = NonNullable<POut<'p.pilot.teach'>['lesson']>;
 type Line = { id: number; from: 'coach' | 'pilot'; text: string; lesson?: Lesson | null; added?: number; at: string };
 
@@ -58,23 +60,21 @@ export function LabTab({ d, manager }: { d: State; manager: boolean }) {
   const { t } = useTranslation();
   // a phone shows one chat at a time; a computer both
   const [pane, setPane] = useState<'try' | 'teach'>('try');
-  const [book, setBook] = useState<Book>('live');
+  // a push (here, or « Tester » on the Dellal tab): the test chat starts again on that version
+  const [start] = useState(() => takeFreshPush());
+  const [book, setBook] = useState<Book>(start ?? 'live');
+  const [fresh, setFresh] = useState(start ? 1 : 0);
   const tryBox = useRef<HTMLDivElement>(null);
-  // « Try it »: the lesson just added is in the next book; the test chat switches to it
-  const tryNext = () => {
-    setBook('next');
-    setPane('try');
-    requestAnimationFrame(() => tryBox.current?.scrollIntoView({ behavior: still() ? 'auto' : 'smooth', block: 'start' }));
-  };
-  // « Push » done (here, or « Test it now » on the Dellal tab): the test chat starts again with the new version in service
-  const [fresh, setFresh] = useState(() => (takeFreshPush() ? 1 : 0));
-  const pushed = (v: number | null) => {
-    if (!v) return;
-    setBook('live');
+  const relBox = useRef<HTMLDivElement>(null);
+  const scroll = (el: HTMLElement | null) => requestAnimationFrame(() => el?.scrollIntoView({ behavior: still() ? 'auto' : 'smooth', block: 'start' }));
+  const pushed = (kind: 'trial' | 'live') => {
+    setBook(kind);
     setFresh((x) => x + 1);
     setPane('try');
-    requestAnimationFrame(() => tryBox.current?.scrollIntoView({ behavior: still() ? 'auto' : 'smooth', block: 'start' }));
+    scroll(tryBox.current);
   };
+  // « Push en test pour l'essayer » under a lesson just added: to the two pushes
+  const toPush = () => scroll(relBox.current);
   return (
     <>
       <div className="pl-lab-switch">
@@ -92,10 +92,12 @@ export function LabTab({ d, manager }: { d: State; manager: boolean }) {
           <TryCard d={d} book={book} onBook={setBook} fresh={fresh} />
         </div>
         <div className="pl-lab-pane pl-lab-teach">
-          <LessonsCard d={d} onTry={tryNext} manager={manager} />
+          <LessonsCard d={d} onTry={toPush} manager={manager} />
         </div>
       </div>
-      <NextCard d={d} manager={manager} onPushed={pushed} />
+      <div ref={relBox}>
+        <NextCard d={d} manager={manager} onPushed={pushed} />
+      </div>
     </>
   );
 }
@@ -119,16 +121,21 @@ function TryCard({ d, book, onBook, fresh = 0 }: { d: State; book: Book; onBook:
 
   const champion = d.books.books.find((b) => b.status === 'champion') ?? null;
   const testing = d.books.test ? d.books.books.find((b) => b.id === d.books.test!.challengerId) ?? null : null;
+  const trial = d.release.trial;
   const options: { value: Book; label: string }[] = [
     { value: 'live', label: champion ? t('platform.pilot.lab.try.live', { v: champion.version }) : t('platform.pilot.lab.try.liveNone') },
+    ...(trial ? [{ value: 'trial' as const, label: t('platform.pilot.lab.try.trial', { v: trial.version }) }] : []),
     ...(testing ? [{ value: 'test' as const, label: t('platform.pilot.lab.try.test', { v: testing.version }) }] : []),
-    ...(d.next.changed ? [{ value: 'next' as const, label: t('platform.pilot.lab.try.next', { v: d.next.version }) }] : []),
     ...(champion ? [{ value: 'none' as const, label: t('platform.pilot.lab.try.none') }] : []),
   ];
   const have = options.map((o) => o.value).join();
-  // a choice that is gone (the test ended, the next book was published): back to the book in service
+  // a choice that is gone (the test ended, the version in test went to the server): back to the version in service; the
+  // version just made by « Push en test » may not be in the page's data yet: it is kept until it is
+  const prevHave = useRef(have);
   useEffect(() => {
-    if (!have.split(',').includes(book)) onBook('live');
+    const before = prevHave.current.split(',');
+    prevHave.current = have;
+    if (!have.split(',').includes(book) && (book !== 'trial' || before.includes(book))) onBook('live');
   }, [have, book]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the chat of this shop (a call with no message only reads it; right after a « Push », a new chat)
@@ -181,11 +188,11 @@ function TryCard({ d, book, onBook, fresh = 0 }: { d: State; book: Book; onBook:
       setBusy(false);
     }
   };
-  // a « Push » from the lab itself: a new chat, answered by the new version in service
+  // a push from the lab itself: a new chat, answered by the version just pushed (in test, or in service)
   useEffect(() => {
     if (fresh === seen.current) return;
     seen.current = fresh;
-    void reset('live');
+    void reset(book);
   }, [fresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** under each answer: the book it used and the model (Haiku for simple messages, Sonnet for the hard moments) */
@@ -193,7 +200,7 @@ function TryCard({ d, book, onBook, fresh = 0 }: { d: State; book: Book; onBook:
     if (m.role !== 'agent' || !m.meta?.pilot) return null;
     const p = m.meta.pilot as { version: number; lab?: Book };
     const k = 'platform.pilot.lab.try.used.';
-    const used = p.lab === 'none' ? t(k + 'none') : p.lab === 'test' ? t(k + 'test', { v: p.version }) : p.lab === 'next' ? t(k + 'next', { v: p.version }) : p.version ? t(k + 'live', { v: p.version }) : t(k + 'base');
+    const used = p.lab === 'none' ? t(k + 'none') : p.lab === 'test' ? t(k + 'test', { v: p.version }) : p.lab === 'trial' ? t(k + 'trial', { v: p.version }) : p.version ? t(k + 'live', { v: p.version }) : t(k + 'base');
     const model = /sonnet/i.test(String(m.meta.model)) ? 'Sonnet' : /haiku/i.test(String(m.meta.model)) ? 'Haiku' : null;
     return (
       <>
@@ -596,6 +603,20 @@ function DarijaPane({ manager }: { manager: boolean }) {
               </>
             )}
           </section>
+          <section>
+            <h3>
+              {t(k + 'accepted')} {d.accepted.length > 0 && <span className="chip">{n(d.accepted.length)}</span>}
+            </h3>
+            {!d.accepted.length ? (
+              <p className="pl-next-empty">{t(k + 'acceptedEmpty')}</p>
+            ) : (
+              <ul className="pl-dj-list pl-dj-done">
+                {d.accepted.map((l) => (
+                  <AcceptedRow key={l.id} l={l} />
+                ))}
+              </ul>
+            )}
+          </section>
           <AddWords />
           <section>
             <h3>
@@ -751,6 +772,24 @@ function Proof({ l, onChat }: { l: LahjaItem; onChat: (conv: number) => void }) 
   );
 }
 
+/** Accepted by Pilotix, out with the next push: taken out of it (refused: the other shops never see it) */
+function AcceptedRow({ l }: { l: LahjaItem }) {
+  const { t } = useTranslation();
+  const k = 'platform.pilot.lab.darija.';
+  const decide = usePilotAction('p.lahja.decide', { success: t(k + 'unacceptedToast') });
+  return (
+    <li>
+      <div>
+        <LahjaWords words={l.words} />
+        <From l={l} />
+      </div>
+      <button type="button" className="btn ghost small" disabled={decide.isPending} onClick={() => decide.mutate({ id: l.id, action: 'refuse' })}>
+        {t(k + 'unaccept')}
+      </button>
+    </li>
+  );
+}
+
 function ApprovedRow({ l }: { l: LahjaItem }) {
   const { t } = useTranslation();
   const k = 'platform.pilot.lab.darija.';
@@ -878,15 +917,13 @@ function CoachFix({ m }: { m: Msg }) {
 }
 
 // ---------------------------------------------------------------- the next book
-function NextCard({ d, manager, onPushed }: { d: State; manager: boolean; onPushed?: (version: number | null) => void }) {
+function NextCard({ d, manager, onPushed }: { d: State; manager: boolean; onPushed?: (kind: 'trial' | 'live') => void }) {
   const { t } = useTranslation();
   const remove = usePilotAction('p.pilot.lesson', { success: t('platform.saved') });
-  const publish = usePilotAction('p.pilot.publish', { success: t('platform.pilot.published') });
   const nb = d.next;
-  const testing = d.books.test ? d.books.books.find((b) => b.id === d.books.test!.challengerId) ?? null : null;
   const k = 'platform.pilot.lab.next.';
   return (
-    <Card title={t(k + 'title', { v: nb.version })} badge={nb.fresh.length ? <span className="chip">{n(nb.fresh.length)}</span> : undefined} help={t(k + 'help')}>
+    <Card title={t(k + 'title')} badge={nb.fresh.length ? <span className="chip">{n(nb.fresh.length)}</span> : undefined} help={t(k + 'help')}>
       {!nb.fresh.length ? (
         <p className="pl-next-empty">{t(k + 'empty')}</p>
       ) : (
@@ -920,21 +957,7 @@ function NextCard({ d, manager, onPushed }: { d: State; manager: boolean; onPush
           ))}
         </ul>
       )}
-      <div className="pl-next-foot">
-        {testing ? (
-          <p className="small muted">{t(k + 'testRunning', { v: testing.version })}</p>
-        ) : manager ? (
-          <>
-            <button type="button" className="btn primary" disabled={!nb.changed || publish.isPending} onClick={() => publish.mutate({})}>
-              {t(k + 'publish', { v: nb.version })}
-            </button>
-            <span className="small muted">{t(k + 'publishNote', { share: Math.round(d.config.share * 100) })}</span>
-          </>
-        ) : (
-          <p className="small muted">{t(k + 'managers')}</p>
-        )}
-      </div>
-      {manager && <PushPanel d={d} onPushed={onPushed} />}
+      <ReleasePanel d={d} manager={manager} onStaged={() => onPushed?.('trial')} onReleased={() => onPushed?.('live')} onTry={(kind) => onPushed?.(kind)} />
     </Card>
   );
 }

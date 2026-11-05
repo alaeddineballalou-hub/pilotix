@@ -18,7 +18,7 @@ import { darijaGuide } from './darijabook';
 import { markReply, noticeForConversation, ordersForDellal, sendInPreview } from './notify';
 import { addEvent, createOrder, customerFee, updateOrder } from './orders';
 import { anonymize, bookFor, BookRef, pickModel } from './pilotlearn';
-import { asWords, checkLahjaWords, LAHJA_NO_CHANGE, LAHJA_PERSONAL, lahjaAvoid, lahjaBlocks, lahjaDiff, lahjaErr, lahjaFor, LahjaWord } from './lahja';
+import { asWords, checkLahjaWords, LAHJA_NO_CHANGE, LAHJA_PERSONAL, lahjaAvoid, lahjaBlocks, lahjaDiff, lahjaErr, lahjaFor, lahjaWith, LahjaWord } from './lahja';
 import { pilotConfig, pilotToday } from '../platform/pilotai';
 import { guideText, HAS_GUIDE, readGuide, toFill } from './guide';
 import { vocabBlock, vocabFor } from './vocab';
@@ -906,6 +906,8 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
 }
 
 // ---------------------------------------------------------------- the agent: prompt and loop
+/** The version of « Push en test » in the control room's test chat: its Darija rules (as text) and its Darija lessons. */
+export type Trial = { darija: string; lahja: LahjaWord[] };
 /**
  * Dellal's instructions in three blocks, from the most shared to the most personal, so the AI's cache reuses them:
  * 1. the same for every shop (sales method, Darija, and the coach's lesson book of Pilot AI),
@@ -918,6 +920,7 @@ async function systemPrompt(
   followUp: boolean,
   lessons = '',
   lahja: { all: LahjaWord[]; own: LahjaWord[] } = { all: [], own: [] },
+  trial: Trial | null = null,
 ): Promise<{ text: string; blocks: string[] }> {
   const shop = await getSetting(ctx.db, 'shop');
   const prods = await searchProducts(ctx.db, null, 40);
@@ -940,11 +943,12 @@ async function systemPrompt(
   // the vocabulary book (Pilot AI › Leçons › Vocabulaire): only its words that touch what this customer wrote
   const said = (await ctx.db.query(`SELECT body FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' ORDER BY id DESC LIMIT 8`, [conv.id])).map((r: any) => String(r.body ?? ''));
   // with the prices this customer said in centimes, read for the AI (« mlyoun w nos » = 15 000 DA)
-  const vocab = vocabBlock(await vocabFor(ctx.t?.platform ?? null, said), said);
+  const vocab = vocabBlock(await vocabFor(ctx.t?.platform ?? null, said, undefined, trial ? 'trial' : 'live'), said);
   const shared = [
     playbookFor(s),
-    // the Darija book in service (Pilot AI › Tester & leçons › Leçons › Darija; the guide of the code without the platform)
-    await darijaGuide(ctx.t?.platform ?? null),
+    // the Darija book in service (Pilot AI › Tester & leçons › Leçons › Darija; the guide of the code without the platform),
+    // or the rules of the version in test (the control room's test chat)
+    trial ? trial.darija : await darijaGuide(ctx.t?.platform ?? null),
     lahjaBlocks(lahja).shared,
     lessons.trim(),
   ];
@@ -1273,7 +1277,7 @@ export async function hearVoices(ctx: Ctx, convId: number, ids?: number[]): Prom
 export async function runAgent(
   ctx: Ctx,
   convId: number,
-  opts: { followUp?: boolean; book?: BookRef | null; lab?: string } = {},
+  opts: { followUp?: boolean; book?: BookRef | null; lab?: string; trial?: Trial | null } = {},
 ): Promise<{ reply: string | null; handoff: boolean; orderRef: string | null; demo: boolean; skipped?: string }> {
   const check = await shouldAnswer(ctx, convId);
   if (!check.ok) return { reply: null, handoff: false, orderRef: null, demo: false, skipped: check.why };
@@ -1299,8 +1303,11 @@ export async function runAgent(
     const said = await ctx.db.query(`SELECT body, count(*) OVER ()::int AS n FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' ORDER BY id DESC LIMIT 6`, [convId]);
     model = pickModel({ recent: said.map((r: any) => String(r.body)).reverse(), turns: num(said[0]?.n) });
   }
-  const lahja = await lahjaFor(ctx.db, ctx.t?.platform ?? null, ctx.shop?.id ?? null);
-  const prompt = await systemPrompt(ctx, conv, s, !!opts.followUp, book?.text ?? '', lahja);
+  // the control room's test chat on the version in test: its Darija lessons for every shop are there too
+  const trial = opts.trial ?? null;
+  const shopLahja = await lahjaFor(ctx.db, ctx.t?.platform ?? null, ctx.shop?.id ?? null);
+  const lahja = trial ? lahjaWith(shopLahja, trial.lahja) : shopLahja;
+  const prompt = await systemPrompt(ctx, conv, s, !!opts.followUp, book?.text ?? '', lahja, trial);
   const system = prompt.text;
 
   const texts: string[] = [];
@@ -1370,7 +1377,7 @@ const rawConv = async (db: Db, id: number) => (await db.query('SELECT * FROM con
  * book they chose. Their own test chat in the shop (channel test: never sent to anyone, never counted, never in the shop's
  * lists, orders only pretend); always on Pilotix's key (Pilot AI), never on a key of the shop.
  */
-export async function pilotTry(ctx: Ctx, i: { staffId: number; name: string; body: string; reset: boolean; book: BookRef | null; lab: string }) {
+export async function pilotTry(ctx: Ctx, i: { staffId: number; name: string; body: string; reset: boolean; book: BookRef | null; lab: string; trial?: Trial | null }) {
   const ext = `pilot-${i.staffId}`;
   let c = (await ctx.db.query(`SELECT id FROM conversations WHERE channel = 'test' AND external_id = $1`, [ext]))[0];
   if (!c) c = (await ctx.db.query(`INSERT INTO conversations (channel, external_id, customer_name, created_by) VALUES ('test',$1,$2,$3) RETURNING id`, [ext, i.name, me(ctx)]))[0];
@@ -1379,7 +1386,7 @@ export async function pilotTry(ctx: Ctx, i: { staffId: number; name: string; bod
   if (i.body) {
     if (!(await pilotOn(ctx))) throw new AppError('bad_request', 'Pilot AI est éteint ou se repose (limite du jour atteinte) : ce test répond avec la clé de Pilotix.');
     await addMessage(ctx.db, cid, { role: 'customer', body: i.body });
-    await runAgent(ctx, cid, { book: i.book, lab: i.lab });
+    await runAgent(ctx, cid, { book: i.book, lab: i.lab, trial: i.trial ?? null });
   }
   return { conversationId: cid, messages: await messagesOf(ctx.db, cid) };
 }
@@ -2157,7 +2164,7 @@ export const dellalProcs = {
         const pdb = ctx.t!.platform;
         for (const r of await pdb.query(`SELECT shop_lesson_id, status FROM platform.lahja WHERE shop_id = $1 AND source = 'seller' AND shop_lesson_id IS NOT NULL`, [ctx.shop!.id]))
           status.set(num(r.shop_lesson_id), String(r.status));
-        learned = (await pdb.query(`SELECT id, words, note, evidence, created_at FROM platform.lahja WHERE shop_id = $1 AND source = 'dellal' AND own AND status = 'waiting' ORDER BY id DESC LIMIT 100`, [ctx.shop!.id])).map(
+        learned = (await pdb.query(`SELECT id, words, note, evidence, created_at FROM platform.lahja WHERE shop_id = $1 AND source = 'dellal' AND own AND status IN ('waiting', 'accepted') ORDER BY id DESC LIMIT 100`, [ctx.shop!.id])).map(
           (r: any) => ({ id: num(r.id), words: asWords(r.words), note: r.note ?? null, customers: num(r.evidence?.customers), at: iso(r.created_at) }),
         );
         all = (await pdb.query(`SELECT id, words, shop_id, decided_at FROM platform.lahja WHERE status = 'approved' ORDER BY decided_at DESC NULLS LAST, id DESC LIMIT 300`)).map(

@@ -3,7 +3,8 @@
 // what the corrections taught (an accepted Darija lesson writes in it), and try which words a customer's message brings
 // to Dellal: for each reply it reads only the words that touch the conversation (in any spelling), and the prices the
 // customer said in centimes. Pilotix's own book (the Algiers Darija Book, darija/) goes in with one click; its files are
-// loaded only when they are used, so they cost the app nothing.
+// loaded only when they are used, so they cost the app nothing. Everything here is the working copy: the shops get it with
+// the next push (« Push en test », then « Push sur le serveur »); « Annuler les changements » brings back the live book.
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { n } from '../../lib/format';
@@ -54,6 +55,7 @@ export function VocabPane({ manager }: { manager: boolean }) {
           </span>
         </div>
       )}
+      {d && d.changes.total > 0 && <Changes d={d} manager={manager} />}
       {showImport && <ImportBook canClose={!!c?.total} onClose={() => setImporting(false)} />}
       <TryWords />
       <section>
@@ -134,6 +136,27 @@ export function VocabPane({ manager }: { manager: boolean }) {
   );
 }
 
+/** What the working copy changes in the live book: out with the next push; « Annuler les changements » (managers). */
+function Changes({ d, manager }: { d: POut<'p.vocab.list'>; manager: boolean }) {
+  const { t } = useTranslation();
+  const reset = usePilotAction('p.vocab.reset', { success: t(K + 'resetDone') });
+  const c = d.changes;
+  const tr = d.notInTrial;
+  return (
+    <div className="pl-vc-changes" role="note">
+      <p>
+        <b>{t(K + 'changes', { n: n(c.total) })}</b> {t(K + 'changesParts', { added: n(c.added), changed: n(c.changed), removed: n(c.removed) })}
+      </p>
+      <p className="small">{tr ? (tr.total > 0 ? t(K + 'changesTrial', { v: tr.version, n: n(tr.total) }) : t(K + 'changesInTrial', { v: tr.version })) : t(K + 'changesHelp')}</p>
+      {manager && (
+        <ConfirmButton className="btn ghost small" question={t(K + 'resetAsk')} onConfirm={() => reset.mutate({})} disabled={reset.isPending}>
+          <Icon name="undo" /> {t(K + 'reset')}
+        </ConfirmButton>
+      )}
+    </div>
+  );
+}
+
 /** the rows of a page, a group each time the topic changes (the book's order: its chapters stay together) */
 function byTopic(rows: Word[]): { topic: string; rows: Word[] }[] {
   const out: { topic: string; rows: Word[] }[] = [];
@@ -190,7 +213,7 @@ function WordRow({ w, manager, onEdit }: { w: Word; manager: boolean; onEdit: ()
   );
 }
 
-/** A word written or corrected by Pilotix: used at once by every shop. */
+/** A word written or corrected by Pilotix (the working copy): out with the next push. */
 function WordForm({ id, value, onDone }: { id?: number; value: Draft; onDone: () => void }) {
   const { t } = useTranslation();
   const [f, setF] = useState<Draft>({ ar: value.ar, lat: value.lat, meaning: value.meaning, topic: value.topic, avoid: value.avoid });

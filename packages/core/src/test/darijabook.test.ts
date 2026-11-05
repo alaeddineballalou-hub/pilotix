@@ -24,6 +24,11 @@ let pctx: PCtx;
 let shop: Ctx;
 const other: Db = { query: async () => [], tx: async (f: any) => f(other) } as any;
 const p = <T = any>(name: string, input: unknown = {}) => platformCall(name, pctx, input) as Promise<T>;
+/** « Push en test » then « Push sur le serveur »: what waits goes out to every shop */
+const push = async () => {
+  await p('p.pilot.stage', { darija: false });
+  await p('p.pilot.release', { id: (await p('p.pilot.state')).release.trial.id });
+};
 const reqs: any[] = [];
 const hooks: ServerHooks = {
   courier: async () => ({}),
@@ -73,7 +78,7 @@ test('the guide of the code, in chapters: read back exactly, letters set by orde
   assert.ok(checkDarijaBook({ title: 'x', chapters: [{ title: 'Grand', text: 'y'.repeat(9000) }] }).includes('chapter_text'));
 });
 
-test('version 1 is the guide; an edit is a new version used at once by Dellal and the CM AI agent', async () => {
+test('version 1 is the guide; an edit is a draft until the push, then a new version used by Dellal and the CM AI agent', async () => {
   const first: any = await p('p.darija.book');
   assert.equal(first.book.version, 1);
   assert.equal(first.book.kind, 'first');
@@ -84,7 +89,15 @@ test('version 1 is the guide; an edit is a new version used at once by Dellal an
   const chapters = first.book.chapters.map((c: any, i: number) => (i === 0 ? { ...c, text: c.text + '\n- Dis « saha » pour dire d’accord, jamais « wakha ».' } : c));
   chapters.push({ title: 'Mots de Sétif', text: '- À Sétif, les clients disent « wesh rak » : réponds pareil.' });
   const r: any = await p('p.darija.save', { chapters, note: 'saha, Sétif' });
-  assert.equal(r.version, 2);
+  assert.deepEqual(r, { draft: true });
+  // a draft: Dellal still reads the rules in service
+  assert.doesNotMatch(await sharedBlock(), /jamais « wakha »/);
+  const st: any = await p('p.darija.book');
+  assert.equal(st.book.version, 1);
+  assert.equal(st.draft.chapters.length, 9);
+  assert.equal(st.draft.note, 'saha, Sétif');
+  await push();
+  assert.equal((await p('p.darija.book')).book.version, 2);
   const block = await sharedBlock();
   assert.match(block, /- Dis « saha » pour dire d’accord, jamais « wakha »\./);
   assert.match(block, /I\. Mots de Sétif\n- À Sétif/, 'the new chapter gets the next letter');
@@ -97,44 +110,47 @@ test('version 1 is the guide; an edit is a new version used at once by Dellal an
   assert.equal(await darijaGuide(null), DELLAL_DARIJA);
 });
 
-test('lessons for every shop: each change is a version; going back brings back the rules and the lessons of that time', async () => {
+test('lessons for every shop: a push is a version, a removal too; going back brings back the rules and the lessons of that time', async () => {
   const pdb = t.platform;
-  // Pilotix adds a lesson (v3), a shop's lesson is accepted (v4), then removed (v5); a refusal is not a version
+  // Pilotix adds a lesson and accepts a shop's lesson: no version until the push (v3); removed: v4; a refusal is no version
   await p('p.lahja.add', { words: [{ use: 'khouya' }] });
   const seller = Number((await pdb.query(`INSERT INTO platform.lahja (shop_id, source, status, own, words) VALUES (1, 'seller', 'waiting', true, '[{"use":"saha","not":"wakha"}]'::jsonb) RETURNING id`))[0].id);
   await p('p.lahja.decide', { id: seller, action: 'approve' });
   const refused = Number((await pdb.query(`INSERT INTO platform.lahja (shop_id, source, status, own, words) VALUES (1, 'seller', 'waiting', true, '[{"use":"bezzaf"}]'::jsonb) RETURNING id`))[0].id);
   await p('p.lahja.decide', { id: refused, action: 'refuse' });
   let st: any = await p('p.darija.book');
-  assert.equal(st.book.version, 4);
+  assert.equal(st.book.version, 2, 'accepted: not in the book in service yet');
+  await push();
+  st = await p('p.darija.book');
+  assert.equal(st.book.version, 3);
   assert.deepEqual(st.book.lessons.map((l: any) => l.words[0].use), ['khouya', 'saha']);
-  assert.match(st.versions[0].note, /Leçon acceptée : « wakha » → « saha »/);
-  assert.equal(st.versions.length, 4);
+  assert.match(st.versions[0].note, /Push sur le serveur de la v\d+ : leçons pour toutes les boutiques/);
+  assert.equal(st.versions.length, 3);
   await p('p.lahja.decide', { id: seller, action: 'remove' });
   st = await p('p.darija.book');
-  assert.equal(st.book.version, 5);
+  assert.equal(st.book.version, 4);
   assert.match(st.versions[0].note, /Leçon retirée/);
 
   // back to version 2: its rules (with « Mots de Sétif »), and its lessons (none: « khouya » goes, « saha » stays out)
   const back: any = await p('p.darija.restore', { version: 2 });
-  assert.equal(back.version, 6);
+  assert.equal(back.version, 5);
   st = await p('p.darija.book');
   assert.equal(st.book.kind, 'restore');
   assert.match(st.book.note, /Retour à la version 2/);
   assert.equal(st.book.chapters.at(-1).title, 'Mots de Sétif');
   assert.deepEqual(st.book.lessons, []);
   assert.deepEqual((await lahjaFor(other, pdb, 999)).all, [], 'no shop uses « khouya » any more');
-  // and forward again to version 4: « khouya » and « saha » come back for every shop
-  await p('p.darija.restore', { version: 4 });
+  // and forward again to version 3: « khouya » and « saha » come back for every shop
+  await p('p.darija.restore', { version: 3 });
   assert.deepEqual((await lahjaFor(other, pdb, 999)).all.map((w) => w.use).sort(), ['khouya', 'saha']);
-  await assert.rejects(p('p.darija.restore', { version: 7 }), /déjà en service/);
+  await assert.rejects(p('p.darija.restore', { version: 6 }), /déjà en service/);
   await assert.rejects(p('p.darija.restore', { version: 99 }), /introuvable/);
 });
 
 test('the book as a file: the rules then the lessons; an old version too; the sales book has no Darija', async () => {
   const f: any = await p('p.darija.file');
   assert.match(f.text, /^DELLAL & CM AI — LE LIVRE DE DARIJA/);
-  assert.match(f.text, /Version 7, du/);
+  assert.match(f.text, /Version 6, du/);
   assert.match(f.text, /1\. LES RÈGLES[\s\S]*A\. Registre[\s\S]*I\. Mots de Sétif/);
   assert.match(f.text, /2\. LES LEÇONS DE DARIJA POUR TOUTES LES BOUTIQUES \(2\)\n[─]+\n\n- utilise « khouya » quand ça va\n- écris « saha » au lieu de « wakha »/);
   const old: any = await p('p.darija.file', { version: 1 });

@@ -219,7 +219,8 @@
       "approved": "For every shop",
       "refused": "Kept for your shop",
       "removed": "Kept for your shop",
-      "withdrawn": "In your shop"
+      "withdrawn": "In your shop",
+      "accepted": "Accepted by Pilotix: soon in every shop"
     },
     "remove": "Remove",
     "learned": "Learned by {{name}} from your customers",

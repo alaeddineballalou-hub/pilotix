@@ -6,6 +6,8 @@
 //    an accepted lesson writes its words in the book (a word replaced, or a new word), and removing it takes them back;
 //  - in a chat, Dellal and the CM AI agent read only the words of the book that touch what is said (the customer's words,
 //    the post, the product), and so does Pilot AI when it translates a guide into Arabic: a big book costs nothing more.
+// Nothing Pilotix changes reaches the shops at once: the control room edits a working copy; « Push en test » freezes it
+// for the control room's test chat, « Push sur le serveur » makes it the live book of every shop (pilotlearn.ts › releases).
 // The book lives in Pilotix's database (schema `platform`); without it (the preview, a single shop) there is no book.
 import { Db, iso, num } from '../db';
 import type { LahjaWord } from './lahja';
@@ -49,6 +51,24 @@ CREATE TABLE IF NOT EXISTS platform.vocab (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS vocab_lahja ON platform.vocab (lahja_id);
+`;
+
+/**
+ * The book in three copies (the same words keep the same id in all three):
+ *  - `live`: what the AI agents of every shop read;
+ *  - `work`: what the control room edits (Pilotix's words, its imports, the words of the Darija lessons it accepted): it
+ *    waits for « Push en test »;
+ *  - `trial`: the copy « Push en test » froze, that only the control room's test chat reads, until « Push sur le serveur »
+ *    makes it the live one.
+ */
+export type VocabCopy = 'live' | 'work' | 'trial';
+const TABLE: Record<VocabCopy, string> = { live: 'platform.vocab', work: 'platform.vocab_work', trial: 'platform.vocab_trial' };
+const COLS = 'id, ar, lat, meaning, topic, avoid, source, lahja_id, prev, by_user, created_at, updated_at';
+export const VOCAB_COPIES_SQL = `
+CREATE TABLE IF NOT EXISTS platform.vocab_work (LIKE platform.vocab INCLUDING ALL);
+CREATE TABLE IF NOT EXISTS platform.vocab_trial (LIKE platform.vocab INCLUDING ALL);
+INSERT INTO platform.vocab_work (${COLS}) SELECT ${COLS} FROM platform.vocab;
+CREATE TABLE IF NOT EXISTS platform.vocab_gen (copy text PRIMARY KEY, gen bigint NOT NULL DEFAULT 0);
 `;
 
 // ---------------------------------------------------------------- words, as they are compared
@@ -232,39 +252,40 @@ export function parseVocab(text: string): VocabImport {
   return { words: words.filter((w) => !seen.has(keyOf(w)) && !!seen.add(keyOf(w))), unsure };
 }
 
-// ---------------------------------------------------------------- reading and writing the book
-export async function vocabCounts(pdb: Db): Promise<{ total: number; book: number; learned: number; coach: number; topics: { topic: string; n: number }[] }> {
+// ---------------------------------------------------------------- reading and writing the book (the control room: the working copy)
+export async function vocabCounts(pdb: Db, copy: VocabCopy = 'work'): Promise<{ total: number; book: number; learned: number; coach: number; topics: { topic: string; n: number }[] }> {
   const k: Record<string, number> = {};
-  for (const r of await pdb.query(`SELECT source, count(*)::int AS n FROM platform.vocab GROUP BY source`)) k[String(r.source)] = num(r.n);
-  const topics = (await pdb.query(`SELECT topic, count(*)::int AS n FROM platform.vocab GROUP BY topic ORDER BY min(id)`)).map((r: any) => ({ topic: String(r.topic), n: num(r.n) }));
+  for (const r of await pdb.query(`SELECT source, count(*)::int AS n FROM ${TABLE[copy]} GROUP BY source`)) k[String(r.source)] = num(r.n);
+  const topics = (await pdb.query(`SELECT topic, count(*)::int AS n FROM ${TABLE[copy]} GROUP BY topic ORDER BY min(id)`)).map((r: any) => ({ topic: String(r.topic), n: num(r.n) }));
   return { total: (k.book ?? 0) + (k.learned ?? 0) + (k.coach ?? 0), book: k.book ?? 0, learned: k.learned ?? 0, coach: k.coach ?? 0, topics };
 }
 
 /** A page of the book: a search (any of its letters or its meaning), a chapter, a source. */
-export async function vocabList(pdb: Db, o: { q?: string; topic?: string; source?: VocabSource; offset?: number; limit?: number }): Promise<{ rows: VocabWord[]; total: number }> {
+export async function vocabList(pdb: Db, o: { q?: string; topic?: string; source?: VocabSource; offset?: number; limit?: number }, copy: VocabCopy = 'work'): Promise<{ rows: VocabWord[]; total: number }> {
   const w: string[] = [];
   const p: unknown[] = [];
   if (o.q?.trim()) w.push(`(ar ILIKE '%' || $${p.push(o.q.trim())} || '%' OR lat ILIKE '%' || $${p.length} || '%' OR meaning ILIKE '%' || $${p.length} || '%' OR avoid ILIKE '%' || $${p.length} || '%')`);
   if (o.topic !== undefined) w.push(`topic = $${p.push(o.topic)}`);
   if (o.source) w.push(`source = $${p.push(o.source)}`);
   const where = w.length ? `WHERE ${w.join(' AND ')}` : '';
-  const total = num((await pdb.query(`SELECT count(*)::int AS n FROM platform.vocab ${where}`, p))[0]?.n);
-  const rows = await pdb.query(`SELECT * FROM platform.vocab ${where} ORDER BY id LIMIT ${Math.min(VOCAB.pageMax, o.limit ?? 100)} OFFSET ${Math.max(0, o.offset ?? 0)}`, p);
+  const total = num((await pdb.query(`SELECT count(*)::int AS n FROM ${TABLE[copy]} ${where}`, p))[0]?.n);
+  const rows = await pdb.query(`SELECT * FROM ${TABLE[copy]} ${where} ORDER BY id LIMIT ${Math.min(VOCAB.pageMax, o.limit ?? 100)} OFFSET ${Math.max(0, o.offset ?? 0)}`, p);
   return { rows: rows.map(row), total };
 }
 
-/** Pilotix's book in: its words added (a word already there is kept as it is), or the book's words replaced. */
+const W = TABLE.work;
+/** Pilotix's book in (the working copy): its words added (a word already there is kept as it is), or the book's words replaced. */
 export async function importVocab(pdb: Db, o: { text: string; replace: boolean; by: string }): Promise<{ added: number; skipped: number; unsure: number; total: number }> {
   const { words, unsure } = parseVocab(o.text);
   return pdb.tx(async (tx) => {
-    if (o.replace) await tx.query(`DELETE FROM platform.vocab WHERE source = 'book'`);
-    const have = new Set((await tx.query(`SELECT ar, lat FROM platform.vocab`)).map((r: any) => keyOf({ ar: String(r.ar), lat: String(r.lat) })));
-    const count = num((await tx.query(`SELECT count(*)::int AS n FROM platform.vocab`))[0]?.n);
+    if (o.replace) await tx.query(`DELETE FROM ${W} WHERE source = 'book'`);
+    const have = new Set((await tx.query(`SELECT ar, lat FROM ${W}`)).map((r: any) => keyOf({ ar: String(r.ar), lat: String(r.lat) })));
+    const count = num((await tx.query(`SELECT count(*)::int AS n FROM ${W}`))[0]?.n);
     const fresh = words.filter((w) => !have.has(keyOf(w))).slice(0, Math.max(0, VOCAB.maxWords - count));
     for (let i = 0; i < fresh.length; i += 500) {
       const part = fresh.slice(i, i + 500);
       await tx.query(
-        `INSERT INTO platform.vocab (ar, lat, meaning, topic, by_user) SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[])`,
+        `INSERT INTO ${W} (ar, lat, meaning, topic, by_user) SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[])`,
         [part.map((w) => w.ar), part.map((w) => w.lat), part.map((w) => w.meaning), part.map((w) => clean(w.topic)), part.map(() => o.by)],
       );
     }
@@ -273,43 +294,78 @@ export async function importVocab(pdb: Db, o: { text: string; replace: boolean; 
   });
 }
 
-/** One word written or corrected by Pilotix (a word of the book stays from the book). */
+/** One word written or corrected by Pilotix in the working copy (a word of the book stays from the book). */
 export async function saveVocab(pdb: Db, o: VocabInput & { id?: number; by: string }): Promise<{ ok: boolean; error?: 'empty' | 'same' | 'not_found'; id?: number }> {
   const w = { ar: clean(o.ar), lat: clean(o.lat), meaning: clean(o.meaning), topic: clean(o.topic), avoid: clean(o.avoid) };
   if (!w.ar && !w.lat && !w.avoid) return { ok: false, error: 'empty' };
   // the same word: one of its forms already in the book
-  const twin = (await pdb.query(`SELECT id, ar, lat FROM platform.vocab`)).find(
+  const twin = (await pdb.query(`SELECT id, ar, lat FROM ${W}`)).find(
     (r: any) => num(r.id) !== o.id && ((!!w.ar && vnorm(r.ar) === vnorm(w.ar)) || (!!w.lat && vnorm(r.lat) === vnorm(w.lat))),
   );
   if (twin) return { ok: false, error: 'same' };
   if (o.id) {
-    const r = await pdb.query(`UPDATE platform.vocab SET ar = $2, lat = $3, meaning = $4, topic = $5, avoid = $6, by_user = $7, updated_at = now() WHERE id = $1 RETURNING id`, [o.id, w.ar, w.lat, w.meaning, w.topic, w.avoid, o.by]);
+    const r = await pdb.query(`UPDATE ${W} SET ar = $2, lat = $3, meaning = $4, topic = $5, avoid = $6, by_user = $7, updated_at = now() WHERE id = $1 RETURNING id`, [o.id, w.ar, w.lat, w.meaning, w.topic, w.avoid, o.by]);
     if (!r.length) return { ok: false, error: 'not_found' };
     bump();
     return { ok: true, id: o.id };
   }
-  const r = await pdb.query(`INSERT INTO platform.vocab (ar, lat, meaning, topic, avoid, source, by_user) VALUES ($1, $2, $3, $4, $5, 'coach', $6) RETURNING id`, [w.ar, w.lat, w.meaning, w.topic, w.avoid, o.by]);
+  const r = await pdb.query(`INSERT INTO ${W} (ar, lat, meaning, topic, avoid, source, by_user) VALUES ($1, $2, $3, $4, $5, 'coach', $6) RETURNING id`, [w.ar, w.lat, w.meaning, w.topic, w.avoid, o.by]);
   bump();
   return { ok: true, id: num(r[0].id) };
 }
 
 export async function removeVocab(pdb: Db, id: number): Promise<boolean> {
-  const r = await pdb.query(`DELETE FROM platform.vocab WHERE id = $1 RETURNING id`, [id]);
+  const r = await pdb.query(`DELETE FROM ${W} WHERE id = $1 RETURNING id`, [id]);
   bump();
   return r.length > 0;
 }
 
+/**
+ * One copy becomes another (« Push en test »: work → trial; « Push sur le serveur »: trial → live; « Annuler les
+ * changements »: live → work), words, ids and dates as they are. Inside the caller's transaction when there is one.
+ */
+export async function copyVocab(pdb: Db, from: VocabCopy, to: VocabCopy): Promise<number> {
+  if (from === to) return 0;
+  return pdb.tx(async (d) => {
+    await d.query(`DELETE FROM ${TABLE[to]}`);
+    await d.query(`INSERT INTO ${TABLE[to]} (${COLS}) SELECT ${COLS} FROM ${TABLE[from]}`);
+    await d.query(`INSERT INTO platform.vocab_gen (copy, gen) VALUES ($1, 1) ON CONFLICT (copy) DO UPDATE SET gen = platform.vocab_gen.gen + 1`, [to]);
+    bump();
+    return num((await d.query(`SELECT count(*)::int AS n FROM ${TABLE[to]}`))[0]?.n);
+  });
+}
+
+/** What one copy changes in another: words added, corrected (any of their letters, meaning, chapter, « not »), removed. */
+export async function vocabChanges(pdb: Db, from: VocabCopy, to: VocabCopy): Promise<{ added: number; changed: number; removed: number; total: number }> {
+  const a = TABLE[from];
+  const b = TABLE[to];
+  const r = (
+    await pdb.query(
+      `SELECT (SELECT count(*)::int FROM ${a} x WHERE NOT EXISTS (SELECT 1 FROM ${b} y WHERE y.id = x.id)) AS added,
+              (SELECT count(*)::int FROM ${b} y WHERE NOT EXISTS (SELECT 1 FROM ${a} x WHERE x.id = y.id)) AS removed,
+              (SELECT count(*)::int FROM ${a} x JOIN ${b} y ON y.id = x.id
+                WHERE (x.ar, x.lat, x.meaning, x.topic, x.avoid) IS DISTINCT FROM (y.ar, y.lat, y.meaning, y.topic, y.avoid)) AS changed`,
+    )
+  )[0];
+  const added = num(r?.added);
+  const changed = num(r?.changed);
+  const removed = num(r?.removed);
+  return { added, changed, removed, total: added + changed + removed };
+}
+
 // ---------------------------------------------------------------- what the corrections teach
 /**
- * An accepted Darija lesson writes its words in the book: « write X instead of Y » replaces Y where the book has it (the
- * word it was is kept, to give it back if the lesson is removed) or adds X; « never write Y » marks Y; a new word is added.
+ * An accepted Darija lesson writes its words in the book (the working copy, unless told): « write X instead of Y » replaces
+ * Y where the book has it (the word it was is kept, to give it back if the lesson is removed) or adds X; « never write Y »
+ * marks Y; a new word is added.
  */
-export async function learnVocab(pdb: Db, o: { lahjaId: number; words: LahjaWord[]; source: 'learned' | 'coach'; by: string }): Promise<number> {
+export async function learnVocab(pdb: Db, o: { lahjaId: number; words: LahjaWord[]; source: 'learned' | 'coach'; by: string }, copy: VocabCopy = 'work'): Promise<number> {
   let n = 0;
-  const all = (await pdb.query(`SELECT * FROM platform.vocab`)).map(row);
+  const T = TABLE[copy];
+  const all = (await pdb.query(`SELECT * FROM ${T}`)).map(row);
   const has = (v: VocabWord, x: string) => !!x && (vnorm(v.ar) === vnorm(x) || vnorm(v.lat) === vnorm(x));
   const change = async (v: VocabWord, next: Pick<VocabWord, 'ar' | 'lat' | 'avoid'>) => {
-    await pdb.query(`UPDATE platform.vocab SET ar = $2, lat = $3, avoid = $4, lahja_id = $5, prev = $6::jsonb, updated_at = now() WHERE id = $1`, [
+    await pdb.query(`UPDATE ${T} SET ar = $2, lat = $3, avoid = $4, lahja_id = $5, prev = $6::jsonb, updated_at = now() WHERE id = $1`, [
       v.id,
       next.ar,
       next.lat,
@@ -336,7 +392,7 @@ export async function learnVocab(pdb: Db, o: { lahjaId: number; words: LahjaWord
       if (not) await change(byUse, { ar: byUse.ar, lat: byUse.lat, avoid: plus(byUse.avoid, not) });
     } else {
       const ar = ARABIC.test(use || not);
-      await pdb.query(`INSERT INTO platform.vocab (ar, lat, topic, avoid, source, lahja_id, by_user) VALUES ($1, $2, $3, $4, $5, $6, $7)`, [ar ? use : '', ar ? '' : use, VOCAB.learnedTopic, not, o.source, o.lahjaId, o.by]);
+      await pdb.query(`INSERT INTO ${T} (ar, lat, topic, avoid, source, lahja_id, by_user) VALUES ($1, $2, $3, $4, $5, $6, $7)`, [ar ? use : '', ar ? '' : use, VOCAB.learnedTopic, not, o.source, o.lahjaId, o.by]);
       n++;
     }
   }
@@ -344,31 +400,35 @@ export async function learnVocab(pdb: Db, o: { lahjaId: number; words: LahjaWord
   return n;
 }
 
-/** A lesson removed by Pilotix: the words it added leave the book, the words it changed come back as they were. */
-export async function forgetVocab(pdb: Db, lahjaId: number): Promise<number> {
-  const rows = await pdb.query(`SELECT * FROM platform.vocab WHERE lahja_id = $1`, [lahjaId]);
+/** A lesson removed or refused by Pilotix: the words it added leave the book, the words it changed come back as they were. */
+export async function forgetVocab(pdb: Db, lahjaId: number, copy: VocabCopy = 'work'): Promise<number> {
+  const T = TABLE[copy];
+  const rows = await pdb.query(`SELECT * FROM ${T} WHERE lahja_id = $1`, [lahjaId]);
   for (const r of rows) {
     const prev = r.prev && typeof r.prev === 'string' ? JSON.parse(r.prev) : r.prev;
-    if (r.source === 'book' && prev) await pdb.query(`UPDATE platform.vocab SET ar = $2, lat = $3, avoid = $4, lahja_id = $5, prev = NULL, updated_at = now() WHERE id = $1`, [r.id, prev.ar ?? '', prev.lat ?? '', prev.avoid ?? '', prev.lahjaId ?? null]);
-    else await pdb.query(`DELETE FROM platform.vocab WHERE id = $1`, [r.id]);
+    if (r.source === 'book' && prev) await pdb.query(`UPDATE ${T} SET ar = $2, lat = $3, avoid = $4, lahja_id = $5, prev = NULL, updated_at = now() WHERE id = $1`, [r.id, prev.ar ?? '', prev.lat ?? '', prev.avoid ?? '', prev.lahjaId ?? null]);
+    else await pdb.query(`DELETE FROM ${T} WHERE id = $1`, [r.id]);
   }
   if (rows.length) bump();
   return rows.length;
 }
 
 // ---------------------------------------------------------------- the words of a chat
-// the book in memory, with its words indexed, read again when it changes (here, or on another server: its last change)
-let mem: { stamp: string; words: VocabWord[]; index: Map<string, Set<number>> } | null = null;
+// each copy in memory, with its words indexed, read again when it changes (here, or on another server: its last change,
+// or its generation, which every copy of a whole book moves on)
+const mem = new Map<VocabCopy, { stamp: string; words: VocabWord[]; index: Map<string, Set<number>> }>();
 let local = 0;
 const bump = () => {
   local++;
 };
 const prefix = (w: string) => (w.length >= 5 ? `~${w.slice(0, 5)}` : '');
-async function loaded(pdb: Db) {
-  const s = (await pdb.query(`SELECT count(*)::int AS n, max(updated_at) AS at, max(id) AS id FROM platform.vocab`))[0];
-  const stamp = `${num(s?.n)}|${s?.at ? iso(s.at) : ''}|${num(s?.id)}|${local}`;
-  if (mem?.stamp === stamp) return mem;
-  const words = (await pdb.query(`SELECT * FROM platform.vocab ORDER BY id`)).map(row);
+async function loaded(pdb: Db, copy: VocabCopy) {
+  const T = TABLE[copy];
+  const s = (await pdb.query(`SELECT count(*)::int AS n, max(updated_at) AS at, max(id) AS id, (SELECT gen FROM platform.vocab_gen WHERE copy = $1) AS gen FROM ${T}`, [copy]))[0];
+  const stamp = `${num(s?.n)}|${s?.at ? iso(s.at) : ''}|${num(s?.id)}|${num(s?.gen)}|${local}`;
+  const had = mem.get(copy);
+  if (had?.stamp === stamp) return had;
+  const words = (await pdb.query(`SELECT * FROM ${T} ORDER BY id`)).map(row);
   const index = new Map<string, Set<number>>();
   const add = (k: string, i: number) => {
     if (!k) return;
@@ -386,19 +446,20 @@ async function loaded(pdb: Db) {
     }
     for (const x of vwords(w.meaning)) add(`m:${x}`, i);
   });
-  mem = { stamp, words, index };
-  return mem;
+  const m = { stamp, words, index };
+  mem.set(copy, m);
+  return m;
 }
 
 /**
  * The words of the book that touch these texts (what the customer wrote, the post, the product): a Darija word written
  * counts twice, its first five letters, the same word in another spelling (wesh = wach) or a word of its meaning once;
- * the best ones first, `limit` at most.
+ * the best ones first, `limit` at most. Every shop reads the live copy; the control room's test chat, the one in test.
  */
-export async function vocabFor(pdb: Db | null, texts: string[], limit = VOCAB.promptWords): Promise<VocabWord[]> {
+export async function vocabFor(pdb: Db | null, texts: string[], limit = VOCAB.promptWords, copy: VocabCopy = 'live'): Promise<VocabWord[]> {
   if (!pdb) return [];
   try {
-    const m = await loaded(pdb);
+    const m = await loaded(pdb, copy);
     if (!m.words.length) return [];
     const score = new Map<number, number>();
     const hit = (k: string, n: number) => m.index.get(k)?.forEach((i) => score.set(i, (score.get(i) ?? 0) + n));

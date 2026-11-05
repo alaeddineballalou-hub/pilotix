@@ -92,6 +92,8 @@ EXTRA.database = '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66
 EXTRA.signup = '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>';
 // Pilot AI › Comptes: « Tester » a linked account
 EXTRA.pulse = '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>';
+// Pilot AI › « Push en test »: a version for the control room's test chat only
+EXTRA.beaker = '<path d="M10 2v7.53a2 2 0 0 1-.21.9L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.07-10.12a2 2 0 0 1-.21-.9V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/>';
 const ALL = { ...(icons as Record<string, string>), ...EXTRA };
 export type IconName = keyof typeof ALL | string;
 

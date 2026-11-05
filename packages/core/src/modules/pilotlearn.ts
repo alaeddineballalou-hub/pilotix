@@ -9,7 +9,9 @@
  */
 import { sha256Hex } from '@pilotix/shared';
 import { Db, num, iso, isoOrNull } from '../db';
-import { learnLahja } from './lahja';
+import { darijaBookLive, darijaDraft, darijaRulesNext, darijaText, pushDarijaRules, sameRules } from './darijabook';
+import { asWords, decideManyLahja, learnLahja, LahjaWord } from './lahja';
+import { copyVocab, learnVocab, vocabChanges } from './vocab';
 
 // ---------------------------------------------------------------- settings
 export const PILOT = {
@@ -1610,46 +1612,226 @@ export async function publishBook(pdb: Db, o: { by: string; share?: number; less
     return { ok: false, error: 'test_running' };
   }
 }
+// ---------------------------------------------------------------- 6b. releases: « Push en test », then « Push sur le serveur »
+/** The versions « Push en test » made (one in test at a time) and pushed to every shop by « Push sur le serveur ». */
+export const RELEASE_SQL = `
+CREATE TABLE IF NOT EXISTS platform.pilot_releases (
+  id bigserial PRIMARY KEY,
+  version integer NOT NULL,
+  status text NOT NULL DEFAULT 'trial',
+  book_id bigint,
+  sales jsonb NOT NULL DEFAULT '{}',
+  darija jsonb NOT NULL DEFAULT '{}',
+  lahja_ids jsonb NOT NULL DEFAULT '[]',
+  vocab jsonb NOT NULL DEFAULT '{}',
+  by_user text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  pushed_by text,
+  pushed_at timestamptz
+);
+CREATE UNIQUE INDEX IF NOT EXISTS pilot_one_trial ON platform.pilot_releases (status) WHERE status = 'trial';
+CREATE UNIQUE INDEX IF NOT EXISTS pilot_one_live_release ON platform.pilot_releases (status) WHERE status = 'live';
+`;
+
 /**
- * « Push »: everything waiting goes into service now, without a test — the coach's choice, to try the lessons in real chats
- * (and in the test chats) at once. Every lesson the nights found that passes the checks again is approved by the person who
- * pushes; a running test is stopped; a new version made of every approved lesson becomes the book in service for every chat
- * at its next reply. « Revenir en arrière » (rollback) brings the book before it back.
+ * « Push en test » (control room, managers): everything waiting goes into one version that only the control room's test
+ * chat uses, frozen as it is now, so the version people test is the one that will go out:
+ *  - the sales lessons: the lessons the nights found are approved in the pusher's name (one that fails the checks keeps
+ *    waiting), and every approved lesson makes the sales book of the version (status 'trial');
+ *  - the Darija rules: the draft (or the rules in service);
+ *  - the Darija lessons for every shop: the ones Pilotix accepted, and, with `darija`, the shops' lessons waiting (accepted
+ *    in the pusher's name);
+ *  - the vocabulary: the working copy, frozen (platform.vocab_trial).
+ * A new « Push en test » replaces the version in test. Nothing reaches the shops before « Push sur le serveur ».
  */
-export async function pushBook(pdb: Db, o: { by: string; note?: string; now?: Date }): Promise<Ack> {
+export async function stageRelease(pdb: Db, o: { by: string; darija?: boolean; now?: Date }): Promise<Ack> {
   if (noWho(o.by)) return { ok: false, error: 'who' };
   const now = o.now ?? new Date();
   const at = now.toISOString();
+  // the sales lessons the nights found, approved (one that fails the checks stays for the coach)
   const approved: number[] = [];
   const skipped: number[] = [];
   for (const c of await pdb.query(`SELECT id FROM platform.pilot_lessons WHERE status = 'candidate' ORDER BY prio DESC, id`)) {
     const r = await approveLesson(pdb, num(c.id), o.by);
     (r.ok ? approved : skipped).push(num(c.id));
   }
-  const rows: Row[] = await pdb.query(`SELECT id, topic, text, prio FROM platform.pilot_lessons WHERE status = 'approved'`);
-  const ver = await nextVersion(pdb);
-  const c = compileBook(ver, asBookLessons(rows));
-  if (!c.used.length) return { ok: false, error: 'no_lessons', approved: approved.length, skipped };
+  // the shops' Darija lessons waiting, accepted (their words go in the working copy of the vocabulary)
+  let accepted: number[] = [];
+  let refusedByCheck = 0;
+  if (o.darija) {
+    const ids = (await pdb.query(`SELECT id FROM platform.lahja WHERE status = 'waiting' ORDER BY id LIMIT 200`)).map((x: Row) => num(x.id));
+    const d = ids.length ? await decideManyLahja(pdb, { ids, action: 'approve', by: o.by, now }) : { done: [] as number[], failed: [] as unknown[] };
+    accepted = d.done;
+    refusedByCheck = d.failed.length;
+    for (const id of accepted) {
+      const w = (await pdb.query(`SELECT words FROM platform.lahja WHERE id = $1`, [id]))[0];
+      await learnVocab(pdb, { lahjaId: id, words: asWords(w?.words), source: 'learned', by: o.by }, 'work');
+    }
+  }
   const champ: Row | undefined = (await pdb.query(`SELECT id, version, lesson_ids FROM platform.pilot_books WHERE status = 'champion' ORDER BY promoted_at DESC NULLS LAST, id DESC LIMIT 1`))[0];
-  const asc = (a: number, b: number) => a - b;
-  const have = champ ? (champ.lesson_ids as unknown[]).map((x) => num(x)).sort(asc).join() : '';
-  if (have === c.used.slice().sort(asc).join()) return { ok: false, error: 'no_change', approved: approved.length, skipped };
+  const have = new Set<number>(champ ? (champ.lesson_ids as unknown[]).map((x) => num(x)) : []);
+  const rules = await darijaRulesNext(pdb, now);
+  const liveRules = await darijaBookLive(pdb, now);
+  const ids = (x: unknown): string =>
+    ((Array.isArray(x) ? x : []) as unknown[])
+      .map((y) => num(y))
+      .sort((a, b) => a - b)
+      .join();
   const out = await pdb.tx(async (d) => {
+    const ver = await nextVersion(d);
+    const c = compileBook(ver, asBookLessons(await approvedLessons(d)));
+    const lahja = (await d.query(`SELECT id FROM platform.lahja WHERE status = 'accepted' ORDER BY id`)).map((x: Row) => num(x.id));
+    const vocab = await vocabChanges(d, 'work', 'live');
+    const salesChanged = ids(c.used) !== ids([...have]);
+    const rulesChanged = !sameRules(rules, liveRules);
+    if (!salesChanged && !rulesChanged && !lahja.length && !vocab.total) return { made: null, error: 'nothing_new', version: null };
+    // the same as the version in test already: nothing to make again
+    const tr: Row | undefined = (await d.query(`SELECT r.*, b.lesson_ids FROM platform.pilot_releases r JOIN platform.pilot_books b ON b.id = r.book_id WHERE r.status = 'trial' LIMIT 1`))[0];
+    if (
+      tr &&
+      ids(c.used) === ids(tr.lesson_ids) &&
+      ids(lahja) === ids(tr.lahja_ids) &&
+      sameRules(rules, { title: String(tr.darija?.title ?? ''), chapters: Array.isArray(tr.darija?.chapters) ? tr.darija.chapters : [] }) &&
+      !(await vocabChanges(d, 'work', 'trial')).total
+    )
+      return { made: null, error: 'same_as_trial', version: num(tr.version) };
+    await copyVocab(d, 'work', 'trial');
+    await d.query(`UPDATE platform.pilot_books SET status = 'replaced', ended_at = $1::timestamptz WHERE status = 'trial'`, [at]);
+    await d.query(`UPDATE platform.pilot_releases SET status = 'replaced' WHERE status = 'trial'`);
+    const b = await d.query(
+      `INSERT INTO platform.pilot_books (version, status, lesson_ids, text, tokens, note, by_user, created_at)
+       VALUES ($1, 'trial', $2::jsonb, $3, $4, 'Push en test', $5, $6::timestamptz) RETURNING id`,
+      [ver, JSON.stringify(c.used), c.text, c.tokens, o.by, at],
+    );
+    const sales = { lessons: c.used.length, fresh: c.used.filter((id) => !have.has(id)).length, gone: [...have].filter((id) => !c.used.includes(id)).length, dropped: c.dropped.length, changed: salesChanged };
+    const darija = { title: rules.title, chapters: rules.chapters, rulesChanged };
+    const r = await d.query(
+      `INSERT INTO platform.pilot_releases (version, status, book_id, sales, darija, lahja_ids, vocab, by_user, created_at)
+       VALUES ($1, 'trial', $2, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8::timestamptz) RETURNING id`,
+      [ver, num(b[0].id), JSON.stringify(sales), JSON.stringify(darija), JSON.stringify(lahja), JSON.stringify(vocab), o.by, at],
+    );
+    return { made: { id: num(r[0].id), version: ver, bookId: num(b[0].id), sales, rulesChanged, lahja: lahja.length, vocab }, error: null, version: ver };
+  });
+  const made = out.made;
+  if (!made) return { ok: false, error: out.error ?? 'nothing_new', version: out.version, approved: approved.length, skipped, accepted: accepted.length };
+  await logAct(pdb, o.by, 'stage', String(made.id), `v${made.version}: ${made.sales.lessons} sales lessons, ${made.lahja} Darija lessons${made.rulesChanged ? ', Darija rules' : ''}, ${made.vocab.total} words changed`, now);
+  return { ok: true, ...made, approved: approved.length, skipped, accepted: accepted.length, refusedByCheck };
+}
+
+/** What made the version in test out of date: a sales lesson of it refused since, a Darija lesson of it refused or removed. */
+async function trialChanges(pdb: Db, rel: Row): Promise<{ sales: number; darija: number }> {
+  const ids = ((await pdb.query(`SELECT lesson_ids FROM platform.pilot_books WHERE id = $1`, [num(rel.book_id)]))[0]?.lesson_ids ?? []) as unknown[];
+  const lessons = ids.map((x) => num(x));
+  const lahja = ((rel.lahja_ids ?? []) as unknown[]).map((x) => num(x));
+  const sales = lessons.length ? num((await pdb.query(`SELECT count(*)::int AS n FROM platform.pilot_lessons WHERE id = ANY($1::bigint[]) AND status <> 'approved'`, [lessons]))[0]?.n) : 0;
+  const darija = lahja.length ? num((await pdb.query(`SELECT count(*)::int AS n FROM platform.lahja WHERE id = ANY($1::bigint[]) AND status <> 'accepted'`, [lahja]))[0]?.n) : 0;
+  return { sales, darija };
+}
+
+/**
+ * « Push sur le serveur » (managers): the version in test — exactly the one the control room tested — goes out to every
+ * shop at once: its sales book is the one in service (a running A/B test stops), its Darija lessons are used by every shop,
+ * its Darija rules (with the lessons for every shop) are a new version of the Darija book, and its vocabulary is the live
+ * one. `id` is the version the person saw: one replaced since by another « Push en test » is refused, and so is one that a
+ * refused lesson made out of date (« Push en test » again). « Revenir au livre précédent » brings the sales book back.
+ */
+export async function pushRelease(pdb: Db, o: { id: number; by: string; now?: Date }): Promise<Ack> {
+  if (noWho(o.by)) return { ok: false, error: 'who' };
+  const now = o.now ?? new Date();
+  const at = now.toISOString();
+  const rel: Row | undefined = (await pdb.query(`SELECT * FROM platform.pilot_releases WHERE id = $1`, [o.id]))[0];
+  if (!rel) return { ok: false, error: 'not_found' };
+  if (rel.status !== 'trial') return { ok: false, error: rel.status === 'live' || rel.status === 'past' ? 'already_live' : 'replaced' };
+  const stale = await trialChanges(pdb, rel);
+  if (stale.sales || stale.darija) return { ok: false, error: 'trial_changed', ...stale };
+  const lahja = ((rel.lahja_ids ?? []) as unknown[]).map((x) => num(x));
+  const out = await pdb.tx(async (d) => {
+    const champ: Row | undefined = (await d.query(`SELECT id, version FROM platform.pilot_books WHERE status = 'champion' ORDER BY promoted_at DESC NULLS LAST, id DESC LIMIT 1`))[0];
     const run: Row | undefined = (await d.query(`SELECT id, challenger_id FROM platform.pilot_tests WHERE status = 'running'`))[0];
     if (run) {
       await d.query(`UPDATE platform.pilot_tests SET status = 'stopped', verdict = 'manual', why = 'push', ended_at = $2::timestamptz WHERE id = $1`, [num(run.id), at]);
       await d.query(`UPDATE platform.pilot_books SET status = 'stopped', ended_at = $2::timestamptz WHERE id = $1`, [num(run.challenger_id), at]);
     }
     await d.query(`UPDATE platform.pilot_books SET status = 'retired', ended_at = $1::timestamptz WHERE status = 'champion'`, [at]);
-    const b = await d.query(
-      `INSERT INTO platform.pilot_books (version, status, lesson_ids, text, tokens, note, by_user, created_at, promoted_at)
-       VALUES ($1, 'champion', $2::jsonb, $3, $4, $5, $6, $7::timestamptz, $7::timestamptz) RETURNING id`,
-      [ver, JSON.stringify(c.used), c.text, c.tokens, o.note || 'Push', o.by, at],
-    );
-    return { bookId: num(b[0].id), stoppedTest: run ? num(run.id) : null };
+    await d.query(`UPDATE platform.pilot_books SET status = 'champion', promoted_at = $2::timestamptz, ended_at = NULL WHERE id = $1`, [num(rel.book_id), at]);
+    if (lahja.length) await d.query(`UPDATE platform.lahja SET status = 'approved', decided_at = $2::timestamptz WHERE id = ANY($1::bigint[]) AND status = 'accepted'`, [lahja, at]);
+    await copyVocab(d, 'trial', 'live');
+    const dj = rel.darija ?? {};
+    const book = await pushDarijaRules(d, { title: String(dj.title ?? ''), chapters: Array.isArray(dj.chapters) ? dj.chapters : [], release: num(rel.version), by: o.by, now });
+    await d.query(`UPDATE platform.pilot_releases SET status = 'past' WHERE status = 'live'`);
+    await d.query(`UPDATE platform.pilot_releases SET status = 'live', pushed_by = $2, pushed_at = $3::timestamptz WHERE id = $1`, [o.id, o.by, at]);
+    return { previous: champ ? num(champ.version) : null, stoppedTest: run ? num(run.id) : null, darijaVersion: book ? book.version : null };
   });
-  await logAct(pdb, o.by, 'push', String(out.bookId), `v${ver}: ${c.used.length} lessons${approved.length ? `, ${approved.length} approved with it` : ''}${out.stoppedTest ? `, test ${out.stoppedTest} stopped` : ''}`, now);
-  return { ok: true, ...out, version: ver, previous: champ ? num(champ.version) : null, lessons: c.used.length, tokens: c.tokens, dropped: c.dropped, approved: approved.length, skipped };
+  await logAct(pdb, o.by, 'release', String(o.id), `v${num(rel.version)} live: ${lahja.length} Darija lessons${out.darijaVersion ? `, Darija book v${out.darijaVersion}` : ''}${out.stoppedTest ? `, test ${out.stoppedTest} stopped` : ''}`, now);
+  return { ok: true, id: o.id, version: num(rel.version), ...out, sales: rel.sales ?? {}, lahja: lahja.length, vocab: rel.vocab ?? {}, rulesChanged: !!rel.darija?.rulesChanged };
+}
+
+export type ReleaseView = {
+  id: number;
+  version: number;
+  by: string | null;
+  at: string;
+  sales: { lessons: number; fresh: number; gone: number; dropped: number; changed: boolean };
+  darija: { rules: boolean; lessons: number };
+  vocab: { added: number; changed: number; removed: number; total: number };
+};
+const releaseView = (r: Row): ReleaseView => {
+  const s = r.sales ?? {};
+  const v = r.vocab ?? {};
+  return {
+    id: num(r.id),
+    version: num(r.version),
+    by: (r.by_user as string | null) ?? null,
+    at: iso(r.created_at),
+    sales: { lessons: num(s.lessons), fresh: num(s.fresh), gone: num(s.gone), dropped: num(s.dropped), changed: !!s.changed },
+    darija: { rules: !!r.darija?.rulesChanged, lessons: ((r.lahja_ids ?? []) as unknown[]).length },
+    vocab: { added: num(v.added), changed: num(v.changed), removed: num(v.removed), total: num(v.total) },
+  };
+};
+
+/**
+ * The push panel: the version in service, the version in test (what it holds; out of date when a lesson of it was refused
+ * since), the last push, and what waits for the next « Push en test » (compared with the version in test, or with the one
+ * in service when there is none).
+ */
+export async function releaseState(pdb: Db, now?: Date) {
+  const champ: Row | undefined = (await pdb.query(`SELECT id, version, lesson_ids, by_user, created_at, promoted_at FROM platform.pilot_books WHERE status = 'champion' ORDER BY promoted_at DESC NULLS LAST, id DESC LIMIT 1`))[0];
+  const tr: Row | undefined = (await pdb.query(`SELECT * FROM platform.pilot_releases WHERE status = 'trial' LIMIT 1`))[0];
+  const last: Row | undefined = (await pdb.query(`SELECT version, pushed_by, pushed_at FROM platform.pilot_releases WHERE status = 'live' LIMIT 1`))[0];
+  const trialBook: Row | undefined = tr ? (await pdb.query(`SELECT lesson_ids FROM platform.pilot_books WHERE id = $1`, [num(tr.book_id)]))[0] : undefined;
+  const base = new Set<number>(((trialBook ?? champ)?.lesson_ids ?? []).map((x: unknown) => num(x)));
+  const inTrial = new Set<number>(((tr?.lahja_ids ?? []) as unknown[]).map((x) => num(x)));
+  const approvedIds = (await pdb.query(`SELECT id FROM platform.pilot_lessons WHERE status = 'approved'`)).map((x: Row) => num(x.id));
+  const candidates = num((await pdb.query(`SELECT count(*)::int AS n FROM platform.pilot_lessons WHERE status = 'candidate'`))[0]?.n);
+  const accepted = (await pdb.query(`SELECT id FROM platform.lahja WHERE status = 'accepted'`)).map((x: Row) => num(x.id));
+  const waiting = num((await pdb.query(`SELECT count(*)::int AS n FROM platform.lahja WHERE status = 'waiting'`))[0]?.n);
+  const draft = await darijaDraft(pdb);
+  const rulesBase = tr ? { title: String(tr.darija?.title ?? ''), chapters: Array.isArray(tr.darija?.chapters) ? tr.darija.chapters : [] } : await darijaBookLive(pdb, now);
+  const vocab = await vocabChanges(pdb, 'work', tr ? 'trial' : 'live');
+  const stale = tr ? await trialChanges(pdb, tr) : { sales: 0, darija: 0 };
+  // the approved lessons not in the version in test (or in service), and — with no version in test — the lessons of the one
+  // in service the coach removed since (with one in test, a removed lesson makes it out of date: `stale`)
+  const sales = approvedIds.filter((id) => !base.has(id)).length + (tr ? 0 : [...base].filter((id) => !approvedIds.includes(id)).length);
+  return {
+    live: champ ? { version: num(champ.version), by: (champ.by_user as string | null) ?? null, at: iso(champ.promoted_at ?? champ.created_at) } : null,
+    lastPush: last ? { version: num(last.version), by: (last.pushed_by as string | null) ?? null, at: iso(last.pushed_at) } : null,
+    trial: tr ? { ...releaseView(tr), stale } : null,
+    pending: { candidates, sales, waiting, darija: accepted.filter((id) => !inTrial.has(id)).length, rules: !!draft && !sameRules(draft, rulesBase), vocab },
+  };
+}
+
+/** The version in test, for the control room's test chat: its sales book, its Darija rules, its Darija lessons (still accepted). */
+export async function trialFor(pdb: Db): Promise<{ book: BookRef; darija: string; lahja: LahjaWord[] } | null> {
+  const tr: Row | undefined = (await pdb.query(`SELECT r.*, b.text, b.tokens FROM platform.pilot_releases r JOIN platform.pilot_books b ON b.id = r.book_id WHERE r.status = 'trial' LIMIT 1`))[0];
+  if (!tr) return null;
+  const ids = ((tr.lahja_ids ?? []) as unknown[]).map((x) => num(x));
+  const words = ids.length ? (await pdb.query(`SELECT words FROM platform.lahja WHERE id = ANY($1::bigint[]) AND status = 'accepted' ORDER BY id`, [ids])).flatMap((r: Row) => asWords(r.words)) : [];
+  const dj = tr.darija ?? {};
+  return {
+    book: { bookId: num(tr.book_id), version: num(tr.version), arm: 'B', testId: null, text: String(tr.text ?? ''), tokens: num(tr.tokens) },
+    darija: darijaText({ title: String(dj.title ?? ''), chapters: Array.isArray(dj.chapters) ? dj.chapters : [] }),
+    lahja: words,
+  };
 }
 /** Keeps the challenger: it becomes the champion for everyone. Only a test that the nights proved not worse can be kept. */
 export async function promote(pdb: Db, testId: number, by: string, o: { now?: Date } = {}): Promise<Ack> {
@@ -1708,7 +1890,7 @@ export async function listBooks(pdb: Db) {
 }
 
 // ---------------------------------------------------------------- 7. the lab (control room › Pilot AI › Test & lessons)
-export const BOOK_CHOICES = ['live', 'test', 'next', 'none'] as const;
+export const BOOK_CHOICES = ['live', 'trial', 'test', 'none'] as const;
 export type BookChoice = (typeof BOOK_CHOICES)[number];
 const NO_BOOK: BookRef = { bookId: null, version: 0, arm: 'A', testId: null, text: '', tokens: 0 };
 const nextVersion = async (pdb: Db): Promise<number> => num((await pdb.query('SELECT COALESCE(max(version), 0) AS v FROM platform.pilot_books'))[0].v) + 1;
@@ -1717,16 +1899,12 @@ const approvedLessons = (pdb: Db): Promise<Row[]> =>
 const asBookLessons = (rows: Row[]): BookLesson[] => rows.map((r) => ({ id: num(r.id), topic: String(r.topic), text: String(r.text), prio: num(r.prio) }));
 
 /**
- * The book a test chat of the control room uses: the one in service, the one in test (null: no test running), the next one
- * (every approved lesson, as « Publish » would make it now) or none. Never recorded as an exposure: test chats are not measured.
+ * The book a test chat of the control room uses: the one in service, the version of « Push en test » (null: none), the one
+ * of a running A/B test (null: none) or none. Never recorded as an exposure: test chats are not measured.
  */
 export async function bookChoice(pdb: Db, kind: BookChoice): Promise<BookRef | null> {
   if (kind === 'none') return NO_BOOK;
-  if (kind === 'next') {
-    const v = await nextVersion(pdb);
-    const c = compileBook(v, asBookLessons(await approvedLessons(pdb)));
-    return { bookId: null, version: v, arm: 'B', testId: null, text: c.text, tokens: c.tokens };
-  }
+  if (kind === 'trial') return (await trialFor(pdb))?.book ?? null;
   const b: Row | undefined = (
     await pdb.query(
       kind === 'test'

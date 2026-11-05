@@ -1,7 +1,7 @@
 // Pilot AI (control room): the shops' AI agents, all on Pilotix's own AI key (shops never bring one). Five tabs:
 // Dellal AI (its sales dashboard: conversion and real sales per shop, product and channel, why chats end without a sale;
-// how it learns, drawn; its instruction book to download, always the latest, with « Push »: every lesson waiting in
-// service now, PilotPush.tsx; last night, the coach's morning check of each lesson, the lesson books and their test),
+// its two pushes (« Push en test », then « Push sur le serveur »: PilotRelease.tsx); how it learns, drawn; its
+// instruction book to download, always the latest; last night, the coach's morning check of each lesson, the lesson books),
 // Test & lessons (talk to Dellal as a customer with the book of your
 // choice; teach it a lesson in your own words: PilotLab.tsx), CM AI (the comments it handled), Spy AI (the competitors it
 // watches), and Settings & costs (the key, the daily limit, the night budget, what each shop's AI costs to bill it; Pilotix's
@@ -18,6 +18,7 @@ import { can } from './bits';
 import { BoardDays, CmBoard, DellalBoard, SpyBoard } from './PilotBoards';
 import { BookCard, LearnCard } from './PilotLearn';
 import { LabTab } from './PilotLab';
+import { ReleaseCard } from './PilotRelease';
 import { CaseModal } from './pilotCase';
 import { SocialAppsCard } from './SocialApps';
 
@@ -71,7 +72,8 @@ function PilotAiInner({ staff, tab, demo }: { staff: Staff; tab?: string; demo: 
       </div>
       {cur === 'dellal' && (
         <>
-          <DellalBoard {...board} aside={<BookCard d={d} manager={manager} />} />
+          <DellalBoard {...board} aside={<BookCard d={d} />} />
+          <ReleaseCard d={d} manager={manager} />
           <LearnCard d={d} />
           <VersionsCard shopId={shopId} />
           <div className="pp-grid">
@@ -496,14 +498,13 @@ function LessonRow({ l, onCase }: { l: Lesson; onCase: (c: [number, number]) => 
 
 function BooksCard({ d, manager }: { d: State; manager: boolean }) {
   const { t } = useTranslation();
-  const publish = usePilotAction('p.pilot.publish', { success: t('platform.pilot.published') });
   const promote = usePilotAction('p.pilot.promote', { success: t('platform.saved') });
   const stop = usePilotAction('p.pilot.stop', { success: t('platform.saved') });
   const back = usePilotAction('p.pilot.rollback', { success: t('platform.saved') });
   const { books, test } = d.books;
   const champion = books.find((b) => b.status === 'champion') ?? null;
   const rep = d.night?.test && test && d.night.test.id === test.id ? d.night.test : null;
-  const busy = publish.isPending || promote.isPending || stop.isPending || back.isPending;
+  const busy = promote.isPending || stop.isPending || back.isPending;
   return (
     <Card title={t('platform.pilot.books')} help={t('platform.pilot.booksHelp')}>
       <p>
@@ -542,16 +543,14 @@ function BooksCard({ d, manager }: { d: State; manager: boolean }) {
           )}
         </div>
       ) : (
-        manager && (
+        // a new book goes out with the two pushes (the « Push » card above); going back stays here
+        manager &&
+        champion &&
+        books.some((b) => b.version < champion.version && (b.status === 'retired' || b.status === 'rolled_back')) && (
           <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-            <button type="button" className="btn primary" disabled={busy || !d.approved.length} onClick={() => publish.mutate({})}>
-              <Icon name="sparkles" /> {t('platform.pilot.publish', { n: d.approved.length })}
+            <button type="button" className="btn" disabled={busy} onClick={() => back.mutate({})}>
+              <Icon name="undo" /> {t('platform.pilot.rollback')}
             </button>
-            {champion && books.some((b) => b.version < champion.version) && (
-              <button type="button" className="btn" disabled={busy} onClick={() => back.mutate({})}>
-                <Icon name="undo" /> {t('platform.pilot.rollback')}
-              </button>
-            )}
           </div>
         )
       )}

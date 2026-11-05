@@ -20,6 +20,11 @@ let db: Db;
 let pctx: PCtx;
 let shop: Ctx;
 const p = <T = any>(name: string, input: unknown = {}) => platformCall(name, pctx, input) as Promise<T>;
+/** « Push en test » then « Push sur le serveur »: the working copy goes out to every shop */
+const push = async () => {
+  await p('p.pilot.stage', { darija: false });
+  await p('p.pilot.release', { id: (await p('p.pilot.state')).release.trial.id });
+};
 const reqs: any[] = [];
 const hooks: ServerHooks = {
   courier: async () => ({}),
@@ -122,6 +127,9 @@ test('Pilotix puts its book in: added once, a second time changes nothing, « re
 });
 
 test('in a chat, only the words that touch it: what the customer wrote, in Darija or in French', async () => {
+  // the book is in the working copy: no shop reads it before the push
+  assert.deepEqual(await vocabFor(t.platform, ['karrossa']), []);
+  await push();
   const tried: any = await p('p.vocab.try', { text: 'Salam, 3andkom karrossa ? ghalya chwiya' });
   assert.deepEqual(tried.words.slice(0, 2).map((w: any) => w.lat).sort(), ['ghalya', 'karrossa']);
   assert.match(tried.block, /^Vocabulaire algérien/);
@@ -141,7 +149,7 @@ test('in a chat, only the words that touch it: what the customer wrote, in Darij
   assert.doesNotMatch(blocks[blocks.length - 1], /korsi/, 'a word the chat does not touch stays out');
 });
 
-test('an accepted lesson writes in the book (a word replaced, a new word); removed, the book is as it was', async () => {
+test('an accepted lesson writes in the book (a word replaced, a new word); refused, or removed after the push, the book is as it was', async () => {
   const fix: any = await p('p.lahja.add', { words: [{ use: 'kursi', not: 'korsi' }] });
   const chair = (await p<any>('p.vocab.list', { q: 'kursi' })).rows[0];
   assert.deepEqual([chair.ar, chair.lat, chair.avoid, chair.source, chair.lahjaId], ['الكورسي', 'kursi', 'korsi', 'book', fix.id]);
@@ -149,12 +157,20 @@ test('an accepted lesson writes in the book (a word replaced, a new word); remov
   const added: any = await p('p.lahja.add', { words: [{ use: 'sa7bi' }] });
   const learned = (await p<any>('p.vocab.list', { source: 'coach' })).rows.find((w: any) => w.lat === 'sa7bi');
   assert.equal(learned.topic, 'Appris des corrections');
-  // removed: the chair is « korsi » again, the new word leaves
-  await p('p.lahja.decide', { id: fix.id, action: 'remove' });
-  await p('p.lahja.decide', { id: added.id, action: 'remove' });
+  assert.deepEqual((await vocabFor(t.platform, ['kursi'])).map((w) => w.lat), ['korsi'], 'the shops still read « korsi »');
+  // refused before the push: the chair is « korsi » again, the new word leaves
+  await p('p.lahja.decide', { id: fix.id, action: 'refuse' });
+  await p('p.lahja.decide', { id: added.id, action: 'refuse' });
   const back = (await p<any>('p.vocab.list', { q: 'chaise' })).rows[0];
   assert.deepEqual([back.lat, back.avoid, back.lahjaId], ['korsi', '', null]);
   assert.equal((await p<any>('p.vocab.list', { q: 'sa7bi' })).total, 0);
+  // accepted again and pushed: every shop reads « kursi »; removed: every copy is as it was, at once
+  const again: any = await p('p.lahja.add', { words: [{ use: 'kursi', not: 'korsi' }] });
+  await push();
+  assert.deepEqual((await vocabFor(t.platform, ['kursi'])).map((w) => [w.lat, w.avoid]), [['kursi', 'korsi']]);
+  await p('p.lahja.decide', { id: again.id, action: 'remove' });
+  assert.deepEqual((await vocabFor(t.platform, ['chaise'])).map((w) => [w.lat, w.avoid]), [['korsi', '']]);
+  assert.deepEqual((await p<any>('p.vocab.list', { q: 'chaise' })).rows.map((w: any) => w.lat), ['korsi']);
 });
 
 test('a guide’s Arabic translation corrected by the team: a lesson in the shop at once, then in the book once accepted', async () => {

@@ -3,8 +3,10 @@
 // pilotlearn.ts). Two parts:
 //  - the rules, in chapters (A. Registre, B. Les mots algériens…): text Pilotix edits in the control room;
 //  - the Darija lessons for every shop (modules/lahja.ts): the shops' corrections and what Dellal learned, once accepted.
-// Every change is a new version, used at once: an edit of the rules, a lesson accepted, removed or added. Going back to an
-// older version brings back its rules and its lessons. The first version is the guide written in the code (darija.ts).
+// Pilotix edits the rules in a draft: nothing reaches the shops before the push (« Push en test » freezes it for the
+// control room's test chat, « Push sur le serveur » makes it a new version in service: pilotlearn.ts › releases). A version
+// is also made when a lesson every shop uses is removed (at once). Going back to an older version brings back its rules
+// and its lessons, at once. The first version is the guide written in the code (darija.ts).
 // A shop's own lessons (used in that shop only) are not in the book.
 import { Db, iso, num } from '../db';
 import { DELLAL_DARIJA } from './darija';
@@ -12,7 +14,9 @@ import { asWords, lahjaLines, LahjaWord } from './lahja';
 
 export type DarijaChapter = { title: string; text: string };
 export type DarijaLesson = { id: number; words: LahjaWord[] };
-export type DarijaKind = 'first' | 'edit' | 'lessons' | 'restore';
+export type DarijaKind = 'first' | 'edit' | 'lessons' | 'restore' | 'push';
+/** The rules being edited: they go out with the next push. */
+export type DarijaDraft = { title: string; chapters: DarijaChapter[]; note: string | null; by: string | null; at: string };
 export type DarijaBook = {
   id: number;
   version: number;
@@ -40,6 +44,17 @@ CREATE TABLE IF NOT EXISTS platform.darija_books (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS darija_books_live ON platform.darija_books (live) WHERE live;
+`;
+/** The draft of the rules (one at most), until the push. */
+export const DARIJA_DRAFT_SQL = `
+CREATE TABLE IF NOT EXISTS platform.darija_draft (
+  id smallint PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  title text NOT NULL DEFAULT '',
+  chapters jsonb NOT NULL DEFAULT '[]',
+  note text,
+  by_user text,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 `;
 
 export const DARIJA_BOOK = { maxChapters: 30, maxTitle: 200, maxChapterTitle: 140, maxChapterText: 8000, maxTotal: 30000 };
@@ -163,17 +178,67 @@ export async function darijaGuide(platform: Db | null): Promise<string> {
   }
 }
 
-export type DarijaAck = { ok: boolean; error?: DarijaProblem | 'who' | 'not_found' | 'already_live'; problems?: DarijaProblem[]; book?: DarijaBook };
+export type DarijaAck = { ok: boolean; error?: DarijaProblem | 'who' | 'not_found' | 'already_live'; problems?: DarijaProblem[]; book?: DarijaBook; draft?: DarijaDraft | null };
 
-/** Pilotix edits the rules: a new version, used at once (with the lessons of this moment). */
+/** The rules being edited (null: none, the rules in service are the ones the next push takes). */
+export async function darijaDraft(pdb: Db): Promise<DarijaDraft | null> {
+  const r = (await pdb.query('SELECT * FROM platform.darija_draft WHERE id = 1'))[0];
+  return r ? { title: String(r.title ?? ''), chapters: chaptersOf(r.chapters), note: (r.note as string | null) ?? null, by: (r.by_user as string | null) ?? null, at: iso(r.updated_at) } : null;
+}
+/** The rules the next « Push en test » takes: the draft, or the ones in service. */
+export async function darijaRulesNext(pdb: Db, now?: Date): Promise<{ title: string; chapters: DarijaChapter[]; draft: boolean }> {
+  const d = await darijaDraft(pdb);
+  if (d) return { title: d.title, chapters: d.chapters, draft: true };
+  const live = await darijaBookLive(pdb, now);
+  return { title: live.title, chapters: live.chapters, draft: false };
+}
+export const sameRules = (a: { title: string; chapters: DarijaChapter[] }, b: { title: string; chapters: DarijaChapter[] }) => darijaText(a) === darijaText(b);
+
+/**
+ * Pilotix edits the rules: the draft, which goes out with the next push (the shops keep the rules in service until then).
+ * Edited back to the rules in service, there is no draft any more.
+ */
 export async function saveDarijaBook(pdb: Db, o: { title?: string; chapters: DarijaChapter[]; note?: string | null; by: string; now?: Date }): Promise<DarijaAck> {
   if (!String(o.by || '').trim()) return { ok: false, error: 'who' };
   const live = await darijaBookLive(pdb, o.now);
-  const next = { title: tidy(o.title ?? live.title), chapters: o.chapters.map((c) => ({ title: tidy(c.title), text: tidy(c.text) })) };
+  const draft = await darijaDraft(pdb);
+  const base = draft ?? live;
+  const next = { title: tidy(o.title ?? base.title), chapters: o.chapters.map((c) => ({ title: tidy(c.title), text: tidy(c.text) })) };
   const problems = checkDarijaBook(next);
   if (problems.length) return { ok: false, error: problems[0], problems };
-  if (darijaText(next) === darijaText(live)) return { ok: false, error: 'no_change', problems: ['no_change'] };
-  return { ok: true, book: await addVersion(pdb, { ...next, lessons: await lessonsNow(pdb), kind: 'edit', note: o.note, by: o.by, now: o.now }) };
+  if (sameRules(next, base)) return { ok: false, error: 'no_change', problems: ['no_change'] };
+  if (sameRules(next, live)) {
+    await pdb.query('DELETE FROM platform.darija_draft WHERE id = 1');
+    return { ok: true, draft: null };
+  }
+  await pdb.query(
+    `INSERT INTO platform.darija_draft (id, title, chapters, note, by_user, updated_at) VALUES (1, $1, $2::jsonb, $3, $4, $5::timestamptz)
+     ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, chapters = EXCLUDED.chapters, note = EXCLUDED.note, by_user = EXCLUDED.by_user, updated_at = EXCLUDED.updated_at`,
+    [next.title, JSON.stringify(next.chapters), o.note ? String(o.note).slice(0, 300) : null, o.by, (o.now ?? new Date()).toISOString()],
+  );
+  return { ok: true, draft: await darijaDraft(pdb) };
+}
+
+/** The draft thrown away: the next push takes the rules in service. */
+export async function discardDarijaDraft(pdb: Db): Promise<boolean> {
+  return (await pdb.query('DELETE FROM platform.darija_draft WHERE id = 1 RETURNING id')).length > 0;
+}
+
+/**
+ * « Push sur le serveur »: the rules of the version in test, and the lessons for every shop of this moment, as a new version
+ * in service (none when nothing changed). The draft goes when it is the same as those rules (an edit made after « Push en
+ * test » stays a draft, for the next push). Inside the caller's transaction.
+ */
+export async function pushDarijaRules(d: Db, o: { title: string; chapters: DarijaChapter[]; release: number; by: string; now?: Date }): Promise<DarijaBook | null> {
+  const live = await darijaBookLive(d, o.now);
+  const rules = { title: tidy(o.title), chapters: o.chapters.map((c) => ({ title: tidy(c.title), text: tidy(c.text) })) };
+  const lessons = await lessonsNow(d);
+  const draft = await darijaDraft(d);
+  if (draft && sameRules(draft, rules)) await d.query('DELETE FROM platform.darija_draft WHERE id = 1');
+  const rulesChanged = !sameRules(rules, live);
+  if (!rulesChanged && sameIds(lessons, live.lessons)) return null;
+  const what = [rulesChanged ? 'règles modifiées' : '', !sameIds(lessons, live.lessons) ? 'leçons pour toutes les boutiques' : ''].filter(Boolean).join(', ');
+  return addVersion(d, { ...rules, lessons, kind: 'push', note: `Push sur le serveur de la v${o.release} : ${what}`, by: o.by, now: o.now });
 }
 
 /** After a lesson for every shop is accepted, removed or added: a new version with the same rules (none when nothing changed). */

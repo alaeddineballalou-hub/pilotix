@@ -4,8 +4,10 @@
 //    to Pilotix for review.
 //  - Every night Pilot AI reads how each sharing shop's customers write and proposes up to 3 lessons for that shop
 //    (« Dellal learned »): used at once in that shop, reviewed the same way; a refused one stops in its shop too.
-//  - Pilotix accepts (as is or modified) or refuses: an accepted lesson is used by every shop, and no shop can turn it off.
-//    Pilotix can also correct Dellal's Darija in the control room's test chat: for every shop at once.
+//  - Pilotix accepts (as is or modified) or refuses. An accepted lesson goes out with the next push (« Push en test » for
+//    the control room's test chat, then « Push sur le serveur »: pilotlearn.ts › releases); from then on every shop uses it,
+//    and no shop can turn it off. Pilotix can also correct Dellal's Darija in the control room's test chat (accepted at once,
+//    out with the next push the same way). Removing a lesson every shop uses takes it off every shop at once.
 //  - A shop's team corrects a guide de vente's Arabic translation (Produits & stock › Guide de vente, its language tabs):
 //    the words they changed become a lesson the same way (lessonsFromGuide).
 //  An accepted lesson also writes its words in Pilotix's vocabulary book (modules/vocab.ts).
@@ -174,8 +176,9 @@ export const lahjaBlocks = (l: { all: LahjaWord[]; own: LahjaWord[] }): { shared
 export const lahjaAvoid = (words: LahjaWord[]): { term: string; use?: string }[] => words.filter((w) => w.not && w.not.length >= 2).map((w) => ({ term: w.not!, use: w.use || undefined }));
 
 /**
- * The Darija lessons Dellal uses in this shop: `all` = accepted by Pilotix for every shop; `own` = this shop's own (its team's
- * corrections, and what Dellal learned from its customers until Pilotix refuses it). Never throws (an answer must go out).
+ * The Darija lessons Dellal uses in this shop: `all` = the ones every shop uses (accepted by Pilotix and pushed to the
+ * server); `own` = this shop's own (its team's corrections, and what Dellal learned from its customers until Pilotix refuses
+ * it, also while Pilotix's acceptance waits for the push). Never throws (an answer must go out).
  */
 export async function lahjaFor(db: Db, platform: Db | null, shopId: number | null): Promise<{ all: LahjaWord[]; own: LahjaWord[] }> {
   const all: LahjaWord[] = [];
@@ -189,7 +192,7 @@ export async function lahjaFor(db: Db, platform: Db | null, shopId: number | nul
     try {
       const rows: Row[] = await platform.query(
         `SELECT words, status FROM platform.lahja
-          WHERE status = 'approved' OR (shop_id = $1 AND source = 'dellal' AND own AND status = 'waiting')
+          WHERE status = 'approved' OR (shop_id = $1 AND source = 'dellal' AND own AND status IN ('waiting', 'accepted'))
           ORDER BY decided_at DESC NULLS LAST, id DESC LIMIT 300`,
         [shopId],
       );
@@ -255,37 +258,52 @@ const item = (r: Row, names: Map<number, string>): LahjaItem => ({
   via: r.source !== 'seller' ? null : r.evidence?.via === 'cm' ? 'cm' : 'messages',
 });
 
-/** What waits for Pilotix (oldest first) and what every shop uses (newest first). */
-export async function lahjaState(pdb: Db, names: Map<number, string>): Promise<{ waiting: LahjaItem[]; approved: LahjaItem[] }> {
+/**
+ * What waits for Pilotix (oldest first), what Pilotix accepted and goes out with the next push (« Push en test », then
+ * « Push sur le serveur »), and what every shop uses (newest first).
+ */
+export async function lahjaState(pdb: Db, names: Map<number, string>): Promise<{ waiting: LahjaItem[]; accepted: LahjaItem[]; approved: LahjaItem[] }> {
   const waiting: Row[] = await pdb.query(`SELECT * FROM platform.lahja WHERE status = 'waiting' ORDER BY id LIMIT 200`);
+  const accepted: Row[] = await pdb.query(`SELECT * FROM platform.lahja WHERE status = 'accepted' ORDER BY decided_at DESC NULLS LAST, id DESC LIMIT 200`);
   const approved: Row[] = await pdb.query(`SELECT * FROM platform.lahja WHERE status = 'approved' ORDER BY decided_at DESC NULLS LAST, id DESC LIMIT 300`);
-  return { waiting: waiting.map((r) => item(r, names)), approved: approved.map((r) => item(r, names)) };
+  return { waiting: waiting.map((r) => item(r, names)), accepted: accepted.map((r) => item(r, names)), approved: approved.map((r) => item(r, names)) };
 }
 export const lahjaWaiting = async (pdb: Db): Promise<number> => num((await pdb.query(`SELECT count(*)::int AS n FROM platform.lahja WHERE status = 'waiting'`))[0]?.n);
+/** The lessons Pilotix accepted that wait for the push (ids and words). */
+export const lahjaAccepted = async (pdb: Db): Promise<{ id: number; words: LahjaWord[] }[]> =>
+  (await pdb.query(`SELECT id, words FROM platform.lahja WHERE status = 'accepted' ORDER BY decided_at NULLS FIRST, id`)).map((r: Row) => ({ id: num(r.id), words: asWords(r.words) }));
+/** The lessons for every shop with more of them (the control room's test chat: the ones of the version in test). */
+export function lahjaWith(l: { all: LahjaWord[]; own: LahjaWord[] }, more: LahjaWord[]): { all: LahjaWord[]; own: LahjaWord[] } {
+  const all = dedupe([...l.all, ...more]);
+  const shared = new Set(all.map(lahjaKey));
+  return { all, own: l.own.filter((w) => !shared.has(lahjaKey(w))) };
+}
 
-export type LahjaAck = { ok: boolean; error?: string; problems?: LahjaProblem[]; id?: number; words?: LahjaWord[] };
+export type LahjaAck = { ok: boolean; error?: string; problems?: LahjaProblem[]; id?: number; words?: LahjaWord[]; was?: string };
 /**
- * Pilotix decides: accept (with the words as they are, or as Pilotix modified them): every shop uses it, none can turn it off;
- * refuse: the other shops never see it (a lesson Dellal learned also stops in its own shop; a team's own correction stays in
- * its shop: that shop chose it); remove (an accepted one): no shop uses it any more.
+ * Pilotix decides: accept (with the words as they are, or as Pilotix modified them): it goes out with the next push, then
+ * every shop uses it and none can turn it off; refuse (one waiting, or one accepted that has not gone out yet): the other
+ * shops never see it (a lesson Dellal learned also stops in its own shop; a team's own correction stays in its shop: that
+ * shop chose it); remove (one every shop uses): no shop uses it any more, at once.
  */
 export async function decideLahja(pdb: Db, o: { id: number; action: 'approve' | 'refuse' | 'remove'; by: string; words?: LahjaWord[]; note?: string | null; now?: Date }): Promise<LahjaAck> {
   if (!String(o.by || '').trim()) return { ok: false, error: 'who' };
   const r: Row | undefined = (await pdb.query(`SELECT id, source, status, words FROM platform.lahja WHERE id = $1`, [o.id]))[0];
   if (!r) return { ok: false, error: 'not_found' };
   const at = (o.now ?? new Date()).toISOString();
+  const was = String(r.status);
   if (o.action === 'approve') {
-    if (r.status !== 'waiting' && r.status !== 'refused') return { ok: false, error: 'not_waiting' };
+    if (was !== 'waiting' && was !== 'refused' && was !== 'accepted') return { ok: false, error: 'not_waiting' };
     const words = o.words ? asWords(o.words) : asWords(r.words);
     const chk = checkLahjaWords(words);
     if (!chk.ok) return { ok: false, error: 'check', problems: chk.problems };
-    await pdb.query(`UPDATE platform.lahja SET status = 'approved', words = $2::jsonb, decided_by = $3, decided_at = $4::timestamptz, note = COALESCE($5, note) WHERE id = $1`, [o.id, JSON.stringify(words), o.by, at, o.note ?? null]);
-    return { ok: true, id: o.id, words };
+    await pdb.query(`UPDATE platform.lahja SET status = 'accepted', words = $2::jsonb, decided_by = $3, decided_at = $4::timestamptz, note = COALESCE($5, note) WHERE id = $1`, [o.id, JSON.stringify(words), o.by, at, o.note ?? null]);
+    return { ok: true, id: o.id, words, was };
   }
   if (o.action === 'refuse') {
-    if (r.status !== 'waiting') return { ok: false, error: 'not_waiting' };
+    if (was !== 'waiting' && was !== 'accepted') return { ok: false, error: 'not_waiting' };
     await pdb.query(`UPDATE platform.lahja SET status = 'refused', own = CASE WHEN source = 'dellal' THEN false ELSE own END, decided_by = $2, decided_at = $3::timestamptz, note = COALESCE($4, note) WHERE id = $1`, [o.id, o.by, at, o.note ?? null]);
-    return { ok: true, id: o.id };
+    return { ok: true, id: o.id, was };
   }
   if (r.status !== 'approved') return { ok: false, error: 'not_approved' };
   await pdb.query(`UPDATE platform.lahja SET status = 'removed', own = CASE WHEN source = 'dellal' THEN false ELSE own END, decided_by = $2, decided_at = $3::timestamptz WHERE id = $1`, [o.id, o.by, at]);
@@ -307,19 +325,22 @@ export async function decideManyLahja(pdb: Db, o: { ids: number[]; action: 'appr
   return { done, failed };
 }
 
-/** Pilotix's own lesson (a correction in the control room's test chat, or words typed): every shop uses it at once. */
+/**
+ * Pilotix's own lesson (a correction in the control room's test chat, or words typed): accepted at once, it goes out with
+ * the next push like every lesson Pilotix accepts.
+ */
 export async function addCoachLahja(pdb: Db, o: { by: string; before?: string; after?: string; words?: LahjaWord[]; now?: Date }): Promise<LahjaAck> {
   if (!String(o.by || '').trim()) return { ok: false, error: 'who' };
   const words = o.words?.length ? asWords(o.words) : lahjaDiff(o.before ?? '', o.after ?? '');
   if (!words.length) return { ok: false, error: 'no_change' };
   const chk = checkLahjaWords(words);
   if (!chk.ok) return { ok: false, error: 'check', problems: chk.problems };
-  const have = new Set((await pdb.query(`SELECT words FROM platform.lahja WHERE status = 'approved'`)).flatMap((r: Row) => asWords(r.words).map(lahjaKey)));
+  const have = new Set((await pdb.query(`SELECT words FROM platform.lahja WHERE status IN ('approved', 'accepted')`)).flatMap((r: Row) => asWords(r.words).map(lahjaKey)));
   if (words.every((w) => have.has(lahjaKey(w)))) return { ok: false, error: 'duplicate' };
   const at = (o.now ?? new Date()).toISOString();
   const ins: Row[] = await pdb.query(
     `INSERT INTO platform.lahja (shop_id, source, status, own, words, before, after, by_user, decided_by, created_at, decided_at)
-     VALUES (NULL, 'coach', 'approved', false, $1::jsonb, $2, $3, $4, $4, $5::timestamptz, $5::timestamptz) RETURNING id`,
+     VALUES (NULL, 'coach', 'accepted', false, $1::jsonb, $2, $3, $4, $4, $5::timestamptz, $5::timestamptz) RETURNING id`,
     [JSON.stringify(words), String(o.before ?? '').slice(0, 2000), String(o.after ?? '').slice(0, 2000), o.by, at],
   );
   return { ok: true, id: num(ins[0].id), words };
@@ -392,11 +413,11 @@ export async function learnLahja(pdb: Db, run: (reqs: LahjaReq[]) => Promise<(st
   }
   if (!jobs.length) return { asked: 0, proposed: 0 };
   const out = await run(jobs.map((j) => j.req));
-  // what is already a lesson, or was one: every shop's (accepted, or Pilotix's own), and each shop's (waiting, refused by
+  // what is already a lesson, or was one: every shop's (in service or accepted, or Pilotix's own), and each shop's (waiting, refused by
   // Pilotix, taken back by the shop): never proposed again
   const known = new Set(
     (await pdb.query(`SELECT shop_id, status, words FROM platform.lahja`)).flatMap((r: Row) =>
-      asWords(r.words).map((w) => `${r.status === 'approved' || r.shop_id === null ? '*' : num(r.shop_id)}:${lahjaKey(w)}`),
+      asWords(r.words).map((w) => `${r.status === 'approved' || r.status === 'accepted' || r.shop_id === null ? '*' : num(r.shop_id)}:${lahjaKey(w)}`),
     ),
   );
   let proposed = 0;

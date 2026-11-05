@@ -1,5 +1,5 @@
 // Pilot AI › Test & lessons (control room): a Pilotix person talks to Dellal as a customer of a shop, with the lesson book
-// they choose (in service, in test, the next one, none), in their own test chat (never measured, Pilotix's key, Pilot AI's
+// they choose (in service, the version of « Push en test », an A/B test's, none), in their own test chat (never measured, Pilotix's key, Pilot AI's
 // own cost); and teaches Dellal in a chat: Pilot AI turns their words into one lesson that passes the checks, they read it
 // and add it, and it waits for the next book (tested on a share of new chats like any book).
 import assert from 'node:assert/strict';
@@ -125,8 +125,11 @@ test('the test chat: the book chosen is used as is and never recorded; Pilot AI 
   assert.equal(reqs[0].feature, 'pilot', 'Pilot AI’s own cost: never in the shop’s bill');
   assert.equal(reqs[0].pilot, true, 'Pilotix’s key');
 
-  const next = await p('p.pilot.try', { shopId, book: 'next', body: 'nheb nchouf tsawer' });
-  assert.equal(next.book.version, 2, 'the next book is the version after the last one');
+  // no version in test yet; « Push en test »: the coach's new lesson in a version only this chat uses
+  await assert.rejects(p('p.pilot.try', { shopId, book: 'trial', body: 'salam' }), /Push en test/);
+  await p('p.pilot.stage', { darija: false });
+  const next = await p('p.pilot.try', { shopId, book: 'trial', body: 'nheb nchouf tsawer' });
+  assert.equal(next.book.version, 2, 'the version in test is the version after the last one');
   const last = reqs[reqs.length - 1];
   assert.match(last.systemBlocks[0], /LEARNED HABITS v2/);
   assert.match(last.systemBlocks[0], /send the real photos from the product tool/, 'the coach’s new lesson is in it');

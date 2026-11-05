@@ -1,11 +1,11 @@
 // The platform's tables (schema "platform"): the shops, their plans and payments, Pilotix staff, the e-mail → shop
 // index used at login, settings and the journal. Applied before every shop's own migrations.
 import type { Tenancy } from './tenancy';
-import { PILOT_PLATFORM_SQL } from '../modules/pilotlearn';
+import { PILOT_PLATFORM_SQL, RELEASE_SQL } from '../modules/pilotlearn';
 import { AI_USAGE_SQL } from './aiusage';
 import { LAHJA_PLATFORM_SQL } from '../modules/lahja';
-import { DARIJA_BOOK_SQL } from '../modules/darijabook';
-import { VOCAB_PLATFORM_SQL } from '../modules/vocab';
+import { DARIJA_BOOK_SQL, DARIJA_DRAFT_SQL } from '../modules/darijabook';
+import { VOCAB_COPIES_SQL, VOCAB_PLATFORM_SQL } from '../modules/vocab';
 import { SOCIAL_CONFIRM_SQL, SOCIAL_DELETIONS_SQL, SOCIAL_HOOKS_SQL, SOCIAL_PLATFORM_SQL } from '../modules/social';
 
 const P001 = `
@@ -629,6 +629,9 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
      ALTER TABLE platform.staff ADD COLUMN IF NOT EXISTS totp_on boolean NOT NULL DEFAULT false;
      ALTER TABLE platform.staff ADD COLUMN IF NOT EXISTS totp_step bigint;`,
   ],
+  // Pilot AI's two pushes: nothing Pilotix changes reaches the shops before « Push sur le serveur » — the vocabulary's
+  // working copy and the copy in test, the draft of the Darija rules, the versions of « Push en test » (pilotlearn.ts)
+  ['p028_pilot_release', VOCAB_COPIES_SQL + DARIJA_DRAFT_SQL + RELEASE_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

@@ -226,7 +226,8 @@
       "approved": "لكل المتاجر",
       "refused": "باقٍ لمتجرك",
       "removed": "باقٍ لمتجرك",
-      "withdrawn": "في متجرك"
+      "withdrawn": "في متجرك",
+      "accepted": "قبلها Pilotix: قريبًا في كل المتاجر"
     },
     "remove": "احذف",
     "learned": "تعلّمها {{name}} من زبائنك",

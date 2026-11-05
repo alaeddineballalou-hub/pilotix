@@ -1,19 +1,21 @@
 // Pilot AI › Tester & leçons › Leçons › Darija: the Darija book, kept apart from the sales book. The rules of Algerian
 // Darija in chapters, and the lessons for every shop, that Dellal and the CM AI agent read before every reply. Read it,
-// edit it (managers), download it, see its versions and go back to one. Every change is a new version, used at once
-// (modules/darijabook.ts).
+// edit it (managers: a draft, out with the next push — « Push en test », then « Push sur le serveur »), download it, see
+// its versions and go back to one (at once) (modules/darijabook.ts).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dateOnly, dateTime, n } from '../../lib/format';
 import type { POut } from '../../lib/platform';
 import { Icon } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
+import { ConfirmButton } from '../admin/bits';
 import { toast } from '../../ui/toast';
 import { LahjaWords } from '../messages/lahja';
 import { usePilotAction, usePilotCall, usePilotRpc } from './pilotDemo';
 
 type Data = POut<'p.darija.book'>;
 type Book = Data['book'];
+type Draft = NonNullable<Data['draft']>;
 type Version = Data['versions'][number];
 type Chapter = { title: string; text: string };
 const k = 'platform.pilot.lab.book.';
@@ -57,7 +59,7 @@ export function DarijaBookCard({ manager }: { manager: boolean }) {
         <Icon name="alert" /> {q.error?.message}
       </p>
     );
-  const { book, versions } = q.data;
+  const { book, draft, trial, versions } = q.data;
   const words = book.lessons.flatMap((l) => l.words);
   return (
     <section className="pl-db" aria-labelledby="pl-db-h">
@@ -90,8 +92,10 @@ export function DarijaBookCard({ manager }: { manager: boolean }) {
           {t(k + 'last')} <bdi>{book.note}</bdi>
         </p>
       )}
+      {draft && <DraftNote draft={draft} manager={manager} onEdit={() => setOpen('edit')} />}
+      {trial?.rules && <p className="small muted pl-db-trial">{t(k + 'trialRules', { v: trial.version })}</p>}
       <div className="pl-db-do">
-        {manager && (
+        {manager && !draft && (
           <button type="button" className="btn primary small" onClick={() => setOpen('edit')}>
             <Icon name="pencil" /> {t(k + 'edit')}
           </button>
@@ -107,7 +111,7 @@ export function DarijaBookCard({ manager }: { manager: boolean }) {
         </button>
       </div>
       {open === 'read' && <ReadBook book={book} onClose={() => setOpen(null)} />}
-      {open === 'edit' && <EditBook book={book} onClose={() => setOpen(null)} />}
+      {open === 'edit' && <EditBook book={book} draft={draft} onClose={() => setOpen(null)} />}
       {open === 'versions' && <Versions versions={versions} manager={manager} busy={busy} onDownload={download} onClose={() => setOpen(null)} />}
     </section>
   );
@@ -161,16 +165,49 @@ function ReadBook({ book, onClose }: { book: Book; onClose: () => void }) {
   );
 }
 
-/** The rules as text, chapter by chapter: saving makes the next version, used at once. */
-function EditBook({ book, onClose }: { book: Book; onClose: () => void }) {
+/** The rules being edited: not in service yet, out with the next push. */
+function DraftNote({ draft, manager, onEdit }: { draft: Draft; manager: boolean; onEdit: () => void }) {
   const { t } = useTranslation();
-  const [title, setTitle] = useState(book.title);
-  const [chapters, setChapters] = useState<Chapter[]>(() => book.chapters.map((c) => ({ ...c })));
-  const [note, setNote] = useState('');
+  const discard = usePilotAction('p.darija.discard', { success: t(k + 'discarded') });
+  return (
+    <div className="pl-db-draft" role="note">
+      <p>
+        <Icon name="pencil" /> <b>{t(k + 'draftTitle')}</b>{' '}
+        <small className="muted">
+          <bdi>{draft.by ?? '—'}</bdi> · <bdi>{dateTime(draft.at)}</bdi>
+        </small>
+      </p>
+      {draft.note && (
+        <p className="small" dir="auto">
+          {draft.note}
+        </p>
+      )}
+      <p className="small">{t(k + 'draftHelp')}</p>
+      {manager && (
+        <div className="pl-db-do">
+          <button type="button" className="btn primary small" onClick={onEdit}>
+            <Icon name="pencil" /> {t(k + 'editDraft')}
+          </button>
+          <ConfirmButton className="btn ghost small" question={t(k + 'discardAsk')} onConfirm={() => discard.mutate({})} disabled={discard.isPending}>
+            <Icon name="trash" /> {t(k + 'discard')}
+          </ConfirmButton>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The rules as text, chapter by chapter (from the draft when there is one): saving keeps a draft, out with the next push. */
+function EditBook({ book, draft, onClose }: { book: Book; draft: Draft | null; onClose: () => void }) {
+  const { t } = useTranslation();
+  const base = draft ?? book;
+  const [title, setTitle] = useState(base.title);
+  const [chapters, setChapters] = useState<Chapter[]>(() => base.chapters.map((c) => ({ ...c })));
+  const [note, setNote] = useState(draft?.note ?? '');
   const [leave, setLeave] = useState(false);
   const added = useRef<number | null>(null);
-  const save = usePilotAction('p.darija.save', { success: (r) => t(k + 'saved', { v: r.version }), onDone: onClose });
-  const dirty = title !== book.title || JSON.stringify(chapters) !== JSON.stringify(book.chapters.map((c) => ({ ...c })));
+  const save = usePilotAction('p.darija.save', { success: (r) => t(k + (r.draft ? 'savedDraft' : 'savedBack')), onDone: onClose });
+  const dirty = title !== base.title || JSON.stringify(chapters) !== JSON.stringify(base.chapters.map((c) => ({ ...c })));
   const total = size(title, chapters);
   const ok = dirty && title.trim() && chapters.length > 0 && chapters.every((c) => c.title.trim() && c.text.trim()) && total <= MAX;
   const put = (i: number, f: keyof Chapter, v: string) => setChapters((cs) => cs.map((c, j) => (j === i ? { ...c, [f]: v } : c)));
@@ -188,7 +225,7 @@ function EditBook({ book, onClose }: { book: Book; onClose: () => void }) {
   }, [chapters.length]);
   return (
     <Modal
-      title={t(k + 'editTitle', { v: book.version })}
+      title={t(k + (draft ? 'editDraftTitle' : 'editTitle'), { v: book.version })}
       onClose={close}
       wide
       footer={
@@ -215,14 +252,14 @@ function EditBook({ book, onClose }: { book: Book; onClose: () => void }) {
               disabled={!ok || save.isPending}
               onClick={() => save.mutate({ title: title.trim(), chapters: chapters.map((c) => ({ title: c.title.trim(), text: c.text.trim() })), ...(note.trim() ? { note: note.trim() } : {}) })}
             >
-              {t(k + 'save', { v: book.version + 1 })}
+              {t(k + 'saveDraft')}
             </button>
           </div>
         )
       }
     >
       <div className="pl-db-edit">
-        <p className="pl-db-help">{t(k + 'editHelp', { v: book.version + 1 })}</p>
+        <p className="pl-db-help">{t(k + 'editHelp')}</p>
         <label className="pl-db-f">
           <span>{t(k + 'bookTitle')}</span>
           <input dir="auto" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />

@@ -372,16 +372,34 @@ function state() {
     approved: [{ id: 1, topic: 'trust', text: 'Quand le client a peur d’une arnaque, rappelle tôt qu’il ne paie rien avant de recevoir le colis.', status: 'approved', source: 'ai', prio: 9, evidence: {}, note: null, by: 'Sara', createdAt: at(4), decidedAt: at(3) }],
     books: {
       books: [
+        { id: 4, version: 4, status: 'trial', tokens: 690, lessons: 11, note: 'Push en test', by: 'Alaeddine', createdAt: at(0, 8), promotedAt: null, endedAt: null },
         { id: 3, version: 3, status: 'testing', tokens: 610, lessons: 9, note: null, by: 'Sara', createdAt: at(3), promotedAt: null, endedAt: null },
         { id: 2, version: 2, status: 'champion', tokens: 540, lessons: 7, note: null, by: 'Sara', createdAt: at(18), promotedAt: at(9), endedAt: null },
         { id: 1, version: 1, status: 'retired', tokens: 320, lessons: 4, note: null, by: 'Alaeddine', createdAt: at(40), promotedAt: at(32), endedAt: at(9) },
       ],
       test: { id: 3, championId: 2, challengerId: 3, share: 0.2, verdict: 'wait', why: null, stats: {}, startedAt: at(3) },
     },
-    // the next book: v4 (v3 is in test), a lesson found at night and one the coach wrote in « Teach a lesson »
+    // the two pushes: v4 made by « Push en test » this morning (the control room's test chat only), v2 on the server;
+    // since v4, a word was added to the vocabulary and one Darija lesson was accepted
+    release: {
+      live: { version: 2, by: 'Sara', at: at(9) },
+      lastPush: { version: 2, by: 'Sara', at: at(9) },
+      trial: {
+        id: 4,
+        version: 4,
+        by: 'Alaeddine',
+        at: at(0, 8),
+        sales: { lessons: 11, fresh: 4, gone: 0, dropped: 0, changed: true },
+        darija: { rules: true, lessons: 2 },
+        vocab: { added: 14, changed: 3, removed: 1, total: 18 },
+        stale: { sales: 0, darija: 0 },
+      },
+      pending: { candidates: 3, sales: 1, waiting: 3, darija: 1, rules: false, vocab: { added: 2, changed: 0, removed: 0, total: 2 } },
+    },
+    // the sales lessons not in service yet: a lesson found at night and one the coach wrote in « Teach a lesson »
     lahjaWaiting: 3,
     next: {
-      version: 4,
+      version: 5,
       lessons: 11,
       dropped: 0,
       changed: true,
@@ -431,7 +449,7 @@ préparés au moment du clic.
 // ---------------------------------------------------------------- « Test & lessons » in the preview (no AI, no server)
 let tryChat: { id: number; role: string; body: string; userName: string | null; sendError: string | null; at: string; meta: any }[] = [];
 let tryId = 0;
-const VERSIONS: Record<string, number> = { live: 2, test: 3, next: 4, none: 0 };
+const VERSIONS: Record<string, number> = { live: 2, trial: 4, test: 3, none: 0 };
 /** Dellal's answer in the example: a few real-looking replies by what the customer asked; « no lessons » is plainer */
 function tryReply(text: string, book: string): { body: string; model: string } {
   const f = text.toLowerCase();
@@ -550,7 +568,10 @@ function darijaBook() {
     v(2, 'edit', 'Chapitre B : « dorka », pas « daba »', 'Alaeddine', 14, 8, 0),
     v(1, 'first', 'Première version : le guide de darija de Pilotix', 'Pilotix', 20, 8, 0),
   ];
-  return { book, versions };
+  // the rules being edited (out with the next push), and the version in test, which already changes them
+  const chapters = DEMO_BOOK.chapters.map((c, i) => (i === 1 ? { ...c, text: c.text + '\n- je comprends : fhemtek (فهمتك), jamais « fhemtek mlih » pour finir.' } : c));
+  const draft = { title: DEMO_BOOK.title, chapters, note: 'Chapitre B : « fhemtek »', by: 'Alaeddine', at: at(0, 9) };
+  return { book, draft, trial: { version: 4, rules: true }, versions };
 }
 function darijaFile(version?: number) {
   const { book } = darijaBook();
@@ -594,6 +615,9 @@ function lahjaState() {
         at: at(0, 2),
       }),
       row({ id: 43, shopId: 3, shop: 'Maison Sétif', source: 'seller', via: 'cm', status: 'waiting', own: true, words: [{ use: 'inbox', not: 'privé' }], before: 'Ahlan ! Jawbnakom f privé 👍', after: 'Ahlan ! Jawbnakom f inbox 👍', by: 'Karim', at: at(1, 7) }),
+    ],
+    accepted: [
+      row({ id: 44, source: 'coach', status: 'accepted', words: [{ use: 'mlih', not: 'kwayes' }], before: 'Kwayes bezzaf 👍', after: 'Mlih bezzaf 👍', by: 'Alaeddine', decidedBy: 'Alaeddine', at: at(0, 9), decidedAt: at(0, 9) }),
     ],
     approved: [
       row({ id: 30, source: 'coach', status: 'approved', words: [{ use: 'khouya' }], before: 'Mar7ba bik, wach t7ab ?', after: 'Mar7ba bik khouya, wach t7ab ?', by: 'Alaeddine', decidedBy: 'Alaeddine', at: at(5), decidedAt: at(5) }),
@@ -658,7 +682,13 @@ function vocabList(i: { q?: string; topic?: string; source?: string; limit?: num
   const rows = all.filter((w) => (!q || `${w.ar} ${w.lat} ${w.meaning} ${w.avoid}`.toLowerCase().includes(q)) && (i.topic === undefined || w.topic === i.topic) && (!i.source || w.source === i.source));
   const topics = [...new Set(all.map((w) => w.topic))].map((topic) => ({ topic, n: all.filter((w) => w.topic === topic).length }));
   const k = (s: string) => all.filter((w) => w.source === s).length;
-  return { rows: rows.slice(0, i.limit ?? 100), total: rows.length, counts: { total: all.length, book: k('book'), learned: k('learned'), coach: k('coach'), topics } };
+  return {
+    rows: rows.slice(0, i.limit ?? 100),
+    total: rows.length,
+    counts: { total: all.length, book: k('book'), learned: k('learned'), coach: k('coach'), topics },
+    changes: { added: 16, changed: 3, removed: 1, total: 20 },
+    notInTrial: { version: 4, added: 2, changed: 0, removed: 0, total: 2 },
+  };
 }
 // the preview reads a few prices said in centimes, as the server does (modules/vocab.ts › readCentimes)
 const DEMO_PRICES: [RegExp, string, number, boolean][] = [

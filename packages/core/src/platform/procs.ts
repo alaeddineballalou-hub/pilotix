@@ -52,9 +52,9 @@ import * as pilot from '../modules/pilotlearn';
 import { pilotConfig, pilotToday, savePilotConfig, saveVoiceConfig, voiceConfig, voiceToday, VOICE_MODEL } from './pilotai';
 import { AI_FEATURES, aiBill, aiLabOfMonth, aiUsageOfMonth, aiUsageSince, monthOf, saveAiBill } from './aiusage';
 import { pilotTry } from '../modules/dellal';
-import { addCoachLahja, decideLahja, decideManyLahja, LAHJA_NO_CHANGE, lahjaErr, lahjaState, lahjaWaiting, LahjaWord } from '../modules/lahja';
-import { forgetVocab, importVocab, learnVocab, readCentimes, removeVocab, saveVocab, vocabBlock, vocabCounts, vocabFor, vocabList, VOCAB } from '../modules/vocab';
-import { darijaBookFile, darijaBookLive, darijaErr, darijaVersions, restoreDarijaBook, saveDarijaBook, snapshotDarijaLessons } from '../modules/darijabook';
+import { addCoachLahja, decideLahja, decideManyLahja, LAHJA_NO_CHANGE, lahjaAccepted, lahjaErr, lahjaState, lahjaWaiting, LahjaWord } from '../modules/lahja';
+import { copyVocab, forgetVocab, importVocab, learnVocab, readCentimes, removeVocab, saveVocab, vocabBlock, vocabChanges, vocabCounts, vocabFor, vocabList, VOCAB } from '../modules/vocab';
+import { darijaBookFile, darijaBookLive, darijaDraft, darijaErr, darijaVersions, discardDarijaDraft, restoreDarijaBook, saveDarijaBook, snapshotDarijaLessons } from '../modules/darijabook';
 import { cmBoard, dellalBoard, dellalBooks, dellalBookText, dellalMore, spyBoard } from './aiboard';
 import { appReady, saveSocialApps, socialApps, SocialAppsInput, socialCounts, socialUrls } from '../modules/social';
 
@@ -1123,7 +1123,8 @@ export const PLATFORM_REGISTRY = {
       .map((s) => ({ id: s.id, name: s.name, slug: s.slug, share: config.shops.includes(s.id), cases: per.get(s.id) ?? 0 }));
     // the learning's rules, for the page that explains them in simple words (always the engine's own numbers)
     const rules = { score: pilot.SCORE, gold: pilot.GOLD_WEIGHT, minPass: pilot.PILOT.minPass, matureDays: pilot.PILOT.matureDays, maxTestDays: pilot.PILOT.maxTestDays, maxOpen: pilot.PILOT.maxOpen };
-    return { config, today, night, candidates, approved, books, next, lahjaWaiting: lahja, sharing: { shops: num(sharing[0]?.shops), cases: num(sharing[0]?.cases) }, shops: stores, rules };
+    const release = await pilot.releaseState(pdb, new Date(ctx.now()));
+    return { config, today, night, candidates, approved, books, next, release, lahjaWaiting: lahja, sharing: { shops: num(sharing[0]?.shops), cases: num(sharing[0]?.cases) }, shops: stores, rules };
   }),
   'p.pilot.save': pproc(
     MANAGERS,
@@ -1198,43 +1199,34 @@ export const PLATFORM_REGISTRY = {
     return r;
   }),
   /**
-   * « Push »: every lesson waiting goes into service now, without a test — the nights' lessons approved by the person who
-   * pushes, a running test stopped, a new version in service for every chat (and the test chats) at once; with `darija`,
-   * the shops' Darija lessons waiting are accepted for every shop too. « Revenir en arrière » undoes the book.
+   * « Push en test »: everything waiting (the sales lessons, with the nights' lessons approved by the person who pushes; the
+   * Darija lessons Pilotix accepted and, with `darija`, the shops' ones waiting; the Darija rules' draft; the vocabulary's
+   * working copy) becomes one version that only the control room's test chat uses. The shops get nothing yet.
    */
-  'p.pilot.push': pproc(MANAGERS, z.object({ note: z.string().max(300).optional(), darija: z.boolean().default(false) }), async (ctx, i) => {
-    const by = ctx.staff.name || ctx.staff.email;
-    const now = new Date(ctx.now());
-    const pdb = ctx.t.platform;
-    const r = await pilot.pushBook(pdb, { by, note: i.note, now });
-    // nothing new for the sales book: with the Darija box ticked, the Darija lessons still go live (that is a push too)
-    const quiet = !r.ok && (r.error === 'no_change' || r.error === 'no_lessons');
-    if (!r.ok && !(quiet && i.darija)) throw bad(lessonErr(r));
-    let darija: { done: number; failed: number } | null = null;
-    if (i.darija) {
-      const ids = (await pdb.query(`SELECT id FROM platform.lahja WHERE status = 'waiting' ORDER BY id LIMIT 200`)).map((x: any) => num(x.id));
-      const d = ids.length ? await decideManyLahja(pdb, { ids, action: 'approve', by, now }) : { done: [] as number[], failed: [] as unknown[] };
-      for (const id of d.done) {
-        await learnVocab(pdb, { lahjaId: id, words: await lessonWords(ctx, id), source: 'learned', by });
-        await audit(ctx, 'pilot.lahja.approve', null, { id, push: true });
-      }
-      if (d.done.length) await bookAfter(ctx, `${d.done.length} leçon(s) acceptée(s) avec le push`);
-      darija = { done: d.done.length, failed: d.failed.length };
-    }
-    if (!r.ok && !darija?.done) throw bad(lessonErr(r));
-    await audit(ctx, 'pilot.push', null, { book: r.ok ? num(r.bookId) : null, darija: darija?.done ?? 0 });
+  'p.pilot.stage': pproc(MANAGERS, z.object({ darija: z.boolean().default(true) }), async (ctx, i) => {
+    const r = await pilot.stageRelease(ctx.t.platform, { by: ctx.staff.name || ctx.staff.email, darija: i.darija, now: new Date(ctx.now()) });
+    if (!r.ok) throw bad(r.error === 'same_as_trial' ? `La v${num(r.version)} en test a déjà tout ce qui attend : testez-la, puis « Push sur le serveur ».` : lessonErr(r));
+    await audit(ctx, 'pilot.stage', null, { release: num(r.id), version: num(r.version) });
     return {
-      ok: true as const,
-      /** the version now in service (null: only Darija lessons went live) */
-      version: r.ok ? num(r.version) : null,
-      previous: r.ok ? numOrNull(r.previous) : null,
-      lessons: r.ok ? num(r.lessons) : 0,
-      /** the night lessons approved with the push; `skipped`: those that failed the checks (they still wait for the coach) */
+      id: num(r.id),
+      version: num(r.version),
+      /** the nights' lessons approved with the push; `skipped`: those that failed the checks (they still wait for the coach) */
       approved: num(r.approved),
       skipped: Array.isArray(r.skipped) ? r.skipped.length : 0,
-      stoppedTest: r.ok ? numOrNull(r.stoppedTest) : null,
-      darija,
+      /** the shops' Darija lessons accepted with the push; `refusedByCheck`: those that failed the checks (still waiting) */
+      accepted: num(r.accepted),
+      refusedByCheck: num(r.refusedByCheck),
     };
+  }),
+  /**
+   * « Push sur le serveur »: the version in test (`id`: the one the person saw) goes out to every shop at once — sales book,
+   * Darija rules and lessons, vocabulary. « Revenir au livre précédent » brings the sales book back.
+   */
+  'p.pilot.release': pproc(MANAGERS, z.object({ id: Id }), async (ctx, i) => {
+    const r = await pilot.pushRelease(ctx.t.platform, { id: i.id, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
+    if (!r.ok) throw bad(lessonErr(r));
+    await audit(ctx, 'pilot.release', null, { release: i.id, version: num(r.version) });
+    return { version: num(r.version), previous: numOrNull(r.previous), darijaVersion: numOrNull(r.darijaVersion), stoppedTest: numOrNull(r.stoppedTest) };
   }),
   'p.pilot.promote': pproc(MANAGERS, z.object({ testId: z.number().int().positive() }), async (ctx, i) => {
     const r = await pilot.promote(ctx.t.platform, i.testId, ctx.staff.name || ctx.staff.email, { now: new Date(ctx.now()) });
@@ -1261,7 +1253,10 @@ export const PLATFORM_REGISTRY = {
     const names = new Map((await loadShops(ctx.t)).map((s) => [s.id, s.name]));
     return lahjaState(ctx.t.platform, names);
   }),
-  /** Accept (as it is, or with the words modified): every shop uses it. Refuse: the other shops never see it. Remove an accepted one. */
+  /**
+   * Accept (as it is, or with the words modified): it goes out with the next push. Refuse (one waiting, or one accepted that
+   * has not gone out): the other shops never see it. Remove one every shop uses: off every shop at once.
+   */
   'p.lahja.decide': pproc(
     ALL,
     z.object({
@@ -1271,33 +1266,36 @@ export const PLATFORM_REGISTRY = {
       note: z.string().max(300).optional(),
     }),
     async (ctx, i) => {
-      const r = await decideLahja(ctx.t.platform, { ...i, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
+      const pdb = ctx.t.platform;
+      const words = await lessonWords(ctx, i.id);
+      const r = await decideLahja(pdb, { ...i, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
       if (!r.ok) throw bad(r.problems?.length ? lahjaErr(r.problems) : LAHJA_ERR[r.error ?? ''] ?? 'Impossible');
-      // the vocabulary book: an accepted lesson writes its words in it, a removed one takes them back
-      if (i.action === 'approve') await learnVocab(ctx.t.platform, { lahjaId: i.id, words: r.words ?? (await lessonWords(ctx, i.id)), source: 'learned', by: ctx.staff.name || ctx.staff.email });
-      if (i.action === 'remove') await forgetVocab(ctx.t.platform, i.id);
+      // the vocabulary book: an accepted lesson writes its words in the working copy (out with the next push), a refused
+      // accepted one takes them back from it; a removed one leaves every copy, the live one at once
+      if (r.was === 'accepted') await forgetVocab(pdb, i.id, 'work');
+      if (i.action === 'approve') await learnVocab(pdb, { lahjaId: i.id, words: r.words ?? words, source: 'learned', by: ctx.staff.name || ctx.staff.email }, 'work');
+      if (i.action === 'remove') for (const copy of ['live', 'work', 'trial'] as const) await forgetVocab(pdb, i.id, copy);
       await audit(ctx, `pilot.lahja.${i.action}`, null, { id: i.id });
-      if (i.action !== 'refuse') await bookAfter(ctx, `${i.action === 'approve' ? 'Leçon acceptée' : 'Leçon retirée'} : ${wordsNote(r.words ?? (await lessonWords(ctx, i.id)))}`);
+      if (i.action === 'remove') await bookAfter(ctx, `Leçon retirée : ${wordsNote(words)}`);
       return r;
     },
   ),
   /**
-   * Several waiting lessons at once (the review's tick boxes), as they are: accepted for every shop, or refused. Each one is
-   * decided on its own; one that does not pass the checks stays waiting and comes back with the reason.
+   * Several waiting lessons at once (the review's tick boxes), as they are: accepted (out with the next push), or refused.
+   * Each one is decided on its own; one that does not pass the checks stays waiting and comes back with the reason.
    */
   'p.lahja.decideMany': pproc(ALL, z.object({ ids: z.array(Id).min(1).max(200), action: z.enum(['approve', 'refuse']) }), async (ctx, i) => {
     const r = await decideManyLahja(ctx.t.platform, { ids: i.ids, action: i.action, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
     for (const id of r.done) {
-      if (i.action === 'approve') await learnVocab(ctx.t.platform, { lahjaId: id, words: await lessonWords(ctx, id), source: 'learned', by: ctx.staff.name || ctx.staff.email });
+      if (i.action === 'approve') await learnVocab(ctx.t.platform, { lahjaId: id, words: await lessonWords(ctx, id), source: 'learned', by: ctx.staff.name || ctx.staff.email }, 'work');
       await audit(ctx, `pilot.lahja.${i.action}`, null, { id, many: true });
     }
-    if (i.action === 'approve' && r.done.length) await bookAfter(ctx, `${r.done.length} leçon(s) acceptée(s) ensemble`);
     return {
       done: r.done,
       failed: r.failed.map((f) => ({ id: f.id, error: f.problems?.length ? lahjaErr(f.problems) : LAHJA_ERR[f.error] ?? 'Impossible' })),
     };
   }),
-  /** Pilotix's own Darija lesson: a correction of Dellal's message in the control room's test chat (or words): every shop at once. */
+  /** Pilotix's own Darija lesson: a correction of Dellal's message in the control room's test chat (or words): out with the next push. */
   'p.lahja.add': pproc(
     ALL,
     z.object({
@@ -1308,20 +1306,25 @@ export const PLATFORM_REGISTRY = {
     async (ctx, i) => {
       const r = await addCoachLahja(ctx.t.platform, { ...i, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
       if (!r.ok) throw bad(r.problems?.length ? lahjaErr(r.problems) : LAHJA_ERR[r.error ?? ''] ?? 'Impossible');
-      if (r.id) await learnVocab(ctx.t.platform, { lahjaId: r.id, words: r.words ?? [], source: 'coach', by: ctx.staff.name || ctx.staff.email });
+      if (r.id) await learnVocab(ctx.t.platform, { lahjaId: r.id, words: r.words ?? [], source: 'coach', by: ctx.staff.name || ctx.staff.email }, 'work');
       await audit(ctx, 'pilot.lahja.add', null, { id: r.id });
-      await bookAfter(ctx, `Leçon ajoutée par Pilotix : ${wordsNote(r.words ?? [])}`);
       return r;
     },
   ),
 
   // ---------------------------------------------------------------- Pilot AI › Tester & leçons › Leçons › Darija: the Darija book (modules/darijabook.ts)
-  /** The book in service (its rules, in chapters, and the lessons for every shop) and its versions. */
+  /**
+   * The book in service (its rules, in chapters, and the lessons for every shop), the draft of its rules (out with the next
+   * push), whether the version in test changes the rules, and its versions.
+   */
   'p.darija.book': pproc(ALL, z.object({}), async (ctx) => {
-    const book = await darijaBookLive(ctx.t.platform, new Date(ctx.now()));
-    return { book, versions: await darijaVersions(ctx.t.platform) };
+    const pdb = ctx.t.platform;
+    const book = await darijaBookLive(pdb, new Date(ctx.now()));
+    const draft = await darijaDraft(pdb);
+    const tr = (await pdb.query(`SELECT version, darija FROM platform.pilot_releases WHERE status = 'trial' LIMIT 1`))[0];
+    return { book, draft, trial: tr ? { version: num(tr.version), rules: !!tr.darija?.rulesChanged } : null, versions: await darijaVersions(pdb) };
   }),
-  /** Pilotix edits the rules: a new version, used at once by Dellal and the CM AI agent in every shop. */
+  /** Pilotix edits the rules: the draft, out with the next push (« Push en test », then « Push sur le serveur »). */
   'p.darija.save': pproc(
     MANAGERS,
     z.object({
@@ -1332,10 +1335,17 @@ export const PLATFORM_REGISTRY = {
     async (ctx, i) => {
       const r = await saveDarijaBook(ctx.t.platform, { ...i, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
       if (!r.ok) throw bad(r.problems?.length ? darijaErr(r.problems) : r.error === 'who' ? 'Personne connectée inconnue' : 'Impossible');
-      await audit(ctx, 'pilot.darija.save', null, { version: r.book!.version });
-      return { version: r.book!.version };
+      await audit(ctx, 'pilot.darija.save', null, { draft: !!r.draft });
+      /** draft: false when the rules were edited back to the ones in service (no draft any more) */
+      return { draft: !!r.draft };
     },
   ),
+  /** The draft thrown away: the next push takes the rules in service. */
+  'p.darija.discard': pproc(MANAGERS, z.object({}), async (ctx) => {
+    if (!(await discardDarijaDraft(ctx.t.platform))) throw notFound('Pas de brouillon');
+    await audit(ctx, 'pilot.darija.discard', null, {});
+    return { ok: true };
+  }),
   /** Back to an older version (its rules and its lessons): a new version, used at once. */
   'p.darija.restore': pproc(MANAGERS, z.object({ version: z.number().int().positive() }), async (ctx, i) => {
     const r = await restoreDarijaBook(ctx.t.platform, { version: i.version, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
@@ -1351,11 +1361,25 @@ export const PLATFORM_REGISTRY = {
   }),
 
   // ---------------------------------------------------------------- Pilot AI › Tester & leçons › Leçons › Vocabulaire (modules/vocab.ts)
-  /** A page of the vocabulary book (a search, a chapter, a source), its counts and its chapters. */
+  /**
+   * A page of the vocabulary book (its working copy: a search, a chapter, a source), its counts and its chapters, and what
+   * it changes in the live book (out with the next push) and in the version in test.
+   */
   'p.vocab.list': pproc(
     ALL,
     z.object({ q: z.string().max(100).optional(), topic: z.string().max(200).optional(), source: z.enum(['book', 'learned', 'coach']).optional(), offset: z.number().int().min(0).default(0), limit: z.number().int().min(1).max(VOCAB.pageMax).default(100) }),
-    async (ctx, i) => ({ ...(await vocabList(ctx.t.platform, i)), counts: await vocabCounts(ctx.t.platform) }),
+    async (ctx, i) => {
+      const pdb = ctx.t.platform;
+      const trial = (await pdb.query(`SELECT version FROM platform.pilot_releases WHERE status = 'trial' LIMIT 1`))[0];
+      return {
+        ...(await vocabList(pdb, i)),
+        counts: await vocabCounts(pdb),
+        /** the working copy against the live book: what the next « Push sur le serveur » would change */
+        changes: await vocabChanges(pdb, 'work', 'live'),
+        /** against the version in test (null: none): what is not in it yet */
+        notInTrial: trial ? { version: num(trial.version), ...(await vocabChanges(pdb, 'work', 'trial')) } : null,
+      };
+    },
   ),
   /** Pilotix's book in (a Markdown file: its tables): its words added to the book, or the book's own words replaced. */
   'p.vocab.import': pproc(MANAGERS, z.object({ text: z.string().min(1).max(VOCAB.maxImport), replace: z.boolean().default(false) }), async (ctx, i) => {
@@ -1364,7 +1388,7 @@ export const PLATFORM_REGISTRY = {
     await audit(ctx, 'pilot.vocab.import', null, { added: r.added, replace: i.replace });
     return r;
   }),
-  /** One word added or corrected by Pilotix: used at once by every shop. */
+  /** One word added or corrected by Pilotix (the working copy): out with the next push. */
   'p.vocab.save': pproc(
     MANAGERS,
     z.object({ id: Id.optional(), ar: z.string().max(200).default(''), lat: z.string().max(200).default(''), meaning: z.string().max(200).default(''), topic: z.string().max(200).default(''), avoid: z.string().max(200).default('') }),
@@ -1380,10 +1404,23 @@ export const PLATFORM_REGISTRY = {
     await audit(ctx, 'pilot.vocab.remove', null, { id: i.id });
     return { ok: true };
   }),
+  /**
+   * « Annuler les changements »: the working copy becomes the live book again (with the words of the Darija lessons Pilotix
+   * accepted, which still go out with the next push).
+   */
+  'p.vocab.reset': pproc(MANAGERS, z.object({}), async (ctx) => {
+    const pdb = ctx.t.platform;
+    const by = ctx.staff.name || ctx.staff.email;
+    await copyVocab(pdb, 'live', 'work');
+    for (const l of await lahjaAccepted(pdb)) await learnVocab(pdb, { lahjaId: l.id, words: l.words, source: 'learned', by }, 'work');
+    await audit(ctx, 'pilot.vocab.reset', null, {});
+    return vocabChanges(pdb, 'work', 'live');
+  }),
   /** Try it: the words of the book a customer's message would bring into Dellal's instructions. */
   'p.vocab.try': pproc(ALL, z.object({ text: z.string().max(2000) }), async (ctx, i) => {
     const t0 = Date.now();
-    const words = await vocabFor(ctx.t.platform, [i.text]);
+    // the working copy: the words as the control room is writing them
+    const words = await vocabFor(ctx.t.platform, [i.text], undefined, 'work');
     const prices = readCentimes([i.text]);
     const block = vocabBlock(words, [i.text]);
     // what it costs Dellal: the time to find the words, and about how many tokens they add to its instructions
@@ -1414,9 +1451,11 @@ export const PLATFORM_REGISTRY = {
       if (!ctx.shop) throw bad('Le test de Dellal n’est disponible que sur le serveur');
       const s = (await loadShops(ctx.t)).find((x) => x.id === i.shopId);
       if (!s || s.kind !== 'store' || s.status === 'archived' || s.status === 'deleted') throw notFound('Boutique introuvable');
-      const book = await pilot.bookChoice(ctx.t.platform, i.book);
-      if (!book) throw bad('Aucun livre en test en ce moment');
-      const r = await pilotTry(await ctx.shop(i.shopId), { staffId: ctx.staff.id, name: ctx.staff.name || 'Pilotix', body: i.body, reset: i.reset, book, lab: i.book });
+      // the version of « Push en test »: its sales book, its Darija rules and lessons, its vocabulary (the copy in test)
+      const trial = i.book === 'trial' ? await pilot.trialFor(ctx.t.platform) : null;
+      const book = trial ? trial.book : i.book === 'trial' ? null : await pilot.bookChoice(ctx.t.platform, i.book);
+      if (!book) throw bad(i.book === 'trial' ? 'Aucune version en test : cliquez d’abord sur « Push en test »' : 'Aucun livre en test en ce moment');
+      const r = await pilotTry(await ctx.shop(i.shopId), { staffId: ctx.staff.id, name: ctx.staff.name || 'Pilotix', body: i.body, reset: i.reset, book, lab: i.book, trial: trial ? { darija: trial.darija, lahja: trial.lahja } : null });
       return { ...r, book: { kind: i.book, version: book.version, empty: !book.text } };
     },
   ),
@@ -1542,6 +1581,10 @@ const LESSON_ERR: Record<string, string> = {
   not_running: 'Aucun test en cours',
   not_proven: 'Le test n’a pas encore prouvé que le nouveau livre vend au moins aussi bien',
   nothing_to_roll_back: 'Pas de livre précédent',
+  nothing_new: 'Rien de nouveau : aucune leçon, aucune règle ni aucun mot n’attend le push',
+  replaced: 'Cette version d’essai a été remplacée par un autre « Push en test » : rechargez la page',
+  already_live: 'Cette version est déjà sur le serveur',
+  trial_changed: 'La version d’essai a changé (une de ses leçons a été refusée ou retirée) : refaites « Push en test », testez, puis poussez',
 };
 /** « wakha » → « saha », never « habibi »: a lesson's words in one line, for the book's version note. */
 const wordsNote = (ws: LahjaWord[]) =>

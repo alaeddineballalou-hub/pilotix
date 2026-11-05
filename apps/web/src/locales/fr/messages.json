@@ -219,7 +219,8 @@
       "approved": "Pour toutes les boutiques",
       "refused": "Gardée pour votre boutique",
       "removed": "Gardée pour votre boutique",
-      "withdrawn": "Dans votre boutique"
+      "withdrawn": "Dans votre boutique",
+      "accepted": "Acceptée par Pilotix : bientôt dans toutes les boutiques"
     },
     "remove": "Retirer",
     "learned": "Apprises par {{name}} de vos clients",

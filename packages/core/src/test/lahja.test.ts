@@ -25,6 +25,11 @@ let shopId: number;
 /** another shop: no lessons of its own (what « every shop » means for it) */
 const other: Db = { query: async () => [], tx: async (f: any) => f(other) } as any;
 const p = <T = any>(name: string, input: unknown = {}) => platformCall(name, pctx, input) as Promise<T>;
+/** « Push en test » then « Push sur le serveur »: what Pilotix accepted goes out to every shop */
+const push = async () => {
+  await p('p.pilot.stage', { darija: false });
+  await p('p.pilot.release', { id: (await p('p.pilot.state')).release.trial.id });
+};
 const reqs: any[] = [];
 const hooks: ServerHooks = {
   courier: async () => ({}),
@@ -102,7 +107,7 @@ test('a shop without Pilotix’s server: the lesson is its own, used at once by 
   assert.deepEqual((await lahjaFor(db, null, null)).own, []);
 });
 
-test('Pilotix’s server: a team’s lesson works in its shop at once and waits for Pilotix; accepted (modified), every shop uses it', async () => {
+test('Pilotix’s server: a team’s lesson works in its shop at once and waits for Pilotix; accepted (modified), every shop uses it after the push', async () => {
   reqs.length = 0;
   const m = await said('Wakha Ahmed, nb3atlek tsawer');
   const r: any = await call('dellal.lahja.add', shop, { messageId: m, after: 'Saha Ahmed, nb3atlek tsawer' });
@@ -120,9 +125,12 @@ test('Pilotix’s server: a team’s lesson works in its shop at once and waits 
   assert.equal((await p('p.pilot.state')).lahjaWaiting, 1, 'the tab says how many wait');
   // a word the Darija check removes cannot be accepted
   await assert.rejects(p('p.lahja.decide', { id: w.id, action: 'approve', words: [{ use: 'daba', not: 'dorka' }] }), /pas de la darija algérienne/);
-  // accepted with the words Pilotix chose: every shop
+  // accepted with the words Pilotix chose: out with the next push, not before; then every shop
   const ok: any = await p('p.lahja.decide', { id: w.id, action: 'approve', words: [{ use: 'saha', not: 'wakha' }] });
   assert.equal(ok.ok, true);
+  assert.deepEqual((await lahjaFor(other, t.platform, 999)).all, []);
+  assert.equal(((await call('dellal.lahja.list', shop, {})) as any).own[0].review, 'accepted');
+  await push();
   assert.deepEqual((await lahjaFor(other, t.platform, 999)).all, [{ use: 'saha', not: 'wakha' }]);
   const mine = await lahjaFor(db, t.platform, shopId);
   assert.deepEqual(mine.all, [{ use: 'saha', not: 'wakha' }]);
@@ -148,9 +156,12 @@ test('Pilotix’s server: a team’s lesson works in its shop at once and waits 
   assert.equal((await p('p.lahja.state')).waiting.length, 0);
 });
 
-test('Pilotix’s own lesson (the control room’s test chat): every shop at once; the same words twice are refused', async () => {
+test('Pilotix’s own lesson (the control room’s test chat): every shop after the push; the same words twice are refused', async () => {
   const r: any = await p('p.lahja.add', { before: 'Mar7ba bik, wach t7ab ?', after: 'Mar7ba bik khouya, wach t7ab ?' });
   assert.deepEqual(r.words, [{ use: 'khouya' }]);
+  assert.deepEqual((await lahjaFor(other, t.platform, 999)).all, [], 'accepted at once, out with the next push');
+  assert.equal((await p('p.lahja.state')).accepted[0].source, 'coach');
+  await push();
   assert.deepEqual((await lahjaFor(other, t.platform, 999)).all, [{ use: 'khouya' }]);
   await assert.rejects(p('p.lahja.add', { words: [{ use: 'khouya' }] }), /déjà une leçon/);
   await assert.rejects(p('p.lahja.add', { before: 'Salam', after: 'Salam' }), /Changez au moins un mot/);
@@ -213,6 +224,9 @@ test('the night: Dellal learns only words the chats prove; used in its shop at o
   await p('p.lahja.decide', { id: wesh.id, action: 'refuse', note: 'pas partout' });
   await p('p.lahja.decide', { id: jal.id, action: 'approve' });
   assert.ok(!(await lahjaFor(db, pdb, shopId)).own.some((w) => w.use === 'wesh'));
+  // accepted, « 3la jal » stays in use in its shop until the push takes it to every shop
+  assert.ok((await lahjaFor(db, pdb, shopId)).own.some((w) => w.use === '3la jal'));
+  await push();
   assert.deepEqual((await lahjaFor(other, pdb, 999)).all, [{ use: '3la jal' }]);
   // the next night does not propose them again
   assert.equal((await learnLahja(pdb, run, new Date(NOW))).proposed, 0);
@@ -287,9 +301,10 @@ test('the review: several lessons accepted or refused at once; one that fails st
   assert.equal(r.failed[0].id, bad);
   assert.match(r.failed[0].error, /nombre/);
   assert.equal((await pdb.query(`SELECT status FROM platform.lahja WHERE id = $1`, [bad]))[0].status, 'waiting');
+  await push();
   const all = (await lahjaFor(other, pdb, 999)).all.map((w) => w.use);
   assert.ok(all.includes('bezzaf') && all.includes('dorka'));
-  // refused together; one already decided is said, not changed
+  // refused together; one already in every shop is said, not changed
   const r2: any = await p('p.lahja.decideMany', { ids: [ids[2], ids[0]], action: 'refuse' });
   assert.deepEqual(r2.done, [ids[2]]);
   assert.match(r2.failed[0].error, /n’attend plus/);
