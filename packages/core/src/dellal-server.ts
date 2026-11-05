@@ -101,7 +101,13 @@ export function chunks(text: string, max: number): string[] {
   return out;
 }
 
-async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; accountId?: string | null; text: string }) {
+/**
+ * Meta's « human agent » tag: a person's answer 24 hours to 7 days after the customer's last message (Messenger and
+ * Instagram; never Dellal's own). Anything else is refused here, so no other tag goes out by mistake.
+ */
+const humanTag = (tag: unknown) => (tag === 'HUMAN_AGENT' ? { messaging_type: 'MESSAGE_TAG', tag: 'HUMAN_AGENT' } : null);
+
+async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; accountId?: string | null; text: string; tag?: string }) {
   if (a.channel === 'whatsapp') {
     const token = await dellalSecret(ctx.db, 'waToken');
     const phoneId = a.accountId || (await ctx.db.query(`SELECT value->>'whatsappPhoneId' AS v FROM settings WHERE key = 'dellal'`))[0]?.v;
@@ -117,7 +123,7 @@ async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; a
         // Instagram's own login answers as « me »; a Unified login key (a system user's) answers as the account itself
         const s = await dellalSettings(ctx.db);
         const url = s.igLoginKind === 'unified' && s.instagramLoginId ? `${UNI_GRAPH}/${enc(s.instagramLoginId)}/messages` : `${IG_GRAPH}/me/messages`;
-        for (const t of chunks(a.text, 1000)) await postJson(url, { recipient: { id: a.externalId }, message: { text: t } }, { Authorization: `Bearer ${ig}` }, 'Instagram');
+        for (const t of chunks(a.text, 1000)) await postJson(url, { recipient: { id: a.externalId }, ...humanTag(a.tag), message: { text: t } }, { Authorization: `Bearer ${ig}` }, 'Instagram');
         return { ok: true, via: s.igLoginKind === 'unified' ? 'unified' : 'instagram' };
       } catch (e) {
         // the Page can still answer someone with a role on the app; otherwise the Instagram login's reason is the one that counts
@@ -136,11 +142,11 @@ async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; a
 }
 
 /** Messenger, and Instagram through the Facebook Page (Meta lets it answer only people with a role on the app until App Review). */
-async function sendPage(ctx: Ctx, a: { channel: DellalChannel; externalId: string; text: string }) {
+async function sendPage(ctx: Ctx, a: { channel: DellalChannel; externalId: string; text: string; tag?: string }) {
   const token = await dellalSecret(ctx.db, 'pageToken');
   if (!token) throw new AppError('bad_request', 'La page Facebook n’est pas connectée (jeton de page manquant).');
   for (const t of chunks(a.text, 1900))
-    await postJson(`${GRAPH}/me/messages?access_token=${encodeURIComponent(token)}`, { recipient: { id: a.externalId }, messaging_type: 'RESPONSE', message: { text: t } }, {}, a.channel === 'instagram' ? 'Instagram' : 'Messenger');
+    await postJson(`${GRAPH}/me/messages?access_token=${encodeURIComponent(token)}`, { recipient: { id: a.externalId }, ...(humanTag(a.tag) ?? { messaging_type: 'RESPONSE' }), message: { text: t } }, {}, a.channel === 'instagram' ? 'Instagram' : 'Messenger');
   return { ok: true };
 }
 

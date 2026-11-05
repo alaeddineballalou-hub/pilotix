@@ -12,6 +12,7 @@ export * from './agency';
 export * from './couriers';
 export * from './links';
 export * from './passwords';
+export * from './metawindow';
 import type { ShopInfo } from './features';
 import type { OrigLine } from './upsell';
 import type { AgencySellerWork } from './agency';

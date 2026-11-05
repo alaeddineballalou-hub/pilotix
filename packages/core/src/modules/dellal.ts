@@ -7,7 +7,7 @@
 // number; and a customer who gave his number then went quiet (20 min) gets his order all the same, with that number and
 // the product he asked about, for the team to call (runAutoOrders). The same rules run on the server (Claude through ctx.server.dellal) and in
 // the browser preview (a small rule-based "demo brain" with the same tools, so the demo shows the whole flow).
-import { COMMUNES, CONF_TODO, normalizePhone, SalesChannel, WILAYAS } from '@pilotix/shared';
+import { COMMUNES, CONF_TODO, normalizePhone, replyWindow, SalesChannel, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { AppError, Ctx, notFound, proc } from '../rpc';
@@ -2066,13 +2066,18 @@ export const dellalProcs = {
     };
   }),
 
-  /** A person writes to the customer: Dellal pauses on this conversation. */
+  /**
+   * A person writes to the customer: Dellal pauses on this conversation. On Messenger and Instagram, 24 hours after the
+   * customer's last message only a person may answer, with Meta's « human agent » tag, and only until 7 days.
+   */
   'dellal.reply': proc([...SELLERS], z.object({ id, body: z.string().trim().min(1).max(2000) }), async (ctx, i) => {
     const conv = await getConv(ctx.db, i.id);
+    const win = replyWindow(conv.channel, conv.lastCustomerAt, ctx.now());
+    if (win === 'closed') throw new AppError('bad_request', 'Plus de 7 jours depuis le dernier message du client : Meta ne permet plus de lui répondre ici. Vous pourrez répondre dès qu’il écrira à nouveau.');
     let sendError: string | null = null;
     if (conv.channel !== 'test' && ctx.server?.dellal) {
       try {
-        await ctx.server.dellal('send', { conversationId: conv.id, channel: conv.channel, externalId: conv.externalId, accountId: (await rawConv(ctx.db, conv.id)).account_id, text: i.body }, ctx);
+        await ctx.server.dellal('send', { conversationId: conv.id, channel: conv.channel, externalId: conv.externalId, accountId: (await rawConv(ctx.db, conv.id)).account_id, text: i.body, ...(win === 'human' ? { tag: 'HUMAN_AGENT' } : {}) }, ctx);
       } catch (e: any) {
         sendError = e?.message ?? 'Envoi impossible';
       }
@@ -2090,7 +2095,9 @@ export const dellalProcs = {
     let answered = false;
     if (i.mode === 'ai') {
       const lastRole = (await ctx.db.query(`SELECT role FROM conv_messages WHERE conversation_id = $1 AND role <> 'tool' ORDER BY id DESC LIMIT 1`, [i.id]))[0]?.role;
-      if (lastRole === 'customer') answered = !!(await runAgent(ctx, i.id)).reply;
+      // more than 24 hours after the customer's last message, Meta takes no answer from Dellal: it waits for the next one
+      const conv = await getConv(ctx.db, i.id);
+      if (lastRole === 'customer' && replyWindow(conv.channel, conv.lastCustomerAt, ctx.now()) === 'open') answered = !!(await runAgent(ctx, i.id)).reply;
     }
     ctx.emit({ type: 'chat', data: { dellal: i.id } });
     return { ok: true, answered };

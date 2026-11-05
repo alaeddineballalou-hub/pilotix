@@ -6,7 +6,8 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMenuCounts } from '../../layout/Shell';
 import { backend, serverUrl, shopApi } from '../../lib/backend';
-import { da, n, shortWhen } from '../../lib/format';
+import { humanReplyUntil, replyWindow } from '@pilotix/shared';
+import { da, n, shortWhen, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
@@ -231,7 +232,9 @@ function Thread({ id, name, info, onInfo, onBack }: { id: number; name: string; 
     );
   const { conversation: c, messages, customer, orders } = q.data;
   const who = c.customerName || c.phone || t('messages.unknown');
-  const submit = () => body.trim() && !reply.isPending && reply.mutate({ id, body: body.trim() });
+  // Meta's window: after 24 hours only a person answers (until 7 days), after 7 days nobody until the customer writes
+  const win = replyWindow(c.channel, c.lastCustomerAt, Date.now());
+  const submit = () => win !== 'closed' && body.trim() && !reply.isPending && reply.mutate({ id, body: body.trim() });
   return (
     <>
       <section className="ai-thread" aria-label={who}>
@@ -283,7 +286,14 @@ function Thread({ id, name, info, onInfo, onBack }: { id: number; name: string; 
             </>
           )}
         />
-        <Composer value={body} onChange={setBody} onSend={submit} placeholder={t('messages.thread.write')} busy={reply.isPending} />
+        <Composer value={body} onChange={setBody} onSend={submit} placeholder={t('messages.thread.write')} busy={reply.isPending} disabled={win === 'closed'}>
+          {win !== 'open' && c.lastCustomerAt && (
+            <p className={`ai-window ${win}`} role="note">
+              <Icon name={win === 'closed' ? 'xcircle' : 'clock'} />
+              <span>{win === 'closed' ? t('messages.thread.window7') : t('messages.thread.window24', { name, date: when(humanReplyUntil(c.lastCustomerAt)) })}</span>
+            </p>
+          )}
+        </Composer>
       </section>
       <aside className="ai-side" aria-label={t('messages.side.customer')}>
         <div className="ai-side-h">

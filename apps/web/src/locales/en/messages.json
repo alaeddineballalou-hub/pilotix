@@ -40,6 +40,8 @@
     "empty": "No message.",
     "takeOver": "Take over",
     "giveBack": "Give back to {{name}}",
+    "window24": "More than 24 hours since the customer wrote: {{name}} can’t answer now, but a person can, until {{date}}.",
+    "window7": "More than 7 days since the customer wrote: Meta no longer lets the shop answer here. You can answer as soon as the customer writes again.",
     "answered": "{{name}} answered the customer",
     "modeSaved": "Saved",
     "write": "Write to the customer…",

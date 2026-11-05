@@ -263,6 +263,10 @@ html[dir="rtl"] .ai-prev { text-align: right; }
 /* writing */
 .ai-cmp { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--line); }
 .ai-cmp-r { display: flex; align-items: flex-end; gap: 8px; }
+/* Meta's answer window (Messenger, Instagram): 24 h to 7 days a person only; after 7 days nobody */
+.ai-window { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 8px 12px; border-radius: 12px; background: var(--warn-soft); color: var(--warn); font-size: 12.5px; line-height: 1.45; }
+.ai-window .bji { flex: none; width: 16px; height: 16px; margin-top: 1px; }
+.ai-window.closed { background: var(--raise); color: var(--muted); }
 .ai-cmp-r > textarea { flex: 1; height: 44px; min-height: 44px; max-height: 140px; padding: 11px 16px; border-radius: 22px; background: var(--raise); line-height: 1.4; resize: none; }
 .ai-cmp-r > textarea:focus { background: var(--surface); border-color: var(--ai-dot-2); }
 .ai-send { flex: none; width: 44px; height: 44px; padding: 0 !important; border-radius: 50% !important; }

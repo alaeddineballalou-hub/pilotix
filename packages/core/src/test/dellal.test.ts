@@ -1057,3 +1057,58 @@ test('safety net with Instagram’s own login: Instagram’s chats are read at i
     globalThis.fetch = real;
   }
 });
+
+test('Meta’s window: 24 hours to 7 days after the customer’s last message, a person answers with the « human agent » tag; after 7 days nobody; Dellal waits', async () => {
+  const sent: any[] = [];
+  const admin = await as(EMAILS.admin, fakeServer([], sent));
+  await call('dellal.receive', admin, { channel: 'messenger', externalId: 'psid-window', name: 'Samir', text: 'Salam, ch7al?' });
+  const id = Number((await db.query(`SELECT id FROM conversations WHERE external_id = 'psid-window'`))[0].id);
+  const ago = (when: string) => db.query(`UPDATE conversations SET last_customer_at = now() - $2::interval WHERE id = $1`, [id, when]);
+
+  // within 24 hours: a normal answer
+  sent.length = 0;
+  await ago('1 hour');
+  await call('dellal.reply', admin, { id, body: 'Salam Samir, 2 900 DA.' });
+  assert.equal(sent.at(-1).tag, undefined);
+  // two days later: the same answer goes with Meta's « human agent » tag
+  await ago('2 days');
+  await call('dellal.reply', admin, { id, body: 'Mazal disponible, nb3tholek?' });
+  assert.equal(sent.at(-1).tag, 'HUMAN_AGENT');
+  // after 7 days: nothing goes, and the person is told why
+  await ago('8 days');
+  const before = sent.length;
+  await assert.rejects(call('dellal.reply', admin, { id, body: 'Salam?' }), /7 jours/);
+  assert.equal(sent.length, before);
+  // given back to Dellal 2 days after the customer's last message: it waits for the customer instead of answering
+  await db.query(`INSERT INTO conv_messages (conversation_id, role, body) VALUES ($1, 'customer', 'mazal?')`, [id]);
+  await ago('2 days');
+  const r: any = await call('dellal.setMode', admin, { id, mode: 'ai' });
+  assert.equal(r.answered, false);
+  assert.equal(sent.length, before);
+});
+
+test('the « human agent » tag reaches Meta as Meta asks (Messenger and Instagram), and no other tag can go out', async () => {
+  const ctx = await as(EMAILS.admin);
+  await setRaw(db, 'secret_dellal_page_token', 'PAGE-SEND');
+  const asked: any[] = [];
+  const real = globalThis.fetch;
+  globalThis.fetch = (async (input: any, init?: any) => {
+    asked.push({ host: new URL(String(input)).host, body: init?.body ? JSON.parse(init.body) : null });
+    return new Response(JSON.stringify({ recipient_id: 'x', message_id: 'm' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }) as typeof fetch;
+  try {
+    await runDellal('send', { channel: 'messenger', externalId: 'psid-1', text: 'Salam', tag: 'HUMAN_AGENT' }, ctx);
+    assert.deepEqual(asked.at(-1).body, { recipient: { id: 'psid-1' }, messaging_type: 'MESSAGE_TAG', tag: 'HUMAN_AGENT', message: { text: 'Salam' } });
+    await runDellal('send', { channel: 'messenger', externalId: 'psid-1', text: 'Salam', tag: 'CONFIRMED_EVENT_UPDATE' }, ctx);
+    assert.deepEqual(asked.at(-1).body, { recipient: { id: 'psid-1' }, messaging_type: 'RESPONSE', message: { text: 'Salam' } });
+    await runDellal('send', { channel: 'messenger', externalId: 'psid-1', text: 'Salam' }, ctx);
+    assert.deepEqual(asked.at(-1).body, { recipient: { id: 'psid-1' }, messaging_type: 'RESPONSE', message: { text: 'Salam' } });
+    // Instagram's own login carries it too
+    await setRaw(db, 'secret_dellal_ig_token', 'IGAA-SEND');
+    await runDellal('send', { channel: 'instagram', externalId: 'igsid-1', text: 'Wakha', tag: 'HUMAN_AGENT' }, ctx);
+    assert.deepEqual([asked.at(-1).host, asked.at(-1).body], ['graph.instagram.com', { recipient: { id: 'igsid-1' }, messaging_type: 'MESSAGE_TAG', tag: 'HUMAN_AGENT', message: { text: 'Wakha' } }]);
+  } finally {
+    globalThis.fetch = real;
+    await db.query(`DELETE FROM settings WHERE key IN ('secret_dellal_ig_token', 'secret_dellal_page_token')`);
+  }
+});

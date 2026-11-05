@@ -139,7 +139,7 @@ export function Typing({ name }: { name: string }) {
 }
 
 /** The message box: grows with the text; Enter sends, Shift + Enter goes to the line. */
-export function Composer({ value, onChange, onSend, placeholder, busy, children }: { value: string; onChange: (v: string) => void; onSend: () => void; placeholder: string; busy: boolean; children?: ReactNode }) {
+export function Composer({ value, onChange, onSend, placeholder, busy, disabled, children }: { value: string; onChange: (v: string) => void; onSend: () => void; placeholder: string; busy: boolean; disabled?: boolean; children?: ReactNode }) {
   const { t } = useTranslation();
   const ref = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
@@ -159,6 +159,7 @@ export function Composer({ value, onChange, onSend, placeholder, busy, children 
           aria-label={placeholder}
           placeholder={placeholder}
           value={value}
+          disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -167,7 +168,7 @@ export function Composer({ value, onChange, onSend, placeholder, busy, children 
             }
           }}
         />
-        <button type="button" className="btn primary ai-send" title={t('messages.thread.send')} aria-label={t('messages.thread.send')} disabled={!value.trim() || busy} onClick={onSend}>
+        <button type="button" className="btn primary ai-send" title={t('messages.thread.send')} aria-label={t('messages.thread.send')} disabled={!value.trim() || busy || disabled} onClick={onSend}>
           <Icon name="send" />
         </button>
       </div>
