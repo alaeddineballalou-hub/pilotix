@@ -1285,7 +1285,7 @@ async function buildMetaEvent(db: Db, e: any, api: string, publicUrl: string, no
         action_source: web ? 'website' : 'system_generated',
         ...(web ? { event_source_url: sourceUrl(o.slug, o.v_url) } : {}),
         user_data: userData({ phone: o.phone, name: realName(o.customer_name) || o.a_name || '', commune: o.commune, wilaya: num(o.wilaya_id), customerId: num(o.customer_id), ip: o.v_ip, ua: o.v_ua, fbp: o.v_fbp, fbc: o.v_fbc }),
-        custom_data: { currency: 'DZD', value: num(o.total), order_id: o.ref, content_type: 'product', content_ids: items.map((x) => x.id), contents: items, num_items: items.reduce((n, x) => n + x.quantity, 0) },
+        custom_data: { currency: 'DZD', value: num(o.total), order_id: o.ref, content_type: 'product_group', content_ids: items.map((x) => x.id), contents: items, num_items: items.reduce((n, x) => n + x.quantity, 0) },
       },
       tt: tiktokEvent(e.event_name, {
         time: nowS, eventId: e.event_id, phone: o.phone, customerId: num(o.customer_id), ip: o.v_ip, ua: o.v_ua, ttp: o.v_ttp, ttclid: readJson<Record<string, string>>(o.utm)?.ttclid ?? null,
@@ -1307,7 +1307,7 @@ async function buildMetaEvent(db: Db, e: any, api: string, publicUrl: string, no
       action_source: 'website',
       event_source_url: sourceUrl(a.slug, a.url),
       user_data: userData({ phone: a.phone, name: a.customer_name, commune: a.commune, wilaya: numOrNull(a.wilaya_id), ip: a.ip, ua: a.ua, fbp: a.fbp, fbc: a.fbc }),
-      custom_data: { currency: 'DZD', value: num(e.value), content_type: 'product', content_ids: [String(a.product_id)], num_items: Math.max(1, num(a.qty)) },
+      custom_data: { currency: 'DZD', value: num(e.value), content_type: 'product_group', content_ids: [String(a.product_id)], num_items: Math.max(1, num(a.qty)) },
     },
     tt: tiktokEvent('InitiateCheckout', {
       time: Math.min(t, nowS), eventId: e.event_id, phone: a.phone, ip: a.ip, ua: a.ua, ttp: a.ttp, ttclid: readJson<Record<string, string>>(a.utm)?.ttclid ?? null,

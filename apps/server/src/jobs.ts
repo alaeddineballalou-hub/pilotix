@@ -56,6 +56,7 @@ const FEATURE: Record<string, string | null> = {
   'spy-scan': 'marketing/spy',
   'leads-catchup': 'marketing/formulaires',
   'campaigns-run': 'marketing/campagnes',
+  'catalog-run': 'marketing/catalogue',
   'sheets-sync': 'management/canaux',
 };
 
@@ -108,6 +109,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     if (name === 'coverage-refresh') return call('coverage.refresh');
     if (name === 'spy-scan') return call('spy.scan');
     if (name === 'campaigns-run') return call('campaigns.run');
+    if (name === 'catalog-run') return call('metacatalog.run');
     if (name === 'leads-catchup') {
       const r: any = await call('leads.catchUp');
       if (r?.errors?.length) new Logger('Formulaires').warn(`${tag} ${r.errors.join(' | ')}`);
@@ -239,6 +241,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('leads-catchup', {}, { repeat: { every: 10 * 60_000 }, jobId: 'leads-catchup', removeOnComplete: 20, removeOnFail: 50 });
     // Marketing › Campagnes: the WhatsApp offers due, a few each minute (the shop's messages a day, never at night)
     await this.queue.add('campaigns-run', {}, { repeat: { every: 60_000 }, jobId: 'campaigns-run', removeOnComplete: 20, removeOnFail: 50 });
+    // Marketing › Catalogue: what changed in the lists' products goes to Meta, and Meta's answers come back
+    await this.queue.add('catalog-run', {}, { repeat: { every: 10 * 60_000 }, jobId: 'catalog-run', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('turnstile-sync', {}, { repeat: { every: 30 * 60_000 }, jobId: 'turnstile-sync', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('offsite-backup', {}, { repeat: { every: 30 * 60_000 }, jobId: 'offsite-backup', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('fraud-reputation', {}, { repeat: { every: 30 * 60_000 }, jobId: 'fraud-reputation', removeOnComplete: 20, removeOnFail: 50 });

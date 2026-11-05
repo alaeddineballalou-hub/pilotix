@@ -49,6 +49,7 @@ import { sheetsProcs } from './modules/sheets';
 import { spyProcs } from './modules/spy';
 import { leadsProcs } from './modules/leads';
 import { campaignsProcs } from './modules/campaigns';
+import { metacatalogProcs } from './modules/metacatalog';
 import { statsProcs } from './modules/stats';
 import { boardProcs } from './modules/board';
 import { boutiqueProcs } from './modules/boutiques';
@@ -114,6 +115,7 @@ export const REGISTRY = {
   ...spyProcs,
   ...leadsProcs,
   ...campaignsProcs,
+  ...metacatalogProcs,
   ...archiveProcs,
   ...agencyProcs,
   ...managementPlanProcs,

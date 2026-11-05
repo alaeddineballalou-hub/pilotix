@@ -69,6 +69,8 @@ export const SOCIAL = {
     'leads_retrieval',
     'pages_manage_ads',
     'ads_management',
+    // Marketing › Catalogue: the shop's catalog and its product sets (lists)
+    'catalog_management',
   ],
   /** what each Page sends to Pilotix's webhook */
   pageFields: 'messages,messaging_postbacks,messaging_referrals,message_edits,message_reactions,feed',

@@ -151,11 +151,103 @@ const toDay = (r: any, level: 'adset' | 'ad', currency: string): MetaDay => ({
   thruplays: actionValue(r.video_thruplay_watched_actions, ['video_view']),
 });
 
+// ---------------------------------------------------------------- Marketing › Catalogue (Commerce: catalogs)
+/** A POST or DELETE to the Graph API, the token in the body (never in the address). */
+async function graphWrite(path: string, body: Record<string, unknown>, token: string, method: 'POST' | 'DELETE' = 'POST'): Promise<any> {
+  let res: Response;
+  try {
+    res = await fetch(`${GRAPH}/${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ ...body, access_token: token }),
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch {
+    throw new AppError('bad_request', 'Meta injoignable. Réessayez plus tard.');
+  }
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || data?.error) throw catalogError(data?.error, res.statusText);
+  return data;
+}
+/** Meta's catalog errors, said to the seller. */
+function catalogError(e: any, fallback: string): AppError {
+  const code = Number(e?.code);
+  if (code === 190) return new AppError('bad_request', 'Le compte Meta n’est plus relié : reliez-le à nouveau dans Pilot AI › Comptes.');
+  if (code === 10 || code === 200 || code === 3 || (code >= 200 && code < 300))
+    return new AppError('bad_request', 'Meta refuse : Pilotix n’a pas la permission de gérer vos catalogues. Reliez Meta à nouveau dans Pilot AI › Comptes et acceptez « catalogue ».');
+  if (code === 80014 || code === 4 || code === 17 || code === 613) return new AppError('conflict', 'Meta limite les envois pour l’instant : réessayez dans quelques minutes.');
+  return new AppError('bad_request', `Meta : ${e?.error_user_msg ?? e?.message ?? fallback}`);
+}
+
+/**
+ * The catalog actions (the token and the ad account of the shop):
+ *  - 'catalogSetup'  → { catalogId?, name, pixelIds }: the shop's catalog (made in the ad account's business when there is
+ *    none) and its pixels linked to it (each visit of a page finds its product)
+ *  - 'catalogBatch'  → { catalogId, requests }: up to 5,000 lines sent at once; Meta's first checks come back at once
+ *  - 'catalogStatus' → { catalogId, handle }: how a batch ended, line by line
+ *  - 'catalogSet'    → { catalogId, setId?, name, ids }: a list as a product set (made, or changed)
+ *  - 'catalogSetDelete' → { setId }
+ */
+async function runCatalog(action: string, args: any, token: string, acts: string[]): Promise<unknown> {
+  const enc = encodeURIComponent;
+  if (action === 'catalogSetup') {
+    let catalogId = args?.catalogId ? String(args.catalogId) : '';
+    let businessId: string | null = null;
+    let businessName: string | null = null;
+    if (!catalogId) {
+      const acc = await graph(acts[0], { fields: 'business{id,name}' }, token).catch((e) => {
+        throw e instanceof AppError ? e : catalogError(null, 'compte pub illisible');
+      });
+      if (!acc?.business?.id) throw new AppError('bad_request', 'Votre compte pub n’est pas dans un portefeuille business Meta : ajoutez-le dans Meta Business Suite, puis réessayez.');
+      businessId = String(acc.business.id);
+      businessName = String(acc.business.name ?? '');
+      const made = await graphWrite(`${enc(businessId)}/owned_product_catalogs`, { name: String(args?.name ?? 'Pilotix').slice(0, 100) }, token);
+      catalogId = String(made.id);
+    }
+    const pixels = (Array.isArray(args?.pixelIds) ? args.pixelIds : []).map(String).filter((x: string) => /^\d{5,20}$/.test(x));
+    let pixelsLinked = false;
+    if (pixels.length)
+      pixelsLinked = await graphWrite(`${enc(catalogId)}/external_event_sources`, { external_event_sources: pixels }, token)
+        .then(() => true)
+        .catch(() => false);
+    return { catalogId, businessId, businessName, pixelsLinked };
+  }
+  if (action === 'catalogBatch') {
+    const r = await graphWrite(`${enc(String(args.catalogId))}/items_batch`, { item_type: 'PRODUCT_ITEM', allow_upsert: true, requests: args.requests }, token);
+    const errors: { id: string; message: string }[] = [];
+    for (const v of Array.isArray(r?.validation_status) ? r.validation_status : [])
+      for (const e of Array.isArray(v?.errors) ? v.errors : []) errors.push({ id: String(v.retailer_id ?? ''), message: String(e?.message ?? 'refusé').slice(0, 300) });
+    return { handle: Array.isArray(r?.handles) && r.handles[0] ? String(r.handles[0]) : null, errors };
+  }
+  if (action === 'catalogStatus') {
+    const r = await graph(`${enc(String(args.catalogId))}/check_batch_request_status`, { handle: String(args.handle) }, token);
+    const d = Array.isArray(r?.data) ? r.data[0] : r;
+    const errors: { id: string; message: string }[] = [];
+    for (const e of Array.isArray(d?.errors) ? d.errors : []) errors.push({ id: String(e?.id ?? e?.retailer_id ?? ''), message: String(e?.message ?? 'refusé').slice(0, 300) });
+    return { done: String(d?.status ?? '').toLowerCase() === 'finished', errors };
+  }
+  if (action === 'catalogSet') {
+    const filter = { retailer_id: { is_any: (args.ids as string[]).slice(0, 5000) } };
+    if (args.setId) {
+      await graphWrite(enc(String(args.setId)), { name: String(args.name).slice(0, 100), filter }, token);
+      return { setId: String(args.setId) };
+    }
+    const made = await graphWrite(`${enc(String(args.catalogId))}/product_sets`, { name: String(args.name).slice(0, 100), filter }, token);
+    return { setId: String(made.id) };
+  }
+  if (action === 'catalogSetDelete') {
+    await graphWrite(enc(String(args.setId)), {}, token, 'DELETE').catch(() => null);
+    return { ok: true };
+  }
+  throw new AppError('bad_request', `Action Meta inconnue : ${action}`);
+}
+
 /**
  * Runs one Meta action with the stored connection.
  *  - 'test'      → { name, currency } of the ad account (checks the token)
  *  - 'insights'  → { from, to } (YYYY-MM-DD): daily results at ad set AND ad level, plus the ad sets / ads (status, video or not)
  *  - 'capi'      → { pixelId, token, events, testEventCode? }: Conversions API events (landing pages)
+ *  - 'catalog…'  → Marketing › Catalogue (runCatalog above)
  */
 export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
   // the Conversions API needs a pixel and its token, not the ad account
@@ -166,6 +258,8 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
   if (!meta.adAccountId || !token) throw new AppError('bad_request', 'Meta n’est pas connecté : ajoutez le compte pub et le jeton dans Réglages.');
   // a linked Facebook account: every one of its ad accounts, added up (Pilot AI › Comptes); pasted by hand: the one
   const acts = [...new Set((meta.adAccountIds?.length ? meta.adAccountIds : [meta.adAccountId]).map((x) => `act_${String(x).replace(/^act_/, '')}`))];
+
+  if (action.startsWith('catalog')) return runCatalog(action, args, token, acts);
 
   if (action === 'test') {
     const r = await graph(acts[0], { fields: 'name,currency,account_status' }, token);

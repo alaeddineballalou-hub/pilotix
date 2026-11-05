@@ -75,6 +75,7 @@ export const USER_REFS: readonly Ref[] = [
   ['spy_follow', 'created_by', 'marketing'],
   ['leads', 'handled_by', 'marketing'],
   ['wa_campaigns', 'created_by', 'marketing'],
+  ['meta_catalog_lists', 'created_by', 'marketing'],
   ['landing_pages', 'created_by', 'pages'],
   ['landing_images', 'created_by', 'pages'],
   ['landing_groups', 'created_by', 'pages'],
@@ -92,6 +93,7 @@ export const PRODUCT_REFS: readonly Ref[] = [
   ['landing_pages', 'product_id', 'pages'],
   ['lead_forms', 'product_id', 'marketing'],
   ['wa_campaigns', 'product_id', 'marketing'],
+  ['meta_catalog_list_products', 'product_id', 'marketing'],
   ['landing_leads', 'product_id', 'pages'],
   ['landing_submits', 'product_id', 'pages'],
   ['landing_blocked', 'product_id', 'pages'],
@@ -134,6 +136,9 @@ export const NOT_REFS: readonly string[] = [
   'product_changes.product_id',
   // a product's sales guide goes with it
   'product_guides.product_id',
+  // Marketing › Catalogue: what Meta's catalog holds (a mirror, not a link: a product that leaves goes out of it)
+  'meta_catalog_items.product_id',
+  'meta_catalog_items.variant_id',
   'stock.variant_id',
   'stock.warehouse_id',
   'spy_watch.product_id',

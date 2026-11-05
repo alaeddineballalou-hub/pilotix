@@ -1,0 +1,93 @@
+/* Marketing › Catalogue: the products on the left, the lists as columns; drag a product into a list. Built on the
+   Formulaires blocks (formulaires.css) and the Campagnes warning (campagnes.css .cp-warn, repeated here). */
+.ct .bji svg { width: 100%; height: 100%; }
+.ct .lf-btn .bji, .ct .lf-link .bji { width: 16px; height: 16px; }
+.ct-main { gap: 14px; }
+.ct-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: -4px 0 0; font-size: 14px; color: var(--sk-count-ink, var(--ink)); }
+.ct-top > span { display: inline-flex; align-items: center; gap: 6px; }
+.ct-top .bji { width: 16px; height: 16px; color: var(--c-muted); }
+.ct-top b { font-weight: 600; }
+.ct-warn { display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; border-radius: 16px; background: var(--c-warn-tint); color: var(--c-warn-ink); font-size: 14px; line-height: 1.45; }
+.ct-warn .bji { width: 18px; height: 18px; margin-top: 1px; }
+.ct-warn a { color: inherit; font-weight: 700; text-underline-offset: 3px; }
+.ct-small { font-size: 13px !important; line-height: 1.45; margin: 0; }
+
+.ct-board { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+
+/* the products */
+.ct-lib { flex: 1 1 280px; max-width: 100%; display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: var(--sk-r, 22px); background: var(--surface); box-shadow: var(--lf-shadow); }
+html[data-theme="dark"] .ct-lib { border: 1px solid var(--line); }
+.ct-lib h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.ct-search { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--field, var(--surface)); color: var(--c-muted); }
+.ct-search .bji { width: 16px; height: 16px; }
+.ct .ct-search input { flex: 1; min-width: 0; height: auto !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; color: var(--ink); font: inherit; font-size: 14px; outline: none; }
+.ct-search:focus-within { outline: 2px solid var(--c-accent-2, #F28B1E); outline-offset: 2px; }
+.ct-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 70vh; overflow-y: auto; }
+.ct-item { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.ct-item.ct-bad { background: var(--c-warn-tint); border-color: var(--c-warn-line); }
+.ct-item[draggable="true"] { cursor: grab; }
+.ct-item:active { cursor: grabbing; }
+.ct-row { display: flex; align-items: center; gap: 10px; padding: 8px; }
+.ct-grip { display: inline-flex; color: var(--c-muted); }
+.ct-grip .bji { width: 14px; height: 14px; }
+.ct-thumb { flex: none; border-radius: 10px; object-fit: cover; background: var(--raise); display: inline-flex; align-items: center; justify-content: center; color: var(--c-muted); }
+.ct-thumb.none .bji { width: 18px; height: 18px; }
+.ct-thumb.out { opacity: .45; filter: grayscale(1); }
+.ct-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: 1.35; }
+.ct-name b { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.ct-name > span { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12.5px; color: var(--c-muted); }
+.ct-name s { opacity: .8; }
+.ct-name small { font-size: 12px; color: var(--c-muted); }
+.ct-name small.warn { color: var(--c-warn-ink); font-weight: 600; }
+.ct-plus, .ct-more, .ct-x { flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: var(--c-muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.ct-plus:hover, .ct-more:hover, .ct-x:hover:not(:disabled) { background: var(--raise); color: var(--ink); }
+.ct-plus .bji, .ct-more .bji { width: 18px; height: 18px; }
+.ct-x .bji { width: 14px; height: 14px; }
+.ct-plus[aria-expanded="true"] { background: var(--c-accent-tint); color: var(--c-accent-ink); }
+.ct-menu { display: flex; flex-direction: column; gap: 8px; padding: 2px 12px 12px 12px; }
+.ct-menu .lf-btn { align-self: flex-start; }
+.ct-why { margin: 0; font-size: 13px; line-height: 1.45; color: var(--c-warn-ink); }
+.ct-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.ct-choice { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.ct-choice:hover:not(:disabled) { border-color: var(--c-muted); }
+.ct-choice.on { background: var(--c-ok-tint); border-color: transparent; color: var(--c-ok-ink); cursor: default; }
+.ct-choice .bji { width: 14px; height: 14px; }
+
+/* the lists */
+.ct-cols { flex: 999 1 640px; min-width: 0; display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch; }
+.ct-col { flex: 1 1 230px; min-width: 0; max-width: 100%; display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--sk-r, 22px); background: var(--surface); box-shadow: var(--lf-shadow); transition: box-shadow .15s; }
+html[data-theme="dark"] .ct-col { border: 1px solid var(--line); }
+.ct-col.over { box-shadow: inset 0 0 0 2px var(--c-accent-2, #F28B1E), var(--lf-shadow); }
+.ct-col-head { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+.ct-col-head > b { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.ct-n { font-size: 13px; color: var(--c-muted); }
+.ct-rename { flex: 1; display: flex; gap: 6px; }
+.ct-rename input { flex: 1; min-width: 0; height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--field, var(--surface)); color: var(--ink); font: inherit; font-size: 14px; }
+.ct-colmenu { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--raise); }
+.ct-auto { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.ct-auto > span { flex: 1; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.ct-auto small { color: var(--c-muted); line-height: 1.4; }
+.ct-in { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ct-in > li { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 12px; background: var(--raise); cursor: grab; }
+.ct-in > li.ct-bad { background: var(--c-warn-tint); }
+.ct-in .ct-name { font-size: 13px; font-weight: 600; }
+.ct-alert { display: inline-flex; color: var(--c-warn-ink); }
+.ct-alert .bji { width: 15px; height: 15px; }
+.ct-in > li.ct-drop { justify-content: center; padding: 16px 10px; border: 2px dashed var(--line); background: transparent; color: var(--c-muted); font-size: 13px; text-align: center; cursor: default; }
+.ct-in > li.ct-drop.on { border-color: var(--c-accent-2, #F28B1E); background: var(--c-accent-tint); color: var(--c-accent-ink); font-weight: 600; }
+.ct-col-foot { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-top: 4px; }
+.ct-col-foot .lf-btn { width: 100%; }
+.ct-col-foot small { font-size: 12px; }
+.ct-new { flex: 1 1 160px; min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 2px dashed var(--line); border-radius: var(--sk-r, 22px); background: transparent; color: var(--c-accent-ink); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+.ct-new:hover { border-color: var(--c-accent-2, #F28B1E); background: var(--c-accent-tint); }
+.ct-new .bji { width: 22px; height: 22px; }
+.ct-newform input { height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--field, var(--surface)); color: var(--ink); font: inherit; font-size: 15px; }
+.ct-newbtns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+
+@media (max-width: 640px) {
+  .ct-items { max-height: none; }
+  /* a phone: the lists first, the products under them (each with its « + ») */
+  .ct-cols { order: -1; }
+  .ct-col, .ct-new { flex-basis: 100%; }
+  .ct-new { min-height: 96px; }
+}

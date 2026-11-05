@@ -14,13 +14,15 @@ import { PhoneMarketing } from './PhoneAds';
 import { Spy } from './Spy';
 import { Formulaires } from './Formulaires';
 import { Campagnes } from './Campagnes';
+import { Catalogue } from './Catalogue';
 import { featureIsOn } from '../../lib/features';
 import { useIsPhone } from '../../lib/useMedia';
 import './ads.css';
 
 /** Marketing: Publicité (Meta spend face to the real orders), Formulaires (the ads' lead forms become orders,
- *  Formulaires.tsx), Campagnes (WhatsApp offers to the customers who said yes, Campagnes.tsx), Marketer (paying
- *  marketers per ad set) and AI Spy (competitors' Facebook ads in Algeria, Spy.tsx). */
+ *  Formulaires.tsx), Campagnes (WhatsApp offers to the customers who said yes, Campagnes.tsx), Catalogue (the shop's
+ *  lists of products sent to its Meta catalog, Catalogue.tsx), Marketer (paying marketers per ad set) and AI Spy
+ *  (competitors' Facebook ads in Algeria, Spy.tsx). */
 export function Marketing({ sub, rest }: PageProps) {
   const { t } = useTranslation();
   // phones: every KPI to decide (won / lost, where the money goes, what to do), then products and ad sets
@@ -30,7 +32,7 @@ export function Marketing({ sub, rest }: PageProps) {
 }
 
 function MarketingDesktop({ sub, rest, t }: { sub?: string; rest?: string[]; t: (k: string) => string }) {
-  const cur = sub === 'marketer' ? 'marketer' : sub === 'spy' ? 'spy' : sub === 'formulaires' ? 'formulaires' : sub === 'campagnes' ? 'campagnes' : 'publicite';
+  const cur = sub === 'marketer' ? 'marketer' : sub === 'spy' ? 'spy' : sub === 'formulaires' ? 'formulaires' : sub === 'campagnes' ? 'campagnes' : sub === 'catalogue' ? 'catalogue' : 'publicite';
   // Formulaires: the leads waiting for a person (a wilaya, a number, a product), on its tab
   const todo = useLeadsTodo();
   return (
@@ -38,9 +40,9 @@ function MarketingDesktop({ sub, rest, t }: { sub?: string; rest?: string[]; t: 
       <StageBar
         flow={false}
         current={cur}
-        items={(['publicite', 'formulaires', 'campagnes', 'marketer', 'spy'] as const).map((k) => ({ key: k, label: t(`nav.${k}`), href: `#/marketing/${k}`, ...(k === 'formulaires' && todo ? { count: todo } : {}) }))}
+        items={(['publicite', 'formulaires', 'campagnes', 'catalogue', 'marketer', 'spy'] as const).map((k) => ({ key: k, label: t(`nav.${k}`), href: `#/marketing/${k}`, ...(k === 'formulaires' && todo ? { count: todo } : {}) }))}
       />
-      {cur === 'marketer' ? <Marketer rest={rest} /> : cur === 'spy' ? <Spy rest={rest} /> : cur === 'formulaires' ? <Formulaires /> : cur === 'campagnes' ? <Campagnes /> : <Publicite />}
+      {cur === 'marketer' ? <Marketer rest={rest} /> : cur === 'spy' ? <Spy rest={rest} /> : cur === 'formulaires' ? <Formulaires /> : cur === 'campagnes' ? <Campagnes /> : cur === 'catalogue' ? <Catalogue /> : <Publicite />}
     </>
   );
 }

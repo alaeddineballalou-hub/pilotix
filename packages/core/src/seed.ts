@@ -22,6 +22,7 @@ import { seed as seed_dellal } from './seeds/dellal';
 import { seed as seed_cm } from './seeds/cm';
 import { seed as seed_leads } from './seeds/leads';
 import { seed as seed_campaigns } from './seeds/campaigns';
+import { seed as seed_metacatalog } from './seeds/metacatalog';
 import { seed as seed_cmplan } from './seeds/cmplan';
 import { seed as seed_notify } from './seeds/notify';
 import { seed as seed_landing } from './seeds/landing';
@@ -378,6 +379,8 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
   for (const q of UPSELL_BACKFILL) await db.query(q);
   await seed_notify(db, users, now);
   await seed_landing(db, users, now);
+  // after the landing pages (the catalog sends products that have one)
+  await seed_metacatalog(db, users, now);
   await seed_spy(db, users, now);
 
   return { users, orders: N, todo: CONF_TODO.length };

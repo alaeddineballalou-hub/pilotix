@@ -29,6 +29,7 @@ const SUB_LABEL: Record<string, string> = {
   'marketing/publicite': 'nav.publicite',
   'marketing/formulaires': 'nav.formulaires',
   'marketing/campagnes': 'nav.campagnes',
+  'marketing/catalogue': 'nav.catalogue',
   'marketing/marketer': 'nav.marketer',
   'marketing/spy': 'nav.spy',
   'caisse/overview': 'caisse.dk.tabs.overview',

@@ -1372,11 +1372,21 @@ class ApiController {
     return sendText(req, res.status(200).header('Content-Type', 'application/json; charset=utf-8').header('Cache-Control', 'public, max-age=2592000, immutable'), JSON.stringify(core.landingCommunes(id)));
   }
 
-  /** A page's picture in WebP: /lp/img/<id>/<160|320|480|720|960>.webp (never changes: cached a year). */
+  /** A page's picture in WebP: /lp/img/<id>/<160|320|480|720|960>.webp (never changes: cached a year), and meta.jpg its JPEG copy for Meta's catalog. */
   @Public()
   @Get(['lp/img/:id/:file', 's/:shop/lp/img/:id/:file'])
   async landingImage(@Param('shop') shop: string | undefined, @Param('id') idp: string, @Param('file') file: string, @Res() res: any) {
     const m = file.match(/^(160|320|480|720|960)\.webp$/);
+    // Marketing › Catalogue: the JPEG copy Meta downloads (/lp/img/<id>/meta.jpg)
+    if (/^\d+$/.test(idp) && file === 'meta.jpg') {
+      try {
+        const ref = intake(await this.publicShop(shop));
+        const r: any = await this.core.call(ref, 'metacatalog.image', await this.core.systemSession(ref), { id: Number(idp) });
+        return res.status(200).header('Content-Type', 'image/jpeg').header('Cache-Control', 'public, max-age=31536000, immutable').send(Buffer.from(r.base64, 'base64'));
+      } catch {
+        return res.status(404).send();
+      }
+    }
     if (!/^\d+$/.test(idp) || !m) return res.status(404).send();
     try {
       const ref = intake(await this.publicShop(shop));
@@ -1820,6 +1830,7 @@ class ApiController {
     bg('channels.sheet.syncAll'); // Google Sheets channels: new lines become orders (in the background)
     bg('leads.catchUp'); // Marketing › Formulaires: the ads' leads Meta did not send (in the background)
     bg('campaigns.run'); // Marketing › Campagnes: the WhatsApp offers due, at the shop's pace (in the background)
+    bg('metacatalog.run'); // Marketing › Catalogue: what changed goes to Meta, Meta's answers come back (in the background)
     return this.core.call(ref, 'delivery.sync', session, {}).catch((e) => ({ ok: false, message: e.message }));
   }
 }
