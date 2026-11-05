@@ -467,7 +467,13 @@ export async function catchUpLeads(ctx: Ctx): Promise<{ found: number; forms: nu
       errors.push(why);
       await noteSync(ctx, { error: why });
     });
-  const forms = await db.query(`SELECT form_id, last_lead_at FROM lead_forms WHERE meta_status = 'ACTIVE' ORDER BY last_lead_at DESC NULLS LAST, id DESC LIMIT 25`);
+  // the forms that run: a lead these 30 days, or found these 7 days (Meta counts each question: not the old ones)
+  const recent = (days: number) => new Date(ctx.now() - days * 86_400_000).toISOString();
+  const forms = await db.query(
+    `SELECT form_id, last_lead_at FROM lead_forms WHERE meta_status = 'ACTIVE' AND (last_lead_at > $1 OR created_at > $2)
+     ORDER BY last_lead_at DESC NULLS LAST, id DESC LIMIT 15`,
+    [recent(30), recent(7)],
+  );
   const floor = ctx.now() - 2 * 86_400_000;
   let found = 0;
   for (const f of forms) {
