@@ -374,11 +374,11 @@ class ApiController {
     // every account has its own number (proven by the WhatsApp code when it is on) before entering any store
     const acc = await core.accountByEmail(this.core.t, email);
     if (acc && (await core.phoneStep(this.core.t, acc, await otpOn(this.core)))) throw new core.AppError('forbidden', 'Votre numéro de téléphone doit d’abord être vérifié : déconnectez-vous puis reconnectez-vous');
+    // a partner's person (agency, marketer) works for this store from the partner's space, never inside the store
+    if (m.agencyId) throw new core.AppError('forbidden', 'Ouvrez l’espace de votre agence (ou votre espace marketer) : vous y travaillez pour ce vendeur');
     // a password a store's admin chose opens that seller's stores only: another one needs the person's own password
     if (acc && !(await core.passwordOpens(this.core.t, acc, shopId)))
       throw new core.AppError('forbidden', 'Votre mot de passe a été choisi par l’administrateur d’une autre boutique : pour ouvrir celle-ci, choisissez le vôtre avec « Mot de passe oublié » (un lien arrive par e-mail).');
-    // a partner's person (agency, marketer) works for this store from the partner's space, never inside the store
-    if (m.agencyId) throw new core.AppError('forbidden', 'Ouvrez l’espace de votre agence (ou votre espace marketer) : vous y travaillez pour ce vendeur');
     const p = await core.profileById(ref.db, m.profileId);
     if (!p?.active) throw new core.AppError('unauthorized', 'Votre compte est désactivé');
     await ref.db.query("UPDATE profiles SET last_seen_at = now(), presence = 'online' WHERE id = $1", [p.id]);

@@ -614,9 +614,14 @@ await section('The owner deletes a store (and only the owner)', async () => {
   const n0 = mailCount();
   await must('/auth/verify/send/ticket', { ticket: gone.ticket });
   await must('/auth/verify', { token: linkToken(await mailTo(other, n0), 'verify') });
-  const mine = await must('/auth/add-store/ticket', { ticket: (await login(other, 'Admin2-Password')).ticket, name: `Admin Deux ${run}` });
+  // the password is the one the deleted store's owner chose: their own store needs their own (the e-mail link)
+  await fails(must('/auth/add-store/ticket', { ticket: (await login(other, 'Admin2-Password')).ticket, name: `Admin Deux ${run}` }), 403, /OWN_PASSWORD/);
+  const n1 = mailCount();
+  await must('/auth/forgot', { email: other });
+  await must('/auth/reset', { token: linkToken(await mailTo(other, n1), 'reset'), password: 'Admin2-Own-Pass-1' });
+  const mine = await must('/auth/add-store/ticket', { ticket: (await login(other, 'Admin2-Own-Pass-1')).ticket, name: `Admin Deux ${run}` });
   assert.equal(mine.session.shop.owner, true);
-  ok('…confirms the e-mail from there and makes a store of their own');
+  ok('…confirms the e-mail from there, chooses their own password, and makes a store of their own');
   await fails(prpc('p.shops.update', { id: sid, name: 'Back' }), 400);
   assert.ok((await prpc('p.shops.list', { state: 'deleted' })).some((s) => s.id === sid));
   ok('the control room cannot touch it, and lists it in « Supprimées »');
