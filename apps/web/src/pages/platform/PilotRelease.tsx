@@ -136,7 +136,7 @@ export function ReleasePanel({ d, manager, onStaged, onReleased, onTry, tryHref 
             ) : (
               <>
                 <p className="pl-rel-what">
-                  <b className="ltr">{t(K + 'trialV', { v: tr.version })}</b> {inTrial.length ? inTrial.join(t(K + 'and')) : t(K + 'trialSame')}
+                  <b>{t(K + 'trialV', { v: tr.version })}</b> {inTrial.length ? inTrial.join(t(K + 'and')) : t(K + 'trialSame')}
                   <span className="small muted pl-rel-by">
                     {' '}
                     · <bdi>{tr.by ?? '—'}</bdi> · <bdi>{dateTime(tr.at)}</bdi>
