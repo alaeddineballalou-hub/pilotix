@@ -1,7 +1,7 @@
 // The control room's actions (Pilotix staff only): shops, trials, payments, plans and their menus, staff, settings,
 // the journal, sign-ups, messages from stores and the demo shop. Same shape as the shops' actions (input checked, roles
 // checked), own registry. Pilotix never sees what is inside a store: only its numbers (accounts, livreurs, orders).
-import { DEMO_ACCOUNTS, FEATURE_KEYS } from '@pilotix/shared';
+import { DEMO_ACCOUNTS, FEATURE_KEYS, passwordProblem } from '@pilotix/shared';
 import bcrypt from 'bcryptjs';
 import { z, ZodTypeAny } from 'zod';
 import { isoOrNull, num, numOrNull } from '../db';
@@ -366,6 +366,8 @@ export const PLATFORM_REGISTRY = {
   'p.me.password': pproc(ALL, z.object({ current: z.string().min(1).max(200), next: z.string().min(10).max(200) }), async (ctx, i) => {
     const r = (await ctx.t.platform.query('SELECT password_hash FROM platform.staff WHERE id = $1', [ctx.staff.id]))[0];
     if (!r || !(await bcrypt.compare(i.current, r.password_hash))) throw bad('Mot de passe actuel incorrect');
+    const weak = passwordProblem(i.next, 10);
+    if (weak) throw bad(weak);
     await ctx.t.platform.query('UPDATE platform.staff SET password_hash = $2, token_version = token_version + 1 WHERE id = $1', [ctx.staff.id, await hashPassword(i.next)]);
     await audit(ctx, 'staff.password', null, {});
     return { ok: true };
@@ -935,6 +937,8 @@ export const PLATFORM_REGISTRY = {
     z.object({ id: Id.optional(), name: z.string().trim().min(2).max(80), email: z.string().trim().email().max(200), role: z.enum(STAFF_ROLES), active: z.boolean(), password: z.string().min(10).max(200).optional() }),
     async (ctx, i) => {
       const email = i.email.toLowerCase();
+      const weak = i.password ? passwordProblem(i.password, 10) : null;
+      if (weak) throw bad(weak);
       const taken = (await ctx.t.platform.query('SELECT id FROM platform.staff WHERE email = $1', [email]))[0];
       if (taken && num(taken.id) !== i.id) throw bad('Cet email est déjà un compte de l’équipe');
       if (i.id) {

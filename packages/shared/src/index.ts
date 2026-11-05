@@ -11,6 +11,7 @@ export * from './features';
 export * from './agency';
 export * from './couriers';
 export * from './links';
+export * from './passwords';
 import type { ShopInfo } from './features';
 import type { OrigLine } from './upsell';
 import type { AgencySellerWork } from './agency';

@@ -251,9 +251,9 @@ await section('« Créer ma boutique »: the e-mail link makes the store, on tri
   ok(`store names: a taken one → ${taken.slug}; a taken link → « ${takenSlug.reason} »; Pilotix’s words refused`);
   const code = (await prpc('p.shops.get', { id: ctx.owner1.shopId })).referralCode;
   assert.ok(code, 'every store has a referral code');
-  await fails(must('/auth/signup', { name: 'X Y', email: em('bad'), phone: newPhone(), password: 'Password-123', storeName: 'Abc', language: 'fr', terms: false }), 400);
+  await fails(must('/auth/signup', { name: 'X Y', email: em('bad'), phone: newPhone(), password: 'Pass-Sara-123', storeName: 'Abc', language: 'fr', terms: false }), 400);
   ok('terms not accepted → refused');
-  await fails(must('/auth/signup', { name: 'Sara Test', email: em('bad2'), phone: newPhone(), password: 'Password-123', storeName: `Ref Bad ${run}`, language: 'fr', referral: 'ZZZZZZ', terms: true }), 400, /parrainage/i);
+  await fails(must('/auth/signup', { name: 'Sara Test', email: em('bad2'), phone: newPhone(), password: 'Pass-Sara-123', storeName: `Ref Bad ${run}`, language: 'fr', referral: 'ZZZZZZ', terms: true }), 400, /parrainage/i);
   ok('an unknown referral code → a clear message');
   const n0 = mailCount();
   const email = em('signup1');

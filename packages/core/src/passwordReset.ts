@@ -1,5 +1,6 @@
 // "Mot de passe oublié": makes and uses one-time reset links. The e-mail itself is sent by the server.
 // Works the same on PostgreSQL and in the browser preview (Web Crypto, no Node module).
+import { passwordProblem } from '@pilotix/shared';
 import { Db } from './db';
 import { hashPassword } from './modules/users';
 import { AppError } from './rpc';
@@ -79,7 +80,9 @@ const EXPIRED = 'Ce lien n’est plus valable. Demandez un nouveau lien.';
 
 /** Sets a new password with a reset link (once). Every session of the account is logged out. */
 export async function resetPassword(db: Db, token: string, password: string, now = Date.now()): Promise<{ email: string }> {
-  if (typeof password !== 'string' || password.length < 8 || password.length > 200) throw new AppError('bad_request', 'Le mot de passe doit contenir au moins 8 caractères');
+  if (typeof password !== 'string' || password.length > 200) throw new AppError('bad_request', 'Le mot de passe doit contenir au moins 8 caractères');
+  const weak = passwordProblem(password);
+  if (weak) throw new AppError('bad_request', weak);
   if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{20,100}$/.test(token)) throw new AppError('bad_request', EXPIRED);
   // taken in one statement: two clicks on the same link cannot both work
   const row = (

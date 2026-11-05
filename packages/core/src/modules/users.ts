@@ -1,4 +1,4 @@
-import { CONF_TODO, expandRoles, LANGUAGES, normalizeAccountPhone, Profile, ROLES, type Role } from '@pilotix/shared';
+import { CONF_TODO, expandRoles, LANGUAGES, normalizeAccountPhone, passwordProblem, Profile, ROLES, type Role } from '@pilotix/shared';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { Db, isoOrNull, num, numOrNull } from '../db';
@@ -243,6 +243,8 @@ export const usersProcs = {
   'me.password': proc(null, z.object({ current: z.string().min(1), next: z.string().min(8).max(200) }), async (ctx, i) => {
     const r = (await ctx.db.query('SELECT password_hash FROM profiles WHERE id=$1', [ctx.session.profile.id]))[0];
     if (!r || !(await bcrypt.compare(i.current, r.password_hash))) throw bad('Mot de passe actuel incorrect');
+    const weak = passwordProblem(i.next);
+    if (weak) throw bad(weak);
     // every other session (another phone, a stolen token) is logged out
     await ctx.db.query('UPDATE profiles SET password_hash=$2, token_version = token_version + 1 WHERE id=$1', [ctx.session.profile.id, await hashPassword(i.next)]);
     return { ok: true };
@@ -425,6 +427,9 @@ export const usersProcs = {
   }),
   'users.create': proc(null, NewUser, async (ctx, b) => {
     needUserManager(ctx);
+    // never a password guessed in a few tries (shared/passwords.ts)
+    const weak = passwordProblem(b.password);
+    if (weak) throw bad(weak);
     needGrantable(ctx, b);
     noNewSeller(b.roles);
     noNewMarketer(ctx, b.roles);
@@ -449,6 +454,8 @@ export const usersProcs = {
   }),
   'users.update': proc(null, NewUser.partial().extend({ id: z.number().int().positive(), active: z.boolean().optional() }), async (ctx, b) => {
     await needCanEdit(ctx, b.id);
+    const weak = b.password ? passwordProblem(b.password) : null;
+    if (weak) throw bad(weak);
     if ((await ctx.db.query('SELECT 1 FROM profiles WHERE id = $1 AND agency_id IS NOT NULL', [b.id])).length)
       throw forbidden('Ce compte appartient à une agence de confirmation (ou à un marketer) : seule elle le gère');
     needGrantable(ctx, b);

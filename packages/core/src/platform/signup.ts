@@ -2,6 +2,7 @@
 // (confirmed by e-mail before anything is made), « Ajouter une boutique », « Mot de passe oublié » for an account,
 // invitations made from the control room, and a store deleted by its owner (the only one who can).
 import { z } from 'zod';
+import { passwordProblem } from '@pilotix/shared';
 import { RESETS_PER_MONTH } from '../passwordReset';
 import { hashPassword } from '../modules/users';
 import { AppError, bad, forbidden, notFound } from '../rpc';
@@ -101,7 +102,14 @@ async function startPlan(t: Tenancy, set: PlatformSettings) {
 export const SignupInput = z.object({
   name: z.string().trim().min(2, 'Votre nom : au moins 2 lettres').max(80),
   email: z.string().trim().email('E-mail invalide').max(200),
-  password: z.string().min(8, 'Le mot de passe doit contenir au moins 8 caractères').max(200),
+  password: z
+    .string()
+    .max(200)
+    .superRefine((p, c) => {
+      // too short, or one guessed in a few tries (shared/passwords.ts)
+      const weak = passwordProblem(p);
+      if (weak) c.addIssue({ code: 'custom', message: weak });
+    }),
   /** the person's own mobile (required: one number = one account) */
   phone: z.string().trim().min(1, 'Votre numéro de téléphone est obligatoire').max(30),
   /** the WhatsApp code sent to it (when Pilotix asks the code) */
@@ -391,7 +399,9 @@ export async function accountResetRequest(t: Tenancy, email: string, now = Date.
 
 /** The new password from a link (« Mot de passe oublié » or an invitation): for every store of the person. */
 export async function passwordFromLink(t: Tenancy, token: string, password: string, now = Date.now()): Promise<Account> {
-  if (typeof password !== 'string' || password.length < 8 || password.length > 200) throw bad('Le mot de passe doit contenir au moins 8 caractères');
+  if (typeof password !== 'string' || password.length > 200) throw bad('Le mot de passe doit contenir au moins 8 caractères');
+  const weak = passwordProblem(password);
+  if (weak) throw bad(weak);
   const r = await takeAccountToken(t, ['reset', 'invite'], token, now);
   if (!r) throw bad('Ce lien n’est plus valable. Demandez un nouveau lien.');
   return (await setPasswordFromLink(t, r.account.id, password))!;
