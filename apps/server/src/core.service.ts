@@ -2,6 +2,9 @@ import { Global, Injectable, Logger, Module, OnModuleDestroy, OnModuleInit } fro
 import * as core from '@pilotix/core';
 import type { Ctx, Db, LiveEvent, PCtx, PlatformSettings, ServerHooks, Shop, ShopCtx, ShopStatus, StaffSession, Tenancy } from '@pilotix/core';
 import type { Session } from '@pilotix/shared';
+import { promises as dnsp, lookup as dnsLookup } from 'node:dns';
+import * as http from 'node:http';
+import * as https from 'node:https';
 import { Pool, PoolClient } from 'pg';
 import { config } from './config';
 import { mailConfigured, sendMail } from './mail';
@@ -249,19 +252,17 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Asks go.<domain> who answers there (the whole road: DNS, Cloudflare, Caddy, this server): on once it answers, off
-   * after 2 failures in a row (a short glitch changes nothing).
+   * Asks go.<domain> who answers there: its public DNS record, its certificate, Caddy, this server. On once it answers,
+   * off after 2 failures in a row (a short glitch changes nothing).
    */
   async checkLanding() {
     if (!config.landingUrl) return;
     const was = this.landingOk;
     let ok = false;
     try {
-      const r = await fetch(`${config.landingUrl}/api/landing-ready`, {
-        signal: AbortSignal.timeout(10_000),
-        headers: { Accept: 'application/json', 'User-Agent': 'Pilotix-landing-check/1' },
-      });
-      ok = !!(r.ok && ((await r.json().catch(() => null)) as { landing?: boolean } | null)?.landing);
+      // the name exists for visitors (through LANDING_CHECK_VIA the road below skips the public DNS)
+      if (config.landingCheckVia) await dnsp.lookup(this.landingHost() ?? '');
+      ok = await this.landingAsk();
     } catch {
       ok = false;
     }
@@ -272,6 +273,42 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
       this.log.log(this.landingOk ? `Landing pages: served at ${config.landingUrl}` : `Landing pages: ${config.landingUrl} does not answer, served at ${config.publicUrl}`);
       this.invalidate();
     }
+  }
+
+  /** GET <LANDING_URL>/api/landing-ready: its name, its certificate checked; connected through LANDING_CHECK_VIA when set. */
+  private landingAsk(): Promise<boolean> {
+    const u = new URL(`${config.landingUrl}/api/landing-ready`);
+    const via = config.landingCheckVia;
+    const mod = u.protocol === 'https:' ? https : http;
+    return new Promise((resolve) => {
+      const req = mod.request(
+        u,
+        {
+          method: 'GET',
+          headers: { Accept: 'application/json', 'User-Agent': 'Pilotix-landing-check/1' },
+          timeout: 10_000,
+          ...(via ? { lookup: ((_h: string, o: any, cb: any) => dnsLookup(via, o, cb)) as any } : {}),
+        },
+        (res) => {
+          let body = '';
+          res.setEncoding('utf8');
+          res.on('data', (d: string) => {
+            if (body.length < 2000) body += d;
+          });
+          res.on('end', () => {
+            try {
+              resolve(res.statusCode === 200 && JSON.parse(body)?.landing === true);
+            } catch {
+              resolve(false);
+            }
+          });
+          res.on('error', () => resolve(false));
+        },
+      );
+      req.on('timeout', () => req.destroy(new Error('timeout')));
+      req.on('error', () => resolve(false));
+      req.end();
+    });
   }
 
   /** the next check: soon after the start (the server listens by then), every 30 s while off, every minute while on */

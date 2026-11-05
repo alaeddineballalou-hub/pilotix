@@ -12,7 +12,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = 3010;
 const SITE = `http://localhost:${PORT}`;
-const PAGES = `http://127.0.0.1:${PORT}`;
+// another name of this machine (PAGES_URL: a name of /etc/hosts, to check the road of LANDING_CHECK_VIA too)
+const PAGES = process.env.PAGES_URL || `http://127.0.0.1:${PORT}`;
 const run = Date.now().toString(36).slice(-6);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ok = (m) => console.log(`   ✓ ${m}`);
@@ -112,7 +113,7 @@ try {
   ok('llms.txt links the pages at their address');
 
   // the pages' address may get its certificate; other names do not
-  assert.equal((await fetch(`${SITE}/api/domain-check?domain=127.0.0.1`)).status, 200);
+  assert.equal((await fetch(`${SITE}/api/domain-check?domain=${new URL(PAGES).hostname}`)).status, 200);
   assert.equal((await fetch(`${SITE}/api/domain-check?domain=go.example.org`)).status, 404);
   ok('only the pages’ address (and the shops’ ready domains) may get a certificate');
 

@@ -53,6 +53,12 @@ export const config = {
    * (their scripts could reach a logged-in person's session there). Used once it answers (CoreService.checkLanding).
    */
   landingUrl: (process.env.LANDING_URL || '').replace(/\/+$/, ''),
+  /**
+   * Optional: where the check of that address connects (LANDING_CHECK_VIA=web, Caddy's container in deploy/), with the
+   * same name and the same certificate check: Cloudflare's bot protection stops robots like it on the way through
+   * Cloudflare. The public DNS record is checked apart. Unset: straight to LANDING_URL.
+   */
+  landingCheckVia: (process.env.LANDING_CHECK_VIA || '').trim(),
   /** Optional: a GitHub token (no rights needed) for « Changements API » to read the open-source couriers' code more often. */
   githubToken: (process.env.GITHUB_TOKEN || '').trim(),
   /**

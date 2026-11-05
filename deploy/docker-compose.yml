@@ -47,6 +47,8 @@ services:
       PUBLIC_URL: https://${DOMAIN}
       # the landing pages' own address (deploy/Caddyfile › go.<domain>): used once it answers, else the pages stay on PUBLIC_URL
       LANDING_URL: https://go.${DOMAIN}
+      # its check goes to Caddy here (same name, same certificate check): through Cloudflare, its bot protection stops it
+      LANDING_CHECK_VIA: web
       # shops' own domains point to this server's address: set it when the domain is behind Cloudflare (its DNS shows
       # Cloudflare's addresses, not the server's). Several: comma-separated.
       PUBLIC_IP: ${PUBLIC_IP:-}

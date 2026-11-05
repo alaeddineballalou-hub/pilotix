@@ -131,7 +131,8 @@ serves only the pages and what they call (`/api/lp/…`, `/api/s/<store>/lp/…`
 app, its login or its other doors (`deploy/Caddyfile` › `go.{$DOMAIN}`). Setup, once: in Cloudflare › DNS, add a
 **CNAME** record named `go` pointing to the domain (`@`), **proxied** (orange cloud). Caddy makes its certificate at the
 first visit (the server allows that one name, `domain-check`). The server (`LANDING_URL`) asks `go.<domain>` every
-minute whether it reaches it (`/api/landing-ready`); once it does, the app shows and copies the pages' links there and
+minute whether it reaches it (`/api/landing-ready`: its public DNS record, then Caddy with that name and its certificate
+checked, `LANDING_CHECK_VIA=web`, since Cloudflare's bot protection stops robots); once it does, the app shows and copies the pages' links there and
 the old addresses (`<domain>/<store>/<page>`, `/api/lp/<page>`) move there with what followed them (`?fbclid=…`). If it
 stops answering, the pages are served at `<domain>` again within two minutes. Test: `node scripts/landing-host-test.mjs`.
 
