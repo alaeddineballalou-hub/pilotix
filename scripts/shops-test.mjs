@@ -303,10 +303,18 @@ await section('« Ajouter une boutique »: stores per person, and an e-mail chec
   const n0 = mailCount();
   await must('/auth/verify/send', {}, st.token);
   await must('/auth/verify', { token: linkToken(await mailTo(staff, n0), 'verify') });
-  const s2 = await must('/auth/add-store', { name: `Staff Store ${run}` }, st.token);
+  // the password is still the one the store's admin chose: one's own store needs one's own password (an e-mail link)
+  await fails(must('/auth/add-store', { name: `Staff Store ${run}` }, st.token), 403, /OWN_PASSWORD/);
+  ok('the e-mail confirmed, the password still chosen by the admin → « choose your own password first »');
+  const n1 = mailCount();
+  await must('/auth/forgot', { email: staff });
+  await must('/auth/reset', { token: linkToken(await mailTo(staff, n1), 'reset'), password: 'Staff1-Own-Pass-1' });
+  await fails(login(staff, 'Staff1-Password'), 401);
+  const st2 = await login(staff, 'Staff1-Own-Pass-1');
+  const s2 = await must('/auth/add-store', { name: `Staff Store ${run}` }, st2.token);
   assert.equal(s2.session.shop.owner, true);
-  ok('the e-mail confirmed with its link → the store is made');
-  ctx.staff1 = { email: staff, password: 'Staff1-Password' };
+  ok('their own password set with the e-mail link (the admin\'s one stops) → the store is made');
+  ctx.staff1 = { email: staff, password: 'Staff1-Own-Pass-1' };
 });
 
 await section('« Mes boutiques »: the owner renames a boutique; its link never changes', async () => {
