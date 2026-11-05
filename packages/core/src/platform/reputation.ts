@@ -17,6 +17,7 @@
 import { algeriaDay, QUALITY_OPEN_DAYS, QUALITY_SQL, qualityOf } from '../modules/quality';
 import { hmacSha256Hex } from '@pilotix/shared';
 import type { Db } from '../db';
+import { sealPlatformSetting } from '../secretbox';
 import type { Ctx } from '../rpc';
 import type { Tenancy } from './tenancy';
 
@@ -42,7 +43,7 @@ function pepperOf(t: Tenancy): Promise<string> {
     p = (async () => {
       const fresh = Array.from(globalThis.crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, '0')).join('');
       // two servers starting together: the first one's pepper is kept, the other reads it back
-      await t.platform.query(`INSERT INTO platform.settings (key, value, updated_at) VALUES ($1, $2, now()) ON CONFLICT (key) DO NOTHING`, [PEPPER, JSON.stringify(fresh)]);
+      await t.platform.query(`INSERT INTO platform.settings (key, value, updated_at) VALUES ($1, $2, now()) ON CONFLICT (key) DO NOTHING`, [PEPPER, JSON.stringify(sealPlatformSetting(PEPPER, fresh))]);
       const v = (await t.platform.query(`SELECT value FROM platform.settings WHERE key = $1`, [PEPPER]))[0]?.value;
       if (typeof v !== 'string' || v.length < 32) throw new Error('fraud reputation: no secret');
       return v;

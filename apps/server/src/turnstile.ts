@@ -9,6 +9,7 @@
 //     secret. The secrets and the token never leave the server.
 // Cloudflare unreachable, not set up, or full: nothing breaks, the check is simply off (no points for the order).
 import { Logger } from '@nestjs/common';
+import { sealPlatformSetting, sealString } from '@pilotix/core';
 import type { CoreService } from './core.service';
 import { config } from './config';
 
@@ -54,7 +55,7 @@ async function writeConfig(core: CoreService, v: TsConfig | null) {
   else
     await core.t.platform.query(
       `INSERT INTO platform.settings (key, value, updated_at) VALUES ($1, $2, now()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-      [SETTING, JSON.stringify(v)],
+      [SETTING, JSON.stringify(sealPlatformSetting(SETTING, v))],
     );
 }
 
@@ -139,7 +140,7 @@ async function doSync(core: CoreService): Promise<TsStatus> {
         const name = `Pilotix ${list.length + 1}`;
         const r = await cf(c, 'POST', '/challenges/widgets', { name, domains: [d], mode: 'invisible' });
         w = { sitekey: String(r.sitekey), secret: String(r.secret), name, domains: [d] };
-        await core.t.platform.query(`INSERT INTO platform.turnstile_widgets (sitekey, secret, name, domains) VALUES ($1, $2, $3, $4)`, [w.sitekey, w.secret, w.name, w.domains]);
+        await core.t.platform.query(`INSERT INTO platform.turnstile_widgets (sitekey, secret, name, domains) VALUES ($1, $2, $3, $4)`, [w.sitekey, sealString(w.secret), w.name, w.domains]);
         list.push(w);
         placed.add(d);
         continue;

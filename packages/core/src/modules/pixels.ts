@@ -2,6 +2,7 @@
 // picks one of each platform (NULL: the default one, 0: none). Real orders reach them from the server only (Meta's
 // Conversions API, TikTok's Events API) with the same fake-order rules; each pixel can have its own token, kept on the
 // server (settings secret_pixel_<id>): the app only learns whether one is saved.
+import { sealString } from '../secretbox';
 import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
@@ -141,7 +142,7 @@ export const pixelProcs = {
       else if (i.token.trim())
         await tx.query(
           `INSERT INTO settings (key, value, updated_by) VALUES ($1, $2, $3) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by`,
-          [secretKey(rid), JSON.stringify(i.token.trim()), ctx.session.profile.id],
+          [secretKey(rid), JSON.stringify(sealString(i.token.trim())), ctx.session.profile.id],
         );
       return rid;
     });

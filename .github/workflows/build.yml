@@ -50,6 +50,8 @@ jobs:
       DATABASE_URL: postgres://pilotix:pilotix_ci@localhost:5432/pilotix
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-only-secret-0123456789abcdefghijklmnop
+      # the saved secrets sealed, as in production (every test below runs with it)
+      DATA_KEY: Y2ktb25seS1kYXRhLWtleS0wMTIzNDU2Nzg5YWJjZGU=
       # e-mails go to a test mailbox (scripts/smtp-sink.cjs): invitations, sign-up links, codes, receipts are checked
       PUBLIC_URL: http://localhost:3000
       SMTP_HOST: 127.0.0.1
@@ -78,6 +80,8 @@ jobs:
         run: node scripts/doctor-test.mjs
       - name: End-to-end test of the landing pages' own address (go.<domain>; a second server on port 3010)
         run: node scripts/landing-host-test.mjs
+      - name: End-to-end test of the saved secrets kept sealed (DATA_KEY; a second server on port 3030)
+        run: node scripts/secrets-test.mjs
       - name: End-to-end test of the public Pro marketers page
         run: |
           curl -fs http://localhost:3000/api/pro | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const d=JSON.parse(s);if(!Array.isArray(d.pros))process.exit(1);console.log('pros',d.pros.length)})"

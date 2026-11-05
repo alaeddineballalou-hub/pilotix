@@ -4,8 +4,11 @@ import * as core from '@pilotix/core';
 import { Pool } from 'pg';
 import { config } from './config';
 import { poolTenancy } from './core.service';
+import { startSecretBox } from './secretbox';
 
 async function main() {
+  // the saved secrets: sealed as they are written, opened as they are read (as in the server)
+  startSecretBox(process.env.DATA_KEY);
   const pool = new Pool({ connectionString: config.databaseUrl, max: 2 });
   const t = poolTenancy(pool);
   const db = t.shop('public');

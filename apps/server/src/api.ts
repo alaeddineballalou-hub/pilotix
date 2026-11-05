@@ -873,7 +873,16 @@ class ApiController {
     checkLogin(ipKey, 60);
     failedLogin(ipKey);
     const acc = body?.ticket ? await this.ticketAccount(String(body.ticket)).catch(() => null) : null;
-    return core.phoneProblem(this.core.t, String(body?.phone ?? '').slice(0, 30), acc?.id ?? null);
+    if (acc) {
+      // and 30 per 15 minutes per account, whatever the address
+      const accKey = `phonecheck:acc:${acc.id}`;
+      checkLogin(accKey, 30);
+      failedLogin(accKey);
+    }
+    const r = await core.phoneProblem(this.core.t, String(body?.phone ?? '').slice(0, 30), acc?.id ?? null);
+    // « another account's » only to a person who logged in (the ticket): to anyone else, the same answer as a free
+    // number (the sign-up form cannot be used to learn which numbers have a Pilotix account)
+    return acc ? r : { ...r, problem: r.problem === 'taken' ? null : r.problem };
   }
 
   /**

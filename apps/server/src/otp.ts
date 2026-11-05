@@ -6,6 +6,7 @@
 // Without a server able to reach Meta (development), the code is written in the server's log instead.
 import { Logger } from '@nestjs/common';
 import { phoneWa } from '@pilotix/shared';
+import { sealPlatformSetting } from '@pilotix/core';
 import type { CoreService } from './core.service';
 
 const log = new Logger('OTP');
@@ -39,7 +40,7 @@ export async function readOtp(core: CoreService): Promise<OtpConfig> {
 async function writeOtp(core: CoreService, v: OtpConfig) {
   await core.t.platform.query(
     `INSERT INTO platform.settings (key, value, updated_at) VALUES ($1, $2, now()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-    [SETTING, JSON.stringify(v)],
+    [SETTING, JSON.stringify(sealPlatformSetting(SETTING, v))],
   );
 }
 

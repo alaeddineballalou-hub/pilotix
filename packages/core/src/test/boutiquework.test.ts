@@ -3,7 +3,7 @@
 // boutique; an order of another boutique opens and works there; nothing outside the order work runs there that way.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
+import { call, Ctx, login, migrate, migrateAll, OTHER_BOUTIQUE, PCtx, pgliteTenancy, platformCall, REGISTRY, seedBase, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
 import { loadShop, passwordFromLink } from '../platform';
 
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
@@ -310,4 +310,12 @@ test('« Toutes les boutiques » › Dépôt and Caisse: added up and boutique b
   const sam = await as(t, A.id, AGENT, PW, { boutique: 'all' });
   await assert.rejects(call('caisse.overview', sam, {}));
   await assert.rejects(call('depot.counts', sam, {}));
+});
+
+test('another boutique from the open one: only the actions listed by name, never its settings, stock or caisse', () => {
+  for (const name of OTHER_BOUTIQUE) assert.ok(name in REGISTRY, `${name}: no such action`);
+  for (const name of Object.keys(REGISTRY)) {
+    if (!OTHER_BOUTIQUE.has(name)) continue;
+    assert.ok(!/^(delivery\.(save|remove|import|webhook|test|hook|zr)|stats\.(save|setGoal)|suivi\.motifsSet|customers\.shareAll|caisse\.|stock\.|settings\.|users\.(create|update|remove)|catalog\.(save|remove))/.test(name), `${name} is a setting`);
+  }
 });

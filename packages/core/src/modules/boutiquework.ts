@@ -60,10 +60,30 @@ async function boutiqueCtx(ctx: Ctx, b: MyBoutique): Promise<Ctx> {
 /**
  * What runs inside another of the person's boutiques from the open one: the work on an order of that boutique (the
  * depot's too: « J'ai pris » for its orders, received back, taken off its company, sent again… — never its stock, its
- * settings or its caisse).
+ * settings or its caisse). Each action by its name (a new action is never allowed here by itself): what reads, and
+ * what works on orders, parcels, calls, SAV tickets and customers.
  */
-const OTHER_BOUTIQUE =
-  /^(orders|confirmation|suivi|sav|parcel|customers|filters|undo|delivery|stats)\.[a-zA-Z0-9.]+$|^(users\.list|pilot\.get|prefs\.get|catalog\.(search|guide|guides|guideFacts|assigned)|depot\.(find|pick|receiveReturn|unassign|resend|cancelDone|companies))$/;
+export const OTHER_BOUTIQUE = new Set(
+  [
+    'catalog: assigned guide guideFacts guides search',
+    'confirmation: addColPreset banner block catalog colActive colPresets confirmed counts deleteColPreset delivery deskOptions enCours firstCall gridFee hold list meta mine period release riskStats setColActive setTry',
+    'customers: history list ping setBlacklist shareInfo',
+    'delivery: cancel companies fees feesInfo kinds label labels live livreurs overweight preview routeSheet send stopdesks sync tournee',
+    'depot: cancelDone companies find pick receiveReturn resend unassign',
+    'filters: options',
+    'orders: assignAgent assignCompany cancelReport companyFees confirmCheck counts create delete deliveredReport duplicate events formData get lastChange list logCall lookups next note quote reasons setConf setFollow setSub setTracking sync uiMeta undo undoMany update',
+    'parcel: action change changeCancel changeSync info',
+    'pilot: get',
+    'prefs: get',
+    'sav: catalog create exchange findOrder get kpis list rate settle stats update',
+    'stats: agents board dashDepot dashLivreurs dashMeta dashSav dashSuivi doctor livreurs me myLivreur now overview overview2 presence teams',
+    'suivi: act claimCategories claimCreate claimPush claimRemind claimSync claimUpdate claims claimsLate contacts counts findOrders list motifStats motifs next release resolve stuckDone swap swapCandidates swapTarget treat unassign',
+    'users: list',
+  ].flatMap((line) => {
+    const [ns, names] = line.split(': ');
+    return names.split(' ').map((n) => `${ns}.${n}`);
+  }),
+);
 
 const ratio = (a: number, b: number) => (b > 0 ? a / b : null);
 /** each boutique's own answer next to the total (the « Par boutique » table) */
@@ -263,7 +283,7 @@ export async function boutiqueCall(name: string, ctx: Ctx, input: unknown, run: 
     const b = mine.find((x) => x.id === scope);
     if (!b) throw forbidden('Vous n’avez pas de compte dans cette boutique');
     if (b.id === here) return run({ ...ctx, boutique: undefined }, name, input);
-    if (!OTHER_BOUTIQUE.test(name)) throw bad(`Ouvrez « ${b.name} » pour cette action`);
+    if (!OTHER_BOUTIQUE.has(name)) throw bad(`Ouvrez « ${b.name} » pour cette action`);
     return run(await boutiqueCtx(ctx, b), name, input);
   }
   const raw = (input ?? {}) as Record<string, unknown>;

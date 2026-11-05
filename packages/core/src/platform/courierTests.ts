@@ -2,6 +2,7 @@
 // with real keys (connection, lists, tracking, a test parcel), and the last result of each test. Keys are write-only:
 // the page learns which ones are set, never their values; only the server reads them, to run a test.
 import type { Tenancy } from './tenancy';
+import { sealPlatformSetting } from '../secretbox';
 
 const KEYS = 'courier_test_keys';
 const RESULTS = 'courier_test_results';
@@ -36,7 +37,7 @@ export async function readSetting<T>(t: Tenancy, key: string): Promise<Record<st
 export async function writeSetting(t: Tenancy, key: string, value: unknown) {
   await t.platform.query(
     `INSERT INTO platform.settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-    [key, JSON.stringify(value)],
+    [key, JSON.stringify(sealPlatformSetting(key, value))],
   );
 }
 

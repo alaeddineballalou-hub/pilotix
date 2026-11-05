@@ -302,8 +302,12 @@ test('sign-up: confirmed by e-mail, the store on the trial plan, referral reward
   const refs = await storeReferrals(t, s1.id);
   assert.equal(refs.list.length, 1);
   // a store brought by Yasmine's store: Yasmine gets a free month when it pays
-  // one number = one account
-  await assert.rejects(startSignup(t, { ...form, email: 'other@x.dz', storeName: 'Other Shop' }, '1.2.3.5'), /déjà utilisé/);
+  // one number = one account, said to nobody who has not proven the number: the sign-up answers as usual, and the
+  // other account does not get Yasmine's number (asked at its first login)
+  const other = (await startSignup(t, { ...form, email: 'other@x.dz', storeName: 'Other Shop', referral: undefined }, '1.2.3.5'))!;
+  assert.equal(other.kind, 'confirm');
+  assert.equal(((await confirmSignup(t, (other as any).token)) as any).account.phone, null);
+  assert.equal((await accountByEmail(t, 'yasmine@shop.dz'))!.phone, '0661000001');
   const m2 = (await startSignup(t, { ...form, email: 'nadia@x.dz', phone: '0661000002', name: 'Nadia', storeName: 'Nadia Beauty', referral: done.shop.referralCode }, '1.2.3.5'))!;
   const n: any = await confirmSignup(t, (m2 as any).token);
   const before = Date.parse((await loadShop(t, { id: done.shop.id }))!.paidUntil!);
@@ -638,7 +642,18 @@ test('phone of every account: required, one number = one account, proven once by
   const owner = (await accountByEmail(t, OWNER.email))!;
   await assert.rejects(setAccountPhone(t, owner.id, '0770123456', false), /déjà utilisé/);
   await assert.rejects(newPhoneCode(t, owner, '0770 12 34 56'), /déjà utilisé/);
-  await assert.rejects(newSignupCode(t, '0770123456'), /déjà utilisé/);
+  // the sign-up form answers alike for a number that has an account (a code is sent to it, as to any number): only
+  // the person who gets the code learns it, when the sign-up goes on
+  const sc = await newSignupCode(t, '0770123456', now + 60_000);
+  assert.match(sc.code, /^\d{6}$/);
+  const form = { name: 'Intrus', email: 'intrus@x.dz', phone: '0770123456', password: 'Intrus-Pass-9', storeName: 'Intrus Shop', language: 'fr', terms: true };
+  await assert.rejects(startSignup(t, { ...form, phoneCode: sc.code }, '1.2.3.4', now + 61_000, { otp: true }), /déjà un compte Pilotix/);
+  // code off: the sign-up goes on as any other, and the new account does not get the number (asked at its first login)
+  const m: any = await startSignup(t, form, '1.2.3.4', now + 62_000);
+  assert.equal(m.kind, 'confirm');
+  const intrus: any = await confirmSignup(t, m.token);
+  assert.equal(intrus.account.phone, null);
+  assert.equal((await accountByEmail(t, 'rym@x.dz'))!.phone, '0770123456');
   // a number from abroad, with its +
   const o2 = await setAccountPhone(t, owner.id, '+33 6 12 34 56 78', false);
   assert.equal(o2.phone, '+33612345678');

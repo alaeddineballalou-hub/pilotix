@@ -1,5 +1,6 @@
 // Administration: users (via users.*), statuses, pay plans + monthly payslips, client delivery prices,
 // sales channels, shop settings, depots, website webhook, cron key and the Meta Ads connection.
+import { sealSetting } from '../secretbox';
 import { CONF_STATUSES, DEFAULT_CALL_SETTINGS, FOLLOW_STATUSES, SAV_STATUSES } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num } from '../db';
@@ -29,7 +30,7 @@ export async function setRaw(db: Db, key: string, value: unknown, userId?: numbe
   await db.query(
     `INSERT INTO settings (key, value, updated_by) VALUES ($1, $2, $3)
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by`,
-    [key, JSON.stringify(value), userId ?? null],
+    [key, JSON.stringify(sealSetting(key, value)), userId ?? null],
   );
 }
 

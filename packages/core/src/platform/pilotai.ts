@@ -2,6 +2,7 @@
 // the live answers (every shop together) and the test share. The learning itself is in modules/pilotlearn.ts; this file
 // only keeps its settings on the platform.
 import type { Tenancy } from './tenancy';
+import { sealPlatformSetting } from '../secretbox';
 
 export interface PilotConfig {
   /** Dellal answers with Pilotix's key, learns every night and uses the coach's lesson book */
@@ -104,7 +105,7 @@ export async function savePilotConfig(t: Tenancy, c: Omit<PilotConfig, 'shops' |
   const up = `INSERT INTO platform.settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`;
   await t.platform.query(up, [CONF_ROW, JSON.stringify(clean)]);
   if (key === null) await t.platform.query('DELETE FROM platform.settings WHERE key = $1', [KEY_ROW]);
-  else if (typeof key === 'string' && key.trim()) await t.platform.query(up, [KEY_ROW, JSON.stringify({ key: key.trim() })]);
+  else if (typeof key === 'string' && key.trim()) await t.platform.query(up, [KEY_ROW, JSON.stringify(sealPlatformSetting(KEY_ROW, { key: key.trim() }))]);
 }
 
 // ---------------------------------------------------------------- voice notes (Google Gemini writes them as text)
@@ -136,7 +137,7 @@ export async function saveVoiceConfig(t: Tenancy, c: VoiceConfig, key?: string |
   const up = `INSERT INTO platform.settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`;
   await t.platform.query(up, [VOICE_ROW, JSON.stringify({ enabled: !!c.enabled, model: VOICE_MODEL.test(String(c.model)) ? String(c.model) : VOICE_DEFAULTS.model })]);
   if (key === null) await t.platform.query('DELETE FROM platform.settings WHERE key = $1', [VOICE_KEY_ROW]);
-  else if (typeof key === 'string' && key.trim()) await t.platform.query(up, [VOICE_KEY_ROW, JSON.stringify({ key: key.trim() })]);
+  else if (typeof key === 'string' && key.trim()) await t.platform.query(up, [VOICE_KEY_ROW, JSON.stringify(sealPlatformSetting(VOICE_KEY_ROW, { key: key.trim() }))]);
 }
 
 /**

@@ -15,20 +15,33 @@
 //   GET  /api/health
 //   Socket.IO at /live              → "something changed" events for open screens
 import 'reflect-metadata';
-import { Logger, Module } from '@nestjs/common';
+import { Injectable, Logger, Module, OnApplicationShutdown } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { ApiModule } from './api';
 import { config } from './config';
 import { DoctorLogger, watchProcess } from './doctor';
-import { CoreModule } from './core.service';
+import * as core from '@pilotix/core';
+import { CoreModule, CoreService } from './core.service';
 import { JobsModule } from './jobs';
+import { keepLimits, stopKeepingLimits } from './limits';
 import { LiveModule } from './live';
+import { startSecretBox } from './secretbox';
 
-@Module({ imports: [CoreModule, LiveModule, ApiModule, JobsModule] })
+/** The login counters, written down when the server stops (read back at the start: see keepLimits below). */
+@Injectable()
+class LimitsKeeper implements OnApplicationShutdown {
+  async onApplicationShutdown() {
+    await stopKeepingLimits();
+  }
+}
+
+@Module({ imports: [CoreModule, LiveModule, ApiModule, JobsModule], providers: [LimitsKeeper] })
 class AppModule {}
 
 async function bootstrap() {
+  // the saved secrets (couriers' keys, tokens): sealed as they are written, opened as they are read (DATA_KEY)
+  const sealing = startSecretBox(process.env.DATA_KEY);
   // the Doctor (control room) keeps every error and warning the server writes
   const logger = new DoctorLogger();
   logger.setLogLevels(['error', 'warn', 'log']);
@@ -47,12 +60,27 @@ async function bootstrap() {
       if (/^\/api\/(auth|platform\/auth)\//.test(url)) route.bodyLimit = 64 * 1024;
       else if (/^\/api\/(s\/[^/]+\/)?lp\//.test(url)) route.bodyLimit = 64 * 1024;
       else if (/^\/api\/(s\/[^/]+\/)?hooks\//.test(url)) route.bodyLimit = 1024 * 1024;
+    })
+    // and what a request carries is counted before anything checks it: a list of millions of tiny items fits in 5 MB,
+    // and checking each of them one by one would fill the memory (core.inputTooBig)
+    .addHook('preValidation', async (req: { body?: unknown }, reply: any) => {
+      if (!req.body || typeof req.body !== 'object' || Buffer.isBuffer(req.body)) return;
+      const big = core.inputTooBig(req.body);
+      if (big) return reply.code(413).send({ statusCode: 413, error: 'Payload Too Large', message: big });
     });
   app.setGlobalPrefix('api');
   app.enableCors({ origin: config.corsOrigins, credentials: true });
   app.enableShutdownHooks();
+  // the failed logins counted before an update still count after it
+  await keepLimits(config.redisUrl);
   await app.listen(config.port, '0.0.0.0');
   new Logger('Pilotix').log(`Server ready on port ${config.port}`);
+  // what was saved readable before (an older version, no DATA_KEY yet): sealed now, in the background
+  if (sealing)
+    void core
+      .sealStoredSecrets(app.get(CoreService).t)
+      .then((r) => r && r.sealed && new Logger('Secrets').log(`${r.sealed} saved secrets sealed (${r.shops} shops checked)`))
+      .catch((e) => new Logger('Secrets').warn(`Sealing the saved secrets stopped: ${(e as Error).message}`));
 }
 
 bootstrap();

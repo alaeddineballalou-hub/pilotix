@@ -148,12 +148,12 @@ export async function checkPhoneCode(t: Tenancy, acc: Account, raw: string, code
 
 // ---------------------------------------------------------------- the sign-up's code (before the account exists)
 /**
- * A code for a number typed in the sign-up form: the number must be nobody's yet. 1 a minute and 5 an hour per number,
- * whoever asks (nobody can flood a stranger's WhatsApp).
+ * A code for a number typed in the sign-up form, whoever's it is: the answer is the same for a number that already has
+ * an account (nobody learns which numbers have one); only the person who gets the code learns it, when the sign-up
+ * goes on (startSignup). 1 a minute and 5 an hour per number, whoever asks (nobody can flood a stranger's WhatsApp).
  */
 export async function newSignupCode(t: Tenancy, raw: string, now = Date.now()): Promise<{ phone: string; code: string; id: number }> {
   const phone = accountPhoneOrBad(raw);
-  if (await phoneTaken(t, phone, null)) throw bad(TAKEN);
   const last = (await t.platform.query('SELECT created_at FROM platform.phone_codes WHERE phone = $1 AND account_id IS NULL ORDER BY created_at DESC LIMIT 1', [phone]))[0];
   const since = last ? now - Date.parse(new Date(last.created_at).toISOString()) : Infinity;
   if (since < PHONE_CODE.gapMs) throw bad(`Attendez ${Math.ceil((PHONE_CODE.gapMs - since) / 1000)} secondes avant de demander un nouveau code`);

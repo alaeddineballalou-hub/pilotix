@@ -11,6 +11,7 @@
 // The network part (the login's code turned into a token, the Pages and ad accounts read, the Pages subscribed to
 // Pilotix's webhook) is in social-server.ts, run by the server only. In the browser preview there is no platform: a
 // sample account answers, kept in the page until it is reloaded.
+import { sealPlatformSetting, sealSetting, sealString } from '../secretbox';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num } from '../db';
 import { AppError, Ctx, proc } from '../rpc';
@@ -199,7 +200,7 @@ async function platformRow(t: Tenancy, key: string): Promise<any> {
 async function savePlatformRow(t: Tenancy, key: string, value: unknown) {
   await t.platform.query(
     `INSERT INTO platform.settings (key, value, updated_at) VALUES ($1, $2, now()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-    [key, JSON.stringify(value)],
+    [key, JSON.stringify(sealPlatformSetting(key, value))],
   );
 }
 
@@ -360,7 +361,7 @@ export async function saveLink(t: Tenancy, st: StateRow, f: FoundAccount): Promi
     const same = (
       await db.query(`SELECT id FROM platform.social_links WHERE provider = $1 AND owner_id = $2 AND ext_id = $3 AND coalesce(shop_id, 0) = $4`, [f.provider, st.ownerId, f.extId, st.shopId ?? 0])
     )[0];
-    const vals = [f.name.slice(0, 200), (f.picture ?? '').slice(0, 1000), f.token, f.tokenKind, f.expiresAt, st.by.slice(0, 120)];
+    const vals = [f.name.slice(0, 200), (f.picture ?? '').slice(0, 1000), sealString(f.token), f.tokenKind, f.expiresAt, st.by.slice(0, 120)];
     if (same) {
       await db.query(`UPDATE platform.social_links SET name = $2, picture = $3, token = $4, token_kind = $5, expires_at = $6, by_name = $7, status = 'ok', error = NULL, updated_at = now() WHERE id = $1`, [num(same.id), ...vals]);
       return num(same.id);
@@ -376,7 +377,7 @@ export async function saveLink(t: Tenancy, st: StateRow, f: FoundAccount): Promi
     await t.platform.query(
       `INSERT INTO platform.social_assets (link_id, kind, ext_id, name, extra, token) VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (link_id, kind, ext_id) DO UPDATE SET name = EXCLUDED.name, extra = EXCLUDED.extra, token = EXCLUDED.token`,
-      [linkId, a.kind, a.extId, a.name.slice(0, 200), JSON.stringify(a.extra ?? {}), a.token ?? null],
+      [linkId, a.kind, a.extId, a.name.slice(0, 200), JSON.stringify(a.extra ?? {}), a.token ? sealString(a.token) : null],
     );
   // The Pages and ad accounts no longer shared with Pilotix: a boutique that used such a Page stops; one that counted this
   // account's ad accounts keeps counting the others (its use moves to one of them), and stops only when none is left.
@@ -501,7 +502,7 @@ interface Applied {
 }
 const raw = async (db: Db, key: string): Promise<any> => (await db.query('SELECT value FROM settings WHERE key = $1', [key]))[0]?.value ?? null;
 const put = (db: Db, key: string, value: unknown) =>
-  db.query(`INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [key, JSON.stringify(value)]);
+  db.query(`INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [key, JSON.stringify(sealSetting(key, value))]);
 const drop = (db: Db, keys: string[]) => db.query('DELETE FROM settings WHERE key = ANY($1)', [keys]);
 
 async function applyShop(db: Db, a: Applied) {

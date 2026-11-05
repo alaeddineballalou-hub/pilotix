@@ -8,6 +8,8 @@
 #   BACKUP_PASSPHRASE=...                   a long password of your own: the copies are unreadable without it (keep it
 #                                           somewhere safe, away from this server)
 # To read a copy back:  openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in <file>.sql.gz.enc -out <file>.sql.gz
+# (and pilotix-keys.enc the same way: the DATA_KEY line to put in the new server's deploy/.env, without which the saved
+# couriers' keys and tokens in the copy cannot be read)
 # Run by hand to test:  sudo bash /opt/pilotix/deploy/backup.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -34,10 +36,15 @@ if [ "${#PASS}" -lt 16 ]; then
   exit 1
 fi
 E="$F.enc"
-trap 'rm -f "$E"' EXIT
+K="$DIR/pilotix-keys.enc"
+trap 'rm -f "$E" "$K"' EXIT
 # encrypted here, before it leaves: the storage company never sees the data
 BACKUP_PASSPHRASE="$PASS" openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in "$F" -out "$E" -pass env:BACKUP_PASSPHRASE
-docker run --rm -v "$DIR:/data:ro" \
-  -e RCLONE_CONFIG_B2_TYPE=b2 -e RCLONE_CONFIG_B2_ACCOUNT="$KEY_ID" -e RCLONE_CONFIG_B2_KEY="$KEY" \
-  rclone/rclone:1 copyto "/data/$(basename "$E")" "b2:$BUCKET/$(basename "$E")" --no-traverse
-echo "Off-site copy: OK (b2:$BUCKET/$(basename "$E"))"
+# the key that seals the saved secrets goes too, under the same passphrase (a new server needs it to read them)
+printf 'DATA_KEY=%s\n' "$(setting DATA_KEY)" | BACKUP_PASSPHRASE="$PASS" openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -out "$K" -pass env:BACKUP_PASSPHRASE
+for f in "$E" "$K"; do
+  docker run --rm -v "$DIR:/data:ro" \
+    -e RCLONE_CONFIG_B2_TYPE=b2 -e RCLONE_CONFIG_B2_ACCOUNT="$KEY_ID" -e RCLONE_CONFIG_B2_KEY="$KEY" \
+    rclone/rclone:1 copyto "/data/$(basename "$f")" "b2:$BUCKET/$(basename "$f")" --no-traverse
+done
+echo "Off-site copy: OK (b2:$BUCKET/$(basename "$E"), and the key of the saved secrets)"

@@ -121,8 +121,9 @@ export async function login(db: Db, email: string, password: string) {
 export const hashPassword = (pw: string) => bcrypt.hash(pw, 12);
 
 /**
- * A team member's phone: required, a mobile (or a number from abroad with its +), and nobody else's — not another
- * person of this team, not another person's Pilotix account.
+ * A team member's phone: required, a mobile (or a number from abroad with its +), and not another person's of this
+ * team. Whether it is another Pilotix account's is not said here (any store's admin could test numbers with it): the
+ * person's account gets it only when it is free (setAccountPhone), else it is asked at their first login.
  */
 async function teamPhone(ctx: Ctx, raw: unknown, who: { id: number | null; email: string }): Promise<string> {
   const p = normalizeAccountPhone(String(raw ?? ''));
@@ -130,10 +131,6 @@ async function teamPhone(ctx: Ctx, raw: unknown, who: { id: number | null; email
   const email = who.email.toLowerCase();
   if ((await ctx.db.query('SELECT 1 FROM profiles WHERE phone = $1 AND id IS DISTINCT FROM $2 AND lower(email) <> $3 AND active', [p, who.id, email])).length)
     throw bad('Ce numéro est déjà utilisé par une autre personne de l’équipe');
-  if (ctx.t) {
-    const owner = (await ctx.t.platform.query('SELECT email FROM platform.accounts WHERE phone = $1', [p]))[0];
-    if (owner && String(owner.email).toLowerCase() !== email) throw bad('Ce numéro est déjà utilisé par un autre compte Pilotix');
-  }
   return p;
 }
 

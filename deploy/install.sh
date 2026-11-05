@@ -37,6 +37,13 @@ if ! grep -q '^PUBLIC_IP=' deploy/.env; then
     echo "    server address for shops' own domains: $IP"
   fi
 fi
+# the key that seals the secrets saved in the database (couriers' keys, Meta / TikTok / WhatsApp tokens, AI keys): made
+# once and never changed (what was sealed with it cannot be read with another). The off-site backup keeps it, under its
+# passphrase (deploy/backup.sh): a copy of the database alone shows none of these secrets.
+if ! grep -q '^DATA_KEY=' deploy/.env; then
+  echo "DATA_KEY=$(head -c 32 /dev/urandom | base64 | tr -d '\n')" >> deploy/.env
+  echo "    DATA_KEY added to deploy/.env (it seals the saved secrets: keep this file safe)"
+fi
 
 echo "==> Server protection"
 export DEBIAN_FRONTEND=noninteractive
@@ -109,6 +116,12 @@ CRON
 
 echo "==> E-mails (the control room's login code, password links, invitations, sign-ups)"
 $C exec -T server node apps/server/dist/mailcheck.js || echo "E-mail: FAILED (the check did not run)"
+
+# the server's own SSH key (public: anyone can ask the server for it), for GitHub's « Deploy » to check it talks to this
+# server and no other (the secret DEPLOY_KNOWN_HOSTS: these words, as they are)
+for k in /etc/ssh/ssh_host_ed25519_key.pub /etc/ssh/ssh_host_ecdsa_key.pub; do
+  if [ -r "$k" ]; then echo "Host key: $(cut -d' ' -f1,2 "$k")"; break; fi
+done
 
 echo
 echo "Pilotix is running: https://$DOMAIN"

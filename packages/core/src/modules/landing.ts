@@ -9,6 +9,7 @@
 //   server: InitiateCheckout for an abandoned order, Purchase only for a real order (received, confirmed or delivered,
 //   as chosen), never for a blocked one;
 // - the products still without a page (menu badge, one-click page, automatic page for each new product).
+import { sealString } from '../secretbox';
 import { AD_KEY_SQL, algeriaDay, QUALITY_OPEN_DAYS, QUALITY_SQL } from './quality';
 import {
   CONF_DONE_BAD,
@@ -247,7 +248,7 @@ async function secret(db: Db): Promise<string> {
   const bytes = new Uint8Array(24);
   globalThis.crypto.getRandomValues(bytes);
   const s = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-  await db.query(`INSERT INTO settings (key, value) VALUES ('landing_secret', $1) ON CONFLICT (key) DO NOTHING`, [JSON.stringify(s)]);
+  await db.query(`INSERT INTO settings (key, value) VALUES ('landing_secret', $1) ON CONFLICT (key) DO NOTHING`, [JSON.stringify(sealString(s))]);
   return secret(db);
 }
 
@@ -1711,13 +1712,13 @@ export const landingProcs = {
     else if (turnstileSecret.trim())
       await ctx.db.query(
         `INSERT INTO settings (key, value, updated_by) VALUES ($1,$2,$3) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by`,
-        [LANDING_TURNSTILE_SECRET, JSON.stringify(turnstileSecret.trim()), ctx.session.profile.id],
+        [LANDING_TURNSTILE_SECRET, JSON.stringify(sealString(turnstileSecret.trim())), ctx.session.profile.id],
       );
     if (capiToken === null) await ctx.db.query(`DELETE FROM settings WHERE key = $1`, [LANDING_CAPI_SECRET]);
     else if (capiToken.trim()) {
       await ctx.db.query(
         `INSERT INTO settings (key, value, updated_by) VALUES ($1,$2,$3) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by`,
-        [LANDING_CAPI_SECRET, JSON.stringify(capiToken.trim()), ctx.session.profile.id],
+        [LANDING_CAPI_SECRET, JSON.stringify(sealString(capiToken.trim())), ctx.session.profile.id],
       );
       // what waited for a token (or failed with the old one) leaves now
       await requeueMetaEvents(ctx.db, ctx.now());

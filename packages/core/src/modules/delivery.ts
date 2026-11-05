@@ -1,6 +1,7 @@
 // Delivery companies (couriers with or without API), their tariffs and stop desks, sending parcels, status sync,
 // own livreurs and their round ("Ma tournée"). Courier APIs run on the server only (ctx.server.courier → couriers/index.ts);
 // in the browser preview every courier answer is simulated.
+import { sealDeep, sealString } from '../secretbox';
 import { COURIER_KINDS, CourierKind, FOLLOW_ON_ROAD, FollowStatus, Order, Session, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { ADAPTERS } from '../couriers/adapters';
@@ -704,13 +705,13 @@ export const deliveryProcs = {
         const cred = i.clearKeys || cur.kind !== i.kind ? {} : parseJson(cur.credentials);
         const cfg = parseJson(cur.config);
         await tx.query('UPDATE delivery_companies SET name=$2, kind=$3, active=$4, phone=$5, credentials=$6, config=$7 WHERE id=$1', [
-          cid, i.name, i.kind, i.active, i.phone ?? null, JSON.stringify({ ...cred, ...newKeys }),
+          cid, i.name, i.kind, i.active, i.phone ?? null, JSON.stringify(sealDeep({ ...cred, ...newKeys })),
           // the courier's webhook (set from « ZR depuis Pilotix ») stays when the form does not send it back
           JSON.stringify({ ...cfg, settings: cur.kind === i.kind && cfg.settings?.webhook_id && settings.webhook_id === undefined ? { ...settings, webhook_id: cfg.settings.webhook_id } : settings }),
         ]);
       } else {
         const r = await tx.query('INSERT INTO delivery_companies (name, kind, active, phone, credentials, config) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id', [
-          i.name, i.kind, i.active, i.phone ?? null, JSON.stringify(newKeys), JSON.stringify({ settings, statusMap: {} }),
+          i.name, i.kind, i.active, i.phone ?? null, JSON.stringify(sealDeep(newKeys)), JSON.stringify({ settings, statusMap: {} }),
         ]);
         cid = num(r[0].id);
       }
@@ -1008,7 +1009,7 @@ export const deliveryProcs = {
     await ctx.db.query(
       `UPDATE delivery_companies SET credentials = credentials || jsonb_build_object('webhook_key', $2::text),
          config = jsonb_set(COALESCE(config, '{}'::jsonb), '{settings}', COALESCE(config->'settings', '{}'::jsonb) || jsonb_build_object('webhook_id', $3::text)) WHERE id = $1`,
-      [c.id, key, extId],
+      [c.id, sealString(key), extId],
     );
     // the courier's space asks for the address by hand (Yalidine: Développement → Webhooks): shown once, to paste there
     const base = publicApi(ctx) || 'https://votre-serveur.dz/api';

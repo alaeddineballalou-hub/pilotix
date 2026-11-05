@@ -159,12 +159,15 @@ export async function startSignup(t: Tenancy, raw: unknown, ip: string | null, n
   }
   if (!partner && i.referral && !(await t.platform.query(`SELECT 1 FROM platform.shops WHERE referral_code = $1 AND status <> 'deleted'`, [i.referral])).length)
     throw bad('Code de parrainage inconnu (laissez vide si vous n’en avez pas)');
-  // one number = one account
+  // one number = one account. Whose number it is is said only to the person who proves it (its WhatsApp code): to
+  // anyone else the sign-up answers as usual, so nobody learns which numbers have an account. Without the code, a number
+  // that is already an account's is not given to the new one (asked again at its first login, after the password).
   const phone = accountPhoneOrBad(i.phone);
-  const phoneOwner = (await t.platform.query('SELECT email FROM platform.accounts WHERE phone = $1', [phone]))[0];
-  if (phoneOwner && phoneOwner.email !== email) throw bad('Ce numéro est déjà utilisé par un autre compte');
-  // the WhatsApp code (when Pilotix asks it): the number is proven before the account is opened
-  if (opts.otp && !phoneOwner) await checkSignupCode(t, phone, i.phoneCode ?? '', now);
+  if (opts.otp) {
+    await checkSignupCode(t, phone, i.phoneCode ?? '', now);
+    const phoneOwner = (await t.platform.query('SELECT email FROM platform.accounts WHERE phone = $1', [phone]))[0];
+    if (phoneOwner && phoneOwner.email !== email) throw bad('Ce numéro a déjà un compte Pilotix : connectez-vous avec ce compte (ou « Mot de passe oublié »)');
+  }
   // 3 sign-ups an hour per e-mail: nobody can fill someone's inbox
   const recent = Number((await t.platform.query('SELECT count(*)::int AS n FROM platform.signup_requests WHERE email = $1 AND created_at > $2::timestamptz', [email, iso(now - HOUR)]))[0]?.n ?? 0);
   if (recent >= 3) return null;

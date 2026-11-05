@@ -5,7 +5,7 @@ import { DEMO_ACCOUNTS, FEATURE_KEYS, passwordProblem } from '@pilotix/shared';
 import bcrypt from 'bcryptjs';
 import { z, ZodTypeAny } from 'zod';
 import { isoOrNull, num, numOrNull } from '../db';
-import { AppError, bad, Ctx, forbidden, notFound } from '../rpc';
+import { AppError, bad, Ctx, forbidden, inputTooBig, notFound } from '../rpc';
 import { hashPassword } from '../modules/users';
 import { courierCatalog } from '../couriers/catalog';
 import { clearCourierTestKeys, courierTestState, saveCourierTestKeys } from './courierTests';
@@ -1579,6 +1579,8 @@ export async function platformCall(name: string, ctx: PCtx, raw: unknown): Promi
   const p = (PLATFORM_REGISTRY as unknown as Record<string, PProcedure>)[name];
   if (!p) throw notFound(`Action inconnue : ${name}`);
   if (ctx.staff.role !== 'owner' && !p.roles.includes(ctx.staff.role)) throw forbidden('Réservé au propriétaire de Pilotix');
+  const big = inputTooBig(raw);
+  if (big) throw bad(big);
   const parsed = p.input.safeParse(raw ?? {});
   if (!parsed.success) {
     const iss = parsed.error.issues[0];

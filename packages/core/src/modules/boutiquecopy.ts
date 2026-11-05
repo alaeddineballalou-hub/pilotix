@@ -13,6 +13,7 @@
 // removed) and only missing bureaus are added, so the orders there keep theirs. People and products named in the
 // settings (an agent's choices, a rule for some products) are found again by their e-mail and their SKU or name; a rule
 // whose products are not in this boutique is left out (it never becomes a rule for every product).
+import { sealDeep, sealSetting } from '../secretbox';
 import { CLASH_ASSIGN, type PilotConfig } from '@pilotix/shared';
 import { z } from 'zod';
 import type { Db } from '../db';
@@ -193,7 +194,7 @@ export async function copyBoutique(from: Db, to: Db, parts: readonly CopyPart[],
     const put = <K extends keyof SettingsMap>(k: K, v: SettingsMap[K]) => setSetting(tx, k, v, by);
     const raw = async (k: string) => parseJson((await tx.query('SELECT value FROM settings WHERE key = $1', [k]))[0]?.value ?? {});
     const putRaw = (k: string, v: unknown) =>
-      tx.query(`INSERT INTO settings (key, value, updated_by) VALUES ($1, $2, $3) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by`, [k, JSON.stringify(v), by ?? null]);
+      tx.query(`INSERT INTO settings (key, value, updated_by) VALUES ($1, $2, $3) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by`, [k, JSON.stringify(sealSetting(k, v)), by ?? null]);
     const copy = async <K extends keyof SettingsMap>(k: K) => {
       const v = src(k);
       if (v !== null) await put(k, v);
@@ -221,7 +222,7 @@ export async function copyBoutique(from: Db, to: Db, parts: readonly CopyPart[],
           const own = newKeys ? null : parseJson(cur.config)?.settings?.webhook_id;
           const next = JSON.stringify({ ...cfg, settings: own ? { ...settings, webhook_id: own } : settings });
           const cred = newKeys ? keys : ownKey !== undefined ? { ...curKeys, webhook_key: ownKey } : curKeys;
-          await tx.query('UPDATE delivery_companies SET active = $2, phone = $3, config = $4, credentials = $5 WHERE id = $1', [id, !!c.active, c.phone ?? null, next, JSON.stringify(cred)]);
+          await tx.query('UPDATE delivery_companies SET active = $2, phone = $3, config = $4, credentials = $5 WHERE id = $1', [id, !!c.active, c.phone ?? null, next, JSON.stringify(sealDeep(cred))]);
           result.updated.push(String(c.name));
         } else {
           id = num(
@@ -231,7 +232,7 @@ export async function copyBoutique(from: Db, to: Db, parts: readonly CopyPart[],
                 c.kind,
                 !!c.active,
                 c.phone ?? null,
-                JSON.stringify(opts.keys ? keys : {}),
+                JSON.stringify(opts.keys ? sealDeep(keys) : {}),
                 JSON.stringify({ ...cfg, settings }),
               ])
             )[0].id,

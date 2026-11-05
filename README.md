@@ -195,6 +195,14 @@ curl -fsSL https://raw.githubusercontent.com/alaeddineballalou-hub/pilotix/main/
 It installs Docker, starts PostgreSQL + Redis + the server + the website behind Caddy (automatic HTTPS), asks for the
 first administrator and sets a daily database backup. Run it again to update. By hand, the steps are:
 
+**Saved secrets** (couriers' API keys, Meta / TikTok / WhatsApp tokens, AI keys, the control room's own keys) are kept
+sealed in the database with `DATA_KEY` (AES-256-GCM; `deploy/.env`, made once by the installer, never in the database):
+a copy of the database alone shows none of them. The server seals each one as it is saved and opens it as it is read
+(`apps/server/src/secretbox.ts`); what an older version saved readable is sealed at the next start. **Never change or
+lose `DATA_KEY`**: the secrets sealed with it could not be read with another (they would have to be typed again). The
+off-site backup keeps it with the database, under the backup's passphrase (`deploy/backup.sh`).
+
+
 **Updates from GitHub, without logging in to the server:** once, on the server, run
 `sudo bash /opt/pilotix/deploy/setup-github-deploy.sh` and put the two secrets it prints in GitHub (Settings › Secrets and
 variables › Actions). Then **Actions › Deploy to the server › Run workflow** backs up the database and updates the server

@@ -10,6 +10,8 @@ import { requireAssignedProducts, seesPurchaseCosts, withoutPurchaseCosts } from
 
 export * from './db';
 export * from './rpc';
+export * from './privacy';
+export * from './secretbox';
 export * from './settings';
 export { expandIp, ipNet } from './net';
 export { seedDemo, seedBase } from './seed';
@@ -40,7 +42,7 @@ export type { KindField } from './couriers/kinds';
 export { syncAgency, syncLink, agencyCounts, monthBounds, monthNow } from './modules/agencies';
 export { agencyGate, AGENCY_AGENT_PROCS, MARKETER_AGENT_PROCS, MARKETER_SELLER_PROCS, SELLER_PROCS, sellerProcsOf } from './modules/agencyscope';
 export { FANOUT_PROCS } from './modules/agencywork';
-export { BOUTIQUE_FANOUT_PROCS, boutiqueWork } from './modules/boutiquework';
+export { BOUTIQUE_FANOUT_PROCS, boutiqueWork, OTHER_BOUTIQUE } from './modules/boutiquework';
 export { listPros, proByCode, computeProStats, STATS_HOURS } from './modules/pro';
 export * as pilotLearn from './modules/pilotlearn';
 export { pilotOn } from './modules/dellal';

@@ -169,12 +169,37 @@ export function shopAllows(shop: ShopCtx | undefined, name: string): { ok: true 
 /** A last check of an action with its checked input (who may call it on what), before it runs. */
 export type Gate = (name: string, ctx: Ctx, input: unknown) => Promise<void>;
 
+/**
+ * What one call or one request may carry, counted before its schema checks it: Zod 3 checks every item of a list
+ * before its length, so a list of millions of wrong items would fill the memory with errors (GHSA-mrhx-c7xc-m3w5).
+ * The biggest list an action takes is 5 000 items; the deepest input a few levels.
+ */
+export const INPUT_LIMITS = { items: 20_000, values: 400_000, depth: 64 } as const;
+
+/** Why this input is too big to check (null: it is fine). Walks it without recursion, stops at the first excess. */
+export function inputTooBig(v: unknown, lim: { items: number; values: number; depth: number } = INPUT_LIMITS): string | null {
+  let values = 0;
+  const stack: [unknown, number][] = [[v, 0]];
+  while (stack.length) {
+    const [x, depth] = stack.pop()!;
+    if (++values > lim.values) return 'Envoi trop gros';
+    if (x === null || typeof x !== 'object') continue;
+    if (depth >= lim.depth) return 'Envoi trop imbriqué';
+    const items = Array.isArray(x) ? x : Object.values(x as Record<string, unknown>);
+    if (items.length > lim.items) return `Liste trop longue (${items.length} éléments, ${lim.items} au plus)`;
+    for (const y of items) stack.push([y, depth + 1]);
+  }
+  return null;
+}
+
 export async function dispatch(registry: Record<string, Procedure>, name: string, ctx: Ctx, rawInput: unknown, gate?: Gate): Promise<unknown> {
   const p = registry[name];
   if (!p) throw notFound(`Action inconnue : ${name}`);
   const allowed = shopAllows(ctx.shop, name);
   if (!allowed.ok) throw allowed.error;
   if (p.roles !== null && !hasRole(ctx.session, ...p.roles)) throw forbidden();
+  const big = inputTooBig(rawInput);
+  if (big) throw bad(big);
   const parsed = p.input.safeParse(rawInput ?? {});
   if (!parsed.success) {
     const i = parsed.error.issues[0];

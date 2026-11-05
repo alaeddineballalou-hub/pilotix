@@ -11,6 +11,7 @@ import { DoctorAction, DoctorError, DoctorMuted, DoctorItem, DoctorJob, DoctorLi
 import IORedis from 'ioredis';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
+import { maskPersonal } from '@pilotix/core';
 import { config } from './config';
 import type { CoreService } from './core.service';
 import { turnstileStatus } from './turnstile';
@@ -62,6 +63,7 @@ export class DoctorState {
   record(level: 'error' | 'warn', source: string, raw: unknown) {
     let text = raw instanceof Error ? raw.message : typeof raw === 'string' ? raw : JSON.stringify(raw);
     if (!text) return;
+    text = maskPersonal(text);
     let shop: string | null = null;
     const m = /^\[([a-z0-9-]{1,60})\]\s*/i.exec(text);
     if (m) {
@@ -148,13 +150,30 @@ export class DoctorState {
 
 export const doctorState = new DoctorState();
 
+/** The same for anything given to the log: text, an error (a copy: the error itself is unchanged), the rest as is. */
+function masked(v: unknown): unknown {
+  if (typeof v === 'string') return maskPersonal(v);
+  if (v instanceof Error) {
+    const e = new Error(maskPersonal(v.message));
+    e.name = v.name;
+    e.stack = v.stack ? maskPersonal(v.stack) : undefined;
+    return e;
+  }
+  return v;
+}
+
 /** Nest's logger, writing as before, and also telling the Doctor every error and warning. */
 export class DoctorLogger extends ConsoleLogger {
   private ctxOf(rest: unknown[]) {
     const last = rest[rest.length - 1];
     return typeof last === 'string' && last.length < 60 && !last.includes('\n') ? last : this.context || 'Pilotix';
   }
+  log(message: any, ...rest: any[]) {
+    super.log(masked(message), ...rest.map(masked));
+  }
   error(message: any, ...rest: any[]) {
+    message = masked(message);
+    rest = rest.map(masked);
     super.error(message, ...rest);
     try {
       doctorState.record('error', this.ctxOf(rest), message);
@@ -163,6 +182,8 @@ export class DoctorLogger extends ConsoleLogger {
     }
   }
   warn(message: any, ...rest: any[]) {
+    message = masked(message);
+    rest = rest.map(masked);
     super.warn(message, ...rest);
     try {
       doctorState.record('warn', this.ctxOf(rest), message);

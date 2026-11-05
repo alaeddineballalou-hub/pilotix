@@ -9,6 +9,7 @@ import { normalizePhone, phoneIntl, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
+import { sealSetting } from '../secretbox';
 import { getSetting } from '../settings';
 import { ownRowSql } from './agencyscope';
 
@@ -144,7 +145,7 @@ async function saveRaw(db: Db, key: string, value: unknown, userId?: number) {
   await db.query(
     `INSERT INTO settings (key, value, updated_by) VALUES ($1, $2, $3)
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by`,
-    [key, JSON.stringify(value), userId ?? null],
+    [key, JSON.stringify(sealSetting(key, value)), userId ?? null],
   );
 }
 

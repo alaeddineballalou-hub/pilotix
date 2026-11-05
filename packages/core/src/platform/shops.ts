@@ -3,6 +3,7 @@
 import { AgencyPrices, APP_PAGES, CODE_PREFIX, effectiveFeatures, isFeatureKey, isPartnerKind, PartnerKind, pricesOfKind, PUBLIC_ROOTS, ShopInfo, ShopKind, ShopState } from '@pilotix/shared';
 import { Db, isoOrNull, migrate, num, numOrNull } from '../db';
 import type { ShopCtx } from '../rpc';
+import { sealPlatformSetting } from '../secretbox';
 import { landingSettings, landingStore, STORE_RESERVED } from '../modules/landingquery';
 import { hashPassword } from '../modules/users';
 import { seedBase, seedDemo } from '../seed';
@@ -292,7 +293,7 @@ export async function platformSettings(t: Tenancy): Promise<PlatformSettings> {
 export async function setPlatformSetting<K extends keyof PlatformSettings>(t: Tenancy, key: K, value: PlatformSettings[K]) {
   await t.platform.query(
     `INSERT INTO platform.settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-    [key, JSON.stringify(value)],
+    [key, JSON.stringify(sealPlatformSetting(key, value))],
   );
 }
 

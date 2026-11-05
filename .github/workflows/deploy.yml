@@ -36,8 +36,8 @@ jobs:
         env:
           KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           HOST: ${{ secrets.DEPLOY_HOST }}
-          # the server's own SSH key (« ssh-keyscan <server> » once, saved as the secret DEPLOY_KNOWN_HOSTS): with it, a
-          # machine pretending to be the server is refused
+          # the server's own SSH key (the « Host key: » line of an update, saved as the secret DEPLOY_KNOWN_HOSTS: its
+          # type and key, the server's address is added here): with it, a machine pretending to be the server is refused
           KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           if [ -z "$KEY" ] || [ -z "$HOST" ]; then
@@ -47,7 +47,14 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$KEY" > ~/.ssh/deploy
           chmod 600 ~/.ssh/deploy
-          if [ -n "$KNOWN" ]; then printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts; CHECK=yes; else CHECK=accept-new; echo "::warning title=SSH::No DEPLOY_KNOWN_HOSTS secret: the server's key is not checked"; fi
+          if [ -n "$KNOWN" ]; then
+            # a line with only « type key » (ssh-ed25519 AAAA…) gets the server's address in front; a full line stays as it is
+            printf '%s\n' "$KNOWN" | sed -E "s/^(Host key: )?//; /^(ssh-|ecdsa-)/s|^|$HOST |" > ~/.ssh/known_hosts
+            CHECK=yes
+          else
+            CHECK=accept-new
+            echo "::warning title=SSH::No DEPLOY_KNOWN_HOSTS secret: the server's key is not checked"
+          fi
           set -o pipefail
           # (e-mail addresses are hidden in the run's log: anyone can read it while the code is public)
           ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=$CHECK -o ServerAliveInterval=30 "root@$HOST" update 2>&1 | sed -u -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/***@***/g' | tee update.log

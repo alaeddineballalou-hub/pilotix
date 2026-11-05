@@ -41,6 +41,8 @@ services:
       DATABASE_URL: postgres://pilotix:${POSTGRES_PASSWORD}@postgres:5432/pilotix
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?missing in deploy/.env}
+      # seals the secrets saved in the database (made by install.sh; never change it: apps/server/src/secretbox.ts)
+      DATA_KEY: ${DATA_KEY:-}
       JWT_EXPIRES: 12h
       CORS_ORIGINS: https://${DOMAIN},https://www.${DOMAIN},capacitor://localhost,https://localhost
       TRUST_PROXY: "1"
