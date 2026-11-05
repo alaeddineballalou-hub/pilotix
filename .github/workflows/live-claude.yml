@@ -1,4 +1,4 @@
-# Temporary (for Claude): which version of the app page does Cloudflare give to visitors? Reads only.
+# Temporary (for Claude): does the live server answer Meta's data deletion address? Changes nothing.
 name: Live now 2 (temporary, for Claude)
 on:
   push:
@@ -10,20 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: The app page, through Cloudflare and straight from the server
+      - name: Meta's data deletion address, through Cloudflare and straight from the server
         run: |
-          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
-          t() {
-            c=$(curl -s -m 30 -A "$UA" -H 'Accept: text/html' -D /tmp/h.txt -o /tmp/b.html -w '%{http_code}' "$1" || echo failed)
-            h() { grep -i "^$1:" /tmp/h.txt | head -1 | tr -d '\r' | cut -d' ' -f2-; }
-            js=$(grep -o 'assets/index-[A-Za-z0-9_-]*\.js' /tmp/b.html | head -1)
-            echo "::notice title=$2::$c · script ${js:-none} · cf-cache-status=$(h cf-cache-status) · age=$(h age) · cache-control=$(h cache-control) · last-modified=$(h last-modified) · challenge=$(grep -c 'Just a moment' /tmp/b.html || true)"
-          }
-          t 'https://direct.pilotix.online/demo/accueil' 'Server itself /demo/accueil'
-          t 'https://direct.pilotix.online/' 'Server itself /'
-          t 'https://pilotix.online/' 'Cloudflare /'
-          t 'https://pilotix.online/index.html' 'Cloudflare /index.html'
-          t 'https://pilotix.online/demo/accueil' 'Cloudflare /demo/accueil'
-          t 'https://pilotix.online/demo/comptes' 'Cloudflare /demo/comptes'
-          t "https://pilotix.online/demo/comptes?fresh=$RANDOM" 'Cloudflare /demo/comptes?fresh'
-          t 'https://pilotix.online/demo/accueil' 'Cloudflare /demo/accueil (again)'
+          for base in https://pilotix.online https://direct.pilotix.online; do
+            c=$(curl -s -m 30 -o /tmp/p.html -w '%{http_code}' "$base/api/hooks/meta-deletion/NOPE1234" || echo failed)
+            echo "::notice title=Page of an unknown code, $base::HTTP $c · says unknown code: $(grep -c 'Unknown request code' /tmp/p.html || true) · Cloudflare challenge: $(grep -c 'Just a moment' /tmp/p.html || true)"
+            c=$(curl -s -m 30 -o /tmp/q.json -w '%{http_code}' -X POST -H 'Content-Type: application/x-www-form-urlencoded' --data 'signed_request=abc.def' "$base/api/hooks/meta-deletion" || echo failed)
+            echo "::notice title=Request with a wrong signature, $base::HTTP $c · $(head -c 120 /tmp/q.json | tr -d '\n')"
+          done
