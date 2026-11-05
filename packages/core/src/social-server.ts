@@ -499,7 +499,7 @@ export async function deletionPage(t: Tenancy, code: string): Promise<{ found: b
   const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Data deletion · Pilotix</title>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f5f8;color:#16202e}
 main{max-width:480px;margin:24px;padding:28px;border-radius:16px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.08)}h1{margin:0 0 4px;font-size:22px}
-h2{margin:18px 0 4px;font-size:17px}p{margin:0;color:#4b5563}section+section{border-top:1px solid #eceef2;margin-top:18px}
+h2{margin:18px 0 4px;font-size:17px}p{margin:0;color:#4b5563}bdi{white-space:nowrap}section+section{border-top:1px solid #eceef2;margin-top:18px}
 .dot{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:50%;margin-bottom:14px;color:#fff;font-size:24px;background:${r ? '#1f9d55' : '#6b7280'}}</style></head>
 <body><main><div class="dot">${r ? '✓' : '?'}</div><h1>Pilotix</h1>${body}</main></body></html>`;
   return { found: !!r, html };
