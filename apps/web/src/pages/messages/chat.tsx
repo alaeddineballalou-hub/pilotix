@@ -102,7 +102,8 @@ export function Bubbles({
         </div>
         {m.meta?.edited?.before && (
           <small className="ai-before" dir="auto">
-            {t('messages.thread.editedBefore', { text: String(m.meta.edited.before) })}
+            {t('messages.thread.editedBefore', { text: '' })}
+            <s>{String(m.meta.edited.before)}</s>
           </small>
         )}
         {m.sendError && <small className="ai-err">⚠ {m.sendError}</small>}
