@@ -1,0 +1,31 @@
+name: Lock file (for a dependency change made without the registry)
+# A deps/* branch whose package.json changed (a version only one site serves, like SheetJS's own address): GitHub works
+# out package-lock.json for it (the exact files and their fingerprints) and adds it to the same branch. No install
+# script runs. The branch is then checked like any change (Pilotix CI) before it is merged.
+on:
+  push:
+    branches: ['deps/**']
+concurrency:
+  group: lockfile-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: write
+jobs:
+  lock:
+    # its own commit (GitHub's token) starts no new run; this guard is for a push by hand of the same commit
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Add package-lock.json to the branch
+        run: |
+          if git diff --quiet package-lock.json; then echo "package-lock.json: nothing to change"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -qm "package-lock.json for ${GITHUB_SHA::7}"
+          git push -q origin "HEAD:${GITHUB_REF_NAME}"
