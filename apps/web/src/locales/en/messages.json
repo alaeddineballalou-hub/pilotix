@@ -187,7 +187,7 @@
     "pageNoneHint": "Link your Facebook account: your agents then answer on Messenger and Instagram.",
     "pageOld": "An old Page key pasted by hand still works. Link your Facebook account: it will be replaced.",
     "pageLink": "Link a Facebook account",
-    "waHelp": "WhatsApp still goes through your own Meta app: paste its address and verify token in Webhooks, then its secret key below.",
+    "waHelp": "Without the button: your own Meta app. Paste its address and verify token in Webhooks, then its secret key, the number ID and the WhatsApp key below.",
     "igLogin": "Instagram: answer all your customers",
     "igLoginHelp": "Without Meta’s approval, Instagram lets {{name}} answer only accounts that have a role on the Meta app. With Instagram’s own login, your own Instagram account is added to the app: {{name}} can then answer all its customers.",
     "igStep1": "In the Meta app, give your Instagram account the Instagram Tester role:",
@@ -210,7 +210,14 @@
     "igClosed": "The Meta tab was closed before the end.",
     "igConnectHelp": "Log in with the Facebook account that manages the shop's Instagram, pick that account, then « Yes, it's my shop ».",
     "igOr": "If the button does not work, the Pilotix team can paste a key here:",
-    "igAdvanced": "Advanced (Pilotix team): paste a key by hand"
+    "igAdvanced": "Advanced (Pilotix team): paste a key by hand",
+    "waConnect": "Connect WhatsApp",
+    "waReconnect": "Reconnect WhatsApp",
+    "waConnected": "{{phone}} connected ✅",
+    "waConnectedToast": "WhatsApp connected: its messages now reach Pilotix.",
+    "waConnectHelp": "Log in with the Facebook account that manages the shop's WhatsApp Business, pick (or add) its number, then « Yes, it's my shop ».",
+    "waManual": "A number is already connected by hand (see Advanced).",
+    "waAdvanced": "Advanced (Pilotix team): your own Meta app"
   },
   "lahja": {
     "fix": "Darija lesson",

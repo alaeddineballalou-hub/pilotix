@@ -22,7 +22,7 @@ import { asWords, checkLahjaWords, LAHJA_NO_CHANGE, LAHJA_PERSONAL, lahjaAvoid, 
 import { pilotConfig, pilotToday } from '../platform/pilotai';
 import { guideText, HAS_GUIDE, readGuide, toFill } from './guide';
 import { vocabBlock, vocabFor } from './vocab';
-import { linkedPage, noteIgLogin } from './social';
+import { linkedPage, noteIgLogin, noteWaLogin } from './social';
 import { catalogueThumbs, imageBlock, PHOTO_MODEL, PHOTO_SYSTEM, photoBody, PhotoReading, photoRequest, PhotoSrc, productPhotos, productsWithPhotos, productsWithSizeChart, readPhotoAnswer } from './dellalphotos';
 
 // ---------------------------------------------------------------- settings and secrets
@@ -78,6 +78,8 @@ export interface DellalSettings {
   /** 'ig': Instagram's own login (older apps, a 60-day key, renewed); 'unified': Meta's Unified login (newer apps, EAA…) */
   igLoginKind: string;
   whatsappPhoneId: string;
+  /** « Connecter WhatsApp »: the number as Meta shows it (+213 …), for Réglages ('': not connected with the button) */
+  whatsappPhone: string;
 }
 
 export const DEFAULT_DELLAL: DellalSettings = {
@@ -106,6 +108,7 @@ export const DEFAULT_DELLAL: DellalSettings = {
   igTokenAt: '',
   igLoginKind: '',
   whatsappPhoneId: '',
+  whatsappPhone: '',
 };
 
 /** Secret keys (never returned by any action). */
@@ -119,6 +122,8 @@ export const DELLAL_SECRETS = {
   igToken: 'secret_dellal_ig_token',
 } as const;
 export type DellalSecret = keyof typeof DELLAL_SECRETS;
+/** « Connecter WhatsApp »: the two-step PIN Pilotix gave the number when it registered it (Meta asks it to move the number) */
+export const WA_PIN_KEY = 'secret_dellal_wa_pin';
 
 export async function dellalSettings(db: Db): Promise<DellalSettings> {
   return { ...DEFAULT_DELLAL, ...(await getRaw<Partial<DellalSettings>>(db, 'dellal', {})) };
@@ -2618,7 +2623,12 @@ export const dellalProcs = {
     const cur = await dellalSettings(ctx.db);
     const { secrets, ...rest } = i;
     const next: DellalSettings = { ...cur, ...rest, verifyToken: cur.verifyToken || randomToken() };
+    // WhatsApp's key removed, or another number id typed by hand: the number « Connecter WhatsApp » brought is no longer
+    // this boutique's (Réglages stops showing it, and its messages stop coming here through Pilotix's app)
+    const waGone = secrets.waToken === null || next.whatsappPhoneId !== cur.whatsappPhoneId;
+    if (waGone) next.whatsappPhone = '';
     await setRaw(ctx.db, 'dellal', next, me(ctx));
+    if (waGone && ctx.t && ctx.shop) await noteWaLogin(ctx.t, ctx.shop.id, '');
     for (const [k, v] of Object.entries(secrets) as [DellalSecret, string | null][]) {
       if (v === null) await ctx.db.query('DELETE FROM settings WHERE key = $1', [DELLAL_SECRETS[k]]);
       else if (v.trim()) await setRaw(ctx.db, DELLAL_SECRETS[k], v.trim(), me(ctx));

@@ -187,7 +187,7 @@
     "pageNoneHint": "Liez votre compte Facebook : vos agents répondent alors sur Messenger et Instagram.",
     "pageOld": "Une ancienne clé de page collée à la main marche encore. Liez votre compte Facebook : elle sera remplacée.",
     "pageLink": "Lier un compte Facebook",
-    "waHelp": "WhatsApp passe encore par votre propre app Meta : collez son adresse et son jeton de vérification dans Webhooks, puis sa clé secrète ci-dessous.",
+    "waHelp": "Sans le bouton : votre propre app Meta. Collez son adresse et son jeton de vérification dans Webhooks, puis sa clé secrète, l’ID du numéro et la clé WhatsApp ci-dessous.",
     "igLogin": "Instagram : répondre à tous vos clients",
     "igLoginHelp": "Sans l’accord de Meta, Instagram laisse {{name}} répondre seulement aux comptes qui ont un rôle dans l’app Meta. Avec la connexion Instagram, votre propre compte Instagram est ajouté à l’app : {{name}} peut alors répondre à tous ses clients.",
     "igStep1": "Dans l’app Meta, donnez le rôle Instagram Tester à votre compte Instagram :",
@@ -210,7 +210,14 @@
     "igClosed": "L’onglet Meta a été fermé avant la fin.",
     "igConnectHelp": "Connectez-vous avec le Facebook qui gère le compte Instagram de la boutique, choisissez ce compte, puis « Oui, c’est ma boutique ».",
     "igOr": "Si le bouton ne marche pas, l’équipe Pilotix peut coller une clé ici :",
-    "igAdvanced": "Avancé (équipe Pilotix) : coller une clé à la main"
+    "igAdvanced": "Avancé (équipe Pilotix) : coller une clé à la main",
+    "waConnect": "Connecter WhatsApp",
+    "waReconnect": "Reconnecter WhatsApp",
+    "waConnected": "{{phone}} connecté ✅",
+    "waConnectedToast": "WhatsApp connecté : ses messages arrivent dans Pilotix.",
+    "waConnectHelp": "Connectez-vous avec le Facebook qui gère le WhatsApp Business de la boutique, choisissez (ou ajoutez) son numéro, puis « Oui, c’est ma boutique ».",
+    "waManual": "Un numéro est déjà connecté à la main (voir Avancé).",
+    "waAdvanced": "Avancé (équipe Pilotix) : votre propre app Meta"
   },
   "lahja": {
     "fix": "Leçon de darija",

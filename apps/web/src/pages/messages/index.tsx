@@ -491,11 +491,18 @@ function Results() {
   );
 }
 
-// « Connecter Instagram »: one Meta login with Pilotix's Instagram configuration (Centre de contrôle › Comptes Meta et
-// TikTok › Instagram seul). The tab opens on the click; Pilotix keeps the key, subscribes the account's DMs and says
-// « @x connecté ». Asked every two seconds, like Pilot AI › Comptes.
-function IgConnect({ linked }: { linked: string }) {
+// « Connecter Instagram » / « Connecter WhatsApp »: one Meta login with Pilotix's own configuration for it (Centre de
+// contrôle › Comptes Meta et TikTok › Instagram seul / WhatsApp). The tab opens on the click; Pilotix keeps the key,
+// subscribes the account's messages and says « @x connecté » / « +213… connecté ». Asked every two seconds, like Pilot
+// AI › Comptes.
+type ConnectKind = 'instagram' | 'whatsapp';
+const CONNECT_TEXT: Record<ConnectKind, { connect: string; reconnect: string; connected: string; toast: string; help: string }> = {
+  instagram: { connect: 'igConnect', reconnect: 'igReconnect', connected: 'igConnected', toast: 'igConnectedToast', help: 'igConnectHelp' },
+  whatsapp: { connect: 'waConnect', reconnect: 'waReconnect', connected: 'waConnected', toast: 'waConnectedToast', help: 'waConnectHelp' },
+};
+function MetaConnect({ kind, linked }: { kind: ConnectKind; linked: string }) {
   const { t } = useTranslation();
+  const k = (x: keyof (typeof CONNECT_TEXT)['instagram']) => `messages.settings.${CONNECT_TEXT[kind][x]}`;
   const qc = useQueryClient();
   const [pending, setPending] = useState<{
     state: string;
@@ -514,7 +521,7 @@ function IgConnect({ linked }: { linked: string }) {
         if (r.status === 'done') {
           setPending(null);
           await qc.invalidateQueries();
-          toast(t('messages.settings.igConnectedToast'), 'ok');
+          toast(t(k('toast')), 'ok');
           return;
         }
         if (r.status === 'error' || r.status === 'expired') {
@@ -545,10 +552,7 @@ function IgConnect({ linked }: { linked: string }) {
     // opened now, on the click: a tab opened after waiting for the server is blocked by browsers
     const win = backend.kind === 'demo' ? null : window.open('', '_blank');
     try {
-      const r = await rpc('social.start', {
-        provider: 'meta',
-        kind: 'instagram',
-      });
+      const r = await rpc('social.start', { provider: 'meta', kind });
       if (r.url && win && !win.closed) win.location.href = r.url;
       setPending({ state: r.state, url: r.url, win });
     } catch (e) {
@@ -561,15 +565,15 @@ function IgConnect({ linked }: { linked: string }) {
   return (
     <div className="dl-igconnect">
       <button type="button" className="btn primary" disabled={!!pending} onClick={start}>
-        <ChannelBadge ch="instagram" /> {pending ? t('messages.settings.igConnecting') : linked ? t('messages.settings.igReconnect') : t('messages.settings.igConnect')}
+        <ChannelBadge ch={kind} /> {pending ? t('messages.settings.igConnecting') : linked ? t(k('reconnect')) : t(k('connect'))}
       </button>
       {pending?.url && (
         <button type="button" className="linkbtn" onClick={reopen}>
           {t('messages.settings.igReopen')}
         </button>
       )}
-      {linked && !pending && <span className="dl-ok">✓ {t('messages.settings.igConnected', { user: linked })}</span>}
-      <p className="muted small">{t('messages.settings.igConnectHelp')}</p>
+      {linked && !pending && <span className="dl-ok">✓ {t(k('connected'), { user: linked, phone: linked })}</span>}
+      <p className="muted small">{t(k('help'))}</p>
     </div>
   );
 }
@@ -758,7 +762,7 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
           <h4>
             <ChannelBadge ch="instagram" /> {t('messages.settings.igLogin')}
           </h4>
-          <IgConnect linked={data.has.igToken && f.instagramLoginUser ? f.instagramLoginUser : ''} />
+          <MetaConnect kind="instagram" linked={data.has.igToken && f.instagramLoginUser ? f.instagramLoginUser : ''} />
           {/* the shop sees one button; Meta's developer steps and the pasted key are folded away for the Pilotix team */}
           <details className="dl-ig-adv">
             <summary>{t('messages.settings.igAdvanced')}</summary>
@@ -792,22 +796,31 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
         <h3 className="dl-h3">
           <ChannelBadge ch="whatsapp" /> {t('messages.ch.whatsapp')}
         </h3>
-        <p className="muted small">{t('messages.settings.waHelp')}</p>
-        <div className="dl-hook">
-          <Field label={t('messages.settings.metaUrl')}>
-            <CopyCode code={metaUrl} />
-          </Field>
-          <Field label={t('messages.settings.verifyToken')}>
-            <CopyCode code={f.verifyToken || '—'} />
-          </Field>
-        </div>
-        {secret('appSecret', t('messages.settings.appSecret'), '32 caractères')}
-        <div className="grid2">
-          <Field label={t('messages.settings.waPhoneId')}>
-            <input className="ltr" inputMode="numeric" value={f.whatsappPhoneId} onChange={(e) => set('whatsappPhoneId', e.target.value.replace(/\D/g, ''))} />
-          </Field>
-          {secret('waToken', t('messages.settings.waToken'), 'EAAG…')}
-        </div>
+        {/* « Connecter WhatsApp » (Meta's Embedded Signup): the shop sees one button and its number */}
+        <section className="dl-iglogin" aria-label={t('messages.ch.whatsapp')}>
+          <MetaConnect kind="whatsapp" linked={data.has.waToken && f.whatsappPhone ? f.whatsappPhone : ''} />
+          {data.has.waToken && f.whatsappPhoneId && !f.whatsappPhone && <p className="muted small">{t('messages.settings.waManual')}</p>}
+          {/* its own Meta app (the webhook, its keys, the number's id) is folded away for the Pilotix team */}
+          <details className="dl-ig-adv">
+            <summary>{t('messages.settings.waAdvanced')}</summary>
+            <p className="muted small">{t('messages.settings.waHelp')}</p>
+            <div className="dl-hook">
+              <Field label={t('messages.settings.metaUrl')}>
+                <CopyCode code={metaUrl} />
+              </Field>
+              <Field label={t('messages.settings.verifyToken')}>
+                <CopyCode code={f.verifyToken || '—'} />
+              </Field>
+            </div>
+            {secret('appSecret', t('messages.settings.appSecret'), '32 caractères')}
+            <div className="grid2">
+              <Field label={t('messages.settings.waPhoneId')}>
+                <input className="ltr" inputMode="numeric" value={f.whatsappPhoneId} onChange={(e) => set('whatsappPhoneId', e.target.value.replace(/\D/g, ''))} />
+              </Field>
+              {secret('waToken', t('messages.settings.waToken'), 'EAAG…')}
+            </div>
+          </details>
+        </section>
         <h3 className="dl-h3">
           <ChannelBadge ch="tiktok" /> {t('messages.ch.tiktok')}
         </h3>

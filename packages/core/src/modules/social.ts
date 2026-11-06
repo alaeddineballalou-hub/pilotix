@@ -210,10 +210,12 @@ export interface SocialApps {
   /** hasIgSecret: the secret of the app's Instagram login (Meta signs that login's webhooks with it) */
   /** igConfigId: a second Facebook Login for Business configuration, made for Instagram alone (« Instagram API (unified
    * login) », Instagram Login Compatible): « Connecter Instagram » in Pilot Message › Réglages opens it */
+  /** waConfigId: a third one, of the « WhatsApp Embedded Signup » kind: « Connecter WhatsApp » in Pilot Message › Réglages */
   meta: {
     appId: string;
     configId: string;
     igConfigId: string;
+    waConfigId: string;
     hasSecret: boolean;
     hasIgSecret: boolean;
   };
@@ -251,6 +253,7 @@ export async function socialApps(t: Tenancy): Promise<SocialApps> {
       appId: clean(a.meta?.appId, 40),
       configId: clean(a.meta?.configId, 40),
       igConfigId: clean(a.meta?.igConfigId, 40),
+      waConfigId: clean(a.meta?.waConfigId, 40),
       hasSecret: !!clean(s.meta),
       hasIgSecret: !!clean(s.metaIg),
     },
@@ -294,6 +297,22 @@ async function igLoginShop(t: Tenancy, igId: string): Promise<number | null> {
   const v = (await platformRow(t, IG_LOGINS_ROW))[igId];
   return v?.shopId ? num(v.shopId) : null;
 }
+/**
+ * WhatsApp numbers a boutique connected with « Connecter WhatsApp » (Meta's Embedded Signup, Pilot Message › Réglages):
+ * the number's id in Meta's webhooks (phone_number_id) → the boutique (one number per boutique). Their messages and
+ * delivery statuses come to Pilotix's own app, and routeMeta gives them to that boutique.
+ */
+const WA_LOGINS_ROW = 'wa_logins';
+export async function noteWaLogin(t: Tenancy, shopId: number, phoneId: string, phone = ''): Promise<void> {
+  const all = await platformRow(t, WA_LOGINS_ROW);
+  for (const [k, v] of Object.entries(all)) if (num((v as any)?.shopId) === shopId) delete all[k];
+  if (phoneId) all[phoneId] = { shopId, phone, at: new Date().toISOString() };
+  await savePlatformRow(t, WA_LOGINS_ROW, all);
+}
+async function waLoginShop(t: Tenancy, phoneId: string): Promise<number | null> {
+  const v = (await platformRow(t, WA_LOGINS_ROW))[phoneId];
+  return v?.shopId ? num(v.shopId) : null;
+}
 export const appReady = (a: SocialApps, p: SocialProvider) => (p === 'meta' ? !!(a.meta.appId && a.meta.hasSecret) : !!(a.tiktok.appId && a.tiktok.hasSecret));
 /** Where the login tab comes back, where Meta sends the Pages' messages and comments, and its data deletion requests. */
 export const socialUrls = (publicUrl: string) => ({
@@ -309,6 +328,8 @@ export const SocialAppsInput = z.object({
     configId: z.string().trim().max(40).regex(/^\d*$/, 'ID de configuration (chiffres)').default(''),
     /** the Instagram-only configuration (« Connecter Instagram ») */
     igConfigId: z.string().trim().max(40).regex(/^\d*$/, 'ID de configuration Instagram (chiffres)').default(''),
+    /** the WhatsApp Embedded Signup configuration (« Connecter WhatsApp ») */
+    waConfigId: z.string().trim().max(40).regex(/^\d*$/, 'ID de configuration WhatsApp (chiffres)').default(''),
     /** a value replaces, '' keeps, null removes */
     secret: z.string().trim().max(300).nullable().default(''),
     /** the Instagram login's secret: the same (a value replaces, '' keeps, null removes) */
@@ -326,6 +347,7 @@ export async function saveSocialApps(t: Tenancy, i: z.output<typeof SocialAppsIn
       appId: i.meta.appId,
       configId: i.meta.configId,
       igConfigId: i.meta.igConfigId,
+      waConfigId: i.meta.waConfigId,
     },
     tiktok: { appId: i.tiktok.appId },
     verifyToken: clean(cur.verifyToken, 100) || randomToken(),
@@ -358,16 +380,22 @@ export function loginUrl(apps: SocialApps, p: SocialProvider, state: string, pub
   const base = `${SOCIAL.dialog}?client_id=${enc(apps.meta.appId)}&redirect_uri=${enc(u.metaRedirect)}&state=${enc(state)}&response_type=code`;
   // « Connecter Instagram »: the Instagram-only configuration (Instagram Login Compatible)
   if (kind === 'instagram') return `${base}&config_id=${enc(apps.meta.igConfigId)}&override_default_response_type=true`;
+  // « Connecter WhatsApp »: Meta's Embedded Signup (the shop picks or makes its WhatsApp Business account and number)
+  if (kind === 'whatsapp') return `${base}&config_id=${enc(apps.meta.waConfigId)}&override_default_response_type=true&extras=${enc(JSON.stringify(WA_EXTRAS))}`;
   // Facebook Login for Business: a token that does not expire (a configuration made in Pilotix's Meta app)
   return apps.meta.configId ? `${base}&config_id=${enc(apps.meta.configId)}&override_default_response_type=true` : `${base}&scope=${enc(SOCIAL.metaScopes.join(','))}`;
 }
 
-/** What a login is for: an account (Pages, ad accounts) or « Connecter Instagram » (Pilot Message's Instagram alone). */
-export type LoginKind = "account" | "instagram";
+/** What a login is for: an account (Pages, ad accounts), « Connecter Instagram » or « Connecter WhatsApp » (Pilot Message alone). */
+export type LoginKind = "account" | "instagram" | "whatsapp";
 /** « Connecter Instagram »'s states start with it (a normal state never has a dot). */
 export const IG_STATE = "ig.";
+/** « Connecter WhatsApp »'s states start with it. */
+export const WA_STATE = 'wa.';
 export const loginKindOf = (state: string): LoginKind =>
-  state.startsWith(IG_STATE) ? "instagram" : "account";
+  state.startsWith(IG_STATE) ? "instagram" : state.startsWith(WA_STATE) ? 'whatsapp' : "account";
+/** Embedded Signup's own settings (Meta's « extras »): its usual flow, its version 3 */
+const WA_EXTRAS = { setup: {}, featureType: '', sessionInfoVersion: '3' };
 
 export interface StateRow {
   state: string;
@@ -429,6 +457,8 @@ export interface FoundAccount {
   assets: FoundAsset[];
   /** « Connecter Instagram »: the Instagram account the login brought (it goes to Pilot Message, not to the accounts list) */
   instagram?: { id: string; username: string };
+  /** « Connecter WhatsApp »: the WhatsApp Business account, its number's id, the number as Meta shows it, its name */
+  whatsapp?: { wabaId: string; phoneId: string; phone: string; name: string };
 }
 
 const schemaOfShop = async (t: Tenancy, shopId: number): Promise<string | null> => {
@@ -667,8 +697,40 @@ function hookWhat(entry: any): string {
   return 'event';
 }
 
+/** When Meta last sent something for a Page / Instagram account / WhatsApp number, what it was, and whether a boutique took it (« Tester »). */
+async function noteHook(t: Tenancy, obj: string, id: string, routed: boolean, what: string, comment: boolean) {
+  await t.platform
+    .query(
+      `INSERT INTO platform.social_hooks (object, ext_id, at, routed, what, message_at, comment_at)
+         VALUES ($1, $2, now(), $3, $4, CASE WHEN $5::boolean THEN now() END, CASE WHEN $6::boolean THEN now() END)
+       ON CONFLICT (object, ext_id) DO UPDATE SET at = now(), routed = EXCLUDED.routed, what = EXCLUDED.what,
+         message_at = coalesce(EXCLUDED.message_at, platform.social_hooks.message_at), comment_at = coalesce(EXCLUDED.comment_at, platform.social_hooks.comment_at)`,
+      [obj, id, routed, what, what === 'message', comment],
+    )
+    .catch(() => undefined);
+}
+
 export async function routeMeta(t: Tenancy, body: any): Promise<{ shopId: number; body: any }[]> {
   const obj = body?.object;
+  // WhatsApp (« Connecter WhatsApp »): each number's messages and delivery statuses go to the boutique that connected it
+  if (obj === 'whatsapp_business_account') {
+    const byShop = new Map<number, any[]>();
+    for (const entry of Array.isArray(body?.entry) ? body.entry : []) {
+      const mine = new Map<number, any[]>();
+      for (const ch of Array.isArray(entry?.changes) ? entry.changes : []) {
+        const v = ch?.value ?? {};
+        const phoneId = String(v.metadata?.phone_number_id ?? '');
+        if (!/^\d{1,30}$/.test(phoneId)) continue;
+        const shop = await waLoginShop(t, phoneId);
+        const what = Array.isArray(v.messages) && v.messages.length ? 'message' : Array.isArray(v.statuses) && v.statuses.length ? 'status' : `change:${String(ch?.field ?? '')}`.slice(0, 40);
+        await noteHook(t, obj, phoneId, !!shop, what, false);
+        if (shop) mine.set(shop, [...(mine.get(shop) ?? []), ch]);
+      }
+      // a boutique gets only its own number's changes
+      for (const [shop, changes] of mine) byShop.set(shop, [...(byShop.get(shop) ?? []), { ...entry, changes }]);
+    }
+    return [...byShop].map(([shopId, entry]) => ({ shopId, body: { object: obj, entry } }));
+  }
   // an ad account's webhook (ad rejected, problem…): the boutique that uses this ad account (Co-Pilot warns there)
   if (obj === 'ad_account') {
     const byShop = new Map<number, any[]>();
@@ -694,16 +756,7 @@ export async function routeMeta(t: Tenancy, body: any): Promise<{ shopId: number
       if (shop) r = { shop_id: shop };
     }
     // when Meta last sent something for this Page / Instagram account, what it was, and whether a boutique took it (« Tester »)
-    const what = hookWhat(entry);
-    await t.platform
-      .query(
-        `INSERT INTO platform.social_hooks (object, ext_id, at, routed, what, message_at, comment_at)
-           VALUES ($1, $2, now(), $3, $4, CASE WHEN $5::boolean THEN now() END, CASE WHEN $6::boolean THEN now() END)
-         ON CONFLICT (object, ext_id) DO UPDATE SET at = now(), routed = EXCLUDED.routed, what = EXCLUDED.what,
-           message_at = coalesce(EXCLUDED.message_at, platform.social_hooks.message_at), comment_at = coalesce(EXCLUDED.comment_at, platform.social_hooks.comment_at)`,
-        [obj, id, !!r, what, what === 'message', customerComment(obj, entry, id)],
-      )
-      .catch(() => undefined);
+    await noteHook(t, obj, id, !!r, hookWhat(entry), customerComment(obj, entry, id));
     if (!r) continue;
     const s = num(r.shop_id);
     byShop.set(s, [...(byShop.get(s) ?? []), entry]);
@@ -895,18 +948,22 @@ export const socialProcs = {
     z.object({
       provider: z.enum(SOCIAL_PROVIDERS),
       scope: z.enum(['here', 'all']).default('here'),
-      kind: z.enum(['account', 'instagram']).default('account'),
+      kind: z.enum(['account', 'instagram', 'whatsapp']).default('account'),
     }),
     async (ctx, i) => {
-      if (!live(ctx)) return demoStart(ctx, i.provider, i.scope);
-      // « Connecter Instagram »: Facebook's login with the Instagram-only configuration, for this boutique only
+      if (!live(ctx)) return demoStart(ctx, i.provider, i.scope, i.kind);
+      // « Connecter Instagram » / « Connecter WhatsApp »: Facebook's login with their own configuration, for this boutique only
       const ig = i.kind === 'instagram';
+      const wa = i.kind === 'whatsapp';
       if (ig && i.provider !== 'meta') throw new AppError('bad_request', 'Seul Meta connecte Instagram.');
+      if (wa && i.provider !== 'meta') throw new AppError('bad_request', 'Seul Meta connecte WhatsApp.');
       const w = await who(ctx);
       if (i.scope === 'all' && !canAll(w)) throw new AppError('forbidden', 'Seul le propriétaire des boutiques lie un compte pour toutes ses boutiques.');
       const apps = await socialApps(w.t);
       if (ig && !apps.meta.igConfigId)
         throw new AppError('bad_request', 'La connexion Instagram n’est pas encore prête : Pilotix doit d’abord ajouter l’ID de configuration Instagram (Pilot AI › Réglages).');
+      if (wa && !apps.meta.waConfigId)
+        throw new AppError('bad_request', 'La connexion WhatsApp n’est pas encore prête : Pilotix doit d’abord ajouter l’ID de configuration WhatsApp (Pilot AI › Réglages).');
       if (!appReady(apps, i.provider))
         throw new AppError(
           'bad_request',
@@ -916,11 +973,11 @@ export const socialProcs = {
         );
       const publicUrl = ctx.server?.publicUrl;
       if (!publicUrl) throw new AppError('bad_request', 'L’adresse publique du serveur manque (PUBLIC_URL).');
-      const state = (ig ? IG_STATE : '') + randomToken();
+      const state = (ig ? IG_STATE : wa ? WA_STATE : '') + randomToken();
       await w.t.platform.query(`DELETE FROM platform.social_states WHERE expires_at < now() - interval '1 day'`);
       await w.t.platform.query(
         `INSERT INTO platform.social_states (state, provider, owner_id, shop_id, from_shop, by_name, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + interval '${SOCIAL.stateMinutes} minutes')`,
-        [state, i.provider, w.ownerId, i.scope === 'all' && !ig ? null : w.shopId, w.shopId, w.by.slice(0, 120)],
+        [state, i.provider, w.ownerId, i.scope === 'all' && !ig && !wa ? null : w.shopId, w.shopId, w.by.slice(0, 120)],
       );
       return {
         state,
@@ -1033,7 +1090,7 @@ interface DemoLink {
   assets: { id: number; kind: AssetKind; extId: string; name: string; igUsername: string | null; currency: string | null; usedBy: number[] }[];
 }
 const DEMO_SISTER = { id: 902, name: 'Boutique Oran' };
-let demo: { links: DemoLink[]; next: number; states: Map<string, { at: number; provider: SocialProvider; scope: 'here' | 'all'; linkId: number | null }> } | null = null;
+let demo: { links: DemoLink[]; next: number; states: Map<string, { at: number; provider: SocialProvider; scope: 'here' | 'all'; kind?: LoginKind; linkId: number | null }> } | null = null;
 const demoShop = (ctx: Ctx) => ctx.shop?.id ?? 1;
 function demoData(ctx: Ctx) {
   if (demo) return demo;
@@ -1108,10 +1165,10 @@ async function demoList(ctx: Ctx): Promise<SocialListView> {
   }));
   return { apps: { meta: true, tiktok: true }, canAll: true, isOwner: true, shop: { id: me, name }, sisters: shops, links, here: hereOf(links), preview: true };
 }
-async function demoStart(ctx: Ctx, provider: SocialProvider, scope: 'here' | 'all') {
+async function demoStart(ctx: Ctx, provider: SocialProvider, scope: 'here' | 'all', kind: LoginKind = 'account') {
   const d = demoData(ctx);
   const state = `demo-${d.next++}`;
-  d.states.set(state, { at: ctx.now(), provider, scope, linkId: null });
+  d.states.set(state, { at: ctx.now(), provider, scope, kind, linkId: null });
   return { state, url: null as string | null };
 }
 /** In the preview the « login » takes two seconds, then a sample account is linked. */
@@ -1120,6 +1177,13 @@ async function demoState(ctx: Ctx, state: string) {
   const s = d.states.get(state);
   if (!s) throw new AppError('not_found', 'Connexion introuvable');
   if (s.linkId === null && ctx.now() - s.at < 2000) return { status: 'waiting' as const, error: null, linkId: null };
+  // « Connecter WhatsApp »: a sample number, connected to Pilot Message (a preview sends nothing)
+  if (s.kind === 'whatsapp') {
+    const cur = (await raw(ctx.db, 'dellal')) ?? {};
+    await put(ctx.db, 'secret_dellal_wa_token', 'preview');
+    await put(ctx.db, 'dellal', { ...cur, whatsappPhoneId: '106540352242922', whatsappPhone: '+213 550 11 22 33' });
+    return { status: 'done' as const, error: null, linkId: null };
+  }
   if (s.linkId === null) {
     const me = demoShop(ctx);
     const n = d.next++;

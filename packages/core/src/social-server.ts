@@ -3,12 +3,12 @@
 // expire, or a configuration's « system user » token that does not expire; TikTok: an advertiser's token), then what the account may use
 // is read (Facebook Pages with their Instagram account and their own tokens, Meta ad accounts, TikTok ad accounts) and
 // each Page is subscribed to Pilotix's webhook (its messages and comments come to Pilotix). Tokens never leave the server.
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { num } from './db';
 import { AppError, Ctx } from './rpc';
 import type { Tenancy } from './platform/tenancy';
 import { getRaw, setRaw } from './modules/admin';
-import { DELLAL_SECRETS, keepIgLogin } from './modules/dellal';
+import { DELLAL_SECRETS, dellalSettings, keepIgLogin, WA_PIN_KEY } from './modules/dellal';
 import { igLogin, igPeek, uniAccounts } from './dellal-server';
 import {
   deletionStatus,
@@ -16,6 +16,7 @@ import {
   FoundAccount,
   loginKindOf,
   noteIgLogin,
+  noteWaLogin,
   FoundAsset,
   holdFound,
   lastBadSignature,
@@ -260,6 +261,88 @@ async function linkInstagram(
   };
 }
 
+/**
+ * « Connecter WhatsApp » (Pilot Message › Réglages): Meta's Embedded Signup with the WhatsApp configuration. In Meta's
+ * window the shop picks (or makes) its WhatsApp Business account and its number; Pilotix reads which account the key was
+ * given (debug_token's granular scopes), then its number. Its key and number wait for « Oui, c'est ma boutique ».
+ */
+async function whatsappAccount(t: Tenancy, code: string, publicUrl: string): Promise<FoundAccount> {
+  const apps = await socialApps(t);
+  const secret = await socialSecret(t, 'meta');
+  if (!apps.meta.appId || !secret) throw new AppError('bad_request', 'L’app Meta de Pilotix n’est pas prête.');
+  const tok = await graph('oauth/access_token', { client_id: apps.meta.appId, client_secret: secret, redirect_uri: socialUrls(publicUrl).metaRedirect, code });
+  let token = String(tok.access_token ?? '');
+  let expiresIn = Number(tok.expires_in) || 0;
+  if (!token) throw new AppError('bad_request', 'Meta n’a pas donné de clé. Recommencez.');
+  // a person's key becomes one of about 60 days; a business key (that does not end) is kept as it is
+  const ll = await graph('oauth/access_token', { grant_type: 'fb_exchange_token', client_id: apps.meta.appId, client_secret: secret, fb_exchange_token: token }).catch(() => null);
+  if (ll?.access_token) {
+    token = String(ll.access_token);
+    expiresIn = Number(ll.expires_in) || 60 * 86_400;
+  }
+  // the WhatsApp Business accounts the shop gave Pilotix in Meta's window
+  const dbg = await graph('debug_token', { input_token: token, access_token: `${apps.meta.appId}|${secret}` });
+  const scopes: any[] = Array.isArray(dbg?.data?.granular_scopes) ? dbg.data.granular_scopes : [];
+  const wabas = [
+    ...new Set(scopes.filter((x) => x?.scope === 'whatsapp_business_management').flatMap((x) => (Array.isArray(x.target_ids) ? x.target_ids.map(String) : []))),
+  ].filter((x) => /^\d{1,30}$/.test(x));
+  if (!wabas.length)
+    throw new AppError('bad_request', 'Aucun compte WhatsApp Business trouvé avec cette connexion. Dans la fenêtre de Meta, choisissez (ou créez) le compte WhatsApp de la boutique et son numéro, puis recommencez.');
+  for (const id of wabas) {
+    const waba = await graph(id, { fields: 'id,name', access_token: token }).catch(() => null);
+    const nums = await graph(`${id}/phone_numbers`, { fields: 'id,display_phone_number,verified_name', access_token: token }).catch(() => null);
+    const n = (Array.isArray(nums?.data) ? nums.data : []).find((x: any) => /^\d{1,30}$/.test(String(x?.id ?? '')));
+    if (!n) continue;
+    const phone = String(n.display_phone_number ?? '').slice(0, 40);
+    const name = String(n.verified_name || waba?.name || 'WhatsApp').slice(0, 200);
+    return {
+      provider: 'meta',
+      extId: id,
+      name,
+      token,
+      tokenKind: ll?.access_token ? 'user' : 'system',
+      expiresAt: expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : null,
+      assets: [],
+      whatsapp: { wabaId: id, phoneId: String(n.id), phone, name },
+    };
+  }
+  throw new AppError('bad_request', 'Ce compte WhatsApp Business n’a pas encore de numéro. Dans la fenêtre de Meta, ajoutez le numéro de la boutique (code reçu par SMS), puis recommencez.');
+}
+
+/**
+ * « Oui, c'est ma boutique » for « Connecter WhatsApp »: the account's messages come to Pilotix's app, the number is
+ * registered for the Cloud API (with a two-step PIN Pilotix keeps), and the key and the number go to the boutique's
+ * Pilot Message (Dellal answers on it), its delivery messages and its campaigns' templates (the account's id).
+ */
+async function linkWhatsapp(t: Tenancy, shopId: number | null, f: FoundAccount): Promise<{ ok: boolean; message: string; account?: string; warn?: string }> {
+  if (!shopId || !f.whatsapp) return { ok: false, message: 'Boutique introuvable. Recommencez depuis Pilot Message › Réglages.' };
+  const r = (await t.platform.query(`SELECT schema_name FROM platform.shops WHERE id = $1 AND status NOT IN ('archived', 'deleted')`, [shopId]))[0];
+  if (!r) return { ok: false, message: 'Boutique introuvable.' };
+  const db = t.shop(String(r.schema_name));
+  const w = f.whatsapp;
+  // without it no message comes: the link stops here, with Meta's reason
+  await graph(`${w.wabaId}/subscribed_apps`, { access_token: f.token }, 'POST');
+  // a number already registered (or with another PIN) says why: the link goes on, and the tab says it
+  const pin = String(randomInt(0, 1_000_000)).padStart(6, '0');
+  let warn = '';
+  try {
+    await graph(`${w.phoneId}/register`, { messaging_product: 'whatsapp', pin, access_token: f.token }, 'POST');
+    await setRaw(db, WA_PIN_KEY, pin);
+  } catch (e: any) {
+    warn = String(e?.message ?? e).slice(0, 240);
+  }
+  await setRaw(db, DELLAL_SECRETS.waToken, f.token);
+  await setRaw(db, 'dellal', { ...(await dellalSettings(db)), whatsappPhoneId: w.phoneId, whatsappPhone: w.phone });
+  await setRaw(db, 'notify', { ...(await getRaw<Record<string, unknown>>(db, 'notify', {})), wabaId: w.wabaId });
+  await noteWaLogin(t, shopId, w.phoneId, w.phone);
+  return {
+    ok: true,
+    message: 'WhatsApp connecté',
+    account: w.phone || f.name,
+    ...(warn ? { warn: `Meta n’a pas enregistré le numéro pour l’envoi (${warn}). Les messages peuvent ne pas partir : écrivez à l’équipe Pilotix.` } : {}),
+  };
+}
+
 /** A TikTok for Business login: the advertiser's token and the ad accounts it opened to Pilotix. */
 async function tiktokAccount(t: Tenancy, code: string): Promise<FoundAccount> {
   const apps = await socialApps(t);
@@ -290,8 +373,10 @@ export interface LoginEnd {
   ok: boolean;
   message: string;
   account?: string;
-  /** the account is back: its tab asks « Oui, c'est ma boutique ? » (key: that page's one-time key) */
-  confirm?: { state: string; key: string; provider: SocialProvider; account: string; shop: string | null; by: string; assets: { kind: string; name: string }[] };
+  /** done, but something did not go (« Connecter WhatsApp »: the number not registered): the tab says it and stays open */
+  warn?: string;
+  /** the account is back: its tab asks « Oui, c'est ma boutique ? » (key: that page's one-time key; net: what the account is, Facebook by default) */
+  confirm?: { state: string; key: string; provider: SocialProvider; account: string; shop: string | null; by: string; assets: { kind: string; name: string }[]; net?: string };
 }
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -317,7 +402,15 @@ export async function finishLogin(t: Tenancy, provider: SocialProvider, q: Recor
     return { ok: false, message: `${why} Fermez cet onglet.` };
   }
   try {
-    const found = provider === 'meta' ? (loginKindOf(st.state) === 'instagram' ? await instagramAccount(t, code, publicUrl) : await metaAccount(t, code, publicUrl)) : await tiktokAccount(t, code);
+    const kind = loginKindOf(st.state);
+    const found =
+      provider === 'meta'
+        ? kind === 'instagram'
+          ? await instagramAccount(t, code, publicUrl)
+          : kind === 'whatsapp'
+            ? await whatsappAccount(t, code, publicUrl)
+            : await metaAccount(t, code, publicUrl)
+        : await tiktokAccount(t, code);
     const key = randomBytes(24).toString('base64url');
     await holdFound(t, st.state, found, sha256(key));
     const shop = st.shopId ? String((await t.platform.query('SELECT name FROM platform.shops WHERE id = $1', [st.shopId]))[0]?.name ?? '') : null;
@@ -325,7 +418,9 @@ export async function finishLogin(t: Tenancy, provider: SocialProvider, q: Recor
       ok: true,
       message: 'À confirmer',
       account: found.name,
-      confirm: { state: st.state, key, provider, account: found.name, shop, by: st.by, assets: found.assets.slice(0, 8).map((a) => ({ kind: a.kind, name: a.name })) },
+      confirm: found.whatsapp
+        ? { state: st.state, key, provider, account: found.name, shop, by: st.by, assets: found.whatsapp.phone ? [{ kind: 'whatsapp', name: found.whatsapp.phone }] : [], net: 'WhatsApp Business' }
+        : { state: st.state, key, provider, account: found.name, shop, by: st.by, assets: found.assets.slice(0, 8).map((a) => ({ kind: a.kind, name: a.name })) },
     };
   } catch (e: any) {
     const m = String(e?.message ?? 'Erreur').slice(0, 300);
@@ -356,6 +451,12 @@ export async function confirmLogin(t: Tenancy, state: string, key: string, yes: 
       message: String(e?.message ?? 'Erreur').slice(0, 300),
       account: undefined,
     }));
+    await endState(t, st.state, r.ok ? { linkId: null } : { error: r.message });
+    return r;
+  }
+  // « Connecter WhatsApp »: to Pilot Message too
+  if (st.found.whatsapp) {
+    const r = await linkWhatsapp(t, st.shopId, st.found).catch((e: any) => ({ ok: false, message: String(e?.message ?? 'Erreur').slice(0, 300), account: undefined }));
     await endState(t, st.state, r.ok ? { linkId: null } : { error: r.message });
     return r;
   }
@@ -745,22 +846,25 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 /** The page the login tab shows at its end (it closes itself when the browser lets it). */
-const KIND_WORD: Record<string, string> = { page: 'Page', ad_account: 'Compte pub', advertiser: 'Compte pub TikTok' };
+const KIND_WORD: Record<string, string> = { page: 'Page', ad_account: 'Compte pub', advertiser: 'Compte pub TikTok', whatsapp: 'Numéro' };
 
 export function loginPage(r: LoginEnd): string {
   if (r.confirm) return confirmPage(r.confirm);
   const title = r.ok ? 'Compte lié' : 'Connexion non faite';
   const line = r.ok ? `${r.account ? `« ${esc(r.account)} » est lié à Pilotix. ` : ''}Vous pouvez fermer cet onglet : Pilotix est déjà à jour.` : esc(r.message);
+  // done, but something to read: the tab stays open
+  const warn = r.ok && r.warn ? `<p class="warn">${esc(r.warn)}</p>` : '';
   return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Pilotix</title>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f5f8;color:#16202e}
 main{max-width:420px;margin:24px;padding:28px;border-radius:16px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.08)}h1{margin:0 0 8px;font-size:22px}
-.dot{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:50%;margin-bottom:14px;color:#fff;font-size:24px;background:${r.ok ? '#1f9d55' : '#c2410c'}}p{margin:0;color:#4b5563}</style></head>
-<body><main><div class="dot">${r.ok ? '✓' : '!'}</div><h1>${title}</h1><p>${line}</p></main>${r.ok ? '<script>setTimeout(function(){window.close()},1500)</script>' : ''}</body></html>`;
+.dot{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:50%;margin-bottom:14px;color:#fff;font-size:24px;background:${r.ok ? '#1f9d55' : '#c2410c'}}p{margin:0;color:#4b5563}
+.warn{margin-top:12px;padding:10px 12px;border-radius:10px;background:#fff7ed;color:#9a3412}</style></head>
+<body><main><div class="dot">${r.ok ? '✓' : '!'}</div><h1>${title}</h1><p>${line}</p>${warn}</main>${r.ok && !warn ? '<script>setTimeout(function(){window.close()},1500)</script>' : ''}</body></html>`;
 }
 
 /** The tab's question: which account, which boutique, asked by whom; « Oui, c'est ma boutique » or « Non ». */
 function confirmPage(c: NonNullable<LoginEnd['confirm']>): string {
-  const net = c.provider === 'meta' ? 'Facebook' : 'TikTok';
+  const net = c.net ?? (c.provider === 'meta' ? 'Facebook' : 'TikTok');
   // a name in « » never leaves its marks alone at the end of a line
   const q = (x: string) => `«&nbsp;<b>${esc(x)}</b>&nbsp;»`;
   const where = c.shop ? `la boutique ${q(c.shop)}` : 'toutes les boutiques de la personne qui l’a demandé';

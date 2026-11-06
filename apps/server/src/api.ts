@@ -1652,8 +1652,9 @@ class ApiController {
   }
 
   /**
-   * The linked Pages' messages and comments (Messenger, Instagram, Facebook and Instagram comments), all through Pilotix's
-   * Meta app: each entry goes to the boutique that uses its Page; Dellal and the CM AI agent answer there as usual.
+   * The linked Pages' messages and comments (Messenger, Instagram, Facebook and Instagram comments), and the WhatsApp numbers
+   * connected with « Connecter WhatsApp », all through Pilotix's Meta app: each entry goes to the boutique that uses its
+   * Page / number; Dellal and the CM AI agent answer there as usual.
    */
   @Public()
   @Post('hooks/meta-app')
@@ -1682,12 +1683,15 @@ class ApiController {
       const edits: any[] = m?.parseMetaEdits ? m.parseMetaEdits(r.body) : [];
       const reactions: any[] = m?.parseMetaReactions ? m.parseMetaReactions(r.body) : [];
       const adIssues: any[] = m?.parseMetaAdIssues ? m.parseMetaAdIssues(r.body) : [];
+      // « Connecter WhatsApp »: what became of the boutique's WhatsApp messages (delivered, read, failed → SMS)
+      const statuses: any[] = m?.parseWhatsAppStatuses ? m.parseWhatsAppStatuses(r.body) : [];
       void this.handleIncoming(ref, list);
       void this.handleComments(ref, comments);
       void this.handleLeads(ref, leads);
       void this.handleEdits(ref, edits, reactions);
       void this.handleAdIssues(ref, adIssues);
-      received += list.length + comments.length + leads.length + edits.length + reactions.length + adIssues.length;
+      void this.handleStatuses(ref, statuses);
+      received += list.length + comments.length + leads.length + edits.length + reactions.length + adIssues.length + statuses.length;
     }
     return { ok: true, received };
   }

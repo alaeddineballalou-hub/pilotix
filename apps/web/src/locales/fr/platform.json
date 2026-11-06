@@ -1695,7 +1695,10 @@
       "igAlone": "Instagram seul",
       "igConfigId": "ID de configuration Instagram (Instagram API, unified login)",
       "igConfigHint": "La configuration « Instagram API (unified login) » de Facebook Login for Business, compatible Instagram Login. Elle doit avoir la même adresse de retour (ci-dessous).",
-      "igAloneText": "Avec cet ID, chaque boutique a un bouton « Connecter Instagram » dans Pilot Message › Réglages › Instagram : une connexion, et ses messages Instagram arrivent dans Pilotix."
+      "igAloneText": "Avec cet ID, chaque boutique a un bouton « Connecter Instagram » dans Pilot Message › Réglages › Instagram : une connexion, et ses messages Instagram arrivent dans Pilotix.",
+      "waAlone": "WhatsApp",
+      "waConfigId": "ID de configuration WhatsApp (Embedded Signup)",
+      "waAloneText": "Avec cet ID, chaque boutique a un bouton « Connecter WhatsApp » dans Pilot Message › Réglages : une connexion, et son numéro répond dans Pilotix. Configuration de type « WhatsApp Embedded Signup », même adresse de retour (ci-dessous)."
     },
     "release": {
       "title": "Push : la prochaine version de Dellal",

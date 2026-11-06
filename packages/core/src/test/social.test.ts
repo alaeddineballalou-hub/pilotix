@@ -46,6 +46,8 @@ let graph: { me: any; pages: any[]; ads: any[] } = { me: {}, pages: [], ads: [] 
 let tiktok: { token: string; ids: string[]; list: any[]; user: any } = { token: '', ids: [], list: [], user: {} };
 // a configuration « System-user access token »: Facebook will not turn its token into another one
 let refuseSwap = false;
+// « Connecter WhatsApp »: the WhatsApp Business account the key was given ('' : none), its numbers, its number's registration
+let wa: { waba: string; numbers: any[]; registerFail: boolean } = { waba: '', numbers: [], registerFail: false };
 // what « Tester » finds on Facebook's side
 const ALL_PERMS = ['pages_show_list', 'pages_messaging', 'pages_manage_metadata', 'pages_read_engagement', 'pages_manage_engagement', 'pages_read_user_content', 'instagram_basic', 'instagram_manage_messages', 'instagram_manage_comments', 'ads_read'];
 let probe: { perms: string[]; pageSubs: any[]; appSubs: any[]; unreadable: string[]; cloudflare: boolean; refuse: boolean; inbox?: string | null; igRefuse?: boolean } = { perms: ALL_PERMS, pageSubs: [], appSubs: [], unreadable: [], cloudflare: false, refuse: false };
@@ -73,6 +75,12 @@ before(async () => {
       if (path === 'oauth/access_token') return answer(u.searchParams.get('grant_type') === 'fb_exchange_token' ? { access_token: 'LONG_USER_TOKEN', expires_in: 5_184_000 } : { access_token: 'SHORT_USER_TOKEN' });
       if (path === 'me' && probe.refuse) return new Response(JSON.stringify({ error: { message: 'Error validating access token', code: 190 } }), { status: 400 });
       if (path === 'me') return answer(graph.me);
+      // « Connecter WhatsApp »: what the key was given (Embedded Signup), the account's numbers, a number's registration
+      if (path === 'debug_token')
+        return answer({ data: { granular_scopes: wa.waba ? [{ scope: 'whatsapp_business_management', target_ids: [wa.waba] }, { scope: 'whatsapp_business_messaging', target_ids: [wa.waba] }] : [{ scope: 'business_management' }] } });
+      if (wa.waba && path === `${wa.waba}/phone_numbers`) return answer({ data: wa.numbers });
+      if (/^\d+\/register$/.test(path))
+        return wa.registerFail ? new Response(JSON.stringify({ error: { message: 'Two step verification PIN Mismatch', code: 133005 } }), { status: 400 }) : answer({ success: true });
       // Meta's Unified login: the Instagram accounts a key was given
       if (path === 'me/assigned_instagram_accounts') return answer({ data: [{ id: '178555', username: 'bebeconfort.dz' }] });
       // Publicité: each ad account's ad sets, ads and days (one that cannot be read answers an error)
@@ -411,6 +419,111 @@ test('« Instagram seul »: the Instagram configuration opens its own login for 
     meta: { ...APPS.meta, configId: '', igConfigId: '', secret: '' },
     tiktok: { ...APPS.tiktok, secret: '' },
   });
+});
+
+test('« Connecter WhatsApp »: Meta’s Embedded Signup for one shop; its number answers there, and its messages come through Pilotix’s app', async () => {
+  const apps = (waConfigId: string) => p('p.social.apps.save', { meta: { ...APPS.meta, configId: '777000111', waConfigId, secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+  // not before Pilotix has put in the WhatsApp configuration
+  await apps('');
+  await assert.rejects(() => call('social.start', b, { provider: 'meta', kind: 'whatsapp' }), /WhatsApp/);
+  await apps('880011223344');
+  assert.equal(((await p('p.social.apps', {})) as any).meta.waConfigId, '880011223344');
+  const s: any = await call('social.start', b, { provider: 'meta', kind: 'whatsapp' });
+  assert.ok(s.state.startsWith('wa.'));
+  const u = new URL(s.url);
+  assert.equal(u.searchParams.get('config_id'), '880011223344');
+  assert.equal(u.searchParams.get('override_default_response_type'), 'true');
+  assert.equal(u.searchParams.get('response_type'), 'code');
+  assert.deepEqual(JSON.parse(u.searchParams.get('extras')!), { setup: {}, featureType: '', sessionInfoVersion: '3' });
+  // for this boutique only
+  assert.equal(Number((await t.platform.query(`SELECT shop_id FROM platform.social_states WHERE state = $1`, [s.state]))[0].shop_id), b.shop!.id);
+
+  // the shop picked its account and number in Meta's window: the tab asks « Oui, c'est ma boutique ? »
+  wa = { waba: '102030405060', numbers: [{ id: '109988776655', display_phone_number: '+213 550 98 76 54', verified_name: 'Bébé Oran' }], registerFail: false };
+  calls.length = 0;
+  const end = await finishLogin(t, 'meta', { state: s.state, code: 'WA_CODE' }, URL0);
+  assert.equal(end.ok, true);
+  assert.equal(end.confirm?.net, 'WhatsApp Business');
+  assert.deepEqual(end.confirm?.assets, [{ kind: 'whatsapp', name: '+213 550 98 76 54' }]);
+  assert.match(loginPage(end), /WhatsApp Business/);
+  // which account the key was given: asked with the app's own key
+  const dbg = calls.find((c) => new URL(c.url).pathname.endsWith('/debug_token'))!;
+  assert.equal(new URL(dbg.url).searchParams.get('access_token'), `${APPS.meta.appId}|${APPS.meta.secret}`);
+  const done = await confirmLogin(t, end.confirm!.state, end.confirm!.key, true);
+  assert.deepEqual([done.ok, done.account, done.warn], [true, '+213 550 98 76 54', undefined]);
+  assert.match(loginPage(done), /window\.close/);
+  // the account's messages come to Pilotix's app; the number is registered with a 6-digit PIN the boutique keeps
+  assert.ok(calls.some((c) => c.method === 'POST' && new URL(c.url).pathname.endsWith('/102030405060/subscribed_apps')));
+  const reg = new URLSearchParams(calls.find((c) => c.method === 'POST' && new URL(c.url).pathname.endsWith('/109988776655/register'))!.body);
+  assert.equal(reg.get('messaging_product'), 'whatsapp');
+  assert.match(reg.get('pin')!, /^\d{6}$/);
+  assert.equal(await setting(b, 'secret_dellal_wa_pin'), reg.get('pin'));
+  // Pilot Message answers on it, the delivery messages and the campaigns use it
+  assert.equal(await setting(b, 'secret_dellal_wa_token'), 'LONG_USER_TOKEN');
+  const d = await setting(b, 'dellal');
+  assert.deepEqual([d.whatsappPhoneId, d.whatsappPhone], ['109988776655', '+213 550 98 76 54']);
+  assert.equal((await setting(b, 'notify')).wabaId, '102030405060');
+  assert.equal(await setting(a, 'secret_dellal_wa_token'), null, 'not the other boutique');
+
+  // Meta's webhook: each number's changes to the boutique that connected it; another number is dropped (and noted)
+  const hook = {
+    object: 'whatsapp_business_account',
+    entry: [
+      {
+        id: '102030405060',
+        changes: [
+          {
+            field: 'messages',
+            value: {
+              messaging_product: 'whatsapp',
+              metadata: { display_phone_number: '213550987654', phone_number_id: '109988776655' },
+              contacts: [{ wa_id: '213661000111', profile: { name: 'Samia' } }],
+              messages: [{ from: '213661000111', id: 'wamid.A1', type: 'text', text: { body: 'Salam, le prix ?' } }],
+            },
+          },
+          { field: 'messages', value: { messaging_product: 'whatsapp', metadata: { phone_number_id: '555000111' }, statuses: [{ id: 'wamid.X', status: 'delivered' }] } },
+        ],
+      },
+    ],
+  };
+  const routed = await routeMeta(t, hook);
+  assert.deepEqual(routed.map((r) => r.shopId), [b.shop!.id]);
+  assert.deepEqual(routed[0].body.entry[0].changes.map((c: any) => c.value.metadata.phone_number_id), ['109988776655']);
+  assert.equal(routed[0].body.entry[0].id, '102030405060');
+  const seen = async (id: string) => (await t.platform.query(`SELECT routed, what, message_at FROM platform.social_hooks WHERE object = 'whatsapp_business_account' AND ext_id = $1`, [id]))[0];
+  const mine = await seen('109988776655');
+  assert.deepEqual([mine.routed, mine.what, !!mine.message_at], [true, 'message', true]);
+  const other = await seen('555000111');
+  assert.deepEqual([other.routed, other.what], [false, 'status']);
+
+  // a number Meta would not register: linked all the same, and the tab says why (it stays open)
+  wa.registerFail = true;
+  const s2: any = await call('social.start', b, { provider: 'meta', kind: 'whatsapp' });
+  const e2 = await finishLogin(t, 'meta', { state: s2.state, code: 'WA_CODE_2' }, URL0);
+  const d2 = await confirmLogin(t, e2.confirm!.state, e2.confirm!.key, true);
+  assert.equal(d2.ok, true);
+  assert.match(d2.warn ?? '', /PIN Mismatch/);
+  assert.match(loginPage(d2), /class="warn"/);
+  assert.doesNotMatch(loginPage(d2), /window\.close/);
+  // no WhatsApp Business account given in Meta's window: said plainly
+  wa = { waba: '', numbers: [], registerFail: false };
+  const s3: any = await call('social.start', b, { provider: 'meta', kind: 'whatsapp' });
+  const e3 = await finishLogin(t, 'meta', { state: s3.state, code: 'WA_CODE_3' }, URL0);
+  assert.equal(e3.ok, false);
+  assert.match(e3.message, /Aucun compte WhatsApp Business/);
+  // an account without a number yet: said plainly too
+  wa = { waba: '102030405061', numbers: [], registerFail: false };
+  const s4: any = await call('social.start', b, { provider: 'meta', kind: 'whatsapp' });
+  assert.match((await finishLogin(t, 'meta', { state: s4.state, code: 'WA_CODE_4' }, URL0)).message, /pas encore de numéro/);
+
+  // the shop removes WhatsApp's key (Avancé): its number is no longer shown, nor its messages routed here
+  const g: any = await call('dellal.settings.get', b, {});
+  assert.equal(g.settings.whatsappPhone, '+213 550 98 76 54');
+  await call('dellal.settings.save', b, { ...g.settings, secrets: { waToken: null } });
+  assert.equal((await setting(b, 'dellal')).whatsappPhone, '');
+  assert.deepEqual(await routeMeta(t, hook), []);
+  wa = { waba: '', numbers: [], registerFail: false };
+  await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '', waConfigId: '', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
 });
 
 test('a Facebook Login for Business configuration: a person’s short token is turned into a long one too; a « system user » token Facebook will not turn is kept, without an end', async () => {

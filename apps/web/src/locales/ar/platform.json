@@ -1735,7 +1735,10 @@
       "igAlone": "إنستغرام وحده",
       "igConfigId": "معرّف إعداد إنستغرام (⁦Instagram API, unified login⁩)",
       "igConfigHint": "إعداد «⁦Instagram API (unified login)⁩» في Facebook Login for Business، المتوافق مع Instagram Login. يجب أن يستعمل نفس عنوان الرجوع (أدناه).",
-      "igAloneText": "بهذا المعرّف يظهر لكل متجر زر «ربط إنستغرام» في Pilot Message › الإعدادات › إنستغرام: دخول واحد، وتصل رسائل إنستغرام إلى Pilotix."
+      "igAloneText": "بهذا المعرّف يظهر لكل متجر زر «ربط إنستغرام» في Pilot Message › الإعدادات › إنستغرام: دخول واحد، وتصل رسائل إنستغرام إلى Pilotix.",
+      "waAlone": "واتساب",
+      "waConfigId": "معرّف إعداد واتساب (⁦Embedded Signup⁩)",
+      "waAloneText": "بهذا المعرّف يظهر لكل متجر زر «ربط واتساب» في Pilot Message › الإعدادات: دخول واحد، ويجيب رقمه داخل Pilotix. إعداد من نوع «⁦WhatsApp Embedded Signup⁩»، بنفس عنوان الرجوع (أدناه)."
     },
     "release": {
       "title": "Push: النسخة القادمة من Dellal",

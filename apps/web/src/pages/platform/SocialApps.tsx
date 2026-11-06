@@ -30,6 +30,8 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
   const [config, setConfig] = useState(d.meta.configId);
   // the « Instagram API (unified login) » configuration: one click links a shop's Instagram for its DMs
   const [igConfig, setIgConfig] = useState(d.meta.igConfigId ?? '');
+  // the « WhatsApp Embedded Signup » configuration: one click connects a shop's WhatsApp number
+  const [waConfig, setWaConfig] = useState(d.meta.waConfigId ?? '');
   const [metaSecret, setMetaSecret] = useState<string | null>('');
   // the secret of the app's Instagram login (Meta signs that login's webhooks with it)
   const [igSecret, setIgSecret] = useState<string | null>('');
@@ -59,7 +61,7 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
       <input type="password" className="ltr" autoComplete="new-password" disabled={!manager || v === null} value={v ?? ''} placeholder={has ? '••••••••' : ''} onChange={(e) => set(e.target.value)} />
     </Field>
   );
-  const dirty = metaId !== d.meta.appId || config !== d.meta.configId || igConfig !== (d.meta.igConfigId ?? '') || ttId !== d.tiktok.appId || metaSecret !== '' || igSecret !== '' || ttSecret !== '';
+  const dirty = metaId !== d.meta.appId || config !== d.meta.configId || igConfig !== (d.meta.igConfigId ?? '') || waConfig !== (d.meta.waConfigId ?? '') || ttId !== d.tiktok.appId || metaSecret !== '' || igSecret !== '' || ttSecret !== '';
   return (
     <Card title={t(K + 'title')} badge={<span className="chip">{t(K + 'counts', { meta: n(d.counts.meta), tiktok: n(d.counts.tiktok), shops: n(d.counts.shops) })}</span>}>
       <p className="small muted">{t(K + 'text')}</p>
@@ -88,6 +90,15 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
               <input className="ltr" inputMode="numeric" disabled={!manager} value={igConfig} placeholder="1485334790168642" onChange={(e) => setIgConfig(digits(e.target.value))} />
             </Field>
             <p className="small muted">{t(K + 'igAloneText')}</p>
+          </div>
+          <div className="pl-sa-ig" role="group" aria-labelledby="pl-sa-wa">
+            <h4 id="pl-sa-wa">
+              {t(K + 'waAlone')} {chip(!!d.meta.appId && !!(d.meta.waConfigId ?? ''))}
+            </h4>
+            <Field label={t(K + 'waConfigId')}>
+              <input className="ltr" inputMode="numeric" disabled={!manager} value={waConfig} onChange={(e) => setWaConfig(digits(e.target.value))} />
+            </Field>
+            <p className="small muted">{t(K + 'waAloneText')}</p>
           </div>
           {secretField(t(K + 'igSecret'), d.meta.hasIgSecret, igSecret, setIgSecret)}
           <p className="small muted">
@@ -170,6 +181,7 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
                   appId: metaId,
                   configId: config,
                   igConfigId: igConfig,
+                  waConfigId: waConfig,
                   secret: metaSecret === null ? null : metaSecret.trim(),
                   igSecret: igSecret === null ? null : igSecret.trim(),
                 },
