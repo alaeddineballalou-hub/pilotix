@@ -958,3 +958,5 @@ mark.pl-dj-gone { padding: 0 2px; border-radius: 4px; background: none; color: i
 .pp-store { display: flex; flex-direction: column; gap: 10px; }
 .pp-steps { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 3px; }
 .pp-ok { color: var(--ok); }
+.pl-sa-ig { display: grid; gap: 6px; margin: 10px 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.pl-sa-ig h4 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; }

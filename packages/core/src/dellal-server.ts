@@ -763,15 +763,68 @@ async function igLoginInstagram(token: string) {
   }
   return { kind: 'ig' as const, userId, username: String(me?.username ?? ''), subscribeError };
 }
-async function igLoginUnified(token: string, igId: string | null) {
-  const r = await postJson(`${UNI_GRAPH}/me/assigned_instagram_accounts?fields=id,username&limit=50&access_token=${enc(token)}`, null, {}, 'Instagram', 'GET', 20_000);
+/**
+ * The Instagram accounts a Unified login key reaches: a system user's key lists those it was given
+ * (assigned_instagram_accounts); a person's key (« Connecter Instagram », Facebook Login for Business) reaches them
+ * through its Pages (each Page's Instagram account).
+ */
+export async function uniAccounts(token: string): Promise<any[]> {
+  let refused: unknown = null;
+  const r = await postJson(`${UNI_GRAPH}/me/assigned_instagram_accounts?fields=id,username&limit=50&access_token=${enc(token)}`, null, {}, 'Instagram', 'GET', 20_000).catch(
+    (e) => ((refused = e), null),
+  );
   const list: any[] = Array.isArray(r?.data) ? r.data : [];
+  if (list.length) return list;
+  // each Page's Instagram account, with the Page (its key subscribes the Page: Instagram's DMs come through it)
+  const p = await postJson(`${UNI_GRAPH}/me/accounts?fields=id,access_token,instagram_business_account{id,username}&limit=100&access_token=${enc(token)}`, null, {}, 'Instagram', 'GET', 20_000).catch(
+    (e) => ((refused ??= e), null),
+  );
+  const found = (Array.isArray(p?.data) ? p.data : [])
+    .filter((x: any) => x?.instagram_business_account?.id)
+    .map((x: any) => ({
+      ...x.instagram_business_account,
+      page: { id: String(x.id), token: String(x.access_token ?? '') },
+    }));
+  // refused and nothing through the Pages: Meta's own reason (an expired or wrong key), not « no account »
+  if (!found.length && refused) throw refused;
+  return found;
+}
+/** « Connecter Instagram »: the Instagram account a login brought, before the boutique says « Oui, c'est ma boutique ». */
+export async function igPeek(token: string): Promise<{ id: string; username: string } | null> {
+  const list = await uniAccounts(token).catch(() => [] as any[]);
+  if (list[0]?.id) return { id: String(list[0].id), username: String(list[0].username ?? '') };
+  const me = await postJson(`${IG_GRAPH}/me?fields=user_id,username&access_token=${enc(token)}`, null, {}, 'Instagram', 'GET', 20_000).catch(() => null);
+  const id = String(me?.user_id ?? me?.id ?? '');
+  return id ? { id, username: String(me?.username ?? '') } : null;
+}
+async function igLoginUnified(token: string, igId: string | null) {
+  const list = await uniAccounts(token);
   // the boutique's own Instagram account when the key has several
   const acc = list.find((x) => igId && String(x?.id) === igId) ?? list[0];
   if (!acc?.id) throw new AppError('bad_request', 'Cette clé n’a accès à aucun compte Instagram. Dans l’app Meta, donnez votre compte Instagram à cette clé (« Instagram account »), puis recommencez.');
   // its messages' webhook (through the Page it already comes for people with a role; Meta may refuse this one: not a failure)
-  await postJson(`${UNI_GRAPH}/${enc(String(acc.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,comments&access_token=${enc(token)}`, {}, {}, 'Instagram', 'POST', 20_000).catch(() => null);
-  return { kind: 'unified' as const, userId: String(acc.id), username: String(acc.username ?? ''), subscribeError: null };
+  await postJson(`${UNI_GRAPH}/${enc(String(acc.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,comments&access_token=${enc(token)}`, {}, {}, 'Instagram', 'POST', 20_000).catch(
+    () => null,
+  );
+  // « Connecter Instagram » (a person's key, through a Page): the Page is subscribed to the app, so its Instagram DMs come
+  let subscribeError: string | null = null;
+  if (acc.page?.id && acc.page.token)
+    await postJson(
+      `${UNI_GRAPH}/${enc(acc.page.id)}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,feed&access_token=${enc(acc.page.token)}`,
+      {},
+      {},
+      'Instagram',
+      'POST',
+      20_000,
+    ).catch((e) => {
+      subscribeError = (e as Error).message;
+    });
+  return {
+    kind: 'unified' as const,
+    userId: String(acc.id),
+    username: String(acc.username ?? ''),
+    subscribeError,
+  };
 }
 /** A new key for 60 more days (Meta renews a key at least a day old that still works). */
 export async function igRefresh(token: string): Promise<{ token: string | null; expiresIn: number | null }> {

@@ -377,6 +377,42 @@ test('the preview: a sample account, and a « login » that links a new one afte
   await assert.rejects(() => call('social.use', demo, { assetId: oran.id }), /répond déjà/);
 });
 
+test('« Instagram seul »: the Instagram configuration opens its own login for one shop, and is asked for first', async () => {
+  await p('p.social.apps.save', {
+    meta: { ...APPS.meta, configId: '777000111', igConfigId: '', secret: '' },
+    tiktok: { ...APPS.tiktok, secret: '' },
+  });
+  await assert.rejects(() => call('social.start', b, { provider: 'meta', kind: 'instagram' }), /Instagram/);
+  await p('p.social.apps.save', {
+    meta: {
+      ...APPS.meta,
+      configId: '777000111',
+      igConfigId: '1485334790168642',
+      secret: '',
+    },
+    tiktok: { ...APPS.tiktok, secret: '' },
+  });
+  assert.equal(((await p('p.social.apps', {})) as any).meta.igConfigId, '1485334790168642');
+  const s: any = await call('social.start', b, {
+    provider: 'meta',
+    kind: 'instagram',
+  });
+  const u = new URL(s.url);
+  assert.equal(u.searchParams.get('config_id'), '1485334790168642');
+  assert.equal(u.searchParams.get('override_default_response_type'), 'true');
+  assert.ok(s.state.startsWith('ig.'));
+  // the shops' own login keeps the Pages configuration
+  const plain: any = await call('social.start', b, {
+    provider: 'meta',
+    scope: 'here',
+  });
+  assert.equal(new URL(plain.url).searchParams.get('config_id'), '777000111');
+  await p('p.social.apps.save', {
+    meta: { ...APPS.meta, configId: '', igConfigId: '', secret: '' },
+    tiktok: { ...APPS.tiktok, secret: '' },
+  });
+});
+
 test('a Facebook Login for Business configuration: a person’s short token is turned into a long one too; a « system user » token Facebook will not turn is kept, without an end', async () => {
   await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '777000111', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
   const kept = async (extId: string) => (await t.platform.query(`SELECT token, token_kind, expires_at FROM platform.social_links WHERE provider = 'meta' AND ext_id = $1`, [extId]))[0];

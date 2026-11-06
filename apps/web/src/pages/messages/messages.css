@@ -134,3 +134,7 @@
 .ai-react { position: absolute; bottom: -11px; inset-inline-end: 8px; display: grid; place-items: center; min-width: 24px; height: 22px; padding: 0 5px; border-radius: 11px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 1px 4px rgba(0,0,0,.18); font-size: 13px; line-height: 1; }
 .ai-msg:has(.ai-react) { margin-bottom: 12px; }
 .ai-msg.out .ai-react { inset-inline-end: auto; inset-inline-start: 8px; }
+.dl-igconnect { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.dl-igconnect .btn .dl-ch { width: 20px; height: 20px; font-size: 9px; }
+.dl-igconnect p { flex-basis: 100%; margin: 0; }
+.dl-ig-or { margin: 6px 0 0; padding-top: 10px; border-top: 1px dashed var(--line); }

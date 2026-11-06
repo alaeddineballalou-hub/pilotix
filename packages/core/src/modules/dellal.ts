@@ -2129,17 +2129,46 @@ async function autoOrderOf(ctx: Ctx, s: DellalSettings, row: any): Promise<{ ref
  * tokens) is read on the server: its account (number, name), and the account is subscribed to Pilotix's webhook. Pilotix
  * then answers Instagram with it (dellal-server › send), and the boutique gets that login's webhooks (social › routeMeta).
  */
-async function linkIgLogin(ctx: Ctx, token: string): Promise<{ ok: boolean; username?: string; message?: string }> {
-  if (!ctx.server?.dellal) return { ok: false, message: 'Aperçu : la clé est gardée, elle sera lue sur le serveur.' };
+/** What the Instagram login read (its account), kept in the boutique: Dellal answers Instagram with it. */
+export async function keepIgLogin(
+  db: Db,
+  r: { kind?: string; userId: string; username: string },
+  at: string,
+  userId?: number,
+): Promise<void> {
+  const s = await dellalSettings(db);
+  await setRaw(
+    db,
+    "dellal",
+    {
+      ...s,
+      instagramLoginId: String(r.userId),
+      instagramLoginUser: String(r.username ?? ""),
+      igTokenAt: at,
+      igLoginKind: r.kind === "unified" ? "unified" : "ig",
+    },
+    userId,
+  );
+}
+
+async function linkIgLogin(
+  ctx: Ctx,
+  token: string,
+): Promise<{ ok: boolean; username?: string; message?: string }> {
+  if (!ctx.server?.dellal)
+    return {
+      ok: false,
+      message: "Aperçu : la clé est gardée, elle sera lue sur le serveur.",
+    };
   try {
     const s = await dellalSettings(ctx.db);
-    const r = (await ctx.server.dellal('igLogin', { token, igId: s.instagramId || null }, ctx)) as { kind?: string; userId: string; username: string; subscribeError?: string | null };
-    await setRaw(
-      ctx.db,
-      'dellal',
-      { ...s, instagramLoginId: String(r.userId), instagramLoginUser: String(r.username ?? ''), igTokenAt: new Date(ctx.now()).toISOString(), igLoginKind: r.kind === 'unified' ? 'unified' : 'ig' },
-      me(ctx),
-    );
+    const r = (await ctx.server.dellal('igLogin', { token, igId: s.instagramId || null }, ctx)) as {
+      kind?: string;
+      userId: string;
+      username: string;
+      subscribeError?: string | null;
+    };
+    await keepIgLogin(ctx.db, r, new Date(ctx.now()).toISOString(), me(ctx));
     if (ctx.t && ctx.shop) await noteIgLogin(ctx.t, ctx.shop.id, String(r.userId), String(r.username ?? ''));
     return r.subscribeError ? { ok: false, username: r.username, message: r.subscribeError } : { ok: true, username: r.username };
   } catch (e: any) {

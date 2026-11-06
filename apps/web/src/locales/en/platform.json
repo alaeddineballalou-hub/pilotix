@@ -1691,7 +1691,11 @@
         "Paste the App ID and the Secret here, then save. TikTok approves the app in one to two weeks."
       ],
       "igSecret": "Instagram app secret (Instagram login)",
-      "igSecretHint": "Only if a boutique uses Instagram’s own login (Pilot Message › Settings). Meta signs that login’s messages with it. In the Meta app:"
+      "igSecretHint": "Only if a boutique uses Instagram’s own login (Pilot Message › Settings). Meta signs that login’s messages with it. In the Meta app:",
+      "igAlone": "Instagram only",
+      "igConfigId": "Instagram configuration ID (Instagram API, unified login)",
+      "igConfigHint": "The « Instagram API (unified login) » configuration of Facebook Login for Business, Instagram Login compatible. It must use the same redirect address (below).",
+      "igAloneText": "With this ID, every shop gets a « Connect Instagram » button in Pilot Message › Settings › Instagram: one login, and its Instagram messages reach Pilotix."
     },
     "release": {
       "title": "Push: Dellal’s next version",

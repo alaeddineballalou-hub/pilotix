@@ -199,7 +199,17 @@
     "igStep1b": "then accept the invite in Instagram:",
     "igStepNote": "A system user’s key (Business settings › System users, with your Instagram account and the instagram_manage_messages permission) works too, and never ends.",
     "photos": "Send product photos",
-    "photosHint": "When a customer asks for a photo, {{name}} sends the product’s real photos (the colour asked first). It also looks at the photos customers send."
+    "photosHint": "When a customer asks for a photo, {{name}} sends the product’s real photos (the colour asked first). It also looks at the photos customers send.",
+    "igConnect": "Connect Instagram",
+    "igReconnect": "Reconnect Instagram",
+    "igConnecting": "Connecting… (finish in the Meta tab)",
+    "igReopen": "Reopen the tab",
+    "igConnected": "@{{user}} connected ✅",
+    "igConnectedToast": "Instagram connected: its messages now reach Pilotix.",
+    "igExpired": "The login expired, start again.",
+    "igClosed": "The Meta tab was closed before the end.",
+    "igConnectHelp": "Log in with the Facebook account that manages the shop's Instagram, pick that account, then « Yes, it's my shop ».",
+    "igOr": "Or, as a backup, paste a key by hand:"
   },
   "lahja": {
     "fix": "Darija lesson",

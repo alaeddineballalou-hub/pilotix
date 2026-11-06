@@ -208,7 +208,15 @@ CREATE TABLE IF NOT EXISTS platform.social_deletions (
 /** Pilotix's Meta and TikTok apps: what the control room shows (never the secrets). */
 export interface SocialApps {
   /** hasIgSecret: the secret of the app's Instagram login (Meta signs that login's webhooks with it) */
-  meta: { appId: string; configId: string; hasSecret: boolean; hasIgSecret: boolean };
+  /** igConfigId: a second Facebook Login for Business configuration, made for Instagram alone (« Instagram API (unified
+   * login) », Instagram Login Compatible): « Connecter Instagram » in Pilot Message › Réglages opens it */
+  meta: {
+    appId: string;
+    configId: string;
+    igConfigId: string;
+    hasSecret: boolean;
+    hasIgSecret: boolean;
+  };
   tiktok: { appId: string; hasSecret: boolean };
   /** the webhook's verify token (Meta asks for it once) */
   verifyToken: string;
@@ -239,7 +247,13 @@ export async function socialApps(t: Tenancy): Promise<SocialApps> {
   const a = await platformRow(t, APPS_ROW);
   const s = await platformRow(t, SECRETS_ROW);
   return {
-    meta: { appId: clean(a.meta?.appId, 40), configId: clean(a.meta?.configId, 40), hasSecret: !!clean(s.meta), hasIgSecret: !!clean(s.metaIg) },
+    meta: {
+      appId: clean(a.meta?.appId, 40),
+      configId: clean(a.meta?.configId, 40),
+      igConfigId: clean(a.meta?.igConfigId, 40),
+      hasSecret: !!clean(s.meta),
+      hasIgSecret: !!clean(s.metaIg),
+    },
     tiktok: { appId: clean(a.tiktok?.appId, 40), hasSecret: !!clean(s.tiktok) },
     verifyToken: clean(a.verifyToken, 100),
   };
@@ -293,6 +307,8 @@ export const SocialAppsInput = z.object({
   meta: z.object({
     appId: z.string().trim().max(40).regex(/^\d*$/, 'ID de l’app Meta (chiffres)'),
     configId: z.string().trim().max(40).regex(/^\d*$/, 'ID de configuration (chiffres)').default(''),
+    /** the Instagram-only configuration (« Connecter Instagram ») */
+    igConfigId: z.string().trim().max(40).regex(/^\d*$/, 'ID de configuration Instagram (chiffres)').default(''),
     /** a value replaces, '' keeps, null removes */
     secret: z.string().trim().max(300).nullable().default(''),
     /** the Instagram login's secret: the same (a value replaces, '' keeps, null removes) */
@@ -305,7 +321,15 @@ export const SocialAppsInput = z.object({
 });
 export async function saveSocialApps(t: Tenancy, i: z.output<typeof SocialAppsInput>): Promise<SocialApps> {
   const cur = await platformRow(t, APPS_ROW);
-  await savePlatformRow(t, APPS_ROW, { meta: { appId: i.meta.appId, configId: i.meta.configId }, tiktok: { appId: i.tiktok.appId }, verifyToken: clean(cur.verifyToken, 100) || randomToken() });
+  await savePlatformRow(t, APPS_ROW, {
+    meta: {
+      appId: i.meta.appId,
+      configId: i.meta.configId,
+      igConfigId: i.meta.igConfigId,
+    },
+    tiktok: { appId: i.tiktok.appId },
+    verifyToken: clean(cur.verifyToken, 100) || randomToken(),
+  });
   const sec = await platformRow(t, SECRETS_ROW);
   for (const p of SOCIAL_PROVIDERS) {
     const v = i[p].secret;
@@ -327,14 +351,23 @@ export async function socialCounts(t: Tenancy): Promise<{ meta: number; tiktok: 
 
 // ---------------------------------------------------------------- the login, from a boutique
 /** The address of the login page (Facebook or TikTok) for this state. */
-export function loginUrl(apps: SocialApps, p: SocialProvider, state: string, publicUrl: string): string {
+export function loginUrl(apps: SocialApps, p: SocialProvider, state: string, publicUrl: string, kind: LoginKind = 'account'): string {
   const u = socialUrls(publicUrl);
   const enc = encodeURIComponent;
   if (p === 'tiktok') return `${SOCIAL.tiktokAuth}?app_id=${enc(apps.tiktok.appId)}&state=${enc(state)}&redirect_uri=${enc(u.tiktokRedirect)}`;
   const base = `${SOCIAL.dialog}?client_id=${enc(apps.meta.appId)}&redirect_uri=${enc(u.metaRedirect)}&state=${enc(state)}&response_type=code`;
+  // « Connecter Instagram »: the Instagram-only configuration (Instagram Login Compatible)
+  if (kind === 'instagram') return `${base}&config_id=${enc(apps.meta.igConfigId)}&override_default_response_type=true`;
   // Facebook Login for Business: a token that does not expire (a configuration made in Pilotix's Meta app)
   return apps.meta.configId ? `${base}&config_id=${enc(apps.meta.configId)}&override_default_response_type=true` : `${base}&scope=${enc(SOCIAL.metaScopes.join(','))}`;
 }
+
+/** What a login is for: an account (Pages, ad accounts) or « Connecter Instagram » (Pilot Message's Instagram alone). */
+export type LoginKind = "account" | "instagram";
+/** « Connecter Instagram »'s states start with it (a normal state never has a dot). */
+export const IG_STATE = "ig.";
+export const loginKindOf = (state: string): LoginKind =>
+  state.startsWith(IG_STATE) ? "instagram" : "account";
 
 export interface StateRow {
   state: string;
@@ -394,6 +427,8 @@ export interface FoundAccount {
   tokenKind: 'user' | 'system' | 'advertiser';
   expiresAt: string | null;
   assets: FoundAsset[];
+  /** « Connecter Instagram »: the Instagram account the login brought (it goes to Pilot Message, not to the accounts list) */
+  instagram?: { id: string; username: string };
 }
 
 const schemaOfShop = async (t: Tenancy, shopId: number): Promise<string | null> => {
@@ -855,22 +890,44 @@ export const socialProcs = {
   'social.list': proc([], z.object({}), (ctx) => listFor(ctx)),
 
   /** A login starts: its address (opened in a new tab) and its state (the page asks it until the tab is back). */
-  'social.start': proc([], z.object({ provider: z.enum(SOCIAL_PROVIDERS), scope: z.enum(['here', 'all']).default('here') }), async (ctx, i) => {
-    if (!live(ctx)) return demoStart(ctx, i.provider, i.scope);
-    const w = await who(ctx);
-    if (i.scope === 'all' && !canAll(w)) throw new AppError('forbidden', 'Seul le propriétaire des boutiques lie un compte pour toutes ses boutiques.');
-    const apps = await socialApps(w.t);
-    if (!appReady(apps, i.provider)) throw new AppError('bad_request', i.provider === 'meta' ? 'La connexion Facebook n’est pas encore prête : Pilotix doit d’abord ajouter son app Meta.' : 'La connexion TikTok n’est pas encore prête : Pilotix doit d’abord ajouter son app TikTok.');
-    const publicUrl = ctx.server?.publicUrl;
-    if (!publicUrl) throw new AppError('bad_request', 'L’adresse publique du serveur manque (PUBLIC_URL).');
-    const state = randomToken();
-    await w.t.platform.query(`DELETE FROM platform.social_states WHERE expires_at < now() - interval '1 day'`);
-    await w.t.platform.query(
-      `INSERT INTO platform.social_states (state, provider, owner_id, shop_id, from_shop, by_name, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + interval '${SOCIAL.stateMinutes} minutes')`,
-      [state, i.provider, w.ownerId, i.scope === 'all' ? null : w.shopId, w.shopId, w.by.slice(0, 120)],
-    );
-    return { state, url: loginUrl(apps, i.provider, state, publicUrl) as string | null };
-  }),
+  'social.start': proc(
+    [],
+    z.object({
+      provider: z.enum(SOCIAL_PROVIDERS),
+      scope: z.enum(['here', 'all']).default('here'),
+      kind: z.enum(['account', 'instagram']).default('account'),
+    }),
+    async (ctx, i) => {
+      if (!live(ctx)) return demoStart(ctx, i.provider, i.scope);
+      // « Connecter Instagram »: Facebook's login with the Instagram-only configuration, for this boutique only
+      const ig = i.kind === 'instagram';
+      if (ig && i.provider !== 'meta') throw new AppError('bad_request', 'Seul Meta connecte Instagram.');
+      const w = await who(ctx);
+      if (i.scope === 'all' && !canAll(w)) throw new AppError('forbidden', 'Seul le propriétaire des boutiques lie un compte pour toutes ses boutiques.');
+      const apps = await socialApps(w.t);
+      if (ig && !apps.meta.igConfigId)
+        throw new AppError('bad_request', 'La connexion Instagram n’est pas encore prête : Pilotix doit d’abord ajouter l’ID de configuration Instagram (Pilot AI › Réglages).');
+      if (!appReady(apps, i.provider))
+        throw new AppError(
+          'bad_request',
+          i.provider === 'meta'
+            ? 'La connexion Facebook n’est pas encore prête : Pilotix doit d’abord ajouter son app Meta.'
+            : 'La connexion TikTok n’est pas encore prête : Pilotix doit d’abord ajouter son app TikTok.',
+        );
+      const publicUrl = ctx.server?.publicUrl;
+      if (!publicUrl) throw new AppError('bad_request', 'L’adresse publique du serveur manque (PUBLIC_URL).');
+      const state = (ig ? IG_STATE : '') + randomToken();
+      await w.t.platform.query(`DELETE FROM platform.social_states WHERE expires_at < now() - interval '1 day'`);
+      await w.t.platform.query(
+        `INSERT INTO platform.social_states (state, provider, owner_id, shop_id, from_shop, by_name, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + interval '${SOCIAL.stateMinutes} minutes')`,
+        [state, i.provider, w.ownerId, i.scope === 'all' && !ig ? null : w.shopId, w.shopId, w.by.slice(0, 120)],
+      );
+      return {
+        state,
+        url: loginUrl(apps, i.provider, state, publicUrl, i.kind) as string | null,
+      };
+    },
+  ),
 
   /** Where a login is: waiting for its tab, done (its account is in the list), failed or too old. */
   'social.state': proc([], z.object({ state: z.string().min(8).max(100) }), async (ctx, i) => {

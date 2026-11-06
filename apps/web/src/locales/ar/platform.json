@@ -1731,7 +1731,11 @@
         "الصق هنا App ID والـ Secret، ثم احفظ. تيك توك يوافق على التطبيق خلال أسبوع إلى أسبوعين."
       ],
       "igSecret": "المفتاح السري لتطبيق Instagram (تسجيل الدخول عبر Instagram)",
-      "igSecretHint": "فقط إذا كان متجر يستعمل تسجيل الدخول عبر Instagram (Pilot Message › الإعدادات). توقّع Meta رسائل هذا الدخول به. في تطبيق Meta:"
+      "igSecretHint": "فقط إذا كان متجر يستعمل تسجيل الدخول عبر Instagram (Pilot Message › الإعدادات). توقّع Meta رسائل هذا الدخول به. في تطبيق Meta:",
+      "igAlone": "إنستغرام وحده",
+      "igConfigId": "معرّف إعداد إنستغرام (⁦Instagram API, unified login⁩)",
+      "igConfigHint": "إعداد «⁦Instagram API (unified login)⁩» في Facebook Login for Business، المتوافق مع Instagram Login. يجب أن يستعمل نفس عنوان الرجوع (أدناه).",
+      "igAloneText": "بهذا المعرّف يظهر لكل متجر زر «ربط إنستغرام» في Pilot Message › الإعدادات › إنستغرام: دخول واحد، وتصل رسائل إنستغرام إلى Pilotix."
     },
     "release": {
       "title": "Push: النسخة القادمة من Dellal",

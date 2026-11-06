@@ -211,7 +211,7 @@
     },
     "igLogin": {
       "ok": "Connexion Instagram : la clé de @{{username}} marche. Dellal répond avec elle à tous vos clients Instagram.",
-      "warn": "Connexion Instagram : pas encore faite pour @{{username}}. Sans elle (ou sans l’accord de Meta), Dellal répond sur Instagram seulement aux comptes qui ont un rôle dans l’app. Ajoutez-la dans Pilot Message › Réglages.",
+      "warn": "Connexion Instagram : pas encore faite pour @{{username}}. Sans elle (ou sans l’accord de Meta), Dellal répond sur Instagram seulement aux comptes qui ont un rôle dans l’app. Cliquez « Connecter Instagram » dans Pilot Message › Réglages › Instagram.",
       "bad": "Connexion Instagram : la clé ne marche plus. La raison est juste en dessous."
     },
     "badSig": {

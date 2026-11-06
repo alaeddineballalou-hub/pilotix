@@ -2,10 +2,11 @@
 // (Dellal answers, a person can take over), a "Tester Dellal" chat, Dellal's results, and its settings (admin).
 // The inbox has three columns on a computer (conversations, the conversation, the customer), two on a tablet
 // (the customer opens as a panel) and one on a phone, where a conversation takes the whole screen.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useMenuCounts } from '../../layout/Shell';
-import { backend, serverUrl, shopApi } from '../../lib/backend';
+import { backend, rpc, serverUrl, shopApi } from '../../lib/backend';
 import { replyWindow } from '@pilotix/shared';
 import { da, n, shortWhen } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
@@ -490,6 +491,89 @@ function Results() {
   );
 }
 
+// « Connecter Instagram »: one Meta login with Pilotix's Instagram configuration (Centre de contrôle › Comptes Meta et
+// TikTok › Instagram seul). The tab opens on the click; Pilotix keeps the key, subscribes the account's DMs and says
+// « @x connecté ». Asked every two seconds, like Pilot AI › Comptes.
+function IgConnect({ linked }: { linked: string }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [pending, setPending] = useState<{
+    state: string;
+    url: string | null;
+    win: Window | null;
+  } | null>(null);
+  const closed = useRef(0);
+  useEffect(() => {
+    if (!pending) return;
+    closed.current = 0;
+    let stop = false;
+    const tick = async () => {
+      try {
+        const r = await rpc('social.state', { state: pending.state });
+        if (stop) return;
+        if (r.status === 'done') {
+          setPending(null);
+          await qc.invalidateQueries();
+          toast(t('messages.settings.igConnectedToast'), 'ok');
+          return;
+        }
+        if (r.status === 'error' || r.status === 'expired') {
+          setPending(null);
+          toast(r.error ?? t('messages.settings.igExpired'), 'bad');
+          return;
+        }
+        if (pending.win?.closed && ++closed.current >= 3) {
+          setPending(null);
+          toast(t('messages.settings.igClosed'), 'bad');
+        }
+      } catch (e) {
+        if (!stop) {
+          setPending(null);
+          toast((e as Error).message, 'bad');
+        }
+      }
+    };
+    const id = window.setInterval(tick, 2000);
+    return () => {
+      stop = true;
+      window.clearInterval(id);
+    };
+  }, [pending]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const start = async () => {
+    if (pending) return;
+    // opened now, on the click: a tab opened after waiting for the server is blocked by browsers
+    const win = backend.kind === 'demo' ? null : window.open('', '_blank');
+    try {
+      const r = await rpc('social.start', {
+        provider: 'meta',
+        kind: 'instagram',
+      });
+      if (r.url && win && !win.closed) win.location.href = r.url;
+      setPending({ state: r.state, url: r.url, win });
+    } catch (e) {
+      win?.close();
+      toast((e as Error).message, 'bad');
+    }
+  };
+  const reopen = () => pending?.url && setPending({ ...pending, win: window.open(pending.url, '_blank') });
+
+  return (
+    <div className="dl-igconnect">
+      <button type="button" className="btn primary" disabled={!!pending} onClick={start}>
+        <ChannelBadge ch="instagram" /> {pending ? t('messages.settings.igConnecting') : linked ? t('messages.settings.igReconnect') : t('messages.settings.igConnect')}
+      </button>
+      {pending?.url && (
+        <button type="button" className="linkbtn" onClick={reopen}>
+          {t('messages.settings.igReopen')}
+        </button>
+      )}
+      {linked && !pending && <span className="dl-ok">✓ {t('messages.settings.igConnected', { user: linked })}</span>}
+      <p className="muted small">{t('messages.settings.igConnectHelp')}</p>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- settings (admin)
 type Secret = 'ai' | 'appSecret' | 'waToken' | 'tiktokToken' | 'igToken';
 
@@ -675,6 +759,8 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
             <ChannelBadge ch="instagram" /> {t('messages.settings.igLogin')}
           </h4>
           <p className="muted small">{t('messages.settings.igLoginHelp', { name: f.name })}</p>
+          <IgConnect linked={data.has.igToken && f.instagramLoginUser ? f.instagramLoginUser : ''} />
+          <p className="muted small dl-ig-or">{t('messages.settings.igOr')}</p>
           {/* Meta's own words (its App Dashboard), kept left-to-right in every language. Newer apps: « Unified login »;
               older ones: « Instagram login » (Pilotix takes both keys) */}
           <ol>

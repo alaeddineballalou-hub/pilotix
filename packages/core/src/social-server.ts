@@ -7,8 +7,30 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypt
 import { num } from './db';
 import { AppError, Ctx } from './rpc';
 import type { Tenancy } from './platform/tenancy';
-import { getRaw } from './modules/admin';
-import { deletionStatus, endState, FoundAccount, FoundAsset, holdFound, lastBadSignature, removeLink, saveLink, SOCIAL, SOCIAL_KEYS, SocialCheck, SocialProvider, socialApps, socialSecret, SocialTest, socialUrls, takeState } from './modules/social';
+import { getRaw, setRaw } from './modules/admin';
+import { DELLAL_SECRETS, keepIgLogin } from './modules/dellal';
+import { igLogin, igPeek, uniAccounts } from './dellal-server';
+import {
+  deletionStatus,
+  endState,
+  FoundAccount,
+  loginKindOf,
+  noteIgLogin,
+  FoundAsset,
+  holdFound,
+  lastBadSignature,
+  removeLink,
+  saveLink,
+  SOCIAL,
+  SOCIAL_KEYS,
+  SocialCheck,
+  SocialProvider,
+  socialApps,
+  socialSecret,
+  SocialTest,
+  socialUrls,
+  takeState,
+} from './modules/social';
 
 async function fetchJson(url: string, init: RequestInit, who: string): Promise<any> {
   let res: Response;
@@ -146,6 +168,98 @@ async function metaAccount(t: Tenancy, code: string, publicUrl: string): Promise
   };
 }
 
+/**
+ * « Connecter Instagram » (Pilot Message › Réglages): Facebook's login with the Instagram-only configuration. Its key and
+ * the Instagram account it reaches wait for « Oui, c'est ma boutique »; nothing goes to the accounts list.
+ */
+async function instagramAccount(
+  t: Tenancy,
+  code: string,
+  publicUrl: string,
+): Promise<FoundAccount> {
+  const apps = await socialApps(t);
+  const secret = await socialSecret(t, "meta");
+  if (!apps.meta.appId || !secret)
+    throw new AppError("bad_request", "L’app Meta de Pilotix n’est pas prête.");
+  const tok = await graph("oauth/access_token", {
+    client_id: apps.meta.appId,
+    client_secret: secret,
+    redirect_uri: socialUrls(publicUrl).metaRedirect,
+    code,
+  });
+  let token = String(tok.access_token ?? "");
+  let expiresIn = Number(tok.expires_in) || 0;
+  if (!token)
+    throw new AppError(
+      "bad_request",
+      "Meta n’a pas donné de clé. Recommencez.",
+    );
+  // a person's key becomes one of about 60 days; a system user's key (that does not end) is kept as it is
+  const ll = await graph("oauth/access_token", {
+    grant_type: "fb_exchange_token",
+    client_id: apps.meta.appId,
+    client_secret: secret,
+    fb_exchange_token: token,
+  }).catch(() => null);
+  if (ll?.access_token) {
+    token = String(ll.access_token);
+    expiresIn = Number(ll.expires_in) || 60 * 86_400;
+  }
+  const ig = await igPeek(token);
+  if (!ig)
+    throw new AppError(
+      "bad_request",
+      "Aucun compte Instagram professionnel trouvé avec cette connexion. Choisissez votre compte Instagram dans la fenêtre de Meta, puis recommencez.",
+    );
+  return {
+    provider: "meta",
+    extId: ig.id,
+    name: ig.username ? `@${ig.username}` : "Instagram",
+    token,
+    tokenKind: "user",
+    expiresAt: expiresIn
+      ? new Date(Date.now() + expiresIn * 1000).toISOString()
+      : null,
+    assets: [],
+    instagram: ig,
+  };
+}
+
+/** « Oui, c'est ma boutique » for « Connecter Instagram »: the key goes to the boutique's Pilot Message, its DMs to Pilotix. */
+async function linkInstagram(
+  t: Tenancy,
+  shopId: number | null,
+  f: FoundAccount,
+): Promise<{ ok: boolean; message: string; account?: string }> {
+  if (!shopId || !f.instagram)
+    return {
+      ok: false,
+      message:
+        "Boutique introuvable. Recommencez depuis Pilot Message › Réglages.",
+    };
+  const r = (
+    await t.platform.query(
+      `SELECT schema_name FROM platform.shops WHERE id = $1 AND status NOT IN ('archived', 'deleted')`,
+      [shopId],
+    )
+  )[0];
+  if (!r) return { ok: false, message: "Boutique introuvable." };
+  const db = t.shop(String(r.schema_name));
+  // the account is read again with the key and subscribed to Pilotix's webhook (its DMs come to Pilotix)
+  const got = await igLogin(f.token, f.instagram.id);
+  await setRaw(db, DELLAL_SECRETS.igToken, f.token);
+  await keepIgLogin(db, got, new Date().toISOString());
+  await noteIgLogin(t, shopId, String(got.userId), String(got.username ?? ""));
+  const name = got.username ? `@${got.username}` : f.name;
+  return {
+    ok: true,
+    message: got.subscribeError
+      ? `Instagram connecté, mais Meta a refusé l’abonnement aux messages : ${got.subscribeError}`
+      : "Instagram connecté",
+    account: name,
+  };
+}
+
 /** A TikTok for Business login: the advertiser's token and the ad accounts it opened to Pilotix. */
 async function tiktokAccount(t: Tenancy, code: string): Promise<FoundAccount> {
   const apps = await socialApps(t);
@@ -203,7 +317,7 @@ export async function finishLogin(t: Tenancy, provider: SocialProvider, q: Recor
     return { ok: false, message: `${why} Fermez cet onglet.` };
   }
   try {
-    const found = provider === 'meta' ? await metaAccount(t, code, publicUrl) : await tiktokAccount(t, code);
+    const found = provider === 'meta' ? (loginKindOf(st.state) === 'instagram' ? await instagramAccount(t, code, publicUrl) : await metaAccount(t, code, publicUrl)) : await tiktokAccount(t, code);
     const key = randomBytes(24).toString('base64url');
     await holdFound(t, st.state, found, sha256(key));
     const shop = st.shopId ? String((await t.platform.query('SELECT name FROM platform.shops WHERE id = $1', [st.shopId]))[0]?.name ?? '') : null;
@@ -234,6 +348,16 @@ export async function confirmLogin(t: Tenancy, state: string, key: string, yes: 
   if (!yes) {
     await endState(t, st.state, { error: 'Pas lié : « Ce n’est pas ma boutique » dans l’onglet de connexion.' });
     return { ok: false, message: 'Rien n’a été lié. Si vous n’avez rien demandé, vous pouvez retirer Pilotix de votre compte (Facebook : Paramètres › Intégrations professionnelles).' };
+  }
+  // « Connecter Instagram »: to Pilot Message, not to the accounts list
+  if (st.found.instagram) {
+    const r = await linkInstagram(t, st.shopId, st.found).catch((e: any) => ({
+      ok: false,
+      message: String(e?.message ?? 'Erreur').slice(0, 300),
+      account: undefined,
+    }));
+    await endState(t, st.state, r.ok ? { linkId: null } : { error: r.message });
+    return r;
   }
   const linkId = await saveLink(t, st, st.found);
   await endState(t, st.state, { linkId });
@@ -543,8 +667,8 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
         try {
           if (dset?.igLoginKind === 'unified') {
             // Meta's Unified login (newer apps): the key's Instagram accounts (a system user's /me is not the account)
-            const r = await graph('https://graph.facebook.com/v23.0/me/assigned_instagram_accounts', { fields: 'id,username', limit: '50', access_token: String(igKey) });
-            const list: any[] = Array.isArray(r?.data) ? r.data : [];
+            // (a system user's key lists them as assigned accounts; « Connecter Instagram »'s key, through its Pages)
+            const list = await uniAccounts(String(igKey));
             const acc = list.find((x) => String(x?.id) === String(dset?.instagramLoginId ?? '')) ?? list[0];
             if (!acc) throw new AppError('bad_request', 'Cette clé n’a plus accès au compte Instagram. Dans l’app Meta, donnez-lui le compte à nouveau.');
             add('igLogin', 'ok', { username: String(acc.username ?? dset?.instagramLoginUser ?? '') });

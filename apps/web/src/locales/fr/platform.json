@@ -1691,7 +1691,11 @@
         "Collez ici l’App ID et le Secret, puis enregistrez. TikTok valide l’app en une à deux semaines."
       ],
       "igSecret": "Clé secrète de l’app Instagram (connexion Instagram)",
-      "igSecretHint": "Seulement si une boutique utilise la connexion Instagram (Pilot Message › Réglages). Meta signe les messages de cette connexion avec elle. Dans l’app Meta :"
+      "igSecretHint": "Seulement si une boutique utilise la connexion Instagram (Pilot Message › Réglages). Meta signe les messages de cette connexion avec elle. Dans l’app Meta :",
+      "igAlone": "Instagram seul",
+      "igConfigId": "ID de configuration Instagram (Instagram API, unified login)",
+      "igConfigHint": "La configuration « Instagram API (unified login) » de Facebook Login for Business, compatible Instagram Login. Elle doit avoir la même adresse de retour (ci-dessous).",
+      "igAloneText": "Avec cet ID, chaque boutique a un bouton « Connecter Instagram » dans Pilot Message › Réglages › Instagram : une connexion, et ses messages Instagram arrivent dans Pilotix."
     },
     "release": {
       "title": "Push : la prochaine version de Dellal",
