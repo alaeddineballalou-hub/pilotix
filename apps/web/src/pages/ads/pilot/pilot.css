@@ -364,10 +364,30 @@
   .pa-pro-more, .pa-pilot-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 700px) {
-  .pa { gap: 12px; }
-  .pa-top { flex-direction: column; align-items: stretch; }
+  .pa { gap: 10px; }
+  .pa-top { flex-direction: column; align-items: stretch; gap: 8px; }
   .pa-top .pa-mode { align-self: flex-start; }
+  .pa-top .pa-mode button { padding: 5px 12px; font-size: 13px; min-height: 32px; }
   .pa-tabs a { padding: 8px 12px; font-size: 13.5px; }
+  /* the cards on top stay small on a phone, so the ads show sooner */
+  .pa-guardbar { flex-wrap: nowrap; gap: 8px; padding-block: 6px; padding-inline: 10px 6px; }
+  .pa-guard-sum { flex: 1; min-width: 0; gap: 8px; font-size: 13px; line-height: 1.35; }
+  .pa-guard-sum svg { flex: none; }
+  .pa-guard-txt { display: flex; flex-direction: column; min-width: 0; }
+  .pa-guard-dot { display: none; }
+  .pa-guardbar .btn { flex: none; white-space: nowrap; min-height: 34px; padding: 5px 10px; font-size: 13px; }
+  .pa-wait { padding: 12px 14px; gap: 4px; }
+  .pa-wait .card-head h2 { font-size: 15px; }
+  .pa-wait-list li { padding: 8px 0; gap: 8px; }
+  .pa-wait-what b { font-size: 14px; line-height: 1.35; }
+  .pa-wait-what .muted { font-size: 12px; }
+  .pa-simple { gap: 10px; }
+  .pa-simple-head { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 8px; }
+  /* « Mes pubs » is already the tab just above: the title stays for screen readers only */
+  .pa-simple-head h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .pa-simple-head p { margin: 0; font-size: 13px; line-height: 1.4; }
+  .pa-simple-head .pa-days { display: flex; }
+  .pa-simple-head .pa-days button { flex: 1; padding: 5px 10px; font-size: 13px; min-height: 32px; }
   .pa-cards { grid-template-columns: minmax(0, 1fr); }
   .pa-three b { font-size: 17px; }
   .pa-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
@@ -382,6 +402,7 @@
   .pa-nav .btn { min-height: 46px; flex: 1; }
   .pa-prods { grid-template-columns: minmax(0, 1fr); }
   .pa-wait-btns, .pa-sug-btns { width: 100%; }
-  .pa-wait-btns .btn, .pa-sug-btns .btn { flex: 1; min-height: 44px; }
+  .pa-sug-btns .btn { flex: 1; min-height: 44px; }
+  .pa-wait-btns .btn { flex: 1; min-height: 40px; }
   .pa-ib { width: 40px; height: 40px; }
 }

@@ -26,7 +26,8 @@
     "resumed": "{{n}} pub(s) relancée(s)"
   },
   "guard": {
-    "summary": "Limite : {{max}} $ par jour · en cours : {{now}} $",
+    "limit": "Limite : {{max}} $ par jour",
+    "now": "en cours : {{now}} $",
     "title": "Les limites du propriétaire",
     "maxDaily": "Dépense maximum de la boutique par jour",
     "maxRaise": "Hausse permise sans votre oui (marketeur)",

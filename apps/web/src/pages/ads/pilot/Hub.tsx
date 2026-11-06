@@ -117,7 +117,14 @@ function TopAlerts({ s }: { s: Ctl }) {
           <div className="pa-guardbar">
             <span className="pa-guard-sum">
               <Icon name="shield" />
-              {t('pilotads.guard.summary', { max: s.guard.maxDailyUsd ?? '∞', now: s.shopDailyUsd.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) })}
+              {/* one line on a computer; on a phone the limit and today's spend go on two lines */}
+              <span className="pa-guard-txt">
+                <span>{t('pilotads.guard.limit', { max: s.guard.maxDailyUsd ?? '∞' })}</span>
+                <span className="pa-guard-dot" aria-hidden="true">
+                  {' · '}
+                </span>
+                <span>{t('pilotads.guard.now', { now: s.shopDailyUsd.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) })}</span>
+              </span>
             </span>
             <button type="button" className="btn pa-danger-ghost" onClick={() => setAsk(true)}>
               <Icon name="power" /> {t('pilotads.stop.button')}

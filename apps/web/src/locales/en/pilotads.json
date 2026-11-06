@@ -26,7 +26,8 @@
     "resumed": "{{n}} ad(s) restarted"
   },
   "guard": {
-    "summary": "Limit: {{max}} $ a day · running: {{now}} $",
+    "limit": "Limit: {{max}} $ a day",
+    "now": "running: {{now}} $",
     "title": "The owner’s limits",
     "maxDaily": "Most the shop may spend a day",
     "maxRaise": "Raise allowed without your yes (marketer)",
