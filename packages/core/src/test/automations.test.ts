@@ -215,7 +215,8 @@ test('Rapport du soir: once a day, at its hour, with the day’s numbers', async
   await call('auto.save', admin, { evening: { on: true, hour: 21, to: [] } });
   await forget('eveningDay');
   await call('auto.run', at(admin, t), {});
-  const l = (await lines('evening'))[0];
+  // its own report (sent at t): after 21:00 in Algiers, earlier tests' runs on the real clock send tonight's too
+  const l = (await lines('evening')).find((x) => new Date(x.at).getTime() === t);
   assert.equal(l.data.day, day);
   const r = await dayReport(db, day);
   assert.deepEqual([l.data.orders, l.data.confirmed, l.data.delivered, l.data.returned, l.data.cash, l.data.profit], [r.orders, r.confirmed, r.delivered, r.returned, r.cash, r.profit]);
