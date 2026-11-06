@@ -541,6 +541,7 @@ const SaveIn = z.object({
   stockBack: z.boolean().optional(),
   autoDispatch: z.boolean().optional(),
   livreurAuto: z.boolean().optional(),
+  livreurMax: z.number().int().min(0).max(500).optional(),
   pilotAuto: z.boolean().optional(),
   delivery: z.boolean().optional(),
   noStock: z.object({ on: z.boolean() }).optional(),
@@ -566,6 +567,7 @@ export const automationsProcs = {
     if (i.stockBack !== undefined) next.stockBack = i.stockBack;
     if (i.autoDispatch !== undefined) next.autoDispatch = i.autoDispatch;
     if (i.livreurAuto !== undefined) next.livreurAuto = i.livreurAuto;
+    if (i.livreurMax !== undefined) next.livreurMax = i.livreurMax;
     if (i.pilotAuto !== undefined) await setPilotMode(ctx, i.pilotAuto);
     if (i.noStock) next.noStock = { ...cur.noStock, ...i.noStock };
     if (i.evening) next.evening = i.evening;
@@ -607,7 +609,7 @@ export const automationsProcs = {
     // « Stock revenu » on again: what the stock can serve goes now
     if (!cur.stockBack && next.stockBack && (await releaseNoStock(db, me, undefined, { force: true })).length) ctx.emit({ type: 'orders' });
     // « Livreur automatique » on: the « Livraison privée » orders waiting in « À attribuer » get their livreur now
-    if (next.autoDispatch && next.livreurAuto && !(cur.autoDispatch && cur.livreurAuto)) {
+    if (next.autoDispatch && next.livreurAuto && (!(cur.autoDispatch && cur.livreurAuto) || next.livreurMax !== cur.livreurMax)) {
       const ids = await ownWaiting(db);
       if (ids.length) await autoDispatch(ctx, ids);
     }

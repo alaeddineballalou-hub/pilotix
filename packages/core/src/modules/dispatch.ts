@@ -118,21 +118,34 @@ export async function keepRefusal(db: Db, orderId: number, error: string, userId
 /** A livreur's parcels today: those he still has to deliver (or bring back), and those he finished today. */
 const OPEN_OWN = ['prepared', 'shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange', 'returning'];
 
-/** The livreurs who said « Je travaille aujourd'hui » (when), with their parcels today, fewest first, and the
- *  « Livraison privée » they belong to (none: any). */
-export async function livreursToday(db: Db, now: number): Promise<{ id: number; name: string; at: string; n: number; companyId: number | null }[]> {
+/** The livreurs who said « Je travaille aujourd'hui » (when), with their parcels today (`n`) and those in hand now
+ *  (`hands`: still to deliver or bring back), fewest first, and the « Livraison privée » they belong to (none: any). */
+export async function livreursToday(
+  db: Db,
+  now: number,
+): Promise<{ id: number; name: string; at: string; n: number; hands: number; companyId: number | null }[]> {
   const inToday = await checkedInToday(db, now);
   if (!inToday.size) return [];
   const people = await db.query(`SELECT id, name, livreur_company_id FROM profiles WHERE active AND 'livreur' = ANY(roles) AND id = ANY($1)`, [[...inToday.keys()]]);
   const n = new Map<number, number>();
+  const hands = new Map<number, number>();
   for (const r of await db.query(
-    `SELECT livreur_id, count(*)::int AS n FROM orders
+    `SELECT livreur_id, count(*)::int AS n, count(*) FILTER (WHERE follow_status = ANY($2))::int AS hands FROM orders
       WHERE livreur_id = ANY($1) AND (follow_status = ANY($2) OR delivered_at >= $3 OR returned_at >= $3) GROUP BY 1`,
     [people.map((p: any) => num(p.id)), OPEN_OWN, new Date(algiersDayStart(now)).toISOString()],
-  ))
+  )) {
     n.set(num(r.livreur_id), num(r.n));
+    hands.set(num(r.livreur_id), num(r.hands));
+  }
   return people
-    .map((p: any) => ({ id: num(p.id), name: String(p.name), at: inToday.get(num(p.id))!, n: n.get(num(p.id)) ?? 0, companyId: p.livreur_company_id ? num(p.livreur_company_id) : null }))
+    .map((p: any) => ({
+      id: num(p.id),
+      name: String(p.name),
+      at: inToday.get(num(p.id))!,
+      n: n.get(num(p.id)) ?? 0,
+      hands: hands.get(num(p.id)) ?? 0,
+      companyId: p.livreur_company_id ? num(p.livreur_company_id) : null,
+    }))
     .sort((a: { n: number; at: string }, b: { n: number; at: string }) => a.n - b.n || Date.parse(a.at) - Date.parse(b.at));
 }
 
@@ -146,15 +159,17 @@ export async function ownWaiting(db: Db): Promise<number[]> {
 /**
  * Pilot Automations' « Livreur automatique »: ready « Livraison privée » orders with no livreur go, oldest first, to
  * the livreur who said « Je travaille aujourd'hui » with the fewest parcels today — one at a time, so a batch is shared
- * out; equal: the first who checked in. Only a livreur of the order's « Livraison privée » (or of none). Nobody checked
- * in: they wait in « À attribuer » (then the backup company).
+ * out; equal: the first who checked in. Only a livreur of the order's « Livraison privée » (or of none), and under the
+ * shop's maximum in hand. Nobody checked in (or all at their maximum): they wait in « À attribuer » (then the backup
+ * company), and the job gives them as soon as one checks in or delivers.
  * Returns each livreur given orders, with how many (his notification comes after the dispatch).
  */
-async function giveToLivreurs(ctx: Ctx, rows: { id: number; companyId: number }[]): Promise<{ id: number; name: string; n: number }[]> {
+async function giveToLivreurs(ctx: Ctx, rows: { id: number; companyId: number }[], max: number): Promise<{ id: number; name: string; n: number }[]> {
   if (!rows.length) return [];
   const today = await livreursToday(ctx.db, ctx.now());
   if (!today.length) return [];
   const load = new Map<number, number>(today.map((l) => [l.id, l.n]));
+  const hands = new Map<number, number>(today.map((l) => [l.id, l.hands]));
   const names = new Map<number, string>(today.map((l) => [l.id, l.name]));
   const since = new Map<number, string>(today.map((l) => [l.id, l.at]));
   const company = new Map<number, number | null>(today.map((l) => [l.id, l.companyId]));
@@ -162,9 +177,10 @@ async function giveToLivreurs(ctx: Ctx, rows: { id: number; companyId: number }[
   const groups = new Map<string, number[]>();
   const given = new Map<number, number>();
   for (const r of [...rows].sort((a, b) => a.id - b.id)) {
-    const l = [...load.keys()].filter((x) => company.get(x) === null || company.get(x) === r.companyId).sort(first)[0];
+    const l = [...load.keys()].filter((x) => (company.get(x) === null || company.get(x) === r.companyId) && (!max || hands.get(x)! < max)).sort(first)[0];
     if (l === undefined) continue;
     load.set(l, load.get(l)! + 1);
+    hands.set(l, hands.get(l)! + 1);
     given.set(l, (given.get(l) ?? 0) + 1);
     groups.set(`${r.companyId}:${l}`, [...(groups.get(`${r.companyId}:${l}`) ?? []), r.id]);
   }
@@ -192,7 +208,7 @@ export async function autoDispatch(ctx: Ctx, ids?: number[]) {
   let livreurs: { id: number; name: string; n: number }[] = [];
   if (by && auto.livreurAuto) {
     const own = rows.filter((r: any) => r.company_id && r.active && r.kind === 'own' && !r.livreur_id);
-    livreurs = await giveToLivreurs(ctx, own.map((r: any) => ({ id: num(r.id), companyId: num(r.company_id) })));
+    livreurs = await giveToLivreurs(ctx, own.map((r: any) => ({ id: num(r.id), companyId: num(r.company_id) })), auto.livreurMax);
     if (livreurs.length) {
       const now = (await ctx.db.query(`SELECT id, livreur_id FROM orders WHERE id = ANY($1)`, [own.map((r: any) => num(r.id))])) as any[];
       for (const r of rows) {

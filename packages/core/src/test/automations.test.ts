@@ -313,7 +313,9 @@ test('who is asked to turn on notifications: the people the evening report and t
   await call('auto.save', admin, { evening: { on: true, hour: 21, to: [] }, queue: { on: true, waitHours: 2, idleMin: 30, to: [] } });
 });
 
-test('Livreur automatique: a ready « Livraison privée » order goes to the livreur working today with the fewest parcels', async () => {
+/** Walid and Lamine, livreurs of our « Livraison privée », on a clean day (no parcel yet, nobody checked in, nothing
+ *  waiting for a livreur); `ready()` makes a confirmed order of it, all picked, with no livreur */
+const livreurDay = async (from: number) => {
   const own = Number((await db.query(`SELECT id FROM delivery_companies WHERE kind = 'own' AND active ORDER BY id LIMIT 1`))[0].id);
   const lamine = Number((await db.query(`SELECT id FROM profiles WHERE email = $1`, [EMAILS.livreur]))[0].id);
   const other = (await db.query(`SELECT id, email FROM profiles WHERE 'livreur' = ANY(roles) AND active AND id <> $1 ORDER BY id LIMIT 1`, [lamine]))[0];
@@ -331,21 +333,30 @@ test('Livreur automatique: a ready « Livraison privée » order goes to the liv
   await db.query('INSERT INTO stock (variant_id, warehouse_id, qty) VALUES ($1, $2, 500) ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET qty = 500', [X.vid, wh]);
   let k = 0;
   const ready = async () => {
-    const o = (await call('orders.create', admin, { customerName: 'Privé Auto', phone: `0695${String(400000 + ++k).padStart(6, '0')}`, wilayaId: 16, commune: 'Kouba', address: 'Cité 5', items: [{ productId: Number(X.id), variantId: Number(X.vid), qty: 1 }], companyId: own })) as any;
+    const o = (await call('orders.create', admin, { customerName: 'Privé Auto', phone: `0695${String(from + ++k).padStart(6, '0')}`, wilayaId: 16, commune: 'Kouba', address: 'Cité 5', items: [{ productId: Number(X.id), variantId: Number(X.vid), qty: 1 }], companyId: own })) as any;
     await call('orders.setConf', admin, { ids: [o.id], status: 'confirmed' });
     await db.query(`UPDATE orders SET company_id = $2, livreur_id = NULL WHERE id = $1`, [o.id, own]);
     await db.query(`UPDATE order_items SET picked_qty = qty WHERE order_id = $1`, [o.id]);
     return Number(o.id);
   };
   const row = async (id: number) => (await db.query(`SELECT follow_status, livreur_id FROM orders WHERE id = $1`, [id]))[0];
+  /** Lamine already has `n` parcels in hand */
+  const forLamine = async (n: number) => {
+    for (let i = 0; i < n; i++) {
+      const id = await ready();
+      await call('orders.assignCompany', admin, { ids: [id], companyId: own, livreurId: lamine });
+      await call('orders.setFollow', admin, { ids: [id], status: 'prepared' });
+    }
+  };
+  return { own, lamine, walid, walidEmail: String(other.email), ready, row, forLamine };
+};
+
+test('Livreur automatique: a ready « Livraison privée » order goes to the livreur working today with the fewest parcels', async () => {
+  const { lamine, walid, walidEmail, ready, row, forLamine } = await livreurDay(400000);
   // Walid says « Je travaille aujourd'hui » first; Lamine already has two parcels
-  await call('tournee.checkIn', await as(other.email), {});
+  await call('tournee.checkIn', await as(walidEmail), {});
   await call('tournee.checkIn', await as(EMAILS.livreur), {});
-  for (let i = 0; i < 2; i++) {
-    const id = await ready();
-    await call('orders.assignCompany', admin, { ids: [id], companyId: own, livreurId: lamine });
-    await call('orders.setFollow', admin, { ids: [id], status: 'prepared' });
-  }
+  await forLamine(2);
   assert.deepEqual((await livreursToday(db, Date.now())).map((l) => [l.id, l.n]), [[walid, 0], [lamine, 2]]);
   // off (the default): they wait in « À attribuer »
   const four = [await ready(), await ready(), await ready(), await ready()];
@@ -377,6 +388,41 @@ test('Livreur automatique: a ready « Livraison privée » order goes to the liv
   await call('depot.toAssign', await as(EMAILS.depot), {});
   assert.deepEqual(await row(manual), { follow_status: 'to_prepare', livreur_id: null });
   await call('auto.save', admin, { autoDispatch: true, livreurAuto: false });
+});
+
+test('Livreur automatique: a livreur with the maximum in hand gets no more until he delivers; 0 is no limit', async () => {
+  const { lamine, walid, walidEmail, ready, row, forLamine } = await livreurDay(500000);
+  const lv = async (id: number) => {
+    const r = await row(id);
+    return r.livreur_id ? Number(r.livreur_id) : null;
+  };
+  await call('tournee.checkIn', await as(walidEmail), {});
+  await call('tournee.checkIn', await as(EMAILS.livreur), {});
+  await forLamine(2);
+  // at most 2 in hand: Walid (0) takes two, then both have 2: the third waits in « À attribuer »
+  const three = [await ready(), await ready(), await ready()];
+  const s: any = await call('auto.save', admin, { livreurAuto: true, livreurMax: 2 });
+  assert.equal(s.s.livreurMax, 2);
+  assert.deepEqual(await Promise.all(three.map(lv)), [walid, walid, null]);
+  const st: any = await call('auto.state', admin, {});
+  assert.equal(st.livreurs.waiting, 1);
+  assert.deepEqual(
+    st.livreurs.today.map((l: any) => [l.id, l.n, l.hands]).sort((a: number[], b: number[]) => a[0] - b[0]),
+    [[walid, 2, 2], [lamine, 2, 2]].sort((a, b) => a[0] - b[0]),
+  );
+  // Walid delivers one: the job gives him the third
+  await db.query(`UPDATE orders SET follow_status = 'delivered', delivered_at = now() WHERE id = $1`, [three[0]]);
+  await call('auto.run', admin, {});
+  assert.equal(await lv(three[2]), walid);
+  // both full again: one more waits; « Pas de limite » (0) gives it at once, to the fewest parcels today
+  const more = await ready();
+  await call('auto.run', admin, {});
+  assert.equal(await lv(more), null);
+  await call('auto.save', admin, { livreurMax: 0 });
+  assert.equal(await lv(more), lamine, 'Lamine 2 today, Walid 3 (one delivered)');
+  // out of range: refused
+  await assert.rejects(call('auto.save', admin, { livreurMax: -1 }), (err: any) => !!err);
+  await call('auto.save', admin, { livreurAuto: false, livreurMax: 30 });
 });
 
 test('Pilot Auto Assign: the same switch as in Sociétés de livraison; a clash between two rules needs its answer first', async () => {

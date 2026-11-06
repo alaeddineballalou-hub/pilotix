@@ -18,6 +18,8 @@ const HOURS = [17, 18, 19, 20, 21, 22, 23];
 const WAIT = [1, 2, 3, 4, 6, 8, 12, 24];
 const IDLE = [15, 20, 30, 45, 60, 90, 120];
 const DAYS = [7, 14, 21, 30, 45, 60, 90];
+/** « Maximum en main par livreur » (0: no limit) */
+const MAX_HANDS = [0, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100];
 
 export function Automations() {
   const q = useRpc('auto.state', {}, { refetchInterval: 60_000 });
@@ -46,6 +48,9 @@ function Board({ d }: { d: S }) {
     save.mutate(patch, { onSuccess: () => said && toast(t(said.on ? 'notify.auto.on' : 'notify.auto.off', { name: said.name }), 'ok'), onError: back });
   const name = (k: string) => t(`notify.auto.${k}.name`);
   const lastOf = (...kinds: string[]) => d.log.find((l) => kinds.includes(l.kind));
+  /** « Livreur automatique »: at his maximum in hand (0: no limit); the next parcel goes to the first under it (fewest parcels today) */
+  const full = (l: S['livreurs']['today'][number]) => s.livreurMax > 0 && l.hands >= s.livreurMax;
+  const next = d.livreurs.today.find((l) => !full(l));
   const assignOn = (area: 'conf' | 'follow') => assign[area] !== 'manual';
   const flipAssign = (area: 'conf' | 'follow', on: boolean) => {
     setAssign({ ...assign, [area]: on ? (s.assignPrev[area] ?? 'turn') : 'manual' });
@@ -230,11 +235,17 @@ function Board({ d }: { d: S }) {
                 <div className="au-today">
                   <span className="au-today-t">{t('notify.auto.livreur.today')}</span>
                   <ul className="au-out">
-                    {d.livreurs.today.map((l, k) => (
+                    {d.livreurs.today.map((l) => (
                       <li key={l.id}>
                         <b>{l.name}</b>
-                        <span className="muted">{t('notify.auto.livreur.parcels', { count: l.n })}</span>
-                        {k === 0 && s.livreurAuto && s.autoDispatch && <span className="au-next">{t('notify.auto.livreur.next')}</span>}
+                        <span className="muted">
+                          {t('notify.auto.livreur.parcels', { count: l.n })} · {t('notify.auto.livreur.hands', { count: l.hands })}
+                        </span>
+                        {full(l) ? (
+                          <span className="au-full">{t('notify.auto.livreur.full')}</span>
+                        ) : (
+                          l.id === next?.id && s.livreurAuto && s.autoDispatch && <span className="au-next">{t('notify.auto.livreur.next')}</span>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -242,7 +253,26 @@ function Board({ d }: { d: S }) {
               ) : (
                 <Now tone={d.livreurs.waiting ? 'warn' : undefined}>{t('notify.auto.livreur.nobody')}</Now>
               )}
-              {d.livreurs.waiting > 0 && <Now tone="warn">{t('notify.auto.livreur.waiting', { count: d.livreurs.waiting })}</Now>}
+              {d.livreurs.waiting > 0 && (
+                <Now tone="warn">
+                  {t('notify.auto.livreur.waiting', { count: d.livreurs.waiting })}
+                  {d.livreurs.today.length > 0 && !next && <> · {t('notify.auto.livreur.allFull')}</>}
+                </Now>
+              )}
+              {s.livreurAuto && (
+                <div className="au-fields">
+                  <Pick
+                    label={t('notify.auto.livreur.max')}
+                    value={s.livreurMax}
+                    options={MAX_HANDS}
+                    show={(v) => (v ? t('notify.auto.livreur.parcels', { count: v }) : t('notify.auto.livreur.noLimit'))}
+                    onChange={(v) => {
+                      setS({ ...s, livreurMax: v });
+                      put({ livreurMax: v });
+                    }}
+                  />
+                </div>
+              )}
             </>
           )}
           <Links items={[['#/livraison/livreurs', t('notify.auto.livreur.link')]]} />
