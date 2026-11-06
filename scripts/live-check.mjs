@@ -74,9 +74,12 @@ check(r.status === 200 && typeof r.data?.slug === 'string' && typeof r.data?.fre
 r = await get('/auth/store-name?name=x&slug=platform');
 check(r.status === 200 && r.data?.free === false, 'Pilotix’s own words are never a store name', r.data);
 r = await post('/auth/login', { email: nobody, password: 'Wrong-Password-1' });
-check(r.status === 401 && r.data?.message === 'Email ou mot de passe incorrect', 'a login with an unknown e-mail is refused like a wrong password', r.data);
+// after several tries from the same place (each deploy checks again) the login asks for the anti-robot check instead:
+// that is a refusal too, so it counts as one
+const antiRobot = (x) => x.status >= 400 && x.status < 500 && typeof x.data?.challenge === 'string' && x.data.challenge.length > 0;
+check((r.status === 401 && r.data?.message === 'Email ou mot de passe incorrect') || antiRobot(r), 'a login with an unknown e-mail is refused like a wrong password', r.data);
 r = await post('/platform/auth/login', { email: nobody, password: 'Wrong-Password-1' });
-check(r.status === 401, 'the control room refuses an unknown e-mail', r.data);
+check(r.status === 401 || antiRobot(r), 'the control room refuses an unknown e-mail', r.data);
 r = await post('/rpc/me.get', {});
 check(r.status === 401, 'the app’s actions need a login', r.status);
 r = await get('/platform/health');
