@@ -51,5 +51,15 @@
       "Les sauvegardes de nuit gardent une copie 14 jours au plus, puis elle est effacée.",
       "Vous avez écrit à une boutique sur Messenger, Instagram ou TikTok ? Vos messages sont gardés dans cette boutique pour vous répondre et suivre votre commande. Pour les faire effacer, demandez-le à la boutique, ou écrivez-nous à {{email}} avec le nom de la boutique et le nom de votre profil : nous les effaçons sous 30 jours au plus."
     ]
+  },
+  "sgov": {
+    "t": "Demandes des autorités",
+    "p": "Si une autorité publique (police, justice, gouvernement) demande des données de vos comptes ou de vos clients, Pilotix suit ces 4 règles :",
+    "steps": [
+      "Nous vérifions que chaque demande est légale : faite par une autorité qui en a le droit, selon la loi qui s’applique.",
+      "Nous refusons une demande que nous jugeons illégale, et nous la contestons par les voies que la loi prévoit.",
+      "Nous ne donnons que le strict minimum : seulement les données demandées et nécessaires, rien de plus.",
+      "Nous gardons une trace de chaque demande : qui l’a faite, ce qui était demandé, notre réponse et la raison légale de cette réponse."
+    ]
   }
 }

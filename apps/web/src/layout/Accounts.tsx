@@ -791,9 +791,9 @@ export function Legal() {
     legalText().then(setD);
   }, []);
   const email = d?.email || 'contact@pilotix.online';
-  // the linked Facebook / Instagram / TikTok accounts: what Pilotix receives and how to erase it. Meta and TikTok ask
-  // for it, so it shows under Pilotix's own text too.
-  const social = ['sfb', 'sdel'] as const;
+  // the linked Facebook / Instagram / TikTok accounts (what Pilotix receives and how to erase it) and the 4 rules for
+  // requests from authorities: Meta and TikTok ask for them, so they show under Pilotix's own text too.
+  const social = ['sfb', 'sdel', 'sgov'] as const;
   const sections = ['s1', 's2', 's2ai', 's3', ...social, 's4', 's5', 's6', 's7'] as const;
   return (
     <div className="px-legal">

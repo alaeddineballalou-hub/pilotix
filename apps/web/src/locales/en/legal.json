@@ -51,5 +51,15 @@
       "Nightly backups keep a copy for 14 days at most, then it is erased.",
       "Did you write to a store on Messenger, Instagram or TikTok? Your messages are kept in that store to answer you and follow your order. To have them erased, ask the store, or write to us at {{email}} with the store’s name and your profile name: we erase them within 30 days at most."
     ]
+  },
+  "sgov": {
+    "t": "Requests from authorities",
+    "p": "If a public authority (police, courts, government) asks for data about your accounts or your customers, Pilotix follows these 4 rules:",
+    "steps": [
+      "We check that every request is lawful: made by an authority that has the right to ask, under the law that applies.",
+      "We refuse a request we believe is unlawful, and we challenge it in the ways the law allows.",
+      "We give only the minimum: just the data that is asked for and needed, nothing more.",
+      "We keep a record of every request: who made it, what was asked, our answer and the legal reason for that answer."
+    ]
   }
 }
