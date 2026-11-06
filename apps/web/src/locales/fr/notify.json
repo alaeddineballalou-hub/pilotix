@@ -62,6 +62,16 @@
       },
       "link": "Régler l’affectation"
     },
+    "pilot": {
+      "name": "Pilot Auto Assign",
+      "when": "une commande arrive",
+      "then": "choisit sa société de livraison avec vos règles (sinon la société par défaut)",
+      "rules_one": "{{count}} règle",
+      "rules_other": "{{count}} règles",
+      "noRules": "Pas encore de règle",
+      "default": "Par défaut : {{name}}",
+      "link": "Régler Pilot Auto Assign"
+    },
     "queue": {
       "name": "File d’attente lente",
       "when": "une commande attend sans appel, ou une agente en ligne n’appelle plus",
@@ -123,6 +133,21 @@
       "offEmpty": "Arrêté : chaque commande prête attendra dans « À attribuer » qu’un manager choisisse.",
       "link": "Ouvrir « À attribuer »"
     },
+    "livreur": {
+      "name": "Livreur automatique",
+      "when": "une commande « Livraison privée » est prête",
+      "then": "la donne au livreur qui a le moins de colis aujourd’hui, parmi ceux qui ont dit « Je travaille aujourd’hui » ; il reçoit une notification",
+      "today": "Au travail aujourd’hui",
+      "parcels_one": "{{count}} colis",
+      "parcels_other": "{{count}} colis",
+      "next": "le prochain",
+      "nobody": "Aucun livreur n’a encore dit « Je travaille aujourd’hui » : les commandes attendent dans « À attribuer ».",
+      "waiting_one": "{{count}} commande attend un livreur",
+      "waiting_other": "{{count}} commandes attendent un livreur",
+      "needsDispatch": "Marche avec « Dispatch automatique » : allumez-le aussi.",
+      "noOwn": "Pas de « Livraison privée » dans vos sociétés de livraison.",
+      "link": "Voir les livreurs"
+    },
     "delivery": {
       "name": "Messages de livraison",
       "when": "une commande change d’étape",
@@ -160,7 +185,9 @@
       "comeback_other": "Offre de retour : {{count}} clients ajoutés à « {{campaign}} »",
       "comebackProblem": "Offre de retour : la campagne « {{campaign}} » n’est pas prête",
       "release_one": "{{count}} commande sans stock envoyée au dépôt",
-      "release_other": "{{count}} commandes sans stock envoyées au dépôt"
+      "release_other": "{{count}} commandes sans stock envoyées au dépôt",
+      "livreur_one": "{{count}} commande donnée aux livreurs : {{who}}",
+      "livreur_other": "{{count}} commandes données aux livreurs : {{who}}"
     }
   },
   "tomorrow": "demain",

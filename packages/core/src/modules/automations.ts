@@ -22,10 +22,11 @@ import { addDays, dayStart, fxTable, moneyOf, moneyRows } from './ads';
 import { act } from './adsmgr';
 import { getAssign } from './assign';
 import { REACHABLE } from './campaigns';
-import { READY_SQL } from './dispatch';
+import { autoDispatch, livreursToday, ownWaiting, READY_SQL } from './dispatch';
 import { managers } from './livreur';
 import { releaseNoStock } from './nostock';
 import { notifySettings, setNotifyEnabled } from './notify';
+import { pilotConfig, setPilotMode } from './pilot';
 import { sendPush } from './push';
 import { RESERVED } from './stockquery';
 
@@ -447,6 +448,12 @@ export async function autoRun(ctx: Ctx) {
   await step('Rapport du soir', () => runEvening(ctx, s, st));
   await step('File d’attente', () => runQueue(ctx, s, st));
   await step('Offre de retour', () => runComeBack(ctx, s, st));
+  // « Livreur automatique »: the « Livraison privée » orders that waited (nobody had said « Je travaille aujourd'hui »)
+  if (s.autoDispatch && s.livreurAuto)
+    await step('Livreur automatique', async () => {
+      const ids = await ownWaiting(ctx.db);
+      if (ids.length) await autoDispatch(ctx, ids);
+    });
   const today = algDay(ctx.now());
   if (st.cleanDay !== today) {
     st.cleanDay = today;
@@ -483,6 +490,11 @@ async function stateView(ctx: Ctx) {
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
   const day = await openedAt(db, now);
+  // « Pilot Auto Assign » (who delivers) and « Livreur automatique » (which of our livreurs)
+  const pilot = await pilotConfig(db);
+  const companies = await db.query(`SELECT c.id, c.name, c.kind FROM delivery_companies c WHERE c.active ORDER BY c.id`);
+  const shopDefault = (await getSetting(db, 'shop')).defaultCompanyId ?? null;
+  const own = companies.some((c: any) => c.kind === 'own');
   const people = (
     await db.query(`SELECT id, name, roles, can_assign FROM profiles WHERE active AND NOT (roles = ARRAY['livreur']::text[]) ORDER BY ('admin' = ANY(roles)) DESC, can_assign DESC, lower(name)`)
   ).map((r: any) => ({ id: num(r.id), name: String(r.name), admin: (r.roles ?? []).includes('admin'), manager: !!r.can_assign }));
@@ -507,6 +519,12 @@ async function stateView(ctx: Ctx) {
     delivery: notify.enabled,
     has: { ads: hasAds, campaigns: hasCampaigns, adSets: w.sets.length > 0 },
     noStock: { waiting, ready, toAssign },
+    pilot: {
+      on: pilot.mode === 'auto',
+      rules: pilot.rules.length,
+      defaultCompany: String(companies.find((c: any) => num(c.id) === shopDefault)?.name ?? '') || null,
+    },
+    livreurs: { own, today: own ? await livreursToday(db, now) : [], waiting: own ? (await ownWaiting(db)).length : 0 },
     soldOut,
     today: await dayReport(db, algDay(now)),
     queueNow: { open: day.open, ...(await waitingOrders(db, now, s.queue.waitHours, day.since)) },
@@ -522,6 +540,8 @@ const SaveIn = z.object({
   assignFollow: z.boolean().optional(),
   stockBack: z.boolean().optional(),
   autoDispatch: z.boolean().optional(),
+  livreurAuto: z.boolean().optional(),
+  pilotAuto: z.boolean().optional(),
   delivery: z.boolean().optional(),
   noStock: z.object({ on: z.boolean() }).optional(),
   evening: z.object({ on: z.boolean(), hour: z.number().int().min(12).max(23), to: z.array(id).max(30) }).optional(),
@@ -545,6 +565,8 @@ export const automationsProcs = {
     const next: AutomationSettings = { ...cur, assignPrev: { ...cur.assignPrev } };
     if (i.stockBack !== undefined) next.stockBack = i.stockBack;
     if (i.autoDispatch !== undefined) next.autoDispatch = i.autoDispatch;
+    if (i.livreurAuto !== undefined) next.livreurAuto = i.livreurAuto;
+    if (i.pilotAuto !== undefined) await setPilotMode(ctx, i.pilotAuto);
     if (i.noStock) next.noStock = { ...cur.noStock, ...i.noStock };
     if (i.evening) next.evening = i.evening;
     if (i.queue) next.queue = i.queue;
@@ -584,6 +606,11 @@ export const automationsProcs = {
     await writeState(db, st);
     // « Stock revenu » on again: what the stock can serve goes now
     if (!cur.stockBack && next.stockBack && (await releaseNoStock(db, me, undefined, { force: true })).length) ctx.emit({ type: 'orders' });
+    // « Livreur automatique » on: the « Livraison privée » orders waiting in « À attribuer » get their livreur now
+    if (next.autoDispatch && next.livreurAuto && !(cur.autoDispatch && cur.livreurAuto)) {
+      const ids = await ownWaiting(db);
+      if (ids.length) await autoDispatch(ctx, ids);
+    }
     ctx.emit({ type: 'settings' });
     return stateView(ctx);
   }),

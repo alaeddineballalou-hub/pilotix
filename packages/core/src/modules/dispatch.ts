@@ -7,13 +7,13 @@
 //  - A cancelled order whose parcel is at a courier: Pilotix cancels it there by itself; a courier whose system cannot
 //    cancel puts it on « À annuler à la main » (the depot cancels it in the courier's space, then « C'est fait »).
 //  - A parcel still « En dispatch » after 24 h is late (the courier did not take it).
-import { API_COURIER_KINDS } from '@pilotix/shared';
+import { algiersDayStart, API_COURIER_KINDS } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { bad, Ctx, forbidden, proc } from '../rpc';
 import { autoSettings } from '../settings';
 import { cancelParcel, sendOrders } from './delivery';
-import { tellLivreur } from './livreur';
+import { checkedInToday, tellLivreur } from './livreur';
 import { addEvent, assignCompanies, getOrder, setFollow } from './orders';
 import { privateBackupRun } from './pilot';
 
@@ -115,9 +115,71 @@ export async function keepRefusal(db: Db, orderId: number, error: string, userId
   if (had !== error) await addEvent(db, orderId, userId, 'note', null, 'event', `Colis refusé par la société : ${error}`);
 }
 
+/** A livreur's parcels today: those he still has to deliver (or bring back), and those he finished today. */
+const OPEN_OWN = ['prepared', 'shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange', 'returning'];
+
+/** The livreurs who said « Je travaille aujourd'hui » (when), with their parcels today, fewest first, and the
+ *  « Livraison privée » they belong to (none: any). */
+export async function livreursToday(db: Db, now: number): Promise<{ id: number; name: string; at: string; n: number; companyId: number | null }[]> {
+  const inToday = await checkedInToday(db, now);
+  if (!inToday.size) return [];
+  const people = await db.query(`SELECT id, name, livreur_company_id FROM profiles WHERE active AND 'livreur' = ANY(roles) AND id = ANY($1)`, [[...inToday.keys()]]);
+  const n = new Map<number, number>();
+  for (const r of await db.query(
+    `SELECT livreur_id, count(*)::int AS n FROM orders
+      WHERE livreur_id = ANY($1) AND (follow_status = ANY($2) OR delivered_at >= $3 OR returned_at >= $3) GROUP BY 1`,
+    [people.map((p: any) => num(p.id)), OPEN_OWN, new Date(algiersDayStart(now)).toISOString()],
+  ))
+    n.set(num(r.livreur_id), num(r.n));
+  return people
+    .map((p: any) => ({ id: num(p.id), name: String(p.name), at: inToday.get(num(p.id))!, n: n.get(num(p.id)) ?? 0, companyId: p.livreur_company_id ? num(p.livreur_company_id) : null }))
+    .sort((a: { n: number; at: string }, b: { n: number; at: string }) => a.n - b.n || Date.parse(a.at) - Date.parse(b.at));
+}
+
+/** Ready « Livraison privée » orders still without a livreur. */
+export async function ownWaiting(db: Db): Promise<number[]> {
+  return (
+    await db.query(`SELECT o.id FROM orders o JOIN delivery_companies c ON c.id = o.company_id WHERE ${READY_SQL} AND c.kind = 'own' AND c.active AND o.livreur_id IS NULL ORDER BY o.id`)
+  ).map((r: any) => num(r.id));
+}
+
+/**
+ * Pilot Automations' « Livreur automatique »: ready « Livraison privée » orders with no livreur go, oldest first, to
+ * the livreur who said « Je travaille aujourd'hui » with the fewest parcels today — one at a time, so a batch is shared
+ * out; equal: the first who checked in. Only a livreur of the order's « Livraison privée » (or of none). Nobody checked
+ * in: they wait in « À attribuer » (then the backup company).
+ * Returns each livreur given orders, with how many (his notification comes after the dispatch).
+ */
+async function giveToLivreurs(ctx: Ctx, rows: { id: number; companyId: number }[]): Promise<{ id: number; name: string; n: number }[]> {
+  if (!rows.length) return [];
+  const today = await livreursToday(ctx.db, ctx.now());
+  if (!today.length) return [];
+  const load = new Map<number, number>(today.map((l) => [l.id, l.n]));
+  const names = new Map<number, string>(today.map((l) => [l.id, l.name]));
+  const since = new Map<number, string>(today.map((l) => [l.id, l.at]));
+  const company = new Map<number, number | null>(today.map((l) => [l.id, l.companyId]));
+  const first = (a: number, b: number) => load.get(a)! - load.get(b)! || Date.parse(since.get(a)!) - Date.parse(since.get(b)!) || a - b;
+  const groups = new Map<string, number[]>();
+  const given = new Map<number, number>();
+  for (const r of [...rows].sort((a, b) => a.id - b.id)) {
+    const l = [...load.keys()].filter((x) => company.get(x) === null || company.get(x) === r.companyId).sort(first)[0];
+    if (l === undefined) continue;
+    load.set(l, load.get(l)! + 1);
+    given.set(l, (given.get(l) ?? 0) + 1);
+    groups.set(`${r.companyId}:${l}`, [...(groups.get(`${r.companyId}:${l}`) ?? []), r.id]);
+  }
+  for (const [k, list] of groups) {
+    const [companyId, livreurId] = k.split(':').map(Number);
+    await assignCompanies(asDepot(ctx), { ids: list, companyId, livreurId }, { check: false });
+    for (const oid of list) await addEvent(ctx.db, oid, null, 'note', null, 'event', `Livreur automatique : ${names.get(livreurId)}`);
+  }
+  return [...given].map(([lid, n]) => ({ id: lid, name: names.get(lid)!, n }));
+}
+
 /**
  * Orders just picked whole (or any ready ones): with a company — or own delivery with its livreur — to « En dispatch ».
- * Pilot Automations' « Dispatch automatique » switched off: they all wait in « À attribuer » for a manager.
+ * Pilot Automations' « Dispatch automatique » switched off: they all wait in « À attribuer » for a manager. With its
+ * « Livreur automatique » on, « Livraison privée » ones get their livreur first (giveToLivreurs).
  */
 export async function autoDispatch(ctx: Ctx, ids?: number[]) {
   const rows = await ctx.db.query(
@@ -125,12 +187,32 @@ export async function autoDispatch(ctx: Ctx, ids?: number[]) {
       WHERE ${READY_SQL} ${ids ? 'AND o.id = ANY($1)' : ''}`,
     ids ? [ids] : [],
   );
-  const by = (await autoSettings(ctx.db)).autoDispatch;
+  const auto = await autoSettings(ctx.db);
+  const by = auto.autoDispatch;
+  let livreurs: { id: number; name: string; n: number }[] = [];
+  if (by && auto.livreurAuto) {
+    const own = rows.filter((r: any) => r.company_id && r.active && r.kind === 'own' && !r.livreur_id);
+    livreurs = await giveToLivreurs(ctx, own.map((r: any) => ({ id: num(r.id), companyId: num(r.company_id) })));
+    if (livreurs.length) {
+      const now = (await ctx.db.query(`SELECT id, livreur_id FROM orders WHERE id = ANY($1)`, [own.map((r: any) => num(r.id))])) as any[];
+      for (const r of rows) {
+        const x = now.find((y) => num(y.id) === num(r.id));
+        if (x) r.livreur_id = x.livreur_id;
+      }
+      await ctx.db.query(`INSERT INTO auto_log (kind, at, data, n) VALUES ('livreur', $1, $2, $3)`, [
+        new Date(ctx.now()).toISOString(),
+        JSON.stringify({ livreurs: livreurs.map((l) => ({ name: l.name, n: l.n })) }),
+        livreurs.reduce((a, l) => a + l.n, 0),
+      ]);
+    }
+  }
   const go = by ? rows.filter((r: any) => r.company_id && r.active && (r.kind !== 'own' || r.livreur_id)).map((r: any) => num(r.id)) : [];
   // the others start waiting for a person in « À attribuer » (« Livraison privée » ones go to the backup company after a while)
   const wait = rows.map((r: any) => num(r.id)).filter((x: number) => !go.includes(x));
   if (wait.length) await ctx.db.query('UPDATE orders SET assign_wait_since = now() WHERE id = ANY($1) AND assign_wait_since IS NULL', [wait]);
   const r = go.length ? await dispatchOrders(asDepot(ctx), go) : { moved: 0, sent: 0, failed: [] };
+  // each livreur given orders hears it on his phone (« Passez au dépôt et scannez-les »)
+  for (const l of livreurs) await tellLivreur(ctx, l.id, l.n);
   return { dispatched: r.moved, failed: r.failed, toAssign: rows.length - go.length };
 }
 

@@ -62,6 +62,16 @@
       },
       "link": "Assignment settings"
     },
+    "pilot": {
+      "name": "Pilot Auto Assign",
+      "when": "an order comes in",
+      "then": "chooses its delivery company with your rules (else the default company)",
+      "rules_one": "{{count}} rule",
+      "rules_other": "{{count}} rules",
+      "noRules": "No rule yet",
+      "default": "Default: {{name}}",
+      "link": "Pilot Auto Assign settings"
+    },
     "queue": {
       "name": "Slow call queue",
       "when": "an order waits without a call, or an agent on line stops calling",
@@ -123,6 +133,21 @@
       "offEmpty": "Off: each ready order will wait in “To assign” for a manager to choose.",
       "link": "Open “To assign”"
     },
+    "livreur": {
+      "name": "Automatic driver",
+      "when": "a “Private delivery” order is ready",
+      "then": "gives it to the driver with the fewest parcels today, among those who said “I work today”; he gets a notification",
+      "today": "Working today",
+      "parcels_one": "{{count}} parcel",
+      "parcels_other": "{{count}} parcels",
+      "next": "next",
+      "nobody": "No driver has said “I work today” yet: the orders wait in “To assign”.",
+      "waiting_one": "{{count}} order waits for a driver",
+      "waiting_other": "{{count}} orders wait for a driver",
+      "needsDispatch": "Works with “Automatic dispatch”: turn it on too.",
+      "noOwn": "No “Private delivery” among your delivery companies.",
+      "link": "See the drivers"
+    },
     "delivery": {
       "name": "Delivery messages",
       "when": "an order moves to a new step",
@@ -160,7 +185,9 @@
       "comeback_other": "Come-back offer: {{count}} customers added to “{{campaign}}”",
       "comebackProblem": "Come-back offer: the campaign “{{campaign}}” is not ready",
       "release_one": "{{count}} order without stock sent to the depot",
-      "release_other": "{{count}} orders without stock sent to the depot"
+      "release_other": "{{count}} orders without stock sent to the depot",
+      "livreur_one": "{{count}} order given to drivers: {{who}}",
+      "livreur_other": "{{count}} orders given to drivers: {{who}}"
     }
   },
   "tomorrow": "tomorrow",

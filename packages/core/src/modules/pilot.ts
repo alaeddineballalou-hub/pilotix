@@ -179,6 +179,19 @@ async function cleanConfig(db: Db, i: z.infer<typeof ConfigIn>): Promise<PilotCo
 }
 
 /** The clashes of these rules, each with the seller's answer (only answers that still mean something are kept). */
+/** Pilot Automations' « Pilot Auto Assign » switch: the mode only (the rules stay as they are); to switch it on, every
+ *  clash between two rules must have its answer, as when saving the rules. */
+export async function setPilotMode(ctx: Ctx, on: boolean) {
+  const cfg = await pilotConfig(ctx.db);
+  const mode = on ? 'auto' : 'manual';
+  if (cfg.mode === mode) return;
+  if (on) {
+    const open = withAnswers(cfg).clashes.find((c) => c.kind === 'ask' && !c.win);
+    if (open) throw bad(`Les règles ${ruleNumber(cfg.rules, open.a)} et ${ruleNumber(cfg.rules, open.b)} se contredisent : choisissez qui gagne dans Sociétés de livraison › Pilot Auto Assign.`);
+  }
+  await setSetting(ctx.db, 'pilot', { ...cfg, mode }, ctx.session.profile.id);
+}
+
 function withAnswers(cfg: PilotConfig): { clashes: Clash[]; keep: PilotConfig['clashes'] } {
   const clashes = clashesOf(cfg);
   const keep = clashes.filter((c) => c.kind === 'ask' && c.win).map((c) => ({ a: c.a, b: c.b, win: c.win! }));

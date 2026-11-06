@@ -11,6 +11,8 @@ import { call, Ctx, Db } from '../index';
 import { addDays } from '../modules/ads';
 import { getAssign } from '../modules/assign';
 import { dayReport } from '../modules/automations';
+import { livreursToday, ownWaiting } from '../modules/dispatch';
+import { pilotConfig } from '../modules/pilot';
 import { notifySettings } from '../modules/notify';
 import { getSetting, setSetting } from '../settings';
 import { EMAILS, setup } from './harness';
@@ -309,4 +311,89 @@ test('who is asked to turn on notifications: the people the evening report and t
   // « Envoyer un essai » (no phone here)
   assert.deepEqual(await call('auto.pushTest', admin, {}), { sent: 0 });
   await call('auto.save', admin, { evening: { on: true, hour: 21, to: [] }, queue: { on: true, waitHours: 2, idleMin: 30, to: [] } });
+});
+
+test('Livreur automatique: a ready « Livraison privée » order goes to the livreur working today with the fewest parcels', async () => {
+  const own = Number((await db.query(`SELECT id FROM delivery_companies WHERE kind = 'own' AND active ORDER BY id LIMIT 1`))[0].id);
+  const lamine = Number((await db.query(`SELECT id FROM profiles WHERE email = $1`, [EMAILS.livreur]))[0].id);
+  const other = (await db.query(`SELECT id, email FROM profiles WHERE 'livreur' = ANY(roles) AND active AND id <> $1 ORDER BY id LIMIT 1`, [lamine]))[0];
+  const walid = Number(other.id);
+  await db.query(`UPDATE profiles SET livreur_company_id = $2 WHERE id = ANY($1)`, [[lamine, walid], own]);
+  // a clean day for the two: no parcel yet today, nothing else waiting for a livreur
+  const dayStart = new Date(algiersDayStart(Date.now())).toISOString();
+  await db.query(
+    `UPDATE orders SET livreur_id = NULL WHERE livreur_id = ANY($1) AND (follow_status IN ('prepared','shipped','out_for_delivery','failed','alert','in_exchange','returning') OR delivered_at >= $2 OR returned_at >= $2)`,
+    [[lamine, walid], dayStart],
+  );
+  for (const oid of await ownWaiting(db)) await db.query(`UPDATE order_items SET picked_qty = 0 WHERE order_id = $1`, [oid]);
+  await db.query(`DELETE FROM livreur_checkins`);
+  const X = (await db.query(`SELECT p.id, v.id AS vid FROM products p JOIN product_variants v ON v.product_id = p.id AND v.active WHERE p.active AND NOT p.is_service ORDER BY p.id, v.id LIMIT 1`))[0];
+  await db.query('INSERT INTO stock (variant_id, warehouse_id, qty) VALUES ($1, $2, 500) ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET qty = 500', [X.vid, wh]);
+  let k = 0;
+  const ready = async () => {
+    const o = (await call('orders.create', admin, { customerName: 'Privé Auto', phone: `0695${String(400000 + ++k).padStart(6, '0')}`, wilayaId: 16, commune: 'Kouba', address: 'Cité 5', items: [{ productId: Number(X.id), variantId: Number(X.vid), qty: 1 }], companyId: own })) as any;
+    await call('orders.setConf', admin, { ids: [o.id], status: 'confirmed' });
+    await db.query(`UPDATE orders SET company_id = $2, livreur_id = NULL WHERE id = $1`, [o.id, own]);
+    await db.query(`UPDATE order_items SET picked_qty = qty WHERE order_id = $1`, [o.id]);
+    return Number(o.id);
+  };
+  const row = async (id: number) => (await db.query(`SELECT follow_status, livreur_id FROM orders WHERE id = $1`, [id]))[0];
+  // Walid says « Je travaille aujourd'hui » first; Lamine already has two parcels
+  await call('tournee.checkIn', await as(other.email), {});
+  await call('tournee.checkIn', await as(EMAILS.livreur), {});
+  for (let i = 0; i < 2; i++) {
+    const id = await ready();
+    await call('orders.assignCompany', admin, { ids: [id], companyId: own, livreurId: lamine });
+    await call('orders.setFollow', admin, { ids: [id], status: 'prepared' });
+  }
+  assert.deepEqual((await livreursToday(db, Date.now())).map((l) => [l.id, l.n]), [[walid, 0], [lamine, 2]]);
+  // off (the default): they wait in « À attribuer »
+  const four = [await ready(), await ready(), await ready(), await ready()];
+  await call('depot.toAssign', await as(EMAILS.depot), {});
+  assert.deepEqual(await row(four[0]), { follow_status: 'to_prepare', livreur_id: null });
+  // on: Walid (0) gets the first two, then Walid first again (2 = 2, he checked in first), then Lamine (3 > 2)
+  const s: any = await call('auto.save', admin, { livreurAuto: true });
+  assert.equal(s.s.livreurAuto, true);
+  const got = await Promise.all(four.map(row));
+  assert.deepEqual(got.map((r) => Number(r.livreur_id)), [walid, walid, walid, lamine]);
+  assert.ok(got.every((r) => r.follow_status === 'prepared'), 'and to « En dispatch » with him');
+  const l = (await lines('livreur'))[0];
+  assert.equal(l.n, 4);
+  assert.deepEqual(l.data.livreurs.map((x: any) => x.n).sort(), [1, 3]);
+  // nobody working today: it waits; the job gives it as soon as one checks in
+  await db.query(`DELETE FROM livreur_checkins`);
+  const late = await ready();
+  await call('depot.toAssign', await as(EMAILS.depot), {});
+  assert.deepEqual(await row(late), { follow_status: 'to_prepare', livreur_id: null });
+  assert.equal(((await call('auto.state', admin, {})) as any).livreurs.waiting, 1);
+  await call('tournee.checkIn', await as(EMAILS.livreur), {});
+  await call('auto.run', admin, {});
+  const given = await row(late);
+  assert.deepEqual([given.follow_status, Number(given.livreur_id)], ['prepared', lamine]);
+  // « Dispatch automatique » off: a manager chooses every parcel, livreur included
+  await call('auto.save', admin, { autoDispatch: false });
+  const manual = await ready();
+  await call('auto.run', admin, {});
+  await call('depot.toAssign', await as(EMAILS.depot), {});
+  assert.deepEqual(await row(manual), { follow_status: 'to_prepare', livreur_id: null });
+  await call('auto.save', admin, { autoDispatch: true, livreurAuto: false });
+});
+
+test('Pilot Auto Assign: the same switch as in Sociétés de livraison; a clash between two rules needs its answer first', async () => {
+  const keep = await pilotConfig(db);
+  let s: any = await call('auto.save', admin, { pilotAuto: false });
+  assert.equal(s.pilot.on, false);
+  assert.equal((await pilotConfig(db)).mode, 'manual');
+  s = await call('auto.save', admin, { pilotAuto: true });
+  assert.equal(s.pilot.on, true);
+  assert.equal((await pilotConfig(db)).mode, 'auto');
+  assert.deepEqual((await pilotConfig(db)).rules, keep.rules, 'the rules stay as they were');
+  // two soft rules that meet, no answer yet: not switched on
+  const cs = (await db.query(`SELECT id FROM delivery_companies WHERE active AND kind <> 'own' ORDER BY id LIMIT 2`)).map((r: any) => Number(r.id));
+  const X = Number((await db.query(`SELECT id FROM products WHERE active AND NOT is_service ORDER BY id LIMIT 1`))[0].id);
+  const r = (id: string, p: object) => ({ id, wilayas: [], except: false, communes: [], products: [], strict: false, on: true, ...p });
+  await setSetting(db, 'pilot', { mode: 'manual', rules: [r('r1', { products: [X], to: cs[0] }), r('r2', { wilayas: [16], to: cs[1] })] as any, clashes: [] });
+  await assert.rejects(call('auto.save', admin, { pilotAuto: true }), /se contredisent/);
+  assert.equal((await pilotConfig(db)).mode, 'manual');
+  await setSetting(db, 'pilot', keep);
 });

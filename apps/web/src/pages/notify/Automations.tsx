@@ -24,7 +24,7 @@ export function Automations() {
   if (q.isLoading) return <Loading />;
   if (q.error || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   // a new answer from the server starts the screen again from it (the switches show what is saved)
-  return <Board key={JSON.stringify([q.data.s, q.data.assign, q.data.delivery])} d={q.data} />;
+  return <Board key={JSON.stringify([q.data.s, q.data.assign, q.data.delivery, q.data.pilot.on])} d={q.data} />;
 }
 
 function Board({ d }: { d: S }) {
@@ -32,12 +32,14 @@ function Board({ d }: { d: S }) {
   const [s, setS] = useState(d.s);
   const [assign, setAssign] = useState(d.assign);
   const [delivery, setDelivery] = useState(d.delivery);
+  const [pilotOn, setPilotOn] = useState(d.pilot.on);
   const save = useAction('auto.save');
   const release = useAction('auto.release', { success: (r) => t('notify.auto.stockback.released', { count: r.sent }) });
   const back = () => {
     setS(d.s);
     setAssign(d.assign);
     setDelivery(d.delivery);
+    setPilotOn(d.pilot.on);
   };
   /** saved at once; a switch says so in a toast, a number quietly */
   const put = (patch: Patch, said?: { name: string; on: boolean }) =>
@@ -73,6 +75,25 @@ function Board({ d }: { d: S }) {
             ))}
           </div>
           <Links items={[['#/management/affectation', t('notify.auto.assign.link')]]} />
+        </Rule>
+
+        <Rule
+          icon="navigation"
+          name={name('pilot')}
+          when={t('notify.auto.pilot.when')}
+          then={t('notify.auto.pilot.then')}
+          on={pilotOn}
+          busy={save.isPending}
+          onToggle={(on) => {
+            setPilotOn(on);
+            put({ pilotAuto: on }, { name: name('pilot'), on });
+          }}
+        >
+          <Now>
+            {d.pilot.rules ? t('notify.auto.pilot.rules', { count: d.pilot.rules }) : t('notify.auto.pilot.noRules')}
+            {d.pilot.defaultCompany && <> · {t('notify.auto.pilot.default', { name: d.pilot.defaultCompany })}</>}
+          </Now>
+          <Links items={[['#/livraison/pilot', t('notify.auto.pilot.link')]]} />
         </Rule>
 
         <Rule
@@ -185,6 +206,47 @@ function Board({ d }: { d: S }) {
           {!s.autoDispatch && <Now tone="warn">{d.noStock.toAssign ? t('notify.auto.dispatch.offNote', { count: d.noStock.toAssign }) : t('notify.auto.dispatch.offEmpty')}</Now>}
           <Links items={[['#/depot/preparer', t('notify.auto.dispatch.link')]]} />
         </Rule>
+
+        <Rule
+          icon="bike"
+          name={name('livreur')}
+          when={t('notify.auto.livreur.when')}
+          then={t('notify.auto.livreur.then')}
+          on={s.livreurAuto}
+          busy={save.isPending}
+          disabled={!d.livreurs.own}
+          onToggle={(on) => {
+            setS({ ...s, livreurAuto: on });
+            put({ livreurAuto: on }, { name: name('livreur'), on });
+          }}
+          last={lastOf('livreur')}
+        >
+          {!d.livreurs.own ? (
+            <p className="au-note">{t('notify.auto.livreur.noOwn')}</p>
+          ) : (
+            <>
+              {s.livreurAuto && !s.autoDispatch && <Now tone="warn">{t('notify.auto.livreur.needsDispatch')}</Now>}
+              {d.livreurs.today.length ? (
+                <div className="au-today">
+                  <span className="au-today-t">{t('notify.auto.livreur.today')}</span>
+                  <ul className="au-out">
+                    {d.livreurs.today.map((l, k) => (
+                      <li key={l.id}>
+                        <b>{l.name}</b>
+                        <span className="muted">{t('notify.auto.livreur.parcels', { count: l.n })}</span>
+                        {k === 0 && s.livreurAuto && s.autoDispatch && <span className="au-next">{t('notify.auto.livreur.next')}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <Now tone={d.livreurs.waiting ? 'warn' : undefined}>{t('notify.auto.livreur.nobody')}</Now>
+              )}
+              {d.livreurs.waiting > 0 && <Now tone="warn">{t('notify.auto.livreur.waiting', { count: d.livreurs.waiting })}</Now>}
+            </>
+          )}
+          <Links items={[['#/livraison/livreurs', t('notify.auto.livreur.link')]]} />
+        </Rule>
       </Group>
 
       <Group title={t('notify.auto.groups.clients')}>
@@ -280,7 +342,7 @@ function Board({ d }: { d: S }) {
   );
 }
 
-const KIND_ICON: Record<string, string> = { evening: 'moon', nostock: 'pause', stockback: 'play', queue: 'timer', comeback: 'gift', release: 'package' };
+const KIND_ICON: Record<string, string> = { evening: 'moon', nostock: 'pause', stockback: 'play', queue: 'timer', comeback: 'gift', release: 'package', livreur: 'bike' };
 
 /** A name typed by the shop (a product, an ad set, a campaign, a person) kept whole inside a sentence of the other
  *  direction: « Offre de retour −10 % » stays itself in an Arabic line. */
@@ -305,6 +367,8 @@ function lineText(t: (k: string, o?: any) => string, l: Line): string {
       return x.problem ? t(`${k}.comebackProblem`, { campaign: own(x.campaign) }) : t(`${k}.comeback`, { count: l.n, campaign: own(x.campaign) });
     case 'release':
       return t(`${k}.release`, { count: l.n });
+    case 'livreur':
+      return t(`${k}.livreur`, { count: l.n, who: ((x.livreurs ?? []) as { name: string; n: number }[]).map((p) => `${own(p.name)} ${p.n}`).join(', ') });
     default:
       return l.kind;
   }

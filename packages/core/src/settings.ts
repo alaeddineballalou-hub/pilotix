@@ -199,6 +199,9 @@ export interface AutomationSettings {
   /** « Dispatch automatique »: a picked order goes to « En dispatch » by itself, its parcel made at the courier
    *  (off: every picked order waits in « À attribuer » for a manager) */
   autoDispatch: boolean;
+  /** « Livreur automatique »: a ready « Livraison privée » order goes to the livreur working today with the fewest parcels
+   *  (only with « Dispatch automatique » on) */
+  livreurAuto: boolean;
   /** « Plus de stock → stop »: an ad set whose products have no stock left is paused, and their landing pages show
    *  « épuisé » instead of the form; when one of them has stock again, the ad set goes back on by itself */
   noStock: { on: boolean };
@@ -293,6 +296,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   automations: {
     stockBack: true,
     autoDispatch: true,
+    livreurAuto: false,
     noStock: { on: false },
     evening: { on: false, hour: 21, to: [] },
     queue: { on: false, waitHours: 2, idleMin: 30, to: [] },
@@ -316,6 +320,7 @@ export async function autoSettings(db: Db): Promise<AutomationSettings> {
   return {
     stockBack: s.stockBack ?? d.stockBack,
     autoDispatch: s.autoDispatch ?? d.autoDispatch,
+    livreurAuto: s.livreurAuto ?? d.livreurAuto,
     noStock: { ...d.noStock, ...(s.noStock ?? {}) },
     evening: { ...d.evening, ...(s.evening ?? {}) },
     queue: { ...d.queue, ...(s.queue ?? {}) },
