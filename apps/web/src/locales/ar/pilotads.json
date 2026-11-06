@@ -6,6 +6,12 @@
     "pilote": "الطيار الآلي",
     "audiences": "الجماهير"
   },
+  "tabShort": {
+    "pubs": "إعلاناتي",
+    "lancer": "إطلاق",
+    "pilote": "الطيار الآلي",
+    "audiences": "الجماهير"
+  },
   "mode": {
     "label": "العرض",
     "simple": "بسيط",

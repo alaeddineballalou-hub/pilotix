@@ -6,6 +6,12 @@
     "pilote": "Pilote auto",
     "audiences": "Audiences"
   },
+  "tabShort": {
+    "pubs": "Mes pubs",
+    "lancer": "Lancer",
+    "pilote": "Pilote auto",
+    "audiences": "Audiences"
+  },
   "mode": {
     "label": "Affichage",
     "simple": "Simple",

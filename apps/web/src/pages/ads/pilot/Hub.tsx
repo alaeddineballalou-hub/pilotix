@@ -47,7 +47,9 @@ export function PubHub({ rest, pro, base = '#/marketing/publicite' }: { rest?: s
           {TABS.map((k) => (
             <a key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} href={k === 'pubs' ? base : `${base}/${k}`}>
               <Icon name={TAB_ICON[k]} />
-              <span>{t(`pilotads.tab.${k}`)}</span>
+              {/* on a phone the four tabs sit side by side, so each shows a short name */}
+              <span className="pa-tab-long">{t(`pilotads.tab.${k}`)}</span>
+              <span className="pa-tab-short">{t(`pilotads.tabShort.${k}`)}</span>
               {!!counts[k] && <b className="pa-count ltr">{counts[k]}</b>}
             </a>
           ))}

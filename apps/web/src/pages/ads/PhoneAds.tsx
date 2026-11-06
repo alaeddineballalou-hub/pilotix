@@ -3,7 +3,7 @@
 // products and ad sets (a tap opens them full screen). Marketeurs: what is owed to whom, each marketer's ad sets.
 // AI Spy: the desktop page (Spy.tsx), which lays itself out in one column on a phone.
 // Every figure comes from core (ads.*, mk.*); this page only arranges them for a phone.
-import { useMemo, useState } from 'react';
+import { type CSSProperties, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
 import { da, n, pct } from '../../lib/format';
@@ -65,9 +65,12 @@ export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; re
   const camps = !noSpy && featureIsOn('marketing/campagnes');
   const cat = !noSpy && featureIsOn('marketing/catalogue');
   const tab = sub === 'marketer' ? 'mk' : sub === 'spy' && !noSpy ? 'spy' : sub === 'formulaires' && forms ? 'forms' : sub === 'campagnes' && camps ? 'camps' : sub === 'catalogue' && cat ? 'cat' : 'pub';
+  // every tab in sight, nothing slides: one row up to three tabs, 2 x 2 for four, rows of three for five or six
+  const tabCount = 2 + Number(forms) + Number(camps) + Number(cat) + Number(!noSpy);
+  const cols = tabCount <= 3 ? tabCount : tabCount === 4 ? 2 : 3;
   return (
     <div className="pxm">
-      <div className="pxv-own pxm-tabs" role="tablist">
+      <div className="pxv-own pxm-tabs" role="tablist" style={{ '--pxm-cols': cols } as CSSProperties}>
         <a role="tab" aria-selected={tab === 'pub'} className={tab === 'pub' ? 'on' : ''} href="#/marketing/publicite">
           {t('nav.publicite')}
         </a>
