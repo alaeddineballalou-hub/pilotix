@@ -5,7 +5,6 @@ import { createHash } from 'node:crypto';
 import { getSetting } from './settings';
 import { getRaw, META_TOKEN_KEY } from './modules/admin';
 import type { LaunchPlan } from './modules/pilotads';
-import { withMcp } from './metamcp';
 import { AppError, Ctx } from './rpc';
 
 /** Meta's current Marketing API (v21.0 ended for ads on 9 Sep 2025; v26.0 came out on 29 Jul 2026). */
@@ -409,17 +408,6 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
 
   if (action.startsWith('catalog')) return runCatalog(action, args, token, acts);
   if (action.startsWith('partner')) return runPartners(action, args, token, acts);
-
-  // ---- Publicité › Demander: Meta's ads MCP server (./metamcp.ts); the shop's own ad accounts only
-  if (action === 'mcpTools') return { tools: await withMcp(token, (s) => s.tools()), accounts: acts };
-  if (action === 'mcpCall') {
-    const a = (args ?? {}) as { name?: string; args?: Record<string, unknown> };
-    if (!a.name || !/^[\w.-]{2,80}$/.test(a.name)) throw new AppError('bad_request', 'Outil Meta invalide');
-    // an id of an ad account that is not the shop's: refused before Meta (the AI acts on this shop's ads only)
-    const text = JSON.stringify(a.args ?? {});
-    for (const m of text.matchAll(/act_(\d{5,25})/g)) if (!acts.includes(`act_${m[1]}`)) throw new AppError('forbidden', 'Ce compte pub n’est pas celui de la boutique.');
-    return withMcp(token, (s) => s.call(a.name!, a.args ?? {}));
-  }
 
   if (action === 'test') {
     const r = await graph(acts[0], { fields: 'name,currency,account_status' }, token);

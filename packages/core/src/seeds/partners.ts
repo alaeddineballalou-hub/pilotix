@@ -1,14 +1,12 @@
 import type { Db } from '../db';
 import { num } from '../db';
-import { readyAnswer } from '../modules/adsask';
 import { demoThumb } from '../modules/partners';
 
 /**
- * Demo data for Marketing › Influenceurs and Publicité › Demander: four creators (two who said yes on Instagram, one
+ * Demo data for Marketing › Influenceurs: four creators (two who said yes on Instagram, one
  * request waiting, one Facebook Page), their posts that tag the shop (ready for an ad, to check, refused by Meta, one of
  * a creator the shop does not know yet), two ads in two names that ran (a new ad of the stroller with Amina, Rym's reel
- * boosted) with their days and the orders they brought, a draft with the waiting creator, and two questions asked to
- * Pilot AI (one change it proposed, waiting for the owner's yes).
+ * boosted) with their days and the orders they brought, and a draft with the waiting creator.
  */
 export async function seed(db: Db, users: Record<string, number>, now: number): Promise<void> {
   const H = 3_600_000;
@@ -300,31 +298,4 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   await tag(pous, 14, 21, '120210000101', '120200010');
   // (the set's last 10 days of chat orders are the messages campaign's already)
   await tag(ens, 9, 18, '120210000111', '120200011');
-
-  // Publicité › Demander: a question answered, then a pause Pilot AI proposed that waits for the owner's yes (the demo's
-  // own numbers, as the page answers them)
-  const asked = [
-    { q: 'Quelle pub me coûte le plus cher par achat cette semaine ?', ago: 27 * H },
-    { q: 'Mets en pause celle qui vend le moins', ago: 27 * H - 90_000 },
-  ];
-  let thread: number | null = null;
-  for (const a of asked) {
-    const d = await readyAnswer(db, now, a.q, 'fr');
-    const r = (
-      await db.query(`INSERT INTO ads_asks (thread_id, by_user, question, answer, lang, reads, pending, status, by_ai, created_at, updated_at) VALUES ($1,$2,$3,$4,'fr',$5,$6,$7,true,$8,$8) RETURNING id`, [
-        thread,
-        users.vendeur,
-        a.q,
-        d.answer,
-        JSON.stringify(d.reads),
-        d.pending ? JSON.stringify(d.pending) : null,
-        d.pending ? 'waiting_yes' : 'done',
-        iso(a.ago),
-      ])
-    )[0];
-    if (thread === null) {
-      thread = num(r.id);
-      await db.query(`UPDATE ads_asks SET thread_id = id WHERE id = $1`, [thread]);
-    }
-  }
 }

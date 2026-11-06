@@ -4,15 +4,13 @@
     "pubs": "Mes pubs",
     "lancer": "Lancer une pub",
     "pilote": "Pilote auto",
-    "audiences": "Audiences",
-    "demander": "Demander à Pilot AI"
+    "audiences": "Audiences"
   },
   "tabShort": {
     "pubs": "Mes pubs",
     "lancer": "Lancer",
     "pilote": "Pilote auto",
-    "audiences": "Audiences",
-    "demander": "Demander"
+    "audiences": "Audiences"
   },
   "mode": {
     "label": "Affichage",

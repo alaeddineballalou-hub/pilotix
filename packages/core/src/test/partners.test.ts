@@ -1,16 +1,13 @@
-// Marketing › Influenceurs (Meta's partnership ads) and Publicité › Demander (Pilot AI with Meta's ads MCP server):
-// what the person types, Meta's answers made plain, the ads in two names (a new ad with the creator as second name, a
-// creator's post boosted), the creators' numbers from their ads' own ids, the requests on the server, Pilot AI's reads
-// and the change that waits for the owner's yes (then the owner's limits, Meta, the log), and the MCP client itself.
+// Marketing › Influenceurs (Meta's partnership ads): what the person types, Meta's answers made plain, the ads in two
+// names (a new ad with the creator as second name, a creator's post boosted), the creators' numbers from their ads' own
+// ids, and the requests on the server.
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
 import { setRaw, META_TOKEN_KEY } from '../modules/admin';
-import { changeOf, intentOf, isWrite } from '../modules/adsask';
 import { contentOf, igUsername, pageNumber, permissionOf, statusOf } from '../modules/partners';
 import { launchProblems, metaPlan, type LaunchInput } from '../modules/pilotads';
 import { SOCIAL_KEYS } from '../modules/social';
-import { McpSession, readMessage, resultOf, toolOf } from '../metamcp';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -286,147 +283,4 @@ test('server: a request, the refresh (statuses, posts), a launch in two names se
   const chk: any = await call('ads.launch.check', await owner(server), { id: d2.id });
   assert.ok(chk.problems.some((x: string) => /retiré son accord/.test(x)));
   await db.query(`DELETE FROM settings WHERE key IN ($1, $2, 'meta')`, [SOCIAL_KEYS.page, META_TOKEN_KEY]);
-});
-
-test('Demander: reading or changing, the change Pilotix knows, the intent of a question', () => {
-  assert.equal(isWrite({ name: 'ads_get_ad_set_status', readOnly: null, destructive: null }), false);
-  assert.equal(isWrite({ name: 'ads_insights_performance', readOnly: null, destructive: null }), false);
-  assert.equal(isWrite({ name: 'ads_catalog_get_products', readOnly: null, destructive: null }), false);
-  assert.equal(isWrite({ name: 'ads_update_entity', readOnly: null, destructive: null }), true);
-  assert.equal(isWrite({ name: 'ads_create_campaign', readOnly: null, destructive: null }), true);
-  assert.equal(isWrite({ name: 'mystery_tool', readOnly: null, destructive: null }), true, 'a tool that says nothing waits for the owner');
-  assert.equal(isWrite({ name: 'ads_update_entity', readOnly: true, destructive: null }), false, 'what the tool says of itself first');
-  assert.equal(isWrite({ name: 'ads_get_x', readOnly: false, destructive: null }), true);
-  assert.deepEqual(changeOf({ entity_id: '120200005', status: 'PAUSED' }), { op: 'pause', objectId: '120200005', budgetCents: null });
-  assert.deepEqual(changeOf({ id: '120200001', fields: { daily_budget: '2500' } }), { op: 'budget', objectId: '120200001', budgetCents: 2500 });
-  assert.deepEqual(changeOf({ adset_id: '120200001', daily_budget: 25 }, 'units'), { op: 'budget', objectId: '120200001', budgetCents: 2500 });
-  assert.deepEqual(changeOf({ name: 'Nouvelle campagne', objective: 'OUTCOME_SALES' }), { op: null, objectId: null, budgetCents: null });
-  assert.equal(intentOf('Mets en pause celle qui ne vend pas'), 'pause');
-  assert.equal(intentOf('وقف الإعلان الغالي'), 'pause');
-  assert.equal(intentOf('Augmente le budget de la meilleure'), 'raise');
-  assert.equal(intentOf('Compare avec la semaine dernière'), 'compare');
-  assert.equal(intentOf('Combien j’ai dépensé ?'), 'summary');
-});
-
-test('Demander (demo): the owner only, a change waits for the yes, then the log', async () => {
-  await assert.rejects(call('ads.ask.state', await mk(), {}));
-  const st: any = await call('ads.ask.state', await owner(), {});
-  assert.equal(st.demo, true);
-  assert.ok(st.asks.length >= 2, 'the demo’s questions');
-  assert.equal(st.waiting, 1);
-  const a: any = await call('ads.ask.send', await owner(), { question: 'Combien j’ai dépensé cette semaine ?', lang: 'fr' });
-  assert.equal(a.status, 'done');
-  assert.match(a.answer, /\$/);
-  assert.ok(a.reads.length);
-  const p: any = await call('ads.ask.send', await owner(), { question: 'Mets en pause celle qui vend le moins', threadId: a.threadId, lang: 'fr' });
-  assert.equal(p.threadId, a.threadId);
-  assert.equal(p.status, 'waiting_yes');
-  assert.equal(p.pending.op, 'pause');
-  const target = String(p.pending.input.entity_id);
-  assert.equal((await db.query(`SELECT status FROM adsets WHERE id = $1`, [target]))[0].status, 'ACTIVE', 'nothing changed before the yes');
-  const done: any = await call('ads.ask.decide', await owner(), { id: p.id, yes: true });
-  assert.equal(done.status, 'applied');
-  assert.equal((await db.query(`SELECT status FROM adsets WHERE id = $1`, [target]))[0].status, 'PAUSED');
-  const log = (await db.query(`SELECT op, source, status FROM ad_actions WHERE object_id = $1 ORDER BY id DESC LIMIT 1`, [target]))[0];
-  assert.deepEqual({ ...log }, { op: 'pause', source: 'ask', status: 'done' });
-  await assert.rejects(call('ads.ask.decide', await owner(), { id: p.id, yes: true }), /n’attend plus/);
-  // « Tout arrêter » is on: starting it again is refused
-  const ar: any = await call('ads.ask.send', await owner(), { question: 'Arabic: وقف الإعلان', lang: 'fr' });
-  assert.equal(ar.lang, 'ar');
-  await call('ads.ctl.stopAll', await owner(), { on: true });
-  const again = Number(
-    (
-      await db.query(`INSERT INTO ads_asks (thread_id, by_user, question, answer, pending, status) VALUES (1, NULL, 'q', 'a', $1, 'waiting_yes') RETURNING id`, [
-        JSON.stringify({ tool: 'ads_update_entity', input: { entity_id: target, status: 'ACTIVE' }, label: 'x', kind: { op: 'resume', objectId: target, budgetCents: null } }),
-      ])
-    )[0].id,
-  );
-  await assert.rejects(call('ads.ask.decide', await owner(), { id: again, yes: true }), /arrêté/);
-  await call('ads.ctl.stopAll', await owner(), { on: false });
-  const no: any = await call('ads.ask.decide', await owner(), { id: again, yes: false });
-  assert.equal(no.status, 'refused');
-  await call('ads.ask.forget', await owner(), { threadId: a.threadId });
-  assert.equal((await db.query(`SELECT count(*)::int AS n FROM ads_asks WHERE thread_id = $1`, [a.threadId]))[0].n, 0);
-});
-
-test('Demander (server): Meta’s tools read, the change waits, then the same tool with the same arguments', async () => {
-  const calls: { action: string; args: any }[] = [];
-  let round = 0;
-  const server: any = {
-    publicUrl: 'https://pilotix.test',
-    courier: async () => null,
-    hashPassword: async (x: string) => x,
-    meta: async (action: string, args: any) => {
-      calls.push({ action, args });
-      if (action === 'mcpTools')
-        return {
-          tools: [
-            { name: 'ads_insights_performance', description: 'Results', inputSchema: { type: 'object', properties: { level: { type: 'string' } } }, readOnly: true, destructive: false },
-            {
-              name: 'ads_update_entity',
-              description: 'Change',
-              inputSchema: { type: 'object', properties: { entity_id: { type: 'string' }, daily_budget: { type: 'integer', description: 'in cents' } } },
-              readOnly: null,
-              destructive: null,
-            },
-          ],
-        };
-      if (action === 'mcpCall') return { text: JSON.stringify({ data: [{ id: '120200001', spend_usd: 70, purchases: 30 }] }), isError: false };
-      return { ok: true };
-    },
-    dellal: async (action: string, req: any) => {
-      assert.equal(action, 'complete');
-      assert.ok(req.tools.find((t: any) => t.name === 'ads_update_entity').description.includes('waits for the owner'));
-      round++;
-      if (round === 1) return { content: [{ type: 'tool_use', id: 't1', name: 'ads_insights_performance', input: { level: 'adset' } }], stop_reason: 'tool_use' };
-      if (round === 2) return { content: [{ type: 'tool_use', id: 't2', name: 'ads_update_entity', input: { entity_id: '120200001', daily_budget: 2600 } }], stop_reason: 'tool_use' };
-      return { content: [{ type: 'text', text: 'Je propose de monter **Poussette** à 26 $ par jour.' }], stop_reason: 'end_turn' };
-    },
-  };
-  await setRaw(db, 'meta', { adAccountId: '120211887', hasToken: true });
-  await setRaw(db, 'secret_dellal_ai_key', 'sk-test');
-  const o = await owner(server);
-  const r: any = await call('ads.ask.send', o, { question: 'Monte la meilleure de 20 %', lang: 'fr' });
-  assert.equal(r.status, 'waiting_yes');
-  assert.equal(r.answer, 'Je propose de monter Poussette à 26 $ par jour.', 'no markdown');
-  assert.deepEqual(r.reads, [{ tool: 'ads_insights_performance', ok: true }]);
-  assert.ok(!calls.some((c) => c.action === 'mcpCall' && c.args.name === 'ads_update_entity'), 'the change is not made before the yes');
-  assert.match(r.pending.label, /Budget de « Poussette/);
-  const done: any = await call('ads.ask.decide', o, { id: r.id, yes: true });
-  assert.equal(done.status, 'applied');
-  assert.deepEqual(calls.at(-1), { action: 'mcpCall', args: { name: 'ads_update_entity', args: { entity_id: '120200001', daily_budget: 2600 } } });
-  assert.equal((await db.query(`SELECT daily_budget_cents FROM adsets WHERE id = '120200001'`))[0].daily_budget_cents, 2600);
-  await db.query(`DELETE FROM settings WHERE key IN ('meta', 'secret_dellal_ai_key')`);
-});
-
-test('the MCP client: a session, an event stream, the tools and a call', async () => {
-  const seen: { body: any; headers: Record<string, string> }[] = [];
-  const http = (async (_url: string, init: any) => {
-    const body = JSON.parse(init.body);
-    seen.push({ body, headers: init.headers });
-    if (body.method === 'initialize')
-      return new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: { protocolVersion: '2025-06-18' } }), { headers: { 'content-type': 'application/json', 'mcp-session-id': 'sess-1' } });
-    if (!('id' in body)) return new Response(null, { status: 202 });
-    if (body.method === 'tools/list')
-      return new Response(`event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: body.id, result: { tools: [{ name: 'ads_get_campaigns', description: 'List', annotations: { readOnlyHint: true } }] } })}\n\n`, {
-        headers: { 'content-type': 'text/event-stream' },
-      });
-    if (body.method === 'tools/call') return new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: { content: [{ type: 'text', text: 'ok' }] } }), { headers: { 'content-type': 'application/json' } });
-    return new Response('{}', { status: 500 });
-  }) as unknown as typeof fetch;
-  const s = new McpSession('tok', 'https://mcp.test/ads', http);
-  const tools = await s.tools();
-  assert.deepEqual(
-    tools.map((t) => [t.name, t.readOnly]),
-    [['ads_get_campaigns', true]],
-  );
-  assert.equal((await s.call('ads_get_campaigns', {})).text, 'ok');
-  assert.equal(seen[0].headers.Authorization, 'Bearer tok');
-  assert.equal(seen[2].headers['Mcp-Session-Id'], 'sess-1', 'the session id goes back on each call');
-  assert.equal(readMessage('data: {"jsonrpc":"2.0","id":3,"result":{}}\n\n', 'text/event-stream', 3).id, 3);
-  assert.equal(readMessage('{"jsonrpc":"2.0","id":4,"error":{"message":"no"}}', 'application/json', 4).error.message, 'no');
-  assert.deepEqual(resultOf({ structuredContent: { a: 1 }, isError: true }), { text: '{"a":1}', isError: true });
-  assert.equal(toolOf({ name: 'x', annotations: { destructiveHint: true } }).destructive, true);
-  const refused = new McpSession('tok', 'https://mcp.test/ads', (async () => new Response('{}', { status: 401 })) as unknown as typeof fetch);
-  await assert.rejects(refused.tools(), /ads_mcp_management/);
 });

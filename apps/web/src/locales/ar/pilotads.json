@@ -4,15 +4,13 @@
     "pubs": "إعلاناتي",
     "lancer": "إطلاق إعلان",
     "pilote": "الطيار الآلي",
-    "audiences": "الجماهير",
-    "demander": "اسأل Pilot AI"
+    "audiences": "الجماهير"
   },
   "tabShort": {
     "pubs": "إعلاناتي",
     "lancer": "إطلاق",
     "pilote": "الطيار الآلي",
-    "audiences": "الجماهير",
-    "demander": "اسأل"
+    "audiences": "الجماهير"
   },
   "mode": {
     "label": "العرض",
