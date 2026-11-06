@@ -830,6 +830,18 @@ function examV2() {
   ]);
 }
 
+/** « Lancer l'examen » in the example: the ten come one by one (one every 1,5 s), then the marks of that version */
+let demoRun: { id: number; book: string; at: number } | null = null;
+function examRun(id: number) {
+  const run = demoRun!;
+  const base = examDemo(run.book === 'live' ? 9 : 13);
+  const at = new Date(run.at).toISOString();
+  const done = Math.min(base.items.length, Math.floor((Date.now() - run.at) / 1500));
+  if (done >= base.items.length) return { ...base, id, at, finishedAt: new Date(run.at + base.items.length * 1500).toISOString() };
+  const items = base.items.slice(0, done);
+  return { ...base, id, at, status: 'running', score: null, done, items, passed: items.filter((i) => i.pass).length, finishedAt: null };
+}
+
 /** the example answer of one control-room call (the Pilot AI page's reads) */
 export function demoAnswer(name: string, input: any): unknown {
   switch (name) {
@@ -837,9 +849,10 @@ export function demoAnswer(name: string, input: any): unknown {
     case 'p.photos.store':
       return { configured: true, account: 'a1b2c3d4e5f60718293a4b5c6d7e8f90', bucket: 'pilotix-photos', keyId: '3f9c2a71b0d84e6f9a1c5b7d2e4f6a8c', secretSet: true, lastTest: { at: new Date(Date.parse(`${today()}T08:00:00Z`)).toISOString(), ok: true, error: null } };
     case 'p.pilot.exam.get':
-      return examDemo(Number(input?.id) || 13);
+      return demoRun && Number(input?.id) === demoRun.id ? examRun(demoRun.id) : examDemo(Number(input?.id) || 13);
     case 'p.pilot.exam.start':
-      return { id: input?.book === 'live' ? 9 : 13 };
+      demoRun = { id: (demoRun?.id ?? 90) + 1, book: input?.book === 'live' ? 'live' : 'trial', at: Date.now() };
+      return { id: demoRun.id };
     case 'p.pilot.exam.list':
       return [examDemo(13), examDemo(9)];
     // Pilotix's Meta and TikTok apps, not made yet (the preview shows what to do)
