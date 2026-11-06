@@ -3,7 +3,9 @@
 // sends the list to the shop's Meta catalog as a product set, picked when making a catalog ad, and to its TikTok catalog
 // too when « Envoyer aussi à TikTok » is on (each list then says where it is). A product that cannot go says why (no
 // page, a picture too small, refused) with the way to fix it. The pictures Meta and TikTok take are JPEG: the browser
-// makes those copies by itself. Everything is decided in core (metacatalog.*).
+// makes those copies by itself. « Résultats » (CatalogueResults.tsx, #/marketing/catalogue/resultats) says what the
+// catalog ads brought and which colours / sizes left the ads because little is left. Everything is decided in core
+// (metacatalog.*).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
@@ -11,6 +13,7 @@ import { da, n, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
+import { Results } from './CatalogueResults';
 import './formulaires.css';
 import './catalogue.css';
 
@@ -21,8 +24,9 @@ type Drag = { productId: number; fromListId?: number };
 
 const DRAG = 'application/x-pilotix-product';
 
-export function Catalogue() {
+export function Catalogue({ rest }: { rest?: string[] } = {}) {
   const { t } = useTranslation();
+  const view = rest?.[0] === 'resultats' ? 'results' : 'lists';
   const q = useRpc('metacatalog.board', {}, { refetchInterval: 30_000 });
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState<number | null>(null);
@@ -54,6 +58,21 @@ export function Catalogue() {
       <section className="lf-main ct-main" aria-labelledby="ct-title">
         <div className="lf-head">
           <h2 id="ct-title">{t('metacatalog.title')}</h2>
+          <div className="px-vsw ct-views" role="tablist" aria-label={t('metacatalog.view.label')}>
+            {(['lists', 'results'] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={view === k}
+                className={view === k ? 'on' : ''}
+                onClick={() => (location.hash = k === 'results' ? '#/marketing/catalogue/resultats' : '#/marketing/catalogue')}
+              >
+                <Icon name={k === 'results' ? 'chart' : 'list'} />
+                {t(`metacatalog.view.${k}`)}
+              </button>
+            ))}
+          </div>
         </div>
         <Networks d={d} />
         {!d.catalog.ready && !(d.tiktok.on && d.tiktok.linked) && (
@@ -64,38 +83,42 @@ export function Catalogue() {
             </span>
           </div>
         )}
-        <div className="ct-board">
-          <aside className="ct-lib" aria-labelledby="ct-lib">
-            <h3 id="ct-lib">{t('metacatalog.products')}</h3>
-            <p className="lf-muted ct-small">{t('metacatalog.dragHint')}</p>
-            <label className="ct-search">
-              <Icon name="search" />
-              <span className="sr-only">{t('metacatalog.search')}</span>
-              <input type="search" value={search} placeholder={t('metacatalog.search')} onChange={(e) => setSearch(e.target.value)} />
-            </label>
-            <ul className="ct-items">
-              {products.map((p) => (
-                <LibItem key={p.id} p={p} lists={d.lists} open={open === p.id} onToggle={() => setOpen(open === p.id ? null : p.id)} />
+        {view === 'results' ? (
+          <Results />
+        ) : (
+          <div className="ct-board">
+            <aside className="ct-lib" aria-labelledby="ct-lib">
+              <h3 id="ct-lib">{t('metacatalog.products')}</h3>
+              <p className="lf-muted ct-small">{t('metacatalog.dragHint')}</p>
+              <label className="ct-search">
+                <Icon name="search" />
+                <span className="sr-only">{t('metacatalog.search')}</span>
+                <input type="search" value={search} placeholder={t('metacatalog.search')} onChange={(e) => setSearch(e.target.value)} />
+              </label>
+              <ul className="ct-items">
+                {products.map((p) => (
+                  <LibItem key={p.id} p={p} lists={d.lists} open={open === p.id} onToggle={() => setOpen(open === p.id ? null : p.id)} />
+                ))}
+                {!products.length && <li className="lf-muted ct-small">{t('metacatalog.noProduct')}</li>}
+              </ul>
+            </aside>
+            <div className="ct-cols">
+              {d.lists.map((l) => (
+                <Column
+                  key={l.id}
+                  l={l}
+                  where={d.catalog.ready && d.tiktok.on && d.tiktok.linked ? 'both' : d.tiktok.on && d.tiktok.linked ? 'tiktok' : 'meta'}
+                  nets={d.tiktok.on}
+                  byId={byId}
+                  over={over === l.id}
+                  onOver={(on) => setOver(on ? l.id : over === l.id ? null : over)}
+                  onDrop={(e) => drop(l.id, e)}
+                />
               ))}
-              {!products.length && <li className="lf-muted ct-small">{t('metacatalog.noProduct')}</li>}
-            </ul>
-          </aside>
-          <div className="ct-cols">
-            {d.lists.map((l) => (
-              <Column
-                key={l.id}
-                l={l}
-                where={d.catalog.ready && d.tiktok.on && d.tiktok.linked ? 'both' : d.tiktok.on && d.tiktok.linked ? 'tiktok' : 'meta'}
-                nets={d.tiktok.on}
-                byId={byId}
-                over={over === l.id}
-                onOver={(on) => setOver(on ? l.id : over === l.id ? null : over)}
-                onDrop={(e) => drop(l.id, e)}
-              />
-            ))}
-            <NewList />
+              <NewList />
+            </div>
           </div>
-        </div>
+        )}
       </section>
     </div>
   );
@@ -184,7 +207,7 @@ function Networks({ d }: { d: Board }) {
 // ---------------------------------------------------------------- the products
 function Thumb({ p, size = 40 }: { p: Product; size?: number }) {
   return p.thumb ? (
-    <img className={`ct-thumb ${p.stock <= 0 ? 'out' : ''}`} src={p.thumb} alt="" width={size} height={size} style={{ width: size, height: size }} loading="lazy" />
+    <img className={`ct-thumb ${p.stock !== null && p.stock <= 0 ? 'out' : ''}`} src={p.thumb} alt="" width={size} height={size} style={{ width: size, height: size }} loading="lazy" />
   ) : (
     <span className="ct-thumb none" style={{ width: size, height: size }} aria-hidden="true">
       <Icon name="package" />
@@ -202,6 +225,22 @@ function problemLabel(p: Product, t: (k: string) => string): string | null {
 }
 /** Something to fix before the product can go (or Meta / TikTok refused it). */
 const isBad = (p: Product) => !!p.problem || p.meta === 'error' || p.tiktok === 'error';
+/** Out of the ads because little (or nothing) is left: all of it, or some colours / sizes (« Résultats » says which). */
+function hiddenLabel(p: Product, t: (k: string, o?: Record<string, unknown>) => string): string | null {
+  if (!p.hidden) return null;
+  if (p.hidden < p.variants) return t('metacatalog.res.st.some', { count: p.hidden, total: p.variants });
+  return t(p.stock === 0 ? 'metacatalog.res.st.out' : 'metacatalog.res.st.low');
+}
+function HiddenHint({ p }: { p: Product }) {
+  const { t } = useTranslation();
+  const h = hiddenLabel(p, t);
+  return h ? (
+    <small className="ct-hidhint">
+      <Icon name="eyeoff" />
+      {h}
+    </small>
+  ) : null;
+}
 
 function LibItem({ p, lists, open, onToggle }: { p: Product; lists: List[]; open: boolean; onToggle: () => void }) {
   const { t } = useTranslation();
@@ -233,6 +272,7 @@ function LibItem({ p, lists, open, onToggle }: { p: Product; lists: List[]; open
             {p.oldPrice && <s className="ltr">{da(p.oldPrice)}</s>}
           </span>
           {pb && <small className={bad ? 'warn' : ''}>{pb}</small>}
+          {!bad && <HiddenHint p={p} />}
         </span>
         <button type="button" className="ct-plus" aria-expanded={open} aria-label={t('metacatalog.addTo', { name: p.name })} onClick={onToggle}>
           <Icon name="plus" />
@@ -406,7 +446,7 @@ function Column({
               <Thumb p={p} size={32} />
               <span className="ct-name">
                 <bdi>{p.name}</bdi>
-                {bad && <small className="warn">{problemLabel(p, t)}</small>}
+                {bad ? <small className="warn">{problemLabel(p, t)}</small> : <HiddenHint p={p} />}
               </span>
               {bad && (
                 <span className="ct-alert" aria-hidden="true">

@@ -2,8 +2,8 @@ import type { Db } from '../db';
 import { num } from '../db';
 
 // Demo of Marketing › Catalogue: a few more landing pages (pictures drawn in SVG; the travel cot's is too small for
-// Meta), the shop's catalogs at Meta and TikTok, and four lists: three sent to both (one with products to fix), one not
-// sent yet.
+// Meta), the shop's catalogs at Meta and TikTok, four lists (three sent to both, one with products to fix; one not sent
+// yet), and « Résultats »: a month of visits and orders from the catalog ads, one product with its own « stock bas » level.
 
 const svg = (body: string, bg: string) =>
   'data:image/svg+xml,' +
@@ -90,4 +90,35 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     `INSERT INTO settings (key, value) VALUES ('ttcatalog', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
     [JSON.stringify({ on: true, bcId: 'demo-bc', bcName: 'BabyJoy DZ', catalogId: 'demo-tt-catalog', pixelBound: true, error: null, at: at(28) })],
   );
+
+  // « Résultats »: the last 30 days of catalog ads. Three orders in five of the catalogs' products (one product per order)
+  // came from them (their utm says which network), and their pages got visits from them every day (about 30 for an order)
+  const sent = [...new Set(ok.map((r: any) => num(r.pid)))];
+  const orders = await db.query(
+    `SELECT o.id, min(i.product_id) AS product_id, o.created_at FROM orders o JOIN order_items i ON i.order_id = o.id AND NOT i.is_upsell
+     WHERE o.created_at > $2 GROUP BY o.id, o.created_at HAVING count(DISTINCT i.product_id) = 1 AND min(i.product_id) = ANY($1) ORDER BY o.id`,
+    [sent, at(30 * 24)],
+  );
+  const DAY = 24 * H;
+  const dayOf = (t: number) => new Date(t + H).toISOString().slice(0, 10);
+  const perDay = new Map<string, number>();
+  for (const [k, o] of orders.entries()) {
+    if (k % 5 >= 3) continue;
+    const net = k % 4 === 0 ? 'tiktok' : 'meta';
+    await db.query(`UPDATE orders SET utm = COALESCE(utm, '{}'::jsonb) || jsonb_build_object('px_cat', $2::text) WHERE id = $1`, [o.id, net]);
+    const key = `${dayOf(new Date(o.created_at).getTime())}|${num(o.product_id)}|${net}`;
+    perDay.set(key, (perDay.get(key) ?? 0) + 1);
+  }
+  for (const [i, p] of sent.entries())
+    for (let d = 0; d < 30; d++) {
+      const day = dayOf(now - d * DAY);
+      for (const net of ['meta', 'tiktok']) {
+        const base = net === 'meta' ? 14 + ((p * 7 + d * 3 + i) % 17) : 5 + ((p * 5 + d * 7 + i) % 9);
+        const n = base + 28 * (perDay.get(`${day}|${p}|${net}`) ?? 0);
+        await db.query(`INSERT INTO catalog_visits (day, product_id, net, n) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`, [day, p, net, n]);
+      }
+    }
+  // the baby set sells fast: it leaves the ads with 30 left (the shop's level is 3)
+  const ens = await pid('PX-ENS');
+  if (ens) await db.query(`INSERT INTO catalog_guard (product_id, min_left) VALUES ($1, 30) ON CONFLICT DO NOTHING`, [ens]);
 }

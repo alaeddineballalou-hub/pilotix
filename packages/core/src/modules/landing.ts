@@ -283,6 +283,8 @@ export interface HtmlOpts {
   url?: string;
   /** opened from this group page (?g=<slug>): the « back to all the products » bar */
   group?: string;
+  /** opened from a catalog ad (Marketing › Catalogue: its link carries ?px_cat=meta|tiktok): a visit counted for « Résultats » */
+  catalog?: 'meta' | 'tiktok';
 }
 
 export function viewImages(refs: ImgRef[], rows: Map<number, any>, imgBase: string | null): LandingImage[] {
@@ -354,6 +356,12 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     waOptin: (await campaignSettings(ctx.db)).formOptin,
   };
   if (o.mode === 'live') await ctx.db.query('UPDATE landing_pages SET views = views + 1 WHERE id = $1', [l.id]);
+  // a visit from a catalog ad, by day (in Algeria), product and network (Marketing › Catalogue › Résultats)
+  if (o.mode === 'live' && o.catalog)
+    await ctx.db.query(
+      `INSERT INTO catalog_visits (day, product_id, net, n) VALUES ($1, $2, $3, 1) ON CONFLICT (day, product_id, net) DO UPDATE SET n = catalog_visits.n + 1`,
+      [new Date(ctx.now() + 3_600_000).toISOString().slice(0, 10), num(l.product_id), o.catalog],
+    );
   const group = o.group ? await groupOf(ctx.db, o.group, num(l.id), o.mode === 'live') : null;
   const html = renderLanding(view, {
     mode: o.mode,
@@ -400,8 +408,8 @@ export const landingCommunes = (wilayaId: number): [string, string][] => commune
 // ---------------------------------------------------------------- what a page sends
 const str = (n: number) => z.any().transform((v) => (v === null || v === undefined || typeof v === 'object' ? '' : String(v)).slice(0, n));
 const int = (d: number | null) => z.any().transform((v) => (v === null || v === undefined || v === '' || !isFinite(Number(v)) ? d : Math.trunc(Number(v))));
-/** the ad link's parameters (utm_*, fbclid, ad / ad set / campaign ids): 12 keys at most, short strings only */
-const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'ttclid', 'gclid', 'ad_id', 'adset_id', 'campaign_id', 'placement'];
+/** the ad link's parameters (utm_*, fbclid, ad / ad set / campaign ids, a catalog ad's network): 13 keys at most, short strings only */
+const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'ttclid', 'gclid', 'ad_id', 'adset_id', 'campaign_id', 'placement', 'px_cat'];
 const utmOf = z.any().transform((v): Record<string, string> | null => {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
   const out: Record<string, string> = {};
@@ -1778,7 +1786,7 @@ export const landingProcs = {
   // ---------------------------------------------------------------- public side (the server calls these as the system)
   'landing.html': proc(
     [],
-    z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null), site: z.string().max(500).optional(), url: z.string().max(600).optional(), group: z.string().max(80).optional() }),
+    z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null), site: z.string().max(500).optional(), url: z.string().max(600).optional(), group: z.string().max(80).optional(), catalog: z.enum(['meta', 'tiktok']).optional() }),
     async (ctx, i) => landingPage(ctx, i.slug, i),
   ),
 

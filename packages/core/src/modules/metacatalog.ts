@@ -9,11 +9,13 @@
 // every list leaves the catalogs. TikTok's problems never stop Meta's sending: they show on the page.
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
+import { algiersDayStart } from '@pilotix/shared';
 import { bad, Ctx, notFound, proc, publicApi } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, META_TOKEN_KEY } from './admin';
 import { landingStore } from './landingquery';
 import { SOCIAL_KEYS } from './social';
+import { RESERVED } from './stockquery';
 
 const ROLES = ['marketer'] as const;
 const id = z.number().int().positive();
@@ -60,17 +62,27 @@ interface Prod {
   brand: string | null;
   price: number;
   page: { slug: string; title: string; price: number | null; oldPrice: number | null; description: string; variantLabel: string; pics: Pic[] } | null;
-  variants: { id: number; title: string; price: number | null; stock: number }[];
+  /** left: what is in the depots less what confirmed orders already promised (as Produits › Stock counts it) */
+  variants: { id: number; title: string; price: number | null; left: number }[];
+  /** the shop counts this product's stock (it has stock lines): else it always goes as in stock */
+  tracked: boolean;
+  /** its own « stock bas » level (null: the shop's) */
+  level: number | null;
 }
 
 async function loadProducts(db: Db, ids?: number[]): Promise<Prod[]> {
   const rows = await db.query(
-    `SELECT p.id, p.name, p.brand, p.price,
+    `WITH r AS (SELECT x.variant_id, sum(x.n)::int AS n FROM (${RESERVED}) x JOIN warehouses wh ON wh.id = x.wid AND wh.active GROUP BY 1),
+       s AS (SELECT s.variant_id, sum(s.qty)::int AS qty FROM stock s JOIN warehouses wh ON wh.id = s.warehouse_id AND wh.active GROUP BY 1)
+     SELECT p.id, p.name, p.brand, p.price, g.min_left,
+       EXISTS (SELECT 1 FROM stock t JOIN product_variants tv ON tv.id = t.variant_id WHERE tv.product_id = p.id) AS tracked,
        l.slug, l.title, l.price AS l_price, l.old_price, l.description, l.variant_label, l.images,
        (SELECT COALESCE(json_agg(json_build_object('id', v.id, 'title', v.title, 'price', v.price,
-          'stock', (SELECT COALESCE(sum(s.qty), 0) FROM stock s WHERE s.variant_id = v.id)) ORDER BY v.id), '[]'::json)
-        FROM product_variants v WHERE v.product_id = p.id AND v.active) AS variants
+          'left', COALESCE(s.qty, 0) - COALESCE(r.n, 0)) ORDER BY v.id), '[]'::json)
+        FROM product_variants v LEFT JOIN s ON s.variant_id = v.id LEFT JOIN r ON r.variant_id = v.id
+        WHERE v.product_id = p.id AND v.active) AS variants
      FROM products p
+     LEFT JOIN catalog_guard g ON g.product_id = p.id
      LEFT JOIN LATERAL (SELECT * FROM landing_pages x WHERE x.product_id = p.id AND x.active ORDER BY x.id LIMIT 1) l ON true
      WHERE p.active AND NOT p.is_service AND p.archived_at IS NULL ${ids ? 'AND p.id = ANY($1)' : ''}
      ORDER BY lower(p.name), p.id`,
@@ -106,7 +118,9 @@ async function loadProducts(db: Db, ids?: number[]): Promise<Prod[]> {
             .filter((x: Pic | null): x is Pic => !!x),
         }
       : null,
-    variants: arr(r.variants).map((v: any) => ({ id: num(v.id), title: String(v.title ?? ''), price: numOrNull(v.price), stock: num(v.stock) })),
+    variants: arr(r.variants).map((v: any) => ({ id: num(v.id), title: String(v.title ?? ''), price: numOrNull(v.price), left: num(v.left) })),
+    tracked: !!r.tracked,
+    level: numOrNull(r.min_left),
   }));
 }
 const arr = (v: unknown): any[] => {
@@ -154,12 +168,39 @@ interface Where {
   brand: string;
   /** the browser preview: nothing goes to Meta */
   demo: boolean;
+  /** the shop's « stock bas » rule */
+  guard: Guard;
 }
 async function whereOf(ctx: Ctx): Promise<Where> {
   const shop = String((await getSetting(ctx.db, 'shop')).name ?? '') || 'Boutique';
   const pages = String(ctx.server?.pagesUrl?.() ?? ctx.server?.publicUrl ?? 'https://pilotix.online').replace(/\/+$/, '');
-  return { pages, store: await landingStore(ctx.db), api: ctx.server ? publicApi(ctx) : 'https://pilotix.online/api', brand: shop, demo: simulated(ctx) };
+  return { pages, store: await landingStore(ctx.db), api: ctx.server ? publicApi(ctx) : 'https://pilotix.online/api', brand: shop, demo: simulated(ctx), guard: await guardOf(ctx.db) };
 }
+
+// ---------------------------------------------------------------- « stock bas »: a colour / size with little left leaves the ads
+const GUARD_KEY = 'catalogguard';
+export interface Guard {
+  /** on: a colour / size with `min` or fewer left goes as out of stock (the ads stop showing it) */
+  on: boolean;
+  min: number;
+}
+export const GUARD_DEFAULTS: Guard = { on: true, min: 3 };
+export async function guardOf(db: Db): Promise<Guard> {
+  const r = (await db.query(`SELECT value FROM settings WHERE key = $1`, [GUARD_KEY]))[0];
+  const v = r?.value && typeof r.value === 'object' ? r.value : {};
+  return { on: v.on === undefined ? GUARD_DEFAULTS.on : !!v.on, min: Number.isFinite(Number(v.min)) ? Math.max(0, Math.trunc(Number(v.min))) : GUARD_DEFAULTS.min };
+}
+/** At this many left or fewer, a colour / size of this product is out of the ads (the product's own level, else the shop's). */
+export const levelOf = (p: Pick<Prod, 'level'>, g: Guard): number => (g.on ? (p.level ?? g.min) : 0);
+/** Why a colour / size is out of the ads: nothing left, or little (null: it is in them). Stock not counted: always in. */
+export function hiddenWhy(p: Pick<Prod, 'level' | 'tracked'>, v: { left: number }, g: Guard): 'out' | 'low' | null {
+  if (!p.tracked) return null;
+  if (v.left <= 0) return 'out';
+  return v.left <= levelOf(p, g) ? 'low' : null;
+}
+
+/** A catalog ad's link: the page, tagged with the network it comes from (its visits and orders are counted). */
+export const tagged = (link: string, net: 'meta' | 'tiktok') => `${link}${link.includes('?') ? '&' : '?'}px_cat=${net}`;
 
 const COLOR = /lon|لون|couleur|color|colour/i;
 const SIZE = /taille|مقاس|size|pointure|عمر|âge|age/i;
@@ -206,7 +247,7 @@ export function linesOf(p: Prod, w: Where): Line[] {
       group: String(p.id),
       title: named ? `${page.title} – ${v.title}` : page.title,
       description: text,
-      inStock: v.stock > 0,
+      inStock: !hiddenWhy(p, v, w.guard),
       price: old ?? now,
       salePrice: old ? now : null,
       link,
@@ -230,7 +271,7 @@ export function itemsOf(p: Prod, w: Where): { retailerId: string; variantId: num
       condition: 'new',
       price: `${l.price} DZD`,
       ...(l.salePrice !== null ? { sale_price: `${l.salePrice} DZD` } : {}),
-      link: l.link,
+      link: tagged(l.link, 'meta'),
       image: l.images.map((url) => ({ url, tag: [] as string[] })),
       brand: l.brand.slice(0, 100),
     };
@@ -264,7 +305,7 @@ export function ttItemsOf(p: Prod, w: Where): { skuId: string; variantId: number
       ...(l.images.length > 1 ? { additional_image_urls: l.images.slice(1, 11) } : {}),
       product_detail: detail,
       price_info: { price: l.price, currency: 'DZD', ...(l.salePrice !== null ? { sale_price: l.salePrice } : {}) },
-      landing_page: { landing_page_url: l.link },
+      landing_page: { landing_page_url: tagged(l.link, 'tiktok') },
     };
     return { skuId: l.id, variantId: l.variantId, data };
   });
@@ -324,7 +365,7 @@ async function syncProducts(ctx: Ctx, productIds: number[], o: { force?: boolean
   const have = new Map<string, { hash: string | null; status: string }>();
   for (const r of await db.query(`SELECT retailer_id, hash, status FROM meta_catalog_items`)) have.set(String(r.retailer_id), { hash: r.hash ? String(r.hash) : null, status: String(r.status) });
   const requests: { method: 'UPDATE' | 'DELETE'; data: Record<string, unknown> }[] = [];
-  const rows: { retailerId: string; productId: number; variantId: number | null; hash: string | null }[] = [];
+  const rows: { retailerId: string; productId: number; variantId: number | null; hash: string | null; inStock: boolean }[] = [];
   const keep = new Set<string>();
   for (const p of prods)
     for (const it of itemsOf(p, w)) {
@@ -333,7 +374,7 @@ async function syncProducts(ctx: Ctx, productIds: number[], o: { force?: boolean
       const cur = have.get(it.retailerId);
       if (!o.force && cur && cur.hash === hash && cur.status !== 'error') continue;
       requests.push({ method: 'UPDATE', data: it.data });
-      rows.push({ retailerId: it.retailerId, productId: p.id, variantId: it.variantId, hash });
+      rows.push({ retailerId: it.retailerId, productId: p.id, variantId: it.variantId, hash, inStock: it.data.availability === 'in stock' });
     }
   // lines no longer wanted: a product out of every sent list, a colour removed, a product that lost its page
   const gone: string[] = [];
@@ -358,10 +399,10 @@ async function syncProducts(ctx: Ctx, productIds: number[], o: { force?: boolean
       const err = failed.get(r.retailerId);
       if (err) errors++;
       await db.query(
-        `INSERT INTO meta_catalog_items (retailer_id, product_id, variant_id, hash, status, error, sent_at) VALUES ($1,$2,$3,$4,$5,$6,$7)
+        `INSERT INTO meta_catalog_items (retailer_id, product_id, variant_id, hash, status, error, sent_at, in_stock) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
          ON CONFLICT (retailer_id) DO UPDATE SET product_id = EXCLUDED.product_id, variant_id = EXCLUDED.variant_id, hash = EXCLUDED.hash,
-           status = EXCLUDED.status, error = EXCLUDED.error, sent_at = EXCLUDED.sent_at, checked_at = NULL`,
-        [r.retailerId, r.productId, r.variantId, err ? null : r.hash, err ? 'error' : simulated(ctx) ? 'ok' : 'pending', err ?? null, at],
+           status = EXCLUDED.status, error = EXCLUDED.error, sent_at = EXCLUDED.sent_at, checked_at = NULL, in_stock = EXCLUDED.in_stock`,
+        [r.retailerId, r.productId, r.variantId, err ? null : r.hash, err ? 'error' : simulated(ctx) ? 'ok' : 'pending', err ?? null, at, r.inStock],
       );
     }
     if (gone.length) await db.query(`UPDATE meta_catalog_items SET status = 'deleted', hash = NULL, error = NULL, sent_at = $2 WHERE retailer_id = ANY($1)`, [gone, at]);
@@ -498,7 +539,7 @@ async function ttSyncProducts(ctx: Ctx, productIds: number[], o: { retry?: boole
   const have = new Map<string, { hash: string | null; status: string }>();
   for (const r of await db.query(`SELECT sku_id, hash, status FROM tiktok_catalog_items`)) have.set(String(r.sku_id), { hash: r.hash ? String(r.hash) : null, status: String(r.status) });
   const up: Record<string, unknown>[] = [];
-  const rows: { skuId: string; productId: number; variantId: number; hash: string }[] = [];
+  const rows: { skuId: string; productId: number; variantId: number; hash: string; inStock: boolean }[] = [];
   const keep = new Set<string>();
   for (const p of prods)
     for (const it of ttItemsOf(p, w)) {
@@ -508,7 +549,7 @@ async function ttSyncProducts(ctx: Ctx, productIds: number[], o: { retry?: boole
       // unchanged: not again (a refused one waits for a change, or « Envoyer »)
       if (cur && cur.hash === hash && cur.status !== 'deleted' && (cur.status !== 'error' || !o.retry)) continue;
       up.push(it.data);
-      rows.push({ skuId: it.skuId, productId: p.id, variantId: it.variantId, hash });
+      rows.push({ skuId: it.skuId, productId: p.id, variantId: it.variantId, hash, inStock: it.data.availability === 'IN_STOCK' });
     }
   const gone: string[] = [];
   for (const [sku, cur] of have) {
@@ -526,10 +567,10 @@ async function ttSyncProducts(ctx: Ctx, productIds: number[], o: { retry?: boole
   }
   for (const r of rows)
     await db.query(
-      `INSERT INTO tiktok_catalog_items (sku_id, product_id, variant_id, hash, status, error, sent_at) VALUES ($1,$2,$3,$4,$5,NULL,$6)
+      `INSERT INTO tiktok_catalog_items (sku_id, product_id, variant_id, hash, status, error, sent_at, in_stock) VALUES ($1,$2,$3,$4,$5,NULL,$6,$7)
        ON CONFLICT (sku_id) DO UPDATE SET product_id = EXCLUDED.product_id, variant_id = EXCLUDED.variant_id, hash = EXCLUDED.hash,
-         status = EXCLUDED.status, error = NULL, sent_at = EXCLUDED.sent_at, checked_at = NULL`,
-      [r.skuId, r.productId, r.variantId, r.hash, simulated(ctx) ? 'ok' : 'pending', at],
+         status = EXCLUDED.status, error = NULL, sent_at = EXCLUDED.sent_at, checked_at = NULL, in_stock = EXCLUDED.in_stock`,
+      [r.skuId, r.productId, r.variantId, r.hash, simulated(ctx) ? 'ok' : 'pending', at, r.inStock],
     );
   if (gone.length) await db.query(`UPDATE tiktok_catalog_items SET status = 'deleted', hash = NULL, error = NULL, sent_at = $2 WHERE sku_id = ANY($1)`, [gone, at]);
   return { sent: rows.length, removed: gone.length };
@@ -599,6 +640,34 @@ async function ttSendSent(ctx: Ctx, o: { retry?: boolean; onlyLate?: boolean } =
   return r.sent;
 }
 
+/**
+ * The products of every sent list (« mise à jour toute seule » or not) where a colour / size went in or out of stock
+ * since it was sent (« stock bas », a delivery, new stock): they go again now, whatever the list's switch says.
+ */
+async function stockMoves(ctx: Ctx, o: { meta: boolean; tiktok: boolean }): Promise<{ meta: number[]; tiktok: number[] }> {
+  const db = ctx.db;
+  const ids = await wanted(db);
+  if (!ids.length || (!o.meta && !o.tiktok)) return { meta: [], tiktok: [] };
+  const sentOf = async (table: string, col: string) => {
+    const m = new Map<string, boolean | null>();
+    for (const r of await db.query(`SELECT ${col} AS id, in_stock FROM ${table} WHERE status <> 'deleted' AND product_id = ANY($1)`, [ids]))
+      m.set(String(r.id), r.in_stock === null || r.in_stock === undefined ? null : !!r.in_stock);
+    return m;
+  };
+  const meta = o.meta ? await sentOf('meta_catalog_items', 'retailer_id') : new Map<string, boolean | null>();
+  const tiktok = o.tiktok ? await sentOf('tiktok_catalog_items', 'sku_id') : new Map<string, boolean | null>();
+  const w = await whereOf(ctx);
+  const out = { meta: new Set<number>(), tiktok: new Set<number>() };
+  for (const p of await loadProducts(db, ids))
+    for (const l of linesOf(p, w)) {
+      // a line never sent goes with its list's own sending
+      if (meta.has(l.id) && meta.get(l.id) !== l.inStock) out.meta.add(p.id);
+      if (tiktok.has(l.id) && tiktok.get(l.id) !== l.inStock) out.tiktok.add(p.id);
+    }
+  return { meta: [...out.meta], tiktok: [...out.tiktok] };
+}
+const uniq = (a: number[]) => [...new Set(a)];
+
 /** Every few minutes: lists « mises à jour toutes seules » send what changed; Meta's and TikTok's answers come back. */
 export async function runCatalog(ctx: Ctx): Promise<{ sent: number; removed: number; checked: number; tiktok: number }> {
   const db = ctx.db;
@@ -622,13 +691,15 @@ export async function runCatalog(ctx: Ctx): Promise<{ sent: number; removed: num
   const auto = (
     await db.query(`SELECT DISTINCT lp.product_id FROM meta_catalog_list_products lp JOIN meta_catalog_lists l ON l.id = lp.list_id WHERE l.sent_at IS NOT NULL AND l.auto_update`)
   ).map((r: any) => num(r.product_id));
+  // a colour / size in or out of stock goes whatever the list's switch says
+  const moved = await stockMoves(ctx, { meta: metaGo, tiktok: ttGo });
   if (metaGo) {
-    const r = await syncProducts(ctx, auto);
+    const r = await syncProducts(ctx, uniq([...auto, ...moved.meta]));
     out.sent = r.sent;
     out.removed = r.removed;
   }
   if (ttGo) {
-    out.tiktok = (await ttStep(() => ttSyncProducts(ctx, auto)))?.sent ?? 0;
+    out.tiktok = (await ttStep(() => ttSyncProducts(ctx, uniq([...auto, ...moved.tiktok]))))?.sent ?? 0;
     // a list TikTok did not take yet (refused, or sent before)
     out.tiktok += (await ttStep(() => ttSendSent(ctx, { onlyLate: true }))) ?? 0;
   }
@@ -689,9 +760,10 @@ async function board(ctx: Ctx) {
     // a list's product asks the browser for its JPEG copies
     if (p.page && inLists.has(p.id))
       for (const x of p.page.pics) if (x.id && !x.jpg && x.w >= MIN_SIDE && x.h >= MIN_SIDE) needJpeg.set(x.id, ctx.server ? `${publicApi(ctx)}/lp/img/${x.id}/960.webp` : null);
-    const first = p.page?.pics[0] ?? null;
-    const thumb = first ? (first.id ? (ctx.server ? `${publicApi(ctx)}/lp/img/${first.id}/160.webp` : null) : first.url) : null;
-    const stock = p.variants.reduce((n, v) => n + v.stock, 0);
+    const thumb = thumbOf(ctx, p);
+    // what is left (null: the shop does not count this product's stock)
+    const stock = p.tracked ? p.variants.reduce((n, v) => n + Math.max(0, v.left), 0) : null;
+    const hidden = p.variants.filter((v) => hiddenWhy(p, v, w.guard)).length;
     const now = p.page?.price ?? p.price;
     return {
       id: p.id,
@@ -700,6 +772,8 @@ async function board(ctx: Ctx) {
       oldPrice: p.page?.oldPrice && p.page.oldPrice > now ? p.page.oldPrice : null,
       variants: p.variants.length,
       stock,
+      /** colours / sizes out of the ads (nothing or little left) */
+      hidden,
       thumb,
       slug: p.page?.slug ?? null,
       problem: problem === 'jpeg' ? null : problem,
@@ -755,6 +829,177 @@ async function board(ctx: Ctx) {
     // the pictures the browser turns into JPEG for Meta and TikTok (Catalogue does it by itself), a few at a time
     needJpeg: [...needJpeg].slice(0, 40).map(([pic, url]) => ({ id: pic, url })),
     articles: items.filter((i: any) => i.status === 'ok' || i.status === 'pending').length,
+  };
+}
+
+/** A product's small picture (the first of its page). */
+function thumbOf(ctx: Ctx, p: Prod): string | null {
+  const first = p.page?.pics[0] ?? null;
+  return first ? (first.id ? (ctx.server ? `${publicApi(ctx)}/lp/img/${first.id}/160.webp` : null) : first.url) : null;
+}
+
+// ---------------------------------------------------------------- « Résultats »: what the catalog ads bring
+const DAY = 86_400_000;
+/** a day in Algeria (UTC+1, no summer time) */
+const dayOf = (t: number) => new Date(t + 3_600_000).toISOString().slice(0, 10);
+export type Net = 'meta' | 'tiktok';
+const NETS: Net[] = ['meta', 'tiktok'];
+export interface Numbers {
+  visits: number;
+  orders: number;
+  delivered: number;
+  /** what the delivered orders' lines of this product brought (DA) */
+  cash: number;
+  meta: { visits: number; orders: number };
+  tiktok: { visits: number; orders: number };
+}
+const zero = (): Numbers => ({ visits: 0, orders: 0, delivered: 0, cash: 0, meta: { visits: 0, orders: 0 }, tiktok: { visits: 0, orders: 0 } });
+/** the first instant counted: the start of the day `days - 1` days ago (0: since the start) */
+const startOf = (now: number, days: number) => (days ? algiersDayStart(now) - (days - 1) * DAY : null);
+
+/**
+ * Per product, what its catalog ads brought since `start`: visits of its page from a catalog ad (counted when the page
+ * opens), orders from them (their utm keeps px_cat), how many were delivered and what those lines brought.
+ */
+async function numbersOf(db: Db, start: number | null, productId?: number): Promise<Map<number, Numbers>> {
+  const by = new Map<number, Numbers>();
+  const at = (pid: number) => by.get(pid) ?? (by.set(pid, zero()), by.get(pid)!);
+  const one = productId ? 'AND product_id = $2' : '';
+  for (const r of await db.query(
+    `SELECT product_id, net, sum(n)::int AS n FROM catalog_visits WHERE ($1::date IS NULL OR day >= $1::date) ${one} GROUP BY 1, 2`,
+    productId ? [start ? dayOf(start) : null, productId] : [start ? dayOf(start) : null],
+  )) {
+    const k = at(num(r.product_id));
+    k.visits += num(r.n);
+    if (r.net === 'meta' || r.net === 'tiktok') k[r.net as Net].visits += num(r.n);
+  }
+  for (const r of await db.query(
+    `SELECT i.product_id, o.utm->>'px_cat' AS net, count(DISTINCT o.id)::int AS orders,
+       count(DISTINCT o.id) FILTER (WHERE o.follow_status IN ('delivered', 'exchanged'))::int AS delivered,
+       COALESCE(sum(i.qty * i.unit_price) FILTER (WHERE o.follow_status IN ('delivered', 'exchanged')), 0)::bigint AS cash
+     FROM orders o JOIN order_items i ON i.order_id = o.id AND NOT i.is_upsell
+     WHERE o.utm->>'px_cat' IN ('meta', 'tiktok') AND o.conf_status <> 'duplicate' AND ($1::timestamptz IS NULL OR o.created_at >= $1)
+       ${productId ? 'AND i.product_id = $2' : ''}
+     GROUP BY 1, 2`,
+    productId ? [start ? iso(new Date(start)) : null, productId] : [start ? iso(new Date(start)) : null],
+  )) {
+    const k = at(num(r.product_id));
+    k.orders += num(r.orders);
+    k.delivered += num(r.delivered);
+    k.cash += num(r.cash);
+    k[r.net as Net].orders += num(r.orders);
+  }
+  return by;
+}
+
+/** The first day anything was counted (visits or orders from a catalog ad): null before the first one. */
+async function sinceOf(db: Db): Promise<string | null> {
+  const v = (await db.query(`SELECT min(day)::text AS d FROM catalog_visits`))[0]?.d;
+  const o = (await db.query(`SELECT min(created_at) AS t FROM orders WHERE utm->>'px_cat' IN ('meta', 'tiktok')`))[0]?.t;
+  const days = [v ? String(v).slice(0, 10) : null, o ? dayOf(new Date(o).getTime()) : null].filter((x): x is string => !!x).sort();
+  return days[0] ?? null;
+}
+
+export type AdState = 'ads' | 'some' | 'low' | 'out' | 'fix' | 'off';
+/** Where a product is in the ads: in them, some colours / sizes out, all out (little or nothing left), to fix, not in a sent list. */
+function adStateOf(p: Prod, g: Guard, demo: boolean, inSent: boolean): { state: AdState; hidden: number } {
+  const why = p.variants.map((v) => hiddenWhy(p, v, g));
+  const hidden = why.filter(Boolean).length;
+  const pb = problemOf(p, demo);
+  if (pb && pb !== 'jpeg') return { state: 'fix', hidden };
+  if (!inSent) return { state: 'off', hidden };
+  if (hidden && hidden === why.length) return { state: why.every((x) => x === 'out') ? 'out' : 'low', hidden };
+  return { state: hidden ? 'some' : 'ads', hidden };
+}
+
+async function results(ctx: Ctx, days: number) {
+  const db = ctx.db;
+  const w = await whereOf(ctx);
+  const nums = await numbersOf(db, startOf(ctx.now(), days));
+  const inSent = new Set(await wanted(db));
+  const ids = [...new Set([...inSent, ...nums.keys()])];
+  const prods = ids.length ? await loadProducts(db, ids) : [];
+  const totals = zero();
+  for (const k of nums.values()) {
+    totals.visits += k.visits;
+    totals.orders += k.orders;
+    totals.delivered += k.delivered;
+    totals.cash += k.cash;
+    for (const n of NETS) {
+      totals[n].visits += k[n].visits;
+      totals[n].orders += k[n].orders;
+    }
+  }
+  const hiddenLines: { productId: number; name: string; thumb: string | null; variant: string | null; left: number; why: 'out' | 'low'; level: number }[] = [];
+  const products = prods
+    .map((p) => {
+      const st = adStateOf(p, w.guard, w.demo, inSent.has(p.id));
+      // the colours / sizes out of the ads, for « Cachés : stock bas » (only the products in a sent list)
+      if (inSent.has(p.id))
+        for (const v of p.variants) {
+          const why = hiddenWhy(p, v, w.guard);
+          if (why) hiddenLines.push({ productId: p.id, name: p.name, thumb: thumbOf(ctx, p), variant: p.variants.length > 1 && v.title ? v.title : null, left: Math.max(0, v.left), why, level: levelOf(p, w.guard) });
+        }
+      const pb = problemOf(p, w.demo);
+      return {
+        id: p.id,
+        name: p.name,
+        thumb: thumbOf(ctx, p),
+        price: p.page?.price ?? p.price,
+        ...(nums.get(p.id) ?? zero()),
+        /** what is left (null: the shop does not count this product's stock) */
+        left: p.tracked ? p.variants.reduce((n, v) => n + Math.max(0, v.left), 0) : null,
+        state: st.state,
+        hidden: st.hidden,
+        variants: p.variants.length,
+        problem: pb === 'nopage' || pb === 'photo' ? pb : null,
+      };
+    })
+    .sort((a, b) => b.cash - a.cash || b.orders - a.orders || b.visits - a.visits || a.name.localeCompare(b.name));
+  return { days, since: await sinceOf(db), totals, products, hidden: hiddenLines, guard: w.guard };
+}
+
+/** One product: its numbers, its orders day by day (Meta / TikTok), its colours / sizes and its « stock bas » level. */
+async function productStats(ctx: Ctx, productId: number, days: number) {
+  const db = ctx.db;
+  const p = (await loadProducts(db, [productId]))[0];
+  if (!p) throw notFound('Produit introuvable');
+  const w = await whereOf(ctx);
+  const now = ctx.now();
+  const start = startOf(now, days);
+  // the chart: the period's days (« depuis le début »: the last 30)
+  const chartStart = startOf(now, days && days <= 30 ? days : 30)!;
+  const byDay = new Map<string, { meta: number; tiktok: number }>();
+  for (let t = chartStart; t <= now; t += DAY) byDay.set(dayOf(t), { meta: 0, tiktok: 0 });
+  for (const r of await db.query(
+    `SELECT to_char(o.created_at + interval '1 hour', 'YYYY-MM-DD') AS d, o.utm->>'px_cat' AS net, count(DISTINCT o.id)::int AS n
+     FROM orders o JOIN order_items i ON i.order_id = o.id AND NOT i.is_upsell
+     WHERE i.product_id = $1 AND o.utm->>'px_cat' IN ('meta', 'tiktok') AND o.conf_status <> 'duplicate' AND o.created_at >= $2
+     GROUP BY 1, 2`,
+    [productId, iso(new Date(chartStart))],
+  )) {
+    const d = byDay.get(String(r.d));
+    if (d) d[r.net as Net] += num(r.n);
+  }
+  const now_ = p.page?.price ?? p.price;
+  const st = adStateOf(p, w.guard, w.demo, (await wanted(db)).includes(p.id));
+  const pb = problemOf(p, w.demo);
+  return {
+    id: p.id,
+    name: p.name,
+    thumb: thumbOf(ctx, p),
+    /** where it is in the ads (« fix » / « off »: not in them, whatever its stock) */
+    state: st.state,
+    problem: pb === 'nopage' || pb === 'photo' ? pb : null,
+    price: now_,
+    oldPrice: p.page?.oldPrice && p.page.oldPrice > now_ ? p.page.oldPrice : null,
+    numbers: (await numbersOf(db, start, productId)).get(productId) ?? zero(),
+    daily: [...byDay].map(([day, v]) => ({ day, ...v })),
+    tracked: p.tracked,
+    variants: p.variants.map((v) => ({ id: v.id, title: v.title, left: v.left, why: hiddenWhy(p, v, w.guard) })),
+    /** its own level (null: the shop's) */
+    level: p.level,
+    guard: w.guard,
   };
 }
 
@@ -913,6 +1158,30 @@ export const metacatalogProcs = {
       await ttPatch(db, { error });
       return { on: true, sent: 0, error };
     }
+  }),
+
+  /** « Résultats »: what the catalog ads brought these last days (0: since the start), product by product. */
+  'metacatalog.results': proc([...ROLES], z.object({ days: z.union([z.literal(7), z.literal(30), z.literal(0)]).default(7) }), (ctx, i) => results(ctx, i.days)),
+
+  /** One product of « Résultats »: its numbers, its orders day by day, its colours / sizes and its « stock bas » level. */
+  'metacatalog.product': proc([...ROLES], z.object({ id, days: z.union([z.literal(7), z.literal(30), z.literal(0)]).default(7) }), (ctx, i) => productStats(ctx, i.id, i.days)),
+
+  /** The shop's « stock bas » rule: on or off, and how many left (or fewer) takes a colour / size out of the ads. */
+  'metacatalog.guard': proc([...ROLES], z.object({ on: z.boolean(), min: z.number().int().min(0).max(999) }), async (ctx, i) => {
+    await ctx.db.query(`INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [GUARD_KEY, JSON.stringify({ on: i.on, min: i.min })]);
+    // the preview has no background job: what moved goes at once (the server sends it within a few minutes)
+    if (simulated(ctx)) await runCatalog(ctx);
+    return { on: i.on, min: i.min };
+  }),
+
+  /** A product's own « stock bas » level (null: the shop's). */
+  'metacatalog.productGuard': proc([...ROLES], z.object({ id, level: z.number().int().min(0).max(999).nullable() }), async (ctx, i) => {
+    const p = (await ctx.db.query(`SELECT id FROM products WHERE id = $1`, [i.id]))[0];
+    if (!p) throw notFound('Produit introuvable');
+    if (i.level === null) await ctx.db.query(`DELETE FROM catalog_guard WHERE product_id = $1`, [i.id]);
+    else await ctx.db.query(`INSERT INTO catalog_guard (product_id, min_left) VALUES ($1, $2) ON CONFLICT (product_id) DO UPDATE SET min_left = EXCLUDED.min_left`, [i.id, i.level]);
+    if (simulated(ctx)) await runCatalog(ctx);
+    return { level: i.level };
   }),
 
   /** A JPEG copy of a page's picture, made by the browser (Meta and TikTok take no WebP). */

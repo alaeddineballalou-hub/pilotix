@@ -152,6 +152,9 @@ export const NOT_REFS: readonly string[] = [
   // and TikTok's
   'tiktok_catalog_items.product_id',
   'tiktok_catalog_items.variant_id',
+  // the catalog ads' visits and a product's own « stock bas » level go with the product
+  'catalog_visits.product_id',
+  'catalog_guard.product_id',
   'stock.variant_id',
   'stock.warehouse_id',
   'spy_watch.product_id',

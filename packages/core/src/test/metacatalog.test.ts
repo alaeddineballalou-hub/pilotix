@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { call } from '../index';
 import { setRaw, META_TOKEN_KEY } from '../modules/admin';
-import { hashOf, itemsOf, noEmoji, plainText, problemOf, ttItemsOf } from '../modules/metacatalog';
+import { GUARD_DEFAULTS, hashOf, hiddenWhy, itemsOf, levelOf, noEmoji, plainText, problemOf, ttItemsOf } from '../modules/metacatalog';
 import { AppError } from '../rpc';
 import { ttCatalogError, ttLogOf, TT_NO_REGION } from '../social-server';
 import { EMAILS, setup } from './harness';
@@ -33,11 +33,13 @@ test('plain text, the lines of a product and the fingerprint', () => {
       ],
     },
     variants: [
-      { id: 20, title: 'Gris', price: null, stock: 4 },
-      { id: 21, title: 'Rose', price: null, stock: 0 },
+      { id: 20, title: 'Gris', price: null, left: 4 },
+      { id: 21, title: 'Rose', price: null, left: 0 },
     ],
+    tracked: true,
+    level: null,
   };
-  const w = { pages: 'https://go.test', store: 'bebe', api: 'https://pilotix.test/api', brand: 'Bébé Confort', demo: false };
+  const w = { pages: 'https://go.test', store: 'bebe', api: 'https://pilotix.test/api', brand: 'Bébé Confort', demo: false, guard: GUARD_DEFAULTS };
   const items = itemsOf(p, w);
   assert.equal(items.length, 2);
   const [gris, rose] = items.map((x) => x.data as any);
@@ -50,7 +52,8 @@ test('plain text, the lines of a product and the fingerprint', () => {
   assert.equal(rose.availability, 'out of stock');
   assert.equal(gris.color, 'Gris');
   assert.equal(gris.size, undefined);
-  assert.equal(gris.link, 'https://go.test/bebe/poussette');
+  // the link says it is a catalog ad (its visits and orders are counted)
+  assert.equal(gris.link, 'https://go.test/bebe/poussette?px_cat=meta');
   assert.equal(gris.brand, 'Bébé Confort');
   assert.equal(gris.description, 'Légère\n• 6 kg');
   // the small picture never goes; the pink one comes first for « Rose »
@@ -78,9 +81,21 @@ test('plain text, the lines of a product and the fingerprint', () => {
   assert.equal(tt[0].image_url, 'https://pilotix.test/api/lp/img/3/meta.jpg');
   assert.deepEqual(tt[0].additional_image_urls, ['https://pilotix.test/api/lp/img/4/meta.jpg']);
   assert.equal(tt[1].image_url, 'https://pilotix.test/api/lp/img/4/meta.jpg');
-  assert.deepEqual(tt[0].landing_page, { landing_page_url: 'https://go.test/bebe/poussette' });
+  assert.deepEqual(tt[0].landing_page, { landing_page_url: 'https://go.test/bebe/poussette?px_cat=tiktok' });
   assert.equal(tt[0].brand, 'Bébé Confort');
   assert.equal(noEmoji('Promo 🇩🇿 ✅ تخفيض 👶🏽'), 'Promo تخفيض');
+  // « stock bas »: 3 or fewer left (the shop's level), or the product's own; a product whose stock is not counted always goes
+  assert.deepEqual(GUARD_DEFAULTS, { on: true, min: 3 });
+  assert.equal(hiddenWhy(p, { left: 4 }, GUARD_DEFAULTS), null);
+  assert.equal(hiddenWhy(p, { left: 3 }, GUARD_DEFAULTS), 'low');
+  assert.equal(hiddenWhy(p, { left: 0 }, GUARD_DEFAULTS), 'out');
+  assert.equal(hiddenWhy({ ...p, level: 10 }, { left: 8 }, GUARD_DEFAULTS), 'low');
+  assert.equal(hiddenWhy({ ...p, level: 10 }, { left: 8 }, { on: false, min: 3 }), null);
+  assert.equal(levelOf({ level: null }, { on: false, min: 3 }), 0);
+  assert.equal(hiddenWhy({ ...p, tracked: false }, { left: 0 }, GUARD_DEFAULTS), null);
+  const low = itemsOf({ ...p, variants: [{ id: 20, title: 'Gris', price: null, left: 2 }, { id: 21, title: 'Rose', price: null, left: 9 }] }, w).map((x) => x.data as any);
+  assert.deepEqual(low.map((x) => x.availability), ['out of stock', 'in stock']);
+  assert.equal(ttItemsOf({ ...p, tracked: false }, w)[1].data.availability, 'IN_STOCK');
   // TikTok's answers in plain words
   assert.match(ttCatalogError(40105, 'x').message, /Reliez TikTok/);
   assert.match(ttCatalogError(40001, 'x').message, /Catalog Management/);
@@ -230,7 +245,7 @@ test('server: the catalog is made once, only what changed goes, product sets, Me
   assert.equal(d.item_group_id, String(pid));
   assert.equal(d.price, '2900 DZD');
   assert.equal(d.size, '0-3 mois');
-  assert.match(d.link, /^https:\/\/go\.pilotix\.test\/.+\/ensemble-bebe-3-pieces$/);
+  assert.match(d.link, /^https:\/\/go\.pilotix\.test\/.+\/ensemble-bebe-3-pieces\?px_cat=meta$/);
   assert.equal(d.image[0].url, `https://pilotix.test/api/lp/img/${img}/meta.jpg`);
   assert.deepEqual(calls[2].args.ids.length, 3);
   assert.equal((await db.query(`SELECT set_id FROM meta_catalog_lists WHERE id = $1`, [list.id]))[0].set_id, 'set1');
@@ -355,7 +370,7 @@ test('server: the same lists on TikTok — its catalog, products, sets, answers,
   assert.deepEqual(d.price_info, { price: 2900, currency: 'DZD' });
   assert.equal(d.product_detail.size, '0-3 mois');
   assert.equal(d.image_url, `https://pilotix.test/api/lp/img/${img}/meta.jpg`);
-  assert.match(d.landing_page.landing_page_url, /^https:\/\/go\.pilotix\.test\/.+\/ensemble-bebe-3-pieces$/);
+  assert.match(d.landing_page.landing_page_url, /^https:\/\/go\.pilotix\.test\/.+\/ensemble-bebe-3-pieces\?px_cat=tiktok$/);
   assert.deepEqual(calls[1].args.groupIds, [String(pid)]);
   assert.equal(calls[1].args.setId, null);
   let l = (await db.query(`SELECT * FROM meta_catalog_lists WHERE id = $1`, [list.id]))[0];
@@ -429,4 +444,129 @@ test('server: the same lists on TikTok — its catalog, products, sets, answers,
   calls.length = 0;
   await call('metacatalog.listRemove', mk, { id: list.id });
   assert.deepEqual(calls.filter((c) => c.action === 'ttCatalogSetDelete').map((c) => c.args.setId), ['ttset1']);
+});
+
+test('résultats: visits and orders from the catalog ads, « stock bas » (the shop\u2019s level, a product\u2019s own, off), stock not counted', async () => {
+  const { db, as } = await setup(120);
+  const mk = await as(EMAILS.marketer);
+  const admin = await as(EMAILS.admin);
+  const pid = async (sku: string) => Number((await db.query(`SELECT id FROM products WHERE sku = $1`, [sku]))[0].id);
+  const pou = await pid('PX-POU');
+  // the demo: a month of catalog ads, the baby set with its own level (30)
+  let r: any = await call('metacatalog.results', mk, { days: 30 });
+  assert.ok(r.totals.visits > 0 && r.totals.orders > 0);
+  assert.equal(r.totals.meta.orders + r.totals.tiktok.orders, r.totals.orders);
+  assert.ok(r.since);
+  assert.deepEqual(r.guard, { on: true, min: 3 });
+  const ensId = await pid('PX-ENS');
+  assert.ok(r.hidden.some((h: any) => h.productId === ensId && h.why === 'low' && h.level === 30 && h.variant === '3-6 mois'));
+  assert.ok(r.products.every((p: any, i: number, a: any[]) => i === 0 || a[i - 1].cash >= p.cash), 'by money');
+  // a clean count: two visits from a Meta catalog ad and one from TikTok, today
+  await db.query(`DELETE FROM catalog_visits`);
+  await db.query(`UPDATE orders SET utm = utm - 'px_cat' WHERE utm ? 'px_cat'`);
+  const slug = String((await db.query(`SELECT slug FROM landing_pages WHERE product_id = $1 AND active ORDER BY id LIMIT 1`, [pou]))[0].slug);
+  for (const catalog of ['meta', 'meta', 'tiktok']) await call('landing.html', admin, { slug, mode: 'live', catalog });
+  await call('landing.html', admin, { slug, mode: 'live' });
+  await call('landing.html', admin, { slug, mode: 'preview', catalog: 'meta' });
+  // three orders: one delivered (2 strollers at 9 950), one waiting, one duplicate (not counted)
+  const ords = (
+    await db.query(`SELECT DISTINCT o.id FROM orders o JOIN order_items i ON i.order_id = o.id AND NOT i.is_upsell WHERE i.product_id = $1 AND (SELECT count(*) FROM order_items x WHERE x.order_id = o.id) = 1 ORDER BY o.id LIMIT 3`, [pou])
+  ).map((x: any) => Number(x.id));
+  assert.equal(ords.length, 3);
+  await db.query(`UPDATE orders SET created_at = now() - interval '1 day', utm = jsonb_build_object('px_cat', 'meta'), conf_status = 'confirmed', follow_status = 'delivered' WHERE id = $1`, [ords[0]]);
+  await db.query(`UPDATE order_items SET qty = 2, unit_price = 9950 WHERE order_id = $1`, [ords[0]]);
+  await db.query(`UPDATE orders SET created_at = now() - interval '2 days', utm = jsonb_build_object('px_cat', 'tiktok'), conf_status = 'new', follow_status = NULL WHERE id = $1`, [ords[1]]);
+  await db.query(`UPDATE orders SET created_at = now() - interval '2 days', utm = jsonb_build_object('px_cat', 'meta'), conf_status = 'duplicate' WHERE id = $1`, [ords[2]]);
+  r = await call('metacatalog.results', mk, { days: 7 });
+  const p = r.products.find((x: any) => x.id === pou);
+  assert.deepEqual([p.visits, p.meta.visits, p.tiktok.visits], [3, 2, 1]);
+  assert.deepEqual([p.orders, p.delivered, p.cash, p.meta.orders, p.tiktok.orders], [2, 1, 19900, 1, 1]);
+  assert.equal(r.products[0].id, pou);
+  assert.deepEqual([r.totals.visits, r.totals.orders, r.totals.cash], [3, 2, 19900]);
+  // a product's page: its orders day by day
+  const one: any = await call('metacatalog.product', mk, { id: pou, days: 7 });
+  assert.equal(one.daily.length, 7);
+  assert.equal(one.daily.reduce((n: number, d: any) => n + d.meta + d.tiktok, 0), 2);
+  assert.equal(one.numbers.orders, 2);
+  assert.equal((await call('metacatalog.product', mk, { id: pou, days: 0 }) as any).daily.length, 30);
+  // « stock bas »: the navy stroller has 2 left (nothing promised): out of the ads, the others stay
+  const navy = Number((await db.query(`SELECT id FROM product_variants WHERE product_id = $1 AND title = 'Bleu marine'`, [pou]))[0].id);
+  await db.query(`UPDATE stock SET qty = 2 WHERE variant_id = $1`, [navy]);
+  r = await call('metacatalog.results', mk, { days: 7 });
+  assert.equal(r.products.find((x: any) => x.id === pou).state, 'some');
+  assert.deepEqual(r.hidden.filter((h: any) => h.productId === pou).map((h: any) => [h.variant, h.left, h.why, h.level]), [['Bleu marine', 2, 'low', 3]]);
+  assert.equal(((await call('metacatalog.board', mk, {})) as any).products.find((x: any) => x.id === pou).hidden, 1);
+  // its own level (1): it stays in the ads; the shop's rule off: nothing hidden for little stock
+  await call('metacatalog.productGuard', mk, { id: pou, level: 1 });
+  r = await call('metacatalog.results', mk, { days: 7 });
+  assert.equal(r.products.find((x: any) => x.id === pou).state, 'ads');
+  await call('metacatalog.productGuard', mk, { id: pou, level: null });
+  await call('metacatalog.guard', mk, { on: false, min: 3 });
+  r = await call('metacatalog.results', mk, { days: 7 });
+  assert.equal(r.products.find((x: any) => x.id === pou).state, 'ads');
+  assert.ok(r.hidden.every((h: any) => h.why === 'out'));
+  await call('metacatalog.guard', mk, { on: true, min: 3 });
+  // a product whose stock is not counted (no stock line): always in the ads
+  const sac = await pid('PX-SAC');
+  await db.query(`DELETE FROM stock WHERE variant_id IN (SELECT id FROM product_variants WHERE product_id = $1)`, [sac]);
+  r = await call('metacatalog.results', mk, { days: 7 });
+  const sp = r.products.find((x: any) => x.id === sac);
+  assert.deepEqual([sp.left, sp.state], [null, 'ads']);
+  await assert.rejects(call('metacatalog.guard', mk, { on: true, min: -1 }));
+  await assert.rejects(call('metacatalog.results', await as(EMAILS.conf), { days: 7 }));
+});
+
+test('server: a colour that runs low leaves the ads even in a list not « mise à jour toute seule », and comes back', async () => {
+  const { db, as } = await setup(120);
+  const calls: { action: string; args: any }[] = [];
+  const server: any = {
+    publicUrl: 'https://pilotix.test',
+    publicApi: 'https://pilotix.test/api',
+    pagesUrl: () => 'https://go.pilotix.test',
+    courier: async () => null,
+    hashPassword: async (x: string) => x,
+    meta: async (action: string, args: any) => {
+      calls.push({ action, args });
+      if (action === 'catalogSetup') return { catalogId: 'cat1', businessId: 'b1', businessName: 'Ma boutique', pixelsLinked: true };
+      if (action === 'catalogBatch') return { handle: `h${calls.length}`, errors: [] };
+      if (action === 'catalogSet') return { setId: args.setId ?? 'set1' };
+      if (action === 'catalogStatus') return { done: true, errors: [] };
+      return { ok: true };
+    },
+  };
+  const mk = await as(EMAILS.marketer, server);
+  const admin = await as(EMAILS.admin, server);
+  await db.query(`DELETE FROM meta_catalog_lists`);
+  await db.query(`DELETE FROM meta_catalog_items`);
+  await db.query(`DELETE FROM settings WHERE key IN ('metacatalog', 'ttcatalog')`);
+  await setRaw(db, META_TOKEN_KEY, 'tok');
+  await setRaw(db, 'meta', { adAccountId: '123', hasToken: true });
+  const pid = Number((await db.query(`SELECT id FROM products WHERE sku = 'PX-ENS'`))[0].id);
+  await db.query(`DELETE FROM catalog_guard`);
+  const img = Number((await db.query(`INSERT INTO landing_images (w, h, t160, w480, w960, jpg) VALUES (900, 900, 'x', 'y', 'z', $1) RETURNING id`, [JPEG]))[0].id);
+  await db.query(`UPDATE landing_pages SET images = $2 WHERE product_id = $1`, [pid, JSON.stringify([{ id: img }])]);
+  const list: any = await call('metacatalog.listSave', mk, { name: 'Bébé' });
+  await call('metacatalog.add', mk, { listId: list.id, productId: pid });
+  await call('metacatalog.listAuto', mk, { id: list.id, on: false });
+  await call('metacatalog.send', mk, { id: list.id });
+  assert.equal((await db.query(`SELECT count(*)::int AS n FROM meta_catalog_items WHERE product_id = $1 AND in_stock`, [pid]))[0].n, 3);
+  // nothing moved: nothing goes
+  calls.length = 0;
+  await call('metacatalog.run', admin, {});
+  assert.deepEqual(calls.filter((c) => c.action === 'catalogBatch'), []);
+  // 0-3 mois: 2 left
+  const v = Number((await db.query(`SELECT id FROM product_variants WHERE product_id = $1 AND title = '0-3 mois'`, [pid]))[0].id);
+  const before = Number((await db.query(`SELECT qty FROM stock WHERE variant_id = $1`, [v]))[0].qty);
+  await db.query(`UPDATE stock SET qty = 2 WHERE variant_id = $1`, [v]);
+  calls.length = 0;
+  await call('metacatalog.run', admin, {});
+  const sentNow = calls.filter((c) => c.action === 'catalogBatch').flatMap((c) => c.args.requests);
+  assert.equal(sentNow.find((x: any) => x.data.id === `${pid}-${v}`).data.availability, 'out of stock');
+  assert.equal((await db.query(`SELECT in_stock FROM meta_catalog_items WHERE retailer_id = $1`, [`${pid}-${v}`]))[0].in_stock, false);
+  // the stock comes back: so does it
+  await db.query(`UPDATE stock SET qty = $2 WHERE variant_id = $1`, [v, before]);
+  calls.length = 0;
+  await call('metacatalog.run', admin, {});
+  const back = calls.filter((c) => c.action === 'catalogBatch').flatMap((c) => c.args.requests);
+  assert.equal(back.find((x: any) => x.data.id === `${pid}-${v}`).data.availability, 'in stock');
 });

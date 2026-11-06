@@ -96,7 +96,7 @@ export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; re
         )}
       </div>
       {/* AI Spy: the same page as on a computer, in one column */}
-      {tab === 'pub' ? noSpy ? <Pub /> : <PubHub rest={rest} pro={<Pub />} /> : tab === 'spy' ? <Spy rest={rest} /> : tab === 'forms' ? <Formulaires /> : tab === 'camps' ? <Campagnes /> : tab === 'cat' ? <Catalogue /> : <Marketeurs />}
+      {tab === 'pub' ? noSpy ? <Pub /> : <PubHub rest={rest} pro={<Pub />} /> : tab === 'spy' ? <Spy rest={rest} /> : tab === 'forms' ? <Formulaires /> : tab === 'camps' ? <Campagnes /> : tab === 'cat' ? <Catalogue rest={rest} /> : <Marketeurs />}
     </div>
   );
 }

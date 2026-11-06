@@ -1275,8 +1275,13 @@ class ApiController {
       const base = `${own?.api ?? apiOf(ref, atPages ? config.landingUrl : config.publicUrl)}/lp/`;
       // opened from a group page (?g=<group>): the product page shows « back to all the products »
       const g = /[?&]g=([a-z0-9-]{2,60})(?:&|$)/.exec(String(req.url ?? ''))?.[1];
+      // opened from a catalog ad (?px_cat=meta|tiktok, Marketing › Catalogue): a visit for its « Résultats »; Meta's and
+      // TikTok's robots that check an ad's page are no visits
+      const cat = /[?&]px_cat=(meta|tiktok)(?:&|$)/.exec(String(req.url ?? ''))?.[1];
+      const robot = /facebookexternalhit|facebot|meta-externalagent|bytespider|bot\b|crawler|spider|headless/i.test(String(req.headers['user-agent'] ?? ''));
       const r: any = await this.core.call(ref, 'landing.html', await this.core.systemSession(ref), {
         slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, geo: `${base}geo/`, imgBase: `${base}img/`, site: atPages ? config.landingUrl : this.core.landingBase(), ...(own ? { url: own.url } : {}), ...(g ? { group: g } : {}),
+        ...(cat && !robot ? { catalog: cat } : {}),
       });
       res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store');
       // the main photo asked for as soon as these headers arrive, before the page itself
