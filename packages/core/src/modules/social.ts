@@ -71,6 +71,13 @@ export const SOCIAL = {
     'ads_management',
     // Marketing › Catalogue: the shop's catalog and its product sets (lists)
     'catalog_management',
+    // the CM plan: publish photos, videos and reels on the Page and on Instagram, delete them, read their numbers
+    'pages_manage_posts',
+    'publish_video',
+    'instagram_content_publish',
+    'instagram_manage_contents',
+    'read_insights',
+    'instagram_manage_insights',
   ],
   /** what each Page sends to Pilotix's webhook */
   pageFields: 'messages,messaging_postbacks,messaging_referrals,message_edits,message_reactions,feed',
