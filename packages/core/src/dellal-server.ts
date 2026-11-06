@@ -110,13 +110,8 @@ export function chunks(text: string, max: number): string[] {
   return out;
 }
 
-/**
- * Meta's « human agent » tag: a person's answer 24 hours to 7 days after the customer's last message (Messenger and
- * Instagram; never Dellal's own). Anything else is refused here, so no other tag goes out by mistake.
- */
-const humanTag = (tag: unknown) => (tag === 'HUMAN_AGENT' ? { messaging_type: 'MESSAGE_TAG', tag: 'HUMAN_AGENT' } : null);
-
-async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; accountId?: string | null; text: string; tag?: string }) {
+/** An answer within Meta's 24 hours (Messenger and Instagram): never with a message tag. */
+async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; accountId?: string | null; text: string }) {
   if (a.channel === 'whatsapp') {
     const token = await dellalSecret(ctx.db, 'waToken');
     const phoneId = a.accountId || (await ctx.db.query(`SELECT value->>'whatsappPhoneId' AS v FROM settings WHERE key = 'dellal'`))[0]?.v;
@@ -133,7 +128,7 @@ async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; a
         const s = await dellalSettings(ctx.db);
         const url = s.igLoginKind === 'unified' && s.instagramLoginId ? `${UNI_GRAPH}/${enc(s.instagramLoginId)}/messages` : `${IG_GRAPH}/me/messages`;
         let mid: string | null = null;
-        for (const t of chunks(a.text, 1000)) mid = midOf(await postJson(url, { recipient: { id: a.externalId }, ...humanTag(a.tag), message: { text: t } }, { Authorization: `Bearer ${ig}` }, 'Instagram')) ?? mid;
+        for (const t of chunks(a.text, 1000)) mid = midOf(await postJson(url, { recipient: { id: a.externalId }, message: { text: t } }, { Authorization: `Bearer ${ig}` }, 'Instagram')) ?? mid;
         return { ok: true, via: s.igLoginKind === 'unified' ? 'unified' : 'instagram', messageId: mid };
       } catch (e) {
         // the Page can still answer someone with a role on the app; otherwise the Instagram login's reason is the one that counts
@@ -158,7 +153,7 @@ async function sendPage(ctx: Ctx, a: { channel: DellalChannel; externalId: strin
   // the last piece's message id: the customer's reaction (❤️ 👍) to it finds it again
   let mid: string | null = null;
   for (const t of chunks(a.text, 1900))
-    mid = midOf(await postJson(`${GRAPH}/me/messages?access_token=${encodeURIComponent(token)}`, { recipient: { id: a.externalId }, ...(humanTag(a.tag) ?? { messaging_type: 'RESPONSE' }), message: { text: t } }, {}, a.channel === 'instagram' ? 'Instagram' : 'Messenger')) ?? mid;
+    mid = midOf(await postJson(`${GRAPH}/me/messages?access_token=${encodeURIComponent(token)}`, { recipient: { id: a.externalId }, messaging_type: 'RESPONSE', message: { text: t } }, {}, a.channel === 'instagram' ? 'Instagram' : 'Messenger')) ?? mid;
   return { ok: true, messageId: mid };
 }
 const midOf = (r: any): string | null => (r?.message_id ? String(r.message_id).slice(0, 200) : null);

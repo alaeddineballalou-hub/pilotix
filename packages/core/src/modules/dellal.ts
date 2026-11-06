@@ -2400,18 +2400,18 @@ export const dellalProcs = {
   }),
 
   /**
-   * A person writes to the customer: Dellal pauses on this conversation. On Messenger and Instagram, 24 hours after the
-   * customer's last message only a person may answer, with Meta's « human agent » tag, and only until 7 days.
+   * A person writes to the customer: Dellal pauses on this conversation. On Messenger and Instagram nobody can answer
+   * more than 24 hours after the customer's last message, until the customer writes again.
    */
   'dellal.reply': proc([...SELLERS], z.object({ id, body: z.string().trim().min(1).max(2000) }), async (ctx, i) => {
     const conv = await getConv(ctx.db, i.id);
     const win = replyWindow(conv.channel, conv.lastCustomerAt, ctx.now());
-    if (win === 'closed') throw new AppError('bad_request', 'Plus de 7 jours depuis le dernier message du client : Meta ne permet plus de lui répondre ici. Vous pourrez répondre dès qu’il écrira à nouveau.');
+    if (win === 'closed') throw new AppError('bad_request', 'Plus de 24 heures depuis le dernier message du client : Meta ne permet plus de lui répondre ici. Vous pourrez répondre dès qu’il écrira à nouveau.');
     let sendError: string | null = null;
     let sentId: string | null = null;
     if (conv.channel !== 'test' && ctx.server?.dellal) {
       try {
-        sentId = sentMid(await ctx.server.dellal('send', { conversationId: conv.id, channel: conv.channel, externalId: conv.externalId, accountId: (await rawConv(ctx.db, conv.id)).account_id, text: i.body, ...(win === 'human' ? { tag: 'HUMAN_AGENT' } : {}) }, ctx));
+        sentId = sentMid(await ctx.server.dellal('send', { conversationId: conv.id, channel: conv.channel, externalId: conv.externalId, accountId: (await rawConv(ctx.db, conv.id)).account_id, text: i.body }, ctx));
       } catch (e: any) {
         sendError = e?.message ?? 'Envoi impossible';
       }
