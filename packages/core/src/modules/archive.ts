@@ -82,6 +82,10 @@ export const USER_REFS: readonly Ref[] = [
   ['ad_launches', 'by_user', 'marketing'],
   ['ad_launches', 'approved_by', 'marketing'],
   ['ad_suggestions', 'decided_by', 'marketing'],
+  // Influenceurs: who asked a creator; Demander: who asked Pilot AI, who said yes to its change
+  ['ad_partners', 'requested_by', 'marketing'],
+  ['ads_asks', 'by_user', 'marketing'],
+  ['ads_asks', 'decided_by', 'marketing'],
   ['landing_pages', 'created_by', 'pages'],
   ['landing_images', 'created_by', 'pages'],
   ['landing_groups', 'created_by', 'pages'],

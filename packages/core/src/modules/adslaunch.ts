@@ -19,6 +19,7 @@ import { aiKeyed, dellalSettings, PILOT_CHEAP_MODEL, pilotOn, type AiResponse } 
 import { landingStore } from './landingquery';
 import { fieldOf } from './leads';
 import { budgetPacks, CHANNELS, GOAL_META, GOALS, launchProblems, limitOf, metaPlan, type Goal, type LaunchInput, type LaunchMedia } from './pilotads';
+import { contentFor, partnerChoices, partnerFor, USABLE } from './partners';
 import { linkedPage } from './social';
 
 const algDay = (ms: number) => new Date(ms + 3_600_000).toISOString().slice(0, 10);
@@ -136,7 +137,7 @@ async function pixelsOf(ctx: Ctx): Promise<{ id: string; name: string; main: boo
   return pixels;
 }
 
-async function options(ctx: Ctx) {
+async function options(ctx: Ctx, contentId: string | null = null) {
   const today = algDay(ctx.now());
   const rate = (await fxTable(ctx.db))(today.slice(0, 7));
   const page = await pageOf(ctx);
@@ -170,6 +171,9 @@ async function options(ctx: Ctx) {
     phone: last.phone ?? (normalizePhone(shop.savPhone ?? '') ? `+213${normalizePhone(shop.savPhone)!.slice(1)}` : ''),
     privacyUrl: last.privacyUrl ?? '',
     products: await productLimits(ctx),
+    /** Marketing › Influenceurs: the creators an ad in two names may use, and the creator's post to boost when one is chosen */
+    partners: await partnerChoices(ctx.db),
+    boost: contentId ? await contentFor(ctx.db, contentId).then((c) => (c ? { ...c, adCode: undefined, hasCode: !!c.adCode } : null)) : null,
   };
 }
 
@@ -275,6 +279,10 @@ export const LaunchSpec = z.object({
   bid: z.object({ strategy: z.enum(['LOWEST_COST_WITHOUT_CAP', 'COST_CAP', 'LOWEST_COST_WITH_BID_CAP']), usd: z.number().positive().max(10_000).nullable() }).nullable().default(null),
   start: z.string().datetime({ offset: true }).nullable().default(null),
   pixelId: z.string().regex(/^\d{6,25}$/).nullable().default(null),
+  /** Marketing › Influenceurs: the ad in the shop's name and this creator's */
+  partnerId: z.number().int().positive().nullable().default(null),
+  /** …or this post of the creator, boosted (Instagram media id, or a Facebook post's id) */
+  partnerContentId: z.string().regex(/^[\w.:-]{3,80}$/).nullable().default(null),
 });
 export type LaunchSpec = z.infer<typeof LaunchSpec>;
 
@@ -298,9 +306,11 @@ const view = (r: any) => ({
   approvedBy: r.approved_name ?? null,
   createdAt: new Date(r.created_at).toISOString(),
   liveAt: r.live_at ? new Date(r.live_at).toISOString() : null,
+  partnerId: numOrNull(r.partner_id),
+  partnerName: r.partner_name ?? null,
 });
 async function launchRow(db: Db, id: number) {
-  const r = (await db.query(`SELECT l.*, p.name AS product_name, u.name AS by_name, a.name AS approved_name FROM ad_launches l LEFT JOIN products p ON p.id = l.product_id LEFT JOIN profiles u ON u.id = l.by_user LEFT JOIN profiles a ON a.id = l.approved_by WHERE l.id = $1`, [id]))[0];
+  const r = (await db.query(`SELECT l.*, p.name AS product_name, u.name AS by_name, a.name AS approved_name, pt.name AS partner_name FROM ad_launches l LEFT JOIN products p ON p.id = l.product_id LEFT JOIN profiles u ON u.id = l.by_user LEFT JOIN profiles a ON a.id = l.approved_by LEFT JOIN ad_partners pt ON pt.id = l.partner_id WHERE l.id = $1`, [id]))[0];
   if (!r) throw notFound('Lancement introuvable');
   return r;
 }
@@ -330,7 +340,7 @@ function budgetCents(usd: number, currency: string, rate: number | null): number
 }
 
 /** The launch as Meta will get it, checked: the problems first (nothing goes to Meta while one is left). */
-async function inputOf(ctx: Ctx, r: any): Promise<{ input: LaunchInput; acct: { id: string; currency: string }; media: MediaRow[]; product: ProductLimit | null; excluded: number[] }> {
+async function inputOf(ctx: Ctx, r: any): Promise<{ input: LaunchInput; acct: { id: string; currency: string }; media: MediaRow[]; product: ProductLimit | null; excluded: number[]; boostVideo: boolean }> {
   const spec = LaunchSpec.parse(r.spec);
   const acct = await account(ctx);
   if (!acct) throw bad('Reliez le compte pub Meta de la boutique (Pilot AI › Comptes).');
@@ -371,11 +381,21 @@ async function inputOf(ctx: Ctx, r: any): Promise<{ input: LaunchInput; acct: { 
     bid: spec.bid ? { strategy: spec.bid.strategy, amountCents: spec.bid.usd ? budgetCents(spec.bid.usd, acct.currency, rate) : null } : null,
     start: spec.start,
   };
+  // Marketing › Influenceurs: an ad in two names, or a creator's post boosted
+  const extra: string[] = [];
+  const partner = spec.partnerId ? await partnerFor(ctx.db, spec.partnerId) : null;
+  if (spec.partnerId && !partner) extra.push('Cet influenceur n’est plus dans la liste : choisissez-en un autre.');
+  if (partner && !USABLE.includes(partner.status)) extra.push(`${partner.name} a retiré son accord (ou l’a refusé) : demandez-le à nouveau dans Influenceurs.`);
+  const post = spec.partnerContentId ? await contentFor(ctx.db, spec.partnerContentId) : null;
+  if (spec.partnerContentId && !post) extra.push('Cette publication n’est plus dans la liste : actualisez la page Influenceurs.');
+  if (post && !post.boostable) extra.push(`Meta ne permet pas de booster cette publication${post.errors[0]?.message ? ` : ${post.errors[0].message}` : '.'}`);
+  if (post) input.boost = { platform: post.platform, contentId: post.id, adCode: post.adCode };
+  else if (partner && USABLE.includes(partner.status)) input.partner = { igId: partner.igId, pageId: partner.pageId };
   // a new form is made at launch: until then the plan has its place
-  const problems = launchProblems(spec.goal === 'form' && spec.newForm && !spec.formId ? { ...input, formId: 'new' } : input);
+  const problems = [...extra, ...launchProblems(spec.goal === 'form' && spec.newForm && !spec.formId ? { ...input, formId: 'new' } : input)];
   if (spec.goal === 'form' && !spec.formId && !spec.newForm) problems.push('Choisissez un formulaire, ou faites-en un nouveau.');
   if (problems.length) throw bad(problems.join(' · '));
-  return { input, acct, media, product, excluded: spec.excludeWilayas };
+  return { input, acct, media, product, excluded: spec.excludeWilayas, boostVideo: post?.mediaType === 'VIDEO' };
 }
 
 /** a video in the library: the public address Meta downloads it from (the server only) */
@@ -423,7 +443,7 @@ async function go(ctx: Ctx, id: number, approved = false) {
     if (r.status === 'refused') throw bad('Le propriétaire a refusé ce lancement : faites-en un autre.');
     const s = await pilotSettings(ctx.db);
     if (s.guard.stopped) throw bad('Tout est arrêté par le propriétaire : rien ne démarre avant « Tout relancer ».');
-    const { input, acct, media, product, excluded } = await inputOf(ctx, r);
+    const { input, acct, media, product, excluded, boostVideo } = await inputOf(ctx, r);
     const rate = (await fxTable(ctx.db))(algDay(ctx.now()).slice(0, 7));
     const usd = Number(r.spec.budgetUsd);
     // the shop's spend per day with this one: above the owner's limit, a marketer cannot; the owner is told
@@ -509,7 +529,7 @@ async function go(ctx: Ctx, id: number, approved = false) {
             adIds[n],
             ids[`adset:${a.adset}`],
             String(a.body.name),
-            media[n]?.kind === 'video',
+            input.boost ? boostVideo : media[n]?.kind === 'video',
           ]);
         if (media.length) await tx.query(`UPDATE cm_media SET for_ads = true WHERE id = ANY($1)`, [media.map((m) => m.id)]);
         await tx.query(
@@ -538,6 +558,13 @@ async function ownsShop(db: Db, id: number): Promise<boolean> {
 }
 
 async function saveLaunch(ctx: Ctx, i: { id?: number | null; clientId?: string | null; mode: 'simple' | 'pro'; spec: LaunchSpec }) {
+  // a creator's post: its creator is the launch's creator (their numbers count its orders)
+  if (i.spec.partnerContentId) {
+    const post = await contentFor(ctx.db, i.spec.partnerContentId);
+    if (!post) throw bad('Cette publication n’est plus dans la liste : actualisez la page Influenceurs.');
+    i = { ...i, spec: { ...i.spec, partnerId: i.spec.partnerId ?? post.partnerId, mediaIds: [] } };
+  }
+  if (i.spec.partnerId && !(await partnerFor(ctx.db, i.spec.partnerId))) throw bad('Cet influenceur n’est plus dans la liste.');
   const given = givenOf(ctx);
   if (i.spec.productId && given && !given.has(i.spec.productId)) throw forbidden('Ce produit ne vous est pas confié.');
   if (i.spec.mediaIds.length) {
@@ -551,15 +578,10 @@ async function saveLaunch(ctx: Ctx, i: { id?: number | null; clientId?: string |
     const r = await launchRow(ctx.db, i.id);
     mayOpen(ctx, r);
     if (!['draft', 'failed', 'refused'].includes(r.status)) throw bad('Ce lancement est déjà parti : il ne change plus.');
-    await ctx.db.query(`UPDATE ad_launches SET mode = $2, goal = $3, product_id = $4, name = $5, spec = $6, budget_cents = $7, status = 'draft', error = NULL, updated_at = now() WHERE id = $1`, [
-      i.id,
-      i.mode,
-      i.spec.goal,
-      i.spec.productId,
-      i.spec.name,
-      JSON.stringify(i.spec),
-      usdCents,
-    ]);
+    await ctx.db.query(
+      `UPDATE ad_launches SET mode = $2, goal = $3, product_id = $4, name = $5, spec = $6, budget_cents = $7, partner_id = $8, partner_content_id = $9, status = 'draft', error = NULL, updated_at = now() WHERE id = $1`,
+      [i.id, i.mode, i.spec.goal, i.spec.productId, i.spec.name, JSON.stringify(i.spec), usdCents, i.spec.partnerId, i.spec.partnerContentId],
+    );
     return view(await launchRow(ctx.db, i.id));
   }
   if (i.clientId) {
@@ -567,7 +589,7 @@ async function saveLaunch(ctx: Ctx, i: { id?: number | null; clientId?: string |
     if (seen) return view(await launchRow(ctx.db, num(seen.id)));
   }
   const row = (
-    await ctx.db.query(`INSERT INTO ad_launches (client_id, mode, goal, product_id, name, spec, budget_cents, by_user) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, [
+    await ctx.db.query(`INSERT INTO ad_launches (client_id, mode, goal, product_id, name, spec, budget_cents, by_user, partner_id, partner_content_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`, [
       i.clientId ?? null,
       i.mode,
       i.spec.goal,
@@ -576,6 +598,8 @@ async function saveLaunch(ctx: Ctx, i: { id?: number | null; clientId?: string |
       JSON.stringify(i.spec),
       usdCents,
       me(ctx),
+      i.spec.partnerId,
+      i.spec.partnerContentId,
     ])
   )[0];
   return view(await launchRow(ctx.db, num(row.id)));
@@ -597,13 +621,14 @@ const Id = z.number().int().positive();
 const Lang = z.enum(['darija', 'fr', 'ar']);
 
 export const adsLaunchProcs = {
-  'ads.launch.options': proc(['marketer'], z.object({}), (ctx) => options(ctx)),
+  'ads.launch.options': proc(['marketer'], z.object({ contentId: z.string().max(80).nullable().default(null) }), (ctx, i) => options(ctx, i.contentId)),
   /** the ad's words: three versions and the welcome message (Pilot AI, or ready sentences) */
   'ads.launch.copy': proc(['marketer'], z.object({ productId: Id, goal: z.enum(GOALS), lang: Lang, idea: z.string().max(400).default('') }), (ctx, i) => writeCopy(ctx, i)),
   'ads.launch.save': proc(['marketer'], z.object({ id: Id.nullable().optional(), clientId: z.string().max(64).nullable().optional(), mode: z.enum(['simple', 'pro']), spec: LaunchSpec }), (ctx, i) => saveLaunch(ctx, i)),
   'ads.launch.list': proc(['marketer'], z.object({}), async (ctx) => {
     const rows = await ctx.db.query(
-      `SELECT l.*, p.name AS product_name, u.name AS by_name, a.name AS approved_name FROM ad_launches l LEFT JOIN products p ON p.id = l.product_id LEFT JOIN profiles u ON u.id = l.by_user LEFT JOIN profiles a ON a.id = l.approved_by
+      `SELECT l.*, p.name AS product_name, u.name AS by_name, a.name AS approved_name, pt.name AS partner_name FROM ad_launches l LEFT JOIN products p ON p.id = l.product_id LEFT JOIN profiles u ON u.id = l.by_user
+       LEFT JOIN profiles a ON a.id = l.approved_by LEFT JOIN ad_partners pt ON pt.id = l.partner_id
        WHERE ($1::bigint IS NULL OR l.by_user = $1) ORDER BY l.id DESC LIMIT 60`,
       [isOwner(ctx) ? null : me(ctx)],
     );

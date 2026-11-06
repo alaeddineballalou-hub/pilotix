@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { getSetting } from './settings';
 import { getRaw, META_TOKEN_KEY } from './modules/admin';
 import type { LaunchPlan } from './modules/pilotads';
+import { withMcp } from './metamcp';
 import { AppError, Ctx } from './rpc';
 
 /** Meta's current Marketing API (v21.0 ended for ads on 9 Sep 2025; v26.0 came out on 29 Jul 2026). */
@@ -275,6 +276,120 @@ async function runCatalog(action: string, args: any, token: string, acts: string
   throw new AppError('bad_request', `Action Meta inconnue : ${action}`);
 }
 
+// ---------------------------------------------------------------- Marketing › Influenceurs (partnership ads)
+/** What Pilotix reads of each creator's post that tags the shop (Meta's Advertisable Content API). */
+const CONTENT_FIELDS =
+  'content_id,platform,media_type,post_type,caption,permalink,creation_time,author{display_name,ig_user_id,fb_page_id,profile_picture_url},ad_usage,is_recommended,' +
+  'partnership_info{ad_eligibility,permission_status,permission_type,ad_code,content_types,eligibility_errors},organic_insights{likes,comments,views,reach,shares,saves}';
+
+/** Meta's partnership errors, said to the seller. */
+function partnerError(e: any, fallback: string): AppError {
+  const code = Number(e?.code);
+  if (code === 190) return new AppError('bad_request', 'Le compte Meta n’est plus relié : reliez-le à nouveau dans Pilot AI › Comptes.');
+  if (code === 10 || code === 3 || (code >= 200 && code < 300))
+    return new AppError('bad_request', 'Meta refuse : Pilotix n’a pas encore la permission des pubs avec des influenceurs. Reliez Meta à nouveau (Pilot AI › Comptes) et acceptez-la.');
+  if (code === 4 || code === 17 || code === 613 || code === 80004) return new AppError('conflict', 'Meta limite les demandes pour l’instant : réessayez dans quelques minutes.');
+  return new AppError('bad_request', `Meta : ${e?.error_user_msg ?? e?.message ?? fallback}`);
+}
+/** A Graph call for partnership ads: GET with the token in the Authorization header, POST with it in the body. */
+async function pcall(path: string, token: string, o: { params?: Record<string, string>; body?: Record<string, unknown> } = {}): Promise<any> {
+  const url = `${GRAPH}/${path}${o.params ? `?${new URLSearchParams(o.params)}` : ''}`;
+  let res: Response;
+  try {
+    res = await fetch(
+      url,
+      o.body
+        ? { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ ...o.body, access_token: token }), signal: AbortSignal.timeout(30_000) }
+        : { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30_000) },
+    );
+  } catch {
+    throw new AppError('bad_request', 'Meta injoignable. Réessayez plus tard.');
+  }
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || data?.error) throw partnerError(data?.error, res.statusText);
+  return data;
+}
+/** The pages of a list (cursor `after`), `max` pages at most. */
+async function pall(path: string, token: string, params: Record<string, string>, max: number): Promise<any[]> {
+  const out: any[] = [];
+  let after: string | null = null;
+  for (let k = 0; k < max; k++) {
+    const r = await pcall(path, token, { params: { ...params, ...(after ? { after } : {}) } });
+    const data = Array.isArray(r?.data) ? r.data : [];
+    out.push(...data);
+    after = r?.paging?.cursors?.after && (r.paging.next || data.length >= Number(params.limit ?? 25)) ? String(r.paging.cursors.after) : null;
+    if (!after || !data.length) break;
+  }
+  return out;
+}
+/** The business that holds the shop's ad account (else its Page): the Advertisable Content API asks through it. */
+async function businessOf(token: string, acts: string[], pageId: string | null): Promise<string | null> {
+  for (const act of acts.slice(0, 3)) {
+    const r = await pcall(act, token, { params: { fields: 'business{id}' } }).catch(() => null);
+    if (r?.business?.id) return String(r.business.id);
+  }
+  if (pageId && /^\d{5,25}$/.test(pageId)) {
+    const r = await pcall(pageId, token, { params: { fields: 'business{id}' } }).catch(() => null);
+    if (r?.business?.id) return String(r.business.id);
+  }
+  return null;
+}
+const igOk = (v: unknown) => /^\d{5,25}$/.test(String(v ?? ''));
+const said = (e: unknown) => String((e as any)?.message ?? e).slice(0, 300);
+
+/**
+ * The partnership actions (the shop's Instagram account `igId` and Page `pageId` come from Pilotix):
+ *  - 'partnerRequest' → { igId, username }: asks the creator for the right to run ads in both names (they say yes in the
+ *    Instagram app)
+ *  - 'partnerRevoke'  → { igId, creatorId?, username? }: that right ends
+ *  - 'partnerSync'    → { igId, pageId }: every request and where it is, and the creators' posts that tag the shop
+ *    (Instagram and Facebook together); each part's error is given back, never thrown
+ *  - 'partnerLookup'  → { igId, pageId, adCode? | permalink? }: one post, by the creator's ad code or its link
+ */
+async function runPartners(action: string, args: any, token: string, acts: string[]): Promise<unknown> {
+  const enc = encodeURIComponent;
+  const ig = igOk(args?.igId) ? String(args.igId) : null;
+  const page = igOk(args?.pageId) ? String(args.pageId) : null;
+  if (action === 'partnerRequest') {
+    if (!ig) throw new AppError('bad_request', 'Reliez le compte Instagram de la boutique (Pilot AI › Comptes).');
+    const r = await pcall(`${enc(ig)}/branded_content_ad_permissions`, token, { body: { creator_instagram_username: String(args.username) } });
+    return { id: r?.id ? String(r.id) : null };
+  }
+  if (action === 'partnerRevoke') {
+    if (!ig) throw new AppError('bad_request', 'Reliez le compte Instagram de la boutique (Pilot AI › Comptes).');
+    const who = igOk(args?.creatorId) ? { creator_instagram_account: String(args.creatorId) } : { creator_instagram_username: String(args?.username ?? '') };
+    await pcall(`${enc(ig)}/branded_content_ad_permissions`, token, { body: { ...who, revoke: true } });
+    return { ok: true };
+  }
+  const where: Record<string, string> = { ...(ig ? { ig_user_id: ig } : {}), ...(page ? { fb_page_id: page } : {}) };
+  if (action === 'partnerSync') {
+    const errors: string[] = [];
+    let permissions: any[] = [];
+    if (ig)
+      permissions = await pall(`${enc(ig)}/branded_content_ad_permissions`, token, { limit: '100' }, 10).catch((e) => {
+        errors.push(said(e));
+        return [];
+      });
+    let content: any[] = [];
+    const business = await businessOf(token, acts, page);
+    if (!business) errors.push('Votre Page n’est pas dans un portefeuille business Meta : ajoutez-la dans Meta Business Suite, puis actualisez.');
+    else if (Object.keys(where).length)
+      content = await pall(`${enc(business)}/partnership-ads-advertisable-content`, token, { ...where, fields: CONTENT_FIELDS, sort_by: 'DATE', limit: '50' }, 4).catch((e) => {
+        errors.push(said(e));
+        return [];
+      });
+    return { permissions, content, errors };
+  }
+  if (action === 'partnerLookup') {
+    const business = await businessOf(token, acts, page);
+    if (!business) throw new AppError('bad_request', 'Votre Page n’est pas dans un portefeuille business Meta : ajoutez-la dans Meta Business Suite.');
+    const one: Record<string, string> = args?.adCode ? { ad_codes: JSON.stringify([String(args.adCode)]) } : { permalinks: JSON.stringify([String(args?.permalink ?? '')]) };
+    const r = await pcall(`${enc(business)}/partnership-ads-advertisable-content`, token, { params: { ...where, ...one, fields: CONTENT_FIELDS } });
+    return { content: Array.isArray(r?.data) ? r.data : [] };
+  }
+  throw new AppError('bad_request', `Action Meta inconnue : ${action}`);
+}
+
 /**
  * Runs one Meta action with the stored connection.
  *  - 'test'      → { name, currency } of the ad account (checks the token)
@@ -293,6 +408,18 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
   const acts = [...new Set((meta.adAccountIds?.length ? meta.adAccountIds : [meta.adAccountId]).map((x) => `act_${String(x).replace(/^act_/, '')}`))];
 
   if (action.startsWith('catalog')) return runCatalog(action, args, token, acts);
+  if (action.startsWith('partner')) return runPartners(action, args, token, acts);
+
+  // ---- Publicité › Demander: Meta's ads MCP server (./metamcp.ts); the shop's own ad accounts only
+  if (action === 'mcpTools') return { tools: await withMcp(token, (s) => s.tools()), accounts: acts };
+  if (action === 'mcpCall') {
+    const a = (args ?? {}) as { name?: string; args?: Record<string, unknown> };
+    if (!a.name || !/^[\w.-]{2,80}$/.test(a.name)) throw new AppError('bad_request', 'Outil Meta invalide');
+    // an id of an ad account that is not the shop's: refused before Meta (the AI acts on this shop's ads only)
+    const text = JSON.stringify(a.args ?? {});
+    for (const m of text.matchAll(/act_(\d{5,25})/g)) if (!acts.includes(`act_${m[1]}`)) throw new AppError('forbidden', 'Ce compte pub n’est pas celui de la boutique.');
+    return withMcp(token, (s) => s.call(a.name!, a.args ?? {}));
+  }
 
   if (action === 'test') {
     const r = await graph(acts[0], { fields: 'name,currency,account_status' }, token);

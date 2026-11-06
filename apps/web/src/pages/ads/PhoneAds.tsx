@@ -16,6 +16,7 @@ import { Spy } from './Spy';
 import { Formulaires } from './Formulaires';
 import { Campagnes } from './Campagnes';
 import { Catalogue } from './Catalogue';
+import { Influenceurs } from './Influenceurs';
 import { featureIsOn } from '../../lib/features';
 import { PubHub } from './pilot/Hub';
 import '../confirmation/phone.css';
@@ -64,10 +65,13 @@ export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; re
   // Campagnes (WhatsApp offers): the same, only the store's own Marketing
   const camps = !noSpy && featureIsOn('marketing/campagnes');
   const cat = !noSpy && featureIsOn('marketing/catalogue');
-  const tab = sub === 'marketer' ? 'mk' : sub === 'spy' && !noSpy ? 'spy' : sub === 'formulaires' && forms ? 'forms' : sub === 'campagnes' && camps ? 'camps' : sub === 'catalogue' && cat ? 'cat' : 'pub';
-  // every tab in sight, nothing slides: one row up to three tabs, 2 x 2 for four, rows of three for five or six
-  const tabCount = 2 + Number(forms) + Number(camps) + Number(cat) + Number(!noSpy);
-  const cols = tabCount <= 3 ? tabCount : tabCount === 4 ? 2 : 3;
+  const infl = !noSpy && featureIsOn('marketing/influenceurs');
+  const tab =
+    sub === 'marketer' ? 'mk' : sub === 'spy' && !noSpy ? 'spy' : sub === 'formulaires' && forms ? 'forms' : sub === 'campagnes' && camps ? 'camps' : sub === 'catalogue' && cat ? 'cat' : sub === 'influenceurs' && infl ? 'infl' : 'pub';
+  // every tab in sight, nothing slides: one row up to three tabs, 2 x 2 for four, rows of three for five to seven (each
+  // name whole), 4 x 2 for eight
+  const tabCount = 2 + Number(forms) + Number(camps) + Number(cat) + Number(infl) + Number(!noSpy);
+  const cols = tabCount <= 3 ? tabCount : tabCount === 4 ? 2 : tabCount === 8 ? 4 : 3;
   return (
     <div className="pxm">
       <div className="pxv-own pxm-tabs" role="tablist" style={{ '--pxm-cols': cols } as CSSProperties}>
@@ -89,6 +93,11 @@ export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; re
             {t('nav.catalogue')}
           </a>
         )}
+        {infl && (
+          <a role="tab" aria-selected={tab === 'infl'} className={tab === 'infl' ? 'on' : ''} href="#/marketing/influenceurs">
+            {t('nav.influenceurs')}
+          </a>
+        )}
         <a role="tab" aria-selected={tab === 'mk'} className={tab === 'mk' ? 'on' : ''} href="#/marketing/marketer">
           {mkLabel ?? t('mkph.marketers')}
         </a>
@@ -99,7 +108,25 @@ export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; re
         )}
       </div>
       {/* AI Spy: the same page as on a computer, in one column */}
-      {tab === 'pub' ? noSpy ? <Pub /> : <PubHub rest={rest} pro={<Pub />} /> : tab === 'spy' ? <Spy rest={rest} /> : tab === 'forms' ? <Formulaires /> : tab === 'camps' ? <Campagnes /> : tab === 'cat' ? <Catalogue rest={rest} /> : <Marketeurs />}
+      {tab === 'pub' ? (
+        noSpy ? (
+          <Pub />
+        ) : (
+          <PubHub rest={rest} pro={<Pub />} />
+        )
+      ) : tab === 'spy' ? (
+        <Spy rest={rest} />
+      ) : tab === 'forms' ? (
+        <Formulaires />
+      ) : tab === 'camps' ? (
+        <Campagnes />
+      ) : tab === 'cat' ? (
+        <Catalogue rest={rest} />
+      ) : tab === 'infl' ? (
+        <Influenceurs />
+      ) : (
+        <Marketeurs />
+      )}
     </div>
   );
 }

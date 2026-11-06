@@ -4,13 +4,15 @@
     "pubs": "My ads",
     "lancer": "Launch an ad",
     "pilote": "Autopilot",
-    "audiences": "Audiences"
+    "audiences": "Audiences",
+    "demander": "Ask Pilot AI"
   },
   "tabShort": {
     "pubs": "My ads",
     "lancer": "Launch",
     "pilote": "Autopilot",
-    "audiences": "Audiences"
+    "audiences": "Audiences",
+    "demander": "Ask"
   },
   "mode": {
     "label": "View",
@@ -66,7 +68,8 @@
     "budget": "« {{name}} »: budget {{from}} → {{to}} a day",
     "copy": "« {{name}} » copied (paused)",
     "launch": "« {{name}} » launched at {{usd}} $ a day",
-    "undo": "« {{name}} »: undone"
+    "undo": "« {{name}} »: undone",
+    "ai": "Pilot AI: {{name}}"
   },
   "simple": {
     "title": "My ads",
@@ -132,7 +135,8 @@
     "rule": "Autopilot",
     "pilot": "Autopilot suggestion",
     "stop_all": "Stop everything",
-    "launch": "Launch an ad"
+    "launch": "Launch an ad",
+    "ask": "Ask (Pilot AI)"
   },
   "st": {
     "done": "Done",
@@ -515,5 +519,24 @@
       "failed": "Error"
     }
   },
-  "ago": "{{d}} ago"
+  "ago": "{{d}} ago",
+  "partner": {
+    "title": "With an influencer",
+    "none": "No influencer",
+    "help": "Pick an influencer: the ad shows your name and theirs, and their followers trust them.",
+    "both": "The ad will run in the names of {{shop}} and {{name}}.",
+    "pending": "{{name}} has not said yes in Instagram yet: the ad waits for their OK to start.",
+    "page": "Meta will ask {{name}} for their OK at the first ad.",
+    "manage": "Manage influencers",
+    "boostTitle": "{{name}}’s post becomes the ad",
+    "boostHelp": "It keeps its video and words; your “Shop now” button and your sales page are added under it.",
+    "boostFb": "A Facebook post is boosted as it is, to be seen.",
+    "cancelBoost": "Make an ad with my photos instead",
+    "check": "Ad in {{name}}’s name too",
+    "checkBoost": "{{name}}’s post is ready",
+    "checkNoBoost": "Post not found: refresh Influencers",
+    "and": "{{a}} and {{b}}",
+    "paid": "Sponsored · Paid partnership",
+    "with": "with {{name}}"
+  }
 }

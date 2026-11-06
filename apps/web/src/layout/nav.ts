@@ -101,7 +101,7 @@ export const NAV: NavItem[] = [
   { id: 'clients', icon: 'users', roles: ['confirmation', 'suivi'] },
   // Publicité (Meta spend face to the orders), Formulaires (the ads' lead forms become orders), Campagnes (WhatsApp offers
   // to the customers who said yes), Marketer (paying marketers), AI Spy (competitors' ads in Algeria)
-  { id: 'marketing', icon: 'megaphone', roles: ['marketer'], subs: ['publicite', 'formulaires', 'campagnes', 'catalogue', 'marketer', 'spy'] },
+  { id: 'marketing', icon: 'megaphone', roles: ['marketer'], subs: ['publicite', 'formulaires', 'campagnes', 'catalogue', 'influenceurs', 'marketer', 'spy'] },
   // a public page per product, and the orders its fake-order check held back (agents restore the real ones)
   { id: 'landing', icon: 'globe', roles: ['marketer', 'confirmation'] },
   { id: 'caisse', icon: 'wallet', roles: [], subs: ['overview', 'due', 'done', 'livreurs', 'journal'] },

@@ -78,6 +78,11 @@ export const SOCIAL = {
     'instagram_manage_contents',
     'read_insights',
     'instagram_manage_insights',
+    // Marketing › Influenceurs: ads in the shop's name and a creator's (partnership ads), on Instagram and on Facebook
+    'instagram_branded_content_ads_brand',
+    'facebook_branded_content_ads_brand',
+    // Publicité › Demander: Pilot AI reads the ads (and proposes changes) through Meta's ads MCP server
+    'ads_mcp_management',
   ],
   /** what each Page sends to Pilotix's webhook */
   pageFields: 'messages,messaging_postbacks,messaging_referrals,message_edits,message_reactions,feed',

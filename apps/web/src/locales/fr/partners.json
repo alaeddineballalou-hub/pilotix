@@ -1,0 +1,125 @@
+{
+  "title": "Influenceurs",
+  "sub": "Des pubs au nom de votre boutique et d’un influenceur : ses abonnés voient son nom, les commandes arrivent chez vous.",
+  "add": "Ajouter un influenceur",
+  "refresh": "Actualiser",
+  "refreshed": "Liste actualisée",
+  "checked": "Actualisé {{d}}",
+  "never": "Pas encore actualisé",
+  "demo": "Démo : rien ne part chez Meta.",
+  "syncError": "Meta a répondu : {{msg}}",
+  "noBrand": "Reliez d’abord la Page Facebook et le compte Instagram de la boutique (Pilot AI › Comptes) : les demandes partent d’eux.",
+  "period": {
+    "label": "Période",
+    "d7": "7 j",
+    "d30": "30 j",
+    "d90": "90 j",
+    "all": "Tout"
+  },
+  "tile": {
+    "partners": "Influenceurs",
+    "partnersSub": "{{ok}} d’accord · {{wait}} en attente",
+    "spend": "Dépensé en pubs",
+    "spendSub_one": "{{count}} pub à deux noms",
+    "spendSub_other": "{{count}} pubs à deux noms",
+    "orders": "Commandes",
+    "ordersSub": "venues de leurs pubs",
+    "delivered": "Livrées",
+    "deliveredSub": "{{cost}} de pub par livrée",
+    "deliveredNone": "pas encore de livrée"
+  },
+  "list": {
+    "title": "Vos influenceurs",
+    "empty": "Pas encore d’influenceur",
+    "emptySub": "Ajoutez son Instagram : il dit oui une fois dans l’app, puis vous lancez des pubs à vos deux noms."
+  },
+  "st": {
+    "pending": "En attente",
+    "approved": "D’accord",
+    "refused": "Refusé",
+    "revoked": "Retiré",
+    "page": "Page Facebook",
+    "code": "Code pub"
+  },
+  "stHelp": {
+    "pending": "Il doit accepter dans l’app Instagram (Réglages › Contenu de marque).",
+    "approved": "Vous pouvez lancer des pubs à vos deux noms.",
+    "refused": "Il a refusé : parlez-lui, puis demandez à nouveau.",
+    "revoked": "Plus de nouvelle pub à son nom.",
+    "page": "Meta lui demande son accord à la première pub.",
+    "code": "Il a donné un code pub pour une publication."
+  },
+  "num": {
+    "ads": "Pubs",
+    "spend": "Dépensé",
+    "orders": "Commandes",
+    "delivered": "Livrées",
+    "perDelivered": "Pub / livrée",
+    "cash": "Rapporté"
+  },
+  "launch": "Lancer une pub avec lui",
+  "more": "Plus",
+  "note": "Note",
+  "notePh": "Prix convenu, numéro, date…",
+  "noteSave": "Enregistrer la note",
+  "noteSaved": "Note enregistrée",
+  "askAgain": "Demander à nouveau",
+  "asked": "Demande envoyée à {{name}}",
+  "remove": "Retirer",
+  "removeQ": "Retirer {{name}} ?",
+  "removeSub": "Plus aucune nouvelle pub à son nom. Les pubs déjà lancées restent dans vos chiffres.",
+  "removed": "{{name}} retiré",
+  "posts": {
+    "title": "Leurs publications qui vous identifient",
+    "sub": "Une publication prête devient une pub en 1 clic : elle garde ses mots et sa vidéo, avec votre bouton « Commander ».",
+    "f": {
+      "all": "Toutes",
+      "ready": "Prêtes",
+      "INSTAGRAM": "Instagram",
+      "FACEBOOK": "Facebook"
+    },
+    "empty": "Pas encore de publication qui identifie la boutique.",
+    "boost": "Booster",
+    "open": "Voir",
+    "elig": {
+      "AD_READY": "Prête",
+      "NEEDS_ATTENTION": "À vérifier",
+      "INELIGIBLE": "Impossible",
+      "EXCLUDED": "Exclue"
+    },
+    "used": "Déjà en pub",
+    "views": "{{n}} vues",
+    "others": "D’autres créateurs vous identifient",
+    "addHim": "Ajouter"
+  },
+  "steps": {
+    "title": "Comment ça marche",
+    "s1": "Ajoutez son Instagram : Pilotix lui envoie la demande.",
+    "s2": "Il dit oui une fois, dans l’app Instagram.",
+    "s3": "Lancez une pub à vos deux noms : vos photos, votre page, son nom.",
+    "s4": "Pilotix compte ses commandes et ses livrées."
+  },
+  "addTitle": "Ajouter un influenceur",
+  "how": {
+    "ig": "Instagram",
+    "page": "Page Facebook",
+    "code": "Code pub"
+  },
+  "igLabel": "Son nom Instagram",
+  "igPh": "@amina.style",
+  "igHelp": "Il reçoit la demande dans l’app Instagram et dit oui une fois : ensuite vous lancez les pubs que vous voulez à vos deux noms.",
+  "pageLabel": "Numéro de sa Page Facebook",
+  "pagePh": "1049…",
+  "pageHelp": "Demandez-le-lui (Page › À propos › Transparence de la Page). Meta lui demande son accord à la première pub.",
+  "codeLabel": "Code pub ou lien de la publication",
+  "codePh": "Code donné par l’influenceur, ou https://www.instagram.com/p/…",
+  "codeHelp": "Pour une seule publication : l’influenceur copie son « code pub » dans Instagram (… › Autorisations de partenariat).",
+  "nameLabel": "Son nom (pour vous)",
+  "noteLabel": "Note (prix, contact…)",
+  "send": "Envoyer la demande",
+  "addPage": "Ajouter la Page",
+  "find": "Chercher la publication",
+  "sent": "Demande envoyée : il doit dire oui dans Instagram",
+  "added": "Influenceur ajouté",
+  "found": "Publication trouvée"
+}

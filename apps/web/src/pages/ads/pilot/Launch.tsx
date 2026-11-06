@@ -2,6 +2,8 @@
 // (who sees it, the wilayas left out, the budget's shape, a test of each photo or video, the bid), with the same
 // preview and checks. Everything goes to Meta PAUSED and is turned on in one go; the owner may want to say yes first.
 // The numbers (what a delivered order may cost, the budgets suggested) come from core (ads.launch.options).
+// Marketing › Influenceurs opens it with a creator (…/lancer/avec/<id>: an ad in the shop's name and the creator's) or
+// with one of the creator's posts (…/lancer/booster/<post id>: the post itself becomes the ad).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, Out, rpc } from '../../../lib/backend';
@@ -52,6 +54,9 @@ interface Draft {
   bid: { strategy: 'LOWEST_COST_WITHOUT_CAP' | 'COST_CAP' | 'LOWEST_COST_WITH_BID_CAP'; usd: number | null } | null;
   start: string | null;
   pixelId: string | null;
+  /** Marketing › Influenceurs: the creator whose name the ad carries too, or whose post is boosted */
+  partnerId: number | null;
+  partnerContentId: string | null;
 }
 const fresh = (): Draft => ({
   id: null,
@@ -80,7 +85,11 @@ const fresh = (): Draft => ({
   bid: null,
   start: null,
   pixelId: null,
+  partnerId: null,
+  partnerContentId: null,
 });
+/** the goals a creator's post may be boosted for (an Instagram post gets the shop's link and button) */
+const BOOST_GOALS: Record<'INSTAGRAM' | 'FACEBOOK', Goal[]> = { INSTAGRAM: ['sales', 'traffic', 'awareness'], FACEBOOK: ['awareness'] };
 const specOf = (d: Draft) => ({
   goal: d.goal,
   productId: d.productId,
@@ -105,20 +114,44 @@ const specOf = (d: Draft) => ({
   bid: d.bid,
   start: d.start,
   pixelId: d.pixelId,
+  partnerId: d.goal === 'engagement' ? null : d.partnerId,
+  partnerContentId: d.goal === 'engagement' ? null : d.partnerContentId,
 });
 const phoneOk = (v: string) => /^\+213[5-7]\d{8}$/.test(v.replace(/\s/g, '')) || /^0[5-7]\d{8}$/.test(v.replace(/\s/g, ''));
 
-export function Launch({ base }: { base: string }) {
+export function Launch({ base, rest }: { base: string; rest?: string[] }) {
   const { t } = useTranslation();
-  const q = useRpc('ads.launch.options', {});
+  // opened from Influenceurs: …/lancer/avec/<creator> or …/lancer/booster/<post>
+  const pre = useMemo(() => {
+    const id = rest?.[2] ? decodeURIComponent(rest[2]) : '';
+    return { partnerId: rest?.[1] === 'avec' && /^\d+$/.test(id) ? Number(id) : null, contentId: rest?.[1] === 'booster' && /^[\w.:-]{3,80}$/.test(id) ? id : null };
+  }, [rest]);
+  const q = useRpc('ads.launch.options', { contentId: pre.contentId });
   const lib = useRpc('ads.media.list', {});
   const [mode, setMode] = useState<'simple' | 'pro'>(() => (store.get('ads-launch-mode') === 'pro' ? 'pro' : 'simple'));
   const [step, setStep] = useState(0);
-  const [d, setD] = useState<Draft>(fresh);
+  const [d, setD] = useState<Draft>(() => ({ ...fresh(), partnerId: pre.partnerId, partnerContentId: pre.contentId }));
   const [done, setDone] = useState<Out<'ads.launch.go'> | null>(null);
   const set = (p: Partial<Draft>) => setD((o) => ({ ...o, ...p }));
   const o = q.data;
   const product = o?.products.find((p) => p.id === d.productId) ?? null;
+  // a creator's post to boost: its creator, and a goal it may be boosted for
+  const boost = d.partnerContentId && o?.boost?.id === d.partnerContentId ? o.boost : null;
+  useEffect(() => {
+    if (!boost) return;
+    const allowed = BOOST_GOALS[boost.platform];
+    setD((x) => ({ ...x, partnerId: boost.partnerId ?? x.partnerId, mediaIds: [], goal: allowed.includes(x.goal) ? x.goal : allowed[0] }));
+  }, [boost?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a creator chosen in Influenceurs, now: the same one here
+  useEffect(() => {
+    if (pre.partnerId) setD((x) => ({ ...x, partnerId: pre.partnerId, partnerContentId: null }));
+    else if (pre.contentId) setD((x) => ({ ...x, partnerContentId: pre.contentId }));
+  }, [pre.partnerId, pre.contentId]);
+  const cancelBoost = () => {
+    set({ partnerContentId: null });
+    location.hash = `${base}/lancer`;
+  };
+  const goalsOf = (all: Goal[]) => (boost ? all.filter((g) => BOOST_GOALS[boost.platform].includes(g)) : all);
   const chooseMode = (m: 'simple' | 'pro') => {
     setMode(m);
     store.set('ads-launch-mode', m);
@@ -138,7 +171,7 @@ export function Launch({ base }: { base: string }) {
       />
     );
   const problems = readiness(t, o, d, product, lib.data ?? []);
-  const props = { o, d, set, product, lib: lib.data ?? [], refetchLib: () => lib.refetch() };
+  const props = { o, d, set, product, lib: lib.data ?? [], refetchLib: () => lib.refetch(), cancelBoost };
   return (
     <div className="pa-launch">
       <div className="pa-launch-head">
@@ -171,7 +204,7 @@ export function Launch({ base }: { base: string }) {
           <div className="pa-wizard-body">
             <div className="pa-wizard-main">
               {step === 0 && <StepProduct {...props} onNext={() => setStep(1)} />}
-              {step === 1 && <StepGoal {...props} goals={SIMPLE_GOALS} />}
+              {step === 1 && <StepGoal {...props} goals={goalsOf(SIMPLE_GOALS)} />}
               {step === 2 && <StepAd {...props} />}
               {step === 3 && <StepBudget {...props} />}
               <div className="pa-nav">
@@ -181,7 +214,7 @@ export function Launch({ base }: { base: string }) {
                   </button>
                 )}
                 {step < 3 ? (
-                  <button type="button" className="btn primary" disabled={!stepOk(step, d, product)} onClick={() => setStep(step + 1)}>
+                  <button type="button" className="btn primary" disabled={!stepOk(step, d, product, !!boost)} onClick={() => setStep(step + 1)}>
                     {t('pilotads.launch.next')}
                   </button>
                 ) : (
@@ -201,7 +234,7 @@ export function Launch({ base }: { base: string }) {
             <section className="card">
               <h3 className="pa-h">{t('pilotads.pro.what')}</h3>
               <StepProduct {...props} compact />
-              <StepGoal {...props} goals={PRO_GOALS} compact />
+              <StepGoal {...props} goals={goalsOf(PRO_GOALS)} compact />
             </section>
             <section className="card">
               <h3 className="pa-h">{t('pilotads.pro.ad')}</h3>
@@ -234,7 +267,8 @@ export function Launch({ base }: { base: string }) {
   );
 }
 
-const stepOk = (step: number, d: Draft, p: P | null) => (step === 0 ? !!p : step === 1 ? true : step === 2 ? !!d.text.primary.trim() && (d.mediaIds.length > 0 || d.goal === 'engagement') : true);
+const stepOk = (step: number, d: Draft, p: P | null, boosting = false) =>
+  step === 0 ? !!p : step === 1 ? true : step === 2 ? boosting || (!!d.text.primary.trim() && (d.mediaIds.length > 0 || d.goal === 'engagement')) : true;
 
 /** What is still missing before « Lancer » (the server checks it again). */
 function readiness(t: (k: string, o?: any) => string, o: Opt, d: Draft, p: P | null, lib: Media[]): { ok: boolean; text: string }[] {
@@ -246,10 +280,14 @@ function readiness(t: (k: string, o?: any) => string, o: Opt, d: Draft, p: P | n
   if (d.goal === 'calls') out.push({ ok: phoneOk(d.phone), text: phoneOk(d.phone) ? t('pilotads.check.phone', { v: d.phone }) : t('pilotads.check.noPhone') });
   if (d.goal === 'messages') out.push({ ok: d.channels.length > 0, text: d.channels.length ? t('pilotads.check.channels', { v: d.channels.map((c) => t(`pilotads.ch.${c}`)).join(' + ') }) : t('pilotads.check.noChannels') });
   if (d.goal === 'form') out.push({ ok: !!d.formId || !!(d.newForm?.privacyUrl && /^https?:\/\//.test(d.newForm.privacyUrl)), text: d.formId || d.newForm?.privacyUrl ? t('pilotads.check.form') : t('pilotads.check.noForm') });
-  if (d.goal !== 'engagement') {
+  const boost = d.partnerContentId && o.boost?.id === d.partnerContentId ? o.boost : null;
+  const partner = o.partners.find((x) => x.id === d.partnerId) ?? null;
+  if (d.partnerContentId) out.push({ ok: !!boost?.boostable, text: boost ? (boost.boostable ? t('pilotads.partner.checkBoost', { name: partner?.name ?? boost.author.name }) : (boost.errors[0]?.message ?? t('partners.posts.elig.INELIGIBLE'))) : t('pilotads.partner.checkNoBoost') });
+  else if (d.goal !== 'engagement') {
     const sel = lib.filter((m) => d.mediaIds.includes(m.id));
     out.push({ ok: sel.length > 0, text: sel.length ? t('pilotads.check.media', { n: sel.length }) : t('pilotads.check.noMedia') });
     out.push({ ok: !!d.text.primary.trim(), text: d.text.primary.trim() ? t('pilotads.check.text') : t('pilotads.check.noText') });
+    if (partner) out.push({ ok: true, text: partner.status === 'pending' ? t('pilotads.partner.pending', { name: partner.name }) : t('pilotads.partner.check', { name: partner.name }) });
   } else out.push({ ok: !!d.postId, text: d.postId ? t('pilotads.check.post') : t('pilotads.check.noPost') });
   out.push({ ok: d.budgetUsd >= 1, text: t('pilotads.check.budget', { v: usd(d.budgetUsd, 0) }) });
   if (o.guard.stopped) out.push({ ok: false, text: t('pilotads.stop.isOn') });
@@ -452,7 +490,7 @@ function GoalFields({ o, d, set, product }: { o: Opt; d: Draft; set: (p: Partial
 }
 
 // ---------------------------------------------------------------- step 3: the ad (photos or videos, words)
-function StepAd({ o, d, set, product, lib, refetchLib, pro }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; product: P | null; lib: Media[]; refetchLib: () => void; pro?: boolean }) {
+function StepAd({ o, d, set, product, lib, refetchLib, pro, cancelBoost }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; product: P | null; lib: Media[]; refetchLib: () => void; pro?: boolean; cancelBoost: () => void }) {
   const { t } = useTranslation();
   const [variants, setVariants] = useState<{ primary: string; headline: string }[]>([]);
   const [by, setBy] = useState<'ai' | 'ready' | null>(null);
@@ -471,16 +509,24 @@ function StepAd({ o, d, set, product, lib, refetchLib, pro }: { o: Opt; d: Draft
   const asked = useRef<string>('');
   useEffect(() => {
     const k = `${product?.id}:${d.goal}:${d.lang}`;
-    if (product && d.goal !== 'engagement' && asked.current !== k) {
+    if (product && d.goal !== 'engagement' && !d.partnerContentId && asked.current !== k) {
       asked.current = k;
       ask();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.id, d.goal, d.lang]);
   if (d.goal === 'engagement') return <p className="note">{t('pilotads.post.noAd')}</p>;
+  if (d.partnerContentId)
+    return (
+      <div className="pa-ad">
+        {!pro && <h3 className="pa-q">{t('pilotads.ask.ad')}</h3>}
+        <BoostCard o={o} d={d} onCancel={cancelBoost} />
+      </div>
+    );
   return (
     <div className="pa-ad">
       {!pro && <h3 className="pa-q">{t('pilotads.ask.ad')}</h3>}
+      <PartnerPick o={o} d={d} set={set} />
       <MediaPicker d={d} set={set} lib={lib} refetchLib={refetchLib} product={product} />
       <div className="pa-words">
         <div className="pa-words-head">
@@ -531,6 +577,57 @@ function StepAd({ o, d, set, product, lib, refetchLib, pro }: { o: Opt; d: Draft
             <Icon name="sparkles" /> {t('pilotads.ad.more')}
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** « Avec un influenceur »: the ad in the shop's name and a creator's (Marketing › Influenceurs) */
+function PartnerPick({ o, d, set }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void }) {
+  const { t } = useTranslation();
+  if (!o.partners.length) return null;
+  const p = o.partners.find((x) => x.id === d.partnerId) ?? null;
+  const shop = o.page?.name ?? t('pilotads.preview.page');
+  return (
+    <div className="pa-partner">
+      <div className="pa-partner-head">
+        <Icon name="handshake" /> {t('pilotads.partner.title')}
+        <a href="#/marketing/influenceurs">{t('pilotads.partner.manage')}</a>
+      </div>
+      <select value={d.partnerId ?? ''} aria-label={t('pilotads.partner.title')} onChange={(e) => set({ partnerId: e.target.value ? Number(e.target.value) : null })}>
+        <option value="">{t('pilotads.partner.none')}</option>
+        {o.partners.map((x) => (
+          <option key={x.id} value={x.id}>
+            {x.name}
+            {x.igUsername && `@${x.igUsername}` !== x.name ? ` · @${x.igUsername}` : ''}
+            {x.status === 'pending' ? ` (${t('partners.st.pending')})` : ''}
+          </option>
+        ))}
+      </select>
+      <p className={p?.status === 'pending' ? 'pa-partner-warn' : 'muted'}>
+        {p ? (p.status === 'pending' ? t('pilotads.partner.pending', { name: p.name }) : p.status === 'page' ? t('pilotads.partner.page', { name: p.name }) : t('pilotads.partner.both', { shop, name: p.name })) : t('pilotads.partner.help')}
+      </p>
+    </div>
+  );
+}
+
+/** a creator's post boosted: it keeps its picture and words (Marketing › Influenceurs › Booster) */
+function BoostCard({ o, d, onCancel }: { o: Opt; d: Draft; onCancel: () => void }) {
+  const { t } = useTranslation();
+  const b = o.boost && o.boost.id === d.partnerContentId ? o.boost : null;
+  if (!b) return <Loading />;
+  const name = o.partners.find((x) => x.id === (d.partnerId ?? b.partnerId))?.name ?? b.author.name;
+  return (
+    <div className="pa-boost">
+      {b.thumb ? <img src={b.thumb} alt="" /> : <span className="pa-boost-pic" aria-hidden="true" />}
+      <div>
+        <b>{t('pilotads.partner.boostTitle', { name })}</b>
+        <p dir="auto">{b.caption.length > 220 ? `${b.caption.slice(0, 219)}…` : b.caption}</p>
+        <p className="muted">{b.platform === 'FACEBOOK' ? t('pilotads.partner.boostFb') : t('pilotads.partner.boostHelp')}</p>
+        {!b.boostable ? <p className="pa-err">{b.errors[0]?.message ?? t('partners.posts.elig.INELIGIBLE')}</p> : b.errors[0] && <p className="pa-partner-warn">{b.errors[0].message}</p>}
+        <button type="button" className="btn small" onClick={onCancel}>
+          {t('pilotads.partner.cancelBoost')}
+        </button>
       </div>
     </div>
   );
@@ -843,8 +940,15 @@ function TestPlan({ d, product }: { d: Draft; product: P | null }) {
 // ---------------------------------------------------------------- the preview, the checks, « Lancer »
 function Preview({ o, d, lib }: { o: Opt; d: Draft; lib: Media[] }) {
   const { t } = useTranslation();
-  const first = lib.find((m) => m.id === d.mediaIds[0]);
-  const name = o.page?.name ?? t('pilotads.preview.page');
+  const boost = d.partnerContentId && o.boost?.id === d.partnerContentId ? o.boost : null;
+  const pic = lib.find((m) => m.id === d.mediaIds[0]);
+  const first = boost ? { url: boost.thumb, kind: boost.mediaType === 'VIDEO' ? 'video' : 'photo' } : pic;
+  const shop = o.page?.name ?? t('pilotads.preview.page');
+  const partner = d.goal === 'engagement' ? null : (o.partners.find((x) => x.id === d.partnerId)?.name ?? (boost ? boost.author.name : null));
+  // a partnership ad: two names in its head (a boosted post: the creator first)
+  const name = boost && partner ? partner : shop;
+  const second = partner ? (boost ? shop : partner) : null;
+  const text = boost ? boost.caption : d.text.primary;
   const url = o.products.find((p) => p.id === d.productId)?.landing?.url ?? '';
   const host = (() => {
     try {
@@ -858,22 +962,25 @@ function Preview({ o, d, lib }: { o: Opt; d: Draft; lib: Media[] }) {
       <h3 className="pa-h">{t('pilotads.preview.title')}</h3>
       <div className="pa-fb">
         <div className="pa-fb-head">
-          <span className="pa-fb-av">{name.slice(0, 1)}</span>
+          <span className="pa-fb-two">
+            <span className="pa-fb-av">{name.slice(0, 1)}</span>
+            {second && <span className="pa-fb-av">{second.slice(0, 1)}</span>}
+          </span>
           <span>
-            <b>{name}</b>
-            <small>{t('pilotads.preview.sponsored')}</small>
+            <b>{second ? t('pilotads.partner.and', { a: name, b: second }) : name}</b>
+            <small>{second ? t('pilotads.partner.paid') : t('pilotads.preview.sponsored')}</small>
           </span>
         </div>
-        <p className="pa-fb-text" dir={d.text.primary ? (d.lang === 'fr' ? 'ltr' : 'rtl') : undefined}>{d.text.primary || t('pilotads.preview.textPh')}</p>
+        <p className="pa-fb-text" dir={boost ? 'auto' : d.text.primary ? (d.lang === 'fr' ? 'ltr' : 'rtl') : undefined}>{text || t('pilotads.preview.textPh')}</p>
         <div className="pa-fb-media">
           {first?.url ? <img src={first.url} alt="" /> : <Icon name="image" />}
           {first?.kind === 'video' && <span className="pa-fb-play"><Icon name="play" /></span>}
-          {d.mediaIds.length > 1 && <span className="pa-fb-more ltr">+{d.mediaIds.length - 1}</span>}
+          {!boost && d.mediaIds.length > 1 && <span className="pa-fb-more ltr">+{d.mediaIds.length - 1}</span>}
         </div>
         <div className="pa-fb-foot">
           <span dir={d.text.headline ? (d.lang === 'fr' ? 'ltr' : 'rtl') : undefined}>
-            <small>{d.goal === 'messages' ? t(`pilotads.ch.${d.channels[0] ?? 'messenger'}`) : d.goal === 'calls' ? d.phone : host || name}</small>
-            <b>{d.text.headline || t('pilotads.preview.headlinePh')}</b>
+            <small>{d.goal === 'messages' ? t(`pilotads.ch.${d.channels[0] ?? 'messenger'}`) : d.goal === 'calls' ? d.phone : host || shop}</small>
+            <b>{boost ? (o.products.find((p) => p.id === d.productId)?.name ?? '') || t('pilotads.preview.headlinePh') : d.text.headline || t('pilotads.preview.headlinePh')}</b>
           </span>
           <span className="pa-fb-cta">{t(`pilotads.cta.${CTA[d.goal]}`)}</span>
         </div>
@@ -988,7 +1095,8 @@ function Launches({ onOpen }: { onOpen: (l: L) => void }) {
             <div className="pa-l-what">
               <b>{l.name}</b>
               <span className="muted">
-                {t(`pilotads.goal.${l.goal}.name`)} · {t('pilotads.perDay', { v: usd(l.budgetUsd, 0) })} · {l.by ?? '—'} · {t('pilotads.ago', { d: since(l.createdAt) })}
+                {t(`pilotads.goal.${l.goal}.name`)} · {t('pilotads.perDay', { v: usd(l.budgetUsd, 0) })}
+                {l.partnerName ? ` · ${t('pilotads.partner.with', { name: l.partnerName })}` : ''} · {l.by ?? '—'} · {t('pilotads.ago', { d: since(l.createdAt) })}
               </span>
               {l.error && <span className="pa-err">{l.error}</span>}
             </div>

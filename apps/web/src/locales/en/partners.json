@@ -1,0 +1,125 @@
+{
+  "title": "Influencers",
+  "sub": "Ads in your shop’s name and an influencer’s: their followers see their name, the orders come to you.",
+  "add": "Add an influencer",
+  "refresh": "Refresh",
+  "refreshed": "List refreshed",
+  "checked": "Refreshed {{d}}",
+  "never": "Not refreshed yet",
+  "demo": "Demo: nothing goes to Meta.",
+  "syncError": "Meta said: {{msg}}",
+  "noBrand": "First link the shop’s Facebook Page and Instagram account (Pilot AI › Accounts): the requests go from them.",
+  "period": {
+    "label": "Period",
+    "d7": "7 d",
+    "d30": "30 d",
+    "d90": "90 d",
+    "all": "All"
+  },
+  "tile": {
+    "partners": "Influencers",
+    "partnersSub": "{{ok}} agreed · {{wait}} waiting",
+    "spend": "Spent on ads",
+    "spendSub_one": "{{count}} ad in two names",
+    "spendSub_other": "{{count}} ads in two names",
+    "orders": "Orders",
+    "ordersSub": "from their ads",
+    "delivered": "Delivered",
+    "deliveredSub": "{{cost}} of ads per delivered order",
+    "deliveredNone": "no delivered order yet"
+  },
+  "list": {
+    "title": "Your influencers",
+    "empty": "No influencer yet",
+    "emptySub": "Add their Instagram: they say yes once in the app, then you launch ads in both your names."
+  },
+  "st": {
+    "pending": "Waiting",
+    "approved": "Agreed",
+    "refused": "Refused",
+    "revoked": "Removed",
+    "page": "Facebook Page",
+    "code": "Ad code"
+  },
+  "stHelp": {
+    "pending": "They must accept in the Instagram app (Settings › Branded content).",
+    "approved": "You can launch ads in both your names.",
+    "refused": "They refused: talk to them, then ask again.",
+    "revoked": "No new ad in their name.",
+    "page": "Meta asks for their OK at the first ad.",
+    "code": "They gave an ad code for one post."
+  },
+  "num": {
+    "ads": "Ads",
+    "spend": "Spent",
+    "orders": "Orders",
+    "delivered": "Delivered",
+    "perDelivered": "Ads / delivered",
+    "cash": "Earned"
+  },
+  "launch": "Launch an ad with them",
+  "more": "More",
+  "note": "Note",
+  "notePh": "Price agreed, phone, date…",
+  "noteSave": "Save the note",
+  "noteSaved": "Note saved",
+  "askAgain": "Ask again",
+  "asked": "Request sent to {{name}}",
+  "remove": "Remove",
+  "removeQ": "Remove {{name}}?",
+  "removeSub": "No new ad in their name. The ads already launched stay in your numbers.",
+  "removed": "{{name}} removed",
+  "posts": {
+    "title": "Their posts that tag you",
+    "sub": "A ready post becomes an ad in 1 click: it keeps its words and video, with your “Shop now” button.",
+    "f": {
+      "all": "All",
+      "ready": "Ready",
+      "INSTAGRAM": "Instagram",
+      "FACEBOOK": "Facebook"
+    },
+    "empty": "No post tags the shop yet.",
+    "boost": "Boost",
+    "open": "View",
+    "elig": {
+      "AD_READY": "Ready",
+      "NEEDS_ATTENTION": "To check",
+      "INELIGIBLE": "Not possible",
+      "EXCLUDED": "Excluded"
+    },
+    "used": "Already an ad",
+    "views": "{{n}} views",
+    "others": "Other creators tag you",
+    "addHim": "Add"
+  },
+  "steps": {
+    "title": "How it works",
+    "s1": "Add their Instagram: Pilotix sends them the request.",
+    "s2": "They say yes once, in the Instagram app.",
+    "s3": "Launch an ad in both your names: your photos, your page, their name.",
+    "s4": "Pilotix counts their orders and delivered orders."
+  },
+  "addTitle": "Add an influencer",
+  "how": {
+    "ig": "Instagram",
+    "page": "Facebook Page",
+    "code": "Ad code"
+  },
+  "igLabel": "Their Instagram name",
+  "igPh": "@amina.style",
+  "igHelp": "They get the request in the Instagram app and say yes once: then you launch all the ads you want in both your names.",
+  "pageLabel": "Their Facebook Page number",
+  "pagePh": "1049…",
+  "pageHelp": "Ask them for it (Page › About › Page transparency). Meta asks for their OK at the first ad.",
+  "codeLabel": "Ad code or the post’s link",
+  "codePh": "Code given by the influencer, or https://www.instagram.com/p/…",
+  "codeHelp": "For one post only: the influencer copies their “ad code” in Instagram (… › Partnership permissions).",
+  "nameLabel": "Their name (for you)",
+  "noteLabel": "Note (price, contact…)",
+  "send": "Send the request",
+  "addPage": "Add the Page",
+  "find": "Find the post",
+  "sent": "Request sent: they must say yes in Instagram",
+  "added": "Influencer added",
+  "found": "Post found"
+}

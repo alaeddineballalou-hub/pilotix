@@ -97,7 +97,16 @@ export interface LaunchInput {
   bid?: { strategy: 'LOWEST_COST_WITHOUT_CAP' | 'COST_CAP' | 'LOWEST_COST_WITH_BID_CAP'; amountCents?: number | null } | null;
   /** start (ISO); none = as soon as it is turned on */
   start?: string | null;
+  /**
+   * Marketing › Influenceurs, an ad in two names: a new ad of the shop (its photos, words and page) with the creator as
+   * second name — their Instagram account and / or their Facebook Page (Meta's partnership ads)…
+   */
+  partner?: { igId: string | null; pageId: string | null } | null;
+  /** …or one of the creator's own posts boosted, the shop as second name (with the creator's ad code when they gave one) */
+  boost?: { platform: 'INSTAGRAM' | 'FACEBOOK'; contentId: string; adCode?: string | null } | null;
 }
+/** the goals a creator's post may be boosted for: an Instagram post gets the shop's link and button; a Facebook post stays as it is */
+export const BOOST_GOALS: Record<'INSTAGRAM' | 'FACEBOOK', readonly Goal[]> = { INSTAGRAM: ['sales', 'traffic', 'awareness'], FACEBOOK: ['awareness'] };
 export interface LaunchPlan {
   /** photos (and videos' stills) sent as bytes first: `{image:k}` becomes Meta's image hash */
   images: { key: string; mediaId: number; col: 'jpeg' | 'thumb' }[];
@@ -113,11 +122,17 @@ const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…'
 export function launchProblems(i: LaunchInput): string[] {
   const out: string[] = [];
   if (!i.pageId) out.push('Reliez la Page Facebook de la boutique (Pilot AI › Comptes).');
-  if (!i.media.length && i.goal !== 'engagement') out.push('Choisissez au moins une photo ou une vidéo.');
+  if (i.boost) {
+    if (!BOOST_GOALS[i.boost.platform].includes(i.goal))
+      out.push(i.boost.platform === 'FACEBOOK' ? 'Une publication Facebook d’influenceur se booste pour être vue (objectif « Être vu »).' : 'Une publication Instagram d’influenceur se booste pour vendre, des visites ou être vu.');
+    if (i.media.length) out.push('Une publication boostée garde sa propre photo ou vidéo : enlevez celles de la boutique.');
+  } else if (!i.media.length && i.goal !== 'engagement') out.push('Choisissez au moins une photo ou une vidéo.');
+  if (i.partner && !i.partner.igId && !i.partner.pageId) out.push('Meta ne connaît pas encore le compte de cet influenceur : actualisez la page Influenceurs.');
+  if (i.partner && i.goal === 'engagement') out.push('Une pub avec un influenceur ne booste pas une publication de la boutique : choisissez un autre objectif.');
   if (i.media.length > 10) out.push('10 photos ou vidéos au plus par lancement.');
   if (i.media.some((m) => m.kind === 'video' && !m.url)) out.push('Une vidéo n’est pas encore prête (envoi en cours) : attendez la fin.');
   if (i.media.some((m) => m.kind === 'photo' && !m.mediaId && !m.url)) out.push('Une photo est introuvable : choisissez-la à nouveau.');
-  if (i.goal !== 'engagement' && !i.text.primary.trim()) out.push('Écrivez le texte de la pub.');
+  if (i.goal !== 'engagement' && !i.boost && !i.text.primary.trim()) out.push('Écrivez le texte de la pub.');
   if (i.text.primary.length > 2000) out.push('Le texte de la pub est trop long (2 000 caractères au plus).');
   if ((i.goal === 'sales' || i.goal === 'traffic') && !i.link) out.push('Ce produit n’a pas de page de vente : créez-la d’abord (Landing pages).');
   if (i.goal === 'sales' && !i.pixelId) out.push('Ajoutez un pixel Meta (Landing pages › Réglages › Pixels) : Meta doit savoir qui achète.');
@@ -257,13 +272,39 @@ export function metaPlan(i: LaunchInput): LaunchPlan {
     const body: Record<string, unknown> = { name: clip(`${i.name} · ${m.name}`, 200), object_story_spec: spec, degrees_of_freedom_spec: SAFE_CREATIVE };
     if (i.goal === 'sales' || i.goal === 'traffic' || i.goal === 'awareness') body.url_tags = URL_TAGS;
     if (multi) body.asset_feed_spec = { optimization_type: 'DOF_MESSAGING_DESTINATION', call_to_actions: channels.map((c) => MESSAGE_CTA[c]) };
+    // an ad in two names: the shop first, the creator second (Meta asks the creator if they have not said yes yet)
+    if (i.partner?.igId) body.instagram_branded_content = { sponsor_id: i.partner.igId };
+    if (i.partner?.pageId) body.facebook_branded_content = { sponsor_page_id: i.partner.pageId };
     return { body, video };
+  };
+
+  /** a creator's post boosted: the creator first, the shop second (ad_format 1: both names in the ad's head) */
+  const boostBody = (b: NonNullable<LaunchInput['boost']>): Record<string, unknown> => {
+    const body: Record<string, unknown> = { name: clip(`${i.name} · ${b.platform === 'INSTAGRAM' ? 'Instagram' : 'Facebook'}`, 200), degrees_of_freedom_spec: SAFE_CREATIVE };
+    if (b.platform === 'INSTAGRAM') {
+      body.object_id = i.pageId;
+      body.branded_content = b.adCode ? { instagram_boost_post_access_token: b.adCode, ad_format: 1 } : { ad_format: 1 };
+      if (!b.adCode) body.source_instagram_media_id = b.contentId;
+      // the shop's sales page and button under the creator's post (its ids on the link find the orders)
+      if ((i.goal === 'sales' || i.goal === 'traffic') && i.link) body.call_to_action = { type: g.cta, value: { link: i.link } };
+    } else {
+      body.branded_content = b.adCode ? { facebook_boost_post_access_token: b.adCode, ad_format: 1 } : { ad_format: 1 };
+      if (!b.adCode) body.object_story_id = b.contentId;
+    }
+    body.facebook_branded_content = { sponsor_page_id: i.pageId };
+    if (i.instagramId) body.instagram_branded_content = { sponsor_id: i.instagramId };
+    if (i.goal === 'sales' || i.goal === 'traffic' || i.goal === 'awareness') body.url_tags = URL_TAGS;
+    return body;
   };
 
   const adsets: LaunchPlan['adsets'] = [];
   const creatives: LaunchPlan['creatives'] = [];
   const ads: LaunchPlan['ads'] = [];
-  if (i.goal === 'engagement') {
+  if (i.boost) {
+    adsets.push({ key: 'a0', body: adsetBody(i.name) });
+    creatives.push({ key: 'c0', body: boostBody(i.boost) });
+    ads.push({ key: 'd0', adset: 'a0', creative: 'c0', body: { name: clip(i.name, 200), status: 'PAUSED' } });
+  } else if (i.goal === 'engagement') {
     adsets.push({ key: 'a0', body: adsetBody(i.name) });
     creatives.push({ key: 'c0', body: { name: clip(`${i.name} · publication`, 200), object_story_id: i.postId, degrees_of_freedom_spec: SAFE_CREATIVE } });
     ads.push({ key: 'd0', adset: 'a0', creative: 'c0', body: { name: clip(i.name, 200), status: 'PAUSED' } });

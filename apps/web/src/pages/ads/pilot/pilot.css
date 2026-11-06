@@ -364,17 +364,100 @@
   .pa-wizard-side, .pa-pro-side { position: static; }
   .pa-pro-more, .pa-pilot-grid { grid-template-columns: minmax(0, 1fr); }
 }
+/* ---- Demander: a conversation with Pilot AI about the ads (the owner only) ---- */
+.pa-ask { display: flex; flex-direction: column; gap: 12px; max-width: 880px; }
+.pa-ask-head { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.pa-ask-head > div { flex: 1 1 320px; min-width: 0; }
+.pa-ask-head h2 { font-size: 20px; letter-spacing: -.01em; }
+.pa-ask-head p { margin: 4px 0 0; font-size: 14px; line-height: 1.5; max-width: 62ch; }
+.pa-ask-mark { flex: none; width: 42px; height: 42px; border-radius: 14px; background: var(--c-accent-grad); color: var(--c-on-accent); display: inline-grid; place-items: center; }
+.pa-ask-mark svg { width: 22px; height: 22px; }
+.pa-ask-new { display: inline-flex; align-items: center; gap: 6px; }
+.pa-ask-demo { display: flex; align-items: center; gap: 8px; margin: 0; padding: 9px 14px; border-radius: var(--sk-r-ctl, 12px); background: var(--c-info-tint); color: var(--c-info-ink); font-size: 13.5px; line-height: 1.45; align-self: flex-start; }
+.pa-ask-demo svg { flex: none; width: 16px; height: 16px; }
+.pa-ask .btn svg, .pa-ask-change svg, .pa-partner svg { width: 16px; height: 16px; }
+.pa-ask-chat { display: flex; flex-direction: column; gap: 14px; padding: 18px; }
+.pa-ask-start { display: flex; flex-direction: column; gap: 12px; }
+.pa-ask-start p { margin: 0; font-size: 14px; }
+.pa-ask-tries { display: flex; flex-wrap: wrap; gap: 8px; }
+.pa-ask-tries button { min-height: 40px; padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--sk-r-chip, 999px); background: var(--surface); color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 600; text-align: start; line-height: 1.35; cursor: pointer; }
+.pa-ask-tries button:hover:not(:disabled) { border-color: var(--c-accent); }
+.pa-ask-tries button:disabled { opacity: .5; cursor: default; }
+.pa-ask-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 18px; max-height: min(62vh, 680px); overflow-y: auto; }
+.pa-ask-turn { display: flex; flex-direction: column; gap: 8px; }
+.pa-ask-q { align-self: flex-end; max-width: min(82%, 560px); margin: 0; padding: 10px 14px; border-radius: 18px; border-end-end-radius: 6px; background: var(--sk-tab-on-bg, var(--c-accent-tint)); color: var(--ink); font-size: 14.5px; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; }
+.pa-ask-a { align-self: flex-start; max-width: min(92%, 680px); display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 18px; border-end-start-radius: 6px; background: var(--raise); border: 1px solid var(--line); }
+.pa-ask-a > p { margin: 0; font-size: 14.5px; line-height: 1.55; white-space: pre-line; overflow-wrap: anywhere; }
+.pa-ask-who { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; color: var(--c-accent-ink); }
+.pa-ask-who svg { width: 14px; height: 14px; }
+.pa-ask-who small { font-weight: 500; }
+.pa-ask-wait { flex-direction: row; align-items: center; gap: 8px; color: var(--c-muted); font-size: 14px; }
+.pa-ask-wait svg { width: 16px; height: 16px; color: var(--c-accent-ink); }
+@media (prefers-reduced-motion: no-preference) {
+  .pa-ask-wait svg { animation: pa-ask-spin 1.6s cubic-bezier(.45, 0, .55, 1) infinite; }
+}
+@keyframes pa-ask-spin { 0%, 100% { opacity: .35; transform: scale(.9); } 50% { opacity: 1; transform: scale(1.08); } }
+.pa-ask-reads { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pa-ask-reads small { font-size: 12px; }
+.pa-ask-reads code { font-size: 11.5px; padding: 2px 7px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); color: var(--c-muted); direction: ltr; }
+.pa-ask-reads code.bad { color: var(--c-bad-ink); border-color: var(--c-bad-line); }
+.pa-ask-change { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 14px; background: var(--surface); border: 1.5px solid var(--c-warn-line); }
+.pa-ask-change.st-applied { border-color: var(--c-ok-line); }
+.pa-ask-change.st-refused, .pa-ask-change.st-failed { border-color: var(--line); }
+.pa-ask-change-l { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; color: var(--c-warn-ink); }
+.pa-ask-change.st-applied .pa-ask-change-l { color: var(--c-ok-ink); }
+.pa-ask-change > b { font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.pa-ask-change small { font-size: 12.5px; line-height: 1.4; }
+.pa-ask-change small.ok { color: var(--c-ok-ink); font-weight: 600; }
+.pa-ask-change small.bad { color: var(--c-bad-ink); font-weight: 600; }
+.pa-ask-yes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.pa-ask-yes .btn { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; }
+.pa-ask-details summary { font-size: 12px; color: var(--c-muted); cursor: pointer; }
+.pa-ask-details code { display: block; margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: var(--raise); font-size: 11.5px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; text-align: start; }
+.pa-ask-form { display: flex; align-items: flex-end; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.pa-ask-form textarea { flex: 1; min-width: 0; min-height: 48px; max-height: 160px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--sk-r-ctl, 14px); background: var(--field, var(--surface)); color: var(--ink); font: inherit; font-size: 15px; line-height: 1.45; resize: vertical; }
+.pa-ask-form textarea:focus-visible, .pa-ask-tries button:focus-visible, .pa-ask-old button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.pa-ask-form .btn { display: inline-flex; align-items: center; gap: 6px; min-height: 48px; padding-inline: 18px; }
+.pa-ask-old { padding: 16px 18px; }
+.pa-ask-old ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.pa-ask-old li + li { border-top: 1px solid var(--line); }
+.pa-ask-old button { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 2px; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; text-align: start; cursor: pointer; }
+.pa-ask-old button:hover span { text-decoration: underline; text-underline-offset: 3px; }
+.pa-ask-old small { font-size: 12px; font-weight: 500; }
+.pa-ask-dot { color: var(--c-warn-ink); }
+.pa-ask-forget { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; background: transparent; color: var(--c-muted); }
+
+/* ---- Lancer une pub: with a creator (an ad in two names), or a creator's post boosted ---- */
+.pa-partner { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; margin-bottom: 14px; border-radius: var(--sk-r-ctl, 14px); background: var(--raise); border: 1px solid var(--line); }
+.pa-partner-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 700; font-size: 14px; }
+.pa-partner-head a { margin-inline-start: auto; font-size: 13px; font-weight: 600; }
+.pa-partner select { min-height: 42px; }
+.pa-partner p { margin: 0; font-size: 13px; line-height: 1.45; }
+.pa-partner .pa-partner-warn, .pa-boost .pa-partner-warn { color: var(--c-warn-ink); }
+.pa-boost { display: flex; gap: 12px; padding: 12px; margin-bottom: 14px; border-radius: var(--sk-r-ctl, 14px); border: 1.5px solid var(--c-accent); background: var(--surface); }
+.pa-boost img, .pa-boost .pa-boost-pic { flex: none; width: 92px; aspect-ratio: 4 / 5; border-radius: 12px; object-fit: cover; background: var(--raise); }
+.pa-boost > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.pa-boost b { font-size: 14.5px; }
+.pa-boost p { margin: 0; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.pa-boost .btn { align-self: flex-start; }
+.pa-fb-two { display: inline-flex; }
+.pa-fb-two .pa-fb-av + .pa-fb-av { margin-inline-start: -10px; box-shadow: 0 0 0 2px var(--surface); }
+
 @media (max-width: 700px) {
   .pa { gap: 10px; }
   .pa-top { flex-direction: column; align-items: stretch; gap: 8px; }
   .pa-top .pa-mode { align-self: flex-start; }
   .pa-top .pa-mode button { padding: 5px 12px; font-size: 13px; min-height: 32px; }
   /* the four tabs side by side on a phone, nothing to slide: the icon on top, a short name under it */
-  .pa-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; overflow: visible; padding: 0; }
+  .pa-tabs { display: grid; grid-template-columns: repeat(var(--pa-n, 4), minmax(0, 1fr)); gap: 6px; overflow: visible; padding: 0; }
   .pa-tabs a { position: relative; flex-direction: column; justify-content: center; gap: 4px; min-width: 0; padding: 8px 4px 7px; border-radius: 14px; font-size: 12px; line-height: 1.2; white-space: normal; text-align: center; }
   .pa-tabs a svg { width: 20px; height: 20px; }
   .pa-tab-long { display: none; }
   .pa-tab-short { display: block; max-width: 100%; overflow-wrap: break-word; }
+  /* five tabs (the owner's « Demander »): a little smaller, a word never cut in two */
+  .pa-tabs.many { gap: 4px; }
+  .pa-tabs.many a { padding-inline: 2px; font-size: 11px; letter-spacing: -.01em; overflow: hidden; }
+  .pa-tabs.many .pa-tab-short { overflow-wrap: normal; }
   .pa-tabs .pa-count { position: absolute; top: 4px; inset-inline-start: calc(50% + 8px); min-width: 18px; height: 18px; padding: 0 5px; font-size: 11px; }
   /* the cards on top stay small on a phone, so the ads show sooner */
   .pa-guardbar { flex-wrap: nowrap; gap: 8px; padding-block: 6px; padding-inline: 10px 6px; }
@@ -412,4 +495,20 @@
   .pa-sug-btns .btn { flex: 1; min-height: 44px; }
   .pa-wait-btns .btn { flex: 1; min-height: 40px; }
   .pa-ib { width: 40px; height: 40px; }
+}
+@media (max-width: 700px) {
+  .pa-ask-head h2 { font-size: 18px; }
+  .pa-ask-head p { font-size: 13px; }
+  .pa-ask-new { order: 3; margin-inline-start: 48px; }
+  .pa-ask-chat { padding: 14px; }
+  .pa-ask-q { max-width: 90%; }
+  .pa-ask-a { max-width: 100%; }
+  .pa-ask-list { max-height: none; }
+  .pa-ask-form .pa-ask-send { display: none; }
+  .pa-ask-head > div { flex: 1 1 calc(100% - 60px); min-width: 0; }
+  .pa-ask-mark { width: 36px; height: 36px; border-radius: 12px; }
+  .pa-ask-mark svg { width: 19px; height: 19px; }
+  .pa-ask-form .btn { padding-inline: 14px; }
+  .pa-ask-yes .btn { flex: 1; min-height: 44px; justify-content: center; }
+  .pa-boost img, .pa-boost .pa-boost-pic { width: 72px; }
 }

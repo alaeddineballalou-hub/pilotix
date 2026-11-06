@@ -3,6 +3,7 @@ import { adminProcs } from './modules/admin';
 import { adsProcs } from './modules/ads';
 import { adsMgrProcs } from './modules/adsmgr';
 import { adsLaunchProcs } from './modules/adslaunch';
+import { adsAskProcs } from './modules/adsask';
 import { agencyProcs } from './modules/agencies';
 import { managementPlanProcs } from './modules/managementplans';
 import { bonusProcs } from './modules/bonusrules';
@@ -53,6 +54,7 @@ import { spyProcs } from './modules/spy';
 import { leadsProcs } from './modules/leads';
 import { campaignsProcs } from './modules/campaigns';
 import { metacatalogProcs } from './modules/metacatalog';
+import { partnersProcs } from './modules/partners';
 import { statsProcs } from './modules/stats';
 import { boardProcs } from './modules/board';
 import { boutiqueProcs } from './modules/boutiques';
@@ -108,6 +110,7 @@ export const REGISTRY = {
   ...adsProcs,
   ...adsMgrProcs,
   ...adsLaunchProcs,
+  ...adsAskProcs,
   ...dellalProcs,
   ...cmProcs,
   ...cmPlanProcs,
@@ -122,6 +125,7 @@ export const REGISTRY = {
   ...leadsProcs,
   ...campaignsProcs,
   ...metacatalogProcs,
+  ...partnersProcs,
   ...archiveProcs,
   ...agencyProcs,
   ...managementPlanProcs,

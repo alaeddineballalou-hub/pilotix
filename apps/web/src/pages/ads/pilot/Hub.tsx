@@ -1,24 +1,27 @@
 // Pilot Ads, inside Marketing › Publicité: its own tabs — « Mes pubs » (Simple: one card per product with three numbers,
 // a verdict and one button; Pro: every table of Publicité, the buttons on each ad set, where the orders come from and
-// the log of every change), « Lancer une pub », « Pilote auto », « Audiences ». On top of all of them: the owner's
-// « Tout arrêter », the changes waiting for the owner's yes, an ad account that needs a payment.
-// Every number and every rule is in core (ads.*, ads.ctl.*, ads.pilot.*): this file only shows them and asks.
-import { ReactNode, useMemo, useState } from 'react';
+// the log of every change), « Lancer une pub », « Pilote auto », « Audiences », and for the owner « Demander » (Pilot AI
+// answers about the ads with Meta's tools, Ask.tsx). On top of all of them: the owner's « Tout arrêter », the changes
+// waiting for the owner's yes, an ad account that needs a payment.
+// Every number and every rule is in core (ads.*, ads.ctl.*, ads.pilot.*, ads.ask.*): this file only shows them and asks.
+import { CSSProperties, ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../../lib/backend';
 import { da, n, since, wilayaName } from '../../../lib/format';
 import { useAction, useRpc } from '../../../lib/query';
+import { useSession } from '../../../lib/session';
 import { store } from '../../../lib/store';
 import { Empty, ErrorBox, Icon, Loading } from '../../../ui/kit';
 import { Modal } from '../../../ui/modal';
+import { AskPilot } from './Ask';
 import { Audiences } from './Audiences';
 import { Launch } from './Launch';
 import { Pilote } from './Pilote';
 import './pilot.css';
 
-export type PubTab = 'pubs' | 'lancer' | 'pilote' | 'audiences';
-const TABS: PubTab[] = ['pubs', 'lancer', 'pilote', 'audiences'];
-const TAB_ICON: Record<PubTab, string> = { pubs: 'chart', lancer: 'megaphone', pilote: 'sparkles', audiences: 'users' };
+export type PubTab = 'pubs' | 'lancer' | 'pilote' | 'audiences' | 'demander';
+const TABS: PubTab[] = ['pubs', 'lancer', 'pilote', 'audiences', 'demander'];
+const TAB_ICON: Record<PubTab, string> = { pubs: 'chart', lancer: 'megaphone', pilote: 'sparkles', audiences: 'users', demander: 'chat' };
 export type Ctl = Out<'ads.ctl.state'>;
 export type Act = Ctl['recent'][number];
 type Obj = Ctl['objects'][number];
@@ -31,7 +34,12 @@ export const clientId = () => `${Date.now().toString(36)}-${Math.random().toStri
 /** The Publicité page with Pilot Ads' tabs. `pro` is the full Publicité (the computer's, or the phone's). */
 export function PubHub({ rest, pro, base = '#/marketing/publicite' }: { rest?: string[]; pro: ReactNode; base?: string }) {
   const { t } = useTranslation();
-  const tab: PubTab = (TABS as string[]).includes(rest?.[0] ?? '') ? (rest![0] as PubTab) : 'pubs';
+  const { has } = useSession();
+  // « Demander » is the owner's: Meta's tools read the whole ad account, more than a marketer sees here
+  const owner = has('vendeur');
+  const tabs = owner ? TABS : TABS.filter((k) => k !== 'demander');
+  const tab: PubTab = (tabs as string[]).includes(rest?.[0] ?? '') ? (rest![0] as PubTab) : 'pubs';
+  const asks = useRpc('ads.ask.state', {}, { enabled: owner, refetchInterval: 120_000, retry: false });
   const [mode, setMode] = useState<'simple' | 'pro'>(() => (store.get('ads-mode') === 'pro' ? 'pro' : 'simple'));
   const ctl = useRpc('ads.ctl.state', {}, { refetchInterval: 60_000 });
   const pil = useRpc('ads.pilot.state', {}, { refetchInterval: 120_000 });
@@ -39,12 +47,12 @@ export function PubHub({ rest, pro, base = '#/marketing/publicite' }: { rest?: s
     setMode(m);
     store.set('ads-mode', m);
   };
-  const counts: Partial<Record<PubTab, number>> = { pilote: pil.data?.suggestions.length || undefined };
+  const counts: Partial<Record<PubTab, number>> = { pilote: pil.data?.suggestions.length || undefined, demander: asks.data?.waiting || undefined };
   return (
     <div className="pa">
       <div className="pa-top">
-        <nav className="pa-tabs" role="tablist" aria-label={t('pilotads.tabsLabel')}>
-          {TABS.map((k) => (
+        <nav className={`pa-tabs ${tabs.length > 4 ? 'many' : ''}`} role="tablist" aria-label={t('pilotads.tabsLabel')} style={{ '--pa-n': tabs.length } as CSSProperties}>
+          {tabs.map((k) => (
             <a key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} href={k === 'pubs' ? base : `${base}/${k}`}>
               <Icon name={TAB_ICON[k]} />
               {/* on a phone the four tabs sit side by side, so each shows a short name */}
@@ -70,9 +78,11 @@ export function PubHub({ rest, pro, base = '#/marketing/publicite' }: { rest?: s
           </>
         )
       ) : tab === 'lancer' ? (
-        <Launch base={base} />
+        <Launch base={base} rest={rest} />
       ) : tab === 'pilote' ? (
         <Pilote />
+      ) : tab === 'demander' ? (
+        <AskPilot />
       ) : (
         <Audiences />
       )}
@@ -479,7 +489,7 @@ export function ActionLog({ rows: given, title }: { rows?: Act[]; title?: string
           {rows.map((a) => (
             <li key={a.id} className={`st-${a.status}`}>
               <span className={`pa-src s-${a.source}`} title={t(`pilotads.src.${a.source}`)}>
-                <Icon name={a.source === 'rule' || a.source === 'pilot' ? 'sparkles' : a.source === 'stop_all' ? 'power' : a.source === 'launch' ? 'megaphone' : 'user'} />
+                <Icon name={a.source === 'rule' || a.source === 'pilot' || a.source === 'ask' ? 'sparkles' : a.source === 'stop_all' ? 'power' : a.source === 'launch' ? 'megaphone' : 'user'} />
               </span>
               <div className="pa-log-what">
                 <b>{actLine(t, a)}</b>

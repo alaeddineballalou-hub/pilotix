@@ -4,13 +4,15 @@
     "pubs": "Mes pubs",
     "lancer": "Lancer une pub",
     "pilote": "Pilote auto",
-    "audiences": "Audiences"
+    "audiences": "Audiences",
+    "demander": "Demander à Pilot AI"
   },
   "tabShort": {
     "pubs": "Mes pubs",
     "lancer": "Lancer",
     "pilote": "Pilote auto",
-    "audiences": "Audiences"
+    "audiences": "Audiences",
+    "demander": "Demander"
   },
   "mode": {
     "label": "Affichage",
@@ -66,7 +68,8 @@
     "budget": "« {{name}} » : budget {{from}} → {{to}} par jour",
     "copy": "« {{name}} » copiée (en pause)",
     "launch": "« {{name}} » lancée à {{usd}} $ par jour",
-    "undo": "« {{name}} » : retour en arrière"
+    "undo": "« {{name}} » : retour en arrière",
+    "ai": "Pilot AI : {{name}}"
   },
   "simple": {
     "title": "Mes pubs",
@@ -132,7 +135,8 @@
     "rule": "Pilote auto",
     "pilot": "Suggestion de Pilote auto",
     "stop_all": "Tout arrêter",
-    "launch": "Lancer une pub"
+    "launch": "Lancer une pub",
+    "ask": "Demander (Pilot AI)"
   },
   "st": {
     "done": "Fait",
@@ -515,5 +519,24 @@
       "failed": "Erreur"
     }
   },
-  "ago": "il y a {{d}}"
+  "ago": "il y a {{d}}",
+  "partner": {
+    "title": "Avec un influenceur",
+    "none": "Sans influenceur",
+    "help": "Choisissez un influenceur : la pub montre votre nom et le sien, et ses abonnés lui font confiance.",
+    "both": "La pub montre deux noms : {{shop}} et {{name}}.",
+    "pending": "{{name}} n’a pas encore dit oui dans Instagram : la pub attend son accord pour démarrer.",
+    "page": "Meta demandera son accord à {{name}} à la première pub.",
+    "manage": "Gérer les influenceurs",
+    "boostTitle": "{{name}} : sa publication devient la pub",
+    "boostHelp": "Elle garde sa vidéo et ses mots ; votre bouton « Commander » et votre page de vente s’ajoutent dessous.",
+    "boostFb": "Une publication Facebook se booste telle quelle, pour être vue.",
+    "cancelBoost": "Faire plutôt une pub avec mes photos",
+    "check": "Deuxième nom : {{name}}",
+    "checkBoost": "Publication prête : {{name}}",
+    "checkNoBoost": "Publication introuvable : actualisez Influenceurs",
+    "and": "{{a}} et {{b}}",
+    "paid": "Sponsorisé · Partenariat rémunéré",
+    "with": "avec {{name}}"
+  }
 }
