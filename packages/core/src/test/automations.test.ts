@@ -287,3 +287,25 @@ test('Offre de retour: X days after a delivered order, the customers who said ye
   await call('auto.run', at(admin, t + 30 * MIN), {});
   assert.equal((await lines('comeback')).length, n, 'once a day');
 });
+
+test('who is asked to turn on notifications: the people the evening report and the slow queue alerts go to', async () => {
+  const mine = async (e: string) => ((await call('auto.alertMine', await as(e), {})) as any).mine as boolean;
+  const id = async (e: string) => Number((await db.query(`SELECT id FROM profiles WHERE email = $1`, [e]))[0].id);
+  await call('auto.save', admin, { evening: { on: true, hour: 21, to: [] }, queue: { on: true, waitHours: 2, idleMin: 30, to: [] } });
+  assert.equal(await mine(EMAILS.admin), true, 'the evening report: the administrators');
+  assert.equal(await mine(EMAILS.conf), false, 'an agent: no');
+  const boss = await id(EMAILS.manager);
+  await db.query(`UPDATE profiles SET can_assign = true WHERE id = $1`, [boss]);
+  assert.equal(await mine(EMAILS.manager), true, 'the queue alerts: the managers');
+  // the people chosen instead
+  await call('auto.save', admin, { queue: { on: true, waitHours: 2, idleMin: 30, to: [await id(EMAILS.conf2)] } });
+  assert.equal(await mine(EMAILS.manager), true, 'still told: the chef d’équipe of his agents');
+  assert.equal(await mine(EMAILS.conf2), true);
+  await db.query(`UPDATE profiles SET can_assign = false WHERE id = $1`, [boss]);
+  // off: nobody for it
+  await call('auto.save', admin, { evening: { on: false, hour: 21, to: [] }, queue: { on: false, waitHours: 2, idleMin: 30, to: [] } });
+  assert.equal(await mine(EMAILS.admin), false);
+  // « Envoyer un essai » (no phone here)
+  assert.deepEqual(await call('auto.pushTest', admin, {}), { sent: 0 });
+  await call('auto.save', admin, { evening: { on: true, hour: 21, to: [] }, queue: { on: true, waitHours: 2, idleMin: 30, to: [] } });
+});

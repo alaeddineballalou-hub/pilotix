@@ -34,6 +34,20 @@
       "title": "Ce que Pilotix a fait",
       "empty": "Rien pour l’instant : chaque action d’une automatisation s’écrit ici."
     },
+    "phone": {
+      "title": "Ce téléphone",
+      "why": "Le rapport du soir et les alertes arrivent en notification sur les téléphones où vous avez touché « Activer les notifications ».",
+      "on": "Activer les notifications",
+      "isOn": "Ce téléphone reçoit les notifications",
+      "test": "Envoyer un essai",
+      "testSent": "Essai envoyé : regardez votre téléphone",
+      "testNone": "Aucun téléphone n’a reçu l’essai : touchez d’abord « Activer les notifications »",
+      "denied": "Les notifications sont bloquées pour Pilotix sur ce téléphone. Autorisez-les dans les réglages du navigateur (le cadenas à côté de l’adresse › Notifications), puis revenez ici.",
+      "unsupported": "Ce navigateur ne reçoit pas les notifications. Sur iPhone : ajoutez d’abord Pilotix à l’écran d’accueil (Partager › Sur l’écran d’accueil), puis ouvrez-le depuis là.",
+      "ask": "Activez les notifications : le rapport du soir et les alertes de la file d’appels sonneront sur ce téléphone, même quand Pilotix est fermé.",
+      "later": "Plus tard",
+      "demo": "Dans l’aperçu, rien ne sonne. Sur pilotix.online, touchez ici « Activer les notifications » depuis votre téléphone."
+    },
     "assign": {
       "name": "Affectation automatique",
       "when": "une commande arrive",

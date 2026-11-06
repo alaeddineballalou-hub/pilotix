@@ -16,6 +16,17 @@
 .au-top h3 { margin: 0; font-size: 15.5px; font-weight: 800; line-height: 1.3; }
 .au-top .nt-toggle { flex: none; display: inline-flex; }
 
+/* this phone: where the evening report and the alerts ring */
+.au-phone { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 14px; }
+.au-phone .au-main { gap: 4px; }
+.au-phone h3 { margin: 0; font-size: 15.5px; font-weight: 800; }
+.au-phone.is-on .au-ic { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.au-phone.is-off .au-ic, .au-phone.is-denied .au-ic { background: var(--ai-tint); color: var(--ai-tint-ink); border-color: var(--ai-tint-line); }
+.au-phone-act { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; }
+.au-phone-ok { display: inline-flex; align-items: center; gap: 6px; color: var(--ok); font-size: 13.5px; font-weight: 800; }
+.au-phone-ok .bji { width: 16px; height: 16px; }
+.au-phone-act:empty { display: none; }
+
 /* the rule, said as a sentence: Quand … → Pilotix … */
 .au-rule-t { margin: -2px 0 0; max-width: 74ch; font-size: 13.5px; line-height: 1.55; color: var(--muted); }
 .au-k { color: var(--ink); font-weight: 800; }
@@ -88,6 +99,10 @@
 .au-dot.k-queue { background: var(--coral-soft, var(--warn-soft)); color: var(--coral, var(--warn)); }
 
 @media (max-width: 640px) {
+  .au-phone { grid-template-columns: 34px minmax(0, 1fr); gap: 11px; align-items: start; }
+  .au-phone .au-ic { width: 34px; height: 34px; border-radius: 11px; }
+  .au-phone-act { grid-column: 1 / -1; justify-content: flex-start; }
+  .au-phone-act .btn.primary { width: 100%; justify-content: center; }
   .au-rule { grid-template-columns: 34px minmax(0, 1fr); gap: 11px; padding: 14px 0; }
   .au-ic { width: 34px; height: 34px; border-radius: 11px; }
   .au-ic .bji { width: 16px; height: 16px; }

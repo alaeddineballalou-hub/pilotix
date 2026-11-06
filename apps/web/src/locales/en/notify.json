@@ -34,6 +34,20 @@
       "title": "What Pilotix did",
       "empty": "Nothing yet: each thing an automation does is written here."
     },
+    "phone": {
+      "title": "This phone",
+      "why": "The evening report and the alerts arrive as notifications on the phones where you tapped “Turn on notifications”.",
+      "on": "Turn on notifications",
+      "isOn": "This phone gets the notifications",
+      "test": "Send a test",
+      "testSent": "Test sent: look at your phone",
+      "testNone": "No phone got the test: first tap “Turn on notifications”",
+      "denied": "Notifications are blocked for Pilotix on this phone. Allow them in the browser settings (the lock next to the address › Notifications), then come back here.",
+      "unsupported": "This browser can’t get notifications. On iPhone: first add Pilotix to the Home Screen (Share › Add to Home Screen), then open it from there.",
+      "ask": "Turn on notifications: the evening report and the call queue alerts will ring on this phone, even when Pilotix is closed.",
+      "later": "Later",
+      "demo": "Nothing rings in the preview. On pilotix.online, tap “Turn on notifications” here from your phone."
+    },
     "assign": {
       "name": "Automatic assignment",
       "when": "an order comes in",

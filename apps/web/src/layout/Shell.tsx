@@ -24,6 +24,7 @@ import { BoutiqueSwitch, useBoutiques } from './Boutiques';
 import { ShopBanner } from './ShopBanner';
 import { AllBanner, useAllMode } from './AllBoutiques';
 const DepotAlert = lazy(() => import('./DepotAlert').then((m) => ({ default: m.DepotAlert })));
+const AutoPushAsk = lazy(() => import('./AutoPushAsk').then((m) => ({ default: m.AutoPushAsk })));
 
 const AgentBanner = lazy(() => import('../pages/confirmation/AgentBanner').then((m) => ({ default: m.AgentBanner })));
 
@@ -369,6 +370,11 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
         {!partner && !isAdmin && roles.includes('depot') && (
           <Suspense fallback={null}>
             <DepotAlert />
+          </Suspense>
+        )}
+        {!partner && !isAdmin && (
+          <Suspense fallback={null}>
+            <AutoPushAsk />
           </Suspense>
         )}
         <main id="page" className="page">

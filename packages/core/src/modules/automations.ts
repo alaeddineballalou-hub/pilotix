@@ -419,6 +419,18 @@ async function runComeBack(ctx: Ctx, s: AutomationSettings, st: AutoState) {
   await log(ctx, 'comeback', { campaign: String(c.name), days: s.comeBack.days }, r.length);
 }
 
+// ---------------------------------------------------------------- who hears it
+/** The people the evening report and the slow queue alerts go to now (an automation off: nobody for it). */
+async function listeners(db: Db, s: AutomationSettings): Promise<Set<number>> {
+  const out = new Set<number>();
+  if (s.evening.on) for (const p of await peopleOr(db, s.evening.to, () => admins(db))) out.add(p);
+  if (s.queue.on) {
+    for (const p of await peopleOr(db, s.queue.to, () => managers(db))) out.add(p);
+    for (const t of await getSetting(db, 'teams')) if (t.managerId && t.agentIds.length) out.add(t.managerId);
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------- the job
 export async function autoRun(ctx: Ctx) {
   const s = await autoSettings(ctx.db);
@@ -588,4 +600,12 @@ export const automationsProcs = {
 
   /** The job (every minute): each automation that is on does its part. */
   'auto.run': proc([], z.object({}), (ctx) => autoRun(ctx)),
+
+  /** Does this person get the evening report or the slow queue alerts? (They are asked to turn on notifications.) */
+  'auto.alertMine': proc(null, z.object({}), async (ctx) => ({ mine: (await listeners(ctx.db, await autoSettings(ctx.db))).has(ctx.session.profile.id) })),
+
+  /** « Envoyer un essai »: a notification to this person's own phones, to see that they ring. */
+  'auto.pushTest': proc(null, z.object({}), async (ctx) => ({
+    sent: await sendPush(ctx, [ctx.session.profile.id], { title: 'Pilot Automations', body: 'Les notifications marchent sur ce téléphone.', tag: 'auto-test', url: '#/notify/auto' }),
+  })),
 };

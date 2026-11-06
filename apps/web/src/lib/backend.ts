@@ -581,6 +581,8 @@ export function switchDemo(on: boolean) {
   backend = on ? (demo ??= new DemoBackend()) : remote;
   return backend;
 }
+/** The demo running in this browser: no server, so nothing leaves it (no notification rings). */
+export const inBrowserDemo = () => backend instanceof DemoBackend;
 export const onDemoProgress = (fn: (m: string) => void) => {
   if (backend instanceof DemoBackend) backend.progress = fn;
 };

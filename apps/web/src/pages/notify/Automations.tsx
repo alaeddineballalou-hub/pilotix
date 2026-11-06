@@ -1,10 +1,11 @@
 // Pilot Automations › Automatisations (admins): what Pilotix does by itself, in three groups, one row each — the rule
 // in one sentence (« Quand … → Pilotix … »), its switch, its few numbers (saved on change), where things stand now and
 // the last thing it did; then everything it did lately.
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { In, Out } from '../../lib/backend';
+import { inBrowserDemo, type In, type Out } from '../../lib/backend';
 import { da, n, when } from '../../lib/format';
+import { enablePush } from '../../lib/push';
 import { useAction, useRpc } from '../../lib/query';
 import { ErrorBox, Icon, Loading, RemovableChip } from '../../ui/kit';
 import { toast } from '../../ui/toast';
@@ -54,6 +55,7 @@ function Board({ d }: { d: S }) {
   return (
     <div className="au">
       <p className="au-lead">{t('notify.auto.lead')}</p>
+      <ThisPhone />
 
       <Group title={t('notify.auto.groups.orders')}>
         <Rule icon="usercog" name={name('assign')} when={t('notify.auto.assign.when')} then={t('notify.auto.assign.then')} on={assignOn('conf') || assignOn('follow')}>
@@ -422,6 +424,56 @@ function People({ ids, all, fallback, onChange }: { ids: number[]; all: S['peopl
         )}
       </div>
     </div>
+  );
+}
+
+type PushState = Awaited<ReturnType<typeof enablePush>>;
+
+/** This phone: the evening report and the alerts ring only where someone tapped « Activer les notifications »; then
+ *  « Envoyer un essai » rings it once, to be sure. */
+function ThisPhone() {
+  const { t } = useTranslation();
+  const k = 'notify.auto.phone';
+  const demo = inBrowserDemo();
+  const [found, setState] = useState<PushState | null>(null);
+  const test = useAction('auto.pushTest', { onDone: (r) => toast(t(r.sent ? `${k}.testSent` : `${k}.testNone`), r.sent ? 'ok' : 'bad') });
+  useEffect(() => {
+    if (demo) return;
+    enablePush(false)
+      .then(setState)
+      .catch(() => setState('unsupported'));
+  }, [demo]);
+  // the preview: shown as on a phone that has not said yes yet (its button does nothing here)
+  const state: PushState | null = demo ? 'off' : found;
+  if (!state) return null;
+  return (
+    <section className={`card au-phone is-${state}`}>
+      <span className="au-ic" aria-hidden="true">
+        <Icon name="bell" />
+      </span>
+      <div className="au-main">
+        <h3>{t(`${k}.title`)}</h3>
+        <p className="au-rule-t">{t(state === 'denied' ? `${k}.denied` : state === 'unsupported' ? `${k}.unsupported` : `${k}.why`)}</p>
+        {demo && <p className="au-note">{t(`${k}.demo`)}</p>}
+      </div>
+      <div className="au-phone-act">
+        {state === 'off' && (
+          <button type="button" className="btn primary" disabled={demo} onClick={() => enablePush(true).then(setState).catch(() => setState('unsupported'))}>
+            <Icon name="bell" /> {t(`${k}.on`)}
+          </button>
+        )}
+        {state === 'on' && (
+          <>
+            <span className="au-phone-ok">
+              <Icon name="checkcircle" /> {t(`${k}.isOn`)}
+            </span>
+            <button type="button" className="btn ghost small" disabled={test.isPending} onClick={() => test.mutate({})}>
+              {t(`${k}.test`)}
+            </button>
+          </>
+        )}
+      </div>
+    </section>
   );
 }
 
