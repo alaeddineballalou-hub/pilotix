@@ -209,7 +209,8 @@
     "igExpired": "The login expired, start again.",
     "igClosed": "The Meta tab was closed before the end.",
     "igConnectHelp": "Log in with the Facebook account that manages the shop's Instagram, pick that account, then « Yes, it's my shop ».",
-    "igOr": "Or, as a backup, paste a key by hand:"
+    "igOr": "If the button does not work, the Pilotix team can paste a key here:",
+    "igAdvanced": "Advanced (Pilotix team): paste a key by hand"
   },
   "lahja": {
     "fix": "Darija lesson",

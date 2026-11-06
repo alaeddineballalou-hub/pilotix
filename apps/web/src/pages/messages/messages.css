@@ -137,4 +137,7 @@
 .dl-igconnect { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .dl-igconnect .btn .dl-ch { width: 20px; height: 20px; font-size: 9px; }
 .dl-igconnect p { flex-basis: 100%; margin: 0; }
-.dl-ig-or { margin: 6px 0 0; padding-top: 10px; border-top: 1px dashed var(--line); }
+.dl-ig-adv { margin-top: 6px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.dl-ig-adv > summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.dl-ig-adv[open] > summary { margin-bottom: 8px; }
+.dl-ig-adv > * + * { margin-top: 8px; }

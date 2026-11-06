@@ -209,7 +209,8 @@
     "igExpired": "La connexion a expiré, recommencez.",
     "igClosed": "L’onglet Meta a été fermé avant la fin.",
     "igConnectHelp": "Connectez-vous avec le Facebook qui gère le compte Instagram de la boutique, choisissez ce compte, puis « Oui, c’est ma boutique ».",
-    "igOr": "Ou, en secours, collez une clé à la main :"
+    "igOr": "Si le bouton ne marche pas, l’équipe Pilotix peut coller une clé ici :",
+    "igAdvanced": "Avancé (équipe Pilotix) : coller une clé à la main"
   },
   "lahja": {
     "fix": "Leçon de darija",
