@@ -22,6 +22,9 @@ CREATE TABLE IF NOT EXISTS platform.pilot_exams (
 CREATE INDEX IF NOT EXISTS pilot_exams_recent ON platform.pilot_exams (started_at DESC);
 `;
 
+/** The 100 situations: each exam keeps the ten it asks (one per stage, chosen before it starts), with their titles. */
+export const EXAM_PLAN_SQL = `ALTER TABLE platform.pilot_exams ADD COLUMN IF NOT EXISTS plan jsonb;`;
+
 // ---------------------------------------------------------------- Pilotix's own lessons (with the photos and the exam)
 /**
  * Lessons written by Pilotix for no mistakes and a chat kept in order (and the new photo abilities). Added once by the

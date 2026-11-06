@@ -908,9 +908,43 @@ mark.pl-dj-gone { padding: 0 2px; border-radius: 4px; background: none; color: i
 .pl-exam-line .bji { width: 15px; height: 15px; }
 .pl-exam-line.ok > .bji { color: var(--ok); } .pl-exam-line.warn > .bji { color: var(--warn); } .pl-exam-line.bad > .bji { color: var(--coral); }
 .pl-exam-line a, .pl-exam-line .linkish { font-weight: 700; }
+/* the ten, one per stage of the sale: green passed (no lesson needed), red missed (its lesson always in sight) */
+.pl-exam-q { position: relative; }
+.pl-exam-q::before { content: ""; position: absolute; inset-block: 0; inset-inline-start: 0; width: 4px; }
+.pl-exam-q.pass::before { background: var(--ok); }
+.pl-exam-q.miss::before { background: var(--coral); }
+.pl-exam-q.miss { background: color-mix(in srgb, var(--coral-soft) 55%, transparent); }
+.pl-exam-q.wait { opacity: .62; }
+.pl-exam-q.wait.now { opacity: 1; }
+.pl-exam-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; }
+.pl-exam-stage { font-size: 12px; font-weight: 600; color: var(--muted); }
+.pl-exam-okline { color: var(--ok); font-weight: 600; }
+.pl-exam-mark.wait { background: var(--raise); color: var(--muted); }
+.pl-exam-dot { display: block; width: 10px; height: 10px; border-radius: 50%; background: var(--ai-dot-2, var(--navy)); animation: pl-exam-pulse 1.2s ease-in-out infinite; }
+@keyframes pl-exam-pulse { 50% { opacity: .35; transform: scale(.75); } }
+@media (prefers-reduced-motion: reduce) { .pl-exam-dot { animation: none; } }
+.pl-exam-again { align-self: flex-start; margin-top: 4px; display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 700; background: var(--raise); color: var(--muted); }
+.pl-exam-again .bji { width: 13px; height: 13px; }
+.pl-exam-again.ok { background: var(--ok-soft); color: var(--ok); }
+.pl-exam-again.bad { background: var(--coral-soft); color: var(--coral); }
+.pl-exam-q > .pl-exam-lesson { margin: 0 12px 12px 62px; background: var(--surface); border-style: solid; border-color: color-mix(in srgb, var(--coral) 30%, var(--line)); }
+[dir="rtl"] .pl-exam-q > .pl-exam-lesson { margin: 0 62px 12px 12px; }
+.pl-exam-tally { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 0; font-weight: 700; }
+.pl-exam-tally span { display: inline-flex; align-items: center; gap: 4px; }
+.pl-exam-tally .bji { width: 15px; height: 15px; }
+.pl-exam-tally .ok { color: var(--ok); }
+.pl-exam-tally .bad { color: var(--coral); }
+/* below the ten: the lessons added go to « Push en test », then the exam again */
+.pl-exam-push { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 14px; border: 1px dashed var(--line, rgba(0,0,0,.15)); }
+.pl-exam-push.on { border-style: solid; border-color: color-mix(in srgb, var(--ai-dot-2, var(--navy)) 45%, var(--line)); background: var(--raise); }
+.pl-exam-push-ic { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--raise); color: var(--ai-dot-2, var(--navy)); }
+.pl-exam-push.on .pl-exam-push-ic { background: var(--surface); }
+.pl-exam-push-body { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.pl-exam-push-body p { margin: 0; line-height: 1.5; }
 @media (max-width: 560px) {
   .pl-exam-go { width: 100%; }
   .pl-exam-body, [dir="rtl"] .pl-exam-body { padding: 0 12px 12px; }
+  .pl-exam-q > .pl-exam-lesson, [dir="rtl"] .pl-exam-q > .pl-exam-lesson { margin: 0 12px 12px; }
   .pl-exam-score b { font-size: 38px; }
 }
 

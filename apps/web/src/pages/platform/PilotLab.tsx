@@ -111,7 +111,7 @@ export function LabTab({ d, manager }: { d: State; manager: boolean }) {
         </div>
       </div>
       <div ref={examBox}>
-        <ExamCard d={d} book={examBook} onBook={setExamBook} />
+        <ExamCard d={d} book={examBook} onBook={setExamBook} manager={manager} />
       </div>
       <div ref={relBox}>
         <NextCard

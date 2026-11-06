@@ -1,7 +1,9 @@
-// Pilot AI › Test & lessons › the 10-question exam: ten simulated customers of the shop chosen talk to Dellal on the
-// version chosen (in service, in test…), and Pilot AI marks each chat out of 10. The page starts it, follows it question
-// by question (it runs on the server: a few minutes), then shows the mark, each question's chat, what was good and wrong,
-// and the lesson that would fix the main fault (one click: it waits for the next « Push en test »). The mark of each
+// Pilot AI › Test & lessons › the exam: ten simulated customers of the shop chosen talk to Dellal on the version chosen
+// (in service, in test…), and Pilot AI marks each chat out of 10. The ten come from 100 situations organised the way
+// Dellal sells: one per stage (the greeting, the product, the price… the hard cases), the ones missed last time first.
+// The page starts it, follows it question by question (it runs on the server: a few minutes), then shows the mark and
+// each question in green (passed from 8: no lesson needed) or red, with the lesson that fixes its main fault (one click).
+// Below the questions: « Push en test » for the lessons added, then the exam again on that version. The mark of each
 // version also shows on the push card. Pilotix's own lessons: added in one click, from the lessons' Sales tab.
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -11,23 +13,37 @@ import type { POut } from '../../lib/platform';
 import { Card, Icon, Tabs } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { usePilotAction, usePilotCall } from './pilotDemo';
+import { waitingParts } from './pilotWaiting';
 
 type State = POut<'p.pilot.state'>;
 type Exam = POut<'p.pilot.exam.get'>;
 type Item = Exam['items'][number];
+type Plan = Exam['plan'][number];
 type Book = 'live' | 'trial' | 'test' | 'none';
 const K = 'platform.pilot.exam.';
 const SHOP_KEY = 'px.pilot.lab.shop';
+/** a question is passed from this mark (the server's rule) */
+const PASS = 8;
 
 /** 9,2 (the page's language decides the comma) */
 export const mark = (v: number, lang: string) => (lang === 'en' ? v.toFixed(1) : v.toFixed(1).replace('.', ','));
 /** good ≥ 9, to work on ≥ 7, a real problem below */
 export const tone = (v: number) => (v >= 9 ? 'ok' : v >= 7 ? 'warn' : 'bad');
+/** a question's mark: 9, 7,5 */
+const short = (v: number, lang: string) => mark(v, lang).replace(/[.,]0$/, '');
 
-export function ExamCard({ d, book: picked, onBook }: { d: State; book: Book; onBook: (b: Book) => void }) {
+/** the situation's title in the page's language */
+function useTitle() {
+  const { i18n } = useTranslation();
+  const lang = i18n.language;
+  return (x: { title: string; en?: string | null; ar?: string | null }) => (lang === 'en' ? x.en : lang === 'ar' ? x.ar : x.title) || x.title;
+}
+
+export function ExamCard({ d, book: picked, onBook, manager }: { d: State; book: Book; onBook: (b: Book) => void; manager: boolean }) {
   const { t, i18n } = useTranslation();
   const call = usePilotCall();
   const qc = useQueryClient();
+  const title = useTitle();
   const shops = d.shops;
   const [shopId, setShopId] = useState<number | null>(() => {
     let s = 0;
@@ -56,6 +72,7 @@ export function ExamCard({ d, book: picked, onBook }: { d: State; book: Book; on
   const runningId = d.exams.running?.id ?? null;
   const last = chosen === 'trial' ? d.exams.trial : chosen === 'live' ? d.exams.live : null;
   const wantId = runningId ?? (mine && mine.book === chosen ? mine.id : null) ?? last?.id ?? null;
+  const refresh = () => void qc.invalidateQueries({ queryKey: ['p', 'p.pilot.state'] });
   // follow it while it runs (every 2,5 s); the push card gets its mark when it ends
   useEffect(() => {
     let on = true;
@@ -71,7 +88,7 @@ export function ExamCard({ d, book: picked, onBook }: { d: State; book: Book; on
         if (v.status === 'running') {
           ran = true;
           timer = window.setTimeout(tick, 2500);
-        } else if (ran || v.id === runningId) void qc.invalidateQueries({ queryKey: ['p.pilot.state'] });
+        } else if (ran || v.id === runningId) refresh();
       } catch {
         /* gone: nothing to show */
       }
@@ -83,14 +100,20 @@ export function ExamCard({ d, book: picked, onBook }: { d: State; book: Book; on
     };
   }, [wantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const start = async () => {
+  const start = async (b: Book = chosen) => {
     if (!shopId || busy) return;
     setBusy(true);
     try {
-      const r = await call('p.pilot.exam.start', { shopId, book: chosen });
-      setMine({ id: r.id, book: chosen });
+      try {
+        localStorage.setItem(SHOP_KEY, String(shopId));
+      } catch {
+        /* private mode */
+      }
+      if (b !== chosen) onBook(b);
+      const r = await call('p.pilot.exam.start', { shopId, book: b });
+      setMine({ id: r.id, book: b });
       setExam(await call('p.pilot.exam.get', { id: r.id }));
-      void qc.invalidateQueries({ queryKey: ['p.pilot.state'] });
+      refresh();
     } catch (e: any) {
       toast(e?.message || t(K + 'failed'), 'bad');
     } finally {
@@ -105,8 +128,8 @@ export function ExamCard({ d, book: picked, onBook }: { d: State; book: Book; on
   const pick = (b: Book) => {
     if (!running) onBook(b);
   };
-  const now = exam && running ? exam.items : null;
-  const nextQ = running ? EXAM_IDS[exam!.done] : null;
+  const next: Plan | null = running ? exam!.plan[exam!.done] ?? null : null;
+  const missed = exam ? exam.items.length - exam.passed : 0;
   return (
     <Card title={t(K + 'title')} help={t(K + 'help')} className="pl-lab-card pl-exam">
       {!shops.length ? (
@@ -142,9 +165,14 @@ export function ExamCard({ d, book: picked, onBook }: { d: State; book: Book; on
               </div>
               <p className="small">
                 <b>{t(K + 'progress', { done: n(exam.done), total: n(exam.total) })}</b>
-                {nextQ ? <> · {t(K + `q.${nextQ}`)}</> : null}
+                {next ? (
+                  <>
+                    {' · '}
+                    {t(K + 'now', { stage: t(K + `stage.${next.stage}`), title: title(next) })}
+                  </>
+                ) : null}
               </p>
-              {now && now.length > 0 && <Questions items={now} />}
+              <Questions items={exam.items} plan={exam.plan} />
             </div>
           )}
 
@@ -164,49 +192,96 @@ export function ExamCard({ d, book: picked, onBook }: { d: State; book: Book; on
                 <p className="pl-rel-h">
                   <b>{t(K + (exam.score >= 9.5 ? 'verdictTop' : exam.score >= 9 ? 'verdictGood' : exam.score >= 7 ? 'verdictWork' : 'verdictBad'))}</b>
                 </p>
+                <p className="pl-exam-tally small">
+                  <span className="ok">
+                    <Icon name="check" /> {t(K + 'passedN', { count: exam.passed })}
+                  </span>
+                  {missed > 0 && (
+                    <span className="bad">
+                      <Icon name="alert" /> {t(K + 'missedN', { count: missed })}
+                    </span>
+                  )}
+                </p>
                 <p className="small muted">
                   <bdi>{exam.shopName ?? ''}</bdi> · {t(K + (exam.book === 'live' && !exam.version ? 'book.base' : `book.${exam.book}`), { v: exam.version })} · <bdi>{dateTime(exam.finishedAt ?? exam.at)}</bdi>
                 </p>
               </div>
             </div>
           )}
-          {exam && exam.status === 'done' && <Questions items={exam.items} />}
+          {exam && exam.status === 'done' && (
+            <>
+              <Questions items={exam.items} plan={exam.plan} />
+              <ToTest d={d} exam={exam} manager={manager} busy={busy || !shopId} onAgain={() => void start('trial')} />
+            </>
+          )}
         </>
       )}
     </Card>
   );
 }
 
-/** the ten situations, in the exam's order (the server's list) */
-const EXAM_IDS = ['price', 'centimes', 'fee', 'photo_ask', 'photo_client', 'trust', 'expensive', 'family', 'order', 'unknown'];
-
-function Questions({ items }: { items: Item[] }) {
+/** the ten, in the order of a sale: the ones marked, then (while it runs) the ones still to come */
+function Questions({ items, plan }: { items: Item[]; plan: Plan[] }) {
+  const { t } = useTranslation();
+  const title = useTitle();
+  // the questions are marked in the plan's order
+  const left = plan.slice(items.length);
   return (
     <ol className="pl-exam-qs">
-      {items.map((q) => (
-        <Question key={q.id} q={q} />
+      {items.map((q, i) => (
+        <Question key={q.id} q={q} n={i + 1} />
+      ))}
+      {left.map((x, i) => (
+        <li key={x.id} className={`pl-exam-q wait${i === 0 ? ' now' : ''}`}>
+          <div className="pl-exam-row">
+            <span className="pl-exam-mark wait" aria-hidden="true">
+              {i === 0 ? <i className="pl-exam-dot" /> : '·'}
+            </span>
+            <span className="pl-exam-qt">
+              <span className="pl-exam-stage">{t(K + 'stageN', { n: items.length + i + 1, stage: t(K + `stage.${x.stage}`) })}</span>
+              <b>{title(x)}</b>
+              <small className="muted">{t(K + (i === 0 ? 'asking' : 'toCome'))}</small>
+              {x.why === 'again' && <Again before={x.before} pass={null} />}
+            </span>
+          </div>
+        </li>
       ))}
     </ol>
   );
 }
 
-function Question({ q }: { q: Item }) {
+/** « Reposée · 5/10 la dernière fois »: a question missed last time, asked again (fixed now, or missed again) */
+function Again({ before, pass }: { before: number | null; pass: boolean | null }) {
   const { t, i18n } = useTranslation();
+  const k = pass === null ? 'retry' : pass ? 'fixed' : 'stillMissed';
+  return (
+    <span className={`pl-exam-again${pass === null ? '' : pass ? ' ok' : ' bad'}`}>
+      <Icon name="refresh" /> {before === null ? t(K + `${k}None`) : t(K + k, { v: short(before, i18n.language) })}
+    </span>
+  );
+}
+
+function Question({ q, n: num }: { q: Item; n: number }) {
+  const { t, i18n } = useTranslation();
+  const title = useTitle();
   const [added, setAdded] = useState(false);
   const add = usePilotAction('p.pilot.addLesson', {
     success: () => t(K + 'lessonAdded'),
     onDone: () => setAdded(true),
   });
   const s = typeof q.score === 'number' ? q.score : null;
+  const pass = q.pass ?? (s !== null && s >= PASS);
   const fault = q.faults?.[0] ?? null;
   return (
-    <li className="pl-exam-q">
+    <li className={`pl-exam-q ${pass ? 'pass' : 'miss'}`}>
       <details>
         <summary>
-          <span className={`pl-exam-mark ${s === null ? 'bad' : tone(s)}`}>{s === null ? '—' : <bdi className="ltr">{mark(s, i18n.language).replace(/[.,]0$/, '')}</bdi>}</span>
+          <span className={`pl-exam-mark ${pass ? 'ok' : 'bad'}`}>{s === null ? '—' : <bdi className="ltr">{short(s, i18n.language)}</bdi>}</span>
           <span className="pl-exam-qt">
-            <b>{t(K + `q.${q.id}`, { defaultValue: q.title })}</b>
-            <small className="muted">{q.error ? t(K + 'notMarked') : s !== null && s >= 10 ? t(K + 'perfect') : fault ?? q.good?.[0] ?? ''}</small>
+            <span className="pl-exam-stage">{t(K + 'stageN', { n: num, stage: t(K + `stage.${q.stage}`) })}</span>
+            <b>{title(q)}</b>
+            <small className={pass ? 'pl-exam-okline' : 'muted'}>{q.error ? t(K + 'notMarked') : pass ? t(K + 'passNoLesson') : fault ?? ''}</small>
+            {q.why === 'again' && <Again before={q.before ?? null} pass={q.error ? false : pass} />}
           </span>
           <Icon name="chevron" />
         </summary>
@@ -236,29 +311,84 @@ function Question({ q }: { q: Item }) {
               ))}
             </ul>
           )}
-          {q.lesson && (
-            <div className="pl-exam-lesson">
-              <span className="small muted">{t(K + 'lessonTitle')}</span>
-              <p lang="en" dir="ltr">
-                {q.lesson}
-              </p>
-              {q.meaning && i18n.language !== 'en' && (
-                <p className="pl-next-mean" dir="auto">
-                  {q.meaning}
-                </p>
-              )}
-              {q.lessonOk ? (
-                <button type="button" className="btn small" disabled={added || add.isPending} onClick={() => add.mutate({ topic: q.topic ?? 'other', text: q.lesson!, ...(q.meaning ? { meaning: q.meaning } : {}) })}>
-                  <Icon name={added ? 'check' : 'plus'} /> {t(K + (added ? 'lessonDone' : 'lessonAdd'))}
-                </button>
-              ) : (
-                <small className="muted">{t(K + 'lessonIdea')}</small>
-              )}
-            </div>
-          )}
         </div>
       </details>
+      {/* red: the lesson that fixes it, always in sight (green: none needed) */}
+      {!pass && q.lesson && (
+        <div className="pl-exam-lesson">
+          <span className="small muted">{t(K + 'lessonTitle')}</span>
+          <p lang="en" dir="ltr">
+            {q.lesson}
+          </p>
+          {q.meaning && i18n.language !== 'en' && (
+            <p className="pl-next-mean" dir="auto">
+              {q.meaning}
+            </p>
+          )}
+          {q.lessonOk ? (
+            <button type="button" className={`btn small${added ? '' : ' primary'}`} disabled={added || add.isPending} onClick={() => add.mutate({ topic: q.topic ?? 'other', text: q.lesson!, ...(q.meaning ? { meaning: q.meaning } : {}) })}>
+              <Icon name={added ? 'check' : 'plus'} /> {t(K + (added ? 'lessonDone' : 'lessonAdd'))}
+            </button>
+          ) : (
+            <small className="muted">{t(K + 'lessonIdea')}</small>
+          )}
+        </div>
+      )}
     </li>
+  );
+}
+
+/**
+ * Below the questions: the lessons added wait for « Push en test » (one click here, like the push card's), then the exam
+ * again on that version — the missed questions are asked first, so the marks show whether the lessons fixed them.
+ */
+function ToTest({ d, exam, manager, busy, onAgain }: { d: State; exam: Exam; manager: boolean; busy: boolean; onAgain: () => void }) {
+  const { t } = useTranslation();
+  const R = 'platform.pilot.release.';
+  const p = d.release.pending;
+  const tr = d.release.trial;
+  const waiting = waitingParts(t, p, false);
+  const stage = usePilotAction('p.pilot.stage', { success: (x) => t(R + 'stagedToast', { v: x.version }) });
+  const missed = exam.items.length - exam.passed;
+  const onTrial = !!tr && exam.book === 'trial' && exam.version === tr.version;
+  let text: string;
+  let action: 'stage' | 'again' | null = null;
+  if (waiting.length) {
+    text = t(K + 'toTestWaiting', { what: waiting.join(t(R + 'and')) });
+    action = 'stage';
+  } else if (tr && !onTrial) {
+    text = t(K + 'toTestReady', { v: tr.version });
+    action = 'again';
+  } else if (missed > 0) text = t(K + 'toTestAdd');
+  else if (onTrial) text = t(K + 'toTestAllGreen', { v: tr!.version });
+  else return null;
+  return (
+    <div className={`pl-exam-push${action ? ' on' : ''}`}>
+      <span className="pl-exam-push-ic" aria-hidden="true">
+        <Icon name="beaker" />
+      </span>
+      <div className="pl-exam-push-body">
+        <p className="pl-rel-h">
+          <b>{t(K + 'toTestTitle')}</b>
+        </p>
+        <p className="small">{text}</p>
+        {action === 'stage' && <p className="small muted">{t(K + 'toTestThen')}</p>}
+        {action && !manager && <p className="small muted">{t(K + 'toTestManagers')}</p>}
+        {action && manager && (
+          <div className="pl-rel-do">
+            {action === 'stage' ? (
+              <button type="button" className="btn primary" disabled={stage.isPending} onClick={() => stage.mutate({ darija: false })}>
+                <Icon name="beaker" /> {t(R + 'stage')}
+              </button>
+            ) : (
+              <button type="button" className="btn primary" disabled={busy} onClick={onAgain}>
+                <Icon name="checkcircle" /> {t(K + 'againOn', { v: tr!.version })}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

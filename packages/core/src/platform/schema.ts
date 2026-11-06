@@ -2,7 +2,7 @@
 // index used at login, settings and the journal. Applied before every shop's own migrations.
 import type { Tenancy } from './tenancy';
 import { PILOT_PLATFORM_SQL, RELEASE_SQL } from '../modules/pilotlearn';
-import { EXAM_SQL, pilotixLessonsSql } from '../modules/pilotexamdata';
+import { EXAM_PLAN_SQL, EXAM_SQL, pilotixLessonsSql } from '../modules/pilotexamdata';
 import { AI_USAGE_SQL } from './aiusage';
 import { LAHJA_PLATFORM_SQL } from '../modules/lahja';
 import { DARIJA_BOOK_SQL, DARIJA_DRAFT_SQL } from '../modules/darijabook';
@@ -650,6 +650,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   // Pilotix's own sales lessons (no mistakes, a chat in order, the photos): approved in Pilotix's name, they wait for the
   // next « Push en test » like any coach lesson (pilotexamdata.ts)
   ['p031_pilotix_lessons', pilotixLessonsSql()],
+  // Pilot AI › the exam's 100 situations: the ten an exam asks (one per stage, the missed ones first), kept with it
+  ['p032_exam_plan', EXAM_PLAN_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

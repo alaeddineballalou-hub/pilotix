@@ -1520,13 +1520,16 @@ export const PLATFORM_REGISTRY = {
     const book = trial ? trial.book : i.book === 'trial' ? null : await pilot.bookChoice(ctx.t.platform, i.book);
     if (!book) throw bad(i.book === 'trial' ? 'Aucune version en test : cliquez d’abord sur « Push en test »' : 'Aucun livre en test en ce moment');
     const shop = await ctx.shop(i.shopId);
-    if (!(await exam.examFacts(shop.db))) throw bad('Cette boutique n’a aucun produit actif : l’examen parle d’un de ses produits.');
-    const id = await exam.startExam(ctx.t.platform, { shopId: s.id, shopName: s.name, book: i.book, version: book.version, by: ctx.staff.name || ctx.staff.email });
-    await audit(ctx, 'pilot.exam.start', null, { id, shopId: s.id, book: i.book, version: book.version });
+    const facts = await exam.examFacts(shop.db);
+    if (!facts) throw bad('Cette boutique n’a aucun produit actif : l’examen parle d’un de ses produits.');
+    // the ten situations, one per stage of the sale: the ones missed last time first, then the ones never asked
+    const plan = exam.pickExam(facts, await exam.examHistory(ctx.t.platform), ctx.now());
+    const id = await exam.startExam(ctx.t.platform, { shopId: s.id, shopName: s.name, book: i.book, version: book.version, by: ctx.staff.name || ctx.staff.email, plan });
+    await audit(ctx, 'pilot.exam.start', null, { id, shopId: s.id, book: i.book, version: book.version, again: plan.filter((x) => x.why === 'again').length });
     const ask = ctx.ai;
     // the exam goes on after this answer; a failure is written on it (never lost)
     void exam
-      .runExam({ pdb: ctx.t.platform, shop, ask, examId: id, book, lab: i.book, trial: trial ? { darija: trial.darija, lahja: trial.lahja } : null })
+      .runExam({ pdb: ctx.t.platform, shop, ask, examId: id, book, lab: i.book, trial: trial ? { darija: trial.darija, lahja: trial.lahja } : null, facts })
       .catch((e) => ctx.t.platform.query(`UPDATE platform.pilot_exams SET status = 'failed', error = $2, finished_at = now() WHERE id = $1`, [id, String(e?.message ?? e).slice(0, 300)]).catch(() => undefined));
     return { id };
   }),

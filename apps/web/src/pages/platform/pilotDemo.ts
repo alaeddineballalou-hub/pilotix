@@ -726,77 +726,108 @@ const PILOTIX_DEMO = [
   ['anger', 'When the customer is unhappy, apologise in one sentence, repeat their problem in your own words to show you understood, then hand the chat to the team without arguing.', 'Client mécontent : s’excuser en une phrase, redire son problème avec ses propres mots pour montrer qu’on a compris, puis passer la main à l’équipe sans discuter.'],
 ].map(([topic, text, meaning]) => ({ topic, text, meaning }));
 
-/** v4's exam this morning (id 13), or v2's two days ago (id 9): ten chats with the demo shop's watch, each marked */
+/** the exam's situations the example uses (pilotexambank.ts: their stage, their titles in French, English and Arabic) */
+const EXQ: Record<string, [string, string, string, string]> = {
+  greet_salam: ['greet', 'Juste « salam »', 'Just « salam »', 'مجرد « سلام »'],
+  greet_robot: ['greet', '« Tu es un robot ? »', '« Are you a robot? »', '« هل أنت روبوت؟ »'],
+  prod_original: ['product', 'Original ou copie ?', 'Original or a copy?', 'أصلي أم تقليد؟'],
+  centimes: ['price', 'Un prix en centimes', 'A price in centimes', 'سعر بالسنتيم'],
+  photo_ask: ['variants', 'Une photo demandée', 'A photo asked for', 'صورة مطلوبة'],
+  var_other: ['variants', 'Voir une autre couleur', 'Seeing another colour', 'رؤية لون آخر'],
+  fee: ['delivery', 'La livraison et le total', 'Delivery and the total', 'التوصيل والمجموع'],
+  del_far: ['delivery', 'Une wilaya du Sud', 'A far southern wilaya', 'ولاية في الجنوب'],
+  trust: ['trust', 'La peur de l’arnaque', 'Fear of a scam', 'الخوف من الاحتيال'],
+  trust_sms: ['trust', 'Un code reçu par SMS', 'A code received by SMS', 'رمز وصل عبر SMS'],
+  expensive: ['objections', '« C’est cher »', '« It’s expensive »', '« غالي »'],
+  order: ['order', 'Une commande complète', 'A whole order', 'طلبية كاملة'],
+  ord_badnum: ['order', 'Un numéro à 9 chiffres', 'A 9-digit phone number', 'رقم من 9 أرقام'],
+  after_late: ['after', 'Un colis en retard', 'A late parcel', 'طرد متأخر'],
+  after_broken: ['after', 'Un produit cassé', 'A broken product', 'منتج مكسور'],
+  unknown: ['hard', 'Une question sans réponse', 'A question with no answer', 'سؤال بلا جواب'],
+};
+type ExLesson = { topic: string; text: string; meaning: string } | null;
+const C = (body: string) => ({ role: 'customer', body });
+const D = (body: string) => ({ role: 'agent', body });
+const T = (body: string) => ({ role: 'tool', body });
+/** one question of the example: green from 8 (no lesson needed), red below with its lesson; `before`: missed last time */
+function exItem(id: string, score: number, transcript: { role: string; body: string }[], good: string[], faults: string[], lesson: ExLesson = null, before?: number) {
+  const [stage, title, en, ar] = EXQ[id];
+  const pass = score >= 8;
+  return {
+    id,
+    stage,
+    title,
+    en,
+    ar,
+    why: before === undefined ? ('new' as const) : ('again' as const),
+    before: before ?? null,
+    score,
+    pass,
+    good,
+    faults,
+    lesson: pass ? null : lesson?.text ?? null,
+    meaning: pass ? null : lesson?.meaning ?? null,
+    topic: lesson?.topic ?? 'other',
+    lessonOk: !pass && !!lesson,
+    transcript,
+  };
+}
+function exExam(id: number, book: string, version: number, at: string, items: ReturnType<typeof exItem>[]) {
+  const score = Math.round((items.reduce((s, i) => s + i.score, 0) / items.length) * 10) / 10;
+  const plan = items.map(({ id: q, stage, title, en, ar, why, before }) => ({ id: q, stage, title, en, ar, why, before }));
+  return { id, shopId: 1, shopName: 'Boutique Alaeddine', book, version, status: 'done', score, done: items.length, total: items.length, plan, items, passed: items.filter((i) => i.pass).length, error: null, by: 'Alaeddine', at, finishedAt: at };
+}
+
+/** v4's exam this morning (id 13), or v2's two days ago (id 9): ten chats with the demo shop's watch, one per stage */
 function examDemo(id = 13) {
   if (id === 9) return examV2();
   const at = new Date(Date.parse(`${today()}T07:00:00Z`)).toISOString();
-  const C = (body: string) => ({ role: 'customer', body });
-  const D = (body: string) => ({ role: 'agent', body });
-  const T = (body: string) => ({ role: 'tool', body });
-  const q = (id: string, title: string, score: number, transcript: { role: string; body: string }[], good: string[], faults: string[], lesson: string | null = null, meaning: string | null = null, topic = 'other') => ({
-    id,
-    title,
-    score,
-    good,
-    faults,
-    lesson,
-    meaning,
-    topic,
-    lessonOk: !!lesson,
-    transcript,
-  });
-  const items = [
-    q('price', 'Le prix', 10, [C('salam, ch7al Montre Atlas ?'), T('search_products "Montre Atlas" → 1 produit(s)'), D('Wa 3likoum salam 😊 Montre Atlas b 3 500 DA, w tkhalass ghir ki tesselmha. Men ayya wilaya nta ?')], ['Le prix exact du catalogue, tout de suite', 'Le paiement à la livraison dit tôt', 'Une seule question pour avancer'], []),
-    q('centimes', 'Un prix en centimes', 9, [C('Montre Atlas rahi b 35 alf ?'), D('Ih khouya, 35 alf ya3ni 3 500 DA 👍 Tkhalass ki tesselmha. Men ayya wilaya ?')], ['A compris les centimes et confirmé en DA'], ['N’a pas dit qu’on règle seulement à la réception avec le total livré'], 'Before giving a price, a fee or a total, check it with the tool, then say clearly the total to hand to the delivery man, so there is no surprise at the door.', 'Avant un prix, des frais ou un total : le vérifier avec l’outil, puis redire le total à donner au livreur.', 'price'),
-    q('fee', 'La livraison et le total', 10, [C('salam, n7ab Montre Atlas'), D('Mar7ba 😊 Montre Atlas b 3 500 DA. Men ayya wilaya ?'), C('ana men Oran, ch7al la livraison ?'), T('delivery_fee Oran → domicile 600 DA · bureau 400 DA'), D('L Oran : 600 DA l dar wela 400 DA f l bureau. Ya3ni 4 100 DA l dar wela 3 900 DA f l bureau, tkhalashom l livreur. Wach yasselhek ?')], ['Les frais pris avec l’outil', 'Le total livré clair, sans date promise'], []),
-    q('photo_ask', 'Une photo demandée', 10, [C('ab3athli tswira ta3 Montre Atlas noire stp'), T('send_photos #12 → 2 photo(s) envoyée(s)'), D('Ha hiya la noire 👆 T7abha l dar wela f l bureau ?')], ['Les vraies photos envoyées tout de suite, la couleur demandée', 'Un texte court, une question'], []),
-    q('photo_client', 'La photo du client', 9, [C('[photo] Capture d’écran d’une publicité : une montre noire · Message : 3andkom hadi ? ch7al ?'), D('Ih 3andna, hadi Montre Atlas 😊 b 3 500 DA. Men ayya wilaya ?')], ['A reconnu le produit et l’a nommé', 'Le prix tout de suite'], ['N’a pas confirmé la couleur qu’il voit sur la photo']),
-    q('trust', 'La peur de l’arnaque', 10, [C('nkhalas 9bel wela ki yjini ? ma nthi9ch bezzaf f les pages'), D('Ma tkhalass walou 9bel 🙏 Tkhalass ghir ki yjik l colis 3and l livreur, w 7atta acompte ma ntalbouhch. Men ayya wilaya bach n9ollek l livraison ?')], ['Des faits simples : rien avant la réception, jamais d’acompte', 'Calme, et la vente continue'], []),
-    q('expensive', '« C’est cher »', 8, [C('ch7al Montre Atlas ?'), D('Montre Atlas b 3 500 DA 😊 Men ayya wilaya ?'), C('ghali bezzaf, ta9der tna9es chwiya ?'), D('Les prix ta3na fixes, smahli 🙏 Bessah f l bureau tkhalass la livraison ghir 400 DA.')], ['Pas de remise inventée', 'Une vraie option : le bureau'], ['N’a pas rappelé ce que vaut la montre avant de parler du bureau', 'Pas de question à la fin'], 'Keep the chat in order: answer the customer\'s question first, add one useful benefit, then ask one single question to move forward. Never skip a step and never ask several questions at once.', 'Répondre, un seul avantage utile, puis une seule question pour avancer.', 'closing'),
-    q('family', '« Je demande à ma famille »', 9, [C('ch7al Montre Atlas ?'), D('Montre Atlas b 3 500 DA, tkhalass ki tesselmha 😊'), C('mli7, nchawer rajli w nwelli'), D('Saha, chawer 3la rahtek 😊 Ha l mlakhess : Montre Atlas, 3 500 DA + livraison selon la wilaya. Ana hna ki twelli.')], ['A respecté ce moment, petit récapitulatif à montrer'], ['Le récapitulatif n’a pas le total livré']),
-    q('order', 'Une commande complète', 9, [C('n7ab nkoumandi Montre Atlas noire'), D('Mlih 👍 3tini smiytek stp.'), C('Karim, 0661 23 45 18'), D('Merci Karim. Ra9mek 0661 23 45 18, s7i7 ? Men ayya wilaya ?'), C('Oran'), T('create_order → CMD-0412 · 4 100 DA'), D('C’est noté ✅ Conseiller ghadi y3aytlek 3la 0661 23 45 18 bach ykonfirmi, jawbou 🙏')], ['Une chose à la fois, le numéro relu', 'La commande enregistrée dès que tout est là'], ['N’a pas demandé la commune']),
-    q('unknown', 'Une question sans réponse', 9, [C('wach fih garantie 2 ans ? w wach houwa original ?'), T('callback → numéro demandé (1/2)'), D('Had l ma3louma ma 3andich dorka 🙏 3tini ra9mek w conseiller y3aytlek yjawbek.')], ['Rien d’inventé', 'Un rappel par un conseiller'], ['Aurait pu rassurer avec le paiement à la livraison']),
-  ];
-  return { id: 13, shopId: 1, shopName: 'Boutique Alaeddine', book: 'trial', version: 4, status: 'done', score: 9.3, done: 10, total: 10, items, error: null, by: 'Alaeddine', at, finishedAt: at };
+  const far = {
+    topic: 'fee',
+    text: 'When the delivery tool finds no delivery for a wilaya, say so honestly and hand the chat to the team; never promise a fee or a delivery time.',
+    meaning: 'L’outil ne trouve aucune livraison pour une wilaya : le dire honnêtement et passer la main à l’équipe ; ne jamais promettre de frais ni de délai.',
+  };
+  // the four questions v2 missed are asked again first (did the lessons fix them?); the six other stages, new situations
+  return exExam(13, 'trial', 4, at, [
+    exItem('greet_robot', 10, [C('ch7al Montre Atlas ?'), D('Montre Atlas b 3 500 DA, w tkhalass ghir ki tesselmha 😊 Noire wela argentée ?'), C('nta robot wela bnadem ?'), D('Ana l’assistant ta3 la boutique 😊 Ida t7ab, wa7ed men l’équipe ykamel m3ak. Noire wela argentée ?')], ['Honnête : l’assistant de la boutique', 'Propose une personne, puis la vente continue'], []),
+    exItem('prod_original', 9, [C('Montre Atlas original wela copie ?'), T('callback → numéro demandé (1/2)'), D('Had l ma3louma ma 3andich bdhabt 🙏 3tini numéro ta3ek w wa7ed men l’équipe y3ayetlek yjawbek.')], ['Rien d’inventé', 'Un rappel par un conseiller'], ['Aurait pu rappeler qu’on paie seulement à la réception'], null, 6),
+    exItem('centimes', 10, [C('Montre Atlas rahi b 35 alf ?'), D('Ih khouya, 35 alf ya3ni 3 500 DA 👍 Tkhalass ki tesselmha. Men ayya wilaya ?')], ['A compris les centimes et confirmé en DA', 'Une seule question'], [], null, 6),
+    exItem('var_other', 10, [C('ch7al Montre Atlas ?'), D('Montre Atlas b 3 500 DA, tkhalass ki tesselmha 😊'), C('3andek argentée ? ab3athli tswira nchoufha'), T('send_photos #12 (argentée) → 2 photo(s) envoyée(s)'), D('Ha hiya l’argentée 👆 T7abha ?')], ['Les photos de la couleur demandée, tout de suite', 'Court, une question'], []),
+    exItem('del_far', 7, [C('tewaslou l Tamanrasset ? ch7al la livraison ?'), T('delivery_fee Tamanrasset → pas de livraison configurée'), D('Ih nwaslou 😊 Tousel f 7 iyam. Ch7al men wa7da t7ab ?')], ['Poli et court'], ['A promis la livraison et 7 jours alors que l’outil ne trouve aucune livraison pour Tamanrasset', 'N’a pas passé la main à l’équipe'], far),
+    exItem('trust_sms', 10, [C('n7ab nkoumandi Montre Atlas'), D('Mlih 👍 3tini smiytek stp.'), C('jani code f SMS, nab3athoulek ?'), D('Lala, ma tab3at l code l 7ad 🙏 7na ma nsa9souch 3la code, tkhalass ghir ki yjik l colis. Smiytek ?')], ['Aucun code demandé, le client protégé', 'La commande continue'], []),
+    exItem('expensive', 9, [C('ch7al Montre Atlas ?'), D('Montre Atlas b 3 500 DA 😊 Men ayya wilaya ?'), C('ghali bezzaf, ta9der tna9es chwiya ?'), D('Les prix fixes, smahli 🙏 Bessah montre solide, w tkhalass ghir ki tesselmha. F l bureau la livraison 400 DA berk. Noire wela argentée ?')], ['La valeur, puis une vraie option : le bureau', 'Une question pour avancer'], ['Un peu long'], null, 6),
+    exItem('ord_badnum', 10, [C('n7ab nkoumandi Montre Atlas'), D('Mlih 👍 3tini smiytek w numéro ta3ek stp.'), C('Yacine, 066123451'), D('Merci Yacine 😊 Numéro fih 9 ar9am berk : 3awed ktebli l 10 ar9am stp (05, 06 wela 07…).')], ['A vu les 9 chiffres', 'Une seule question'], []),
+    exItem('after_broken', 9, [C('l Montre Atlas wslatni mkassra 😡'), T('handoff → l’équipe prend la main'), D('Smahli bezzaf khouya. Rani ba3atht l’équipe, y3aytoulek bach ychoufou m3ak.')], ['Excuses en une phrase, sans emoji', 'La main passée tout de suite'], ['N’a pas dit la règle d’échange de la boutique']),
+    exItem('unknown', 9, [C('wach fih garantie 2 ans ? w wach houwa original ?'), T('callback → numéro demandé (1/2)'), D('Had l ma3louma ma 3andich dorka 🙏 3tini ra9mek w conseiller y3aytlek yjawbek.')], ['Rien d’inventé', 'Un rappel par un conseiller'], ['Aurait pu rassurer avec le paiement à la livraison'], null, 7),
+  ]);
 }
 
-/** v2 (in service): the same ten chats two days ago, before Pilotix's lessons: more faults, 7,6/10 */
+/** v2 (in service) two days ago, before Pilotix's lessons: four questions missed, 7,6/10 */
 function examV2() {
   const at = new Date(Date.parse(`${add(today(), -2)}T09:00:00Z`)).toISOString();
-  const C = (body: string) => ({ role: 'customer', body });
-  const D = (body: string) => ({ role: 'agent', body });
-  const T = (body: string) => ({ role: 'tool', body });
   const L = (k: number) => PILOTIX_DEMO[k] ?? null;
-  const q = (id: string, title: string, score: number, transcript: { role: string; body: string }[], good: string[], faults: string[], lesson: { topic: string; text: string; meaning: string } | null = null) => ({
-    id,
-    title,
-    score,
-    good,
-    faults,
-    lesson: lesson?.text ?? null,
-    meaning: lesson?.meaning ?? null,
-    topic: lesson?.topic ?? 'other',
-    lessonOk: !!lesson,
-    transcript,
-  });
   const centimes = {
     topic: 'price',
     text: 'When the customer says a price in centimes, as many Algerians do, confirm it is the same price in dinars instead of saying no.',
     meaning: 'Un prix dit en centimes : confirmer que c’est le même prix en dinars, au lieu de dire non.',
   };
-  const items = [
-    q('price', 'Le prix', 8, [C('salam, ch7al Montre Atlas ?'), T('search_products "Montre Atlas" → 1 produit(s)'), D('Salam 😊 Montre Atlas b 3 500 DA. Men ayya wilaya nta ? W t7abha l dar wela f l bureau ?')], ['Le prix exact du catalogue'], ['Deux questions à la fois', 'Le paiement à la livraison n’est pas dit'], L(0)),
-    q('centimes', 'Un prix en centimes', 6, [C('Montre Atlas rahi b 35 alf ?'), D('Lala khouya, Montre Atlas b 3 500 DA 😊')], ['Le bon prix en DA'], ['A dit « non » : 35 alf en centimes, c’est bien 3 500 DA', 'Pas de question pour avancer'], centimes),
-    q('fee', 'La livraison et le total', 9, [C('salam, n7ab Montre Atlas'), D('Mar7ba 😊 Montre Atlas b 3 500 DA. Men ayya wilaya ?'), C('ana men Oran, ch7al la livraison ?'), T('delivery_fee Oran → domicile 600 DA · bureau 400 DA'), D('L Oran : 600 DA l dar wela 400 DA f l bureau. Wach yasselhek ?')], ['Les frais pris avec l’outil'], ['N’a pas redit le total à donner au livreur'], L(3)),
-    q('photo_ask', 'Une photo demandée', 8, [C('ab3athli tswira ta3 Montre Atlas noire stp'), T('send_photos #12 → 4 photo(s) envoyée(s)'), D('Ha les photos 👆 3andna noire w argentée. Ch7al men wa7da t7ab ? W men ayya wilaya ?')], ['Les vraies photos envoyées tout de suite'], ['A envoyé aussi l’autre couleur : le client voulait la noire', 'Deux questions à la fois'], L(1)),
-    q('photo_client', 'La photo du client', 7, [C('[photo] Capture d’écran d’une publicité : une montre noire · Message : 3andkom hadi ? ch7al ?'), D('Ih 3andna 😊 b 3 500 DA.')], ['Le prix tout de suite'], ['N’a pas nommé le produit vu sur la photo', 'Pas de question pour avancer'], L(2)),
-    q('trust', 'La peur de l’arnaque', 9, [C('nkhalas 9bel wela ki yjini ? ma nthi9ch bezzaf f les pages'), D('Tkhalass ghir ki yjik l colis 🙏 Men ayya wilaya ?')], ['Rien avant la réception', 'La vente continue'], ['N’a pas dit qu’on ne demande jamais d’acompte'], L(5)),
-    q('expensive', '« C’est cher »', 6, [C('ch7al Montre Atlas ?'), D('Montre Atlas b 3 500 DA 😊'), C('ghali bezzaf, ta9der tna9es chwiya ?'), D('Smahli, les prix fixes.')], ['Pas de remise inventée'], ['Aucune vraie option (le bureau, moins cher)', 'Rien sur ce que vaut la montre', 'La vente s’arrête là'], L(0)),
-    q('family', '« Je demande à ma famille »', 7, [C('ch7al Montre Atlas ?'), D('Montre Atlas b 3 500 DA 😊'), C('mli7, nchawer rajli w nwelli'), D('Saha 😊')], ['Sans pression'], ['Pas de récapitulatif à montrer à la famille', 'N’a pas dit qu’il reste là pour répondre'], L(7)),
-    q('order', 'Une commande complète', 8, [C('n7ab nkoumandi Montre Atlas noire'), D('Mlih 👍 3tini smiytek, ra9mek, l wilaya w l commune stp.'), C('Karim, 0661 23 45 18, Oran, Bir El Djir'), T('create_order → CMD-0398 · 4 100 DA'), D('C’est noté ✅ Conseiller y3aytlek bach ykonfirmi 🙏')], ['La commande enregistrée avec la commune'], ['Tout demandé d’un coup', 'Le numéro pas relu au client'], L(4)),
-    q('unknown', 'Une question sans réponse', 8, [C('wach fih garantie 2 ans ? w wach houwa original ?'), D('Ma n3arafch had l ma3louma 🙏')], ['Rien d’inventé'], ['N’a pas proposé qu’un conseiller rappelle le client'], L(9)),
-  ];
-  return { id: 9, shopId: 1, shopName: 'Boutique Alaeddine', book: 'live', version: 2, status: 'done', score: 7.6, done: 10, total: 10, items, error: null, by: 'Alaeddine', at, finishedAt: at };
+  const original = {
+    topic: 'product',
+    text: 'When the customer asks whether a product is original, answer only with what the shop wrote; if it says nothing, say so honestly and offer that someone from the team calls back.',
+    meaning: 'Le client demande si c’est original : répondre seulement avec ce que la boutique a écrit ; sinon le dire honnêtement et proposer qu’un conseiller le rappelle.',
+  };
+  return exExam(9, 'live', 2, at, [
+    exItem('greet_salam', 9, [C('salam'), D('Wa 3likoum salam 😊 Mar7ba bik. Wach rak t7awes, montre wela sac ?')], ['Le salam rendu', 'Une seule question'], ['Aurait pu dire qu’on paie à la livraison']),
+    exItem('prod_original', 6, [C('Montre Atlas original wela copie ?'), D('Original 100 % khouya 👍 Men ayya wilaya ?')], ['Court'], ['A dit « original 100 % » : les informations de la boutique ne le disent pas', 'Aucun rappel par un conseiller proposé'], original),
+    exItem('centimes', 6, [C('Montre Atlas rahi b 35 alf ?'), D('Lala khouya, Montre Atlas b 3 500 DA 😊')], ['Le bon prix en DA'], ['A dit « non » : 35 alf en centimes, c’est bien 3 500 DA', 'Pas de question pour avancer'], centimes),
+    exItem('photo_ask', 8, [C('ab3athli tswira ta3 Montre Atlas noire stp'), T('send_photos #12 → 4 photo(s) envoyée(s)'), D('Ha les photos 👆 3andna noire w argentée. Ch7al men wa7da t7ab ? W men ayya wilaya ?')], ['Les vraies photos envoyées tout de suite'], ['A envoyé aussi l’autre couleur : le client voulait la noire', 'Deux questions à la fois']),
+    exItem('fee', 9, [C('salam, n7ab Montre Atlas'), D('Mar7ba 😊 Montre Atlas b 3 500 DA. Men ayya wilaya ?'), C('ana men Oran, ch7al la livraison ?'), T('delivery_fee Oran → domicile 600 DA · bureau 400 DA'), D('L Oran : 600 DA l dar wela 400 DA f l bureau. Wach yasselhek ?')], ['Les frais pris avec l’outil'], ['N’a pas redit le total à donner au livreur']),
+    exItem('trust', 9, [C('nkhalas 9bel wela ki yjini ? ma nthi9ch bezzaf f les pages'), D('Tkhalass ghir ki yjik l colis 🙏 Men ayya wilaya ?')], ['Rien avant la réception', 'La vente continue'], ['N’a pas dit qu’on ne demande jamais d’acompte']),
+    exItem('expensive', 6, [C('ch7al Montre Atlas ?'), D('Montre Atlas b 3 500 DA 😊'), C('ghali bezzaf, ta9der tna9es chwiya ?'), D('Smahli, les prix fixes.')], ['Pas de remise inventée'], ['Aucune vraie option (le bureau, moins cher)', 'Rien sur ce que vaut la montre', 'La vente s’arrête là'], L(0)),
+    exItem('order', 8, [C('n7ab nkoumandi Montre Atlas noire'), D('Mlih 👍 3tini smiytek, ra9mek, l wilaya w l commune stp.'), C('Karim, 0661 23 45 18, Oran, Bir El Djir'), T('create_order → CMD-0398 · 4 100 DA'), D('C’est noté ✅ Conseiller y3aytlek bach ykonfirmi 🙏')], ['La commande enregistrée avec la commune'], ['Tout demandé d’un coup', 'Le numéro pas relu au client']),
+    exItem('after_late', 8, [C('3andi 5 jours w ma wsalnich l colis !! wach had l khedma'), T('handoff → l’équipe prend la main'), D('Smahli bezzaf 🙏 Rani ba3aththa l l’équipe, y3aytoulek lyoum.')], ['Excuses et la main passée tout de suite'], ['Un emoji alors que le client est fâché', '« lyoum » : une heure promise']),
+    exItem('unknown', 7, [C('wach fih garantie 2 ans ? w wach houwa original ?'), D('Ma n3arafch had l ma3louma 🙏')], ['Rien d’inventé'], ['N’a pas proposé qu’un conseiller rappelle le client'], L(9)),
+  ]);
 }
 
 /** the example answer of one control-room call (the Pilot AI page's reads) */

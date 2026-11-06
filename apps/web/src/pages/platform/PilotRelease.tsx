@@ -12,6 +12,7 @@ import type { POut } from '../../lib/platform';
 import { Card, Icon } from '../../ui/kit';
 import { usePilotAction } from './pilotDemo';
 import { ExamLine } from './PilotExam';
+import { waitingParts } from './pilotWaiting';
 
 type State = POut<'p.pilot.state'>;
 type Release = State['release'];
@@ -26,17 +27,6 @@ export const takeFreshPush = (): 'trial' | 'live' | null => {
   return v;
 };
 
-/** What waits for the next « Push en test », in a few words (the box: the shops' Darija lessons waiting go in too). */
-function waitingParts(t: Tr, p: Release['pending'], withShops: boolean): string[] {
-  const sales = p.sales + p.candidates;
-  const darija = p.darija + (withShops ? p.waiting : 0);
-  return [
-    sales > 0 ? (p.candidates > 0 ? t(K + 'partSalesNight', { n: n(sales), night: n(p.candidates) }) : t(K + 'partSales', { n: n(sales) })) : '',
-    darija > 0 ? t(K + 'partDarija', { n: n(darija) }) : '',
-    p.rules ? t(K + 'partRules') : '',
-    p.vocab.total > 0 ? t(K + 'partVocab', { n: n(p.vocab.total) }) : '',
-  ].filter(Boolean);
-}
 /** What the version in test holds that the shops do not have. */
 function trialParts(t: Tr, tr: NonNullable<Release['trial']>): string[] {
   return [
