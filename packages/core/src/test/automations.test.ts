@@ -1,0 +1,289 @@
+// Pilot Automations: each switch does what it says — the « Affectation » and « Messages de livraison » switches are the
+// same as on their pages; « Stock revenu » off keeps the « sans stock » orders until « Envoyer au dépôt »; « Dispatch
+// automatique » off keeps every picked order in « À attribuer »; « Plus de stock » pauses the ad sets of a product with
+// nothing left and closes its pages, then puts back on only what it paused (never one a person started again); the
+// evening report comes once, at its hour, with the day's numbers; the slow queue alerts come once an hour at most; the
+// come-back offer goes once to the customers delivered X days before who said yes and did not order again.
+import { algiersDayStart, slotAt } from '@pilotix/shared';
+import assert from 'node:assert/strict';
+import { before, test } from 'node:test';
+import { call, Ctx, Db } from '../index';
+import { addDays } from '../modules/ads';
+import { getAssign } from '../modules/assign';
+import { dayReport } from '../modules/automations';
+import { notifySettings } from '../modules/notify';
+import { getSetting, setSetting } from '../settings';
+import { EMAILS, setup } from './harness';
+
+const H = 3_600_000;
+const MIN = 60_000;
+const algDay = (t: number) => new Date(t + H).toISOString().slice(0, 10);
+/** a moment of an Algiers day */
+const alg = (day: string, hour: number) => Date.parse(day + 'T00:00:00Z') - H + hour * H;
+/** the most recent Algiers day whose `hour` (+ margin) is already past */
+const pastDay = (hour: number, margin = 0) => {
+  const d = algDay(Date.now());
+  return alg(d, hour) + margin <= Date.now() ? d : addDays(d, -1);
+};
+const at = (c: Ctx, t: number): Ctx => ({ ...c, now: () => t });
+
+let db: Db;
+let as: (email: string) => Promise<Ctx>;
+let admin: Ctx;
+let wh: number;
+
+before(async () => {
+  ({ db, as } = await setup(150));
+  admin = await as(EMAILS.admin);
+  wh = Number((await db.query('SELECT id FROM warehouses WHERE active ORDER BY is_default DESC, id LIMIT 1'))[0].id);
+});
+
+const lines = async (kind: string) => (await db.query(`SELECT * FROM auto_log WHERE kind = $1 ORDER BY at DESC, id DESC`, [kind])) as any[];
+const forget = (...keys: string[]) => db.query(`UPDATE settings SET value = value ${keys.map((k) => `- '${k}'`).join(' ')} WHERE key = 'automations_state'`);
+/** a product of its own: nothing in stock, nothing promised */
+const emptyProduct = async (skip: number) => {
+  const p = (await db.query(`SELECT p.id FROM products p WHERE p.active AND NOT p.is_service AND EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = p.id AND v.active) ORDER BY p.id OFFSET $1 LIMIT 1`, [skip]))[0];
+  const productId = Number(p.id);
+  const variants = (await db.query(`SELECT id FROM product_variants WHERE product_id = $1 ORDER BY id`, [productId])).map((r: any) => Number(r.id));
+  await db.query('DELETE FROM stock WHERE variant_id = ANY($1)', [variants]);
+  await db.query(
+    `UPDATE orders SET conf_status = 'cancelled', follow_status = CASE WHEN follow_status IN ('to_prepare','prepared') THEN 'cancelled' ELSE follow_status END
+      WHERE id IN (SELECT order_id FROM order_items WHERE variant_id = ANY($1)) AND conf_status IN ('confirmed','no_stock')`,
+    [variants],
+  );
+  const variantId = Number((await db.query(`SELECT id FROM product_variants WHERE product_id = $1 AND active ORDER BY id LIMIT 1`, [productId]))[0].id);
+  return { productId, variantId, variants };
+};
+
+test('the demo: the automations on, and what they did these last days; only the administrators', async () => {
+  const s: any = await call('auto.state', admin, {});
+  assert.deepEqual([s.s.stockBack, s.s.autoDispatch, s.s.noStock.on, s.s.evening.on, s.s.queue.on, s.s.comeBack.on], [true, true, true, true, true, true]);
+  const kinds = new Set(s.log.map((l: any) => l.kind));
+  for (const k of ['evening', 'nostock', 'stockback', 'queue', 'comeback']) assert.ok(kinds.has(k), `a line « ${k} »`);
+  const ev = s.log.find((l: any) => l.kind === 'evening');
+  const r = await dayReport(db, ev.data.day);
+  assert.deepEqual([ev.data.orders, ev.data.delivered, ev.data.cash], [r.orders, r.delivered, r.cash], 'the demo’s own numbers');
+  assert.ok(r.orders > 0);
+  assert.ok(s.campaigns.some((c: any) => c.id === s.s.comeBack.campaignId && c.name === 'Offre de retour −10 %'));
+  assert.ok(s.comeBackSent > 0);
+  // in Pilot Ads' log, the pause is Pilot Automations' (not the account it runs as)
+  const acts = await db.query(`SELECT * FROM ad_actions WHERE source = 'auto' ORDER BY id`);
+  assert.deepEqual(acts.map((a: any) => a.op), ['pause', 'resume']);
+  for (const e of [EMAILS.marketer, EMAILS.conf, EMAILS.manager, EMAILS.vendeur]) await assert.rejects(call('auto.state', await as(e), {}), (err: any) => !!err, e);
+  await assert.rejects(call('auto.save', await as(EMAILS.manager), { stockBack: false }));
+});
+
+test('Affectation and Messages de livraison: the same switches as on their pages, and the mode comes back', async () => {
+  const a = await getAssign(db);
+  await setSetting(db, 'autoAssign', { ...a, conf: { ...a.conf, mode: 'load' } });
+  let s: any = await call('auto.save', admin, { assignConf: false });
+  assert.equal(s.assign.conf, 'manual');
+  assert.equal((await getAssign(db)).conf.mode, 'manual');
+  s = await call('auto.save', admin, { assignConf: true });
+  assert.equal(s.assign.conf, 'load', 'its own mode back, not « tour à tour »');
+  assert.equal((await getAssign(db)).conf.rotation.on, a.conf.rotation.on, 'the rest of its settings kept');
+  s = await call('auto.save', admin, { delivery: false });
+  assert.equal(s.delivery, false);
+  assert.equal((await notifySettings(db)).enabled, false);
+  s = await call('auto.save', admin, { delivery: true });
+  assert.equal((await notifySettings(db)).enabled, true);
+});
+
+test('Stock revenu off: the orders wait in « Sans stock » until « Envoyer au dépôt »; on again, what can go goes', async () => {
+  const X = await emptyProduct(0);
+  const order = async () => {
+    const o = (await call('orders.create', admin, { customerName: 'Attente Auto', phone: `0696${String(Math.floor(Math.random() * 1e6)).padStart(6, '0')}`, wilayaId: 16, commune: 'Kouba', items: [{ productId: X.productId, variantId: X.variantId, qty: 1 }] })) as any;
+    await call('orders.setConf', admin, { ids: [o.id], status: 'confirmed' });
+    return Number(o.id);
+  };
+  const conf = async (id: number) => (await db.query('SELECT conf_status, follow_status FROM orders WHERE id = $1', [id]))[0];
+  await call('auto.save', admin, { stockBack: false });
+  const a = await order();
+  const b = await order();
+  assert.equal((await conf(a)).conf_status, 'no_stock');
+  await call('catalog.move', await as(EMAILS.depot), { variantId: X.variantId, warehouseId: wh, kind: 'entry', qty: 1, unitCost: 1000 });
+  await call('depot.noStock', await as(EMAILS.depot), {});
+  assert.equal((await conf(a)).conf_status, 'no_stock', 'the stock came, it still waits');
+  const s: any = await call('auto.state', admin, {});
+  assert.ok(s.noStock.waiting >= 2);
+  assert.ok(s.noStock.ready >= 1, 'one can be served (the oldest)');
+  const r: any = await call('auto.release', admin, {});
+  assert.ok(r.sent >= 1);
+  assert.deepEqual(await conf(a), { conf_status: 'confirmed', follow_status: 'to_prepare' });
+  assert.equal((await conf(b)).conf_status, 'no_stock');
+  assert.equal((await lines('release'))[0].n, r.sent);
+  // on again: the next one goes as soon as its stock is there
+  await call('catalog.move', await as(EMAILS.depot), { variantId: X.variantId, warehouseId: wh, kind: 'entry', qty: 1, unitCost: 1000 });
+  assert.equal((await conf(b)).conf_status, 'no_stock');
+  await call('auto.save', admin, { stockBack: true });
+  assert.deepEqual(await conf(b), { conf_status: 'confirmed', follow_status: 'to_prepare' });
+});
+
+test('Dispatch automatique off: a picked order waits in « À attribuer », even with its company', async () => {
+  const depot = await as(EMAILS.depot);
+  const yal = Number((await db.query(`SELECT id FROM delivery_companies WHERE kind = 'yalidine' ORDER BY id LIMIT 1`))[0].id);
+  const id = Number((await db.query(`SELECT id FROM orders WHERE conf_status = 'confirmed' AND follow_status = 'to_prepare' AND tracking IS NULL AND NOT is_exchange ORDER BY id LIMIT 1`))[0].id);
+  await db.query('UPDATE orders SET company_id = $2, livreur_id = NULL WHERE id = $1', [id, yal]);
+  await call('auto.save', admin, { autoDispatch: false });
+  await db.query('UPDATE order_items SET picked_qty = qty WHERE order_id = $1', [id]);
+  const r: any = await call('depot.toAssign', depot, {});
+  assert.ok(r.rows.some((o: any) => o.id === id), 'in « À attribuer »');
+  assert.equal((await db.query('SELECT follow_status FROM orders WHERE id = $1', [id]))[0].follow_status, 'to_prepare');
+  assert.ok(((await call('auto.state', admin, {})) as any).noStock.toAssign >= 1);
+  await call('auto.save', admin, { autoDispatch: true });
+  const again: any = await call('depot.toAssign', depot, {});
+  assert.ok(!again.rows.some((o: any) => o.id === id));
+  assert.equal((await db.query('SELECT follow_status FROM orders WHERE id = $1', [id]))[0].follow_status, 'prepared', 'to « En dispatch » by itself');
+});
+
+test('Plus de stock: its ad set paused and its page closed; back with the stock — never one a person started again', async () => {
+  const page = (await db.query(`SELECT slug, product_id FROM landing_pages WHERE active ORDER BY id LIMIT 1`))[0];
+  await db.query(`UPDATE landing_pages SET stock_mode = 'off' WHERE slug = $1`, [page.slug]);
+  const productId = Number(page.product_id);
+  const variants = (await db.query(`SELECT id FROM product_variants WHERE product_id = $1 ORDER BY id`, [productId])).map((r: any) => Number(r.id));
+  const variantId = Number((await db.query(`SELECT id FROM product_variants WHERE product_id = $1 AND active ORDER BY id LIMIT 1`, [productId]))[0].id);
+  const empty = async () => {
+    await db.query('DELETE FROM stock WHERE variant_id = ANY($1)', [variants]);
+    await db.query(
+      `UPDATE orders SET conf_status = 'cancelled', follow_status = CASE WHEN follow_status IN ('to_prepare','prepared') THEN 'cancelled' ELSE follow_status END
+        WHERE id IN (SELECT order_id FROM order_items WHERE variant_id = ANY($1)) AND conf_status IN ('confirmed','no_stock')`,
+      [variants],
+    );
+  };
+  const fill = () => call('catalog.move', admin, { variantId, warehouseId: wh, kind: 'entry', qty: 5, unitCost: 1000 });
+  const run = async () => {
+    await forget('stockAt');
+    return call('auto.run', admin, {});
+  };
+  const status = async () => (await db.query(`SELECT status FROM adsets WHERE id = '990000001'`))[0].status;
+  const ours = async () => (await db.query(`SELECT * FROM auto_paused WHERE adset_id = '990000001'`))[0];
+  const html = async () => ((await call('landing.html', admin, { slug: page.slug, mode: 'live', post: '/o', geo: '/g/', lead: '/l', imgBase: '/i/' })) as any).html as string;
+  await db.query(`INSERT INTO adsets (id, name, campaign, product_ids, status, currency) VALUES ('990000001', 'Test stock', 'Test', $1, 'ACTIVE', 'USD')`, [[productId]]);
+  await run(); // where things stand
+  await empty();
+  await run();
+  assert.equal(await status(), 'PAUSED');
+  assert.ok(await ours());
+  const pause = (await db.query(`SELECT * FROM ad_actions WHERE object_id = '990000001' ORDER BY id DESC LIMIT 1`))[0];
+  assert.deepEqual([pause.op, pause.source, pause.status], ['pause', 'auto', 'done']);
+  assert.match(pause.why, /Plus de stock/);
+  assert.ok((await lines('nostock')).some((l) => l.data.paused.includes('Test stock')));
+  assert.match(await html(), /نفذت الكمية مؤقتاً/, 'the page says « épuisé », no form');
+  assert.ok(((await call('auto.state', admin, {})) as any).soldOut.some((p: any) => p.id === productId && p.paused >= 1));
+  // a person starts it again with no stock: left alone, not paused again
+  await db.query(`UPDATE adsets SET status = 'ACTIVE' WHERE id = '990000001'`);
+  await run();
+  assert.equal(await status(), 'ACTIVE');
+  assert.equal((await ours()).hands_off, true);
+  await fill();
+  await run();
+  assert.equal(await ours(), undefined, 'forgotten once the stock is back');
+  assert.equal(await status(), 'ACTIVE');
+  assert.doesNotMatch(await html(), /نفذت الكمية مؤقتاً/, 'the page takes orders again');
+  // again, alone this time: back on by itself with the stock
+  await empty();
+  await run();
+  assert.equal(await status(), 'PAUSED');
+  await fill();
+  await run();
+  assert.equal(await status(), 'ACTIVE');
+  const resume = (await db.query(`SELECT * FROM ad_actions WHERE object_id = '990000001' ORDER BY id DESC LIMIT 1`))[0];
+  assert.deepEqual([resume.op, resume.source], ['resume', 'auto']);
+  assert.ok((await lines('stockback')).some((l) => l.data.resumed.includes('Test stock')));
+  // switched off: what it paused goes back on, and the page takes orders even with no stock
+  await empty();
+  await run();
+  assert.equal(await status(), 'PAUSED');
+  await call('auto.save', admin, { noStock: { on: false } });
+  assert.equal(await status(), 'ACTIVE');
+  assert.equal(await ours(), undefined);
+  assert.doesNotMatch(await html(), /نفذت الكمية مؤقتاً/);
+  await call('auto.save', admin, { noStock: { on: true } });
+  assert.equal(await status(), 'PAUSED', 'on again: checked at once');
+  await fill();
+  await run();
+});
+
+test('Rapport du soir: once a day, at its hour, with the day’s numbers', async () => {
+  const day = pastDay(21.5);
+  const t = alg(day, 21.5);
+  await call('auto.save', admin, { evening: { on: true, hour: 23, to: [] } });
+  await forget('eveningDay');
+  const n0 = (await lines('evening')).length;
+  await call('auto.run', at(admin, t), {});
+  assert.equal((await lines('evening')).length, n0, 'not before its hour');
+  await call('auto.save', admin, { evening: { on: true, hour: 21, to: [] } });
+  await forget('eveningDay');
+  await call('auto.run', at(admin, t), {});
+  const l = (await lines('evening'))[0];
+  assert.equal(l.data.day, day);
+  const r = await dayReport(db, day);
+  assert.deepEqual([l.data.orders, l.data.confirmed, l.data.delivered, l.data.returned, l.data.cash, l.data.profit], [r.orders, r.confirmed, r.delivered, r.returned, r.cash, r.profit]);
+  assert.equal(l.data.people, 1, 'to the administrator');
+  await call('auto.run', at(admin, t + 20 * MIN), {});
+  assert.equal((await lines('evening')).length, n0 + 1, 'once');
+});
+
+test('File d’attente lente: orders waiting, an agent on line who calls nobody — once an hour at most', async () => {
+  const calls = await getSetting(db, 'calls');
+  const hour = calls.slots[0].from + 3;
+  const t = alg(pastDay(hour, 41 * MIN), hour);
+  assert.ok(slotAt(t, calls).open && slotAt(t + 31 * MIN, calls).open, 'in the call hours');
+  await call('auto.save', admin, { queue: { on: true, waitHours: 2, idleMin: 30, to: [] } });
+  await forget('told', 'online', 'queueAt');
+  // Rania is on line, three orders wait for her, she has called nobody
+  const rania = Number((await db.query(`SELECT id FROM profiles WHERE email = $1`, [EMAILS.conf2]))[0].id);
+  await db.query(`DELETE FROM order_events WHERE user_id = $1 AND at > $2`, [rania, new Date(t - 12 * H).toISOString()]);
+  const ids = (await db.query(`SELECT id FROM orders WHERE conf_status IN ('new','no_answer') AND follow_status IS NULL ORDER BY id DESC LIMIT 3`)).map((r: any) => Number(r.id));
+  await db.query(`UPDATE orders SET agent_id = $2, conf_status = 'new', attempts = 0, next_call_at = NULL, created_at = $3 WHERE id = ANY($1)`, [ids, rania, new Date(algiersDayStart(t) - 2 * H).toISOString()]);
+  const seen = (ms: number) => db.query(`UPDATE profiles SET last_seen_at = $2, presence = 'online' WHERE id = $1`, [rania, new Date(ms).toISOString()]);
+  await seen(t);
+  await call('auto.run', at(admin, t), {});
+  const wait = (await lines('queue')).filter((l) => l.data.what === 'wait');
+  assert.ok(wait.length && wait[0].data.n >= 3 && wait[0].data.hours >= 2, JSON.stringify(wait[0]?.data));
+  assert.ok(!(await lines('queue')).some((l) => l.data.what === 'idle' && l.data.agent === 'Rania' && Date.parse(l.at) >= t), 'just arrived: not yet');
+  await seen(t + 31 * MIN);
+  await call('auto.run', at(admin, t + 31 * MIN), {});
+  const idle = (await lines('queue')).find((l) => l.data.what === 'idle' && l.data.agent === 'Rania');
+  assert.ok(idle && idle.data.minutes >= 30 && idle.data.n >= 3, JSON.stringify(idle?.data));
+  assert.equal((await lines('queue')).filter((l) => l.data.what === 'wait').length, wait.length, 'the waiting orders: told once this hour');
+  await seen(t + 40 * MIN);
+  await call('auto.run', at(admin, t + 40 * MIN), {});
+  assert.equal((await lines('queue')).filter((l) => l.data.what === 'idle' && l.data.agent === 'Rania').length, 1, 'Rania: once this hour');
+});
+
+test('Offre de retour: X days after a delivered order, the customers who said yes and did not order again', async () => {
+  const s0: any = await call('auto.state', admin, {});
+  const campaignId = s0.s.comeBack.campaignId as number;
+  const draft = Number((await db.query(`SELECT id FROM wa_campaigns WHERE status = 'draft' LIMIT 1`))[0].id);
+  await assert.rejects(call('auto.save', admin, { comeBack: { on: true, days: 30, campaignId: draft } }), /pas encore approuvé/);
+  const t = alg(pastDay(10.5), 10.5);
+  const delivered = addDays(algDay(t), -30);
+  const X = await emptyProduct(1);
+  const customer = async (phone: string) => {
+    const o = (await call('orders.create', admin, { customerName: 'Retour Test', phone, wilayaId: 16, commune: 'Kouba', items: [{ productId: X.productId, variantId: X.variantId, qty: 1 }] })) as any;
+    const d = alg(delivered, 14);
+    await db.query(`UPDATE orders SET conf_status = 'confirmed', follow_status = 'delivered', delivered_at = $2, created_at = $3 WHERE id = $1`, [o.id, new Date(d).toISOString(), new Date(d - 3 * 24 * H).toISOString()]);
+    const p = String((await db.query(`SELECT phone FROM orders WHERE id = $1`, [o.id]))[0].phone);
+    await db.query(`UPDATE customers SET wa_optin_at = $2, wa_optout_at = NULL, blacklisted = false WHERE phone = $1`, [p, new Date(t - 60 * 24 * H).toISOString()]);
+    return p;
+  };
+  const one = await customer('0697100001');
+  const two = await customer('0697100002');
+  const three = await customer('0697100003');
+  // two ordered again since; three said « Stop »
+  await call('orders.create', admin, { customerName: 'Retour Test', phone: two, wilayaId: 16, commune: 'Kouba', items: [{ productId: X.productId, variantId: X.variantId, qty: 1 }] });
+  await db.query(`UPDATE customers SET wa_optout_at = $2 WHERE phone = $1`, [three, new Date(t - 24 * H).toISOString()]);
+  await call('auto.save', admin, { comeBack: { on: true, days: 30, campaignId } });
+  await forget('comeBackDay');
+  await call('auto.run', at(admin, t), {});
+  const sends = (await db.query(`SELECT phone FROM wa_campaign_sends WHERE campaign_id = $1`, [campaignId])).map((r: any) => String(r.phone));
+  assert.ok(sends.includes(one));
+  assert.ok(!sends.includes(two), 'ordered again');
+  assert.ok(!sends.includes(three), 'said « Stop »');
+  assert.equal((await db.query(`SELECT status FROM wa_campaigns WHERE id = $1`, [campaignId]))[0].status, 'sending', 'it leaves at the campaigns’ pace');
+  const n = (await lines('comeback')).length;
+  assert.ok((await lines('comeback'))[0].n >= 1);
+  await call('auto.run', at(admin, t + 30 * MIN), {});
+  assert.equal((await lines('comeback')).length, n, 'once a day');
+});

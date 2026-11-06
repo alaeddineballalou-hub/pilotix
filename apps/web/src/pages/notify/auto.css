@@ -1,0 +1,105 @@
+/* Pilot Automations › Automatisations: a card per group, a row per automation (its rule, its switch, its numbers, where
+   things stand, the last thing it did), then the log. The switch is the agent pages' (.nt-toggle, ../ai/ai.css). */
+.au { display: flex; flex-direction: column; gap: 16px; }
+.au-lead { margin: 2px 0 0; max-width: 70ch; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.au-group .card-head, .au-log .card-head { margin-bottom: 2px; }
+
+.au-list { list-style: none; margin: 0; padding: 0; }
+.au-rule { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 14px; padding: 16px 0; border-top: 1px solid var(--line); }
+.au-rule:first-child { border-top: 0; padding-top: 6px; }
+.au-rule:last-child { padding-bottom: 4px; }
+.au-ic { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; background: var(--raise); color: var(--muted); border: 1px solid var(--line); transition: background-color .2s ease, color .2s ease, border-color .2s ease; }
+.au-ic .bji { width: 19px; height: 19px; }
+.au-rule.is-on .au-ic { background: var(--ai-tint); color: var(--ai-tint-ink); border-color: var(--ai-tint-line); }
+.au-main { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.au-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; }
+.au-top h3 { margin: 0; font-size: 15.5px; font-weight: 800; line-height: 1.3; }
+.au-top .nt-toggle { flex: none; display: inline-flex; }
+
+/* the rule, said as a sentence: Quand … → Pilotix … */
+.au-rule-t { margin: -2px 0 0; max-width: 74ch; font-size: 13.5px; line-height: 1.55; color: var(--muted); }
+.au-k { color: var(--ink); font-weight: 800; }
+.au-arrow { display: inline-block; margin-inline: 7px 6px; color: var(--ai-dot-2); font-weight: 800; }
+[dir="rtl"] .au-arrow { transform: scaleX(-1); }
+
+/* where things stand now */
+.au-now { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--ink); }
+.au-now.au-warn { color: var(--warn); font-weight: 700; }
+.au-now .au-act { margin-inline-start: 4px; }
+.au-note { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--raise); border: 1px solid var(--line); color: var(--muted); font-size: 13px; line-height: 1.45; max-width: 74ch; }
+
+/* its numbers: saved as soon as they change */
+.au-fields { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 16px; margin-top: 2px; }
+.au-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.au-field > span:first-child { font-size: 12px; font-weight: 700; color: var(--muted); }
+.au-field select { min-width: 132px; }
+.au-wide { flex: 1 1 260px; max-width: 420px; }
+.au-wide select { width: 100%; }
+.au-people { flex: 1 1 280px; }
+.au-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 38px; }
+.au-default { font-size: 13.5px; font-weight: 600; color: var(--ink); padding-inline-end: 4px; }
+.au-add { width: auto; min-width: 0; }
+
+/* the two areas of « Affectation automatique », each with its own switch */
+.au-pair { display: flex; flex-wrap: wrap; gap: 10px; }
+.au-mini { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex: 1 1 220px; max-width: 320px; padding: 9px 10px 9px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); cursor: pointer; }
+[dir="rtl"] .au-mini { padding: 9px 14px 9px 10px; }
+.au-mini > span:first-child { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.au-mini b { font-size: 13.5px; }
+.au-mini small { font-size: 12px; color: var(--muted); }
+.au-mini.is-on { border-color: var(--ai-tint-line); }
+
+.au-links { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; font-size: 13px; font-weight: 700; }
+.au-links a { display: inline-flex; align-items: center; gap: 2px; text-decoration: none; }
+.au-links a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.au-links .bji { width: 14px; height: 14px; }
+[dir="rtl"] .au-links .bji { transform: scaleX(-1); }
+
+.au-last { display: grid; grid-template-columns: 13px minmax(0, 1fr) auto; align-items: baseline; column-gap: 7px; margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.au-last .bji { width: 13px; height: 13px; align-self: center; }
+.au-last time { padding-inline-start: 10px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* « Aujourd'hui jusqu'ici »: what the evening report would say now */
+.au-today { display: flex; flex-direction: column; gap: 6px; }
+.au-today-t { font-size: 12px; font-weight: 700; color: var(--muted); }
+.au-today dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; margin: 0; }
+.au-today dl > div { padding: 7px 10px; border-radius: 10px; background: var(--raise); border: 1px solid var(--line); min-width: 0; }
+.au-today dt { font-size: 11.5px; color: var(--muted); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.au-today dd { margin: 1px 0 0; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.au-today .is-pos dd { color: var(--ok); }
+.au-today .is-neg dd { color: var(--bad, var(--coral)); }
+
+/* the products with nothing left now */
+.au-out { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; }
+.au-out li { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; }
+.au-out b { font-weight: 700; }
+.au-out .muted { font-size: 12.5px; }
+
+/* everything Pilotix did lately */
+.au-lines { list-style: none; margin: 0; padding: 0; }
+.au-lines li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13.5px; line-height: 1.45; }
+.au-lines li:first-child { border-top: 0; }
+.au-lines time { color: var(--muted); font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.au-dot { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: var(--raise); color: var(--muted); }
+.au-dot .bji { width: 14px; height: 14px; }
+.au-dot.k-nostock { background: var(--warn-soft); color: var(--warn); }
+.au-dot.k-stockback, .au-dot.k-release { background: var(--ok-soft); color: var(--ok); }
+.au-dot.k-evening, .au-dot.k-comeback { background: var(--ai-tint); color: var(--ai-tint-ink); }
+.au-dot.k-queue { background: var(--coral-soft, var(--warn-soft)); color: var(--coral, var(--warn)); }
+
+@media (max-width: 640px) {
+  .au-rule { grid-template-columns: 34px minmax(0, 1fr); gap: 11px; padding: 14px 0; }
+  .au-ic { width: 34px; height: 34px; border-radius: 11px; }
+  .au-ic .bji { width: 16px; height: 16px; }
+  .au-top h3 { font-size: 15px; }
+  .au-mini { max-width: none; }
+  .au-field select, .au-wide { width: 100%; max-width: none; }
+  .au-fields > .au-field { flex: 1 1 100%; }
+  .au-today dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .au-last { grid-template-columns: 13px minmax(0, 1fr); }
+  .au-last .bji { align-self: start; margin-top: 2px; }
+  .au-last time { grid-column: 2; padding-inline-start: 0; }
+  .au-lines li { grid-template-columns: 28px minmax(0, 1fr); }
+  .au-lines time { grid-column: 2; margin-top: -4px; }
+}
+@media (prefers-reduced-motion: reduce) { .au-ic { transition: none; } }

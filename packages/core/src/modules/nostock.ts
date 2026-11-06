@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { proc } from '../rpc';
+import { autoSettings } from '../settings';
 import { getPrefs } from './prefs';
 import { ownRowSql } from './agencyscope';
 
@@ -32,9 +33,11 @@ async function leftFor(db: Db, variantIds: number[]): Promise<Map<number, number
 
 /**
  * Sends to the depot the oldest « sans stock » orders whose products are all there now. `variantIds`: only when one of
- * them is waited for (a stock movement of these variants). Returns the orders sent.
+ * them is waited for (a stock movement of these variants). Returns the orders sent. Pilot Automations' « Stock revenu »
+ * switched off: nothing goes by itself (`force`: « Envoyer au dépôt » there); `dry`: the orders that would go, none moved.
  */
-export async function releaseNoStock(db: Db, userId: number | null, variantIds?: number[]): Promise<number[]> {
+export async function releaseNoStock(db: Db, userId: number | null, variantIds?: number[], o: { force?: boolean; dry?: boolean } = {}): Promise<number[]> {
+  if (!o.force && !o.dry && !(await autoSettings(db)).stockBack) return [];
   if (variantIds) {
     if (!variantIds.length) return [];
     const any = await db.query(`SELECT 1 FROM order_items i JOIN orders o ON o.id = i.order_id WHERE i.variant_id = ANY($1) AND ${WAITING} LIMIT 1`, [variantIds]);
@@ -59,6 +62,10 @@ export async function releaseNoStock(db: Db, userId: number | null, variantIds?:
     for (const i of its) need.set(num(i.variant_id), (need.get(num(i.variant_id)) ?? 0) + num(i.qty));
     if (![...need].every(([v, q]) => (left.get(v) ?? 0) >= q)) continue;
     for (const [v, q] of need) left.set(v, (left.get(v) ?? 0) - q);
+    if (o.dry) {
+      sent.push(oid);
+      continue;
+    }
     const moved = await db.query(
       `UPDATE orders SET conf_status = 'confirmed', follow_status = 'to_prepare', updated_at = now(), version = version + 1
         WHERE id = $1 AND conf_status = 'no_stock' AND follow_status IS NULL RETURNING id`,

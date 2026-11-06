@@ -154,6 +154,15 @@ export async function notifySettings(db: Db): Promise<NotifySettings> {
   return { ...DEFAULT_NOTIFY, ...r, cases: { ...DEFAULT_NOTIFY.cases, ...(r.cases ?? {}) }, texts: r.texts ?? {}, templates: r.templates ?? {} };
 }
 
+/** Pilot Automations' « Messages de livraison » switch (the same as the one in its own tab). Off: what waits is not sent. */
+export async function setNotifyEnabled(ctx: Ctx, on: boolean) {
+  const cur = await notifySettings(ctx.db);
+  if (cur.enabled === on) return;
+  await saveRaw(ctx.db, 'notify', { ...cur, enabled: on, hookKey: cur.hookKey || randomKey() }, ctx.session.profile.id);
+  if (!on) await ctx.db.query(`UPDATE notifications SET status = 'skipped', error = 'Messages de livraison arrêtés' WHERE status = 'queued'`);
+  ctx.emit({ type: 'settings' });
+}
+
 /** Pilot Message's WhatsApp number is connected (the same number sends these messages). */
 async function waConnected(db: Db): Promise<boolean> {
   const d = await raw<{ whatsappPhoneId?: string }>(db, 'dellal', {});
@@ -1098,7 +1107,7 @@ export const notifyProcs = {
     if (rest.sms === 'gateway' && !rest.smsUrl) throw bad('Adresse du service SMS manquante');
     await saveRaw(ctx.db, 'notify', { ...cur, ...rest, texts, hookKey: cur.hookKey || randomKey() }, me(ctx));
     // stopped: what was waiting is not sent later
-    if (cur.enabled && !rest.enabled) await ctx.db.query(`UPDATE notifications SET status = 'skipped', error = 'Pilot Automations arrêté' WHERE status = 'queued'`);
+    if (cur.enabled && !rest.enabled) await ctx.db.query(`UPDATE notifications SET status = 'skipped', error = 'Messages de livraison arrêtés' WHERE status = 'queued'`);
     if (smsSecret === null) await ctx.db.query('DELETE FROM settings WHERE key = $1', [NOTIFY_SMS_SECRET]);
     else if (smsSecret?.trim()) await saveRaw(ctx.db, NOTIFY_SMS_SECRET, smsSecret.trim(), me(ctx));
     ctx.emit({ type: 'settings' });

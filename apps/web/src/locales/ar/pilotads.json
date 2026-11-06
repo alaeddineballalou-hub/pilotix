@@ -136,7 +136,8 @@
     "pilot": "اقتراح الطيار الآلي",
     "stop_all": "إيقاف الكل",
     "launch": "إطلاق إعلان",
-    "ask": "اسأل (Pilot AI)"
+    "ask": "اسأل (Pilot AI)",
+    "auto": "Pilot Automations"
   },
   "st": {
     "done": "تم",

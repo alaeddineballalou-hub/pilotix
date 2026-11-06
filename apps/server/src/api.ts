@@ -1864,6 +1864,7 @@ class ApiController {
     bg('cm.plan.run'); // CM AI agent › Planner: the posts whose time has come go out (in the background)
     bg('landing.run'); // landing pages: abandoned orders, Meta events (in the background)
     bg('notify.run'); // Delivery AI agent: messages due (in the background)
+    bg('auto.run'); // Pilot Automations: no stock → ads paused, the evening report, slow queue alerts, come-back offers (in the background)
     bg('dellal.autoOrders'); // Message AI agent: quiet chats with the customer's number become orders (in the background)
     bg('dellal.catchUp'); // Message AI agent: the safety net, messages Meta did not send (in the background)
     bg('depot.pushRun'); // dépôt alerts: ring the phones again (in the background)

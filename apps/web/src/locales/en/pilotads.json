@@ -136,7 +136,8 @@
     "pilot": "Autopilot suggestion",
     "stop_all": "Stop everything",
     "launch": "Launch an ad",
-    "ask": "Ask (Pilot AI)"
+    "ask": "Ask (Pilot AI)",
+    "auto": "Pilot Automations"
   },
   "st": {
     "done": "Done",

@@ -389,6 +389,7 @@
     "courier-sync": "Parcel tracking",
     "sheets-sync": "Google Sheets",
     "notify-run": "Customer messages",
+    "auto-run": "Pilot Automations",
     "landing-run": "Landing pages",
     "cm-sweep": "Comments (CM)",
     "leads-catchup": "Ad lead forms: missed leads",

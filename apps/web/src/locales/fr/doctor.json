@@ -389,6 +389,7 @@
     "courier-sync": "Suivi des colis",
     "sheets-sync": "Google Sheets",
     "notify-run": "Messages aux clients",
+    "auto-run": "Pilot Automations",
     "landing-run": "Landing pages",
     "cm-sweep": "Commentaires (CM)",
     "leads-catchup": "Formulaires de pub : leads ratés",

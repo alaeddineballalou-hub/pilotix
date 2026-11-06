@@ -44,7 +44,8 @@ export async function campaignSettings(db: Db): Promise<CampaignSettings> {
 
 // ---------------------------------------------------------------- consent
 /** A customer may get offers: said yes, never « Stop » since, not blacklisted. */
-const REACHABLE = `c.wa_optin_at IS NOT NULL AND c.wa_optout_at IS NULL AND NOT c.blacklisted`;
+/** A customer who said yes to offers, never « Stop », not blacklisted (on `c`, a customers row). */
+export const REACHABLE = `c.wa_optin_at IS NOT NULL AND c.wa_optout_at IS NULL AND NOT c.blacklisted`;
 
 /** The customer said yes (the box of a landing page, the agent during the call, a list): offers may come on WhatsApp. */
 export async function giveConsent(db: Db, phone: string, source: OptinSource, at: string): Promise<boolean> {

@@ -22,6 +22,6 @@
     "messages": "Answers your customers in messages and takes their orders.",
     "cm": "Answers the comments on your posts and hides spam.",
     "social": "Plans your posts and publishes them on Facebook and Instagram at the right time.",
-    "notify": "Tells each customer by WhatsApp or SMS at every step."
+    "notify": "Does the repetitive work by itself: assignment, stock, dispatch, customer messages, alerts and the evening report."
   }
 }

@@ -29,6 +29,7 @@ import { seed as seed_landing } from './seeds/landing';
 import { seed as seed_spy } from './seeds/spy';
 import { seed as seed_pilotads } from './seeds/pilotads';
 import { seed as seed_partners } from './seeds/partners';
+import { seed as seed_automations } from './seeds/automations';
 
 /** First admin + one warehouse. Used by the real server on first start. */
 export async function seedBase(db: Db, admin: { email: string; password: string; name?: string }) {
@@ -391,6 +392,8 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
   await seed_pilotads(db, users, now);
   // Influenceurs and Demander: their own campaign, after Pilot Ads (Pilote auto's suggestions are the shop's usual ads)
   await seed_partners(db, users, now);
+  // Pilot Automations: what it did these last days (it reads the demo's orders, ads and customers)
+  await seed_automations(db, users, now);
 
   return { users, orders: N, todo: CONF_TODO.length };
 }

@@ -136,7 +136,8 @@
     "pilot": "Suggestion de Pilote auto",
     "stop_all": "Tout arrêter",
     "launch": "Lancer une pub",
-    "ask": "Demander (Pilot AI)"
+    "ask": "Demander (Pilot AI)",
+    "auto": "Pilot Automations"
   },
   "st": {
     "done": "Fait",

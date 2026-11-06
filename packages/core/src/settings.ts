@@ -187,6 +187,32 @@ export interface SettingsMap {
   };
   /** Réglages › Score client: the points of the customer's score out of 100 (shared/clientscore.ts) */
   clientScore: ScoreRules;
+  /** Pilot Automations (modules/automations.ts): what Pilotix does by itself, each one switched on or off there */
+  automations: AutomationSettings;
+}
+
+/** Pilot Automations: the switches and their numbers. */
+export interface AutomationSettings {
+  /** « Stock revenu »: confirmed orders without stock go to « À préparer » by themselves when the stock comes back
+   *  (off: they wait in « Sans stock » until someone sends them, Pilot Automations shows how many are ready) */
+  stockBack: boolean;
+  /** « Dispatch automatique »: a picked order goes to « En dispatch » by itself, its parcel made at the courier
+   *  (off: every picked order waits in « À attribuer » for a manager) */
+  autoDispatch: boolean;
+  /** « Plus de stock → stop »: an ad set whose products have no stock left is paused, and their landing pages show
+   *  « épuisé » instead of the form; when one of them has stock again, the ad set goes back on by itself */
+  noStock: { on: boolean };
+  /** « Rapport du soir »: the day's numbers at this hour (Algiers time) to these people (none: the administrators) */
+  evening: { on: boolean; hour: number; to: number[] };
+  /** « File d'attente lente »: new orders waiting more than `waitHours` without a call, or an agent on line who has
+   *  called nobody for `idleMin` minutes, in the call hours; to the agent's team manager and these people (none:
+   *  the administrators) */
+  queue: { on: boolean; waitHours: number; idleMin: number; to: number[] };
+  /** « Offre de retour »: a customer who said yes to offers gets this campaign (an approved WhatsApp template made in
+   *  Marketing › Campagnes) this many days after a delivered order, when he has not ordered again */
+  comeBack: { on: boolean; days: number; campaignId: number | null };
+  /** the Affectation mode an area had before it was switched off here, so switching it on brings it back */
+  assignPrev: { conf: AssignArea['mode'] | null; follow: AssignArea['mode'] | null };
 }
 
 export const DEFAULT_SETTINGS: SettingsMap = {
@@ -264,6 +290,15 @@ export const DEFAULT_SETTINGS: SettingsMap = {
     suiviStuck: { days: 3 },
   },
   clientScore: DEFAULT_SCORE_RULES,
+  automations: {
+    stockBack: true,
+    autoDispatch: true,
+    noStock: { on: false },
+    evening: { on: false, hour: 21, to: [] },
+    queue: { on: false, waitHours: 2, idleMin: 30, to: [] },
+    comeBack: { on: false, days: 30, campaignId: null },
+    assignPrev: { conf: null, follow: null },
+  },
 };
 
 export async function getSetting<K extends keyof SettingsMap>(db: Db, key: K): Promise<SettingsMap[K]> {
@@ -272,6 +307,21 @@ export async function getSetting<K extends keyof SettingsMap>(db: Db, key: K): P
   if (!r[0]) return d;
   const v = r[0].value;
   return typeof d === 'object' && d !== null && !Array.isArray(d) && typeof v === 'object' && v !== null && !Array.isArray(v) ? ({ ...d, ...v } as SettingsMap[K]) : v;
+}
+
+/** Pilot Automations' settings, each group merged with its defaults (a group saved before one of its fields existed). */
+export async function autoSettings(db: Db): Promise<AutomationSettings> {
+  const s: Partial<AutomationSettings> = await getSetting(db, 'automations');
+  const d = DEFAULT_SETTINGS.automations;
+  return {
+    stockBack: s.stockBack ?? d.stockBack,
+    autoDispatch: s.autoDispatch ?? d.autoDispatch,
+    noStock: { ...d.noStock, ...(s.noStock ?? {}) },
+    evening: { ...d.evening, ...(s.evening ?? {}) },
+    queue: { ...d.queue, ...(s.queue ?? {}) },
+    comeBack: { ...d.comeBack, ...(s.comeBack ?? {}) },
+    assignPrev: { ...d.assignPrev, ...(s.assignPrev ?? {}) },
+  };
 }
 
 export async function setSetting<K extends keyof SettingsMap>(db: Db, key: K, value: SettingsMap[K], userId?: number) {

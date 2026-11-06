@@ -176,7 +176,8 @@ export interface ActInput {
   /** budget: the new daily budget, in dollars */
   usd?: number | null;
   clientId?: string | null;
-  source?: 'person' | 'rule' | 'stop_all' | 'pilot' | 'launch';
+  /** auto: Pilot Automations (no stock left → paused, stock back → started again) */
+  source?: 'person' | 'rule' | 'stop_all' | 'pilot' | 'launch' | 'auto';
   rule?: RuleKey | null;
   why?: string | null;
   /** Pilote auto acting alone: a change that would wait for the owner is not made at all */
@@ -287,7 +288,8 @@ async function actionsOf(ctx: Ctx, limit: number, where = '') {
       status: String(r.status),
       why: r.why ?? null,
       error: r.error ?? null,
-      by: r.by_name ?? null,
+      // Pilot Automations acted alone (its name is shown, not the account it runs as)
+      by: r.source === 'auto' ? null : (r.by_name ?? null),
       approvedBy: r.approved_name ?? null,
       at: new Date(r.created_at).toISOString(),
       canUndo: r.status === 'done' && ['pause', 'resume', 'budget'].includes(r.op) && ctx.now() - new Date(r.done_at ?? r.created_at).getTime() < 7 * 86_400_000,

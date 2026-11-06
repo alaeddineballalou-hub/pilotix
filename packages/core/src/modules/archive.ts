@@ -149,6 +149,8 @@ export const NOT_REFS: readonly string[] = [
   'product_guides.product_id',
   // its HD photos for Dellal too (deleted with it; their files then leave the photo bucket)
   'product_photos.product_id',
+  // Pilot Automations: what an ad set it paused was selling (a copy; the ad set itself is in adsets)
+  'auto_paused.product_ids',
   'product_photos.variant_id',
   // Marketing › Catalogue: what Meta's catalog holds (a mirror, not a link: a product that leaves goes out of it)
   'meta_catalog_items.product_id',

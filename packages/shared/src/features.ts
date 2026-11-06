@@ -135,6 +135,7 @@ export const PROC_FEATURES: readonly (readonly [prefix: string, feature: string]
   ['cm.plan.', 'pilotai/social'],
   ['cm.', 'pilotai/cm'],
   ['notify.', 'pilotai/notify'],
+  ['auto.', 'pilotai/notify'],
   ['spy.', 'marketing/spy'],
   ['leads.', 'marketing/formulaires'],
   ['campaigns.', 'marketing/campagnes'],

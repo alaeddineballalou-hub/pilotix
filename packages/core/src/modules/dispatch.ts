@@ -11,6 +11,7 @@ import { API_COURIER_KINDS } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { bad, Ctx, forbidden, proc } from '../rpc';
+import { autoSettings } from '../settings';
 import { cancelParcel, sendOrders } from './delivery';
 import { tellLivreur } from './livreur';
 import { addEvent, assignCompanies, getOrder, setFollow } from './orders';
@@ -114,14 +115,18 @@ export async function keepRefusal(db: Db, orderId: number, error: string, userId
   if (had !== error) await addEvent(db, orderId, userId, 'note', null, 'event', `Colis refusé par la société : ${error}`);
 }
 
-/** Orders just picked whole (or any ready ones): with a company — or own delivery with its livreur — to « En dispatch ». */
+/**
+ * Orders just picked whole (or any ready ones): with a company — or own delivery with its livreur — to « En dispatch ».
+ * Pilot Automations' « Dispatch automatique » switched off: they all wait in « À attribuer » for a manager.
+ */
 export async function autoDispatch(ctx: Ctx, ids?: number[]) {
   const rows = await ctx.db.query(
     `SELECT o.id, o.company_id, o.livreur_id, c.kind, c.active FROM orders o LEFT JOIN delivery_companies c ON c.id = o.company_id
       WHERE ${READY_SQL} ${ids ? 'AND o.id = ANY($1)' : ''}`,
     ids ? [ids] : [],
   );
-  const go = rows.filter((r: any) => r.company_id && r.active && (r.kind !== 'own' || r.livreur_id)).map((r: any) => num(r.id));
+  const by = (await autoSettings(ctx.db)).autoDispatch;
+  const go = by ? rows.filter((r: any) => r.company_id && r.active && (r.kind !== 'own' || r.livreur_id)).map((r: any) => num(r.id)) : [];
   // the others start waiting for a person in « À attribuer » (« Livraison privée » ones go to the backup company after a while)
   const wait = rows.map((r: any) => num(r.id)).filter((x: number) => !go.includes(x));
   if (wait.length) await ctx.db.query('UPDATE orders SET assign_wait_since = now() WHERE id = ANY($1) AND assign_wait_since IS NULL', [wait]);
@@ -129,11 +134,13 @@ export async function autoDispatch(ctx: Ctx, ids?: number[]) {
   return { dispatched: r.moved, failed: r.failed, toAssign: rows.length - go.length };
 }
 
-/** « À attribuer »: ready orders without a company, or « Livraison privée » without a livreur. */
+/** « À attribuer »: ready orders without a company, or « Livraison privée » without a livreur (every ready order when
+ *  Pilot Automations' « Dispatch automatique » is off). */
 async function toAssignList(ctx: Ctx) {
+  const all = !(await autoSettings(ctx.db)).autoDispatch;
   const rows = await ctx.db.query(
     `SELECT o.id FROM orders o LEFT JOIN delivery_companies c ON c.id = o.company_id
-      WHERE ${READY_SQL} AND (o.company_id IS NULL OR NOT c.active OR (c.kind = 'own' AND o.livreur_id IS NULL))
+      WHERE ${READY_SQL}${all ? '' : ` AND (o.company_id IS NULL OR NOT c.active OR (c.kind = 'own' AND o.livreur_id IS NULL))`}
       ORDER BY o.confirmed_at NULLS LAST, o.created_at, o.id LIMIT 300`,
   );
   return Promise.all(rows.map((r: any) => getOrder(ctx, num(r.id))));

@@ -204,14 +204,8 @@ export async function insights(db: Db, ids: string[], from: string, to: string):
   }));
 }
 
-/** Orders by their first product, for some products, created in [from, to] (Algiers days). */
-export async function ordersOf(db: Db, productIds: number[], from: string, to: string) {
-  if (!productIds.length) return [];
-  const rows = await db.query(
-    `WITH firsts AS (
-       SELECT DISTINCT ON (i.order_id) i.order_id, i.product_id FROM order_items i ORDER BY i.order_id, i.is_upsell, i.id
-     )
-     SELECT o.id, o.created_at, o.conf_status, o.follow_status, o.total, o.delivery_cost, o.has_upsell, o.company_id, o.wilaya_id, f.product_id,
+/** What moneyOf reads of each order (on `o`, an order of the `sales` view). */
+const MONEY_COLS = `o.id, o.created_at, o.conf_status, o.follow_status, o.total, o.delivery_cost, o.has_upsell, o.company_id, o.wilaya_id,
             (SELECT COALESCE(sum(i.qty * i.purchase_price), 0) FROM order_items i WHERE i.order_id = o.id) AS achat,
             (SELECT COALESCE(sum(i.qty), 0) FROM order_items i WHERE i.order_id = o.id) AS qty,
             -- the return fee the company itself counted (its API: price + weight fee), else its price list
@@ -222,11 +216,29 @@ export async function ordersOf(db: Db, productIds: number[], from: string, to: s
             -- a return priced by the price list: the weight declared, for the company's « Surpoids » on the return
             CASE WHEN o.follow_status IN ('returned', 'lost') AND o.courier_fees->>'ret' IS NULL AND o.livreur_id IS NULL
                  THEN (SELECT COALESCE(sum(p.weight_kg * i.qty), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id) END AS ret_kg,
-            o.courier_fees AS cf
+            o.courier_fees AS cf`;
+
+/** Orders by their first product, for some products, created in [from, to] (Algiers days). */
+export async function ordersOf(db: Db, productIds: number[], from: string, to: string) {
+  if (!productIds.length) return [];
+  const rows = await db.query(
+    `WITH firsts AS (
+       SELECT DISTINCT ON (i.order_id) i.order_id, i.product_id FROM order_items i ORDER BY i.order_id, i.is_upsell, i.id
+     )
+     SELECT ${MONEY_COLS}, f.product_id
      FROM sales o JOIN firsts f ON f.order_id = o.id
      WHERE f.product_id = ANY($1) AND o.created_at >= $2 AND o.created_at < $3 AND o.conf_status <> 'duplicate'`,
     [productIds, dayStart(from), dayStart(addDays(to, 1))],
   );
+  return withReturnWeight(db, rows);
+}
+
+/** The same rows as ordersOf, for the orders `where` picks (SQL on `o`, its parameters from $1). */
+export async function moneyRows(db: Db, where: string, params: unknown[]) {
+  return withReturnWeight(db, await db.query(`SELECT ${MONEY_COLS} FROM sales o WHERE (${where}) AND o.conf_status <> 'duplicate'`, params));
+}
+
+async function withReturnWeight(db: Db, rows: any[]) {
   // the companies' « Surpoids » (Tarifs): it is taken on the return too, as on the delivery (in its cost already)
   if (rows.some((o: any) => o.ret_kg !== null && o.ret_kg !== undefined && o.company_id)) {
     const rules = new Map<number, { kind: string; rule: WeightRule }>();

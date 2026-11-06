@@ -6,7 +6,7 @@ import { GROUP_THEMES, GroupItem, GroupTheme, isAppPage, isHexColor, LANDING_DEF
 import { z } from 'zod';
 import { Db, iso, num, numOrNull } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
-import { getSetting } from '../settings';
+import { autoSettings, getSetting } from '../settings';
 // (landing.ts imports this file too: only functions from it here, used once both are loaded)
 import { b64, HtmlOpts, imageRows, ImgRef, productContext, readImgs, viewImages } from './landing';
 
@@ -78,6 +78,7 @@ async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'im
   const P = new Map(pages.map((p: any) => [num(p.id), p]));
   const items: (GroupItem & { pageId: number })[] = [];
   let shopName = '';
+  const stopOut = (await autoSettings(ctx.db)).noStock.on;
   for (const it of list) {
     const l = P.get(it.pageId);
     if (!l || (o.mode === 'live' && !l.active)) continue;
@@ -93,7 +94,7 @@ async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'im
       price: numOrNull(l.price) ?? pc.price,
       oldPrice: numOrNull(l.old_price),
       image,
-      soldOut: l.stock_mode === 'hide' && pc.soldOut,
+      soldOut: (l.stock_mode === 'hide' || stopOut) && pc.soldOut,
       tab: it.tab,
       note: it.note,
     });

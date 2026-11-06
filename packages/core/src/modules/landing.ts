@@ -36,7 +36,7 @@ import {
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, notFound, proc, publicApi } from '../rpc';
-import { clientHomeFees, getSetting, setSetting } from '../settings';
+import { autoSettings, clientHomeFees, getSetting, setSetting } from '../settings';
 import { BOT_UA, FraudLevel, FraudReason, scoreOrder, verdictOf } from './fraud';
 import { lookAlikeOf, trustOf } from './trust';
 import { groupHtml, groupOf } from './landinggroups';
@@ -327,7 +327,8 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
   const pc = await productContext(ctx.db, num(l.product_id));
   if (!pc.active && o.mode === 'live') throw notFound('Page introuvable');
   const refs = readImgs(l.images);
-  const hide = l.stock_mode === 'hide';
+  // « épuisé » instead of the form: the page's own choice, or Pilot Automations' « Plus de stock → stop »
+  const hide = l.stock_mode === 'hide' || (await autoSettings(ctx.db)).noStock.on;
   const s = await landingSettings(ctx.db);
   const pageUrl = o.url ?? (o.site ? `${o.site}/${await landingStore(ctx.db, s)}/${slug}` : '');
   const px = await pixelsOf(ctx.db, l, s.pixelId);

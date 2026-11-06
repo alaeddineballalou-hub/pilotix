@@ -29,8 +29,9 @@ test('the demo: customers who said yes, a promo sent last week with its results,
   const d: any = await call('campaigns.list', await mk(), {});
   assert.ok(d.consent.yes > 0, 'customers said yes');
   assert.ok(d.consent.form > 0 && d.consent.call > 0);
-  assert.deepEqual(d.campaigns.map((c: any) => c.status).sort(), ['done', 'draft', 'sending']);
-  const promo = d.campaigns.find((c: any) => c.status === 'done');
+  // (and Pilot Automations' « Offre de retour », done until the next customers delivered 30 days before)
+  assert.deepEqual(d.campaigns.map((c: any) => c.status).sort(), ['done', 'done', 'draft', 'sending']);
+  const promo = d.campaigns.find((c: any) => c.name === 'Promo poussette −15 %');
   assert.ok(promo.stats.sent > 0 && promo.stats.read > 0 && promo.stats.replied > 0);
   assert.ok(promo.stats.orders >= 1, 'the orders made after the message');
   assert.ok(promo.stats.revenue > 0);

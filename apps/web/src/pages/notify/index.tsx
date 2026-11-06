@@ -1,6 +1,7 @@
-// « Pilot Automations »: the messages sent to each customer about their order — received, confirmed, shipped, with the
-// livreur, at the desk, failed attempt, cancelled by the livreur, delivered — by WhatsApp first, by SMS when the number
-// has no WhatsApp, or to send by hand; the cases and their texts, a tester, the results and the settings (admin).
+// « Pilot Automations »: what Pilotix does by itself (« Automatisations », admins: Automations.tsx), and the delivery
+// messages sent to each customer about their order — received, confirmed, shipped, with the livreur, at the desk, failed
+// attempt, cancelled by the livreur, delivered — by WhatsApp first, by SMS when the number has no WhatsApp, or to send by
+// hand; the cases and their texts, a tester, the results and the settings (admin).
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMenuCounts } from '../../layout/Shell';
@@ -14,6 +15,7 @@ import { Card, ErrorBox, Field, Icon, Kpi, Kpis, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { AgentHeader, Filters, PeriodSwitch, SaveBar, SearchBox } from '../ai/agent';
 import type { PageProps } from '../registry';
+import { Automations } from './Automations';
 import '../messages/messages.css';
 import '../cm/cm.css';
 import './notify.css';
@@ -35,7 +37,7 @@ function whenSend(iso: string, t: (k: string) => string) {
   return d === today ? `${t('notify.tomorrow')} ${time}` : when(iso);
 }
 
-const TAB_ICON: Record<string, string> = { messages: 'send', cas: 'route', tester: 'play', resultats: 'chart', reglages: 'settings' };
+const TAB_ICON: Record<string, string> = { auto: 'zap', messages: 'send', cas: 'route', tester: 'play', resultats: 'chart', reglages: 'settings' };
 
 export function Notify({ sub }: PageProps) {
   const { t } = useTranslation();
@@ -43,12 +45,13 @@ export function Notify({ sub }: PageProps) {
   const admin = !!session?.isAdmin;
   const counts = useMenuCounts();
   const st = useRpc('notify.feed', { limit: 1 });
-  const keys = ['messages', 'cas', 'tester', 'resultats', ...(admin ? ['reglages'] : [])];
-  const current = keys.includes(sub ?? '') ? sub! : 'messages';
+  const keys = [...(admin ? ['auto'] : []), 'messages', 'cas', 'tester', 'resultats', ...(admin ? ['reglages'] : [])];
+  const current = keys.includes(sub ?? '') ? sub! : keys[0];
   const tabs = keys.map((k) => ({ key: k, label: t(`notify.tabs.${k}`), icon: TAB_ICON[k], href: `#/notify/${k}`, count: k === 'messages' ? counts.notify : undefined }));
   return (
     <>
-      <AgentHeader agent="notify" title={t('notify.title')} help={t('notify.help')} about={t('ai.about.notify')} on={st.data?.enabled} settings={admin ? '#/notify/reglages' : undefined} tabs={tabs} current={current} />
+      <AgentHeader agent="notify" title={t('notify.title')} help={t('notify.help')} about={t('ai.about.notify')} on={current === 'auto' ? undefined : st.data?.enabled} settings={admin ? '#/notify/reglages' : undefined} tabs={tabs} current={current} />
+      {current === 'auto' && <Automations />}
       {current === 'messages' && <Feed admin={admin} />}
       {current === 'cas' && <Cases admin={admin} />}
       {current === 'tester' && <Tester admin={admin} />}

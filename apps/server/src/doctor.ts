@@ -25,6 +25,7 @@ export const JOB_EVERY: Record<string, number> = {
   'courier-sync': 30 * MIN,
   'sheets-sync': 2 * MIN,
   'notify-run': MIN,
+  'auto-run': MIN,
   'landing-run': MIN,
   'cm-plan': MIN,
   'cm-sweep': 3 * MIN,

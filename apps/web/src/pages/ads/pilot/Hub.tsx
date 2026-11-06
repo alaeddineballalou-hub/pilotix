@@ -489,7 +489,7 @@ export function ActionLog({ rows: given, title }: { rows?: Act[]; title?: string
           {rows.map((a) => (
             <li key={a.id} className={`st-${a.status}`}>
               <span className={`pa-src s-${a.source}`} title={t(`pilotads.src.${a.source}`)}>
-                <Icon name={a.source === 'rule' || a.source === 'pilot' || a.source === 'ask' ? 'sparkles' : a.source === 'stop_all' ? 'power' : a.source === 'launch' ? 'megaphone' : 'user'} />
+                <Icon name={a.source === 'rule' || a.source === 'pilot' || a.source === 'ask' ? 'sparkles' : a.source === 'stop_all' ? 'power' : a.source === 'launch' ? 'megaphone' : a.source === 'auto' ? 'zap' : 'user'} />
               </span>
               <div className="pa-log-what">
                 <b>{actLine(t, a)}</b>
