@@ -72,8 +72,8 @@ export const SOCIAL = {
     // Marketing › Catalogue: the shop's catalog and its product sets (lists)
     'catalog_management',
     // the CM plan: publish photos, videos and reels on the Page and on Instagram, delete them, read their numbers
+    // (a Page video needs pages_manage_posts only: publish_video is for live videos, which Pilotix does not make)
     'pages_manage_posts',
-    'publish_video',
     'instagram_content_publish',
     'instagram_manage_contents',
     'read_insights',

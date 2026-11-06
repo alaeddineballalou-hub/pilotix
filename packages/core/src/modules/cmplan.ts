@@ -441,7 +441,7 @@ export function planError(e: any, ch: PlanChannel, what: 'post' | 'delete' = 'po
   const m = String(e?.message ?? e ?? 'Erreur').slice(0, 300);
   const code = typeof e?.metaCode === 'number' ? e.metaCode : null;
   const net = ch === 'facebook' ? 'Facebook' : 'Instagram';
-  const perm = ch === 'facebook' ? (video && what === 'post' ? 'publish_video' : 'pages_manage_posts') : what === 'delete' ? 'instagram_manage_contents' : 'instagram_content_publish';
+  const perm = ch === 'facebook' ? 'pages_manage_posts' : what === 'delete' ? 'instagram_manage_contents' : 'instagram_content_publish';
   if (code === 10 || code === 200 || code === 3 || /\(#(10|200|3)\)|permission|not authori[sz]ed/i.test(m))
     return `${net} : Meta ne permet pas encore à Pilotix de ${what === 'delete' ? 'supprimer' : 'publier'}. Ajoutez « ${perm} » dans l’app Meta, puis appuyez sur « Continuer avec Facebook » dans Pilot AI › Comptes. (${m})`;
   if (code === 9 || code === 4 || code === 32 || code === 613 || /limits? (has been )?reached|too many|rate limit/i.test(m)) return `${net} : la limite de Meta est atteinte (Instagram : 100 posts par jour). Réessayez plus tard. (${m})`;

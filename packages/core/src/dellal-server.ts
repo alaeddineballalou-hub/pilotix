@@ -366,7 +366,7 @@ async function planPublish(ctx: Ctx, a: PlanArgs): Promise<{ id: string; url: st
     if (!a.pageId) throw new AppError('bad_request', 'Facebook : aucune Page liée à cette boutique (Pilot AI › Comptes).');
     const page = enc(a.pageId);
     if (a.video?.url) {
-      // Facebook downloads the original file from Pilotix and prepares it itself (publish_video)
+      // Facebook downloads the original file from Pilotix and prepares it itself (pages_manage_posts)
       const r = await postJson(`https://graph-video.facebook.com/v25.0/${page}/videos?${tk}`, { file_url: a.video.url, description: caption, published: true }, {}, 'Facebook', 'POST', 120_000);
       const vid = String(r?.id ?? '');
       if (!vid) throw new AppError('bad_request', 'Facebook n’a pas donné le numéro de la vidéo.');
