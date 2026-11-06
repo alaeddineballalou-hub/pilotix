@@ -112,5 +112,14 @@
     "goWaCall": "Open WhatsApp to call",
     "goWa": "Send on WhatsApp",
     "goSms": "Send by SMS"
+  },
+  "confirmDelivery": {
+    "title": "Confirm delivery",
+    "orderAmount": "Order amount (COD)",
+    "question": "Was the correct parcel handed to the customer?",
+    "hold": "Press and hold 1.2 s to mark Delivered",
+    "saving": "Saving…",
+    "release": "Release to cancel.",
+    "cashNote": "This does not settle the cash in the register."
   }
 }
