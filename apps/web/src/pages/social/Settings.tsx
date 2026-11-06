@@ -1,4 +1,4 @@
-// AI social media manager › Réglages (administrator): the fixed posting times (« Fill my week » and « Next free time » use
+// Pilot Content › Réglages (administrator): the fixed posting times (« Fill my week » and « Next free time » use
 // them), the administrator's yes before a marketer's post goes out, and the first comment a feed post gets.
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

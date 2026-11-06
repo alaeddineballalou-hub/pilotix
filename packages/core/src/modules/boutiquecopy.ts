@@ -7,7 +7,7 @@
 //  - work: calls, automatic assignment, pay, the client score, Suivi's clock, goals, the column presets…;
 //  - messages: the messages sent to customers and the livreur's ready messages;
 //  - pages: the landing pages' settings (when a sale counts, the reminder, the WhatsApp button);
-//  - ai: how Message AI agent and CM AI agent talk and work.
+//  - ai: how Pilot Message and Pilot Comments talk and work.
 // Never the orders, products, stock, customers, team, money, linked Facebook / WhatsApp / TikTok accounts, pixels or
 // secrets of the agents. What the other boutique never set is left as it is; companies are added or updated (none is
 // removed) and only missing bureaus are added, so the orders there keep theirs. People and products named in the
@@ -42,7 +42,7 @@ const ALL_KEYS = [...new Set(Object.values(PART_KEYS).flat())];
 /** The parts of `prefs` that belong to the delivery companies (the rest is Suivi's and the depot's rules). */
 const PREFS_COURIERS = ['manualDefault', 'changeCompany', 'strictLock', 'rulesBy', 'privateBackup', 'livreurAlerts'] as const;
 const PREFS_WORK = ['noStockDays', 'suiviClock', 'suiviTries', 'suiviStuck'] as const;
-/** Message AI agent: how it talks and works (not whether it is on, nor the Page / Instagram / WhatsApp it answers on). */
+/** Pilot Message: how it talks and works (not whether it is on, nor the Page / Instagram / WhatsApp it answers on). */
 const DELLAL_FIELDS = ['version', 'name', 'tone', 'languages', 'ordersTo', 'model', 'allowDiscount', 'followUpHours', 'nightReplies', 'notes', 'handoffTopics', 'servicePhone', 'darijaPrefer', 'darijaAvoid'];
 /** Messages to customers: the texts and when they leave (not the WhatsApp account, its approved templates, the SMS phone). */
 const NOTIFY_FIELDS = ['enabled', 'lang', 'cases', 'texts', 'whatsapp', 'sms', 'quietFrom', 'quietTo'];

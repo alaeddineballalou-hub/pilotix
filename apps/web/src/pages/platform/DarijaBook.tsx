@@ -1,5 +1,5 @@
 // Pilot AI › Tester & leçons › Leçons › Darija: the Darija book, kept apart from the sales book. The rules of Algerian
-// Darija in chapters, and the lessons for every shop, that Dellal and the CM AI agent read before every reply. Read it,
+// Darija in chapters, and the lessons for every shop, that Dellal and Pilot Comments read before every reply. Read it,
 // edit it (managers: a draft, out with the next push — « Push en test », then « Push sur le serveur »), download it, see
 // its versions and go back to one (at once) (modules/darijabook.ts).
 import { useCallback, useEffect, useRef, useState } from 'react';

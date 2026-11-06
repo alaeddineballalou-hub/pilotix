@@ -81,7 +81,7 @@ export function guideChapters(text: string = DELLAL_DARIJA): { title: string; ch
 }
 /** A, B, C… (then 27, 28… past Z): the chapters keep their letters in order whatever is added or removed. */
 export const chapterMark = (i: number) => (i < 26 ? String.fromCharCode(65 + i) : String(i + 1));
-/** The rules as Dellal and the CM AI agent read them. */
+/** The rules as Dellal and Pilot Comments read them. */
 export function darijaText(b: { title: string; chapters: DarijaChapter[] }): string {
   return [tidy(b.title), ...b.chapters.map((c, i) => `${chapterMark(i)}. ${tidy(c.title)}\n${tidy(c.text)}`)].filter(Boolean).join('\n\n');
 }
@@ -168,7 +168,7 @@ export async function darijaBookLive(pdb: Db, now?: Date): Promise<DarijaBook> {
   }
 }
 
-/** The rules Dellal and the CM AI agent read (the book in service), or the guide of the code when there is no platform. Never throws. */
+/** The rules Dellal and Pilot Comments read (the book in service), or the guide of the code when there is no platform. Never throws. */
 export async function darijaGuide(platform: Db | null): Promise<string> {
   if (!platform) return DELLAL_DARIJA;
   try {

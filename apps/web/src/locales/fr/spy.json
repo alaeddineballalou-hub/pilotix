@@ -201,7 +201,7 @@
     "keep": "À reprendre :",
     "weak": "Point faible :",
     "notYet": "Claude n’a pas encore lu cette pub.",
-    "off": "L’IA n’est pas activée : ajoutez la clé Claude du Message AI agent.",
+    "off": "L’IA n’est pas activée : ajoutez la clé Claude de Pilot Message.",
     "offPilot": "L’IA de Pilotix n’est pas encore activée.",
     "run": "Analyser avec l’IA",
     "running": "Analyse…",
@@ -300,7 +300,7 @@
       "scrapecreators": "Le serveur Pilotix cherche avec votre clé ScrapeCreators, à la demande et chaque matin. Il lit aussi les sites concurrents (prix, plateforme, formulaire).",
       "searchapi": "Le serveur Pilotix cherche avec votre clé SearchAPI.io, à la demande et chaque matin. Il lit aussi les sites concurrents (prix, plateforme, formulaire)."
     },
-    "aiOn": "Claude (clé du Message AI agent) lit chaque pub et prépare le brief.",
+    "aiOn": "Claude (clé de Pilot Message) lit chaque pub et prépare le brief.",
     "aiOnPilot": "Claude (l’IA de Pilotix) lit chaque pub et prépare le brief.",
     "aiOff": "L’IA n’est pas activée : pas de lecture des pubs ni d’accroches.",
     "aiOffPilot": "L’IA de Pilotix n’est pas encore activée : pas de lecture des pubs ni d’accroches.",
@@ -361,8 +361,8 @@
     "ai": "Analyse IA",
     "aiOn": "IA activée",
     "aiOff": "IA désactivée",
-    "aiHelp": "L’analyse IA (pertinence, accroche, angle, offre, brief) utilise la clé Claude du Message AI agent (Dellal). Sans elle, AI Spy montre les chiffres et un résumé simple.",
-    "aiLink": "Réglages du Message AI agent"
+    "aiHelp": "L’analyse IA (pertinence, accroche, angle, offre, brief) utilise la clé Claude de Pilot Message (Dellal). Sans elle, AI Spy montre les chiffres et un résumé simple.",
+    "aiLink": "Réglages de Pilot Message"
   },
   "ext": {
     "title": "Extension Chrome Pilotix",

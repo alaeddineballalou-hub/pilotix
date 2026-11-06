@@ -107,7 +107,7 @@
       "pages": "Landing pages",
       "pagesText": "When a purchase counts, the reminder to a customer who did not finish, the WhatsApp button.",
       "ai": "AI agents",
-      "aiText": "How Message AI agent and CM AI agent talk and work. They stay on or off as they are here."
+      "aiText": "How Pilot Message and Pilot Comments talk and work. They stay on or off as they are here."
     },
     "keys": "The same API keys (the same account at each company)",
     "keysOn": "API keys typed",

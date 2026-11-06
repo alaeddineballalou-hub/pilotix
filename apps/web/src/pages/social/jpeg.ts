@@ -1,4 +1,4 @@
-// AI social media manager: a picked photo becomes what Meta takes, in the browser itself, always at the highest quality:
+// Pilot Content: a picked photo becomes what Meta takes, in the browser itself, always at the highest quality:
 // - JPEG (Instagram takes no other format), as big as Instagram keeps (1440 px wide, so up to 1800 px tall); a smaller
 //   photo is never blown up (it would only get blurry);
 // - between 4:5 (tall) and 1.91:1 (wide), cut in the middle when it is outside;

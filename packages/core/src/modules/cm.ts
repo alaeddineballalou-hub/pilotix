@@ -1,6 +1,6 @@
-// CM AI agent (community manager): reads the comments left under the shop's Facebook and Instagram posts and ads,
+// Pilot Comments (community manager): reads the comments left under the shop's Facebook and Instagram posts and ads,
 // answers them in public with one short line, sends the commenter a private message — it opens a conversation in
-// Message AI agent, where Dellal continues the sale — and hides spam, insults and phone numbers (competitors copy them).
+// Pilot Message, where Dellal continues the sale — and hides spam, insults and phone numbers (competitors copy them).
 // The same rules run on the server (Claude through ctx.server.dellal), in the Pilotix preview opened in Claude
 // (ctx.dellalAi) and, without AI, with a small rule-based "demo brain", so the preview shows the whole flow.
 import { COMMUNES, normalizePhone, WILAYAS_AR } from '@pilotix/shared';
@@ -49,7 +49,7 @@ export interface CmSettings {
   replyPublic: boolean;
   /** say the price in public (off: the price only goes in the private message) */
   showPrice: boolean;
-  /** send a private message to people who ask: it opens a conversation in Message AI agent */
+  /** send a private message to people who ask: it opens a conversation in Pilot Message */
   sendPrivate: boolean;
   /** hide spam, links of other pages, insults */
   hideSpam: boolean;
@@ -723,7 +723,7 @@ async function metaAct(ctx: Ctx, row: any, action: 'cmReply' | 'cmPrivate' | 'cm
   return ctx.server.dellal(action, { channel: row.channel, commentId: row.external_id, ...args }, ctx);
 }
 
-/** Opens (or continues) the commenter's conversation in Message AI agent with the private message. */
+/** Opens (or continues) the commenter's conversation in Pilot Message with the private message. */
 async function openConversation(ctx: Ctx, row: any, text: string, recipientId: string | null, extra: { meta?: Record<string, unknown>; staffId?: number; takeOver?: boolean }) {
   const ext = recipientId ?? (ctx.server?.dellal ? `comment:${row.external_id}` : `cm-${row.author_id ?? row.external_id}`);
   return conversationFromComment(ctx, {
@@ -789,7 +789,7 @@ export async function answerComment(ctx: Ctx, id: number, opts: { force?: boolea
     }
   }
   if (!opts.force) {
-    const why = !s.enabled ? 'Le CM AI agent est désactivé' : !s.channels[row.channel as CmChannel] ? 'Canal désactivé' : !s.nightReplies && (algeriaHour(ctx.now()) >= 23 || algeriaHour(ctx.now()) < 8) ? 'Pas de réponse la nuit' : null;
+    const why = !s.enabled ? 'Pilot Comments est désactivé' : !s.channels[row.channel as CmChannel] ? 'Canal désactivé' : !s.nightReplies && (algeriaHour(ctx.now()) >= 23 || algeriaHour(ctx.now()) < 8) ? 'Pas de réponse la nuit' : null;
     if (why) {
       await release();
       return { status: null, skipped: why };
@@ -1005,7 +1005,7 @@ export const cmProcs = {
   /** A person answers in public. */
   /**
    * « Leçon de darija » under one of the agent's replies (public or private): the words the team member changed become a
-   * Darija lesson of the shop (Dellal and the CM AI agent use it at once; Pilotix reviews it). The reply that was sent never
+   * Darija lesson of the shop (Dellal and Pilot Comments use it at once; Pilotix reviews it). The reply that was sent never
    * changes.
    */
   'cm.lahja.add': proc([...CM_ROLES], z.object({ id, which: z.enum(['public', 'private']), after: z.string().trim().min(1).max(2000) }), async (ctx, i) => {
@@ -1015,7 +1015,7 @@ export const cmProcs = {
     if (!c || !text.trim() || c.handled_by || !c.meta?.by) throw notFound('Réponse du CM AI introuvable');
     return saveShopLahja(ctx, { before: text, after: i.after, commentId: num(c.id), conversationId: i.which === 'private' ? numOrNull(c.conversation_id) : null });
   }),
-  /** CM AI agent › Tester: the same lesson from what the agent would answer to a test comment (public or private). */
+  /** Pilot Comments › Tester: the same lesson from what the agent would answer to a test comment (public or private). */
   'cm.lahja.test': proc([...CM_ROLES], z.object({ testId: id, which: z.enum(['public', 'private']), after: z.string().trim().min(1).max(2000) }), async (ctx, i) => {
     const r = (await ctx.db.query(`SELECT id, public_reply, private_reply FROM cm_tests WHERE id = $1`, [i.testId]))[0];
     const text = r ? String((i.which === 'public' ? r.public_reply : r.private_reply) ?? '') : '';
@@ -1037,16 +1037,16 @@ export const cmProcs = {
     return { ok: !sendError, sendError };
   }),
 
-  /** A person writes to the commenter in private (opens the conversation in Message AI agent, assigned to them). */
+  /** A person writes to the commenter in private (opens the conversation in Pilot Message, assigned to them). */
   'cm.private': proc([...CM_ROLES], z.object({ id, body: z.string().trim().min(1).max(1000) }), async (ctx, i) => {
     const row = await rawComment(ctx.db, i.id);
-    if (row.private_sent) throw bad('Un message privé est déjà parti pour ce commentaire : continuez dans Message AI agent.');
+    if (row.private_sent) throw bad('Un message privé est déjà parti pour ce commentaire : continuez dans Pilot Message.');
     if (ctx.now() - Date.parse(iso(row.created_at)) > 7 * 86_400_000) throw bad('Plus de 7 jours : Meta ne permet plus le message privé pour ce commentaire.');
     let sendError: string | null = null;
     let convId: number | null = null;
     try {
       const r = await metaAct(ctx, row, 'cmPrivate', { text: i.body });
-      // a seller keeps the conversation; a marketer's message leaves it to Dellal (marketers do not open Message AI agent)
+      // a seller keeps the conversation; a marketer's message leaves it to Dellal (marketers do not open Pilot Message)
       convId = await openConversation(ctx, row, i.body, r?.recipientId ?? null, { staffId: me(ctx), takeOver: hasRole(ctx.session, 'confirmation') });
     } catch (e) {
       sendError = errText(e);

@@ -1,6 +1,6 @@
-// Darija (lahja) lessons in a shop. « Leçon de darija » under one of Dellal's messages, or under one of the CM AI agent's
+// Darija (lahja) lessons in a shop. « Leçon de darija » under one of Dellal's messages, or under one of Pilot Comments's
 // replies to a comment: write how it should have said it (what was sent never changes); the words you change become a
-// lesson that Dellal and the CM AI agent use at once in this shop, and that Pilotix checks for every shop. Messages › Réglages lists them, with what Dellal learned from the shop's
+// lesson that Dellal and Pilot Comments use at once in this shop, and that Pilotix checks for every shop. Messages › Réglages lists them, with what Dellal learned from the shop's
 // customers and Pilotix's lessons for every shop. The words are drawn the same way in the control room.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,7 +35,7 @@ export function LahjaWords({ words, className = '' }: { words: LahjaWord[]; clas
 type Saved = { words: LahjaWord[]; review: string };
 
 /**
- * The editor under one of the agents' messages (Dellal's message, or the CM AI agent's reply to a comment): write it the
+ * The editor under one of the agents' messages (Dellal's message, or Pilot Comments's reply to a comment): write it the
  * right way; the changed words become a lesson. What was sent never changes.
  */
 function FixBox({ sent, help, busy, done, onSave }: { sent: string; help: string; busy: boolean; done: Saved | null; onSave: (after: string) => void }) {
@@ -107,7 +107,7 @@ export function LahjaFix({ m, name = 'Dellal' }: { m: Msg; name?: string }) {
   return <FixBox sent={m.body} help={t('messages.lahja.fixHelp', { name })} busy={add.isPending} done={done} onSave={(after) => add.mutate({ messageId: m.id, after })} />;
 }
 
-/** Under one of the CM AI agent's replies to a comment (public or private): the same lesson, the reply never changes. */
+/** Under one of Pilot Comments's replies to a comment (public or private): the same lesson, the reply never changes. */
 export function CmLahjaFix({ id, which, sent }: { id: number; which: 'public' | 'private'; sent: string }) {
   const { t } = useTranslation();
   const [done, setDone] = useState<Saved | null>(null);
@@ -115,7 +115,7 @@ export function CmLahjaFix({ id, which, sent }: { id: number; which: 'public' | 
   return <FixBox sent={sent} help={t('cm.lahja.fixHelp')} busy={add.isPending} done={done} onSave={(after) => add.mutate({ id, which, after })} />;
 }
 
-/** CM AI agent › Tester: the same lesson from what the agent would answer to a test comment. */
+/** Pilot Comments › Tester: the same lesson from what the agent would answer to a test comment. */
 export function CmTestLahjaFix({ testId, which, sent }: { testId: number; which: 'public' | 'private'; sent: string }) {
   const { t } = useTranslation();
   const [done, setDone] = useState<Saved | null>(null);

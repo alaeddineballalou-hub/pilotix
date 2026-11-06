@@ -1,6 +1,6 @@
 {
-  "title": "CM AI agent",
-  "help": "Your AI community manager: it reads the comments under your Facebook and Instagram posts and ads, answers in public in one line, writes privately to people who ask for the price (the conversation goes on in Message AI agent, where Dellal takes the order) and hides spam, insults and phone numbers.",
+  "title": "Pilot Comments",
+  "help": "Your AI community manager: it reads the comments under your Facebook and Instagram posts and ads, answers in public in one line, writes privately to people who ask for the price (the conversation goes on in Pilot Message, where Dellal takes the order) and hides spam, insults and phone numbers.",
   "tabs": {
     "commentaires": "Comments",
     "publications": "Posts",
@@ -41,7 +41,7 @@
     "team": "Team",
     "teamName": "Team: {{name}}"
   },
-  "off": "The CM AI agent is off: comments arrive here but nobody answers automatically.",
+  "off": "Pilot Comments is off: comments arrive here but nobody answers automatically.",
   "offLink": "Turn it on in Settings",
   "feed": {
     "todo": "To handle",
@@ -70,7 +70,7 @@
     "hiddenPhone": "Phone number: hidden so competitors cannot see it",
     "reason": "Why",
     "replyPh": "Your public reply…",
-    "privatePh": "Your private message (it opens the conversation in Message AI agent)…",
+    "privatePh": "Your private message (it opens the conversation in Pilot Message)…",
     "cancel": "Cancel",
     "send": "Send",
     "answer": "Answer with CM AI",
@@ -90,7 +90,7 @@
   },
   "posts": {
     "title": "Posts and ads",
-    "help": "The product of each post: the CM AI agent uses it to give the price, colours and stock in private. It is guessed from the post's text; change it if needed.",
+    "help": "The product of each post: Pilot Comments uses it to give the price, colours and stock in private. It is guessed from the post's text; change it if needed.",
     "empty": "Posts show up here with their first comment.",
     "noCaption": "(post text not read yet)",
     "comments_one": "{{count}} comment",
@@ -104,12 +104,12 @@
     "saved": "Product saved"
   },
   "tester": {
-    "title": "Try the CM AI agent",
-    "help": "Write a comment like a customer under one of your posts: you see what the CM AI agent would do. Nothing is posted or sent.",
+    "title": "Try Pilot Comments",
+    "help": "Write a comment like a customer under one of your posts: you see what Pilot Comments would do. Nothing is posted or sent.",
     "demoPreview": "Preview: these answers come from the demo rules. On your server, with the AI key, Claude decides.",
-    "demoNoKey": "Demo answers: add the AI key in Message AI agent › Settings so Claude decides.",
+    "demoNoKey": "Demo answers: add the AI key in Pilot Message › Settings so Claude decides.",
     "demoPilot": "Demo answers: Pilotix’s AI is not on yet. As soon as it is, Claude decides.",
-    "inPage": "In this page, the CM AI agent answers with Claude (your Claude account), with its real instructions and the Darija check. An answer often takes 20 to 60 seconds.",
+    "inPage": "In this page, Pilot Comments answers with Claude (your Claude account), with its real instructions and the Darija check. An answer often takes 20 to 60 seconds.",
     "post": "Under the post",
     "noPost": "No post (unknown product)",
     "name": "Customer name (optional)",
@@ -127,7 +127,7 @@
     ],
     "run": "Try",
     "running": "CM AI is thinking… {{s}} s",
-    "result": "What the CM AI agent would do",
+    "result": "What Pilot Comments would do",
     "nothing": "Nothing: this comment needs no answer.",
     "would": {
       "hide": "Hide the comment",
@@ -146,10 +146,10 @@
     "product": "Product",
     "place": "Place",
     "phone": "Phone",
-    "empty": "Write a comment, then “{{run}}”: what the CM AI agent would do shows here."
+    "empty": "Write a comment, then “{{run}}”: what Pilot Comments would do shows here."
   },
   "results": {
-    "title": "CM AI agent results",
+    "title": "Pilot Comments results",
     "total": "Comments",
     "todo_one": "{{count}} to handle",
     "todo_other": "{{count}} to handle",
@@ -167,19 +167,19 @@
     "speed": "Average answer time",
     "speedV": "{{m}} min",
     "intents": "What the comments are about",
-    "note": "Orders: those taken in conversations opened by a private message of the CM AI agent (Message AI agent or the team)."
+    "note": "Orders: those taken in conversations opened by a private message of Pilot Comments (Pilot Message or the team)."
   },
   "settings": {
     "saved": "Settings saved",
-    "how": "How the CM AI agent answers",
-    "enabled": "The CM AI agent handles new comments",
+    "how": "How Pilot Comments answers",
+    "enabled": "Pilot Comments handles new comments",
     "enabledHint": "Off: comments arrive here, with no automatic answer.",
     "replyPublic": "Answer in public",
     "replyPublicHint": "One short line under the comment (“Jawbnakom f privé 📩”). Facebook shows pages that answer more.",
     "showPrice": "Give the price in public",
     "showPriceHint": "Off (advised): the price only goes in private, competitors do not see it and the customer comes to the conversation.",
     "sendPrivate": "Write privately to people who ask",
-    "sendPrivateHint": "One message per comment, within 7 days (Meta's rule). The conversation opens in Message AI agent, where Dellal goes on selling.",
+    "sendPrivateHint": "One message per comment, within 7 days (Meta's rule). The conversation opens in Pilot Message, where Dellal goes on selling.",
     "hideSpam": "Hide spam and insults",
     "hideSpamHint": "Links of other pages, competitors, vulgarity. Hidden: the person and their friends still see it, others do not. A complaint always goes to the team and is hidden only when it contains insults.",
     "hidePhones": "Hide phone numbers",
@@ -202,13 +202,13 @@
     "bannedHint": "One word or phrase per line, on top of the known insults.",
     "bannedPh": "a competitor's name\nanother word",
     "channels": "Channels and connection",
-    "channelsHelp": "The CM AI agent uses the Meta connection of Message AI agent (page token, app secret, AI key). In your Meta app, also subscribe the page to the “feed” field and Instagram to the “comments” field, with the same webhook address.",
+    "channelsHelp": "Pilot Comments uses the Meta connection of Pilot Message (page token, app secret, AI key). In your Meta app, also subscribe the page to the “feed” field and Instagram to the “comments” field, with the same webhook address.",
     "facebookHint": "The page's posts and ads.",
     "instagramHint": "Posts and ads of the professional Instagram account.",
     "soon": "Soon: TikTok does not open comments to apps yet.",
     "pageToken": "Page token",
     "connected": "connected",
-    "connect": "Connect it in Message AI agent › Settings",
+    "connect": "Connect it in Pilot Message › Settings",
     "pageId": "Facebook page ID",
     "igId": "Instagram account ID",
     "ai": "AI key (Claude)",
@@ -221,7 +221,7 @@
     "demo": "Preview: these are the demo's settings, nothing is sent to Meta.",
     "save": "Save",
     "appSecret": "Meta app secret",
-    "appSecretNone": "Required: without it, comments are not handled (Message AI agent › Settings)"
+    "appSecretNone": "Required: without it, comments are not handled (Pilot Message › Settings)"
   },
   "lahja": {
     "fixHelp": "The reply that was sent does not change: write how CM AI should have said it. The words you change become a lesson, for CM AI and Dellal."

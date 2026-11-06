@@ -1,5 +1,5 @@
-// « CM AI agent »: the community manager. The comments under the shop's Facebook and Instagram posts and ads, and what
-// the agent did with each one (public reply, private message that opens a conversation in Message AI agent, hidden);
+// « Pilot Comments »: the community manager. The comments under the shop's Facebook and Instagram posts and ads, and what
+// the agent did with each one (public reply, private message that opens a conversation in Pilot Message, hidden);
 // the posts and the product each one sells, a tester, the results and the settings (admin).
 import { webHref } from '../../lib/safeHref';
 import { useEffect, useRef, useState } from 'react';

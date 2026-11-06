@@ -211,7 +211,7 @@
     },
     "igLogin": {
       "ok": "Instagram login: @{{username}}’s key works. Dellal uses it to answer all your Instagram customers.",
-      "warn": "Instagram login: not done yet for @{{username}}. Without it (or Meta’s approval), Dellal answers on Instagram only accounts that have a role on the app. Add it in Message AI agent › Settings.",
+      "warn": "Instagram login: not done yet for @{{username}}. Without it (or Meta’s approval), Dellal answers on Instagram only accounts that have a role on the app. Add it in Pilot Message › Settings.",
       "bad": "Instagram login: the key no longer works. The reason is just below."
     },
     "badSig": {

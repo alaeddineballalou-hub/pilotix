@@ -1,6 +1,6 @@
 {
-  "title": "Delivery AI agent",
-  "help": "Il prévient chaque client de l’état de sa commande : reçue, confirmée, expédiée, avec le livreur, au bureau, livraison échouée, annulée par le livreur. D’abord par WhatsApp ; si le numéro n’a pas WhatsApp, par SMS ; sinon le message attend dans « À envoyer » pour l’équipe. Les réponses des clients arrivent dans Message AI agent, où Dellal connaît la commande.",
+  "title": "Pilot Automations",
+  "help": "Il prévient chaque client de l’état de sa commande : reçue, confirmée, expédiée, avec le livreur, au bureau, livraison échouée, annulée par le livreur. D’abord par WhatsApp ; si le numéro n’a pas WhatsApp, par SMS ; sinon le message attend dans « À envoyer » pour l’équipe. Les réponses des clients arrivent dans Pilot Message, où Dellal connaît la commande.",
   "tabs": {
     "messages": "Messages",
     "cas": "Cas",
@@ -9,7 +9,7 @@
     "reglages": "Réglages"
   },
   "tomorrow": "demain",
-  "off": "Delivery AI agent est arrêté : aucun message n’est envoyé aux clients.",
+  "off": "Pilot Automations est arrêté : aucun message n’est envoyé aux clients.",
   "offLink": "Le démarrer dans Réglages",
   "kind": {
     "created": "Commande reçue",
@@ -103,7 +103,7 @@
     "howHelp": "Chaque changement de statut d’une commande envoie au plus un message : une seule fois par commande pour « reçue », « confirmée », « expédiée », « annulée » et « livrée », une fois par jour au plus pour les autres. Un message qui attend la fin de la nuit est remplacé si la commande avance entre-temps.",
     "flowLabel": "Le parcours d’une commande",
     "step1": "1. WhatsApp",
-    "step1Hint": "Depuis le numéro de Message AI agent, avec un texte validé par WhatsApp.",
+    "step1Hint": "Depuis le numéro de Pilot Message, avec un texte validé par WhatsApp.",
     "step2": "2. SMS",
     "step2Hint": "Si le numéro n’a pas WhatsApp, ou si le WhatsApp n’est pas reçu au bout d’1 h.",
     "step3": "3. À la main",
@@ -193,16 +193,16 @@
     "byKind": "Par cas",
     "replies_one": "{{count}} réponse",
     "replies_other": "{{count}} réponses",
-    "note": "Les réponses des clients sur WhatsApp arrivent dans Message AI agent, avec le message avant elles. Dellal répond aux questions et passe la main à l’équipe pour renvoyer une commande ou changer une adresse."
+    "note": "Les réponses des clients sur WhatsApp arrivent dans Pilot Message, avec le message avant elles. Dellal répond aux questions et passe la main à l’équipe pour renvoyer une commande ou changer une adresse."
   },
   "settings": {
     "saved": "Réglages enregistrés",
     "save": "Enregistrer",
     "how": "Fonctionnement",
-    "enabled": "Delivery AI agent démarré",
+    "enabled": "Pilot Automations démarré",
     "enabledHint": "Les messages partent à chaque changement de statut des commandes.",
     "whatsapp": "Envoyer d’abord par WhatsApp",
-    "whatsappHint": "Depuis le numéro WhatsApp de Message AI agent. Sinon, tout part par SMS.",
+    "whatsappHint": "Depuis le numéro WhatsApp de Pilot Message. Sinon, tout part par SMS.",
     "lang": "Langue des messages",
     "langHint": "La darija en lettres latines se lit comme vos discussions et coûte 2 à 3 fois moins en SMS.",
     "quiet": "Pas de message la nuit",
@@ -212,7 +212,7 @@
     "waHelp": "WhatsApp n’autorise le premier message d’une entreprise qu’avec un texte validé (modèle « Utilitaire »). Pilotix envoie vos textes à WhatsApp pour validation ; c’est souvent fait en quelques minutes, parfois en 24 h.",
     "waNumber": "Numéro WhatsApp",
     "connected": "connecté",
-    "waConnect": "À connecter dans Message AI agent › Réglages",
+    "waConnect": "À connecter dans Pilot Message › Réglages",
     "waba": "ID du compte WhatsApp Business (WABA)",
     "wabaHint": "Meta Business › Comptes WhatsApp, ou dans le gestionnaire WhatsApp. Il sert à envoyer vos textes pour validation.",
     "waTemplates": "Les textes se valident dans l’onglet « Cas » : boutons « Envoyer les textes à WhatsApp » puis « Vérifier la validation ».",
@@ -249,7 +249,7 @@
     "manualNote": "Chaque message à envoyer apparaît dans Messages › À envoyer, avec « Ouvrir WhatsApp » et « Ouvrir SMS » : le texte est déjà écrit, il reste à appuyer sur envoyer.",
     "demo": "Aperçu : les envois sont simulés, aucun SMS ni WhatsApp ne part.",
     "appSecretMissing": "Sans le secret de l’app Meta, Pilotix n’accepte pas les accusés de WhatsApp (lu, reçu, non reçu) : un message non reçu passe au SMS seulement après 1 h.",
-    "appSecretLink": "L’ajouter dans Message AI agent › Réglages"
+    "appSecretLink": "L’ajouter dans Pilot Message › Réglages"
   },
   "ev": {
     "sent": "{{via}} au client · {{kind}}",

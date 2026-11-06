@@ -1,4 +1,4 @@
-// CM AI agent › Planner: posts planned on a calendar. The AI writes the caption, and Pilotix posts them on the shop's
+// Pilot Comments › Planner: posts planned on a calendar. The AI writes the caption, and Pilotix posts them on the shop's
 // Facebook Page and Instagram account at the chosen time (the 'cm-plan' job, every minute).
 // - cm_media: a post's photos and videos. A photo as Meta needs it: JPEG (Instagram takes nothing else), at most 1440 px
 //   wide, between 4:5 and 1.91:1 (cropped in the browser before it is sent), and a small copy for the calendar. A video:

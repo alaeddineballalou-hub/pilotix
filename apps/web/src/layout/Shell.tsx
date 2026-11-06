@@ -87,6 +87,8 @@ const ITEM_COUNT: Record<string, [string, string]> = {
   landing: ['landing', 'nc-a'],
   caisse: ['uncashed', 'nc-c'],
   livraison: ['toShip', 'nc-n'],
+  // Pilot Automations: the delivery messages waiting
+  notify: ['notify', 'nc-a'],
 };
 
 function Count({ v, tone }: { v: number; tone: string }) {
@@ -130,7 +132,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
   /** an agency's person who calls customers (its chief and supervisors too) */
   const calls = agency && (isAdmin || roles.some((r) => r === 'confirmation' || r === 'agent_manager'));
 
-  // A new order that came by itself (a landing page, the shop's site, the Message AI agent): a toast and a chime for the
+  // A new order that came by itself (a landing page, the shop's site, Pilot Message): a toast and a chime for the
   // people who confirm orders (sound: once the page was touched) — from any of their boutiques, with its name.
   const boutiques = useBoutiques().data;
   useEffect(

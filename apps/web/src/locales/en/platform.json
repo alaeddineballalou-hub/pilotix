@@ -900,11 +900,11 @@
     "keySaved": "Key saved. Paste another one to replace it.",
     "keyRemove": "Remove the key",
     "dayUsd": "Daily limit, all shops ($)",
-    "dayUsdHint": "The most Pilotix's key spends in one day on AI answers (Dellal, CM AI agent, AI Spy). Reached: the AI rests until midnight and you get an e-mail. 0 = no limit.",
+    "dayUsdHint": "The most Pilotix's key spends in one day on AI answers (Dellal, Pilot Comments, AI Spy). Reached: the AI rests until midnight and you get an e-mail. 0 = no limit.",
     "today": "Today: {{usd}} of {{max}}.",
     "todayNoLimit": "Today: {{usd}} (no limit).",
     "resting": "Resting",
-    "restText": "Today's limit reached ({{usd}} of {{max}}): until midnight, Dellal answers with its simple rules, so does the CM AI agent, and AI Spy waits. Raise the limit to go on right away.",
+    "restText": "Today's limit reached ({{usd}} of {{max}}): until midnight, Dellal answers with its simple rules, so does Pilot Comments, and AI Spy waits. Raise the limit to go on right away.",
     "maxUsd": "Most spent per night ($)",
     "maxUsdHint": "Learning never goes over this amount (about $0.15 is enough for 10,000 chats a month).",
     "share": "Share of new chats that try a new book (%)",
@@ -1020,14 +1020,14 @@
     "shopsOff": "Unticking a shop deletes at once what Pilot AI kept of its chats.",
     "costs": {
       "title": "AI cost per shop",
-      "help": "What each shop's AI cost you this month (Message AI agent, CM AI agent, AI Spy), at Anthropic's price, with your Pilotix key. Bill each shop this amount (or more).",
+      "help": "What each shop's AI cost you this month (Pilot Message, Pilot Comments, AI Spy), at Anthropic's price, with your Pilotix key. Bill each shop this amount (or more).",
       "prev": "Previous month",
       "next": "Next month",
       "rate": "How many DA for 1 $",
       "none": "No AI answers paid by Pilotix this month.",
       "f": {
-        "dellal": "Message AI agent",
-        "cm": "CM AI agent",
+        "dellal": "Pilot Message",
+        "cm": "Pilot Comments",
         "spy": "AI Spy",
         "other": "Other"
       },
@@ -1691,7 +1691,7 @@
         "Paste the App ID and the Secret here, then save. TikTok approves the app in one to two weeks."
       ],
       "igSecret": "Instagram app secret (Instagram login)",
-      "igSecretHint": "Only if a boutique uses Instagram’s own login (Message AI agent › Settings). Meta signs that login’s messages with it. In the Meta app:"
+      "igSecretHint": "Only if a boutique uses Instagram’s own login (Pilot Message › Settings). Meta signs that login’s messages with it. In the Meta app:"
     },
     "release": {
       "title": "Push: Dellal’s next version",

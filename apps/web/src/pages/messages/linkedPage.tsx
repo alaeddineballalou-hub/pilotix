@@ -1,4 +1,4 @@
-// The Facebook Page (and its Instagram account) the agents answer on, in Message AI agent › Réglages and CM AI agent ›
+// The Facebook Page (and its Instagram account) the agents answer on, in Pilot Message › Réglages and Pilot Comments ›
 // Réglages: it comes only from a linked account (Pilot AI › Comptes, pages/comptes).
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../../ui/kit';

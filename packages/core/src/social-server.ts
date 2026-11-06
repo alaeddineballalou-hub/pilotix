@@ -43,7 +43,7 @@ async function igGraph(path: string, params: Record<string, string>): Promise<an
   const { res, data } = await fetchJson(`https://graph.instagram.com/v23.0/${path}?${new URLSearchParams(params).toString()}`, {}, 'Instagram');
   if (!res.ok || data?.error) {
     const e = data?.error;
-    if (e?.code === 190) throw new AppError('bad_request', 'Instagram a refusé la clé (expirée ou retirée). Créez-en une nouvelle dans l’app Meta, puis collez-la dans Message AI agent › Réglages.');
+    if (e?.code === 190) throw new AppError('bad_request', 'Instagram a refusé la clé (expirée ou retirée). Créez-en une nouvelle dans l’app Meta, puis collez-la dans Pilot Message › Réglages.');
     throw new AppError('bad_request', `Instagram : ${e?.error_user_msg ?? e?.message ?? res.statusText}`);
   }
   return data;
@@ -494,7 +494,7 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
         add('pageHook', 'bad', undefined, why(e));
       }
       if (extra.hook !== hook) await t.platform.query(`UPDATE platform.social_assets SET extra = $2 WHERE id = $1`, [num(page.id), JSON.stringify({ ...extra, hook })]);
-      // the Page's comments: when a customer's last came (the CM AI agent answers them)
+      // the Page's comments: when a customer's last came (Pilot Comments answers them)
       const fbc = await lastComment(t, 'page', String(page.ext_id));
       add('fbComment', fbc?.routed ? 'ok' : 'warn', { name, ...(fbc ? { at: fbc.at } : {}), ...(fbc && !fbc.routed ? { lost: 1 } : {}) });
       if (extra.ig?.id) {
@@ -536,7 +536,7 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
       if (!run?.at) add('catchUp', 'warn');
       else if (run.error) add('catchUp', 'warn', { at: String(run.at), why: 'error' }, String(run.error).slice(0, 240));
       else add('catchUp', 'ok', { at: String(run.at), count: num(run.found) });
-      // Instagram's own login (Message AI agent › Réglages): with it, Dellal answers every customer of this account
+      // Instagram's own login (Pilot Message › Réglages): with it, Dellal answers every customer of this account
       const igKey = schema ? (await t.shop(String(schema)).query(`SELECT value FROM settings WHERE key = 'secret_dellal_ig_token'`).catch(() => []))[0]?.value : null;
       const dset = schema ? (await t.shop(String(schema)).query(`SELECT value FROM settings WHERE key = 'dellal'`).catch(() => []))[0]?.value : null;
       if (igKey) {

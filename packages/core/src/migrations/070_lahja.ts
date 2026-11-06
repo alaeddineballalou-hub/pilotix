@@ -1,5 +1,5 @@
 // Darija (lahja) lessons of this shop: a team member writes how Dellal should have said one of its messages; the words they
-// changed become a lesson, used at once by this shop's Dellal and CM AI agent (modules/lahja.ts). The message that was
+// changed become a lesson, used at once by this shop's Dellal and Pilot Comments (modules/lahja.ts). The message that was
 // sent never changes.
 export default `
 CREATE TABLE IF NOT EXISTS dellal_lahja (

@@ -1,6 +1,6 @@
 // AI Spy › Réglages (#/marketing/spy/reglages): where the ads come from (the free Pilotix Chrome extension, or a paid
 // key used by the server: ScrapeCreators, SearchAPI.io), the daily scan, the shop's own pages, how many ads per keyword,
-// whether Claude reads the ads (the Message AI agent's key), and how to install the extension. Only admins save.
+// whether Claude reads the ads (Pilot Message's key), and how to install the extension. Only admins save.
 import type { SpySource } from '@pilotix/core';
 import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';

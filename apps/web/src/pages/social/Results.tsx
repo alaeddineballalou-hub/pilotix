@@ -1,5 +1,5 @@
-// AI social media manager › Results: what the posts did. Meta's numbers (views, reach, likes, comments, shares, saves) and
-// Pilotix's own (the comments CM AI agent answered, the conversations they opened, the orders and the money they
+// Pilot Content › Results: what the posts did. Meta's numbers (views, reach, likes, comments, shares, saves) and
+// Pilotix's own (the comments Pilot Comments answered, the conversations they opened, the orders and the money they
 // brought); this week against the one before with what to do next; the best posts (« Post again »); the best hours,
 // days and kinds; the followers; every post. The numbers come from cm.plan.stats (modules/cmsocial.ts).
 import { useMemo, useState } from 'react';

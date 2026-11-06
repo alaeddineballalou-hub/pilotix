@@ -1,5 +1,5 @@
 // What each shop's AI costs Pilotix (control room › Pilot AI › AI cost per shop), so the owner can bill it.
-// Every answer Claude gives on the server (Dellal, the CM AI agent, AI Spy) goes through dellal-server › complete(), which
+// Every answer Claude gives on the server (Dellal, Pilot Comments, AI Spy) goes through dellal-server › complete(), which
 // adds its tokens here: one row per day, shop, feature, model and payer (Pilotix's key or the shop's own), so the table
 // stays small. The price is worked out at that moment from Anthropic's list price (USD per million tokens).
 import type { Tenancy } from './tenancy';

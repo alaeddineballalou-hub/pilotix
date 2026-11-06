@@ -1,4 +1,4 @@
-// Delivery AI agent: the messages sent to customers about their order (received, confirmed, shipped, with the livreur,
+// Pilot Automations: the messages sent to customers about their order (received, confirmed, shipped, with the livreur,
 // at the desk, failed attempt, cancelled by the livreur, delivered). WhatsApp first; SMS when the customer has no
 // WhatsApp; a list to send by hand when no SMS sender is set. Settings live in `settings` (key 'notify').
 export default `

@@ -608,7 +608,7 @@ export function eventText(t: (k: string, o?: any) => string, e: OrderEvent, user
     case 'suivi_motif':
       return t(`orders.card.ev.motif_${e.fromValue === 'lost' ? 'lost' : 'resolved'}`, { m: e.note ?? e.toValue ?? '' });
     case 'chat': {
-      // Delivery AI agent: what was sent to the customer (channel → case), or the customer's answer
+      // Pilot Automations: what was sent to the customer (channel → case), or the customer's answer
       if (!e.fromValue) return t('orders.card.ev.chat');
       const via = t(`notify.via.${e.fromValue}`, { defaultValue: e.fromValue });
       return e.toValue === 'reply' ? t('notify.ev.reply', { via }) : t('notify.ev.sent', { via, kind: t(`notify.kind.${e.toValue}`, { defaultValue: e.toValue ?? '' }) });

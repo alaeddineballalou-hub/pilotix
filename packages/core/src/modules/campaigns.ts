@@ -1,7 +1,7 @@
 // Marketing › Campagnes: WhatsApp messages to the shop's own customers — a new product, a promo — only to those who said
 // yes (the box on the landing pages, the agent during the call, a list the shop pastes), never again after « Stop », and
 // never to a blacklisted number. A campaign is one WhatsApp template (category Marketing) Meta approves, with its
-// buttons: « Je commande » (the conversation goes to Message AI agent: Dellal takes the order), « Stop », and a link to
+// buttons: « Je commande » (the conversation goes to Pilot Message: Dellal takes the order), « Stop », and a link to
 // the product's page. Pilotix sends slowly: a number of messages a day (Meta's own limit is 250 customers a day before
 // the business is verified, order messages included), never at night, never twice in 3 days to the same customer. Each
 // message keeps what became of it (received, read, a reply, a button) and the orders its customer made in the 7 days
@@ -290,7 +290,7 @@ async function checkTemplates(ctx: Ctx): Promise<number> {
   if (simulated(ctx)) list = pending.map((p: any) => ({ name: String(p.template_name), status: 'APPROVED' }));
   else {
     const n = await notifySettings(db);
-    if (!n.wabaId) throw bad('Ajoutez l’ID du compte WhatsApp Business (Delivery AI agent › Réglages)');
+    if (!n.wabaId) throw bad('Ajoutez l’ID du compte WhatsApp Business (Pilot Automations › Réglages)');
     list = (await ctx.server!.dellal!('waTemplates', { wabaId: n.wabaId }, ctx)) as typeof list;
   }
   let changed = 0;
@@ -490,8 +490,8 @@ export const campaignsProcs = {
     const name = `pilotix_offre_${num(c.id)}_v${version}`;
     if (!simulated(ctx)) {
       const r = await readiness(ctx);
-      if (!r.whatsapp) throw bad('WhatsApp n’est pas connecté : ajoutez le jeton et l’ID du numéro (Message AI agent › Réglages)');
-      if (!n.wabaId) throw bad('Ajoutez l’ID du compte WhatsApp Business (Delivery AI agent › Réglages)');
+      if (!r.whatsapp) throw bad('WhatsApp n’est pas connecté : ajoutez le jeton et l’ID du numéro (Pilot Message › Réglages)');
+      if (!n.wabaId) throw bad('Ajoutez l’ID du compte WhatsApp Business (Pilot Automations › Réglages)');
       const shop = (await getSetting(db, 'shop')).name;
       const example = templateParams(String(c.body), { nom: firstName('Amina', lang), boutique: shop });
       await ctx.server!.dellal!('waCreateTemplate', { wabaId: n.wabaId, name, lang: TEMPLATE_LANG[lang], body: templateBody(String(c.body)), example, category: 'MARKETING', buttons: templateButtons(c) }, ctx);

@@ -107,7 +107,7 @@
       "pages": "Landing pages",
       "pagesText": "Quand un achat compte, la relance du client qui n’a pas fini, le bouton WhatsApp.",
       "ai": "Agents IA",
-      "aiText": "Comment Message AI agent et CM AI agent parlent et travaillent. Ils restent allumés ou éteints comme ici."
+      "aiText": "Comment Pilot Message et Pilot Comments parlent et travaillent. Ils restent allumés ou éteints comme ici."
     },
     "keys": "Les mêmes clés API (le même compte chez chaque société)",
     "keysOn": "Clés API tapées",

@@ -1,4 +1,4 @@
-// « Message AI agent »: Dellal, the AI sales agent. One inbox for WhatsApp, Messenger, Instagram and TikTok
+// « Pilot Message »: Dellal, the AI sales agent. One inbox for WhatsApp, Messenger, Instagram and TikTok
 // (Dellal answers, a person can take over), a "Tester Dellal" chat, Dellal's results, and its settings (admin).
 // The inbox has three columns on a computer (conversations, the conversation, the customer), two on a tablet
 // (the customer opens as a panel) and one on a phone, where a conversation takes the whole screen.

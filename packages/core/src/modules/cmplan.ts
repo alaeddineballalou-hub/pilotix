@@ -1,4 +1,4 @@
-// AI social media manager › Calendar: posts planned on a calendar. A person picks the photos or the video (always at the highest
+// Pilot Content › Calendar: posts planned on a calendar. A person picks the photos or the video (always at the highest
 // quality: the photos as big as Instagram keeps them, the video's original file), the networks (the shop's Facebook Page,
 // its Instagram account), the product the post sells and the time; the AI writes the caption (Darija, French or Arabic)
 // from the product and an idea; Pilotix posts it at that time (the 'cm-plan' job calls cm.plan.run every minute) or at
@@ -238,7 +238,7 @@ export interface PostResult {
   saves: number;
   /** Meta gave its numbers for it (else likes and comments only, or nothing yet) */
   insights: boolean;
-  /** its comments in CM AI agent, the conversations they opened in Message AI agent, the orders those brought */
+  /** its comments in Pilot Comments, the conversations they opened in Pilot Message, the orders those brought */
   cmComments: number;
   messages: number;
   orders: number;

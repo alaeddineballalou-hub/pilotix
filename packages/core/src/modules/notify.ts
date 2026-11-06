@@ -1,8 +1,8 @@
-// Delivery AI agent: tells each customer where their order is — received, confirmed, shipped, with the livreur today,
+// Pilot Automations: tells each customer where their order is — received, confirmed, shipped, with the livreur today,
 // waiting at the desk, a failed attempt, cancelled by the livreur, delivered — by WhatsApp, or by SMS when the number has
 // no WhatsApp, or in a list to send by hand when no SMS sender is set. Messages are queued when the order is created or
 // its status changes (a person, the livreur's app or the couriers' sync) and sent by the server's job every minute; in
-// the preview, sending is simulated. The customer's answers land in Message AI agent, where Dellal knows the order.
+// the preview, sending is simulated. The customer's answers land in Pilot Message, where Dellal knows the order.
 //
 // This module imports no other module of ./modules (orders.ts calls it): no import cycle.
 import { normalizePhone, phoneIntl, WILAYAS } from '@pilotix/shared';
@@ -100,7 +100,7 @@ export interface NotifySettings {
   cases: Record<NotifyKind, boolean>;
   /** the shop's own texts (missing = the default text) */
   texts: Partial<Record<NotifyKind, Partial<Record<NotifyLang, string>>>>;
-  /** send by WhatsApp when Message AI agent's WhatsApp number is connected */
+  /** send by WhatsApp when Pilot Message's WhatsApp number is connected */
   whatsapp: boolean;
   /** when there is no WhatsApp: an SMS sender (gateway), a list to send by hand, or nothing */
   sms: 'gateway' | 'manual' | 'off';
@@ -154,7 +154,7 @@ export async function notifySettings(db: Db): Promise<NotifySettings> {
   return { ...DEFAULT_NOTIFY, ...r, cases: { ...DEFAULT_NOTIFY.cases, ...(r.cases ?? {}) }, texts: r.texts ?? {}, templates: r.templates ?? {} };
 }
 
-/** Message AI agent's WhatsApp number is connected (the same number sends these messages). */
+/** Pilot Message's WhatsApp number is connected (the same number sends these messages). */
 async function waConnected(db: Db): Promise<boolean> {
   const d = await raw<{ whatsappPhoneId?: string }>(db, 'dellal', {});
   return !!d.whatsappPhoneId && !!(await raw<string>(db, 'secret_dellal_wa_token', ''));
@@ -341,7 +341,7 @@ async function queue(db: Db, nc: NotifyCtx, row: any, kind: NotifyKind, now: num
     const phone = normalizePhone(String(row.phone ?? ''));
     const ov = await orderVars(db, num(row.id), s.lang, nc.shop);
     const body = ov ? render(textOf(s, kind, s.lang), ov.vars) : '';
-    // taken by Message AI agent in the customer's WhatsApp chat: the answer is already there
+    // taken by Pilot Message in the customer's WhatsApp chat: the answer is already there
     let why = !phone ? 'Numéro de téléphone invalide' : CONF_KINDS.includes(kind) && ov?.row.conv_channel === 'whatsapp' ? CHAT_SKIP : null;
     // « we received your order » costs a message: fake orders typed with someone's number (or by a script) cannot
     // make the shop send it more than once a day to a number, nor hundreds in an hour
@@ -629,7 +629,7 @@ export async function onSmsEvent(ctx: Ctx, ev: { event: string; id?: string | nu
   return { ok: true };
 }
 
-// ---------------------------------------------------------------- the customer's answers (Message AI agent)
+// ---------------------------------------------------------------- the customer's answers (Pilot Message)
 /** The latest message sent to this number in the last 5 days (what the customer is answering). */
 async function lastSent(db: Db, phone: string) {
   return (
@@ -1098,7 +1098,7 @@ export const notifyProcs = {
     if (rest.sms === 'gateway' && !rest.smsUrl) throw bad('Adresse du service SMS manquante');
     await saveRaw(ctx.db, 'notify', { ...cur, ...rest, texts, hookKey: cur.hookKey || randomKey() }, me(ctx));
     // stopped: what was waiting is not sent later
-    if (cur.enabled && !rest.enabled) await ctx.db.query(`UPDATE notifications SET status = 'skipped', error = 'Delivery AI agent arrêté' WHERE status = 'queued'`);
+    if (cur.enabled && !rest.enabled) await ctx.db.query(`UPDATE notifications SET status = 'skipped', error = 'Pilot Automations arrêté' WHERE status = 'queued'`);
     if (smsSecret === null) await ctx.db.query('DELETE FROM settings WHERE key = $1', [NOTIFY_SMS_SECRET]);
     else if (smsSecret?.trim()) await saveRaw(ctx.db, NOTIFY_SMS_SECRET, smsSecret.trim(), me(ctx));
     ctx.emit({ type: 'settings' });

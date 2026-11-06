@@ -610,7 +610,7 @@ export async function createOrder(
   input: OrderInput,
   db: Db = ctx.db,
   opts: {
-    /** taken in this Message AI agent conversation */
+    /** taken in this Pilot Message conversation */
     conversationId?: number | null;
     /** typed by someone the shop has not verified (a Messenger chatter): never renames an existing customer */
     untrusted?: boolean;
@@ -736,13 +736,13 @@ export async function createOrder(
     await addEvent(tx, oid, me, 'created', null, conf, input.isExchange ? `Échange de la commande #${input.originalOrderId}` : null);
     if (confirmed) await addEvent(tx, oid, me, 'follow_status', null, 'to_prepare');
     for (const n of trustNotes) await addEvent(tx, oid, null, 'note', null, 'event', n);
-    // Delivery AI agent: "we received your order" (or "confirmed")
+    // Pilot Automations: "we received your order" (or "confirmed")
     if (!opts.silent) await onOrderCreated(tx, { id: oid, phone, conf_status: conf, is_exchange: input.isExchange }, ctx.now());
     return getOrder(ctx, oid, tx);
   });
   // made already confirmed (by an agent): a « Risqué » customer is kept like « Confirmer quand même »
   if (!order.isExchange && (order.confStatus === 'confirmed' || order.confStatus === 'no_stock')) await recordRiskConfirms(ctx, [order.id], me, db);
-  // an order that came by itself (the shop's site, a conversation of the Message AI agent): the people who confirm
+  // an order that came by itself (the shop's site, a conversation of Pilot Message): the people who confirm
   // hear of it, in this boutique and in their other ones (a landing page says it itself)
   const came = !input.isExchange && !opts.landingId && (input.via === 'api' || !!opts.conversationId);
   ctx.emit({ type: 'orders', ...(came ? { id: order.id, data: { created: { ref: order.ref, channel: order.channel, agency: order.confAgencyId ?? null } } } : {}) });
@@ -1482,7 +1482,7 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
         const t = await applyTrust(tx, numOrNull(cur.customer_id));
         if (t) await addEvent(tx, oid, null, 'note', null, 'event', t);
       }
-      // Delivery AI agent: shipped, with the livreur, at the desk, failed attempt, cancelled by the livreur, delivered
+      // Pilot Automations: shipped, with the livreur, at the desk, failed attempt, cancelled by the livreur, delivered
       await onFollowChange(tx, notify, cur, from, to, ctx.now());
       await onLandingFollow(tx, landing, cur, from, to, ctx.now());
       changed.push(oid);
@@ -1553,8 +1553,8 @@ export async function orderCounts(ctx: Ctx) {
     )
   )[0];
   const tickets = { toShip: num(tk?.to_ship), prepared: num(tk?.prepared), onRoad: num(tk?.on_road), uncashed: num(tk?.uncashed) };
-  // Pilot AI: conversations waiting for a person or unread (Message AI agent), comments still to handle (CM AI agent),
-  // delivery messages to send by hand or that failed in the last 3 days (Delivery AI agent)
+  // Pilot AI: conversations waiting for a person or unread (Pilot Message), comments still to handle (Pilot Comments),
+  // delivery messages to send by hand or that failed in the last 3 days (Pilot Automations)
   const aiRow = (
     await ctx.db.query(
       `SELECT (SELECT count(*) FROM conversations WHERE channel <> 'test' AND (mode = 'handoff' OR unread > 0))::int AS msgs,

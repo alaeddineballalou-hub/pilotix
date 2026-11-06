@@ -651,7 +651,7 @@ export async function dellalBookText(t: Tenancy, now: Date | number = Date.now()
   return { version: champ ? n(champ.version) : null, updatedAt, testVersion: test ? n(test.version) : null, lessons: lessonsOf(champ), text };
 }
 
-// ---------------------------------------------------------------- CM AI agent
+// ---------------------------------------------------------------- Pilot Comments
 export async function cmBoard(t: Tenancy, i: { days: BoardDays; shopId?: number; now?: Date | number; costs?: boolean }) {
   const p = boardPeriod(i.days, i.now);
   const list = await stores(t);

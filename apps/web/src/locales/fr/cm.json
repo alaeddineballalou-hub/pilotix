@@ -1,6 +1,6 @@
 {
-  "title": "CM AI agent",
-  "help": "Votre community manager IA : il lit les commentaires sous vos publications et publicités Facebook et Instagram, répond en public en une phrase, écrit en privé à ceux qui demandent le prix (la conversation continue dans Message AI agent, où Dellal prend la commande) et masque le spam, les insultes et les numéros de téléphone.",
+  "title": "Pilot Comments",
+  "help": "Votre community manager IA : il lit les commentaires sous vos publications et publicités Facebook et Instagram, répond en public en une phrase, écrit en privé à ceux qui demandent le prix (la conversation continue dans Pilot Message, où Dellal prend la commande) et masque le spam, les insultes et les numéros de téléphone.",
   "tabs": {
     "commentaires": "Commentaires",
     "publications": "Publications",
@@ -41,7 +41,7 @@
     "team": "Équipe",
     "teamName": "Équipe : {{name}}"
   },
-  "off": "Le CM AI agent est désactivé : les commentaires arrivent ici mais personne ne répond automatiquement.",
+  "off": "Pilot Comments est désactivé : les commentaires arrivent ici mais personne ne répond automatiquement.",
   "offLink": "Activer dans Réglages",
   "feed": {
     "todo": "À traiter",
@@ -70,7 +70,7 @@
     "hiddenPhone": "Numéro de téléphone : masqué pour que les concurrents ne le voient pas",
     "reason": "Pourquoi",
     "replyPh": "Votre réponse publique…",
-    "privatePh": "Votre message privé (il ouvre la conversation dans Message AI agent)…",
+    "privatePh": "Votre message privé (il ouvre la conversation dans Pilot Message)…",
     "cancel": "Annuler",
     "send": "Envoyer",
     "answer": "Répondre avec CM AI",
@@ -90,7 +90,7 @@
   },
   "posts": {
     "title": "Publications et publicités",
-    "help": "Le produit de chaque publication : le CM AI agent s’en sert pour donner le prix, les couleurs et le stock en privé. Il est deviné d’après le texte de la publication ; changez-le si besoin.",
+    "help": "Le produit de chaque publication : Pilot Comments s’en sert pour donner le prix, les couleurs et le stock en privé. Il est deviné d’après le texte de la publication ; changez-le si besoin.",
     "empty": "Les publications apparaissent ici dès leur premier commentaire.",
     "noCaption": "(texte de la publication pas encore lu)",
     "comments_one": "{{count}} commentaire",
@@ -104,12 +104,12 @@
     "saved": "Produit enregistré"
   },
   "tester": {
-    "title": "Tester le CM AI agent",
-    "help": "Écrivez un commentaire comme un client sous une de vos publications : vous voyez ce que le CM AI agent ferait. Rien n’est publié ni envoyé.",
+    "title": "Tester Pilot Comments",
+    "help": "Écrivez un commentaire comme un client sous une de vos publications : vous voyez ce que Pilot Comments ferait. Rien n’est publié ni envoyé.",
     "demoPreview": "Aperçu : ces réponses viennent des règles de démonstration. Sur votre serveur, avec la clé IA, c’est Claude qui décide.",
-    "demoNoKey": "Réponses de démonstration : ajoutez la clé de l’IA dans Message AI agent › Réglages pour que Claude décide.",
+    "demoNoKey": "Réponses de démonstration : ajoutez la clé de l’IA dans Pilot Message › Réglages pour que Claude décide.",
     "demoPilot": "Réponses de démonstration : l’IA de Pilotix n’est pas encore activée. Dès qu’elle l’est, c’est Claude qui décide.",
-    "inPage": "Dans cette page, le CM AI agent répond avec Claude (votre compte Claude), avec ses vraies instructions et la vérification darija. Une réponse prend souvent 20 à 60 secondes.",
+    "inPage": "Dans cette page, Pilot Comments répond avec Claude (votre compte Claude), avec ses vraies instructions et la vérification darija. Une réponse prend souvent 20 à 60 secondes.",
     "post": "Sous la publication",
     "noPost": "Aucune publication (produit inconnu)",
     "name": "Nom du client (facultatif)",
@@ -127,7 +127,7 @@
     ],
     "run": "Tester",
     "running": "CM AI réfléchit… {{s}} s",
-    "result": "Ce que ferait le CM AI agent",
+    "result": "Ce que ferait Pilot Comments",
     "nothing": "Rien : ce commentaire ne demande pas de réponse.",
     "would": {
       "hide": "Masquer le commentaire",
@@ -146,10 +146,10 @@
     "product": "Produit",
     "place": "Lieu",
     "phone": "Téléphone",
-    "empty": "Écrivez un commentaire puis « {{run}} » : ce que le CM AI agent ferait s’affiche ici."
+    "empty": "Écrivez un commentaire puis « {{run}} » : ce que Pilot Comments ferait s’affiche ici."
   },
   "results": {
-    "title": "Résultats du CM AI agent",
+    "title": "Résultats de Pilot Comments",
     "total": "Commentaires",
     "todo_one": "{{count}} à traiter",
     "todo_other": "{{count}} à traiter",
@@ -167,19 +167,19 @@
     "speed": "Temps de réponse moyen",
     "speedV": "{{m}} min",
     "intents": "De quoi parlent les commentaires",
-    "note": "Commandes : celles prises dans les conversations ouvertes par un message privé du CM AI agent (Message AI agent ou l’équipe)."
+    "note": "Commandes : celles prises dans les conversations ouvertes par un message privé de Pilot Comments (Pilot Message ou l’équipe)."
   },
   "settings": {
     "saved": "Réglages enregistrés",
-    "how": "Comment le CM AI agent répond",
-    "enabled": "Le CM AI agent traite les nouveaux commentaires",
+    "how": "Comment Pilot Comments répond",
+    "enabled": "Pilot Comments traite les nouveaux commentaires",
     "enabledHint": "Désactivé : les commentaires arrivent ici, sans réponse automatique.",
     "replyPublic": "Répondre en public",
     "replyPublicHint": "Une phrase courte sous le commentaire (« Jawbnakom f privé 📩 »). Les pages qui répondent sont mieux montrées par Facebook.",
     "showPrice": "Donner le prix en public",
     "showPriceHint": "Désactivé (conseillé) : le prix part seulement en privé, les concurrents ne le voient pas et le client vient en conversation.",
     "sendPrivate": "Écrire en privé à ceux qui demandent",
-    "sendPrivateHint": "Un seul message par commentaire, dans les 7 jours (règle de Meta). La conversation s’ouvre dans Message AI agent, où Dellal continue la vente.",
+    "sendPrivateHint": "Un seul message par commentaire, dans les 7 jours (règle de Meta). La conversation s’ouvre dans Pilot Message, où Dellal continue la vente.",
     "hideSpam": "Masquer le spam et les insultes",
     "hideSpamHint": "Liens d’autres pages, concurrents, vulgarités. Masqué : la personne et ses amis le voient encore, les autres non. Une réclamation va toujours à l’équipe et n’est masquée que si elle contient des insultes.",
     "hidePhones": "Masquer les numéros de téléphone",
@@ -202,13 +202,13 @@
     "bannedHint": "Un mot ou une expression par ligne, en plus des insultes connues.",
     "bannedPh": "nom d’un concurrent\nautre mot",
     "channels": "Canaux et connexion",
-    "channelsHelp": "Le CM AI agent utilise la connexion Meta de Message AI agent (jeton de la page, clé secrète de l’application, clé IA). Dans votre application Meta, abonnez aussi la page au champ « feed » et Instagram au champ « comments », avec la même adresse de webhook.",
+    "channelsHelp": "Pilot Comments utilise la connexion Meta de Pilot Message (jeton de la page, clé secrète de l’application, clé IA). Dans votre application Meta, abonnez aussi la page au champ « feed » et Instagram au champ « comments », avec la même adresse de webhook.",
     "facebookHint": "Publications et publicités de la page.",
     "instagramHint": "Publications et pubs du compte Instagram pro.",
     "soon": "Bientôt : TikTok n’ouvre pas encore les commentaires aux applications.",
     "pageToken": "Jeton de la page",
     "connected": "connecté",
-    "connect": "À connecter dans Message AI agent › Réglages",
+    "connect": "À connecter dans Pilot Message › Réglages",
     "pageId": "ID de la page Facebook",
     "igId": "ID du compte Instagram",
     "ai": "Clé IA (Claude)",
@@ -221,7 +221,7 @@
     "demo": "Aperçu : ces réglages sont ceux de la démonstration, rien n’est envoyé à Meta.",
     "save": "Enregistrer",
     "appSecret": "Clé secrète de l’application Meta",
-    "appSecretNone": "Obligatoire : sans elle, les commentaires ne sont pas traités (Message AI agent › Réglages)"
+    "appSecretNone": "Obligatoire : sans elle, les commentaires ne sont pas traités (Pilot Message › Réglages)"
   },
   "lahja": {
     "fixHelp": "La réponse envoyée ne change pas : écrivez comment CM AI aurait dû l’écrire. Les mots que vous changez deviennent une leçon, pour CM AI et Dellal."

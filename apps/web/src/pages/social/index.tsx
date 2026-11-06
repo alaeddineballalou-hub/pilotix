@@ -1,8 +1,8 @@
-// « AI social media manager »: the shop's posts on Facebook and Instagram. Calendrier (./Planner.tsx): posts and stories
+// « Pilot Content »: the shop's posts on Facebook and Instagram. Calendrier (./Planner.tsx): posts and stories
 // planned on a calendar, photos or a video at the highest quality, a caption the AI writes and fixes, a score out of 10,
 // « Fill my week », posted by Pilotix at the chosen time (the 'cm-plan' job). Résultats (./Results.tsx): what each post
 // did, Meta's numbers and the orders it brought. Réglages (./Settings.tsx, administrator): the fixed times, the yes
-// before a marketer's post goes out, the first comment. Each post is linked to the product it sells, so CM AI agent
+// before a marketer's post goes out, the first comment. Each post is linked to the product it sells, so Pilot Comments
 // answers its comments with the right price.
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

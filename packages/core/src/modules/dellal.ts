@@ -277,7 +277,7 @@ export async function receiveMessage(ctx: Ctx, m: z.infer<typeof IncomingInput> 
       )
     )[0];
     const id = num(c.id);
-    // Delivery AI agent: the customer often answers a delivery message (shipped, failed attempt…). It goes in the
+    // Pilot Automations: the customer often answers a delivery message (shipped, failed attempt…). It goes in the
     // conversation just before their answer, so the team and Dellal see what they answer.
     const notice = phone ? await noticeForConversation(tx, phone, id) : null;
     if (notice) await addMessage(tx, id, { role: 'agent', body: notice.body, at: notice.sentAt, meta: { notify: notice.kind, notifyId: notice.id, ref: notice.ref, via: notice.channel }, quiet: true });
@@ -341,7 +341,7 @@ export async function reactedMessage(ctx: Ctx, m: z.infer<typeof ReactedInput>):
 }
 
 /**
- * CM AI agent: the private message sent to someone who commented a post opens (or continues) their conversation here,
+ * Pilot Comments: the private message sent to someone who commented a post opens (or continues) their conversation here,
  * with the comment as their first words, so Dellal knows what they asked when they answer.
  */
 export async function conversationFromComment(
@@ -1145,12 +1145,12 @@ export async function pilotOn(ctx: Ctx): Promise<boolean> {
   }
 }
 
-/** The model of the CM AI agent and AI Spy when Pilotix pays: Haiku (about 20 × cheaper than Sonnet). */
+/** The model of Pilot Comments and AI Spy when Pilotix pays: Haiku (about 20 × cheaper than Sonnet). */
 export const PILOT_CHEAP_MODEL = 'claude-haiku-5-5';
 
 /**
  * Claude answers on the server: Pilot AI's key (Pilotix's server: shops bring no key) or, without it, the shop's own key.
- * Dellal, the CM AI agent and AI Spy all ask this, so a shop never needs a key of its own on Pilotix's server.
+ * Dellal, Pilot Comments and AI Spy all ask this, so a shop never needs a key of its own on Pilotix's server.
  */
 export async function aiKeyed(ctx: Ctx): Promise<boolean> {
   if (!ctx.server?.dellal) return false;
@@ -1328,7 +1328,7 @@ async function history(db: Db, convId: number): Promise<AiMsg[]> {
   const out: AiMsg[] = [];
   for (const r of rows) {
     const role = r.role === 'customer' ? 'user' : 'assistant';
-    // a conversation opened from a comment starts with the public comment, then the private message of the CM AI agent
+    // a conversation opened from a comment starts with the public comment, then the private message of Pilot Comments
     const post = r.meta?.comment ? String(r.meta.comment.post ?? '').slice(0, 120) : '';
     const voice = r.role === 'customer' ? r.meta?.voice : null;
     const photo = r.role === 'customer' ? r.meta?.photo : null;
@@ -1693,7 +1693,7 @@ export interface DarijaReport {
 }
 
 /**
- * The Algerian Darija check on a reply before it is sent (Dellal and the CM AI agent): spelling (q → 9, 5 → kh) is fixed
+ * The Algerian Darija check on a reply before it is sent (Dellal and Pilot Comments): spelling (q → 9, 5 → kh) is fixed
  * directly; words of another dialect, wrong phrases and the shop's banned list get one AI rewrite, then a safe mechanical
  * fix for what is left. Words the customer wrote himself are allowed.
  */
@@ -1982,7 +1982,7 @@ export async function runFollowUps(ctx: Ctx): Promise<{ sent: number }> {
        AND c.last_customer_at > now() - interval '23 hours'
        AND c.last_message_at < now() - make_interval(hours => $1)
        AND (SELECT role FROM conv_messages m WHERE m.conversation_id = c.id AND m.role <> 'tool' ORDER BY id DESC LIMIT 1) = 'agent'
-       -- a customer answering a delivery message (Delivery AI agent) already ordered: no sales follow-up
+       -- a customer answering a delivery message (Pilot Automations) already ordered: no sales follow-up
        AND NOT EXISTS (SELECT 1 FROM conv_messages m WHERE m.conversation_id = c.id AND m.meta ? 'notify')
      LIMIT 50`,
     [s.followUpHours],
@@ -2250,7 +2250,7 @@ export async function runAutoOrders(ctx: Ctx): Promise<{ ordered: number; skippe
        AND c.last_message_at < $1 AND c.last_message_at > $2
        AND (c.auto_checked_at IS NULL OR c.auto_checked_at < COALESCE(c.last_customer_at, c.created_at))
        AND (SELECT role FROM conv_messages m WHERE m.conversation_id = c.id AND m.role <> 'tool' ORDER BY id DESC LIMIT 1) = 'agent'
-       -- a customer answering a delivery message (Delivery AI agent) already ordered
+       -- a customer answering a delivery message (Pilot Automations) already ordered
        AND NOT EXISTS (SELECT 1 FROM conv_messages m WHERE m.conversation_id = c.id AND m.meta ? 'notify')
      ORDER BY c.last_message_at LIMIT 50`,
     [quiet, oldest],
@@ -2327,7 +2327,7 @@ async function settingsView(db: Db) {
 /**
  * A shop's Darija lesson: the words a team member changed in one of the agents' messages (Dellal's in Messages, or the CM AI
  * agent's reply to a comment). The message that was sent never changes. The lesson works at once in this shop (Dellal and the
- * CM AI agent) and goes to Pilotix for review (names, numbers and prices hidden); only its words ever reach other shops.
+ * Pilot Comments) and goes to Pilotix for review (names, numbers and prices hidden); only its words ever reach other shops.
  */
 export async function saveShopLahja(
   ctx: Ctx,
@@ -2457,7 +2457,7 @@ export const dellalProcs = {
   // ---------------------------------------------------------------- Darija lessons (modules/lahja.ts)
   /**
    * « Leçon de darija »: a team member writes how Dellal should have said one of its messages. The message that was sent
-   * never changes: the words they changed become a lesson, used at once by this shop's Dellal and CM AI agent; on Pilotix's
+   * never changes: the words they changed become a lesson, used at once by this shop's Dellal and Pilot Comments; on Pilotix's
    * server it also goes to Pilotix, who can make it every shop's (anonymized: only the words travel to other shops).
    */
   'dellal.lahja.add': proc([...SELLERS], z.object({ messageId: id, after: z.string().trim().min(1).max(2000) }), async (ctx, i) => {

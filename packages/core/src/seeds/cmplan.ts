@@ -1,7 +1,7 @@
 import type { Db } from '../db';
 import { num } from '../db';
 
-// AI social media manager demo: a week of posts around today. One went out two days ago on both networks, one went out on
+// Pilot Content demo: a week of posts around today. One went out two days ago on both networks, one went out on
 // Facebook but Instagram refused it (the « Réessayer » case), four are planned (one a carousel, one a video: a Reel), one
 // is a draft without a day; a story is planned, a marketer's post waits for the administrator's yes. Before them, six
 // weeks of posts that went out, with Meta's numbers, the comments they got, the messages and the orders those brought,
@@ -209,7 +209,7 @@ export async function seed(db: Db, now: number): Promise<void> {
 
 /**
  * Six weeks of posts that went out (photos, carousels, Reels, stories, a text), with Meta's numbers, the comments under
- * them (CM AI agent answered), the conversations those opened and the demo orders they brought (Message AI agent), and the
+ * them (Pilot Comments answered), the conversations those opened and the demo orders they brought (Pilot Message), and the
  * followers of each day.
  */
 async function history(db: Db, now: number, pr: { pou: number | null; cha: number | null; sac: number | null }, m: Record<string, number>, at: (day: number, hour: number, min?: number) => string) {
@@ -235,7 +235,7 @@ async function history(db: Db, now: number, pr: { pou: number | null; cha: numbe
   const asks = ['سومة ؟', 'Prix svp', 'شحال ؟', 'كاين التوصيل لوهران ؟', 'Disponible ?', 'نحب نطلب', 'Combien ?', 'بالخلاص عند الاستلام ؟'];
   const fetched = new Date(now - 3_600_000).toISOString();
   let k = 0;
-  /** Comments under a post (CM AI agent answered them); some opened a conversation that became one of the demo's orders. */
+  /** Comments under a post (Pilot Comments answered them); some opened a conversation that became one of the demo's orders. */
   const sell = async (pid: number, time: string, cmPost: Partial<Record<'fb' | 'ig', number>>, netsIn: ('fb' | 'ig')[], ordersN: number, extra: number) => {
     const t = Date.parse(time);
       // the demo's orders of the 3 days after the post: some came from its comments (a private message, then an order)
@@ -300,7 +300,7 @@ async function history(db: Db, now: number, pr: { pou: number | null; cha: numbe
       ],
     );
     const pid = num(r[0].id);
-    // Meta's numbers (a story: views and reach only), the network's post that CM AI agent knows
+    // Meta's numbers (a story: views and reach only), the network's post that Pilot Comments knows
     const cmPost: Partial<Record<'fb' | 'ig', number>> = {};
     for (const net of h.nets) {
       const ext = net === 'fb' ? fb! : ig!;

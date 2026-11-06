@@ -6,7 +6,7 @@ import { DEFAULT_TEXTS, kindFor, NOTIFY_KINDS, NotifyKind, orderVars, render, se
 const iso = (t: number) => new Date(t).toISOString();
 
 /**
- * Delivery AI agent demo: the agent is on (WhatsApp texts approved by Meta, SMS through the gateway; sending is simulated),
+ * Pilot Automations demo: the agent is on (WhatsApp texts approved by Meta, SMS through the gateway; sending is simulated),
  * with the messages of the last 3 days for the orders that moved: received, confirmed, shipped, with the livreur, at the
  * desk, failed attempt, cancelled by the livreur. Numbers ending in 3 or 7 have no WhatsApp: they got an SMS. Messages that
  * waited for the night and were overtaken by a newer step were skipped. A few customers answered (WhatsApp and SMS), and
@@ -74,7 +74,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
       const due = sendTime(st.at + 60_000, quiet);
       const next = steps[i + 1];
       const base = { order: oid, kind: st.kind, phone: String(o.phone), body: body(st.kind), at: st.at, sendAfter: due, waId: null, waStatus: null, smsId: null, smsStatus: null, deliveredAt: null, readAt: null };
-      // taken by Message AI agent in the customer's WhatsApp chat: no "received / confirmed" message
+      // taken by Pilot Message in the customer's WhatsApp chat: no "received / confirmed" message
       if ((st.kind === 'created' || st.kind === 'confirmed') && o.conv_channel === 'whatsapp')
         return void rows.push({ ...base, status: 'skipped', channel: null, error: 'Commande prise dans la conversation WhatsApp : le client a déjà la réponse', sentAt: null });
       // still waiting for the morning when the next step came: replaced by the newer message
@@ -110,7 +110,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   // answered a while ago (never in the future): the message was sent at least 2 hours before now
   const pickRow = (kind: NotifyKind, status: string, skip: Set<number>) => rows.find((r) => r.kind === kind && r.status === status && !skip.has(r.order) && r.sentAt && r.sentAt < now - 2 * 3_600_000);
   const used = new Set<number>();
-  // phones that already have a WhatsApp conversation (Message AI agent demo) are left alone
+  // phones that already have a WhatsApp conversation (Pilot Message demo) are left alone
   for (const c of await db.query(`SELECT phone FROM conversations WHERE phone IS NOT NULL`)) for (const r of rows) if (r.phone === c.phone) used.add(r.order);
   const failedWa = pickRow('failed', 'whatsapp', used);
   if (failedWa) {
@@ -185,7 +185,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     await db.query(`INSERT INTO order_events (order_id, at, user_id, kind, from_value, to_value, note) VALUES ${values.join(',')}`, params);
   }
 
-  // the answers: in the order's history, and the WhatsApp ones in Message AI agent with the message before them
+  // the answers: in the order's history, and the WhatsApp ones in Pilot Message with the message before them
   for (const rp of replies) {
     const r = rp.row;
     if (!r.sentAt) continue;

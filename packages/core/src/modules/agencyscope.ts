@@ -174,7 +174,7 @@ const ticket =
     const n = num((await ctx.db.query(`SELECT count(*)::int AS n FROM complaints c WHERE c.id = ANY($1) AND ${scope}`, [ids]))[0]?.n);
     if (n !== ids.length) throw forbidden('Ce ticket SAV est donné à un autre agent');
   };
-/** A delivery message (Delivery AI agent) about one of the store's confirmation agent's own orders. */
+/** A delivery message (Pilot Automations) about one of the store's confirmation agent's own orders. */
 const message =
   (key: string): Gate =>
   async (ctx, i) => {

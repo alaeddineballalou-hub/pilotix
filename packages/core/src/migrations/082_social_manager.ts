@@ -1,4 +1,4 @@
-// AI social media manager: stories, the first comment under a post, the admin's yes before a post goes out (when the
+// Pilot Content: stories, the first comment under a post, the admin's yes before a post goes out (when the
 // shop asks for it), « Post again » for a post that sold, the Algerian calendar's day a post was made for, and the numbers
 // Meta gives for each post (views, reach, likes, comments, shares, saves) and the followers of each day.
 export default `

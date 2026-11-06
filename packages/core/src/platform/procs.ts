@@ -1583,7 +1583,7 @@ export const PLATFORM_REGISTRY = {
   ),
 
   /**
-   * What each shop's AI cost Pilotix in a month (Algeria's days), to bill it: Dellal, the CM AI agent and AI Spy, in USD
+   * What each shop's AI cost Pilotix in a month (Algeria's days), to bill it: Dellal, Pilot Comments and AI Spy, in USD
    * at Anthropic's list price, and in DA at the owner's rate. Only answers paid with Pilotix's key count in « to bill »;
    * answers a shop paid with its own key are shown apart. The night learning (Pilot AI) is Pilotix's own cost.
    */

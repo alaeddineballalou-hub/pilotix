@@ -113,9 +113,9 @@ export function Bubbles({
           <span className="ai-who">
             {m.role === 'agent' && <Icon name="sparkles" />}
             {author(m)}
-            {/* a delivery message (Delivery AI agent) the customer answered */}
+            {/* a delivery message (Pilot Automations) the customer answered */}
             {m.meta?.notify && <span className="ai-tag">{t(`notify.kind.${m.meta.notify}`, { defaultValue: '' })}</span>}
-            {/* a conversation opened from a comment: the public comment, then the CM AI agent's private message */}
+            {/* a conversation opened from a comment: the public comment, then Pilot Comments's private message */}
             {m.meta?.comment && <span className="ai-tag">{t('messages.thread.comment')}</span>}
             {m.role === 'agent' && m.meta?.demo && <span className="ai-tag">{t('messages.thread.demo')}</span>}
           </span>

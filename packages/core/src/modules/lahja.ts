@@ -1,6 +1,6 @@
 // Darija (lahja) lessons: how Dellal should say things in Algerian Darija, taught by the people who read its messages.
-//  - A shop's team corrects one of Dellal's messages (Messages, or its test chat) or one of the CM AI agent's replies to a
-//    comment: the words they changed become a lesson that Dellal and the CM AI agent use at once in that shop, and that goes
+//  - A shop's team corrects one of Dellal's messages (Messages, or its test chat) or one of Pilot Comments's replies to a
+//    comment: the words they changed become a lesson that Dellal and Pilot Comments use at once in that shop, and that goes
 //    to Pilotix for review.
 //  - Every night Pilot AI reads how each sharing shop's customers write and proposes up to 3 lessons for that shop
 //    (« Dellal learned »): used at once in that shop, reviewed the same way; a refused one stops in its shop too.
@@ -167,7 +167,7 @@ export function lahjaLines(words: LahjaWord[]): string {
     .map((w) => (w.not ? (w.use ? `- écris « ${w.use} » au lieu de « ${w.not} »` : `- n’écris jamais « ${w.not} »`) : `- utilise « ${w.use} » quand ça va`))
     .join('\n');
 }
-/** The two blocks of the instructions (Dellal's and the CM AI agent's): Pilotix's lessons for every shop, the shop's own. */
+/** The two blocks of the instructions (Dellal's and Pilot Comments's): Pilotix's lessons for every shop, the shop's own. */
 export const lahjaBlocks = (l: { all: LahjaWord[]; own: LahjaWord[] }): { shared: string; own: string } => ({
   shared: l.all.length ? `LEÇONS DE DARIJA (validées par Pilotix pour toutes les boutiques) :\n${lahjaLines(l.all)}` : '',
   own: l.own.length ? `LEÇONS DE DARIJA DE LA BOUTIQUE (corrections de l’équipe et ce que tu as appris de ses clients) :\n${lahjaLines(l.own)}` : '',
@@ -225,7 +225,7 @@ export type LahjaItem = {
   decidedAt: string | null;
   /** a word Dellal learned: a few lines of the chats that prove it (names, numbers and prices hidden), for Pilotix only */
   samples: LahjaSamples;
-  /** a shop's correction: of a message (Message AI agent) or of a reply to a comment (CM AI agent) */
+  /** a shop's correction: of a message (Pilot Message) or of a reply to a comment (Pilot Comments) */
   via: 'messages' | 'cm' | null;
 };
 export type LahjaSample = { conv: number; line: string };
@@ -458,7 +458,7 @@ export async function learnLahja(pdb: Db, run: (reqs: LahjaReq[]) => Promise<(st
 // ---------------------------------------------------------------- what a guide's corrected translation teaches
 /**
  * The Arabic translations of a guide de vente the team corrected (modules/guide.ts › saveGuide): the words they changed
- * become this shop's lessons, used at once by its Dellal, its CM AI agent and its next translations, and sent to Pilotix
+ * become this shop's lessons, used at once by its Dellal, its Pilot Comments and its next translations, and sent to Pilotix
  * for review (a guide's line carries no customer: it goes as it is). A change that is not a word lesson (a sentence
  * written again, a number) teaches nothing; nothing here ever stops the guide's save.
  */

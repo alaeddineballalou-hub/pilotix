@@ -8,7 +8,7 @@ const iso = (t: number) => new Date(t).toISOString();
 const money = (n: number) => n.toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' ');
 
 /**
- * CM AI agent demo: three posts (an ad, a post, an Instagram post) and their comments. Most were already handled by the
+ * Pilot Comments demo: three posts (an ad, a post, an Instagram post) and their comments. Most were already handled by the
  * agent (run here with its demo rules: private messages, a hidden spam, a hidden phone number, a complaint for the team);
  * a few are still new, to try "Répondre avec CM AI" in the preview. One commenter answered the private message and Dellal took
  * the order: comment → private message → conversation → order, as on a real page.

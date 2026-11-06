@@ -459,7 +459,7 @@ function WhyCard({ d }: { d: Dellal }) {
   );
 }
 
-// ---------------------------------------------------------------- CM AI agent
+// ---------------------------------------------------------------- Pilot Comments
 export function CmBoard({ days, onDays, shopId, onShop, manager }: { days: BoardDays; onDays: (d: BoardDays) => void; shopId: number | null; onShop: (id: number | null) => void; manager: boolean }) {
   const { t } = useTranslation();
   const q = usePilotRpc('p.cm.board', { days, ...(shopId ? { shopId } : {}) }, { refetchInterval: 5 * 60_000 });

@@ -2,8 +2,8 @@
   "title": "WhatsApp campaigns",
   "new": "New campaign",
   "ready": {
-    "whatsapp": "WhatsApp is not connected yet: add the token and the number ID in Message AI agent › Settings.",
-    "waba": "Add the WhatsApp Business account ID in Delivery AI agent › Settings, so Meta can approve your messages.",
+    "whatsapp": "WhatsApp is not connected yet: add the token and the number ID in Pilot Message › Settings.",
+    "waba": "Add the WhatsApp Business account ID in Pilot Automations › Settings, so Meta can approve your messages.",
     "fix": "Open settings"
   },
   "empty": {

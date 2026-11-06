@@ -201,7 +201,7 @@
     "keep": "Worth reusing:",
     "weak": "Weak point:",
     "notYet": "Claude has not read this ad yet.",
-    "off": "AI is not on: add the Message AI agent’s Claude key.",
+    "off": "AI is not on: add Pilot Message’s Claude key.",
     "offPilot": "Pilotix’s AI is not on yet.",
     "run": "Analyze with AI",
     "running": "Analyzing…",
@@ -300,7 +300,7 @@
       "scrapecreators": "The Pilotix server searches with your ScrapeCreators key, on demand and every morning. It also reads competitors’ sites (price, platform, form).",
       "searchapi": "The Pilotix server searches with your SearchAPI.io key, on demand and every morning. It also reads competitors’ sites (price, platform, form)."
     },
-    "aiOn": "Claude (the Message AI agent’s key) reads every ad and prepares the brief.",
+    "aiOn": "Claude (Pilot Message’s key) reads every ad and prepares the brief.",
     "aiOnPilot": "Claude (Pilotix’s AI) reads every ad and prepares the brief.",
     "aiOff": "AI is not on: no reading of the ads, no hooks.",
     "aiOffPilot": "Pilotix’s AI is not on yet: no reading of the ads, no hooks.",
@@ -361,8 +361,8 @@
     "ai": "AI analysis",
     "aiOn": "AI on",
     "aiOff": "AI off",
-    "aiHelp": "The AI analysis (relevance, hook, angle, offer, brief) uses the Message AI agent’s (Dellal) Claude key. Without it, AI Spy shows the figures and a simple summary.",
-    "aiLink": "Message AI agent settings"
+    "aiHelp": "The AI analysis (relevance, hook, angle, offer, brief) uses Pilot Message’s (Dellal) Claude key. Without it, AI Spy shows the figures and a simple summary.",
+    "aiLink": "Pilot Message settings"
   },
   "ext": {
     "title": "Pilotix Chrome extension",

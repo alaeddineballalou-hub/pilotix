@@ -76,28 +76,28 @@ export const NAV: NavItem[] = [
   { id: 'sav', icon: 'headset', roles: ['confirmation', 'suivi', 'depot'], subs: ['tickets', 'nouveau', 'attente', 'depot', 'livraison', 'livres', 'annules', 'stats'] },
   { id: 'tournee', icon: 'navigation', roles: ['livreur'], onlyIf: (r) => r.includes('livreur') },
   { id: 'produits', icon: 'layers', roles: ['depot', 'confirmation', 'suivi'], subs: ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'achats', 'depots'] },
-  // Pilot AI: the AI agents. Message AI agent (Dellal) sells in the inbox, CM AI agent answers the comments, AI social
-  // media manager plans the posts and publishes them,
-  // Delivery AI agent tells each customer where their order is (WhatsApp, SMS); Comptes: the Facebook and TikTok
-  // accounts they use (an administrator links them, pages/comptes).
+  // AI Pilot: the AI agents. Pilot Message (Dellal) sells in the inbox, Pilot Content plans the posts and publishes them,
+  // Pilot Comments answers the comments; Comptes: the Facebook and TikTok accounts they use (an administrator links
+  // them, pages/comptes).
   {
     id: 'pilotai',
     icon: 'sparkles',
-    roles: ['confirmation', 'marketer', 'suivi'],
-    pages: ['messages', 'cm', 'social', 'notify', 'comptes'],
+    roles: ['confirmation', 'marketer'],
+    pages: ['messages', 'social', 'cm', 'comptes'],
     children: [
       { id: 'messages', href: '#/messages', count: 'msgs', tone: 'nc-a', icon: 'chat', roles: ['confirmation'] },
-      { id: 'cm', href: '#/cm', count: 'cm', tone: 'nc-a', icon: 'comments', roles: ['confirmation', 'marketer'] },
       { id: 'social', href: '#/social', icon: 'calendar', roles: ['marketer'] },
-      { id: 'notify', href: '#/notify', count: 'notify', tone: 'nc-a', icon: 'truck', roles: ['confirmation', 'suivi'] },
+      { id: 'cm', href: '#/cm', count: 'cm', tone: 'nc-a', icon: 'comments', roles: ['confirmation', 'marketer'] },
       { id: 'comptes', href: '#/comptes', icon: 'link', roles: [] },
     ],
   },
   { id: 'messages', icon: 'chat', roles: ['confirmation'], hidden: true },
   { id: 'cm', icon: 'comments', roles: ['confirmation', 'marketer'], hidden: true },
   { id: 'social', icon: 'calendar', roles: ['marketer'], hidden: true },
-  { id: 'notify', icon: 'truck', roles: ['confirmation', 'suivi'], hidden: true },
   { id: 'comptes', icon: 'link', roles: [], hidden: true },
+  // Pilot Automations: what Pilotix does by itself, on its own line. First the delivery messages: each customer told
+  // where their order is (WhatsApp, SMS, pages/notify)
+  { id: 'notify', icon: 'zap', roles: ['confirmation', 'suivi'] },
   { id: 'clients', icon: 'users', roles: ['confirmation', 'suivi'] },
   // Publicité (Meta spend face to the orders), Formulaires (the ads' lead forms become orders), Campagnes (WhatsApp offers
   // to the customers who said yes), Marketer (paying marketers), AI Spy (competitors' ads in Algeria)

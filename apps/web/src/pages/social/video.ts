@@ -1,4 +1,4 @@
-// AI social media manager: a picked video, sent at its highest quality — the original file, never re-encoded:
+// Pilot Content: a picked video, sent at its highest quality — the original file, never re-encoded:
 // - its length and picture size (from the browser, or from the file's own index when the browser cannot play it);
 // - a still from it for the calendar (360 px JPEG; a plain card when the browser cannot show its pictures);
 // - its index moved to the front when the phone wrote it at the end (as Instagram asks, @pilotix/shared mp4.ts: the

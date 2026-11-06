@@ -4,7 +4,7 @@
 // uses its Page and its ad accounts at once) or to all the owner's boutiques (each boutique picks its Page and counts the
 // ad accounts or not, in one click; a Page answers for one boutique only). A boutique counts all the ad accounts of a
 // linked account together: Publicité adds them up. What a boutique uses is written where its agents already read it:
-// Message AI agent and CM AI agent (the Page, its token, its Instagram account) and Publicité (the ad accounts and the
+// Pilot Message and Pilot Comments (the Page, its token, its Instagram account) and Publicité (the ad accounts and the
 // account's token). The hand-pasted Page token is gone: a Page comes only from a linked account. « Tester » tries an
 // account on the server (social-server.ts) and says, line by line, what works.
 //
@@ -260,7 +260,7 @@ export async function lastBadSignature(t: Tenancy): Promise<{ at: string; object
 }
 
 /**
- * Instagram accounts a boutique linked with Instagram's own login (Message AI agent › Réglages): the number Meta gives
+ * Instagram accounts a boutique linked with Instagram's own login (Pilot Message › Réglages): the number Meta gives
  * them in that login's webhooks → the boutique (one account per boutique). Without Meta's approval (Advanced Access),
  * that login is the way to answer every customer of the boutique's own account.
  */
@@ -581,7 +581,7 @@ async function clearShop(db: Db, kind: AssetKind) {
   } else await drop(db, [SOCIAL_KEYS.tiktokAdsToken, SOCIAL_KEYS.tiktokAds]);
 }
 
-/** The Page this boutique answers on (Message AI agent and CM AI agent show it), from its linked account. */
+/** The Page this boutique answers on (Pilot Message and Pilot Comments show it), from its linked account. */
 export interface LinkedPage {
   pageId: string;
   name: string;
@@ -1181,7 +1181,7 @@ async function demoRemove(ctx: Ctx, linkId: number) {
   return demoList(ctx);
 }
 /**
- * The browser preview's boutique uses its sample account's Page and ad account from the start (Message AI agent ›
+ * The browser preview's boutique uses its sample account's Page and ad account from the start (Pilot Message ›
  * Réglages shows the Page): written once by the page (lib/backend.ts), never on a server.
  */
 export async function seedSocialPreview(db: Db, now = Date.now()) {

@@ -5,7 +5,7 @@
 //  2. we deliver there: wilaya, commune (home), and the company — the order's, the bureau's, or the
 //     default one — serves that wilaya at home / at a bureau (a courier with a tariff needs a price there; own
 //     delivery men, manual companies and companies without a tariff always do). No company yet: one of them must.
-//     An order whose customer never said his wilaya (Message AI agent, « Commande avec le numéro seul »: the shop's own
+//     An order whose customer never said his wilaya (Pilot Message, « Commande avec le numéro seul »: the shop's own
 //     wilaya put in for now, orders.wilaya_guess) waits until someone asks him: another wilaya, or a commune / bureau.
 // The order card asks the same question (orders.confirmCheck) before the agent presses « Confirmer ».
 import { WILAYAS } from '@pilotix/shared';

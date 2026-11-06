@@ -1,4 +1,4 @@
-// « Delivery AI agent »: the messages sent to each customer about their order — received, confirmed, shipped, with the
+// « Pilot Automations »: the messages sent to each customer about their order — received, confirmed, shipped, with the
 // livreur, at the desk, failed attempt, cancelled by the livreur, delivered — by WhatsApp first, by SMS when the number
 // has no WhatsApp, or to send by hand; the cases and their texts, a tester, the results and the settings (admin).
 import { useEffect, useRef, useState } from 'react';

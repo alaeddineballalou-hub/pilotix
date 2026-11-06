@@ -739,9 +739,9 @@ const DEFAULT_PLANS = [
     orders: 6000,
     stores: 3,
     pub: true,
-    desc: 'Essentiel + landing pages, publicité, marketeurs, Delivery AI agent.',
+    desc: 'Essentiel + landing pages, publicité, marketeurs, Pilot Automations.',
   },
-  { code: 'business', name: 'Business', price: 14900, features: ['*'], users: null, orders: null, stores: 10, pub: true, desc: 'Tout Pilotix : Message AI agent, CM AI agent, AI Spy…' },
+  { code: 'business', name: 'Business', price: 14900, features: ['*'], users: null, orders: null, stores: 10, pub: true, desc: 'Tout Pilotix : Pilot Message, Pilot Comments, AI Spy…' },
 ];
 
 /**

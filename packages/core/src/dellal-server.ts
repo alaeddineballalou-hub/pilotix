@@ -1,6 +1,6 @@
 // Dellal on the server — SERVER ONLY (loaded as '@pilotix/core/dist/dellal-server', called through ctx.server.dellal).
 // Calls the AI (Anthropic Messages API) and sends messages to WhatsApp (Cloud API), Messenger and Instagram (Graph API);
-// for Delivery AI agent, WhatsApp templates and SMS (SMS Gateway for Android, or any HTTP SMS service).
+// for Pilot Automations, WhatsApp templates and SMS (SMS Gateway for Android, or any HTTP SMS service).
 // Keys are read from the settings table (written by dellal.settings.save / notify.settings.save) and never leave the server.
 import { randomBytes } from 'crypto';
 import { AppError, Ctx, publicApi } from './rpc';
@@ -46,7 +46,7 @@ async function postJson(url: string, body: unknown, headers: Record<string, stri
   if (!res.ok || data?.error) {
     const e = data?.error;
     const m = (typeof e === 'string' ? e : e?.error_user_msg ?? e?.message) ?? data?.message ?? res.statusText;
-    // Meta's error code travels with the error (Delivery AI agent decides: try again, or SMS)
+    // Meta's error code travels with the error (Pilot Automations decides: try again, or SMS)
     const fail = (code: AppError['code'], text: string) => Object.assign(new AppError(code, text), { metaCode: typeof e?.code === 'number' ? e.code : null, status: res.status });
     if (res.status === 401 || e?.code === 190) throw fail('bad_request', `${who} : clé ou jeton refusé (${m}). Vérifiez les réglages.`);
     if (res.status === 429) throw fail('conflict', `${who} limite les demandes pour l’instant.`);
@@ -189,13 +189,13 @@ export async function pilotComplete(t: Tenancy, req: { model: string; system: st
   return { content: data.content ?? [], stop_reason: data.stop_reason ?? 'end_turn', usage: data.usage };
 }
 
-// ---------------------------------------------------------------- CM AI agent: comments (Graph API, the page token)
+// ---------------------------------------------------------------- Pilot Comments: comments (Graph API, the page token)
 type CmArgs = { channel: 'facebook' | 'instagram' | 'tiktok'; commentId?: string; postId?: string; text?: string; hidden?: boolean };
 const enc = encodeURIComponent;
 
 async function pageToken(ctx: Ctx): Promise<string> {
   const token = await dellalSecret(ctx.db, 'pageToken');
-  if (!token) throw new AppError('bad_request', 'La page Facebook n’est pas connectée (jeton de page manquant dans Message AI agent › Réglages).');
+  if (!token) throw new AppError('bad_request', 'La page Facebook n’est pas connectée (jeton de page manquant dans Pilot Message › Réglages).');
   return token;
 }
 
@@ -304,7 +304,7 @@ async function formLeads(ctx: Ctx, a: { formId: string; since: number }): Promis
   return rows.map(toMetaLead);
 }
 
-// ---------------------------------------------------------------- CM AI agent › Planner: posts on the Page and Instagram
+// ---------------------------------------------------------------- Pilot Comments › Planner: posts on the Page and Instagram
 /** a recent version for the posts (Pages API, Instagram content publishing) */
 const PLAN_GRAPH = 'https://graph.facebook.com/v25.0';
 interface PlanArgs {
@@ -403,7 +403,7 @@ async function planPublish(ctx: Ctx, a: PlanArgs): Promise<{ id: string; url: st
       if (code === 'FINISHED') return igPublish(a.igId, reel, tk);
       if (code === 'ERROR' || code === 'EXPIRED') throw new AppError('bad_request', `Instagram : la vidéo n’a pas pu être préparée.${why ? ` (${why})` : ''}`);
     }
-    // still being prepared: Pilotix looks again every minute (CM AI agent › Planner shows « Part en ce moment »)
+    // still being prepared: Pilotix looks again every minute (Pilot Comments › Planner shows « Part en ce moment »)
     return { pending: true, container: reel };
   }
   if (!images.length) throw new AppError('bad_request', 'Instagram : ajoutez au moins une photo.');
@@ -590,11 +590,11 @@ async function planEdit(ctx: Ctx, a: PlanArgs): Promise<{ ok: true }> {
   return { ok: true };
 }
 
-// ---------------------------------------------------------------- Delivery AI agent: WhatsApp templates, SMS
+// ---------------------------------------------------------------- Pilot Automations: WhatsApp templates, SMS
 async function waNumber(ctx: Ctx): Promise<{ token: string; phoneId: string }> {
   const token = await dellalSecret(ctx.db, 'waToken');
   const phoneId = (await ctx.db.query(`SELECT value->>'whatsappPhoneId' AS v FROM settings WHERE key = 'dellal'`))[0]?.v;
-  if (!token || !phoneId) throw new AppError('bad_request', 'WhatsApp n’est pas connecté (Message AI agent › Réglages : jeton et ID du numéro).');
+  if (!token || !phoneId) throw new AppError('bad_request', 'WhatsApp n’est pas connecté (Pilot Message › Réglages : jeton et ID du numéro).');
   return { token, phoneId };
 }
 
@@ -652,7 +652,7 @@ const plus213 = (p: string) => '+213' + String(p).replace(/^0/, '');
 async function sms(ctx: Ctx, a: { to: string; text: string; validUntil?: string | null }) {
   const { s, secret, base, local } = await smsGateway(ctx);
   if (s.smsProvider === 'android') {
-    if (!s.smsUser || !secret) throw new AppError('bad_request', 'SMS : identifiant ou mot de passe de SMS Gateway manquant (Delivery AI agent › Réglages).');
+    if (!s.smsUser || !secret) throw new AppError('bad_request', 'SMS : identifiant ou mot de passe de SMS Gateway manquant (Pilot Automations › Réglages).');
     const auth = `Basic ${Buffer.from(`${s.smsUser}:${secret}`).toString('base64')}`;
     // an SMS the phone could not send in time (offline) expires instead of leaving in the night
     const body = { textMessage: { text: a.text }, phoneNumbers: [plus213(a.to)], ...(a.validUntil ? { validUntil: a.validUntil.replace(/\.\d{3}Z$/, 'Z') } : {}) };
@@ -660,7 +660,7 @@ async function sms(ctx: Ctx, a: { to: string; text: string; validUntil?: string 
     return { id: r?.id ? String(r.id) : null, status: r?.state ? String(r.state) : null };
   }
   // any HTTP SMS service: POST { to, text } (and the token as Bearer)
-  if (!s.smsUrl) throw new AppError('bad_request', 'SMS : adresse du service manquante (Delivery AI agent › Réglages).');
+  if (!s.smsUrl) throw new AppError('bad_request', 'SMS : adresse du service manquante (Pilot Automations › Réglages).');
   const r = await postJson(s.smsUrl, { to: plus213(a.to), text: a.text }, secret ? { Authorization: `Bearer ${secret}` } : {}, 'Service SMS', 'POST', 30_000, true);
   const id = r?.id ?? r?.messageId ?? r?.message_id ?? null;
   return { id: id === null ? null : String(id), status: null };
@@ -669,7 +669,7 @@ async function sms(ctx: Ctx, a: { to: string; text: string; validUntil?: string 
 /** Points the gateway's reports (sent, delivered, failed) and the customers' SMS answers to this server. */
 async function smsHooks(ctx: Ctx, a: { url: string }) {
   const { s, secret, base, local } = await smsGateway(ctx);
-  if (!s.smsUser || !secret) throw new AppError('bad_request', 'SMS : identifiant ou mot de passe de SMS Gateway manquant (Delivery AI agent › Réglages).');
+  if (!s.smsUser || !secret) throw new AppError('bad_request', 'SMS : identifiant ou mot de passe de SMS Gateway manquant (Pilot Automations › Réglages).');
   const auth = { Authorization: `Basic ${Buffer.from(`${s.smsUser}:${secret}`).toString('base64')}` };
   const path = `${base}${local ? '/webhooks' : '/3rdparty/v1/webhooks'}`;
   const have: any[] = await postJson(path, null, auth, 'SMS Gateway', 'GET', 30_000, true).catch(() => []);
@@ -683,11 +683,11 @@ async function smsHooks(ctx: Ctx, a: { url: string }) {
  *  - 'complete' → AiRequest: one call to the AI
  *  - 'send'     → { channel, externalId, accountId, text }: sends a message to the customer
  *  - 'ping'     → checks the AI key
- *  - 'cmReply' / 'cmPrivate' / 'cmHide' / 'cmPost' → the CM AI agent's actions on comments
+ *  - 'cmReply' / 'cmPrivate' / 'cmHide' / 'cmPost' → Pilot Comments's actions on comments
  *  - 'lead' / 'leadForms' / 'leadForm' / 'formLeads' → Marketing › Formulaires (the ads' lead forms)
- *  - 'planPublish' / 'planCheck' / 'planDelete' / 'planEdit' / 'planComment' / 'planStats' → AI social media manager: its
+ *  - 'planPublish' / 'planCheck' / 'planDelete' / 'planEdit' / 'planComment' / 'planStats' → Pilot Content: its
  *    posts and stories on the Page and Instagram, their first comment, their numbers and the followers
- *  - 'waTemplate' / 'waTemplates' / 'waCreateTemplate' / 'sms' / 'smsHooks' → Delivery AI agent
+ *  - 'waTemplate' / 'waTemplates' / 'waCreateTemplate' / 'sms' / 'smsHooks' → Pilot Automations
  *  - 'media' → a customer's photo (WhatsApp media id or Meta's link): its bytes for Pilot AI, and a small copy
  *  - 'photos' → { channel, externalId, accountId, photos }: the product photos Dellal picked, sent as JPEG
  */
@@ -1437,7 +1437,7 @@ export function parseMetaAdIssues(body: any): { accountId: string; objectId: str
   return out;
 }
 
-// ---------------------------------------------------------------- delivery statuses (Delivery AI agent)
+// ---------------------------------------------------------------- delivery statuses (Pilot Automations)
 /** WhatsApp message statuses in a Meta webhook (sent, delivered, read, failed with its error). */
 export function parseWhatsAppStatuses(body: any): { id: string; status: string; code: number | null; title: string | null }[] {
   const out: { id: string; status: string; code: number | null; title: string | null }[] = [];
@@ -1473,7 +1473,7 @@ export function parseSmsEvent(body: any): { event: 'sent' | 'delivered' | 'faile
   };
 }
 
-// ---------------------------------------------------------------- incoming comments (CM AI agent)
+// ---------------------------------------------------------------- incoming comments (Pilot Comments)
 export interface IncomingComment {
   channel: 'facebook' | 'instagram';
   externalId: string;

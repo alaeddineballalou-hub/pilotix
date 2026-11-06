@@ -595,7 +595,7 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p011_buyer_quality', P011],
   // Pilot AI: what Dellal learns from every sharing shop's chats (modules/pilotlearn.ts)
   ['p012_pilot_ai', PILOT_PLATFORM_SQL],
-  // what each shop's AI costs (Dellal, CM AI agent, AI Spy), counted by dellal-server › complete() (platform/aiusage.ts)
+  // what each shop's AI costs (Dellal, Pilot Comments, AI Spy), counted by dellal-server › complete() (platform/aiusage.ts)
   ['p013_ai_usage', AI_USAGE_SQL],
   // Darija (lahja) lessons: the shops' corrections and what Dellal learned, waiting for Pilotix; the ones every shop uses
   ['p014_lahja', LAHJA_PLATFORM_SQL],
@@ -642,8 +642,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   // Pilot AI's two pushes: nothing Pilotix changes reaches the shops before « Push sur le serveur » — the vocabulary's
   // working copy and the copy in test, the draft of the Darija rules, the versions of « Push en test » (pilotlearn.ts)
   ['p028_pilot_release', VOCAB_COPIES_SQL + DARIJA_DRAFT_SQL + RELEASE_SQL],
-  // « AI social media manager » (Pilot AI › social): its own switch, out of CM AI agent where its calendar began. The plans
-  // and boutiques that had CM AI agent off (or on, on top of their plan) get the same for it, so nobody gains or loses it
+  // « Pilot Content » (Pilot AI › social): its own switch, out of Pilot Comments where its calendar began. The plans
+  // and boutiques that had Pilot Comments off (or on, on top of their plan) get the same for it, so nobody gains or loses it
   ['p029_social_manager', P029],
   // Pilot AI › the 10-question exam: each exam of a version, its ten chats and their marks (pilotexam.ts)
   ['p030_pilot_exams', EXAM_SQL],

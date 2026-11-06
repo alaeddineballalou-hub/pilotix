@@ -1,6 +1,6 @@
 {
-  "title": "Delivery AI agent",
-  "help": "It tells each customer where their order is: received, confirmed, shipped, with the courier, at the desk, delivery failed, cancelled by the courier. First on WhatsApp; if the number has no WhatsApp, by SMS; otherwise the message waits in “To send” for the team. Customers’ answers arrive in Message AI agent, where Dellal knows the order.",
+  "title": "Pilot Automations",
+  "help": "It tells each customer where their order is: received, confirmed, shipped, with the courier, at the desk, delivery failed, cancelled by the courier. First on WhatsApp; if the number has no WhatsApp, by SMS; otherwise the message waits in “To send” for the team. Customers’ answers arrive in Pilot Message, where Dellal knows the order.",
   "tabs": {
     "messages": "Messages",
     "cas": "Cases",
@@ -9,7 +9,7 @@
     "reglages": "Settings"
   },
   "tomorrow": "tomorrow",
-  "off": "Delivery AI agent is stopped: no message is sent to customers.",
+  "off": "Pilot Automations is stopped: no message is sent to customers.",
   "offLink": "Start it in Settings",
   "kind": {
     "created": "Order received",
@@ -103,7 +103,7 @@
     "howHelp": "Each status change sends at most one message: once per order for “received”, “confirmed”, “shipped”, “cancelled” and “delivered”, at most once a day for the others. A message waiting for the end of the night is replaced if the order moves on meanwhile.",
     "flowLabel": "An order’s journey",
     "step1": "1. WhatsApp",
-    "step1Hint": "From Message AI agent’s number, with a text approved by WhatsApp.",
+    "step1Hint": "From Pilot Message’s number, with a text approved by WhatsApp.",
     "step2": "2. SMS",
     "step2Hint": "If the number has no WhatsApp, or the WhatsApp is not received within 1 h.",
     "step3": "3. By hand",
@@ -193,16 +193,16 @@
     "byKind": "By case",
     "replies_one": "{{count}} answer",
     "replies_other": "{{count}} answers",
-    "note": "Customers’ WhatsApp answers arrive in Message AI agent, with the message before them. Dellal answers questions and hands over to the team to resend an order or change an address."
+    "note": "Customers’ WhatsApp answers arrive in Pilot Message, with the message before them. Dellal answers questions and hands over to the team to resend an order or change an address."
   },
   "settings": {
     "saved": "Settings saved",
     "save": "Save",
     "how": "How it runs",
-    "enabled": "Delivery AI agent started",
+    "enabled": "Pilot Automations started",
     "enabledHint": "Messages leave at each order status change.",
     "whatsapp": "Send on WhatsApp first",
-    "whatsappHint": "From Message AI agent’s WhatsApp number. Otherwise everything goes by SMS.",
+    "whatsappHint": "From Pilot Message’s WhatsApp number. Otherwise everything goes by SMS.",
     "lang": "Language of the messages",
     "langHint": "Darija in Latin letters reads like your chats and costs 2 to 3 times less by SMS.",
     "quiet": "No message at night",
@@ -212,7 +212,7 @@
     "waHelp": "WhatsApp only allows a business’s first message with an approved text (“Utility” template). Pilotix sends your texts to WhatsApp for approval; it often takes minutes, sometimes 24 h.",
     "waNumber": "WhatsApp number",
     "connected": "connected",
-    "waConnect": "Connect it in Message AI agent › Settings",
+    "waConnect": "Connect it in Pilot Message › Settings",
     "waba": "WhatsApp Business Account ID (WABA)",
     "wabaHint": "Meta Business › WhatsApp accounts, or in WhatsApp Manager. Used to send your texts for approval.",
     "waTemplates": "Texts are approved in the “Cases” tab: “Send the texts to WhatsApp”, then “Check approval”.",
@@ -249,7 +249,7 @@
     "manualNote": "Each message to send appears in Messages › To send, with “Open WhatsApp” and “Open SMS”: the text is already written, just press send.",
     "demo": "Preview: sending is simulated, no SMS or WhatsApp leaves.",
     "appSecretMissing": "Without the Meta app secret, Pilotix does not accept WhatsApp reports (read, received, not received): a message not received switches to SMS only after 1 h.",
-    "appSecretLink": "Add it in Message AI agent › Settings"
+    "appSecretLink": "Add it in Pilot Message › Settings"
   },
   "ev": {
     "sent": "{{via}} to the customer · {{kind}}",

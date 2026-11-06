@@ -1,10 +1,10 @@
 // The vocabulary book (Pilot AI › Tester & leçons › Leçons › Vocabulaire): the Algerian Darija words Pilotix gives the AI
 // agents of every shop, each in Arabic letters, in Latin letters, and with its meaning. Pilotix puts its book in (a
 // Markdown file with tables, pasted or uploaded), edits it word by word, and the corrections teach it more:
-//  - a correction of the AI (Dellal's messages, the CM AI agent's replies, the control room's test chat, a guide's Arabic
+//  - a correction of the AI (Dellal's messages, Pilot Comments's replies, the control room's test chat, a guide's Arabic
 //    translation) becomes a Darija lesson (lahja.ts): used at once in its shop, then accepted by Pilotix for every shop;
 //    an accepted lesson writes its words in the book (a word replaced, or a new word), and removing it takes them back;
-//  - in a chat, Dellal and the CM AI agent read only the words of the book that touch what is said (the customer's words,
+//  - in a chat, Dellal and Pilot Comments read only the words of the book that touch what is said (the customer's words,
 //    the post, the product), and so does Pilot AI when it translates a guide into Arabic: a big book costs nothing more.
 // Nothing Pilotix changes reaches the shops at once: the control room edits a working copy; « Push en test » freezes it
 // for the control room's test chat, « Push sur le serveur » makes it the live book of every shop (pilotlearn.ts › releases).

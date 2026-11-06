@@ -1,4 +1,4 @@
-// AI social media manager › Calendar: the shop's posts on a calendar. A month on a computer (the posts to approve and to fix,
+// Pilot Content › Calendar: the shop's posts on a calendar. A month on a computer (the posts to approve and to fix,
 // the next posts, the drafts and the Algerian calendar's days coming beside it, or the post being edited); on a phone the
 // days with dots and the chosen day's posts under them. A post: a feed post or a story, its photos (made JPEG in the
 // browser, ./jpeg.ts) or its video, Facebook and / or Instagram, the product it sells, a caption the AI can write and fix,

@@ -2,8 +2,8 @@
   "title": "Campagnes WhatsApp",
   "new": "Nouvelle campagne",
   "ready": {
-    "whatsapp": "WhatsApp n’est pas encore connecté : ajoutez le jeton et l’ID du numéro dans Message AI agent › Réglages.",
-    "waba": "Ajoutez l’ID du compte WhatsApp Business dans Delivery AI agent › Réglages, pour que Meta approuve vos messages.",
+    "whatsapp": "WhatsApp n’est pas encore connecté : ajoutez le jeton et l’ID du numéro dans Pilot Message › Réglages.",
+    "waba": "Ajoutez l’ID du compte WhatsApp Business dans Pilot Automations › Réglages, pour que Meta approuve vos messages.",
     "fix": "Ouvrir les réglages"
   },
   "empty": {

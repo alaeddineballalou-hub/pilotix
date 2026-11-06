@@ -1,6 +1,6 @@
-// AI social media manager: everything around the calendar (./cmplan.ts holds the posts and how they go out).
+// Pilot Content: everything around the calendar (./cmplan.ts holds the posts and how they go out).
 //  - Results (cm.plan.stats): what each post did. Meta's numbers (cm_post_stats, fetched by the job) and Pilotix's own
-//    (its comments in CM AI agent → the conversations they opened in Message AI agent → the orders); the best posts,
+//    (its comments in Pilot Comments → the conversations they opened in Pilot Message → the orders); the best posts,
 //    hours, days and kinds (photo, carousel, video, story); the followers of each day; this week against the one before,
 //    with what to do next
 //  - « Fill my week » (cm.plan.fillWeek): the AI prepares drafts on the shop's fixed times from its products (best

@@ -1,6 +1,6 @@
-// CM AI agent (community manager): comments left under the shop's Facebook and Instagram posts and ads, and what the
-// agent did with each one (public reply, private message that opens a conversation in Message AI agent, hidden).
-// Settings live in `settings` (key 'cm'); the Meta connection (page token, app secret) is the one of Message AI agent.
+// Pilot Comments (community manager): comments left under the shop's Facebook and Instagram posts and ads, and what the
+// agent did with each one (public reply, private message that opens a conversation in Pilot Message, hidden).
+// Settings live in `settings` (key 'cm'); the Meta connection (page token, app secret) is the one of Pilot Message.
 export default `
 CREATE TABLE IF NOT EXISTS cm_posts (
   id          bigserial PRIMARY KEY,

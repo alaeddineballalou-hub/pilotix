@@ -211,7 +211,7 @@
     },
     "igLogin": {
       "ok": "تسجيل الدخول عبر Instagram: مفتاح @{{username}} يعمل. Dellal يرد به على كل زبائنك في Instagram.",
-      "warn": "تسجيل الدخول عبر Instagram: لم يتم بعد لـ @{{username}}. بدونه (أو بدون موافقة Meta)، يرد Dellal في Instagram فقط على الحسابات التي لها دور في التطبيق. أضفه في Message AI agent › الإعدادات.",
+      "warn": "تسجيل الدخول عبر Instagram: لم يتم بعد لـ @{{username}}. بدونه (أو بدون موافقة Meta)، يرد Dellal في Instagram فقط على الحسابات التي لها دور في التطبيق. أضفه في Pilot Message › الإعدادات.",
       "bad": "تسجيل الدخول عبر Instagram: المفتاح لم يعد يعمل. السبب في الأسفل."
     },
     "badSig": {

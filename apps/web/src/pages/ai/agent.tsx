@@ -1,4 +1,4 @@
-// Pilot AI — what the three agents (Message AI agent, CM AI agent, Delivery AI agent) share on screen:
+// AI Pilot — what the agents (Pilot Message, Pilot Comments, Pilot Automations) share on screen:
 // the agent's header (its portrait with the live dot, its name, what it does, on or paused) and its section tabs,
 // the filters of a feed (a column beside the list on a wide screen, a row above it on a phone), the period
 // switch of the results, the bar that saves the settings, the height that lets a chat fill the screen, and

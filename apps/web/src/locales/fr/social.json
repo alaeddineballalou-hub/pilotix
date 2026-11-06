@@ -1,6 +1,6 @@
 {
-  "title": "AI social media manager",
-  "help": "Prépare les posts de la boutique sur Facebook et Instagram : des photos ou une vidéo à la plus haute qualité, un texte que l’IA écrit, publiés tout seuls à l’heure choisie. Chaque post est lié à son produit : CM AI agent répond à ses commentaires avec le bon prix.",
+  "title": "Pilot Content",
+  "help": "Prépare les posts de la boutique sur Facebook et Instagram : des photos ou une vidéo à la plus haute qualité, un texte que l’IA écrit, publiés tout seuls à l’heure choisie. Chaque post est lié à son produit : Pilot Comments répond à ses commentaires avec le bon prix.",
   "tabs": {
     "calendrier": "Calendrier",
     "resultats": "Résultats",
@@ -306,7 +306,7 @@
       "delivered": "livrées : {{n}}",
       "basket": "{{v}} par commande"
     },
-    "note": "Commandes : celles venues des commentaires d’un post (le message privé de CM AI agent, puis Message AI agent).",
+    "note": "Commandes : celles venues des commentaires d’un post (le message privé de Pilot Comments, puis Pilot Message).",
     "week": "Cette semaine",
     "vsWeek": "par rapport à la semaine dernière",
     "bestWeek": "Meilleur post de la semaine",

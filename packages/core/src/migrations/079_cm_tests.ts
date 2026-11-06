@@ -1,5 +1,5 @@
-// CM AI agent › Tester: each test keeps what the agent would answer, so a team member can teach it from there
-// (« Leçon de darija », as in Message AI agent › Tester). Kept 30 days. A lesson remembers the test it came from.
+// Pilot Comments › Tester: each test keeps what the agent would answer, so a team member can teach it from there
+// (« Leçon de darija », as in Pilot Message › Tester). Kept 30 days. A lesson remembers the test it came from.
 export default `
 CREATE TABLE IF NOT EXISTS cm_tests (
   id            bigserial   PRIMARY KEY,

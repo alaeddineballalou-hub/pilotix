@@ -1,6 +1,6 @@
 {
-  "title": "AI social media manager",
-  "help": "Plans the shop's posts on Facebook and Instagram: photos or a video at the highest quality, a caption the AI writes, posted by itself at the chosen time. Each post is linked to its product, so CM AI agent answers its comments with the right price.",
+  "title": "Pilot Content",
+  "help": "Plans the shop's posts on Facebook and Instagram: photos or a video at the highest quality, a caption the AI writes, posted by itself at the chosen time. Each post is linked to its product, so Pilot Comments answers its comments with the right price.",
   "tabs": {
     "calendrier": "Calendar",
     "resultats": "Results",
@@ -306,7 +306,7 @@
       "delivered": "delivered: {{n}}",
       "basket": "{{v}} per order"
     },
-    "note": "Orders: those that came from a post's comments (CM AI agent's private message, then Message AI agent).",
+    "note": "Orders: those that came from a post's comments (Pilot Comments's private message, then Pilot Message).",
     "week": "This week",
     "vsWeek": "against last week",
     "bestWeek": "Best post of the week",
