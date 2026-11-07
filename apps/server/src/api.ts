@@ -1008,12 +1008,17 @@ class ApiController {
     return core.shopReply(this.core.t, req.shop.shop.id, Number(id) || 0, { name: req.session.profile.name }, body);
   }
 
-  /** The terms of use and privacy page: Pilotix's own text when it wrote one (else the app's standard text). */
+  /**
+   * The terms of use and privacy page: Pilotix's own text when it wrote one (else the app's standard text), and the
+   * company that publishes Pilotix (control room › Réglages › Société: its legal name, address, phone and tax number),
+   * shown on that page and under the login page, the way Meta checks a business against its papers.
+   */
   @Public()
   @Get('legal')
   async legal() {
     const set = await this.core.settings();
-    return { text: set.legal.text, company: set.company.name, email: set.company.email };
+    const c = set.company;
+    return { text: set.legal.text, company: c.name, email: c.email, address: c.address, phone: c.phone, taxId: c.taxId };
   }
 
   /**

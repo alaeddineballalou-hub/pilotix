@@ -61,5 +61,8 @@
       "Nous ne donnons que le strict minimum : seulement les données demandées et nécessaires, rien de plus.",
       "Nous gardons une trace de chaque demande : qui l’a faite, ce qui était demandé, notre réponse et la raison légale de cette réponse."
     ]
-  }
+  },
+  "publisherTitle": "Éditeur",
+  "publisher": "Pilotix est un produit de {{company}}.",
+  "phone": "Tél."
 }

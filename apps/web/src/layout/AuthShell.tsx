@@ -4,7 +4,7 @@
 import { Language, LANGUAGES } from '@pilotix/shared';
 import { InputHTMLAttributes, ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { signupInfo } from '../lib/backend';
+import { LegalInfo, legalText, publisherOf, signupInfo } from '../lib/backend';
 import { applyLanguage } from '../lib/i18n';
 import { Icon } from '../ui/kit';
 import { ThemeGround, ThemePanel, useAuthTheme } from './authThemes';
@@ -64,9 +64,12 @@ export function AuthShell({ children, wide }: { children: ReactNode; wide?: bool
   const { t, i18n } = useTranslation();
   const theme = useAuthTheme();
   const [wa, setWa] = useState('');
+  // the company that publishes Pilotix, under the form (its legal name, as on its papers)
+  const [pub, setPub] = useState<LegalInfo | null>(null);
   useEffect(() => {
     let on = true;
     signupInfo().then((r) => on && setWa(String(r.whatsapp ?? '').replace(/[^\d+]/g, '')));
+    legalText().then((d) => on && setPub(publisherOf(d)));
     return () => {
       on = false;
     };
@@ -102,6 +105,7 @@ export function AuthShell({ children, wide }: { children: ReactNode; wide?: bool
           <a href="#/conditions">{t('auth.terms')}</a>
           <a href="#/conditions">{t('auth.privacy')}</a>
         </span>
+        {pub && <span className="pxa-pub">{t('auth.publisher', { company: pub.company })}</span>}
       </footer>
     </main>
   );

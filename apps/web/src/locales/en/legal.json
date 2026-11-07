@@ -61,5 +61,8 @@
       "We give only the minimum: just the data that is asked for and needed, nothing more.",
       "We keep a record of every request: who made it, what was asked, our answer and the legal reason for that answer."
     ]
-  }
+  },
+  "publisherTitle": "Publisher",
+  "publisher": "Pilotix is a product of {{company}}.",
+  "phone": "Phone"
 }

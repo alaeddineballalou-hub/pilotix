@@ -4,7 +4,7 @@
 // e-mail check link, and the terms of use and privacy page.
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError, DEMO_ONLY, isPhone, legalText, phoneCheck, PhoneSent, requestPasswordReset, server, signup, signupCode, SignupInfo, signupInfo, StoreChoice, storeNameCheck, verifyEmail } from '../lib/backend';
+import { ApiError, DEMO_ONLY, isPhone, LegalInfo, legalText, phoneCheck, publisherOf, PhoneSent, requestPasswordReset, server, signup, signupCode, SignupInfo, signupInfo, StoreChoice, storeNameCheck, verifyEmail } from '../lib/backend';
 import { usePhoneProblem } from '../lib/phoneCheck';
 import { useRpcFor } from '../lib/query';
 import { addressShop, go, leaveAddress } from '../lib/route';
@@ -784,9 +784,33 @@ function LegalPart({ k, email }: { k: string; email: string }) {
   );
 }
 
+/** Who publishes Pilotix: its legal name, address, phone, tax number and email (control room › Réglages › Société). */
+function Publisher({ d }: { d: LegalInfo | null }) {
+  const { t } = useTranslation();
+  const p = publisherOf(d);
+  if (!p) return null;
+  const lines = [p.address, p.phone && `${t('legal.phone')} ${p.phone}`, p.taxId && `NIF ${p.taxId}`, p.email].filter(Boolean) as string[];
+  return (
+    <section className="px-legal-pub">
+      <h2>{t('legal.publisherTitle')}</h2>
+      <p>{t('legal.publisher', { company: p.company })}</p>
+      {lines.length > 0 && (
+        <p>
+          {lines.map((l, i) => (
+            <span key={i}>
+              {i > 0 && ' · '}
+              {l}
+            </span>
+          ))}
+        </p>
+      )}
+    </section>
+  );
+}
+
 export function Legal() {
   const { t } = useTranslation();
-  const [d, setD] = useState<{ text: string; company: string; email: string } | null>(null);
+  const [d, setD] = useState<LegalInfo | null>(null);
   useEffect(() => {
     legalText().then(setD);
   }, []);
@@ -809,12 +833,13 @@ export function Legal() {
           </>
         ) : (
           <>
-            <p className="muted">{t('legal.intro', { company: d?.company || 'Pilotix' })}</p>
+            <p className="muted">{t('legal.intro', { company: 'Pilotix' })}</p>
             {sections.map((k) => (
               <LegalPart key={k} k={k} email={email} />
             ))}
           </>
         )}
+        <Publisher d={d} />
         <p>
           <a className="btn" href="#/" onClick={(e) => (history.length > 1 ? (e.preventDefault(), history.back()) : undefined)}>
             ← {t('legal.back')}

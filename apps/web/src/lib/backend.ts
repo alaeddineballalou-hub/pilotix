@@ -202,7 +202,10 @@ export const phoneCheck = (phone: string, ticket?: string) =>
 /** « Recevoir le code »: a WhatsApp code to the phone typed in the sign-up form. */
 export const signupCode = (phone: string) => authRequest<PhoneSent>('/auth/signup/code', { phone });
 /** The terms of use and privacy page (Pilotix's own text, else the app's standard one). */
-export const legalText = () => authRequest<{ text: string; company: string; email: string }>('/legal').catch(() => ({ text: '', company: 'Pilotix', email: '' }));
+export type LegalInfo = { text: string; company: string; email: string; address?: string; phone?: string; taxId?: string };
+export const legalText = () => authRequest<LegalInfo>('/legal').catch((): LegalInfo => ({ text: '', company: 'Pilotix', email: '' }));
+/** The company that publishes Pilotix, when the control room names one (« Pilotix » alone is the product, not a company). */
+export const publisherOf = (d: LegalInfo | null) => (d && d.company.trim() && d.company.trim() !== 'Pilotix' ? d : null);
 
 /** Pilotix's list of Pro marketers (the public page #/pro), or one of them by its code. */
 export const publicPros = () => authRequest<{ pros: import('@pilotix/shared').ProCard[] }>('/pro');
