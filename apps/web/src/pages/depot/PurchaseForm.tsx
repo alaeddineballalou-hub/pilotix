@@ -35,6 +35,9 @@ export function PurchaseForm({ prefill, onClose }: { prefill?: PurchasePrefill; 
   const [updateCost, setUpdateCost] = useState(true);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  // costs around the purchase (transport, customs…): spread on the products, the way chosen each time
+  const [costs, setCosts] = useState<{ label: string; amount: number | '' }[]>([]);
+  const [spread, setSpread] = useState<'value' | 'qty' | 'weight' | null>(null);
   const create = useAction('purchases.create', { success: (r) => t('produits.buy.saved', { ref: bidi(r.ref), pieces: r.pieces, depot: bidi(r.warehouseName) }), onDone: onClose });
 
   // the lines start from the prefill once the product names are known
@@ -52,6 +55,8 @@ export function PurchaseForm({ prefill, onClose }: { prefill?: PurchasePrefill; 
   const pieces = lines.reduce((s, l) => s + (l.qty === '' ? 0 : l.qty), 0);
   const paidV = paid === '' ? 0 : paid;
   const taken = new Set(lines.map((l) => l.variantId));
+  const costTotal = costs.reduce((s, c) => s + (c.amount === '' ? 0 : c.amount), 0);
+  const landedOf = landedPreview(lines, costTotal, spread);
 
   const add = (it: PickItem) =>
     setLines((ls) => (ls.some((l) => l.variantId === it.variantId) ? ls.map((l) => (l.variantId === it.variantId ? { ...l, qty: (l.qty === '' ? 0 : l.qty) + 1 } : l)) : [...ls, { variantId: it.variantId, label: it.label, sku: it.sku, qty: 1, unitCost: it.cost }]));
@@ -62,6 +67,9 @@ export function PurchaseForm({ prefill, onClose }: { prefill?: PurchasePrefill; 
     const bad = lines.find((l) => l.qty === '' || l.qty < 1 || l.unitCost === '');
     if (bad) return toast(t('produits.buy.badLine', { name: bad.label }), 'bad');
     if (paidV > total) return toast(t('produits.buy.paidTooMuch'), 'bad');
+    const badCost = costs.find((c) => c.amount !== '' && c.amount > 0 && !c.label.trim());
+    if (badCost) return toast(t('produits.buy.costNoLabel'), 'bad');
+    if (costTotal > 0 && !spread) return toast(t('produits.buy.chooseSpread'), 'bad');
     let supplierId: number | null = supplier && supplier !== 'new' ? Number(supplier) : null;
     if (supplier === 'new') {
       if (!newSup.name.trim()) return toast(t('produits.sup.nameRequired'), 'bad');
@@ -75,7 +83,7 @@ export function PurchaseForm({ prefill, onClose }: { prefill?: PurchasePrefill; 
       setBusy(false);
       setSupplier(String(supplierId));
     }
-    create.mutate({ supplierId, warehouseId: depot, lines: lines.map((l) => ({ variantId: l.variantId, qty: l.qty as number, unitCost: l.unitCost as number })), paid: paidV, updateCost, note: note.trim() });
+    create.mutate({ supplierId, warehouseId: depot, lines: lines.map((l) => ({ variantId: l.variantId, qty: l.qty as number, unitCost: l.unitCost as number })), paid: paidV, updateCost, note: note.trim(), extras: costs.filter((c) => c.amount !== '' && c.amount > 0).map((c) => ({ label: c.label.trim(), amount: c.amount as number })), spread: costTotal > 0 ? spread ?? undefined : undefined });
   };
 
   return (
@@ -197,6 +205,55 @@ export function PurchaseForm({ prefill, onClose }: { prefill?: PurchasePrefill; 
           </span>
         </div>
 
+        <div className="pd-costs">
+          <h3>{t('produits.buy.costs')}</h3>
+          <p className="pd-note">{t('produits.buy.costsHint')}</p>
+          {costs.map((c, k) => (
+            <div key={k} className="pd-cost">
+              <input value={c.label} maxLength={60} placeholder={t('produits.buy.costPh')} aria-label={t('produits.buy.costName')} onChange={(e) => setCosts((cs) => cs.map((x, j) => (j === k ? { ...x, label: e.target.value } : x)))} />
+              <MoneyInput value={c.amount} label={t('produits.buy.costAmount')} onChange={(v) => setCosts((cs) => cs.map((x, j) => (j === k ? { ...x, amount: v } : x)))} />
+              <button type="button" className="icon-btn" aria-label={t('produits.buy.costRemove')} onClick={() => setCosts((cs) => cs.filter((_, j) => j !== k))}>
+                <Icon name="x" />
+              </button>
+            </div>
+          ))}
+          {costs.length < 10 && (
+            <button type="button" className="btn small" onClick={() => setCosts((cs) => [...cs, { label: cs.length ? '' : t('produits.buy.costTransport'), amount: '' }])}>
+              <Icon name="plus" />
+              {t('produits.buy.costAdd')}
+            </button>
+          )}
+          {costTotal > 0 && (
+            <>
+              <fieldset className="pd-spread">
+                <legend>{t('produits.buy.spread', { total: bidi(da(costTotal)) })}</legend>
+                {(['value', 'qty', 'weight'] as const).map((k) => (
+                  <label key={k} className={spread === k ? 'on' : ''}>
+                    <input type="radio" name="spread" checked={spread === k} onChange={() => setSpread(k)} />
+                    <span>
+                      <b>{t(`produits.buy.spread_${k}`)}</b>
+                      <small>{t(`produits.buy.spreadHint_${k}`)}</small>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+              {spread && landedOf && (
+                <ul className="pd-landed">
+                  {lines.map((l, k) => (
+                    <li key={l.variantId}>
+                      <span>{l.label}</span>
+                      <span className="ltr">
+                        {da(l.unitCost === '' ? 0 : l.unitCost)} → <b>{da(landedOf[k])}</b>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {spread === 'weight' && <p className="pd-note">{t('produits.buy.weightNote')}</p>}
+            </>
+          )}
+        </div>
+
         <label className="dl-switch">
           <input type="checkbox" checked={updateCost} onChange={(e) => setUpdateCost(e.target.checked)} />
           <span>
@@ -211,4 +268,15 @@ export function PurchaseForm({ prefill, onClose }: { prefill?: PurchasePrefill; 
       </div>
     </Modal>
   );
+}
+
+/** What one piece will really cost (by value or by quantity, as the server spreads it); by weight is worked out on saving. */
+function landedPreview(lines: Line[], extra: number, spread: 'value' | 'qty' | 'weight' | null): number[] | null {
+  if (extra <= 0 || !spread || spread === 'weight') return null;
+  const q = (l: Line) => (l.qty === '' ? 0 : l.qty);
+  const c = (l: Line) => (l.unitCost === '' ? 0 : l.unitCost);
+  const base = lines.map((l) => (spread === 'value' ? q(l) * c(l) : q(l)));
+  const sum = base.reduce((a, b) => a + b, 0);
+  if (sum <= 0) return null;
+  return lines.map((l, k) => c(l) + (q(l) ? Math.round((extra * base[k]) / sum / q(l)) : 0));
 }

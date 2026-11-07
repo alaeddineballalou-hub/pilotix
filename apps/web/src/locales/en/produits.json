@@ -295,7 +295,25 @@
     "saved": "Purchase {{ref}} saved: +{{pieces}} pieces at {{depot}}",
     "noLines": "Add at least one product",
     "badLine": "Missing quantity or price for “{{name}}”",
-    "paidTooMuch": "The amount paid is more than the total"
+    "paidTooMuch": "The amount paid is more than the total",
+    "costs": "Costs (transport, customs…)",
+    "costsHint": "Paid apart from the supplier. They are added to the products’ purchase price, to know what they really cost.",
+    "costPh": "e.g. Transport, Customs",
+    "costName": "Cost name",
+    "costAmount": "Cost amount",
+    "costRemove": "Remove this cost",
+    "costAdd": "Add a cost",
+    "costTransport": "Transport",
+    "spread": "How to spread {{total}} on the products?",
+    "spread_value": "By value",
+    "spread_qty": "By quantity",
+    "spread_weight": "By weight",
+    "spreadHint_value": "A more expensive product takes a bigger share (the usual way for customs).",
+    "spreadHint_qty": "Each piece takes the same share.",
+    "spreadHint_weight": "By each product’s weight (the fairest for transport).",
+    "weightNote": "The real cost of each piece is worked out on saving, with each product’s weight.",
+    "costNoLabel": "Give each cost a name (e.g. Transport).",
+    "chooseSpread": "Choose how to spread the costs: by value, quantity or weight."
   },
   "buys": {
     "kDue": "To pay suppliers",
@@ -331,7 +349,9 @@
     "savePay": "Save the payment",
     "paySaved": "Payment saved",
     "lastPay": "Last payment recorded on {{when}}.",
-    "seeMoves": "See the movements"
+    "seeMoves": "See the movements",
+    "landed": "real cost {{cost}}",
+    "costs": "Costs {{total}} · spread {{how}}"
   },
   "sup": {
     "new": "New supplier",

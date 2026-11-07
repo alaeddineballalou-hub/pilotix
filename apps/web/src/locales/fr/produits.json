@@ -295,7 +295,25 @@
     "saved": "Achat {{ref}} enregistré : +{{pieces}} pièces à {{depot}}",
     "noLines": "Ajoutez au moins un produit",
     "badLine": "Quantité ou prix manquant pour « {{name}} »",
-    "paidTooMuch": "Le montant payé dépasse le total"
+    "paidTooMuch": "Le montant payé dépasse le total",
+    "costs": "Frais (transport, douane…)",
+    "costsHint": "Payés à part du fournisseur. Ils s’ajoutent au prix d’achat des produits, pour connaître leur vrai coût.",
+    "costPh": "ex. Transport, Douane",
+    "costName": "Nom du frais",
+    "costAmount": "Montant du frais",
+    "costRemove": "Retirer ce frais",
+    "costAdd": "Ajouter un frais",
+    "costTransport": "Transport",
+    "spread": "Comment répartir {{total}} sur les produits ?",
+    "spread_value": "Par valeur",
+    "spread_qty": "Par quantité",
+    "spread_weight": "Par poids",
+    "spreadHint_value": "Un produit plus cher prend une plus grande part (le plus courant pour la douane).",
+    "spreadHint_qty": "Chaque pièce prend la même part.",
+    "spreadHint_weight": "Selon le poids de chaque produit (le plus juste pour le transport).",
+    "weightNote": "Le prix réel de chaque pièce est calculé à l’enregistrement, avec le poids de chaque produit.",
+    "costNoLabel": "Donnez un nom à chaque frais (ex. Transport).",
+    "chooseSpread": "Choisissez comment répartir les frais : par valeur, par quantité ou par poids."
   },
   "buys": {
     "kDue": "À payer aux fournisseurs",
@@ -331,7 +349,9 @@
     "savePay": "Enregistrer le paiement",
     "paySaved": "Paiement enregistré",
     "lastPay": "Dernier paiement enregistré le {{when}}.",
-    "seeMoves": "Voir les mouvements"
+    "seeMoves": "Voir les mouvements",
+    "landed": "coût réel {{cost}}",
+    "costs": "Frais {{total}} · répartis {{how}}"
   },
   "sup": {
     "new": "Nouveau fournisseur",

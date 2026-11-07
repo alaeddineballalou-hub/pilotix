@@ -247,7 +247,41 @@ export const PurchaseInput = z.object({
   /** the products' purchase price becomes the price of this purchase */
   updateCost: z.boolean().default(true),
   note: z.string().trim().max(300).default(''),
+  /** costs around the purchase (transport, customs…), paid apart from the supplier */
+  extras: z.array(z.object({ label: z.string().trim().min(1).max(60), amount: money })).max(10).default([]),
+  /** how the costs go on the products: by value, by number of pieces, by weight — always chosen when there are costs */
+  spread: z.enum(['value', 'qty', 'weight']).optional(),
 });
+
+/**
+ * The costs spread on the lines: each line's share (DA, the shares add up to the costs exactly) and its landed unit
+ * cost (purchase price + its share per piece). By weight needs every product's weight.
+ */
+export function spreadCosts(
+  lines: { qty: number; unitCost: number; weightKg?: number | null; label?: string }[],
+  extra: number,
+  spread: 'value' | 'qty' | 'weight' | undefined,
+): { share: number; landed: number }[] {
+  if (extra <= 0) return lines.map((l) => ({ share: 0, landed: l.unitCost }));
+  if (!spread) throw bad('Choisissez comment répartir les frais : par valeur, par quantité ou par poids');
+  if (spread === 'weight') {
+    const miss = lines.find((l) => !(Number(l.weightKg) > 0));
+    if (miss) throw bad(`Poids manquant pour « ${miss.label ?? 'un produit'} » : ajoutez-le au produit, ou répartissez par valeur ou par quantité`);
+  }
+  const base = lines.map((l) => (spread === 'value' ? l.qty * l.unitCost : spread === 'qty' ? l.qty : l.qty * Number(l.weightKg)));
+  const sum = base.reduce((a, b) => a + b, 0);
+  if (sum <= 0) throw bad('Impossible de répartir par valeur : les prix sont à 0. Répartissez par quantité');
+  // largest remainder: the shares add up to the costs, to the dinar
+  const raw = base.map((b) => (extra * b) / sum);
+  const share = raw.map(Math.floor);
+  let rest = extra - share.reduce((a, b) => a + b, 0);
+  for (const k of raw.map((x, k) => [x - Math.floor(x), k]).sort((a, b) => b[0] - a[0]).map((x) => x[1])) {
+    if (rest <= 0) break;
+    share[k]++;
+    rest--;
+  }
+  return lines.map((l, k) => ({ share: share[k], landed: l.unitCost + Math.round(share[k] / l.qty) }));
+}
 
 export interface PurchaseRow {
   id: number;
@@ -273,6 +307,9 @@ export interface PurchaseLine {
   qty: number;
   unitCost: number;
   amount: number;
+  /** its share of the purchase's costs (DA), and what one piece really cost (null: no costs) */
+  extraShare: number;
+  landedCost: number | null;
 }
 
 const PURCHASE_SELECT = `SELECT pu.*, s.name AS sname, wh.name AS wname, u.name AS uname,
@@ -285,7 +322,7 @@ const toPurchase = (r: any): PurchaseRow => ({
   lines: num(r.nlines), pieces: num(r.pieces), total: num(r.total), paid: num(r.paid), due: num(r.total) - num(r.paid), paidAt: isoOrNull(r.paid_at), userName: r.uname ?? null, note: r.note ?? '',
 });
 
-export async function getPurchase(db: Db, pid: number): Promise<PurchaseRow & { lineItems: PurchaseLine[] }> {
+export async function getPurchase(db: Db, pid: number): Promise<PurchaseRow & { lineItems: PurchaseLine[]; extras: { label: string; amount: number }[]; extraTotal: number; spread: 'value' | 'qty' | 'weight' | null }> {
   const r = (await db.query(`${PURCHASE_SELECT} WHERE pu.id = $1`, [pid]))[0];
   if (!r) throw notFound('Achat introuvable');
   const lines = await db.query(
@@ -294,7 +331,10 @@ export async function getPurchase(db: Db, pid: number): Promise<PurchaseRow & { 
   );
   return {
     ...toPurchase(r),
-    lineItems: lines.map((l: any) => ({ variantId: num(l.variant_id), label: label(l.name, l.title), sku: l.sku, qty: num(l.qty), unitCost: num(l.unit_cost), amount: num(l.qty) * num(l.unit_cost) })),
+    lineItems: lines.map((l: any) => ({ variantId: num(l.variant_id), label: label(l.name, l.title), sku: l.sku, qty: num(l.qty), unitCost: num(l.unit_cost), amount: num(l.qty) * num(l.unit_cost), extraShare: num(l.extra_share), landedCost: numOrNull(l.landed_cost) })),
+    extras: (Array.isArray(r.extras) ? r.extras : []).map((x: any) => ({ label: String(x.label), amount: num(x.amount) })),
+    extraTotal: num(r.extra_total),
+    spread: (r.spread ?? null) as 'value' | 'qty' | 'weight' | null,
   };
 }
 
@@ -310,26 +350,37 @@ export async function createPurchase(ctx: Ctx, i: z.infer<typeof PurchaseInput>)
     }
     const vars = await stockable(tx, i.lines.map((l) => l.variantId));
     const total = i.lines.reduce((s, l) => s + l.qty * l.unitCost, 0);
+    const extras = i.extras.filter((x) => x.amount > 0);
+    const extraTotal = extras.reduce((s, x) => s + x.amount, 0);
+    if (extraTotal > 2_000_000_000) throw bad('Frais trop grands');
+    const info = extraTotal > 0 && i.spread === 'weight'
+      ? new Map((await tx.query(`SELECT v.id, COALESCE(v.weight_kg, p.weight_kg) AS w, p.name, v.title FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = ANY($1)`, [i.lines.map((l) => l.variantId)]))
+          .map((r: any) => [num(r.id), { w: r.w === null ? null : Number(r.w), label: label(r.name, r.title) }]))
+      : new Map<number, { w: number | null; label: string }>();
+    const landed = spreadCosts(i.lines.map((l) => ({ qty: l.qty, unitCost: l.unitCost, weightKg: info.get(l.variantId)?.w ?? null, label: info.get(l.variantId)?.label })), extraTotal, i.spread);
     if (total > 2_000_000_000) throw bad('Montant trop grand');
     if (i.paid > total) throw bad('Le montant payé dépasse le total de l’achat');
     const pid = await nextId(tx, 'purchases');
     const ref = `ACH-${pad(pid)}`;
-    await tx.query('INSERT INTO purchases (id, ref, supplier_id, warehouse_id, total, paid, paid_at, note, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)', [
-      pid, ref, i.supplierId, w.id, total, i.paid, i.paid > 0 ? new Date(ctx.now()).toISOString() : null, i.note, me(ctx),
+    await tx.query('INSERT INTO purchases (id, ref, supplier_id, warehouse_id, total, paid, paid_at, note, created_by, extras, extra_total, spread) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)', [
+      pid, ref, i.supplierId, w.id, total, i.paid, i.paid > 0 ? new Date(ctx.now()).toISOString() : null, i.note, me(ctx), JSON.stringify(extras), extraTotal, extraTotal > 0 ? i.spread : null,
     ]);
     if (i.paid > 0) {
       const k = supplierCaisse(ctx, i.caisse);
       await checkCaisse(tx, k);
       await supplierCash(tx, k, i.paid, ref, supplier, me(ctx));
     }
-    for (const l of i.lines) {
-      await tx.query('INSERT INTO purchase_lines (purchase_id, variant_id, qty, unit_cost) VALUES ($1,$2,$3,$4)', [pid, l.variantId, l.qty, l.unitCost]);
-      await moveStock(tx, { variantId: l.variantId, warehouseId: w.id, delta: l.qty, reason: 'purchase', userId: me(ctx), note: `Achat ${ref}${supplier ? ` — ${supplier}` : ''}`, purchaseId: pid, unitCost: l.unitCost });
+    for (const [k, l] of i.lines.entries()) {
+      // the stock comes in at what it really cost: its price plus its share of the costs
+      const cost = landed[k].landed;
+      await tx.query('INSERT INTO purchase_lines (purchase_id, variant_id, qty, unit_cost, extra_share, landed_cost) VALUES ($1,$2,$3,$4,$5,$6)', [pid, l.variantId, l.qty, l.unitCost, landed[k].share, extraTotal > 0 ? cost : null]);
+      await moveStock(tx, { variantId: l.variantId, warehouseId: w.id, delta: l.qty, reason: 'purchase', userId: me(ctx), note: `Achat ${ref}${supplier ? ` — ${supplier}` : ''}`, purchaseId: pid, unitCost: cost });
     }
     if (i.updateCost) {
       // Show the last purchase cost per variant; all historic receipt costs
       // remain unchanged on purchase_lines and stock_movements.
-      for (const line of i.lines) {
+      for (const [k, l0] of i.lines.entries()) {
+        const line = { ...l0, unitCost: landed[k].landed };
         const row = (await tx.query(
           'SELECT v.title, p.id AS product_id, p.cost AS product_cost FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id=$1 FOR UPDATE OF v',
           [line.variantId],

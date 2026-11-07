@@ -332,11 +332,18 @@ function PurchaseDetail({ id, onClose }: { id: number; onClose: () => void }) {
                 </span>
                 <span className="pd-ro-q ltr">
                   {n(l.qty)} × {da(l.unitCost)}
+                  {l.landedCost != null && <small className="pd-ro-landed">{t('produits.buys.landed', { cost: da(l.landedCost) })}</small>}
                 </span>
                 <b className="pd-amount ltr">{da(l.amount)}</b>
               </li>
             ))}
           </ul>
+          {d.extraTotal > 0 && (
+            <div className="pd-ro-costs">
+              <b>{t('produits.buys.costs', { total: bidi(da(d.extraTotal)), how: d.spread ? t(`produits.buy.spread_${d.spread}`) : '' })}</b>
+              <small>{d.extras.map((x) => `${x.label} ${da(x.amount)}`).join(' · ')}</small>
+            </div>
+          )}
           <div className="pd-total">
             <span>
               <small>{t('produits.buy.total', { count: d.pieces })}</small>

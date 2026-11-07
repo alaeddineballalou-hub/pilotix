@@ -264,3 +264,40 @@ test('forecast: the selling speed, when it runs out, and how many to buy to last
   assert.ok(g.rows.find((y: any) => y.variantId === x.vid).toOrder >= r.toOrder);
   await assert.rejects(call('catalog.forecast', await as(EMAILS.conf), {}), /Accès refusé/);
 });
+
+test('landed costs: transport and customs spread by value, quantity or weight, to the dinar, and the stock comes in at its real cost', async () => {
+  const { spreadCosts } = await import('../modules/stock');
+  const two = [{ qty: 10, unitCost: 1000 }, { qty: 10, unitCost: 3000 }];
+  // by value: 1/4 and 3/4 of 4000
+  assert.deepEqual(spreadCosts(two, 4000, 'value'), [{ share: 1000, landed: 1100 }, { share: 3000, landed: 3300 }]);
+  // by quantity: half each
+  assert.deepEqual(spreadCosts(two, 4000, 'qty'), [{ share: 2000, landed: 1200 }, { share: 2000, landed: 3200 }]);
+  // by weight: 1 kg and 3 kg
+  assert.deepEqual(spreadCosts([{ ...two[0], weightKg: 1 }, { ...two[1], weightKg: 3 }], 4000, 'weight').map((x) => x.share), [1000, 3000]);
+  // the shares always add up to the costs, even when it does not divide
+  const odd = spreadCosts([{ qty: 3, unitCost: 100 }, { qty: 3, unitCost: 100 }, { qty: 3, unitCost: 100 }], 1000, 'qty');
+  assert.equal(odd.reduce((s, x) => s + x.share, 0), 1000);
+  assert.throws(() => spreadCosts(two, 4000, undefined), /répartir/);
+  assert.throws(() => spreadCosts([{ qty: 1, unitCost: 1, weightKg: 0, label: 'Robe' }], 10, 'weight'), /Poids manquant pour « Robe »/);
+  assert.deepEqual(spreadCosts(two, 0, undefined), [{ share: 0, landed: 1000 }, { share: 0, landed: 3000 }]);
+
+  const depot = await as(EMAILS.depot);
+  const wid = await mainDepot();
+  const [a, b] = await someVariants(2);
+  await assert.rejects(call('purchases.create', depot, { supplierId: null, warehouseId: wid, lines: [{ variantId: a.vid, qty: 10, unitCost: 1000 }], extras: [{ label: 'Transport', amount: 500 }] }), /répartir/);
+  const r: any = await call('purchases.create', depot, {
+    supplierId: null, warehouseId: wid, updateCost: true,
+    lines: [{ variantId: a.vid, qty: 10, unitCost: 1000 }, { variantId: b.vid, qty: 10, unitCost: 3000 }],
+    extras: [{ label: 'Transport', amount: 1000 }, { label: 'Douane', amount: 3000 }], spread: 'value',
+  });
+  // the supplier is owed the goods only; the costs are written on the purchase
+  assert.equal(r.total, 40_000);
+  assert.equal(r.extraTotal, 4000);
+  assert.equal(r.spread, 'value');
+  assert.deepEqual(r.extras, [{ label: 'Transport', amount: 1000 }, { label: 'Douane', amount: 3000 }]);
+  assert.deepEqual(r.lineItems.map((l: any) => [l.unitCost, l.extraShare, l.landedCost]), [[1000, 1000, 1100], [3000, 3000, 3300]]);
+  // the stock movement and the product's purchase price are the real cost
+  const mv = (await db.query(`SELECT unit_cost FROM stock_movements WHERE purchase_id = $1 AND variant_id = $2`, [r.id, a.vid]))[0];
+  assert.equal(Number(mv.unit_cost), 1100);
+  assert.equal(Number((await db.query(`SELECT cost FROM product_variants WHERE id = $1`, [a.vid]))[0].cost), 1100);
+});

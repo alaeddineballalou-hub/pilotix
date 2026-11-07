@@ -693,3 +693,18 @@ a.chip.lp-nolp:hover { text-decoration: underline; }
 .pd-fc-st{display:inline-block;padding:2px 8px;border-radius:99px;font-weight:700;font-size:12.5px;background:var(--px-green-soft,#e7f6ec);color:var(--px-green,#1e8a4c)}
 .pd-fc-st.soon{background:var(--px-orange-soft,#fff3e0);color:#b45309}
 .pd-fc-st.now{background:#fee2e2;color:#b91c1c}
+/* Achats › frais (transport, douane…) */
+.pd-costs{display:flex;flex-direction:column;gap:8px;margin:6px 0 10px}
+.pd-costs h3{margin:0}
+.pd-cost{display:grid;grid-template-columns:1fr 160px auto;gap:8px;align-items:center}
+.pd-spread{border:1px solid var(--line,#e5e7eb);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;margin:0}
+.pd-spread legend{font-weight:700;padding:0 4px}
+.pd-spread label{display:flex;gap:10px;align-items:flex-start;cursor:pointer;padding:6px 8px;border-radius:10px}
+.pd-spread label.on{background:var(--px-orange-soft,#fff3e0)}
+.pd-spread label span{display:flex;flex-direction:column}
+.pd-spread small{color:var(--muted)}
+.pd-landed{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+.pd-landed li{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--line,#e5e7eb);padding:4px 0}
+.pd-ro-landed{display:block;color:var(--muted);font-size:12px}
+.pd-ro-costs{display:flex;flex-direction:column;gap:2px;padding:8px 12px;margin:6px 0;border-radius:10px;background:var(--px-orange-soft,#fff3e0)}
+.pd-ro-costs small{color:var(--muted)}
