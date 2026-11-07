@@ -254,8 +254,26 @@ export function splitOptions(raw: unknown, variants: { title: string }[]): { nam
     if (parts.length !== opts.length || parts.some((x, k) => !opts[k].values.includes(x))) return null;
     parts.forEach((x, k) => used[k].add(x));
   }
-  // only the values some variant uses, in the product's order
-  return opts.map((o, k) => ({ name: o.name, values: o.values.filter((x: string) => used[k].has(x)) }));
+  // only the values some variant uses, in the product's order; the name as the (Arabic) page says it
+  return opts.map((o, k) => ({ name: pageOptionName(o.name), values: o.values.filter((x: string) => used[k].has(x)) }));
+}
+
+/** Option names the shops use (French, English…) as the Arabic page says them; any other name is shown as typed. */
+const OPTION_AR: [RegExp, string][] = [
+  [/^(taille|tailles|size|sizes|pointure|mesure|talla|المقاس|مقاس)$/, 'المقاس'],
+  [/^(couleur|couleurs|color|colors|colour|colours|coloris|اللون|لون)$/, 'اللون'],
+  [/^(genre|gender|sexe|sex|fille ?\/ ?garçon|garçon ?\/ ?fille)$/, 'الجنس'],
+  [/^(modèle|modele|model|style|type)$/, 'الموديل'],
+  [/^(âge|age)$/, 'العمر'],
+  [/^(capacité|capacite|capacity|volume)$/, 'السعة'],
+  [/^(poids|weight)$/, 'الوزن'],
+  [/^(longueur|length)$/, 'الطول'],
+  [/^(matière|matiere|material|tissu)$/, 'المادة'],
+  [/^(parfum|goût|gout|flavor|flavour|saveur)$/, 'النكهة'],
+];
+export function pageOptionName(name: string): string {
+  const k = name.trim().toLowerCase();
+  return OPTION_AR.find(([re]) => re.test(k))?.[1] ?? name;
 }
 
 /** The boutique's logo on its pages: inside the page (no other request), when it is small enough. */
