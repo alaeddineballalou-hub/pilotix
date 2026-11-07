@@ -30,6 +30,8 @@ export interface LandingView {
   variantLabel: string;
   /** price: the variant's own price when it differs from the page's; out: sold out (shown, not orderable) */
   variants: { id: number; title: string; price?: number | null; out?: boolean }[];
+  /** the product's options (Taille, Couleur…) when every variant is one of their combinations: one list each on the page */
+  options?: { name: string; values: string[] }[];
   /** everything sold out: the page says so instead of taking orders */
   soldOut?: boolean;
   images: LandingImage[];
@@ -228,7 +230,7 @@ var sy=0,ps=false,tt='',de=d.documentElement;window.addEventListener('scroll',fu
 if(C.ts){var tsl=function(){if(window.turnstile){var z=d.createElement('div');z.style.marginTop='10px';f.appendChild(z);try{turnstile.render(z,{sitekey:C.ts,appearance:'interaction-only',callback:function(k){tt=k},'expired-callback':function(){tt=''}})}catch(e){}}};
 window.__pxts=tsl;var tl2=function(){var t=d.createElement('script');t.async=1;t.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=__pxts';d.head.appendChild(t)};if(d.readyState=='complete')setTimeout(tl2,1500);else window.addEventListener('load',function(){setTimeout(tl2,1500)})}
 var cb={},seq=0;window.addEventListener('message',function(e){var m=e.data;if(m&&m.lp&&cb[m.id]){cb[m.id](m.r);delete cb[m.id]}});
-function ask(kind,body,done,beacon){if(C.mode=='live'){var u=kind=='geo'?C.geo+body:kind=='lead'?C.lead:C.post;
+function ask(kind,body,done,beacon){if(C.mode=='live'){var u=kind=='geo'?C.geo+body:kind=='lead'?C.lead:kind=='optin'?C.post.replace(/order$/,'optin'):C.post;
 if(beacon){var bd=JSON.stringify(body);try{if(nv.sendBeacon&&nv.sendBeacon(u,new Blob([bd],{type:'text/plain'})))return;if(window.fetch){fetch(u,{method:'POST',body:bd,keepalive:true,headers:{'Content-Type':'text/plain'}});return}}catch(e){}}
 var x=new XMLHttpRequest();x.open(kind=='geo'?'GET':'POST',u);x.setRequestHeader('Content-Type','application/json');x.timeout=30000;
 x.onload=function(){var r=null;try{r=JSON.parse(x.responseText)}catch(e){}done(x.status<300?r:null,x.status)};x.onerror=x.ontimeout=function(){done(null,0)};x.send(kind=='geo'?null:JSON.stringify(body));return}
@@ -243,9 +245,14 @@ $('s2').textContent=!w.value?'\\u0627\\u062e\\u062a\\u0631 \\u0627\\u0644\\u0648
 w.onchange=function(){cm.innerHTML='<option value="">\\u2026</option>';cm.disabled=true;sum();if(!w.value)return;var v=w.value;ask('geo',v,function(r){if(w.value!=v)return;var h='<option value="">\\u0627\\u062e\\u062a\\u0631 \\u0627\\u0644\\u0628\\u0644\\u062f\\u064a\\u0629</option>';
 (r||[]).forEach(function(c){h+='<option value="'+c[0].replace(/"/g,'&quot;')+'">'+(c[1]||c[0])+'</option>'});cm.innerHTML=h;cm.disabled=false})};
 if(vr)vr.onchange=sum;
+var vos=d.querySelectorAll('select.vo');if(vos.length&&vr){var vt={};for(var t0 in C.vt){var o=vr.querySelector('option[value="'+C.vt[t0]+'"]');vt[t0]={id:String(C.vt[t0]),out:!o||o.disabled}}
+var vsync=function(){var p=[],all=1,i,j,k;for(i=0;i<vos.length;i++){p.push(vos[i].value);if(!vos[i].value)all=0;vos[i].className='vo'}
+for(i=0;i<vos.length;i++){for(j=1;j<vos[i].options.length;j++){var ok=0;for(var t in vt){if(vt[t].out)continue;var s=t.split(' / '),m=s[i]==vos[i].options[j].value;for(k=0;m&&k<i;k++)if(p[k]&&s[k]!=p[k])m=0;if(m){ok=1;break}}vos[i].options[j].disabled=!ok}
+if(vos[i].value&&vos[i].options[vos[i].selectedIndex].disabled){vos[i].value='';p[i]='';all=0}}
+var x=all&&vt[p.join(' / ')];vr.value=x&&!x.out?x.id:'';vr.dispatchEvent(new Event('change'))};for(var i=0;i<vos.length;i++)vos[i].addEventListener('change',vsync);vsync()}
 $('qm').onclick=function(){qt.value=Math.max(1,qv()-1);sum();lead()};$('qp').onclick=function(){qt.value=Math.min(99,qv()+1);sum();lead()};qt.oninput=sum;
 var done=0,lt=null,last='';
-function form(){return{name:f.nm.value.trim(),phone:nph(f.ph.value),wilaya:+w.value||0,commune:cm.value,variant:vr?+vr.value||null:null,qty:qv(),hp:f.web.value,ch:C.ch,fp:fp,did:did,vid:C.vid,utm:utm,fbp:ck('_fbp'),fbc:ck('_fbc'),ttp:ck('_ttp'),url:C.mode=='live'?location.href.slice(0,500):'',wo:!!(f.wo&&f.wo.checked)}}
+function form(){return{name:f.nm.value.trim(),phone:nph(f.ph.value),wilaya:+w.value||0,commune:cm.value,variant:vr?+vr.value||null:null,qty:qv(),hp:f.web.value,ch:C.ch,fp:fp,did:did,vid:C.vid,utm:utm,fbp:ck('_fbp'),fbc:ck('_fbc'),ttp:ck('_ttp'),url:C.mode=='live'?location.href.slice(0,500):''}}
 function lead(now){if(!C.lead||done||busy)return;var b=form();if(!/^0[567]\\d{8}$/.test(b.phone))return;var k=JSON.stringify([b.name,b.phone,b.wilaya,b.commune,b.variant,b.qty]);if(k==last)return;clearTimeout(lt);lt=null;
 var go=function(){lt=null;last=k;if(px&&!ic){ic=1;fbq('track','InitiateCheckout',{content_ids:[String(C.pid)],content_type:'product_group',value:unit()*b.qty,currency:'DZD',num_items:b.qty},{eventID:'ic-'+C.vid})}if(C.tt&&!tic){tic=1;ttq.track('InitiateCheckout',{contents:[{content_id:String(C.pid),content_type:'product_group',quantity:b.qty}],value:unit()*b.qty,currency:'DZD'},{event_id:'ic-'+C.vid})}ask('lead',b,function(){},now)};if(now)go();else lt=setTimeout(go,1500)}
 f.addEventListener('input',function(e){if(e.isTrusted!==false)ki++;lead()});f.ph.addEventListener('paste',function(){ps=true});f.addEventListener('change',function(){lead()});
@@ -256,13 +263,14 @@ var busy=false;f.onsubmit=function(ev){ev.preventDefault();if(busy)return;var nm
 var ok=err('nm',nm.length<3?'\\u0623\\u062f\\u062e\\u0644 \\u0627\\u0633\\u0645\\u0643 \\u0627\\u0644\\u0643\\u0627\\u0645\\u0644':'');
 ok=err('ph',/^0[567]\\d{8}$/.test(ph)&&!fk(ph)?'':fk(ph)?'\\u0623\\u062f\\u062e\\u0644 \\u0631\\u0642\\u0645\\u0643 \\u0627\\u0644\\u062d\\u0642\\u064a\\u0642\\u064a':'\\u0631\\u0642\\u0645 \\u0627\\u0644\\u0647\\u0627\\u062a\\u0641 \\u063a\\u064a\\u0631 \\u0635\\u062d\\u064a\\u062d (\\u0645\\u062b\\u0627\\u0644: 0555123456)')&&ok;
 ok=err('w',w.value?'':'\\u0627\\u062e\\u062a\\u0631 \\u0627\\u0644\\u0648\\u0644\\u0627\\u064a\\u0629')&&ok;ok=err('cm',cm.value?'':'\\u0627\\u062e\\u062a\\u0631 \\u0627\\u0644\\u0628\\u0644\\u062f\\u064a\\u0629')&&ok;
-if(vr)ok=err('vr',vr.value?'':'\\u0627\\u062e\\u062a\\u0631 '+C.vl)&&ok;if(!ok)return;busy=true;clearTimeout(lt);lt=null;var btn=$('go');btn.disabled=true;btn.textContent='\\u2026';
+if(vr)ok=err('vr',vr.value?'':'\\u0627\\u062e\\u062a\\u0631 '+C.vl)&&ok;for(var i=0;i<vos.length;i++)if(!vos[i].value)vos[i].className='vo bad';if(!ok)return;busy=true;clearTimeout(lt);lt=null;var btn=$('go');btn.disabled=true;btn.textContent='\\u2026';
 var q=qv(),wait=Date.now();
 (function send(){if(nonce===null&&Date.now()-wait<4000)return setTimeout(send,150);var b=form();b.name=nm;b.phone=ph;b.ch=C.ch;b.pw=nonce;b.t=Date.now()-t0;b.ki=ki;b.wd=!!nv.webdriver;b.sc=de.scrollHeight-de.clientHeight<200?50:sy;b.ps=ps;b.mt=nv.maxTouchPoints==null?null:nv.maxTouchPoints;b.tt=tt;b.tk=C.ts;try{b.tz=Intl.DateTimeFormat().resolvedOptions().timeZone||''}catch(e){}
 ask('order',b,function(r,st){
 if(!r||!r.ok){busy=false;btn.disabled=false;btn.textContent=C.cta;$('fe').textContent='\\u062a\\u0639\\u0630\\u0631 \\u0627\\u0644\\u0625\\u0631\\u0633\\u0627\\u0644\\u060c \\u062a\\u062d\\u0642\\u0642 \\u0645\\u0646 \\u0627\\u0644\\u0627\\u062a\\u0635\\u0627\\u0644 \\u0648\\u0623\\u0639\\u062f \\u0627\\u0644\\u0645\\u062d\\u0627\\u0648\\u0644\\u0629';return}
 done=1;var fee=fz()[w.value];$('okn').textContent=nm;$('o1').textContent=C.title+(vr?' \\u2014 '+vr.options[vr.selectedIndex].text:'')+' \\u00d7 '+q;$('o2').textContent=money(unit()*q+(fee||0));
 var wa=$('wa');if(wa&&C.wa){var V={nom:nm,produit:C.title+(vr?' \\u2014 '+vr.options[vr.selectedIndex].text:''),quantite:q,total:money(unit()*q+(fee||0)),telephone:nph(f.ph.value),wilaya:w.value?w.options[w.selectedIndex].text.replace(/^\\d+\\s*-\\s*/,''):'',commune:cm.value?cm.options[cm.selectedIndex].text:''};wa.href='https://wa.me/'+C.wa.n+'?text='+encodeURIComponent(C.wa.m.replace(/\\{(\\w+)\\}/g,function(x,k){return V[k]!=null?V[k]:x}))}
+var wo=$('wo');if(wo)wo.onchange=function(){if(wo.checked&&!wo.s&&C.mode=='live'){wo.s=1;ask('optin',{ch:C.ch,phone:ph},function(){})}};
 f.style.display='none';$('ok').style.display='block';window.scrollTo(0,0)})})()};sum()})();`;
 
 /**
@@ -325,11 +333,16 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
     .sort((a, b) => a - b)
     .map((k) => `<option value="${k}">${String(k).padStart(2, '0')} - ${esc(WILAYAS_AR[k] ?? WILAYAS[k - 1])}</option>`)
     .join('');
-  const variants = v.variants.length
-    ? `<label for="vr">${esc(v.variantLabel)}</label><select id="vr" name="vr"><option value="">${esc(v.variantLabel)}…</option>${v.variants
-        .map((x) => `<option value="${x.id}"${x.out ? ' disabled' : ''}>${esc(x.title)}${x.out ? ' — نفذت الكمية' : x.price != null ? ` — ${landingPrice(x.price)}` : ''}</option>`)
-        .join('')}</select><div class="e" id="vre"></div>`
-    : '';
+  // several options (Taille, Couleur…): one list each, the variant list stays (hidden) and is set from them
+  const split = !!v.variants.length && (v.options?.length ?? 0) >= 2;
+  const vopts = v.variants
+    .map((x) => `<option value="${x.id}"${x.out ? ' disabled' : ''}>${esc(x.title)}${x.out ? ' — نفذت الكمية' : x.price != null ? ` — ${landingPrice(x.price)}` : ''}</option>`)
+    .join('');
+  const variants = !v.variants.length
+    ? ''
+    : split
+      ? `${v.options!.map((o, k) => `<label for="vo${k}">${esc(o.name)}</label><select id="vo${k}" class="vo"><option value="">${esc(o.name)}…</option>${o.values.map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select>`).join('')}<select id="vr" name="vr" hidden><option value=""></option>${vopts}</select><div class="e" id="vre"></div>`
+      : `<label for="vr">${esc(v.variantLabel)}</label><select id="vr" name="vr"><option value="">${esc(v.variantLabel)}…</option>${vopts}</select><div class="e" id="vre"></div>`;
   const off = v.oldPrice && v.oldPrice > v.price ? Math.round((1 - v.price / v.oldPrice) * 100) : 0;
   const cta = 'اطلب الآن';
   const vp: Record<number, number> = {};
@@ -340,7 +353,7 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
     if (x.v && vi[x.v] === undefined) vi[x.v] = k;
   });
   const cfg = {
-    mode: r.mode, post: r.post, geo: r.geo, lead: r.lead ?? '', ch: r.challenge, bits: r.bits, slug: v.slug, price: v.price, vp, vi, fees: v.fees, fs: v.variantFee && Object.keys(v.variantFee).length ? v.feeSets ?? null : null, vf: v.variantFee && Object.keys(v.variantFee).length ? v.variantFee : null, title: v.title, vl: v.variantLabel, cta,
+    mode: r.mode, post: r.post, geo: r.geo, lead: r.lead ?? '', ch: r.challenge, bits: r.bits, slug: v.slug, price: v.price, vp, vi, fees: v.fees, fs: v.variantFee && Object.keys(v.variantFee).length ? v.feeSets ?? null : null, vf: v.variantFee && Object.keys(v.variantFee).length ? v.variantFee : null, ...(split ? { vt: Object.fromEntries(v.variants.map((x) => [x.title, x.id])) } : {}), title: v.title, vl: split ? v.options!.map((o) => o.name).join(' / ') : v.variantLabel, cta,
     vid: r.viewId ?? '', px: r.mode === 'live' ? pixelIds(v.pixelId, META_PIXEL)[0] ?? '' : '', pxs: r.mode === 'live' ? pixelIds(v.pixelId, META_PIXEL) : [], pid: v.productId ?? 0, op: off ? v.oldPrice : 0,
     g: r.group?.slug ?? '',
     wa: v.whatsapp && whatsappNumber(v.whatsapp.number) ? { n: whatsappNumber(v.whatsapp.number), m: v.whatsapp.message || WHATSAPP_DEFAULT.message } : null,
@@ -371,10 +384,10 @@ ${head}<meta name="theme-color" content="${c}">${img ? `<link rel="preload" as="
 <div><label for="cm">البلدية</label><select id="cm" name="cm" disabled><option value="">اختر الولاية أولاً</option></select><div class="e" id="cme"></div></div></div>
 ${variants}<label for="qt">الكمية</label><div class="q"><button type="button" id="qm" aria-label="-">−</button><input id="qt" name="qt" inputmode="numeric" value="1" maxlength="2"><button type="button" id="qp" aria-label="+">+</button></div>
 <div class="hp" aria-hidden="true"><label for="web">Website</label><input id="web" name="web" tabindex="-1" autocomplete="off"></div>
-${v.waOptin ? `<label class="wo"><input type="checkbox" id="wo" name="wo"><span>أرغب في تلقي العروض والمنتجات الجديدة على واتساب</span></label>` : ''}<div class="sum"><div><span>سعر المنتج</span><b id="s1"></b></div><div><span>التوصيل</span><b id="s2"></b></div><div class="tt"><span>المجموع</span><b id="s3"></b></div></div>
+<div class="sum"><div><span>سعر المنتج</span><b id="s1"></b></div><div><span>التوصيل</span><b id="s2"></b></div><div class="tt"><span>المجموع</span><b id="s3"></b></div></div>
 <button class="go" id="go">${cta}</button><div class="e" id="fe" role="alert"></div><div class="trust"><span>✔ الدفع عند الاستلام</span><span>✔ معاينة المنتج قبل الدفع</span></div></form>
 <div id="ok" class="ok" style="display:none" role="status"><i>✓</i><h2>شكراً <span id="okn"></span>!</h2><p>تم استلام طلبك بنجاح.</p><p>سيتصل بك فريقنا قريباً لتأكيد الطلب.</p>
-<div class="sum"><div><span id="o1"></span></div><div class="tt"><span>المجموع</span><b id="o2"></b></div></div>${
+<div class="sum"><div><span id="o1"></span></div><div class="tt"><span>المجموع</span><b id="o2"></b></div></div>${v.waOptin ? `<label class="wo"><input type="checkbox" id="wo"><span>أرغب في تلقي العروض والمنتجات الجديدة على واتساب</span></label>` : ''}${
   v.whatsapp && whatsappNumber(v.whatsapp.number)
     ? `<a id="wa" class="wa" href="https://wa.me/${whatsappNumber(v.whatsapp.number)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 2.9 2.9 0 0 0-.9 2.2 5 5 0 0 0 1.1 2.7 11.5 11.5 0 0 0 4.4 3.9c1.6.7 2.3.8 3.1.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3Z"/></svg>${esc(v.whatsapp.label || WHATSAPP_DEFAULT.label)}</a>`
     : ''

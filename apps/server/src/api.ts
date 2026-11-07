@@ -1504,6 +1504,19 @@ class ApiController {
     return { ok: true };
   }
 
+  /** « Offers on WhatsApp » ticked on the thank-you screen. Same answer whatever happens. */
+  @Public()
+  @Post(['lp/:slug/optin', 's/:shop/lp/:slug/optin'])
+  async landingOptin(@Param('shop') shop: string | undefined, @Param('slug') slug: string, @Body() body: any, @Req() req: { ip?: string; headers: Record<string, string | undefined> }) {
+    if (!/^[a-z0-9-]{2,60}$/.test(slug) || crossSite(req) || limitLanding(req.ip || 'unknown', 'optin', 30)) return { ok: true };
+    const ref = await this.core.fromParam(shop).catch(() => null);
+    if (!ref || ref.shop.status !== 'active') return { ok: true };
+    const r = intake(ref);
+    const b = body && typeof body === 'object' ? body : {};
+    await this.core.call(r, 'landing.optin', await this.core.systemSession(r), { slug, ch: String(b.ch ?? ''), phone: String(b.phone ?? '') }).catch(() => null);
+    return { ok: true };
+  }
+
   /** What a customer typed so far (a valid phone): their abandoned order if they leave. Same answer whatever happens. */
   @Public()
   @Post(['lp/:slug/lead', 's/:shop/lp/:slug/lead'])

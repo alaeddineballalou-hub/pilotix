@@ -190,7 +190,7 @@ async function listPages(db: Db, now: number, ids?: number[]): Promise<LandingRo
  * shop name. Left = stock − what confirmed orders already promised (the same count as Produits › Stock).
  */
 export async function productContext(db: Db, productId: number) {
-  const p = (await db.query('SELECT id, name, price, active, fee_grid, is_service, fixed_price, photo FROM products WHERE id = $1', [productId]))[0];
+  const p = (await db.query('SELECT id, name, price, active, fee_grid, is_service, fixed_price, photo, options FROM products WHERE id = $1', [productId]))[0];
   if (!p) throw notFound('Produit introuvable');
   const vars = await db.query(
     `WITH r AS (${RESERVED}),
@@ -227,6 +227,7 @@ export async function productContext(db: Db, productId: number) {
     active: !!p.active,
     fixedPrice: !!p.fixed_price,
     variants,
+    options: splitOptions(p.options, variants),
     plainVariantId: plain ? num(plain.id) : null,
     soldOut,
     fees,
@@ -237,6 +238,25 @@ export async function productContext(db: Db, productId: number) {
   };
 }
 type ProductCtx = Awaited<ReturnType<typeof productContext>>;
+
+/**
+ * The product's options (Taille, Couleur…) for the page: only when there are at least 2 and every variant is one of
+ * their combinations (« M / Rouge »), so each option gets its own list. Else null: the page keeps one list of variants.
+ */
+export function splitOptions(raw: unknown, variants: { title: string }[]): { name: string; values: string[] }[] | null {
+  const opts = (Array.isArray(raw) ? raw : [])
+    .map((o: any) => ({ name: String(o?.name ?? '').trim(), values: (Array.isArray(o?.values) ? o.values : []).map((x: unknown) => String(x)) }))
+    .filter((o) => o.name && o.values.length);
+  if (opts.length < 2 || !variants.length) return null;
+  const used = opts.map(() => new Set<string>());
+  for (const v of variants) {
+    const parts = v.title.split(' / ');
+    if (parts.length !== opts.length || parts.some((x, k) => !opts[k].values.includes(x))) return null;
+    parts.forEach((x, k) => used[k].add(x));
+  }
+  // only the values some variant uses, in the product's order
+  return opts.map((o, k) => ({ name: o.name, values: o.values.filter((x: string) => used[k].has(x)) }));
+}
 
 /** The boutique's logo on its pages: inside the page (no other request), when it is small enough. */
 const pageLogo = (url: string | null) => (url && url.length <= 60_000 ? url : null);
@@ -354,6 +374,7 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     description: l.description,
     variantLabel: l.variant_label || 'اللون',
     variants: viewVariants(l, pc, hide),
+    ...(pc.options ? { options: pc.options } : {}),
     soldOut: hide && pc.soldOut,
     images: viewImages(refs, await imageRows(ctx.db, refs, !o.imgBase), o.imgBase),
     fees: pc.fees,
@@ -973,6 +994,24 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
   // the agency it went to (its agents are told; the store's own team only of its own orders)
   ctx.emit({ type: 'orders', ...(ref ? { id: orderId!, data: { created: { ref, channel: 'landing', agency } } } : {}) });
   await afterChange(ctx);
+  return { ok: true };
+}
+
+export const OptinInput = z.object({ slug: z.string().min(2).max(60), ch: z.string().max(80), phone: z.string().max(30) });
+
+/**
+ * « Offers on WhatsApp » ticked on the thank-you screen, after the order. Consent only when this very page view (its
+ * challenge) made an accepted order for this phone in the last hour; else nothing, with the same answer.
+ */
+export async function optinAfterOrder(ctx: Ctx, i: z.infer<typeof OptinInput>, now = Date.now()): Promise<{ ok: true }> {
+  const phone = mobileOf(i.phone);
+  if (!phone || !i.ch) return { ok: true };
+  const hit = await ctx.db.query(
+    `SELECT 1 FROM landing_submits s JOIN landing_pages l ON l.id = s.landing_id
+     WHERE l.slug = $1 AND s.challenge = $2 AND s.phone = $3 AND s.order_id IS NOT NULL AND s.at > $4 LIMIT 1`,
+    [i.slug, i.ch, phone, isoAt(now - 3_600_000)],
+  );
+  if (hit.length) await giveConsent(ctx.db, phone, 'form', isoAt(now));
   return { ok: true };
 }
 
@@ -1858,6 +1897,7 @@ export const landingProcs = {
   }),
 
   'landing.submit': proc([], SubmitInput, (ctx, i) => submitOrder(ctx, i)),
+  'landing.optin': proc([], OptinInput, (ctx, i) => optinAfterOrder(ctx, i)),
   'landing.capture': proc([], CaptureInput, async (ctx, i) => {
     const r = await captureLead(ctx, i);
     return r;
