@@ -8,7 +8,8 @@
     "mouvements": "Mouvements",
     "alertes": "Alertes",
     "achats": "Achats",
-    "depots": "Dépôts"
+    "depots": "Dépôts",
+    "prevision": "Prévisions"
   },
   "about": {
     "stock": "Ce qu’il y a dans chaque dépôt, ce qui est déjà promis aux commandes et ce qui reste à vendre. Les produits revenus cassés sont à part (« Cassé »).",
@@ -19,7 +20,8 @@
     "achats": "Vos achats aux fournisseurs : ce qui est entré en stock, ce qui est payé et ce qui reste à payer.",
     "depots": "Vos dépôts, ce que chacun contient, et les transferts de stock de l’un à l’autre.",
     "guides": "Le guide de vente de chaque produit : ce que les conseillers lisent pendant l’appel, et ce que Dellal et CM AI utilisent pour répondre aux clients.",
-    "guidesAgent": "Le guide de vente de vos produits : quoi dire, les réponses aux questions et aux hésitations des clients."
+    "guidesAgent": "Le guide de vente de vos produits : quoi dire, les réponses aux questions et aux hésitations des clients.",
+    "prevision": "Quand chaque produit sera épuisé, au rythme de ses ventes, et combien en acheter maintenant."
   },
   "ui": {
     "allDepots": "Tous les dépôts",
@@ -750,5 +752,31 @@
     "chart": "Guide des tailles",
     "chartHelp": "Une photo du tableau des tailles : Dellal l’envoie quand un client demande quelle taille prendre.",
     "chartAdd": "Ajouter le guide des tailles"
+  },
+  "fc": {
+    "filters": "Filtrer les prévisions",
+    "fAll": "Tous",
+    "now": "À commander",
+    "soon": "Bientôt",
+    "window": "Ventes des",
+    "days_one": "{{count}} dernier jour",
+    "days_other": "{{count}} derniers jours",
+    "lead": "Délai fournisseur (jours)",
+    "cover": "Stock voulu (jours)",
+    "product": "Produit",
+    "left": "Reste",
+    "perDay": "Vendus / jour",
+    "runsOut": "Épuisé",
+    "toOrder": "À acheter",
+    "soldIn": "{{n}} vendus en {{count}} jours",
+    "outNow": "Déjà épuisé",
+    "inDays_one": "dans {{count}} jour",
+    "inDays_other": "dans {{count}} jours",
+    "none_one": "Aucun produit vendu le dernier jour.",
+    "none_other": "Aucun produit vendu ces {{count}} derniers jours.",
+    "noneHere": "Aucun produit dans ce filtre.",
+    "help": "Rythme = pièces expédiées sur la période choisie. « À commander » : le produit sera épuisé avant qu’un achat fait aujourd’hui arrive ({{lead}} jours). « À acheter » : de quoi tenir {{total}} jours ({{lead}} de délai + {{cover}} de stock), moins ce qui reste.",
+    "idle_one": "{{count}} produit en stock ne s’est pas vendu ces {{days}} jours.",
+    "idle_other": "{{count}} produits en stock ne se sont pas vendus ces {{days}} jours."
   }
 }

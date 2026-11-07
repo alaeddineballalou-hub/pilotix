@@ -1,5 +1,5 @@
-// Produits & stock, in seven tabs: Stock · Inventaire · Produits (prices, margin and maximum discount included) ·
-// Mouvements · Alertes · Achats (and suppliers) · Dépôts (and transfers). The header is the one of the Pilot AI pages: an icon, a name, a sentence
+// Produits & stock, in tabs: Stock · Inventaire · Produits (prices, margin and maximum discount included) ·
+// Mouvements · Alertes · Prévisions · Achats (and suppliers) · Dépôts (and transfers). The header is the one of the Pilot AI pages: an icon, a name, a sentence
 // about the current tab, and the tabs underneath.
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +13,7 @@ import { Filters, SearchBox, SectionHeader } from '../ai/agent';
 import type { PageProps } from '../registry';
 import { Achats } from './Achats';
 import { Alertes } from './Alertes';
+import { Prevision } from './Prevision';
 import { Depots } from './Depots';
 import { Inventaire } from './Inventaire';
 import { useDebounced } from './OrderList';
@@ -24,9 +25,9 @@ import './produits.css';
 import { AssignedCatalog } from './AssignedCatalog';
 import { Guides } from './Guides';
 
-const TABS = ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'achats', 'depots'] as const;
+const TABS = ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'prevision', 'achats', 'depots'] as const;
 type Tab = (typeof TABS)[number];
-const ICONS: Record<Tab, string> = { stock: 'package', inventaire: 'clipboard', produits: 'tag', guides: 'book', mouvements: 'swap', alertes: 'alert', achats: 'receipt', depots: 'building' };
+const ICONS: Record<Tab, string> = { stock: 'package', inventaire: 'clipboard', produits: 'tag', guides: 'book', mouvements: 'swap', alertes: 'alert', prevision: 'chart', achats: 'receipt', depots: 'building' };
 
 export function Produits(props: PageProps) {
   const { session, has } = useSession();
@@ -49,6 +50,7 @@ function DepotProduits({ sub, rest }: PageProps) {
       {tab === 'guides' && <Guides manager initial={arg && /^\d+$/.test(arg) ? Number(arg) : undefined} />}
       {tab === 'mouvements' && <MovesTab key={arg ?? ''} initial={arg} />}
       {tab === 'alertes' && <Alertes />}
+      {tab === 'prevision' && <Prevision />}
       {tab === 'achats' && <Achats open={arg && /^\d+$/.test(arg) ? Number(arg) : undefined} />}
       {tab === 'depots' && <Depots />}
     </div>

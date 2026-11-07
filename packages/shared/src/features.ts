@@ -24,7 +24,7 @@ export const FEATURES: readonly FeatureNode[] = [
   { key: 'scanner' },
   { key: 'sav' },
   { key: 'tournee' },
-  { key: 'produits', subs: ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'achats', 'depots'] },
+  { key: 'produits', subs: ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'prevision', 'achats', 'depots'] },
   { key: 'pilotai', subs: ['messages', 'cm', 'social', 'notify'] },
   { key: 'clients' },
   { key: 'marketing', subs: ['publicite', 'formulaires', 'campagnes', 'catalogue', 'influenceurs', 'marketer', 'spy'] },

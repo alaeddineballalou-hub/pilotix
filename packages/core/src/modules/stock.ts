@@ -367,6 +367,94 @@ async function supplierCash(db: Db, caisse: string, delta: number, ref: string, 
   ]);
 }
 
+export const ForecastInput = z.object({
+  warehouseId: id.optional(),
+  /** the days of sales the speed is measured on */
+  window: z.number().int().min(7).max(180).default(30),
+  /** days between ordering and the stock arriving */
+  lead: z.number().int().min(0).max(180).default(15),
+  /** days of sales the purchase should cover once it arrives */
+  cover: z.number().int().min(1).max(365).default(30),
+});
+
+export interface ForecastRow {
+  variantId: number;
+  productId: number;
+  productName: string;
+  variantTitle: string;
+  sku: string;
+  cost: number | null;
+  available: number;
+  sold: number;
+  perDay: number;
+  /** null: it does not sell any more */
+  daysLeft: number | null;
+  runOutAt: string | null;
+  toOrder: number;
+  status: 'now' | 'soon' | 'ok';
+  lastPurchase: { unitCost: number; at: string; ref: string; supplierId: number | null; supplierName: string | null } | null;
+}
+
+export async function forecast(ctx: Ctx, i: z.infer<typeof ForecastInput>): Promise<{ rows: ForecastRow[]; idle: number; warehouseId: number | null }> {
+  const now = ctx.now();
+  const stock = (await stockRows(ctx.db, { missingOnly: false, withHidden: false, warehouseId: i.warehouseId })).filter((r) => r.productActive && r.variantActive);
+  // one line per variant: every depot together, or the depot chosen
+  const V = new Map<number, { r: StockLine; available: number }>();
+  for (const r of stock) {
+    const v = V.get(r.variantId);
+    if (v) v.available += r.available;
+    else V.set(r.variantId, { r, available: r.available });
+  }
+  const vids = [...V.keys()];
+  const since = new Date(now - i.window * 86_400_000).toISOString();
+  const sold = vids.length
+    ? await ctx.db.query(
+        `SELECT i.variant_id, sum(i.qty)::int AS n
+         FROM order_items i JOIN orders o ON o.id = i.order_id
+         WHERE i.variant_id = ANY($1) AND o.shipped_at >= $2
+           AND ($3::bigint IS NULL OR COALESCE(o.warehouse_id, (SELECT id FROM warehouses WHERE active ORDER BY is_default DESC, id LIMIT 1)) = $3)
+         GROUP BY 1`,
+        [vids, since, i.warehouseId ?? null],
+      )
+    : [];
+  const S = new Map(sold.map((r: any) => [num(r.variant_id), num(r.n)]));
+  const selling = vids.filter((v) => (S.get(v) ?? 0) > 0);
+  const last = selling.length
+    ? await ctx.db.query(
+        `SELECT DISTINCT ON (l.variant_id) l.variant_id, l.unit_cost, pu.created_at, pu.ref, s.id AS sid, s.name AS sname
+         FROM purchase_lines l JOIN purchases pu ON pu.id = l.purchase_id LEFT JOIN suppliers s ON s.id = pu.supplier_id
+         WHERE l.variant_id = ANY($1) ORDER BY l.variant_id, pu.created_at DESC, l.id DESC`,
+        [selling],
+      )
+    : [];
+  const L = new Map(last.map((r: any) => [num(r.variant_id), { unitCost: num(r.unit_cost), at: iso(r.created_at), ref: r.ref as string, supplierId: numOrNull(r.sid), supplierName: (r.sname ?? null) as string | null }]));
+  const rows = selling.map((vid): ForecastRow => {
+    const { r, available } = V.get(vid)!;
+    const n = S.get(vid)!;
+    const perDay = n / i.window;
+    const left = Math.max(0, available);
+    const daysLeft = Math.floor(left / perDay);
+    return {
+      variantId: vid,
+      productId: r.productId,
+      productName: r.productName,
+      variantTitle: r.variantTitle,
+      sku: r.sku,
+      cost: r.cost ?? null,
+      available,
+      sold: n,
+      perDay: Math.round(perDay * 100) / 100,
+      daysLeft,
+      runOutAt: new Date(now + daysLeft * 86_400_000).toISOString(),
+      toOrder: Math.max(0, Math.ceil(perDay * (i.lead + i.cover)) - left),
+      status: daysLeft <= i.lead ? 'now' : daysLeft <= i.lead + 14 ? 'soon' : 'ok',
+      lastPurchase: L.get(vid) ?? null,
+    };
+  });
+  rows.sort((a, b) => (a.daysLeft ?? 1e9) - (b.daysLeft ?? 1e9) || b.perDay - a.perDay);
+  return { rows, idle: vids.length - selling.length, warehouseId: i.warehouseId ?? null };
+}
+
 export const stockProcs = {
   /** "Prix": sale price, purchase price and maximum discount of many products at once. */
   'catalog.setPrices': proc([...DEPOT], PricesInput, (ctx, i) => setPrices(ctx, i)),
@@ -423,6 +511,13 @@ export const stockProcs = {
       })
       .sort((a, b) => (a.level === b.level ? b.sold30 - a.sold30 : a.level === 'out' ? -1 : 1));
   }),
+
+  /**
+   * "Prévisions": every product that sells, with how many leave a day (shipped over the chosen days), in how many days
+   * what is left (stock − reserved) runs out, and how many to buy now to last the supplier's delay plus the days of
+   * stock wanted. « now »: it runs out before a purchase made today arrives; « soon »: within two weeks after that.
+   */
+  'catalog.forecast': proc([...DEPOT], ForecastInput, (ctx, i) => forecast(ctx, i)),
 
   /** "Dépôts & transferts": the depots with their stock, and the transfers between them. */
   'catalog.depots': proc([...DEPOT], z.object({}), async (ctx) => {

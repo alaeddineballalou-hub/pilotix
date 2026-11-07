@@ -237,3 +237,30 @@ test('concurrent manual losses cannot both consume the same last unit', async ()
   assert.equal(requests.filter((r) => r.status === 'rejected').length, 1);
   assert.equal(await qty(v.vid, wid), 0);
 });
+
+test('forecast: the selling speed, when it runs out, and how many to buy to last the delay plus the stock wanted', async () => {
+  const depot = await as(EMAILS.depot);
+  const wid = await mainDepot();
+  const [x] = await someVariants(1);
+  await call('catalog.inventory', depot, { warehouseId: wid, lines: [{ variantId: x.vid, counted: 40 }] });
+  // 30 pieces shipped 5 days ago in an existing order: 1 a day over 30 days
+  const o = (await db.query(`SELECT id FROM orders ORDER BY id LIMIT 1`))[0];
+  await db.query(`UPDATE orders SET shipped_at = now() - interval '5 days', warehouse_id = $2 WHERE id = $1`, [o.id, wid]);
+  await db.query(`INSERT INTO order_items (order_id, product_id, variant_id, name, qty, unit_price) VALUES ($1, $2, $3, 'test', 30, 1000)`, [o.id, x.pid, x.vid]);
+  const f: any = await call('catalog.forecast', depot, { warehouseId: wid, window: 30, lead: 15, cover: 30 });
+  const r = f.rows.find((y: any) => y.variantId === x.vid);
+  assert.ok(r, 'a product that sells is in the forecast');
+  assert.ok(r.sold >= 30);
+  const perDay = r.sold / 30;
+  const left = Math.max(0, r.available);
+  assert.equal(r.daysLeft, Math.floor(left / perDay));
+  assert.equal(r.toOrder, Math.max(0, Math.ceil(perDay * 45) - left));
+  assert.equal(r.status, r.daysLeft <= 15 ? 'now' : r.daysLeft <= 29 ? 'soon' : 'ok');
+  // soonest to run out first; only products that sold
+  assert.ok(f.rows.every((y: any, k: number) => k === 0 || (f.rows[k - 1].daysLeft ?? 1e9) <= (y.daysLeft ?? 1e9)));
+  assert.ok(f.rows.every((y: any) => y.sold > 0));
+  // a longer delay asks to buy more
+  const g: any = await call('catalog.forecast', depot, { warehouseId: wid, window: 30, lead: 60, cover: 30 });
+  assert.ok(g.rows.find((y: any) => y.variantId === x.vid).toOrder >= r.toOrder);
+  await assert.rejects(call('catalog.forecast', await as(EMAILS.conf), {}), /Accès refusé/);
+});
