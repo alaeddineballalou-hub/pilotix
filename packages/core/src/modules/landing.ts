@@ -1264,9 +1264,35 @@ function tiktokEvent(
   };
 }
 
+/**
+ * The Purchase of an order taken in a Messenger / Instagram chat (Conversions API for Business Messaging): who bought is
+ * the chat itself (the Page and the customer's PSID, or the Instagram account and the IGSID), never a phone or a name.
+ */
+async function buildChatEvent(db: Db, e: any, nowS: number): Promise<{ event?: Record<string, unknown>; skip?: string }> {
+  const o = (
+    await db.query(`SELECT o.ref, o.total, o.conf_status, c.channel, c.external_id FROM orders o LEFT JOIN conversations c ON c.id = o.conversation_id WHERE o.id = $1`, [e.order_id])
+  )[0];
+  if (!o) return { skip: 'Commande supprimée' };
+  if ((CONF_DONE_BAD as string[]).includes(o.conf_status)) return { skip: 'Commande annulée ou fausse : pas de Purchase' };
+  const [channel, accountId] = String(e.pixel_id).split(':');
+  if (!o.external_id || o.channel !== channel) return { skip: 'Conversation introuvable' };
+  return {
+    event: {
+      event_name: 'Purchase',
+      event_time: nowS,
+      event_id: e.event_id,
+      action_source: 'business_messaging',
+      messaging_channel: channel,
+      user_data: channel === 'instagram' ? { instagram_business_account_id: accountId, ig_sid: String(o.external_id) } : { page_id: accountId, page_scoped_user_id: String(o.external_id) },
+      custom_data: { currency: 'DZD', value: num(o.total), order_id: o.ref },
+    },
+  };
+}
+
 async function buildMetaEvent(db: Db, e: any, api: string, publicUrl: string, now: number): Promise<{ event?: Record<string, unknown>; tt?: Record<string, unknown>; skip?: string }> {
   const sourceUrl = (slug: string | null, url: string | null) => url || (slug && api ? `${api}/lp/${slug}` : publicUrl || 'https://pilotix.app');
   const nowS = Math.floor(now / 1000);
+  if (e.platform === 'chat') return buildChatEvent(db, e, nowS);
   if (e.event_name === 'Purchase' || e.event_name === 'Confirmed') {
     // the browser's data comes from the customer's submit, or from what they typed (an abandoned order)
     const o = (
@@ -1358,7 +1384,7 @@ export async function sendMetaEvents(ctx: Ctx, limit = 100): Promise<{ sent: num
       out.skipped++;
       continue;
     }
-    const k = `${e.platform === 'tiktok' ? 'tiktok' : 'meta'}|${e.pixel_id}`;
+    const k = `${e.platform === 'tiktok' || e.platform === 'chat' ? e.platform : 'meta'}|${e.pixel_id}`;
     if (!byPixel.has(k)) byPixel.set(k, []);
     byPixel.get(k)!.push({ row: e, event: b.event });
   }
@@ -1370,7 +1396,8 @@ export async function sendMetaEvents(ctx: Ctx, limit = 100): Promise<{ sent: num
     const ids = list.map((x) => num(x.row.id));
     const [platform, pixelId] = key.split('|');
     try {
-      if (platform === 'tiktok')
+      if (platform === 'chat') await ctx.server!.meta('chatCapi', { target: pixelId, token, events: list.map((x) => x.event) }, ctx);
+      else if (platform === 'tiktok')
         await ctx.server!.meta('tiktok', { pixelCode: pixelId, token, events: list.map((x) => x.event), testEventCode: (await pixelTestCode(db, 'tiktok', pixelId)) || undefined }, ctx);
       else await ctx.server!.meta('capi', { pixelId, token, events: list.map((x) => x.event), testEventCode: s.testEventCode || undefined }, ctx);
       await db.query(`UPDATE meta_events SET status = 'sent', sent_at = now(), error = NULL, claimed_at = NULL WHERE id = ANY($1)`, [ids]);
@@ -1397,6 +1424,13 @@ export async function sendMetaEvents(ctx: Ctx, limit = 100): Promise<{ sent: num
     if (simulated(ctx)) {
       await db.query(`UPDATE meta_events SET status = 'simulated', sent_at = now(), error = NULL, claimed_at = NULL WHERE id = ANY($1)`, [ids]);
       out.sent += ids.length;
+      continue;
+    }
+    // a chat's Purchase: the Page's token (Pilot AI › Comptes), which carries page_events / instagram_manage_events
+    if (platform === 'chat') {
+      const pageToken = String((await db.query(`SELECT value FROM settings WHERE key = 'secret_dellal_page_token'`))[0]?.value ?? '');
+      if (!pageToken) await wait(ids, 'Jeton de la Page Facebook manquant (Pilot AI › Comptes)', 30);
+      else await send(key, pageToken, list);
       continue;
     }
     // the pixel's own token, else (Meta) the shop's Conversions API token

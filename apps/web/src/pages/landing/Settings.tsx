@@ -122,6 +122,7 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
         <div className="lp-never">
           <Icon name="ban" /> {t('landing.set.never')}
         </div>
+        <p className="pd-note">{t('landing.set.chats')}</p>
         <h3>{t('landing.set.urlParams')}</h3>
         <p className="pd-note">{t('landing.set.urlParamsHelp')}</p>
         <div className="lp-copy">
@@ -326,7 +327,11 @@ function Events() {
                   {e.ref && <span className="ltr">{e.ref}</span>}
                   {e.customer && <span dir="auto">{e.customer}</span>}
                   {e.value !== null && <span className="ltr">{da(e.value)}</span>}
-                  <span className="ltr muted">pixel {e.pixelId}</span>
+                  {/^(messenger|instagram):/.test(e.pixelId) ? (
+                    <span className="muted">{t(e.pixelId.startsWith('instagram:') ? 'landing.ev.chatIg' : 'landing.ev.chatFb')}</span>
+                  ) : (
+                    <span className="ltr muted">pixel {e.pixelId}</span>
+                  )}
                 </small>
                 {e.error && <small className="lp-everr">{e.error}</small>}
               </span>

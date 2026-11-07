@@ -63,6 +63,9 @@ export const SOCIAL = {
     'instagram_basic',
     'instagram_manage_messages',
     'instagram_manage_comments',
+    // a chat order that became a real sale, told to Meta (Conversions API for Business Messaging)
+    'page_events',
+    'instagram_manage_events',
     'business_management',
     'ads_read',
     // Marketing › Formulaires: the leads of the ads' forms (leadgen_forms, the leads, the Page's ads)

@@ -40,6 +40,50 @@ async function sendCapi(a: { pixelId: string; token: string; events: unknown[]; 
   return { received: Number(data?.events_received ?? 0), trace: data?.fbtrace_id ? String(data.fbtrace_id) : null };
 }
 
+/** The dataset of each Page / Instagram account (Meta gives back the same one every time: kept for the server's life). */
+const chatDatasets = new Map<string, string>();
+
+/** Meta's refusal of a chat event, sorted like sendCapi's (a permission not granted yet waits: it comes with App Review). */
+function chatError(res: Response, data: any): AppError {
+  const e = data?.error;
+  if (e?.code === 190) return new AppError('bad_request', 'Jeton de la Page expiré ou révoqué : liez le compte à nouveau (Pilot AI › Comptes).');
+  if (e?.code === 4 || e?.code === 17 || e?.code === 613 || res.status === 429) return new AppError('conflict', 'Meta limite les demandes pour l’instant.');
+  if (e?.code === 10 || e?.code === 200 || /permission/i.test(String(e?.message ?? '')))
+    return new AppError('bad_request', 'Meta n’a pas encore accordé page_events / instagram_manage_events à Pilotix : réessayez après l’App Review.');
+  return new AppError('bad_request', `Meta : ${e?.error_user_msg ?? e?.message ?? res.statusText}`);
+}
+
+async function graphPost(url: string, body: Record<string, unknown>): Promise<any> {
+  let res: Response;
+  try {
+    res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15_000) });
+  } catch {
+    throw new AppError('bad_request', 'Meta injoignable. Réessayez plus tard.');
+  }
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || data?.error) throw chatError(res, data);
+  return data;
+}
+
+/**
+ * Sends the Purchases of chat orders (Conversions API for Business Messaging). target is « messenger:<page id> » or
+ * « instagram:<ig id> »: its dataset is asked first (POST /{id}/dataset gives the one already there, or makes it), then
+ * the events go to /{dataset}/events. The token goes in the body, never in a URL; 15 s at most per call.
+ */
+async function sendChatCapi(a: { target: string; token: string; events: unknown[] }): Promise<{ received: number; dataset: string }> {
+  const m = /^(messenger|instagram):(\d{5,30})$/.exec(a.target);
+  if (!m) throw new AppError('bad_request', 'Page ou compte Instagram invalide');
+  if (!a.token) throw new AppError('bad_request', 'Jeton de la Page manquant');
+  let dataset = chatDatasets.get(a.target);
+  if (!dataset) {
+    dataset = String((await graphPost(`${GRAPH_CAPI}/${m[2]}/dataset`, { access_token: a.token }))?.id ?? '');
+    if (!/^\d{5,30}$/.test(dataset)) throw new AppError('bad_request', 'Meta n’a pas donné de jeu de données pour cette conversation.');
+    chatDatasets.set(a.target, dataset);
+  }
+  const data = await graphPost(`${GRAPH_CAPI}/${dataset}/events`, { data: a.events, access_token: a.token });
+  return { received: Number(data?.events_received ?? 0), dataset };
+}
+
 /**
  * Sends events to a TikTok pixel through the Events API 2.0 (landing pages: CompletePayment of real orders,
  * InitiateCheckout of abandoned ones). The token goes in a header, never in a URL; 15 s at most.
@@ -394,12 +438,14 @@ async function runPartners(action: string, args: any, token: string, acts: strin
  *  - 'test'      → { name, currency } of the ad account (checks the token)
  *  - 'insights'  → { from, to } (YYYY-MM-DD): daily results at ad set AND ad level, plus the ad sets / ads (status, video or not)
  *  - 'capi'      → { pixelId, token, events, testEventCode? }: Conversions API events (landing pages)
+ *  - 'chatCapi'  → { target, token, events }: Purchases of Messenger / Instagram chat orders (Business Messaging)
  *  - 'catalog…'  → Marketing › Catalogue (runCatalog above)
  */
 export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
   // the Conversions API needs a pixel and its token, not the ad account
   if (action === 'capi') return sendCapi(args as Parameters<typeof sendCapi>[0]);
   if (action === 'tiktok') return sendTiktok(args as Parameters<typeof sendTiktok>[0]);
+  if (action === 'chatCapi') return sendChatCapi(args as Parameters<typeof sendChatCapi>[0]);
   const meta = await getSetting(ctx.db, 'meta');
   const token = await getRaw<string>(ctx.db, META_TOKEN_KEY, '');
   if (!meta.adAccountId || !token) throw new AppError('bad_request', 'Meta n’est pas connecté : ajoutez le compte pub et le jeton dans Réglages.');

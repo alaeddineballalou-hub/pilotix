@@ -280,6 +280,7 @@
     },
     "recommended": "recommended",
     "never": "Never a Purchase for a blocked order, nor for one marked fake, duplicate, wrong number or cancelled before sending.",
+    "chats": "Orders taken in Pilot Message (Messenger, Instagram) follow the same choice: Meta learns which chat became a real buyer.",
     "urlParams": "URL parameters for your ads",
     "urlParamsHelp": "Paste them in the ad (Meta › Ad › URL parameters): each order keeps its campaign, ad set and ad.",
     "copy": "Copy",
@@ -322,6 +323,8 @@
     "empty": "Nothing sent yet (add the pixel ID).",
     "purchase": "Purchase (sale)",
     "checkout": "InitiateCheckout (order started)",
+    "chatFb": "Messenger (chat)",
+    "chatIg": "Instagram (chat)",
     "st": {
       "sent": "Sent",
       "simulated": "Simulated (demo)",

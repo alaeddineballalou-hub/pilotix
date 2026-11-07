@@ -280,6 +280,7 @@
     },
     "recommended": "conseillé",
     "never": "Jamais de Purchase pour une commande bloquée, ni pour une commande marquée fausse, doublon, faux numéro ou annulée avant l’envoi.",
+    "chats": "Les commandes prises dans Pilot Message (Messenger, Instagram) suivent le même choix : Meta apprend quelle conversation est devenue un vrai acheteur.",
     "urlParams": "Paramètres d’URL pour vos publicités",
     "urlParamsHelp": "Collez-les dans la publicité (Meta › Publicité › Paramètres d’URL) : chaque commande garde sa campagne, son ensemble de publicités et sa publicité.",
     "copy": "Copier",
@@ -322,6 +323,8 @@
     "empty": "Rien envoyé pour l’instant (ajoutez l’ID du pixel).",
     "purchase": "Purchase (vente)",
     "checkout": "InitiateCheckout (commande commencée)",
+    "chatFb": "Messenger (conversation)",
+    "chatIg": "Instagram (conversation)",
     "st": {
       "sent": "Envoyé",
       "simulated": "Simulé (démo)",

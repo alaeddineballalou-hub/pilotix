@@ -89,6 +89,46 @@ export async function queuePurchase(db: Db, s: LandingSettings, orderId: number,
   });
 }
 
+/**
+ * Queues the Meta « Purchase » of an order taken in a Messenger or Instagram chat (Conversions API for Business
+ * Messaging: the chat's dataset, the customer's PSID / IGSID). Same rules as a landing page's: never for an exchange or an
+ * order marked fake / duplicate / wrong number / cancelled; once per order (Meta does not deduplicate chat events).
+ * Its « pixel » is the Page (messenger:<page id>) or the Instagram account (instagram:<ig id>) that took the chat.
+ */
+export async function queueChatPurchase(db: Db, orderId: number, now: number): Promise<void> {
+  await guarded(db, async (db) => {
+    const o = (
+      await db.query(
+        `SELECT o.id, o.ref, o.total, o.conf_status, o.is_exchange, o.landing_id, c.channel, c.external_id, c.account_id
+         FROM orders o JOIN conversations c ON c.id = o.conversation_id WHERE o.id = $1`,
+        [orderId],
+      )
+    )[0];
+    if (!o || o.landing_id || o.is_exchange || (CONF_DONE_BAD as string[]).includes(o.conf_status)) return;
+    if (!['messenger', 'instagram'].includes(o.channel) || !o.external_id) return;
+    const target = await chatTarget(db, o.channel, o.account_id);
+    if (!target) return;
+    const at = new Date(now).toISOString();
+    await db.query(
+      `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, value, at, send_after, platform) VALUES ($1,'Purchase',$2,$3,$4,$5,$5,'chat')
+       ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
+      [target, `chat-purchase-${o.ref}`, o.id, num(o.total), at],
+    );
+  });
+}
+
+/** The Page or the Instagram account a chat came to: the conversation's own, else the one linked in Pilot Message. */
+async function chatTarget(db: Db, channel: string, accountId: unknown): Promise<string | null> {
+  const own = String(accountId ?? '').trim();
+  let id = /^\d{5,30}$/.test(own) ? own : '';
+  if (!id) {
+    const s = (await db.query(`SELECT value FROM settings WHERE key = 'dellal'`))[0]?.value ?? {};
+    const v = typeof s === 'string' ? JSON.parse(s) : s;
+    id = String((channel === 'messenger' ? v.messengerPageId : v.instagramId || v.instagramLoginId) ?? '').trim();
+  }
+  return /^\d{5,30}$/.test(id) ? `${channel}:${id}` : null;
+}
+
 const CONFIRMED = ['confirmed', 'no_stock'];
 const DELIVERED = ['delivered', 'exchanged'];
 
@@ -151,14 +191,20 @@ async function queueConfirmed(db: Db, s: LandingSettings, orderId: number, now: 
 export async function onLandingConf(
   db: Db,
   s: LandingSettings,
-  row: { id: number; landing_id?: unknown; is_exchange?: boolean },
+  row: { id: number; landing_id?: unknown; conversation_id?: unknown; is_exchange?: boolean },
   from: string | null,
   to: string,
   now: number,
   reason: string | null = null,
   userId: number | null = null,
 ) {
-  if (!row.landing_id || row.is_exchange) return;
+  if (row.is_exchange) return;
+  // an order taken in a Messenger / Instagram chat: its Purchase at the same moment the shop chose for its pages
+  if (!row.landing_id && row.conversation_id) {
+    if (s.purchaseAt !== 'delivered' && CONFIRMED.includes(to) && !CONFIRMED.includes(String(from))) await queueChatPurchase(db, num(row.id), now);
+    return;
+  }
+  if (!row.landing_id) return;
   if (to === 'fake' && from !== 'fake') await markFake(db, num(row.id), reason, userId);
   else if (from === 'fake' && to !== 'fake') await liftMark(db, num(row.id));
   // « at order »: clear orders were reported when received; borderline and abandoned ones count once confirmed
@@ -171,9 +217,10 @@ export async function onLandingConf(
 }
 
 /** setFollow: an order from a landing page was delivered (Purchase « at delivery »). */
-export async function onLandingFollow(db: Db, s: LandingSettings, row: { id: number; landing_id?: unknown; is_exchange?: boolean }, from: string | null, to: string, now: number) {
-  if (!row.landing_id || row.is_exchange || s.purchaseAt !== 'delivered') return;
-  if (DELIVERED.includes(to) && !DELIVERED.includes(String(from))) await queuePurchase(db, s, num(row.id), now);
+export async function onLandingFollow(db: Db, s: LandingSettings, row: { id: number; landing_id?: unknown; conversation_id?: unknown; is_exchange?: boolean }, from: string | null, to: string, now: number) {
+  if (row.is_exchange || s.purchaseAt !== 'delivered' || !(DELIVERED.includes(to) && !DELIVERED.includes(String(from)))) return;
+  if (row.landing_id) await queuePurchase(db, s, num(row.id), now);
+  else if (row.conversation_id) await queueChatPurchase(db, num(row.id), now);
 }
 
 /** A free page address from a name (or the SKU when the name has no Latin letters, e.g. an Arabic name). */

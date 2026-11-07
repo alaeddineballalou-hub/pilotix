@@ -34,7 +34,7 @@ import { getPrefs } from './prefs';
 import { channelGuard, guardNote, type GuardMode } from './guard';
 import { assignNow, getAssign } from './assign';
 import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPreview } from './notify';
-import { landingCounts, landingSettings, onLandingConf, onLandingFollow } from './landingquery';
+import { landingCounts, landingSettings, onLandingConf, onLandingFollow, queueChatPurchase } from './landingquery';
 import { lowStockCount } from './stockquery';
 import { agencyOf, agencyRowSql, andSql, ownRowSql, queueSql, rowScopeSql } from './agencyscope';
 import { settleTickets } from './tickets';
@@ -736,6 +736,11 @@ export async function createOrder(
     await addEvent(tx, oid, me, 'created', null, conf, input.isExchange ? `Échange de la commande #${input.originalOrderId}` : null);
     if (confirmed) await addEvent(tx, oid, me, 'follow_status', null, 'to_prepare');
     for (const n of trustNotes) await addEvent(tx, oid, null, 'note', null, 'event', n);
+    // Meta (a Messenger / Instagram chat's order): « at order », or made already confirmed with « at confirmation »
+    if (opts.conversationId && !input.isExchange) {
+      const at = (await landingSettings(tx)).purchaseAt;
+      if (at === 'order' || (at === 'confirmed' && confirmed)) await queueChatPurchase(tx, oid, ctx.now());
+    }
     // Pilot Automations: "we received your order" (or "confirmed")
     if (!opts.silent) await onOrderCreated(tx, { id: oid, phone, conf_status: conf, is_exchange: input.isExchange }, ctx.now());
     return getOrder(ctx, oid, tx);
@@ -1148,7 +1153,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
     const notify = await notifyContext(tx);
     const landing = await landingSettings(tx);
     for (const oid of input.ids) {
-      const cur = (await tx.query(`SELECT id, ref, customer_id, conf_status, follow_status, shipped_at, tracking, attempts, next_call_at, agent_id, phone, is_exchange, landing_id, commune, is_stopdesk, stopdesk_id,
+      const cur = (await tx.query(`SELECT id, ref, customer_id, conf_status, follow_status, shipped_at, tracking, attempts, next_call_at, agent_id, phone, is_exchange, landing_id, conversation_id, commune, is_stopdesk, stopdesk_id,
          CASE WHEN locked_until > now() AND locked_by <> $2 THEN (SELECT p.name FROM profiles p WHERE p.id = locked_by) END AS held_by
          FROM orders WHERE id = $1 FOR UPDATE`, [oid, me]))[0];
       if (!cur) continue;
