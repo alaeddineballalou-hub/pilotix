@@ -154,7 +154,7 @@ export function SpyDetail({ ad, v }: { ad: SpyAd | null; v: View }) {
                 <Icon name="sparkles" /> {analyze.isPending ? t('spy.ai.running') : t('spy.ai.run')}
               </button>
               {!v.ai && (
-                <a className="btn small ghost" href="#/marketing/spy/reglages">
+                <a className="btn small ghost" href="#/spy/reglages">
                   {t('spy.settings')}
                 </a>
               )}

@@ -79,23 +79,26 @@ export const NAV: NavItem[] = [
   { id: 'tournee', icon: 'navigation', roles: ['livreur'], onlyIf: (r) => r.includes('livreur') },
   { id: 'produits', icon: 'layers', roles: ['depot', 'confirmation', 'suivi'], subs: ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'achats', 'depots'] },
   // AI Pilot: the AI agents. Pilot Message (Dellal) sells in the inbox, Pilot Content plans the posts and publishes them,
-  // Pilot Comments answers the comments; Comptes: the Facebook and TikTok accounts they use (an administrator links
-  // them, pages/comptes).
+  // Pilot Comments answers the comments, AI Spy reads the competitors' Facebook ads in Algeria (pages/ads/Spy.tsx; in
+  // the plans it is still Marketing's AI Spy); Comptes: the Facebook and TikTok accounts they use (an administrator
+  // links them, pages/comptes).
   {
     id: 'pilotai',
     icon: 'sparkles',
     roles: ['confirmation', 'marketer'],
-    pages: ['messages', 'social', 'cm', 'comptes'],
+    pages: ['messages', 'social', 'cm', 'spy', 'comptes'],
     children: [
       { id: 'messages', href: '#/messages', count: 'msgs', tone: 'nc-a', icon: 'chat', roles: ['confirmation'] },
       { id: 'social', href: '#/social', icon: 'calendar', roles: ['marketer'] },
       { id: 'cm', href: '#/cm', count: 'cm', tone: 'nc-a', icon: 'comments', roles: ['confirmation', 'marketer'] },
+      { id: 'spy', href: '#/spy', icon: 'eye', roles: ['marketer'] },
       { id: 'comptes', href: '#/comptes', icon: 'link', roles: [] },
     ],
   },
   { id: 'messages', icon: 'chat', roles: ['confirmation'], hidden: true },
   { id: 'cm', icon: 'comments', roles: ['confirmation', 'marketer'], hidden: true },
   { id: 'social', icon: 'calendar', roles: ['marketer'], hidden: true },
+  { id: 'spy', icon: 'eye', roles: ['marketer'], hidden: true },
   { id: 'comptes', icon: 'link', roles: [], hidden: true },
   // Pilot Automations: what Pilotix does by itself, a group of its own whose lines are the parts of pages/notify — the
   // automations (Automatisations, Auto Pilot Affectation: admins; Auto Pilot Assign, with the Pilot Auto Assign rules and
@@ -117,8 +120,8 @@ export const NAV: NavItem[] = [
   },
   { id: 'clients', icon: 'users', roles: ['confirmation', 'suivi'] },
   // Publicité (Meta spend face to the orders), Formulaires (the ads' lead forms become orders), Campagnes (WhatsApp offers
-  // to the customers who said yes), Marketer (paying marketers), AI Spy (competitors' ads in Algeria)
-  { id: 'marketing', icon: 'megaphone', roles: ['marketer'], subs: ['publicite', 'formulaires', 'campagnes', 'catalogue', 'influenceurs', 'marketer', 'spy'] },
+  // to the customers who said yes), Marketer (paying marketers); AI Spy (competitors' ads in Algeria) is in AI Pilot
+  { id: 'marketing', icon: 'megaphone', roles: ['marketer'], subs: ['publicite', 'formulaires', 'campagnes', 'catalogue', 'influenceurs', 'marketer'] },
   // a public page per product, and the orders its fake-order check held back (agents restore the real ones)
   { id: 'landing', icon: 'globe', roles: ['marketer', 'confirmation'] },
   { id: 'caisse', icon: 'wallet', roles: [], subs: ['overview', 'due', 'done', 'livreurs', 'journal'] },

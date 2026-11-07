@@ -1,9 +1,9 @@
-// Marketing › AI Spy (#/marketing/spy): the competitors' Facebook ads in Algeria for the shop's own products — the
+// AI Pilot › AI Spy (#/spy; it was Marketing's tab): the competitors' Facebook ads in Algeria for the shop's own products — the
 // creative, the page, days online, copies, the site and its price, a 0–100 score, Claude's reading, a « Comment battre
 // la concurrence » brief, a price strip, followed pages and their alerts. Everything comes from core (spy.*): the free
 // Chrome extension reads Facebook's Ad Library in the user's own Chrome (one keyword at a time, then spy.ingest), or a
 // paid key searches on the server (spy.search). Facebook does not publish ad spend for Algeria: none is shown or guessed.
-// #/marketing/spy/reglages opens the settings (SpySettings.tsx).
+// #/spy/reglages opens the settings (SpySettings.tsx).
 import type { RawAd, SpyAd, SpyFinding, SpyKeyword } from '@pilotix/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
@@ -15,6 +15,7 @@ import { store } from '../../lib/store';
 import { adLibraryUrl, detectExtension, extensionSearch, type ExtStatus, type ExtStep } from '../../lib/spyExtension';
 import { copyText, Empty, ErrorBox, Icon, KpiBody, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
+import type { PageProps } from '../registry';
 import { SpyDetail } from './SpyDetail';
 import { ExtensionCard, SpySettingsView } from './SpySettings';
 import { arLang, Creative, dayTone, firstLine, isAr, LandLine, Rich, type View } from './spyShared';
@@ -30,9 +31,14 @@ type Want = { productId: number; gkey?: string | null; pageKey?: string | null }
 type Product = Out<'spy.products'>[number];
 type FollowedEvent = Out<'spy.followed'>['events'][number];
 
-/** Marketing › AI Spy, or its settings (#/marketing/spy/reglages). */
+/** AI Spy, or its settings (rest: ['reglages']). */
 export function Spy({ rest }: { rest?: string[] }) {
   return rest?.[0] === 'reglages' ? <SpySettingsView /> : <SpyMain />;
+}
+
+/** AI Pilot › AI Spy (#/spy), or its settings (#/spy/reglages): a page of its own (it was a tab of Marketing). */
+export function SpyPage({ sub }: PageProps) {
+  return <Spy rest={sub ? [sub] : []} />;
 }
 
 // ---------------------------------------------------------------- the search (extension or paid source)
@@ -313,7 +319,7 @@ function SearchCard({ products, loading, productId, onPick, v, ext, search, sour
             <i aria-hidden="true" />
             {demo ? t('spy.liveDemo') : p?.scannedAt ? t('spy.liveAt', { when: when(p.scannedAt) }) : t('spy.liveNever')}
           </span>
-          <a className="btn small" href="#/marketing/spy/reglages">
+          <a className="btn small" href="#/spy/reglages">
             <Icon name="settings" /> {t('spy.settings')}
           </a>
         </div>
@@ -334,7 +340,7 @@ function SearchCard({ products, loading, productId, onPick, v, ext, search, sour
         </label>
         <div className="field">
           <span className="lab">{t('spy.source')}</span>
-          <a className={`spy-srcpill ${srcState}`} href="#/marketing/spy/reglages" title={t('spy.sourceTip')}>
+          <a className={`spy-srcpill ${srcState}`} href="#/spy/reglages" title={t('spy.sourceTip')}>
             <i aria-hidden="true" />
             <b>{t(`spy.set.src.${source}.name`)}</b>
             <span>{srcText}</span>
@@ -361,7 +367,7 @@ function SearchCard({ products, loading, productId, onPick, v, ext, search, sour
       {paid && v && !v.hasKey && !demo && (
         <div className="warnbox">
           {t('spy.noKey')}{' '}
-          <a href="#/marketing/spy/reglages" className="spy-a">
+          <a href="#/spy/reglages" className="spy-a">
             {t('spy.settings')}
           </a>
         </div>
@@ -820,7 +826,7 @@ function Brief({ v, busy }: { v: View; busy: boolean }) {
               {!v.platform && (
                 <>
                   {' '}
-                  <a className="spy-a" href="#/marketing/spy/reglages">
+                  <a className="spy-a" href="#/spy/reglages">
                     {t('spy.settings')}
                   </a>
                 </>
@@ -1080,7 +1086,7 @@ function Sources({ v, source }: { v: View | null; source: string }) {
           </h3>
           <p>{t(`spy.src.via.${source}`)}</p>
           <p className="note">{v?.platform ? t(v.ai ? 'spy.src.aiOnPilot' : 'spy.src.aiOffPilot') : v?.ai ? t('spy.src.aiOn') : t('spy.src.aiOff')}</p>
-          <a className="spy-a" href="#/marketing/spy/reglages">
+          <a className="spy-a" href="#/spy/reglages">
             {t('spy.src.change')}
           </a>
         </div>

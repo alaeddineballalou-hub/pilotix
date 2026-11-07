@@ -1,4 +1,4 @@
-// AI Spy › Réglages (#/marketing/spy/reglages): where the ads come from (the free Pilotix Chrome extension, or a paid
+// AI Spy › Réglages (#/spy/reglages; it was #/marketing/spy/reglages): where the ads come from (the free Pilotix Chrome extension, or a paid
 // key used by the server: ScrapeCreators, SearchAPI.io), the daily scan, the shop's own pages, how many ads per keyword,
 // whether Claude reads the ads (Pilot Message's key), and how to install the extension. Only admins save.
 import type { SpySource } from '@pilotix/core';
@@ -25,7 +25,7 @@ export function SpySettingsView() {
   return (
     <div className="spy view">
       <section className="card spy-set-head">
-        <a className="btn small" href="#/marketing/spy">
+        <a className="btn small" href="#/spy">
           <Icon name="chevl" className="spy-flip" /> {t('spy.set.back')}
         </a>
         <div className="spy-set-title">
@@ -281,7 +281,7 @@ export function ExtensionCard({ onClose }: { onClose?: () => void }) {
           <Icon name="refresh" /> {t('spy.ext.recheck')}
         </button>
         {onClose && (
-          <a className="btn small ghost" href="#/marketing/spy/reglages">
+          <a className="btn small ghost" href="#/spy/reglages">
             <Icon name="settings" /> {t('spy.settings')}
           </a>
         )}

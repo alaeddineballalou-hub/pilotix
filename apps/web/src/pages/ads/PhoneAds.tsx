@@ -1,7 +1,7 @@
 // Marketing on phones. Publicité: everything to know what to do — the verdict (won / lost), where the money goes,
 // every figure (orders, money, Meta), what wins and what loses, what to do, day by day and month by month, then the
 // products and ad sets (a tap opens them full screen). Marketeurs: what is owed to whom, each marketer's ad sets.
-// AI Spy: the desktop page (Spy.tsx), which lays itself out in one column on a phone.
+// (AI Spy is a page of AI Pilot now: #/spy, Spy.tsx, which lays itself out in one column on a phone.)
 // Every figure comes from core (ads.*, mk.*); this page only arranges them for a phone.
 import { type CSSProperties, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +12,6 @@ import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { store } from '../../lib/store';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
-import { Spy } from './Spy';
 import { Formulaires } from './Formulaires';
 import { Campagnes } from './Campagnes';
 import { Catalogue } from './Catalogue';
@@ -67,10 +66,10 @@ export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; re
   const cat = !noSpy && featureIsOn('marketing/catalogue');
   const infl = !noSpy && featureIsOn('marketing/influenceurs');
   const tab =
-    sub === 'marketer' ? 'mk' : sub === 'spy' && !noSpy ? 'spy' : sub === 'formulaires' && forms ? 'forms' : sub === 'campagnes' && camps ? 'camps' : sub === 'catalogue' && cat ? 'cat' : sub === 'influenceurs' && infl ? 'infl' : 'pub';
+    sub === 'marketer' ? 'mk' : sub === 'formulaires' && forms ? 'forms' : sub === 'campagnes' && camps ? 'camps' : sub === 'catalogue' && cat ? 'cat' : sub === 'influenceurs' && infl ? 'infl' : 'pub';
   // every tab in sight, nothing slides: one row up to three tabs, 2 x 2 for four, rows of three for five to seven (each
   // name whole), 4 x 2 for eight
-  const tabCount = 2 + Number(forms) + Number(camps) + Number(cat) + Number(infl) + Number(!noSpy);
+  const tabCount = 2 + Number(forms) + Number(camps) + Number(cat) + Number(infl);
   const cols = tabCount <= 3 ? tabCount : tabCount === 4 ? 2 : tabCount === 8 ? 4 : 3;
   return (
     <div className="pxm">
@@ -101,21 +100,13 @@ export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; re
         <a role="tab" aria-selected={tab === 'mk'} className={tab === 'mk' ? 'on' : ''} href="#/marketing/marketer">
           {mkLabel ?? t('mkph.marketers')}
         </a>
-        {!noSpy && (
-          <a role="tab" aria-selected={tab === 'spy'} className={tab === 'spy' ? 'on' : ''} href="#/marketing/spy">
-            {t('nav.spy')}
-          </a>
-        )}
       </div>
-      {/* AI Spy: the same page as on a computer, in one column */}
       {tab === 'pub' ? (
         noSpy ? (
           <Pub />
         ) : (
           <PubHub rest={rest} pro={<Pub />} />
         )
-      ) : tab === 'spy' ? (
-        <Spy rest={rest} />
       ) : tab === 'forms' ? (
         <Formulaires />
       ) : tab === 'camps' ? (

@@ -92,7 +92,7 @@ function useAddressBoutique(slug: string | null | undefined, logged: boolean, ro
   return waiting || opening;
 }
 
-const ALIASES: Record<string, [string, string?]> = { livreurs: ['dashboard', 'livreurs'], publicite: ['marketing', 'publicite'], marketer: ['marketing', 'marketer'], spy: ['marketing', 'spy'] };
+const ALIASES: Record<string, [string, string?]> = { livreurs: ['dashboard', 'livreurs'], publicite: ['marketing', 'publicite'], marketer: ['marketing', 'marketer'] };
 /** An agency's older links: its team is « Utilisateurs », its prices are in « Réglages ». */
 const AGENCY_ALIASES: Record<string, [string, string?]> = { equipe: ['utilisateurs'], tarifs: ['reglages'] };
 /** A marketer's short links: its ads are in « Marketing ». */
@@ -177,6 +177,12 @@ function App() {
   if (space === 'store' && page === 'livraison' && (sub === 'pilot' || sub === 'preferences')) {
     go('#/notify/assign', { replace: true });
     [page, sub] = ['notify', 'assign'];
+  }
+  // AI Spy left Marketing for AI Pilot: an old link (#/marketing/spy, #/marketing/spy/reglages) opens #/spy
+  if (space === 'store' && page === 'marketing' && sub === 'spy') {
+    const more = rest.filter((x): x is string => !!x);
+    go(`#/spy${more.length ? `/${more.join('/')}` : ''}`, { replace: true });
+    [page, sub, ...rest] = ['spy', ...more];
   }
   // a group without a page of its own (Pilot AI) opens its first child the user can see
   const group = nav.find((n) => n.id === page && n.children && !pages[n.id]);
