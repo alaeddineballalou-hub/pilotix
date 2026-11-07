@@ -3,6 +3,8 @@
   "help": "Pilot Automations does by itself what the team did by hand: giving orders to agents, sending to the depot when stock comes back, sending to dispatch, telling customers at each step, stopping the ads of a sold-out product, sending the evening report, warning when the call queue drags, bringing old customers back. Each automation has its switch in “Automations”. Delivery messages go by WhatsApp first, else by SMS, else they wait in “To send”; replies arrive in Pilot Message.",
   "tabs": {
     "auto": "Automations",
+    "assign": "Auto Pilot Assign",
+    "affectation": "Auto Pilot Affectation",
     "messages": "Messages",
     "cas": "Cases",
     "tester": "Test",
@@ -11,6 +13,10 @@
   },
   "auto": {
     "lead": "Pilotix does these tasks by itself. Each switch takes effect at once.",
+    "assignLead": "Pilotix picks who delivers each order: the delivery company, then the driver. Each switch takes effect at once.",
+    "affectationLead": "Pilotix picks the agent who calls each order, and the person who follows its parcel. Each switch takes effect at once.",
+    "toAssign": "Delivery company and driver: Auto Pilot Assign",
+    "toAffectation": "Agents: Auto Pilot Affectation",
     "when": "When",
     "then": "Pilotix",
     "on": "“{{name}}” turned on",
@@ -18,6 +24,8 @@
     "saved": "Saved",
     "groups": {
       "orders": "Orders and team",
+      "delivery": "Who delivers each order",
+      "agents": "Who calls and who follows each order",
       "stock": "Stock and depot",
       "clients": "Customers"
     },
@@ -151,6 +159,7 @@
       "max": "Most parcels in hand per driver",
       "noLimit": "No limit",
       "needsDispatch": "Works with “Automatic dispatch”: turn it on too.",
+      "openDispatch": "Turn on “Automatic dispatch”",
       "noOwn": "No “Private delivery” among your delivery companies.",
       "link": "See the drivers"
     },

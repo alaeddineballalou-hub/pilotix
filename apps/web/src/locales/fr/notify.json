@@ -3,6 +3,8 @@
   "help": "Pilot Automations fait tout seul ce que l’équipe faisait à la main : donner les commandes aux agentes, envoyer au dépôt quand le stock revient, envoyer en dispatch, prévenir les clients à chaque étape, arrêter les pubs d’un produit épuisé, envoyer le rapport du soir, prévenir quand la file d’appels traîne, relancer les anciens clients. Chaque automatisation a son interrupteur dans « Automatisations ». Les messages de livraison partent d’abord par WhatsApp, sinon par SMS, sinon ils attendent dans « À envoyer » ; les réponses arrivent dans Pilot Message.",
   "tabs": {
     "auto": "Automatisations",
+    "assign": "Auto Pilot Assign",
+    "affectation": "Auto Pilot Affectation",
     "messages": "Messages",
     "cas": "Cas",
     "tester": "Tester",
@@ -11,6 +13,10 @@
   },
   "auto": {
     "lead": "Pilotix fait ces tâches tout seul. Chaque interrupteur s’applique tout de suite.",
+    "assignLead": "Pilotix choisit qui livre chaque commande : la société de livraison, puis le livreur. Chaque interrupteur s’applique tout de suite.",
+    "affectationLead": "Pilotix choisit l’agente qui appelle chaque commande, et la personne qui suit son colis. Chaque interrupteur s’applique tout de suite.",
+    "toAssign": "Société de livraison et livreur : Auto Pilot Assign",
+    "toAffectation": "Agentes : Auto Pilot Affectation",
     "when": "Quand",
     "then": "Pilotix",
     "on": "« {{name}} » activée",
@@ -18,6 +24,8 @@
     "saved": "Enregistré",
     "groups": {
       "orders": "Commandes et équipe",
+      "delivery": "Qui livre chaque commande",
+      "agents": "Qui appelle et qui suit chaque commande",
       "stock": "Stock et dépôt",
       "clients": "Clients"
     },
@@ -151,6 +159,7 @@
       "max": "Maximum en main par livreur",
       "noLimit": "Pas de limite",
       "needsDispatch": "Marche avec « Dispatch automatique » : allumez-le aussi.",
+      "openDispatch": "Allumer « Dispatch automatique »",
       "noOwn": "Pas de « Livraison privée » dans vos sociétés de livraison.",
       "link": "Voir les livreurs"
     },

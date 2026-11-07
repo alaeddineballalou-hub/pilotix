@@ -1,6 +1,8 @@
 // Pilot Automations › Automatisations (admins): what Pilotix does by itself, in three groups, one row each — the rule
 // in one sentence (« Quand … → Pilotix … »), its switch, its few numbers (saved on change), where things stand now and
-// the last thing it did; then everything it did lately.
+// the last thing it did; then everything it did lately. Two tabs of their own: « Auto Pilot Assign » (view 'assign'):
+// who delivers each order — its delivery company (Pilot Auto Assign), its livreur (Livreur automatique); « Auto Pilot
+// Affectation » (view 'affectation'): its agents (Affectation automatique: confirmation and suivi).
 import { ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { inBrowserDemo, type In, type Out } from '../../lib/backend';
@@ -21,15 +23,16 @@ const DAYS = [7, 14, 21, 30, 45, 60, 90];
 /** « Maximum en main par livreur » (0: no limit) */
 const MAX_HANDS = [0, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100];
 
-export function Automations() {
+export type AutoView = 'auto' | 'assign' | 'affectation';
+export function Automations({ view = 'auto' }: { view?: AutoView }) {
   const q = useRpc('auto.state', {}, { refetchInterval: 60_000 });
   if (q.isLoading) return <Loading />;
   if (q.error || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   // a new answer from the server starts the screen again from it (the switches show what is saved)
-  return <Board key={JSON.stringify([q.data.s, q.data.assign, q.data.delivery, q.data.pilot.on])} d={q.data} />;
+  return <Board key={JSON.stringify([q.data.s, q.data.assign, q.data.delivery, q.data.pilot.on])} d={q.data} view={view} />;
 }
 
-function Board({ d }: { d: S }) {
+function Board({ d, view }: { d: S; view: AutoView }) {
   const { t } = useTranslation();
   const [s, setS] = useState(d.s);
   const [assign, setAssign] = useState(d.assign);
@@ -59,48 +62,148 @@ function Board({ d }: { d: S }) {
   const sendable = d.campaigns.filter((c) => c.status !== 'paused');
   const chosen = d.campaigns.find((c) => c.id === s.comeBack.campaignId) ?? null;
 
+  // their own tabs: the agents (« Auto Pilot Affectation »), the delivery company and the livreur (« Auto Pilot Assign »)
+  const assignRow = (
+    <Rule icon="usercog" name={name('assign')} when={t('notify.auto.assign.when')} then={t('notify.auto.assign.then')} on={assignOn('conf') || assignOn('follow')}>
+      <div className="au-pair">
+        {(['conf', 'follow'] as const).map((area) => (
+          <label key={area} className={`au-mini ${assignOn(area) ? 'is-on' : ''}`}>
+            <span>
+              <b>{t(`notify.auto.assign.${area}`)}</b>
+              <small>{t(`notify.auto.assign.mode.${assign[area]}`)}</small>
+            </span>
+            <span className="nt-toggle">
+              <input type="checkbox" role="switch" checked={assignOn(area)} disabled={save.isPending} aria-label={`${name('assign')} · ${t(`notify.auto.assign.${area}`)}`} onChange={(e) => flipAssign(area, e.target.checked)} />
+            </span>
+          </label>
+        ))}
+      </div>
+      <Links items={[['#/management/affectation', t('notify.auto.assign.link')]]} />
+    </Rule>
+  );
+  const pilotRow = (
+    <Rule
+      icon="navigation"
+      name={name('pilot')}
+      when={t('notify.auto.pilot.when')}
+      then={t('notify.auto.pilot.then')}
+      on={pilotOn}
+      busy={save.isPending}
+      onToggle={(on) => {
+        setPilotOn(on);
+        put({ pilotAuto: on }, { name: name('pilot'), on });
+      }}
+    >
+      <Now>
+        {d.pilot.rules ? t('notify.auto.pilot.rules', { count: d.pilot.rules }) : t('notify.auto.pilot.noRules')}
+        {d.pilot.defaultCompany && <> · {t('notify.auto.pilot.default', { name: d.pilot.defaultCompany })}</>}
+      </Now>
+      <Links items={[['#/livraison/pilot', t('notify.auto.pilot.link')]]} />
+    </Rule>
+  );
+  const livreurRow = (
+    <Rule
+      icon="bike"
+      name={name('livreur')}
+      when={t('notify.auto.livreur.when')}
+      then={t('notify.auto.livreur.then')}
+      on={s.livreurAuto}
+      busy={save.isPending}
+      disabled={!d.livreurs.own}
+      onToggle={(on) => {
+        setS({ ...s, livreurAuto: on });
+        put({ livreurAuto: on }, { name: name('livreur'), on });
+      }}
+      last={lastOf('livreur')}
+    >
+      {!d.livreurs.own ? (
+        <p className="au-note">{t('notify.auto.livreur.noOwn')}</p>
+      ) : (
+        <>
+          {s.livreurAuto && !s.autoDispatch && <Now tone="warn">{t('notify.auto.livreur.needsDispatch')}</Now>}
+          {d.livreurs.today.length ? (
+            <div className="au-today">
+              <span className="au-today-t">{t('notify.auto.livreur.today')}</span>
+              <ul className="au-out">
+                {d.livreurs.today.map((l) => (
+                  <li key={l.id}>
+                    <b>{l.name}</b>
+                    <span className="muted">
+                      {t('notify.auto.livreur.parcels', { count: l.n })} · {t('notify.auto.livreur.hands', { count: l.hands })}
+                    </span>
+                    {full(l) ? (
+                      <span className="au-full">{t('notify.auto.livreur.full')}</span>
+                    ) : (
+                      l.id === next?.id && s.livreurAuto && s.autoDispatch && <span className="au-next">{t('notify.auto.livreur.next')}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <Now tone={d.livreurs.waiting ? 'warn' : undefined}>{t('notify.auto.livreur.nobody')}</Now>
+          )}
+          {d.livreurs.waiting > 0 && (
+            <Now tone="warn">
+              {t('notify.auto.livreur.waiting', { count: d.livreurs.waiting })}
+              {d.livreurs.today.length > 0 && !next && <> · {t('notify.auto.livreur.allFull')}</>}
+            </Now>
+          )}
+          {s.livreurAuto && (
+            <div className="au-fields">
+              <Pick
+                label={t('notify.auto.livreur.max')}
+                value={s.livreurMax}
+                options={MAX_HANDS}
+                show={(v) => (v ? t('notify.auto.livreur.parcels', { count: v }) : t('notify.auto.livreur.noLimit'))}
+                onChange={(v) => {
+                  setS({ ...s, livreurMax: v });
+                  put({ livreurMax: v });
+                }}
+              />
+            </div>
+          )}
+        </>
+      )}
+      <Links
+        items={[
+          ...(s.livreurAuto && !s.autoDispatch ? ([['#/notify/auto', t('notify.auto.livreur.openDispatch')]] as [string, string][]) : []),
+          ['#/livraison/livreurs', t('notify.auto.livreur.link')],
+        ]}
+      />
+    </Rule>
+  );
+  if (view === 'assign')
+    return (
+      <div className="au">
+        <p className="au-lead">{t('notify.auto.assignLead')}</p>
+        <Group title={t('notify.auto.groups.delivery')}>
+          {pilotRow}
+          {livreurRow}
+        </Group>
+        {d.log.some((l) => l.kind === 'livreur') && <Log lines={d.log.filter((l) => l.kind === 'livreur')} />}
+      </div>
+    );
+  if (view === 'affectation')
+    return (
+      <div className="au">
+        <p className="au-lead">{t('notify.auto.affectationLead')}</p>
+        <Group title={t('notify.auto.groups.agents')}>{assignRow}</Group>
+      </div>
+    );
+
   return (
     <div className="au">
       <p className="au-lead">{t('notify.auto.lead')}</p>
+      <Links
+        items={[
+          ['#/notify/assign', t('notify.auto.toAssign')],
+          ['#/notify/affectation', t('notify.auto.toAffectation')],
+        ]}
+      />
       <ThisPhone />
 
       <Group title={t('notify.auto.groups.orders')}>
-        <Rule icon="usercog" name={name('assign')} when={t('notify.auto.assign.when')} then={t('notify.auto.assign.then')} on={assignOn('conf') || assignOn('follow')}>
-          <div className="au-pair">
-            {(['conf', 'follow'] as const).map((area) => (
-              <label key={area} className={`au-mini ${assignOn(area) ? 'is-on' : ''}`}>
-                <span>
-                  <b>{t(`notify.auto.assign.${area}`)}</b>
-                  <small>{t(`notify.auto.assign.mode.${assign[area]}`)}</small>
-                </span>
-                <span className="nt-toggle">
-                  <input type="checkbox" role="switch" checked={assignOn(area)} disabled={save.isPending} aria-label={`${name('assign')} · ${t(`notify.auto.assign.${area}`)}`} onChange={(e) => flipAssign(area, e.target.checked)} />
-                </span>
-              </label>
-            ))}
-          </div>
-          <Links items={[['#/management/affectation', t('notify.auto.assign.link')]]} />
-        </Rule>
-
-        <Rule
-          icon="navigation"
-          name={name('pilot')}
-          when={t('notify.auto.pilot.when')}
-          then={t('notify.auto.pilot.then')}
-          on={pilotOn}
-          busy={save.isPending}
-          onToggle={(on) => {
-            setPilotOn(on);
-            put({ pilotAuto: on }, { name: name('pilot'), on });
-          }}
-        >
-          <Now>
-            {d.pilot.rules ? t('notify.auto.pilot.rules', { count: d.pilot.rules }) : t('notify.auto.pilot.noRules')}
-            {d.pilot.defaultCompany && <> · {t('notify.auto.pilot.default', { name: d.pilot.defaultCompany })}</>}
-          </Now>
-          <Links items={[['#/livraison/pilot', t('notify.auto.pilot.link')]]} />
-        </Rule>
-
         <Rule
           icon="timer"
           name={name('queue')}
@@ -211,72 +314,6 @@ function Board({ d }: { d: S }) {
           {!s.autoDispatch && <Now tone="warn">{d.noStock.toAssign ? t('notify.auto.dispatch.offNote', { count: d.noStock.toAssign }) : t('notify.auto.dispatch.offEmpty')}</Now>}
           <Links items={[['#/depot/preparer', t('notify.auto.dispatch.link')]]} />
         </Rule>
-
-        <Rule
-          icon="bike"
-          name={name('livreur')}
-          when={t('notify.auto.livreur.when')}
-          then={t('notify.auto.livreur.then')}
-          on={s.livreurAuto}
-          busy={save.isPending}
-          disabled={!d.livreurs.own}
-          onToggle={(on) => {
-            setS({ ...s, livreurAuto: on });
-            put({ livreurAuto: on }, { name: name('livreur'), on });
-          }}
-          last={lastOf('livreur')}
-        >
-          {!d.livreurs.own ? (
-            <p className="au-note">{t('notify.auto.livreur.noOwn')}</p>
-          ) : (
-            <>
-              {s.livreurAuto && !s.autoDispatch && <Now tone="warn">{t('notify.auto.livreur.needsDispatch')}</Now>}
-              {d.livreurs.today.length ? (
-                <div className="au-today">
-                  <span className="au-today-t">{t('notify.auto.livreur.today')}</span>
-                  <ul className="au-out">
-                    {d.livreurs.today.map((l) => (
-                      <li key={l.id}>
-                        <b>{l.name}</b>
-                        <span className="muted">
-                          {t('notify.auto.livreur.parcels', { count: l.n })} · {t('notify.auto.livreur.hands', { count: l.hands })}
-                        </span>
-                        {full(l) ? (
-                          <span className="au-full">{t('notify.auto.livreur.full')}</span>
-                        ) : (
-                          l.id === next?.id && s.livreurAuto && s.autoDispatch && <span className="au-next">{t('notify.auto.livreur.next')}</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : (
-                <Now tone={d.livreurs.waiting ? 'warn' : undefined}>{t('notify.auto.livreur.nobody')}</Now>
-              )}
-              {d.livreurs.waiting > 0 && (
-                <Now tone="warn">
-                  {t('notify.auto.livreur.waiting', { count: d.livreurs.waiting })}
-                  {d.livreurs.today.length > 0 && !next && <> · {t('notify.auto.livreur.allFull')}</>}
-                </Now>
-              )}
-              {s.livreurAuto && (
-                <div className="au-fields">
-                  <Pick
-                    label={t('notify.auto.livreur.max')}
-                    value={s.livreurMax}
-                    options={MAX_HANDS}
-                    show={(v) => (v ? t('notify.auto.livreur.parcels', { count: v }) : t('notify.auto.livreur.noLimit'))}
-                    onChange={(v) => {
-                      setS({ ...s, livreurMax: v });
-                      put({ livreurMax: v });
-                    }}
-                  />
-                </div>
-              )}
-            </>
-          )}
-          <Links items={[['#/livraison/livreurs', t('notify.auto.livreur.link')]]} />
-        </Rule>
       </Group>
 
       <Group title={t('notify.auto.groups.clients')}>
@@ -348,27 +385,35 @@ function Board({ d }: { d: S }) {
         </Rule>
       </Group>
 
-      <section className="card au-log">
-        <div className="card-head">
-          <h2>{t('notify.auto.log.title')}</h2>
-        </div>
-        {d.log.length ? (
-          <ol className="au-lines">
-            {d.log.slice(0, 20).map((l) => (
-              <li key={l.id}>
-                <span className={`au-dot k-${l.kind}`} aria-hidden="true">
-                  <Icon name={KIND_ICON[l.kind] ?? 'zap'} />
-                </span>
-                <span className="au-line-t">{lineText(t, l)}</span>
-                <time dateTime={l.at}>{when(l.at)}</time>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="muted small">{t('notify.auto.log.empty')}</p>
-        )}
-      </section>
+      <Log lines={d.log} />
     </div>
+  );
+}
+
+/** Everything Pilotix did lately (the last 20). */
+function Log({ lines }: { lines: Line[] }) {
+  const { t } = useTranslation();
+  return (
+    <section className="card au-log">
+      <div className="card-head">
+        <h2>{t('notify.auto.log.title')}</h2>
+      </div>
+      {lines.length ? (
+        <ol className="au-lines">
+          {lines.slice(0, 20).map((l) => (
+            <li key={l.id}>
+              <span className={`au-dot k-${l.kind}`} aria-hidden="true">
+                <Icon name={KIND_ICON[l.kind] ?? 'zap'} />
+              </span>
+              <span className="au-line-t">{lineText(t, l)}</span>
+              <time dateTime={l.at}>{when(l.at)}</time>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="muted small">{t('notify.auto.log.empty')}</p>
+      )}
+    </section>
   );
 }
 
