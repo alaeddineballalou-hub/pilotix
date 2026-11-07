@@ -1,7 +1,8 @@
 // Marketing on phones. Publicité: everything to know what to do — the verdict (won / lost), where the money goes,
 // every figure (orders, money, Meta), what wins and what loses, what to do, day by day and month by month, then the
 // products and ad sets (a tap opens them full screen). Marketeurs: what is owed to whom, each marketer's ad sets.
-// (AI Spy is a page of AI Pilot now: #/spy, Spy.tsx, which lays itself out in one column on a phone.)
+// (AI Spy is a page of AI Pilot now: #/spy, Spy.tsx, which lays itself out in one column on a phone; Influenceurs a page
+// of Partenaires: #/influenceurs, Influenceurs.tsx.)
 // Every figure comes from core (ads.*, mk.*); this page only arranges them for a phone.
 import { type CSSProperties, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +16,6 @@ import { ErrorBox, Icon, Loading } from '../../ui/kit';
 import { Formulaires } from './Formulaires';
 import { Campagnes } from './Campagnes';
 import { Catalogue } from './Catalogue';
-import { Influenceurs } from './Influenceurs';
 import { featureIsOn } from '../../lib/features';
 import { PubHub } from './pilot/Hub';
 import '../confirmation/phone.css';
@@ -64,12 +64,11 @@ export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; re
   // Campagnes (WhatsApp offers): the same, only the store's own Marketing
   const camps = !noSpy && featureIsOn('marketing/campagnes');
   const cat = !noSpy && featureIsOn('marketing/catalogue');
-  const infl = !noSpy && featureIsOn('marketing/influenceurs');
   const tab =
-    sub === 'marketer' ? 'mk' : sub === 'formulaires' && forms ? 'forms' : sub === 'campagnes' && camps ? 'camps' : sub === 'catalogue' && cat ? 'cat' : sub === 'influenceurs' && infl ? 'infl' : 'pub';
+    sub === 'marketer' ? 'mk' : sub === 'formulaires' && forms ? 'forms' : sub === 'campagnes' && camps ? 'camps' : sub === 'catalogue' && cat ? 'cat' : 'pub';
   // every tab in sight, nothing slides: one row up to three tabs, 2 x 2 for four, rows of three for five to seven (each
   // name whole), 4 x 2 for eight
-  const tabCount = 2 + Number(forms) + Number(camps) + Number(cat) + Number(infl);
+  const tabCount = 2 + Number(forms) + Number(camps) + Number(cat);
   const cols = tabCount <= 3 ? tabCount : tabCount === 4 ? 2 : tabCount === 8 ? 4 : 3;
   return (
     <div className="pxm">
@@ -92,11 +91,6 @@ export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; re
             {t('nav.catalogue')}
           </a>
         )}
-        {infl && (
-          <a role="tab" aria-selected={tab === 'infl'} className={tab === 'infl' ? 'on' : ''} href="#/marketing/influenceurs">
-            {t('nav.influenceurs')}
-          </a>
-        )}
         <a role="tab" aria-selected={tab === 'mk'} className={tab === 'mk' ? 'on' : ''} href="#/marketing/marketer">
           {mkLabel ?? t('mkph.marketers')}
         </a>
@@ -113,8 +107,6 @@ export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; re
         <Campagnes />
       ) : tab === 'cat' ? (
         <Catalogue rest={rest} />
-      ) : tab === 'infl' ? (
-        <Influenceurs />
       ) : (
         <Marketeurs />
       )}

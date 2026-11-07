@@ -120,28 +120,34 @@ export const NAV: NavItem[] = [
   },
   { id: 'clients', icon: 'users', roles: ['confirmation', 'suivi'] },
   // Publicité (Meta spend face to the orders), Formulaires (the ads' lead forms become orders), Campagnes (WhatsApp offers
-  // to the customers who said yes), Marketer (paying marketers); AI Spy (competitors' ads in Algeria) is in AI Pilot
-  { id: 'marketing', icon: 'megaphone', roles: ['marketer'], subs: ['publicite', 'formulaires', 'campagnes', 'catalogue', 'influenceurs', 'marketer'] },
+  // to the customers who said yes), Marketer (paying marketers); AI Spy (competitors' ads in Algeria) is in AI Pilot,
+  // Influenceurs (ads in the shop's name and a creator's) in Partenaires
+  { id: 'marketing', icon: 'megaphone', roles: ['marketer'], subs: ['publicite', 'formulaires', 'campagnes', 'catalogue', 'marketer'] },
   // a public page per product, and the orders its fake-order check held back (agents restore the real ones)
   { id: 'landing', icon: 'globe', roles: ['marketer', 'confirmation'] },
   { id: 'caisse', icon: 'wallet', roles: [], subs: ['overview', 'due', 'done', 'livreurs', 'journal'] },
   // an employee's own caisse (money he received, his expenses, what he handed to the main caisse)
   { id: 'macaisse', icon: 'wallet', roles: ['confirmation', 'suivi', 'depot', 'agent_manager'], onlyIf: (_r, admin) => !admin },
-  // Partenaires: everyone the store works with, in one group — couriers, its own livreurs, confirmation agencies, marketers
-  // (Pilot Auto Assign's rules and the Préférences are in Pilot Automations › Auto Pilot Assign)
+  // Partenaires: everyone the store works with, in one group — couriers, its own livreurs, confirmation agencies, marketers,
+  // influenceurs (pages/ads/Influenceurs.tsx; in the plans it is still Marketing's Influenceurs). Administrators see every
+  // line; a marketer sees the group with Influenceurs only (it was his Marketing tab). (Pilot Auto Assign's rules and the
+  // Préférences are in Pilot Automations › Auto Pilot Assign)
   {
     id: 'partenaires',
     icon: 'handshake',
-    roles: [],
-    pages: ['livraison', 'agences', 'marketers'],
+    roles: ['marketer'],
+    pages: ['livraison', 'agences', 'marketers', 'influenceurs'],
     children: [
-      { id: 'livraison', href: '#/livraison/societes', icon: 'truck', plan: ['livraison'], match: { page: 'livraison', subs: ['', 'societes', 'api'] } },
-      { id: 'livreurs', href: '#/livraison/livreurs', icon: 'navigation', plan: ['livraison', 'livreurs'], match: { page: 'livraison', subs: ['livreurs'] } },
+      { id: 'livraison', href: '#/livraison/societes', icon: 'truck', roles: [], plan: ['livraison'], match: { page: 'livraison', subs: ['', 'societes', 'api'] } },
+      { id: 'livreurs', href: '#/livraison/livreurs', icon: 'navigation', roles: [], plan: ['livraison', 'livreurs'], match: { page: 'livraison', subs: ['livreurs'] } },
       { id: 'agences', href: '#/agences', icon: 'handshake', roles: [], onlyIf: partnersOn },
       { id: 'marketers', href: '#/marketers', icon: 'trend', roles: [], onlyIf: partnersOn },
+      { id: 'influenceurs', href: '#/influenceurs', icon: 'camera', roles: ['marketer'] },
     ],
   },
   { id: 'livraison', icon: 'truck', roles: [], subs: ['societes', 'api', 'livreurs'], hidden: true },
+  // Partenaires › Influenceurs (it was a tab of Marketing: old links follow, main.tsx)
+  { id: 'influenceurs', icon: 'camera', roles: ['marketer'], hidden: true },
   // no « Vendeurs »: a seller never adds another seller
   { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true, subs: ['roles', 'admins', 'agents', 'managers'] },
   // confirmation agencies working for the store (its code, requests both ways, contracts, numbers, payments)

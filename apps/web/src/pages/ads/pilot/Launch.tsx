@@ -582,7 +582,7 @@ function StepAd({ o, d, set, product, lib, refetchLib, pro, cancelBoost }: { o: 
   );
 }
 
-/** « Avec un influenceur »: the ad in the shop's name and a creator's (Marketing › Influenceurs) */
+/** « Avec un influenceur »: the ad in the shop's name and a creator's (Partenaires › Influenceurs) */
 function PartnerPick({ o, d, set }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void }) {
   const { t } = useTranslation();
   if (!o.partners.length) return null;
@@ -592,7 +592,7 @@ function PartnerPick({ o, d, set }: { o: Opt; d: Draft; set: (p: Partial<Draft>)
     <div className="pa-partner">
       <div className="pa-partner-head">
         <Icon name="handshake" /> {t('pilotads.partner.title')}
-        <a href="#/marketing/influenceurs">{t('pilotads.partner.manage')}</a>
+        <a href="#/influenceurs">{t('pilotads.partner.manage')}</a>
       </div>
       <select value={d.partnerId ?? ''} aria-label={t('pilotads.partner.title')} onChange={(e) => set({ partnerId: e.target.value ? Number(e.target.value) : null })}>
         <option value="">{t('pilotads.partner.none')}</option>

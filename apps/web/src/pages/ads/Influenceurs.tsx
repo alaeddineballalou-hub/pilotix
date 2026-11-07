@@ -1,4 +1,5 @@
-// Marketing › Influenceurs: ads in the shop's name and a creator's (Meta's partnership ads). On top, what their ads
+// Partenaires › Influenceurs (#/influenceurs; it was Marketing's tab, old links follow): ads in the shop's name and a
+// creator's (Meta's partnership ads). On top, what their ads
 // brought (spend, orders, delivered, ad money per delivered order); then the creators, each with where their « yes »
 // is, their numbers and « Lancer une pub avec lui » (Publicité › Lancer, the creator as second name); beside them,
 // their posts that tag the shop, each boosted in one click (« Booster »: Publicité › Lancer with the post). « Ajouter un
@@ -11,6 +12,7 @@ import { da, n, since } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
+import type { PageProps } from '../registry';
 import './formulaires.css';
 import './influenceurs.css';
 
@@ -25,6 +27,11 @@ const usd = (v: number | null | undefined) => (v === null || v === undefined || 
 const kn = (v: number) => (v >= 10_000 ? `${(v / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} k` : n(v));
 const TONE: Record<string, string> = { approved: 'ok', pending: 'warn', page: 'info', code: 'info', refused: 'bad', revoked: 'mute' };
 const ELIG_TONE: Record<string, string> = { AD_READY: 'ok', NEEDS_ATTENTION: 'warn', INELIGIBLE: 'bad', EXCLUDED: 'mute' };
+
+/** Partenaires › Influenceurs (#/influenceurs): a page of its own (it was a tab of Marketing). */
+export function InfluenceursPage(_: PageProps) {
+  return <Influenceurs />;
+}
 
 export function Influenceurs() {
   const { t } = useTranslation();

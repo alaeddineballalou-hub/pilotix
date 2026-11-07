@@ -184,6 +184,13 @@ function App() {
     go(`#/spy${more.length ? `/${more.join('/')}` : ''}`, { replace: true });
     [page, sub, ...rest] = ['spy', ...more];
   }
+  // Influenceurs left Marketing for Partenaires: an old link (#/marketing/influenceurs) opens #/influenceurs
+  if (space === 'store' && page === 'marketing' && sub === 'influenceurs') {
+    go('#/influenceurs', { replace: true });
+    page = 'influenceurs';
+    sub = undefined;
+    rest = [];
+  }
   // a group without a page of its own (Pilot AI) opens its first child the user can see
   const group = nav.find((n) => n.id === page && n.children && !pages[n.id]);
   const first = group?.children!.find((c) => canSeeChild(c, session.roles, session.isAdmin, canRules));

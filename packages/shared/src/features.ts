@@ -114,6 +114,8 @@ const PAGE_PARENT: Record<string, [string, string | null]> = {
   comptes: ['pilotai', null],
   // AI Spy: a line of AI Pilot's menu (#/spy), its plan switch still Marketing's AI Spy (marketing/spy)
   spy: ['marketing', 'spy'],
+  // Influenceurs: a line of Partenaires (#/influenceurs), its plan switch still Marketing's Influenceurs (marketing/influenceurs)
+  influenceurs: ['marketing', 'influenceurs'],
 };
 
 /** The features a page of the app needs (with its sub-page, e.g. produits + achats). Pages not listed need none. */

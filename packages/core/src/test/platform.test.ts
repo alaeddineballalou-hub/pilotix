@@ -493,6 +493,8 @@ test('menus by plan, own changes per shop, enforced by the server', async () => 
   assert.ok(!routeAllowed(ess, 'messages') && routeAllowed(ess, 'confirmation') && !routeAllowed(ess, 'produits', 'achats') && routeAllowed(ess, 'profil'));
   // AI Spy: its own page in AI Pilot's menu, still switched on and off with Marketing's AI Spy (marketing/spy)
   assert.ok(routeAllowed(effectiveFeatures(['marketing']), 'spy') && !routeAllowed(effectiveFeatures(['marketing', '-marketing/spy']), 'spy') && !routeAllowed(ess, 'spy'));
+  // Influenceurs: its own page in Partenaires' menu, still switched on and off with Marketing's Influenceurs
+  assert.ok(routeAllowed(effectiveFeatures(['marketing']), 'influenceurs') && !routeAllowed(effectiveFeatures(['marketing', '-marketing/influenceurs']), 'influenceurs') && !routeAllowed(ess, 'influenceurs'));
 
   const { t, p } = await server();
   const plan = (await p<any[]>('p.plans.list')).find((x) => x.code === 'essentiel');

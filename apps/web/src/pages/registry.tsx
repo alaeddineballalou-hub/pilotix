@@ -39,6 +39,8 @@ export const PAGES: Record<string, ComponentType<PageProps>> = {
   comptes: P(() => import('./comptes'), 'Comptes'),
   // AI Pilot › AI Spy (it was a tab of Marketing)
   spy: P(() => import('./ads/Spy'), 'SpyPage'),
+  // Partenaires › Influenceurs (it was a tab of Marketing)
+  influenceurs: P(() => import('./ads/Influenceurs'), 'InfluenceursPage'),
   marketing: P(() => import('./ads'), 'Marketing'),
   landing: P(() => import('./landing'), 'Landing'),
   caisse: P(() => import('./caisse'), 'Caisse'),

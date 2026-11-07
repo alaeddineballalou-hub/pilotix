@@ -57,6 +57,7 @@ export const APP_PAGES = [
   'reglages',
   'agences',
   'marketers',
+  'influenceurs',
   'profil',
   'boutiques',
   'aide',

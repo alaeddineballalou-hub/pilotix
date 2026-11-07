@@ -14,7 +14,6 @@ import { PhoneMarketing } from './PhoneAds';
 import { Formulaires } from './Formulaires';
 import { Campagnes } from './Campagnes';
 import { Catalogue } from './Catalogue';
-import { Influenceurs } from './Influenceurs';
 import { featureIsOn } from '../../lib/features';
 import { useIsPhone } from '../../lib/useMedia';
 import { AdsetButtons, PubHub, useControls } from './pilot/Hub';
@@ -22,9 +21,10 @@ import './ads.css';
 
 /** Marketing: Publicité (Meta spend face to the real orders), Formulaires (the ads' lead forms become orders,
  *  Formulaires.tsx), Campagnes (WhatsApp offers to the customers who said yes, Campagnes.tsx), Catalogue (the shop's
- *  lists of products sent to its Meta and TikTok catalogs, Catalogue.tsx, and what they bring, CatalogueResults.tsx),
- *  Influenceurs (ads in the shop's name and a creator's, Influenceurs.tsx) and Marketer (paying marketers per ad set).
- *  AI Spy (competitors' Facebook ads in Algeria, Spy.tsx) is a page of AI Pilot (#/spy; old links go there, main.tsx). */
+ *  lists of products sent to its Meta and TikTok catalogs, Catalogue.tsx, and what they bring, CatalogueResults.tsx)
+ *  and Marketer (paying marketers per ad set). AI Spy (competitors' Facebook ads in Algeria, Spy.tsx) is a page of AI
+ *  Pilot (#/spy), Influenceurs (ads in the shop's name and a creator's, Influenceurs.tsx) a page of Partenaires
+ *  (#/influenceurs); old links go there (main.tsx). */
 export function Marketing({ sub, rest }: PageProps) {
   const { t } = useTranslation();
   // phones: every KPI to decide (won / lost, where the money goes, what to do), then products and ad sets
@@ -34,7 +34,7 @@ export function Marketing({ sub, rest }: PageProps) {
 }
 
 function MarketingDesktop({ sub, rest, t }: { sub?: string; rest?: string[]; t: (k: string) => string }) {
-  const cur = sub === 'marketer' ? 'marketer' : sub === 'formulaires' ? 'formulaires' : sub === 'campagnes' ? 'campagnes' : sub === 'catalogue' ? 'catalogue' : sub === 'influenceurs' ? 'influenceurs' : 'publicite';
+  const cur = sub === 'marketer' ? 'marketer' : sub === 'formulaires' ? 'formulaires' : sub === 'campagnes' ? 'campagnes' : sub === 'catalogue' ? 'catalogue' : 'publicite';
   // Formulaires: the leads waiting for a person (a wilaya, a number, a product), on its tab
   const todo = useLeadsTodo();
   return (
@@ -42,7 +42,7 @@ function MarketingDesktop({ sub, rest, t }: { sub?: string; rest?: string[]; t: 
       <StageBar
         flow={false}
         current={cur}
-        items={(['publicite', 'formulaires', 'campagnes', 'catalogue', 'influenceurs', 'marketer'] as const).map((k) => ({ key: k, label: t(`nav.${k}`), href: `#/marketing/${k}`, ...(k === 'formulaires' && todo ? { count: todo } : {}) }))}
+        items={(['publicite', 'formulaires', 'campagnes', 'catalogue', 'marketer'] as const).map((k) => ({ key: k, label: t(`nav.${k}`), href: `#/marketing/${k}`, ...(k === 'formulaires' && todo ? { count: todo } : {}) }))}
       />
       {cur === 'marketer' ? (
         <Marketer rest={rest} />
@@ -52,8 +52,6 @@ function MarketingDesktop({ sub, rest, t }: { sub?: string; rest?: string[]; t: 
         <Campagnes />
       ) : cur === 'catalogue' ? (
         <Catalogue rest={rest} />
-      ) : cur === 'influenceurs' ? (
-        <Influenceurs />
       ) : (
         <PubHub rest={rest} pro={<Publicite />} />
       )}

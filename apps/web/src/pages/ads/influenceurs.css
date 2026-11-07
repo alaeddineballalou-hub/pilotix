@@ -1,6 +1,8 @@
-/* Marketing › Influenceurs, one column: the numbers, the creators, then their posts that tag the shop (a gallery) and how
-   it works. Built on the Formulaires blocks (formulaires.css: .lf, .lf-btn, .lf-tag, .lf-chip, .lf-note); the rest is .if-*. */
-.if { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
+/* Partenaires › Influenceurs, one column: the numbers, the creators, then their posts that tag the shop (a gallery) and how
+   it works. Built on the Formulaires blocks (formulaires.css: .lf, .lf-btn, .lf-tag, .lf-chip, .lf-note); the rest is .if-*.
+   A page of its own now, so formulaires.css may load after this file: where an .if rule changes an .lf block it names
+   both classes (.lf.if, .lf-head.if-head, .lf-btn.if-more-btn) and wins whatever the order. */
+.lf.if { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
 .if .bji svg { width: 100%; height: 100%; }
 .if .lf-btn .bji, .if .lf-link .bji { width: 16px; height: 16px; }
 .if .lf-tag.bad { background: var(--c-bad-tint); color: var(--c-bad-ink); }
@@ -8,7 +10,7 @@
 .if-small { margin: 0; font-size: 13px; line-height: 1.45; }
 
 /* the head */
-.if-head { align-items: flex-start; }
+.lf-head.if-head { align-items: flex-start; }
 .if-title { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .if-title h2 { margin: 0; font-size: 22px; font-weight: 600; }
 .if-title p { margin: 0; max-width: 62ch; font-size: 14px; line-height: 1.5; text-wrap: pretty; }
@@ -70,7 +72,7 @@ img.if-av { background: var(--raise); }
 .if-nums dd.ok { color: var(--c-ok-ink); }
 .if-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .if-more { position: relative; margin-inline-start: auto; }
-.if-more-btn { width: 40px; padding: 0; }
+.lf-btn.if-more-btn { width: 40px; padding: 0; }
 .if-menu { position: absolute; z-index: 5; inset-inline-end: 0; top: calc(100% + 6px); min-width: 210px; display: flex; flex-direction: column; padding: 6px; border-radius: 14px; background: var(--surface); box-shadow: 0 12px 32px rgb(15 26 46 / .16); border: 1px solid var(--line); }
 .if-menu button { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; text-align: start; cursor: pointer; }
 .if-menu button:hover:not(:disabled) { background: var(--raise); }
