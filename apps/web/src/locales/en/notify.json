@@ -13,9 +13,9 @@
   },
   "auto": {
     "lead": "Pilotix does these tasks by itself. Each switch takes effect at once.",
-    "assignLead": "Pilotix picks who delivers each order: the delivery company, then the driver. Each switch takes effect at once.",
+    "assignLead": "Pilotix handles each order’s delivery: it picks the delivery company, sends it to dispatch as soon as it is ready, then picks the driver. Each switch takes effect at once.",
     "affectationLead": "Pilotix picks the agent who calls each order, and the person who follows its parcel. Each switch takes effect at once.",
-    "toAssign": "Delivery company and driver: Auto Pilot Assign",
+    "toAssign": "Delivery company, dispatch and driver: Auto Pilot Assign",
     "toAffectation": "Agents: Auto Pilot Affectation",
     "when": "When",
     "then": "Pilotix",
@@ -24,7 +24,7 @@
     "saved": "Saved",
     "groups": {
       "orders": "Orders and team",
-      "delivery": "Who delivers each order",
+      "delivery": "Each order’s delivery",
       "agents": "Who calls and who follows each order",
       "stock": "Stock and depot",
       "clients": "Customers"
@@ -159,7 +159,6 @@
       "max": "Most parcels in hand per driver",
       "noLimit": "No limit",
       "needsDispatch": "Works with “Automatic dispatch”: turn it on too.",
-      "openDispatch": "Turn on “Automatic dispatch”",
       "noOwn": "No “Private delivery” among your delivery companies.",
       "link": "See the drivers"
     },

@@ -13,9 +13,9 @@
   },
   "auto": {
     "lead": "Pilotix fait ces tâches tout seul. Chaque interrupteur s’applique tout de suite.",
-    "assignLead": "Pilotix choisit qui livre chaque commande : la société de livraison, puis le livreur. Chaque interrupteur s’applique tout de suite.",
+    "assignLead": "Pilotix s’occupe de la livraison de chaque commande : il choisit sa société de livraison, l’envoie au dispatch dès qu’elle est prête, puis choisit son livreur. Chaque interrupteur s’applique tout de suite.",
     "affectationLead": "Pilotix choisit l’agente qui appelle chaque commande, et la personne qui suit son colis. Chaque interrupteur s’applique tout de suite.",
-    "toAssign": "Société de livraison et livreur : Auto Pilot Assign",
+    "toAssign": "Société de livraison, dispatch et livreur : Auto Pilot Assign",
     "toAffectation": "Agentes : Auto Pilot Affectation",
     "when": "Quand",
     "then": "Pilotix",
@@ -24,7 +24,7 @@
     "saved": "Enregistré",
     "groups": {
       "orders": "Commandes et équipe",
-      "delivery": "Qui livre chaque commande",
+      "delivery": "La livraison de chaque commande",
       "agents": "Qui appelle et qui suit chaque commande",
       "stock": "Stock et dépôt",
       "clients": "Clients"
@@ -159,7 +159,6 @@
       "max": "Maximum en main par livreur",
       "noLimit": "Pas de limite",
       "needsDispatch": "Marche avec « Dispatch automatique » : allumez-le aussi.",
-      "openDispatch": "Allumer « Dispatch automatique »",
       "noOwn": "Pas de « Livraison privée » dans vos sociétés de livraison.",
       "link": "Voir les livreurs"
     },

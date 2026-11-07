@@ -1,8 +1,9 @@
 // Pilot Automations › Automatisations (admins): what Pilotix does by itself, in three groups, one row each — the rule
 // in one sentence (« Quand … → Pilotix … »), its switch, its few numbers (saved on change), where things stand now and
 // the last thing it did; then everything it did lately. Two tabs of their own: « Auto Pilot Assign » (view 'assign'):
-// who delivers each order — its delivery company (Pilot Auto Assign), its livreur (Livreur automatique); « Auto Pilot
-// Affectation » (view 'affectation'): its agents (Affectation automatique: confirmation and suivi).
+// each order's delivery — its delivery company (Pilot Auto Assign), its dispatch (Dispatch automatique), its livreur
+// (Livreur automatique); « Auto Pilot Affectation » (view 'affectation'): its agents (Affectation automatique:
+// confirmation and suivi).
 import { ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { inBrowserDemo, type In, type Out } from '../../lib/backend';
@@ -165,12 +166,24 @@ function Board({ d, view }: { d: S; view: AutoView }) {
           )}
         </>
       )}
-      <Links
-        items={[
-          ...(s.livreurAuto && !s.autoDispatch ? ([['#/notify/auto', t('notify.auto.livreur.openDispatch')]] as [string, string][]) : []),
-          ['#/livraison/livreurs', t('notify.auto.livreur.link')],
-        ]}
-      />
+      <Links items={[['#/livraison/livreurs', t('notify.auto.livreur.link')]]} />
+    </Rule>
+  );
+  const dispatchRow = (
+    <Rule
+      icon="truck"
+      name={name('dispatch')}
+      when={t('notify.auto.dispatch.when')}
+      then={t('notify.auto.dispatch.then')}
+      on={s.autoDispatch}
+      busy={save.isPending}
+      onToggle={(on) => {
+        setS({ ...s, autoDispatch: on });
+        put({ autoDispatch: on }, { name: name('dispatch'), on });
+      }}
+    >
+      {!s.autoDispatch && <Now tone="warn">{d.noStock.toAssign ? t('notify.auto.dispatch.offNote', { count: d.noStock.toAssign }) : t('notify.auto.dispatch.offEmpty')}</Now>}
+      <Links items={[['#/depot/preparer', t('notify.auto.dispatch.link')]]} />
     </Rule>
   );
   if (view === 'assign')
@@ -179,6 +192,7 @@ function Board({ d, view }: { d: S; view: AutoView }) {
         <p className="au-lead">{t('notify.auto.assignLead')}</p>
         <Group title={t('notify.auto.groups.delivery')}>
           {pilotRow}
+          {dispatchRow}
           {livreurRow}
         </Group>
         {d.log.some((l) => l.kind === 'livreur') && <Log lines={d.log.filter((l) => l.kind === 'livreur')} />}
@@ -297,22 +311,6 @@ function Board({ d, view }: { d: S; view: AutoView }) {
             </Now>
           )}
           <Links items={[['#/depot/preparer', t('notify.auto.stockback.link')]]} />
-        </Rule>
-
-        <Rule
-          icon="truck"
-          name={name('dispatch')}
-          when={t('notify.auto.dispatch.when')}
-          then={t('notify.auto.dispatch.then')}
-          on={s.autoDispatch}
-          busy={save.isPending}
-          onToggle={(on) => {
-            setS({ ...s, autoDispatch: on });
-            put({ autoDispatch: on }, { name: name('dispatch'), on });
-          }}
-        >
-          {!s.autoDispatch && <Now tone="warn">{d.noStock.toAssign ? t('notify.auto.dispatch.offNote', { count: d.noStock.toAssign }) : t('notify.auto.dispatch.offEmpty')}</Now>}
-          <Links items={[['#/depot/preparer', t('notify.auto.dispatch.link')]]} />
         </Rule>
       </Group>
 
