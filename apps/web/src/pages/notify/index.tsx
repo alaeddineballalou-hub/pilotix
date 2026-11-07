@@ -8,6 +8,7 @@ import { useMenuCounts } from '../../layout/Shell';
 import { backend, Out, rpc, serverUrl, shopApi } from '../../lib/backend';
 import { da, n, pct, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
+import { go } from '../../lib/route';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { CopyCode } from '../../ui/CopyCode';
@@ -38,6 +39,8 @@ function whenSend(iso: string, t: (k: string) => string) {
 }
 
 const TAB_ICON: Record<string, string> = { auto: 'zap', assign: 'truck', affectation: 'users', messages: 'send', cas: 'route', tester: 'play', resultats: 'chart', reglages: 'settings' };
+/** The tabs of the menu's « Messages » line; its other lines (Automatisations, Auto Pilot Assign, …) have none */
+const MSG_TABS = ['messages', 'cas', 'tester', 'resultats'];
 
 export function Notify({ sub }: PageProps) {
   const { t } = useTranslation();
@@ -45,10 +48,15 @@ export function Notify({ sub }: PageProps) {
   const admin = !!session?.isAdmin;
   const counts = useMenuCounts();
   const st = useRpc('notify.feed', { limit: 1 });
-  // « Auto Pilot Assign » (the delivery company and the livreur) and « Auto Pilot Affectation » (the agents): each its own tab
-  const keys = [...(admin ? ['auto', 'assign', 'affectation'] : []), 'messages', 'cas', 'tester', 'resultats', ...(admin ? ['reglages'] : [])];
+  // each part is a line of the menu's « Pilot Automations »: Automatisations, Auto Pilot Assign (the delivery company and
+  // the livreur), Auto Pilot Affectation (the agents) and Réglages for admins, Messages (with its four tabs) for everyone
+  const keys = [...(admin ? ['auto', 'assign', 'affectation'] : []), ...MSG_TABS, ...(admin ? ['reglages'] : [])];
   const current = keys.includes(sub ?? '') ? sub! : keys[0];
-  const tabs = keys.map((k) => ({ key: k, label: t(`notify.tabs.${k}`), icon: TAB_ICON[k], href: `#/notify/${k}`, count: k === 'messages' ? counts.notify : undefined }));
+  // an address without its part (#/notify, or one this person does not have) takes the part shown: the menu lights its line
+  useEffect(() => {
+    if (sub !== current) go(`#/notify/${current}`, { replace: true });
+  }, [sub, current]);
+  const tabs = MSG_TABS.includes(current) ? MSG_TABS.map((k) => ({ key: k, label: t(`notify.tabs.${k}`), icon: TAB_ICON[k], href: `#/notify/${k}`, count: k === 'messages' ? counts.notify : undefined })) : [];
   return (
     <>
       <AgentHeader agent="notify" title={t('notify.title')} help={t('notify.help')} about={t('ai.about.notify')} on={['auto', 'assign', 'affectation'].includes(current) ? undefined : st.data?.enabled} settings={admin ? '#/notify/reglages' : undefined} tabs={tabs} current={current} />

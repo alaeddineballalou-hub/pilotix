@@ -134,7 +134,8 @@ export function AgentHeader({ agent, title, help, about, on, settings, tabs, cur
             </a>
           ))}
       </div>
-      <SectionTabs tabs={tabs} current={current} label={t('ai.sections', { name: title })} />
+      {/* no tabs: the menu shows the page's parts (Pilot Automations › Auto Pilot Assign) */}
+      {tabs.length > 0 && <SectionTabs tabs={tabs} current={current} label={t('ai.sections', { name: title })} />}
     </header>
   );
 }

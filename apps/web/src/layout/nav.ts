@@ -95,9 +95,22 @@ export const NAV: NavItem[] = [
   { id: 'cm', icon: 'comments', roles: ['confirmation', 'marketer'], hidden: true },
   { id: 'social', icon: 'calendar', roles: ['marketer'], hidden: true },
   { id: 'comptes', icon: 'link', roles: [], hidden: true },
-  // Pilot Automations: what Pilotix does by itself, on its own line. First the delivery messages: each customer told
-  // where their order is (WhatsApp, SMS, pages/notify)
-  { id: 'notify', icon: 'zap', roles: ['confirmation', 'suivi'] },
+  // Pilot Automations: what Pilotix does by itself, a group of its own whose lines are the parts of pages/notify — the
+  // automations (Automatisations, Auto Pilot Assign, Auto Pilot Affectation: admins), the delivery messages each customer
+  // gets (Messages, its Cas, Tester and Résultats tabs inside: WhatsApp, SMS) and their Réglages (admins)
+  {
+    id: 'notify',
+    icon: 'zap',
+    roles: ['confirmation', 'suivi'],
+    pages: ['notify'],
+    children: [
+      { id: 'auto', href: '#/notify/auto', icon: 'zap', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['auto'] } },
+      { id: 'assign', href: '#/notify/assign', icon: 'truck', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['assign'] } },
+      { id: 'affectation', href: '#/notify/affectation', icon: 'users', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['affectation'] } },
+      { id: 'automessages', href: '#/notify/messages', count: 'notify', tone: 'nc-a', icon: 'send', plan: ['notify'], match: { page: 'notify', subs: ['messages', 'cas', 'tester', 'resultats'] } },
+      { id: 'autoreglages', href: '#/notify/reglages', icon: 'settings', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['reglages'] } },
+    ],
+  },
   { id: 'clients', icon: 'users', roles: ['confirmation', 'suivi'] },
   // Publicité (Meta spend face to the orders), Formulaires (the ads' lead forms become orders), Campagnes (WhatsApp offers
   // to the customers who said yes), Marketer (paying marketers), AI Spy (competitors' ads in Algeria)

@@ -88,8 +88,6 @@ const ITEM_COUNT: Record<string, [string, string]> = {
   landing: ['landing', 'nc-a'],
   caisse: ['uncashed', 'nc-c'],
   livraison: ['toShip', 'nc-n'],
-  // Pilot Automations: the delivery messages waiting
-  notify: ['notify', 'nc-a'],
 };
 
 function Count({ v, tone }: { v: number; tone: string }) {
