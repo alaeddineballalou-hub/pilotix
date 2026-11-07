@@ -407,11 +407,30 @@ export const adminProcs = {
   // ---------- client delivery prices
   'admin.fees.get': proc([], z.object({}), async (ctx) => {
     const products = await ctx.db.query('SELECT id, name, sku, fee_grid, active, weight_kg FROM products WHERE archived_at IS NULL ORDER BY name');
+    // the named sizes / colours: one of them may have its own list (« par taille »: the 20-inch bike in « 10KG »)
+    const vars = await ctx.db.query(
+      `SELECT v.id, v.product_id, v.title, v.fee_grid, v.active FROM product_variants v JOIN products p ON p.id = v.product_id
+        WHERE p.archived_at IS NULL AND v.title <> '' ORDER BY v.product_id, v.id`,
+    );
+    const byProduct = new Map<number, { id: number; title: string; feeGrid: string | null; active: boolean }[]>();
+    for (const v of vars as any[]) {
+      const list = byProduct.get(num(v.product_id)) ?? [];
+      list.push({ id: num(v.id), title: v.title as string, feeGrid: (v.fee_grid as string | null) || null, active: !!v.active });
+      byProduct.set(num(v.product_id), list);
+    }
     return {
       grids: await getSetting(ctx.db, 'clientFees'),
       defaultGrid: await getSetting(ctx.db, 'defaultFeeGrid'),
       savFees: await getSetting(ctx.db, 'savFees'),
-      products: products.map((p: any) => ({ id: num(p.id), name: p.name as string, sku: p.sku as string, feeGrid: (p.fee_grid as string | null) ?? null, active: !!p.active, weightKg: Number(p.weight_kg) })),
+      products: products.map((p: any) => ({
+        id: num(p.id),
+        name: p.name as string,
+        sku: p.sku as string,
+        feeGrid: (p.fee_grid as string | null) ?? null,
+        active: !!p.active,
+        weightKg: Number(p.weight_kg),
+        variants: byProduct.get(num(p.id)) ?? [],
+      })),
     };
   }),
   /** Creates or replaces a grid (optionally renaming it). New grids start as a copy of `copyFrom` or of the default company's tariffs. */
@@ -431,6 +450,7 @@ export const adminProcs = {
       if (i.oldName && i.oldName !== i.name) {
         delete grids[i.oldName];
         await ctx.db.query('UPDATE products SET fee_grid = $2 WHERE fee_grid = $1', [i.oldName, i.name]);
+        await ctx.db.query('UPDATE product_variants SET fee_grid = $2 WHERE fee_grid = $1', [i.oldName, i.name]);
         if ((await getSetting(ctx.db, 'defaultFeeGrid')) === i.oldName) await setSetting(ctx.db, 'defaultFeeGrid', i.name, me(ctx));
       }
       grids[i.name] = full;
@@ -454,6 +474,7 @@ export const adminProcs = {
     delete grids[i.name];
     await setSetting(ctx.db, 'clientFees', grids, me(ctx));
     await ctx.db.query('UPDATE products SET fee_grid = NULL WHERE fee_grid = $1', [i.name]);
+    await ctx.db.query('UPDATE product_variants SET fee_grid = NULL WHERE fee_grid = $1', [i.name]);
     return { ok: true };
   }),
   'admin.fees.setDefault': proc([], z.object({ name: GridName }), async (ctx, i) => {
@@ -461,12 +482,19 @@ export const adminProcs = {
     await setSetting(ctx.db, 'defaultFeeGrid', i.name, me(ctx));
     return { ok: true };
   }),
-  /** The products that use this grid (exactly this list; the others go back to the default). */
-  'admin.fees.assign': proc([], z.object({ name: GridName, productIds: z.array(id).max(5000) }), async (ctx, i) => {
+  /**
+   * The products that use this grid (exactly this list; the others go back to the default) and, when given, the sizes
+   * (variants) that use it whatever their product's list is (exactly this list too; the others follow their product).
+   */
+  'admin.fees.assign': proc([], z.object({ name: GridName, productIds: z.array(id).max(5000), variantIds: z.array(id).max(20000).optional() }), async (ctx, i) => {
     if (!(await getSetting(ctx.db, 'clientFees'))[i.name]) throw notFound('Prix introuvable');
     await ctx.db.tx(async (tx) => {
       await tx.query('UPDATE products SET fee_grid = NULL WHERE fee_grid = $1 AND NOT (id = ANY($2))', [i.name, i.productIds]);
       if (i.productIds.length) await tx.query('UPDATE products SET fee_grid = $1 WHERE id = ANY($2)', [i.name, i.productIds]);
+      if (i.variantIds) {
+        await tx.query('UPDATE product_variants SET fee_grid = NULL WHERE fee_grid = $1 AND NOT (id = ANY($2))', [i.name, i.variantIds]);
+        if (i.variantIds.length) await tx.query('UPDATE product_variants SET fee_grid = $1 WHERE id = ANY($2)', [i.name, i.variantIds]);
+      }
     });
     return { ok: true };
   }),

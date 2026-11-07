@@ -779,8 +779,9 @@ async function updateFromChat(t: ToolCtx, input: any): Promise<any> {
   try {
     // the delivery price follows a new wilaya or new products (the shop's client price grid, as in the order form)
     if (change.wilayaId || lines) {
-      const its = lines ?? (await ctx.db.query('SELECT product_id, qty FROM order_items WHERE order_id = $1', [open.id])).map((r: any) => ({ productId: num(r.product_id), qty: num(r.qty) }));
-      const q = await customerFee(ctx.db, change.wilayaId ?? numOrNull(cur.wilaya_id), !!cur.is_stopdesk, its.map((l) => ({ productId: l.productId, qty: l.qty })));
+      const its: { productId: number; variantId?: number | null; qty: number }[] =
+        lines ?? (await ctx.db.query('SELECT product_id, variant_id, qty FROM order_items WHERE order_id = $1', [open.id])).map((r: any) => ({ productId: num(r.product_id), variantId: numOrNull(r.variant_id), qty: num(r.qty) }));
+      const q = await customerFee(ctx.db, change.wilayaId ?? numOrNull(cur.wilaya_id), !!cur.is_stopdesk, its.map((l) => ({ productId: l.productId, variantId: l.variantId ?? null, qty: l.qty })));
       if (q.fee !== null) change.deliveryFee = q.fee;
     }
     const after = await updateOrder(ctx, {
@@ -985,7 +986,7 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
     if (open?.id && (await isAutoOrder(ctx.db, conv.id, open.id))) {
       try {
         const cur = (await ctx.db.query('SELECT customer_note FROM orders WHERE id = $1', [open.id]))[0];
-        const q = await customerFee(ctx.db, place.wilayaId, !!input?.stopdesk, items.map((l) => ({ productId: l.productId, qty: l.qty })));
+        const q = await customerFee(ctx.db, place.wilayaId, !!input?.stopdesk, items.map((l) => ({ productId: l.productId, variantId: l.variantId, qty: l.qty })));
         const note = [String(cur?.customer_note ?? '').replace(' · Wilaya à demander', '').replace(' · Variante à confirmer', '').trim(), input?.note ? String(input.note).trim() : ''].filter(Boolean).join(' · ');
         const after = await updateOrder(ctx, {
           id: open.id,

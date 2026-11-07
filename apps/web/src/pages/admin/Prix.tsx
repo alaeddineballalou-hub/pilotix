@@ -52,6 +52,7 @@ export function Prix() {
 
   const products = q.data!.products;
   const countOf = (g: string) => products.filter((p) => p.feeGrid === g || (!p.feeGrid && g === q.data!.defaultGrid)).length;
+  const sizesIn = (g: string) => products.reduce((n, p) => n + (p.variants ?? []).filter((v) => v.feeGrid === g).length, 0);
   return (
     <>
       <div className="card">
@@ -62,7 +63,10 @@ export function Prix() {
               <span>
                 {g} {g === q.data!.defaultGrid && <span className="bjg-def">{t('admin.fees.default')}</span>}
               </span>
-              <small>{t('admin.fees.products', { count: countOf(g) })}</small>
+              <small>
+                {t('admin.fees.products', { count: countOf(g) })}
+                {sizesIn(g) > 0 && ` · ${t('admin.fees.sizes', { count: sizesIn(g) })}`}
+              </small>
             </button>
           ))}
           <button type="button" role="tab" aria-selected={savTab} className={`bjg-tab px-sav-tab ${savTab ? 'on' : ''}`} onClick={() => setSavTab(true)}>
@@ -227,10 +231,35 @@ function GridForm({ mode, name, names, onClose, onDone }: { mode: 'new' | 'renam
   );
 }
 
-function ProductsForm({ name, products, defaultGrid, onClose }: { name: string; products: { id: number; name: string; sku: string; feeGrid: string | null; active: boolean }[]; defaultGrid: string; onClose: () => void }) {
+type FeeVariant = { id: number; title: string; feeGrid: string | null; active: boolean };
+type FeeProduct = { id: number; name: string; sku: string; feeGrid: string | null; active: boolean; variants?: FeeVariant[] };
+
+/** A product's sizes as the window shows them: its variants grouped by their first option (« 20P / Bleu » → « 20P »). */
+function sizesOf(p: FeeProduct): { key: string; ids: number[]; grids: (string | null)[] }[] {
+  const out = new Map<string, { key: string; ids: number[]; grids: (string | null)[] }>();
+  for (const v of p.variants ?? []) {
+    const key = v.title.split(' / ')[0].trim() || v.title;
+    const g = out.get(key) ?? { key, ids: [], grids: [] };
+    g.ids.push(v.id);
+    g.grids.push(v.feeGrid);
+    out.set(key, g);
+  }
+  return [...out.values()];
+}
+
+function ProductsForm({ name, products, defaultGrid, onClose }: { name: string; products: FeeProduct[]; defaultGrid: string; onClose: () => void }) {
   const { t } = useTranslation();
   const [sel, setSel] = useState<Set<number>>(new Set(products.filter((p) => p.feeGrid === name).map((p) => p.id)));
+  // the sizes (variants) that take this price whatever their product's is
+  const [vsel, setVsel] = useState<Set<number>>(new Set(products.flatMap((p) => (p.variants ?? []).filter((v) => v.feeGrid === name).map((v) => v.id))));
+  // open by itself: a product whose sizes already have their own list
+  const [open, setOpen] = useState<Set<number>>(new Set(products.filter((p) => (p.variants ?? []).some((v) => v.feeGrid)).map((p) => p.id)));
   const save = useAction('admin.fees.assign', { success: t('admin.fees.productsSaved'), onDone: onClose });
+  const toggle = (set: Set<number>, ids: number[], on: boolean) => {
+    const n = new Set(set);
+    for (const i of ids) on ? n.add(i) : n.delete(i);
+    return n;
+  };
   return (
     <Modal
       title={t('admin.fees.productsTitle', { name })}
@@ -240,36 +269,72 @@ function ProductsForm({ name, products, defaultGrid, onClose }: { name: string; 
           <button className="btn" onClick={onClose}>
             {t('admin.cancel')}
           </button>
-          <button className="btn primary" disabled={save.isPending} onClick={() => save.mutate({ name, productIds: [...sel] })}>
+          <button className="btn primary" disabled={save.isPending} onClick={() => save.mutate({ name, productIds: [...sel], variantIds: [...vsel] })}>
             {t('admin.fees.productsSave')}
           </button>
         </>
       }
     >
-      <p className="muted small">{t('admin.fees.productsHelp')}</p>
+      <p className="muted small">
+        {t('admin.fees.productsHelp')}
+        <br />
+        {t('admin.fees.sizeHelp')}
+      </p>
       {!products.length ? (
         <Empty>{t('admin.fees.noProducts')}</Empty>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {products.map((p) => (
-            <label key={p.id} className={`row nowrap ${p.active ? '' : 'dim'}`} style={{ gap: 8 }}>
-              <input
-                type="checkbox"
-                checked={sel.has(p.id)}
-                onChange={(e) => {
-                  const n = new Set(sel);
-                  if (e.target.checked) n.add(p.id);
-                  else n.delete(p.id);
-                  setSel(n);
-                }}
-              />
-              <span className="grow">
-                {p.name} <small className="muted ltr">{p.sku}</small>
-              </span>
-              {p.feeGrid && p.feeGrid !== name && <small className="muted">{t('admin.fees.usesOther', { name: p.feeGrid })}</small>}
-              {!p.feeGrid && name !== defaultGrid && <small className="muted">{t('admin.fees.usesOther', { name: defaultGrid })}</small>}
-            </label>
-          ))}
+        <div className="px-feeprods">
+          {products.map((p) => {
+            const sizes = sizesOf(p);
+            const isOpen = open.has(p.id);
+            const mine = sizes.reduce((n, g) => n + g.ids.filter((i) => vsel.has(i)).length, 0);
+            return (
+              <div key={p.id} className={`px-feeprod ${p.active ? '' : 'dim'}`}>
+                <div className="px-feeprod-top">
+                  <label className="px-feeprod-name">
+                    <input type="checkbox" checked={sel.has(p.id)} onChange={(e) => setSel(toggle(sel, [p.id], e.target.checked))} />
+                    <span>
+                      {p.name} <small className="muted ltr">{p.sku}</small>
+                    </span>
+                  </label>
+                  <span className="px-feeprod-meta">
+                    {p.feeGrid && p.feeGrid !== name && <small className="muted">{t('admin.fees.usesOther', { name: p.feeGrid })}</small>}
+                    {!p.feeGrid && name !== defaultGrid && <small className="muted">{t('admin.fees.usesOther', { name: defaultGrid })}</small>}
+                    {sizes.length > 1 && (
+                      <button type="button" className={`btn small ghost px-feesize-btn ${isOpen ? 'on' : ''}`} aria-expanded={isOpen} onClick={() => setOpen(toggle(open, [p.id], !isOpen))}>
+                        {t('admin.fees.bySize')}
+                        {mine > 0 && <span className="px-feesize-n">{mine}</span>}
+                      </button>
+                    )}
+                  </span>
+                </div>
+                {isOpen && sizes.length > 1 && (
+                  <div className="px-feesizes" role="group" aria-label={`${t('admin.fees.bySize')} · ${p.name}`}>
+                    {sizes.map((g) => {
+                      const n = g.ids.filter((i) => vsel.has(i)).length;
+                      const all = n === g.ids.length;
+                      const other = [...new Set(g.grids.filter((x): x is string => !!x && x !== name))];
+                      return (
+                        <label key={g.key} className={`px-feesize ${all ? 'on' : n ? 'some' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={all}
+                            ref={(el) => {
+                              if (el) el.indeterminate = n > 0 && !all;
+                            }}
+                            onChange={(e) => setVsel(toggle(vsel, g.ids, e.target.checked))}
+                          />
+                          <span className="ltr">{g.key}</span>
+                          {g.ids.length > 1 && <small className="muted">×{g.ids.length}</small>}
+                          {!all && other.length > 0 && <small className="px-feesize-in">{t('admin.fees.sizeIn', { name: other.join(', ') })}</small>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </Modal>

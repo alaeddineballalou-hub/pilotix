@@ -4,8 +4,8 @@ import { algiersDayStart, CallSettings, CLIENT_LEVELS, CONF_STATUSES, CONF_TODO,
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, hasRole, proc } from '../rpc';
-import { clientFee, getSetting, setSetting } from '../settings';
-import { ConfInput, dueNowSql, getOrder, holdOrder, ListInput, listOrders, setConf, teamMembers, triedSince, withClientScores } from './orders';
+import { getSetting, setSetting } from '../settings';
+import { ConfInput, dueNowSql, getOrder, highestGridFee, holdOrder, lineGrids, ListInput, listOrders, setConf, teamMembers, triedSince, withClientScores } from './orders';
 import { andSql, queueSql } from './agencyscope';
 import { HAS_GUIDE } from './guide';
 import { assignedProductIds } from './productscope';
@@ -738,12 +738,14 @@ export const confirmationProcs = {
     }));
   }),
 
-  /** Delivery price from the client grid for this order's wilaya / delivery type / first product. */
-  /** The grid price of an order's delivery; `wilayaId` / `isStopdesk` give the price for another choice before it is saved. */
+  /**
+   * The grid price of an order's delivery (its lines' client grids, a size's own first, the highest one, like the order
+   * form); `wilayaId` / `isStopdesk` give the price for another choice before it is saved.
+   */
   'confirmation.gridFee': proc(['confirmation'], z.object({ id, isStopdesk: z.boolean().optional(), wilayaId: z.number().int().min(1).max(69).optional() }), async (ctx, { id, isStopdesk, wilayaId }) => {
     const o = await getOrder(ctx, id);
-    const grid = o.items[0] ? (await ctx.db.query('SELECT fee_grid FROM products WHERE id = $1', [o.items[0].productId]))[0]?.fee_grid : null;
-    return { fee: await clientFee(ctx.db, wilayaId ?? o.wilayaId, isStopdesk ?? o.isStopdesk, grid) };
+    const grids = await lineGrids(ctx.db, o.items.map((l: any) => ({ productId: l.productId, variantId: l.variantId })));
+    return { fee: (await highestGridFee(ctx.db, wilayaId ?? o.wilayaId, isStopdesk ?? o.isStopdesk, grids)).fee };
   }),
 
   /**

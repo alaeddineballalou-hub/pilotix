@@ -453,7 +453,8 @@ async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice 
   let maxDiscount = 0;
   let unlimited = false;
   let weight = 0;
-  let grid: string | null = null;
+  /** each line's client price grid: its size's (variant's) own, else its product's (null: the default grid) */
+  const grids: (string | null)[] = [];
   /** how much lower than the catalog (or its quantity packs) the typed unit prices sell: it is a discount too */
   let priceCut = 0;
   const lines: OrderItem[] = items.map((i) => {
@@ -475,44 +476,68 @@ async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice 
     if (discountLimit === null) unlimited = true;
     else maxDiscount += num(discountLimit) * i.qty;
     weight += Number(v?.weight_kg ?? p.weight_kg) * i.qty;
-    grid = grid ?? v?.fee_grid ?? p.fee_grid;
+    grids.push((v?.fee_grid as string | null) || (p.fee_grid as string | null) || null);
     return { productId: i.productId, variantId: i.variantId ?? null, name: p.name, variantTitle: v?.title ?? '', qty: i.qty, unitPrice: num(unit), purchasePrice: num(v?.cost ?? p.cost), isUpsell: !!i.isUpsell };
   });
   const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
-  return { lines, subtotal, maxDiscount: unlimited ? subtotal : maxDiscount, weight, grid, priceCut };
+  return { lines, subtotal, maxDiscount: unlimited ? subtotal : maxDiscount, weight, grids, priceCut };
 }
 
 /**
- * The delivery price the customer pays for these products (the highest client price grid among them, plus the weight
- * above the limit), and the products' maximum discount. Used by « orders.quote » (the order form) and by Dellal when a
- * customer changes his wilaya or his products in the chat.
+ * Each line's client price grid: its size's (variant's) own grid, else its product's (null: the boutique's default).
+ * One rule for the order form, Confirmation, the saved order and Dellal (Gestion › Prix de livraison, « par taille »).
  */
-export async function customerFee(db: Db, wilayaId: number | null, isStopdesk: boolean, items: { productId: number; qty: number }[]) {
+export async function lineGrids(db: Db, lines: { productId: number; variantId?: number | null }[]): Promise<(string | null)[]> {
+  const pids = [...new Set(lines.map((l) => l.productId))];
+  const vids = [...new Set(lines.map((l) => l.variantId).filter((v): v is number => !!v))];
+  const P = new Map((pids.length ? await db.query('SELECT id, fee_grid FROM products WHERE id = ANY($1)', [pids]) : []).map((r: any) => [num(r.id), (r.fee_grid as string | null) || null]));
+  const V = new Map((vids.length ? await db.query('SELECT id, fee_grid FROM product_variants WHERE id = ANY($1)', [vids]) : []).map((r: any) => [num(r.id), (r.fee_grid as string | null) || null]));
+  return lines.map((l) => (l.variantId ? V.get(l.variantId) : null) || P.get(l.productId) || null);
+}
+
+/** The highest client price among these grids for a wilaya (an order with a big product pays the big product's price), and its grid. */
+export async function highestGridFee(db: Db, wilayaId: number, isStopdesk: boolean, grids: (string | null)[]) {
+  let fee: number | null = null;
+  let grid: string | null = null;
+  for (const g of grids.length ? [...new Set(grids)] : [null]) {
+    const f = await clientFee(db, wilayaId, isStopdesk, g);
+    if (f !== null && (fee === null || f > fee)) {
+      fee = f;
+      grid = g ?? (await getSetting(db, 'defaultFeeGrid'));
+    }
+  }
+  return { fee, grid };
+}
+
+/**
+ * The delivery price the customer pays for these products (the highest client price grid among them, a size's own grid
+ * first, plus the weight above the limit), and the products' maximum discount. Used by « orders.quote » (the order form)
+ * and by Dellal when a customer changes his wilaya or his products in the chat.
+ */
+export async function customerFee(db: Db, wilayaId: number | null, isStopdesk: boolean, items: { productId: number; variantId?: number | null; qty: number }[]) {
   const pids = [...new Set(items.map((x) => x.productId))];
-  const prods = pids.length ? await db.query('SELECT id, fee_grid, weight_kg, max_discount FROM products WHERE id = ANY($1)', [pids]) : [];
+  const vids = [...new Set(items.map((x) => x.variantId).filter((v): v is number => !!v))];
+  const prods = pids.length ? await db.query('SELECT id, weight_kg, max_discount FROM products WHERE id = ANY($1)', [pids]) : [];
+  const vars = vids.length ? await db.query('SELECT id, product_id, weight_kg, max_discount FROM product_variants WHERE id = ANY($1)', [vids]) : [];
   const P = new Map(prods.map((p: any) => [num(p.id), p]));
+  const V = new Map(vars.map((v: any) => [num(v.id), v]));
+  const known = items.filter((it) => P.has(it.productId));
   let weight = 0;
   let maxDiscount = 0;
   let unlimited = false;
-  for (const it of items) {
+  for (const it of known) {
     const p: any = P.get(it.productId);
-    if (!p) continue;
-    weight += Number(p.weight_kg) * it.qty;
-    if (p.max_discount === null) unlimited = true;
-    else maxDiscount += num(p.max_discount) * it.qty;
+    const v: any = it.variantId ? V.get(it.variantId) : null;
+    const size = v && num(v.product_id) === it.productId ? v : null;
+    weight += Number(size?.weight_kg ?? p.weight_kg) * it.qty;
+    const limit = size?.max_discount ?? p.max_discount;
+    if (limit === null) unlimited = true;
+    else maxDiscount += num(limit) * it.qty;
   }
   let fee: number | null = null;
   let grid: string | null = null;
   if (wilayaId) {
-    const grids = [...new Set([...P.values()].map((p: any) => p.fee_grid as string | null))];
-    if (!grids.length) grids.push(null);
-    for (const g of grids) {
-      const f = await clientFee(db, wilayaId, isStopdesk, g);
-      if (f !== null && (fee === null || f > fee)) {
-        fee = f;
-        grid = g ?? (await getSetting(db, 'defaultFeeGrid'));
-      }
-    }
+    ({ fee, grid } = await highestGridFee(db, wilayaId, isStopdesk, await lineGrids(db, known)));
     if (fee !== null) {
       const wf = await getSetting(db, 'weightFees');
       if (weight > wf.fromKg) fee += Math.ceil(weight - wf.fromKg) * wf.perKg;
@@ -521,8 +546,8 @@ export async function customerFee(db: Db, wilayaId: number | null, isStopdesk: b
   return { fee, grid, weight, maxDiscount, unlimited };
 }
 
-async function deliveryFeeFor(db: Db, wilayaId: number, stopdesk: boolean, grid: string | null, weight: number): Promise<number> {
-  const base = (await clientFee(db, wilayaId, stopdesk, grid)) ?? 0;
+async function deliveryFeeFor(db: Db, wilayaId: number, stopdesk: boolean, grids: (string | null)[], weight: number): Promise<number> {
+  const base = (await highestGridFee(db, wilayaId, stopdesk, grids)).fee ?? 0;
   const wf = await getSetting(db, 'weightFees');
   const extra = weight > wf.fromKg ? Math.ceil(weight - wf.fromKg) * wf.perKg : 0;
   return base + extra;
@@ -665,7 +690,7 @@ export async function createOrder(
     // (prices worked out by Pilotix itself — a landing page, the AI seller — are already the shop's own prices)
     if (!ctx.session.isAdmin && !opts.landingId && !opts.conversationId && priced.priceCut + input.discount > priced.maxDiscount)
       throw bad(`Prix trop bas : la baisse de prix et la remise dépassent la remise maximale (${priced.maxDiscount} DA)`);
-    const fee = input.deliveryFee ?? (await deliveryFeeFor(tx, input.wilayaId, input.isStopdesk, priced.grid, priced.weight));
+    const fee = input.deliveryFee ?? (await deliveryFeeFor(tx, input.wilayaId, input.isStopdesk, priced.grids, priced.weight));
     const total = priced.subtotal - input.discount + fee;
     // what the customer orders is kept: the upsell is counted against it (lines marked upsell while typing a call are sold in addition)
     const orig = origOf(priced.lines);
@@ -1675,7 +1700,7 @@ function orderExtraProcs() {
      */
     'orders.quote': proc(
       ['confirmation', 'suivi', 'depot'],
-      z.object({ wilayaId: z.number().int().min(1).max(69).nullable(), isStopdesk: z.boolean().default(false), companyId: id.nullable().optional(), items: z.array(z.object({ productId: id, qty: z.number().int().min(1).max(999) })).max(50).default([]) }),
+      z.object({ wilayaId: z.number().int().min(1).max(69).nullable(), isStopdesk: z.boolean().default(false), companyId: id.nullable().optional(), items: z.array(z.object({ productId: id, variantId: id.nullable().optional(), qty: z.number().int().min(1).max(999) })).max(50).default([]) }),
       async (ctx, i) => {
         const { fee, grid, weight, maxDiscount, unlimited } = await customerFee(ctx.db, i.wilayaId, i.isStopdesk, i.items);
         let served = true;

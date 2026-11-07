@@ -141,6 +141,8 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
       soldOut: hide && c.soldOut,
       images: view.images.map((i) => ({ src: i.src, srcset: `${i.src} 480w`, thumb: i.thumb, w: i.w, h: i.h, ...(i.v ? { v: i.v } : {}) })),
       fees: c.fees,
+      feeSets: c.feeSets,
+      variantFee: c.variantFee,
       shopName: c.shopName,
       shopLogo: c.shopLogo,
       whatsapp:

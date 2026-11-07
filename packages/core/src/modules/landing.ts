@@ -196,7 +196,7 @@ export async function productContext(db: Db, productId: number) {
     `WITH r AS (${RESERVED}),
        s AS (SELECT s.variant_id, sum(s.qty)::int AS qty FROM stock s JOIN warehouses wh ON wh.id = s.warehouse_id AND wh.active GROUP BY 1),
        rv AS (SELECT r.variant_id, sum(r.n)::int AS n FROM r JOIN warehouses wh ON wh.id = r.wid AND wh.active GROUP BY 1)
-     SELECT v.id, v.title, v.active, v.price, v.photo, COALESCE(s.qty, 0) - COALESCE(rv.n, 0) AS available
+     SELECT v.id, v.title, v.active, v.price, v.photo, v.fee_grid, COALESCE(s.qty, 0) - COALESCE(rv.n, 0) AS available
      FROM product_variants v LEFT JOIN s ON s.variant_id = v.id LEFT JOIN rv ON rv.variant_id = v.id
      WHERE v.product_id = $1 ORDER BY v.id`,
     [productId],
@@ -207,6 +207,16 @@ export async function productContext(db: Db, productId: number) {
     .map((v: any) => ({ id: num(v.id), title: String(v.title), price: numOrNull(v.price), available: service ? null : num(v.available), photo: (v.photo as string | null) || null }));
   const plain = vars.find((v: any) => v.title === '');
   const fees = await clientHomeFees(db, p.fee_grid);
+  // a size with its own delivery price list (Gestion › Prix de livraison, « par taille »): the page shows its prices
+  // when the customer picks it, as the order will charge them
+  const feeSets: Record<string, Record<number, number>> = {};
+  const variantFee: Record<number, string> = {};
+  for (const v of vars as any[]) {
+    const g = (v.fee_grid as string | null) || null;
+    if (!v.active || v.title === '' || !g || g === ((p.fee_grid as string | null) || null)) continue;
+    feeSets[g] ??= await clientHomeFees(db, g);
+    variantFee[num(v.id)] = g;
+  }
   const shop = await getSetting(db, 'shop');
   const plainAvailable = service ? null : plain ? num(plain.available) : 0;
   const soldOut = !service && (variants.length ? variants.every((v) => (v.available ?? 1) <= 0) : (plainAvailable ?? 1) <= 0);
@@ -220,6 +230,8 @@ export async function productContext(db: Db, productId: number) {
     plainVariantId: plain ? num(plain.id) : null,
     soldOut,
     fees,
+    feeSets,
+    variantFee,
     shopName: shop.name,
     shopLogo: pageLogo((await getSetting(db, 'logo')).url ?? null),
   };
@@ -344,6 +356,7 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     soldOut: hide && pc.soldOut,
     images: viewImages(refs, await imageRows(ctx.db, refs, !o.imgBase), o.imgBase),
     fees: pc.fees,
+    ...(Object.keys(pc.variantFee).length ? { feeSets: pc.feeSets, variantFee: pc.variantFee } : {}),
     shopName: pc.shopName,
     shopLogo: pc.shopLogo,
     // the pixel only on the real page: never in Pilotix (preview, demo), whose visits are not customers
@@ -1569,7 +1582,7 @@ export const landingProcs = {
   /** price, variants (own price, stock), delivery prices and shop name of a product (the editor's preview) */
   'landing.context': proc([...WHO], z.object({ productId: id }), async (ctx, { productId }) => {
     const pc = await productContext(ctx.db, productId);
-    return { name: pc.name, price: pc.price, photo: pc.photo, fixedPrice: pc.fixedPrice, variants: pc.variants, soldOut: pc.soldOut, fees: pc.fees, shopName: pc.shopName, shopLogo: pc.shopLogo, bits: LANDING_POW_BITS };
+    return { name: pc.name, price: pc.price, photo: pc.photo, fixedPrice: pc.fixedPrice, variants: pc.variants, soldOut: pc.soldOut, fees: pc.fees, feeSets: pc.feeSets, variantFee: pc.variantFee, shopName: pc.shopName, shopLogo: pc.shopLogo, bits: LANDING_POW_BITS };
   }),
 
   'landing.freeSlug': proc([...WHO], z.object({ name: z.string().max(200), sku: z.string().max(120).optional(), id: id.optional() }), async (ctx, i) => ({

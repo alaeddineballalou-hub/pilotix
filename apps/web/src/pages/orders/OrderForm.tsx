@@ -179,7 +179,8 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
   const coId = companyId === '' ? data.defaultCompanyId : companyId;
   const company = data.companies.find((c) => c.id === coId) ?? null;
   const isOwn = company?.kind === 'own';
-  const quoteItems = lines.filter((l) => l.productId && l.variantId).map((l) => ({ productId: l.productId!, qty: l.qty }));
+  // each line's size too: a size may have its own delivery price list (Gestion › Prix de livraison, « par taille »)
+  const quoteItems = lines.filter((l) => l.productId && l.variantId).map((l) => ({ productId: l.productId!, variantId: l.variantId!, qty: l.qty }));
   const quote = useRpc('orders.quote', { wilayaId: wil === '' ? null : wil, isStopdesk: desk, companyId: companyId === '' ? null : companyId, items: quoteItems });
   const q = quote.data;
   useEffect(() => {

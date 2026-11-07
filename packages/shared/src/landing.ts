@@ -35,6 +35,9 @@ export interface LandingView {
   images: LandingImage[];
   /** home delivery price per wilaya code (missing: told at confirmation) */
   fees: Record<number, number>;
+  /** sizes with their own delivery price list: the lists' home prices by name, and each such size's list (else `fees`) */
+  feeSets?: Record<string, Record<number, number>>;
+  variantFee?: Record<number, string>;
   shopName: string;
   /** the boutique's logo (a small picture, « Mes boutiques »): at the top and the bottom of the page */
   shopLogo?: string | null;
@@ -234,7 +237,8 @@ var w=$('w'),cm=$('cm'),qt=$('qt'),vr=$('vr');
 function money(v){return Math.round(v)+'.00 \\u062f\\u062c'}
 function qv(){return Math.max(1,Math.min(99,parseInt(ar2(qt.value))||1))}
 function unit(){var p=vr&&C.vp[vr.value];return p!=null?p:C.price}
-function sum(){var q=qv(),fee=C.fees[w.value],s=unit()*q,pr=d.querySelector('.pr');$('pp').textContent=money(unit());if(C.op&&pr)pr.className=unit()<C.op?'pr':'pr no';$('s1').textContent=money(s);
+function fz(){var g=vr&&C.vf&&C.vf[vr.value];return g&&C.fs&&C.fs[g]?C.fs[g]:C.fees}
+function sum(){var q=qv(),fee=fz()[w.value],s=unit()*q,pr=d.querySelector('.pr');$('pp').textContent=money(unit());if(C.op&&pr)pr.className=unit()<C.op?'pr':'pr no';$('s1').textContent=money(s);
 $('s2').textContent=!w.value?'\\u0627\\u062e\\u062a\\u0631 \\u0627\\u0644\\u0648\\u0644\\u0627\\u064a\\u0629':fee==null?'\\u064a\\u062d\\u062f\\u062f \\u0639\\u0646\\u062f \\u0627\\u0644\\u062a\\u0623\\u0643\\u064a\\u062f':fee?money(fee):'\\u0645\\u062c\\u0627\\u0646\\u064a';$('s3').textContent=money(s+(fee||0))}
 w.onchange=function(){cm.innerHTML='<option value="">\\u2026</option>';cm.disabled=true;sum();if(!w.value)return;var v=w.value;ask('geo',v,function(r){if(w.value!=v)return;var h='<option value="">\\u0627\\u062e\\u062a\\u0631 \\u0627\\u0644\\u0628\\u0644\\u062f\\u064a\\u0629</option>';
 (r||[]).forEach(function(c){h+='<option value="'+c[0].replace(/"/g,'&quot;')+'">'+(c[1]||c[0])+'</option>'});cm.innerHTML=h;cm.disabled=false})};
@@ -257,7 +261,7 @@ var q=qv(),wait=Date.now();
 (function send(){if(nonce===null&&Date.now()-wait<4000)return setTimeout(send,150);var b=form();b.name=nm;b.phone=ph;b.ch=C.ch;b.pw=nonce;b.t=Date.now()-t0;b.ki=ki;b.wd=!!nv.webdriver;b.sc=de.scrollHeight-de.clientHeight<200?50:sy;b.ps=ps;b.mt=nv.maxTouchPoints==null?null:nv.maxTouchPoints;b.tt=tt;b.tk=C.ts;try{b.tz=Intl.DateTimeFormat().resolvedOptions().timeZone||''}catch(e){}
 ask('order',b,function(r,st){
 if(!r||!r.ok){busy=false;btn.disabled=false;btn.textContent=C.cta;$('fe').textContent='\\u062a\\u0639\\u0630\\u0631 \\u0627\\u0644\\u0625\\u0631\\u0633\\u0627\\u0644\\u060c \\u062a\\u062d\\u0642\\u0642 \\u0645\\u0646 \\u0627\\u0644\\u0627\\u062a\\u0635\\u0627\\u0644 \\u0648\\u0623\\u0639\\u062f \\u0627\\u0644\\u0645\\u062d\\u0627\\u0648\\u0644\\u0629';return}
-done=1;var fee=C.fees[w.value];$('okn').textContent=nm;$('o1').textContent=C.title+(vr?' \\u2014 '+vr.options[vr.selectedIndex].text:'')+' \\u00d7 '+q;$('o2').textContent=money(unit()*q+(fee||0));
+done=1;var fee=fz()[w.value];$('okn').textContent=nm;$('o1').textContent=C.title+(vr?' \\u2014 '+vr.options[vr.selectedIndex].text:'')+' \\u00d7 '+q;$('o2').textContent=money(unit()*q+(fee||0));
 var wa=$('wa');if(wa&&C.wa){var V={nom:nm,produit:C.title+(vr?' \\u2014 '+vr.options[vr.selectedIndex].text:''),quantite:q,total:money(unit()*q+(fee||0)),telephone:nph(f.ph.value),wilaya:w.value?w.options[w.selectedIndex].text.replace(/^\\d+\\s*-\\s*/,''):'',commune:cm.value?cm.options[cm.selectedIndex].text:''};wa.href='https://wa.me/'+C.wa.n+'?text='+encodeURIComponent(C.wa.m.replace(/\\{(\\w+)\\}/g,function(x,k){return V[k]!=null?V[k]:x}))}
 f.style.display='none';$('ok').style.display='block';window.scrollTo(0,0)})})()};sum()})();`;
 
@@ -336,7 +340,7 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
     if (x.v && vi[x.v] === undefined) vi[x.v] = k;
   });
   const cfg = {
-    mode: r.mode, post: r.post, geo: r.geo, lead: r.lead ?? '', ch: r.challenge, bits: r.bits, slug: v.slug, price: v.price, vp, vi, fees: v.fees, title: v.title, vl: v.variantLabel, cta,
+    mode: r.mode, post: r.post, geo: r.geo, lead: r.lead ?? '', ch: r.challenge, bits: r.bits, slug: v.slug, price: v.price, vp, vi, fees: v.fees, fs: v.variantFee && Object.keys(v.variantFee).length ? v.feeSets ?? null : null, vf: v.variantFee && Object.keys(v.variantFee).length ? v.variantFee : null, title: v.title, vl: v.variantLabel, cta,
     vid: r.viewId ?? '', px: r.mode === 'live' ? pixelIds(v.pixelId, META_PIXEL)[0] ?? '' : '', pxs: r.mode === 'live' ? pixelIds(v.pixelId, META_PIXEL) : [], pid: v.productId ?? 0, op: off ? v.oldPrice : 0,
     g: r.group?.slug ?? '',
     wa: v.whatsapp && whatsappNumber(v.whatsapp.number) ? { n: whatsappNumber(v.whatsapp.number), m: v.whatsapp.message || WHATSAPP_DEFAULT.message } : null,
