@@ -2,7 +2,10 @@
 // price, a score and Claude's reading. Each shop chooses where the ads come from:
 //  - the Pilotix Chrome extension (free): the user's own Chrome opens the public Ad Library and hands the ads to
 //    spy.ingest, one keyword at a time (Facebook refuses these pages to a server, never to a browser);
-//  - ScrapeCreators or SearchAPI.io (paid keys, server side): spy.search on demand and the daily scan (spy.scan).
+//  - « Recherche Pilotix » on Pilotix's server: Pilotix's own key (the control room's Pilot AI › Spy AI, platform/
+//    spykey.ts: ScrapeCreators or SearchAPI.io, the other one as a backup), a shop never brings one, so many searches a
+//    day per shop: spy.search on demand and the daily scan (spy.scan);
+//  - on a server without the control room (a single shop), the shop's own ScrapeCreators or SearchAPI.io key.
 // Facebook's official Ad Library API returns no Algerian shop ads (only political ads and ads shown in the EU).
 // Ads are grouped (same page + same text = one creative, its copies added up) and scored from what the library shows:
 // days online, copies, video, placements, other sellers. Never spend: Meta does not publish it for Algeria.
@@ -13,19 +16,23 @@ import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
 import { getRaw, setRaw } from './admin';
 import { AiRequest, AiResponse, aiKeyed, dellalSettings, PILOT_CHEAP_MODEL, pilotOn } from './dellal';
+import { spyPlatformConfig, spyPlatformTools, spySearchesToday, takeSpySearch } from '../platform/spykey';
 
 // ---------------------------------------------------------------- settings and secrets
-export const SPY_SOURCES = ['extension', 'scrapecreators', 'searchapi'] as const;
+export const SPY_SOURCES = ['extension', 'pilotix', 'scrapecreators', 'searchapi'] as const;
 export type SpySource = (typeof SPY_SOURCES)[number];
-export type SpyPaidSource = Exclude<SpySource, 'extension'>;
-export const isPaid = (s: SpySource): s is SpyPaidSource => s !== 'extension';
+/** the tools that search on the server (Pilotix's key, or a single shop's own key) */
+export type SpyPaidSource = 'scrapecreators' | 'searchapi';
+/** the search runs on the server (« pilotix », or a single shop's own key), not in the person's Chrome */
+export const isPaid = (s: SpySource): boolean => s !== 'extension';
+const ownTool = (s: SpySource): s is SpyPaidSource => s === 'scrapecreators' || s === 'searchapi';
 
 /** Secret keys (never returned by any action). */
 export const SPY_SECRETS = { scrapecreators: 'secret_spy_scrapecreators', searchapi: 'secret_spy_searchapi' } as const;
 
 export interface SpySettings {
   source: SpySource;
-  /** paid sources: scan the followed products every morning */
+  /** server searches: scan the followed products every morning (each shop turns it on) */
   dailyScan: boolean;
   /** hour of the daily scan, Algeria time */
   scanHour: number;
@@ -34,12 +41,53 @@ export interface SpySettings {
   /** most ads kept per keyword and search */
   maxPerKeyword: number;
 }
-export const DEFAULT_SPY: SpySettings = { source: 'extension', dailyScan: true, scanHour: 6, ownPages: '', maxPerKeyword: 30 };
+export const DEFAULT_SPY: SpySettings = { source: 'extension', dailyScan: false, scanHour: 6, ownPages: '', maxPerKeyword: 30 };
 
 export async function spySettings(db: Db): Promise<SpySettings> {
   return { ...DEFAULT_SPY, ...(await getRaw<Partial<SpySettings>>(db, 'spy', {})) };
 }
 const spyKey = async (db: Db, s: SpyPaidSource) => (await getRaw<string>(db, SPY_SECRETS[s], '')) || '';
+
+/**
+ * Pilotix's server (the control room: ctx.t), or its preview in the browser (no server at all), which shows a shop of
+ * Pilotix's server: there a shop never brings a search key of its own.
+ */
+const onPilotix = (ctx: Ctx) => !!ctx.t || !ctx.server;
+
+/**
+ * The settings as they apply here. On Pilotix's server a shop searches with Pilotix's key (« pilotix ») or the extension,
+ * never with a key of its own (an old own key counts as « pilotix »); a single shop on its own server (no control room)
+ * has no « pilotix »: its own key, or the extension.
+ */
+async function settingsHere(ctx: Ctx): Promise<SpySettings> {
+  const s = await spySettings(ctx.db);
+  if (onPilotix(ctx) && ownTool(s.source)) return { ...s, source: 'pilotix' };
+  if (!onPilotix(ctx) && s.source === 'pilotix') return { ...s, source: 'extension' };
+  return s;
+}
+
+type Tool = { tool: SpyPaidSource; key: string };
+/** The tools of a server search, in order: Pilotix's (its main one, then the backup), or a single shop's own key. */
+async function toolsOf(ctx: Ctx, s: SpySettings): Promise<Tool[]> {
+  if (ctx.t) return s.source === 'pilotix' ? spyPlatformTools(ctx.t).catch(() => []) : [];
+  if (onPilotix(ctx) || !ownTool(s.source)) return [];
+  const key = await spyKey(ctx.db, s.source);
+  return key ? [{ tool: s.source, key }] : [];
+}
+
+/** A made-up day on Pilotix's key, for the preview and the demo shop: they search nothing, they show how it looks. */
+const PREVIEW_QUOTA = { used: 6, max: 20, ready: true };
+
+/** Pilotix's key: this shop's searches today against its daily limit, and whether Pilotix's search is ready (null: no control room). */
+async function quotaOf(ctx: Ctx): Promise<{ used: number; max: number; ready: boolean } | null> {
+  // no server tools: the browser preview (even with its several shops), or the demo shop of a server
+  if (!ctx.server) return PREVIEW_QUOTA;
+  if (!ctx.t || !ctx.shop) return null;
+  const c = await spyPlatformConfig(ctx.t).catch(() => null);
+  if (!c) return null;
+  const used = (await spySearchesToday(ctx.t, ctx.now(), ctx.shop.id)).searches;
+  return { used, max: c.perShopDay, ready: c.enabled && (c.keys.scrapecreators || c.keys.searchapi) };
+}
 
 // ---------------------------------------------------------------- what the sources hand over
 /** One ad as a source gives it (the extension, ScrapeCreators, SearchAPI.io all mirror Facebook's own library data). */
@@ -739,33 +787,73 @@ async function enrich(ctx: Ctx, productId: number): Promise<void> {
   }
 }
 
-/** Searches a product's keywords with the paid source (server), stores the ads, then pictures, sites and Claude. */
-async function searchPaid(ctx: Ctx, productId: number): Promise<{ keywords: number; found: number; added: number; stopped: number; analyzed: number }> {
-  const s = await spySettings(ctx.db);
+/** One keyword with the first tool that answers: Pilotix's backup takes over when its main tool fails. */
+async function searchOne(spy: SpyServer, tools: Tool[], a: { query: string; max: number }, ctx: Ctx): Promise<SpySearchResult & { tool: SpyPaidSource }> {
+  let last: unknown = null;
+  for (const t of tools) {
+    try {
+      return { ...(await spy('search', { source: t.tool, key: t.key, query: a.query, country: 'DZ', max: a.max }, ctx)), tool: t.tool };
+    } catch (e) {
+      last = e;
+    }
+  }
+  throw last instanceof Error ? last : bad('Recherche indisponible');
+}
+
+export interface SpyPaidResult {
+  keywords: number;
+  found: number;
+  added: number;
+  stopped: number;
+  analyzed: number;
+  /** Pilotix's key: the shop's daily limit stopped the search before its last keyword (null: no limit here) */
+  limited: boolean;
+  quota: { used: number; max: number } | null;
+}
+
+/**
+ * Searches a product's keywords on the server (Pilotix's key, or a single shop's own key), stores the ads, then
+ * pictures, sites and Claude. On Pilotix's key each keyword counts in the shop's daily limit: once it is reached the
+ * search stops there, keeps what it found, and marks nothing « arrêtée » (the other keywords were not looked at).
+ */
+async function searchPaid(ctx: Ctx, productId: number): Promise<SpyPaidResult> {
+  const s = await settingsHere(ctx);
   if (!isPaid(s.source)) throw bad('La source est l’extension Chrome : la recherche se fait depuis votre navigateur.');
   const spy = spyOf(ctx);
   if (!spy) throw bad('Recherche indisponible sur ce serveur');
-  const key = await spyKey(ctx.db, s.source);
-  if (!key) throw bad('Ajoutez la clé de la source dans AI Spy › Réglages.');
+  const tools = await toolsOf(ctx, s);
+  if (!tools.length) throw bad(ctx.t ? 'La recherche Pilotix n’est pas encore prête : utilisez l’extension Chrome en attendant.' : 'Ajoutez la clé de la source dans AI Spy › Réglages.');
+  const conf = ctx.t ? await spyPlatformConfig(ctx.t) : null;
+  if (conf && !ctx.shop) throw bad('Recherche indisponible sur ce serveur');
+  // one search on Pilotix's key, if today's limit allows it (a single shop's own key counts nothing)
+  const take = async () => !conf || (await takeSpySearch(ctx.t!, ctx.shop!.id, conf.perShopDay, ctx.now()));
   let kws = await keywordsOf(ctx.db, productId);
   if (!kws.length) kws = await suggestKeywords(ctx, productId);
   const since = new Date(ctx.now()).toISOString();
   let found = 0;
   let added = 0;
+  let limited = false;
   const done: SpyKeyword[] = [];
   for (const k of kws.slice(0, 10)) {
-    const r = await spy('search', { source: s.source, key, query: k.q, country: 'DZ', max: s.maxPerKeyword }, ctx);
-    const ing = await ingestAds(ctx, productId, s.source, k.q, r.ads);
+    if (!(await take())) {
+      limited = true;
+      break;
+    }
+    const r = await searchOne(spy, tools, { query: k.q, max: s.maxPerKeyword }, ctx);
+    const ing = await ingestAds(ctx, productId, r.tool, k.q, r.ads);
     found += r.ads.length;
     added += ing.added;
     done.push({ ...k, count: r.count ?? r.ads.length, at: since });
   }
-  await saveKeywords(ctx.db, productId, [...done, ...kws.slice(10)]);
-  const fin = await finishSearch(ctx, productId, since);
+  const quota = conf && ctx.shop ? { used: (await spySearchesToday(ctx.t!, ctx.now(), ctx.shop.id)).searches, max: conf.perShopDay } : null;
+  if (!done.length) return { keywords: 0, found: 0, added: 0, stopped: 0, analyzed: 0, limited, quota };
+  // each searched keyword gets its new count; the others stay as they were, in their place
+  await saveKeywords(ctx.db, productId, kws.map((k) => done.find((d) => d.q.toLowerCase() === k.q.toLowerCase()) ?? k));
+  const fin = limited ? { stopped: 0 } : await finishSearch(ctx, productId, since);
   await enrich(ctx, productId);
   const an = await analyze(ctx, productId);
   await ctx.db.query(`UPDATE spy_watch SET brief = NULL WHERE product_id = $1`, [productId]);
-  return { keywords: done.length, found, added, stopped: fin.stopped, analyzed: an.analyzed };
+  return { keywords: done.length, found, added, stopped: fin.stopped, analyzed: an.analyzed, limited, quota };
 }
 
 // ---------------------------------------------------------------- findings (all products)
@@ -807,9 +895,9 @@ const dzHour = (now: number) => new Date(now + 3_600_000).getUTCHours();
 const dzDay = (now: number) => new Date(now + 3_600_000).toISOString().slice(0, 10);
 
 async function scan(ctx: Ctx): Promise<{ ran: boolean; why?: string; products?: number }> {
-  const s = await spySettings(ctx.db);
+  const s = await settingsHere(ctx);
   if (!isPaid(s.source) || !s.dailyScan) return { ran: false, why: 'off' };
-  if (!ctx.server?.spy || !(await spyKey(ctx.db, s.source))) return { ran: false, why: 'no source' };
+  if (!ctx.server?.spy || !(await toolsOf(ctx, s)).length) return { ran: false, why: 'no source' };
   const now = ctx.now();
   if (dzHour(now) < s.scanHour) return { ran: false, why: 'too early' };
   if ((await getRaw<string>(ctx.db, 'spy_last_scan', '')) === dzDay(now)) return { ran: false, why: 'done today' };
@@ -818,13 +906,26 @@ async function scan(ctx: Ctx): Promise<{ ran: boolean; why?: string; products?: 
   let n = 0;
   for (const r of list) {
     try {
-      await searchPaid(ctx, num(r.product_id));
-      n++;
+      const res = await searchPaid(ctx, num(r.product_id));
+      if (res.keywords) n++;
+      // Pilotix's key: today's searches are used up, the other products wait for tomorrow (searched first then)
+      if (res.limited) break;
     } catch {
       /* one product's failure (no credits, a refused key) never stops the others */
     }
   }
   return { ran: true, products: n };
+}
+
+/**
+ * One real search in Algeria with a tool and its key, nothing stored and counted for no shop (a single shop's settings
+ * test, the control room's « Tester »). Without the server's sources (the preview) it says where the test happens.
+ */
+export async function spyTryKey(ctx: Ctx, tool: SpyPaidSource, key: string, query: string): Promise<{ ok: boolean; count: number; sample: { page: string; text: string }[]; message: string }> {
+  const spy = spyOf(ctx);
+  if (!spy) return { ok: false, count: 0, sample: [], message: 'Aperçu : le test se fait sur votre serveur Pilotix.' };
+  const r = await spy('search', { source: tool, key, query, country: 'DZ', max: 10 }, ctx);
+  return { ok: r.ads.length > 0, count: r.count ?? r.ads.length, sample: r.ads.slice(0, 3).map((a) => ({ page: a.pageName, text: (a.body ?? '').slice(0, 120) })), message: '' };
 }
 
 // ---------------------------------------------------------------- procedures
@@ -859,10 +960,11 @@ export const spyProcs = {
 
   /** Everything AI Spy shows for one product. */
   'spy.view': proc(['marketer'], z.object({ productId: id }), async (ctx, { productId }) => {
-    const s = await spySettings(ctx.db);
+    const s = await settingsHere(ctx);
     const product = await productRow(ctx.db, productId, ctx.now());
     const w = (await ctx.db.query(`SELECT brief FROM spy_watch WHERE product_id = $1`, [productId]))[0];
     const events = await ctx.db.query(`SELECT id, at, kind, page_name, gkey, data FROM spy_events WHERE product_id = $1 ORDER BY at DESC LIMIT 20`, [productId]);
+    const quota = await quotaOf(ctx);
     return {
       product,
       keywords: await keywordsOf(ctx.db, productId),
@@ -870,7 +972,10 @@ export const spyProcs = {
       brief: (w?.brief as SpyBrief | null) ?? null,
       events: events.map((e: any) => ({ id: num(e.id), at: iso(e.at), kind: str(e.kind) as 'new_ad' | 'stopped' | 'price', page: str(e.page_name), gkey: e.gkey ?? null, data: e.data ?? {} })),
       source: s.source,
-      hasKey: isPaid(s.source) ? !!(await spyKey(ctx.db, s.source)) : true,
+      /** the search can run: Pilotix's search is ready, or the shop's own key is there (the extension: always) */
+      hasKey: s.source === 'pilotix' ? !!quota?.ready : isPaid(s.source) ? (await toolsOf(ctx, s)).length > 0 : true,
+      /** Pilotix's key: this shop's searches today and its daily limit (null: no control room) */
+      quota,
       ai: await aiOn(ctx),
       platform: !!ctx.t,
       demo: !ctx.server,
@@ -896,8 +1001,12 @@ export const spyProcs = {
   /** Keywords prepared by Claude (or from the product name without AI). */
   'spy.keywords.suggest': proc(['marketer'], z.object({ productId: id }), (ctx, { productId }) => suggestKeywords(ctx, productId)),
 
-  /** Paid source: searches the product's keywords on the server now. */
-  'spy.search': proc(['marketer'], z.object({ productId: id }), (ctx, { productId }) => searchPaid(ctx, productId)),
+  /** Server search (Pilotix's key, or a single shop's own key): the product's keywords now. */
+  'spy.search': proc(['marketer'], z.object({ productId: id }), async (ctx, { productId }) => {
+    const r = await searchPaid(ctx, productId);
+    if (r.limited && !r.keywords) throw bad(`Limite du jour atteinte (${r.quota?.max ?? 0} recherches par jour) : la recherche Pilotix reprend demain. L’extension Chrome, elle, n’a pas de limite.`);
+    return r;
+  }),
 
   /** Extension: the ads of one keyword, read by the user's Chrome in Facebook's Ad Library. */
   'spy.ingest': proc(['marketer'], z.object({ productId: id, keyword: z.string().trim().min(1).max(60), count: z.number().int().min(0).nullable(), ads: z.array(RawAdSchema).max(200) }), async (ctx, i) => {
@@ -977,12 +1086,16 @@ export const spyProcs = {
   }),
 
   'spy.settings.get': proc(['marketer'], z.object({}), async (ctx) => {
-    const s = await spySettings(ctx.db);
+    const s = await settingsHere(ctx);
     return {
       settings: s,
-      keys: { scrapecreators: !!(await spyKey(ctx.db, 'scrapecreators')), searchapi: !!(await spyKey(ctx.db, 'searchapi')) },
+      // Pilotix's server (and its preview): shops have no key of their own (Pilotix's, set in the control room)
+      keys: onPilotix(ctx) ? { scrapecreators: false, searchapi: false } : { scrapecreators: !!(await spyKey(ctx.db, 'scrapecreators')), searchapi: !!(await spyKey(ctx.db, 'searchapi')) },
+      /** Pilotix's key: ready or not, this shop's searches today and its daily limit (null: no control room) */
+      pilotix: await quotaOf(ctx),
       ai: await aiOn(ctx),
-      platform: !!ctx.t,
+      /** Pilotix's server or its preview: « Recherche Pilotix » or the extension, no key boxes */
+      platform: onPilotix(ctx),
       lastScan: (await getRaw<string>(ctx.db, 'spy_last_scan', '')) || null,
       demo: !ctx.server,
     };
@@ -990,6 +1103,12 @@ export const spyProcs = {
 
   'spy.settings.save': proc([], SettingsInput, async (ctx, i) => {
     const { keys, ...s } = i;
+    // Pilotix's server (and its preview): Pilotix's key or the extension, a shop never brings a key (any key sent is ignored)
+    if (onPilotix(ctx)) {
+      await setRaw(ctx.db, 'spy', { ...s, source: s.source === 'extension' ? 'extension' : 'pilotix' }, ctx.session.profile.id);
+      return { ok: true };
+    }
+    if (s.source === 'pilotix') throw bad('« Recherche Pilotix » n’existe que sur le serveur de Pilotix : choisissez l’extension ou une clé.');
     await setRaw(ctx.db, 'spy', s, ctx.session.profile.id);
     for (const k of ['scrapecreators', 'searchapi'] as const) {
       const v = keys[k];
@@ -999,14 +1118,12 @@ export const spyProcs = {
     return { ok: true };
   }),
 
-  /** One real search in Algeria with a paid source's key (the stored one, or the one being typed). */
+  /** One real search in Algeria with a single shop's own key (the stored one, or the one being typed). */
   'spy.settings.test': proc([], z.object({ source: z.enum(['scrapecreators', 'searchapi']), key: z.string().max(400).optional(), query: z.string().trim().min(2).max(60).default('poussette') }), async (ctx, i) => {
-    const spy = spyOf(ctx);
-    if (!spy) return { ok: false, count: 0, sample: [] as { page: string; text: string }[], message: 'Aperçu : le test se fait sur votre serveur Pilotix.' };
+    if (onPilotix(ctx)) return { ok: false, count: 0, sample: [] as { page: string; text: string }[], message: 'La clé de recherche est celle de Pilotix (salle de contrôle) : rien à tester ici.' };
     const key = i.key?.trim() || (await spyKey(ctx.db, i.source));
     if (!key) throw bad('Ajoutez d’abord la clé.');
-    const r = await spy('search', { source: i.source, key, query: i.query, country: 'DZ', max: 10 }, ctx);
-    return { ok: r.ads.length > 0, count: r.count ?? r.ads.length, sample: r.ads.slice(0, 3).map((a) => ({ page: a.pageName, text: (a.body ?? '').slice(0, 120) })), message: '' };
+    return spyTryKey(ctx, i.source, key, i.query);
   }),
 
   /** Include a product in the daily scan (or not). */

@@ -3,8 +3,8 @@
 // its two pushes (« Push en test », then « Push sur le serveur »: PilotRelease.tsx); how it learns, drawn; its
 // instruction book to download, always the latest; last night, the coach's morning check of each lesson, the lesson books),
 // Test & lessons (talk to Dellal as a customer with the book of your
-// choice; teach it a lesson in your own words: PilotLab.tsx), CM AI (the comments it handled), Spy AI (the competitors it
-// watches), and Settings & costs (the key, the daily limit, the night budget, what each shop's AI costs to bill it; Pilotix's
+// choice; teach it a lesson in your own words: PilotLab.tsx), CM AI (the comments it handled), Spy AI (Pilotix's own search
+// key for every shop, its daily number of searches per shop: SpyKey.tsx; the competitors it watches), and Settings & costs (the key, the daily limit, the night budget, what each shop's AI costs to bill it; Pilotix's
 // Meta and TikTok apps, which let the boutiques link their accounts: SocialApps.tsx).
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +22,7 @@ import { ReleaseCard } from './PilotRelease';
 import { CaseModal } from './pilotCase';
 import { SocialAppsCard } from './SocialApps';
 import { PhotoStoreCard } from './PhotoStore';
+import { SpyKeyCard } from './SpyKey';
 
 type State = POut<'p.pilot.state'>;
 type Lesson = State['candidates'][number];
@@ -87,7 +88,12 @@ function PilotAiInner({ staff, tab, demo }: { staff: Staff; tab?: string; demo: 
       )}
       {cur === 'lab' && <LabTab d={d} manager={manager} />}
       {cur === 'cm' && <CmBoard {...board} />}
-      {cur === 'spy' && <SpyBoard {...board} />}
+      {cur === 'spy' && (
+        <>
+          <SpyKeyCard manager={manager} />
+          <SpyBoard {...board} />
+        </>
+      )}
       {cur === 'settings' && (
         <>
           <div className="pilot-settings">

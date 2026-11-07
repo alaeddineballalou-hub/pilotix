@@ -14,7 +14,7 @@
   "extOn": "détectée",
   "extOff": "non détectée",
   "extDemo": "absente de l’aperçu",
-  "demoNote": "Aperçu : les pubs affichées sont des exemples. La recherche marche dans le vrai Pilotix (extension Chrome ou clé payante).",
+  "demoNote": "Aperçu : les pubs affichées sont des exemples. La recherche marche dans le vrai Pilotix (Recherche Pilotix ou extension Chrome).",
   "noKey": "Ajoutez la clé de la source payante dans AI Spy › Réglages pour lancer la recherche.",
   "productGone": "Ce produit n’est plus dans la liste (inactif ou supprimé).",
   "noProducts": "Aucun produit actif : ajoutez vos produits dans Produits & stock.",
@@ -71,7 +71,9 @@
     "failed": "Aucun mot-clé n’a abouti. Vérifiez l’extension et réessayez.",
     "errors_one": "{{count}} étape n’a pas abouti",
     "errors_other": "{{count}} étapes n’ont pas abouti",
-    "partial": "Les pubs non revues n’ont pas été marquées « arrêtées » : relancez la recherche quand tout passe."
+    "partial": "Les pubs non revues n’ont pas été marquées « arrêtées » : relancez la recherche quand tout passe.",
+    "limited_one": "Limite du jour atteinte après {{count}} mot-clé : {{found}} pubs lues. Les autres mots-clés passent demain ({{max}} recherches par jour).",
+    "limited_other": "Limite du jour atteinte après {{count}} mots-clés : {{found}} pubs lues. Les autres mots-clés passent demain ({{max}} recherches par jour)."
   },
   "prog": {
     "kw": "Mot-clé {{i}}/{{n}} · <b>{{q}}</b> — {{step}}",
@@ -298,7 +300,8 @@
     "via": {
       "extension": "Votre Chrome ouvre la bibliothèque Facebook et lit les pubs quand vous cliquez sur « Chercher ». Gratuit, sans scan automatique.",
       "scrapecreators": "Le serveur Pilotix cherche avec votre clé ScrapeCreators, à la demande et chaque matin. Il lit aussi les sites concurrents (prix, plateforme, formulaire).",
-      "searchapi": "Le serveur Pilotix cherche avec votre clé SearchAPI.io, à la demande et chaque matin. Il lit aussi les sites concurrents (prix, plateforme, formulaire)."
+      "searchapi": "Le serveur Pilotix cherche avec votre clé SearchAPI.io, à la demande et chaque matin. Il lit aussi les sites concurrents (prix, plateforme, formulaire).",
+      "pilotix": "Le serveur Pilotix cherche pour vous avec son propre service, à la demande et chaque matin si vous l’activez. Il lit aussi les sites concurrents (prix, plateforme, formulaire)."
     },
     "aiOn": "Claude (clé de Pilot Message) lit chaque pub et prépare le brief.",
     "aiOnPilot": "Claude (l’IA de Pilotix) lit chaque pub et prépare le brief.",
@@ -331,6 +334,11 @@
         "price": "40 $/mois",
         "desc": "Clé payante utilisée par le serveur Pilotix : scan automatique chaque matin, l’Algérie est officiellement prise en charge.",
         "ph": "Clé SearchAPI.io"
+      },
+      "pilotix": {
+        "name": "Recherche Pilotix",
+        "price": "Inclus",
+        "desc": "Pilotix cherche pour vous avec son propre service, depuis son serveur : à la demande, et chaque matin si vous l’activez. Rien à installer, aucune clé à acheter. {{max}} recherches par jour (1 recherche = 1 mot-clé)."
       }
     },
     "missingKey": "Ajoutez la clé {{name}} : sans elle, la recherche ne peut pas se faire.",
@@ -362,7 +370,14 @@
     "aiOn": "IA activée",
     "aiOff": "IA désactivée",
     "aiHelp": "L’analyse IA (pertinence, accroche, angle, offre, brief) utilise la clé Claude de Pilot Message (Dellal). Sans elle, AI Spy montre les chiffres et un résumé simple.",
-    "aiLink": "Réglages de Pilot Message"
+    "aiLink": "Réglages de Pilot Message",
+    "sourceHelpPilotix": "Facebook refuse ses pages de pubs aux serveurs : soit votre Chrome les lit (extension gratuite, sans limite), soit Pilotix les cherche pour vous avec son propre service.",
+    "pilotixNotReady": "Pas encore prête : Pilotix l’active bientôt.",
+    "pilotixReady": "Prête",
+    "pilotixFull": "Les {{max}} recherches du jour sont faites : la suite demain.",
+    "pilotixToday": "Aujourd’hui : {{used}} / {{max}} recherches",
+    "pilotixOff": "La Recherche Pilotix n’est pas encore prête : en attendant, utilisez l’extension Chrome (gratuite).",
+    "dailyHelpPilotix": "Recherche Pilotix : le serveur cherche les mots-clés des produits inclus une fois par jour et vous prévient des changements. Le scan compte dans vos {{max}} recherches du jour."
   },
   "ext": {
     "title": "Extension Chrome Pilotix",
@@ -376,5 +391,9 @@
     "s3": "Dans l’extension, ajoutez votre adresse Pilotix :",
     "copyOrigin": "Copier l’adresse",
     "recheck": "Vérifier à nouveau"
-  }
+  },
+  "quota": "{{used}} / {{max}} aujourd’hui",
+  "pilotixOffShort": "pas encore prête",
+  "pilotixOff": "La Recherche Pilotix n’est pas encore prête : utilisez l’extension Chrome en attendant.",
+  "limitToday": "Les {{max}} recherches Pilotix du jour sont faites : la suite demain matin. L’extension Chrome, elle, n’a pas de limite."
 }

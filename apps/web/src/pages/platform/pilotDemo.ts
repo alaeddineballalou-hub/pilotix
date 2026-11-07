@@ -334,12 +334,13 @@ function cm(i: { days?: number; shopId?: number }) {
 function spy(i: { days?: number; shopId?: number }) {
   const days = i.days ?? 30;
   const p = period(days);
-  const base: Record<number, number[]> = { 1: [18, 1020, 362, 141, 846, 12, 5, 21], 7: [10, 560, 190, 64, 455, 6, 3, 11], 12: [6, 240, 88, 35, 189, 3, 1, 5] };
-  const keys = ['watched', 'ads', 'active', 'newAds', 'analysed', 'briefs', 'followed', 'alerts'] as const;
+  // the last figure: the searches on Pilotix's key in 30 days (they grow with the period, like new ads)
+  const base: Record<number, number[]> = { 1: [18, 1020, 362, 141, 846, 12, 5, 21, 412], 7: [10, 560, 190, 64, 455, 6, 3, 11, 236], 12: [6, 240, 88, 35, 189, 3, 1, 5, 98] };
+  const keys = ['watched', 'ads', 'active', 'newAds', 'analysed', 'briefs', 'followed', 'alerts', 'searches'] as const;
   const f = days / 30;
   const rows = SHOPS.filter((s) => !i.shopId || s.id === i.shopId).map((s) => {
     const r = { key: String(s.id), label: s.name } as { key: string; label: string } & Record<(typeof keys)[number], number>;
-    keys.forEach((k, j) => (r[k] = k === 'newAds' || k === 'alerts' ? Math.round(base[s.id][j] * f ** 0.8) : base[s.id][j]));
+    keys.forEach((k, j) => (r[k] = k === 'newAds' || k === 'alerts' ? Math.round(base[s.id][j] * f ** 0.8) : k === 'searches' ? Math.round(base[s.id][j] * f) : base[s.id][j]));
     return r;
   });
   const kpi = Object.fromEntries(keys.map((k) => [k, rows.reduce((a, r) => a + r[k], 0)])) as Record<(typeof keys)[number], number>;
@@ -890,6 +891,20 @@ export function demoAnswer(name: string, input: any): unknown {
       return cm(input ?? {});
     case 'p.spy.board':
       return spy(input ?? {});
+    // Pilotix's AI Spy key: ScrapeCreators saved and main, no backup yet (the keys themselves are never sent back)
+    case 'p.spy.key':
+      return { enabled: true, main: 'scrapecreators', perShopDay: 20, keys: { scrapecreators: true, searchapi: false }, today: { searches: 29, shops: 3 } };
+    case 'p.spy.keyTest':
+      return {
+        ok: true,
+        count: 214,
+        sample: [
+          { page: 'Bébé Confort DZ', text: 'Poussette 3 en 1 pliable, livraison 58 wilayas, paiement à la livraison' },
+          { page: 'Kids Store Oran', text: 'عربة أطفال خفيفة 11900 دج فقط، التوصيل مجاني' },
+          { page: 'Mama Shop', text: 'Poussette canne légère, 7 kg, garantie 6 mois' },
+        ],
+        message: '',
+      };
     case 'p.ai.costs':
       return costs(input ?? {});
     case 'p.pilot.bookText':

@@ -1,6 +1,8 @@
-// AI Spy › Réglages (#/spy/reglages; it was #/marketing/spy/reglages): where the ads come from (the free Pilotix Chrome extension, or a paid
-// key used by the server: ScrapeCreators, SearchAPI.io), the daily scan, the shop's own pages, how many ads per keyword,
-// whether Claude reads the ads (Pilot Message's key), and how to install the extension. Only admins save.
+// AI Spy › Réglages (#/spy/reglages; it was #/marketing/spy/reglages): where the ads come from (the free Pilotix Chrome
+// extension, or the server: on Pilotix's server « Recherche Pilotix », Pilotix's own key set in the control room, with a
+// daily number of searches; a single shop on its own server brings its own paid key, ScrapeCreators or SearchAPI.io),
+// the daily scan, the shop's own pages, how many ads per keyword, whether Claude reads the ads, and how to install the
+// extension. Only admins save.
 import type { SpySource } from '@pilotix/core';
 import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,9 +16,11 @@ import { toast } from '../../ui/toast';
 import { SaveBar } from '../ai/agent';
 import './spy.css';
 
-type Paid = Exclude<SpySource, 'extension'>;
-const SOURCES: SpySource[] = ['extension', 'scrapecreators', 'searchapi'];
-const PAID: Paid[] = ['scrapecreators', 'searchapi'];
+/** a single shop's own paid key (never on Pilotix's server: there the key is Pilotix's) */
+type Paid = 'scrapecreators' | 'searchapi';
+const isOwn = (s: SpySource): s is Paid => s === 'scrapecreators' || s === 'searchapi';
+/** Pilotix's server (and its preview): the extension or « Recherche Pilotix »; a single shop: the extension or its own key */
+const sourcesOf = (platform: boolean): SpySource[] => (platform ? ['extension', 'pilotix'] : ['extension', 'scrapecreators', 'searchapi']);
 const REPO = 'https://github.com/alaeddineballalou-hub/pilotix/tree/main/apps/extension';
 
 export function SpySettingsView() {
@@ -65,7 +69,11 @@ function Form({ data }: { data: Out<'spy.settings.get'> }) {
   const submit = () => save.mutate({ ...values(), keys: { scrapecreators: keys.scrapecreators.trim(), searchapi: keys.searchapi.trim() } });
   const removeKey = (s: Paid) => window.confirm(t('spy.set.removeAsk')) && save.mutate({ ...values(), keys: s === 'scrapecreators' ? { scrapecreators: null } : { searchapi: null } });
   const paid = f.source !== 'extension';
-  const missingKey = paid && !data.keys[f.source as Paid] && !keys[f.source as Paid].trim();
+  const missingKey = isOwn(f.source) && !data.keys[f.source] && !keys[f.source].trim();
+  // Pilotix's search, not switched on yet in the control room: the extension in the meantime
+  const pilotixOff = f.source === 'pilotix' && !data.pilotix?.ready;
+  const sources = sourcesOf(data.platform);
+  const max = data.pilotix?.max ?? 20;
   const ownId = useId();
   return (
     <form
@@ -81,25 +89,25 @@ function Form({ data }: { data: Out<'spy.settings.get'> }) {
         <h2 id="spy-src-h">
           <Icon name="search" /> {t('spy.set.source')}
         </h2>
-        <p className="note">{t('spy.set.sourceHelp')}</p>
-        <div className="spy-sources" role="radiogroup" aria-labelledby="spy-src-h">
-          {SOURCES.map((s) => (
+        <p className="note">{t(data.platform ? 'spy.set.sourceHelpPilotix' : 'spy.set.sourceHelp')}</p>
+        <div className={`spy-sources ${sources.length === 2 ? 'two' : ''}`} role="radiogroup" aria-labelledby="spy-src-h">
+          {sources.map((s) => (
             <div key={s} className={`spy-scard ${f.source === s ? 'on' : ''}`}>
               <label className="spy-scard-h">
                 <input type="radio" name="spy-source" value={s} checked={f.source === s} disabled={!admin} onChange={() => set('source', s)} />
                 <span>
                   <b>{t(`spy.set.src.${s}.name`)}</b>
-                  <span className={`badge ${s === 'extension' ? 't-ok' : 't-mid'}`}>{t(`spy.set.src.${s}.price`)}</span>
+                  <span className={`badge ${s === 'extension' || s === 'pilotix' ? 't-ok' : 't-mid'}`}>{t(`spy.set.src.${s}.price`)}</span>
                 </span>
               </label>
-              <p className="note">{t(`spy.set.src.${s}.desc`)}</p>
-              {s !== 'extension' && (
-                <KeyField source={s} stored={data.keys[s]} value={keys[s]} admin={admin} onChange={(v) => setKeys((k) => ({ ...k, [s]: v }))} onRemove={() => removeKey(s)} />
-              )}
+              <p className="note">{t(`spy.set.src.${s}.desc`, { max })}</p>
+              {s === 'pilotix' && <PilotixDay q={data.pilotix} />}
+              {isOwn(s) && <KeyField source={s} stored={data.keys[s]} value={keys[s]} admin={admin} onChange={(v) => setKeys((k) => ({ ...k, [s]: v }))} onRemove={() => removeKey(s)} />}
             </div>
           ))}
         </div>
         {missingKey && <div className="warnbox">{t('spy.set.missingKey', { name: t(`spy.set.src.${f.source}.name`) })}</div>}
+        {pilotixOff && <div className="warnbox">{t('spy.set.pilotixOff')}</div>}
       </section>
 
       <div className="spy-setgrid">
@@ -111,7 +119,7 @@ function Form({ data }: { data: Out<'spy.settings.get'> }) {
             <input type="checkbox" checked={f.dailyScan} disabled={!admin} onChange={(e) => set('dailyScan', e.target.checked)} />
             <span>
               <b>{t('spy.set.daily')}</b>
-              <small>{t('spy.set.dailyHelp')}</small>
+              <small>{data.platform ? t('spy.set.dailyHelpPilotix', { max }) : t('spy.set.dailyHelp')}</small>
             </span>
           </label>
           <Field label={t('spy.set.hour')} hint={t('spy.set.hourHint')}>
@@ -161,6 +169,30 @@ function Form({ data }: { data: Out<'spy.settings.get'> }) {
         </div>
       )}
     </form>
+  );
+}
+
+/** « Recherche Pilotix »: ready or not, and this shop's searches today against its daily number (1 search = 1 keyword). */
+function PilotixDay({ q }: { q: Out<'spy.settings.get'>['pilotix'] }) {
+  const { t } = useTranslation();
+  if (!q) return null;
+  if (!q.ready)
+    return (
+      <p className="spy-pil off" role="status">
+        <i aria-hidden="true" /> {t('spy.set.pilotixNotReady')}
+      </p>
+    );
+  const full = q.used >= q.max;
+  return (
+    <div className={`spy-pil ${full ? 'full' : ''}`} role="status">
+      <p>
+        <i aria-hidden="true" /> {full ? t('spy.set.pilotixFull', { max: n(q.max) }) : t('spy.set.pilotixReady')}
+      </p>
+      <div className="spy-pil-bar" aria-hidden="true">
+        <span style={{ width: `${Math.min(100, Math.round((q.used / Math.max(1, q.max)) * 100))}%` }} />
+      </div>
+      <small>{t('spy.set.pilotixToday', { used: n(q.used), max: n(q.max) })}</small>
+    </div>
   );
 }
 

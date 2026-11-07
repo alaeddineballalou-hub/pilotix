@@ -11,6 +11,7 @@ import { DELLAL_PLAYBOOK } from '../modules/dellal';
 import { PILOT } from '../modules/pilotlearn';
 import { loadShops } from './shops';
 import type { Tenancy } from './tenancy';
+import { spySearchesByShop } from './spykey';
 
 export const BOARD_DAYS = [7, 30, 90] as const;
 export type BoardDays = (typeof BOARD_DAYS)[number];
@@ -716,11 +717,13 @@ export async function spyBoard(t: Tenancy, i: { days: BoardDays; shopId?: number
   const list = await stores(t);
   const chosen = i.shopId ? list.filter((s) => s.id === i.shopId) : list;
   const keys = ['watched', 'ads', 'active', 'newAds', 'analysed', 'briefs', 'followed', 'alerts'] as const;
-  type K = Record<(typeof keys)[number], number>;
-  const empty = (): K => ({ watched: 0, ads: 0, active: 0, newAds: 0, analysed: 0, briefs: 0, followed: 0, alerts: 0 });
+  type K = Record<(typeof keys)[number] | 'searches', number>;
+  const empty = (): K => ({ watched: 0, ads: 0, active: 0, newAds: 0, analysed: 0, briefs: 0, followed: 0, alerts: 0, searches: 0 });
   const total = empty();
   const rows: ({ key: string; label: string } & K)[] = [];
   const skipped: string[] = [];
+  // the searches each shop made on Pilotix's key in the period (its daily limit counts them: platform.spy_searches)
+  const searches = await spySearchesByShop(t, p.from, p.to);
   for (const s of chosen) {
     const db = t.shop(s.schema);
     const r = (
@@ -744,8 +747,9 @@ export async function spyBoard(t: Tenancy, i: { days: BoardDays; shopId?: number
     }
     const one = empty();
     for (const k of keys) one[k] = n(r[k]);
-    for (const k of keys) total[k] += one[k];
-    if (one.watched || one.ads || one.followed) rows.push({ key: String(s.id), label: s.name, ...one });
+    one.searches = searches.get(s.id) ?? 0;
+    for (const k of [...keys, 'searches'] as const) total[k] += one[k];
+    if (one.watched || one.ads || one.followed || one.searches) rows.push({ key: String(s.id), label: s.name, ...one });
   }
   rows.sort((a, b) => b.ads - a.ads || b.watched - a.watched || a.label.localeCompare(b.label));
   return {

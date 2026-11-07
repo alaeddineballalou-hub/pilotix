@@ -1249,7 +1249,7 @@
       "help": "Les produits que les boutiques font surveiller, les pubs des concurrents que Spy AI a trouvées (celles des boutiques elles-mêmes ne comptent pas), lues par l’IA, et les alertes des pages suivies (nouvelle pub, prix changé, pub arrêtée).",
       "find": "Spy AI surveille {{watched}} produits dans {{shops}} boutique(s) : {{ads}} pubs de concurrents connues, dont {{fresh}} nouvelles sur les {{days}} derniers jours.",
       "none": "Aucun produit surveillé pour l’instant.",
-      "note": "Nouvelles pubs et alertes : dans la période choisie. Les autres chiffres : aujourd’hui.",
+      "note": "Nouvelles pubs, alertes et recherches Pilotix : dans la période choisie. Les autres chiffres : aujourd’hui.",
       "k": {
         "watched": "Produits surveillés",
         "watchedSub": "aujourd’hui",
@@ -1264,7 +1264,9 @@
         "alertsN_one": "{{n}} alerte dans la période",
         "alertsN_other": "{{n}} alertes dans la période",
         "alerts": "Alertes",
-        "newAdsSub": "sur les {{days}} derniers jours"
+        "newAdsSub": "sur les {{days}} derniers jours",
+        "searches": "Recherches Pilotix",
+        "searchesSub": "clé Pilotix, sur {{days}} jours"
       }
     },
     "more": {
@@ -1840,6 +1842,43 @@
       "testOk": "Testé le {{when}} : tout marche.",
       "testBad": "Testé le {{when}} : {{error}}",
       "managers": "Réservé au propriétaire et aux managers."
+    },
+    "spyKey": {
+      "title": "La clé de recherche de Pilotix",
+      "text": "Pilotix cherche les pubs pour toutes les boutiques avec sa propre clé : les boutiques n’en apportent jamais. L’outil principal cherche ; si l’autre a aussi une clé, il prend le relais quand le principal échoue. Chaque boutique peut aussi garder l’extension Chrome gratuite.",
+      "enable": "Les boutiques cherchent avec la clé de Pilotix",
+      "main": "Outil principal",
+      "mainBadge": "Principal",
+      "backupBadge": "Secours",
+      "tools": {
+        "scrapecreators": {
+          "name": "ScrapeCreators",
+          "price": "≈ 47 $ une fois",
+          "desc": "Crédits achetés une fois, utilisés recherche après recherche."
+        },
+        "searchapi": {
+          "name": "SearchAPI.io",
+          "price": "40 $/mois",
+          "desc": "Abonnement mensuel, l’Algérie officiellement prise en charge."
+        }
+      },
+      "key": "Clé {{name}}",
+      "keyPh": "Collez la clé {{name}}",
+      "keySaved": "Clé enregistrée (jamais affichée). Collez-en une autre pour la remplacer.",
+      "keyNone": "Aucune clé : créez un compte, puis collez la clé ici.",
+      "test": "Tester",
+      "testing": "Test…",
+      "testNeedsKey": "Enregistrez d’abord la clé pour la tester.",
+      "testOk": "Clé valide : {{n}} pubs actives trouvées en Algérie pour « poussette ».",
+      "testNone": "Aucune pub trouvée : vérifiez la clé et le solde de l’outil.",
+      "removeAsk": "Retirer la clé {{name}} ? Les recherches avec cet outil s’arrêteront.",
+      "noKey": "Ajoutez au moins une clé : sans clé, les boutiques cherchent avec l’extension Chrome.",
+      "mainMissing": "L’outil principal n’a pas de clé : les recherches passent par {{name}}.",
+      "offNote": "Arrêtée : les boutiques qui ont choisi la Recherche Pilotix lisent « pas encore prête » et cherchent avec l’extension Chrome.",
+      "perShopDay": "Recherches par boutique et par jour",
+      "perShopDayHint": "1 recherche = 1 mot-clé, le scan du matin compris. Entre 1 et 500 (20 conseillé).",
+      "today_one": "Aujourd’hui : {{n}} recherche, {{shops}} boutique(s).",
+      "today_other": "Aujourd’hui : {{n}} recherches, {{shops}} boutique(s)."
     }
   },
   "seller": {

@@ -4,6 +4,7 @@ import type { Tenancy } from './tenancy';
 import { PILOT_PLATFORM_SQL, RELEASE_SQL } from '../modules/pilotlearn';
 import { EXAM_PLAN_SQL, EXAM_SQL, pilotixLessonsSql } from '../modules/pilotexamdata';
 import { AI_USAGE_SQL } from './aiusage';
+import { SPY_SEARCHES_SQL } from './spykey';
 import { LAHJA_PLATFORM_SQL } from '../modules/lahja';
 import { DARIJA_BOOK_SQL, DARIJA_DRAFT_SQL } from '../modules/darijabook';
 import { VOCAB_COPIES_SQL, VOCAB_PLATFORM_SQL } from '../modules/vocab';
@@ -652,6 +653,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p031_pilotix_lessons', pilotixLessonsSql()],
   // Pilot AI › the exam's 100 situations: the ten an exam asks (one per stage, the missed ones first), kept with it
   ['p032_exam_plan', EXAM_PLAN_SQL],
+  // AI Spy on Pilotix's key: each shop's searches per day (its daily limit, the control room's board)
+  ['p033_spy_searches', SPY_SEARCHES_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

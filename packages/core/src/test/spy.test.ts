@@ -168,20 +168,40 @@ test('extension: copies are grouped, own ads recognised, stopped ads and followe
   await c('spy.hide', mk, { productId: bib, gkey: rival.gkey, hidden: false });
 });
 
-test('only admins choose the source and its keys; keys never come back', async () => {
-  await assert.rejects(c('spy.settings.save', mk, { source: 'searchapi', dailyScan: true, scanHour: 6, ownPages: '', maxPerKeyword: 30, keys: { searchapi: 'k' } }), /Accès refusé/);
-  await c('spy.settings.save', admin, { source: 'searchapi', dailyScan: true, scanHour: 6, ownPages: '', maxPerKeyword: 30, keys: { searchapi: 'secret-key-123' } });
-  const g = await c('spy.settings.get', mk, {});
+test('a single shop on its own server: only admins choose the source and its keys; keys never come back', async () => {
+  // its own server (no control room); this one has no search tools (a test then says where it happens)
+  const own: Ctx['server'] = { courier: async () => null, meta: async () => null, hashPassword: async (p) => p };
+  const ad = await as(EMAILS.admin, own);
+  const m = await as(EMAILS.marketer, own);
+  await assert.rejects(c('spy.settings.save', m, { source: 'searchapi', dailyScan: true, scanHour: 6, ownPages: '', maxPerKeyword: 30, keys: { searchapi: 'k' } }), /Accès refusé/);
+  await assert.rejects(c('spy.settings.save', ad, { source: 'pilotix', dailyScan: true, scanHour: 6, ownPages: '', maxPerKeyword: 30, keys: {} }), /serveur de Pilotix/);
+  await c('spy.settings.save', ad, { source: 'searchapi', dailyScan: true, scanHour: 6, ownPages: '', maxPerKeyword: 30, keys: { searchapi: 'secret-key-123' } });
+  const g = await c('spy.settings.get', m, {});
   assert.equal(g.settings.source, 'searchapi');
   assert.equal(g.keys.searchapi, true);
+  assert.equal(g.platform, false);
+  assert.equal(g.pilotix, null);
   assert.ok(!JSON.stringify(g).includes('secret-key-123'));
-  // in the preview (no server) a test explains itself instead of failing
-  const t = await c('spy.settings.test', admin, { source: 'searchapi' });
+  const t = await c('spy.settings.test', ad, { source: 'searchapi' });
   assert.equal(t.ok, false);
   assert.match(t.message, /serveur/);
-  await c('spy.settings.save', admin, { source: 'extension', dailyScan: true, scanHour: 6, ownPages: '', maxPerKeyword: 30, keys: { searchapi: null } });
-  assert.equal((await c('spy.settings.get', admin, {})).keys.searchapi, false);
-  await assert.rejects(c('spy.search', mk, { productId: pou }), /extension/);
+
+  // the browser preview shows a shop of Pilotix's server: « Recherche Pilotix » (its made-up day), no key boxes
+  const g2 = await c('spy.settings.get', mk, {});
+  assert.equal(g2.settings.source, 'pilotix', 'an own key counts as Pilotix’s search there');
+  assert.deepEqual(g2.keys, { scrapecreators: false, searchapi: false });
+  assert.equal(g2.platform, true);
+  assert.deepEqual(g2.pilotix, { used: 6, max: 20, ready: true });
+  const v = await c('spy.view', mk, { productId: pou });
+  assert.equal(v.source, 'pilotix');
+  assert.equal(v.hasKey, true);
+  assert.match((await c('spy.settings.test', admin, { source: 'searchapi' })).message, /Pilotix/);
+  await c('spy.settings.save', admin, { source: 'scrapecreators', dailyScan: false, scanHour: 6, ownPages: '', maxPerKeyword: 30, keys: { scrapecreators: 'x-key-123456' } });
+  assert.equal((await c('spy.settings.get', ad, {})).keys.scrapecreators, false, 'a key sent from the preview is not kept');
+
+  await c('spy.settings.save', ad, { source: 'extension', dailyScan: true, scanHour: 6, ownPages: '', maxPerKeyword: 30, keys: { searchapi: null } });
+  assert.equal((await c('spy.settings.get', ad, {})).keys.searchapi, false);
+  await assert.rejects(c('spy.search', m, { productId: pou }), /extension/);
 });
 
 test('paid source: the server searches every keyword, stores, reads sites; the daily scan runs once a day', async () => {

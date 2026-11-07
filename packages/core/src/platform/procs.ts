@@ -59,6 +59,8 @@ import { addCoachLahja, decideLahja, decideManyLahja, LAHJA_NO_CHANGE, lahjaAcce
 import { copyVocab, forgetVocab, importVocab, learnVocab, readCentimes, removeVocab, saveVocab, vocabBlock, vocabChanges, vocabCounts, vocabFor, vocabList, VOCAB } from '../modules/vocab';
 import { darijaBookFile, darijaBookLive, darijaDraft, darijaErr, darijaVersions, discardDarijaDraft, restoreDarijaBook, saveDarijaBook, snapshotDarijaLessons } from '../modules/darijabook';
 import { cmBoard, dellalBoard, dellalBooks, dellalBookText, dellalMore, spyBoard } from './aiboard';
+import { saveSpyPlatformConfig, SPY_PER_SHOP_MAX, SPY_TOOLS, spyPlatformConfig, spyPlatformKey, spySearchesToday, type SpyTool } from './spykey';
+import { spyTryKey } from '../modules/spy';
 import { appReady, saveSocialApps, socialApps, SocialAppsInput, socialCounts, socialUrls } from '../modules/social';
 
 export const STAFF_ROLES = ['owner', 'manager', 'support'] as const;
@@ -1658,6 +1660,48 @@ export const PLATFORM_REGISTRY = {
   'p.dellal.books': pproc(ALL, z.object({ shopId: Id.optional() }), async (ctx, i) => dellalBooks(ctx.t, { ...i, now: ctx.now() })),
   'p.cm.board': pproc(ALL, BoardInput, async (ctx, i) => cmBoard(ctx.t, { ...i, now: ctx.now(), costs: ctx.staff.role !== 'support' })),
   'p.spy.board': pproc(ALL, BoardInput, async (ctx, i) => spyBoard(ctx.t, { ...i, now: ctx.now(), costs: ctx.staff.role !== 'support' })),
+  /**
+   * AI Spy's search key (Pilot AI › Spy AI): Pilotix's own, shops never bring one. The main tool, the backup (the other
+   * tool, when it has a key), how many searches one shop may make per day; today's searches. Keys never come back.
+   */
+  'p.spy.key': pproc(ALL, z.object({}), async (ctx) => ({ ...(await spyPlatformConfig(ctx.t)), today: await spySearchesToday(ctx.t, ctx.now()) })),
+  'p.spy.keySave': pproc(
+    MANAGERS,
+    z.object({
+      enabled: z.boolean(),
+      main: z.enum(SPY_TOOLS),
+      perShopDay: z.number().int().min(1).max(SPY_PER_SHOP_MAX),
+      /** a new key; null removes it; not sent: kept */
+      keys: z.object({ scrapecreators: z.string().max(400).nullable().optional(), searchapi: z.string().max(400).nullable().optional() }).default({}),
+    }),
+    async (ctx, i) => {
+      const keys: Partial<Record<SpyTool, string | null>> = {};
+      for (const tool of SPY_TOOLS) {
+        const v = i.keys[tool];
+        if (v === null) keys[tool] = null;
+        else if (typeof v === 'string' && v.trim()) {
+          if (!/^[A-Za-z0-9._\-+/=]{10,300}$/.test(v.trim())) throw bad('Clé invalide : copiez-la telle quelle, sans espace.');
+          keys[tool] = v.trim();
+        }
+      }
+      await saveSpyPlatformConfig(ctx.t, { enabled: i.enabled, main: i.main, perShopDay: i.perShopDay }, keys);
+      const said = (x: string | null | undefined) => (x === undefined ? 'kept' : x === null ? 'removed' : 'new');
+      await audit(ctx, 'spy.key', null, { enabled: i.enabled, main: i.main, perShopDay: i.perShopDay, scrapecreators: said(keys.scrapecreators), searchapi: said(keys.searchapi) });
+      return { ...(await spyPlatformConfig(ctx.t)), today: await spySearchesToday(ctx.t, ctx.now()) };
+    },
+  ),
+  /** « Tester »: one real search in Algeria with a saved key, through Pilotix's own shop (counted for no shop). */
+  'p.spy.keyTest': pproc(MANAGERS, z.object({ tool: z.enum(SPY_TOOLS), query: z.string().trim().min(2).max(60).default('poussette') }), async (ctx, i) => {
+    const key = await spyPlatformKey(ctx.t, i.tool);
+    if (!key) throw bad('Ajoutez d’abord la clé, puis enregistrez.');
+    const home = await loadShop(ctx.t, { primary: true });
+    if (!ctx.shop || !home) return { ok: false, count: 0, sample: [] as { page: string; text: string }[], message: 'Le test se fait sur le serveur Pilotix.' };
+    try {
+      return await spyTryKey(await ctx.shop(home.id), i.tool, key, i.query);
+    } catch (e) {
+      return { ok: false, count: 0, sample: [] as { page: string; text: string }[], message: e instanceof Error ? e.message : String(e) };
+    }
+  }),
   /** Dellal's instruction book as one text file, put together now: a download is always the latest version. */
   'p.pilot.bookText': pproc(ALL, z.object({}), async (ctx) => dellalBookText(ctx.t, ctx.now())),
 

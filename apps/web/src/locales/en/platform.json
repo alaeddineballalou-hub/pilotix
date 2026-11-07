@@ -1249,7 +1249,7 @@
       "help": "The products the shops have watched, the competitors’ ads Spy AI found (the shops’ own ads do not count), read by the AI, and the alerts of the pages followed (new ad, price changed, ad stopped).",
       "find": "Spy AI watches {{watched}} products in {{shops}} shop(s): {{ads}} competitor ads known, {{fresh}} of them new in the last {{days}} days.",
       "none": "No product watched yet.",
-      "note": "New ads and alerts: in the chosen period. The other figures: today.",
+      "note": "New ads, alerts and Pilotix searches: in the chosen period. The other figures: today.",
       "k": {
         "watched": "Products watched",
         "watchedSub": "today",
@@ -1264,7 +1264,9 @@
         "alertsN_one": "{{n}} alert in the period",
         "alertsN_other": "{{n}} alerts in the period",
         "alerts": "Alerts",
-        "newAdsSub": "in the last {{days}} days"
+        "newAdsSub": "in the last {{days}} days",
+        "searches": "Pilotix searches",
+        "searchesSub": "Pilotix key, over {{days}} days"
       }
     },
     "more": {
@@ -1840,6 +1842,43 @@
       "testOk": "Tested on {{when}}: everything works.",
       "testBad": "Tested on {{when}}: {{error}}",
       "managers": "For the owner and managers only."
+    },
+    "spyKey": {
+      "title": "Pilotix’s search key",
+      "text": "Pilotix searches the ads for every shop with its own key: shops never bring one. The main tool searches; if the other one has a key too, it takes over when the main one fails. Each shop can also keep the free Chrome extension.",
+      "enable": "Shops search with Pilotix’s key",
+      "main": "Main tool",
+      "mainBadge": "Main",
+      "backupBadge": "Backup",
+      "tools": {
+        "scrapecreators": {
+          "name": "ScrapeCreators",
+          "price": "≈ $47 one-off",
+          "desc": "Credits bought once, used search after search."
+        },
+        "searchapi": {
+          "name": "SearchAPI.io",
+          "price": "$40/month",
+          "desc": "Monthly plan, Algeria officially supported."
+        }
+      },
+      "key": "{{name}} key",
+      "keyPh": "Paste the {{name}} key",
+      "keySaved": "Key saved (never shown). Paste another one to replace it.",
+      "keyNone": "No key: create an account, then paste the key here.",
+      "test": "Test",
+      "testing": "Testing…",
+      "testNeedsKey": "Save the key first to test it.",
+      "testOk": "Key works: {{n}} active ads found in Algeria for “poussette”.",
+      "testNone": "No ad found: check the key and the tool’s balance.",
+      "removeAsk": "Remove the {{name}} key? Searches with this tool will stop.",
+      "noKey": "Add at least one key: without a key, shops search with the Chrome extension.",
+      "mainMissing": "The main tool has no key: searches go through {{name}}.",
+      "offNote": "Off: shops that chose Pilotix search read “not ready yet” and search with the Chrome extension.",
+      "perShopDay": "Searches per shop and per day",
+      "perShopDayHint": "1 search = 1 keyword, the morning scan included. Between 1 and 500 (20 advised).",
+      "today_one": "Today: {{n}} search, {{shops}} shop(s).",
+      "today_other": "Today: {{n}} searches, {{shops}} shop(s)."
     }
   },
   "seller": {

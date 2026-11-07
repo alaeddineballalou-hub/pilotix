@@ -589,7 +589,7 @@ export function SpyBoard({ days, onDays, shopId, onShop, manager }: { days: Boar
   const { t } = useTranslation();
   const q = usePilotRpc('p.spy.board', { days, ...(shopId ? { shopId } : {}) }, { refetchInterval: 5 * 60_000 });
   const d = q.data;
-  const cols = ['watched', 'ads', 'active', 'newAds', 'analysed', 'briefs', 'followed', 'alerts'] as const;
+  const cols = ['watched', 'ads', 'active', 'newAds', 'analysed', 'briefs', 'followed', 'alerts', 'searches'] as const;
   return (
     <Card title={t('platform.pilot.spy.title')} help={t('platform.pilot.spy.help')} className="pb-card">
       <BoardBar days={days} onDays={onDays} shops={d?.shops ?? []} shopId={shopId} onShop={onShop} busy={q.isFetching && !!d} />
@@ -610,6 +610,7 @@ export function SpyBoard({ days, onDays, shopId, onShop, manager }: { days: Boar
             <Fig label={t('platform.pilot.spy.k.analysed')} value={n(d.kpi.analysed)} sub={d.kpi.ads ? pct(d.kpi.analysed / d.kpi.ads) : undefined} />
             <Fig label={t('platform.pilot.spy.k.briefs')} value={n(d.kpi.briefs)} sub={t('platform.pilot.spy.k.briefsSub')} />
             <Fig label={t('platform.pilot.spy.k.followed')} value={n(d.kpi.followed)} sub={t('platform.pilot.spy.k.alertsN', { count: d.kpi.alerts, n: n(d.kpi.alerts) })} />
+            <Fig label={t('platform.pilot.spy.k.searches')} value={n(d.kpi.searches)} sub={t('platform.pilot.spy.k.searchesSub', { days: d.days })} />
             {manager && d.cost && <Fig label={t('platform.pilot.board.k.costAll')} value={usd(d.cost.usd)} sub={t('platform.pilot.board.k.calls', { count: d.cost.calls, n: n(d.cost.calls) })} />}
           </div>
           {d.rows.length > 0 && (

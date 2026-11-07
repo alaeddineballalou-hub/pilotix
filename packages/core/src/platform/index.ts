@@ -13,6 +13,7 @@ export * from './courierTests';
 export * from './reputation';
 export * from './courierWatch';
 export * from './pilotai';
+export * from './spykey';
 export * from './aiusage';
 export * from './aiboard';
 export * from './sessions';

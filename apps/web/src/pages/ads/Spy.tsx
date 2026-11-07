@@ -145,7 +145,10 @@ function useSearch() {
     else toast(t('spy.search.failed'), 'bad', 6000);
   };
 
-  /** Paid source: the server searches every keyword (pictures, sites and Claude included), then the brief. */
+  /**
+   * The server searches every keyword (pictures, sites and Claude included), then the brief: with « Recherche Pilotix »
+   * (Pilotix's key: the shop's searches of the day are counted, the day's limit can stop it), or a single shop's own key.
+   */
   const viaServer = async (v: View) => {
     const productId = v.product.id;
     if (v.demo) {
@@ -153,14 +156,15 @@ function useSearch() {
       return;
     }
     if (!v.hasKey) {
-      toast(t('spy.noKey'), 'bad', 6000);
+      toast(t(v.source === 'pilotix' ? 'spy.pilotixOff' : 'spy.noKey'), 'bad', 6000);
       return;
     }
     setProg({ k: 'paid' });
     const r = await rpc('spy.search', { productId });
     setProg({ k: 'brief' });
     await rpc('spy.brief', { productId, refresh: true }).catch(() => null);
-    toast(t('spy.search.donePaid', { found: n(r.found), added: n(r.added), stopped: n(r.stopped) }), 'ok', 6000);
+    if (r.limited) toast(t('spy.search.limited', { count: r.keywords, found: n(r.found), max: n(r.quota?.max ?? 0) }), 'info', 9000);
+    else toast(t('spy.search.donePaid', { found: n(r.found), added: n(r.added), stopped: n(r.stopped) }), 'ok', 6000);
   };
 
   const run = async (v: View, max: number) => {
@@ -300,8 +304,12 @@ function SearchCard({ products, loading, productId, onPick, v, ext, search, sour
   const paid = source !== 'extension';
   const demo = !!(v?.demo ?? settings?.demo);
   const busy = !!search.prog;
-  const srcState = paid ? (v ? (v.hasKey ? 'ok' : 'bad') : '') : ext ? (ext.installed ? 'ok' : demo ? '' : 'bad') : '';
-  const srcText = paid ? (v ? (v.hasKey ? t('spy.keyOk') : t('spy.keyMissing')) : '…') : !ext ? '…' : ext.installed ? t('spy.extOn') : demo ? t('spy.extDemo') : t('spy.extOff');
+  // « Recherche Pilotix »: ready or not, and the searches left today (1 search = 1 keyword)
+  const quota = source === 'pilotix' ? (v?.quota ?? settings?.pilotix ?? null) : null;
+  const full = !!quota?.ready && quota.used >= quota.max;
+  const pilotixText = !quota ? '…' : quota.ready ? t('spy.quota', { used: n(quota.used), max: n(quota.max) }) : t('spy.pilotixOffShort');
+  const srcState = source === 'pilotix' ? (quota ? (!quota.ready ? 'bad' : full ? 'mid' : 'ok') : '') : paid ? (v ? (v.hasKey ? 'ok' : 'bad') : '') : ext ? (ext.installed ? 'ok' : demo ? '' : 'bad') : '';
+  const srcText = source === 'pilotix' ? pilotixText : paid ? (v ? (v.hasKey ? t('spy.keyOk') : t('spy.keyMissing')) : '…') : !ext ? '…' : ext.installed ? t('spy.extOn') : demo ? t('spy.extDemo') : t('spy.extOff');
   return (
     <section className="card spy-search" aria-labelledby="spy-t">
       <div className="spy-head">
@@ -366,12 +374,13 @@ function SearchCard({ products, loading, productId, onPick, v, ext, search, sour
       )}
       {paid && v && !v.hasKey && !demo && (
         <div className="warnbox">
-          {t('spy.noKey')}{' '}
+          {t(source === 'pilotix' ? 'spy.pilotixOff' : 'spy.noKey')}{' '}
           <a href="#/spy/reglages" className="spy-a">
             {t('spy.settings')}
           </a>
         </div>
       )}
+      {full && !demo && <div className="warnbox">{t('spy.limitToday', { max: n(quota!.max) })}</div>}
       {search.prog && <ProgressLine p={search.prog} source={source} />}
       {search.errors.length > 0 && (
         <div className="spy-errs" role="alert">

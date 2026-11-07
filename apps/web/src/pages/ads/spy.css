@@ -51,6 +51,7 @@ html[data-theme="dark"] .spy { --spy-or-3: #F7B955; --spy-fb: #6EA8FF; --spy-gol
 .spy-srcpill i { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
 .spy-srcpill.ok i { background: var(--ok); }
 .spy-srcpill.bad i { background: var(--coral); }
+.spy-srcpill.mid i { background: var(--warn); }
 .spy-srcpill b { white-space: nowrap; }
 .spy-srcpill span { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .spy-demo { margin: 0; display: flex; gap: 8px; align-items: flex-start; padding: 9px 12px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: 13px; font-weight: 600; line-height: 1.45; }
@@ -274,7 +275,8 @@ html[data-theme="dark"] .spy { --spy-or-3: #F7B955; --spy-fb: #6EA8FF; --spy-gol
 .spy-set-title { display: flex; flex-direction: column; gap: 4px; flex: 1 1 260px; min-width: 0; }
 .spy-set { display: flex; flex-direction: column; gap: 16px; }
 .spy-sources { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-@media (max-width: 1000px) { .spy-sources { grid-template-columns: minmax(0, 1fr); } }
+.spy-sources.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 1000px) { .spy-sources, .spy-sources.two { grid-template-columns: minmax(0, 1fr); } }
 .spy-scard { border: 1.5px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--raise); min-width: 0; }
 .spy-scard.on { border-color: var(--spy-or-2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--spy-or) 22%, transparent); }
 .spy-scard-h { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
@@ -292,6 +294,17 @@ html[data-theme="dark"] .spy { --spy-or-3: #F7B955; --spy-fb: #6EA8FF; --spy-gol
 .spy-test.bad { background: var(--coral-soft); }
 .spy-test.bad > b { color: var(--coral); }
 .spy-test ul { margin: 0; padding-inline-start: 18px; }
+/* « Recherche Pilotix »: ready, and this shop's searches today against its daily number */
+.spy-pil { display: flex; flex-direction: column; gap: 6px; border-top: 1px dashed var(--line); padding-top: 8px; font-size: 13px; }
+.spy-pil p { margin: 0; display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.spy-pil i { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); flex: none; }
+.spy-pil.full i { background: var(--warn); }
+.spy-pil.off { flex-direction: row; align-items: center; gap: 8px; margin: 0; font-weight: 600; color: var(--muted); }
+.spy-pil.off i { background: var(--coral); }
+.spy-pil small { color: var(--muted); font-variant-numeric: tabular-nums; }
+.spy-pil-bar { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.spy-pil-bar span { display: block; height: 100%; border-radius: inherit; background: var(--ok); transition: width .2s ease-out; }
+.spy-pil.full .spy-pil-bar span { background: var(--warn); }
 .spy-setgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
 @media (max-width: 760px) { .spy-setgrid { grid-template-columns: minmax(0, 1fr); } }
 .spy .spy-self { align-self: flex-start; }

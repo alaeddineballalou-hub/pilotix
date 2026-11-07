@@ -244,9 +244,12 @@ test('CM AI and Spy AI: what each agent did in the period, every shop or one, wh
   await ad(3, { own: true });
   await db.query(`INSERT INTO spy_follow (page_key, page_name, product_id) VALUES ('pg-1', 'Rival', $1)`, [prod]);
   await db.query(`INSERT INTO spy_events (kind, page_name, product_id, at) VALUES ('new_ad', 'Rival', $1, '2026-10-11T10:00:00Z'), ('price', 'Rival', $1, '2026-08-11T10:00:00Z')`, [prod]);
+  // the searches the shop made on Pilotix's key in the period (the old one is out of it)
+  await t.platform.query(`INSERT INTO platform.spy_searches (day, shop_id, n) VALUES ('2026-10-12', $1, 7), ('2026-08-12', $1, 5)`, [shop.id]);
   const s = await p('p.spy.board', { days: 30 });
-  assert.deepEqual(s.kpi, { watched: 1, ads: 2, active: 1, newAds: 1, analysed: 1, briefs: 1, followed: 1, alerts: 1 }, 'the shop’s own ads are not competitors');
+  assert.deepEqual(s.kpi, { watched: 1, ads: 2, active: 1, newAds: 1, analysed: 1, briefs: 1, followed: 1, alerts: 1, searches: 7 }, 'the shop’s own ads are not competitors');
   assert.equal(s.rows.length, 1);
+  assert.equal(s.rows[0].searches, 7);
   assert.equal(s.cost.usd, 0);
   assert.equal((await p('p.spy.board', { days: 30 }, support)).cost, null);
 });

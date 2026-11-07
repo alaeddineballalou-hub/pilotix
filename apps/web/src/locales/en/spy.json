@@ -14,7 +14,7 @@
   "extOn": "detected",
   "extOff": "not detected",
   "extDemo": "not in the preview",
-  "demoNote": "Preview: the ads shown are examples. Searching works in the real Pilotix (Chrome extension or paid key).",
+  "demoNote": "Preview: the ads shown are examples. Searching works in the real Pilotix (Pilotix search or Chrome extension).",
   "noKey": "Add the paid source’s key in AI Spy › Settings to search.",
   "productGone": "This product is no longer in the list (inactive or deleted).",
   "noProducts": "No active product: add your products in Products & stock.",
@@ -71,7 +71,9 @@
     "failed": "No keyword went through. Check the extension and try again.",
     "errors_one": "{{count}} step failed",
     "errors_other": "{{count}} steps failed",
-    "partial": "Ads not seen again were not marked “stopped”: search again when every step goes through."
+    "partial": "Ads not seen again were not marked “stopped”: search again when every step goes through.",
+    "limited_one": "Daily limit reached after {{count}} keyword: {{found}} ads read. The other keywords go tomorrow ({{max}} searches a day).",
+    "limited_other": "Daily limit reached after {{count}} keywords: {{found}} ads read. The other keywords go tomorrow ({{max}} searches a day)."
   },
   "prog": {
     "kw": "Keyword {{i}}/{{n}} · <b>{{q}}</b> — {{step}}",
@@ -298,7 +300,8 @@
     "via": {
       "extension": "Your Chrome opens Facebook’s library and reads the ads when you click “Search”. Free, no automatic scan.",
       "scrapecreators": "The Pilotix server searches with your ScrapeCreators key, on demand and every morning. It also reads competitors’ sites (price, platform, form).",
-      "searchapi": "The Pilotix server searches with your SearchAPI.io key, on demand and every morning. It also reads competitors’ sites (price, platform, form)."
+      "searchapi": "The Pilotix server searches with your SearchAPI.io key, on demand and every morning. It also reads competitors’ sites (price, platform, form).",
+      "pilotix": "The Pilotix server searches for you with its own service, on demand and every morning if you turn it on. It also reads competitors’ sites (price, platform, form)."
     },
     "aiOn": "Claude (Pilot Message’s key) reads every ad and prepares the brief.",
     "aiOnPilot": "Claude (Pilotix’s AI) reads every ad and prepares the brief.",
@@ -331,6 +334,11 @@
         "price": "$40/month",
         "desc": "Paid key used by the Pilotix server: automatic scan every morning, Algeria officially supported.",
         "ph": "SearchAPI.io key"
+      },
+      "pilotix": {
+        "name": "Pilotix search",
+        "price": "Included",
+        "desc": "Pilotix searches for you with its own service, from its server: on demand, and every morning if you turn it on. Nothing to install, no key to buy. {{max}} searches a day (1 search = 1 keyword)."
       }
     },
     "missingKey": "Add the {{name}} key: without it, no search can run.",
@@ -362,7 +370,14 @@
     "aiOn": "AI on",
     "aiOff": "AI off",
     "aiHelp": "The AI analysis (relevance, hook, angle, offer, brief) uses Pilot Message’s (Dellal) Claude key. Without it, AI Spy shows the figures and a simple summary.",
-    "aiLink": "Pilot Message settings"
+    "aiLink": "Pilot Message settings",
+    "sourceHelpPilotix": "Facebook refuses its ad pages to servers: either your Chrome reads them (free extension, no limit), or Pilotix searches them for you with its own service.",
+    "pilotixNotReady": "Not ready yet: Pilotix turns it on soon.",
+    "pilotixReady": "Ready",
+    "pilotixFull": "Today’s {{max}} searches are done: more tomorrow.",
+    "pilotixToday": "Today: {{used}} / {{max}} searches",
+    "pilotixOff": "Pilotix search is not ready yet: use the Chrome extension (free) in the meantime.",
+    "dailyHelpPilotix": "Pilotix search: the server searches the included products’ keywords once a day and tells you what changed. The scan counts in your {{max}} searches of the day."
   },
   "ext": {
     "title": "Pilotix Chrome extension",
@@ -376,5 +391,9 @@
     "s3": "In the extension, add your Pilotix address:",
     "copyOrigin": "Copy the address",
     "recheck": "Check again"
-  }
+  },
+  "quota": "{{used}} / {{max}} today",
+  "pilotixOffShort": "not ready yet",
+  "pilotixOff": "Pilotix search is not ready yet: use the Chrome extension in the meantime.",
+  "limitToday": "Today’s {{max}} Pilotix searches are done: more tomorrow morning. The Chrome extension has no limit."
 }
