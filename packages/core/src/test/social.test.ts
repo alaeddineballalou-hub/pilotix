@@ -8,7 +8,7 @@ import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCal
 import { loadShop, passwordFromLink } from '../platform';
 import { noteBadSignature, noteIgLogin, resetSocialDemo, routeMeta } from '../modules/social';
 import { setRaw } from '../modules/admin';
-import { confirmLogin, deletionPage, finishLogin, loginPage, metaDeletion, parseSignedRequest, runSocial } from '../social-server';
+import { confirmLogin, deletionPage, finishLogin, finishWhatsappPopup, loginPage, metaDeletion, parseSignedRequest, runSocial } from '../social-server';
 import { createHmac } from 'node:crypto';
 
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
@@ -522,6 +522,47 @@ test('« Connecter WhatsApp »: Meta’s Embedded Signup for one shop; its numbe
   await call('dellal.settings.save', b, { ...g.settings, secrets: { waToken: null } });
   assert.equal((await setting(b, 'dellal')).whatsappPhone, '');
   assert.deepEqual(await routeMeta(t, hook), []);
+  wa = { waba: '', numbers: [], registerFail: false };
+  await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '', waConfigId: '', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+});
+
+test('« Connecter WhatsApp » in Meta’s own popup (JavaScript SDK): the code without redirect_uri, the account and number Meta’s window said, for this boutique only', async () => {
+  await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '777000111', waConfigId: '880011223344', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+  // what the page needs before the click: Pilotix's app, its WhatsApp configuration, Meta's version and Embedded Signup's extras
+  const sdk: any = await call('social.waSdk', b, {});
+  assert.deepEqual(sdk, { appId: APPS.meta.appId, configId: '880011223344', version: 'v25.0', extras: { setup: {}, featureType: '', sessionInfoVersion: '3' } });
+  // two numbers: the one chosen in Meta's window is the one linked
+  wa = {
+    waba: '102030405070',
+    numbers: [
+      { id: '109988770001', display_phone_number: '+213 550 00 00 01', verified_name: 'Bébé Oran' },
+      { id: '109988770002', display_phone_number: '+213 550 00 00 02', verified_name: 'Bébé Oran' },
+    ],
+    registerFail: false,
+  };
+  const s: any = await call('social.start', b, { provider: 'meta', kind: 'whatsapp' });
+  calls.length = 0;
+  const r: any = await finishWhatsappPopup(t, b.shop!.id, { state: s.state, code: 'SDK_CODE', wabaId: '102030405070', phoneId: '109988770002' });
+  assert.deepEqual([r.ok, r.account], [true, '+213 550 00 00 02']);
+  // an SDK code is exchanged without redirect_uri
+  const ex = calls.find((c) => new URL(c.url).pathname.endsWith('/oauth/access_token') && new URL(c.url).searchParams.get('code') === 'SDK_CODE')!;
+  assert.equal(new URL(ex.url).searchParams.get('redirect_uri'), null);
+  assert.equal((await setting(b, 'dellal')).whatsappPhoneId, '109988770002');
+  assert.equal(await setting(a, 'secret_dellal_wa_token'), null, 'not the other boutique');
+  // the state served once
+  assert.match((await finishWhatsappPopup(t, b.shop!.id, { state: s.state, code: 'SDK_CODE' })).message, /déjà servi/);
+  // another boutique's state is refused
+  const s2: any = await call('social.start', b, { provider: 'meta', kind: 'whatsapp' });
+  assert.match((await finishWhatsappPopup(t, a.shop!.id, { state: s2.state, code: 'SDK_CODE' })).message, /introuvable/);
+  // an account the key was not given (the page said another one): refused, nothing linked
+  const s3: any = await call('social.start', b, { provider: 'meta', kind: 'whatsapp' });
+  const bad: any = await finishWhatsappPopup(t, b.shop!.id, { state: s3.state, code: 'SDK_CODE', wabaId: '999999999999' });
+  assert.equal(bad.ok, false);
+  assert.match(bad.message, /n’a pas donné/);
+  // a state of an Instagram connection is not a WhatsApp one
+  await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '777000111', igConfigId: '1485334790168642', waConfigId: '880011223344', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+  const s4: any = await call('social.start', b, { provider: 'meta', kind: 'instagram' });
+  assert.match((await finishWhatsappPopup(t, b.shop!.id, { state: s4.state, code: 'SDK_CODE' })).message, /introuvable/);
   wa = { waba: '', numbers: [], registerFail: false };
   await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '', waConfigId: '', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
 });

@@ -266,11 +266,17 @@ async function linkInstagram(
  * window the shop picks (or makes) its WhatsApp Business account and its number; Pilotix reads which account the key was
  * given (debug_token's granular scopes), then its number. Its key and number wait for « Oui, c'est ma boutique ».
  */
-async function whatsappAccount(t: Tenancy, code: string, publicUrl: string): Promise<FoundAccount> {
+async function whatsappAccount(t: Tenancy, code: string, publicUrl: string | null, prefer: { wabaId?: string | null; phoneId?: string | null } = {}): Promise<FoundAccount> {
   const apps = await socialApps(t);
   const secret = await socialSecret(t, 'meta');
   if (!apps.meta.appId || !secret) throw new AppError('bad_request', 'L’app Meta de Pilotix n’est pas prête.');
-  const tok = await graph('oauth/access_token', { client_id: apps.meta.appId, client_secret: secret, redirect_uri: socialUrls(publicUrl).metaRedirect, code });
+  // Meta's popup (JavaScript SDK) gives a code that is exchanged without redirect_uri; the old tab gives one with it
+  const tok = await graph('oauth/access_token', {
+    client_id: apps.meta.appId,
+    client_secret: secret,
+    ...(publicUrl ? { redirect_uri: socialUrls(publicUrl).metaRedirect } : {}),
+    code,
+  });
   let token = String(tok.access_token ?? '');
   let expiresIn = Number(tok.expires_in) || 0;
   if (!token) throw new AppError('bad_request', 'Meta n’a pas donné de clé. Recommencez.');
@@ -288,10 +294,15 @@ async function whatsappAccount(t: Tenancy, code: string, publicUrl: string): Pro
   ].filter((x) => /^\d{1,30}$/.test(x));
   if (!wabas.length)
     throw new AppError('bad_request', 'Aucun compte WhatsApp Business trouvé avec cette connexion. Dans la fenêtre de Meta, choisissez (ou créez) le compte WhatsApp de la boutique et son numéro, puis recommencez.');
-  for (const id of wabas) {
+  // the account the popup said comes first, only if the key really was given it (never a number Pilotix may not use)
+  const said = String(prefer.wabaId ?? '');
+  if (said && !wabas.includes(said)) throw new AppError('bad_request', 'Meta n’a pas donné à Pilotix le compte WhatsApp choisi. Recommencez la connexion.');
+  const order = said ? [said, ...wabas.filter((x) => x !== said)] : wabas;
+  for (const id of order) {
     const waba = await graph(id, { fields: 'id,name', access_token: token }).catch(() => null);
     const nums = await graph(`${id}/phone_numbers`, { fields: 'id,display_phone_number,verified_name', access_token: token }).catch(() => null);
-    const n = (Array.isArray(nums?.data) ? nums.data : []).find((x: any) => /^\d{1,30}$/.test(String(x?.id ?? '')));
+    const list: any[] = (Array.isArray(nums?.data) ? nums.data : []).filter((x: any) => /^\d{1,30}$/.test(String(x?.id ?? '')));
+    const n = (id === said && prefer.phoneId ? list.find((x) => String(x.id) === String(prefer.phoneId)) : null) ?? list[0];
     if (!n) continue;
     const phone = String(n.display_phone_number ?? '').slice(0, 40);
     const name = String(n.verified_name || waba?.name || 'WhatsApp').slice(0, 200);
@@ -341,6 +352,34 @@ async function linkWhatsapp(t: Tenancy, shopId: number | null, f: FoundAccount):
     account: w.phone || f.name,
     ...(warn ? { warn: `Meta n’a pas enregistré le numéro pour l’envoi (${warn}). Les messages peuvent ne pas partir : écrivez à l’équipe Pilotix.` } : {}),
   };
+}
+
+/**
+ * « Connecter WhatsApp » with Meta's own popup (JavaScript SDK, Meta's recommended Embedded Signup): the page sends the
+ * code and what Meta's window said (WA_EMBEDDED_SIGNUP: the account and the number). The state must be this boutique's
+ * « Connecter WhatsApp », unused and recent; the person is already signed in to this boutique, so no « Oui, c'est ma
+ * boutique » tab: the number goes straight to its Pilot Message.
+ */
+export async function finishWhatsappPopup(t: Tenancy, shopId: number, a: { state: string; code: string; wabaId?: string | null; phoneId?: string | null }) {
+  const st = await takeState(t, a.state);
+  if (!st || st.provider !== 'meta' || loginKindOf(st.state) !== 'whatsapp' || st.fromShop !== shopId || st.shopId !== shopId)
+    return { ok: false, message: 'Connexion introuvable. Recommencez depuis Pilot Message › Réglages.' };
+  if (st.done) return { ok: false, message: 'Cette connexion a déjà servi. Recommencez.' };
+  if (st.expired) {
+    await endState(t, st.state, { error: 'Le temps est passé (20 minutes) : recommencez.' });
+    return { ok: false, message: 'Le temps est passé (20 minutes) : recommencez.' };
+  }
+  const ok = (x: unknown) => (/^\d{1,30}$/.test(String(x ?? '')) ? String(x) : null);
+  try {
+    const found = await whatsappAccount(t, a.code, null, { wabaId: ok(a.wabaId), phoneId: ok(a.phoneId) });
+    const r = await linkWhatsapp(t, shopId, found);
+    await endState(t, st.state, r.ok ? { linkId: null } : { error: r.message });
+    return r;
+  } catch (e: any) {
+    const m = String(e?.message ?? 'Erreur').slice(0, 300);
+    await endState(t, st.state, { error: m });
+    return { ok: false, message: m };
+  }
 }
 
 /** A TikTok for Business login: the advertiser's token and the ad accounts it opened to Pilotix. */
@@ -469,6 +508,7 @@ export async function confirmLogin(t: Tenancy, state: string, key: string, yes: 
 /** The server's hook: 'test' (one linked account, for one boutique); 'ttCatalog…' (Marketing › Catalogue on TikTok). */
 export async function runSocial(action: string, args: any, ctx: Ctx): Promise<unknown> {
   if (action === 'test') return testLink(ctx.t!, num(args?.shopId), num(args?.linkId), ctx.server?.publicUrl ?? '');
+  if (action === 'waFinish') return finishWhatsappPopup(ctx.t!, num(args?.shopId), args ?? {});
   if (action.startsWith('ttCatalog')) return runTtCatalog(action, args ?? {}, ctx);
   throw new AppError('bad_request', `Action inconnue : ${action}`);
 }

@@ -48,6 +48,8 @@ export const SOCIAL = {
   stateMinutes: 20,
   /** a token that ends in less than this is shown « to link again soon » */
   soonDays: 7,
+  /** Meta's API version (Meta's popup is opened with it too) */
+  graphVersion: 'v25.0',
   graph: 'https://graph.facebook.com/v25.0',
   dialog: 'https://www.facebook.com/v25.0/dialog/oauth',
   tiktokAuth: 'https://business-api.tiktok.com/portal/auth',
@@ -984,6 +986,40 @@ export const socialProcs = {
         state,
         url: loginUrl(apps, i.provider, state, publicUrl, i.kind) as string | null,
       };
+    },
+  ),
+
+  /**
+   * What Meta's popup needs for « Connecter WhatsApp » (JavaScript SDK, the way Meta asks Embedded Signup to open):
+   * read before the click, so the popup opens on the click itself (a popup opened later is blocked by browsers).
+   * Null while Pilotix's WhatsApp configuration is not ready (the button then says why, as before).
+   */
+  'social.waSdk': proc([], z.object({}), async (ctx) => {
+    if (!live(ctx)) return null;
+    const apps = await socialApps(ctx.t);
+    if (!apps.meta.appId || !apps.meta.waConfigId) return null;
+    return { appId: apps.meta.appId, configId: apps.meta.waConfigId, version: SOCIAL.graphVersion, extras: WA_EXTRAS };
+  }),
+
+  /**
+   * « Connecter WhatsApp » came back in Meta's popup: its code and what Meta's window said (the WhatsApp Business account
+   * and the number). The server checks them against what the key was given and links the number to this boutique.
+   */
+  'social.waFinish': proc(
+    [],
+    z.object({
+      state: z.string().min(8).max(100),
+      code: z.string().trim().min(10).max(2000),
+      wabaId: z.string().regex(/^\d{1,30}$/).nullish(),
+      phoneId: z.string().regex(/^\d{1,30}$/).nullish(),
+    }),
+    async (ctx, i) => {
+      if (!live(ctx)) return { ok: true, message: 'WhatsApp connecté', account: '+213 550 11 22 33' };
+      if (!ctx.server.social) throw new AppError('bad_request', 'La connexion WhatsApp se fait sur le serveur de Pilotix.');
+      const r = (await ctx.server.social('waFinish', { ...i, shopId: ctx.shop.id }, ctx)) as { ok: boolean; message: string; account?: string; warn?: string };
+      if (!r.ok) throw new AppError('bad_request', r.message);
+      ctx.emit({ type: 'settings' });
+      return r;
     },
   ),
 

@@ -22,6 +22,7 @@ import { LahjaCard, LahjaFix } from './lahja';
 import { chatPhoto } from './photo';
 import { LinkedPage } from './linkedPage';
 import { VoiceRead } from './voice';
+import { loadFacebookSdk, openWaSignup } from './waSignup';
 import './messages.css';
 
 type Channel = 'whatsapp' | 'messenger' | 'instagram' | 'tiktok' | 'test';
@@ -562,10 +563,44 @@ function MetaConnect({ kind, linked }: { kind: ConnectKind; linked: string }) {
   };
   const reopen = () => pending?.url && setPending({ ...pending, win: window.open(pending.url, '_blank') });
 
+  // « Connecter WhatsApp »: Meta's own popup (its JavaScript SDK), loaded before the click so the popup opens on it;
+  // without it (Meta's script blocked, the demo) the button opens Meta's page in a tab, as before
+  const sdkQ = useRpc('social.waSdk', {}, { enabled: kind === 'whatsapp' && backend.kind !== 'demo' });
+  const sdk = kind === 'whatsapp' ? sdkQ.data ?? null : null;
+  const [fb, setFb] = useState<Awaited<ReturnType<typeof loadFacebookSdk>> | null>(null);
+  const [popup, setPopup] = useState(false);
+  useEffect(() => {
+    if (!sdk) return;
+    let on = true;
+    loadFacebookSdk(sdk)
+      .then((x) => on && setFb(x))
+      .catch(() => undefined);
+    return () => {
+      on = false;
+    };
+  }, [sdk?.appId, sdk?.configId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const startPopup = () => {
+    if (!fb || !sdk || popup) return;
+    setPopup(true);
+    // the login's state is asked while Meta's popup is open (the popup itself must open now, on the click)
+    const st = rpc('social.start', { provider: 'meta', kind: 'whatsapp' });
+    openWaSignup(fb, sdk)
+      .then(async (r) => {
+        const s = await st;
+        const done = await rpc('social.waFinish', { state: s.state, code: r.code, wabaId: r.wabaId, phoneId: r.phoneId });
+        await qc.invalidateQueries();
+        toast(done.warn ? done.warn : t(k('toast')), done.warn ? 'bad' : 'ok');
+      })
+      .catch((e: Error) => toast(e.message === 'cancelled' ? t('messages.settings.igClosed') : e.message, 'bad'))
+      .finally(() => setPopup(false));
+    st.catch(() => undefined);
+  };
+  const usePopup = kind === 'whatsapp' && !!fb && !!sdk;
+
   return (
     <div className="dl-igconnect">
-      <button type="button" className="btn primary" disabled={!!pending} onClick={start}>
-        <ChannelBadge ch={kind} /> {pending ? t('messages.settings.igConnecting') : linked ? t(k('reconnect')) : t(k('connect'))}
+      <button type="button" className="btn primary" disabled={!!pending || popup} onClick={usePopup ? startPopup : start}>
+        <ChannelBadge ch={kind} /> {pending || popup ? t('messages.settings.igConnecting') : linked ? t(k('reconnect')) : t(k('connect'))}
       </button>
       {pending?.url && (
         <button type="button" className="linkbtn" onClick={reopen}>
