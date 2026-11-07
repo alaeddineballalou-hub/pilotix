@@ -189,6 +189,7 @@ input:focus,select:focus{outline:2px solid var(--c);outline-offset:-1px;border-c
 .ok{text-align:center;padding:26px 10px}.ok i{display:inline-grid;place-items:center;width:64px;height:64px;border-radius:50%;background:var(--c);color:#fff;font-size:34px;font-style:normal}
 .ok h2{margin:12px 0 6px}.ok p{color:var(--m);margin:4px 0}.ok .sum{text-align:start}
 .trust{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;color:var(--m);font-size:13px;margin-top:10px}
+.vrow+.vrow{border-top:1px dashed var(--b);margin-top:12px;padding-top:2px}.vh{display:block;font-size:15px;margin-top:10px;color:var(--c)}
 .wo{display:flex;gap:10px;align-items:flex-start;margin:12px 0 14px;font-size:14px;font-weight:500;line-height:1.5;color:var(--t);cursor:pointer}.wo input{width:18px;height:18px;margin:2px 0 0;flex:none;accent-color:var(--c)}
 .so{margin-top:12px;padding:18px;border-radius:12px;background:#f3f4f6;text-align:center}.so b{display:block;font-size:19px;color:#b91c1c}.so p{margin:6px 0 0;color:var(--m)}
 footer{text-align:center;color:var(--m);font-size:12px;padding:18px;display:flex;align-items:center;justify-content:center;gap:8px}footer img{border-radius:6px;object-fit:contain;background:#fff}.brand{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 12px 2px;color:var(--t);font-size:15px}.brand img{border-radius:10px;object-fit:contain;background:#fff;box-shadow:0 0 0 1px var(--b)}
@@ -212,7 +213,7 @@ var tic=0;if(C.tt){${TT_STUB}var tl=0,tlx=function(){if(tl)return;tl=1;(C.tts&&C
 window.addEventListener('load',function(){setTimeout(tlx,2500)});['touchstart','scroll','keydown','mousemove'].forEach(function(e){window.addEventListener(e,tlx,{once:true,passive:true})})}
 var bk=$('bk');if(bk){if(C.mode=='live'){var bq=location.search.replace(/([?&])g=[^&]*&?/,'$1').replace(/[?&]$/,'');bk.href=bk.getAttribute('href')+bq}else bk.onclick=function(e){e.preventDefault();parent.postMessage({lp:'nav',slug:C.g},'*')}}
 var th=d.querySelectorAll('.th button'),mi=$('mi');for(var i=0;i<th.length;i++)th[i].onclick=function(){for(var j=0;j<th.length;j++)th[j].className='';this.className='on';mi.src=this.getAttribute('data-s');mi.srcset=this.getAttribute('data-ss')};
-var vr0=$('vr');if(vr0&&th.length)vr0.addEventListener('change',function(){var k=C.vi&&C.vi[this.value];if(k!=null&&th[k])th[k].click()});
+
 function tl(){var a=d.querySelectorAll('.th img[data-src]');for(var i=0;i<a.length;i++){a[i].src=a[i].getAttribute('data-src');a[i].removeAttribute('data-src')}}
 if(mi&&mi.tagName=='IMG'&&!mi.complete){mi.addEventListener('load',tl);mi.addEventListener('error',tl);setTimeout(tl,10000)}else tl();
 var f=$('f');if(!f)return;
@@ -240,21 +241,33 @@ function money(v){return Math.round(v)+'.00 \\u062f\\u062c'}
 function qv(){return Math.max(1,Math.min(99,parseInt(ar2(qt.value))||1))}
 function unit(){var p=vr&&C.vp[vr.value];return p!=null?p:C.price}
 function fz(){var g=vr&&C.vf&&C.vf[vr.value];return g&&C.fs&&C.fs[g]?C.fs[g]:C.fees}
-function sum(){var q=qv(),fee=fz()[w.value],s=unit()*q,pr=d.querySelector('.pr');$('pp').textContent=money(unit());if(C.op&&pr)pr.className=unit()<C.op?'pr':'pr no';$('s1').textContent=money(s);
+function sum(){var q=qv();vrows(q);var fee=fz()[w.value],s=tot(),pr=d.querySelector('.pr');$('pp').textContent=money(unit());if(C.op&&pr)pr.className=unit()<C.op?'pr':'pr no';$('s1').textContent=money(s);
 $('s2').textContent=!w.value?'\\u0627\\u062e\\u062a\\u0631 \\u0627\\u0644\\u0648\\u0644\\u0627\\u064a\\u0629':fee==null?'\\u064a\\u062d\\u062f\\u062f \\u0639\\u0646\\u062f \\u0627\\u0644\\u062a\\u0623\\u0643\\u064a\\u062f':fee?money(fee):'\\u0645\\u062c\\u0627\\u0646\\u064a';$('s3').textContent=money(s+(fee||0))}
 w.onchange=function(){cm.innerHTML='<option value="">\\u2026</option>';cm.disabled=true;sum();if(!w.value)return;var v=w.value;ask('geo',v,function(r){if(w.value!=v)return;var h='<option value="">\\u0627\\u062e\\u062a\\u0631 \\u0627\\u0644\\u0628\\u0644\\u062f\\u064a\\u0629</option>';
 (r||[]).forEach(function(c){h+='<option value="'+c[0].replace(/"/g,'&quot;')+'">'+(c[1]||c[0])+'</option>'});cm.innerHTML=h;cm.disabled=false})};
-if(vr)vr.onchange=sum;
-var vos=d.querySelectorAll('select.vo');if(vos.length&&vr){var vt={};for(var t0 in C.vt){var o=vr.querySelector('option[value="'+C.vt[t0]+'"]');vt[t0]={id:String(C.vt[t0]),out:!o||o.disabled}}
+var vrs=$('vrs'),vtpl=vrs?vrs.innerHTML:'';
+function rowsOf(){return vrs?vrs.querySelectorAll('.vrow'):[]}
+function rv(row){return row.querySelector('select[name=vr]')}
+var vt={};if(vr)for(var t0 in C.vt||{}){var o0=vr.querySelector('option[value="'+C.vt[t0]+'"]');vt[t0]={id:String(C.vt[t0]),out:!o0||o0.disabled}}
+function vbind(row){var r=rv(row),vos=row.querySelectorAll('select.vo');
+r.addEventListener('change',function(){if(this.value)this.className='';sum();var k=C.vi&&C.vi[this.value];if(k!=null&&th[k])th[k].click()});if(!vos.length)return;
 var vsync=function(){var p=[],all=1,i,j,k;for(i=0;i<vos.length;i++){p.push(vos[i].value);if(!vos[i].value)all=0;vos[i].className='vo'}
 for(i=0;i<vos.length;i++){for(j=1;j<vos[i].options.length;j++){var ok=0;for(var t in vt){if(vt[t].out)continue;var s=t.split(' / '),m=s[i]==vos[i].options[j].value;for(k=0;m&&k<i;k++)if(p[k]&&s[k]!=p[k])m=0;if(m){ok=1;break}}vos[i].options[j].disabled=!ok}
 if(vos[i].value&&vos[i].options[vos[i].selectedIndex].disabled){vos[i].value='';p[i]='';all=0}}
-var x=all&&vt[p.join(' / ')];vr.value=x&&!x.out?x.id:'';vr.dispatchEvent(new Event('change'))};for(var i=0;i<vos.length;i++)vos[i].addEventListener('change',vsync);vsync()}
+var x=all&&vt[p.join(' / ')];r.value=x&&!x.out?x.id:'';r.dispatchEvent(new Event('change'))};for(var i=0;i<vos.length;i++)vos[i].addEventListener('change',vsync);vsync()}
+function vrows(n){if(!vrs)return;n=Math.max(1,Math.min(n,10));var a=rowsOf(),i;
+while(a.length<n){var x=d.createElement('div');x.innerHTML=vtpl;var row=x.firstChild,q=row.querySelectorAll('[id]');for(i=0;i<q.length;i++)q[i].removeAttribute('id');q=row.querySelectorAll('label[for]');for(i=0;i<q.length;i++)q[i].removeAttribute('for');vrs.appendChild(row);a=rowsOf();vbind(row)}
+while(a.length>n){vrs.removeChild(a[a.length-1]);a=rowsOf()}
+for(i=0;i<a.length;i++){var h=a[i].querySelector('.vh');h.textContent=n>1?'\u0627\u0644\u0642\u0637\u0639\u0629 '+(i+1):'';h.style.display=n>1?'':'none'}}
+function lines(){var a=rowsOf(),q=qv(),n=a.length,o=[];for(var i=0;i<n;i++)o.push({variant:+rv(a[i]).value||null,qty:i==n-1?q-(n-1):1});return o}
+function tot(){if(!vrs)return unit()*qv();var s=0,l=lines();for(var i=0;i<l.length;i++){var p=C.vp[l[i].variant];s+=(p!=null?p:C.price)*l[i].qty}return s}
+function vtx(){var a=rowsOf(),t=[];for(var i=0;i<a.length;i++){var r=rv(a[i]);if(r.value)t.push(r.options[r.selectedIndex].text)}return t.length?' \u2014 '+t.join('\u060c '):''}
+if(vrs)vbind(rowsOf()[0]);
 $('qm').onclick=function(){qt.value=Math.max(1,qv()-1);sum();lead()};$('qp').onclick=function(){qt.value=Math.min(99,qv()+1);sum();lead()};qt.oninput=sum;
 var done=0,lt=null,last='';
-function form(){return{name:f.nm.value.trim(),phone:nph(f.ph.value),wilaya:+w.value||0,commune:cm.value,variant:vr?+vr.value||null:null,qty:qv(),hp:f.web.value,ch:C.ch,fp:fp,did:did,vid:C.vid,utm:utm,fbp:ck('_fbp'),fbc:ck('_fbc'),ttp:ck('_ttp'),url:C.mode=='live'?location.href.slice(0,500):''}}
+function form(){return{name:f.nm.value.trim(),phone:nph(f.ph.value),wilaya:+w.value||0,commune:cm.value,variant:vr?+vr.value||null:null,qty:qv(),items:vrs?lines():null,hp:f.web.value,ch:C.ch,fp:fp,did:did,vid:C.vid,utm:utm,fbp:ck('_fbp'),fbc:ck('_fbc'),ttp:ck('_ttp'),url:C.mode=='live'?location.href.slice(0,500):''}}
 function lead(now){if(!C.lead||done||busy)return;var b=form();if(!/^0[567]\\d{8}$/.test(b.phone))return;var k=JSON.stringify([b.name,b.phone,b.wilaya,b.commune,b.variant,b.qty]);if(k==last)return;clearTimeout(lt);lt=null;
-var go=function(){lt=null;last=k;if(px&&!ic){ic=1;fbq('track','InitiateCheckout',{content_ids:[String(C.pid)],content_type:'product_group',value:unit()*b.qty,currency:'DZD',num_items:b.qty},{eventID:'ic-'+C.vid})}if(C.tt&&!tic){tic=1;ttq.track('InitiateCheckout',{contents:[{content_id:String(C.pid),content_type:'product_group',quantity:b.qty}],value:unit()*b.qty,currency:'DZD'},{event_id:'ic-'+C.vid})}ask('lead',b,function(){},now)};if(now)go();else lt=setTimeout(go,1500)}
+var go=function(){lt=null;last=k;if(px&&!ic){ic=1;fbq('track','InitiateCheckout',{content_ids:[String(C.pid)],content_type:'product_group',value:tot(),currency:'DZD',num_items:b.qty},{eventID:'ic-'+C.vid})}if(C.tt&&!tic){tic=1;ttq.track('InitiateCheckout',{contents:[{content_id:String(C.pid),content_type:'product_group',quantity:b.qty}],value:tot(),currency:'DZD'},{event_id:'ic-'+C.vid})}ask('lead',b,function(){},now)};if(now)go();else lt=setTimeout(go,1500)}
 f.addEventListener('input',function(e){if(e.isTrusted!==false)ki++;lead()});f.ph.addEventListener('paste',function(){ps=true});f.addEventListener('change',function(){lead()});
 function flush(){if(lt){clearTimeout(lt);lt=null;last='';lead(1)}}window.addEventListener('pagehide',flush);d.addEventListener('visibilitychange',function(){if(d.visibilityState=='hidden')flush()});
 function fk(p){var x=p.slice(2);return/(\\d)\\1{5,}/.test(x)||'0123456789012345'.indexOf(x.slice(0,7))>=0||'9876543210987654'.indexOf(x.slice(0,7))>=0}
@@ -263,13 +276,13 @@ var busy=false;f.onsubmit=function(ev){ev.preventDefault();if(busy)return;var nm
 var ok=err('nm',nm.length<3?'\\u0623\\u062f\\u062e\\u0644 \\u0627\\u0633\\u0645\\u0643 \\u0627\\u0644\\u0643\\u0627\\u0645\\u0644':'');
 ok=err('ph',/^0[567]\\d{8}$/.test(ph)&&!fk(ph)?'':fk(ph)?'\\u0623\\u062f\\u062e\\u0644 \\u0631\\u0642\\u0645\\u0643 \\u0627\\u0644\\u062d\\u0642\\u064a\\u0642\\u064a':'\\u0631\\u0642\\u0645 \\u0627\\u0644\\u0647\\u0627\\u062a\\u0641 \\u063a\\u064a\\u0631 \\u0635\\u062d\\u064a\\u062d (\\u0645\\u062b\\u0627\\u0644: 0555123456)')&&ok;
 ok=err('w',w.value?'':'\\u0627\\u062e\\u062a\\u0631 \\u0627\\u0644\\u0648\\u0644\\u0627\\u064a\\u0629')&&ok;ok=err('cm',cm.value?'':'\\u0627\\u062e\\u062a\\u0631 \\u0627\\u0644\\u0628\\u0644\\u062f\\u064a\\u0629')&&ok;
-if(vr)ok=err('vr',vr.value?'':'\\u0627\\u062e\\u062a\\u0631 '+C.vl)&&ok;for(var i=0;i<vos.length;i++)if(!vos[i].value)vos[i].className='vo bad';if(!ok)return;busy=true;clearTimeout(lt);lt=null;var btn=$('go');btn.disabled=true;btn.textContent='\\u2026';
+var ra=rowsOf();for(var i=0;i<ra.length;i++){var r=rv(ra[i]),e=ra[i].querySelector('.e'),vs=ra[i].querySelectorAll('select.vo');if(e)e.textContent=r.value?'':'\u0627\u062e\u062a\u0631 '+C.vl;if(r.value)continue;ok=false;if(!vs.length)r.className='bad';for(var j=0;j<vs.length;j++)if(!vs[j].value)vs[j].className='vo bad'}if(!ok)return;busy=true;clearTimeout(lt);lt=null;var btn=$('go');btn.disabled=true;btn.textContent='\\u2026';
 var q=qv(),wait=Date.now();
 (function send(){if(nonce===null&&Date.now()-wait<4000)return setTimeout(send,150);var b=form();b.name=nm;b.phone=ph;b.ch=C.ch;b.pw=nonce;b.t=Date.now()-t0;b.ki=ki;b.wd=!!nv.webdriver;b.sc=de.scrollHeight-de.clientHeight<200?50:sy;b.ps=ps;b.mt=nv.maxTouchPoints==null?null:nv.maxTouchPoints;b.tt=tt;b.tk=C.ts;try{b.tz=Intl.DateTimeFormat().resolvedOptions().timeZone||''}catch(e){}
 ask('order',b,function(r,st){
 if(!r||!r.ok){busy=false;btn.disabled=false;btn.textContent=C.cta;$('fe').textContent='\\u062a\\u0639\\u0630\\u0631 \\u0627\\u0644\\u0625\\u0631\\u0633\\u0627\\u0644\\u060c \\u062a\\u062d\\u0642\\u0642 \\u0645\\u0646 \\u0627\\u0644\\u0627\\u062a\\u0635\\u0627\\u0644 \\u0648\\u0623\\u0639\\u062f \\u0627\\u0644\\u0645\\u062d\\u0627\\u0648\\u0644\\u0629';return}
-done=1;var fee=fz()[w.value];$('okn').textContent=nm;$('o1').textContent=C.title+(vr?' \\u2014 '+vr.options[vr.selectedIndex].text:'')+' \\u00d7 '+q;$('o2').textContent=money(unit()*q+(fee||0));
-var wa=$('wa');if(wa&&C.wa){var V={nom:nm,produit:C.title+(vr?' \\u2014 '+vr.options[vr.selectedIndex].text:''),quantite:q,total:money(unit()*q+(fee||0)),telephone:nph(f.ph.value),wilaya:w.value?w.options[w.selectedIndex].text.replace(/^\\d+\\s*-\\s*/,''):'',commune:cm.value?cm.options[cm.selectedIndex].text:''};wa.href='https://wa.me/'+C.wa.n+'?text='+encodeURIComponent(C.wa.m.replace(/\\{(\\w+)\\}/g,function(x,k){return V[k]!=null?V[k]:x}))}
+done=1;var fee=fz()[w.value];$('okn').textContent=nm;$('o1').textContent=C.title+vtx()+' \\u00d7 '+q;$('o2').textContent=money(tot()+(fee||0));
+var wa=$('wa');if(wa&&C.wa){var V={nom:nm,produit:C.title+vtx(),quantite:q,total:money(tot()+(fee||0)),telephone:nph(f.ph.value),wilaya:w.value?w.options[w.selectedIndex].text.replace(/^\\d+\\s*-\\s*/,''):'',commune:cm.value?cm.options[cm.selectedIndex].text:''};wa.href='https://wa.me/'+C.wa.n+'?text='+encodeURIComponent(C.wa.m.replace(/\\{(\\w+)\\}/g,function(x,k){return V[k]!=null?V[k]:x}))}
 var wo=$('wo');if(wo)wo.onchange=function(){if(wo.checked&&!wo.s&&C.mode=='live'){wo.s=1;ask('optin',{ch:C.ch,phone:ph},function(){})}};
 f.style.display='none';$('ok').style.display='block';window.scrollTo(0,0)})})()};sum()})();`;
 
@@ -338,11 +351,13 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
   const vopts = v.variants
     .map((x) => `<option value="${x.id}"${x.out ? ' disabled' : ''}>${esc(x.title)}${x.out ? ' — نفذت الكمية' : x.price != null ? ` — ${landingPrice(x.price)}` : ''}</option>`)
     .join('');
-  const variants = !v.variants.length
+  const vrow = !v.variants.length
     ? ''
     : split
       ? `${v.options!.map((o, k) => `<label for="vo${k}">${esc(o.name)}</label><select id="vo${k}" class="vo"><option value="">${esc(o.name)}…</option>${o.values.map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select>`).join('')}<select id="vr" name="vr" hidden><option value=""></option>${vopts}</select><div class="e" id="vre"></div>`
       : `<label for="vr">${esc(v.variantLabel)}</label><select id="vr" name="vr"><option value="">${esc(v.variantLabel)}…</option>${vopts}</select><div class="e" id="vre"></div>`;
+  // one row per piece: the page adds a row (empty, to choose) for each piece the customer adds
+  const variants = vrow ? `<div id="vrs"><div class="vrow"><b class="vh" style="display:none"></b>${vrow}</div></div>` : '';
   const off = v.oldPrice && v.oldPrice > v.price ? Math.round((1 - v.price / v.oldPrice) * 100) : 0;
   const cta = 'اطلب الآن';
   const vp: Record<number, number> = {};

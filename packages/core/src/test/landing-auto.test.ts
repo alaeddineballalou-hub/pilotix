@@ -62,6 +62,23 @@ test('an order goes straight to « Nouvelle » as a Landing order, with its ad l
   await db.query(`UPDATE product_variants SET price = NULL WHERE id = $1`, [v]);
 });
 
+test('one variant per piece: 3 pieces, 2 different, make 2 order lines; a piece without a variant is not an order', async () => {
+  const [a, b] = [variants[0].id, variants[1].id];
+  await db.query(`UPDATE product_variants SET price = 10500 WHERE id = $1`, [b]);
+  await call('landing.save', admin, { id: Number((await db.query(`SELECT id FROM landing_pages WHERE slug = $1`, [SLUG]))[0].id), productId, slug: SLUG, title: 'Test', price: null, pixelId: PIXEL });
+  const input = await human({ variant: a, qty: 3, items: [{ variant: a, qty: 1 }, { variant: b, qty: 1 }, { variant: a, qty: 1 }] });
+  await call('landing.submit', admin, input);
+  const o = await orderOf(input.phone as string);
+  const items = (await db.query(`SELECT variant_id, qty, unit_price FROM order_items WHERE order_id = $1 ORDER BY id`, [o.id])).map((r: any) => [Number(r.variant_id), Number(r.qty), Number(r.unit_price)]);
+  const base = Number((await db.query(`SELECT price FROM products WHERE id = $1`, [productId]))[0].price);
+  assert.deepEqual(items, [[a, 2, base], [b, 1, 10500]]);
+  // a piece left without its variant: the page never sends that, so it is not taken as an order
+  const bad = await human({ qty: 2, items: [{ variant: a, qty: 1 }, { variant: null, qty: 1 }] });
+  await call('landing.submit', admin, bad);
+  assert.equal(await orderOf(bad.phone as string), undefined);
+  await db.query(`UPDATE product_variants SET price = NULL WHERE id = $1`, [b]);
+});
+
 test('Meta: a Purchase only when an agent confirms a landing order (never at submit, never twice)', async () => {
   const input = await human();
   await call('landing.submit', admin, input);

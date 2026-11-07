@@ -470,6 +470,14 @@ export const SubmitInput = z.object({
   commune: str(120),
   variant: int(null),
   qty: int(1),
+  /** one line per piece when the customer picked a variant for each (« M / Rouge » ×1, « L / Noir » ×1) */
+  items: z
+    .any()
+    .transform((v) =>
+      (Array.isArray(v) ? v.slice(0, 20) : [])
+        .map((x: any) => ({ variant: Number.isFinite(Number(x?.variant)) ? Math.trunc(Number(x.variant)) : null, qty: Math.trunc(Number(x?.qty)) || 0 }))
+        .filter((x: { qty: number }) => x.qty >= 1 && x.qty <= 99),
+    ),
   hp: str(500),
   ch: str(200),
   pw: str(40),
@@ -835,9 +843,18 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
   const now = ctx.now();
   const phoneRaw = arDigits(i.phone);
   const phone = mobileOf(i.phone);
-  const qty = Math.max(1, Math.min(99, i.qty ?? 1));
   const wilayaId = i.wilaya && i.wilaya >= 1 && i.wilaya <= 69 ? i.wilaya : 0;
-  const variant = pc.variants.find((v) => v.id === i.variant) ?? null;
+  // the pieces: one variant each when the page sent them (the same variant twice is one line ×2), else the old way
+  const asked = pc.variants.length && i.items?.length ? i.items : [{ variant: i.variant, qty: i.qty ?? 1 }];
+  const pieces: { variant: (typeof pc.variants)[number] | null; qty: number }[] = [];
+  for (const x of asked) {
+    const v = pc.variants.find((y) => y.id === x.variant) ?? null;
+    const same = pieces.find((p) => p.variant?.id === v?.id && !!v);
+    if (same) same.qty += x.qty;
+    else pieces.push({ variant: v, qty: x.qty });
+  }
+  const qty = Math.max(1, Math.min(99, pieces.reduce((n, p) => n + p.qty, 0)));
+  const variant = pieces[0]?.variant ?? null;
   const ip = i.meta.ip ?? '';
   const device = i.did ? `d:${i.did}` : `f:${i.fp}:${ip}`;
   // the stable device fingerprint (survives a cleared or private browser), kept apart from the device key above
@@ -901,7 +918,7 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
   );
   // a form the page itself would never send (no wilaya, no commune, no variant when there are some): a script.
   // A variant sold out since the page opened is still a real customer: it is ordered (the agent sets « sans stock »).
-  if (!wilayaId || !i.commune.trim() || (pc.variants.length && !variant)) {
+  if (!wilayaId || !i.commune.trim() || (pc.variants.length && pieces.some((p) => !p.variant))) {
     result.reasons.unshift({ code: 'form_invalid', points: 100 });
     result.score = 100;
     result.verdict = 'block';
@@ -942,7 +959,9 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
     merged = true;
     const changes = [
       num(mergeInto.qty) !== qty ? `quantité ${qty} (avant ${num(mergeInto.qty)})` : '',
-      (numOrNull(mergeInto.variant_id) ?? null) !== (variantId ?? null) ? `variante ${variant?.title ?? '—'}` : '',
+      pieces.length > 1
+        ? `variantes ${pieces.map((p) => `${p.variant?.title ?? '—'} ×${p.qty}`).join(', ')}`
+        : (numOrNull(mergeInto.variant_id) ?? null) !== (variantId ?? null) ? `variante ${variant?.title ?? '—'}` : '',
     ].filter(Boolean);
     const note = `🔁 Le client a renvoyé la commande depuis la landing page${changes.length ? ` avec ${changes.join(', ')} : demandez-lui laquelle il veut` : ' (même commande)'}.`;
     await db.query(`UPDATE orders SET internal_note = concat_ws(E'\n', NULLIF(internal_note, ''), $2::text), updated_at = now(), version = version + 1 WHERE id = $1`, [orderId, note]);
@@ -963,7 +982,10 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
         channel: 'landing',
         source: `Landing · ${i.slug}`.slice(0, 120),
         utm: i.utm,
-        items: [{ productId, variantId, qty, unitPrice }],
+        items:
+          pieces.length > 1
+            ? pieces.map((p) => ({ productId, variantId: p.variant!.id, qty: p.qty, unitPrice: unitPriceOf(numOrNull(l.price), pc, p.variant!.id) }))
+            : [{ productId, variantId, qty, unitPrice }],
         discount: 0,
         confirm: false,
         isExchange: false,
