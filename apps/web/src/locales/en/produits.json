@@ -490,7 +490,11 @@
       "othersHelp": "They stay (orders or stock may use them): untick “active” if you no longer sell them.",
       "organize": "Organise in options (Size, Colour…)",
       "tooMany": "{{count}} combinations: 200 at most. Remove some values.",
-      "needName": "Give each option a name (e.g. Size)."
+      "needName": "Give each option a name (e.g. Size).",
+      "renameHint": "Click to rename",
+      "renameValue": "Rename {{v}}",
+      "renameTaken": "“{{v}}” is already in this option",
+      "renameHelp": "Click a value to rename it: the size keeps its stock, delivery price, photo and code."
     },
     "archive": "Archive",
     "archiveAsk": "Archive this product? It leaves the lists (old orders keep it). It must have 0 in stock.",

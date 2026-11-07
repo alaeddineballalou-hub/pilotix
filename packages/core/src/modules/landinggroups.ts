@@ -11,7 +11,7 @@ import { autoSettings, getSetting } from '../settings';
 import { b64, HtmlOpts, imageRows, ImgRef, productContext, readImgs, viewImages } from './landing';
 
 const WHO = ['marketer'] as const;
-import { APP_WORD, landingSettings, landingStore } from './landingquery';
+import { addressOwner, addressTaken, APP_WORD, groupRowAt, keepFormerAddress, landingSettings, landingStore } from './landingquery';
 import { checkPixels, PixelList, pixelsJson, pixelsOf, readPixels } from './pixels';
 
 const id = z.number().int().positive();
@@ -66,7 +66,8 @@ const readItems = (v: unknown): { pageId: number; tab: string; note: string }[] 
 
 /** The group page's HTML (a group saved at this address; none: « page introuvable »). */
 export async function groupHtml(ctx: Ctx, slug: string, o: HtmlOpts): Promise<string> {
-  const g = (await ctx.db.query('SELECT * FROM landing_groups WHERE slug = $1', [slug]))[0];
+  // the group that has this address, or had it before (its old links keep working)
+  const g = await groupRowAt(ctx.db, slug);
   if (!g || (!g.active && o.mode === 'live')) throw notFound('Page introuvable');
   if (o.mode === 'live') await ctx.db.query('UPDATE landing_groups SET views = views + 1 WHERE id = $1', [g.id]);
   return renderRow(ctx, g, o);
@@ -132,7 +133,7 @@ async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'im
  */
 export async function groupOf(db: Db, slug: string, pageId: number, live: boolean): Promise<{ slug: string; title: string } | null> {
   if (!/^[a-z0-9-]{2,60}$/.test(slug)) return null;
-  const g = (await db.query('SELECT id, slug, title, active, items FROM landing_groups WHERE slug = $1', [slug]))[0];
+  const g = await groupRowAt(db, slug);
   if (!g || (live && !g.active) || !readItems(g.items).some((x) => x.pageId === pageId)) return null;
   if (live)
     await db.query(
@@ -146,9 +147,14 @@ async function listGroups(db: Db, ids?: number[]) {
   const rows = await db.query(`SELECT * FROM landing_groups ${ids ? 'WHERE id = ANY($1)' : ''} ORDER BY updated_at DESC`, ids ? [ids] : []);
   if (!rows.length) return [];
   const clicks = await db.query('SELECT group_id, page_id, clicks FROM landing_group_clicks WHERE group_id = ANY($1)', [rows.map((r: any) => r.id)]);
+  // a group's orders came through its address of the time (utm.g): its address now and its former ones
+  const former = await db.query('SELECT slug, group_id FROM landing_old_slugs WHERE group_id = ANY($1)', [rows.map((r: any) => r.id)]);
+  const slugsOf = new Map<number, Set<string>>(
+    rows.map((r: any) => [num(r.id), new Set([String(r.slug), ...former.filter((f: any) => num(f.group_id) === num(r.id)).map((f: any) => String(f.slug))])]),
+  );
   const orders = await db.query(
     `SELECT utm->>'g' AS g, landing_id, count(*)::int AS n FROM orders WHERE utm ? 'g' AND utm->>'g' = ANY($1) GROUP BY 1, 2`,
-    [rows.map((r: any) => r.slug)],
+    [[...slugsOf.values()].flatMap((x) => [...x])],
   );
   const allIds = [...new Set(rows.flatMap((r: any) => readItems(r.items).map((x) => x.pageId)))];
   const pages = allIds.length ? await db.query('SELECT id, slug, title, active, images, product_id, (SELECT name FROM products p WHERE p.id = l.product_id) AS pname FROM landing_pages l WHERE id = ANY($1)', [allIds]) : [];
@@ -172,7 +178,7 @@ async function listGroups(db: Db, ids?: number[]) {
         active: p?.active ?? false,
         thumb: p?.thumb ?? null,
         clicks: num(clicks.find((c: any) => num(c.group_id) === gid && num(c.page_id) === x.pageId)?.clicks),
-        orders: num(orders.find((o: any) => o.g === r.slug && num(o.landing_id) === x.pageId)?.n),
+        orders: orders.filter((o: any) => slugsOf.get(gid)!.has(String(o.g)) && num(o.landing_id) === x.pageId).reduce((n: number, o: any) => n + num(o.n), 0),
       };
     });
     return {
@@ -189,7 +195,7 @@ async function listGroups(db: Db, ids?: number[]) {
       tiktokPixels: readPixels(r.tiktok_pixels),
       views: num(r.views),
       clicks: items.reduce((n, x) => n + x.clicks, 0),
-      orders: orders.filter((o: any) => o.g === r.slug).reduce((n: number, o: any) => n + num(o.n), 0),
+      orders: orders.filter((o: any) => slugsOf.get(gid)!.has(String(o.g))).reduce((n: number, o: any) => n + num(o.n), 0),
       items,
       updatedAt: iso(r.updated_at),
     };
@@ -198,9 +204,9 @@ async function listGroups(db: Db, ids?: number[]) {
 export type LandingGroupRow = Awaited<ReturnType<typeof listGroups>>[number];
 
 async function checkInput(db: Db, i: GroupIn) {
-  if ((await db.query('SELECT 1 FROM landing_pages WHERE slug = $1', [i.slug])).length) throw bad(`L’adresse « ${i.slug} » est déjà prise par une landing page`);
-  const dup = (await db.query('SELECT id FROM landing_groups WHERE slug = $1', [i.slug]))[0];
-  if (dup && num(dup.id) !== i.id) throw bad(`L’adresse « ${i.slug} » est déjà prise`);
+  // a page's or another group's address, now or before (its old links lead there): not this one's
+  const taken = await addressTaken(db, i.slug, { group: i.id });
+  if (taken) throw bad(taken);
   const ids = i.items.map((x) => x.pageId);
   if (new Set(ids).size !== ids.length) throw bad('Un produit est deux fois dans le groupe');
   if (ids.length && num((await db.query('SELECT count(*)::int AS n FROM landing_pages WHERE id = ANY($1)', [ids]))[0].n) !== ids.length) throw notFound('Landing page introuvable');
@@ -232,12 +238,15 @@ export const landingGroupProcs = {
     const vals = [r.slug, r.active, r.title, r.subtitle, r.color, r.theme, r.best_page_id, JSON.stringify(r.items), r.pixel_id || null, pixelsJson(i.metaPixels), pixelsJson(i.tiktokPixels)];
     let gid: number;
     if (i.id) {
+      const before = (await ctx.db.query('SELECT slug FROM landing_groups WHERE id = $1', [i.id]))[0]?.slug as string | undefined;
       const u = await ctx.db.query(
         `UPDATE landing_groups SET slug=$2, active=$3, title=$4, subtitle=$5, color=$6, theme=$7, best_page_id=$8, items=$9, pixel_id=$10, meta_pixels=$11, tiktok_pixels=$12, updated_at=now() WHERE id=$1 RETURNING id`,
         [i.id, ...vals],
       );
       if (!u.length) throw notFound('Groupe introuvable');
       gid = i.id;
+      // a new address: the old one keeps opening this group
+      if (before) await keepFormerAddress(ctx.db, { group: gid }, before, i.slug);
     } else {
       gid = num(
         (
@@ -274,10 +283,9 @@ export const landingGroupProcs = {
     for (let n = 1; n < 200; n++) {
       const s = n === 1 ? base : `${base}-${n}`;
       if (s.length < 2) continue;
-      const taken =
-        (await ctx.db.query('SELECT 1 FROM landing_pages WHERE slug = $1', [s])).length ||
-        (await ctx.db.query('SELECT 1 FROM landing_groups WHERE slug = $1 AND id IS DISTINCT FROM $2', [s, i.id ?? null])).length;
-      if (!taken) return { slug: s };
+      // free, or this group's own (now or before); never a page's or another group's, even a former one
+      const o = await addressOwner(ctx.db, s);
+      if (!o || (i.id !== undefined && o.group === i.id)) return { slug: s };
     }
     return { slug: `${base}-${Date.now().toString(36)}` };
   }),

@@ -1232,13 +1232,13 @@ class ApiController {
     const items: { productId: number; variantId: number | null; qty: number; unitPrice?: number }[] = [];
     for (const it of Array.isArray(body?.items) ? body.items : []) {
       const sku = String(it.sku ?? '').trim();
-      const v = (await db.query('SELECT v.id, v.product_id FROM product_variants v WHERE v.sku = $1', [sku]))[0];
-      const p = v ? null : (await db.query('SELECT id FROM products WHERE sku = $1', [sku]))[0];
-      if (!v && !p) {
+      // its code now, else a code it had before (a code changed in Pilotix while the site still sends the old one)
+      const hit = await core.findBySku(db, sku);
+      if (!hit) {
         if (ch?.sku_required) throw new core.AppError('bad_request', `SKU inconnu : ${sku}`);
         continue;
       }
-      items.push({ productId: Number(v?.product_id ?? p.id), variantId: v ? Number(v.id) : null, qty: Math.max(1, Number(it.qty) || 1), unitPrice: it.price !== undefined ? Math.round(Number(it.price)) : undefined });
+      items.push({ productId: hit.productId, variantId: hit.variantId, qty: Math.max(1, Number(it.qty) || 1), unitPrice: it.price !== undefined ? Math.round(Number(it.price)) : undefined });
     }
     if (!items.length) throw new core.AppError('bad_request', 'Aucun produit reconnu (vérifiez les SKU)');
     const phone = normalizePhone(String(body?.phone ?? ''));

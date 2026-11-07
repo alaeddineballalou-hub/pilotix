@@ -1,10 +1,11 @@
 // Product form › Options: the product's options (Taille, Couleur, Fille / Garçon…) and their values; Pilotix makes one
 // variant per combination (« 12P / ROSE / Fille »), each with its SKU, price and on/off. Variants already made that do
 // not follow the options stay listed (orders and stock may use them): they are switched off, never deleted.
-import { KeyboardEvent, useEffect, useMemo, useState } from 'react';
+import { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da } from '../../lib/format';
 import { Icon } from '../../ui/kit';
+import { toast } from '../../ui/toast';
 import { bidi } from './stockui';
 
 export interface VRow {
@@ -66,9 +67,29 @@ const PRESET: [RegExp, string[]][] = [
   [/age|âge/i, ['0-6 mois', '6-12 mois', '1-3 ans', '3-5 ans', '5-8 ans']],
 ];
 
-function ValuesInput({ opt, onChange, suggestions }: { opt: Opt; onChange: (values: string[]) => void; suggestions: string[] }) {
+/** a value as typed: no « / » (it separates the values in a variant's name), spaces tidied, 60 letters at most */
+const cleanValue = (x: string) => x.replace(/\//g, '-').replace(/\s+/g, ' ').trim().slice(0, 60);
+
+function ValuesInput({ opt, onChange, onRename, suggestions }: { opt: Opt; onChange: (values: string[]) => void; onRename: (from: string, to: string) => void; suggestions: string[] }) {
   const { t } = useTranslation();
   const [text, setText] = useState('');
+  /** the value being renamed (a click on it) and what is typed so far */
+  const [edit, setEdit] = useState<{ from: string; text: string } | null>(null);
+  /** the edit is over (Enter, Escape or a click away): the blur that follows does not count it twice */
+  const closed = useRef(false);
+  const start = (v: string) => {
+    closed.current = false;
+    setEdit({ from: v, text: v });
+  };
+  const commit = () => {
+    if (!edit || closed.current) return;
+    closed.current = true;
+    const to = cleanValue(edit.text);
+    setEdit(null);
+    if (!to || to === edit.from) return;
+    if (opt.values.some((y) => y !== edit.from && low(y) === low(to))) return toast(t('produits.form.opt.renameTaken', { v: to }), 'bad');
+    onRename(edit.from, to);
+  };
   const add = (raw: string) => {
     const parts = raw
       .split(/[,;\n]+/)
@@ -90,14 +111,42 @@ function ValuesInput({ opt, onChange, suggestions }: { opt: Opt; onChange: (valu
   return (
     <>
       <div className="po-vals">
-        {opt.values.map((v) => (
-          <span key={v} className="po-chip">
-            {v}
-            <button type="button" aria-label={`${t('produits.form.opt.removeValue')} ${v}`} onClick={() => onChange(opt.values.filter((x) => x !== v))}>
-              ×
-            </button>
-          </span>
-        ))}
+        {opt.values.map((v) =>
+          edit?.from === v ? (
+            <span key={v} className="po-chip po-chip-edit">
+              <input
+                autoFocus
+                value={edit.text}
+                size={Math.max(4, edit.text.length + 1)}
+                aria-label={t('produits.form.opt.renameValue', { v })}
+                onChange={(e) => setEdit({ from: v, text: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    commit();
+                  } else if (e.key === 'Escape') {
+                    // Escape leaves the renaming only, not the product form around it
+                    e.preventDefault();
+                    e.stopPropagation();
+                    closed.current = true;
+                    setEdit(null);
+                  }
+                }}
+                onBlur={commit}
+              />
+            </span>
+          ) : (
+            <span key={v} className="po-chip">
+              <button type="button" className="po-chip-name" title={t('produits.form.opt.renameHint')} aria-label={t('produits.form.opt.renameValue', { v })} onClick={() => start(v)}>
+                {bidi(v)}
+                <Icon name="pencil" />
+              </button>
+              <button type="button" aria-label={`${t('produits.form.opt.removeValue')} ${v}`} onClick={() => onChange(opt.values.filter((x) => x !== v))}>
+                ×
+              </button>
+            </span>
+          ),
+        )}
         <input
           value={text}
           aria-label={t('produits.form.opt.valuesPh')}
@@ -112,7 +161,7 @@ function ValuesInput({ opt, onChange, suggestions }: { opt: Opt; onChange: (valu
           <span className="muted small">{t('produits.form.opt.suggest')}</span>
           {left.map((s) => (
             <button key={s} type="button" onClick={() => onChange([...opt.values, s])}>
-              + {s}
+              + {bidi(s)}
             </button>
           ))}
         </div>
@@ -136,6 +185,7 @@ export function VariantOptions({
   skipped,
   feeGrids,
   onPhotoFile,
+  onRenameValue,
 }: {
   opts: Opt[];
   setOpts: (o: Opt[]) => void;
@@ -153,6 +203,8 @@ export function VariantOptions({
   skipped: Set<string>;
   feeGrids: string[];
   onPhotoFile: (file: File) => Promise<string>;
+  /** a value renamed (« 0-3 mois » → « 0-3 m »): the form moves what follows the name (the size guide's line) */
+  onRenameValue?: (option: Opt, from: string, to: string) => void;
  }) {
   const { t } = useTranslation();
   const combos = useMemo(() => combosOf(opts), [opts]);
@@ -166,6 +218,36 @@ export function VariantOptions({
   const others = vars.filter((v) => v.id && v.title && !want.has(low(v.title)));
   const editRow = (title: string, patch: Partial<VRow>) => setVars((prev) => prev.map((v) => (low(v.title) === low(title) ? { ...v, ...patch } : v)));
   const setOpt = (k: number, o: Opt) => setOpts(opts.map((x, i) => (i === k ? o : x)));
+  /**
+   * A value renamed (« 0-3 mois » → « 0-3 m »): the variants already made only change name — they keep their id, so their
+   * stock, delivery price list, photo, code and orders stay with them (not a new empty size beside the old one). The
+   * combinations the product was saved without stay left out under the new name.
+   */
+  const renameValue = (k: number, from: string, to: string) => {
+    const used = opts.filter((o) => o.name.trim() && o.values.length);
+    const at = used.indexOf(opts[k]);
+    const next = opts.map((o, i) => (i === k ? { ...o, values: o.values.map((v) => (v === from ? to : v)) } : o));
+    if (at >= 0) {
+      const swap = (title: string, a: string, b: string) => {
+        const parts = title.split(SEP);
+        if (parts.length !== used.length || low(parts[at]) !== low(a)) return title;
+        parts[at] = b;
+        return parts.join(SEP);
+      };
+      setVars((prev) => {
+        const out = prev.map((v) => ({ ...v, title: swap(v.title, from, to) }));
+        const have = new Set(out.map((v) => low(v.title)));
+        for (const c of combosOf(next)) {
+          const title = titleOf(c);
+          if (!have.has(low(title)) && skipped.has(low(swap(title, to, from))))
+            out.push({ title, sku: '', price: '', cost: '', maxDiscount: '', weightKg: '', alertQty: '', feeGrid: '', photo: '', active: false });
+        }
+        return out;
+      });
+    }
+    setOpts(next);
+    onRenameValue?.(opts[k], from, to);
+  };
   const names = new Set(opts.map((o) => low(o.name)));
   const addOpt = (o: Opt) => setOpts([...opts, o]);
   const sugg = (name: string) => {
@@ -188,7 +270,9 @@ export function VariantOptions({
 
   return (
     <>
-      <p className="muted small po-help">{t('produits.form.opt.help')}</p>
+      <p className="muted small po-help">
+        {t('produits.form.opt.help')} {opts.some((o) => o.values.length) && t('produits.form.opt.renameHelp')}
+      </p>
       {opts.map((o, k) => (
         <div key={k} className="po-opt">
           <div className="po-name">
@@ -196,7 +280,7 @@ export function VariantOptions({
             <input list="po-names" value={o.name} aria-label={t('produits.form.opt.name')} placeholder={t('produits.form.opt.namePh')} onChange={(e) => setOpt(k, { ...o, name: e.target.value })} />
           </div>
           <div className="po-body">
-            <ValuesInput opt={o} onChange={(values) => setOpt(k, { ...o, values })} suggestions={sugg(o.name)} />
+            <ValuesInput opt={o} onChange={(values) => setOpt(k, { ...o, values })} onRename={(from, to) => renameValue(k, from, to)} suggestions={sugg(o.name)} />
           </div>
           <button type="button" className="icon-btn" title={t('produits.form.opt.remove')} aria-label={t('produits.form.opt.remove')} onClick={() => setOpts(opts.filter((_, i) => i !== k))}>
             ✕

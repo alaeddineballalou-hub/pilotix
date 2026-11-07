@@ -43,7 +43,7 @@ import { groupHtml, groupOf } from './landinggroups';
 import { runAttackTest } from './attacktest';
 import { checkPixels, PixelList, pixelsJson, pixelsOf, pixelTestCode, pixelToken, readPixels } from './pixels';
 import { campaignSettings, giveConsent } from './campaigns';
-import { ABANDONED, abandonCutoff, APP_WORD, freeLandingSlug, landingCounts, landingSettings, LandingSettings, landingStore, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
+import { ABANDONED, abandonCutoff, addressTaken, APP_WORD, freeLandingSlug, keepFormerAddress, landingCounts, landingSettings, LandingSettings, landingStore, pageRowAt, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
 import { sendInPreview } from './notify';
 import { addEvent, createOrder, noOrderAccess } from './orders';
 import { shareBlacklist } from './sharedblacklist';
@@ -332,7 +332,8 @@ export async function landingHtml(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
 
 /** The page, and the `Link` header that starts its main photo early (null when the photos are inside the page). */
 export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<{ html: string; link: string | null }> {
-  const l = (await ctx.db.query('SELECT * FROM landing_pages WHERE slug = $1', [slug]))[0];
+  // the page that has this address, or had it before (its old links keep working)
+  const l = await pageRowAt(ctx.db, slug);
   // not a product's page: a group page (several products) at that address
   if (!l) return { html: await groupHtml(ctx, slug, o), link: null };
   if (!l.active && o.mode === 'live') throw notFound('Page introuvable');
@@ -804,7 +805,8 @@ async function linkSameCustomer(db: Db, phone: string, orderId: number, ref: str
 
 export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Promise<{ ok: true }> {
   const db = ctx.db;
-  const l = (await db.query('SELECT * FROM landing_pages WHERE slug = $1 AND active', [i.slug]))[0];
+  // a page opened before its address changed still sends its order (its former address leads to it)
+  const l = await pageRowAt(db, i.slug, true);
   if (!l) throw notFound('Page introuvable');
   const productId = num(l.product_id);
   const pc = await productContext(db, productId);
@@ -996,7 +998,8 @@ export async function captureLead(ctx: Ctx, i: z.infer<typeof CaptureInput>): Pr
   // robots are not customers: no abandoned order, no Meta event (and the answer is the same: nothing to learn)
   if (!phone || i.hp.trim() || BOT_UA.test(ua) || !ua.trim()) return { ok: true };
   const now = ctx.now();
-  const l = (await db.query('SELECT l.id, l.product_id, l.price, l.pixel_id, l.meta_pixels, l.tiktok_pixels, p.price AS p_price FROM landing_pages l JOIN products p ON p.id = l.product_id WHERE l.slug = $1 AND l.active', [i.slug]))[0];
+  const at = await pageRowAt(db, i.slug, true);
+  const l = at ? (await db.query('SELECT l.id, l.product_id, l.price, l.pixel_id, l.meta_pixels, l.tiktok_pixels, p.price AS p_price FROM landing_pages l JOIN products p ON p.id = l.product_id WHERE l.id = $1', [at.id]))[0] : null;
   if (!l || (await checkChallenge(db, i.ch, i.slug, now)) === null) return { ok: true };
   // blocked as fake, or already ordered this product (any channel) in the last day: not an abandoned order
   if (await recentlyBlocked(db, phone, now)) return { ok: true };
@@ -1590,9 +1593,10 @@ export const landingProcs = {
   })),
 
   'landing.save': proc([...WHO], PageInput, async (ctx, i) => {
-    const dup = (await ctx.db.query('SELECT id FROM landing_pages WHERE slug = $1', [i.slug]))[0];
-    if (dup && num(dup.id) !== i.id) throw bad(`L’adresse « ${i.slug} » est déjà prise`);
-    if ((await ctx.db.query('SELECT 1 FROM landing_groups WHERE slug = $1', [i.slug])).length) throw bad(`L’adresse « ${i.slug} » est déjà prise par un groupe`);
+    // another page's or a group's address, now or before (its old links lead there): not this one's
+    const taken = await addressTaken(ctx.db, i.slug, { page: i.id });
+    if (taken) throw bad(taken);
+    const before = i.id ? ((await ctx.db.query('SELECT slug FROM landing_pages WHERE id = $1', [i.id]))[0]?.slug as string | undefined) : undefined;
     if (!(await ctx.db.query('SELECT 1 FROM products WHERE id = $1', [i.productId])).length) throw notFound('Produit introuvable');
     await checkPixels(ctx.db, 'meta', i.metaPixels);
     await checkPixels(ctx.db, 'tiktok', i.tiktokPixels);
@@ -1606,6 +1610,8 @@ export const landingProcs = {
       );
       if (!r.length) throw notFound('Page introuvable');
       pid = i.id;
+      // a new address: the old one keeps opening this page (the ads already running, the links already shared)
+      if (before) await keepFormerAddress(ctx.db, { page: pid }, before, i.slug);
     } else {
       pid = num(
         (

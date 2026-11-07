@@ -24,6 +24,60 @@ export async function landingStore(db: Db, s?: LandingSettings): Promise<string>
 
 export const abandonCutoff = (s: Pick<LandingSettings, 'abandonAfterMin'>, now: number) => new Date(now - Math.max(5, num(s.abandonAfterMin) || 20) * 60_000).toISOString();
 
+// ---------------------------------------------------------------- former addresses (landing_old_slugs)
+// A page's or a group's address may change: the ads and links already out keep opening it, and a form opened before
+// the change still sends its order. A former address stays with its page (no other page or group may take it).
+
+/** The page at this address: the one that has it now, else the one that had it before. */
+export async function pageRowAt(db: Db, slug: string, onlyActive = false): Promise<any | null> {
+  const on = onlyActive ? ' AND l.active' : '';
+  return (
+    (await db.query(`SELECT l.* FROM landing_pages l WHERE l.slug = $1${on}`, [slug]))[0] ??
+    (await db.query(`SELECT l.* FROM landing_old_slugs o JOIN landing_pages l ON l.id = o.page_id WHERE o.slug = $1${on}`, [slug]))[0] ??
+    null
+  );
+}
+
+/** The group page at this address, now or before. */
+export async function groupRowAt(db: Db, slug: string): Promise<any | null> {
+  return (
+    (await db.query('SELECT * FROM landing_groups WHERE slug = $1', [slug]))[0] ??
+    (await db.query('SELECT g.* FROM landing_old_slugs o JOIN landing_groups g ON g.id = o.group_id WHERE o.slug = $1', [slug]))[0] ??
+    null
+  );
+}
+
+/** Who has this address: a page or a group, now or as a former address (null: free). */
+export async function addressOwner(db: Db, slug: string): Promise<{ page: number | null; group: number | null; former: boolean } | null> {
+  const p = (await db.query('SELECT id FROM landing_pages WHERE slug = $1', [slug]))[0];
+  if (p) return { page: num(p.id), group: null, former: false };
+  const g = (await db.query('SELECT id FROM landing_groups WHERE slug = $1', [slug]))[0];
+  if (g) return { page: null, group: num(g.id), former: false };
+  const o = (await db.query('SELECT page_id, group_id FROM landing_old_slugs WHERE slug = $1', [slug]))[0];
+  if (o) return { page: o.page_id == null ? null : num(o.page_id), group: o.group_id == null ? null : num(o.group_id), former: true };
+  return null;
+}
+
+/** The refusal when this address belongs to another page or group (null: this one may take it). */
+export async function addressTaken(db: Db, slug: string, me: { page?: number; group?: number }): Promise<string | null> {
+  const o = await addressOwner(db, slug);
+  if (!o || (o.page !== null && o.page === me.page) || (o.group !== null && o.group === me.group)) return null;
+  if (o.former) return `L’adresse « ${slug} » est l’ancienne adresse ${o.group !== null ? 'd’un groupe' : 'd’une autre landing page'} : ses anciens liens y mènent encore, choisissez-en une autre`;
+  return o.group !== null ? `L’adresse « ${slug} » est déjà prise par un groupe` : `L’adresse « ${slug} » est déjà prise par une landing page`;
+}
+
+/** A page's or a group's address changed: the old one keeps leading to it; the new one is not a former one anymore. */
+export async function keepFormerAddress(db: Db, who: { page: number } | { group: number }, oldSlug: string, newSlug: string): Promise<void> {
+  if (!oldSlug || oldSlug === newSlug) return;
+  const [page, group] = 'page' in who ? [who.page, null] : [null, who.group];
+  await db.query('DELETE FROM landing_old_slugs WHERE slug = $1', [newSlug]);
+  await db.query(
+    `INSERT INTO landing_old_slugs (slug, page_id, group_id) VALUES ($1, $2, $3)
+     ON CONFLICT (slug) DO UPDATE SET page_id = EXCLUDED.page_id, group_id = EXCLUDED.group_id, created_at = now()`,
+    [oldSlug, page, group],
+  );
+}
+
 /** SQL: lead `a` is an abandoned order now ($cut = abandonCutoff): no order of this number for this product around it. */
 export const ABANDONED = (cut: string) =>
   `(a.status = 'abandoned' OR (a.status = 'open' AND a.last_at < ${cut}))
@@ -231,8 +285,9 @@ export async function freeLandingSlug(db: Db, name: string, sku = '', selfId?: n
     const s = k ? `${base}-${k + 1}` : base;
     // a word of the app's own pages (site/<boutique>/commandes opens the app): the next one
     if (isAppPage(s)) continue;
-    const r = (await db.query('SELECT id FROM landing_pages WHERE slug = $1', [s]))[0];
-    if ((!r || num(r.id) === selfId) && !(await db.query('SELECT 1 FROM landing_groups WHERE slug = $1', [s])).length) return s;
+    // free, or this page's own (now or before); never another page's or a group's, even a former one
+    const o = await addressOwner(db, s);
+    if (!o || (selfId !== undefined && o.page === selfId)) return s;
   }
   return `${base}-${Date.now().toString(36)}`;
 }

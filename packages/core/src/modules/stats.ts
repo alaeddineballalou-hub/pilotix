@@ -428,10 +428,13 @@ async function overview(ctx: Ctx, r: RangeT) {
   const monthPrev = num((await q1(`SELECT COALESCE(sum(total),0)::bigint AS v FROM sales WHERE follow_status IN ('delivered','exchanged') AND delivered_at >= $1 AND delivered_at < $2`, [pm0, sameDayPrev])).v);
   const goal = (await getSetting(ctx.db, 'goals')).monthlyRevenue;
 
-  // top products (delivered value)
+  // top products (delivered value): one line per product under its name of today, whatever name each order wrote down
+  // when it was made (a renamed product is not split in two); a line without its product keeps the name it wrote
   const prods = await ctx.db.query(
-    `SELECT i.name, COALESCE(sum(i.qty * i.unit_price),0)::bigint AS v, COALESCE(sum(i.qty),0)::int AS q FROM order_items i JOIN sales o ON o.id = i.order_id
-      WHERE o.follow_status IN ('delivered','exchanged') AND o.delivered_at >= $1 AND o.delivered_at < $2 GROUP BY i.name ORDER BY 2 DESC`,
+    `SELECT COALESCE(p.name, i.name) AS name, COALESCE(sum(i.qty * i.unit_price),0)::bigint AS v, COALESCE(sum(i.qty),0)::int AS q
+       FROM order_items i JOIN sales o ON o.id = i.order_id LEFT JOIN products p ON p.id = i.product_id
+      WHERE o.follow_status IN ('delivered','exchanged') AND o.delivered_at >= $1 AND o.delivered_at < $2
+      GROUP BY i.product_id, COALESCE(p.name, i.name) ORDER BY 2 DESC`,
     [r.from, r.to],
   );
   const top = prods.slice(0, 4).map((x: any) => ({ name: x.name as string, value: num(x.v), qty: num(x.q) }));

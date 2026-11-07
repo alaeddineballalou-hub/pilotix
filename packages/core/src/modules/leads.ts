@@ -217,11 +217,16 @@ export function placeOf(wilaya: string, commune: string, address = ''): { wilaya
   return { wilayaId: null, commune: commune || null, candidates: (both.length ? both : commune ? wilayaCandidates(commune) : []).slice(0, 4), wrote: commune };
 }
 
-/** A variant named in the answer (« rose », « taille 2 »): one of the product's, else null. */
-export function variantOf(vars: { id: number; title: string }[], text: string | null | undefined): number | null {
+/**
+ * A variant named in the answer (« rose », « taille 2 »): one of the product's, else null. A size renamed in Pilotix
+ * after the form was made is still found by its former name (the form keeps offering the old one).
+ */
+export function variantOf(vars: { id: number; title: string; oldTitles?: string[] }[], text: string | null | undefined): number | null {
   const t = strip(words(text ?? ''));
   if (!t || !vars.length) return null;
-  const exact = vars.find((v) => strip(v.title) === t);
+  // both sides cleaned the same way (« 0-3 mois » written « 0-3_mois » by the form is the same size)
+  const key = (x: string) => strip(words(x));
+  const exact = vars.find((v) => key(v.title) === t) ?? vars.find((v) => (v.oldTitles ?? []).some((o) => key(o) === t));
   if (exact) return exact.id;
   const ws = t.split(/[^a-z0-9؀-ۿ]+/).filter((w) => w.length >= 2);
   const hit = vars.filter((v) => {
@@ -383,7 +388,11 @@ export async function processLead(ctx: Ctx, leadId: number, o: { force?: boolean
       const d = (await db.query(`SELECT id FROM orders WHERE phone = $1 AND created_at > $2 ORDER BY created_at DESC LIMIT 1`, [phone, since]))[0];
       if (d) return await done('dup', { dupOrderId: num(d.id) });
     }
-    const vars = (await db.query(`SELECT id, title FROM product_variants WHERE product_id = $1 AND active ORDER BY id`, [form.product_id])).map((v: any) => ({ id: num(v.id), title: String(v.title ?? '') }));
+    const vars = (await db.query(`SELECT id, title, old_titles FROM product_variants WHERE product_id = $1 AND active ORDER BY id`, [form.product_id])).map((v: any) => ({
+      id: num(v.id),
+      title: String(v.title ?? ''),
+      oldTitles: Array.isArray(v.old_titles) ? v.old_titles.map(String) : [],
+    }));
     const named = numOrNull(lead.variant_id) ?? variantOf(vars, lead.variant_text);
     const variantId = named ?? (vars.some((v) => v.id === num(form.variant_id)) ? num(form.variant_id) : (vars[0]?.id ?? null));
     const guessed = !named && !form.variant_id && vars.length > 1;

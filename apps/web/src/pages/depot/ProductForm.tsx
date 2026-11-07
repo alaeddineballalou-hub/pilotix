@@ -10,7 +10,7 @@ import { toast } from '../../ui/toast';
 import { ConfirmButton } from '../admin/bits';
 import { bidi } from './stockui';
 import { combosOf, MAX_COMBOS, Opt, skuOf, titleOf, VariantOptions, VRow } from './VariantOptions';
-import { DraftFacts, formToGuide, formTr, GuideEditor, GuideForm, guideProblem, guideToForm, readLang, sizeValues, useGuideTranslate } from './guide';
+import { DraftFacts, formToGuide, formTr, GuideEditor, GuideForm, guideProblem, guideToForm, isSizeOption, readLang, renameGuideSize, sizeValues, useGuideTranslate } from './guide';
 import { HdPhotos } from './HdPhotos';
 
 interface PackRow {
@@ -398,7 +398,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
             )}
           </div>
           {optMode ? (
-            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseCost={Number(f.cost) || 0} baseSku={f.sku.trim() || f.name.trim()} basePhoto={f.photo} baseDiscount={f.maxDiscount === '' ? null : Number(f.maxDiscount) || 0} admin={admin} used={usedValues} skipped={skipped} feeGrids={grids.data?.grids ?? []} onPhotoFile={thumb} />
+            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseCost={Number(f.cost) || 0} baseSku={f.sku.trim() || f.name.trim()} basePhoto={f.photo} baseDiscount={f.maxDiscount === '' ? null : Number(f.maxDiscount) || 0} admin={admin} used={usedValues} skipped={skipped} feeGrids={grids.data?.grids ?? []} onPhotoFile={thumb} onRenameValue={(o, from, to) => isSizeOption(o.name) && setGuide((g) => renameGuideSize(g, from, to))} />
           ) : (
             <>
               {vars.length ? (

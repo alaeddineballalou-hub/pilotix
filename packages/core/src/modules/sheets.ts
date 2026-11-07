@@ -5,6 +5,7 @@ import { communesOf, normalizePhone, WILAYAS, WILAYAS_AR } from '@pilotix/shared
 import { z } from 'zod';
 import { num } from '../db';
 import { AppError, bad, Ctx, notFound, proc, withActionLock } from '../rpc';
+import { findBySku } from './catalog';
 import { createOrder } from './orders';
 
 const id = z.number().int().positive();
@@ -210,28 +211,34 @@ const extIdOf = (url: string, key: string) => `sheet:${sheetIdOf(url)}:${key}`.s
 
 async function findProduct(ctx: Ctx, l: Line): Promise<{ productId: number; variantId: number | null }> {
   if (l.sku) {
-    const v = (await ctx.db.query('SELECT id, product_id FROM product_variants WHERE sku = $1', [l.sku]))[0];
-    if (v) return { productId: num(v.product_id), variantId: num(v.id) };
-    const p = (await ctx.db.query('SELECT id FROM products WHERE sku = $1', [l.sku]))[0];
-    if (p) return { productId: num(p.id), variantId: null };
+    // its code now, else a code it had before (a code changed in Pilotix after the sheet was written)
+    const hit = await findBySku(ctx.db, l.sku);
+    if (hit) return { productId: hit.productId, variantId: hit.variantId };
     if (!l.product) throw bad(`SKU inconnu : ${l.sku}`);
   }
   if (!l.product) throw bad('Produit manquant');
   const want = norm(l.product);
-  const prods = await ctx.db.query('SELECT id, name FROM products WHERE active ORDER BY id');
+  const prods = await ctx.db.query('SELECT id, name, old_names FROM products WHERE active ORDER BY id');
+  const formerly = (r: any, w: string) => (Array.isArray(r.old_names) ? r.old_names : []).some((x: unknown) => norm(String(x)) === w);
   const p =
     prods.find((r: any) => norm(r.name) === want) ??
+    // a product renamed in Pilotix after the sheet was written: its former name
+    prods.find((r: any) => formerly(r, want)) ??
     prods.find((r: any) => norm(r.name).includes(want) || want.includes(norm(r.name)));
   if (!p) throw bad(`Produit inconnu : ${l.product}`);
   let variantId: number | null = null;
-  const vs = await ctx.db.query('SELECT id, title FROM product_variants WHERE product_id = $1 AND active ORDER BY id', [p.id]);
+  const vs = await ctx.db.query('SELECT id, title, old_titles FROM product_variants WHERE product_id = $1 AND active ORDER BY id', [p.id]);
   if (!l.variant) {
     // one variant only: that one; several: the sheet must say which (a colour, a size…)
     if (vs.length === 1) variantId = num(vs[0].id);
     else if (vs.length > 1) throw bad(`« ${p.name} » a plusieurs variantes : ajoutez une colonne Variante (couleur, taille…) dans la feuille`);
   } else {
     const w = norm(l.variant);
-    const v = vs.find((x: any) => norm(x.title) === w) ?? vs.find((x: any) => norm(x.title).includes(w) || (w && w.includes(norm(x.title)) && norm(x.title)));
+    const v =
+      vs.find((x: any) => norm(x.title) === w) ??
+      // a size renamed in Pilotix after the sheet was written: its former name
+      vs.find((x: any) => (Array.isArray(x.old_titles) ? x.old_titles : []).some((t: unknown) => norm(String(t)) === w)) ??
+      vs.find((x: any) => norm(x.title).includes(w) || (w && w.includes(norm(x.title)) && norm(x.title)));
     if (!v) throw bad(`Variante inconnue : ${l.variant}`);
     variantId = num(v.id);
   }

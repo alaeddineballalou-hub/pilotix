@@ -490,7 +490,11 @@
       "othersHelp": "Elles restent (des commandes ou du stock peuvent les utiliser) : décochez « active » si vous ne les vendez plus.",
       "organize": "Organiser en options (Taille, Couleur…)",
       "tooMany": "{{count}} combinaisons : 200 au maximum. Retirez des valeurs.",
-      "needName": "Donnez un nom à chaque option (ex. Taille)."
+      "needName": "Donnez un nom à chaque option (ex. Taille).",
+      "renameHint": "Cliquer pour renommer",
+      "renameValue": "Renommer {{v}}",
+      "renameTaken": "« {{v}} » existe déjà dans cette option",
+      "renameHelp": "Cliquez sur une valeur pour la renommer : la taille garde son stock, son prix de livraison, sa photo et son code."
     },
     "archive": "Archiver",
     "archiveAsk": "Archiver ce produit ? Il sort des listes (les anciennes commandes le gardent). Il doit avoir 0 en stock.",

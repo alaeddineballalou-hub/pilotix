@@ -90,6 +90,8 @@ const COLOR_OPTION = /couleur|color|colour|لون|الألوان/i;
 type Option = { name: string; values: string[] };
 export const sizeValues = (options: Option[] | null | undefined): string[] =>
   [...new Set((options ?? []).filter((o) => SIZE_OPTION.test(o.name)).flatMap((o) => o.values.map((v) => v.trim()).filter(Boolean)))].slice(0, GUIDE_MAX.sizes);
+/** Is this option the product's sizes (Taille, Pointure, Âge…): its values are the size guide's lines. */
+export const isSizeOption = (name: string) => SIZE_OPTION.test(name);
 
 export const EMPTY_FIT: GuideFit = { age: '', weight: '', measures: '' };
 /** Is something written in the small size guide. */
@@ -97,6 +99,9 @@ export const fitFilled = (f: GuideFit | null | undefined) => !!f && !!(f.age || 
 
 const lines = (s: string) => s.split('\n').map((x) => x.replace(/^\s*[-•*]\s*/, '').trim()).filter(Boolean);
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+/** A size renamed in the product's options (« 0-3 mois » → « 0-3 m »): its line of the size guide follows (age, weight). */
+export const renameGuideSize = (f: GuideForm, from: string, to: string): GuideForm =>
+  f.sizes.some((x) => same(x.size, from)) ? { ...f, sizes: f.sizes.map((x) => (same(x.size, from) ? { ...x, size: to } : x)) } : f;
 const copyTr = (tr: GuideTr | null | undefined): GuideTr => Object.fromEntries(Object.entries(tr ?? {}).map(([l, m]) => [l, { ...m }]));
 /** lang: the language of a new guide (the writer's) */
 export const guideToForm = (g: Guide | null | undefined, tr?: GuideTr | null, lang: GuideLang = 'fr'): GuideForm => ({

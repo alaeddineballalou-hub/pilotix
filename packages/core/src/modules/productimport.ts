@@ -153,6 +153,13 @@ export async function importProducts(ctx: Ctx, i: z.infer<typeof ImportInput>): 
       p.warnings.push(`Le SKU « ${p.sku} » existe déjà : produit ignoré`);
       return;
     }
+    // the former code of a product whose code was changed in Pilotix: the same product, not a new one
+    const was = p.sku ? (await db.query('SELECT name FROM products WHERE $1 = ANY(old_skus) ORDER BY id DESC LIMIT 1', [p.sku]))[0] : null;
+    if (was) {
+      p.status = 'skip';
+      p.warnings.push(`Le SKU « ${p.sku} » est l’ancien code de « ${was.name} » : produit ignoré`);
+      return;
+    }
     for (const v of p.variants) if (v.sku && (await db.query('SELECT 1 FROM product_variants WHERE sku = $1', [v.sku]))[0]) p.errors.push(`Ligne ${v.line} : le SKU variante « ${v.sku} » est déjà utilisé`);
     if (p.errors.length) p.status = 'error';
     else if (!p.sku && (await db.query('SELECT 1 FROM products WHERE lower(name) = lower($1)', [p.name]))[0]) p.warnings.push('Un produit du même nom existe déjà : il sera créé une deuxième fois');

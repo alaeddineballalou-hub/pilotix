@@ -527,6 +527,37 @@ const slug = (s: string) =>
     .replace(/^-|-$/g, '')
     .slice(0, 24) || 'P';
 
+/**
+ * A product's or a size's name or code that is no longer the current one, kept so that a Google Sheet, the website, a
+ * Meta lead form or an import still writing it finds the same product or size (the last 20; a name taken back leaves
+ * the list). Names are compared without case, codes exactly.
+ */
+export function rememberOld(list: unknown, old: unknown, now: string, anyCase: boolean): string[] {
+  const k = (x: string) => (anyCase ? x.trim().toLowerCase() : x.trim());
+  const xs = (Array.isArray(list) ? list.map(String) : []).filter((x) => x.trim() && k(x) !== k(now));
+  const o = String(old ?? '').trim();
+  if (o && k(o) !== k(now) && !xs.some((x) => k(x) === k(o))) xs.push(o);
+  return xs.slice(-20);
+}
+
+/**
+ * A product or one of its sizes by its code (SKU): the one that has it now, else the one that had it before — a code
+ * changed in Pilotix still works for a Google Sheet, the website or an import that still writes the old one.
+ */
+export async function findBySku(db: Db, code: string): Promise<{ productId: number; variantId: number | null; former: boolean } | null> {
+  const sku = code.trim();
+  if (!sku) return null;
+  const v = (await db.query('SELECT id, product_id FROM product_variants WHERE sku = $1', [sku]))[0];
+  if (v) return { productId: num(v.product_id), variantId: num(v.id), former: false };
+  const p = (await db.query('SELECT id FROM products WHERE sku = $1', [sku]))[0];
+  if (p) return { productId: num(p.id), variantId: null, former: false };
+  const ov = (await db.query('SELECT id, product_id FROM product_variants WHERE $1 = ANY(old_skus) ORDER BY id DESC LIMIT 1', [sku]))[0];
+  if (ov) return { productId: num(ov.product_id), variantId: num(ov.id), former: true };
+  const op = (await db.query('SELECT id FROM products WHERE $1 = ANY(old_skus) ORDER BY id DESC LIMIT 1', [sku]))[0];
+  if (op) return { productId: num(op.id), variantId: null, former: true };
+  return null;
+}
+
 async function freeSku(db: Db, table: 'products' | 'product_variants', base: string, selfId?: number): Promise<string> {
   for (let k = 0; k < 200; k++) {
     const s = k ? `${base}-${k + 1}` : base;
@@ -597,8 +628,10 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
       await logProductChange(tx, i.id!, ctx.session.profile.id, { price: cur.price, cost: cur.cost, max_discount: cur.max_discount }, { price: i.price, cost: i.cost, max_discount: maxDiscount }, 'Fiche produit');
       await tx.query(
         `UPDATE products SET name=$2, sku=$3, price=$4, cost=$5, weight_kg=$6, photo=$7, is_service=$8, active=$9, fixed_price=$10, max_discount=$11, packs=$12, linked=$13, parts=$14, fee_grid=$15,
-         barcode=$16, brand=$17, external_id=$18, page_url=$19, seller_id=$20, description=$21, alert_qty=$22, default_company_id=$23, options=$24, services=$25 WHERE id=$1`,
-        [i.id, ...vals, JSON.stringify(options), JSON.stringify(services)],
+         barcode=$16, brand=$17, external_id=$18, page_url=$19, seller_id=$20, description=$21, alert_qty=$22, default_company_id=$23, options=$24, services=$25,
+         old_names=$26, old_skus=$27 WHERE id=$1`,
+        // its former name and code are kept: what still writes them (a sheet, the website, an import) finds it
+        [i.id, ...vals, JSON.stringify(options), JSON.stringify(services), rememberOld(cur.old_names, cur.name, i.name, true), rememberOld(cur.old_skus, cur.sku, sku, false)],
       );
       productId = i.id!;
     } else {
@@ -624,7 +657,9 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
         const old = existing.find((e: any) => num(e.id) === v.id);
         if (!old) throw bad('Variante d’un autre produit');
         if (!ctx.session.isAdmin && v.maxDiscount !== undefined && v.maxDiscount !== numOrNull(old.max_discount)) throw forbidden('Seul l’administrateur modifie la remise maximale');
-        await tx.query('UPDATE product_variants SET title=$2, sku=$3, price=$4, active=$5, cost=$6, max_discount=$7, weight_kg=$8, alert_qty=$9, fee_grid=$10, photo=$11 WHERE id=$1', [v.id, v.title.trim(), vsku || old.sku, v.price === undefined ? old.price : v.price, v.active, v.cost === undefined ? old.cost : v.cost, v.maxDiscount === undefined ? old.max_discount : v.maxDiscount, v.weightKg === undefined ? old.weight_kg : v.weightKg, v.alertQty === undefined ? old.alert_qty : v.alertQty, v.feeGrid === undefined ? old.fee_grid : v.feeGrid, v.photo === undefined ? old.photo : v.photo]);
+        // a renamed size keeps its row (its stock, price list, photo and orders stay with it); its former name and code
+        // are kept for what still writes them (a sheet, a Meta lead form, the website)
+        await tx.query('UPDATE product_variants SET title=$2, sku=$3, price=$4, active=$5, cost=$6, max_discount=$7, weight_kg=$8, alert_qty=$9, fee_grid=$10, photo=$11, old_titles=$12, old_skus=$13 WHERE id=$1', [v.id, v.title.trim(), vsku || old.sku, v.price === undefined ? old.price : v.price, v.active, v.cost === undefined ? old.cost : v.cost, v.maxDiscount === undefined ? old.max_discount : v.maxDiscount, v.weightKg === undefined ? old.weight_kg : v.weightKg, v.alertQty === undefined ? old.alert_qty : v.alertQty, v.feeGrid === undefined ? old.fee_grid : v.feeGrid, v.photo === undefined ? old.photo : v.photo, rememberOld(old.old_titles, old.title, v.title.trim(), true), rememberOld(old.old_skus, old.sku, vsku || old.sku, false)]);
       } else {
         vsku ||= await freeSku(tx, 'product_variants', `${sku}-${slug(v.title).slice(0, 12)}`);
         if (!ctx.session.isAdmin && v.maxDiscount != null) throw forbidden('Seul l’administrateur modifie la remise maximale');
