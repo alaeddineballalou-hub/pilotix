@@ -173,9 +173,14 @@ function App() {
     go('#/confirmation/nouvelles', { replace: true });
     sub = 'nouvelles';
   }
+  // Pilot Auto Assign's rules and the Préférences left Sociétés de livraison: an old link opens Pilot Automations › Auto Pilot Assign
+  if (space === 'store' && page === 'livraison' && (sub === 'pilot' || sub === 'preferences')) {
+    go('#/notify/assign', { replace: true });
+    [page, sub] = ['notify', 'assign'];
+  }
   // a group without a page of its own (Pilot AI) opens its first child the user can see
   const group = nav.find((n) => n.id === page && n.children && !pages[n.id]);
-  const first = group?.children!.find((c) => canSeeChild(c, session.roles, session.isAdmin));
+  const first = group?.children!.find((c) => canSeeChild(c, session.roles, session.isAdmin, canRules));
   if (first) {
     go(first.href, { replace: true });
     [page, sub] = first.href.replace(/^#\/?/, '').split('/');

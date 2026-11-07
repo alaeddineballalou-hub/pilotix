@@ -1,13 +1,16 @@
-// « Pilot Automations »: what Pilotix does by itself (« Automatisations », admins: Automations.tsx), and the delivery
-// messages sent to each customer about their order — received, confirmed, shipped, with the livreur, at the desk, failed
-// attempt, cancelled by the livreur, delivered — by WhatsApp first, by SMS when the number has no WhatsApp, or to send by
-// hand; the cases and their texts, a tester, the results and the settings (admin).
+// « Pilot Automations »: what Pilotix does by itself (« Automatisations », admins: Automations.tsx; « Auto Pilot Assign »
+// also holds Pilot Auto Assign's rules, livraison/Pilot.tsx, and the shop's Préférences, livraison/Preferences.tsx), and
+// the delivery messages sent to each customer about their order — received, confirmed, shipped, with the livreur, at the
+// desk, failed attempt, cancelled by the livreur, delivered — by WhatsApp first, by SMS when the number has no WhatsApp,
+// or to send by hand; the cases and their texts, a tester, the results and the settings (admin).
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMenuCounts } from '../../layout/Shell';
 import { backend, Out, rpc, serverUrl, shopApi } from '../../lib/backend';
+import { pageIsOn } from '../../lib/features';
 import { da, n, pct, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
+import { useRulesState } from '../../lib/pilot';
 import { go } from '../../lib/route';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
@@ -15,6 +18,8 @@ import { CopyCode } from '../../ui/CopyCode';
 import { Card, ErrorBox, Field, Icon, Kpi, Kpis, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { AgentHeader, Filters, PeriodSwitch, SaveBar, SearchBox } from '../ai/agent';
+import { Pilot } from '../livraison/Pilot';
+import { Preferences } from '../livraison/Preferences';
 import type { PageProps } from '../registry';
 import { Automations } from './Automations';
 import '../messages/messages.css';
@@ -46,22 +51,37 @@ export function Notify({ sub }: PageProps) {
   const { t } = useTranslation();
   const { session } = useSession();
   const admin = !!session?.isAdmin;
+  // the people ticked « règles Pilot » in Préférences (not admins) have Auto Pilot Assign: its rules alone
+  const rules = useRulesState();
+  // the delivery messages: the confirmation and suivi agents (admins always)
+  const msgs = admin || !!session?.roles.some((r) => r === 'confirmation' || r === 'suivi');
   const counts = useMenuCounts();
-  const st = useRpc('notify.feed', { limit: 1 });
-  // each part is a line of the menu's « Pilot Automations »: Automatisations, Auto Pilot Assign (the delivery company and
-  // the livreur), Auto Pilot Affectation (the agents) and Réglages for admins, Messages (with its four tabs) for everyone
-  const keys = [...(admin ? ['auto', 'assign', 'affectation'] : []), ...MSG_TABS, ...(admin ? ['reglages'] : [])];
+  const st = useRpc('notify.feed', { limit: 1 }, { enabled: msgs });
+  // each part is a line of the menu's « Pilot Automations »: Automatisations, Auto Pilot Assign (the delivery company — with
+  // Pilot Auto Assign's rules and the Préférences —, the dispatch and the livreur), Auto Pilot Affectation (the agents) and
+  // Réglages for admins, Messages (with its four tabs) for the agents
+  const keys = [...(admin ? ['auto'] : []), ...(rules.can ? ['assign'] : []), ...(admin ? ['affectation'] : []), ...(msgs ? MSG_TABS : []), ...(admin ? ['reglages'] : [])];
   const current = keys.includes(sub ?? '') ? sub! : keys[0];
+  // whether the person writes the rules is not known yet (their Préférences are on their way): Auto Pilot Assign waits
+  const waiting = !rules.known && sub === 'assign';
   // an address without its part (#/notify, or one this person does not have) takes the part shown: the menu lights its line
   useEffect(() => {
-    if (sub !== current) go(`#/notify/${current}`, { replace: true });
-  }, [sub, current]);
+    if (rules.known && current && sub !== current) go(`#/notify/${current}`, { replace: true });
+  }, [rules.known, sub, current]);
   const tabs = MSG_TABS.includes(current) ? MSG_TABS.map((k) => ({ key: k, label: t(`notify.tabs.${k}`), icon: TAB_ICON[k], href: `#/notify/${k}`, count: k === 'messages' ? counts.notify : undefined })) : [];
+  if (waiting) return <Loading />;
   return (
     <>
       <AgentHeader agent="notify" title={t('notify.title')} help={t('notify.help')} about={t('ai.about.notify')} on={['auto', 'assign', 'affectation'].includes(current) ? undefined : st.data?.enabled} settings={admin ? '#/notify/reglages' : undefined} tabs={tabs} current={current} />
       {current === 'auto' && <Automations />}
-      {current === 'assign' && <Automations view="assign" />}
+      {current === 'assign' && (
+        <div className="nt-assign">
+          {/* the switches (admins), then Pilot Auto Assign's rules and the Préférences (they left Sociétés de livraison) */}
+          {admin && <Automations view="assign" />}
+          {pageIsOn('livraison', 'pilot') && <Pilot inAuto={admin} />}
+          {admin && pageIsOn('livraison', 'preferences') && <Preferences />}
+        </div>
+      )}
       {current === 'affectation' && <Automations view="affectation" />}
       {current === 'messages' && <Feed admin={admin} />}
       {current === 'cas' && <Cases admin={admin} />}

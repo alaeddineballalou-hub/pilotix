@@ -7,6 +7,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { inBrowserDemo, type In, type Out } from '../../lib/backend';
+import { pageIsOn } from '../../lib/features';
 import { da, n, when } from '../../lib/format';
 import { enablePush } from '../../lib/push';
 import { useAction, useRpc } from '../../lib/query';
@@ -99,7 +100,21 @@ function Board({ d, view }: { d: S; view: AutoView }) {
         {d.pilot.rules ? t('notify.auto.pilot.rules', { count: d.pilot.rules }) : t('notify.auto.pilot.noRules')}
         {d.pilot.defaultCompany && <> · {t('notify.auto.pilot.default', { name: d.pilot.defaultCompany })}</>}
       </Now>
-      <Links items={[['#/livraison/pilot', t('notify.auto.pilot.link')]]} />
+      {/* the rules are lower on this page (Pilot Auto Assign's own part, when the shop's plan has it) */}
+      {pageIsOn('livraison', 'pilot') && (
+        <p className="au-links">
+          <a
+            href="#/notify/assign"
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById('pl-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+          >
+            {t('notify.auto.pilot.link')}
+            <Icon name="chevr" />
+          </a>
+        </p>
+      )}
     </Rule>
   );
   const livreurRow = (

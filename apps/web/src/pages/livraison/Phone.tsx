@@ -5,8 +5,6 @@
 import { ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AskCall } from '../confirmation/History';
-import { Preferences } from './Preferences';
-import { Pilot } from './Pilot';
 import type { Out } from '../../lib/backend';
 import { wilaya } from '../../lib/format';
 import { useFullScreen } from '../../lib/fullScreen';
@@ -86,7 +84,7 @@ export function PhoneLivraison({
   onAdd,
   onSheet,
 }: {
-  current: 'societes' | 'pilot' | 'api' | 'livreurs' | 'preferences';
+  current: 'societes' | 'api' | 'livreurs';
   companies: ReturnType<typeof useRpc<'delivery.companies'>>;
   kinds: ReturnType<typeof useRpc<'delivery.kinds'>>;
   onEdit: (c: Company) => void;
@@ -100,18 +98,14 @@ export function PhoneLivraison({
       {/* Livreurs has its own line in Partenaires: no Sociétés de livraison tabs on it */}
       {current !== 'livreurs' && (
         <div className="pxv-own pxl-tabs" role="tablist">
-          {(['societes', 'pilot', 'api', 'preferences'] as const).map((k) => (
+          {(['societes', 'api'] as const).map((k) => (
             <a key={k} role="tab" aria-selected={current === k} className={current === k ? 'on' : ''} href={`#/livraison/${k}`}>
               {t(`livraison.ph.tab.${k}`)}
             </a>
           ))}
         </div>
       )}
-      {current === 'preferences' ? (
-        <Preferences />
-      ) : current === 'pilot' ? (
-        <Pilot />
-      ) : current === 'livreurs' ? (
+      {current === 'livreurs' ? (
         <Livreurs companies={companies.data ?? []} onSheet={onSheet} onEdit={onEdit} onOpen={onOpen} />
       ) : companies.error ? (
         <ErrorBox error={companies.error} onRetry={() => companies.refetch()} />

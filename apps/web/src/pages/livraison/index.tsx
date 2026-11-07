@@ -1,5 +1,5 @@
-// « Sociétés de livraison » (admin): Sociétés & tarifs · Pilot Auto Assign · API Integration · Livreurs · Préférences.
-// The people ticked « règles Pilot » in Utilisateurs (not admins) see only Pilot Auto Assign.
+// « Sociétés de livraison » (admin): Sociétés & tarifs · API Integration · Livreurs (its own line in Partenaires).
+// Pilot Auto Assign's rules and the Préférences are in Pilot Automations › Auto Pilot Assign (old links go there, main.tsx).
 import { WILAYAS } from '@pilotix/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,24 +15,15 @@ import { AlertsModal, Company, CompanyDraft, CompanyForm, FeesModal, PreviewModa
 import { printRouteSheet } from './print';
 import { useIsPhone } from '../../lib/useMedia';
 import { PhoneLivraison } from './Phone';
-import { Preferences } from './Preferences';
-import { Pilot } from './Pilot';
-import { useSession } from '../../lib/session';
 import { Card as CarrierCard, cardSub, cardTitle, companyCount, countOf, draftOf, searchCards } from './carriers';
 import { CompanyLogo, CourierLogo } from './CourierLogo';
 import { courierCardOf } from '@pilotix/shared';
 
 type Dialog = { kind: 'form'; draft: CompanyDraft; keysSet?: string[] } | { kind: 'fees' | 'desks' | 'statuses' | 'alerts' | 'preview' | 'zr' | 'live'; company: Company } | null;
 
-export function Livraison(p: PageProps) {
-  const { session } = useSession();
-  if (session && !session.isAdmin) return <Pilot />;
-  return <LivraisonAdmin {...p} />;
-}
-
-function LivraisonAdmin({ sub }: PageProps) {
+export function Livraison({ sub }: PageProps) {
   const { t } = useTranslation();
-  const current = sub === 'api' || sub === 'livreurs' || sub === 'preferences' || sub === 'pilot' ? sub : 'societes';
+  const current = sub === 'api' || sub === 'livreurs' ? sub : 'societes';
   const q = useRpc('delivery.companies', {});
   const kinds = useRpc('delivery.kinds', {});
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -40,9 +31,7 @@ function LivraisonAdmin({ sub }: PageProps) {
 
   const items = [
     { key: 'societes', label: t('livraison.tabs.societes'), href: '#/livraison/societes' },
-    { key: 'pilot', label: t('livraison.tabs.pilot'), href: '#/livraison/pilot' },
     { key: 'api', label: t('livraison.tabs.api'), href: '#/livraison/api' },
-    { key: 'preferences', label: t('livraison.tabs.preferences'), href: '#/livraison/preferences' },
   ];
 
   const edit = (c: Company) => setDialog({ kind: 'form', draft: { id: c.id, name: c.name, kind: c.kind, active: c.active, phone: c.phone ?? '', settings: { ...(c.settings as Record<string, unknown>) } }, keysSet: c.keysSet });
@@ -86,8 +75,6 @@ function LivraisonAdmin({ sub }: PageProps) {
     <>
       {/* Livreurs has its own line in Partenaires: no Sociétés de livraison tabs on it */}
       {current !== 'livreurs' && <StageBar items={items} current={current} flow={false} />}
-      {current === 'preferences' && <Preferences />}
-      {current === 'pilot' && <Pilot />}
       {current === 'societes' && (
         <>
           <Card

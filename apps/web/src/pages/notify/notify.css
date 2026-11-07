@@ -125,3 +125,8 @@ html[data-theme='dark'] .nt-bubble { background: #202c33; color: #e9edef; }
   .nt-ref { padding-block: 8px; margin-block: -8px; }
 }
 [dir='rtl'] .nt-arrow { display: inline-block; transform: scaleX(-1); }
+
+/* Auto Pilot Assign: the switches, then Pilot Auto Assign's rules, then the Préférences — one column, each part apart */
+.nt-assign { display: flex; flex-direction: column; gap: 28px; }
+/* « Régler Pilot Auto Assign » scrolls to the rules: their title stays under the top bar */
+.nt-assign #pl-top { scroll-margin-top: 84px; }

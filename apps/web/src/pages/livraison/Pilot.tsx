@@ -1,4 +1,5 @@
-// Sociétés de livraison › « Pilot Auto Assign »: who delivers each order.
+// Pilot Automations › Auto Pilot Assign › « Pilot Auto Assign »'s rules (formerly a tab of Sociétés de livraison): who
+// delivers each order.
 //  - « Manuel »: the team chooses (the default company first, see Préférences).
 //  - « Pilot Auto Assign »: the seller's rules — wilayas (or « toutes sauf… »), communes and/or products → a company or
 //    « Livraison privée », strict or soft. A rule crossing another shows it while it is written; when saving, Pilot
@@ -33,7 +34,11 @@ function communeLabel(w: number, c: string): string {
   return communesOf(w).find((x) => normCommune(x[1]) === n)?.[2] || c;
 }
 
-export function Pilot() {
+/**
+ * inAuto: in Pilot Automations › Auto Pilot Assign under the « Pilot Auto Assign » switch (an admin's): no « Pilot Auto
+ * Assign | Manuel » choice of its own, the switch does it. The people who write the rules (not admins) have no switches there.
+ */
+export function Pilot({ inAuto = false }: { inAuto?: boolean }) {
   const { t } = useTranslation();
   const q = useRpc('pilot.get', {});
   const [draft, setDraft] = useState<Cfg | null>(null);
@@ -97,20 +102,22 @@ export function Pilot() {
   const firstCompany = d.companies.find((c) => c.active && !c.own)?.id ?? d.companies[0]?.id ?? 0;
 
   return (
-    <div className="pl">
+    <div className="pl" id="pl-top">
       <div className="pl-head">
         <div className="pl-title">
           <h2>{t('livraison.pilot.title')}</h2>
           <p className="muted">{t('livraison.pilot.help')}</p>
         </div>
-        <div className="pl-mode" role="radiogroup" aria-label={t('livraison.pilot.mode')}>
-          {(['auto', 'manual'] as const).map((m) => (
-            <button key={m} type="button" role="radio" aria-checked={v.mode === m} className={v.mode === m ? 'on' : ''} disabled={!canEdit} onClick={() => set({ mode: m })}>
-              <Icon name={m === 'auto' ? 'sparkles' : 'usercog'} />
-              {t(`livraison.pilot.${m}`)}
-            </button>
-          ))}
-        </div>
+        {!inAuto && (
+          <div className="pl-mode" role="radiogroup" aria-label={t('livraison.pilot.mode')}>
+            {(['auto', 'manual'] as const).map((m) => (
+              <button key={m} type="button" role="radio" aria-checked={v.mode === m} className={v.mode === m ? 'on' : ''} disabled={!canEdit} onClick={() => set({ mode: m })}>
+                <Icon name={m === 'auto' ? 'sparkles' : 'usercog'} />
+                {t(`livraison.pilot.${m}`)}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <p className="pl-hint">
         <Icon name="info" />

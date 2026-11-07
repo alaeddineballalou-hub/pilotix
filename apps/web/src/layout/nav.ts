@@ -21,6 +21,8 @@ export interface NavChild {
   match?: { page: string; subs: string[] };
   /** the plan's menu (and sub-menu) this child belongs to, when its id is not a page of its own (default: its id) */
   plan?: [page: string, sub?: string];
+  /** also shown to the people who write the « Pilot Auto Assign » rules (ticked in Préférences) */
+  rules?: boolean;
   /** only shown when this returns true */
   onlyIf?: () => boolean;
 }
@@ -96,18 +98,20 @@ export const NAV: NavItem[] = [
   { id: 'social', icon: 'calendar', roles: ['marketer'], hidden: true },
   { id: 'comptes', icon: 'link', roles: [], hidden: true },
   // Pilot Automations: what Pilotix does by itself, a group of its own whose lines are the parts of pages/notify — the
-  // automations (Automatisations, Auto Pilot Assign, Auto Pilot Affectation: admins), the delivery messages each customer
-  // gets (Messages, its Cas, Tester and Résultats tabs inside: WhatsApp, SMS) and their Réglages (admins)
+  // automations (Automatisations, Auto Pilot Affectation: admins; Auto Pilot Assign, with the Pilot Auto Assign rules and
+  // the Préférences: admins, and the rules alone for the people who write them), the delivery messages each customer gets
+  // (Messages, its Cas, Tester and Résultats tabs inside: WhatsApp, SMS) and their Réglages (admins)
   {
     id: 'notify',
     icon: 'zap',
     roles: ['confirmation', 'suivi'],
+    rules: true,
     pages: ['notify'],
     children: [
       { id: 'auto', href: '#/notify/auto', icon: 'zap', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['auto'] } },
-      { id: 'assign', href: '#/notify/assign', icon: 'truck', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['assign'] } },
+      { id: 'assign', href: '#/notify/assign', icon: 'truck', roles: [], rules: true, plan: ['notify'], match: { page: 'notify', subs: ['assign'] } },
       { id: 'affectation', href: '#/notify/affectation', icon: 'users', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['affectation'] } },
-      { id: 'automessages', href: '#/notify/messages', count: 'notify', tone: 'nc-a', icon: 'send', plan: ['notify'], match: { page: 'notify', subs: ['messages', 'cas', 'tester', 'resultats'] } },
+      { id: 'automessages', href: '#/notify/messages', count: 'notify', tone: 'nc-a', icon: 'send', roles: ['confirmation', 'suivi'], plan: ['notify'], match: { page: 'notify', subs: ['messages', 'cas', 'tester', 'resultats'] } },
       { id: 'autoreglages', href: '#/notify/reglages', icon: 'settings', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['reglages'] } },
     ],
   },
@@ -121,20 +125,20 @@ export const NAV: NavItem[] = [
   // an employee's own caisse (money he received, his expenses, what he handed to the main caisse)
   { id: 'macaisse', icon: 'wallet', roles: ['confirmation', 'suivi', 'depot', 'agent_manager'], onlyIf: (_r, admin) => !admin },
   // Partenaires: everyone the store works with, in one group — couriers, its own livreurs, confirmation agencies, marketers
+  // (Pilot Auto Assign's rules and the Préférences are in Pilot Automations › Auto Pilot Assign)
   {
     id: 'partenaires',
     icon: 'handshake',
     roles: [],
-    rules: true,
     pages: ['livraison', 'agences', 'marketers'],
     children: [
-      { id: 'livraison', href: '#/livraison/societes', icon: 'truck', plan: ['livraison'], match: { page: 'livraison', subs: ['', 'societes', 'pilot', 'api', 'preferences'] } },
+      { id: 'livraison', href: '#/livraison/societes', icon: 'truck', plan: ['livraison'], match: { page: 'livraison', subs: ['', 'societes', 'api'] } },
       { id: 'livreurs', href: '#/livraison/livreurs', icon: 'navigation', plan: ['livraison', 'livreurs'], match: { page: 'livraison', subs: ['livreurs'] } },
       { id: 'agences', href: '#/agences', icon: 'handshake', roles: [], onlyIf: partnersOn },
       { id: 'marketers', href: '#/marketers', icon: 'trend', roles: [], onlyIf: partnersOn },
     ],
   },
-  { id: 'livraison', icon: 'truck', roles: [], subs: ['societes', 'pilot', 'api', 'livreurs', 'preferences'], rules: true, hidden: true },
+  { id: 'livraison', icon: 'truck', roles: [], subs: ['societes', 'api', 'livreurs'], hidden: true },
   // no « Vendeurs »: a seller never adds another seller
   { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true, subs: ['roles', 'admins', 'agents', 'managers'] },
   // confirmation agencies working for the store (its code, requests both ways, contracts, numbers, payments)
@@ -148,9 +152,9 @@ export const NAV: NavItem[] = [
   { id: 'boutiques', icon: 'store', roles: null, hidden: true },
 ];
 
-/** A group's child: its own roles, or everyone who sees the group — and in the shop's plan. */
-export const canSeeChild = (c: NavChild, roles: Role[], isAdmin: boolean) =>
-  (isAdmin || !c.roles || c.roles.some((r) => roles.includes(r))) && (c.plan ? pageIsOn(...c.plan) : pageIsOn(c.id)) && (!c.onlyIf || c.onlyIf());
+/** A group's child: its own roles (or the people who write the Pilot rules), or everyone who sees the group — and in the shop's plan. */
+export const canSeeChild = (c: NavChild, roles: Role[], isAdmin: boolean, canRules = false) =>
+  (isAdmin || !c.roles || c.roles.some((r) => roles.includes(r)) || (!!c.rules && canRules)) && (c.plan ? pageIsOn(...c.plan) : pageIsOn(c.id)) && (!c.onlyIf || c.onlyIf());
 
 export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManageUsers = false, canRules = false, canAffect = false): boolean {
   // a menu the shop's plan does not include is not shown to anyone, administrators included

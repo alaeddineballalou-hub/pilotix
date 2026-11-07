@@ -47,11 +47,16 @@ export function mayChangeCompany(s: Session | null, p: Prefs | undefined, o: { c
 
 /** Does this person write the Pilot rules? Admins, and the kinds ticked in Préférences (the menu then shows the page). */
 export function useCanRules(): boolean {
+  return useRulesState().can;
+}
+
+/** The same, and whether it is known yet: a non-admin's answer waits for the shop's Préférences (known: false meanwhile). */
+export function useRulesState(): { can: boolean; known: boolean } {
   const { session } = useSession();
   const store = !session?.shop?.kind || session.shop.kind === 'store';
   const q = useRpc('prefs.get', {}, { enabled: !!session && !session.isAdmin && store, staleTime: 5 * 60_000 });
-  if (!session) return false;
-  if (session.isAdmin) return true;
+  if (!session) return { can: false, known: false };
+  if (session.isAdmin) return { can: true, known: true };
   const by = q.data?.prefs.rulesBy;
-  return !!by && personIs(session, by);
+  return { can: !!by && personIs(session, by), known: !store || !q.isLoading };
 }

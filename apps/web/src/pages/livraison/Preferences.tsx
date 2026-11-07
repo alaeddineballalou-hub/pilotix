@@ -1,4 +1,5 @@
-// Sociétés de livraison › Préférences: the seller's own choices. The simple view says what Pilotix does now, one short line each;
+// Préférences (Pilot Automations › Auto Pilot Assign, under Pilot Auto Assign's rules; formerly a tab of Sociétés de
+// livraison): the seller's own choices. The simple view says what Pilotix does now, one short line each;
 // « Mode avancé » opens them to change, each with one short line of help. Saved for the whole shop (admin only).
 import { FAIL_REASONS, RETURN_REASONS } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';

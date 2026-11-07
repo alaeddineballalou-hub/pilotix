@@ -344,7 +344,7 @@
     "strictLock": "Strict rules locked",
     "strictLockHint": "An order placed by a strict rule: only agent managers and admins change it.",
     "rules": "Who can change the Pilot rules",
-    "rulesHint": "The Pilot Auto Assign rules (Delivery companies › Pilot Auto Assign). Others see them without changing them. Admins always can.",
+    "rulesHint": "The Pilot Auto Assign rules (Pilot Automations › Auto Pilot Assign). Others see them without changing them. Admins always can.",
     "gPrivate": "Private delivery",
     "backup": "Backup company",
     "backupHint": "A private order that waits too long goes to this company, if it delivers there.",
