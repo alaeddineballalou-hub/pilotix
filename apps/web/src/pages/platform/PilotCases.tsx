@@ -185,6 +185,7 @@ export function CasesCard({ d, manager, pushed }: { d: State; manager: boolean; 
       {test && (test.status === 'running' || test.status === 'done') && (
         <>
           <div className="pl-cases-head">
+            {test.status === 'done' && (
             <p className="pl-exam-tally small">
               <span className="ok">
                 <Icon name="check" /> {t(K + 'passedN', { count: test.passed })}
@@ -194,8 +195,9 @@ export function CasesCard({ d, manager, pushed }: { d: State; manager: boolean; 
                   <Icon name="alert" /> {t(K + 'missedN', { count: test.missed })}
                 </span>
               )}
-              {test.status === 'done' && test.items.length - test.passed - test.missed > 0 && <span className="muted">{t(K + 'openN', { count: test.items.length - test.passed - test.missed })}</span>}
+              {test.items.length - test.passed - test.missed > 0 && <span className="muted">{t(K + 'openN', { count: test.items.length - test.passed - test.missed })}</span>}
             </p>
+            )}
             <p className="small muted">
               {t(K + 'meta', { round: test.round, v: test.version })} · <bdi>{test.shopName ?? ''}</bdi> · <bdi>{dateTime(test.finishedAt ?? test.at)}</bdi>
             </p>
@@ -423,24 +425,26 @@ function Footer({
         </p>
         {!all && <p className="small">{t(K + 'leftHow')}</p>}
         {all && onTrial && <p className="small">{t(K + 'moreHow')}</p>}
-        {waiting.length > 0 && <p className="small">{t('platform.pilot.exam.toTestWaiting', { what: waiting.join(t(R + 'and')) })}</p>}
+        {/* all passed: the lessons kept (and what else waits) go to « Push en test » */}
+        {all && waiting.length > 0 && <p className="small">{t('platform.pilot.exam.toTestWaiting', { what: waiting.join(t(R + 'and')) })}</p>}
         {!onTrial && <p className="small muted">{t(K + 'otherVersion', { v: test.version })}</p>}
-        {manager ? (
-          <div className="pl-rel-do">
-            {all && onTrial && (
-              <button type="button" className="btn primary" disabled={busy} onClick={onMore}>
-                <Icon name="sparkles" /> {t(K + 'more')}
-              </button>
-            )}
-            {waiting.length > 0 && (
-              <button type="button" className={`btn${all ? '' : ' primary'}`} disabled={stage.isPending} onClick={() => stage.mutate({ darija: false })}>
-                <Icon name="beaker" /> {t(R + 'stage')}
-              </button>
-            )}
-          </div>
-        ) : (
-          <p className="small muted">{t('platform.pilot.exam.toTestManagers')}</p>
-        )}
+        {all &&
+          (manager ? (
+            <div className="pl-rel-do">
+              {onTrial && (
+                <button type="button" className="btn primary" disabled={busy} onClick={onMore}>
+                  <Icon name="sparkles" /> {t(K + 'more')}
+                </button>
+              )}
+              {waiting.length > 0 && (
+                <button type="button" className="btn" disabled={stage.isPending} onClick={() => stage.mutate({ darija: false })}>
+                  <Icon name="beaker" /> {t(R + 'stage')}
+                </button>
+              )}
+            </div>
+          ) : (
+            <p className="small muted">{t('platform.pilot.exam.toTestManagers')}</p>
+          ))}
       </div>
     </div>
   );
