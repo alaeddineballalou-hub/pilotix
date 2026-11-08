@@ -1429,7 +1429,11 @@
         "wrote": "written by {{by}} · {{date}}",
         "found": "found at night, approved by {{by}} · {{date}}",
         "noRoom": "does not fit in the book",
-        "remove": "Remove"
+        "remove": "Remove",
+        "list_one": "{{count}} lesson waiting",
+        "list_other": "{{count}} lessons waiting",
+        "show": "Show",
+        "hide": "Hide"
       },
       "lessons": {
         "title": "Lessons",

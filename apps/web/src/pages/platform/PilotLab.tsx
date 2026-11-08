@@ -972,47 +972,72 @@ function CoachFix({ m }: { m: Msg }) {
 }
 
 // ---------------------------------------------------------------- the next book
+const NEXT_OPEN = 'px.pilot.lab.nextOpen';
+/** the push card first (« Push en test », « Push sur le serveur »), then the lessons waiting for it, folded or not (the
+ *  choice is kept in this browser) */
 function NextCard({ d, manager, onPushed, onExam }: { d: State; manager: boolean; onPushed?: (kind: 'trial' | 'live') => void; onExam?: () => void }) {
   const { t } = useTranslation();
   const remove = usePilotAction('p.pilot.lesson', { success: t('platform.saved') });
   const nb = d.next;
   const k = 'platform.pilot.lab.next.';
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(NEXT_OPEN) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggle = (v: boolean) => {
+    setOpen(v);
+    try {
+      localStorage.setItem(NEXT_OPEN, v ? '1' : '0');
+    } catch {
+      /* private mode */
+    }
+  };
   return (
     <Card title={t(k + 'title')} badge={nb.fresh.length ? <span className="chip">{n(nb.fresh.length)}</span> : undefined} help={t(k + 'help')}>
+      <ReleasePanel d={d} manager={manager} onStaged={() => onPushed?.('trial')} onReleased={() => onPushed?.('live')} onTry={(kind) => onPushed?.(kind)} onExam={onExam} />
       {!nb.fresh.length ? (
         <p className="pl-next-empty">{t(k + 'empty')}</p>
       ) : (
-        <ul className="pl-next">
-          {nb.fresh.map((l) => (
-            <li key={l.id}>
-              <div className="pl-next-txt">
-                <span className="chip">{t(`platform.pilot.topic.${l.topic}`, { defaultValue: l.topic })}</span>
-                <p lang="en" dir="ltr">
-                  {l.text}
-                </p>
-                {l.meaning && !same(l.meaning, l.text) && (
-                  <p className="pl-next-mean" dir="auto">
-                    {l.meaning}
+        <details className="pl-next-fold" open={open} onToggle={(e) => toggle((e.currentTarget as HTMLDetailsElement).open)}>
+          <summary>
+            <Icon name="chevron" />
+            <b>{t(k + 'list', { count: nb.fresh.length })}</b>
+            <span className="muted small">{t(k + (open ? 'hide' : 'show'))}</span>
+          </summary>
+          <ul className="pl-next">
+            {nb.fresh.map((l) => (
+              <li key={l.id}>
+                <div className="pl-next-txt">
+                  <span className="chip">{t(`platform.pilot.topic.${l.topic}`, { defaultValue: l.topic })}</span>
+                  <p lang="en" dir="ltr">
+                    {l.text}
                   </p>
-                )}
-                <small>
-                  {t(l.source === 'coach' ? k + 'wrote' : k + 'found', { by: l.by ?? '—', date: dateOnly(l.at) })}
-                  {!l.fits && (
-                    <>
-                      {' '}
-                      · <span className="pl-next-room">{t(k + 'noRoom')}</span>
-                    </>
+                  {l.meaning && !same(l.meaning, l.text) && (
+                    <p className="pl-next-mean" dir="auto">
+                      {l.meaning}
+                    </p>
                   )}
-                </small>
-              </div>
-              <button type="button" className="btn small ghost" disabled={remove.isPending} onClick={() => remove.mutate({ id: l.id, action: 'reject' })}>
-                {t(k + 'remove')}
-              </button>
-            </li>
-          ))}
-        </ul>
+                  <small>
+                    {t(l.source === 'coach' ? k + 'wrote' : k + 'found', { by: l.by ?? '—', date: dateOnly(l.at) })}
+                    {!l.fits && (
+                      <>
+                        {' '}
+                        · <span className="pl-next-room">{t(k + 'noRoom')}</span>
+                      </>
+                    )}
+                  </small>
+                </div>
+                <button type="button" className="btn small ghost" disabled={remove.isPending} onClick={() => remove.mutate({ id: l.id, action: 'reject' })}>
+                  {t(k + 'remove')}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
-      <ReleasePanel d={d} manager={manager} onStaged={() => onPushed?.('trial')} onReleased={() => onPushed?.('live')} onTry={(kind) => onPushed?.(kind)} onExam={onExam} />
     </Card>
   );
 }

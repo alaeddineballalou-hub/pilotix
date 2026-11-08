@@ -617,8 +617,19 @@ html[data-theme="dark"] .pp-prot { --pp-c-q: #3B9BC0; }
 /* ---- Pilot AI's two pushes (PilotRelease.tsx): 1 « Push en test » (the control room only), 2 « Push sur le serveur »
    (every shop). The step that holds a version in test is the one lit; the question says all of it before the click. */
 .pl-rel { display: flex; flex-direction: column; gap: 12px; }
-/* under the lab's list of sales lessons not in service yet */
-.pl-next + .pl-rel, .pl-next-empty + .pl-rel { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+/* the lab's card: the two pushes first, then the sales lessons waiting for them, folded or open */
+.pl-rel + .pl-next-empty { margin-top: 14px; }
+.pl-next-fold { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.pl-next-fold > summary { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--raise); cursor: pointer; list-style: none; }
+.pl-next-fold > summary::-webkit-details-marker { display: none; }
+.pl-next-fold > summary:hover { border-color: color-mix(in srgb, var(--navy) 30%, var(--line)); }
+.pl-next-fold > summary:focus-visible { outline: 2px solid var(--px-orange); outline-offset: 2px; }
+.pl-next-fold > summary .bji { flex: none; width: 16px; height: 16px; color: var(--muted); transform: rotate(-90deg); transition: transform .15s ease; }
+[dir="rtl"] .pl-next-fold > summary .bji { transform: rotate(90deg); }
+.pl-next-fold[open] > summary .bji, [dir="rtl"] .pl-next-fold[open] > summary .bji { transform: none; }
+.pl-next-fold > summary .muted { margin-inline-start: auto; }
+.pl-next-fold[open] > summary { margin-bottom: 6px; }
+@media (prefers-reduced-motion: reduce) { .pl-next-fold > summary .bji { transition: none; } }
 .pl-rel-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .pl-rel-step { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .pl-rel-step.on { border-color: color-mix(in srgb, var(--px-orange) 50%, var(--line)); background: color-mix(in srgb, var(--px-orange) 7%, var(--surface)); }
