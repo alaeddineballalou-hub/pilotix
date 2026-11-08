@@ -85,49 +85,54 @@ export const NAV: NavItem[] = [
   // Pilot Comments answers the comments, AI Spy reads the competitors' Facebook ads in Algeria (pages/ads/Spy.tsx; in
   // the plans it is still Marketing's AI Spy); Comptes: the Facebook and TikTok accounts they use (an administrator
   // links them, pages/comptes).
+  // Confirmation agents and their supervisors do not see it (they confirm orders): the owner (vendeur), the marketers,
+  // the administrators.
   {
     id: 'pilotai',
     icon: 'sparkles',
-    roles: ['confirmation', 'marketer'],
+    roles: ['vendeur', 'marketer'],
     pages: ['messages', 'social', 'cm', 'spy', 'comptes'],
     children: [
-      { id: 'messages', href: '#/messages', count: 'msgs', tone: 'nc-a', icon: 'chat', roles: ['confirmation'] },
+      { id: 'messages', href: '#/messages', count: 'msgs', tone: 'nc-a', icon: 'chat', roles: ['vendeur'] },
       { id: 'social', href: '#/social', icon: 'calendar', roles: ['marketer'] },
-      { id: 'cm', href: '#/cm', count: 'cm', tone: 'nc-a', icon: 'comments', roles: ['confirmation', 'marketer'] },
+      { id: 'cm', href: '#/cm', count: 'cm', tone: 'nc-a', icon: 'comments', roles: ['marketer'] },
       { id: 'spy', href: '#/spy', icon: 'eye', roles: ['marketer'] },
       { id: 'comptes', href: '#/comptes', icon: 'link', roles: [] },
     ],
   },
-  { id: 'messages', icon: 'chat', roles: ['confirmation'], hidden: true },
-  { id: 'cm', icon: 'comments', roles: ['confirmation', 'marketer'], hidden: true },
+  { id: 'messages', icon: 'chat', roles: ['vendeur'], hidden: true },
+  { id: 'cm', icon: 'comments', roles: ['marketer'], hidden: true },
   { id: 'social', icon: 'calendar', roles: ['marketer'], hidden: true },
   { id: 'spy', icon: 'eye', roles: ['marketer'], hidden: true },
   { id: 'comptes', icon: 'link', roles: [], hidden: true },
   // Pilot Automations: what Pilotix does by itself, a group of its own whose lines are the parts of pages/notify — the
   // automations (Automatisations, Auto Pilot Affectation: admins; Auto Pilot Assign, with the Pilot Auto Assign rules and
   // the Préférences: admins, and the rules alone for the people who write them), the delivery messages each customer gets
-  // (Messages, its Cas, Tester and Résultats tabs inside: WhatsApp, SMS) and their Réglages (admins)
+  // (Messages, its Cas, Tester and Résultats tabs inside: WhatsApp, SMS: the suivi agents, not the confirmation agents
+  // nor their supervisors) and their Réglages (admins)
   {
     id: 'notify',
     icon: 'zap',
-    roles: ['confirmation', 'suivi'],
+    roles: ['suivi'],
     rules: true,
     pages: ['notify'],
     children: [
       { id: 'auto', href: '#/notify/auto', icon: 'zap', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['auto'] } },
       { id: 'assign', href: '#/notify/assign', icon: 'truck', roles: [], rules: true, plan: ['notify'], match: { page: 'notify', subs: ['assign'] } },
       { id: 'affectation', href: '#/notify/affectation', icon: 'users', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['affectation'] } },
-      { id: 'automessages', href: '#/notify/messages', count: 'notify', tone: 'nc-a', icon: 'send', roles: ['confirmation', 'suivi'], plan: ['notify'], match: { page: 'notify', subs: ['messages', 'cas', 'tester', 'resultats'] } },
+      { id: 'automessages', href: '#/notify/messages', count: 'notify', tone: 'nc-a', icon: 'send', roles: ['suivi'], plan: ['notify'], match: { page: 'notify', subs: ['messages', 'cas', 'tester', 'resultats'] } },
       { id: 'autoreglages', href: '#/notify/reglages', icon: 'settings', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['reglages'] } },
     ],
   },
-  { id: 'clients', icon: 'users', roles: ['confirmation', 'suivi'] },
+  // the customers: the suivi agents (not the confirmation agents nor their supervisors)
+  { id: 'clients', icon: 'users', roles: ['suivi'] },
   // Publicité (Meta spend face to the orders), Formulaires (the ads' lead forms become orders), Campagnes (WhatsApp offers
   // to the customers who said yes), Marketer (paying marketers); AI Spy (competitors' ads in Algeria) is in AI Pilot,
   // Influenceurs (ads in the shop's name and a creator's) in Partenaires
   { id: 'marketing', icon: 'megaphone', roles: ['marketer'], subs: ['publicite', 'formulaires', 'campagnes', 'catalogue', 'marketer'] },
-  // a public page per product, and the orders its fake-order check held back (agents restore the real ones)
-  { id: 'landing', icon: 'globe', roles: ['marketer', 'confirmation'] },
+  // a public page per product, and the orders its fake-order check held back (the marketers, the owner and the
+  // administrators restore the real ones; not the confirmation agents)
+  { id: 'landing', icon: 'globe', roles: ['marketer'] },
   { id: 'caisse', icon: 'wallet', roles: [], subs: ['overview', 'due', 'done', 'livreurs', 'journal'] },
   // an employee's own caisse (money he received, his expenses, what he handed to the main caisse)
   { id: 'macaisse', icon: 'wallet', roles: ['confirmation', 'suivi', 'depot', 'agent_manager'], onlyIf: (_r, admin) => !admin },

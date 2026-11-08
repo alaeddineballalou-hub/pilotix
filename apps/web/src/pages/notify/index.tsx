@@ -53,8 +53,8 @@ export function Notify({ sub }: PageProps) {
   const admin = !!session?.isAdmin;
   // the people ticked « règles Pilot » in Préférences (not admins) have Auto Pilot Assign: its rules alone
   const rules = useRulesState();
-  // the delivery messages: the confirmation and suivi agents (admins always)
-  const msgs = admin || !!session?.roles.some((r) => r === 'confirmation' || r === 'suivi');
+  // the delivery messages: the suivi agents (admins always), not the confirmation agents nor their supervisors
+  const msgs = admin || !!session?.roles.includes('suivi');
   const counts = useMenuCounts();
   const st = useRpc('notify.feed', { limit: 1 }, { enabled: msgs });
   // each part is a line of the menu's « Pilot Automations »: Automatisations, Auto Pilot Assign (the delivery company — with
