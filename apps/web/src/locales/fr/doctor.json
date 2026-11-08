@@ -425,7 +425,8 @@
     "courier-watch": "Sociétés de livraison : changements API",
     "turnstile-sync": "Cloudflare (robots) : domaines des boutiques",
     "offsite-backup": "Copie des sauvegardes hors du serveur (Backblaze)",
-    "pilot-ai-night": "Pilot AI : apprentissage de la nuit"
+    "pilot-ai-night": "Pilot AI : apprentissage de la nuit",
+    "pay-plan-alert": "Paie : personnes sans plan (notification du matin)"
   },
   "errs": {
     "title": "Dernières erreurs",

@@ -517,7 +517,8 @@
     "courier-watch": "شركات التوصيل: تغييرات API",
     "turnstile-sync": "Cloudflare (الروبوتات): نطاقات المتاجر",
     "offsite-backup": "نسخة النسخ الاحتياطية خارج الخادم (Backblaze)",
-    "pilot-ai-night": "Pilot AI: تعلم الليل"
+    "pilot-ai-night": "Pilot AI: تعلم الليل",
+    "pay-plan-alert": "الأجور: أشخاص بدون خطة (إشعار الصباح)"
   },
   "errs": {
     "title": "آخر الأخطاء",
