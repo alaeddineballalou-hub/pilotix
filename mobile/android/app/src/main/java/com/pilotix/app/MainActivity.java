@@ -27,6 +27,8 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // the app updating itself (website: lib/appUpdate); a plugin of the app is registered before the bridge starts
+        registerPlugin(AppUpdatePlugin.class);
         super.onCreate(savedInstanceState);
         keepPagesBetweenTheBars();
         if (

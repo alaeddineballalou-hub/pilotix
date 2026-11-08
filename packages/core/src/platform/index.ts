@@ -19,3 +19,4 @@ export * from './aiboard';
 export * from './sessions';
 export * from './sealing';
 export * from './totp';
+export * from './appUpdate';

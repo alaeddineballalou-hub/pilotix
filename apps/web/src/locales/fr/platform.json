@@ -1997,5 +1997,18 @@
     "tested": "Backblaze répond : un petit fichier pilotix-test.txt est dans le bucket",
     "send": "Envoyer maintenant",
     "sentNow": "Sauvegarde envoyée chez Backblaze"
+  },
+  "app": {
+    "title": "App Android",
+    "help": "L'app Pilotix des téléphones. GitHub en fait une nouvelle chaque fois que le code de l'app change ; les téléphones la proposent à l'ouverture (« Nouvelle version de l'app »). Obligatoire : ils doivent la mettre à jour avant tout le reste.",
+    "latest": "Dernière app : version {{build}} · {{when}} · {{size}} Mo",
+    "unknown": "Dernière app : inconnue pour le moment (GitHub ne répond pas).",
+    "keyOk": "Signée avec la clé fixe : elle remplace l’app des téléphones sans la désinstaller.",
+    "keyMissing": "Sans clé fixe : elle ne peut pas remplacer l'app des téléphones. Ajoutez la clé dans GitHub (ANDROID_TEST_KEYSTORE_BASE64).",
+    "requiredFrom": "Obligatoire à partir de la version {{build}}.",
+    "notRequired": "Pas obligatoire : chacun peut dire « Plus tard ».",
+    "require": "Rendre la version {{build}} obligatoire",
+    "unrequire": "Ne plus obliger",
+    "link": "Page de téléchargement"
   }
 }

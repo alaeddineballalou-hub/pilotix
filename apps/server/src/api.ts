@@ -1022,6 +1022,18 @@ class ApiController {
   }
 
   /**
+   * The phone app (mobile/): the latest app GitHub made and the oldest build still allowed (control room › App Android ›
+   * « Mise à jour obligatoire »). The app's pages ask it to offer « Nouvelle version de l'app ». Open to everyone: nothing
+   * in it is private.
+   */
+  @Public()
+  @Get('app')
+  async app() {
+    const [latest, set] = await Promise.all([core.latestApp(), this.core.settings()]);
+    return { latest, minBuild: set.app.minBuild };
+  }
+
+  /**
    * Pilotix's list of Pro marketers, open to everyone (the public page #/pro): their cards, the best rate first. Kept a
    * minute (each card's numbers are counted again only every few hours).
    */

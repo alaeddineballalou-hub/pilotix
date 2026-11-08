@@ -257,6 +257,8 @@ export interface PlatformSettings {
   social: { googleClientId: string; facebookAppId: string };
   /** Pro marketers: shown on Pilotix's list of marketers while paid; its price by the month (DA), « Passer Pro » offered or not */
   pro: { on: boolean; price: number };
+  /** The phone app: an app older than this build must update before anything else (control room › App Android › « Mise à jour obligatoire »; 0 = none) */
+  app: { minBuild: number };
 }
 
 /** How many designs the sign-in pages have (numbered 1…LOGIN_DESIGNS). */
@@ -276,6 +278,7 @@ export const PLATFORM_DEFAULTS: PlatformSettings = {
   login: { designs: Array.from({ length: LOGIN_DESIGNS }, (_, i) => i + 1) },
   social: { googleClientId: '', facebookAppId: '' },
   pro: { on: true, price: 2000 },
+  app: { minBuild: 0 },
 };
 
 export async function platformSettings(t: Tenancy): Promise<PlatformSettings> {

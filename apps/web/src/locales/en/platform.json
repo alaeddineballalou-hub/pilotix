@@ -1997,5 +1997,18 @@
     "tested": "Backblaze answers: a small pilotix-test.txt file is in the bucket",
     "send": "Send now",
     "sentNow": "Backup sent to Backblaze"
+  },
+  "app": {
+    "title": "Android app",
+    "help": "The Pilotix phone app. GitHub makes a new one each time the app’s code changes; phones offer it when they open (« New version of the app »). Required: they must update before anything else.",
+    "latest": "Latest app: version {{build}} · {{when}} · {{size}} MB",
+    "unknown": "Latest app: unknown right now (GitHub doesn't answer).",
+    "keyOk": "Signed with the fixed key: it replaces the app on phones without uninstalling.",
+    "keyMissing": "Without the fixed key: it can't replace the app on phones. Add the key in GitHub (ANDROID_TEST_KEYSTORE_BASE64).",
+    "requiredFrom": "Required from version {{build}}.",
+    "notRequired": "Not required: everyone can say « Later ».",
+    "require": "Make version {{build}} required",
+    "unrequire": "Stop requiring",
+    "link": "Download page"
   }
 }

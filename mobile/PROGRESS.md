@@ -47,7 +47,7 @@ on from the first step that isn't ✅.
 | 6 | One-tap calls (today a `tel:` link opens the phone's dialer with the number) | ⏭️ |
 | 7 | Notifications: the app asks for permission at start ✅ (30 Oct); sending them needs the owner's Firebase project → `google-services.json` | 🔨 |
 | 8 | Scanner: test the website's camera scanner in the app (camera permission is in) | ⏭️ |
-| 9 | Auto-update check (server says the minimum app version) | ⏭️ |
+| 9 | The app updates itself (« Nouvelle version de l'app », one tap; « Mise à jour obligatoire » in the control room) | 🔨 9 Nov 2026: built; needs the fixed key, then one last install by hand |
 | 10 | iPhone (`npx cap add ios`, Mac build on GitHub, Apple account) | ⏭️ |
 
 ## Facts and decisions
@@ -99,6 +99,15 @@ on from the first step that isn't ✅.
   `apps/web` can be removed later; `@capacitor/core` stays there for the website's "doors".
 - Test app download (made by GitHub after each build of `mobile/`):
   `https://github.com/alaeddineballalou-hub/pilotix/releases/download/app-test/pilotix-test.apk`
+- The app updates itself (step 9): `AppUpdatePlugin.java` (info, canInstall, openInstallSettings, progress, install —
+  only from Pilotix's GitHub download page, only an app of this package), `REQUEST_INSTALL_PACKAGES`, version code =
+  GitHub's build number (`PILOTIX_BUILD`). mobile.yml writes the version card `app-version.json` next to the app (build,
+  sha, date, size, fixedKey) and publishes only main's apps. The server's `GET /api/app` reads the card (core
+  `platform/appUpdate`, kept 5 min) with the control room's « obligatoire » build (`platform.settings` key `app`); the
+  website's `lib/appUpdate` + `ui/AppUpdate` show the sheet inside the app. Apps made before the updater show « Nouvelle
+  app à installer » (by hand, once). Offers wait for `fixedKey: true`.
+- The owner makes the fixed key once with the page « La clé de l'app Pilotix » (a Claude artifact: made in his browser,
+  pasted by him into GitHub's secret `ANDROID_TEST_KEYSTORE_BASE64`; alias androiddebugkey, passwords « android »).
 - Test builds are signed with a new random test key each time **until** the secret
   `ANDROID_TEST_KEYSTORE_BASE64` is added in GitHub (Settings → Secrets and variables → Actions).
   Without it, uninstall the old test app before installing a new one.
@@ -133,6 +142,8 @@ on from the first step that isn't ✅.
 
 ## Log
 
+- 9 Nov 2026: step 9 built (owner chose « obligatoire » as a control room button). Next: owner adds the key, first
+  fixed-key app, agents install it once by hand; then updates come through the app.
 - 8 Nov 2026: owner wants the app always up to date by itself. Website side done (lib/freshness, above). Next:
   step 9 as an in-app updater (one tap « Mettre à jour », needs the fixed key `ANDROID_TEST_KEYSTORE_BASE64`), Google Play later.
 - 30 Oct 2026, 07:04: owner: titles could be selected by a long press → off inside the app (website side, live).

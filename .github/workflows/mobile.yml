@@ -2,6 +2,8 @@ name: Pilotix app
 
 # Builds the Android test app when something in mobile/ changes.
 # Website-only changes build nothing here: the app opens the live pilotix.online, so they show up in the app by themselves.
+# Each app built on main goes on the download page with its version card (app-version.json): the server reads it and the
+# phones offer « Nouvelle version de l'app » (the app updates itself: website lib/appUpdate, AppUpdatePlugin.java).
 on:
   push:
     paths:
@@ -55,19 +57,32 @@ jobs:
           if [ -n "$KEY" ]; then mkdir -p ~/.android && echo "$KEY" | base64 -d > ~/.android/debug.keystore && echo "test key: fixed"; else echo "test key: new one for this build (add the secret to keep it)"; fi
       - name: Build the test app
         working-directory: mobile/android
+        # GitHub's build number is the app's version code: each new app is « newer » for Android and for the updater
+        env:
+          PILOTIX_BUILD: ${{ github.run_number }}
         run: ./gradlew assembleDebug --no-daemon
       - run: cp android/app/build/outputs/apk/debug/app-debug.apk pilotix-test.apk
+      # the app's version card: its build, commit, date, size, and whether it has the fixed key (only then can it replace
+      # the app on a phone; before, Android refuses and the phones are not asked to update)
+      - name: Version card
+        env:
+          KEY: ${{ secrets.ANDROID_TEST_KEYSTORE_BASE64 }}
+        run: |
+          printf '{"build":%s,"sha":"%s","date":"%s","size":%s,"fixedKey":%s}\n' "$GITHUB_RUN_NUMBER" "${GITHUB_SHA::7}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(stat -c %s pilotix-test.apk)" "$([ -n "$KEY" ] && echo true || echo false)" > app-version.json
+          cat app-version.json
       - uses: actions/upload-artifact@v4
         with:
           name: pilotix-android-test
           path: mobile/pilotix-test.apk
       # one stable link for the latest test app:
       # https://github.com/<owner>/<repo>/releases/download/app-test/pilotix-test.apk
+      # only main's apps: a side branch (or a robot's dependency update) never replaces the phones' app
       - name: Put it on the download page
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          NOTES="Test version of the Pilotix Android app, from ${GITHUB_REF_NAME} (${GITHUB_SHA::7}), $(date -u '+%Y-%m-%d %H:%M') UTC.
+          NOTES="Test version of the Pilotix Android app, version ${GITHUB_RUN_NUMBER}, from ${GITHUB_REF_NAME} (${GITHUB_SHA::7}), $(date -u '+%Y-%m-%d %H:%M') UTC.
           To install: open this page on the Android phone, tap pilotix-test.apk, then Install (allow Chrome to install apps if the phone asks)."
           gh release delete app-test --yes --cleanup-tag || true
-          gh release create app-test pilotix-test.apk --target "$GITHUB_SHA" --prerelease --title "Pilotix app (test version)" --notes "$NOTES"
+          gh release create app-test pilotix-test.apk app-version.json --target "$GITHUB_SHA" --prerelease --title "Pilotix app (test version)" --notes "$NOTES"

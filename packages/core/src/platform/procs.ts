@@ -12,6 +12,7 @@ import { courierCatalog } from '../couriers/catalog';
 import { clearCourierTestKeys, courierTestState, saveCourierTestKeys } from './courierTests';
 import { addWatchItems, courierUsage, removeCourier, removedCouriers, removeWatchItem, restoreCourier, setWatchStatus, watchState } from './courierWatch';
 import { protectionStats } from './reputation';
+import { latestApp } from './appUpdate';
 import { syncAgency } from '../modules/agencies';
 import { SLUG_LOCKED } from '../modules/boutiques';
 import { accountByEmail, accountById, dropForeignPassword, foreignPassword, makeAccountToken, sha256Hex } from './accounts';
@@ -981,6 +982,17 @@ export const PLATFORM_REGISTRY = {
       return { id };
     },
   ),
+
+  // ---------------------------------------------------------------- the phone app (mobile/)
+  /** Control room › Réglages › App Android: the latest app GitHub made (null: GitHub out of reach) and the oldest build still allowed. */
+  'p.app.get': pproc(ALL, z.object({}), async (ctx) => ({ latest: await latestApp(), minBuild: (await platformSettings(ctx.t)).app.minBuild })),
+
+  /** « Mise à jour obligatoire »: phones with an older app must update before anything else (0: none required). */
+  'p.app.require': pproc(OWNER, z.object({ build: z.number().int().min(0).max(1_000_000_000) }), async (ctx, i) => {
+    await setPlatformSetting(ctx.t, 'app', { minBuild: i.build });
+    await audit(ctx, 'app.require', null, { build: i.build });
+    return { latest: await latestApp(), minBuild: i.build };
+  }),
 
   // ---------------------------------------------------------------- settings, journal
   'p.settings.get': pproc(ALL, z.object({}), async (ctx) => platformSettings(ctx.t)),

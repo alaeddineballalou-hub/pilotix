@@ -75,5 +75,29 @@
     "moving": "Mise à jour de Pilotix…",
     "movingSub": "Une nouvelle version est prête, un instant.",
     "done": "Pilotix est à jour"
+  },
+  "appUpdate": {
+    "titleOffer": "Nouvelle version de l'app Pilotix",
+    "titleRequired": "Mise à jour obligatoire",
+    "titleOld": "Nouvelle app Pilotix à installer",
+    "version": "Version {{build}} · {{size}}",
+    "size": "{{n}} Mo",
+    "noteOffer": "Ce qui change : l'app elle-même (son écran de démarrage, les notifications…). Vos commandes ne changent pas.",
+    "noteRequired": "Cette version est nécessaire pour continuer à travailler. Ça prend moins d'une minute.",
+    "old1": "Touchez « Télécharger la nouvelle app » : le fichier arrive dans Téléchargements.",
+    "old2": "Supprimez l'ancienne app Pilotix (appui long sur son icône › Désinstaller).",
+    "old3": "Ouvrez le fichier téléchargé › Installer, puis connectez-vous. Ensuite, l'app se met à jour toute seule.",
+    "update": "Mettre à jour",
+    "download": "Télécharger la nouvelle app",
+    "later": "Plus tard",
+    "allowTitle": "Autoriser la mise à jour",
+    "allowNote": "Android le demande une seule fois : touchez « Ouvrir les réglages », activez « Autoriser cette source », puis revenez ici.",
+    "allowBtn": "Ouvrir les réglages",
+    "downloading": "Téléchargement…",
+    "progress": "{{done}} sur {{total}}",
+    "then": "Ensuite, Android vous demande de confirmer.",
+    "failed": "Le téléchargement n'a pas abouti. Vérifiez internet et réessayez.",
+    "retry": "Réessayer",
+    "done": "App Pilotix à jour · version {{build}}"
   }
 }

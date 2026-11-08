@@ -75,5 +75,29 @@
     "moving": "Updating Pilotix…",
     "movingSub": "A new version is ready, one moment.",
     "done": "Pilotix is up to date"
+  },
+  "appUpdate": {
+    "titleOffer": "New version of the Pilotix app",
+    "titleRequired": "Update required",
+    "titleOld": "New Pilotix app to install",
+    "version": "Version {{build}} · {{size}}",
+    "size": "{{n}} MB",
+    "noteOffer": "What changes: the app itself (its start screen, notifications…). Your orders stay the same.",
+    "noteRequired": "This version is needed to keep working. It takes less than a minute.",
+    "old1": "Tap « Download the new app »: the file goes to Downloads.",
+    "old2": "Remove the old Pilotix app (long-press its icon › Uninstall).",
+    "old3": "Open the downloaded file › Install, then sign in. After that, the app updates itself.",
+    "update": "Update",
+    "download": "Download the new app",
+    "later": "Later",
+    "allowTitle": "Allow the update",
+    "allowNote": "Android asks only once: tap « Open settings », turn on « Allow from this source », then come back here.",
+    "allowBtn": "Open settings",
+    "downloading": "Downloading…",
+    "progress": "{{done}} of {{total}}",
+    "then": "Then Android asks you to confirm.",
+    "failed": "The download didn't finish. Check the internet and try again.",
+    "retry": "Try again",
+    "done": "Pilotix app up to date · version {{build}}"
   }
 }
