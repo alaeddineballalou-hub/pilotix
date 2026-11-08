@@ -105,7 +105,7 @@ function agencyMoved(page: string | undefined, sub: string | undefined, rest: (s
   if (page === 'utilisateurs') return `#/equipe/personnes${sub && sub !== 'affectations' ? `/${sub}` : ''}`;
   if (page !== 'facturation') return null;
   if (sub === 'paie') return '#/equipe/paie';
-  if (sub === 'agents') return '#/equipe/scores';
+  if (sub === 'agents') return '#/equipe/paie';
   if (sub === 'plans') return '#/vendeurs/plans';
   return `#/vendeurs/factures${sub && sub !== 'vendeurs' ? `/${[sub, ...rest].filter(Boolean).join('/')}` : ''}`;
 }

@@ -287,11 +287,11 @@ export function Vendeurs({ sub }: PageProps) {
 export function AgencyTeam({ sub, rest }: PageProps) {
   const { t } = useTranslation();
   const { session } = useSession();
-  const tabs = session?.isAdmin ? (['personnes', 'repartition', 'paie', 'scores'] as const) : (['personnes'] as const);
+  // no tabs on the page: the sidebar opens Équipe into Utilisateurs, Affectation, Paie
+  const tabs = session?.isAdmin ? (['personnes', 'repartition', 'paie'] as const) : (['personnes'] as const);
   const tab = (tabs as readonly string[]).includes(sub ?? '') ? sub! : 'personnes';
   return (
     <>
-      {tabs.length > 1 && <StageBar flow={false} current={tab} items={tabs.map((k) => ({ key: k, label: t(`agency.teamTabs.${k}`), href: `#/equipe/${k}` }))} />}
       <Suspense fallback={<Loading />}>
         {tab === 'personnes' ? (
           <div className="agx-page">
@@ -299,14 +299,10 @@ export function AgencyTeam({ sub, rest }: PageProps) {
           </div>
         ) : tab === 'repartition' ? (
           <AgencyAffectation />
-        ) : tab === 'paie' ? (
+        ) : (
           <div className="agx-page">
             <PaieBoard />
             <AgencyPaymentPlans bare noPayroll initialKind="agent" only={['agent', 'bonus']} />
-          </div>
-        ) : (
-          <div className="agx-page">
-            <AgentsPay />
           </div>
         )}
       </Suspense>
