@@ -1433,7 +1433,11 @@
         "list_one": "{{count}} lesson waiting",
         "list_other": "{{count}} lessons waiting",
         "show": "Show",
-        "hide": "Hide"
+        "hide": "Hide",
+        "foldTrial": "v{{v}} in test",
+        "foldNoTrial": "Nothing in test",
+        "foldLive": "v{{v}} on the server",
+        "foldBase": "base method on the server"
       },
       "lessons": {
         "title": "Lessons",
@@ -1828,7 +1832,12 @@
       "toTestAdd": "Add the lessons of the red questions: they will wait here for the « Push to test ».",
       "toTestAllGreen": "Everything is green on v{{v}}: it can go to the server (« Push to the server », below).",
       "toTestManagers": "A manager can push the lessons to test.",
-      "againOn": "Take the exam on v{{v}}"
+      "againOn": "Take the exam on v{{v}}",
+      "foldRunning": "Exam running: question {{done}} of {{total}}",
+      "foldTrial": "v{{v}} in test: {{score}}/10",
+      "foldLive": "v{{v}} live: {{score}}/10",
+      "foldBase": "base method: {{score}}/10",
+      "foldNone": "No exam yet"
     },
     "photos": {
       "title": "HD photo storage (Cloudflare R2)",

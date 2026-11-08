@@ -10,8 +10,9 @@
 //      used at once in their own shop, wait here: accept (as is or modified): out with the next push, then every shop uses
 //      it; refuse, the others never see it. Pilotix's own: « Darija lesson » under an answer of the test chat, or words
 //      typed here: accepted at once, out with the next push.
-// Under them, the sales lessons not in service yet and the two pushes (PilotRelease.tsx): « Push en test » (the test chat
-// starts again on the version in test), then « Push sur le serveur » (every shop).
+// Under them, folded until opened: the two pushes (PilotRelease.tsx) with the sales lessons not in service yet below them,
+// « Push en test » (the version's new lessons are played at once in ten cases, the lesson test, PilotCases.tsx) then
+// « Push sur le serveur » (every shop); the lesson test; then the 10-question exam (PilotExam.tsx), folded too.
 import { useQueryClient } from '@tanstack/react-query';
 import { Fragment, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -27,6 +28,7 @@ import { CaseModal } from './pilotCase';
 import { ReleasePanel, takeFreshPush } from './PilotRelease';
 import { ExamCard, PilotixLessons, takeExamJump } from './PilotExam';
 import { CasesCard } from './PilotCases';
+import { FoldCard } from './PilotFold';
 import { DarijaBookCard } from './DarijaBook';
 import { VocabPane } from './Vocab';
 import { PilotDemo, usePilotAction, usePilotCall, usePilotRpc } from './pilotDemo';
@@ -82,6 +84,9 @@ export function LabTab({ d, manager }: { d: State; manager: boolean }) {
   const casesBox = useRef<HTMLDivElement>(null);
   // « Push en test »: the version made, whose new lessons the lesson test plays at once
   const [casesGo, setCasesGo] = useState<number | null>(null);
+  // the push card and the exam: folded when the page opens (the exam opens when a « Passer l'examen » leads here)
+  const [relOpen, setRelOpen] = useState(false);
+  const [examOpen, setExamOpen] = useState(!!jump);
   const scroll = (el: HTMLElement | null) => requestAnimationFrame(() => el?.scrollIntoView({ behavior: still() ? 'auto' : 'smooth', block: 'start' }));
   useEffect(() => {
     if (jump) scroll(examBox.current);
@@ -97,7 +102,10 @@ export function LabTab({ d, manager }: { d: State; manager: boolean }) {
     } else scroll(tryBox.current);
   };
   // « Push en test pour l'essayer » under a lesson just added: to the two pushes
-  const toPush = () => scroll(relBox.current);
+  const toPush = () => {
+    setRelOpen(true);
+    scroll(relBox.current);
+  };
   return (
     <>
       <div className="pl-lab-switch">
@@ -118,22 +126,25 @@ export function LabTab({ d, manager }: { d: State; manager: boolean }) {
           <LessonsCard d={d} onTry={toPush} manager={manager} />
         </div>
       </div>
-      <div ref={casesBox}>
-        <CasesCard d={d} manager={manager} pushed={casesGo} />
-      </div>
-      <div ref={examBox}>
-        <ExamCard d={d} book={examBook} onBook={setExamBook} manager={manager} onStaged={(v) => pushed('trial', v)} />
-      </div>
       <div ref={relBox}>
         <NextCard
           d={d}
           manager={manager}
+          open={relOpen}
+          onOpen={setRelOpen}
           onPushed={pushed}
           onExam={() => {
             setExamBook('trial');
+            setExamOpen(true);
             scroll(examBox.current);
           }}
         />
+      </div>
+      <div ref={casesBox}>
+        <CasesCard d={d} manager={manager} pushed={casesGo} />
+      </div>
+      <div ref={examBox}>
+        <ExamCard d={d} book={examBook} onBook={setExamBook} manager={manager} onStaged={(v) => pushed('trial', v)} open={examOpen} onOpen={setExamOpen} />
       </div>
     </>
   );
@@ -984,13 +995,31 @@ function CoachFix({ m }: { m: Msg }) {
 
 // ---------------------------------------------------------------- the next book
 const NEXT_OPEN = 'px.pilot.lab.nextOpen';
-/** the push card first (« Push en test », « Push sur le serveur »), then the lessons waiting for it, folded or not (the
- *  choice is kept in this browser) */
-function NextCard({ d, manager, onPushed, onExam }: { d: State; manager: boolean; onPushed?: (kind: 'trial' | 'live', v?: number) => void; onExam?: () => void }) {
+/** the push card, folded when the page opens (its title row says what is in test and on the server): the two pushes
+ *  (« Push en test », « Push sur le serveur »), then the lessons waiting for them, folded or not (that choice is kept in
+ *  this browser) */
+function NextCard({
+  d,
+  manager,
+  open: cardOpen,
+  onOpen,
+  onPushed,
+  onExam,
+}: {
+  d: State;
+  manager: boolean;
+  open: boolean;
+  onOpen: (open: boolean) => void;
+  onPushed?: (kind: 'trial' | 'live', v?: number) => void;
+  onExam?: () => void;
+}) {
   const { t } = useTranslation();
   const remove = usePilotAction('p.pilot.lesson', { success: t('platform.saved') });
   const nb = d.next;
   const k = 'platform.pilot.lab.next.';
+  const tr = d.release.trial;
+  const live = d.release.live;
+  const sum = [tr ? t(k + 'foldTrial', { v: tr.version }) : t(k + 'foldNoTrial'), live?.version ? t(k + 'foldLive', { v: live.version }) : t(k + 'foldBase')].join(' · ');
   const [open, setOpen] = useState(() => {
     try {
       return localStorage.getItem(NEXT_OPEN) === '1';
@@ -1007,7 +1036,7 @@ function NextCard({ d, manager, onPushed, onExam }: { d: State; manager: boolean
     }
   };
   return (
-    <Card title={t(k + 'title')} badge={nb.fresh.length ? <span className="chip">{n(nb.fresh.length)}</span> : undefined} help={t(k + 'help')}>
+    <FoldCard title={t(k + 'title')} badge={nb.fresh.length ? <span className="chip">{n(nb.fresh.length)}</span> : undefined} help={t(k + 'help')} open={cardOpen} onOpen={onOpen} sum={sum}>
       <ReleasePanel d={d} manager={manager} onStaged={(v) => onPushed?.('trial', v)} onReleased={() => onPushed?.('live')} onTry={(kind) => onPushed?.(kind)} onExam={onExam} />
       {!nb.fresh.length ? (
         <p className="pl-next-empty">{t(k + 'empty')}</p>
@@ -1049,6 +1078,6 @@ function NextCard({ d, manager, onPushed, onExam }: { d: State; manager: boolean
           </ul>
         </details>
       )}
-    </Card>
+    </FoldCard>
   );
 }

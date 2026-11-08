@@ -10,9 +10,10 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dateTime, n } from '../../lib/format';
 import type { POut } from '../../lib/platform';
-import { Card, Icon, Tabs } from '../../ui/kit';
+import { Icon, Tabs } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { usePilotAction, usePilotCall } from './pilotDemo';
+import { FoldCard } from './PilotFold';
 import { waitingParts } from './pilotWaiting';
 
 type State = POut<'p.pilot.state'>;
@@ -39,7 +40,24 @@ function useTitle() {
   return (x: { title: string; en?: string | null; ar?: string | null }) => (lang === 'en' ? x.en : lang === 'ar' ? x.ar : x.title) || x.title;
 }
 
-export function ExamCard({ d, book: picked, onBook, manager, onStaged }: { d: State; book: Book; onBook: (b: Book) => void; manager: boolean; onStaged?: (v: number) => void }) {
+export function ExamCard({
+  d,
+  book: picked,
+  onBook,
+  manager,
+  onStaged,
+  open,
+  onOpen,
+}: {
+  d: State;
+  book: Book;
+  onBook: (b: Book) => void;
+  manager: boolean;
+  onStaged?: (v: number) => void;
+  /** folded when the page opens; open from its title row (or « Passer l'examen ») */
+  open: boolean;
+  onOpen: (open: boolean) => void;
+}) {
   const { t, i18n } = useTranslation();
   const call = usePilotCall();
   const qc = useQueryClient();
@@ -130,8 +148,19 @@ export function ExamCard({ d, book: picked, onBook, manager, onStaged }: { d: St
   };
   const next: Plan | null = running ? exam!.plan[exam!.done] ?? null : null;
   const missed = exam ? exam.items.length - exam.passed : 0;
+  // folded: the exam that runs, else the marks of the version in test and of the one in service
+  const going = running ? exam : d.exams.running;
+  const lang = i18n.language;
+  const sum = going
+    ? t(K + 'foldRunning', { done: n(going.done), total: n(going.total) })
+    : [
+        d.exams.trial ? t(K + 'foldTrial', { v: d.exams.trial.version, score: mark(d.exams.trial.score, lang) }) : '',
+        d.exams.live ? (d.exams.live.version ? t(K + 'foldLive', { v: d.exams.live.version, score: mark(d.exams.live.score, lang) }) : t(K + 'foldBase', { score: mark(d.exams.live.score, lang) })) : '',
+      ]
+        .filter(Boolean)
+        .join(' · ') || t(K + 'foldNone');
   return (
-    <Card title={t(K + 'title')} help={t(K + 'help')} className="pl-lab-card pl-exam">
+    <FoldCard title={t(K + 'title')} help={t(K + 'help')} className="pl-lab-card pl-exam" open={open} onOpen={onOpen} sum={sum}>
       {!shops.length ? (
         <p className="muted">{t('platform.pilot.lab.try.noShop')}</p>
       ) : (
@@ -216,7 +245,7 @@ export function ExamCard({ d, book: picked, onBook, manager, onStaged }: { d: St
           )}
         </>
       )}
-    </Card>
+    </FoldCard>
   );
 }
 

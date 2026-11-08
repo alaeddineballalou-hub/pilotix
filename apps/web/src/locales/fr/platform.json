@@ -1433,7 +1433,11 @@
         "list_one": "{{count}} leçon en attente",
         "list_other": "{{count}} leçons en attente",
         "show": "Afficher",
-        "hide": "Masquer"
+        "hide": "Masquer",
+        "foldTrial": "v{{v}} en test",
+        "foldNoTrial": "Rien en test",
+        "foldLive": "v{{v}} sur le serveur",
+        "foldBase": "méthode de base sur le serveur"
       },
       "lessons": {
         "title": "Leçons",
@@ -1828,7 +1832,12 @@
       "toTestAdd": "Ajoutez les leçons des questions en rouge : elles attendront ici le « Push en test ».",
       "toTestAllGreen": "Tout est vert sur la v{{v}} : elle peut partir sur le serveur (« Push sur le serveur », plus bas).",
       "toTestManagers": "Un responsable peut pousser les leçons en test.",
-      "againOn": "Relancer l’examen sur la v{{v}}"
+      "againOn": "Relancer l’examen sur la v{{v}}",
+      "foldRunning": "Examen en cours : question {{done}} sur {{total}}",
+      "foldTrial": "v{{v}} en test : {{score}}/10",
+      "foldLive": "v{{v}} en service : {{score}}/10",
+      "foldBase": "méthode de base : {{score}}/10",
+      "foldNone": "Pas encore d’examen"
     },
     "photos": {
       "title": "Stockage des photos HD (Cloudflare R2)",
