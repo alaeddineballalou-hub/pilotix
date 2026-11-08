@@ -39,6 +39,8 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- the app installs its own update (AppUpdatePlugin): Android asks the person once, then « Mettre à jour ? » each time -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- camera: the website's parcel scanner (Dépôt, Suivi) uses it inside the app -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />

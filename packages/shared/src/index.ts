@@ -479,3 +479,4 @@ export * from './management-plans';
 export * from './pos';
 export * from './modules';
 export * from './pay';
+export * from './appUpdate';

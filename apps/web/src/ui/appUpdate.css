@@ -1,0 +1,27 @@
+/* « Nouvelle version de l'app » (ui/AppUpdate.tsx), inside the app's own sheet. */
+.au-locked .pxk-x { display: none; }
+.au-app { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.au-app img { width: 56px; height: 56px; border-radius: 14px; flex: none; }
+.au-app b { display: block; font-size: 17px; font-weight: 600; color: var(--ink); }
+.au-app small { display: block; font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+.au-note {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--c-accent-tint, #FFF3E6);
+  border: 1px solid color-mix(in srgb, var(--c-accent, #F7A823) 22%, transparent);
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.au-note.bad { background: var(--c-bad-tint, #FCE7E5); border-color: color-mix(in srgb, var(--c-bad-line, #D6453D) 30%, transparent); }
+.au-steps { margin: 0; padding-inline-start: 22px; display: grid; gap: 10px; font-size: 14.5px; line-height: 1.5; color: var(--ink); }
+.au-steps li::marker { font-weight: 700; color: var(--c-accent-ink, #A4480A); }
+.au-bar { height: 10px; border-radius: 999px; background: var(--sky-soft, #F3EFEA); overflow: hidden; margin: 4px 0 8px; }
+.au-bar i { display: block; height: 100%; border-radius: 999px; background: var(--c-accent-grad, linear-gradient(135deg, #F7A823, #F28C1B)); transition: width 0.35s ease-out; }
+.au-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; color: var(--muted); }
+.au-row b { color: var(--ink); font-weight: 600; }
+.au-then { margin: 12px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
+.au-foot { display: grid; gap: 4px; width: 100%; }
+.au-foot .btn { width: 100%; }
+@media (prefers-reduced-motion: reduce) { .au-bar i { transition: none; } }

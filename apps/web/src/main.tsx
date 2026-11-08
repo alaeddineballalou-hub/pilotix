@@ -13,6 +13,8 @@ import './lib/i18n';
 import { ModalHost } from './lib/modals';
 import { addressShop, fixAddress, go, PATHS, useRoute } from './lib/route';
 import { startFreshness } from './lib/freshness';
+import { startAppUpdates } from './lib/appUpdate';
+import { AppUpdateHost } from './ui/AppUpdate';
 import { RiskAskHost } from './ui/clientScore';
 import { initSeller } from './lib/seller';
 import { SessionProvider, useSession } from './lib/session';
@@ -269,10 +271,15 @@ createRoot(document.getElementById('root')!).render(
         <ModalHost />
         <RiskAskHost />
         <Toasts />
+        <AppUpdateHost />
       </SessionProvider>
     </QueryClientProvider>
   </StrictMode>,
 );
 
 // the site on its own server moves to each new version by itself (lib/freshness); the preview in Claude has none
-if (PATHS && import.meta.env.PROD) startFreshness();
+if (PATHS && import.meta.env.PROD) {
+  startFreshness();
+  // inside the phone app: a newer app offered (or required), lib/appUpdate
+  startAppUpdates();
+}

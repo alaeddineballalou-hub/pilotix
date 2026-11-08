@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { PayInfo } from '../../layout/ShopBanner';
 import { POut, Staff, usePAction, usePRpc } from '../../lib/platform';
 import { Card, ErrorBox, Field, Loading } from '../../ui/kit';
+import { AppBox } from './AppBox';
 import { CloudflareBox } from './CloudflareBox';
 import { OtpBox } from './OtpBox';
 
@@ -69,6 +70,7 @@ export function Settings({ staff }: { staff: Staff }) {
       </div>
       <CloudflareBox owner={owner} />
       <OtpBox owner={owner} manager={staff.role === 'manager'} />
+      <AppBox owner={owner} />
       <div className="pp-grid">
         <Card title={t('platform.set.trialTitle')} help={t('platform.set.trialHelp')}>
           <div className="grid2 pp-form">
