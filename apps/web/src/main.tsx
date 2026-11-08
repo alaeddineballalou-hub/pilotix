@@ -12,6 +12,7 @@ import { firstSubOn, hasPlanSubs, pageIsOn } from './lib/features';
 import './lib/i18n';
 import { ModalHost } from './lib/modals';
 import { addressShop, fixAddress, go, PATHS, useRoute } from './lib/route';
+import { startFreshness } from './lib/freshness';
 import { RiskAskHost } from './ui/clientScore';
 import { initSeller } from './lib/seller';
 import { SessionProvider, useSession } from './lib/session';
@@ -271,3 +272,6 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+// the site on its own server moves to each new version by itself (lib/freshness); the preview in Claude has none
+if (PATHS && import.meta.env.PROD) startFreshness();

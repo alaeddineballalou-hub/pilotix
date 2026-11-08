@@ -21,7 +21,9 @@ export const PATHS = import.meta.env.VITE_DEMO_ONLY !== '1' && import.meta.env.B
 /** The open boutique's link name (null: nobody logged in yet, or a server with a single shop). */
 let shop: string | null = null;
 
-const EVENT = 'px:route';
+/** Fired on window when the page changes (lib/freshness: a good moment to load a new version). */
+export const ROUTE_EVENT = 'px:route';
+const EVENT = ROUTE_EVENT;
 /** The page changed: every useRoute() reads the address again (after the current work, never inside a render). */
 const changed = () => queueMicrotask(() => window.dispatchEvent(new Event(EVENT)));
 

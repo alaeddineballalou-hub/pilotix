@@ -12,6 +12,11 @@ on from the first step that isn't ✅.
    server, database and code as the website). A website change shows in the app the next time it opens,
    on Android and iPhone, with nothing to download. When Cloudflare's road is cut, it opens the backup
    door `https://direct.pilotix.online` by itself (same app and server, without Cloudflare).
+   An app left open moves to a new website version by itself too (`apps/web/src/lib/freshness.ts`, 8 Nov 2026):
+   it checks every 5 minutes, then loads the new version when the person changes page, comes back to the app after
+   1 minute away, or leaves it untouched 2 minutes — never with a window open or something typed on the page. A page
+   whose old files are gone loads the new version at once. The person sees « Mise à jour de Pilotix… » under a second,
+   then « Pilotix est à jour ».
 2. **Phone powers inside the app:** calls, notifications, camera scanner, icon. The website "asks" the
    app to use them.
 3. **Auto-check for app updates:** only needed when a new phone power is added (rare). The app asks the
@@ -128,6 +133,8 @@ on from the first step that isn't ✅.
 
 ## Log
 
+- 8 Nov 2026: owner wants the app always up to date by itself. Website side done (lib/freshness, above). Next:
+  step 9 as an in-app updater (one tap « Mettre à jour », needs the fixed key `ANDROID_TEST_KEYSTORE_BASE64`), Google Play later.
 - 30 Oct 2026, 07:04: owner: titles could be selected by a long press → off inside the app (website side, live).
   Test 6 (navy bars) built; the owner's screenshot still looked like test 5 (white bars).
 - 30 Oct 2026, 06:43: the owner added the `direct` DNS line; on his Wi‑Fi (pilotix.online still cut) the app

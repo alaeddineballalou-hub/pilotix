@@ -70,5 +70,10 @@
   "remove": "Retirer",
   "view": "Affichage",
   "viewCards": "Cartes",
-  "viewTable": "Tableau"
+  "viewTable": "Tableau",
+  "update": {
+    "moving": "Mise à jour de Pilotix…",
+    "movingSub": "Une nouvelle version est prête, un instant.",
+    "done": "Pilotix est à jour"
+  }
 }

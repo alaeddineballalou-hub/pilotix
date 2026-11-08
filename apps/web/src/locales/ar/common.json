@@ -70,5 +70,10 @@
   "remove": "إزالة",
   "view": "العرض",
   "viewCards": "بطاقات",
-  "viewTable": "جدول"
+  "viewTable": "جدول",
+  "update": {
+    "moving": "جارٍ تحديث Pilotix…",
+    "movingSub": "نسخة جديدة جاهزة، لحظة من فضلك.",
+    "done": "Pilotix محدَّث"
+  }
 }

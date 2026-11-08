@@ -70,5 +70,10 @@
   "remove": "Remove",
   "view": "View",
   "viewCards": "Cards",
-  "viewTable": "Table"
+  "viewTable": "Table",
+  "update": {
+    "moving": "Updating Pilotix…",
+    "movingSub": "A new version is ready, one moment.",
+    "done": "Pilotix is up to date"
+  }
 }
