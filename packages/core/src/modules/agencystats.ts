@@ -2,15 +2,18 @@
 // works for, or the seller chosen at the top of the page:
 // - « Dashboard » (everyone): what waits now, who is on line, the period's numbers and each agent's. An agent sees his own
 //   orders and his own row only (with his rank, no one else's name); the chief and the agent managers see the team.
+//   The leads also see each seller's numbers; the chief also the month's money (agency.money): what each seller owes
+//   the agency, what its agents cost (their pay), and the profit.
 // - « Analyse & statistiques » (the chief and the agent managers): the results over a period per seller, product,
 //   wilaya and agent — confirmation (of the orders received in the period: confirmed, cancelled, refused, still to
 //   call), delivery (delivered and back in the period), upsells and the value delivered.
 import { CONF_TODO, FOLLOW_ON_ROAD, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, num } from '../db';
-import { Ctx, forbidden, proc } from '../rpc';
-import { agencyEarnings, LINK_SQL, monthNow, toLink } from './agencies';
+import { bad, Ctx, forbidden, proc } from '../rpc';
+import { agencyEarnings, LINK_SQL, monthBounds, monthNow, toLink } from './agencies';
 import { ONLINE_MS } from './assign';
+import { payRows, paySpace, termsOf } from './pay';
 import { prevOf, Range } from './stats';
 
 const CONFIRMED = ['confirmed', 'no_stock'];
@@ -319,6 +322,82 @@ async function earningsOf(ctx: Ctx, r: R) {
   return { months, sellers, perMonth, total: sellers.reduce((n, s) => n + s.total, 0), current: monthNow(ctx.now()) };
 }
 
+const MonthIn = z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Mois invalide (AAAA-MM)') });
+
+/**
+ * The agency's money for a month: what each seller owes it (the same amounts as Facturation: the bill asked for, else the
+ * contract's bill on the month's numbers), what its agents earned on each seller's orders (the same amounts as Paie:
+ * their plans' commissions, and the fixed monthly salaries, which belong to no seller), and what is left: the profit.
+ * The current month: up to now. A seller chosen at the top of the page: his part only (no salaries).
+ */
+async function moneyOf(ctx: Ctx, month: string) {
+  const now = ctx.now();
+  const one = typeof ctx.seller === 'number' ? ctx.seller : null;
+  const { from, to } = monthBounds(month);
+  type Seller = { key: string; name: string; earned: number; status: string | null; cost: number };
+  const sellers = new Map<number, Seller>();
+  const sellerOf = (id: number, name: string) => {
+    let s = sellers.get(id);
+    if (!s) sellers.set(id, (s = { key: String(id), name, earned: 0, status: null, cost: 0 }));
+    return s;
+  };
+  // a pay row names its seller: its store's id
+  const idOf = new Map<string, number>();
+  for (const s of await storesInView(ctx)) if (!idOf.has(s.name)) idOf.set(s.name, s.id);
+  const bills = await agencyEarnings(ctx.t!, ctx.shop!.id, [month], now, one ?? undefined);
+  for (const b of bills) {
+    if (!idOf.has(b.store)) idOf.set(b.store, b.storeId);
+    const s = sellerOf(b.storeId, b.store);
+    s.earned += b.total;
+    s.status = b.status ?? s.status;
+  }
+  // everyone who has (or had) a pay plan here, the ones who left this month too
+  const people = (await ctx.db.query(`SELECT p.id, p.name FROM profiles p WHERE p.agency_id IS NULL AND EXISTS (SELECT 1 FROM pay_plan_terms t WHERE t.profile_id = p.id) ORDER BY p.name`)).map((r: any) => ({ id: num(r.id), name: String(r.name) }));
+  const terms = await termsOf(ctx.db, people.map((p) => p.id));
+  const agents: { id: number; name: string; orders: number; commissions: number; salary: number; total: number }[] = [];
+  let commissions = 0;
+  let salaries = 0;
+  for (const p of people) {
+    const rows = await payRows(ctx.db, p.id, terms.get(p.id) ?? [], Date.parse(from), Math.min(Date.parse(to), now));
+    const orders = new Set<string>();
+    let com = 0;
+    let sal = 0;
+    for (const r of rows) {
+      if (r.kind === 'salary') {
+        sal += r.amount;
+        continue;
+      }
+      const sid = r.agent === null ? undefined : idOf.get(r.agent);
+      if (one !== null && sid !== one) continue;
+      com += r.amount;
+      orders.add(`${r.agent}:${r.orderId}`);
+      if (sid !== undefined) sellerOf(sid, r.agent!).cost += r.amount;
+    }
+    if (one !== null) sal = 0;
+    commissions += com;
+    salaries += sal;
+    if (com || sal) agents.push({ id: p.id, name: p.name, orders: orders.size, commissions: com, salary: sal, total: com + sal });
+  }
+  const earned = bills.reduce((n, b) => n + b.total, 0);
+  const cost = commissions + salaries;
+  const margin = (a: number, b: number) => (a > 0 ? b / a : null);
+  return {
+    month,
+    current: monthNow(now),
+    earned,
+    // what the sellers already paid (the agency said « reçu »)
+    received: bills.filter((b) => b.status === 'received').reduce((n, b) => n + b.total, 0),
+    commissions,
+    // a seller chosen: the salaries belong to no seller
+    salaries: one === null ? salaries : null,
+    cost,
+    profit: earned - cost,
+    margin: margin(earned, earned - cost),
+    sellers: [...sellers.values()].map((s) => ({ ...s, profit: s.earned - s.cost, margin: margin(s.earned, s.earned - s.cost) })).sort((a, b) => b.earned - a.earned || b.cost - a.cost),
+    agents: agents.sort((a, b) => b.total - a.total),
+  };
+}
+
 export const agencyStatsProcs = {
   /**
    * Dashboard (everyone in the agency): what waits now, the period's numbers next to the period before, the days, who is
@@ -330,7 +409,9 @@ export const agencyStatsProcs = {
     const me = ctx.session.profile.id;
     const mine = lead ? undefined : new Set([me]);
     const f = await figures(ctx, r, { mine, detail: false });
-    const prev = await totalsOnly(ctx, prevOf(r, ctx.now()), mine);
+    // the period before: the team's totals (an agent: his own), and an agent's own line (his job's numbers compare with it)
+    const pf = await figures(ctx, prevOf(r, ctx.now()), { mine, detail: false });
+    const prev = withRates(pf.total);
     const workers = f.people.filter((p) => p.roles.some((x) => x === 'confirmation' || x === 'suivi'));
     const rows = workers.map((p) => ({ ...agentLine(f, p.id), name: p.name, presence: p.presence, conf: p.roles.includes('confirmation'), suivi: p.roles.includes('suivi') }));
     // an agent: his rank and the team's ladder — the other agents' numbers without their names (his job: confirmation, else
@@ -366,10 +447,22 @@ export const agencyStatsProcs = {
       days: f.days,
       online: workers.filter((p) => p.presence === 'online' || p.presence === 'call').length,
       agents: lead ? sortRows(rows) : rows.filter((x) => x.id === me),
+      prevMe: lead ? null : agentLine(pf, me),
       rank,
       ladder,
       sellers: f.stores.length,
+      // the leads: each seller's numbers over the period (confirmation, delivery, upsells, value delivered)
+      bySeller: lead ? sortRows([...f.sellers.entries()].map(([id, l]) => ({ key: String(id), ...withRates(l), name: l.name }))) : [],
     };
+  }),
+
+  /** The money of a month (the chief): what each seller owes, what the agents cost, the profit. */
+  'agency.money': proc([], MonthIn, async (ctx, i) => {
+    needAgency(ctx);
+    if (i.month > monthNow(ctx.now())) throw bad('Ce mois n’est pas encore commencé');
+    // the agents' pay reads each seller's store
+    paySpace(ctx);
+    return moneyOf(ctx, i.month);
   }),
 
   /** Analyse & statistiques (the chief and the agent managers): the results per seller, product, wilaya and agent. */

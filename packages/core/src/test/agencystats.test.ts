@@ -3,7 +3,7 @@
 // product; the agency's agents work inside the store on its orders only; numbers, bills, suspension, the end.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cleanCode } from '@pilotix/shared';
+import { cleanCode, DEFAULT_MANAGEMENT_PLAN } from '@pilotix/shared';
 import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
 import { confirmSignup, loadShop, membershipsOf, passwordFromLink, startSignup, storeChoices } from '../platform';
 import { computePayroll } from '../modules/admin';
@@ -134,4 +134,83 @@ test('agency Dashboard and Analyse: its orders only, the team for the chief, an 
   const other: any = await call('agency.analytics', { ...chief, seller: shop.id + 999 }, today);
   assert.equal(other.team.received, 0);
   assert.equal((await call('agency.analytics', { ...chief, seller: shop.id }, today) as any).team.received, 3);
+});
+
+/** An agent pay plan: a fixed amount per delivered order (and a monthly salary). */
+const payPlan = (task: 'confirmation' | 'suivi', rate: number, monthly = 0) => ({ ...structuredClone(DEFAULT_MANAGEMENT_PLAN), agentTask: task, method: 'fixed' as const, trigger: 'delivered' as const, rate, monthly });
+
+test('agency Dashboard: the chief\'s money (billed to the sellers − the agents\' pay = profit), each seller, each user his own numbers', async () => {
+  const { t, p } = await server();
+  const shop = await store(t, p, 'Boutique Oran', 'karim@oran.dz');
+  const ag = await agency(t, 'Agence Rapide', 'samir@agence.dz');
+  const chief = await as(t, ag.id, 'samir@agence.dz', PW);
+  await call('agency.prices', chief, { prices: PRICES });
+  await p('p.agencies.verify', { id: ag.id, verified: true });
+  const admin = await as(t, shop.id, 'karim@oran.dz', PW);
+  const { id: linkId } = (await call('partners.request', admin, { agencyId: ag.id, tasks: ['confirmation', 'suivi'], products: [shop.products.VELO] })) as any;
+  await call('agency.answer', chief, { id: linkId, accept: true });
+  const nora: any = await call('users.create', chief, { phone: tph(), name: 'Nora', email: 'nora@agence.dz', password: PW, roles: ['confirmation'] });
+  const ali: any = await call('users.create', chief, { phone: tph(), name: 'Ali', email: 'ali@agence.dz', password: PW, roles: ['suivi'] });
+  await call('users.create', chief, { phone: tph(), name: 'Riad', email: 'riad@agence.dz', password: PW, roles: ['agent_manager'] });
+  await call('agency.setAgents', chief, { id: linkId, people: [nora.id, ali.id] });
+  // their pay: Nora 100 DA per delivered order she confirmed; Ali 40 DA per delivered parcel he followed + 20 000 DA a month
+  const conf: any = await call('management.planSave', chief, { name: 'Conf 100', kind: 'agent', configuration: payPlan('confirmation', 100) });
+  const suivi: any = await call('management.planSave', chief, { name: 'Suivi 40', kind: 'agent', configuration: payPlan('suivi', 40, 20000) });
+  await call('pay.assign', chief, { personId: nora.id, task: 'confirmation', planId: conf.id });
+  await call('pay.assign', chief, { personId: ali.id, task: 'suivi', planId: suivi.id });
+  // given before this month (so this month's salary counts)
+  await chief.db.query(`UPDATE pay_plan_terms SET effective_at = now() - interval '40 days'`);
+  const inStore = async (email: string) => Number((await shop.db.query('SELECT id FROM profiles WHERE email = $1', [email]))[0].id);
+  const [noraS, aliS] = [await inStore('nora@agence.dz'), await inStore('ali@agence.dz')];
+
+  // Nora confirmed three orders: two delivered (Ali followed them, one with an upsell), one cancelled
+  const os = [await order(admin, shop.products.VELO, '0661000301'), await order(admin, shop.products.VELO, '0661000302'), await order(admin, shop.products.VELO, '0661000303')];
+  for (const [i, o] of os.slice(0, 2).entries())
+    await shop.db.query(
+      `UPDATE orders SET agent_id = $2, follow_agent_id = $3, conf_agency_id = $4, follow_agency_id = $4, conf_status = 'confirmed', confirmed_at = now(), follow_status = 'delivered', delivered_at = now(), has_upsell = $5, total = 9000 WHERE id = $1`,
+      [o.id, noraS, aliS, ag.id, i === 0],
+    );
+  await shop.db.query(`UPDATE orders SET agent_id = $2, conf_status = 'cancelled' WHERE id = $1`, [os[2].id, noraS]);
+  const today = { from: new Date(Date.now() - 6 * 3_600_000).toISOString(), to: new Date(Date.now() + 3_600_000).toISOString() };
+
+  // the leads: each seller's numbers over the period
+  const d: any = await call('agency.dash', chief, today);
+  assert.deepEqual(d.bySeller.map((s: any) => [s.name, s.received, s.confirmed, s.delivered, s.upsells, s.upsellRate]), [['Boutique Oran', 3, 2, 2, 1, 0.5]]);
+  assert.equal(d.prevMe, null);
+  const riad = await as(t, ag.id, 'riad@agence.dz', PW);
+  assert.equal(((await call('agency.dash', riad, today)) as any).bySeller.length, 1, 'an agent manager sees the sellers too');
+
+  // the chief's money of the month: the bill (as Facturation) − the agents' pay (as Paie) = the profit
+  // this month, in Algiers
+  const month = new Date(Date.now() + 3_600_000).toISOString().slice(0, 7);
+  const bill: any = await call('agency.billing', chief, { month });
+  const billed = bill.rows[0].bill.total;
+  assert.ok(billed > 0);
+  const m: any = await call('agency.money', chief, { month });
+  assert.equal(m.earned, billed, 'the same amount as Facturation');
+  assert.deepEqual([m.commissions, m.salaries, m.cost], [280, 20000, 20280], 'Nora 2 × 100, Ali 2 × 40 + his salary');
+  assert.equal(m.profit, billed - 20280);
+  assert.equal(m.margin, (billed - 20280) / billed);
+  assert.deepEqual(m.sellers.map((s: any) => [s.name, s.earned, s.cost, s.profit]), [['Boutique Oran', billed, 280, billed - 280]]);
+  assert.deepEqual(m.agents.map((a: any) => [a.name, a.orders, a.commissions, a.salary, a.total]), [['Ali', 2, 80, 20000, 20080], ['Nora', 2, 200, 0, 200]]);
+  // the seller chosen at the top of the page: his part only (the salaries belong to no seller); another seller: nothing
+  const own: any = await call('agency.money', { ...chief, seller: shop.id }, { month });
+  assert.deepEqual([own.earned, own.commissions, own.salaries, own.cost], [billed, 280, null, 280]);
+  const none: any = await call('agency.money', { ...chief, seller: shop.id + 999 }, { month });
+  assert.deepEqual([none.earned, none.cost, none.sellers.length], [0, 0, 0]);
+  // the chief only; never a month to come
+  const noraCtx = await as(t, ag.id, 'nora@agence.dz', PW);
+  await assert.rejects(call('agency.money', noraCtx, { month }), /Accès refusé|refus/i);
+  await assert.rejects(call('agency.money', riad, { month }), /Accès refusé|refus/i);
+  const next = `${Number(month.slice(0, 4)) + 1}-01`;
+  await assert.rejects(call('agency.money', chief, { month: next }), /pas encore commencé/);
+
+  // each agent: his own job's numbers, and his own of the period before (to compare)
+  const nd: any = await call('agency.dash', noraCtx, today);
+  assert.deepEqual([nd.agents[0].received, nd.agents[0].confirmed, nd.agents[0].cancelled, nd.agents[0].upsells], [3, 2, 1, 1]);
+  assert.equal(nd.prevMe.received, 0);
+  assert.deepEqual(nd.bySeller, []);
+  const ad: any = await call('agency.dash', await as(t, ag.id, 'ali@agence.dz', PW), today);
+  assert.deepEqual([ad.agents[0].followDelivered, ad.agents[0].followReturned, ad.agents[0].followRate], [2, 0, 1]);
+  assert.equal(ad.ladder.by, 'follow');
 });

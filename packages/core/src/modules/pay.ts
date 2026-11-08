@@ -108,7 +108,7 @@ export interface PayTerm {
 }
 const json = (x: unknown) => (typeof x === 'string' ? JSON.parse(x) : x);
 
-async function termsOf(db: Db, ids: number[]): Promise<Map<number, PayTerm[]>> {
+export async function termsOf(db: Db, ids: number[]): Promise<Map<number, PayTerm[]>> {
   const out = new Map<number, PayTerm[]>();
   if (!ids.length) return out;
   for (const r of await db.query('SELECT * FROM pay_plan_terms WHERE profile_id = ANY($1) ORDER BY effective_at, id', [ids])) {

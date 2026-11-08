@@ -1,8 +1,13 @@
-// A confirmation agency's numbers (its space), on its orders only, for the seller chosen at the top of the page or all:
-// - Dashboard (everyone): what waits now, the period next to the one before, day by day, and each agent's numbers —
-//   an agent sees his own orders and his own row, with his rank (no one else's name), and his bonuses: it is his home
-//   (an agent has no Accueil).
-// - Analyse & statistiques (the chief and the agent managers): the results per seller, product, wilaya and agent.
+// A confirmation agency's numbers (its space), on its orders only, for the seller chosen at the top of the page or all.
+// Dashboard: each person his own numbers —
+// - the chief: what waits now, the month's money (billed to the sellers, the agents' cost, the profit and the margin,
+//   per seller and per agent), the period next to the one before, day by day, each seller, the confirmation team and
+//   the suivi team;
+// - an agent manager: the same without the money;
+// - an agent (it is his home: an agent has no Accueil): what waits for him now, his own job's numbers (a confirmation
+//   agent: calls, confirmation, upsells, delivery; a suivi agent: parcels delivered, back, his delivery rate) next to
+//   his period before, with his rank (no one else's name), his gains and his bonuses.
+// Analyse & statistiques (the chief and the agent managers): the results per seller, product, wilaya and agent.
 import { ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
@@ -16,13 +21,15 @@ import { Avatar, DayChart, PeriodChips } from '../dashboard/board/parts';
 import { confTone, delivTone, KpiBox } from '../dashboard/util';
 import type { PageProps } from '../registry';
 import { NoPlanAlert } from '../caisse/NoPlanAlert';
+import { payDay, period } from '../caisse/paieParts';
 import { MyAgentBonuses } from './index';
-import { monthLabel } from './parts';
+import { monthLabel, MonthPicker } from './parts';
 import '../dashboard/board/board.css';
 import './stats.css';
 
 type Dash = Out<'agency.dash'>;
 type Ana = Out<'agency.analytics'>;
+type Money = Out<'agency.money'>;
 type Totals = Dash['team'];
 type Row = Ana['sellers'][number];
 
@@ -128,38 +135,26 @@ function DashBody() {
               {d.lead && <KpiBox icon="headset" label={t('agency.st.online')} value={n(d.online)} sub={t('agency.st.onlineSub', { n: d.agents.length })} tone={d.online ? 'ok' : undefined} zero={!d.online} />}
             </Kpis>
           </section>
-          <section className="card hm-per">
-            <div className="card-head">
-              <h2>
-                {t(d.lead ? 'agency.st.period' : 'agency.st.myPeriod')} <small className="px-vs">{vs}</small>
-              </h2>
-              {d.rank && (
-                <span className="tb-rank">
-                  <Icon name="medal" /> {t('dashboard.tb.rank', { rank: d.rank.rank, of: d.rank.of })}
-                  <small> · {t('agency.st.confRateShort')}</small>
-                </span>
-              )}
-            </div>
-            <PeriodKpis d={d.team} p={d.prev} vs={vs} mine={!d.lead} />
-          </section>
-          <Days days={d.days} title={t('agency.st.days')} />
           {d.lead ? (
-            <section className="card">
-              <div className="card-head">
-                <h2>{t('agency.st.team')}</h2>
-              </div>
-              {d.agents.length ? <AgentTable rows={d.agents} live /> : <p className="tb-calm">{t('agency.st.noAgents')}</p>}
-            </section>
+            <>
+              {session!.isAdmin && <MoneyCard />}
+              <section className="card hm-per">
+                <div className="card-head">
+                  <h2>
+                    {t('agency.st.period')} <small className="px-vs">{vs}</small>
+                  </h2>
+                </div>
+                <PeriodKpis d={d.team} p={d.prev} vs={vs} />
+              </section>
+              <Days days={d.days} title={t('agency.st.days')} />
+              {d.bySeller.length > 0 && <SellerOps rows={d.bySeller} />}
+              <Team rows={d.agents} />
+            </>
           ) : (
             <>
-              {d.agents[0] && (
-                <section className="card">
-                  <div className="card-head">
-                    <h2>{t('agency.st.mine', { name: session!.profile.name })}</h2>
-                  </div>
-                  <AgentTable rows={d.agents} />
-                </section>
-              )}
+              {d.agents[0] && <MyJob d={d} vs={vs} />}
+              <MyGains />
+              {roles.includes('confirmation') && <Days days={d.days} title={t('agency.st.days')} />}
               {d.ladder && <Ladder l={d.ladder} />}
               <MyAgentBonuses />
             </>
@@ -170,12 +165,320 @@ function DashBody() {
   );
 }
 
+/** An agent's own numbers over the period, job by job, next to his period before, with his rank in his job. */
+function MyJob({ d, vs }: { d: Dash; vs: string }) {
+  const { t } = useTranslation();
+  const m = d.agents[0];
+  const p = d.prevMe;
+  const rank = (job: 'conf' | 'follow') =>
+    d.rank && d.ladder?.by === job ? (
+      <span className="tb-rank">
+        <Icon name="medal" /> {t('dashboard.tb.rank', { rank: d.rank.rank, of: d.rank.of })}
+        <small> · {t(job === 'conf' ? 'agency.st.confRateShort' : 'agency.st.followRate')}</small>
+      </span>
+    ) : null;
+  return (
+    <>
+      {m.conf && (
+        <section className="card hm-per">
+          <div className="card-head">
+            <h2>
+              {t('agency.st.myConf')} <small className="px-vs">{vs}</small>
+            </h2>
+            {rank('conf')}
+          </div>
+          <Kpis>
+            <KpiBox icon="phone" label={t('agency.st.callsKpi')} value={n(m.calls)} trend={<Trend v={ch(m.calls, p?.calls)} vs={vs} />} sub={t('agency.st.callsSub')} zero={!m.calls} />
+            <KpiBox icon="list" label={t('agency.st.myReceived')} value={n(m.received)} trend={<Trend v={ch(m.received, p?.received)} vs={vs} />} sub={t('agency.st.pending', { n: m.pending })} zero={!m.received} />
+            <KpiBox icon="check" label={t('agency.st.confirmed')} value={n(m.confirmed)} trend={<Trend v={chPts(m.confRate, p?.confRate)} pts vs={vs} />} sub={t('agency.st.confRate', { v: pct(m.confRate) })} rate={m.confRate} tone={confTone(m.confRate)} />
+            <KpiBox icon="xcircle" label={t('agency.st.cancelled')} value={n(m.cancelled)} trend={<Trend v={ch(m.cancelled, p?.cancelled)} goodDown vs={vs} />} sub={t('agency.st.invalid', { n: m.invalid })} tone={m.cancelled ? 'bad' : undefined} zero={!m.cancelled} />
+            <KpiBox icon="gift" label={t('agency.st.upsells')} value={n(m.upsells)} trend={<Trend v={ch(m.upsells, p?.upsells)} vs={vs} />} sub={t('agency.st.upsellRate', { v: pct(m.upsellRate) })} zero={!m.upsells} />
+            <KpiBox icon="truck" label={t('agency.st.delivered')} value={n(m.delivered)} trend={<Trend v={chPts(m.deliveryRate, p?.deliveryRate)} pts vs={vs} />} sub={t('agency.st.delivRate', { v: pct(m.deliveryRate) })} rate={m.deliveryRate} tone={delivTone(m.deliveryRate)} />
+          </Kpis>
+        </section>
+      )}
+      {m.suivi && (
+        <section className="card hm-per">
+          <div className="card-head">
+            <h2>
+              {t('agency.st.myFollow')} <small className="px-vs">{vs}</small>
+            </h2>
+            {rank('follow')}
+          </div>
+          <Kpis>
+            <KpiBox icon="truck" label={t('agency.st.followDelivered')} value={n(m.followDelivered)} trend={<Trend v={ch(m.followDelivered, p?.followDelivered)} vs={vs} />} sub={t('agency.st.followDeliveredSub')} tone={m.followDelivered ? 'ok' : undefined} zero={!m.followDelivered} />
+            <KpiBox icon="undo" label={t('agency.st.followReturned')} value={n(m.followReturned)} trend={<Trend v={ch(m.followReturned, p?.followReturned)} goodDown vs={vs} />} sub={t('agency.st.returnedSub')} tone={m.followReturned ? 'bad' : undefined} zero={!m.followReturned} />
+            <KpiBox icon="chart" label={t('agency.st.followRate')} value={pct(m.followRate)} trend={<Trend v={chPts(m.followRate, p?.followRate)} pts vs={vs} />} sub={t('agency.st.ladderOf.follow', { a: m.followDelivered, b: m.followDelivered + m.followReturned })} rate={m.followRate} tone={delivTone(m.followRate)} />
+          </Kpis>
+        </section>
+      )}
+    </>
+  );
+}
+
+/** An agent's own money, as « Mes gains »: what the agency owes him, this pay period, what is on its way. */
+function MyGains() {
+  const { t } = useTranslation();
+  const q = useRpc('pay.mine', {}, { refetchInterval: 300_000 });
+  const g = q.data;
+  // no plan yet: the red alert at the top of the page says it
+  if (!g || !g.plans.length) return null;
+  return (
+    <section className="card agx-gains">
+      <div className="card-head">
+        <h2>{t('agency.st.gains')}</h2>
+        <a className="btn small" href="#/gains">
+          {t('agency.st.gainsLink')}
+        </a>
+      </div>
+      <Kpis>
+        <KpiBox icon="wallet" label={t('paie.owedAgency')} value={da(g.owed)} sub={g.ready.total > 0 ? t('paie.owedSub', { ready: da(g.ready.total), open: da(Math.max(0, g.open.net)) }) : t('paie.owedSubOpen')} tone="ok" href="#/gains" />
+        <KpiBox icon="coins" label={t('paie.earned', { period: period(g.open.from, g.open.to) })} value={da(g.open.earned)} sub={`${t('paie.earnedSub', { count: g.open.orders, upsells: g.open.upsells })} · ${t('paie.payDay', { d: payDay(g.open.to) })}`} />
+        <KpiBox icon="truck" label={t('paie.coming')} value={`+${da(g.coming.amount)}`} sub={t('paie.comingSub', { count: g.coming.count })} zero={!g.coming.amount} />
+      </Kpis>
+    </section>
+  );
+}
+
+/** this month (Algeria) */
+const monthNow = () => {
+  const x = new Date(Date.now() + 3_600_000);
+  return `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}`;
+};
+/** what is left of what was billed: green from 30 %, orange from 10 %, red under */
+const marginTone = (v: number | null, badge = false) => (v === null ? undefined : v < 0.1 ? 'bad' : v < 0.3 ? (badge ? 'mid' : 'warn') : 'ok');
+
+/**
+ * The chief: the month's money — what the sellers owe the agency (as Facturation), what its agents cost (as Paie), the
+ * profit and the margin; then each seller (the fixed salaries apart: they belong to no seller) and each agent's cost.
+ */
+function MoneyCard() {
+  const { t } = useTranslation();
+  const max = monthNow();
+  const [month, setMonth] = useState(max);
+  const q = useRpc('agency.money', { month }, { refetchInterval: 300_000 });
+  return (
+    <section className="card agx-money">
+      <div className="card-head">
+        <h2>{t('agency.st.money.title')}</h2>
+        <MonthPicker value={month} max={max} onChange={setMonth} />
+      </div>
+      <p className="muted small agx-st-hint">{t('agency.st.money.help')}</p>
+      {q.error ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : !q.data ? <Loading /> : <MoneyBody m={q.data} />}
+    </section>
+  );
+}
+
+function MoneyBody({ m }: { m: Money }) {
+  const { t } = useTranslation();
+  if (!m.earned && !m.cost) return <p className="tb-calm">{t('agency.st.money.empty')}</p>;
+  const running = m.month === m.current;
+  const L = (k: string) => t(`agency.st.money.${k}`);
+  return (
+    <>
+      <Kpis>
+        <KpiBox icon="wallet" label={L('billed')} value={da(m.earned)} sub={running ? L('running') : m.received ? t('agency.st.money.received', { v: da(m.received) }) : L('noneReceived')} href="#/facturation/vendeurs" />
+        <KpiBox icon="users" label={L('cost')} value={da(m.cost)} sub={m.salaries ? t('agency.st.money.costSplit', { c: da(m.commissions), s: da(m.salaries) }) : L('costCom')} href="#/equipe/paie" />
+        <KpiBox icon="coins" label={L('profit')} value={da(m.profit)} sub={L('profitSub')} tone={m.profit >= 0 ? 'ok' : 'bad'} />
+        <KpiBox icon="chart" label={L('margin')} value={pct(m.margin)} sub={L('marginSub')} rate={m.margin} tone={marginTone(m.margin)} />
+      </Kpis>
+      <h3 className="agx-money-h">{L('sellers')}</h3>
+      <div className="tbl-wrap">
+        <table className="tbl agx-st-tbl agx-money-tbl">
+          <thead>
+            <tr>
+              <th>{L('seller')}</th>
+              <th className="num">{L('billed')}</th>
+              <th className="num">{L('cost')}</th>
+              <th className="num">{L('profit')}</th>
+              <th className="num">{L('margin')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {m.sellers.map((s) => {
+              const st = s.status ?? (running ? 'running' : 'estimate');
+              return (
+                <tr key={s.key}>
+                  <td data-l={L('seller')}>
+                    <b>{s.name}</b>
+                  </td>
+                  <td className="num" data-l={L('billed')}>
+                    <b className="ltr">{da(s.earned)}</b>
+                    <small className={`agx-st-bill ${st}`}>{t(`agency.st.bill.${st}`)}</small>
+                  </td>
+                  <td className="num ltr" data-l={L('cost')}>
+                    {da(s.cost)}
+                  </td>
+                  <td className="num" data-l={L('profit')}>
+                    <b className={`ltr${s.profit < 0 ? ' agx-neg' : ''}`}>{da(s.profit)}</b>
+                  </td>
+                  <td className="num" data-l={L('margin')}>
+                    <Rate v={s.margin} tone={marginTone(s.margin, true)} />
+                  </td>
+                </tr>
+              );
+            })}
+            {m.salaries ? (
+              <tr className="agx-money-sal">
+                <td data-l={L('seller')}>
+                  <span className="agx-st-who">
+                    <b>{L('salaries')}</b>
+                    <small>{L('salariesSub')}</small>
+                  </span>
+                </td>
+                <td className="num" data-l={L('billed')}>
+                  —
+                </td>
+                <td className="num ltr" data-l={L('cost')}>
+                  {da(m.salaries)}
+                </td>
+                <td className="num" data-l={L('profit')}>
+                  <b className="ltr agx-neg">{da(-m.salaries)}</b>
+                </td>
+                <td className="num" data-l={L('margin')}>
+                  —
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+          {(m.sellers.length > 1 || !!m.salaries) && (
+            <tfoot>
+              <tr>
+                <th>{t('agency.st.c.total')}</th>
+                <th className="num ltr">{da(m.earned)}</th>
+                <th className="num ltr">{da(m.cost)}</th>
+                <th className={`num ltr${m.profit < 0 ? ' agx-neg' : ''}`}>{da(m.profit)}</th>
+                <th className="num">
+                  <Rate v={m.margin} tone={marginTone(m.margin, true)} />
+                </th>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+      {m.salaries === null && <p className="muted small">{L('oneSeller')}</p>}
+      {m.agents.length > 0 && (
+        <>
+          <h3 className="agx-money-h">{L('agents')}</h3>
+          <div className="tbl-wrap">
+            <table className="tbl agx-st-tbl agx-money-tbl">
+              <thead>
+                <tr>
+                  <th>{L('agent')}</th>
+                  <th className="num">{L('orders')}</th>
+                  <th className="num">{L('commissions')}</th>
+                  {m.salaries !== null && <th className="num">{L('salary')}</th>}
+                  <th className="num">{t('agency.st.c.total')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {m.agents.map((a) => (
+                  <tr key={a.id}>
+                    <td data-l={L('agent')}>
+                      <span className="agx-st-who">
+                        <Avatar name={a.name} />
+                        <b>{a.name}</b>
+                      </span>
+                    </td>
+                    <td className="num ltr" data-l={L('orders')}>
+                      {n(a.orders)}
+                    </td>
+                    <td className="num ltr" data-l={L('commissions')}>
+                      {da(a.commissions)}
+                    </td>
+                    {m.salaries !== null && (
+                      <td className="num ltr" data-l={L('salary')}>
+                        {a.salary ? da(a.salary) : '—'}
+                      </td>
+                    )}
+                    <td className="num" data-l={t('agency.st.c.total')}>
+                      <b className="ltr">{da(a.total)}</b>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+/** The leads: each seller over the period — confirmation, delivery, upsells and the value delivered. */
+function SellerOps({ rows }: { rows: Dash['bySeller'] }) {
+  const { t } = useTranslation();
+  const cols: Col<Dash['bySeller'][number]>[] = [
+    { k: 'received', l: t('agency.st.c.received'), v: (r) => r.received, f: (r) => n(r.received) },
+    { k: 'confirmed', l: t('agency.st.c.confirmed'), v: (r) => r.confirmed, f: (r) => n(r.confirmed) },
+    { k: 'confRate', l: t('agency.st.c.confRate'), v: (r) => r.confRate ?? -1, f: (r) => <Rate v={r.confRate} tone={confTone(r.confRate, true)} /> },
+    { k: 'delivered', l: t('agency.st.c.delivered'), v: (r) => r.delivered, f: (r) => n(r.delivered) },
+    { k: 'deliveryRate', l: t('agency.st.c.deliveryRate'), v: (r) => r.deliveryRate ?? -1, f: (r) => <Rate v={r.deliveryRate} tone={delivTone(r.deliveryRate, true)} /> },
+    { k: 'upsells', l: t('agency.st.c.upsells'), v: (r) => r.upsells, f: (r) => n(r.upsells) },
+    { k: 'upsellRate', l: t('agency.st.c.upsellRate'), v: (r) => r.upsellRate ?? -1, f: (r) => <span className="ltr">{pct(r.upsellRate)}</span> },
+    { k: 'revenue', l: t('agency.st.c.revenue'), v: (r) => r.revenue, f: (r) => <span className="ltr">{da(r.revenue)}</span> },
+  ];
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>{t('agency.st.bySeller')}</h2>
+      </div>
+      <p className="muted small agx-st-hint">{t('agency.st.bySellerHint')}</p>
+      <SortTable rows={rows} cols={cols} first={t('agency.st.first.sellers')} name={(r) => <span className="agx-st-who"><b>{r.name || t('agency.st.noName')}</b></span>} keyOf={(r) => r.key} />
+    </section>
+  );
+}
+
+/** The leads: the confirmation team (calls, confirmation, upsells, delivery) and the suivi team (its parcels). */
+function Team({ rows }: { rows: Dash['agents'] }) {
+  const { t } = useTranslation();
+  if (!rows.length)
+    return (
+      <section className="card">
+        <div className="card-head">
+          <h2>{t('agency.st.team')}</h2>
+        </div>
+        <p className="tb-calm">{t('agency.st.noAgents')}</p>
+      </section>
+    );
+  const conf = rows.filter((r) => r.conf);
+  const follow = rows.filter((r) => r.suivi);
+  return (
+    <>
+      {conf.length > 0 && (
+        <section className="card">
+          <div className="card-head">
+            <h2>{t('agency.st.teamConf')}</h2>
+          </div>
+          <AgentTable rows={conf} live />
+        </section>
+      )}
+      {follow.length > 0 && (
+        <section className="card">
+          <div className="card-head">
+            <h2>{t('agency.st.teamFollow')}</h2>
+          </div>
+          <AgentTable rows={follow} live job="follow" />
+        </section>
+      )}
+    </>
+  );
+}
+
 type AgentRow = Dash['agents'][number] | Ana['agents'][number];
 
-/** Each agent: on line or not, calls, confirmation (the orders given to him), delivery, upsells. */
-function AgentTable({ rows, live }: { rows: AgentRow[]; live?: boolean }) {
+/**
+ * Each agent: on line or not, then his job's numbers — confirmation: calls, the orders given to him (confirmed,
+ * cancelled), their delivery and upsells; suivi: the parcels he followed (delivered, back, his delivery rate).
+ */
+function AgentTable({ rows, live, job = 'conf' }: { rows: AgentRow[]; live?: boolean; job?: 'conf' | 'follow' }) {
   const { t } = useTranslation();
-  const cols: Col<AgentRow>[] = [
+  const followCols: Col<AgentRow>[] = [
+    { k: 'followDelivered', l: t('agency.st.c.followDelivered'), v: (r) => r.followDelivered, f: (r) => n(r.followDelivered) },
+    { k: 'followReturned', l: t('agency.st.c.followReturned'), v: (r) => r.followReturned, f: (r) => n(r.followReturned) },
+    { k: 'followRate', l: t('agency.st.c.followRate'), v: (r) => r.followRate ?? -1, f: (r) => <Rate v={r.followRate} tone={delivTone(r.followRate, true)} /> },
+  ];
+  const confCols: Col<AgentRow>[] = [
     { k: 'calls', l: t('agency.st.c.calls'), v: (r) => r.calls, f: (r) => n(r.calls) },
     { k: 'received', l: t('agency.st.c.received'), v: (r) => r.received, f: (r) => n(r.received) },
     { k: 'confirmed', l: t('agency.st.c.confirmed'), v: (r) => r.confirmed, f: (r) => n(r.confirmed) },
@@ -185,11 +488,13 @@ function AgentTable({ rows, live }: { rows: AgentRow[]; live?: boolean }) {
     { k: 'returned', l: t('agency.st.c.returned'), v: (r) => r.returned, f: (r) => n(r.returned) },
     { k: 'deliveryRate', l: t('agency.st.c.deliveryRate'), v: (r) => r.deliveryRate ?? -1, f: (r) => <Rate v={r.deliveryRate} tone={delivTone(r.deliveryRate, true)} /> },
     { k: 'upsells', l: t('agency.st.c.upsells'), v: (r) => r.upsells, f: (r) => n(r.upsells) },
+    { k: 'upsellRate', l: t('agency.st.c.upsellRate'), v: (r) => r.upsellRate ?? -1, f: (r) => <span className="ltr">{pct(r.upsellRate)}</span> },
   ];
   return (
     <SortTable
+      key={job}
       rows={rows}
-      cols={cols}
+      cols={job === 'follow' ? followCols : confCols}
       first={t('agency.st.c.agent')}
       name={(r) => (
         <span className="agx-st-who">
