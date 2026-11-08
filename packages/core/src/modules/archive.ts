@@ -118,6 +118,7 @@ export const VARIANT_REFS: readonly Ref[] = [
   ['order_items', 'variant_id', 'orders'],
   ['stock_movements', 'variant_id', 'stock'],
   ['purchase_lines', 'variant_id', 'stock'],
+  ['stock_batches', 'variant_id', 'stock'],
   ['landing_leads', 'variant_id', 'pages'],
   ['lead_forms', 'variant_id', 'marketing'],
   ['leads', 'variant_id', 'marketing'],
@@ -130,6 +131,7 @@ export const WAREHOUSE_REFS: readonly Ref[] = [
   ['orders', 'warehouse_id', 'orders'],
   ['stock_movements', 'warehouse_id', 'stock'],
   ['purchases', 'warehouse_id', 'stock'],
+  ['stock_batches', 'warehouse_id', 'stock'],
   ['inventories', 'warehouse_id', 'stock'],
 ];
 /**
