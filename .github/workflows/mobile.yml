@@ -48,13 +48,31 @@ jobs:
       # the small « Pilotix app · test N (abc1234) » line at the bottom of the app's start and error pages
       - run: echo "window.PILOTIX_BUILD = 'test ${GITHUB_RUN_NUMBER} (${GITHUB_SHA::7})';" > www/build.js
       - run: npx cap sync android
-      # The same test key on every build lets a new test app install over the old one.
-      # It is used only when the secret ANDROID_TEST_KEYSTORE_BASE64 exists (Settings › Secrets and variables › Actions).
-      - name: Test signing key
+      # The same key on every build lets a new app install over the old one (Android refuses an app signed by another key).
+      # GitHub makes it itself, the same each time, from the server key it already keeps (DEPLOY_SSH_KEY): nobody pastes a
+      # key (scripts/app-key.mjs). A keystore in the secret ANDROID_TEST_KEYSTORE_BASE64 would come first.
+      # Changing DEPLOY_SSH_KEY changes the app key: every phone then installs the app again by hand once.
+      - name: App signing key
         env:
           KEY: ${{ secrets.ANDROID_TEST_KEYSTORE_BASE64 }}
+          SEED: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
-          if [ -n "$KEY" ]; then mkdir -p ~/.android && echo "$KEY" | base64 -d > ~/.android/debug.keystore && echo "test key: fixed"; else echo "test key: new one for this build (add the secret to keep it)"; fi
+          mkdir -p ~/.android
+          if [ -n "$KEY" ]; then
+            echo "$KEY" | base64 -d > ~/.android/debug.keystore
+            echo "app key: from ANDROID_TEST_KEYSTORE_BASE64"
+          elif [ -n "$SEED" ]; then
+            D=$(mktemp -d)
+            node scripts/app-key.mjs "$D"
+            openssl pkcs12 -export -inkey "$D/key.pem" -in "$D/cert.pem" -name androiddebugkey -passout pass:android -out ~/.android/debug.keystore
+            rm -rf "$D"
+            echo "app key: made from DEPLOY_SSH_KEY"
+          else
+            echo "app key: a new one for this build only (it can't replace the app on phones)"
+            exit 0
+          fi
+          keytool -list -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey
+          echo "FIXED_KEY=true" >> "$GITHUB_ENV"
       - name: Build the test app
         working-directory: mobile/android
         # GitHub's build number is the app's version code: each new app is « newer » for Android and for the updater
@@ -62,13 +80,17 @@ jobs:
           PILOTIX_BUILD: ${{ github.run_number }}
         run: ./gradlew assembleDebug --no-daemon
       - run: cp android/app/build/outputs/apk/debug/app-debug.apk pilotix-test.apk
+      # which key signed the app (public: any phone shows it); the same line on every build = the fixed key works
+      - name: The app's key
+        continue-on-error: true
+        run: |
+          SIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$SIGNER" verify --print-certs pilotix-test.apk | grep -i "SHA-256"
       # the app's version card: its build, commit, date, size, and whether it has the fixed key (only then can it replace
       # the app on a phone; before, Android refuses and the phones are not asked to update)
       - name: Version card
-        env:
-          KEY: ${{ secrets.ANDROID_TEST_KEYSTORE_BASE64 }}
         run: |
-          printf '{"build":%s,"sha":"%s","date":"%s","size":%s,"fixedKey":%s}\n' "$GITHUB_RUN_NUMBER" "${GITHUB_SHA::7}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(stat -c %s pilotix-test.apk)" "$([ -n "$KEY" ] && echo true || echo false)" > app-version.json
+          printf '{"build":%s,"sha":"%s","date":"%s","size":%s,"fixedKey":%s}\n' "$GITHUB_RUN_NUMBER" "${GITHUB_SHA::7}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(stat -c %s pilotix-test.apk)" "${FIXED_KEY:-false}" > app-version.json
           cat app-version.json
       - uses: actions/upload-artifact@v4
         with:

@@ -2004,7 +2004,7 @@
     "latest": "Latest app: version {{build}} · {{when}} · {{size}} MB",
     "unknown": "Latest app: unknown right now (GitHub doesn't answer).",
     "keyOk": "Signed with the fixed key: it replaces the app on phones without uninstalling.",
-    "keyMissing": "Without the fixed key: it can't replace the app on phones. Add the key in GitHub (ANDROID_TEST_KEYSTORE_BASE64).",
+    "keyMissing": "Without the fixed key: it can't replace the app on phones. GitHub makes the key from the secret DEPLOY_SSH_KEY: check that it exists.",
     "requiredFrom": "Required from version {{build}}.",
     "notRequired": "Not required: everyone can say « Later ».",
     "require": "Make version {{build}} required",

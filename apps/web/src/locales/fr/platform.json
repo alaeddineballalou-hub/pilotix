@@ -2004,7 +2004,7 @@
     "latest": "Dernière app : version {{build}} · {{when}} · {{size}} Mo",
     "unknown": "Dernière app : inconnue pour le moment (GitHub ne répond pas).",
     "keyOk": "Signée avec la clé fixe : elle remplace l’app des téléphones sans la désinstaller.",
-    "keyMissing": "Sans clé fixe : elle ne peut pas remplacer l'app des téléphones. Ajoutez la clé dans GitHub (ANDROID_TEST_KEYSTORE_BASE64).",
+    "keyMissing": "Sans clé fixe : elle ne peut pas remplacer l'app des téléphones. GitHub fabrique la clé avec le secret DEPLOY_SSH_KEY : vérifiez qu'il existe.",
     "requiredFrom": "Obligatoire à partir de la version {{build}}.",
     "notRequired": "Pas obligatoire : chacun peut dire « Plus tard ».",
     "require": "Rendre la version {{build}} obligatoire",

@@ -47,7 +47,7 @@ on from the first step that isn't ✅.
 | 6 | One-tap calls (today a `tel:` link opens the phone's dialer with the number) | ⏭️ |
 | 7 | Notifications: the app asks for permission at start ✅ (30 Oct); sending them needs the owner's Firebase project → `google-services.json` | 🔨 |
 | 8 | Scanner: test the website's camera scanner in the app (camera permission is in) | ⏭️ |
-| 9 | The app updates itself (« Nouvelle version de l'app », one tap; « Mise à jour obligatoire » in the control room) | 🔨 9 Nov 2026: built; needs the fixed key, then one last install by hand |
+| 9 | The app updates itself (« Nouvelle version de l'app », one tap; « Mise à jour obligatoire » in the control room) | 🔨 9 Nov 2026: built; the fixed key is made by GitHub (DEPLOY_SSH_KEY); one last install by hand |
 | 10 | iPhone (`npx cap add ios`, Mac build on GitHub, Apple account) | ⏭️ |
 
 ## Facts and decisions
@@ -106,11 +106,12 @@ on from the first step that isn't ✅.
   `platform/appUpdate`, kept 5 min) with the control room's « obligatoire » build (`platform.settings` key `app`); the
   website's `lib/appUpdate` + `ui/AppUpdate` show the sheet inside the app. Apps made before the updater show « Nouvelle
   app à installer » (by hand, once). Offers wait for `fixedKey: true`.
-- The owner makes the fixed key once with the page « La clé de l'app Pilotix » (a Claude artifact: made in his browser,
-  pasted by him into GitHub's secret `ANDROID_TEST_KEYSTORE_BASE64`; alias androiddebugkey, passwords « android »).
-- Test builds are signed with a new random test key each time **until** the secret
-  `ANDROID_TEST_KEYSTORE_BASE64` is added in GitHub (Settings → Secrets and variables → Actions).
-  Without it, uninstall the old test app before installing a new one.
+- The fixed key (9 Nov 2026, the owner's choice « nobody pastes »): GitHub makes it on every build, the same each time,
+  from the server key secret `DEPLOY_SSH_KEY` (`scripts/app-key.mjs`: RSA 2048 from HMAC of the secret, a certificate
+  CN=Pilotix written byte by byte; openssl makes the keystore, alias androiddebugkey, passwords « android »).
+  The log shows the certificate's SHA-256 (public): the same on every build. A keystore in the secret
+  `ANDROID_TEST_KEYSTORE_BASE64` would come first. **Changing `DEPLOY_SSH_KEY` (or the script's VERSION) changes the
+  app key: every phone installs the app again by hand once.** Without any key, each build gets a random key.
 
 ## To test on the phone (things a website-in-an-app can get wrong)
 
