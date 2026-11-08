@@ -33,7 +33,7 @@ export const FEATURES: readonly FeatureNode[] = [
   { key: 'macaisse' },
   { key: 'livraison', subs: ['societes', 'pilot', 'api', 'livreurs', 'preferences'] },
   { key: 'utilisateurs', always: true },
-  { key: 'management', subs: ['plans', 'statuts', 'affectation', 'paie', 'prix', 'canaux', 'alertes', 'stock', 'livreur', 'archive'] },
+  { key: 'management', subs: ['plans', 'statuts', 'affectation', 'paie', 'prix', 'canaux', 'alertes', 'stock', 'livreur', 'modules', 'archive'] },
   { key: 'reglages', always: true },
 ];
 

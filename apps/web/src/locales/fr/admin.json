@@ -15,7 +15,8 @@
     "archive": "Archives",
     "alertes": "Alertes dépôt",
     "livreur": "Livreur",
-    "stock": "Stock"
+    "stock": "Stock",
+    "modules": "Modules"
   },
   "users": {
     "rolesTitle": "Rôles",
@@ -900,5 +901,19 @@
     "lots": "Lots et dates d’expiration",
     "lotsHint": "Pour les produits cosmétiques, alimentaires… : cochez « A des lots » sur un produit ; ses achats disent chaque lot et sa date, et le stock part toujours du lot qui expire en premier. Désactivé : aucun lot nulle part.",
     "warnDays": "« Bientôt périmé » : jours avant la date"
+  },
+  "mod": {
+    "title": "Modules",
+    "help": "Les parties de Pilotix que votre boutique allume quand elle en a besoin. Éteint : personne ne les voit, rien ne change dans le reste de Pilotix.",
+    "on": "Allumé",
+    "off": "Éteint",
+    "switch": "Allumer ou éteindre : {{name}}",
+    "open": "Ouvrir la page",
+    "onOk": "{{name}} allumé : il est dans le menu",
+    "offOk": "{{name}} éteint : il n’est plus dans le menu",
+    "pos": {
+      "name": "Point de vente",
+      "text": "Vendre au comptoir de votre boutique : produits en photos, ticket 80 mm, ventes du jour et clôture de caisse. Le stock sort du dépôt choisi, l’argent va dans « Caisse boutique »."
+    }
   }
 }

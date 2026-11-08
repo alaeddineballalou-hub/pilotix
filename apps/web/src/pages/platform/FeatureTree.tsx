@@ -49,6 +49,7 @@ const SUB_LABEL: Record<string, string> = {
   'management/canaux': 'admin.subs.canaux',
   'management/alertes': 'admin.subs.alertes',
   'management/livreur': 'admin.subs.livreur',
+  'management/modules': 'admin.subs.modules',
   'management/archive': 'admin.subs.archive',
 };
 

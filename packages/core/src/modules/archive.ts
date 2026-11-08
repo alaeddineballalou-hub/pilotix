@@ -95,6 +95,11 @@ export const USER_REFS: readonly Ref[] = [
   ['products', 'seller_id', 'products'],
   ['product_changes', 'user_id', 'products'],
   ['product_guides', 'updated_by', 'products'],
+  // Point de vente: who opened and closed a drawer, who sold at the counter, who cancelled a sale
+  ['pos_sessions', 'opened_by', 'cash'],
+  ['pos_sessions', 'closed_by', 'cash'],
+  ['pos_sales', 'seller_id', 'cash'],
+  ['pos_sales', 'cancelled_by', 'cash'],
 ];
 
 /** Columns that point to a product (products.id). */
@@ -112,6 +117,7 @@ export const PRODUCT_REFS: readonly Ref[] = [
   ['cm_planned', 'product_id', 'marketing'],
   ['depot_pick_pool', 'product_id', 'stock'],
   ['depot_restock', 'product_id', 'stock'],
+  ['pos_lines', 'product_id', 'cash'],
 ];
 /** Columns that point to one of its variants (product_variants.id): the product is used. */
 export const VARIANT_REFS: readonly Ref[] = [
@@ -125,6 +131,7 @@ export const VARIANT_REFS: readonly Ref[] = [
   ['landing_blocked', 'variant_id', 'pages'],
   ['depot_pick_pool', 'variant_id', 'stock'],
   ['depot_restock', 'variant_id', 'stock'],
+  ['pos_lines', 'variant_id', 'cash'],
 ];
 /** Columns that point to a depot (warehouses.id). */
 export const WAREHOUSE_REFS: readonly Ref[] = [
@@ -133,6 +140,7 @@ export const WAREHOUSE_REFS: readonly Ref[] = [
   ['purchases', 'warehouse_id', 'stock'],
   ['stock_batches', 'warehouse_id', 'stock'],
   ['inventories', 'warehouse_id', 'stock'],
+  ['pos_sales', 'warehouse_id', 'cash'],
 ];
 /**
  * Columns that look like links but are not history to keep: they go with the thing (its variants, its own change log,

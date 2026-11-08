@@ -180,7 +180,9 @@
       "exchange_in": "Exchange (old product)",
       "broken_return": "Broken on return",
       "repaired": "Repaired (back on sale)",
-      "scrapped": "Broken, thrown away"
+      "scrapped": "Broken, thrown away",
+      "pos_sale": "Shop sale",
+      "pos_cancel": "Shop sale cancelled"
     },
     "brokenDelta": "broken {{n}}"
   },

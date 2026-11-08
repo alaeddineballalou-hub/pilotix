@@ -47,6 +47,8 @@ export { BOUTIQUE_FANOUT_PROCS, boutiqueWork, OTHER_BOUTIQUE } from './modules/b
 export { listPros, proByCode, computeProStats, STATS_HOURS } from './modules/pro';
 export * as pilotLearn from './modules/pilotlearn';
 export { pilotOn } from './modules/dellal';
+export { seedPos } from './modules/pos';
+export type { PosSale, PosSettings } from './modules/pos';
 export { noteBadSignature, routeMeta, seedSocialPreview, socialApps, socialIgSecret, socialSecret } from './modules/social';
 
 /** A partner's team changed (a person closed, given other roles): its people's accounts in the stores follow. */

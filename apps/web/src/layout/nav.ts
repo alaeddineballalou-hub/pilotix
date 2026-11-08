@@ -1,6 +1,7 @@
 import type { Role } from '@pilotix/shared';
 import { backend } from '../lib/backend';
 import { currentShop, pageIsOn } from '../lib/features';
+import { moduleOn } from '../lib/modules';
 
 /**
  * The menu, as in the original Pilotix (final layout): sub-pages appear as a stage bar inside the page,
@@ -78,6 +79,8 @@ export const NAV: NavItem[] = [
   { id: 'sav', icon: 'headset', roles: ['confirmation', 'suivi', 'depot'], subs: ['tickets', 'nouveau', 'attente', 'depot', 'livraison', 'livres', 'annules', 'stats'] },
   { id: 'tournee', icon: 'navigation', roles: ['livreur'], onlyIf: (r) => r.includes('livreur') },
   { id: 'produits', icon: 'layers', roles: ['depot', 'confirmation', 'suivi'], subs: ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'achats', 'depots'] },
+  // Point de vente: the boutique's counter, shown once an administrator turns it on (Management › Modules)
+  { id: 'pos', icon: 'store', roles: ['depot'], subs: ['vendre', 'ventes', 'cloture', 'reglages'], onlyIf: () => moduleOn('pos') },
   // AI Pilot: the AI agents. Pilot Message (Dellal) sells in the inbox, Pilot Content plans the posts and publishes them,
   // Pilot Comments answers the comments, AI Spy reads the competitors' Facebook ads in Algeria (pages/ads/Spy.tsx; in
   // the plans it is still Marketing's AI Spy); Comptes: the Facebook and TikTok accounts they use (an administrator
@@ -154,7 +157,7 @@ export const NAV: NavItem[] = [
   { id: 'agences', icon: 'handshake', roles: [], onlyIf: partnersOn, hidden: true },
   // marketers running the store's ads (the same, on their own: a marketer has nothing to do with the agencies)
   { id: 'marketers', icon: 'trend', roles: [], onlyIf: partnersOn, hidden: true },
-  { id: 'management', icon: 'briefcase', roles: [], affect: true, subs: ['plans', 'statuts', 'affectation', 'paie', 'prix', 'canaux', 'alertes', 'livreur', 'archive'] },
+  { id: 'management', icon: 'briefcase', roles: [], affect: true, subs: ['plans', 'statuts', 'affectation', 'paie', 'prix', 'canaux', 'alertes', 'livreur', 'modules', 'archive'] },
   { id: 'reglages', icon: 'settings', roles: [] },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'parrainage', 'securite'] },
   // « Mes boutiques »: opened from the boutique at the bottom of the menu (and the account menu)

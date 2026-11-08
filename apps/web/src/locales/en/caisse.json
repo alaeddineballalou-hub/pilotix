@@ -193,7 +193,9 @@
     "rent": "Rent",
     "ads": "Ads",
     "repair": "Repair",
-    "other": "Other"
+    "other": "Other",
+    "pos": "Shop sale",
+    "pos_gap": "Till difference"
   },
   "pay": {
     "title": "{{name}} payments",

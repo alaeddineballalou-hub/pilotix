@@ -15,7 +15,8 @@
     "archive": "Archives",
     "alertes": "Depot alerts",
     "livreur": "Livreur",
-    "stock": "Stock"
+    "stock": "Stock",
+    "modules": "Modules"
   },
   "users": {
     "rolesTitle": "Roles",
@@ -900,5 +901,19 @@
     "lots": "Lots and expiry dates",
     "lotsHint": "For cosmetics, food…: tick « Has lots » on a product; its purchases say each lot and its date, and stock always leaves from the lot that expires first. Off: no lot anywhere.",
     "warnDays": "« Expiring soon »: days before the date"
+  },
+  "mod": {
+    "title": "Modules",
+    "help": "The parts of Pilotix your shop turns on when it needs them. Off: nobody sees them, nothing else in Pilotix changes.",
+    "on": "On",
+    "off": "Off",
+    "switch": "Turn on or off: {{name}}",
+    "open": "Open the page",
+    "onOk": "{{name}} turned on: it is in the menu",
+    "offOk": "{{name}} turned off: it is no longer in the menu",
+    "pos": {
+      "name": "Point of sale",
+      "text": "Sell at your shop’s counter: products as photos, 80 mm ticket, today’s sales and till closing. Stock leaves the chosen depot, money goes into “Shop till”."
+    }
   }
 }

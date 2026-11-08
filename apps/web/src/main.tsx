@@ -16,6 +16,7 @@ import { RiskAskHost } from './ui/clientScore';
 import { initSeller } from './lib/seller';
 import { SessionProvider, useSession } from './lib/session';
 import { useCanRules } from './lib/pilot';
+import { useShopModules } from './lib/modules';
 import { store } from './lib/store';
 import { AGENCY_PAGES, MARKETER_PAGES, PAGES } from './pages/registry';
 import { Loading } from './ui/kit';
@@ -110,6 +111,8 @@ function App() {
   // #/page/sub/rest… — on the site: /<boutique>/page/sub/rest… (lib/route)
   const parts = useRoute();
   const canRules = useCanRules();
+  // the boutique's modules (Point de vente…): the menu shows their pages once they are on (Management › Modules)
+  useShopModules();
   const opening = useAddressBoutique(session?.shop?.slug, !!session && ready, parts.join('/'));
   if (parts[0] === 'platform')
     return (

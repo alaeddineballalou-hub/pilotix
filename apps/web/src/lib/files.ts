@@ -33,10 +33,11 @@ th{background:#f1f3f7}.num{text-align:right}.slip{page-break-inside:avoid;border
 
 /**
  * Prints an HTML document. Uses a hidden frame (works in browsers and the phone apps);
- * if printing is blocked, the document is shown in a new tab instead.
+ * if printing is blocked, the document is shown in a new tab instead. `css`: the paper's own look (a shop ticket on an
+ * 80 mm roll), instead of the A4 one.
  */
-export function printHtml(title: string, bodyHtml: string) {
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>${PRINT_CSS}</style></head><body>${bodyHtml}</body></html>`;
+export function printHtml(title: string, bodyHtml: string, css = PRINT_CSS) {
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>${css}</style></head><body>${bodyHtml}</body></html>`;
   const frame = document.createElement('iframe');
   frame.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
   document.body.append(frame);

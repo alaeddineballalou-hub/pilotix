@@ -41,6 +41,8 @@ import { dellalProcs } from './modules/dellal';
 import { landingProcs } from './modules/landing';
 import { landingGroupProcs } from './modules/landinggroups';
 import { pixelProcs } from './modules/pixels';
+import { posProcs } from './modules/pos';
+import { shopModulesProcs } from './modules/shopmodules';
 import { marketersProcs } from './modules/marketers';
 import { notifyProcs } from './modules/notify';
 import { socialProcs } from './modules/social';
@@ -135,4 +137,7 @@ export const REGISTRY = {
   ...boutiqueProcs,
   ...boutiqueCopyProcs,
   ...sharedBlacklistProcs,
+  // a boutique's optional modules (Management › Modules), and the first of them: Point de vente
+  ...shopModulesProcs,
+  ...posProcs,
 };

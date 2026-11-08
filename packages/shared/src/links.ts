@@ -51,6 +51,8 @@ export const APP_PAGES = [
   'landing',
   'caisse',
   'macaisse',
+  // Point de vente (a module the boutique turns on in Management › Modules)
+  'pos',
   'livraison',
   'utilisateurs',
   'management',

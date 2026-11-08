@@ -180,7 +180,9 @@
       "exchange_in": "Échange (ancien produit)",
       "broken_return": "Cassé au retour",
       "repaired": "Réparé (remis en vente)",
-      "scrapped": "Cassé, jeté"
+      "scrapped": "Cassé, jeté",
+      "pos_sale": "Vente en boutique",
+      "pos_cancel": "Vente en boutique annulée"
     },
     "brokenDelta": "cassé {{n}}"
   },

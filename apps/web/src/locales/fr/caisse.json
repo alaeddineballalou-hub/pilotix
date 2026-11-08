@@ -193,7 +193,9 @@
     "rent": "Loyer",
     "ads": "Publicité",
     "repair": "Réparation",
-    "other": "Autre"
+    "other": "Autre",
+    "pos": "Vente boutique",
+    "pos_gap": "Écart de caisse"
   },
   "pay": {
     "title": "Paiements {{name}}",

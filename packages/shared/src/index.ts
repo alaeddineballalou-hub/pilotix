@@ -475,3 +475,6 @@ export * from './colors';
 export * from './compensation';
 
 export * from './management-plans';
+
+export * from './pos';
+export * from './modules';

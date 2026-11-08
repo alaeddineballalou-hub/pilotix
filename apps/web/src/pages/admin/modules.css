@@ -1,0 +1,23 @@
+/* Management › Modules: one line per module (its icon, what it does, on / off, its switch). App tokens only, so light,
+   dark and Arabic (dir="rtl") follow. */
+.px-mods { gap: 12px; }
+.px-mods > p { margin: 0; }
+.px-mods-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.px-mod { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--sk-r-ctl, 14px); background: var(--surface); }
+.px-mod.on { border-color: var(--c-ok-line, #1F9D57); background: color-mix(in srgb, var(--c-ok-tint, #E3F5EA) 45%, var(--surface)); }
+.px-mod-ic { width: 46px; height: 46px; flex: none; border-radius: 14px; display: grid; place-items: center; background: var(--sky-soft); color: var(--ink); }
+.px-mod.on .px-mod-ic { background: var(--c-ok-tint, #E3F5EA); color: var(--c-ok-ink, #137A3B); }
+.px-mod-ic .bji { width: 22px; height: 22px; }
+.px-mod-t { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; line-height: 1.4; }
+.px-mod-t b { font-size: 16px; font-weight: 600; }
+.px-mod-t small { font-size: 14px; }
+.px-mod-go { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; margin-top: 4px; font-size: 14px; font-weight: 700; color: var(--c-accent-ink, #A4480A); text-decoration: none; }
+.px-mod-go .bji { width: 16px; height: 16px; }
+[dir="rtl"] .px-mod-flip svg { transform: scaleX(-1); }
+.px-mod-state { flex: none; height: 26px; padding: 0 10px; border-radius: 999px; display: inline-flex; align-items: center; font-size: 13px; font-weight: 700; background: var(--sky-soft); color: var(--muted); }
+.px-mod-state.on { background: var(--c-ok-tint, #E3F5EA); color: var(--c-ok-ink, #137A3B); }
+@media (max-width: 560px) {
+  .px-mod { flex-wrap: wrap; }
+  .px-mod-t { flex-basis: calc(100% - 60px); }
+  .px-mod-state { margin-inline-start: 60px; }
+}
