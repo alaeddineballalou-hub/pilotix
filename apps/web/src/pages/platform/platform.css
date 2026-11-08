@@ -618,8 +618,8 @@ html[data-theme="dark"] .pp-prot { --pp-c-q: #3B9BC0; }
    (every shop). The step that holds a version in test is the one lit; the question says all of it before the click. */
 .pl-rel { display: flex; flex-direction: column; gap: 12px; }
 /* the lab's card: the two pushes first, then the sales lessons waiting for them, folded or open */
-.pl-rel + .pl-next-empty { margin-top: 14px; }
-.pl-next-fold { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.pl-rel + .pl-next-empty { margin-top: 4px; }
+.pl-next-fold { padding-top: 14px; border-top: 1px solid var(--line); }
 .pl-next-fold > summary { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--raise); cursor: pointer; list-style: none; }
 .pl-next-fold > summary::-webkit-details-marker { display: none; }
 .pl-next-fold > summary:hover { border-color: color-mix(in srgb, var(--navy) 30%, var(--line)); }
@@ -646,6 +646,9 @@ html[data-theme="dark"] .pp-prot { --pp-c-q: #3B9BC0; }
 .pl-rel-live .bji { color: var(--ok); }
 @media (max-width: 860px) {
   .pl-rel-steps { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .pl-rel-by { white-space: normal; }
 }
 /* what waits for the push in the Darija rules and the vocabulary (not in service yet) */
 .pl-db-draft, .pl-vc-changes { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 10px 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed color-mix(in srgb, var(--px-orange) 60%, var(--line)); background: color-mix(in srgb, var(--px-orange) 6%, var(--surface)); }
