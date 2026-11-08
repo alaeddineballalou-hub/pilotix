@@ -16,6 +16,8 @@ import { caisseText, calendarText, PaymentRows, period, PayPayment, payDay, payW
 import './paie.css';
 
 type Board = Out<'pay.board'>;
+/** Where the plans are made: Management › Plans (a store), Facturation › Plans (an agency). */
+const plansHref = (b: Board) => (b.cashless ? '#/facturation/plans' : '#/management/plans');
 type Person = Board['people'][number];
 type PayFor = { kind: 'pay'; person: Person } | { kind: 'acompte'; person: Person; request: NonNullable<Person['request']> };
 
@@ -200,12 +202,14 @@ export function PaieBoard() {
         </section>
       )}
 
-      <details className="pp-card pb-livreurs">
-        <summary>
-          <b>{t('paie.board.livreurs')}</b> <span className="pp-muted">{t('paie.board.livreursHelp')}</span>
-        </summary>
-        <OldPaie only="livreurs" />
-      </details>
+      {!b.cashless && (
+        <details className="pp-card pb-livreurs">
+          <summary>
+            <b>{t('paie.board.livreurs')}</b> <span className="pp-muted">{t('paie.board.livreursHelp')}</span>
+          </summary>
+          <OldPaie only="livreurs" />
+        </details>
+      )}
 
       {payFor && <PaySheet b={b} f={payFor} onClose={() => setPayFor(null)} />}
       {plansFor && <PlansSheet b={b} p={plansFor} onClose={() => setPlansFor(null)} />}
@@ -226,7 +230,8 @@ function PaySheet({ b, f, onClose }: { b: Board; f: PayFor; onClose: () => void 
   const amount = f.kind === 'pay' ? max : Math.round(Number(v) || 0);
   const box = b.caisses.find((c) => c.key === caisse);
   const pay = useAction('pay.pay', { success: t('paie.board.pay.done', { name: p.name }), onDone: onClose });
-  const short = !!box && box.balance < amount;
+  // an agency keeps no caisse here: what it pays is only written down
+  const short = !b.cashless && !!box && box.balance < amount;
   const last = f.kind === 'pay' ? p.ready.periods[p.ready.periods.length - 1] : null;
   return (
     <Sheet title={t('paie.board.pay.title', { name: p.name })} sub={f.kind === 'pay' && last ? t('paie.board.pay.what', { period: period(p.ready.periods[0].from, last.to) }) : f.kind === 'acompte' ? t('paie.board.pay.whatAcompte', { d: when(f.request.askedAt) }) : undefined} onClose={onClose}>
@@ -255,7 +260,7 @@ function PaySheet({ b, f, onClose }: { b: Board; f: PayFor; onClose: () => void 
             </span>
           </label>
         )}
-        <div className="pp-field">
+        {!b.cashless && <div className="pp-field">
           <span>{t('paie.board.pay.from')}</span>
           <div className="pp-choice" role="radiogroup">
             {b.caisses.map((c) => (
@@ -265,12 +270,12 @@ function PaySheet({ b, f, onClose }: { b: Board; f: PayFor; onClose: () => void 
               </button>
             ))}
           </div>
-        </div>
+        </div>}
         {short && <p className="pp-err">{t('paie.board.pay.short')}</p>}
         <button type="button" className="btn primary big" disabled={pay.isPending || short || amount < 1 || amount > max} onClick={() => pay.mutate(f.kind === 'pay' ? { kind: 'pay', personId: p.id, caisse, amount } : { kind: 'acompte', requestId: f.request.id, caisse, amount })}>
           <Icon name="check" /> {t('paie.board.pay.confirm', { v: da(amount) })}
         </button>
-        <p className="pp-muted small">{t('paie.board.pay.after', { name: p.name })}</p>
+        <p className="pp-muted small">{t(b.cashless ? 'paie.board.pay.afterAgency' : 'paie.board.pay.after', { name: p.name })}</p>
       </div>
     </Sheet>
   );
@@ -315,7 +320,7 @@ function PlansSheet({ b, p, onClose }: { b: Board; p: Person; onClose: () => voi
                 </select>
               ) : (
                 <span className="pp-note warn">
-                  {t('paie.board.plans.noPlans')} <a href="#/management/plans">{t('paie.board.plans.create')}</a>
+                  {t('paie.board.plans.noPlans')} <a href={plansHref(b)}>{t('paie.board.plans.create')}</a>
                 </span>
               )}
             </label>
@@ -326,9 +331,7 @@ function PlansSheet({ b, p, onClose }: { b: Board; p: Person; onClose: () => voi
         </button>
         <p className="pp-muted small">
           {t('paie.board.plans.more')}{' '}
-          <a href="#/management/plans">
-            {t('nav.management')} › {t('admin.subs.plans')}
-          </a>
+          <a href={plansHref(b)}>{b.cashless ? `${t('nav.facturation')} › ${t('agency.factTabs.plans')}` : `${t('nav.management')} › ${t('admin.subs.plans')}`}</a>
         </p>
       </div>
     </Sheet>

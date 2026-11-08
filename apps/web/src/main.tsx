@@ -95,7 +95,7 @@ function useAddressBoutique(slug: string | null | undefined, logged: boolean, ro
 
 const ALIASES: Record<string, [string, string?]> = { livreurs: ['dashboard', 'livreurs'], publicite: ['marketing', 'publicite'], marketer: ['marketing', 'marketer'] };
 /** An agency's older links: its team is « Utilisateurs », its prices are in « Réglages ». */
-const AGENCY_ALIASES: Record<string, [string, string?]> = { equipe: ['utilisateurs'], tarifs: ['reglages'] };
+const AGENCY_ALIASES: Record<string, [string, string?]> = { equipe: ['utilisateurs'], tarifs: ['reglages'], macaisse: ['gains'], caisse: ['facturation', 'paie'] };
 /** A marketer's short links: its ads are in « Marketing ». */
 const MARKETER_ALIASES: Record<string, [string, string?]> = { ...AGENCY_ALIASES, publicite: ['marketing', 'publicite'], marketer: ['marketing', 'marketer'], adsets: ['marketing', 'marketer'] };
 

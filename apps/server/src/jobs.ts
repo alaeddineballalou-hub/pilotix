@@ -64,6 +64,9 @@ const FEATURE: Record<string, string | null> = {
   'catalog-run': 'marketing/catalogue',
   'ads-pilot': 'marketing/publicite',
   'sheets-sync': 'management/canaux',
+  // agent pay: the people still without a pay plan, told to the admins and to whoever added them (a store with
+  // Caisse › Paie, an agency; the proc answers « nothing » elsewhere)
+  'pay-plan-alert': null,
 };
 
 @Injectable()
@@ -115,6 +118,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       return r;
     }
     if (name === 'depot-push') return call('depot.pushRun');
+    if (name === 'pay-plan-alert') return call('pay.noPlanPush');
     if (name === 'pilot-run') return call('pilot.run');
     if (name === 'assign-run') return call('assign.run');
     if (name === 'coverage-refresh') return call('coverage.refresh');
@@ -285,6 +289,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('pilot-ai-night', {}, { repeat: { pattern: '30 2 * * *', tz: 'Africa/Algiers' }, jobId: 'pilot-ai-night', removeOnComplete: 20, removeOnFail: 50 });
     // every morning at 08:00 in Algeria (what the control room's settings say), whatever the server's time zone
     await this.queue.add('platform-reminders', {}, { repeat: { pattern: '0 8 * * *', tz: 'Africa/Algiers' }, jobId: 'platform-reminders', removeOnComplete: 20, removeOnFail: 50 });
+    // 09:10 in Algeria: who still has no pay plan (once a day)
+    await this.queue.add('pay-plan-alert', {}, { repeat: { pattern: '10 9 * * *', tz: 'Africa/Algiers' }, jobId: 'pay-plan-alert', removeOnComplete: 20, removeOnFail: 50 });
     // the delivery companies' APIs looked at every morning, before the work day (Algeria time)
     await this.queue.add('courier-watch', {}, { repeat: { pattern: '20 7 * * *', tz: 'Africa/Algiers' }, jobId: 'courier-watch', removeOnComplete: 20, removeOnFail: 50 });
   }

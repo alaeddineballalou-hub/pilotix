@@ -129,7 +129,12 @@
     "boutiquesHint": "Le même compte est créé dans chaque boutique cochée, avec les mêmes rôles et le même mot de passe.",
     "addedIn": "{{name}} ajouté(e) aussi dans : {{list}}",
     "notAddedIn": "Pas ajouté(e) dans {{shop}} : {{error}}",
-    "colBoutiques": "Boutiques"
+    "colBoutiques": "Boutiques",
+    "payPlans": "Plan de paie",
+    "payPlansHint": "Un plan pour chaque travail coché. Sans plan, la personne n’est pas payée et une alerte rouge s’affiche.",
+    "payPick": "Choisir un plan…",
+    "payNoPlanYet": "Aucun plan pour ce travail.",
+    "payNeed": "Choisissez le plan de paie : {{jobs}}"
   },
   "status": {
     "groups": {

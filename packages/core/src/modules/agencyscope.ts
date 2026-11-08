@@ -408,6 +408,8 @@ export async function agencyGate(name: string, ctx: Ctx, input: unknown): Promis
     if (name.startsWith('agency.') || AGENCY_SPACE.has(name)) return;
     // Only these plan actions belong to the agency itself; role checks still run before this gate.
     if (kind === 'agency' && MANAGEMENT_PROCS.has(name)) return;
+    // an agency pays its people with the agent pay (Facturation › Paie, « Mes gains »)
+    if (kind === 'agency' && name.startsWith('pay.')) return;
     if (sellerProcsOf(kind).has(name)) throw bad('Choisissez un vendeur en haut de la page');
     throw forbidden(kind === 'agency' ? 'Pas dans l’espace d’une agence' : 'Pas dans l’espace d’un marketer');
   }

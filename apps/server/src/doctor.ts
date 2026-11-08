@@ -43,6 +43,7 @@ export const JOB_EVERY: Record<string, number> = {
   'turnstile-sync': 30 * MIN,
   'offsite-backup': 30 * MIN,
   'pilot-ai-night': D,
+  'pay-plan-alert': D,
 };
 
 interface Seen {

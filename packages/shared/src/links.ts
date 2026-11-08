@@ -69,6 +69,8 @@ export const APP_PAGES = [
   'facturation',
   'affectation',
   'comptepro',
+  // an agency's agent: his pay (« Mes gains »)
+  'gains',
   // the menu's groups without a page of their own
   'partenaires',
   'pilotai',

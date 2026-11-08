@@ -36,7 +36,7 @@ test('agency payment plans: real dispatch, tenant isolation, seller acceptance, 
     await assert.rejects(rpc(chief,'management.planAssign',{targetKind:'product',targetId:1,planId:billing.id}),/contrat vendeur/);
     await chief.db.query("UPDATE profiles SET phone='0710000001' WHERE id=$1",[chief.session.profile.id]);
     let agentEmail='nora@example.dz';
-    const agent=await rpc(chief,'users.create',{name:'Nora',email:'nora@example.dz',phone:'0710000002',password:PW,roles:['confirmation']});
+    const agent=await rpc(chief,'users.create',{name:'Nora',email:'nora@example.dz',phone:'0710000002',password:PW,roles:['confirmation'],plans:[{task:'confirmation',planId:agentPlan.id}]});
     await rpc(chief,'management.planAssign',{targetKind:'agent',targetId:agent.id,planId:agentPlan.id});
     await t.exec(agency.schema,migration);
     assert.equal(Number((await chief.db.query('SELECT count(*) AS n FROM management_agent_terms WHERE profile_id=$1',[agent.id]))[0].n),1,'repeating a migration does not duplicate assignment copies');

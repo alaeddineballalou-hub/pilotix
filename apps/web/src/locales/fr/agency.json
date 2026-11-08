@@ -10,7 +10,8 @@
     "facturation": "Facturation",
     "utilisateurs": "Utilisateurs",
     "reglages": "Réglages",
-    "affectation": "Affectation"
+    "affectation": "Affectation",
+    "gains": "Mes gains"
   },
   "badge": "Agence",
   "create": "Créer mon agence",
@@ -643,7 +644,8 @@
     "agents": "Agents",
     "vendeurs": "Vendeurs",
     "sellerPlans": "Voir le plan de chaque vendeur",
-    "backPlans": "Retour aux plans"
+    "backPlans": "Retour aux plans",
+    "paie": "Paie"
   },
   "agentsPay": {
     "title": "Paie des agents · {{m}}",
@@ -666,7 +668,8 @@
     "scoreHow": "Note = confirmées × livrées (agent de confirmation) et livrées sur suivies (agent de suivi), sur 100.",
     "close": "Valider la paie",
     "closeAsk": "Valider la paie de ce mois ? Elle ne changera plus.",
-    "closed": "Paie validée"
+    "closed": "Paie validée",
+    "payMoved": "La paie de chaque agent (un plan par travail, les jours de paie, les acomptes) se fait dans"
   },
   "sellerGroup": "{{name}} · {{count}} boutiques",
   "sellerGroupHelp": "Le même vendeur : ses boutiques sont ensemble.",

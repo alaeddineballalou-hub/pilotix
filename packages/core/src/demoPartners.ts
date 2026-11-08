@@ -106,6 +106,20 @@ export async function seedDemoPartners(t: Tenancy, opts: { now?: number } = {}):
     await sdb.query(`UPDATE orders SET agent_id = ($2::bigint[])[1 + (id % $3)] WHERE conf_agency_id = $1 AND agent_id IS NOT NULL`, [agency.id, conf, conf.length]);
   if (suivi.length) await sdb.query(`UPDATE orders SET follow_agent_id = $2 WHERE follow_agency_id = $1 AND follow_agent_id IS NOT NULL`, [agency.id, suivi[0]]);
 
+  // the agency's agent pay (Facturation › Paie, « Mes gains »): a confirmation plan and a suivi plan, given 40 days
+  // ago (so last month's pay is ready); Yasmine has none yet (the chief's red alert)
+  const base = { method: 'fixed', trigger: 'delivered', rate: 0, tiers: [0, 0, 0], thresholds: [10000, 20000], monthly: 0, bonus: { enabled: false, threshold: 100, amount: 0 }, upsell: { enabled: false, method: 'qty', rate: 0, trigger: 'delivered', ruleVersion: 2 } };
+  const confPlan = await run(chiefA, 'management.planSave', { kind: 'agent', name: 'Confirmation · 120 DA par livrée', configuration: { ...base, agentTask: 'confirmation', rate: 120, upsell: { ...base.upsell, enabled: true } } });
+  const suiviPlan = await run(chiefA, 'management.planSave', { kind: 'agent', name: 'Suivi · 60 DA par colis livré', configuration: { ...base, agentTask: 'suivi', rate: 60 } });
+  const aid = async (email: string) => num((await t.shop(agency.schema).query('SELECT id FROM profiles WHERE email = $1', [email]))[0].id);
+  for (const [email, task, planId] of [
+    ['nora.agence@demo.pilotix.dz', 'confirmation', confPlan.id],
+    ['ali.agence@demo.pilotix.dz', 'suivi', suiviPlan.id],
+  ] as const)
+    await run(chiefA, 'pay.assign', { personId: await aid(email), task, planId });
+  await t.shop(agency.schema).query('UPDATE pay_plan_terms SET effective_at = $1', [new Date(now - 40 * DAY).toISOString()]);
+  await t.shop(agency.schema).query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value', ['payAcompte', JSON.stringify({ max: 5000, fromDay: 1 })]);
+
   // the marketer's ad sets: its people's, on its products, with Meta's results of the last weeks
   const byEmail = async (email: string) => num((await sdb.query('SELECT id FROM profiles WHERE email = $1', [email]))[0].id);
   const [nadirId, selmaId] = [await byEmail('nadir.mk@demo.pilotix.dz'), await byEmail('selma.mk@demo.pilotix.dz')];

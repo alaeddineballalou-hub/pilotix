@@ -16,7 +16,7 @@ import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
 import { PhoneCaisse } from './PhoneCaisse';
 import { CaisseJournal, CaisseOverview } from './Overview';
 import { PaieBoard } from './PaieBoard';
-export { MaCaisse } from './MaPaie';
+export { MaCaisse, MesGains } from './MaPaie';
 import { CopyCode } from '../../ui/CopyCode';
 import { ClearFilters, CompanyFilter, DateFilters, dayIso, LivreurFilter } from '../../ui/filters';
 import { useAllMode } from '../../layout/AllBoutiques';

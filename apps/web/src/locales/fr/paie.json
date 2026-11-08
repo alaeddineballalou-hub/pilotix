@@ -215,7 +215,8 @@
       "short": "Pas assez d’argent dans cette caisse.",
       "confirm": "Payer {{v}}",
       "after": "L’argent sort de la caisse (dépense « Salaire »). Ensuite, {{name}} confirme la réception.",
-      "done": "Payé. {{name}} doit confirmer la réception."
+      "done": "Payé. {{name}} doit confirmer la réception.",
+      "afterAgency": "Le paiement est noté (l’agence ne tient pas de caisse ici). Ensuite, {{name}} confirme la réception dans Mes gains."
     },
     "plans": {
       "title": "Plans de paie · {{name}}",
@@ -259,5 +260,11 @@
       "lastOnly": "Annulez d’abord le dernier paiement de cette personne."
     },
     "noCount": "Pas de plan : rien n’est compté"
-  }
+  },
+  "noPlanAlert": {
+    "title_one": "{{count}} personne sans plan de paie",
+    "title_other": "{{count}} personnes sans plan de paie",
+    "go": "Donner un plan ›"
+  },
+  "owedAgency": "L’agence te doit"
 }

@@ -10,7 +10,8 @@
     "facturation": "Billing",
     "utilisateurs": "Users",
     "reglages": "Settings",
-    "affectation": "Assignment"
+    "affectation": "Assignment",
+    "gains": "My earnings"
   },
   "badge": "Agency",
   "create": "Create my agency",
@@ -643,7 +644,8 @@
     "agents": "Agents",
     "vendeurs": "Sellers",
     "sellerPlans": "See each seller’s plan",
-    "backPlans": "Back to plans"
+    "backPlans": "Back to plans",
+    "paie": "Pay"
   },
   "agentsPay": {
     "title": "Agents’ pay · {{m}}",
@@ -666,7 +668,8 @@
     "scoreHow": "Score = confirmed × delivered (confirmation agent) and delivered out of followed (follow-up agent), out of 100.",
     "close": "Approve pay",
     "closeAsk": "Approve this month’s pay? It will not change after.",
-    "closed": "Pay approved"
+    "closed": "Pay approved",
+    "payMoved": "Each agent’s pay (one plan per job, pay days, advances) is in"
   },
   "sellerGroup": "{{name}} · {{count}} boutiques",
   "sellerGroupHelp": "The same seller: their boutiques are together.",

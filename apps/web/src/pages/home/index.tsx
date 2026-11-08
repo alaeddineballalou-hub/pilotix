@@ -23,6 +23,7 @@ import { delivTone, KpiBox, prevRangeOf } from '../dashboard/util';
 import { MyDay } from '../dashboard/Mine';
 import '../dashboard/board/board.css';
 import { useAllMode } from '../../layout/AllBoutiques';
+import { NoPlanAlert } from '../caisse/NoPlanAlert';
 
 type R = { from: string; to: string };
 
@@ -88,6 +89,7 @@ function HomeStats() {
     return (
       <div className="tb hm">
         {head}
+        <NoPlanAlert admins={false} />
         {copilot && <ShopDoctor card />}
         <Now />
         <MyDay range={per.range} />
@@ -101,6 +103,7 @@ function HomeStats() {
   return (
     <div className="tb hm">
       {head}
+      <NoPlanAlert admins={false} />
       {meta.error ? (
         <ErrorBox error={meta.error} onRetry={() => meta.refetch()} />
       ) : !m ? (

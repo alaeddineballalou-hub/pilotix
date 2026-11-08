@@ -4,7 +4,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { planPriceBrackets, type PayTask } from '@pilotix/shared';
-import { payOn } from '../../lib/features';
+import { inAgency, payOn } from '../../lib/features';
 import { da, n, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
@@ -21,8 +21,14 @@ export function MaCaisse() {
   return payOn() ? <MaPaie /> : <MyCash />;
 }
 
-function MaPaie() {
+/** « Mes gains » (a confirmation agency's agent): the same page, without a cash tab (an agency keeps no caisse here). */
+export function MesGains() {
+  return <MaPaie gains />;
+}
+
+function MaPaie({ gains = false }: { gains?: boolean }) {
   const { t } = useTranslation();
+  const tabs = gains ? TABS.filter((k) => k !== 'cash') : TABS;
   const q = useRpc('pay.mine', {});
   const [tab, setTab] = useState<Tab>('paie');
   const [ask, setAsk] = useState(false);
@@ -36,8 +42,8 @@ function MaPaie() {
       {d.toConfirm.map((p) => (
         <ConfirmBox key={p.id} p={p} />
       ))}
-      <div className="pp-tabs" role="tablist" aria-label={t('nav.macaisse')}>
-        {TABS.map((k) => (
+      <div className="pp-tabs" role="tablist" aria-label={t(gains ? 'nav.gains' : 'nav.macaisse')}>
+        {tabs.map((k) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
             {t(`paie.tabs.${k}`)}
           </button>
@@ -124,9 +130,9 @@ export function Summary({ d }: { d: PayMine }) {
   const last = r.periods[r.periods.length - 1];
   const openNet = d.open.net;
   return (
-    <section className="pp-sum" aria-label={t('paie.owed')}>
+    <section className="pp-sum" aria-label={t(inAgency() ? 'paie.owedAgency' : 'paie.owed')}>
       <div className="pp-cell lead">
-        <span>{t('paie.owed')}</span>
+        <span>{t(inAgency() ? 'paie.owedAgency' : 'paie.owed')}</span>
         <b className="ltr">{da(d.owed)}</b>
         <small>{r.total > 0 ? t('paie.owedSub', { ready: da(r.total), open: da(Math.max(0, openNet)) }) : t('paie.owedSubOpen')}</small>
       </div>

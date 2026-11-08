@@ -15,8 +15,11 @@ export const featureIsOn = (key: string) => featureOn(shop?.features, key);
 /** Can this page (and sub-page) be opened? */
 export const pageIsOn = (page: string, sub?: string) => routeAllowed(shop?.features, page, sub);
 
-/** Agent pay (Caisse › Paie, the pay in Ma caisse): a store whose plan has it (a partner's space pays its own way). */
-export const payOn = () => pageIsOn('caisse', 'paie') && payIsOn(shop);
+/** Agent pay (Caisse › Paie, the pay in Ma caisse): a store whose plan has it, and a confirmation agency (Facturation ›
+ *  Paie, « Mes gains »). A marketer's space pays its own way. */
+export const payOn = () => payIsOn(shop) && (shop?.kind === 'agency' || pageIsOn('caisse', 'paie'));
+/** In a confirmation agency's own space. */
+export const inAgency = () => shop?.kind === 'agency';
 
 /** A link of the app ('#/produits/achats'): is its page in the plan? */
 export function hrefIsOn(href: string): boolean {

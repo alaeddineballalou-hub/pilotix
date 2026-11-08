@@ -213,13 +213,13 @@ test('plans given before in Management › Plans (« Agent Pay ») carry over to
   assert.deepEqual(board.people.find((p: any) => p.id === omar).missing, ['confirmation'], 'Omar still needs a confirmation plan');
 });
 
-test('agent pay is a store’s: a partner’s space, or a plan without Caisse › Paie, has no pay action and no pay alert', async () => {
+test('agent pay is a store’s and an agency’s: a marketer’s space, or a plan without Caisse › Paie, has no pay action and no pay alert', async () => {
   assert.equal(payIsOn(undefined), true, 'a one-shop server');
   assert.equal(payIsOn({ kind: 'store', features: null }), true);
   assert.equal(payIsOn({ features: ['*'] }), true, 'no kind = a store');
   assert.equal(payIsOn({ kind: 'store', features: ['*', '-caisse/paie'] }), false);
   assert.equal(payIsOn({ kind: 'store', features: ['commandes'] }), false, 'no Caisse at all');
-  assert.equal(payIsOn({ kind: 'agency', features: null }), false);
+  assert.equal(payIsOn({ kind: 'agency', features: null }), true, 'an agency pays its agents (Facturation › Paie)');
   assert.equal(payIsOn({ kind: 'marketer', features: null }), false);
   const admin = await as(EMAILS.admin);
   const space = { id: 2, slug: 'b', primary: false, locked: false, demo: false, maxUsers: null, maxDrivers: null };
@@ -229,10 +229,10 @@ test('agent pay is a store’s: a partner’s space, or a plan without Caisse �
   await assert.rejects(call('pay.mine', { ...(await as(EMAILS.conf)), shop: noPaie }, {}), /pas disponible/);
   const off: any = await call('stats.doctor', { ...admin, shop: noPaie }, {});
   assert.ok(!off.items.some((i: any) => i.id === 'payNoPlan' || i.id === 'payNotReceived'));
-  // a confirmation agency's own space (its Co-Pilot is not the store's either)
-  const shop = { ...space, kind: 'agency' as const, features: null };
-  await assert.rejects(call('pay.board', { ...admin, shop }, {}), /pas disponible|agence/);
-  await assert.rejects(call('pay.mine', { ...(await as(EMAILS.conf)), shop }, {}), /pas disponible|agence/);
+  // a marketer's own space
+  const shop = { ...space, kind: 'marketer' as const, features: null };
+  await assert.rejects(call('pay.board', { ...admin, shop }, {}), /pas disponible|marketer/);
+  await assert.rejects(call('pay.mine', { ...(await as(EMAILS.conf)), shop }, {}), /pas disponible|marketer/);
   const here: any = await call('stats.doctor', admin, {});
   assert.ok(here.items.some((i: any) => i.id === 'payNoPlan'));
 });

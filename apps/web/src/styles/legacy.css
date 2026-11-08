@@ -1396,3 +1396,12 @@ input.bjsav-q{width:76px!important}.bjsav-pp{display:flex;flex-direction:column;
 .login-note { margin: 0; line-height: 1.5; color: var(--muted, #5b6577); text-align: center; }
 .login-link { font: inherit; align-self: center; background: none; border: 0; padding: 4px; color: var(--navy); font-weight: 700; text-decoration: underline; cursor: pointer; }
 .login-link:hover { color: var(--coral); }
+
+/* Utilisateurs › the pay plan of each job ticked (Confirmation, Suivi…) */
+.px-payplans { display: grid; gap: 8px; }
+.px-payplan { display: grid; grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.4fr); align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line, #e5e7eb); border-radius: 10px; }
+.px-payplan > span:first-child { display: flex; flex-direction: column; gap: 2px; }
+.px-payplan em { font-style: normal; font-size: 12px; }
+.px-payplan-req { color: var(--bad, #c0392b); font-weight: 600; }
+.px-payplan select[aria-invalid='true'] { border-color: var(--bad, #c0392b); }
+@media (max-width: 560px) { .px-payplan { grid-template-columns: 1fr; } }

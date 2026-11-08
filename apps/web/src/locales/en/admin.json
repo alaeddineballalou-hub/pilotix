@@ -129,7 +129,12 @@
     "boutiquesHint": "The same account is created in every boutique ticked, with the same roles and password.",
     "addedIn": "{{name}} also added to: {{list}}",
     "notAddedIn": "Not added to {{shop}}: {{error}}",
-    "colBoutiques": "Boutiques"
+    "colBoutiques": "Boutiques",
+    "payPlans": "Pay plan",
+    "payPlansHint": "One plan for each job ticked. Without a plan the person is not paid and a red alert shows.",
+    "payPick": "Pick a plan…",
+    "payNoPlanYet": "No plan for this job yet.",
+    "payNeed": "Pick the pay plan: {{jobs}}"
   },
   "status": {
     "groups": {

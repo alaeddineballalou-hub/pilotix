@@ -8,11 +8,18 @@ export const PAY_TASKS = ['confirmation', 'suivi', 'superviseur', 'depot'] as co
 export type PayTask = (typeof PAY_TASKS)[number];
 
 /**
- * Agent pay runs in a store whose plan has Caisse › Paie. A partner's own space (a confirmation agency, a marketer) pays
- * its people its own way (Facturation, its agents' plans), so there it has no page, no action and no alert.
+ * Agent pay runs in a store whose plan has Caisse › Paie, and in a confirmation agency (Facturation › Paie for its
+ * chief, « Mes gains » for each agent: their orders in every seller's store). A marketer's space pays its own way.
  */
 export function payIsOn(shop: { kind?: string | null; features?: readonly string[] | null } | null | undefined): boolean {
+  if (shop?.kind === 'agency') return true;
   return (!shop?.kind || shop.kind === 'store') && featureOn(shop?.features, 'caisse/paie');
+}
+
+/** In an agency, people are paid for confirmation and suivi only (a supervisor may confirm too). */
+export function payTasksIn(kind: string | null | undefined, roles: readonly string[], allowed = false): PayTask[] {
+  const l = allowed ? payTasksAllowed(roles) : payTasksOf(roles);
+  return kind === 'agency' ? l.filter((t) => t === 'confirmation' || t === 'suivi') : l;
 }
 
 export type PayCalendar = { every: 'week'; weekday: number } | { every: 'half' } | { every: 'month'; day: number } | { every: 'days'; days: number[] };

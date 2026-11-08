@@ -1,10 +1,10 @@
 // Utilisateurs: the Rôles table and one list per role, with the create / edit form (users.create / users.update).
-import { AgencySellerWork, expandRoles, LANGUAGES, Profile, Role, ROLES } from '@pilotix/shared';
+import { AgencySellerWork, expandRoles, LANGUAGES, payTasksIn, Profile, Role, ROLES, type PayTask } from '@pilotix/shared';
 import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { canSee, NAV } from '../../layout/nav';
 import { rpc } from '../../lib/backend';
-import { pageIsOn } from '../../lib/features';
+import { pageIsOn, payOn } from '../../lib/features';
 import { usePhoneProblem } from '../../lib/phoneCheck';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
@@ -383,11 +383,27 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
   const ownerId = session?.shop?.ownerProfileId ?? null;
   const canArchive = !agency && !!user && isAdmin && user.id !== me && user.id !== ownerId && pageIsOn('management', 'archive');
   const busy = create.isPending || update.isPending;
+  // agent pay: a plan for each job ticked (required when the shop has a plan for that job)
+  const payHere = payOn() && (isAdmin || !!session?.canManageUsers);
+  const payQ = useRpc('pay.planChoices', { personId: user?.id ?? null }, { enabled: payHere });
+  const [plans, setPlans] = useState<Partial<Record<PayTask, number | null>>>({});
+  const current = (k: PayTask) => payQ.data?.current.find((c) => c.task === k)?.planId ?? null;
+  const planOf = (k: PayTask) => (k in plans ? (plans[k] ?? null) : current(k));
+  const payKind = payQ.data?.kind ?? 'store';
+  const payJobs = payHere && payQ.data ? payTasksIn(payKind, roles, true) : [];
+  const payNeed = payHere && payQ.data ? payTasksIn(payKind, roles) : [];
+  const plansFor = (k: PayTask) => (payQ.data?.plans ?? []).filter((p) => p.task === k);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!roles.length) return setErr(t('admin.users.needRole'));
+    const missing = payNeed.filter((k) => !planOf(k) && plansFor(k).length > 0);
+    if (missing.length) return setErr(t('admin.users.payNeed', { jobs: missing.map((k) => t(`paie.tasks.${k}`)).join(', ') }));
     setErr('');
+    const payPlans = payJobs.flatMap((k) => {
+      const id = planOf(k);
+      return id ? [{ task: k, planId: id }] : [];
+    });
     const base = {
       name: name.trim(),
       email: email.trim(),
@@ -398,6 +414,7 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
       // only the administrator gives (or takes back) the right to handle accounts
       ...(isAdmin ? { canManageUsers: manage && !roles.includes('admin'), canAssign: assign && !roles.includes('admin'), canAffect: affect && !roles.includes('admin') } : {}),
       ...(agency ? { sellers } : {}),
+      ...(payHere && payPlans.length ? { plans: payPlans } : {}),
     };
     if (user) update.mutate({ id: user.id, ...base, ...(password ? { password } : {}) });
     else
@@ -457,6 +474,37 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
               ))}
           </div>
         </Field>
+        {payJobs.length > 0 && (
+          <Field label={t('admin.users.payPlans')} hint={t('admin.users.payPlansHint')}>
+            <div className="px-payplans">
+              {payJobs.map((k) => {
+                const list = plansFor(k);
+                const need = payNeed.includes(k);
+                return (
+                  <label key={k} className="px-payplan">
+                    <span>
+                      <b>{t(`paie.tasks.${k}`)}</b> <em className={need ? 'px-payplan-req' : 'muted'}>{need ? t('paie.board.plans.required') : t('paie.board.plans.optional')}</em>
+                    </span>
+                    {list.length ? (
+                      <select value={planOf(k) ?? ''} required={need} aria-invalid={need && !planOf(k)} onChange={(e) => setPlans((x) => ({ ...x, [k]: e.target.value ? Number(e.target.value) : null }))}>
+                        <option value="">{t('admin.users.payPick')}</option>
+                        {list.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="form-err">
+                        {t('admin.users.payNoPlanYet')} {payQ.data && <a href={payQ.data.plansUrl}>{t('paie.board.plans.create')}</a>}
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          </Field>
+        )}
         {agency && <SellersField value={sellers} onChange={setSellers} />}
         {multi && (
           <Field label={t('admin.users.boutiques')} hint={t('admin.users.boutiquesHint')}>

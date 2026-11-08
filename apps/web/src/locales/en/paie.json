@@ -215,7 +215,8 @@
       "short": "Not enough money in this caisse.",
       "confirm": "Pay {{v}}",
       "after": "The money leaves the caisse (a “Salary” expense). Then {{name}} confirms they got it.",
-      "done": "Paid. {{name}} must confirm they got it."
+      "done": "Paid. {{name}} must confirm they got it.",
+      "afterAgency": "The payment is recorded (the agency keeps no cash box here). Then {{name}} confirms receipt in My earnings."
     },
     "plans": {
       "title": "Pay plans · {{name}}",
@@ -259,5 +260,11 @@
       "lastOnly": "First cancel this person’s latest payment."
     },
     "noCount": "No plan: nothing is counted"
-  }
+  },
+  "noPlanAlert": {
+    "title_one": "{{count}} person without a pay plan",
+    "title_other": "{{count}} people without a pay plan",
+    "go": "Give a plan ›"
+  },
+  "owedAgency": "The agency owes you"
 }

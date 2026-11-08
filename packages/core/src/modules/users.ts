@@ -174,6 +174,11 @@ const NewUser = z.object({
     .max(500)
     .nullable()
     .optional(),
+  /** the pay plan of each job ticked (Confirmation, Suivi…): required when the shop has a plan for that job */
+  plans: z
+    .array(z.object({ task: z.enum(['confirmation', 'suivi', 'superviseur', 'depot']), planId: z.number().int().positive() }))
+    .max(4)
+    .optional(),
 });
 
 /**
@@ -434,15 +439,18 @@ export const usersProcs = {
     if (b.roles.includes('livreur')) await needDriverSeat(ctx, null, b.email);
     // an agency's person: every seller unless the chief chose some
     const sellers = await agencyFields(ctx, b);
+    const { payPlansOnSave } = await import('./pay');
+    await payPlansOnSave(ctx, { personId: null, roles: b.roles, active: true, plans: b.plans, write: false });
     const phone = await teamPhone(ctx, b.phone, { id: null, email: b.email });
     const hash = await teamPasswordHash(ctx, b.email, b.password);
     try {
       const r = (
         await ctx.db.query(
-          'INSERT INTO profiles (name, email, phone, password_hash, roles, language, livreur_company_id, can_manage_users, agency_sellers, can_assign, can_affect) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
-          [b.name, b.email.toLowerCase(), phone, hash, b.roles, b.language, b.livreurCompanyId ?? null, !!b.canManageUsers && !b.roles.includes('admin'), sellers ? JSON.stringify(sellers) : null, !!b.canAssign && !b.roles.includes('admin'), !!b.canAffect && !b.roles.includes('admin')],
+          'INSERT INTO profiles (name, email, phone, password_hash, roles, language, livreur_company_id, can_manage_users, agency_sellers, can_assign, can_affect, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *',
+          [b.name, b.email.toLowerCase(), phone, hash, b.roles, b.language, b.livreurCompanyId ?? null, !!b.canManageUsers && !b.roles.includes('admin'), sellers ? JSON.stringify(sellers) : null, !!b.canAssign && !b.roles.includes('admin'), !!b.canAffect && !b.roles.includes('admin'), ctx.session.profile.id || null],
         )
       )[0];
+      await payPlansOnSave(ctx, { personId: num(r.id), roles: b.roles, active: true, plans: b.plans, write: true });
       return toProfile(r);
     } catch (e: any) {
       if (String(e?.code) === '23505' || /unique|duplicate/i.test(e?.message)) throw bad('Cet email est déjà utilisé');
@@ -486,6 +494,10 @@ export const usersProcs = {
       if (left !== 0) throw bad(`Il reste ${left} DA dans la caisse de cette personne : transférez-les d’abord vers une autre caisse (Caisse › Transférer).`);
     }
     if (willBeActive && (b.roles ?? (before?.roles as string[] | undefined) ?? []).includes('livreur') && !wasDriver) await needDriverSeat(ctx, b.id, before?.email ?? null);
+    // a job ticked now (or plans sent by the form): its pay plan
+    const { payPlansOnSave } = await import('./pay');
+    const payCheck = b.roles !== undefined || b.plans !== undefined;
+    if (payCheck) await payPlansOnSave(ctx, { personId: b.id, roles: nextRoles, active: willBeActive, plans: b.plans, write: false });
     let r: any;
     try {
       r = (
@@ -505,6 +517,7 @@ export const usersProcs = {
     }
     if (!r) throw notFound();
     if (b.sellers !== undefined) r = (await ctx.db.query('UPDATE profiles SET agency_sellers = $2 WHERE id = $1 RETURNING *', [b.id, sellers ? JSON.stringify(sellers) : null]))[0];
+    if (payCheck) await payPlansOnSave(ctx, { personId: b.id, roles: (r.roles ?? []) as string[], active: !!r.active, plans: b.plans, write: true });
     // no longer working here (closed, or without the role): his work still to do goes back to the team
     if (before?.active) await releaseWork(ctx, b.id, !!r.active, (r.roles ?? []) as Role[], (before.roles ?? []) as Role[]);
     return toProfile(r);

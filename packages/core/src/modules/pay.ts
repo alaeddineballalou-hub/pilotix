@@ -12,9 +12,10 @@
 //   - Acomptes: the agent asks, never more than what he earned in the open period (minus his acomptes) and the shop's
 //     monthly maximum, from the shop's day of the month. An acompte is taken off the pay of the period it was paid in.
 //   - Every payment waits for the agent's answer: « Reçu », or « Pas encore reçu » — the owners are told at once.
-import { agentPlanTask, DEFAULT_PAY_ACOMPTE, DEFAULT_PAY_CALENDAR, ManagementPlanConfig, PAY_TASKS, PayAcompte, PayCalendar, PayTask, payIsOn, payLocalDay, payMonthStart, payPeriodAt, payPeriods, payTasksAllowed, payTasksOf, planPriceBrackets } from '@pilotix/shared';
+import { agentPlanTask, DEFAULT_PAY_ACOMPTE, DEFAULT_PAY_CALENDAR, ManagementPlanConfig, PAY_TASKS, PayAcompte, PayCalendar, PayTask, payIsOn, payLocalDay, payMonthStart, payPeriodAt, payPeriods, payTasksIn, planPriceBrackets } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, num } from '../db';
+import type { Tenancy } from '../platform/tenancy';
 import { bad, Ctx, forbidden, notFound, proc, withActionLock } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, setRaw } from './admin';
@@ -28,6 +29,55 @@ export const PAY_ACOMPTE_KEY = 'payAcompte';
 const Id = z.number().int().positive();
 const Money = z.number().int().min(1).max(10_000_000);
 const PAID = ['delivered', 'exchanged'];
+
+// ---------------------------------------------------------------- a confirmation agency's pay
+// An agency's people work on its sellers' orders, in each seller's own store (where they have a profile of their own,
+// agency_id = the agency). Their pay counts the orders the agency confirmed (conf_agency_id) or followed
+// (follow_agency_id) there. The agency's db is marked by paySpace (each request, the job, Co-Pilot).
+interface AgencySpace {
+  t: Tenancy;
+  agencyId: number;
+}
+const SPACE = new WeakMap<object, AgencySpace>();
+/** Marks this request's db as an agency's (its pay reads its sellers' stores). */
+export function paySpace(ctx: Ctx): void {
+  if (ctx.shop?.kind === 'agency' && ctx.t && ctx.shop.id) SPACE.set(ctx.db, { t: ctx.t, agencyId: ctx.shop.id });
+}
+const kindOf = (db: Db) => (SPACE.has(db) ? 'agency' : 'store');
+/** The jobs a person must have a plan for here (allowed: may have). */
+const tasksOf = (db: Db, roles: string[], allowed = false) => payTasksIn(kindOf(db), roles, allowed);
+/** Where to open the pay pages (an agency: Facturation › Paie and « Mes gains »). */
+const boardUrl = (db: Db) => (SPACE.has(db) ? '#/facturation/paie' : '#/caisse/paie');
+const mineUrl = (db: Db) => (SPACE.has(db) ? '#/gains' : '#/macaisse');
+const mineName = (db: Db) => (SPACE.has(db) ? 'Mes gains' : 'Ma caisse');
+
+/** The databases holding this person's orders, with his profile ids there (an agency: each seller's store). */
+interface Source {
+  db: Db;
+  ids: number[];
+  /** an agency's id: only the orders it confirmed / followed */
+  agency: number | null;
+  /** the seller's name (an agency) */
+  store: string | null;
+}
+async function sourcesOf(db: Db, personId: number): Promise<Source[]> {
+  const a = SPACE.get(db);
+  if (!a) return [{ db, ids: [personId], agency: null, store: null }];
+  const me = (await db.query('SELECT email FROM profiles WHERE id = $1', [personId]))[0];
+  const email = String(me?.email ?? '').toLowerCase();
+  const links = await a.t.platform.query(
+    `SELECT DISTINCT s.schema_name, s.name FROM platform.agency_links l JOIN platform.shops s ON s.id = l.store_id
+      WHERE l.agency_id = $1 AND l.started_at IS NOT NULL AND s.status <> 'deleted'`,
+    [a.agencyId],
+  );
+  const out: Source[] = [];
+  for (const l of links) {
+    const sdb = a.t.shop(String(l.schema_name));
+    const ids = (await sdb.query('SELECT id FROM profiles WHERE agency_id = $1 AND (agency_profile_id = $2 OR (agency_profile_id IS NULL AND lower(email) = $3))', [a.agencyId, personId, email])).map((r: any) => num(r.id));
+    if (ids.length) out.push({ db: sdb, ids, agency: a.agencyId, store: String(l.name ?? '') });
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------- settings
 const Calendar = z.union([
@@ -165,10 +215,14 @@ export async function payRows(db: Db, personId: number, terms: PayTerm[], from: 
   const F = new Date(from).toISOString();
   const T = new Date(to).toISOString();
   const tasks = new Set(terms.map((t) => t.task));
-  const services = new Set<number>((await db.query('SELECT id FROM products WHERE is_service')).map((r: any) => num(r.id)));
+  const agencySpace = SPACE.has(db);
+  const servicesOf = async (d: Db) => new Set<number>((await d.query('SELECT id FROM products WHERE is_service')).map((r: any) => num(r.id)));
+  let services = await servicesOf(db);
   const names = new Map<number, string>((await db.query('SELECT id, name FROM profiles')).map((r: any) => [num(r.id), String(r.name)]));
   const rows: PayRow[] = [];
-  const push = (task: PayTask, term: PayTerm, o: any, event: PayRow['event'], at: string, withBase: boolean, withUpsell: boolean, agent: string | null) => {
+  let store: string | null = null;
+  const push = (task: PayTask, term: PayTerm, o: any, event: PayRow['event'], at: string, withBase: boolean, withUpsell: boolean, agentRaw: string | null) => {
+    const agent = agentRaw ?? store;
     const s = payOrderShape(o.items, o.orig_items, services);
     const { fee, step } = planFee(term.config!, s.price);
     const base = withBase ? fee : 0;
@@ -178,14 +232,19 @@ export async function payRows(db: Db, personId: number, terms: PayTerm[], from: 
   };
 
   // confirmation (his own orders) and team leader (his team's orders): at delivery, or at confirmation for such a plan
+  const sources = agencySpace ? await sourcesOf(db, personId) : [{ db, ids: [personId], agency: null, store: null } as Source];
+  for (const src of sources) {
+  services = src.db === db ? services : await servicesOf(src.db);
+  store = src.store;
   for (const task of ['confirmation', 'superviseur'] as const) {
-    if (!tasks.has(task)) continue;
-    const who = task === 'confirmation' ? [personId] : await teamOf(db, personId);
-    const os = await db.query(
+    if (!tasks.has(task) || (task === 'superviseur' && src.agency)) continue;
+    const who = task === 'confirmation' ? src.ids : await teamOf(db, personId);
+    const os = await src.db.query(
       `SELECT o.id, o.ref, o.agent_id, o.confirmed_at, o.delivered_at, o.follow_status, o.orig_items, ${ITEMS}
          FROM sales o
-        WHERE o.agent_id = ANY($1) AND ((o.follow_status = ANY($4) AND o.delivered_at >= $2 AND o.delivered_at < $3) OR (o.confirmed_at >= $2 AND o.confirmed_at < $3))`,
-      [who, F, T, PAID],
+        WHERE o.agent_id = ANY($1) AND ($5::bigint IS NULL OR o.conf_agency_id = $5)
+          AND ((o.follow_status = ANY($4) AND o.delivered_at >= $2 AND o.delivered_at < $3) OR (o.confirmed_at >= $2 AND o.confirmed_at < $3))`,
+      [who, F, T, PAID, src.agency],
     );
     for (const o of os) {
       const agent = task === 'superviseur' ? (names.get(num(o.agent_id)) ?? null) : null;
@@ -203,12 +262,12 @@ export async function payRows(db: Db, personId: number, terms: PayTerm[], from: 
   }
   // suivi: the parcels he followed that were delivered (no follow-up agent: whoever set « Livré »)
   if (tasks.has('suivi')) {
-    const os = await db.query(
+    const os = await src.db.query(
       `SELECT o.id, o.ref, o.delivered_at, o.orig_items, ${ITEMS}
          FROM sales o
-        WHERE o.follow_status = ANY($4) AND o.delivered_at >= $2 AND o.delivered_at < $3
-          AND (o.follow_agent_id = $1 OR (o.follow_agent_id IS NULL AND (SELECT e.user_id FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'delivered' ORDER BY e.at DESC LIMIT 1) = $1))`,
-      [personId, F, T, PAID],
+        WHERE o.follow_status = ANY($4) AND o.delivered_at >= $2 AND o.delivered_at < $3 AND ($5::bigint IS NULL OR o.follow_agency_id = $5)
+          AND (o.follow_agent_id = ANY($1) OR (o.follow_agent_id IS NULL AND (SELECT e.user_id FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'delivered' ORDER BY e.at DESC LIMIT 1) = ANY($1)))`,
+      [src.ids, F, T, PAID, src.agency],
     );
     for (const o of os) {
       const at = Date.parse(iso(o.delivered_at));
@@ -216,8 +275,11 @@ export async function payRows(db: Db, personId: number, terms: PayTerm[], from: 
       if (tm && tm.config!.trigger === 'delivered') push('suivi', tm, o, 'delivered', iso(o.delivered_at), true, false, null);
     }
   }
+  }
+  store = null;
+  services = await servicesOf(db);
   // dépôt: each order he prepared first (preparing it again pays nobody)
-  if (tasks.has('depot')) {
+  if (tasks.has('depot') && !agencySpace) {
     const os = await db.query(
       `SELECT o.id, o.ref, o.orig_items, f.at AS prepared_at, ${ITEMS}
          FROM (SELECT DISTINCT ON (e.order_id) e.order_id, e.user_id, e.at FROM order_events e
@@ -350,21 +412,23 @@ export async function payLedger(db: Db, personId: number, now: number) {
 /** Orders still on their way that will pay this person when delivered (an estimate under today's plans). */
 async function coming(db: Db, personId: number, terms: PayTerm[], now: number) {
   const out = { count: 0, amount: 0 };
-  const services = new Set<number>((await db.query('SELECT id FROM products WHERE is_service')).map((r: any) => num(r.id)));
   const road = `(o.follow_status IS NULL OR o.follow_status IN ('to_prepare','prepared','shipped','out_for_delivery','failed','alert','in_exchange'))`;
+  for (const src of await sourcesOf(db, personId)) {
+  const services = new Set<number>((await src.db.query('SELECT id FROM products WHERE is_service')).map((r: any) => num(r.id)));
   for (const task of ['confirmation', 'superviseur', 'suivi'] as const) {
     const tm = termAt(terms, task, now);
-    if (!tm || tm.config!.trigger !== 'delivered') continue;
+    if (!tm || tm.config!.trigger !== 'delivered' || (task === 'superviseur' && src.agency)) continue;
     const os =
       task === 'suivi'
-        ? await db.query(`SELECT o.id, o.orig_items, ${ITEMS} FROM sales o WHERE o.follow_agent_id = $1 AND o.conf_status = 'confirmed' AND ${road}`, [personId])
-        : await db.query(`SELECT o.id, o.orig_items, ${ITEMS} FROM sales o WHERE o.agent_id = ANY($1) AND o.conf_status = 'confirmed' AND ${road}`, [task === 'confirmation' ? [personId] : await teamOf(db, personId)]);
+        ? await src.db.query(`SELECT o.id, o.orig_items, ${ITEMS} FROM sales o WHERE o.follow_agent_id = ANY($1) AND ($2::bigint IS NULL OR o.follow_agency_id = $2) AND o.conf_status = 'confirmed' AND ${road}`, [src.ids, src.agency])
+        : await src.db.query(`SELECT o.id, o.orig_items, ${ITEMS} FROM sales o WHERE o.agent_id = ANY($1) AND ($2::bigint IS NULL OR o.conf_agency_id = $2) AND o.conf_status = 'confirmed' AND ${road}`, [task === 'confirmation' ? src.ids : await teamOf(db, personId), src.agency]);
     for (const o of os) {
       const s = payOrderShape(o.items, o.orig_items, services);
       const { fee } = planFee(tm.config!, s.price);
       out.count++;
       out.amount += fee;
     }
+  }
   }
   return out;
 }
@@ -401,10 +465,10 @@ async function admins(db: Db): Promise<number[]> {
 
 /** The people paid here (not owners, vendeurs or a partner agency's agents) and the jobs they must have a plan for. */
 async function payPeople(db: Db) {
-  const rows = await db.query(`SELECT id, name, roles FROM profiles WHERE active AND archived_at IS NULL AND agency_id IS NULL ORDER BY name`);
+  const rows = await db.query(`SELECT id, name, roles, created_by FROM profiles WHERE active AND archived_at IS NULL AND agency_id IS NULL ORDER BY name`);
   return rows
-    .map((r: any) => ({ id: num(r.id), name: String(r.name), roles: (r.roles ?? []) as string[] }))
-    .map((p: { id: number; name: string; roles: string[] }) => ({ ...p, required: payTasksOf(p.roles), allowed: payTasksAllowed(p.roles) }))
+    .map((r: any) => ({ id: num(r.id), name: String(r.name), roles: (r.roles ?? []) as string[], createdBy: r.created_by === null || r.created_by === undefined ? null : num(r.created_by) }))
+    .map((p: { id: number; name: string; roles: string[]; createdBy: number | null }) => ({ ...p, required: tasksOf(db, p.roles), allowed: tasksOf(db, p.roles, true) }))
     .filter((p: { required: PayTask[] }) => p.required.length > 0);
 }
 
@@ -413,7 +477,7 @@ export async function payAlerts(db: Db, now: number) {
   const people = await payPeople(db);
   const terms = await termsOf(db, people.map((p) => p.id));
   const noPlan = people
-    .map((p) => ({ id: p.id, name: p.name, missing: p.required.filter((t) => !termAt(terms.get(p.id) ?? [], t, now)) }))
+    .map((p) => ({ id: p.id, name: p.name, createdBy: p.createdBy, missing: p.required.filter((t) => !termAt(terms.get(p.id) ?? [], t, now)) }))
     .filter((p) => p.missing.length > 0);
   const notReceived = (
     await db.query(`SELECT p.id, p.profile_id, p.amount, p.kind, p.answered_at, u.name FROM pay_payments p JOIN profiles u ON u.id = p.profile_id WHERE p.status = 'not_received' ORDER BY p.answered_at DESC`)
@@ -432,7 +496,7 @@ async function personView(ctx: Ctx, personId: number) {
   const person = (await ctx.db.query('SELECT id, name, roles FROM profiles WHERE id = $1', [personId]))[0];
   const roles = ((person?.roles ?? []) as string[]) ?? [];
   return {
-    person: { id: personId, name: String(person?.name ?? ''), required: payTasksOf(roles), allowed: payTasksAllowed(roles) },
+    person: { id: personId, name: String(person?.name ?? ''), required: tasksOf(ctx.db, roles), allowed: tasksOf(ctx.db, roles, true) },
     calendar: l.cal,
     plans: plansNow(l.terms, now),
     start: l.start,
@@ -455,7 +519,7 @@ async function personView(ctx: Ctx, personId: number) {
 export async function assignPayPlan(db: Db, now: number, personId: number, task: PayTask, planId: number | null, by: number | null) {
   const target = (await db.query('SELECT id, roles, active, agency_id FROM profiles WHERE id = $1', [personId]))[0];
   if (!target || !target.active || target.agency_id) throw notFound('Choisissez une personne active de votre équipe');
-  if (!payTasksAllowed(target.roles ?? []).includes(task)) throw bad('Cette personne ne fait pas ce travail : donnez-lui d’abord le rôle dans Utilisateurs');
+  if (!tasksOf(db, target.roles ?? [], true).includes(task)) throw bad('Cette personne ne fait pas ce travail : donnez-lui d’abord le rôle dans Utilisateurs');
   const plan = planId === null ? null : (await db.query(`SELECT * FROM management_payment_plans WHERE id = $1 AND kind = 'agent' AND active`, [planId]))[0];
   if (planId !== null && !plan) throw bad('Plan introuvable ou archivé');
   const config = plan ? (json(plan.configuration) as ManagementPlanConfig) : null;
@@ -478,6 +542,60 @@ export async function assignPayPlan(db: Db, now: number, personId: number, task:
     else await tx.query('DELETE FROM pay_plan_slots WHERE profile_id = $1 AND task = $2', [personId, task]);
   });
 }
+
+
+// ---------------------------------------------------------------- plans when a person is added or changed (Utilisateurs)
+/** The active plans of each job, for the user form. */
+async function planChoices(db: Db) {
+  return (await db.query(`SELECT id, name, configuration FROM management_payment_plans WHERE kind = 'agent' AND active ORDER BY name`)).map((r: any) => ({
+    id: num(r.id),
+    name: String(r.name),
+    task: agentPlanTask(json(r.configuration) as ManagementPlanConfig) as PayTask,
+  }));
+}
+
+/**
+ * Users › save: each job of the person (Confirmation, Suivi…) gets its plan. A job without a plan blocks the save when
+ * the shop has a plan for that job (with none yet, the person is saved and stays in the red alert until he gets one).
+ * Called before the save (check) and after it (write), with the plans the form sent.
+ */
+export async function payPlansOnSave(
+  ctx: Ctx,
+  p: { personId: number | null; roles: string[]; active: boolean; plans: { task: PayTask; planId: number }[] | undefined; write: boolean },
+): Promise<void> {
+  if (!payIsOn(ctx.shop)) return;
+  paySpace(ctx);
+  if (!p.active) return;
+  const need = tasksOf(ctx.db, p.roles);
+  const allowed = tasksOf(ctx.db, p.roles, true);
+  const choices = await planChoices(ctx.db);
+  const now = ctx.now();
+  const terms = p.personId ? ((await termsOf(ctx.db, [p.personId])).get(p.personId) ?? []) : [];
+  const given = new Map((p.plans ?? []).filter((x) => allowed.includes(x.task)).map((x) => [x.task, x.planId]));
+  for (const [task, planId] of given) {
+    const c = choices.find((x) => x.id === planId);
+    if (!c || c.task !== task) throw bad('Plan de paie introuvable, archivé ou fait pour un autre travail');
+  }
+  if (!p.write) {
+    const LABEL: Record<PayTask, string> = { confirmation: 'Confirmation', suivi: 'Suivi', superviseur: 'Superviseur', depot: 'Dépôt' };
+    const missing = need.filter((t) => !given.has(t) && !termAt(terms, t, now) && choices.some((c) => c.task === t));
+    if (missing.length) throw bad(`Choisissez le plan de paie : ${missing.map((t) => LABEL[t]).join(', ')}`);
+    return;
+  }
+  for (const [task, planId] of given) {
+    if (termAt(terms, task, now)?.planId === planId) continue;
+    await assignPayPlan(ctx.db, now, p.personId!, task, planId, me(ctx));
+  }
+}
+
+/** The people without a plan this person must hear about: an admin, all of them; someone else, those he added. */
+async function noPlanFor(ctx: Ctx) {
+  const all = (await payAlerts(ctx.db, ctx.now())).noPlan;
+  return ctx.session.isAdmin ? all : all.filter((x) => x.createdBy === ctx.session.profile.id);
+}
+
+const TASK_FR: Record<PayTask, string> = { confirmation: 'confirmation', suivi: 'suivi', superviseur: 'superviseur', depot: 'dépôt' };
+const PUSHED_KEY = 'payNoPlanPushedOn';
 
 // ---------------------------------------------------------------- paying
 const PERIOD_FMT = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'Africa/Algiers' });
@@ -507,6 +625,8 @@ export async function recordPayment(
 }
 
 async function balanceOf(ctx: Ctx, key: string) {
+  // an agency keeps no caisse in Pilotix: what it pays is written, never checked against a balance
+  if (SPACE.has(ctx.db)) return null;
   return (await caisseChoices(ctx)).find((c) => c.key === key)?.balance ?? null;
 }
 
@@ -518,6 +638,7 @@ const PAY_OFF = 'La paie des agents n’est pas disponible ici';
 const payProc: typeof proc = (roles, input, run) =>
   proc(roles, input, async (ctx, i) => {
     if (!payIsOn(ctx.shop)) throw forbidden(PAY_OFF);
+    paySpace(ctx);
     return run(ctx, i);
   });
 
@@ -544,7 +665,7 @@ export const payProcs = {
     if (room.why === 'day') throw bad(`Les acomptes se demandent à partir du ${room.fromDay} du mois`);
     if (i.amount > room.available) throw bad(`Vous pouvez demander au plus ${room.available} DA`);
     await ctx.db.query('INSERT INTO pay_requests (profile_id, amount, note, asked_at) VALUES ($1,$2,$3,$4)', [pid, i.amount, i.note || null, new Date(ctx.now()).toISOString()]);
-    await sendPush(ctx, await admins(ctx.db), { title: `${ctx.session.profile.name} demande un acompte`, body: `${i.amount} DA${i.note ? ` · ${i.note}` : ''}`, tag: `pay-ask-${pid}`, url: '#/caisse/paie' }).catch(() => 0);
+    await sendPush(ctx, await admins(ctx.db), { title: `${ctx.session.profile.name} demande un acompte`, body: `${i.amount} DA${i.note ? ` · ${i.note}` : ''}`, tag: `pay-ask-${pid}`, url: boardUrl(ctx.db) }).catch(() => 0);
     return { ok: true };
   }),
   'pay.askCancel': payProc([...STAFF], z.object({}), async (ctx) => {
@@ -561,9 +682,59 @@ export const payProcs = {
     await ctx.db.query('UPDATE pay_payments SET status = $2, answered_at = $3, note = $4 WHERE id = $1', [i.paymentId, i.received ? 'received' : 'not_received', at, i.note || null]);
     if (!i.received) {
       const to = [...new Set([...(await admins(ctx.db)), ...(p.paid_by ? [num(p.paid_by)] : [])])];
-      await sendPush(ctx, to, { title: `${ctx.session.profile.name} : paiement pas reçu`, body: `${num(p.amount)} DA marqués payés ne sont pas arrivés${i.note ? ` · ${i.note}` : ''}`, tag: `pay-not-${i.paymentId}`, url: '#/caisse/paie' }).catch(() => 0);
+      await sendPush(ctx, to, { title: `${ctx.session.profile.name} : paiement pas reçu`, body: `${num(p.amount)} DA marqués payés ne sont pas arrivés${i.note ? ` · ${i.note}` : ''}`, tag: `pay-not-${i.paymentId}`, url: boardUrl(ctx.db) }).catch(() => 0);
     }
     return { ok: true };
+  }),
+
+
+  /** The plans the user form offers, by job, and the jobs a set of roles needs (admins and user managers). */
+  'pay.planChoices': payProc(null, z.object({ personId: Id.nullable().optional() }), async (ctx, i) => {
+    if (!ctx.session.isAdmin && !ctx.session.canManageUsers) throw forbidden();
+    const now = ctx.now();
+    const terms = i.personId ? ((await termsOf(ctx.db, [i.personId])).get(i.personId) ?? []) : [];
+    return {
+      plans: await planChoices(ctx.db),
+      current: PAY_TASKS.map((task) => termAt(terms, task, now)).filter((t): t is PayTerm => !!t).map((t) => ({ task: t.task, planId: t.planId })),
+      tasks: { confirmation: tasksOf(ctx.db, ['confirmation']), suivi: tasksOf(ctx.db, ['suivi']), agent_manager: tasksOf(ctx.db, ['agent_manager'], true), depot: tasksOf(ctx.db, ['depot']) },
+      kind: kindOf(ctx.db),
+      plansUrl: SPACE.has(ctx.db) ? '#/facturation/plans' : '#/management/plans',
+    };
+  }),
+
+  /** The red alert of the home page: the people without a plan (an admin: all; someone else: those he added). */
+  'pay.noPlan': proc(null, z.object({}), async (ctx) => {
+    if (!payIsOn(ctx.shop)) return { people: [], url: '' };
+    paySpace(ctx);
+    if (!ctx.session.isAdmin && !ctx.session.canManageUsers) return { people: [], url: boardUrl(ctx.db) };
+    return { people: await noPlanFor(ctx), url: ctx.session.isAdmin ? boardUrl(ctx.db) : SPACE.has(ctx.db) ? '#/utilisateurs' : '#/management/utilisateurs' };
+  }),
+
+  /**
+   * Once a day (the morning job): each admin, and each person who added someone, hears who still has no plan.
+   * Runs as the shop's system admin; a second run the same day sends nothing.
+   */
+  'pay.noPlanPush': proc([], z.object({}), async (ctx) => {
+    if (!payIsOn(ctx.shop)) return { sent: 0 };
+    paySpace(ctx);
+    const now = ctx.now();
+    const day = new Date(now + 3_600_000).toISOString().slice(0, 10);
+    if ((await getRaw<string | null>(ctx.db, PUSHED_KEY, null)) === day) return { sent: 0, skipped: 'today' };
+    const list = (await payAlerts(ctx.db, now)).noPlan;
+    await setRaw(ctx.db, PUSHED_KEY, day);
+    if (!list.length) return { sent: 0 };
+    const text = (l: typeof list) => l.slice(0, 5).map((x) => `${x.name} (${x.missing.map((t) => TASK_FR[t]).join(', ')})`).join(' · ') + (l.length > 5 ? ` · +${l.length - 5}` : '');
+    const adminIds = await admins(ctx.db);
+    let sent = 0;
+    await sendPush(ctx, adminIds, { title: `${list.length} personne(s) sans plan de paie`, body: text(list), tag: 'pay-noplan', url: boardUrl(ctx.db) }).catch(() => 0);
+    sent += adminIds.length;
+    const byCreator = new Map<number, typeof list>();
+    for (const x of list) if (x.createdBy && !adminIds.includes(x.createdBy)) byCreator.set(x.createdBy, [...(byCreator.get(x.createdBy) ?? []), x]);
+    for (const [who, l] of byCreator) {
+      await sendPush(ctx, [who], { title: `${l.length} personne(s) ajoutée(s) par vous sans plan de paie`, body: text(l), tag: 'pay-noplan', url: SPACE.has(ctx.db) ? '#/utilisateurs' : '#/management/utilisateurs' }).catch(() => 0);
+      sent++;
+    }
+    return { sent };
   }),
 
   // ---------- the owner (Caisse › Paie)
@@ -596,7 +767,7 @@ export const payProcs = {
       const c = json(r.configuration) as ManagementPlanConfig;
       return { id: num(r.id), name: String(r.name), task: agentPlanTask(c), config: c };
     });
-    return { now: new Date(now).toISOString(), calendar: await payCalendarOf(ctx.db), acompte: await payAcompteOf(ctx.db), alerts: await payAlerts(ctx.db, now), people: out, plans, caisses: await caisseChoices(ctx) };
+    return { now: new Date(now).toISOString(), calendar: await payCalendarOf(ctx.db), acompte: await payAcompteOf(ctx.db), alerts: await payAlerts(ctx.db, now), people: out, plans, cashless: SPACE.has(ctx.db), caisses: SPACE.has(ctx.db) ? [{ key: 'main', name: 'Paiement agence', balance: 0 }] : await caisseChoices(ctx) };
   }),
 
   /** One person seen by the owner (the same page as his Ma caisse). */
@@ -633,7 +804,7 @@ export const payProcs = {
           const bal = await balanceOf(ctx, i.caisse);
           if (bal !== null && bal < i.amount) throw bad(`Solde insuffisant : ${bal} DA dans cette caisse`);
           const id = await recordPayment(ctx.db, { personId: num(r.profile_id), kind: 'acompte', amount: i.amount, caisse: i.caisse, by, at: new Date(now).toISOString(), requestId: i.requestId });
-          await sendPush(ctx, [num(r.profile_id)], { title: 'Ton acompte est payé', body: `${ctx.session.profile.name} a payé ${i.amount} DA. Tu l’as reçu ? Réponds dans Ma caisse.`, tag: `pay-${id}`, url: '#/macaisse' }).catch(() => 0);
+          await sendPush(ctx, [num(r.profile_id)], { title: 'Ton acompte est payé', body: `${ctx.session.profile.name} a payé ${i.amount} DA. Tu l’as reçu ? Réponds dans ${mineName(ctx.db)}.`, tag: `pay-${id}`, url: mineUrl(ctx.db) }).catch(() => 0);
           return { id };
         });
       }
@@ -647,7 +818,7 @@ export const payProcs = {
         const to = l.ready.periods[l.ready.periods.length - 1].to;
         const rows = l.rows.filter((r) => Date.parse(r.at) >= Date.parse(from) && Date.parse(r.at) < Date.parse(to));
         const id = await recordPayment(ctx.db, { personId: i.personId, kind: 'pay', from, to, amount: i.amount, caisse: i.caisse, by, at: new Date(now).toISOString(), details: { periods: l.ready.periods, orders: rows.filter((r) => r.kind === 'order').length, earned: rows.reduce((s, r) => s + r.amount, 0) } });
-        await sendPush(ctx, [i.personId], { title: 'Ta paie est payée', body: `${ctx.session.profile.name} a payé ${i.amount} DA (${periodText(from, to)}). Tu l’as reçue ? Réponds dans Ma caisse.`, tag: `pay-${id}`, url: '#/macaisse' }).catch(() => 0);
+        await sendPush(ctx, [i.personId], { title: 'Ta paie est payée', body: `${ctx.session.profile.name} a payé ${i.amount} DA (${periodText(from, to)}). Tu l’as reçue ? Réponds dans ${mineName(ctx.db)}.`, tag: `pay-${id}`, url: mineUrl(ctx.db) }).catch(() => 0);
         return { id };
       });
     },
@@ -657,7 +828,7 @@ export const payProcs = {
     const r = (await ctx.db.query(`SELECT * FROM pay_requests WHERE id = $1 AND status = 'pending'`, [i.requestId]))[0];
     if (!r) throw notFound('Cette demande n’est plus en attente');
     await ctx.db.query(`UPDATE pay_requests SET status = 'refused', decided_by = $2, decided_at = $3, reason = $4 WHERE id = $1`, [i.requestId, me(ctx), new Date(ctx.now()).toISOString(), i.reason || null]);
-    await sendPush(ctx, [num(r.profile_id)], { title: 'Acompte refusé', body: `${num(r.amount)} DA${i.reason ? ` · ${i.reason}` : ''}`, tag: `pay-ask-${num(r.profile_id)}`, url: '#/macaisse' }).catch(() => 0);
+    await sendPush(ctx, [num(r.profile_id)], { title: 'Acompte refusé', body: `${num(r.amount)} DA${i.reason ? ` · ${i.reason}` : ''}`, tag: `pay-ask-${num(r.profile_id)}`, url: mineUrl(ctx.db) }).catch(() => 0);
     return { ok: true };
   }),
 

@@ -85,7 +85,7 @@ test('accounts: archived = closed and out of the team list, kept in the history;
   assert.ok(r.kept[0].uses.includes('orders'));
 
   // a new account that never did anything: archived, then deleted for good (and out of the teams)
-  const u: any = await call('users.create', admin, { phone: tph(), name: 'Erreur Saisie', email: 'erreur@demo.pilotix.dz', password: 'Pass-Sara-123', roles: ['confirmation'], language: 'fr' });
+  const u: any = await call('users.create', admin, { phone: tph(), name: 'Erreur Saisie', email: 'erreur@demo.pilotix.dz', password: 'Pass-Sara-123', roles: ['confirmation'], language: 'fr', plans: [{ task: 'confirmation', planId: Number((await db.query("SELECT id FROM management_payment_plans WHERE kind = 'agent' AND active AND configuration->>'agentTask' = 'confirmation' LIMIT 1"))[0].id) }] });
   const teams = [{ id: 't-x', name: 'Équipe X', managerId: null, agentIds: [u.id, samira.id] }];
   await db.query(`INSERT INTO settings (key, value) VALUES ('teams', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify(teams)]);
   r = await call('archive.delete', admin, { kind: 'users', ids: [u.id] });

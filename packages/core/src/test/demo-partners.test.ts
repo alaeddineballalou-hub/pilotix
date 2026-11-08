@@ -50,6 +50,13 @@ test('the demo store gets its agency and its marketer, each with work to show', 
   assert.deepEqual(((await call('agency.sellers', chiefA, {})) as any[]).map((s) => s.name), ['Pilotix Démo']);
   const conf: any = await call('confirmation.list', { ...chiefA, seller: 'all' }, { sub: 'nouvelles' });
   assert.ok(conf.rows.length > 0, 'new orders to call');
+  // the agency's pay: Nora earns from the store's orders she confirmed; Yasmine has no plan yet (the red alert)
+  const nora = await as(t, agency.schema, 'nora.agence@demo.pilotix.dz');
+  const gains: any = await call('pay.mine', nora, {});
+  assert.equal(gains.plans.length, 1);
+  assert.ok(gains.owed > 0, 'Mes gains: money from the store\'s orders');
+  const noPlan: any = await call('pay.noPlan', chiefA, {});
+  assert.ok(noPlan.people.some((p: any) => p.name === 'Yasmine Kaci'));
   // the marketer's chief: his team's ad sets, one judged « réussi », and his bill
   const chiefM = await as(t, marketer.schema, MK.email);
   const rows: any = await call('mk.overview', { ...chiefM, seller: 'all' }, {});

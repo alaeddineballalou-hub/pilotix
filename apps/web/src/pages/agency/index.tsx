@@ -5,7 +5,7 @@
 // A marketer's space uses the same Vendeurs, Facturation, Utilisateurs and Réglages (its own words, prices and
 // numbers); its Accueil and its ads are in ../marketer.
 import { AgencyCounts, AgencyLinkInfo, AgencyPrices, AgencyTask, confirmRate, deliveryRate, hasPrice, NO_AGENCY_PRICES, NO_COUNTS } from '@pilotix/shared';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, lazy, Suspense, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Out, rpc } from '../../lib/backend';
 import { da, dateOnly, n, pct } from '../../lib/format';
@@ -24,6 +24,10 @@ import { KpiBox } from '../dashboard/util';
 import type { PageProps } from '../registry';
 import { BillLines, billOf, BillsList, CountsLine, CountsRow, EndModal, Lead, LinkStatus, monthLabel, MonthPicker, PriceEditor, PriceList, TaskChips, TaskPicker, usePartnerKind, useTp } from './parts';
 import './agency.css';
+import { NoPlanAlert } from '../caisse/NoPlanAlert';
+
+/** Facturation › Paie: the agents' pay (the same board as a store's Caisse › Paie, without caisses). */
+const PaieBoard = lazy(() => import('../caisse/PaieBoard').then((m) => ({ default: m.PaieBoard })));
 
 type Home = Out<'agency.home'>;
 
@@ -74,6 +78,7 @@ function HomeBody() {
           </p>
         </div>
       </header>
+      <NoPlanAlert />
       {s.isAdmin && <ChiefTop />}
       <section className="card hm-now">
         <div className="card-head">
@@ -700,11 +705,21 @@ export function Facturation({ sub }: PageProps) {
   const mk = usePartnerKind() === 'marketer';
   // an agency's administrators: « Plans » (seller and agent plans, bonuses), « Agents » (their pay and score), « Vendeurs »
   if (mk || !session?.isAdmin) return <SellerBills />;
-  const tab = sub === 'agents' || sub === 'vendeurs' ? sub : 'plans';
+  const tab = sub === 'agents' || sub === 'vendeurs' || sub === 'paie' ? sub : 'plans';
   return (
     <div className="agx-page">
-      <StageBar flow={false} current={tab} items={(['plans', 'agents', 'vendeurs'] as const).map((k) => ({ key: k, label: t(`agency.factTabs.${k}`), href: `#/facturation/${k}` }))} />
-      {tab === 'plans' ? <PlansTab /> : tab === 'agents' ? <AgentsPay /> : <SellerBills />}
+      <StageBar flow={false} current={tab} items={(['plans', 'paie', 'agents', 'vendeurs'] as const).map((k) => ({ key: k, label: t(`agency.factTabs.${k}`), href: `#/facturation/${k}` }))} />
+      {tab === 'plans' ? (
+        <PlansTab />
+      ) : tab === 'paie' ? (
+        <Suspense fallback={<Loading />}>
+          <PaieBoard />
+        </Suspense>
+      ) : tab === 'agents' ? (
+        <AgentsPay />
+      ) : (
+        <SellerBills />
+      )}
     </div>
   );
 }
@@ -745,7 +760,6 @@ function AgentsPay() {
     <>
       <Card title={t('agency.agentsPay.title', { m: monthLabel(month, i18n.language) })} help={t('agency.agentsPay.help')} actions={<MonthPicker value={month} max={max} onChange={setMonth} />}>
         <Kpis>
-          <KpiBox icon="wallet" label={t('agency.agentsPay.toPay')} value={da(pay.data?.total ?? 0)} sub={pay.data?.closedAt ? t('agency.agentsPay.isClosed') : t('agency.agentsPay.open')} tone="warn" />
           <KpiBox icon="users" label={t('agency.agentsPay.agents')} value={n(rows.length)} sub={t('agency.agentsPay.agentsSub')} />
           <KpiBox icon="truck" label={t('agency.c.delivered')} value={n(rows.reduce((s, r) => s + (r.s?.delivered ?? 0) + (r.s?.followDelivered ?? 0), 0))} sub={t('agency.agentsPay.deliveredSub')} tone="ok" />
           <KpiBox icon="chart" label={t('agency.agentsPay.avg')} value={avg === null ? '—' : `${avg} / 100`} sub={t('agency.agentsPay.avgSub')} />
@@ -768,7 +782,6 @@ function AgentsPay() {
                   <th className="num">{t('agency.c.delivered')}</th>
                   <th className="num">{t('agency.agentsPay.followed')}</th>
                   <th>{t('agency.agentsPay.score')}</th>
-                  <th className="num">{t('agency.agentsPay.amount')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -776,21 +789,12 @@ function AgentsPay() {
                   <tr key={r.id}>
                     <td data-l={t('agency.agentsPay.agent')}>
                       <b>{r.name}</b>
-                      {r.lines.length > 0 && (
-                        <details className="agx-pay-lines">
-                          <summary className="muted small">{t('agency.agentsPay.detail', { count: r.operations })}</summary>
-                          <BillLines lines={r.lines} total={r.total} />
-                        </details>
-                      )}
                     </td>
                     <td className="num ltr" data-l={t('agency.c.confirmed')}>{r.s ? `${n(r.s.confirmed)} / ${n(r.s.received)}` : '—'}</td>
                     <td className="num ltr" data-l={t('agency.c.delivered')}>{r.s ? n(r.s.delivered) : '—'}</td>
                     <td className="num ltr" data-l={t('agency.agentsPay.followed')}>{r.s && r.s.followed ? `${n(r.s.followDelivered)} / ${n(r.s.followed)}` : '—'}</td>
                     <td data-l={t('agency.agentsPay.score')}>
                       <ScoreBar v={r.s?.score ?? null} />
-                    </td>
-                    <td className="num" data-l={t('agency.agentsPay.amount')}>
-                      <b className="ltr">{da(r.total)}</b>
                     </td>
                   </tr>
                 ))}
@@ -799,11 +803,9 @@ function AgentsPay() {
           </div>
         )}
         <p className="muted small">{t('agency.agentsPay.scoreHow')}</p>
-        {pay.data && !pay.data.closedAt && (
-          <button type="button" className="btn primary" disabled={close.isPending || ym >= max} onClick={() => confirm(t('agency.agentsPay.closeAsk')) && close.mutate({ month })}>
-            {t('agency.agentsPay.close')}
-          </button>
-        )}
+        <p className="muted small">
+          {t('agency.agentsPay.payMoved')} <a href="#/facturation/paie">{t('agency.factTabs.paie')}</a>
+        </p>
       </section>
     </>
   );

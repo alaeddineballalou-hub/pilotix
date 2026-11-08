@@ -109,6 +109,7 @@ export const USER_REFS: readonly Ref[] = [
   ['pay_payments', 'profile_id', 'cash'],
   ['pay_payments', 'paid_by', 'cash'],
   ['pay_payments', 'cancelled_by', 'cash'],
+  ['profiles', 'created_by', 'history'],
 ];
 
 /** Columns that point to a product (products.id). */
@@ -235,6 +236,9 @@ export interface ArchiveRow {
   stock: number;
 }
 
+/** A person's pay plans alone are not work done (given when he was added): deleted with him. */
+const GOES_WITH_USER = new Set(['pay_plan_slots.profile_id', 'pay_plan_terms.profile_id']);
+
 // ---------------------------------------------------------------- what is used
 /** For each id, what it is linked to (one query per column for the whole list). */
 export async function usesOf(db: Db, kind: ArchiveKind, ids: number[]): Promise<Map<number, UseKind[]>> {
@@ -246,7 +250,7 @@ export async function usesOf(db: Db, kind: ArchiveKind, ids: number[]): Promise<
   };
   if (ids.length) {
     const refs = kind === 'users' ? USER_REFS : kind === 'products' ? PRODUCT_REFS : WAREHOUSE_REFS;
-    for (const [tb, col, u] of refs) for (const r of await db.query(`SELECT DISTINCT ${col} AS id FROM ${tb} WHERE ${col} = ANY($1)`, [ids])) mark(r.id, u);
+    for (const [tb, col, u] of refs) if (!(kind === 'users' && GOES_WITH_USER.has(`${tb}.${col}`))) for (const r of await db.query(`SELECT DISTINCT ${col} AS id FROM ${tb} WHERE ${col} = ANY($1)`, [ids])) mark(r.id, u);
     if (kind === 'products') {
       for (const [tb, col, u] of VARIANT_REFS)
         for (const r of await db.query(`SELECT DISTINCT v.product_id AS id FROM ${tb} t JOIN product_variants v ON v.id = t.${col} WHERE v.product_id = ANY($1)`, [ids])) mark(r.id, u);
@@ -420,6 +424,8 @@ export async function archiveDelete(ctx: Ctx, kind: ArchiveKind, ids: number[]):
     await ctx.db.tx(async (tx) => {
       if (kind === 'users') {
         await tx.query('DELETE FROM referrals WHERE referrer_id = ANY($1)', [free]);
+        await tx.query('DELETE FROM pay_plan_slots WHERE profile_id = ANY($1)', [free]);
+        await tx.query('DELETE FROM pay_plan_terms WHERE profile_id = ANY($1)', [free]);
         await tx.query('DELETE FROM profiles WHERE id = ANY($1) AND archived_at IS NOT NULL', [free]);
         // the teams (Paie, tableau de bord) forget them
         const teams = await getSetting(tx, 'teams');
