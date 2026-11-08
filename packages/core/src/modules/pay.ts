@@ -714,7 +714,8 @@ export const payProcs = {
     return people.map((p) => {
       const l = terms.get(p.id) ?? [];
       const plans = p.allowed.map((task) => termAt(l, task, now)).filter((x): x is PayTerm => !!x).map((x) => ({ task: x.task, name: x.name }));
-      return { id: p.id, plans, missing: p.required.filter((task) => !plans.some((x) => x.task === task)) };
+      // only an administrator sees which plan (and so which rate) each person has; the others see who has none
+      return { id: p.id, plans: ctx.session.isAdmin ? plans : [], missing: p.required.filter((task) => !plans.some((x) => x.task === task)) };
     });
   }),
 

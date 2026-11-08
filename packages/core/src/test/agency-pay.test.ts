@@ -96,6 +96,14 @@ test('agency pay: a plan per job when added, orders counted in the sellers\' sto
     assert.deepEqual(team.find((p: any) => p.id === nora.id).plans.map((x: any) => [x.task, x.name]), [['confirmation', 'Conf 100'], ['suivi', 'Suivi 50']]);
     assert.deepEqual(team.find((p: any) => p.id === sami).missing, ['suivi']);
     assert.deepEqual(await rpc(me, 'pay.teamPlans', {}), []);
+    // nobody but an administrator sees another person's money
+    await assert.rejects(rpc(me, 'pay.board', {}));
+    await assert.rejects(rpc(me, 'pay.person', { personId: lead.id }));
+    await assert.rejects(rpc(me, 'pay.rows', { personId: lead.id, from: new Date(0).toISOString(), to: new Date(clock).toISOString() }), /propre paie/);
+    await assert.rejects(rpc(leadCtx, 'pay.board', {}));
+    await assert.rejects(rpc(leadCtx, 'pay.person', { personId: nora.id }));
+    assert.ok((await rpc(leadCtx, 'pay.teamPlans', {})).every((p: any) => p.plans.length === 0), 'a user manager sees who has no plan, not the plans');
+    assert.equal((await rpc(me, 'pay.mine', {})).open.earned, 150, 'his own: yes');
     // adding the job later asks its plan too
     await assert.rejects(rpc(chief, 'users.update', { id: lead.id, roles: ['agent_manager', 'suivi'] }), /plan de paie : Suivi/);
     await rpc(chief, 'users.update', { id: lead.id, roles: ['agent_manager', 'suivi'], plans: [{ task: 'suivi', planId: suivi.id }] });
