@@ -1429,7 +1429,11 @@
         "wrote": "écrite par {{by}} · {{date}}",
         "found": "trouvée la nuit, approuvée par {{by}} · {{date}}",
         "noRoom": "ne tient pas dans le livre",
-        "remove": "Retirer"
+        "remove": "Retirer",
+        "list_one": "{{count}} leçon en attente",
+        "list_other": "{{count}} leçons en attente",
+        "show": "Afficher",
+        "hide": "Masquer"
       },
       "lessons": {
         "title": "Leçons",
