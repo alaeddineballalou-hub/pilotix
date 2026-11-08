@@ -61,6 +61,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
   const admin = !!session?.isAdmin;
   const all = useRpc('catalog.products', {});
   const grids = useRpc('catalog.feeGrids', {});
+  const lotsCfg = useRpc('stock.batchConfig', {});
   const [f, setF] = useState({
     name: p?.name ?? '',
     sku: p?.sku ?? '',
@@ -69,6 +70,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
     weightKg: String(p?.weightKg ?? 1),
     photo: p?.photo ?? '',
     isService: !!p?.isService,
+    hasBatches: !!p?.hasBatches,
     active: p ? !!p.active : true,
     fixedPrice: !!p?.fixedPrice,
     maxDiscount: p ? (p.maxDiscount === null ? '' : String(p.maxDiscount)) : '',
@@ -180,6 +182,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
       weightKg: Number(f.weightKg) || 0,
       photo: f.photo.trim() || null,
       isService: f.isService,
+      ...(lotsCfg.data?.on ? { hasBatches: f.hasBatches } : {}),
       active: f.active,
       fixedPrice: f.fixedPrice,
       maxDiscount: f.maxDiscount === '' ? null : Math.max(0, Math.round(Number(f.maxDiscount) || 0)),
@@ -377,6 +380,12 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
                 <input type="checkbox" checked={f.active} onChange={(e) => set('active', e.target.checked)} />
                 {t('produits.form.active')}
               </label>
+              {lotsCfg.data?.on && !f.isService && (
+                <label className="check" title={t('produits.form.hasBatchesHint')}>
+                  <input type="checkbox" checked={f.hasBatches} onChange={(e) => set('hasBatches', e.target.checked)} />
+                  {t('produits.form.hasBatches')}
+                </label>
+              )}
             </div>
           </section>
         </div>

@@ -21,7 +21,7 @@ export function Utilisateurs({ sub, rest }: PageProps) {
   return <UsersPage sub={sub} rest={rest} />;
 }
 
-const MGMT = ['plans', 'statuts', 'affectation', 'paie', 'prix', 'canaux', 'alertes', 'livreur', 'archive'] as const;
+const MGMT = ['plans', 'statuts', 'affectation', 'paie', 'prix', 'canaux', 'alertes', 'stock', 'livreur', 'archive'] as const;
 const ARCHIVE_KINDS = ['users', 'products', 'warehouses'] as const;
 export function Management({ sub, rest }: PageProps) {
   const { t } = useTranslation();
@@ -34,7 +34,7 @@ export function Management({ sub, rest }: PageProps) {
   return (
     <>
       <StageBar flow={false} current={cur} items={mine.filter((k) => pageIsOn('management', k)).map((k) => ({ key: k, label: t(`admin.subs.${k}`), href: `#/management/${k}` }))} />
-      {cur === 'plans' ? <ManagementPlans /> : cur === 'statuts' ? <Statuts /> : cur === 'affectation' ? <Affectation /> : cur === 'paie' ? <Paie /> : cur === 'prix' ? <Prix /> : cur === 'canaux' ? <Canaux /> : cur === 'alertes' ? <DepotAlertsCfg /> : cur === 'livreur' ? <LivreurCfg /> : <Archive key={kind ?? 'users'} initial={kind} />}
+      {cur === 'plans' ? <ManagementPlans /> : cur === 'statuts' ? <Statuts /> : cur === 'affectation' ? <Affectation /> : cur === 'paie' ? <Paie /> : cur === 'prix' ? <Prix /> : cur === 'canaux' ? <Canaux /> : cur === 'alertes' ? <DepotAlertsCfg /> : cur === 'stock' ? <StockCfg /> : cur === 'livreur' ? <LivreurCfg /> : <Archive key={kind ?? 'users'} initial={kind} />}
     </>
   );
 }
@@ -66,6 +66,36 @@ function DepotAlertsCfg() {
       )}
       <p className="muted small">{cur.length ? t('admin.dalert.chosen', { count: cur.length }) : t('admin.dalert.all')}</p>
       <button className="btn primary" disabled={save.isPending || to === null} onClick={() => save.mutate({ to: cur }, { onSuccess: () => setTo(null) })}>
+        {t('common.save')}
+      </button>
+    </div>
+  );
+}
+
+/** Management › Stock: « Lots et dates d'expiration » on or off, and when a lot is « bientôt périmé ». */
+function StockCfg() {
+  const { t } = useTranslation();
+  const q = useRpc('stock.batchConfig', {});
+  const [v, setV] = useState<{ on: boolean; warnDays: number } | null>(null);
+  const save = useAction('stock.batchConfigSet', { success: t('common.saved') });
+  const cur = v ?? q.data ?? { on: false, warnDays: 30 };
+  return (
+    <div className="card">
+      <h2>{t('admin.stockCfg.title')}</h2>
+      <label className="dl-switch" style={{ margin: '12px 0' }}>
+        <input type="checkbox" checked={cur.on} onChange={(e) => setV({ ...cur, on: e.target.checked })} />
+        <span>
+          <b>{t('admin.stockCfg.lots')}</b>
+          <small>{t('admin.stockCfg.lotsHint')}</small>
+        </span>
+      </label>
+      {cur.on && (
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, maxWidth: 260, margin: '0 0 12px' }}>
+          <span className="muted small">{t('admin.stockCfg.warnDays')}</span>
+          <input type="number" min={1} max={365} value={cur.warnDays} onChange={(e) => setV({ ...cur, warnDays: Math.max(1, Math.min(365, Number(e.target.value) || 1)) })} />
+        </label>
+      )}
+      <button className="btn primary" disabled={save.isPending || v === null} onClick={() => save.mutate(cur, { onSuccess: () => setV(null) })}>
         {t('common.save')}
       </button>
     </div>

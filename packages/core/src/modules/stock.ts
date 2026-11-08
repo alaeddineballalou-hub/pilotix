@@ -2,10 +2,11 @@
 // (a whole depot counted and validated in one go), low-stock alerts, transfers between depots (one or many products),
 // suppliers, and purchases — stock that comes in at a purchase price, paid to the supplier now or later.
 import { Page } from '@pilotix/shared';
+import { getSetting, setSetting } from '../settings';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
-import { logProductChange, moveStock, stockRows, StockLine } from './catalog';
+import { logProductChange, moveStock, stockRows, StockLine, transferBatches } from './catalog';
 import { CaisseKey, checkCaisse } from './cash';
 
 const id = z.number().int().positive();
@@ -160,7 +161,8 @@ export async function transferMany(ctx: Ctx, i: z.infer<typeof TransferManyInput
     }
     const note = i.note || `${a.name} → ${b.name}`;
     for (const l of i.lines) {
-      await moveStock(tx, { variantId: l.variantId, warehouseId: a.id, delta: -l.qty, reason: 'transfer_out', userId: me(ctx), note });
+      await transferBatches(tx, l.variantId, a.id, b.id, l.qty);
+      await moveStock(tx, { variantId: l.variantId, warehouseId: a.id, delta: -l.qty, reason: 'transfer_out', userId: me(ctx), note, lotsMoved: true });
       await moveStock(tx, { variantId: l.variantId, warehouseId: b.id, delta: l.qty, reason: 'transfer_in', userId: me(ctx), note });
     }
     return { lines: i.lines.length, pieces: i.lines.reduce((s, l) => s + l.qty, 0) };
@@ -239,7 +241,19 @@ async function saveSupplier(ctx: Ctx, i: z.infer<typeof SupplierInput>): Promise
 export const PurchaseInput = z.object({
   supplierId: id.nullable(),
   warehouseId: id,
-  lines: z.array(z.object({ variantId: id, qty, unitCost: money })).min(1).max(500),
+  lines: z
+    .array(
+      z.object({
+        variantId: id,
+        qty,
+        unitCost: money,
+        /** a product « a des lots » (Management › Stock on): its lot and expiry date */
+        lot: z.string().trim().max(60).optional(),
+        expiresOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date d’expiration invalide').optional(),
+      }),
+    )
+    .min(1)
+    .max(500),
   /** paid to the supplier at once (DA) */
   paid: money.default(0),
   /** the caisse that money leaves (default: the owner's main caisse; an employee's own caisse) */
@@ -357,6 +371,12 @@ export async function createPurchase(ctx: Ctx, i: z.infer<typeof PurchaseInput>)
       ? new Map((await tx.query(`SELECT v.id, COALESCE(v.weight_kg, p.weight_kg) AS w, p.name, v.title FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = ANY($1)`, [i.lines.map((l) => l.variantId)]))
           .map((r: any) => [num(r.id), { w: r.w === null ? null : Number(r.w), label: label(r.name, r.title) }]))
       : new Map<number, { w: number | null; label: string }>();
+    // products with lots (Management › Stock on): each line says its expiry date
+    const lotsOn = (await getSetting(tx, 'stockBatches')).on;
+    const withLots = lotsOn
+      ? new Map((await tx.query(`SELECT v.id, p.name, v.title FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = ANY($1) AND p.has_batches`, [i.lines.map((l) => l.variantId)])).map((r: any) => [num(r.id), label(r.name, r.title)]))
+      : new Map<number, string>();
+    for (const l of i.lines) if (withLots.has(l.variantId) && !l.expiresOn) throw bad(`Date d’expiration obligatoire pour « ${withLots.get(l.variantId)} » (produit avec lots)`);
     const landed = spreadCosts(i.lines.map((l) => ({ qty: l.qty, unitCost: l.unitCost, weightKg: info.get(l.variantId)?.w ?? null, label: info.get(l.variantId)?.label })), extraTotal, i.spread);
     if (total > 2_000_000_000) throw bad('Montant trop grand');
     if (i.paid > total) throw bad('Le montant payé dépasse le total de l’achat');
@@ -375,6 +395,11 @@ export async function createPurchase(ctx: Ctx, i: z.infer<typeof PurchaseInput>)
       const cost = landed[k].landed;
       await tx.query('INSERT INTO purchase_lines (purchase_id, variant_id, qty, unit_cost, extra_share, landed_cost) VALUES ($1,$2,$3,$4,$5,$6)', [pid, l.variantId, l.qty, l.unitCost, landed[k].share, extraTotal > 0 ? cost : null]);
       await moveStock(tx, { variantId: l.variantId, warehouseId: w.id, delta: l.qty, reason: 'purchase', userId: me(ctx), note: `Achat ${ref}${supplier ? ` — ${supplier}` : ''}`, purchaseId: pid, unitCost: cost });
+      if (withLots.has(l.variantId)) {
+        await tx.query('INSERT INTO stock_batches (variant_id, warehouse_id, lot, expires_on, qty, received, purchase_id) VALUES ($1,$2,$3,$4,$5,$5,$6)', [
+          l.variantId, w.id, l.lot || ref, l.expiresOn, l.qty, pid,
+        ]);
+      }
     }
     if (i.updateCost) {
       // Show the last purchase cost per variant; all historic receipt costs
@@ -506,6 +531,54 @@ export async function forecast(ctx: Ctx, i: z.infer<typeof ForecastInput>): Prom
   return { rows, idle: vids.length - selling.length, warehouseId: i.warehouseId ?? null };
 }
 
+export interface BatchRow {
+  id: number;
+  variantId: number;
+  productName: string;
+  variantTitle: string;
+  sku: string;
+  warehouseId: number;
+  warehouseName: string;
+  lot: string;
+  expiresOn: string | null;
+  qty: number;
+  received: number;
+  /** days until its date (negative: past) */
+  daysLeft: number | null;
+  status: 'expired' | 'soon' | 'ok';
+  /** the lot to send first for this product in this depot */
+  first: boolean;
+  purchaseRef: string | null;
+}
+
+export async function batchList(ctx: Ctx, i: { warehouseId?: number; filter: 'all' | 'expired' | 'soon' }): Promise<{ on: boolean; warnDays: number; rows: BatchRow[] }> {
+  const cfg = await getSetting(ctx.db, 'stockBatches');
+  const rows = await ctx.db.query(
+    `SELECT b.*, p.name, v.title, v.sku, w.name AS wname, pu.ref,
+       (b.expires_on - (now() AT TIME ZONE 'Africa/Algiers')::date) AS days
+     FROM stock_batches b JOIN product_variants v ON v.id = b.variant_id JOIN products p ON p.id = v.product_id
+     JOIN warehouses w ON w.id = b.warehouse_id LEFT JOIN purchases pu ON pu.id = b.purchase_id
+     WHERE b.qty > 0 AND ($1::bigint IS NULL OR b.warehouse_id = $1)
+     ORDER BY b.expires_on ASC NULLS LAST, b.created_at, b.id`,
+    [i.warehouseId ?? null],
+  );
+  const seen = new Set<string>();
+  const out = rows.map((r: any): BatchRow => {
+    const days = r.days === null ? null : num(r.days);
+    const key = `${r.variant_id}:${r.warehouse_id}`;
+    const first = !seen.has(key);
+    seen.add(key);
+    return {
+      id: num(r.id), variantId: num(r.variant_id), productName: r.name, variantTitle: r.title ?? '', sku: r.sku ?? '',
+      warehouseId: num(r.warehouse_id), warehouseName: r.wname, lot: r.lot, expiresOn: r.expires_on ? String(r.expires_on instanceof Date ? r.expires_on.toISOString().slice(0, 10) : r.expires_on).slice(0, 10) : null,
+      qty: num(r.qty), received: num(r.received), daysLeft: days,
+      status: days !== null && days < 0 ? 'expired' : days !== null && days <= cfg.warnDays ? 'soon' : 'ok',
+      first, purchaseRef: r.ref ?? null,
+    };
+  });
+  return { on: cfg.on, warnDays: cfg.warnDays, rows: i.filter === 'all' ? out : out.filter((r) => r.status === (i.filter === 'expired' ? 'expired' : 'soon')) };
+}
+
 export const stockProcs = {
   /** "Prix": sale price, purchase price and maximum discount of many products at once. */
   'catalog.setPrices': proc([...DEPOT], PricesInput, (ctx, i) => setPrices(ctx, i)),
@@ -569,6 +642,26 @@ export const stockProcs = {
    * stock wanted. « now »: it runs out before a purchase made today arrives; « soon »: within two weeks after that.
    */
   'catalog.forecast': proc([...DEPOT], ForecastInput, (ctx, i) => forecast(ctx, i)),
+
+  /** Management › Stock: « Lots et dates d'expiration » on or off, and the days before a lot's date it is « bientôt périmé ». */
+  'stock.batchConfig': proc([...DEPOT], z.object({}), async (ctx) => getSetting(ctx.db, 'stockBatches')),
+  'stock.batchConfigSet': proc(['admin'], z.object({ on: z.boolean(), warnDays: z.number().int().min(1).max(365) }), async (ctx, i) => {
+    await setSetting(ctx.db, 'stockBatches', i);
+    ctx.emit({ type: 'stock' });
+    return i;
+  }),
+  /** A product « a des lots » or not (its next purchases say each lot and its date). */
+  'catalog.setBatches': proc([...DEPOT], z.object({ productId: id, on: z.boolean() }), async (ctx, i) => {
+    const r = await ctx.db.query('UPDATE products SET has_batches = $2 WHERE id = $1 AND NOT is_service RETURNING id', [i.productId, i.on]);
+    if (!r.length) throw notFound('Produit introuvable');
+    ctx.emit({ type: 'stock' });
+    return { ok: true };
+  }),
+  /**
+   * « Lots »: what is left of each lot, the one to send first per product and depot (it expires first), and the lots
+   * past their date (« périmé ») or within the warning days (« bientôt »).
+   */
+  'stock.batches': proc([...DEPOT], z.object({ warehouseId: id.optional(), filter: z.enum(['all', 'expired', 'soon']).default('all') }), (ctx, i) => batchList(ctx, i)),
 
   /** "Dépôts & transferts": the depots with their stock, and the transfers between them. */
   'catalog.depots': proc([...DEPOT], z.object({}), async (ctx) => {

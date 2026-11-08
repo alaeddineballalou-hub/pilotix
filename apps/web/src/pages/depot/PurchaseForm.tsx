@@ -12,13 +12,14 @@ import { toast } from '../../ui/toast';
 import { bidi, MoneyInput, PickItem, ProductPicker, Stepper, useDepots } from './stockui';
 
 export type PurchasePrefill = { supplierId?: number | null; warehouseId?: number; lines?: { variantId: number; qty: number; unitCost?: number }[] };
-type Line = { variantId: number; label: string; sku: string; qty: number | ''; unitCost: number | '' };
+type Line = { variantId: number; label: string; sku: string; qty: number | ''; unitCost: number | ''; lot?: string; expiresOn?: string };
 
 export function PurchaseForm({ prefill, onClose }: { prefill?: PurchasePrefill; onClose: () => void }) {
   const { t } = useTranslation();
   const { depots, many } = useDepots();
   const sups = useRpc('suppliers.list', {});
   const prods = useRpc('catalog.products', {});
+  const lotsCfg = useRpc('stock.batchConfig', {});
   const items: PickItem[] = useMemo(
     () =>
       (prods.data ?? [])
@@ -27,6 +28,11 @@ export function PurchaseForm({ prefill, onClose }: { prefill?: PurchasePrefill; 
     [prods.data, t],
   );
   const byId = useMemo(() => new Map(items.map((it) => [it.variantId, it])), [items]);
+  // the variants whose product « a des lots » (Management › Stock on): each line says its lot and expiry date
+  const lotted = useMemo(
+    () => new Set(lotsCfg.data?.on ? (prods.data ?? []).filter((p) => p.hasBatches).flatMap((p) => p.variants.map((v) => v.id)) : []),
+    [prods.data, lotsCfg.data],
+  );
   const [supplier, setSupplier] = useState<string>(prefill?.supplierId ? String(prefill.supplierId) : '');
   const [newSup, setNewSup] = useState({ name: '', phone: '' });
   const [wid, setWid] = useState<number | null>(prefill?.warehouseId ?? null);
@@ -67,6 +73,8 @@ export function PurchaseForm({ prefill, onClose }: { prefill?: PurchasePrefill; 
     const bad = lines.find((l) => l.qty === '' || l.qty < 1 || l.unitCost === '');
     if (bad) return toast(t('produits.buy.badLine', { name: bad.label }), 'bad');
     if (paidV > total) return toast(t('produits.buy.paidTooMuch'), 'bad');
+    const noDate = lines.find((l) => lotted.has(l.variantId) && !l.expiresOn);
+    if (noDate) return toast(t('produits.buy.needExpiry', { name: noDate.label }), 'bad');
     const badCost = costs.find((c) => c.amount !== '' && c.amount > 0 && !c.label.trim());
     if (badCost) return toast(t('produits.buy.costNoLabel'), 'bad');
     if (costTotal > 0 && !spread) return toast(t('produits.buy.chooseSpread'), 'bad');
@@ -83,7 +91,7 @@ export function PurchaseForm({ prefill, onClose }: { prefill?: PurchasePrefill; 
       setBusy(false);
       setSupplier(String(supplierId));
     }
-    create.mutate({ supplierId, warehouseId: depot, lines: lines.map((l) => ({ variantId: l.variantId, qty: l.qty as number, unitCost: l.unitCost as number })), paid: paidV, updateCost, note: note.trim(), extras: costs.filter((c) => c.amount !== '' && c.amount > 0).map((c) => ({ label: c.label.trim(), amount: c.amount as number })), spread: costTotal > 0 ? spread ?? undefined : undefined });
+    create.mutate({ supplierId, warehouseId: depot, lines: lines.map((l) => ({ variantId: l.variantId, qty: l.qty as number, unitCost: l.unitCost as number, ...(lotted.has(l.variantId) ? { lot: (l.lot ?? '').trim() || undefined, expiresOn: l.expiresOn } : {}) })), paid: paidV, updateCost, note: note.trim(), extras: costs.filter((c) => c.amount !== '' && c.amount > 0).map((c) => ({ label: c.label.trim(), amount: c.amount as number })), spread: costTotal > 0 ? spread ?? undefined : undefined });
   };
 
   return (
@@ -177,6 +185,18 @@ export function PurchaseForm({ prefill, onClose }: { prefill?: PurchasePrefill; 
                   <button type="button" className="icon-btn pd-x" aria-label={t('produits.buy.removeOf', { name: l.label })} onClick={() => setLines((ls) => ls.filter((x) => x.variantId !== l.variantId))}>
                     <Icon name="x" />
                   </button>
+                  {lotted.has(l.variantId) && (
+                    <span className="pd-lotrow">
+                      <label className="pd-in">
+                        <small className="pd-lab">{t('produits.buy.lot')}</small>
+                        <input value={l.lot ?? ''} maxLength={60} placeholder={t('produits.buy.lotPh')} onChange={(e) => setLines((ls) => ls.map((x) => (x.variantId === l.variantId ? { ...x, lot: e.target.value } : x)))} />
+                      </label>
+                      <label className="pd-in">
+                        <small className="pd-lab">{t('produits.buy.expiresOn')} *</small>
+                        <input type="date" className={l.expiresOn ? '' : 'bad'} value={l.expiresOn ?? ''} onChange={(e) => setLines((ls) => ls.map((x) => (x.variantId === l.variantId ? { ...x, expiresOn: e.target.value } : x)))} />
+                      </label>
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>

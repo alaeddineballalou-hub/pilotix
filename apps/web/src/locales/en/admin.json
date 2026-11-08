@@ -14,7 +14,8 @@
     "canaux": "Sales channels",
     "archive": "Archives",
     "alertes": "Depot alerts",
-    "livreur": "Livreur"
+    "livreur": "Livreur",
+    "stock": "Stock"
   },
   "users": {
     "rolesTitle": "Roles",
@@ -893,5 +894,11 @@
       "note": "The agent sees the time left on the order (↻). Every move is written in the order’s history."
     },
     "ranMoved": "{{n}} given · {{b}} taken back · {{m}} moved"
+  },
+  "stockCfg": {
+    "title": "Stock",
+    "lots": "Lots and expiry dates",
+    "lotsHint": "For cosmetics, food…: tick « Has lots » on a product; its purchases say each lot and its date, and stock always leaves from the lot that expires first. Off: no lot anywhere.",
+    "warnDays": "« Expiring soon »: days before the date"
   }
 }

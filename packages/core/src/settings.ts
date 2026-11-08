@@ -133,6 +133,8 @@ export interface SettingsMap {
   caisses: { bankHidden: boolean };
   /** Dépôt alerts (an order still in the depot was changed or cancelled): who gets them; [] = every depot agent */
   depotAlerts: { to: number[] };
+  /** Management › Stock: « Lots et dates d'expiration » (off: no lot anywhere), and how many days before its date a lot is « bientôt périmé » */
+  stockBatches: { on: boolean; warnDays: number };
   /** Order-list column presets: saved by an admin, shared with everyone, never edited (only deleted by an admin) */
   colPresets: { id: string; name: string; cols: string[]; by: string; at: string }[];
   /** The preset every team uses (set by an admin; only an admin changes the columns) */
@@ -246,6 +248,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   goals: { monthlyRevenue: 3_000_000 },
   caisses: { bankHidden: false },
   depotAlerts: { to: [] },
+  stockBatches: { on: false, warnDays: 30 },
   colPresets: [],
   colPresetActive: null,
   livreurMessages: [

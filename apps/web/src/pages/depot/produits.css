@@ -708,3 +708,11 @@ a.chip.lp-nolp:hover { text-decoration: underline; }
 .pd-ro-landed{display:block;color:var(--muted);font-size:12px}
 .pd-ro-costs{display:flex;flex-direction:column;gap:2px;padding:8px 12px;margin:6px 0;border-radius:10px;background:var(--px-orange-soft,#fff3e0)}
 .pd-ro-costs small{color:var(--muted)}
+/* Lots */
+.pd-lotrow{grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap;padding:4px 0 2px}
+.pd-lotrow input{min-width:150px}
+.pd-lotrow input.bad{border-color:#dc2626}
+.pd-lots-st{display:inline-block;padding:2px 8px;border-radius:99px;font-weight:700;font-size:12.5px;background:var(--px-green-soft,#e7f6ec);color:var(--px-green,#1e8a4c)}
+.pd-lots-st.soon{background:var(--px-orange-soft,#fff3e0);color:#b45309}
+.pd-lots-st.expired{background:#fee2e2;color:#b91c1c}
+.pd-first{display:inline-block;margin-inline-start:6px;padding:1px 6px;border-radius:6px;background:#1B2A47;color:#fff;font-size:11px;font-weight:700}

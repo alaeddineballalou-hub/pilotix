@@ -9,7 +9,8 @@
     "alertes": "Alertes",
     "achats": "Achats",
     "depots": "Dépôts",
-    "prevision": "Prévisions"
+    "prevision": "Prévisions",
+    "lots": "Lots"
   },
   "about": {
     "stock": "Ce qu’il y a dans chaque dépôt, ce qui est déjà promis aux commandes et ce qui reste à vendre. Les produits revenus cassés sont à part (« Cassé »).",
@@ -21,7 +22,8 @@
     "depots": "Vos dépôts, ce que chacun contient, et les transferts de stock de l’un à l’autre.",
     "guides": "Le guide de vente de chaque produit : ce que les conseillers lisent pendant l’appel, et ce que Dellal et CM AI utilisent pour répondre aux clients.",
     "guidesAgent": "Le guide de vente de vos produits : quoi dire, les réponses aux questions et aux hésitations des clients.",
-    "prevision": "Quand chaque produit sera épuisé, au rythme de ses ventes, et combien en acheter maintenant."
+    "prevision": "Quand chaque produit sera épuisé, au rythme de ses ventes, et combien en acheter maintenant.",
+    "lots": "Ce qui reste de chaque lot, le lot à envoyer en premier, et les lots périmés ou bientôt périmés."
   },
   "ui": {
     "allDepots": "Tous les dépôts",
@@ -313,7 +315,11 @@
     "spreadHint_weight": "Selon le poids de chaque produit (le plus juste pour le transport).",
     "weightNote": "Le prix réel de chaque pièce est calculé à l’enregistrement, avec le poids de chaque produit.",
     "costNoLabel": "Donnez un nom à chaque frais (ex. Transport).",
-    "chooseSpread": "Choisissez comment répartir les frais : par valeur, par quantité ou par poids."
+    "chooseSpread": "Choisissez comment répartir les frais : par valeur, par quantité ou par poids.",
+    "lot": "Lot",
+    "lotPh": "ex. L2405 (vide : la réf. de l’achat)",
+    "expiresOn": "Expire le",
+    "needExpiry": "Date d’expiration obligatoire pour « {{name}} » (produit avec lots)."
   },
   "buys": {
     "kDue": "À payer aux fournisseurs",
@@ -523,7 +529,9 @@
     "archived": "Produit archivé (Management › Archives)",
     "archiveStock": "Il reste du stock : faites une sortie de stock d’abord, puis archivez",
     "removeAsk": "Supprimer « {{name}} » pour toujours ? Seulement si le produit n’a jamais servi (aucune commande, aucun stock).",
-    "removed": "Produit supprimé"
+    "removed": "Produit supprimé",
+    "hasBatches": "A des lots (date d’expiration)",
+    "hasBatchesHint": "Ses achats disent chaque lot et sa date d’expiration ; le stock part du lot qui expire en premier."
   },
   "landing": {
     "none": "Sans landing page",
@@ -798,5 +806,21 @@
     "help": "Rythme = pièces expédiées sur la période choisie. « À commander » : le produit sera épuisé avant qu’un achat fait aujourd’hui arrive ({{lead}} jours). « À acheter » : de quoi tenir {{total}} jours ({{lead}} de délai + {{cover}} de stock), moins ce qui reste.",
     "idle_one": "{{count}} produit en stock ne s’est pas vendu ces {{days}} jours.",
     "idle_other": "{{count}} produits en stock ne se sont pas vendus ces {{days}} jours."
+  },
+  "lots": {
+    "filters": "Filtrer les lots",
+    "fAll": "Tous",
+    "expired": "Périmés",
+    "soon": "Bientôt ({{count}} j)",
+    "lot": "Lot",
+    "expires": "Expire",
+    "left": "Reste",
+    "first": "À envoyer en premier",
+    "since_one": "périmé depuis {{count}} jour",
+    "since_other": "périmé depuis {{count}} jours",
+    "today": "expire aujourd’hui",
+    "none": "Aucun lot en stock. Cochez « A des lots » sur un produit, puis faites un achat avec la date d’expiration.",
+    "noneHere": "Aucun lot dans ce filtre.",
+    "help": "Le stock qui part (expédié, cassé, inventaire…) est pris dans le lot qui expire en premier. Un transfert garde le lot et sa date. Ce qui est en stock hors lot (avant d’activer les lots, un retour) n’a pas de lot."
   }
 }

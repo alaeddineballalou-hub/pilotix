@@ -14,6 +14,7 @@ import type { PageProps } from '../registry';
 import { Achats } from './Achats';
 import { Alertes } from './Alertes';
 import { Prevision } from './Prevision';
+import { Lots } from './Lots';
 import { Depots } from './Depots';
 import { Inventaire } from './Inventaire';
 import { useDebounced } from './OrderList';
@@ -25,9 +26,9 @@ import './produits.css';
 import { AssignedCatalog } from './AssignedCatalog';
 import { Guides } from './Guides';
 
-const TABS = ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'prevision', 'achats', 'depots'] as const;
+const TABS = ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'prevision', 'lots', 'achats', 'depots'] as const;
 type Tab = (typeof TABS)[number];
-const ICONS: Record<Tab, string> = { stock: 'package', inventaire: 'clipboard', produits: 'tag', guides: 'book', mouvements: 'swap', alertes: 'alert', prevision: 'chart', achats: 'receipt', depots: 'building' };
+const ICONS: Record<Tab, string> = { stock: 'package', inventaire: 'clipboard', produits: 'tag', guides: 'book', mouvements: 'swap', alertes: 'alert', prevision: 'chart', lots: 'calendar', achats: 'receipt', depots: 'building' };
 
 export function Produits(props: PageProps) {
   const { session, has } = useSession();
@@ -39,7 +40,8 @@ function DepotProduits({ sub, rest }: PageProps) {
   // the former « Prix » tab lives in Produits now
   const tab: Tab = sub === 'prix' ? 'produits' : (TABS as readonly string[]).includes(sub ?? '') ? (sub as Tab) : 'stock';
   const alerts = useRpc('catalog.alerts', {});
-  const tabs = TABS.filter((k) => pageIsOn('produits', k)).map((k) => ({ key: k, label: t(`produits.tabs.${k}`), icon: ICONS[k], href: `#/produits/${k}`, count: k === 'alertes' ? alerts.data?.length : undefined, alert: k === 'alertes' }));
+  const lotsCfg = useRpc('stock.batchConfig', {});
+  const tabs = TABS.filter((k) => pageIsOn('produits', k) && (k !== 'lots' || !!lotsCfg.data?.on)).map((k) => ({ key: k, label: t(`produits.tabs.${k}`), icon: ICONS[k], href: `#/produits/${k}`, count: k === 'alertes' ? alerts.data?.length : undefined, alert: k === 'alertes' }));
   const arg = rest?.[0] ? decodeURIComponent(rest[0]) : undefined;
   return (
     <div className="pd">
@@ -51,6 +53,7 @@ function DepotProduits({ sub, rest }: PageProps) {
       {tab === 'mouvements' && <MovesTab key={arg ?? ''} initial={arg} />}
       {tab === 'alertes' && <Alertes />}
       {tab === 'prevision' && <Prevision />}
+      {tab === 'lots' && <Lots />}
       {tab === 'achats' && <Achats open={arg && /^\d+$/.test(arg) ? Number(arg) : undefined} />}
       {tab === 'depots' && <Depots />}
     </div>

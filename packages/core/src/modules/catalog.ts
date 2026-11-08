@@ -45,6 +45,8 @@ export interface CatalogProduct {
   weightKg: number;
   photo: string | null;
   isService: boolean;
+  /** « a des lots »: its purchases say each lot and its expiry date (Management › Stock) */
+  hasBatches: boolean;
   active: boolean;
   fixedPrice: boolean;
   maxDiscount: number | null;
@@ -141,6 +143,7 @@ function toProduct(p: any, vars: any[]): CatalogProduct {
     weightKg: Number(p.weight_kg),
     photo: p.photo ?? null,
     isService: !!p.is_service,
+    hasBatches: !!p.has_batches,
     active: !!p.active,
     fixedPrice: !!p.fixed_price,
     maxDiscount: numOrNull(p.max_discount),
@@ -269,9 +272,11 @@ export async function logProductChange(
 /** Adds `delta` to the stock of a variant in a depot and writes the movement. Use inside a transaction. */
 export async function moveStock(
   db: Db,
-  a: { variantId: number; warehouseId: number; delta: number; reason: string; orderId?: number | null; userId: number | null; note?: string | null; purchaseId?: number | null; inventoryId?: number | null; unitCost?: number | null },
+  a: { variantId: number; warehouseId: number; delta: number; reason: string; orderId?: number | null; userId: number | null; note?: string | null; purchaseId?: number | null; inventoryId?: number | null; unitCost?: number | null; lotsMoved?: boolean },
 ) {
   if (!a.delta) return;
+  // stock leaving: out of the lots that expire first (what is left outside any lot goes last); a transfer moves its lots itself
+  if (a.delta < 0 && !a.lotsMoved) await takeFromBatches(db, a.variantId, a.warehouseId, -a.delta);
   await db.query(
     `INSERT INTO stock (variant_id, warehouse_id, qty) VALUES ($1,$2,$3)
      ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET qty = stock.qty + EXCLUDED.qty`,
@@ -285,6 +290,34 @@ export async function moveStock(
 }
 
 /**
+ * Takes `n` pieces out of a variant's lots in a depot: the lot that expires first first (no date: last), the oldest
+ * first among the same date; what the lots cannot give comes from the stock outside any lot.
+ */
+export async function takeFromBatches(db: Db, variantId: number, warehouseId: number, n: number): Promise<{ lot: string; expiresOn: unknown; qty: number; purchaseId: unknown }[]> {
+  const lots = await db.query(
+    `SELECT id, qty, lot, expires_on, purchase_id FROM stock_batches WHERE variant_id = $1 AND warehouse_id = $2 AND qty > 0
+     ORDER BY expires_on ASC NULLS LAST, created_at, id FOR UPDATE`,
+    [variantId, warehouseId],
+  );
+  const taken: { lot: string; expiresOn: unknown; qty: number; purchaseId: unknown }[] = [];
+  let left = n;
+  for (const l of lots) {
+    if (left <= 0) break;
+    const take = Math.min(left, num(l.qty));
+    await db.query('UPDATE stock_batches SET qty = qty - $2 WHERE id = $1', [l.id, take]);
+    taken.push({ lot: l.lot, expiresOn: l.expires_on, qty: take, purchaseId: l.purchase_id });
+    left -= take;
+  }
+  return taken;
+}
+
+/** A transfer: the pieces leave their depot from the lots that expire first and arrive in the other with the same lots. */
+export async function transferBatches(db: Db, variantId: number, from: number, to: number, n: number) {
+  for (const t of await takeFromBatches(db, variantId, from, n))
+    await db.query('INSERT INTO stock_batches (variant_id, warehouse_id, lot, expires_on, qty, received, purchase_id) VALUES ($1,$2,$3,$4,$5,$5,$6)', [variantId, to, t.lot, t.expiresOn, t.qty, t.purchaseId]);
+}
+
+/**
  * A move of the broken stock (« Stock cassé », kept apart, never sold): `sellable` what changes in the stock that is
  * sold, `broken` what changes in the broken stock — a return found broken (−n sold, +n broken), the old product of an
  * exchange for a defect (+n broken), repaired (+n sold, −n broken), thrown away (−n broken).
@@ -294,6 +327,7 @@ export async function brokenMove(
   a: { variantId: number; warehouseId: number; sellable: number; broken: number; reason: string; orderId?: number | null; userId: number | null; note?: string | null },
 ) {
   if (!a.sellable && !a.broken) return;
+  if (a.sellable < 0) await takeFromBatches(db, a.variantId, a.warehouseId, -a.sellable);
   await db.query(
     `INSERT INTO stock (variant_id, warehouse_id, qty, broken) VALUES ($1,$2,$3,$4)
      ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET qty = stock.qty + EXCLUDED.qty, broken = stock.broken + EXCLUDED.broken`,
@@ -450,7 +484,8 @@ export async function stockTransfer(ctx: Ctx, i: z.infer<typeof TransferInput>) 
     const have = num((await tx.query('SELECT qty FROM stock WHERE variant_id = $1 AND warehouse_id = $2 FOR UPDATE', [i.variantId, i.from]))[0]?.qty);
     if (have < i.qty) throw bad(`Stock insuffisant dans ce dépôt (${have})`);
     const me = ctx.session.profile.id;
-    await moveStock(tx, { variantId: i.variantId, warehouseId: i.from, delta: -i.qty, reason: 'transfer_out', userId: me, note: i.note });
+    await transferBatches(tx, i.variantId, i.from, i.to, i.qty);
+    await moveStock(tx, { variantId: i.variantId, warehouseId: i.from, delta: -i.qty, reason: 'transfer_out', userId: me, note: i.note, lotsMoved: true });
     await moveStock(tx, { variantId: i.variantId, warehouseId: i.to, delta: i.qty, reason: 'transfer_in', userId: me, note: i.note });
     return { from: have - i.qty, to: await currentQty(tx, i.variantId, i.to) };
   });
@@ -483,6 +518,8 @@ export const ProductInput = z.object({
   /** a link, or a small picture picked in the form (a data: URL of ~10–30 KB) */
   photo: z.string().trim().max(200_000).nullable().optional(),
   isService: z.boolean().default(false),
+  /** « a des lots » (Management › Stock on): its purchases say each lot and its expiry date */
+  hasBatches: z.boolean().optional(),
   active: z.boolean().default(true),
   fixedPrice: z.boolean().default(false),
   maxDiscount: z.number().int().min(0).max(100_000_000).nullable().optional(),
@@ -1082,7 +1119,12 @@ export const catalogProcs = {
     sellers: (await ctx.db.query(`SELECT id, name FROM profiles WHERE active AND ('vendeur' = ANY(roles) OR 'admin' = ANY(roles)) ORDER BY name`)).map((r: any) => ({ id: num(r.id), name: r.name as string })),
   })),
 
-  'catalog.saveProduct': proc([...DEPOT], ProductInput, (ctx, i) => saveProduct(ctx, i)),
+  'catalog.saveProduct': proc([...DEPOT], ProductInput, async (ctx, i) => {
+    const p = await saveProduct(ctx, i);
+    if (i.hasBatches === undefined || p.isService) return p;
+    await ctx.db.query('UPDATE products SET has_batches = $2 WHERE id = $1', [p.id, i.hasBatches]);
+    return { ...p, hasBatches: i.hasBatches };
+  }),
 
   /** Fast availability switch: physically available stock stays recorded when an item is switched off. */
   'catalog.setAvailability': proc([...DEPOT], z.object({

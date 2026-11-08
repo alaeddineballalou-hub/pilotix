@@ -9,7 +9,8 @@
     "alertes": "Alerts",
     "achats": "Purchases",
     "depots": "Depots",
-    "prevision": "Forecast"
+    "prevision": "Forecast",
+    "lots": "Lots"
   },
   "about": {
     "stock": "What each depot holds, what is already promised to orders, and what is left to sell. Products that came back broken are kept apart (“Broken”).",
@@ -21,7 +22,8 @@
     "depots": "Your depots, what each one holds, and stock transfers between them.",
     "guides": "Each product’s sales guide: what the agents read during the call, and what Dellal and CM AI use to answer customers.",
     "guidesAgent": "Your products’ sales guides: what to say, and the answers to customers’ questions and hesitations.",
-    "prevision": "When each product will run out at its selling speed, and how many to buy now."
+    "prevision": "When each product will run out at its selling speed, and how many to buy now.",
+    "lots": "What is left of each lot, the lot to send first, and lots past or near their date."
   },
   "ui": {
     "allDepots": "All depots",
@@ -313,7 +315,11 @@
     "spreadHint_weight": "By each product’s weight (the fairest for transport).",
     "weightNote": "The real cost of each piece is worked out on saving, with each product’s weight.",
     "costNoLabel": "Give each cost a name (e.g. Transport).",
-    "chooseSpread": "Choose how to spread the costs: by value, quantity or weight."
+    "chooseSpread": "Choose how to spread the costs: by value, quantity or weight.",
+    "lot": "Lot",
+    "lotPh": "e.g. L2405 (empty: the purchase ref)",
+    "expiresOn": "Expires on",
+    "needExpiry": "Expiry date required for « {{name}} » (product with lots)."
   },
   "buys": {
     "kDue": "To pay suppliers",
@@ -523,7 +529,9 @@
     "archived": "Product archived (Management › Archives)",
     "archiveStock": "There is stock left: take it out of stock first, then archive",
     "removeAsk": "Delete « {{name}} » for good? Only if the product was never used (no order, no stock).",
-    "removed": "Product deleted"
+    "removed": "Product deleted",
+    "hasBatches": "Has lots (expiry date)",
+    "hasBatchesHint": "Its purchases say each lot and its expiry date; stock leaves from the lot that expires first."
   },
   "landing": {
     "none": "No landing page",
@@ -798,5 +806,21 @@
     "help": "Speed = pieces shipped over the chosen days. « Order now »: it runs out before a purchase made today arrives ({{lead}} days). « To buy »: enough for {{total}} days ({{lead}} of delay + {{cover}} of stock), less what is left.",
     "idle_one": "{{count}} product in stock did not sell in these {{days}} days.",
     "idle_other": "{{count}} products in stock did not sell in these {{days}} days."
+  },
+  "lots": {
+    "filters": "Filter the lots",
+    "fAll": "All",
+    "expired": "Expired",
+    "soon": "Soon ({{count}} d)",
+    "lot": "Lot",
+    "expires": "Expires",
+    "left": "Left",
+    "first": "Send first",
+    "since_one": "expired {{count}} day ago",
+    "since_other": "expired {{count}} days ago",
+    "today": "expires today",
+    "none": "No lot in stock. Tick « Has lots » on a product, then make a purchase with the expiry date.",
+    "noneHere": "No lot in this filter.",
+    "help": "Stock leaving (shipped, broken, stock-taking…) is taken from the lot that expires first. A transfer keeps the lot and its date. Stock outside any lot (before lots were on, a return) has no lot."
   }
 }

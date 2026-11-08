@@ -301,3 +301,39 @@ test('landed costs: transport and customs spread by value, quantity or weight, t
   assert.equal(Number(mv.unit_cost), 1100);
   assert.equal(Number((await db.query(`SELECT cost FROM product_variants WHERE id = $1`, [a.vid]))[0].cost), 1100);
 });
+
+test('lots: off by default; on, a product with lots needs its expiry date, the stock leaves from the lot that expires first, a transfer keeps the lots', async () => {
+  const depot = await as(EMAILS.depot);
+  const admin = await as(EMAILS.admin);
+  const wid = await mainDepot();
+  const [x] = await someVariants(1);
+  const buy = (lines: any[]) => call('purchases.create', depot, { supplierId: null, warehouseId: wid, updateCost: false, lines });
+  // off: a product ticked « a des lots » buys as before, no lot
+  await call('catalog.setBatches', depot, { productId: x.pid, on: true });
+  await buy([{ variantId: x.vid, qty: 1, unitCost: 100 }]);
+  assert.equal((await call('stock.batches', depot, {}) as any).rows.filter((r: any) => r.variantId === x.vid).length, 0);
+  await assert.rejects(call('stock.batchConfigSet', depot, { on: true, warnDays: 30 }), /Accès refusé/);
+  await call('stock.batchConfigSet', admin, { on: true, warnDays: 30 });
+  // on: the date is asked
+  await assert.rejects(buy([{ variantId: x.vid, qty: 5, unitCost: 100 }]), /Date d’expiration obligatoire/);
+  const day = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+  await buy([{ variantId: x.vid, qty: 5, unitCost: 100, lot: 'LATE', expiresOn: day(200) }]);
+  await buy([{ variantId: x.vid, qty: 4, unitCost: 100, lot: 'SOON', expiresOn: day(10) }]);
+  await buy([{ variantId: x.vid, qty: 2, unitCost: 100, lot: 'OLD', expiresOn: day(-3) }]);
+  const lots = async () => ((await call('stock.batches', depot, { warehouseId: wid })) as any).rows.filter((r: any) => r.variantId === x.vid);
+  let l = await lots();
+  assert.deepEqual(l.map((r: any) => [r.lot, r.qty, r.status, r.first]), [['OLD', 2, 'expired', true], ['SOON', 4, 'soon', false], ['LATE', 5, 'ok', false]]);
+  assert.equal(((await call('stock.batches', depot, { filter: 'expired' })) as any).rows.filter((r: any) => r.variantId === x.vid).length, 1);
+  // 3 pieces leave: the 2 of OLD, then 1 of SOON
+  await call('catalog.move', depot, { variantId: x.vid, warehouseId: wid, kind: 'loss', qty: 3, note: 'test' });
+  l = await lots();
+  assert.deepEqual(l.map((r: any) => [r.lot, r.qty]), [['SOON', 3], ['LATE', 5]]);
+  // a transfer: the lot that expires first goes, with its lot and date
+  const w2 = Number((await db.query(`INSERT INTO warehouses (name, active, wilaya_id) VALUES ('Lots test', true, 16) RETURNING id`))[0].id);
+  await call('catalog.transfer', depot, { variantId: x.vid, from: wid, to: w2, qty: 2 });
+  const there = ((await call('stock.batches', depot, { warehouseId: w2 })) as any).rows;
+  assert.deepEqual(there.map((r: any) => [r.lot, r.qty, r.expiresOn]), [['SOON', 2, day(10)]]);
+  assert.deepEqual((await lots()).map((r: any) => [r.lot, r.qty]), [['SOON', 1], ['LATE', 5]]);
+  await call('stock.batchConfigSet', admin, { on: false, warnDays: 30 });
+  await call('catalog.setBatches', depot, { productId: x.pid, on: false });
+});

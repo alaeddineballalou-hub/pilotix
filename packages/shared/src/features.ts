@@ -24,7 +24,7 @@ export const FEATURES: readonly FeatureNode[] = [
   { key: 'scanner' },
   { key: 'sav' },
   { key: 'tournee' },
-  { key: 'produits', subs: ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'prevision', 'achats', 'depots'] },
+  { key: 'produits', subs: ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'prevision', 'lots', 'achats', 'depots'] },
   { key: 'pilotai', subs: ['messages', 'cm', 'social', 'notify'] },
   { key: 'clients' },
   { key: 'marketing', subs: ['publicite', 'formulaires', 'campagnes', 'catalogue', 'influenceurs', 'marketer', 'spy'] },
@@ -33,7 +33,7 @@ export const FEATURES: readonly FeatureNode[] = [
   { key: 'macaisse' },
   { key: 'livraison', subs: ['societes', 'pilot', 'api', 'livreurs', 'preferences'] },
   { key: 'utilisateurs', always: true },
-  { key: 'management', subs: ['plans', 'statuts', 'affectation', 'paie', 'prix', 'canaux', 'alertes', 'livreur', 'archive'] },
+  { key: 'management', subs: ['plans', 'statuts', 'affectation', 'paie', 'prix', 'canaux', 'alertes', 'stock', 'livreur', 'archive'] },
   { key: 'reglages', always: true },
 ];
 
