@@ -40,7 +40,8 @@ export function ShopDoctor({ card, fold }: { card?: boolean; fold?: boolean }) {
           <CopilotIcon mood={r ? copilotMood(r.items) : null} size={38} label={t('doctor.shopTitle')} />
           <span className="dr-mine-t">
             <b>{t('doctor.mineTitle')}</b>
-            <small>{open || !r ? sub : say}</small>
+            {/* open, the cockpit below says it all */}
+            {!open && <small>{r ? say : sub}</small>}
           </span>
           {r && !open && (
             <span className={`dr-mine-score dr-${tone}`}>
