@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEMO_PASSWORD } from '@pilotix/shared';
-import { call, createPasswordReset, login, resetPassword } from '../index';
+import { call, createPasswordReset, type Db, login, resetPassword } from '../index';
 import { EMAILS, setup } from './harness';
 
 /** a new team member's phone (required, one per person) */
@@ -14,6 +14,12 @@ const link = (r: Awaited<ReturnType<typeof createPasswordReset>>) => {
   assert.ok(r && r.kind === 'link', `expected a link, got ${JSON.stringify(r)}`);
   return r;
 };
+
+
+/** The demo shop's pay plan of one job (adding an agent asks it). */
+async function planOf(d: Db, task = 'confirmation') {
+  return [{ task, planId: Number((await d.query("SELECT id FROM management_payment_plans WHERE kind = 'agent' AND active AND configuration->>'agentTask' = $1 ORDER BY id LIMIT 1", [task]))[0].id) }];
+}
 
 test('password reset links', async () => {
   const { db } = await setup(5);
@@ -92,7 +98,7 @@ test('team accounts: the administrator chooses who may create accounts and set p
   assert.equal(m.session.canManageUsers, true);
 
   // creates an agent, sets an agent's password, sees the logins
-  const created: any = await call('users.create', m, { phone: tph(), name: 'Nouvel Agent', email: 'nouveau@example.com', password: 'Mot-de-passe-Fort1', roles: ['confirmation'] });
+  const created: any = await call('users.create', m, { phone: tph(), name: 'Nouvel Agent', email: 'nouveau@example.com', password: 'Mot-de-passe-Fort1', roles: ['confirmation'], plans: await planOf(db) });
   assert.equal(created.canManageUsers, false);
   const r: any = await call('admin.users.resetPassword', m, { id: confId });
   assert.equal((await login(db, EMAILS.conf, r.password)).profile.email, EMAILS.conf);

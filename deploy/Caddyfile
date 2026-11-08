@@ -62,7 +62,7 @@
 	@store {
 		path_regexp page ^/([a-z0-9-]{2,40})/([a-z0-9-]{2,60})/?$
 		not path /api/* /live*
-		not path_regexp ^/(?:conditions|pro|platform|reset|invite|signup|verify|inscription|inscription-agence|inscription-marketer|confirmer)/|^/[a-z0-9-]+/(?:accueil|dashboard|commandes|livrees|retournees|confirmation|depot|scanner|produits|suivi|sav|tournee|clients|messages|cm|social|notify|comptes|marketing|landing|caisse|macaisse|pos|livraison|utilisateurs|management|reglages|agences|marketers|influenceurs|profil|boutiques|aide|analyse|vendeurs|facturation|affectation|comptepro|partenaires|pilotai|livreurs|publicite|marketer|spy|equipe|tarifs|adsets)/?$
+		not path_regexp ^/(?:conditions|pro|platform|reset|invite|signup|verify|inscription|inscription-agence|inscription-marketer|confirmer)/|^/[a-z0-9-]+/(?:accueil|dashboard|commandes|livrees|retournees|confirmation|depot|scanner|produits|suivi|sav|tournee|clients|messages|cm|social|notify|comptes|marketing|landing|caisse|macaisse|pos|livraison|utilisateurs|management|reglages|agences|marketers|influenceurs|profil|boutiques|aide|analyse|vendeurs|facturation|affectation|comptepro|gains|partenaires|pilotai|livreurs|publicite|marketer|spy|equipe|tarifs|adsets)/?$
 	}
 	handle @store {
 		rewrite * /api/s/{re.page.1}/{re.page.2}
