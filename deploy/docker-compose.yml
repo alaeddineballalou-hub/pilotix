@@ -45,7 +45,8 @@ services:
       DATA_KEY: ${DATA_KEY:-}
       JWT_EXPIRES: 12h
       CORS_ORIGINS: https://${DOMAIN},https://www.${DOMAIN},capacitor://localhost,https://localhost
-      TRUST_PROXY: "1"
+      # Caddy, in Docker's private network (a number such as 1 no longer works with Fastify 5.12)
+      TRUST_PROXY: "loopback,linklocal,uniquelocal"
       PUBLIC_URL: https://${DOMAIN}
       # the landing pages' own address (deploy/Caddyfile › go.<domain>): used once it answers, else the pages stay on PUBLIC_URL
       LANDING_URL: https://go.${DOMAIN}

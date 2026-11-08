@@ -199,20 +199,37 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
             }
           return null;
         }
-        const out: Record<string, unknown> = {};
-        for (const ref of await this.core.jobShops()) {
-          if (ref.shop.demo) continue; // the demo shop only simulates: nothing to run in the background
+        // one run of a job at a time: a slow one (courier sync) never runs twice, and never holds the others up
+        if (this.running.has(job.name)) return { skipped: 'still running' };
+        this.running.add(job.name);
+        try {
           const f = FEATURE[job.name];
-          if (f === undefined || (f && !featureOn(ref.rules.features, f))) continue;
-          try {
-            out[ref.shop.slug] = await this.runFor(ref, job.name);
-          } catch (e) {
-            this.log.error(`[${ref.shop.slug}] ${job.name} failed: ${(e as Error).message}`);
-          }
+          const shops = (await this.core.jobShops()).filter(
+            // the demo shop only simulates: nothing to run in the background
+            (ref) => !ref.shop.demo && f !== undefined && (!f || featureOn(ref.rules.features, f)),
+          );
+          let done = 0;
+          let asleep = 0;
+          let failed = 0;
+          // several shops at once (JOB_SHOPS_PARALLEL); a sleeping shop (nobody, no order for weeks) is skipped
+          await eachLimited(shops, config.jobShopsParallel, async (ref) => {
+            if (!(await this.awake(ref))) return void asleep++;
+            try {
+              await this.runFor(ref, job.name);
+              done++;
+            } catch (e) {
+              failed++;
+              this.log.error(`[${ref.shop.slug}] ${job.name} failed: ${(e as Error).message}`);
+            }
+          });
+          return { shops: done, asleep, failed };
+        } finally {
+          this.running.delete(job.name);
         }
-        return out;
       },
-      { connection: this.conn, concurrency: 1 },
+      // a few jobs at once (each one only once, see above): the courier sync waits on the companies' APIs while the
+      // every-minute jobs go on
+      { connection: this.conn, concurrency: 3 },
     );
     this.worker.on('failed', (job, err) => {
       if (job?.name) doctorState.job(job.name, false, err.message);
@@ -272,6 +289,29 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('courier-watch', {}, { repeat: { pattern: '20 7 * * *', tz: 'Africa/Algiers' }, jobId: 'courier-watch', removeOnComplete: 20, removeOnFail: 50 });
   }
 
+  /** The jobs running now. */
+  private running = new Set<string>();
+  /** Each shop's newest order, looked at again every 10 minutes (to know which shops sleep). */
+  private newest = new Map<number, { at: number; checked: number }>();
+
+  /**
+   * A shop is awake when someone used the app, an order came in, or it was opened, in the last JOB_SLEEP_DAYS days.
+   * A sleeping shop costs nothing in the background; it wakes with its next order or the next time someone opens it.
+   */
+  private async awake(ref: ShopRef): Promise<boolean> {
+    const limit = Date.now() - config.jobSleepDays * 86_400_000;
+    if ((Date.parse(ref.shop.lastActiveAt ?? '') || 0) > limit || (Date.parse(ref.shop.createdAt ?? '') || 0) > limit) return true;
+    let n = this.newest.get(ref.shop.id);
+    if (!n || Date.now() - n.checked > 10 * 60_000) {
+      // the last order by number (its key): no table scan, even with many orders
+      const r = await ref.db.query<{ created_at: string | Date }>('SELECT created_at FROM orders ORDER BY id DESC LIMIT 1').catch(() => null);
+      // not readable: counted as awake (never skip a shop by mistake)
+      n = { at: r === null ? Date.now() : r[0] ? new Date(r[0].created_at).getTime() : 0, checked: Date.now() };
+      this.newest.set(ref.shop.id, n);
+    }
+    return n.at > limit;
+  }
+
   private pilotBusy = false;
   /**
    * Pilot AI, every night: each sharing shop's new or changed chats go to the platform (names, phones, addresses removed
@@ -329,6 +369,15 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue?.close();
     await this.conn?.quit();
   }
+}
+
+/** Runs fn for every item, at most `limit` at the same time. */
+async function eachLimited<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  const lane = async () => {
+    while (next < items.length) await fn(items[next++]);
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, lane));
 }
 
 @Module({ providers: [JobsService] })

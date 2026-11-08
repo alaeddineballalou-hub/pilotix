@@ -130,9 +130,37 @@ export interface ShopRef {
 
 const SHOP_TTL = 15_000;
 
+/**
+ * The database connections. Each one is replaced after DB_CONN_MAX_USES queries or DB_CONN_MAX_SECONDS: a connection
+ * remembers every shop schema it opened (~1.5 MB each), and with hundreds of shops a long-lived one grows until
+ * PostgreSQL is killed for lack of memory. A connection that breaks while idle (PostgreSQL restarting) is only written
+ * in the log: without this listener the error would stop the whole server.
+ */
+function openPool(): Pool {
+  const pool = new Pool({
+    connectionString: config.databaseUrl,
+    max: config.dbPoolMax,
+    maxUses: config.dbConnMaxUses,
+    maxLifetimeSeconds: config.dbConnMaxSeconds,
+  });
+  const log = new Logger('Database');
+  let last = 0;
+  const lost = (e: Error) => {
+    // at most one line every 10 seconds (a restart breaks every connection at once)
+    if (Date.now() - last < 10_000) return;
+    last = Date.now();
+    log.error(`connection lost: ${e.message}`);
+  };
+  // idle connections (the pool's own listener) and connections in use: the query that was running fails, the request
+  // answers with an error, and the broken connection is thrown away when it comes back (core.service: broken())
+  pool.on('error', lost);
+  pool.on('connect', (c) => c.on('error', lost));
+  return pool;
+}
+
 @Injectable()
 export class CoreService implements OnModuleInit, OnModuleDestroy {
-  readonly pool = new Pool({ connectionString: config.databaseUrl, max: config.dbPoolMax });
+  readonly pool = openPool();
   readonly t = poolTenancy(this.pool);
   private readonly log = new Logger('Core');
   private listeners = new Set<(shopId: number, e: LiveEvent) => void>();
