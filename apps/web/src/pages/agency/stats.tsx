@@ -1,6 +1,7 @@
 // A confirmation agency's numbers (its space), on its orders only, for the seller chosen at the top of the page or all:
 // - Dashboard (everyone): what waits now, the period next to the one before, day by day, and each agent's numbers —
-//   an agent sees his own orders and his own row, with his rank (no one else's name).
+//   an agent sees his own orders and his own row, with his rank (no one else's name), and his bonuses: it is his home
+//   (an agent has no Accueil).
 // - Analyse & statistiques (the chief and the agent managers): the results per seller, product, wilaya and agent.
 import { ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +15,8 @@ import { useBoardPeriod } from '../dashboard/board/Board';
 import { Avatar, DayChart, PeriodChips } from '../dashboard/board/parts';
 import { confTone, delivTone, KpiBox } from '../dashboard/util';
 import type { PageProps } from '../registry';
+import { NoPlanAlert } from '../caisse/NoPlanAlert';
+import { MyAgentBonuses } from './index';
 import { monthLabel } from './parts';
 import '../dashboard/board/board.css';
 import './stats.css';
@@ -112,6 +115,7 @@ function DashBody() {
         <Loading />
       ) : (
         <>
+          {!d.lead && <NoPlanAlert />}
           <section className="card hm-now">
             <div className="card-head">
               <h2>{t(d.lead ? 'agency.st.now' : 'agency.st.myNow')}</h2>
@@ -157,6 +161,7 @@ function DashBody() {
                 </section>
               )}
               {d.ladder && <Ladder l={d.ladder} />}
+              <MyAgentBonuses />
             </>
           )}
         </>

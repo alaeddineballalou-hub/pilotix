@@ -5,7 +5,7 @@ import { Legal, PhoneStep, Signup, SignupConfirm, StorePicker, VerifyEmail } fro
 import { LockScreen } from './layout/LockScreen';
 import { Login } from './layout/Login';
 import { ResetPassword } from './layout/ResetPassword';
-import { AGENCY_NAV, canSee, canSeeChild, homeFor, MARKETER_NAV, NAV, NavItem } from './layout/nav';
+import { AGENCY_NAV, canSee, canSeeChild, homeFor, isPlainAgent, MARKETER_NAV, NAV, NavItem } from './layout/nav';
 import { applyTheme, Shell } from './layout/Shell';
 import { ApiError, server } from './lib/backend';
 import { firstSubOn, hasPlanSubs, pageIsOn } from './lib/features';
@@ -176,7 +176,8 @@ function App() {
   if (space !== 'store') initSeller(session.shop!.id);
   const nav: NavItem[] = space === 'agency' ? AGENCY_NAV : space === 'marketer' ? MARKETER_NAV : NAV;
   const pages = space === 'agency' ? AGENCY_PAGES : space === 'marketer' ? MARKETER_PAGES : PAGES;
-  const homeOf = () => (space !== 'store' ? 'accueil' : homeFor(session.roles, session.isAdmin));
+  // an agency's agent who leads no one has no Accueil: his Dashboard is his home
+  const homeOf = () => (space === 'agency' && isPlainAgent(session.roles, session.isAdmin) ? 'dashboard' : space !== 'store' ? 'accueil' : homeFor(session.roles, session.isAdmin));
   let [page, sub, ...rest]: (string | undefined)[] = parts;
   if (page && ALIASES[page] && space === 'store') [page, sub] = [ALIASES[page][0], ALIASES[page][1] ?? sub];
   const moved = space === 'agency' ? agencyMoved(page, sub, rest) : null;

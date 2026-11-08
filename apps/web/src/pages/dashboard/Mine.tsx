@@ -1,7 +1,10 @@
 // Dashboard of a person who is not a manager (Dashboard › Mon tableau de bord): their own numbers only, over the period
 // they choose — in each area they work in (Confirmation, Suivi, Dépôt) next to their team's, with their rank (no one
 // else's name), and a livreur's own parcels, deliveries, returns, the money he holds and his pay.
+// An agent who leads no one has no Accueil: this is his home — his own Co-Pilot first, folded (his score, what to put
+// right, with what to do), what waits now, his numbers, and a suivi agent the livreurs' parcels.
 import { useTranslation } from 'react-i18next';
+import { featureIsOn } from '../../lib/features';
 import { da, dayRange, n, pct } from '../../lib/format';
 import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
@@ -11,6 +14,9 @@ import { MemberDetail, useBoardPeriod } from './board/Board';
 import { AreaKey, AREAS } from './board/defs';
 import { PeriodChips } from './board/parts';
 import { delivTone, KpiBox, prevRangeOf } from './util';
+import { ShopDoctor } from './Doctor';
+import { LivCard, Now } from '../home/cards';
+import { NoPlanAlert } from '../caisse/NoPlanAlert';
 import './board/board.css';
 
 type R = { from: string; to: string };
@@ -35,7 +41,11 @@ export function MyDashboard() {
         </div>
         <PeriodChips value={per.period} onChange={per.setPeriod} custom={per.custom} onCustom={per.setCustom} />
       </header>
+      {works && <NoPlanAlert admins={false} />}
+      {works && featureIsOn('dashboard/doctor') && <ShopDoctor fold />}
+      {works && <Now />}
       {works && <MyDay range={per.range} />}
+      {works && roles.includes('suivi') && <LivCard range={per.range} />}
       {has('livreur') && roles.includes('livreur') && <MyLivreur range={per.range} />}
       {!works && !roles.includes('livreur') && <div className="empty-box">{t('dashboard.mine.nothing')}</div>}
     </div>

@@ -53,8 +53,17 @@ export interface NavItem {
   href?: string;
 }
 
+/**
+ * An agent who leads no one (confirmation, suivi, dépôt — not an administrator, a vendeur or an agent manager): he has no
+ * Accueil, his Dashboard is his home (his Co-Pilot folded, what waits now, his numbers next to his team's, with his rank).
+ */
+export function isPlainAgent(roles: Role[], isAdmin: boolean): boolean {
+  return !isAdmin && roles.some((r) => r === 'confirmation' || r === 'suivi' || r === 'depot') && !roles.some((r) => r === 'agent_manager' || r === 'vendeur');
+}
+
 export const NAV: NavItem[] = [
-  { id: 'accueil', icon: 'home', roles: null },
+  // an agent who leads no one has no Accueil (his Dashboard is his home), unless the shop's plan has no Dashboard
+  { id: 'accueil', icon: 'home', roles: null, onlyIf: (r, admin) => !isPlainAgent(r, admin) || !pageIsOn('dashboard') },
   // everyone: owners and managers see the teams' boards, the others their own numbers (Mine.tsx)
   { id: 'dashboard', icon: 'chart', roles: ['agent_manager', 'vendeur', 'confirmation', 'suivi', 'depot', 'livreur'], subs: ['overview', 'confirmation', 'depot', 'suivi', 'livreurs', 'sav'] },
   {
@@ -190,6 +199,7 @@ export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManage
 export function homeFor(roles: Role[], isAdmin: boolean): string {
   if (!isAdmin && roles.includes('livreur') && !roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r)) && pageIsOn('tournee')) return 'tournee';
   if (!isAdmin && roles.includes('confirmation') && !roles.includes('vendeur') && roles.length === 1 && pageIsOn('confirmation')) return 'confirmation';
+  if (isPlainAgent(roles, isAdmin) && pageIsOn('dashboard')) return 'dashboard';
   return 'accueil';
 }
 
@@ -208,7 +218,8 @@ function partnersOn(): boolean {
 }
 
 export const AGENCY_NAV: NavItem[] = [
-  { id: 'accueil', icon: 'home', roles: null },
+  // an agent of the agency has no Accueil: the Dashboard is his home (what waits, his numbers and rank, his bonuses)
+  { id: 'accueil', icon: 'home', roles: null, onlyIf: (r, admin) => !isPlainAgent(r, admin) },
   // the results over a period per seller, product, wilaya and agent (the chief and the agent managers)
   { id: 'analyse', icon: 'trend', roles: ['agent_manager'] },
   // what waits now and the period's numbers: the team for the chief and the managers, an agent his own

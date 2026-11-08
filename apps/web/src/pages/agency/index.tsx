@@ -101,8 +101,8 @@ function HomeBody() {
   );
 }
 
-/** Agent-visible offers; read-only, strictly scoped to the current agency profile. */
-function MyAgentBonuses(){
+/** Agent-visible offers; read-only, strictly scoped to the current agency profile (an agent sees them on his Dashboard). */
+export function MyAgentBonuses(){
   const q=useRpc('management.myBonuses',{}, {refetchInterval:15000});
   return <section className="card ppm-panel" aria-label="Mes bonus">
     <div className="ppm-row"><div><h2>Mes bonus</h2><p className="muted">Primes offertes par l'agence · sur les opérations à venir</p></div>
