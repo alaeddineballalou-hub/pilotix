@@ -248,10 +248,72 @@ function ChiefMonth() {
 }
 
 // ---------------------------------------------------------------- Vendeurs
+/**
+ * « Vendeurs »: everything about the agency's sellers — the list (requests, contracts), their plans and prices (each
+ * seller's plan waits for its acceptance), the bills. A marketer's Vendeurs is the list only.
+ */
 export function Vendeurs({ sub }: PageProps) {
+  const { t } = useTranslation();
+  const { session } = useSession();
+  const mk = usePartnerKind() === 'marketer';
   const id = sub && /^\d+$/.test(sub) ? Number(sub) : null;
-  return id ? <SellerDetail id={id} /> : <SellerList />;
+  if (id) return <SellerDetail id={id} />;
+  if (mk || !session?.isAdmin) return <SellerList />;
+  const tab = sub === 'plans' || sub === 'factures' ? sub : 'liste';
+  return (
+    <>
+      <StageBar flow={false} current={tab} items={(['liste', 'plans', 'factures'] as const).map((k) => ({ key: k, label: t(`agency.sellerTabs.${k}`), href: `#/vendeurs/${k}` }))} />
+      {tab === 'liste' ? (
+        <SellerList />
+      ) : tab === 'plans' ? (
+        <div className="agx-page">
+          <AgencyPaymentPlans bare noPayroll initialKind="billing" only={['billing', 'assignment']} assign="seller" />
+        </div>
+      ) : (
+        <div className="agx-page">
+          <SellerBills />
+        </div>
+      )}
+    </>
+  );
 }
+
+// ---------------------------------------------------------------- Équipe
+/**
+ * « Équipe »: everything about the agency's people — Personnes (accounts, roles, sellers, pay plan), Répartition (who
+ * gets which order), Paie (the pay board, the agents' plans and bonuses), Scores. A person who may add accounts (not an
+ * administrator) sees Personnes only.
+ */
+export function AgencyTeam({ sub, rest }: PageProps) {
+  const { t } = useTranslation();
+  const { session } = useSession();
+  const tabs = session?.isAdmin ? (['personnes', 'repartition', 'paie', 'scores'] as const) : (['personnes'] as const);
+  const tab = (tabs as readonly string[]).includes(sub ?? '') ? sub! : 'personnes';
+  return (
+    <>
+      {tabs.length > 1 && <StageBar flow={false} current={tab} items={tabs.map((k) => ({ key: k, label: t(`agency.teamTabs.${k}`), href: `#/equipe/${k}` }))} />}
+      <Suspense fallback={<Loading />}>
+        {tab === 'personnes' ? (
+          <div className="agx-page">
+            <UsersPage sub={rest?.[0]} rest={rest?.slice(1)} agency />
+          </div>
+        ) : tab === 'repartition' ? (
+          <AgencyAffectation />
+        ) : tab === 'paie' ? (
+          <div className="agx-page">
+            <PaieBoard />
+            <AgencyPaymentPlans bare noPayroll initialKind="agent" only={['agent', 'bonus']} />
+          </div>
+        ) : (
+          <div className="agx-page">
+            <AgentsPay />
+          </div>
+        )}
+      </Suspense>
+    </>
+  );
+}
+const AgencyAffectation = lazy(() => import('../admin/Affectation').then((m) => ({ default: m.AgencyAffectation })));
 
 function SellerList() {
   const { t } = useTranslation();
@@ -804,7 +866,7 @@ function AgentsPay() {
         )}
         <p className="muted small">{t('agency.agentsPay.scoreHow')}</p>
         <p className="muted small">
-          {t('agency.agentsPay.payMoved')} <a href="#/facturation/paie">{t('agency.factTabs.paie')}</a>
+          {t('agency.agentsPay.payMoved')} <a href="#/equipe/paie">{t('agency.teamTabs.paie')}</a>
         </p>
       </section>
     </>

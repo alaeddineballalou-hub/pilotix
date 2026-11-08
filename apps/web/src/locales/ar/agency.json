@@ -690,5 +690,17 @@
     "cancelled": "ملغى",
     "ended": "منتهٍ",
     "pending": "في الانتظار"
+  },
+  "teamTabs": {
+    "personnes": "الأشخاص",
+    "repartition": "توزيع الطلبيات",
+    "paie": "الأجور",
+    "scores": "النقاط",
+    "tous": "الجميع"
+  },
+  "sellerTabs": {
+    "liste": "بائعيّ",
+    "plans": "الخطط والأسعار",
+    "factures": "الفواتير"
   }
 }

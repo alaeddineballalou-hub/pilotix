@@ -95,9 +95,21 @@ function useAddressBoutique(slug: string | null | undefined, logged: boolean, ro
 
 const ALIASES: Record<string, [string, string?]> = { livreurs: ['dashboard', 'livreurs'], publicite: ['marketing', 'publicite'], marketer: ['marketing', 'marketer'] };
 /** An agency's older links: its team is « Utilisateurs », its prices are in « Réglages ». */
-const AGENCY_ALIASES: Record<string, [string, string?]> = { equipe: ['utilisateurs'], tarifs: ['reglages'], macaisse: ['gains'], caisse: ['facturation', 'paie'] };
+const AGENCY_ALIASES: Record<string, [string, string?]> = { tarifs: ['vendeurs', 'plans'], macaisse: ['gains'], caisse: ['equipe', 'paie'], affectation: ['equipe', 'repartition'] };
+/**
+ * A confirmation agency's menu is sorted by who: « Équipe » (its people: accounts, who gets which order, their pay, their
+ * scores) and « Vendeurs » (its sellers: the list, their plans and prices, the bills). An old link opens the new place.
+ */
+function agencyMoved(page: string | undefined, sub: string | undefined, rest: (string | undefined)[]): string | null {
+  if (page === 'utilisateurs') return `#/equipe/personnes${sub && sub !== 'affectations' ? `/${sub}` : ''}`;
+  if (page !== 'facturation') return null;
+  if (sub === 'paie') return '#/equipe/paie';
+  if (sub === 'agents') return '#/equipe/scores';
+  if (sub === 'plans') return '#/vendeurs/plans';
+  return `#/vendeurs/factures${sub && sub !== 'vendeurs' ? `/${[sub, ...rest].filter(Boolean).join('/')}` : ''}`;
+}
 /** A marketer's short links: its ads are in « Marketing ». */
-const MARKETER_ALIASES: Record<string, [string, string?]> = { ...AGENCY_ALIASES, publicite: ['marketing', 'publicite'], marketer: ['marketing', 'marketer'], adsets: ['marketing', 'marketer'] };
+const MARKETER_ALIASES: Record<string, [string, string?]> = { equipe: ['utilisateurs'], tarifs: ['reglages'], publicite: ['marketing', 'publicite'], marketer: ['marketing', 'marketer'], adsets: ['marketing', 'marketer'] };
 
 /** Pilotix's control room (#/platform): its own login and pages, loaded only when opened. */
 const PlatformApp = lazy(() => import('./pages/platform').then((m) => ({ default: m.PlatformApp })));
@@ -166,6 +178,11 @@ function App() {
   const homeOf = () => (space !== 'store' ? 'accueil' : homeFor(session.roles, session.isAdmin));
   let [page, sub, ...rest]: (string | undefined)[] = parts;
   if (page && ALIASES[page] && space === 'store') [page, sub] = [ALIASES[page][0], ALIASES[page][1] ?? sub];
+  const moved = space === 'agency' ? agencyMoved(page, sub, rest) : null;
+  if (moved) {
+    go(moved, { replace: true });
+    [page, sub, ...rest] = moved.slice(2).split('/');
+  }
   const partnerAliases = space === 'agency' ? AGENCY_ALIASES : space === 'marketer' ? MARKETER_ALIASES : null;
   if (page && partnerAliases?.[page]) {
     [page, sub] = partnerAliases[page];

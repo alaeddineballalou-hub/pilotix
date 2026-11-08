@@ -682,5 +682,17 @@
     "cancelled": "Cancelled",
     "ended": "Ended",
     "pending": "Waiting"
+  },
+  "teamTabs": {
+    "personnes": "People",
+    "repartition": "Order sharing",
+    "paie": "Pay",
+    "scores": "Scores",
+    "tous": "Everyone"
+  },
+  "sellerTabs": {
+    "liste": "My sellers",
+    "plans": "Plans & prices",
+    "factures": "Bills"
   }
 }

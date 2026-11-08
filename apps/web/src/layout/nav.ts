@@ -235,10 +235,10 @@ export const AGENCY_NAV: NavItem[] = [
   { id: 'produits', icon: 'layers', roles: ['confirmation', 'suivi', 'agent_manager'], subs: ['produits', 'stock'] },
   // « Mes gains »: what the agency owes me (my orders in every seller's store), my plans, my acomptes
   { id: 'gains', icon: 'wallet', roles: ['confirmation', 'suivi', 'agent_manager'], onlyIf: (_r, admin) => !admin },
+  // sorted by who: « Équipe » = the agency's people (accounts, who gets which order, pay, scores); « Vendeurs » = its
+  // sellers (the list, their plans and prices, the bills)
+  { id: 'equipe', icon: 'users', roles: [], manageUsers: true },
   { id: 'vendeurs', icon: 'store', roles: [] },
-  { id: 'facturation', icon: 'receipt', roles: [] },
-  { id: 'affectation', icon: 'users', roles: [] },
-  { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true },
   { id: 'reglages', icon: 'settings', roles: [] },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'securite'] },
   { id: 'boutiques', icon: 'store', roles: null, hidden: true },

@@ -70,12 +70,12 @@ export function AgencyPaymentPlans({initialKind='billing',only,bare=false,noPayr
       <span className="ppm-live">Pilotix</span>
     </header>}
     {(!only||only.length>1)&&<nav className="ppm-tabs" aria-label="Plans de paiement">
-      {([['billing','Facturation Seller'],['agent','Agent Pay'],['bonus','Bonus'],['assignment',assignOnly==='seller'?'Affectations vendeurs':'Affectations']] as const).filter(([id])=>!only||only.includes(id)).map(([id,label])=>
+      {([['billing','Plans vendeurs'],['agent','Plans des agents'],['bonus','Bonus'],['assignment',assignOnly==='seller'?'Plan de chaque vendeur':'Affectations']] as const).filter(([id])=>!only||only.includes(id)).map(([id,label])=>
         <button key={id} type="button" className={'ppm-tab '+(tab===id?'on':'')} onClick={()=>setTab(id)}>{label}</button>)}
     </nav>}
     {(tab==='billing'||tab==='agent')&&<>
       <section className="card ppm-panel">
-        <div className="ppm-row"><div><h2>{tab==='billing'?'Plans Facturation Seller':'Plans Agent Pay'}</h2><p className="muted">{tab==='billing'?'Tarifs facturés aux contrats vendeurs':'Salaire et primes de votre équipe'}</p></div>
+        <div className="ppm-row"><div><h2>{tab==='billing'?'Plans vendeurs':'Plans des agents'}</h2><p className="muted">{tab==='billing'?'Tarifs facturés aux contrats vendeurs':'Salaire et primes de votre équipe'}</p></div>
           <button type="button" className="btn primary" onClick={()=>newPlan(tab)}>+ Nouveau plan</button></div>
         {q.isLoading?<p>Chargement…</p>:q.error?<p className="form-err">{q.error.message}</p>:
           <div className="ppm-cards">{plans.filter(p=>p.kind===tab).map(p=>

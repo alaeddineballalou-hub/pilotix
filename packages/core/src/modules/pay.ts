@@ -47,7 +47,7 @@ const kindOf = (db: Db) => (SPACE.has(db) ? 'agency' : 'store');
 /** The jobs a person must have a plan for here (allowed: may have). */
 const tasksOf = (db: Db, roles: string[], allowed = false) => payTasksIn(kindOf(db), roles, allowed);
 /** Where to open the pay pages (an agency: Facturation › Paie and « Mes gains »). */
-const boardUrl = (db: Db) => (SPACE.has(db) ? '#/facturation/paie' : '#/caisse/paie');
+const boardUrl = (db: Db) => (SPACE.has(db) ? '#/equipe/paie' : '#/caisse/paie');
 const mineUrl = (db: Db) => (SPACE.has(db) ? '#/gains' : '#/macaisse');
 const mineName = (db: Db) => (SPACE.has(db) ? 'Mes gains' : 'Ma caisse');
 
@@ -698,7 +698,7 @@ export const payProcs = {
       current: PAY_TASKS.map((task) => termAt(terms, task, now)).filter((t): t is PayTerm => !!t).map((t) => ({ task: t.task, planId: t.planId })),
       tasks: { confirmation: tasksOf(ctx.db, ['confirmation']), suivi: tasksOf(ctx.db, ['suivi']), agent_manager: tasksOf(ctx.db, ['agent_manager'], true), depot: tasksOf(ctx.db, ['depot']) },
       kind: kindOf(ctx.db),
-      plansUrl: SPACE.has(ctx.db) ? '#/facturation/plans' : '#/management/plans',
+      plansUrl: SPACE.has(ctx.db) ? '#/equipe/paie' : '#/management/plans',
     };
   }),
 
@@ -721,7 +721,7 @@ export const payProcs = {
     if (!payIsOn(ctx.shop)) return { people: [], url: '' };
     paySpace(ctx);
     if (!ctx.session.isAdmin && !ctx.session.canManageUsers) return { people: [], url: boardUrl(ctx.db) };
-    return { people: await noPlanFor(ctx), url: ctx.session.isAdmin ? boardUrl(ctx.db) : SPACE.has(ctx.db) ? '#/utilisateurs' : '#/management/utilisateurs' };
+    return { people: await noPlanFor(ctx), url: ctx.session.isAdmin ? boardUrl(ctx.db) : SPACE.has(ctx.db) ? '#/equipe/personnes' : '#/management/utilisateurs' };
   }),
 
   /**
@@ -745,7 +745,7 @@ export const payProcs = {
     const byCreator = new Map<number, typeof list>();
     for (const x of list) if (x.createdBy && !adminIds.includes(x.createdBy)) byCreator.set(x.createdBy, [...(byCreator.get(x.createdBy) ?? []), x]);
     for (const [who, l] of byCreator) {
-      await sendPush(ctx, [who], { title: `${l.length} personne(s) ajoutée(s) par vous sans plan de paie`, body: text(l), tag: 'pay-noplan', url: SPACE.has(ctx.db) ? '#/utilisateurs' : '#/management/utilisateurs' }).catch(() => 0);
+      await sendPush(ctx, [who], { title: `${l.length} personne(s) ajoutée(s) par vous sans plan de paie`, body: text(l), tag: 'pay-noplan', url: SPACE.has(ctx.db) ? '#/equipe/personnes' : '#/management/utilisateurs' }).catch(() => 0);
       sent++;
     }
     return { sent };

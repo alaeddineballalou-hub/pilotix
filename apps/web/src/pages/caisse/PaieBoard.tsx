@@ -17,7 +17,7 @@ import './paie.css';
 
 type Board = Out<'pay.board'>;
 /** Where the plans are made: Management › Plans (a store), Facturation › Plans (an agency). */
-const plansHref = (b: Board) => (b.cashless ? '#/facturation/plans' : '#/management/plans');
+const plansHref = (b: Board) => (b.cashless ? '#/equipe/paie' : '#/management/plans');
 type Person = Board['people'][number];
 type PayFor = { kind: 'pay'; person: Person } | { kind: 'acompte'; person: Person; request: NonNullable<Person['request']> };
 
@@ -331,7 +331,7 @@ function PlansSheet({ b, p, onClose }: { b: Board; p: Person; onClose: () => voi
         </button>
         <p className="pp-muted small">
           {t('paie.board.plans.more')}{' '}
-          <a href={plansHref(b)}>{b.cashless ? `${t('nav.facturation')} › ${t('agency.factTabs.plans')}` : `${t('nav.management')} › ${t('admin.subs.plans')}`}</a>
+          <a href={plansHref(b)}>{b.cashless ? `${t('agency.nav.equipe')} › ${t('agency.teamTabs.paie')}` : `${t('nav.management')} › ${t('admin.subs.plans')}`}</a>
         </p>
       </div>
     </Sheet>

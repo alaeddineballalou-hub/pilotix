@@ -258,3 +258,9 @@ html[data-skin][data-theme] .card.agx-danger { border: 1.5px solid var(--c-bad-t
 .agx-seller-grp { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
 .agx-seller-h { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 800; color: var(--ink); }
 .agx-seller-h .bji { width: 16px; height: 16px; color: var(--muted); }
+
+/* Équipe › Personnes: the role lists as small filters (under the page's tabs) */
+.agx-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.agx-filter { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 500; text-decoration: none; white-space: nowrap; }
+.agx-filter:hover { border-color: color-mix(in srgb, var(--ink) 30%, var(--line)); }
+.agx-filter.on { background: var(--sk-tab-on-bg, #FFE9CC); color: var(--sk-tab-on-ink, #6B3A00); border-color: transparent; font-weight: 600; }
