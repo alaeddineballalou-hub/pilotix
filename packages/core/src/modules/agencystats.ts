@@ -385,8 +385,9 @@ async function moneyOf(ctx: Ctx, month: string) {
     month,
     current: monthNow(now),
     earned,
-    // what the sellers already paid (the agency said « reçu »)
+    // what the sellers already paid (the agency said « reçu »), and what they say they paid (the agency has to confirm)
     received: bills.filter((b) => b.status === 'received').reduce((n, b) => n + b.total, 0),
+    paid: bills.filter((b) => b.status === 'paid').reduce((n, b) => n + b.total, 0),
     commissions,
     // a seller chosen: the salaries belong to no seller
     salaries: one === null ? salaries : null,

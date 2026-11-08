@@ -311,7 +311,9 @@
       "commissions": "Commissions",
       "salary": "Salaire",
       "oneSeller": "Un vendeur choisi : les salaires fixes ne comptent que sur tous les vendeurs ensemble.",
-      "empty": "Rien à facturer ni à payer ce mois-ci."
+      "empty": "Rien à facturer ni à payer ce mois-ci.",
+      "billedShort": "Facturé",
+      "paid": "{{v}} payés par les vendeurs, à confirmer « reçu »"
     },
     "bySeller": "Par vendeur",
     "bySellerHint": "Chaque vendeur sur la période : confirmation, livraison, upsells et valeur livrée.",
@@ -323,7 +325,6 @@
     "callsSub": "Statuts donnés à vos commandes",
     "followDelivered": "Colis livrés",
     "followDeliveredSub": "Les colis que vous suivez",
-    "followReturned": "Colis revenus",
     "followRate": "Taux de livraison",
     "gains": "Mes gains",
     "gainsLink": "Voir Mes gains"

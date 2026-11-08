@@ -180,7 +180,7 @@ function MyJob({ d, vs }: { d: Dash; vs: string }) {
   return (
     <>
       {m.conf && (
-        <section className="card hm-per">
+        <section className="card hm-per agx-my6">
           <div className="card-head">
             <h2>
               {t('agency.st.myConf')} <small className="px-vs">{vs}</small>
@@ -207,7 +207,7 @@ function MyJob({ d, vs }: { d: Dash; vs: string }) {
           </div>
           <Kpis>
             <KpiBox icon="truck" label={t('agency.st.followDelivered')} value={n(m.followDelivered)} trend={<Trend v={ch(m.followDelivered, p?.followDelivered)} vs={vs} />} sub={t('agency.st.followDeliveredSub')} tone={m.followDelivered ? 'ok' : undefined} zero={!m.followDelivered} />
-            <KpiBox icon="undo" label={t('agency.st.followReturned')} value={n(m.followReturned)} trend={<Trend v={ch(m.followReturned, p?.followReturned)} goodDown vs={vs} />} sub={t('agency.st.returnedSub')} tone={m.followReturned ? 'bad' : undefined} zero={!m.followReturned} />
+            <KpiBox icon="undo" label={t('agency.st.returned')} value={n(m.followReturned)} trend={<Trend v={ch(m.followReturned, p?.followReturned)} goodDown vs={vs} />} sub={t('agency.st.returnedSub')} tone={m.followReturned ? 'bad' : undefined} zero={!m.followReturned} />
             <KpiBox icon="chart" label={t('agency.st.followRate')} value={pct(m.followRate)} trend={<Trend v={chPts(m.followRate, p?.followRate)} pts vs={vs} />} sub={t('agency.st.ladderOf.follow', { a: m.followDelivered, b: m.followDelivered + m.followReturned })} rate={m.followRate} tone={delivTone(m.followRate)} />
           </Kpis>
         </section>
@@ -277,7 +277,7 @@ function MoneyBody({ m }: { m: Money }) {
   return (
     <>
       <Kpis>
-        <KpiBox icon="wallet" label={L('billed')} value={da(m.earned)} sub={running ? L('running') : m.received ? t('agency.st.money.received', { v: da(m.received) }) : L('noneReceived')} href="#/facturation/vendeurs" />
+        <KpiBox icon="wallet" label={L('billed')} value={da(m.earned)} sub={running ? L('running') : m.received ? t('agency.st.money.received', { v: da(m.received) }) : m.paid ? t('agency.st.money.paid', { v: da(m.paid) }) : L('noneReceived')} href="#/facturation/vendeurs" />
         <KpiBox icon="users" label={L('cost')} value={da(m.cost)} sub={m.salaries ? t('agency.st.money.costSplit', { c: da(m.commissions), s: da(m.salaries) }) : L('costCom')} href="#/equipe/paie" />
         <KpiBox icon="coins" label={L('profit')} value={da(m.profit)} sub={L('profitSub')} tone={m.profit >= 0 ? 'ok' : 'bad'} />
         <KpiBox icon="chart" label={L('margin')} value={pct(m.margin)} sub={L('marginSub')} rate={m.margin} tone={marginTone(m.margin)} />
@@ -288,7 +288,7 @@ function MoneyBody({ m }: { m: Money }) {
           <thead>
             <tr>
               <th>{L('seller')}</th>
-              <th className="num">{L('billed')}</th>
+              <th className="num">{L('billedShort')}</th>
               <th className="num">{L('cost')}</th>
               <th className="num">{L('profit')}</th>
               <th className="num">{L('margin')}</th>
@@ -302,7 +302,7 @@ function MoneyBody({ m }: { m: Money }) {
                   <td data-l={L('seller')}>
                     <b>{s.name}</b>
                   </td>
-                  <td className="num" data-l={L('billed')}>
+                  <td className="num" data-l={L('billedShort')}>
                     <b className="ltr">{da(s.earned)}</b>
                     <small className={`agx-st-bill ${st}`}>{t(`agency.st.bill.${st}`)}</small>
                   </td>
@@ -326,7 +326,7 @@ function MoneyBody({ m }: { m: Money }) {
                     <small>{L('salariesSub')}</small>
                   </span>
                 </td>
-                <td className="num" data-l={L('billed')}>
+                <td className="num" data-l={L('billedShort')}>
                   —
                 </td>
                 <td className="num ltr" data-l={L('cost')}>
@@ -367,7 +367,7 @@ function MoneyBody({ m }: { m: Money }) {
                   <th>{L('agent')}</th>
                   <th className="num">{L('orders')}</th>
                   <th className="num">{L('commissions')}</th>
-                  {m.salaries !== null && <th className="num">{L('salary')}</th>}
+                  {!!m.salaries && <th className="num">{L('salary')}</th>}
                   <th className="num">{t('agency.st.c.total')}</th>
                 </tr>
               </thead>
@@ -386,7 +386,7 @@ function MoneyBody({ m }: { m: Money }) {
                     <td className="num ltr" data-l={L('commissions')}>
                       {da(a.commissions)}
                     </td>
-                    {m.salaries !== null && (
+                    {!!m.salaries && (
                       <td className="num ltr" data-l={L('salary')}>
                         {a.salary ? da(a.salary) : '—'}
                       </td>

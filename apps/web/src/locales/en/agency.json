@@ -311,7 +311,9 @@
       "commissions": "Commissions",
       "salary": "Salary",
       "oneSeller": "One seller chosen: fixed salaries count only on all sellers together.",
-      "empty": "Nothing to bill or pay this month."
+      "empty": "Nothing to bill or pay this month.",
+      "billedShort": "Billed",
+      "paid": "{{v}} paid by the sellers, to confirm as received"
     },
     "bySeller": "By seller",
     "bySellerHint": "Each seller over the period: confirmation, delivery, upsells and value delivered.",
@@ -323,7 +325,6 @@
     "callsSub": "Statuses given to your orders",
     "followDelivered": "Parcels delivered",
     "followDeliveredSub": "The parcels you follow",
-    "followReturned": "Parcels back",
     "followRate": "Delivery rate",
     "gains": "My earnings",
     "gainsLink": "See My earnings"
