@@ -579,6 +579,77 @@ export async function batchList(ctx: Ctx, i: { warehouseId?: number; filter: 'al
   return { on: cfg.on, warnDays: cfg.warnDays, rows: i.filter === 'all' ? out : out.filter((r) => r.status === (i.filter === 'expired' ? 'expired' : 'soon')) };
 }
 
+async function recipeOf(db: Db, productId: number) {
+  return (
+    await db.query(
+      `SELECT r.part_variant_id, r.qty, p.name, v.title, v.sku, COALESCE(v.cost, p.cost) AS cost
+       FROM product_recipes r JOIN product_variants v ON v.id = r.part_variant_id JOIN products p ON p.id = v.product_id
+       WHERE r.product_id = $1 ORDER BY p.name, v.title`,
+      [productId],
+    )
+  ).map((r: any) => ({ variantId: num(r.part_variant_id), qty: num(r.qty), label: label(r.name, r.title), sku: r.sku ?? '', cost: num(r.cost) }));
+}
+
+export async function makingList(ctx: Ctx, warehouseId?: number) {
+  const wid = warehouseId ?? num((await ctx.db.query('SELECT id FROM warehouses WHERE active ORDER BY is_default DESC, id LIMIT 1'))[0]?.id);
+  const prods = await ctx.db.query(
+    `SELECT DISTINCT p.id, p.name FROM product_recipes r JOIN products p ON p.id = r.product_id WHERE p.active ORDER BY p.name`,
+  );
+  const stock = new Map<number, number>();
+  for (const r of await stockRows(ctx.db, { missingOnly: false, withHidden: true, warehouseId: wid })) stock.set(r.variantId, (stock.get(r.variantId) ?? 0) + r.available);
+  const recipes = [];
+  for (const p of prods) {
+    const parts = (await recipeOf(ctx.db, num(p.id))).map((x) => ({ ...x, inStock: stock.get(x.variantId) ?? 0 }));
+    const variants = (await ctx.db.query('SELECT id, title FROM product_variants WHERE product_id = $1 AND active ORDER BY id', [p.id])).map((v: any) => ({ id: num(v.id), title: v.title ?? '' }));
+    recipes.push({
+      productId: num(p.id),
+      name: p.name as string,
+      variants,
+      parts,
+      unitCost: parts.reduce((s, x) => s + x.qty * x.cost, 0),
+      /** how many the parts in stock allow */
+      canMake: parts.length ? Math.max(0, Math.min(...parts.map((x) => Math.floor(Math.max(0, x.inStock) / x.qty)))) : 0,
+    });
+  }
+  const last = (await ctx.db.query(
+    `SELECT m.*, p.name, v.title, w.name AS wname, u.name AS uname FROM productions m JOIN product_variants v ON v.id = m.variant_id
+     JOIN products p ON p.id = v.product_id JOIN warehouses w ON w.id = m.warehouse_id LEFT JOIN profiles u ON u.id = m.created_by
+     ORDER BY m.id DESC LIMIT 30`,
+  )).map((m: any) => ({ id: num(m.id), ref: m.ref as string, label: label(m.name, m.title), warehouseName: m.wname as string, qty: num(m.qty), unitCost: num(m.unit_cost), at: iso(m.created_at), by: (m.uname ?? null) as string | null }));
+  return { warehouseId: wid, recipes, last };
+}
+
+export async function makeProduct(ctx: Ctx, i: { variantId: number; warehouseId: number; qty: number; note: string }) {
+  if (!(await getSetting(ctx.db, 'stockMaking')).on) throw bad('La fabrication est désactivée (Management › Stock)');
+  const out = await ctx.db.tx(async (tx) => {
+    const w = await activeDepot(tx, i.warehouseId);
+    const v = (await tx.query('SELECT v.id, v.product_id, v.title, p.name FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = $1 AND v.active AND p.active AND NOT p.is_service', [i.variantId]))[0];
+    if (!v) throw notFound('Produit introuvable');
+    const parts = await recipeOf(tx, num(v.product_id));
+    if (!parts.length) throw bad(`« ${label(v.name, v.title)} » n’a pas de recette`);
+    // every part must be there, in this depot
+    // the parts not promised to orders (stock − reserved), as « Fabrication » counts them
+    await tx.query('SELECT 1 FROM stock WHERE warehouse_id = $1 AND variant_id = ANY($2) FOR UPDATE', [w.id, parts.map((x) => x.variantId)]);
+    const have = new Map<number, number>();
+    for (const r of await stockRows(tx, { missingOnly: false, withHidden: true, warehouseId: w.id })) if (parts.some((x) => x.variantId === r.variantId)) have.set(r.variantId, Math.max(0, r.available));
+    const short = parts.find((x) => (have.get(x.variantId) ?? 0) < x.qty * i.qty);
+    if (short) throw bad(`Pas assez de « ${short.label} » dans ${w.name} : il en faut ${short.qty * i.qty}, il y en a ${have.get(short.variantId) ?? 0}`);
+    const id2 = num((await tx.query("SELECT nextval(pg_get_serial_sequence('productions','id')) AS n"))[0].n);
+    const ref = `FAB-${pad(id2)}`;
+    const unitCost = parts.reduce((s, x) => s + x.qty * x.cost, 0);
+    const note = `Fabrication ${ref}${i.note ? ` — ${i.note}` : ''}`;
+    for (const x of parts) await moveStock(tx, { variantId: x.variantId, warehouseId: w.id, delta: -x.qty * i.qty, reason: 'production_out', userId: me(ctx), note, unitCost: x.cost });
+    await moveStock(tx, { variantId: i.variantId, warehouseId: w.id, delta: i.qty, reason: 'production_in', userId: me(ctx), note, unitCost });
+    await tx.query('UPDATE product_variants SET cost = $2 WHERE id = $1', [i.variantId, unitCost]);
+    await tx.query('INSERT INTO productions (id, ref, variant_id, warehouse_id, qty, unit_cost, parts, note, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)', [
+      id2, ref, i.variantId, w.id, i.qty, unitCost, JSON.stringify(parts.map((x) => ({ variantId: x.variantId, qty: x.qty * i.qty, cost: x.cost }))), i.note, me(ctx),
+    ]);
+    return { ref, qty: i.qty, unitCost, label: label(v.name, v.title), warehouseName: w.name as string };
+  });
+  ctx.emit({ type: 'stock' });
+  return out;
+}
+
 export const stockProcs = {
   /** "Prix": sale price, purchase price and maximum discount of many products at once. */
   'catalog.setPrices': proc([...DEPOT], PricesInput, (ctx, i) => setPrices(ctx, i)),
@@ -662,6 +733,33 @@ export const stockProcs = {
    * past their date (« périmé ») or within the warning days (« bientôt »).
    */
   'stock.batches': proc([...DEPOT], z.object({ warehouseId: id.optional(), filter: z.enum(['all', 'expired', 'soon']).default('all') }), (ctx, i) => batchList(ctx, i)),
+
+  /** Management › Stock › « Fabrication » on or off. */
+  'stock.makingConfig': proc([...DEPOT], z.object({}), async (ctx) => getSetting(ctx.db, 'stockMaking')),
+  'stock.makingConfigSet': proc(['admin'], z.object({ on: z.boolean() }), async (ctx, i) => {
+    await setSetting(ctx.db, 'stockMaking', i);
+    ctx.emit({ type: 'stock' });
+    return i;
+  }),
+  /** « Fabrication »: the products with a recipe (their parts, what one piece costs in parts, how many the stock of parts allows) and the last makings. */
+  'making.list': proc([...DEPOT], z.object({ warehouseId: id.optional() }), (ctx, i) => makingList(ctx, i.warehouseId)),
+  /** A product's recipe: the parts one piece uses ([] = no recipe). */
+  'making.saveRecipe': proc([...DEPOT], z.object({ productId: id, parts: z.array(z.object({ variantId: id, qty: z.number().int().min(1).max(10000) })).max(50) }), async (ctx, i) => {
+    await ctx.db.tx(async (tx) => {
+      const p = (await tx.query('SELECT id, is_service FROM products WHERE id = $1', [i.productId]))[0];
+      if (!p) throw notFound('Produit introuvable');
+      if (p.is_service) throw bad('Un service ne se fabrique pas');
+      const own = await tx.query('SELECT id FROM product_variants WHERE product_id = $1', [i.productId]);
+      if (i.parts.some((x) => own.some((o: any) => num(o.id) === x.variantId))) throw bad('Un produit ne peut pas être une pièce de lui-même');
+      await stockable(tx, i.parts.map((x) => x.variantId));
+      await tx.query('DELETE FROM product_recipes WHERE product_id = $1', [i.productId]);
+      for (const x of i.parts) await tx.query('INSERT INTO product_recipes (product_id, part_variant_id, qty) VALUES ($1,$2,$3) ON CONFLICT (product_id, part_variant_id) DO UPDATE SET qty = EXCLUDED.qty', [i.productId, x.variantId, x.qty]);
+    });
+    ctx.emit({ type: 'stock' });
+    return { ok: true };
+  }),
+  /** « Fabriquer »: the parts leave the depot, the finished pieces come in at the cost of their parts. */
+  'making.make': proc([...DEPOT], z.object({ variantId: id, warehouseId: id, qty: z.number().int().min(1).max(100000), note: z.string().trim().max(300).default('') }), (ctx, i) => makeProduct(ctx, i)),
 
   /** "Dépôts & transferts": the depots with their stock, and the transfers between them. */
   'catalog.depots': proc([...DEPOT], z.object({}), async (ctx) => {

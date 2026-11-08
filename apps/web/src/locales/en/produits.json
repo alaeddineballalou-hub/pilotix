@@ -10,7 +10,8 @@
     "achats": "Purchases",
     "depots": "Depots",
     "prevision": "Forecast",
-    "lots": "Lots"
+    "lots": "Lots",
+    "fabrication": "Making"
   },
   "about": {
     "stock": "What each depot holds, what is already promised to orders, and what is left to sell. Products that came back broken are kept apart (“Broken”).",
@@ -23,7 +24,8 @@
     "guides": "Each product’s sales guide: what the agents read during the call, and what Dellal and CM AI use to answer customers.",
     "guidesAgent": "Your products’ sales guides: what to say, and the answers to customers’ questions and hesitations.",
     "prevision": "When each product will run out at its selling speed, and how many to buy now.",
-    "lots": "What is left of each lot, the lot to send first, and lots past or near their date."
+    "lots": "What is left of each lot, the lot to send first, and lots past or near their date.",
+    "fabrication": "Your products’ recipes and « Make »: the parts leave the stock, the finished products come in."
   },
   "ui": {
     "allDepots": "All depots",
@@ -182,7 +184,9 @@
       "repaired": "Repaired (back on sale)",
       "scrapped": "Broken, thrown away",
       "pos_sale": "Shop sale",
-      "pos_cancel": "Shop sale cancelled"
+      "pos_cancel": "Shop sale cancelled",
+      "production_in": "Made",
+      "production_out": "Used in making"
     },
     "brokenDelta": "broken {{n}}"
   },
@@ -824,5 +828,35 @@
     "none": "No lot in stock. Tick « Has lots » on a product, then make a purchase with the expiry date.",
     "noneHere": "No lot in this filter.",
     "help": "Stock leaving (shipped, broken, stock-taking…) is taken from the lot that expires first. A transfer keeps the lot and its date. Stock outside any lot (before lots were on, a return) has no lot."
+  },
+  "mk": {
+    "recipes": "Recipes",
+    "newRecipe": "New recipe",
+    "none": "No recipe yet. Make one: the finished product and the parts one piece uses.",
+    "unitCost": "cost in parts: {{cost}}",
+    "inStock": "{{n}} in stock",
+    "canMake_one": "{{count}} possible with the stock",
+    "canMake_other": "{{count}} possible with the stock",
+    "edit": "Edit",
+    "make": "Make",
+    "help": "« Make » takes the parts out of the depot and adds the finished products, at their cost in parts (which becomes their purchase price). Stock promised to orders is not used.",
+    "last": "Last makings",
+    "recipeTitle": "Recipe",
+    "finished": "Finished product",
+    "pickProduct": "Choose the finished product",
+    "parts": "Parts for 1 product",
+    "addPart": "Add a part (bottle, box…)",
+    "perPiece": "Per product",
+    "removePart": "Remove this part",
+    "noParts": "No part.",
+    "removeHint": "With no part, the recipe is deleted.",
+    "badQty": "Each part needs a quantity.",
+    "makeTitle": "Make « {{name}} »",
+    "variant": "Variant",
+    "howMany": "How many (max {{max}})",
+    "makeN_one": "Make {{count}}",
+    "makeN_other": "Make {{count}}",
+    "costNote": "Each finished product comes in at a cost of {{cost}}.",
+    "done": "{{ref}}: {{n}} « {{name}} » made"
   }
 }

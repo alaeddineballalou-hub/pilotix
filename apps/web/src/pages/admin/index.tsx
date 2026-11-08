@@ -80,6 +80,8 @@ function StockCfg() {
   const [v, setV] = useState<{ on: boolean; warnDays: number } | null>(null);
   const save = useAction('stock.batchConfigSet', { success: t('common.saved') });
   const cur = v ?? q.data ?? { on: false, warnDays: 30 };
+  const mq = useRpc('stock.makingConfig', {});
+  const msave = useAction('stock.makingConfigSet', { success: t('common.saved') });
   return (
     <div className="card">
       <h2>{t('admin.stockCfg.title')}</h2>
@@ -99,6 +101,14 @@ function StockCfg() {
       <button className="btn primary" disabled={save.isPending || v === null} onClick={() => save.mutate(cur, { onSuccess: () => setV(null) })}>
         {t('common.save')}
       </button>
+      <hr style={{ margin: '18px 0', border: 0, borderTop: '1px solid var(--line, #e5e7eb)' }} />
+      <label className="dl-switch">
+        <input type="checkbox" checked={!!mq.data?.on} disabled={msave.isPending || !mq.data} onChange={(e) => msave.mutate({ on: e.target.checked })} />
+        <span>
+          <b>{t('admin.stockCfg.making')}</b>
+          <small>{t('admin.stockCfg.makingHint')}</small>
+        </span>
+      </label>
     </div>
   );
 }

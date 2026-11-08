@@ -135,6 +135,8 @@ export interface SettingsMap {
   depotAlerts: { to: number[] };
   /** Management › Stock: « Lots et dates d'expiration » (off: no lot anywhere), and how many days before its date a lot is « bientôt périmé » */
   stockBatches: { on: boolean; warnDays: number };
+  /** Management › Stock: « Fabrication » (recipes and makings in Produits & stock), off by default */
+  stockMaking: { on: boolean };
   /** Order-list column presets: saved by an admin, shared with everyone, never edited (only deleted by an admin) */
   colPresets: { id: string; name: string; cols: string[]; by: string; at: string }[];
   /** The preset every team uses (set by an admin; only an admin changes the columns) */
@@ -249,6 +251,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   caisses: { bankHidden: false },
   depotAlerts: { to: [] },
   stockBatches: { on: false, warnDays: 30 },
+  stockMaking: { on: false },
   colPresets: [],
   colPresetActive: null,
   livreurMessages: [

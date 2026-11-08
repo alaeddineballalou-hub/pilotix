@@ -10,7 +10,8 @@
     "achats": "Achats",
     "depots": "Dépôts",
     "prevision": "Prévisions",
-    "lots": "Lots"
+    "lots": "Lots",
+    "fabrication": "Fabrication"
   },
   "about": {
     "stock": "Ce qu’il y a dans chaque dépôt, ce qui est déjà promis aux commandes et ce qui reste à vendre. Les produits revenus cassés sont à part (« Cassé »).",
@@ -23,7 +24,8 @@
     "guides": "Le guide de vente de chaque produit : ce que les conseillers lisent pendant l’appel, et ce que Dellal et CM AI utilisent pour répondre aux clients.",
     "guidesAgent": "Le guide de vente de vos produits : quoi dire, les réponses aux questions et aux hésitations des clients.",
     "prevision": "Quand chaque produit sera épuisé, au rythme de ses ventes, et combien en acheter maintenant.",
-    "lots": "Ce qui reste de chaque lot, le lot à envoyer en premier, et les lots périmés ou bientôt périmés."
+    "lots": "Ce qui reste de chaque lot, le lot à envoyer en premier, et les lots périmés ou bientôt périmés.",
+    "fabrication": "Les recettes de vos produits et « Fabriquer » : les pièces sortent du stock, les produits finis entrent."
   },
   "ui": {
     "allDepots": "Tous les dépôts",
@@ -182,7 +184,9 @@
       "repaired": "Réparé (remis en vente)",
       "scrapped": "Cassé, jeté",
       "pos_sale": "Vente en boutique",
-      "pos_cancel": "Vente en boutique annulée"
+      "pos_cancel": "Vente en boutique annulée",
+      "production_in": "Fabriqué",
+      "production_out": "Utilisé en fabrication"
     },
     "brokenDelta": "cassé {{n}}"
   },
@@ -824,5 +828,35 @@
     "none": "Aucun lot en stock. Cochez « A des lots » sur un produit, puis faites un achat avec la date d’expiration.",
     "noneHere": "Aucun lot dans ce filtre.",
     "help": "Le stock qui part (expédié, cassé, inventaire…) est pris dans le lot qui expire en premier. Un transfert garde le lot et sa date. Ce qui est en stock hors lot (avant d’activer les lots, un retour) n’a pas de lot."
+  },
+  "mk": {
+    "recipes": "Recettes",
+    "newRecipe": "Nouvelle recette",
+    "none": "Aucune recette. Créez-en une : le produit fini et les pièces qu’une pièce utilise.",
+    "unitCost": "coût en pièces : {{cost}}",
+    "inStock": "{{n}} en stock",
+    "canMake_one": "{{count}} possible avec le stock",
+    "canMake_other": "{{count}} possibles avec le stock",
+    "edit": "Modifier",
+    "make": "Fabriquer",
+    "help": "« Fabriquer » sort les pièces du dépôt et y ajoute les produits finis, à leur coût en pièces (qui devient leur prix d’achat). Le stock promis à des commandes n’est pas utilisé.",
+    "last": "Dernières fabrications",
+    "recipeTitle": "Recette",
+    "finished": "Produit fini",
+    "pickProduct": "Choisissez le produit fini",
+    "parts": "Pièces pour 1 produit",
+    "addPart": "Ajouter une pièce (flacon, boîte…)",
+    "perPiece": "Par produit",
+    "removePart": "Retirer cette pièce",
+    "noParts": "Aucune pièce.",
+    "removeHint": "Sans pièce, la recette est supprimée.",
+    "badQty": "Chaque pièce doit avoir une quantité.",
+    "makeTitle": "Fabriquer « {{name}} »",
+    "variant": "Variante",
+    "howMany": "Combien (max {{max}})",
+    "makeN_one": "Fabriquer {{count}}",
+    "makeN_other": "Fabriquer {{count}}",
+    "costNote": "Chaque produit fini entrera au coût de {{cost}}.",
+    "done": "{{ref}} : {{n}} « {{name}} » fabriqués"
   }
 }

@@ -34,6 +34,7 @@ export const USER_REFS: readonly Ref[] = [
   ['applied_actions', 'user_id', 'orders'],
   ['stock_movements', 'user_id', 'stock'],
   ['purchases', 'created_by', 'stock'],
+  ['productions', 'created_by', 'stock'],
   ['inventories', 'created_by', 'stock'],
   ['depot_restock', 'updated_by', 'stock'],
   ['pickup_bags', 'created_by', 'delivery'],
@@ -105,6 +106,7 @@ export const USER_REFS: readonly Ref[] = [
 /** Columns that point to a product (products.id). */
 export const PRODUCT_REFS: readonly Ref[] = [
   ['order_items', 'product_id', 'orders'],
+  ['product_recipes', 'product_id', 'stock'],
   ['landing_pages', 'product_id', 'pages'],
   ['lead_forms', 'product_id', 'marketing'],
   ['wa_campaigns', 'product_id', 'marketing'],
@@ -125,6 +127,8 @@ export const VARIANT_REFS: readonly Ref[] = [
   ['stock_movements', 'variant_id', 'stock'],
   ['purchase_lines', 'variant_id', 'stock'],
   ['stock_batches', 'variant_id', 'stock'],
+  ['product_recipes', 'part_variant_id', 'stock'],
+  ['productions', 'variant_id', 'stock'],
   ['landing_leads', 'variant_id', 'pages'],
   ['lead_forms', 'variant_id', 'marketing'],
   ['leads', 'variant_id', 'marketing'],
@@ -139,6 +143,7 @@ export const WAREHOUSE_REFS: readonly Ref[] = [
   ['stock_movements', 'warehouse_id', 'stock'],
   ['purchases', 'warehouse_id', 'stock'],
   ['stock_batches', 'warehouse_id', 'stock'],
+  ['productions', 'warehouse_id', 'stock'],
   ['inventories', 'warehouse_id', 'stock'],
   ['pos_sales', 'warehouse_id', 'cash'],
 ];

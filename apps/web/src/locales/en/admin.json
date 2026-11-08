@@ -900,7 +900,9 @@
     "title": "Stock",
     "lots": "Lots and expiry dates",
     "lotsHint": "For cosmetics, food…: tick « Has lots » on a product; its purchases say each lot and its date, and stock always leaves from the lot that expires first. Off: no lot anywhere.",
-    "warnDays": "« Expiring soon »: days before the date"
+    "warnDays": "« Expiring soon »: days before the date",
+    "making": "Making",
+    "makingHint": "Recipes (e.g. 1 bottle + 1 box) and « Make » in Products & stock: the parts leave the stock, the finished products come in at their cost in parts. Off: the tab is hidden."
   },
   "mod": {
     "title": "Modules",

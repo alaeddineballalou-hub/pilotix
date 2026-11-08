@@ -337,3 +337,40 @@ test('lots: off by default; on, a product with lots needs its expiry date, the s
   await call('stock.batchConfigSet', admin, { on: false, warnDays: 30 });
   await call('catalog.setBatches', depot, { productId: x.pid, on: false });
 });
+
+test('making: off by default; a recipe takes its parts out of the depot and puts the finished pieces in at the cost of their parts', async () => {
+  const depot = await as(EMAILS.depot);
+  const admin = await as(EMAILS.admin);
+  const wid = await mainDepot();
+  const vs = (await db.query(`SELECT v.id, p.id AS pid FROM product_variants v JOIN products p ON p.id = v.product_id WHERE NOT p.is_service AND p.active AND v.active ORDER BY p.id, v.id`)).map((r: any) => ({ vid: Number(r.id), pid: Number(r.pid) }));
+  const fin = vs[0];
+  const [bottle, box] = vs.filter((x: any) => x.pid !== fin.pid).filter((x: any, k: number, a: any[]) => a.findIndex((y) => y.pid === x.pid) === k).slice(0, 2);
+  await db.query('UPDATE product_variants SET cost = $2 WHERE id = $1', [bottle.vid, 300]);
+  await db.query('UPDATE product_variants SET cost = $2 WHERE id = $1', [box.vid, 50]);
+  await call('catalog.move', depot, { variantId: bottle.vid, warehouseId: wid, kind: 'count', qty: 10 });
+  await call('catalog.move', depot, { variantId: box.vid, warehouseId: wid, kind: 'count', qty: 5 });
+  await call('catalog.move', depot, { variantId: fin.vid, warehouseId: wid, kind: 'count', qty: 0 });
+  const qtyOf = async (v: number) => Number((await db.query('SELECT qty FROM stock WHERE variant_id = $1 AND warehouse_id = $2', [v, wid]))[0].qty);
+  await assert.rejects(call('making.saveRecipe', depot, { productId: fin.pid, parts: [{ variantId: fin.vid, qty: 1 }] }), /lui-même/);
+  await call('making.saveRecipe', depot, { productId: fin.pid, parts: [{ variantId: bottle.vid, qty: 2 }, { variantId: box.vid, qty: 1 }] });
+  // off: nothing is made
+  await assert.rejects(call('making.make', depot, { variantId: fin.vid, warehouseId: wid, qty: 1 }), /désactivée/);
+  await call('stock.makingConfigSet', admin, { on: true });
+  const l: any = await call('making.list', depot, { warehouseId: wid });
+  const r = l.recipes.find((x: any) => x.productId === fin.pid);
+  assert.equal(r.unitCost, 650);
+  // what the parts not promised to orders allow: 10 bottles / 2, 5 boxes / 1, less what orders hold
+  const free = (v: number) => Math.max(0, r.parts.find((x: any) => x.variantId === v).inStock);
+  assert.equal(r.canMake, Math.min(Math.floor(free(bottle.vid) / 2), free(box.vid)));
+  assert.ok(r.canMake >= 1);
+  await assert.rejects(call('making.make', depot, { variantId: fin.vid, warehouseId: wid, qty: r.canMake + 1 }), /Pas assez de/);
+  const [b0, x0, f0] = [await qtyOf(bottle.vid), await qtyOf(box.vid), await qtyOf(fin.vid)];
+  const m: any = await call('making.make', depot, { variantId: fin.vid, warehouseId: wid, qty: 1 });
+  assert.equal(m.unitCost, 650);
+  assert.deepEqual([await qtyOf(bottle.vid), await qtyOf(box.vid), await qtyOf(fin.vid)], [b0 - 2, x0 - 1, f0 + 1]);
+  assert.equal(Number((await db.query('SELECT cost FROM product_variants WHERE id = $1', [fin.vid]))[0].cost), 650);
+  const after: any = await call('making.list', depot, { warehouseId: wid });
+  assert.equal(after.last[0].ref, m.ref);
+  await call('stock.makingConfigSet', admin, { on: false });
+  await call('making.saveRecipe', depot, { productId: fin.pid, parts: [] });
+});

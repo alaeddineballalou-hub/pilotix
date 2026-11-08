@@ -900,7 +900,9 @@
     "title": "Stock",
     "lots": "Lots et dates d’expiration",
     "lotsHint": "Pour les produits cosmétiques, alimentaires… : cochez « A des lots » sur un produit ; ses achats disent chaque lot et sa date, et le stock part toujours du lot qui expire en premier. Désactivé : aucun lot nulle part.",
-    "warnDays": "« Bientôt périmé » : jours avant la date"
+    "warnDays": "« Bientôt périmé » : jours avant la date",
+    "making": "Fabrication",
+    "makingHint": "Recettes (ex. 1 flacon + 1 boîte) et « Fabriquer » dans Produits & stock : les pièces sortent du stock, les produits finis entrent à leur coût en pièces. Désactivé : l’onglet est caché."
   },
   "mod": {
     "title": "Modules",
