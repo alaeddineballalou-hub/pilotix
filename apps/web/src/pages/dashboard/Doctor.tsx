@@ -35,22 +35,22 @@ export function ShopDoctor({ card, fold }: { card?: boolean; fold?: boolean }) {
     const tone = !r ? '' : r.score >= 80 ? 'ok' : r.score >= 50 ? 'warn' : 'bad';
     const say = !r ? '' : bad ? t('doctor.say.bad', { count: bad }) : warn ? t('doctor.say.warn', { count: warn }) : t('doctor.say.ok');
     return (
-      <section className={`card dr-home dr-fold${open ? ' open' : ''}`}>
-        <button type="button" className="dr-fold-row" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+      <section className={`card dr-home dr-mine${open ? ' open' : ''}`}>
+        <button type="button" className="dr-mine-row" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
           <CopilotIcon mood={r ? copilotMood(r.items) : null} size={38} label={t('doctor.shopTitle')} />
-          <span className="dr-fold-t">
+          <span className="dr-mine-t">
             <b>{t('doctor.mineTitle')}</b>
             <small>{open || !r ? sub : say}</small>
           </span>
           {r && !open && (
-            <span className={`dr-fold-score dr-${tone}`}>
+            <span className={`dr-mine-score dr-${tone}`}>
               <b className="ltr">{r.score}</b>
               <small>{t('doctor.outOf')}</small>
             </span>
           )}
-          <Icon name="chevron" className="dr-fold-ch" />
+          <Icon name="chevron" className="dr-mine-ch" />
         </button>
-        <div id={id} className="dr-fold-b" hidden={!open}>
+        <div id={id} className="dr-mine-b" hidden={!open}>
           {body}
         </div>
       </section>
