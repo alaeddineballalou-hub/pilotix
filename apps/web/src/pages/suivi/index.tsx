@@ -546,6 +546,15 @@ function List({ tab }: { tab: ListTab }) {
         {t('suivi.act.swap')}
       </button>
     );
+  // Annulés: a parcel the customer cancelled, on its way back, can always be swapped from here too
+  if (tab === 'annules') actions = (o) => <SwapButton o={o} onSwap={() => setDlg({ kind: 'swap', o })} />;
+  // the same buttons on the cards (Réclamation on each alert, Swap on a parcel coming back), without opening them
+  const cardAct = (o: Order): ReactNode => {
+    if (!canFollow) return null;
+    if (isAlertTab(tab)) return agency ? null : <AlertClaim o={o} x={extra[o.id]} onClaim={(toLivreur) => setDlg({ kind: 'claim', o, toLivreur })} />;
+    if (tab === 'annules') return o.followStatus === 'returning' ? <SwapButton o={o} onSwap={() => setDlg({ kind: 'swap', o })} /> : null;
+    return null;
+  };
 
   return (
     <div className={`card${cards && !phone ? ' px-wide' : ''}`}>
@@ -585,11 +594,12 @@ function List({ tab }: { tab: ListTab }) {
               ];
             if (tab === 'bloques') return [{ key: 'stuck', label: t('suivi.stuck.btn'), tone: 'main', run: () => setDlg({ kind: 'stuck', o }) }, claim];
             if (tab === 'swap') return [{ key: 'swap', label: t('suivi.act.swap'), tone: 'main', run: () => setDlg({ kind: 'swap', o }) }, claim];
+            if (tab === 'annules' && o.followStatus === 'returning') return [{ key: 'swap', label: t('suivi.act.swap'), tone: 'main', run: () => setDlg({ kind: 'swap', o }) }, ...(!agency ? [claim] : [])];
             return agency ? [] : [claim];
           };
           return (
             <>
-              <ParcelCards rows={rows} extra={extra} reasonOf={reasonOf} empty={t(`suivi.empty.${tab}`)} onOpen={setOpenId} />
+              <ParcelCards rows={rows} extra={extra} reasonOf={reasonOf} empty={t(`suivi.empty.${tab}`)} onOpen={setOpenId} act={cardAct} />
               {canFollow && (isAlertTab(tab) || tab === 'bloques') && rows.length > 0 && (
                 <button type="button" className="pxp-next" disabled={nexting} onClick={nextAlert}>
                   {tab === 'bloques' ? t('suivi.stuck.next') : t('suivi.ph.next')}
@@ -679,46 +689,51 @@ function FocusAlert({ kind, id, x, actions, onClaim, onLeft, onClose }: { kind: 
   return <ParcelPage o={o} x={x ?? undefined} reason={reasonOf(o, x ?? undefined)} actions={actions(o)} onClaim={onClaim ? () => onClaim(o) : undefined} onClose={onClose} onSkip={onLeft} />;
 }
 
-/** Next to an alert: claim to the courier (copies the tracking), or call / write to our own livreur. */
+/** On every alert, always: « Réclamation ». To the delivery company: by its API when it has one, otherwise the message
+ *  to send. To our own livreur: written to him (his number shown to call too). A réclamation already sent since the
+ *  alert is shown next to it, and another one can still be sent. */
 function AlertClaim({ o, x, onClaim }: { o: Order; x?: Extra; onClaim: (toLivreur: boolean) => void }) {
   const { t } = useTranslation();
   if (!x) return null;
-  if (x.companyKind === 'own') {
-    return (
-      <span className="bjr-al">
-        {x.livreurPhone && (
-          <a className="bjr-call c" href={`tel:${x.livreurPhone}`}>
-            <Icon name="phone" />
-            <span>
-              <b>{t('suivi.act.call')} </b>
-              <span className="ltr">{x.livreurPhone}</span>
-            </span>
-          </a>
-        )}
-        <button type="button" className="bjp-ib bjp-ib-e" title={t('suivi.act.write', { name: o.livreurName ?? '' })} aria-label={t('suivi.act.write', { name: o.livreurName ?? '' })} onClick={() => onClaim(true)}>
-          <Icon name="message" />
-        </button>
-      </span>
-    );
-  }
-  if (!o.companyId) return null;
+  const own = x.companyKind === 'own';
+  if (!own && !o.companyId) return null;
   const sentAfterAlert = x.claim && x.claim.status !== 'resolved' && x.claim.sentAt && Date.parse(x.claim.createdAt) >= Date.parse(o.updatedAt) - 7 * 86_400_000;
-  if (sentAfterAlert)
-    return (
-      <span className="bjr-al">
-        <span className="badge t-ok bjr-sent">{t('suivi.act.claimSent')}</span>
-        <small className="muted">{when(x.claim!.sentAt)}</small>
-      </span>
-    );
   return (
     <span className="bjr-al">
-      <button type="button" className="btn small bjr-recb" onClick={() => onClaim(false)}>
+      {own && x.livreurPhone && (
+        <a className="bjr-call c" href={`tel:${x.livreurPhone}`}>
+          <Icon name="phone" />
+          <span>
+            <b>{t('suivi.act.call')} </b>
+            <span className="ltr">{x.livreurPhone}</span>
+          </span>
+        </a>
+      )}
+      {sentAfterAlert && (
+        <span className="bjr-sentat">
+          <span className="badge t-ok bjr-sent">{t('suivi.act.claimSent')}</span>
+          <small className="muted">{when(x.claim!.sentAt)}</small>
+        </span>
+      )}
+      <button type="button" className="btn small bjr-recb" title={own ? t('suivi.act.write', { name: o.livreurName ?? '' }) : undefined} onClick={() => onClaim(own)}>
         <span className="bjr-ic">
-          <Icon name="copy" />
+          <Icon name={own ? 'message' : 'copy'} />
         </span>
         {t('suivi.act.claim')}
       </button>
     </span>
+  );
+}
+
+/** On a parcel the customer cancelled, on its way back: « Swap », always (to another customer; through the delivery
+ *  company's API when it has one, the swap window says what is possible). */
+function SwapButton({ o, onSwap }: { o: Order; onSwap: () => void }) {
+  const { t } = useTranslation();
+  if (o.followStatus !== 'returning') return null;
+  return (
+    <button type="button" className="btn small primary nowrap" style={{ whiteSpace: 'nowrap' }} onClick={onSwap}>
+      {t('suivi.act.swap')}
+    </button>
   );
 }
 

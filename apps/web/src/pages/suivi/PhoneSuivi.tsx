@@ -87,7 +87,9 @@ function Journey({ o, label }: { o: Order; label: string | null }) {
 
 const dayTone = (d: number | null) => (d === null ? '' : d >= 10 ? 'bad' : d >= 5 ? 'warn' : 'info');
 
-export function ParcelCards({ rows, extra, reasonOf, empty, onOpen }: { rows: Order[]; extra: Record<number, PExtra>; reasonOf: (o: Order, x?: PExtra) => string | null; empty: string; onOpen: (id: number) => void }) {
+/** The parcels as cards; a tap opens one. `act`: the buttons on a card itself (Réclamation on an alert, Swap on a parcel
+ *  coming back), usable without opening it. */
+export function ParcelCards({ rows, extra, reasonOf, empty, onOpen, act }: { rows: Order[]; extra: Record<number, PExtra>; reasonOf: (o: Order, x?: PExtra) => string | null; empty: string; onOpen: (id: number) => void; act?: (o: Order) => ReactNode }) {
   const { t } = useTranslation();
   if (!rows.length) return <p className="pxp-empty muted">{empty}</p>;
   return (
@@ -95,6 +97,7 @@ export function ParcelCards({ rows, extra, reasonOf, empty, onOpen }: { rows: Or
       {rows.map((o) => {
         const x = extra[o.id];
         const d = daysSince(o.shippedAt);
+        const buttons = act?.(o);
         return (
           <li key={o.id}>
             <div className="pxs-card" role="button" tabIndex={0} onClick={() => onOpen(o.id)} onKeyDown={(e) => e.key === 'Enter' && onOpen(o.id)}>
@@ -125,6 +128,12 @@ export function ParcelCards({ rows, extra, reasonOf, empty, onOpen }: { rows: Or
                   <ClockChip c={x.clock} />
                   <TriesChip tr={x.tries} />
                   <RotateChip at={x.rotateAt} />
+                </div>
+              )}
+              {buttons && (
+                // its own buttons: they act, they don't open the card
+                <div className="pxs-act" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                  {buttons}
                 </div>
               )}
             </div>

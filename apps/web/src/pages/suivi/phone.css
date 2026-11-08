@@ -225,4 +225,7 @@ body:has(.pxs-page) .modal-wrap, body:has(.pxp-order) .modal-wrap { z-index: 90 
 .pxs-skip { flex: none; min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--field); color: var(--ink); font-weight: 800; font-size: 13px; cursor: pointer; white-space: nowrap; }
 .pxs-skip:hover { border-color: var(--px-orange); }
 .pxs-clk { display: flex; margin-top: 8px; }
+/* the card's own buttons (Réclamation on each alert, Swap on a parcel coming back): at its end; they act, they don't open it */
+.pxs-act { display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 10px; border-top: 1px dashed var(--line); cursor: default; }
+.pxs-act .bjr-al { max-width: none; justify-content: flex-end; }
 .pxs-clkbar { display: flex; justify-content: center; padding: 8px 12px 0; }

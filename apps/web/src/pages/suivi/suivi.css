@@ -34,3 +34,5 @@ td .sv-clock + .sv-clock { margin-inline-start: 4px; }
 .sv-why textarea { width: 100%; font: inherit; font-weight: 500; }
 .pxr-stage { display: block; margin-top: 6px; }
 .bjp-tabs .tab.bad b { background: var(--coral-soft, #FDE2DE); color: var(--coral, #C2410C); }
+/* a réclamation already sent since the alert, next to the « Réclamation » button (another one can be sent) */
+.bjr-sentat { display: inline-flex; align-items: center; gap: 6px; }
