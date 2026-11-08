@@ -190,7 +190,8 @@ export function transcriptText(rows: { role: string; body: string; meta?: any }[
     .join('\n');
 }
 
-export function judgePrompt(q: ExamQuestion, f: ExamFacts, transcript: string): string {
+/** What the shop knows, for the judge (it checks Dellal said nothing beyond it): its catalogue, delivery, rules, information. */
+export function shopKnows(f: ExamFacts): string[] {
   const fee = (w: Place) => (hasFee(w) ? `${w.name} (domicile ${w.home ?? '—'} DA, bureau ${w.desk ?? '—'} DA)` : `${w.name} (aucune livraison réglée)`);
   const variants = f.variants.length > 1 ? ` (variantes : ${f.variants.join(', ')} ; en stock : ${f.inStock.join(', ') || 'aucune'})` : '';
   const more = [
@@ -201,17 +202,17 @@ export function judgePrompt(q: ExamQuestion, f: ExamFacts, transcript: string): 
     f.sizeChart ? 'guide des tailles en photo : oui' : '',
   ].filter(Boolean);
   return [
-    `Situation : ${q.title}.`,
-    `Une réponse parfaite : ${q.aim(f)}`,
     `Ce que la boutique sait : « ${f.product} » à ${spacedDa(f.price)}${variants}${more.length ? ` ; ${more.join(' ; ')}` : ''} ; livraison : ${fee(f.wilaya)}, ${fee(f.far)} ; photos du produit : ${
       f.photos ? (f.sendPhotos ? 'oui' : 'oui, mais la boutique n’en envoie pas dans le chat') : 'non'
     } ; ${f.version === '001' ? 'version 001 (le numéro d’abord, un conseiller appelle pour confirmer)' : 'commande complète dans le chat'} ; remise ${
       f.discount && (f.maxDiscount ?? 0) > 0 ? `possible si le client insiste (au plus ${spacedDa(f.maxDiscount!)})` : 'interdite'
     }.`,
     `Informations de la boutique : ${f.notes || '(aucune : rien à promettre au-delà du catalogue)'}`,
-    'La conversation :',
-    transcript,
-  ].join('\n');
+  ];
+}
+
+export function judgePrompt(q: ExamQuestion, f: ExamFacts, transcript: string): string {
+  return [`Situation : ${q.title}.`, `Une réponse parfaite : ${q.aim(f)}`, ...shopKnows(f), 'La conversation :', transcript].join('\n');
 }
 
 export interface ExamMark {

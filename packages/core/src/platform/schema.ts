@@ -3,6 +3,7 @@
 import type { Tenancy } from './tenancy';
 import { PILOT_PLATFORM_SQL, RELEASE_SQL } from '../modules/pilotlearn';
 import { EXAM_PLAN_SQL, EXAM_SQL, pilotixLessonsSql } from '../modules/pilotexamdata';
+import { CASES_SQL } from '../modules/pilotcases';
 import { AI_USAGE_SQL } from './aiusage';
 import { SPY_SEARCHES_SQL } from './spykey';
 import { LAHJA_PLATFORM_SQL } from '../modules/lahja';
@@ -655,6 +656,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p032_exam_plan', EXAM_PLAN_SQL],
   // AI Spy on Pilotix's key: each shop's searches per day (its daily limit, the control room's board)
   ['p033_spy_searches', SPY_SEARCHES_SQL],
+  // Pilot AI › the lesson test: after « Push en test », ten cases on the new lessons, decided by the coach (pilotcases.ts)
+  ['p034_case_tests', CASES_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

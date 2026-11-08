@@ -1487,6 +1487,12 @@ export function bucket(testId: number, shopId: number, convId: number): number {
 }
 
 export type BookRef = { bookId: number | null; version: number; arm: 'A' | 'B'; testId: number | null; text: string; tokens: number };
+/** The book with a few more lessons, for one test chat (the lesson test: the lessons kept since « Push en test »). */
+export function bookPlus(book: BookRef, extra: { topic: string; text: string }[]): BookRef {
+  if (!extra.length) return book;
+  const text = (book.text || HEAD(book.version)) + extra.map((l) => '\n- [' + l.topic + '] ' + l.text).join('');
+  return { ...book, text, tokens: estTokens(text) };
+}
 /**
  * At reply time: which book this chat uses, and its text for Dellal's instructions ('' when there is no book yet).
  * Sticky: the first call of a chat decides its arm (hash of test, shop, chat, against the test share) and records the
@@ -1832,6 +1838,19 @@ export async function trialFor(pdb: Db): Promise<{ book: BookRef; darija: string
     darija: darijaText({ title: String(dj.title ?? ''), chapters: Array.isArray(dj.chapters) ? dj.chapters : [] }),
     lahja: words,
   };
+}
+/** The sales lessons of the version in test: the new ones (not in the book in service) first. */
+export async function trialLessons(pdb: Db): Promise<{ id: number; topic: string; text: string; meaning: string | null; fresh: boolean }[]> {
+  const tr: Row | undefined = (await pdb.query(`SELECT b.lesson_ids FROM platform.pilot_releases r JOIN platform.pilot_books b ON b.id = r.book_id WHERE r.status = 'trial' LIMIT 1`))[0];
+  if (!tr) return [];
+  const ids = ((tr.lesson_ids ?? []) as unknown[]).map((x) => num(x));
+  if (!ids.length) return [];
+  const champ: Row | undefined = (await pdb.query(`SELECT lesson_ids FROM platform.pilot_books WHERE status = 'champion' ORDER BY promoted_at DESC NULLS LAST, id DESC LIMIT 1`))[0];
+  const have = new Set<number>(((champ?.lesson_ids ?? []) as unknown[]).map((x) => num(x)));
+  const rows: Row[] = await pdb.query(`SELECT id, topic, text, evidence FROM platform.pilot_lessons WHERE id = ANY($1::bigint[])`, [ids]);
+  return rows
+    .map((r) => ({ id: num(r.id), topic: String(r.topic), text: String(r.text), meaning: r.evidence?.meaning ? String(r.evidence.meaning) : null, fresh: !have.has(num(r.id)) }))
+    .sort((a, b) => Number(b.fresh) - Number(a.fresh) || b.id - a.id);
 }
 /** Keeps the challenger: it becomes the champion for everyone. Only a test that the nights proved not worse can be kept. */
 export async function promote(pdb: Db, testId: number, by: string, o: { now?: Date } = {}): Promise<Ack> {

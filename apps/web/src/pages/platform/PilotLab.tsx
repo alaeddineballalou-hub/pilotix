@@ -26,6 +26,7 @@ import { chatPhoto } from '../messages/photo';
 import { CaseModal } from './pilotCase';
 import { ReleasePanel, takeFreshPush } from './PilotRelease';
 import { ExamCard, PilotixLessons, takeExamJump } from './PilotExam';
+import { CasesCard } from './PilotCases';
 import { DarijaBookCard } from './DarijaBook';
 import { VocabPane } from './Vocab';
 import { PilotDemo, usePilotAction, usePilotCall, usePilotRpc } from './pilotDemo';
@@ -78,15 +79,22 @@ export function LabTab({ d, manager }: { d: State; manager: boolean }) {
   const tryBox = useRef<HTMLDivElement>(null);
   const relBox = useRef<HTMLDivElement>(null);
   const examBox = useRef<HTMLDivElement>(null);
+  const casesBox = useRef<HTMLDivElement>(null);
+  // « Push en test »: the version made, whose new lessons the lesson test plays at once
+  const [casesGo, setCasesGo] = useState<number | null>(null);
   const scroll = (el: HTMLElement | null) => requestAnimationFrame(() => el?.scrollIntoView({ behavior: still() ? 'auto' : 'smooth', block: 'start' }));
   useEffect(() => {
     if (jump) scroll(examBox.current);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const pushed = (kind: 'trial' | 'live') => {
+  const pushed = (kind: 'trial' | 'live', v?: number) => {
     setBook(kind);
     setFresh((x) => x + 1);
     setPane('try');
-    scroll(tryBox.current);
+    // a version in test: first its ten cases (the lesson test), then the test chat
+    if (kind === 'trial' && v) {
+      setCasesGo(v);
+      scroll(casesBox.current);
+    } else scroll(tryBox.current);
   };
   // « Push en test pour l'essayer » under a lesson just added: to the two pushes
   const toPush = () => scroll(relBox.current);
@@ -110,8 +118,11 @@ export function LabTab({ d, manager }: { d: State; manager: boolean }) {
           <LessonsCard d={d} onTry={toPush} manager={manager} />
         </div>
       </div>
+      <div ref={casesBox}>
+        <CasesCard d={d} manager={manager} pushed={casesGo} />
+      </div>
       <div ref={examBox}>
-        <ExamCard d={d} book={examBook} onBook={setExamBook} manager={manager} />
+        <ExamCard d={d} book={examBook} onBook={setExamBook} manager={manager} onStaged={(v) => pushed('trial', v)} />
       </div>
       <div ref={relBox}>
         <NextCard
@@ -975,7 +986,7 @@ function CoachFix({ m }: { m: Msg }) {
 const NEXT_OPEN = 'px.pilot.lab.nextOpen';
 /** the push card first (« Push en test », « Push sur le serveur »), then the lessons waiting for it, folded or not (the
  *  choice is kept in this browser) */
-function NextCard({ d, manager, onPushed, onExam }: { d: State; manager: boolean; onPushed?: (kind: 'trial' | 'live') => void; onExam?: () => void }) {
+function NextCard({ d, manager, onPushed, onExam }: { d: State; manager: boolean; onPushed?: (kind: 'trial' | 'live', v?: number) => void; onExam?: () => void }) {
   const { t } = useTranslation();
   const remove = usePilotAction('p.pilot.lesson', { success: t('platform.saved') });
   const nb = d.next;
@@ -997,7 +1008,7 @@ function NextCard({ d, manager, onPushed, onExam }: { d: State; manager: boolean
   };
   return (
     <Card title={t(k + 'title')} badge={nb.fresh.length ? <span className="chip">{n(nb.fresh.length)}</span> : undefined} help={t(k + 'help')}>
-      <ReleasePanel d={d} manager={manager} onStaged={() => onPushed?.('trial')} onReleased={() => onPushed?.('live')} onTry={(kind) => onPushed?.(kind)} onExam={onExam} />
+      <ReleasePanel d={d} manager={manager} onStaged={(v) => onPushed?.('trial', v)} onReleased={() => onPushed?.('live')} onTry={(kind) => onPushed?.(kind)} onExam={onExam} />
       {!nb.fresh.length ? (
         <p className="pl-next-empty">{t(k + 'empty')}</p>
       ) : (

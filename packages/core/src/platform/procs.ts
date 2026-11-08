@@ -50,6 +50,7 @@ import {
 import type { Tenancy } from './tenancy';
 import * as pilot from '../modules/pilotlearn';
 import * as exam from '../modules/pilotexam';
+import * as cases from '../modules/pilotcases';
 import { pilotixLessons } from '../modules/pilotexamdata';
 import { pilotConfig, pilotToday, savePilotConfig, saveVoiceConfig, voiceConfig, voiceToday, VOICE_MODEL } from './pilotai';
 import { saveStore, storeStatus, testStore } from '../photostore';
@@ -1135,7 +1136,13 @@ export const PLATFORM_REGISTRY = {
     const exams = { trial: mark('trial', release.trial?.version), live: mark('live', release.live?.version ?? 0), running: await exam.runningExam(pdb).catch(() => null) };
     // Pilotix's own lessons (no mistakes, a chat in order, the photos): the ones not added yet, one click in Leçons › Vente
     const pilotix = (await pilotixLessons(pdb).catch(() => [])).filter((l) => !l.added).map(({ topic, text, meaning }) => ({ topic, text, meaning }));
-    return { config, today, night, candidates, approved, books, next, release, exams, pilotix, lahjaWaiting: lahja, sharing: { shops: num(sharing[0]?.shops), cases: num(sharing[0]?.cases) }, shops: stores, rules };
+    // the lesson test: the latest one (its cases are read apart) and the lessons of the version in test, the new ones first
+    const lastTest = await cases.lastCases(pdb).catch(() => null);
+    const caseTest = {
+      last: lastTest ? { id: lastTest.id, version: lastTest.version, round: lastTest.round, status: lastTest.status, passed: lastTest.passed, total: lastTest.total } : null,
+      lessons: release.trial ? await pilot.trialLessons(pdb).catch(() => []) : [],
+    };
+    return { config, today, night, candidates, approved, books, next, release, exams, caseTest, pilotix, lahjaWaiting: lahja, sharing: { shops: num(sharing[0]?.shops), cases: num(sharing[0]?.cases) }, shops: stores, rules };
   }),
   'p.pilot.save': pproc(
     MANAGERS,
@@ -1533,6 +1540,90 @@ export const PLATFORM_REGISTRY = {
     void exam
       .runExam({ pdb: ctx.t.platform, shop, ask, examId: id, book, lab: i.book, trial: trial ? { darija: trial.darija, lahja: trial.lahja } : null, facts })
       .catch((e) => ctx.t.platform.query(`UPDATE platform.pilot_exams SET status = 'failed', error = $2, finished_at = now() WHERE id = $1`, [id, String(e?.message ?? e).slice(0, 300)]).catch(() => undefined));
+    return { id };
+  }),
+  /**
+   * The lesson test: after « Push en test », Pilot AI writes ten cases on the version's new sales lessons (or the ones
+   * picked) with the shop's catalogue, and Dellal answers each on the version in test. In the background; one at a time.
+   */
+  'p.pilot.cases.start': pproc(MANAGERS, z.object({ shopId: Id, lessonIds: z.array(Id).max(20).optional() }), async (ctx, i) => {
+    if (!ctx.shop || !ctx.ai) throw bad('Le test des leçons n’est disponible que sur le serveur');
+    const s = (await loadShops(ctx.t)).find((x) => x.id === i.shopId);
+    if (!s || s.kind !== 'store' || s.status === 'archived' || s.status === 'deleted') throw notFound('Boutique introuvable');
+    const pdb = ctx.t.platform;
+    if (await cases.runningCases(pdb)) throw bad('Un test des leçons est déjà en cours : attendez qu’il finisse.');
+    const trial = await pilot.trialFor(pdb);
+    if (!trial) throw bad('Aucune version en test : cliquez d’abord sur « Push en test »');
+    const all = await pilot.trialLessons(pdb);
+    const picked = i.lessonIds?.length ? all.filter((l) => i.lessonIds!.includes(l.id)) : all.filter((l) => l.fresh);
+    if (!picked.length) throw bad(i.lessonIds?.length ? 'Ces leçons ne sont pas dans la version en test.' : 'La version en test n’a pas de nouvelle leçon de vente : ajoutez-en une, puis « Push en test ».');
+    const shop = await ctx.shop(i.shopId);
+    const facts = await exam.examFacts(shop.db);
+    if (!facts) throw bad('Cette boutique n’a aucun produit actif : les cas parlent d’un de ses produits.');
+    const lessons = picked.slice(0, 12).map(({ id, topic, text, meaning }) => ({ id, topic, text, meaning }));
+    const id = await cases.startCases(pdb, { shopId: s.id, shopName: s.name, version: trial.book.version, lessons, by: ctx.staff.name || ctx.staff.email });
+    await audit(ctx, 'pilot.cases.start', null, { id, shopId: s.id, version: trial.book.version, lessons: lessons.map((l) => l.id) });
+    void cases
+      .runCases({ pdb, shop, ask: ctx.ai, testId: id, book: trial.book, trial: { darija: trial.darija, lahja: trial.lahja }, facts, avoid: await cases.writtenCases(pdb, trial.book.version) })
+      .catch((e) => pdb.query(`UPDATE platform.pilot_case_tests SET status = 'failed', error = $2, finished_at = now() WHERE id = $1`, [id, String(e?.message ?? e).slice(0, 300)]).catch(() => undefined));
+    return { id };
+  }),
+  'p.pilot.cases.get': pproc(ALL, z.object({ id: Id }), async (ctx, i) => {
+    const r = (await ctx.t.platform.query('SELECT * FROM platform.pilot_case_tests WHERE id = $1', [i.id]))[0];
+    if (!r) throw notFound('Test introuvable');
+    return cases.caseView(r);
+  }),
+  /** « Réussi » keeps the lesson tried for the case (it waits for « Push en test »); « Pas encore » takes it back. */
+  'p.pilot.cases.verdict': pproc(ALL, z.object({ id: Id, caseId: z.string().max(20), pass: z.boolean() }), async (ctx, i) => {
+    try {
+      const v = await cases.caseVerdict(ctx.t.platform, { testId: i.id, caseId: i.caseId, pass: i.pass, by: ctx.staff.name || ctx.staff.email });
+      await audit(ctx, 'pilot.cases.verdict', null, { id: i.id, caseId: i.caseId, pass: i.pass });
+      return v;
+    } catch (e: any) {
+      throw e?.message === 'not_found' || e?.message === 'case_not_found' ? notFound('Cas introuvable') : e;
+    }
+  }),
+  /** « Refaire »: the coach's words for the case become a lesson, and the case is played again with it. */
+  'p.pilot.cases.redo': pproc(
+    ALL,
+    z.object({ id: Id, caseId: z.string().max(20), note: z.string().trim().min(3).max(1500), lang: z.enum(['fr', 'en', 'ar']).default('fr') }),
+    async (ctx, i) => {
+      if (!ctx.shop || !ctx.ai) throw bad('Le test des leçons n’est disponible que sur le serveur');
+      const pdb = ctx.t.platform;
+      const r = (await pdb.query('SELECT shop_id, version FROM platform.pilot_case_tests WHERE id = $1', [i.id]))[0];
+      if (!r) throw notFound('Test introuvable');
+      const trial = await pilot.trialFor(pdb);
+      if (!trial || trial.book.version !== num(r.version)) throw bad('La version en test a changé : lancez un nouveau test des leçons.');
+      const shop = await ctx.shop(num(r.shop_id));
+      try {
+        const out = await cases.redoCase({ pdb, shop, ask: ctx.ai, testId: i.id, caseId: i.caseId, note: i.note, lang: i.lang, book: trial.book, trial: { darija: trial.darija, lahja: trial.lahja } });
+        await audit(ctx, 'pilot.cases.redo', null, { id: i.id, caseId: i.caseId, played: !out.reply || !out.problems.length });
+        return out;
+      } catch (e: any) {
+        if (e?.message === 'running') throw bad('Attendez la fin du test.');
+        if (e?.message === 'not_found' || e?.message === 'case_not_found') throw notFound('Cas introuvable');
+        if (e?.message === 'no_product') throw bad('Cette boutique n’a plus de produit actif.');
+        throw e;
+      }
+    },
+  ),
+  /** « D'autres cas »: ten new cases on the same lessons, completely different from the ones written for this version. */
+  'p.pilot.cases.more': pproc(MANAGERS, z.object({ id: Id }), async (ctx, i) => {
+    if (!ctx.shop || !ctx.ai) throw bad('Le test des leçons n’est disponible que sur le serveur');
+    const pdb = ctx.t.platform;
+    const r = (await pdb.query('SELECT * FROM platform.pilot_case_tests WHERE id = $1', [i.id]))[0];
+    if (!r) throw notFound('Test introuvable');
+    if (await cases.runningCases(pdb)) throw bad('Un test des leçons est déjà en cours : attendez qu’il finisse.');
+    const trial = await pilot.trialFor(pdb);
+    if (!trial || trial.book.version !== num(r.version)) throw bad('La version en test a changé : lancez un nouveau test des leçons.');
+    const shop = await ctx.shop(num(r.shop_id));
+    const round = num((await pdb.query('SELECT coalesce(max(round), 0) + 1 AS n FROM platform.pilot_case_tests WHERE version = $1', [num(r.version)]))[0]?.n);
+    const lessons = (typeof r.lessons === 'string' ? JSON.parse(r.lessons) : r.lessons) ?? [];
+    const id = await cases.startCases(pdb, { shopId: num(r.shop_id), shopName: String(r.shop_name ?? ''), version: num(r.version), round, lessons, by: ctx.staff.name || ctx.staff.email });
+    await audit(ctx, 'pilot.cases.more', null, { id, from: i.id, round });
+    void cases
+      .runCases({ pdb, shop, ask: ctx.ai, testId: id, book: trial.book, trial: { darija: trial.darija, lahja: trial.lahja }, avoid: await cases.writtenCases(pdb, num(r.version)) })
+      .catch((e) => pdb.query(`UPDATE platform.pilot_case_tests SET status = 'failed', error = $2, finished_at = now() WHERE id = $1`, [id, String(e?.message ?? e).slice(0, 300)]).catch(() => undefined));
     return { id };
   }),
   'p.pilot.exam.get': pproc(ALL, z.object({ id: Id }), async (ctx, i) => {

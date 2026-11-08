@@ -39,7 +39,7 @@ function useTitle() {
   return (x: { title: string; en?: string | null; ar?: string | null }) => (lang === 'en' ? x.en : lang === 'ar' ? x.ar : x.title) || x.title;
 }
 
-export function ExamCard({ d, book: picked, onBook, manager }: { d: State; book: Book; onBook: (b: Book) => void; manager: boolean }) {
+export function ExamCard({ d, book: picked, onBook, manager, onStaged }: { d: State; book: Book; onBook: (b: Book) => void; manager: boolean; onStaged?: (v: number) => void }) {
   const { t, i18n } = useTranslation();
   const call = usePilotCall();
   const qc = useQueryClient();
@@ -211,7 +211,7 @@ export function ExamCard({ d, book: picked, onBook, manager }: { d: State; book:
           {exam && exam.status === 'done' && (
             <>
               <Questions items={exam.items} plan={exam.plan} />
-              <ToTest d={d} exam={exam} manager={manager} busy={busy || !shopId} onAgain={() => void start('trial')} />
+              <ToTest d={d} exam={exam} manager={manager} busy={busy || !shopId} onAgain={() => void start('trial')} onStaged={onStaged} />
             </>
           )}
         </>
@@ -342,13 +342,13 @@ function Question({ q, n: num }: { q: Item; n: number }) {
  * Below the questions: the lessons added wait for « Push en test » (one click here, like the push card's), then the exam
  * again on that version — the missed questions are asked first, so the marks show whether the lessons fixed them.
  */
-function ToTest({ d, exam, manager, busy, onAgain }: { d: State; exam: Exam; manager: boolean; busy: boolean; onAgain: () => void }) {
+function ToTest({ d, exam, manager, busy, onAgain, onStaged }: { d: State; exam: Exam; manager: boolean; busy: boolean; onAgain: () => void; onStaged?: (v: number) => void }) {
   const { t } = useTranslation();
   const R = 'platform.pilot.release.';
   const p = d.release.pending;
   const tr = d.release.trial;
   const waiting = waitingParts(t, p, false);
-  const stage = usePilotAction('p.pilot.stage', { success: (x) => t(R + 'stagedToast', { v: x.version }) });
+  const stage = usePilotAction('p.pilot.stage', { success: (x) => t(R + 'stagedToast', { v: x.version }), onDone: (x) => onStaged?.(x.version) });
   const missed = exam.items.length - exam.passed;
   const onTrial = !!tr && exam.book === 'trial' && exam.version === tr.version;
   let text: string;

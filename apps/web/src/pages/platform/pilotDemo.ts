@@ -401,6 +401,8 @@ function state() {
     lahjaWaiting: 3,
     // the 10-question exam: v4 (in test) marked this morning, v2 (in service) two days ago
     exams: { trial: { id: 13, book: 'trial', version: 4, score: 9.3, at: at(0, 7) }, live: { id: 9, book: 'live', version: 2, score: 7.6, at: at(2) }, running: null },
+    // the lesson test: v4's three new lessons, ten cases this morning (six passed, two not yet, two to decide)
+    caseTest: { last: { id: 21, version: 4, round: 1, status: 'done' as const, passed: 6, total: 10 }, lessons: CASE_LESSONS },
     // the lessons Pilotix wrote: already added (the platform's migration), they wait in the next book below
     pilotix: [] as typeof PILOTIX_DEMO,
     next: {
@@ -831,6 +833,143 @@ function examV2() {
   ]);
 }
 
+// ---------------------------------------------------------------- the lesson test (PilotCases.tsx), in the example
+/** v4's lessons: three new ones (the cases test them), two already in service */
+const CASE_LESSONS = [
+  { id: 301, topic: 'closing', text: 'When the customer asks two things at once, answer both briefly, then ask one single question to move forward.', meaning: 'Deux questions à la fois : répondre brièvement aux deux, puis une seule question pour avancer.', fresh: true },
+  { id: 302, topic: 'price', text: 'When the customer asks for the price, give it right away with the tool, add one useful benefit, then ask one question.', meaning: 'Le client demande le prix : le donner tout de suite avec l’outil, un avantage utile, puis une seule question.', fresh: true },
+  { id: 303, topic: 'trust', text: 'When the customer hesitates to give their number, explain simply that it is only for the delivery man and the confirmation call.', meaning: 'Le client hésite à donner son numéro : expliquer simplement qu’il sert seulement au livreur et à l’appel de confirmation.', fresh: true },
+  { id: 210, topic: 'language', text: "Write short, like a seller on their phone, in the customer's language and script.", meaning: 'Écrire court, comme un vendeur sur son téléphone, dans la langue et l’écriture du client.', fresh: false },
+  { id: 207, topic: 'address', text: 'Before confirming, read the full address back to the customer in one line and wait for a clear yes.', meaning: 'Avant de confirmer, relire l’adresse complète en une ligne et attendre un oui clair.', fresh: false },
+];
+type CaseRow = { title: string; lesson: number; turns: string[]; chat: { role: string; body: string }[]; score: number; good: string[]; faults: string[]; idea?: string; aim: string };
+const CASES_A: CaseRow[] = [
+  { title: 'Le prix, premier message', lesson: 2, turns: ['salam ch7al montre atlas ?'], chat: [C('salam ch7al montre atlas ?'), T('search_products « montre atlas » → Montre Atlas · 3 500 DA'), D('Wa 3likoum salam 😊 Montre Atlas b 3 500 DA, w tkhalass ghir ki tesselmha. Noire wela argentée ?')], score: 10, good: ['Le prix tout de suite, avec l’outil', 'Un avantage, une seule question'], faults: [], aim: 'Le prix exact avec l’outil tout de suite, le paiement à la livraison, puis une seule question.' },
+  { title: 'Prix et livraison dans le même message', lesson: 1, turns: ['ch7al l montre w ch7al la livraison l Oran ?'], chat: [C('ch7al l montre w ch7al la livraison l Oran ?'), T('delivery_fee Oran → domicile 600 DA · bureau 400 DA'), D('Montre Atlas b 3 500 DA 😊 L Oran : 600 DA l dar wela 400 DA f l bureau, ya3ni 4 100 DA wela 3 900 DA. Wach yasselhek ?')], score: 9, good: ['Les deux réponses, avec les outils', 'Le total clair'], faults: ['Un peu long'], aim: 'Répondre aux deux (prix et frais avec les outils, le total), puis une seule question.' },
+  { title: 'Couleur et délai à la fois', lesson: 1, turns: ['kayen argentée ? w wa9tach tousel ?'], chat: [C('kayen argentée ? w wa9tach tousel ?'), T('search_products « argentée » → en stock'), D('Ih kayna l’argentée 👍 L wa9t 3la 7sab l wilaya : men ayya wilaya nta ?')], score: 9, good: ['La couleur d’abord', 'Le délai sans rien promettre'], faults: [], aim: 'Répondre à la couleur, puis demander la wilaya pour le vrai délai, sans promettre de date.' },
+  { title: 'Il ne veut pas donner son numéro', lesson: 3, turns: ['n7ab nkoumandi bessah ma n7abch na3ti numéro'], chat: [C('n7ab nkoumandi bessah ma n7abch na3ti numéro'), D('Bla numéro ma n9derch nsajjel la commande 🙏 3tini numéro stp.')], score: 5, good: ['Poli'], faults: ['Insiste sans expliquer à quoi sert le numéro', 'Rien pour le rassurer'], idea: 'Expliquer que le numéro sert seulement au livreur et à l’appel de confirmation, sans insister.', aim: 'Expliquer simplement à quoi sert le numéro (le livreur, l’appel de confirmation), rassurer, sans insister.' },
+  { title: 'Le prix demandé en français', lesson: 2, turns: ['Bonjour, quel est le prix de la montre ?'], chat: [C('Bonjour, quel est le prix de la montre ?'), D('Bonjour 😊 La Montre Atlas est à 3 500 DA, payable à la livraison. Vous la préférez noire ou argentée ?')], score: 10, good: ['En français, comme le client', 'Prix, avantage, une question'], faults: [], aim: 'En français : le prix exact, le paiement à la livraison, une seule question.' },
+  { title: 'Deux questions en arabe', lesson: 1, turns: ['بشحال الساعة؟ وكاين التوصيل لوهران؟'], chat: [C('بشحال الساعة؟ وكاين التوصيل لوهران؟'), T('delivery_fee Oran → domicile 600 DA · bureau 400 DA'), D('الساعة بـ 3 500 دج 😊 التوصيل لوهران: 600 دج للمنزل أو 400 دج للمكتب. تحب المنزل ولا المكتب؟')], score: 9, good: ['En lettres arabes', 'Les deux réponses, une question'], faults: [], aim: 'En lettres arabes : le prix et les frais avec les outils, puis une seule question.' },
+  { title: 'Méfiant : « pourquoi mon numéro ? »', lesson: 3, turns: ['3lach t7ab numéro ta3i ? bach tbi3ouh ?'], chat: [C('3lach t7ab numéro ta3i ? bach tbi3ouh ?'), D('Lala khouya 😊 3tini numéro w smiytek.')], score: 4, good: [], faults: ['N’explique pas à quoi sert le numéro', 'Demande deux informations à la fois'], idea: 'Dire simplement que le numéro sert au livreur et à l’appel de confirmation, puis demander une seule information.', aim: 'Rassurer : le numéro sert seulement au livreur et à l’appel de confirmation ; une seule question.' },
+  { title: 'Le prix pour deux montres', lesson: 2, turns: ['ch7al ida nchri jouj ?'], chat: [C('ch7al ida nchri jouj ?'), D('Jouj Montre Atlas : 2 × 3 500 DA = 7 000 DA 😊 Noire w argentée, wela zouj kif kif ?')], score: 9, good: ['Le calcul juste, sans remise inventée'], faults: [], aim: 'Deux fois le prix exact, sans remise inventée, puis une seule question.' },
+  { title: 'Trois questions d’un coup', lesson: 1, turns: ['ch7al ? kayen garantie ? w tlivriw l Tlemcen ?'], chat: [C('ch7al ? kayen garantie ? w tlivriw l Tlemcen ?'), T('delivery_fee Tlemcen → domicile 650 DA · bureau 450 DA'), D('Montre Atlas b 3 500 DA 😊 L garantie, ma 3andich l ma3louma : wa7ed men l’équipe y3ayetlek. L Tlemcen : 650 DA l dar, 450 DA f l bureau. Wach t7ab ?')], score: 8, good: ['Les trois réponses, rien d’inventé'], faults: ['Un peu long'], aim: 'Répondre brièvement aux trois (prix, garantie sans rien inventer, frais), puis une seule question.' },
+  { title: 'Le numéro de sa sœur', lesson: 3, turns: ['n9der na3tik numéro ta3 khti ? hiya li testa9bel'], chat: [C('n9der na3tik numéro ta3 khti ? hiya li testa9bel'), D('Ih normal 👍 3tini smiytha w numéro ta3ha, w l wilaya.')], score: 7, good: ['Accepte tout de suite'], faults: ['Demande trois informations à la fois'], idea: 'Accepter, puis demander une seule information à la fois.', aim: 'Accepter la personne qui reçoit, puis une seule information à la fois.' },
+];
+const CASES_B: CaseRow[] = [
+  { title: 'Le prix avec des fautes', lesson: 2, turns: ['chhal la monter atlas'], chat: [C('chhal la monter atlas'), D('Montre Atlas b 3 500 DA 😊 Noire wela argentée ?')], score: 10, good: ['A compris malgré les fautes'], faults: [], aim: 'Comprendre, donner le prix exact, une seule question.' },
+  { title: 'Prix et paiement à la livraison', lesson: 1, turns: ['ch7al w nkhalas ki tousel ?'], chat: [C('ch7al w nkhalas ki tousel ?'), D('Montre Atlas b 3 500 DA, w ih tkhalass ghir ki tesselmha 👍 Men ayya wilaya ?')], score: 10, good: ['Les deux réponses, une question'], faults: [], aim: 'Le prix et le paiement à la livraison, puis une seule question.' },
+  { title: 'Un numéro étranger', lesson: 3, turns: ['3andi numéro français, ynfa3 ?'], chat: [C('3andi numéro français, ynfa3 ?'), D('Lazem numéro dzayri bach y3ayetlek l livreur 🙏 3andek numéro hna ?')], score: 9, good: ['Explique pourquoi'], faults: [], aim: 'Expliquer que le livreur appelle un numéro algérien, sans brusquer.' },
+  { title: 'Couleur et quantité', lesson: 1, turns: ['kayen noire ? w kayna bezzaf ?'], chat: [C('kayen noire ? w kayna bezzaf ?'), T('search_products « noire » → en stock'), D('Ih kayna noire 👍 Ch7al men wa7da t7ab ?')], score: 8, good: ['Rien d’inventé sur le stock'], faults: ['N’a pas répondu à « bezzaf »'], aim: 'La couleur, puis rien d’inventé sur le stock, une seule question.' },
+  { title: 'Le prix en centimes', lesson: 2, turns: ['rahi b 35 alf ?'], chat: [C('rahi b 35 alf ?'), D('Ih, 35 alf ya3ni 3 500 DA 👍 Men ayya wilaya ?')], score: 10, good: ['Les centimes compris'], faults: [], aim: 'Confirmer en DA que 35 alf est le prix, une seule question.' },
+  { title: '« Je vous l’ai donné hier »', lesson: 3, turns: ['a3titek numéro lbare7'], chat: [C('a3titek numéro lbare7'), D('Smahli, 3awed ktebli numéro stp.')], score: 6, good: ['Poli'], faults: ['Ne dit pas pourquoi il le redemande'], idea: 'Dire poliment qu’il ne voit pas l’ancienne conversation, puis redemander le numéro une seule fois.', aim: 'Expliquer pourquoi il le redemande, poliment, une seule fois.' },
+  { title: 'Prix, livraison et délai', lesson: 1, turns: ['ch7al l montre, l livraison l Blida w wa9tach ?'], chat: [C('ch7al l montre, l livraison l Blida w wa9tach ?'), T('delivery_fee Blida → domicile 500 DA · bureau 350 DA'), D('Montre Atlas b 3 500 DA. L Blida : 500 DA l dar wela 350 DA f l bureau. L wa9t 3la 7sab l livreur 🙏 Dar wela bureau ?')], score: 9, good: ['Les trois réponses, rien promis'], faults: [], aim: 'Les trois réponses brèves avec les outils, aucun délai promis, une seule question.' },
+  { title: 'Le prix demandé en anglais', lesson: 2, turns: ['how much is the watch?'], chat: [C('how much is the watch?'), D('The Atlas watch is 3,500 DA, paid on delivery 😊 Black or silver?')], score: 10, good: ['En anglais, comme le client'], faults: [], aim: 'En anglais : le prix exact, le paiement à la livraison, une seule question.' },
+  { title: 'Un chiffre en moins', lesson: 3, turns: ['0661 23 45 1'], chat: [C('0661 23 45 1'), D('Numéro fih 9 ar9am berk 🙏 3awed ktebli l 10 ar9am stp.')], score: 10, good: ['A vu le chiffre manquant'], faults: [], aim: 'Voir qu’il manque un chiffre et le redemander gentiment.' },
+  { title: 'Deux produits demandés', lesson: 1, turns: ['ch7al l montre w l bracelet ?'], chat: [C('ch7al l montre w l bracelet ?'), T('search_products « bracelet » → rien'), D('Montre Atlas b 3 500 DA, w l bracelet ma l9itouch 🙏 Wach t9sod b l bracelet ?')], score: 8, good: ['Rien d’inventé'], faults: ['Pourrait proposer la montre seule'], aim: 'Le prix de la montre, honnête pour le bracelet, une seule question.' },
+];
+type DemoCases = { id: number; round: number; at: number; cases: CaseRow[]; items: Record<string, { verdict: 'pass' | 'fail' | null; note: string | null; draft: { topic: string; text: string; meaning: string } | null; kept: number | null; tries: number; chat?: { role: string; body: string }[]; score?: number }> };
+const caseTests = new Map<number, DemoCases>();
+/** this morning's test (id 21): six passed (one after « Refaire »), two not yet, two to decide */
+function caseTest21(): DemoCases {
+  const kept = { topic: 'closing', text: 'When the customer asks about a colour and the delivery time together, answer the colour first, then ask the wilaya to give the real delay.', meaning: 'Couleur et délai dans le même message : répondre d’abord à la couleur, puis demander la wilaya pour donner le vrai délai.' };
+  const v = (verdict: 'pass' | 'fail' | null) => ({ verdict, note: null, draft: null, kept: null, tries: 1 });
+  return {
+    id: 21,
+    round: 1,
+    at: Date.parse(`${today()}T08:30:00Z`),
+    cases: CASES_A,
+    items: { r1c1: v('pass'), r1c2: v('pass'), r1c3: { verdict: 'pass', note: 'Répondre d’abord à la couleur, puis demander la wilaya pour le délai.', draft: kept, kept: 901, tries: 2 }, r1c4: v('fail'), r1c5: v('pass'), r1c6: v('pass'), r1c7: v('fail'), r1c8: v('pass'), r1c9: v(null), r1c10: v(null) },
+  };
+}
+function caseTestNew(round: number, cases: CaseRow[]) {
+  const id = Math.max(30, ...caseTests.keys()) + 1;
+  caseTests.set(id, { id, round, at: Date.now(), cases, items: {} });
+  return id;
+}
+function caseTestView(id: number) {
+  if (id === 21 && !caseTests.has(21)) caseTests.set(21, caseTest21());
+  const t = caseTests.get(id) ?? caseTests.get(21) ?? caseTest21();
+  const live = t.id !== 21;
+  // a new test: Pilot AI writes for 2 s, then a case every 1,2 s
+  const since = Date.now() - t.at;
+  const done = live ? Math.max(0, Math.min(t.cases.length, Math.floor((since - 2000) / 1200))) : t.cases.length;
+  const status = live && since < 2000 ? 'writing' : done < t.cases.length ? 'running' : 'done';
+  const prefix = `r${t.round}c`;
+  const cases = status === 'writing' ? [] : t.cases.map((c, k) => ({ id: `${prefix}${k + 1}`, title: c.title, turns: c.turns, aim: c.aim, lesson: c.lesson }));
+  const items = cases.slice(0, done).map((c, k) => {
+    const row = t.cases[k];
+    const st = t.items[c.id] ?? { verdict: null, note: null, draft: null, kept: null, tries: 1 };
+    const score = st.score ?? row.score;
+    const missed = score < 8;
+    return {
+      id: c.id,
+      transcript: st.chat ?? row.chat,
+      score,
+      good: st.chat ? ['Applique la leçon de ce cas'] : row.good,
+      faults: st.chat ? [] : row.faults,
+      lesson: null,
+      meaning: missed ? row.idea ?? null : null,
+      topic: 'closing',
+      lessonOk: false,
+      hint: !missed,
+      verdict: st.verdict,
+      note: st.note,
+      draft: st.draft,
+      kept: st.kept,
+      keptError: null,
+      tries: st.tries,
+    };
+  });
+  const at = new Date(t.at).toISOString();
+  return {
+    id: t.id,
+    shopId: 1,
+    shopName: 'Boutique Alaeddine',
+    version: 4,
+    round: t.round,
+    status: status as 'writing' | 'running' | 'done' | 'failed',
+    error: null,
+    lessons: CASE_LESSONS.filter((l) => l.fresh).map(({ id: lid, topic, text, meaning }) => ({ id: lid, topic, text, meaning })),
+    cases,
+    items,
+    done,
+    total: t.cases.length,
+    passed: items.filter((i) => i.verdict === 'pass').length,
+    missed: items.filter((i) => i.verdict === 'fail').length,
+    kept: items.filter((i) => i.kept).length,
+    by: 'Alaeddine',
+    at,
+    finishedAt: status === 'done' ? new Date(t.at + (live ? 2000 + t.cases.length * 1200 : 180_000)).toISOString() : null,
+  };
+}
+function caseTestVerdict(id: number, caseId: string, pass: boolean) {
+  caseTestView(id);
+  const t = caseTests.get(id) ?? caseTests.get(21)!;
+  const st = t.items[caseId] ?? { verdict: null, note: null, draft: null, kept: null, tries: 1 };
+  t.items[caseId] = { ...st, verdict: pass ? 'pass' : 'fail', kept: pass && st.draft ? st.kept ?? 900 + Object.keys(t.items).length : pass ? st.kept : null };
+  return caseTestView(t.id);
+}
+/** « Refaire » in the example: Dellal answers the case again with the coach's lesson, and does it right */
+function caseTestRedo(id: number, caseId: string, note: string) {
+  caseTestView(id);
+  const t = caseTests.get(id) ?? caseTests.get(21)!;
+  const k = Number(caseId.split('c').pop()) - 1;
+  const row = t.cases[k];
+  const st = t.items[caseId] ?? { verdict: null, note: null, draft: null, kept: null, tries: 1 };
+  const better = row.lesson === 3 ? 'Normal 🙏 L numéro ykhdem ghir l livreur w l conseiller li y3ayetlek bach ykonfirmi, ma nbi3ouh l 7ad. 3tini smiytek l’awel ?' : 'Ih 👍 Nkamlou b wa7da wa7da : smiytek l’awel ?';
+  t.items[caseId] = {
+    ...st,
+    verdict: null,
+    note,
+    draft: { topic: row.lesson === 3 ? 'trust' : 'closing', text: row.lesson === 3 ? 'When the customer asks why you need their number, say it is only for the delivery man and the confirmation call, then ask one thing at a time.' : 'Ask for one piece of information at a time, even when the customer is in a hurry.', meaning: note },
+    kept: null,
+    tries: st.tries + 1,
+    chat: [...row.chat.filter((m) => m.role === 'customer'), D(better)],
+    score: 9,
+  };
+  return caseTestView(t.id);
+}
+
 /** « Lancer l'examen » in the example: the ten come one by one (one every 1,5 s), then the marks of that version */
 let demoRun: { id: number; book: string; at: number } | null = null;
 function examRun(id: number) {
@@ -856,6 +995,16 @@ export function demoAnswer(name: string, input: any): unknown {
       return { id: demoRun.id };
     case 'p.pilot.exam.list':
       return [examDemo(13), examDemo(9)];
+    case 'p.pilot.cases.get':
+      return caseTestView(Number(input?.id) || 21);
+    case 'p.pilot.cases.start':
+      return { id: caseTestNew(1, CASES_A) };
+    case 'p.pilot.cases.more':
+      return { id: caseTestNew((caseTests.get(Number(input?.id))?.round ?? 1) + 1, CASES_B) };
+    case 'p.pilot.cases.verdict':
+      return caseTestVerdict(Number(input?.id), String(input?.caseId), !!input?.pass);
+    case 'p.pilot.cases.redo':
+      return { test: caseTestRedo(Number(input?.id), String(input?.caseId), String(input?.note ?? '')), reply: null, problems: [] };
     // Pilotix's Meta and TikTok apps, not made yet (the preview shows what to do)
     case 'p.social.apps':
       return { meta: { appId: '', configId: '', igConfigId: '', waConfigId: '', hasSecret: false, hasIgSecret: false }, tiktok: { appId: '', hasSecret: false }, verifyToken: 'pilotix-verify-3f9c2a71', ready: { meta: false, tiktok: false }, urls: null, counts: { meta: 1, tiktok: 0, shops: 2 } };
