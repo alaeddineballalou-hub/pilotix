@@ -30,15 +30,29 @@ export function FoldCard({
       <div
         className="card-head pl-fold-head"
         onClick={(e) => {
-          // the whole row opens it (the « ? » and the buttons do their own thing)
-          if (!(e.target as HTMLElement).closest('button, a, .px-help, .px-tip')) onOpen(!open);
+          // the whole row opens it (the title does it itself; the « ? » does its own thing)
+          if (!(e.target as HTMLElement).closest('button, a, [role="button"], .px-help, .px-tip')) onOpen(!open);
         }}
       >
         <h2>
-          <button type="button" className="pl-fold-btn" aria-expanded={open} aria-controls={id} onClick={() => onOpen(!open)}>
+          {/* inline, so that on a phone the count and the « ? » follow the title's last word */}
+          <span
+            role="button"
+            tabIndex={0}
+            className="pl-fold-btn"
+            aria-expanded={open}
+            aria-controls={id}
+            onClick={() => onOpen(!open)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onOpen(!open);
+              }
+            }}
+          >
             <Icon name="chevron" />
             {title}
-          </button>
+          </span>
           {badge !== undefined && <> {badge}</>}
           {help && <Help text={help} label={title} />}
         </h2>

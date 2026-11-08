@@ -632,9 +632,9 @@ html[data-theme="dark"] .pp-prot { --pp-c-q: #3B9BC0; }
 @media (prefers-reduced-motion: reduce) { .pl-next-fold > summary .bji { transition: none; } }
 /* the lab's folding cards (the push card, the exam): folded when the page opens, the title row opens them */
 .pl-fold-head { cursor: pointer; }
-.pl-fold-btn { display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: start; cursor: pointer; }
+.pl-fold-btn { cursor: pointer; }
 .pl-fold-btn:focus-visible { outline: 2px solid var(--px-orange); outline-offset: 3px; border-radius: 6px; }
-.pl-fold-btn .bji { flex: none; width: 18px; height: 18px; color: var(--muted); transform: rotate(-90deg); transition: transform .15s ease; }
+.pl-fold-btn .bji { display: inline-block; width: 18px; height: 18px; margin-inline-end: 8px; vertical-align: -3px; color: var(--muted); transform: rotate(-90deg); transition: transform .15s ease; }
 [dir="rtl"] .pl-fold-btn .bji { transform: rotate(90deg); }
 .pl-fold.open .pl-fold-btn .bji, [dir="rtl"] .pl-fold.open .pl-fold-btn .bji { transform: none; }
 .pl-fold:not(.open):hover { border-color: color-mix(in srgb, var(--navy) 30%, var(--line)); }
