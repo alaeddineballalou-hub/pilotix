@@ -57,7 +57,10 @@
     "livreurs": "عمّال التوصيل",
     "agences": "وكالات التأكيد",
     "marketers": "المسوّقون",
-    "influenceurs": "المؤثرون"
+    "influenceurs": "المؤثرون",
+    "eq-users": "المستخدمون",
+    "eq-affect": "التوزيع",
+    "eq-paie": "الأجور"
   },
   "profil": "ملفي الشخصي",
   "boutiques": "متاجري",
@@ -67,5 +70,6 @@
   "marketers": "المسوّقون",
   "influenceurs": "المؤثرون",
   "gains": "أرباحي",
-  "facturation": "الفوترة"
+  "facturation": "الفوترة",
+  "equipe": "الفريق"
 }

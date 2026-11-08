@@ -57,7 +57,10 @@
     "livreurs": "Delivery drivers",
     "agences": "Confirmation agencies",
     "marketers": "Marketers",
-    "influenceurs": "Influencers"
+    "influenceurs": "Influencers",
+    "eq-users": "Users",
+    "eq-affect": "Assignment",
+    "eq-paie": "Pay"
   },
   "profil": "My profile",
   "boutiques": "My boutiques",
@@ -67,5 +70,6 @@
   "marketers": "Marketers",
   "influenceurs": "Influencers",
   "gains": "My earnings",
-  "facturation": "Billing"
+  "facturation": "Billing",
+  "equipe": "Team"
 }

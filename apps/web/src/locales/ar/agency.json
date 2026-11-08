@@ -692,8 +692,8 @@
     "pending": "في الانتظار"
   },
   "teamTabs": {
-    "personnes": "الأشخاص",
-    "repartition": "توزيع الطلبيات",
+    "personnes": "المستخدمون",
+    "repartition": "التوزيع",
     "paie": "الأجور",
     "scores": "النقاط",
     "tous": "الجميع"

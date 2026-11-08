@@ -57,7 +57,10 @@
     "livreurs": "Livreurs",
     "agences": "Agences de confirmation",
     "marketers": "Marketers",
-    "influenceurs": "Influenceurs"
+    "influenceurs": "Influenceurs",
+    "eq-users": "Utilisateurs",
+    "eq-affect": "Affectation",
+    "eq-paie": "Paie"
   },
   "profil": "Mon profil",
   "boutiques": "Mes boutiques",
@@ -67,5 +70,6 @@
   "marketers": "Marketers",
   "influenceurs": "Influenceurs",
   "gains": "Mes gains",
-  "facturation": "Facturation"
+  "facturation": "Facturation",
+  "equipe": "Équipe"
 }

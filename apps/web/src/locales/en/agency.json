@@ -684,8 +684,8 @@
     "pending": "Waiting"
   },
   "teamTabs": {
-    "personnes": "People",
-    "repartition": "Order sharing",
+    "personnes": "Users",
+    "repartition": "Assignment",
     "paie": "Pay",
     "scores": "Scores",
     "tous": "Everyone"

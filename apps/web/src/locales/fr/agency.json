@@ -684,8 +684,8 @@
     "pending": "En attente"
   },
   "teamTabs": {
-    "personnes": "Personnes",
-    "repartition": "Répartition",
+    "personnes": "Utilisateurs",
+    "repartition": "Affectation",
     "paie": "Paie",
     "scores": "Scores",
     "tous": "Tout le monde"

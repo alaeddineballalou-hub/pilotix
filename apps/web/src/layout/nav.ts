@@ -237,7 +237,20 @@ export const AGENCY_NAV: NavItem[] = [
   { id: 'gains', icon: 'wallet', roles: ['confirmation', 'suivi', 'agent_manager'], onlyIf: (_r, admin) => !admin },
   // sorted by who: « Équipe » = the agency's people (accounts, who gets which order, pay, scores); « Vendeurs » = its
   // sellers (the list, their plans and prices, the bills)
-  { id: 'equipe', icon: 'users', roles: [], manageUsers: true },
+  {
+    id: 'equipe',
+    icon: 'users',
+    roles: [],
+    manageUsers: true,
+    pages: ['equipe'],
+    href: '#/equipe/personnes',
+    children: [
+      // the accounts (a person allowed to add accounts sees this one only), who gets which order, the pay
+      { id: 'eq-users', href: '#/equipe/personnes', icon: 'usercog', plan: ['equipe'], match: { page: 'equipe', subs: ['personnes', ''] } },
+      { id: 'eq-affect', href: '#/equipe/repartition', icon: 'route', roles: [], plan: ['equipe'], match: { page: 'equipe', subs: ['repartition'] } },
+      { id: 'eq-paie', href: '#/equipe/paie', icon: 'wallet', roles: [], plan: ['equipe'], match: { page: 'equipe', subs: ['paie'] } },
+    ],
+  },
   { id: 'vendeurs', icon: 'store', roles: [] },
   { id: 'reglages', icon: 'settings', roles: [] },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'securite'] },
