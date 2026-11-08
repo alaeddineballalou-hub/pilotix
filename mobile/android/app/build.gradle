@@ -2,6 +2,9 @@ apply plugin: 'com.android.application'
 
 // GitHub's build number (mobile.yml): each new app is « newer » for Android and for the app's own updater (AppUpdatePlugin)
 def pilotixBuild = (System.getenv('PILOTIX_BUILD') ?: '1').toInteger()
+// the fixed app key (mobile.yml makes the keystore and gives its path): a new app installs over the old one.
+// Said here by name: the build's own debug key place is not ~/.android on GitHub, so a key put there was never used.
+def pilotixKeystore = System.getenv('PILOTIX_KEYSTORE')
 
 android {
     namespace = "com.pilotix.app"
@@ -19,7 +22,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        pilotix {
+            if (pilotixKeystore) {
+                storeFile file(pilotixKeystore)
+                storeType 'pkcs12'
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+            }
+        }
+    }
     buildTypes {
+        debug {
+            if (pilotixKeystore) {
+                signingConfig signingConfigs.pilotix
+            }
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

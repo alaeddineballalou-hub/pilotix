@@ -52,27 +52,29 @@ jobs:
       # GitHub makes it itself, the same each time, from the server key it already keeps (DEPLOY_SSH_KEY): nobody pastes a
       # key (scripts/app-key.mjs). A keystore in the secret ANDROID_TEST_KEYSTORE_BASE64 would come first.
       # Changing DEPLOY_SSH_KEY changes the app key: every phone then installs the app again by hand once.
+      # The build signs with it through PILOTIX_KEYSTORE (android/app/build.gradle); « The app's key » checks it did.
       - name: App signing key
         env:
           KEY: ${{ secrets.ANDROID_TEST_KEYSTORE_BASE64 }}
           SEED: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
-          mkdir -p ~/.android
+          KS="$RUNNER_TEMP/pilotix.keystore"
           if [ -n "$KEY" ]; then
-            echo "$KEY" | base64 -d > ~/.android/debug.keystore
+            echo "$KEY" | base64 -d > "$KS"
             echo "app key: from ANDROID_TEST_KEYSTORE_BASE64"
           elif [ -n "$SEED" ]; then
             D=$(mktemp -d)
             node scripts/app-key.mjs "$D"
-            openssl pkcs12 -export -inkey "$D/key.pem" -in "$D/cert.pem" -name androiddebugkey -passout pass:android -out ~/.android/debug.keystore
+            openssl pkcs12 -export -inkey "$D/key.pem" -in "$D/cert.pem" -name androiddebugkey -passout pass:android -out "$KS"
             rm -rf "$D"
             echo "app key: made from DEPLOY_SSH_KEY"
           else
             echo "app key: a new one for this build only (it can't replace the app on phones)"
             exit 0
           fi
-          keytool -list -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey
-          echo "FIXED_KEY=true" >> "$GITHUB_ENV"
+          keytool -list -keystore "$KS" -storepass android -alias androiddebugkey
+          echo "PILOTIX_KEYSTORE=$KS" >> "$GITHUB_ENV"
+          echo "KEY_SHA256=$(keytool -exportcert -keystore "$KS" -storepass android -alias androiddebugkey | sha256sum | cut -d' ' -f1)" >> "$GITHUB_ENV"
       - name: Build the test app
         working-directory: mobile/android
         # GitHub's build number is the app's version code: each new app is « newer » for Android and for the updater
@@ -80,12 +82,18 @@ jobs:
           PILOTIX_BUILD: ${{ github.run_number }}
         run: ./gradlew assembleDebug --no-daemon
       - run: cp android/app/build/outputs/apk/debug/app-debug.apk pilotix-test.apk
-      # which key signed the app (public: any phone shows it); the same line on every build = the fixed key works
+      # which key signed the app (public: any phone shows it). With a fixed key, the app must carry it, or nothing is
+      # published: a card saying « fixed key » on an app signed by another key would send the phones a failing update.
       - name: The app's key
-        continue-on-error: true
         run: |
           SIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
-          "$SIGNER" verify --print-certs pilotix-test.apk | grep -i "SHA-256"
+          GOT=$("$SIGNER" verify --print-certs pilotix-test.apk | grep -m1 -i 'certificate SHA-256 digest' | grep -oE '[0-9a-f]{64}' | head -1)
+          echo "the app is signed by the certificate $GOT"
+          if [ -n "${KEY_SHA256:-}" ]; then
+            if [ "$GOT" != "$KEY_SHA256" ]; then echo "::error::the app is not signed with the fixed key"; exit 1; fi
+            echo "the fixed key: yes"
+            echo "FIXED_KEY=true" >> "$GITHUB_ENV"
+          fi
       # the app's version card: its build, commit, date, size, and whether it has the fixed key (only then can it replace
       # the app on a phone; before, Android refuses and the phones are not asked to update)
       - name: Version card

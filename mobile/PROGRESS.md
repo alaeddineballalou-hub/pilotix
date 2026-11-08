@@ -112,6 +112,9 @@ on from the first step that isn't ✅.
   The log shows the certificate's SHA-256 (public): the same on every build. A keystore in the secret
   `ANDROID_TEST_KEYSTORE_BASE64` would come first. **Changing `DEPLOY_SSH_KEY` (or the script's VERSION) changes the
   app key: every phone installs the app again by hand once.** Without any key, each build gets a random key.
+- A keystore put in `~/.android/debug.keystore` on GitHub is NOT used (found 9 Nov: build 22 came out « CN=Android
+  Debug »): the build signs through `PILOTIX_KEYSTORE` (app/build.gradle), and the step « The app's key » compares the
+  app's certificate with the key's; if they differ, nothing is published.
 
 ## To test on the phone (things a website-in-an-app can get wrong)
 
