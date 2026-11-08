@@ -236,3 +236,21 @@ test('agent pay is a store’s and an agency’s: a marketer’s space, or a pla
   const here: any = await call('stats.doctor', admin, {});
   assert.ok(here.items.some((i: any) => i.id === 'payNoPlan'));
 });
+
+test('an administrator may be paid (a plan for a job) or not: never in the red alert, on the board once he has a plan', async () => {
+  const admin = await as(EMAILS.admin);
+  const me = admin.session.profile.id;
+  let board: any = await call('pay.board', admin, {});
+  assert.ok(!board.people.some((p: any) => p.id === me), 'no plan: not paid here');
+  assert.ok(!board.alerts.noPlan.some((p: any) => p.id === me));
+  const conf = Number((await db.query("SELECT id FROM management_payment_plans WHERE kind = 'agent' AND active AND configuration->>'agentTask' = 'confirmation' LIMIT 1"))[0].id);
+  await call('users.update', admin, { id: me, plans: [{ task: 'confirmation', planId: conf }] });
+  board = await call('pay.board', admin, {});
+  const row = board.people.find((p: any) => p.id === me);
+  assert.deepEqual(row.plans.map((x: any) => x.task), ['confirmation']);
+  assert.deepEqual(row.missing, []);
+  // taking it away: back to « not paid here »
+  await call('pay.assign', admin, { personId: me, task: 'confirmation', planId: null });
+  board = await call('pay.board', admin, {});
+  assert.ok(!board.people.some((p: any) => p.id === me));
+});

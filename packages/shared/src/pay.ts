@@ -43,8 +43,12 @@ export function payTasksOf(roles: readonly string[]): PayTask[] {
   return out;
 }
 
-/** The jobs a person MAY have a plan for: a supervisor may also confirm orders himself. */
+/**
+ * The jobs a person MAY have a plan for: a supervisor may also confirm orders himself; an administrator may be paid for
+ * any job (or for none: never required).
+ */
 export function payTasksAllowed(roles: readonly string[]): PayTask[] {
+  if (roles.includes('admin')) return [...PAY_TASKS];
   const out = payTasksOf(roles);
   if (out.includes('superviseur') && !out.includes('confirmation')) out.unshift('confirmation');
   return out;

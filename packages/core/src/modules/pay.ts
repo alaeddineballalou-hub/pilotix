@@ -466,10 +466,12 @@ async function admins(db: Db): Promise<number[]> {
 /** The people paid here (not owners, vendeurs or a partner agency's agents) and the jobs they must have a plan for. */
 async function payPeople(db: Db) {
   const rows = await db.query(`SELECT id, name, roles, created_by FROM profiles WHERE active AND archived_at IS NULL AND agency_id IS NULL ORDER BY name`);
+  // an administrator is paid only if he was given a plan (he may have none)
+  const withPlan = new Set((await db.query('SELECT DISTINCT profile_id FROM pay_plan_slots')).map((r: any) => num(r.profile_id)));
   return rows
     .map((r: any) => ({ id: num(r.id), name: String(r.name), roles: (r.roles ?? []) as string[], createdBy: r.created_by === null || r.created_by === undefined ? null : num(r.created_by) }))
     .map((p: { id: number; name: string; roles: string[]; createdBy: number | null }) => ({ ...p, required: tasksOf(db, p.roles), allowed: tasksOf(db, p.roles, true) }))
-    .filter((p: { required: PayTask[] }) => p.required.length > 0);
+    .filter((p: { id: number; required: PayTask[] }) => p.required.length > 0 || withPlan.has(p.id));
 }
 
 /** Red alerts for the owners: people without a plan for one of their jobs, payments an agent says he did not get. */

@@ -509,7 +509,7 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
           </div>
         </Field>
         {payJobs.length > 0 && (
-          <Field label={t('admin.users.payPlans')} hint={t('admin.users.payPlansHint')}>
+          <Field label={t('admin.users.payPlans')} hint={t(roles.includes('admin') ? 'admin.users.payPlansHintAdmin' : 'admin.users.payPlansHint')}>
             <div className="px-payplans">
               {payJobs.map((k) => {
                 const list = plansFor(k);
@@ -521,7 +521,7 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
                     </span>
                     {list.length ? (
                       <select value={planOf(k) ?? ''} required={need} aria-invalid={need && !planOf(k)} onChange={(e) => setPlans((x) => ({ ...x, [k]: e.target.value ? Number(e.target.value) : null }))}>
-                        <option value="">{t('admin.users.payPick')}</option>
+                        <option value="">{need ? t('admin.users.payPick') : t('admin.users.payNone')}</option>
                         {list.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.name}

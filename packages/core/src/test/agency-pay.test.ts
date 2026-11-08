@@ -16,6 +16,10 @@ test('agency pay: the jobs paid there', () => {
   assert.deepEqual(payTasksIn('agency', ['agent_manager']), []);
   assert.deepEqual(payTasksIn('agency', ['agent_manager'], true), ['confirmation']);
   assert.deepEqual(payTasksIn('store', ['agent_manager']), ['superviseur']);
+  // an administrator: never required, may have a plan for any job
+  assert.deepEqual(payTasksIn('store', ['admin']), []);
+  assert.deepEqual(payTasksIn('store', ['admin'], true), ['confirmation', 'suivi', 'superviseur', 'depot']);
+  assert.deepEqual(payTasksIn('agency', ['admin'], true), ['confirmation', 'suivi']);
 });
 
 test('agency pay: a plan per job when added, orders counted in the sellers\' stores, alerts to the admins and the one who added him', async () => {

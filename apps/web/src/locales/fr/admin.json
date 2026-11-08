@@ -137,7 +137,9 @@
     "payNeed": "Choisissez le plan de paie : {{jobs}}",
     "colPay": "Plan de paie",
     "payMissing": "sans plan",
-    "payMissingHint": "Pas de plan pour ce travail : la personne n’est pas payée pour lui. Ouvrez la fiche pour choisir un plan."
+    "payMissingHint": "Pas de plan pour ce travail : la personne n’est pas payée pour lui. Ouvrez la fiche pour choisir un plan.",
+    "payNone": "Pas de plan",
+    "payPlansHintAdmin": "Un administrateur peut être payé pour un travail (choisissez son plan) ou pas du tout (« Pas de plan »)."
   },
   "status": {
     "groups": {

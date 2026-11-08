@@ -137,7 +137,9 @@
     "payNeed": "Pick the pay plan: {{jobs}}",
     "colPay": "Pay plan",
     "payMissing": "no plan",
-    "payMissingHint": "No plan for this job: the person is not paid for it. Open the person to pick a plan."
+    "payMissingHint": "No plan for this job: the person is not paid for it. Open the person to pick a plan.",
+    "payNone": "No plan",
+    "payPlansHintAdmin": "An administrator can be paid for a job (pick its plan) or not at all (« No plan »)."
   },
   "status": {
     "groups": {
