@@ -210,6 +210,10 @@ function RoleList({ role, onNew, onEdit, agency }: { role: Role | null; onNew: (
   // « Boutiques »: where each person also works (an owner with several boutiques)
   const all = useAllMode();
   const showWhere = !agency && all.can && (!!session?.isAdmin || !!session?.canManageUsers);
+  // the pay plan of each job (a red mark: a job without a plan, the person is not paid for it)
+  const payCol = payOn() && (!!session?.isAdmin || !!session?.canManageUsers);
+  const payQ = useRpc('pay.teamPlans', {}, { enabled: payCol });
+  const payOf = new Map((payQ.data ?? []).map((x) => [x.id, x]));
   const where = useRpc('users.boutiques', {}, { enabled: showWhere, staleTime: 60_000 }).data as Record<string, number[]> | undefined;
   const archives = !agency && !!session?.isAdmin && pageIsOn('management', 'archive');
   // users.list matches own roles; vendeurs also count as agents etc. only through their own roles (as in the original)
@@ -248,6 +252,7 @@ function RoleList({ role, onNew, onEdit, agency }: { role: Role | null; onNew: (
                   <th>{t('admin.users.colName')}</th>
                   <th>{t('admin.users.colPhone')}</th>
                   <th>{t('admin.users.colRoles')}</th>
+                  {payCol && <th>{t('admin.users.colPay')}</th>}
                   {agency && <th>{t('agency.users.colSellers')}</th>}
                   {showWhere && <th>{t('admin.users.colBoutiques')}</th>}
                   <th>{t('admin.users.colLast')}</th>
@@ -301,6 +306,28 @@ function RoleList({ role, onNew, onEdit, agency }: { role: Role | null; onNew: (
                         </span>
                       )}
                     </td>
+                    {payCol && (
+                      <td data-l={t('admin.users.colPay')}>
+                        {(() => {
+                          const p = payOf.get(u.id);
+                          if (!p || (!p.plans.length && !p.missing.length)) return <span className="muted">—</span>;
+                          return (
+                            <div className="px-paycell">
+                              {p.plans.map((x) => (
+                                <span key={x.task} className="chip px-paychip" title={t(`paie.tasks.${x.task}`)}>
+                                  <small>{t(`paie.tasks.${x.task}`)}</small> {x.name}
+                                </span>
+                              ))}
+                              {p.missing.map((k) => (
+                                <span key={k} className="chip px-paychip-none" title={t('admin.users.payMissingHint')}>
+                                  ⚠ {t(`paie.tasks.${k}`)} · {t('admin.users.payMissing')}
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </td>
+                    )}
                     {agency && (
                       <td data-l={t('agency.users.colSellers')} className="agx-users-sellers">
                         {!u.agencySellers ? (

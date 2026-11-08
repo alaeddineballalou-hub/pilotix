@@ -134,7 +134,10 @@
     "payPlansHint": "One plan for each job ticked. Without a plan the person is not paid and a red alert shows.",
     "payPick": "Pick a plan…",
     "payNoPlanYet": "No plan for this job yet.",
-    "payNeed": "Pick the pay plan: {{jobs}}"
+    "payNeed": "Pick the pay plan: {{jobs}}",
+    "colPay": "Pay plan",
+    "payMissing": "no plan",
+    "payMissingHint": "No plan for this job: the person is not paid for it. Open the person to pick a plan."
   },
   "status": {
     "groups": {

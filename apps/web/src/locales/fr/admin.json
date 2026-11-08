@@ -134,7 +134,10 @@
     "payPlansHint": "Un plan pour chaque travail coché. Sans plan, la personne n’est pas payée et une alerte rouge s’affiche.",
     "payPick": "Choisir un plan…",
     "payNoPlanYet": "Aucun plan pour ce travail.",
-    "payNeed": "Choisissez le plan de paie : {{jobs}}"
+    "payNeed": "Choisissez le plan de paie : {{jobs}}",
+    "colPay": "Plan de paie",
+    "payMissing": "sans plan",
+    "payMissingHint": "Pas de plan pour ce travail : la personne n’est pas payée pour lui. Ouvrez la fiche pour choisir un plan."
   },
   "status": {
     "groups": {

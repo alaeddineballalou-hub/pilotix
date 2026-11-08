@@ -702,6 +702,20 @@ export const payProcs = {
     };
   }),
 
+  /** Utilisateurs: each person's plan per job now, and the jobs left without one (admins and user managers). */
+  'pay.teamPlans': proc(null, z.object({}), async (ctx) => {
+    if (!payIsOn(ctx.shop) || (!ctx.session.isAdmin && !ctx.session.canManageUsers)) return [];
+    paySpace(ctx);
+    const now = ctx.now();
+    const people = await payPeople(ctx.db);
+    const terms = await termsOf(ctx.db, people.map((p) => p.id));
+    return people.map((p) => {
+      const l = terms.get(p.id) ?? [];
+      const plans = p.allowed.map((task) => termAt(l, task, now)).filter((x): x is PayTerm => !!x).map((x) => ({ task: x.task, name: x.name }));
+      return { id: p.id, plans, missing: p.required.filter((task) => !plans.some((x) => x.task === task)) };
+    });
+  }),
+
   /** The red alert of the home page: the people without a plan (an admin: all; someone else: those he added). */
   'pay.noPlan': proc(null, z.object({}), async (ctx) => {
     if (!payIsOn(ctx.shop)) return { people: [], url: '' };

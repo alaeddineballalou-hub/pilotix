@@ -87,6 +87,11 @@ test('agency pay: a plan per job when added, orders counted in the sellers\' sto
     assert.deepEqual((await rpc(me, 'pay.noPlan', {})).people, []);
     assert.ok((await rpc(chief, 'pay.noPlanPush', {})).sent >= 2);
     assert.equal((await rpc(chief, 'pay.noPlanPush', {})).skipped, 'today');
+    // Utilisateurs: each person's plan per job, and the job without one
+    const team = await rpc(chief, 'pay.teamPlans', {});
+    assert.deepEqual(team.find((p: any) => p.id === nora.id).plans.map((x: any) => [x.task, x.name]), [['confirmation', 'Conf 100'], ['suivi', 'Suivi 50']]);
+    assert.deepEqual(team.find((p: any) => p.id === sami).missing, ['suivi']);
+    assert.deepEqual(await rpc(me, 'pay.teamPlans', {}), []);
     // adding the job later asks its plan too
     await assert.rejects(rpc(chief, 'users.update', { id: lead.id, roles: ['agent_manager', 'suivi'] }), /plan de paie : Suivi/);
     await rpc(chief, 'users.update', { id: lead.id, roles: ['agent_manager', 'suivi'], plans: [{ task: 'suivi', planId: suivi.id }] });
