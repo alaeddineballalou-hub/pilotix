@@ -7,9 +7,9 @@ import { agencyAdmin, agencyAgentScores, agencyPayroll, billingTargets, json, pe
 const Amount = z.number().finite().min(0).max(10_000_000);
 const Pct = z.number().finite().min(0).max(100);
 const Config = z.object({
-  agentTask: z.enum(['confirmation','suivi']).optional(),
+  agentTask: z.enum(['confirmation','suivi','superviseur','depot']).optional(),
   method: z.enum(['none','fixed','percent','tier']),
-  trigger: z.enum(['confirmed','delivered']),
+  trigger: z.enum(['confirmed','delivered','prepared']),
   rate: Amount,
   tiers: z.tuple([Amount,Amount,Amount]),
   thresholds: z.tuple([Amount,Amount]).optional(),
@@ -51,6 +51,13 @@ function validPlan(c: z.infer<typeof Config>, kind: 'billing'|'agent') {
     if (c.trigger !== 'delivered') throw bad('Un plan de suivi est rémunéré à la livraison');
     if (c.upsell.enabled) throw bad('Les plans de suivi ne comptent pas les upsells');
   }
+  // a dépôt plan pays each order prepared; a team leader's plan, his team's delivered orders
+  if (kind === 'agent' && agentPlanTask(c) === 'depot') {
+    if (c.trigger !== 'prepared') throw bad('Un plan de dépôt est rémunéré à la préparation');
+    if (c.upsell.enabled) throw bad('Les plans de dépôt ne comptent pas les upsells');
+  }
+  if (kind === 'agent' && agentPlanTask(c) === 'superviseur' && c.trigger !== 'delivered') throw bad('Un plan de superviseur est rémunéré à la livraison des commandes de son équipe');
+  if ((kind === 'billing' || agentPlanTask(c) !== 'depot') && c.trigger === 'prepared') throw bad('Seul un plan de dépôt est rémunéré à la préparation');
   if (c.method === 'percent' && c.rate > 100) throw bad('Le pourcentage ne peut pas dépasser 100');
   if (c.upsell.method === 'percent' && c.upsell.rate > 100) throw bad('Le pourcentage upsell ne peut pas dépasser 100');
   if (c.upsell.enabled && ['double','qty'].includes(c.upsell.method) && (c.method === 'none' || (!c.upsell.ruleVersion && c.trigger !== 'confirmed'))) throw bad('Double confirmation ou QTY nécessite une commission principale');
@@ -107,7 +114,8 @@ export const managementPlanProcs = {
       if (i.targetKind === 'agent' && config) {
         validPlan(config, 'agent');
         const task = agentPlanTask(config);
-        if (!expandRoles(target.roles).includes(task)) throw bad(`Ce plan de ${task} nécessite un agent avec le rôle ${task}`);
+        const role = task === 'superviseur' ? 'agent_manager' : task;
+        if (!expandRoles(target.roles).includes(role)) throw bad(`Ce plan de ${task} nécessite un agent avec le rôle ${role}`);
         config.agentTask = task;
       }
       if(i.targetKind==='agent') await db.query('INSERT INTO management_agent_terms(profile_id,plan_id,name,configuration,effective_at) VALUES($1,$2,$3,$4,$5)',[i.targetId,i.planId,plan?.name??'Aucun plan',config?JSON.stringify(config):null,new Date(ctx.now()).toISOString()]);

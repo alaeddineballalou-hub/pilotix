@@ -1,0 +1,220 @@
+/* ===== Agent pay: the agent's Ma caisse (.pp) and the owner's Caisse › Paie (.pp.pb).
+   Built on the app's tokens (--surface, --line, --ink, --muted, --sky-soft, the Doux skin's --sk-*, the status colours
+   --c-ok-*, --c-warn-*, --c-bad-*) so light, dark and Arabic (dir="rtl") follow the app. ===== */
+.pp {
+  --pp-on-bg: var(--sk-tab-on-bg, #FFE9CC);
+  --pp-on-ink: var(--sk-tab-on-ink, #6B3A00);
+  --pp-ring: var(--c-accent-2, #F28B1E);
+  --pp-r: 22px;
+  --pp-rule: color-mix(in srgb, var(--line) 70%, transparent);
+  display: flex; flex-direction: column; gap: 16px; min-width: 0;
+}
+.pp h2 { margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 17px; font-weight: 600; line-height: 1.3; color: var(--ink); }
+.pp .bji { width: 18px; height: 18px; flex: none; }
+.pp :focus-visible { outline: 2px solid var(--pp-ring); outline-offset: 2px; }
+.pp-grow { flex: 1 1 auto; min-width: 0; }
+.pp-muted { color: var(--muted); font-size: 14px; line-height: 1.45; margin: 0; }
+.pp-empty { margin: 0; padding: 14px; border: 1px dashed var(--line); border-radius: 14px; color: var(--muted); font-size: 14px; }
+.pp-err { margin: 0; color: var(--c-bad-ink, #B42318); font-size: 14px; font-weight: 600; }
+.pp-req { color: var(--c-warn-ink, #8A5A00); font-style: normal; font-weight: 600; font-size: 13px; }
+.pp em.pp-muted { font-style: normal; font-size: 13px; }
+.pp-link { border: 0; background: none; padding: 0; color: var(--c-accent-ink, #A4480A); font: inherit; font-weight: 600; cursor: pointer; text-align: start; }
+.pp-link.small { font-size: 13px; }
+@media (hover: hover) { .pp-link:hover { text-decoration: underline; } }
+
+/* ---------- cards */
+.pp-card { padding: 18px 20px; border-radius: var(--pp-r); background: var(--surface); box-shadow: 0 2px 10px rgba(31, 38, 51, .06); display: flex; flex-direction: column; gap: 12px; min-width: 0; box-sizing: border-box; }
+.pp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.pp-head > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+/* ---------- the tabs (Ma paie · Acomptes · Mon plan · Argent en main) */
+.pp-tabs { display: flex; gap: 4px; padding: 6px; border-radius: var(--pp-r); background: var(--surface); box-shadow: 0 2px 10px rgba(31, 38, 51, .06); align-self: flex-start; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.pp-tabs::-webkit-scrollbar { display: none; }
+.pp-tabs button { flex: none; height: 40px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent; color: var(--ink); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+@media (hover: hover) { .pp-tabs button:hover { background: var(--sky-soft); } }
+.pp-tabs button.on { background: var(--pp-on-bg); color: var(--pp-on-ink); font-weight: 700; }
+
+/* ---------- the summary: one container split by hairlines (the lead answers « how much ») */
+.pp-sum { display: grid; grid-template-columns: 1.5fr repeat(3, 1fr); border-radius: var(--pp-r); background: var(--surface); box-shadow: 0 2px 10px rgba(31, 38, 51, .06); }
+.pp-cell { padding: 18px 22px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pp-cell + .pp-cell { border-inline-start: 1px solid var(--pp-rule); }
+.pp-cell > span { font-size: 14px; color: var(--muted); }
+.pp-cell > b { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pp-cell > b.muted { color: var(--muted); }
+.pp-cell.lead > b { font-size: 34px; }
+.pp-cell > small { font-size: 13px; line-height: 1.4; color: var(--muted); }
+
+/* ---------- a payment to confirm (Reçu / Pas encore reçu) */
+.pp-confirm { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 16px; padding: 16px 20px; border-radius: var(--pp-r); background: #FFF8EC; box-shadow: inset 0 0 0 1px #F6D9A6; color: var(--ink); }
+.pp-confirm.bad { background: var(--c-bad-tint, #FCE7E5); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-bad-line, #D6453D) 40%, transparent); }
+.pp-confirm-ic { width: 40px; height: 40px; flex: none; border-radius: 12px; background: var(--c-warn-tint, #FFF2DA); color: var(--c-warn-ink, #8A5A00); display: inline-flex; align-items: center; justify-content: center; }
+.pp-confirm.bad .pp-confirm-ic { background: var(--surface); color: var(--c-bad-ink, #B42318); }
+.pp-confirm-ic .bji { width: 20px; height: 20px; }
+.pp-confirm-tx { flex: 1 1 320px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pp-confirm-tx b { font-size: 16px; font-weight: 600; line-height: 1.35; }
+.pp-confirm-tx span { font-size: 14px; color: var(--muted); }
+.pp-confirm-tx small { font-size: 13px; color: var(--muted); }
+.pp-confirm-bt { display: flex; gap: 10px; flex-wrap: wrap; }
+.pp-confirm-bt .btn { height: 44px; padding: 0 18px; border-radius: 999px; white-space: nowrap; }
+.pp-confirm.compact { padding: 14px 16px; }
+.pp-confirm.compact .pp-confirm-bt { flex: 1 1 100%; }
+.pp-confirm.compact .pp-confirm-bt .btn { flex: 1 1 0; }
+html[data-theme="dark"] .pp-confirm:not(.bad) { background: #2E2615; box-shadow: inset 0 0 0 1px #5A4520; }
+@media (prefers-color-scheme: dark) { html:not([data-theme="light"]) .pp-confirm:not(.bad) { background: #2E2615; box-shadow: inset 0 0 0 1px #5A4520; } }
+
+/* ---------- two columns: the orders and payments, then the plan and the acompte */
+.pp-cols { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.pp-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* ---------- rows (orders, payments, requests) */
+.pp-rows { list-style: none; margin: 0; padding: 0; }
+.pp-rows li { display: flex; align-items: center; gap: 12px; padding: 10px 0; min-width: 0; }
+.pp-rows li + li { border-top: 1px solid var(--pp-rule); }
+.pp-rows li.off { opacity: .6; }
+.pp-rows li .pp-grow { display: flex; flex-direction: column; gap: 2px; }
+.pp-rows li b { font-size: 15px; font-weight: 600; color: var(--ink); }
+.pp-rows li small { font-size: 13px; color: var(--muted); line-height: 1.4; }
+.pp-rows li .pp-muted { font-size: 13px; font-weight: 500; }
+.pp-ref { margin-left: 6px; }
+[dir="rtl"] .pp-ref { margin-left: 0; margin-right: 6px; }
+.pp-up { font-style: normal; color: var(--c-ok-ink, #137A3B); font-weight: 600; }
+.pp-step { flex: none; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.pp-amtc { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.pp-amt { flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 700 !important; }
+.pp-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.pp-foot b { color: var(--ink); font-size: 17px; }
+.pp-ready { display: flex; align-items: center; gap: 12px; padding: 4px 0 10px; border-bottom: 1px solid var(--pp-rule); }
+.pp-ready .pp-grow { display: flex; flex-direction: column; gap: 2px; }
+.pp-ready b { font-size: 15px; font-weight: 600; }
+.pp-ready small { font-size: 13px; color: var(--muted); }
+
+/* ---------- pills (a state: icon + words) and chips (filters) */
+.pp-pill { flex: none; display: inline-flex; align-items: center; gap: 5px; min-height: 26px; padding: 2px 10px; border-radius: 999px; background: var(--sky-soft); color: var(--ink); font-size: 12.5px; font-weight: 600; white-space: nowrap; box-sizing: border-box; }
+.pp-pill .bji { width: 14px; height: 14px; }
+.pp-pill.ok { background: var(--c-ok-tint, #E3F5EA); color: var(--c-ok-ink, #137A3B); }
+.pp-pill.warn { background: var(--c-warn-tint, #FFF2DA); color: var(--c-warn-ink, #8A5A00); }
+.pp-pill.bad { background: var(--c-bad-tint, #FCE7E5); color: var(--c-bad-ink, #B42318); }
+.pp-pill.off { background: var(--sky-soft); color: var(--muted); }
+.pp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pp-chips button { height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--sky-soft); color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.pp-chips button.on { background: var(--pp-on-bg); color: var(--pp-on-ink); font-weight: 700; }
+
+/* ---------- the plan explained */
+.pp-planbox { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--pp-rule); }
+.pp-planbox:last-of-type { border-bottom: 0; padding-bottom: 0; }
+.pp-planhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.pp-planhead > b { font-size: 15px; }
+.pp-plan { display: flex; flex-direction: column; gap: 8px; }
+.pp-steps { list-style: none; margin: 0; padding: 0; }
+.pp-steps li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; font-size: 15px; }
+.pp-steps li + li { border-top: 1px solid var(--pp-rule); }
+.pp-steps b { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pp-plan.compact .pp-steps li { padding: 7px 0; font-size: 14px; }
+.pp-rule { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink); }
+.pp-rule.ic { display: flex; gap: 6px; align-items: flex-start; }
+.pp-rule .bji { margin-top: 2px; color: var(--muted); }
+.pp-narrow { max-width: 760px; }
+
+/* ---------- acompte */
+.pp-can { margin: 0; font-size: 15px; line-height: 1.45; }
+.pp-can b { font-weight: 700; }
+.pp-bar-h { height: 10px; border-radius: 999px; background: var(--sky-soft); overflow: hidden; }
+.pp-bar-h i { display: block; height: 100%; background: #C9BFB2; border-radius: 999px; }
+.pp-bar-l { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+.pp-bar-l b { color: var(--ink); }
+.pp .btn.primary .bji, .pp .btn .bji { width: 18px; height: 18px; }
+.pp-card > .btn { align-self: flex-start; }
+.pp-note { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 12px 14px; border-radius: 14px; background: var(--sky-soft); color: var(--ink); font-size: 14px; line-height: 1.45; }
+.pp-note.warn { background: var(--c-warn-tint, #FFF2DA); color: var(--c-warn-ink, #8A5A00); }
+.pp-note .bji { margin-top: 1px; }
+.pp-noplan { flex-direction: row; align-items: flex-start; gap: 14px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-bad-line, #D6453D) 40%, transparent); }
+.pp-noplan > .bji { width: 24px; height: 24px; color: var(--c-bad-ink, #B42318); }
+.pp-noplan p { margin: 6px 0 0; color: var(--muted); }
+
+/* ---------- the phone's « Demander un acompte » at the bottom */
+.pp-bar { display: none; }
+
+/* ---------- forms in sheets */
+.pp-form { display: flex; flex-direction: column; gap: 14px; }
+.pp-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 14px; font-weight: 500; color: var(--ink); }
+.pp-field input, .pp-field select, .pp-field textarea { min-height: 46px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--field, var(--surface)); color: var(--ink); font: inherit; font-size: 15px; box-sizing: border-box; width: 100%; }
+.pp-amount { display: flex; align-items: center; gap: 8px; border: 1.5px solid var(--pp-ring, #F28B1E); border-radius: 14px; padding: 0 14px; background: var(--field, var(--surface)); }
+.pp-amount input { border: 0 !important; padding: 0 !important; min-height: 50px; font-size: 20px !important; font-weight: 600; background: transparent !important; box-shadow: none !important; outline: none; }
+.pp-amount em { font-style: normal; color: var(--muted); font-size: 15px; }
+.pp-form .btn.big { width: 100%; border-radius: 999px; height: 52px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.pp-choice { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr)); gap: 8px; }
+.pp-choice button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; border: 0; border-radius: 14px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); font: inherit; text-align: start; cursor: pointer; }
+.pp-choice button b { font-size: 15px; font-weight: 600; }
+.pp-choice button small { font-size: 13px; color: var(--muted); }
+.pp-choice button.on { background: var(--pp-on-bg); color: var(--pp-on-ink); box-shadow: inset 0 0 0 2px var(--pp-ring); }
+.pp-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.pp-days button { height: 40px; border: 0; border-radius: 12px; background: var(--sky-soft); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+.pp-days button.on { background: var(--pp-on-bg); color: var(--pp-on-ink); box-shadow: inset 0 0 0 2px var(--pp-ring); }
+.pp-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pp-sheet-wide .pxk-sh { max-width: 1100px; }
+.pp-sheet-wide .pp-sum { grid-template-columns: 1.4fr repeat(3, 1fr); }
+
+/* ---------- the owner's board */
+.pb-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pb-top h2 { font-size: 20px; }
+.pb-alert { display: flex; align-items: flex-start; gap: 12px; padding: 14px 18px; border-radius: 18px; background: var(--c-bad-tint, #FCE7E5); color: var(--c-bad-ink, #B42318); }
+.pb-alert > .bji { width: 22px; height: 22px; margin-top: 1px; }
+.pb-alert .pp-grow { display: flex; flex-direction: column; gap: 4px; }
+.pb-alert b { font-size: 15px; }
+.pb-alert span { font-size: 14px; color: var(--ink); }
+.pb-alert ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pb-alert li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; color: var(--ink); }
+.pb-alert li b { color: var(--ink); }
+.pb-alert .btn { background: var(--surface); }
+.pp-sum.four { grid-template-columns: 1.4fr repeat(3, 1fr); }
+.pb-list { padding-top: 6px; gap: 0; }
+.pb-row { display: grid; grid-template-columns: minmax(150px, 1.1fr) minmax(200px, 1.6fr) minmax(170px, 1.2fr) minmax(150px, 1fr) minmax(150px, 1fr); gap: 14px; align-items: start; padding: 14px 0; }
+.pb-row + .pb-row { border-top: 1px solid var(--pp-rule); }
+.pb-th { padding: 6px 0 8px; font-size: 12.5px; color: var(--muted); border-bottom: 1px solid var(--line); }
+.pb-th + .pb-row { border-top: 0; }
+.pb-row > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pb-who .pp-link { font-size: 15px; }
+.pb-who small, .pb-ready small, .pb-req small { font-size: 13px; color: var(--muted); }
+.pb-ready b, .pb-req b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.pb-plans { flex-direction: row !important; flex-wrap: wrap; align-items: center; gap: 6px !important; }
+.pb-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.pb-ph { display: none; }
+.pb-row .btn.small { align-self: flex-start; border-radius: 999px; padding: 0 12px; height: 32px; }
+.pb-state { flex-direction: row !important; flex-wrap: wrap; gap: 6px !important; }
+.pb-state .pp-pill { white-space: normal; max-width: 100%; }
+.pb-livreurs summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.pb-livreurs[open] summary { margin-bottom: 8px; }
+
+/* ---------- phones */
+@media (max-width: 760px) {
+  .pp { gap: 12px; }
+  .pp-card { padding: 14px 16px; }
+  .pp-tabs { align-self: stretch; -webkit-mask-image: linear-gradient(90deg, #000 82%, transparent); mask-image: linear-gradient(90deg, #000 82%, transparent); }
+  [dir="rtl"] .pp-tabs { -webkit-mask-image: linear-gradient(270deg, #000 82%, transparent); mask-image: linear-gradient(270deg, #000 82%, transparent); }
+  .pp-tabs button { padding: 0 14px; font-size: 14px; }
+  .pp-sum, .pp-sum.four { grid-template-columns: 1fr 1fr; }
+  .pp-cell { padding: 12px 14px; }
+  .pp-cell.lead { grid-column: 1 / -1; padding: 16px 18px 8px; }
+  .pp-cell.lead > b { font-size: 30px; }
+  .pp-cell > b { font-size: 18px; }
+  .pp-cell + .pp-cell { border-inline-start: 0; border-top: 1px solid var(--pp-rule); }
+  .pp-cell:nth-child(2n + 1):not(.lead) { border-inline-start: 1px solid var(--pp-rule); }
+  .pp-cols { grid-template-columns: 1fr; gap: 12px; }
+  .pp-col { gap: 12px; }
+  .pp-step { display: none; }
+  .pp-rows li { gap: 10px; }
+  .pp-rows li b { font-size: 14px; }
+  .pp-confirm { padding: 14px 16px; }
+  .pp-confirm-bt { flex: 1 1 100%; }
+  .pp-confirm-bt .btn { flex: 1 1 0; padding: 0 12px; }
+  .pp-bar { display: block; position: sticky; bottom: 0; z-index: 3; margin: 0 -12px -12px; padding: 10px 12px 14px; background: var(--surface); border-top: 1px solid var(--line); }
+  .pp-bar .btn { width: 100%; height: 52px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+  .pp-days { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .pb-th { display: none; }
+  .pb-req.empty { display: none !important; }
+  .pb-ph { display: block; flex: 1 1 100%; font-size: 12.5px; color: var(--muted); }
+  .pb-row { grid-template-columns: 1fr; gap: 8px; }
+  .pb-ready, .pb-req { flex-direction: row !important; flex-wrap: wrap; align-items: baseline; gap: 6px 10px !important; }
+  .pb-ready .btn, .pb-req .pb-btns { flex: 1 1 100%; }
+  .pb-ready .btn { height: 44px; }
+}

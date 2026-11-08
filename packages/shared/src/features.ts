@@ -29,11 +29,11 @@ export const FEATURES: readonly FeatureNode[] = [
   { key: 'clients' },
   { key: 'marketing', subs: ['publicite', 'formulaires', 'campagnes', 'catalogue', 'influenceurs', 'marketer', 'spy'] },
   { key: 'landing' },
-  { key: 'caisse', subs: ['overview', 'due', 'done', 'livreurs', 'journal'] },
+  { key: 'caisse', subs: ['overview', 'due', 'done', 'livreurs', 'journal', 'paie'] },
   { key: 'macaisse' },
   { key: 'livraison', subs: ['societes', 'pilot', 'api', 'livreurs', 'preferences'] },
   { key: 'utilisateurs', always: true },
-  { key: 'management', subs: ['plans', 'statuts', 'affectation', 'paie', 'prix', 'canaux', 'alertes', 'stock', 'livreur', 'modules', 'archive'] },
+  { key: 'management', subs: ['plans', 'statuts', 'affectation', 'prix', 'canaux', 'alertes', 'stock', 'livreur', 'modules', 'archive'] },
   { key: 'reglages', always: true },
 ];
 

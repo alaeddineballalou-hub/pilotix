@@ -1,6 +1,6 @@
 // The shop of the logged-in user (a multi-shop server): its plan's menus, kept here so the menu, the stage bars and
 // the public links can ask without passing the session around. Set by the session (lib/session.tsx).
-import { FEATURES, featureOn, routeAllowed, ShopInfo } from '@pilotix/shared';
+import { FEATURES, featureOn, payIsOn, routeAllowed, ShopInfo } from '@pilotix/shared';
 
 let shop: ShopInfo | null = null;
 
@@ -14,6 +14,9 @@ export const featureIsOn = (key: string) => featureOn(shop?.features, key);
 
 /** Can this page (and sub-page) be opened? */
 export const pageIsOn = (page: string, sub?: string) => routeAllowed(shop?.features, page, sub);
+
+/** Agent pay (Caisse › Paie, the pay in Ma caisse): a store whose plan has it (a partner's space pays its own way). */
+export const payOn = () => pageIsOn('caisse', 'paie') && payIsOn(shop);
 
 /** A link of the app ('#/produits/achats'): is its page in the plan? */
 export function hrefIsOn(href: string): boolean {

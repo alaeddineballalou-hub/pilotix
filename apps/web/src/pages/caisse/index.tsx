@@ -4,7 +4,7 @@
 import { lazy, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { downloadCsv } from '../../lib/files';
-import { pageIsOn } from '../../lib/features';
+import { pageIsOn, payOn } from '../../lib/features';
 import { da, dateTime, n, wilayaName, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { openOrder } from '../../lib/modals';
@@ -15,7 +15,8 @@ import { useIsPhone } from '../../lib/useMedia';
 import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
 import { PhoneCaisse } from './PhoneCaisse';
 import { CaisseJournal, CaisseOverview } from './Overview';
-export { MaCaisse } from './PhoneCaisse';
+import { PaieBoard } from './PaieBoard';
+export { MaCaisse } from './MaPaie';
 import { CopyCode } from '../../ui/CopyCode';
 import { ClearFilters, CompanyFilter, DateFilters, dayIso, LivreurFilter } from '../../ui/filters';
 import { useAllMode } from '../../layout/AllBoutiques';
@@ -30,8 +31,39 @@ export function Caisse(p: PageProps) {
         <AllCaissePage {...p} />
       </Suspense>
     );
+  // Caisse › Paie: the agents' pay (its own page, on phones as on computers)
+  if (p.sub === 'paie' && payOn())
+    return phone ? (
+      <div className="pxk">
+        <PhonePayTabs />
+        <PaieBoard />
+      </div>
+    ) : (
+      <>
+        <CaisseHead current="paie" />
+        <PaieBoard />
+      </>
+    );
   if (phone) return <PhoneCaisse sub={p.sub} />;
   return <CaisseWide sub={p.sub} />;
+}
+
+/** The phone's caisse tabs with « Paie » open (PhoneCaisse draws the same row on its own pages). */
+function PhonePayTabs() {
+  const { t } = useTranslation();
+  return (
+    <div className="pxv-own" role="tablist">
+      <a role="tab" aria-selected={false} href="#/caisse/due">
+        {t('caisse.ph.view')}
+      </a>
+      <a role="tab" aria-selected={false} href="#/caisse/done">
+        {t('caisse.ph.journal')}
+      </a>
+      <a role="tab" aria-selected className="on" href="#/caisse/paie">
+        {t('caisse.tabs.paie')}
+      </a>
+    </div>
+  );
 }
 const AllCaissePage = lazy(() => import('../boutiques/all').then((m) => ({ default: m.BoutiquesCaisse })));
 
@@ -54,33 +86,41 @@ function CaisseWide({ sub }: PageProps) {
   );
 }
 
-function CaisseDesktop({ sub }: PageProps) {
+/** The computer's caisse title and its tabs (Vue d'ensemble · À recevoir · Déjà reçu · Livreurs · Journal · Paie). */
+function CaisseHead({ current }: { current: string }) {
   const { t } = useTranslation();
-  const current = sub === 'done' || sub === 'livreurs' || sub === 'due' || sub === 'journal' ? sub : 'overview';
   const tabs = [
     { key: 'overview', label: t('caisse.dk.tabs.overview') },
     { key: 'due', label: t('caisse.tabs.due') },
     { key: 'done', label: t('caisse.tabs.done') },
     { key: 'livreurs', label: t('caisse.tabs.livreurs') },
     { key: 'journal', label: t('caisse.ph.journal') },
-  ].filter((x) => pageIsOn('caisse', x.key));
+    { key: 'paie', label: t('caisse.tabs.paie') },
+  ].filter((x) => (x.key === 'paie' ? payOn() : pageIsOn('caisse', x.key)));
   return (
-    <>
-      <div className="card">
-        <div className="card-head">
-          <h2>
-            {t('caisse.title')}
-            <Help text={t('caisse.help')} label={t('caisse.title')} />
-          </h2>
-          <div className="tabs" role="tablist">
-            {tabs.map((x) => (
-              <a key={x.key} role="tab" aria-selected={current === x.key} className={`tab ${current === x.key ? 'on' : ''}`} href={`#/caisse/${x.key}`} style={{ textDecoration: 'none' }}>
-                {x.label}
-              </a>
-            ))}
-          </div>
+    <div className="card">
+      <div className="card-head">
+        <h2>
+          {t('caisse.title')}
+          <Help text={t('caisse.help')} label={t('caisse.title')} />
+        </h2>
+        <div className="tabs" role="tablist">
+          {tabs.map((x) => (
+            <a key={x.key} role="tab" aria-selected={current === x.key} className={`tab ${current === x.key ? 'on' : ''}`} href={`#/caisse/${x.key}`} style={{ textDecoration: 'none' }}>
+              {x.label}
+            </a>
+          ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function CaisseDesktop({ sub }: PageProps) {
+  const current = sub === 'done' || sub === 'livreurs' || sub === 'due' || sub === 'journal' ? sub : 'overview';
+  return (
+    <>
+      <CaisseHead current={current} />
       {current === 'overview' && <CaisseOverview onOpenDue={() => (location.hash = '#/caisse/due')} onOpenLivreurs={() => (location.hash = '#/caisse/livreurs')} />}
       {current === 'journal' && <CaisseJournal />}
       {current === 'due' && <Due />}

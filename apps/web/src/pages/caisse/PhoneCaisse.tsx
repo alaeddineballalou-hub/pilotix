@@ -9,6 +9,7 @@ import type { Out } from '../../lib/backend';
 import { dateOnly, dayLabel, da, when } from '../../lib/format';
 import { useFullScreen } from '../../lib/fullScreen';
 import { useAction, useRpc } from '../../lib/query';
+import { payOn } from '../../lib/features';
 import { useSession } from '../../lib/session';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
 import '../confirmation/phone.css';
@@ -142,6 +143,11 @@ export function PhoneCaisse({ sub }: { sub?: string }) {
         <a role="tab" aria-selected={tab === 'journal'} className={tab === 'journal' ? 'on' : ''} href="#/caisse/done">
           {t('caisse.ph.journal')}
         </a>
+        {payOn() && (
+          <a role="tab" aria-selected={false} href="#/caisse/paie">
+            {t('caisse.tabs.paie')}
+          </a>
+        )}
       </div>
       {q.error ? (
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
@@ -675,8 +681,8 @@ function MoveSheet({ kind: kind0, from: from0, to: to0, mine, onClose }: { kind:
   );
 }
 
-// ---------------------------------------------------------------- « Ma caisse » (employees)
-export function MaCaisse() {
+// ---------------------------------------------------------------- « Ma caisse › Argent en main » (employees: the cash they hold)
+export function MyCash() {
   const { t } = useTranslation();
   const q = useRpc('caisse.mine', {});
   const [sheet, setSheet] = useState<Kind | null>(null);

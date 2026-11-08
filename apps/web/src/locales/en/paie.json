@@ -1,0 +1,263 @@
+{
+  "tabs": {
+    "paie": "My pay",
+    "acomptes": "Advances",
+    "plan": "My plan",
+    "cash": "Cash in hand"
+  },
+  "owed": "The shop owes you",
+  "owedSub": "{{ready}} ready to pay + {{open}} of your current pay (after your advances)",
+  "owedSubOpen": "Your current pay, after your advances",
+  "ready": "Ready to pay",
+  "readySub": "Pay for {{period}}",
+  "readySince": "ready since {{d}}",
+  "readyNone": "Nothing is waiting to be paid",
+  "readyWait": "Ready since {{d}}: your manager will pay you",
+  "earned": "Earned · {{period}}",
+  "earnedSub_one": "{{count}} paid order · {{upsells}} extra item(s)",
+  "earnedSub_other": "{{count}} paid orders · {{upsells}} extra item(s)",
+  "minusAcompte": "−{{v}} advance",
+  "payDay": "paid on {{d}}",
+  "coming": "On the way",
+  "comingSub_one": "{{count}} order, if it is delivered",
+  "comingSub_other": "{{count}} orders, if they are delivered",
+  "orders": {
+    "title": "My orders · {{period}}",
+    "help": "What each order earned you.",
+    "all": "All",
+    "task": {
+      "confirmation": "My orders",
+      "superviseur": "My team",
+      "suivi": "Follow-up",
+      "depot": "Depot"
+    },
+    "empty": "No paid order in this period yet.",
+    "salary": "Monthly salary",
+    "event": {
+      "delivered": "delivered {{d}}",
+      "confirmed": "confirmed {{d}}",
+      "prepared": "prepared {{d}}",
+      "month": "{{d}}"
+    },
+    "team": "by {{name}}",
+    "upsell_one": "upsell +{{count}}",
+    "upsell_other": "upsell +{{count}}",
+    "less": "Show less",
+    "more_one": "Show the order",
+    "more_other": "Show all {{count}}",
+    "total": "Total earned"
+  },
+  "payments": {
+    "title": "My payments",
+    "pay": "Pay {{period}}",
+    "acompte": "Advance",
+    "paidOn": "Paid {{d}} · {{caisse}}",
+    "none": "No payment yet.",
+    "st": {
+      "paid": "To confirm",
+      "received": "Received",
+      "not_received": "Not received",
+      "cancelled": "Cancelled"
+    }
+  },
+  "confirm": {
+    "aria": "Payment to confirm",
+    "boss": "Your manager",
+    "titlePay": "{{who}} marked your pay for {{period}} ({{v}}) as paid",
+    "titleAcompte": "{{who}} marked your advance of {{v}} as paid",
+    "sub": "{{when}} · taken from: {{caisse}}. Did you get it?",
+    "noteNo": "If you tap “Not received yet”, {{who}} is told right away.",
+    "yes": "Yes, I got it",
+    "no": "Not received yet",
+    "notTitle": "You said you did not get {{v}} ({{what}})",
+    "notSub": "{{who}} has been told. As soon as you have the money, say so here.",
+    "gotNow": "I got it now",
+    "sheetTitle": "You did not get {{v}}?",
+    "sheetNote": "A word for {{who}} (optional)",
+    "sheetSend": "Tell {{who}}",
+    "doneYes": "Thanks, noted: received.",
+    "doneNo": "{{who}} has been told."
+  },
+  "plan": {
+    "title": "My pay plan",
+    "noneTitle": "You do not have a pay plan yet",
+    "none": "No bonus per order",
+    "since": "Since {{d}}",
+    "per": {
+      "confirmation": "For each order you confirm that gets delivered, by the product price (without delivery):",
+      "confirmationConfirmed": "For each order you confirm, by the product price (without delivery):",
+      "superviseur": "For each delivered order of your team (yours too), by the product price:",
+      "suivi": "For each parcel you follow that gets delivered:",
+      "depot": "For each parcel you prepare (the first time):"
+    },
+    "upTo": "Up to {{v}}",
+    "from": "Over {{v}}",
+    "between": "{{a}} – {{b}}",
+    "fixed": "{{v}} per order",
+    "percent": "{{p}} % of the product price",
+    "monthly": "Fixed salary: {{v}} a month.",
+    "upsellLabel": "Upsell:",
+    "upsell": {
+      "qty": "each item delivered beyond what the customer ordered gives you its step’s amount again.",
+      "double": "when the customer takes more than the order, you earn the order’s amount once more.",
+      "fixed": "{{v}} for each order where the customer takes more.",
+      "percent": "{{p}} % of the product price for each extra item."
+    },
+    "calendar": {
+      "week": "Paid every week, on {{day}}.",
+      "half": "Paid every 15 days: on the 1st and the 16th.",
+      "month": "Paid every month, on day {{day}}.",
+      "days": "Paid on day {{days}} of the month."
+    },
+    "acompteRule": "Advance: up to {{v}} a month, from day {{day}} of the month.",
+    "acompteOff": "No advances in this shop."
+  },
+  "acompte": {
+    "title": "Advance",
+    "rule": "Possible from day {{day}} of the month · your manager gets your request.",
+    "can": "You can ask up to",
+    "canWhy": "(what you earned since {{d}}, minus your advances)",
+    "taken": "Already taken this month:",
+    "max": "Maximum {{v}}",
+    "ask": "Ask for an advance",
+    "why": {
+      "off": "No advances in this shop.",
+      "day": "Possible from day {{day}} of the month.",
+      "max": "You already took this month’s maximum.",
+      "earned": "Nothing to ask for now: you have not earned enough in this period yet.",
+      "pending": "Your request for {{v}} was sent ({{when}}). Waiting for the answer."
+    },
+    "cancel": "Cancel my request",
+    "cancelled": "Request cancelled.",
+    "sheetTitle": "Ask for an advance",
+    "upTo": "Up to {{v}}",
+    "amount": "Amount",
+    "tooMuch": "At most {{v}}.",
+    "note": "What for? (optional)",
+    "send": "Send the request",
+    "sent": "Request sent. You will be told.",
+    "history": "My requests",
+    "paid": "My paid advances",
+    "none": "No request yet.",
+    "refusedWhy": "Refused: {{r}}",
+    "st": {
+      "pending": "Waiting",
+      "paid": "Paid",
+      "refused": "Refused",
+      "cancelled": "Cancelled"
+    }
+  },
+  "tasks": {
+    "confirmation": "Confirmation",
+    "suivi": "Follow-up",
+    "superviseur": "Supervisor",
+    "depot": "Depot"
+  },
+  "weekdays": [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday"
+  ],
+  "board": {
+    "title": "Agents’ pay",
+    "help": "Each person is paid by their plan. On pay day, their pay becomes “ready to pay”: you pay it from a caisse, then the person confirms they got it.",
+    "settings": "Pay days and advances",
+    "noPlan_one": "{{count}} person has no pay plan",
+    "noPlan_other": "{{count}} people have no pay plan",
+    "noPlanSub": "Without a plan, Pilotix does not count their pay. Give a plan right away.",
+    "givePlan": "Give a plan",
+    "notReceived": "{{name}} says they did not get {{v}}",
+    "notReceivedSub": "Reported {{d}}. Check together: if the money did not leave, cancel the payment.",
+    "see": "See",
+    "kpi": {
+      "ready": "Ready to pay",
+      "readySub_one": "{{count}} person",
+      "readySub_other": "{{count}} people",
+      "requests": "Advance requests",
+      "waiting": "Payments to confirm",
+      "waitingSub": "the person must say “Received”",
+      "open": "Current pay",
+      "openSub": "earned since the period started"
+    },
+    "empty": "Nobody to pay here: add agents in Users.",
+    "col": {
+      "person": "Person",
+      "plans": "Pay plans",
+      "ready": "Ready to pay",
+      "request": "Advance asked",
+      "state": "Payments"
+    },
+    "openLine": "{{v}} so far · paid on {{d}}",
+    "missing": "No plan · {{task}}",
+    "change": "Change",
+    "since": "since {{d}}",
+    "payBtn": "Pay {{v}}",
+    "payShort": "Pay",
+    "nothingReady": "Nothing to pay",
+    "refuse": "Refuse",
+    "waiting": "Waiting for the answer · {{v}}",
+    "notRec": "Not received · {{v}}",
+    "allGood": "All confirmed",
+    "notYet": "Not paid yet",
+    "livreurs": "Couriers (old calculation)",
+    "livreursHelp": "Couriers keep their old calculation for now.",
+    "pay": {
+      "title": "Pay {{name}}",
+      "what": "Pay for {{period}}",
+      "whatAcompte": "Advance asked {{d}}",
+      "amount": "Amount",
+      "from": "Pay from the caisse",
+      "balance": "{{v}} in the caisse",
+      "short": "Not enough money in this caisse.",
+      "confirm": "Pay {{v}}",
+      "after": "The money leaves the caisse (a “Salary” expense). Then {{name}} confirms they got it.",
+      "done": "Paid. {{name}} must confirm they got it."
+    },
+    "plans": {
+      "title": "Pay plans · {{name}}",
+      "help": "One plan per job. The first plan counts from the start of the current pay period.",
+      "required": "required",
+      "optional": "optional",
+      "none": "No plan",
+      "noPlans": "No plan for this job.",
+      "create": "Create a plan",
+      "save": "Save",
+      "more": "A new plan? You make it here:"
+    },
+    "refuseSheet": {
+      "title": "Refuse {{name}}’s advance ({{v}})?",
+      "reason": "Why? (the person will see it)",
+      "send": "Refuse the request",
+      "done": "Request refused."
+    },
+    "set": {
+      "title": "Pay days and advances",
+      "every": "Pay becomes ready",
+      "week": "Every week",
+      "half": "Every 15 days (the 1st and the 16th)",
+      "month": "Every month",
+      "days": "Days I choose",
+      "weekday": "Day of the week",
+      "day": "Day of the month",
+      "daysPick": "Days of the month",
+      "next": "Next pay ready: {{d}}",
+      "acompte": "Advances",
+      "max": "Maximum per month (0 = no advance)",
+      "fromDay": "From day",
+      "save": "Save",
+      "saved": "Settings saved."
+    },
+    "person": {
+      "sub": "Their pay, as in their own My caisse page",
+      "cancel": "Cancel",
+      "cancelAsk": "Cancel this payment ({{what}}, {{v}})? The money goes back into the caisse.",
+      "cancelled": "Payment cancelled: the money is back in the caisse.",
+      "lastOnly": "First cancel this person’s latest payment."
+    },
+    "noCount": "No plan: nothing is counted"
+  }
+}

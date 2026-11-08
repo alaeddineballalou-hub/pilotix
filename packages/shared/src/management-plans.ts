@@ -2,13 +2,15 @@
 export type ManagementPlanKind = 'billing' | 'agent';
 export type ManagementFeeMethod = 'none' | 'fixed' | 'percent' | 'tier';
 export type ManagementUpsellMethod = 'double' | 'qty' | 'fixed' | 'percent';
-export type AgentPlanTask = 'confirmation' | 'suivi';
+/** The job a plan pays: confirming orders, following parcels, leading a team (its delivered orders), preparing parcels. */
+export type AgentPlanTask = 'confirmation' | 'suivi' | 'superviseur' | 'depot';
 export interface EditablePriceBracket {from:number;to:number|null;amount:number}
 export interface ManagementPlanConfig {
   /** Agent Pay only. Plans created before task selection belong to confirmation. */
   agentTask?: AgentPlanTask;
   method: ManagementFeeMethod;
-  trigger: 'confirmed' | 'delivered';
+  /** the event that pays: a dépôt plan pays each order the first time it is prepared */
+  trigger: 'confirmed' | 'delivered' | 'prepared';
   rate: number;
   tiers: [number, number, number];
   /** Upper bounds of the first two price brackets (defaults preserve existing plans). */
@@ -58,6 +60,13 @@ export function simulateManagementPlan(p: ManagementPlanConfig, s: ManagementSim
     if (p.trigger !== 'delivered') throw new Error('Un plan de suivi est rémunéré à la livraison');
     p = { ...p, upsell: { ...p.upsell, enabled: false, rate: 0 } };
   }
+  // a dépôt plan pays each prepared order and never an upsell; a team leader is paid when his team's orders are delivered
+  if (p.agentTask === 'depot') {
+    if (p.trigger !== 'prepared') throw new Error('Un plan de dépôt est rémunéré à la préparation');
+    p = { ...p, upsell: { ...p.upsell, enabled: false, rate: 0 } };
+  }
+  if (p.agentTask === 'superviseur' && p.trigger !== 'delivered') throw new Error('Un plan de superviseur est rémunéré à la livraison des commandes de son équipe');
+  if (p.agentTask !== 'depot' && p.trigger === 'prepared') throw new Error('Seul un plan de dépôt est rémunéré à la préparation');
   const nonnegative = (v: number) => Number.isFinite(v) && v >= 0;
   if (![s.productPrice,s.operations,s.upsells,s.incrementalValue,p.monthly,p.rate,...p.tiers,p.bonus.threshold,p.bonus.amount,p.upsell.rate,...(s.originalQty===undefined?[]:[s.originalQty]),...(s.deliveredQty===undefined?[]:[s.deliveredQty])].every(nonnegative)) throw new Error('Valeur invalide');
   if (!Number.isInteger(s.operations) || !Number.isInteger(s.upsells) || (s.originalQty!==undefined&&!Number.isInteger(s.originalQty)) || (s.deliveredQty!==undefined&&!Number.isInteger(s.deliveredQty))) throw new Error('Quantité invalide');

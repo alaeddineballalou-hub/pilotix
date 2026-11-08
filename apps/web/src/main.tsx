@@ -194,6 +194,12 @@ function App() {
     sub = undefined;
     rest = [];
   }
+  // the agents' pay left Management for Caisse: an old link (#/management/paie) opens #/caisse/paie
+  if (space === 'store' && page === 'management' && sub === 'paie') {
+    go('#/caisse/paie', { replace: true });
+    page = 'caisse';
+    rest = [];
+  }
   // a group without a page of its own (Pilot AI) opens its first child the user can see
   const group = nav.find((n) => n.id === page && n.children && !pages[n.id]);
   const first = group?.children!.find((c) => canSeeChild(c, session.roles, session.isAdmin, canRules));

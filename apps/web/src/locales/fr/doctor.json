@@ -352,6 +352,25 @@
       "short": "Au niveau de l’équipe",
       "okTitle": "Votre taux : {{me}} % (équipe {{team}} %)",
       "info": "Pas encore assez d’appels cette semaine pour vous comparer"
+    },
+    "payNoPlan": {
+      "title_one": "{{count}} personne sans plan de paie",
+      "title_other": "{{count}} personnes sans plan de paie",
+      "title": "{{count}} personnes sans plan de paie",
+      "why": "Sans plan, Pilotix ne compte pas leur paie.",
+      "fix": "Donnez un plan à chacun dans Caisse › Paie.",
+      "short": "Plans de paie",
+      "okTitle": "Tout le monde a un plan de paie"
+    },
+    "payNotReceived": {
+      "title_one": "{{count}} paiement pas reçu",
+      "title_other": "{{count}} paiements pas reçus",
+      "title": "{{count}} paiements pas reçus",
+      "why": "Un agent dit ne pas avoir reçu l’argent marqué payé.",
+      "whyMoney": "Un agent dit ne pas avoir reçu {{amount}} marqués payés.",
+      "fix": "Vérifiez ensemble dans Caisse › Paie, puis annulez le paiement si l’argent n’est pas parti.",
+      "short": "Paiements reçus",
+      "okTitle": "Tous les paiements sont confirmés"
     }
   },
   "gauge": {

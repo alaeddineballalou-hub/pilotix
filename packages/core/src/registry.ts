@@ -42,6 +42,7 @@ import { landingProcs } from './modules/landing';
 import { landingGroupProcs } from './modules/landinggroups';
 import { pixelProcs } from './modules/pixels';
 import { posProcs } from './modules/pos';
+import { payProcs } from './modules/pay';
 import { shopModulesProcs } from './modules/shopmodules';
 import { marketersProcs } from './modules/marketers';
 import { notifyProcs } from './modules/notify';
@@ -140,4 +141,5 @@ export const REGISTRY = {
   // a boutique's optional modules (Management › Modules), and the first of them: Point de vente
   ...shopModulesProcs,
   ...posProcs,
+  ...payProcs,
 };

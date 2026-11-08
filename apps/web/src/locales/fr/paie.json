@@ -1,0 +1,263 @@
+{
+  "tabs": {
+    "paie": "Ma paie",
+    "acomptes": "Acomptes",
+    "plan": "Mon plan",
+    "cash": "Argent en main"
+  },
+  "owed": "La boutique te doit",
+  "owedSub": "{{ready}} prêts à payer + {{open}} de ta paie en cours (après tes acomptes)",
+  "owedSubOpen": "Ta paie en cours, après tes acomptes",
+  "ready": "Prête à payer",
+  "readySub": "Paie du {{period}}",
+  "readySince": "prête depuis le {{d}}",
+  "readyNone": "Rien n’attend d’être payé",
+  "readyWait": "Prête depuis le {{d}} : ton responsable va te payer",
+  "earned": "Gagné · {{period}}",
+  "earnedSub_one": "{{count}} commande payée · {{upsells}} article(s) en plus",
+  "earnedSub_other": "{{count}} commandes payées · {{upsells}} article(s) en plus",
+  "minusAcompte": "−{{v}} d’acompte",
+  "payDay": "paie le {{d}}",
+  "coming": "En route",
+  "comingSub_one": "{{count}} commande, si elle est livrée",
+  "comingSub_other": "{{count}} commandes, si elles sont livrées",
+  "orders": {
+    "title": "Mes commandes · {{period}}",
+    "help": "Ce que chaque commande t’a rapporté.",
+    "all": "Toutes",
+    "task": {
+      "confirmation": "Mes commandes",
+      "superviseur": "Mon équipe",
+      "suivi": "Suivi",
+      "depot": "Dépôt"
+    },
+    "empty": "Pas encore de commande payée dans cette période.",
+    "salary": "Salaire mensuel",
+    "event": {
+      "delivered": "livrée {{d}}",
+      "confirmed": "confirmée {{d}}",
+      "prepared": "préparée {{d}}",
+      "month": "{{d}}"
+    },
+    "team": "de {{name}}",
+    "upsell_one": "upsell +{{count}}",
+    "upsell_other": "upsell +{{count}}",
+    "less": "Voir moins",
+    "more_one": "Voir la commande",
+    "more_other": "Voir les {{count}}",
+    "total": "Total gagné"
+  },
+  "payments": {
+    "title": "Mes paiements",
+    "pay": "Paie {{period}}",
+    "acompte": "Acompte",
+    "paidOn": "Payé {{d}} · {{caisse}}",
+    "none": "Pas encore de paiement.",
+    "st": {
+      "paid": "À confirmer",
+      "received": "Reçu",
+      "not_received": "Pas reçu",
+      "cancelled": "Annulé"
+    }
+  },
+  "confirm": {
+    "aria": "Paiement à confirmer",
+    "boss": "Ton responsable",
+    "titlePay": "{{who}} a marqué ta paie du {{period}} ({{v}}) comme payée",
+    "titleAcompte": "{{who}} a marqué ton acompte de {{v}} comme payé",
+    "sub": "{{when}} · sorti de : {{caisse}}. Tu l’as reçu ?",
+    "noteNo": "Si tu tapes « Pas encore reçu », {{who}} est prévenu tout de suite.",
+    "yes": "Oui, je l’ai reçu",
+    "no": "Pas encore reçu",
+    "notTitle": "Tu as dit que tu n’as pas reçu {{v}} ({{what}})",
+    "notSub": "{{who}} est prévenu. Dès que tu as l’argent, dis-le ici.",
+    "gotNow": "Je l’ai reçu maintenant",
+    "sheetTitle": "Tu n’as pas reçu {{v}} ?",
+    "sheetNote": "Un mot pour {{who}} (facultatif)",
+    "sheetSend": "Prévenir {{who}}",
+    "doneYes": "Merci, c’est noté : reçu.",
+    "doneNo": "{{who}} est prévenu."
+  },
+  "plan": {
+    "title": "Mon plan de paie",
+    "noneTitle": "Tu n’as pas encore de plan de paie",
+    "none": "Pas de prime par commande",
+    "since": "Depuis le {{d}}",
+    "per": {
+      "confirmation": "Pour chaque commande que tu confirmes et qui est livrée, selon le prix du produit (sans la livraison) :",
+      "confirmationConfirmed": "Pour chaque commande que tu confirmes, selon le prix du produit (sans la livraison) :",
+      "superviseur": "Pour chaque commande livrée de ton équipe (les tiennes aussi), selon le prix du produit :",
+      "suivi": "Pour chaque colis que tu suis et qui est livré :",
+      "depot": "Pour chaque colis que tu prépares (la première fois) :"
+    },
+    "upTo": "Jusqu’à {{v}}",
+    "from": "Plus de {{v}}",
+    "between": "{{a}} – {{b}}",
+    "fixed": "{{v}} par commande",
+    "percent": "{{p}} % du prix du produit",
+    "monthly": "Salaire fixe : {{v}} par mois.",
+    "upsellLabel": "Upsell :",
+    "upsell": {
+      "qty": "chaque article livré en plus de ce que le client a commandé te donne encore le montant de sa tranche.",
+      "double": "quand le client prend plus que sa commande, tu gagnes une fois de plus le montant de la commande.",
+      "fixed": "{{v}} pour chaque commande où le client prend plus.",
+      "percent": "{{p}} % du prix du produit pour chaque article en plus."
+    },
+    "calendar": {
+      "week": "Paie chaque semaine, le {{day}}.",
+      "half": "Paie tous les 15 jours : le 1er et le 16 du mois.",
+      "month": "Paie chaque mois, le {{day}}.",
+      "days": "Paie le {{days}} du mois."
+    },
+    "acompteRule": "Acompte : jusqu’à {{v}} par mois, à partir du {{day}} du mois.",
+    "acompteOff": "Pas d’acompte dans cette boutique."
+  },
+  "acompte": {
+    "title": "Acompte",
+    "rule": "Possible à partir du {{day}} du mois · ton responsable reçoit ta demande.",
+    "can": "Tu peux demander jusqu’à",
+    "canWhy": "(ce que tu as gagné depuis le {{d}}, moins tes acomptes)",
+    "taken": "Déjà pris ce mois :",
+    "max": "Maximum {{v}}",
+    "ask": "Demander un acompte",
+    "why": {
+      "off": "Pas d’acompte dans cette boutique.",
+      "day": "Possible à partir du {{day}} du mois.",
+      "max": "Tu as déjà pris le maximum de ce mois.",
+      "earned": "Rien à demander pour l’instant : tu n’as pas encore assez gagné dans cette période.",
+      "pending": "Ta demande de {{v}} est envoyée ({{when}}). En attente de la réponse."
+    },
+    "cancel": "Annuler ma demande",
+    "cancelled": "Demande annulée.",
+    "sheetTitle": "Demander un acompte",
+    "upTo": "Jusqu’à {{v}}",
+    "amount": "Montant",
+    "tooMuch": "Au plus {{v}}.",
+    "note": "Pour quoi ? (facultatif)",
+    "send": "Envoyer la demande",
+    "sent": "Demande envoyée. Tu seras prévenu.",
+    "history": "Mes demandes",
+    "paid": "Mes acomptes payés",
+    "none": "Pas encore de demande.",
+    "refusedWhy": "Refusé : {{r}}",
+    "st": {
+      "pending": "En attente",
+      "paid": "Payé",
+      "refused": "Refusé",
+      "cancelled": "Annulé"
+    }
+  },
+  "tasks": {
+    "confirmation": "Confirmation",
+    "suivi": "Suivi",
+    "superviseur": "Superviseur",
+    "depot": "Dépôt"
+  },
+  "weekdays": [
+    "dimanche",
+    "lundi",
+    "mardi",
+    "mercredi",
+    "jeudi",
+    "vendredi",
+    "samedi"
+  ],
+  "board": {
+    "title": "Paie des agents",
+    "help": "Chaque personne est payée selon son plan. Le jour de paie, sa paie devient « prête à payer » : vous la payez depuis une caisse, puis la personne confirme qu’elle l’a reçue.",
+    "settings": "Jours de paie et acomptes",
+    "noPlan_one": "{{count}} personne n’a pas de plan de paie",
+    "noPlan_other": "{{count}} personnes n’ont pas de plan de paie",
+    "noPlanSub": "Sans plan, Pilotix ne compte pas leur paie. Donnez un plan tout de suite.",
+    "givePlan": "Donner un plan",
+    "notReceived": "{{name}} dit ne pas avoir reçu {{v}}",
+    "notReceivedSub": "Signalé {{d}}. Vérifiez ensemble : si l’argent n’est pas parti, annulez le paiement.",
+    "see": "Voir",
+    "kpi": {
+      "ready": "Prêt à payer",
+      "readySub_one": "{{count}} personne",
+      "readySub_other": "{{count}} personnes",
+      "requests": "Demandes d’acompte",
+      "waiting": "Paiements à confirmer",
+      "waitingSub": "la personne doit dire « Reçu »",
+      "open": "Paie en cours",
+      "openSub": "gagné depuis le début de la période"
+    },
+    "empty": "Personne à payer ici : ajoutez des agents dans Utilisateurs.",
+    "col": {
+      "person": "Personne",
+      "plans": "Plans de paie",
+      "ready": "Prête à payer",
+      "request": "Acompte demandé",
+      "state": "Paiements"
+    },
+    "openLine": "{{v}} en cours · paie le {{d}}",
+    "missing": "Sans plan · {{task}}",
+    "change": "Changer",
+    "since": "depuis le {{d}}",
+    "payBtn": "Payer {{v}}",
+    "payShort": "Payer",
+    "nothingReady": "Rien à payer",
+    "refuse": "Refuser",
+    "waiting": "Attend la réponse · {{v}}",
+    "notRec": "Pas reçu · {{v}}",
+    "allGood": "Tout est confirmé",
+    "notYet": "Pas encore payé",
+    "livreurs": "Livreurs (ancien calcul)",
+    "livreursHelp": "Les livreurs gardent leur ancien calcul pour l’instant.",
+    "pay": {
+      "title": "Payer {{name}}",
+      "what": "Paie du {{period}}",
+      "whatAcompte": "Acompte demandé {{d}}",
+      "amount": "Montant",
+      "from": "Payer depuis la caisse",
+      "balance": "{{v}} dans la caisse",
+      "short": "Pas assez d’argent dans cette caisse.",
+      "confirm": "Payer {{v}}",
+      "after": "L’argent sort de la caisse (dépense « Salaire »). Ensuite, {{name}} confirme la réception.",
+      "done": "Payé. {{name}} doit confirmer la réception."
+    },
+    "plans": {
+      "title": "Plans de paie · {{name}}",
+      "help": "Un plan par travail. Le premier plan compte depuis le début de la période de paie en cours.",
+      "required": "obligatoire",
+      "optional": "facultatif",
+      "none": "Aucun plan",
+      "noPlans": "Aucun plan pour ce travail.",
+      "create": "Créer un plan",
+      "save": "Enregistrer",
+      "more": "Un nouveau plan ? Il se crée ici :"
+    },
+    "refuseSheet": {
+      "title": "Refuser l’acompte de {{name}} ({{v}}) ?",
+      "reason": "Pourquoi ? (la personne le verra)",
+      "send": "Refuser la demande",
+      "done": "Demande refusée."
+    },
+    "set": {
+      "title": "Jours de paie et acomptes",
+      "every": "La paie devient prête",
+      "week": "Chaque semaine",
+      "half": "Tous les 15 jours (le 1er et le 16)",
+      "month": "Chaque mois",
+      "days": "Les jours que je choisis",
+      "weekday": "Le jour de la semaine",
+      "day": "Le jour du mois",
+      "daysPick": "Les jours du mois",
+      "next": "Prochaine paie prête : {{d}}",
+      "acompte": "Acomptes",
+      "max": "Maximum par mois (0 = pas d’acompte)",
+      "fromDay": "À partir du jour",
+      "save": "Enregistrer",
+      "saved": "Réglages enregistrés."
+    },
+    "person": {
+      "sub": "Sa paie, comme dans sa page Ma caisse",
+      "cancel": "Annuler",
+      "cancelAsk": "Annuler ce paiement ({{what}}, {{v}}) ? L’argent revient dans la caisse.",
+      "cancelled": "Paiement annulé : l’argent est revenu dans la caisse.",
+      "lastOnly": "Annulez d’abord le dernier paiement de cette personne."
+    },
+    "noCount": "Pas de plan : rien n’est compté"
+  }
+}

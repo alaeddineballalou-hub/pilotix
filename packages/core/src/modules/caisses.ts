@@ -50,6 +50,15 @@ async function customCaisses(ctx: Ctx, bal?: Map<string, number>) {
   return rows.map((r: any) => ({ key: `c${num(r.id)}`, id: num(r.id), name: r.name as string, kind: r.kind as (typeof CAISSE_KINDS)[number], balance: b.get(`c${num(r.id)}`) ?? 0 }));
 }
 
+/** The owner's caisses money can be paid from (main, the bank unless removed, the caisses he created), with their balance. */
+export async function caisseChoices(ctx: Ctx) {
+  const bal = await balances(ctx);
+  const out = [{ key: 'main', name: 'Caisse principale', balance: bal.get('main') ?? 0 }];
+  if (!(await bankHidden(ctx))) out.push({ key: 'bank', name: 'Banque', balance: bal.get('bank') ?? 0 });
+  for (const c of await customCaisses(ctx, bal)) out.push({ key: c.key, name: c.name, balance: c.balance });
+  return out;
+}
+
 const isStaffOnly = (ctx: Ctx) => !ctx.session.isAdmin && !ctx.session.roles.includes('vendeur');
 const mine = (ctx: Ctx) => `u${ctx.session.profile.id}`;
 /** An employee only touches his own caisse. */

@@ -1,4 +1,4 @@
-// Admin pages: Utilisateurs, Management (Statuts, Paie des agents, Prix de livraison, Canaux de vente, Alertes dépôt, Modules, Archives), Réglages.
+// Admin pages: Utilisateurs, Management (Plans de paiement, Statuts, Prix de livraison, Canaux de vente, Alertes dépôt, Modules, Archives), Réglages. The agents' pay is in Caisse › Paie.
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSession } from '../../lib/session';
@@ -10,7 +10,6 @@ import { Archive } from './Archive';
 import { Canaux } from './Canaux';
 import { LivreurCfg } from './LivreurCfg';
 import { Modules } from './Modules';
-import { Paie } from './Paie';
 import { ManagementPlans } from './ManagementPlans';
 import { Prix } from './Prix';
 import { ReglagesPage } from './Reglages';
@@ -22,7 +21,7 @@ export function Utilisateurs({ sub, rest }: PageProps) {
   return <UsersPage sub={sub} rest={rest} />;
 }
 
-const MGMT = ['plans', 'statuts', 'affectation', 'paie', 'prix', 'canaux', 'alertes', 'stock', 'livreur', 'modules', 'archive'] as const;
+const MGMT = ['plans', 'statuts', 'affectation', 'prix', 'canaux', 'alertes', 'stock', 'livreur', 'modules', 'archive'] as const;
 const ARCHIVE_KINDS = ['users', 'products', 'warehouses'] as const;
 export function Management({ sub, rest }: PageProps) {
   const { t } = useTranslation();
@@ -35,7 +34,7 @@ export function Management({ sub, rest }: PageProps) {
   return (
     <>
       <StageBar flow={false} current={cur} items={mine.filter((k) => pageIsOn('management', k)).map((k) => ({ key: k, label: t(`admin.subs.${k}`), href: `#/management/${k}` }))} />
-      {cur === 'plans' ? <ManagementPlans /> : cur === 'statuts' ? <Statuts /> : cur === 'affectation' ? <Affectation /> : cur === 'paie' ? <Paie /> : cur === 'prix' ? <Prix /> : cur === 'canaux' ? <Canaux /> : cur === 'alertes' ? <DepotAlertsCfg /> : cur === 'stock' ? <StockCfg /> : cur === 'livreur' ? <LivreurCfg /> : cur === 'modules' ? <Modules /> : <Archive key={kind ?? 'users'} initial={kind} />}
+      {cur === 'plans' ? <ManagementPlans /> : cur === 'statuts' ? <Statuts /> : cur === 'affectation' ? <Affectation /> : cur === 'prix' ? <Prix /> : cur === 'canaux' ? <Canaux /> : cur === 'alertes' ? <DepotAlertsCfg /> : cur === 'stock' ? <StockCfg /> : cur === 'livreur' ? <LivreurCfg /> : cur === 'modules' ? <Modules /> : <Archive key={kind ?? 'users'} initial={kind} />}
     </>
   );
 }

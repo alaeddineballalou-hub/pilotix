@@ -2,7 +2,7 @@
 // problem, each one quiet when all is well, and the borders (just under / just over a limit, ignored rows).
 import assert from 'node:assert/strict';
 import { before, describe, test } from 'node:test';
-import { DoctorItem, doctorScore, doctorSort, effectiveFeatures, FEATURE_KEYS, featureOn, routeAllowed, ShopDoctorReport } from '@pilotix/shared';
+import { DoctorItem, doctorScore, doctorSort, effectiveFeatures, FEATURE_KEYS, featureOn, routeAllowed, ShopDoctorReport, DEFAULT_MANAGEMENT_PLAN } from '@pilotix/shared';
 import { call, Ctx, Db, hashPassword, login, migrate, seedBase } from '../index';
 import { pgliteDb } from '../pglite';
 import { EMAILS, setup } from './harness';
@@ -61,7 +61,12 @@ async function shop(): Promise<Shop> {
       return { v, p };
     },
     async agent(name) {
-      return Number((await db.query(`INSERT INTO profiles (name, email, password_hash, roles) VALUES ($1, $2, 'x', '{confirmation}') RETURNING id`, [name, `a${++seq}@shop.dz`]))[0].id);
+      const id = Number((await db.query(`INSERT INTO profiles (name, email, password_hash, roles) VALUES ($1, $2, 'x', '{confirmation}') RETURNING id`, [name, `a${++seq}@shop.dz`]))[0].id);
+      // every agent of these shops has his pay plan (one without is the owner's red alert, checked on its own)
+      const cfg = JSON.stringify({ ...DEFAULT_MANAGEMENT_PLAN, agentTask: 'confirmation', trigger: 'delivered' });
+      const plan = Number((await db.query(`INSERT INTO management_payment_plans (kind, name, configuration) VALUES ('agent', 'Test', $1) RETURNING id`, [cfg]))[0].id);
+      await db.query(`INSERT INTO pay_plan_terms (profile_id, task, plan_id, name, configuration, effective_at) VALUES ($1, 'confirmation', $2, 'Test', $3, $4)`, [id, plan, cfg, new Date(NOW - 90 * D).toISOString()]);
+      return id;
     },
     async order(o) {
       const n = ++seq;
@@ -97,7 +102,10 @@ function wellFormed(r: ShopDoctorReport, full = true) {
     assert.equal(ids.filter((x) => x === 'confRate' || x === 'confRateDrop').length, 1);
     assert.equal(ids.filter((x) => x === 'returns' || x === 'returnsUp').length, 1);
     assert.equal(ids.filter((x) => x === 'ordersDrop' || x === 'ordersOk').length, 1);
-    assert.equal(r.items.length, SHOP_IDS.length + 3);
+    // the owner also gets the agent pay checks (people without a plan, payments not received); a vendeur does not
+    const pay = ids.filter((x) => x === 'payNoPlan' || x === 'payNotReceived').length;
+    assert.ok(pay === 0 || pay === 2, 'both pay checks or none');
+    assert.equal(r.items.length, SHOP_IDS.length + 3 + pay);
     assert.deepEqual(r.scope, { whole: true, mine: false });
   }
   for (const i of r.items) {
@@ -312,7 +320,10 @@ describe('every problem is seen', () => {
 
   test('the vendeur sees the same problems, without the amount', async () => {
     const v = await s.doctor(s.vendeur);
-    assert.deepEqual(v.items.map((i) => [i.id, i.level]), r.items.map((i) => [i.id, i.level]));
+    // the same problems, except the agent pay checks: they are about money, for the owner only
+    const notPay = (x: ShopDoctorReport) => x.items.filter((i) => !i.id.startsWith('pay')).map((i) => [i.id, i.level]);
+    assert.deepEqual(notPay(v), notPay(r));
+    assert.equal(find(v, 'payNoPlan'), undefined);
     assert.equal(find(v, 'cashLate')?.params?.amount, undefined);
   });
 });
@@ -563,4 +574,19 @@ test('score: 15 per urgent, 5 per watch, never under 5; sort keeps the order ins
     doctorSort([it('a', 'ok'), it('b', 'warn'), it('c', 'bad'), it('d', 'info'), it('e', 'bad'), it('f', 'warn')]).map((i) => i.id),
     ['c', 'e', 'b', 'f', 'd', 'a'],
   );
+});
+
+// ---------------------------------------------------------------- agent pay
+test('agent pay: someone without a pay plan is the owner\'s red alert (a vendeur does not see it)', async () => {
+  const s = await shop();
+  await s.db.query(`INSERT INTO profiles (name, email, password_hash, roles) VALUES ('Imane', 'imane@shop.dz', 'x', '{confirmation}')`);
+  const r = await s.doctor(s.admin);
+  wellFormed(r);
+  const it = find(r, 'payNoPlan');
+  assert.equal(it?.level, 'bad');
+  assert.deepEqual(it?.list?.map((l) => l.label), ['Imane']);
+  assert.equal(it?.href, '#/caisse/paie');
+  assert.equal(find(r, 'payNotReceived')?.level, 'ok');
+  const v = await s.doctor(s.vendeur);
+  assert.equal(find(v, 'payNoPlan'), undefined);
 });

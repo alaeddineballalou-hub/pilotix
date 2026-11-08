@@ -352,6 +352,25 @@
       "short": "At team level",
       "okTitle": "Your rate: {{me}} % (team {{team}} %)",
       "info": "Not enough calls yet this week to compare you"
+    },
+    "payNoPlan": {
+      "title_one": "{{count}} person without a pay plan",
+      "title_other": "{{count}} people without a pay plan",
+      "title": "{{count}} people without a pay plan",
+      "why": "Without a plan, Pilotix does not count their pay.",
+      "fix": "Give everyone a plan in Cash › Pay.",
+      "short": "Pay plans",
+      "okTitle": "Everyone has a pay plan"
+    },
+    "payNotReceived": {
+      "title_one": "{{count}} payment not received",
+      "title_other": "{{count}} payments not received",
+      "title": "{{count}} payments not received",
+      "why": "An agent says they did not get money marked as paid.",
+      "whyMoney": "An agent says they did not get {{amount}} marked as paid.",
+      "fix": "Check together in Cash › Pay, then cancel the payment if the money did not leave.",
+      "short": "Payments received",
+      "okTitle": "All payments are confirmed"
     }
   },
   "gauge": {

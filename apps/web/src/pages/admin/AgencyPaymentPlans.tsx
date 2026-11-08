@@ -275,7 +275,9 @@ function removeRange(all:{from:number;to:number|null;amount:number}[],i:number){
 function PlanAssignment({label,plans,current,onApply,busy,action,agentRoles}:{label:string;plans:Plan[];current:number|null;onApply:(id:number|null)=>void;busy:boolean;action:string;agentRoles?:Role[]}){
   const [value,setValue]=useState(current===null?'':String(current));
   useEffect(()=>setValue(current===null?'':String(current)),[current]);
-  const incompatible=(p:Plan)=>p.kind==='agent'&&!!agentRoles&&!expandRoles(agentRoles).includes(agentPlanTask(p.configuration));
+  // a plan's job needs its role (a team leader's plan: agent_manager)
+  const roleOf=(p:Plan):Role=>{const k=agentPlanTask(p.configuration);return k==='superviseur'?'agent_manager':k};
+  const incompatible=(p:Plan)=>p.kind==='agent'&&!!agentRoles&&!expandRoles(agentRoles).includes(roleOf(p));
   return <div className="ppm-assignment"><label className="field"><span className="lab">{label}</span><select value={value} disabled={busy} onChange={e=>setValue(e.target.value)}>
     <option value="">Aucun plan / retirer</option>{plans.map(p=><option key={p.id} value={p.id} disabled={incompatible(p)}>{p.name}{p.kind==='agent'?' · '+(agentPlanTask(p.configuration)==='suivi'?'Suivi':'Confirmation'):''}{incompatible(p)?' (rôle incompatible)':''}</option>)}
   </select></label><button className="btn" disabled={busy||plans.some(p=>String(p.id)===value&&incompatible(p))} onClick={()=>onApply(value?Number(value):null)}>{action}</button></div>;

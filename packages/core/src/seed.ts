@@ -16,6 +16,7 @@ import { seed as seed_sav } from './seeds/sav';
 import { seed as seed_delivery, seedZrFees } from './seeds/delivery';
 import { seed as seed_zr } from './seeds/zr';
 import { seed as seed_cash } from './seeds/cash';
+import { seed as seed_pay } from './seeds/pay';
 import { seed as seed_admin } from './seeds/admin';
 import { seed as seed_ads } from './seeds/ads';
 import { seed as seed_dellal, seedPhotoChat, seedSizeChart } from './seeds/dellal';
@@ -394,6 +395,8 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
   await seed_partners(db, users, now);
   // Pilot Automations: what it did these last days (it reads the demo's orders, ads and customers)
   await seed_automations(db, users, now);
+  // agent pay last: it reads the delivered and prepared orders the seeds above wrote (and their first quantities)
+  await seed_pay(db, users, now);
 
   return { users, orders: N, todo: CONF_TODO.length };
 }

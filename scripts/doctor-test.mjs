@@ -218,7 +218,8 @@ check((await req('/platform/doctor/dismiss', { id: 'config', kind: 'ignore' }, S
 // ---------------------------------------------------------------- 4. Pilotix Doctor of a shop over HTTP
 step('Pilotix Doctor of a shop');
 r = await req('/rpc/stats.doctor', {}, SHOP_ADMIN);
-check(r.status === 201 && Array.isArray(r.data.items) && r.data.items.length === 15 && r.data.score >= 5, 'the shop admin gets the report', r.data);
+// 15 checks, and the owner's 2 agent pay checks (people without a pay plan, payments not received)
+check(r.status === 201 && Array.isArray(r.data.items) && r.data.items.length === 17 && r.data.score >= 5, 'the shop admin gets the report', r.data);
 const SHOP = r.data;
 const agent = (await req('/auth/login', { email: 'samira@demo.pilotix.dz', password: 'demo-pilotix' })).data.token;
 r = await req('/rpc/stats.doctor', {}, agent);
@@ -226,7 +227,7 @@ check(r.status === 201 && r.data.scope?.mine === true && r.data.items.every((i) 
 
 // ---------------------------------------------------------------- 5. the sentences
 step('every sentence exists in French, English and Arabic');
-const SHOP_IDS = ['stockOut', 'stockSoon', 'notCalled', 'lateCallbacks', 'confRate', 'confRateDrop', 'fakeOrders', 'weakAgents', 'meVsTeam', 'notShipped', 'stuckParcels', 'openAlerts', 'returns', 'returnsUp', 'badWilayas', 'ordersDrop', 'ordersOk', 'adIssues', 'cashLate'];
+const SHOP_IDS = ['stockOut', 'stockSoon', 'notCalled', 'lateCallbacks', 'confRate', 'confRateDrop', 'fakeOrders', 'weakAgents', 'meVsTeam', 'notShipped', 'stuckParcels', 'openAlerts', 'returns', 'returnsUp', 'badWilayas', 'ordersDrop', 'ordersOk', 'adIssues', 'cashLate', 'payNoPlan', 'payNotReceived'];
 const SERVER_IDS = ['cpu', 'memory', 'disk', 'restarted', 'dbPing', 'dbConnections', 'dbSlow', 'dbDown', 'dbPoolFull', 'redisOff', 'redisDown', 'redis', 'jobs', 'errors', 'courierSync', 'silentShops', 'config', 'turnstile', 'turnstileOff'];
 // the ids the code can give (read from its source): none may be missing from the lists above
 const src = readFileSync(join(ROOT, 'packages/core/src/modules/doctor.ts'), 'utf8') + readFileSync(join(ROOT, 'apps/server/src/doctor.ts'), 'utf8');

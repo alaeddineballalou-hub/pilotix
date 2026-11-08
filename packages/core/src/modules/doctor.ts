@@ -9,10 +9,11 @@
 //   - suivi agent: their own parcels (stuck, alerts, their delivery rate);
 //   - dépôt: stock and orders waiting to leave;  marketer: orders dropping, fake orders (the ads' quality).
 // Someone with several roles gets each part. Nobody else (livreur) gets any check.
-import { algiersDayStart, CONF_DONE_BAD, CONF_TODO, DoctorItem, DoctorLine, doctorScore, doctorSort, FOLLOW_ON_ROAD, ShopDoctorReport } from '@pilotix/shared';
+import { algiersDayStart, CONF_DONE_BAD, CONF_TODO, DoctorItem, DoctorLine, doctorScore, doctorSort, FOLLOW_ON_ROAD, payIsOn, ShopDoctorReport } from '@pilotix/shared';
 import { z } from 'zod';
 import { iso, num } from '../db';
 import { Ctx, proc } from '../rpc';
+import { payAlerts } from './pay';
 import { allowedAreas } from './stats';
 
 const H = 3_600_000;
@@ -20,8 +21,8 @@ const D = 24 * H;
 const ratio = (a: number, b: number) => (b > 0 ? a / b : null);
 const pts = (x: number) => Math.round(x * 1000) / 10; // 0.123 → 12.3
 
-type CheckId = 'stockOut' | 'stockSoon' | 'notCalled' | 'lateCallbacks' | 'confRate' | 'fakeOrders' | 'weakAgents' | 'meVsTeam' | 'notShipped' | 'stuckParcels' | 'openAlerts' | 'returns' | 'badWilayas' | 'ordersDrop' | 'adIssues' | 'cashLate';
-const ALL: CheckId[] = ['stockOut', 'stockSoon', 'notCalled', 'lateCallbacks', 'confRate', 'fakeOrders', 'weakAgents', 'notShipped', 'stuckParcels', 'openAlerts', 'returns', 'badWilayas', 'ordersDrop', 'adIssues', 'cashLate'];
+type CheckId = 'stockOut' | 'stockSoon' | 'notCalled' | 'lateCallbacks' | 'confRate' | 'fakeOrders' | 'weakAgents' | 'meVsTeam' | 'notShipped' | 'stuckParcels' | 'openAlerts' | 'returns' | 'badWilayas' | 'ordersDrop' | 'adIssues' | 'cashLate' | 'payNoPlan' | 'payNotReceived';
+const ALL: CheckId[] = ['stockOut', 'stockSoon', 'notCalled', 'lateCallbacks', 'confRate', 'fakeOrders', 'weakAgents', 'notShipped', 'stuckParcels', 'openAlerts', 'returns', 'badWilayas', 'ordersDrop', 'adIssues', 'cashLate', 'payNoPlan', 'payNotReceived'];
 const CONF_TEAM: CheckId[] = ['notCalled', 'lateCallbacks', 'confRate', 'fakeOrders', 'weakAgents'];
 const CONF_MINE: CheckId[] = ['notCalled', 'lateCallbacks', 'confRate', 'meVsTeam'];
 const DEPOT: CheckId[] = ['stockOut', 'stockSoon', 'notShipped'];
@@ -318,6 +319,21 @@ export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
       ? { id: 'cashLate', level: cN >= 50 ? 'bad' : 'warn', area: 'cash', params: money ? { count: cN, amount: num(cash.v) } : { count: cN }, href: '#/caisse/due' }
       : { id: 'cashLate', level: 'ok', area: 'cash', href: '#/caisse/due' },
   );
+  }
+
+  // ------------------------------------------------------------ agent pay (the owner only: it is about money; a store's only)
+  if (money && payIsOn(ctx.shop) && (want('payNoPlan') || want('payNotReceived'))) {
+    const pa = await payAlerts(ctx.db, now);
+    items.push(
+      pa.noPlan.length
+        ? { id: 'payNoPlan', level: 'bad', area: 'cash', params: { count: pa.noPlan.length }, list: pa.noPlan.slice(0, 6).map((x) => ({ label: x.name, n: 0, unit: 'text' as const })), href: '#/caisse/paie' }
+        : { id: 'payNoPlan', level: 'ok', area: 'cash', href: '#/caisse/paie' },
+    );
+    items.push(
+      pa.notReceived.length
+        ? { id: 'payNotReceived', level: 'bad', area: 'cash', params: { count: pa.notReceived.length, amount: pa.notReceived.reduce((s, x) => s + x.amount, 0) }, list: pa.notReceived.slice(0, 6).map((x) => ({ label: x.name, n: x.amount, unit: 'da' as const })), href: '#/caisse/paie' }
+        : { id: 'payNotReceived', level: 'ok', area: 'cash', href: '#/caisse/paie' },
+    );
   }
 
   const sorted = doctorSort(items);

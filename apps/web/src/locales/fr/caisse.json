@@ -4,7 +4,8 @@
   "tabs": {
     "due": "À recevoir",
     "done": "Déjà reçu",
-    "livreurs": "Livreurs"
+    "livreurs": "Livreurs",
+    "paie": "Paie"
   },
   "selectAll": "Tout sélectionner",
   "select": "Sélectionner",

@@ -133,7 +133,8 @@ export const NAV: NavItem[] = [
   // a public page per product, and the orders its fake-order check held back (the marketers, the owner and the
   // administrators restore the real ones; not the confirmation agents)
   { id: 'landing', icon: 'globe', roles: ['marketer'] },
-  { id: 'caisse', icon: 'wallet', roles: [], subs: ['overview', 'due', 'done', 'livreurs', 'journal'] },
+  // Caisse › Paie: the agents' pay (their plans, pay days, acomptes, paying from a caisse)
+  { id: 'caisse', icon: 'wallet', roles: [], subs: ['overview', 'due', 'done', 'livreurs', 'journal', 'paie'] },
   // an employee's own caisse (money he received, his expenses, what he handed to the main caisse)
   { id: 'macaisse', icon: 'wallet', roles: ['confirmation', 'suivi', 'depot', 'agent_manager'], onlyIf: (_r, admin) => !admin },
   // Partenaires: everyone the store works with, in one group — couriers, its own livreurs, confirmation agencies, marketers,
@@ -162,7 +163,7 @@ export const NAV: NavItem[] = [
   { id: 'agences', icon: 'handshake', roles: [], onlyIf: partnersOn, hidden: true },
   // marketers running the store's ads (the same, on their own: a marketer has nothing to do with the agencies)
   { id: 'marketers', icon: 'trend', roles: [], onlyIf: partnersOn, hidden: true },
-  { id: 'management', icon: 'briefcase', roles: [], affect: true, subs: ['plans', 'statuts', 'affectation', 'paie', 'prix', 'canaux', 'alertes', 'livreur', 'modules', 'archive'] },
+  { id: 'management', icon: 'briefcase', roles: [], affect: true, subs: ['plans', 'statuts', 'affectation', 'prix', 'canaux', 'alertes', 'livreur', 'modules', 'archive'] },
   { id: 'reglages', icon: 'settings', roles: [] },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'parrainage', 'securite'] },
   // « Mes boutiques »: opened from the boutique at the bottom of the menu (and the account menu)

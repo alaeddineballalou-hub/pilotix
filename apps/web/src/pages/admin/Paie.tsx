@@ -12,9 +12,10 @@ type Tab = 'agents' | 'managers' | 'suivi' | 'depot' | 'livreurs';
 const TABS: Tab[] = ['agents', 'managers', 'suivi', 'depot', 'livreurs'];
 const TAB_ROLE: Record<Tab, string> = { agents: 'confirmation', managers: 'agent_manager', suivi: 'suivi', depot: 'depot', livreurs: 'livreur' };
 
-export function Paie() {
+/** `only`: one category alone (Caisse › Paie keeps the livreurs here: the agents have their plans there). */
+export function Paie({ only }: { only?: Tab } = {}) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<Tab>('agents');
+  const [tab, setTab] = useState<Tab>(only ?? 'agents');
   const [month, setMonth] = useState(thisMonth());
   const cfg = useRpc('admin.pay.get', {});
   const pay = useRpc('admin.payroll', { month });
@@ -57,15 +58,17 @@ export function Paie() {
 
   return (
     <div className="bjpp">
-      <p className="muted small">{t('admin.pay.intro')}</p>
-      <div className="tabs bjpp-tabs">
-        {TABS.map((tb) => (
-          <button key={tb} type="button" className={`tab ${tb === tab ? 'on' : ''}`} aria-pressed={tb === tab} onClick={() => setTab(tb)}>
-            {t(`admin.pay.tabs.${tb}`)}
-            <b className="ltr">{count(tb)}</b>
-          </button>
-        ))}
-      </div>
+      {!only && <p className="muted small">{t('admin.pay.intro')}</p>}
+      {!only && (
+        <div className="tabs bjpp-tabs">
+          {TABS.map((tb) => (
+            <button key={tb} type="button" className={`tab ${tb === tab ? 'on' : ''}`} aria-pressed={tb === tab} onClick={() => setTab(tb)}>
+              {t(`admin.pay.tabs.${tb}`)}
+              <b className="ltr">{count(tb)}</b>
+            </button>
+          ))}
+        </div>
+      )}
 
       <Card title={t(`admin.pay.tabs.${tab}`)} help={t(`admin.pay.paidOn.${tab}`)}>
         {!people.length ? (

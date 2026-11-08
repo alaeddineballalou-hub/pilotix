@@ -1,6 +1,6 @@
 // Templates are separate from their immutable assignments and accepted seller contracts.
 import { useEffect, useState } from 'react';
-import { agentPlanTask, DEFAULT_MANAGEMENT_PLAN, ManagementPlanConfig, simulateManagementPlan, planPriceBrackets } from '@pilotix/shared';
+import { agentPlanTask, AgentPlanTask, DEFAULT_MANAGEMENT_PLAN, ManagementPlanConfig, simulateManagementPlan, planPriceBrackets } from '@pilotix/shared';
 import { useAction, useRpc } from '../../lib/query';
 import { PlanSummary } from './PlanSummary';
 import { BillLines } from '../agency/parts';
@@ -41,6 +41,10 @@ function StoreManagementPlans({ agency = false, initialKind = 'billing' }: { age
   const changeKind=(next:'billing'|'agent')=>{if(!dirty||confirm('Quitter les modifications non enregistrées ?'))setKind(next)};
   const p=editing?.configuration;
   const suiviPlan=kind==='agent'&&p&&agentPlanTask(p)==='suivi';
+  // a dépôt plan pays each prepared order, a team leader's each delivered order of his team: neither has a choice of event; suivi and dépôt never count upsells
+  const task=kind==='agent'&&p?agentPlanTask(p):null;
+  const fixedEvent=task==='suivi'||task==='depot'||task==='superviseur';
+  const noUpsell=task==='suivi'||task==='depot';
   let preview:ReturnType<typeof simulateManagementPlan>|null=null;
   let previewError='';
   try {if(p) preview=simulateManagementPlan(p,{productPrice:price,operations:count,upsells,incrementalValue:incremental})}catch(e){previewError=e instanceof Error?e.message:'Configuration invalide'}
@@ -64,14 +68,17 @@ function StoreManagementPlans({ agency = false, initialKind = 'billing' }: { age
       <div className="agx-pe-grid">
         <label className="field"><span className="lab">Nom du plan</span><input value={editing.name} maxLength={100} onChange={e=>{setEditing(x=>x?{...x,name:e.target.value}:x);setDirty(true)}} /></label>
         {kind==='agent'&&<label className="field"><span className="lab">Type de plan Agent Pay</span><select value={agentPlanTask(p)} onChange={e=>{
-          const task=e.target.value as 'confirmation'|'suivi';
-          change({agentTask:task,...(task==='suivi'?{trigger:'delivered',upsell:{...p.upsell,enabled:false,rate:0,trigger:'delivered',ruleVersion:2}}:{})});
-        }}><option value="confirmation">Plan de confirmation</option><option value="suivi">Plan de suivi</option></select></label>}
+          const next=e.target.value as AgentPlanTask;
+          const off={...p.upsell,enabled:false,rate:0,trigger:'delivered' as const,ruleVersion:2 as const};
+          change({agentTask:next,...(next==='suivi'?{trigger:'delivered',upsell:off}:next==='depot'?{trigger:'prepared',upsell:off}:{trigger:p.trigger==='confirmed'&&next==='confirmation'?'confirmed':'delivered'})});
+        }}><option value="confirmation">Plan de confirmation</option><option value="suivi">Plan de suivi</option>{!agency&&<option value="superviseur">Plan de superviseur (commandes de son équipe)</option>}{!agency&&<option value="depot">Plan de dépôt (commandes préparées)</option>}</select></label>}
         <label className="field"><span className="lab">Mode de calcul</span><select value={p.method} onChange={e=>change({method:e.target.value as ManagementPlanConfig['method']})}>
           <option value="fixed">Montant fixe par opération</option><option value="percent">Pourcentage du prix produit</option><option value="tier">Tranches de prix</option><option value="none">Forfait / salaire uniquement</option>
         </select></label>
-        {p.method!=='none'&&!suiviPlan&&<label className="field"><span className="lab">Événement rémunéré</span><select value={p.trigger} onChange={e=>change({trigger:e.target.value as 'confirmed'|'delivered'})}><option value="confirmed">Commande confirmée</option><option value="delivered">Commande livrée</option></select></label>}
+        {p.method!=='none'&&!fixedEvent&&<label className="field"><span className="lab">Événement rémunéré</span><select value={p.trigger} onChange={e=>change({trigger:e.target.value as 'confirmed'|'delivered'})}><option value="confirmed">Commande confirmée</option><option value="delivered">Commande livrée</option></select></label>}
         {suiviPlan&&<p className="agx-note">Commande livrée · agent de suivi attribué à la commande uniquement.</p>}
+        {task==='superviseur'&&<p className="agx-note">Commande livrée · chaque commande confirmée par son équipe (lui compris), selon le prix du produit.</p>}
+        {task==='depot'&&<p className="agx-note">Commande préparée · la première personne qui la prépare.</p>}
         {(p.method==='fixed'||p.method==='percent')&&<label className="field"><span className="lab">{p.method==='fixed'?'Tarif (DA)':'Pourcentage (%)'}</span><input style={FIELD} type="number" min={0} max={p.method==='percent'?100:10000000} value={p.rate} onChange={e=>change({rate:number(e.target.value)})}/></label>}
         <label className="field"><span className="lab">{kind==='agent'?'Salaire mensuel (DA)':'Forfait mensuel client (DA)'}</span><input style={FIELD} type="number" min={0} value={p.monthly} onChange={e=>change({monthly:number(e.target.value)})}/></label>
       </div>
@@ -90,7 +97,7 @@ function StoreManagementPlans({ agency = false, initialKind = 'billing' }: { age
             <fieldset className="agx-bonus"><legend><label><input type="checkbox" checked={p.bonus.enabled} onChange={e=>change({bonus:{...p.bonus,enabled:e.target.checked}})}/> Bonus optionnel</label></legend>
         {p.bonus.enabled&&<div className="agx-pe-grid"><label className="field"><span className="lab">Objectif : nombre d'opérations</span><input type="number" min={0} value={p.bonus.threshold} onChange={e=>change({bonus:{...p.bonus,threshold:number(e.target.value)}})}/></label><label className="field"><span className="lab">Prime unique (DA)</span><input type="number" min={0} value={p.bonus.amount} onChange={e=>change({bonus:{...p.bonus,amount:number(e.target.value)}})}/></label></div>}
       </fieldset>
-      {!suiviPlan&&<fieldset className="agx-bonus"><legend><label><input type="checkbox" checked={p.upsell.enabled} onChange={e=>change({upsell:{...p.upsell,enabled:e.target.checked}})}/> Upsell optionnel</label></legend>
+      {!noUpsell&&<fieldset className="agx-bonus"><legend><label><input type="checkbox" checked={p.upsell.enabled} onChange={e=>change({upsell:{...p.upsell,enabled:e.target.checked}})}/> Upsell optionnel</label></legend>
         {p.upsell.enabled&&<div className="agx-pe-grid"><label className="field"><span className="lab">Plan upsell</span><select value={p.upsell.method} onChange={e=>change({upsell:{...p.upsell,method:e.target.value as ManagementPlanConfig['upsell']['method']}})}>
           <option value="double">Double confirmation (tarif confirmation une 2e fois)</option><option value="fixed">Montant fixe par upsell</option><option value="percent">Pourcentage de la vente ajoutée</option>
         </select></label>
@@ -111,7 +118,9 @@ function StoreManagementPlans({ agency = false, initialKind = 'billing' }: { age
       </div>
       {previewError?<p className="form-err">{previewError}</p>:preview&&<div><p>Forfait/salaire : <b>{money(preview.monthly)}</b></p><p>Commissions : <b>{money(preview.main)}</b></p><p>Bonus : <b>{money(preview.bonus)}</b></p>{!suiviPlan&&<p>Upsell : <b>{money(preview.upsell)}</b></p>}<h2>Total : {money(preview.total)}</h2></div>}
     </section>}
-    <section className="card"><h2>Affecter les plans</h2>
+    {!agency&&kind==='agent'?<section className="card"><h2>Donner les plans</h2>
+      <p className="muted">Chaque personne reçoit un plan par travail (confirmation, suivi, superviseur, dépôt) dans <a href="#/caisse/paie">Caisse › Paie</a>. Une personne sans plan est signalée en rouge : sa paie n’est pas comptée.</p>
+    </section>:<section className="card"><h2>Affecter les plans</h2>
       <p className="muted">{agency&&kind==='billing'?'Le vendeur doit accepter chaque proposition dans Agences → son contrat. Les nouveaux tarifs commencent à son acceptation.':`Sélectionnez un plan par ${kind==='billing'?'produit':'agent'} et cliquez sur Appliquer.`} Une commande confirmée sous un plan conserve ce plan jusqu’à sa livraison. Les opérations antérieures conservent leurs règles. Modifier un modèle ne change pas ses affectations : réaffectez-le pour appliquer une nouvelle version.</p>
       {agency&&kind==='billing'?<>
         {contracts.isLoading?<p>Chargement des contrats…</p>:contracts.error?<p className="form-err">{contracts.error.message}</p>:!contracts.data?.length?<p>Aucun contrat actif. Ajoutez un vendeur depuis Vendeurs.</p>:contracts.data.map(c=><div key={c.id} className="card" style={{marginBlock:12}}><h3>{c.name}</h3>
@@ -130,7 +139,7 @@ function StoreManagementPlans({ agency = false, initialKind = 'billing' }: { age
         const current=q.data?.assignments.find(a=>a.targetKind===assignKind&&a.targetId===target.id)?.planId??null;
         return <Assignment key={target.id} label={target.name} plans={plans} current={current} busy={assign.isPending} action="Appliquer" empty="Aucun plan" onApply={planId=>assign.mutate({targetKind:assignKind,targetId:target.id,planId})}/>;
       })}
-    </section>
+    </section>}
     {agency&&kind==='agent'&&<section className="card"><h2>Paie des agents</h2><p>Calculée sur leurs opérations chez les vendeurs, selon les plans affectés. Le salaire mensuel et la prime sont comptés une fois par agent.</p>
       <label className="field"><span className="lab">Mois</span><input type="month" value={month} onChange={e=>setMonth(e.target.value)}/></label>
       {payroll.isLoading?<p>Calcul en cours…</p>:payroll.error?<p className="form-err">{payroll.error.message}</p>:payroll.data&&<>
@@ -140,7 +149,7 @@ function StoreManagementPlans({ agency = false, initialKind = 'billing' }: { age
         {payroll.data.closedAt?<p>Paie validée le {new Date(payroll.data.closedAt).toLocaleString('fr-FR')}. Montants conservés.</p>:<button className="btn primary" disabled={closePay.isPending||month>=new Date(Date.now()+3600000).toISOString().slice(0,7)} onClick={()=>{if(confirm('Valider définitivement la paie de ce mois ?'))closePay.mutate({month})}}>Valider la paie du mois terminé</button>}
       </>}
     </section>}
-    {!agency&&<p className="muted small">Les plans boutique sont enregistrés séparément des contrats agence. Ils ne remplacent pas encore le calcul existant dans Management → Paie.</p>}
+    {!agency&&<p className="muted small">Les plans boutique sont enregistrés séparément des contrats agence. La paie de chaque agent se calcule avec son plan dans Caisse › Paie.</p>}
   </div>;
 }
 function Assignment({label,plans,current,busy,action,empty,onApply}:{label:string;plans:Plan[];current:number|null;busy:boolean;action:string;empty:string;onApply:(id:number|null)=>void}) {

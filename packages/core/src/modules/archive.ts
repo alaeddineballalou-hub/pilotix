@@ -101,6 +101,14 @@ export const USER_REFS: readonly Ref[] = [
   ['pos_sessions', 'closed_by', 'cash'],
   ['pos_sales', 'seller_id', 'cash'],
   ['pos_sales', 'cancelled_by', 'cash'],
+  ['pay_plan_slots', 'profile_id', 'cash'],
+  ['pay_plan_terms', 'profile_id', 'cash'],
+  ['pay_plan_terms', 'created_by', 'cash'],
+  ['pay_requests', 'profile_id', 'cash'],
+  ['pay_requests', 'decided_by', 'cash'],
+  ['pay_payments', 'profile_id', 'cash'],
+  ['pay_payments', 'paid_by', 'cash'],
+  ['pay_payments', 'cancelled_by', 'cash'],
 ];
 
 /** Columns that point to a product (products.id). */
