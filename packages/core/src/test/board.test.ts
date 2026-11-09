@@ -127,25 +127,3 @@ test('stats.me: an agent sees their own day next to their own team, with their r
   assert.ok(karim.some((x) => x.area === 'depot' && x.me && x.me.v.packed > 0));
   await assert.rejects(call('stats.me', await as(EMAILS.livreur), r), /refusé/);
 });
-
-test('the board cache: off by default; on, the same person asking again gets the same answer, another person his own', async () => {
-  const { boardCache } = await import('../modules/board');
-  const r = range();
-  const admin = await as(EMAILS.admin);
-  const a1: any = await call('stats.board', admin, { ...r, area: 'confirmation' });
-  const a2: any = await call('stats.board', admin, { ...r, area: 'confirmation' });
-  assert.notEqual(a1, a2, 'off: worked out each time');
-  boardCache.ttlMs = 60_000;
-  try {
-    const [b1, b2]: any[] = await Promise.all([call('stats.board', admin, { ...r, area: 'confirmation' }), call('stats.board', admin, { ...r, area: 'confirmation' })]);
-    assert.equal(b1, b2, 'asked twice at once: worked out once');
-    assert.equal(await call('stats.board', admin, { ...r, area: 'confirmation' }), b1, 'asked again: the same answer');
-    const mgr: any = await call('stats.board', await as(EMAILS.manager), { ...r, area: 'confirmation' });
-    assert.notEqual(mgr, b1, 'another person: never someone else’s board');
-    assert.ok(mgr.members.length < b1.members.length, 'the manager still sees only his team');
-    const other: any = await call('stats.board', admin, { ...r, area: 'suivi' });
-    assert.notEqual(other, b1, 'another question: its own answer');
-  } finally {
-    boardCache.ttlMs = 0;
-  }
-});

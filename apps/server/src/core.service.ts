@@ -158,16 +158,12 @@ export interface ShopRef {
 
 const SHOP_TTL = 15_000;
 
-// a team's board asked again within 20 s: the same answer (some thirty reads each time)
-core.boardCache.ttlMs = Number(process.env.BOARD_CACHE_MS ?? 20_000);
-
 /**
  * The database connections. Each one is replaced after DB_CONN_MAX_USES queries or DB_CONN_MAX_SECONDS: a connection
  * remembers every shop schema it opened (~1.5 MB each), and with hundreds of shops a long-lived one grows until
  * PostgreSQL is killed for lack of memory. A connection that breaks while idle (PostgreSQL restarting) is only written
  * in the log: without this listener the error would stop the whole server.
  */
-
 function openPool(): Pool {
   const pool = new Pool({
     connectionString: config.databaseUrl,

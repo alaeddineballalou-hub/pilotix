@@ -192,7 +192,7 @@ export async function confirmationStats(ctx: Ctx, input: z.infer<typeof TeamsInp
   const live = await ctx.db.query(
     `SELECT agent_id AS uid, count(*) FILTER (WHERE conf_status = ANY($1))::int AS todo,
             count(*) FILTER (WHERE conf_status IN ('callback','postponed') AND next_call_at < $2)::int AS late
-     FROM sales WHERE agent_id IS NOT NULL AND (conf_status = ANY($1) OR conf_status IN ('callback','postponed')) GROUP BY agent_id`,
+     FROM sales WHERE agent_id IS NOT NULL GROUP BY agent_id`,
     [CONF_TODO, isoNow(ctx)],
   );
   const unassigned = num((await ctx.db.query(`SELECT count(*)::int AS n FROM sales WHERE agent_id IS NULL AND conf_status = 'new'`))[0]?.n);
