@@ -88,7 +88,7 @@ const te = new TextEncoder();
 const hex = (b: ArrayBuffer) => Array.from(new Uint8Array(b), (x) => x.toString(16).padStart(2, '0')).join('');
 const sha256 = async (s: string) => hex(await globalThis.crypto.subtle.digest('SHA-256', te.encode(s)));
 async function hmac(key: ArrayBuffer | Uint8Array, msg: string): Promise<ArrayBuffer> {
-  const k = await globalThis.crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const k = await globalThis.crypto.subtle.importKey('raw', key instanceof Uint8Array ? new Uint8Array(key) : key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   return globalThis.crypto.subtle.sign('HMAC', k, te.encode(msg));
 }
 /** RFC 3986, as S3 wants it */
@@ -141,7 +141,7 @@ const r2Error = async (res: Response, what: string) => {
 
 /** Puts one photo in the bucket. */
 export async function putObject(c: StoreConf, key: string, bytes: Uint8Array, type: string): Promise<void> {
-  const res = await fetch(await presign(c, 'PUT', key, 600), { method: 'PUT', headers: { 'Content-Type': type }, body: bytes, signal: AbortSignal.timeout(60_000) });
+  const res = await fetch(await presign(c, 'PUT', key, 600), { method: 'PUT', headers: { 'Content-Type': type }, body: new Uint8Array(bytes), signal: AbortSignal.timeout(60_000) });
   if (!res.ok) throw await r2Error(res, 'Envoi de la photo');
 }
 

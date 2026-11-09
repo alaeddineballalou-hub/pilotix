@@ -36,7 +36,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   // claims to the couriers and to our livreurs
   const withCompany = await db.query(
     `SELECT o.id, o.ref, o.tracking, o.customer_name, o.phone, o.company_id, o.livreur_id, co.name AS cname, co.kind FROM orders o JOIN delivery_companies co ON co.id = o.company_id
-     WHERE o.follow_status IN ('alert','out_for_delivery','failed','returning') AND o.shipped_at IS NOT NULL ORDER BY o.shipped_at LIMIT ${expanded ? 24 : 7}`,
+     WHERE o.follow_status IN ('alert','out_for_delivery','failed','returning') AND o.shipped_at IS NOT NULL AND (co.kind <> 'own' OR o.livreur_id IS NOT NULL) ORDER BY o.shipped_at LIMIT ${expanded ? 24 : 7}`,
   );
   const reasons: [string, string][] = [['relivrer', 'Client joint : merci de relivrer le colis'], ['late', 'Colis en retard / bloqué'], ['nocall', 'Le client dit qu’on ne l’a pas appelé']];
   for (const [k, o] of withCompany.entries()) {

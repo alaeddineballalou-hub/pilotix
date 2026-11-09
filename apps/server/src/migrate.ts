@@ -23,7 +23,7 @@ async function main() {
     if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DEMO_SEED !== '1') throw new Error('Demo data refused in production (set ALLOW_DEMO_SEED=1 only on a test server)');
     const n = Number((await db.query('SELECT count(*)::int AS n FROM orders'))[0].n);
     if (n > 0) throw new Error('Database is not empty');
-    await core.seedDemo(db, { orders: Number(process.env.DEMO_ORDERS || 2400) });
+    await core.seedDemo(db, { orders: Number(process.env.DEMO_ORDERS || 2400), expanded: true });
     await core.seedPilotDemo(db);
     console.log('Demo data created.');
   } else {

@@ -43,7 +43,7 @@ export function unbase32(s: string): Uint8Array {
 
 /** The 6-digit code of one step (RFC 4226, HMAC-SHA1). */
 export async function hotp(secret: Uint8Array, counter: number): Promise<string> {
-  const key = await globalThis.crypto.subtle.importKey('raw', secret, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+  const key = await globalThis.crypto.subtle.importKey('raw', new Uint8Array(secret), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
   const msg = new ArrayBuffer(8);
   const v = new DataView(msg);
   v.setUint32(0, Math.floor(counter / 2 ** 32));

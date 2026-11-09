@@ -239,7 +239,7 @@ async function lean(b: Blob): Promise<Blob> {
   const vp8x = chunks.find((c) => c.id === 'VP8X');
   if (!img || chunks.some((c) => c.id === 'ANIM') || (alph && !vp8x)) return b;
   const piece = (c: { at: number; n: number }) => u.subarray(c.at, c.at + 8 + c.n + (c.n & 1));
-  const parts: Uint8Array[] = [];
+  const parts: ReturnType<typeof piece>[] = [];
   if (alph && vp8x) {
     const x = piece(vp8x).slice();
     x[8] &= ~(0x20 | 0x08 | 0x04); // no ICC profile, EXIF or XMP; alpha kept

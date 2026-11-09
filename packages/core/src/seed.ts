@@ -86,6 +86,8 @@ const PRODUCTS = [
   { name: 'Thermomètre frontal', sku: 'PX-THE', price: 2400, cost: 900, w: 0.2, variants: [], packs: [], maxD: 200 },
   { name: 'Lot de 6 bodies coton', sku: 'PX-BOD', price: 3200, cost: 1300, w: 0.5, variants: ['Naissance', '3 mois', '6 mois', '12 mois'], packs: [], maxD: 300 },
   { name: 'Écharpe de portage', sku: 'PX-ECH', price: 3900, cost: 1600, w: 0.6, variants: ['Gris chiné', 'Vert sauge'], packs: [], maxD: 300 },
+];
+const EXTRA_PRODUCTS = [
   { name: 'Veilleuse rechargeable silicone', sku: 'PX-VEI', price: 2700, cost: 1050, w: 0.3, variants: ['Ourson', 'Lapin'], packs: [], maxD: 200 },
   { name: 'Couverture bébé coton', sku: 'PX-COU', price: 3400, cost: 1400, w: 0.7, variants: ['Écru', 'Rose', 'Bleu'], packs: [], maxD: 300 },
   { name: 'Stérilisateur vapeur 6 biberons', sku: 'PX-STE', price: 7900, cost: 4200, w: 2.2, variants: [], packs: [], maxD: 500 },
@@ -118,7 +120,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
 
   // team
   const users: Record<string, number> = {};
-  const extraKeys = ['manager3', 'conf4', 'conf5', 'suivi2', 'suivi3', 'depot2', 'livreur3'];
+  const extraKeys = ['manager3', 'conf4', 'conf5', 'suivi2', 'suivi3', 'depot2', 'livreur3', 'admin2', 'vendeur2', 'conf6', 'depot3', 'marketer2', 'polyvalent'];
   for (const a of (expanded ? DEMO_ACCOUNTS : DEMO_ACCOUNTS.filter(a => !extraKeys.includes(a.key)))) {
     const r = await db.query(
       `INSERT INTO profiles (name, email, phone, password_hash, roles, last_seen_at, presence) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
@@ -173,7 +175,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
 
   // catalog + stock
   const catalog: { id: number; name: string; price: number; cost: number; variants: { id: number; title: string }[] }[] = [];
-  for (const p of PRODUCTS) {
+  for (const p of (expanded ? [...PRODUCTS, ...EXTRA_PRODUCTS] : PRODUCTS)) {
     const pid = num(
       (await db.query('INSERT INTO products (name, sku, price, cost, weight_kg, packs, max_discount) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id', [p.name, p.sku, p.price, p.cost, p.w, JSON.stringify(p.packs), p.maxD]))[0].id,
     );
@@ -405,7 +407,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
   await seed_partners(db, users, now);
   // Pilot Automations: what it did these last days (it reads the demo's orders, ads and customers)
   await seed_automations(db, users, now);
-  await seedSwaps(db, now);
+  if (expanded) await seedSwaps(db, now);
   // agent pay last: it reads the delivered and prepared orders the seeds above wrote (and their first quantities)
   await seed_pay(db, users, now);
 

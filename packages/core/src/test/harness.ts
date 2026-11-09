@@ -3,14 +3,14 @@ import { Ctx, Db, login, migrate, seedDemo } from '../index';
 import { pgliteDb } from '../pglite';
 import { DEMO_PASSWORD } from '@pilotix/shared';
 
-export async function setup(orders = 400) {
+export async function setup(orders = 400, expanded = false) {
   const { PGlite } = await import('@electric-sql/pglite');
   const pg = new PGlite();
   const db: Db = pgliteDb(pg as any);
   await migrate(db, async (sql) => {
     await pg.exec(sql);
   });
-  await seedDemo(db, { orders });
+  await seedDemo(db, { orders, expanded });
   const events: unknown[] = [];
   /** Context for a demo account by email (e.g. 'samira@demo.pilotix.dz'). */
   const as = async (email: string, server?: Ctx['server']): Promise<Ctx> => ({ db, session: await login(db, email, DEMO_PASSWORD), now: () => Date.now(), emit: (e) => events.push(e), server });

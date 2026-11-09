@@ -7,7 +7,7 @@ import { EMAILS, setup } from './harness';
 
 let db: Db;
 let as: (email: string) => Promise<Ctx>;
-before(async () => { ({ db, as } = await setup(2400)); });
+before(async () => { ({ db, as } = await setup(2400, true)); });
 
 async function parcel() {
   const p = (await db.query(`SELECT o.id FROM orders o JOIN delivery_companies c ON c.id = o.company_id

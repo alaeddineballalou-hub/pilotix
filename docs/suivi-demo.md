@@ -2,7 +2,7 @@
 
 Réclamation is in Suivi → Alertes. Swap is in Alertes → Annulés, after cancelling an alert. Desktop tables and phone parcel details use the same placement; cancelling through Traiter first moves the parcel into Annulés before a swap is offered.
 
-The fresh demo has 2,400 base orders over 60 days, 16 catalog products plus existing feature fixtures, 19 store accounts covering all existing roles (including a combined confirmation/suivi agent), courier claims in several stages, returns, SAV exchanges, and up to four completed same-product swaps. Existing partner demos are preserved. All store accounts use the documented demo password. Small test seeds can still request fewer orders.
+The fresh demo has 2,400 base orders over 60 days, 16 catalog products plus existing feature fixtures, 25 store accounts covering all existing roles (including a combined confirmation/suivi agent), courier claims in several stages, returns, SAV exchanges, and up to four completed same-product swaps. Existing partner demos are preserved. All store accounts use the documented demo password. Small test seeds can still request fewer orders.
 
 On Suivi lists, demo suivi agents and administrators can expand **API transporteur simulée · Démo**, select a tracked parcel and simulate an alert, delivery, return, loss or API 503 response. This calls `delivery.demoScenario` through the existing RPC and tracking reconciliation rules. A 503 makes no changes. Treated alerts and returns retain the normal manual holds; the depot still receives returned parcels. Claims, redelivery requests, swaps and shipping already use the existing simulated courier behavior.
 

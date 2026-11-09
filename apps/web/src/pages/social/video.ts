@@ -112,7 +112,7 @@ export async function videoBody(file: File, mime: string): Promise<Blob> {
   const pieces = await faststartPieces(file.size, read(file)).catch(() => null);
   if (!pieces) return file;
   return new Blob(
-    pieces.map((p) => (p instanceof Uint8Array ? p : file.slice(p.from, p.to))),
+    pieces.map((p) => (p instanceof Uint8Array ? new Uint8Array(p) : file.slice(p.from, p.to))),
     { type: mime },
   );
 }
