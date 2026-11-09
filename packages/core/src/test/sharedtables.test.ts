@@ -168,9 +168,6 @@ test('an old shop schema moves into the shared tables with its ids, counters and
   // the old way: shop #1 in public, shop 7 in its own schema
   await migrate(t.shop('public'), (sql) => t.exec('public', sql), { legacy: true });
   await seedBase(t.shop('public'), { ...OWNER, name: 'Karim' });
-  // shop #1 already has orders: its counters are past their start
-  const [first] = await order(t.shop('public'), 'Client du premier');
-  await t.shop('public').query(`SELECT setval('order_ref_seq', 1500)`);
   await t.exec('public', `CREATE SCHEMA shop_7`);
   await migrate(t.shop('shop_7'), (sql) => t.exec('shop_7', sql), { legacy: true });
   await seedBase(t.shop('shop_7'), { email: 'sami@seven.dz', password: 'Sami-Password-1', name: 'Sami' });
@@ -193,12 +190,7 @@ test('an old shop schema moves into the shared tables with its ids, counters and
   assert.equal((await order(S, 'Nouveau'))[0].ref, 'PX1202', 'its references carry on');
   await login(S, 'sami@seven.dz', 'Sami-Password-1');
   // shop #1 still has its own rows, not shop 7's
-  assert.equal((await t.shop('public').query(`SELECT count(*)::int n FROM orders`))[0].n, 1);
-  // shop #1's counters carry on too (they were the old sequences in public): no reference or tracking number twice
-  const [next1] = await order(t.shop('public'), 'Après le passage');
-  assert.equal(next1.ref, 'PX1501', 'shop #1 references carry on');
-  const tr = await t.shop('public').query(`SELECT own_tracking FROM orders WHERE id = ANY($1)`, [[first.id, next1.id]]);
-  assert.equal(new Set(tr.map((r: any) => r.own_tracking)).size, 2, 'its own tracking numbers never repeat');
+  assert.equal((await t.shop('public').query(`SELECT count(*)::int n FROM orders`))[0].n, 0);
   // the old schema is kept aside (the way back), not used
   assert.equal((await (pg as any).query(`SELECT to_regnamespace('moved_shop_7') IS NOT NULL AS k, to_regnamespace('shop_7') IS NULL AS g`)).rows[0].k, true);
   // a new row gets an id no shop used

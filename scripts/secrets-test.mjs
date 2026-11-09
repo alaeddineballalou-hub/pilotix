@@ -28,8 +28,7 @@ const pg = new Client({ connectionString: process.env.DATABASE_URL });
 await pg.connect();
 const companyId = Number((await pg.query('SELECT id FROM public.delivery_companies ORDER BY id LIMIT 1')).rows[0].id);
 await pg.query(`UPDATE public.delivery_companies SET credentials = COALESCE(credentials, '{}'::jsonb) || jsonb_build_object('webhook_key', $2::text) WHERE id = $1`, [companyId, HOOK]);
-// shared tables: a setting is one shop's (the owner's shop #1 here), unique per shop
-await pg.query(`INSERT INTO public.settings (shop_id, key, value) VALUES ((SELECT coalesce((SELECT id FROM platform.shops WHERE primary_shop), 1)), 'secret_test_token', to_jsonb($1::text)) ON CONFLICT (shop_id, key) DO UPDATE SET value = EXCLUDED.value`, [SECRET]);
+await pg.query(`INSERT INTO public.settings (key, value) VALUES ('secret_test_token', to_jsonb($1::text)) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [SECRET]);
 
 const server = spawn(process.execPath, [join(ROOT, 'apps/server/dist/main.js')], {
   env: { ...process.env, PORT: String(PORT), DATA_KEY: KEY },
