@@ -718,12 +718,13 @@ function useTotal(input: ListFilter, enabled: boolean) {
   return useRpc('orders.list', { ...input, pageSize: 1 }, { enabled }).data?.total;
 }
 
-export function PhoneAnnule({ onTable }: { onTable?: () => void }) {
+/** `start`: the tab open first (the old « Retournées » page opens on the returns); otherwise the last one used. */
+export function PhoneAnnule({ onTable, start }: { onTable?: () => void; start?: 'conf' | 'back' }) {
   const { t } = useTranslation();
   const { has } = useSession();
   const wide = !useIsPhone();
   const per = usePeriod();
-  const [view, setView] = useState<'conf' | 'back'>(() => (store.get('orders-ph-view') === 'back' ? 'back' : 'conf'));
+  const [view, setView] = useState<'conf' | 'back'>(() => start ?? (store.get('orders-ph-view') === 'back' ? 'back' : 'conf'));
   const [f, setF] = useState<PF>(NO_F);
   const { ref, show } = useShow(f, setF);
   const can = has('suivi', 'depot', 'agent_manager');

@@ -683,6 +683,9 @@ export function Livrees(_: PageProps) {
 
 export function Retournees(_: PageProps) {
   const { t } = useTranslation();
+  // a phone: the short cards of Commandes › Annulé, open on the returns (the big table's rows were one very long card each)
+  const phone = useIsPhone();
+  if (phone) return <PhoneAnnule start="back" />;
   return (
     <>
       <DoneKpis />
