@@ -37,7 +37,9 @@ export function prevRangeOf(r: { from: string; to: string }, now = Date.now()): 
   const a = Date.parse(r.from);
   const b = Date.parse(r.to);
   const len = b - a;
-  const upTo = Math.min(now, b) - a;
+  // « now » to the minute: this range is a query's key, and a key that changed at every millisecond asked the server
+  // again at every render (each answer → a render → a new key → a new question, without end)
+  const upTo = Math.min(Math.floor(now / 60_000) * 60_000, b) - a;
   return { from: new Date(a - len).toISOString(), to: new Date(a - len + (upTo > 0 ? upTo : len)).toISOString() };
 }
 

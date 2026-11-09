@@ -19,7 +19,7 @@ import { saveTurnstileConfig, syncTurnstile, turnstileStatus } from './turnstile
 import { robotGate } from './robot';
 import { offsiteStatus, saveOffsite, sendOffsite, testOffsite } from './offsite';
 import { otpStatus, saveOtp, testOtp } from './otp';
-import { checkLogin, clearLogin, failedLogin } from './limits';
+import { checkLogin, clearLogin, failedLogin, settleLogin } from './limits';
 import { couriers, runCheck, runCheckAll, testable, watchNow, watchRunning } from './courierWatch';
 import { mailConfigured, sendMail } from './mail';
 import { ownerMail, ReceiptData, receiptMail, staffCodeMail } from './mails';
@@ -110,22 +110,36 @@ export class PlatformController {
   @Post('auth/login')
   async login(@Body() body: unknown, @Req() req: { ip?: string; headers?: Record<string, unknown> }) {
     const ipKey = `p-ip:${core.ipNet(req.ip || '') || 'unknown'}`;
-    checkLogin(ipKey, 10);
+    // counted the moment they arrive (many tries at once never pass together)
+    checkLogin(ipKey, 10, true);
     const b = LoginBody.safeParse(body);
-    if (!b.success) throw new core.AppError('bad_request', 'Email ou mot de passe manquant');
+    if (!b.success) {
+      settleLogin(ipKey);
+      throw new core.AppError('bad_request', 'Email ou mot de passe manquant');
+    }
     const mailKey = `p-email:${b.data.email.trim().toLowerCase()}|${core.ipNet(req.ip || '') || 'unknown'}`;
-    // after 3 failures: Cloudflare's robot check too (robot.ts)
-    await robotGate(this.core, req, [ipKey, mailKey], b.data.turnstile);
-    checkLogin(mailKey, 5, true);
+    // this staff account's failures from every address
+    const acctKey = `p-acct:${b.data.email.trim().toLowerCase()}`;
+    try {
+      // after 3 failures: Cloudflare's robot check too (robot.ts); 5 for the account from any address
+      await robotGate(this.core, req, [ipKey, mailKey], b.data.turnstile, acctKey);
+      checkLogin(mailKey, 5, true);
+    } catch (e) {
+      settleLogin(ipKey);
+      throw e;
+    }
     let r: Awaited<ReturnType<typeof core.staffLogin>>;
     try {
       r = await core.staffLogin(this.core.t, b.data.email, b.data.password);
     } catch (e) {
       failedLogin(ipKey);
       failedLogin(mailKey);
+      failedLogin(acctKey);
       throw e;
     }
+    settleLogin(ipKey);
     clearLogin(mailKey);
+    clearLogin(acctKey);
     // the authenticator app (when this person turned it on): its code instead of the e-mailed one (a device remembered
     // 30 days is let in, as with the e-mailed code)
     if ((await core.staffTotpOn(this.core.t, r.staff.id)) && !(await this.deviceOk(b.data.device, r.staff.id, r.tv))) {

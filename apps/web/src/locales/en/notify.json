@@ -456,5 +456,18 @@
     "sms": "SMS",
     "manual_sms": "SMS sent by hand",
     "manual_whatsapp": "WhatsApp sent by hand"
+  },
+  "reason": {
+    "cancelledBy": "Cancelled by a person",
+    "chatTaken": "Order taken in the WhatsApp chat: the customer already has the answer",
+    "interrupted": "Sending interrupted: check with the customer before sending again",
+    "statusChanged": "The order's status changed before sending",
+    "stopped": "Delivery messages turned off",
+    "noWhatsapp": "No WhatsApp on this number",
+    "replaced": "Replaced by a newer message",
+    "smsOffline": "SMS: the sending phone is offline",
+    "waNotValidated": "WhatsApp: text not yet approved by Meta",
+    "waNotReceived": "WhatsApp not received",
+    "waNotReceived1h": "WhatsApp not received after 1 h"
   }
 }

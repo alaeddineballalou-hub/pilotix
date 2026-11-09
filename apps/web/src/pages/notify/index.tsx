@@ -26,6 +26,22 @@ import '../messages/messages.css';
 import '../cm/cm.css';
 import './notify.css';
 
+/** The server's fixed reasons (kept in French with the message): shown in the reader's language; any other text as it is. */
+const REASON_KEY: Record<string, string> = {
+  "Annulé par une personne": 'cancelledBy',
+  "Commande prise dans la conversation WhatsApp : le client a déjà la réponse": 'chatTaken',
+  "Envoi interrompu : vérifiez avec le client avant de renvoyer": 'interrupted',
+  "Le statut de la commande a changé avant l’envoi": 'statusChanged',
+  "Messages de livraison arrêtés": 'stopped',
+  "Pas de WhatsApp sur ce numéro": 'noWhatsapp',
+  "Remplacé par un message plus récent": 'replaced',
+  "SMS : le téléphone d’envoi est hors ligne": 'smsOffline',
+  "WhatsApp : texte pas encore validé par Meta": 'waNotValidated',
+  "WhatsApp pas reçu": 'waNotReceived',
+  "WhatsApp pas reçu après 1 h": 'waNotReceived1h',
+};
+
+
 type Row = Out<'notify.feed'>['rows'][number];
 type Kind = Row['kind'];
 type Case = Out<'notify.cases'>['cases'][number];
@@ -252,7 +268,7 @@ function MsgCard({ m }: { m: Row }) {
       {m.error && (
         <p className={m.status === 'failed' ? 'dl-err nt-err' : 'cm-reason'}>
           {m.status === 'failed' ? '⚠ ' : ''}
-          {m.error}
+          {REASON_KEY[m.error] ? t(`notify.reason.${REASON_KEY[m.error]}`) : m.error}
         </p>
       )}
       {m.reply && (

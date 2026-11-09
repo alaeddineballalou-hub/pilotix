@@ -58,7 +58,8 @@ export class LiveGateway implements OnGatewayConnection, OnModuleInit, OnModuleD
       if (!c.sub || c.typ) throw new Error('refused');
       if (await this.core.isRevoked(c.jti)) throw new Error('refused');
       const ref = c.shop ? await this.core.shop({ id: Number(c.shop) }) : await this.core.primary();
-      if (!ref || ref.shop.status === 'archived') throw new Error('refused');
+      // a closed or deleted store: no live updates (the same as the API)
+      if (!ref || ref.shop.status === 'archived' || ref.shop.status === 'deleted') throw new Error('refused');
       // the same checks as the API: an active account, a token made after the last password change
       const r = (await ref.db.query('SELECT active, token_version FROM profiles WHERE id = $1', [Number(c.sub)]))[0];
       if (!r || !r.active || Number(r.token_version ?? 0) !== Number(c.tv ?? 0)) throw new Error('refused');

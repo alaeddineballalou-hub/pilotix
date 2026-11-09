@@ -413,7 +413,9 @@
     "value": "Valeur",
     "howHelp": "Supprimez les autres enregistrements A ou AAAA de ce nom. Le changement prend de quelques minutes à quelques heures.",
     "found": "Adresse trouvée aujourd’hui : {{ips}}",
-    "check": "Vérifier"
+    "check": "Vérifier",
+    "proofHelp": "Le TXT prouve que ce domaine est à vous : tout domaine pointe vers le même serveur Pilotix, seul son propriétaire peut ajouter ce TXT.",
+    "proofMissing": "La ligne TXT n’est pas encore trouvée : ajoutez-la chez votre registraire, puis « Vérifier » (quelques minutes à quelques heures)."
   },
   "pr": {
     "kQuality": "Qualité des commandes",

@@ -21,11 +21,14 @@ export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Ses
   const shop = session.shop;
   useEffect(() => {
     if (!open) return;
-    const down = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    // a tap or click outside (pointerdown: phones too), Escape, or another page: the menu closes
+    const down = (e: PointerEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
     const key = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
-    document.addEventListener('mousedown', down);
+    const away = () => setOpen(false);
+    document.addEventListener('pointerdown', down);
     document.addEventListener('keydown', key);
-    return () => (document.removeEventListener('mousedown', down), document.removeEventListener('keydown', key));
+    window.addEventListener('hashchange', away);
+    return () => (document.removeEventListener('pointerdown', down), document.removeEventListener('keydown', key), window.removeEventListener('hashchange', away));
   }, [open]);
   const p = session.profile;
   const role = session.roles.map((r) => t(`roles.${r}`)).join(' · ');

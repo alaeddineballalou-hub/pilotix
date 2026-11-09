@@ -12,6 +12,7 @@ export function OwnDomain() {
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [found, setFound] = useState<string[] | null>(null);
+  const [proofSeen, setProofSeen] = useState<boolean | null>(null);
   useEffect(() => {
     domainGet()
       .then((r) => (setD(r), setValue(r.domain ?? '')))
@@ -40,6 +41,7 @@ export function OwnDomain() {
     run(async () => {
       const r = await domainCheck();
       setFound(r.found);
+      setProofSeen(r.proof ?? null);
       setD((x) => ({ ...x!, status: r.ok ? 'ok' : 'pending' }));
       toast(r.ok ? t('landing.domain.ready') : t('landing.domain.notYet'), r.ok ? 'ok' : 'bad');
     });
@@ -94,10 +96,22 @@ export function OwnDomain() {
                       <td className="ltr">{ip}</td>
                     </tr>
                   ))}
+                  {/* the proof that this domain is the shop's (every shop's domain points to the same server) */}
+                  {d.proof && (
+                    <tr>
+                      <td className="ltr">TXT</td>
+                      <td className="ltr">{d.proof.name.slice(0, d.proof.name.length - d.domain!.length - 1) || '@'}</td>
+                      <td className="ltr" style={{ wordBreak: 'break-all' }}>
+                        {d.proof.value}
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
               <small>{t('landing.domain.howHelp')}</small>
+              {d.proof && <small>{t('landing.domain.proofHelp')}</small>}
               {found && <small className="ltr">{t('landing.domain.found', { ips: found.join(', ') || '—' })}</small>}
+              {proofSeen === false && <small>{t('landing.domain.proofMissing')}</small>}
               <button type="button" className="btn small" disabled={busy} onClick={check}>
                 <Icon name="refresh" /> {t('landing.domain.check')}
               </button>

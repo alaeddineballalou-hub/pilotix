@@ -413,7 +413,9 @@
     "value": "Value",
     "howHelp": "Delete the other A or AAAA records of this name. The change takes from a few minutes to a few hours.",
     "found": "Address found now: {{ips}}",
-    "check": "Check"
+    "check": "Check",
+    "proofHelp": "The TXT line proves this domain is yours: every domain points to the same Pilotix server, only its owner can add this TXT.",
+    "proofMissing": "The TXT line is not found yet: add it at your registrar, then “Check” (a few minutes to a few hours)."
   },
   "pr": {
     "kQuality": "Order quality",

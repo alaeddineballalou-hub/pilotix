@@ -456,5 +456,18 @@
     "sms": "SMS",
     "manual_sms": "SMS envoyé à la main",
     "manual_whatsapp": "WhatsApp envoyé à la main"
+  },
+  "reason": {
+    "cancelledBy": "Annulé par une personne",
+    "chatTaken": "Commande prise dans la conversation WhatsApp : le client a déjà la réponse",
+    "interrupted": "Envoi interrompu : vérifiez avec le client avant de renvoyer",
+    "statusChanged": "Le statut de la commande a changé avant l’envoi",
+    "stopped": "Messages de livraison arrêtés",
+    "noWhatsapp": "Pas de WhatsApp sur ce numéro",
+    "replaced": "Remplacé par un message plus récent",
+    "smsOffline": "SMS : le téléphone d’envoi est hors ligne",
+    "waNotValidated": "WhatsApp : texte pas encore validé par Meta",
+    "waNotReceived": "WhatsApp pas reçu",
+    "waNotReceived1h": "WhatsApp pas reçu après 1 h"
   }
 }

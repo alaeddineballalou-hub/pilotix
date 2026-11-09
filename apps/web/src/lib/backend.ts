@@ -621,6 +621,8 @@ export interface DomainState {
   domain: string | null;
   status: 'none' | 'pending' | 'ok';
   ips?: string[];
+  /** the TXT record proving the domain is this shop's */
+  proof?: { name: string; value: string } | null;
   host?: string;
 }
 const onServer = () => {
@@ -629,7 +631,7 @@ const onServer = () => {
 };
 export const domainGet = () => onServer().request<DomainState>('/shop/domain/get');
 export const domainSet = (domain: string | null) => onServer().request<DomainState>('/shop/domain', { domain });
-export const domainCheck = () => onServer().request<{ ok: boolean; found: string[]; expected: string[] }>('/shop/domain/check');
+export const domainCheck = () => onServer().request<{ ok: boolean; found: string[]; expected: string[]; proof?: boolean }>('/shop/domain/check');
 
 /**
  * Call an action on the current backend (server or demo). `seller` (a confirmation agency's space): the seller whose

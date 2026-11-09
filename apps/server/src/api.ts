@@ -33,7 +33,7 @@ import { brotliCompressSync, constants as zlibConst, gzipSync } from 'node:zlib'
 import { z } from 'zod';
 import { config } from './config';
 import { CoreService, ShopRef } from './core.service';
-import { checkLogin, clearLogin, failedLogin } from './limits';
+import { checkLogin, clearLogin, failedLogin, settleLogin } from './limits';
 import { mailConfigured, sendMail } from './mail';
 import { PlatformController, PlatformGuard } from './platform';
 import { PUBLIC, Public } from './public';
@@ -45,6 +45,12 @@ import { syncTurnstile } from './turnstile';
 import { robotGate } from './robot';
 import { sendVideo, writePart } from './media';
 import { otpOn, sendOtp } from './otp';
+
+/**
+ * Shop #1's demo e-mails (…@demo.pilotix.dz) logging in with the public demo password: only on a test server (not
+ * production, or ALLOW_DEMO_SEED=1 like the demo data itself). On a live server they would open the real shop #1.
+ */
+const demoShortcutOn = () => process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEMO_SEED === '1';
 
 // ---------------------------------------------------------------- errors → HTTP
 const STATUS: Record<string, number> = { bad_request: 400, unauthorized: 401, payment_required: 402, forbidden: 403, not_found: 404, conflict: 409 };
@@ -497,32 +503,54 @@ class ApiController {
       new Logger('Pilotix').warn('Requests come through a proxy (X-Forwarded-For) but TRUST_PROXY is not set: the login limit sees every user as the proxy. Set TRUST_PROXY=1.');
     }
     const ipKey = `ip:${ipOf(req)}`;
-    checkLogin(ipKey, 10);
+    // counted the moment they arrive (many tries sent at once with different e-mails never pass together)
+    checkLogin(ipKey, 10, true);
     const b = LoginBody.safeParse(body);
-    if (!b.success) throw new core.AppError('bad_request', 'Email ou mot de passe manquant');
+    if (!b.success) {
+      settleLogin(ipKey);
+      throw new core.AppError('bad_request', 'Email ou mot de passe manquant');
+    }
     const email = b.data.email.trim().toLowerCase();
     const mailKey = `email:${email}|${ipOf(req)}`;
-    // after 3 failures: Cloudflare's robot check too (robot.ts)
-    await robotGate(this.core, req, [ipKey, mailKey], b.data.turnstile);
+    // this account's failures from every address (someone changing address every two tries)
+    const acctKey = `acct:${email}`;
+    // after 3 failures: Cloudflare's robot check too (robot.ts); 5 for the account from any address
+    try {
+      await robotGate(this.core, req, [ipKey, mailKey], b.data.turnstile, acctKey);
+    } catch (e) {
+      settleLogin(ipKey);
+      throw e;
+    }
     // this account's tries, counted the moment they arrive (many at once never pass together)
-    checkLogin(mailKey, 5, true);
+    try {
+      checkLogin(mailKey, 5, true);
+    } catch (e) {
+      settleLogin(ipKey);
+      throw e;
+    }
     let acc: core.Account | null;
     try {
       acc = await core.checkAccountPassword(this.core.t, email, b.data.password);
-      // the demo accounts of shop #1 on old installs (no account of their own): the shop's own check, as before
-      if (!acc && core.NO_ACCOUNT.test(email)) {
+      // the demo accounts of shop #1 on old installs and test servers (no account of their own): the shop's own check,
+      // as before. Never on a live server: the demo password is public, and the demo button opens its own demo shop.
+      if (!acc && core.NO_ACCOUNT.test(email) && demoShortcutOn()) {
         const ref = await this.core.primary();
         const session = await core.login(ref.db, email, b.data.password);
+        settleLogin(ipKey);
         clearLogin(mailKey);
+        clearLogin(acctKey);
         return { token: await this.signShop(ref, session.profile.id), session: await this.core.withShop(session, ref) };
       }
       if (!acc) throw new core.AppError('unauthorized', 'Email ou mot de passe incorrect');
     } catch (e) {
       failedLogin(ipKey);
       failedLogin(mailKey);
+      failedLogin(acctKey);
       throw e;
     }
+    settleLogin(ipKey);
     clearLogin(mailKey);
+    clearLogin(acctKey);
     // the number first (when missing); then one store (or the one asked for): straight in; several or none: the picker
     return this.proceed(acc, b.data.shop);
   }
@@ -588,13 +616,23 @@ class ApiController {
   }
   /** The DNS as the domain check sees it: the platform's name answers the server's addresses. */
   private resolve = (h: string) => (h === this.platformHost() ? this.serverIps() : dns.resolve4(h));
+  /** A name's TXT texts (the proof that a domain is the shop's: core.domainProof). */
+  private resolveTxt = async (h: string) => (await dns.resolveTxt(h)).map((parts) => parts.join(''));
 
   /** The shop's own domain: what it is, whether its DNS is ready, what to write at the domain's registrar. */
   @Post('shop/domain/get')
   async domainGet(@Req() req: ShopRequest) {
     const s = req.shop.shop;
     const ips = await this.serverIps();
-    return { domain: s.domain, status: s.domainStatus, ips, host: this.platformHost(), primary: s.primary };
+    return {
+      domain: s.domain,
+      status: s.domainStatus,
+      ips,
+      host: this.platformHost(),
+      primary: s.primary,
+      // the TXT record that proves the domain is this shop's
+      proof: s.domain ? { name: core.proofName(s.domain), value: core.domainProof(s.id, s.domain) } : null,
+    };
   }
 
   /** Sets or removes the shop's own domain (its administrator), then checks its DNS at once. */
@@ -611,12 +649,13 @@ class ApiController {
       if (e instanceof core.DomainError) throw new core.AppError('bad_request', e.message);
       throw e;
     }
-    if (want) await core.checkShopDomain(this.core.t, req.shop.shop.id, this.platformHost(), this.resolve);
+    if (want) await core.checkShopDomain(this.core.t, req.shop.shop.id, this.platformHost(), this.resolve, this.resolveTxt);
     this.core.invalidate();
     // its landing pages get Cloudflare's robot check on the new domain (or the old one is taken out), in the background
     void syncTurnstile(this.core).catch(() => null);
     const ref = (await this.core.shop({ id: req.shop.shop.id }))!;
-    return { domain: ref.shop.domain, status: ref.shop.domainStatus };
+    const d = ref.shop.domain;
+    return { domain: d, status: ref.shop.domainStatus, proof: d ? { name: core.proofName(d), value: core.domainProof(ref.shop.id, d) } : null };
   }
 
   /** « Vérifier »: does the domain point to this server now? (DNS changes take minutes to hours) */
@@ -625,7 +664,7 @@ class ApiController {
     const key = `domain:${req.shop.shop.id}`;
     checkLogin(key, 30);
     failedLogin(key);
-    const r = await core.checkShopDomain(this.core.t, req.shop.shop.id, this.platformHost(), this.resolve);
+    const r = await core.checkShopDomain(this.core.t, req.shop.shop.id, this.platformHost(), this.resolve, this.resolveTxt);
     this.core.invalidate();
     if (r.ok) void syncTurnstile(this.core).catch(() => null);
     return r;

@@ -2,7 +2,7 @@
 // once its DNS points to this server.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { checkShopDomain, cleanDomain, loadShop, migrate, migrateAll, pgliteTenancy, provisionShop, seedBase, setShopDomain, shopIdByDomain } from '../index';
+import { checkShopDomain, cleanDomain, domainProof, loadShop, migrate, migrateAll, pgliteTenancy, provisionShop, seedBase, setShopDomain, shopIdByDomain } from '../index';
 
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
 
@@ -26,12 +26,26 @@ test('own domain: cleaned, never the platform or another shop, ready once its DN
   const s = await setShopDomain(t, two.id, 'www.bijoux-setif.com', 'pilotix.online');
   assert.equal(s.domain, 'www.bijoux-setif.com');
   assert.equal(s.domainStatus, 'pending');
-  await assert.rejects(setShopDomain(t, three.id, 'WWW.bijoux-setif.com', 'pilotix.online'), /autre boutique/);
   assert.equal(await shopIdByDomain(t, 'www.bijoux-setif.com'), null);
   // the DNS: wrong address, then the server's
   const dns = (m: Record<string, string[]>) => async (h: string) => m[h] ?? [];
+  const here = { 'pilotix.online': ['1.2.3.4'], 'www.bijoux-setif.com': ['1.2.3.4'] };
   assert.equal((await checkShopDomain(t, two.id, 'pilotix.online', dns({ 'pilotix.online': ['1.2.3.4'], 'www.bijoux-setif.com': ['9.9.9.9'] }))).ok, false);
-  assert.equal((await checkShopDomain(t, two.id, 'pilotix.online', dns({ 'pilotix.online': ['1.2.3.4'], 'www.bijoux-setif.com': ['1.2.3.4'] }))).ok, true);
+  // pointing here is not enough: every shop's domain points here. Without the shop's TXT proof it stays pending …
+  const noProof = await checkShopDomain(t, two.id, 'pilotix.online', dns(here), dns({}));
+  assert.deepEqual([noProof.ok, noProof.proof], [false, false]);
+  // … and another shop that only typed it first does not keep it from its real owner: it loses it
+  await setShopDomain(t, three.id, 'WWW.bijoux-setif.com', 'pilotix.online');
+  assert.equal((await loadShop(t, { id: two.id }))!.domain, null);
+  // the other shop's proof is refused; the owner's own proof makes it ready
+  assert.equal((await checkShopDomain(t, three.id, 'pilotix.online', dns(here), dns({ '_pilotix.www.bijoux-setif.com': [domainProof(two.id, 'www.bijoux-setif.com')] }))).ok, false);
+  await setShopDomain(t, two.id, 'www.bijoux-setif.com', 'pilotix.online');
+  assert.equal((await loadShop(t, { id: three.id }))!.domain, null);
+  assert.equal((await checkShopDomain(t, two.id, 'pilotix.online', dns(here), dns({ '_pilotix.www.bijoux-setif.com': ['other', domainProof(two.id, 'www.bijoux-setif.com')] }))).ok, true);
+  // once ready, nobody else takes it
+  await assert.rejects(setShopDomain(t, three.id, 'WWW.bijoux-setif.com', 'pilotix.online'), /autre boutique/);
+  // a domain ready before the proof existed stays ready while it points here (without its TXT)
+  assert.equal((await checkShopDomain(t, two.id, 'pilotix.online', dns(here), dns({}))).ok, true);
   assert.equal(await shopIdByDomain(t, 'WWW.Bijoux-Setif.com:443'), two.id);
   // a suspended shop's domain answers nothing; removing the domain frees it
   await t.platform.query(`UPDATE platform.shops SET status = 'suspended' WHERE id = $1`, [two.id]);

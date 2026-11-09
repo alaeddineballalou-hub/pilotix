@@ -54,6 +54,15 @@ export function clearLogin(raw: string) {
   attempts.delete(fp(raw));
 }
 
+/**
+ * A try counted while being checked (`held`) that turned out good, on a counter a good password must not empty (an
+ * address shared by a whole office): it is simply no longer « being checked ».
+ */
+export function settleLogin(raw: string) {
+  const a = attempts.get(fp(raw));
+  if (a) a.pending.shift();
+}
+
 /** The failures counted now for this key (0 once its 15 minutes are over). */
 export function failuresOf(raw: string): number {
   const a = attempts.get(fp(raw));
