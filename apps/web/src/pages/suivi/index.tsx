@@ -61,10 +61,10 @@ function SuiviOne({ sub }: PageProps) {
   const agency = useInAgency();
   const { has } = useSession();
   // the claims with couriers and the swaps: the store's suivi agents and the agencies (on their own orders)
-  const tabs: readonly string[] = !has('suivi') && !agency ? LIST_TABS.filter((k) => k !== 'swap') : [...LIST_TABS, 'reclamation'];
+  const tabs: readonly string[] = !has('suivi') && !has('confirmation') ? LIST_TABS.filter((k) => k !== 'swap') : [...LIST_TABS, 'reclamation'];
   const asked: Sub = tabs.includes(sub ?? '') ? (sub as Sub) : 'enlivraison';
   // an agency's confirmation agent (no suivi): En livraison, Livré, Annulé — to watch its orders move (no alert, claim, swap)
-  const tab: Sub = agency && !has('suivi') && !['enlivraison', 'livres', 'annules'].includes(asked) ? 'enlivraison' : asked;
+  const tab: Sub = agency && !has('suivi') && !['enlivraison', 'livres', 'annules', 'alertes', 'alertes_new', 'alertes_encours', 'swap', 'reclamation'].includes(asked) ? 'enlivraison' : asked;
   return (
     <>
       <SuiviBar tab={tab} />
@@ -118,7 +118,7 @@ function SuiviBar({ tab }: { tab: Sub }) {
             <span className="bjm-ar" aria-hidden="true">›</span>
             {item('traites', c?.traites ?? 0)}
             <span className="bjm-sep" aria-hidden="true" />
-            {has('suivi') && item('reclamation', c?.claims, true)}
+            {(has('suivi') || has('confirmation')) && item('reclamation', c?.claims, true)}
             {item('annules', c?.annules ?? 0)}
           </>
         ) : step === 'road' ? (
@@ -131,7 +131,7 @@ function SuiviBar({ tab }: { tab: Sub }) {
           <>
             {item('annules', c?.annules ?? 0)}
             {has('suivi') && <span className="bjm-sep" aria-hidden="true" />}
-            {has('suivi') && item('swap', c?.swap ?? 0, true)}
+            {(has('suivi') || has('confirmation')) && item('swap', c?.swap ?? 0, true)}
           </>
         ) : (
           item(tab, c?.livres ?? 0)
@@ -158,9 +158,9 @@ function SuiviBar({ tab }: { tab: Sub }) {
     {alerts && <nav className="bjm-bar flow" aria-label={t('suivi.tabs.alertes')} data-g="suivi-alertes">
       {item('alertes_new', c?.alertes_new ?? 0)}
       {item('alertes_encours', c?.alertes_encours ?? 0)}
-      {has('suivi') && item('reclamation', c?.claims, true)}
+      {(has('suivi') || has('confirmation')) && item('reclamation', c?.claims, true)}
       {item('annules', c?.annules ?? 0)}
-      {has('suivi') && (tab === 'annules' || tab === 'swap') && item('swap', c?.swap ?? 0, true)}
+      {(has('suivi') || has('confirmation')) && (tab === 'annules' || tab === 'swap') && item('swap', c?.swap ?? 0, true)}
     </nav>}
     </>
   );
@@ -460,6 +460,7 @@ function List({ tab }: { tab: ListTab }) {
   const agency = useInAgency();
   const { has } = useSession();
   const canFollow = has('suivi');
+  const canHandle = canFollow || has('confirmation');
   const [page, setPage] = useState(1);
   const [f, setF] = useState<SuiviF>(() => ({ ...NO_SF, ...store.json<Partial<SuiviF>>('suivi-f', {}), q: '' }));
   const setFilter = (patch: Partial<SuiviF>) => {
@@ -560,7 +561,7 @@ function List({ tab }: { tab: ListTab }) {
   if (tab === 'annules') actions = (o) => <SwapButton o={o} onSwap={() => setDlg({ kind: 'swap', o })} />;
   // the same buttons on the cards (Réclamation on each alert, Swap on a parcel coming back), without opening them
   const cardAct = (o: Order): ReactNode => {
-    if (!canFollow) return null;
+    if (!canHandle) return null;
     if (isAlertTab(tab)) return agency ? null : <AlertClaim o={o} x={extra[o.id]} onClaim={(toLivreur) => setDlg({ kind: 'claim', o, toLivreur })} />;
     if (tab === 'annules') return o.followStatus === 'returning' ? <SwapButton o={o} onSwap={() => setDlg({ kind: 'swap', o })} /> : null;
     return null;
@@ -589,7 +590,12 @@ function List({ tab }: { tab: ListTab }) {
           const rows = q.data?.rows ?? [];
           const cur = rows.find((r) => r.id === openId) ?? null;
           const phoneActions = (o: Order): ParcelAction[] => {
-            if (!canFollow) return [];
+            if (!canFollow) {
+              if (!canHandle) return [];
+              if (isAlertTab(tab) && !agency) return [{ key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: extra[o.id]?.companyKind === 'own' }) }];
+              if ((tab === 'annules' || tab === 'swap') && o.followStatus === 'returning') return [{ key: 'swap', label: t('suivi.act.swap'), run: () => setDlg({ kind: 'swap', o }) }];
+              return [];
+            }
             const claim: ParcelAction = { key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: extra[o.id]?.companyKind === 'own' }) };
             if (tab === 'enlivraison') return [o.followStatus === 'alert'
               ? { key: 'treat', label: t('suivi.act.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) }
@@ -621,7 +627,7 @@ function List({ tab }: { tab: ListTab }) {
                   x={extra[cur.id]}
                   reason={reasonOf(cur, extra[cur.id])}
                   actions={phoneActions(cur)}
-                  onClaim={agency || !canFollow || !isAlertTab(tab) ? undefined : () => setDlg({ kind: 'claim', o: cur, toLivreur: extra[cur.id]?.companyKind === 'own' })}
+                  onClaim={agency || !canHandle || !isAlertTab(tab) ? undefined : () => setDlg({ kind: 'claim', o: cur, toLivreur: extra[cur.id]?.companyKind === 'own' })}
                   onClose={() => setOpenId(null)}
                 />
               )}
@@ -629,7 +635,7 @@ function List({ tab }: { tab: ListTab }) {
           );
         })()
       ) : (
-        <ParcelTable rows={q.data?.rows ?? []} extra={extra} actions={canFollow ? actions : undefined} empty={t(`suivi.empty.${tab}`)} />
+        <ParcelTable rows={q.data?.rows ?? []} extra={extra} actions={canFollow ? actions : canHandle && tab === 'swap' ? actions : canHandle ? cardAct : undefined} empty={t(`suivi.empty.${tab}`)} />
       )}
       {q.data && <Pager page={page} pageSize={100} total={q.data.total} onPage={setPage} />}
       {focus && (

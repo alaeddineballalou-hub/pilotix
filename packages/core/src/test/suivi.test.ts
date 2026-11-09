@@ -21,6 +21,21 @@ async function waitingOrder(exclude: number[] = []) {
   return Number(r.id);
 }
 
+test('confirmation agent can claim an alert and swap a parcel once it is returning', async () => {
+  const ctx = await as(EMAILS.conf);
+  const fromId = await shippedParcel('alert');
+  const toId = await waitingOrder();
+  await db.query('UPDATE orders SET agent_id=$1 WHERE id = ANY($2)', [ctx.session.profile.id, [fromId, toId]]);
+  const claim: any = await call('suivi.claimCreate', ctx, { orderId: fromId, reason: 'late', message: 'Relance démo', viaApi: false });
+  assert.ok(claim.id);
+  await assert.rejects(call('suivi.swap', ctx, { fromId, toId }), /en retour/);
+  await db.query("UPDATE orders SET follow_status='returning' WHERE id=$1", [fromId]);
+  await call('suivi.swapCandidates', ctx, { fromId });
+  const result: any = await call('suivi.swap', ctx, { fromId, toId });
+  assert.equal(result.from.subStatus, 'annule_swappe');
+  assert.equal(result.to.followStatus, 'out_for_delivery');
+});
+
 test('suivi: counts and lists by tab', async () => {
   const ctx = await as(EMAILS.suivi);
   const c: any = await call('suivi.counts', ctx, {});

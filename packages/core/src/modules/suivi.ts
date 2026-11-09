@@ -285,6 +285,11 @@ async function swapCandidates(ctx: Ctx, fromId: number, q?: string) {
 }
 
 export async function swapParcel(ctx: Ctx, fromId: number, toId: number, note?: string | null) {
+  if (!hasRole(ctx.session, 'suivi')) {
+    const source = await getOrder(ctx, fromId);
+    if (source.followStatus !== 'returning') throw bad('Le colis doit être en retour');
+    await getOrder(ctx, toId);
+  }
   if (fromId === toId) throw bad('Choisissez une autre commande');
   const me = ctx.session.profile.id;
   // what the company takes to give its parcel to another customer (same wilaya or another): on the new order's cost
@@ -1122,9 +1127,9 @@ export const suiviProcs = {
     },
   ),
 
-  'suivi.swapCandidates': proc(['suivi'], z.object({ fromId: id, q: z.string().max(100).optional() }), (ctx, i) => swapCandidates(ctx, i.fromId, i.q)),
-  'suivi.swap': proc(['suivi'], z.object({ fromId: id, toId: id, note: z.string().max(500).nullable().optional() }), (ctx, i) => swapParcel(ctx, i.fromId, i.toId, i.note)),
-  'suivi.swapTarget': proc(['suivi'], z.object({ id }), (ctx, i) => swapTarget(ctx, i.id)),
+  'suivi.swapCandidates': proc(['suivi', 'confirmation'], z.object({ fromId: id, q: z.string().max(100).optional() }), (ctx, i) => swapCandidates(ctx, i.fromId, i.q)),
+  'suivi.swap': proc(['suivi', 'confirmation'], z.object({ fromId: id, toId: id, note: z.string().max(500).nullable().optional() }), (ctx, i) => swapParcel(ctx, i.fromId, i.toId, i.note)),
+  'suivi.swapTarget': proc(['suivi', 'confirmation'], z.object({ id }), (ctx, i) => swapTarget(ctx, i.id)),
 
   /** Couriers and livreurs that can receive a claim, with their claim contacts. */
   'suivi.contacts': proc(['suivi', 'confirmation', 'depot'], z.object({}), async (ctx) => {
