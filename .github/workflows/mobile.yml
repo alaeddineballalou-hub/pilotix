@@ -103,13 +103,35 @@ jobs:
         run: |
           # adb (platform-tools) is not on the runner's PATH: without this every adb call is « command not found »
           export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+          # avdmanager and the emulator look for the test phone in the same folder (as reactivecircus/android-emulator-runner
+          # does); before, the emulator never answered adb within 300 s and the cause was not shown
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
           curl -fLsS --retry 3 https://github.com/alaeddineballalou-hub/pilotix/releases/download/app-test/pilotix-test.apk -o "$RUNNER_TEMP/previous.apk"
+          # GitHub's way to let the emulator use the processor's virtualisation (KVM)
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
           sudo chmod 666 /dev/kvm
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-30;google_apis;x86_64' >/dev/null
-          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n update-test -k 'system-images;android-30;google_apis;x86_64' --force
-          "$ANDROID_HOME/emulator/emulator" -avd update-test -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -no-snapshot >"$RUNNER_TEMP/emulator.log" 2>&1 &
-          trap 'adb emu kill || true' EXIT
-          timeout 300 bash -c 'adb wait-for-device; until adb shell getprop sys.boot_completed | grep -q 1; do sleep 2; done'
+          ls -l /dev/kvm; df -h "$HOME" | tail -1
+          SDK="$ANDROID_HOME/cmdline-tools/latest/bin"
+          yes | "$SDK/sdkmanager" --licenses >/dev/null || true
+          "$SDK/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-30;google_apis;x86_64' >/dev/null
+          echo no | "$SDK/avdmanager" create avd -n update-test -k 'system-images;android-30;google_apis;x86_64' --force
+          LOG="$RUNNER_TEMP/emulator.log"
+          "$ANDROID_HOME/emulator/emulator" -avd update-test -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -no-snapshot >"$LOG" 2>&1 &
+          trap 'adb emu kill >/dev/null 2>&1 || true' EXIT
+          booted() { [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; }
+          # up to 10 minutes; if it does not start, the emulator's own words are shown here
+          for i in $(seq 1 120); do
+            if booted; then echo "the test phone started in about $((i * 5)) s"; break; fi
+            if ! pgrep -f 'avd update-test' >/dev/null; then echo "::error::the Android emulator stopped by itself"; tail -40 "$LOG"; exit 1; fi
+            if [ $((i % 12)) -eq 0 ]; then echo "still starting ($((i * 5)) s): $(adb devices | tail -n +2 | tr '\n' ' ')"; tail -2 "$LOG"; fi
+            sleep 5
+          done
+          if ! booted; then echo "::error::the Android emulator did not start in 10 minutes"; tail -60 "$LOG"; exit 1; fi
+          # Android's app installer answers a little after the start
+          for i in $(seq 1 30); do adb shell pm path android >/dev/null 2>&1 && break; sleep 2; done
           adb install "$RUNNER_TEMP/previous.apk"
           adb shell run-as com.pilotix.app touch files-upgrade-marker
           adb install -r pilotix-test.apk
