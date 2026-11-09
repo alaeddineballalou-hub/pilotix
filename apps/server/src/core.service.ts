@@ -168,10 +168,10 @@ core.boardCache.ttlMs = Number(process.env.BOARD_CACHE_MS ?? 20_000);
  * in the log: without this listener the error would stop the whole server.
  */
 
-function openPool(): Pool {
+function openPool(max = config.dbPoolMax): Pool {
   const pool = new Pool({
     connectionString: config.databaseUrl,
-    max: config.dbPoolMax,
+    max,
     maxUses: config.dbConnMaxUses,
     maxLifetimeSeconds: config.dbConnMaxSeconds,
   });
@@ -194,6 +194,9 @@ function openPool(): Pool {
 export class CoreService implements OnModuleInit, OnModuleDestroy {
   readonly pool = openPool();
   readonly t = poolTenancy(this.pool);
+  /** the customers' own connections (landing pages, orders): the team's screens can be busy, a sale never waits for them */
+  private readonly publicPool = config.dbPublicPoolMax ? openPool(config.dbPublicPoolMax) : null;
+  private readonly tPublic = this.publicPool ? poolTenancy(this.publicPool) : null;
   private readonly log = new Logger('Core');
   private listeners = new Set<(shopId: number, e: LiveEvent) => void>();
   /** Pilot AI's daily limit: looked at most every 10 seconds (many answers can come at once), and once after the last one */
@@ -469,6 +472,11 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
     return r;
   }
 
+  /** The same shop, its queries on the customers' connections (a landing page, an order). */
+  forPublic(ref: ShopRef): ShopRef {
+    return this.tPublic ? { ...ref, db: this.tPublic.shop(ref.shop.schema) } : ref;
+  }
+
   /** The shop of a public link: /api/s/<slug>/… (none = the owner's shop, as all the old links); a former link of a shop leads to it. */
   async fromParam(slug: string | undefined): Promise<ShopRef | null> {
     if (slug === undefined || slug === '') return this.primary();
@@ -632,6 +640,7 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
     if (this.landingTimer) clearTimeout(this.landingTimer);
     this.landingTimer = null;
     await this.pool.end();
+    await this.publicPool?.end();
   }
 }
 

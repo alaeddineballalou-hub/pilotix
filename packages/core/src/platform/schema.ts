@@ -689,6 +689,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p034_case_tests', CASES_SQL],
   // shared tables: an account's shop is the row's own shop_id (every shop's profiles are in public.profiles)
   ['p035_shared_login_sync', SHARED_LOGIN_SQL],
+  // the list of shops finds each shop's main boutique by its owner's account (it read every shop once per shop)
+  ['p036_shops_owner_index', `CREATE INDEX IF NOT EXISTS shops_owner ON platform.shops (owner_account_id, primary_shop DESC, id) WHERE kind = 'store'`],
 ];
 
 /** Creates or updates the platform's tables. */

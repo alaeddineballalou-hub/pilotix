@@ -199,7 +199,11 @@ export async function confirmationStats(ctx: Ctx, input: z.infer<typeof TeamsInp
 
   // First call: the first status change after arrival / assignment.
   const firstRows = counted.length
-    ? await ctx.db.query(`SELECT order_id, min(at) AS at FROM order_events WHERE kind = 'conf_status' AND order_id = ANY($1) GROUP BY order_id`, [counted.map((o) => o.id)])
+    ? await ctx.db.query(
+        // an order's events never come before it (a week's margin): the months before are not read, nor even planned
+        `SELECT order_id, min(at) AS at FROM order_events WHERE kind = 'conf_status' AND order_id = ANY($1) AND at >= $2 GROUP BY order_id`,
+        [counted.map((o) => o.id), new Date(counted.reduce((m, o) => Math.min(m, o.created), Infinity) - 7 * 86_400_000).toISOString()],
+      )
     : [];
   const firstAt = new Map(firstRows.map((r: any) => [num(r.order_id), Date.parse(r.at)]));
 
