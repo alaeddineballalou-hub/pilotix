@@ -14,7 +14,9 @@ before(async () => {
 });
 
 test('the sales and ticket_parcels views have exactly the columns of orders', async () => {
-  const cols = async (t: string) => (await db.query(`SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`, [t])).map((r: any) => r.column_name).join(',');
+  // (shop_id left out: the views read with the reader's shop filter, shared tables)
+  const cols = async (t: string) =>
+    (await db.query(`SELECT column_name FROM information_schema.columns WHERE table_name = $1 AND column_name <> 'shop_id' ORDER BY ordinal_position`, [t])).map((r: any) => r.column_name).join(',');
   const o = await cols('orders');
   assert.equal(await cols('sales'), o);
   assert.equal(await cols('ticket_parcels'), o);

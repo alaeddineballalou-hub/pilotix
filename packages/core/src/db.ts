@@ -1,4 +1,4 @@
-import { GRANTS_SQL, SHARED_SQL } from './platform/shared';
+import { AFTER_SHARED_SQL, GRANTS_SQL, SHARED_SQL } from './platform/shared';
 import schema001 from './migrations/001_schema';
 import m002 from './migrations/002_orders';
 import m003 from './migrations/003_confirmation';
@@ -135,7 +135,8 @@ DO $px$ DECLARE p integer := 1; BEGIN
     SELECT coalesce((SELECT id FROM platform.shops WHERE primary_shop ORDER BY id LIMIT 1), 1) INTO p;
   END IF;
   PERFORM public.px_tenantize(p);
-END $px$;`;
+END $px$;
+${AFTER_SHARED_SQL}`;
 
 // ---------------------------------------------------------------- small helpers
 export const num = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
