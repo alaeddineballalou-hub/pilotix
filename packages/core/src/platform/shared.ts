@@ -253,7 +253,8 @@ BEGIN
                   AND NOT EXISTS (SELECT 1 FROM pg_attribute n WHERE n.attrelid = format('public.%I', r.relname)::regclass AND n.attname = o.attname AND NOT n.attisdropped)) THEN
       RAISE EXCEPTION 'px_move_shop(%): % has columns the shared table does not have', src, r.relname;
     END IF;
-    EXECUTE format('INSERT INTO public.%I (shop_id, %s) SELECT %s, %s FROM %I.%I', r.relname, cols, sid, cols, src, r.relname);
+    -- OVERRIDING SYSTEM VALUE: the ids are kept even in a table whose id is GENERATED ALWAYS (the pay plans)
+    EXECUTE format('INSERT INTO public.%I (shop_id, %s) OVERRIDING SYSTEM VALUE SELECT %s, %s FROM %I.%I', r.relname, cols, sid, cols, src, r.relname);
     EXECUTE format('SELECT count(*) FROM public.%I WHERE shop_id = %s', r.relname, sid) INTO b;
     IF a <> b THEN RAISE EXCEPTION 'px_move_shop(%): % has % rows, % moved', src, r.relname, a, b; END IF;
     moved := moved + 1;

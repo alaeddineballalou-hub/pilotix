@@ -178,6 +178,8 @@ test('an old shop schema moves into the shared tables with its ids, counters and
   await old.query(`SELECT setval('order_ref_seq', 1200)`);
   const [o] = await order(old, 'Client ancien');
   await old.query(`INSERT INTO settings (key, value) VALUES ('note', '{"order": ${o.id}}')`);
+  // a table whose id is GENERATED ALWAYS (the pay plans): its rows move with their ids too
+  const [plan] = await old.query(`INSERT INTO management_payment_plans (kind, name, configuration) VALUES ('agent', 'Plan ancien', '{}') RETURNING id`);
   const before = (await old.query('SELECT count(*)::int n FROM profiles'))[0].n;
   // the platform as before the change, with shop 7 in it
   const { migratePlatform } = await import('../platform/schema');
@@ -191,6 +193,9 @@ test('an old shop schema moves into the shared tables with its ids, counters and
   assert.deepEqual([moved.id, moved.ref, moved.customer_name], [o.id, o.ref, 'Client ancien'], 'same id, same reference');
   assert.equal((await S.query(`SELECT value FROM settings WHERE key = 'note'`))[0].value.order, o.id, 'ids inside JSON still right');
   assert.equal((await order(S, 'Nouveau'))[0].ref, 'PX1202', 'its references carry on');
+  assert.equal((await S.query(`SELECT id FROM management_payment_plans WHERE name = 'Plan ancien'`))[0]?.id, plan.id, 'a GENERATED ALWAYS id is kept');
+  const [plan2] = await S.query(`INSERT INTO management_payment_plans (kind, name, configuration) VALUES ('agent', 'Plan nouveau', '{}') RETURNING id`);
+  assert.ok(Number(plan2.id) > Number(plan.id), 'a new one gets a new id');
   await login(S, 'sami@seven.dz', 'Sami-Password-1');
   // shop #1 still has its own rows, not shop 7's
   assert.equal((await t.shop('public').query(`SELECT count(*)::int n FROM orders`))[0].n, 1);
