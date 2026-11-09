@@ -1,5 +1,6 @@
 // Browser preview (no server): realistic fake answers from the couriers.
 import type { CourierKind, FollowStatus } from '@pilotix/shared';
+import type { ClaimState } from './types';
 
 
 /**
@@ -61,7 +62,11 @@ export function nextStep(cur: FollowStatus, hasTracking: boolean, r = Math.rando
     case 'failed':
       return r < 0.35 ? 'out_for_delivery' : r < 0.5 ? 'returning' : null;
     case 'alert':
-      return r < 0.2 ? 'out_for_delivery' : null;
+      return r < 0.2 ? 'out_for_delivery' : r < 0.3 ? 'returning' : null;
+    case 'returning':
+      return r < 0.45 ? 'returned' : null;
+    case 'in_exchange':
+      return r < 0.4 ? 'exchanged' : null;
     default:
       return null;
   }
@@ -72,3 +77,19 @@ export const zrWeighs = (orderId: number, productsKg: unknown) => {
   const d = Math.max(1, Math.round(Number(productsKg) || 0));
   return d + (d >= 4 && orderId % 3 === 0 ? 2 : 0);
 };
+
+/** A fake courier-API reply for a complaint in a demo shop. It cannot call a real courier.
+ * Older claims advance through "received", "processing" and "answered". One in three eventually resolves,
+ * so testers can see all outcomes; the claim's ID makes the scenario stable across repeated syncs.
+ */
+export function demoClaimState(extId: string, claimId: number, sentAt: string | null, now: number): ClaimState {
+  const sent = sentAt ? Date.parse(sentAt) : NaN;
+  const hours = Number.isFinite(sent) ? Math.max(0, (now - sent) / 3_600_000) : 0;
+  const resolved = hours >= 72 && claimId % 3 === 0;
+  return {
+    extId,
+    status: resolved ? 'Résolue' : hours >= 24 ? 'Réponse apportée' : hours >= 6 ? 'En cours de traitement' : 'Nouvelle',
+    resolved,
+    answer: hours >= 24 ? 'Simulation API : le transporteur a contacté le client et planifié une nouvelle livraison.' : null,
+  };
+}
