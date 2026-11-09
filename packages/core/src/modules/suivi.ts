@@ -530,9 +530,10 @@ async function syncClaims(ctx: Ctx, onlyId?: number) {
   const byCompany = new Map<number, any[]>();
   for (const r of rows) byCompany.set(num(r.company_id), [...(byCompany.get(num(r.company_id)) ?? []), r]);
   const nowIso = new Date(ctx.now()).toISOString();
+  const expanded = !ctx.server && (await ctx.db.query(`SELECT value FROM settings WHERE key = 'demoExpanded'`))[0]?.value === true;
   for (const [companyId, list] of byCompany) {
     let states: ClaimState[] = [];
-    if (!ctx.server) states = list.map((r) => demoClaimState(r.ext_id, num(r.id), r.sent_at ? iso(r.sent_at) : null, ctx.now()));
+    if (!ctx.server) states = list.map((r) => expanded ? demoClaimState(r.ext_id, num(r.id), r.sent_at ? iso(r.sent_at) : null, ctx.now()) : { extId: r.ext_id, status: r.ext_status || 'Nouvelle', resolved: false });
     else
       try {
         states = (await ctx.server.courier('claimStates', { companyId, extIds: list.map((r) => r.ext_id) }, ctx)) as ClaimState[];
