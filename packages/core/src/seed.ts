@@ -108,6 +108,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
   const expanded = opts.expanded === true;
   seed = 20261021;
   const hash = await hashPassword(DEMO_PASSWORD);
+  if (expanded) await db.query(`INSERT INTO settings (key, value) VALUES ('demoExpanded', 'true') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
 
   // team
   const users: Record<string, number> = {};
