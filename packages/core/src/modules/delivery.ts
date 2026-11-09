@@ -424,12 +424,13 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
     // the others say the weight they found (their price list counts)
     const costs = c.kind !== 'own' && KINDS[c.kind]?.api ? await demoCosts(ctx, c.id, parcels.map((p: any) => num(p.id)), true) : new Map<number, CourierCosts>();
     if (!feesByApi(c.kind)) for (const [k, v] of costs) costs.set(k, { delivery: null, ret: null, kg: v.kg });
+    const expanded = (await ctx.db.query(`SELECT value FROM settings WHERE key = 'demoExpanded'`))[0]?.value === true;
     for (const p of parcels) {
       if (endedIds.has(num(p.id))) {
         answers.push({ id: num(p.id), status: p.ext_status ?? '', at: null, ...(costs.has(num(p.id)) ? { costs: costs.get(num(p.id)) } : {}) });
         continue;
       }
-      const next = nextStep(p.follow_status, !!p.tracking);
+      const next = nextStep(p.follow_status, !!p.tracking, Math.random(), expanded);
       if (next) answers.push({ id: num(p.id), status: word(c.kind, next), mapped: next, at: new Date(ctx.now()).toISOString(), ...(costs.has(num(p.id)) ? { costs: costs.get(num(p.id)) } : {}) });
     }
   } else {
