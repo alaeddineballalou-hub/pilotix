@@ -227,7 +227,6 @@
       "total": "Total",
       "upsellRate": "Taux upsell",
       "followDelivered": "Livrés",
-      "followReturned": "Revenus",
       "followRate": "Taux livr."
     },
     "sortBy": "Trier par {{col}}",

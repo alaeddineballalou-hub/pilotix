@@ -227,7 +227,6 @@
       "total": "Total",
       "upsellRate": "Upsell rate",
       "followDelivered": "Delivered",
-      "followReturned": "Back",
       "followRate": "Deliv. rate"
     },
     "sortBy": "Sort by {{col}}",

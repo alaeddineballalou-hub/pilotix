@@ -475,7 +475,7 @@ function AgentTable({ rows, live, job = 'conf' }: { rows: AgentRow[]; live?: boo
   const { t } = useTranslation();
   const followCols: Col<AgentRow>[] = [
     { k: 'followDelivered', l: t('agency.st.c.followDelivered'), v: (r) => r.followDelivered, f: (r) => n(r.followDelivered) },
-    { k: 'followReturned', l: t('agency.st.c.followReturned'), v: (r) => r.followReturned, f: (r) => n(r.followReturned) },
+    { k: 'followReturned', l: t('agency.st.c.returned'), v: (r) => r.followReturned, f: (r) => n(r.followReturned) },
     { k: 'followRate', l: t('agency.st.c.followRate'), v: (r) => r.followRate ?? -1, f: (r) => <Rate v={r.followRate} tone={delivTone(r.followRate, true)} /> },
   ];
   const confCols: Col<AgentRow>[] = [

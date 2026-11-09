@@ -227,7 +227,6 @@
       "total": "المجموع",
       "upsellRate": "نسبة البيع الإضافي",
       "followDelivered": "المسلّمة",
-      "followReturned": "المرتجعة",
       "followRate": "نسبة التسليم"
     },
     "sortBy": "ترتيب حسب {{col}}",
