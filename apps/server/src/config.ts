@@ -14,8 +14,6 @@ export const config = {
   port: Number(process.env.PORT || 3000),
   databaseUrl: need('DATABASE_URL', 'postgres://pilotix:pilotix_dev_only@localhost:5432/pilotix'),
   dbPoolMax: Number(process.env.DB_POOL_MAX || 20),
-  /** connections kept for the customers (landing pages, their orders): busy screens never make a customer wait for them (0: none) */
-  dbPublicPoolMax: Math.max(0, Number(process.env.DB_PUBLIC_POOL_MAX ?? 6)),
   /**
    * A database connection keeps notes on every shop schema it has opened (~1.5 MB each, never forgotten while it lives):
    * with many shops it grows until PostgreSQL runs out of memory. So a connection is closed after this many queries or

@@ -262,9 +262,8 @@ const dateStr = z.string().min(10).max(40);
 
 /** The first words of the note of the status change that put the order where it is: the reason given (« Prix trop
  *  cher », « Refusé par le client »…), as it was typed or chosen. */
-// an order's events never come before it (a week's margin): its older months are skipped
 const reasonOf = (kind: 'conf_status' | 'follow_status', to: string) =>
-  `nullif(split_part(coalesce((SELECT e.note FROM order_events e WHERE e.order_id = o.id AND e.kind = '${kind}' AND e.to_value = ${to} AND e.at >= o.created_at - interval '7 days' ORDER BY e.at DESC, e.id DESC LIMIT 1), ''), ' — ', 1), '')`;
+  `nullif(split_part(coalesce((SELECT e.note FROM order_events e WHERE e.order_id = o.id AND e.kind = '${kind}' AND e.to_value = ${to} ORDER BY e.at DESC, e.id DESC LIMIT 1), ''), ' — ', 1), '')`;
 /** why an order was cancelled at the confirmation (its current status) / why its parcel came back */
 export const REASON_SQL = { conf: reasonOf('conf_status', 'o.conf_status'), back: reasonOf('follow_status', "'returning'") };
 

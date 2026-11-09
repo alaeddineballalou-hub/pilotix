@@ -385,7 +385,7 @@ class ApiController {
   private async publicShop(slug: string | undefined): Promise<ShopRef> {
     const ref = await this.core.fromParam(slug);
     if (!ref || ref.shop.status !== 'active') throw new core.AppError('not_found', 'Boutique introuvable');
-    return this.core.forPublic(ref);
+    return ref;
   }
 
   @Public()
@@ -1364,7 +1364,7 @@ class ApiController {
     // a boutique's former link (« Mes boutiques »: its link changed): its pages moved to the new one
     const moved = core.SLUG_RE.test(store) && !(await this.core.shop({ slug: store }).catch(() => null)) ? await this.core.movedShop(store).catch(() => null) : null;
     if (moved && moved.shop.status === 'active' && /^[a-z0-9-]{2,60}$/.test(slug)) return this.movePage(res, moved.shop.slug, slug, req);
-    const ref = await this.core.fromParam(store).then((r) => r && this.core.forPublic(r)).catch(() => null);
+    const ref = await this.core.fromParam(store).catch(() => null);
     if (ref) {
       // a suspended or closed shop: its pages are gone
       if (ref.shop.status !== 'active') return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
@@ -1592,7 +1592,7 @@ class ApiController {
   @Post(['lp/:slug/optin', 's/:shop/lp/:slug/optin'])
   async landingOptin(@Param('shop') shop: string | undefined, @Param('slug') slug: string, @Body() body: any, @Req() req: { ip?: string; headers: Record<string, string | undefined> }) {
     if (!/^[a-z0-9-]{2,60}$/.test(slug) || crossSite(req) || limitLanding(req.ip || 'unknown', 'optin', 30)) return { ok: true };
-    const ref = await this.core.fromParam(shop).then((r) => r && this.core.forPublic(r)).catch(() => null);
+    const ref = await this.core.fromParam(shop).catch(() => null);
     if (!ref || ref.shop.status !== 'active') return { ok: true };
     const r = intake(ref);
     const b = body && typeof body === 'object' ? body : {};
@@ -1615,7 +1615,7 @@ class ApiController {
       }
     }
     if (crossSite(req) || limitLanding(req.ip || 'unknown', 'lead', 120)) return { ok: true };
-    const ref = await this.core.fromParam(shop).then((r) => r && this.core.forPublic(r)).catch(() => null);
+    const ref = await this.core.fromParam(shop).catch(() => null);
     if (!ref || ref.shop.status !== 'active') return { ok: true };
     const r = intake(ref);
     await this.core.call(r, 'landing.capture', await this.core.systemSession(r), { ...(b && typeof b === 'object' ? b : {}), slug, meta: visitorMeta(req) }).catch(() => null);
