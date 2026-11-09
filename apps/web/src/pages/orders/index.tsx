@@ -670,6 +670,9 @@ function DoneKpis() {
 export function Livrees(_: PageProps) {
   const { t } = useTranslation();
   const extra = useDeliveredExtra();
+  // a phone: the same short cards as Commandes › Livré (the big table's rows were one very long card each)
+  const phone = useIsPhone();
+  if (phone) return <PhoneLivre />;
   return (
     <>
       <DoneKpis />
