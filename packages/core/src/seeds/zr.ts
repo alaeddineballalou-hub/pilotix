@@ -68,10 +68,10 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   // Several fake ZR API complaints: new, in progress, and answered (demo only).
   // They exercise the same Suivi screens as an actual courier API, without any network traffic.
   const claims = await db.query(`SELECT c.id FROM claims c JOIN delivery_companies d ON d.id = c.company_id
-    WHERE d.kind = 'zr' AND c.status <> 'resolved' AND c.livreur_id IS NULL ORDER BY c.id LIMIT 6`);
+    WHERE d.kind = 'zr' AND c.status <> 'resolved' AND c.livreur_id IS NULL ORDER BY c.id LIMIT ${users.suivi2 ? 6 : 1}`);
   for (const [k, cl] of claims.entries()) {
-    const status = k % 3 === 0 ? 'Nouvelle' : k % 3 === 1 ? 'En cours de traitement' : 'Réponse apportée';
-    const answer = k % 3 === 2 ? 'Le livreur repasse demain matin ; client prévenu par SMS (simulation).' : null;
+    const status = users.suivi2 ? (k % 3 === 0 ? 'Nouvelle' : k % 3 === 1 ? 'En cours de traitement' : 'Réponse apportée') : 'En cours de traitement';
+    const answer = !users.suivi2 || k % 3 === 2 ? 'Le livreur repasse demain matin ; le client a été prévenu par SMS.' : null;
     await db.query(`UPDATE claims SET channel = 'api', ext_id = $2, ext_ref = $3, ext_status = $4,
       ext_answer = $5, ext_synced_at = $6 WHERE id = $1`, [cl.id, `demo-claim-${num(cl.id)}`, `RC-${48210 + num(cl.id)}`, status, answer, new Date(now - (k + 1) * 3_600_000).toISOString()]);
   }
