@@ -13,6 +13,7 @@ import { algiersDayStart, CONF_DONE_BAD, CONF_TODO, DoctorItem, DoctorLine, doct
 import { z } from 'zod';
 import { iso, num } from '../db';
 import { Ctx, proc } from '../rpc';
+import { agencyDoctor } from './agencydoctor';
 import { payAlerts } from './pay';
 import { allowedAreas } from './stats';
 
@@ -367,6 +368,7 @@ export async function adIssue(ctx: Ctx, i: z.infer<typeof AdIssueInput>): Promis
 export const doctorProcs = {
   // Meta's ad account webhooks (the server, with the shop's system session)
   'ads.issue': proc([], AdIssueInput, (ctx, i) => adIssue(ctx, i)),
-  // everyone: each person gets the checks of their own work (none for a livreur)
-  'stats.doctor': proc(null, z.object({}), (ctx) => shopDoctor(ctx)),
+  // everyone: each person gets the checks of their own work (none for a livreur); in a confirmation agency's space, its
+  // orders in its sellers' stores
+  'stats.doctor': proc(null, z.object({}), (ctx) => (ctx.shop?.kind === 'agency' && ctx.t ? agencyDoctor(ctx) : shopDoctor(ctx))),
 };

@@ -413,6 +413,8 @@ export async function agencyGate(name: string, ctx: Ctx, input: unknown): Promis
     if (kind === 'agency' && MANAGEMENT_PROCS.has(name)) return;
     // an agency pays its people with the agent pay (Facturation › Paie, « Mes gains »)
     if (kind === 'agency' && name.startsWith('pay.')) return;
+    // an agency's Co-Pilot: its orders in its sellers' stores, each person his part (agencydoctor.ts)
+    if (kind === 'agency' && name === 'stats.doctor') return;
     if (sellerProcsOf(kind).has(name)) throw bad('Choisissez un vendeur en haut de la page');
     throw forbidden(kind === 'agency' ? 'Pas dans l’espace d’une agence' : 'Pas dans l’espace d’un marketer');
   }

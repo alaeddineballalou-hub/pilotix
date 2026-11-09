@@ -9,6 +9,7 @@ import { FormEvent, lazy, Suspense, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Out, rpc } from '../../lib/backend';
 import { da, dateOnly, n, pct } from '../../lib/format';
+import { featureIsOn } from '../../lib/features';
 import { useAction, useRpc } from '../../lib/query';
 import { SellerScope, useSeller } from '../../lib/seller';
 import { ownerGroups, ownerRows, useSellers } from '../../lib/sellers';
@@ -25,6 +26,7 @@ import type { PageProps } from '../registry';
 import { BillLines, billOf, BillsList, CountsLine, CountsRow, EndModal, Lead, LinkStatus, monthLabel, MonthPicker, PriceEditor, PriceList, TaskChips, TaskPicker, usePartnerKind, useTp } from './parts';
 import './agency.css';
 import { NoPlanAlert } from '../caisse/NoPlanAlert';
+import { ShopDoctor } from '../dashboard/Doctor';
 
 /** Facturation › Paie: the agents' pay (the same board as a store's Caisse › Paie, without caisses). */
 const PaieBoard = lazy(() => import('../caisse/PaieBoard').then((m) => ({ default: m.PaieBoard })));
@@ -79,6 +81,7 @@ function HomeBody() {
         </div>
       </header>
       <NoPlanAlert />
+      {lead && featureIsOn('dashboard/doctor') && <ShopDoctor card />}
       {s.isAdmin && <ChiefTop />}
       <section className="card hm-now">
         <div className="card-head">

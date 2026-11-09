@@ -2,7 +2,8 @@
 // shop (admin / vendeur), their teams' areas (agent manager), their own orders or parcels (an agent), stock (dépôt)…
 // It keeps itself up to date: every change in the shop refreshes it (live updates), and it looks again every minute.
 // An agent's own Co-Pilot sits on his Dashboard (he has no Accueil), folded when the page opens: one row with its face,
-// what it found and his score; open, every check with what to do.
+// what it found and his score; open, every check with what to do. In a confirmation agency's space: its orders in its
+// sellers' stores (the chief and the managers on Accueil and the Dashboard, the agents on their Dashboard).
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRpc } from '../../lib/query';
@@ -18,7 +19,7 @@ export function ShopDoctor({ card, fold }: { card?: boolean; fold?: boolean }) {
   const r = q.data;
   // nothing to look at for this person (a livreur): no card
   if (r && !r.items.length) return null;
-  const sub = !r?.scope ? t('doctor.shopSub') : r.scope.whole ? t('doctor.scope.whole') : r.scope.mine ? t('doctor.scope.mine') : t('doctor.scope.team');
+  const sub = !r?.scope ? t('doctor.shopSub') : r.scope.whole ? t(r.scope.agency ? 'doctor.scope.agency' : 'doctor.scope.whole') : r.scope.mine ? t('doctor.scope.mine') : t('doctor.scope.team');
   const body = q.error ? (
     <ErrorBox error={q.error} onRetry={() => q.refetch()} />
   ) : !r ? (

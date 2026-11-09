@@ -31,7 +31,7 @@ function needAgency(ctx: Ctx) {
 const isLead = (ctx: Ctx) => ctx.session.isAdmin || ctx.session.roles.includes('agent_manager');
 
 /** The stores in view: the seller chosen at the top of the page, or every store the agency works (or worked) for. */
-async function storesInView(ctx: Ctx): Promise<{ id: number; name: string; schema: string }[]> {
+export async function storesInView(ctx: Ctx): Promise<{ id: number; name: string; schema: string }[]> {
   const rows = await ctx.t!.platform.query(`${LINK_SQL} WHERE l.agency_id = $1 AND l.started_at IS NOT NULL ORDER BY s.name, l.id`, [ctx.shop!.id]);
   const seen = new Map<number, { id: number; name: string; schema: string }>();
   for (const L of rows.map(toLink)) {
@@ -69,7 +69,7 @@ const inR = (v: unknown, r: R) => {
 const dayOf = (v: unknown) => new Date(Date.parse(new Date(v as string).toISOString()) + 3_600_000).toISOString().slice(0, 10);
 
 /** The agency's people (its own space): name, roles, on line or not. */
-async function team(ctx: Ctx, now: number) {
+export async function team(ctx: Ctx, now: number) {
   const rows = await ctx.db.query(`SELECT id, name, lower(email) AS email, roles, presence, last_seen_at FROM profiles WHERE active ORDER BY name`);
   return rows.map((r: any) => {
     const seen = r.last_seen_at ? Date.parse(new Date(r.last_seen_at).toISOString()) : 0;
@@ -80,7 +80,7 @@ async function team(ctx: Ctx, now: number) {
 }
 
 /** One store: its accounts of the agency's people (store profile id → the person in the agency's space). */
-async function accountsIn(db: Db, agencyId: number, people: { id: number; email: string }[]) {
+export async function accountsIn(db: Db, agencyId: number, people: { id: number; email: string }[]) {
   const byEmail = new Map(people.map((p) => [p.email, p.id]));
   const ids = new Set(people.map((p) => p.id));
   const rows = await db.query(`SELECT id, lower(email) AS email, agency_profile_id, name FROM profiles WHERE agency_id = $1`, [agencyId]);

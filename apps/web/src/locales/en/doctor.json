@@ -372,6 +372,34 @@
       "fix": "Check together in Cash › Pay, then cancel the payment if the money did not leave.",
       "short": "Payments received",
       "okTitle": "All payments are confirmed"
+    },
+    "agUnassigned": {
+      "title_one": "{{count}} order has no agent",
+      "title_other": "{{count}} orders have no agent",
+      "title": "{{count}} orders have no agent",
+      "why": "Nobody will call them until they are given to an agent.",
+      "fix": "Open Team › Assignment and give them to your agents.",
+      "short": "Orders given to agents",
+      "okTitle": "Every order has an agent"
+    },
+    "agPayNoPlan": {
+      "title_one": "{{count}} person without a pay plan",
+      "title_other": "{{count}} people without a pay plan",
+      "title": "{{count}} people without a pay plan",
+      "why": "Without a plan, Pilotix does not count their pay.",
+      "fix": "Give everyone a plan in Team › Pay.",
+      "short": "Pay plans",
+      "okTitle": "Everyone has a pay plan"
+    },
+    "agPayNotReceived": {
+      "title_one": "{{count}} payment not received",
+      "title_other": "{{count}} payments not received",
+      "title": "{{count}} payments not received",
+      "why": "An agent says they did not get money marked as paid.",
+      "whyMoney": "An agent says they did not get {{amount}} marked as paid.",
+      "fix": "Check together in Team › Pay, then cancel the payment if the money did not leave.",
+      "short": "Payments received",
+      "okTitle": "All payments are confirmed"
     }
   },
   "gauge": {
@@ -483,7 +511,8 @@
   "scope": {
     "whole": "The whole shop: confirmation, depot, delivery, stock, sales and money.",
     "team": "The teams you manage.",
-    "mine": "Your own work: your orders and your parcels."
+    "mine": "Your own work: your orders and your parcels.",
+    "agency": "The whole agency: calls, confirmation, delivery, team and pay."
   },
   "foldAll": "Fold everything",
   "unfoldAll": "Unfold everything",

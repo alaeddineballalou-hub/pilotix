@@ -214,3 +214,74 @@ test('agency Dashboard: the chief\'s money (billed to the sellers − the agents
   assert.deepEqual([ad.agents[0].followDelivered, ad.agents[0].followReturned, ad.agents[0].followRate], [2, 0, 1]);
   assert.equal(ad.ladder.by, 'follow');
 });
+
+test('agency Co-Pilot: the agency\'s orders in its sellers\' stores, each person his part (the chief, a manager, his own orders or parcels)', async () => {
+  const { t, p } = await server();
+  const shop = await store(t, p, 'Boutique Blida', 'karim@blida.dz');
+  const ag = await agency(t, 'Agence Nord', 'samir@nord.dz');
+  const chief = await as(t, ag.id, 'samir@nord.dz', PW);
+  await call('agency.prices', chief, { prices: PRICES });
+  await p('p.agencies.verify', { id: ag.id, verified: true });
+  const admin = await as(t, shop.id, 'karim@blida.dz', PW);
+  const { id: linkId } = (await call('partners.request', admin, { agencyId: ag.id, tasks: ['confirmation', 'suivi'], products: [shop.products.VELO] })) as any;
+  await call('agency.answer', chief, { id: linkId, accept: true });
+  const nora: any = await call('users.create', chief, { phone: tph(), name: 'Nora', email: 'nora@nord.dz', password: PW, roles: ['confirmation'] });
+  const ali: any = await call('users.create', chief, { phone: tph(), name: 'Ali', email: 'ali@nord.dz', password: PW, roles: ['suivi'] });
+  await call('users.create', chief, { phone: tph(), name: 'Riad', email: 'riad@nord.dz', password: PW, roles: ['agent_manager'] });
+  await call('agency.setAgents', chief, { id: linkId, people: [nora.id, ali.id] });
+  const inStore = async (email: string) => Number((await shop.db.query('SELECT id FROM profiles WHERE email = $1', [email]))[0].id);
+  const [noraS, aliS] = [await inStore('nora@nord.dz'), await inStore('ali@nord.dz')];
+
+  // the agency's orders: three not called for 3 hours (two given to Nora, one to nobody), a callback of Nora's 2 hours
+  // late, a parcel of Ali's with no news for 5 days, an alert of his; and an order the store keeps (not the agency's)
+  const os = [];
+  for (let i = 0; i < 6; i++) os.push(await order(admin, shop.products.VELO, `066100040${i}`));
+  const own = await order(admin, shop.products.POUS, '0661000499');
+  const set = (id: number, sql: string, params: unknown[] = []) => shop.db.query(`UPDATE orders SET ${sql} WHERE id = $1`, [id, ...params]);
+  for (const [i, who] of [noraS, noraS, null].entries()) await set(os[i].id, `conf_status = 'new', attempts = 0, created_at = now() - interval '3 hours', agent_id = $2, conf_agency_id = $3`, [who, ag.id]);
+  await set(os[3].id, `conf_status = 'callback', next_call_at = now() - interval '2 hours', agent_id = $2, conf_agency_id = $3`, [noraS, ag.id]);
+  await set(os[4].id, `conf_status = 'confirmed', follow_status = 'shipped', shipped_at = now() - interval '10 days', ext_status_at = now() - interval '5 days', follow_agent_id = $2, follow_agency_id = $3`, [aliS, ag.id]);
+  await set(os[5].id, `conf_status = 'confirmed', follow_status = 'alert', sub_status = NULL, shipped_at = now() - interval '1 day', follow_agent_id = $2, follow_agency_id = $3`, [aliS, ag.id]);
+  await set(own.id, `conf_status = 'new', attempts = 0, created_at = now() - interval '3 hours', conf_agency_id = NULL, follow_agency_id = NULL`);
+
+  const doc = async (ctx: Ctx) => {
+    const r: any = await call('stats.doctor', ctx, {});
+    return { r, of: (id: string) => r.items.find((x: any) => x.id === id) };
+  };
+  // the chief: the whole agency (the store's own order is not his), with the order given to nobody and the agents' pay
+  const c = await doc(chief);
+  assert.deepEqual(c.r.scope, { whole: true, mine: false, agency: true });
+  assert.equal(c.of('notCalled').params.count, 3);
+  assert.equal(c.of('lateCallbacks').params.count, 1);
+  assert.equal(c.of('agUnassigned').params.count, 1);
+  assert.equal(c.of('stuckParcels').params.count, 1);
+  assert.equal(c.of('openAlerts').params.count, 1);
+  assert.deepEqual(c.of('agPayNoPlan').list.map((x: any) => x.label).sort(), ['Ali', 'Nora'], 'no pay plan yet');
+  assert.ok(c.r.score < 100);
+  // an agent manager: the team's calls and parcels, not the pay nor the assignment
+  const m = await doc(await as(t, ag.id, 'riad@nord.dz', PW));
+  assert.deepEqual(m.r.scope, { whole: false, mine: false, agency: true });
+  assert.equal(m.of('notCalled').params.count, 3);
+  assert.equal(m.of('openAlerts').params.count, 1);
+  assert.equal(m.of('agUnassigned'), undefined);
+  assert.equal(m.of('agPayNoPlan'), undefined);
+  // Nora: her own orders only (no parcels: she does not follow any)
+  const n = await doc(await as(t, ag.id, 'nora@nord.dz', PW));
+  assert.deepEqual(n.r.scope, { whole: false, mine: true, agency: true });
+  assert.equal(n.of('notCalled').params.count, 2);
+  assert.equal(n.of('lateCallbacks').params.count, 1);
+  assert.equal(n.of('meVsTeam').level, 'info', 'not enough calls yet to compare');
+  assert.equal(n.of('stuckParcels'), undefined);
+  // Ali: his own parcels only
+  const a = await doc(await as(t, ag.id, 'ali@nord.dz', PW));
+  assert.deepEqual(a.r.scope, { whole: false, mine: true, agency: true });
+  assert.equal(a.of('stuckParcels').params.count, 1);
+  assert.equal(a.of('openAlerts').params.count, 1);
+  assert.equal(a.of('notCalled'), undefined);
+  // another seller chosen at the top of the page: nothing of this store
+  assert.equal((await doc({ ...chief, seller: shop.id + 999 })).of('notCalled').level, 'ok');
+  // the store's own Co-Pilot is still the store's: its order the agency does not have counts there
+  const own2: any = await call('stats.doctor', admin, {});
+  assert.equal(own2.scope.agency, undefined);
+  assert.equal(own2.items.find((x: any) => x.id === 'notCalled').params.count, 4, 'the store sees all its orders not called');
+});

@@ -12,6 +12,7 @@ import { ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
 import { da, dayRange, n, pct } from '../../lib/format';
+import { featureIsOn } from '../../lib/features';
 import { useRpc } from '../../lib/query';
 import { SellerScope, useSeller } from '../../lib/seller';
 import { useSession } from '../../lib/session';
@@ -21,6 +22,7 @@ import { Avatar, DayChart, PeriodChips } from '../dashboard/board/parts';
 import { confTone, delivTone, KpiBox } from '../dashboard/util';
 import type { PageProps } from '../registry';
 import { NoPlanAlert } from '../caisse/NoPlanAlert';
+import { ShopDoctor } from '../dashboard/Doctor';
 import { payDay, period } from '../caisse/paieParts';
 import { MyAgentBonuses } from './index';
 import { monthLabel, MonthPicker } from './parts';
@@ -123,6 +125,7 @@ function DashBody() {
       ) : (
         <>
           {!d.lead && <NoPlanAlert />}
+          {featureIsOn('dashboard/doctor') && <ShopDoctor fold />}
           <section className="card hm-now">
             <div className="card-head">
               <h2>{t(d.lead ? 'agency.st.now' : 'agency.st.myNow')}</h2>

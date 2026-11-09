@@ -372,6 +372,34 @@
       "fix": "Vérifiez ensemble dans Caisse › Paie, puis annulez le paiement si l’argent n’est pas parti.",
       "short": "Paiements reçus",
       "okTitle": "Tous les paiements sont confirmés"
+    },
+    "agUnassigned": {
+      "title_one": "{{count}} commande n’a pas d’agent",
+      "title_other": "{{count}} commandes n’ont pas d’agent",
+      "title": "{{count}} commandes n’ont pas d’agent",
+      "why": "Personne ne les appellera tant qu’elles ne sont pas données à un agent.",
+      "fix": "Ouvrez Équipe › Affectation et donnez-les à vos agents.",
+      "short": "Commandes données aux agents",
+      "okTitle": "Chaque commande a un agent"
+    },
+    "agPayNoPlan": {
+      "title_one": "{{count}} personne sans plan de paie",
+      "title_other": "{{count}} personnes sans plan de paie",
+      "title": "{{count}} personnes sans plan de paie",
+      "why": "Sans plan, Pilotix ne compte pas leur paie.",
+      "fix": "Donnez un plan à chacun dans Équipe › Paie.",
+      "short": "Plans de paie",
+      "okTitle": "Tout le monde a un plan de paie"
+    },
+    "agPayNotReceived": {
+      "title_one": "{{count}} paiement pas reçu",
+      "title_other": "{{count}} paiements pas reçus",
+      "title": "{{count}} paiements pas reçus",
+      "why": "Un agent dit ne pas avoir reçu l’argent marqué payé.",
+      "whyMoney": "Un agent dit ne pas avoir reçu {{amount}} marqués payés.",
+      "fix": "Vérifiez ensemble dans Équipe › Paie, puis annulez le paiement si l’argent n’est pas parti.",
+      "short": "Paiements reçus",
+      "okTitle": "Tous les paiements sont confirmés"
     }
   },
   "gauge": {
@@ -483,7 +511,8 @@
   "scope": {
     "whole": "Toute la boutique : confirmation, dépôt, livraison, stock, ventes et argent.",
     "team": "Les équipes que vous gérez.",
-    "mine": "Votre propre travail : vos commandes et vos colis."
+    "mine": "Votre propre travail : vos commandes et vos colis.",
+    "agency": "Toute l’agence : appels, confirmation, livraison, équipe et paie."
   },
   "foldAll": "Tout replier",
   "unfoldAll": "Tout déplier",
