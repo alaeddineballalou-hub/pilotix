@@ -7,7 +7,7 @@ import { Card, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { can } from './bits';
 
 /** the accounts the login page offers (layout/Login.tsx) */
-const ON_LOGIN = ['admin', 'conf1', 'depot', 'livreur', 'marketer'];
+const ON_LOGIN = ['admin', 'vendeur', 'manager1', 'conf1', 'conf4', 'suivi', 'suivi2', 'depot', 'depot2', 'livreur', 'livreur3', 'marketer'];
 
 export function Demo({ staff }: { staff: Staff }) {
   const { t } = useTranslation();
