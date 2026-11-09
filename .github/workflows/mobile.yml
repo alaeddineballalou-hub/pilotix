@@ -101,6 +101,8 @@ jobs:
       - name: Verify in-place Android upgrade from the published APK
         if: github.ref == 'refs/heads/main'
         run: |
+          # adb (platform-tools) is not on the runner's PATH: without this every adb call is « command not found »
+          export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
           curl -fLsS --retry 3 https://github.com/alaeddineballalou-hub/pilotix/releases/download/app-test/pilotix-test.apk -o "$RUNNER_TEMP/previous.apk"
           sudo chmod 666 /dev/kvm
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-30;google_apis;x86_64' >/dev/null
