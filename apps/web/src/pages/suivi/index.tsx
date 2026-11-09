@@ -117,7 +117,9 @@ function SuiviBar({ tab }: { tab: Sub }) {
             {item('alertes_encours', c?.alertes_encours ?? 0)}
             <span className="bjm-ar" aria-hidden="true">›</span>
             {item('traites', c?.traites ?? 0)}
-
+            <span className="bjm-sep" aria-hidden="true" />
+            {has('suivi') && item('reclamation', c?.claims, true)}
+            {item('annules', c?.annules ?? 0)}
           </>
         ) : step === 'road' ? (
           <>
@@ -128,14 +130,12 @@ function SuiviBar({ tab }: { tab: Sub }) {
         ) : step === 'annules' || step === 'swap' ? (
           <>
             {item('annules', c?.annules ?? 0)}
-
+            {has('suivi') && <span className="bjm-sep" aria-hidden="true" />}
+            {has('suivi') && item('swap', c?.swap ?? 0, true)}
           </>
         ) : (
           item(tab, c?.livres ?? 0)
         )}
-        {has('suivi') && <span className="bjm-sep" aria-hidden="true" />}
-        {has('suivi') && item('reclamation', c?.claims, true)}
-        {has('suivi') && item('swap', c?.swap ?? 0, true)}
       </nav>
     );
   }

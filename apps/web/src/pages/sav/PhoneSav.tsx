@@ -364,16 +364,6 @@ function CallFlow({ onClose, onOpen }: { onClose: () => void; onOpen: (id: numbe
   // on the road: no SAV before delivery, it is a réclamation in Suivi; not shipped yet: only counted
   const notYet = (found.data ?? []).filter((o) => ON_ROAD.includes(o.followStatus ?? ''));
   const notShipped = (found.data ?? []).length - delivered.length - notYet.length;
-  const toClaim = (o: Order) => {
-    try {
-      sessionStorage.setItem('px-rec-q', o.ref);
-      sessionStorage.setItem('px-rec-tab', 'search');
-    } catch {
-      /* private mode */
-    }
-    onClose();
-    setTimeout(() => (location.hash = '#/suivi/reclamation'), 0);
-  };
   const ready = details.trim().length > 0 && (order || name.trim() || phone.trim());
   const base = () => ({
     orderId: order?.id ?? null,
@@ -469,7 +459,7 @@ function CallFlow({ onClose, onOpen }: { onClose: () => void; onOpen: (id: numbe
                 ))}
                 {notYet.length > 0 && <div className="pxv-lbl">{t('sav.ph.notYet')}</div>}
                 {notYet.map((o) => (
-                  <button key={o.id} type="button" className="pxv-ord dim" onClick={() => toClaim(o)}>
+                  <div key={o.id} className="pxv-ord dim">
                     <span className="pxs-th" aria-hidden="true">
                       <Icon name="truck" />
                     </span>
@@ -480,11 +470,7 @@ function CallFlow({ onClose, onOpen }: { onClose: () => void; onOpen: (id: numbe
                       <small>
                         {t(`status.follow.${o.followStatus}`)} · {o.companyName || o.livreurName || ''} · {t('sav.ph.notPaid')}
                       </small>
-                    </span>
-                    <span className="pxv-go">
-                      {t('sav.ph.toClaim')} <Icon name="chevr" />
-                    </span>
-                  </button>
+                    </span></div>
                 ))}
                 {notShipped > 0 && <p className="pxv-help">{t('sav.ph.notShipped', { count: notShipped })}</p>}
               </>

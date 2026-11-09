@@ -93,7 +93,7 @@ export const AREAS: Record<AreaKey, AreaDef> = {
     now: {
       alertsOld: { tone: 'bad', href: '#/suivi/alertes' },
       alerts: { tone: 'warn', href: '#/suivi/alertes' },
-      claimsLate: { tone: 'bad', href: '#/suivi/reclamation' },
+      claimsLate: { tone: 'bad', href: '#/suivi/alertes' },
       orphan: { tone: 'info', href: '#/suivi' },
     },
     reasons: true,
