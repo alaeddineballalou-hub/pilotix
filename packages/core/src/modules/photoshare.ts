@@ -1,7 +1,9 @@
 // « Envoyer des photos » (Confirmation): a confirmation agent sends a customer the photos of products — the order's,
-// with their colour, or others he adds — from his own WhatsApp. The message opens in WhatsApp with the products' names
-// and one link: WhatsApp shows its first photo, the customer opens it to see them all (photo_pages). The photos are the
-// shop's own (its HD photos, its pages', the colour's and the product's), made public JPEG copies by the server.
+// with their colour (or all their colours), or others he adds — from his own WhatsApp. On a phone the message goes
+// first, then the real photos (the Pilotix app puts them straight into the customer's chat, a phone's browser through
+// its share menu: a link carries text only). On a computer the message carries one link instead: WhatsApp shows its
+// first photo, the customer opens it to see them all (photo_pages). The photos are the shop's own (its HD photos, its
+// pages', the colour's and the product's), made public JPEG copies by the server.
 // The page shows the shop's name and the products only: never the customer, the order or a price.
 import { z } from 'zod';
 import { iso, num } from '../db';
@@ -11,27 +13,35 @@ import { PhotoSrc, productPhotos } from './dellalphotos';
 import { getOrder } from './orders';
 import { assignedProductIds } from './productscope';
 
-/** at most this many products in one send, and this many photos of each */
+/** at most this many products in one send, and this many photos of one product (or one colour) */
 export const PHOTO_ITEMS_MAX = 10;
 export const PHOTOS_PER_ITEM = 3;
+/** « Toutes les couleurs »: each colour's own photos, this many of one colour at most */
+export const PHOTOS_PER_COLOUR = 10;
+/** at most this many photos in one send (WhatsApp takes 30 at once) */
+export const PHOTOS_MAX = 30;
 
 const id = z.number().int().positive();
-const Item = z.object({ productId: id, variantId: id.nullable() });
+/** a product and its colour; `all`: every colour of the product, each with its own photos */
+const Item = z.object({ productId: id, variantId: id.nullable(), all: z.boolean().optional() });
 type ItemT = z.infer<typeof Item>;
+type One = { productId: number; variantId: number | null; all: boolean };
 
-/** the same product and colour once, in the order chosen */
-const uniq = (items: ItemT[]) => {
+/** the same product and colour once, in the order chosen (« all colours » has no colour of its own) */
+const uniq = (items: ItemT[]): One[] => {
   const seen = new Set<string>();
-  return items.filter((i) => {
-    const k = `${i.productId}:${i.variantId ?? 0}`;
-    if (seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  });
+  return items
+    .map((i) => ({ productId: i.productId, variantId: i.all ? null : i.variantId, all: !!i.all }))
+    .filter((i) => {
+      const k = `${i.productId}:${i.all ? 'all' : (i.variantId ?? 0)}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
 };
 
 /** what a product (and its colour) is called in the message and on the page: « Poussette canne — Rouge » */
-async function namesOf(ctx: Ctx, items: ItemT[]) {
+async function namesOf(ctx: Ctx, items: One[]) {
   const allowed = await assignedProductIds(ctx);
   const P = await ctx.db.query('SELECT id, name FROM products WHERE id = ANY($1)', [items.map((i) => i.productId)]);
   const V = await ctx.db.query('SELECT id, product_id, title FROM product_variants WHERE id = ANY($1)', [items.map((i) => i.variantId).filter((v): v is number => v !== null)]);
@@ -46,16 +56,45 @@ async function namesOf(ctx: Ctx, items: ItemT[]) {
     return { ...i, name, variant: v?.t.trim() || null, label: v?.t.trim() ? `${name} — ${v.t.trim()}` : name };
   });
 }
+type Named = Awaited<ReturnType<typeof namesOf>>[number];
 
-/** the photos of a product (the colour's first), as sent */
-const photosOf = (ctx: Ctx, i: ItemT) => productPhotos(ctx.db, i.productId, { variantId: i.variantId, size: 'send', max: PHOTOS_PER_ITEM, svg: true });
+/** one block of photos (one section of the page): a product, or one of its colours */
+type Group = { label: string; colour: string | null; photos: PhotoSrc[] };
+
+/**
+ * The photos a product sends, by block: its colour's first (or the product's). « Toutes les couleurs »: each colour
+ * with its own photos (a colour without any is left out); when no colour has its own, the product's.
+ */
+async function groupsOf(ctx: Ctx, i: Named): Promise<Group[]> {
+  if (!i.all) return [{ label: i.label, colour: i.variant, photos: await productPhotos(ctx.db, i.productId, { variantId: i.variantId, size: 'send', max: PHOTOS_PER_ITEM, svg: true }) }];
+  const V = await ctx.db.query(`SELECT id, title FROM product_variants WHERE product_id = $1 AND active AND btrim(coalesce(title, '')) <> '' ORDER BY id`, [i.productId]);
+  const seen = new Set<string>();
+  const out: Group[] = [];
+  for (const v of V) {
+    const vid = num(v.id);
+    // only the colour's own photos (asked for a colour without any, the picker gives the product's)
+    const own = (await productPhotos(ctx.db, i.productId, { variantId: vid, size: 'send', max: PHOTOS_PER_COLOUR, svg: true })).filter((p) => p.variantId === vid && !seen.has(p.src));
+    own.forEach((p) => seen.add(p.src));
+    const colour = String(v.title).trim();
+    if (own.length) out.push({ label: `${i.name} — ${colour}`, colour, photos: own });
+  }
+  if (!out.length) out.push({ label: i.name, colour: null, photos: await productPhotos(ctx.db, i.productId, { variantId: null, size: 'send', max: PHOTOS_PER_ITEM, svg: true }) });
+  return out;
+}
 
 /** The photos each product (and colour) would send: small copies for the window, and how many. */
 export async function photoThumbs(ctx: Ctx, items: ItemT[]) {
   const out = [];
   for (const i of await namesOf(ctx, uniq(items))) {
-    const ph = await photosOf(ctx, i);
-    out.push({ productId: i.productId, variantId: i.variantId, label: i.label, count: ph.length, thumbs: ph.map((p) => p.thumb).filter((t): t is string => !!t).slice(0, PHOTOS_PER_ITEM) });
+    const g = await groupsOf(ctx, i);
+    const photos = g.flatMap((x) => x.photos);
+    /** « all colours »: the colours that have photos (the message lists them) */
+    const colours = i.all ? g.map((x) => x.colour).filter((c): c is string => !!c) : [];
+    // « all colours »: the first photo of each colour first
+    const firsts = i.all ? [...g.map((x) => x.photos[0]), ...photos] : photos;
+    const thumbs = [...new Set(firsts.map((p) => p?.thumb).filter((t): t is string => !!t))].slice(0, PHOTOS_PER_ITEM);
+    const label = i.all && colours.length ? `${i.name} — ${colours.join(', ')}` : i.label;
+    out.push({ productId: i.productId, variantId: i.variantId, all: i.all, label, colours, count: photos.length, thumbs });
   }
   return out;
 }
@@ -68,17 +107,36 @@ function randomKey() {
 }
 
 /**
- * The page of a send: the products' photos at public addresses (the server's JPEG copies; the preview keeps its own
- * pictures, and has no link). Returns its link and what the message lists.
+ * The photos of a send, at public addresses (the server's JPEG copies; the preview keeps its own pictures, and has no
+ * link), and their page. Returns the photos (the phone hands them to WhatsApp), the page's link (a computer's message
+ * carries it) and what the message lists. 30 photos at most, in the order chosen.
  */
 export async function sharePhotos(ctx: Ctx, orderId: number, items: ItemT[]) {
   const o = await getOrder(ctx, orderId);
   const named = await namesOf(ctx, uniq(items));
   if (!named.length) throw bad('Choisissez au moins un produit.');
   if (named.length > PHOTO_ITEMS_MAX) throw bad(`${PHOTO_ITEMS_MAX} produits au plus dans un envoi.`);
-  const found: { label: string; photos: PhotoSrc[] }[] = [];
-  for (const i of named) found.push({ label: i.label, photos: await photosOf(ctx, i) });
-  const all = found.flatMap((f) => f.photos);
+  // each product's blocks; the same photo once in a send; then 30 photos in all
+  const seen = new Set<string>();
+  let room = PHOTOS_MAX;
+  let cut = 0;
+  /** `had`: the product's photos (some may already be in the send: sent once) */
+  const per: { label: string; had: number; blocks: Group[] }[] = [];
+  for (const i of named) {
+    const blocks: Group[] = [];
+    let had = 0;
+    for (const g of await groupsOf(ctx, i)) {
+      had += g.photos.length;
+      const fresh = g.photos.filter((p) => !seen.has(p.src));
+      fresh.forEach((p) => seen.add(p.src));
+      const take = fresh.slice(0, Math.max(0, room));
+      cut += fresh.length - take.length;
+      room -= take.length;
+      if (take.length) blocks.push({ ...g, photos: take });
+    }
+    per.push({ label: i.label, had, blocks });
+  }
+  const all = per.flatMap((p) => p.blocks.flatMap((b) => b.photos));
   if (!all.length) throw bad('Pas de photo pour ces produits : ajoutez-en dans Produits & stock (photo du produit ou de la couleur).');
   const base = publicApi(ctx);
   let urls: (string | null)[];
@@ -87,9 +145,17 @@ export async function sharePhotos(ctx: Ctx, orderId: number, items: ItemT[]) {
     urls = Array.isArray(r?.urls) ? r.urls : [];
   } else urls = all.map((p) => p.thumb ?? p.url ?? null); // the preview: its own pictures (no public link)
   let k = 0;
-  const pageItems = found
-    .map((f) => ({ label: f.label, photos: f.photos.map(() => urls[k++] ?? null).filter((u): u is string => !!u) }))
-    .filter((f) => f.photos.length);
+  const made = per.map((p) => ({
+    ...p,
+    blocks: p.blocks.map((b) => ({ label: b.label, photos: b.photos.map(() => urls[k++] ?? null).filter((u): u is string => !!u) })).filter((b) => b.photos.length),
+  }));
+  // one section per product and colour (a colour chosen on its own and again in « all colours »: together)
+  const pageItems: { label: string; photos: string[] }[] = [];
+  for (const b of made.flatMap((p) => p.blocks)) {
+    const same = pageItems.find((x) => x.label === b.label);
+    if (same) same.photos.push(...b.photos);
+    else pageItems.push({ label: b.label, photos: [...b.photos] });
+  }
   if (!pageItems.length) throw bad('Les photos n’ont pas pu être préparées : réessayez dans un instant.');
   await ctx.db.query(`DELETE FROM photo_pages WHERE created_at < now() - interval '90 days'`);
   const key = randomKey();
@@ -98,8 +164,12 @@ export async function sharePhotos(ctx: Ctx, orderId: number, items: ItemT[]) {
     /** the page's link (null in the preview: it has no public address) */
     url: base ? `${base}/lp/ph/${num(row.id)}/${key}` : null,
     items: pageItems.map((f) => ({ label: f.label, photos: f.photos.length })),
-    /** products without any photo: not on the page */
-    missing: found.filter((f) => !pageItems.some((p) => p.label === f.label)).map((f) => f.label),
+    /** the photos themselves, in order: what the phone hands to WhatsApp */
+    photos: pageItems.flatMap((f) => f.photos),
+    /** photos left out (30 at most in one send) */
+    cut,
+    /** products without any photo, or whose photos could not be made: not sent (those only past the 30 are in `cut`) */
+    missing: made.filter((m, j) => !m.blocks.length && (per[j].had === 0 || per[j].blocks.length > 0)).map((m) => m.label),
   };
 }
 

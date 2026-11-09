@@ -113,6 +113,69 @@ test('only the agent’s own orders and products; at most 10 products; a product
   assert.equal(r.missing.length, 1);
 });
 
+/** a product of Samira's with test colours added: each `photos` her own photos (HD), `photo`: the colour's photo */
+const withColours = async (colours: { title: string; photo?: boolean; hd?: number }[]) => {
+  const { orderId } = await withPhoto();
+  const mine: any[] = (await call('confirmation.catalog', samira, {})) as any[];
+  const productId = Number(mine.find((p) => !p.isService).id);
+  const made: number[] = [];
+  for (const [k, c] of colours.entries()) {
+    const v = (await db.query(`INSERT INTO product_variants (product_id, title, sku, photo) VALUES ($1, $2, $3, $4) RETURNING id`, [productId, c.title, `TST-ALL-${Date.now()}-${k}`, c.photo ? `data:image/png;base64,iVBORw0KGgo${'A'.repeat(40 + k * 4)}` : null]))[0];
+    made.push(Number(v.id));
+    for (let j = 0; j < (c.hd ?? 0); j++) {
+      const data = `/9j/${'B'.repeat(60 + (k * 40 + j) * 4)}`;
+      await db.query(`INSERT INTO product_photos (product_id, variant_id, kind, store, data, thumb, position) VALUES ($1, $2, 'photo', 'local', $3, $4, $5)`, [productId, v.id, data, `data:image/jpeg;base64,${data}`, j]);
+    }
+  }
+  const done = async () => {
+    await db.query('DELETE FROM product_photos WHERE variant_id = ANY($1)', [made]);
+    await db.query('DELETE FROM product_variants WHERE id = ANY($1)', [made]);
+  };
+  return { productId, orderId, done };
+};
+
+test('« Toutes les couleurs »: each colour with its own photos, the colours named; a colour without photo left out', async () => {
+  const { productId, orderId, done } = await withColours([{ title: 'Test Rouge', photo: true }, { title: 'Test Noir', photo: true }, { title: 'Test Vide' }]);
+  try {
+    const [th]: any = await call('confirmation.photoThumbs', samira, { items: [{ productId, variantId: null, all: true }] });
+    assert.equal(th.all, true);
+    assert.ok(th.colours.includes('Test Rouge') && th.colours.includes('Test Noir'));
+    assert.ok(!th.colours.includes('Test Vide'), 'a colour without its own photo is not listed');
+    assert.ok(th.count >= 2);
+    assert.match(th.label, / — .*Test Rouge.*Test Noir/);
+    // the same product once for « all », once for a colour: two lines
+    const two: any = await call('confirmation.photoThumbs', samira, { items: [{ productId, variantId: null, all: true }, { productId, variantId: null, all: true }, { productId, variantId: null }] });
+    assert.equal(two.length, 2);
+    const r: any = await call('confirmation.photoShare', samira, { orderId, items: [{ productId, variantId: null, all: true }] });
+    const labels = r.items.map((i: any) => i.label);
+    assert.ok(labels.some((l: string) => l.endsWith(' — Test Rouge')) && labels.some((l: string) => l.endsWith(' — Test Noir')), 'one block per colour on the page');
+    assert.ok(!labels.some((l: string) => l.endsWith(' — Test Vide')));
+    assert.equal(r.photos.length, r.items.reduce((s: number, i: any) => s + i.photos, 0), 'the photos handed to the phone are the page’s');
+    assert.equal(r.cut, 0);
+  } finally {
+    await done();
+  }
+});
+
+test('one send: 30 photos at most (the rest counted), 10 of one colour at most, the same photo once', async () => {
+  const { productId, orderId, done } = await withColours(['A', 'B', 'C', 'D'].map((x) => ({ title: `Test ${x}`, hd: 12 })));
+  try {
+    const [th]: any = await call('confirmation.photoThumbs', samira, { items: [{ productId, variantId: null, all: true }] });
+    assert.ok(th.count >= 40, '10 photos of each of the 4 colours');
+    const r: any = await call('confirmation.photoShare', samira, { orderId, items: [{ productId, variantId: null, all: true }] });
+    assert.equal(r.photos.length, 30);
+    assert.equal(r.cut, th.count - 30);
+    assert.equal(r.missing.length, 0, 'photos left past the 30 are not « without photo »');
+    // a colour already chosen on its own, then « all »: its photos go once
+    const first = (await db.query(`SELECT id FROM product_variants WHERE product_id = $1 AND title = 'Test A'`, [productId]))[0];
+    const r2: any = await call('confirmation.photoShare', samira, { orderId, items: [{ productId, variantId: Number(first.id) }, { productId, variantId: null, all: true }] });
+    assert.equal(r2.items.filter((i: any) => i.label.endsWith(' — Test A')).length, 1);
+    assert.equal(r2.photos.length, 30);
+  } finally {
+    await done();
+  }
+});
+
 test('pages older than 90 days are removed; the page never shows a customer or a price', async () => {
   const { productId, variantId, orderId } = await withPhoto();
   const old = (await db.query(`INSERT INTO photo_pages (key, items, created_at) VALUES ($1, '[]', now() - interval '100 days') RETURNING id`, ['cd'.repeat(12)]))[0];

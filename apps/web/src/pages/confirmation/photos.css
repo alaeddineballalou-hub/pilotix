@@ -43,3 +43,37 @@ html .btn.primary.sph-wa:disabled, html[data-skin][data-theme] .btn.primary.sph-
 .qd6-photos { margin-inline-start: auto; letter-spacing: 0; text-transform: none; font-weight: 700; gap: 6px; }
 .qd6-photos + .qd6-hist { margin-inline-start: 10px; }
 .qd6-photos .bji { width: 15px; height: 15px; color: #1f9d55; }
+/* a phone: two steps — 1 the message (it makes the customer's chat), 2 the real photos into that chat */
+.sph-steps { display: flex; flex-direction: column; gap: 10px; }
+.sph-step { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; align-items: start; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.sph-step.now { border-color: #1fa855; box-shadow: 0 0 0 3px rgba(31, 168, 85, .14); }
+.sph-sn { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 14px; background: var(--raise); color: var(--ink); }
+.sph-step.done .sph-sn { background: #1fa855; color: #fff; }
+.sph-sn .bji { width: 16px; height: 16px; }
+.sph-sb { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.sph-sb > b { font-size: 15px; }
+.sph-sb > small { color: var(--muted); font-size: 13px; line-height: 1.4; }
+.sph-sb > .btn { width: 100%; justify-content: center; margin-top: 2px; }
+.sph-sb > .sph-note { font-size: 12px; }
+.sph-again { font-size: 13px; padding: 0; }
+/* which WhatsApp (the app, when the phone has both): asked once, remembered */
+.sph-apps { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; font-weight: 700; color: var(--muted); }
+.sph-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.sph-seg button { border: 0; background: transparent; padding: 8px 12px; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; }
+.sph-seg button[aria-pressed="true"] { background: #1fa855; color: #fff; font-weight: 700; }
+/* a computer's send (the extension): opening, ready, or why not */
+.sph-step.bad { border-color: var(--coral); }
+.sph-step.bad .sph-sn { background: var(--coral); color: #fff; font-weight: 800; }
+.sph-spin { width: 16px; height: 16px; border-radius: 50%; border: 2.5px solid rgba(31, 168, 85, .25); border-top-color: #1fa855; animation: sph-spin .8s linear infinite; }
+.sph-step.now .sph-sn { background: #e7f7ec; }
+@keyframes sph-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .sph-spin { animation-duration: 2.4s; } }
+/* the extension: why, and how to install it (once) */
+.sph-ext-need { margin: 0; padding: 10px 12px; border-radius: 12px; background: #fff6e5; border: 1px solid #f3d9a4; color: #7a4b00; font-size: 13px; line-height: 1.45; }
+.sph-ext { display: flex; flex-direction: column; gap: 12px; }
+.sph-ext-why { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink); }
+.sph-ext-warn { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--coral-soft); color: var(--coral); font-size: 13px; font-weight: 600; }
+.sph-ext-steps { margin: 0; padding: 0; list-style: none; counter-reset: sph; display: flex; flex-direction: column; gap: 8px; }
+.sph-ext-steps li { counter-increment: sph; display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 10px; row-gap: 6px; align-items: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 13.5px; line-height: 1.45; }
+.sph-ext-steps li::before { content: counter(sph); grid-row: span 2; width: 26px; height: 26px; border-radius: 50%; background: var(--raise); color: var(--ink); font-weight: 800; font-size: 13px; display: grid; place-items: center; }
+.sph-ext-steps li > .btn { justify-self: start; }

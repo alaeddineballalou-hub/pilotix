@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "build": "node ../../scripts/wa-extension-zip.mjs && tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",
     "cap:sync": "cap sync",
-    "build:artifact": "tsc -p tsconfig.json --noEmit && vite build --mode artifact"
+    "build:artifact": "node ../../scripts/wa-extension-zip.mjs && tsc -p tsconfig.json --noEmit && vite build --mode artifact"
   },
   "dependencies": {
     "@capacitor/android": "7.6.9",
