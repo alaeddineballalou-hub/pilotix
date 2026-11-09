@@ -23,6 +23,8 @@ function sameSecret(a: string, b: string): boolean {
 import { getSetting } from '../settings';
 import { removedCouriers } from '../platform/courierWatch';
 import { addEvent, getOrder, listOrders, setFollow } from './orders';
+import { recipients } from './depotalerts';
+import { sendPush } from './push';
 import { apiFees, companyWeightRule, courierFeesOf, declaredKg, feesByApi, knownKg, ruleFee, saveCourierFees, saveCourierWeight, weightRuleOf, weightRuleSet, wholeKg, type WeightRule } from './courierfees';
 
 const id = z.number().int().positive();
@@ -446,6 +448,8 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
   let weightRule: WeightRule | null = null;
   const rule = async () => (weightRule ??= await companyWeightRule(ctx.db, c.id));
   const errors: { ref: string; error: string }[] = [];
+  /** parcels the company just took before the depot's scan (the depot is told once, below) */
+  const taken: string[] = [];
   for (const a of answers) {
     const p = parcels.find((x: any) => num(x.id) === a.id);
     if (!p) continue;
@@ -479,6 +483,7 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
         await ctx.db.query(`UPDATE orders SET sub_status = $2, updated_at = now() WHERE id = $1 AND follow_status = 'prepared'`, [a.id, SUB_TAKEN_UNSCANNED]);
         await addEvent(ctx.db, a.id, null, 'note', null, 'event', `${c.name} a pris le colis avant le scan du dépôt : il reste « En dispatch » jusqu’au scan`);
         changed++;
+        taken.push(p.ref);
       }
       continue;
     }
@@ -500,6 +505,17 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
   for (const [status, list] of byStatus) {
     // a new alert from the company is a new one (« à traiter » again)
     changed += (await setFollow(sys, { ids: list, status, note: `Statut ${c.name}`, ...(status === 'alert' ? { subStatus: null } : {}) }, { system: true, courier: true, expect })).changed.length;
+  }
+  // the depot manager (Management › Alertes dépôt; nobody chosen: every depot agent) gets one notification on the phone
+  // for the parcels the company just took before the depot's scan — they are waiting in « En dispatch » to be scanned
+  if (taken.length) {
+    const what = taken.length === 1 ? taken[0] : `${taken.length} colis`;
+    await sendPush(ctx, await recipients(ctx.db), {
+      title: `📦 ${c.name} a pris ${what} sans le scan du dépôt`,
+      body: taken.length === 1 ? 'Scannez-le dans Dépôt › En dispatch.' : `${taken.slice(0, 6).join(', ')}${taken.length > 6 ? '…' : ''} · scannez-les dans Dépôt › En dispatch.`,
+      tag: `depot-taken-${c.id}`,
+      url: '#/depot/prepares',
+    }).catch(() => 0);
   }
   return { company: c.name, checked: parcels.length, changed, fees: feesChanged, failed: errors.length, errors: errors.slice(0, 20) };
 }

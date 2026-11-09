@@ -210,16 +210,32 @@ test('a parcel the courier took before the depot scanned it waits « En dispatch
   // both packed and given their tracking, not scanned out yet (« En dispatch »)
   await db.query(`UPDATE orders SET follow_status = 'prepared', sub_status = NULL WHERE id = ANY($1)`, [[a.id, b.id]]);
   const says: Record<number, [string, string]> = { [Number(a.id)]: ['En livraison', 'out_for_delivery'], [Number(b.id)]: ['Livré', 'delivered'] };
-  const server = { courier: async (k: string, args: any) => (k === 'track' ? args.items.map((x: any) => (says[x.id] ? { id: x.id, status: says[x.id][0], mapped: says[x.id][1] } : { id: x.id, status: 'x', mapped: null })) : []) } as any;
+  // the depot manager's phone (here: every depot agent, nobody chosen in Management › Alertes dépôt)
+  const pushed: { endpoint: string; title: string; body: string }[] = [];
+  const server = {
+    courier: async (k: string, args: any) => (k === 'track' ? args.items.map((x: any) => (says[x.id] ? { id: x.id, status: says[x.id][0], mapped: says[x.id][1] } : { id: x.id, status: 'x', mapped: null })) : []),
+    pushKeys: () => ({ publicKey: 'pub-taken', privateKey: 'priv' }),
+    push: async (_k: any, subs: any[], payload: any) => {
+      for (const x of subs) pushed.push({ endpoint: x.endpoint, title: payload.title, body: payload.body });
+      return subs.map((x: any) => ({ endpoint: x.endpoint, ok: true, gone: false }));
+    },
+  } as any;
+  await call('push.key', await as(EMAILS.depot, server), {});
+  await call('push.subscribe', await as(EMAILS.depot, server), { endpoint: 'https://fcm.googleapis.com/fcm/send/depot-phone', p256dh: 'p256dh-key-0123456789', auth: 'auth-key-01' });
   const sync = async () => call('delivery.sync', await as(EMAILS.suivi, server), { companyId: Number(a.company_id) });
   const row = async (id: unknown) => one('SELECT follow_status, sub_status, ext_status FROM orders WHERE id = $1', [id]);
+  const ref = (await one('SELECT ref FROM orders WHERE id = $1', [a.id])).ref as string;
   await sync();
   assert.deepEqual(await row(a.id), { follow_status: 'prepared', sub_status: 'pris_sans_scan', ext_status: 'En livraison' }, 'it waits for the scan, its company word kept');
   assert.equal((await row(b.id)).follow_status, 'delivered', 'an end still moves it');
-  // asked again: no second note in its history
+  const told = pushed.filter((x) => x.endpoint.endsWith('/depot-phone'));
+  assert.equal(told.length, 1, 'the depot is told once');
+  assert.match(told[0].title, new RegExp(`a pris ${ref} sans le scan du dépôt`));
+  // asked again: no second note in its history, no second notification
   await sync();
   const notes = await one(`SELECT count(*)::int AS n FROM order_events WHERE order_id = $1 AND note LIKE '%avant le scan du dépôt%'`, [a.id]);
   assert.equal(notes.n, 1);
+  assert.equal(pushed.filter((x) => x.endpoint.endsWith('/depot-phone')).length, 1);
   // the depot scans it out: the mark goes, then the company's status moves it on
   await call('orders.setFollow', depot, { ids: [Number(a.id)], status: 'shipped' });
   assert.deepEqual(await row(a.id), { follow_status: 'shipped', sub_status: null, ext_status: 'En livraison' });
