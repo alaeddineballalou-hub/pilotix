@@ -1,7 +1,6 @@
 // The platform's tables (schema "platform"): the shops, their plans and payments, Pilotix staff, the e-mail → shop
 // index used at login, settings and the journal. Applied before every shop's own migrations.
 import type { Tenancy } from './tenancy';
-import { GRANTS_SQL } from './shared';
 import { PILOT_PLATFORM_SQL, RELEASE_SQL } from '../modules/pilotlearn';
 import { EXAM_PLAN_SQL, EXAM_SQL, pilotixLessonsSql } from '../modules/pilotexamdata';
 import { CASES_SQL } from '../modules/pilotcases';
@@ -584,34 +583,6 @@ UPDATE platform.shops SET features_on = features_on || '["pilotai/social"]'::jso
  WHERE features_on @> '["pilotai/cm"]'::jsonb AND NOT features_on @> '["pilotai/social"]'::jsonb;
 `;
 
-// The login index kept in step with every shop's accounts. Shared tables: all shops' profiles are in public.profiles,
-// each row with its shop_id; before them, the shop was the table's schema.
-const SHARED_LOGIN_SQL = `
-CREATE OR REPLACE FUNCTION platform.sync_login() RETURNS trigger LANGUAGE plpgsql AS $f$
-DECLARE
-  sid   integer;
-  e_old text;
-  e_new text;
-BEGIN
-  IF TG_TABLE_SCHEMA = 'public' AND to_regproc('public.px_shop_id') IS NOT NULL THEN
-    IF TG_OP = 'DELETE' THEN sid := OLD.shop_id; ELSE sid := NEW.shop_id; END IF;
-  ELSE
-    SELECT id INTO sid FROM platform.shops WHERE schema_name = TG_TABLE_SCHEMA;
-  END IF;
-  IF sid IS NULL THEN RETURN NULL; END IF;
-  IF TG_OP <> 'INSERT' THEN e_old := lower(OLD.email); END IF;
-  IF TG_OP <> 'DELETE' THEN e_new := lower(NEW.email); END IF;
-  IF e_new LIKE '%@pilotix.invalid' OR e_new LIKE '%@demo.pilotix.dz' OR e_new = '' THEN e_new := NULL; END IF;
-  IF e_old IS NOT NULL AND e_old IS DISTINCT FROM e_new THEN
-    DELETE FROM platform.logins WHERE email = e_old AND shop_id = sid;
-  END IF;
-  IF e_new IS NOT NULL AND e_new IS DISTINCT FROM e_old THEN
-    INSERT INTO platform.logins (email, shop_id) VALUES (e_new, sid) ON CONFLICT DO NOTHING;
-  END IF;
-  RETURN NULL;
-END $f$;
-`;
-
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
@@ -687,15 +658,11 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p033_spy_searches', SPY_SEARCHES_SQL],
   // Pilot AI › the lesson test: after « Push en test », ten cases on the new lessons, decided by the coach (pilotcases.ts)
   ['p034_case_tests', CASES_SQL],
-  // shared tables: an account's shop is the row's own shop_id (every shop's profiles are in public.profiles)
-  ['p035_shared_login_sync', SHARED_LOGIN_SQL],
 ];
 
 /** Creates or updates the platform's tables. */
 export async function migratePlatform(t: Tenancy): Promise<string[]> {
   await t.exec('public', 'CREATE SCHEMA IF NOT EXISTS platform; CREATE TABLE IF NOT EXISTS platform.migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
-  // shared tables: the app's role may use the platform's schema (and every table made in it from now on)
-  await t.exec('public', GRANTS_SQL);
   const done = new Set((await t.platform.query<{ name: string }>('SELECT name FROM platform.migrations')).map((r) => r.name));
   const applied: string[] = [];
   for (const [name, sql] of PLATFORM_MIGRATIONS) {
@@ -704,15 +671,11 @@ export async function migratePlatform(t: Tenancy): Promise<string[]> {
     await t.platform.query('INSERT INTO platform.migrations (name) VALUES ($1)', [name]);
     applied.push(name);
   }
-  // the app's role (shared tables) may use the platform's tables, the new ones too
-  await t.exec('public', GRANTS_SQL);
   return applied;
 }
 
 /** The trigger that keeps platform.logins in step with a shop's accounts (created once per shop schema). */
 export async function ensureLoginTrigger(t: Tenancy, schema: string): Promise<void> {
-  // shared tables: one trigger on public.profiles serves every shop
-  if (schema !== 'public' && (await t.platform.query(`SELECT to_regproc('public.px_shop_id') IS NOT NULL AS s`))[0]?.s === true) return;
   await t.exec(
     schema,
     `DO $$ BEGIN

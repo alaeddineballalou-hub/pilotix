@@ -1,4 +1,3 @@
-import { GRANTS_SQL, SHARED_SQL } from './platform/shared';
 import schema001 from './migrations/001_schema';
 import m002 from './migrations/002_orders';
 import m003 from './migrations/003_confirmation';
@@ -109,11 +108,7 @@ export interface Db {
 export const MIGRATIONS: [string, string][] = [['001_schema', schema001], ['002_orders', m002], ['003_confirmation', m003], ['004_stats', m004], ['005_catalog', m005], ['006_customers', m006], ['007_suivi', m007], ['008_sav', m008], ['009_delivery', m009], ['010_cash', m010], ['011_admin', m011], ['012_ads', m012], ['013_tickets', m013], ['014_own_tracking', m014], ['015_profile', m015], ['016_dellal', m016], ['017_ui', m017], ['018_marketers', m018], ['019_cm', m019], ['020_upsell', m020], ['021_notify', m021], ['022_picking', m022], ['023_sav_satisfaction', m023], ['024_stock', m024], ['025_claims_api', m025], ['026_caisses', m026], ['027_courier_payments', m027], ['028_zr_services', m028], ['029_custom_caisses', m029], ['030_landing', m030], ['031_landing_auto', m031], ['032_safety', m032], ['033_product_details', m033], ['034_product_log', m034], ['035_landing_images', m035], ['036_password_reset', m036], ['037_spy', m037], ['038_user_managers', m038], ['039_sheet_rows', m039], ['040_sheet_memory', m040], ['041_product_options', m041], ['042_archive', m042], ['043_protection', m043], ['044_trust', m044], ['045_agencies', m045], ['046_groups', m046], ['047_landing_w320', m047], ['048_partner_lead', m048], ['049_pixels', m049], ['050_multi_pixels', m050], ['051_fp', m051], ['052_depot_alerts', m052], ['053_push', m053], ['054_dispatch', m054], ['055_livreur', m055], ['056_pilot', m056], ['057_risk_confirms', m057], ['058_can_affect', m058], ['059_courier_fees', m059], ['060_pick_undo', m060], ['061_variant_pricing', m061], ['062_variant_logistics', m062], ['063_product_services', m063], ['064_variant_photo', m064], ['065_receipt_unit_cost', m065], ['066_management_plans', m066], ['067_agency_plan_terms', m067], ['068_payment_bonus_rules', m068], ['069_seller_bonus_offers', m069], ['070_lahja', m070], ['071_lahja_comment', m071], ['072_product_guides', m072], ['073_guide_translations', m073], ['074_landing_variant_photos', m074], ['075_broken_stock', m075], ['076_shared_blacklist', m076], ['077_dellal_auto_order', m077], ['078_ad_currency', m078], ['079_cm_tests', m079], ['080_lead_forms', m080], ['081_cm_planner', m081], ['082_social_manager', m082], ['083_ad_issues', m083], ['084_wa_campaigns', m084], ['085_meta_catalog', m085], ['086_tiktok_catalog', m086], ['087_pilot_ads', m087], ['088_dellal_photos', m088], ['089_product_photos', m089], ['090_catalog_results', m090], ['091_partners', m091], ['092_automations', m092], ['093_rename_memory', m093], ['094_landed_costs', m094], ['095_batches', m095], ['096_pos', m096], ['097_making', m097], ['098_pay', m098], ['099_created_by', m099], ['100_photo_pages', m100],];
 
 /** Applies migrations not applied yet. `exec` runs a multi-statement SQL script. */
-/**
- * Applies the migrations not applied yet, then (unless `legacy`: an old per-shop schema being moved) converts what they
- * made to shared tables (platform/shared.ts): every shop's rows in the same tables, each filtered to its own shop.
- */
-export async function migrate(db: Db, exec: (sql: string) => Promise<void>, opts: { legacy?: boolean } = {}): Promise<string[]> {
+export async function migrate(db: Db, exec: (sql: string) => Promise<void>): Promise<string[]> {
   await exec('CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
   const done = new Set((await db.query<{ name: string }>('SELECT name FROM schema_migrations')).map((r) => r.name));
   const applied: string[] = [];
@@ -123,19 +118,8 @@ export async function migrate(db: Db, exec: (sql: string) => Promise<void>, opts
     await db.query('INSERT INTO schema_migrations (name) VALUES ($1)', [name]);
     applied.push(name);
   }
-  if (!opts.legacy) await exec(TENANTIZE_SQL);
   return applied;
 }
-
-/** The shared tables' functions and role, then the conversion of anything not converted yet (shop #1 owns the rows already there). */
-export const TENANTIZE_SQL = `${SHARED_SQL}
-${GRANTS_SQL}
-DO $px$ DECLARE p integer := 1; BEGIN
-  IF to_regclass('platform.shops') IS NOT NULL THEN
-    SELECT coalesce((SELECT id FROM platform.shops WHERE primary_shop ORDER BY id LIMIT 1), 1) INTO p;
-  END IF;
-  PERFORM public.px_tenantize(p);
-END $px$;`;
 
 // ---------------------------------------------------------------- small helpers
 export const num = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
