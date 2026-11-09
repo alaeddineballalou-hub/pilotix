@@ -72,6 +72,9 @@ export const FOLLOW_TONE: Record<FollowStatus, Tone> = {
 };
 /** Parcels still with the courier. */
 export const FOLLOW_ON_ROAD: FollowStatus[] = ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange'];
+/** A parcel « En dispatch » that its company says it already took, before the depot scanned it out: it waits there for the
+ *  scan (the scan clears this mark), shown « … l’a déjà pris : scannez-le ». */
+export const SUB_TAKEN_UNSCANNED = 'pris_sans_scan';
 export const FOLLOW_FINAL: FollowStatus[] = ['delivered', 'returned', 'exchanged', 'lost', 'cancelled'];
 
 /** Which delivery statuses each role may set (admin and suivi: all). */

@@ -2,7 +2,7 @@
 // own livreurs and their round ("Ma tournée"). Courier APIs run on the server only (ctx.server.courier → couriers/index.ts);
 // in the browser preview every courier answer is simulated.
 import { sealDeep, sealString } from '../secretbox';
-import { COURIER_KINDS, CourierKind, FOLLOW_ON_ROAD, FollowStatus, Order, Session, WILAYAS } from '@pilotix/shared';
+import { COURIER_KINDS, CourierKind, FOLLOW_ON_ROAD, FollowStatus, Order, Session, SUB_TAKEN_UNSCANNED, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { ADAPTERS } from '../couriers/adapters';
 import { DEFAULT_TEMPLATE, PLACEHOLDERS, checkTemplate, custom } from '../couriers/custom';
@@ -30,7 +30,8 @@ const ids = z.array(id).min(1).max(500);
 
 /** Statuses where a parcel is waiting to leave with this company. */
 export const TO_SHIP: FollowStatus[] = ['to_prepare', 'prepared'];
-/** Statuses the courier sync follows (parcels with a tracking number, not final). « En retour » too: the Suivi may
+/** Statuses the courier sync follows (parcels with a tracking number, not final). « En dispatch » only for the company's
+ *  word and its ends: taken on the road, it waits for the depot's scan (syncCompany). « En retour » too: the Suivi may
  *  have marked it so (Perdu, client annule) while the company still delivers it — only its delivered / lost is taken. */
 const SYNCABLE: FollowStatus[] = ['prepared', ...FOLLOW_ON_ROAD, 'returning'];
 /** Statuses set by hand by the suivi that the courier's ordinary on-the-road statuses must not overwrite. */
@@ -469,6 +470,17 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
     if (a.status !== p.ext_status) {
       await ctx.db.query('UPDATE orders SET ext_status=$2, ext_status_at=COALESCE($3::timestamptz, now()), updated_at=now() WHERE id=$1', [a.id, a.status.slice(0, 200), safeDate(a.at)]);
       changed++;
+    }
+    // The depot hands a parcel over by scanning it (« Dispatchées »): until then the company's « on the road » statuses
+    // do not take it out of « En dispatch » (the owner's rule, 9 Nov 2026). It waits there marked « … l’a déjà pris :
+    // scannez-le »; the scan clears the mark and the next sync moves it on. An end (livré, retour, perdu…) still moves it.
+    if (p.follow_status === 'prepared' && to && FOLLOW_ON_ROAD.includes(to)) {
+      if (p.sub_status !== SUB_TAKEN_UNSCANNED) {
+        await ctx.db.query(`UPDATE orders SET sub_status = $2, updated_at = now() WHERE id = $1 AND follow_status = 'prepared'`, [a.id, SUB_TAKEN_UNSCANNED]);
+        await addEvent(ctx.db, a.id, null, 'note', null, 'event', `${c.name} a pris le colis avant le scan du dépôt : il reste « En dispatch » jusqu’au scan`);
+        changed++;
+      }
+      continue;
     }
     // Suivi's own work (an alert raised or handled, an exchange in progress) is not undone by the courier's
     // « en livraison » / « vers wilaya »: only an end (livré, retour, perdu…) moves such a parcel.

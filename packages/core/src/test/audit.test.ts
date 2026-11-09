@@ -200,6 +200,33 @@ test('the courier sync does not undo the suivi’s alert', async () => {
   assert.equal((await one('SELECT follow_status FROM orders WHERE id = $1', [zr.id])).follow_status, 'failed');
 });
 
+test('a parcel the courier took before the depot scanned it waits « En dispatch » for the scan; delivered still counts', async () => {
+  const depot = await as(EMAILS.depot);
+  const a = await one(`SELECT o.id, o.company_id FROM orders o JOIN delivery_companies c ON c.id = o.company_id WHERE c.kind = 'zr' AND o.tracking IS NOT NULL AND o.follow_status IN ('shipped', 'out_for_delivery') ORDER BY o.id LIMIT 1`);
+  assert.ok(a, 'a ZR parcel');
+  const b = await one(`SELECT id FROM orders WHERE company_id = $1 AND tracking IS NOT NULL AND follow_status IN ('shipped', 'out_for_delivery') AND id <> $2 ORDER BY id LIMIT 1`, [a.company_id, a.id]);
+  assert.ok(b, 'a second parcel at the same company');
+  await db.query(`UPDATE delivery_companies SET credentials = '{"api_key":"k","tenant":"t"}', active = true WHERE id = $1`, [a.company_id]);
+  // both packed and given their tracking, not scanned out yet (« En dispatch »)
+  await db.query(`UPDATE orders SET follow_status = 'prepared', sub_status = NULL WHERE id = ANY($1)`, [[a.id, b.id]]);
+  const says: Record<number, [string, string]> = { [Number(a.id)]: ['En livraison', 'out_for_delivery'], [Number(b.id)]: ['Livré', 'delivered'] };
+  const server = { courier: async (k: string, args: any) => (k === 'track' ? args.items.map((x: any) => (says[x.id] ? { id: x.id, status: says[x.id][0], mapped: says[x.id][1] } : { id: x.id, status: 'x', mapped: null })) : []) } as any;
+  const sync = async () => call('delivery.sync', await as(EMAILS.suivi, server), { companyId: Number(a.company_id) });
+  const row = async (id: unknown) => one('SELECT follow_status, sub_status, ext_status FROM orders WHERE id = $1', [id]);
+  await sync();
+  assert.deepEqual(await row(a.id), { follow_status: 'prepared', sub_status: 'pris_sans_scan', ext_status: 'En livraison' }, 'it waits for the scan, its company word kept');
+  assert.equal((await row(b.id)).follow_status, 'delivered', 'an end still moves it');
+  // asked again: no second note in its history
+  await sync();
+  const notes = await one(`SELECT count(*)::int AS n FROM order_events WHERE order_id = $1 AND note LIKE '%avant le scan du dépôt%'`, [a.id]);
+  assert.equal(notes.n, 1);
+  // the depot scans it out: the mark goes, then the company's status moves it on
+  await call('orders.setFollow', depot, { ids: [Number(a.id)], status: 'shipped' });
+  assert.deepEqual(await row(a.id), { follow_status: 'shipped', sub_status: null, ext_status: 'En livraison' });
+  await sync();
+  assert.equal((await row(a.id)).follow_status, 'out_for_delivery');
+});
+
 test('two « Envoyer » at once send a parcel to the courier only once', async () => {
   const conf = await as(EMAILS.conf);
   const depot = await as(EMAILS.depot);

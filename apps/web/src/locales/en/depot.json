@@ -204,6 +204,7 @@
     "one": "Label",
     "printSel": "Labels",
     "waiting": "Tracking pending",
+    "courierTook": "{{name}} already took it: scan it",
     "waitingN_one": "{{count}} parcel waits for its company’s tracking number",
     "waitingN_other": "{{count}} parcels wait for their company’s tracking number",
     "sendAll": "Send to the company",

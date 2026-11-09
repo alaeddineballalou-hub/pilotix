@@ -204,6 +204,7 @@
     "one": "Étiquette",
     "printSel": "Étiquettes",
     "waiting": "Suivi en attente",
+    "courierTook": "{{name}} l’a déjà pris : scannez-le",
     "waitingN_one": "{{count}} colis attend le n° de suivi de sa société",
     "waitingN_other": "{{count}} colis attendent le n° de suivi de leur société",
     "sendAll": "Envoyer à la société",

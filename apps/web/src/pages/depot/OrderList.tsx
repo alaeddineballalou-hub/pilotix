@@ -1,5 +1,5 @@
 import type { FollowStatus, Order } from '@pilotix/shared';
-import { API_COURIER_KINDS } from '@pilotix/shared';
+import { API_COURIER_KINDS, SUB_TAKEN_UNSCANNED } from '@pilotix/shared';
 import { ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, wilaya, when } from '../../lib/format';
@@ -250,6 +250,11 @@ export function DepotOrderList({
                       </small>
                     ) : (
                       <CopyCode code={trackOf(o) || o.ref} small />
+                    )}
+                    {o.followStatus === 'prepared' && o.subStatus === SUB_TAKEN_UNSCANNED && (
+                      <small className="px-taken">
+                        <Icon name="alert" /> {t('depot.labels.courierTook', { name: o.companyName || t('depot.filters.company') })}
+                      </small>
                     )}
                   </td>
                   {!compact && (

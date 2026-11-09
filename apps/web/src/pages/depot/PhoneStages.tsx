@@ -8,6 +8,7 @@
 //   stock comes back.
 // A tap on a card opens the order.
 import type { FollowStatus, Order } from '@pilotix/shared';
+import { SUB_TAKEN_UNSCANNED } from '@pilotix/shared';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
@@ -96,6 +97,11 @@ function Parcel({ o, badge, children, waiting }: { o: Order; badge?: ReactNode; 
         )}
         <b className="ltr">{da(o.total)}</b>
       </div>
+      {o.followStatus === 'prepared' && o.subStatus === SUB_TAKEN_UNSCANNED && (
+        <p className="px-taken">
+          <Icon name="alert" /> {t('depot.labels.courierTook', { name: o.companyName || t('depot.filters.company') })}
+        </p>
+      )}
       {children}
     </div>
   );
