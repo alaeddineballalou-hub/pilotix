@@ -577,7 +577,7 @@ export async function provisionShop(t: Tenancy, n: NewShop): Promise<Shop> {
 }
 
 async function fillDemo(db: Db, name: string, now: number) {
-  await seedDemo(db, { orders: 600, now });
+  await seedDemo(db, { orders: 1100, now });
   await seedPilotDemo(db);
   await setSetting(db, 'shop', { ...DEFAULT_SETTINGS.shop, name });
 }
