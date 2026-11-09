@@ -191,16 +191,19 @@ async function countConfirmation(ctx: Ctx, r: R, ids: number[], detail: boolean)
   for (const c of await ctx.db.query(`SELECT e.user_id AS u, count(*)::int AS n FROM order_events e JOIN sales o ON o.id = e.order_id WHERE e.kind = 'conf_status' AND e.at >= $1 AND e.at < $2 AND e.user_id = ANY($3) GROUP BY 1`, P))
     add(of(x, c.u), 'calls', num(c.n));
   // what came of the orders they confirmed: delivered or back
+  // two reads, each on its own index (agent + delivery date; status), instead of every order they ever confirmed
   for (const q of await ctx.db.query(
-    `SELECT agent_id AS u,
-       count(*) FILTER (WHERE follow_status = ANY($4) AND delivered_at >= $1 AND delivered_at < $2)::int AS dl,
-       count(*) FILTER (WHERE follow_status = ANY($5) AND coalesce(returned_at, returning_at, updated_at) >= $1 AND coalesce(returned_at, returning_at, updated_at) < $2)::int AS rt
-     FROM sales WHERE agent_id = ANY($3) AND (follow_status = ANY($4) OR follow_status = ANY($5)) GROUP BY 1`,
-    [...P, DONE, BACK],
-  )) {
-    add(of(x, q.u), 'delivered', num(q.dl));
-    add(of(x, q.u), 'returned', num(q.rt));
-  }
+    `SELECT agent_id AS u, count(*)::int AS n FROM sales
+      WHERE agent_id = ANY($3) AND follow_status = ANY($4) AND delivered_at >= $1 AND delivered_at < $2 GROUP BY 1`,
+    [...P, DONE],
+  ))
+    add(of(x, q.u), 'delivered', num(q.n));
+  for (const q of await ctx.db.query(
+    `SELECT agent_id AS u, count(*)::int AS n FROM sales
+      WHERE agent_id = ANY($3) AND follow_status = ANY($4) AND coalesce(returned_at, returning_at, updated_at) >= $1 AND coalesce(returned_at, returning_at, updated_at) < $2 GROUP BY 1`,
+    [...P, BACK],
+  ))
+    add(of(x, q.u), 'returned', num(q.n));
   // the basket and the upsell of what they confirmed
   for (const q of await ctx.db.query(
     `SELECT agent_id AS u, count(*)::int AS n, count(*) FILTER (WHERE has_upsell)::int AS up, COALESCE(sum(total), 0)::bigint AS v
@@ -228,7 +231,7 @@ async function countConfirmation(ctx: Ctx, r: R, ids: number[], detail: boolean)
     for (const q of await ctx.db.query(
       `SELECT agent_id AS u, count(*) FILTER (WHERE conf_status = ANY($2))::int AS todo,
          count(*) FILTER (WHERE conf_status IN ('callback','postponed') AND next_call_at < $3)::int AS late
-       FROM sales WHERE agent_id = ANY($1) GROUP BY 1`,
+       FROM sales WHERE agent_id = ANY($1) AND conf_status = ANY($2) GROUP BY 1`,
       [ids, CONF_TODO, new Date(ctx.now()).toISOString()],
     )) {
       add(of(x, q.u), 'inProgress', num(q.todo));
@@ -640,7 +643,8 @@ export const boardProcs = {
   /** A team's board for one area and a period: members, team, period before, days, reasons, what is late now. */
   'stats.board': proc(['agent_manager', 'vendeur'], BoardInput, async (ctx, i) => {
     await needArea(ctx, i.area);
-    return cachedBoard(ctx, i, () => board(ctx, i));
+    // all its reads on one connection (one wait in the queue, not thirty) and from the same moment
+    return cachedBoard(ctx, i, () => ctx.db.tx((db) => board({ ...ctx, db }, i)));
   }),
   /** The user's own day in each area they work in, next to their team's (Accueil of an agent). */
   'stats.me': proc(['confirmation', 'suivi', 'depot'], Range, (ctx, r) => myDay(ctx, r)),
