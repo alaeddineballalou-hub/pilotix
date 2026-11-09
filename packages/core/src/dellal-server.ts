@@ -690,6 +690,7 @@ async function smsHooks(ctx: Ctx, a: { url: string }) {
  *  - 'waTemplate' / 'waTemplates' / 'waCreateTemplate' / 'sms' / 'smsHooks' → Pilot Automations
  *  - 'media' → a customer's photo (WhatsApp media id or Meta's link): its bytes for Pilot AI, and a small copy
  *  - 'photos' → { channel, externalId, accountId, photos }: the product photos Dellal picked, sent as JPEG
+ *  - 'photoLinks' → { photos }: « Envoyer des photos » (Confirmation): each photo's public JPEG copy (its link, or null)
  */
 export async function runDellal(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
   if (action === 'complete') return complete(ctx, args as AiRequest);
@@ -716,6 +717,7 @@ export async function runDellal(action: string, args: unknown, ctx: Ctx): Promis
   if (action === 'transcribe') return transcribe(ctx, args as VoiceArgs);
   if (action === 'media') return readMedia(ctx, args as MediaArgs);
   if (action === 'photos') return sendPhotos(ctx, args as PhotosArgs);
+  if (action === 'photoLinks') return photoLinks(ctx, args as { photos: PhotosArgs['photos'] });
   if (action === 'catchUp') return catchUpMeta(args as CatchUpArgs);
   if (action === 'igLogin') return igLogin(String((args as any)?.token ?? ''), (args as any)?.igId ? String((args as any).igId) : null);
   if (action === 'igRefresh') return igRefresh(String((args as any)?.token ?? ''));
@@ -1303,6 +1305,30 @@ async function sendPhotos(ctx: Ctx, a: PhotosArgs): Promise<{ ok: boolean; sent:
   if (sent) await new Promise((r) => setTimeout(r, PHOTOS_PAUSE_MS));
   return { ok: !errors.length, sent, errors };
 }
+/**
+ * « Envoyer des photos » (Confirmation): each photo as a public JPEG copy (the same picture is made once; an HD one is
+ * fetched from the bucket that one time). A photo that fails gives null: the others still go.
+ */
+async function photoLinks(ctx: Ctx, a: { photos: PhotosArgs['photos'] }): Promise<{ urls: (string | null)[]; errors: string[] }> {
+  const base = publicApi(ctx);
+  const photos = Array.isArray(a?.photos) ? a.photos.slice(0, 40) : [];
+  const urls: (string | null)[] = [];
+  const errors: string[] = [];
+  if (!base) return { urls: photos.map(() => null), errors: ['Adresse publique du serveur manquante (PUBLIC_URL) : les photos ne peuvent pas partir.'] };
+  const bucket = photos.some((p) => p.key) && ctx.t ? await readStore(ctx.t.platform).catch(() => null) : null;
+  for (const p of photos) {
+    try {
+      if (p.key && !bucket) throw new AppError('bad_request', 'Photo HD : le stockage des photos n’est plus configuré sur ce serveur.');
+      const f = await jpegFile(ctx, p.key ? { ...p, url: await presign(bucket!, 'GET', String(p.key), 600) } : p);
+      urls.push(`${base}/lp/dp/${f.id}/${f.key}.jpg`);
+    } catch (e: any) {
+      urls.push(null);
+      errors.push(String(e?.message ?? e).slice(0, 300));
+    }
+  }
+  return { urls, errors };
+}
+
 /** the moment the words wait after the photos (0 in the tests) */
 export let PHOTOS_PAUSE_MS = 1500;
 export const setPhotosPause = (ms: number) => (PHOTOS_PAUSE_MS = ms);

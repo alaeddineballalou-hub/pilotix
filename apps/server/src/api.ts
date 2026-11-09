@@ -1501,6 +1501,34 @@ class ApiController {
   }
 
   /**
+   * « Envoyer des photos » (Confirmation): the page a customer opens from the agent's WhatsApp message (and WhatsApp reads
+   * for its preview: the first photo): /lp/ph/<id>/<key>. The random key keeps it unguessable; the shop's name and the
+   * products' photos only. Plain HTML: nothing runs, only the photos load.
+   */
+  @Public()
+  @Get(['lp/ph/:id/:key', 's/:shop/lp/ph/:id/:key'])
+  async photoPage(@Param('shop') shop: string | undefined, @Param('id') idp: string, @Param('key') key: string, @Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
+    if (!/^\d{1,15}$/.test(idp) || !/^[a-f0-9]{24}$/.test(key)) return res.status(404).send();
+    try {
+      const ref = intake(await this.publicShop(shop));
+      const p: any = await this.core.call(ref, 'photos.page', await this.core.systemSession(ref), { id: Number(idp), key });
+      return sendText(
+        req,
+        res
+          .status(200)
+          .header('Content-Type', 'text/html; charset=utf-8')
+          .header('Cache-Control', 'public, max-age=300')
+          .header('Content-Security-Policy', "default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+          .header('X-Robots-Tag', 'noindex, nofollow')
+          .header('Referrer-Policy', 'no-referrer'),
+        core.photoPageHtml(p),
+      );
+    } catch {
+      return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
+    }
+  }
+
+  /**
    * An order from a page. The answer is the same whether the order passed or was blocked as fake (the customer must not
    * be able to tell); only a page that does not exist (404) or a server failure (500, the page asks to try again) differ.
    */

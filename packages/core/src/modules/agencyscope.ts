@@ -259,6 +259,9 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'confirmation.banner': free,
   'confirmation.gridFee': order('id'),
   'confirmation.release': order('id'),
+  // « Envoyer des photos »: the catalogue's photos (its products only), the page for one of its orders
+  'confirmation.photoThumbs': free,
+  'confirmation.photoShare': order('orderId'),
   'confirmation.setTry': order('ids'),
   'confirmation.block': order('ids'),
   'customers.history': customer,

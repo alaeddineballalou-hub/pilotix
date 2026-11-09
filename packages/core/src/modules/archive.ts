@@ -56,6 +56,8 @@ export const USER_REFS: readonly Ref[] = [
   ['chat_messages', 'livreur_id', 'messages'],
   ['conversations', 'created_by', 'messages'],
   ['conversations', 'assigned_to', 'messages'],
+  // « Envoyer des photos » (Confirmation): the agent who sent a customer the products' photos
+  ['photo_pages', 'created_by', 'messages'],
   ['conv_messages', 'user_id', 'messages'],
   ['cm_comments', 'handled_by', 'messages'],
   ['dellal_lahja', 'created_by', 'messages'],

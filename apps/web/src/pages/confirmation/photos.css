@@ -1,0 +1,45 @@
+/* « Envoyer des photos »: the products ticked (their photo, their colour), one to add, the message, then WhatsApp */
+.sph .modal-body, .sph .sheet-body { display: flex; flex-direction: column; gap: 12px; }
+.sph-title { display: inline-flex; align-items: center; gap: 8px; }
+.sph-title .bji { width: 18px; height: 18px; color: #1f9d55; }
+.sph-help { margin: 0; color: var(--muted); font-size: 13.5px; }
+.sph-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sph-it { display: grid; grid-template-columns: 60px minmax(0, 1fr) 32px; gap: 12px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.sph-it.none { background: var(--raise); }
+.sph-it.none .sph-pic { opacity: .55; }
+.sph-pic { position: relative; width: 60px; height: 60px; border-radius: 12px; overflow: hidden; display: grid; place-items: center; background: linear-gradient(135deg, #ffe2b3, #fff4e2); color: var(--c-accent-ink); }
+.sph-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sph-pic .bji { width: 22px; height: 22px; }
+.sph-n { position: absolute; inset-inline-end: 4px; bottom: 4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: rgba(16, 24, 40, .78); color: #fff; font-size: 11.5px; font-weight: 800; display: grid; place-items: center; }
+.sph-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.sph-main > b { font-size: 14.5px; overflow-wrap: anywhere; }
+.sph-var { max-width: 100%; height: 34px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 13.5px; }
+.sph-main small { font-size: 12px; font-weight: 600; }
+.sph-ok { color: var(--ok); }
+.sph-bad { color: var(--coral); }
+.sph-rm { width: 32px; height: 32px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+.sph-rm:hover { background: var(--coral-soft); color: var(--coral); }
+.sph-rm .bji { width: 16px; height: 16px; }
+.sph-empty { padding: 14px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 14px; }
+.sph-add .qd2-add { max-width: none; }
+.sph-msg { display: flex; flex-direction: column; gap: 6px; }
+.sph-msg > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.sph-msg > span .linkish { text-transform: none; letter-spacing: 0; font-weight: 600; }
+.sph-msg textarea { width: 100%; min-height: 120px; resize: vertical; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; line-height: 1.45; }
+.sph-msg small { color: var(--muted); font-size: 12px; }
+/* WhatsApp's green, like the app's other WhatsApp buttons */
+html .btn.primary.sph-wa, html[data-skin][data-theme] .btn.primary.sph-wa { background: #1fa855 !important; border-color: #1fa855 !important; color: #fff !important; }
+html .btn.primary.sph-wa:hover:not(:disabled), html[data-skin][data-theme] .btn.primary.sph-wa:hover:not(:disabled) { background: #188a46 !important; border-color: #188a46 !important; }
+html .btn.primary.sph-wa:disabled, html[data-skin][data-theme] .btn.primary.sph-wa:disabled { opacity: .55; }
+/* the phone's sheet: the WhatsApp button on its own line, the others beside each other */
+.sph .pxk-foot, .sph .modal-foot { display: flex; flex-wrap: wrap; gap: 8px; }
+.sph .pxk-foot > .btn { flex: 1 1 auto; justify-content: center; }
+.sph .pxk-foot > .sph-wa { flex-basis: 100%; order: -1; }
+.btn.sph-wa .bji { width: 17px; height: 17px; }
+.sph-msg-ready { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 14px; line-height: 1.45; padding: 12px 14px; border-radius: 12px; background: #e7f7ec; color: #12341f; border: 1px solid #c7ebd3; }
+[data-theme="dark"] .sph-msg-ready { background: rgba(31, 157, 85, .14); color: var(--ink); border-color: rgba(31, 157, 85, .35); }
+/* the button on the order's products (the count beside it never breaks) */
+.qd6-cnt { white-space: nowrap; }
+.qd6-photos { margin-inline-start: auto; letter-spacing: 0; text-transform: none; font-weight: 700; gap: 6px; }
+.qd6-photos + .qd6-hist { margin-inline-start: 10px; }
+.qd6-photos .bji { width: 15px; height: 15px; color: #1f9d55; }

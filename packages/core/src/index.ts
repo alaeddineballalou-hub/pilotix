@@ -28,6 +28,7 @@ export { pgliteDb } from './pglite';
 export * from './platform';
 export { landingCommunes } from './modules/landing';
 export { findBySku } from './modules/catalog';
+export { photoPageHtml } from './modules/photoshare';
 export { fromLibrary } from './modules/spy';
 export type { RawAd, SpyAd, SpyBrief, SpyFinding, SpyKeyword, SpyProductRow, SpySettings, SpySite, SpySource, ScorePart } from './modules/spy';
 export { demoSnapshot, demoRestore } from './demoKeep';

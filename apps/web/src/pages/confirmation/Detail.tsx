@@ -4,7 +4,8 @@ import { CANCEL_REASONS, communesOf, FOLLOW_LOCKED, Order, origOf, upsellOf, WIL
 import { useQueryClient } from '@tanstack/react-query';
 import { rpc } from '../../lib/backend';
 import { defaultNext } from './shared';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
@@ -19,6 +20,7 @@ import { hasMouse } from '../../lib/useMedia';
 import { toast } from '../../ui/toast';
 import { toastUndo } from '../../lib/undo';
 import './check.css';
+import './photos.css';
 import { askRisk } from '../../ui/clientScore';
 import { useHold } from './hold';
 
@@ -31,8 +33,10 @@ interface Line {
   unitPrice: number;
   isUpsell: boolean;
 }
-type Catalog = NonNullable<ReturnType<typeof useCatalog>['data']>;
+export type Catalog = NonNullable<ReturnType<typeof useCatalog>['data']>;
 type Prod = Catalog[number];
+/** « Envoyer des photos » (its window loads when opened) */
+const SendPhotos = lazy(() => import('./SendPhotos').then((m) => ({ default: m.SendPhotos })));
 
 const useCatalog = () => useRpc('confirmation.catalog', {}, { staleTime: 5 * 60_000 });
 const norm = (s: string) =>
@@ -56,6 +60,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
   const mgrHold = hasRole('agent_manager', 'vendeur');
   const initial = useMemo<Line[]>(() => order.items.map((i) => ({ productId: i.productId, variantId: i.variantId, name: i.name, variantTitle: i.variantTitle, qty: i.qty, unitPrice: i.unitPrice, isUpsell: i.isUpsell })), [order]);
   const [L, setL] = useState<Line[]>(initial);
+  const [photos, setPhotos] = useState(false);
   const [fee, setFee] = useState(order.deliveryFee);
   const [err, setErr] = useState('');
   const [desk, setDesk] = useState(order.isStopdesk);
@@ -387,10 +392,22 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
         <section className="qd6-card">
           <div className="qd6-h">
             {t('confirmation.d6.cart')} <span className="qd6-cnt">{t('confirmation.d6.nProducts', { count: L.length })}</span>
+            <button type="button" className="btn small qd6-photos" onClick={() => setPhotos(true)} disabled={!cat.data} title={t('confirmation.photos.btnHint')}>
+              <Icon name="image" /> {phone ? t('confirmation.photos.btnShort') : t('confirmation.photos.btn')}
+            </button>
             <button type="button" className="linkish qd6-hist" onClick={() => openOrder(order.id)}>
               {t('confirmation.d.history')}
             </button>
           </div>
+          {photos &&
+            cat.data &&
+            // on the page itself (the open row is inside the table: a window there would be cut)
+            createPortal(
+              <Suspense fallback={null}>
+                <SendPhotos order={order} start={L.map((l) => ({ productId: l.productId, variantId: l.variantId }))} catalog={cat.data} onClose={() => setPhotos(false)} />
+              </Suspense>,
+              document.body,
+            )}
           {L.length === 0 && <p className="muted small qd6-empty">{t('confirmation.d.noProduct')}</p>}
           {L.map((l, i) => {
             const p = P.get(l.productId);
@@ -918,7 +935,8 @@ function StatusMenu({ order, busy, pending, onPick }: { order: Order; busy: bool
 }
 
 /** "+ Ajouter un produit": a menu with every product and variant (price, stock, remise), and under it the products often bought with the cart. */
-function AddProduct({ catalog, lines, onPick }: { catalog: Catalog; lines: Line[]; onPick: (p: Prod, vid: number | null) => void }) {
+/** `markLabel`: what an already chosen product says (« dans la commande »); `placeholder`: the search's hint. */
+export function AddProduct({ catalog, lines, onPick, markLabel, placeholder }: { catalog: Catalog; lines: Line[]; onPick: (p: Prod, vid: number | null) => void; markLabel?: string; placeholder?: string }) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
   const [k, setK] = useState(0);
@@ -970,7 +988,7 @@ function AddProduct({ catalog, lines, onPick }: { catalog: Catalog; lines: Line[
           </b>
           <small>
             {o.stock !== null && <span className={o.stock > 0 ? 'pxf-ok' : 'pxf-bad'}>{o.stock > 0 ? t('confirmation.d6.inStock', { n: o.stock }) : t('confirmation.d6.outStock', { n: o.stock })}</span>}
-            {has && <span> · {t('confirmation.d.inOrder')}</span>}
+            {has && <span> · {markLabel ?? t('confirmation.d.inOrder')}</span>}
           </small>
         </span>
         <span className="pxf-price ltr">
@@ -992,7 +1010,7 @@ function AddProduct({ catalog, lines, onPick }: { catalog: Catalog; lines: Line[
         type="search"
         className="qd2-add-in"
         autoComplete="off"
-        placeholder={t('confirmation.d.addPh')}
+        placeholder={placeholder ?? t('confirmation.d.addPh')}
         aria-label={t('confirmation.d.add')}
         role="combobox"
         aria-expanded={open}

@@ -69,6 +69,7 @@ import { doctorProcs } from './modules/doctor';
 import { stockProcs } from './modules/stock';
 import { suiviProcs } from './modules/suivi';
 import { usersProcs } from './modules/users';
+import { photoShareProcs } from './modules/photoshare';
 
 export const REGISTRY = {
   ...ordersProcs,
@@ -108,6 +109,7 @@ export const REGISTRY = {
   ...agencyAssignProcs,
   ...agencyStatsProcs,
   ...undoProcs,
+  ...photoShareProcs,
   ...coverageProcs,
   ...pushProcs,
   ...adminProcs,
