@@ -174,6 +174,8 @@ export const NAV: NavItem[] = [
   { id: 'marketers', icon: 'trend', roles: [], onlyIf: partnersOn, hidden: true },
   { id: 'management', icon: 'briefcase', roles: [], affect: true, subs: ['plans', 'statuts', 'affectation', 'prix', 'canaux', 'alertes', 'livreur', 'modules', 'archive'] },
   { id: 'reglages', icon: 'settings', roles: [] },
+  // « Aide »: short films for everyone (installing the WhatsApp add-on…); « Contacter Pilotix » there for the admins
+  { id: 'aide', icon: 'help', roles: null },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'parrainage', 'securite'] },
   // « Mes boutiques »: opened from the boutique at the bottom of the menu (and the account menu)
   { id: 'boutiques', icon: 'store', roles: null, hidden: true },
@@ -264,6 +266,8 @@ export const AGENCY_NAV: NavItem[] = [
   },
   { id: 'vendeurs', icon: 'store', roles: [] },
   { id: 'reglages', icon: 'settings', roles: [] },
+  // « Aide »: the same films as a store's (its agents send the photos too)
+  { id: 'aide', icon: 'help', roles: null },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'securite'] },
   { id: 'boutiques', icon: 'store', roles: null, hidden: true },
 ];

@@ -1,5 +1,7 @@
 // The Pilotix WhatsApp extension (apps/wa-extension) as the zip the website offers to download:
-// apps/web/public/pilotix-whatsapp.zip, holding one folder « pilotix-whatsapp » (unzipped, it is what Chrome loads).
+// apps/web/public/pilotix-whatsapp.zip, its files at the top. « Extraire tout » (Windows) and a Mac's unzip make the folder
+// « pilotix-whatsapp » from the zip's name, with manifest.json right inside it: the one folder Chrome loads. (A folder
+// inside the zip gave pilotix-whatsapp › pilotix-whatsapp on Windows, and Chrome refuses the outer one.)
 // Run by the website's build (apps/web: build, build:artifact), so the download is always this folder. No dependency:
 // a plain zip (deflate), the same bytes for the same files (fixed dates).
 import * as zlib from 'node:zlib';
@@ -10,7 +12,6 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const src = join(root, 'apps/wa-extension');
 const out = join(root, 'apps/web/public/pilotix-whatsapp.zip');
-const FOLDER = 'pilotix-whatsapp';
 
 /** zlib's CRC-32 (Node 22.2+), or the same in plain code */
 const TABLE = Array.from({ length: 256 }, (_, n) => {
@@ -26,7 +27,7 @@ const crc32 =
     return (c ^ 0xffffffff) >>> 0;
   });
 const walk = (d) => readdirSync(d).sort().flatMap((n) => (statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : [join(d, n)]));
-const files = walk(src).map((p) => ({ name: `${FOLDER}/${relative(src, p).split('\\').join('/')}`, data: readFileSync(p) }));
+const files = walk(src).map((p) => ({ name: relative(src, p).split('\\').join('/'), data: readFileSync(p) }));
 
 // 1 Jan 2026 00:00 (DOS date and time): the same zip for the same files
 const DOS_TIME = 0;

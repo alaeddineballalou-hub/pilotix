@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Pilotix · Aide — Installer l'extension WhatsApp</title>
+<style>
+:root { --navy:#1B2A47; --orange:#F7A823; --sand:#F2EBE1; --cream:#FBF6F0; --ink:#1B2A47; --muted:#5F6673; --line:#E5DED3; --wa:#1FA855; --wabg:#EFE7DD; --bubble:#D9FDD3; --win:#005FB8; --winbg:#F3F3F3; }
+* { box-sizing:border-box; margin:0; padding:0; }
+html, body { width:1920px; height:1080px; overflow:hidden; background:var(--sand); font-family:Inter, system-ui, sans-serif; color:var(--ink); -webkit-font-smoothing:antialiased; }
+#stage { position:relative; width:1920px; height:1080px; overflow:hidden; background:radial-gradient(1300px 760px at 30% 18%, #FBF6F0 0%, #F2EBE1 72%); }
+.abs { position:absolute; }
+.big { font-family:'Inter Display', Inter, sans-serif; font-weight:800; letter-spacing:-.02em; }
+
+/* title and end */
+#sc-title, #sc-end { position:absolute; inset:0; opacity:0; z-index:8; background:radial-gradient(1300px 760px at 30% 18%, #FBF6F0 0%, #F2EBE1 72%); }
+#t-logo, #e-logo { width:160px; height:160px; border-radius:36px; overflow:hidden; box-shadow:0 20px 44px rgba(27,42,71,.2); }
+#t-logo img, #e-logo img { display:block; width:100%; height:100%; }
+#t-kicker { left:0; right:0; top:420px; text-align:center; font-size:30px; font-weight:800; letter-spacing:.14em; color:#B26A00; }
+#t-title { left:0; right:0; top:466px; text-align:center; font-size:100px; color:var(--navy); }
+#t-sub { left:0; right:0; top:596px; text-align:center; font-size:40px; color:var(--muted); font-weight:500; }
+#t-steps { left:0; right:0; top:690px; display:flex; justify-content:center; gap:20px; }
+#t-steps span { width:64px; height:64px; border-radius:50%; background:#fff; color:var(--navy); border:3px solid var(--navy); display:grid; place-items:center; font-size:28px; font-weight:800; }
+#t-steps span.o { background:var(--orange); border-color:var(--orange); }
+#e-title { left:0; right:0; top:440px; text-align:center; font-size:110px; color:var(--navy); }
+#e-sub { left:0; right:0; top:584px; text-align:center; font-size:40px; color:var(--muted); font-weight:500; }
+#e-chip { left:50%; top:680px; transform:translateX(-50%); padding:18px 34px; border-radius:999px; background:var(--navy); color:#fff; font-size:32px; font-weight:700; white-space:nowrap; }
+#e-chip b { color:var(--orange); }
+
+/* step rail, captions, notes, keys */
+#rail { left:0; right:0; top:16px; display:flex; justify-content:center; gap:10px; z-index:6; opacity:0; }
+#rail i { width:64px; height:9px; border-radius:6px; background:#D9D1C4; }
+#rail i.done { background:var(--navy); }
+#rail i.on { background:var(--orange); }
+.cap { left:50%; bottom:28px; transform:translateX(-50%); display:flex; align-items:center; gap:18px; padding:16px 34px 16px 16px; border-radius:999px; background:var(--navy); color:#fff; font-size:36px; font-weight:700; white-space:nowrap; box-shadow:0 14px 34px rgba(27,42,71,.30); opacity:0; z-index:7; }
+.cap b { display:grid; place-items:center; width:58px; height:58px; border-radius:50%; background:var(--orange); color:var(--navy); font-size:30px; font-weight:800; flex:none; }
+.cap em { font-style:normal; color:#FFD27A; }
+.note { left:50%; bottom:132px; transform:translateX(-50%); padding:12px 26px; border-radius:16px; background:#fff; color:var(--navy); font-size:27px; font-weight:700; white-space:nowrap; box-shadow:0 10px 28px rgba(27,42,71,.18); border:2px solid var(--orange); opacity:0; z-index:7; }
+.key { min-width:96px; height:84px; padding:0 26px; border-radius:16px; background:#fff; border:3px solid #CFC7BB; border-bottom-width:9px; font-size:36px; font-weight:800; display:flex; align-items:center; justify-content:center; color:var(--navy); opacity:0; z-index:7; box-shadow:0 12px 30px rgba(27,42,71,.18); }
+
+/* the world: everything the camera moves */
+#world { left:0; top:0; width:1920px; height:1080px; transform-origin:0 0; z-index:2; opacity:0; }
+
+/* the browser */
+#br { left:120px; top:52px; width:1680px; height:902px; z-index:1; border-radius:14px; background:#fff; box-shadow:0 30px 80px rgba(27,42,71,.24); overflow:hidden; }
+#br-tabs { position:absolute; left:0; right:0; top:0; height:44px; background:#E3DED6; }
+.tab { position:absolute; top:7px; height:37px; width:258px; border-radius:11px 11px 0 0; display:flex; align-items:center; gap:10px; padding:0 14px; font-size:16px; font-weight:600; color:#4A505B; white-space:nowrap; overflow:hidden; }
+.tab.on { background:#fff; color:var(--ink); }
+.tab .fav { width:20px; height:20px; border-radius:5px; overflow:hidden; flex:none; display:grid; place-items:center; }
+.tab .fav img, .tab .fav svg { width:20px; height:20px; display:block; }
+.tab .tx { flex:1; overflow:hidden; text-overflow:ellipsis; }
+.tab i { font-style:normal; color:#7A808A; font-size:16px; }
+#tb-plus { position:absolute; top:10px; width:30px; height:30px; display:grid; place-items:center; font-size:24px; color:#4A505B; }
+.winctl { position:absolute; right:0; top:0; height:44px; display:flex; }
+.winctl i { width:58px; height:44px; display:grid; place-items:center; font-style:normal; font-size:17px; color:#3B4049; }
+#br-bar { position:absolute; left:0; right:0; top:44px; height:48px; background:#fff; border-bottom:1px solid #E6E1D9; display:flex; align-items:center; padding:0 14px; gap:12px; }
+.ico { width:32px; height:32px; display:grid; place-items:center; color:#4A505B; flex:none; }
+.ico svg { width:20px; height:20px; }
+#url { flex:1; height:36px; border-radius:18px; background:#F1EEE9; display:flex; align-items:center; gap:10px; padding:0 16px; font-size:19px; color:var(--ink); white-space:nowrap; overflow:hidden; }
+#url .ph { color:#8A9099; }
+#url-lock svg { width:16px; height:16px; display:block; }
+#caret { width:2px; height:24px; background:var(--ink); }
+#me { width:30px; height:30px; border-radius:50%; background:var(--orange); color:var(--navy); font-weight:800; font-size:15px; display:grid; place-items:center; flex:none; }
+#br-body { position:absolute; left:0; top:92px; width:1680px; height:810px; overflow:hidden; background:#fff; z-index:0; }
+.lay { position:absolute; left:0; top:0; width:1680px; height:810px; opacity:0; }
+img.lay { display:block; }
+#L-new { background:#fff; }
+#L-flash { background:#fff; }
+.ring-box { position:absolute; border:5px solid var(--orange); border-radius:18px; box-shadow:0 0 0 6px rgba(247,168,35,.22); opacity:0; pointer-events:none; }
+
+/* download bubble */
+#dl { position:absolute; z-index:2; right:56px; top:88px; width:430px; border-radius:14px; background:#fff; box-shadow:0 14px 40px rgba(0,0,0,.18); border:1px solid #E6E1D9; padding:14px 16px 16px; opacity:0; }
+#dl .h { font-size:15px; font-weight:700; color:var(--muted); margin-bottom:12px; }
+#dl .r { display:flex; align-items:center; gap:14px; }
+#dl .nm { font-size:19px; font-weight:800; }
+#dl .sb { font-size:15px; color:var(--muted); margin-top:3px; }
+#dl-st { margin-left:auto; width:34px; height:34px; position:relative; }
+
+/* windows (Windows 11 look, no logo) */
+.win { z-index:3; background:#fff; border-radius:12px; box-shadow:0 30px 90px rgba(0,0,0,.30); border:1px solid #D6D6D6; overflow:hidden; opacity:0; font-size:18px; color:#1B1B1B; }
+.w-title { position:absolute; left:0; right:0; top:0; height:44px; background:var(--winbg); display:flex; align-items:center; gap:10px; padding:0 16px; font-size:16px; font-weight:600; }
+.w-title .ctl { margin-left:auto; display:flex; height:44px; margin-right:-16px; }
+.w-title .ctl i { width:52px; display:grid; place-items:center; font-style:normal; font-size:15px; color:#333; }
+.w-tool { position:absolute; left:0; right:0; top:44px; height:56px; background:var(--winbg); display:flex; align-items:center; gap:10px; padding:0 14px; border-bottom:1px solid #E3E3E3; }
+.w-arr { display:flex; gap:12px; color:#555; font-size:18px; padding-right:6px; }
+.w-path { flex:1; height:36px; border-radius:6px; background:#fff; border:1px solid #DADADA; display:flex; align-items:center; gap:10px; padding:0 12px; font-size:17px; }
+.w-search { width:320px; height:36px; border-radius:6px; background:#fff; border:1px solid #DADADA; display:flex; align-items:center; padding:0 12px; font-size:16px; color:#777; }
+.w-nav { position:absolute; left:0; top:100px; bottom:0; width:260px; background:#FAFAFA; border-right:1px solid #ECECEC; }
+.w-ni { position:absolute; left:10px; right:10px; height:36px; border-radius:6px; display:flex; align-items:center; gap:12px; padding:0 12px; font-size:17px; }
+.w-ni.on { background:#E5EEF8; font-weight:600; }
+.w-main { position:absolute; left:260px; right:0; top:100px; bottom:0; }
+.w-head { position:absolute; left:0; right:0; top:12px; height:36px; display:grid; grid-template-columns:420px 230px 230px 1fr; padding:0 20px; font-size:15px; color:#666; align-items:center; border-bottom:1px solid #EFEFEF; }
+.w-grp { position:absolute; left:20px; top:60px; font-size:15px; font-weight:700; color:#444; }
+.w-row { position:absolute; left:8px; right:8px; height:44px; border-radius:6px; display:grid; grid-template-columns:412px 230px 230px 1fr; align-items:center; padding:0 12px; font-size:17px; }
+.w-row .nm { display:flex; align-items:center; gap:12px; font-weight:500; }
+.w-row span:not(.nm) { color:#555; font-size:16px; }
+.w-row.sel { background:#CCE4F7; }
+.fi { width:26px; height:26px; flex:none; display:block; }
+.cmenu { position:absolute; width:330px; border-radius:10px; background:#F9F9F9; border:1px solid #D9D9D9; box-shadow:0 12px 34px rgba(0,0,0,.22); padding:8px 6px; opacity:0; }
+.cmenu div { height:40px; border-radius:6px; display:flex; align-items:center; gap:12px; padding:0 14px; font-size:17px; }
+.cmenu div.hl { background:#E3E3E3; font-weight:600; }
+.cmenu hr { border:0; border-top:1px solid #E2E2E2; margin:5px 8px; }
+.dlg { position:absolute; background:#fff; border-radius:10px; border:1px solid #CFCFCF; box-shadow:0 18px 50px rgba(0,0,0,.28); opacity:0; }
+.btnw { position:absolute; height:40px; border-radius:6px; display:grid; place-items:center; font-size:16px; font-weight:600; border:1px solid #CFCFCF; background:#FBFBFB; }
+.btnw.acc { background:var(--win); border-color:var(--win); color:#fff; }
+#fx-toast { position:absolute; left:460px; top:400px; width:400px; height:50px; border-radius:25px; background:#1E7E45; color:#fff; font-size:18px; font-weight:700; display:grid; place-items:center; opacity:0; }
+#ghost { width:300px; height:52px; border-radius:8px; background:rgba(204,228,247,.92); border:1px solid #9CC5E8; display:flex; align-items:center; gap:12px; padding:0 14px; font-size:17px; font-weight:600; opacity:0; z-index:9; }
+#pk-call { position:absolute; left:610px; top:238px; padding:10px 18px; border-radius:12px; background:var(--orange); color:var(--navy); font-size:19px; font-weight:800; white-space:nowrap; opacity:0; box-shadow:0 8px 20px rgba(0,0,0,.14); }
+#pk-call:before { content:''; position:absolute; left:-12px; top:50%; margin-top:-10px; border:10px solid transparent; border-right-color:var(--orange); border-left:0; }
+
+/* the phone */
+#ph { left:1500px; top:126px; width:380px; height:800px; border-radius:54px; background:#0E1116; padding:14px; box-shadow:0 30px 80px rgba(27,42,71,.32); opacity:0; z-index:4; }
+#ph-scr { position:relative; width:352px; height:772px; border-radius:42px; overflow:hidden; background:#fff; }
+.pscr { position:absolute; inset:0; opacity:0; }
+.notch { position:absolute; left:50%; top:10px; width:110px; height:28px; margin-left:-55px; border-radius:18px; background:#0E1116; z-index:5; }
+.p-head { height:110px; padding:60px 20px 0; display:flex; align-items:center; gap:14px; font-size:21px; font-weight:800; border-bottom:1px solid #EEE; }
+.p-ill { margin:34px auto 0; width:200px; height:150px; border-radius:20px; background:#EAF7EF; display:grid; place-items:center; }
+.p-txt { margin:22px 26px 0; text-align:center; font-size:17px; color:#55606B; line-height:1.45; }
+.p-btn { margin:26px 24px 0; height:56px; border-radius:28px; background:var(--wa); color:#fff; font-size:19px; font-weight:800; display:grid; place-items:center; }
+.p-list { margin:30px 24px 0; font-size:15px; color:#8A9097; border-top:1px solid #EEE; padding-top:16px; }
+#ph-B { background:#101418; }
+#ph-frame { position:absolute; left:46px; top:220px; width:260px; height:260px; }
+#ph-frame i { position:absolute; width:46px; height:46px; border-color:#fff; border-style:solid; border-width:0; }
+#ph-scan { position:absolute; left:6px; right:6px; height:4px; border-radius:2px; background:#41E47F; box-shadow:0 0 18px #41E47F; }
+#ph-qr { position:absolute; left:28px; top:28px; width:204px; height:204px; opacity:.9; transform:rotate(-4deg); }
+.p-cap { position:absolute; left:0; right:0; bottom:120px; text-align:center; color:#fff; font-size:18px; font-weight:600; }
+#ph-C .ok { position:absolute; left:50%; top:250px; width:130px; height:130px; margin-left:-65px; border-radius:50%; background:var(--wa); display:grid; place-items:center; }
+#ph-C .t1 { position:absolute; left:0; right:0; top:410px; text-align:center; font-size:24px; font-weight:800; }
+#ph-C .t2 { position:absolute; left:0; right:0; top:450px; text-align:center; font-size:17px; color:#6A737D; }
+
+/* whatsapp web (generic, no logo) */
+.wa-page { background:#F3F1EE; }
+#wl-card { position:absolute; left:220px; top:100px; width:1240px; height:610px; border-radius:20px; background:#fff; box-shadow:0 10px 40px rgba(0,0,0,.08); }
+#wl-card h2 { position:absolute; left:64px; top:70px; font-size:36px; font-weight:800; color:#111B21; letter-spacing:-.01em; }
+#wl-steps { position:absolute; left:64px; top:150px; width:640px; }
+#wl-steps div { display:flex; align-items:center; gap:18px; font-size:24px; color:#3B4A54; margin-bottom:26px; }
+#wl-steps b { width:44px; height:44px; border-radius:50%; background:#E7F6EC; color:#13803F; display:grid; place-items:center; font-size:21px; flex:none; }
+#wl-qr { position:absolute; left:820px; top:120px; width:350px; height:350px; }
+#wl-qr-ok { position:absolute; left:820px; top:120px; width:350px; height:350px; background:rgba(255,255,255,.86); display:grid; place-items:center; opacity:0; }
+.wa-left { position:absolute; left:0; top:0; bottom:0; width:470px; border-right:1px solid #E6E6E6; background:#fff; }
+.wa-search { margin:18px; height:46px; border-radius:12px; background:#F0F2F5; font-size:18px; color:#7a8189; display:flex; align-items:center; padding:0 18px; }
+.chat-it { height:88px; display:flex; align-items:center; gap:16px; padding:0 20px; border-bottom:1px solid #F0F0F0; }
+.chat-it.on { background:#F0F2F5; }
+.av { width:56px; height:56px; border-radius:50%; display:grid; place-items:center; font-weight:800; color:#fff; font-size:20px; flex:none; }
+.chat-it .nm { font-size:20px; font-weight:700; }
+.chat-it .pv { font-size:17px; color:#7a8189; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:330px; }
+.wa-empty { position:absolute; left:470px; right:0; top:0; bottom:0; background:#F7F5F3; display:grid; place-items:center; color:#667781; font-size:24px; font-weight:600; }
+#wc-right { position:absolute; left:470px; right:0; top:0; bottom:0; background:var(--wabg); }
+#wc-head { position:absolute; left:0; right:0; top:0; height:80px; background:#F0F2F5; display:flex; align-items:center; gap:16px; padding:0 24px; border-bottom:1px solid #E2E2E2; }
+#wc-head .nm { font-size:22px; font-weight:700; }
+#wc-head .st { font-size:16px; color:#7a8189; }
+#wc-comp { position:absolute; left:0; right:0; bottom:0; height:84px; background:#F0F2F5; display:flex; align-items:center; gap:16px; padding:0 22px; }
+#wc-comp .in { flex:1; height:52px; border-radius:12px; background:#fff; font-size:19px; color:#8a9097; display:flex; align-items:center; padding:0 20px; }
+.send { width:56px; height:56px; border-radius:50%; background:var(--wa); display:grid; place-items:center; flex:none; }
+.send svg { width:28px; height:28px; }
+#wc-prev { position:absolute; left:0; right:0; top:80px; bottom:0; background:#E9EDEF; }
+#wc-big { position:absolute; left:50%; top:34px; width:380px; height:380px; margin-left:-190px; border-radius:10px; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,.12); }
+#wc-cap { position:absolute; left:110px; right:110px; top:440px; min-height:92px; border-radius:12px; background:#fff; padding:14px 18px; font-size:20px; line-height:1.45; white-space:pre-wrap; color:#111B21; box-shadow:0 0 0 4px rgba(247,168,35,.55); }
+#wc-pasted { position:absolute; right:10px; top:-18px; padding:5px 12px; border-radius:999px; background:var(--orange); color:var(--navy); font-size:15px; font-weight:800; }
+#wc-strip { position:absolute; left:0; right:0; bottom:22px; display:flex; justify-content:center; gap:14px; }
+.sth { width:74px; height:74px; border-radius:10px; overflow:hidden; border:3px solid transparent; }
+.sth.sel { border-color:var(--wa); }
+#wc-psend { position:absolute; right:40px; bottom:26px; width:72px; height:72px; }
+#wc-album { position:absolute; right:40px; bottom:110px; width:430px; border-radius:14px; background:var(--bubble); padding:6px; box-shadow:0 2px 3px rgba(0,0,0,.08); opacity:0; transform-origin:right bottom; }
+#wc-album .g { display:grid; grid-template-columns:1fr 1fr; gap:4px; border-radius:10px; overflow:hidden; }
+#wc-album .g div { height:200px; }
+#wc-album p { font-size:18px; line-height:1.45; padding:10px 8px 2px; white-space:pre-wrap; color:#111B21; }
+.tm { text-align:right; font-size:14px; color:#667781; padding:0 8px 4px; }
+.tm em { font-style:normal; color:#53BDEB; }
+#wc-banner { position:absolute; left:50%; top:16px; transform:translateX(-50%); background:#1B2A47; color:#fff; font:600 18px/1.4 Inter, system-ui, sans-serif; padding:12px 22px; border-radius:999px; box-shadow:0 8px 24px rgba(0,0,0,.25); white-space:nowrap; opacity:0; z-index:3; }
+.ph-img { display:block; width:100%; height:100%; }
+.ph-img svg { display:block; width:100%; height:100%; }
+
+/* cursor and clicks */
+#cur { width:40px; height:46px; left:0; top:0; z-index:10; opacity:0; transform-origin:4px 4px; }
+#cur svg { width:40px; height:46px; display:block; filter:drop-shadow(0 3px 4px rgba(0,0,0,.28)); }
+.ring { position:absolute; border-radius:50%; border:5px solid var(--orange); opacity:0; pointer-events:none; z-index:9; }
+#rtag { padding:6px 14px; border-radius:10px; background:var(--navy); color:#fff; font-size:18px; font-weight:700; white-space:nowrap; opacity:0; z-index:10; }
+#tap { position:absolute; width:76px; height:76px; border-radius:50%; background:rgba(247,168,35,.45); border:4px solid var(--orange); opacity:0; z-index:6; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- the world: browser, windows, phone, cursor (the camera moves it) -->
+  <div id="world" class="abs">
+    <div id="br" class="abs">
+      <div id="br-tabs">
+        <div class="tab" id="tb-px" style="left:12px"><span class="fav"><img src="../../../apps/web/public/icon.svg" alt=""></span><span class="tx">Pilotix · Confirmation</span><i>✕</i></div>
+        <div class="tab" id="tb-ext" style="left:276px"><span class="fav" id="fav-ext"></span><span class="tx">Extensions</span><i>✕</i></div>
+        <div class="tab" id="tb-wa" style="left:540px"><span class="fav" id="fav-wa"></span><span class="tx">WhatsApp</span><i>✕</i></div>
+        <div id="tb-plus">+</div>
+        <div class="winctl"><i>─</i><i>▢</i><i>✕</i></div>
+      </div>
+      <div id="br-bar">
+        <span class="ico" id="i-back"></span><span class="ico" id="i-fwd"></span><span class="ico" id="i-rel"></span>
+        <div id="url"><span id="url-lock"></span><span id="url-t">pilotix.online/confirmation</span><span id="caret"></span></div>
+        <span class="ico" id="i-dl"></span><span class="ico" id="i-puz"></span><span id="me">A</span>
+      </div>
+      <div id="br-body">
+        <img class="lay" id="L-order" src="shots/px-order.png" alt="">
+        <img class="lay" id="L-noext" src="shots/px-modal-noext.png" alt="">
+        <img class="lay" id="L-guide" src="shots/px-guide.png" alt="">
+        <img class="lay" id="L-pxext" src="shots/px-modal-ext.png" alt="">
+        <div class="lay" id="L-new"></div>
+        <img class="lay" id="L-xoff" src="shots/ext-off.png" alt="">
+        <img class="lay" id="L-xon" src="shots/ext-on-none.png" alt="">
+        <img class="lay" id="L-xwith" src="shots/ext-on-with.png" alt="">
+        <div class="lay wa-page" id="L-walogin">
+          <div id="wl-card">
+            <h2>Connectez WhatsApp à cet ordinateur</h2>
+            <div id="wl-steps">
+              <div><b>1</b>Ouvrez WhatsApp sur votre téléphone</div>
+              <div><b>2</b>Menu ⋮ › Appareils connectés</div>
+              <div><b>3</b>Touchez « Connecter un appareil »</div>
+              <div><b>4</b>Scannez ce code avec le téléphone</div>
+            </div>
+            <div id="wl-qr"></div>
+            <div id="wl-qr-ok"></div>
+          </div>
+        </div>
+        <div class="lay" id="L-walist">
+          <div class="wa-left">
+            <div class="wa-search">Rechercher une discussion</div>
+            <div class="chat-it"><div class="av" style="background:#6C8EBF">AB</div><div><div class="nm">Amine Bouzid</div><div class="pv">Merci, à demain !</div></div></div>
+            <div class="chat-it"><div class="av" style="background:#C98B6B">SL</div><div><div class="nm">Sara · Livraison</div><div class="pv">Colis remis au livreur</div></div></div>
+            <div class="chat-it"><div class="av" style="background:#7FA36B">KM</div><div><div class="nm">Karim M.</div><div class="pv">D'accord</div></div></div>
+            <div class="chat-it"><div class="av" style="background:#A57FB8">NB</div><div><div class="nm">Nadia B.</div><div class="pv">Bonjour</div></div></div>
+          </div>
+          <div class="wa-empty">Choisissez une discussion</div>
+        </div>
+        <div class="lay" id="L-wachat">
+          <div class="wa-left">
+            <div class="wa-search">Rechercher une discussion</div>
+            <div class="chat-it on"><div class="av" style="background:#6C8EBF">AB</div><div><div class="nm">Amine Bouzid</div><div class="pv" id="wc-pv">Merci, à demain !</div></div></div>
+            <div class="chat-it"><div class="av" style="background:#C98B6B">SL</div><div><div class="nm">Sara · Livraison</div><div class="pv">Colis remis au livreur</div></div></div>
+            <div class="chat-it"><div class="av" style="background:#7FA36B">KM</div><div><div class="nm">Karim M.</div><div class="pv">D'accord</div></div></div>
+          </div>
+          <div id="wc-right">
+            <div id="wc-head"><div class="av" style="background:#6C8EBF">AB</div><div><div class="nm">Amine Bouzid</div><div class="st">en ligne</div></div></div>
+            <div id="wc-album"><div class="g"><div id="al1"></div><div id="al2"></div><div id="al3"></div><div id="al4"></div></div><p id="al-msg"></p><div class="tm">22:05 <em>✓✓</em></div></div>
+            <div id="wc-comp"><div class="in">Écrivez un message</div><div class="send" id="wc-send"></div></div>
+            <div id="wc-prev">
+              <div id="wc-big"></div>
+              <div id="wc-cap"><span id="wc-cap-t"></span><span id="wc-pasted">collé par Pilotix</span></div>
+              <div id="wc-strip"><div class="sth sel" id="ws1"></div><div class="sth" id="ws2"></div><div class="sth" id="ws3"></div><div class="sth" id="ws4"></div></div>
+              <div class="send" id="wc-psend"></div>
+            </div>
+          </div>
+          <div id="wc-banner">Pilotix · Photos et message prêts : appuyez sur Entrée pour envoyer.</div>
+        </div>
+        <div class="lay" id="L-flash"></div>
+        <div class="ring-box" id="need-ring" style="left:524px; top:389px; width:632px; height:86px"></div>
+        <div class="ring-box" id="card-ring" style="left:437px; top:227px; width:487px; height:263px"></div>
+      </div>
+      <div id="dl">
+        <div class="h">Téléchargements récents</div>
+        <div class="r"><span id="dl-ic"></span><div><div class="nm">pilotix-whatsapp.zip</div><div class="sb" id="dl-sb">16,1 Ko · Terminé</div></div><div id="dl-st"></div></div>
+      </div>
+    </div>
+
+    <!-- Windows: Téléchargements -->
+    <div id="fx" class="win abs" style="left:300px; top:150px; width:1320px; height:720px">
+      <div class="w-title"><span class="fi" data-i="folder"></span>Téléchargements<div class="ctl"><i>─</i><i>▢</i><i>✕</i></div></div>
+      <div class="w-tool"><div class="w-arr"><span>←</span><span>→</span><span>↑</span></div><div class="w-path"><span class="fi" data-i="down"></span>›&nbsp; Téléchargements</div><div class="w-search">Rechercher dans : Téléchargements</div></div>
+      <div class="w-nav">
+        <div class="w-ni" style="top:16px"><span class="fi" data-i="home"></span>Accueil</div>
+        <div class="w-ni" style="top:56px"><span class="fi" data-i="desk"></span>Bureau</div>
+        <div class="w-ni on" style="top:96px"><span class="fi" data-i="down"></span>Téléchargements</div>
+        <div class="w-ni" id="fx-docs" style="top:136px"><span class="fi" data-i="doc"></span>Documents</div>
+        <div class="w-ni" style="top:176px"><span class="fi" data-i="pic"></span>Images</div>
+        <div class="w-ni" style="top:216px"><span class="fi" data-i="music"></span>Musique</div>
+        <div class="w-ni" style="top:256px"><span class="fi" data-i="pc"></span>Ce PC</div>
+      </div>
+      <div class="w-main">
+        <div class="w-head"><span>Nom</span><span>Modifié le</span><span>Type</span><span>Taille</span></div>
+        <div class="w-grp">Aujourd'hui</div>
+        <div class="w-row" id="fx-fold" style="top:96px"><span class="nm"><span class="fi" data-i="folder"></span>pilotix-whatsapp</span><span>09/11/2026 22:01</span><span>Dossier de fichiers</span><span></span></div>
+        <div class="w-row" id="fx-zip" style="top:96px"><span class="nm"><span class="fi" data-i="zip"></span>pilotix-whatsapp.zip</span><span>09/11/2026 22:00</span><span>Dossier compressé</span><span>16 Ko</span></div>
+      </div>
+      <div class="cmenu" id="fx-menu" style="left:440px; top:230px">
+        <div><span class="fi" data-i="open"></span>Ouvrir</div>
+        <div id="fx-mx"><span class="fi" data-i="zip"></span>Extraire tout…</div>
+        <div><span class="fi" data-i="share"></span>Partager</div>
+        <div><span class="fi" data-i="copy"></span>Copier</div>
+        <div><span class="fi" data-i="ren"></span>Renommer</div>
+        <div><span class="fi" data-i="del"></span>Supprimer</div>
+        <hr><div><span class="fi" data-i="more"></span>Afficher d'autres options</div>
+      </div>
+      <div class="dlg" id="fx-dlg" style="left:320px; top:170px; width:680px; height:380px">
+        <div style="position:absolute; left:28px; top:22px; font-size:16px; color:#555">← &nbsp;Extraire des dossiers compressés (zippés)</div>
+        <div style="position:absolute; left:28px; top:70px; font-size:23px; font-weight:600; color:#1A3E8A">Sélectionner une destination et extraire les fichiers</div>
+        <div style="position:absolute; left:28px; top:128px; font-size:17px">Les fichiers seront extraits dans ce dossier :</div>
+        <div style="position:absolute; left:28px; top:160px; width:470px; height:38px; border:1px solid #BDBDBD; border-radius:4px; display:flex; align-items:center; padding:0 10px; font-size:16px">C:\Users\Agent\Downloads\pilotix-whatsapp</div>
+        <div class="btnw" style="left:512px; top:159px; width:140px">Parcourir…</div>
+        <div style="position:absolute; left:28px; top:222px; font-size:16px; display:flex; align-items:center; gap:10px"><span style="width:20px; height:20px; border-radius:4px; background:var(--win); color:#fff; display:grid; place-items:center; font-size:14px">✓</span>Afficher les fichiers extraits une fois l'opération terminée</div>
+        <div class="btnw acc" id="fx-go" style="left:384px; top:316px; width:130px">Extraire</div>
+        <div class="btnw" style="left:526px; top:316px; width:130px">Annuler</div>
+      </div>
+      <div id="fx-toast">✓ Rangé dans Documents</div>
+    </div>
+
+    <!-- Chrome's folder picker -->
+    <div id="pk" class="win abs" style="left:400px; top:160px; width:1120px; height:680px">
+      <div class="w-title">Sélectionner le dossier de l'extension<div class="ctl"><i>✕</i></div></div>
+      <div class="w-tool"><div class="w-arr"><span>←</span><span>→</span><span>↑</span></div><div class="w-path" id="pk-path"><span class="fi" data-i="doc"></span><span id="pk-path-t">›&nbsp; Documents</span></div><div class="w-search" style="width:260px">Rechercher</div></div>
+      <div class="w-nav" style="width:240px; bottom:80px">
+        <div class="w-ni" style="top:16px"><span class="fi" data-i="desk"></span>Bureau</div>
+        <div class="w-ni" style="top:56px"><span class="fi" data-i="down"></span>Téléchargements</div>
+        <div class="w-ni on" style="top:96px"><span class="fi" data-i="doc"></span>Documents</div>
+        <div class="w-ni" style="top:136px"><span class="fi" data-i="pic"></span>Images</div>
+      </div>
+      <div class="w-main" style="left:240px; bottom:80px">
+        <div class="w-head" style="grid-template-columns:420px 230px 1fr"><span>Nom</span><span>Modifié le</span><span>Type</span></div>
+        <div id="pk-A">
+          <div class="w-row" id="pk-fold" style="top:56px; grid-template-columns:412px 230px 1fr"><span class="nm"><span class="fi" data-i="folder"></span>pilotix-whatsapp</span><span>09/11/2026 22:01</span><span>Dossier de fichiers</span></div>
+        </div>
+        <div id="pk-B" style="opacity:0">
+          <div class="w-row" style="top:56px; grid-template-columns:412px 230px 1fr"><span class="nm"><span class="fi" data-i="folder"></span>icons</span><span>09/11/2026 22:01</span><span>Dossier de fichiers</span></div>
+          <div class="w-row" style="top:100px; grid-template-columns:412px 230px 1fr"><span class="nm"><span class="fi" data-i="js"></span>background.js</span><span>09/11/2026 22:01</span><span>Fichier JavaScript</span></div>
+          <div class="w-row" id="pk-man" style="top:144px; grid-template-columns:412px 230px 1fr"><span class="nm"><span class="fi" data-i="json"></span>manifest.json</span><span>09/11/2026 22:01</span><span>Fichier JSON</span></div>
+          <div class="w-row" style="top:188px; grid-template-columns:412px 230px 1fr"><span class="nm"><span class="fi" data-i="js"></span>pilotix.js</span><span>09/11/2026 22:01</span><span>Fichier JavaScript</span></div>
+          <div class="w-row" style="top:232px; grid-template-columns:412px 230px 1fr"><span class="nm"><span class="fi" data-i="md"></span>README.md</span><span>09/11/2026 22:01</span><span>Fichier MD</span></div>
+          <div class="w-row" style="top:276px; grid-template-columns:412px 230px 1fr"><span class="nm"><span class="fi" data-i="js"></span>whatsapp.js</span><span>09/11/2026 22:01</span><span>Fichier JavaScript</span></div>
+        </div>
+      </div>
+      <div style="position:absolute; left:0; right:0; bottom:0; height:80px; background:var(--winbg); border-top:1px solid #E3E3E3">
+        <div style="position:absolute; left:24px; top:28px; font-size:16px">Dossier :</div>
+        <div style="position:absolute; left:110px; top:20px; width:560px; height:40px; border:1px solid #BDBDBD; border-radius:4px; background:#fff; display:flex; align-items:center; padding:0 10px; font-size:16px" id="pk-name">Documents</div>
+        <div class="btnw acc" id="pk-go" style="left:734px; top:20px; width:220px">Sélectionner un dossier</div>
+        <div class="btnw" style="left:966px; top:20px; width:130px">Annuler</div>
+      </div>
+      <div id="pk-call">manifest.json est là : c'est le bon dossier ✓</div>
+    </div>
+
+    <!-- the phone (WhatsApp › Appareils connectés) -->
+    <div id="ph" class="abs">
+      <div id="ph-scr">
+        <div class="notch"></div>
+        <div class="pscr" id="ph-A">
+          <div class="p-head">←&nbsp; Appareils connectés</div>
+          <div class="p-ill" id="ph-ill"></div>
+          <div class="p-txt">Utilisez WhatsApp sur votre ordinateur, avec le même compte.</div>
+          <div class="p-btn" id="ph-btn">Connecter un appareil</div>
+          <div class="p-list">Aucun appareil connecté</div>
+        </div>
+        <div class="pscr" id="ph-B">
+          <div id="ph-frame"><div id="ph-qr"></div><i style="left:0;top:0;border-left-width:6px;border-top-width:6px;border-radius:10px 0 0 0"></i><i style="right:0;top:0;border-right-width:6px;border-top-width:6px;border-radius:0 10px 0 0"></i><i style="left:0;bottom:0;border-left-width:6px;border-bottom-width:6px;border-radius:0 0 0 10px"></i><i style="right:0;bottom:0;border-right-width:6px;border-bottom-width:6px;border-radius:0 0 10px 0"></i><div id="ph-scan"></div></div>
+          <div class="p-cap">Pointez vers le code de l'ordinateur</div>
+        </div>
+        <div class="pscr" id="ph-C">
+          <div class="ok" id="ph-ok"></div>
+          <div class="t1">Appareil connecté</div>
+          <div class="t2">Chrome · Windows</div>
+        </div>
+      </div>
+    </div>
+    <div id="tap"></div>
+
+    <div id="ghost" class="abs"><span class="fi" data-i="folder"></span>pilotix-whatsapp</div>
+    <div class="ring" id="ring1"></div>
+    <div class="ring" id="ring2"></div>
+    <div id="rtag" class="abs">clic droit</div>
+    <div id="cur" class="abs"></div>
+  </div>
+
+  <!-- fixed on screen -->
+  <div id="rail" class="abs"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="abs cap" id="c1"><b>1</b>Dans Pilotix : Envoyer photos <em>›</em> Installer l'extension</div>
+  <div class="abs cap" id="c2"><b>2</b>Cliquez sur Télécharger</div>
+  <div class="abs cap" id="c3"><b>3</b>Clic droit <em>›</em> Extraire tout, puis rangez le dossier dans Documents</div>
+  <div class="abs cap" id="c4"><b>4</b>Ouvrez chrome://extensions <em>›</em> activez Mode développeur</div>
+  <div class="abs cap" id="c5"><b>5</b>Charger l'extension non empaquetée <em>›</em> dossier pilotix-whatsapp</div>
+  <div class="abs cap" id="c6"><b>6</b>Ouvrez web.whatsapp.com et scannez le code (une seule fois)</div>
+  <div class="abs cap" id="c7"><b>7</b>Rechargez Pilotix <em>›</em> Envoyer sur WhatsApp <em>›</em> Entrée</div>
+  <div class="abs note" id="n3">Ne supprimez pas ce dossier : Chrome s'en sert tous les jours</div>
+  <div class="abs note" id="n7">Rien ne part tout seul : c'est vous qui appuyez sur Entrée</div>
+  <div class="abs key" id="k1" style="left:880px; top:760px">Entrée</div>
+  <div class="abs key" id="k2" style="left:912px; top:760px">F5</div>
+  <div class="abs key" id="k3" style="left:880px; top:760px">Entrée</div>
+
+  <section id="sc-title">
+    <div class="abs" id="t-logo" style="left:880px; top:212px"><img src="../../../apps/web/public/icon.svg" alt=""></div>
+    <div class="abs" id="t-kicker">AIDE PILOTIX</div>
+    <div class="abs big" id="t-title">Installer l'extension WhatsApp</div>
+    <div class="abs" id="t-sub">2 minutes · une seule fois par ordinateur</div>
+    <div class="abs" id="t-steps"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span></div>
+  </section>
+  <section id="sc-end">
+    <div class="abs" id="e-logo" style="left:880px; top:212px"><img src="../../../apps/web/public/icon.svg" alt=""></div>
+    <div class="abs big" id="e-title">C'est prêt !</div>
+    <div class="abs" id="e-sub">Les vraies photos partent dans WhatsApp, en un clic.</div>
+    <div class="abs" id="e-chip">Revoir cette vidéo : menu <b>›</b> Aide</div>
+  </section>
+</div>
+
+<script>
+// one clock: everything on screen is worked out from the time alone (window.seek)
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const eOut = (x) => 1 - Math.pow(1 - x, 3);
+const eInOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const eBack = (x) => { const c = 1.6; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+const lerp = (a, b, x) => a + (b - a) * x;
+const $ = (id) => document.getElementById(id);
+const css = (el, o) => { const e = typeof el === 'string' ? $(el) : el; for (const k in o) e.style[k] = o[k]; };
+/** in from a to b, out from c to d */
+const win = (t, a, b, c, d) => Math.min(eOut(prog(t, a, b)), 1 - eOut(prog(t, c, d)));
+window.DURATION = 62.5;
+
+// ---------------------------------------------------------------- pictures (code only, no logo)
+const SVG = {
+  back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  fwd: '<svg viewBox="0 0 24 24" fill="none" stroke="#B9BDC4" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>',
+  rel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>',
+  dl: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>',
+  puz: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M9 4h3a2 2 0 1 1 4 0h2v5a2 2 0 1 1 0 4v5h-5a2 2 0 1 0-4 0H4v-5a2 2 0 1 0 0-4V4h5z"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" fill="none" stroke="#4A505B" stroke-width="2.2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+  chat: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#1FA855"/><path d="M7 16.5l.8-2.6A5.5 5.5 0 1 1 10 16l-3 .5z" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+  arrow: '<svg viewBox="0 0 40 46"><path d="M4 3 L4 36 L12.5 28.5 L18 41 L24 38.5 L18.5 26 L30 26 Z" fill="#fff" stroke="#1B2A47" stroke-width="2.6" stroke-linejoin="round"/></svg>',
+  sendw: '<svg viewBox="0 0 24 24"><path d="M3 20l18-8L3 4v6l12 2-12 2z" fill="#fff"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  laptop: '<svg viewBox="0 0 120 90" fill="none" stroke="#1FA855" stroke-width="5" stroke-linejoin="round"><rect x="18" y="12" width="84" height="54" rx="6"/><path d="M6 76h108"/><rect x="72" y="34" width="28" height="48" rx="6" fill="#fff"/></svg>',
+};
+const FI = {
+  folder: '<svg viewBox="0 0 26 26"><path d="M2 6.5A2.5 2.5 0 0 1 4.5 4h5.6l2.4 2.6h9A2.5 2.5 0 0 1 24 9.1V20a2.5 2.5 0 0 1-2.5 2.5h-17A2.5 2.5 0 0 1 2 20z" fill="#E8B23A"/><path d="M2 10h22v10a2.5 2.5 0 0 1-2.5 2.5h-17A2.5 2.5 0 0 1 2 20z" fill="#F6C94A"/></svg>',
+  zip: '<svg viewBox="0 0 26 26"><path d="M2 6.5A2.5 2.5 0 0 1 4.5 4h5.6l2.4 2.6h9A2.5 2.5 0 0 1 24 9.1V20a2.5 2.5 0 0 1-2.5 2.5h-17A2.5 2.5 0 0 1 2 20z" fill="#E8B23A"/><path d="M2 10h22v10a2.5 2.5 0 0 1-2.5 2.5h-17A2.5 2.5 0 0 1 2 20z" fill="#F6C94A"/><path d="M12 10v12.5" stroke="#6B6B6B" stroke-width="3" stroke-dasharray="1.6 1.6"/><rect x="10.3" y="15" width="3.4" height="4" rx=".8" fill="#6B6B6B"/></svg>',
+  file: (c, t) => `<svg viewBox="0 0 26 26"><path d="M6 2h10l6 6v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" fill="#fff" stroke="#9AA0A6" stroke-width="1.3"/><path d="M16 2v6h6" fill="none" stroke="#9AA0A6" stroke-width="1.3"/><rect x="4" y="13" width="15" height="8" rx="1.5" fill="${c}"/><text x="11.5" y="19.3" font-size="6" font-weight="800" fill="#fff" text-anchor="middle" font-family="Inter">${t}</text></svg>`,
+  home: '<svg viewBox="0 0 26 26" fill="none" stroke="#4A5A6A" stroke-width="2" stroke-linejoin="round"><path d="M4 12L13 4l9 8v10H4z"/></svg>',
+  desk: '<svg viewBox="0 0 26 26"><rect x="3" y="5" width="20" height="13" rx="2" fill="#5AA0E0"/><path d="M9 22h8" stroke="#4A5A6A" stroke-width="2"/></svg>',
+  down: '<svg viewBox="0 0 26 26"><circle cx="13" cy="13" r="10" fill="#2E8B57"/><path d="M13 7v9m-4-4 4 4 4-4" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>',
+  doc: '<svg viewBox="0 0 26 26"><path d="M6 3h10l5 5v15H6z" fill="#4C7BD9"/><path d="M9 13h9M9 17h9" stroke="#fff" stroke-width="1.6"/></svg>',
+  pic: '<svg viewBox="0 0 26 26"><rect x="3" y="5" width="20" height="16" rx="2" fill="#3FA7C9"/><path d="M5 19l5-6 4 4 3-3 4 5" fill="#fff"/></svg>',
+  music: '<svg viewBox="0 0 26 26"><circle cx="8" cy="19" r="3.4" fill="#E0663F"/><path d="M11 19V6l10-2v12" stroke="#E0663F" stroke-width="2.2" fill="none"/><circle cx="18" cy="16" r="3" fill="#E0663F"/></svg>',
+  pc: '<svg viewBox="0 0 26 26"><rect x="3" y="4" width="20" height="13" rx="2" fill="#6B7C93"/><path d="M8 22h10M13 17v5" stroke="#6B7C93" stroke-width="2"/></svg>',
+  open: '<svg viewBox="0 0 26 26" fill="none" stroke="#444" stroke-width="2"><path d="M5 6h7l2 2h7v11H5z"/></svg>',
+  share: '<svg viewBox="0 0 26 26" fill="none" stroke="#444" stroke-width="2" stroke-linecap="round"><path d="M13 4v12M8 9l5-5 5 5M6 14v7h14v-7"/></svg>',
+  copy: '<svg viewBox="0 0 26 26" fill="none" stroke="#444" stroke-width="2"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M6 17V5h10"/></svg>',
+  ren: '<svg viewBox="0 0 26 26" fill="none" stroke="#444" stroke-width="2" stroke-linecap="round"><path d="M5 18l10-10 3 3-10 10H5z"/></svg>',
+  del: '<svg viewBox="0 0 26 26" fill="none" stroke="#444" stroke-width="2" stroke-linecap="round"><path d="M5 7h16M10 7V4h6v3M7 7l1 14h10l1-14"/></svg>',
+  more: '<svg viewBox="0 0 26 26" fill="none" stroke="#444" stroke-width="2"><rect x="5" y="5" width="16" height="16" rx="3"/><path d="M9 13h8"/></svg>',
+};
+FI.js = FI.file('#C9A227', 'JS');
+FI.json = FI.file('#7A5BC9', '{ }');
+FI.md = FI.file('#5F6673', 'MD');
+document.querySelectorAll('.fi[data-i]').forEach((el) => (el.innerHTML = FI[el.dataset.i]));
+$('i-back').innerHTML = SVG.back; $('i-fwd').innerHTML = SVG.fwd; $('i-rel').innerHTML = SVG.rel; $('i-dl').innerHTML = SVG.dl; $('i-puz').innerHTML = SVG.puz;
+$('url-lock').innerHTML = SVG.lock; $('fav-ext').innerHTML = SVG.puz; $('fav-wa').innerHTML = SVG.chat; $('cur').innerHTML = SVG.arrow;
+$('dl-ic').innerHTML = `<span class="fi" style="width:40px;height:40px">${FI.zip}</span>`;
+$('wc-send').innerHTML = SVG.sendw; $('wc-psend').innerHTML = SVG.sendw; $('ph-ok').innerHTML = `<span style="width:70px;height:70px;display:block">${SVG.check}</span>`;
+$('ph-ill').innerHTML = `<span style="width:120px;height:90px;display:block">${SVG.laptop}</span>`;
+
+// the QR code (made up: it only shows what to scan)
+function qr(size) {
+  let s = 20261109;
+  const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const N = 33, c = size / N;
+  let r = '';
+  const finder = (x, y) => { r += `<rect x="${x * c}" y="${y * c}" width="${7 * c}" height="${7 * c}" fill="#111"/><rect x="${(x + 1) * c}" y="${(y + 1) * c}" width="${5 * c}" height="${5 * c}" fill="#fff"/><rect x="${(x + 2) * c}" y="${(y + 2) * c}" width="${3 * c}" height="${3 * c}" fill="#111"/>`; };
+  const inF = (i, j) => (i < 8 && j < 8) || (i > N - 9 && j < 8) || (i < 8 && j > N - 9);
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (!inF(i, j) && rnd() < 0.48) r += `<rect x="${i * c}" y="${j * c}" width="${c + 0.4}" height="${c + 0.4}" fill="#111"/>`;
+  finder(0, 0); finder(N - 7, 0); finder(0, N - 7);
+  // the Pilotix-free middle: a small white square (no logo)
+  return `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><rect width="${size}" height="${size}" fill="#fff"/>${r}</svg>`;
+}
+$('wl-qr').innerHTML = qr(350);
+$('ph-qr').innerHTML = qr(204);
+$('wl-qr-ok').innerHTML = `<span style="width:120px;height:120px;border-radius:50%;background:#1FA855;display:grid;place-items:center"><span style="width:70px;height:70px;display:block">${SVG.check}</span></span>`;
+
+// the stroller photos (the shop's « Poussette canne pliable »: Gris, Bleu marine, Rose)
+function stroller(color, bg, flip) {
+  return `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice"><rect width="200" height="200" fill="${bg}"/>
+  <g transform="${flip ? 'translate(200,0) scale(-1,1)' : ''}">
+  <ellipse cx="100" cy="170" rx="72" ry="9" fill="rgba(0,0,0,.07)"/>
+  <path d="M60 96 Q58 46 102 40 L106 40 L106 96 Z" fill="${color}"/>
+  <path d="M60 96 Q62 72 84 70" stroke="rgba(255,255,255,.35)" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M58 96 L142 96 Q150 97 146 106 L134 122 L68 122 Z" fill="${color}" opacity=".88"/>
+  <path d="M106 40 L134 64 L136 122" stroke="#2A2F36" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M134 64 L156 54" stroke="#2A2F36" stroke-width="6" stroke-linecap="round"/>
+  <path d="M70 122 L54 158 M134 122 L148 158 M100 122 L100 142" stroke="#2A2F36" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="54" cy="160" r="12" fill="#fff" stroke="#2A2F36" stroke-width="5"/><circle cx="148" cy="160" r="12" fill="#fff" stroke="#2A2F36" stroke-width="5"/>
+  </g></svg>`;
+}
+const P = [stroller('#8B95A3', '#EEF1F4'), stroller('#2B3F73', '#E8ECF5'), stroller('#E38BAE', '#FBEFF4'), stroller('#8B95A3', '#F5F1EA', true)];
+['al1', 'al2', 'al3', 'al4'].forEach((id, k) => ($(id).innerHTML = `<div class="ph-img">${P[k]}</div>`));
+['ws1', 'ws2', 'ws3', 'ws4'].forEach((id, k) => ($(id).innerHTML = `<div class="ph-img">${P[k]}</div>`));
+$('wc-big').innerHTML = `<div class="ph-img">${P[0]}</div>`;
+const MSG = 'Bonjour Amine Bouzid 👋 Voici les photos de votre commande PX3115 :\n• Poussette canne pliable — Gris, Bleu marine, Rose';
+$('wc-cap-t').textContent = MSG;
+$('al-msg').textContent = MSG;
+
+// ---------------------------------------------------------------- the film's plan
+// where things are on screen (stage pixels): the browser's page starts at (120, 144); the page shots are 1680 x 810
+const BX = 120, BY = 144;
+const at = (b) => [BX + b.x + b.w / 2, BY + b.y + b.h / 2];
+const POS = {
+  photosBtn: at({ x: 806.6, y: 387, w: 170.4, h: 35 }),
+  installBtn: at({ x: 898.6, y: 707, w: 249.4, h: 53.7 }),
+  download: at({ x: 591.5, y: 242.4, w: 141.2, h: 35 }),
+  sendBtn: at({ x: 871.4, y: 665.2, w: 276.6, h: 53.7 }),
+  devMode: at({ x: 1635.7, y: 23.3, w: 30.3, h: 18.7 }),
+  loadUnpacked: at({ x: 28, y: 77, w: 287, h: 42 }),
+  zipRow: [720, 368], extractAll: [900, 448], extractGo: [1069, 656], foldRow: [720, 368], docs: [430, 404],
+  pkFold: [780, 338], pkGo: [1244, 800], phBtn: [1690, 498],
+};
+const STEPS = [4.0, 11.5, 16.5, 26.0, 32.0, 41.5, 48.6, 58.6];
+
+// the cursor's way [t, x, y] (it moves between two points with the same ease)
+const CUR = [
+  [4.4, 1400, 760], [5.0, 1400, 760], [6.0, ...POS.photosBtn], [6.6, ...POS.photosBtn], [8.2, ...POS.installBtn], [8.5, ...POS.installBtn], [9.6, 1010, 520], [11.6, 1010, 520],
+  [12.7, ...POS.download], [13.2, ...POS.download], [14.2, 1240, 560], [17.2, 1240, 560], [18.1, ...POS.zipRow], [18.6, ...POS.zipRow],
+  [19.3, ...POS.extractAll], [19.9, ...POS.extractAll], [20.8, ...POS.extractGo], [21.7, ...POS.extractGo], [22.3, ...POS.foldRow],
+  [22.45, ...POS.foldRow], [23.4, ...POS.docs], [24.2, ...POS.docs], [25.0, 700, 560], [28.6, 1100, 420], [29.5, ...POS.devMode],
+  [30.3, ...POS.devMode], [31.4, 900, 300], [32.1, 900, 300], [33.0, ...POS.loadUnpacked], [34.0, ...POS.loadUnpacked], [34.9, ...POS.pkFold],
+  [35.45, ...POS.pkFold], [36.1, 1130, 640], [37.6, 1130, 640], [38.5, ...POS.pkGo], [39.3, ...POS.pkGo], [40.0, 1150, 690], [49.8, 1300, 700], [50.8, ...POS.photosBtn],
+  [51.3, ...POS.photosBtn], [52.2, ...POS.sendBtn], [60, ...POS.sendBtn],
+];
+const CURVIS = [[4.4, 25.9], [28.5, 41.3], [49.8, 52.7]];
+const CLICKS = [[6.1, 'photosBtn'], [8.35, 'installBtn'], [12.85, 'download'], [18.25, 'zipRow', 1], [19.45, 'extractAll'], [20.95, 'extractGo'], [29.65, 'devMode'], [33.15, 'loadUnpacked'], [35.0, 'pkFold'], [35.22, 'pkFold'], [38.65, 'pkGo'], [50.9, 'photosBtn'], [52.35, 'sendBtn']];
+window.CLICKS = CLICKS.map((c) => c[0]);
+
+// the camera [t, zoom, x, y]: that point of the world at the middle of the screen (never past the screen's edges)
+const CAM = [
+  [0, 1, 960, 540], [5.0, 1, 960, 540], [6.0, 1.35, 1012, 560], [6.4, 1.35, 1012, 560], [7.0, 1.22, 980, 600], [7.7, 1.22, 980, 600],
+  [8.3, 1.4, 1080, 800], [8.7, 1.4, 1080, 800], [9.4, 1.18, 900, 560], [11.5, 1.18, 900, 560], [12.3, 1.55, 800, 440], [13.0, 1.55, 800, 440],
+  [13.6, 1.35, 1450, 300], [15.6, 1.35, 1450, 300], [16.4, 1, 960, 540], [17.2, 1, 960, 540], [17.9, 1.25, 820, 440], [19.3, 1.25, 860, 460],
+  [19.9, 1.25, 940, 520], [21.0, 1.25, 940, 520], [21.7, 1.15, 760, 440], [24.0, 1.15, 760, 440], [25.4, 1, 960, 540], [26.2, 1, 960, 540],
+  [26.6, 1.6, 700, 150], [28.0, 1.6, 700, 150], [28.5, 1, 960, 540], [28.8, 1, 960, 540], [29.5, 1.8, 1620, 200], [30.2, 1.8, 1620, 200],
+  [31.0, 1.4, 600, 280], [32.0, 1.4, 600, 280], [32.8, 1.6, 400, 260], [33.4, 1.6, 400, 260], [34.0, 1.12, 960, 500], [35.3, 1.12, 960, 500],
+  [35.9, 1.3, 900, 420], [37.6, 1.3, 900, 420], [38.3, 1.35, 1150, 700], [38.9, 1.35, 1150, 700], [39.6, 1.45, 820, 510], [41.0, 1.45, 820, 510],
+  [41.6, 1, 960, 540], [48.6, 1, 960, 540], [50.0, 1.3, 1012, 580], [50.9, 1.3, 1012, 580], [51.5, 1.3, 1090, 760], [52.5, 1.3, 1090, 760],
+  [53.1, 1.12, 1190, 560], [55.6, 1.12, 1190, 560], [56.2, 1.12, 1300, 640], [58.0, 1.12, 1300, 640], [58.6, 1, 960, 540], [70, 1, 960, 540],
+];
+function path(K, t) {
+  if (t <= K[0][0]) return K[0].slice(1);
+  for (let i = 0; i < K.length - 1; i++) {
+    const [a, ...p] = K[i], [b, ...q] = K[i + 1];
+    if (t >= a && t <= b) { const x = eInOut(prog(t, a, b)); return p.map((v, k) => lerp(v, q[k], x)); }
+  }
+  return K[K.length - 1].slice(1);
+}
+
+// the page shown in the browser: [layer, from, to, fade]
+const LAYERS = [
+  ['L-order', 4.0, 6.6, 0.3], ['L-noext', 6.3, 8.9, 0.25], ['L-guide', 8.6, 26.3, 0.25], ['L-new', 26.0, 28.5, 0.12], ['L-xoff', 28.2, 30.1, 0.2],
+  ['L-xon', 29.8, 39.5, 0.2], ['L-xwith', 39.2, 41.8, 0.3], ['L-walogin', 41.5, 46.2, 0.12], ['L-walist', 45.9, 48.9, 0.3], ['L-guide', 48.6, 49.8, 0.12],
+  ['L-order', 49.7, 51.4, 0.15], ['L-pxext', 51.1, 52.9, 0.25], ['L-wachat', 52.6, 70, 0.12],
+];
+const URL_PX = 'pilotix.online/confirmation', URL_EXT = 'chrome://extensions', URL_WA = 'web.whatsapp.com';
+
+function cap(id, t, a, b) {
+  const o = win(t, a, a + 0.35, b - 0.3, b);
+  css(id, { opacity: String(o), transform: `translateX(-50%) translateY(${(1 - eOut(prog(t, a, a + 0.35))) * 26}px)` });
+}
+function note(id, t, a, b) {
+  const o = win(t, a, a + 0.3, b - 0.3, b);
+  css(id, { opacity: String(o), transform: `translateX(-50%) translateY(${(1 - eOut(prog(t, a, a + 0.3))) * 18}px)` });
+}
+function key(id, t, a, b, press) {
+  const p = t > press && t < press + 0.16;
+  css(id, { opacity: String(win(t, a, a + 0.15, b - 0.2, b)), transform: `translateY(${p ? 6 : 0}px)`, borderBottomWidth: p ? '3px' : '9px' });
+}
+
+window.seek = function (t) {
+  // 0 · title
+  css('sc-title', { opacity: String(win(t, -1, 0, 3.6, 4.0)), display: t > 4.05 ? 'none' : 'block' });
+  {
+    const lg = eBack(prog(t, 0.1, 0.7));
+    css('t-logo', { transform: `scale(${0.6 + 0.4 * lg})`, opacity: String(prog(t, 0.1, 0.35)) });
+    css('t-kicker', { opacity: String(eOut(prog(t, 0.3, 0.7))) });
+    css('t-title', { opacity: String(eOut(prog(t, 0.4, 0.9))), transform: `translateY(${(1 - eOut(prog(t, 0.4, 0.9))) * 34}px)` });
+    css('t-sub', { opacity: String(eOut(prog(t, 0.7, 1.1))) });
+    document.querySelectorAll('#t-steps span').forEach((el, k) => {
+      const p = eBack(prog(t, 1.2 + k * 0.12, 1.6 + k * 0.12));
+      el.style.opacity = String(prog(t, 1.2 + k * 0.12, 1.35 + k * 0.12));
+      el.style.transform = `translateY(${(1 - p) * 40}px) scale(${0.8 + 0.2 * p})`;
+      el.className = t > 2.4 + k * 0.12 ? 'o' : '';
+    });
+  }
+
+  // the world: in, the camera, out
+  const wo = win(t, 3.6, 4.1, 58.3, 58.8);
+  const [s, fx, fy] = path(CAM, t);
+  let tx = clamp(960 - fx * s, 1920 - 1920 * s, 0), ty = clamp(540 - fy * s, 1080 - 1080 * s, 0);
+  const intro = 1 - eOut(prog(t, 3.6, 4.4));
+  css('world', { opacity: String(wo), transform: `translate(${tx}px, ${ty + intro * 40}px) scale(${s})`, display: wo <= 0 ? 'none' : 'block' });
+
+  // the rail: which step
+  let step = -1;
+  for (let i = 0; i < 7; i++) if (t >= STEPS[i] && t < STEPS[i + 1]) step = i;
+  css('rail', { opacity: String(win(t, 3.9, 4.3, 58.3, 58.7)) });
+  document.querySelectorAll('#rail i').forEach((el, k) => (el.className = k === step ? 'on' : k < step ? 'done' : ''));
+
+  // the browser: its tabs, its address, its page
+  const tabOn = t < 26.0 ? 'px' : t < 41.5 ? 'ext' : t < 48.6 ? 'wa' : t < 52.6 ? 'px' : 'wa';
+  $('tb-px').className = `tab${tabOn === 'px' ? ' on' : ''}`;
+  $('tb-ext').className = `tab${tabOn === 'ext' ? ' on' : ''}`;
+  $('tb-wa').className = `tab${tabOn === 'wa' ? ' on' : ''}`;
+  const extIn = eOut(prog(t, 25.9, 26.2)), waIn = eOut(prog(t, 41.4, 41.7));
+  css('tb-ext', { opacity: String(extIn), transform: `scaleX(${0.6 + 0.4 * extIn})`, transformOrigin: 'left center' });
+  css('tb-wa', { opacity: String(waIn), transform: `scaleX(${0.6 + 0.4 * waIn})`, transformOrigin: 'left center' });
+  css('tb-plus', { left: `${t < 25.9 ? 278 : t < 41.4 ? 542 : 806}px` });
+  let url = URL_PX, typing = false, placeholder = false;
+  if (t >= 26.0 && t < 26.6) { url = ''; placeholder = true; typing = true; }
+  else if (t >= 26.6 && t < 27.9) { url = URL_EXT.slice(0, Math.floor(prog(t, 26.6, 27.8) * URL_EXT.length)); typing = true; }
+  else if (t >= 27.9 && t < 41.5) url = URL_EXT;
+  else if (t >= 41.5 && t < 48.6) url = URL_WA;
+  else if (t >= 52.6) url = URL_WA;
+  $('url-t').textContent = placeholder ? 'Saisissez une adresse' : url;
+  $('url-t').className = placeholder ? 'ph' : '';
+  css('url-lock', { display: url.startsWith('chrome') || typing ? 'none' : 'block' });
+  css('caret', { display: typing && Math.floor(t * 3) % 2 === 0 ? 'block' : 'none' });
+  const z = {};
+  LAYERS.forEach(([id, a, b, f]) => {
+    if (t >= a && t <= b) { z[id] = { o: eOut(prog(t, a, a + f)), z: Math.round(a * 100) }; }
+  });
+  ['L-order', 'L-noext', 'L-guide', 'L-pxext', 'L-new', 'L-xoff', 'L-xon', 'L-xwith', 'L-walogin', 'L-walist', 'L-wachat'].forEach((id) => {
+    const v = z[id];
+    css(id, { opacity: v ? String(v.o) : '0', zIndex: v ? String(v.z) : '0', display: v ? 'block' : 'none' });
+  });
+  // the reload (F5): a white flash
+  css('L-flash', { opacity: String(Math.min(prog(t, 49.35, 49.5), 1 - prog(t, 49.7, 49.9)) * 0.92), zIndex: '9000' });
+  // the yellow notice, then the add-on's card
+  css('need-ring', { opacity: String(win(t, 6.9, 7.2, 8.0, 8.3)), zIndex: '9001' });
+  css('card-ring', { opacity: String(win(t, 39.5, 39.8, 41.0, 41.3) * (0.75 + 0.25 * Math.sin(t * 7))), zIndex: '9001' });
+
+  // 2 · the download
+  css('dl', { opacity: String(win(t, 12.95, 13.25, 15.6, 16.0)), transform: `translateY(${(1 - eOut(prog(t, 12.95, 13.3))) * -14}px)` });
+  {
+    const p = prog(t, 13.0, 13.8);
+    $('dl-sb').textContent = p < 1 ? `${(16.1 * p).toFixed(1).replace('.', ',')} Ko sur 16,1 Ko` : '16,1 Ko · Terminé';
+    $('dl-st').innerHTML = p < 1
+      ? `<svg viewBox="0 0 34 34" width="34" height="34"><circle cx="17" cy="17" r="14" fill="none" stroke="#E6E1D9" stroke-width="4"/><circle cx="17" cy="17" r="14" fill="none" stroke="#1FA855" stroke-width="4" stroke-dasharray="${88 * p} 88" transform="rotate(-90 17 17)" stroke-linecap="round"/></svg>`
+      : `<span style="width:34px;height:34px;border-radius:50%;background:#1FA855;display:grid;place-items:center"><span style="width:20px;height:20px;display:block">${SVG.check}</span></span>`;
+  }
+
+  // 3 · Windows: extract, then put the folder in Documents
+  {
+    const o = win(t, 16.55, 16.95, 25.5, 25.9);
+    css('fx', { opacity: String(o), transform: `scale(${0.97 + 0.03 * eOut(prog(t, 16.55, 16.95))})`, display: o <= 0 ? 'none' : 'block' });
+    css('fx-menu', { opacity: String(win(t, 18.3, 18.42, 19.45, 19.55)) });
+    $('fx-mx').className = t > 18.95 ? 'hl' : '';
+    css('fx-dlg', { opacity: String(win(t, 19.6, 19.8, 21.0, 21.15)), transform: `scale(${0.96 + 0.04 * eOut(prog(t, 19.6, 19.8))})` });
+    $('fx-go').style.filter = t > 20.9 && t < 21.05 ? 'brightness(.85)' : 'none';
+    const born = eOut(prog(t, 21.3, 21.55)), gone = eInOut(prog(t, 23.5, 23.8));
+    const dragging = t > 22.45 && t < 23.5;
+    css('fx-fold', { opacity: String(born * (dragging ? 0.45 : 1) * (1 - gone)), transform: `scale(${0.9 + 0.1 * born})` });
+    $('fx-fold').className = `w-row${t > 22.35 && t < 23.5 ? ' sel' : ''}`;
+    $('fx-zip').className = `w-row${t > 18.2 && t < 21.2 ? ' sel' : ''}`;
+    css('fx-zip', { top: `${96 + 44 * eInOut(prog(t, 21.2, 21.5)) * (1 - gone)}px` });
+    $('fx-docs').className = `w-ni${t > 23.15 && t < 24.4 ? ' on' : ''}`;
+    css('fx-toast', { opacity: String(win(t, 23.6, 23.9, 25.0, 25.3)), transform: `translateY(${(1 - eOut(prog(t, 23.6, 23.9))) * 16}px)` });
+  }
+
+  // 5 · Chrome's folder picker
+  {
+    const o = win(t, 33.4, 33.7, 38.75, 38.95);
+    css('pk', { opacity: String(o), transform: `scale(${0.97 + 0.03 * eOut(prog(t, 33.4, 33.7))})`, display: o <= 0 ? 'none' : 'block' });
+    const b = eOut(prog(t, 35.25, 35.45));
+    css('pk-A', { opacity: String(1 - b) });
+    css('pk-B', { opacity: String(b) });
+    $('pk-fold').className = `w-row${t > 34.95 && t < 35.3 ? ' sel' : ''}`;
+    $('pk-man').className = `w-row${t > 35.8 ? ' sel' : ''}`;
+    $('pk-path-t').innerHTML = t < 35.3 ? '›&nbsp; Documents' : '›&nbsp; Documents &nbsp;›&nbsp; pilotix-whatsapp';
+    $('pk-name').textContent = t < 35.3 ? 'Documents' : 'pilotix-whatsapp';
+    css('pk-call', { opacity: String(win(t, 35.9, 36.2, 38.3, 38.6)), transform: `translateX(${(1 - eOut(prog(t, 35.9, 36.2))) * -16}px)` });
+    $('pk-go').style.filter = t > 38.6 && t < 38.75 ? 'brightness(.85)' : 'none';
+  }
+
+  // 6 · WhatsApp Web: the phone scans the code
+  {
+    const o = win(t, 42.0, 42.3, 48.0, 48.3);
+    const x = (1 - eOut(prog(t, 42.0, 42.6))) * 520 + eInOut(prog(t, 47.7, 48.3)) * 520;
+    css('ph', { opacity: String(o), transform: `translateX(${x}px)`, display: o <= 0 ? 'none' : 'block' });
+    css('ph-A', { opacity: String(win(t, 41.9, 42.0, 43.9, 44.05)) });
+    css('ph-B', { opacity: String(win(t, 43.9, 44.05, 45.6, 45.75)) });
+    css('ph-C', { opacity: String(win(t, 45.6, 45.75, 49, 49.1)) });
+    css('ph-btn', { filter: t > 43.55 && t < 43.75 ? 'brightness(.85)' : 'none' });
+    css('ph-scan', { top: `${10 + 236 * (0.5 - 0.5 * Math.cos((t - 44.0) * 3.4))}px` });
+    css('ph-ok', { transform: `scale(${0.4 + 0.6 * eBack(prog(t, 45.65, 46.1))})` });
+    css('wl-qr-ok', { opacity: String(eOut(prog(t, 45.6, 45.85))) });
+    const tp = prog(t, 43.55, 44.0);
+    css('tap', tp > 0 && tp < 1 ? { opacity: String(1 - tp), left: `${POS.phBtn[0] - 38}px`, top: `${POS.phBtn[1] - 38}px`, transform: `scale(${0.6 + tp * 0.8})` } : { opacity: '0' });
+  }
+
+  // 7 · WhatsApp Web: the add-on pasted the photos and the message; Entrée sends them
+  {
+    css('wc-banner', { opacity: String(win(t, 52.9, 53.2, 55.3, 55.6)), transform: `translateX(-50%) translateY(${(1 - eOut(prog(t, 52.9, 53.2))) * -18}px)` });
+    const cl = eInOut(prog(t, 55.6, 55.9));
+    css('wc-prev', { opacity: String(1 - cl), transform: `translateY(${cl * 40}px)` });
+    css('wc-big', { transform: `scale(${0.92 + 0.08 * eBack(prog(t, 52.7, 53.2))})` });
+    css('wc-pasted', { opacity: String(win(t, 52.95, 53.15, 55.2, 55.5)) });
+    css('wc-cap', { boxShadow: `0 0 0 ${4 * (1 - prog(t, 53.0, 54.4))}px rgba(247,168,35,.6)` });
+    const al = eBack(prog(t, 55.9, 56.45));
+    css('wc-album', { opacity: String(prog(t, 55.9, 56.1)), transform: `scale(${0.6 + 0.4 * al})` });
+    $('wc-pv').textContent = t > 56.0 ? '📷 4 photos · Bonjour Amine Bouzid 👋…' : 'Merci, à demain !';
+  }
+
+  // the cursor, its clicks, the drag
+  {
+    const [x, y] = path(CUR, t);
+    let vis = 0;
+    for (const [a, b] of CURVIS) vis = Math.max(vis, win(t, a, a + 0.2, b - 0.2, b));
+    let press = 1;
+    for (const [c] of CLICKS) if (t > c && t < c + 0.14) press = 0.86;
+    css('cur', { left: `${x - 4}px`, top: `${y - 4}px`, opacity: String(vis), transform: `scale(${press})` });
+    let r1 = null, r2 = null;
+    for (const [c, k, right] of CLICKS) {
+      const p = prog(t, c, c + 0.55);
+      if (p > 0 && p < 1) { if (!r1) r1 = [p, ...POS[k], right]; else r2 = [p, ...POS[k], right]; }
+    }
+    const ring = (id, r) => css(id, r ? { opacity: String(1 - r[0]), left: `${r[1] - 26 - r[0] * 26}px`, top: `${r[2] - 26 - r[0] * 26}px`, width: `${52 + r[0] * 52}px`, height: `${52 + r[0] * 52}px`, borderColor: r[3] ? '#1B2A47' : '#F7A823' } : { opacity: '0' });
+    ring('ring1', r1); ring('ring2', r2);
+    css('rtag', { opacity: String(win(t, 18.15, 18.3, 18.9, 19.05)), left: `${x - 138}px`, top: `${y - 18}px` });
+    css('ghost', { opacity: String(win(t, 22.45, 22.6, 23.4, 23.5) * 0.95), left: `${x + 18}px`, top: `${y + 14}px` });
+  }
+
+  // captions, notes, keys
+  cap('c1', t, 4.6, 11.3); cap('c2', t, 11.5, 16.3); cap('c3', t, 16.6, 25.8); cap('c4', t, 26.1, 31.9);
+  cap('c5', t, 32.1, 41.3); cap('c6', t, 41.7, 48.3); cap('c7', t, 48.8, 58.3);
+  note('n3', t, 23.8, 25.7); note('n7', t, 56.2, 58.2);
+  key('k1', t, 27.8, 28.45, 27.95); key('k2', t, 48.95, 49.8, 49.25); key('k3', t, 55.0, 56.2, 55.45);
+
+  // 8 · end
+  css('sc-end', { opacity: String(win(t, 58.5, 59.0, 70, 71)), display: t < 58.45 ? 'none' : 'block' });
+  {
+    css('e-logo', { transform: `scale(${0.7 + 0.3 * eBack(prog(t, 58.8, 59.3))})`, opacity: String(prog(t, 58.8, 59.05)) });
+    css('e-title', { opacity: String(eOut(prog(t, 59.0, 59.5))), transform: `translateY(${(1 - eOut(prog(t, 59.0, 59.5))) * 30}px)` });
+    css('e-sub', { opacity: String(eOut(prog(t, 59.4, 59.9))) });
+    css('e-chip', { opacity: String(eOut(prog(t, 59.9, 60.4))), transform: `translateX(-50%) translateY(${(1 - eOut(prog(t, 59.9, 60.4))) * 20}px)` });
+  }
+};
+window.seek(0);
+</script>
+</body>
+</html>

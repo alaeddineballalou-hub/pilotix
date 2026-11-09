@@ -736,6 +736,8 @@
     "ext4": "Cliquez sur « Charger l’extension non empaquetée » et choisissez le dossier « pilotix-whatsapp ».",
     "ext5": "Rechargez Pilotix : le bouton « Envoyer sur WhatsApp » est prêt.",
     "extReload": "Recharger Pilotix",
-    "extNote": "WhatsApp Web doit être connecté dans ce même navigateur."
+    "extNote": "WhatsApp Web doit être connecté dans ce même navigateur.",
+    "extVideo": "Voir la vidéo (1 min)",
+    "extVideoHide": "Masquer la vidéo"
   }
 }

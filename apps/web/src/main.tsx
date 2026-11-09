@@ -124,8 +124,8 @@ const MARKETER_ALIASES: Record<string, [string, string?]> = { equipe: ['utilisat
 const PlatformApp = lazy(() => import('./pages/platform').then((m) => ({ default: m.PlatformApp })));
 /** Pilotix's public list of Pro marketers (#/pro, #/pro/MK-7K2Q), open to everyone. */
 const PublicPros = lazy(() => import('./pages/pro').then((m) => ({ default: m.PublicPros })));
-/** « Contacter Pilotix » (the store's administrators). */
-const Support = lazy(() => import('./pages/aide').then((m) => ({ default: m.Support })));
+/** « Aide »: the films for everyone, « Contacter Pilotix » for the administrators. */
+const Aide = lazy(() => import('./pages/aide').then((m) => ({ default: m.Aide })));
 
 function App() {
   const { session, ready, picker, phoneStep } = useSession();
@@ -169,20 +169,21 @@ function App() {
   // unpaid or suspended: the lock screen (how to pay), nothing else
   if (session.shop?.locked) return <LockScreen />;
 
-  // « Contacter Pilotix »: the store's administrators
-  if (parts[0] === 'aide' && session.isAdmin && !session.shop?.demo)
-    return (
-      <Shell page="aide" sub={undefined}>
-        <Suspense fallback={<Loading />}>
-          <Support id={parts[1] && /^\d+$/.test(parts[1]) ? Number(parts[1]) : null} />
-        </Suspense>
-      </Shell>
-    );
   // whose space this is: a store's, or a partner's — a confirmation agency (it works on its sellers' orders) or a
   // marketer (on its sellers' ads), one seller or all of them
   const space: 'store' | 'agency' | 'marketer' = session.shop?.kind === 'agency' || session.shop?.kind === 'marketer' ? session.shop.kind : 'store';
   if (space !== 'store') initSeller(session.shop!.id);
   const nav: NavItem[] = space === 'agency' ? AGENCY_NAV : space === 'marketer' ? MARKETER_NAV : NAV;
+  // « Aide »: everyone's films (menu › Aide); the administrators also « Contacter Pilotix » there (#/aide/contact,
+  // a message: #/aide/<id>), in every kind of space, with that space's menu
+  if (parts[0] === 'aide')
+    return (
+      <Shell page="aide" sub={undefined} nav={nav} space={space}>
+        <Suspense fallback={<Loading />}>
+          <Aide part={parts[1]} contact={session.isAdmin && !session.shop?.demo} films={space !== 'marketer'} />
+        </Suspense>
+      </Shell>
+    );
   const pages = space === 'agency' ? AGENCY_PAGES : space === 'marketer' ? MARKETER_PAGES : PAGES;
   // an agency's agent who leads no one has no Accueil: his Dashboard is his home
   const homeOf = () => (space === 'agency' && isPlainAgent(session.roles, session.isAdmin) ? 'dashboard' : space !== 'store' ? 'accueil' : homeFor(session.roles, session.isAdmin));

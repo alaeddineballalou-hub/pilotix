@@ -103,6 +103,29 @@
     "sent": "Message envoyé",
     "replyPh": "Votre réponse…"
   },
+  "help": {
+    "title": "Aide",
+    "sub": "De courtes vidéos pour bien utiliser Pilotix.",
+    "soon": "Les vidéos d’aide arrivent bientôt ici.",
+    "copied": "Adresse copiée : collez-la dans la barre d’adresse de Chrome",
+    "copyFail": "Copie impossible : tapez chrome://extensions dans la barre d’adresse",
+    "ext": {
+      "title": "Installer l’extension WhatsApp",
+      "time": "Vidéo · 1 min",
+      "where": "Ordinateur · Chrome ou Edge",
+      "once": "Une seule fois par ordinateur",
+      "what": "Pour envoyer les vraies photos des produits dans la discussion WhatsApp du client, avec le message, depuis un ordinateur.",
+      "s1": "Dans Pilotix : Confirmation › une commande › « Envoyer photos » › « Installer l’extension ».",
+      "s2": "Cliquez sur « Télécharger » : le fichier pilotix-whatsapp.zip arrive dans Téléchargements.",
+      "s3": "Clic droit sur le fichier › « Extraire tout ». Rangez le dossier « pilotix-whatsapp » dans Documents et gardez-le.",
+      "s4": "Dans Chrome, ouvrez chrome://extensions et activez « Mode développeur » (en haut à droite).",
+      "s5": "Cliquez sur « Charger l’extension non empaquetée » et choisissez le dossier « pilotix-whatsapp » (celui qui contient manifest.json).",
+      "s6": "Ouvrez web.whatsapp.com dans le même Chrome et scannez le code avec votre téléphone (une seule fois).",
+      "s7": "Rechargez Pilotix : « Envoyer sur WhatsApp » met les photos et le message dans la discussion. Vous appuyez sur Entrée.",
+      "download": "Télécharger l’extension",
+      "phone": "Cette vidéo est pour un ordinateur. Sur téléphone, rien à installer : utilisez « Envoyer photos » directement."
+    }
+  },
   "ordersOver": "Vous avez dépassé les commandes de votre formule ce mois : {{done}} / {{max}}",
   "ordersNear": "Bientôt la limite de commandes de votre formule ce mois : {{done}} / {{max}}",
   "ordersKeep": "Vos commandes continuent d’arriver, aucune n’est perdue. Passez à la formule supérieure.",

@@ -75,7 +75,7 @@ export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Ses
               {shop.canAddAgency && item('headset', t('agency.create'), () => (setOpen(false), setModal('agency')))}
               {shop.canAddMarketer && item('megaphone', t('agency.mk.create'), () => (setOpen(false), setModal('marketer')))}
               {session.isAdmin && (
-                <button type="button" role="menuitem" onClick={() => (setOpen(false), (location.hash = '#/aide'))}>
+                <button type="button" role="menuitem" onClick={() => (setOpen(false), (location.hash = '#/aide/contact'))}>
                   <Icon name="chat" />
                   {t('shop.aide.title')}
                   {shop.supportUnread > 0 && <span className="nav-count ltr">{shop.supportUnread}</span>}

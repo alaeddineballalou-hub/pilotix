@@ -1,5 +1,6 @@
-// « Contacter Pilotix » (#/aide): the store's administrators write to Pilotix and read its answers. The store chooses
-// what it tells: Pilotix sees nothing else of it.
+// « Aide » (menu › Aide, #/aide): for everyone, short films that show how to do one thing (videos.tsx). Under them,
+// « Contacter Pilotix » (#/aide/contact, a message #/aide/<id>): the store's administrators write to Pilotix and read
+// its answers. The store chooses what it tells: Pilotix sees nothing else of it.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +9,7 @@ import { server } from '../../lib/backend';
 import { Card, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import '../platform/platform.css';
+import { ExtensionHelp } from './videos';
 
 interface Thread {
   id: number;
@@ -26,18 +28,55 @@ interface Message {
   createdAt: string;
 }
 
-export function Support({ id }: { id: number | null }) {
+/**
+ * The page: the films for everyone (a store's, an agency's: `films`; a marketer's space has none yet); « Contacter
+ * Pilotix » under them for the administrators (`contact`).
+ */
+export function Aide({ part, contact, films = true }: { part?: string; contact: boolean; films?: boolean }) {
   const { t } = useTranslation();
-  const list = useQuery({ queryKey: ['support'], queryFn: () => server.support<Thread[]>(''), refetchInterval: 60_000 });
-  const [writing, setWriting] = useState(false);
+  const id = part && /^\d+$/.test(part) ? Number(part) : null;
+  // from the account menu (« Contacter Pilotix ») or a message's link: straight to it, under the films
+  const toContact = contact && (id !== null || part === 'contact');
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (toContact) box.current?.scrollIntoView({ block: 'start' });
+  }, [toContact, id]);
   return (
     <div className="px-aide">
       <div className="pp-head">
         <div>
-          <h1>{t('shop.aide.title')}</h1>
+          <h1>{t('shop.help.title')}</h1>
+          <p className="muted">{t('shop.help.sub')}</p>
+        </div>
+        {contact && (
+          <a className="btn" href="#/aide/contact">
+            <Icon name="send" /> {t('shop.aide.title')}
+          </a>
+        )}
+      </div>
+      {films && <ExtensionHelp />}
+      {!films && !contact && <p className="muted">{t('shop.help.soon')}</p>}
+      {contact && (
+        <div ref={box} className="aide-contact" id="contact">
+          <Support id={id} embedded />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Support({ id, embedded = false }: { id: number | null; embedded?: boolean }) {
+  const { t } = useTranslation();
+  const list = useQuery({ queryKey: ['support'], queryFn: () => server.support<Thread[]>(''), refetchInterval: 60_000 });
+  const [writing, setWriting] = useState(false);
+  return (
+    <div className={embedded ? 'aide-contact-in' : 'px-aide'}>
+      <div className="pp-head">
+        <div>
+          {embedded ? <h2>{t('shop.aide.title')}</h2> : <h1>{t('shop.aide.title')}</h1>}
           <p className="muted">{t('shop.aide.sub')}</p>
         </div>
-        <button type="button" className="btn primary" onClick={() => (setWriting(true), (location.hash = '#/aide'))}>
+        <button type="button" className="btn primary" onClick={() => (setWriting(true), (location.hash = '#/aide/contact'))}>
           <Icon name="send" /> {t('shop.aide.new')}
         </button>
       </div>

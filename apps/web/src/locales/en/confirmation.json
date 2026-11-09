@@ -736,6 +736,8 @@
     "ext4": "Click « Load unpacked » and choose the « pilotix-whatsapp » folder.",
     "ext5": "Reload Pilotix: the « Send on WhatsApp » button is ready.",
     "extReload": "Reload Pilotix",
-    "extNote": "WhatsApp Web must be linked in this same browser."
+    "extNote": "WhatsApp Web must be linked in this same browser.",
+    "extVideo": "Watch the video (1 min, in French)",
+    "extVideoHide": "Hide the video"
   }
 }

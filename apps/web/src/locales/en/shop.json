@@ -103,6 +103,29 @@
     "sent": "Message sent",
     "replyPh": "Your reply…"
   },
+  "help": {
+    "title": "Help",
+    "sub": "Short videos to use Pilotix well.",
+    "soon": "Help videos are coming here soon.",
+    "copied": "Address copied: paste it in Chrome’s address bar",
+    "copyFail": "Couldn’t copy: type chrome://extensions in the address bar",
+    "ext": {
+      "title": "Install the WhatsApp extension",
+      "time": "Video · 1 min · in French",
+      "where": "Computer · Chrome or Edge",
+      "once": "Once per computer",
+      "what": "To send the real product photos into the customer’s WhatsApp chat, with the message, from a computer.",
+      "s1": "In Pilotix: Confirmation › an order › “Send photos” › “Install the extension”.",
+      "s2": "Click “Download”: the file pilotix-whatsapp.zip lands in your Downloads.",
+      "s3": "Right-click the file › “Extract All”. Put the “pilotix-whatsapp” folder in Documents and keep it.",
+      "s4": "In Chrome, open chrome://extensions and turn on “Developer mode” (top right).",
+      "s5": "Click “Load unpacked” and choose the “pilotix-whatsapp” folder (the one with manifest.json inside).",
+      "s6": "Open web.whatsapp.com in the same Chrome and scan the code with your phone (once).",
+      "s7": "Reload Pilotix: “Send on WhatsApp” puts the photos and the message in the chat. You press Enter.",
+      "download": "Download the extension",
+      "phone": "This video is for a computer. On a phone, nothing to install: just use “Send photos”."
+    }
+  },
   "ordersOver": "You went over your plan’s orders this month: {{done}} / {{max}}",
   "ordersNear": "Close to your plan’s order limit this month: {{done}} / {{max}}",
   "ordersKeep": "Your orders keep coming in, none is lost. Move to a bigger plan.",
