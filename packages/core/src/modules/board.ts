@@ -195,7 +195,7 @@ async function countConfirmation(ctx: Ctx, r: R, ids: number[], detail: boolean)
     `SELECT agent_id AS u,
        count(*) FILTER (WHERE follow_status = ANY($4) AND delivered_at >= $1 AND delivered_at < $2)::int AS dl,
        count(*) FILTER (WHERE follow_status = ANY($5) AND coalesce(returned_at, returning_at, updated_at) >= $1 AND coalesce(returned_at, returning_at, updated_at) < $2)::int AS rt
-     FROM sales WHERE agent_id = ANY($3) GROUP BY 1`,
+     FROM sales WHERE agent_id = ANY($3) AND (follow_status = ANY($4) OR follow_status = ANY($5)) GROUP BY 1`,
     [...P, DONE, BACK],
   )) {
     add(of(x, q.u), 'delivered', num(q.dl));
@@ -616,11 +616,31 @@ function avgOf(area: Area, members: { none: boolean; v: V }[]): V {
   return out;
 }
 
+/**
+ * A board is some thirty reads one after the other: under load each one waits its turn, so the same board asked again
+ * within a few seconds (a refresh, two tabs, the 30 s auto-refresh) is answered from the first one, and the same board
+ * asked twice at once is worked out once. Off by default (tests, the browser preview); the server turns it on.
+ */
+export const boardCache = { ttlMs: 0, max: 2000 };
+const boards = new Map<string, { at: number; v: Promise<unknown> }>();
+function cachedBoard<T>(ctx: Ctx, i: unknown, make: () => Promise<T>): Promise<T> {
+  if (!boardCache.ttlMs) return make();
+  const key = `${ctx.shop?.id ?? 0}:${ctx.session.profile.id}:${JSON.stringify(i)}`;
+  const now = Date.now();
+  const hit = boards.get(key);
+  if (hit && now - hit.at < boardCache.ttlMs) return hit.v as Promise<T>;
+  if (boards.size >= boardCache.max) for (const [k, e] of boards) if (now - e.at >= boardCache.ttlMs || boards.size >= boardCache.max) boards.delete(k); else break;
+  const v = make();
+  boards.set(key, { at: now, v });
+  v.catch(() => boards.get(key)?.v === v && boards.delete(key));
+  return v;
+}
+
 export const boardProcs = {
   /** A team's board for one area and a period: members, team, period before, days, reasons, what is late now. */
   'stats.board': proc(['agent_manager', 'vendeur'], BoardInput, async (ctx, i) => {
     await needArea(ctx, i.area);
-    return board(ctx, i);
+    return cachedBoard(ctx, i, () => board(ctx, i));
   }),
   /** The user's own day in each area they work in, next to their team's (Accueil of an agent). */
   'stats.me': proc(['confirmation', 'suivi', 'depot'], Range, (ctx, r) => myDay(ctx, r)),

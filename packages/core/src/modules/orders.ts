@@ -384,7 +384,9 @@ export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' 
   const limit = w.p(f.pageSize);
   const offset = w.p((f.page - 1) * f.pageSize);
   const col = f.sort === 'score' ? 'created_at' : f.sort;
-  const rows = await ctx.db.query(`SELECT ${ORDER_COLS} ${ORDER_FROM} ${w.sql} ORDER BY o.${col} ${f.dir} ${nulls}, o.id DESC LIMIT ${limit} OFFSET ${offset}`, w.params);
+  // a column never empty sorts without « NULLS … », so its index gives the page without sorting the whole shop
+  const never = col === 'created_at' || col === 'updated_at';
+  const rows = await ctx.db.query(`SELECT ${ORDER_COLS} ${ORDER_FROM} ${w.sql} ORDER BY o.${col} ${f.dir}${never ? '' : ` ${nulls}`}, o.id DESC LIMIT ${limit} OFFSET ${offset}`, w.params);
   const list = rows.map(toOrder);
   return { rows: onlyOwnDeliveries(ctx) ? list.map(hideCustomer) : list, total, page: f.page, pageSize: f.pageSize };
 }

@@ -47,6 +47,7 @@ export { FANOUT_PROCS } from './modules/agencywork';
 export { BOUTIQUE_FANOUT_PROCS, boutiqueWork, OTHER_BOUTIQUE } from './modules/boutiquework';
 export { listPros, proByCode, computeProStats, STATS_HOURS } from './modules/pro';
 export * as pilotLearn from './modules/pilotlearn';
+export { boardCache } from './modules/board';
 export { pilotOn } from './modules/dellal';
 export { seedPos } from './modules/pos';
 export type { PosSale, PosSettings } from './modules/pos';
