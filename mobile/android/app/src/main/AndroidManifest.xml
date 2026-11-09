@@ -36,6 +36,13 @@
         </provider>
     </application>
 
+    <!-- « Envoyer des photos » (WaSharePlugin): whether WhatsApp and WhatsApp Business are on the phone (Android 11+
+         shows an app only the apps it names) -->
+    <queries>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+    </queries>
+
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />

@@ -29,6 +29,8 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         // the app updating itself (website: lib/appUpdate); a plugin of the app is registered before the bridge starts
         registerPlugin(AppUpdatePlugin.class);
+        // « Envoyer des photos »: the photos given to WhatsApp, in the customer's chat (website: lib/waShare)
+        registerPlugin(WaSharePlugin.class);
         super.onCreate(savedInstanceState);
         keepPagesBetweenTheBars();
         if (
