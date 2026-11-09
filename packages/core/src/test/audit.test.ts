@@ -243,6 +243,30 @@ test('a parcel the courier took before the depot scanned it waits « En dispatch
   assert.equal((await row(a.id)).follow_status, 'out_for_delivery');
 });
 
+test('a parcel taken before the depot scanned it moves on by itself after 24 h without the scan', async () => {
+  const c = await one(`SELECT o.id, o.company_id FROM orders o JOIN delivery_companies d ON d.id = o.company_id WHERE d.kind = 'zr' AND o.tracking IS NOT NULL AND o.follow_status IN ('shipped', 'out_for_delivery') ORDER BY o.id DESC LIMIT 1`);
+  assert.ok(c, 'a ZR parcel');
+  await db.query(`UPDATE delivery_companies SET credentials = '{"api_key":"k","tenant":"t"}', active = true WHERE id = $1`, [c.company_id]);
+  await db.query(`UPDATE orders SET follow_status = 'prepared', sub_status = NULL WHERE id = $1`, [c.id]);
+  const server = { courier: async (k: string, args: any) => (k === 'track' ? args.items.map((x: any) => (x.id === Number(c.id) ? { id: x.id, status: 'En livraison', mapped: 'out_for_delivery' } : { id: x.id, status: 'x', mapped: null })) : []) } as any;
+  const H = 3600_000;
+  const syncAt = async (later: number) => {
+    const s = await as(EMAILS.suivi, server);
+    return call('delivery.sync', { ...s, now: () => Date.now() + later }, { companyId: Number(c.company_id) });
+  };
+  const row = async () => one('SELECT follow_status, sub_status FROM orders WHERE id = $1', [c.id]);
+  await syncAt(0);
+  assert.deepEqual(await row(), { follow_status: 'prepared', sub_status: 'pris_sans_scan' });
+  await syncAt(23 * H);
+  assert.deepEqual(await row(), { follow_status: 'prepared', sub_status: 'pris_sans_scan' }, 'a day not over yet: it still waits');
+  // (a parcel marked before the tag existed is known by its note's words)
+  await db.query(`UPDATE order_events SET data = NULL WHERE order_id = $1 AND kind = 'note' AND note LIKE '%avant le scan du dépôt%'`, [c.id]);
+  await syncAt(25 * H);
+  assert.deepEqual(await row(), { follow_status: 'out_for_delivery', sub_status: null }, 'a day later it follows the company');
+  const said = await one(`SELECT count(*)::int AS n FROM order_events WHERE order_id = $1 AND note LIKE 'Pas scanné au dépôt 24 h%'`, [c.id]);
+  assert.equal(said.n, 1);
+});
+
 test('two « Envoyer » at once send a parcel to the courier only once', async () => {
   const conf = await as(EMAILS.conf);
   const depot = await as(EMAILS.depot);

@@ -481,11 +481,15 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
     if (p.follow_status === 'prepared' && to && FOLLOW_ON_ROAD.includes(to)) {
       if (p.sub_status !== SUB_TAKEN_UNSCANNED) {
         await ctx.db.query(`UPDATE orders SET sub_status = $2, updated_at = now() WHERE id = $1 AND follow_status = 'prepared'`, [a.id, SUB_TAKEN_UNSCANNED]);
-        await addEvent(ctx.db, a.id, null, 'note', null, 'event', `${c.name} a pris le colis avant le scan du dépôt : il reste « En dispatch » jusqu’au scan`);
+        await addEvent(ctx.db, a.id, null, 'note', null, 'event', `${c.name} a pris le colis avant le scan du dépôt : il reste « En dispatch » jusqu’au scan`, { taken: true });
         changed++;
         taken.push(p.ref);
+        continue;
       }
-      continue;
+      // the safety (the owner's choice): still not scanned a day after the company took it, it follows the company's
+      // status by itself — the Suivi must see its news (a failed attempt, an alert). Said in its history.
+      if (!(await takenLongAgo(ctx, a.id))) continue;
+      await addEvent(ctx.db, a.id, null, 'note', null, 'event', `Pas scanné au dépôt 24 h après que ${c.name} l’a pris : il suit maintenant son statut`);
     }
     // Suivi's own work (an alert raised or handled, an exchange in progress) is not undone by the courier's
     // « en livraison » / « vers wilaya »: only an end (livré, retour, perdu…) moves such a parcel.
@@ -506,6 +510,8 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
     // a new alert from the company is a new one (« à traiter » again)
     changed += (await setFollow(sys, { ids: list, status, note: `Statut ${c.name}`, ...(status === 'alert' ? { subStatus: null } : {}) }, { system: true, courier: true, expect })).changed.length;
   }
+  // the mark goes with the parcels that left « En dispatch » (24 h passed, or the company's end: livré, retour…)
+  await ctx.db.query(`UPDATE orders SET sub_status = NULL WHERE company_id = $1 AND sub_status = $2 AND follow_status IS DISTINCT FROM 'prepared'`, [c.id, SUB_TAKEN_UNSCANNED]);
   // the depot manager (Management › Alertes dépôt; nobody chosen: every depot agent) gets one notification on the phone
   // for the parcels the company just took before the depot's scan — they are waiting in « En dispatch » to be scanned
   if (taken.length) {
@@ -518,6 +524,19 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
     }).catch(() => 0);
   }
   return { company: c.name, checked: parcels.length, changed, fees: feesChanged, failed: errors.length, errors: errors.slice(0, 20) };
+}
+/** How long a parcel the company took waits in « En dispatch » for the depot's scan before it moves on by itself. */
+export const TAKEN_WAIT_MS = 24 * 3600_000;
+/** Was this parcel taken by its company (before the depot's scan) more than TAKEN_WAIT_MS ago? From its history's note
+ *  (tagged; the first ones of 9 Nov 2026 by their words). */
+async function takenLongAgo(ctx: Ctx, orderId: number) {
+  const at = (
+    await ctx.db.query(
+      `SELECT max(at) AS at FROM order_events WHERE order_id = $1 AND kind = 'note' AND (data->>'taken' = 'true' OR note LIKE '%avant le scan du dépôt%')`,
+      [orderId],
+    )
+  )[0]?.at;
+  return !!at && ctx.now() - new Date(at).getTime() >= TAKEN_WAIT_MS;
 }
 const safeDate = (s: string | null | undefined) => {
   if (!s) return null;
