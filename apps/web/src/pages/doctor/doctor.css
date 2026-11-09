@@ -301,3 +301,13 @@
   .dr-mine-score { padding: 3px 9px; }
   .dr-mine-score small { display: none; }
 }
+
+/* the bug detector's test robot: each step, ✓ / ✗, its time */
+.dr-robot { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; }
+.dr-robot li { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 13px; align-items: start; }
+.dr-robot li:last-child { border-bottom: 0; }
+.dr-robot li small { display: block; color: var(--muted); }
+.dr-robot-mark { font-weight: 700; text-align: center; }
+.dr-robot li.dr-ok .dr-robot-mark { color: var(--ok); }
+.dr-robot li.dr-warn .dr-robot-mark { color: #F28C1B; }
+.dr-robot li.dr-bad .dr-robot-mark { color: var(--coral); }

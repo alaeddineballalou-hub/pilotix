@@ -107,6 +107,8 @@ export const courierWatchNow = () => req<{ running: boolean; startedAt: string |
 export const serverDoctor = () => req<ServerDoctorReport>('/doctor');
 /** Doctor: « Résolu » / « Ignorer » / « Ré-afficher » an alert no page can fix; answers with the new report. */
 export const doctorDismiss = (id: string, kind: 'solve' | 'ignore' | 'restore') => req<ServerDoctorReport>('/doctor/dismiss', { id, kind });
+/** The bug detector now (test robot, outside services, data checker): its new report. */
+export const doctorWatch = () => req<ServerDoctorReport>('/doctor/watch', {});
 /** Cloudflare Turnstile for every shop: connect the account (owner; token '' keeps the saved one), remove it, sync now. */
 export const turnstileSave = (body: { accountId: string; token: string }) => req<NonNullable<ServerDoctorReport['turnstile']>>('/turnstile/save', body);
 export const turnstileStatus = () => req<NonNullable<ServerDoctorReport['turnstile']>>('/turnstile/status', {});

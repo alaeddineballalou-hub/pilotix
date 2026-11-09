@@ -99,5 +99,6 @@
     "failed": "The download didn't finish. Check the internet and try again.",
     "retry": "Try again",
     "done": "Pilotix app up to date · version {{build}}"
-  }
+  },
+  "pageCrashed": "This page ran into a problem. The Pilotix team has been told automatically."
 }

@@ -59,7 +59,11 @@
     "code": "Code",
     "shops": "Boutiques",
     "config": "Réglages",
-    "ads": "Publicités"
+    "ads": "Publicités",
+    "robot": "Robot de test",
+    "outside": "Services extérieurs",
+    "data": "Données",
+    "trends": "Alertes à l’avance"
   },
   "c": {
     "stockOut": {
@@ -372,6 +376,86 @@
       "fix": "Vérifiez ensemble dans Caisse › Paie, puis annulez le paiement si l’argent n’est pas parti.",
       "short": "Paiements reçus",
       "okTitle": "Tous les paiements sont confirmés"
+    },
+    "robot": {
+      "title": "Le robot de test : {{failed}} action(s) en panne sur {{steps}}",
+      "why": "Il refait le travail principal toutes les 10 minutes (dernier passage il y a {{min}} min) :",
+      "fix": "Ouvrez l’action en panne vous-même. Si elle casse aussi pour vous, donnez l’erreur à Claude.",
+      "short": "Robot de test",
+      "okTitle": "Le robot de test : les {{steps}} actions marchent (il y a {{min}} min)"
+    },
+    "robotWaiting": {
+      "title": "Le robot de test n’a pas encore tourné",
+      "why": "Il passe toutes les 10 minutes après le démarrage du serveur.",
+      "fix": "« Lancer les tests » pour le faire tout de suite.",
+      "short": "Robot de test",
+      "okTitle": "Le robot de test n’a pas encore tourné",
+      "info": "Le robot de test n’a pas encore tourné (toutes les 10 minutes)"
+    },
+    "browser": {
+      "title": "Sur les écrans : {{errors}} erreur(s), {{loops}} boucle(s), {{slow}} lenteur(s) en 24 h",
+      "why": "Ce qui casse chez les utilisateurs (page, rôle, téléphone ou ordinateur), le plus fréquent d’abord :",
+      "fix": "Une boucle charge le serveur sans arrêt : à corriger en premier. Donnez la ligne à Claude.",
+      "short": "Écrans des utilisateurs",
+      "okTitle": "Aucune erreur sur les écrans des utilisateurs depuis 24 h",
+      "info": "Seulement des lenteurs sur les écrans ({{slow}})"
+    },
+    "smtp": {
+      "title": "Les e-mails ne partent plus",
+      "why": "Le serveur d’e-mails (Brevo) refuse ou ne répond pas :",
+      "fix": "Vérifiez le compte Brevo et la clé SMTP (sudo bash /opt/pilotix/deploy/set-email.sh).",
+      "short": "E-mails",
+      "okTitle": "Les e-mails partent (Brevo répond)"
+    },
+    "certs": {
+      "title_one": "{{count}} certificat de site expire bientôt",
+      "title_other": "{{count}} certificats de site expirent bientôt",
+      "title": "{{count}} certificats de site expirent bientôt",
+      "why": "Jours avant que le navigateur affiche « site non sécurisé » :",
+      "fix": "Normalement il se renouvelle seul : vérifiez que le domaine pointe toujours ici (Caddy) ou Cloudflare.",
+      "short": "Certificats",
+      "okTitle": "Les certificats des {{count}} sites sont valides (plus de 14 jours)"
+    },
+    "socialLinks": {
+      "title_one": "{{count}} lien Meta / TikTok cassé ou qui expire",
+      "title_other": "{{count}} liens Meta / TikTok cassés ou qui expirent",
+      "title": "{{count}} liens Meta / TikTok cassés ou qui expirent",
+      "why": "Sans lien, plus de messages, de pubs ni de commentaires pour ces boutiques :",
+      "fix": "La boutique doit reconnecter son compte (Marketing › Comptes) avant la date.",
+      "short": "Liens Meta / TikTok",
+      "okTitle": "Les liens Meta / TikTok marchent"
+    },
+    "backup": {
+      "title": "Dernière sauvegarde hors serveur il y a {{hours}} h",
+      "why": "Si le serveur brûle, c’est la seule copie des commandes :",
+      "fix": "Sauvegardes › Copie hors du serveur : « Tester », puis vérifiez la clé Backblaze.",
+      "short": "Sauvegarde hors serveur",
+      "okTitle": "Sauvegarde hors serveur faite il y a {{hours}} h"
+    },
+    "dataIssues": {
+      "title": "{{count}} donnée(s) incohérente(s) dans {{shops}} boutique(s)",
+      "why": "Des traces qu’un bug a laissées dans les données (30 derniers jours) :",
+      "fix": "Ouvrez une de ces commandes pour voir ce qui s’est passé, puis donnez la ligne à Claude.",
+      "short": "Données cohérentes",
+      "okTitle": "Données cohérentes dans les {{shops}} boutiques"
+    },
+    "diskSoon": {
+      "title": "Le disque sera plein dans {{days}} jours",
+      "why": "À la vitesse des 3 derniers jours (il est à {{pct}} %). Disque plein = plus aucune commande n’entre.",
+      "fix": "Libérez de la place maintenant (vieux logs, sauvegardes, docker system prune) ou agrandissez le disque.",
+      "short": "Place sur le disque"
+    },
+    "memoryLeak": {
+      "title": "La mémoire du serveur grandit sans arrêt : {{from}} → {{to}} Mo en {{hours}} h",
+      "why": "Elle ne redescend jamais : c’est souvent une fuite dans le code. Elle finira par faire tomber le serveur.",
+      "fix": "Redémarrer le serveur la vide pour un temps. Donnez ces chiffres à Claude pour trouver la fuite.",
+      "short": "Mémoire stable"
+    },
+    "errorsAfterUpdate": {
+      "title": "Erreurs en hausse depuis la mise à jour {{version}} : {{now}}/h (avant : {{before}}/h)",
+      "why": "La dernière mise à jour a probablement cassé quelque chose.",
+      "fix": "Regardez « Erreurs dans le code ». Si c’est grave, revenez à la version d’avant pendant qu’on corrige.",
+      "short": "Erreurs après mise à jour"
     }
   },
   "gauge": {
@@ -427,7 +511,8 @@
     "turnstile-sync": "Cloudflare (robots) : domaines des boutiques",
     "offsite-backup": "Copie des sauvegardes hors du serveur (Backblaze)",
     "pilot-ai-night": "Pilot AI : apprentissage de la nuit",
-    "pay-plan-alert": "Paie : personnes sans plan (notification du matin)"
+    "pay-plan-alert": "Paie : personnes sans plan (notification du matin)",
+    "doctor-watch": "Détecteur de bugs (robot, services, données)"
   },
   "errs": {
     "title": "Dernières erreurs",
@@ -498,5 +583,24 @@
     "ignoreHelp": "Cacher cette alerte pendant 7 jours",
     "mutedTitle": "Alertes ignorées",
     "mutedUntil": "Cachée jusqu’au {{date}} · par {{by}}"
+  },
+  "robot": {
+    "title": "Robot de test",
+    "help": "Toutes les 10 minutes, il fait le travail principal dans la boutique de démo (listes, compteurs, chiffres de l’Accueil, une commande test créée puis supprimée) et ouvre le site et son serveur, comme une vraie personne. Sans boutique de démo, il lit seulement une vraie boutique (jamais de commande test).",
+    "run": "Lancer les tests",
+    "running": "Tests en cours…",
+    "done": "Tests terminés",
+    "demo": "Dans l’aperçu, les tests ne tournent pas : ils tournent sur votre serveur.",
+    "notYet": "Pas encore lancé depuis le démarrage du serveur.",
+    "skipped": "Sauté : pas de produit dans la boutique de démo",
+    "last": "Dernier passage {{when}} · boutique « {{shop}} »",
+    "step": {
+      "site": "Site (page d’accueil)",
+      "api": "Serveur (API)",
+      "orders.list": "Liste des commandes",
+      "orders.counts": "Compteurs du menu",
+      "stats.overview": "Chiffres de l’Accueil",
+      "orders.create": "Créer une commande (test)"
+    }
   }
 }

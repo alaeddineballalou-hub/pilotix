@@ -1,3 +1,4 @@
+import { noteCall, type ClientReport } from './watch';
 import type { REGISTRY } from '@pilotix/core';
 import { withRobotCheck } from './robot';
 import type { Session, AppInfo } from '@pilotix/shared';
@@ -639,8 +640,18 @@ export const domainCheck = () => onServer().request<{ ok: boolean; found: string
  */
 export function rpc<N extends ProcName>(name: N, input: In<N>, seller?: Seller | null): Promise<Out<N>> {
   const s = seller === undefined ? ambientSeller() : seller === null ? undefined : seller;
-  return backend.call(name, input, s);
+  // the browser watcher (lib/watch): an action asked again and again (a loop), or slow
+  const t0 = performance.now();
+  const p = backend.call(name, input, s);
+  void p.then(
+    () => noteCall(name, performance.now() - t0),
+    () => noteCall(name, 0),
+  );
+  return p;
 }
+
+/** The browser watcher's door on the server (Control room › Doctor). Never in the demo. */
+export const sendClientReport = (items: ClientReport[]) => onServer().request('/client-report', { items });
 
 // The browser demo only (data made up, in this page): its actions reachable from the console, to try a scenario fast
 // (e.g. change an order as the owner, then open the depot). Never on a real server.

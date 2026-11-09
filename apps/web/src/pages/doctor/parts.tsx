@@ -23,6 +23,11 @@ const AREA_ICON: Record<string, string> = {
   code: 'alert',
   shops: 'users',
   config: 'lock',
+  // the bug detector
+  robot: 'play',
+  outside: 'globe',
+  data: 'clipboard',
+  trends: 'trend',
 };
 
 /** A number of a sentence, written for the reader (money in DA, the rest in the reader's language). */

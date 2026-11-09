@@ -98,6 +98,8 @@ export interface ServerDoctorReport {
   errors: DoctorError[];
   /** alerts hidden with « Ignorer » (they come back by themselves after 7 days, or with « Ré-afficher ») */
   muted?: DoctorMuted[];
+  /** the bug detector's test robot: its last run, step by step (null: not run yet since the server started) */
+  robot?: { at: string; shop: string | null; steps: { name: string; label: string; ok: boolean; ms: number; error?: string; skipped?: boolean }[] } | null;
   /** Cloudflare Turnstile kept by Pilotix for every shop: how full the free plan is */
   turnstile?: DoctorTurnstile;
 }

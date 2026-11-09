@@ -99,5 +99,6 @@
     "failed": "Le téléchargement n'a pas abouti. Vérifiez internet et réessayez.",
     "retry": "Réessayer",
     "done": "App Pilotix à jour · version {{build}}"
-  }
+  },
+  "pageCrashed": "Cette page a eu un problème. L’équipe Pilotix est prévenue automatiquement."
 }

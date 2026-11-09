@@ -59,7 +59,11 @@
     "code": "Code",
     "shops": "Shops",
     "config": "Settings",
-    "ads": "Ads"
+    "ads": "Ads",
+    "robot": "Test robot",
+    "outside": "Outside services",
+    "data": "Data",
+    "trends": "Early warnings"
   },
   "c": {
     "stockOut": {
@@ -372,6 +376,86 @@
       "fix": "Check together in Cash › Pay, then cancel the payment if the money did not leave.",
       "short": "Payments received",
       "okTitle": "All payments are confirmed"
+    },
+    "robot": {
+      "title": "Test robot: {{failed}} action(s) broken out of {{steps}}",
+      "why": "It redoes the main work every 10 minutes (last run {{min}} min ago):",
+      "fix": "Open the broken action yourself. If it breaks for you too, give the error to Claude.",
+      "short": "Test robot",
+      "okTitle": "Test robot: all {{steps}} actions work ({{min}} min ago)"
+    },
+    "robotWaiting": {
+      "title": "The test robot has not run yet",
+      "why": "It runs every 10 minutes after the server starts.",
+      "fix": "“Run the tests” to do it now.",
+      "short": "Test robot",
+      "okTitle": "The test robot has not run yet",
+      "info": "The test robot has not run yet (every 10 minutes)"
+    },
+    "browser": {
+      "title": "On screens: {{errors}} error(s), {{loops}} loop(s), {{slow}} slow action(s) in 24 h",
+      "why": "What breaks for users (page, role, phone or computer), most frequent first:",
+      "fix": "A loop keeps loading the server: fix it first. Give the line to Claude.",
+      "short": "Users’ screens",
+      "okTitle": "No error on users’ screens in 24 h",
+      "info": "Only slow actions on screens ({{slow}})"
+    },
+    "smtp": {
+      "title": "E-mails are not going out",
+      "why": "The e-mail server (Brevo) refuses or does not answer:",
+      "fix": "Check the Brevo account and the SMTP key (sudo bash /opt/pilotix/deploy/set-email.sh).",
+      "short": "E-mails",
+      "okTitle": "E-mails go out (Brevo answers)"
+    },
+    "certs": {
+      "title_one": "{{count}} website certificate expires soon",
+      "title_other": "{{count}} website certificates expire soon",
+      "title": "{{count}} website certificates expire soon",
+      "why": "Days before browsers show “not secure”:",
+      "fix": "It normally renews by itself: check the domain still points here (Caddy) or Cloudflare.",
+      "short": "Certificates",
+      "okTitle": "The {{count}} websites’ certificates are valid (over 14 days)"
+    },
+    "socialLinks": {
+      "title_one": "{{count}} Meta / TikTok link broken or expiring",
+      "title_other": "{{count}} Meta / TikTok links broken or expiring",
+      "title": "{{count}} Meta / TikTok links broken or expiring",
+      "why": "Without the link, no messages, ads or comments for these shops:",
+      "fix": "The shop must reconnect its account (Marketing › Accounts) before the date.",
+      "short": "Meta / TikTok links",
+      "okTitle": "Meta / TikTok links work"
+    },
+    "backup": {
+      "title": "Last off-site backup {{hours}} h ago",
+      "why": "If the server burns, it is the only copy of the orders:",
+      "fix": "Backups › Off-site copy: “Test”, then check the Backblaze key.",
+      "short": "Off-site backup",
+      "okTitle": "Off-site backup done {{hours}} h ago"
+    },
+    "dataIssues": {
+      "title": "{{count}} inconsistent record(s) in {{shops}} shop(s)",
+      "why": "Traces a bug left in the data (last 30 days):",
+      "fix": "Open one of these orders to see what happened, then give the line to Claude.",
+      "short": "Consistent data",
+      "okTitle": "Data consistent in the {{shops}} shops"
+    },
+    "diskSoon": {
+      "title": "The disk will be full in {{days}} days",
+      "why": "At the speed of the last 3 days (it is at {{pct}} %). A full disk = no order comes in.",
+      "fix": "Free space now (old logs, backups, docker system prune) or grow the disk.",
+      "short": "Disk space"
+    },
+    "memoryLeak": {
+      "title": "Server memory keeps growing: {{from}} → {{to}} MB in {{hours}} h",
+      "why": "It never comes down: often a leak in the code. It will end up bringing the server down.",
+      "fix": "Restarting the server empties it for a while. Give these numbers to Claude to find the leak.",
+      "short": "Stable memory"
+    },
+    "errorsAfterUpdate": {
+      "title": "Errors up since update {{version}}: {{now}}/h (before: {{before}}/h)",
+      "why": "The last update probably broke something.",
+      "fix": "Look at “Errors in the code”. If it is serious, go back to the previous version while it is fixed.",
+      "short": "Errors after update"
     }
   },
   "gauge": {
@@ -427,7 +511,8 @@
     "turnstile-sync": "Cloudflare (robots): shops’ domains",
     "offsite-backup": "Off-site copy of the backups (Backblaze)",
     "pilot-ai-night": "Pilot AI: the night learning",
-    "pay-plan-alert": "Pay: people without a plan (morning notification)"
+    "pay-plan-alert": "Pay: people without a plan (morning notification)",
+    "doctor-watch": "Bug detector (robot, services, data)"
   },
   "errs": {
     "title": "Latest errors",
@@ -498,5 +583,24 @@
     "ignoreHelp": "Hide this alert for 7 days",
     "mutedTitle": "Ignored alerts",
     "mutedUntil": "Hidden until {{date}} · by {{by}}"
+  },
+  "robot": {
+    "title": "Test robot",
+    "help": "Every 10 minutes it does the main work in the demo shop (lists, counters, home page numbers, a test order created then deleted) and opens the site and its server, like a real person. With no demo shop, it only reads a real shop (never a test order).",
+    "run": "Run the tests",
+    "running": "Running…",
+    "done": "Tests done",
+    "demo": "In the preview the tests do not run: they run on your server.",
+    "notYet": "Not run yet since the server started.",
+    "skipped": "Skipped: no product in the demo shop",
+    "last": "Last run {{when}} · shop “{{shop}}”",
+    "step": {
+      "site": "Website (home page)",
+      "api": "Server (API)",
+      "orders.list": "Orders list",
+      "orders.counts": "Menu counters",
+      "stats.overview": "Home page numbers",
+      "orders.create": "Create an order (test)"
+    }
   }
 }

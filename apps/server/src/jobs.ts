@@ -11,6 +11,7 @@ import { mailConfigured, sendMail } from './mail';
 import { pilotCoachMail, qualityAlertMail, reminderMail } from './mails';
 import { syncTurnstile } from './turnstile';
 import { sendOffsite } from './offsite';
+import { runWatch } from './watchers';
 
 /**
  * Background work, outside user requests, for every shop that is active and paid (needs REDIS_URL; without it the app
@@ -178,6 +179,11 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
           return { shops: r.shops, keys: r.keys };
         }
         if (job.name === 'courier-watch') return watchNow(this.core, null);
+        if (job.name === 'doctor-watch') {
+          // the bug detector: the test robot, the outside services, the data checker, the judge, the red alerts
+          await runWatch(this.core);
+          return { done: true };
+        }
         if (job.name === 'turnstile-sync') {
           // Cloudflare's widgets in step with the shops' domains (a shop stopped, a domain became ready…)
           const st = await syncTurnstile(this.core);
@@ -280,6 +286,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     // Marketing › Publicité › Pilote auto: the ads' rules (stop the loss, trim, the daily cap…), every 15 minutes
     await this.queue.add('ads-pilot', {}, { repeat: { every: 15 * 60_000 }, jobId: 'ads-pilot', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('turnstile-sync', {}, { repeat: { every: 30 * 60_000 }, jobId: 'turnstile-sync', removeOnComplete: 20, removeOnFail: 50 });
+    // the bug detector (Control room › Doctor): every 10 minutes
+    await this.queue.add('doctor-watch', {}, { repeat: { every: 10 * 60_000 }, jobId: 'doctor-watch', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('offsite-backup', {}, { repeat: { every: 30 * 60_000 }, jobId: 'offsite-backup', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('fraud-reputation', {}, { repeat: { every: 30 * 60_000 }, jobId: 'fraud-reputation', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('partitions', {}, { repeat: { pattern: '0 3 1 * *' }, jobId: 'partitions', removeOnComplete: 10 });

@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dur, n, shortWhen } from '../../lib/format';
-import { doctorDismiss, serverDoctor, turnstileSync } from '../../lib/platform';
+import { doctorDismiss, doctorWatch, serverDoctor, turnstileSync } from '../../lib/platform';
 import { Card, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { DoctorHero, DoctorList, fmtParams } from '../doctor/parts';
@@ -38,6 +38,20 @@ export function DoctorPage({ demo, owner }: { demo?: boolean; owner?: boolean })
       toast((e as Error).message, 'bad');
     } finally {
       setBusy(false);
+    }
+  };
+  // « Lancer les tests »: the bug detector now (robot, outside services, data) instead of its next run
+  const [testing, setTesting] = useState(false);
+  const runTests = async () => {
+    if (demo) return toast(t('doctor.robot.demo'), 'ok');
+    setTesting(true);
+    try {
+      qc.setQueryData(['p', 'doctor', false, demoHidden], await doctorWatch());
+      toast(t('doctor.robot.done'), 'ok');
+    } catch (e) {
+      toast((e as Error).message, 'bad');
+    } finally {
+      setTesting(false);
     }
   };
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
@@ -76,6 +90,36 @@ export function DoctorPage({ demo, owner }: { demo?: boolean; owner?: boolean })
         </span>
       </div>
       <DoctorList items={r.items} onAction={busy ? undefined : (id, kind) => act(id, kind)} />
+      <Card
+        title={t('doctor.robot.title')}
+        badge={
+          <button type="button" className="btn small" disabled={testing} onClick={runTests}>
+            <Icon name="play" /> {testing ? t('doctor.robot.running') : t('doctor.robot.run')}
+          </button>
+        }
+      >
+        <p className="muted small">{t('doctor.robot.help')}</p>
+        {r.robot ? (
+          <>
+            <ul className="dr-robot">
+              {r.robot.steps.map((s) => (
+                <li key={s.name} className={s.ok ? (s.ms >= 5000 ? 'dr-warn' : 'dr-ok') : 'dr-bad'}>
+                  <span className="dr-robot-mark">{s.ok ? (s.skipped ? '–' : '✓') : '✗'}</span>
+                  <span>
+                    <b>{t(`doctor.robot.step.${s.name}`, { defaultValue: s.label })}</b>
+                    {!s.ok && s.error && <small>{s.error}</small>}
+                    {s.skipped && <small>{t('doctor.robot.skipped')}</small>}
+                  </span>
+                  <span className="ltr muted small">{s.ms} ms</span>
+                </li>
+              ))}
+            </ul>
+            <small className="muted">{t('doctor.robot.last', { when: shortWhen(r.robot.at), shop: r.robot.shop ?? '—' })}</small>
+          </>
+        ) : (
+          <p className="muted">{t('doctor.robot.notYet')}</p>
+        )}
+      </Card>
       {!!r.muted?.length && (
         <section className="dr-muted">
           <h3>
@@ -276,7 +320,19 @@ function Gauge({ label, icon, v, warn, bad, sub }: { label: string; icon: string
 }
 
 /** What the page looks like on a real server (the preview has none). */
-const DEMO_ACTIONS: Record<string, ('solve' | 'ignore')[]> = { restarted: ['solve'], errors: ['solve', 'ignore'], courierSync: ['solve', 'ignore'], jobs: ['solve', 'ignore'], silentShops: ['solve', 'ignore'], config: ['ignore'] };
+const DEMO_ACTIONS: Record<string, ('solve' | 'ignore')[]> = {
+  restarted: ['solve'],
+  errors: ['solve', 'ignore'],
+  courierSync: ['solve', 'ignore'],
+  jobs: ['solve', 'ignore'],
+  silentShops: ['solve', 'ignore'],
+  config: ['ignore'],
+  robot: ['solve', 'ignore'],
+  browser: ['solve', 'ignore'],
+  certs: ['solve', 'ignore'],
+  dataIssues: ['solve', 'ignore'],
+  diskSoon: ['solve', 'ignore'],
+};
 
 function demoReport(hidden: Record<string, 'solve' | 'ignore'> = {}): ServerDoctorReport {
   const now = Date.now();
@@ -305,6 +361,23 @@ function demoReport(hidden: Record<string, 'solve' | 'ignore'> = {}): ServerDoct
     { id: 'silentShops', level: 'warn', area: 'shops', params: { count: 1 }, list: [{ label: 'Maison Sara', n: 52, unit: 'hours' }] },
     { id: 'config', level: 'warn', area: 'config', params: { count: 1 }, list: [{ label: 'SMTP_HOST (e-mails)', n: 0, unit: 'text' }] },
     { id: 'turnstile', level: 'ok', area: 'config', params: { domains: 23, max: 200, pct: 11.5, widgets: 3, maxWidgets: 20, waiting: 0 } },
+    // the bug detector (an example)
+    { id: 'robot', level: 'warn', area: 'robot', params: { steps: 6, failed: 0, min: 4 }, list: [{ label: 'Chiffres de l’Accueil', n: 6120, unit: 'ms' }] },
+    {
+      id: 'browser',
+      level: 'bad',
+      area: 'code',
+      params: { errors: 412, loops: 1, slow: 2 },
+      list: [
+        { label: '#/accueil · Boucle : stats.overview demandé 60 fois en 10 s (admin, ordinateur)', n: 402, unit: 'n' },
+        { label: '#/suivi · Lent : orders.list a pris 9 s (suivi, téléphone)', n: 3, unit: 'n' },
+      ],
+    },
+    { id: 'smtp', level: 'ok', area: 'outside' },
+    { id: 'certs', level: 'warn', area: 'outside', params: { count: 1 }, list: [{ label: 'www.bijoux-setif.com', n: 9, unit: 'days' }] },
+    { id: 'backup', level: 'ok', area: 'outside', params: { hours: 7 } },
+    { id: 'dataIssues', level: 'warn', area: 'data', params: { count: 3, shops: 1 }, list: [{ label: 'Maison Sara · stock négatif', n: 3, unit: 'n' }] },
+    { id: 'diskSoon', level: 'warn', area: 'trends', params: { days: 6.5, pct: 91.4 } },
   ];
   const sorted = doctorSort(
     items.filter((i) => !hidden[i.id]).map((i) => ((i.level === 'bad' || i.level === 'warn') && DEMO_ACTIONS[i.id] ? { ...i, actions: DEMO_ACTIONS[i.id] } : i)),
@@ -341,6 +414,18 @@ function demoReport(hidden: Record<string, 'solve' | 'ignore'> = {}): ServerDoct
       job('demo-reset', 86_400_000, 'ok', 1100),
       job('turnstile-sync', 30 * 60_000, 'ok', 12),
     ],
+    robot: {
+      at: ago(4),
+      shop: 'demo',
+      steps: [
+        { name: 'site', label: 'Site', ok: true, ms: 182 },
+        { name: 'api', label: 'API', ok: true, ms: 41 },
+        { name: 'orders.list', label: 'Liste', ok: true, ms: 230 },
+        { name: 'orders.counts', label: 'Compteurs', ok: true, ms: 95 },
+        { name: 'stats.overview', label: 'Accueil', ok: true, ms: 6120 },
+        { name: 'orders.create', label: 'Commande', ok: true, ms: 410 },
+      ],
+    },
     turnstile: {
       configured: true,
       accountId: '023e…c353',

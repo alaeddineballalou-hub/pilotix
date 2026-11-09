@@ -43,6 +43,7 @@ import { signupConfirmMail, signupExistsMail, verifyMail } from './mails';
 import type { Mail } from './mail';
 import { syncTurnstile } from './turnstile';
 import { robotGate } from './robot';
+import { doctorState } from './doctor';
 import { sendVideo, writePart } from './media';
 import { otpOn, sendOtp } from './otp';
 
@@ -99,6 +100,20 @@ export interface ShopRequest {
 }
 
 const CLOSED = 'Cette boutique est fermée. Contactez Pilotix.';
+/** What a screen tells the Doctor (web lib/watch). */
+const ClientReports = z.object({
+  items: z
+    .array(
+      z.object({
+        kind: z.enum(['error', 'loop', 'slow']),
+        page: z.string().max(40),
+        message: z.string().min(1).max(300),
+        device: z.enum(['phone', 'computer']),
+      }),
+    )
+    .min(1)
+    .max(10),
+});
 /** The store picker's ticket (after the password, before a store is chosen) is signed with its own key. */
 const pickSecret = () => `${config.jwtSecret}:pick`;
 
@@ -656,6 +671,26 @@ class ApiController {
     const ref = (await this.core.shop({ id: req.shop.shop.id }))!;
     const d = ref.shop.domain;
     return { domain: d, status: ref.shop.domainStatus, proof: d ? { name: core.proofName(d), value: core.domainProof(ref.shop.id, d) } : null };
+  }
+
+  /**
+   * The browser watcher (web lib/watch): an error, a loop or a slow action on someone's screen, kept with the server's
+   * own errors for Control room › Doctor (personal data hidden, the same problem grouped). At most 10 a send and 60
+   * sends per 15 minutes per person: a broken screen never floods the server.
+   */
+  @Post('client-report')
+  clientReport(@Body() body: any, @Req() req: ShopRequest) {
+    const key = `client-report:${req.shop.shop.id}:${req.session.profile.id}`;
+    checkLogin(key, 60);
+    failedLogin(key);
+    const items = ClientReports.safeParse(body);
+    if (!items.success) throw new core.AppError('bad_request', 'Rapport illisible');
+    const role = (req.session.roles ?? []).join('+') || '—';
+    for (const r of items.data.items) {
+      const what = r.kind === 'loop' ? 'Boucle' : r.kind === 'slow' ? 'Lent' : 'Erreur';
+      doctorState.record(r.kind === 'slow' ? 'warn' : 'error', `Navigateur · ${r.page}`, `[${req.shop.shop.slug}] ${what} : ${r.message} (${role}, ${r.device === 'phone' ? 'téléphone' : 'ordinateur'})`);
+    }
+    return { ok: true };
   }
 
   /** « Vérifier »: does the domain point to this server now? (DNS changes take minutes to hours) */

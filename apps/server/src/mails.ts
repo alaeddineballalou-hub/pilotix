@@ -324,6 +324,23 @@ export function courierWatchMail(m: { to: string; name: string; items: { company
   });
 }
 
+// ---------------------------------------------------------------- the Doctor's red alerts (to the control room's staff)
+export function doctorAlertMail(m: { to: string; name: string; lines: [string, string][] }): Mail {
+  const n = m.lines.length;
+  const one = n === 1;
+  return mail(m.to, `Pilotix : ${one ? 'alerte rouge' : `${n} alertes rouges`} — ${m.lines[0][0]}`, {
+    l: 'fr',
+    title: one ? 'Alerte rouge' : `${n} alertes rouges`,
+    icon: '🚨',
+    hello: hello('fr', m.name),
+    lines: [`Le Doctor de Pilotix a trouvé ${one ? 'un problème grave' : `${n} problèmes graves`}. Regardez avant que les boutiques ne le voient.`],
+    box: m.lines.slice(0, 12),
+    button: { label: 'Ouvrir le Doctor', link: `${site()}/platform/doctor` },
+    after: [],
+    note: 'Une même alerte part au plus une fois toutes les 6 heures. « Résolu » ou « Ignorer » dans le Doctor la fait taire.',
+  });
+}
+
 // ---------------------------------------------------------------- Pilot AI (to the control room's staff, in French)
 const usd = (v: number) => `${v.toFixed(2).replace('.', ',')} $`;
 const PILOT_TOPIC: Record<string, string> = {

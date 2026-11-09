@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { staffLogin } from './mailbox.mjs';
+import { allMails, staffLogin } from './mailbox.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(join(ROOT, 'apps/server/package.json'));
@@ -65,7 +65,7 @@ step('server Doctor: the jobs');
   const t0 = s.startedAt;
   const st = (list, name) => list.find((j) => j.name === name)?.state;
   let l = s.jobList(t0 + MIN);
-  check(l.length === 22 && l.every((j) => j.state === 'waiting'), 'just started: every job is waiting', l.map((j) => j.state));
+  check(l.length === 23 && l.every((j) => j.state === 'waiting'), 'just started: every job is waiting', l.map((j) => j.state));
   l = s.jobList(t0 + 6 * MIN);
   check(st(l, 'notify-run') === 'late' && st(l, 'courier-sync') === 'waiting', 'a job never seen after 3 runs + 2 min is late; a slow one still waits', l);
   s.job('notify-run', true);
@@ -84,7 +84,7 @@ step('server Doctor: the jobs');
     encoding: 'utf8',
   });
   const offStates = JSON.parse(off.stdout.trim() || '[]');
-  check(offStates.length === 22 && offStates.every((x) => x === 'off'), 'without Redis every job is "off"', off.stderr || offStates);
+  check(offStates.length === 23 && offStates.every((x) => x === 'off'), 'without Redis every job is "off"', off.stderr || offStates);
 }
 
 // ---------------------------------------------------------------- 2. the logger
@@ -175,7 +175,7 @@ check(
   it('config'),
 );
 check(['ok', 'warn'].includes(it('silentShops')?.level) && !(it('silentShops').list ?? []).some((l) => /démo|demo/i.test(l.label)), 'silent shops checked (the demo shop is never counted)', it('silentShops'));
-check(R.jobs.length === 22 && R.jobs.every((j) => ['ok', 'late', 'failing', 'waiting', 'off'].includes(j.state)), 'the 22 jobs with a state', R.jobs);
+check(R.jobs.length === 23 && R.jobs.every((j) => ['ok', 'late', 'failing', 'waiting', 'off'].includes(j.state)), 'the 23 jobs with a state', R.jobs);
 check(R.errors.some((e) => e.level === 'warn' && /TRUST_PROXY/.test(e.message)), 'a warning the server wrote shows in the report', R.errors);
 for (const i of R.items) for (const l of i.list ?? []) check(Number.isFinite(l.n) && typeof l.label === 'string', `${i.id}: a clean line`, l);
 
@@ -188,9 +188,117 @@ for (let i = 0; i < 24 && !jobOk; i++) {
 }
 check(jobOk, 'the jobs that run every minute are seen running');
 
+// ---------------------------------------------------------------- the browser watcher (web lib/watch)
+step('browser watcher: a screen tells the Doctor (errors, loops, slow actions)');
+const rep = (items, tok = SHOP_ADMIN) => req('/client-report', { items }, tok);
+check((await rep([{ kind: 'loop', page: 'accueil', message: 'stats.overview demandé 60 fois en 10 s', device: 'computer' }], null)).status === 401, 'no token: refused');
+check((await rep([])).status === 400, 'an empty report is refused');
+check((await rep([{ kind: 'virus', page: 'x', message: 'y', device: 'computer' }])).status === 400, 'an unknown kind is refused');
+check((await rep(Array.from({ length: 11 }, () => ({ kind: 'error', page: 'x', message: 'y', device: 'phone' })))).status === 400, 'more than 10 at once is refused');
+r = await rep([
+  { kind: 'loop', page: 'accueil', message: 'stats.overview demandé 60 fois en 10 s', device: 'computer' },
+  { kind: 'error', page: 'commandes', message: 'Cannot read properties of undefined (reading "wilaya") — 0555123456', device: 'phone' },
+  { kind: 'slow', page: 'suivi', message: 'orders.list a pris 9 s', device: 'computer' },
+]);
+check(r.status === 201 || r.status === 200, 'a good report is taken', r);
+{
+  const errs = (await req('/platform/doctor', {}, OWN)).data.errors;
+  const loop = errs.find((x) => x.source === 'Navigateur · accueil');
+  check(loop?.level === 'error' && /Boucle : stats\.overview/.test(loop.message) && loop.shop, 'the loop is in the control room, with the page and the store', loop);
+  const crash = errs.find((x) => x.source === 'Navigateur · commandes');
+  check(crash && !crash.message.includes('0555123456') && /téléphone/.test(crash.message), 'the error too, phone number hidden, the device said', crash);
+  check(errs.find((x) => x.source === 'Navigateur · suivi')?.level === 'warn', 'a slow action is a warning, not an error');
+}
+let limited = false;
+for (let i = 0; i < 61 && !limited; i++) limited = (await rep([{ kind: 'slow', page: 'x', message: 'z', device: 'computer' }])).status === 429;
+check(limited, 'one screen cannot flood the server (60 reports per 15 minutes)');
+
+// ---------------------------------------------------------------- the bug detector (watchers.ts)
+step('bug detector: the judge (early warnings from 7 days of measures)');
+const W = require(join(ROOT, 'apps/server/dist/watchers.js'));
+{
+  const H = 60 * MIN;
+  const D = 24 * H;
+  const t0 = Date.now() - 3 * D;
+  check(W.slope([1, 2, 3].map((x) => ({ x, y: x }))) === null, 'too few measures: no trend');
+  check(Math.abs(W.slope([0, 1, 2, 3, 4, 5].map((x) => ({ x, y: 2 * x + 1 }))) - 2) < 1e-9, 'the trend of a straight line is its slope');
+  const sample = (at, o = {}) => ({ at, v: 'v1', disk: 0.5, rss: 300 * 1048576, db: 100, errH: 0, brH: 0, ...o });
+  // the disk: +3 % a day, at 80 % now → full (95 %) in 5 days
+  const disk = Array.from({ length: 37 }, (_, i) => sample(t0 + i * 2 * H, { disk: 0.71 + (0.09 * i) / 36 }));
+  const ds = W.judge(disk, t0 + 72 * H, 0).find((i) => i.id === 'diskSoon');
+  check(ds && ds.level === 'warn' && ds.params.days >= 4.5 && ds.params.days <= 5.5 && ds.params.pct === 80, 'the disk full in ~5 days is told in advance', ds);
+  const fast = disk.map((s, i) => ({ ...s, disk: 0.5 + (0.44 * i) / 36 }));
+  check(W.judge(fast, t0 + 72 * H, 0).find((i) => i.id === 'diskSoon')?.level === 'bad', 'full within 3 days: red');
+  check(!W.judge(disk.map((s) => ({ ...s, disk: 0.6 })), t0 + 72 * H, 0).some((i) => i.id === 'diskSoon'), 'a disk that does not grow: nothing to say');
+  // the memory: since the start, always up, x3 → a leak; flat → nothing
+  const start = Date.now() - 8 * H;
+  const leak = Array.from({ length: 48 }, (_, i) => sample(start + i * 10 * MIN, { rss: (200 + i * 15) * 1048576 }));
+  const ml = W.judge(leak, Date.now(), start).find((i) => i.id === 'memoryLeak');
+  check(ml && ml.params.to > ml.params.from && ml.params.hours >= 7, 'memory growing without end since the start: a leak', ml);
+  check(!W.judge(leak.map((s) => ({ ...s, rss: 500 * 1048576 })), Date.now(), start).some((i) => i.id === 'memoryLeak'), 'memory that stays the same: no leak');
+  check(!W.judge(leak, Date.now(), Date.now() - H).some((i) => i.id === 'memoryLeak'), 'only since the last start (a restart gives it back), and after 6 hours');
+  // errors after an update: 1/h before, 9/h since → red; 2/h since → nothing
+  const before = Array.from({ length: 12 }, (_, i) => sample(t0 + i * H, { v: 'old', errH: 1 }));
+  const after = Array.from({ length: 4 }, (_, i) => sample(t0 + (13 + i) * H, { v: 'new-abc', errH: 9 }));
+  const ea = W.judge([...before, ...after], t0 + 17 * H, 0).find((i) => i.id === 'errorsAfterUpdate');
+  check(ea?.level === 'bad' && ea.params.now === 9 && ea.params.before === 1 && ea.params.version === 'new-abc', 'errors x9 since the update: red, with the version', ea);
+  check(!W.judge([...before, ...after.map((s) => ({ ...s, errH: 2 }))], t0 + 17 * H, 0).some((i) => i.id === 'errorsAfterUpdate'), 'a few more errors: nothing to say');
+}
+
+step('bug detector: « Lancer les tests » (robot, outside services, data checker)');
+check((await req('/platform/doctor/watch', {}, SUPPORT ?? undefined)).status === 403, 'support staff cannot run it');
+check((await req('/platform/doctor/watch', {})).status === 401, 'no token: refused');
+{
+  // a mistake the data checker must find: a negative stock in a real shop
+  const pg2 = new Pool({ connectionString: process.env.DATABASE_URL });
+  const st = (await pg2.query(`SELECT variant_id, warehouse_id, qty FROM public.stock ORDER BY variant_id LIMIT 1`)).rows[0];
+  if (st) await pg2.query(`UPDATE public.stock SET qty = -3 WHERE variant_id = $1 AND warehouse_id = $2`, [st.variant_id, st.warehouse_id]);
+  const mailsBefore = allMails().length;
+  r = await req('/platform/doctor/watch', {}, OWN);
+  check(r.status === 201 && r.data.robot && Array.isArray(r.data.robot.steps), 'the owner runs the tests: the report has the robot', r.data?.robot);
+  const steps = Object.fromEntries((r.data.robot?.steps ?? []).map((x) => [x.name, x]));
+  check(steps.api?.ok, 'the robot reaches the server (API)', steps.api);
+  const pg0 = new Pool({ connectionString: process.env.DATABASE_URL });
+  const hasDemo = (await pg0.query(`SELECT count(*)::int AS n FROM platform.shops WHERE is_demo AND NOT primary_shop AND status = 'active'`)).rows[0].n > 0;
+  await pg0.end();
+  for (const n of ['orders.list', 'orders.counts', 'stats.overview']) check(steps[n]?.ok && steps[n].ms >= 0, `the robot's « ${n} » works`, steps[n]);
+  // the test order only where data is made up (the demo shop); never in a real shop
+  if (hasDemo) check(steps['orders.create']?.ok, 'the robot makes and deletes a test order in the demo shop', steps['orders.create']);
+  else check(!steps['orders.create'], 'no demo shop: the robot only reads (no test order in a real shop)', steps['orders.create']);
+  const W1 = r.data.items;
+  const di = W1.find((i) => i.id === 'dataIssues');
+  check(!st || (di && ['warn', 'bad'].includes(di.level) && di.list.some((l) => /stock négatif/.test(l.label) && l.n >= 1)), 'the data checker finds the negative stock', di);
+  check(!(di?.list ?? []).some((l) => /démo|demo/i.test(l.label)), 'the demo shop is never checked (its data is made up)');
+  check(W1.some((i) => i.id === 'robot') && W1.some((i) => i.id === 'browser'), 'the robot and the screens are in the report', W1.map((i) => i.id));
+  check(!process.env.SMTP_HOST || W1.find((i) => i.id === 'smtp')?.level === 'ok', 'e-mails go out (the test mailbox answers)', W1.find((i) => i.id === 'smtp'));
+  check(W1.some((i) => i.id === 'certs'), 'the certificates are checked', W1.map((i) => i.id));
+  // no test order is left in the real shop
+  check(!(await pg2.query(`SELECT 1 FROM public.orders WHERE customer_name = 'Robot Pilotix'`)).rows.length, 'no test order is left in a real shop');
+  if (st) await pg2.query(`UPDATE public.stock SET qty = $3 WHERE variant_id = $1 AND warehouse_id = $2`, [st.variant_id, st.warehouse_id, st.qty]);
+  // the measures for the judge are kept
+  const smp = (await pg2.query(`SELECT value FROM platform.settings WHERE key = 'doctor_samples'`)).rows[0]?.value;
+  check(Array.isArray(smp) && smp.length >= 1 && smp[smp.length - 1].rss > 0, 'a measure is kept for the early warnings', smp?.slice(-1));
+  // a red alert goes to the owner by e-mail (once per 6 hours)
+  const red = W1.filter((i) => i.level === 'bad');
+  if (process.env.SMTP_HOST && red.length) {
+    await sleep(1500);
+    const got = allMails().slice(mailsBefore).filter((m) => m.to === OWNER.email && /alerte/i.test(m.subject));
+    check(got.length === 1, 'a red alert is e-mailed to the owner', { red: red.map((i) => i.id), got: got.map((m) => m.subject) });
+    // a 2nd run may tell a new red alert (e.g. the robot failing a 2nd time); a 3rd run with the same alerts sends nothing
+    await req('/platform/doctor/watch', {}, OWN);
+    await sleep(1500);
+    const second = allMails().slice(mailsBefore).filter((m) => m.to === OWNER.email && /alerte/i.test(m.subject)).length;
+    await req('/platform/doctor/watch', {}, OWN);
+    await sleep(1500);
+    const again = allMails().slice(mailsBefore).filter((m) => m.to === OWNER.email && /alerte/i.test(m.subject));
+    check(again.length === second, 'the same alert is not e-mailed again at once', { second, now: again.length });
+  }
+  await pg2.end();
+}
+
 // ---------------------------------------------------------------- « Résolu » / « Ignorer »
 step('control room Doctor: « Résolu » and « Ignorer » on the alerts no page can fix');
-const DISMISSABLE = ['restarted', 'errors', 'courierSync', 'jobs', 'dbSlow', 'dbPoolFull', 'silentShops', 'config', 'redisOff'];
+const DISMISSABLE = ['restarted', 'errors', 'courierSync', 'jobs', 'dbSlow', 'dbPoolFull', 'silentShops', 'config', 'redisOff', 'robot', 'browser', 'socialLinks', 'certs', 'backup', 'dataIssues', 'diskSoon', 'memoryLeak', 'errorsAfterUpdate'];
 r = await req('/platform/doctor', {}, OWN);
 let D1 = r.data;
 check(D1.items.every((i) => !i.actions || (DISMISSABLE.includes(i.id) && ['bad', 'warn'].includes(i.level))), 'only those alerts, and only when they are a problem, have the buttons', D1.items.filter((i) => i.actions));
@@ -228,9 +336,11 @@ check(r.status === 201 && r.data.scope?.mine === true && r.data.items.every((i) 
 // ---------------------------------------------------------------- 5. the sentences
 step('every sentence exists in French, English and Arabic');
 const SHOP_IDS = ['stockOut', 'stockSoon', 'notCalled', 'lateCallbacks', 'confRate', 'confRateDrop', 'fakeOrders', 'weakAgents', 'meVsTeam', 'notShipped', 'stuckParcels', 'openAlerts', 'returns', 'returnsUp', 'badWilayas', 'ordersDrop', 'ordersOk', 'adIssues', 'cashLate', 'payNoPlan', 'payNotReceived'];
-const SERVER_IDS = ['cpu', 'memory', 'disk', 'restarted', 'dbPing', 'dbConnections', 'dbSlow', 'dbDown', 'dbPoolFull', 'redisOff', 'redisDown', 'redis', 'jobs', 'errors', 'courierSync', 'silentShops', 'config', 'turnstile', 'turnstileOff'];
+const SERVER_IDS = ['cpu', 'memory', 'disk', 'restarted', 'dbPing', 'dbConnections', 'dbSlow', 'dbDown', 'dbPoolFull', 'redisOff', 'redisDown', 'redis', 'jobs', 'errors', 'courierSync', 'silentShops', 'config', 'turnstile', 'turnstileOff',
+  // the bug detector (watchers.ts)
+  'robot', 'robotWaiting', 'browser', 'smtp', 'certs', 'socialLinks', 'backup', 'dataIssues', 'diskSoon', 'memoryLeak', 'errorsAfterUpdate'];
 // the ids the code can give (read from its source): none may be missing from the lists above
-const src = readFileSync(join(ROOT, 'packages/core/src/modules/doctor.ts'), 'utf8') + readFileSync(join(ROOT, 'apps/server/src/doctor.ts'), 'utf8');
+const src = readFileSync(join(ROOT, 'packages/core/src/modules/doctor.ts'), 'utf8') + readFileSync(join(ROOT, 'apps/server/src/doctor.ts'), 'utf8') + readFileSync(join(ROOT, 'apps/server/src/watchers.ts'), 'utf8');
 const inCode = new Set([...src.matchAll(/\bid: (?:[^,{}]*\? )?'([a-zA-Z]+)'(?: : '([a-zA-Z]+)')?/g)].flatMap((m) => [m[1], m[2]].filter(Boolean)));
 for (const id of inCode) check(SHOP_IDS.includes(id) || SERVER_IDS.includes(id), `id "${id}" of the code is known to this test`);
 const has = (o, path) => path.split('.').reduce((x, k) => (x && typeof x === 'object' ? x[k] : undefined), o) !== undefined;

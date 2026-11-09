@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { config } from './config';
 import { CoreService } from './core.service';
 import { dismissDoctor, serverDoctor } from './doctor';
+import { runWatch, watchState } from './watchers';
 import { saveTurnstileConfig, syncTurnstile, turnstileStatus } from './turnstile';
 import { robotGate } from './robot';
 import { offsiteStatus, saveOffsite, sendOffsite, testOffsite } from './offsite';
@@ -258,6 +259,18 @@ export class PlatformController {
   @Post('doctor')
   async doctor(@Req() req: { staff: StaffSession }) {
     if (req.staff.role === 'support') throw new core.AppError('forbidden', 'Réservé au propriétaire et aux managers');
+    return serverDoctor(this.core);
+  }
+
+  /**
+   * Doctor › « Lancer les tests » : the bug detector now (the test robot, the outside services, the data checker),
+   * instead of waiting for its next run (every 10 minutes). Owner and managers; one run at a time.
+   */
+  @Post('doctor/watch')
+  async doctorWatch(@Req() req: { staff: StaffSession }) {
+    if (req.staff.role === 'support') throw new core.AppError('forbidden', 'Réservé au propriétaire et aux managers');
+    if (watchState.running) throw new core.AppError('conflict', 'Les tests tournent déjà : réessayez dans une minute');
+    await runWatch(this.core, { force: true });
     return serverDoctor(this.core);
   }
 

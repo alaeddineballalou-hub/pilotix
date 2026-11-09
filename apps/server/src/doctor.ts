@@ -15,6 +15,7 @@ import { maskPersonal } from '@pilotix/core';
 import { config } from './config';
 import type { CoreService } from './core.service';
 import { turnstileStatus } from './turnstile';
+import { readSamples, robotReport, watchItems } from './watchers';
 
 const MIN = 60_000;
 const H = 60 * MIN;
@@ -44,6 +45,7 @@ export const JOB_EVERY: Record<string, number> = {
   'offsite-backup': 30 * MIN,
   'pilot-ai-night': D,
   'pay-plan-alert': D,
+  'doctor-watch': 10 * MIN,
 };
 
 interface Seen {
@@ -259,6 +261,16 @@ export const DISMISSABLE: Record<string, DoctorAction[]> = {
   silentShops: ['solve', 'ignore'],
   config: ['ignore'],
   redisOff: ['ignore'],
+  // the bug detector (watchers.ts)
+  robot: ['solve', 'ignore'],
+  browser: ['solve', 'ignore'],
+  socialLinks: ['solve', 'ignore'],
+  certs: ['solve', 'ignore'],
+  backup: ['solve', 'ignore'],
+  dataIssues: ['solve', 'ignore'],
+  diskSoon: ['solve', 'ignore'],
+  memoryLeak: ['solve', 'ignore'],
+  errorsAfterUpdate: ['solve', 'ignore'],
 };
 const DISMISS_KEY = 'doctor_dismissed';
 const IGNORE_DAYS = 7;
@@ -306,6 +318,9 @@ export async function dismissDoctor(core: CoreService, id: string, kind: DoctorA
       delete all[id];
     } else if (id === 'jobs') {
       doctorState.resetJobs();
+      delete all[id];
+    } else if (id === 'browser') {
+      doctorState.clear((s) => s.source.startsWith('Navigateur'));
       delete all[id];
     } else {
       // hidden while it stays the same: the report that is shown right now gives its signature
@@ -445,6 +460,13 @@ export async function serverDoctor(core: CoreService, opts: { raw?: boolean } = 
     );
   }
 
+  // ------------------------------------------------------------ the bug detector (watchers.ts): robot, screens, outside, data, trends
+  try {
+    items.push(...watchItems(await readSamples(core), now));
+  } catch (e) {
+    doctorState.record('warn', 'Doctor', `watchers: ${(e as Error).message}`);
+  }
+
   // what the owner hid: « Ignorer » for 7 days, « Résolu » while the alert stays the same; what can be hidden says so
   const muted: DoctorMuted[] = [];
   let shown = items;
@@ -491,5 +513,6 @@ export async function serverDoctor(core: CoreService, opts: { raw?: boolean } = 
     errors: errors.slice(0, 40),
     muted,
     ...(ts ? { turnstile: ts } : {}),
+    robot: robotReport(),
   };
 }

@@ -7,7 +7,7 @@ import { Login } from './layout/Login';
 import { ResetPassword } from './layout/ResetPassword';
 import { AGENCY_NAV, canSee, canSeeChild, homeFor, isPlainAgent, MARKETER_NAV, NAV, NavItem } from './layout/nav';
 import { applyTheme, Shell } from './layout/Shell';
-import { ApiError, server } from './lib/backend';
+import { ApiError, sendClientReport, server } from './lib/backend';
 import { firstSubOn, hasPlanSubs, pageIsOn } from './lib/features';
 import './lib/i18n';
 import { ModalHost } from './lib/modals';
@@ -27,6 +27,8 @@ import { Toasts } from './ui/toast';
 import { installEdgeScroll } from './ui/edgeScroll';
 import { installEdgeFade } from './ui/edgeFade';
 import { SelectPicker } from './ui/SelectPicker';
+import { PageGuard } from './ui/PageGuard';
+import { startWatch } from './lib/watch';
 import './styles/tokens.css';
 import './styles/legacy.css';
 import './styles/pilotix.css';
@@ -263,12 +265,17 @@ function App() {
   const Page = pages[page!];
   return (
     <Shell page={page!} sub={sub} nav={nav} space={space}>
-      <Suspense fallback={<Loading />}>
-        <Page key={page} sub={sub} rest={rest as string[]} />
-      </Suspense>
+      <PageGuard page={page!}>
+        <Suspense fallback={<Loading />}>
+          <Page key={page} sub={sub} rest={rest as string[]} />
+        </Suspense>
+      </PageGuard>
     </Shell>
   );
 }
+
+// the browser watcher: errors, loops and slow actions to Control room › Doctor (only on a real server)
+startWatch(sendClientReport);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
