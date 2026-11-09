@@ -12,9 +12,7 @@ import { Icon } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { SendModal, useTarget } from './Claims';
-import { SwapSheetModal } from './Swap';
-import type { SwapResult } from './swapKit';
-import { da, when, wilayaName } from '../../lib/format';
+import { when } from '../../lib/format';
 import type { SentClaim } from './claimKit';
 import type { AlertTries } from './PhoneSuivi';
 import './traiter.css';
@@ -33,11 +31,6 @@ export function Traiter({ o, reason, tries, own, onClose }: { o: Order; reason: 
   const [relance, setRelance] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState<SentClaim | null>(null);
-  // « Perdu »: before the return, give the parcel to a waiting order of the same product
-  const cands = useRpc('suivi.swapCandidates', { fromId: o.id }, { enabled: out === 'lost', staleTime: 30_000 });
-  const [swapTo, setSwapTo] = useState<number | null>(null);
-  const [swapped, setSwapped] = useState<SwapResult | null>(null);
-  const picks = (cands.data?.rows ?? []).filter((x) => x.sameProduct).slice(0, 5);
   const list = (out && motifs ? motifs[out] : []).filter((m) => m.on);
   const chosen = list.find((m) => m.key === motif) ?? null;
   const name = (m: { fr: string; ar: string }) => (i18n.language === 'ar' && m.ar ? m.ar : m.fr);
@@ -51,9 +44,8 @@ export function Traiter({ o, reason, tries, own, onClose }: { o: Order; reason: 
     if (!out || !chosen) return;
     setBusy(true);
     try {
-      const r = await rpc('suivi.resolve', { id: o.id, outcome: out, motif: chosen.key, date: date || null, note: note.trim() || null, early, relance: out === 'resolved' && relance, swapTo: out === 'lost' ? swapTo : null });
+      const r = await rpc('suivi.resolve', { id: o.id, outcome: out, motif: chosen.key, date: date || null, note: note.trim() || null, early, relance: out === 'resolved' && relance, swapTo: null });
       qc.invalidateQueries();
-      if (out === 'lost' && r.swap) return setSwapped(r.swap as SwapResult);
       if (out === 'lost') {
         toast(t('suivi.tr.lostDone', { ref: o.ref }), 'ok');
         return onClose();
@@ -71,7 +63,6 @@ export function Traiter({ o, reason, tries, own, onClose }: { o: Order; reason: 
   };
 
   // « Résolu » with a company without an API (or our livreur): the message to send, as in Réclamation
-  if (swapped) return <SwapSheetModal {...swapped} fresh onClose={onClose} />;
   if (sent && target) return <SendModal claim={sent} order={o} target={target} shop={shop} again={false} onClose={onClose} />;
 
   return (
@@ -86,7 +77,7 @@ export function Traiter({ o, reason, tries, own, onClose }: { o: Order; reason: 
           </button>
           {out && (
             <button type="button" className={`btn ${out === 'lost' ? 'danger' : 'primary'}`} disabled={!ready || busy} onClick={go}>
-              {busy ? '…' : out === 'lost' && swapTo ? t('suivi.tr.okSwap', { ref: picks.find((x) => x.id === swapTo)?.ref ?? '' }) : out === 'resolved' ? (relance && o.companyId ? t('suivi.tr.okResolved') : t('suivi.tr.okSolved')) : early ? t('suivi.tries.cancelAnyway') : t('suivi.tr.okLost')}
+              {busy ? '…' : out === 'resolved' ? (relance && o.companyId ? t('suivi.tr.okResolved') : t('suivi.tr.okSolved')) : early ? t('suivi.tries.cancelAnyway') : t('suivi.tr.okLost')}
             </button>
           )}
         </>
@@ -153,56 +144,6 @@ export function Traiter({ o, reason, tries, own, onClose }: { o: Order; reason: 
             <textarea rows={2} maxLength={1000} value={note} placeholder={early ? t('suivi.tries.whyPh') : ''} onChange={(e) => setNote(e.target.value)} />
             {early && <small className="muted">{t('suivi.tries.earlyNote')}</small>}
           </label>
-          {out === 'lost' && (
-            <fieldset className="tr-swap">
-              <legend>
-                <Icon name="swap" /> {t('suivi.tr.swapT')}
-              </legend>
-              <small className="muted">{t('suivi.tr.swapHint')}</small>
-              {cands.isLoading ? (
-                <small className="muted">…</small>
-              ) : !picks.length ? (
-                <small className="muted">{t('suivi.tr.swapNone')}</small>
-              ) : (
-                <ul>
-                  <li>
-                    <label className={`tr-sw ${swapTo === null ? 'on' : ''}`}>
-                      <input type="radio" name="tr-swap" checked={swapTo === null} onChange={() => setSwapTo(null)} />
-                      <span>
-                        <b>{t('suivi.tr.swapNo')}</b>
-                        <small>{t('suivi.tr.swapNoHint')}</small>
-                      </span>
-                    </label>
-                  </li>
-                  {picks.map((x) => (
-                    <li key={x.id}>
-                      <label className={`tr-sw ${swapTo === x.id ? 'on' : ''}`}>
-                        <input type="radio" name="tr-swap" checked={swapTo === x.id} onChange={() => setSwapTo(x.id)} />
-                        <span>
-                          <b>
-                            <span className="ltr">{x.ref}</span> · {x.customerName}
-                          </b>
-                          <small>
-                            {wilayaName(x.wilayaId)}
-                            {x.commune ? ` · ${x.commune}` : ''}
-                            {x.sameCommune ? ` · ${t('suivi.tr.sameCommune')}` : x.sameWilaya ? ` · ${t('suivi.tr.sameWilaya')}` : ''}
-                            {!x.sameVariant ? ` · ${t('suivi.tr.otherVariant')}` : ''}
-                          </small>
-                        </span>
-                        {(x.fee !== null || x.swapFee !== null) && (
-                          <span className={`tr-fee ${x.feeDiff && x.feeDiff > 0 ? 'up' : ''}`}>
-                            {x.fee !== null && <span className="ltr">{da(x.fee)}</span>}
-                            {!!x.feeDiff && <small className="ltr">{x.feeDiff > 0 ? `+${da(x.feeDiff)}` : da(x.feeDiff)}</small>}
-                            {x.swapFee !== null && <small className="tr-swfee">{t('suivi.tr.swapFee', { v: da(x.swapFee) })}</small>}
-                          </span>
-                        )}
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </fieldset>
-          )}
           {out === 'resolved' && o.companyId && (
             <label className="tr-relance">
               <input type="checkbox" checked={relance} onChange={(e) => setRelance(e.target.checked)} />

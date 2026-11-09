@@ -1,4 +1,5 @@
 {
+  "demo": {"run":"Simuler la réponse","choose":"Choisir un colis de cette liste","help":"Ces réponses fictives modifient uniquement la boutique démo. Aucun appel à une société réelle. Testez une alerte, une réclamation, puis Annulés → Swap, ou la réception du retour au dépôt.","done":"Démo : {{n}} modification(s)","response":"Réponse simulée","error":"Erreur API 503 (sans modification)","title":"API transporteur simulée · Démo"},
   "tabs": {
     "enlivraison": "En livraison",
     "alertes": "Alertes",

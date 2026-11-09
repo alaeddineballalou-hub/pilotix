@@ -1,4 +1,5 @@
 {
+  "demo": {"run":"Simulate response","choose":"Choose a parcel from this list","help":"Fake responses affect only the demo shop. No real courier is contacted. Try an alert, a claim, then Cancelled → Swap, or receive the return at the depot.","done":"Demo: {{n}} change(s)","response":"Simulated response","error":"API error 503 (no change)","title":"Mock courier API · Demo"},
   "tabs": {
     "enlivraison": "Out for delivery",
     "alertes": "Alerts",

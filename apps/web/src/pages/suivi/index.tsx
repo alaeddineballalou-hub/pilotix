@@ -32,6 +32,7 @@ import { AgentFilter, ClearFilters, CompanyFilter, DateFilters, dayIso, LivreurF
 import { useDebounced } from '../depot/OrderList';
 import type { In } from '../../lib/backend';
 import { useAllMode } from '../../layout/AllBoutiques';
+import { DemoCourier } from './DemoCourier';
 
 const LIST_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'traites', 'bloques', 'livres', 'annules', 'swap'] as const;
 /** the alert lists: all of them, the new ones (nobody acted yet), the ones in progress */
@@ -97,8 +98,9 @@ function SuiviBar({ tab }: { tab: Sub }) {
     if (b.left >= r.left + 8 && b.right <= r.right - 8) return;
     el.scrollBy({ left: b.left + b.width / 2 - (r.left + r.width / 2) });
   }, [tab]);
+  const active = (k: Sub) => tab === k || (k === 'alertes' && ['alertes_new', 'alertes_encours', 'reclamation', 'annules', 'swap'].includes(tab));
   const item = (k: Sub, count?: number, x = false) => (
-    <a className={`bjm-p ${tab === k ? 'on' : ''} ${x ? 'x' : ''}`} href={`#/suivi/${k}`} data-k={k} aria-current={tab === k ? 'page' : undefined}>
+    <a className={`bjm-p ${active(k) ? 'on' : ''} ${x ? 'x' : ''}`} href={`#/suivi/${k}`} data-k={k} aria-current={tab === k ? 'page' : active(k) ? 'location' : undefined}>
       <span className="bjm-l">{t(agency && k === 'traites' ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`)}</span>
       {count !== undefined && <b className="bjm-n ltr">{count}</b>}
     </a>
@@ -137,7 +139,9 @@ function SuiviBar({ tab }: { tab: Sub }) {
       </nav>
     );
   }
+  const alerts = isAlertTab(tab) || ['traites', 'reclamation', 'annules', 'swap'].includes(tab);
   return (
+    <>
     <nav ref={bar} className="bjm-bar flow" aria-label="Étapes" data-g="suivi">
       {item('enlivraison', c?.enlivraison ?? 0)}
       <span className="bjm-ar" aria-hidden="true">
@@ -150,10 +154,15 @@ function SuiviBar({ tab }: { tab: Sub }) {
       {item('traites', c?.traites ?? 0)}
       <span className="bjm-sep" aria-hidden="true" />
       {item('bloques', c?.bloquesTodo ?? 0, true)}
-      {item('annules', c?.annules ?? 0, true)}
-      {!agency && has('suivi') && item('reclamation', undefined, true)}
-      {!agency && has('suivi') && item('swap', c?.swap ?? 0, true)}
     </nav>
+    {alerts && <nav className="bjm-bar flow" aria-label={t('suivi.tabs.alertes')} data-g="suivi-alertes">
+      {item('alertes_new', c?.alertes_new ?? 0)}
+      {item('alertes_encours', c?.alertes_encours ?? 0)}
+      {has('suivi') && item('reclamation', c?.claims, true)}
+      {item('annules', c?.annules ?? 0)}
+      {has('suivi') && (tab === 'annules' || tab === 'swap') && item('swap', c?.swap ?? 0, true)}
+    </nav>}
+    </>
   );
 }
 
@@ -570,6 +579,7 @@ function List({ tab }: { tab: ListTab }) {
         {!phone && <ViewSwitch mode={mode} onChange={setMode} />}
       </div>
       <SuiviFilters f={f} set={setFilter} />
+      {!agency && <DemoCourier rows={q.data?.rows ?? []} />}
       {q.isLoading ? (
         <Loading />
       ) : q.error ? (
@@ -589,14 +599,12 @@ function List({ tab }: { tab: ListTab }) {
             if (tab === 'traites')
               return [
                 { key: 'deliv', label: t('suivi.ph.deliv'), tone: 'ok', run: () => run(o, 'delivered') },
-                claim,
                 { key: 'realert', label: t('suivi.ph.realert'), run: () => run(o, 'realert') },
                 { key: 'cancelled', label: t('suivi.ph.cancelled'), tone: 'bad', run: () => run(o, 'cancel') },
               ];
-            if (tab === 'bloques') return [{ key: 'stuck', label: t('suivi.stuck.btn'), tone: 'main', run: () => setDlg({ kind: 'stuck', o }) }, claim];
-            if (tab === 'swap') return [{ key: 'swap', label: t('suivi.act.swap'), tone: 'main', run: () => setDlg({ kind: 'swap', o }) }, claim];
-            if (tab === 'annules' && o.followStatus === 'returning') return [{ key: 'swap', label: t('suivi.act.swap'), tone: 'main', run: () => setDlg({ kind: 'swap', o }) }, ...(!agency ? [claim] : [])];
-            return agency ? [] : [claim];
+            if (tab === 'bloques') return [{ key: 'stuck', label: t('suivi.stuck.btn'), tone: 'main', run: () => setDlg({ kind: 'stuck', o }) }];
+            if (tab === 'swap' || (tab === 'annules' && o.followStatus === 'returning')) return [{ key: 'swap', label: t('suivi.act.swap'), tone: 'main', run: () => setDlg({ kind: 'swap', o }) }];
+            return [];
           };
           return (
             <>
@@ -613,7 +621,7 @@ function List({ tab }: { tab: ListTab }) {
                   x={extra[cur.id]}
                   reason={reasonOf(cur, extra[cur.id])}
                   actions={phoneActions(cur)}
-                  onClaim={agency || !canFollow ? undefined : () => setDlg({ kind: 'claim', o: cur, toLivreur: extra[cur.id]?.companyKind === 'own' })}
+                  onClaim={agency || !canFollow || !isAlertTab(tab) ? undefined : () => setDlg({ kind: 'claim', o: cur, toLivreur: extra[cur.id]?.companyKind === 'own' })}
                   onClose={() => setOpenId(null)}
                 />
               )}
@@ -635,9 +643,9 @@ function List({ tab }: { tab: ListTab }) {
             focus.kind === 'stuck'
               ? { key: 'stuck', label: t('suivi.stuck.btn'), tone: 'main', run: () => setDlg({ kind: 'stuck', o }) }
               : { key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) },
-            { key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: focus.x?.companyKind === 'own' }) },
+            ...(!agency && focus.kind === 'alert' ? [{ key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: focus.x?.companyKind === 'own' }) }] : []),
           ]}
-          onClaim={agency ? undefined : (o) => setDlg({ kind: 'claim', o, toLivreur: focus.x?.companyKind === 'own' })}
+          onClaim={agency || focus.kind !== 'alert' ? undefined : (o) => setDlg({ kind: 'claim', o, toLivreur: focus.x?.companyKind === 'own' })}
         />
       )}
       {dlg?.kind === 'stuck' && (

@@ -1,5 +1,7 @@
 import type { Db } from '../db';
 import { num } from '../db';
+import { login } from '../modules/users';
+import { DEMO_PASSWORD } from '@pilotix/shared';
 
 const EXT = ['Client absent', 'Client injoignable (ne répond pas)', 'Refusé par le client', 'Adresse incorrecte', 'Reporté par le client', 'Numéro erroné', 'Client demande le bureau (stop desk)', 'Commune non desservie'];
 const iso = (t: number) => new Date(t).toISOString();
@@ -52,5 +54,25 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
        VALUES ($1,$2,$3,$4,'',$5,'whatsapp',$6,$7,$8,$9,$10,$11,$12)`,
       [o.id, num(o.company_id), own ? o.livreur_id : null, reason, message, status, users.suivi, iso(created), iso(created + (status === 'waiting' ? 60_000 : 40 * 3_600_000)), iso(created + 60_000), JSON.stringify(notes), status === 'resolved' ? iso(created + 40 * 3_600_000) : null],
     );
+  }
+}
+
+/** Completed examples use the real swap rules, including stock, fees and tracking transfer. */
+export async function seedSwaps(db: Db, now: number): Promise<void> {
+  const { swapParcel } = await import('../modules/suivi');
+  const session = await login(db, 'admin@demo.pilotix.dz', DEMO_PASSWORD);
+  for (let k = 0; k < 4; k++) {
+    const pair = (await db.query(`SELECT a.id AS src, b.id AS dst FROM orders a
+      JOIN order_items ai ON ai.order_id = a.id
+      JOIN order_items bi ON bi.variant_id = ai.variant_id AND bi.qty = ai.qty
+      JOIN orders b ON b.id = bi.order_id
+      WHERE a.follow_status = 'returning' AND a.shipped_at IS NOT NULL AND a.tracking IS NOT NULL
+        AND b.conf_status = 'confirmed' AND b.shipped_at IS NULL AND b.tracking IS NULL
+        AND b.follow_status IN ('to_prepare','prepared')
+        AND (SELECT count(*) FROM order_items WHERE order_id = a.id) = 1
+        AND (SELECT count(*) FROM order_items WHERE order_id = b.id) = 1
+      ORDER BY (a.wilaya_id = b.wilaya_id) DESC, a.id, b.id LIMIT 1`))[0];
+    if (!pair) break;
+    await swapParcel({ db, session, now: () => now - k * 3_600_000, emit: () => {} }, num(pair.src), num(pair.dst), 'Démo : client annule, colis réaffecté à une commande du même produit');
   }
 }

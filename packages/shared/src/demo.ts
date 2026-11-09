@@ -20,6 +20,12 @@ export const DEMO_ACCOUNTS = [
   { key: 'livreur2', name: 'Walid', email: 'walid@demo.pilotix.dz', roles: ['livreur'] },
   { key: 'livreur3', name: 'Hichem', email: 'hichem@demo.pilotix.dz', roles: ['livreur'] },
   { key: 'marketer', name: 'Lyes (Marketeur)', email: 'lyes@demo.pilotix.dz', roles: ['marketer'] },
+  { key: 'admin2', name: 'Salma (Administratrice)', email: 'salma@demo.pilotix.dz', roles: ['admin'] },
+  { key: 'vendeur2', name: 'Anis (Vendeur)', email: 'anis@demo.pilotix.dz', roles: ['vendeur'] },
+  { key: 'conf6', name: 'Houda', email: 'houda@demo.pilotix.dz', roles: ['confirmation'] },
+  { key: 'depot3', name: 'Bilal', email: 'bilal@demo.pilotix.dz', roles: ['depot'] },
+  { key: 'marketer2', name: 'Sarah (Marketeuse)', email: 'sarah@demo.pilotix.dz', roles: ['marketer'] },
+  { key: 'polyvalent', name: 'Riad (Confirmation et Suivi)', email: 'riad@demo.pilotix.dz', roles: ['confirmation', 'suivi'] },
 ] as const;
 
 /**

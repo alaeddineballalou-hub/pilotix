@@ -11,7 +11,7 @@ import { seed as seed_stats } from './seeds/stats';
 import { seed as seed_catalog } from './seeds/catalog';
 import { seed as seed_stock } from './seeds/stock';
 import { seed as seed_customers } from './seeds/customers';
-import { seed as seed_suivi } from './seeds/suivi';
+import { seed as seed_suivi, seedSwaps } from './seeds/suivi';
 import { seed as seed_sav } from './seeds/sav';
 import { seed as seed_delivery, seedZrFees } from './seeds/delivery';
 import { seed as seed_zr } from './seeds/zr';
@@ -86,6 +86,12 @@ const PRODUCTS = [
   { name: 'Thermomètre frontal', sku: 'PX-THE', price: 2400, cost: 900, w: 0.2, variants: [], packs: [], maxD: 200 },
   { name: 'Lot de 6 bodies coton', sku: 'PX-BOD', price: 3200, cost: 1300, w: 0.5, variants: ['Naissance', '3 mois', '6 mois', '12 mois'], packs: [], maxD: 300 },
   { name: 'Écharpe de portage', sku: 'PX-ECH', price: 3900, cost: 1600, w: 0.6, variants: ['Gris chiné', 'Vert sauge'], packs: [], maxD: 300 },
+  { name: 'Veilleuse rechargeable silicone', sku: 'PX-VEI', price: 2700, cost: 1050, w: 0.3, variants: ['Ourson', 'Lapin'], packs: [], maxD: 200 },
+  { name: 'Couverture bébé coton', sku: 'PX-COU', price: 3400, cost: 1400, w: 0.7, variants: ['Écru', 'Rose', 'Bleu'], packs: [], maxD: 300 },
+  { name: 'Stérilisateur vapeur 6 biberons', sku: 'PX-STE', price: 7900, cost: 4200, w: 2.2, variants: [], packs: [], maxD: 500 },
+  { name: 'Barrière de sécurité escalier', sku: 'PX-BAR', price: 6900, cost: 3500, w: 4, variants: ['Blanc', 'Noir'], packs: [], maxD: 500 },
+  { name: 'Gourde enfant inox 350 ml', sku: 'PX-GOU', price: 2200, cost: 850, w: 0.3, variants: ['Vert', 'Violet'], packs: [{ qty: 2, price: 3900 }], maxD: 200 },
+  { name: 'Organisateur de poussette', sku: 'PX-ORG', price: 1900, cost: 650, w: 0.4, variants: [], packs: [], maxD: 200 },
 ];
 
 async function bulkInsert(db: Db, table: string, cols: string[], rows: unknown[][], returning = '') {
@@ -399,6 +405,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
   await seed_partners(db, users, now);
   // Pilot Automations: what it did these last days (it reads the demo's orders, ads and customers)
   await seed_automations(db, users, now);
+  await seedSwaps(db, now);
   // agent pay last: it reads the delivered and prepared orders the seeds above wrote (and their first quantities)
   await seed_pay(db, users, now);
 

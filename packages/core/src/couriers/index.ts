@@ -83,8 +83,10 @@ type Args = {
  * askReturn / retry / note {companyId, item, text}.
  */
 export async function runCourier(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
+  if (ctx.shop?.demo) throw new CourierError('Boutique démo : aucune action réelle chez un transporteur');
   const a = args as Args;
   const c = await loadCompany(ctx.db, a.companyId);
+  if (c.secret.demo) throw new CourierError('Identifiants démo : aucune action réelle chez un transporteur');
   if (action === 'askReturn' || action === 'retry' || action === 'note') {
     const ad = ADAPTERS[c.kind];
     const f = ad[action];

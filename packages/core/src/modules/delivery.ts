@@ -12,7 +12,7 @@ import { keysOk, loadCompany, loadParcels, resolveStatus } from '../couriers/loa
 import { checkedInToday } from './livreur';
 import type { CourierCosts, Desk, ExchangeResult, FeeRow, LabelResult, PreviewResult, SendResult, TrackItem, TrackResult } from '../couriers/types';
 import { Db, iso, num, numOrNull } from '../db';
-import { bad, Ctx, notFound, proc, publicApi, takeActionLocks } from '../rpc';
+import { bad, Ctx, forbidden, notFound, proc, publicApi, takeActionLocks } from '../rpc';
 
 /** Compares two secrets in a time that does not depend on where they differ (no guessing a key letter by letter). */
 function sameSecret(a: string, b: string): boolean {
@@ -396,7 +396,8 @@ async function demoCosts(ctx: Ctx, companyId: number, ids: number[], weighed: bo
 }
 
 // ---------------------------------------------------------------- status sync
-async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
+async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario?: FollowStatus) {
+  if (scenario && (ctx.server || (ctx.shop && !ctx.shop.demo))) throw forbidden('Simulation réservée à la démo');
   const parcels = await ctx.db.query(
     `SELECT id, ref, tracking, ext_id, follow_status, sub_status, ext_status FROM orders
      WHERE company_id = $1 AND tracking IS NOT NULL AND follow_status = ANY($2) ${onlyIds ? 'AND id = ANY($3)' : ''} ORDER BY ext_status_at NULLS FIRST LIMIT 2000`,
@@ -430,7 +431,7 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
         answers.push({ id: num(p.id), status: p.ext_status ?? '', at: null, ...(costs.has(num(p.id)) ? { costs: costs.get(num(p.id)) } : {}) });
         continue;
       }
-      const next = nextStep(p.follow_status, !!p.tracking, Math.random(), expanded);
+      const next = scenario ?? nextStep(p.follow_status, !!p.tracking, Math.random(), expanded);
       if (next) answers.push({ id: num(p.id), status: word(c.kind, next), mapped: next, at: new Date(ctx.now()).toISOString(), ...(costs.has(num(p.id)) ? { costs: costs.get(num(p.id)) } : {}) });
     }
   } else {
@@ -451,7 +452,8 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
       errors.push({ ref: p.ref, error: a.error });
       continue;
     }
-    const to = resolveStatus(defaults, c.statusMap, a);
+    // The scenario picker supplies an already mapped status; ordinary sync still honors the shop's courier mapping.
+    const to = scenario ?? resolveStatus(defaults, c.statusMap, a);
     // what the company charges for it (its prices, the weight it counted): counted instead of the price list
     // (a company without its prices by API only says the weight it found: its « Surpoids » counts on that weight)
     // its own prices for the parcel (delivery, return — 0 for a free return) come first, like ZR's; with only a weight,
@@ -672,6 +674,19 @@ function weightOf(kind: string, cfg: unknown) {
 }
 
 export const deliveryProcs = {
+  /** Deterministic fake courier response, using the normal tracking rules. Never available in a real shop. */
+  'delivery.demoScenario': proc(['suivi', 'depot'], z.object({ orderId: id, status: z.enum(['out_for_delivery', 'alert', 'delivered', 'returning', 'lost', 'error']) }), async (ctx, i) => {
+    // Check before reading or changing orders; a production context without hooks must also fail closed.
+    if (ctx.server || (ctx.shop && !ctx.shop.demo)) throw forbidden('Simulation réservée à la démo');
+    const o = await getOrder(ctx, i.orderId);
+    if (!o.companyId || !o.shippedAt || !o.tracking || !SYNCABLE.includes(o.followStatus!)) throw bad('Choisissez un colis expédié avec un suivi actif');
+    const company = await companyOr404(ctx.db, o.companyId);
+    if (company.kind === 'own') throw bad('Choisissez une société de livraison');
+    if (i.status === 'error') return { demo: true, checked: 1, changed: 0, error: 'Démo : API transporteur indisponible (503), aucune modification' };
+    const r = await syncCompany(ctx, company, [o.id], i.status);
+    if (r.changed) ctx.emit({ type: 'orders' });
+    return { ...r, demo: true, error: null };
+  }),
   /** Courier kinds, provider cards and custom-API placeholders (for the forms). */
   // a company removed from Pilotix (control room) is no longer offered; a shop's own companies keep their kind
   'delivery.kinds': proc([], z.object({}), async (ctx) => {
