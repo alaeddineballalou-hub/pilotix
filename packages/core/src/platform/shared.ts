@@ -81,8 +81,18 @@ DECLARE
   r record;
   d text;
   n integer := 0;
+  v bigint;
   skip text[] := ARRAY['schema_migrations', 'shop_counters'];
 BEGIN
+  -- 0. the primary shop's counters (order references, SAV tickets, own tracking numbers) carry on from the old
+  -- sequences in public: without this they would start again at 1 and give numbers its orders already have
+  FOR r IN SELECT unnest(ARRAY['order_ref_seq', 'complaint_ref_seq', 'order_track_seq']) AS name LOOP
+    IF to_regclass(format('public.%I', r.name)) IS NOT NULL THEN
+      EXECUTE format('SELECT CASE WHEN is_called THEN last_value ELSE last_value - 1 END FROM public.%I', r.name) INTO v;
+      INSERT INTO public.shop_counters (shop_id, name, value) VALUES (primary_id, r.name, v)
+        ON CONFLICT (shop_id, name) DO UPDATE SET value = greatest(public.shop_counters.value, EXCLUDED.value);
+    END IF;
+  END LOOP;
   -- 1. the column: existing rows belong to the primary shop, new rows to the connection's shop
   FOR r IN SELECT c.oid, c.relname FROM pg_class c JOIN pg_namespace s ON s.oid = c.relnamespace
             WHERE s.nspname = 'public' AND c.relkind IN ('r', 'p') AND NOT c.relispartition AND c.relname <> ALL (skip)
