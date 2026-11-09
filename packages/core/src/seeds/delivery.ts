@@ -65,7 +65,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   }
 
   // livreurs: where their round ends; Lamine has parcels to pick up at the depot and some out today
-  await db.query('INSERT INTO livreur_routes (profile_id, end_wilaya_id, end_commune) VALUES ($1, 16, $2), ($3, 16, $4)', [users.livreur, 'Bab Ezzouar', users.livreur2, 'Kouba']);
+  await db.query('INSERT INTO livreur_routes (profile_id, end_wilaya_id, end_commune) VALUES ($1, 16, $2), ($3, 16, $4), ($5, 31, $6)', [users.livreur, 'Bab Ezzouar', users.livreur2, 'Kouba', users.livreur3, 'Oran']);
   const own = num((await db.query(`SELECT id FROM delivery_companies WHERE kind = 'own' LIMIT 1`))[0]?.id);
   const pick = await db.query(`SELECT id FROM orders WHERE follow_status IN ('to_prepare','prepared') AND wilaya_id = 16 AND livreur_id IS NULL ORDER BY id DESC LIMIT 3`);
   // (own livreurs keep the Pilotix number: a company's number from above goes)
