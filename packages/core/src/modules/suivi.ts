@@ -13,6 +13,7 @@ import { agencyOf, andSql, queueSql, rowScopeSql } from './agencyscope';
 import { findOrders } from './sav';
 import { applyTrust, DRIVER_CLAIMS } from './trust';
 import { KINDS } from '../couriers/kinds';
+import { demoClaimState } from '../couriers/demo';
 import type { ClaimCategory, ClaimSent, ClaimState } from '../couriers/types';
 import type { CourierKind } from '@pilotix/shared';
 
@@ -519,7 +520,7 @@ async function pushClaim(ctx: Ctx, cid: number, categoryId: string | null): Prom
 /** Reads back the state of the open claims sent through an API; a closed one becomes "Réglée", ZR's answer goes in the history. */
 async function syncClaims(ctx: Ctx, onlyId?: number) {
   const rows = await ctx.db.query(
-    `SELECT c.id, c.company_id, c.ext_id, c.ext_status, c.ext_answer, c.notes, c.order_id, c.status FROM claims c
+    `SELECT c.id, c.company_id, c.ext_id, c.ext_status, c.ext_answer, c.sent_at, c.notes, c.order_id, c.status FROM claims c
      WHERE c.ext_id IS NOT NULL AND c.status NOT IN ${CLAIM_DONE} ${onlyId ? 'AND c.id = $1' : ''} ORDER BY c.updated_at LIMIT 200`,
     onlyId ? [onlyId] : [],
   );
@@ -531,7 +532,7 @@ async function syncClaims(ctx: Ctx, onlyId?: number) {
   const nowIso = new Date(ctx.now()).toISOString();
   for (const [companyId, list] of byCompany) {
     let states: ClaimState[] = [];
-    if (!ctx.server) states = list.map((r) => ({ extId: r.ext_id, status: r.ext_status || 'Nouvelle', resolved: false }));
+    if (!ctx.server) states = list.map((r) => demoClaimState(r.ext_id, num(r.id), r.sent_at ? iso(r.sent_at) : null, ctx.now()));
     else
       try {
         states = (await ctx.server.courier('claimStates', { companyId, extIds: list.map((r) => r.ext_id) }, ctx)) as ClaimState[];
