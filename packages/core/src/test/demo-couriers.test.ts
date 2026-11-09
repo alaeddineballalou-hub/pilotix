@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { demoClaimState, fakeTracking, nextStep, word } from '../couriers/demo';
 
 test('demo couriers give fake tracking identifiers and status changes', () => {
-  assert.match(fakeTracking('zr', 'PX1001', 0), /^ZR-\\d{8}$/);
+  assert.match(fakeTracking('zr', 'PX1001', 0), /^ZR-[0-9]{8}$/);
   assert.match(fakeTracking('yalidine', 'PX1001', 0), /^yal-[A-Z0-9]{6}$/);
   assert.equal(nextStep('shipped', true, 0.1), 'out_for_delivery');
   assert.equal(nextStep('alert', true, 0.25), 'returning');
