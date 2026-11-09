@@ -5,6 +5,7 @@
 // updater existed can't replace itself: it shows how to install the new app once, by hand.
 // (The website itself needs none of this: it moves to each new version by itself, lib/freshness.)
 import { AppInfo, appUpdateNeed, LatestApp } from '@pilotix/shared';
+import { atLocalMidnight } from './midnight';
 import i18n from './i18n';
 import { appInfo } from './backend';
 import { store } from './store';
@@ -83,7 +84,7 @@ async function check() {
       if (state?.phase === 'ask') show(null);
       return;
     }
-    show({ need, old: !updater, latest: info.latest!, phase: 'ask', loaded: 0, total: info.latest!.size });
+    show({ need, old: !updater || installed < 24, latest: info.latest!, phase: 'ask', loaded: 0, total: info.latest!.size });
   } catch {
     /* the app did not answer: nothing offered */
   } finally {
@@ -136,12 +137,13 @@ export async function allowAppInstalls() {
 
 export function startAppUpdates() {
   if (!inApp()) return;
+  atLocalMidnight(() => void check());
   setTimeout(() => void check(), 8000);
   // back on screen after a while, and every few hours: a newer app, or one made obligatoire meanwhile
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && Date.now() - lastCheck > 30 * 60_000) void check();
   });
   setInterval(() => {
-    if (document.visibilityState === 'visible' && Date.now() - lastCheck > 3 * 3600_000) void check();
-  }, 10 * 60_000);
+    if (document.visibilityState === 'visible' && Date.now() - lastCheck >= 5 * 60_000) void check();
+  }, 5 * 60_000);
 }

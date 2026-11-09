@@ -5,6 +5,7 @@
 // never with a window open, a field in use or something typed on this page. A page whose files are gone loads the new
 // version at once. The person sees « Mise à jour de Pilotix… » for a moment, then « Pilotix est à jour ».
 // Only on the real site (lib/route PATHS): the preview in Claude has no new versions to fetch.
+import { atLocalMidnight } from './midnight';
 import i18n from './i18n';
 import { ROUTE_EVENT } from './route';
 import { toast } from '../ui/toast';
@@ -112,6 +113,11 @@ export function startFreshness() {
     const live = await liveMain();
     if (live && live !== mine) waiting = Date.now();
   };
+
+  atLocalMidnight(async () => {
+    await check();
+    if (waiting && document.visibilityState === 'visible' && !busy(typed) && Date.now() - lastTouch >= IDLE) moveOn();
+  });
 
   // the page changed: nothing typed on the new one yet, and the best moment to move on
   window.addEventListener(ROUTE_EVENT, () => {

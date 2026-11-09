@@ -240,6 +240,18 @@ class RemoteBackend implements Backend {
     store.set('token', token);
   }
 
+  private checkingToken: string | null = null;
+  private unauthorized(sent: string | null, sessionProbe: boolean) {
+    if (!sent || this.token !== sent) return;
+    if (sessionProbe) { this.onUnauthorized(); return; }
+    // Some actions reject their own password or ticket. Only me.get can reject the device session.
+    if (this.checkingToken === sent) return;
+    this.checkingToken = sent;
+    void this.req('/rpc/me.get', {}).catch(() => {}).finally(() => {
+      if (this.checkingToken === sent) this.checkingToken = null;
+    });
+  }
+
   private async req<T>(path: string, body?: unknown, extra?: Record<string, string>): Promise<T> {
     const base = apiUrl();
     if (!base) throw new ApiError(0, 'Adresse du serveur manquante');
@@ -258,7 +270,7 @@ class RemoteBackend implements Backend {
     const data = await res.json().catch(() => undefined);
     // after a password change the server hands this session a fresh token (the old ones stop working in every store)
     if (res.ok && path === '/rpc/me.password' && typeof (data as any)?.token === 'string') this.keep((data as any).token);
-    if (res.status === 401 && this.token && this.token === sent) this.onUnauthorized();
+    if (res.status === 401) this.unauthorized(sent, path === '/rpc/me.get');
     if (res.status === 402 && this.token && this.token === sent) this.onLocked();
     if (!res.ok) throw new ApiError(res.status, (data as any)?.message || res.statusText, data);
     return data as T;
@@ -275,7 +287,7 @@ class RemoteBackend implements Backend {
       throw new ApiError(0, 'Serveur injoignable. Vérifiez votre connexion.');
     }
     const data = await res.json().catch(() => undefined);
-    if (res.status === 401 && this.token && this.token === sent) this.onUnauthorized();
+    if (res.status === 401) this.unauthorized(sent, false);
     if (!res.ok) throw new ApiError(res.status, (data as any)?.message || res.statusText, data);
     return data;
   }
@@ -358,7 +370,7 @@ class RemoteBackend implements Backend {
       this.connect();
       return s as Session;
     } catch (e) {
-      if (isNetworkError(e)) {
+      if (e instanceof ApiError && (e.status === 0 || e.status >= 500 || e.status === 429)) {
         const saved = store.get('session');
         return saved ? (JSON.parse(saved) as Session) : null;
       }

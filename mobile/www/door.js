@@ -20,7 +20,7 @@
   var BACKUP = { id: 'backup', url: 'https://direct.pilotix.online/' };
   var INTERNET = ['https://connectivitycheck.gstatic.com/generate_204', 'https://www.google.com/generate_204'];
   var PROBE_MS = 5000; // how long a door has to answer
-  var PREFER_MAIN_MS = 1500; // when the backup answers first, how long the main door still gets
+  var PREFER_MAIN_MS = PROBE_MS; // when the backup answers first, how long the main door still gets
   var POLL_MS = 6000; // pause between two tries when nothing answers
   var CALM_S = 15; // the server itself fails again and again: wait this long between tries
 
@@ -164,6 +164,7 @@
     leaving = true;
     stopTimers();
     store.set('pxDoor', door.id);
+    try { localStorage.setItem('pxLastDoor', door.id); } catch (e) {}
     btn.disabled = true;
     status.textContent = door.id === 'backup' ? w.backup : w.trying;
     // the start animation (splash.js) finishes first
@@ -202,7 +203,10 @@
       else status.textContent = w.trying;
     }
     // the main door just failed: ask the backup door first this time
-    var preferBackup = PAGE === 'error' && store.get('pxDoor') === 'main';
+    var preferBackup = store.get('pxDoor') === 'main';
+    if (PAGE !== 'error') {
+      try { preferBackup = localStorage.getItem('pxLastDoor') === 'backup'; } catch (e) { preferBackup = false; }
+    }
     pickDoor(preferBackup).then(function (door) {
       if (leaving) return;
       if (!door) return nothingAnswers();

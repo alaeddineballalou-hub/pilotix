@@ -13,6 +13,11 @@ echo "→ health";                     curl -fsS "$API/health" >/dev/null
 echo "→ wrong password refused";     [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/auth/login" -H 'Content-Type: application/json' -d '{"email":"admin@demo.pilotix.dz","password":"nope"}')" = 401 ]
 echo "→ no token refused";           [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/rpc/orders.list" -H 'Content-Type: application/json' -d '{}')" = 401 ]
 ADMIN=$(login admin@demo.pilotix.dz); CONF=$(login samira@demo.pilotix.dz); DEPOT=$(login karim@demo.pilotix.dz); LIV=$(login lamine@demo.pilotix.dz)
+echo "→ Android login persists across shifts; logout still revokes only that device"
+PHONE=$(curl -fsS -A 'Android PilotixApp' -X POST "$API/auth/login" -H 'Content-Type: application/json' -d '{"email":"samira@demo.pilotix.dz","password":"demo-pilotix"}' | j .token)
+echo "$PHONE" | node -e "const t=JSON.parse(Buffer.from(require('fs').readFileSync(0,'utf8').split('.')[1],'base64url')); if(t.exp-t.iat!==30*86400) process.exit(1)"
+curl -fsS -X POST "$API/auth/logout" -H "Authorization: Bearer $PHONE" -H 'Content-Type: application/json' -d '{}' >/dev/null
+[ "$(code "$PHONE" me.get)" = 401 ] && [ "$(code "$CONF" me.get)" != 401 ] || exit 1
 echo "→ orders.list";                [ "$(rpc "$CONF" orders.list '{"pageSize":5}' | j .total)" -ge 100 ]
 echo "→ counts";                     rpc "$ADMIN" orders.counts | grep -q '"conf"'
 PID=$(rpc "$ADMIN" orders.list '{"pageSize":1}' | j '.rows[0].items[0].productId')

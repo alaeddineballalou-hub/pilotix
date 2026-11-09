@@ -70,6 +70,7 @@ jobs:
             echo "app key: made from DEPLOY_SSH_KEY"
           else
             echo "app key: a new one for this build only (it can't replace the app on phones)"
+            [[ "$GITHUB_REF" != refs/heads/main ]] || exit 1
             exit 0
           fi
           keytool -list -keystore "$KS" -storepass android -alias androiddebugkey
@@ -89,11 +90,28 @@ jobs:
           SIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
           GOT=$("$SIGNER" verify --print-certs pilotix-test.apk | grep -m1 -i 'certificate SHA-256 digest' | grep -oE '[0-9a-f]{64}' | head -1)
           echo "the app is signed by the certificate $GOT"
+          if [[ "$GITHUB_REF" == refs/heads/main && "$GOT" != 7217a246407e53084e76151f694bbfe9f53f60118fdddc2118a88c7adbe22c7f ]]; then
+            echo "::error::Signer differs from published build 24. Restore the original key."; exit 1
+          fi
           if [ -n "${KEY_SHA256:-}" ]; then
             if [ "$GOT" != "$KEY_SHA256" ]; then echo "::error::the app is not signed with the fixed key"; exit 1; fi
             echo "the fixed key: yes"
             echo "FIXED_KEY=true" >> "$GITHUB_ENV"
           fi
+      - name: Verify in-place Android upgrade from the published APK
+        if: github.ref == 'refs/heads/main'
+        run: |
+          curl -fLsS --retry 3 https://github.com/alaeddineballalou-hub/pilotix/releases/download/app-test/pilotix-test.apk -o "$RUNNER_TEMP/previous.apk"
+          sudo chmod 666 /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-30;google_apis;x86_64' >/dev/null
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n update-test -k 'system-images;android-30;google_apis;x86_64' --force
+          "$ANDROID_HOME/emulator/emulator" -avd update-test -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -no-snapshot >"$RUNNER_TEMP/emulator.log" 2>&1 &
+          trap 'adb emu kill || true' EXIT
+          timeout 300 bash -c 'adb wait-for-device; until adb shell getprop sys.boot_completed | grep -q 1; do sleep 2; done'
+          adb install "$RUNNER_TEMP/previous.apk"
+          adb shell run-as com.pilotix.app touch files-upgrade-marker
+          adb install -r pilotix-test.apk
+          adb shell run-as com.pilotix.app test -f files-upgrade-marker
       # the app's version card: its build, commit, date, size, and whether it has the fixed key (only then can it replace
       # the app on a phone; before, Android refuses and the phones are not asked to update)
       - name: Version card

@@ -10,6 +10,7 @@ import {
   Headers,
   HttpCode,
   HttpException,
+  Inject,
   Injectable,
   Logger,
   Module,
@@ -23,7 +24,7 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import { APP_FILTER, Reflector } from '@nestjs/core';
+import { APP_FILTER, Reflector, REQUEST } from '@nestjs/core';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import * as core from '@pilotix/core';
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, maskPhone, normalizePhone, ProCard, Session } from '@pilotix/shared';
@@ -362,13 +363,16 @@ const sendLater = (m: Mail | null, what: string) => {
 @UseGuards(AuthGuard)
 class ApiController {
   constructor(
+    @Inject(REQUEST) private readonly httpRequest: { headers: Record<string, string | undefined> },
     private readonly core: CoreService,
     private readonly jwt: JwtService,
   ) {}
 
   /** A shop token: the person's account in that shop, its token version, its shop, and its own id (« Se déconnecter »). */
   private async signShop(ref: ShopRef, id: number) {
-    return this.jwt.signAsync({ sub: id, tv: await tokenVersion(ref.db, id), shop: ref.shop.id, jti: randomUUID() });
+    const phone = /\bPilotixApp\b/.test(this.httpRequest.headers['user-agent'] || '');
+    return this.jwt.signAsync({ sub: id, tv: await tokenVersion(ref.db, id), shop: ref.shop.id, jti: randomUUID() },
+      phone ? { expiresIn: '30d' } : {});
   }
 
   /** The shop of a public link (/api/s/<slug>/…; none = shop #1). A suspended or closed shop answers as unknown. */
@@ -1037,16 +1041,16 @@ class ApiController {
    * Pilotix's list of Pro marketers, open to everyone (the public page #/pro): their cards, the best rate first. Kept a
    * minute (each card's numbers are counted again only every few hours).
    */
-  private prosCache: { at: number; p: Promise<ProCard[]> } | null = null;
+  private static prosCache: { at: number; p: Promise<ProCard[]> } | null = null;
   @Public()
   @Get('pro')
   async pros() {
-    if (!this.prosCache || Date.now() - this.prosCache.at > 60_000) {
+    if (!ApiController.prosCache || Date.now() - ApiController.prosCache.at > 60_000) {
       const p = core.listPros(this.core.t, Date.now());
-      this.prosCache = { at: Date.now(), p };
-      p.catch(() => (this.prosCache = null));
+      ApiController.prosCache = { at: Date.now(), p };
+      p.catch(() => (ApiController.prosCache = null));
     }
-    return { pros: await this.prosCache.p };
+    return { pros: await ApiController.prosCache.p };
   }
 
   /** One Pro marketer's card by its code (MK-7K2Q): its public page (#/pro/MK-7K2Q). */
