@@ -1,6 +1,7 @@
 // A shop's own domain name for its landing pages (myshop.com instead of pilotix.online/<store>): set by the shop's
 // administrator, ready once its DNS points to this server (Caddy then gets its HTTPS certificate on demand).
-import { createHash } from 'node:crypto';
+// sha256 in plain code: this file is in the browser build too (the demo)
+import { sha256Hex } from '@pilotix/shared';
 import { num } from '../db';
 import { loadShop, Shop } from './shops';
 import type { Tenancy } from './tenancy';
@@ -27,7 +28,7 @@ export function cleanDomain(input: string): string | null {
  * domain's registrar — only the domain's owner can. One text per shop and domain (nothing to keep: it is computed).
  */
 export function domainProof(shopId: number, domain: string): string {
-  return 'pilotix-verify=' + createHash('sha256').update(`pilotix-domain|${shopId}|${domain}`).digest('hex').slice(0, 32);
+  return 'pilotix-verify=' + sha256Hex(`pilotix-domain|${shopId}|${domain}`).slice(0, 32);
 }
 /** Where that TXT record lives. */
 export const proofName = (domain: string) => `_pilotix.${domain}`;
