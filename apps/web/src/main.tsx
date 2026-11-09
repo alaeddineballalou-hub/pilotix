@@ -25,6 +25,7 @@ import { AGENCY_PAGES, MARKETER_PAGES, PAGES } from './pages/registry';
 import { Loading } from './ui/kit';
 import { Toasts } from './ui/toast';
 import { installEdgeScroll } from './ui/edgeScroll';
+import { installEdgeFade } from './ui/edgeFade';
 import { SelectPicker } from './ui/SelectPicker';
 import './styles/tokens.css';
 import './styles/legacy.css';
@@ -42,6 +43,8 @@ document.documentElement.setAttribute('data-skin', 'doux');
 // inside the Pilotix phone app (mobile/: its web view adds « PilotixApp » to the user agent): styles/app.css
 if (/\bPilotixApp\b/.test(navigator.userAgent)) document.documentElement.classList.add('in-app');
 installEdgeScroll();
+// rows that slide sideways on a phone fade out where more is hidden (ui/edgeFade)
+installEdgeFade();
 
 const qc = new QueryClient({
   defaultOptions: {

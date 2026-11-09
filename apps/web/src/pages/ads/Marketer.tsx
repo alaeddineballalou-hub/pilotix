@@ -2,7 +2,7 @@
 // Every figure and result comes from core (mk.*); this page shows them, lets the owner give ad sets to marketers,
 // set a result by hand, set prices and rules, and mark ad sets paid. A marketer sees his own ad sets, read only.
 // Views (address): #/marketing/marketer · …/gerer (marketers) · …/produit/<key> · …/adset/<id>
-import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, dateOnly, n, pct } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
@@ -816,7 +816,21 @@ function trend(days: { day: string; n: number; d: number }[]) {
 
 function OrdersChart({ days }: { days: { day: string; n: number; d: number }[] }) {
   const { t } = useTranslation();
-  const W = 640, H = 170, pl = 24, pb = 18, pt = 8;
+  // drawn at the size it is shown (a phone: its own width), so the days and numbers keep their real size
+  const box = useRef<HTMLDivElement>(null);
+  const [cw, setCw] = useState(640);
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const set = () => setCw(Math.max(280, Math.round(el.clientWidth) || 640));
+    set();
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(set);
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, []);
+  const W = cw, H = 170, pl = 24, pb = 18, pt = 8;
+  // a day's date every few bars, as many as fit (about one every 56 px)
+  const every = Math.max(1, Math.ceil(days.length / Math.max(3, Math.floor((W - pl) / 56))));
   const max = Math.max(4, ...days.map((x) => x.n));
   const bw = (W - pl) / days.length;
   const y = (v: number) => H - pb - (v / max) * (H - pb - pt);
@@ -824,7 +838,7 @@ function OrdersChart({ days }: { days: { day: string; n: number; d: number }[] }
   const grid: number[] = [];
   for (let v = 0; v <= max; v += step) grid.push(v);
   return (
-    <div className="mk-chart">
+    <div className="mk-chart" ref={box}>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t('marketer.d.orders30')}>
         {grid.map((v) => (
           <g key={v}>
@@ -843,7 +857,7 @@ function OrdersChart({ days }: { days: { day: string; n: number; d: number }[] }
               <rect className="b-all" x={gx} y={y(x.n)} width={w} height={Math.max(0, H - pb - y(x.n))} rx={2} />
               {!!x.d && <rect className="b-del" x={gx} y={y(x.d)} width={w} height={Math.max(0, H - pb - y(x.d))} rx={2} />}
               <rect x={pl + i * bw} y={0} width={bw} height={H} fill="transparent" />
-              {(i % 5 === 0 || i === days.length - 1) && (
+              {(i % every === 0 || i === days.length - 1) && (
                 <text x={gx + w / 2} y={H - 4} textAnchor="middle">
                   {`${Number(x.day.slice(8))}/${Number(x.day.slice(5, 7))}`}
                 </text>

@@ -169,3 +169,20 @@ html[data-skin][data-theme] .px-paycell .chip { border-radius: 12px; }
 .pager > :not(.muted) { flex: none; }
 .pager > span.ltr { white-space: nowrap; }
 html body .pager select.qsz { min-width: 112px; }
+/* Rows that slide sideways on a phone (tabs, periods, filters — ui/edgeFade): the side where more is hidden fades out.
+   Rows on the page fade their content; framed bars (white or tinted) keep their frame whole and get a veil of their
+   own colour over the hidden side. */
+:is(.tb-per, .tb-teams, .pxv-road, .pxn-per, .prx-chips, .pxr-f, .tabs)[data-more="l"] { -webkit-mask-image: linear-gradient(90deg, transparent, #000 34px); mask-image: linear-gradient(90deg, transparent, #000 34px); }
+:is(.tb-per, .tb-teams, .pxv-road, .pxn-per, .prx-chips, .pxr-f, .tabs)[data-more="r"] { -webkit-mask-image: linear-gradient(270deg, transparent, #000 34px); mask-image: linear-gradient(270deg, transparent, #000 34px); }
+:is(.tb-per, .tb-teams, .pxv-road, .pxn-per, .prx-chips, .pxr-f, .tabs)[data-more="l r"] { -webkit-mask-image: linear-gradient(90deg, transparent, #000 34px, #000 calc(100% - 34px), transparent); mask-image: linear-gradient(90deg, transparent, #000 34px, #000 calc(100% - 34px), transparent); }
+:is(.bjm-bar, .px-pf-tabs, .bqp-tabs, .pxd-tabs, .bjp-tabs)[data-fade~="e"]::after,
+:is(.bjm-bar, .px-pf-tabs, .bqp-tabs, .pxd-tabs, .bjp-tabs)[data-fade~="s"]::before {
+  content: ''; position: sticky; z-index: 2; flex: none; align-self: stretch; width: 50px; pointer-events: none; background: inherit; border-radius: 0;
+}
+:is(.bjm-bar, .px-pf-tabs, .bqp-tabs, .pxd-tabs, .bjp-tabs)[data-fade~="e"]::after { order: 999; inset-inline-end: -6px; margin-inline-start: -50px; -webkit-mask-image: linear-gradient(270deg, #000 30%, transparent); mask-image: linear-gradient(270deg, #000 30%, transparent); }
+:is(.bjm-bar, .px-pf-tabs, .bqp-tabs, .pxd-tabs, .bjp-tabs)[data-fade~="s"]::before { order: -999; inset-inline-start: -6px; margin-inline-end: -50px; -webkit-mask-image: linear-gradient(90deg, #000 30%, transparent); mask-image: linear-gradient(90deg, #000 30%, transparent); }
+[dir="rtl"] :is(.bjm-bar, .px-pf-tabs, .bqp-tabs, .pxd-tabs, .bjp-tabs)[data-fade~="e"]::after { -webkit-mask-image: linear-gradient(90deg, #000 30%, transparent); mask-image: linear-gradient(90deg, #000 30%, transparent); }
+[dir="rtl"] :is(.bjm-bar, .px-pf-tabs, .bqp-tabs, .pxd-tabs, .bjp-tabs)[data-fade~="s"]::before { -webkit-mask-image: linear-gradient(270deg, #000 30%, transparent); mask-image: linear-gradient(270deg, #000 30%, transparent); }
+/* tables as cards on a phone: a cell that spans the columns (a group's title, « nothing here », a total) takes the
+   card's whole width instead of half of it */
+@media (max-width: 760px) { .tbl td[colspan]:not([colspan="1"]) { grid-column: 1 / -1; } }

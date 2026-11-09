@@ -1,6 +1,6 @@
 // Dashboard › Vue d'ensemble (admin / vendeur): the whole shop on one screen.
 // KPIs · orders per day · this month vs the goal · top products · wilayas · funnel · sales channels · recent orders · activity.
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, dayRange, n, pct, when, wilayaName } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
@@ -257,8 +257,21 @@ export function Overview({ areas }: { areas: AreaKey[] }) {
 function LineChart({ data }: { data: { day: string; received: number; delivered: number }[] }) {
   const { t, i18n } = useTranslation();
   const [hov, setHov] = useState<number | null>(null);
-  const W = 640;
-  const H = 220;
+  // drawn at the size it is shown (a phone: its own width), so the dates and numbers keep their real size instead of
+  // shrinking with the picture
+  const box = useRef<HTMLDivElement>(null);
+  const [cw, setCw] = useState(640);
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const set = () => setCw(Math.max(280, Math.round(el.clientWidth) || 640));
+    set();
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(set);
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, []);
+  const W = cw;
+  const H = cw < 480 ? 200 : 220;
   const L = 34;
   const B = 24;
   const top = Math.max(4, ...data.map((d) => Math.max(d.received, d.delivered)));
@@ -275,11 +288,12 @@ function LineChart({ data }: { data: { day: string; received: number; delivered:
       return `${s} C${mx},${qy} ${mx},${py} ${px},${py}`;
     }, '');
   };
-  const every = Math.ceil(data.length / 7);
+  // as many dates as fit (one every 80 px or so)
+  const every = Math.ceil(data.length / Math.max(3, Math.min(7, Math.floor((W - L) / 80))));
   const fmt = (d: string) => new Intl.DateTimeFormat(i18n.language === 'ar' ? 'ar-DZ' : i18n.language === 'en' ? 'en-GB' : 'fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC', numberingSystem: 'latn' } as Intl.DateTimeFormatOptions).format(Date.parse(d));
   const h = hov === null ? null : data[hov];
   return (
-    <div className="ov-chart" onMouseLeave={() => setHov(null)}>
+    <div className="ov-chart" ref={box} onMouseLeave={() => setHov(null)}>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t('dashboard.ov.perDay')}>
         {[0, 1, 2, 3, 4].map((k) => (
           <g key={k}>
