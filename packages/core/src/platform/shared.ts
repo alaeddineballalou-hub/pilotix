@@ -193,8 +193,82 @@ BEGIN
   GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO px_app;
   GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO px_app;
   GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO px_app;
+  ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO px_app;
+  ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO px_app;
   RETURN n;
 END $t$;
+
+-- Moves an old shop schema (one schema per shop) into the shared tables, keeping every id, then renames it
+-- moved_<schema> (kept until it is dropped by hand: the way back). Every table's row count is checked; any difference,
+-- a column or a table the shared tables do not have, stops the move (nothing is kept of it). Run as the owner, in a transaction, with session_replication_role = replica.
+CREATE OR REPLACE FUNCTION public.px_move_shop(src text, sid integer) RETURNS jsonb LANGUAGE plpgsql AS $m$
+DECLARE
+  r record;
+  cols text;
+  a bigint;
+  b bigint;
+  moved integer := 0;
+  m date;
+BEGIN
+  IF src !~ '^shop_[1-9][0-9]{0,8}$' OR to_regnamespace(src) IS NULL THEN RAISE EXCEPTION 'px_move_shop: no schema %', src; END IF;
+  IF EXISTS (SELECT 1 FROM public.profiles WHERE shop_id = sid) THEN RAISE EXCEPTION 'px_move_shop: shop % already has rows', sid; END IF;
+  -- the months of its events must have their part of order_events
+  IF to_regclass(format('%I.order_events', src)) IS NOT NULL THEN
+    FOR m IN EXECUTE format('SELECT DISTINCT date_trunc(''month'', at)::date FROM %I.order_events', src) LOOP
+      PERFORM public.ensure_events_partition(m);
+    END LOOP;
+  END IF;
+  FOR r IN SELECT c.relname FROM pg_class c
+            WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p') AND NOT c.relispartition
+              AND c.relname NOT IN ('schema_migrations', 'shop_counters')
+              AND EXISTS (SELECT 1 FROM pg_attribute x WHERE x.attrelid = c.oid AND x.attname = 'shop_id')
+              AND to_regclass(format('%I.%I', src, c.relname)) IS NOT NULL LOOP
+    -- the columns both have (a column only the old schema has is reported, never silently dropped)
+    SELECT string_agg(quote_ident(o.attname), ', ' ORDER BY o.attnum) INTO cols
+      FROM pg_attribute o JOIN pg_attribute n ON n.attrelid = format('public.%I', r.relname)::regclass AND n.attname = o.attname AND NOT n.attisdropped AND n.attgenerated = ''
+     WHERE o.attrelid = format('%I.%I', src, r.relname)::regclass AND o.attnum > 0 AND NOT o.attisdropped AND o.attgenerated = '';
+    EXECUTE format('SELECT count(*) FROM %I.%I', src, r.relname) INTO a;
+    IF a = 0 THEN CONTINUE; END IF;
+    IF EXISTS (SELECT 1 FROM pg_attribute o
+                WHERE o.attrelid = format('%I.%I', src, r.relname)::regclass AND o.attnum > 0 AND NOT o.attisdropped
+                  AND NOT EXISTS (SELECT 1 FROM pg_attribute n WHERE n.attrelid = format('public.%I', r.relname)::regclass AND n.attname = o.attname AND NOT n.attisdropped)) THEN
+      RAISE EXCEPTION 'px_move_shop(%): % has columns the shared table does not have', src, r.relname;
+    END IF;
+    EXECUTE format('INSERT INTO public.%I (shop_id, %s) SELECT %s, %s FROM %I.%I', r.relname, cols, sid, cols, src, r.relname);
+    EXECUTE format('SELECT count(*) FROM public.%I WHERE shop_id = %s', r.relname, sid) INTO b;
+    IF a <> b THEN RAISE EXCEPTION 'px_move_shop(%): % has % rows, % moved', src, r.relname, a, b; END IF;
+    moved := moved + 1;
+  END LOOP;
+  -- a table of the old schema the shared tables do not have, with rows: stop (nothing must be left behind)
+  FOR r IN SELECT c.relname FROM pg_class c WHERE c.relnamespace = to_regnamespace(src) AND c.relkind IN ('r', 'p') AND NOT c.relispartition
+              AND c.relname <> 'schema_migrations' AND to_regclass(format('public.%I', c.relname)) IS NULL LOOP
+    EXECUTE format('SELECT count(*) FROM %I.%I', src, r.relname) INTO a;
+    IF a > 0 THEN RAISE EXCEPTION 'px_move_shop(%): table % has no shared table', src, r.relname; END IF;
+  END LOOP;
+  -- its counters (order references, SAV tickets, own tracking numbers) carry on where they were
+  FOR r IN SELECT unnest(ARRAY['order_ref_seq', 'complaint_ref_seq', 'order_track_seq']) AS name LOOP
+    IF to_regclass(format('%I.%I', src, r.name)) IS NOT NULL THEN
+      EXECUTE format('SELECT CASE WHEN is_called THEN last_value ELSE last_value - 1 END FROM %I.%I', src, r.name) INTO a;
+      INSERT INTO public.shop_counters (shop_id, name, value) VALUES (sid, r.name, a)
+        ON CONFLICT (shop_id, name) DO UPDATE SET value = greatest(public.shop_counters.value, EXCLUDED.value);
+    END IF;
+  END LOOP;
+  EXECUTE format('ALTER SCHEMA %I RENAME TO %I', src, 'moved_' || src);
+  RETURN jsonb_build_object('tables', moved);
+END $m$;
+
+-- after a move: every table's id sequence goes above the highest id of every shop (new rows never collide)
+CREATE OR REPLACE FUNCTION public.px_fix_sequences() RETURNS void LANGUAGE plpgsql AS $q$
+DECLARE r record; v bigint;
+BEGIN
+  FOR r IN SELECT s.relname AS seq, t.relname AS tbl, a.attname AS col
+             FROM pg_class s JOIN pg_depend d ON d.objid = s.oid AND d.deptype IN ('a', 'i')
+             JOIN pg_class t ON t.oid = d.refobjid JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
+            WHERE s.relkind = 'S' AND s.relnamespace = 'public'::regnamespace AND NOT t.relispartition LOOP
+    EXECUTE format('SELECT max(%I) FROM public.%I', r.col, r.tbl) INTO v;
+    IF v IS NOT NULL THEN PERFORM setval(format('public.%I', r.seq), v); END IF;
+  END LOOP;
+END $q$;
 
 -- the own tracking number (PXT…), counted per shop
 CREATE OR REPLACE FUNCTION public.px_next_tracking() RETURNS text LANGUAGE sql AS
@@ -204,11 +278,14 @@ $f$ SELECT 'PXT' || lpad(((public.px_next('order_track_seq') * 48271) % 10000000
 /** Grants on the platform's schema and the extensions' (no row level security there: the platform's own tables). */
 export const GRANTS_SQL = String.raw`
 DO $g$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'px_app') THEN RETURN; END IF;
   IF to_regnamespace('platform') IS NOT NULL THEN
     GRANT USAGE ON SCHEMA platform TO px_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA platform TO px_app;
     GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA platform TO px_app;
     GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA platform TO px_app;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA platform GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO px_app;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA platform GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO px_app;
   END IF;
   IF to_regnamespace('ext') IS NOT NULL THEN
     GRANT USAGE ON SCHEMA ext TO px_app;
@@ -231,10 +308,41 @@ export function sharedSql(sql: string): string {
       /^"?platform"?\./i.test(table) ? m : `${ins}${table}${mid}(shop_id, `,
     );
   }
+  // GROUP BY x.id used to let the query read x's other columns (id was x's key): the key is (shop_id, id) now
+  if (/GROUP\s+BY/i.test(out)) {
+    out = out.replace(/(GROUP\s+BY\s+)((?:[^;()]|\([^()]*\))+?)(?=\s+(?:HAVING|ORDER|LIMIT|OFFSET|WINDOW|UNION|INTERSECT|EXCEPT|FOR)\b|\s*\)|\s*;|\s*$)/gi, (m, kw, list) => {
+      const items = splitTop(list);
+      if (!items.some((i) => /^(\w+\.)?id$/.test(i.trim()))) return m;
+      const out2: string[] = [];
+      for (const i of items) {
+        const k = /^(\w+\.)?id$/.exec(i.trim());
+        if (k && !items.some((j) => j.trim() === `${k[1] ?? ''}shop_id`)) out2.push(`${k[1] ?? ''}shop_id`);
+        out2.push(i.trim());
+      }
+      return kw + out2.join(', ');
+    });
+  }
   if (/\b(nextval|setval)\s*\(/i.test(out)) {
     out = out
       .replace(/\bnextval\s*\(\s*'(order_ref_seq|complaint_ref_seq|order_track_seq)'(?:::regclass)?\s*\)/gi, "public.px_next('$1')")
       .replace(/\bsetval\s*\(\s*'(order_ref_seq|complaint_ref_seq|order_track_seq)'(?:::regclass)?\s*,/gi, "public.px_setval('$1',");
   }
+  return out;
+}
+
+/** a, b(c, d), e → ["a", "b(c, d)", "e"] (commas outside parentheses) */
+function splitTop(list: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of list) {
+    if (ch === '(') depth++;
+    if (ch === ')') depth--;
+    if (ch === ',' && depth === 0) {
+      out.push(cur);
+      cur = '';
+    } else cur += ch;
+  }
+  out.push(cur);
   return out;
 }
