@@ -345,6 +345,7 @@
     "noProduct": "No product",
     "locked": "Order already shipped: products cannot be changed.",
     "history": "See history",
+    "historyShort": "History",
     "packs": "Packs",
     "with": "With",
     "variants": "{{n}} variants",
@@ -360,7 +361,8 @@
     "saved": "{{ref}}: products saved",
     "merged": "Same variant already in the order: quantities merged",
     "add": "Add a product",
-    "addPh": "+ Add a product: type the name, colour or SKU…",
+    "addPh": "Add a product: type the name, colour or SKU…",
+    "addPhShort": "Add a product…",
     "inOrder": "already in the order (+1)",
     "note": {
       "client": "Customer",

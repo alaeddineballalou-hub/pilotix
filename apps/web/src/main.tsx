@@ -25,6 +25,7 @@ import { AGENCY_PAGES, MARKETER_PAGES, PAGES } from './pages/registry';
 import { Loading } from './ui/kit';
 import { Toasts } from './ui/toast';
 import { installEdgeScroll } from './ui/edgeScroll';
+import { SelectPicker } from './ui/SelectPicker';
 import './styles/tokens.css';
 import './styles/legacy.css';
 import './styles/pilotix.css';
@@ -32,6 +33,8 @@ import './styles/responsive.css';
 import './styles/ux.css';
 import './styles/skins.css';
 import './styles/app.css';
+// lists to choose from and date fields in the Doux look (last: over the older rules)
+import './styles/fields.css';
 
 applyTheme(store.get('theme') as 'light' | 'dark' | null);
 // the Pilotix look (styles/skins.css); also set in index.html so the first paint already has it
@@ -272,6 +275,8 @@ createRoot(document.getElementById('root')!).render(
         <RiskAskHost />
         <Toasts />
         <AppUpdateHost />
+        {/* every <select> opens our own list (ui/SelectPicker) */}
+        <SelectPicker />
       </SessionProvider>
     </QueryClientProvider>
   </StrictMode>,

@@ -188,3 +188,24 @@ test('pages older than 90 days are removed; the page never shows a customer or a
   assert.doesNotMatch(html, /javascript:|onerror|data:image/);
   assert.doesNotMatch(html, /DA\b|PX\d/);
 });
+
+test('the small pictures of the cart and « Ajouter un produit »: the colour’s photo first, then the product’s; the agent’s products only', async () => {
+  const { productId, variantId } = await withPhoto();
+  const all: any = await call('confirmation.thumbs', samira, {});
+  assert.equal(all.products[productId], PNG, 'the product’s own photo');
+  // a colour with its own photo: that one for the colour, the product keeps its own
+  if (variantId !== null) {
+    const RED = PNG.replace('ggg==', 'ggh==');
+    await db.query('UPDATE product_variants SET photo = $2 WHERE id = $1', [variantId, RED]);
+    const r: any = await call('confirmation.thumbs', samira, { ids: [productId] });
+    assert.equal(r.variants[variantId], RED);
+    assert.equal(r.products[productId], PNG);
+    assert.deepEqual(Object.keys(r.products).map(Number), [productId], 'these products only');
+    await db.query('UPDATE product_variants SET photo = NULL WHERE id = $1', [variantId]);
+  }
+  // a picture too big for a list, or not an image, is left out
+  await db.query('UPDATE products SET photo = $2 WHERE id = $1', [productId, 'javascript:alert(1)']);
+  const bad: any = await call('confirmation.thumbs', samira, { ids: [productId] });
+  assert.notEqual(bad.products[productId], 'javascript:alert(1)');
+  await db.query('UPDATE products SET photo = $2 WHERE id = $1', [productId, PNG]);
+});

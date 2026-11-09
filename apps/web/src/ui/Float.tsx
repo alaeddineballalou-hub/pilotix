@@ -13,17 +13,23 @@ export function Float({ anchor, onClose, children, className = '', minWidth = 28
       const a = anchor.current?.getBoundingClientRect();
       if (!a) return;
       const M = 12;
-      const below = window.innerHeight - a.bottom - M - 6;
+      // the part of the page still visible (a phone's keyboard hides the bottom: the list stays above it)
+      const vv = window.visualViewport;
+      const bottom = vv ? Math.min(window.innerHeight, vv.offsetTop + vv.height) : window.innerHeight;
+      const below = bottom - a.bottom - M - 6;
       const above = a.top - M - 6;
-      const width = Math.max(a.width, minWidth);
+      // never wider than the screen (a phone: the whole width, 12 px from each edge)
+      const width = Math.min(window.innerWidth - 2 * M, Math.max(a.width, minWidth));
       const left = Math.min(Math.max(M, a.left), window.innerWidth - width - M);
       if (below >= Math.min(maxHeight, 260) || below >= above) setPos({ top: a.bottom + 6, left, width, max: Math.max(140, Math.min(maxHeight, below)) });
       else setPos({ bottom: window.innerHeight - a.top + 6, left, width, max: Math.max(140, Math.min(maxHeight, above)) });
     };
     place();
+    const vv = window.visualViewport;
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);
-    return () => (window.removeEventListener('resize', place), window.removeEventListener('scroll', place, true));
+    vv?.addEventListener('resize', place);
+    return () => (window.removeEventListener('resize', place), window.removeEventListener('scroll', place, true), vv?.removeEventListener('resize', place));
   }, [anchor, minWidth, maxHeight]);
   useEffect(() => {
     const down = (e: MouseEvent) => {

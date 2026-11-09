@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { iso, num } from '../db';
 import { bad, Ctx, notFound, proc, publicApi } from '../rpc';
 import { getSetting } from '../settings';
-import { PhotoSrc, productPhotos } from './dellalphotos';
+import { mimeOf, PhotoSrc, productPhotos } from './dellalphotos';
 import { getOrder } from './orders';
 import { assignedProductIds } from './productscope';
 
@@ -97,6 +97,65 @@ export async function photoThumbs(ctx: Ctx, items: ItemT[]) {
     out.push({ productId: i.productId, variantId: i.variantId, all: i.all, label, colours, count: photos.length, thumbs });
   }
   return out;
+}
+
+/** a picture an <img> can show at once: a data: picture (not too big) or an https link */
+const smallPic = (s: unknown): string | null => {
+  const v = String(s ?? '').trim();
+  if (/^data:image\/(jpeg|png|gif|webp|svg\+xml)[;,]/i.test(v)) return v.length <= 120_000 ? v : null;
+  return /^https:\/\/[^\s"'<>]{8,1900}$/i.test(v) ? v : null;
+};
+
+/**
+ * One small picture per product and per colour / size, for the confirmation screens (the cart's lines, « Ajouter un
+ * produit »): the colour's own photo, its HD photo or its pages' photo; the product's photo, its HD photo, then its
+ * pages' first photo. A few queries for the whole catalogue (the agent's products only).
+ */
+export async function catalogThumbs(ctx: Ctx, only?: number[]) {
+  const allowed = await assignedProductIds(ctx);
+  const ids = (only ?? null)?.filter((id) => allowed === null || allowed.includes(id)) ?? allowed;
+  const P = await ctx.db.query(`SELECT id, photo FROM products WHERE active AND NOT is_service${ids ? ' AND id = ANY($1)' : ''}`, ids ? [ids] : []);
+  const products: Record<number, string> = {};
+  const variants: Record<number, string> = {};
+  if (!P.length) return { products, variants };
+  const pids = P.map((p: any) => num(p.id));
+  const V = await ctx.db.query('SELECT id, product_id, photo FROM product_variants WHERE active AND product_id = ANY($1) ORDER BY id', [pids]);
+  const HD = await ctx.db.query(`SELECT product_id, variant_id, mini, thumb FROM product_photos WHERE kind = 'photo' AND product_id = ANY($1) ORDER BY position, id`, [pids]).catch(() => []);
+  const pages = await ctx.db.query('SELECT product_id, images FROM landing_pages WHERE product_id = ANY($1) ORDER BY active DESC, updated_at DESC', [pids]).catch(() => []);
+  // the pages' pictures: a stored one (its 160 px copy) or a link / drawing
+  const refs = pages.flatMap((p: any) => {
+    const a = typeof p.images === 'string' ? JSON.parse(p.images) : p.images;
+    return (Array.isArray(a) ? a : []).filter((x: any) => x && (x.id || x.url)).map((x: any) => ({ p: num(p.product_id), v: x.v == null ? null : Number(x.v), id: x.id ? Number(x.id) : null, url: x.url ?? null }));
+  });
+  const imgIds = [...new Set(refs.filter((r) => r.id).map((r) => r.id as number))];
+  const imgs = imgIds.length ? await ctx.db.query('SELECT id, t160 FROM landing_images WHERE id = ANY($1)', [imgIds]).catch(() => []) : [];
+  const t160 = new Map<number, string>(imgs.map((r: any) => [num(r.id), String(r.t160)]));
+  const refPic = (r: (typeof refs)[number]) => (r.id ? (t160.has(r.id) ? smallPic(`data:${mimeOf(t160.get(r.id)!) ?? 'image/webp'};base64,${t160.get(r.id)}`) : null) : smallPic(r.url));
+  const hdPic = (r: any) => smallPic(r.mini) ?? smallPic(r.thumb);
+  const first = <T,>(xs: T[], f: (x: T) => string | null) => {
+    for (const x of xs) {
+      const s = f(x);
+      if (s) return s;
+    }
+    return null;
+  };
+  for (const v of V) {
+    const vid = num(v.id);
+    const s = smallPic(v.photo) ?? first(HD.filter((r: any) => r.variant_id != null && num(r.variant_id) === vid), hdPic) ?? first(refs.filter((r) => r.v === vid), refPic);
+    if (s) variants[vid] = s;
+  }
+  for (const p of P) {
+    const pid = num(p.id);
+    const mine = HD.filter((r: any) => num(r.product_id) === pid);
+    const s =
+      smallPic(p.photo) ??
+      first(mine.filter((r: any) => r.variant_id == null), hdPic) ??
+      first(refs.filter((r) => r.p === pid), refPic) ??
+      first(mine, hdPic) ??
+      first(V.filter((v: any) => num(v.product_id) === pid), (v: any) => variants[num(v.id)] ?? null);
+    if (s) products[pid] = s;
+  }
+  return { products, variants };
 }
 
 /** a random key of 24 hex characters (the page's link cannot be guessed) */
@@ -239,6 +298,8 @@ img{display:block;width:100%;height:auto;border-radius:12px;margin:0 0 8px;backg
 export const photoShareProcs = {
   /** « Envoyer des photos »: the photos each product (and colour) would send, small copies for the window. */
   'confirmation.photoThumbs': proc(['confirmation'], z.object({ items: z.array(Item).min(1).max(PHOTO_ITEMS_MAX * 2) }), (ctx, i) => photoThumbs(ctx, i.items)),
+  /** A small picture per product and colour (the cart's lines, « Ajouter un produit »); `ids`: these products only. */
+  'confirmation.thumbs': proc(['confirmation'], z.object({ ids: z.array(id).max(200).optional() }), (ctx, i) => catalogThumbs(ctx, i.ids)),
   /** « Envoyer des photos »: the page of this send (its link goes in the WhatsApp message). */
   'confirmation.photoShare': proc(['confirmation'], z.object({ orderId: id, items: z.array(Item).min(1).max(PHOTO_ITEMS_MAX) }), (ctx, i) => sharePhotos(ctx, i.orderId, i.items)),
   /** A send's page, for its public address: read by the server only (admin = the system). */

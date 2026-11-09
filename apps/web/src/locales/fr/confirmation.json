@@ -345,6 +345,7 @@
     "noProduct": "Aucun produit",
     "locked": "Commande déjà partie : produits non modifiables.",
     "history": "Voir l’historique",
+    "historyShort": "Historique",
     "packs": "Packs",
     "with": "Avec",
     "variants": "{{n}} variantes",
@@ -360,7 +361,8 @@
     "saved": "{{ref}} : produits enregistrés",
     "merged": "Même variante déjà dans la commande : quantités regroupées",
     "add": "Ajouter un produit",
-    "addPh": "+ Ajouter un produit : tapez le nom, la couleur ou le SKU…",
+    "addPh": "Ajouter un produit : tapez le nom, la couleur ou le SKU…",
+    "addPhShort": "Ajouter un produit…",
     "inOrder": "déjà dans la commande (+1)",
     "note": {
       "client": "Client",

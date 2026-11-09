@@ -270,7 +270,9 @@
     "buy": "Order {{n}}",
     "setLevel": "Level",
     "buySel": "Order the selection",
-    "help": "A product is on alert when what is left (in stock − reserved) goes down to its level; without a level, when none is left. “Order” prepares a purchase: enough for 30 days of sales plus the level, at the last purchase price."
+    "help": "A product is on alert when what is left (in stock − reserved) goes down to its level; without a level, when none is left. “Order” prepares a purchase: enough for 30 days of sales plus the level, at the last purchase price.",
+    "nVariants_one": "{{count}} variant to reorder",
+    "nVariants_other": "{{count}} variants to reorder"
   },
   "buy": {
     "title": "New purchase",

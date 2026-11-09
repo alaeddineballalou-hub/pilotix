@@ -38,11 +38,35 @@ html .btn.primary.sph-wa:disabled, html[data-skin][data-theme] .btn.primary.sph-
 .btn.sph-wa .bji { width: 17px; height: 17px; }
 .sph-msg-ready { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 14px; line-height: 1.45; padding: 12px 14px; border-radius: 12px; background: #e7f7ec; color: #12341f; border: 1px solid #c7ebd3; }
 [data-theme="dark"] .sph-msg-ready { background: rgba(31, 157, 85, .14); color: var(--ink); border-color: rgba(31, 157, 85, .35); }
-/* the button on the order's products (the count beside it never breaks) */
+/* the cart's title row: « PANIER 2 produits » then two small round buttons (Photos, Historique). They never break or
+   leave the card: on a narrow card they go under the title, at the end. */
 .qd6-cnt { white-space: nowrap; }
-.qd6-photos { margin-inline-start: auto; letter-spacing: 0; text-transform: none; font-weight: 700; gap: 6px; }
-.qd6-photos + .qd6-hist { margin-inline-start: 10px; }
-.qd6-photos .bji { width: 15px; height: 15px; color: #1f9d55; }
+.qd6-cart-h { flex-wrap: wrap; row-gap: 8px; }
+.qd6-ht { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.qd6-hacts { display: inline-flex; gap: 8px; margin-inline-start: auto; }
+.qd6-hacts .qd6-hbtn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 13px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; letter-spacing: 0; text-transform: none; white-space: nowrap; cursor: pointer; transition: border-color .15s, background .15s; }
+.qd6-hacts .qd6-hbtn:hover:not(:disabled) { border-color: #F7A823; background: #fffaf1; }
+.qd6-hacts .qd6-hbtn:disabled { opacity: .55; cursor: default; }
+.qd6-hacts .qd6-hbtn .bji { width: 15px; height: 15px; }
+.qd6-photos .bji { color: #1f9d55; }
+.qd6-hist .bji { color: var(--c-accent-ink, #8f4d00); }
+[data-theme="dark"] .qd6-hacts .qd6-hbtn:hover:not(:disabled) { background: rgba(247, 168, 35, .08); }
+/* a product's own picture in its square (cart line, « Ajouter un produit »): the box icon when it has none */
+.qd6-thumb.pic, .pxf-ic.pic { overflow: hidden; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.qd6-thumb img, .pxf-ic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pxf-prod .pxf-ic { width: 44px; height: 44px; border-radius: 11px; }
+.pxf-prod .pxf-it { padding: 8px; min-height: 56px; }
+/* « Ajouter un produit »: a magnifier in the field */
+.qd2-add { position: relative; }
+.qd2-add-i { position: absolute; inset-inline-start: 13px; top: 50%; transform: translateY(-50%); width: 17px; height: 17px; color: var(--muted); pointer-events: none; z-index: 1; }
+html body .qd2-add .qd2-add-in { padding-inline-start: 38px !important; text-overflow: ellipsis; }
+/* a narrow card (the phone): Photos and Historique share the row under the title, half each */
+@container qd6 (max-width: 520px) {
+  .qd6-hacts { flex: 1 1 100%; }
+  .qd6-hacts .qd6-hbtn { flex: 1 1 0; justify-content: center; height: 40px; }
+}
+/* « Ajouter un produit »: the name and colour in full (two lines at most), never cut after a few letters */
+.pxf-prod .pxf-main b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
 /* a phone: two steps — 1 the message (it makes the customer's chat), 2 the real photos into that chat */
 .sph-steps { display: flex; flex-direction: column; gap: 10px; }
 .sph-step { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; align-items: start; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }

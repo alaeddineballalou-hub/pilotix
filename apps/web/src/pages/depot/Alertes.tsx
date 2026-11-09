@@ -69,12 +69,20 @@ export function Alertes() {
           </div>
         ) : (
           <div className="pd-alerts">
-            {groups.map((group) => (
-              <div key={group.productId} className="pd-card">
-                <button type="button" className="btn ghost" aria-expanded={expanded.has(group.productId)} onClick={() => setExpanded((old) => { const next = new Set(old); next.has(group.productId) ? next.delete(group.productId) : next.add(group.productId); return next; })}>
-                  <Icon name={expanded.has(group.productId) ? "chevron-down" : "chevron-right"} /> {group.productName} · {group.rows.length} variants to reorder
+            {groups.map((group) => {
+              const open = expanded.has(group.productId);
+              const out = group.rows.some((a) => a.level === 'out');
+              return (
+              <div key={group.productId} className={`pd-agrp${open ? ' open' : ''}`}>
+                <button type="button" className="pd-agrp-h" aria-expanded={open} onClick={() => setExpanded((old) => { const next = new Set(old); next.has(group.productId) ? next.delete(group.productId) : next.add(group.productId); return next; })}>
+                  <Icon name="chevron" className="pd-agrp-chev" />
+                  <span className="pd-agrp-t">
+                    <b>{group.productName}</b>
+                    <small>{t('produits.alerts.nVariants', { count: group.rows.length })}</small>
+                  </span>
+                  <span className={`pd-lvl ${out ? 'out' : 'low'}`}>{t(`produits.alerts.${out ? 'out' : 'low'}`)}</span>
                 </button>
-                {expanded.has(group.productId) && group.rows.map((a) => {
+                {open && <div className="pd-agrp-rows">{group.rows.map((a) => {
               const perDay = a.sold30 / 30;
               const days = perDay > 0 ? Math.max(0, Math.floor(a.available / perDay)) : null;
               const on = sel.has(keyOf(a));
@@ -146,9 +154,10 @@ export function Alertes() {
                   </div>
                 </article>
               );
-                })}
+                })}</div>}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
         <p className="pd-note">{t('produits.alerts.help')}</p>

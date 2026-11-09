@@ -39,6 +39,19 @@ type Prod = Catalog[number];
 const SendPhotos = lazy(() => import('./SendPhotos').then((m) => ({ default: m.SendPhotos })));
 
 const useCatalog = () => useRpc('confirmation.catalog', {}, { staleTime: 5 * 60_000 });
+/** The small picture of a product, its colour's first (null: none): these products only, or the whole catalogue. */
+function useThumbs(ids: number[] | null, enabled = true) {
+  const q = useRpc('confirmation.thumbs', ids ? { ids } : {}, { staleTime: 10 * 60_000, enabled: enabled && (ids === null || ids.length > 0) });
+  return (productId: number, variantId: number | null): string | null => (variantId !== null ? q.data?.variants[variantId] : undefined) ?? q.data?.products[productId] ?? null;
+}
+/** a product's picture in a small square (the box icon when it has none) */
+function Thumb({ src, className }: { src: string | null; className: string }) {
+  return (
+    <span className={`${className}${src ? ' pic' : ''}`} aria-hidden="true">
+      {src ? <img src={src} alt="" loading="lazy" decoding="async" /> : <Icon name="package" />}
+    </span>
+  );
+}
 const norm = (s: string) =>
   s
     .toLowerCase()
@@ -60,6 +73,9 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
   const mgrHold = hasRole('agent_manager', 'vendeur');
   const initial = useMemo<Line[]>(() => order.items.map((i) => ({ productId: i.productId, variantId: i.variantId, name: i.name, variantTitle: i.variantTitle, qty: i.qty, unitPrice: i.unitPrice, isUpsell: i.isUpsell })), [order]);
   const [L, setL] = useState<Line[]>(initial);
+  /** the pictures of the cart's products */
+  const cartIds = useMemo(() => [...new Set(L.map((l) => l.productId))].sort((a, b) => a - b), [L]);
+  const thumbOf = useThumbs(cartIds);
   const [photos, setPhotos] = useState(false);
   const [fee, setFee] = useState(order.deliveryFee);
   const [err, setErr] = useState('');
@@ -390,14 +406,19 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
           })()}
         </section>
         <section className="qd6-card">
-          <div className="qd6-h">
-            {t('confirmation.d6.cart')} <span className="qd6-cnt">{t('confirmation.d6.nProducts', { count: L.length })}</span>
-            <button type="button" className="btn small qd6-photos" onClick={() => setPhotos(true)} disabled={!cat.data} title={t('confirmation.photos.btnHint')}>
-              <Icon name="image" /> {phone ? t('confirmation.photos.btnShort') : t('confirmation.photos.btn')}
-            </button>
-            <button type="button" className="linkish qd6-hist" onClick={() => openOrder(order.id)}>
-              {t('confirmation.d.history')}
-            </button>
+          <div className="qd6-h qd6-cart-h">
+            <span className="qd6-ht">
+              {t('confirmation.d6.cart')} <span className="qd6-cnt">{t('confirmation.d6.nProducts', { count: L.length })}</span>
+            </span>
+            {/* two small round buttons, never cut: the photos to send, the order's history */}
+            <span className="qd6-hacts">
+              <button type="button" className="qd6-hbtn qd6-photos" onClick={() => setPhotos(true)} disabled={!cat.data} title={t('confirmation.photos.btnHint')}>
+                <Icon name="image" /> {phone ? t('confirmation.photos.btnShort') : t('confirmation.photos.btn')}
+              </button>
+              <button type="button" className="qd6-hbtn qd6-hist" onClick={() => openOrder(order.id)} title={t('confirmation.d.history')}>
+                <Icon name="history" /> {phone ? t('confirmation.d.historyShort') : t('confirmation.d.history')}
+              </button>
+            </span>
           </div>
           {photos &&
             cat.data &&
@@ -416,9 +437,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
             const n = stockOf(l);
             return (
               <div key={`${l.productId}-${l.variantId}-${i}`} className={`qd6-line${lineState(i) === 'off' ? ' off' : ''}`}>
-                <span className="qd6-thumb" aria-hidden="true">
-                  <Icon name="package" />
-                </span>
+                <Thumb className="qd6-thumb" src={thumbOf(l.productId, l.variantId)} />
                 <div className="qd6-pn">
                   <b>
                     {l.name}{' '}
@@ -487,7 +506,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
               </div>
             );
           })}
-          <div className="qd6-add">{editable ? <AddProduct catalog={cat.data} lines={L} onPick={add} /> : <p className="muted small">{t('confirmation.d.locked')}</p>}</div>
+          <div className="qd6-add">{editable ? <AddProduct catalog={cat.data} lines={L} onPick={add} placeholder={phone ? t('confirmation.d.addPhShort') : undefined} /> : <p className="muted small">{t('confirmation.d.locked')}</p>}</div>
         </section>
           {editable && (
             <section className="qd6-card qd6-related" aria-label={t('confirmation.d6.offer')}>
@@ -943,6 +962,12 @@ export function AddProduct({ catalog, lines, onPick, markLabel, placeholder }: {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
+  /** each result with its picture (loaded when the list first opens) */
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    if (open) setSeen(true);
+  }, [open]);
+  const thumbOf = useThumbs(null, seen);
   type Opt = { p: Prod; v: Prod['variants'][number] | null; label: string; hay: string; price: number; stock: number | null };
   const opts = useMemo<Opt[]>(
     () =>
@@ -978,9 +1003,7 @@ export function AddProduct({ catalog, lines, onPick, markLabel, placeholder }: {
     const has = lines.some((l) => l.productId === o.p.id && l.variantId === (o.v?.id ?? null));
     return (
       <button key={`${o.p.id}-${o.v?.id ?? 0}`} type="button" role="option" aria-selected={i === k} className={`pxf-it ${i === k ? 'on' : ''}`} onMouseEnter={() => setK(i)} onMouseDown={(e) => (e.preventDefault(), pick(o))}>
-        <span className="pxf-ic">
-          <Icon name="package" />
-        </span>
+        <Thumb className="pxf-ic" src={thumbOf(o.p.id, o.v?.id ?? null)} />
         <span className="pxf-main">
           <b>
             {o.p.name}
@@ -1005,6 +1028,7 @@ export function AddProduct({ catalog, lines, onPick, markLabel, placeholder }: {
   const main = list.filter((o) => !linkedIds.includes(o.p.id));
   return (
     <div className="combo qd2-add" ref={wrap}>
+      <Icon name="search" className="qd2-add-i" />
       <input
         ref={ref}
         type="search"

@@ -261,6 +261,8 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'confirmation.release': order('id'),
   // « Envoyer des photos »: the catalogue's photos (its products only), the page for one of its orders
   'confirmation.photoThumbs': free,
+  // the small pictures of the cart's lines and « Ajouter un produit » (the proc keeps to the agency's products)
+  'confirmation.thumbs': free,
   'confirmation.photoShare': order('orderId'),
   'confirmation.setTry': order('ids'),
   'confirmation.block': order('ids'),

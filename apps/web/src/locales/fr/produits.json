@@ -270,7 +270,9 @@
     "buySel": "Commander la sélection",
     "help": "Un produit est en alerte quand ce qui reste (en stock − réservé) descend à son seuil ; sans seuil, quand il n’en reste plus. « Commander » prépare un achat : de quoi tenir 30 jours de ventes plus le seuil, au dernier prix d’achat.",
     "negative": "Le stock enregistré est négatif ({{n}}) : il ne correspond plus à ce qu’il y a au dépôt.",
-    "countIt": "Compter ce produit"
+    "countIt": "Compter ce produit",
+    "nVariants_one": "{{count}} variante à racheter",
+    "nVariants_other": "{{count}} variantes à racheter"
   },
   "buy": {
     "title": "Nouvel achat",

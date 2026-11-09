@@ -314,7 +314,7 @@ function RoleList({ role, onNew, onEdit, agency }: { role: Role | null; onNew: (
                       )}
                     </td>
                     {payCol && (
-                      <td data-l={t('admin.users.colPay')}>
+                      <td data-l={t('admin.users.colPay')} className="px-paytd">
                         {(() => {
                           const p = payOf.get(u.id);
                           if (!p || (!p.plans.length && !p.missing.length)) return <span className="muted">—</span>;
