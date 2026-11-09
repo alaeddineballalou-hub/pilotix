@@ -51,7 +51,7 @@ const WORDS: Partial<Record<CourierKind, Partial<Record<FollowStatus, string>>>>
 export const word = (kind: CourierKind, s: FollowStatus) => WORDS[kind]?.[s] ?? WORDS.yalidine![s] ?? s;
 
 /** Next step of a parcel on the road, or null when it does not move this time. */
-export function nextStep(cur: FollowStatus, hasTracking: boolean, r = Math.random()): FollowStatus | null {
+export function nextStep(cur: FollowStatus, hasTracking: boolean, r = Math.random(), expanded = false): FollowStatus | null {
   switch (cur) {
     case 'prepared':
       return hasTracking && r < 0.5 ? 'shipped' : null;
@@ -62,11 +62,11 @@ export function nextStep(cur: FollowStatus, hasTracking: boolean, r = Math.rando
     case 'failed':
       return r < 0.35 ? 'out_for_delivery' : r < 0.5 ? 'returning' : null;
     case 'alert':
-      return r < 0.2 ? 'out_for_delivery' : null;
+      return r < 0.2 ? 'out_for_delivery' : expanded && r < 0.3 ? 'returning' : null;
     case 'returning':
-      return r < 0.45 ? 'returned' : null;
+      return expanded && r < 0.45 ? 'returned' : null;
     case 'in_exchange':
-      return r < 0.4 ? 'exchanged' : null;
+      return expanded && r < 0.4 ? 'exchanged' : null;
     default:
       return null;
   }
