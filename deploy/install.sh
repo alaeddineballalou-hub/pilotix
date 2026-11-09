@@ -85,14 +85,15 @@ fi
 echo "==> Building and starting (the first time takes 5-10 minutes)"
 C="docker compose -f deploy/docker-compose.yml --env-file deploy/.env"
 # the server's own lines, safe for a public log: only what matters, cut short, no e-mails, no phone or long numbers
-safe_log() { $C logs --no-color --tail "${1:-300}" server 2>&1 | grep -iE 'error|fail|migrat|moved|shared|tenant|ready on port|exception|killed|memory' | tail -n "${2:-25}" | sed -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/***@***/g; s/[0-9]{7,}/#######/g' | cut -c1-260 | sed 's/^/    | /' || true; }
+safe_log() { $C logs --no-color --tail "${1:-300}" server 2>&1 | grep -av -E '^\s*$|RouterExplorer|RoutesResolver|InstanceLoader' | tail -n "${2:-25}" | sed -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/***@***/g; s/[0-9]{7,}/#######/g' | cut -c1-260 | sed 's/^/    | /' || true; }
 # what the database is doing right now (a long move of the shops' data shows here), without any data in it
 db_now() { $C exec -T postgres psql -U pilotix -d pilotix -tAc "SELECT coalesce(string_agg(round(extract(epoch FROM now() - query_start))::text || ' s: ' || left(regexp_replace(query, '[0-9]{4,}|''[^'']*''', '…', 'g'), 90), ' / '), 'idle') FROM pg_stat_activity WHERE datname = 'pilotix' AND state = 'active' AND pid <> pg_backend_pid()" 2>/dev/null | cut -c1-400 || true; }
 echo "    before the switch: server $($C ps --format '{{.State}} {{.Status}}' server 2>/dev/null | head -1)"
 safe_log 400 30
 echo "    database now: $(db_now)"
 # the move into shared tables (or any long migration) still running: never stopped half-way by a new start
-if $C exec -T postgres psql -U pilotix -d pilotix -tAc "SELECT count(*) FROM pg_stat_activity WHERE datname = 'pilotix' AND state = 'active' AND (query ILIKE '%px_tenantize%' OR query ILIKE '%px_move_shop%' OR query ILIKE '%ALTER TABLE%' OR query ILIKE '%CREATE INDEX%')" 2>/dev/null | grep -qv '^0$'; then
+RUNNING=$($C exec -T postgres psql -U pilotix -d pilotix -tAc "SELECT count(*) FROM pg_stat_activity WHERE datname = 'pilotix' AND state = 'active' AND pid <> pg_backend_pid() AND (query ILIKE '%px_tenantize%' OR query ILIKE '%px_move_shop%' OR query ILIKE '%ALTER TABLE%' OR query ILIKE '%CREATE INDEX%')" 2>/dev/null | tr -dc '0-9' || true)
+if [ "${RUNNING:-0}" -gt 0 ]; then
   echo "    a migration is running: the new images are built, the server is not restarted until it ends"
   $C build
   $C up -d --no-recreate
@@ -103,9 +104,16 @@ fi
 # answered, so this waited the full 3 minutes on every update)
 HEALTH="fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
 # up to 20 minutes: moving a big shop's data the first time takes a while; a line every minute says what is happening
+CRASHES=0
 for i in $(seq 1 400); do
   $C exec -T server node -e "$HEALTH" >/dev/null 2>&1 && break
-  [ $((i % 20)) = 0 ] && echo "    waiting ($((i * 3)) s): server $($C ps --format '{{.State}}' server 2>/dev/null | head -1); database: $(db_now)"
+  if [ $((i % 20)) = 0 ]; then
+    STATE=$($C ps --format '{{.State}}' server 2>/dev/null | head -1 || true)
+    echo "    waiting ($((i * 3)) s): server $STATE; database: $(db_now)"
+    # it keeps stopping and starting again (a crash, not a long migration): no use waiting longer
+    if [ "$STATE" = restarting ]; then CRASHES=$((CRASHES + 1)); else CRASHES=0; fi
+    [ "$CRASHES" -ge 3 ] && break
+  fi
   sleep 3
 done
 # said in one line the Deploy button reads: the proof the new version runs, checked here on the server itself
