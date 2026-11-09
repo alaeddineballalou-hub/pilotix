@@ -1,7 +1,7 @@
 // Shops of a multi-shop server: reading them, their subscription state, creating one (its own schema), the demo shop,
 // and the first start (the server owner's shop becomes shop #1, its first admin the platform owner).
 import { AgencyPrices, APP_PAGES, CODE_PREFIX, effectiveFeatures, isFeatureKey, isPartnerKind, PartnerKind, pricesOfKind, PUBLIC_ROOTS, ShopInfo, ShopKind, ShopState } from '@pilotix/shared';
-import { Db, isoOrNull, migrate, num, numOrNull } from '../db';
+import { Db, isoOrNull, migrate, num, numOrNull, TENANTIZE_SQL } from '../db';
 import type { ShopCtx } from '../rpc';
 import { sealPlatformSetting } from '../secretbox';
 import { landingSettings, landingStore, STORE_RESERVED } from '../modules/landingquery';
@@ -458,8 +458,26 @@ export function makePassword(): string {
 }
 
 /** Applies the shops' migrations to one schema and keeps its login index. */
+/** Is this database in shared tables (every shop's rows in "public", platform/shared.ts)? */
+export async function isShared(t: Tenancy): Promise<boolean> {
+  return (await t.platform.query(`SELECT to_regproc('public.px_shop_id') IS NOT NULL AS s`))[0]?.s === true;
+}
+
+/**
+ * The rows the migrations put in a new shop (in shared tables they ran once, for shop #1 only). A test checks this
+ * list against what the migrations write (sharedtables.test.ts): a migration that adds a default row must add it here.
+ */
+export async function newShopRows(db: Db): Promise<void> {
+  await db.query(`INSERT INTO settings (key, value) VALUES ('referral', '{"cash":2000,"months":1}') ON CONFLICT (key) DO NOTHING`);
+}
+
+/** A shop's tables: in shared tables they are everyone's (made once); a shop only needs its default rows. */
 export async function migrateShop(t: Tenancy, schema: string): Promise<string[]> {
-  const applied = await migrate(t.shop(schema), (sql) => t.exec(schema, sql));
+  if (await isShared(t)) {
+    await newShopRows(t.shop(schema));
+    return [];
+  }
+  const applied = await migrate(t.shop(schema), (sql) => t.exec(schema, sql), { legacy: true });
   await ensureLoginTrigger(t, schema);
   return applied;
 }
@@ -545,7 +563,7 @@ export async function provisionShop(t: Tenancy, n: NewShop): Promise<Shop> {
   const schema = row.schema_name as string;
   if (schema !== schemaOf(id) || !SCHEMA_RE.test(schema)) throw new Error('Invalid schema');
   try {
-    await t.exec('platform', `CREATE SCHEMA ${schema}`);
+    if (!(await isShared(t))) await t.exec('platform', `CREATE SCHEMA ${schema}`);
     await migrateShop(t, schema);
     const db = t.shop(schema);
     if (n.demo) await fillDemo(db, n.name.trim(), now);
@@ -582,10 +600,26 @@ async function fillDemo(db: Db, name: string, now: number) {
   await setSetting(db, 'shop', { ...DEFAULT_SETTINGS.shop, name });
 }
 
-/** Removes a store's data (its schema) and its e-mails from the login index. */
+/**
+ * Removes a store's data and its e-mails from the login index. Shared tables: every row marked with its shop, in every
+ * table (as the owner, without the triggers: as a dropped schema did); its old schema too if it still has one.
+ */
 export async function dropShopData(t: Tenancy, id: number, schema: string) {
-  if (!/^shop_\d+$/.test(schema)) throw new Error('Only a shop_<id> schema can be dropped');
+  if (!/^shop_\d+$/.test(schema) || schema !== schemaOf(id)) throw new Error('Only a shop_<id> schema can be dropped');
   await t.platform.query('DELETE FROM platform.logins WHERE shop_id = $1', [id]);
+  if (await isShared(t))
+    await t.exec(
+      'public',
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       DO $d$ DECLARE r record; BEGIN
+         FOR r IN SELECT c.relname FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'shop_id' AND NOT a.attisdropped
+                   WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p') AND NOT c.relispartition LOOP
+           EXECUTE format('DELETE FROM public.%I WHERE shop_id = %s', r.relname, ${Number(id)});
+         END LOOP;
+       END $d$;
+       COMMIT;`,
+    );
   await t.exec('platform', `DROP SCHEMA IF EXISTS ${schema} CASCADE`);
 }
 
@@ -594,7 +628,7 @@ export async function resetDemoShop(t: Tenancy, id: number, now = Date.now()): P
   const s = await loadShop(t, { id });
   if (!s || !s.demo || s.primary) throw new Error('Not a demo shop');
   await dropShopData(t, s.id, s.schema);
-  await t.exec('platform', `CREATE SCHEMA ${s.schema}`);
+  if (!(await isShared(t))) await t.exec('platform', `CREATE SCHEMA ${s.schema}`);
   await migrateShop(t, s.schema);
   await fillDemo(t.shop(s.schema), s.name, now);
   await setShopStore(t.shop(s.schema), s.slug);
@@ -863,16 +897,31 @@ export async function ensureOwnerStaff(t: Tenancy): Promise<void> {
 
 /**
  * Everything a start needs, in order: the platform's tables, shop #1's tables, the first start, then every other
- * shop's tables. Returns what was applied, per schema.
+ * shop. Shared tables (platform/shared.ts): the first start after the change brings each old shop schema up to date,
+ * converts "public" to shared tables, then moves each old schema in (one transaction per shop, checked table by table;
+ * the old schema is kept as moved_shop_<id>, the way back). Returns what was applied, per schema.
  */
 export async function migrateAll(t: Tenancy): Promise<Record<string, string[]>> {
   const out: Record<string, string[]> = {};
   out.platform = await migratePlatform(t);
-  out.public = await migrate(t.shop('public'), (sql) => t.exec('public', sql));
+  out.public = await migrate(t.shop('public'), (sql) => t.exec('public', sql), { legacy: true });
   await bootstrapPlatform(t);
+  const shops = (await loadShops(t)).filter((s) => !s.primary && s.status !== 'archived' && s.status !== 'deleted');
+  // old schemas still there (never moved): up to date first, the old way (before "public" is converted)
+  const legacy = new Set(
+    (await t.platform.query(`SELECT nspname FROM pg_namespace WHERE nspname ~ '^shop_[1-9][0-9]*$'`)).map((r) => String(r.nspname)),
+  );
+  if (!(await isShared(t))) for (const s of shops) if (legacy.has(s.schema)) out[s.schema] = await migrateShop(t, s.schema);
+  // "public" in shared tables (and anything new since converted)
+  await t.exec('public', TENANTIZE_SQL);
   for (const s of await loadShops(t)) {
-    if (s.primary || s.status === 'archived' || s.status === 'deleted') continue;
-    out[s.schema] = await migrateShop(t, s.schema);
+    if (s.primary || !legacy.has(s.schema)) continue;
+    await t.exec('public', `BEGIN; SET LOCAL session_replication_role = replica; SELECT public.px_move_shop('${s.schema}', ${Number(s.id)}); COMMIT;`);
+    (out[s.schema] ??= []).push('moved to shared tables');
+  }
+  if (legacy.size) await t.exec('public', 'SELECT public.px_fix_sequences()');
+  for (const s of shops) {
+    await migrateShop(t, s.schema);
     await setShopStore(t.shop(s.schema), s.slug);
   }
   return out;
