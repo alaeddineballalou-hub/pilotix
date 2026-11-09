@@ -62,7 +62,7 @@ export function nextStep(cur: FollowStatus, hasTracking: boolean, r = Math.rando
     case 'failed':
       return r < 0.35 ? 'out_for_delivery' : r < 0.5 ? 'returning' : null;
     case 'alert':
-      return r < 0.2 ? 'out_for_delivery' : r < 0.3 ? 'returning' : null;
+      return r < 0.2 ? 'out_for_delivery' : null;
     case 'returning':
       return r < 0.45 ? 'returned' : null;
     case 'in_exchange':
