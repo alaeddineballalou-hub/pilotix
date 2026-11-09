@@ -14,7 +14,8 @@ import { turnstileCheck, turnstileSiteKey } from './turnstile';
 import { push, pushKeys } from './push';
 
 const PATH = Symbol('pilotix.search_path');
-type Client = PoolClient & { [PATH]?: string };
+const ROLE = Symbol('pilotix.role');
+type Client = PoolClient & { [PATH]?: string; [ROLE]?: boolean };
 
 /** A SQL error leaves the connection usable; anything else (connection lost, protocol error) destroys it. */
 const broken = (e: unknown) => {
@@ -23,22 +24,43 @@ const broken = (e: unknown) => {
 };
 
 /**
- * Every shop through one pool. Each connection remembers the search path it was given and changes it only when the
- * next query is for another schema (outside any transaction, so a rollback never undoes it). bigint/numeric come back
- * as strings; the core converts with num().
+ * Every shop through one pool. Shared tables (core platform/shared.ts): a connection takes the app's role (px_app,
+ * filtered by row level security) and the shop of the query (app.shop_id) before each query; it remembers both and
+ * sets them again only when the next query is for another shop (outside any transaction, so a rollback never undoes
+ * them). A database not moved yet keeps the old way (search_path = the shop's schema). bigint/numeric come back as
+ * strings; the core converts with num().
  */
 export function poolTenancy(pool: Pool): Tenancy {
-  const ready = async (c: Client, path: string) => {
-    if (c[PATH] === path) return;
-    c[PATH] = undefined;
-    await c.query(`SELECT set_config('search_path', $1, false)`, [path]);
-    c[PATH] = path;
+  let mode: Promise<core.SharedMode> | null = null;
+  const getMode = () => {
+    if (!mode) {
+      mode = core.detectShared(async (sql) => (await pool.query(sql)).rows);
+      mode.catch(() => (mode = null)); // looked at again next time
+    }
+    return mode;
   };
-  const scoped = (path: string): Db => {
-    const inTx = (c: Client): Db => {
+  /** Puts the connection on this schema's shop; true: shared tables. */
+  const ready = async (c: Client, schema: string): Promise<boolean> => {
+    const m = await getMode();
+    const key = m.shared ? `shop:${core.shopIdOf(schema, m.primary)}` : `path:${core.searchPath(schema)}`;
+    if (m.shared && !c[ROLE]) {
+      c[PATH] = undefined;
+      await c.query('SET ROLE px_app');
+      c[ROLE] = true;
+    }
+    if (c[PATH] === key) return m.shared;
+    c[PATH] = undefined; // unknown until the query below succeeds
+    if (m.shared) await c.query(core.SHARED_ENTER, [String(core.shopIdOf(schema, m.primary))]);
+    else await c.query(`SELECT set_config('search_path', $1, false)`, [core.searchPath(schema)]);
+    c[PATH] = key;
+    return m.shared;
+  };
+  const scoped = (schema: string, isShop: boolean): Db => {
+    const sqlOf = (shared: boolean, sql: string) => (shared && isShop ? core.sharedSql(sql) : sql);
+    const inTx = (c: Client, shared: boolean): Db => {
       const db: Db = {
         async query(sql, params = []) {
-          return (await c.query(sql, params as unknown[])).rows;
+          return (await c.query(sqlOf(shared, sql), params as unknown[])).rows;
         },
         async tx(fn) {
           return fn(db); // already in a transaction
@@ -51,8 +73,8 @@ export function poolTenancy(pool: Pool): Tenancy {
         const c = (await pool.connect()) as Client;
         let bad: Error | undefined;
         try {
-          await ready(c, path);
-          return (await c.query(sql, params as unknown[])).rows;
+          const shared = await ready(c, schema);
+          return (await c.query(sqlOf(shared, sql), params as unknown[])).rows;
         } catch (e) {
           if (broken(e)) bad = e as Error;
           throw e;
@@ -64,10 +86,10 @@ export function poolTenancy(pool: Pool): Tenancy {
         const c = (await pool.connect()) as Client;
         let bad: Error | undefined;
         try {
-          await ready(c, path);
+          const shared = await ready(c, schema);
           await c.query('BEGIN');
           try {
-            const out = await fn(inTx(c));
+            const out = await fn(inTx(c, shared));
             await c.query('COMMIT');
             return out;
           } catch (e) {
@@ -85,22 +107,28 @@ export function poolTenancy(pool: Pool): Tenancy {
   };
   const shops = new Map<string, Db>();
   return {
-    platform: scoped(core.searchPath('platform')),
+    platform: scoped('platform', false),
     shop(schema) {
+      core.shopIdOf(schema, 1); // checks the name
       let d = shops.get(schema);
-      if (!d) shops.set(schema, (d = scoped(core.searchPath(schema))));
+      if (!d) shops.set(schema, (d = scoped(schema, true)));
       return d;
     },
+    // migrations: as the owner (no filter), in the schema itself; afterwards the database may have changed way
     async exec(schema, sql) {
       const c = (await pool.connect()) as Client;
       let bad: Error | undefined;
       try {
-        await ready(c, core.searchPath(schema));
+        c[PATH] = undefined;
+        if (c[ROLE]) await c.query('RESET ROLE');
+        c[ROLE] = false;
+        await c.query(`SELECT set_config('search_path', $1, false), set_config('app.shop_id', '', false)`, [core.searchPath(schema)]);
         await c.query(sql);
       } catch (e) {
         if (broken(e)) bad = e as Error;
         throw e;
       } finally {
+        mode = null;
         c.release(bad);
       }
     },
