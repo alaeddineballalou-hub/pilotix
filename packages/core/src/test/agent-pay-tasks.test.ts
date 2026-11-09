@@ -127,8 +127,7 @@ test('Agent Pay types pay only their assigned task: role checks, dual-role agent
     const secondLink=await rpc(chief,'agency.request',{storeId:secondStore.id,tasks:['confirmation','suivi']});
     await rpc(second,'partners.answer',{id:secondLink.id,accept:true,products:null});
     const secondProduct=Number((await second.db.query("INSERT INTO products(name,sku,price) VALUES('Second original','SECOND-TASKS',10000) RETURNING id"))[0].id);
-    // shared tables: new accounts get ids no shop used (moved shops keep theirs, which may repeat: sharedtables.test)
-    assert.ok(await mapped(second,'conf'),'mapped in the second store');
+    assert.equal(await mapped(second,'conf'),confId,'seller-local profile ids may repeat');
     await rpc(chief,'management.planAssign',{targetKind:'agent',targetId:people.follow,planId:suiviPlan});
     await make('conf','follow',{ctx:second,product:secondProduct,delivered:true});
     assert.equal((await pay('conf')).total,600);assert.equal((await pay('follow')).total,240);
