@@ -424,7 +424,7 @@ class DemoBackend implements Backend {
         const db = t.shop('public');
         await core.migrate(db, (sql) => t.exec('public', sql));
         this.progress('Création des commandes d’exemple…');
-        await core.seedDemo(db, { orders: Number(import.meta.env.VITE_DEMO_ORDERS) || 1200 });
+        await core.seedDemo(db, { orders: Number(import.meta.env.VITE_DEMO_ORDERS) || 1800, expanded: true });
         await core.seedPilotDemo(db);
         // Pilot AI › Comptes: the sample linked account's Page and ad account, used by this boutique
         await core.seedSocialPreview(db);

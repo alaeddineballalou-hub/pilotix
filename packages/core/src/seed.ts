@@ -102,15 +102,18 @@ async function bulkInsert(db: Db, table: string, cols: string[], rows: unknown[]
 const iso = (t: number) => new Date(t).toISOString();
 
 /** Fills an empty database with a realistic shop: team, catalog, couriers, ~1,500 orders over 60 days. */
-export async function seedDemo(db: Db, opts: { orders?: number; now?: number } = {}) {
+export async function seedDemo(db: Db, opts: { orders?: number; now?: number; expanded?: boolean } = {}) {
   const now = opts.now ?? Date.now();
   const N = opts.orders ?? 1500;
+  const expanded = opts.expanded === true;
   seed = 20261021;
   const hash = await hashPassword(DEMO_PASSWORD);
+  if (expanded) await db.query(`INSERT INTO settings (key, value) VALUES ('demoExpanded', 'true') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
 
   // team
   const users: Record<string, number> = {};
-  for (const a of DEMO_ACCOUNTS) {
+  const extraKeys = ['manager3', 'conf4', 'conf5', 'suivi2', 'suivi3', 'depot2', 'livreur3'];
+  for (const a of (expanded ? DEMO_ACCOUNTS : DEMO_ACCOUNTS.filter(a => !extraKeys.includes(a.key)))) {
     const r = await db.query(
       `INSERT INTO profiles (name, email, phone, password_hash, roles, last_seen_at, presence) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
       [a.name, a.email, `06${String(Math.floor(rnd() * 1e8)).padStart(8, '0')}`, hash, a.roles, iso(now - rnd() * 3_600_000),
@@ -118,7 +121,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
     );
     users[a.key] = num(r[0].id);
   }
-  const agents = [users.conf1, users.conf2, users.conf3, users.manager1, users.manager2];
+  const agents = [users.conf1, users.conf2, users.conf3, users.manager1, users.manager2, ...(expanded ? [users.conf4, users.conf5, users.manager3] : [])];
 
   // settings
   const grid: Record<string, { home: number; desk: number }> = {};
@@ -133,6 +136,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
   await setSetting(db, 'teams', [
     { id: 't1', name: 'Équipe Yacine', managerId: users.manager1, agentIds: [users.conf1, users.conf2] },
     { id: 't2', name: 'Équipe Amel', managerId: users.manager2, agentIds: [users.conf3] },
+    ...(expanded ? [{ id: 't3', name: 'Équipe Mouna', managerId: users.manager3, agentIds: [users.conf4, users.conf5] }] : []),
   ]);
   await setSetting(db, 'webhook', { key: 'demo-webhook-key' });
 
@@ -149,7 +153,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
   const yal = await comp('Yalidine', 'yalidine', true);
   const zr = await comp('ZR Express', 'zr', true);
   const own = await comp('Nos livreurs', 'own', false);
-  await db.query('UPDATE profiles SET livreur_company_id=$1 WHERE id = ANY($2)', [own, [users.livreur, users.livreur2]]);
+  await db.query('UPDATE profiles SET livreur_company_id=$1 WHERE id = ANY($2)', [own, expanded ? [users.livreur, users.livreur2, users.livreur3] : [users.livreur, users.livreur2]]);
   await setSetting(db, 'shop', { ...DEFAULT_SETTINGS.shop, name: 'Pilotix Démo', defaultCompanyId: yal, savPhone: '0550 11 22 33' });
   const feeRows: unknown[][] = [];
   for (let w = 1; w <= 69; w++) {
@@ -235,7 +239,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
     }
     const agent = conf === 'new' && chance(0.5) ? null : pick(agents);
     const company = follow && follow !== 'to_prepare' ? (chance(0.12) ? own : chance(0.6) ? yal : zr) : follow ? yal : null;
-    const livreur = company === own ? pick([users.livreur, users.livreur2]) : null;
+    const livreur = company === own ? pick(expanded ? [users.livreur, users.livreur2, users.livreur3] : [users.livreur, users.livreur2]) : null;
     const attempts = ['no_answer', 'busy'].includes(conf) ? 1 + Math.floor(rnd() * 2) : conf === 'confirmed' && chance(0.3) ? 1 : 0;
     const tConfirm = created + (0.2 + rnd() * 6) * 3_600_000;
     const tPrep = tConfirm + (2 + rnd() * 16) * 3_600_000;
