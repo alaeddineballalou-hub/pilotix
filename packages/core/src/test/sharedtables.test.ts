@@ -127,6 +127,14 @@ test('every shop table is converted: shop_id first in every key and index, the f
              WHERE c.oid IN (${shopTables}) AND NOT c.relispartition AND pg_get_indexdef(i.indexrelid) ~ 'USING btree' AND pg_get_indexdef(i.indexrelid) !~ 'btree \\(shop_id'`),
     [],
   );
+  // every index is whole: none left on a partitioned parent alone, and each partition carries every parent index
+  assert.deepEqual(await q(`SELECT indexrelid::regclass::text i FROM pg_index WHERE NOT indisvalid AND indrelid IN (${shopTables})`), []);
+  assert.deepEqual(
+    await q(`SELECT ch.relname, count(*) FILTER (WHERE TRUE) FROM pg_inherits h JOIN pg_class p ON p.oid = h.inhparent AND p.relkind = 'p' JOIN pg_class ch ON ch.oid = h.inhrelid
+             WHERE p.oid IN (${shopTables})
+               AND (SELECT count(*) FROM pg_index WHERE indrelid = ch.oid) < (SELECT count(*) FROM pg_index WHERE indrelid = p.oid) GROUP BY ch.relname`),
+    [],
+  );
   // the views read with the reader's filter
   assert.deepEqual(await q(`SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'v' AND NOT coalesce('security_invoker=on' = ANY (reloptions), false)`), []);
   // converting again changes nothing

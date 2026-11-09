@@ -133,7 +133,7 @@ BEGIN
               AND pg_get_indexdef(i.indexrelid) ~ 'USING btree \('
               AND NOT (pg_get_indexdef(i.indexrelid) ~ 'USING btree \(shop_id[,)]') LOOP
     EXECUTE format('DROP INDEX public.%I', r.idx);
-    EXECUTE regexp_replace(r.def, 'USING btree \(', 'USING btree (shop_id, ');
+    EXECUTE regexp_replace(replace(r.def, ' ON ONLY ', ' ON '), 'USING btree \(', 'USING btree (shop_id, ');
   END LOOP;
 
   -- 5. the foreign keys again: (shop_id, col) → (shop_id, key); « SET NULL » empties only the column, never shop_id
@@ -158,7 +158,16 @@ BEGIN
               AND pg_get_indexdef(i.indexrelid) ~ 'USING btree \('
               AND NOT (pg_get_indexdef(i.indexrelid) ~ 'USING btree \(shop_id[,)]') LOOP
     EXECUTE format('DROP INDEX public.%I', r.idx);
-    EXECUTE regexp_replace(r.def, 'USING btree \(', 'USING btree (shop_id, ');
+    EXECUTE regexp_replace(replace(r.def, ' ON ONLY ', ' ON '), 'USING btree \(', 'USING btree (shop_id, ');
+  END LOOP;
+  -- 6b. a partitioned table's index made on the parent alone (older run) has no index on its partitions: made again whole
+  FOR r IN SELECT ci.relname AS idx, pg_get_indexdef(i.indexrelid) AS def
+             FROM pg_index i JOIN pg_class ci ON ci.oid = i.indexrelid JOIN pg_class c ON c.oid = i.indrelid
+             JOIN pg_namespace s ON s.oid = c.relnamespace
+            WHERE s.nspname = 'public' AND c.relkind = 'p' AND NOT i.indisvalid
+              AND NOT EXISTS (SELECT 1 FROM pg_constraint k WHERE k.conindid = i.indexrelid) LOOP
+    EXECUTE format('DROP INDEX public.%I', r.idx);
+    EXECUTE replace(r.def, ' ON ONLY ', ' ON ');
   END LOOP;
 
   -- 7. row level security on every shop table (and its partitions), for reading and writing
