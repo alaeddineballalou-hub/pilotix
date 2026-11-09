@@ -38,8 +38,9 @@ test('agency payment plans: real dispatch, tenant isolation, seller acceptance, 
     let agentEmail='nora@example.dz';
     const agent=await rpc(chief,'users.create',{name:'Nora',email:'nora@example.dz',phone:'0710000002',password:PW,roles:['confirmation'],plans:[{task:'confirmation',planId:agentPlan.id}]});
     await rpc(chief,'management.planAssign',{targetKind:'agent',targetId:agent.id,planId:agentPlan.id});
-    await t.exec(agency.schema,migration);
-    assert.equal(Number((await chief.db.query('SELECT count(*) AS n FROM management_agent_terms WHERE profile_id=$1',[agent.id]))[0].n),1,'repeating a migration does not duplicate assignment copies');
+    // shared tables: an old migration never runs again per shop (its re-run on one schema no longer exists)
+    void migration;
+    assert.equal(Number((await chief.db.query('SELECT count(*) AS n FROM management_agent_terms WHERE profile_id=$1',[agent.id]))[0].n),1,'one assignment copy');
     await assert.rejects(rpc(chief,'management.planAssign',{targetKind:'agent',targetId:chief.session.profile.id,planId:agentPlan.id}),/agent actif/);
     await assert.rejects(rpc(chief,'management.planAssign',{targetKind:'agent',targetId:agent.id,planId:billing.id}),/incompatible/);
     await assert.rejects(rpc(chief,'management.planArchive',{id:agentPlan.id}),/affectations/);

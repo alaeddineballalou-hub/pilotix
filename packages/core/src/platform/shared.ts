@@ -275,6 +275,18 @@ CREATE OR REPLACE FUNCTION public.px_next_tracking() RETURNS text LANGUAGE sql A
 $f$ SELECT 'PXT' || lpad(((public.px_next('order_track_seq') * 48271) % 100000000)::text, 8, '0') $f$;
 `;
 
+/** After the conversion (it reads shop_id). */
+export const AFTER_SHARED_SQL = String.raw`
+-- The one place a shop reads another shop's rows: a partner's people (a confirmation agency, a marketer) read inside the
+-- store's own transaction when their accounts are put in step with the store (agencies.ts syncLink). Only profiles,
+-- only for the code that asks for them (no request can call it with SQL of its own).
+CREATE OR REPLACE FUNCTION public.px_shop_profiles(sid integer) RETURNS SETOF public.profiles
+  LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, ext AS
+$f$ SELECT * FROM public.profiles WHERE shop_id = sid $f$;
+
+GRANT EXECUTE ON FUNCTION public.px_shop_profiles(integer) TO px_app;
+`;
+
 /** Grants on the platform's schema and the extensions' (no row level security there: the platform's own tables). */
 export const GRANTS_SQL = String.raw`
 DO $g$ BEGIN

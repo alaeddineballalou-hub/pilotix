@@ -188,7 +188,10 @@ const fits = (kind: PartnerKind, roles: string[], tasks: AgencyTask[]) => isLead
  */
 export async function agencyPeople(db: Db, schema?: string): Promise<AgencyPerson[]> {
   if (schema !== undefined && !SCHEMA_RE.test(schema)) throw new Error('Invalid schema');
-  const table = schema === undefined ? 'profiles' : `${schema}.profiles`;
+  // another shop's people: in shared tables through the one function allowed to read them, else its schema
+  const other = schema === undefined ? null : /^shop_(\d+)$/.exec(schema);
+  const shared = other && (await db.query(`SELECT to_regproc('public.px_shop_profiles') IS NOT NULL AS s`))[0]?.s === true;
+  const table = schema === undefined ? 'profiles' : shared ? `public.px_shop_profiles(${Number(other![1])})` : `${schema}.profiles`;
   const rows = await db.query(`SELECT id, name, email, roles, password_hash, language, agency_sellers FROM ${table} WHERE active AND email NOT LIKE '%@pilotix.invalid' ORDER BY name`);
   return rows.map((p: any) => ({
     id: num(p.id),

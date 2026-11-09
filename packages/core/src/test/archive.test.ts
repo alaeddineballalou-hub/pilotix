@@ -34,7 +34,7 @@ test('every column that points to an account, a product, a variant or a depot is
     `SELECT c.conrelid::regclass::text AS tb, a.attname AS col, c.confrelid::regclass::text AS ref
        FROM pg_constraint c JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
       WHERE c.contype = 'f' AND c.connamespace = current_schema()::regnamespace
-        AND c.confrelid::regclass::text IN ('profiles', 'products', 'product_variants', 'warehouses')`,
+        AND c.confrelid::regclass::text IN ('profiles', 'products', 'product_variants', 'warehouses') AND a.attname <> 'shop_id'`,
   );
   const known = new Set([...USER_REFS, ...PRODUCT_REFS, ...VARIANT_REFS, ...WAREHOUSE_REFS].map(([t, c]) => `${t}.${c}`).concat(NOT_REFS));
   const people = /^(user_id|agent_id|follow_agent_id|livreur_id|marketer_id|profile_id|seller_id|referrer_id|manager_id|assigned_to)$|_by$/;
