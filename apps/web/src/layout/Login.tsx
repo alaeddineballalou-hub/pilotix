@@ -32,7 +32,7 @@ export function Login() {
     let on = true;
     forgotAvailable().then((ok) => on && setCanReset(ok));
     signupInfo().then((r) => on && setCanSignup(r.open));
-    serverDemo().then((d) => on && d.available && setSrvDemo(d.accounts.filter((a) => ['admin', 'conf1', 'depot', 'livreur', 'marketer'].includes(a.key))));
+    serverDemo().then((d) => on && d.available && setSrvDemo(d.accounts.filter((a) => ['admin', 'vendeur', 'manager1', 'conf1', 'conf4', 'suivi', 'suivi2', 'depot', 'depot2', 'livreur', 'livreur3', 'marketer'].includes(a.key))));
     return () => {
       on = false;
     };
