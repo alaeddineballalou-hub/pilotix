@@ -91,7 +91,8 @@ export const NAV: NavItem[] = [
   // Point de vente: the boutique's counter, shown once an administrator turns it on (Management › Modules)
   { id: 'pos', icon: 'store', roles: ['depot'], subs: ['vendre', 'ventes', 'cloture', 'reglages'], onlyIf: () => moduleOn('pos') },
   // AI Pilot: the AI agents. Pilot Message (Dellal) sells in the inbox, Pilot Content plans the posts and publishes them,
-  // Pilot Comments answers the comments, AI Spy reads the competitors' Facebook ads in Algeria (pages/ads/Spy.tsx; in
+  // Espace créateur (under it) keeps the video pieces on the user's computer, Pilot Comments answers the comments,
+  // AI Spy reads the competitors' Facebook ads in Algeria (pages/ads/Spy.tsx; in
   // the plans it is still Marketing's AI Spy); Comptes: the Facebook and TikTok accounts they use (an administrator
   // links them, pages/comptes).
   // Confirmation agents and their supervisors do not see it (they confirm orders): the owner (vendeur), the marketers,
@@ -100,10 +101,12 @@ export const NAV: NavItem[] = [
     id: 'pilotai',
     icon: 'sparkles',
     roles: ['vendeur', 'marketer'],
-    pages: ['messages', 'social', 'cm', 'spy', 'comptes'],
+    pages: ['messages', 'social', 'createur', 'cm', 'spy', 'comptes'],
     children: [
       { id: 'messages', href: '#/messages', count: 'msgs', tone: 'nc-a', icon: 'chat', roles: ['vendeur'] },
       { id: 'social', href: '#/social', icon: 'calendar', roles: ['marketer'] },
+      // Espace créateur, under Pilot Content (its plan switch): the video pieces, kept on the user's computer
+      { id: 'createur', href: '#/createur', icon: 'film', roles: ['marketer'] },
       { id: 'cm', href: '#/cm', count: 'cm', tone: 'nc-a', icon: 'comments', roles: ['marketer'] },
       { id: 'spy', href: '#/spy', icon: 'eye', roles: ['marketer'] },
       { id: 'comptes', href: '#/comptes', icon: 'link', roles: [] },
@@ -112,6 +115,7 @@ export const NAV: NavItem[] = [
   { id: 'messages', icon: 'chat', roles: ['vendeur'], hidden: true },
   { id: 'cm', icon: 'comments', roles: ['marketer'], hidden: true },
   { id: 'social', icon: 'calendar', roles: ['marketer'], hidden: true },
+  { id: 'createur', icon: 'film', roles: ['marketer'], hidden: true },
   { id: 'spy', icon: 'eye', roles: ['marketer'], hidden: true },
   { id: 'comptes', icon: 'link', roles: [], hidden: true },
   // Pilot Automations: what Pilotix does by itself, a group of its own whose lines are the parts of pages/notify — the

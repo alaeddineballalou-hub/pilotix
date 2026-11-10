@@ -102,6 +102,8 @@ EXTRA.pulse = '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>';
 EXTRA.beaker = '<path d="M10 2v7.53a2 2 0 0 1-.21.9L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.07-10.12a2 2 0 0 1-.21-.9V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/>';
 // Pilot Automations: what Pilotix does by itself
 EXTRA.zap = '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>';
+// AI Pilot › Espace créateur: the folder of the user's computer where the videos stay
+EXTRA.folder = '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>';
 const ALL = { ...(icons as Record<string, string>), ...EXTRA };
 export type IconName = keyof typeof ALL | string;
 

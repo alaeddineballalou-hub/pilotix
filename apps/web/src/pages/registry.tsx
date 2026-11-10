@@ -35,6 +35,8 @@ export const PAGES: Record<string, ComponentType<PageProps>> = {
   messages: P(() => import('./messages'), 'Messages'),
   cm: P(() => import('./cm'), 'Cm'),
   social: P(() => import('./social'), 'Social'),
+  // AI Pilot › Espace créateur (under Pilot Content): the video pieces, on the user's computer only
+  createur: P(() => import('./createur'), 'Createur'),
   notify: P(() => import('./notify'), 'Notify'),
   comptes: P(() => import('./comptes'), 'Comptes'),
   // AI Pilot › AI Spy (it was a tab of Marketing)

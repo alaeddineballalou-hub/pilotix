@@ -1,0 +1,78 @@
+{
+  "title": "Espace créateur",
+  "about": "Mettez vos petits morceaux de vidéo. Pilotix les mélange pour faire beaucoup de pubs.",
+  "help": "Chaque produit a son dossier sur votre ordinateur, avec 3 petits dossiers : hooks, corps et cta. Vous pouvez aussi mettre des vidéos dedans vous-même (avec l'explorateur de fichiers), puis revenir ici : elles apparaissent.",
+  "unsupported": "Pour l'instant, l'Espace créateur marche sur ordinateur avec Chrome ou Edge.",
+  "unsupportedHelp": "Ouvrez Pilotix dans Chrome ou Edge sur votre ordinateur pour ajouter vos vidéos.",
+  "intro": {
+    "title": "Où garder vos vidéos ?",
+    "text": "Choisissez un dossier sur votre ordinateur. Vos vidéos restent dedans : rien n'est envoyé sur internet."
+  },
+  "choose": "Choisir mon dossier",
+  "reopenTitle": "On rouvre votre dossier ?",
+  "reopenText": "Votre navigateur demande votre accord pour ouvrir encore le dossier « {{name}} ».",
+  "reopen": "Rouvrir mon dossier",
+  "other": "Choisir un autre dossier",
+  "change": "Changer de dossier",
+  "folderTitle": "Le dossier de vos vidéos, sur cet ordinateur",
+  "pickFail": "Impossible d'ouvrir ce dossier. Essayez un autre dossier.",
+  "denied": "Le dossier n'est pas ouvert : il faut dire oui dans la fenêtre du navigateur.",
+  "lost": "Le dossier n'est plus là (déplacé ou supprimé). Choisissez-le encore.",
+  "product": "Produit",
+  "noProducts": "Ajoutez d'abord un produit dans Produits & stock.",
+  "private": "Vos vidéos restent sur cet ordinateur.",
+  "refresh": "Actualiser",
+  "kinds": {
+    "hooks": {
+      "title": "Hooks",
+      "sub": "le début, 2–4 s",
+      "hint": "Ce qui arrête le pouce : une question, un problème, une réaction."
+    },
+    "corps": {
+      "title": "Corps",
+      "sub": "le milieu, 10–25 s",
+      "hint": "On montre le produit et ce qu'il fait."
+    },
+    "cta": {
+      "title": "CTA",
+      "sub": "la fin, 2–5 s",
+      "hint": "On dit quoi faire : commander, prix, livraison."
+    }
+  },
+  "add": "+ Ajouter",
+  "empty": "Pas encore de vidéo. Cliquez sur « + Ajouter » ou glissez vos fichiers ici.",
+  "drop": "Lâchez vos vidéos ici",
+  "copying": "Copie de la vidéo {{n}} sur {{total}}…",
+  "copied_one": "{{count}} vidéo ajoutée",
+  "copied_other": "{{count}} vidéos ajoutées",
+  "same_one": "{{count}} vidéo était déjà dans le dossier",
+  "same_other": "{{count}} vidéos étaient déjà dans le dossier",
+  "copyFail": "Impossible de copier la vidéo {{name}}.",
+  "copyStop": "La copie s'est arrêtée. Réessayez.",
+  "notVideo": "Ce n'est pas une vidéo : {{name}}",
+  "reading": "Lecture…",
+  "unreadable": "Aperçu impossible",
+  "tooShort": "Un peu court (conseil : {{min}}–{{max}} s)",
+  "tooLong": "Un peu long (conseil : {{min}}–{{max}} s)",
+  "delete": "Supprimer {{name}}",
+  "del": {
+    "title": "Supprimer ce morceau ?",
+    "text": "La vidéo « {{name}} » sera enlevée du dossier « {{folder}} » sur votre ordinateur.",
+    "yes": "Supprimer",
+    "no": "Annuler"
+  },
+  "deleted": "Vidéo supprimée",
+  "deleteFail": "Impossible de supprimer cette vidéo.",
+  "formula": "{{h}} hooks × {{b}} corps × {{c}} CTA",
+  "ads_one": "= {{count}} pub possible",
+  "ads_other": "= {{count}} pubs possibles",
+  "missing": "Il manque {{list}}.",
+  "and": " et ",
+  "need": {
+    "hooks": "au moins 1 hook",
+    "corps": "au moins 1 corps",
+    "cta": "au moins 1 CTA"
+  },
+  "mix": "Mélanger →",
+  "soon": "Bientôt : le mélange"
+}

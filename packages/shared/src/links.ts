@@ -45,6 +45,8 @@ export const APP_PAGES = [
   'messages',
   'cm',
   'social',
+  // AI Pilot › Espace créateur (the video pieces stay on the user's computer)
+  'createur',
   'notify',
   'comptes',
   'marketing',
