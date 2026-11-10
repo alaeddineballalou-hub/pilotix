@@ -1,0 +1,78 @@
+{
+  "title": "Creator space",
+  "about": "Add your small video pieces. Pilotix mixes them to make lots of ads.",
+  "help": "Each product has its own folder on your computer, with 3 small folders: hooks, corps and cta. You can also put videos in them yourself (with your file explorer), then come back here: they show up.",
+  "unsupported": "For now, the Creator space works on a computer with Chrome or Edge.",
+  "unsupportedHelp": "Open Pilotix in Chrome or Edge on your computer to add your videos.",
+  "intro": {
+    "title": "Where to keep your videos?",
+    "text": "Choose a folder on your computer. Your videos stay in it: nothing is sent to the internet."
+  },
+  "choose": "Choose my folder",
+  "reopenTitle": "Open your folder again?",
+  "reopenText": "Your browser asks for your OK to open the folder “{{name}}” again.",
+  "reopen": "Open my folder again",
+  "other": "Choose another folder",
+  "change": "Change folder",
+  "folderTitle": "Your videos' folder, on this computer",
+  "pickFail": "Could not open this folder. Try another folder.",
+  "denied": "The folder is not open: say yes in the browser's window.",
+  "lost": "The folder is not there anymore (moved or deleted). Choose it again.",
+  "product": "Product",
+  "noProducts": "First add a product in Products & stock.",
+  "private": "Your videos stay on this computer.",
+  "refresh": "Refresh",
+  "kinds": {
+    "hooks": {
+      "title": "Hooks",
+      "sub": "the start, 2–4 s",
+      "hint": "What stops the thumb: a question, a problem, a reaction."
+    },
+    "corps": {
+      "title": "Body",
+      "sub": "the middle, 10–25 s",
+      "hint": "Show the product and what it does."
+    },
+    "cta": {
+      "title": "CTA",
+      "sub": "the end, 2–5 s",
+      "hint": "Say what to do: order, price, delivery."
+    }
+  },
+  "add": "+ Add",
+  "empty": "No video yet. Click “+ Add” or drag your files here.",
+  "drop": "Drop your videos here",
+  "copying": "Copying video {{n}} of {{total}}…",
+  "copied_one": "{{count}} video added",
+  "copied_other": "{{count}} videos added",
+  "same_one": "{{count}} video was already in the folder",
+  "same_other": "{{count}} videos were already in the folder",
+  "copyFail": "Could not copy the video {{name}}.",
+  "copyStop": "The copy stopped. Try again.",
+  "notVideo": "This is not a video: {{name}}",
+  "reading": "Reading…",
+  "unreadable": "No preview",
+  "tooShort": "A bit short (tip: {{min}}–{{max}} s)",
+  "tooLong": "A bit long (tip: {{min}}–{{max}} s)",
+  "delete": "Delete {{name}}",
+  "del": {
+    "title": "Delete this piece?",
+    "text": "The video “{{name}}” will be removed from the “{{folder}}” folder on your computer.",
+    "yes": "Delete",
+    "no": "Cancel"
+  },
+  "deleted": "Video deleted",
+  "deleteFail": "Could not delete this video.",
+  "formula": "{{h}} hooks × {{b}} bodies × {{c}} CTA",
+  "ads_one": "= {{count}} possible ad",
+  "ads_other": "= {{count}} possible ads",
+  "missing": "Missing: {{list}}.",
+  "and": " and ",
+  "need": {
+    "hooks": "at least 1 hook",
+    "corps": "at least 1 body",
+    "cta": "at least 1 CTA"
+  },
+  "mix": "Mix →",
+  "soon": "Coming soon: the mix"
+}

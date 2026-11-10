@@ -109,6 +109,8 @@ const PAGE_PARENT: Record<string, [string, string | null]> = {
   cm: ['pilotai', 'cm'],
   // AI social media manager: the posts planned on a calendar
   social: ['pilotai', 'social'],
+  // Espace créateur: a line of AI Pilot's menu under Pilot Content (#/createur), switched on and off with Pilot Content
+  createur: ['pilotai', 'social'],
   notify: ['pilotai', 'notify'],
   // Pilot AI › Comptes: the Facebook and TikTok accounts the agents use
   comptes: ['pilotai', null],
