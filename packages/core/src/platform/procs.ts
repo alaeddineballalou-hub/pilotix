@@ -1,10 +1,10 @@
 // The control room's actions (Pilotix staff only): shops, trials, payments, plans and their menus, staff, settings,
 // the journal, sign-ups, messages from stores and the demo shop. Same shape as the shops' actions (input checked, roles
 // checked), own registry. Pilotix never sees what is inside a store: only its numbers (accounts, livreurs, orders).
-import { DEMO_ACCOUNTS, FEATURE_KEYS, passwordProblem } from '@pilotix/shared';
+import { DEMO_ACCOUNTS, FEATURE_KEYS, normalizeAccountPhone, passwordProblem } from '@pilotix/shared';
 import bcrypt from 'bcryptjs';
 import { z, ZodTypeAny } from 'zod';
-import { isoOrNull, num, numOrNull } from '../db';
+import { Db, isoOrNull, num, numOrNull } from '../db';
 import { AppError, bad, Ctx, forbidden, inputTooBig, notFound } from '../rpc';
 import { staffTotpOn, totpConfirm, totpOff, totpStart } from './totp';
 import { hashPassword } from '../modules/users';
@@ -18,8 +18,10 @@ import { SLUG_LOCKED } from '../modules/boutiques';
 import { accountByEmail, accountById, dropForeignPassword, foreignPassword, makeAccountToken, sha256Hex } from './accounts';
 import { rewardReferrer, ReferralReward } from './reminders';
 import { staffReply, staffSetStatus, staffThread, staffThreads, staffUnread } from './support';
+import { CLAIM_COLUMNS, claimRow } from './claims';
 import {
   cleanFeatures,
+  cleanPayAlert,
   keepSellerBilling,
   mainShopOf,
   sellerShops,
@@ -166,6 +168,69 @@ async function needShop(ctx: PCtx, id: number): Promise<Shop> {
   const s = await loadShop(ctx.t, { id });
   if (!s) throw notFound('Boutique introuvable');
   return s;
+}
+
+export interface PaymentIn {
+  amount: number;
+  method: (typeof PAYMENT_METHODS)[number];
+  months: number;
+  reference?: string;
+  note?: string;
+  paidAt?: string;
+  planId?: number;
+}
+
+/**
+ * Records a payment received on a shop holding its plan (the seller's first boutique): the receipt's number, the paid
+ * period grown by `months` (from today, or the end of the trial / of the period already paid when still ahead), a
+ * suspended shop back on, the referrer's reward; audited. Used by « Enregistrer un paiement » and by « Valider » of a
+ * store's « J'ai payé ». `inTx` runs in the same transaction, with the payment's id (the claim marked accepted).
+ */
+async function recordPayment(ctx: PCtx, s: Shop, i: PaymentIn, inTx?: (db: Db, paymentId: number) => Promise<void>) {
+  if (s.primary || s.demo) throw bad('Pas de paiement pour cette boutique');
+  if (i.planId !== undefined && !(await loadPlans(ctx.t)).some((p) => p.id === i.planId)) throw bad('Formule introuvable');
+  const set = await platformSettings(ctx.t);
+  const out = await ctx.t.platform.tx(async (db) => {
+    const cur = (await db.query('SELECT status FROM platform.shops WHERE id = $1 FOR UPDATE', [s.id]))[0];
+    // receipts are numbered per year, one after the other (one payment at a time takes its number)
+    await db.query('SELECT pg_advisory_xact_lock(7340211)');
+    const year = new Date(i.paidAt ? Date.parse(i.paidAt) : ctx.now()).getUTCFullYear();
+    const seq = num((await db.query(`SELECT COALESCE(max(substring(receipt_no from 9)::int), 0) AS n FROM platform.payments WHERE receipt_no LIKE $1`, [`PX-${year}-%`]))[0]?.n) + 1;
+    const receiptNo = `PX-${year}-${String(seq).padStart(4, '0')}`;
+    // from today, or from the end of the trial / of the period already paid when it is still ahead
+    const p = (
+      await db.query(
+        `INSERT INTO platform.payments (shop_id, amount, method, reference, months, plan_id, period_from, period_to, paid_at, note, created_by, receipt_no)
+         SELECT $1, $2, $3, $4, $5, $6, x.f, x.f + make_interval(months => $5), COALESCE($7::timestamptz, now()), $8, $9, $10
+           FROM (SELECT GREATEST(now(), paid_until, trial_ends_at) AS f FROM platform.shops WHERE id = $1) x
+         RETURNING id, period_to`,
+        [s.id, i.amount, i.method, i.reference || null, i.months, i.planId ?? s.planId, i.paidAt ? new Date(i.paidAt).toISOString() : null, i.note || null, ctx.staff.id, receiptNo],
+      )
+    )[0];
+    await db.query(
+      `UPDATE platform.shops sh SET paid_until = p.period_to, plan_id = COALESCE($3, sh.plan_id),
+         status = CASE WHEN sh.status = 'suspended' THEN 'active' ELSE sh.status END,
+         status_reason = CASE WHEN sh.status = 'suspended' THEN NULL ELSE sh.status_reason END
+         FROM platform.payments p WHERE sh.id = $1 AND p.id = $2`,
+      [s.id, p.id, i.planId ?? null],
+    );
+    // the first payment of a store another one brought: that one gets its free months
+    const reward = await rewardReferrer(db, set, s.id, num(p.id));
+    if (inTx) await inTx(db, num(p.id));
+    return { id: num(p.id), paidUntil: isoOrNull(p.period_to), reactivated: cur.status === 'suspended', receiptNo, reward };
+  });
+  await audit(ctx, 'payment.add', s.id, { amount: i.amount, method: i.method, months: i.months, paidUntil: out.paidUntil, reference: i.reference ?? null, reactivated: out.reactivated, receipt: out.receiptNo });
+  if (out.reward) await audit(ctx, 'referral.reward', out.reward.referrerShopId, { months: out.reward.months, from: s.name, paidUntil: out.reward.paidUntil });
+  const mails: OwnerMail[] = [];
+  if (out.reward?.to) mails.push({ kind: 'reward', to: out.reward.to, name: out.reward.name, language: out.reward.language, reward: out.reward });
+  return {
+    id: out.id,
+    paidUntil: out.paidUntil,
+    reactivated: out.reactivated,
+    receiptNo: out.receiptNo,
+    rewarded: out.reward ? { shop: out.reward.shop, months: out.reward.months } : null,
+    mails,
+  };
 }
 
 const usageCache = new WeakMap<Tenancy, Map<number, { at: number; v: ShopUsage }>>();
@@ -802,48 +867,9 @@ export const PLATFORM_REGISTRY = {
       // one plan per seller: one payment for all their boutiques, recorded on their first one
       const asked = await needShop(ctx, i.shopId);
       const s = asked.mainShopId ? await needShop(ctx, asked.mainShopId) : asked;
-      if (s.primary || s.demo) throw bad('Pas de paiement pour cette boutique');
-      if (i.planId !== undefined && !(await loadPlans(ctx.t)).some((p) => p.id === i.planId)) throw bad('Formule introuvable');
-      const set = await platformSettings(ctx.t);
-      const out = await ctx.t.platform.tx(async (db) => {
-        const cur = (await db.query('SELECT status FROM platform.shops WHERE id = $1 FOR UPDATE', [s.id]))[0];
-        // receipts are numbered per year, one after the other (one payment at a time takes its number)
-        await db.query('SELECT pg_advisory_xact_lock(7340211)');
-        const year = new Date(i.paidAt ? Date.parse(i.paidAt) : ctx.now()).getUTCFullYear();
-        const seq = num((await db.query(`SELECT COALESCE(max(substring(receipt_no from 9)::int), 0) AS n FROM platform.payments WHERE receipt_no LIKE $1`, [`PX-${year}-%`]))[0]?.n) + 1;
-        const receiptNo = `PX-${year}-${String(seq).padStart(4, '0')}`;
-        // from today, or from the end of the trial / of the period already paid when it is still ahead
-        const p = (
-          await db.query(
-            `INSERT INTO platform.payments (shop_id, amount, method, reference, months, plan_id, period_from, period_to, paid_at, note, created_by, receipt_no)
-             SELECT $1, $2, $3, $4, $5, $6, x.f, x.f + make_interval(months => $5), COALESCE($7::timestamptz, now()), $8, $9, $10
-               FROM (SELECT GREATEST(now(), paid_until, trial_ends_at) AS f FROM platform.shops WHERE id = $1) x
-             RETURNING id, period_to`,
-            [s.id, i.amount, i.method, i.reference || null, i.months, i.planId ?? s.planId, i.paidAt ? new Date(i.paidAt).toISOString() : null, i.note || null, ctx.staff.id, receiptNo],
-          )
-        )[0];
-        await db.query(
-          `UPDATE platform.shops sh SET paid_until = p.period_to, plan_id = COALESCE($3, sh.plan_id),
-             status = CASE WHEN sh.status = 'suspended' THEN 'active' ELSE sh.status END,
-             status_reason = CASE WHEN sh.status = 'suspended' THEN NULL ELSE sh.status_reason END
-             FROM platform.payments p WHERE sh.id = $1 AND p.id = $2`,
-          [s.id, p.id, i.planId ?? null],
-        );
-        // the first payment of a store another one brought: that one gets its free months
-        const reward = await rewardReferrer(db, set, s.id, num(p.id));
-        return { id: num(p.id), paidUntil: isoOrNull(p.period_to), reactivated: cur.status === 'suspended', receiptNo, reward };
-      });
-      await audit(ctx, 'payment.add', s.id, { amount: i.amount, method: i.method, months: i.months, paidUntil: out.paidUntil, reference: i.reference ?? null, reactivated: out.reactivated, receipt: out.receiptNo });
-      if (out.reward) await audit(ctx, 'referral.reward', out.reward.referrerShopId, { months: out.reward.months, from: s.name, paidUntil: out.reward.paidUntil });
-      const mails: OwnerMail[] = [];
-      if (out.reward?.to) mails.push({ kind: 'reward', to: out.reward.to, name: out.reward.name, language: out.reward.language, reward: out.reward });
+      const out = await recordPayment(ctx, s, i);
       return {
-        id: out.id,
-        paidUntil: out.paidUntil,
-        reactivated: out.reactivated,
-        receiptNo: out.receiptNo,
-        rewarded: out.reward ? { shop: out.reward.shop, months: out.reward.months } : null,
-        mails,
+        ...out,
         // asked on another boutique of the seller: recorded on their first one
         ...(asked.id !== s.id ? { main: { id: s.id, name: s.name } } : {}),
       };
@@ -891,6 +917,70 @@ export const PLATFORM_REGISTRY = {
     });
     await audit(ctx, 'payment.void', r.shopId, { payment: i.id, amount: r.amount, reason: i.reason, periodBack: r.periodBack });
     return { ok: true, periodBack: r.periodBack };
+  }),
+
+  // ---------------------------------------------------------------- « J'ai payé » (a store's receipt, to check)
+  /** The stores' claims: pending ones (« À vérifier », the oldest first), or the ones decided (the newest first). Never the photos. */
+  'p.claims.list': pproc(MANAGERS, z.object({ status: z.enum(['pending', 'decided']).default('pending') }), async (ctx, i) => {
+    const rows = await ctx.t.platform.query(
+      `SELECT ${CLAIM_COLUMNS}, s.name AS shop_name, s.slug AS shop_slug, st.name AS decided_name
+         FROM platform.payment_claims c JOIN platform.shops s ON s.id = c.shop_id
+         LEFT JOIN platform.plans pl ON pl.id = c.plan_id LEFT JOIN platform.staff st ON st.id = c.decided_by
+        WHERE ${i.status === 'pending' ? `c.status = 'pending'` : `c.status <> 'pending'`}
+        ORDER BY ${i.status === 'pending' ? 'c.created_at, c.id' : 'c.decided_at DESC NULLS LAST, c.id DESC'} LIMIT 100`,
+    );
+    return rows.map((r: any) => ({ ...claimRow(r), shop: { id: num(r.shop_id), name: r.shop_name as string, slug: r.shop_slug as string }, decidedBy: (r.decided_name as string | null) ?? null }));
+  }),
+
+  /** A claim's receipt photo (a JPEG data URL), shown big. */
+  'p.claims.photo': pproc(MANAGERS, z.object({ id: Id }), async (ctx, i) => {
+    const r = (await ctx.t.platform.query('SELECT photo FROM platform.payment_claims WHERE id = $1', [i.id]))[0];
+    if (!r) throw notFound('Paiement introuvable');
+    return { photo: (r.photo as string | null) ?? null };
+  }),
+
+  /** « Valider »: the payment is recorded exactly like « Enregistrer un paiement » (1 or 12 months, the claim's amount). */
+  'p.claims.accept': pproc(MANAGERS, z.object({ id: Id, note: z.string().trim().max(500).optional() }), async (ctx, i) => {
+    const c = (await ctx.t.platform.query('SELECT * FROM platform.payment_claims WHERE id = $1', [i.id]))[0];
+    if (!c) throw notFound('Paiement introuvable');
+    if (c.status !== 'pending') throw bad('Ce paiement a déjà été vérifié');
+    // the claim's shop held the plan when it was sent; if the seller's first boutique changed since, theirs now
+    const asked = await needShop(ctx, num(c.shop_id));
+    const s = asked.mainShopId ? await needShop(ctx, asked.mainShopId) : asked;
+    const months = num(c.months);
+    const out = await recordPayment(
+      ctx,
+      s,
+      { amount: num(c.amount), method: c.method, months, reference: c.reference || undefined, note: i.note, planId: numOrNull(c.plan_id) ?? undefined },
+      async (db, paymentId) => {
+        // one decision: a claim decided meanwhile by someone else undoes this payment (the transaction)
+        const ok = await db.query(`UPDATE platform.payment_claims SET status = 'accepted', decided_at = now(), decided_by = $2, payment_id = $3 WHERE id = $1 AND status = 'pending' RETURNING id`, [
+          i.id,
+          ctx.staff.id,
+          paymentId,
+        ]);
+        if (!ok.length) throw bad('Ce paiement a déjà été vérifié');
+      },
+    );
+    await audit(ctx, 'claim.accept', s.id, { claim: i.id, payment: out.id, amount: num(c.amount), months, method: c.method, receipt: out.receiptNo });
+    return { ...out, claimId: i.id };
+  }),
+
+  /** « Refuser »: the store sees the reason and may send again. */
+  'p.claims.refuse': pproc(MANAGERS, z.object({ id: Id, reason: z.string().trim().min(2, 'Écrivez la raison').max(200) }), async (ctx, i) => {
+    const r = (
+      await ctx.t.platform.query(`UPDATE platform.payment_claims SET status = 'refused', reason = $3, decided_at = now(), decided_by = $2 WHERE id = $1 AND status = 'pending' RETURNING shop_id, amount, months`, [
+        i.id,
+        ctx.staff.id,
+        i.reason,
+      ])
+    )[0];
+    if (!r) {
+      if (!(await ctx.t.platform.query('SELECT 1 FROM platform.payment_claims WHERE id = $1', [i.id])).length) throw notFound('Paiement introuvable');
+      throw bad('Ce paiement a déjà été vérifié');
+    }
+    await audit(ctx, 'claim.refuse', num(r.shop_id), { claim: i.id, amount: num(r.amount), months: num(r.months), reason: i.reason });
+    return { ok: true };
   }),
 
   // ---------------------------------------------------------------- plans
@@ -1001,7 +1091,21 @@ export const PLATFORM_REGISTRY = {
     OWNER,
     z.object({
       trial: z.object({ days: z.number().int().min(0).max(90), graceDays: z.number().int().min(0).max(30), planCode: z.string().max(60) }).optional(),
-      payment: z.object({ text: z.string().max(1500), phone: z.string().max(40), whatsapp: z.string().max(40) }).optional(),
+      payment: z
+        .object({
+          text: z.string().max(1500),
+          phone: z.string().max(40),
+          whatsapp: z.string().max(40),
+          // « Prévenir sur WhatsApp quand une boutique paie » (missing: the one saved stays)
+          alert: z
+            .object({
+              numbers: z.array(z.string().trim().max(30)).max(10, '10 numéros au plus'),
+              template: z.string().trim().regex(/^[a-z0-9_]{1,120}$/, 'Nom du modèle : lettres minuscules, chiffres et _ (comme dans Meta)'),
+              lang: z.string().trim().regex(/^[A-Za-z_]{2,12}$/, 'Langue du modèle : fr, en, ar…'),
+            })
+            .optional(),
+        })
+        .optional(),
       notice: z.object({ text: z.string().max(400), tone: z.enum(['info', 'warn']), until: IsoDate.nullable() }).optional(),
       demo: z.object({ public: z.boolean() }).optional(),
       signup: z.object({ open: z.boolean(), maxStores: z.number().int().min(1).max(100) }).optional(),
@@ -1020,6 +1124,18 @@ export const PLATFORM_REGISTRY = {
       pro: z.object({ on: z.boolean(), price: z.number().int().min(0).max(1_000_000) }).optional(),
     }),
     async (ctx, i) => {
+      if (i.payment) {
+        const before = (await platformSettings(ctx.t)).payment.alert;
+        const a = i.payment.alert;
+        const numbers: string[] = [];
+        for (const raw of a?.numbers ?? before.numbers) {
+          if (!raw.trim()) continue;
+          const n = normalizeAccountPhone(raw);
+          if (!n) throw bad(`Numéro WhatsApp faux : ${raw.slice(0, 30)}`);
+          if (!numbers.includes(n)) numbers.push(n);
+        }
+        i.payment = { ...i.payment, alert: cleanPayAlert({ numbers, template: a?.template ?? before.template, lang: a?.lang ?? before.lang }) };
+      }
       for (const k of ['trial', 'payment', 'notice', 'demo', 'signup', 'reminders', 'referral', 'security', 'company', 'legal', 'login', 'social', 'pro'] as const) if (i[k]) await setPlatformSetting(ctx.t, k, i[k] as any);
       await audit(ctx, 'settings.save', null, { keys: Object.keys(i) });
       return platformSettings(ctx.t);

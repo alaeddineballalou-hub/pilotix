@@ -8,6 +8,7 @@ import * as https from 'node:https';
 import { Pool, PoolClient } from 'pg';
 import { config } from './config';
 import { mediaHooks } from './media';
+import { payAlert } from './payalert';
 import { mailConfigured, sendMail } from './mail';
 import { pilotRestMail } from './mails';
 import { turnstileCheck, turnstileSiteKey } from './turnstile';
@@ -284,6 +285,8 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
     turnstileSite: (host) => turnstileSiteKey(this, host),
     turnstileCheck: (siteKey, token, ip) => turnstileCheck(this, siteKey, token, ip),
     hashPassword: (pw) => core.hashPassword(pw),
+    // « J'ai payé »: Pilotix's WhatsApp tells the team (control room › Réglages › Paiement)
+    payAlert: (claimId) => payAlert(this, claimId),
     publicUrl: config.publicUrl,
     // the landing pages' address in use (their own once it answers, else the site's)
     pagesUrl: () => this.landingBase(),

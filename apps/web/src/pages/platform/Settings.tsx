@@ -173,9 +173,10 @@ export function Settings({ staff }: { staff: Staff }) {
           </div>
           <div className="pp-pay-prev">
             <span className="lab">{t('platform.set.preview')}</span>
-            <PayInfo shop={sample} />
+            <PayInfo shop={sample} preview />
           </div>
         </div>
+        <PayAlertBox owner={owner} value={f.payment.alert} onChange={(alert) => setF({ ...f, payment: { ...f.payment, alert } })} />
       </Card>
       <Card title={t('platform.set.companyTitle')} help={t('platform.set.companyHelp')}>
         <div className="grid2 pp-form">
@@ -225,6 +226,75 @@ export function Settings({ staff }: { staff: Staff }) {
           {f.notice.text.trim() && <div className={`px-ban ${f.notice.tone === 'warn' ? 'px-ban-warn' : 'px-ban-info'}`}>{f.notice.text}</div>}
         </div>
       </Card>
+    </div>
+  );
+}
+
+/** The Meta template the owner submits (Utility, IMAGE header): the same words as the server's 5 variables. */
+const TEMPLATE_BODY = 'Nouveau paiement Pilotix. Boutique : {{1}}. Plan : {{2}}. Période : {{3}}. Montant : {{4}} DA. Envoyé par : {{5}}. Vérifiez dans la salle de contrôle › Paiements.';
+
+/** « Prévenir sur WhatsApp quand une boutique paie »: the team's numbers, the template's name and language. */
+function PayAlertBox({ owner, value, onChange }: { owner: boolean; value: S['payment']['alert']; onChange: (v: S['payment']['alert']) => void }) {
+  const { t } = useTranslation();
+  const [num, setNum] = useState('');
+  const add = () => {
+    const n = num.trim();
+    if (!n || value.numbers.includes(n)) return setNum('');
+    onChange({ ...value, numbers: [...value.numbers, n].slice(0, 10) });
+    setNum('');
+  };
+  return (
+    <div className="pp-form" style={{ marginTop: 16 }}>
+      <h3>{t('platform.set.alertTitle')}</h3>
+      <p className="small muted">{t('platform.set.alertHelp')}</p>
+      <Field label={t('platform.set.alertNumbers')} hint={t('platform.set.alertNumbersHint')}>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          {value.numbers.map((n) => (
+            <span key={n} className="chip ltr">
+              {n}
+              {owner && (
+                <button type="button" className="px-ban-x" aria-label={t('platform.set.alertRemove')} title={t('platform.set.alertRemove')} onClick={() => onChange({ ...value, numbers: value.numbers.filter((x) => x !== n) })}>
+                  ×
+                </button>
+              )}
+            </span>
+          ))}
+          {!value.numbers.length && <span className="small muted">{t('platform.set.alertNone')}</span>}
+        </div>
+      </Field>
+      {owner && value.numbers.length < 10 && (
+        <div className="row" style={{ gap: 8 }}>
+          <input
+            dir="ltr"
+            maxLength={30}
+            value={num}
+            onChange={(e) => setNum(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                add();
+              }
+            }}
+            placeholder="0550 12 34 56"
+          />
+          <button type="button" className="btn" disabled={!num.trim()} onClick={add}>
+            {t('platform.set.alertAdd')}
+          </button>
+        </div>
+      )}
+      <div className="grid2">
+        <Field label={t('platform.set.alertTemplate')}>
+          <input disabled={!owner} dir="ltr" maxLength={120} value={value.template} onChange={(e) => onChange({ ...value, template: e.target.value.trim().toLowerCase() })} placeholder="pilotix_paiement" />
+        </Field>
+        <Field label={t('platform.set.alertLang')}>
+          <input disabled={!owner} dir="ltr" maxLength={12} value={value.lang} onChange={(e) => onChange({ ...value, lang: e.target.value.trim() })} placeholder="fr" />
+        </Field>
+      </div>
+      <p className="small">{t('platform.set.alertMeta')}</p>
+      <pre className="px-pay-text" dir="ltr">
+        {`${t('platform.set.alertMetaHeader')}\n\n${TEMPLATE_BODY}`}
+      </pre>
+      <p className="small muted">{t('platform.set.alertMetaNote')}</p>
     </div>
   );
 }

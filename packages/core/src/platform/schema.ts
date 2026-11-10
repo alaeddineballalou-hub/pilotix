@@ -612,6 +612,34 @@ BEGIN
 END $f$;
 `;
 
+// « J'ai payé » (the pay window of a store): the receipt's photo (a small JPEG as a data URL, its only copy), the period
+// asked (1 or 12 months) and its amount from the plan. Pending until the control room accepts it (a row of
+// platform.payments, payment_id) or refuses it (reason). wa_status: the WhatsApp message to Pilotix's team ('sent',
+// 'off' when not set up, or the error). One pending claim per shop at a time.
+const PAYMENT_CLAIMS_SQL = `
+CREATE TABLE IF NOT EXISTS platform.payment_claims (
+  id          serial PRIMARY KEY,
+  shop_id     integer     NOT NULL REFERENCES platform.shops(id),
+  plan_id     integer REFERENCES platform.plans(id),
+  months      integer     NOT NULL CHECK (months IN (1, 12)),
+  amount      integer     NOT NULL CHECK (amount >= 0),
+  method      text        NOT NULL,
+  reference   text,
+  photo       text,
+  status      text        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'refused')),
+  reason      text,
+  sent_by     text,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  decided_at  timestamptz,
+  decided_by  integer,
+  payment_id  integer REFERENCES platform.payments(id),
+  wa_status   text
+);
+CREATE INDEX IF NOT EXISTS payment_claims_shop ON platform.payment_claims (shop_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS payment_claims_status ON platform.payment_claims (status, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS payment_claims_one_pending ON platform.payment_claims (shop_id) WHERE status = 'pending';
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
@@ -691,6 +719,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p035_shared_login_sync', SHARED_LOGIN_SQL],
   // the list of shops finds each shop's main boutique by its owner's account (it read every shop once per shop)
   ['p036_shops_owner_index', `CREATE INDEX IF NOT EXISTS shops_owner ON platform.shops (owner_account_id, primary_shop DESC, id) WHERE kind = 'store'`],
+  // « J'ai payé »: a store sends its BaridiMob / CCP receipt, the control room checks it (Valider: a real payment)
+  ['p037_payment_claims', PAYMENT_CLAIMS_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

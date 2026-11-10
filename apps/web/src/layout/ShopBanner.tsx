@@ -7,6 +7,7 @@ import { dateOnly } from '../lib/format';
 import { store } from '../lib/store';
 import { Icon } from '../ui/kit';
 import { Modal } from '../ui/modal';
+import { PayClaim } from './PayClaim';
 
 const hash = (s: string) => {
   let h = 0;
@@ -22,8 +23,11 @@ export function waLink(phone: string, text: string): string {
   return `https://wa.me/${d}?text=${encodeURIComponent(text)}`;
 }
 
-/** How to pay Pilotix: the details written in the control room, WhatsApp and call buttons. */
-export function PayInfo({ shop }: { shop: ShopInfo }) {
+/**
+ * How to pay Pilotix: the details written in the control room, « J'ai payé » (the receipt's photo, checked by Pilotix),
+ * and WhatsApp and call buttons when something goes wrong. `preview`: the control room's sample (no « J'ai payé »).
+ */
+export function PayInfo({ shop, preview = false }: { shop: ShopInfo; preview?: boolean }) {
   const { t } = useTranslation();
   const p = shop.payment;
   if (!p) return <p className="muted">{t('shop.noPay')}</p>;
@@ -39,7 +43,8 @@ export function PayInfo({ shop }: { shop: ShopInfo }) {
           <pre className="px-pay-text">{p.text.trim()}</pre>
         </>
       )}
-      <p className="small muted">{t('shop.payThen')}</p>
+      {!preview && shop.plan && shop.planPrice ? <PayClaim /> : null}
+      <p className="small muted">{!preview && shop.plan && shop.planPrice ? t('shop.claim.orWa') : t('shop.payThen')}</p>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         {wa && (
           <a className="btn primary" href={waLink(wa, t('shop.payWaText', { shop: shop.mainShop?.name ?? shop.name, slug: shop.slug }))} target="_blank" rel="noreferrer">

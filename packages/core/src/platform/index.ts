@@ -9,6 +9,7 @@ export * from './signup';
 export * from './support';
 export * from './reminders';
 export * from './procs';
+export * from './claims';
 export * from './domains';
 export * from './courierTests';
 export * from './reputation';

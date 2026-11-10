@@ -133,5 +133,32 @@
   "payPlanYear": "Ou {{price}} DA pour un an",
   "payAll_one": "Un seul paiement pour vos {{count}} boutiques (boutique principale : {{main}}).",
   "payAll_other": "Un seul paiement pour vos {{count}} boutiques (boutique principale : {{main}}).",
-  "allStores": "toutes vos boutiques"
+  "allStores": "toutes vos boutiques",
+  "claim": {
+    "title": "J’ai payé : envoyer le reçu",
+    "help": "Vous avez payé ? Choisissez la durée, la façon de payer, et ajoutez la photo du reçu. Pilotix vérifie et prolonge votre accès.",
+    "period": "Durée",
+    "month": "1 mois",
+    "year": "1 an",
+    "method": "Comment avez-vous payé ?",
+    "m_baridimob": "BaridiMob",
+    "m_ccp": "CCP",
+    "m_virement": "Virement",
+    "reference": "Numéro du reçu (si vous l’avez)",
+    "referenceHint": "Pas obligatoire",
+    "photo": "Photo du reçu",
+    "photoHint": "Une photo claire du reçu ou de la capture d’écran",
+    "needPhoto": "Ajoutez la photo du reçu pour envoyer.",
+    "notImage": "Ce fichier n’est pas une image. Choisissez une photo.",
+    "tooBig": "Photo trop lourde. Prenez une photo plus petite.",
+    "send": "J’ai payé",
+    "sending": "Envoi…",
+    "sent": "Paiement envoyé. L’équipe Pilotix vérifie.",
+    "waitTitle": "Paiement envoyé. L’équipe Pilotix vérifie.",
+    "waitText": "Envoyé le {{date}} : {{amount}} pour {{period}}. Vous pouvez continuer à travailler en attendant.",
+    "refused": "Paiement du {{date}} refusé : {{reason}}. Vous pouvez l’envoyer à nouveau.",
+    "okText": "Paiement validé le {{date}} : {{amount}} pour {{period}}. Merci !",
+    "payAgain": "Payer encore",
+    "orWa": "Un souci ? Écrivez-nous sur WhatsApp ou appelez-nous."
+  }
 }

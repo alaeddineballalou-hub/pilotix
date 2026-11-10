@@ -362,7 +362,9 @@
     "couriers_todoResolved": "تغيير API: « تم الحل » ({{company}}): {{title}}",
     "couriers_todoReopened": "تغيير API: « لم يتم الحل » ({{company}}): {{title}}",
     "couriers_todoAdded": "تمت إضافة مهمة ({{company}}): {{title}}",
-    "couriers_todoRemoved": "تم حذف مهمة ({{company}}): {{title}}"
+    "couriers_todoRemoved": "تم حذف مهمة ({{company}}): {{title}}",
+    "claimAccept": "تم قبول «دفعت»: {{amount}} ({{months}} شهر)",
+    "claimRefuse": "تم رفض «دفعت»: {{amount}} — {{reason}}"
   },
   "plan": {
     "new": "باقة جديدة",
@@ -479,7 +481,19 @@
     "socialTitle": "الدخول بـ Google",
     "socialHelp": "الصق هنا معرّف عميل Google: يظهر بعدها زر «المتابعة بـ Google» في صفحتَي الدخول والتسجيل. اتركه فارغًا لإخفائه.",
     "socialGoogle": "Google — معرّف عميل OAuth",
-    "socialGoogleHint": "Google Cloud Console ← Credentials ← OAuth client ID من نوع «Web application». المصدر المسموح: {{site}}"
+    "socialGoogleHint": "Google Cloud Console ← Credentials ← OAuth client ID من نوع «Web application». المصدر المسموح: {{site}}",
+    "alertTitle": "أخبرنا على واتساب عندما يدفع متجر",
+    "alertHelp": "عندما يرسل متجر «دفعت»، يرسل رقم واتساب Pilotix (رقم رمز التسجيل) رسالة مع صورة الوصل إلى هذه الأرقام.",
+    "alertNumbers": "الأرقام التي نخبرها",
+    "alertNumbersHint": "0550 12 34 56، أو +33… لبلد آخر. 10 على الأكثر.",
+    "alertNone": "لا رقم: لا أحد يُخبر.",
+    "alertAdd": "إضافة",
+    "alertRemove": "حذف",
+    "alertTemplate": "اسم قالب Meta",
+    "alertLang": "لغة القالب",
+    "alertMeta": "في Meta (WhatsApp Manager › القوالب)، أنشئ هذا القالب، فئة «Utility»، وانتظر حتى تتم الموافقة عليه:",
+    "alertMetaHeader": "الرأس: IMAGE (صورة الوصل)\nالنص:",
+    "alertMetaNote": "يملأ Pilotix الفراغات الخمسة (من 1 إلى 5): المتجر، الخطة، المدة، المبلغ، من أرسل."
   },
   "demo": {
     "none": "لا يوجد متجر تجريبي بعد",
@@ -2097,5 +2111,29 @@
     "require": "جعل الإصدار {{build}} إلزامياً",
     "unrequire": "إيقاف الإلزام",
     "link": "صفحة التنزيل"
+  },
+  "claims": {
+    "title": "للتحقق",
+    "help": "المتاجر التي تقول إنها دفعت. انظر إلى صورة الوصل، ثم اقبل أو ارفض.",
+    "none": "لا شيء للتحقق.",
+    "sentBy": "أرسله",
+    "photo": "الوصل",
+    "see": "عرض",
+    "noPhoto": "لا صورة",
+    "month": "شهر واحد",
+    "year": "سنة واحدة",
+    "accept": "قبول",
+    "refuse": "رفض",
+    "acceptAsk": "قبول دفع «{{shop}}»: {{amount}} لمدة {{months}} شهر؟",
+    "accepted": "تم قبول الدفع (وصل {{no}}): مدفوع حتى {{date}}",
+    "refuseTitle": "رفض دفع «{{shop}}»",
+    "reason": "لماذا؟",
+    "reasonPh": "مثال: الوصل غير واضح، المبلغ خطأ",
+    "reasonHint": "المتجر يرى هذا السبب.",
+    "refused": "تم رفض الدفع",
+    "waWait": "واتساب: جار الإرسال…",
+    "waSent": "واتساب: تم الإرسال",
+    "waOff": "واتساب: غير مضبوط",
+    "waError": "واتساب: خطأ ({{error}})"
   }
 }

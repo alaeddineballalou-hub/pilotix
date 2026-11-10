@@ -233,8 +233,11 @@ export async function shopIdsOfEmail(t: Tenancy, email: string): Promise<number[
 export interface PlatformSettings {
   /** new shops: free trial days, days of grace after the end before the lock, plan offered by default */
   trial: { days: number; graceDays: number; planCode: string };
-  /** how shops pay (shown to them): free text (BaridiMob RIP, CCP account…), phone, WhatsApp */
-  payment: { text: string; phone: string; whatsapp: string };
+  /**
+   * how shops pay (shown to them): free text (BaridiMob RIP, CCP account…), phone, WhatsApp; and `alert`: the numbers
+   * Pilotix's WhatsApp tells when a store sends « J'ai payé » (an approved Utility template, never shown to the shops)
+   */
+  payment: { text: string; phone: string; whatsapp: string; alert: PayAlertSettings };
   /** a message shown to every shop until `until` (empty = none) */
   notice: { text: string; tone: 'info' | 'warn'; until: string | null };
   /** the demo shop: its button on the login page */
@@ -261,12 +264,27 @@ export interface PlatformSettings {
   app: { minBuild: number };
 }
 
+/** « Prévenir sur WhatsApp quand une boutique paie »: the team's numbers (normalised), the Meta template and its language. */
+export interface PayAlertSettings {
+  numbers: string[];
+  template: string;
+  lang: string;
+}
+export const PAY_ALERT_DEFAULTS: PayAlertSettings = { numbers: [], template: 'pilotix_paiement', lang: 'fr' };
+/** A saved alert setting as it is (older saves have none, or some pieces only): the missing pieces are the defaults. */
+export function cleanPayAlert(v: any): PayAlertSettings {
+  const numbers = Array.isArray(v?.numbers) ? [...new Set((v.numbers as unknown[]).map((x) => String(x ?? '').trim()).filter(Boolean))].slice(0, 10) : [];
+  const template = typeof v?.template === 'string' && /^[a-z0-9_]{1,120}$/.test(v.template) ? v.template : PAY_ALERT_DEFAULTS.template;
+  const lang = typeof v?.lang === 'string' && /^[A-Za-z_]{2,12}$/.test(v.lang) ? v.lang : PAY_ALERT_DEFAULTS.lang;
+  return { numbers, template, lang };
+}
+
 /** How many designs the sign-in pages have (numbered 1…LOGIN_DESIGNS). */
 export const LOGIN_DESIGNS = 20;
 
 export const PLATFORM_DEFAULTS: PlatformSettings = {
   trial: { days: 14, graceDays: 3, planCode: 'pro' },
-  payment: { text: '', phone: '', whatsapp: '' },
+  payment: { text: '', phone: '', whatsapp: '', alert: PAY_ALERT_DEFAULTS },
   notice: { text: '', tone: 'info', until: null },
   demo: { public: false },
   signup: { open: true, maxStores: 3 },
@@ -288,6 +306,8 @@ export async function platformSettings(t: Tenancy): Promise<PlatformSettings> {
   // saved by the first sign-up settings (stores per e-mail): kept until saved again
   const su = rows.find((r) => r.key === 'signup');
   if (su && !('maxStores' in (json(su.value) ?? {})) && Number(out.signup.maxShopsPerEmail) > 0) out.signup.maxStores = Number(out.signup.maxShopsPerEmail);
+  // the WhatsApp alert of « J'ai payé » came later: payment settings saved before have none (or only some pieces)
+  out.payment.alert = cleanPayAlert(out.payment.alert);
   delete out.signup.maxShopsPerEmail;
   delete out.signup.perIpPerDay;
   return out as PlatformSettings;

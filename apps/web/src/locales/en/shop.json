@@ -133,5 +133,32 @@
   "payPlanYear": "Or {{price}} DA for a year",
   "payAll_one": "One payment for your {{count}} boutique (main boutique: {{main}}).",
   "payAll_other": "One payment for your {{count}} boutiques (main boutique: {{main}}).",
-  "allStores": "all your boutiques"
+  "allStores": "all your boutiques",
+  "claim": {
+    "title": "I paid: send the receipt",
+    "help": "Did you pay? Pick how long, how you paid, and add a photo of the receipt. Pilotix checks it and gives you more time.",
+    "period": "How long",
+    "month": "1 month",
+    "year": "1 year",
+    "method": "How did you pay?",
+    "m_baridimob": "BaridiMob",
+    "m_ccp": "CCP",
+    "m_virement": "Bank transfer",
+    "reference": "Receipt number (if you have it)",
+    "referenceHint": "Not required",
+    "photo": "Photo of the receipt",
+    "photoHint": "A clear photo of the receipt or a screenshot",
+    "needPhoto": "Add the photo of the receipt to send.",
+    "notImage": "This file is not a picture. Pick a photo.",
+    "tooBig": "The photo is too big. Take a smaller one.",
+    "send": "I paid",
+    "sending": "Sending…",
+    "sent": "Payment sent. The Pilotix team is checking it.",
+    "waitTitle": "Payment sent. The Pilotix team is checking it.",
+    "waitText": "Sent on {{date}}: {{amount}} for {{period}}. You can keep working while you wait.",
+    "refused": "Payment of {{date}} refused: {{reason}}. You can send it again.",
+    "okText": "Payment accepted on {{date}}: {{amount}} for {{period}}. Thank you!",
+    "payAgain": "Pay again",
+    "orWa": "A problem? Write to us on WhatsApp or call us."
+  }
 }

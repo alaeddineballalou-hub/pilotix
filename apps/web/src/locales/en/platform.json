@@ -330,7 +330,9 @@
     "couriers_todoResolved": "API change marked « Resolved » ({{company}}): {{title}}",
     "couriers_todoReopened": "API change marked « Not resolved » ({{company}}): {{title}}",
     "couriers_todoAdded": "Task added ({{company}}): {{title}}",
-    "couriers_todoRemoved": "Task deleted ({{company}}): {{title}}"
+    "couriers_todoRemoved": "Task deleted ({{company}}): {{title}}",
+    "claimAccept": "“I paid” accepted: {{amount}} ({{months}} months)",
+    "claimRefuse": "“I paid” refused: {{amount}} — {{reason}}"
   },
   "plan": {
     "new": "New plan",
@@ -439,7 +441,19 @@
     "socialTitle": "Google sign-in",
     "socialHelp": "Paste your Google client ID here: the “Continue with Google” button then shows on the sign-in and sign-up pages. Leave empty to hide it.",
     "socialGoogle": "Google — OAuth client ID",
-    "socialGoogleHint": "Google Cloud Console → Credentials → OAuth client ID “Web application”. Authorized JavaScript origin: {{site}}"
+    "socialGoogleHint": "Google Cloud Console → Credentials → OAuth client ID “Web application”. Authorized JavaScript origin: {{site}}",
+    "alertTitle": "Tell us on WhatsApp when a store pays",
+    "alertHelp": "When a store sends “I paid”, Pilotix’s WhatsApp number (the one of the sign-up code) sends a message with the receipt photo to these numbers.",
+    "alertNumbers": "Numbers to tell",
+    "alertNumbersHint": "0550 12 34 56, or +33… for another country. 10 at most.",
+    "alertNone": "No number: nobody is told.",
+    "alertAdd": "Add",
+    "alertRemove": "Remove",
+    "alertTemplate": "Meta template name",
+    "alertLang": "Template language",
+    "alertMeta": "In Meta (WhatsApp Manager › Templates), create this template, category “Utility”, and wait until it is approved:",
+    "alertMetaHeader": "Header: IMAGE (the receipt photo)\nBody:",
+    "alertMetaNote": "Pilotix fills the 5 blanks (1 to 5): the store, the plan, how long, the amount, who sent it."
   },
   "demo": {
     "none": "No demo shop yet",
@@ -2010,5 +2024,29 @@
     "require": "Make version {{build}} required",
     "unrequire": "Stop requiring",
     "link": "Download page"
+  },
+  "claims": {
+    "title": "To check",
+    "help": "Stores that say they paid. Look at the receipt photo, then accept or refuse.",
+    "none": "Nothing to check.",
+    "sentBy": "Sent by",
+    "photo": "Receipt",
+    "see": "See",
+    "noPhoto": "No photo",
+    "month": "1 month",
+    "year": "1 year",
+    "accept": "Accept",
+    "refuse": "Refuse",
+    "acceptAsk": "Accept the payment of “{{shop}}”: {{amount}} for {{months}} months?",
+    "accepted": "Payment accepted (receipt {{no}}): paid until {{date}}",
+    "refuseTitle": "Refuse the payment of “{{shop}}”",
+    "reason": "Why?",
+    "reasonPh": "E.g. receipt not readable, wrong amount",
+    "reasonHint": "The store sees this reason.",
+    "refused": "Payment refused",
+    "waWait": "WhatsApp: sending…",
+    "waSent": "WhatsApp: sent",
+    "waOff": "WhatsApp: not set up",
+    "waError": "WhatsApp: error ({{error}})"
   }
 }

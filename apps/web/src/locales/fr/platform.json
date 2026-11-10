@@ -330,7 +330,9 @@
     "couriers_todoResolved": "Changement API marqué « Résolu » ({{company}}) : {{title}}",
     "couriers_todoReopened": "Changement API marqué « Non résolu » ({{company}}) : {{title}}",
     "couriers_todoAdded": "Tâche ajoutée ({{company}}) : {{title}}",
-    "couriers_todoRemoved": "Tâche supprimée ({{company}}) : {{title}}"
+    "couriers_todoRemoved": "Tâche supprimée ({{company}}) : {{title}}",
+    "claimAccept": "« J’ai payé » validé : {{amount}} ({{months}} mois)",
+    "claimRefuse": "« J’ai payé » refusé : {{amount}} — {{reason}}"
   },
   "plan": {
     "new": "Nouvelle formule",
@@ -439,7 +441,19 @@
     "socialTitle": "Connexion Google",
     "socialHelp": "Collez ici votre ID client Google : le bouton « Continuer avec Google » apparaît alors sur les pages de connexion et d’inscription. Laissez vide pour le cacher.",
     "socialGoogle": "Google — ID client OAuth",
-    "socialGoogleHint": "Google Cloud Console → Identifiants → ID client OAuth « Application Web ». Origine JavaScript autorisée : {{site}}"
+    "socialGoogleHint": "Google Cloud Console → Identifiants → ID client OAuth « Application Web ». Origine JavaScript autorisée : {{site}}",
+    "alertTitle": "Prévenir sur WhatsApp quand une boutique paie",
+    "alertHelp": "Quand une boutique envoie « J’ai payé », le numéro WhatsApp de Pilotix (celui du code d’inscription) envoie un message avec la photo du reçu à ces numéros.",
+    "alertNumbers": "Numéros à prévenir",
+    "alertNumbersHint": "0550 12 34 56, ou +33… pour un autre pays. 10 au plus.",
+    "alertNone": "Aucun numéro : personne n’est prévenu.",
+    "alertAdd": "Ajouter",
+    "alertRemove": "Retirer",
+    "alertTemplate": "Nom du modèle Meta",
+    "alertLang": "Langue du modèle",
+    "alertMeta": "Dans Meta (WhatsApp Manager › Modèles), créez ce modèle, catégorie « Utilitaire », et attendez qu’il soit approuvé :",
+    "alertMetaHeader": "En-tête : IMAGE (la photo du reçu)\nCorps :",
+    "alertMetaNote": "Les 5 trous (de 1 à 5) sont remplis par Pilotix : la boutique, le plan, la durée, le montant, qui a envoyé."
   },
   "demo": {
     "none": "Pas encore de boutique démo",
@@ -2010,5 +2024,29 @@
     "require": "Rendre la version {{build}} obligatoire",
     "unrequire": "Ne plus obliger",
     "link": "Page de téléchargement"
+  },
+  "claims": {
+    "title": "À vérifier",
+    "help": "Les boutiques qui disent avoir payé. Regardez la photo du reçu, puis validez ou refusez.",
+    "none": "Rien à vérifier.",
+    "sentBy": "Envoyé par",
+    "photo": "Reçu",
+    "see": "Voir",
+    "noPhoto": "Pas de photo",
+    "month": "1 mois",
+    "year": "1 an",
+    "accept": "Valider",
+    "refuse": "Refuser",
+    "acceptAsk": "Valider le paiement de « {{shop}} » : {{amount}} pour {{months}} mois ?",
+    "accepted": "Paiement validé (reçu {{no}}) : payé jusqu’au {{date}}",
+    "refuseTitle": "Refuser le paiement de « {{shop}} »",
+    "reason": "Pourquoi ?",
+    "reasonPh": "Ex. : reçu illisible, montant faux",
+    "reasonHint": "La boutique voit cette raison.",
+    "refused": "Paiement refusé",
+    "waWait": "WhatsApp : en cours…",
+    "waSent": "WhatsApp : envoyé",
+    "waOff": "WhatsApp : pas configuré",
+    "waError": "WhatsApp : erreur ({{error}})"
   }
 }

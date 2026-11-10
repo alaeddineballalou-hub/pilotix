@@ -75,6 +75,10 @@ export function auditText(t: TFunction, a: AuditRow): string {
       return t('platform.log.supportReply', { subject: d.subject ?? '' });
     case 'payment.add':
       return t('platform.log.paymentAdd', { amount: da(d.amount), method: t(`platform.method.${d.method}`, { defaultValue: d.method }), months: d.months, date: dateOnly(d.paidUntil) });
+    case 'claim.accept':
+      return t('platform.log.claimAccept', { amount: da(d.amount), months: d.months });
+    case 'claim.refuse':
+      return t('platform.log.claimRefuse', { amount: da(d.amount), reason: d.reason ?? '' });
     case 'payment.void':
       return t('platform.log.paymentVoid', { amount: da(d.amount), reason: d.reason ?? '' });
     case 'plan.create':

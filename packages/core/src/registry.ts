@@ -43,6 +43,7 @@ import { landingGroupProcs } from './modules/landinggroups';
 import { pixelProcs } from './modules/pixels';
 import { posProcs } from './modules/pos';
 import { payProcs } from './modules/pay';
+import { billingProcs } from './modules/billing';
 import { shopModulesProcs } from './modules/shopmodules';
 import { marketersProcs } from './modules/marketers';
 import { notifyProcs } from './modules/notify';
@@ -144,4 +145,6 @@ export const REGISTRY = {
   ...shopModulesProcs,
   ...posProcs,
   ...payProcs,
+  // « J'ai payé »: a store sends its receipt to Pilotix (the control room checks it)
+  ...billingProcs,
 };
