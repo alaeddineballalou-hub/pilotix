@@ -290,7 +290,7 @@ export interface Notes {
   /** a piece's subtitles, by name + size + last change (the same file is listened to once) */
   words: Record<string, Segment[]>;
   /** how each ad of pubs/ was made */
-  ads: Record<string, { hook: string; body: string; strategy: string; at: string; post?: string }>;
+  ads: Record<string, { hook: string; body: string; strategy: string; at: string; post?: string; stage?: 'top' | 'middle' | 'bottom'; cta?: boolean }>;
   /** the post's fixed part (prix, livraison, lien…) */
   fixed?: string;
 }

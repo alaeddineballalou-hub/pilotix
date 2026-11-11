@@ -88,6 +88,12 @@
       "1": "Type 1: your own product (nobody else sells it)",
       "2": "Type 2: like competitors' (similar, not the same)",
       "3": "Type 3: exactly the same as competitors'"
+    },
+    "stages": "Customer journey stages",
+    "stageName": {
+      "top": "Discovery",
+      "middle": "Interest",
+      "bottom": "Purchase"
     }
   }
 }

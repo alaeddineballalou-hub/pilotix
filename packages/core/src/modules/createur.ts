@@ -37,7 +37,7 @@ const money = (n: number) => n.toLocaleString('fr-FR').replace(/[  ]/g, ' ');
 function shopView(c: CreditsConfig) {
   return {
     tools: c.tools.filter((x) => x.on).map((x) => ({ key: x.key, name: x.name, desc: x.desc, credits: c.on ? x.credits : 0, unit: x.unit })),
-    strategies: c.strategies.filter((x) => x.on).map((x) => ({ key: x.key, name: x.name, kind: x.kind, style: x.style, desc: x.desc, credits: c.on ? x.credits : 0, trend: x.trend, types: x.types })),
+    strategies: c.strategies.filter((x) => x.on).map((x) => ({ key: x.key, name: x.name, kind: x.kind, style: x.style, desc: x.desc, credits: c.on ? x.credits : 0, trend: x.trend, types: x.types, stages: x.stages })),
     packs: c.on ? c.packs.filter((x) => x.on).map((x) => ({ key: x.key, name: x.name, credits: x.credits, price: x.price, best: x.best })) : [],
   };
 }
@@ -126,6 +126,13 @@ export function demoLines(items: { hook: string }[], product: string, lang: keyo
 }
 
 const Strat = z.string().trim().max(40).optional();
+const Stage = z.enum(['top', 'middle', 'bottom']).optional();
+/** What the AI is told about the funnel stage of the video. */
+const STAGE_RULE: Record<'top' | 'middle' | 'bottom', string> = {
+  top: 'Étape : découverte. Les gens ne connaissent pas encore la boutique : attire l’attention, éveille la curiosité, montre le problème ou l’effet « waw ». Ne pousse pas encore l’achat.',
+  middle: 'Étape : intérêt. Les gens ont déjà vu le produit sans acheter : rassure-les avec des preuves (avis, livraison, qualité) et réponds à leurs doutes.',
+  bottom: 'Étape : achat. Les gens sont prêts : l’offre claire, ce qu’ils gagnent, et une raison d’acheter maintenant.',
+};
 
 export const createurProcs = {
   /** The page: the credits left, the tools and strategies that are on, the packs, and the last pack bought. */
@@ -239,6 +246,7 @@ export const createurProcs = {
     z.object({
       productId: z.number().int().positive().nullable(),
       strategy: Strat,
+      stage: Stage,
       lang: z.enum(['darija', 'fr', 'ar']).default('darija'),
       items: z
         .array(z.object({ hook: z.string().trim().max(400), body: z.string().trim().max(600).default('') }))
@@ -258,6 +266,7 @@ export const createurProcs = {
         'N’écris JAMAIS le prix, la livraison, le paiement, le lien ni le numéro : la boutique les ajoute elle-même en dessous (la partie fixe).',
         'Pas de mensonge, pas de promesse médicale, pas de faux avis. Chaque texte différent des autres.',
         st?.idea ? `Stratégie de la pub : ${st.name} — ${st.idea}` : '',
+        i.stage ? STAGE_RULE[i.stage] : '',
         got.tool.prompt ? `Consignes de la boutique Pilotix : ${got.tool.prompt}` : '',
         `Réponds seulement en JSON : {"lines": ["texte 1", "texte 2", …]} avec exactement ${i.items.length} textes, dans l’ordre.`,
       ]
@@ -303,7 +312,7 @@ export const createurProcs = {
   }),
 
   /** « Idées de hooks IA »: 10 short first sentences for the product's videos. */
-  'createur.hooks': proc(['marketer'], z.object({ productId: z.number().int().positive(), lang: z.enum(['darija', 'fr', 'ar']).default('darija'), strategy: Strat }), async (ctx, i) => {
+  'createur.hooks': proc(['marketer'], z.object({ productId: z.number().int().positive(), lang: z.enum(['darija', 'fr', 'ar']).default('darija'), strategy: Strat, stage: Stage }), async (ctx, i) => {
     const cfg = ctx.t && ctx.shop ? await creditsConfig(ctx.t) : DEFAULT_CREDITS;
     const pr = (await ctx.db.query(`SELECT name, description FROM products WHERE id = $1`, [i.productId]))[0];
     if (!pr) throw bad('Produit introuvable');
@@ -314,6 +323,7 @@ export const createurProcs = {
       `Écris ${LANG_RULE[i.lang]}. 4 à 10 mots chacun. Variés : une question, un problème, une surprise, un défi, une réaction.`,
       'Pas de mensonge, pas de promesse médicale.',
       st?.idea ? `Stratégie : ${st.name} — ${st.idea}` : '',
+      i.stage ? STAGE_RULE[i.stage] : '',
       got.tool.prompt ? `Consignes : ${got.tool.prompt}` : '',
       'Réponds seulement en JSON : {"lines": ["…", …]} (10 textes).',
     ]

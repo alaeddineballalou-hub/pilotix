@@ -11,6 +11,8 @@ import type { CrState } from './Credits';
 import { adHandle, Clip, Notes } from './folder';
 import { encodeOn, Format, FORMATS, goodMix, Look, makeAd, pieceSound, Stopped } from './mix';
 import { clipInfoNow } from './probe';
+import { useSession } from '../../lib/session';
+import { clearBrief, readBrief } from './brief';
 
 const K = 'createur.mx.';
 type Script = 'arabic' | 'latin' | 'fr';
@@ -29,7 +31,18 @@ export function MixTab(p: {
 }) {
   const { t } = useTranslation();
   const strategies = p.st.strategies;
-  const [strategy, setStrategy] = useState(strategies[0]?.key ?? '');
+  // sent from Marketing › Stratégies for this product: its stage and its formats, the first one chosen
+  const { session } = useSession();
+  const boutique = String(session?.shop?.id ?? 0);
+  const [brief, setBrief] = useState(() => {
+    const b = readBrief(boutique);
+    return b && b.productId === p.product.id ? { ...b, formats: b.formats.filter((k) => strategies.some((s) => s.key === k)) } : null;
+  });
+  const [strategy, setStrategy] = useState(brief?.formats[0] ?? strategies[0]?.key ?? '');
+  const stage = brief?.stage;
+  // awareness only: the video's end and the post ask to follow the page and comment CODE (off until the shop's codes run)
+  const [cta, setCta] = useState(false);
+  const [ctaText, setCtaText] = useState(t(K + 'ctaDefault'));
   const strat = strategies.find((s) => s.key === strategy) ?? strategies[0];
   const [format, setFormat] = useState<Format>('9:16');
   const has4k = [...p.hooks, ...p.bodies].some((c) => {
@@ -88,7 +101,7 @@ export function MixTab(p: {
     setIdeasFor(hook);
     setIdeas(null);
     try {
-      const r = await rpc('createur.hooks', { productId: p.product.id, strategy, lang: script === 'fr' ? 'fr' : 'darija' });
+      const r = await rpc('createur.hooks', { productId: p.product.id, strategy, lang: script === 'fr' ? 'fr' : 'darija', ...(stage ? { stage } : {}) });
       setIdeas(r.lines);
       p.onCredits();
       if (r.demo) toast(t(K + 'demoIdeas'), 'info');
@@ -135,7 +148,7 @@ export function MixTab(p: {
       hookText,
       subtitles,
       circle,
-      end: { price: price.replace(/[^\d ]/g, '').trim(), cod, delivery, logo: logo ? p.st.shop.logo : null },
+      end: { price: price.replace(/[^\d ]/g, '').trim(), cod, delivery, logo: logo ? p.st.shop.logo : null, ...(stage === 'top' && cta && ctaText.trim() ? { cta: ctaText.trim() } : {}) },
     };
     let made = 0;
     for (let i = 0; i < pairs.length; i++) {
@@ -157,7 +170,9 @@ export function MixTab(p: {
           stop: () => stop.current,
         });
         made++;
-        notes = await p.saveNotes((n) => void (n.ads[name] = { hook: hook.name, body: body.name, strategy: strat?.key ?? '', at: new Date().toISOString() }));
+        notes = await p.saveNotes(
+          (n) => void (n.ads[name] = { hook: hook.name, body: body.name, strategy: strat?.key ?? '', at: new Date().toISOString(), ...(stage ? { stage } : {}), ...(stage === 'top' && cta ? { cta: true } : {}) }),
+        );
         if (strat && strat.credits > 0) await rpc('createur.made', { strategy: strat.key, count: 1 }).catch((e) => toast(e?.message ?? '', 'bad'));
       } catch (e: any) {
         // a half-made file is removed
@@ -183,6 +198,38 @@ export function MixTab(p: {
 
   return (
     <div className="mx">
+      {brief && (
+        <section className="card mx-brief">
+          <div className="mx-brief-h">
+            <b>
+              <Icon name="megaphone" /> {t(K + 'brief', { stage: t(K + `stage.${brief.stage}`) })}
+            </b>
+            <button type="button" className="btn small ghost" onClick={() => (clearBrief(boutique), setBrief(null))} disabled={!!run}>
+              {t(K + 'briefClose')}
+            </button>
+          </div>
+          <p className="small muted">{t(K + `stageHelp.${brief.stage}`)}</p>
+          {brief.formats.length > 0 && (
+            <div className="mx-row">
+              {brief.formats.map((k, i) => (
+                <button key={k} type="button" className={`mx-chip${k === strat?.key ? ' on' : ''}`} onClick={() => setStrategy(k)} disabled={!!run}>
+                  <b>{i + 1}.</b> {strategies.find((s) => s.key === k)?.name ?? k}
+                </button>
+              ))}
+            </div>
+          )}
+          {brief.formats.length > 1 && <p className="small muted">{t(K + 'briefOneByOne')}</p>}
+          {brief.stage === 'top' && (
+            <div className="mx-cta">
+              <label className="mx-chip">
+                <input type="checkbox" checked={cta} onChange={(e) => setCta(e.target.checked)} disabled={!!run} /> {t(K + 'cta')}
+              </label>
+              {cta && <input className="mx-cta-text" dir="auto" value={ctaText} maxLength={60} onChange={(e) => setCtaText(e.target.value)} disabled={!!run} />}
+              <p className="small muted">{t(K + 'ctaHelp')}</p>
+            </div>
+          )}
+        </section>
+      )}
       <section className="card mx-sec">
         <h2>{t(K + 'strategy')}</h2>
         <div className="mx-strats">

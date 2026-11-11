@@ -33,5 +33,22 @@
   "trend": "Tendance",
   "credits": "{{n}} crédit / pub",
   "noRecs": "Aucun format actif pour ce type. Le centre de contrôle peut en ajouter.",
-  "nextStep": "Bientôt : choisir l'étape (découverte, intérêt, achat) et envoyer à l'Espace créateur."
+  "whichStage": "Pour quelle étape ?",
+  "stageWhy": {
+    "top": "Ici : attirer l'attention.",
+    "middle": "Ici : rassurer avec des preuves.",
+    "bottom": "Ici : l'offre et l'urgence."
+  },
+  "send": "Envoyer à l'Espace créateur ({{n}})",
+  "sendHelp": "L'Espace créateur s'ouvre avec ce produit, cette étape et ces formats.",
+  "stage": {
+    "top": "Découverte",
+    "middle": "Intérêt",
+    "bottom": "Achat"
+  },
+  "stageHelp": {
+    "top": "Des gens qui ne vous connaissent pas encore.",
+    "middle": "Ils ont vu ou cliqué, sans acheter.",
+    "bottom": "Ils sont prêts à commander."
+  }
 }

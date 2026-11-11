@@ -144,7 +144,23 @@
     "noEncoder": "Ce navigateur ne sait pas faire de vidéo. Utilisez Chrome ou Edge à jour sur un ordinateur.",
     "needPieces": "Ajoutez au moins 1 hook et 1 corps dans « Mes morceaux ».",
     "demoWords": "Aperçu : pas d'IA ici, pas de sous-titres.",
-    "types": "Type {{list}}"
+    "types": "Type {{list}}",
+    "brief": "Envoyé depuis Stratégies · étape {{stage}}",
+    "briefClose": "Fermer",
+    "briefOneByOne": "Faites un format à la fois : choisissez-le ici, créez les pubs, puis passez au suivant.",
+    "cta": "Finir par « Abonnez-vous et commentez CODE »",
+    "ctaDefault": "تابعونا و اكتبو CODE في التعليقات 🎁",
+    "ctaHelp": "Le texte s'affiche à la fin de la vidéo et dans le post. Le code lui-même n'est pas encore envoyé par Pilotix : laissez-le éteint tant que Référral › Code promo n'est pas prêt.",
+    "stage": {
+      "top": "Découverte",
+      "middle": "Intérêt",
+      "bottom": "Achat"
+    },
+    "stageHelp": {
+      "top": "Des gens qui ne vous connaissent pas encore.",
+      "middle": "Ils ont vu ou cliqué, sans acheter.",
+      "bottom": "Ils sont prêts à commander."
+    }
   },
   "ad": {
     "none": "Pas encore de pub. Allez dans « Mélanger ».",
@@ -190,6 +206,7 @@
     "out_one": "{{count}} pub publiée",
     "out_other": "{{count}} pubs publiées",
     "planned_one": "{{count}} pub prévue dans le calendrier",
-    "planned_other": "{{count}} pubs prévues dans le calendrier"
+    "planned_other": "{{count}} pubs prévues dans le calendrier",
+    "ctaLine": "🎁 Abonnez-vous à la page et commentez CODE : on vous envoie votre code."
   }
 }

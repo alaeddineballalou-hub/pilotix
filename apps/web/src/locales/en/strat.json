@@ -33,5 +33,22 @@
   "trend": "Trending",
   "credits": "{{n}} credit / ad",
   "noRecs": "No active format for this type. The control room can add some.",
-  "nextStep": "Soon: choose the stage (discovery, interest, purchase) and send to Espace créateur."
+  "whichStage": "For which stage?",
+  "stageWhy": {
+    "top": "Here: catch attention.",
+    "middle": "Here: reassure with proof.",
+    "bottom": "Here: the offer and urgency."
+  },
+  "send": "Send to Espace créateur ({{n}})",
+  "sendHelp": "Espace créateur opens with this product, this stage and these formats.",
+  "stage": {
+    "top": "Discovery",
+    "middle": "Interest",
+    "bottom": "Purchase"
+  },
+  "stageHelp": {
+    "top": "People who don't know you yet.",
+    "middle": "They watched or clicked, without buying.",
+    "bottom": "They are ready to order."
+  }
 }

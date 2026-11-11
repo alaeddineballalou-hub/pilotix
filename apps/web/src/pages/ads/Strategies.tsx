@@ -1,14 +1,17 @@
 // Marketing › Stratégies: the seller gives each product its type for the ads (1 his own product, 2 like a
 // competitor's, 3 exactly a competitor's), and Pilotix shows the video formats that fit that type best (core:
 // strat.*, the formats library is the control room's, platform/credits.ts). Espace créateur makes the videos.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
+import { useSession } from '../../lib/session';
 import { Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
+import { FunnelStage, saveBrief } from '../createur/brief';
 
 type Type = 1 | 2 | 3;
 const TYPES: Type[] = [1, 2, 3];
+const STAGES: FunnelStage[] = ['top', 'middle', 'bottom'];
 const K = 'strat.';
 
 export function Strategies() {
@@ -17,6 +20,9 @@ export function Strategies() {
   const setType = useAction('strat.setType', { silent: false });
   const [pick, setPick] = useState<number | null>(null);
   const [filter, setFilter] = useState<'all' | 'none' | Type>('all');
+  const [stage, setStage] = useState<FunnelStage>('top');
+  const [chosen, setChosen] = useState<Set<string>>(new Set());
+  const { session } = useSession();
 
   const data = q.data;
   const products = useMemo(() => {
@@ -24,13 +30,24 @@ export function Strategies() {
     return filter === 'all' ? all : filter === 'none' ? all.filter((p) => p.type === null) : all.filter((p) => p.type === filter);
   }, [data, filter]);
 
+  const cur0 = data ? (data.products.find((p) => p.id === pick) ?? products[0] ?? data.products[0]) : undefined;
+  const recKeys = cur0?.type && data ? (data.byStage[`${cur0.type}-${stage}`] ?? []) : [];
+  const recSig = `${cur0?.id}-${cur0?.type}-${stage}-${recKeys.join(',')}`;
+  // a new product, type or stage: the 3 best formats are ticked
+  useEffect(() => setChosen(new Set(recKeys.slice(0, 3))), [recSig]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   if (!data) return <Loading />;
   if (!data.products.length) return <Empty>{t(K + 'noProducts')}</Empty>;
 
   const cur = data.products.find((p) => p.id === pick) ?? products[0] ?? data.products[0];
   const missing = data.products.filter((p) => p.type === null).length;
-  const recs = cur.type ? data.byType[cur.type].map((k) => data.formats.find((f) => f.key === k)!).filter(Boolean) : [];
+  const recs = recKeys.map((k) => data.formats.find((f) => f.key === k)!).filter(Boolean);
+  const send = () => {
+    const formats = recs.filter((f) => chosen.has(f.key)).map((f) => f.key);
+    saveBrief(String(session?.shop?.id ?? 0), { productId: cur.id, stage, formats });
+    location.hash = '/createur';
+  };
 
   return (
     <div className="st">
@@ -97,14 +114,39 @@ export function Strategies() {
 
           {cur.type ? (
             <>
+              <p className="lab st-lab2">{t(K + 'whichStage')}</p>
+              <div className="st-pick">
+                {STAGES.map((n) => (
+                  <button key={n} type="button" className={`st-pickbtn st-stage${stage === n ? ' on' : ''}`} aria-pressed={stage === n} onClick={() => setStage(n)}>
+                    <b>{t(K + `stage.${n}`)}</b>
+                    <small>{t(K + `stageHelp.${n}`)}</small>
+                  </button>
+                ))}
+              </div>
               <h4 className="st-rech">
                 <Icon name="check" /> {t(K + 'recs', { n: recs.length })}
               </h4>
-              <p className="muted small">{t(K + `why.${cur.type}`)}</p>
+              <p className="muted small">
+                {t(K + `why.${cur.type}`)} {t(K + `stageWhy.${stage}`)}
+              </p>
               {recs.length ? (
                 <ol className="st-recs">
                   {recs.map((f, i) => (
-                    <li key={f.key} className={`st-rec${i < 3 ? ' top' : ''}`}>
+                    <li key={f.key} className={`st-rec${chosen.has(f.key) ? ' top' : ''}`}>
+                      <input
+                        type="checkbox"
+                        className="st-tick"
+                        aria-label={f.name}
+                        checked={chosen.has(f.key)}
+                        onChange={(e) =>
+                          setChosen((o) => {
+                            const n = new Set(o);
+                            if (e.target.checked) n.add(f.key);
+                            else n.delete(f.key);
+                            return n;
+                          })
+                        }
+                      />
                       <span className="st-n">{i + 1}</span>
                       <span className="st-rt">
                         <b>{f.name}</b>
@@ -121,9 +163,12 @@ export function Strategies() {
               ) : (
                 <p className="muted small">{t(K + 'noRecs')}</p>
               )}
-              <p className="small muted">
-                <Icon name="film" /> {t(K + 'nextStep')}
-              </p>
+              <div className="st-send">
+                <button type="button" className="btn primary" disabled={!chosen.size} onClick={send}>
+                  <Icon name="film" /> {t(K + 'send', { n: chosen.size })}
+                </button>
+                <small className="muted">{t(K + 'sendHelp')}</small>
+              </div>
             </>
           ) : (
             <p className="st-hint">{t(K + 'chooseFirst')}</p>

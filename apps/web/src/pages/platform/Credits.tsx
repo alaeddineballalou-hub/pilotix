@@ -243,7 +243,7 @@ export function CreditsPage({ staff }: { staff: Staff }) {
           <button
             type="button"
             className="btn small"
-            onClick={() => set((x) => void x.strategies.push({ key: '', name: t(K + 'newStrat'), kind: 'recipe', style: 'ugly', desc: '', credits: 0, trend: false, on: false, idea: '', types: [1, 2, 3] } as Strat))}
+            onClick={() => set((x) => void x.strategies.push({ key: '', name: t(K + 'newStrat'), kind: 'recipe', style: 'ugly', desc: '', credits: 0, trend: false, on: false, idea: '', types: [1, 2, 3], stages: ['top', 'middle', 'bottom'] } as Strat))}
           >
             + {t(K + 'addStrat')}
           </button>
@@ -299,6 +299,26 @@ export function CreditsPage({ staff }: { staff: Staff }) {
                       }
                     />{' '}
                     {t(K + `typeName.${n}`)}
+                  </label>
+                ))}
+              </fieldset>
+              <fieldset className="field crs-types">
+                <legend className="lab">{t(K + 'stages')}</legend>
+                {(['top', 'middle', 'bottom'] as const).map((n) => (
+                  <label key={n} className="crs-check">
+                    <input
+                      type="checkbox"
+                      checked={s.stages.includes(n)}
+                      onChange={(e) =>
+                        set((y) => {
+                          const own = y.strategies[k];
+                          const next = (['top', 'middle', 'bottom'] as const).filter((x) => (x === n ? e.target.checked : own.stages.includes(x)));
+                          // never none: a strategy fits at least one stage
+                          if (next.length) own.stages = next as Strat['stages'];
+                        })
+                      }
+                    />{' '}
+                    {t(K + `stageName.${n}`)}
                   </label>
                 ))}
               </fieldset>

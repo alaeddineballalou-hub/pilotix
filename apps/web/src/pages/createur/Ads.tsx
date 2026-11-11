@@ -203,7 +203,8 @@ export function PublishTab(p: {
         const hookText = how ? (p.notes.text[how.hook] ?? '') : '';
         return { hook: hookText, body: '' };
       });
-      const r = await rpc('createur.texts', { productId: p.product.id, strategy: p.notes.ads[p.ads[0]?.name]?.strategy, lang: 'darija', items });
+      const first = p.notes.ads[p.ads[0]?.name];
+      const r = await rpc('createur.texts', { productId: p.product.id, strategy: first?.strategy, ...(first?.stage ? { stage: first.stage } : {}), lang: 'darija', items });
       const next = Object.fromEntries(p.ads.map((a, k) => [a.name, r.lines[k] ?? '']));
       setParts(next);
       if (r.demo) toast(t(P + 'demo'), 'info');
@@ -241,7 +242,9 @@ export function PublishTab(p: {
           );
           await rpc('cm.plan.videoDone', { id: r.id });
         }
-        const caption = [parts[a.name]?.trim(), fixed.trim()].filter(Boolean).join('\n\n');
+        // an awareness video made with « commentez CODE »: the post asks the same, before the fixed part
+        const cta = p.notes.ads[a.name]?.cta ? t(P + 'ctaLine') : '';
+        const caption = [parts[a.name]?.trim(), cta, fixed.trim()].filter(Boolean).join('\n\n');
         let at: string | null = null;
         if (when !== 'now') {
           const base = new Date(`${when === 'date' ? day : tomorrow}T${pad(hh || 0)}:${pad(mm || 0)}:00`);

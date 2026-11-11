@@ -12,7 +12,7 @@ before(async () => {
   ({ db, as } = await setup(20));
 });
 
-const lib: StratFormat[] = DEFAULT_CREDITS.strategies.map((x) => ({ key: x.key, name: x.name, desc: x.desc, kind: x.kind, style: x.style, credits: x.credits, trend: x.trend, types: x.types }));
+const lib: StratFormat[] = DEFAULT_CREDITS.strategies.map((x) => ({ key: x.key, name: x.name, desc: x.desc, kind: x.kind, style: x.style, credits: x.credits, trend: x.trend, types: x.types, stages: x.stages }));
 
 test('the formats for each type: only recipes made for it, the most precise first, never an editing style', () => {
   const t2 = recommend(lib, 2).map((x) => x.key);
@@ -28,12 +28,26 @@ test('the formats for each type: only recipes made for it, the most precise firs
   assert.ok(t1.includes('tutoriel') && t1.includes('microtrottoir') && !t1.includes('unboxing'));
 });
 
+test('with the funnel stage: only the formats made for it, the ones made for that stage only first', () => {
+  const top3 = recommend(lib, 3, 'top').map((x) => x.key);
+  assert.ok(!top3.includes('offre') && !top3.includes('livraison'));
+  const bottom3 = recommend(lib, 3, 'bottom').map((x) => x.key);
+  assert.ok(bottom3.includes('offre'));
+  assert.deepEqual(lib.find((x) => x.key === bottom3[0])?.types, [3]);
+  assert.ok(bottom3.includes('livraison') && bottom3.includes('captures') && !bottom3.includes('probleme'));
+  const top1 = recommend(lib, 1, 'top').map((x) => x.key);
+  assert.ok(top1.includes('microtrottoir') && top1.includes('demo') && !top1.includes('temoignage'));
+  // every type and stage has at least one format
+  for (const t of [1, 2, 3] as const) for (const st of ['top', 'middle', 'bottom'] as const) assert.ok(recommend(lib, t, st).length > 0, `${t}-${st}`);
+});
+
 test('a product gets its type; the marketer and the seller may, a confirmation agent may not', async () => {
   const mk = await as(EMAILS.marketer);
   const s: any = await call('strat.state', mk, {});
   assert.ok(s.products.length > 0);
   assert.ok(s.products.every((p: any) => p.type === null));
   assert.deepEqual(s.byType[2], recommend(lib, 2).map((x) => x.key));
+  assert.deepEqual(s.byStage['3-bottom'], recommend(lib, 3, 'bottom').map((x) => x.key));
   const id = s.products[0].id;
   await call('strat.setType', mk, { id, type: 2 });
   const after: any = await call('strat.state', await as(EMAILS.vendeur), {});

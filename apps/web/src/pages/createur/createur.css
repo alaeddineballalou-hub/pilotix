@@ -134,3 +134,8 @@
   .mx-two { grid-template-columns: 1fr; }
   .pb-item { grid-template-columns: 1fr; }
 }
+.mx-brief { border: 2px solid #f6c88a; background: #fffaf2; display: flex; flex-direction: column; gap: 8px; }
+.mx-brief-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.mx-brief-h b { display: inline-flex; align-items: center; gap: 6px; }
+.mx-cta { display: flex; flex-direction: column; gap: 6px; }
+.mx-cta-text { max-width: 420px; }

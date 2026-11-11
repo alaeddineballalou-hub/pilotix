@@ -52,7 +52,34 @@ export interface CreditStrategy {
   /** the product types it fits best: 1 the shop's own product (nobody else sells it), 2 like a competitor's (similar,
    *  not the same), 3 exactly a competitor's (Marketing › Stratégies recommends with it) */
   types: ProductType[];
+  /** the funnel stages it fits: « top » people who don't know the shop yet (awareness), « middle » people who watched
+   *  or clicked without buying, « bottom » people ready to buy */
+  stages: FunnelStage[];
 }
+
+export const FUNNEL_STAGES = ['top', 'middle', 'bottom'] as const;
+export type FunnelStage = (typeof FUNNEL_STAGES)[number];
+/** Each default strategy's stages (a saved strategy without stages takes its default's, or all three). */
+const DEFAULT_STAGES: Record<string, FunnelStage[]> = {
+  ugly: ['top', 'middle', 'bottom'],
+  propre: ['top', 'middle', 'bottom'],
+  probleme: ['top'],
+  temoignage: ['middle'],
+  pov: ['top', 'middle'],
+  resultat: ['top', 'middle'],
+  unboxing: ['middle'],
+  fidele: ['middle', 'bottom'],
+  demo: ['top'],
+  comparaison: ['middle'],
+  erreur: ['top'],
+  coulisses: ['middle'],
+  livraison: ['middle', 'bottom'],
+  microtrottoir: ['top'],
+  tutoriel: ['top', 'middle'],
+  offre: ['bottom'],
+  captures: ['middle', 'bottom'],
+  details: ['middle'],
+};
 
 export const PRODUCT_TYPES = [1, 2, 3] as const;
 export type ProductType = (typeof PRODUCT_TYPES)[number];
@@ -120,6 +147,7 @@ export const DEFAULT_CREDITS: CreditsConfig = {
       on: true,
       idea: 'Ton direct et simple, comme un client qui parle.',
       types: [1, 2, 3],
+      stages: [],
     },
     {
       key: 'probleme',
@@ -132,6 +160,7 @@ export const DEFAULT_CREDITS: CreditsConfig = {
       on: true,
       idea: 'Commence par le problème du client, puis la solution avec le produit.',
       types: [1, 2, 3],
+      stages: [],
     },
     {
       key: 'temoignage',
@@ -144,8 +173,9 @@ export const DEFAULT_CREDITS: CreditsConfig = {
       on: true,
       idea: 'Comme un client content qui raconte son expérience.',
       types: [1, 2, 3],
+      stages: [],
     },
-    { key: 'propre', name: 'Propre', kind: 'style', style: 'clean', desc: 'Texte fin avec une ombre, look plus « marque ».', credits: 0, trend: false, on: true, idea: 'Ton soigné, rassurant.', types: [1, 2, 3] },
+    { key: 'propre', name: 'Propre', kind: 'style', style: 'clean', desc: 'Texte fin avec une ombre, look plus « marque ».', credits: 0, trend: false, on: true, idea: 'Ton soigné, rassurant.', types: [1, 2, 3], stages: [] },
     // the video formats (version 2): what each video shows, and the product types it fits best
     ...(
       [
@@ -164,10 +194,11 @@ export const DEFAULT_CREDITS: CreditsConfig = {
         ['captures', 'Captures WhatsApp', 'clean', 'Les messages des clients contents, en captures.', 'Des preuves réelles : les mots des clients.', [2, 3], false],
         ['details', 'Zoom détails', 'clean', 'Gros plans : matière, coutures, poids, boîte.', 'La qualité qu’on voit : chaque détail compte.', [2], false],
       ] as const
-    ).map(([key, name, style, desc, idea, types, trend]) => ({ key, name, kind: 'recipe' as const, style, desc, credits: 0, trend, on: true, idea, types: [...types] as ProductType[] })),
+    ).map(([key, name, style, desc, idea, types, trend]) => ({ key, name, kind: 'recipe' as const, style, desc, credits: 0, trend, on: true, idea, types: [...types] as ProductType[], stages: [] as FunnelStage[] })),
   ],
   version: STRATEGIES_VERSION,
 };
+for (const x of DEFAULT_CREDITS.strategies) x.stages = [...(DEFAULT_STAGES[x.key] ?? FUNNEL_STAGES)];
 
 // ---------------------------------------------------------------- the control room's settings
 const SETTING = 'ai_credits';
@@ -183,6 +214,11 @@ const int = (x: unknown, min: number, max: number, dflt: number) => {
 const typesOf = (x: unknown): ProductType[] => {
   const got = PRODUCT_TYPES.filter((n) => Array.isArray(x) && x.some((y) => Number(y) === n));
   return got.length ? [...got] : [...PRODUCT_TYPES];
+};
+/** the funnel stages a strategy fits (none given: its default's, or all three) */
+const stagesOf = (x: unknown, key: string): FunnelStage[] => {
+  const got = FUNNEL_STAGES.filter((n) => Array.isArray(x) && x.includes(n));
+  return [...(got.length ? got : (DEFAULT_STAGES[key] ?? FUNNEL_STAGES))];
 };
 const keyOk = (x: unknown) => /^[a-z0-9-]{1,40}$/.test(String(x ?? ''));
 /** a key from a name (« Avant / Après » → « avant-apres »), unique in the list */
@@ -256,6 +292,7 @@ export function cleanCredits(v: any): CreditsConfig {
           on: x?.on !== false,
           idea: clip(x?.idea, 600),
           types: typesOf(x?.types),
+          stages: stagesOf(x?.stages, clip(x?.key, 40)),
         }))
     : structuredClone(d.strategies);
   // a config saved before the newer default strategies: they are added once (at the end, on as the defaults are)

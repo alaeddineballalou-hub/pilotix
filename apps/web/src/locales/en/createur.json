@@ -144,7 +144,23 @@
     "noEncoder": "This browser cannot make videos. Use an up-to-date Chrome or Edge on a computer.",
     "needPieces": "Add at least 1 hook and 1 body in « My pieces ».",
     "demoWords": "Preview: no AI here, no subtitles.",
-    "types": "Type {{list}}"
+    "types": "Type {{list}}",
+    "brief": "Sent from Strategies · stage {{stage}}",
+    "briefClose": "Close",
+    "briefOneByOne": "Make one format at a time: choose it here, create the ads, then move to the next.",
+    "cta": "End with « Follow us and comment CODE »",
+    "ctaDefault": "تابعونا و اكتبو CODE في التعليقات 🎁",
+    "ctaHelp": "The text shows at the end of the video and in the post. Pilotix does not send the code itself yet: keep it off until Referral › Code promo is ready.",
+    "stage": {
+      "top": "Discovery",
+      "middle": "Interest",
+      "bottom": "Purchase"
+    },
+    "stageHelp": {
+      "top": "People who don't know you yet.",
+      "middle": "They watched or clicked, without buying.",
+      "bottom": "They are ready to order."
+    }
   },
   "ad": {
     "none": "No ad yet. Go to « Mix ».",
@@ -190,6 +206,7 @@
     "out_one": "{{count}} ad published",
     "out_other": "{{count}} ads published",
     "planned_one": "{{count}} ad planned in the calendar",
-    "planned_other": "{{count}} ads planned in the calendar"
+    "planned_other": "{{count}} ads planned in the calendar",
+    "ctaLine": "🎁 Follow the page and comment CODE: we send you your code."
   }
 }

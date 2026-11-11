@@ -60,3 +60,8 @@
 @media (max-width: 760px) {
   .st-two, .st-types, .st-pick { grid-template-columns: 1fr; }
 }
+.st-lab2 { margin-top: 16px; }
+.st-stage.on { background: #efedff; color: #3c3489; border-color: currentColor; }
+.st-rec { align-items: flex-start; }
+.st-tick { margin-top: 5px; width: 18px; height: 18px; flex: none; accent-color: #f39a1e; }
+.st-send { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin-top: 8px; }

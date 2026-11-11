@@ -38,7 +38,7 @@ export interface Look {
   hookText: boolean;
   subtitles: boolean;
   circle: boolean;
-  end: { price: string; cod: boolean; delivery: boolean; logo: string | null };
+  end: { price: string; cod: boolean; delivery: boolean; logo: string | null; cta?: string };
 }
 
 export interface Piece {
@@ -204,6 +204,17 @@ function drawEnd(g: CanvasRenderingContext2D, W: number, H: number, end: Look['e
   g.textBaseline = 'middle';
   g.direction = 'rtl';
   let y = H * 0.84;
+  // the awareness ending (« Abonnez-vous et commentez CODE »): above the price
+  if (end.cta?.trim()) {
+    const fs = Math.round(50 * k);
+    g.font = `900 ${fs}px ${FONT}`;
+    const t = end.cta.trim();
+    const w = Math.min(W - 40 * k, g.measureText(t).width + 50 * k);
+    const cy = H * 0.68;
+    box(g, (W - w) / 2, cy - fs * 0.75, w, fs * 1.5, 18 * k, '#F39A1E');
+    g.fillStyle = '#FFFFFF';
+    g.fillText(t, W / 2, cy, W - 70 * k);
+  }
   if (end.price.trim()) {
     const fs = Math.round(76 * k);
     g.font = `900 ${fs}px ${FONT}`;

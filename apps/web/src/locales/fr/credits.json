@@ -88,6 +88,12 @@
       "1": "Type 1 : votre propre produit (personne d'autre ne le vend)",
       "2": "Type 2 : comme celui des concurrents (proche, pas pareil)",
       "3": "Type 3 : exactement le même que les concurrents"
+    },
+    "stages": "Étapes du parcours client",
+    "stageName": {
+      "top": "Découverte",
+      "middle": "Intérêt",
+      "bottom": "Achat"
     }
   }
 }

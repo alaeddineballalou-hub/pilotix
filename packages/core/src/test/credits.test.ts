@@ -50,6 +50,10 @@ test('the video formats: the library, the product types, and the old saved setti
   assert.equal(d.strategies.length, 18);
   assert.ok(d.strategies.every((x) => x.types.length >= 1 && x.types.every((n) => [1, 2, 3].includes(n))));
   assert.deepEqual(d.strategies.find((x) => x.key === 'comparaison')?.types, [2]);
+  assert.deepEqual(d.strategies.find((x) => x.key === 'offre')?.stages, ['bottom']);
+  // stages: unknown ones go; none saved: the default's (or all three for a strategy of the owner)
+  const sg = cleanCredits({ version: STRATEGIES_VERSION, strategies: [{ key: 'offre', name: 'Offre' }, { name: 'X', stages: ['top', 'nope'] }, { name: 'Y' }] });
+  assert.deepEqual(sg.strategies.map((x) => x.stages), [['bottom'], ['top'], ['top', 'middle', 'bottom']]);
   // the types are made safe: unknown ones go, none at all means the three
   const one = cleanCredits({ version: STRATEGIES_VERSION, strategies: [{ name: 'A', types: [3, '2', 9, 3] }, { name: 'B', types: [] }, { name: 'C' }] });
   assert.deepEqual(
