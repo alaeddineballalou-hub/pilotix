@@ -7,7 +7,9 @@ import { Login } from './layout/Login';
 import { ResetPassword } from './layout/ResetPassword';
 import { AGENCY_NAV, canSee, canSeeChild, homeFor, isPlainAgent, MARKETER_NAV, NAV, NavItem } from './layout/nav';
 import { applyTheme, Shell } from './layout/Shell';
-import { ApiError, sendClientReport, server } from './lib/backend';
+import { ApiError, DEMO_ONLY, sendClientReport, server } from './lib/backend';
+import { readTryLink, type TryLink } from './lib/tryLink';
+import { DEMO_PASSWORD } from '@pilotix/shared';
 import { firstSubOn, hasPlanSubs, pageIsOn } from './lib/features';
 import './lib/i18n';
 import { ModalHost } from './lib/modals';
@@ -132,6 +134,36 @@ const PublicPros = lazy(() => import('./pages/pro').then((m) => ({ default: m.Pu
 /** « Aide »: the films for everyone, « Contacter Pilotix » for the administrators. */
 const Aide = lazy(() => import('./pages/aide').then((m) => ({ default: m.Aide })));
 
+/**
+ * The demo build only (lib/tryLink): « #essayer-<account>---<page> » logs in with that demo account, then opens that page
+ * (its home without one). True while it logs in. Read when the demo loads and whenever the link changes.
+ */
+function useTryLink(ready: boolean): boolean {
+  const { login } = useSession();
+  const [link, setLink] = useState<TryLink | null>(() => readTryLink());
+  useEffect(() => {
+    if (!DEMO_ONLY) return;
+    const on = () => setLink(readTryLink());
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, []);
+  useEffect(() => {
+    if (!link || !ready) return;
+    let gone = false;
+    login(link.email, DEMO_PASSWORD)
+      .catch(() => {})
+      .finally(() => {
+        if (gone) return;
+        go(link.route ? `#/${link.route}` : '#/accueil', { replace: true });
+        setLink(null);
+      });
+    return () => {
+      gone = true;
+    };
+  }, [link, ready]);
+  return !!link;
+}
+
 function App() {
   const { session, ready, picker, phoneStep } = useSession();
   // #/page/sub/rest… — on the site: /<boutique>/page/sub/rest… (lib/route)
@@ -140,6 +172,9 @@ function App() {
   // the boutique's modules (Point de vente…): the menu shows their pages once they are on (Management › Modules)
   useShopModules();
   const opening = useAddressBoutique(session?.shop?.slug, !!session && ready, parts.join('/'));
+  // the demo only: an « Essayer » link of the Deploy page logs in with its demo account and opens its page
+  const trying = useTryLink(ready);
+  if (trying) return <Loading />;
   if (parts[0] === 'platform')
     return (
       <Suspense fallback={<Loading />}>
