@@ -1,13 +1,14 @@
 /* Motion for the whole app (ui/motion.ts marks what moves). Nothing here changes a page at rest: every keyframe ends on
    the element's own style, so a browser that plays none of it shows the same app. Short and soft: this is a work tool. */
 
-/* 1. A page change: the old page melts into the new one; the menu's orange mark slides to its new line. */
+/* 1. A page change: the old page melts into the new one, and the menu's orange mark with it. */
 /* the page under the melt already answers a click */
 ::view-transition { pointer-events: none; }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .22s; animation-timing-function: ease; }
-::view-transition-group(px-nav-on) { animation-duration: .4s; animation-timing-function: cubic-bezier(.16, 1, .3, 1); }
-::view-transition-old(px-nav-on) { display: none; }
-::view-transition-new(px-nav-on) { animation: none; mix-blend-mode: normal; width: 100%; height: 100%; }
+/* the menu's mark on its way (ui/motion navGlide): a copy travels under the words, the line's own mark waits for it */
+.px-nav-ghost { position: fixed; z-index: 0; margin: 0; pointer-events: none; }
+#side.px-gliding .nav-item { z-index: 1; }
+html #side.px-gliding .nav-item[data-px-glide] { background: transparent !important; box-shadow: none !important; }
 @keyframes px-page-in { from { opacity: 0; } }
 main#page[data-px-page] { animation: px-page-in .24s ease backwards; }
 

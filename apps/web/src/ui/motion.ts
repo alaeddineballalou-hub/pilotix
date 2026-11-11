@@ -7,7 +7,6 @@
 import { currentRoute, setRouteMotion } from '../lib/route';
 
 const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-const NAV_NAME = 'px-nav-on';
 /** what never gets a list entrance: drawings, menus and pickers, table heads and cells, the bars of buttons */
 const STILL = 'svg, select, thead, tr, nav, [role="listbox"], [role="menu"], .pxs-pick, .px-grp-bar, .modal-foot, .pager, [data-px-still]';
 const ITEM_TAGS = new Set(['TR', 'DIV', 'LI', 'ARTICLE', 'SECTION', 'A']);
@@ -54,9 +53,8 @@ function routeMotion(apply: () => void) {
     page.setAttribute('data-px-page', '');
     return;
   }
-  const from = activeNav();
-  from?.style.setProperty('view-transition-name', NAV_NAME);
-  let to: HTMLElement | null = null;
+  const from = activeNav()?.getBoundingClientRect() ?? null;
+  let glide: Animation | null = null;
   const vt = start.call(
     document,
     () =>
@@ -69,9 +67,8 @@ function routeMotion(apply: () => void) {
           mo.disconnect();
           clearTimeout(wait);
           clearTimeout(cap);
-          from?.style.removeProperty('view-transition-name');
-          to = from ? activeNav() : null;
-          to?.style.setProperty('view-transition-name', NAV_NAME);
+          const to = from ? activeNav() : null;
+          if (from && to) glide = navGlide(from, to);
           done();
         };
         // the new page is on screen a moment after React is told (a transition): wait for it, never for long
@@ -86,12 +83,80 @@ function routeMotion(apply: () => void) {
         apply();
       }),
   );
-  const clean = () => {
-    from?.style.removeProperty('view-transition-name');
-    to?.style.removeProperty('view-transition-name');
+  // the mark starts to move when the new page starts to show, not while the screen is still held
+  const play = () => glide?.play();
+  vt.ready.then(play, play);
+  vt.finished.catch(() => {});
+}
+
+/** How the menu's orange mark reaches its new line. « fade »: it melts with the page (nothing more to do). */
+type NavMo = 'fade' | 'slide' | 'stretch' | 'grow' | 'pop';
+const NAV_MO: NavMo = 'fade';
+function navMo(): NavMo {
+  try {
+    const v = localStorage.getItem('px.navmo');
+    if (v && ['fade', 'slide', 'stretch', 'grow', 'pop'].includes(v)) return v as NavMo;
+  } catch {
+    /* no storage: the default */
+  }
+  return NAV_MO;
+}
+
+/** A copy of the mark (its colour, its round corners) travels under the words; the line's own mark waits for it. */
+function navGlide(from: DOMRect, to: HTMLElement): Animation | null {
+  const mode = navMo();
+  const side = document.getElementById('side');
+  if (mode === 'fade' || !side) return null;
+  side.querySelectorAll('.px-nav-ghost').forEach((g) => g.remove());
+  side.querySelectorAll('[data-px-glide]').forEach((g) => g.removeAttribute('data-px-glide'));
+  const r = to.getBoundingClientRect();
+  if (Math.abs(r.top - from.top) < 2 && mode !== 'pop' && mode !== 'grow') return null;
+  const cs = getComputedStyle(to);
+  const g = document.createElement('i');
+  g.className = 'px-nav-ghost';
+  g.setAttribute('aria-hidden', 'true');
+  Object.assign(g.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`, backgroundColor: cs.backgroundColor, backgroundImage: cs.backgroundImage, borderRadius: cs.borderRadius, boxShadow: cs.boxShadow });
+  const rtl = document.documentElement.dir === 'rtl';
+  const out = 'cubic-bezier(.16, 1, .3, 1)';
+  let frames: Keyframe[];
+  let opts: KeyframeAnimationOptions;
+  if (mode === 'slide') {
+    frames = [{ transform: `translateY(${from.top - r.top}px)` }, { transform: 'none' }];
+    opts = { duration: 380, easing: out };
+  } else if (mode === 'stretch') {
+    const top = Math.min(from.top, r.top);
+    const span = Math.max(from.bottom, r.bottom) - top;
+    frames = [
+      { top: `${from.top}px`, height: `${from.height}px`, easing: 'cubic-bezier(.5, 0, .7, .4)' },
+      { top: `${top}px`, height: `${span}px`, offset: 0.4, easing: out },
+      { top: `${r.top}px`, height: `${r.height}px` },
+    ];
+    opts = { duration: 460 };
+  } else if (mode === 'grow') {
+    g.style.transformOrigin = rtl ? '100% 50%' : '0 50%';
+    frames = [{ transform: 'scaleX(0)' }, { transform: 'none' }];
+    opts = { duration: 340, easing: out };
+  } else {
+    frames = [
+      { transform: 'scale(.82)', opacity: 0 },
+      { transform: 'none', opacity: 1 },
+    ];
+    opts = { duration: 320, easing: 'cubic-bezier(.3, 1.4, .5, 1)' };
+  }
+  side.classList.add('px-gliding');
+  to.setAttribute('data-px-glide', '');
+  side.prepend(g);
+  const a = g.animate(frames, { ...opts, fill: 'backwards' });
+  a.pause();
+  const end = () => {
+    g.remove();
+    to.removeAttribute('data-px-glide');
+    if (!side.querySelector('.px-nav-ghost')) side.classList.remove('px-gliding');
   };
-  vt.ready.catch(() => {});
-  vt.finished.then(clean, clean);
+  a.finished.then(end, end);
+  // never left waiting: a transition the browser dropped still lets the mark land
+  window.setTimeout(() => a.playState === 'paused' && a.play(), 1500);
+  return a;
 }
 
 /** "1 555 850", "12,5", "42.5", "1,204": the number in a text, with what it takes to write it the same way again. */
