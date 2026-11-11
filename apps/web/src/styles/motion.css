@@ -30,6 +30,11 @@ main .ov-bar-t i { transform-origin: 0 50%; animation: px-grow-x .7s cubic-bezie
 [dir="rtl"] main .ov-bar-t i { transform-origin: 100% 50%; }
 main .ov-fun-b i { transform-origin: 50% 100%; animation: px-grow .6s cubic-bezier(.16, 1, .3, 1) backwards; }
 main :is(.ov-stack, .pp-q-bar) { animation: px-draw .7s cubic-bezier(.3, .7, .2, 1) backwards; }
+/* the small rate bar of a number box fills, the dashboard's ring settles, an empty box fades in */
+main .kpi-bar i { transform-origin: 0 50%; animation: px-grow-x .7s cubic-bezier(.16, 1, .3, 1) backwards; }
+[dir="rtl"] main .kpi-bar i { transform-origin: 100% 50%; }
+main .ov-donut svg { animation: px-open .5s cubic-bezier(.16, 1, .3, 1) backwards; }
+main .empty-box { animation: px-fade .3s ease backwards; }
 
 /* 4. What opens over the page: a window settles into place (the menu mark's « pop », without the bounce), a message rises. */
 @keyframes px-open { from { opacity: 0; transform: translateY(8px) scale(.97); } }
@@ -44,6 +49,17 @@ dialog.modal[open]::backdrop { animation: px-veil .2s ease backwards; }
    :where() keeps this at the lowest weight: any rule of a page that sets its own transition still wins. */
 :where(.btn, .tab, .icon-btn, .kpi, .side .nav-item, .pxo-seg button) { transition: scale .12s ease, background-color .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease; }
 :where(.btn, .tab, .icon-btn, .pxo-seg button):active:not(:disabled) { scale: .97; }
+/* a number box that leads somewhere lifts a hair under the pointer; a row and a field answer softly */
+:where(a.kpi, button.kpi) { transition: translate .16s ease, border-color .16s ease, box-shadow .16s ease; }
+@media (hover: hover) { :where(a.kpi, button.kpi):hover { translate: 0 -1px; } }
+:where(.tbl tbody tr) { transition: background-color .12s ease; }
+:where(input, select, textarea) { transition: border-color .16s ease, box-shadow .16s ease; }
+
+/* 6. Small signs of life: a menu count that just changed gives one small pop, a picture fades in when it lands. */
+@keyframes px-tick { 40% { scale: 1.18; } }
+.nav-count[data-px-tick] { animation: px-tick .36s cubic-bezier(.3, 1.4, .5, 1); }
+@keyframes px-img { from { opacity: 0; } }
+img[data-px-img] { animation: px-img .24s ease; }
 
 /* « Reduce motion » on the device: nothing slides, grows or draws; a list keeps one plain short fade. */
 @media (prefers-reduced-motion: reduce) {
@@ -51,4 +67,6 @@ dialog.modal[open]::backdrop { animation: px-veil .2s ease backwards; }
   main svg rect:is(.s-b, .s-r, .s-p, .b, .b-all, .b-del, .ct-b-meta, .ct-b-tt), main svg :is(path.ln, path.lt, path.qa, path.qd, path.pb-l-conv, path.pb-l-real, path.ov-ln, polyline.sr-pl), main .ov-gauge path + path, main svg circle.dt, main .ov-bar-t i, main .ov-fun-b i, main :is(.ov-stack, .pp-q-bar) { animation: none; }
   .modal-wrap .modal:not(:has(.loading)), dialog.modal[open], .toast { animation: px-veil .16s ease backwards; }
   :where(.btn, .tab, .icon-btn, .pxo-seg button):active:not(:disabled) { scale: none; }
+  main .kpi-bar i, main .ov-donut svg, .nav-count[data-px-tick] { animation: none; }
+  :where(a.kpi, button.kpi):hover { translate: none; }
 }

@@ -300,12 +300,41 @@ function watch() {
   // an entrance played: its mark leaves, so showing the item again later (a tab, a filter) never replays it
   const done = (e: AnimationEvent) => {
     const el = e.target as HTMLElement | null;
-    if (!el?.hasAttribute?.('data-px-in') && !el?.hasAttribute?.('data-px-page')) return;
-    if (!e.animationName.startsWith('px-')) return;
+    if (!el?.hasAttribute || !e.animationName.startsWith('px-')) return;
+    el.removeAttribute('data-px-tick');
+    el.removeAttribute('data-px-img');
+    if (!el.hasAttribute('data-px-in') && !el.hasAttribute('data-px-page')) return;
     el.removeAttribute('data-px-in');
     el.removeAttribute('data-px-page');
     el.style.removeProperty('--px-i');
   };
+  // a count of the menu that changes (a new order, a parcel back): its badge gives one small pop
+  const tick = new MutationObserver((records) => {
+    if (reduce() || document.hidden) return;
+    for (const r of records) {
+      const badge = (r.target.nodeType === 3 ? r.target.parentElement : (r.target as Element))?.closest?.('.nav-count');
+      if (badge && !badge.hasAttribute('data-px-tick')) badge.setAttribute('data-px-tick', '');
+    }
+  });
+  const hookSide = () => {
+    const side = document.getElementById('side');
+    if (side && !side.hasAttribute('data-px-watched')) {
+      side.setAttribute('data-px-watched', '');
+      tick.observe(side, { characterData: true, subtree: true });
+    }
+  };
+  hookSide();
+  new MutationObserver(hookSide).observe(document.getElementById('root') ?? document.body, { childList: true });
+  // a picture that lands (a product photo, a receipt) fades in instead of snapping on
+  document.addEventListener(
+    'load',
+    (e) => {
+      const img = e.target as HTMLElement | null;
+      if (img?.tagName !== 'IMG' || reduce() || !img.closest('#page, .modal, .px-float') || performance.now() < bootUntil) return;
+      img.setAttribute('data-px-img', '');
+    },
+    true,
+  );
   // a tab of a page: what it shows next arrives like a page's own lists
   document.addEventListener(
     'click',
