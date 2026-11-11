@@ -101,7 +101,9 @@
     "open": "Open on {{ch}}",
     "product": "Product of the post",
     "none": "— None (it will ask which one) —",
-    "saved": "Product saved"
+    "saved": "Product saved",
+    "aware": "🎁 Awareness: gives a code",
+    "awareHelp": "People who comment get their welcome code in private (Referral › Promo code)."
   },
   "tester": {
     "title": "Try Pilot Comments",

@@ -84,7 +84,7 @@ export function Bubbles({
   useEffect(() => {
     box.current?.scrollTo({ top: box.current.scrollHeight });
   }, [messages.length, pending]);
-  const author = (m: Msg) => (m.role === 'customer' ? t('messages.thread.customer') : m.role === 'agent' ? (m.meta?.cm ? t('nav.cm') : m.meta?.notify ? t('nav.notify') : name) : m.userName ?? t('messages.thread.team'));
+  const author = (m: Msg) => (m.role === 'customer' ? t('messages.thread.customer') : m.role === 'agent' ? (m.meta?.promo ? t('messages.promoAuthor') : m.meta?.cm ? t('nav.cm') : m.meta?.notify ? t('nav.notify') : name) : m.userName ?? t('messages.thread.team'));
   const rows: ReactNode[] = [];
   let prev: Msg | null = null;
   for (const m of messages) {

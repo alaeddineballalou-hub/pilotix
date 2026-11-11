@@ -49,6 +49,7 @@ export { listPros, proByCode, computeProStats, STATS_HOURS } from './modules/pro
 export * as pilotLearn from './modules/pilotlearn';
 export { boardCache } from './modules/board';
 export { pilotOn } from './modules/dellal';
+export { pushShopAdmins } from './modules/push';
 export { seedPos } from './modules/pos';
 export type { PosSale, PosSettings } from './modules/pos';
 export { noteBadSignature, routeMeta, seedSocialPreview, socialApps, socialIgSecret, socialSecret } from './modules/social';

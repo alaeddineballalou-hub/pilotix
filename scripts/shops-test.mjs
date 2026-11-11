@@ -534,8 +534,8 @@ await section('Payments: numbered receipts, receipt by e-mail, the referral rewa
   ok('cancelled → the receipt says so');
   const ref = await rpc(ctx.owner1.token, 'me.referrals');
   assert.equal(ref.platform, true);
-  // the sign-up link without « # »: <site>/inscription/<code>
-  assert.match(String(ref.link), /^https?:\/\/[^/#]+\/inscription\/[A-Z0-9]+$/);
+  // the sign-up link (Referral › Referral): <site>/signup?ref=<code>
+  assert.match(String(ref.link), /^https?:\/\/[^/#]+\/signup\?ref=[A-Z0-9]+$/);
   assert.ok(ref.friends.some((f) => f.status === 'subscribed'));
   ok(`the store’s « Parrainage »: ${ref.link}, ${ref.friends.length} store(s) brought, ${ref.totals.months} month(s) earned`);
 });

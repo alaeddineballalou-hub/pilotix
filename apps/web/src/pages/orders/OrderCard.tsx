@@ -116,6 +116,7 @@ export default function OrderCard({ id, onClose }: { id: number; onClose: () => 
                 </div>
                 <div className="muted small">
                   {t('orders.card.created', { when: when(o.createdAt) })} · {t(`status.channel.${o.channel}`)}
+                  {o.awareness && <span className="badge t-warn" title={o.promoCode ?? ''}> 🎁 {t('orders.awareness')}{o.promoCode ? ` · ${o.promoCode}` : ''}</span>}
                   {o.agentName ? ` · ${t('orders.card.agent', { name: o.agentName })}` : ''}
                 </div>
               </>

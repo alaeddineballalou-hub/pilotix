@@ -586,5 +586,16 @@
       "repick": "Ses produits sont à reprendre : ce qui était déjà pris attend en premier au dépôt.",
       "resend": "Son colis est recréé chez la société de livraison (nouveau numéro)."
     }
-  }
+  },
+  "promo": {
+    "label": "Code promo",
+    "valid": "valide : −{{v}}",
+    "small": "commande trop petite (min {{v}} de produits)",
+    "unknown": "code inconnu",
+    "used": "déjà utilisé",
+    "expired": "expiré",
+    "waiting": "pas encore donné (suivre la page)",
+    "eBad": "Le code promo ne marche pas pour cette commande : corrigez-le ou videz le champ."
+  },
+  "awareness": "Awareness"
 }

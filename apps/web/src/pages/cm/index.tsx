@@ -360,6 +360,8 @@ function Posts() {
   const { t } = useTranslation();
   const q = useRpc('cm.posts', {});
   const link = useAction('cm.linkPost', { success: t('cm.posts.saved') });
+  // Referral › Code promo: « 🎁 Awareness: gives a code » on a post
+  const aware = useAction('promo.markPost', { success: t('cm.posts.saved'), onDone: () => q.refetch() });
   if (q.isLoading) return <Loading />;
   if (q.error || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const { rows, products } = q.data;
@@ -389,6 +391,12 @@ function Posts() {
                   )}
                 </small>
               </div>
+              {p.channel !== 'tiktok' && (
+                <label className={`cm-aware${p.awareness ? ' on' : ''}`} title={t('cm.posts.awareHelp')}>
+                  <input type="checkbox" checked={!!p.awareness} disabled={aware.isPending} onChange={(e) => aware.mutate({ id: p.id, on: e.target.checked })} />
+                  <span>{t('cm.posts.aware')}</span>
+                </label>
+              )}
               <Field label={t('cm.posts.product')}>
                 <select value={p.productId ?? ''} disabled={link.isPending} onChange={(e) => link.mutate({ id: p.id, productId: e.target.value ? Number(e.target.value) : null })}>
                   <option value="">{t('cm.posts.none')}</option>

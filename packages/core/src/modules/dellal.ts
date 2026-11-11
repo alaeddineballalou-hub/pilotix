@@ -9,6 +9,7 @@
 // the browser preview (a small rule-based "demo brain" with the same tools, so the demo shows the whole flow).
 import { COMMUNES, CONF_TODO, normalizePhone, replyWindow, SalesChannel, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
+import { checkPromo, onlyAsksCode, promoForConversation, promoOnMessage, promoPromptLine, PROMO_REASON } from './promo';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { AppError, Ctx, notFound, proc } from '../rpc';
 import { clientFee, getSetting } from '../settings';
@@ -206,7 +207,7 @@ async function getConv(db: Db, id: number): Promise<Conversation> {
   return toConv(r);
 }
 
-async function addMessage(
+export async function addMessage(
   db: Db,
   convId: number,
   m: {
@@ -980,6 +981,17 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
       const fee = (await clientFee(ctx.db, place.wilayaId, !!input?.stopdesk)) ?? 0;
       return { ok: true, test: true, ref: 'TEST', total: sub - discount + fee, delivery_fee: fee, ...(v1 ? { next: V001_NEXT } : {}), note: 'Mode test : aucune vraie commande créée.' };
     }
+    // the customer's welcome code (Referral › Code promo): applied by itself when it still works; never one Dellal makes
+    const promo = conv.channel === 'messenger' || conv.channel === 'instagram' ? await promoForConversation(ctx.db, conv.id, ctx.now()) : null;
+    let promoCode: string | null = null;
+    let promoNote = '';
+    if (promo && promo.status === 'sent') {
+      const cat = await searchProducts(ctx.db, null, 1000);
+      const sub = items.reduce((n: number, l) => n + (l.unitPrice ?? cat.find((p) => p.product_id === l.productId)?.variants.find((v) => v.variant_id === l.variantId)?.price ?? 0) * l.qty, 0);
+      const ck = await checkPromo(ctx.db, promo.code, sub, ctx.now());
+      if (ck.ok) promoCode = promo.code;
+      else promoNote = ck.reason === 'small' ? `Code ${promo.code} pas appliqué : il faut au moins ${ck.minOrder} DA de produits.` : `Code ${promo.code} pas appliqué (${PROMO_REASON[ck.reason]}).`;
+    }
     // the whole order, and Pilotix already made one by itself from his number while he was quiet: that one is completed,
     // never a second one (it stays in Nouvelles: the team calls about it anyway)
     const open = !v1 ? await openOrder(ctx.db, conv, false) : null;
@@ -998,6 +1010,7 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
           isStopdesk: !!input?.stopdesk,
           items: items.map(({ productId, variantId, qty, unitPrice, isUpsell }) => ({ productId, variantId, qty, ...(unitPrice ? { unitPrice } : {}), ...(isUpsell ? { isUpsell } : {}) })),
           discount,
+          ...(promoCode ? { promoCode } : {}),
           customerNote: note.slice(0, 1000) || null,
           ...(q.fee !== null ? { deliveryFee: q.fee } : {}),
         });
@@ -1011,6 +1024,7 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
     try {
       const ad = t.test ? { utm: null, adsetId: null } : await chatAdOf(ctx.db, conv.source);
       const o = await createOrder(ctx, {
+        ...(promoCode ? { promoCode } : {}),
         customerName: name,
         phone,
         wilayaId: place.wilayaId,
@@ -1028,14 +1042,22 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
           : `Commande prise par ${settings.name} (conversation #${conv.id})`,
         confirm: !v1 && settings.ordersTo === 'confirmed',
         isExchange: false,
-      }, ctx.db, { conversationId: conv.id, untrusted: conv.channel !== 'whatsapp', guard: 'check', adsetId: ad.adsetId }); // linked from the start: no "we received your order" into this very chat
+      }, ctx.db, { conversationId: conv.id, untrusted: conv.channel !== 'whatsapp', guard: 'check', adsetId: ad.adsetId, promoSoft: true }); // linked from the start: no "we received your order" into this very chat
       await sendInPreview(ctx);
       await ctx.db.query(
         `UPDATE conversations SET order_id = $2, orders_count = orders_count + 1, phone = COALESCE(phone, $3), customer_name = COALESCE(customer_name, $4),
            customer_id = COALESCE(customer_id, (SELECT id FROM customers WHERE phone = $3)) WHERE id = $1`,
         [conv.id, o.id, phone, name],
       );
-      return { ok: true, ref: o.ref, total: o.total, delivery_fee: o.deliveryFee, next: v1 ? V001_NEXT : settings.ordersTo === 'new' ? 'Un conseiller va appeler pour confirmer.' : 'La commande part en préparation.' };
+      return {
+        ok: true,
+        ref: o.ref,
+        total: o.total,
+        delivery_fee: o.deliveryFee,
+        ...(o.promoCode ? { welcome_code: o.promoCode, code_discount: o.promoDiscount } : {}),
+        ...(promoNote ? { code_note: promoNote } : {}),
+        next: v1 ? V001_NEXT : settings.ordersTo === 'new' ? 'Un conseiller va appeler pour confirmer.' : 'La commande part en préparation.',
+      };
     } catch (e: any) {
       return { error: e?.message ?? 'Commande refusée' };
     }
@@ -1130,6 +1152,7 @@ async function systemPrompt(
     cust ? `Client connu : ${cust.name}, ${cust.orders} commande(s), ${cust.delivered} livrée(s), ${cust.returned} retour(s)${cust.blacklisted ? ', SUR LISTE NOIRE : ne prends pas de commande, passe la main' : ''}.` : '',
     orders,
     followUp ? `Le client ne répond plus depuis un moment : envoie UNE relance courte et aimable, sans insister.` : '',
+    conv.channel === 'messenger' || conv.channel === 'instagram' ? promoPromptLine(await promoForConversation(ctx.db, conv.id, ctx.now())) : '',
     vocab,
   ];
   const blocks = [shared, own, chat].map((b) => b.filter(Boolean).join('\n')).filter(Boolean);
@@ -1359,6 +1382,12 @@ async function history(db: Db, convId: number): Promise<AiMsg[]> {
     if (last && last.role === role) last.content += `\n${text}`;
     else out.push({ role, content: text });
   }
+  // the welcome code's fixed message after the customer's last words: not an answer of Dellal's (it is a note on them)
+  const tail = rows.length ? rows[rows.length - 1] : null;
+  if (tail?.role === 'agent' && tail.meta?.promo && out.length > 1 && out[out.length - 1].role === 'assistant') {
+    const p = out.pop()!;
+    out[out.length - 1].content += `\n(Note système : la boutique vient d’envoyer au client ce message automatique : « ${String(p.content).slice(0, 400)} ». Ne le répète pas ; réponds au reste de son message.)`;
+  }
   // the AI conversation starts with the customer: what the shop wrote before stays as context of their first message
   const before: string[] = [];
   while (out.length && out[0].role === 'assistant') before.push(String(out.shift()!.content));
@@ -1531,6 +1560,20 @@ export async function seePhotos(ctx: Ctx, convId: number, ask: PhotoAsk | null, 
  * test, the next one, none): it is used as is and never recorded (test chats are not measured), and the answer is Pilot
  * AI's own cost.
  */
+/** The last message is the welcome code's fixed message, and the customer's words before it only asked for the code. */
+async function promoAnsweredAll(db: Db, convId: number): Promise<boolean> {
+  const rows = await db.query(`SELECT role, body, meta FROM conv_messages WHERE conversation_id = $1 AND role <> 'tool' ORDER BY id DESC LIMIT 6`, [convId]);
+  if (!rows[0] || rows[0].role !== 'agent' || !rows[0].meta?.promo) return false;
+  const said: string[] = [];
+  for (const r of rows.slice(1)) {
+    if (r.role !== 'customer') break;
+    said.push(String(r.body ?? ''));
+  }
+  // a chat opened from an ad with no words yet (a referral): nothing more to answer
+  // (a greeting, or only the code asked: the fixed message answered it)
+  return !said.length || said.every((x) => onlyAsksCode(x, 'CODE', true));
+}
+
 export async function runAgent(
   ctx: Ctx,
   convId: number,
@@ -1538,6 +1581,8 @@ export async function runAgent(
 ): Promise<{ reply: string | null; handoff: boolean; orderRef: string | null; demo: boolean; skipped?: string }> {
   const check = await shouldAnswer(ctx, convId);
   if (!check.ok) return { reply: null, handoff: false, orderRef: null, demo: false, skipped: check.why };
+  // the welcome code's fixed message already answered a customer who only asked for it (Referral › Code promo)
+  if (!opts.followUp && (await promoAnsweredAll(ctx.db, convId))) return { reply: null, handoff: false, orderRef: null, demo: false, skipped: 'Code de bienvenue envoyé' };
   const s = await dellalSettings(ctx.db);
   // the customer's voice notes, written as text first (Gemini, on the server), so Dellal reads what they said
   if (ctx.server?.dellal) await hearVoices(ctx, convId).catch(() => undefined);
@@ -2654,7 +2699,30 @@ export const dellalProcs = {
   }),
 
   /** Server: a message arrived on a channel (webhooks). Admin/system only. */
-  'dellal.receive': proc([], IncomingInput, (ctx, i) => receiveMessage(ctx, i)),
+  'dellal.receive': proc([], IncomingInput, async (ctx, i) => {
+    const r = await receiveMessage(ctx, i);
+    // Referral › Code promo: the fixed rule, before Dellal (a code is never made nor given by the AI)
+    if (r) await promoOnMessage(ctx, r.conversationId, { text: i.text, source: i.source ?? null }).catch(() => null);
+    return r;
+  }),
+  /** Server: someone opened the chat again from an ad or an m.me ?ref= link, without a message (Meta's referral). */
+  'dellal.referral': proc(
+    [],
+    z.object({ channel: z.enum(['messenger', 'instagram']), externalId: z.string().min(1).max(120), accountId: z.string().max(120).nullable().optional(), source: z.string().max(200).nullable().optional() }),
+    async (ctx, i) => {
+      if (!i.source) return { ok: true, promo: null };
+      const c = (
+        await ctx.db.query(
+          `INSERT INTO conversations (channel, external_id, account_id, source) VALUES ($1,$2,$3,$4)
+           ON CONFLICT (channel, external_id) DO UPDATE SET source = EXCLUDED.source, account_id = COALESCE(EXCLUDED.account_id, conversations.account_id)
+           RETURNING id`,
+          [i.channel, i.externalId, i.accountId ?? null, i.source],
+        )
+      )[0];
+      const promo = await promoOnMessage(ctx, num(c.id), { text: '', source: i.source }).catch(() => null);
+      return { ok: true, promo: promo?.kind ?? null };
+    },
+  ),
   'dellal.edited': proc([], EditedInput, (ctx, i) => editedMessage(ctx, i)),
   'dellal.reacted': proc([], ReactedInput, (ctx, i) => reactedMessage(ctx, i)),
   /** Server: let Dellal answer a conversation now. */

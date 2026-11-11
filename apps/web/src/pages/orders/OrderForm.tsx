@@ -2,6 +2,7 @@
 import { communesOf, FOLLOW_LOCKED, normalizePhone, Order, origOf, SALES_CHANNELS, upsellOf, WILAYAS } from '@pilotix/shared';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PromoField, usePromoCheck } from './PromoField';
 import { Out, rpc } from '../../lib/backend';
 import { da, n, when } from '../../lib/format';
 import type { OrderFormOpts } from '../../lib/modals';
@@ -165,7 +166,9 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
   });
   const [fee, setFee] = useState<string>(isEdit || base.deliveryFee !== undefined ? String(base.deliveryFee ?? '') : '');
   const [feeAuto, setFeeAuto] = useState<boolean>(!isEdit && base.deliveryFee === undefined);
-  const [discount, setDiscount] = useState<string>(String(base.discount ?? 0));
+  // the remise besides the welcome code (Referral › Code promo: its own field, its discount added)
+  const [discount, setDiscount] = useState<string>(String(Math.max(0, (base.discount ?? 0) - (base.promoDiscount ?? 0))));
+  const [promoCode, setPromoCode] = useState<string>(String(base.promoCode ?? ''));
   const [pErr, setPErr] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -261,7 +264,9 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
   const sub = lines.reduce((s, x) => s + (Number(x.unitPrice) || 0) * (x.variantId ? x.qty : 0), 0);
   const nItems = lines.reduce((s, x) => s + (x.variantId ? x.qty : 0), 0);
   const feeN = Number(fee) || 0;
+  const promo = usePromoCheck(promoCode, sub, order?.id);
   const disN = Number(discount) || 0;
+  const promoN = promoCode.trim() ? promo.discount : 0;
   // editing an order: the upsell is counted by itself against what the customer first ordered (the same rule as the server)
   const autoUp =
     isEdit && order && !order.isExchange
@@ -291,6 +296,7 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
       seen.add(x.variantId!);
     }
     if (over) return t('orders.form.eDiscount', { v: da(maxD) });
+    if (promoCode.trim() && promo.result && !promo.result.ok) return t('orders.promo.eBad');
     if (strict) {
       if (!desk && !commune) return t('orders.form.eCommune');
       if (ship.hard.length) return t('orders.form.eNotDeliverable', { msg: ship.hard[0] });
@@ -323,6 +329,7 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
       channel: channel as (typeof SALES_CHANNELS)[number],
       deliveryFee: fee === '' ? undefined : feeN,
       discount: disN,
+      promoCode: promoCode.trim() || null,
       customerNote: noteC.trim() || null,
       deliveryNote: noteL.trim() || null,
       internalNote: (isExchange ? [noteT.trim(), `Échange de ${original!.ref}`].filter(Boolean).join(' · ') : noteT.trim()) || null,
@@ -803,9 +810,16 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
                   <input type="number" min={0} max={maxD ?? undefined} className={`pxo-num${over ? ' px-over' : ''}`} value={discount} aria-label={t('orders.form.discount')} onChange={(e) => setDiscount(e.target.value)} /> DA
                 </span>
               </div>
+              <div className="pxo-tr">
+                <span>
+                  {t('orders.promo.label')}
+                  {promoN > 0 && <small className="pxo-fn">−{da(promoN)}</small>}
+                </span>
+                <PromoField value={promoCode} onChange={setPromoCode} check={promo} />
+              </div>
               <div className="pxo-tr grand">
                 <span>{t('orders.form.grand')}</span>
-                <b className="ltr">{da(sub + feeN - disN)}</b>
+                <b className="ltr">{da(Math.max(0, sub - promoN) + feeN - disN)}</b>
               </div>
             </div>
           </Sec>

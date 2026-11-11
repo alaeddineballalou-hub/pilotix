@@ -8,7 +8,15 @@
   "notConnectedSeller": "Meta is not connected at this seller: they add it in their Settings → Ads · Meta Ads. Meanwhile, figures already saved are shown.",
   "stamp": "Meta updated {{when}}",
   "period": "Period",
-  "periods": { "today": "Today", "yesterday": "Yesterday", "thisweek": "This week", "lastweek": "Last week", "month": "This month", "lastmonth": "Last month", "custom": "Chosen dates" },
+  "periods": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "thisweek": "This week",
+    "lastweek": "Last week",
+    "month": "This month",
+    "lastmonth": "Last month",
+    "custom": "Chosen dates"
+  },
   "from": "From",
   "to": "To",
   "fx": "$1 rate (in DA) · {{month}}",
@@ -50,7 +58,15 @@
   "colProfit": "Profit",
   "colAdvice": "Advice",
   "noProducts": "No product linked to your ad sets in this period. Link your ad sets to their products (\"Which product?\").",
-  "advice": { "scale": "Scale", "keep": "Keep", "price": "Price +", "cutdel": "Cut", "cut": "Cut", "loss": "Cut", "wait": "Wait" },
+  "advice": {
+    "scale": "Scale",
+    "keep": "Keep",
+    "price": "Price +",
+    "cutdel": "Cut",
+    "cut": "Cut",
+    "loss": "Cut",
+    "wait": "Wait"
+  },
   "adviceLong": {
     "scale": "Increase the budget",
     "keep": "Keep, without increasing the budget",
@@ -164,5 +180,8 @@
     "watch": "Fine, to watch"
   },
   "adsManager": "Ads Manager ↗",
-  "detailClose": "Close"
+  "detailClose": "Close",
+  "aware": "🎁 Awareness",
+  "awareHelp": "A chat started from this ad gets the welcome code (Referral › Promo code).",
+  "awareSaved": "Ad updated"
 }

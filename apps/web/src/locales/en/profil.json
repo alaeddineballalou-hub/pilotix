@@ -95,5 +95,7 @@
   "friendsPlat": "Stores that came with your link",
   "noFriendsPlat": "No store yet. Share your link!",
   "nMonths": "{{n}} month(s)",
-  "phoneLock": "This is your account’s number (one account per number). To change it, write to Pilotix."
+  "phoneLock": "This is your account’s number (one account per number). To change it, write to Pilotix.",
+  "refMoved": "Referrals now live in the menu: Referral › Referral.",
+  "refOpen": "Open referrals"
 }

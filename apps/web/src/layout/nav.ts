@@ -137,6 +137,20 @@ export const NAV: NavItem[] = [
       { id: 'autoreglages', href: '#/notify/reglages', icon: 'settings', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['reglages'] } },
     ],
   },
+  // Referral: « Referral » (other shops invited to Pilotix: the store's code and link, the stores it brought, the free
+  // months — the store's administrators only) and « Code promo » (the welcome codes of the « Awareness 🎁 » posts and ads)
+  {
+    id: 'referral',
+    icon: 'gift',
+    roles: ['marketer', 'vendeur'],
+    pages: ['parrainage'],
+    href: '#/parrainage',
+    children: [
+      { id: 'parrainage', href: '#/parrainage', icon: 'gift', roles: [], onlyIf: storeOnly, match: { page: 'parrainage', subs: ['', 'amis'] } },
+      { id: 'codepromo', href: '#/parrainage/codes', icon: 'tag', roles: ['marketer', 'vendeur'], plan: ['parrainage'], match: { page: 'parrainage', subs: ['codes'] } },
+    ],
+  },
+  { id: 'parrainage', icon: 'gift', roles: ['marketer', 'vendeur'], hidden: true },
   // the customers: the suivi agents (not the confirmation agents nor their supervisors)
   { id: 'clients', icon: 'users', roles: ['suivi'] },
   // Publicité (Meta spend face to the orders), Formulaires (the ads' lead forms become orders), Campagnes (WhatsApp offers
@@ -218,6 +232,12 @@ export function homeFor(roles: Role[], isAdmin: boolean): string {
  * The store's « Agences » and « Marketers »: on a multi-shop server (not in its shared demo shop, whose accounts every
  * visitor uses), and in the in-browser demo (its own agency and marketer are made there).
  */
+/** A store's own space (not a confirmation agency's or a marketer's). */
+function storeOnly(): boolean {
+  const s = currentShop();
+  return !s?.kind || s.kind === 'store';
+}
+
 function partnersOn(): boolean {
   const s = currentShop();
   return s ? !s.demo : backend.kind === 'demo';

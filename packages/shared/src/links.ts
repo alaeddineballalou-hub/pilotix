@@ -63,6 +63,8 @@ export const APP_PAGES = [
   'marketers',
   'influenceurs',
   'profil',
+  // Referral › Referral and › Code promo
+  'parrainage',
   'boutiques',
   'aide',
   // a confirmation agency, a marketer

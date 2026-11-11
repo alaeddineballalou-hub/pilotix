@@ -290,6 +290,17 @@ function rewardMail(m: { to: string; name: string; language: string; reward: Ref
   return mail(m.to, T.s, { l, title: T.t, icon: '🎁', hello: hello(l, m.name), lines: [T.a, T.b], box: r.paidUntil ? [[T.until, day(r.paidUntil, l)]] : undefined });
 }
 
+/** Referral › Referral: a store signed up with this store's link (the reward comes with its first payment). */
+export function referralSignupMail(m: { to: string; name: string; language: string; shop: string; friend: string; months: number }): Mail {
+  const l = lang(m.language);
+  const T = {
+    fr: { s: 'Pilotix : une boutique s’est inscrite avec votre lien 🎉', t: 'Nouveau parrainage', a: `« ${m.friend} » vient de s’inscrire avec le lien de « ${m.shop} ».`, b: m.months ? `Dès son premier paiement, vous gagnez ${m.months} mois gratuit${m.months > 1 ? 's' : ''}.` : 'Merci de faire connaître Pilotix.' },
+    en: { s: 'Pilotix: a store signed up with your link 🎉', t: 'New referral', a: `“${m.friend}” just signed up with the link of “${m.shop}”.`, b: m.months ? `When it pays for the first time, you get ${m.months} free month${m.months > 1 ? 's' : ''}.` : 'Thank you for telling people about Pilotix.' },
+    ar: { s: 'Pilotix: متجر سجّل برابطك 🎉', t: 'دعوة جديدة', a: `سجّل «${m.friend}» برابط «${m.shop}».`, b: m.months ? `عند أول دفع له، تحصل على ${m.months} شهر مجاني.` : 'شكرًا لأنك تعرّف الناس بـ Pilotix.' },
+  }[l];
+  return mail(m.to, T.s, { l, title: T.t, icon: '🎉', hello: hello(l, m.name), lines: [T.a, T.b] });
+}
+
 export function staffCodeMail(m: { to: string; name: string; code: string }): Mail {
   return mail(m.to, `Pilotix : votre code ${m.code}`, {
     l: 'fr',

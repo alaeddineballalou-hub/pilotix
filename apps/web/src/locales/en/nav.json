@@ -64,7 +64,9 @@
     "influenceurs": "Influencers",
     "eq-users": "Users",
     "eq-affect": "Assignment",
-    "eq-paie": "Pay"
+    "eq-paie": "Pay",
+    "parrainage": "Referral",
+    "codepromo": "Promo code"
   },
   "profil": "My profile",
   "boutiques": "My boutiques",
@@ -75,5 +77,8 @@
   "influenceurs": "Influencers",
   "gains": "My earnings",
   "facturation": "Billing",
-  "equipe": "Team"
+  "equipe": "Team",
+  "referral": "Referral",
+  "parrainage": "Referral",
+  "codepromo": "Promo code"
 }

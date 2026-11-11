@@ -1,0 +1,45 @@
+/* Menu « Referral » › Referral and › Code promo */
+.rf-page { display: grid; gap: 16px; }
+.rf-hero { display: grid; gap: 14px; background: linear-gradient(135deg, #fff7e6, #ffffff 60%); }
+.rf-hero-promo { background: linear-gradient(135deg, #fdf2f8, #ffffff 60%); }
+.rf-ht { display: flex; gap: 14px; align-items: center; }
+.rf-ht h1 { margin: 0 0 4px; font-size: 20px; }
+.rf-ht p { margin: 0; color: var(--muted, #5b6574); }
+.rf-ico { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 12px; display: grid; place-items: center; background: #fff; border: 1px solid #f3d9a8; font-size: 22px; color: #b45309; }
+.rf-state { margin-inline-start: auto; }
+.rf-share { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+.rf-box { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line, #e3e8f0); border-radius: 12px; background: #fff; }
+.rf-box.grow { flex: 1 1 260px; min-width: 0; }
+.rf-box .lab { font-size: 12px; color: var(--muted, #5b6574); }
+.rf-code { font-size: 20px; letter-spacing: 2px; }
+.rf-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.rf-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.rf-wa { background: #25d366; color: #fff; border-color: #25d366; }
+.rf-fb { background: #1877f2; color: #fff; border-color: #1877f2; }
+.rf-steps { margin: 0; padding-inline-start: 20px; display: grid; gap: 6px; }
+.rf-card { display: grid; gap: 10px; }
+.rf-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+form.rf-grid { grid-template-columns: minmax(300px, 1fr) minmax(320px, 1.6fr); }
+@media (max-width: 760px) { form.rf-grid { grid-template-columns: 1fr; } }
+.rf-save { grid-column: 1 / -1; }
+.rf-switch { display: inline-flex; gap: 8px; align-items: center; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line, #e3e8f0); font-weight: 600; cursor: pointer; margin-bottom: 10px; }
+.rf-switch.on { background: #ecfdf3; border-color: #16a34a; color: #166534; }
+.rf-text { border-top: 1px dashed var(--line, #e3e8f0); padding-top: 8px; margin-top: 8px; opacity: 0.75; }
+.rf-text.used { opacity: 1; }
+.rf-text textarea { width: 100%; min-height: 84px; resize: vertical; }
+.rf-preview { margin-top: 12px; display: grid; gap: 8px; }
+.rf-bubble { margin: 0; padding: 10px 14px; border-radius: 16px 16px 16px 4px; background: #eef2ff; max-width: 420px; white-space: pre-wrap; }
+.rf-bubble.ig { background: #fdf2f8; }
+.rf-bubble small { font-weight: 700; margin-inline-end: 6px; }
+.rf-ads { list-style: none; padding: 0; margin: 0 0 10px; display: grid; gap: 6px; }
+.rf-aware { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px dashed var(--line, #d0d7e2); border-radius: 10px; cursor: pointer; }
+.rf-aware.on { border-style: solid; border-color: #f59e0b; background: #fff7e6; }
+.rf-aware span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rf-add { display: flex; gap: 8px; }
+.rf-add input { flex: 1; min-width: 0; }
+.rf-filters { display: inline-flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.rf-filters input { width: 220px; }
+.rf-filters select { width: auto; }
+.rf-c { letter-spacing: 1px; white-space: nowrap; }
+.rf-days { gap: 8px; }
+.rf-page td small { display: block; }

@@ -15,3 +15,8 @@
   #ads table th:nth-child(3):empty, #ads td[aria-hidden='true'] { display: none; }
 }
 #ads .ad-refresh { height: 40px; align-self: end; }
+
+/* Referral › Code promo: « 🎁 Awareness » on an ad */
+.ad-aware { display: inline-flex; align-items: center; gap: 4px; margin-inline-start: 8px; padding: 2px 8px; border: 1px dashed #d0d7e2; border-radius: 999px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.ad-aware.on { border-style: solid; border-color: #f59e0b; background: #fff7e6; color: #92400e; font-weight: 600; }
+.ad-aware input { margin: 0; }

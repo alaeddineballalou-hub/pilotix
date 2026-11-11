@@ -34,6 +34,7 @@ import {
   zeroBits,
 } from '@pilotix/shared';
 import { z } from 'zod';
+import { checkPromo, promoSettings } from './promo';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, notFound, proc, publicApi } from '../rpc';
 import { autoSettings, clientHomeFees, getSetting, setSetting } from '../settings';
@@ -408,6 +409,8 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     turnstileKey: o.mode === 'live' ? String(s.turnstileSiteKey ?? '').trim() || ((await ctx.server?.turnstileSite?.(hostOf(pageUrl || o.post))) ?? '') : '',
     // Marketing › Campagnes: the customer may ask for the shop's offers on WhatsApp
     waOptin: (await campaignSettings(ctx.db)).formOptin,
+    // Referral › Code promo: the optional code field
+    promo: (await promoSettings(ctx.db)).enabled,
   };
   if (o.mode === 'live') await ctx.db.query('UPDATE landing_pages SET views = views + 1 WHERE id = $1', [l.id]);
   // a visit from a catalog ad, by day (in Algeria), product and network (Marketing › Catalogue › Résultats)
@@ -497,6 +500,8 @@ export const SubmitInput = z.object({
         .filter((x: { qty: number }) => x.qty >= 1 && x.qty <= 99),
     ),
   hp: str(500),
+  /** Referral › Code promo: the welcome code typed (optional) */
+  promo: str(30),
   ch: str(200),
   pw: str(40),
   t: int(null),
@@ -1005,12 +1010,13 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
             ? pieces.map((p) => ({ productId, variantId: p.variant!.id, qty: p.qty, unitPrice: unitPriceOf(numOrNull(l.price), pc, p.variant!.id) }))
             : [{ productId, variantId, qty, unitPrice }],
         discount: 0,
+        ...(i.promo ? { promoCode: i.promo } : {}),
         confirm: false,
         isExchange: false,
         internalNote: review ? reviewNote(result) : null,
       },
       db,
-      { landingId: num(l.id), adsetId: adsetOf(i.utm), device: device || null },
+      { landingId: num(l.id), adsetId: adsetOf(i.utm), device: device || null, promoSoft: true },
     );
     orderId = o.id;
     ref = o.ref;
@@ -1937,6 +1943,14 @@ export const landingProcs = {
   }),
 
   'landing.submit': proc([], SubmitInput, (ctx, i) => submitOrder(ctx, i)),
+  /** The page's « code » field (public, through the server): does it work for these products, and what it takes off. */
+  'landing.code': proc(null, z.object({ slug: z.string().max(80), code: z.string().max(30), total: z.number().int().min(0).max(100_000_000) }), async (ctx, i) => {
+    if (!(await promoSettings(ctx.db)).enabled) return { ok: false, reason: 'unknown' };
+    const r = await checkPromo(ctx.db, i.code, i.total, ctx.now());
+    // a code still waiting for its person to follow the page is « unknown » to the page
+    if (!r.ok) return { ok: false, reason: r.reason === 'waiting' ? 'unknown' : r.reason, ...(r.reason === 'small' ? { min: r.minOrder } : {}) };
+    return { ok: true, code: r.code, pct: r.pct, amount: r.amount, min: r.minOrder, discount: r.discount };
+  }),
   'landing.optin': proc([], OptinInput, (ctx, i) => optinAfterOrder(ctx, i)),
   'landing.capture': proc([], CaptureInput, async (ctx, i) => {
     const r = await captureLead(ctx, i);

@@ -41,6 +41,7 @@ import { settleTickets } from './tickets';
 import { addDepotAlert, alertsDepot, DepotChange, itemsText } from './depotalerts';
 import { blockerText, checkLines, checkOrder, deliverCheck } from './confirmcheck';
 import { releaseNoStock } from './nostock';
+import { checkPromo, normCode, PROMO_REASON, takePromo } from './promo';
 import { applyTrust, lookAlikeNote, lookAlikeOf } from './trust';
 import { companyLock, pilotMayRun, pilotPick, setPick, type Pick } from './pilot';
 import { apiFees, courierFeesOf, declaredKg, feesByApi, knownKg, ruleFee, weightRuleOf, weightRuleSet, wholeKg } from './courierfees';
@@ -107,6 +108,9 @@ export function toOrder(r: any): Order {
     subtotal: num(r.subtotal),
     deliveryFee: num(r.delivery_fee),
     discount: num(r.discount),
+    promoCode: (r.promo_code as string | null) ?? null,
+    promoDiscount: num(r.promo_discount),
+    awareness: !!r.awareness,
     total: num(r.total),
     deliveryCost: num(r.delivery_cost),
     cashed: r.cashed,
@@ -426,6 +430,8 @@ export const OrderInput = z.object({
   isExchange: z.boolean().default(false),
   originalOrderId: id.nullable().optional(),
   utm: z.record(z.string()).nullable().optional(),
+  /** Referral › Code promo: the welcome code (its discount is added to `discount`, and may go above the products' maximum) */
+  promoCode: z.string().max(30).nullable().optional(),
 });
 export type OrderInput = z.infer<typeof OrderInput>;
 
@@ -653,6 +659,8 @@ export async function createOrder(
     /** the anti-fraud check of the other channels (guard.ts): « note » writes the reasons; « check » also puts what a
      *  landing page would block « À vérifier » (an order coming by itself: a Google Sheet, the AI seller, the site) */
     guard?: GuardMode;
+    /** a welcome code that does not work does not stop the order (a landing page, Dellal): it is left out, with a note */
+    promoSoft?: boolean;
   } = {},
 ): Promise<Order> {
   const phone = normalizePhone(input.phone);
@@ -694,8 +702,19 @@ export async function createOrder(
     // (prices worked out by Pilotix itself — a landing page, the AI seller — are already the shop's own prices)
     if (!ctx.session.isAdmin && !opts.landingId && !opts.conversationId && priced.priceCut + input.discount > priced.maxDiscount)
       throw bad(`Prix trop bas : la baisse de prix et la remise dépassent la remise maximale (${priced.maxDiscount} DA)`);
+    // the welcome code (Referral › Code promo): off the products' total, checked before (minimum order); the only discount
+    // allowed above the products' maximum
+    let promo: { code: string; discount: number } | null = null;
+    let promoNote = '';
+    if (input.promoCode && normCode(input.promoCode) && !input.isExchange) {
+      const ck = await checkPromo(tx, input.promoCode, priced.subtotal, ctx.now());
+      if (ck.ok) promo = { code: ck.code, discount: ck.discount };
+      else if (opts.promoSoft) promoNote = `Code ${ck.code} pas appliqué : ${PROMO_REASON[ck.reason]}${ck.reason === 'small' ? ` (au moins ${ck.minOrder} DA de produits)` : ''}`;
+      else throw bad(`${PROMO_REASON[ck.reason]}${ck.reason === 'small' ? ` (au moins ${ck.minOrder} DA de produits)` : ''}`);
+    }
+    const allDiscount = promo ? Math.min(priced.subtotal, input.discount + promo.discount) : input.discount;
     const fee = input.deliveryFee ?? (await deliveryFeeFor(tx, input.wilayaId, input.isStopdesk, priced.grids, priced.weight));
-    const total = priced.subtotal - input.discount + fee;
+    const total = priced.subtotal - allDiscount + fee;
     // what the customer orders is kept: the upsell is counted against it (lines marked upsell while typing a call are sold in addition)
     const orig = origOf(priced.lines);
     const up = upsellFor(input.isExchange, orig, input.discount, priced.lines, input.discount);
@@ -734,7 +753,7 @@ export async function createOrder(
       ? await lookAlikeOf(tx, { phone, name: input.customerName, wilayaId: input.wilayaId, commune: String(input.commune ?? ''), device: opts.device ?? null })
       : null;
     if (guard?.verdict === 'block' && opts.guard === 'check') conf = 'to_check';
-    const trustNotes = [homeRefused ? STOPDESK_NOTE : '', look ? lookAlikeNote(look) : '', guard && guard.verdict !== 'allow' ? guardNote(guard, opts.guard!) : '', confWhy ? `Pas confirmée : ${confWhy}` : ''].filter(Boolean);
+    const trustNotes = [homeRefused ? STOPDESK_NOTE : '', look ? lookAlikeNote(look) : '', guard && guard.verdict !== 'allow' ? guardNote(guard, opts.guard!) : '', confWhy ? `Pas confirmée : ${confWhy}` : '', promoNote].filter(Boolean);
     const internalNote = [input.internalNote ?? '', ...trustNotes].filter(Boolean).join('\n') || null;
     const confirmed = conf === 'confirmed';
     // « sans stock » is confirmed too (by this person, now): it only waits for stock before the depot
@@ -754,13 +773,17 @@ export async function createOrder(
         [ref, me, cust.id, input.customerName, phone, phone2, input.wilayaId, input.commune, input.address, input.isStopdesk, input.stopdeskId ?? null,
           input.channel, input.source ?? null, input.utm ? JSON.stringify(input.utm) : null,
           conf, stamped || ownNew ? me : null, stamped || ownNew ? new Date(ctx.now()).toISOString() : null, stamped ? new Date(ctx.now()).toISOString() : null,
-          confirmed ? 'to_prepare' : null, defCompany, wh?.id ?? null, priced.subtotal, fee, input.discount, total,
+          confirmed ? 'to_prepare' : null, defCompany, wh?.id ?? null, priced.subtotal, fee, allDiscount, total,
           input.customerNote ?? null, input.deliveryNote ?? null, internalNote, input.isExchange, input.originalOrderId ?? null,
           up.value > 0, up.value, JSON.stringify(orig), input.discount, opts.conversationId ?? null, opts.landingId ?? null, opts.adsetId ?? null, look?.id ?? null,
           pick.by, pick.rule, pick.why],
       )
     )[0];
     const oid = num(row.id);
+    if (promo) {
+      await takePromo(tx, promo.code, oid, promo.discount);
+      await tx.query('UPDATE orders SET promo_code = $2, promo_discount = $3, awareness = true WHERE id = $1', [oid, promo.code, promo.discount]);
+    }
     await insertItems(tx, oid, lines);
     // SAV exchange parcels stay with the store's team (they are not sales)
     if (!input.isExchange) await routeToAgencies(tx, oid, lines[0]?.productId, stamped);
@@ -842,10 +865,21 @@ async function priceChange(db: Db, cur: any, input: z.infer<typeof UpdateInput>,
     maxDiscount = priced.maxDiscount;
     priceCut = priced.priceCut;
   }
-  const discount = input.discount ?? num(cur.discount);
-  if (discount > maxDiscount) throw bad(`Remise trop élevée (maximum ${maxDiscount} DA)`);
-  if (!isAdmin && priceCut + discount > maxDiscount) throw bad(`Prix trop bas : la baisse de prix et la remise dépassent la remise maximale (${maxDiscount} DA)`);
-  return { old, lines, subtotal, discount };
+  // the welcome code (Referral › Code promo) apart: `discount` here is the other remise, the code's is added and may go
+  // above the products' maximum. The code kept is worked out again on the new products' total.
+  const curCode = cur.promo_code ? String(cur.promo_code) : null;
+  const wantCode = input.promoCode === undefined ? curCode : input.promoCode ? normCode(input.promoCode) || null : null;
+  let promo: { code: string; discount: number } | null = null;
+  if (wantCode && !cur.is_exchange) {
+    const ck = await checkPromo(db, wantCode, subtotal, Date.now(), num(cur.id));
+    if (!ck.ok) throw bad(`${PROMO_REASON[ck.reason]}${ck.reason === 'small' ? ` (au moins ${ck.minOrder} DA de produits)` : ''}`);
+    promo = { code: ck.code, discount: ck.discount };
+  }
+  const other = input.discount ?? Math.max(0, num(cur.discount) - num(cur.promo_discount));
+  if (other > maxDiscount) throw bad(`Remise trop élevée (maximum ${maxDiscount} DA)`);
+  if (!isAdmin && priceCut + other > maxDiscount) throw bad(`Prix trop bas : la baisse de prix et la remise dépassent la remise maximale (${maxDiscount} DA)`);
+  const discount = promo ? Math.min(subtotal, other + promo.discount) : other;
+  return { old, lines, subtotal, discount, promo, dropCode: curCode && curCode !== (promo?.code ?? null) ? curCode : null };
 }
 
 /**
@@ -888,8 +922,11 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
         const now = (await tx.query('SELECT product_id, variant_id, qty FROM order_items WHERE order_id = $1', [input.id])).map((r: any) => key({ productId: num(r.product_id), variantId: numOrNull(r.variant_id), qty: num(r.qty) })).sort();
         itemsChanged = JSON.stringify(input.items.map(key).sort()) !== JSON.stringify(now);
       }
+      // the remise the form sends is the one besides the welcome code
+      const discountMoved = input.discount !== undefined && input.discount + num(cur.promo_discount) !== num(cur.discount);
+      const codeMoved = input.promoCode !== undefined && (input.promoCode ? normCode(input.promoCode) : null) !== (cur.promo_code ?? null);
       const moneyOrPlace =
-        itemsChanged || differs('discount', 'discount', n) || differs('deliveryFee', 'delivery_fee', n) || differs('wilayaId', 'wilaya_id', n) ||
+        itemsChanged || discountMoved || codeMoved || differs('deliveryFee', 'delivery_fee', n) || differs('wilayaId', 'wilaya_id', n) ||
         differs('commune', 'commune', t) || (atCourier && differs('address', 'address', t)) || differs('isStopdesk', 'is_stopdesk', (x) => !!x) || differs('stopdeskId', 'stopdesk_id', n);
       if (moneyOrPlace)
         throw bad(
@@ -909,8 +946,13 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
     if (input.isStopdesk === true && !(input.stopdeskId ?? (input.stopdeskId === undefined ? cur.stopdesk_id : null))) throw bad('Livraison au bureau : choisissez le bureau.');
     if (input.isStopdesk === false && input.stopdeskId === undefined) input = { ...input, stopdeskId: null };
 
-    const recount = !!input.items || input.discount !== undefined;
-    const { old, lines, subtotal, discount } = await priceChange(tx, cur, input, ctx.session.isAdmin);
+    const recount = !!input.items || input.discount !== undefined || input.promoCode !== undefined;
+    const { old, lines, subtotal, discount, promo, dropCode } = await priceChange(tx, cur, input, ctx.session.isAdmin);
+    // the welcome code: the one taken off goes back to its person (unused), the new one is taken by this order
+    if (dropCode) await tx.query(`UPDATE promo_codes SET status = 'sent', order_id = NULL, used_at = NULL, discount = NULL WHERE code = $1 AND order_id = $2`, [dropCode, input.id]);
+    if (promo) await takePromo(tx, promo.code, input.id, promo.discount);
+    if (promo || dropCode)
+      await tx.query('UPDATE orders SET promo_code = $2::text, promo_discount = $3::int, awareness = awareness OR $2::text IS NOT NULL WHERE id = $1', [input.id, promo?.code ?? null, promo?.discount ?? 0]);
     // against what the customer first ordered (an order made before it was kept: its lines not marked upsell, now kept)
     const kept = readOrig(cur.orig_items);
     const orig = kept ?? origOf(old);

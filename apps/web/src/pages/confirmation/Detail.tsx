@@ -7,6 +7,7 @@ import { defaultNext } from './shared';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { PromoField, usePromoCheck } from '../orders/PromoField';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { da, fromLocalInput, wilayaName } from '../../lib/format';
@@ -95,7 +96,9 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
   const comRef = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false);
   const deskRef = useRef<HTMLElement>(null);
-  const [disc, setDisc] = useState(order.discount);
+  // the remise besides the welcome code (Referral › Code promo: its own field)
+  const [disc, setDisc] = useState(Math.max(0, order.discount - (order.promoDiscount ?? 0)));
+  const [code, setCode] = useState(order.promoCode ?? '');
   const [nOrigin, setNOrigin] = useState(order.customerNote ?? '');
   const [nLivreur, setNLivreur] = useState(order.deliveryNote ?? '');
   const [nTeam, setNTeam] = useState(order.internalNote ?? '');
@@ -111,11 +114,12 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
   const canSave = !!pend && (pend.status === 'try' || pend.status !== order.confStatus);
   useEffect(() => setPend(null), [order.id, order.confStatus, order.version]);
   useEffect(() => {
-    setDisc(order.discount);
+    setDisc(Math.max(0, order.discount - (order.promoDiscount ?? 0)));
+    setCode(order.promoCode ?? '');
     setNOrigin(order.customerNote ?? '');
     setNLivreur(order.deliveryNote ?? '');
     setNTeam(order.internalNote ?? '');
-  }, [order.discount, order.customerNote, order.deliveryNote, order.internalNote]);
+  }, [order.discount, order.promoDiscount, order.promoCode, order.customerNote, order.deliveryNote, order.internalNote]);
   useEffect(() => {
     setCName(order.customerName);
     setCPhone(order.phone);
@@ -159,6 +163,8 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
     if (modeTouched && modeFee.data?.fee != null) setFee(modeFee.data.fee);
   }, [modeTouched, modeFee.data]);
 
+  // the welcome code's check (a hook: before the early return)
+  const promo = usePromoCheck(code, L.reduce((n, l) => n + l.qty * l.unitPrice, 0), order.id);
   if (!cat.data) return <Loading />;
   const P = new Map(cat.data.map((p) => [p.id, p]));
   const editable = !(order.followStatus && FOLLOW_LOCKED.includes(order.followStatus)) && !order.shippedAt;
@@ -167,7 +173,8 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
   const geoChanged = wil !== order.wilayaId || com !== (order.commune ?? '');
   const clientChanged = cName.trim() !== order.customerName || cPhone.trim() !== order.phone || cPhone2.trim() !== (order.phone2 ?? '') || cAddr.trim() !== (order.address ?? '');
   const coChanged = !desk && co !== order.companyId;
-  const dirty = key(L) !== key(initial) || fee !== order.deliveryFee || disc !== order.discount || notesChanged || geoChanged || clientChanged || desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId) || coChanged;
+  const codeChanged = code.trim() !== (order.promoCode ?? '');
+  const dirty = key(L) !== key(initial) || fee !== order.deliveryFee || disc !== Math.max(0, order.discount - (order.promoDiscount ?? 0)) || codeChanged || notesChanged || geoChanged || clientChanged || desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId) || coChanged;
   /** another wilaya: pick its commune, forget a bureau of the old one, and take that wilaya's price from the grid */
   const pickWilaya = (w: number) => {
     setGeoPick(null);
@@ -199,6 +206,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
     return vs.length ? vs.reduce((n, v) => n + (v.stock ?? 0), 0) : null;
   };
   const sub = L.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+  const promoN = code.trim() ? promo.discount : 0;
   // the upsell, counted by itself against what the customer first ordered (the same rule as the server): no box to tick
   const up = order.isExchange ? null : upsellOf(order.origItems ?? origOf(order.items), order.origItems ? order.origDiscount : order.discount, L, disc);
   // the biggest discount the customer can get: each product's limit × quantity (a product without limit allows the whole cart)
@@ -306,7 +314,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
       const notes = notesChanged ? { customerNote: nOrigin.trim() || null, deliveryNote: nLivreur.trim() || null, internalNote: nTeam.trim() || null } : {};
       const geo = geoChanged ? { wilayaId: wil, commune: com } : {};
       const client = clientChanged ? { customerName: cName.trim(), phone: cPhone.trim(), phone2: cPhone2.trim() || null, address: cAddr.trim() } : {};
-      await rpc('orders.update', { id: order.id, version: order.version, deliveryFee: fee, discount: disc, ...notes, ...geo, ...client, ...mode, ...(coChanged ? { companyId: co } : {}), ...(key(L) !== key(initial) ? { items: cartBody } : {}) });
+      await rpc('orders.update', { id: order.id, version: order.version, deliveryFee: fee, discount: disc, ...(codeChanged ? { promoCode: code.trim() || null } : {}), ...notes, ...geo, ...client, ...mode, ...(coChanged ? { companyId: co } : {}), ...(key(L) !== key(initial) ? { items: cartBody } : {}) });
       return true;
     } catch (e: any) {
       setErr(e.message);
@@ -671,6 +679,15 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
               </label>
             </dd>
           </div>
+          <div className="qd6-code">
+            <dt>
+              {t('orders.promo.label')}
+              {promoN > 0 && <small className="ltr">−{da(promoN)}</small>}
+            </dt>
+            <dd>
+              <PromoField value={code} onChange={setCode} check={promo} disabled={!editable} />
+            </dd>
+          </div>
           {up && up.value > 0 && (
             <div className="qd6-up" title={t('confirmation.d6.upsellHint')}>
               <dt>
@@ -682,7 +699,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
           )}
           <div className="qd5-total">
             <dt>{t('confirmation.d.total')}</dt>
-            <dd className="ltr">{da(sub + fee - disc)}</dd>
+            <dd className="ltr">{da(Math.max(0, sub - promoN) + fee - disc)}</dd>
           </div>
         </dl>
         {chkNote && (
@@ -720,7 +737,8 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
                 setDeskId(order.stopdeskId);
                 setWil(order.wilayaId);
                 setCom(order.commune ?? '');
-                setDisc(order.discount);
+                setDisc(Math.max(0, order.discount - (order.promoDiscount ?? 0)));
+                setCode(order.promoCode ?? '');
                 setNOrigin(order.customerNote ?? '');
                 setNLivreur(order.deliveryNote ?? '');
                 setNTeam(order.internalNote ?? '');

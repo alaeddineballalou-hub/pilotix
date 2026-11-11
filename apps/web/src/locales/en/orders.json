@@ -586,5 +586,16 @@
       "repick": "Its products are to pick again: what was already picked waits first at the depot.",
       "resend": "Its parcel is created again at the delivery company (new number)."
     }
-  }
+  },
+  "promo": {
+    "label": "Promo code",
+    "valid": "valid: −{{v}}",
+    "small": "order too small (min {{v}} of products)",
+    "unknown": "unknown code",
+    "used": "already used",
+    "expired": "expired",
+    "waiting": "not given yet (follow the page)",
+    "eBad": "The promo code does not work for this order: fix it or clear the field."
+  },
+  "awareness": "Awareness"
 }

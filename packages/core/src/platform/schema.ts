@@ -641,6 +641,13 @@ CREATE INDEX IF NOT EXISTS payment_claims_status ON platform.payment_claims (sta
 CREATE UNIQUE INDEX IF NOT EXISTS payment_claims_one_pending ON platform.payment_claims (shop_id) WHERE status = 'pending';
 `;
 
+const REFERRAL_PERIOD_SQL = `
+-- Referral › Referral: the period the free months covered (« used » / « left »), and when the referrer was told of the sign-up
+ALTER TABLE platform.referrals ADD COLUMN IF NOT EXISTS reward_from timestamptz;
+ALTER TABLE platform.referrals ADD COLUMN IF NOT EXISTS reward_to timestamptz;
+ALTER TABLE platform.referrals ADD COLUMN IF NOT EXISTS told_at timestamptz;
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
@@ -724,6 +731,7 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p037_payment_claims', PAYMENT_CLAIMS_SQL],
   // AI credits (Espace créateur): each shop's wallet and its moves; a pack is bought with « J'ai payé » (months = 0)
   ['p038_ai_credits', CREDITS_SQL],
+  ['p039_referral_period', REFERRAL_PERIOD_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

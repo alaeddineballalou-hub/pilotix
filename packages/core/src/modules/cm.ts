@@ -10,6 +10,7 @@ import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, hasRole, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, setRaw } from './admin';
+import { promoCommentSent, promoForComment } from './promo';
 import { DELLAL_DARIJA, parseAvoid } from './darija';
 import { darijaGuide } from './darijabook';
 import { vocabBlock, vocabFor } from './vocab';
@@ -813,6 +814,24 @@ export async function answerComment(ctx: Ctx, id: number, opts: { force?: boolea
       });
       const run = await decide(ctx, f, s);
       const d = { ...run.decision };
+      // Referral › Code promo: under a post marked « Awareness 🎁 », the private message is the welcome code's fixed
+      // message (never the AI's): the code, « follow us first » (Instagram), or the same code again
+      const promo = await promoForComment(ctx, {
+        channel: row.channel,
+        postId: numOrNull(row.post_id),
+        authorId: row.author_id ?? null,
+        authorName: row.author_name ?? null,
+        body: row.body,
+        intent: d.intent,
+        hide: !!d.hide,
+        tooOld: !!f.tooOld,
+        alreadyPrivate: !!f.alreadyPrivate,
+      }).catch(() => null);
+      if (promo) {
+        d.privateReply = promo.text;
+        d.publicReply = CM_LINES.privateDone[f.lang];
+        d.handoff = false;
+      }
       const errors: string[] = [];
       let hidden = !!fresh.hidden;
       let privateSent = false;
@@ -834,8 +853,11 @@ export async function answerComment(ctx: Ctx, id: number, opts: { force?: boolea
           const r = await metaAct(ctx, row, 'cmPrivate', { text: d.privateReply });
           privateSent = true;
           convId = await openConversation(ctx, row, d.privateReply, r?.recipientId ?? null, {
-            meta: { by: run.by, demo: run.by !== 'ai', model: run.model, usage: run.usage, ...(run.darija.private ? { darija: run.darija.private } : {}) },
+            meta: promo
+              ? { by: 'promo', promo: { kind: promo.decision.kind, code: promo.decision.row.code } }
+              : { by: run.by, demo: run.by !== 'ai', model: run.model, usage: run.usage, ...(run.darija.private ? { darija: run.darija.private } : {}) },
           });
+          if (promo) await promoCommentSent(ctx, promo, { conversationId: convId, recipientId: r?.recipientId ?? null }).catch(() => undefined);
         } catch (e) {
           errors.push(`Message privé : ${errText(e)}`);
           // never say "answered in private" when the private message did not go: ask them to write instead
@@ -1132,6 +1154,8 @@ export const cmProcs = {
         comments: num(r.comments),
         todo: num(r.todo),
         lastAt: isoOrNull(r.last_at),
+        /** Referral › Code promo: a comment here gets the welcome code in private */
+        awareness: !!r.awareness,
       })),
       products: products.map((p: any) => ({ id: num(p.id), name: p.name as string, price: num(p.price) })),
     };

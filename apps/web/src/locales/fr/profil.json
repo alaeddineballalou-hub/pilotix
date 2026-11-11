@@ -95,5 +95,7 @@
   "friendsPlat": "Les boutiques venues avec votre lien",
   "noFriendsPlat": "Aucune boutique pour l’instant. Partagez votre lien !",
   "nMonths": "{{n}} mois",
-  "phoneLock": "C’est le numéro de votre compte (un seul compte par numéro). Pour le changer, écrivez à Pilotix."
+  "phoneLock": "C’est le numéro de votre compte (un seul compte par numéro). Pour le changer, écrivez à Pilotix.",
+  "refMoved": "Le parrainage est maintenant dans le menu : Referral › Parrainage.",
+  "refOpen": "Ouvrir le parrainage"
 }

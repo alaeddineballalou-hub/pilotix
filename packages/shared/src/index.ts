@@ -300,6 +300,10 @@ export interface Order {
   subtotal: number;
   deliveryFee: number;
   discount: number;
+  /** Referral › Code promo: the welcome code used, what it took off (inside `discount`), and the « Awareness » tag */
+  promoCode?: string | null;
+  promoDiscount?: number;
+  awareness?: boolean;
   total: number;
   deliveryCost: number;
   cashed: boolean;

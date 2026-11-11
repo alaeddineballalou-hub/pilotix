@@ -195,6 +195,8 @@ function App() {
   if (parts[0] === 'reset' && parts[1]) return <ResetPassword token={parts[1]} />;
   if (parts[0] === 'invite' && parts[1]) return <ResetPassword token={parts[1]} invite />;
   if (parts[0] === 'signup' && parts[1]) return <SignupConfirm token={parts[1]} />;
+  // the referral link « pilotix.online/signup?ref=CODE » (Referral › Referral): the sign-up with the code filled in
+  if (parts[0] === 'signup') return <Signup referral={refParam()} />;
   if (parts[0] === 'verify' && parts[1]) return <VerifyEmail token={parts[1]} />;
   if (parts[0] === 'inscription') return <Signup referral={parts[1]} />;
   // « Créer mon agence » / « Créer mon espace marketer »: a partner signs up the same way (its kind chosen already)
@@ -336,4 +338,14 @@ if (PATHS && import.meta.env.PROD) {
   startFreshness();
   // inside the phone app: a newer app offered (or required), lib/appUpdate
   startAppUpdates();
+}
+
+/** ?ref=CODE of a referral link (letters and digits only). */
+function refParam(): string | undefined {
+  try {
+    const v = new URLSearchParams(window.location.search).get('ref') ?? '';
+    return /^[A-Za-z0-9]{3,12}$/.test(v) ? v.toUpperCase() : undefined;
+  } catch {
+    return undefined;
+  }
 }

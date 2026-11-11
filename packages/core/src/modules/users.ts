@@ -371,6 +371,7 @@ export const usersProcs = {
       subscribedAt: isoOrNull(x.subscribed_at),
     }));
     const sub = friends.filter((f) => f.status === 'subscribed');
+    const used = Math.round(sub.reduce((s, f) => s + Math.min(f.months, f.subscribedAt ? Math.max(0, (ctx.now() - Date.parse(f.subscribedAt)) / (30 * 86_400_000)) : 0), 0) * 10) / 10;
     return {
       code,
       rules,
@@ -383,7 +384,11 @@ export const usersProcs = {
         cashPaid: sub.filter((f) => f.paid).reduce((s, f) => s + f.cash, 0),
         cashPending: sub.filter((f) => !f.paid).reduce((s, f) => s + f.cash, 0),
         months: sub.reduce((s, f) => s + f.months, 0),
+        // the free months already gone by (one a month from the friend's subscription), and those left
+        monthsUsed: used,
+        monthsLeft: Math.max(0, Math.round((sub.reduce((s, f) => s + f.months, 0) - used) * 10) / 10),
       },
+      on: rules.months > 0 || rules.cash > 0,
       /** On a server with several stores, Pilotix's own programme answers instead (the store's link, free months). */
       platform: false,
       link: null as string | null,

@@ -55,6 +55,8 @@ export const PAGES: Record<string, ComponentType<PageProps>> = {
   reglages: P(() => import('./admin'), 'Reglages'),
   agences: P(() => import('./agences'), 'Agences'),
   marketers: P(() => import('./agences'), 'Marketers'),
+  // Referral › Referral (other shops invited) and › Code promo (welcome codes)
+  parrainage: P(() => import('./referral'), 'Parrainage'),
   profil: P(() => import('./profil'), 'Profil'),
   boutiques: P(() => import('./boutiques'), 'Boutiques'),
 } satisfies Pages;

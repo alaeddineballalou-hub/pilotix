@@ -22,6 +22,8 @@ export function useLandingFrame(
       if (m.lp === 'geo') r = communesOf(Number(m.body)).map((c) => [c[1], c[2]]);
       else if (m.lp === 'order' && onOrder) r = await onOrder(String(m.slug), m.body).catch(() => null);
       else if (m.lp === 'lead' && onOrder) r = await demoCapture(String(m.slug), m.body).catch(() => null);
+      // Referral › Code promo: the page's code field, checked like the server does
+      else if (m.lp === 'code') r = await rpc('landing.code', { slug: String(m.slug), code: String(m.body?.code ?? ''), total: Math.round(Number(m.body?.total) || 0) } as any).catch(() => null);
       (e.source as Window).postMessage({ lp: 1, id: m.id, r }, '*');
     };
     window.addEventListener('message', on);

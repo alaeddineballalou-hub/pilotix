@@ -278,5 +278,6 @@
     "sentN_one": "{{count}} photo sent",
     "sentN_other": "{{count}} photos sent",
     "preview": "preview, no AI"
-  }
+  },
+  "promoAuthor": "🎁 Welcome code (automatic message, not the AI)"
 }

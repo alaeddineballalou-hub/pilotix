@@ -108,3 +108,22 @@ export const pushProcs = {
     return { ok: true };
   }),
 };
+
+/**
+ * From the platform (no shop session: a sign-up, a payment in the control room): a notification to the administrators
+ * of one boutique (Referral: « a friend signed up », « your free months were added »). Never fails the caller.
+ */
+export async function pushShopAdmins(t: import('../platform/tenancy').Tenancy, server: Pick<ServerHooks, 'push' | 'pushKeys'>, shopId: number, payload: Record<string, unknown>): Promise<number> {
+  try {
+    if (!server.push) return 0;
+    const s = (await t.platform.query('SELECT schema_name FROM platform.shops WHERE id = $1', [shopId]))[0];
+    if (!s?.schema_name) return 0;
+    const db = t.shop(String(s.schema_name));
+    const k = await keysOf(db, server as ServerHooks);
+    if (!k) return 0;
+    const subs = await db.query(`SELECT s.endpoint, s.p256dh, s.auth FROM push_subs s JOIN profiles p ON p.id = s.profile_id WHERE p.active AND 'admin' = ANY(p.roles)`);
+    return await deliver(db, server as ServerHooks, k, subs as Sub[], payload, new Set());
+  } catch {
+    return 0;
+  }
+}

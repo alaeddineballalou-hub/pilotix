@@ -156,6 +156,39 @@ async function sendPage(ctx: Ctx, a: { channel: DellalChannel; externalId: strin
     mid = midOf(await postJson(`${GRAPH}/me/messages?access_token=${encodeURIComponent(token)}`, { recipient: { id: a.externalId }, messaging_type: 'RESPONSE', message: { text: t } }, {}, a.channel === 'instagram' ? 'Instagram' : 'Messenger')) ?? mid;
   return { ok: true, messageId: mid };
 }
+/**
+ * Referral › Code promo, Instagram only: does this person follow the boutique's Instagram account (User Profile API,
+ * is_user_follow_business; the same permission as the messages). null: Meta did not say (the code then waits).
+ */
+async function igFollows(ctx: Ctx, a: { externalId: string }): Promise<{ follows: boolean | null; error?: string }> {
+  const id = enc(String(a.externalId ?? ''));
+  const ask = async (url: string, headers: Record<string, string>) => {
+    const r = await postJson(url, null, headers, 'Instagram', 'GET', 15_000);
+    return typeof r?.is_user_follow_business === 'boolean' ? (r.is_user_follow_business as boolean) : null;
+  };
+  let error = '';
+  const ig = await dellalSecret(ctx.db, 'igToken');
+  if (ig) {
+    try {
+      const s = await dellalSettings(ctx.db);
+      const base = s.igLoginKind === 'unified' ? UNI_GRAPH : IG_GRAPH;
+      const v = await ask(`${base}/${id}?fields=is_user_follow_business`, { Authorization: `Bearer ${ig}` });
+      if (v !== null) return { follows: v };
+    } catch (e: any) {
+      error = String(e?.message ?? e);
+    }
+  }
+  const page = await dellalSecret(ctx.db, 'pageToken');
+  if (page) {
+    try {
+      const v = await ask(`${GRAPH}/${id}?fields=is_user_follow_business&access_token=${enc(page)}`, {});
+      if (v !== null) return { follows: v };
+    } catch (e: any) {
+      error = String(e?.message ?? e);
+    }
+  }
+  return { follows: null, error: error || 'Instagram n’a pas répondu (compte Instagram non connecté ?)' };
+}
 const midOf = (r: any): string | null => (r?.message_id ? String(r.message_id).slice(0, 200) : null);
 
 async function complete(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
@@ -722,6 +755,7 @@ export async function runDellal(action: string, args: unknown, ctx: Ctx): Promis
   if (action === 'catchUp') return catchUpMeta(args as CatchUpArgs);
   if (action === 'igLogin') return igLogin(String((args as any)?.token ?? ''), (args as any)?.igId ? String((args as any).igId) : null);
   if (action === 'igRefresh') return igRefresh(String((args as any)?.token ?? ''));
+  if (action === 'igFollows') return igFollows(ctx, args as { externalId: string });
   if (action === 'ping') {
     await complete(ctx, { model: 'claude-haiku-5-5', system: 'Réponds OK.', messages: [{ role: 'user', content: 'ping' }], tools: [] as any, max_tokens: 5 });
     return { ok: true };
@@ -755,7 +789,7 @@ async function igLoginInstagram(token: string) {
   const userId = String(me?.user_id ?? me?.id ?? '');
   if (!userId) throw new AppError('bad_request', 'Instagram n’a pas donné le compte de cette clé.');
   let subscribeError: string | null = null;
-  for (const fields of ['messages,messaging_postbacks,messaging_seen,comments', 'messages']) {
+  for (const fields of ['messages,messaging_postbacks,messaging_seen,messaging_referral,comments', 'messages,messaging_postbacks,messaging_seen,comments', 'messages']) {
     try {
       await postJson(`${IG_GRAPH}/me/subscribed_apps?subscribed_fields=${fields}&access_token=${enc(token)}`, {}, {}, 'Instagram', 'POST', 20_000);
       subscribeError = null;
@@ -806,14 +840,14 @@ async function igLoginUnified(token: string, igId: string | null) {
   const acc = list.find((x) => igId && String(x?.id) === igId) ?? list[0];
   if (!acc?.id) throw new AppError('bad_request', 'Cette clé n’a accès à aucun compte Instagram. Dans l’app Meta, donnez votre compte Instagram à cette clé (« Instagram account »), puis recommencez.');
   // its messages' webhook (through the Page it already comes for people with a role; Meta may refuse this one: not a failure)
-  await postJson(`${UNI_GRAPH}/${enc(String(acc.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,comments&access_token=${enc(token)}`, {}, {}, 'Instagram', 'POST', 20_000).catch(
+  await postJson(`${UNI_GRAPH}/${enc(String(acc.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_referral,comments&access_token=${enc(token)}`, {}, {}, 'Instagram', 'POST', 20_000).catch(
     () => null,
   );
   // « Connecter Instagram » (a person's key, through a Page): the Page is subscribed to the app, so its Instagram DMs come
   let subscribeError: string | null = null;
   if (acc.page?.id && acc.page.token)
     await postJson(
-      `${UNI_GRAPH}/${enc(acc.page.id)}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,feed&access_token=${enc(acc.page.token)}`,
+      `${UNI_GRAPH}/${enc(acc.page.id)}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_referrals,feed&access_token=${enc(acc.page.token)}`,
       {},
       {},
       'Instagram',
@@ -1419,6 +1453,8 @@ export interface Incoming {
   media?: { kind: 'audio' | 'image'; id?: string; url?: string; mime?: string } | null;
   /** WhatsApp: the hidden value of the template button the customer tapped (a campaign's « Je commande » / « Stop ») */
   payload?: string;
+  /** Messenger / Instagram: only where the person comes from (an ad, a ?ref= link), no message (text is empty) */
+  referral?: boolean;
 }
 
 const MEDIA: Record<string, string> = {
@@ -1431,6 +1467,18 @@ const MEDIA: Record<string, string> = {
   file: '[fichier envoyé]',
 };
 
+/**
+ * Where a chat comes from: « pub <ad id> » (an ad), « ref:<value> » (an m.me / ig.me link with ?ref=, its value kept),
+ * else Meta's word (shortlink, ads…). Null: nothing said.
+ */
+export function refSource(ref: any): string | null {
+  if (!ref || typeof ref !== 'object') return null;
+  if (ref.ad_id) return `pub ${String(ref.ad_id).replace(/[^0-9]/g, '').slice(0, 30)}`;
+  const v = String(ref.ref ?? '').trim().slice(0, 120);
+  if (v) return `ref:${v}`;
+  return ref.source ? String(ref.source).toLowerCase().slice(0, 60) : null;
+}
+
 /** Reads a Meta webhook (Messenger page, Instagram, WhatsApp Business) into plain customer messages. */
 export function parseMetaWebhook(body: any): Incoming[] {
   const out: Incoming[] = [];
@@ -1439,6 +1487,23 @@ export function parseMetaWebhook(body: any): Incoming[] {
     if (obj === 'page' || obj === 'instagram') {
       for (const ev of Array.isArray(entry?.messaging) ? entry.messaging : []) {
         const m = ev?.message;
+        // a referral without a message (messaging_referrals): someone already in a conversation opened the chat again from
+        // an ad or an m.me / ig.me ?ref= link — no text, but where they come from (Referral › Code promo needs it)
+        if (!m && ev?.referral && ev?.sender?.id) {
+          const src = refSource(ev.referral);
+          if (src)
+            out.push({
+              channel: (obj === 'page' ? 'messenger' : 'instagram') as DellalChannel,
+              externalId: String(ev.sender.id),
+              accountId: ev?.recipient?.id ? String(ev.recipient.id) : null,
+              name: null,
+              text: '',
+              messageId: null,
+              source: src,
+              referral: true,
+            });
+          continue;
+        }
         if (!m || m.is_echo || !ev?.sender?.id) continue;
         const atts: any[] = Array.isArray(m.attachments) ? m.attachments : [];
         const att = atts[0] ?? null;
@@ -1453,7 +1518,7 @@ export function parseMetaWebhook(body: any): Incoming[] {
           externalId: String(ev.sender.id),
           accountId: ev?.recipient?.id ? String(ev.recipient.id) : null,
           name: null,
-          source: ref?.ad_id ? `pub ${ref.ad_id}` : ref?.source ? String(ref.source).toLowerCase() : null,
+          source: refSource(ref),
         };
         // photos (up to 3 in one message): each one its own message, read by Pilot AI before Dellal answers
         const photos = m.text ? [] : atts.filter((a) => a?.type === 'image' && a?.payload?.url && !sticker(a)).slice(0, 3);

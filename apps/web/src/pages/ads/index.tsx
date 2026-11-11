@@ -722,6 +722,10 @@ function PickProduct({ adset, catalog, onClose }: { adset: { id: string; name: s
 function AdsetDetail({ adset, from, to, lang, onClose }: { adset: { id: string; name: string }; from: string; to: string; lang: string; onClose: () => void }) {
   const { t } = useTranslation();
   const q = useRpc('ads.adset', { id: adset.id, from, to });
+  // Referral › Code promo: « 🎁 Awareness: gives a code » on an ad (a chat started from it gets the welcome code)
+  const marks = useRpc('promo.marks', {});
+  const mark = useAction('promo.mark', { success: t('ads.awareSaved') });
+  const aware = new Set((marks.data?.marks ?? []).filter((m) => m.kind === 'ad').map((m) => m.id));
   const max = Math.max(1, ...(q.data?.days.map((x) => x.spendUsd) ?? [1]));
   return (
     <Modal
@@ -777,7 +781,13 @@ function AdsetDetail({ adset, from, to, lang, onClose }: { adset: { id: string; 
                   <tbody>
                     {q.data!.ads.map((a) => (
                       <tr key={a.id}>
-                        <td data-l={t('ads.colAd')}>{a.name}</td>
+                        <td data-l={t('ads.colAd')}>
+                          {a.name}
+                          <label className={`ad-aware${aware.has(String(a.id)) ? ' on' : ''}`} title={t('ads.awareHelp')}>
+                            <input type="checkbox" checked={aware.has(String(a.id))} disabled={mark.isPending || !marks.data} onChange={(e) => mark.mutate({ kind: 'ad', id: String(a.id), on: e.target.checked, label: a.name })} />
+                            {t('ads.aware')}
+                          </label>
+                        </td>
                         <td className="num">{usd(a.spendUsd)}</td>
                         <td className="num">{n(a.purchases)}</td>
                         <td className="num">{usd(a.cpa)}</td>

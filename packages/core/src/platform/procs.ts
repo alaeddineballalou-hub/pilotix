@@ -216,7 +216,8 @@ async function recordPayment(ctx: PCtx, s: Shop, i: PaymentIn, inTx?: (db: Db, p
       [s.id, p.id, i.planId ?? null],
     );
     // the first payment of a store another one brought: that one gets its free months
-    const reward = await rewardReferrer(db, set, s.id, num(p.id));
+    // (a payment of 0 DA — a gift, a correction — is not the store's first real payment)
+    const reward = i.amount > 0 ? await rewardReferrer(db, set, s.id, num(p.id)) : null;
     if (inTx) await inTx(db, num(p.id));
     return { id: num(p.id), paidUntil: isoOrNull(p.period_to), reactivated: cur.status === 'suspended', receiptNo, reward };
   });

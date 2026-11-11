@@ -111,3 +111,8 @@
 .cm-act .lj-open, .cm-act .lj-done { align-self: flex-start; margin: 2px 0 0; padding-inline: 0; }
 .cm-act .lj-edit { width: 100%; margin-top: 4px; }
 .cm-acts.by-ai .cm-act .lj-open { color: var(--ai-tint-ink); }
+
+/* Referral › Code promo: « 🎁 Awareness: gives a code » on a post */
+.cm-aware { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px dashed var(--line, #d0d7e2); border-radius: 999px; font-size: 13px; cursor: pointer; white-space: nowrap; align-self: center; }
+.cm-aware.on { border-style: solid; border-color: #f59e0b; background: #fff7e6; color: #92400e; font-weight: 600; }
+.cm-aware input { margin: 0; }

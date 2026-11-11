@@ -31,6 +31,7 @@ import { seed as seed_spy } from './seeds/spy';
 import { seed as seed_pilotads } from './seeds/pilotads';
 import { seed as seed_partners } from './seeds/partners';
 import { seed as seed_automations } from './seeds/automations';
+import { seed as seed_promo } from './seeds/promo';
 
 /** First admin + one warehouse. Used by the real server on first start. */
 export async function seedBase(db: Db, admin: { email: string; password: string; name?: string }) {
@@ -408,6 +409,8 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
   // Pilot Automations: what it did these last days (it reads the demo's orders, ads and customers)
   await seed_automations(db, users, now);
   if (expanded) await seedSwaps(db, now);
+  // Referral › Code promo: the welcome codes (reads the posts, ads and orders above)
+  await seed_promo(db, users, now);
   // agent pay last: it reads the delivered and prepared orders the seeds above wrote (and their first quantities)
   await seed_pay(db, users, now);
 

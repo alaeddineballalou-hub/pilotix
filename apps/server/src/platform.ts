@@ -24,6 +24,7 @@ import { checkLogin, clearLogin, failedLogin, settleLogin } from './limits';
 import { couriers, runCheck, runCheckAll, testable, watchNow, watchRunning } from './courierWatch';
 import { mailConfigured, sendMail } from './mail';
 import { ownerMail, ReceiptData, receiptMail, staffCodeMail } from './mails';
+import { push as webPush, pushKeys as webPushKeys } from './push';
 import { PUBLIC, Public } from './public';
 
 /** Staff tokens are signed with their own key: a shop token is never a staff token, nor the reverse. */
@@ -246,13 +247,23 @@ export class PlatformController {
   }
 
   private async send(m: OwnerMail, ctx: core.PCtx) {
-    if (!mailConfigured()) return;
     try {
+      if (!mailConfigured()) throw null;
       const mail = m.kind === 'receipt' ? receiptMail((await core.platformCall('p.payments.receipt', ctx, { id: m.paymentId })) as ReceiptData, m.to) : ownerMail(m);
       if (mail) await sendMail(mail);
     } catch (e: any) {
-      this.log.error(`${m.kind} e-mail to ${m.to} failed: ${e?.message || e}`);
+      if (e) this.log.error(`${m.kind} e-mail to ${m.to} failed: ${e?.message || e}`);
     }
+    // Referral: the free months were added — the referrer's admins see it on their phones too
+    if (m.kind === 'reward')
+      await core
+        .pushShopAdmins(this.core.t, { push: webPush, pushKeys: webPushKeys }, m.reward.referrerShopId, {
+          title: '🎁 Parrainage',
+          body: `« ${m.reward.referred} » a payé : ${m.reward.months} mois gratuit${m.reward.months > 1 ? 's' : ''} ajouté${m.reward.months > 1 ? 's' : ''} à « ${m.reward.shop} ».`,
+          url: '#/parrainage',
+          tag: `reward-${m.reward.referrerShopId}`,
+        })
+        .catch(() => 0);
   }
 
   /** Doctor: the server's health (machine, database, jobs, errors in the code, silent shops). Owner and managers. */

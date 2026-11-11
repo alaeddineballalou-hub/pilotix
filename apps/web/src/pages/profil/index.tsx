@@ -67,7 +67,8 @@ export function Profil({ sub }: PageProps) {
   const p = session!.profile;
   // a confirmation agency's people (its own space, or working in a store for it) have no referral programme
   const agencyPerson = (!!session!.shop?.kind && session!.shop.kind !== 'store') || !!p.agencyId;
-  const tabs = TABS.filter(([k]) => k !== 'parrainage' || !agencyPerson);
+  // Referral › Referral is the owner's (the administrators of the store)
+  const tabs = TABS.filter(([k]) => k !== 'parrainage' || (!agencyPerson && session!.isAdmin));
   const tab: Tab = tabs.some((x) => x[0] === sub) ? (sub as Tab) : 'infos';
   return (
     <div className="px-pf">
@@ -93,7 +94,7 @@ export function Profil({ sub }: PageProps) {
           </a>
         ))}
       </nav>
-      {tab === 'infos' ? <Infos p={p} /> : tab === 'parametres' ? <Settings /> : tab === 'parrainage' ? <Referral /> : <Security p={p} />}
+      {tab === 'infos' ? <Infos p={p} /> : tab === 'parametres' ? <Settings /> : tab === 'parrainage' ? <RefMoved /> : <Security p={p} />}
     </div>
   );
 }
@@ -324,208 +325,19 @@ function Security({ p }: { p: Profile }) {
   );
 }
 
-function Referral() {
-  const { t, i18n } = useTranslation();
-  const { session } = useSession();
-  const q = useRpc('me.referrals', {});
-  const [nm, setNm] = useState('');
-  const [em, setEm] = useState('');
-  const [copied, setCopied] = useState('');
-  const [rc, setRc] = useState<{ cash: number | string; months: number | string } | null>(null);
-  const invite = useAction('me.invite', { success: t('profil.invOk'), onDone: () => (setNm(''), setEm('')) });
-  const rules = useAction('referral.rules', { success: t('profil.rulesOk') });
-  if (q.isLoading || !q.data) return <Loading />;
-  const d = q.data;
-  const cash = da(d.rules.cash);
-  const months = String(d.rules.months);
-  // on the Pilotix server: the store's own sign-up link, and Pilotix's programme (free months, no cash)
-  const plat = d.platform;
-  const off = plat && !d.rules.months;
-  // the site's own address (on the site: pilotix.online/inscription/<code>; the preview: its page, #/inscription/<code>)
-  const site = `${location.origin}${PATHS ? '' : location.pathname}`;
-  const link = d.link ?? (plat ? `${site}${linkHref(`#/inscription/${d.code}`)}` : `${site}${PATHS ? '/' : ''}?ref=${d.code}`);
-  const msg = t('profil.refMsg', { code: d.code, link });
-  const copy = (v: string, k: string) =>
-    navigator.clipboard
-      ?.writeText(v)
-      .then(() => {
-        setCopied(k);
-        setTimeout(() => setCopied(''), 1600);
-      })
-      .catch(() => {});
-  const kpi = (l: string, v: string, tone?: string) => (
-    <div className={`kpi${tone ? ` t-${tone}` : ''}`}>
-      <span className="l">{l}</span>
-      <span className="v ltr">{v}</span>
-    </div>
-  );
-  const st = { invited: ['sInvited', 'off'], signed_up: ['sSigned', 'info'], subscribed: ['sSub', 'ok'] } as const;
-  const date = (x: string) => new Intl.DateTimeFormat(i18n.language === 'ar' ? 'ar-DZ' : i18n.language, { day: 'numeric', month: 'short', year: 'numeric', numberingSystem: 'latn' }).format(new Date(x));
-  const R = rc ?? { cash: d.rules.cash, months: d.rules.months };
+/** Parrainage moved to the menu (Referral › Referral): the profile keeps a link to it. */
+function RefMoved() {
+  const { t } = useTranslation();
   return (
-    <>
-      <section className="card px-ref-hero">
-        <div className="px-ref-ht">
-          <h2>{t(plat ? 'profil.refTitlePlat' : 'profil.refTitle')}</h2>
-          <p>{off ? t('profil.refOff') : plat ? t('profil.refRulePlat', { months }) : t('profil.refRule', { cash, months })}</p>
-        </div>
-        <div className="px-ref-share">
-          <div className="px-ref-code">
-            <span className="lab">{t('profil.refCode')}</span>
-            <div className="px-ref-box">
-              <b className="ltr">{d.code}</b>
-              <button type="button" className="btn small" onClick={() => copy(d.code ?? '', 'code')}>
-                <Icon name="copy" />
-                {copied === 'code' ? t('profil.copied') : t('profil.copy')}
-              </button>
-            </div>
-          </div>
-          <div className="px-ref-code grow">
-            <span className="lab">{t('profil.refLink')}</span>
-            <div className="px-ref-box">
-              <span className="ltr px-ref-url">{link}</span>
-              <button type="button" className="btn small" onClick={() => copy(link, 'link')}>
-                <Icon name="copy" />
-                {copied === 'link' ? t('profil.copied') : t('profil.copy')}
-              </button>
-              <a className="btn small px-ref-wa" href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener">
-                <Icon name="whatsapp" />
-                {t('profil.share')}
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
-      {plat ? (
-        <div className="kpis px-ref-k">
-          {kpi(t('profil.kStores'), n(d.totals.signedUp))}
-          {kpi(t('profil.kPaying'), n(d.totals.subscribed), 'ok')}
-          {kpi(t('profil.kMonths'), n(d.totals.months), d.totals.months ? 'ok' : undefined)}
-        </div>
-      ) : (
-        <div className="kpis px-ref-k">
-          {kpi(t('profil.kInv'), n(d.totals.invited))}
-          {kpi(t('profil.kSign'), n(d.totals.signedUp))}
-          {kpi(t('profil.kSub'), n(d.totals.subscribed), 'ok')}
-          {kpi(t('profil.kEarn'), da(d.totals.cashEarned), 'ok')}
-          {kpi(t('profil.kPend'), da(d.totals.cashPending), d.totals.cashPending ? 'warn' : undefined)}
-          {kpi(t('profil.kMonths'), n(d.totals.months))}
-        </div>
-      )}
-      <div className={plat ? undefined : 'px-ref-grid'}>
-        <section className="card px-pf-card">
-          <h2>{t('profil.how')}</h2>
-          {plat ? (
-            <ol className="px-ref-steps">
-              <li>{t('profil.p1')}</li>
-              <li>{t('profil.p2')}</li>
-              <li>{t('profil.p3', { months })}</li>
-            </ol>
-          ) : (
-            <ol className="px-ref-steps">
-              <li>{t('profil.h1')}</li>
-              <li>{t('profil.h2')}</li>
-              <li>{t('profil.h3', { cash, months })}</li>
-            </ol>
-          )}
-        </section>
-        {!plat && (
-        <form
-          className="card px-pf-card"
-          onSubmit={(e) => {
-            e.preventDefault();
-            invite.mutate({ name: nm.trim(), email: em.trim() });
-          }}
-        >
-          <h2>{t('profil.invite')}</h2>
-          <Field label={t('profil.invName')}>
-            <input value={nm} onChange={(e) => setNm(e.target.value)} required minLength={2} />
-          </Field>
-          <Field label={t('profil.invEmail')}>
-            <input type="email" className="ltr" value={em} onChange={(e) => setEm(e.target.value)} required />
-          </Field>
-          <div className="row end">
-            <button type="submit" className="btn primary" disabled={invite.isPending}>
-              {t('profil.invBtn')}
-            </button>
-          </div>
-        </form>
-        )}
+    <section className="card px-pf-card">
+      <h2>{t('profil.tRef')}</h2>
+      <p className="muted">{t('profil.refMoved')}</p>
+      <div className="row end">
+        <a className="btn primary" href="#/parrainage">
+          <Icon name="gift" />
+          {t('profil.refOpen')}
+        </a>
       </div>
-      <section className="card px-pf-card">
-        <h2>{t(plat ? 'profil.friendsPlat' : 'profil.friends')}</h2>
-        {d.friends.length ? (
-          <div className="tbl-wrap">
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>{t('profil.cFriend')}</th>
-                  <th>{t('profil.cStatus')}</th>
-                  <th>{t('profil.cDate')}</th>
-                  <th className="num">{t('profil.cReward')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {d.friends.map((f) => (
-                  <tr key={f.id}>
-                    <td data-l={t('profil.cFriend')}>
-                      <b>{f.name}</b>
-                      <small className="ltr">{[f.shop, f.email].filter(Boolean).join(' · ')}</small>
-                    </td>
-                    <td data-l={t('profil.cStatus')}>
-                      <span className={`badge t-${st[f.status][1]}`}>{t(`profil.${st[f.status][0]}`)}</span>
-                    </td>
-                    <td data-l={t('profil.cDate')}>{date(f.createdAt)}</td>
-                    <td className="num" data-l={t('profil.cReward')}>
-                      {f.status === 'subscribed' && plat ? (
-                        <b className="ltr">+{t('profil.nMonths', { n: f.months })}</b>
-                      ) : f.status === 'subscribed' ? (
-                        <>
-                          <b className="ltr">
-                            {da(f.cash)} + {f.months} m
-                          </b>
-                          <small>
-                            <span className={`badge t-${f.paid ? 'ok' : 'warn'}`}>{f.paid ? t('profil.paid') : t('profil.unpaid')}</span>
-                          </small>
-                        </>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="muted">{t(plat ? 'profil.noFriendsPlat' : 'profil.noFriends')}</p>
-        )}
-        {!plat && <p className="muted small">{t('profil.demo')}</p>}
-      </section>
-      {session?.isAdmin && !plat && (
-        <form
-          className="card px-pf-card"
-          onSubmit={(e) => {
-            e.preventDefault();
-            rules.mutate({ cash: Number(R.cash) || 0, months: Number(R.months) || 0 });
-          }}
-        >
-          <h2>{t('profil.rules')}</h2>
-          <div className="grid2">
-            <Field label={t('profil.rulesCash')}>
-              <input type="number" min={0} step={100} className="ltr" value={R.cash} onChange={(e) => setRc({ ...R, cash: e.target.value })} />
-            </Field>
-            <Field label={t('profil.rulesMonths')}>
-              <input type="number" min={0} max={24} className="ltr" value={R.months} onChange={(e) => setRc({ ...R, months: e.target.value })} />
-            </Field>
-          </div>
-          <div className="row end">
-            <button type="submit" className="btn primary" disabled={rules.isPending}>
-              {t('profil.rulesSave')}
-            </button>
-          </div>
-        </form>
-      )}
-    </>
+    </section>
   );
 }

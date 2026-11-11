@@ -34,6 +34,7 @@ import { dropShopData, freeSlug, keepSellerBilling, mainShopOf, NAME_RESERVED, l
 import { accountPhoneOrBad, checkSignupCode, setAccountPhone } from './phone';
 import { shopUnread } from './support';
 import type { Tenancy } from './tenancy';
+import { isSelfReferral } from './reminders';
 
 const HOUR = 3_600_000;
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -246,7 +247,8 @@ export async function confirmSignup(t: Tenancy, token: string, now = Date.now())
     now,
   });
   await t.platform.query('UPDATE platform.signup_requests SET shop_id = $2 WHERE id = $1', [row.id, shop.id]);
-  if (referrer) await t.platform.query('INSERT INTO platform.referrals (referrer_shop_id, referred_shop_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [referrer, shop.id]);
+  if (referrer && !(await isSelfReferral(t.platform, Number(referrer), shop.id)))
+    await t.platform.query('INSERT INTO platform.referrals (referrer_shop_id, referred_shop_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [referrer, shop.id]);
   await journal(t, shop.id, partner ? `${kind}.signup` : 'shop.signup', row.email, { name: shop.name, plan: plan?.name ?? null, referredBy: referrer });
   const account = await signupPhone(t, (await accountByEmail(t, row.email))!, row.phone, !!row.phone_verified);
   return { shop, account };
@@ -352,7 +354,8 @@ export async function addStore(t: Tenancy, account: Account, raw: unknown, now =
   if (main)
     await t.platform.query('UPDATE platform.shops SET plan_id = $2, trial_ends_at = $3, paid_until = $4, never_expires = $5 WHERE id = $1', [created.id, main.planId, main.trialEndsAt, main.paidUntil, main.neverExpires]);
   const shop = main ? ((await loadShop(t, { id: created.id })) ?? created) : created;
-  if (referrer) await t.platform.query('INSERT INTO platform.referrals (referrer_shop_id, referred_shop_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [referrer, shop.id]);
+  if (referrer && !(await isSelfReferral(t.platform, Number(referrer), shop.id)))
+    await t.platform.query('INSERT INTO platform.referrals (referrer_shop_id, referred_shop_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [referrer, shop.id]);
   await journal(t, shop.id, partner ? `${kind}.added` : 'shop.added', account.email, { name: shop.name, plan: (main ? main.plan?.name : plan?.name) ?? null, referredBy: referrer, ...(main ? { follows: main.id } : {}) });
   return shop;
 }

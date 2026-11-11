@@ -39,7 +39,8 @@ import { PlatformController, PlatformGuard } from './platform';
 import { PUBLIC, Public } from './public';
 import { limitMail, resetMail } from './resetMail';
 import { promises as dns } from 'node:dns';
-import { signupConfirmMail, signupExistsMail, verifyMail } from './mails';
+import { referralSignupMail, signupConfirmMail, signupExistsMail, verifyMail } from './mails';
+import { push as webPush, pushKeys as webPushKeys } from './push';
 import type { Mail } from './mail';
 import { syncTurnstile } from './turnstile';
 import { robotGate } from './robot';
@@ -1009,6 +1010,7 @@ class ApiController {
     }
     if ('exists' in r) return { exists: true, email: r.email };
     if (r.shop) this.core.invalidate();
+    if (r.shop) void this.toldReferrer(r.shop.id);
     // the number's WhatsApp code first (when it is on); then the new store, or (account-only sign-up) the picker where
     // the person creates their first store
     return this.proceed(r.account, r.shop?.id);
@@ -1030,6 +1032,7 @@ class ApiController {
   private async addFor(acc: core.Account, body: unknown) {
     const shop = await core.addStore(this.core.t, acc, body);
     this.core.invalidate();
+    void this.toldReferrer(shop.id);
     // « Commencer avec les réglages de … »: one of the person's own boutiques; a failed copy never stops the new one
     // (the app says so: « Copier des réglages » in « Mes boutiques » does it again)
     const from = Number((body as { copyFrom?: unknown } | null)?.copyFrom) || 0;
@@ -1181,7 +1184,11 @@ class ApiController {
     if (TEAM_ACTIONS.has(name)) await this.teamRules(name, body as any, req);
     if (name.startsWith('archive.') && !req.shop.shop.demo) return this.archive(name, body as any, req);
     // « Parrainage » on a multi-shop server: this store's code and the stores it brought
-    if (name === 'me.referrals' && !req.shop.shop.demo) return this.referrals(req);
+    if (name === 'me.referrals' && !req.shop.shop.demo) {
+      // Referral › Referral is the owner's: the store's administrators
+      if (!req.session.isAdmin) throw new core.AppError('forbidden', 'Réservé à l’administrateur de la boutique');
+      return this.referrals(req);
+    }
     // a confirmation agency's space: the seller chosen at the top of the page (one store, or all of them)
     let out: any = await this.core.call(req.shop, name, req.session, body ?? {}, sellerOf(req.headers?.['x-seller']));
     if (AUTH_CHANGES.has(name)) this.core.authEpoch++;
@@ -1262,15 +1269,15 @@ class ApiController {
     return out;
   }
 
-  /** « Parrainage »: the store's code, its link, and the stores it brought (the free months they earned). */
+  /** Referral › Referral: the store's code, its link, and the stores it brought (the free months earned and used). */
   private async referrals(req: ShopRequest) {
     const r = await core.storeReferrals(this.core.t, req.shop.shop.id);
     const friends = r.list.map((x, i) => ({
       id: i + 1,
       name: x.name,
       email: null as string | null,
-      shop: x.name,
-      status: (x.paid ? 'subscribed' : 'signed_up') as 'invited' | 'signed_up' | 'subscribed',
+      shop: x.stage === 'started' ? null : x.name,
+      status: (x.stage === 'paying' ? 'subscribed' : x.stage === 'signed_up' ? 'signed_up' : 'invited') as 'invited' | 'signed_up' | 'subscribed',
       cash: 0,
       months: x.months,
       paid: x.paid,
@@ -1282,10 +1289,40 @@ class ApiController {
       code: r.code,
       rules: { cash: 0, months: r.on ? r.months : 0 },
       friends,
-      totals: { invited: friends.length, signedUp: friends.length, subscribed: sub.length, cashEarned: 0, cashPaid: 0, cashPending: 0, months: r.earned },
+      totals: {
+        invited: friends.length,
+        signedUp: friends.filter((f) => f.status !== 'invited').length,
+        subscribed: sub.length,
+        cashEarned: 0,
+        cashPaid: 0,
+        cashPending: 0,
+        months: r.earned,
+        monthsUsed: r.used,
+        monthsLeft: r.left,
+      },
       platform: true,
-      link: r.code && config.publicUrl ? `${config.publicUrl}/inscription/${r.code}` : null,
+      on: r.on,
+      link: r.code && config.publicUrl ? `${config.publicUrl}/signup?ref=${r.code}` : null,
     };
+  }
+
+  /** Referral: a store just signed up with another one's link: that one is told (e-mail + its admins' phones), once. */
+  private async toldReferrer(shopId: number) {
+    try {
+      const n = await core.referralSignupNotice(this.core.t, shopId);
+      if (!n) return;
+      const set = await core.platformSettings(this.core.t);
+      const months = set.referral.on ? set.referral.months : 0;
+      if (n.to) sendLater(referralSignupMail({ to: n.to, name: n.name, language: n.language, shop: n.shop, friend: n.friend, months }), 'Referral');
+      await core.pushShopAdmins(this.core.t, { push: webPush, pushKeys: webPushKeys }, n.referrerShopId, {
+        title: '🎉 Parrainage',
+        body: `« ${n.friend} » s’est inscrite avec votre lien${months ? ` : ${months} mois offert${months > 1 ? 's' : ''} à son premier paiement` : ''}.`,
+        url: '#/parrainage',
+        tag: `referral-${shopId}`,
+      });
+    } catch (e: any) {
+      new Logger('Referral').warn(`notice for store ${shopId} failed: ${e?.message ?? e}`);
+    }
   }
 
   /**
@@ -1622,6 +1659,19 @@ class ApiController {
     return { ok: true };
   }
 
+  /** Referral › Code promo: the page's « code » field (does it work, what it takes off). 20 checks per 10 minutes per address. */
+  @Public()
+  @Post(['lp/:slug/code', 's/:shop/lp/:slug/code'])
+  async landingCode(@Param('shop') shop: string | undefined, @Param('slug') slug: string, @Body() body: any, @Req() req: { ip?: string; headers: Record<string, string | undefined> }) {
+    if (!/^[a-z0-9-]{2,60}$/.test(slug) || crossSite(req) || limitLanding(req.ip || 'unknown', 'code', 20)) return { ok: false, reason: 'unknown' };
+    const ref = await this.core.fromParam(shop).then((r) => r && this.core.forPublic(r)).catch(() => null);
+    if (!ref || ref.shop.status !== 'active') return { ok: false, reason: 'unknown' };
+    const b = body && typeof body === 'object' ? body : {};
+    return this.core
+      .call(intake(ref), 'landing.code', await this.core.systemSession(intake(ref)), { slug, code: String(b.code ?? '').slice(0, 30), total: Math.max(0, Math.min(100_000_000, Math.round(Number(b.total) || 0))) })
+      .catch(() => ({ ok: false, reason: 'unknown' }));
+  }
+
   /** « Offers on WhatsApp » ticked on the thank-you screen. Same answer whatever happens. */
   @Public()
   @Post(['lp/:slug/optin', 's/:shop/lp/:slug/optin'])
@@ -1911,6 +1961,12 @@ class ApiController {
           const c: any = await this.core.call(ref, 'campaigns.reply', session, { phone: String(msg.externalId), payload: msg.payload ?? null, text: msg.text ?? null, accountId: msg.accountId ?? null }).catch(() => null);
           if (c?.stop) continue;
           if (c?.text) msg = { ...msg, text: c.text };
+        }
+        // Referral › Code promo: someone opened the chat again from an ad or an m.me ?ref= link, without a message
+        // (where they come from is kept; the welcome code goes by itself when that ad is « Awareness 🎁 »)
+        if (msg?.referral) {
+          await this.core.call(ref, 'dellal.referral', session, { channel: msg.channel, externalId: msg.externalId, accountId: msg.accountId ?? null, source: msg.source ?? null });
+          continue;
         }
         const r: any = await this.core.call(ref, 'dellal.receive', session, msg);
         if (!r) continue;

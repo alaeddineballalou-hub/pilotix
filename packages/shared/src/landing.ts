@@ -52,6 +52,8 @@ export interface LandingView {
   waOptin?: boolean;
   /** TikTok pixel code (real pages only) */
   tiktokId?: string;
+  /** Referral › Code promo is on: an optional « code » field (the discount shows at once) */
+  promo?: boolean;
   /** a « contact us on WhatsApp » button on the thank-you screen: the number (international, digits), its label, the message ({nom}, {produit}…) */
   whatsapp?: { number: string; label: string; message: string } | null;
 }
@@ -179,7 +181,7 @@ label{display:block;font-size:14px;font-weight:600;margin:10px 0 4px}
 input,select{width:100%;font:inherit;padding:11px 12px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:inherit;min-height:46px}
 input:focus,select:focus{outline:2px solid var(--c);outline-offset:-1px;border-color:var(--c)}
 .r2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.ltr{direction:ltr;text-align:right}
-.q{display:flex;align-items:center;gap:8px}.q button{width:46px;height:46px;border:1px solid #d1d5db;border-radius:10px;background:#fff;font-size:22px;cursor:pointer;color:var(--t)}.q input{text-align:center;width:70px;flex:0 0 70px}
+.pcw{display:flex;gap:8px;align-items:center}.pcw input{flex:1;letter-spacing:1px}.pcw button{height:46px;padding:0 16px;border:1px solid var(--c);border-radius:10px;background:#fff;color:var(--c);font-weight:700;cursor:pointer}input.ok{border-color:#16a34a}#sdr b{color:#16a34a}.q{display:flex;align-items:center;gap:8px}.q button{width:46px;height:46px;border:1px solid #d1d5db;border-radius:10px;background:#fff;font-size:22px;cursor:pointer;color:var(--t)}.q input{text-align:center;width:70px;flex:0 0 70px}
 .e{color:#dc2626;font-size:13px;min-height:0;margin-top:3px}.e:empty{display:none}.bad{border-color:#dc2626}
 .sum{background:var(--cl);border-radius:10px;padding:10px 12px;margin-top:14px;font-size:15px}.sum div{display:flex;justify-content:space-between;gap:8px}.sum .tt{font-weight:800;font-size:17px;border-top:1px dashed #cbd5e1;margin-top:6px;padding-top:6px}
 .go{display:block;width:100%;margin-top:14px;padding:14px;border:0;border-radius:12px;background:var(--c);color:#fff;font:inherit;font-size:19px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px ${shade(c, 0.55)}}
@@ -231,17 +233,18 @@ var sy=0,ps=false,tt='',de=d.documentElement;window.addEventListener('scroll',fu
 if(C.ts){var tsl=function(){if(window.turnstile){var z=d.createElement('div');z.style.marginTop='10px';f.appendChild(z);try{turnstile.render(z,{sitekey:C.ts,appearance:'interaction-only',callback:function(k){tt=k},'expired-callback':function(){tt=''}})}catch(e){}}};
 window.__pxts=tsl;var tl2=function(){var t=d.createElement('script');t.async=1;t.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=__pxts';d.head.appendChild(t)};if(d.readyState=='complete')setTimeout(tl2,1500);else window.addEventListener('load',function(){setTimeout(tl2,1500)})}
 var cb={},seq=0;window.addEventListener('message',function(e){var m=e.data;if(m&&m.lp&&cb[m.id]){cb[m.id](m.r);delete cb[m.id]}});
-function ask(kind,body,done,beacon){if(C.mode=='live'){var u=kind=='geo'?C.geo+body:kind=='lead'?C.lead:kind=='optin'?C.post.replace(/order$/,'optin'):C.post;
+function ask(kind,body,done,beacon){if(C.mode=='live'){var u=kind=='geo'?C.geo+body:kind=='lead'?C.lead:kind=='optin'?C.post.replace(/order$/,'optin'):kind=='code'?C.post.replace(/order$/,'code'):C.post;
 if(beacon){var bd=JSON.stringify(body);try{if(nv.sendBeacon&&nv.sendBeacon(u,new Blob([bd],{type:'text/plain'})))return;if(window.fetch){fetch(u,{method:'POST',body:bd,keepalive:true,headers:{'Content-Type':'text/plain'}});return}}catch(e){}}
 var x=new XMLHttpRequest();x.open(kind=='geo'?'GET':'POST',u);x.setRequestHeader('Content-Type','application/json');x.timeout=30000;
 x.onload=function(){var r=null;try{r=JSON.parse(x.responseText)}catch(e){}done(x.status<300?r:null,x.status)};x.onerror=x.ontimeout=function(){done(null,0)};x.send(kind=='geo'?null:JSON.stringify(body));return}
-if(C.mode=='preview'&&kind!='geo')return kind=='order'&&setTimeout(function(){done({ok:true},200)},400);var id=++seq;cb[id]=function(r){done(r,r?200:0)};parent.postMessage({lp:kind,id:id,body:body,slug:C.slug},'*')}
+if(C.mode=='preview'&&kind!='geo'&&kind!='code')return kind=='order'&&setTimeout(function(){done({ok:true},200)},400);var id=++seq;cb[id]=function(r){done(r,r?200:0)};parent.postMessage({lp:kind,id:id,body:body,slug:C.slug},'*')}
 var w=$('w'),cm=$('cm'),qt=$('qt'),vr=$('vr');
 function money(v){return Math.round(v)+'.00 \\u062f\\u062c'}
 function qv(){return Math.max(1,Math.min(99,parseInt(ar2(qt.value))||1))}
 function unit(){var p=vr&&C.vp[vr.value];return p!=null?p:C.price}
 function fz(){var g=vr&&C.vf&&C.vf[vr.value];return g&&C.fs&&C.fs[g]?C.fs[g]:C.fees}
-function sum(){var q=qv();vrows(q);var fee=fz()[w.value],s=tot(),pr=d.querySelector('.pr');$('pp').textContent=money(unit());if(C.op&&pr)pr.className=unit()<C.op?'pr':'pr no';$('s1').textContent=money(s);
+var P=null;function pdisc(s){return!P||s<P.min?0:Math.min(s,P.pct?Math.round(s*P.pct/100):P.amount)}
+function sum(){var q=qv();vrows(q);var fee=fz()[w.value],s0=tot(),dc=pdisc(s0),s=s0-dc,pr=d.querySelector('.pr');var sdr=$('sdr');if(sdr){sdr.style.display=dc?'':'none';$('sd').textContent='-'+money(dc);$('sdc').textContent=P?P.code:''}$('pp').textContent=money(unit());if(C.op&&pr)pr.className=unit()<C.op?'pr':'pr no';$('s1').textContent=money(s0);
 $('s2').textContent=!w.value?'\\u0627\\u062e\\u062a\\u0631 \\u0627\\u0644\\u0648\\u0644\\u0627\\u064a\\u0629':fee==null?'\\u064a\\u062d\\u062f\\u062f \\u0639\\u0646\\u062f \\u0627\\u0644\\u062a\\u0623\\u0643\\u064a\\u062f':fee?money(fee):'\\u0645\\u062c\\u0627\\u0646\\u064a';$('s3').textContent=money(s+(fee||0))}
 w.onchange=function(){cm.innerHTML='<option value="">\\u2026</option>';cm.disabled=true;sum();if(!w.value)return;var v=w.value;ask('geo',v,function(r){if(w.value!=v)return;var h='<option value="">\\u0627\\u062e\\u062a\\u0631 \\u0627\\u0644\\u0628\\u0644\\u062f\\u064a\\u0629</option>';
 (r||[]).forEach(function(c){h+='<option value="'+c[0].replace(/"/g,'&quot;')+'">'+(c[1]||c[0])+'</option>'});cm.innerHTML=h;cm.disabled=false})};
@@ -263,11 +266,12 @@ function lines(){var a=rowsOf(),q=qv(),n=a.length,o=[];for(var i=0;i<n;i++)o.pus
 function tot(){if(!vrs)return unit()*qv();var s=0,l=lines();for(var i=0;i<l.length;i++){var p=C.vp[l[i].variant];s+=(p!=null?p:C.price)*l[i].qty}return s}
 function vtx(){var a=rowsOf(),t=[];for(var i=0;i<a.length;i++){var r=rv(a[i]);if(r.value)t.push(r.options[r.selectedIndex].text)}return t.length?' \u2014 '+t.join('\u060c '):''}
 if(vrs)vbind(rowsOf()[0]);
+var pc=$('pc');if(pc){var pe=$('pce'),pcg=function(){var v=pc.value.trim().toUpperCase().replace(/\\s+/g,'');pe.textContent='';P=null;if(!v)return sum();ask('code',{code:v,total:tot()},function(r){var o=r&&r.ok;if(o)P={code:r.code,pct:r.pct||0,amount:r.amount||0,min:r.min||0};pc.className=o?'ltr ok':'ltr bad';pe.style.color=o?'#16a34a':'';pe.textContent=o?'\u2714 '+(r.pct?'-'+r.pct+'%':'-'+money(r.amount)):r&&r.reason=='small'?'\u0627\u0644\u062d\u062f \u0627\u0644\u0623\u062f\u0646\u0649 '+money(r.min||0):'\u0643\u0648\u062f \u063a\u064a\u0631 \u0635\u0627\u0644\u062d';sum()})};$('pcb').onclick=pcg;pc.onchange=pcg}
 $('qm').onclick=function(){qt.value=Math.max(1,qv()-1);sum();lead()};$('qp').onclick=function(){qt.value=Math.min(99,qv()+1);sum();lead()};qt.oninput=sum;
 var done=0,lt=null,last='';
-function form(){return{name:f.nm.value.trim(),phone:nph(f.ph.value),wilaya:+w.value||0,commune:cm.value,variant:vr?+vr.value||null:null,qty:qv(),items:vrs?lines():null,hp:f.web.value,ch:C.ch,fp:fp,did:did,vid:C.vid,utm:utm,fbp:ck('_fbp'),fbc:ck('_fbc'),ttp:ck('_ttp'),url:C.mode=='live'?location.href.slice(0,500):''}}
+function form(){return{name:f.nm.value.trim(),phone:nph(f.ph.value),wilaya:+w.value||0,commune:cm.value,variant:vr?+vr.value||null:null,qty:qv(),items:vrs?lines():null,hp:f.web.value,ch:C.ch,fp:fp,did:did,vid:C.vid,utm:utm,fbp:ck('_fbp'),fbc:ck('_fbc'),ttp:ck('_ttp'),promo:P?P.code:'',url:C.mode=='live'?location.href.slice(0,500):''}}
 function lead(now){if(!C.lead||done||busy)return;var b=form();if(!/^0[567]\\d{8}$/.test(b.phone))return;var k=JSON.stringify([b.name,b.phone,b.wilaya,b.commune,b.variant,b.qty]);if(k==last)return;clearTimeout(lt);lt=null;
-var go=function(){lt=null;last=k;if(px&&!ic){ic=1;fbq('track','InitiateCheckout',{content_ids:[String(C.pid)],content_type:'product_group',value:tot(),currency:'DZD',num_items:b.qty},{eventID:'ic-'+C.vid})}if(C.tt&&!tic){tic=1;ttq.track('InitiateCheckout',{contents:[{content_id:String(C.pid),content_type:'product_group',quantity:b.qty}],value:tot(),currency:'DZD'},{event_id:'ic-'+C.vid})}ask('lead',b,function(){},now)};if(now)go();else lt=setTimeout(go,1500)}
+var go=function(){lt=null;last=k;if(px&&!ic){ic=1;fbq('track','InitiateCheckout',{content_ids:[String(C.pid)],content_type:'product_group',value:tot()-pdisc(tot()),currency:'DZD',num_items:b.qty},{eventID:'ic-'+C.vid})}if(C.tt&&!tic){tic=1;ttq.track('InitiateCheckout',{contents:[{content_id:String(C.pid),content_type:'product_group',quantity:b.qty}],value:tot()-pdisc(tot()),currency:'DZD'},{event_id:'ic-'+C.vid})}ask('lead',b,function(){},now)};if(now)go();else lt=setTimeout(go,1500)}
 f.addEventListener('input',function(e){if(e.isTrusted!==false)ki++;lead()});f.ph.addEventListener('paste',function(){ps=true});f.addEventListener('change',function(){lead()});
 function flush(){if(lt){clearTimeout(lt);lt=null;last='';lead(1)}}window.addEventListener('pagehide',flush);d.addEventListener('visibilitychange',function(){if(d.visibilityState=='hidden')flush()});
 function fk(p){var x=p.slice(2);return/(\\d)\\1{5,}/.test(x)||'0123456789012345'.indexOf(x.slice(0,7))>=0||'9876543210987654'.indexOf(x.slice(0,7))>=0}
@@ -281,8 +285,8 @@ var q=qv(),wait=Date.now();
 (function send(){if(nonce===null&&Date.now()-wait<4000)return setTimeout(send,150);var b=form();b.name=nm;b.phone=ph;b.ch=C.ch;b.pw=nonce;b.t=Date.now()-t0;b.ki=ki;b.wd=!!nv.webdriver;b.sc=de.scrollHeight-de.clientHeight<200?50:sy;b.ps=ps;b.mt=nv.maxTouchPoints==null?null:nv.maxTouchPoints;b.tt=tt;b.tk=C.ts;try{b.tz=Intl.DateTimeFormat().resolvedOptions().timeZone||''}catch(e){}
 ask('order',b,function(r,st){
 if(!r||!r.ok){busy=false;btn.disabled=false;btn.textContent=C.cta;$('fe').textContent='\\u062a\\u0639\\u0630\\u0631 \\u0627\\u0644\\u0625\\u0631\\u0633\\u0627\\u0644\\u060c \\u062a\\u062d\\u0642\\u0642 \\u0645\\u0646 \\u0627\\u0644\\u0627\\u062a\\u0635\\u0627\\u0644 \\u0648\\u0623\\u0639\\u062f \\u0627\\u0644\\u0645\\u062d\\u0627\\u0648\\u0644\\u0629';return}
-done=1;var fee=fz()[w.value];$('okn').textContent=nm;$('o1').textContent=C.title+vtx()+' \\u00d7 '+q;$('o2').textContent=money(tot()+(fee||0));
-var wa=$('wa');if(wa&&C.wa){var V={nom:nm,produit:C.title+vtx(),quantite:q,total:money(tot()+(fee||0)),telephone:nph(f.ph.value),wilaya:w.value?w.options[w.selectedIndex].text.replace(/^\\d+\\s*-\\s*/,''):'',commune:cm.value?cm.options[cm.selectedIndex].text:''};wa.href='https://wa.me/'+C.wa.n+'?text='+encodeURIComponent(C.wa.m.replace(/\\{(\\w+)\\}/g,function(x,k){return V[k]!=null?V[k]:x}))}
+done=1;var fee=fz()[w.value];$('okn').textContent=nm;$('o1').textContent=C.title+vtx()+' \\u00d7 '+q;$('o2').textContent=money(tot()-pdisc(tot())+(fee||0));
+var wa=$('wa');if(wa&&C.wa){var V={nom:nm,produit:C.title+vtx(),quantite:q,total:money(tot()-pdisc(tot())+(fee||0)),telephone:nph(f.ph.value),wilaya:w.value?w.options[w.selectedIndex].text.replace(/^\\d+\\s*-\\s*/,''):'',commune:cm.value?cm.options[cm.selectedIndex].text:''};wa.href='https://wa.me/'+C.wa.n+'?text='+encodeURIComponent(C.wa.m.replace(/\\{(\\w+)\\}/g,function(x,k){return V[k]!=null?V[k]:x}))}
 var wo=$('wo');if(wo)wo.onchange=function(){if(wo.checked&&!wo.s&&C.mode=='live'){wo.s=1;ask('optin',{ch:C.ch,phone:ph},function(){})}};
 f.style.display='none';$('ok').style.display='block';window.scrollTo(0,0)})})()};sum()})();`;
 
@@ -399,7 +403,8 @@ ${head}<meta name="theme-color" content="${c}">${img ? `<link rel="preload" as="
 <div><label for="cm">البلدية</label><select id="cm" name="cm" disabled><option value="">اختر الولاية أولاً</option></select><div class="e" id="cme"></div></div></div>
 ${variants}<label for="qt">الكمية</label><div class="q"><button type="button" id="qm" aria-label="-">−</button><input id="qt" name="qt" inputmode="numeric" value="1" maxlength="2"><button type="button" id="qp" aria-label="+">+</button></div>
 <div class="hp" aria-hidden="true"><label for="web">Website</label><input id="web" name="web" tabindex="-1" autocomplete="off"></div>
-<div class="sum"><div><span>سعر المنتج</span><b id="s1"></b></div><div><span>التوصيل</span><b id="s2"></b></div><div class="tt"><span>المجموع</span><b id="s3"></b></div></div>
+${v.promo ? `<label for="pc">كود الخصم (اختياري)</label><div class="pcw"><input id="pc" name="pc" class="ltr" maxlength="20" autocomplete="off" placeholder="BJ-7K3P"><button type="button" id="pcb">تطبيق</button></div><div class="e" id="pce"></div>` : ''}
+<div class="sum"><div><span>سعر المنتج</span><b id="s1"></b></div><div id="sdr" style="display:none"><span>الخصم <i id="sdc" class="ltr"></i></span><b id="sd"></b></div><div><span>التوصيل</span><b id="s2"></b></div><div class="tt"><span>المجموع</span><b id="s3"></b></div></div>
 <button class="go" id="go">${cta}</button><div class="e" id="fe" role="alert"></div><div class="trust"><span>✔ الدفع عند الاستلام</span><span>✔ معاينة المنتج قبل الدفع</span></div></form>
 <div id="ok" class="ok" style="display:none" role="status"><i>✓</i><h2>شكراً <span id="okn"></span>!</h2><p>تم استلام طلبك بنجاح.</p><p>سيتصل بك فريقنا قريباً لتأكيد الطلب.</p>
 <div class="sum"><div><span id="o1"></span></div><div class="tt"><span>المجموع</span><b id="o2"></b></div></div>${v.waOptin ? `<label class="wo"><input type="checkbox" id="wo"><span>أرغب في تلقي العروض والمنتجات الجديدة على واتساب</span></label>` : ''}${

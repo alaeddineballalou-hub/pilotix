@@ -101,7 +101,9 @@
     "open": "Ouvrir sur {{ch}}",
     "product": "Produit de la publication",
     "none": "— Aucun (il demandera lequel) —",
-    "saved": "Produit enregistré"
+    "saved": "Produit enregistré",
+    "aware": "🎁 Awareness : donne un code",
+    "awareHelp": "Les personnes qui commentent reçoivent en privé leur code de bienvenue (Referral › Code promo)."
   },
   "tester": {
     "title": "Tester Pilot Comments",
