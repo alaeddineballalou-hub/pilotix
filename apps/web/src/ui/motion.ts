@@ -91,7 +91,7 @@ function routeMotion(apply: () => void) {
 
 /** How the menu's orange mark reaches its new line. « fade »: it melts with the page (nothing more to do). */
 type NavMo = 'fade' | 'slide' | 'stretch' | 'grow' | 'pop';
-const NAV_MO: NavMo = 'fade';
+const NAV_MO: NavMo = 'pop';
 function navMo(): NavMo {
   try {
     const v = localStorage.getItem('px.navmo');
