@@ -1,14 +1,19 @@
-# The "Deploy" button: Actions > Deploy to the server > Run workflow.
-# Backs up the database, then updates the server to the latest main (about 3-5 minutes; the site pauses a few seconds).
+# Puts the latest main live on pilotix.online: backs up the database, then updates the server (about 3-5 minutes; the
+# site pauses while the server restarts).
+# The owner's rule (11 Nov 2026): never during the day — the agents work in Pilotix all day and each update made them
+# drop. So the server updates by itself at night only: every night at 03:17 Algiers time (02:17 UTC), the latest main,
+# if Pilotix CI passed on it and it is not live yet. A change waits on a branch until it is good, then goes to main,
+# then goes live that night.
+# Urgent only (the site is down, a fix cannot wait for the night), and only when the owner asks: the « Deploy now »
+# button, Actions > Deploy to the server > Run workflow (or `gh workflow run deploy.yml`).
 # Needs the secrets DEPLOY_HOST and DEPLOY_SSH_KEY, made by deploy/setup-github-deploy.sh on the server.
 # The key can run only deploy/update.sh on the server: nothing else, even if it leaked.
 name: Deploy to the server
 
 on:
+  schedule:
+    - cron: '17 2 * * *'
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Pilotix CI"]
-    types: [completed]
 
 concurrency:
   group: deploy
@@ -16,19 +21,53 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  # the night's update only goes on with something new on main that CI passed (a red main waits for its fix)
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      go: ${{ steps.what.outputs.go }}
+    steps:
+      - name: Something new to put live, checked by CI?
+        id: what
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ]; then
+            echo "Deploy now (asked by hand): the latest main goes live."
+            echo "go=yes" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          MAIN=$(gh api "repos/$REPO/commits/main" --jq .sha)
+          # the version live: the last run whose « deploy » job really ran and passed (a night with nothing to do, or a
+          # red main, also ends green, with that job skipped: it does not count)
+          LIVE=""
+          for id in $(gh run list -R "$REPO" --workflow deploy.yml --status success --limit 30 --json databaseId --jq '.[].databaseId'); do
+            if [ "$(gh run view "$id" -R "$REPO" --json jobs --jq '[.jobs[] | select(.name == "deploy" and .conclusion == "success")] | length')" != 0 ]; then
+              LIVE=$(gh run view "$id" -R "$REPO" --json headSha --jq .headSha)
+              break
+            fi
+          done
+          CI=$(gh run list -R "$REPO" --workflow build.yml --branch main --commit "$MAIN" --event push --limit 1 --json status,conclusion --jq '.[0] | "\(.status) \(.conclusion)"')
+          echo "main: ${MAIN:0:8} · live: ${LIVE:0:8} · CI on main: ${CI:-none}"
+          if [ "$MAIN" = "$LIVE" ]; then
+            echo "Nothing new tonight: the live version is the latest main."
+            echo "go=no" >> "$GITHUB_OUTPUT"
+          elif [ "$CI" != "completed success" ]; then
+            echo "::warning title=Not updated tonight::Pilotix CI has not passed on the latest main (${MAIN:0:8}: ${CI:-no run}). It goes live the night after its fix, or with « Run workflow » if the owner asks."
+            echo "go=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=yes" >> "$GITHUB_OUTPUT"
+          fi
+
   deploy:
-    # Deploy manually, or automatically after successful CI on main.
-    # (only CI of a push to this repository's main: a pull request from a fork whose branch is also called « main »
-    # runs CI too, and must never deploy)
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == 'main' &&
-       github.event.workflow_run.head_repository.full_name == github.repository &&
-       github.event.workflow_run.conclusion == 'success')
+    needs: check
+    if: needs.check.outputs.go == 'yes'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
