@@ -40,7 +40,8 @@ export function MixTab(p: {
   });
   const [strategy, setStrategy] = useState(brief?.formats[0] ?? strategies[0]?.key ?? '');
   const stage = brief?.stage;
-  // awareness only: the video's end and the post ask to follow the page and comment CODE (off until the shop's codes run)
+  // awareness only: the video's end and the post ask to follow the page and comment CODE (Referral › Code promo sends
+  // the code to people who do it under a post marked « Awareness 🎁 »); off by default, the seller turns it on
   const [cta, setCta] = useState(false);
   const [ctaText, setCtaText] = useState(t(K + 'ctaDefault'));
   const strat = strategies.find((s) => s.key === strategy) ?? strategies[0];
