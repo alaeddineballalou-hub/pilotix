@@ -14,6 +14,7 @@ import { PhoneMarketing } from './PhoneAds';
 import { Formulaires } from './Formulaires';
 import { Campagnes } from './Campagnes';
 import { Catalogue } from './Catalogue';
+import { Strategies } from './Strategies';
 import { featureIsOn } from '../../lib/features';
 import { useIsPhone } from '../../lib/useMedia';
 import { AdsetButtons, PubHub, useControls } from './pilot/Hub';
@@ -29,12 +30,13 @@ export function Marketing({ sub, rest }: PageProps) {
   const { t } = useTranslation();
   // phones: every KPI to decide (won / lost, where the money goes, what to do), then products and ad sets
   const phone = useIsPhone();
-  if (phone) return <PhoneMarketing sub={sub} rest={rest} />;
+  // Stratégies: the same page on every screen
+  if (phone && sub !== 'strategies') return <PhoneMarketing sub={sub} rest={rest} />;
   return <MarketingDesktop sub={sub} rest={rest} t={t} />;
 }
 
 function MarketingDesktop({ sub, rest, t }: { sub?: string; rest?: string[]; t: (k: string) => string }) {
-  const cur = sub === 'marketer' ? 'marketer' : sub === 'formulaires' ? 'formulaires' : sub === 'campagnes' ? 'campagnes' : sub === 'catalogue' ? 'catalogue' : 'publicite';
+  const cur = sub === 'marketer' ? 'marketer' : sub === 'strategies' ? 'strategies' : sub === 'formulaires' ? 'formulaires' : sub === 'campagnes' ? 'campagnes' : sub === 'catalogue' ? 'catalogue' : 'publicite';
   // Formulaires: the leads waiting for a person (a wilaya, a number, a product), on its tab
   const todo = useLeadsTodo();
   return (
@@ -42,10 +44,12 @@ function MarketingDesktop({ sub, rest, t }: { sub?: string; rest?: string[]; t: 
       <StageBar
         flow={false}
         current={cur}
-        items={(['publicite', 'formulaires', 'campagnes', 'catalogue', 'marketer'] as const).map((k) => ({ key: k, label: t(`nav.${k}`), href: `#/marketing/${k}`, ...(k === 'formulaires' && todo ? { count: todo } : {}) }))}
+        items={(['publicite', 'strategies', 'formulaires', 'campagnes', 'catalogue', 'marketer'] as const).map((k) => ({ key: k, label: t(`nav.${k}`), href: `#/marketing/${k}`, ...(k === 'formulaires' && todo ? { count: todo } : {}) }))}
       />
       {cur === 'marketer' ? (
         <Marketer rest={rest} />
+      ) : cur === 'strategies' ? (
+        <Strategies />
       ) : cur === 'formulaires' ? (
         <Formulaires />
       ) : cur === 'campagnes' ? (

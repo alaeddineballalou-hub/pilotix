@@ -1,0 +1,37 @@
+{
+  "title": "Quelle vidéo pour quel produit ?",
+  "intro": "Donnez à chaque produit son type. Pilotix vous montre les formats de vidéo qui marchent le mieux pour lui.",
+  "type": {
+    "1": "Type 1 · Mon produit",
+    "2": "Type 2 · Il ressemble",
+    "3": "Type 3 · Le même"
+  },
+  "short": {
+    "1": "Type 1",
+    "2": "Type 2",
+    "3": "Type 3"
+  },
+  "typeHelp": {
+    "1": "Personne d'autre ne le vend.",
+    "2": "Les concurrents vendent un produit proche, pas pareil.",
+    "3": "Les concurrents vendent exactement le même."
+  },
+  "why": {
+    "1": "Votre produit est nouveau : les gens doivent le comprendre. Montrez-le, expliquez-le.",
+    "2": "Les gens comparent : prouvez que le vôtre est meilleur.",
+    "3": "Le produit est le même partout : faites choisir votre boutique (confiance, offre, rapidité)."
+  },
+  "all": "Tous",
+  "none": "Sans type ({{n}})",
+  "noType": "Sans type",
+  "emptyFilter": "Aucun produit ici.",
+  "noProducts": "Ajoutez d'abord des produits dans Produits & stock.",
+  "whichType": "Quel type est ce produit ?",
+  "chooseFirst": "Choisissez le type du produit : les formats recommandés apparaissent ici.",
+  "recs": "{{n}} formats recommandés",
+  "best": "Le meilleur",
+  "trend": "Tendance",
+  "credits": "{{n}} crédit / pub",
+  "noRecs": "Aucun format actif pour ce type. Le centre de contrôle peut en ajouter.",
+  "nextStep": "Bientôt : choisir l'étape (découverte, intérêt, achat) et envoyer à l'Espace créateur."
+}

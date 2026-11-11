@@ -27,6 +27,7 @@ const SUB_LABEL: Record<string, string> = {
   'pilotai/social': 'nav.sub.social',
   'pilotai/notify': 'nav.sub.notify',
   'marketing/publicite': 'nav.publicite',
+  'marketing/strategies': 'nav.strategies',
   'marketing/formulaires': 'nav.formulaires',
   'marketing/campagnes': 'nav.campagnes',
   'marketing/catalogue': 'nav.catalogue',
