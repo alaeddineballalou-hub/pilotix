@@ -105,7 +105,9 @@ test('statistics: managers only, numbers add up', async () => {
 
 test('Tentative 02 sets no_answer with two attempts; block blacklists the customer', async () => {
   const ctx = await as(EMAILS.conf);
-  // an agent sees only her own orders: « Commande suivante » gives her one
+  // an agent sees only her own orders, given by her manager: « Commande suivante » gives her one
+  const give = (await db.query(`SELECT id FROM orders WHERE conf_status = 'new' AND agent_id IS NULL ORDER BY id LIMIT 1`))[0].id;
+  await db.query('UPDATE orders SET agent_id = $2, assigned_at = now() WHERE id = $1', [give, ctx.session.profile.id]);
   const o: any = await call('orders.next', ctx, {});
   await call('confirmation.setTry', ctx, { ids: [o.id], n: 2 });
   const cur: any = await call('orders.get', ctx, { id: o.id });

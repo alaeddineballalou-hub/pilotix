@@ -538,7 +538,7 @@
     "upsellHint": "Compté automatiquement : ce que le client paie en plus de sa commande d’origine (pièces en plus, pack, produit ajouté ou plus cher), moins la remise ajoutée. Changer de couleur au même prix ne compte pas.",
     "competitorHint": "bloque son appareil"
   },
-  "noNext": "Plus de commande dans cette liste",
+  "noNext": "Plus de commande pour vous : demandez à votre manager de vous en donner",
   "ek": {
     "title": "Commandes en cours",
     "help": "« À traiter maintenant » est en direct : toutes les commandes de l’onglet En cours, quelles que soient les dates. « Performance » et le tableau suivent la période et le type de date choisis. Performance de livraison : ce que sont devenues les commandes confirmées.",
@@ -638,11 +638,11 @@
   "bestFirstHelp": "Les clients au meilleur score en premier : très fiables, fiables, puis les nouveaux, puis ceux à surveiller. Cliquez encore pour revenir au chrono.",
   "hold": {
     "by": "Commande prise par {{name}} : vous pouvez seulement la regarder.",
-    "other": "Commande prise par un autre agent : vous pouvez seulement la regarder.",
+    "other": "Cette commande n’est pas à vous : vous pouvez seulement la regarder.",
     "chip": "🔒 {{name}}",
     "mgr": "{{name}} est sur cette commande en ce moment. Vous pouvez quand même la changer."
   },
-  "mineEmpty": "Aucune commande à vous ici. Appuyez sur « Commande suivante » pour prendre la plus urgente.",
+  "mineEmpty": "Aucune commande à vous ici. Votre manager vous donne les commandes à appeler.",
   "autoCancelled": "{{ref}} annulée automatiquement : {{n}} appels sans réponse",
   "autoCancelledN": "{{n}} commandes annulées automatiquement (trop d’appels sans réponse)",
   "rot": {

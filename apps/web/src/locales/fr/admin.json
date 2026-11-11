@@ -780,7 +780,7 @@
       "smart": "Intelligent"
     },
     "modeHint": {
-      "manual": "Personne n’est choisi : les agents prennent eux-mêmes.",
+      "manual": "Personne n’est choisi automatiquement : en Confirmation, le manager donne les commandes aux agents ; en Suivi, les agents prennent les alertes.",
       "turn": "Chacun son tour, dans l’ordre de l’onglet Agents.",
       "load": "À celui qui a le moins de commandes ouvertes.",
       "smart": "Au meilleur agent pour cette commande."

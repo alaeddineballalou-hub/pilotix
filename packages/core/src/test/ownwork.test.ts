@@ -87,7 +87,7 @@ test('a store confirmation agent opens only his own orders and his own customers
   assert.equal(((await call('orders.get', S.ctx, { id: oA.id })) as any).id, oA.id);
 });
 
-test('« Commande suivante », an order he typed and a SAV ticket given to him stay the agent\'s own; a free order does not', async () => {
+test('« Commande suivante », an order he typed and a SAV ticket given to him stay the agent\'s own; a free order only once his manager gives it', async () => {
   const { boss, pid, A, B, order } = await store();
   const oA = await order(A.id);
   const oB = await order(B.id);
@@ -95,10 +95,13 @@ test('« Commande suivante », an order he typed and a SAV ticket given to him s
   const later = await order(null);
   const b = B.ctx;
   const mine = /donnée à un autre agent/;
-  // nobody's order: not before « Commande suivante » gives it to him
+  // nobody's order: he never takes it himself — « Commande suivante » gives only his own, his manager gives the others
   await assert.rejects(call('orders.get', b, { id: free.id }), mine);
   await assert.rejects(call('confirmation.hold', b, { id: later.id }), mine);
-  await assert.rejects(call('orders.assignAgent', b, { ids: [later.id], agentId: B.id }), mine);
+  await assert.rejects(call('orders.assignAgent', b, { ids: [later.id], agentId: B.id }), /autre agent|manager/);
+  const none: any = await call('orders.next', b, { skip: [oB.id] });
+  assert.equal(none.id, null);
+  await call('orders.assignAgent', boss, { ids: [free.id], agentId: B.id });
   const next: any = await call('orders.next', b, { skip: [oB.id] });
   assert.equal(next.id, free.id);
   assert.equal(((await call('orders.get', b, { id: free.id })) as any).id, free.id);

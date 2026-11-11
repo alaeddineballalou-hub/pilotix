@@ -780,7 +780,7 @@
       "smart": "Smart"
     },
     "modeHint": {
-      "manual": "Nobody is picked: agents take orders themselves.",
+      "manual": "Nobody is picked automatically: in Confirmation, the manager gives orders to the agents; in Suivi, agents take the alerts.",
       "turn": "Each in turn, in the Agents tab order.",
       "load": "To whoever has the fewest open orders.",
       "smart": "To the best agent for this order."

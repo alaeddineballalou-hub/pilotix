@@ -172,8 +172,9 @@ export const dueNowSql = (n: number) =>
 export const triedSince = async (ctx: Ctx) => new Date(slotStartOf(ctx.now(), await getSetting(ctx.db, 'calls'))).toISOString();
 
 /** The orders an agent may take now with « Commande suivante », the most urgent first ($1 to-do statuses, $2 the agent,
- *  $3 skipped, $4 the start of the current call slot). */
-const nextFrom = (ctx: Ctx) => `FROM orders o WHERE conf_status = ANY($1) AND (agent_id IS NULL OR agent_id = $2) AND NOT (id = ANY($3))
+ *  $3 skipped, $4 the start of the current call slot): an agent only his own orders (his manager gives them); a manager,
+ *  the owner or an admin also one nobody has yet — and a confirmation agency's agent, his agency sharing out its orders. */
+const nextFrom = (ctx: Ctx) => `FROM orders o WHERE conf_status = ANY($1) AND (${mayOverrideHold(ctx) || ctx.session.profile.agencyId != null ? 'agent_id IS NULL OR ' : ''}agent_id = $2) AND NOT (id = ANY($3))
   AND ${dueNowSql(4)} AND (locked_until IS NULL OR locked_until < now() OR locked_by = $2)${andSql(queueSql(ctx, 'conf', 'o', { free: true }))}
   ORDER BY (next_call_at IS NOT NULL) DESC, next_call_at ASC, created_at ASC`;
 
@@ -738,6 +739,8 @@ export async function createOrder(
     const confirmed = conf === 'confirmed';
     // « sans stock » is confirmed too (by this person, now): it only waits for stock before the depot
     const stamped = confirmed || conf === 'no_stock';
+    // a confirmation agent's own new order (a customer who called him) is his: nobody else would give it to him
+    const ownNew = ctx.session.roles.includes('confirmation') && !mayOverrideHold(ctx) && ctx.session.profile.agencyId == null;
     const ref = (await tx.query(`SELECT 'PX' || nextval('order_ref_seq') AS r`))[0].r;
     const wh = (await tx.query('SELECT id FROM warehouses WHERE active ORDER BY is_default DESC, id LIMIT 1'))[0];
     const defCompany = pick.companyId;
@@ -750,7 +753,7 @@ export async function createOrder(
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41) RETURNING id`,
         [ref, me, cust.id, input.customerName, phone, phone2, input.wilayaId, input.commune, input.address, input.isStopdesk, input.stopdeskId ?? null,
           input.channel, input.source ?? null, input.utm ? JSON.stringify(input.utm) : null,
-          conf, stamped ? me : null, stamped ? new Date(ctx.now()).toISOString() : null, stamped ? new Date(ctx.now()).toISOString() : null,
+          conf, stamped || ownNew ? me : null, stamped || ownNew ? new Date(ctx.now()).toISOString() : null, stamped ? new Date(ctx.now()).toISOString() : null,
           confirmed ? 'to_prepare' : null, defCompany, wh?.id ?? null, priced.subtotal, fee, input.discount, total,
           input.customerNote ?? null, input.deliveryNote ?? null, internalNote, input.isExchange, input.originalOrderId ?? null,
           up.value > 0, up.value, JSON.stringify(orig), input.discount, opts.conversationId ?? null, opts.landingId ?? null, opts.adsetId ?? null, look?.id ?? null,
@@ -1133,7 +1136,11 @@ export async function holdOrder(ctx: Ctx, id: number): Promise<{ ok: boolean; by
         [id, me],
       )
     )[0];
-    return r?.taken ? { ok: false, by: (r.name as string | null) ?? '', until: isoOrNull(r.until) } : { ok: true, by: null, until: null };
+    if (r?.taken) return { ok: false, by: (r.name as string | null) ?? '', until: isoOrNull(r.until) };
+    // nobody has it and it is not given to this agent: only his manager gives it (an agency's agent: his agency does)
+    const free = (await tx.query(`SELECT 1 FROM orders WHERE id = $1 AND agent_id IS NULL AND conf_status = ANY($2)`, [id, CONF_TODO]))[0];
+    if (free && !mayOverrideHold(ctx) && ctx.session.profile.agencyId == null) return { ok: false, by: '', until: null };
+    return { ok: true, by: null, until: null };
   });
 }
 
@@ -1187,9 +1194,9 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
       if (!cur) continue;
       // another agent has this order open (« Commande suivante » or opened from a list, 10 minutes): only he changes it
       // (an admin or a manager can still act on it)
-      // an agent changes only his own orders and the ones nobody has yet (an agent manager, the owner: any he sees)
-      if (!mayOverrideHold(ctx) && ctx.session.profile.agencyId == null && cur.agent_id != null && num(cur.agent_id) !== me) {
-        const why = `${cur.ref} : cette commande est donnée à un autre agent`;
+      // an agent changes only his own orders — his manager gives them (an agent manager, the owner: any he sees)
+      if (!mayOverrideHold(ctx) && ctx.session.profile.agencyId == null && (cur.agent_id == null || num(cur.agent_id) !== me)) {
+        const why = cur.agent_id == null ? `${cur.ref} : cette commande ne vous est pas donnée — votre manager vous la donne` : `${cur.ref} : cette commande est donnée à un autre agent`;
         if (input.ids.length === 1) throw bad(why);
         blocked.push({ id: oid, ref: cur.ref, reason: why });
         continue;
@@ -1970,6 +1977,8 @@ export const ordersProcs = {
         const cur = (await tx.query('SELECT ref, agent_id, shipped_at FROM orders WHERE id=$1', [oid]))[0];
         if (!cur) continue;
         if (!manager && cur.agent_id && num(cur.agent_id) !== ctx.session.profile.id) throw forbidden();
+        // an agent never takes an order nobody has: his manager gives it (an agency's agent: his agency shares them out)
+        if (!manager && !cur.agent_id && ctx.session.profile.agencyId == null) throw forbidden('Votre manager vous donne les commandes');
         // the agent of an order that left is the one paid for it: only the administrator changes it then
         if (cur.shipped_at && !ctx.session.isAdmin) throw bad(`${cur.ref} est déjà partie : seul l’administrateur change son agent`);
         await tx.query('UPDATE orders SET agent_id=$2, assigned_at = CASE WHEN $2::bigint IS NULL THEN NULL ELSE now() END, updated_at=now() WHERE id=$1', [oid, agentId]);

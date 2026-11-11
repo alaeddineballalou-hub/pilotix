@@ -10,6 +10,12 @@ let as: (email: string) => Promise<Ctx>;
 
 before(async () => {
   ({ db, as } = await setup(300));
+  // their manager gives Samira and Rania their orders (an agent never takes one nobody gave him)
+  const s = (await as(EMAILS.conf)).session.profile.id;
+  const r = (await as(EMAILS.conf2)).session.profile.id;
+  const free = (await db.query(`SELECT id FROM orders WHERE conf_status = 'new' AND agent_id IS NULL ORDER BY id`)).map((x: any) => Number(x.id));
+  free.splice(Math.min(6, Math.max(0, free.length - 4)));
+  for (const [k, id] of free.entries()) await db.query('UPDATE orders SET agent_id = $2, assigned_at = now() WHERE id = $1', [id, k % 2 ? r : s]);
 });
 
 const freeNew = async () =>
@@ -110,11 +116,20 @@ test('who sees which orders: an agent his own, an agent manager his team (not an
   // Rania cannot change Samira's order, nor open it as hers
   await assert.rejects(call('orders.setConf', rania, { ids: [x], status: 'no_answer' }), /autre agent/);
   await assert.rejects(call('confirmation.hold', rania, { id: x }), /autre agent/);
-  // « Commande suivante » still gives Rania a free order (it becomes hers), never Samira's
+  // « Commande suivante » gives Rania one of her own orders, never Samira's nor one nobody gave her
   const n: any = await call('orders.next', rania, { skip: [] });
   assert.ok(n.id);
   assert.notEqual(n.id, x);
+  assert.equal(Number((await db.query('SELECT agent_id FROM orders WHERE id = $1', [n.id]))[0].agent_id), R);
   await call('confirmation.release', rania, { id: n.id });
+  // an order nobody has: Samira does not open it, take it nor change it; once her manager gives it, it is hers
+  assert.equal(await call('confirmation.hold', samira, { id: z }).then((r: any) => r.ok === false, () => true), true, 'not opened');
+  await assert.rejects(call('orders.assignAgent', samira, { ids: [z], agentId: S }), /autre agent|manager/);
+  await assert.rejects(call('orders.setConf', samira, { ids: [z], status: 'busy' }), /autre agent|manager/);
+  
+  await call('orders.assignAgent', yacine, { ids: [z], agentId: S });
+  assert.equal(((await call('confirmation.hold', samira, { id: z })) as any).ok, true);
+  await call('confirmation.release', samira, { id: z });
 });
 
 test('« pas de réponse »: « Commande suivante » gives it again in the next call slot, never in the same one', async () => {

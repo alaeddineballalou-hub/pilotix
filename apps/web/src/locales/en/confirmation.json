@@ -538,7 +538,7 @@
     "upsellHint": "Counted automatically: what the customer pays above their original order (more pieces, a pack, a product added or a dearer one), less any discount added. Another colour at the same price does not count.",
     "competitorHint": "blocks their device"
   },
-  "noNext": "No more orders in this list",
+  "noNext": "No more orders for you: ask your manager to give you some",
   "ek": {
     "title": "Orders in progress",
     "help": "“To handle now” is live: every order of the En cours tab, whatever the dates. “Performance” and the table follow the chosen period and date type. Delivery performance: what became of the confirmed orders.",
@@ -638,11 +638,11 @@
   "bestFirstHelp": "Customers with the best score first: very reliable, reliable, then new ones, then the ones to watch. Click again to go back to the countdown.",
   "hold": {
     "by": "Taken by {{name}}: you can only look at it.",
-    "other": "Taken by another agent: you can only look at it.",
+    "other": "This order is not yours: you can only look at it.",
     "chip": "🔒 {{name}}",
     "mgr": "{{name}} is on this order right now. You can still change it."
   },
-  "mineEmpty": "No order of yours here. Press « Next order » to take the most urgent one.",
+  "mineEmpty": "No order of yours here. Your manager gives you the orders to call.",
   "autoCancelled": "{{ref}} cancelled automatically: {{n}} unanswered calls",
   "autoCancelledN": "{{n}} orders cancelled automatically (too many unanswered calls)",
   "rot": {

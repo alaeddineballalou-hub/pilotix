@@ -77,8 +77,8 @@ export function queueSql(ctx: Ctx, task: 'conf' | 'follow', alias = 'o', opts: {
  * - the owner (Vendeur) and the administrators: every order of the shop ('');
  * - an agent manager: the orders of his team's agents and his own, and the orders no agent has yet (to give them out),
  *   never another agent manager's team;
- * - an agent: only the orders given to him. `free`: also the orders nobody has yet (« Commande suivante » gives the
- *   most urgent one, and it becomes his).
+ * - an agent: only the orders given to him — by his manager or the automatic assignment. He never takes an order
+ *   nobody has yet (`free` is for the managers: « Commande suivante » may give them one).
  */
 export function confSeeSql(ctx: Ctx, alias = 'o', free = false): string {
   if (ctx.session.isAdmin || ctx.session.roles.includes('vendeur')) return '';
@@ -87,7 +87,7 @@ export function confSeeSql(ctx: Ctx, alias = 'o', free = false): string {
   if (!Number.isSafeInteger(me) || me <= 0) throw forbidden();
   if (ctx.session.roles.includes('agent_manager'))
     return `(${alias}.agent_id IS NULL OR ${alias}.agent_id = ${me} OR ${alias}.agent_id IN (SELECT a.v::bigint FROM settings s, jsonb_array_elements(CASE WHEN jsonb_typeof(s.value) = 'array' THEN s.value ELSE '[]'::jsonb END) t, jsonb_array_elements_text(COALESCE(t->'agentIds', '[]'::jsonb)) a(v) WHERE s.key = 'teams' AND (t->>'managerId') = '${me}'))`;
-  return free ? `(${alias}.agent_id IS NULL OR ${alias}.agent_id = ${me})` : `${alias}.agent_id = ${me}`;
+  return `${alias}.agent_id = ${me}`;
 }
 
 /** Order work that needs every order of the store: the suivi, the depot, the livreurs, the managers and the owner. */
