@@ -12,10 +12,10 @@ html #side.px-gliding .nav-item[data-px-glide] { background: transparent !import
 @keyframes px-page-in { from { opacity: 0; } }
 main#page[data-px-page] { animation: px-page-in .24s ease backwards; }
 
-/* 2. Lists: the first rows, cards or columns come in one after the other (28 ms apart, 12 at most). */
-@keyframes px-rise { from { opacity: 0; transform: translateY(8px); } }
+/* 2. Lists: the first rows, cards or columns come in one after the other (24 ms apart, 12 at most), a short soft rise. */
+@keyframes px-rise { from { opacity: 0; transform: translateY(6px); } }
 @keyframes px-fade { from { opacity: 0; } }
-[data-px-in] { animation: px-rise .38s cubic-bezier(.16, 1, .3, 1) backwards; animation-delay: calc(var(--px-i, 0) * 28ms); }
+[data-px-in] { animation: px-rise .34s cubic-bezier(.16, 1, .3, 1) backwards; animation-delay: calc(var(--px-i, 0) * 24ms); }
 [data-px-in="f"] { animation-name: px-fade; }
 
 /* 3. Charts: bars grow from the floor, lines draw from the left (time runs left to right in every language). */
@@ -31,8 +31,24 @@ main .ov-bar-t i { transform-origin: 0 50%; animation: px-grow-x .7s cubic-bezie
 main .ov-fun-b i { transform-origin: 50% 100%; animation: px-grow .6s cubic-bezier(.16, 1, .3, 1) backwards; }
 main :is(.ov-stack, .pp-q-bar) { animation: px-draw .7s cubic-bezier(.3, .7, .2, 1) backwards; }
 
+/* 4. What opens over the page: a window settles into place (the menu mark's « pop », without the bounce), a message rises. */
+@keyframes px-open { from { opacity: 0; transform: translateY(8px) scale(.97); } }
+@keyframes px-veil { from { opacity: 0; } }
+/* a window that first shows « Chargement… » is put on screen twice: only the real one settles in, and its grey veil
+   stays still, so nothing blinks between the two */
+.modal-wrap .modal:not(:has(.loading)), dialog.modal[open] { animation: px-open .28s cubic-bezier(.16, 1, .3, 1) backwards; }
+dialog.modal[open]::backdrop { animation: px-veil .2s ease backwards; }
+.toast { animation: px-open .28s cubic-bezier(.16, 1, .3, 1) backwards; }
+
+/* 5. Under the hand: a button gives a little when pressed, and its colours change softly instead of jumping.
+   :where() keeps this at the lowest weight: any rule of a page that sets its own transition still wins. */
+:where(.btn, .tab, .icon-btn, .kpi, .side .nav-item, .pxo-seg button) { transition: scale .12s ease, background-color .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease; }
+:where(.btn, .tab, .icon-btn, .pxo-seg button):active:not(:disabled) { scale: .97; }
+
 /* « Reduce motion » on the device: nothing slides, grows or draws; a list keeps one plain short fade. */
 @media (prefers-reduced-motion: reduce) {
   [data-px-in] { animation: px-fade .2s ease backwards; animation-delay: 0s; }
   main svg rect:is(.s-b, .s-r, .s-p, .b, .b-all, .b-del, .ct-b-meta, .ct-b-tt), main svg :is(path.ln, path.lt, path.qa, path.qd, path.pb-l-conv, path.pb-l-real, path.ov-ln, polyline.sr-pl), main .ov-gauge path + path, main svg circle.dt, main .ov-bar-t i, main .ov-fun-b i, main :is(.ov-stack, .pp-q-bar) { animation: none; }
+  .modal-wrap .modal:not(:has(.loading)), dialog.modal[open], .toast { animation: px-veil .16s ease backwards; }
+  :where(.btn, .tab, .icon-btn, .pxo-seg button):active:not(:disabled) { scale: none; }
 }

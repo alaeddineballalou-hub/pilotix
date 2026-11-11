@@ -306,6 +306,14 @@ function watch() {
     el.removeAttribute('data-px-page');
     el.style.removeProperty('--px-i');
   };
+  // a tab of a page: what it shows next arrives like a page's own lists
+  document.addEventListener(
+    'click',
+    (e) => {
+      if ((e.target as Element | null)?.closest?.('.tab, [role="tab"], .pxo-seg button, .px-pf-tabs button, .pxd-tabs button, .bjp-tabs button')) openUntil = performance.now() + 900;
+    },
+    true,
+  );
   document.addEventListener('animationend', done, true);
   document.addEventListener('animationcancel', done, true);
 }
