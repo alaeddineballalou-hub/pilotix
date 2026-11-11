@@ -13,7 +13,7 @@ const MAX_SIDE = 1280;
 const MAX_BYTES = 900 * 1024;
 
 /** A picture made smaller (1280 px at most on its longest side), as a JPEG data URL; null when it is not a picture. */
-async function smallJpeg(file: File): Promise<{ url: string; bytes: number } | null> {
+export async function smallJpeg(file: File): Promise<{ url: string; bytes: number } | null> {
   const src = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((ok, ko) => {

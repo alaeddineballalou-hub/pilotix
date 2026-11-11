@@ -139,6 +139,8 @@ export const PROC_FEATURES: readonly (readonly [prefix: string, feature: string]
   ['dellal.', 'pilotai/messages'],
   // the AI social media manager's actions (before the CM AI agent's: same first letters)
   ['cm.plan.', 'pilotai/social'],
+  // Espace créateur (its credits, its AI tools): with Pilot Content
+  ['createur.', 'pilotai/social'],
   ['cm.', 'pilotai/cm'],
   ['notify.', 'pilotai/notify'],
   ['auto.', 'pilotai/notify'],

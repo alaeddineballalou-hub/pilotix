@@ -12,7 +12,7 @@ const NO_SERVER = 'Le paiement en ligne de reçu fonctionne sur le serveur Pilot
 const WAITING = 'Un paiement attend déjà la vérification de Pilotix';
 
 /** The shop holding the plan the person pays (one plan per seller: their first boutique). */
-async function payingShop(ctx: Ctx): Promise<Shop> {
+export async function payingShop(ctx: Ctx): Promise<Shop> {
   if (!ctx.t || !ctx.shop) throw bad(NO_SERVER);
   const here = await loadShop(ctx.t, { id: ctx.shop.id });
   if (!here) throw bad(NO_SERVER);
@@ -22,7 +22,7 @@ async function payingShop(ctx: Ctx): Promise<Shop> {
 }
 
 /** Sends the claim to Pilotix's team on WhatsApp (server hook), then keeps what happened. Never fails the store's request. */
-function alertTeam(ctx: Ctx, claimId: number): Promise<void> {
+export function alertTeam(ctx: Ctx, claimId: number): Promise<void> {
   const t = ctx.t!;
   const keep = (st: string) => t.platform.query('UPDATE platform.payment_claims SET wa_status = $2 WHERE id = $1', [claimId, st.slice(0, 200)]).then(() => undefined);
   const hook = ctx.server?.payAlert;
@@ -41,7 +41,7 @@ export const billingProcs = {
   'billing.claims': proc([], z.object({}), async (ctx) => {
     const s = await payingShop(ctx);
     const rows = await ctx.t!.platform.query(
-      `SELECT ${CLAIM_COLUMNS} FROM platform.payment_claims c LEFT JOIN platform.plans pl ON pl.id = c.plan_id WHERE c.shop_id = $1 ORDER BY c.id DESC LIMIT 5`,
+      `SELECT ${CLAIM_COLUMNS} FROM platform.payment_claims c LEFT JOIN platform.plans pl ON pl.id = c.plan_id WHERE c.shop_id = $1 AND c.credits IS NULL ORDER BY c.id DESC LIMIT 5`,
       [s.id],
     );
     return {
@@ -70,7 +70,7 @@ export const billingProcs = {
       const amount = claimAmount(s.plan, i.months);
       if (amount === null) throw bad('Pas de formule à payer pour cette boutique');
       const t = ctx.t!;
-      if ((await t.platform.query(`SELECT 1 FROM platform.payment_claims WHERE shop_id = $1 AND status = 'pending'`, [s.id])).length) throw bad(WAITING);
+      if ((await t.platform.query(`SELECT 1 FROM platform.payment_claims WHERE shop_id = $1 AND status = 'pending' AND credits IS NULL`, [s.id])).length) throw bad(WAITING);
       const p = ctx.session.profile;
       let id: number;
       try {

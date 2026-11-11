@@ -22,6 +22,7 @@ import { Journal } from './Journal';
 import { LoginDesigns } from './LoginDesigns';
 import { Messages } from './Messages';
 import { Payments } from './Payments';
+import { CreditsPage } from './Credits';
 import { PilotAiPage } from './PilotAi';
 import { Plans } from './Plans';
 import { ProtectionPage } from './Protection';
@@ -48,6 +49,7 @@ const SECTIONS: Section[] = [
   { id: 'messages', icon: 'inbox' },
   { id: 'payments', icon: 'coins', roles: ['owner', 'manager'] },
   { id: 'plans', icon: 'layers' },
+  { id: 'credits', icon: 'zap', roles: ['owner', 'manager'] },
   { id: 'demo', icon: 'sparkles' },
   { id: 'health', icon: 'archive', roles: ['owner', 'manager'] },
   { id: 'staff', icon: 'users', roles: ['owner'] },
@@ -219,6 +221,7 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
   else if (cur === 'messages') page = <Messages id={parts[1] && /^\d+$/.test(parts[1]) ? Number(parts[1]) : null} />;
   else if (cur === 'health') page = <HealthPage owner={staff.role === 'owner'} />;
   else if (cur === 'plans') page = <Plans staff={staff} />;
+  else if (cur === 'credits') page = <CreditsPage staff={staff} />;
   else if (cur === 'demo') page = <Demo staff={staff} />;
   else if (cur === 'staff') page = <StaffPage staff={staff} />;
   else if (cur === 'journal') page = <Journal />;

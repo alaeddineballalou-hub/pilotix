@@ -71,8 +71,11 @@ import { stockProcs } from './modules/stock';
 import { suiviProcs } from './modules/suivi';
 import { usersProcs } from './modules/users';
 import { photoShareProcs } from './modules/photoshare';
+import { createurProcs } from './modules/createur';
 
 export const REGISTRY = {
+  // Espace créateur: the AI credits and the AI tools that use them (subtitles, post texts, hook ideas)
+  ...createurProcs,
   ...ordersProcs,
   ...filterProcs,
   ...boutiqueWorkProcs,

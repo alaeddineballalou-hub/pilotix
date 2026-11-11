@@ -35,7 +35,8 @@
     "designs": "صفحات الدخول",
     "couriers": "شركات التوصيل",
     "protection": "Pilotix Protection System",
-    "pilot": "Pilot AI"
+    "pilot": "Pilot AI",
+    "credits": "رصيد الذكاء الاصطناعي"
   },
   "roles": {
     "owner": "المالك",
@@ -2134,6 +2135,8 @@
     "waWait": "واتساب: جار الإرسال…",
     "waSent": "واتساب: تم الإرسال",
     "waOff": "واتساب: غير مضبوط",
-    "waError": "واتساب: خطأ ({{error}})"
+    "waError": "واتساب: خطأ ({{error}})",
+    "pack": "باقة {{n}} رصيد",
+    "acceptPackAsk": "قبول شراء « {{shop}} »: {{amount}} مقابل {{n}} رصيد؟"
   }
 }

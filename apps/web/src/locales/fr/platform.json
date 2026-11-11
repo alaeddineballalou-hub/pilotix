@@ -35,7 +35,8 @@
     "designs": "Pages de connexion",
     "couriers": "Sociétés de livraison",
     "protection": "Pilotix Protection System",
-    "pilot": "Pilot AI"
+    "pilot": "Pilot AI",
+    "credits": "Crédits IA"
   },
   "roles": {
     "owner": "Propriétaire",
@@ -2047,6 +2048,8 @@
     "waWait": "WhatsApp : en cours…",
     "waSent": "WhatsApp : envoyé",
     "waOff": "WhatsApp : pas configuré",
-    "waError": "WhatsApp : erreur ({{error}})"
+    "waError": "WhatsApp : erreur ({{error}})",
+    "pack": "Pack de {{n}} crédits IA",
+    "acceptPackAsk": "Valider l’achat de « {{shop}} » : {{amount}} pour {{n}} crédits ?"
   }
 }

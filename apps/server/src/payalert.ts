@@ -55,7 +55,9 @@ export async function payAlert(svc: CoreService, claimId: number): Promise<strin
     if (!alert.numbers.length || !alert.template) return 'off';
     const otp = await readOtp(svc);
     const months = Number(c.months);
-    const vars = [c.shop_name, c.plan_name ?? '-', months === 12 ? '1 an' : '1 mois', Number(c.amount).toLocaleString('fr-FR').replace(/\s/g, ' '), c.sent_by ?? '-'].map((x) => param(String(x)));
+    const credits = c.credits == null ? 0 : Number(c.credits);
+    // a pack of AI credits: no plan, no period (the template's 2nd and 3rd words say what was bought)
+    const vars = [c.shop_name, credits ? 'Crédits IA' : c.plan_name ?? '-', credits ? `${credits} crédits` : months === 12 ? '1 an' : '1 mois', Number(c.amount).toLocaleString('fr-FR').replace(/\s/g, ' '), c.sent_by ?? '-'].map((x) => param(String(x)));
     if (!otp.phoneId || !otp.token) {
       // no sender (development, or WhatsApp not set up in Réglages): written in the log
       if (process.env.NODE_ENV !== 'production') log.warn(`(development) payment ${claimId} for ${alert.numbers.join(', ')}: ${vars.map((v) => v.text).join(' | ')}`);

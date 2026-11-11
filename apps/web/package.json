@@ -31,7 +31,8 @@
     "zod": "3.23.8",
     "@zxing/browser": "0.1.5",
     "@zxing/library": "0.21.3",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "mediabunny": "1.65.2"
   },
   "devDependencies": {
     "@capacitor/cli": "7.6.9",

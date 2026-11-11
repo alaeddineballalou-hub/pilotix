@@ -6,6 +6,7 @@ import { PILOT_PLATFORM_SQL, RELEASE_SQL } from '../modules/pilotlearn';
 import { EXAM_PLAN_SQL, EXAM_SQL, pilotixLessonsSql } from '../modules/pilotexamdata';
 import { CASES_SQL } from '../modules/pilotcases';
 import { AI_USAGE_SQL } from './aiusage';
+import { CREDITS_SQL } from './credits';
 import { SPY_SEARCHES_SQL } from './spykey';
 import { LAHJA_PLATFORM_SQL } from '../modules/lahja';
 import { DARIJA_BOOK_SQL, DARIJA_DRAFT_SQL } from '../modules/darijabook';
@@ -721,6 +722,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p036_shops_owner_index', `CREATE INDEX IF NOT EXISTS shops_owner ON platform.shops (owner_account_id, primary_shop DESC, id) WHERE kind = 'store'`],
   // « J'ai payé »: a store sends its BaridiMob / CCP receipt, the control room checks it (Valider: a real payment)
   ['p037_payment_claims', PAYMENT_CLAIMS_SQL],
+  // AI credits (Espace créateur): each shop's wallet and its moves; a pack is bought with « J'ai payé » (months = 0)
+  ['p038_ai_credits', CREDITS_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

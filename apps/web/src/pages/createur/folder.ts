@@ -3,20 +3,27 @@
 // boutique) and opened again on the next visit, after a click when the browser asks for the user's yes again.
 //
 // Inside it, one folder per product (« montre-x-12 »: the product's name made safe, then its id), and in each:
-//   hooks/  the start (2–4 s)   corps/  the middle (10–25 s)   cta/  the end (2–5 s)   pubs/  the finished ads (later)
+//   hooks/  the start (2–4 s)   corps/  the rest (10–25 s, it ends with « commandez »)   pubs/  the finished ads
+//   pilotix.json  what Pilotix keeps on the computer too: each hook's text, each piece's subtitles, how each ad was made
 // Videos put there by hand (Windows Explorer) show up too: the page lists the folders.
 
-export const KINDS = ['hooks', 'corps', 'cta'] as const;
+export const KINDS = ['hooks', 'corps'] as const;
 export type Kind = (typeof KINDS)[number];
-/** the finished ads (step 2, « le mélange »): created now, empty */
-const PUBS = 'pubs';
+/** the finished ads (« Mélanger »), made in this browser */
+export const PUBS = 'pubs';
 
 export const VIDEO_EXT = ['.mp4', '.mov', '.webm', '.m4v'];
 export const isVideoName = (name: string) => VIDEO_EXT.some((e) => name.toLowerCase().endsWith(e));
 
 /** The browser can pick a folder and write in it (not Firefox, Safari or a phone). */
 export function folderApiOn(): boolean {
-  return typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function' && typeof window.showOpenFilePicker === 'function' && typeof FileSystemFileHandle !== 'undefined' && 'createWritable' in FileSystemFileHandle.prototype;
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.showDirectoryPicker === 'function' &&
+    typeof window.showOpenFilePicker === 'function' &&
+    typeof FileSystemFileHandle !== 'undefined' &&
+    'createWritable' in FileSystemFileHandle.prototype
+  );
 }
 
 // ---------------------------------------------------------------- the folder's handle, kept in this browser
@@ -129,7 +136,7 @@ export async function productFolder(root: FileSystemDirectoryHandle, name: strin
   return root.getDirectoryHandle(wanted, { create: true });
 }
 
-/** Makes hooks/, corps/, cta/ and pubs/ inside the product's folder. */
+/** Makes hooks/, corps/ and pubs/ inside the product's folder (an old cta/ folder stays as it is). */
 export async function ensureKindFolders(product: FileSystemDirectoryHandle): Promise<void> {
   for (const k of [...KINDS, PUBS]) await product.getDirectoryHandle(k, { create: true });
 }
@@ -144,9 +151,9 @@ export interface Clip {
 
 const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
-/** The videos of the three folders (the files put there by hand too), by name. */
+/** The videos of the two folders (the files put there by hand too), by name. */
 export async function listClips(product: FileSystemDirectoryHandle): Promise<Record<Kind, Clip[]>> {
-  const out = { hooks: [], corps: [], cta: [] } as Record<Kind, Clip[]>;
+  const out = { hooks: [], corps: [] } as Record<Kind, Clip[]>;
   for (const kind of KINDS) {
     const dir = await product.getDirectoryHandle(kind, { create: true });
     for await (const h of dir.values()) {
@@ -189,7 +196,7 @@ async function freeName(dir: FileSystemDirectoryHandle, file: File): Promise<str
 }
 
 /**
- * Copies a video into hooks/, corps/ or cta/ piece by piece (a 4K file is never read whole into memory).
+ * Copies a video into hooks/ or corps/ piece by piece (a 4K file is never read whole into memory).
  * `progress` gets the bytes written so far.
  */
 export async function copyInto(product: FileSystemDirectoryHandle, kind: Kind, file: File, progress: (bytes: number) => void): Promise<CopyResult> {
@@ -236,3 +243,73 @@ export async function pickVideos(): Promise<File[]> {
 
 /** The browser no longer lets us in (the permission was taken back, the folder was moved or deleted). */
 export const lostAccess = (e: unknown) => ['NotAllowedError', 'SecurityError', 'NotFoundError'].includes((e as DOMException)?.name);
+
+// ---------------------------------------------------------------- the finished ads (pubs/)
+export interface AdFile {
+  name: string;
+  file: File;
+  key: string;
+}
+
+/** The ads of pubs/ (the newest first). */
+export async function listAds(product: FileSystemDirectoryHandle): Promise<AdFile[]> {
+  const dir = await product.getDirectoryHandle(PUBS, { create: true });
+  const out: AdFile[] = [];
+  for await (const h of dir.values()) {
+    if (h.kind !== 'file' || !h.name.toLowerCase().endsWith('.mp4') || h.name.startsWith('.')) continue;
+    try {
+      const file = await (h as FileSystemFileHandle).getFile();
+      if (file.size > 0) out.push({ name: h.name, file, key: `${h.name}|${file.size}|${file.lastModified}` });
+    } catch {
+      /* being written */
+    }
+  }
+  return out.sort((a, b) => b.file.lastModified - a.file.lastModified || byName.compare(a.name, b.name));
+}
+
+/** A new file in pubs/ (an old one with the same name is replaced). */
+export async function adHandle(product: FileSystemDirectoryHandle, name: string): Promise<FileSystemFileHandle> {
+  const dir = await product.getDirectoryHandle(PUBS, { create: true });
+  return dir.getFileHandle(name, { create: true });
+}
+
+export async function removeAd(product: FileSystemDirectoryHandle, name: string): Promise<void> {
+  const dir = await product.getDirectoryHandle(PUBS);
+  await dir.removeEntry(name);
+}
+
+// ---------------------------------------------------------------- pilotix.json: the notes kept next to the videos
+export interface Segment {
+  start: number;
+  end: number;
+  text: string;
+}
+export interface Notes {
+  /** a hook's text (drawn big at the top), by its file name */
+  text: Record<string, string>;
+  /** a piece's subtitles, by name + size + last change (the same file is listened to once) */
+  words: Record<string, Segment[]>;
+  /** how each ad of pubs/ was made */
+  ads: Record<string, { hook: string; body: string; strategy: string; at: string; post?: string }>;
+  /** the post's fixed part (prix, livraison, lien…) */
+  fixed?: string;
+}
+const NOTES = 'pilotix.json';
+const emptyNotes = (): Notes => ({ text: {}, words: {}, ads: {} });
+
+export async function readNotes(product: FileSystemDirectoryHandle): Promise<Notes> {
+  try {
+    const f = await (await product.getFileHandle(NOTES)).getFile();
+    const j = JSON.parse(await f.text());
+    return { ...emptyNotes(), ...(j && typeof j === 'object' ? j : {}) };
+  } catch {
+    return emptyNotes();
+  }
+}
+
+export async function writeNotes(product: FileSystemDirectoryHandle, n: Notes): Promise<void> {
+  const fh = await product.getFileHandle(NOTES, { create: true });
+  const w = await fh.createWritable();
+  await w.write(JSON.stringify(n, null, 1));
+  await w.close();
+}

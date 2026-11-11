@@ -35,7 +35,8 @@
     "designs": "Sign-in pages",
     "couriers": "Delivery companies",
     "protection": "Pilotix Protection System",
-    "pilot": "Pilot AI"
+    "pilot": "Pilot AI",
+    "credits": "AI credits"
   },
   "roles": {
     "owner": "Owner",
@@ -2047,6 +2048,8 @@
     "waWait": "WhatsApp: sending…",
     "waSent": "WhatsApp: sent",
     "waOff": "WhatsApp: not set up",
-    "waError": "WhatsApp: error ({{error}})"
+    "waError": "WhatsApp: error ({{error}})",
+    "pack": "Pack of {{n}} AI credits",
+    "acceptPackAsk": "Accept the purchase of « {{shop}} »: {{amount}} for {{n}} credits?"
   }
 }

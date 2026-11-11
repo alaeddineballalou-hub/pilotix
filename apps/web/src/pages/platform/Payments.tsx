@@ -185,7 +185,7 @@ function ClaimsToCheck() {
   const q = usePRpc('p.claims.list', { status: 'pending' });
   const [photo, setPhoto] = useState<number | null>(null);
   const [refuse, setRefuse] = useState<Claim | null>(null);
-  const accept = usePAction('p.claims.accept', { success: (r) => t('platform.claims.accepted', { no: r.receiptNo, date: dateOnly(r.paidUntil) }) });
+  const accept = usePAction('p.claims.accept', { success: (r) => ('credits' in r && r.credits ? t('credits.cr.given') : t('platform.claims.accepted', { no: r.receiptNo, date: dateOnly('paidUntil' in r ? r.paidUntil : null) })) });
   const rows = q.data ?? [];
   return (
     <div className="card">
@@ -224,7 +224,7 @@ function ClaimsToCheck() {
                     <a href={`#/platform/shops/${c.shop.id}`}>{c.shop.name}</a>
                     <br />
                     <small>
-                      {c.plan ?? ''} · {c.months === 12 ? t('platform.claims.year') : t('platform.claims.month')}
+                      {c.credits ? t('platform.claims.pack', { n: c.credits }) : `${c.plan ?? ''} · ${c.months === 12 ? t('platform.claims.year') : t('platform.claims.month')}`}
                     </small>
                   </td>
                   <td className="num ltr" data-l={t('platform.p.amount')}>
@@ -254,7 +254,7 @@ function ClaimsToCheck() {
                         type="button"
                         className="btn small primary"
                         disabled={accept.isPending}
-                        onClick={() => window.confirm(t('platform.claims.acceptAsk', { shop: c.shop.name, amount: da(c.amount), months: c.months })) && accept.mutate({ id: c.id })}
+                        onClick={() => window.confirm(c.credits ? t('platform.claims.acceptPackAsk', { shop: c.shop.name, amount: da(c.amount), n: c.credits }) : t('platform.claims.acceptAsk', { shop: c.shop.name, amount: da(c.amount), months: c.months })) && accept.mutate({ id: c.id })}
                       >
                         ✓ {t('platform.claims.accept')}
                       </button>

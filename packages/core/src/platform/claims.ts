@@ -30,7 +30,10 @@ export function claimRow(r: any) {
     shopId: num(r.shop_id),
     planId: numOrNull(r.plan_id),
     plan: (r.plan_name as string | null | undefined) ?? null,
-    months: num(r.months) as 1 | 12,
+    months: num(r.months) as 0 | 1 | 12,
+    /** a pack of AI credits (months = 0), else null */
+    credits: r.credits == null ? null : num(r.credits),
+    packKey: (r.pack_key as string | null | undefined) ?? null,
     amount: num(r.amount),
     method: r.method as ClaimMethod,
     reference: (r.reference as string | null) ?? null,
@@ -48,4 +51,4 @@ export type ClaimRow = ReturnType<typeof claimRow>;
 
 /** The columns claimRow reads (the photo only as « has one »). */
 export const CLAIM_COLUMNS = `c.id, c.shop_id, c.plan_id, pl.name AS plan_name, c.months, c.amount, c.method, c.reference, (c.photo IS NOT NULL) AS has_photo,
-  c.status, c.reason, c.sent_by, c.created_at, c.decided_at, c.payment_id, c.wa_status`;
+  c.status, c.reason, c.sent_by, c.created_at, c.decided_at, c.payment_id, c.wa_status, c.credits, c.pack_key`;

@@ -19,6 +19,7 @@ import { accountByEmail, accountById, dropForeignPassword, foreignPassword, make
 import { rewardReferrer, ReferralReward } from './reminders';
 import { staffReply, staffSetStatus, staffThread, staffThreads, staffUnread } from './support';
 import { CLAIM_COLUMNS, claimRow } from './claims';
+import { addCredits, cleanCredits, creditLog, creditsConfig, saveCreditsConfig, wallet } from './credits';
 import {
   cleanFeatures,
   cleanPayAlert,
@@ -947,6 +948,14 @@ export const PLATFORM_REGISTRY = {
     // the claim's shop held the plan when it was sent; if the seller's first boutique changed since, theirs now
     const asked = await needShop(ctx, num(c.shop_id));
     const s = asked.mainShopId ? await needShop(ctx, asked.mainShopId) : asked;
+    // a pack of AI credits: the credits go to the shop (no plan period changes)
+    if (c.credits != null) {
+      const ok = await ctx.t.platform.query(`UPDATE platform.payment_claims SET status = 'accepted', decided_at = now(), decided_by = $2 WHERE id = $1 AND status = 'pending' RETURNING id`, [i.id, ctx.staff.id]);
+      if (!ok.length) throw bad('Ce paiement a déjà été vérifié');
+      await addCredits(ctx.t, num(c.shop_id), num(c.credits), 'pack', ctx.now(), `Pack ${c.pack_key ?? ''} · ${num(c.amount)} DA · paiement ${i.id}`.trim());
+      await audit(ctx, 'claim.accept', s.id, { claim: i.id, credits: num(c.credits), amount: num(c.amount), method: c.method });
+      return { id: null, receiptNo: null, claimId: i.id, credits: num(c.credits) };
+    }
     const months = num(c.months);
     const out = await recordPayment(
       ctx,
@@ -981,6 +990,40 @@ export const PLATFORM_REGISTRY = {
     }
     await audit(ctx, 'claim.refuse', num(r.shop_id), { claim: i.id, amount: num(r.amount), months: num(r.months), reason: i.reason });
     return { ok: true };
+  }),
+
+  // ---------------------------------------------------------------- AI credits (Espace créateur)
+  /** The tools, the ad strategies, the packs and each plan's credits per month, with the plans to set them on. */
+  'p.credits.get': pproc(ALL, z.object({}), async (ctx) => {
+    const plans = (await loadPlans(ctx.t)).filter((p) => !p.system).map((p) => ({ id: p.id, name: p.name }));
+    const sold = await ctx.t.platform.query(
+      `SELECT coalesce(sum(credits), 0) AS credits, coalesce(sum(amount), 0) AS amount, count(*) AS n FROM platform.payment_claims WHERE credits IS NOT NULL AND status = 'accepted' AND decided_at >= date_trunc('month', now())`,
+    );
+    const used = await ctx.t.platform.query(`SELECT coalesce(-sum(delta), 0) AS n FROM platform.ai_credit_log WHERE kind IN ('use', 'refund') AND at >= date_trunc('month', now())`);
+    return { config: await creditsConfig(ctx.t), plans, month: { packs: num(sold[0]?.n), credits: num(sold[0]?.credits), amount: num(sold[0]?.amount), used: num(used[0]?.n) } };
+  }),
+
+  /** « Enregistrer »: everything at once (the shops see it at their next look). */
+  'p.credits.save': pproc(MANAGERS, z.object({ config: z.any() }), async (ctx, i) => {
+    const c = await saveCreditsConfig(ctx.t, cleanCredits(i.config));
+    await audit(ctx, 'credits.save', null, { tools: c.tools.length, strategies: c.strategies.length, packs: c.packs.length, on: c.on });
+    return c;
+  }),
+
+  /** A shop's credits (its wallet and its last moves). */
+  'p.credits.shop': pproc(ALL, z.object({ shopId: Id }), async (ctx, i) => {
+    const asked = await needShop(ctx, i.shopId);
+    const s = asked.mainShopId ? await needShop(ctx, asked.mainShopId) : asked;
+    return { shop: { id: s.id, name: s.name }, wallet: await wallet(ctx.t, { id: s.id, planId: s.planId }, ctx.now()), log: await creditLog(ctx.t, s.id) };
+  }),
+
+  /** « Offrir des crédits » (or take some back with a minus): they stay, like a pack. */
+  'p.credits.gift': pproc(MANAGERS, z.object({ shopId: Id, credits: z.number().int().min(-100_000).max(100_000).refine((n) => n !== 0, 'Un nombre de crédits'), note: z.string().trim().max(200).optional() }), async (ctx, i) => {
+    const asked = await needShop(ctx, i.shopId);
+    const s = asked.mainShopId ? await needShop(ctx, asked.mainShopId) : asked;
+    await addCredits(ctx.t, s.id, i.credits, 'gift', ctx.now(), i.note || `Par ${ctx.staff.name}`);
+    await audit(ctx, 'credits.gift', s.id, { credits: i.credits, note: i.note ?? null });
+    return { wallet: await wallet(ctx.t, { id: s.id, planId: s.planId }, ctx.now()) };
   }),
 
   // ---------------------------------------------------------------- plans

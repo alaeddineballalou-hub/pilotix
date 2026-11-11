@@ -17,6 +17,7 @@ export * from './courierWatch';
 export * from './pilotai';
 export * from './spykey';
 export * from './aiusage';
+export * from './credits';
 export * from './aiboard';
 export * from './sessions';
 export * from './sealing';

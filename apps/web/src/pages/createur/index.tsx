@@ -1,5 +1,6 @@
 // « Espace créateur » (AI Pilot, under Pilot Content), step 1 « Mes morceaux »: the small video pieces of each product —
-// Hooks (the start), Corps (the middle), CTA (the end) — that Pilotix will mix into many ads (step 2, not built yet).
+// Hooks (the start) and Corps (the rest, ending with « commandez ») — then 2. Mélanger (the ads made on this computer),
+// 3. Mes pubs, 4. Publier (Facebook / Instagram through Pilot Content). The AI tools take credits (./Credits.tsx).
 // Nothing is sent to the server: the videos stay in a folder of the user's computer (./folder.ts), their pictures and
 // lengths are read in this browser (./probe.ts). Chrome or Edge on a computer only (the File System Access API).
 import { DragEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -11,16 +12,44 @@ import { Empty, ErrorBox, Help, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import type { PageProps } from '../registry';
-import { askPermission, Clip, copyInto, ensureKindFolders, folderApiOn, hasPermission, isVideoName, Kind, KINDS, listClips, lostAccess, pickFolder, pickVideos, productFolder, removeClip, saveFolder, savedFolder } from './folder';
+import {
+  AdFile,
+  askPermission,
+  Clip,
+  copyInto,
+  ensureKindFolders,
+  folderApiOn,
+  hasPermission,
+  isVideoName,
+  Kind,
+  KINDS,
+  listAds,
+  listClips,
+  lostAccess,
+  Notes,
+  pickFolder,
+  pickVideos,
+  productFolder,
+  readNotes,
+  removeClip,
+  saveFolder,
+  savedFolder,
+  writeNotes,
+} from './folder';
+import { AdsTab, PublishTab } from './Ads';
+import { BuyCredits, CreditPill } from './Credits';
+import { MixTab } from './MixTab';
 import { ClipInfo, clipInfo, clipInfoNow, resolutionTag } from './probe';
 import '../ai/ai.css';
 import './createur.css';
 
 const K = 'createur.';
 /** the length each piece should have (a soft hint, never a block) */
-const RANGE: Record<Kind, [number, number]> = { hooks: [2, 4], corps: [10, 25], cta: [2, 5] };
-const LETTER: Record<Kind, string> = { hooks: 'H', corps: 'B', cta: 'C' };
-const ICON: Record<Kind, string> = { hooks: 'zap', corps: 'film', cta: 'megaphone' };
+const RANGE: Record<Kind, [number, number]> = { hooks: [2, 4], corps: [10, 30] };
+const LETTER: Record<Kind, string> = { hooks: 'H', corps: 'B' };
+const ICON: Record<Kind, string> = { hooks: 'zap', corps: 'film' };
+const TABS = ['pieces', 'mix', 'ads', 'publish'] as const;
+type Tab = (typeof TABS)[number];
 
 type Stage = { s: 'loading' } | { s: 'none' } | { s: 'reopen'; dir: FileSystemDirectoryHandle } | { s: 'ready'; dir: FileSystemDirectoryHandle };
 
@@ -142,7 +171,7 @@ function Notice({ icon, title, text, children }: { icon: string; title: string; 
   );
 }
 
-// ---------------------------------------------------------------- the product's three folders
+// ---------------------------------------------------------------- the product's folders
 type Clips = Record<Kind, Clip[]>;
 type Copying = { kind: Kind; n: number; total: number; share: number };
 
@@ -159,13 +188,24 @@ function Workspace({ root, boutique, onLost }: { root: FileSystemDirectoryHandle
   const [clips, setClips] = useState<Clips | null>(null);
   const [copying, setCopying] = useState<Copying | null>(null);
   const [ask, setAsk] = useState<Clip | null>(null);
+  const [notes, setNotes] = useState<Notes | null>(null);
+  const [ads, setAds] = useState<AdFile[]>([]);
+  const [tab, setTab] = useState<Tab>('pieces');
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [buying, setBuying] = useState(false);
+  const cs = useRpc('createur.state', {}, { staleTime: 30_000 });
   const lostRef = useRef(onLost);
+  const notesRef = useRef<Notes | null>(null);
+  notesRef.current = notes;
   lostRef.current = onLost;
 
   // the product's folder (made when needed), then its videos
   useEffect(() => {
     setDir(null);
     setClips(null);
+    setNotes(null);
+    setAds([]);
+    setPicked(new Set());
     if (!product) return;
     let live = true;
     (async () => {
@@ -174,9 +214,13 @@ function Workspace({ root, boutique, onLost }: { root: FileSystemDirectoryHandle
         if (!d || !live) return;
         await ensureKindFolders(d);
         const c = await listClips(d);
+        const nt = await readNotes(d);
+        const a = await listAds(d);
         if (!live) return;
         setDir(d);
         setClips(c);
+        setNotes(nt);
+        setAds(a);
       } catch (e) {
         if (live) lostRef.current(e);
       }
@@ -190,6 +234,7 @@ function Workspace({ root, boutique, onLost }: { root: FileSystemDirectoryHandle
     if (!dir) return;
     try {
       setClips(await listClips(dir));
+      setAds(await listAds(dir));
     } catch (e) {
       lostRef.current(e);
     }
@@ -277,8 +322,19 @@ function Workspace({ root, boutique, onLost }: { root: FileSystemDirectoryHandle
   if (!q.data) return <Loading />;
   if (!products.length) return <Empty>{t(K + 'noProducts')}</Empty>;
 
-  const n = { hooks: clips?.hooks.length ?? 0, corps: clips?.corps.length ?? 0, cta: clips?.cta.length ?? 0 };
-  const total = n.hooks * n.corps * n.cta;
+  const n = { hooks: clips?.hooks.length ?? 0, corps: clips?.corps.length ?? 0 };
+  const total = n.hooks * n.corps;
+  // pilotix.json, next to the videos: changed and written back at once
+  const saveNotes = async (f: (x: Notes) => void): Promise<Notes> => {
+    const next = structuredClone(notesRef.current ?? { text: {}, words: {}, ads: {} });
+    f(next);
+    notesRef.current = next;
+    setNotes(next);
+    if (dir) await writeNotes(dir, next).catch(() => toast(t(K + 'notesFail'), 'bad'));
+    return next;
+  };
+  const st = cs.data;
+  const pickedAds = ads.filter((a) => picked.has(a.name));
   const missing = KINDS.filter((k) => !n[k]);
 
   return (
@@ -305,36 +361,80 @@ function Workspace({ root, boutique, onLost }: { root: FileSystemDirectoryHandle
           <Icon name="lock" />
           {t(K + 'private')}
         </p>
+        {st && <CreditPill s={st} onBuy={() => setBuying(true)} />}
         <button type="button" className="btn small" onClick={() => void refresh()} disabled={!dir || !!copying}>
           <Icon name="refresh" />
           {t(K + 'refresh')}
         </button>
       </section>
 
-      {!clips ? (
+      <nav className="cr-tabs" role="tablist">
+        {TABS.map((x, k) => (
+          <button type="button" role="tab" key={x} aria-selected={tab === x} className={tab === x ? 'on' : ''} onClick={() => setTab(x)}>
+            <span className="ltr">{k + 1}</span> {t(K + `tabs.${x}`)}
+            {x === 'ads' && ads.length > 0 && <span className="badge ltr">{ads.length}</span>}
+          </button>
+        ))}
+      </nav>
+
+      {tab === 'mix' && dir && clips && notes && st && product ? (
+        <MixTab
+          dir={dir}
+          hooks={clips.hooks}
+          bodies={clips.corps}
+          notes={notes}
+          saveNotes={saveNotes}
+          st={st}
+          product={product}
+          onCredits={() => void cs.refetch()}
+          onDone={() => (void refresh(), setTab('ads'))}
+        />
+      ) : tab === 'ads' && dir && notes ? (
+        <AdsTab dir={dir} ads={ads} notes={notes} picked={picked} setPicked={setPicked} onChange={() => void refresh()} onPublish={() => setTab('publish')} />
+      ) : tab === 'publish' && notes && st && product && q.data ? (
+        <PublishTab
+          key={[...picked].join('|')}
+          ads={pickedAds}
+          notes={notes}
+          saveNotes={saveNotes}
+          st={st}
+          lists={q.data}
+          product={product}
+          onCredits={() => void cs.refetch()}
+          onDone={() => setPicked(new Set())}
+        />
+      ) : tab !== 'pieces' ? (
+        cs.error ? (
+          <ErrorBox error={cs.error} onRetry={() => cs.refetch()} />
+        ) : (
+          <Loading />
+        )
+      ) : !clips ? (
         <Loading />
       ) : (
-        <div className="cr-cols">
-          {KINDS.map((k) => (
-            <Column key={k} kind={k} clips={clips[k]} copying={copying?.kind === k ? copying : null} busy={!!copying} onPick={() => pick(k)} onDrop={(f) => add(k, f)} onDelete={setAsk} />
-          ))}
-        </div>
-      )}
+        <>
+          <div className="cr-cols">
+            {KINDS.map((k) => (
+              <Column key={k} kind={k} clips={clips[k]} copying={copying?.kind === k ? copying : null} busy={!!copying} onPick={() => pick(k)} onDrop={(f) => add(k, f)} onDelete={setAsk} />
+            ))}
+          </div>
 
-      <div className="cr-total" role="status">
-        <div className="cr-total-txt">
-          <b>
-            {t(K + 'formula', { h: n.hooks, b: n.corps, c: n.cta })} {t(K + 'ads', { count: total })}
-          </b>
-          {missing.length > 0 && clips && <span>{t(K + 'missing', { list: missing.map((k) => t(K + `need.${k}`)).join(t(K + 'and')) })}</span>}
-        </div>
-        <div className="cr-mix">
-          <button type="button" className="btn" disabled>
-            {t(K + 'mix')}
-          </button>
-          <small>{t(K + 'soon')}</small>
-        </div>
-      </div>
+          <div className="cr-total" role="status">
+            <div className="cr-total-txt">
+              <b>
+                {t(K + 'formula', { h: n.hooks, b: n.corps })} {t(K + 'ads', { count: total })}
+              </b>
+              {missing.length > 0 && clips && <span>{t(K + 'missing', { list: missing.map((k) => t(K + `need.${k}`)).join(t(K + 'and')) })}</span>}
+            </div>
+            <div className="cr-mix">
+              <button type="button" className="btn primary" disabled={!total} onClick={() => setTab('mix')}>
+                {t(K + 'mix')}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+      {buying && st && <BuyCredits s={st} onClose={() => (setBuying(false), void cs.refetch())} />}
 
       {ask && (
         <Modal
@@ -358,7 +458,23 @@ function Workspace({ root, boutique, onLost }: { root: FileSystemDirectoryHandle
   );
 }
 
-function Column({ kind, clips, copying, busy, onPick, onDrop, onDelete }: { kind: Kind; clips: Clip[]; copying: Copying | null; busy: boolean; onPick: () => void; onDrop: (files: File[]) => void; onDelete: (c: Clip) => void }) {
+function Column({
+  kind,
+  clips,
+  copying,
+  busy,
+  onPick,
+  onDrop,
+  onDelete,
+}: {
+  kind: Kind;
+  clips: Clip[];
+  copying: Copying | null;
+  busy: boolean;
+  onPick: () => void;
+  onDrop: (files: File[]) => void;
+  onDelete: (c: Clip) => void;
+}) {
   const { t } = useTranslation();
   const [over, setOver] = useState(false);
   const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer.types).includes('Files');
