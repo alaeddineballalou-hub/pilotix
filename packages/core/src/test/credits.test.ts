@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, ServerHooks, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
-import { cleanCredits, creditKey, creditMonth, DEFAULT_CREDITS, loadShop, passwordFromLink } from '../platform';
+import { cleanCredits, creditKey, creditMonth, DEFAULT_CREDITS, loadShop, passwordFromLink, STRATEGIES_VERSION } from '../platform';
 import { readClipWords } from '../dellal-server';
 import { demoLines, readLines } from '../modules/createur';
 
@@ -42,6 +42,30 @@ test('the settings are made safe (keys, numbers, units)', () => {
     DEFAULT_CREDITS.tools.map((x) => x.key),
   );
   assert.equal(creditMonth(Date.parse('2026-11-30T23:30:00Z')), '2026-12');
+});
+
+test('the video formats: the library, the product types, and the old saved settings', () => {
+  const d = cleanCredits(null);
+  assert.equal(d.version, STRATEGIES_VERSION);
+  assert.equal(d.strategies.length, 18);
+  assert.ok(d.strategies.every((x) => x.types.length >= 1 && x.types.every((n) => [1, 2, 3].includes(n))));
+  assert.deepEqual(d.strategies.find((x) => x.key === 'comparaison')?.types, [2]);
+  // the types are made safe: unknown ones go, none at all means the three
+  const one = cleanCredits({ version: STRATEGIES_VERSION, strategies: [{ name: 'A', types: [3, '2', 9, 3] }, { name: 'B', types: [] }, { name: 'C' }] });
+  assert.deepEqual(
+    one.strategies.map((x) => x.types),
+    [[2, 3], [1, 2, 3], [1, 2, 3]],
+  );
+  // settings saved before the formats: the owner's own strategies stay, the new formats are added once, at the end
+  const old = cleanCredits({ strategies: [{ key: 'ugly', name: 'Ugly ads (à moi)', on: false }, { key: 'maison', name: 'Ma recette' }] });
+  assert.equal(old.strategies[0].name, 'Ugly ads (à moi)');
+  assert.equal(old.strategies[0].on, false);
+  assert.equal(old.strategies[1].key, 'maison');
+  assert.ok(old.strategies.some((x) => x.key === 'pov') && old.strategies.some((x) => x.key === 'livraison'));
+  assert.equal(old.strategies.filter((x) => x.key === 'ugly').length, 1);
+  // once saved with the new version, a format the owner removed stays removed
+  const kept = cleanCredits({ ...old, strategies: old.strategies.filter((x) => x.key !== 'pov') });
+  assert.ok(!kept.strategies.some((x) => x.key === 'pov'));
 });
 
 test('subtitle lines and post lines read from the AI', () => {

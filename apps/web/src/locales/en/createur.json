@@ -143,7 +143,8 @@
     "keepOpen": "Keep this page open while it works: everything happens on this computer.",
     "noEncoder": "This browser cannot make videos. Use an up-to-date Chrome or Edge on a computer.",
     "needPieces": "Add at least 1 hook and 1 body in « My pieces ».",
-    "demoWords": "Preview: no AI here, no subtitles."
+    "demoWords": "Preview: no AI here, no subtitles.",
+    "types": "Type {{list}}"
   },
   "ad": {
     "none": "No ad yet. Go to « Mix ».",

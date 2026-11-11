@@ -77,6 +77,17 @@
       "refund": "Given back",
       "pack": "Pack",
       "gift": "Gift"
+    },
+    "types": "Products it works best for",
+    "typeName": {
+      "1": "Type 1",
+      "2": "Type 2",
+      "3": "Type 3"
+    },
+    "typeHelp": {
+      "1": "Type 1: your own product (nobody else sells it)",
+      "2": "Type 2: like competitors' (similar, not the same)",
+      "3": "Type 3: exactly the same as competitors'"
     }
   }
 }

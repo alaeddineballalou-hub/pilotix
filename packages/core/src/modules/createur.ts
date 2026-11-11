@@ -37,7 +37,7 @@ const money = (n: number) => n.toLocaleString('fr-FR').replace(/[  ]/g, ' ');
 function shopView(c: CreditsConfig) {
   return {
     tools: c.tools.filter((x) => x.on).map((x) => ({ key: x.key, name: x.name, desc: x.desc, credits: c.on ? x.credits : 0, unit: x.unit })),
-    strategies: c.strategies.filter((x) => x.on).map((x) => ({ key: x.key, name: x.name, kind: x.kind, style: x.style, desc: x.desc, credits: c.on ? x.credits : 0, trend: x.trend })),
+    strategies: c.strategies.filter((x) => x.on).map((x) => ({ key: x.key, name: x.name, kind: x.kind, style: x.style, desc: x.desc, credits: c.on ? x.credits : 0, trend: x.trend, types: x.types })),
     packs: c.on ? c.packs.filter((x) => x.on).map((x) => ({ key: x.key, name: x.name, credits: x.credits, price: x.price, best: x.best })) : [],
   };
 }

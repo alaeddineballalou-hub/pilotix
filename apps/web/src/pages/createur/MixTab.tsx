@@ -192,6 +192,7 @@ export function MixTab(p: {
               <span className="mx-tags">
                 <span className={s.credits ? 'mx-tag paid' : 'mx-tag free'}>{s.credits ? t(K + 'perAd', { n: s.credits }) : t(K + 'free')}</span>
                 {s.trend && <span className="mx-tag trend">{t(K + 'trend')}</span>}
+                {s.types?.length > 0 && s.types.length < 3 && <span className="mx-tag type">{t(K + 'types', { list: s.types.join(' · ') })}</span>}
               </span>
               <small>{s.desc}</small>
             </button>

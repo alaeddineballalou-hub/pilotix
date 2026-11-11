@@ -49,7 +49,16 @@ export interface CreditStrategy {
   on: boolean;
   /** the idea given to the AI when it writes the changing part of the post */
   idea: string;
+  /** the product types it fits best: 1 the shop's own product (nobody else sells it), 2 like a competitor's (similar,
+   *  not the same), 3 exactly a competitor's (Marketing › Stratégies recommends with it) */
+  types: ProductType[];
 }
+
+export const PRODUCT_TYPES = [1, 2, 3] as const;
+export type ProductType = (typeof PRODUCT_TYPES)[number];
+/** The strategies' library version: a saved config older than it gets the new default strategies once (one the owner
+ *  removed afterwards stays removed: the saved config then carries this version). */
+export const STRATEGIES_VERSION = 2;
 
 export interface CreditPack {
   key: string;
@@ -71,6 +80,8 @@ export interface CreditsConfig {
   packs: CreditPack[];
   tools: CreditTool[];
   strategies: CreditStrategy[];
+  /** STRATEGIES_VERSION when it was saved */
+  version: number;
 }
 
 export const DEFAULT_CREDITS: CreditsConfig = {
@@ -108,6 +119,7 @@ export const DEFAULT_CREDITS: CreditsConfig = {
       trend: true,
       on: true,
       idea: 'Ton direct et simple, comme un client qui parle.',
+      types: [1, 2, 3],
     },
     {
       key: 'probleme',
@@ -119,6 +131,7 @@ export const DEFAULT_CREDITS: CreditsConfig = {
       trend: false,
       on: true,
       idea: 'Commence par le problème du client, puis la solution avec le produit.',
+      types: [1, 2, 3],
     },
     {
       key: 'temoignage',
@@ -130,9 +143,30 @@ export const DEFAULT_CREDITS: CreditsConfig = {
       trend: true,
       on: true,
       idea: 'Comme un client content qui raconte son expérience.',
+      types: [1, 2, 3],
     },
-    { key: 'propre', name: 'Propre', kind: 'style', style: 'clean', desc: 'Texte fin avec une ombre, look plus « marque ».', credits: 0, trend: false, on: true, idea: 'Ton soigné, rassurant.' },
+    { key: 'propre', name: 'Propre', kind: 'style', style: 'clean', desc: 'Texte fin avec une ombre, look plus « marque ».', credits: 0, trend: false, on: true, idea: 'Ton soigné, rassurant.', types: [1, 2, 3] },
+    // the video formats (version 2): what each video shows, and the product types it fits best
+    ...(
+      [
+        ['pov', 'POV', 'ugly', 'Filmé avec les yeux du client : « POV : tu as enfin trouvé… ».', 'Écris comme si le client vivait le moment lui-même : « POV : … ».', [1, 2, 3], true],
+        ['resultat', 'Avant / Après', 'ugly', 'Le problème, puis le résultat avec le produit.', 'Montre le changement : avant le produit, puis après.', [1, 2], true],
+        ['unboxing', 'Unboxing / réaction', 'ugly', 'Le client ouvre le colis et réagit.', 'La joie de recevoir et d’ouvrir le colis, la vraie réaction.', [2, 3], true],
+        ['fidele', 'Client fidèle', 'clean', '« C’est ma 3e commande » : un client qui revient.', 'Un client qui revient : il fait confiance à la boutique.', [3], false],
+        ['demo', 'Démo / test', 'ugly', 'Le produit marche devant la caméra : test d’eau, de chute, de force.', 'Prouve que ça marche, sans exagérer.', [1, 2], true],
+        ['comparaison', 'Comparaison', 'clean', 'Le nôtre à côté d’un « normal » (sans nom de marque).', 'Montre pourquoi le nôtre est meilleur, avec des détails visibles. Ne nomme jamais une autre marque.', [2], false],
+        ['erreur', 'Mythe ou erreur', 'ugly', '« Arrête de faire ça ❌, fais ça ✅ ».', 'Corrige une erreur courante, puis montre la bonne façon avec le produit.', [1, 2], false],
+        ['coulisses', 'Coulisses', 'ugly', 'On emballe les commandes, les colis partent, l’équipe travaille.', 'Rassure : une vraie équipe, des colis préparés avec soin, envoyés vite.', [3], false],
+        ['livraison', 'Preuve de livraison', 'ugly', 'Le livreur remet le colis, le client paie à la livraison.', 'Enlève la peur : on paie à la livraison, on vérifie avant de payer.', [3], false],
+        ['microtrottoir', 'Micro-trottoir / quiz', 'ugly', 'Des gens dans la rue essaient le produit ou devinent le prix.', 'Curiosité et surprise : les vrais avis des gens.', [1], false],
+        ['tutoriel', 'Tutoriel', 'clean', '« Comment l’utiliser en 3 étapes ».', 'Explique simplement, étape par étape.', [1], false],
+        ['offre', 'Vidéo offre', 'clean', 'Gros texte : le prix, le pack, la date limite.', 'L’offre claire et l’urgence : le prix, ce qu’on gagne, jusqu’à quand.', [1, 2, 3], false],
+        ['captures', 'Captures WhatsApp', 'clean', 'Les messages des clients contents, en captures.', 'Des preuves réelles : les mots des clients.', [2, 3], false],
+        ['details', 'Zoom détails', 'clean', 'Gros plans : matière, coutures, poids, boîte.', 'La qualité qu’on voit : chaque détail compte.', [2], false],
+      ] as const
+    ).map(([key, name, style, desc, idea, types, trend]) => ({ key, name, kind: 'recipe' as const, style, desc, credits: 0, trend, on: true, idea, types: [...types] as ProductType[] })),
   ],
+  version: STRATEGIES_VERSION,
 };
 
 // ---------------------------------------------------------------- the control room's settings
@@ -144,6 +178,11 @@ const clip = (x: unknown, max: number) =>
 const int = (x: unknown, min: number, max: number, dflt: number) => {
   const n = Math.round(Number(x));
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : dflt;
+};
+/** the product types a strategy fits (none given: all three) */
+const typesOf = (x: unknown): ProductType[] => {
+  const got = PRODUCT_TYPES.filter((n) => Array.isArray(x) && x.some((y) => Number(y) === n));
+  return got.length ? [...got] : [...PRODUCT_TYPES];
 };
 const keyOk = (x: unknown) => /^[a-z0-9-]{1,40}$/.test(String(x ?? ''));
 /** a key from a name (« Avant / Après » → « avant-apres »), unique in the list */
@@ -203,7 +242,7 @@ export function cleanCredits(v: any): CreditsConfig {
           dayLimit: int(x?.dayLimit, 0, 1_000_000, 0),
         }))
     : d.tools;
-  const strategies = Array.isArray(v.strategies)
+  const strategies: CreditStrategy[] = Array.isArray(v.strategies)
     ? v.strategies
         .slice(0, 40)
         .map((x: any) => ({
@@ -216,9 +255,23 @@ export function cleanCredits(v: any): CreditsConfig {
           trend: !!x?.trend,
           on: x?.on !== false,
           idea: clip(x?.idea, 600),
+          types: typesOf(x?.types),
         }))
-    : d.strategies;
-  return { on: v.on !== false, planCredits, defaultCredits: int(v.defaultCredits, -1, 1_000_000, d.defaultCredits), packs: uniq(packs), tools: uniq(tools), strategies: uniq(strategies) };
+    : structuredClone(d.strategies);
+  // a config saved before the newer default strategies: they are added once (at the end, on as the defaults are)
+  if (Array.isArray(v.strategies) && int(v.version, 0, 1000, 1) < STRATEGIES_VERSION) {
+    const have = new Set(strategies.map((x) => x.key));
+    for (const x of d.strategies) if (!have.has(x.key)) strategies.push(structuredClone(x));
+  }
+  return {
+    on: v.on !== false,
+    planCredits,
+    defaultCredits: int(v.defaultCredits, -1, 1_000_000, d.defaultCredits),
+    packs: uniq(packs),
+    tools: uniq(tools),
+    strategies: uniq(strategies).slice(0, 40),
+    version: STRATEGIES_VERSION,
+  };
 }
 
 export async function creditsConfig(t: Tenancy): Promise<CreditsConfig> {

@@ -28,6 +28,8 @@
 .crs-title { font-weight: 800; font-size: 15px; flex: 1; min-width: 0; }
 .crs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .crs-check { flex-direction: row; align-items: center; gap: 6px; }
+.crs-types { display: flex; flex-wrap: wrap; gap: 14px; border: 0; padding: 0; margin: 4px 0 0; }
+.crs-types legend { width: 100%; margin-bottom: 4px; }
 .crs-gift { display: grid; grid-template-columns: 120px 120px 1fr auto; gap: 10px; align-items: end; }
 .crs-log { margin: 0; padding-inline-start: 18px; font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
 .crs-bar { position: sticky; bottom: 12px; display: flex; gap: 10px; align-items: center; justify-content: flex-end; background: var(--card, #fff); border: 1px solid var(--line, #e2e6ee); border-radius: 14px; padding: 10px 14px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12); }

@@ -104,6 +104,7 @@
 .mx-tag { font-size: 11px; font-weight: 900; padding: 2px 8px; border-radius: 999px; }
 .mx-tag.free { background: #e4f6ee; color: #14724b; }
 .mx-tag.paid { background: #fff1e6; color: #a84e0c; }
+.mx-tag.type { background: #e8eefb; color: #23407a; }
 .mx-tag.trend { background: #ffe14d; color: #5a4a00; }
 .mx-chip { border: 1px solid var(--line, #e2e6ee); border-radius: 12px; padding: 8px 12px; display: flex; gap: 6px; align-items: center; cursor: pointer; }
 .mx-chip.on { border-color: var(--accent, #f47b20); background: #fff6ee; }

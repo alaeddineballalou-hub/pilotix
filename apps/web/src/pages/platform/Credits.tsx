@@ -243,7 +243,7 @@ export function CreditsPage({ staff }: { staff: Staff }) {
           <button
             type="button"
             className="btn small"
-            onClick={() => set((x) => void x.strategies.push({ key: '', name: t(K + 'newStrat'), kind: 'recipe', style: 'ugly', desc: '', credits: 0, trend: false, on: false, idea: '' } as Strat))}
+            onClick={() => set((x) => void x.strategies.push({ key: '', name: t(K + 'newStrat'), kind: 'recipe', style: 'ugly', desc: '', credits: 0, trend: false, on: false, idea: '', types: [1, 2, 3] } as Strat))}
           >
             + {t(K + 'addStrat')}
           </button>
@@ -282,6 +282,26 @@ export function CreditsPage({ staff }: { staff: Staff }) {
                   <input type="checkbox" checked={s.trend} onChange={(e) => set((y) => void (y.strategies[k].trend = e.target.checked))} /> {t(K + 'trend')}
                 </label>
               </div>
+              <fieldset className="field crs-types">
+                <legend className="lab">{t(K + 'types')}</legend>
+                {([1, 2, 3] as const).map((n) => (
+                  <label key={n} className="crs-check" title={t(K + `typeHelp.${n}`)}>
+                    <input
+                      type="checkbox"
+                      checked={s.types.includes(n)}
+                      onChange={(e) =>
+                        set((y) => {
+                          const own = y.strategies[k];
+                          const next = e.target.checked ? [...new Set([...own.types, n])].sort() : own.types.filter((x) => x !== n);
+                          // never none: a strategy fits at least one type
+                          own.types = (next.length ? next : own.types) as Strat['types'];
+                        })
+                      }
+                    />{' '}
+                    {t(K + `typeName.${n}`)}
+                  </label>
+                ))}
+              </fieldset>
               <label className="field">
                 <span className="lab">{t(K + 'desc')}</span>
                 <input value={s.desc} onChange={(e) => set((y) => void (y.strategies[k].desc = e.target.value))} />
