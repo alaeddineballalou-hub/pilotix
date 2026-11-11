@@ -25,7 +25,12 @@ let shop: string | null = null;
 export const ROUTE_EVENT = 'px:route';
 const EVENT = ROUTE_EVENT;
 /** The page changed: every useRoute() reads the address again (after the current work, never inside a render). */
-const changed = () => queueMicrotask(() => window.dispatchEvent(new Event(EVENT)));
+let motion: (apply: () => void) => void = (apply) => apply();
+/** ui/motion: how a page change is shown (the old page melting into the new one). It must call « apply » once. */
+export const setRouteMotion = (m: (apply: () => void) => void) => {
+  motion = m;
+};
+const changed = () => queueMicrotask(() => motion(() => window.dispatchEvent(new Event(EVENT))));
 
 const decode = (p: string) => {
   try {

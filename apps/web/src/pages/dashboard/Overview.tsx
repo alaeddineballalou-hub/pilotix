@@ -311,8 +311,8 @@ function LineChart({ data }: { data: { day: string; received: number; delivered:
           ) : null,
         )}
         {hov !== null && <rect x={x(hov) - 10} y={8} width={20} height={H - B - 8} rx={6} className="ov-hl" />}
-        <path d={path('received')} fill="none" stroke={ORANGE} strokeWidth={2.5} strokeLinecap="round" />
-        <path d={path('delivered')} fill="none" stroke={NAVY} strokeWidth={2} strokeLinecap="round" strokeDasharray="5 4" />
+        <path className="ov-ln" d={path('received')} fill="none" stroke={ORANGE} strokeWidth={2.5} strokeLinecap="round" />
+        <path className="ov-ln" d={path('delivered')} fill="none" stroke={NAVY} strokeWidth={2} strokeLinecap="round" strokeDasharray="5 4" />
         {h && hov !== null && (
           <>
             <circle cx={x(hov)} cy={y(h.received)} r={5} fill={ORANGE} stroke="#fff" strokeWidth={2} />
