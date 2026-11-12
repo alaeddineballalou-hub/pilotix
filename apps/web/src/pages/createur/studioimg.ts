@@ -372,7 +372,7 @@ export async function drawPoster(heroSrc: string, p: Poster): Promise<string> {
     const hasOld = !!(p.oldPrice && p.oldPrice > p.price);
     let py = floor - ctaH - 12 - priceH - (hasOld ? 60 : 0);
     if (hasOld) {
-      const old = `${money(p.oldPrice!)} ${p.currency}`;
+      const old = p.rtl ? `${p.currency} ${money(p.oldPrice!)}` : `${money(p.oldPrice!)} ${p.currency}`;
       fit(g, old, 700, 34, pw - 80);
       const ow = g.measureText(old).width + 50;
       g.fillStyle = '#fff';
@@ -391,7 +391,7 @@ export async function drawPoster(heroSrc: string, p: Poster): Promise<string> {
     g.fillStyle = p.accent;
     pill(g, px, py, pw, priceH, 28);
     g.fill();
-    const now = `${money(p.price)} ${p.currency}`;
+    const now = p.rtl ? `${p.currency} ${money(p.price)}` : `${money(p.price)} ${p.currency}`;
     fit(g, now, 800, 66, pw - 40, 30);
     g.fillStyle = '#ffe14d';
     g.fillText(now, px + pw / 2, py + priceH / 2 + 2);
@@ -416,7 +416,10 @@ export async function drawPoster(heroSrc: string, p: Poster): Promise<string> {
     const cx = p.rtl ? W - cw * k - cw / 2 : cw * k + cw / 2;
     g.fillStyle = '#fff';
     fit(g, txt, k === 0 && p.phone ? 800 : 600, k === 0 && p.phone ? 38 : 28, cw - 30, 16);
+    // the phone number always reads left to right, even on an Arabic poster (else « 0550 11 22 33 » comes out reversed)
+    g.direction = k === 0 && p.phone ? 'ltr' : p.rtl ? 'rtl' : 'ltr';
     g.fillText(txt, cx, H - 52);
+    g.direction = p.rtl ? 'rtl' : 'ltr';
     if (k > 0) {
       g.fillStyle = 'rgba(255,255,255,0.25)';
       const lx = p.rtl ? W - cw * k : cw * k;
