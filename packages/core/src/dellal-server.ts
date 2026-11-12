@@ -11,7 +11,7 @@ import { NOTIFY_SMS_SECRET, notifySettings } from './modules/notify';
 import type { MetaForm, MetaLead } from './modules/leads';
 import { linkedPage } from './modules/social';
 
-import { pilotKey, pilotLiveKey, voiceKey } from './platform/pilotai';
+import { googleKey, pilotKey, pilotLiveKey, voiceKey } from './platform/pilotai';
 import { recordAiUsage } from './platform/aiusage';
 import type { PilotAiReq } from './modules/pilotlearn';
 import type { Tenancy } from './platform/tenancy';
@@ -749,6 +749,8 @@ export async function runDellal(action: string, args: unknown, ctx: Ctx): Promis
   if (action === 'planStats') return planStats(ctx, args as any);
   if (action === 'transcribe') return transcribe(ctx, args as VoiceArgs);
   if (action === 'clipWords') return clipWords(ctx, args as ClipWordsArgs);
+  if (action === 'studioImage') return studioImage(ctx, args as StudioImageArgs);
+  if (action === 'studioCheck') return studioCheck(ctx, args as StudioCheckArgs);
   if (action === 'media') return readMedia(ctx, args as MediaArgs);
   if (action === 'photos') return sendPhotos(ctx, args as PhotosArgs);
   if (action === 'photoLinks') return photoLinks(ctx, args as { photos: PhotosArgs['photos'] });
@@ -1758,4 +1760,103 @@ export function parseMetaComments(body: any): IncomingComment[] {
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------- Studio photo (Espace créateur): the AI poses a product
+// on the shop's background. Pilotix's Google key (the shop pays in credits) or the shop's own key (Gemini or OpenAI: it
+// pays them itself, no credits). The pictures come from the page (the product's photos, the background) and go back to
+// it: nothing is kept here.
+export type StudioImg = { mime: string; data: string };
+export type StudioImageArgs = { provider: 'gemini' | 'openai'; key: string | null; model: string; prompt: string; images: StudioImg[] };
+export type StudioImageResult = { ok: true; image: string; w: number; h: number; model: string } | { ok: false; error: string };
+export type StudioCheckArgs = { provider: 'gemini'; key: string | null; model: string; prompt: string; images: StudioImg[] };
+export type StudioCheckResult = { ok: true; text: string; model: string } | { ok: false; error: string };
+
+const STUDIO_MIME = /^image\/(jpeg|png|webp)$/;
+/** An image model's answer costs about this much (USD, an estimate from Google's and OpenAI's list prices: the real price
+ *  is on their bills). A name nobody knows is counted at the dearest line. */
+export const studioUsd = (provider: 'gemini' | 'openai', model: string) => (provider === 'openai' ? 0.25 : /pro/i.test(model) ? 0.14 : 0.07);
+
+/** The picture in Gemini's answer (base64), or null. */
+export function geminiImage(data: any): { mime: string; data: string } | null {
+  const parts: any[] = Array.isArray(data?.candidates?.[0]?.content?.parts) ? data.candidates[0].content.parts : [];
+  for (const p of parts) {
+    const x = p?.inlineData ?? p?.inline_data;
+    if (x && typeof x.data === 'string' && x.data.length > 100) return { mime: String(x.mimeType ?? x.mime_type ?? 'image/png'), data: x.data };
+  }
+  return null;
+}
+
+/** A JPEG of the answer (92 %), and its size: the page crops and keeps it. */
+async function studioJpeg(b64: string): Promise<{ data: string; w: number; h: number } | null> {
+  const s = sharp();
+  if (!s) return null;
+  try {
+    const { data, info } = await s(Buffer.from(b64, 'base64')).rotate().jpeg({ quality: 92 }).toBuffer({ resolveWithObject: true });
+    return { data: data.toString('base64'), w: info.width, h: info.height };
+  } catch {
+    return null;
+  }
+}
+
+async function studioImage(ctx: Ctx, a: StudioImageArgs): Promise<StudioImageResult> {
+  if (!ctx.t || !ctx.shop) return { ok: false, error: 'no_platform' };
+  const images = (a.images ?? []).filter((x) => STUDIO_MIME.test(x?.mime) && typeof x?.data === 'string' && x.data.length > 100).slice(0, 8);
+  if (!images.length) return { ok: false, error: 'no_images' };
+  const own = !!a.key;
+  let out: string | null = null;
+  try {
+    if (a.provider === 'openai') {
+      if (!a.key) return { ok: false, error: 'no_key' };
+      const form = new FormData();
+      form.append('model', a.model || 'gpt-image-1');
+      form.append('prompt', a.prompt.slice(0, 30_000));
+      form.append('size', '1024x1536');
+      form.append('quality', 'high');
+      form.append('n', '1');
+      images.forEach((x, k) => form.append('image[]', new Blob([new Uint8Array(Buffer.from(x.data, 'base64'))], { type: x.mime }), `p${k}.${x.mime.split('/')[1]}`));
+      const res = await fetch('https://api.openai.com/v1/images/edits', { method: 'POST', headers: { Authorization: `Bearer ${a.key}` }, body: form, signal: AbortSignal.timeout(170_000) });
+      const j: any = await res.json().catch(() => null);
+      if (!res.ok) return { ok: false, error: String(j?.error?.message ?? `OpenAI ${res.status}`).slice(0, 300) };
+      out = typeof j?.data?.[0]?.b64_json === 'string' ? j.data[0].b64_json : null;
+    } else {
+      const key = a.key || (await googleKey(ctx.t).catch(() => null));
+      if (!key) return { ok: false, error: 'off' };
+      const body = {
+        contents: [{ role: 'user', parts: [{ text: a.prompt.slice(0, 30_000) }, ...images.map((x) => ({ inline_data: { mime_type: x.mime, data: x.data } }))] }],
+        generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '4:5' } },
+      };
+      const data = await postJson(`${GEMINI}/${enc(a.model)}:generateContent`, body, { 'x-goog-api-key': key }, 'Google Gemini', 'POST', 170_000);
+      out = geminiImage(data)?.data ?? null;
+      if (!out) return { ok: false, error: String(data?.candidates?.[0]?.finishReason ?? data?.promptFeedback?.blockReason ?? 'no_image').slice(0, 120) };
+    }
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message ?? e).slice(0, 300) };
+  }
+  if (!out) return { ok: false, error: 'no_image' };
+  await recordAiUsage(ctx.t, { shopId: ctx.shop.id, feature: 'cm', model: `${a.provider}:${a.model}`.slice(0, 60), payer: own ? 'shop' : 'pilotix', usage: null, usd: studioUsd(a.provider, a.model) });
+  const jpg = await studioJpeg(out);
+  return jpg ? { ok: true, image: jpg.data, w: jpg.w, h: jpg.h, model: a.model } : { ok: true, image: out, w: 0, h: 0, model: a.model };
+}
+
+/** Gemini looks at a made photo next to the product's own photos and says what is wrong (JSON, read by the module). */
+async function studioCheck(ctx: Ctx, a: StudioCheckArgs): Promise<StudioCheckResult> {
+  if (!ctx.t || !ctx.shop) return { ok: false, error: 'no_platform' };
+  const key = a.key || (await googleKey(ctx.t).catch(() => null));
+  if (!key) return { ok: false, error: 'off' };
+  const images = (a.images ?? []).filter((x) => STUDIO_MIME.test(x?.mime) && typeof x?.data === 'string').slice(0, 8);
+  const body = {
+    contents: [{ role: 'user', parts: [{ text: a.prompt.slice(0, 20_000) }, ...images.map((x) => ({ inline_data: { mime_type: x.mime, data: x.data } }))] }],
+    generationConfig: { temperature: 0, maxOutputTokens: 1200, responseMimeType: 'application/json' },
+  };
+  let data: any;
+  try {
+    data = await postJson(`${GEMINI}/${enc(a.model)}:generateContent`, body, { 'x-goog-api-key': key }, 'Google Gemini', 'POST', 90_000);
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message ?? e).slice(0, 300) };
+  }
+  const r = readGemini(data, a.model);
+  await recordAiUsage(ctx.t, { shopId: ctx.shop.id, feature: 'cm', model: `gemini:${a.model}`.slice(0, 60), payer: a.key ? 'shop' : 'pilotix', usage: { input_tokens: r.input, output_tokens: r.output }, usd: r.usd });
+  const raw = (Array.isArray(data?.candidates?.[0]?.content?.parts) ? data.candidates[0].content.parts : []).map((p: any) => (typeof p?.text === 'string' && !p?.thought ? p.text : '')).join('');
+  return { ok: true, text: raw.slice(0, 4000), model: a.model };
 }

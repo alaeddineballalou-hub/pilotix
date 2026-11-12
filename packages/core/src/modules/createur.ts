@@ -29,7 +29,7 @@ import { alertTeam, payingShop } from './billing';
 import { AiResponse, aiKeyed, PILOT_CHEAP_MODEL, pilotOn } from './dellal';
 import { getSetting } from '../settings';
 
-const NOT_ENOUGH = 'Pas assez de crédits : achetez un pack pour continuer.';
+export const NOT_ENOUGH = 'Pas assez de crédits : achetez un pack pour continuer.';
 const WAITING = 'Un achat de crédits attend déjà la vérification de Pilotix';
 const money = (n: number) => n.toLocaleString('fr-FR').replace(/[  ]/g, ' ');
 
@@ -43,13 +43,13 @@ function shopView(c: CreditsConfig) {
 }
 
 /** The paying shop on the server; null in the preview (no platform: the tools are free there, with example answers). */
-async function payer(ctx: Ctx) {
+export async function payer(ctx: Ctx) {
   if (!ctx.t || !ctx.shop) return null;
   return payingShop(ctx);
 }
 
 /** Takes the credits of `units` of a tool (null in the preview: nothing counted). */
-async function take(ctx: Ctx, cfg: CreditsConfig, key: string, units: number, extra = 0): Promise<{ tool: CreditTool; spent: Spent | null; shopId: number | null }> {
+export async function take(ctx: Ctx, cfg: CreditsConfig, key: string, units: number, extra = 0): Promise<{ tool: CreditTool; spent: Spent | null; shopId: number | null }> {
   const tool = cfg.tools.find((x) => x.key === key);
   if (!tool || !tool.on) throw bad('Cet outil IA est arrêté pour le moment.');
   const s = await payer(ctx);
@@ -61,11 +61,11 @@ async function take(ctx: Ctx, cfg: CreditsConfig, key: string, units: number, ex
   return { tool, spent, shopId: s.id };
 }
 
-const giveBack = (ctx: Ctx, t: { spent: Spent | null; shopId: number | null; tool: CreditTool }) =>
+export const giveBack = (ctx: Ctx, t: { spent: Spent | null; shopId: number | null; tool: CreditTool }) =>
   t.spent && t.shopId ? refundCredits(ctx.t!, t.shopId, t.spent, t.tool.key, ctx.now()).catch(() => undefined) : Promise.resolve();
 
 /** Claude, as Pilot Comments asks it (Pilotix's key on the server; in the page: the preview's AI). */
-async function ask(ctx: Ctx, system: string, user: string, max: number, model: string): Promise<string | null> {
+export async function ask(ctx: Ctx, system: string, user: string, max: number, model: string): Promise<string | null> {
   const inPage = !ctx.server?.dellal && ctx.dellalAi ? ctx.dellalAi : null;
   if (!inPage && !(await aiKeyed(ctx))) return null;
   const pilot = !inPage && (await pilotOn(ctx));

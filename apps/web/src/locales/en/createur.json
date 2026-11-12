@@ -208,5 +208,10 @@
     "planned_one": "{{count}} ad planned in the calendar",
     "planned_other": "{{count}} ads planned in the calendar",
     "ctaLine": "🎁 Follow the page and comment CODE: we send you your code."
+  },
+  "mode": {
+    "label": "Creator space",
+    "videos": "Video ads",
+    "studio": "Photo studio"
   }
 }

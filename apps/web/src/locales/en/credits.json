@@ -35,7 +35,8 @@
       "minute": "video minute",
       "post": "post",
       "ten": "10 ideas",
-      "video": "video"
+      "video": "video",
+      "image": "image"
     },
     "active": "On",
     "edit": "Edit",

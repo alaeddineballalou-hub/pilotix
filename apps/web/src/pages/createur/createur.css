@@ -139,3 +139,9 @@
 .mx-brief-h b { display: inline-flex; align-items: center; gap: 6px; }
 .mx-cta { display: flex; flex-direction: column; gap: 6px; }
 .mx-cta-text { max-width: 420px; }
+
+/* the two parts of the Espace créateur: the videos, and Studio photo (#/createur/studio) */
+.cr-mode { display: flex; gap: 6px; flex-wrap: wrap; }
+.cr-mode a { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line, #e2e6ee); background: var(--card, #fff); color: inherit; font-weight: 800; text-decoration: none; }
+.cr-mode a .bji { width: 16px; height: 16px; }
+.cr-mode a.on { border-color: var(--ai-tint-line); background: var(--ai-tint); color: var(--ai-tint-ink); }

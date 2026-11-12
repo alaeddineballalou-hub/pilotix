@@ -8,7 +8,7 @@
 import { isoOrNull, num } from '../db';
 import type { Tenancy } from './tenancy';
 
-export const CREDIT_UNITS = ['minute', 'post', 'ten', 'video'] as const;
+export const CREDIT_UNITS = ['minute', 'post', 'ten', 'video', 'image'] as const;
 export type CreditUnit = (typeof CREDIT_UNITS)[number];
 /** the editing styles Pilotix knows how to draw (in the browser); a strategy picks one of them */
 export const CREDIT_STYLES = ['ugly', 'clean'] as const;
@@ -18,6 +18,8 @@ export const STRATEGY_KINDS = ['style', 'recipe'] as const;
 export const TOOL_WORDS = 'subtitles';
 export const TOOL_TEXT = 'posttext';
 export const TOOL_HOOKS = 'hookideas';
+/** Studio photo: one product photo made by the AI on the shop's background (each version, and each one made again) */
+export const TOOL_PHOTO = 'studiophoto';
 
 export interface CreditTool {
   key: string;
@@ -83,9 +85,9 @@ const DEFAULT_STAGES: Record<string, FunnelStage[]> = {
 
 export const PRODUCT_TYPES = [1, 2, 3] as const;
 export type ProductType = (typeof PRODUCT_TYPES)[number];
-/** The strategies' library version: a saved config older than it gets the new default strategies once (one the owner
- *  removed afterwards stays removed: the saved config then carries this version). */
-export const STRATEGIES_VERSION = 2;
+/** The library's version: a saved config older than it gets the new default strategies and tools once (one the owner
+ *  removed afterwards stays removed: the saved config then carries this version). 3: the Studio photo tool. */
+export const STRATEGIES_VERSION = 3;
 
 export interface CreditPack {
   key: string;
@@ -134,6 +136,17 @@ export const DEFAULT_CREDITS: CreditsConfig = {
     },
     { key: TOOL_TEXT, name: 'Texte du post IA', desc: 'L’IA écrit la partie qui change de chaque post.', model: 'claude-haiku-5-5', credits: 1, unit: 'post', on: true, prompt: '', dayLimit: 0 },
     { key: TOOL_HOOKS, name: 'Idées de hooks IA', desc: '10 idées de phrases pour le début de vos vidéos.', model: 'claude-haiku-5-5', credits: 1, unit: 'ten', on: true, prompt: '', dayLimit: 0 },
+    {
+      key: TOOL_PHOTO,
+      name: 'Studio photo IA',
+      desc: 'L’IA pose votre produit dans votre boutique (votre fond), comme une vraie photo.',
+      model: 'gemini-3.1-flash-image-preview',
+      credits: 10,
+      unit: 'image',
+      on: true,
+      prompt: '',
+      dayLimit: 60,
+    },
   ],
   strategies: [
     {
@@ -263,7 +276,7 @@ export function cleanCredits(v: any): CreditsConfig {
           best: !!p?.best,
         }))
     : d.packs;
-  const tools = Array.isArray(v.tools)
+  const tools: CreditTool[] = Array.isArray(v.tools)
     ? v.tools
         .slice(0, 30)
         .map((x: any) => ({
@@ -295,6 +308,11 @@ export function cleanCredits(v: any): CreditsConfig {
           stages: stagesOf(x?.stages, clip(x?.key, 40)),
         }))
     : structuredClone(d.strategies);
+  // a config saved before the newer default tools: they are added once (at the end)
+  if (Array.isArray(v.tools) && int(v.version, 0, 1000, 1) < STRATEGIES_VERSION) {
+    const have = new Set(tools.map((x: CreditTool) => x.key));
+    for (const x of d.tools) if (!have.has(x.key)) tools.push(structuredClone(x));
+  }
   // a config saved before the newer default strategies: they are added once (at the end, on as the defaults are)
   if (Array.isArray(v.strategies) && int(v.version, 0, 1000, 1) < STRATEGIES_VERSION) {
     const have = new Set(strategies.map((x) => x.key));

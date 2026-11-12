@@ -14,7 +14,7 @@ type Tool = Cfg['tools'][number];
 type Strat = Cfg['strategies'][number];
 type Pack = Cfg['packs'][number];
 const K = 'credits.cr.';
-const UNITS = ['minute', 'post', 'ten', 'video'] as const;
+const UNITS = ['minute', 'post', 'ten', 'video', 'image'] as const;
 const STYLES = ['ugly', 'clean'] as const;
 
 function Sw({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {

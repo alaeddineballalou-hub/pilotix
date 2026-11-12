@@ -172,3 +172,13 @@ export async function pilotCoachDigest(t: Tenancy, since?: Date): Promise<{ wait
   ]);
   return { waiting: Number(n[0]?.waiting) || 0, fresh: since ? Number(n[0]?.fresh) || 0 : 0, lessons: top.map((r) => ({ topic: String(r.topic), text: String(r.text) })) };
 }
+
+/**
+ * Server only: Pilotix's own Google key (the one voice notes use), for the other Gemini tools (Studio photo), whether
+ * voice notes are on or not. null: no key, or Pilot AI is resting (the daily limit).
+ */
+export async function googleKey(t: Tenancy): Promise<string | null> {
+  if ((await pilotToday(t)).rest) return null;
+  const r = (await t.platform.query<{ value: unknown }>('SELECT value FROM platform.settings WHERE key = $1', [VOICE_KEY_ROW]))[0];
+  return (r && String(json(r.value)?.key || '').trim()) || null;
+}

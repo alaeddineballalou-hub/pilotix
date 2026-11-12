@@ -208,5 +208,10 @@
     "planned_one": "{{count}} pub prévue dans le calendrier",
     "planned_other": "{{count}} pubs prévues dans le calendrier",
     "ctaLine": "🎁 Abonnez-vous à la page et commentez CODE : on vous envoie votre code."
+  },
+  "mode": {
+    "label": "Espace créateur",
+    "videos": "Vidéos pub",
+    "studio": "Studio photo"
   }
 }

@@ -39,6 +39,7 @@ import {
 import { AdsTab, PublishTab } from './Ads';
 import { BuyCredits, CreditPill } from './Credits';
 import { MixTab } from './MixTab';
+import { Studio } from './Studio';
 import { ClipInfo, clipInfo, clipInfoNow, resolutionTag } from './probe';
 import '../ai/ai.css';
 import './createur.css';
@@ -53,7 +54,7 @@ type Tab = (typeof TABS)[number];
 
 type Stage = { s: 'loading' } | { s: 'none' } | { s: 'reopen'; dir: FileSystemDirectoryHandle } | { s: 'ready'; dir: FileSystemDirectoryHandle };
 
-export function Createur(_: PageProps) {
+export function Createur({ sub }: PageProps) {
   const { t } = useTranslation();
   const { session } = useSession();
   const boutique = String(session?.shop?.id ?? 0);
@@ -99,7 +100,8 @@ export function Createur(_: PageProps) {
     [boutique, t],
   );
 
-  const ready = stage.s === 'ready' ? stage.dir : null;
+  const studio = sub === 'studio';
+  const ready = studio ? null : stage.s === 'ready' ? stage.dir : null;
   return (
     <div className="cr">
       <header className="ai-head ai-sec cr-head">
@@ -130,7 +132,18 @@ export function Createur(_: PageProps) {
         </div>
       </header>
 
-      {!on ? (
+      <nav className="cr-mode" aria-label={t(K + 'mode.label')}>
+        <a href="#/createur" className={studio ? '' : 'on'} aria-current={studio ? undefined : 'page'}>
+          <Icon name="film" /> {t(K + 'mode.videos')}
+        </a>
+        <a href="#/createur/studio" className={studio ? 'on' : ''} aria-current={studio ? 'page' : undefined}>
+          <Icon name="image" /> {t(K + 'mode.studio')}
+        </a>
+      </nav>
+
+      {studio ? (
+        <Studio />
+      ) : !on ? (
         <Notice icon="alert" title={t(K + 'unsupported')} text={t(K + 'unsupportedHelp')} />
       ) : stage.s === 'loading' ? (
         <Loading />

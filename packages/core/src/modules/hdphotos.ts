@@ -78,7 +78,7 @@ const variantOf = async (db: Db, productId: number, variantId: number | null | u
   return num(v.id);
 };
 
-const AddInput = z.object({
+export const AddInput = z.object({
   productId: Id,
   variantId: Id.nullable().optional(),
   kind: z.enum(['photo', 'sizes']).default('photo'),
@@ -92,6 +92,48 @@ const AddInput = z.object({
   mini: z.string().min(40).max(HD.miniMax).optional(),
 });
 
+/** Adds one HD photo (Produits › Photos HD, and Studio photo: `first` puts it before the others, so it is the one
+ *  Dellal sends first for that colour / size). */
+export async function addHdPhoto(ctx: Ctx, i: z.infer<typeof AddInput>, first = false) {
+  if (!(await product(ctx.db, i.productId))) throw notFound('Produit introuvable');
+  const variantId = i.kind === 'sizes' ? null : await variantOf(ctx.db, i.productId, i.variantId);
+  const data = i.data.replace(/\s+/g, '');
+  if (mimeOf(data) !== 'image/jpeg') throw bad('La photo doit être un JPEG (la page la prépare elle-même : réessayez).');
+  const bytes = b64Bytes(data);
+  if (bytes > HD.maxBytes) throw bad('Photo trop lourde (3,4 Mo au plus).');
+  const t = fromDataUrl(i.thumb);
+  if (!t || t.mime !== 'image/jpeg') throw bad('Petite copie invalide.');
+  const mini = i.mini ? fromDataUrl(i.mini) : null;
+  if (i.mini && (!mini || mini.mime !== 'image/jpeg')) throw bad('Petite copie invalide.');
+  const n = (await ctx.db.query(
+    `SELECT count(*)::int AS total, count(*) FILTER (WHERE kind = $2 AND variant_id IS NOT DISTINCT FROM $3::bigint)::int AS here FROM product_photos WHERE product_id = $1`,
+    [i.productId, i.kind, variantId],
+  ))[0];
+  if (num(n?.total) >= HD.perProduct) throw bad(`${HD.perProduct} photos au plus par produit.`);
+  if (i.kind === 'sizes' && num(n?.here) >= HD.sizeCharts) throw bad(`${HD.sizeCharts} photos du guide des tailles au plus.`);
+  if (i.kind === 'photo' && num(n?.here) >= HD.perVariant) throw bad(`${HD.perVariant} photos au plus pour une même couleur / taille.`);
+  const s = await photoStore(ctx);
+  if (s.kind === 'off') throw bad('Le stockage des photos HD n’est pas encore activé sur ce serveur : Pilotix doit d’abord le configurer (Plateforme › Santé › Stockage des photos).');
+  let key: string | null = null;
+  if (s.kind === 'r2') {
+    key = `${slugOf(ctx)}/p${i.productId}/${randomName()}.jpg`;
+    if (!OBJECT_KEY.test(key)) throw bad('Nom de photo invalide');
+    try {
+      await putObject(s.conf, key, fromB64(data), 'image/jpeg');
+    } catch (e: any) {
+      throw bad(`La photo n’a pas pu être enregistrée : ${String(e?.message ?? e).slice(0, 200)}`);
+    }
+  }
+  if (first) await ctx.db.query(`UPDATE product_photos SET position = position + 1 WHERE product_id = $1`, [i.productId]);
+  const pos = first ? 0 : num((await ctx.db.query(`SELECT coalesce(max(position), -1) + 1 AS p FROM product_photos WHERE product_id = $1`, [i.productId]))[0]?.p);
+  await ctx.db.query(
+    `INSERT INTO product_photos (product_id, variant_id, kind, store, key, data, w, h, bytes, thumb, mini, position) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+    [i.productId, variantId, i.kind, s.kind, key, s.kind === 'local' ? data : null, i.w, i.h, bytes, `data:image/jpeg;base64,${t.data}`, mini ? `data:image/jpeg;base64,${mini.data}` : null, pos],
+  );
+  await purgeTrash(ctx.db, s).catch(() => undefined);
+  return view(ctx, i.productId, s);
+}
+
 export const hdPhotoProcs = {
   'photos.list': proc([...DEPOT], z.object({ productId: Id }), async (ctx, i) => {
     if (!(await product(ctx.db, i.productId))) throw notFound('Produit introuvable');
@@ -100,44 +142,7 @@ export const hdPhotoProcs = {
     return view(ctx, i.productId, s);
   }),
 
-  'photos.add': proc([...DEPOT], AddInput, async (ctx, i) => {
-    if (!(await product(ctx.db, i.productId))) throw notFound('Produit introuvable');
-    const variantId = i.kind === 'sizes' ? null : await variantOf(ctx.db, i.productId, i.variantId);
-    const data = i.data.replace(/\s+/g, '');
-    if (mimeOf(data) !== 'image/jpeg') throw bad('La photo doit être un JPEG (la page la prépare elle-même : réessayez).');
-    const bytes = b64Bytes(data);
-    if (bytes > HD.maxBytes) throw bad('Photo trop lourde (3,4 Mo au plus).');
-    const t = fromDataUrl(i.thumb);
-    if (!t || t.mime !== 'image/jpeg') throw bad('Petite copie invalide.');
-    const mini = i.mini ? fromDataUrl(i.mini) : null;
-    if (i.mini && (!mini || mini.mime !== 'image/jpeg')) throw bad('Petite copie invalide.');
-    const n = (await ctx.db.query(
-      `SELECT count(*)::int AS total, count(*) FILTER (WHERE kind = $2 AND variant_id IS NOT DISTINCT FROM $3::bigint)::int AS here FROM product_photos WHERE product_id = $1`,
-      [i.productId, i.kind, variantId],
-    ))[0];
-    if (num(n?.total) >= HD.perProduct) throw bad(`${HD.perProduct} photos au plus par produit.`);
-    if (i.kind === 'sizes' && num(n?.here) >= HD.sizeCharts) throw bad(`${HD.sizeCharts} photos du guide des tailles au plus.`);
-    if (i.kind === 'photo' && num(n?.here) >= HD.perVariant) throw bad(`${HD.perVariant} photos au plus pour une même couleur / taille.`);
-    const s = await photoStore(ctx);
-    if (s.kind === 'off') throw bad('Le stockage des photos HD n’est pas encore activé sur ce serveur : Pilotix doit d’abord le configurer (Plateforme › Santé › Stockage des photos).');
-    let key: string | null = null;
-    if (s.kind === 'r2') {
-      key = `${slugOf(ctx)}/p${i.productId}/${randomName()}.jpg`;
-      if (!OBJECT_KEY.test(key)) throw bad('Nom de photo invalide');
-      try {
-        await putObject(s.conf, key, fromB64(data), 'image/jpeg');
-      } catch (e: any) {
-        throw bad(`La photo n’a pas pu être enregistrée : ${String(e?.message ?? e).slice(0, 200)}`);
-      }
-    }
-    const pos = num((await ctx.db.query(`SELECT coalesce(max(position), -1) + 1 AS p FROM product_photos WHERE product_id = $1`, [i.productId]))[0]?.p);
-    await ctx.db.query(
-      `INSERT INTO product_photos (product_id, variant_id, kind, store, key, data, w, h, bytes, thumb, mini, position) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-      [i.productId, variantId, i.kind, s.kind, key, s.kind === 'local' ? data : null, i.w, i.h, bytes, `data:image/jpeg;base64,${t.data}`, mini ? `data:image/jpeg;base64,${mini.data}` : null, pos],
-    );
-    await purgeTrash(ctx.db, s).catch(() => undefined);
-    return view(ctx, i.productId, s);
-  }),
+  'photos.add': proc([...DEPOT], AddInput, (ctx, i) => addHdPhoto(ctx, i)),
 
   /** another colour / size, the size chart or a photo, or its place (0 = first) */
   'photos.update': proc(
