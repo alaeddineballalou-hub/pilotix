@@ -73,7 +73,7 @@ function blurred(src: HTMLCanvasElement, px: number): HTMLCanvasElement {
  * The background as it is kept: 4:5, 1280×1600, blurred, with the front (the table or the floor where the product
  * stands) kept sharp from `focus` (0 top … 1 bottom) down. 0 blur: the photo as it is.
  */
-export function makeBackground(img: HTMLImageElement, blur: number, focus: number): { canvas: HTMLCanvasElement; data: string; thumb: string; w: number; h: number } {
+export function makeBackground(img: CanvasImageSource & { width: number; height: number }, blur: number, focus: number): { canvas: HTMLCanvasElement; data: string; thumb: string; w: number; h: number } {
   const W = 1280;
   const H = 1600;
   const [sharp, sg] = canvas(W, H);
@@ -436,4 +436,248 @@ export function download(dataUrl: string, name: string) {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+// ---------------------------------------------------------------- the long landing-page image
+export interface Landing {
+  hero: string | null;
+  title: string;
+  subtitle: string;
+  benefits: { title: string; text: string }[];
+  details: string[];
+  colors: { name: string; src: string }[];
+  colorsLabel: string;
+  size: string;
+  sizeLabel: string;
+  trust: string[];
+  rtl: boolean;
+  accent: string;
+}
+
+/** Splits a sentence into lines that fit `max` px with the current font. */
+function lines(g: CanvasRenderingContext2D, text: string, max: number): string[] {
+  const out: string[] = [];
+  let cur = '';
+  for (const w of text.split(/\s+/).filter(Boolean)) {
+    const next = cur ? `${cur} ${w}` : w;
+    if (g.measureText(next).width <= max || !cur) cur = next;
+    else {
+      out.push(cur);
+      cur = w;
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/**
+ * One very long image (1080 px wide) for under the landing page's order form, block after block: the photo and the
+ * title, the benefits, the close-ups, the colours, the size, the trust. No price in it (the form above has it, and a
+ * price in a picture goes out of date).
+ */
+export async function drawLanding(p: Landing): Promise<string> {
+  await document.fonts?.load(`800 60px ${FONT}`).catch(() => undefined);
+  await document.fonts?.load(`500 30px ${FONT}`).catch(() => undefined);
+  const W = OUT_W;
+  const pad = 70;
+  const hero = p.hero ? await loadImage(p.hero).catch(() => null) : null;
+  const details = (await Promise.all(p.details.slice(0, 4).map((s) => loadImage(s).catch(() => null)))).filter(Boolean) as HTMLImageElement[];
+  const colors = (await Promise.all(p.colors.slice(0, 6).map(async (c) => ({ ...c, img: await loadImage(c.src).catch(() => null) })))).filter((c) => c.img);
+  const [m, mg] = canvas(10, 10);
+  const benefitRows = p.benefits.filter((b) => b.title).map((b) => {
+    mg.font = `500 32px ${FONT}`;
+    return { ...b, lines: lines(mg, b.text, W - pad * 2 - 150) };
+  });
+  void m;
+  const heroH = hero ? Math.round((W * hero.height) / hero.width) : 0;
+  const titleH = p.title ? 330 : 0;
+  const benH = benefitRows.length ? 120 + benefitRows.reduce((s, b) => s + 110 + b.lines.length * 46, 0) : 0;
+  const detCell = details.length === 1 ? W - pad * 2 : (W - pad * 2 - 24) / 2;
+  const detH = details.length ? 130 + (details.length === 1 ? detCell + 24 : Math.ceil(details.length / 2) * (detCell + 24)) : 0;
+  const colH = colors.length ? 120 + Math.ceil(colors.length / 3) * 330 : 0;
+  const sizeH = p.size.trim() ? 260 : 0;
+  const trustH = p.trust.length ? 300 : 0;
+  const H = Math.max(400, heroH + titleH + benH + detH + colH + sizeH + trustH + 40);
+  const [c, g] = canvas(W, H);
+  g.direction = p.rtl ? 'rtl' : 'ltr';
+  g.fillStyle = '#fff';
+  g.fillRect(0, 0, W, H);
+  g.textBaseline = 'middle';
+  const side = (x: number) => (p.rtl ? W - x : x);
+  let y = 0;
+  const heading = (text: string) => {
+    g.textAlign = 'center';
+    fit(g, text, 800, 50, W - pad * 2, 28);
+    g.fillStyle = p.accent;
+    g.fillText(text, W / 2, y + 62);
+    g.fillRect(W / 2 - 50, y + 100, 100, 6);
+    y += 130;
+  };
+
+  if (hero) {
+    g.drawImage(hero, 0, 0, W, heroH);
+    y = heroH;
+  }
+  if (p.title) {
+    g.fillStyle = p.accent;
+    g.fillRect(0, y, W, titleH);
+    g.textAlign = 'center';
+    g.fillStyle = '#fff';
+    fit(g, p.title, 800, 72, W - pad * 2, 34);
+    g.fillText(p.title, W / 2, y + 130);
+    if (p.subtitle) {
+      fit(g, p.subtitle, 500, 38, W - pad * 2, 22);
+      g.fillStyle = 'rgba(255,255,255,0.92)';
+      g.fillText(p.subtitle, W / 2, y + 220);
+    }
+    y += titleH;
+  }
+  if (benefitRows.length) {
+    y += 10;
+    benefitRows.forEach((b, k) => {
+      const top = y + (k === 0 ? 30 : 0);
+      const h = 80 + b.lines.length * 46;
+      g.fillStyle = k % 2 ? '#fff' : '#fdf2f7';
+      pill(g, pad - 20, top, W - (pad - 20) * 2, h, 28);
+      g.fill();
+      const cx = side(pad + 50);
+      g.fillStyle = p.accent;
+      g.beginPath();
+      g.arc(cx, top + h / 2, 44, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = '#fff';
+      g.textAlign = 'center';
+      g.font = `800 40px ${FONT}`;
+      g.fillText('✓', cx, top + h / 2 + 2);
+      g.textAlign = p.rtl ? 'right' : 'left';
+      g.fillStyle = '#1f2a44';
+      fit(g, b.title, 800, 40, W - pad * 2 - 150, 24);
+      g.fillText(b.title, side(pad + 130), top + 46);
+      g.fillStyle = '#4b5563';
+      g.font = `500 32px ${FONT}`;
+      b.lines.forEach((l, i) => g.fillText(l, side(pad + 130), top + 96 + i * 46));
+      y = top + h + 30;
+    });
+    y += 20;
+  }
+  if (details.length) {
+    heading(p.rtl ? 'التفاصيل' : 'Les détails');
+    const one = details.length === 1;
+    const cell = one ? W - pad * 2 : (W - pad * 2 - 24) / 2;
+    details.forEach((img, k) => {
+      const x = one ? pad : pad + (k % 2) * (cell + 24);
+      const yy = y + (one ? 0 : Math.floor(k / 2) * (cell + 24));
+      g.save();
+      pill(g, x, yy, cell, cell, 26);
+      g.clip();
+      cover(g, img, cell, cell, x, yy);
+      g.restore();
+    });
+    y += one ? cell + 24 : Math.ceil(details.length / 2) * (cell + 24);
+    y = Math.max(y, 0);
+  }
+  if (colors.length) {
+    heading(p.colorsLabel);
+    const cw = (W - pad * 2) / 3;
+    colors.forEach((col, k) => {
+      const row = Math.floor(k / 3);
+      const inRow = Math.min(3, colors.length - row * 3);
+      const x0 = (W - inRow * cw) / 2;
+      const cx = x0 + (p.rtl ? inRow - 1 - (k % 3) : k % 3) * cw + cw / 2;
+      const cy = y + row * 330 + 120;
+      g.save();
+      g.beginPath();
+      g.arc(cx, cy, 110, 0, Math.PI * 2);
+      g.clip();
+      const img = col.img!;
+      const s = Math.min(img.width, img.height) * 0.7;
+      g.drawImage(img, (img.width - s) / 2, Math.max(0, img.height * 0.58 - s / 2), s, Math.min(s, img.height), cx - 110, cy - 110, 220, 220);
+      g.restore();
+      g.strokeStyle = p.accent;
+      g.lineWidth = 6;
+      g.beginPath();
+      g.arc(cx, cy, 110, 0, Math.PI * 2);
+      g.stroke();
+      g.textAlign = 'center';
+      g.fillStyle = '#1f2a44';
+      fit(g, col.name, 700, 34, cw - 20, 20);
+      g.fillText(col.name, cx, cy + 150);
+    });
+    y += Math.ceil(colors.length / 3) * 330 + 10;
+  }
+  if (p.size.trim()) {
+    g.fillStyle = '#f1f5ff';
+    pill(g, pad - 20, y + 20, W - (pad - 20) * 2, 210, 30);
+    g.fill();
+    g.textAlign = 'center';
+    g.fillStyle = p.accent;
+    fit(g, `📏 ${p.sizeLabel}`, 800, 40, W - pad * 2);
+    g.fillText(`📏 ${p.sizeLabel}`, W / 2, y + 80);
+    g.fillStyle = '#1f2a44';
+    fit(g, p.size.trim(), 700, 44, W - pad * 2 - 40, 22);
+    g.fillText(p.size.trim(), W / 2, y + 160);
+    y += sizeH;
+  }
+  if (p.trust.length) {
+    g.fillStyle = '#1f2a44';
+    g.fillRect(0, y + 20, W, trustH - 20);
+    const tw = W / p.trust.length;
+    p.trust.forEach((t, k) => {
+      const cx = p.rtl ? W - tw * k - tw / 2 : tw * k + tw / 2;
+      g.textAlign = 'center';
+      g.fillStyle = '#fff';
+      const [icon, ...rest] = t.split(' ');
+      g.font = `400 64px ${FONT}`;
+      g.fillText(icon, cx, y + 110);
+      const words = rest.join(' ');
+      g.font = `700 30px ${FONT}`;
+      lines(g, words, tw - 40)
+        .slice(0, 2)
+        .forEach((l, i) => g.fillText(l, cx, y + 190 + i * 40));
+    });
+  }
+  return c.toDataURL('image/jpeg', 0.88);
+}
+
+/** The long image cut into pieces of at most 1350 px high (they load one after another on a slow phone). */
+export async function slices(src: string, max = OUT_H): Promise<string[]> {
+  const img = await loadImage(src);
+  const out: string[] = [];
+  for (let y = 0; y < img.height; y += max) {
+    const h = Math.min(max, img.height - y);
+    const [c, g] = canvas(img.width, h);
+    g.drawImage(img, 0, y, img.width, h, 0, 0, img.width, h);
+    out.push(c.toDataURL('image/jpeg', 0.88));
+  }
+  return out;
+}
+
+/** The browser preview's EXAMPLE background (no AI there): a plain room with a wooden table in front. */
+export function exampleBackground(label: string): HTMLCanvasElement {
+  const [c, g] = canvas(1280, 1600);
+  g.fillStyle = '#f6efe6';
+  g.fillRect(0, 0, 1280, 1600);
+  g.fillStyle = '#efe2d2';
+  for (let k = 0; k < 6; k++) g.fillRect(80 + k * 200, 260, 140, 520);
+  g.fillStyle = '#e9d9c4';
+  g.fillRect(0, 900, 1280, 160);
+  g.fillStyle = '#c99a6b';
+  g.fillRect(0, 1060, 1280, 540);
+  g.fillStyle = '#b6855a';
+  g.fillRect(0, 1060, 1280, 26);
+  g.fillStyle = 'rgba(17,24,39,0.78)';
+  g.fillRect(0, 0, 1280, 80);
+  g.fillStyle = '#fff';
+  g.font = `700 38px ${FONT}`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(label, 640, 42);
+  return c;
+}
+
+/** A canvas from a data URL (to send an AI background to the background editor). */
+export async function imageFrom(src: string): Promise<HTMLImageElement> {
+  const img = await loadImage(src);
+  await img.decode?.().catch(() => undefined);
+  return img;
 }

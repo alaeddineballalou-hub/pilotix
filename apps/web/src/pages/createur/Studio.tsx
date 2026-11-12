@@ -10,17 +10,24 @@ import { useTranslation } from 'react-i18next';
 import { Out, rpc } from '../../lib/backend';
 import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
-import { Empty, ErrorBox, Field, Help, Icon, Loading } from '../../ui/kit';
+import { Empty, ErrorBox, Field, Help, Icon, IconName, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { BuyCredits, CreditPill } from './Credits';
-import { adSize, AiPhoto, aiPhoto, download, drawPoster, exampleShot, fileImage, Logo, makeBackground, savable } from './studioimg';
+import { adSize, AiPhoto, aiPhoto, download, drawLanding, drawPoster, exampleBackground, exampleShot, fileImage, imageFrom, Logo, makeBackground, savable, slices } from './studioimg';
 import './studio.css';
 
 const K = 'studio.';
 type St = Out<'createur.studio'>;
 type Bg = St['backgrounds'][number];
 type Product = St['products'][number];
+type Kind = 'photo' | 'copy' | 'landing' | 'background';
+const KINDS: { k: Kind; icon: IconName }[] = [
+  { k: 'photo', icon: 'image' },
+  { k: 'copy', icon: 'edit' },
+  { k: 'landing', icon: 'list' },
+  { k: 'background', icon: 'home' },
+];
 type Check = { ok: boolean; problems: string[] } | null;
 type Version = { src: string; check: Check; checked: boolean; redone: boolean; demo: boolean };
 type Row = { key: string; variantId: number | null; title: string; photos: { photo: AiPhoto; preview: string }[]; versions: (Version | { error: string } | null)[]; busy: boolean; picked: number | null; saved: string | null };
@@ -40,6 +47,8 @@ export function Studio() {
   const [productId, setProductId] = useState<number | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [find, setFind] = useState('');
+  const [kind, setKind] = useState<Kind>('photo');
+  const [aiBg, setAiBg] = useState<HTMLImageElement | HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     if (q.data && bgs === null) {
@@ -135,6 +144,36 @@ export function Studio() {
       {!st.server && <p className="st-note">{t(K + 'previewNote')}</p>}
       {!st.tool.on && <p className="st-note bad">{t(K + 'off')}</p>}
 
+      {/* 0. what to make, and its words for the AI */}
+      <section className="st-step">
+        <h2>{t(K + 'k.title')}</h2>
+        <div className="st-kinds" role="radiogroup" aria-label={t(K + 'k.title')}>
+          {KINDS.map((x, n) => (
+            <button key={x.k} type="button" role="radio" aria-checked={kind === x.k} className={`st-kind${kind === x.k ? ' on' : ''}`} onClick={() => setKind(x.k)}>
+              <span className="st-kind-n ltr">{n + 1}</span>
+              <Icon name={x.icon} />
+              <b>{t(K + `k.${x.k}`)}</b>
+              <span className="muted small">{t(K + `k.${x.k}Line`)}</span>
+            </button>
+          ))}
+        </div>
+        <PromptBox key={kind} kind={kind} cur={st.prompts[kind]} def={st.defaults[kind]} onSaved={() => void q.refetch()} />
+      </section>
+
+      {kind === 'copy' && <CopyMaker products={st.products} />}
+      {kind === 'landing' && <LandingMaker products={st.products} saved={rows.filter((r) => r.saved).map((r) => ({ name: r.title, src: r.saved! }))} />}
+      {kind === 'background' && (
+        <BgMaker
+          full={list.length >= st.limits.backgrounds}
+          onUse={(img) => {
+            setAiBg(img);
+            setEditBg('new');
+          }}
+        />
+      )}
+
+      {kind === 'photo' && (
+        <>
       {/* 1. the backgrounds */}
       <section className="st-step">
         <h2>
@@ -216,16 +255,23 @@ export function Studio() {
           {allSaved ? <PosterMaker product={product} rows={rows} shop={cr.data?.shop ?? null} /> : <p className="muted">{t(K + 'po.wait', { done: rows.filter((r) => r.saved).length, of: rows.length })}</p>}
         </section>
       )}
+        </>
+      )}
 
       {editBg && (
         <BgEditor
           bg={editBg === 'new' ? null : editBg}
-          onClose={() => setEditBg(null)}
+          initial={editBg === 'new' ? aiBg : null}
+          onClose={() => (setEditBg(null), setAiBg(null))}
           onDone={(next, pick) => {
             setBgs(next);
             if (pick) setBgId(pick);
             else if (!next.some((b) => b.id === bgId)) setBgId(next[0]?.id ?? null);
             setEditBg(null);
+            if (aiBg) {
+              setAiBg(null);
+              setKind('photo');
+            }
           }}
         />
       )}
@@ -338,12 +384,12 @@ function Sizes({ src, name }: { src: string; name: string }) {
 }
 
 // ---------------------------------------------------------------- a background: the photo, the blur, the logo box
-function BgEditor({ bg, onClose, onDone }: { bg: Bg | null; onClose: () => void; onDone: (next: Bg[], pick?: number) => void }) {
+function BgEditor({ bg, initial, onClose, onDone }: { bg: Bg | null; initial?: HTMLImageElement | HTMLCanvasElement | null; onClose: () => void; onDone: (next: Bg[], pick?: number) => void }) {
   const { t } = useTranslation();
   const [name, setName] = useState(bg?.name ?? t(K + 'bg.defaultName'));
   const [surface, setSurface] = useState<'table' | 'floor'>(bg?.surface ?? 'table');
   const [logo, setLogo] = useState<Logo | null>(bg?.logo ?? null);
-  const [img, setImg] = useState<HTMLImageElement | null>(null);
+  const [img, setImg] = useState<HTMLImageElement | HTMLCanvasElement | null>(initial ?? null);
   const [blur, setBlur] = useState(14);
   const [focus, setFocus] = useState(72);
   const [view, setView] = useState<string | null>(bg?.thumb ?? null);
@@ -718,5 +764,384 @@ function PosterMaker({ product, rows, shop }: { product: Product; rows: Row[]; s
         </div>
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------- step 0: the words for the AI of each kind
+function PromptBox({ kind, cur, def, onSaved }: { kind: Kind; cur: { text: string; custom: boolean }; def: string; onSaved: () => void }) {
+  const { t } = useTranslation();
+  const [text, setText] = useState(cur.text);
+  const [busy, setBusy] = useState(false);
+  const save = async (v: string | null) => {
+    setBusy(true);
+    try {
+      const r = await rpc('createur.studioPrompt', { kind, text: v });
+      setText(r.prompts[kind].text);
+      toast(v === null ? t(K + 'pr.reset') : t(K + 'pr.saved'), 'ok');
+      onSaved();
+    } catch (e) {
+      toast(errText(e), 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <details className="st-prompt">
+      <summary>
+        <Icon name="edit" /> {t(K + 'pr.open')} {cur.custom && <span className="st-tag warn">{t(K + 'pr.custom')}</span>}
+      </summary>
+      <p className="muted small">{t(K + 'pr.help')}</p>
+      <textarea className="ltr" rows={10} value={text} maxLength={6000} onChange={(e) => setText(e.target.value)} dir="auto" />
+      <div className="st-prompt-go">
+        <button type="button" className="btn primary small" disabled={busy || text.trim() === cur.text.trim()} onClick={() => void save(text)}>
+          {t('common.save')}
+        </button>
+        <button type="button" className="btn ghost small" disabled={busy || (!cur.custom && text === def)} onClick={() => void save(null)}>
+          {t(K + 'pr.back')}
+        </button>
+      </div>
+    </details>
+  );
+}
+
+function ProductPicker({ products, onPick }: { products: Product[]; onPick: (p: Product) => void }) {
+  const { t } = useTranslation();
+  const [find, setFind] = useState('');
+  const shown = products.filter((p) => !find.trim() || p.name.toLowerCase().includes(find.trim().toLowerCase())).slice(0, 60);
+  return (
+    <>
+      <input className="st-find" placeholder={t(K + 'ph.find')} value={find} onChange={(e) => setFind(e.target.value)} />
+      {shown.length ? (
+        <div className="st-products">
+          {shown.map((p) => (
+            <button key={p.id} type="button" className="st-product" onClick={() => onPick(p)}>
+              {p.photo ? <img src={p.photo} alt="" /> : <Icon name="package" />}
+              <b>{p.name}</b>
+              <span className="muted small">{p.variants.length ? t(K + 'ph.variants', { count: p.variants.length }) : t(K + 'ph.noVariant')}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <Empty>{t(K + 'ph.noProduct')}</Empty>
+      )}
+    </>
+  );
+}
+
+function Chosen({ p, onOther }: { p: Product; onOther: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="st-chosen">
+      {p.photo ? <img src={p.photo} alt="" /> : <Icon name="package" />}
+      <b>{p.name}</b>
+      <button type="button" className="btn small ghost" onClick={onOther}>
+        {t(K + 'ph.other')}
+      </button>
+    </div>
+  );
+}
+
+const copyText = async (text: string, ok: string) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(ok, 'ok');
+  } catch {
+    toast(text.slice(0, 80), 'info');
+  }
+};
+
+// ---------------------------------------------------------------- 2. Texte pub
+function CopyMaker({ products }: { products: Product[] }) {
+  const { t } = useTranslation();
+  const [p, setP] = useState<Product | null>(null);
+  const [lang, setLang] = useState<'ar' | 'darija' | 'fr'>('darija');
+  const [out, setOut] = useState<{ post: string; angles: { name: string; hook: string }[]; demo: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const write = async () => {
+    if (!p) return;
+    setBusy(true);
+    try {
+      setOut(await rpc('createur.studioCopy', { productId: p.id, lang }));
+    } catch (e) {
+      toast(errText(e), 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="st-step">
+      <h2>{t(K + 'cp.title')}</h2>
+      {!p ? (
+        <ProductPicker products={products} onPick={setP} />
+      ) : (
+        <>
+          <Chosen p={p} onOther={() => (setP(null), setOut(null))} />
+          <div className="st-poster-row">
+            <Field label={t(K + 'po.lang')}>
+              <select value={lang} onChange={(e) => setLang(e.target.value as typeof lang)}>
+                <option value="darija">الدارجة</option>
+                <option value="ar">العربية</option>
+                <option value="fr">Français</option>
+              </select>
+            </Field>
+            <button type="button" className="btn primary" disabled={busy} onClick={write}>
+              <Icon name="zap" /> {out ? t(K + 'cp.again') : t(K + 'cp.write')}
+            </button>
+          </div>
+          {busy && <Loading />}
+          {out && !busy && (
+            <div className="st-copy">
+              {out.demo && <p className="st-note">{t(K + 'cp.example')}</p>}
+              <div className="st-copy-post">
+                <b>{t(K + 'cp.post')}</b>
+                <textarea rows={8} dir="auto" value={out.post} onChange={(e) => setOut({ ...out, post: e.target.value })} />
+                <button type="button" className="btn small" onClick={() => void copyText(out.post, t(K + 'cp.copied'))}>
+                  <Icon name="copy" /> {t(K + 'cp.copy')}
+                </button>
+              </div>
+              <b>{t(K + 'cp.angles')}</b>
+              <div className="st-angles">
+                {out.angles.map((a, k) => (
+                  <div key={k} className="st-angle">
+                    <span className="st-tag">{a.name}</span>
+                    <p dir="auto">{a.hook}</p>
+                    <button type="button" className="btn small ghost" onClick={() => void copyText(a.hook, t(K + 'cp.copied'))}>
+                      <Icon name="copy" /> {t(K + 'cp.copy')}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------- 3. Image landing page (one very long image)
+function LandingMaker({ products, saved }: { products: Product[]; saved: { name: string; src: string }[] }) {
+  const { t } = useTranslation();
+  const [p, setP] = useState<Product | null>(null);
+  const [lang, setLang] = useState<'ar' | 'fr'>('ar');
+  const [hero, setHero] = useState<string | null>(saved[0]?.src ?? null);
+  const [details, setDetails] = useState<string[]>([]);
+  const [title, setTitle] = useState('');
+  const [subtitle, setSubtitle] = useState('');
+  const [benefits, setBenefits] = useState([0, 1, 2, 3].map(() => ({ title: '', text: '' })));
+  const [size, setSize] = useState('');
+  const [accent, setAccent] = useState('#d6246e');
+  const [out, setOut] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const heroPick = useRef<HTMLInputElement>(null);
+  const detPick = useRef<HTMLInputElement>(null);
+  const fr = lang === 'fr';
+  const colors = useMemo(
+    () => (saved.length > 1 ? saved : (p?.variants ?? []).filter((v) => v.photo).map((v) => ({ name: v.title, src: v.photo! }))),
+    [saved, p],
+  );
+
+  useEffect(() => {
+    if (!p) return;
+    let live = true;
+    const h = setTimeout(async () => {
+      const url = await drawLanding({
+        hero,
+        title: title.trim(),
+        subtitle: subtitle.trim(),
+        benefits: benefits.map((b) => ({ title: b.title.trim(), text: b.text.trim() })),
+        details,
+        colors,
+        colorsLabel: t(K + `po.${fr ? 'fr' : 'ar'}.colors`),
+        size,
+        sizeLabel: fr ? 'Taille / âge' : 'المقاس / العمر',
+        trust: fr ? ['💵 Paiement à la livraison', '🚚 Livraison 58 wilayas', '🔄 Échange possible'] : ['💵 الدفع عند الاستلام', '🚚 التوصيل إلى 58 ولاية', '🔄 إمكانية الاستبدال'],
+        rtl: !fr,
+        accent,
+      }).catch(() => null);
+      if (live) setOut(url);
+    }, 250);
+    return () => {
+      live = false;
+      clearTimeout(h);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p, hero, title, subtitle, benefits, details, colors, size, accent, lang]);
+
+  const read = (files: FileList | null, max: number) =>
+    Promise.all(
+      Array.from(files ?? [])
+        .slice(0, max)
+        .map(async (f) => (await aiPhoto(f).catch(() => null))?.photo),
+    ).then((xs) => xs.filter(Boolean).map((x) => `data:image/jpeg;base64,${x!.data}`));
+
+  const suggest = async () => {
+    if (!p) return;
+    setBusy(true);
+    try {
+      const r = await rpc('createur.studioLanding', { productId: p.id, lang });
+      setTitle(r.title);
+      setSubtitle(r.subtitle);
+      setBenefits([0, 1, 2, 3].map((k) => r.benefits[k] ?? { title: '', text: '' }));
+      if (r.demo) toast(t(K + 'po.example'), 'info');
+    } catch (e) {
+      toast(errText(e), 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const parts = async () => {
+    if (!out || !p) return;
+    const list = await slices(out);
+    list.forEach((u, k) => download(u, `${p.name.replace(/[^\p{L}\p{N}-]+/gu, '-').slice(0, 30)}-landing-${k + 1}.jpg`));
+  };
+
+  return (
+    <section className="st-step">
+      <h2>{t(K + 'ld.title')}</h2>
+      {!p ? (
+        <ProductPicker products={products} onPick={setP} />
+      ) : (
+        <div className="st-poster st-landing">
+          <div className="st-landing-view">{out ? <img src={out} alt={t(K + 'ld.title')} /> : <Loading />}</div>
+          <div className="st-poster-form">
+            <Chosen p={p} onOther={() => (setP(null), setOut(null))} />
+            <p className="muted small">{t(K + 'ld.help')}</p>
+            <div className="st-poster-row">
+              <Field label={t(K + 'po.lang')}>
+                <select value={lang} onChange={(e) => setLang(e.target.value as 'ar' | 'fr')}>
+                  <option value="ar">العربية</option>
+                  <option value="fr">Français</option>
+                </select>
+              </Field>
+              <label className="st-check-line">
+                {t(K + 'po.accent')} <input type="color" value={accent} onChange={(e) => setAccent(e.target.value)} />
+              </label>
+            </div>
+            <div className="st-poster-row">
+              <button type="button" className="btn small" onClick={() => heroPick.current?.click()}>
+                <Icon name="image" /> {hero ? t(K + 'ld.heroOther') : t(K + 'ld.hero')}
+              </button>
+              {saved.length > 0 && (
+                <select value={hero ?? ''} onChange={(e) => setHero(e.target.value || null)} aria-label={t(K + 'ld.hero')}>
+                  {saved.map((s) => (
+                    <option key={s.src} value={s.src}>
+                      {t(K + 'ld.fromStudio', { name: s.name })}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <button type="button" className="btn small" onClick={() => detPick.current?.click()} disabled={details.length >= 4}>
+                <Icon name="camera" /> {t(K + 'ld.details', { n: details.length })}
+              </button>
+              {details.length > 0 && (
+                <button type="button" className="btn small ghost" onClick={() => setDetails([])}>
+                  {t(K + 'ld.detailsClear')}
+                </button>
+              )}
+              <input
+                ref={heroPick}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={async (e) => {
+                  const got = await read(e.target.files, 1);
+                  if (got[0]) setHero(got[0]);
+                  e.target.value = '';
+                }}
+              />
+              <input
+                ref={detPick}
+                type="file"
+                accept="image/*"
+                multiple
+                hidden
+                onChange={async (e) => {
+                  const got = await read(e.target.files, 4 - details.length);
+                  setDetails((d) => [...d, ...got].slice(0, 4));
+                  e.target.value = '';
+                }}
+              />
+            </div>
+            <button type="button" className="btn" disabled={busy} onClick={suggest}>
+              <Icon name="zap" /> {t(K + 'po.suggest')}
+            </button>
+            <Field label={t(K + 'po.titleField')}>
+              <input value={title} maxLength={80} dir="auto" onChange={(e) => setTitle(e.target.value)} />
+            </Field>
+            <Field label={t(K + 'po.subtitle')}>
+              <input value={subtitle} maxLength={80} dir="auto" onChange={(e) => setSubtitle(e.target.value)} />
+            </Field>
+            {benefits.map((b, k) => (
+              <div key={k} className="st-benefit">
+                <input value={b.title} maxLength={40} dir="auto" placeholder={t(K + 'po.feature', { n: k + 1 })} onChange={(e) => setBenefits((o) => o.map((x, i) => (i === k ? { ...x, title: e.target.value } : x)))} />
+                <input value={b.text} maxLength={160} dir="auto" placeholder={t(K + 'ld.benefitText')} onChange={(e) => setBenefits((o) => o.map((x, i) => (i === k ? { ...x, text: e.target.value } : x)))} />
+              </div>
+            ))}
+            <Field label={t(K + 'ld.size')} hint={t(K + 'ld.sizeHint')}>
+              <input value={size} maxLength={80} dir="auto" onChange={(e) => setSize(e.target.value)} />
+            </Field>
+            <p className="muted small">{t(K + 'ld.noPrice')}</p>
+            <div className="st-poster-go">
+              <button type="button" className="btn primary" disabled={!out} onClick={() => out && download(out, `${p.name.slice(0, 30)}-landing.jpg`)}>
+                <Icon name="download" /> {t(K + 'ld.download')}
+              </button>
+              <button type="button" className="btn" disabled={!out} onClick={() => void parts()}>
+                {t(K + 'ld.slices')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------- 4. Générer un fond
+function BgMaker({ full, onUse }: { full: boolean; onUse: (img: HTMLImageElement | HTMLCanvasElement) => void }) {
+  const { t } = useTranslation();
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [made, setMade] = useState<{ src: string; img: HTMLImageElement | HTMLCanvasElement; demo: boolean } | null>(null);
+  const go = async () => {
+    setBusy(true);
+    try {
+      const r = await rpc('createur.studioMakeBg', note.trim() ? { note: note.trim() } : {});
+      if (r.demo) {
+        const c = exampleBackground(t(K + 'example'));
+        setMade({ src: c.toDataURL('image/jpeg', 0.85), img: c, demo: true });
+      } else {
+        const src = `data:image/jpeg;base64,${r.image}`;
+        setMade({ src, img: await imageFrom(src), demo: false });
+      }
+    } catch (e) {
+      toast(errText(e), 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="st-step">
+      <h2>{t(K + 'gb.title')}</h2>
+      <p className="st-note">{t(K + 'gb.warn')}</p>
+      <Field label={t(K + 'gb.note')} hint={t(K + 'gb.noteHint')}>
+        <input value={note} maxLength={400} dir="auto" onChange={(e) => setNote(e.target.value)} />
+      </Field>
+      <div className="st-row-go">
+        <button type="button" className="btn primary" disabled={busy} onClick={go}>
+          <Icon name="zap" /> {made ? t(K + 'gb.again') : t(K + 'gb.make')}
+        </button>
+      </div>
+      {busy && <Loading />}
+      {made && !busy && (
+        <div className="st-gb">
+          <img src={made.src} alt="" />
+          <button type="button" className="btn primary" disabled={full} onClick={() => onUse(made.img)}>
+            {t(K + 'gb.use')}
+          </button>
+          {full && <span className="muted small">{t(K + 'gb.full')}</span>}
+        </div>
+      )}
+    </section>
   );
 }

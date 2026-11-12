@@ -1767,7 +1767,7 @@ export function parseMetaComments(body: any): IncomingComment[] {
 // pays them itself, no credits). The pictures come from the page (the product's photos, the background) and go back to
 // it: nothing is kept here.
 export type StudioImg = { mime: string; data: string };
-export type StudioImageArgs = { provider: 'gemini' | 'openai'; key: string | null; model: string; prompt: string; images: StudioImg[] };
+export type StudioImageArgs = { provider: 'gemini' | 'openai'; key: string | null; model: string; prompt: string; images: StudioImg[]; textOnly?: boolean };
 export type StudioImageResult = { ok: true; image: string; w: number; h: number; model: string } | { ok: false; error: string };
 export type StudioCheckArgs = { provider: 'gemini'; key: string | null; model: string; prompt: string; images: StudioImg[] };
 export type StudioCheckResult = { ok: true; text: string; model: string } | { ok: false; error: string };
@@ -1802,12 +1802,24 @@ async function studioJpeg(b64: string): Promise<{ data: string; w: number; h: nu
 async function studioImage(ctx: Ctx, a: StudioImageArgs): Promise<StudioImageResult> {
   if (!ctx.t || !ctx.shop) return { ok: false, error: 'no_platform' };
   const images = (a.images ?? []).filter((x) => STUDIO_MIME.test(x?.mime) && typeof x?.data === 'string' && x.data.length > 100).slice(0, 8);
-  if (!images.length) return { ok: false, error: 'no_images' };
+  // no picture: the AI draws from the words alone (a background for a shop without a photo of its own)
+  if (!images.length && !a.textOnly) return { ok: false, error: 'no_images' };
   const own = !!a.key;
   let out: string | null = null;
   try {
     if (a.provider === 'openai') {
       if (!a.key) return { ok: false, error: 'no_key' };
+      if (!images.length) {
+        const res = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${a.key}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ model: a.model || 'gpt-image-1', prompt: a.prompt.slice(0, 30_000), size: '1024x1536', quality: 'high', n: 1 }),
+          signal: AbortSignal.timeout(170_000),
+        });
+        const j: any = await res.json().catch(() => null);
+        if (!res.ok) return { ok: false, error: String(j?.error?.message ?? `OpenAI ${res.status}`).slice(0, 300) };
+        out = typeof j?.data?.[0]?.b64_json === 'string' ? j.data[0].b64_json : null;
+      } else {
       const form = new FormData();
       form.append('model', a.model || 'gpt-image-1');
       form.append('prompt', a.prompt.slice(0, 30_000));
@@ -1819,6 +1831,7 @@ async function studioImage(ctx: Ctx, a: StudioImageArgs): Promise<StudioImageRes
       const j: any = await res.json().catch(() => null);
       if (!res.ok) return { ok: false, error: String(j?.error?.message ?? `OpenAI ${res.status}`).slice(0, 300) };
       out = typeof j?.data?.[0]?.b64_json === 'string' ? j.data[0].b64_json : null;
+      }
     } else {
       const key = a.key || (await googleKey(ctx.t).catch(() => null));
       if (!key) return { ok: false, error: 'off' };

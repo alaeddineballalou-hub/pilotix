@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, ServerHooks, shopCtx, shopStatus, staffLogin } from '../index';
 import { getRaw } from '../modules/admin';
-import { checkPrompt, readCheck, readPosterTexts, studioPrompt } from '../modules/studio';
+import { checkPrompt, readCheck, readCopy, readLanding, readPosterTexts, studioPrompt } from '../modules/studio';
 import { loadShop, passwordFromLink } from '../platform';
 import type { Tenancy } from '../platform/tenancy';
 
@@ -179,7 +179,43 @@ test('on the server: credits per image, a refused version made once more, the AI
   assert.equal(asked.find((x) => x.action === 'studioImage')!.args.key, 'AIzaSyD-own-key-0123456789abcdef');
   assert.ok(!asked.some((x) => x.action === 'studioCheck'));
   assert.equal((await wallet()).left, before1, 'own key: no credits');
+  // a background from the words alone (no picture sent), with the shop's own key
+  asked.length = 0;
+  const bgm: any = await call('createur.studioMakeBg', server, { note: 'murs roses' });
+  assert.equal(bgm.demo, false);
+  const a0 = asked.find((x) => x.action === 'studioImage')!.args;
+  assert.equal(a0.images.length, 0);
+  assert.equal(a0.textOnly, true);
+  assert.match(a0.prompt, /empty interior[\s\S]*The shop adds: murs roses/);
   // the same mode again without a key keeps the saved one; back to credits forgets it
   assert.equal(((await call('createur.studioKey', server, { mode: 'gemini' })) as any).has, true);
   assert.equal(((await call('createur.studioKey', server, { mode: 'credits' })) as any).has, false);
+});
+
+test('step 0: each kind has Pilotix’s words, the shop may write its own and go back; the texts and the background', async () => {
+  let st: any = await call('createur.studio', preview, {});
+  assert.deepEqual(Object.keys(st.prompts), ['photo', 'copy', 'landing', 'background']);
+  assert.equal(st.prompts.photo.custom, false);
+  assert.equal(st.prompts.photo.text, st.defaults.photo);
+  await assert.rejects(call('createur.studioPrompt', preview, { kind: 'photo', text: 'court' }), /trop court/);
+  let r: any = await call('createur.studioPrompt', preview, { kind: 'photo', text: 'Keep the product exactly. Make it bright and warm, on the table.' });
+  assert.equal(r.prompts.photo.custom, true);
+  assert.match(studioPrompt({ product: 'X', variant: null, surface: 'table', logo: null, photos: 2, rules: r.prompts.photo.text }), /Make it bright and warm/);
+  r = await call('createur.studioPrompt', preview, { kind: 'photo', text: null });
+  assert.equal(r.prompts.photo.custom, false, 'back to Pilotix’s words');
+  r = await call('createur.studioPrompt', preview, { kind: 'copy', text: st.defaults.copy });
+  assert.equal(r.prompts.copy.custom, false, 'the same words as Pilotix’s are not a change');
+
+  st = await call('createur.studio', preview, {});
+  const pid0 = st.products[0].id;
+  const copy: any = await call('createur.studioCopy', preview, { productId: pid0 });
+  assert.equal(copy.demo, true);
+  assert.equal(copy.angles.length, 3);
+  const land: any = await call('createur.studioLanding', preview, { productId: pid0, lang: 'fr' });
+  assert.equal(land.benefits.length, 4);
+  assert.deepEqual(await call('createur.studioMakeBg', preview, {}), { demo: true });
+
+  assert.deepEqual(readCopy('{"post": "Salam", "angles": [{"name": "Prix", "hook": "Moins cher"}, {"name": "", "hook": "x"}]}'), { post: 'Salam', angles: [{ name: 'Prix', hook: 'Moins cher' }] });
+  assert.equal(readCopy('{"post": "", "angles": []}'), null);
+  assert.equal(readLanding('{"title": "T", "benefits": [{"title": "a"}]}'), null, 'at least 2 benefits');
 });

@@ -118,5 +118,59 @@
       "cod": "Paiement à la livraison",
       "colors": "Couleurs disponibles"
     }
+  },
+  "k": {
+    "title": "Que voulez-vous créer ?",
+    "photo": "Photo site",
+    "photoLine": "Votre produit dans votre boutique, une photo par couleur",
+    "copy": "Texte pub",
+    "copyLine": "Le texte du post et 3 angles marketing",
+    "landing": "Image landing page",
+    "landingLine": "Une longue image sous le formulaire, comme description",
+    "background": "Générer un fond",
+    "backgroundLine": "Une boutique dessinée par l'IA, si vous n'avez pas de photo"
+  },
+  "pr": {
+    "open": "Voir / modifier le prompt",
+    "custom": "modifié",
+    "help": "Ce sont les mots envoyés à l'IA pour ce choix. Changez-les si vous voulez un autre résultat ; « Revenir au prompt Pilotix » remet ceux de départ.",
+    "saved": "Prompt enregistré pour votre boutique.",
+    "reset": "Prompt de Pilotix remis.",
+    "back": "Revenir au prompt Pilotix"
+  },
+  "cp": {
+    "title": "Texte pub",
+    "write": "Écrire le texte",
+    "again": "Réécrire",
+    "example": "Texte d'exemple (pas d'IA ici).",
+    "post": "Le post",
+    "copy": "Copier",
+    "copied": "Copié.",
+    "angles": "3 angles marketing (une accroche pour chaque pub)"
+  },
+  "ld": {
+    "title": "Image landing page",
+    "help": "Une seule longue image, posée sous le formulaire de commande comme description. Pas de prix dedans : il est déjà dans le formulaire.",
+    "hero": "Photo du haut",
+    "heroOther": "Changer la photo du haut",
+    "fromStudio": "Photo Studio : {{name}}",
+    "details": "Photos détails ({{n}}/4)",
+    "detailsClear": "Enlever les détails",
+    "benefitText": "Une phrase simple : ce que le client y gagne",
+    "size": "Taille / âge",
+    "sizeHint": "Ex. : de 7 à 14 ans · roues de 20 pouces. Vide : pas de bloc.",
+    "noPrice": "Vérifiez chaque mot avant de publier.",
+    "download": "Télécharger l'image",
+    "slices": "Télécharger en morceaux (plus rapide sur téléphone)"
+  },
+  "gb": {
+    "title": "Générer un fond",
+    "warn": "L'IA dessine une boutique inventée, pas la vôtre. Si vous avez une photo de votre vraie boutique, elle sera toujours mieux.",
+    "note": "Ce que vous voulez (facultatif)",
+    "noteHint": "Ex. : murs roses, table blanche, beaucoup de lumière.",
+    "make": "Générer un fond",
+    "again": "Générer un autre",
+    "use": "Utiliser ce fond (logo, flou…)",
+    "full": "8 fonds au plus : supprimez-en un d'abord."
   }
 }

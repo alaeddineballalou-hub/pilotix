@@ -43,38 +43,79 @@ async function ownKey(ctx: Ctx): Promise<{ mode: Mode; key: string; model: strin
 
 const pct = (n: number) => Math.round(n * 100);
 
-/** What the image AI is told (the shop's « website-image » rules, made short and exact). */
-export function studioPrompt(a: { product: string; variant: string | null; surface: 'table' | 'floor'; logo: Logo | null; photos: number; note?: string; extra?: string; again?: string[] }): string {
-  const where = a.surface === 'floor' ? 'on the floor of the room' : 'on the wooden table / display surface in the front of the picture';
-  return [
-    'You are a professional commercial product photographer and compositing expert.',
-    `IMAGE 1 is the BACKGROUND: the shop's real showroom. IMAGES 2 to ${a.photos + 1} are the SAME real product from different angles: « ${a.product}${a.variant ? ` — ${a.variant}` : ''} ».`,
-    'Put this exact product into the background so the result looks like ONE real photograph taken in the shop. This is compositing, NOT a redesign.',
-    '',
+/** What the shop can make (step 0 of the page), in the page's order; each has its own words for the AI. */
+export const STUDIO_KINDS = ['photo', 'copy', 'landing', 'background'] as const;
+export type StudioKind = (typeof STUDIO_KINDS)[number];
+const PROMPTS_ROW = 'studio_prompts';
+const RULES_MAX = 6000;
+
+/** Pilotix's words for each kind (a shop may change its own; « Revenir au prompt Pilotix » puts these back). */
+export const DEFAULT_RULES: Record<StudioKind, string> = {
+  photo: [
     'PRODUCT (most important):',
     '- Keep the exact same product: shape, proportions, colors, fabric, materials, logos, printed text, every part. Do not add, remove, merge or duplicate parts. Do not invent text or logos.',
     '- Remove price stickers and barcode labels if any. Use the angle from the product photos that fits the room best (a 3/4 view when possible).',
     '',
     'BACKGROUND:',
     '- Keep the background exactly as it is (it is already blurred and final): no new blur, no relight, no color change, no crop, nothing moved, added or removed.',
-    a.logo
-      ? `- The shop's sign / logo is inside the box from ${pct(a.logo.x)}% to ${pct(a.logo.x + a.logo.w)}% of the width and from ${pct(a.logo.y)}% to ${pct(a.logo.y + a.logo.h)}% of the height (from the top left). The product must NEVER cover, cross or touch that box: leave the logo fully visible, with a clear gap.`
-      : '- If the background shows a sign or a logo, the product must never cover or cross it.',
     '',
     'SIZE AND PLACE:',
-    `- Real-life size compared to the room and the furniture: not miniature, not oversized. The product stands ${where}, centered left-right, fully inside the picture with space around it.`,
+    '- Real-life size compared to the room and the furniture: not miniature, not oversized. Centered left-right, fully inside the picture with space around it.',
     '',
     'LIGHT:',
     '- Same light as the room: same direction, same warmth, same camera height and angle. A real soft contact shadow under every point that touches the surface.',
     '- The product is sharp and detailed. No floating, no hard cut-out edges, no halo, no glow, no fake shine.',
+  ].join('\n'),
+  copy: [
+    'Tu écris pour une boutique en ligne algérienne (paiement à la livraison, livraison 58 wilayas) qui vend sur Facebook et Instagram.',
+    'Écris UN texte de post court et vendeur (5 à 8 lignes, quelques emojis, une question ou un appel à commander à la fin), puis 3 angles marketing différents (pour qui, quel problème, quel désir), chacun avec une phrase d’accroche pour le début d’une pub.',
+    'Ne promets rien de faux. N’écris jamais de prix ni de numéro : la boutique les ajoute elle-même.',
+  ].join('\n'),
+  landing: [
+    'Tu écris les mots d’une LONGUE IMAGE de description produit, posée sous le formulaire de commande d’une landing page algérienne (comme les pages produit d’AliExpress).',
+    'Un titre court qui donne envie, une ligne sous le titre, puis 4 avantages : chacun un titre de 1 à 3 mots et une phrase simple (10 à 16 mots) qui explique ce que le client y gagne.',
+    'Seulement ce que l’on voit vraiment sur le produit. Jamais de prix, de numéro ni de promesse fausse.',
+  ].join('\n'),
+  background: [
+    'A photorealistic, empty interior of a modern, bright baby & kids shop, seen from the front at table height.',
+    'A light wooden table in the front (empty: nothing on it), the shop softly blurred behind it (shelves, a few strollers and toys), warm ceiling lights, clean and premium.',
+    'No people, no text, no logo, no watermark. 4:5 portrait.',
+  ].join('\n'),
+};
+
+async function rules(ctx: Ctx): Promise<Record<StudioKind, { text: string; custom: boolean }>> {
+  const v = (await getRaw<any>(ctx.db, PROMPTS_ROW, null)) ?? {};
+  const out = {} as Record<StudioKind, { text: string; custom: boolean }>;
+  for (const k of STUDIO_KINDS) {
+    const mine = typeof v[k] === 'string' && v[k].trim() ? String(v[k]).slice(0, RULES_MAX) : '';
+    out[k] = { text: mine || DEFAULT_RULES[k], custom: !!mine };
+  }
+  return out;
+}
+
+/** What the image AI is told (the shop's « website-image » rules, made short and exact). */
+export function studioPrompt(a: { product: string; variant: string | null; surface: 'table' | 'floor'; logo: Logo | null; photos: number; note?: string; extra?: string; again?: string[]; rules?: string }): string {
+  const where = a.surface === 'floor' ? 'on the floor of the room' : 'on the wooden table / display surface in the front of the picture';
+  return [
+    'You are a professional commercial product photographer and compositing expert.',
+    `IMAGE 1 is the BACKGROUND: the shop's real showroom. IMAGES 2 to ${a.photos + 1} are the SAME real product from different angles: « ${a.product}${a.variant ? ` — ${a.variant}` : ''} ».`,
+    'Put this exact product into the background so the result looks like ONE real photograph taken in the shop. This is compositing, NOT a redesign.',
+    `The product stands ${where}.`,
+    '',
+    (a.rules ?? DEFAULT_RULES.photo).trim(),
+    '',
+    a.logo
+      ? `LOGO: the shop's sign / logo is inside the box from ${pct(a.logo.x)}% to ${pct(a.logo.x + a.logo.w)}% of the width and from ${pct(a.logo.y)}% to ${pct(a.logo.y + a.logo.h)}% of the height (from the top left). The product must NEVER cover, cross or touch that box: leave the logo fully visible, with a clear gap.`
+      : 'LOGO: if the background shows a sign or a logo, the product must never cover or cross it.',
     '',
     'OUTPUT: one photorealistic image, 4:5 portrait, no text, no watermark, no added graphics.',
     a.note ? `The shop adds: ${a.note}` : '',
     a.extra ? `Pilotix adds: ${a.extra}` : '',
     a.again?.length ? `A first try had these problems, avoid them: ${a.again.join(' ; ')}` : '',
   ]
-    .filter((x) => x !== '')
-    .join('\n');
+    .filter((x, k, all) => x !== '' || (k > 0 && all[k - 1] !== ''))
+    .join('\n')
+    .trim();
 }
 
 /** What the checking AI is told: it answers in JSON. */
@@ -124,6 +165,32 @@ export function readPosterTexts(raw: string | null): { title: string; subtitle: 
   }
 }
 
+const jsonOf = (raw: string | null) => {
+  const m = (raw ?? '').replace(/^```(?:json)?\s*|\s*```$/g, '').match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  try {
+    return JSON.parse(m[0]);
+  } catch {
+    return null;
+  }
+};
+const str = (x: unknown, n: number) => String(x ?? '').trim().slice(0, n);
+
+/** The ad text and its 3 angles. */
+export function readCopy(raw: string | null): { post: string; angles: { name: string; hook: string }[] } | null {
+  const j = jsonOf(raw);
+  const post = str(j?.post, 2000);
+  const angles = (Array.isArray(j?.angles) ? j.angles : []).map((a: any) => ({ name: str(a?.name, 60), hook: str(a?.hook, 200) })).filter((a: any) => a.name && a.hook).slice(0, 3);
+  return post && angles.length ? { post, angles } : null;
+}
+
+/** The long image's words: a title, a line, 4 benefits (a short title and a sentence each). */
+export function readLanding(raw: string | null): { title: string; subtitle: string; benefits: { title: string; text: string }[] } | null {
+  const j = jsonOf(raw);
+  const benefits = (Array.isArray(j?.benefits) ? j.benefits : []).map((b: any) => ({ title: str(b?.title, 40), text: str(b?.text, 160) })).filter((b: any) => b.title).slice(0, 4);
+  return str(j?.title, 80) && benefits.length >= 2 ? { title: str(j.title, 80), subtitle: str(j?.subtitle, 80), benefits } : null;
+}
+
 const bgView = (r: any) => ({
   id: num(r.id),
   name: String(r.name),
@@ -154,6 +221,8 @@ export const studioProcs = {
       tool: { on: !!tool?.on, credits: cfg.on ? (tool?.credits ?? 0) : 0, model: tool?.model ?? '' },
       server: !!ctx.server?.dellal,
       limits: STUDIO,
+      prompts: await rules(ctx),
+      defaults: DEFAULT_RULES,
       products: prods.map((p: any) => ({
         id: num(p.id),
         name: String(p.name),
@@ -265,6 +334,7 @@ export const studioProcs = {
       const provider = own.mode === 'openai' && useOwn ? ('openai' as const) : ('gemini' as const);
       const model = (useOwn && own.model) || (provider === 'openai' ? 'gpt-image-1' : tool.model || 'gemini-3.1-flash-image-preview');
       const product = String(pr.name);
+      const mine = await rules(ctx);
       const logo = (bg.logo ?? null) as Logo | null;
       const surface = bg.surface === 'floor' ? ('floor' as const) : ('table' as const);
       const images = [{ mime: 'image/jpeg', data: String(bg.data) }, ...i.photos];
@@ -274,7 +344,7 @@ export const studioProcs = {
 
       const once = async (again?: string[]) => {
         const got = useOwn ? null : await take(ctx, cfg, TOOL_PHOTO, 1);
-        const prompt = studioPrompt({ product, variant: va ? String(va.title) : null, surface, logo, photos: i.photos.length, note: i.note, extra: tool.prompt, again });
+        const prompt = studioPrompt({ product, variant: va ? String(va.title) : null, surface, logo, photos: i.photos.length, note: i.note, extra: tool.prompt, again, rules: mine.photo.text });
         const r = (await ctx.server!.dellal!('studioImage', { provider, key: useOwn ? own.key : null, model, prompt, images }, ctx)) as any;
         if (!r?.ok) {
           if (got) await giveBack(ctx, got);
@@ -363,5 +433,102 @@ export const studioProcs = {
       return { ...example, demo: true };
     }
     return { ...t, demo: false };
+  }),
+
+  /** A kind's words for the AI: the shop's own (text), or back to Pilotix's (null). */
+  'createur.studioPrompt': proc([...M], z.object({ kind: z.enum(STUDIO_KINDS), text: z.string().max(RULES_MAX).nullable() }), async (ctx, i) => {
+    const v = { ...((await getRaw<any>(ctx.db, PROMPTS_ROW, null)) ?? {}) };
+    const text = (i.text ?? '').trim();
+    if (!text || text === DEFAULT_RULES[i.kind].trim()) delete v[i.kind];
+    else if (text.length < 20) throw bad('Prompt trop court (20 caractères au moins).');
+    else v[i.kind] = text;
+    await setRaw(ctx.db, PROMPTS_ROW, v, ctx.session.profile.id || undefined);
+    return { prompts: await rules(ctx) };
+  }),
+
+  /** Texte pub: a post and 3 marketing angles (1 credit, as the other texts). The preview: an example. */
+  'createur.studioCopy': proc([...M], z.object({ productId: Id, lang: z.enum(['ar', 'darija', 'fr']).default('darija') }), async (ctx, i) => {
+    const pr = (await ctx.db.query(`SELECT name, description FROM products WHERE id = $1`, [i.productId]))[0];
+    if (!pr) throw notFound('Produit introuvable');
+    const name = String(pr.name);
+    const example = {
+      post: i.lang === 'fr' ? `✨ ${name}\nLa qualité que vos enfants méritent 😍\n✅ Solide et confortable\n✅ Livraison 58 wilayas\n✅ Paiement à la livraison\nCommandez maintenant 👇` : `✨ ${name}\nالجودة اللي يستاهلها وليدك 😍\n✅ متين ومريح\n✅ توصيل 58 ولاية\n✅ الدفع عند الاستلام\nأطلب درك 👇`,
+      angles: [
+        { name: i.lang === 'fr' ? 'La sécurité' : 'الأمان', hook: i.lang === 'fr' ? 'Vous avez peur qu’il tombe ? Regardez ça.' : 'خايفة على وليدك يطيح؟ شوفي هادي.' },
+        { name: i.lang === 'fr' ? 'Le cadeau' : 'الهدية', hook: i.lang === 'fr' ? 'Le cadeau qui le fait sourire toute l’année.' : 'الهدية اللي تفرّحو العام كامل.' },
+        { name: i.lang === 'fr' ? 'Le prix' : 'السعر', hook: i.lang === 'fr' ? 'La qualité d’un magasin, sans bouger de chez vous.' : 'جودة المحل وانت في دارك.' },
+      ],
+    };
+    if (!ctx.server?.dellal && !ctx.dellalAi) return { ...example, demo: true };
+    const cfg = ctx.t && ctx.shop ? await creditsConfig(ctx.t) : DEFAULT_CREDITS;
+    const got = await take(ctx, cfg, TOOL_TEXT, 1);
+    const lang = i.lang === 'fr' ? 'en français simple' : i.lang === 'darija' ? 'en darija algérienne en lettres arabes' : 'en arabe simple';
+    const system = [(await rules(ctx)).copy.text, `Écris ${lang}.`, 'Réponds seulement en JSON : {"post": "…", "angles": [{"name": "…", "hook": "…"}, {"name": "…", "hook": "…"}, {"name": "…", "hook": "…"}]}'].join('\n');
+    let raw: string | null = null;
+    try {
+      raw = await ask(ctx, system, `Produit : ${name}${pr.description ? `\nDescription : ${String(pr.description).slice(0, 800)}` : ''}`, 900, got.tool.model);
+    } catch {
+      raw = null;
+    }
+    const c = readCopy(raw);
+    if (!c) {
+      await giveBack(ctx, got);
+      throw bad('L’IA n’a pas pu écrire le texte : réessayez.');
+    }
+    return { ...c, demo: false };
+  }),
+
+  /** Image landing page: the long image's words (1 credit). The images and the drawing are the page's. */
+  'createur.studioLanding': proc([...M], z.object({ productId: Id, lang: z.enum(['ar', 'darija', 'fr']).default('ar') }), async (ctx, i) => {
+    const pr = (await ctx.db.query(`SELECT name, description FROM products WHERE id = $1`, [i.productId]))[0];
+    if (!pr) throw notFound('Produit introuvable');
+    const fr = i.lang === 'fr';
+    const example = {
+      title: fr ? `${String(pr.name)}` : 'الجودة اللي يستاهلها وليدك',
+      subtitle: fr ? 'Pensé pour le confort de votre enfant' : 'مصمم لراحة طفلك وأمانه',
+      benefits: [
+        { title: fr ? 'Solide' : 'متين', text: fr ? 'Des matériaux résistants qui durent des années, même avec un usage tous les jours.' : 'مواد قوية تدوم سنين، حتى مع الاستعمال اليومي.' },
+        { title: fr ? 'Confortable' : 'مريح', text: fr ? 'Votre enfant est bien installé et se sent en sécurité.' : 'طفلك يكون مرتاح ويحس بالأمان.' },
+        { title: fr ? 'Facile' : 'سهل', text: fr ? 'Se monte en quelques minutes, se nettoie facilement.' : 'يتركب في دقائق وينظف بسهولة.' },
+        { title: fr ? 'Garanti' : 'مضمون', text: fr ? 'Vous vérifiez à la livraison avant de payer.' : 'تتأكد منه عند الاستلام قبل ما تخلص.' },
+      ],
+    };
+    if (!ctx.server?.dellal && !ctx.dellalAi) return { ...example, demo: true };
+    const cfg = ctx.t && ctx.shop ? await creditsConfig(ctx.t) : DEFAULT_CREDITS;
+    const got = await take(ctx, cfg, TOOL_TEXT, 1);
+    const lang = fr ? 'en français simple' : i.lang === 'darija' ? 'en darija algérienne en lettres arabes' : 'en arabe simple et vendeur';
+    const system = [(await rules(ctx)).landing.text, `Écris ${lang}.`, 'Réponds seulement en JSON : {"title": "…", "subtitle": "…", "benefits": [{"title": "…", "text": "…"}, … 4 en tout]}'].join('\n');
+    let raw: string | null = null;
+    try {
+      raw = await ask(ctx, system, `Produit : ${String(pr.name)}${pr.description ? `\nDescription : ${String(pr.description).slice(0, 800)}` : ''}`, 900, got.tool.model);
+    } catch {
+      raw = null;
+    }
+    const l = readLanding(raw);
+    if (!l) {
+      await giveBack(ctx, got);
+      throw bad('L’IA n’a pas pu écrire les mots : réessayez.');
+    }
+    return { ...l, demo: false };
+  }),
+
+  /** Générer un fond: the AI draws an empty shop from the words alone (credits per image, as the photos). */
+  'createur.studioMakeBg': proc([...M], z.object({ note: z.string().trim().max(400).optional() }), async (ctx, i) => {
+    if (!ctx.server?.dellal) return { demo: true as const };
+    const cfg = ctx.t && ctx.shop ? await creditsConfig(ctx.t) : DEFAULT_CREDITS;
+    const tool = cfg.tools.find((x) => x.key === TOOL_PHOTO);
+    if (!tool || !tool.on) throw bad('Le Studio photo IA est arrêté pour le moment.');
+    const own = await ownKey(ctx);
+    const useOwn = own.mode !== 'credits' && !!own.key;
+    const provider = own.mode === 'openai' && useOwn ? ('openai' as const) : ('gemini' as const);
+    const model = (useOwn && own.model) || (provider === 'openai' ? 'gpt-image-1' : tool.model || 'gemini-3.1-flash-image-preview');
+    const got = useOwn ? null : await take(ctx, cfg, TOOL_PHOTO, 1);
+    const prompt = [(await rules(ctx)).background.text, i.note ? `The shop adds: ${i.note}` : ''].filter(Boolean).join('\n');
+    const r = (await ctx.server.dellal('studioImage', { provider, key: useOwn ? own.key : null, model, prompt, images: [], textOnly: true }, ctx)) as any;
+    if (!r?.ok) {
+      if (got) await giveBack(ctx, got);
+      throw bad(String(r?.error) === 'off' ? 'L’IA image de Pilotix n’est pas encore branchée : collez votre propre clé.' : `L’IA n’a pas pu faire le fond : ${String(r?.error ?? '').slice(0, 200)}`);
+    }
+    return { demo: false as const, image: String(r.image), w: num(r.w), h: num(r.h) };
   }),
 };

@@ -118,5 +118,59 @@
       "cod": "Paiement à la livraison",
       "colors": "Couleurs disponibles"
     }
+  },
+  "k": {
+    "title": "What do you want to make?",
+    "photo": "Website photo",
+    "photoLine": "Your product in your shop, one photo per colour",
+    "copy": "Ad copy",
+    "copyLine": "The post text and 3 marketing angles",
+    "landing": "Landing page image",
+    "landingLine": "One long image under the form, as the description",
+    "background": "Generate a background",
+    "backgroundLine": "A shop drawn by the AI, if you have no photo"
+  },
+  "pr": {
+    "open": "See / edit the prompt",
+    "custom": "edited",
+    "help": "These are the words sent to the AI for this choice. Change them for a different result; « Back to Pilotix's prompt » restores the original.",
+    "saved": "Prompt saved for your shop.",
+    "reset": "Pilotix's prompt restored.",
+    "back": "Back to Pilotix's prompt"
+  },
+  "cp": {
+    "title": "Ad copy",
+    "write": "Write the text",
+    "again": "Rewrite",
+    "example": "Example text (no AI here).",
+    "post": "The post",
+    "copy": "Copy",
+    "copied": "Copied.",
+    "angles": "3 marketing angles (one hook for each ad)"
+  },
+  "ld": {
+    "title": "Landing page image",
+    "help": "One long image, placed under the order form as the description. No price in it: the form already has it.",
+    "hero": "Top photo",
+    "heroOther": "Change the top photo",
+    "fromStudio": "Studio photo: {{name}}",
+    "details": "Detail photos ({{n}}/4)",
+    "detailsClear": "Remove the details",
+    "benefitText": "One simple sentence: what the customer gains",
+    "size": "Size / age",
+    "sizeHint": "E.g. 7 to 14 years · 20-inch wheels. Empty: no block.",
+    "noPrice": "Check every word before publishing.",
+    "download": "Download the image",
+    "slices": "Download in pieces (faster on phones)"
+  },
+  "gb": {
+    "title": "Generate a background",
+    "warn": "The AI draws an invented shop, not yours. A photo of your real shop will always be better.",
+    "note": "What you want (optional)",
+    "noteHint": "E.g. pink walls, white table, lots of light.",
+    "make": "Generate a background",
+    "again": "Generate another",
+    "use": "Use this background (logo, blur…)",
+    "full": "8 backgrounds at most: delete one first."
   }
 }
