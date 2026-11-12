@@ -122,7 +122,6 @@ export function Studio() {
   return (
     <div className="st">
       <div className="st-top">
-        <p className="muted">{t(K + 'about')}</p>
         <div className="st-pay">
           {cr.data && <CreditPill s={cr.data} onBuy={() => setBuy(true)} />}
           <span className="muted small">{payLine}</span>

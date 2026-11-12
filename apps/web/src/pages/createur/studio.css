@@ -1,7 +1,7 @@
 /* ===== Espace créateur › Studio photo: 1. the backgrounds (4:5 cards, the logo box drawn on them), 2. the product's
    colours, each with its photos and its 3 versions, 3. the poster beside its form. One column on a phone. */
 .st { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.st-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.st-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
 .st-top > p { margin: 0; max-width: 620px; line-height: 1.5; }
 .st-pay { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .st-note { margin: 0; padding: 10px 14px; border-radius: 12px; background: var(--ai-tint); color: var(--ai-tint-ink); border: 1px solid var(--ai-tint-line); font-weight: 600; }

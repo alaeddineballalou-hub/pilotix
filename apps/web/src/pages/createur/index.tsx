@@ -114,7 +114,7 @@ export function Createur({ sub }: PageProps) {
               {t(K + 'title')}
               <Help text={t(K + 'help')} label={t(K + 'title')} />
             </h1>
-            <p>{t(K + 'about')}</p>
+            <p>{studio ? t('studio.about') : t(K + 'about')}</p>
           </div>
           {ready && (
             <div className="cr-folder">

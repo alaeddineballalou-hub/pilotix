@@ -316,85 +316,95 @@ export async function drawPoster(heroSrc: string, p: Poster): Promise<string> {
     g.textAlign = 'center';
   });
 
-  // the colours (round pictures with their names) on one side of the bottom, the price on the other
-  const by = H - 330;
+  // the colours (round pictures with their names) on one side of the bottom, the price on the other; everything ends
+  // above the band (H - 104)
+  const floor = H - 104 - 18;
   if (colors.length > 1) {
-    const cw = 150;
-    const area = colors.length * cw + (colors.length - 1) * 18;
-    const ax = p.rtl ? 40 : W - 40 - area;
+    const cw = colors.length > 2 ? 128 : 140;
+    const r = cw / 2 - 6;
+    const area = colors.length * cw + (colors.length - 1) * 14;
+    const ax = p.rtl ? 36 : W - 36 - area;
+    const nameY = floor - 20;
+    const cy = nameY - 30 - r;
+    const ly = cy - r - 34;
     g.fillStyle = p.accent;
-    fit(g, p.colorsLabel, 700, 28, area);
-    const lw = g.measureText(p.colorsLabel).width + 44;
-    pill(g, ax + (area - lw) / 2, by - 26, lw, 50, 25);
+    fit(g, p.colorsLabel, 700, 26, area - 40);
+    const lw = Math.min(area, g.measureText(p.colorsLabel).width + 40);
+    pill(g, ax + (area - lw) / 2, ly - 23, lw, 46, 23);
     g.fill();
     g.fillStyle = '#fff';
-    g.fillText(p.colorsLabel, ax + area / 2, by);
+    g.fillText(p.colorsLabel, ax + area / 2, ly);
     colors.forEach((col, k) => {
-      const cx = ax + k * (cw + 18) + cw / 2;
-      const cy = by + 110;
+      const cx = ax + k * (cw + 14) + cw / 2;
       g.save();
       g.beginPath();
-      g.arc(cx, cy, 68, 0, Math.PI * 2);
+      g.arc(cx, cy, r, 0, Math.PI * 2);
       g.fillStyle = '#fff';
       g.fill();
       g.clip();
       if (col.img) {
-        const k2 = Math.max(136 / col.img.width, 136 / col.img.height);
-        g.drawImage(col.img, cx - (col.img.width * k2) / 2, cy - (col.img.height * k2) / 2, col.img.width * k2, col.img.height * k2);
+        // the product, not the room: a square around the middle of the photo, where the AI put it
+        const side = Math.min(col.img.width, col.img.height) * 0.62;
+        const sx = (col.img.width - side) / 2;
+        const sy = Math.min(col.img.height - side, col.img.height * 0.6 - side / 2);
+        g.drawImage(col.img, sx, Math.max(0, sy), side, side, cx - r, cy - r, r * 2, r * 2);
       }
       g.restore();
       g.lineWidth = 5;
       g.strokeStyle = '#fff';
       g.beginPath();
-      g.arc(cx, cy, 68, 0, Math.PI * 2);
+      g.arc(cx, cy, r, 0, Math.PI * 2);
       g.stroke();
       g.fillStyle = p.accent;
-      fit(g, col.name, 700, 24, cw);
-      const nw = Math.min(cw + 10, g.measureText(col.name).width + 30);
-      pill(g, cx - nw / 2, cy + 74, nw, 40, 20);
+      fit(g, col.name, 700, 22, cw - 16);
+      const nw = Math.min(cw, g.measureText(col.name).width + 28);
+      pill(g, cx - nw / 2, nameY - 19, nw, 38, 19);
       g.fill();
       g.fillStyle = '#fff';
-      g.fillText(col.name, cx, cy + 95);
+      g.fillText(col.name, cx, nameY);
     });
   }
   if (p.price != null) {
-    const px = p.rtl ? W - 40 - 380 : 40;
-    const pw = 380;
-    let py = by - 20;
-    if (p.oldPrice && p.oldPrice > p.price) {
-      const old = `${money(p.oldPrice)} ${p.currency}`;
-      fit(g, old, 700, 38, pw - 80);
+    const pw = 360;
+    const px = p.rtl ? W - 36 - pw : 36;
+    const ctaH = 68;
+    const priceH = 108;
+    const hasOld = !!(p.oldPrice && p.oldPrice > p.price);
+    let py = floor - ctaH - 12 - priceH - (hasOld ? 60 : 0);
+    if (hasOld) {
+      const old = `${money(p.oldPrice!)} ${p.currency}`;
+      fit(g, old, 700, 34, pw - 80);
       const ow = g.measureText(old).width + 50;
       g.fillStyle = '#fff';
-      pill(g, px + (pw - ow) / 2, py - 28, ow, 56, 28);
+      pill(g, px + (pw - ow) / 2, py, ow, 50, 25);
       g.fill();
       g.fillStyle = '#6b7280';
-      g.fillText(old, px + pw / 2, py);
+      g.fillText(old, px + pw / 2, py + 26);
       g.strokeStyle = '#e11d48';
       g.lineWidth = 5;
       g.beginPath();
-      g.moveTo(px + (pw - ow) / 2 + 16, py + 4);
-      g.lineTo(px + (pw + ow) / 2 - 16, py - 6);
+      g.moveTo(px + (pw - ow) / 2 + 16, py + 32);
+      g.lineTo(px + (pw + ow) / 2 - 16, py + 20);
       g.stroke();
-      py += 52;
+      py += 60;
     }
     g.fillStyle = p.accent;
-    pill(g, px, py, pw, 118, 30);
+    pill(g, px, py, pw, priceH, 28);
     g.fill();
     const now = `${money(p.price)} ${p.currency}`;
-    fit(g, now, 800, 68, pw - 40, 30);
+    fit(g, now, 800, 66, pw - 40, 30);
     g.fillStyle = '#ffe14d';
-    g.fillText(now, px + pw / 2, py + 62);
-    py += 132;
+    g.fillText(now, px + pw / 2, py + priceH / 2 + 2);
+    py += priceH + 12;
     g.fillStyle = '#fff';
-    pill(g, px + 20, py, pw - 40, 76, 38);
+    pill(g, px + 24, py, pw - 48, ctaH, ctaH / 2);
     g.fill();
     g.strokeStyle = p.accent;
     g.lineWidth = 4;
     g.stroke();
-    fit(g, `🛒 ${p.cta}`, 800, 38, pw - 80);
+    fit(g, `🛒 ${p.cta}`, 800, 34, pw - 96);
     g.fillStyle = p.accent;
-    g.fillText(`🛒 ${p.cta}`, px + pw / 2, py + 40);
+    g.fillText(`🛒 ${p.cta}`, px + pw / 2, py + ctaH / 2 + 1);
   }
 
   // the band at the bottom: the phone, the delivery, the payment
