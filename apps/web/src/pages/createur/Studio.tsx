@@ -24,7 +24,7 @@ type Product = St['products'][number];
 type Kind = 'photo' | 'copy' | 'landing' | 'background';
 const KINDS: { k: Kind; icon: IconName }[] = [
   { k: 'photo', icon: 'image' },
-  { k: 'copy', icon: 'edit' },
+  { k: 'copy', icon: 'message' },
   { k: 'landing', icon: 'list' },
   { k: 'background', icon: 'home' },
 ];
@@ -192,7 +192,7 @@ export function Studio() {
                 <span className="muted small">{t(K + `bg.${b.surface}`)}</span>
               </button>
               <button type="button" className="btn small ghost" onClick={() => setEditBg(b)} aria-label={t(K + 'bg.edit')}>
-                <Icon name="edit" />
+                <Icon name="pencil" />
               </button>
             </div>
           ))}
@@ -788,7 +788,7 @@ function PromptBox({ kind, cur, def, onSaved }: { kind: Kind; cur: { text: strin
   return (
     <details className="st-prompt">
       <summary>
-        <Icon name="edit" /> {t(K + 'pr.open')} {cur.custom && <span className="st-tag warn">{t(K + 'pr.custom')}</span>}
+        <Icon name="pencil" /> {t(K + 'pr.open')} {cur.custom && <span className="st-tag warn">{t(K + 'pr.custom')}</span>}
       </summary>
       <p className="muted small">{t(K + 'pr.help')}</p>
       <textarea className="ltr" rows={10} value={text} maxLength={6000} onChange={(e) => setText(e.target.value)} dir="auto" />

@@ -618,6 +618,7 @@ export async function drawLanding(p: Landing): Promise<string> {
     g.fillText(p.size.trim(), W / 2, y + 160);
     y += sizeH;
   }
+  const end = p.trust.length ? y + trustH : y + 40;
   if (p.trust.length) {
     g.fillStyle = '#1f2a44';
     g.fillRect(0, y + 20, W, trustH - 20);
@@ -635,6 +636,12 @@ export async function drawLanding(p: Landing): Promise<string> {
         .slice(0, 2)
         .forEach((l, i) => g.fillText(l, cx, y + 190 + i * 40));
     });
+  }
+  // the height was counted generously: the image ends where the last block ends
+  if (end < H - 4) {
+    const [t, tg] = canvas(W, Math.max(200, Math.round(end)));
+    tg.drawImage(c, 0, 0);
+    return t.toDataURL('image/jpeg', 0.88);
   }
   return c.toDataURL('image/jpeg', 0.88);
 }
