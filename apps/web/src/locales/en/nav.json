@@ -81,5 +81,16 @@
   "referral": "Referral",
   "parrainage": "Referral",
   "codepromo": "Promo code",
-  "strategies": "Strategies"
+  "strategies": "Strategies",
+  "screens": {
+    "title": "Screen",
+    "all": "Old menu (everything)",
+    "marketing": "Marketing",
+    "sponsor": "Sponsor",
+    "cm": "CM",
+    "service": "Customer service",
+    "depot": "Depot",
+    "finance": "Finance",
+    "admin": "Admin"
+  }
 }

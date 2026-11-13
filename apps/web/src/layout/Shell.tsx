@@ -17,7 +17,7 @@ import { store } from '../lib/store';
 import { toast } from '../ui/toast';
 import { Field, Icon, StageBar, TicketTag } from '../ui/kit';
 import { Modal } from '../ui/modal';
-import { canSee, canSeeChild, NAV, NavItem } from './nav';
+import { canSee, canSeeChild, NAV, NavItem, onSpace, SpaceId, SPACES } from './nav';
 import { useCanRules } from '../lib/pilot';
 import { AccountMenu } from './AccountMenu';
 import { BoutiqueSwitch, useBoutiques } from './Boutiques';
@@ -180,7 +180,20 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
   const kids = (n: NavItem) =>
     (n.children ?? []).filter((c) => canSeeChild(c, roles, isAdmin, canRules) && (!agency || !work.loaded || (c.id === 'confirmation' ? work.tasks.has('confirmation') : c.id === 'alertes' ? work.tasks.has('suivi') : ['suivi', 'enlivraison', 'livrees', 'annulees'].includes(c.id) ? work.tasks.has('suivi') || work.tasks.has('confirmation') : true)));
   // a group whose children are all out of the shop's plan is not shown
-  const items = nav.filter((n) => !n.hidden && canSee(n, roles, isAdmin, !!session!.canManageUsers, canRules, !!session!.profile.canAffect) && (!n.children || kids(n).length > 0));
+  const allItems = nav.filter((n) => !n.hidden && canSee(n, roles, isAdmin, !!session!.canManageUsers, canRules, !!session!.profile.canAffect) && (!n.children || kids(n).length > 0));
+  // a store's team screens (Écrans): the dropdown at the top of the menu shows one team's lines, « Ancien menu » all of them
+  const onLine = (scr: SpaceId, n: NavItem) => (n.children ? kids(n).some((c) => onSpace(scr, c.id)) : onSpace(scr, n.id));
+  const screens = space === 'store' ? SPACES.filter((s) => allItems.some((n) => !['accueil', 'aide'].includes(n.id) && onLine(s.id, n))) : [];
+  const [scrPicked, setScrPicked] = useState<SpaceId>(() => (store.get('screen') as SpaceId) || 'all');
+  const scr: SpaceId = screens.length > 1 && screens.some((s) => s.id === scrPicked) ? scrPicked : 'all';
+  const pickScreen = (id: SpaceId) => {
+    store.set('screen', id === 'all' ? null : id);
+    setScrPicked(id);
+  };
+  const items = allItems.filter((n) => onLine(scr, n));
+  /** a group's children on the screen picked */
+  const kidsOn = (n: NavItem) => kids(n).filter((c) => onSpace(scr, c.id));
+  const scrCount = (keys: string[]) => keys.reduce((a, k) => a + (counts[k] ?? 0), 0);
   /** the group of the page on screen: its children show in a bar under the header when the sidebar is folded */
   const curGrp = items.find((n) => n.children && n.pages?.includes(page));
   /** the child of a group shown as current */
@@ -228,11 +241,27 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
           </a>
         </div>
         <div className="px-side-scroll">
+        {screens.length > 1 && (
+          <label className="px-scr" title={t('nav.screens.title')}>
+            <span className="px-scr-l">{t('nav.screens.title')}</span>
+            <select value={scr} onChange={(e) => pickScreen(e.target.value as SpaceId)} aria-label={t('nav.screens.title')}>
+              <option value="all">{t('nav.screens.all')}</option>
+              {screens.map((s) => {
+                const v = scrCount(s.counts);
+                return (
+                  <option key={s.id} value={s.id}>
+                    {t(`nav.screens.${s.id}`)}{v > 0 ? ` · ${compact(v)}` : ''}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+        )}
         {items.map((n) =>
           n.children ? (
             <div key={n.id} className={`nav-group open bjcn ${n.pages?.includes(page) ? 'bjcn-on in' : ''}`} data-grp={n.id}>
               <a
-                href={n.href ?? kids(n)[0]?.href ?? '#/'}
+                href={n.href ?? kidsOn(n)[0]?.href ?? '#/'}
                 className="nav-item nav-group-head"
                 title={t(`nav.${n.id}`)}
                 aria-current={page === n.id && (!sub || sub === 'tout') ? 'page' : undefined}
@@ -252,7 +281,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
                 </svg>
               </a>
               <div className={`nav-sub${grpOpen[n.id] !== false ? '' : ' px-sub-closed'}`} style={{ display: 'flex' }}>
-                {kids(n).map((c) => {
+                {kidsOn(n).map((c) => {
                   const on = childOn(n, c.id);
                   const v = c.count ? counts[c.count] : undefined;
                   return (

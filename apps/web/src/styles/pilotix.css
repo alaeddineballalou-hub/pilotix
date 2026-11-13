@@ -1926,3 +1926,14 @@ html[data-theme="dark"] .topbar .px-lang-sel option { background: #16202B; color
   body.nav-drag .side { transition: none; }
   body.nav-drag .scrim { display: block; position: fixed; inset: 0; z-index: 15; background: rgba(0,0,0,.35); opacity: var(--nav-p, 0); transition: none; }
 }
+
+/* The team screens dropdown (Écrans) at the top of a store's menu; hidden when the sidebar is folded. */
+.px-scr { display: flex; flex-direction: column; gap: 4px; margin: 2px 4px 10px; }
+.px-scr-l { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--px-frame-muted); padding-inline: 6px; }
+.px-scr select {
+  width: 100%; min-height: 40px; padding: 8px 10px; border-radius: 10px; font: inherit; font-weight: 600; cursor: pointer;
+  background: var(--px-navy-2); color: var(--px-frame-ink); border: 1px solid var(--px-frame-line);
+}
+.px-scr select:focus-visible { outline: 2px solid var(--px-orange); outline-offset: 1px; }
+.px-scr option { background: #fff; color: #1B2A47; }
+.px-folded .px-scr { display: none; }

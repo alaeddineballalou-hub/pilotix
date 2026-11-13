@@ -313,3 +313,35 @@ export const MARKETER_NAV: NavItem[] = [
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'securite'] },
   { id: 'boutiques', icon: 'store', roles: null, hidden: true },
 ];
+
+// ---------------------------------------------------------------- a store's team screens (Écrans)
+/**
+ * The store's menu split into one screen per team, picked in a dropdown at the top of the menu (with each screen's red
+ * counts). A screen lists the menu items and group children it shows (by id); « Ancien menu » (all) shows everything,
+ * as before. The pages and their links do not change: a screen only chooses which menu lines are shown.
+ */
+export type SpaceId = 'all' | 'marketing' | 'sponsor' | 'cm' | 'service' | 'depot' | 'finance' | 'admin';
+export interface Space {
+  id: SpaceId;
+  icon: string;
+  /** menu items (top level) and group children (by id) shown on this screen */
+  items: string[];
+  /** menu counts (useMenuCounts keys) summed in the dropdown's red badge */
+  counts: string[];
+}
+/** always shown, whatever the screen */
+export const SPACE_ALWAYS = ['accueil', 'aide'];
+export const SPACES: Space[] = [
+  { id: 'marketing', icon: 'megaphone', items: ['marketing', 'createur', 'social', 'influenceurs', 'parrainage', 'codepromo'], counts: [] },
+  { id: 'sponsor', icon: 'trend', items: ['marketing', 'landing', 'spy'], counts: ['landing'] },
+  { id: 'cm', icon: 'chat', items: ['messages', 'cm', 'codepromo'], counts: ['msgs', 'cm'] },
+  { id: 'service', icon: 'phone', items: ['dashboard', 'confirmation', 'suivi', 'livrees', 'annulees', 'sav', 'auto', 'assign', 'affectation', 'automessages', 'autoreglages', 'clients', 'codepromo'], counts: ['conf', 'suivi', 'sav', 'notify'] },
+  { id: 'depot', icon: 'package', items: ['dashboard', 'depot', 'scanner', 'produits', 'pos', 'tournee', 'livreurs'], counts: ['depot', 'lowStock'] },
+  { id: 'finance', icon: 'wallet', items: ['caisse', 'macaisse'], counts: ['uncashed'] },
+  { id: 'admin', icon: 'usercog', items: ['utilisateurs', 'management', 'reglages', 'livraison', 'agences', 'marketers', 'comptes'], counts: [] },
+];
+/** Is this menu item or group child on the screen? */
+export const onSpace = (space: SpaceId, id: string): boolean => {
+  if (space === 'all' || SPACE_ALWAYS.includes(id)) return true;
+  return !!SPACES.find((s) => s.id === space)?.items.includes(id);
+};
