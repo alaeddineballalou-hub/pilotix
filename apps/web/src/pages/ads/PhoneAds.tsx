@@ -22,6 +22,7 @@ import '../confirmation/phone.css';
 import '../suivi/phone.css';
 import '../sav/phone.css';
 import './phone.css';
+import { tabOn } from '../../lib/rights';
 
 type Ov = Out<'ads.overview'>;
 type Prod = Ov['products'][number];
@@ -60,22 +61,27 @@ const DIAG_ICON: Record<string, string> = { scale: 'trend', cut: 'cut', hook: 'f
 export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; rest?: string[]; noSpy?: boolean; mkLabel?: string }) {
   const { t } = useTranslation();
   // Formulaires: only a store's own Marketing (not a marketer's space), when its plan has it
-  const forms = !noSpy && featureIsOn('marketing/formulaires');
+  const forms = !noSpy && featureIsOn('marketing/formulaires') && tabOn('marketing', 'formulaires');
   // Campagnes (WhatsApp offers): the same, only the store's own Marketing
-  const camps = !noSpy && featureIsOn('marketing/campagnes');
-  const cat = !noSpy && featureIsOn('marketing/catalogue');
+  const camps = !noSpy && featureIsOn('marketing/campagnes') && tabOn('marketing', 'campagnes');
+  const cat = !noSpy && featureIsOn('marketing/catalogue') && tabOn('marketing', 'catalogue');
+  // (Utilisateurs › Rôles: Publicité and Marketer can be taken from a role too)
+  const pubOn = tabOn('marketing', 'publicite');
+  const mkOn = tabOn('marketing', 'marketer');
   const tab =
     sub === 'marketer' ? 'mk' : sub === 'formulaires' && forms ? 'forms' : sub === 'campagnes' && camps ? 'camps' : sub === 'catalogue' && cat ? 'cat' : 'pub';
   // every tab in sight, nothing slides: one row up to three tabs, 2 x 2 for four, rows of three for five to seven (each
   // name whole), 4 x 2 for eight
-  const tabCount = 2 + Number(forms) + Number(camps) + Number(cat);
+  const tabCount = Number(pubOn) + Number(mkOn) + Number(forms) + Number(camps) + Number(cat);
   const cols = tabCount <= 3 ? tabCount : tabCount === 4 ? 2 : tabCount === 8 ? 4 : 3;
   return (
     <div className="pxm">
       <div className="pxv-own pxm-tabs" role="tablist" style={{ '--pxm-cols': cols } as CSSProperties}>
-        <a role="tab" aria-selected={tab === 'pub'} className={tab === 'pub' ? 'on' : ''} href="#/marketing/publicite">
-          {t('nav.publicite')}
-        </a>
+        {pubOn && (
+          <a role="tab" aria-selected={tab === 'pub'} className={tab === 'pub' ? 'on' : ''} href="#/marketing/publicite">
+            {t('nav.publicite')}
+          </a>
+        )}
         {forms && (
           <a role="tab" aria-selected={tab === 'forms'} className={tab === 'forms' ? 'on' : ''} href="#/marketing/formulaires">
             {t('nav.formulaires')}
@@ -91,9 +97,11 @@ export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; re
             {t('nav.catalogue')}
           </a>
         )}
-        <a role="tab" aria-selected={tab === 'mk'} className={tab === 'mk' ? 'on' : ''} href="#/marketing/marketer">
-          {mkLabel ?? t('mkph.marketers')}
-        </a>
+        {mkOn && (
+          <a role="tab" aria-selected={tab === 'mk'} className={tab === 'mk' ? 'on' : ''} href="#/marketing/marketer">
+            {mkLabel ?? t('mkph.marketers')}
+          </a>
+        )}
       </div>
       {tab === 'pub' ? (
         noSpy ? (

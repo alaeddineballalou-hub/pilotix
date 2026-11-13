@@ -1,6 +1,7 @@
 // The Dépôt's stage bar, for one boutique (Depot.tsx) and for « Toutes les boutiques » (boutiques/all.tsx).
 import { useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { tabOn } from '../../lib/rights';
 
 // « En livraison » moved to Suivi (the parcels on the road are the suivi's work); an old link goes there
 export const DEPOT_STAGES = ['preparer', 'prepares', 'dispatchees', 'retours'] as const;
@@ -32,7 +33,7 @@ export function DepotStageBar({ stage, counts, phone }: { stage: DepotStage; cou
   }, [stage]);
   return (
     <nav ref={bar} className="bjm-bar flow" aria-label={t('depot.title')} data-g="depot">
-      {DEPOT_STAGES.map((k, i) => (
+      {DEPOT_STAGES.filter((k) => tabOn('depot', k)).map((k, i) => (
         <span key={k} style={{ display: 'contents' }}>
           {i > 0 && (
             <span className={`bjm-ar ${k === 'retours' ? 'bjm-ar2' : ''}`} aria-hidden="true">

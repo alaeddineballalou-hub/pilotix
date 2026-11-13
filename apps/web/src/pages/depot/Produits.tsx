@@ -26,6 +26,7 @@ import { bidi, Delta, DepotSelect, LevelBar, matches, nameOf, RowMenu, StockRowT
 import './produits.css';
 import { AssignedCatalog } from './AssignedCatalog';
 import { Guides } from './Guides';
+import { tabOn } from '../../lib/rights';
 
 const TABS = ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'prevision', 'lots', 'fabrication', 'achats', 'depots'] as const;
 type Tab = (typeof TABS)[number];
@@ -43,7 +44,7 @@ function DepotProduits({ sub, rest }: PageProps) {
   const alerts = useRpc('catalog.alerts', {});
   const lotsCfg = useRpc('stock.batchConfig', {});
   const makeCfg = useRpc('stock.makingConfig', {});
-  const tabs = TABS.filter((k) => pageIsOn('produits', k) && (k !== 'lots' || !!lotsCfg.data?.on) && (k !== 'fabrication' || !!makeCfg.data?.on)).map((k) => ({ key: k, label: t(`produits.tabs.${k}`), icon: ICONS[k], href: `#/produits/${k}`, count: k === 'alertes' ? alerts.data?.length : undefined, alert: k === 'alertes' }));
+  const tabs = TABS.filter((k) => pageIsOn('produits', k) && tabOn('produits', k) && (k !== 'lots' || !!lotsCfg.data?.on) && (k !== 'fabrication' || !!makeCfg.data?.on)).map((k) => ({ key: k, label: t(`produits.tabs.${k}`), icon: ICONS[k], href: `#/produits/${k}`, count: k === 'alertes' ? alerts.data?.length : undefined, alert: k === 'alertes' }));
   const arg = rest?.[0] ? decodeURIComponent(rest[0]) : undefined;
   return (
     <div className="pd">

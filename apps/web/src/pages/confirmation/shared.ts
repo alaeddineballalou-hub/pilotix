@@ -2,6 +2,7 @@ import { CONF_TONE, ConfStatus, phoneIntl, Tone } from '@pilotix/shared';
 import type { TFunction } from 'i18next';
 import { store } from '../../lib/store';
 import { toLocalInput } from '../../lib/format';
+import { rightOn } from '../../lib/rights';
 
 export type Sub = 'nouvelles' | 'attente' | 'confirmees' | 'livrees' | 'terminees';
 /** no Livrées tab in Confirmation (removed on request) */
@@ -21,6 +22,8 @@ export type StatusChoice = ConfStatus | `try${number}`;
 export const ROW_CHOICES: StatusChoice[] = ['new', 'to_check', 'try1', 'callback', 'postponed', 'no_stock', 'confirmed', 'cancelled', 'duplicate', 'wrong_number', 'fake'];
 /** Toolbar "Statut de confirmation" options. */
 /** « Pas de réponse » here: one more call for each order (its own count goes on: never reset to 01). */
+/** Utilisateurs › Rôles: the endings that cancel an order need « Annuler une commande ». */
+export const choiceAllowed = (c: StatusChoice) => rightOn('act:orders.cancel') || !['cancelled', 'duplicate', 'wrong_number', 'fake'].includes(c);
 export const BULK_CHOICES: StatusChoice[] = ['to_check', 'no_answer', 'callback', 'postponed', 'cancelled', 'duplicate', 'wrong_number', 'fake'];
 
 /** Label of a choice; `pill` adds "…" for choices that ask something and ✓ for confirmed. */

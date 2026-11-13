@@ -1,9 +1,10 @@
 import type { Role, Session } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { backend, isPhone, isPick, LoginResult, loginServerDemo, PhoneInfo, PickInfo, rpc, server, setOnLocked, setOnUnauthorized } from './backend';
 import { allOnRaw } from './allMode';
 import { setShop } from './features';
+import { setRights } from './rights';
 import { applyLanguage } from './i18n';
 import { setRouteShop } from './route';
 import { store } from './store';
@@ -56,6 +57,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // the shop's menus are known before anything renders with the new session
   const setSession = useCallback((s: Session | null) => {
     setShop(s?.shop);
+    // the person's rights in this boutique (Utilisateurs › Rôles): the menu, the tabs and the buttons follow them
+    setRights(s?.rights);
     // the app's links and the address name this boutique (pilotix.online/<boutique>/…)
     setRouteShop(s?.shop?.slug);
     setSessionState(s);
@@ -99,13 +102,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const off = backend.onEvent((e) => {
       // another of the person's boutiques: its changes show only with « Toutes les boutiques »
       if (e.shop !== undefined && here !== undefined && e.shop !== here && !allOnRaw()) return;
+      // the administrator changed what the roles see and do: this screen follows at once
+      if (e.type === 'settings' && (e.data as { key?: string } | undefined)?.key === 'roleRights') void refresh().catch(() => {});
       window.clearTimeout(t);
       t = window.setTimeout(() => qc.invalidateQueries(), 250);
     });
     return () => {
       off();
     };
-  }, [session, qc]);
+  }, [session, qc, refresh]);
+
+  // a session from a login that did not bring the rights yet (an older server, the preview): ask for them once
+  const askedRights = useRef<string | null>(null);
+  useEffect(() => {
+    const key = session ? `${session.shop?.id ?? 0}:${session.profile.id}` : null;
+    if (!session || session.rights !== undefined || askedRights.current === key) return;
+    askedRights.current = key;
+    void refresh().catch(() => {});
+  }, [session, refresh]);
 
   const enter = useCallback(
     (s: Session) => {

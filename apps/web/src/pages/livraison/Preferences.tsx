@@ -13,8 +13,6 @@ import { ErrorBox, Icon, Loading } from '../../ui/kit';
 import './prefs.css';
 
 type Prefs = Out<'prefs.get'>['prefs'];
-type Who = keyof Prefs['changeCompany'];
-const WHO: Who[] = ['confirmation', 'agency', 'depot', 'manager'];
 const ADV_KEY = 'px-prefs-advanced';
 /** what the livreur can say on a parcel he did not deliver (« failed:no_answer », « returning:refused »…) */
 const LIVREUR_SAYS = [...FAIL_REASONS.map((r) => `failed:${r}`), ...RETURN_REASONS.map((r) => `returning:${r}`)];
@@ -99,8 +97,6 @@ export function Preferences() {
   const set = (p: Partial<Prefs>) => setDraft({ ...v, ...p });
   const backups = (companies.data ?? []).filter((c) => c.active && c.kind !== 'own');
   const backupName = backups.find((c) => c.id === v.privateBackup.companyId)?.name ?? '';
-  const who = [...WHO.filter((k) => v.changeCompany[k]).map((k) => t(`livraison.prefs.who.${k}`)), t('livraison.prefs.who.admin')];
-  const rulesWho = [...WHO.filter((k) => v.rulesBy[k]).map((k) => t(`livraison.prefs.who.${k}`)), t('livraison.prefs.who.admin')];
   const missingBackup = v.privateBackup.on && !v.privateBackup.companyId;
   const flipAdv = () => {
     keepAdv(!adv);
@@ -109,9 +105,10 @@ export function Preferences() {
 
   const summary: { icon: string; label: string; value: string; changed: boolean }[] = [
     { icon: 'truck', label: t('livraison.prefs.manualDefault'), value: t(v.manualDefault ? 'livraison.prefs.sum.manualOn' : 'livraison.prefs.sum.manualOff'), changed: v.manualDefault !== rec.manualDefault },
-    { icon: 'usercog', label: t('livraison.prefs.change'), value: who.join(', '), changed: JSON.stringify(v.changeCompany) !== JSON.stringify(rec.changeCompany) },
+    // (who changes the company and who writes the rules: Utilisateurs › Rôles now)
+    { icon: 'usercog', label: t('livraison.prefs.change'), value: t('nav.utilisateurs'), changed: false },
     { icon: 'lock', label: t('livraison.prefs.strictLock'), value: t(v.strictLock ? 'livraison.prefs.sum.strictOn' : 'livraison.prefs.sum.strictOff'), changed: v.strictLock !== rec.strictLock },
-    { icon: 'sliders', label: t('livraison.prefs.rules'), value: rulesWho.join(', '), changed: JSON.stringify(v.rulesBy) !== JSON.stringify(rec.rulesBy) },
+    { icon: 'sliders', label: t('livraison.prefs.rules'), value: t('nav.utilisateurs'), changed: false },
     {
       icon: 'clock',
       label: t('livraison.prefs.backup'),
@@ -167,24 +164,16 @@ export function Preferences() {
               </span>
               <input type="checkbox" role="switch" className="pf-sw" checked={v.manualDefault} onChange={(e) => set({ manualDefault: e.target.checked })} />
             </label>
-            <div className="pf-row pf-col">
+            <div className="pf-row">
               <span className="pf-text">
-                <b>{t('livraison.prefs.change')}</b>
-                <small>{t('livraison.prefs.changeHint')}</small>
+                <b>
+                  {t('livraison.prefs.change')} · {t('livraison.prefs.rules')}
+                </b>
+                <small>{t('rights.prefsMoved')}</small>
               </span>
-              <div className="pf-chips" role="group" aria-label={t('livraison.prefs.change')}>
-                {WHO.map((k) => (
-                  <label key={k} className={`pf-chip ${v.changeCompany[k] ? 'on' : ''}`}>
-                    <input type="checkbox" checked={v.changeCompany[k]} onChange={(e) => set({ changeCompany: { ...v.changeCompany, [k]: e.target.checked } })} />
-                    <Icon name="checkcircle" />
-                    {t(`livraison.prefs.who.${k}`)}
-                  </label>
-                ))}
-                <span className="pf-chip on fixed" title={t('livraison.prefs.adminAlways')}>
-                  <Icon name="lock" />
-                  {t('livraison.prefs.who.admin')}
-                </span>
-              </div>
+              <a className="btn small" href="#/utilisateurs/roles/confirmation">
+                {t('rights.prefsMovedLink')}
+              </a>
             </div>
             <label className="pf-row">
               <span className="pf-text">
@@ -193,25 +182,6 @@ export function Preferences() {
               </span>
               <input type="checkbox" role="switch" className="pf-sw" checked={v.strictLock} onChange={(e) => set({ strictLock: e.target.checked })} />
             </label>
-            <div className="pf-row pf-col">
-              <span className="pf-text">
-                <b>{t('livraison.prefs.rules')}</b>
-                <small>{t('livraison.prefs.rulesHint')}</small>
-              </span>
-              <div className="pf-chips" role="group" aria-label={t('livraison.prefs.rules')}>
-                {WHO.map((k) => (
-                  <label key={k} className={`pf-chip ${v.rulesBy[k] ? 'on' : ''}`}>
-                    <input type="checkbox" checked={v.rulesBy[k]} onChange={(e) => set({ rulesBy: { ...v.rulesBy, [k]: e.target.checked } })} />
-                    <Icon name="checkcircle" />
-                    {t(`livraison.prefs.who.${k}`)}
-                  </label>
-                ))}
-                <span className="pf-chip on fixed" title={t('livraison.prefs.adminAlways')}>
-                  <Icon name="lock" />
-                  {t('livraison.prefs.who.admin')}
-                </span>
-              </div>
-            </div>
           </section>
 
           <section className="pf-group">

@@ -28,6 +28,7 @@ import '../suivi/phone.css';
 import './phone.css';
 import { FiltersPanel } from '../../ui/filters';
 import { useSavFilters } from './filters';
+import { tabOn } from '../../lib/rights';
 
 type Stage = 'todo' | 'depot' | 'livraison' | 'satisfaction' | 'termines';
 type Owner = 'me' | 'none' | 'all';
@@ -161,9 +162,11 @@ export function PhoneSav({ sub }: { sub?: string }) {
             {count[s] !== undefined && <b className="ltr">{count[s]}</b>}
           </button>
         ))}
-        <a className="pxv-stlink" href="#/sav/stats">
-          <Icon name="chart" /> {t('sav.views.stats')}
-        </a>
+        {tabOn('sav', 'stats') && (
+          <a className="pxv-stlink" href="#/sav/stats">
+            <Icon name="chart" /> {t('sav.views.stats')}
+          </a>
+        )}
       </div>
       <input className="pxv-search" type="search" value={q} placeholder={t('sav.ph.searchPh')} aria-label={t('sav.search')} enterKeyHint="search" onChange={(e) => setQ(e.target.value)} />
       <FiltersPanel on={sfl.on}>{sfl.fields}</FiltersPanel>

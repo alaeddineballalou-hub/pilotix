@@ -5,6 +5,7 @@ import { CONF_STATUSES, DEFAULT_CALL_SETTINGS, FOLLOW_STATUSES, SAV_STATUSES } f
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
+import { can } from './rights';
 import { DEFAULT_SETTINGS, getSetting, setSetting, SettingsMap } from '../settings';
 import { sendInPreview } from './notify';
 import { createOrder } from './orders';
@@ -289,7 +290,7 @@ export const adminProcs = {
   // ---------- users (the lists use users.list; these add what the original had on top)
   /** Users per role for the Rôles table. */
   'admin.roles': proc(null, z.object({}), async (ctx) => {
-    if (!ctx.session.isAdmin && !ctx.session.canManageUsers) throw forbidden();
+    if (!(await can(ctx, 'x:users'))) throw forbidden();
     const rows = await ctx.db.query('SELECT id, name, roles, active FROM profiles WHERE archived_at IS NULL ORDER BY name');
     const out: Record<string, { active: number; total: number; names: string[] }> = {};
     for (const r of rows as any[]) {
@@ -313,7 +314,7 @@ export const adminProcs = {
   }),
   /** Companies for selects (default company, livreur's company). */
   'admin.companies': proc(null, z.object({}), async (ctx) => {
-    if (!ctx.session.isAdmin && !ctx.session.canManageUsers) throw forbidden();
+    if (!(await can(ctx, 'x:users'))) throw forbidden();
     return (await ctx.db.query('SELECT id, name, kind, active FROM delivery_companies ORDER BY name')).map((r: any) => ({ id: num(r.id), name: r.name as string, kind: r.kind as string, active: !!r.active }));
   }),
 

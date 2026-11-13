@@ -11,6 +11,7 @@ import { algiersDayStart, API_COURIER_KINDS } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { bad, Ctx, forbidden, proc } from '../rpc';
+import { can } from './rights';
 import { autoSettings } from '../settings';
 import { cancelParcel, sendOrders } from './delivery';
 import { checkedInToday, tellLivreur } from './livreur';
@@ -26,8 +27,8 @@ export const READY_SQL = `o.conf_status = 'confirmed' AND o.follow_status = 'to_
   AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id)
   AND NOT EXISTS (SELECT 1 FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id AND NOT p.is_service AND i.picked_qty < i.qty)`;
 
-/** Who chooses in « À attribuer »: admins, and the people ticked in Utilisateurs. */
-export const canAssign = (ctx: Ctx) => ctx.session.isAdmin || !!ctx.session.profile.canAssign;
+/** Who chooses in « À attribuer »: admins, and the roles or people given it (Utilisateurs › Rôles, « en plus »). */
+export const canAssign = (ctx: Ctx) => can(ctx, 'x:assign');
 
 /** The depot's own hands for a step the person was allowed to start (a manager choosing in « À attribuer »). */
 export const asDepot = (ctx: Ctx): Ctx => (ctx.session.roles.includes('depot') ? ctx : { ...ctx, session: { ...ctx.session, roles: [...ctx.session.roles, 'depot'] } });
@@ -103,7 +104,7 @@ export async function checkDispatch(ctx: Ctx, ids: number[], companyId?: number)
       throw bad(`${r.ref} : Livraison privée sans livreur — choisissez-le dans « À attribuer »`);
     if (r.follow_status !== 'to_prepare') continue;
     if (!r.ready) throw bad(`${r.ref} : tous ses produits ne sont pas encore pris (« J’ai pris »)`);
-    if (companyId && num(r.company_id) !== companyId && !canAssign(ctx)) throw forbidden('Seuls les managers et les admins choisissent la société (« À attribuer »)');
+    if (companyId && num(r.company_id) !== companyId && !(await canAssign(ctx))) throw forbidden('Seuls les managers et les admins choisissent la société (« À attribuer »)');
     if (!companyId && !r.company_id) throw bad(`${r.ref} : pas encore de société — elle se choisit dans « À attribuer »`);
   }
 }
@@ -300,12 +301,12 @@ export const dispatchProcs = {
   'depot.toAssign': proc(['depot'], z.object({}), async (ctx) => {
     await autoDispatch(ctx);
     await privateBackupRun(asDepot(ctx));
-    return { canAct: canAssign(ctx), rows: await toAssignList(ctx) };
+    return { canAct: await canAssign(ctx), rows: await toAssignList(ctx) };
   }),
 
   /** « Drop off » (managers and admins): the ticked orders go back to « À préparer »; their products go back on the shelf. */
   'depot.dropOff': proc(['depot'], z.object({ ids: z.array(id).min(1).max(300) }), async (ctx, i) => {
-    if (!canAssign(ctx)) throw forbidden('Seuls les managers et les admins changent les commandes à attribuer');
+    if (!(await canAssign(ctx))) throw forbidden('Seuls les managers et les admins changent les commandes à attribuer');
     const ready = (await ctx.db.query(`SELECT o.id FROM orders o WHERE o.id = ANY($1) AND ${READY_SQL}`, [i.ids])).map((r: any) => num(r.id));
     if (!ready.length) throw bad('Ces commandes ne sont plus à attribuer');
     await ctx.db.tx(async (tx) => {
@@ -319,7 +320,7 @@ export const dispatchProcs = {
 
   /** « Annuler » (managers and admins): the ticked orders go to Annulé, with the reason; their products go back on the shelf. */
   'depot.assignCancel': proc(['depot'], z.object({ ids: z.array(id).min(1).max(300), reason: z.string().trim().min(1).max(200) }), async (ctx, i) => {
-    if (!canAssign(ctx)) throw forbidden('Seuls les managers et les admins changent les commandes à attribuer');
+    if (!(await canAssign(ctx))) throw forbidden('Seuls les managers et les admins changent les commandes à attribuer');
     const ready = (await ctx.db.query(`SELECT o.id FROM orders o WHERE o.id = ANY($1) AND ${READY_SQL}`, [i.ids])).map((r: any) => num(r.id));
     if (!ready.length) throw bad('Ces commandes ne sont plus à attribuer');
     // the people who choose here may cancel these (not yet with any company)
@@ -331,7 +332,7 @@ export const dispatchProcs = {
 
   /** A manager or an admin gives these orders a company (or our own delivery and its livreur): to « En dispatch ». */
   'depot.assign': proc(['depot'], z.object({ ids: z.array(id).min(1).max(300), companyId: id, livreurId: id.nullable().optional() }), async (ctx, i) => {
-    if (!canAssign(ctx)) throw forbidden('Seuls les managers et les admins attribuent les commandes');
+    if (!(await canAssign(ctx))) throw forbidden('Seuls les managers et les admins attribuent les commandes');
     const c = (await ctx.db.query('SELECT kind, active FROM delivery_companies WHERE id = $1', [i.companyId]))[0];
     if (!c || !c.active) throw bad('Société introuvable');
     if (c.kind === 'own' && !i.livreurId) throw bad('Choisissez le livreur');

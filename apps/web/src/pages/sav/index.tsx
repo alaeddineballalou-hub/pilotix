@@ -12,6 +12,7 @@ import { PhoneSav } from './PhoneSav';
 import { SavStats } from './Stats';
 import { useSavFilters } from './filters';
 import { TicketModal } from './Ticket';
+import { tabOn } from '../../lib/rights';
 
 const VIEWS = ['tickets', 'nouveau', 'attente', 'depot', 'livraison', 'livres', 'annules', 'satisfaction', 'stats'] as const;
 type View = (typeof VIEWS)[number];
@@ -96,7 +97,7 @@ function SavDesktop({ sub }: PageProps) {
 
   return (
     <>
-      <StageBar flow={false} current={view} items={VIEWS.map((v) => ({ key: v, label: t(`sav.views.${v}`), href: `#/sav/${v}`, count: stageCount(v) }))} />
+      <StageBar flow={false} current={view} items={VIEWS.filter((v) => tabOn('sav', v)).map((v) => ({ key: v, label: t(`sav.views.${v}`), href: `#/sav/${v}`, count: stageCount(v) }))} />
       <div className="bjt">
         <div className="card">
           <div className="card-head">

@@ -23,6 +23,7 @@ import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
 import { AgentFilter, CashedFilter, ClearFilters, DateFilters, LivreurFilter, ProductFilter, ReasonFilter, TeamFilter } from '../../ui/filters';
 import { PhoneAnnule, PhoneLivre } from './PhoneDone';
 import { useAllMode } from '../../layout/AllBoutiques';
+import { rightOn } from '../../lib/rights';
 
 export { OrderTable } from './OrderTable';
 export type { OrderColumn, ExtraColumn, OrderTableProps } from './OrderTable';
@@ -248,9 +249,11 @@ export function OrderList(p: ListProps) {
       >
         {t('orders.bulk.print')}
       </button>
-      <button className="btn small" onClick={() => exportOrdersCsv(t, sel)}>
-        {t('orders.bulk.export')}
-      </button>
+      {rightOn('act:orders.export') && (
+        <button className="btn small" onClick={() => exportOrdersCsv(t, sel)}>
+          {t('orders.bulk.export')}
+        </button>
+      )}
     </>
   );
 
@@ -579,7 +582,7 @@ function CommandesDesk({ sub }: { sub?: string }) {
       {t('orders.sync')}
     </button>
   );
-  const newBtn = has('confirmation', 'suivi', 'depot') && (
+  const newBtn = has('confirmation', 'suivi', 'depot') && rightOn('act:orders.create') && (
     <button className="btn primary" onClick={() => openOrderForm()}>
       {t('orders.plusNew')}
     </button>

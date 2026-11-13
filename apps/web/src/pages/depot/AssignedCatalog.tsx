@@ -11,6 +11,7 @@ import type { PageProps } from '../registry';
 import './assigned-catalog.css';
 import { GuideButton } from './guide';
 import { Guides } from './Guides';
+import { tabOn } from '../../lib/rights';
 
 export function AgencyProducts(props: PageProps) {
   const seller = useSeller();
@@ -30,7 +31,7 @@ export function AssignedCatalog({ sub, rest, canWrite = false }: PageProps & { c
     return () => clearTimeout(timer);
   }, [search]);
   const query = useRpc('catalog.assigned', { q, page, pageSize: 50 }, { refetchInterval: 60_000, placeholderData: undefined, enabled: tab !== 'guides' });
-  const tabs = (['produits', 'guides', 'stock'] as const).filter((key) => pageIsOn('produits', key)).map((key) => ({ key, label: t(`produits.tabs.${key}`), icon: key === 'stock' ? 'package' : key === 'guides' ? 'book' : 'tag', href: `#/produits/${key}` }));
+  const tabs = (['produits', 'guides', 'stock'] as const).filter((key) => pageIsOn('produits', key) && tabOn('produits', key)).map((key) => ({ key, label: t(`produits.tabs.${key}`), icon: key === 'stock' ? 'package' : key === 'guides' ? 'book' : 'tag', href: `#/produits/${key}` }));
   // the products' sales guides, read only (Produits & stock › Guide de vente)
   if (tab === 'guides') return <div className="pd assigned-catalog">
     <SectionHeader icon="layers" title={t('produits.title')} about={t('produits.about.guidesAgent')} tabs={tabs} current={tab} />

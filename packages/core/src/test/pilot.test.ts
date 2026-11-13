@@ -143,9 +143,9 @@ test('hand changes follow the Préférences: a strict rule is locked for agents;
   await call('orders.assignCompany', samira, { ids: [b.id], companyId: noest });
   await call('orders.update', admin, { id: b.id, commune: 'Es Senia' });
   assert.deepEqual([Number((await row(b.id)).company_id), (await row(b.id)).pilot_by], [noest, 'hand']);
-  // the depot may not (Préférences: dépôt no)
+  // the depot may not (Utilisateurs › Rôles: not the depot's by default, it can be given en plus)
   const c = await order(31, 'Oran');
-  await assert.rejects(call('orders.assignCompany', await as(EMAILS.depot), { ids: [c.id], companyId: noest }), /Préférences/);
+  await assert.rejects(call('orders.assignCompany', await as(EMAILS.depot), { ids: [c.id], companyId: noest }), /Utilisateurs › Rôles/);
 });
 
 test('a new rule: « Déplacer les N commandes en attente aussi ? » — orders given by hand never move', async () => {
@@ -163,18 +163,17 @@ test('a new rule: « Déplacer les N commandes en attente aussi ? » — orders 
   assert.equal(Number((await row(b.id)).company_id), yal, 'given by hand: stays');
 });
 
-test('only admins and the kinds of people ticked in Préférences write the rules', async () => {
+test('only admins and the roles given « Écrire les règles Pilot » (Utilisateurs › Rôles) write the rules', async () => {
   const samira = await as(EMAILS.conf);
   const seen = (await call('pilot.get', samira, {})) as any;
   assert.equal(seen.canEdit, false, 'she sees the rules, without changing them');
   assert.ok(seen.companies.length && seen.products.length);
   assert.equal(((await call('pilot.get', admin, {})) as any).canEdit, true);
   await assert.rejects(call('pilot.save', samira, { mode: 'manual', rules: [], clashes: [] }), /Seuls les admins/);
-  const p = ((await call('prefs.get', admin, {})) as any).prefs;
-  await call('prefs.set', admin, { ...p, rulesBy: { ...p.rulesBy, confirmation: true } });
+  await call('rights.save', admin, { roles: { confirmation: { on: ['x:rules'] } }, people: {} });
   assert.equal(((await call('pilot.get', samira, {})) as any).canEdit, true);
   await call('pilot.save', samira, { mode: 'auto', rules: [], clashes: [] });
-  await call('prefs.set', admin, { ...p, rulesBy: { ...p.rulesBy, confirmation: false } });
+  await call('rights.save', admin, { roles: {}, people: {} });
   await assert.rejects(call('pilot.save', samira, { mode: 'manual', rules: [], clashes: [] }), /Seuls les admins/);
 });
 

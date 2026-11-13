@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { Db, isoOrNull, num, numOrNull } from '../db';
 import { AppError, bad, Ctx, forbidden, makeSession, notFound, proc } from '../rpc';
+import { can, personHas, sessionWithRights, setPersonTicks } from './rights';
 import { idsOrNull, sellersOrNull } from './agencyscope';
 
 export const toProfile = (r: any): Profile => ({
@@ -31,16 +32,16 @@ export const toProfile = (r: any): Profile => ({
  * Team accounts: the administrator, or someone the administrator allowed (a manager, a supervisor). Such a person never
  * touches administrators, nor other people who have this right, nor gives either right: nobody can raise themselves.
  */
-function needUserManager(ctx: Ctx) {
-  if (!ctx.session.isAdmin && !ctx.session.canManageUsers) throw forbidden();
+async function needUserManager(ctx: Ctx) {
+  if (!(await can(ctx, 'x:users'))) throw forbidden();
 }
 async function needCanEdit(ctx: Ctx, id: number) {
-  needUserManager(ctx);
+  await needUserManager(ctx);
   if (ctx.session.isAdmin) return;
   if (id === ctx.session.profile.id) throw forbidden('Changez vos propres informations dans Mon profil');
-  const t = (await ctx.db.query('SELECT roles, can_manage_users FROM profiles WHERE id = $1', [id]))[0];
+  const t = (await ctx.db.query('SELECT * FROM profiles WHERE id = $1', [id]))[0];
   if (!t) throw notFound();
-  if ((t.roles as string[]).includes('admin') || t.can_manage_users) throw forbidden('Seul l’administrateur peut modifier ce compte');
+  if ((t.roles as string[]).includes('admin') || (await personHas(ctx, toProfile(t), 'x:users'))) throw forbidden('Seul l’administrateur peut modifier ce compte');
 }
 function needGrantable(ctx: Ctx, b: { roles?: string[]; canManageUsers?: boolean; canAssign?: boolean; canAffect?: boolean }) {
   if (ctx.session.isAdmin) return;
@@ -224,7 +225,7 @@ export const usersProcs = {
    * another Pilotix account — or free.
    */
   'users.phoneCheck': proc(null, z.object({ phone: z.string().max(30), id: z.number().int().positive().nullable().optional(), email: z.string().max(200).optional() }), async (ctx, i) => {
-    needUserManager(ctx);
+    await needUserManager(ctx);
     try {
       const phone = await teamPhone(ctx, i.phone, { id: i.id ?? null, email: i.email ?? '' });
       return { phone, problem: null as null | 'invalid' | 'team' | 'taken' };
@@ -236,7 +237,8 @@ export const usersProcs = {
   'me.get': proc(null, z.object({}), async (ctx) => {
     const p = await profileById(ctx.db, ctx.session.profile.id);
     if (!p || !p.active) throw new AppError('unauthorized', 'Votre compte est désactivé');
-    return makeSession(p);
+    // with the person's rights in this boutique (Utilisateurs › Rôles): the menu, the tabs and the buttons follow them
+    return sessionWithRights(ctx.db, makeSession(p), ctx.shop);
   }),
   'me.language': proc(null, z.object({ language: z.enum(LANGUAGES) }), async (ctx, i) => {
     await ctx.db.query('UPDATE profiles SET language=$2 WHERE id=$1', [ctx.session.profile.id, i.language]);
@@ -429,11 +431,11 @@ export const usersProcs = {
         AND CASE WHEN $3::int IS NOT NULL THEN agency_id = $3 WHEN $4 THEN true ELSE agency_id IS NULL END ORDER BY name`,
       [i.role ?? null, i.activeOnly, agency, i.agencies],
     );
-    const admin = ctx.session.isAdmin || !!ctx.session.canManageUsers;
+    const admin = await can(ctx, 'x:users');
     return rows.map((r: any) => ({ ...toProfile(r), ...(admin ? {} : { email: '', phone: null }), presence: r.live as 'online' | 'call' | 'idle' | 'offline' }));
   }),
   'users.create': proc(null, NewUser, async (ctx, b) => {
-    needUserManager(ctx);
+    await needUserManager(ctx);
     // never a password guessed in a few tries (shared/passwords.ts)
     const weak = passwordProblem(b.password);
     if (weak) throw bad(weak);
@@ -456,6 +458,8 @@ export const usersProcs = {
         )
       )[0];
       await payPlansOnSave(ctx, { personId: num(r.id), roles: b.roles, active: true, plans: b.plans, write: true });
+      // a store: the ticks are the person's own « en plus » of Utilisateurs › Rôles
+      if (!b.roles.includes('admin')) await setPersonTicks(ctx, num(r.id), { canManageUsers: b.canManageUsers, canAssign: b.canAssign, canAffect: b.canAffect });
       return toProfile(r);
     } catch (e: any) {
       if (String(e?.code) === '23505' || /unique|duplicate/i.test(e?.message)) throw bad('Cet email est déjà utilisé');
@@ -523,6 +527,7 @@ export const usersProcs = {
     if (!r) throw notFound();
     if (b.sellers !== undefined) r = (await ctx.db.query('UPDATE profiles SET agency_sellers = $2 WHERE id = $1 RETURNING *', [b.id, sellers ? JSON.stringify(sellers) : null]))[0];
     if (payCheck) await payPlansOnSave(ctx, { personId: b.id, roles: (r.roles ?? []) as string[], active: !!r.active, plans: b.plans, write: true });
+    if (!((r.roles ?? []) as string[]).includes('admin')) await setPersonTicks(ctx, b.id, { canManageUsers: b.canManageUsers, canAssign: b.canAssign, canAffect: b.canAffect });
     // no longer working here (closed, or without the role): his work still to do goes back to the team
     if (before?.active) await releaseWork(ctx, b.id, !!r.active, (r.roles ?? []) as Role[], (before.roles ?? []) as Role[]);
     return toProfile(r);

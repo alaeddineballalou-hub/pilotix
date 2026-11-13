@@ -125,7 +125,7 @@ export async function refreshCoverage(ctx: Ctx) {
 }
 
 const canFix = async (ctx: Ctx) => {
-  if (!(await canRules(ctx))) throw forbidden('Seuls les admins et les personnes choisies dans Préférences mettent à jour les tarifs');
+  if (!(await canRules(ctx))) throw forbidden('Seuls les admins et les personnes choisies dans Utilisateurs › Rôles mettent à jour les tarifs');
 };
 
 export const coverageProcs = {

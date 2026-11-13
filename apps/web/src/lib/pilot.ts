@@ -39,6 +39,12 @@ export function pilotLine(t: T, o: { by?: string | null; rule?: string | null; w
 export function mayChangeCompany(s: Session | null, p: Prefs | undefined, o: { companyId: number | null; pilotBy?: string | null }): boolean {
   if (!s) return false;
   if (s.isAdmin || !o.companyId) return true;
+  // a store: Utilisateurs › Rôles (« Changer la société de livraison »); strict rules: its managers only
+  if (s.rights) {
+    const may = s.rights.includes('act:orders.company');
+    if (p?.strictLock && o.pilotBy === 'strict') return may && (s.roles.includes('agent_manager') || s.rights.includes('x:assign'));
+    return may;
+  }
   if (!p) return false;
   const manager = p.changeCompany.manager && personIs(s, { confirmation: false, agency: false, depot: false, manager: true });
   if (p.strictLock && o.pilotBy === 'strict') return manager;
@@ -54,9 +60,11 @@ export function useCanRules(): boolean {
 export function useRulesState(): { can: boolean; known: boolean } {
   const { session } = useSession();
   const store = !session?.shop?.kind || session.shop.kind === 'store';
-  const q = useRpc('prefs.get', {}, { enabled: !!session && !session.isAdmin && store, staleTime: 5 * 60_000 });
+  const q = useRpc('prefs.get', {}, { enabled: !!session && !session.isAdmin && store && !session.rights, staleTime: 5 * 60_000 });
   if (!session) return { can: false, known: false };
   if (session.isAdmin) return { can: true, known: true };
+  // a store: Utilisateurs › Rôles (« Écrire les règles Pilot »)
+  if (session.rights) return { can: session.rights.includes('x:rules'), known: true };
   const by = q.data?.prefs.rulesBy;
   return { can: !!by && personIs(session, by), known: !store || !q.isLoading };
 }

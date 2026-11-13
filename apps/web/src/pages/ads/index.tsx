@@ -19,6 +19,7 @@ import { featureIsOn } from '../../lib/features';
 import { useIsPhone } from '../../lib/useMedia';
 import { AdsetButtons, PubHub, useControls } from './pilot/Hub';
 import './ads.css';
+import { tabOn } from '../../lib/rights';
 
 /** Marketing: Publicité (Meta spend face to the real orders), Formulaires (the ads' lead forms become orders,
  *  Formulaires.tsx), Campagnes (WhatsApp offers to the customers who said yes, Campagnes.tsx), Catalogue (the shop's
@@ -44,7 +45,7 @@ function MarketingDesktop({ sub, rest, t }: { sub?: string; rest?: string[]; t: 
       <StageBar
         flow={false}
         current={cur}
-        items={(['publicite', 'strategies', 'formulaires', 'campagnes', 'catalogue', 'marketer'] as const).map((k) => ({ key: k, label: t(`nav.${k}`), href: `#/marketing/${k}`, ...(k === 'formulaires' && todo ? { count: todo } : {}) }))}
+        items={(['publicite', 'strategies', 'formulaires', 'campagnes', 'catalogue', 'marketer'] as const).filter((k) => tabOn('marketing', k)).map((k) => ({ key: k, label: t(`nav.${k}`), href: `#/marketing/${k}`, ...(k === 'formulaires' && todo ? { count: todo } : {}) }))}
       />
       {cur === 'marketer' ? (
         <Marketer rest={rest} />

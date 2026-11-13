@@ -14,6 +14,7 @@ import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import './orders.css';
 import { askRisk } from '../../ui/clientScore';
+import { rightOn } from '../../lib/rights';
 
 type FormData = Out<'orders.formData'>;
 type Product = FormData['products'][number];
@@ -141,7 +142,11 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
     data.products.forEach((x) => x.variants.forEach((v) => m.set(v.id, { ...v, productId: x.id })));
     return m;
   }, [data.products]);
-  const locked = !!order?.followStatus && FOLLOW_LOCKED.includes(order.followStatus);
+  const shippedLock = !!order?.followStatus && FOLLOW_LOCKED.includes(order.followStatus);
+  // Utilisateurs › Rôles (an order being changed): « Changer les produits et les prix », « Modifier le client et l’adresse »
+  const noItems = !!order && !rightOn('act:orders.items');
+  const noCustomer = !!order && !rightOn('act:orders.customer');
+  const locked = shippedLock || noItems;
   const canConf = has('confirmation') && !(order && (order.confStatus === 'confirmed' || order.followStatus));
 
   // ---- state
@@ -439,6 +444,8 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
           </Sec>
 
           <Sec ic="user" title={t('orders.form.client')}>
+            {noCustomer && <div className="warnbox">{t('rights.noCustomer')}</div>}
+            <fieldset className="pxo-fs" disabled={noCustomer}>
             <div className="pxo-g2">
               <Field label={t('orders.form.name')}>
                 <input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} placeholder={t('orders.form.namePh')} autoComplete="off" required />
@@ -497,6 +504,7 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
                 </div>
               )}
             </div>
+            </fieldset>
           </Sec>
 
           <Sec
@@ -512,7 +520,7 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
               )
             }
           >
-            {locked && <div className="warnbox">{t('orders.form.locked')}</div>}
+            {locked && <div className="warnbox">{t(shippedLock ? 'orders.form.locked' : 'rights.noItems')}</div>}
             <div className="pxo-lines">
               <div className="pxo-lh">
                 <span>{t('orders.form.product')}</span>

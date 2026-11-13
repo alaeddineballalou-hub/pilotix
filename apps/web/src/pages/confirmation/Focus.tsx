@@ -11,7 +11,7 @@ import { store } from '../../lib/store';
 import { Kpi, Loading, StatusBadge } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { Detail } from './Detail';
-import { choiceLabel, currentLabel, StatusChoice, telHref, waHref } from './shared';
+import { choiceLabel, currentLabel, StatusChoice, telHref, waHref, choiceAllowed } from './shared';
 import { useStatusChange } from './StatusDialog';
 import { TrustFlags } from '../orders/TrustFlags';
 import { ScoreChip } from '../../ui/clientScore';
@@ -157,7 +157,7 @@ export function Focus({ initialId, onClose, onNext, seller, allSellers }: { init
           </p>
           <Detail order={o} />
           <div className="statusbar">
-            {CHOICES.map((c) => (
+            {CHOICES.filter(choiceAllowed).map((c) => (
               <button
                 key={c}
                 type="button"

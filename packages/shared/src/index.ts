@@ -204,6 +204,11 @@ export interface Session {
   shop?: ShopInfo;
   /** this e-mail is also a Pilotix staff account (the menu shows the way to the control room) */
   platformStaff?: boolean;
+  /**
+   * Utilisateurs › Rôles: every right this person has in the boutique (rights.ts). null: no limits from rights (an
+   * administrator, a partner's own space); missing: not known yet (the app asks me.get).
+   */
+  rights?: string[] | null;
 }
 
 export interface Variant {
@@ -487,3 +492,4 @@ export * from './pos';
 export * from './modules';
 export * from './pay';
 export * from './appUpdate';
+export * from './rights';

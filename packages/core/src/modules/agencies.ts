@@ -37,6 +37,7 @@ import {
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
+import { can } from './rights';
 import { cleanPrices } from '../platform/shops';
 import { sellersOrNull } from './agencyscope';
 import { contractBill, contractTerms, decideTerms } from './planledger';
@@ -703,7 +704,7 @@ export const agencyProcs = {
   /** The sellers the agency works with (or asked), to choose each person's sellers in Utilisateurs. */
   'agency.sellerChoices': proc(null, z.object({}), async (ctx) => {
     const { t, id } = asAgency(ctx);
-    if (!ctx.session.isAdmin && !ctx.session.canManageUsers) throw forbidden();
+    if (!(await can(ctx, 'x:users'))) throw forbidden();
     const links = (await t.platform.query(`${LINK_SQL} WHERE l.agency_id = $1 AND l.status IN ('pending', 'active') ORDER BY s.name, l.id`, [id])).map(toLink);
     return links.map((L) => ({ store: L.info.store, status: L.info.status, tasks: L.info.tasks, products: L.info.products }));
   }),
@@ -711,7 +712,7 @@ export const agencyProcs = {
   /** A seller's products the agency has (all of them, or the ones the seller gave): to give some to one person. */
   'agency.products': proc(null, z.object({ store: Id }), async (ctx, i) => {
     const { t, id } = asAgency(ctx);
-    if (!ctx.session.isAdmin && !ctx.session.canManageUsers) throw forbidden();
+    if (!(await can(ctx, 'x:users'))) throw forbidden();
     const L = (await t.platform.query(`${LINK_SQL} WHERE l.agency_id = $1 AND l.store_id = $2 AND l.status IN ('pending', 'active') ORDER BY l.id DESC LIMIT 1`, [id, i.store])).map(toLink)[0];
     if (!L || !L.storeOk) throw notFound('Vendeur introuvable');
     const db = t.shop(L.storeSchema);

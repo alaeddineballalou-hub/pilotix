@@ -1,0 +1,285 @@
+{
+  "title": "Each role's menu",
+  "sub": "Turn a page, its tabs and its buttons on or off. The menu the person will see changes with you.",
+  "back": "Back to the basic role",
+  "backDone": "{{role}}: back to the basic role (not saved yet)",
+  "pickRole": "Choose the role",
+  "adminAll": "The administrator always has everything: it is not set here.",
+  "agence": "Agency agents",
+  "agenceHint": "The agents of a confirmation agency working in the shop",
+  "menuOf": "{{role}}'s menu",
+  "always": "Always",
+  "tabs": "Tabs",
+  "acts": "Buttons",
+  "count": "{{tabs}} · {{acts}}",
+  "open": "Open {{name}}",
+  "close": "Close {{name}}",
+  "pageOff": "Page off: it leaves the menu, with its tabs.",
+  "orders": "Buttons on the orders",
+  "ordersSub": "Wherever an order opens",
+  "general": "Everywhere in Pilotix",
+  "extra": "On top of the role",
+  "extraSub": "The short list of what can be given on top. It used to be in Preferences or on a person's card.",
+  "extraPill": "extra",
+  "modified": "changed",
+  "none": "Not possible for {{role}}: {{pages}}. These pages stay with their roles and the administrator.",
+  "people": "One person apart",
+  "peopleSub": "When one person must have more or less than their role",
+  "peopleNone": "Nobody is apart yet.",
+  "addPerson": "+ Add a person apart",
+  "edit": "Edit",
+  "remove": "Remove",
+  "more": "+ {{list}}",
+  "less": "− {{list}}",
+  "personTitle": "{{name}} apart",
+  "personHelp": "Take away what {{name}} must not do, or give them on top what the list allows. The rest follows their role.",
+  "pickPerson": "The person",
+  "pickPersonPh": "Choose…",
+  "personHas": "What they have through their role",
+  "personCan": "What can be given to them on top",
+  "personNothing": "Nothing to give this person on top.",
+  "done": "OK",
+  "preview": "What {{name}} sees",
+  "previewRole": "What {{role}} sees",
+  "previewSub": "It changes as you tick",
+  "previewTabs": "{{page}} tabs",
+  "changes_one": "{{count}} change not saved yet",
+  "changes_other": "{{count}} changes not saved yet",
+  "cancel": "Cancel",
+  "save": "Save the rights",
+  "saved": "Rights saved: the team's screens follow at once",
+  "sumExtra": " · {{count}} extra",
+  "sumChanged_one": " · {{count}} changed",
+  "sumChanged_other": " · {{count}} changed",
+  "editRole": "Edit what it does",
+  "formExtras": "Their extra rights (team accounts, « To assign », Assignment) are set in Users › Roles › One person apart.",
+  "formExtrasLink": "Open the roles",
+  "prefsMoved": "« Who can change the company » and « Who writes the Pilot rules » are now set in Users › Roles, role by role.",
+  "prefsMovedLink": "Open Users › Roles",
+  "noItems": "Your role does not change the products or the prices (Users › Roles).",
+  "noCustomer": "Your role does not change the customer or the address (Users › Roles).",
+  "x": {
+    "users": "Manage the team's accounts",
+    "assign": "Choose the parcels' company or livreur",
+    "affect": "Share the orders out between the agents",
+    "rules": "Write the Pilot rules"
+  },
+  "xHelp": {
+    "users": "Create accounts and change passwords, never an administrator's. Before: « Can create accounts and change passwords ».",
+    "assign": "Depot › « To assign ». Before: « Can assign orders ».",
+    "affect": "Management › Assignment. Before: « Can set the assignment ».",
+    "rules": "Pilot Automations › Auto Pilot Assign. Before: in Preferences."
+  },
+  "act": {
+    "orders": {
+      "create": "Create an order",
+      "customer": "Change the customer and the address",
+      "items": "Change the products and the prices",
+      "cancel": "Cancel an order",
+      "company": "Change the delivery company",
+      "give": "Give an order to an agent",
+      "blacklist": "Blacklist a customer",
+      "send": "Send the parcels to the company",
+      "parcelCancel": "Cancel a parcel at the company",
+      "export": "Export to Excel"
+    },
+    "costs": "See the purchase price and the margin",
+    "conf": {
+      "photos": "Send the product's photos to the customer"
+    },
+    "suivi": {
+      "treat": "Handle the alerts",
+      "claim": "Make a claim",
+      "swap": "Make a swap",
+      "parcel": "Change a parcel at the company"
+    },
+    "depot": {
+      "prepare": "Prepare the orders",
+      "dispatch": "Dispatch the parcels",
+      "returns": "Receive the returns",
+      "pickup": "Ask for a pickup"
+    },
+    "sav": {
+      "create": "Open an after-sales ticket",
+      "exchange": "Make an exchange",
+      "settle": "Settle an after-sales ticket"
+    },
+    "stock": {
+      "products": "Create and change the products",
+      "prices": "Change the products' prices",
+      "move": "Change the stock",
+      "purchases": "Buy from the suppliers",
+      "guides": "Write the sales guides"
+    },
+    "pos": {
+      "sell": "Sell at the counter",
+      "cancel": "Cancel a counter sale"
+    },
+    "caisse": {
+      "add": "Add an expense or a payment",
+      "transfer": "Hand the money to another cash box"
+    },
+    "pay": {
+      "ask": "Ask for an advance"
+    },
+    "dellal": {
+      "reply": "Answer the customers"
+    },
+    "cm": {
+      "reply": "Answer the comments"
+    },
+    "social": {
+      "publish": "Publish and plan the posts"
+    },
+    "createur": {
+      "ai": "Use the AI tools"
+    },
+    "spy": {
+      "search": "Run an AI Spy search"
+    },
+    "notify": {
+      "send": "Send the delivery messages"
+    },
+    "promo": {
+      "settings": "Set the promo codes"
+    },
+    "ads": {
+      "control": "Turn on, stop, change an ad's budget",
+      "launch": "Launch a new ad",
+      "owner": "The owner's decisions on the ads"
+    },
+    "campaigns": {
+      "send": "Send a WhatsApp campaign"
+    },
+    "leads": {
+      "fix": "Fix the ads' forms"
+    },
+    "catalog": {
+      "send": "Send the products to the Meta and TikTok catalogue"
+    },
+    "marketers": {
+      "pay": "Pay the marketers"
+    },
+    "landing": {
+      "edit": "Create and change the landing pages",
+      "protect": "Block or give back fake orders"
+    },
+    "partners": {
+      "manage": "Manage the influencers"
+    }
+  },
+  "actHelp": {
+    "orders": {
+      "create": "The « + New order » button",
+      "customer": "Name, phones, wilaya, commune, address, desk",
+      "items": "Products, quantities, prices, discount, fees (never below the maximum discount)",
+      "cancel": "Cancelled, wrong number, duplicate, fake order",
+      "company": "On an order that already has one. Before: in Preferences.",
+      "give": "Choose the agent who calls",
+      "blacklist": "And take them off it",
+      "send": "Through the company's API (ZR, Yalidine…)",
+      "parcelCancel": "Before it leaves",
+      "export": "The lists, with the numbers. The app hides the button: the file is made in the browser."
+    },
+    "costs": "In the products, the orders and the numbers",
+    "conf": {
+      "photos": "By WhatsApp, from the order"
+    },
+    "suivi": {
+      "treat": "Call, note the answer, « Next alert »",
+      "claim": "To the livreur or to the delivery company",
+      "swap": "Send a cancelled parcel to another customer",
+      "parcel": "Amount, address: a request to the company"
+    },
+    "depot": {
+      "prepare": "« I took it », parcels ready",
+      "dispatch": "Take the parcels out of the depot, send them again",
+      "returns": "And put them back in stock",
+      "pickup": "The companies' pickup bags"
+    },
+    "sav": {
+      "create": "« + New ticket »",
+      "exchange": "Send another item to the customer",
+      "settle": "Refund, close"
+    },
+    "stock": {
+      "products": "Cards, photos, import",
+      "prices": "Each product's selling price",
+      "move": "In, out, transfers, breakage",
+      "purchases": "Purchases, payments, suppliers",
+      "guides": "And translate them"
+    },
+    "pos": {
+      "sell": "Open and close the counter's cash box",
+      "cancel": "A sale already made"
+    },
+    "caisse": {
+      "add": "In their own cash box",
+      "transfer": "Transfer to another cash box"
+    },
+    "pay": {
+      "ask": "On the month's pay"
+    },
+    "dellal": {
+      "reply": "Pilot Message: answer, turn Dellal on or off"
+    },
+    "cm": {
+      "reply": "Answer, in private, hide, ignore"
+    },
+    "social": {
+      "publish": "Pilot Content"
+    },
+    "createur": {
+      "ai": "Creator space: they cost credits"
+    },
+    "spy": {
+      "search": "It costs credits"
+    },
+    "notify": {
+      "send": "WhatsApp or SMS to the customer"
+    },
+    "promo": {
+      "settings": "And mark the « Awareness » posts and ads"
+    },
+    "ads": {
+      "control": "On the ads already running",
+      "launch": "Prepare, launch, remove",
+      "owner": "Approve, stop all, budget, currency, marketer"
+    },
+    "campaigns": {
+      "send": "Prepare, launch, remove"
+    },
+    "leads": {
+      "fix": "The requests waiting for a person"
+    },
+    "catalog": {
+      "send": "Add, remove, send"
+    },
+    "marketers": {
+      "pay": "Prices and payments per ad set"
+    },
+    "landing": {
+      "edit": "Pages, images, pixels, groups",
+      "protect": "The landing pages' protection"
+    },
+    "partners": {
+      "manage": "Add, ask, remove"
+    }
+  },
+  "changeOn": "{{who}}: {{what}} added",
+  "changeOff": "{{who}}: {{what}} taken away",
+  "tabsN_one": "{{count}} of {{of}} tabs",
+  "tabsN_other": "{{count}} of {{of}} tabs",
+  "actsN_one": "{{count}} of {{of}} buttons",
+  "actsN_other": "{{count}} of {{of}} buttons",
+  "nPages_one": "{{count}} page",
+  "nPages_other": "{{count}} pages",
+  "nTabs_one": "{{count}} tab",
+  "nTabs_other": "{{count}} tabs",
+  "nActs_one": "{{count}} button",
+  "nActs_other": "{{count}} buttons",
+  "page": {
+    "automessages": "Delivery messages",
+    "autoreglages": "Automations' settings"
+  }
+}

@@ -1,7 +1,8 @@
-import type { Role } from '@pilotix/shared';
+import { menuRight, type Role } from '@pilotix/shared';
 import { backend } from '../lib/backend';
 import { currentShop, pageIsOn } from '../lib/features';
 import { moduleOn } from '../lib/modules';
+import { rightOn } from '../lib/rights';
 
 /**
  * The menu, as in the original Pilotix (final layout): sub-pages appear as a stage bar inside the page,
@@ -199,9 +200,20 @@ export const NAV: NavItem[] = [
   { id: 'boutiques', icon: 'store', roles: null, hidden: true },
 ];
 
-/** A group's child: its own roles (or the people who write the Pilot rules), or everyone who sees the group — and in the shop's plan. */
+/**
+ * A group's child: its own roles (or the people who write the Pilot rules), or everyone who sees the group — left to
+ * their role in Utilisateurs › Rôles — and in the shop's plan.
+ */
 export const canSeeChild = (c: NavChild, roles: Role[], isAdmin: boolean, canRules = false) =>
-  (isAdmin || !c.roles || c.roles.some((r) => roles.includes(r)) || (!!c.rules && canRules)) && (c.plan ? pageIsOn(...c.plan) : pageIsOn(c.id)) && (!c.onlyIf || c.onlyIf());
+  ((isAdmin || ((!c.roles || c.roles.some((r) => roles.includes(r))) && rightOn(menuRight(c.id)))) || (!!c.rules && canRules)) &&
+  (c.plan ? pageIsOn(...c.plan) : pageIsOn(c.id)) &&
+  (!c.onlyIf || c.onlyIf());
+
+/**
+ * The store's pages opened by a group's lines (Pilot Automations' tabs, Referral's, Partenaires'): the line's own right
+ * decides, not the page's (the rights are a store's: a partner's space has none).
+ */
+const BY_LINES = new Set(NAV.flatMap((n) => n.children ?? []).map((c) => c.match?.page).filter((p): p is string => !!p));
 
 export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManageUsers = false, canRules = false, canAffect = false): boolean {
   // a menu the shop's plan does not include is not shown to anyone, administrators included
@@ -212,14 +224,23 @@ export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManage
   // Management, for the people the administrator lets set the Affectation (that page only)
   if (item.affect && canAffect) return true;
   if (item.roles === null || isAdmin) return true;
-  return item.roles.some((r) => roles.includes(r));
+  if (!item.roles.some((r) => roles.includes(r))) return false;
+  // Utilisateurs › Rôles: a page taken from the role (a group shows while one of its lines does)
+  return !!item.children || BY_LINES.has(item.id) || rightOn(menuRight(item.id));
+}
+
+/** The group's line that opens this page and tab (#/notify/messages: « Messages »), if one does. */
+export function lineFor(nav: NavItem[], page: string, sub: string | undefined): NavChild | null {
+  for (const n of nav) for (const c of n.children ?? []) if (c.match?.page === page && c.match.subs.includes(sub ?? '')) return c;
+  return null;
 }
 
 /** Where a user lands when the address doesn't match a page they can see. */
 export function homeFor(roles: Role[], isAdmin: boolean): string {
-  if (!isAdmin && roles.includes('livreur') && !roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r)) && pageIsOn('tournee')) return 'tournee';
-  if (!isAdmin && roles.includes('confirmation') && !roles.includes('vendeur') && roles.length === 1 && pageIsOn('confirmation')) return 'confirmation';
-  if (isPlainAgent(roles, isAdmin) && pageIsOn('dashboard')) return 'dashboard';
+  const on = (page: string) => pageIsOn(page) && rightOn(menuRight(page));
+  if (!isAdmin && roles.includes('livreur') && !roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r)) && on('tournee')) return 'tournee';
+  if (!isAdmin && roles.includes('confirmation') && !roles.includes('vendeur') && roles.length === 1 && on('confirmation')) return 'confirmation';
+  if (isPlainAgent(roles, isAdmin) && on('dashboard')) return 'dashboard';
   return 'accueil';
 }
 

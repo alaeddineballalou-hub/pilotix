@@ -7,6 +7,7 @@ import { sellerCall } from './modules/agencywork';
 import { boutiqueCall } from './modules/boutiquework';
 import { stopAgentPlan } from './modules/planledger';
 import { requireAssignedProducts, seesPurchaseCosts, withoutPurchaseCosts } from './modules/productscope';
+import { can, rightsGate } from './modules/rights';
 
 export * from './db';
 export * from './rpc';
@@ -21,6 +22,7 @@ export { seedDemoBoutiques, DEMO_BOUTIQUES, DEMO_LOGO } from './demoBoutiques';
 export { myBoutiques, shopLogo, setShopLogo, LOGO_MAX } from './modules/boutiques';
 export { copyIntoNewBoutique, COPY_PARTS, type CopyPart, type CopyPreview, type CopyResult } from './modules/boutiquecopy';
 export { login, hashPassword, profileById } from './modules/users';
+export { boutiqueRights, forgetRights, rightsApply, sessionWithRights } from './modules/rights';
 export type { ArchiveBlock, ArchiveKind, ArchiveRow, UseKind } from './modules/archive';
 export { createPasswordReset, resetPassword, RESET_MINUTES, RESETS_PER_MONTH } from './passwordReset';
 export type { PasswordResetLink, PasswordResetMail } from './passwordReset';
@@ -60,10 +62,12 @@ const AGENCY_TEAM = new Set(['users.create', 'users.update', 'admin.users.resetP
 const run = async (ctx: Ctx, name: string, input: unknown) => {
   const out = await dispatch(REGISTRY as unknown as Record<string, Procedure>, name, ctx, input, async (n, c, i: any) => {
     await agencyGate(n, c, i);
+    // Utilisateurs › Rôles: the pages, tabs and buttons the person's role was left (or given)
+    await rightsGate(n, c, i);
     if (['orders.quote', 'orders.create', 'orders.update'].includes(n) && i.items?.length)
       await requireAssignedProducts(c, i.items.map((l: any) => l.productId));
   });
-  return seesPurchaseCosts(ctx) ? out : withoutPurchaseCosts(out);
+  return seesPurchaseCosts(ctx) && (await can(ctx, 'act:costs')) ? out : withoutPurchaseCosts(out);
 };
 
 /** Runs one named action for the logged-in user, with role checks, input validation and the agencies' limits. */

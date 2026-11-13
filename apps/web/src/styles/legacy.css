@@ -78,6 +78,7 @@ html:root[data-theme="dark"] .pxo-h .ic{color:var(--px-orange)}
 .pxo-h h3{margin:0;font:600 15.5px var(--f-display)!important;letter-spacing:-.01em}
 .pxo-h .rt{margin-left:auto}
 .pxo-g2{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+.pxo-fs{border:0;padding:0;margin:0;min-width:0}
 .pxo-g3{display:grid;grid-template-columns:1.2fr auto 1.4fr;gap:12px 14px;align-items:end}
 .pxo-ph{display:flex;flex-direction:column;gap:4px}
 .pxo-t2b{align-self:flex-start;font-size:12.5px;text-decoration:none}

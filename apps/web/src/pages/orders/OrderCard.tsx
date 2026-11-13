@@ -1,5 +1,5 @@
 // The order card of the original app: a drawer on the right with Client, Produits, Livraison, Historique and every action.
-import { API_COURIER_KINDS, canSetFollow, CANCEL_REASONS, CONF_TONE, FAKE_REASONS, CONF_NEEDS_DATE, CONF_NEEDS_REASON, ConfStatus, FAIL_REASONS, FOLLOW_FINAL, FOLLOW_STATUSES, FollowStatus, Order, OrderEvent, RETURN_REASONS } from '@pilotix/shared';
+import { API_COURIER_KINDS, canSetFollow, CANCEL_REASONS, CONF_DONE_BAD, CONF_TONE, FAKE_REASONS, CONF_NEEDS_DATE, CONF_NEEDS_REASON, ConfStatus, FAIL_REASONS, FOLLOW_FINAL, FOLLOW_STATUSES, FollowStatus, Order, OrderEvent, RETURN_REASONS } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,6 +24,7 @@ import { CourierPanel } from '../suivi/CourierPanel';
 import { useIsPhone } from '../../lib/useMedia';
 import { TrustFlags } from './TrustFlags';
 import { AdSection } from './AdSource';
+import { rightOn } from '../../lib/rights';
 
 /** Courier kinds with an API (send / label / status / cancel go through the delivery procedures). */
 export const API_KINDS: readonly string[] = API_COURIER_KINDS;
@@ -201,7 +202,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
   const companyName = (v: string | null) => (v ? companies.find((c) => String(c.id) === v)?.name ?? v : '—');
 
   const actions: ReactNode[] = [];
-  if (has('confirmation', 'suivi') && !shipped)
+  if (has('confirmation', 'suivi') && !shipped && (rightOn('act:orders.customer') || rightOn('act:orders.items')))
     actions.push(
       <button key="edit" className="btn small" onClick={() => openOrderForm({ orderId: o.id, onSaved: (id) => openOrder(id) })}>
         {t('orders.card.edit')}
@@ -229,7 +230,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
         }}
       >
         <option value="">{t('orders.card.changeConf')}</option>
-        {CONF_CHOICES.filter((s) => s !== o.confStatus).map((s) => (
+        {CONF_CHOICES.filter((s) => s !== o.confStatus && (rightOn('act:orders.cancel') || !CONF_DONE_BAD.includes(s))).map((s) => (
           <option key={s} value={s}>
             {t(`status.conf.${s}`)}
           </option>
@@ -242,7 +243,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
         {o.companyId ? t('orders.card.changeCompany') : t('orders.card.chooseCompany')}
       </button>,
     );
-  if (has('suivi', 'depot') && apiKind && !sent && o.confStatus === 'confirmed')
+  if (has('suivi', 'depot') && apiKind && !sent && o.confStatus === 'confirmed' && rightOn('act:orders.send'))
     actions.push(
       <button key="send" className="btn small ok" disabled={busy} onClick={send}>
         {t('orders.card.sendTo', { name: company!.name })}
@@ -262,7 +263,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
         {t('orders.card.statusAt', { name: company!.name })}
       </button>,
     );
-    if (has('suivi') && ['to_prepare', 'prepared', 'shipped'].includes(o.followStatus ?? ''))
+    if (has('suivi') && ['to_prepare', 'prepared', 'shipped'].includes(o.followStatus ?? '') && rightOn('act:orders.parcelCancel'))
       actions.push(
         <button key="cx" className="btn small danger ghost" onClick={() => setPanel({ kind: 'cancelParcel' })}>
           {t('orders.card.cancelParcel')}
@@ -298,7 +299,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
       {t('orders.card.note')}
     </button>,
   );
-  if (has('confirmation', 'suivi'))
+  if (has('confirmation', 'suivi') && rightOn('act:orders.blacklist'))
     actions.push(
       <button
         key="bl"

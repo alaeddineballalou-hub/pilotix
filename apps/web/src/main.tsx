@@ -5,12 +5,13 @@ import { Legal, PhoneStep, Signup, SignupConfirm, StorePicker, VerifyEmail } fro
 import { LockScreen } from './layout/LockScreen';
 import { Login } from './layout/Login';
 import { ResetPassword } from './layout/ResetPassword';
-import { AGENCY_NAV, canSee, canSeeChild, homeFor, isPlainAgent, MARKETER_NAV, NAV, NavItem } from './layout/nav';
+import { AGENCY_NAV, canSee, canSeeChild, homeFor, isPlainAgent, lineFor, MARKETER_NAV, NAV, NavChild, NavItem } from './layout/nav';
 import { applyTheme, Shell } from './layout/Shell';
 import { ApiError, DEMO_ONLY, sendClientReport, server } from './lib/backend';
 import { readTryLink, type TryLink } from './lib/tryLink';
-import { DEMO_PASSWORD } from '@pilotix/shared';
+import { DEMO_PASSWORD, menuRight, tabsOf } from '@pilotix/shared';
 import { firstSubOn, hasPlanSubs, pageIsOn } from './lib/features';
+import { rightOn, tabOn } from './lib/rights';
 import './lib/i18n';
 import { ModalHost } from './lib/modals';
 import { addressShop, fixAddress, go, PATHS, useRoute } from './lib/route';
@@ -288,6 +289,25 @@ function App() {
     rest = [];
   }
   if (!sub && item?.subs?.length) sub = item.subs[0];
+  // Utilisateurs › Rôles (a store): a page, a group's line or a tab taken from the person's role opens what is left
+  if (space === 'store' && !session.isAdmin && page) {
+    const seen = (c: NavChild) => canSeeChild(c, session.roles, session.isAdmin, canRules);
+    const line = lineFor(nav, page, sub);
+    const lines = nav.flatMap((n) => n.children ?? []).filter((c) => c.match?.page === page);
+    // a group with a page of its own (Commandes › Toutes): the page itself taken, its first line left
+    const group = item?.children && !rightOn(menuRight(page)) ? item.children.find(seen) : undefined;
+    const tabsLeft = tabsOf(page).filter((d) => rightOn(d.id)).map((d) => d.id.split('/')[1]);
+    let to: string | null = null;
+    if (line && !seen(line)) to = lines.find(seen)?.href ?? `#/${homeOf()}`;
+    else if (group) to = group.href;
+    else if (item?.children && !rightOn(menuRight(page))) to = `#/${homeOf()}`;
+    else if (!tabOn(page, sub)) to = tabsLeft.length ? `#/${page}/${tabsLeft[0]}` : `#/${homeOf()}`;
+    if (to && to !== `#/${[page, sub].filter(Boolean).join('/')}`) {
+      go(to, { replace: true });
+      [page, sub] = to.replace(/^#\/?/, '').split('/');
+      rest = [];
+    }
+  }
   // a sub-page the shop's plan does not include: its first sub-page that is included
   if (page && sub && hasPlanSubs(page) && !pageIsOn(page, sub)) {
     const first = firstSubOn(page);

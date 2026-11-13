@@ -548,6 +548,8 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
    * answers from Pilotix) — `full` at login and when the app loads; the per-request check only needs the rules.
    */
   async withShop(session: Session, ref: ShopRef, full = true): Promise<Session> {
+    // what the app shows follows the person's rights in this boutique (Utilisateurs › Rôles): at login too
+    if (full && session.rights === undefined) session = await core.sessionWithRights(ref.db, session, ref.rules);
     const set = await this.settings();
     const extra = full && !ref.shop.demo ? await core.shopInfoExtra(this.t, ref.shop, session.profile.email, set).catch(() => core.NO_EXTRA) : core.NO_EXTRA;
     const platformStaff = full && ref.shop.primary && session.isAdmin ? await core.isStaffEmail(this.t, session.profile.email).catch(() => false) : false;

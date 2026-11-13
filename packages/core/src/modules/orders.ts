@@ -29,6 +29,7 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { CLIENT_FACT_COLS, ClientScore, orderIdsByScore, recordRiskConfirms, scoresOf } from './clientscore';
 import { bad, Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
+import { needRight } from './rights';
 import { clientFee, getSetting } from '../settings';
 import { getPrefs } from './prefs';
 import { channelGuard, guardNote, type GuardMode } from './guard';
@@ -895,6 +896,42 @@ async function precheckUpdate(ctx: Ctx, input: z.infer<typeof UpdateInput>) {
   await priceChange(ctx.db, cur, input, ctx.session.isAdmin);
 }
 
+/**
+ * Utilisateurs › Rôles: « Modifier le client et l’adresse » and « Changer les produits et les prix » are two buttons;
+ * only what really changes counts (the form always sends everything).
+ */
+async function needEditRights(ctx: Ctx, tx: Db, cur: any, input: z.infer<typeof UpdateInput>) {
+  if (ctx.session.isAdmin) return;
+  const t = (x: unknown) => String(x ?? '').trim();
+  const n = (x: unknown) => (x == null || x === '' ? null : Number(x));
+  const differs = (k: keyof typeof input, col: string, norm: (x: any) => unknown) => input[k] !== undefined && norm(input[k]) !== norm(cur[col]);
+  const customer =
+    differs('customerName', 'customer_name', t) ||
+    (input.phone !== undefined && normalizePhone(input.phone) !== cur.phone) ||
+    differs('phone2', 'phone2', (x) => (t(x) ? normalizePhone(t(x)) ?? t(x) : null)) ||
+    differs('wilayaId', 'wilaya_id', n) ||
+    differs('commune', 'commune', t) ||
+    differs('address', 'address', t) ||
+    differs('isStopdesk', 'is_stopdesk', (x) => !!x) ||
+    (input.isStopdesk !== false && differs('stopdeskId', 'stopdesk_id', n));
+  let products = differs('deliveryFee', 'delivery_fee', n) || (input.discount !== undefined && input.discount + num(cur.promo_discount) !== num(cur.discount));
+  if (!products && input.items) {
+    const key = (l: { productId: number; variantId?: number | null; qty: number; unitPrice?: number | null }, price: boolean) =>
+      `${l.productId}:${l.variantId ?? ''}:${l.qty}${price ? `:${l.unitPrice ?? ''}` : ''}`;
+    const now = (await tx.query('SELECT product_id, variant_id, qty, unit_price FROM order_items WHERE order_id = $1', [input.id])).map((r: any) => ({
+      productId: num(r.product_id),
+      variantId: numOrNull(r.variant_id),
+      qty: num(r.qty),
+      unitPrice: num(r.unit_price),
+    }));
+    // a price the form does not send stays what it was
+    const priced = input.items.every((l) => l.unitPrice !== undefined);
+    products = JSON.stringify(input.items.map((l) => key(l, priced)).sort()) !== JSON.stringify(now.map((l) => key(l, priced)).sort());
+  }
+  if (customer) await needRight(ctx, 'act:orders.customer', 'Votre rôle ne change pas le client ni l’adresse dans cette boutique (Utilisateurs › Rôles)');
+  if (products) await needRight(ctx, 'act:orders.items', 'Votre rôle ne change pas les produits ni les prix dans cette boutique (Utilisateurs › Rôles)');
+}
+
 export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>): Promise<Order> {
   await guardHands(ctx, [input.id]);
   await precheckUpdate(ctx, input);
@@ -903,6 +940,7 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
     const cur = (await tx.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [input.id]))[0];
     if (!cur) throw notFound('Commande introuvable');
     if (input.version && num(cur.version) !== input.version) throw bad('Cette commande a été modifiée par quelqu’un d’autre. Rechargez-la.');
+    await needEditRights(ctx, tx, cur, input);
     const locked = cur.follow_status && FOLLOW_LOCKED.includes(cur.follow_status);
     if (locked && input.items) throw bad('Commande déjà partie : produits non modifiables');
     // the money and the place of a parcel a courier already has (API) or of a cashed order are frozen here: the

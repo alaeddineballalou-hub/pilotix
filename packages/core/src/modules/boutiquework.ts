@@ -8,6 +8,7 @@
 import { z } from 'zod';
 import { num } from '../db';
 import { bad, Ctx, forbidden, makeSession, notFound, proc } from '../rpc';
+import { can } from './rights';
 import { attachProfile } from '../platform/accounts';
 import { loadShop, platformSettings, shopCtx, shopStatus } from '../platform/shops';
 import { FANOUT, Fan, fanOut, nextAcross, ORDERS_FAN, Part, Runner, sum, sumDeep, Target } from './fanout';
@@ -336,7 +337,7 @@ export const boutiqueWorkProcs = {
 
   /** Utilisateurs › « Boutiques »: for each person of this boutique, the person's boutiques where they also work. */
   'users.boutiques': proc(null, z.object({}), async (ctx) => {
-    if (!ctx.session.isAdmin && !ctx.session.canManageUsers) return {} as Record<string, number[]>;
+    if (!(await can(ctx, 'x:users'))) return {} as Record<string, number[]>;
     const mine = await boutiqueWork(ctx);
     if (mine.length < 2) return {} as Record<string, number[]>;
     const where = new Map<string, number[]>();

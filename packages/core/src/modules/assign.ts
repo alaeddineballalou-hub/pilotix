@@ -11,6 +11,7 @@ import { addWorkMinutes, algiersHour, CONF_STATUSES, CONF_TODO, isWomanName } fr
 import { z } from 'zod';
 import { Db, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, proc } from '../rpc';
+import { can } from './rights';
 import { AssignAgent, AssignArea, AssignRotation, DEFAULT_SETTINGS, getSetting, setSetting, SettingsMap } from '../settings';
 import { addEvent } from './orders';
 import { loadShop } from '../platform/shops';
@@ -761,15 +762,15 @@ export const AgentIn = z.object({
   woman: z.boolean().default(false),
 });
 
-/** Administrators, and the people they ticked (« Peut régler l’affectation »). */
-function needAffect(ctx: Ctx) {
-  if (!ctx.session.isAdmin && !ctx.session.profile.canAffect) throw forbidden('Seul l’administrateur (ou une personne qu’il a choisie) règle l’affectation');
+/** Administrators, and the roles or people given it « en plus » (Utilisateurs › Rôles: « Affectation »). */
+async function needAffect(ctx: Ctx) {
+  if (!(await can(ctx, 'x:affect'))) throw forbidden('Seul l’administrateur (ou une personne qu’il a choisie) règle l’affectation');
 }
 
 export const assignProcs = {
   /** The settings and every agent of both areas with their state now (on line, open items, his own settings). */
   'assign.get': proc(null, z.object({}), async (ctx) => {
-    needAffect(ctx);
+    await needAffect(ctx);
     const cfg = await getAssign(ctx.db);
     const now = ctx.now();
     const [conf, follow] = await Promise.all([agentsOf(ctx.db, 'conf', cfg, now), agentsOf(ctx.db, 'follow', cfg, now)]);
@@ -790,7 +791,7 @@ export const assignProcs = {
     null,
     z.object({ conf: AreaIn, follow: AreaIn, agents: z.record(AgentIn), order: z.array(z.number().int().positive()).max(500), womenProducts: z.array(z.number().int().positive()).max(500).default([]) }),
     async (ctx, i) => {
-      needAffect(ctx);
+      await needAffect(ctx);
       for (const [k, v] of Object.entries(i.agents)) if (v.from !== null && v.to !== null && v.from === v.to) throw bad(`Agent ${k} : l’heure de début et de fin sont pareilles`);
       await setSetting(ctx.db, 'autoAssign', await withRotation(ctx.db, i), ctx.session.profile.id);
       await shareShops(ctx, i.agents);
@@ -800,7 +801,7 @@ export const assignProcs = {
 
   /** « Répartir maintenant », and the job every minute: both areas. */
   'assign.run': proc(null, z.object({}), async (ctx) => {
-    needAffect(ctx);
+    await needAffect(ctx);
     const cfg = await getAssign(ctx.db);
     return { conf: await runArea(ctx, 'conf', undefined, cfg), follow: await runArea(ctx, 'follow', undefined, cfg) };
   }),

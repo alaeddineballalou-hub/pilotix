@@ -33,6 +33,7 @@ import { useDebounced } from '../depot/OrderList';
 import type { In } from '../../lib/backend';
 import { useAllMode } from '../../layout/AllBoutiques';
 import { DemoCourier } from './DemoCourier';
+import { rightOn, tabOn } from '../../lib/rights';
 
 const LIST_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'traites', 'bloques', 'livres', 'annules', 'swap'] as const;
 /** the alert lists: all of them, the new ones (nobody acted yet), the ones in progress */
@@ -61,7 +62,7 @@ function SuiviOne({ sub }: PageProps) {
   const agency = useInAgency();
   const { has } = useSession();
   // the claims with couriers and the swaps: the store's suivi agents and the agencies (on their own orders)
-  const tabs: readonly string[] = !has('suivi') && !has('confirmation') ? LIST_TABS.filter((k) => k !== 'swap') : [...LIST_TABS, 'reclamation'];
+  const tabs: readonly string[] = (!has('suivi') && !has('confirmation') ? LIST_TABS.filter((k) => k !== 'swap') : [...LIST_TABS, 'reclamation']).filter((k) => tabOn('suivi', k));
   const asked: Sub = tabs.includes(sub ?? '') ? (sub as Sub) : 'enlivraison';
   // an agency's confirmation agent (no suivi): En livraison, Livré, Annulé — to watch its orders move (no alert, claim, swap)
   const tab: Sub = agency && !has('suivi') && !['enlivraison', 'livres', 'annules', 'alertes', 'alertes_new', 'alertes_encours', 'swap', 'reclamation'].includes(asked) ? 'enlivraison' : asked;
@@ -99,7 +100,8 @@ function SuiviBar({ tab }: { tab: Sub }) {
     el.scrollBy({ left: b.left + b.width / 2 - (r.left + r.width / 2) });
   }, [tab]);
   const active = (k: Sub) => tab === k || (k === 'alertes' && ['alertes_new', 'alertes_encours', 'reclamation', 'annules', 'swap'].includes(tab));
-  const item = (k: Sub, count?: number, x = false) => (
+  // (a tab taken from the role in Utilisateurs › Rôles is not drawn)
+  const item = (k: Sub, count?: number, x = false) => !tabOn('suivi', k) ? null : (
     <a className={`bjm-p ${active(k) ? 'on' : ''} ${x ? 'x' : ''}`} href={`#/suivi/${k}`} data-k={k} aria-current={tab === k ? 'page' : active(k) ? 'location' : undefined}>
       <span className="bjm-l">{t(agency && k === 'traites' ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`)}</span>
       {count !== undefined && <b className="bjm-n ltr">{count}</b>}
@@ -461,6 +463,8 @@ function List({ tab }: { tab: ListTab }) {
   const { has } = useSession();
   const canFollow = has('suivi');
   const canHandle = canFollow || has('confirmation');
+  // Utilisateurs › Rôles: « Traiter les alertes » (treat, back to alert, stuck parcels)
+  const treats = rightOn('act:suivi.treat');
   const [page, setPage] = useState(1);
   const [f, setF] = useState<SuiviF>(() => ({ ...NO_SF, ...store.json<Partial<SuiviF>>('suivi-f', {}), q: '' }));
   const setFilter = (patch: Partial<SuiviF>) => {
@@ -517,19 +521,21 @@ function List({ tab }: { tab: ListTab }) {
     actions = (o) => (
       <div className="row nowrap px-sv-acts">
         {!agency && <AlertClaim o={o} x={extra[o.id]} onClaim={(toLivreur) => setDlg({ kind: 'claim', o, toLivreur })} />}
-        <button type="button" className="btn small primary" onClick={() => setDlg({ kind: 'treat', o })}>
-          {t('suivi.act.treat')}
-        </button>
+        {treats && (
+          <button type="button" className="btn small primary" onClick={() => setDlg({ kind: 'treat', o })}>
+            {t('suivi.act.treat')}
+          </button>
+        )}
       </div>
     );
   if (tab === 'enlivraison')
     actions = (o) => (
       <div className="row nowrap px-sv-acts">
-        {o.followStatus === 'alert' ? <button type="button" className="btn small primary" onClick={() => setDlg({ kind: 'treat', o })}>{t('suivi.act.treat')}</button> :
+        {!treats ? null : o.followStatus === 'alert' ? <button type="button" className="btn small primary" onClick={() => setDlg({ kind: 'treat', o })}>{t('suivi.act.treat')}</button> :
           <button type="button" className="btn small" disabled={act.isPending} onClick={() => run(o, 'realert')}><Icon name="alert" /> {t('suivi.act.toAlert')}</button>}
       </div>
     );
-  if (tab === 'bloques')
+  if (tab === 'bloques' && treats)
     actions = (o) => (
       <div className="row nowrap px-sv-acts">
         <button type="button" className="btn small primary" onClick={() => setDlg({ kind: 'stuck', o })}>
@@ -592,16 +598,17 @@ function List({ tab }: { tab: ListTab }) {
           const phoneActions = (o: Order): ParcelAction[] => {
             if (!canFollow) {
               if (!canHandle) return [];
-              if (isAlertTab(tab) && !agency) return [{ key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: extra[o.id]?.companyKind === 'own' }) }];
-              if ((tab === 'annules' || tab === 'swap') && o.followStatus === 'returning') return [{ key: 'swap', label: t('suivi.act.swap'), run: () => setDlg({ kind: 'swap', o }) }];
+              if (isAlertTab(tab) && !agency && rightOn('act:suivi.claim')) return [{ key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: extra[o.id]?.companyKind === 'own' }) }];
+              if ((tab === 'annules' || tab === 'swap') && o.followStatus === 'returning' && rightOn('act:suivi.swap')) return [{ key: 'swap', label: t('suivi.act.swap'), run: () => setDlg({ kind: 'swap', o }) }];
               return [];
             }
             const claim: ParcelAction = { key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: extra[o.id]?.companyKind === 'own' }) };
+            if (!treats) return isAlertTab(tab) && !agency && rightOn('act:suivi.claim') ? [claim] : [];
             if (tab === 'enlivraison') return [o.followStatus === 'alert'
               ? { key: 'treat', label: t('suivi.act.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) }
               : { key: 'realert', label: t('suivi.act.toAlert'), run: () => run(o, 'realert') }];
             if (isAlertTab(tab))
-              return [{ key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) }, ...(!agency ? [claim] : [])];
+              return [{ key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) }, ...(!agency && rightOn('act:suivi.claim') ? [claim] : [])];
             if (tab === 'traites')
               return [
                 { key: 'deliv', label: t('suivi.ph.deliv'), tone: 'ok', run: () => run(o, 'delivered') },
@@ -645,13 +652,13 @@ function List({ tab }: { tab: ListTab }) {
           x={extra[focus.id] ?? focus.x}
           onLeft={nextAlert}
           onClose={closeFocus}
-          actions={(o) => [
+          actions={(o) => ([
             focus.kind === 'stuck'
               ? { key: 'stuck', label: t('suivi.stuck.btn'), tone: 'main', run: () => setDlg({ kind: 'stuck', o }) }
               : { key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) },
-            ...(!agency && focus.kind === 'alert' ? [{ key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: focus.x?.companyKind === 'own' }) }] : []),
-          ]}
-          onClaim={agency || focus.kind !== 'alert' ? undefined : (o) => setDlg({ kind: 'claim', o, toLivreur: focus.x?.companyKind === 'own' })}
+            ...(!agency && focus.kind === 'alert' && rightOn('act:suivi.claim') ? [{ key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: focus.x?.companyKind === 'own' }) }] : []),
+          ] as ParcelAction[]).filter((a) => treats || a.key === 'claim')}
+          onClaim={agency || focus.kind !== 'alert' || !rightOn('act:suivi.claim') ? undefined : (o) => setDlg({ kind: 'claim', o, toLivreur: focus.x?.companyKind === 'own' })}
         />
       )}
       {dlg?.kind === 'stuck' && (
@@ -730,12 +737,14 @@ function AlertClaim({ o, x, onClaim }: { o: Order; x?: Extra; onClaim: (toLivreu
           <small className="muted">{when(x.claim!.sentAt)}</small>
         </span>
       )}
-      <button type="button" className="btn small bjr-recb" title={own ? t('suivi.act.write', { name: o.livreurName ?? '' }) : undefined} onClick={() => onClaim(own)}>
-        <span className="bjr-ic">
-          <Icon name={own ? 'message' : 'copy'} />
-        </span>
-        {t('suivi.act.claim')}
-      </button>
+      {rightOn('act:suivi.claim') && (
+        <button type="button" className="btn small bjr-recb" title={own ? t('suivi.act.write', { name: o.livreurName ?? '' }) : undefined} onClick={() => onClaim(own)}>
+          <span className="bjr-ic">
+            <Icon name={own ? 'message' : 'copy'} />
+          </span>
+          {t('suivi.act.claim')}
+        </button>
+      )}
     </span>
   );
 }
@@ -744,7 +753,7 @@ function AlertClaim({ o, x, onClaim }: { o: Order; x?: Extra; onClaim: (toLivreu
  *  company's API when it has one, the swap window says what is possible). */
 function SwapButton({ o, onSwap }: { o: Order; onSwap: () => void }) {
   const { t } = useTranslation();
-  if (o.followStatus !== 'returning') return null;
+  if (o.followStatus !== 'returning' || !rightOn('act:suivi.swap')) return null;
   return (
     <button type="button" className="btn small primary nowrap" style={{ whiteSpace: 'nowrap' }} onClick={onSwap}>
       {t('suivi.act.swap')}

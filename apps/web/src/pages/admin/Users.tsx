@@ -1,5 +1,5 @@
 // Utilisateurs: the Rôles table and one list per role, with the create / edit form (users.create / users.update).
-import { AgencySellerWork, expandRoles, LANGUAGES, payTasksIn, Profile, Role, ROLES, type PayTask } from '@pilotix/shared';
+import { AgencySellerWork, expandRoles, LANGUAGES, payTasksIn, Profile, RIGHTS, RIGHTS_ROLES, type RightsRole, Role, type RoleRights, roleRightsSet, ROLES, roleSummary, type PayTask } from '@pilotix/shared';
 import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { canSee, NAV } from '../../layout/nav';
@@ -13,6 +13,8 @@ import { Card, copyText, Empty, ErrorBox, Field, Icon, Loading, StageBar } from 
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { ConfirmButton } from './bits';
+import { RoleRightsPage } from './RoleRights';
+import './rolerights.css';
 import { usePartnerKind, useTp } from '../agency/parts';
 import { useAllMode } from '../../layout/AllBoutiques';
 import { BoutiqueLogo } from '../../layout/Boutiques';
@@ -105,10 +107,12 @@ export function UsersPage({ sub, rest, agency }: { sub?: string; rest?: string[]
   }
   // people allowed to handle the team's accounts (not administrators) do not see the administrators' list
   const subs = USER_SUBS.filter((k) => session?.isAdmin || k !== 'admins');
+  // Utilisateurs › Rôles › <role>: what the role sees and does (the boutique's administrators)
+  const editing = sub === 'roles' && session?.isAdmin && (RIGHTS_ROLES as readonly string[]).includes(rest?.[0] ?? '') ? rest![0] : null;
   return (
     <>
       <StageBar flow={false} current={cur.sub} items={subs.map((k) => ({ key: k, label: t(`admin.subs.${k}`), href: `#/utilisateurs/${k}` }))} />
-      {cur.role ? <RoleList role={cur.role} onNew={() => setForm({ user: null, role: cur.role })} onEdit={(u) => setForm({ user: u, role: cur.role })} /> : <RolesTable onNew={() => setForm({ user: null, role: null })} />}
+      {editing ? <RoleRightsPage role={editing} /> : cur.role ? <RoleList role={cur.role} onNew={() => setForm({ user: null, role: cur.role })} onEdit={(u) => setForm({ user: u, role: cur.role })} /> : <RolesTable onNew={() => setForm({ user: null, role: null })} />}
       {form && <UserForm user={form.user} role={form.role} onClose={() => setForm(null)} />}
     </>
   );
@@ -125,6 +129,9 @@ function RolesTable({ onNew }: { onNew: () => void }) {
   const { t } = useTranslation();
   const { session } = useSession();
   const q = useRpc('admin.roles', {});
+  // the boutique's rights (its administrators): each role's « Ce qu'il fait » and its pages come from them
+  const rq = useRpc('rights.get', {}, { enabled: !!session?.isAdmin });
+  const rr = rq.data?.rights as RoleRights | undefined;
   return (
     <>
       <Card
@@ -157,7 +164,10 @@ function RolesTable({ onNew }: { onNew: () => void }) {
                 {ROLE_ORDER.filter((r) => (session?.isAdmin || r !== 'admin') && (!NO_NEW.includes(r) || (q.data?.[r]?.total ?? 0) > 0)).map((r) => {
                   const c = q.data?.[r] ?? { active: 0, total: 0, names: [] };
                   const names = c.names.slice(0, 4).join(', ') + (c.names.length > 4 ? '…' : '');
-                  const pages = pagesOf(r).map((p) => t(`nav.${p}`));
+                  const rights = rr && r !== 'admin' ? roleRightsSet(r as RightsRole, rr) : null;
+                  const pages = rights ? RIGHTS.filter((d) => d.kind === 'page' && rights.has(d.id) && !d.locked).map((d) => t(d.label)) : pagesOf(r).map((p) => t(`nav.${p}`));
+                  const sum = rights ? roleSummary(r as RightsRole, rr!) : null;
+                  const changedN = rr && r !== 'admin' ? (rr.roles[r as RightsRole]?.off?.length ?? 0) + (rr.roles[r as RightsRole]?.on?.length ?? 0) : 0;
                   return (
                     <tr key={r}>
                       <td data-l={t('admin.users.colRole')}>
@@ -166,7 +176,20 @@ function RolesTable({ onNew }: { onNew: () => void }) {
                       </td>
                       <td className="wide px-cw" data-l={t('admin.users.colWhat')} title={t(`admin.users.desc.${r}`)}>
                         <div className="px-clamp">{t(`admin.users.desc.${r}`)}</div>
+                        {sum && (
+                          <small className="rr-sum muted">
+                            {[t('rights.nPages', { count: sum.pages.on }), t('rights.nTabs', { count: sum.tabs.on }), t('rights.nActs', { count: sum.acts.on })].join(' · ')}
+                            {sum.extra.on > 0 && t('rights.sumExtra', { count: sum.extra.on })}
+                            {changedN > 0 && t('rights.sumChanged', { count: changedN })}
+                          </small>
+                        )}
+                        {r === 'admin' && session?.isAdmin && <small className="muted">{t('rights.adminAll')}</small>}
                         {NO_NEW.includes(r) && <small className="muted">{t(noNewKey(r))}</small>}
+                        {sum && (
+                          <a className="btn small" href={`#/utilisateurs/roles/${r}`}>
+                            {t('rights.editRole')}
+                          </a>
+                        )}
                       </td>
                       <td className="wide px-cw" data-l={t('admin.users.colPages')} title={pages.join(' · ')}>
                         <div className="px-clamp">
@@ -445,8 +468,9 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
       roles,
       language,
       livreurCompanyId: roles.includes('livreur') ? company : null,
-      // only the administrator gives (or takes back) the right to handle accounts
-      ...(isAdmin ? { canManageUsers: manage && !roles.includes('admin'), canAssign: assign && !roles.includes('admin'), canAffect: affect && !roles.includes('admin') } : {}),
+      // only the administrator gives (or takes back) the right to handle accounts — a partner's space only: a store sets
+      // them in Utilisateurs › Rôles › Une personne à part
+      ...(isAdmin && agency ? { canManageUsers: manage && !roles.includes('admin'), canAssign: assign && !roles.includes('admin'), canAffect: affect && !roles.includes('admin') } : {}),
       ...(agency ? { sellers } : {}),
       ...(payHere && payPlans.length ? { plans: payPlans } : {}),
     };
@@ -558,7 +582,12 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
             </div>
           </Field>
         )}
-        {isAdmin && !roles.includes('admin') && (
+        {isAdmin && !agency && !roles.includes('admin') && (
+          <p className="muted small">
+            {t('rights.formExtras')} <a href="#/utilisateurs/roles/confirmation">{t('rights.formExtrasLink')}</a>
+          </p>
+        )}
+        {isAdmin && agency && !roles.includes('admin') && (
           <Field label={t('admin.users.manageUsers')} hint={t('admin.users.manageUsersHint')}>
             <label className="row nowrap" style={{ gap: 8 }}>
               <input type="checkbox" checked={manage} onChange={(e) => setManage(e.target.checked)} />
@@ -566,19 +595,11 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
             </label>
           </Field>
         )}
-        {isAdmin && !roles.includes('admin') && (
+        {isAdmin && agency && !roles.includes('admin') && (
           <Field label={t('admin.users.canAssign')} hint={t('admin.users.canAssignHint')}>
             <label className="row nowrap" style={{ gap: 8 }}>
               <input type="checkbox" checked={assign} onChange={(e) => setAssign(e.target.checked)} />
               {t('admin.users.canAssignLabel')}
-            </label>
-          </Field>
-        )}
-        {isAdmin && !agency && !roles.includes('admin') && (
-          <Field label={t('admin.users.canAffect')} hint={t('admin.users.canAffectHint')}>
-            <label className="row nowrap" style={{ gap: 8 }}>
-              <input type="checkbox" checked={affect} onChange={(e) => setAffect(e.target.checked)} />
-              {t('admin.users.canAffectLabel')}
             </label>
           </Field>
         )}

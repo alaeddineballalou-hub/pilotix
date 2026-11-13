@@ -1,0 +1,285 @@
+{
+  "title": "Le menu de chaque rôle",
+  "sub": "Allumez ou éteignez une page, ses onglets et ses boutons. Le menu que la personne verra change avec vous.",
+  "back": "Revenir au rôle de base",
+  "backDone": "{{role}} : revenu au rôle de base (pas encore enregistré)",
+  "pickRole": "Choisir le rôle",
+  "adminAll": "L’administrateur a toujours tout : il ne se règle pas.",
+  "agence": "Agents d’agence",
+  "agenceHint": "Les agents d’une agence de confirmation qui travaillent dans la boutique",
+  "menuOf": "Le menu de {{role}}",
+  "always": "Toujours",
+  "tabs": "Onglets",
+  "acts": "Boutons",
+  "count": "{{tabs}} · {{acts}}",
+  "open": "Ouvrir {{name}}",
+  "close": "Fermer {{name}}",
+  "pageOff": "Page éteinte : elle disparaît du menu, avec ses onglets.",
+  "orders": "Boutons sur les commandes",
+  "ordersSub": "Partout où une commande s’ouvre",
+  "general": "Partout dans Pilotix",
+  "extra": "En plus du rôle",
+  "extraSub": "La courte liste de ce qui peut être donné en plus. Avant, c’était dans Préférences ou sur la fiche d’une personne.",
+  "extraPill": "en plus",
+  "modified": "modifié",
+  "none": "Pas possible pour {{role}} : {{pages}}. Ces pages restent à leurs rôles et à l’administrateur.",
+  "people": "Une personne à part",
+  "peopleSub": "Quand une seule personne doit avoir plus ou moins que son rôle",
+  "peopleNone": "Personne n’est à part pour l’instant.",
+  "addPerson": "+ Ajouter une personne à part",
+  "edit": "Modifier",
+  "remove": "Retirer",
+  "more": "+ {{list}}",
+  "less": "− {{list}}",
+  "personTitle": "{{name}} à part",
+  "personHelp": "Enlevez ce que {{name}} ne doit pas faire, ou donnez-lui en plus ce que la liste permet. Le reste suit son rôle.",
+  "pickPerson": "La personne",
+  "pickPersonPh": "Choisir…",
+  "personHas": "Ce qu’elle a par son rôle",
+  "personCan": "Ce qui peut lui être donné en plus",
+  "personNothing": "Rien à donner en plus à cette personne.",
+  "done": "OK",
+  "preview": "Ce que voit {{name}}",
+  "previewRole": "Ce que voit {{role}}",
+  "previewSub": "Il change pendant que vous cochez",
+  "previewTabs": "Onglets de {{page}}",
+  "changes_one": "{{count}} changement pas encore enregistré",
+  "changes_other": "{{count}} changements pas encore enregistrés",
+  "cancel": "Annuler",
+  "save": "Enregistrer les droits",
+  "saved": "Droits enregistrés : les écrans de l’équipe suivent tout de suite",
+  "sumExtra": " · {{count}} en plus",
+  "sumChanged_one": " · {{count}} changé",
+  "sumChanged_other": " · {{count}} changés",
+  "editRole": "Modifier ce qu’il fait",
+  "formExtras": "Ses droits en plus (gérer les comptes, « À attribuer », Affectation) se règlent dans Utilisateurs › Rôles › Une personne à part.",
+  "formExtrasLink": "Ouvrir les rôles",
+  "prefsMoved": "« Qui peut changer la société » et « Qui écrit les règles Pilot » se règlent maintenant dans Utilisateurs › Rôles, rôle par rôle.",
+  "prefsMovedLink": "Ouvrir Utilisateurs › Rôles",
+  "noItems": "Votre rôle ne change pas les produits ni les prix (Utilisateurs › Rôles).",
+  "noCustomer": "Votre rôle ne change pas le client ni l’adresse (Utilisateurs › Rôles).",
+  "x": {
+    "users": "Gérer les comptes de l’équipe",
+    "assign": "Choisir la société ou le livreur des colis",
+    "affect": "Répartir les commandes entre les agents",
+    "rules": "Écrire les règles Pilot"
+  },
+  "xHelp": {
+    "users": "Créer les comptes et changer les mots de passe, jamais d’un administrateur. Avant : « Peut créer des comptes et changer les mots de passe ».",
+    "assign": "Dépôt › « À attribuer ». Avant : « Peut attribuer les commandes ».",
+    "affect": "Management › Affectation. Avant : « Peut régler l’affectation ».",
+    "rules": "Pilot Automations › Auto Pilot Assign. Avant : dans Préférences."
+  },
+  "act": {
+    "orders": {
+      "create": "Créer une commande",
+      "customer": "Modifier le client et l’adresse",
+      "items": "Changer les produits et les prix",
+      "cancel": "Annuler une commande",
+      "company": "Changer la société de livraison",
+      "give": "Donner une commande à un agent",
+      "blacklist": "Mettre un client sur la liste noire",
+      "send": "Envoyer les colis à la société",
+      "parcelCancel": "Annuler un colis chez la société",
+      "export": "Exporter en Excel"
+    },
+    "costs": "Voir le prix d’achat et la marge",
+    "conf": {
+      "photos": "Envoyer les photos du produit au client"
+    },
+    "suivi": {
+      "treat": "Traiter les alertes",
+      "claim": "Faire une réclamation",
+      "swap": "Faire un swap",
+      "parcel": "Modifier un colis chez la société"
+    },
+    "depot": {
+      "prepare": "Préparer les commandes",
+      "dispatch": "Dispatcher les colis",
+      "returns": "Recevoir les retours",
+      "pickup": "Demander un ramassage"
+    },
+    "sav": {
+      "create": "Ouvrir un ticket SAV",
+      "exchange": "Faire un échange",
+      "settle": "Régler un ticket SAV"
+    },
+    "stock": {
+      "products": "Créer et modifier les produits",
+      "prices": "Changer les prix des produits",
+      "move": "Changer le stock",
+      "purchases": "Acheter chez les fournisseurs",
+      "guides": "Écrire les guides de vente"
+    },
+    "pos": {
+      "sell": "Vendre au comptoir",
+      "cancel": "Annuler une vente du comptoir"
+    },
+    "caisse": {
+      "add": "Ajouter une dépense ou un encaissement",
+      "transfer": "Remettre l’argent à une autre caisse"
+    },
+    "pay": {
+      "ask": "Demander un acompte"
+    },
+    "dellal": {
+      "reply": "Répondre aux clients"
+    },
+    "cm": {
+      "reply": "Répondre aux commentaires"
+    },
+    "social": {
+      "publish": "Publier et planifier les posts"
+    },
+    "createur": {
+      "ai": "Utiliser les outils IA"
+    },
+    "spy": {
+      "search": "Lancer une recherche AI Spy"
+    },
+    "notify": {
+      "send": "Envoyer les messages de livraison"
+    },
+    "promo": {
+      "settings": "Régler les codes promo"
+    },
+    "ads": {
+      "control": "Allumer, couper, changer le budget d’une pub",
+      "launch": "Lancer une nouvelle pub",
+      "owner": "Décisions du propriétaire sur les pubs"
+    },
+    "campaigns": {
+      "send": "Envoyer une campagne WhatsApp"
+    },
+    "leads": {
+      "fix": "Corriger les formulaires des pubs"
+    },
+    "catalog": {
+      "send": "Envoyer les produits au catalogue Meta et TikTok"
+    },
+    "marketers": {
+      "pay": "Payer les marketers"
+    },
+    "landing": {
+      "edit": "Créer et modifier les landing pages",
+      "protect": "Bloquer ou rendre les fausses commandes"
+    },
+    "partners": {
+      "manage": "Gérer les influenceurs"
+    }
+  },
+  "actHelp": {
+    "orders": {
+      "create": "Le bouton « + Nouvelle commande »",
+      "customer": "Nom, téléphones, wilaya, commune, adresse, bureau",
+      "items": "Produits, quantités, prix, remise, frais (jamais sous la remise maximum)",
+      "cancel": "Annulée, faux numéro, en double, fausse commande",
+      "company": "Sur une commande qui en a déjà une. Avant : dans Préférences.",
+      "give": "Choisir l’agent qui appelle",
+      "blacklist": "Et l’en sortir",
+      "send": "Par l’API de la société (ZR, Yalidine…)",
+      "parcelCancel": "Avant qu’il parte",
+      "export": "Les listes, avec les numéros. L’app cache le bouton : le fichier se fait dans le navigateur."
+    },
+    "costs": "Dans les produits, les commandes et les chiffres",
+    "conf": {
+      "photos": "Par WhatsApp, depuis la commande"
+    },
+    "suivi": {
+      "treat": "Appeler, noter la réponse, « Alerte suivante »",
+      "claim": "Au livreur ou à la société de livraison",
+      "swap": "Envoyer un colis annulé à un autre client",
+      "parcel": "Montant, adresse : une demande à la société"
+    },
+    "depot": {
+      "prepare": "« J’ai pris », colis prêts",
+      "dispatch": "Sortir les colis du dépôt, les renvoyer",
+      "returns": "Et les remettre en stock",
+      "pickup": "Les sacs de ramassage des sociétés"
+    },
+    "sav": {
+      "create": "« + Nouveau ticket »",
+      "exchange": "Envoyer un autre article au client",
+      "settle": "Rembourser, clôturer"
+    },
+    "stock": {
+      "products": "Fiches, photos, import",
+      "prices": "Le prix de vente de chaque produit",
+      "move": "Entrées, sorties, transferts, casse",
+      "purchases": "Achats, paiements, fournisseurs",
+      "guides": "Et les traduire"
+    },
+    "pos": {
+      "sell": "Ouvrir et fermer la caisse du comptoir",
+      "cancel": "Une vente déjà faite"
+    },
+    "caisse": {
+      "add": "Dans sa propre caisse",
+      "transfer": "Transférer vers une autre caisse"
+    },
+    "pay": {
+      "ask": "Sur sa paie du mois"
+    },
+    "dellal": {
+      "reply": "Pilot Message : répondre, allumer ou couper Dellal"
+    },
+    "cm": {
+      "reply": "Répondre, en privé, cacher, ignorer"
+    },
+    "social": {
+      "publish": "Pilot Content"
+    },
+    "createur": {
+      "ai": "Espace créateur : ils coûtent des crédits"
+    },
+    "spy": {
+      "search": "Elle coûte des crédits"
+    },
+    "notify": {
+      "send": "WhatsApp ou SMS au client"
+    },
+    "promo": {
+      "settings": "Et marquer les posts et les pubs « Awareness »"
+    },
+    "ads": {
+      "control": "Sur les pubs déjà lancées",
+      "launch": "Préparer, lancer, retirer",
+      "owner": "Valider, tout couper, budget, devise, marketer"
+    },
+    "campaigns": {
+      "send": "Préparer, lancer, retirer"
+    },
+    "leads": {
+      "fix": "Les demandes qui attendent une personne"
+    },
+    "catalog": {
+      "send": "Ajouter, retirer, envoyer"
+    },
+    "marketers": {
+      "pay": "Prix et paiements par ad set"
+    },
+    "landing": {
+      "edit": "Pages, images, pixels, groupes",
+      "protect": "La protection des landing pages"
+    },
+    "partners": {
+      "manage": "Ajouter, demander, retirer"
+    }
+  },
+  "changeOn": "{{who}} : {{what}} ajouté",
+  "changeOff": "{{who}} : {{what}} enlevé",
+  "tabsN_one": "{{count}} onglet sur {{of}}",
+  "tabsN_other": "{{count}} onglets sur {{of}}",
+  "actsN_one": "{{count}} bouton sur {{of}}",
+  "actsN_other": "{{count}} boutons sur {{of}}",
+  "nPages_one": "{{count}} page",
+  "nPages_other": "{{count}} pages",
+  "nTabs_one": "{{count}} onglet",
+  "nTabs_other": "{{count}} onglets",
+  "nActs_one": "{{count}} bouton",
+  "nActs_other": "{{count}} boutons",
+  "page": {
+    "automessages": "Messages de livraison",
+    "autoreglages": "Réglages des automatisations"
+  }
+}

@@ -17,6 +17,7 @@ import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import type { Tenancy } from '../platform/tenancy';
 import { bad, Ctx, forbidden, notFound, proc, withActionLock } from '../rpc';
+import { can } from './rights';
 import { getSetting } from '../settings';
 import { getRaw, setRaw } from './admin';
 import { caisseChoices } from './caisses';
@@ -692,7 +693,7 @@ export const payProcs = {
 
   /** The plans the user form offers, by job, and the jobs a set of roles needs (admins and user managers). */
   'pay.planChoices': payProc(null, z.object({ personId: Id.nullable().optional() }), async (ctx, i) => {
-    if (!ctx.session.isAdmin && !ctx.session.canManageUsers) throw forbidden();
+    if (!(await can(ctx, 'x:users'))) throw forbidden();
     const now = ctx.now();
     const terms = i.personId ? ((await termsOf(ctx.db, [i.personId])).get(i.personId) ?? []) : [];
     return {
@@ -706,7 +707,7 @@ export const payProcs = {
 
   /** Utilisateurs: each person's plan per job now, and the jobs left without one (admins and user managers). */
   'pay.teamPlans': proc(null, z.object({}), async (ctx) => {
-    if (!payIsOn(ctx.shop) || (!ctx.session.isAdmin && !ctx.session.canManageUsers)) return [];
+    if (!payIsOn(ctx.shop) || !(await can(ctx, 'x:users'))) return [];
     paySpace(ctx);
     const now = ctx.now();
     const people = await payPeople(ctx.db);
@@ -723,7 +724,7 @@ export const payProcs = {
   'pay.noPlan': proc(null, z.object({}), async (ctx) => {
     if (!payIsOn(ctx.shop)) return { people: [], url: '' };
     paySpace(ctx);
-    if (!ctx.session.isAdmin && !ctx.session.canManageUsers) return { people: [], url: boardUrl(ctx.db) };
+    if (!(await can(ctx, 'x:users'))) return { people: [], url: boardUrl(ctx.db) };
     return { people: await noPlanFor(ctx), url: ctx.session.isAdmin ? boardUrl(ctx.db) : SPACE.has(ctx.db) ? '#/equipe/personnes' : '#/management/utilisateurs' };
   }),
 

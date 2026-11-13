@@ -23,12 +23,13 @@ import { Focus } from './Focus';
 import { HeldChip } from './hold';
 import { useIsPhone } from '../../lib/useMedia';
 import { PhoneCards, PhoneOrder } from './PhoneList';
-import { BULK_CHOICES, choiceLabel, currentLabel, ROW_CHOICES, StatusChoice, Sub, SUB_STATUSES, SUB_TONE, SUBS, telHref, toneOf, waHref } from './shared';
+import { BULK_CHOICES, choiceAllowed, choiceLabel, currentLabel, ROW_CHOICES, StatusChoice, Sub, SUB_STATUSES, SUB_TONE, SUBS, telHref, toneOf, waHref } from './shared';
 import { ConfirmedStatsPage, StatsSection } from './Stats';
 import { useStatusChange } from './StatusDialog';
 import { CopyCode } from '../../ui/CopyCode';
 import { ScoreChip } from '../../ui/clientScore';
 import { useAllMode } from '../../layout/AllBoutiques';
+import { rightOn, tabOn } from '../../lib/rights';
 
 type Row = NonNullable<ReturnType<typeof useList>['data']>['rows'][number];
 type SortKey = 'created_at' | 'confirmed_at' | 'next_call_at' | 'total' | 'customer_name' | 'deadline' | 'score';
@@ -112,7 +113,7 @@ function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
     { key: 'attente', label: t('confirmation.sub.attente'), href: '#/confirmation/attente', count: c?.attente },
     { key: 'confirmees', label: t('confirmation.sub.confirmees'), href: '#/confirmation/confirmees', count: c?.confirmees },
     ...(sub === 'terminees' ? [{ key: 'terminees', label: t('confirmation.sub.terminees'), href: '#/confirmation/terminees', count: c?.terminees }] : []),
-  ];
+  ].filter((x) => tabOn('confirmation', x.key));
   const focusId = rest?.[0] ? Number(rest[0]) : null;
   // phones: the queue comes first; the big statistics stay on tablets and computers
   const phone = useIsPhone();
@@ -363,7 +364,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
         const cur: StatusChoice = r.confStatus === 'no_answer' ? (`try${Math.min(30, Math.max(1, r.attempts))}` as StatusChoice) : r.confStatus;
         // « Tentative 0N »: always this order's next call (its count never goes back)
         const nextTry = `try${Math.min(30, r.attempts + 1)}` as StatusChoice;
-        const choices = ROW_CHOICES.map((x) => (x === 'try1' ? nextTry : x)).filter((x) => x !== cur);
+        const choices = ROW_CHOICES.filter(choiceAllowed).map((x) => (x === 'try1' ? nextTry : x)).filter((x) => x !== cur);
         const opts = [{ value: cur, label: currentLabel(t, r.confStatus, r.attempts) }, ...choices.map((x) => ({ value: x, label: choiceLabel(t, x, true) }))];
         return (
           <StatusSelect
@@ -440,7 +441,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
             <Help text={t(`confirmation.help.${sub}`)} label={title} />
           </h2>
           <div className="row">
-            {has('confirmation') && !session?.profile.agencyId && (
+            {has('confirmation') && !session?.profile.agencyId && rightOn('act:orders.create') && (
               <button type="button" className={`btn ${canNext ? 'px-qnew' : 'primary'}`} onClick={() => openOrderForm({ onSaved: () => qc.invalidateQueries() })}>
                 + {t('confirmation.newOrder')}
               </button>
@@ -519,9 +520,11 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
               open={panel === 'c'}
               onToggle={() => setPanel(panel === 'c' ? null : 'c')}
             />
-            <button type="button" className="px-qb px-qb-dl" title={t('common.export')} aria-label={t('common.export')} onClick={doExport}>
-              <Icon name="download" />
-            </button>
+            {rightOn('act:orders.export') && (
+              <button type="button" className="px-qb px-qb-dl" title={t('common.export')} aria-label={t('common.export')} onClick={doExport}>
+                <Icon name="download" />
+              </button>
+            )}
             <button type="button" className={`px-qb ${list.isFetching ? 'spin' : ''}`} title={t('confirmation.refresh')} aria-label={t('confirmation.refresh')} onClick={() => list.refetch()}>
               <Icon name="refresh" />
             </button>
@@ -944,7 +947,7 @@ function Toolbar(p: {
             }}
           >
             <option value="">{t('confirmation.tb.status')}</option>
-            {BULK_CHOICES.map((c) => (
+            {BULK_CHOICES.filter(choiceAllowed).map((c) => (
               <option key={c} value={c}>
                 {choiceLabel(t, c)}
               </option>

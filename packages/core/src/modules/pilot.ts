@@ -18,6 +18,7 @@ import { clashesOf, type Clash, personIs, pickRule, type PilotBy, type PilotConf
 import { z } from 'zod';
 import { Db, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, proc } from '../rpc';
+import { can, rightsApply } from './rights';
 import { getSetting, setSetting } from '../settings';
 import { serves } from './confirmcheck';
 import { officialCommune, servedWilayas } from './coverage';
@@ -130,6 +131,15 @@ export async function setPick(db: Db, cur: { id: number | string; company_id: un
 export async function companyLock(ctx: Ctx, db: Db, cur: { company_id: unknown; pilot_by?: string | null }): Promise<string | null> {
   if (ctx.session.isAdmin || !numOrNull(cur.company_id)) return null;
   const p = await getPrefs(db);
+  // a store: Utilisateurs › Rôles (« Changer la société de livraison »); the managers there: the « Agent manager » role
+  // or the people who choose in « À attribuer »
+  if (rightsApply(ctx)) {
+    const may = await can(ctx, 'act:orders.company');
+    const manager = may && (ctx.session.roles.includes('agent_manager') || (await can(ctx, 'x:assign')));
+    if (p.strictLock && cur.pilot_by === 'strict')
+      return manager ? null : 'Société choisie par une règle stricte de Pilot : seuls les managers et les admins la changent.';
+    return may ? null : 'Vous ne pouvez pas changer la société de livraison de cette commande (Utilisateurs › Rôles).';
+  }
   const manager = p.changeCompany.manager && personIs(ctx.session, { confirmation: false, agency: false, depot: false, manager: true });
   if (p.strictLock && cur.pilot_by === 'strict')
     return manager ? null : 'Société choisie par une règle stricte de Pilot : seuls les managers et les admins la changent.';
@@ -140,10 +150,11 @@ export async function companyLock(ctx: Ctx, db: Db, cur: { company_id: unknown; 
 // ---------------------------------------------------------------- rules: checks, waiting orders
 /** Admins, and the kinds of people ticked in Préférences (« Qui peut changer les règles Pilot »). */
 export async function canRules(ctx: Ctx): Promise<boolean> {
+  if (rightsApply(ctx)) return can(ctx, 'x:rules');
   return ctx.session.isAdmin || personIs(ctx.session, (await getPrefs(ctx.db)).rulesBy);
 }
 const needRules = async (ctx: Ctx) => {
-  if (!(await canRules(ctx))) throw forbidden('Seuls les admins et les personnes choisies dans Préférences changent les règles de Pilot');
+  if (!(await canRules(ctx))) throw forbidden('Seuls les admins et les personnes choisies dans Utilisateurs › Rôles changent les règles de Pilot');
 };
 
 const RuleIn = z.object({

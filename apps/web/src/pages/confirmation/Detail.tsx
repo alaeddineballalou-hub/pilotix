@@ -24,6 +24,7 @@ import './check.css';
 import './photos.css';
 import { askRisk } from '../../ui/clientScore';
 import { useHold } from './hold';
+import { rightOn } from '../../lib/rights';
 
 interface Line {
   productId: number;
@@ -901,12 +902,17 @@ function StatusMenu({ order, busy, pending, onPick }: { order: Order; busy: bool
           {item('phone', 'c-mid', label('busy'), null, () => direct('busy'))}
           {item('timer', 'c-info', t('confirmation.d6.callback'), t('confirmation.d6.dateHour'), () => pickAsk('callback'))}
           {item('calendar', 'c-info', label('postponed'), t('confirmation.d6.date'), () => pickAsk('postponed'))}
-          <div className="qd6-msep" />
-          {item('ban', 'c-bad', label('cancelled'), t('confirmation.d6.reason'), () => pickAsk('cancelled'))}
-          {item('xcircle', 'c-off', label('wrong_number'), null, () => direct('wrong_number'))}
-          {item('copy', 'c-off', label('duplicate'), null, () => direct('duplicate'))}
-          {item('alert', 'c-off', label('fake'), null, () => direct('fake'))}
-          {item('flag', 'c-off', t('status.fakeReason.competitor'), t('confirmation.d6.competitorHint'), () => direct('competitor'))}
+          {/* Utilisateurs › Rôles: « Annuler une commande » (cancel, wrong number, duplicate, fake) */}
+          {rightOn('act:orders.cancel') && (
+            <>
+              <div className="qd6-msep" />
+              {item('ban', 'c-bad', label('cancelled'), t('confirmation.d6.reason'), () => pickAsk('cancelled'))}
+              {item('xcircle', 'c-off', label('wrong_number'), null, () => direct('wrong_number'))}
+              {item('copy', 'c-off', label('duplicate'), null, () => direct('duplicate'))}
+              {item('alert', 'c-off', label('fake'), null, () => direct('fake'))}
+              {item('flag', 'c-off', t('status.fakeReason.competitor'), t('confirmation.d6.competitorHint'), () => direct('competitor'))}
+            </>
+          )}
         </div>
       )}
       {(step === 'cancelled' || step === 'postponed' || step === 'callback') && (

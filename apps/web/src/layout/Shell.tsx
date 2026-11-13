@@ -23,6 +23,7 @@ import { AccountMenu } from './AccountMenu';
 import { BoutiqueSwitch, useBoutiques } from './Boutiques';
 import { ShopBanner } from './ShopBanner';
 import { AllBanner, useAllMode } from './AllBoutiques';
+import { rightOn, tabOn } from '../lib/rights';
 const DepotAlert = lazy(() => import('./DepotAlert').then((m) => ({ default: m.DepotAlert })));
 const AutoPushAsk = lazy(() => import('./AutoPushAsk').then((m) => ({ default: m.AutoPushAsk })));
 
@@ -333,13 +334,17 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
                 <Icon name="chevr" className="pxs-ar" />
               </button>
             ) : page === 'sav' ? (
-              <button type="button" className="btn primary pxs-new" title={t('sav.new').replace(/^\+\s*/, '')} onClick={() => (location.hash = '#/sav/nouveau')}>
-                +<span className="pxs-t"> {t('sav.new').replace(/^\+\s*/, '')}</span>
-              </button>
+              rightOn('act:sav.create') && tabOn('sav', 'nouveau') && (
+                <button type="button" className="btn primary pxs-new" title={t('sav.new').replace(/^\+\s*/, '')} onClick={() => (location.hash = '#/sav/nouveau')}>
+                  +<span className="pxs-t"> {t('sav.new').replace(/^\+\s*/, '')}</span>
+                </button>
+              )
             ) : (
-              <button type="button" className="btn primary pxs-new" title={t('orders.new')} onClick={() => openOrderForm()}>
-                +<span className="pxs-t"> {t('orders.new')}</span>
-              </button>
+              rightOn('act:orders.create') && (
+                <button type="button" className="btn primary pxs-new" title={t('orders.new')} onClick={() => openOrderForm()}>
+                  +<span className="pxs-t"> {t('orders.new')}</span>
+                </button>
+              )
             )
           )}
           <span className="icon-btn px-hdr-lang px-lang" title={t('shell.language')}>

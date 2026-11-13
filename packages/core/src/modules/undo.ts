@@ -88,7 +88,7 @@ async function lastAction(db: Db, orderId: number): Promise<Action | null> {
 /** Why this person cannot undo it now (null: they can). */
 export type UndoWhy = 'courier' | 'sav' | 'swap' | 'left' | 'cashed' | 'bag' | 'moved' | 'nothing' | 'held' | 'other' | 'old';
 
-function whyNot(ctx: Ctx, o: any, act: Action, now: number): UndoWhy | null {
+function whyNot(ctx: Ctx, o: any, act: Action, now: number, assigns: boolean): UndoWhy | null {
   const ev = act.main;
   // given by the delivery company: its next update would give it again
   if (act.all.some((e) => e.data?.courier || /^Statut |^Payé par la société/.test(e.note ?? ''))) return 'courier';
@@ -108,7 +108,7 @@ function whyNot(ctx: Ctx, o: any, act: Action, now: number): UndoWhy | null {
   const s = ctx.session;
   if (s.isAdmin) return null;
   const office =
-    hasRole(s, 'agent_manager', 'vendeur') || (ev.kind === 'follow_status' && (s.roles.includes('suivi') || (DEPOT_STEPS.includes(String(ev.to)) && canAssign(ctx))));
+    hasRole(s, 'agent_manager', 'vendeur') || (ev.kind === 'follow_status' && (s.roles.includes('suivi') || (DEPOT_STEPS.includes(String(ev.to)) && assigns)));
   if (office) return null;
   // another agent has the order open now (« Commande suivante »)
   if (o.locked_until && Date.parse(iso(o.locked_until)) > now && numOrNull(o.locked_by) !== s.profile.id) return 'held';
@@ -299,7 +299,7 @@ export async function undoOrder(ctx: Ctx, orderId: number, eventId: number | nul
   if (eventId === null && (await ctx.db.query(`SELECT 1 FROM order_events WHERE order_id = $1 AND kind = 'undo' AND at > $2::timestamptz LIMIT 1`, [orderId, ev.atTxt]))[0])
     throw bad('Ce changement est déjà annulé : rechargez la commande.');
   const o = await orderRow(ctx.db, orderId);
-  const why = whyNot(ctx, o, act, now);
+  const why = whyNot(ctx, o, act, now, await canAssign(ctx));
   if (why) throw bad(whyText(why, ev.name, await holderName(ctx.db, o)));
   if (ev.kind === 'conf_status') await undoConf(ctx, o, act);
   else await undoFollow(ctx, o, act);
@@ -315,7 +315,7 @@ export const undoProcs = {
     if (!act) return null;
     const ev = act.main;
     const o = await orderRow(ctx.db, orderId);
-    const why = whyNot(ctx, o, act, ctx.now());
+    const why = whyNot(ctx, o, act, ctx.now(), await canAssign(ctx));
     return {
       eventId: ev.id,
       area: ev.kind === 'conf_status' ? ('conf' as const) : ('follow' as const),

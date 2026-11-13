@@ -17,6 +17,7 @@ import { MyDashboard } from './Mine';
 import { useSession } from '../../lib/session';
 import './dashboard.css';
 import { useAllMode } from '../../layout/AllBoutiques';
+import { tabOn } from '../../lib/rights';
 
 const AREAS = ['overview', 'confirmation', 'depot', 'suivi', 'livreurs', 'sav'] as const;
 type Area = (typeof AREAS)[number];
@@ -46,7 +47,7 @@ function TeamDashboard({ sub }: PageProps) {
   if (meta.isLoading) return <Loading />;
   if (meta.error) return <ErrorBox error={meta.error} onRetry={() => meta.refetch()} />;
   const m = meta.data!;
-  const allowed = AREAS.filter((a) => (a === 'overview' ? m.seesAll : (m.areas as string[]).includes(a)) && pageIsOn('dashboard', a));
+  const allowed = AREAS.filter((a) => (a === 'overview' ? m.seesAll : (m.areas as string[]).includes(a)) && pageIsOn('dashboard', a) && tabOn('dashboard', a));
   if (!allowed.length) return <div className="empty-box">{t('dashboard.noArea')}</div>;
   const area: Area = allowed.includes(sub as Area) ? (sub as Area) : allowed[0];
   return (
