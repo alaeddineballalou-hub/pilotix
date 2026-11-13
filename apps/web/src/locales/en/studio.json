@@ -123,8 +123,8 @@
     "title": "What do you want to make?",
     "photo": "Website photo",
     "photoLine": "Your product in your shop, one photo per colour",
-    "copy": "Ad copy",
-    "copyLine": "The post text and 3 marketing angles",
+    "copy": "Ad poster",
+    "copyLine": "An ad picture with headline, benefits, colours and price (like a poster)",
     "landing": "Landing page image",
     "landingLine": "One long image under the form, as the description",
     "background": "Generate a background",
@@ -139,7 +139,7 @@
     "back": "Back to Pilotix's prompt"
   },
   "cp": {
-    "title": "Ad copy",
+    "title": "Post text (optional)",
     "write": "Write the text",
     "again": "Rewrite",
     "example": "Example text (no AI here).",
@@ -172,5 +172,14 @@
     "again": "Generate another",
     "use": "Use this background (logo, blur…)",
     "full": "8 backgrounds at most: delete one first."
+  },
+  "ad": {
+    "title": "Ad poster",
+    "help": "An ad picture ready for Facebook and Instagram: your photo, a headline, 4 benefits, the colours and the price. The AI only suggests the words; the price, the phone and the colours are written by Pilotix.",
+    "upload": "Add a product photo",
+    "fromStudio": "{{n}} Studio photo(s) ready",
+    "tip": "Tip: make this product's « Website photo » first, it will show here.",
+    "needPhoto": "Add a product photo (or make its « Website photo » first).",
+    "mine": "My photo {{n}}"
   }
 }

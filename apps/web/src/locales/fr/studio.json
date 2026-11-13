@@ -123,8 +123,8 @@
     "title": "Que voulez-vous créer ?",
     "photo": "Photo site",
     "photoLine": "Votre produit dans votre boutique, une photo par couleur",
-    "copy": "Texte pub",
-    "copyLine": "Le texte du post et 3 angles marketing",
+    "copy": "Affiche pub",
+    "copyLine": "Une image pub avec titre, avantages, couleurs et prix (comme une affiche)",
     "landing": "Image landing page",
     "landingLine": "Une longue image sous le formulaire, comme description",
     "background": "Générer un fond",
@@ -139,7 +139,7 @@
     "back": "Revenir au prompt Pilotix"
   },
   "cp": {
-    "title": "Texte pub",
+    "title": "Texte du post (facultatif)",
     "write": "Écrire le texte",
     "again": "Réécrire",
     "example": "Texte d'exemple (pas d'IA ici).",
@@ -172,5 +172,14 @@
     "again": "Générer un autre",
     "use": "Utiliser ce fond (logo, flou…)",
     "full": "8 fonds au plus : supprimez-en un d'abord."
+  },
+  "ad": {
+    "title": "Affiche pub",
+    "help": "Une image pub prête pour Facebook et Instagram : votre photo, un titre, 4 avantages, les couleurs et le prix. L'IA propose seulement les mots ; le prix, le numéro et les couleurs sont écrits par Pilotix.",
+    "upload": "Ajouter une photo du produit",
+    "fromStudio": "{{n}} photo(s) du Studio prêtes",
+    "tip": "Astuce : faites d'abord la « Photo site » de ce produit, elle sera ici.",
+    "needPhoto": "Ajoutez une photo du produit (ou faites d'abord sa « Photo site »).",
+    "mine": "Ma photo {{n}}"
   }
 }

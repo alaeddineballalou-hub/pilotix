@@ -23,8 +23,8 @@ type Bg = St['backgrounds'][number];
 type Product = St['products'][number];
 type Kind = 'photo' | 'copy' | 'landing' | 'background';
 const KINDS: { k: Kind; icon: IconName }[] = [
-  { k: 'photo', icon: 'image' },
-  { k: 'copy', icon: 'message' },
+  { k: 'photo', icon: 'camera' },
+  { k: 'copy', icon: 'image' },
   { k: 'landing', icon: 'list' },
   { k: 'background', icon: 'home' },
 ];
@@ -49,6 +49,8 @@ export function Studio() {
   const [find, setFind] = useState('');
   const [kind, setKind] = useState<Kind>('photo');
   const [aiBg, setAiBg] = useState<HTMLImageElement | HTMLCanvasElement | null>(null);
+  const landingPicks = useMemo(() => rows.filter((r) => r.saved).map((r) => ({ name: r.title, src: r.saved! })), [rows]);
+  const picks = useMemo(() => rows.filter((r) => r.saved).map((r) => ({ key: r.key, title: r.title, src: r.saved! })), [rows]);
 
   useEffect(() => {
     if (q.data && bgs === null) {
@@ -160,8 +162,8 @@ export function Studio() {
         <PromptBox key={kind} kind={kind} cur={st.prompts[kind]} def={st.defaults[kind]} onSaved={() => void q.refetch()} />
       </section>
 
-      {kind === 'copy' && <CopyMaker products={st.products} />}
-      {kind === 'landing' && <LandingMaker products={st.products} saved={rows.filter((r) => r.saved).map((r) => ({ name: r.title, src: r.saved! }))} />}
+      {kind === 'copy' && <AdMaker products={st.products} picks={productId ? { productId, list: picks } : null} shop={cr.data?.shop ?? null} />}
+      {kind === 'landing' && <LandingMaker products={st.products} saved={landingPicks} />}
       {kind === 'background' && (
         <BgMaker
           full={list.length >= st.limits.backgrounds}
@@ -252,7 +254,7 @@ export function Studio() {
             <span className="st-n ltr">3</span> {t(K + 'po.title')}
             <Help text={t(K + 'po.help')} label={t(K + 'po.title')} />
           </h2>
-          {allSaved ? <PosterMaker product={product} rows={rows} shop={cr.data?.shop ?? null} /> : <p className="muted">{t(K + 'po.wait', { done: rows.filter((r) => r.saved).length, of: rows.length })}</p>}
+          {allSaved ? <PosterMaker product={product} heroes={picks} colors={picks} shop={cr.data?.shop ?? null} /> : <p className="muted">{t(K + 'po.wait', { done: rows.filter((r) => r.saved).length, of: rows.length })}</p>}
         </section>
       )}
         </>
@@ -612,11 +614,16 @@ function KeyBox({ st, onClose, onDone }: { st: St; onClose: () => void; onDone: 
 // ---------------------------------------------------------------- the poster
 type Shop = { name: string; phone: string; logo: string | null } | null;
 
-function PosterMaker({ product, rows, shop }: { product: Product; rows: Row[]; shop: Shop }) {
+type Pic = { key: string; title: string; src: string };
+
+function PosterMaker({ product, heroes, colors, shop }: { product: Product; heroes: Pic[]; colors: Pic[]; shop: Shop }) {
   const { t, i18n } = useTranslation();
   const [lang, setLang] = useState<'ar' | 'fr'>(i18n.language === 'fr' ? 'fr' : 'ar');
-  const saved = rows.filter((r) => r.saved);
+  const saved = heroes;
   const [hero, setHero] = useState(saved[0]?.key ?? '');
+  useEffect(() => {
+    if (!saved.some((r) => r.key === hero) && saved[0]) setHero(saved[0].key);
+  }, [saved, hero]);
   const [title, setTitle] = useState('');
   const [subtitle, setSubtitle] = useState('');
   const [features, setFeatures] = useState(['', '', '', '']);
@@ -632,7 +639,7 @@ function PosterMaker({ product, rows, shop }: { product: Product; rows: Row[]; s
   const L = (k: string) => t(K + `po.${lang}.${k}`);
 
   useEffect(() => {
-    const src = saved.find((r) => r.key === hero)?.saved ?? saved[0]?.saved;
+    const src = saved.find((r) => r.key === hero)?.src ?? saved[0]?.src;
     if (!src) return;
     let live = true;
     const h = setTimeout(async () => {
@@ -649,7 +656,7 @@ function PosterMaker({ product, rows, shop }: { product: Product; rows: Row[]; s
         delivery: delivery ? L('delivery') : '',
         cod: cod ? L('cod') : '',
         colorsLabel: L('colors'),
-        colors: saved.length > 1 ? saved.map((r) => ({ name: r.title, src: r.saved! })) : [],
+        colors: colors.length > 1 ? colors.map((r) => ({ name: r.title, src: r.src })) : [],
         rtl: lang === 'ar',
         accent,
       }).catch(() => null);
@@ -660,7 +667,7 @@ function PosterMaker({ product, rows, shop }: { product: Product; rows: Row[]; s
       clearTimeout(h);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hero, title, subtitle, features, price, oldPrice, phone, shopName, delivery, cod, accent, lang, rows]);
+  }, [hero, title, subtitle, features, price, oldPrice, phone, shopName, delivery, cod, accent, lang, heroes, colors]);
 
   const suggest = async () => {
     setBusy('texts');
@@ -850,15 +857,83 @@ const copyText = async (text: string, ok: string) => {
   }
 };
 
-// ---------------------------------------------------------------- 2. Texte pub
-function CopyMaker({ products }: { products: Product[] }) {
+// ---------------------------------------------------------------- 2. Affiche pub (an ad picture, like a shop's poster)
+function AdMaker({ products, picks, shop }: { products: Product[]; picks: { productId: number; list: Pic[] } | null; shop: Shop }) {
   const { t } = useTranslation();
   const [p, setP] = useState<Product | null>(null);
+  const [mine, setMine] = useState<Pic[]>([]);
+  const pick = useRef<HTMLInputElement>(null);
+  const studio = useMemo(() => (p && picks?.productId === p.id ? picks.list : []), [p, picks]);
+  const heroes = useMemo(() => [...studio, ...mine], [studio, mine]);
+  const colors = useMemo(
+    () => (studio.length > 1 ? studio : (p?.variants ?? []).filter((v) => v.photo).map((v) => ({ key: `v${v.id}`, title: v.title, src: v.photo! }))),
+    [studio, p],
+  );
+  const add = async (files: FileList | null) => {
+    const got: Pic[] = [];
+    for (const f of Array.from(files ?? []).slice(0, 4)) {
+      try {
+        const img = await fileImage(f);
+        const c = document.createElement('canvas');
+        const k = Math.min(1, 2048 / Math.max(img.width, img.height));
+        c.width = Math.round(img.width * k);
+        c.height = Math.round(img.height * k);
+        c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+        got.push({ key: `u${Date.now()}-${got.length}`, title: t(K + 'ad.mine', { n: mine.length + got.length + 1 }), src: c.toDataURL('image/jpeg', 0.9) });
+      } catch {
+        toast(t(K + 'notImage'), 'bad');
+      }
+    }
+    if (got.length) setMine((m) => [...m, ...got]);
+  };
+  return (
+    <section className="st-step">
+      <h2>
+        {t(K + 'ad.title')}
+        <Help text={t(K + 'ad.help')} label={t(K + 'ad.title')} />
+      </h2>
+      {!p ? (
+        <ProductPicker products={products} onPick={(x) => (setP(x), setMine([]))} />
+      ) : (
+        <>
+          <Chosen p={p} onOther={() => (setP(null), setMine([]))} />
+          <div className="st-row-go">
+            <button type="button" className="btn small" onClick={() => pick.current?.click()}>
+              <Icon name="camera" /> {t(K + 'ad.upload')}
+            </button>
+            <span className="muted small">{studio.length ? t(K + 'ad.fromStudio', { n: studio.length }) : t(K + 'ad.tip')}</span>
+            <input
+              ref={pick}
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              onChange={(e) => {
+                void add(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </div>
+          {heroes.length ? <PosterMaker product={p} heroes={heroes} colors={colors} shop={shop} /> : <Empty>{t(K + 'ad.needPhoto')}</Empty>}
+          <details className="st-prompt">
+            <summary>
+              <Icon name="message" /> {t(K + 'cp.title')}
+            </summary>
+            <CopyBox p={p} />
+          </details>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** The post's text and 3 angles (the caption that goes with the ad picture). */
+function CopyBox({ p }: { p: Product }) {
+  const { t } = useTranslation();
   const [lang, setLang] = useState<'ar' | 'darija' | 'fr'>('darija');
   const [out, setOut] = useState<{ post: string; angles: { name: string; hook: string }[]; demo: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const write = async () => {
-    if (!p) return;
     setBusy(true);
     try {
       setOut(await rpc('createur.studioCopy', { productId: p.id, lang }));
@@ -869,53 +944,45 @@ function CopyMaker({ products }: { products: Product[] }) {
     }
   };
   return (
-    <section className="st-step">
-      <h2>{t(K + 'cp.title')}</h2>
-      {!p ? (
-        <ProductPicker products={products} onPick={setP} />
-      ) : (
+    <div className="st-copy">
+      <div className="st-poster-row">
+        <Field label={t(K + 'po.lang')}>
+          <select value={lang} onChange={(e) => setLang(e.target.value as typeof lang)}>
+            <option value="darija">الدارجة</option>
+            <option value="ar">العربية</option>
+            <option value="fr">Français</option>
+          </select>
+        </Field>
+        <button type="button" className="btn" disabled={busy} onClick={write}>
+          <Icon name="zap" /> {out ? t(K + 'cp.again') : t(K + 'cp.write')}
+        </button>
+      </div>
+      {busy && <Loading />}
+      {out && !busy && (
         <>
-          <Chosen p={p} onOther={() => (setP(null), setOut(null))} />
-          <div className="st-poster-row">
-            <Field label={t(K + 'po.lang')}>
-              <select value={lang} onChange={(e) => setLang(e.target.value as typeof lang)}>
-                <option value="darija">الدارجة</option>
-                <option value="ar">العربية</option>
-                <option value="fr">Français</option>
-              </select>
-            </Field>
-            <button type="button" className="btn primary" disabled={busy} onClick={write}>
-              <Icon name="zap" /> {out ? t(K + 'cp.again') : t(K + 'cp.write')}
+          {out.demo && <p className="st-note">{t(K + 'cp.example')}</p>}
+          <div className="st-copy-post">
+            <b>{t(K + 'cp.post')}</b>
+            <textarea rows={8} dir="auto" value={out.post} onChange={(e) => setOut({ ...out, post: e.target.value })} />
+            <button type="button" className="btn small" onClick={() => void copyText(out.post, t(K + 'cp.copied'))}>
+              <Icon name="copy" /> {t(K + 'cp.copy')}
             </button>
           </div>
-          {busy && <Loading />}
-          {out && !busy && (
-            <div className="st-copy">
-              {out.demo && <p className="st-note">{t(K + 'cp.example')}</p>}
-              <div className="st-copy-post">
-                <b>{t(K + 'cp.post')}</b>
-                <textarea rows={8} dir="auto" value={out.post} onChange={(e) => setOut({ ...out, post: e.target.value })} />
-                <button type="button" className="btn small" onClick={() => void copyText(out.post, t(K + 'cp.copied'))}>
+          <b>{t(K + 'cp.angles')}</b>
+          <div className="st-angles">
+            {out.angles.map((a, k) => (
+              <div key={k} className="st-angle">
+                <span className="st-tag">{a.name}</span>
+                <p dir="auto">{a.hook}</p>
+                <button type="button" className="btn small ghost" onClick={() => void copyText(a.hook, t(K + 'cp.copied'))}>
                   <Icon name="copy" /> {t(K + 'cp.copy')}
                 </button>
               </div>
-              <b>{t(K + 'cp.angles')}</b>
-              <div className="st-angles">
-                {out.angles.map((a, k) => (
-                  <div key={k} className="st-angle">
-                    <span className="st-tag">{a.name}</span>
-                    <p dir="auto">{a.hook}</p>
-                    <button type="button" className="btn small ghost" onClick={() => void copyText(a.hook, t(K + 'cp.copied'))}>
-                      <Icon name="copy" /> {t(K + 'cp.copy')}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+            ))}
+          </div>
         </>
       )}
-    </section>
+    </div>
   );
 }
 
