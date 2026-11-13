@@ -436,7 +436,25 @@ export interface GroupItem {
   tab?: string;
   /** a short line under the name (designs « big » and « best ») */
   note?: string;
+  /** a band above the photo (« أفضل سعر »…): one product per badge in a group */
+  badge?: GroupBadge | null;
 }
+
+export interface GroupBadge {
+  text: string;
+  color: string;
+}
+
+/** the ready badges of a group's products (the shop can also write its own) */
+export const GROUP_BADGES: GroupBadge[] = [
+  { text: 'أفضل سعر', color: '#dc2626' },
+  { text: 'أفضل جودة', color: '#0f766e' },
+  { text: 'الأكثر طلباً', color: '#ea580c' },
+  { text: 'جديد', color: '#2563eb' },
+  { text: 'عرض محدود', color: '#7c3aed' },
+  { text: 'توصيل مجاني', color: '#16a34a' },
+  { text: 'هدية مع الطلب', color: '#db2777' },
+];
 
 export interface GroupView {
   slug: string;
@@ -468,6 +486,9 @@ a.it:active{transform:scale(.985)}.it.out{opacity:.55}
 .im{display:block;width:100%;height:auto;aspect-ratio:4/5;object-fit:cover;border-radius:10px;background:var(--cl)}
 .it h2{font-size:15px;line-height:1.35;margin:7px 2px 2px;font-weight:700}
 .pr{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin:0 2px}.pr b{color:var(--c);font-size:17px}.pr s{color:var(--m);font-size:13px}
+.bd{display:block;height:30px;margin:-8px -8px 8px;padding:6px 8px;border-radius:13px 13px 0 0;background:var(--bd);color:#fff;font-weight:800;font-size:13px;line-height:18px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hb-on .g2>.it:not(.hb)::before,.hb-on .big>.it:not(.hb)::before{content:'';display:block;height:30px;margin:-8px -8px 8px}
+.it.hb .off,.it.hb .so{top:50px}.ls .bd{display:inline-block;height:auto;margin:0 0 3px;padding:1px 9px;border-radius:99px;font-size:12px;line-height:1.5}
 .off{position:absolute;top:12px;right:12px;background:#dc2626;color:#fff;border-radius:99px;padding:1px 8px;font-size:12px;font-weight:800;direction:ltr}
 .so{position:absolute;top:12px;left:12px;background:#111827;color:#fff;border-radius:99px;padding:1px 8px;font-size:12px;font-weight:700}
 .go{display:block;margin-top:8px;border-radius:10px;background:var(--c);color:#fff;font-weight:800;padding:9px;text-align:center;font-size:15px}
@@ -513,25 +534,30 @@ export function renderGroup(v: GroupView, r: GroupRender): string {
   const price = (x: GroupItem) => `<div class="pr"><b>${landingPrice(x.price)}</b>${x.oldPrice && x.oldPrice > x.price ? `<s>${landingPrice(x.oldPrice)}</s>` : ''}</div>`;
   const off = (x: GroupItem) => (x.oldPrice && x.oldPrice > x.price ? `<span class="off">-${Math.round((1 - x.price / x.oldPrice) * 100)}%</span>` : '');
   const so = (x: GroupItem) => (x.soldOut ? `<span class="so">نفذت الكمية</span>` : '');
+  const badge = (x: GroupItem) => (x.badge && x.badge.text && isHexColor(x.badge.color) ? x.badge : null);
+  const bd = (x: GroupItem) => {
+    const b = badge(x);
+    return b ? `<span class="bd" style="--bd:${b.color}">${esc(b.text)}</span>` : '';
+  };
   const open = (x: GroupItem, extra = '') =>
-    `<a class="it${x.soldOut ? ' out' : ''}${extra}" href="${esc(x.slug)}?g=${esc(v.slug)}" data-s="${esc(x.slug)}" data-n="${esc(x.title.toLowerCase())}" data-t="${esc(x.tab ?? '')}">`;
+    `<a class="it${x.soldOut ? ' out' : ''}${badge(x) ? ' hb' : ''}${extra}" href="${esc(x.slug)}?g=${esc(v.slug)}" data-s="${esc(x.slug)}" data-n="${esc(x.title.toLowerCase())}" data-t="${esc(x.tab ?? '')}">`;
   const go = (x: GroupItem, label = 'اطلب الآن') => `<span class="go">${x.soldOut ? 'نفذت الكمية' : label}</span>`;
-  const card = (x: GroupItem, size = '(min-width:980px) 250px, (min-width:700px) 320px, 46vw') => `${open(x)}${img(x, size)}${off(x)}${so(x)}<h2>${esc(x.title)}</h2>${price(x)}${go(x)}</a>`;
+  const card = (x: GroupItem, size = '(min-width:980px) 250px, (min-width:700px) 320px, 46vw') => `${open(x)}${bd(x)}${img(x, size)}${off(x)}${so(x)}<h2>${esc(x.title)}</h2>${price(x)}${go(x)}</a>`;
   let body = '';
   if (theme === 'grid') body = `<div class="g2">${items.map((x) => card(x)).join('')}</div>`;
   else if (theme === 'big')
     body = `<div class="big">${items
-      .map((x) => `${open(x)}${img(x, '(min-width:700px) 520px, 94vw')}${off(x)}${so(x)}<h2>${esc(x.title)}</h2>${x.note ? `<p class="nt">${esc(x.note)}</p>` : ''}<div class="row">${price(x)}${go(x, 'اطلب الآن ←')}</div></a>`)
+      .map((x) => `${open(x)}${bd(x)}${img(x, '(min-width:700px) 520px, 94vw')}${off(x)}${so(x)}<h2>${esc(x.title)}</h2>${x.note ? `<p class="nt">${esc(x.note)}</p>` : ''}<div class="row">${price(x)}${go(x, 'اطلب الآن ←')}</div></a>`)
       .join('')}</div>`;
   else if (theme === 'best') {
     const best = items.find((x) => x.slug === v.bestSlug && !x.soldOut) ?? items[0];
     const rest = items.filter((x) => x !== best);
     body = best
-      ? `${open(best, ' hero')}${img(best, '(min-width:1080px) 1050px, 94vw')}${off(best)}<span class="star">⭐ الأكثر طلباً</span><h2>${esc(best.title)}</h2>${best.note ? `<p class="nt">${esc(best.note)}</p>` : ''}${price(best)}${go(best)}</a>` +
+      ? `${open(best, ' hero')}${bd(best)}${img(best, '(min-width:1080px) 1050px, 94vw')}${off(best)}<span class="star">⭐ الأكثر طلباً</span><h2>${esc(best.title)}</h2>${best.note ? `<p class="nt">${esc(best.note)}</p>` : ''}${price(best)}${go(best)}</a>` +
         (rest.length ? `<div class="st">منتجات أخرى</div><div class="g2">${rest.map((x) => card(x)).join('')}</div>` : '')
       : '';
   } else if (theme === 'list')
-    body = `<div class="ls">${items.map((x) => `${open(x)}${img(x, '86px')}<span class="tx"><h2>${esc(x.title)}</h2><span class="pr"><b>${landingPrice(x.price)}</b>${off(x)}</span>${x.soldOut ? '' : '<span class="ok">✔ متوفر</span>'}</span>${go(x, 'اطلب')}</a>`).join('')}</div>`;
+    body = `<div class="ls">${items.map((x) => `${open(x)}${img(x, '86px')}<span class="tx">${bd(x)}<h2>${esc(x.title)}</h2><span class="pr"><b>${landingPrice(x.price)}</b>${off(x)}</span>${x.soldOut ? '' : '<span class="ok">✔ متوفر</span>'}</span>${go(x, 'اطلب')}</a>`).join('')}</div>`;
   else {
     const tabs = [...new Set(items.map((x) => (x.tab ?? '').trim()).filter(Boolean))];
     body =
@@ -562,6 +588,6 @@ export function renderGroup(v: GroupView, r: GroupRender): string {
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(v.title)}</title>
 ${head}<meta name="theme-color" content="${c}"><style>${GROUP_CSS(c)}</style></head><body>
 <div class="top">🚚 التوصيل لجميع الولايات · الدفع عند الاستلام</div>${brandTop(v.shopName, v.shopLogo)}<header class="hd"><h1>${esc(v.title)}</h1>${v.subtitle ? `<p>${esc(v.subtitle)}</p>` : ''}</header>
-<main class="w">${body}<div class="trust"><span>✔ الدفع عند الاستلام</span><span>✔ معاينة المنتج قبل الدفع</span></div></main>${brandFoot(v.shopName, v.shopLogo)}
+<main class="w${items.some((x) => badge(x)) ? ' hb-on' : ''}">${body}<div class="trust"><span>✔ الدفع عند الاستلام</span><span>✔ معاينة المنتج قبل الدفع</span></div></main>${brandFoot(v.shopName, v.shopLogo)}
 <script>window.__LG=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script><script>${GROUP_JS}</script></body></html>`;
 }

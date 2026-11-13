@@ -1,7 +1,7 @@
 // Landing pages › Groupes: one page with several products. The customer taps one; it opens that product's own landing
 // page (« back to all the products » at its top). Five designs; in « best seller » the shop picks the product shown big.
 import { LandingPreview } from './Preview';
-import { GROUP_THEMES, GroupTheme, LANDING_COLORS, LANDING_DEFAULT_COLOR } from '@pilotix/shared';
+import { GROUP_BADGES, GROUP_THEMES, GroupBadge, GroupTheme, LANDING_COLORS, LANDING_DEFAULT_COLOR } from '@pilotix/shared';
 import { ReactElement, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, Out, rpc, serverUrl, shopApi } from '../../lib/backend';
@@ -229,6 +229,69 @@ function GroupList() {
   );
 }
 
+const badgeKey = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+/** the badges the group's other products already have (a badge goes on one product only) */
+const usedBadges = (items: { badge: GroupBadge | null }[], self: number) => new Set(items.flatMap((x, k) => (k !== self && x.badge?.text.trim() ? [badgeKey(x.badge.text)] : [])));
+
+/** A product's badge: none, a ready one (not one another product of the group has), or the shop's own text, and its colour. */
+function BadgePick({ value, used, onChange }: { value: GroupBadge | null; used: Set<string>; onChange: (b: GroupBadge | null) => void }) {
+  const { t } = useTranslation();
+  const ready = value ? GROUP_BADGES.find((b) => b.text === value.text) : undefined;
+  const [own, setOwn] = useState(!!value && !ready);
+  const choice = !value && !own ? '' : own ? 'own' : value!.text;
+  const clash = !!value?.text.trim() && used.has(badgeKey(value.text));
+  return (
+    <span className="lp-gbadge">
+      <span className="lp-gbadge-r">
+        <span className="lp-gbadge-l">{t('landing.gr.badge')}</span>
+        <select
+          value={choice}
+          aria-label={t('landing.gr.badge')}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === '') {
+              setOwn(false);
+              onChange(null);
+            } else if (v === 'own') {
+              setOwn(true);
+              onChange({ text: '', color: value?.color ?? GROUP_BADGES[0].color });
+            } else {
+              setOwn(false);
+              onChange({ ...GROUP_BADGES.find((b) => b.text === v)! });
+            }
+          }}
+        >
+          <option value="">{t('landing.gr.badgeNone')}</option>
+          {GROUP_BADGES.map((b) => {
+            const taken = used.has(badgeKey(b.text));
+            return (
+              <option key={b.text} value={b.text} disabled={taken}>
+                {b.text}
+                {taken ? ` — ${t('landing.gr.badgeUsed')}` : ''}
+              </option>
+            );
+          })}
+          <option value="own">{t('landing.gr.badgeOwn')}</option>
+        </select>
+        {value && (
+          <span className="lp-gbadge-c" role="radiogroup" aria-label={t('landing.ed.color')}>
+            {[...new Set([...GROUP_BADGES.map((b) => b.color), ...LANDING_COLORS])].slice(0, 9).map((c) => (
+              <button key={c} type="button" role="radio" aria-checked={value.color === c} aria-label={c} className={`lp-sw ${value.color === c ? 'on' : ''}`} style={{ background: c }} onClick={() => onChange({ ...value, color: c })} />
+            ))}
+          </span>
+        )}
+      </span>
+      {own && value && <input dir="auto" className="lp-gi-in" value={value.text} maxLength={30} placeholder={t('landing.gr.badgePh')} onChange={(e) => onChange({ ...value, text: e.target.value })} />}
+      {value?.text.trim() && (
+        <span className="lp-gbadge-prev" style={{ background: value.color }} dir="auto">
+          {value.text}
+        </span>
+      )}
+      {clash && <span className="lp-warn-note">{t('landing.gr.badgeClash')}</span>}
+    </span>
+  );
+}
+
 function GroupEditor({ id }: { id: number | null }) {
   const list = useRpc('landing.groups', {}, { refetchOnWindowFocus: false });
   if (list.isLoading) return <Loading />;
@@ -246,7 +309,7 @@ const draftOf = (g: Group | null) => ({
   color: g?.color ?? LANDING_DEFAULT_COLOR,
   theme: (g?.theme ?? 'grid') as GroupTheme,
   bestPageId: g?.bestPageId ?? null,
-  items: (g?.items ?? []).map((x) => ({ pageId: x.pageId, tab: x.tab, note: x.note })),
+  items: (g?.items ?? []).map((x) => ({ pageId: x.pageId, tab: x.tab, note: x.note, badge: (x.badge ?? null) as GroupBadge | null })),
   pixelId: g?.pixelId ?? '',
   metaPixels: (g?.metaPixels ?? null) as number[] | null,
   tiktokPixels: (g?.tiktokPixels ?? null) as number[] | null,
@@ -288,6 +351,7 @@ function Form({ g }: { g: Group | null }) {
   const submit = () => {
     if (!d.title.trim()) return toast(t('landing.gr.needTitle'), 'bad');
     if (!d.items.length) return toast(t('landing.gr.needProducts'), 'bad');
+    if (d.items.some((x, i) => x.badge?.text.trim() && usedBadges(d.items, i).has(badgeKey(x.badge.text)))) return toast(t('landing.gr.badgeClash'), 'bad');
     save.mutate({ ...d, id: g?.id, title: d.title.trim(), subtitle: d.subtitle.trim(), slug: d.slug.trim(), bestPageId: d.theme === 'best' ? d.bestPageId : null });
   };
   const remove = async () => {
@@ -429,6 +493,7 @@ function Form({ g }: { g: Group | null }) {
                       {(d.theme === 'big' || d.theme === 'best') && (
                         <input dir="auto" className="lp-gi-in" value={it.note} maxLength={120} placeholder={t('landing.gr.notePh')} onChange={(e) => setItem(i, { note: e.target.value })} />
                       )}
+                      <BadgePick value={it.badge} used={usedBadges(d.items, i)} onChange={(badge) => setItem(i, { badge })} />
                     </span>
                     <span className="lp-gi-a">
                       <button type="button" className="btn small ghost" disabled={i === 0} onClick={() => move(i, -1)} aria-label={t('landing.gr.up')} title={t('landing.gr.up')}>
@@ -466,13 +531,13 @@ function Form({ g }: { g: Group | null }) {
                   className="btn"
                   disabled={!add}
                   onClick={() => {
-                    set('items', [...d.items, { pageId: Number(add), tab: '', note: '' }]);
+                    set('items', [...d.items, { pageId: Number(add), tab: '', note: '', badge: null }]);
                     setAdd('');
                   }}
                 >
                   <Icon name="plus" /> {t('landing.gr.add')}
                 </button>
-                <button type="button" className="btn ghost" onClick={() => set('items', [...d.items, ...free.map((p) => ({ pageId: p.id, tab: '', note: '' }))])}>
+                <button type="button" className="btn ghost" onClick={() => set('items', [...d.items, ...free.map((p) => ({ pageId: p.id, tab: '', note: '', badge: null }))])}>
                   {t('landing.gr.addAll', { count: free.length })}
                 </button>
               </div>

@@ -560,7 +560,13 @@
       "duplicated": "Copy created (offline): edit it, then put it online",
       "duplicatedN_one": "{{count}} copy created (offline)",
       "duplicatedN_other": "{{count}} copies created (offline)"
-    }
+    },
+    "badge": "Badge",
+    "badgeNone": "No badge",
+    "badgeOwn": "Other text…",
+    "badgePh": "Your text (30 characters max.)",
+    "badgeUsed": "already on another product",
+    "badgeClash": "This badge is already on another product of the group: a badge goes on one product only, so the customer is not misled."
   },
   "px": {
     "title": "Pixels (Meta and TikTok)",

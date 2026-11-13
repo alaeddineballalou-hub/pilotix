@@ -2,7 +2,7 @@
 // page (its address with ?g=<group>), which shows « رجوع إلى كل المنتجات » at the top, back to the group. Five looks
 // (GROUP_THEMES); in « best » the shop picks the product shown big at the top. The group's address is the same kind as
 // a landing page's (site/<store>/<slug>, the shop's own domain, /lp/<slug>): landingPage() falls back to the group.
-import { GROUP_THEMES, GroupItem, GroupTheme, isAppPage, isHexColor, LANDING_DEFAULT_COLOR, renderGroup } from '@pilotix/shared';
+import { GROUP_THEMES, GroupBadge, GroupItem, GroupTheme, isAppPage, isHexColor, LANDING_DEFAULT_COLOR, renderGroup } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, num, numOrNull } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
@@ -35,7 +35,19 @@ export const GroupInput = z.object({
   /** design « best »: the product shown big at the top */
   bestPageId: id.nullable().default(null),
   items: z
-    .array(z.object({ pageId: id, tab: z.string().trim().max(40).default(''), note: z.string().trim().max(120).default('') }))
+    .array(
+      z.object({
+        pageId: id,
+        tab: z.string().trim().max(40).default(''),
+        note: z.string().trim().max(120).default(''),
+        /** the band above the product's photo (« أفضل سعر »…); empty text: none */
+        badge: z
+          .object({ text: z.string().trim().max(30, 'Badge : 30 caractères au maximum'), color: z.string().refine(isHexColor, 'Couleur du badge invalide') })
+          .nullable()
+          .default(null)
+          .transform((b) => (b && b.text ? { text: b.text, color: b.color.toLowerCase() } : null)),
+      }),
+    )
     .max(60, '60 produits au maximum')
     .default([]),
   pixelId: z.string().trim().max(30).regex(/^\d*$/, 'Pixel : chiffres seulement').default(''),
@@ -59,9 +71,11 @@ interface GroupRowIn {
   tiktok_pixels: unknown;
 }
 
-const readItems = (v: unknown): { pageId: number; tab: string; note: string }[] => {
+const readBadge = (b: any): GroupBadge | null => (b && typeof b.text === 'string' && b.text.trim() && typeof b.color === 'string' && isHexColor(b.color) ? { text: b.text.trim(), color: b.color } : null);
+
+const readItems = (v: unknown): { pageId: number; tab: string; note: string; badge: GroupBadge | null }[] => {
   const a = typeof v === 'string' ? JSON.parse(v) : v;
-  return Array.isArray(a) ? a.filter((x) => x && x.pageId).map((x) => ({ pageId: num(x.pageId), tab: String(x.tab ?? ''), note: String(x.note ?? '') })) : [];
+  return Array.isArray(a) ? a.filter((x) => x && x.pageId).map((x) => ({ pageId: num(x.pageId), tab: String(x.tab ?? ''), note: String(x.note ?? ''), badge: readBadge(x.badge) })) : [];
 };
 
 /** The group page's HTML (a group saved at this address; none: « page introuvable »). */
@@ -98,6 +112,7 @@ async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'im
       soldOut: (l.stock_mode === 'hide' || stopOut) && pc.soldOut,
       tab: it.tab,
       note: it.note,
+      badge: it.badge,
     });
   }
   const s = await landingSettings(ctx.db);
@@ -209,6 +224,14 @@ async function checkInput(db: Db, i: GroupIn) {
   if (taken) throw bad(taken);
   const ids = i.items.map((x) => x.pageId);
   if (new Set(ids).size !== ids.length) throw bad('Un produit est deux fois dans le groupe');
+  // one product per badge: two « أفضل سعر » in one group would mislead the customer
+  const seen = new Set<string>();
+  for (const x of i.items) {
+    if (!x.badge) continue;
+    const k = x.badge.text.replace(/\s+/g, ' ').trim().toLowerCase();
+    if (seen.has(k)) throw bad(`Le badge « ${x.badge.text} » est sur deux produits : un badge ne va que sur un seul produit du groupe`);
+    seen.add(k);
+  }
   if (ids.length && num((await db.query('SELECT count(*)::int AS n FROM landing_pages WHERE id = ANY($1)', [ids]))[0].n) !== ids.length) throw notFound('Landing page introuvable');
   if (i.theme === 'best' && i.bestPageId && !ids.includes(i.bestPageId)) throw bad('Le best-seller doit être un produit du groupe');
 }

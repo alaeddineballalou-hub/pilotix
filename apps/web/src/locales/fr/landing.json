@@ -560,7 +560,13 @@
       "duplicated": "Copie créée (hors ligne) : modifiez-la puis mettez-la en ligne",
       "duplicatedN_one": "{{count}} copie créée (hors ligne)",
       "duplicatedN_other": "{{count}} copies créées (hors ligne)"
-    }
+    },
+    "badge": "Badge",
+    "badgeNone": "Pas de badge",
+    "badgeOwn": "Autre texte…",
+    "badgePh": "Votre texte (30 caractères max.)",
+    "badgeUsed": "déjà sur un autre produit",
+    "badgeClash": "Ce badge est déjà sur un autre produit du groupe : un badge ne va que sur un seul produit, pour ne pas tromper le client."
   },
   "px": {
     "title": "Pixels (Meta et TikTok)",
