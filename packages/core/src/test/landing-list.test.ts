@@ -109,3 +109,21 @@ test('pages and groups: never wider than the phone, product photos at 4:5', asyn
   assert.match(g, /\.im\{display:block;width:100%;height:auto;aspect-ratio:4\/5/);
   assert.match(g, /repeat\(2,minmax\(0,1fr\)\)/);
 });
+
+test('pages and groups: the tab icon is the shop logo, else the Pilotix icon', async () => {
+  const at = async (slug: string, imgBase: string | null) =>
+    ((await call('landing.html', admin, { slug, mode: imgBase ? 'live' : 'preview', post: '/o', geo: '/g/', lead: '/l', imgBase })) as any).html as string;
+  await db.query(`UPDATE settings SET value = $1 WHERE key = 'logo'`, [JSON.stringify({ url: null, updatedAt: null })]);
+  // no logo: the Pilotix icon (its address next to the pictures; inside the page in the preview)
+  assert.match(await at(pages[0].slug, '/api/lp/img/'), /<link rel="icon" href="\/api\/lp\/icon\/pilotix">/);
+  assert.match(await at(pages[0].slug, null), /<link rel="icon" href="data:image\/svg\+xml,/);
+  assert.equal(await call('landing.icon', admin, {}), null);
+  // a logo: its own address, a new one when the logo changes
+  const logo = 'data:image/png;base64,iVBORw0KGgo=';
+  await db.query(`INSERT INTO settings (key, value) VALUES ('logo', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify({ url: logo, updatedAt: '2026-11-13T20:00:00.000Z' })]);
+  const v = `l${Date.parse('2026-11-13T20:00:00.000Z').toString(36)}`;
+  assert.match(await at(pages[0].slug, '/api/lp/img/'), new RegExp(`<link rel="icon" href="/api/lp/icon/${v}">`));
+  assert.match(await at('badges', '/s/shop/api/lp/img/'), new RegExp(`<link rel="icon" href="/s/shop/api/lp/icon/${v}">`));
+  assert.match(await at(pages[0].slug, null), /<link rel="icon" href="data:image\/png;base64,iVBORw0KGgo=">/);
+  assert.deepEqual(await call('landing.icon', admin, {}), { type: 'image/png', base64: 'iVBORw0KGgo=' });
+});

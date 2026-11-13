@@ -370,6 +370,17 @@ export async function landingHtml(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
 }
 
 /** The page, and the `Link` header that starts its main photo early (null when the photos are inside the page). */
+/**
+ * The tab's icon of the shop's pages: « …/lp/icon/<version> » next to the pictures (the browser keeps it; a new logo is
+ * a new version), the shop's logo or else Pilotix's. Preview (no pictures' address): none, the page puts the logo itself.
+ */
+export async function landingIconUrl(db: Db, imgBase: string | null): Promise<string | undefined> {
+  if (!imgBase || !/\/img\/$/.test(imgBase)) return undefined;
+  const l = await getSetting(db, 'logo');
+  const v = l.url ? `l${(Date.parse(String(l.updatedAt ?? '')) || 0).toString(36)}` : 'pilotix';
+  return `${imgBase.slice(0, -'img/'.length)}icon/${v}`;
+}
+
 export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<{ html: string; link: string | null }> {
   // the page that has this address, or had it before (its old links keep working)
   const l = await pageRowAt(ctx.db, slug);
@@ -430,6 +441,7 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     bits: LANDING_POW_BITS,
     url: pageUrl || undefined,
     group: group ?? undefined,
+    icon: await landingIconUrl(ctx.db, o.imgBase),
   });
   return { html, link: o.imgBase ? landingPreloadLink(view) : null };
 }
@@ -1950,6 +1962,13 @@ export const landingProcs = {
   /** the store's part of the pages' address (site/<store>/<page>): for the links shown in Pilotix, and the server's check */
   // the store's part of the pages' address, and the address they live at (go.<domain> once it answers; '' in the demo)
   'landing.store': proc(null, z.object({}), async (ctx) => ({ store: await landingStore(ctx.db), pagesUrl: ctx.server?.pagesUrl?.() ?? '' })),
+
+  /** the shop's logo for the pages' tab icon (/lp/icon/<version>); null: the server sends Pilotix's icon */
+  'landing.icon': proc([], z.object({}), async (ctx) => {
+    const u = (await getSetting(ctx.db, 'logo')).url ?? null;
+    const m = u ? /^data:(image\/(?:png|jpeg|webp|svg\+xml));base64,([A-Za-z0-9+/=]+)$/.exec(u) : null;
+    return m ? { type: m[1], base64: m[2] } : null;
+  }),
 
   'landing.image': proc([], z.object({ id, size: z.enum(['160', '320', '480', '720', '960']) }), async (ctx, i) => {
     // a picture from before the compressor has no 720 width: the 960 one instead (and no 320: the 480 one)

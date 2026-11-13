@@ -8,7 +8,7 @@ import { Db, iso, num, numOrNull } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
 import { autoSettings, getSetting } from '../settings';
 // (landing.ts imports this file too: only functions from it here, used once both are loaded)
-import { b64, HtmlOpts, imageRows, ImgRef, productContext, readImgs, viewImages } from './landing';
+import { b64, HtmlOpts, imageRows, ImgRef, landingIconUrl, productContext, readImgs, viewImages } from './landing';
 
 const WHO = ['marketer'] as const;
 import { addressOwner, addressTaken, APP_WORD, groupRowAt, keepFormerAddress, landingSettings, landingStore } from './landingquery';
@@ -138,7 +138,7 @@ async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'im
       pixelId: o.mode === 'live' ? px.meta.join(',') : '',
       tiktokId: o.mode === 'live' ? px.tiktok.join(',') : '',
     },
-    { mode: o.mode, url: url || undefined },
+    { mode: o.mode, url: url || undefined, icon: await landingIconUrl(ctx.db, o.imgBase) },
   );
 }
 

@@ -71,6 +71,16 @@ export function whatsappNumber(raw: string): string {
   return /^\d{10,15}$/.test(d) ? d : '';
 }
 
+/** the Pilotix icon (the tab's icon of a shop that has no logo) */
+export const PILOTIX_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cmask id='m' maskUnits='userSpaceOnUse' x='0' y='0' width='512' height='512'%3E%3Crect width='512' height='512' rx='112' fill='%23fff'/%3E%3C/mask%3E%3Cg mask='url(%23m)'%3E%3Crect width='512' height='512' fill='%231B2A47'/%3E%3Cpath d='M0,250 C120,200 200,320 300,280 C380,248 440,230 512,250 V512 H0 Z' fill='%23F7A823'/%3E%3C/g%3E%3Cpath d='M146.00,296.00 C217.40,372.00 324.50,364.40 384.00,272.00 C324.50,319.18 217.40,326.78 146.00,296.00 Z' fill='%231B2A47'/%3E%3Ccircle cx='186' cy='186' r='50' fill='%23F7A823'/%3E%3Cpath d='M290,186 H364' stroke='%23F7A823' stroke-width='44' stroke-linecap='round' fill='none'/%3E%3C/svg%3E";
+
+/** The tab's icon: the shop's logo (its address, or the logo itself in the preview), else the Pilotix icon. */
+function favicon(icon: string | undefined, logo: string | null | undefined): string {
+  const href =
+    icon && /^(https?:\/\/|\/)[^\s"<>]+$/.test(icon) ? icon : logo && /^data:image\/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(logo) ? logo : PILOTIX_ICON;
+  return `<link rel="icon" href="${esc(href)}">`;
+}
+
 export interface LandingRender {
   /**
    * live: the real page (fetch to `post` and `geo`).
@@ -80,6 +90,8 @@ export interface LandingRender {
   mode: 'live' | 'parent' | 'preview';
   post: string;
   geo: string;
+  /** the address of the tab's icon (« …/lp/icon/<version> »: the shop's logo, else Pilotix's); none: the logo itself */
+  icon?: string;
   /** signed challenge for the proof-of-work, and its difficulty in bits */
   challenge: string;
   bits: number;
@@ -392,7 +404,7 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
         (v.shopName ? `<meta property="og:site_name" content="${esc(v.shopName)}">` : '') +
         (img && /^https?:\/\//.test(img.src) ? `<meta property="og:image" content="${esc(img.src)}"><meta name="twitter:card" content="summary_large_image">` : '')
       : '<meta name="robots" content="noindex">');
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(v.title)}</title>
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(v.title)}</title>${favicon(r.icon, v.shopLogo)}
 ${head}<meta name="theme-color" content="${c}">${img ? `<link rel="preload" as="image" href="${esc(img.src)}" imagesrcset="${esc(img.srcset)}" imagesizes="${sizes}">` : ''}<style>${CSS(c)}</style></head><body>
 <div class="top">🚚 التوصيل لجميع الولايات · الدفع عند الاستلام</div>${brandTop(v.shopName, v.shopLogo)}${r.group ? `<a class="bk" id="bk" href="${esc(r.group.slug)}">→ ${esc(GROUP_BACK)}</a>` : ''}<main class="w"><div class="g">
 <section class="gal card">${gallery}</section>
@@ -474,6 +486,8 @@ export interface GroupView {
 export interface GroupRender {
   mode: 'live' | 'parent' | 'preview';
   url?: string;
+  /** the address of the tab's icon (as LandingRender's) */
+  icon?: string;
 }
 
 const GROUP_CSS = (c: string) => `:root{--c:${c};--cd:${shade(c, -0.25)};--cl:${shade(c, 0.9)};--b:#e5e7eb;--t:#111827;--m:#6b7280}
@@ -585,7 +599,7 @@ export function renderGroup(v: GroupView, r: GroupRender): string {
         (v.shopName ? `<meta property="og:site_name" content="${esc(v.shopName)}">` : '') +
         (first && /^https?:\/\//.test(first.src) ? `<meta property="og:image" content="${esc(first.src)}">` : '')
       : '<meta name="robots" content="noindex">');
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(v.title)}</title>
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(v.title)}</title>${favicon(r.icon, v.shopLogo)}
 ${head}<meta name="theme-color" content="${c}"><style>${GROUP_CSS(c)}</style></head><body>
 <div class="top">🚚 التوصيل لجميع الولايات · الدفع عند الاستلام</div>${brandTop(v.shopName, v.shopLogo)}<header class="hd"><h1>${esc(v.title)}</h1>${v.subtitle ? `<p>${esc(v.subtitle)}</p>` : ''}</header>
 <main class="w${items.some((x) => badge(x)) ? ' hb-on' : ''}">${body}<div class="trust"><span>✔ الدفع عند الاستلام</span><span>✔ معاينة المنتج قبل الدفع</span></div></main>${brandFoot(v.shopName, v.shopLogo)}

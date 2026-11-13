@@ -46,6 +46,9 @@ import { syncTurnstile } from './turnstile';
 import { robotGate } from './robot';
 import { doctorState } from './doctor';
 import { sendVideo, writePart } from './media';
+
+/** the Pilotix icon (apps/web/public/icon.svg): the pages' tab icon when the shop has no logo */
+const PILOTIX_ICON_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><mask id='m' maskUnits='userSpaceOnUse' x='0' y='0' width='512' height='512'><rect width='512' height='512' rx='112' fill='#fff'/></mask><g mask='url(#m)'><rect width='512' height='512' fill='#1B2A47'/><path d='M0,250 C120,200 200,320 300,280 C380,248 440,230 512,250 V512 H0 Z' fill='#F7A823'/></g><path d='M146.00,296.00 C217.40,372.00 324.50,364.40 384.00,272.00 C324.50,319.18 217.40,326.78 146.00,296.00 Z' fill='#1B2A47'/><circle cx='186' cy='186' r='50' fill='#F7A823'/><path d='M290,186 H364' stroke='#F7A823' stroke-width='44' stroke-linecap='round' fill='none'/></svg>`;
 import { otpOn, sendOtp } from './otp';
 
 /**
@@ -1526,6 +1529,25 @@ class ApiController {
     const id = Number(w);
     if (!Number.isInteger(id) || id < 1 || id > 69) return res.status(404).send([]);
     return sendText(req, res.status(200).header('Content-Type', 'application/json; charset=utf-8').header('Cache-Control', 'public, max-age=2592000, immutable'), JSON.stringify(core.landingCommunes(id)));
+  }
+
+  /**
+   * The tab's icon of the shop's pages: /lp/icon/<version>, the shop's logo, or the Pilotix icon when it has none. The
+   * version changes with the logo, so the browser keeps it a long time.
+   */
+  @Public()
+  @Get(['lp/icon/:v', 's/:shop/lp/icon/:v'])
+  async landingIcon(@Param('shop') shop: string | undefined, @Param('v') v: string, @Res() res: any) {
+    if (!/^[a-z0-9]{1,20}$/.test(v)) return res.status(404).send();
+    const pilotix = () => res.status(200).header('Content-Type', 'image/svg+xml').header('Cache-Control', 'public, max-age=604800').send(PILOTIX_ICON_SVG);
+    try {
+      const ref = intake(await this.publicShop(shop));
+      const r: any = await this.core.call(ref, 'landing.icon', await this.core.systemSession(ref), {});
+      if (!r) return pilotix();
+      return res.status(200).header('Content-Type', r.type).header('Cache-Control', 'public, max-age=604800').send(Buffer.from(r.base64, 'base64'));
+    } catch {
+      return pilotix();
+    }
   }
 
   /** A page's picture in WebP: /lp/img/<id>/<160|320|480|720|960>.webp (never changes: cached a year), and meta.jpg its JPEG copy for Meta's catalog. */
