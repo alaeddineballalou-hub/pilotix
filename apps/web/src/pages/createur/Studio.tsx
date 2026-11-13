@@ -28,7 +28,7 @@ const LANGS: { k: Lang; label: string }[] = [
   { k: 'darija', label: 'الدارجة' },
   { k: 'fr', label: 'Français' },
 ];
-const LANG_KEY = 'pilotix.studio.lang';
+const LANG_KEY = 'pilotix.studio.langs';
 const KINDS: { k: Kind; icon: IconName }[] = [
   { k: 'photo', icon: 'camera' },
   { k: 'copy', icon: 'image' },
@@ -55,24 +55,28 @@ export function Studio() {
   const [rows, setRows] = useState<Row[]>([]);
   const [find, setFind] = useState('');
   const [kind, setKind] = useState<Kind>('photo');
-  const [lang, setLangState] = useState<Lang>(() => {
-    try {
-      const v = localStorage.getItem(LANG_KEY);
-      if (v === 'ar' || v === 'darija' || v === 'fr') return v;
-    } catch {
-      /* no storage here */
-    }
-    return 'ar';
-  });
-  const setLang = (v: Lang) => {
-    setLangState(v);
-    try {
-      localStorage.setItem(LANG_KEY, v);
-    } catch {
-      /* no storage here */
-    }
-  };
   const [aiBg, setAiBg] = useState<HTMLImageElement | HTMLCanvasElement | null>(null);
+  // each card that writes words has its own language (remembered on this device)
+  const [langs, setLangs] = useState<Record<Kind, Lang>>(() => {
+    const d: Record<Kind, Lang> = { photo: 'ar', copy: 'ar', landing: 'ar', background: 'ar' };
+    try {
+      const v = JSON.parse(localStorage.getItem(LANG_KEY) || '{}');
+      for (const k of Object.keys(d) as Kind[]) if (v?.[k] === 'ar' || v?.[k] === 'darija' || v?.[k] === 'fr') d[k] = v[k];
+    } catch {
+      /* no storage here */
+    }
+    return d;
+  });
+  const setLang = (k: Kind, v: Lang) =>
+    setLangs((old) => {
+      const next = { ...old, [k]: v };
+      try {
+        localStorage.setItem(LANG_KEY, JSON.stringify(next));
+      } catch {
+        /* no storage here */
+      }
+      return next;
+    });
   const landingPicks = useMemo(() => rows.filter((r) => r.saved).map((r) => ({ name: r.title, src: r.saved! })), [rows]);
   const picks = useMemo(() => rows.filter((r) => r.saved).map((r) => ({ key: r.key, title: r.title, src: r.saved! })), [rows]);
 
@@ -172,32 +176,54 @@ export function Studio() {
 
       {/* 0. what to make, and its words for the AI */}
       <section className="st-step">
-        <div className="st-step0-head">
-          <h2>{t(K + 'k.title')}</h2>
-          <div className="st-langs" role="radiogroup" aria-label={t(K + 'po.lang')}>
-            <span className="muted small">{t(K + 'po.lang')}</span>
-            {LANGS.map((x) => (
-              <button key={x.k} type="button" role="radio" aria-checked={lang === x.k} className={`st-lang${lang === x.k ? ' on' : ''}`} onClick={() => setLang(x.k)}>
-                {x.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <h2>{t(K + 'k.title')}</h2>
         <div className="st-kinds" role="radiogroup" aria-label={t(K + 'k.title')}>
           {KINDS.map((x, n) => (
-            <button key={x.k} type="button" role="radio" aria-checked={kind === x.k} className={`st-kind${kind === x.k ? ' on' : ''}`} onClick={() => setKind(x.k)}>
+            <div
+              key={x.k}
+              role="radio"
+              tabIndex={0}
+              aria-checked={kind === x.k}
+              className={`st-kind${kind === x.k ? ' on' : ''}`}
+              onClick={() => setKind(x.k)}
+              onKeyDown={(e) => {
+                if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  setKind(x.k);
+                }
+              }}
+            >
               <span className="st-kind-n ltr">{n + 1}</span>
               <Icon name={x.icon} />
               <b>{t(K + `k.${x.k}`)}</b>
               <span className="muted small">{t(K + `k.${x.k}Line`)}</span>
-            </button>
+              {x.k !== 'background' && (
+                <span className="st-langs" role="group" aria-label={t(K + 'po.lang')}>
+                  {LANGS.map((l) => (
+                    <button
+                      key={l.k}
+                      type="button"
+                      aria-pressed={langs[x.k] === l.k}
+                      className={`st-lang${langs[x.k] === l.k ? ' on' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setKind(x.k);
+                        setLang(x.k, l.k);
+                      }}
+                    >
+                      {l.label}
+                    </button>
+                  ))}
+                </span>
+              )}
+            </div>
           ))}
         </div>
         <PromptBox key={kind} kind={kind} cur={st.prompts[kind]} def={st.defaults[kind]} onSaved={() => void q.refetch()} />
       </section>
 
-      {kind === 'copy' && <AdMaker products={st.products} picks={productId ? { productId, list: picks } : null} shop={cr.data?.shop ?? null} lang={lang} />}
-      {kind === 'landing' && <LandingMaker products={st.products} saved={landingPicks} lang={lang} />}
+      {kind === 'copy' && <AdMaker products={st.products} picks={productId ? { productId, list: picks } : null} shop={cr.data?.shop ?? null} lang={langs.copy} />}
+      {kind === 'landing' && <LandingMaker products={st.products} saved={landingPicks} lang={langs.landing} />}
       {kind === 'background' && (
         <BgMaker
           full={list.length >= st.limits.backgrounds}
@@ -288,7 +314,7 @@ export function Studio() {
             <span className="st-n ltr">3</span> {t(K + 'po.title')}
             <Help text={t(K + 'po.help')} label={t(K + 'po.title')} />
           </h2>
-          {allSaved ? <PosterMaker product={product} heroes={picks} colors={picks} shop={cr.data?.shop ?? null} lang={lang} /> : <p className="muted">{t(K + 'po.wait', { done: rows.filter((r) => r.saved).length, of: rows.length })}</p>}
+          {allSaved ? <PosterMaker product={product} heroes={picks} colors={picks} shop={cr.data?.shop ?? null} lang={langs.photo} /> : <p className="muted">{t(K + 'po.wait', { done: rows.filter((r) => r.saved).length, of: rows.length })}</p>}
         </section>
       )}
         </>
