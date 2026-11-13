@@ -141,3 +141,11 @@
   .st-landing-view { max-width: 300px; }
   .st-benefit { grid-template-columns: 1fr; }
 }
+
+/* the one language of everything the Studio writes */
+.st-step0-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.st-langs { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.st-langs > span { margin-inline-end: 4px; }
+.st-lang { all: unset; cursor: pointer; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line, #e2e6ee); font-weight: 700; font-size: 14px; }
+.st-lang.on { background: var(--accent, #f47b20); border-color: var(--accent, #f47b20); color: #fff; }
+.st-lang:focus-visible { outline: 2px solid var(--accent, #f47b20); outline-offset: 2px; }

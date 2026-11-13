@@ -22,6 +22,13 @@ type St = Out<'createur.studio'>;
 type Bg = St['backgrounds'][number];
 type Product = St['products'][number];
 type Kind = 'photo' | 'copy' | 'landing' | 'background';
+type Lang = 'ar' | 'darija' | 'fr';
+const LANGS: { k: Lang; label: string }[] = [
+  { k: 'ar', label: 'العربية' },
+  { k: 'darija', label: 'الدارجة' },
+  { k: 'fr', label: 'Français' },
+];
+const LANG_KEY = 'pilotix.studio.lang';
 const KINDS: { k: Kind; icon: IconName }[] = [
   { k: 'photo', icon: 'camera' },
   { k: 'copy', icon: 'image' },
@@ -48,6 +55,23 @@ export function Studio() {
   const [rows, setRows] = useState<Row[]>([]);
   const [find, setFind] = useState('');
   const [kind, setKind] = useState<Kind>('photo');
+  const [lang, setLangState] = useState<Lang>(() => {
+    try {
+      const v = localStorage.getItem(LANG_KEY);
+      if (v === 'ar' || v === 'darija' || v === 'fr') return v;
+    } catch {
+      /* no storage here */
+    }
+    return 'ar';
+  });
+  const setLang = (v: Lang) => {
+    setLangState(v);
+    try {
+      localStorage.setItem(LANG_KEY, v);
+    } catch {
+      /* no storage here */
+    }
+  };
   const [aiBg, setAiBg] = useState<HTMLImageElement | HTMLCanvasElement | null>(null);
   const landingPicks = useMemo(() => rows.filter((r) => r.saved).map((r) => ({ name: r.title, src: r.saved! })), [rows]);
   const picks = useMemo(() => rows.filter((r) => r.saved).map((r) => ({ key: r.key, title: r.title, src: r.saved! })), [rows]);
@@ -148,7 +172,17 @@ export function Studio() {
 
       {/* 0. what to make, and its words for the AI */}
       <section className="st-step">
-        <h2>{t(K + 'k.title')}</h2>
+        <div className="st-step0-head">
+          <h2>{t(K + 'k.title')}</h2>
+          <div className="st-langs" role="radiogroup" aria-label={t(K + 'po.lang')}>
+            <span className="muted small">{t(K + 'po.lang')}</span>
+            {LANGS.map((x) => (
+              <button key={x.k} type="button" role="radio" aria-checked={lang === x.k} className={`st-lang${lang === x.k ? ' on' : ''}`} onClick={() => setLang(x.k)}>
+                {x.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="st-kinds" role="radiogroup" aria-label={t(K + 'k.title')}>
           {KINDS.map((x, n) => (
             <button key={x.k} type="button" role="radio" aria-checked={kind === x.k} className={`st-kind${kind === x.k ? ' on' : ''}`} onClick={() => setKind(x.k)}>
@@ -162,8 +196,8 @@ export function Studio() {
         <PromptBox key={kind} kind={kind} cur={st.prompts[kind]} def={st.defaults[kind]} onSaved={() => void q.refetch()} />
       </section>
 
-      {kind === 'copy' && <AdMaker products={st.products} picks={productId ? { productId, list: picks } : null} shop={cr.data?.shop ?? null} />}
-      {kind === 'landing' && <LandingMaker products={st.products} saved={landingPicks} />}
+      {kind === 'copy' && <AdMaker products={st.products} picks={productId ? { productId, list: picks } : null} shop={cr.data?.shop ?? null} lang={lang} />}
+      {kind === 'landing' && <LandingMaker products={st.products} saved={landingPicks} lang={lang} />}
       {kind === 'background' && (
         <BgMaker
           full={list.length >= st.limits.backgrounds}
@@ -254,7 +288,7 @@ export function Studio() {
             <span className="st-n ltr">3</span> {t(K + 'po.title')}
             <Help text={t(K + 'po.help')} label={t(K + 'po.title')} />
           </h2>
-          {allSaved ? <PosterMaker product={product} heroes={picks} colors={picks} shop={cr.data?.shop ?? null} /> : <p className="muted">{t(K + 'po.wait', { done: rows.filter((r) => r.saved).length, of: rows.length })}</p>}
+          {allSaved ? <PosterMaker product={product} heroes={picks} colors={picks} shop={cr.data?.shop ?? null} lang={lang} /> : <p className="muted">{t(K + 'po.wait', { done: rows.filter((r) => r.saved).length, of: rows.length })}</p>}
         </section>
       )}
         </>
@@ -616,9 +650,8 @@ type Shop = { name: string; phone: string; logo: string | null } | null;
 
 type Pic = { key: string; title: string; src: string };
 
-function PosterMaker({ product, heroes, colors, shop }: { product: Product; heroes: Pic[]; colors: Pic[]; shop: Shop }) {
-  const { t, i18n } = useTranslation();
-  const [lang, setLang] = useState<'ar' | 'fr'>(i18n.language === 'fr' ? 'fr' : 'ar');
+function PosterMaker({ product, heroes, colors, shop, lang }: { product: Product; heroes: Pic[]; colors: Pic[]; shop: Shop; lang: Lang }) {
+  const { t } = useTranslation();
   const saved = heroes;
   const [hero, setHero] = useState(saved[0]?.key ?? '');
   useEffect(() => {
@@ -636,7 +669,7 @@ function PosterMaker({ product, heroes, colors, shop }: { product: Product; hero
   const [accent, setAccent] = useState('#d6246e');
   const [out, setOut] = useState<string | null>(null);
   const [busy, setBusy] = useState<'texts' | 'save' | null>(null);
-  const L = (k: string) => t(K + `po.${lang}.${k}`);
+  const L = (k: string) => t(K + `po.${lang === 'fr' ? 'fr' : 'ar'}.${k}`);
 
   useEffect(() => {
     const src = saved.find((r) => r.key === hero)?.src ?? saved[0]?.src;
@@ -657,7 +690,7 @@ function PosterMaker({ product, heroes, colors, shop }: { product: Product; hero
         cod: cod ? L('cod') : '',
         colorsLabel: L('colors'),
         colors: colors.length > 1 ? colors.map((r) => ({ name: r.title, src: r.src })) : [],
-        rtl: lang === 'ar',
+        rtl: lang !== 'fr',
         accent,
       }).catch(() => null);
       if (live) setOut(url);
@@ -703,12 +736,6 @@ function PosterMaker({ product, heroes, colors, shop }: { product: Product; hero
       <div className="st-poster-view">{out ? <img src={out} alt={t(K + 'po.title')} /> : <Loading />}</div>
       <div className="st-poster-form">
         <div className="st-poster-row">
-          <Field label={t(K + 'po.lang')}>
-            <select value={lang} onChange={(e) => setLang(e.target.value as 'ar' | 'fr')}>
-              <option value="ar">العربية</option>
-              <option value="fr">Français</option>
-            </select>
-          </Field>
           {saved.length > 1 && (
             <Field label={t(K + 'po.hero')}>
               <select value={hero} onChange={(e) => setHero(e.target.value)}>
@@ -858,7 +885,7 @@ const copyText = async (text: string, ok: string) => {
 };
 
 // ---------------------------------------------------------------- 2. Affiche pub (an ad picture, like a shop's poster)
-function AdMaker({ products, picks, shop }: { products: Product[]; picks: { productId: number; list: Pic[] } | null; shop: Shop }) {
+function AdMaker({ products, picks, shop, lang }: { products: Product[]; picks: { productId: number; list: Pic[] } | null; shop: Shop; lang: Lang }) {
   const { t } = useTranslation();
   const [p, setP] = useState<Product | null>(null);
   const [mine, setMine] = useState<Pic[]>([]);
@@ -914,12 +941,12 @@ function AdMaker({ products, picks, shop }: { products: Product[]; picks: { prod
               }}
             />
           </div>
-          {heroes.length ? <PosterMaker product={p} heroes={heroes} colors={colors} shop={shop} /> : <Empty>{t(K + 'ad.needPhoto')}</Empty>}
+          {heroes.length ? <PosterMaker product={p} heroes={heroes} colors={colors} shop={shop} lang={lang} /> : <Empty>{t(K + 'ad.needPhoto')}</Empty>}
           <details className="st-prompt">
             <summary>
               <Icon name="message" /> {t(K + 'cp.title')}
             </summary>
-            <CopyBox p={p} />
+            <CopyBox p={p} lang={lang} />
           </details>
         </>
       )}
@@ -928,9 +955,8 @@ function AdMaker({ products, picks, shop }: { products: Product[]; picks: { prod
 }
 
 /** The post's text and 3 angles (the caption that goes with the ad picture). */
-function CopyBox({ p }: { p: Product }) {
+function CopyBox({ p, lang }: { p: Product; lang: Lang }) {
   const { t } = useTranslation();
-  const [lang, setLang] = useState<'ar' | 'darija' | 'fr'>('darija');
   const [out, setOut] = useState<{ post: string; angles: { name: string; hook: string }[]; demo: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const write = async () => {
@@ -946,13 +972,6 @@ function CopyBox({ p }: { p: Product }) {
   return (
     <div className="st-copy">
       <div className="st-poster-row">
-        <Field label={t(K + 'po.lang')}>
-          <select value={lang} onChange={(e) => setLang(e.target.value as typeof lang)}>
-            <option value="darija">الدارجة</option>
-            <option value="ar">العربية</option>
-            <option value="fr">Français</option>
-          </select>
-        </Field>
         <button type="button" className="btn" disabled={busy} onClick={write}>
           <Icon name="zap" /> {out ? t(K + 'cp.again') : t(K + 'cp.write')}
         </button>
@@ -987,10 +1006,9 @@ function CopyBox({ p }: { p: Product }) {
 }
 
 // ---------------------------------------------------------------- 3. Image landing page (one very long image)
-function LandingMaker({ products, saved }: { products: Product[]; saved: { name: string; src: string }[] }) {
+function LandingMaker({ products, saved, lang }: { products: Product[]; saved: { name: string; src: string }[]; lang: Lang }) {
   const { t } = useTranslation();
   const [p, setP] = useState<Product | null>(null);
-  const [lang, setLang] = useState<'ar' | 'fr'>('ar');
   const [hero, setHero] = useState<string | null>(saved[0]?.src ?? null);
   const [details, setDetails] = useState<string[]>([]);
   const [title, setTitle] = useState('');
@@ -1075,12 +1093,6 @@ function LandingMaker({ products, saved }: { products: Product[]; saved: { name:
             <Chosen p={p} onOther={() => (setP(null), setOut(null))} />
             <p className="muted small">{t(K + 'ld.help')}</p>
             <div className="st-poster-row">
-              <Field label={t(K + 'po.lang')}>
-                <select value={lang} onChange={(e) => setLang(e.target.value as 'ar' | 'fr')}>
-                  <option value="ar">العربية</option>
-                  <option value="fr">Français</option>
-                </select>
-              </Field>
               <label className="st-check-line">
                 {t(K + 'po.accent')} <input type="color" value={accent} onChange={(e) => setAccent(e.target.value)} />
               </label>
