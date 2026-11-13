@@ -44,8 +44,63 @@ function GroupList() {
   const list = useRpc('landing.groups', {});
   const store = useStore();
   const base = usePagesBase();
+  const rows = list.data ?? [];
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [busy, setBusy] = useState(false);
+  // a group deleted elsewhere: not chosen any more
+  useEffect(() => {
+    const ids = new Set(rows.map((g) => g.id));
+    if ([...sel].some((x) => !ids.has(x))) setSel(new Set([...sel].filter((x) => ids.has(x))));
+  }, [rows, sel]);
+  const all = rows.length > 0 && rows.every((g) => sel.has(g.id));
+  const flip = (gid: number) => {
+    const s = new Set(sel);
+    if (s.has(gid)) s.delete(gid);
+    else s.add(gid);
+    setSel(s);
+  };
   const copy = async (slug: string) => {
     if (await copyText(backend.kind === 'demo' ? `${location.origin}${location.pathname}${publicUrl(slug, store, base)}` : publicUrl(slug, store, base))) toast(t('landing.copied'), 'ok');
+  };
+  // one group: its copy opens in the editor (offline) to be changed before going online; several: they stay in the list
+  const duplicate = async (ids: number[]) => {
+    if (!ids.length || busy) return;
+    setBusy(true);
+    try {
+      const made: number[] = [];
+      for (const gid of ids) made.push((await rpc('landing.groupDuplicate', { id: gid })).id);
+      setSel(new Set());
+      await list.refetch();
+      if (made.length === 1) {
+        toast(t('landing.gr.ls.duplicated'), 'ok');
+        location.hash = `#/landing/groupes/${made[0]}`;
+      } else toast(t('landing.gr.ls.duplicatedN', { count: made.length }), 'ok');
+    } catch (e) {
+      toast((e as Error).message, 'bad');
+      list.refetch();
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async (ids: number[]) => {
+    if (!ids.length || busy) return;
+    const name = rows.find((g) => g.id === ids[0])?.title ?? '';
+    if (!window.confirm(ids.length === 1 ? t('landing.gr.ls.removeAsk', { name }) : t('landing.gr.ls.removeAskN', { count: ids.length }))) return;
+    setBusy(true);
+    let done = 0;
+    try {
+      for (const gid of ids) {
+        await rpc('landing.groupRemove', { id: gid });
+        done++;
+      }
+    } catch (e) {
+      toast((e as Error).message, 'bad');
+    } finally {
+      setBusy(false);
+      setSel(new Set());
+      if (done) toast(t('landing.gr.ls.removed', { count: done }), 'ok');
+      list.refetch();
+    }
   };
   return (
     <section className="card pd-card">
@@ -62,50 +117,113 @@ function GroupList() {
         <Loading />
       ) : list.error ? (
         <ErrorBox error={list.error} onRetry={() => list.refetch()} />
-      ) : !list.data?.length ? (
+      ) : !rows.length ? (
         <Empty>{t('landing.gr.empty')}</Empty>
       ) : (
-        <div className="lp-grid">
-          {list.data.map((g) => (
-            <article key={g.id} className="lp-tile" style={{ ['--lc' as string]: g.color }}>
-              <a className="lp-tile-img lp-gtile" href={`#/landing/groupes/${g.id}`} aria-label={t('landing.list.edit')}>
-                <span className="lp-gthumbs">
-                  {g.items.slice(0, 4).map((x) => (x.thumb ? <img key={x.pageId} src={x.thumb} alt="" loading="lazy" /> : <span key={x.pageId} />))}
-                </span>
-                <span className={`chip ${g.active ? 'lp-on' : ''}`}>{g.active ? t('landing.list.online') : t('landing.list.offline')}</span>
-              </a>
-              <div className="lp-tile-b">
-                <b dir="auto">{g.title}</b>
-                <small>
-                  {t(`landing.gr.theme.${g.theme}`)} · {t('landing.gr.nProducts', { count: g.items.length })}
-                </small>
-                <code className="ltr">/{g.slug}</code>
-                <div className="lp-tile-n">
-                  <span>
-                    <b className="ltr">{n(g.views)}</b> {t('landing.list.views')}
-                  </span>
-                  <span>
-                    <b className="ltr">{n(g.clicks)}</b> {t('landing.gr.clicks')}
-                  </span>
-                  <span>
-                    <b className="ltr">{n(g.orders)}</b> {t('landing.list.orders')}
-                  </span>
-                </div>
-                <div className="lp-tile-a">
-                  <a className="btn small" href={`#/landing/groupes/${g.id}`}>
-                    <Icon name="pencil" /> {t('landing.list.edit')}
-                  </a>
-                  <a className="btn small" href={publicUrl(g.slug, store, base)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer">
-                    <Icon name="external" /> {t('landing.list.open')}
-                  </a>
-                  <button type="button" className="btn small" onClick={() => copy(g.slug)} aria-label={t('landing.list.copy')} title={t('landing.list.copy')}>
-                    <Icon name="copy" />
-                  </button>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
+        <>
+          {sel.size > 0 && (
+            <div className="bulkbar lp-bulk">
+              <b>{t('landing.gr.ls.chosen', { count: sel.size })}</b>
+              <span className="lp-bulk-sp" />
+              <button type="button" className="btn small" disabled={busy} onClick={() => duplicate([...sel])}>
+                <Icon name="copy" /> {t('landing.list.duplicate')}
+              </button>
+              <button type="button" className="btn small lp-del" disabled={busy} onClick={() => remove([...sel])}>
+                <Icon name="trash" /> {t('landing.list.remove')}
+              </button>
+              <button type="button" className="btn small ghost" onClick={() => setSel(new Set())} aria-label={t('landing.list.clear')} title={t('landing.list.clear')}>
+                <Icon name="x" />
+              </button>
+            </div>
+          )}
+          <div className="tbl-wrap">
+            <table className="tbl lp-tbl lp-gtbl">
+              <thead>
+                <tr>
+                  <th className="ck">
+                    <input
+                      type="checkbox"
+                      aria-label={t('landing.list.selectAll')}
+                      checked={all}
+                      ref={(el) => {
+                        if (el) el.indeterminate = sel.size > 0 && !all;
+                      }}
+                      onChange={() => setSel(all ? new Set() : new Set(rows.map((g) => g.id)))}
+                    />
+                  </th>
+                  <th>{t('landing.gr.ls.group')}</th>
+                  <th>{t('landing.list.state')}</th>
+                  <th>{t('landing.gr.ls.products')}</th>
+                  <th className="num">{t('landing.list.views')}</th>
+                  <th className="num">{t('landing.gr.clicks')}</th>
+                  <th className="num">{t('landing.list.orders')}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((g) => (
+                  <tr key={g.id} className={sel.has(g.id) ? 'sel' : ''}>
+                    <td className="ck">
+                      <input type="checkbox" aria-label={t('landing.list.select')} checked={sel.has(g.id)} onChange={() => flip(g.id)} />
+                    </td>
+                    <td data-l={t('landing.gr.ls.group')}>
+                      <a className="lp-row-p" href={`#/landing/groupes/${g.id}`}>
+                        <span className="lp-gstack" style={{ ['--lc' as string]: g.color }}>
+                          {g.items.slice(0, 3).map((x) => (
+                            <span key={x.pageId} className="lp-row-img">
+                              {x.thumb ? <img src={x.thumb} alt="" loading="lazy" decoding="async" /> : <Icon name="image" />}
+                            </span>
+                          ))}
+                          {!g.items.length && (
+                            <span className="lp-row-img">
+                              <Icon name="grid" />
+                            </span>
+                          )}
+                        </span>
+                        <span className="lp-row-t">
+                          <b dir="auto">{g.title}</b>
+                          <code className="ltr">/{g.slug}</code>
+                        </span>
+                      </a>
+                    </td>
+                    <td data-l={t('landing.list.state')}>
+                      <span className={`chip ${g.active ? 'lp-on' : ''}`}>{g.active ? t('landing.list.online') : t('landing.list.offline')}</span>
+                    </td>
+                    <td data-l={t('landing.gr.ls.products')} className="lp-gmeta">
+                      {t(`landing.gr.theme.${g.theme}`)} · {t('landing.gr.nProducts', { count: g.items.length })}
+                    </td>
+                    <td className="num" data-l={t('landing.list.views')}>
+                      <b className="ltr">{n(g.views)}</b>
+                    </td>
+                    <td className="num" data-l={t('landing.gr.clicks')}>
+                      <b className="ltr">{n(g.clicks)}</b>
+                    </td>
+                    <td className="num" data-l={t('landing.list.orders')}>
+                      <b className="ltr">{n(g.orders)}</b>
+                    </td>
+                    <td className="lp-row-a">
+                      <a className="btn small" href={`#/landing/groupes/${g.id}`}>
+                        <Icon name="pencil" /> {t('landing.list.edit')}
+                      </a>
+                      <a className="btn small icon" href={publicUrl(g.slug, store, base)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer" aria-label={t('landing.list.open')} title={t('landing.list.open')}>
+                        <Icon name="external" />
+                      </a>
+                      <button type="button" className="btn small icon" onClick={() => copy(g.slug)} aria-label={t('landing.list.copy')} title={t('landing.list.copy')}>
+                        <Icon name="link" />
+                      </button>
+                      <button type="button" className="btn small icon" disabled={busy} onClick={() => duplicate([g.id])} aria-label={t('landing.list.duplicate')} title={t('landing.list.duplicate')}>
+                        <Icon name="copy" />
+                      </button>
+                      <button type="button" className="btn small icon lp-del" disabled={busy} onClick={() => remove([g.id])} aria-label={t('landing.list.remove')} title={t('landing.list.remove')}>
+                        <Icon name="trash" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </section>
   );

@@ -227,6 +227,25 @@ const rowOf = (i: GroupIn): GroupRowIn => ({
   tiktok_pixels: i.tiktokPixels,
 });
 
+/** a free address for a group, from its title: free, or this group's own (now or before); never a page's or another group's, even a former one */
+async function freeGroupSlug(db: Db, title: string, selfId?: number): Promise<string> {
+  const base =
+    title
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40) || 'collection';
+  for (let n = 1; n < 200; n++) {
+    const s = n === 1 ? base : `${base}-${n}`;
+    if (s.length < 2) continue;
+    const o = await addressOwner(db, s);
+    if (!o || (selfId !== undefined && o.group === selfId)) return s;
+  }
+  return `${base}-${Date.now().toString(36)}`;
+}
+
 export const landingGroupProcs = {
   'landing.groups': proc([...WHO], z.object({}), (ctx) => listGroups(ctx.db)),
 
@@ -260,6 +279,20 @@ export const landingGroupProcs = {
     return (await listGroups(ctx.db, [gid]))[0];
   }),
 
+  /** A copy of a group (same products, design, colour, pixels), « (copie) » in its name, a new free address, offline. */
+  'landing.groupDuplicate': proc([...WHO], z.object({ id }), async (ctx, { id: gid }) => {
+    const src = (await ctx.db.query('SELECT slug, title FROM landing_groups WHERE id = $1', [gid]))[0];
+    if (!src) throw notFound('Groupe introuvable');
+    const slug = await freeGroupSlug(ctx.db, String(src.slug));
+    const title = `${String(src.title ?? '').slice(0, 180)} (copie)`.trim();
+    const r = await ctx.db.query(
+      `INSERT INTO landing_groups (slug, active, title, subtitle, color, theme, best_page_id, items, pixel_id, meta_pixels, tiktok_pixels, meta_pixel_ref, tiktok_pixel_ref, created_by)
+       SELECT $2, false, $3, subtitle, color, theme, best_page_id, items, pixel_id, meta_pixels, tiktok_pixels, meta_pixel_ref, tiktok_pixel_ref, $4 FROM landing_groups WHERE id = $1 RETURNING id`,
+      [gid, slug, title, ctx.session.profile.id],
+    );
+    return (await listGroups(ctx.db, [num(r[0].id)]))[0];
+  }),
+
   'landing.groupRemove': proc([...WHO], z.object({ id }), async (ctx, { id: gid }) => {
     await ctx.db.query('DELETE FROM landing_groups WHERE id = $1', [gid]);
     return { ok: true };
@@ -271,22 +304,5 @@ export const landingGroupProcs = {
   })),
 
   /** a free address for a new group, from its title */
-  'landing.groupSlug': proc([...WHO], z.object({ title: z.string().max(200), id: id.optional() }), async (ctx, i) => {
-    const base =
-      i.title
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[̀-ͯ]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, 40) || 'collection';
-    for (let n = 1; n < 200; n++) {
-      const s = n === 1 ? base : `${base}-${n}`;
-      if (s.length < 2) continue;
-      // free, or this group's own (now or before); never a page's or another group's, even a former one
-      const o = await addressOwner(ctx.db, s);
-      if (!o || (i.id !== undefined && o.group === i.id)) return { slug: s };
-    }
-    return { slug: `${base}-${Date.now().toString(36)}` };
-  }),
+  'landing.groupSlug': proc([...WHO], z.object({ title: z.string().max(200), id: id.optional() }), async (ctx, i) => ({ slug: await freeGroupSlug(ctx.db, i.title, i.id) })),
 };

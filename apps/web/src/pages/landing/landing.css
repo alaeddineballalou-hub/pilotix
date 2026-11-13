@@ -391,3 +391,14 @@
   .lp-tbl td.lp-row-a .btn { margin: 0; }
   .lp-row-t b { max-width: 100%; }
 }
+/* Groupes: up to 3 of its products' photos, overlapping */
+.lp-gstack { display: flex; flex: none; padding-inline-end: 14px; }
+.lp-gstack .lp-row-img { width: 44px; border-inline-start: 0; box-shadow: 0 0 0 2px var(--surface), inset 0 0 0 1px var(--line); }
+.lp-gstack .lp-row-img + .lp-row-img { margin-inline-start: -14px; }
+.lp-gstack .lp-row-img:first-child { border-inline-start: 3px solid var(--lc, transparent); }
+.lp-gmeta { color: var(--muted); font-size: 13px; white-space: nowrap; }
+@media (max-width: 760px) {
+  .lp-gtbl td.lp-gmeta { grid-column: 1 / -1; }
+  .lp-gtbl td.lp-gmeta::before { display: none !important; }
+  .lp-gtbl tr { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

@@ -546,7 +546,21 @@
     "previewHint": "Comme le client le voit",
     "navHint": "Sur la vraie page, ce produit ouvre sa landing page",
     "sPixel": "Pixel Meta",
-    "pixel": "Pixel Meta de ce groupe"
+    "pixel": "Pixel Meta de ce groupe",
+    "ls": {
+      "group": "Groupe",
+      "products": "Produits",
+      "chosen_one": "{{count}} groupe choisi",
+      "chosen_other": "{{count}} groupes choisis",
+      "removeAsk": "Supprimer le groupe « {{name}} » ? Son adresse ne marchera plus (les landing pages des produits restent).",
+      "removeAskN_one": "Supprimer {{count}} groupe ? Son adresse ne marchera plus (les landing pages des produits restent).",
+      "removeAskN_other": "Supprimer {{count}} groupes ? Leurs adresses ne marcheront plus (les landing pages des produits restent).",
+      "removed_one": "{{count}} groupe supprimé",
+      "removed_other": "{{count}} groupes supprimés",
+      "duplicated": "Copie créée (hors ligne) : modifiez-la puis mettez-la en ligne",
+      "duplicatedN_one": "{{count}} copie créée (hors ligne)",
+      "duplicatedN_other": "{{count}} copies créées (hors ligne)"
+    }
   },
   "px": {
     "title": "Pixels (Meta et TikTok)",
