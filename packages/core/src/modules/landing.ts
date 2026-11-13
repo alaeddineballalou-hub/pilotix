@@ -1712,6 +1712,23 @@ export const landingProcs = {
     return (await listPages(ctx.db, ctx.now(), [pid]))[0];
   }),
 
+  /** A copy of a page (same product, photos, text, prices, pixels…), « (copie) » in its name, a new free address, offline. */
+  'landing.duplicate': proc([...WHO], z.object({ id }), async (ctx, { id }) => {
+    const src = (await ctx.db.query('SELECT slug, title FROM landing_pages WHERE id = $1', [id]))[0];
+    if (!src) throw notFound('Page introuvable');
+    const slug = await freeLandingSlug(ctx.db, String(src.slug));
+    const title = `${String(src.title ?? '').slice(0, 180)} (copie)`.trim();
+    const r = await ctx.db.query(
+      `INSERT INTO landing_pages (product_id, slug, active, title, color, price, old_price, description, variant_label, fraud_level, images, pixel_id, stock_mode, meta_pixels, tiktok_pixels, whatsapp, meta_pixel_ref, tiktok_pixel_ref, created_by)
+       SELECT product_id, $2, false, $3, color, price, old_price, description, variant_label, fraud_level, images, pixel_id, stock_mode, meta_pixels, tiktok_pixels, whatsapp, meta_pixel_ref, tiktok_pixel_ref, $4
+         FROM landing_pages WHERE id = $1 RETURNING id`,
+      [id, slug, title, ctx.session.profile.id],
+    );
+    const pid = num(r[0].id);
+    ctx.emit({ type: 'stock' });
+    return (await listPages(ctx.db, ctx.now(), [pid]))[0];
+  }),
+
   'landing.remove': proc([...WHO], z.object({ id }), async (ctx, { id }) => {
     await ctx.db.query('DELETE FROM landing_pages WHERE id = $1', [id]);
     ctx.emit({ type: 'stock' });

@@ -80,6 +80,64 @@ function Pages() {
   const copy = async (slug: string) => {
     if (await copyText(backend.kind === 'demo' ? `${location.origin}${location.pathname}${publicUrl(slug, store, base)}` : publicUrl(slug, store, base))) toast(t('landing.copied'), 'ok');
   };
+  const rows = list.data ?? [];
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [busy, setBusy] = useState(false);
+  // a page deleted elsewhere: not chosen any more
+  useEffect(() => {
+    const ids = new Set(rows.map((p) => p.id));
+    if ([...sel].some((x) => !ids.has(x))) setSel(new Set([...sel].filter((x) => ids.has(x))));
+  }, [rows, sel]);
+  const all = rows.length > 0 && rows.every((p) => sel.has(p.id));
+  const flip = (id: number) => {
+    const s = new Set(sel);
+    if (s.has(id)) s.delete(id);
+    else s.add(id);
+    setSel(s);
+  };
+  const title = (id: number) => {
+    const p = rows.find((x) => x.id === id);
+    return p ? p.title || p.productName : '';
+  };
+  // one page: its copy opens in the editor (offline) to be changed before going online; several: they stay in the list
+  const duplicate = async (ids: number[]) => {
+    if (!ids.length || busy) return;
+    setBusy(true);
+    try {
+      const made: number[] = [];
+      for (const id of ids) made.push((await rpc('landing.duplicate', { id })).id);
+      setSel(new Set());
+      await list.refetch();
+      if (made.length === 1) {
+        toast(t('landing.list.duplicated'), 'ok');
+        location.hash = `#/landing/pages/${made[0]}`;
+      } else toast(t('landing.list.duplicatedN', { count: made.length }), 'ok');
+    } catch (e) {
+      toast((e as Error).message, 'bad');
+      list.refetch();
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async (ids: number[]) => {
+    if (!ids.length || busy) return;
+    if (!window.confirm(ids.length === 1 ? t('landing.list.removeAsk', { name: title(ids[0]) }) : t('landing.list.removeAskN', { count: ids.length }))) return;
+    setBusy(true);
+    let done = 0;
+    try {
+      for (const id of ids) {
+        await rpc('landing.remove', { id });
+        done++;
+      }
+    } catch (e) {
+      toast((e as Error).message, 'bad');
+    } finally {
+      setBusy(false);
+      setSel(new Set());
+      if (done) toast(t('landing.list.removed', { count: done }), 'ok');
+      list.refetch();
+    }
+  };
   return (
     <>
       <Missing />
@@ -99,46 +157,95 @@ function Pages() {
         ) : !list.data?.length ? (
           <Empty>{t('landing.list.empty')}</Empty>
         ) : (
-          <div className="lp-grid">
-            {list.data.map((p) => (
-              <article key={p.id} className="lp-tile" style={{ ['--lc' as string]: p.color }}>
-                <a className="lp-tile-img" href={`#/landing/pages/${p.id}`} aria-label={t('landing.list.edit')}>
-                  {p.thumb ? <img src={p.thumb} alt="" loading="lazy" /> : <Icon name="image" />}
-                  <span className={`chip ${p.active ? 'lp-on' : ''}`}>{p.active ? t('landing.list.online') : t('landing.list.offline')}</span>
-                </a>
-                <div className="lp-tile-b">
-                  <b dir="auto">{p.title || p.productName}</b>
-                  <small>{p.productName}</small>
-                  <code className="ltr">/{p.slug}</code>
-                  <div className="lp-tile-n">
-                    <span>
-                      <b className="ltr">{n(p.views)}</b> {t('landing.list.views')}
-                    </span>
-                    <span>
-                      <b className="ltr">{n(p.orders)}</b> {t('landing.list.orders')}
-                    </span>
-                    <span className={p.abandoned ? 'warn' : ''}>
-                      <b className="ltr">{n(p.abandoned)}</b> {t('landing.list.abandoned')}
-                    </span>
-                    <span className={p.blocked ? 'bad' : ''}>
-                      <b className="ltr">{n(p.blocked)}</b> {t('landing.list.blocked')}
-                    </span>
-                  </div>
-                  <div className="lp-tile-a">
-                    <a className="btn small" href={`#/landing/pages/${p.id}`}>
-                      <Icon name="pencil" /> {t('landing.list.edit')}
-                    </a>
-                    <a className="btn small" href={publicUrl(p.slug, store, base)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer">
-                      <Icon name="external" /> {t('landing.list.open')}
-                    </a>
-                    <button type="button" className="btn small" onClick={() => copy(p.slug)} aria-label={t('landing.list.copy')} title={t('landing.list.copy')}>
-                      <Icon name="copy" />
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
+          <>
+            {sel.size > 0 && (
+              <div className="bulkbar lp-bulk">
+                <b>{t('landing.list.chosen', { count: sel.size })}</b>
+                <span className="lp-bulk-sp" />
+                <button type="button" className="btn small" disabled={busy} onClick={() => duplicate([...sel])}>
+                  <Icon name="copy" /> {t('landing.list.duplicate')}
+                </button>
+                <button type="button" className="btn small lp-del" disabled={busy} onClick={() => remove([...sel])}>
+                  <Icon name="trash" /> {t('landing.list.remove')}
+                </button>
+                <button type="button" className="btn small ghost" onClick={() => setSel(new Set())} aria-label={t('landing.list.clear')} title={t('landing.list.clear')}>
+                  <Icon name="x" />
+                </button>
+              </div>
+            )}
+            <div className="tbl-wrap">
+              <table className="tbl lp-tbl">
+                <thead>
+                  <tr>
+                    <th className="ck">
+                      <input type="checkbox" aria-label={t('landing.list.selectAll')} checked={all} ref={(el) => {
+                        if (el) el.indeterminate = sel.size > 0 && !all;
+                      }} onChange={() => setSel(all ? new Set() : new Set(rows.map((p) => p.id)))} />
+                    </th>
+                    <th>{t('landing.list.page')}</th>
+                    <th>{t('landing.list.state')}</th>
+                    <th className="num">{t('landing.list.views')}</th>
+                    <th className="num">{t('landing.list.orders')}</th>
+                    <th className="num">{t('landing.list.abandoned')}</th>
+                    <th className="num">{t('landing.list.blocked')}</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((p) => (
+                    <tr key={p.id} className={sel.has(p.id) ? 'sel' : ''}>
+                      <td className="ck">
+                        <input type="checkbox" aria-label={t('landing.list.select')} checked={sel.has(p.id)} onChange={() => flip(p.id)} />
+                      </td>
+                      <td data-l={t('landing.list.page')}>
+                        <a className="lp-row-p" href={`#/landing/pages/${p.id}`}>
+                          <span className="lp-row-img" style={{ ['--lc' as string]: p.color }}>
+                            {p.thumb ? <img src={p.thumb} alt="" loading="lazy" decoding="async" /> : <Icon name="image" />}
+                          </span>
+                          <span className="lp-row-t">
+                            <b dir="auto">{p.title || p.productName}</b>
+                            <code className="ltr">/{p.slug}</code>
+                          </span>
+                        </a>
+                      </td>
+                      <td data-l={t('landing.list.state')}>
+                        <span className={`chip ${p.active ? 'lp-on' : ''}`}>{p.active ? t('landing.list.online') : t('landing.list.offline')}</span>
+                      </td>
+                      <td className="num" data-l={t('landing.list.views')}>
+                        <b className="ltr">{n(p.views)}</b>
+                      </td>
+                      <td className="num" data-l={t('landing.list.orders')}>
+                        <b className="ltr">{n(p.orders)}</b>
+                      </td>
+                      <td className={`num ${p.abandoned ? 'warn' : ''}`} data-l={t('landing.list.abandoned')}>
+                        <b className="ltr">{n(p.abandoned)}</b>
+                      </td>
+                      <td className={`num ${p.blocked ? 'bad' : ''}`} data-l={t('landing.list.blocked')}>
+                        <b className="ltr">{n(p.blocked)}</b>
+                      </td>
+                      <td className="lp-row-a">
+                        <a className="btn small" href={`#/landing/pages/${p.id}`}>
+                          <Icon name="pencil" /> {t('landing.list.edit')}
+                        </a>
+                        <a className="btn small icon" href={publicUrl(p.slug, store, base)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer" aria-label={t('landing.list.open')} title={t('landing.list.open')}>
+                          <Icon name="external" />
+                        </a>
+                        <button type="button" className="btn small icon" onClick={() => copy(p.slug)} aria-label={t('landing.list.copy')} title={t('landing.list.copy')}>
+                          <Icon name="link" />
+                        </button>
+                        <button type="button" className="btn small icon" disabled={busy} onClick={() => duplicate([p.id])} aria-label={t('landing.list.duplicate')} title={t('landing.list.duplicate')}>
+                          <Icon name="copy" />
+                        </button>
+                        <button type="button" className="btn small icon lp-del" disabled={busy} onClick={() => remove([p.id])} aria-label={t('landing.list.remove')} title={t('landing.list.remove')}>
+                          <Icon name="trash" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
     </>
