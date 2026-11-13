@@ -1041,3 +1041,23 @@ mark.pl-dj-gone { padding: 0 2px; border-radius: 4px; background: none; color: i
 @media (max-width: 640px) { .pk-foot { grid-template-columns: minmax(0, 1fr); } }
 .pk-today { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-variant-numeric: tabular-nums; }
 .pk-actions { gap: 8px; flex-wrap: wrap; }
+
+/* Pilot AI › Les 3 IA: Claude, ChatGPT and Gemini side by side, their key and what each cost */
+.ai3-total { display: flex; flex-wrap: wrap; gap: 18px; padding: 10px 14px; border-radius: 12px; background: var(--soft, #f5f7fb); margin: 6px 0 12px; }
+.ai3-total b { font-size: 18px; margin-inline-start: 6px; }
+.ai3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.ai3-card { border: 1px solid var(--line, #e2e6ee); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; border-top-width: 4px; min-width: 0; }
+.ai3-claude { border-top-color: #d97757; }
+.ai3-openai { border-top-color: #10a37f; }
+.ai3-gemini { border-top-color: #4285f4; }
+.ai3-card p { margin: 0; }
+.ai3-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ai3-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.ai3-nums > span { display: flex; flex-direction: column; gap: 2px; }
+.ai3-nums b { font-size: 16px; }
+.ai3-bars { display: flex; align-items: flex-end; gap: 2px; height: 46px; padding: 4px 0; border-bottom: 1px solid var(--line, #e2e6ee); }
+.ai3-bars i { flex: 1; min-width: 2px; border-radius: 2px 2px 0 0; background: currentColor; opacity: 0.75; }
+.ai3-claude .ai3-bars { color: #d97757; }
+.ai3-openai .ai3-bars { color: #10a37f; }
+.ai3-gemini .ai3-bars { color: #4285f4; }
+@media (max-width: 900px) { .ai3 { grid-template-columns: 1fr; } }

@@ -1065,7 +1065,8 @@
       "cm": "CM AI",
       "spy": "Spy AI",
       "settings": "Settings & costs",
-      "lab": "Test & lessons"
+      "lab": "Test & lessons",
+      "ai": "The 3 AIs"
     },
     "board": {
       "title": "Dellal’s sales",
@@ -1959,6 +1960,36 @@
       "moreHow": "« More cases » writes 10 completely different ones. When it is good: « Push to test », the real test in the chat, then « Push to the server ».",
       "otherVersion": "This test is v{{v}}’s: the version in test has changed.",
       "more": "More cases"
+    },
+    "ai": {
+      "title": "The 3 AIs: keys and spending",
+      "text": "Claude, ChatGPT and Gemini in one place: Pilotix's key for each, and what each one cost. Keys are never shown.",
+      "today": "Today",
+      "month": "This month",
+      "days30": "Last 30 days",
+      "linked": "Linked",
+      "missing": "No key",
+      "use": {
+        "claude": "Dellal (selling in the chats), Pilot, post and poster texts.",
+        "openai": "Studio photo, when the control room's model is an OpenAI one (gpt-image…).",
+        "gemini": "Voice notes, Gemini Live, Studio photo pictures and their check."
+      },
+      "bars": "Spending per day, 30 days: {{usd}}",
+      "calls_one": "{{n}} call in 30 days",
+      "calls_other": "{{n}} calls in 30 days",
+      "shopsOwn": "+ {{usd}} paid by shops with their own key",
+      "key": "API key",
+      "keyKept": "A key is saved: paste a new one to change it.",
+      "keyHint": {
+        "claude": "On console.anthropic.com › API keys (starts with sk-ant-).",
+        "openai": "On platform.openai.com › API keys (starts with sk-).",
+        "gemini": "On aistudio.google.com › API keys (starts with AIza or AQ.)."
+      },
+      "link": "Link",
+      "change": "Change the key",
+      "removeAsk": "Remove {{name}}'s key? The tools that use it will stop.",
+      "billing": "Billing",
+      "note": "The amounts are what Pilotix counts for each call (an estimate for pictures): the real bill is on each company's page."
     }
   },
   "seller": {

@@ -11,7 +11,7 @@ import { NOTIFY_SMS_SECRET, notifySettings } from './modules/notify';
 import type { MetaForm, MetaLead } from './modules/leads';
 import { linkedPage } from './modules/social';
 
-import { googleKey, pilotKey, pilotLiveKey, voiceKey } from './platform/pilotai';
+import { googleKey, openaiKey, pilotKey, pilotLiveKey, voiceKey } from './platform/pilotai';
 import { recordAiUsage } from './platform/aiusage';
 import type { PilotAiReq } from './modules/pilotlearn';
 import type { Tenancy } from './platform/tenancy';
@@ -1808,7 +1808,10 @@ async function studioImage(ctx: Ctx, a: StudioImageArgs): Promise<StudioImageRes
   let out: string | null = null;
   try {
     if (a.provider === 'openai') {
-      if (!a.key) return { ok: false, error: 'no_key' };
+      // the shop's own key, or Pilotix's (control room › Pilot AI › Les 3 IA)
+      const okey = a.key || (await openaiKey(ctx.t).catch(() => null));
+      if (!okey) return { ok: false, error: 'off' };
+      a = { ...a, key: okey };
       if (!images.length) {
         const res = await fetch('https://api.openai.com/v1/images/generations', {
           method: 'POST',

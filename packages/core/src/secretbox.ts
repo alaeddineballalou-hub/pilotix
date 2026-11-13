@@ -51,6 +51,7 @@ export function sealFields<T>(v: T, fields: readonly string[]): T {
 export const PLATFORM_SECRETS: Readonly<Record<string, readonly string[] | 'all'>> = {
   pilot_key: ['key'],
   pilot_voice_key: ['key'],
+  openai_key: ['key'],
   spy_key_scrapecreators: ['key'],
   spy_key_searchapi: ['key'],
   social_secrets: 'all',

@@ -172,3 +172,44 @@ export async function saveAiBill(t: Tenancy, b: AiBill): Promise<AiBill> {
   );
   return { rate };
 }
+
+/** Which company an AI line was paid to, from its model's name (« gemini:… », « openai:… », the rest is Claude). */
+export const AI_PROVIDERS = ['claude', 'openai', 'gemini'] as const;
+export type AiProvider = (typeof AI_PROVIDERS)[number];
+const PROVIDER_SQL = `CASE WHEN model LIKE 'gemini:%' THEN 'gemini' WHEN model LIKE 'openai:%' THEN 'openai' ELSE 'claude' END`;
+
+/**
+ * What each AI company cost, day by day for the last `days` days (Algeria's days), Pilotix's part and the part paid by
+ * shops with their own keys apart; with today and this month's totals.
+ */
+export async function aiProviderSpend(t: Tenancy, days = 30) {
+  const rows = await t.platform
+    .query<{ provider: string; day: string; payer: string; calls: unknown; usd: unknown }>(
+      `SELECT ${PROVIDER_SQL} AS provider, to_char(day, 'YYYY-MM-DD') AS day, payer, sum(calls) AS calls, sum(usd) AS usd
+         FROM platform.ai_usage
+        WHERE day > (now() AT TIME ZONE 'Africa/Algiers')::date - $1::int
+        GROUP BY 1, 2, 3`,
+      [Math.max(days, 31)],
+    )
+    .catch(() => []);
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Algiers' }).format(new Date());
+  const month = today.slice(0, 7);
+  const from = new Date(Date.parse(`${today}T00:00:00Z`) - (days - 1) * 86_400_000).toISOString().slice(0, 10);
+  const out = {} as Record<AiProvider, { today: number; month: number; days30: number; calls30: number; shopsOwn30: number; byDay: Record<string, number> }>;
+  for (const p of AI_PROVIDERS) out[p] = { today: 0, month: 0, days30: 0, calls30: 0, shopsOwn30: 0, byDay: {} };
+  for (const r of rows) {
+    const p = (AI_PROVIDERS as readonly string[]).includes(r.provider) ? (r.provider as AiProvider) : 'claude';
+    const usd = Number(r.usd) || 0;
+    if (r.payer !== 'pilotix') {
+      if (r.day >= from) out[p].shopsOwn30 += usd;
+      continue;
+    }
+    if (r.day === today) out[p].today += usd;
+    if (r.day.startsWith(month)) out[p].month += usd;
+    if (r.day < from) continue;
+    out[p].days30 += usd;
+    out[p].calls30 += Number(r.calls) || 0;
+    out[p].byDay[r.day] = (out[p].byDay[r.day] ?? 0) + usd;
+  }
+  return { today, days, providers: out };
+}

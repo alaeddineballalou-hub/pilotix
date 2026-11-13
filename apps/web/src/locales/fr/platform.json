@@ -1065,7 +1065,8 @@
       "cm": "CM AI",
       "spy": "Spy AI",
       "settings": "Réglages & coûts",
-      "lab": "Tester & leçons"
+      "lab": "Tester & leçons",
+      "ai": "Les 3 IA"
     },
     "board": {
       "title": "Les ventes de Dellal",
@@ -1672,7 +1673,7 @@
       "enable": "Lire les messages vocaux des clients",
       "key": "Clé Google (Gemini)",
       "keySaved": "Clé enregistrée. Laissez vide pour la garder.",
-      "keyHint": "Créez une clé sur aistudio.google.com (« Get API key »), puis collez-la ici. Elle commence par AIza.",
+      "keyHint": "Créez une clé sur aistudio.google.com (« Get API key »), puis collez-la ici. Elle commence par AIza ou AQ.",
       "model": "Modèle Gemini",
       "modelHint": "gemini-flash-latest suit toujours le Flash le plus récent de Google.",
       "today_one": "Aujourd’hui : {{n}} vocal écrit · {{usd}}",
@@ -1959,6 +1960,36 @@
       "moreHow": "« D’autres cas » en écrit 10 complètement différents. Quand c’est bon : « Push en test », le vrai test dans le chat, puis « Push sur le serveur ».",
       "otherVersion": "Ce test est celui de la v{{v}} : la version en test a changé.",
       "more": "D’autres cas"
+    },
+    "ai": {
+      "title": "Les 3 IA : clés et dépenses",
+      "text": "Claude, ChatGPT et Gemini au même endroit : la clé de Pilotix pour chacune, et ce que chacune a coûté. Les clés ne sont jamais montrées.",
+      "today": "Aujourd'hui",
+      "month": "Ce mois",
+      "days30": "30 derniers jours",
+      "linked": "Branchée",
+      "missing": "Pas de clé",
+      "use": {
+        "claude": "Dellal (les ventes dans les messages), Pilot, les textes des posts et des affiches.",
+        "openai": "Studio photo, quand le modèle du Centre de contrôle est un modèle OpenAI (gpt-image…).",
+        "gemini": "Les messages vocaux, Gemini Live, les photos du Studio photo et leur vérification."
+      },
+      "bars": "Dépense par jour, 30 jours : {{usd}}",
+      "calls_one": "{{n}} appel en 30 jours",
+      "calls_other": "{{n}} appels en 30 jours",
+      "shopsOwn": "+ {{usd}} payés par les boutiques avec leur propre clé",
+      "key": "Clé API",
+      "keyKept": "Une clé est enregistrée : collez-en une nouvelle pour la changer.",
+      "keyHint": {
+        "claude": "Sur console.anthropic.com › API keys (commence par sk-ant-).",
+        "openai": "Sur platform.openai.com › API keys (commence par sk-).",
+        "gemini": "Sur aistudio.google.com › API keys (commence par AIza ou AQ.)."
+      },
+      "link": "Brancher",
+      "change": "Changer la clé",
+      "removeAsk": "Enlever la clé de {{name}} ? Les outils qui l'utilisent s'arrêteront.",
+      "billing": "Factures",
+      "note": "Les montants sont ceux que Pilotix calcule pour chaque appel (estimation pour les images) : la vraie facture est sur la page de chaque entreprise."
     }
   },
   "seller": {

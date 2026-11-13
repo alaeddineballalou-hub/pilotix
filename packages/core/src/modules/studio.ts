@@ -26,6 +26,8 @@ type Mode = (typeof MODES)[number];
 /** the model that looks at the photos (a Gemini that reads images; cheap) */
 export const STUDIO_CHECK_MODEL = 'gemini-flash-latest';
 const MODEL_RE = /^[a-z0-9][a-z0-9.\-]{2,59}$/i;
+/** An OpenAI image model's name (gpt-image-1, gpt-image-2, dall-e-3…). */
+export const isOpenaiModel = (m: string) => /^(gpt-|dall-e|chatgpt-)/i.test(m.trim());
 
 type Logo = { x: number; y: number; w: number; h: number };
 const LogoIn = z
@@ -331,8 +333,9 @@ export const studioProcs = {
       if (!tool || !tool.on) throw bad('Le Studio photo IA est arrêté pour le moment.');
       const own = await ownKey(ctx);
       const useOwn = own.mode !== 'credits' && !!own.key;
-      const provider = own.mode === 'openai' && useOwn ? ('openai' as const) : ('gemini' as const);
-      const model = (useOwn && own.model) || (provider === 'openai' ? 'gpt-image-1' : tool.model || 'gemini-3.1-flash-image-preview');
+      // with credits, Pilotix's company follows the control room's model: an OpenAI one goes to OpenAI, the rest to Gemini
+      const provider = useOwn ? (own.mode === 'openai' ? ('openai' as const) : ('gemini' as const)) : isOpenaiModel(tool.model) ? ('openai' as const) : ('gemini' as const);
+      const model = (useOwn && own.model) || (useOwn && provider === 'openai' ? 'gpt-image-1' : tool.model || 'gemini-3.1-flash-image-preview');
       const product = String(pr.name);
       const mine = await rules(ctx);
       const logo = (bg.logo ?? null) as Logo | null;
@@ -520,8 +523,8 @@ export const studioProcs = {
     if (!tool || !tool.on) throw bad('Le Studio photo IA est arrêté pour le moment.');
     const own = await ownKey(ctx);
     const useOwn = own.mode !== 'credits' && !!own.key;
-    const provider = own.mode === 'openai' && useOwn ? ('openai' as const) : ('gemini' as const);
-    const model = (useOwn && own.model) || (provider === 'openai' ? 'gpt-image-1' : tool.model || 'gemini-3.1-flash-image-preview');
+    const provider = useOwn ? (own.mode === 'openai' ? ('openai' as const) : ('gemini' as const)) : isOpenaiModel(tool.model) ? ('openai' as const) : ('gemini' as const);
+    const model = (useOwn && own.model) || (useOwn && provider === 'openai' ? 'gpt-image-1' : tool.model || 'gemini-3.1-flash-image-preview');
     const got = useOwn ? null : await take(ctx, cfg, TOOL_PHOTO, 1);
     const prompt = [(await rules(ctx)).background.text, i.note ? `The shop adds: ${i.note}` : ''].filter(Boolean).join('\n');
     const r = (await ctx.server.dellal('studioImage', { provider, key: useOwn ? own.key : null, model, prompt, images: [], textOnly: true }, ctx)) as any;

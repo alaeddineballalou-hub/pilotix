@@ -182,3 +182,35 @@ export async function googleKey(t: Tenancy): Promise<string | null> {
   const r = (await t.platform.query<{ value: unknown }>('SELECT value FROM platform.settings WHERE key = $1', [VOICE_KEY_ROW]))[0];
   return (r && String(json(r.value)?.key || '').trim()) || null;
 }
+
+// ---------------------------------------------------------------- OpenAI (ChatGPT): Pilotix's own key, for the tools that
+// use it (Studio photo with an OpenAI image model). Kept sealed, never sent back to a page.
+const OPENAI_KEY_ROW = 'openai_key';
+/** An OpenAI key: « sk-… » (project keys « sk-proj-… » too). */
+export const OPENAI_KEY_RE = /^sk-[A-Za-z0-9_-]{20,}$/;
+/** A Google key: the old « AIza… » ones and the new « AQ.… » ones that AI Studio gives now. */
+export const GOOGLE_KEY_RE = /^(AIza[0-9A-Za-z_-]{30,}|AQ\.[0-9A-Za-z_.-]{20,})$/;
+
+export async function openaiState(t: Tenancy): Promise<{ hasKey: boolean }> {
+  const r = (await t.platform.query<{ value: unknown }>('SELECT value FROM platform.settings WHERE key = $1', [OPENAI_KEY_ROW]))[0];
+  return { hasKey: !!(r && String(json(r.value)?.key || '').trim()) };
+}
+
+/** `key`: a new key, or null to remove it. */
+export async function saveOpenaiKey(t: Tenancy, key: string | null): Promise<void> {
+  if (key === null) {
+    await t.platform.query('DELETE FROM platform.settings WHERE key = $1', [OPENAI_KEY_ROW]);
+    return;
+  }
+  await t.platform.query(
+    `INSERT INTO platform.settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [OPENAI_KEY_ROW, JSON.stringify(sealPlatformSetting(OPENAI_KEY_ROW, { key: key.trim() }))],
+  );
+}
+
+/** Server only: Pilotix's OpenAI key. null: none, or Pilot AI is resting (the daily limit). */
+export async function openaiKey(t: Tenancy): Promise<string | null> {
+  if ((await pilotToday(t)).rest) return null;
+  const r = (await t.platform.query<{ value: unknown }>('SELECT value FROM platform.settings WHERE key = $1', [OPENAI_KEY_ROW]))[0];
+  return (r && String(json(r.value)?.key || '').trim()) || null;
+}

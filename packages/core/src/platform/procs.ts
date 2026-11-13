@@ -56,9 +56,9 @@ import * as pilot from '../modules/pilotlearn';
 import * as exam from '../modules/pilotexam';
 import * as cases from '../modules/pilotcases';
 import { pilotixLessons } from '../modules/pilotexamdata';
-import { pilotConfig, pilotToday, savePilotConfig, saveVoiceConfig, voiceConfig, voiceToday, VOICE_MODEL } from './pilotai';
+import { GOOGLE_KEY_RE, OPENAI_KEY_RE, openaiState, pilotConfig, pilotToday, saveOpenaiKey, savePilotConfig, saveVoiceConfig, voiceConfig, voiceToday, VOICE_MODEL } from './pilotai';
 import { saveStore, storeStatus, testStore } from '../photostore';
-import { AI_FEATURES, aiBill, aiLabOfMonth, aiUsageOfMonth, aiUsageSince, monthOf, saveAiBill } from './aiusage';
+import { AI_FEATURES, aiBill, aiLabOfMonth, aiProviderSpend, aiUsageOfMonth, aiUsageSince, monthOf, saveAiBill } from './aiusage';
 import { pilotTry, TestPhoto } from '../modules/dellal';
 import { addCoachLahja, decideLahja, decideManyLahja, LAHJA_NO_CHANGE, lahjaAccepted, lahjaErr, lahjaState, lahjaWaiting, LahjaWord } from '../modules/lahja';
 import { copyVocab, forgetVocab, importVocab, learnVocab, readCentimes, removeVocab, saveVocab, vocabBlock, vocabChanges, vocabCounts, vocabFor, vocabList, VOCAB } from '../modules/vocab';
@@ -1341,7 +1341,7 @@ export const PLATFORM_REGISTRY = {
     z.object({ enabled: z.boolean(), model: z.string().trim().max(60), key: z.string().max(300).nullable().optional() }),
     async (ctx, i) => {
       const key = i.key === undefined ? undefined : i.key === null ? null : i.key.trim() || undefined;
-      if (typeof key === 'string' && !/^AIza[0-9A-Za-z_-]{30,}$/.test(key)) throw bad('Clé Google invalide (elle commence par AIza, sur aistudio.google.com)');
+      if (typeof key === 'string' && !GOOGLE_KEY_RE.test(key)) throw bad('Clé Google invalide (elle commence par AIza ou AQ., sur aistudio.google.com)');
       if (!VOICE_MODEL.test(i.model)) throw bad('Nom de modèle Gemini invalide (exemple : gemini-flash-latest)');
       await saveVoiceConfig(ctx.t, { enabled: i.enabled, model: i.model }, key);
       await audit(ctx, 'pilot.voice', null, { enabled: i.enabled, model: i.model, key: key === undefined ? 'kept' : key === null ? 'removed' : 'new' });
@@ -1855,6 +1855,22 @@ export const PLATFORM_REGISTRY = {
    * at Anthropic's list price, and in DA at the owner's rate. Only answers paid with Pilotix's key count in « to bill »;
    * answers a shop paid with its own key are shown apart. The night learning (Pilot AI) is Pilotix's own cost.
    */
+  /**
+   * The 3 AI companies in one place: whether Pilotix has each one's key, and what each cost (today, this month, the last
+   * 30 days day by day). Claude: the live answers and the texts; Gemini: voice notes and Studio photo; OpenAI: Studio photo
+   * when its model is an OpenAI one. The keys never come back.
+   */
+  'p.ai.providers': pproc(MANAGERS, z.object({}), async (ctx) => {
+    const [claude, gemini, openai, spend, bill] = await Promise.all([pilotConfig(ctx.t), voiceConfig(ctx.t), openaiState(ctx.t), aiProviderSpend(ctx.t, 30), aiBill(ctx.t)]);
+    return { keys: { claude: { hasKey: claude.hasKey, on: claude.enabled }, gemini: { hasKey: gemini.hasKey, on: true }, openai: { hasKey: openai.hasKey, on: true } }, ...spend, rate: bill.rate };
+  }),
+  'p.ai.openaiKey': pproc(MANAGERS, z.object({ key: z.string().max(300).nullable() }), async (ctx, i) => {
+    const key = i.key === null ? null : i.key.trim();
+    if (key !== null && !OPENAI_KEY_RE.test(key)) throw bad('Clé OpenAI invalide (elle commence par sk-, sur platform.openai.com › API keys)');
+    await saveOpenaiKey(ctx.t, key);
+    await audit(ctx, 'ai.openai', null, { key: key === null ? 'removed' : 'new' });
+    return openaiState(ctx.t);
+  }),
   'p.ai.costs': pproc(MANAGERS, z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional() }), async (ctx, i) => {
     const month = i.month ?? monthOf(ctx.now());
     const [rows, since, bill, shops, nights, lab] = await Promise.all([

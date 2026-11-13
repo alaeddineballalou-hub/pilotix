@@ -1056,6 +1056,32 @@ export function demoAnswer(name: string, input: any): unknown {
       };
     case 'p.ai.costs':
       return costs(input ?? {});
+    case 'p.ai.openaiKey':
+      return { hasKey: input?.key !== null };
+    case 'p.ai.providers': {
+      // 30 example days: Claude every day (the live answers), Gemini a little (voice notes, Studio photo), OpenAI none yet
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Algiers' }).format(new Date());
+      const day = (k: number) => new Date(Date.parse(`${today}T00:00:00Z`) - k * DAY).toISOString().slice(0, 10);
+      const make = (base: number, wave: number) => {
+        const byDay: Record<string, number> = {};
+        let month = 0;
+        let days30 = 0;
+        for (let k = 0; k < 30; k++) {
+          const v = Math.max(0, +(base + wave * Math.sin(k / 3)).toFixed(3));
+          byDay[day(k)] = v;
+          days30 += v;
+          if (day(k).startsWith(today.slice(0, 7))) month += v;
+        }
+        return { today: byDay[today] ?? 0, month, days30, calls30: Math.round(days30 * 900), shopsOwn30: 0, byDay };
+      };
+      return {
+        keys: { claude: { hasKey: true, on: true }, gemini: { hasKey: true, on: true }, openai: { hasKey: false, on: true } },
+        today,
+        days: 30,
+        providers: { claude: make(1.8, 0.6), gemini: make(0.12, 0.08), openai: make(0, 0) },
+        rate: 250,
+      };
+    }
     case 'p.pilot.bookText':
       return { version: 2, updatedAt: new Date(Date.now() - 9 * DAY).toISOString(), testVersion: 3, lessons: 7, text: BOOK };
     case 'p.pilot.case': {

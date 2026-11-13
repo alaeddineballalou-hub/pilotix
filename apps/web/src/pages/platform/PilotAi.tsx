@@ -23,12 +23,13 @@ import { CaseModal } from './pilotCase';
 import { SocialAppsCard } from './SocialApps';
 import { PhotoStoreCard } from './PhotoStore';
 import { SpyKeyCard } from './SpyKey';
+import { AiKeysCard } from './AiKeys';
 
 type State = POut<'p.pilot.state'>;
 type Lesson = State['candidates'][number];
 const OUTCOMES = ['delivered', 'refused', 'cancelled', 'fake', 'no_order', 'pending', 'stale'] as const;
 const pct = (k: number, total: number) => (total ? `${((k / total) * 100).toFixed(1)} %` : '—');
-const TABS = ['dellal', 'lab', 'cm', 'spy', 'settings'] as const;
+const TABS = ['dellal', 'lab', 'cm', 'spy', 'ai', 'settings'] as const;
 type Tab = (typeof TABS)[number];
 
 export function PilotAiPage({ staff, tab, demo }: { staff: Staff; tab?: string; demo?: boolean }) {
@@ -94,6 +95,7 @@ function PilotAiInner({ staff, tab, demo }: { staff: Staff; tab?: string; demo: 
           <SpyBoard {...board} />
         </>
       )}
+      {cur === 'ai' && (manager ? <AiKeysCard manager={manager} claude={d.config} /> : <p className="muted small">{t('platform.pilot.costs.managers')}</p>)}
       {cur === 'settings' && (
         <>
           <div className="pilot-settings">
@@ -195,7 +197,7 @@ function VoiceCard({ manager }: { manager: boolean }) {
             <input type="checkbox" disabled={!manager} checked={on} onChange={(e) => setOn(e.target.checked)} /> {t(k + 'enable')}
           </label>
           <Field label={t(k + 'key')} hint={d.hasKey ? t(k + 'keySaved') : t(k + 'keyHint')}>
-            <input type="password" className="ltr" autoComplete="off" disabled={!manager} value={key} placeholder={d.hasKey ? '••••••••' : 'AIza…'} onChange={(e) => setKey(e.target.value)} />
+            <input type="password" className="ltr" autoComplete="off" disabled={!manager} value={key} placeholder={d.hasKey ? '••••••••' : 'AIza… / AQ.…'} onChange={(e) => setKey(e.target.value)} />
           </Field>
           <Field label={t(k + 'model')} hint={t(k + 'modelHint')}>
             <input className="ltr" maxLength={60} disabled={!manager} value={model} onChange={(e) => setModel(e.target.value)} />
