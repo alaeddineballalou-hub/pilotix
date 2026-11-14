@@ -41,7 +41,7 @@ Qui lit : un Algérien sur son téléphone, venu d’une pub. Il décide en 3 se
 Comment écrire un titre qui fait acheter :
 1. Le produit + ce qu’il change pour le client (le bénéfice, pas la fiche technique) : on n’achète pas une perceuse, on achète le trou.
 2. Une image que le client voit dans sa tête : ses enfants en voiture, sa cuisine propre, sa tenue pour la fête.
-3. Le point fort le plus concret et VRAI des informations : un chiffre, une matière, un usage (« 6 كغ », « 12 جيب », « بيد وحدة »). Un détail précis vaut mieux qu’un grand mot (« جودة عالية », « رائع »).
+3. Le point fort le plus concret et VRAI des informations : un chiffre, une matière, un usage (« 6 كغ », « 12 جيب », « بيد وحدة »). Un détail précis vaut mieux qu’un grand mot (« جودة عالية », « رائع »). Quand les informations ne donnent aucun chiffre (âge, poids, taille, nombre), n’en écris aucun : prends un usage ou une image à la place.
 4. Le bénéfice tout de suite, au présent : ce que le client gagne dès qu’il l’a.
 5. Une seule idée par titre. Court : 4 à 9 mots, 25 à 55 caractères (60 au maximum), émojis compris.
 6. Le test du concurrent : si une autre boutique pouvait écrire exactement le même titre pour un autre produit, ajoute un détail vrai qui n’est qu’à celui-ci.
@@ -173,7 +173,8 @@ const ONLY_IF_SAID: { why: string; re: RegExp }[] = [
   { why: 'garantie', re: /ضمان|مضمون|garanti/iu },
   { why: 'original', re: /أصلي|اصلي|original/iu },
   { why: 'superlatif', re: /الأفضل|الافضل|رقم\s*(?:1|١|واحد)|الأكثر\s*مبيع|الاكثر\s*مبيع|ما\s*كانش\s*كيف|best[-\s]?seller|n°\s*1/iu },
-  { why: 'santé', re: /يعالج|علاج|يشفي|شفاء|تنحيف|ينحف|الكرش|طبي|médical|maigr/iu },
+  // « طبي » (medical) as a word, never inside « طبيعي » (natural)
+  { why: 'santé', re: /يعالج|علاج|يشفي|شفاء|تنحيف|ينحف|الكرش|(?<!\p{L})(?:ال)?طبي(?:ة)?(?!\p{L})|médical|maigr/iu },
 ];
 /** Never in a title: the page shows the price, the discount, the payment and the delivery just under it. */
 const NEVER: { why: string; re: RegExp }[] = [
@@ -276,6 +277,61 @@ export function rulesTitles(name: string, avoid: string[] = []): string[] {
 }
 
 // ---------------------------------------------------------------- the action
+/** Why a title was refused, told to Claude for its second try (what to write instead). */
+const TOLD: Record<string, string> = {
+  'chiffre inventé': 'un chiffre que les informations ne donnent pas : n’écris aucun chiffre qui n’y est pas (âge, poids, taille, nombre)',
+  prix: 'le prix, une réduction ou un pourcentage',
+  livraison: 'le paiement ou la livraison',
+  urgence: 'une fausse urgence ou une fausse rareté',
+  gratuit: '« gratuit » que la boutique n’a pas écrit',
+  garantie: 'une garantie que la boutique n’a pas écrite',
+  original: '« original » que la boutique n’a pas écrit',
+  superlatif: 'un grand mot sans preuve (le meilleur, n° 1…)',
+  santé: 'une promesse de santé ou un mot médical',
+  'avant-après': '« avant / après »',
+  darija: 'des mots que les règles de darija refusent',
+  'trop long': 'trop long : 60 caractères au plus, émojis compris',
+  'trop court': 'trop court : au moins 4 mots',
+  'pas en lettres arabes': 'pas en lettres arabes',
+  ponctuation: 'plus d’un « ! » ou d’un « ؟ »',
+  'déjà proposé': 'déjà proposé au vendeur',
+};
+/** The main reason all the titles were refused, told to the seller with what to do. */
+const SELLER: Record<string, string> = {
+  'chiffre inventé': 'ses titres avaient des chiffres que la page ne donne pas (âge, poids, taille…). Écrivez-les dans le texte de la page, puis recliquez.',
+  santé: 'ses titres promettaient quelque chose sur la santé. Recliquez pour réessayer.',
+  darija: 'ses titres avaient des mots que vos règles de darija refusent. Recliquez pour réessayer.',
+  'déjà proposé': 'il ne trouve plus de nouveau titre. Changez le texte de la page, puis recliquez.',
+};
+
+/** What Pilotix tells Claude after refusing every title it wrote: each title and why, and what to write instead. */
+export function retryQuestion(refused: { title: string; why: string }[], f: TitleCheck, words: { term: string; use?: string }[] = []): string {
+  if (!refused.length) return 'Ta réponse n’était pas le JSON demandé. Réponds UNIQUEMENT avec {"titles": ["…", "…", "…"]}.';
+  const known = new Set(numbersIn(f.allow));
+  const lines = refused.slice(0, 6).map(({ title, why }) => {
+    let detail = TOLD[why] ?? why;
+    if (why === 'chiffre inventé') {
+      const extra = [...new Set(numbersIn(title).filter((x) => !known.has(x)))];
+      if (extra.length) detail += ` (ici : ${extra.join(', ')})`;
+    }
+    if (why === 'darija') {
+      const found = checkDarija(title, { avoid: words }).map((x) => `${x.found}${x.use ? ` → ${x.use}` : ''}`);
+      if (found.length) detail += ` (${found.join(' ; ')})`;
+    }
+    return `- « ${title} » : ${detail}`;
+  });
+  return `Pilotix a refusé ces titres :\n${lines.join('\n')}\nÉcris 3 nouveaux titres sans ces problèmes, avec seulement ce que disent les informations. Réponds UNIQUEMENT avec le JSON.`;
+}
+
+/** The error when no title could be shown: why (the most frequent reason), and what the seller can do. */
+export function noSafeTitle(refused: { why: string }[]): string {
+  const count = new Map<string, number>();
+  for (const r of refused) count.set(r.why, (count.get(r.why) ?? 0) + 1);
+  const main = [...count.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const say = main ? SELLER[main] : undefined;
+  return say ? `L’IA n’a pas donné de titre sûr : ${say}` : NO_SAFE_TITLE;
+}
+
 export async function aiTitles(ctx: Ctx, i: TitleIn): Promise<{ titles: string[]; by: 'ai' | 'rules' }> {
   const f = await titleFactsOf(ctx, i);
   const avoid = [...i.avoid, i.title].filter((x) => x.trim());
@@ -293,21 +349,31 @@ export async function aiTitles(ctx: Ctx, i: TitleIn): Promise<{ titles: string[]
     [lb.shared, lb.own].filter(Boolean).join('\n\n'),
   ].filter(Boolean);
   const system = blocks.join('\n\n');
-  const messages = [{ role: 'user' as const, content: titleQuestion(f, avoid) }];
-  let text = '';
-  try {
-    const pilot = !inPage && (await pilotOn(ctx));
-    const res: any = inPage
-      ? await inPage({ model: TITLE_MODEL, system, messages, tools: [], max_tokens: 500, runTool: async () => ({ error: 'Pas d’outil ici' }) })
-      : await ctx.server!.dellal!('complete', { model: TITLE_MODEL, system, systemBlocks: blocks, messages, tools: [], max_tokens: 500, feature: 'cm', pilot }, ctx);
-    if (res?.demo) throw new Error(NO_AI);
-    text = (res?.content ?? []).map((b: any) => (b?.type === 'text' ? String(b.text) : '')).join('');
-  } catch (e) {
-    throw bad(`L’IA n’a pas pu écrire le titre : ${(e as Error)?.message ?? 'réessayez'}`);
+  const words = lahjaAvoid([...lessons.all, ...lessons.own]);
+  const messages: { role: 'user' | 'assistant'; content: string }[] = [{ role: 'user', content: titleQuestion(f, avoid) }];
+  let pilot: boolean | undefined;
+  const ask = async (): Promise<string> => {
+    try {
+      if (pilot === undefined) pilot = !inPage && (await pilotOn(ctx));
+      const res: any = inPage
+        ? await inPage({ model: TITLE_MODEL, system, messages, tools: [], max_tokens: 500, runTool: async () => ({ error: 'Pas d’outil ici' }) })
+        : await ctx.server!.dellal!('complete', { model: TITLE_MODEL, system, systemBlocks: blocks, messages, tools: [], max_tokens: 500, feature: 'cm', pilot }, ctx);
+      if (res?.demo) throw new Error(NO_AI);
+      return (res?.content ?? []).map((b: any) => (b?.type === 'text' ? String(b.text) : '')).join('');
+    } catch (e) {
+      throw bad(`L’IA n’a pas pu écrire le titre : ${(e as Error)?.message ?? 'réessayez'}`);
+    }
+  };
+  // every title Claude wrote is checked; when none can be shown, Claude is told why and writes 3 more (once)
+  const refused: { title: string; why: string }[] = [];
+  for (let round = 0; round < 2; round++) {
+    const text = await ask();
+    const r = readTitles(text, f, { avoid, words });
+    if (r.titles.length) return { titles: r.titles, by: 'ai' };
+    refused.push(...r.refused);
+    messages.push({ role: 'assistant', content: text.trim() || '(vide)' }, { role: 'user', content: retryQuestion(r.refused, f, words) });
   }
-  const { titles } = readTitles(text, f, { avoid, words: lahjaAvoid([...lessons.all, ...lessons.own]) });
-  if (!titles.length) throw bad(NO_SAFE_TITLE);
-  return { titles, by: 'ai' };
+  throw bad(noSafeTitle(refused));
 }
 
 export const landingTitleProcs = {

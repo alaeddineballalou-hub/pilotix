@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
-import { readTitles, rulesTitles, tidyTitle, TITLE_PROMPT, titleKey, titleProblem } from '../modules/landingtitle';
+import { noSafeTitle, readTitles, retryQuestion, rulesTitles, tidyTitle, TITLE_PROMPT, titleKey, titleProblem } from '../modules/landingtitle';
 import { rightsNeeded } from '../modules/rights';
 import { EMAILS, setup } from './harness';
 
@@ -106,4 +106,43 @@ test('with Claude: the instructions, the page as typed, the titles already shown
   // nothing safe in Claude's answer: an error to click again, never an unchecked title
   const bad = { ...mk, dellalAi: async () => ({ content: [{ type: 'text' as const, text: '{"titles": ["كمية محدودة من العربة 👶 سارع"]}' }], stop_reason: 'end_turn' }) } as Ctx;
   await assert.rejects(call('landing.aiTitle', bad, { productId }), /pas donné de titre sûr/);
+});
+
+test('« طبيعي » (natural) is not a health word; « طبي » (medical) is', () => {
+  assert.equal(titleProblem('كرسي أطفال للسيارة 🚗 أمان طبيعي لصغارك', facts('كرسي')), null);
+  assert.equal(titleProblem('كرسي طبي للأطفال 🚗 راحة لصغارك', facts('كرسي')), 'santé');
+  assert.equal(titleProblem('كرسي الأطفال الطبية 🚗 راحة لصغارك', facts('كرسي')), 'santé');
+});
+
+test('every title refused: Claude is told why and writes 3 more (once); still none: the seller is told why', async () => {
+  const seat = 'مقعد جلوس للاطفال سيارة';
+  const invented = '{"titles": ["كرسي السيارة للأطفال 🚗 من 0 حتى 4 سنين", "كرسي السيارة 🚗 لولادك حتى 18 كغ"]}';
+  const good = '{"titles": ["كرسي السيارة لولادك 🚗 سوق وانت مرتاح البال"]}';
+  const reqs: any[] = [];
+  const answers = [invented, good];
+  const mk = await as(EMAILS.marketer);
+  const second = {
+    ...mk,
+    dellalAi: async (req: any) => {
+      reqs.push({ ...req, messages: [...req.messages] });
+      return { content: [{ type: 'text' as const, text: answers[reqs.length - 1] ?? good }], stop_reason: 'end_turn' };
+    },
+  } as Ctx;
+  const r: any = await call('landing.aiTitle', second, { productId, title: seat });
+  assert.deepEqual(r.titles, ['كرسي السيارة لولادك 🚗 سوق وانت مرتاح البال']);
+  assert.equal(reqs.length, 2);
+  // the second question: Claude's first answer, then each refused title and why (the numbers the page does not give)
+  const [, again] = reqs;
+  assert.equal(again.messages[1].role, 'assistant');
+  assert.equal(again.messages[1].content, invented);
+  const told = String(again.messages[2].content);
+  assert.match(told, /Pilotix a refusé ces titres/);
+  assert.match(told, /من 0 حتى 4 سنين » : un chiffre que les informations ne donnent pas[^\n]*\(ici : 0, 4\)/);
+  assert.match(told, /\(ici : 18\)/);
+  // both answers refused: the error says why and what to do
+  const never = { ...mk, dellalAi: async () => ({ content: [{ type: 'text' as const, text: invented }], stop_reason: 'end_turn' }) } as Ctx;
+  await assert.rejects(call('landing.aiTitle', never, { productId, title: seat }), /pas donné de titre sûr : ses titres avaient des chiffres que la page ne donne pas/);
+  // not JSON: Claude is asked for the JSON; an unknown reason keeps the general message
+  assert.match(retryQuestion([], facts('كرسي')), /UNIQUEMENT avec \{"titles"/);
+  assert.match(noSafeTitle([{ why: 'urgence' }]), /recliquez pour réessayer/);
 });
