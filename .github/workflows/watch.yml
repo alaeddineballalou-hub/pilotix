@@ -8,12 +8,20 @@
 #   server_alive    the Contabo server's SSH door answers (nothing is logged in, nothing runs on it)
 # The server's address stays secret: only « ok » or « fail » is written.
 # GitHub may start a run a few minutes late or skip one when it is busy: a missing line is not a cut.
+# Alert: when a cut STARTS (this check has a problem, the one before had none), the run ends « failed », so GitHub
+# notifies the owner (it notifies whoever last changed this file about failed scheduled runs). Once per cut, not
+# every 5 minutes. 403 through Cloudflare is normal (its robot check), not a problem.
 name: Pilotix watcher
 
 on:
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
+    inputs:
+      test_alert:
+        description: "Essai : envoyer une fausse alerte (le journal garde le vrai résultat)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -47,6 +55,14 @@ jobs:
           [ "$direct" = 200 ] && server_web=ok || server_web="fail-$direct"
           if [ -n "$ip" ] && timeout 8 bash -c "</dev/tcp/$ip/22" 2>/dev/null; then server=ok; else server=fail; fi
           line="$when,$dns,$cf,$via,$server_web,$server,${secs:-}"
+          problem=""
+          [ "$dns" = ok ] || problem="$problem DNS"
+          [ "$cf" = ok ] || problem="$problem Cloudflare"
+          case "$via" in 200|403) ;; 52?) problem="$problem Cloudflare-ne-joint-pas-le-serveur($via)" ;; *) problem="$problem via-Cloudflare($via)" ;; esac
+          [ "$server_web" = ok ] || problem="$problem site-sur-le-serveur"
+          [ "$server" = ok ] || problem="$problem serveur-Contabo"
+          [ "${{ inputs.test_alert }}" = true ] && problem="$problem ESSAI-d-alerte-(pas-une-vraie-coupure)"
+          echo "problem=$problem" >> "$GITHUB_OUTPUT"
           echo "$line"
           echo "line=$line" >> "$GITHUB_OUTPUT"
           {
@@ -56,6 +72,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Write the line to the watch branch
+        id: w
         env:
           LINE: ${{ steps.t.outputs.line }}
           REPO: ${{ github.repository }}
@@ -63,6 +80,7 @@ jobs:
         run: |
           git config --global user.name pilotix-watch
           git config --global user.email pilotix-watch@users.noreply.github.com
+          head="time_algiers,dns,cloudflare,via_cloudflare,server_web,server_alive,server_seconds"
           for try in 1 2 3; do
             rm -rf w
             if git clone -q --depth 1 --branch watch "https://x-access-token:$TOKEN@github.com/$REPO" w 2>/dev/null; then :; else
@@ -70,12 +88,28 @@ jobs:
             fi
             cd w
             mkdir -p watch
-            [ -f watch/log.csv ] || echo "time_algiers,dns,cloudflare,via_cloudflare,server_web,server_alive,server_seconds" > watch/log.csv
+            [ -f watch/log.csv ] || echo "$head" > watch/log.csv
+            # the line before this one: was it already a problem? (then this cut was already told)
+            prev=$(tail -n 1 watch/log.csv)
+            prev_bad=no
+            if [ -n "$prev" ] && [ "$prev" != "$head" ]; then
+              IFS=, read -r _ pdns pcf pvia pweb palive _ <<< "$prev" || true
+              { [ "$pdns" = ok ] && [ "$pcf" = ok ] && { [ "$pvia" = 200 ] || [ "$pvia" = 403 ]; } && [ "$pweb" = ok ] && [ "$palive" = ok ]; } || prev_bad=yes
+            fi
             echo "$LINE" >> watch/log.csv
             git add watch/log.csv
             git commit -qm "watch: $LINE"
-            if git push -q origin watch; then exit 0; fi
+            if git push -q origin watch; then echo "prev_bad=$prev_bad" >> "$GITHUB_OUTPUT"; exit 0; fi
             cd ..
             sleep 5
           done
           echo "::warning::could not write the line (it is still in this run's summary)"
+
+      - name: Alert when a cut starts
+        if: steps.t.outputs.problem != '' && (steps.w.outputs.prev_bad != 'yes' || inputs.test_alert)
+        env:
+          PROBLEM: ${{ steps.t.outputs.problem }}
+          LINE: ${{ steps.t.outputs.line }}
+        run: |
+          echo "::error title=Pilotix coupure::Problème vu à ${LINE%%,*} (heure d'Alger) :${PROBLEM}. Journal : https://github.com/${{ github.repository }}/blob/watch/watch/log.csv"
+          exit 1
