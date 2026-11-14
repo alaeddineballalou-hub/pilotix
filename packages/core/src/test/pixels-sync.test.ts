@@ -30,7 +30,7 @@ test('pixels come from the connected Meta ad accounts, stay, and are never chang
   const m = await as(EMAILS.marketer, server);
   // not connected: nothing asked
   await db.query(`INSERT INTO settings (key, value) VALUES ('meta', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify({ adAccountId: '', adAccountIds: [], hasToken: false })]);
-  assert.deepEqual(await call('landing.pixelsSync', m, {}), { connected: false, found: 0, added: 0 });
+  assert.deepEqual(await call('landing.pixelsSync', m, {}), { connected: false, found: 0, added: 0, madeDefault: null });
   assert.equal(asked.length, 0);
   // connected: two ad accounts, three pixels (one already in the list under the shop's own name, one on both accounts)
   await db.query(`UPDATE settings SET value = $1 WHERE key = 'meta'`, [JSON.stringify({ adAccountId: '111', adAccountIds: ['111', '222'], hasToken: true })]);
@@ -42,8 +42,11 @@ test('pixels come from the connected Meta ad accounts, stay, and are never chang
     { id: '9000000000000002', name: '', account: '222' },
     { id: '9000000000000001', name: 'Baby Joy Pixel', account: '222' },
   ];
-  assert.deepEqual(await call('landing.pixelsSync', m, {}), { connected: true, found: 3, added: 2 });
+  await db.query(`UPDATE tracking_pixels SET is_default = false WHERE platform = 'meta'`);
+  assert.deepEqual(await call('landing.pixelsSync', m, {}), { connected: true, found: 3, added: 2, madeDefault: 'Baby Joy Pixel' });
   const rows = await metaRows();
+  // no default before: the first one Meta gave is the default now, and only it
+  assert.deepEqual(rows.filter(([, , d]) => d).map(([, id]) => id), ['9000000000000001']);
   assert.ok(rows.some(([n, id]) => id === '9000000000000001' && n === 'Baby Joy Pixel'));
   assert.ok(rows.some(([n, id]) => id === '9000000000000002' && n === 'Pixel 9000000000000002'));
   // the one already there keeps the shop's name
@@ -53,14 +56,19 @@ test('pixels come from the connected Meta ad accounts, stay, and are never chang
   assert.ok(list.some((p) => p.pixelId === '9000000000000001' && p.platform === 'meta'));
   // asked again within 10 minutes: not again (unless forced)
   const n = asked.length;
-  assert.deepEqual(await call('landing.pixelsSync', m, {}), { connected: true, found: -1, added: 0 });
+  assert.deepEqual(await call('landing.pixelsSync', m, {}), { connected: true, found: -1, added: 0, madeDefault: null });
   assert.equal(asked.length, n);
   // a pixel gone from Meta stays; forced: asked at once
+  // the shop picks another default: Meta never changes it back
+  await db.query(`UPDATE tracking_pixels SET is_default = (pixel_id = '9000000000000002') WHERE platform = 'meta'`);
+  assert.deepEqual(await call('landing.pixelsSync', m, { force: true }), { connected: true, found: 3, added: 0, madeDefault: null });
+  const chosen = await metaRows();
+  assert.deepEqual(chosen.filter(([, , d]) => d).map(([, id]) => id), ['9000000000000002']);
   onMeta = [];
-  assert.deepEqual(await call('landing.pixelsSync', m, { force: true }), { connected: true, found: 0, added: 0 });
+  assert.deepEqual(await call('landing.pixelsSync', m, { force: true }), { connected: true, found: 0, added: 0, madeDefault: null });
   // Meta disconnected: they stay
   await db.query(`UPDATE settings SET value = $1 WHERE key = 'meta'`, [JSON.stringify({ adAccountId: '', adAccountIds: [], hasToken: false })]);
-  assert.deepEqual(await metaRows(), rows);
+  assert.deepEqual(await metaRows(), chosen);
   // agents (confirmation) cannot
   await assert.rejects(() => as(EMAILS.conf, server).then((c) => call('landing.pixelsSync', c, {})));
 });

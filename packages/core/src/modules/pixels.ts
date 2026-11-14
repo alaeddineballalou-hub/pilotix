@@ -127,9 +127,9 @@ export const pixelProcs = {
   'landing.pixelsSync': proc([...WHO], z.object({ force: z.boolean().default(false) }), async (ctx, i) => {
     const meta = await getSetting(ctx.db, 'meta');
     const acts = meta.adAccountIds?.length ? meta.adAccountIds : meta.adAccountId ? [meta.adAccountId] : [];
-    if (!ctx.server?.meta || !acts.length || !meta.hasToken) return { connected: false, found: 0, added: 0 };
+    if (!ctx.server?.meta || !acts.length || !meta.hasToken) return { connected: false, found: 0, added: 0, madeDefault: null as string | null };
     const last = Date.parse(String((await ctx.db.query(`SELECT value FROM settings WHERE key = 'pixels_sync'`))[0]?.value?.at ?? '')) || 0;
-    if (!i.force && Date.now() - last < SYNC_EVERY_MS) return { connected: true, found: -1, added: 0 };
+    if (!i.force && Date.now() - last < SYNC_EVERY_MS) return { connected: true, found: -1, added: 0, madeDefault: null as string | null };
     await ctx.db.query(`INSERT INTO settings (key, value) VALUES ('pixels_sync', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [JSON.stringify({ at: new Date().toISOString() })]);
     const got = (await ctx.server.meta('pixels', {}, ctx)) as { id: string; name: string; account: string }[];
     let added = 0;
@@ -137,8 +137,15 @@ export const pixelProcs = {
       const r = await ctx.db.query(`INSERT INTO tracking_pixels (platform, name, pixel_id) VALUES ('meta', $1, $2) ON CONFLICT (platform, pixel_id) DO NOTHING RETURNING id`, [p.name || `Pixel ${p.id}`, p.id]);
       if (r.length) added++;
     }
-    if (added) ctx.emit({ type: 'settings' });
-    return { connected: true, found: new Set(got.map((p) => p.id)).size, added };
+    // a boutique with no default Meta pixel yet: the first one Meta gives becomes it (the pages and groups « Par défaut »
+    // start using it); one the shop chose is never changed
+    let madeDefault: string | null = null;
+    if (got.length && !(await ctx.db.query(`SELECT 1 FROM tracking_pixels WHERE platform = 'meta' AND is_default`))[0]) {
+      const r = await ctx.db.query(`UPDATE tracking_pixels SET is_default = true WHERE platform = 'meta' AND pixel_id = $1 RETURNING name`, [got[0].id]);
+      madeDefault = r[0] ? String(r[0].name) : null;
+    }
+    if (added || madeDefault) ctx.emit({ type: 'settings' });
+    return { connected: true, found: new Set(got.map((p) => p.id)).size, added, madeDefault };
   }),
 
   'landing.pixelSave': proc([...WHO], PixelInput, async (ctx: Ctx, i) => {
