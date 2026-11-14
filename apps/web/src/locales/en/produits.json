@@ -125,6 +125,10 @@
     "f_hidden": "Hidden",
     "f_service": "Services",
     "f_all": "All",
+    "sort": "Sort the products",
+    "sort_recent": "Newest first",
+    "sort_old": "Oldest first",
+    "sort_name": "Name from A to Z",
     "empty": "No product."
   },
   "prices": {

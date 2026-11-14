@@ -125,6 +125,10 @@
     "f_hidden": "Masqués",
     "f_service": "Services",
     "f_all": "Tous",
+    "sort": "Trier les produits",
+    "sort_recent": "Plus récents d’abord",
+    "sort_old": "Plus anciens d’abord",
+    "sort_name": "Nom de A à Z",
     "empty": "Aucun produit."
   },
   "prices": {

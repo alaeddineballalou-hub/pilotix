@@ -9,6 +9,7 @@ import { featureIsOn, pageIsOn } from '../../lib/features';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
+import { store } from '../../lib/store';
 import { Empty, ErrorBox, Icon, Kpi, Kpis, Loading, Pager } from '../../ui/kit';
 import { Filters, SearchBox, SectionHeader } from '../ai/agent';
 import type { PageProps } from '../registry';
@@ -252,11 +253,16 @@ function StockTab() {
 
 // ---------------------------------------------------------------- Produits
 type ProdFilter = 'active' | 'hidden' | 'service' | 'all';
+/** How the products are sorted: the newest first (by default: a product just added is at the top), the oldest first, by name. */
+const PROD_SORTS = ['recent', 'old', 'name'] as const;
+type ProdSort = (typeof PROD_SORTS)[number];
 
 function ProductsTab() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [q, setQ] = useState('');
   const [f, setF] = useState<ProdFilter>('active');
+  // the sort picked last on this computer or phone
+  const [sort, setSort] = useState<ProdSort>(() => PROD_SORTS.find((s) => s === store.get('produits-sort')) ?? 'recent');
   const [openProduct, setOpenProduct] = useState<Set<number>>(new Set());
   const availability = useAction('catalog.setAvailability', { success: 'Disponibilité mise à jour' });
   const prods = useRpc('catalog.products', {});
@@ -281,7 +287,14 @@ function ProductsTab() {
   const all = prods.data ?? [];
   const found = all.filter((p) => !q.trim() || matches(q, p.name, p.sku, ...p.variants.map((v) => `${v.title} ${v.sku}`)));
   const test: Record<ProdFilter, (p: (typeof all)[number]) => boolean> = { active: (p) => p.active, hidden: (p) => !p.active, service: (p) => p.isService, all: () => true };
-  const rows = found.filter(test[f]);
+  // (a product's number grows with each one created: the biggest is the newest)
+  const byName = new Intl.Collator(i18n.language, { sensitivity: 'base', numeric: true });
+  const order: Record<ProdSort, (a: (typeof all)[number], b: (typeof all)[number]) => number> = {
+    recent: (a, b) => b.id - a.id,
+    old: (a, b) => a.id - b.id,
+    name: (a, b) => byName.compare(a.name, b.name) || a.id - b.id,
+  };
+  const rows = found.filter(test[f]).sort(order[sort]);
   const stockByVariant = new Map<number, number>();
   for (const r of st.data ?? []) stockByVariant.set(r.variantId, (stockByVariant.get(r.variantId) ?? 0) + r.available);
   const toggleOpen = (id: number) => setOpenProduct((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
@@ -308,6 +321,26 @@ function ProductsTab() {
           label={t('produits.products.filters')}
           items={(['active', 'hidden', 'service', 'all'] as const).map((k) => ({ value: k, label: t(`produits.products.f_${k}`), count: found.filter(test[k]).length }))}
         />
+        {/* after the filters (on a phone, its own line: not hidden at the end of the pills) */}
+        <div className="pd-sels">
+          <select
+            className="pd-sel"
+            aria-label={t('produits.products.sort')}
+            title={t('produits.products.sort')}
+            value={sort}
+            onChange={(e) => {
+              const s = e.target.value as ProdSort;
+              setSort(s);
+              store.set('produits-sort', s);
+            }}
+          >
+            {PROD_SORTS.map((s) => (
+              <option key={s} value={s}>
+                {t(`produits.products.sort_${s}`)}
+              </option>
+            ))}
+          </select>
+        </div>
       </Toolbar>
       {fresh && !cov.isFetching && !pages.has(fresh.id) && (
         <div className="lp-fresh" role="status">
