@@ -187,7 +187,7 @@ function StockTab() {
               <span className="num">{t('produits.stock.sold30')}</span>
               <span className="num">{t('produits.stock.lasts')}</span>
             </div>
-            <div className="pd-rows">
+            <div className="pd-rows pd-grows">
               {groups.map((group) => (
                 <div key={group.productId}>
                   {(() => {

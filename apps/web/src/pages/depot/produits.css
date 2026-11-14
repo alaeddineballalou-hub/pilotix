@@ -770,7 +770,11 @@ a.chip.lp-nolp:hover { text-decoration: underline; }
   :root:not([data-theme="light"]) .pd-pill.out { background: #42150F; color: #F8A49A; }
   :root:not([data-theme="light"]) .pd-pill.sleep { background: #263040; color: #B8C2D3; }
 }
-@media (max-width: 760px) {
+/* the stock list stays one product per line at every width (the tablet's two-card grid is for the variant rows) */
+.pd-rows.pd-grows { display: block; }
+.pd-rows.pd-grows > div > .pd-row:nth-child(odd) { border-inline-end: 0; }
+/* a card per product when the list itself is narrow (phone, tablet, a computer with the menu open) */
+@container (max-width: 719px) {
   .pd-ghead { display: none; }
   .pd-group.pd-g2 { grid-template-columns: minmax(0, .9fr) minmax(0, 1.5fr) minmax(0, .9fr) auto; gap: 8px 12px; padding: 12px; }
   .pd-g2 > .pd-gwho { grid-column: 1 / -1; }
