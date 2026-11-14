@@ -2,8 +2,10 @@
 # layer separately and write one line to watch/log.csv on the « watch » branch, so every cut has a time and a place:
 #   dns     pilotix.online still points to Cloudflare
 #   cf      Cloudflare answers by itself (/cdn-cgi/trace never touches the server)
-#   site    the site answers through Cloudflare (/healthz: Cloudflare → the server)
-#   server  the Contabo server is alive (its SSH door answers; nothing is logged in, nothing runs on it)
+#   via_cloudflare  the code the site answers through Cloudflare (/healthz): 200 ok, 403 Cloudflare's robot check
+#                   (Cloudflare is up), 520-526 Cloudflare cannot reach the server, 000 nothing answered
+#   server_web      the site straight on the server, skipping Cloudflare (like the deploy's live check)
+#   server_alive    the Contabo server's SSH door answers (nothing is logged in, nothing runs on it)
 # The server's address stays secret: only « ok » or « fail » is written.
 # GitHub may start a run a few minutes late or skip one when it is busy: a missing line is not a cut.
 name: Pilotix watcher
@@ -34,17 +36,22 @@ jobs:
           ips=$(getent ahostsv4 pilotix.online | awk '{print $1}' | sort -u | tr '\n' ' ')
           case "$ips" in *104.*|*172.*) dns=ok ;; '') dns=fail ;; *) dns="other" ;; esac
           if curl -fsS -m 15 https://pilotix.online/cdn-cgi/trace | grep -q '^h=pilotix.online'; then cf=ok; else cf=fail; fi
-          code=$(curl -s -o /dev/null -m 15 -w '%{http_code}' "https://pilotix.online/healthz?w=$(date +%s)") || true
-          secs=$(curl -s -o /dev/null -m 15 -w '%{time_total}' "https://pilotix.online/healthz?w2=$(date +%s)") || true
-          [ "$code" = 200 ] && site=ok || site="fail-$code"
+          # through Cloudflare: 200 ok, 403 = Cloudflare's robot check (Cloudflare is up, the robot is stopped there),
+          # 520-526 = Cloudflare cannot reach the server, 000 = nothing answered
+          via=$(curl -s -o /dev/null -m 15 -w '%{http_code}' "https://pilotix.online/healthz?w=$(date +%s)") || true
           host=${HOST#*@}; host=${host%%:*}
-          if [ -n "$host" ] && timeout 8 bash -c "</dev/tcp/$host/22" 2>/dev/null; then server=ok; else server=fail; fi
-          line="$when,$dns,$cf,$site,$server,${secs:-}"
+          ip=$(getent ahostsv4 "$host" | awk 'NR==1{print $1}')
+          [ -n "$ip" ] && echo "::add-mask::$ip"
+          # straight to the server, skipping Cloudflare (same certificate, same site), like the deploy's live check
+          read -r direct secs < <(curl -s -o /dev/null -m 15 -w '%{http_code} %{time_total}' --resolve "pilotix.online:443:$ip" "https://pilotix.online/healthz?w=$(date +%s)" || echo "000 -")
+          [ "$direct" = 200 ] && server_web=ok || server_web="fail-$direct"
+          if [ -n "$ip" ] && timeout 8 bash -c "</dev/tcp/$ip/22" 2>/dev/null; then server=ok; else server=fail; fi
+          line="$when,$dns,$cf,$via,$server_web,$server,${secs:-}"
           echo "$line"
           echo "line=$line" >> "$GITHUB_OUTPUT"
           {
-            echo "| time (Algiers) | dns | cloudflare | site | server | site time (s) |"
-            echo "|---|---|---|---|---|---|"
+            echo "| time (Algiers) | dns | cloudflare | via cloudflare | server web | server | server time (s) |"
+            echo "|---|---|---|---|---|---|---|"
             echo "| ${line//,/ | } |"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -63,7 +70,7 @@ jobs:
             fi
             cd w
             mkdir -p watch
-            [ -f watch/log.csv ] || echo "time_algiers,dns,cloudflare,site,server,site_seconds" > watch/log.csv
+            [ -f watch/log.csv ] || echo "time_algiers,dns,cloudflare,via_cloudflare,server_web,server_alive,server_seconds" > watch/log.csv
             echo "$LINE" >> watch/log.csv
             git add watch/log.csv
             git commit -qm "watch: $LINE"
