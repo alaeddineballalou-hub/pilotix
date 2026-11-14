@@ -7,9 +7,10 @@ import m105 from '../migrations/105_montage';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
+let pg: any;
 let as: (email: string) => Promise<Ctx>;
 before(async () => {
-  ({ db, as } = await setup(60));
+  ({ db, as, pg } = await setup(60));
 });
 
 const base = { customerName: 'Client Montage', phone: '0555123987', commune: 'Kouba' };
@@ -22,7 +23,7 @@ test('montage: old per-product services merge into the switch', async () => {
   await db.query(`UPDATE products SET services = replace(services::text, '"Old"', '"Montage"')::jsonb WHERE id = $1`, [p.id]);
   // the old way, now refused (the montage switch instead)
   await assert.rejects(call('catalog.saveProduct', depot, { name: 'Autre lit', price: 1, services: [{ name: 'Montage', price: 1, cost: 1 }] }), /bouton « Montage »/);
-  for (const s of m105.split(/;\s*\n/).map((x) => x.trim()).filter((x) => x && !/^(--[^\n]*\n?)+$/.test(x))) await db.query(s);
+  await pg.exec(m105);
   const after: any = (await call('catalog.products', depot, {}) as any[]).find((x: any) => x.id === p.id);
   assert.deepEqual(after.montage, { price: 1500, cost: 500, wilayas: null });
   assert.deepEqual(after.services.map((s: any) => s.name), ['Emballage cadeau']);
