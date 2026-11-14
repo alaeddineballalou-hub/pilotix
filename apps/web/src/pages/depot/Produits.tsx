@@ -78,8 +78,8 @@ const isOut = (r: StockRowT) => !isHidden(r) && r.available <= 0;
 /** pieces that came back broken, kept apart (never sold) */
 const isBroken = (r: StockRowT) => r.broken > 0;
 
-type StockSort = 'name' | 'value' | 'soon' | 'sleep';
-const STOCK_SORTS: StockSort[] = ['name', 'value', 'soon', 'sleep'];
+type StockSort = 'name' | 'new' | 'value' | 'soon' | 'sleep';
+const STOCK_SORTS: StockSort[] = ['name', 'new', 'value', 'soon', 'sleep'];
 /** a product's line in « Stock »: what is left, what it is worth at the purchase price, what sold in 30 days, and how
  *  long what is left lasts at that speed — « out » (nothing left), « sleep » (none sold in 30 days), « low » (2 weeks
  *  or less), « ok » */
@@ -105,6 +105,8 @@ function groupStats(productId: number, productName: string, rows: StockRowT[]) {
 }
 type GroupStats = ReturnType<typeof groupStats>;
 function sortGroups(gs: GroupStats[], sort: StockSort): GroupStats[] {
+  // newest product first: a product's number grows with each one added (products keep no date of their own)
+  if (sort === 'new') return [...gs].sort((a, b) => b.productId - a.productId);
   if (sort === 'value') return [...gs].sort((a, b) => b.value - a.value);
   // runs out soonest: nothing left first, then the fewest days; never sold last
   if (sort === 'soon') return [...gs].sort((a, b) => (a.state === 'out' ? -1 : a.days ?? 1e9) - (b.state === 'out' ? -1 : b.days ?? 1e9));

@@ -105,6 +105,7 @@
     "groupVariants_other": "{{count}} variants",
     "sortBy": "Sort",
     "sort_name": "Name",
+    "sort_new": "Newest first",
     "sort_value": "Value (highest)",
     "sort_soon": "Runs out soonest",
     "sort_sleep": "Money asleep",
