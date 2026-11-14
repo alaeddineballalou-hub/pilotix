@@ -33,13 +33,14 @@ const bag = (c: string, bg: string) =>
 export async function seed(db: Db, now: number): Promise<void> {
   const pid = async (sku: string) => num((await db.query('SELECT id FROM products WHERE sku = $1', [sku]))[0]?.id) || null;
   const key = () => Array.from({ length: 24 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-  const pic = async (src: string, w: number, h: number) =>
-    num((await db.query(`INSERT INTO cm_media (key, w, h, src, created_at) VALUES ($1,$2,$3,$4,$5) RETURNING id`, [key(), w, h, src, new Date(now - 3 * 86_400_000).toISOString()]))[0].id);
+  // each with the name it had on the phone or the computer it was picked on (a post that did not go out says it)
+  const pic = async (src: string, w: number, h: number, name: string) =>
+    num((await db.query(`INSERT INTO cm_media (key, w, h, src, created_at, name) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`, [key(), w, h, src, new Date(now - 3 * 86_400_000).toISOString(), name]))[0].id);
   // a video: its still (the file itself is not in the demo)
-  const clip = async (src: string, w: number, h: number, duration: number) =>
+  const clip = async (src: string, w: number, h: number, duration: number, name: string) =>
     num(
       (
-        await db.query(`INSERT INTO cm_media (key, kind, mime, duration, ready, w, h, src, bytes, created_at) VALUES ($1,'video','video/mp4',$2,true,$3,$4,$5,$6,$7) RETURNING id`, [
+        await db.query(`INSERT INTO cm_media (key, kind, mime, duration, ready, w, h, src, bytes, created_at, name) VALUES ($1,'video','video/mp4',$2,true,$3,$4,$5,$6,$7,$8) RETURNING id`, [
           key(),
           duration,
           w,
@@ -47,6 +48,7 @@ export async function seed(db: Db, now: number): Promise<void> {
           src,
           38_500_000,
           new Date(now - 3 * 86_400_000).toISOString(),
+          name,
         ])
       )[0].id,
     );
@@ -57,11 +59,11 @@ export async function seed(db: Db, now: number): Promise<void> {
   const later = (hour: number) => (midnight + hour * 3_600_000 > now + 2 * 3_600_000 ? at(0, hour) : at(1, hour + 1 > 23 ? 23 : hour + 1));
   const [pou, cha, sac] = [await pid('PX-POU'), await pid('PX-CHA'), await pid('PX-SAC')];
   const m = {
-    pouGris: await pic(stroller('#6B7280', '#E5E7EB'), 1080, 1080),
-    pouRose: await pic(stroller('#E88FA6', '#FCE7EE'), 1080, 1080),
-    cha: await pic(chair('#3B82F6', '#DBEAFE'), 1080, 1350),
-    sacNoir: await pic(bag('#1F2937', '#E5E7EB'), 1080, 1080),
-    sacCamel: await pic(bag('#C08A52', '#F5E6D3'), 1080, 1080),
+    pouGris: await pic(stroller('#6B7280', '#E5E7EB'), 1080, 1080, 'poussette-grise.jpg'),
+    pouRose: await pic(stroller('#E88FA6', '#FCE7EE'), 1080, 1080, 'poussette-rose.jpg'),
+    cha: await pic(chair('#3B82F6', '#DBEAFE'), 1080, 1350, 'IMG_2034.jpg'),
+    sacNoir: await pic(bag('#1F2937', '#E5E7EB'), 1080, 1080, 'sac-noir.jpg'),
+    sacCamel: await pic(bag('#C08A52', '#F5E6D3'), 1080, 1080, 'sac-camel.jpg'),
     // a tall still (9:16), as a Reel's
     reel: await clip(
       svg(
@@ -72,6 +74,7 @@ export async function seed(db: Db, now: number): Promise<void> {
       1080,
       1920,
       14,
+      'reel-trottinette.mp4',
     ),
   };
   const posts: { caption: string; media: number[]; channels: string[]; product: number | null; publishAt: string | null; status: string; fb?: [string, string]; ig?: [string, string]; igError?: string; lang?: string }[] = [
@@ -142,7 +145,7 @@ export async function seed(db: Db, now: number): Promise<void> {
   ];
   // a story planned for tomorrow evening (a tall photo), and a marketer's post waiting for the administrator's yes
   // the Reel's tall still, as a photo (9:16)
-  const tall = await pic(String((await db.query('SELECT src FROM cm_media WHERE id = $1', [m.reel]))[0].src), 1080, 1920);
+  const tall = await pic(String((await db.query('SELECT src FROM cm_media WHERE id = $1', [m.reel]))[0].src), 1080, 1920, 'story-trottinette.jpg');
   const marketer = num((await db.query(`SELECT id FROM profiles WHERE 'marketer' = ANY(roles) AND NOT ('admin' = ANY(roles)) ORDER BY id LIMIT 1`))[0]?.id) || null;
   const extra: { kind: string; media: number[]; channels: string[]; product: number | null; at: string; status: string; caption: string; by: number | null; first?: string }[] = [
     { kind: 'story', media: [tall], channels: ['facebook', 'instagram'], product: pou, at: at(1, 18), status: 'scheduled', caption: '', by: null },
