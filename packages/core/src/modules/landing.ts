@@ -32,6 +32,9 @@ import {
   whatsappNumber,
   WILAYAS,
   zeroBits,
+  followProduct,
+  photoVersion,
+  ProductPhotoSet,
 } from '@pilotix/shared';
 import { z } from 'zod';
 import { checkPromo, promoSettings } from './promo';
@@ -153,11 +156,14 @@ async function listPages(db: Db, now: number, ids?: number[]): Promise<LandingRo
      FROM landing_pages l JOIN products p ON p.id = l.product_id ${ids ? 'WHERE l.id = ANY($2)' : ''} ORDER BY l.updated_at DESC`,
     ids ? [abandonCutoff(s, now), ids] : [abandonCutoff(s, now)],
   );
-  const firsts = rows.map((r: any) => readImgs(r.images)[0]).filter(Boolean) as ImgRef[];
+  // the first photo the page shows (its own, else its product's live one)
+  const sets = await productPhotoSets(db, rows.map((r: any) => num(r.product_id)));
+  const first = new Map<number, ImgRef | undefined>(rows.map((r: any) => [num(r.id), followedRefs(readImgs(r.images), num(r.product_id), sets.get(num(r.product_id)), null)[0]]));
+  const firsts = [...first.values()].filter(Boolean) as ImgRef[];
   const thumbs = await db.query(`SELECT id, t160 FROM landing_images WHERE id = ANY($1)`, [firsts.filter((x): x is { id: number } => 'id' in x).map((x) => x.id)]);
   const T = new Map(thumbs.map((t: any) => [num(t.id), t.t160]));
   return rows.map((r: any) => {
-    const f = readImgs(r.images)[0];
+    const f = first.get(num(r.id));
     return {
       id: num(r.id),
       productId: num(r.product_id),
@@ -338,6 +344,41 @@ export interface HtmlOpts {
   catalog?: 'meta' | 'tiktok';
 }
 
+/** the photos of these products as their pages follow them (main photo, every variant's, on or off) */
+export async function productPhotoSets(db: Db, productIds: number[]): Promise<Map<number, ProductPhotoSet>> {
+  const ids = [...new Set(productIds)];
+  const out = new Map<number, ProductPhotoSet>();
+  if (!ids.length) return out;
+  for (const r of await db.query('SELECT id, photo FROM products WHERE id = ANY($1)', [ids])) out.set(num(r.id), { photo: r.photo ?? null, variants: [] });
+  for (const v of await db.query('SELECT id, product_id, title, photo, active FROM product_variants WHERE product_id = ANY($1) ORDER BY id', [ids]))
+    out.get(num(v.product_id))?.variants.push({ id: num(v.id), photo: v.photo ?? null, active: !!v.active, title: String(v.title ?? '') });
+  return out;
+}
+
+/**
+ * A page's photos as customers see them: its own ones, then its product's live photos (followProduct). On the server a
+ * product photo kept in the shop (a `data:` picture) gets its own address, « …/lp/pp/<product>/<m|v<id>>-<version>.<ext> »
+ * (the page stays light; a new photo is a new address); elsewhere (preview) the photo itself.
+ */
+export function followedRefs(refs: ImgRef[], productId: number, set: ProductPhotoSet | undefined, imgBase: string | null): ImgRef[] {
+  if (!set) return refs;
+  const f = followProduct(refs.map((r) => ('url' in r ? { url: r.url, v: r.v ?? null } : { id: r.id, v: r.v ?? null })), set);
+  const base = imgBase && /\/img\/$/.test(imgBase) ? imgBase.slice(0, -'img/'.length) : null;
+  const live = f.add.map((a): ImgRef => {
+    const m = /^data:image\/(png|jpeg|webp|gif);base64,/.exec(a.url);
+    const url = base && m ? `${base}pp/${productId}/${a.key}-${photoVersion(a.url)}.${m[1] === 'jpeg' ? 'jpg' : m[1]}` : a.url;
+    return { url, w: 960, h: 1200, v: a.v };
+  });
+  return [...f.keep.map((i) => refs[i]), ...live];
+}
+
+/** a product's photo for /lp/pp/<product>/<m|v<id>>-<version>.<ext> (its bytes; null: none or not a picture of the shop) */
+export async function productPhotoFile(db: Db, productId: number, key: string): Promise<{ type: string; base64: string } | null> {
+  const r = key === 'm' ? (await db.query('SELECT photo FROM products WHERE id = $1', [productId]))[0] : /^v\d+$/.test(key) ? (await db.query('SELECT photo FROM product_variants WHERE id = $1 AND product_id = $2', [Number(key.slice(1)), productId]))[0] : null;
+  const m = r?.photo ? /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(String(r.photo)) : null;
+  return m ? { type: m[1], base64: m[2] } : null;
+}
+
 export function viewImages(refs: ImgRef[], rows: Map<number, any>, imgBase: string | null): LandingImage[] {
   const out: LandingImage[] = [];
   for (const r of refs) {
@@ -389,7 +430,8 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
   if (!l.active && o.mode === 'live') throw notFound('Page introuvable');
   const pc = await productContext(ctx.db, num(l.product_id));
   if (!pc.active && o.mode === 'live') throw notFound('Page introuvable');
-  const refs = readImgs(l.images);
+  // its own photos, then its product's live ones (a changed photo, a new variant's, an off variant's gone)
+  const refs = followedRefs(readImgs(l.images), num(l.product_id), (await productPhotoSets(ctx.db, [num(l.product_id)])).get(num(l.product_id)), o.imgBase);
   // « épuisé » instead of the form: the page's own choice, or Pilot Automations' « Plus de stock → stop »
   const hide = l.stock_mode === 'hide' || (await autoSettings(ctx.db)).noStock.on;
   const s = await landingSettings(ctx.db);
@@ -1962,6 +2004,9 @@ export const landingProcs = {
   /** the store's part of the pages' address (site/<store>/<page>): for the links shown in Pilotix, and the server's check */
   // the store's part of the pages' address, and the address they live at (go.<domain> once it answers; '' in the demo)
   'landing.store': proc(null, z.object({}), async (ctx) => ({ store: await landingStore(ctx.db), pagesUrl: ctx.server?.pagesUrl?.() ?? '' })),
+
+  /** a product's photo for its pages (/lp/pp/<product>/<m|v<id>>-<version>.<ext>); null: none */
+  'landing.productPhoto': proc([], z.object({ productId: id, key: z.string().regex(/^(m|v\d{1,12})$/) }), async (ctx, i) => productPhotoFile(ctx.db, i.productId, i.key)),
 
   /** the shop's logo for the pages' tab icon (/lp/icon/<version>); null: the server sends Pilotix's icon */
   'landing.icon': proc([], z.object({}), async (ctx) => {

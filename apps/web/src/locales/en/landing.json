@@ -408,7 +408,11 @@
     "taken_other": "{{count}} photos added",
     "colour": "Photo colour",
     "colourHelp": "When the customer picks this colour, this photo shows big",
-    "colourNone": "— All —"
+    "colourNone": "— All —",
+    "autoTitle": "Product photos (automatic)",
+    "autoHelp": "They follow the product: a changed photo, a new colour or a colour turned off in Products changes the page by itself.",
+    "autoMain": "Product photo",
+    "offHidden": "Colour off: hidden"
   },
   "domain": {
     "title": "Your own domain",

@@ -8,7 +8,7 @@ import { Db, iso, num, numOrNull } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
 import { autoSettings, getSetting } from '../settings';
 // (landing.ts imports this file too: only functions from it here, used once both are loaded)
-import { b64, HtmlOpts, imageRows, ImgRef, landingIconUrl, productContext, readImgs, viewImages } from './landing';
+import { b64, followedRefs, HtmlOpts, imageRows, ImgRef, landingIconUrl, productContext, productPhotoSets, readImgs, viewImages } from './landing';
 
 const WHO = ['marketer'] as const;
 import { addressOwner, addressTaken, APP_WORD, groupRowAt, keepFormerAddress, landingSettings, landingStore } from './landingquery';
@@ -94,13 +94,15 @@ async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'im
   const items: (GroupItem & { pageId: number })[] = [];
   let shopName = '';
   const stopOut = (await autoSettings(ctx.db)).noStock.on;
+  const sets = await productPhotoSets(ctx.db, pages.map((p: any) => num(p.product_id)));
   for (const it of list) {
     const l = P.get(it.pageId);
     if (!l || (o.mode === 'live' && !l.active)) continue;
     const pc = await productContext(ctx.db, num(l.product_id)).catch(() => null);
     if (!pc || (o.mode === 'live' && !pc.active)) continue;
     shopName = pc.shopName;
-    const refs: ImgRef[] = readImgs(l.images).slice(0, 1);
+    // the first photo its page shows (its own, else its product's live one)
+    const refs: ImgRef[] = followedRefs(readImgs(l.images), num(l.product_id), sets.get(num(l.product_id)), o.imgBase).slice(0, 1);
     const image = viewImages(refs, await imageRows(ctx.db, refs, !o.imgBase), o.imgBase)[0] ?? null;
     items.push({
       pageId: it.pageId,
@@ -173,12 +175,14 @@ async function listGroups(db: Db, ids?: number[]) {
   );
   const allIds = [...new Set(rows.flatMap((r: any) => readItems(r.items).map((x) => x.pageId)))];
   const pages = allIds.length ? await db.query('SELECT id, slug, title, active, images, product_id, (SELECT name FROM products p WHERE p.id = l.product_id) AS pname FROM landing_pages l WHERE id = ANY($1)', [allIds]) : [];
-  const firsts = pages.map((p: any) => readImgs(p.images)[0]).filter((x: ImgRef | undefined): x is { id: number } => !!x && 'id' in x);
+  const sets = await productPhotoSets(db, pages.map((p: any) => num(p.product_id)));
+  const first = new Map<number, ImgRef | undefined>(pages.map((p: any) => [num(p.id), followedRefs(readImgs(p.images), num(p.product_id), sets.get(num(p.product_id)), null)[0]]));
+  const firsts = [...first.values()].filter((x): x is { id: number } => !!x && 'id' in x);
   const thumbs = firsts.length ? await db.query('SELECT id, t160 FROM landing_images WHERE id = ANY($1)', [firsts.map((x) => x.id)]) : [];
   const T = new Map(thumbs.map((t: any) => [num(t.id), b64(t.t160)]));
   const P = new Map(
     pages.map((p: any) => {
-      const f = readImgs(p.images)[0];
+      const f = first.get(num(p.id));
       return [num(p.id), { slug: String(p.slug), title: String(p.title || p.pname), active: !!p.active, thumb: !f ? null : 'url' in f ? f.url : T.get(f.id) ?? null }];
     }),
   );

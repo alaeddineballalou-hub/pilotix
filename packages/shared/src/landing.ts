@@ -605,3 +605,68 @@ ${head}<meta name="theme-color" content="${c}"><style>${GROUP_CSS(c)}</style></h
 <main class="w${items.some((x) => badge(x)) ? ' hb-on' : ''}">${body}<div class="trust"><span>✔ الدفع عند الاستلام</span><span>✔ معاينة المنتج قبل الدفع</span></div></main>${brandFoot(v.shopName, v.shopLogo)}
 <script>window.__LG=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script><script>${GROUP_JS}</script></body></html>`;
 }
+
+// ---------------------------------------------------------------- a page's photos follow its product
+
+/** a product's photos as its pages follow them: its main photo, each variant's (off ones too: their photos leave the page) */
+export interface ProductPhotoSet {
+  photo: string | null;
+  variants: { id: number; photo: string | null; active: boolean; title?: string }[];
+}
+
+/**
+ * a copy a page kept of a product photo: one that is still the product's, or a photo kept inside the page (only the
+ * product's photos are: the editor stores the shop's own pictures apart and takes links; drawings are not photos)
+ */
+export function isProductCopy(x: { url?: string | null; id?: number | null }, p: ProductPhotoSet): boolean {
+  return !x.id && !!x.url && (/^data:image\/(png|jpeg|webp|gif);/.test(x.url) || x.url === p.photo || p.variants.some((v) => v.photo === x.url));
+}
+
+const photoOk = (u: string | null | undefined): u is string => !!u && /^(https?:\/\/|data:image\/)/.test(u);
+
+/**
+ * The photos a page shows: its own ones first (posters uploaded in the editor, links), then the product's live ones —
+ * its main photo, then each ON variant's photo (the variant's colour picks it). A copy the page kept of a product photo
+ * (an older one: a `data:` picture, or one that is still the product's) is dropped: the live one replaces it. A photo
+ * tied to a variant that is off or gone leaves the page (a poster of that colour too). A variant that already has its own
+ * poster on the page does not get its product photo as well. 12 at most.
+ * Returns the own photos kept (their index in `own`) and the product photos to add after them.
+ */
+export function followProduct(own: { url?: string | null; id?: number | null; v?: number | null }[], p: ProductPhotoSet): { keep: number[]; add: { url: string; v: number | null; key: string }[] } {
+  const on = new Set(p.variants.filter((v) => v.active && (v.title === undefined || v.title.trim() !== '')).map((v) => v.id));
+  const keep: number[] = [];
+  own.forEach((x, i) => {
+    if (x.v && !on.has(x.v)) return;
+    if (isProductCopy(x, p)) return;
+    keep.push(i);
+  });
+  const has = new Set(keep.map((i) => own[i].url).filter(Boolean));
+  const add: { url: string; v: number | null; key: string }[] = [];
+  if (photoOk(p.photo) && !has.has(p.photo)) {
+    add.push({ url: p.photo, v: null, key: 'm' });
+    has.add(p.photo);
+  }
+  for (const v of p.variants) {
+    if (!on.has(v.id) || !photoOk(v.photo) || keep.some((i) => own[i].v === v.id)) continue;
+    const dup = add.find((a) => a.url === v.photo);
+    if (dup) {
+      dup.v ??= v.id;
+      continue;
+    }
+    if (has.has(v.photo)) continue;
+    add.push({ url: v.photo, v: v.id, key: `v${v.id}` });
+    has.add(v.photo);
+  }
+  const room = Math.max(0, 12 - keep.length);
+  return { keep: keep.slice(0, 12), add: add.slice(0, room) };
+}
+
+/** a short fingerprint of a photo (its address changes when the photo changes, so browsers keep it until then) */
+export function photoVersion(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `${h.toString(36)}${s.length.toString(36)}`;
+}

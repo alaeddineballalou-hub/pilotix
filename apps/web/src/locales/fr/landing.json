@@ -408,7 +408,11 @@
     "taken_other": "{{count}} photos ajoutées",
     "colour": "Couleur de la photo",
     "colourHelp": "Quand le client choisit cette couleur, cette photo passe en grand",
-    "colourNone": "— Toutes —"
+    "colourNone": "— Toutes —",
+    "autoTitle": "Photos du produit (automatiques)",
+    "autoHelp": "Elles suivent le produit : une photo changée, une nouvelle couleur ou une couleur désactivée dans Produits change la page toute seule.",
+    "autoMain": "Photo du produit",
+    "offHidden": "Couleur désactivée : cachée"
   },
   "domain": {
     "title": "Votre propre domaine",

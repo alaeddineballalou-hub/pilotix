@@ -410,3 +410,9 @@
 .lp-gbadge-c { display: inline-flex; flex-wrap: wrap; gap: 5px; }
 .lp-gbadge-c .lp-sw { width: 22px; height: 22px; }
 .lp-gbadge-prev { align-self: flex-start; color: #fff; font-weight: 800; font-size: 13px; padding: 4px 14px; border-radius: 8px 8px 0 0; }
+/* the product's photos a page follows by itself (read-only in the editor) */
+.lp-auto { margin-top: 12px; padding: 10px; border: 1.5px dashed var(--line); border-radius: 12px; background: var(--raise); }
+.lp-auto-t { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; }
+.lp-auto-t small { flex-basis: 100%; }
+.lp-img-auto { opacity: 0.92; }
+.lp-img-off { background: var(--coral-soft); color: var(--coral); top: auto; bottom: 6px; }

@@ -1532,6 +1532,25 @@ class ApiController {
   }
 
   /**
+   * A product's photo on its landing pages: /lp/pp/<product>/<m|v<variant>>-<version>.<ext> (m: its main photo, v: a
+   * variant's). The version changes with the photo, so browsers keep it a year.
+   */
+  @Public()
+  @Get(['lp/pp/:id/:file', 's/:shop/lp/pp/:id/:file'])
+  async landingProductPhoto(@Param('shop') shop: string | undefined, @Param('id') idp: string, @Param('file') file: string, @Res() res: any) {
+    const m = file.match(/^(m|v\d{1,12})-[a-z0-9]{1,20}\.(jpg|png|webp|gif)$/);
+    if (!/^\d{1,12}$/.test(idp) || !m) return res.status(404).send();
+    try {
+      const ref = intake(await this.publicShop(shop));
+      const r: any = await this.core.call(ref, 'landing.productPhoto', await this.core.systemSession(ref), { productId: Number(idp), key: m[1] });
+      if (!r) return res.status(404).send();
+      return res.status(200).header('Content-Type', r.type).header('Cache-Control', 'public, max-age=31536000, immutable').send(Buffer.from(r.base64, 'base64'));
+    } catch {
+      return res.status(404).send();
+    }
+  }
+
+  /**
    * The tab's icon of the shop's pages: /lp/icon/<version>, the shop's logo, or the Pilotix icon when it has none. The
    * version changes with the logo, so the browser keeps it a long time.
    */

@@ -127,3 +127,65 @@ test('pages and groups: the tab icon is the shop logo, else the Pilotix icon', a
   assert.match(await at(pages[0].slug, null), /<link rel="icon" href="data:image\/png;base64,iVBORw0KGgo=">/);
   assert.deepEqual(await call('landing.icon', admin, {}), { type: 'image/png', base64: 'iVBORw0KGgo=' });
 });
+
+test('pages follow their product: its photo, a new variant photo, an off variant leaves (choice and photos)', async () => {
+  const pg = (await db.query('SELECT id, slug, product_id FROM landing_pages WHERE id = $1', [pages[1].id]))[0];
+  const pid = Number(pg.product_id);
+  const png = (n: number) => `data:image/png;base64,${Buffer.from(`photo-${n}`).toString('base64')}`;
+  // the product: a main photo, two colours with their own photo (a third colour without)
+  await db.query('UPDATE products SET photo = $2 WHERE id = $1', [pid, png(1)]);
+  await db.query(`DELETE FROM landing_blocked WHERE landing_id = $1`, [pg.id]).catch(() => null);
+  const vs = (await db.query(`SELECT id FROM product_variants WHERE product_id = $1 AND title <> '' ORDER BY id`, [pid])).map((r: any) => Number(r.id));
+  let [a, b] = vs;
+  if (!b) {
+    a = Number((await db.query(`INSERT INTO product_variants (product_id, title, sku, active) VALUES ($1, 'أحمر', $2, true) RETURNING id`, [pid, `T-${pid}-A`]))[0].id);
+    b = Number((await db.query(`INSERT INTO product_variants (product_id, title, sku, active) VALUES ($1, 'أزرق', $2, true) RETURNING id`, [pid, `T-${pid}-B`]))[0].id);
+  }
+  await db.query('UPDATE product_variants SET active = true, photo = NULL WHERE product_id = $1', [pid]);
+  await db.query('UPDATE product_variants SET photo = $2 WHERE id = $1', [a, png(2)]);
+  await db.query('UPDATE product_variants SET photo = $2 WHERE id = $1', [b, png(3)]);
+  // the page: its own poster (a link) for colour b, and an old copy of an old product photo
+  await db.query('UPDATE landing_pages SET active = true, images = $2 WHERE id = $1', [pg.id, JSON.stringify([{ url: 'https://cdn.example/poster.jpg', w: 1080, h: 1350 }, { url: 'https://cdn.example/b.jpg', w: 1080, h: 1350, v: b }, { url: png(99), w: 960, h: 1200 }])]);
+  const live = async () => ((await call('landing.html', admin, { slug: String(pg.slug), mode: 'live', post: '/o', geo: '/g/', lead: '/l', imgBase: '/api/lp/img/' })) as any).html as string;
+
+  let h = await live();
+  const poster = h.indexOf('https://cdn.example/poster.jpg');
+  const main = h.indexOf(`/api/lp/pp/${pid}/m-`);
+  assert.ok(poster > 0 && main > poster, 'own poster first, then the product photo');
+  assert.match(h, new RegExp(`/api/lp/pp/${pid}/v${a}-[a-z0-9]+\\.png`));
+  // colour b has its own poster on the page: not its product photo as well
+  assert.doesNotMatch(h, new RegExp(`/api/lp/pp/${pid}/v${b}-`));
+  assert.match(h, /cdn\.example\/b\.jpg/);
+  // the old copy is gone, and no product photo is inside the page
+  for (const n of [1, 2, 3, 99]) assert.ok(!h.includes(Buffer.from(`photo-${n}`).toString('base64')), `photo ${n} inside the page`);
+
+  // a new main photo: a new address (browsers fetch the new one)
+  const before = h.match(new RegExp(`/api/lp/pp/${pid}/m-[a-z0-9]+\\.png`))![0];
+  await db.query('UPDATE products SET photo = $2 WHERE id = $1', [pid, png(4)]);
+  h = await live();
+  const after = h.match(new RegExp(`/api/lp/pp/${pid}/m-[a-z0-9]+\\.png`))![0];
+  assert.notEqual(after, before);
+  assert.deepEqual(await call('landing.productPhoto', admin, { productId: pid, key: 'm' }), { type: 'image/png', base64: Buffer.from('photo-4').toString('base64') });
+  assert.deepEqual(await call('landing.productPhoto', admin, { productId: pid, key: `v${a}` }), { type: 'image/png', base64: Buffer.from('photo-2').toString('base64') });
+  assert.equal(await call('landing.productPhoto', admin, { productId: pid, key: 'v999999' }), null);
+
+  // colour b off: its choice and its poster leave the page; colour a off: its product photo too
+  await db.query('UPDATE product_variants SET active = false WHERE id = $1', [b]);
+  h = await live();
+  assert.doesNotMatch(h, /cdn\.example\/b\.jpg/);
+  assert.doesNotMatch(h, /أزرق/);
+  await db.query('UPDATE product_variants SET active = false WHERE id = $1', [a]);
+  h = await live();
+  assert.doesNotMatch(h, new RegExp(`/api/lp/pp/${pid}/v${a}-`));
+  // back on: back on the page
+  await db.query('UPDATE product_variants SET active = true WHERE id = ANY($1)', [[a, b]]);
+  h = await live();
+  assert.match(h, /cdn\.example\/b\.jpg/);
+  assert.match(h, new RegExp(`/api/lp/pp/${pid}/v${a}-`));
+  // the preview (no server address): the photos themselves
+  const pv = ((await call('landing.html', admin, { slug: String(pg.slug), mode: 'preview', post: '/o', geo: '/g/', lead: '/l', imgBase: null })) as any).html as string;
+  assert.ok(pv.includes(png(4)));
+  // the list's picture and a group's: the page's first photo (its poster)
+  const row: any = (await call('landing.list', admin, {}) as any[]).find((x: any) => x.id === Number(pg.id));
+  assert.equal(row.thumb, 'https://cdn.example/poster.jpg');
+});

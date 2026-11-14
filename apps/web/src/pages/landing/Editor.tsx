@@ -1,7 +1,7 @@
 // The editor of one landing page: the form on one side, the page itself on the other (live, desktop or phone), drawn
 // by the very function the server uses, so what is seen here is what customers get.
 import { LandingPreview } from './Preview';
-import { LANDING_COLORS, LANDING_DEFAULT_COLOR, LandingView, renderLanding, WHATSAPP_DEFAULT, WHATSAPP_VARS } from '@pilotix/shared';
+import { followProduct, isProductCopy, LANDING_COLORS, LANDING_DEFAULT_COLOR, LandingView, ProductPhotoSet, renderLanding, WHATSAPP_DEFAULT, WHATSAPP_VARS } from '@pilotix/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, Out, rpc, serverUrl, shopApi } from '../../lib/backend';
@@ -64,6 +64,20 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));
   const products = useRpc('landing.products', {});
   const ctx = useRpc('landing.context', { productId: d.productId }, { enabled: !!d.productId });
+  // the product's photos the page follows (its ON variants only: an off one's photos leave the page)
+  const photoSet = useMemo<ProductPhotoSet | null>(() => (ctx.data ? { photo: ctx.data.photo, variants: ctx.data.variants.map((v) => ({ id: v.id, photo: v.photo, active: true })) } : null), [ctx.data]);
+  // copies the page kept of the product's photos: dropped once (the live ones replace them), without counting as a change
+  const cleaned = useRef(false);
+  useEffect(() => {
+    if (!photoSet || cleaned.current) return;
+    cleaned.current = true;
+    if (!d.images.some((x) => isProductCopy(x, photoSet))) return;
+    const clean = (x: Draft) => ({ ...x, images: x.images.filter((im) => !isProductCopy(im, photoSet)) });
+    setSaved((k) => (k === keyOf(d) ? keyOf(clean(d)) : k));
+    setD(clean);
+  }, [photoSet]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the photos the page shows: its own ones, then the product's live ones
+  const auto = useMemo(() => (photoSet ? followProduct(d.images, photoSet).add : []), [d.images, photoSet]);
   // the WhatsApp button of Réglages (the preview's thank-you screen shows the one the page will have)
   const shopWa = useRpc('landing.settings.get', {}, { staleTime: 60_000 }).data?.settings.whatsapp;
   const save = useAction('landing.save', {
@@ -139,7 +153,13 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
       variantLabel: view.variantLabel.trim() || 'اللون',
       variants,
       soldOut: hide && c.soldOut,
-      images: view.images.map((i) => ({ src: i.src, srcset: `${i.src} 480w`, thumb: i.thumb, w: i.w, h: i.h, ...(i.v ? { v: i.v } : {}) })),
+      images: (() => {
+        const f = photoSet ? followProduct(view.images, photoSet) : { keep: view.images.map((_, i) => i), add: [] };
+        return [
+          ...f.keep.map((k) => view.images[k]).map((i) => ({ src: i.src, srcset: `${i.src} 480w`, thumb: i.thumb, w: i.w, h: i.h, ...(i.v ? { v: i.v } : {}) })),
+          ...f.add.map((a) => ({ src: a.url, srcset: `${a.url} 960w`, thumb: a.url, w: 960, h: 1200, ...(a.v ? { v: a.v } : {}) })),
+        ];
+      })(),
       fees: c.fees,
       feeSets: c.feeSets,
       variantFee: c.variantFee,
@@ -156,7 +176,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
     // the weight customers download before pictures (here the pictures are inside the page, as data)
     const bare = renderLanding({ ...v, images: v.images.map((i) => ({ ...i, src: 'x', srcset: 'x 480w', thumb: 'x' })) }, r);
     return { html: renderLanding(v, r), weight: new Blob([bare]).size };
-  }, [view, ctx.data, shopWa]);
+  }, [view, ctx.data, shopWa, photoSet]);
   const frame = useRef<HTMLIFrameElement>(null);
   useLandingFrame(frame);
   // « Ordinateur »: the page drawn 1280 px wide, then scaled down to fit the box
@@ -251,7 +271,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
             {ctx.data?.fixedPrice && d.price !== '' && Number(d.price) !== ctx.data.price && <p className="lp-warn-note">{t('landing.ed.fixedPrice', { price: da(ctx.data.price) })}</p>}
           </section>
 
-          <Photos images={d.images} onChange={(f) => setD((x) => ({ ...x, images: f(x.images) }))} onBusy={(n) => setBusy((b) => b + n)} product={ctx.data ? { photo: ctx.data.photo, variants: ctx.data.variants } : null} />
+          <Photos images={d.images} onChange={(f) => setD((x) => ({ ...x, images: f(x.images) }))} onBusy={(n) => setBusy((b) => b + n)} product={ctx.data ? { photo: ctx.data.photo, variants: ctx.data.variants } : null} auto={auto} />
 
           <section className="card">
             <h2>{t('landing.ed.sText')}</h2>
