@@ -43,7 +43,7 @@ jobs:
           ip=$(getent ahostsv4 "$host" | awk 'NR==1{print $1}')
           [ -n "$ip" ] && echo "::add-mask::$ip"
           # straight to the server, skipping Cloudflare (same certificate, same site), like the deploy's live check
-          read -r direct secs < <(curl -s -o /dev/null -m 15 -w '%{http_code} %{time_total}' --resolve "pilotix.online:443:$ip" "https://pilotix.online/healthz?w=$(date +%s)" || echo "000 -")
+          read -r direct secs < <(curl -s -o /dev/null -m 15 -w '%{http_code} %{time_total}' --resolve "pilotix.online:443:$ip" "https://pilotix.online/healthz?w=$(date +%s)" || echo "000 -") || true
           [ "$direct" = 200 ] && server_web=ok || server_web="fail-$direct"
           if [ -n "$ip" ] && timeout 8 bash -c "</dev/tcp/$ip/22" 2>/dev/null; then server=ok; else server=fail; fi
           line="$when,$dns,$cf,$via,$server_web,$server,${secs:-}"
