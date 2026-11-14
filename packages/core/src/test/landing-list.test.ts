@@ -253,3 +253,40 @@ test('colour names in Arabic on the page: translated by themselves, or the Arabi
   assert.match(h, /\.th img\{width:40px;height:50px/);
   assert.match(h, /\.th:before,\.th:after\{content:'';margin:auto\}/);
 });
+
+test('conversion: a browser counts once a day; robots, previews and no cookie do not; orders since that day ÷ visitors', async () => {
+  const c: any = await call('landing.duplicate', marketer, { id: pages[0].id });
+  await db.query('UPDATE landing_pages SET active = true WHERE id = $1', [c.id]);
+  const row = async () => ((await call('landing.list', marketer, {})) as any[]).find((r) => r.id === c.id);
+  assert.equal((await row()).unique, 0);
+  assert.equal((await row()).conversion, null);
+  const open = (visitor?: string, mode: 'live' | 'preview' = 'live') =>
+    call('landing.html', admin, { slug: c.slug, mode, post: '/o', geo: '/g/', lead: '/l', imgBase: '/i/', ...(visitor ? { visitor } : {}) });
+  await open('aaaaaaaaaaaa11');
+  await open('aaaaaaaaaaaa11'); // the same browser again the same day
+  await open('bbbbbbbbbbbb22');
+  await open(); // a robot (the server gives it no code)
+  await open('NOT-A-CODE!'); // not a code the server makes
+  await open('cccccccccccc33', 'preview'); // Pilotix itself, not a customer
+  let r = await row();
+  assert.equal(r.unique, 2);
+  assert.equal(r.convOrders, 0);
+  assert.equal(r.conversion, 0);
+  // one real order on the page since the first counted day: 1 ÷ 2 = 50 %
+  await db.query(
+    `UPDATE orders SET landing_id = $1, created_at = (SELECT min(day) FROM landing_visits WHERE landing_id = $1)::timestamp + interval '2 hours' WHERE id = (SELECT id FROM orders WHERE landing_id IS NULL ORDER BY id LIMIT 1)`,
+    [c.id],
+  );
+  r = await row();
+  assert.equal(r.convOrders, 1);
+  assert.equal(r.conversion, 50);
+  assert.match(String(r.uniqueSince), /^\d{4}-\d\d-\d\d$/);
+  // delete: its visits go with it
+  await db.query('UPDATE orders SET landing_id = NULL WHERE landing_id = $1', [c.id]);
+  await call('landing.remove', marketer, { id: c.id });
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM landing_visits WHERE landing_id = $1', [c.id]))[0].n, 0);
+  // the demo shows rates on its pages
+  const demo = ((await call('landing.list', marketer, {})) as any[]).filter((x) => x.unique > 0);
+  assert.ok(demo.length > 0);
+  for (const x of demo) assert.ok(x.conversion >= 0 && x.conversion < 20, `${x.slug}: ${x.conversion}`);
+});

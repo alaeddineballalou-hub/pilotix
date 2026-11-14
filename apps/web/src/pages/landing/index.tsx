@@ -186,6 +186,7 @@ function Pages() {
                     <th>{t('landing.list.state')}</th>
                     <th className="num">{t('landing.list.views')}</th>
                     <th className="num">{t('landing.list.orders')}</th>
+                    <th className="num" title={t('landing.list.convHelp')}>{t('landing.list.conv')}</th>
                     <th className="num">{t('landing.list.abandoned')}</th>
                     <th className="num">{t('landing.list.blocked')}</th>
                     <th />
@@ -216,6 +217,10 @@ function Pages() {
                       </td>
                       <td className="num" data-l={t('landing.list.orders')}>
                         <b className="ltr">{n(p.orders)}</b>
+                      </td>
+                      <td className="num lp-conv" data-l={t('landing.list.conv')} title={p.uniqueSince ? t('landing.list.convSince', { date: p.uniqueSince }) : t('landing.list.convNone')}>
+                        <b className="ltr">{p.conversion == null ? '—' : `${p.conversion.toLocaleString(undefined, { maximumFractionDigits: 1 })} %`}</b>
+                        {p.unique > 0 && <small className="ltr">{n(p.convOrders)} / {n(p.unique)}</small>}
                       </td>
                       <td className={`num ${p.abandoned ? 'warn' : ''}`} data-l={t('landing.list.abandoned')}>
                         <b className="ltr">{n(p.abandoned)}</b>

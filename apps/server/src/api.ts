@@ -28,7 +28,7 @@ import { APP_FILTER, Reflector, REQUEST } from '@nestjs/core';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import * as core from '@pilotix/core';
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, maskPhone, normalizePhone, ProCard, Session } from '@pilotix/shared';
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { brotliCompressSync, constants as zlibConst, gzipSync } from 'node:zlib';
 import { z } from 'zod';
 import { config } from './config';
@@ -1414,11 +1414,17 @@ class ApiController {
       // TikTok's robots that check an ad's page are no visits
       const cat = /[?&]px_cat=(meta|tiktok)(?:&|$)/.exec(String(req.url ?? ''))?.[1];
       const robot = /facebookexternalhit|facebot|meta-externalagent|bytespider|bot\b|crawler|spider|headless/i.test(String(req.headers['user-agent'] ?? ''));
+      // a unique visitor (Landing pages › conversion): the browser's anonymous code, kept a year in a cookie of the
+      // page's own address (no name, no number, nothing else in it); robots get none and are not counted
+      const had = /(?:^|;\s*)pxv=([a-z0-9]{12,40})(?:;|$)/.exec(String(req.headers.cookie ?? ''))?.[1];
+      const visitor = robot ? undefined : (had ?? randomBytes(10).toString('hex'));
       const r: any = await this.core.call(ref, 'landing.html', await this.core.systemSession(ref), {
         slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, geo: `${base}geo/`, imgBase: `${base}img/`, site: atPages ? config.landingUrl : this.core.landingBase(), ...(own ? { url: own.url } : {}), ...(g ? { group: g } : {}),
         ...(cat && !robot ? { catalog: cat } : {}),
+        ...(visitor ? { visitor } : {}),
       });
       res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store');
+      if (visitor && !had) res.header('Set-Cookie', `pxv=${visitor}; Max-Age=31536000; Path=/; SameSite=Lax; Secure; HttpOnly`);
       // the main photo asked for as soon as these headers arrive, before the page itself
       if (r.link) res.header('Link', r.link);
       return sendText(req, res, r.html);

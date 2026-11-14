@@ -99,6 +99,10 @@ export interface LandingRow {
   stockMode: 'off' | 'hide';
   views: number;
   orders: number;
+  unique: number;
+  uniqueSince: string | null;
+  convOrders: number;
+  conversion: number | null;
   blocked: number;
   abandoned: number;
   thumb: string | null;
@@ -152,6 +156,10 @@ async function listPages(db: Db, now: number, ids?: number[]): Promise<LandingRo
   const rows = await db.query(
     `SELECT l.*, p.name AS product_name,
        (SELECT count(*)::int FROM orders o WHERE o.landing_id = l.id) AS n_orders,
+       -- the conversion rate: unique visitors (since the page counts them) and the orders since that same day
+       (SELECT count(*)::int FROM landing_visits v WHERE v.landing_id = l.id) AS n_unique,
+       (SELECT min(v.day) FROM landing_visits v WHERE v.landing_id = l.id) AS unique_since,
+       (SELECT count(*)::int FROM orders o WHERE o.landing_id = l.id AND o.created_at >= (SELECT min(v.day) FROM landing_visits v WHERE v.landing_id = l.id)::timestamp - interval '1 hour') AS n_conv,
        (SELECT count(*)::int FROM landing_blocked b WHERE b.landing_id = l.id) AS n_blocked,
        (SELECT count(*)::int FROM landing_leads a WHERE a.landing_id = l.id AND ${ABANDONED('$1::timestamptz')}) AS n_abandoned
      FROM landing_pages l JOIN products p ON p.id = l.product_id ${ids ? 'WHERE l.id = ANY($2)' : ''} ORDER BY l.updated_at DESC`,
@@ -185,6 +193,11 @@ async function listPages(db: Db, now: number, ids?: number[]): Promise<LandingRo
       stockMode: r.stock_mode === 'hide' ? 'hide' : 'off',
       views: num(r.views),
       orders: num(r.n_orders),
+      /** unique visitors (a browser once a day) since uniqueSince; conversion = convOrders ÷ unique (null: none yet) */
+      unique: num(r.n_unique),
+      uniqueSince: r.unique_since ? String(r.unique_since instanceof Date ? r.unique_since.toISOString().slice(0, 10) : r.unique_since).slice(0, 10) : null,
+      convOrders: num(r.n_conv),
+      conversion: num(r.n_unique) ? Math.round((num(r.n_conv) / num(r.n_unique)) * 1000) / 10 : null,
       blocked: num(r.n_blocked),
       abandoned: num(r.n_abandoned),
       thumb: !f ? null : 'url' in f ? f.url : T.has(f.id) ? b64(T.get(f.id)) : null,
@@ -343,6 +356,8 @@ export interface HtmlOpts {
   group?: string;
   /** opened from a catalog ad (Marketing › Catalogue: its link carries ?px_cat=meta|tiktok): a visit counted for « Résultats » */
   catalog?: 'meta' | 'tiktok';
+  /** the browser's anonymous visitor code (the server's cookie; none for robots): a unique visitor for the day */
+  visitor?: string;
 }
 
 /** the photos of these products as their pages follow them (main photo, every variant's, on or off) */
@@ -486,6 +501,9 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     promo: (await promoSettings(ctx.db)).enabled,
   };
   if (o.mode === 'live') await ctx.db.query('UPDATE landing_pages SET views = views + 1 WHERE id = $1', [l.id]);
+  // a unique visitor: this browser once per page per day (in Algeria), for the conversion rate
+  if (o.mode === 'live' && o.visitor && /^[a-z0-9]{12,40}$/.test(o.visitor))
+    await ctx.db.query('INSERT INTO landing_visits (landing_id, day, visitor) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [l.id, new Date(ctx.now() + 3_600_000).toISOString().slice(0, 10), o.visitor]);
   // a visit from a catalog ad, by day (in Algeria), product and network (Marketing › Catalogue › Résultats)
   if (o.mode === 'live' && o.catalog)
     await ctx.db.query(
@@ -1809,6 +1827,7 @@ export const landingProcs = {
 
   'landing.remove': proc([...WHO], z.object({ id }), async (ctx, { id }) => {
     await ctx.db.query('DELETE FROM landing_pages WHERE id = $1', [id]);
+    await ctx.db.query('DELETE FROM landing_visits WHERE landing_id = $1', [id]);
     ctx.emit({ type: 'stock' });
     return { ok: true };
   }),
@@ -2020,7 +2039,7 @@ export const landingProcs = {
   // ---------------------------------------------------------------- public side (the server calls these as the system)
   'landing.html': proc(
     [],
-    z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null), site: z.string().max(500).optional(), url: z.string().max(600).optional(), group: z.string().max(80).optional(), catalog: z.enum(['meta', 'tiktok']).optional() }),
+    z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null), site: z.string().max(500).optional(), url: z.string().max(600).optional(), group: z.string().max(80).optional(), catalog: z.enum(['meta', 'tiktok']).optional(), visitor: z.string().max(40).optional() }),
     async (ctx, i) => landingPage(ctx, i.slug, i),
   ),
 
