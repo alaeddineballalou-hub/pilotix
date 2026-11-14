@@ -97,7 +97,8 @@ export async function seed(db: Db, now: number): Promise<void> {
       publishAt: at(-1, 13),
       status: 'failed',
       fb: ['1029384756_90002', 'https://www.facebook.com/1029384756_90002'],
-      igError: 'Instagram : Meta ne permet pas encore à Pilotix de publier. Ajoutez « instagram_content_publish » dans l’app Meta, puis appuyez sur « Continuer avec Facebook » dans Pilot AI › Comptes.',
+      // a reason a real shop meets (the permission is given once the Page is linked again: not the demo's example)
+      igError: 'Instagram n’a pas pu télécharger la photo depuis Pilotix. Réessayez dans une minute.',
     },
     {
       caption: '✨ Sac à langer à dos : tout le nécessaire de bébé dans un seul sac\n✅ Noir ou camel\n✅ Poche isotherme pour le biberon\n🚚 Livraison 58 wilayas · paiement à la livraison\n📩 Écrivez-nous en message pour commander\n#Algérie #dz #sacàlanger',
