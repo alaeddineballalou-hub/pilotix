@@ -502,7 +502,7 @@ a.it:active{transform:scale(.985)}.it.out{opacity:.55}
 .pr{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin:0 2px}.pr b{color:var(--c);font-size:17px}.pr s{color:var(--m);font-size:13px}
 .bd{display:block;height:30px;margin:-8px -8px 8px;padding:6px 8px;border-radius:13px 13px 0 0;background:var(--bd);color:#fff;font-weight:800;font-size:13px;line-height:18px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hb-on .g2>.it:not(.hb)::before,.hb-on .big>.it:not(.hb)::before{content:'';display:block;height:30px;margin:-8px -8px 8px}
-.it.hb .off,.it.hb .so{top:50px}.ls .bd{display:inline-block;height:auto;margin:0 0 3px;padding:1px 9px;border-radius:99px;font-size:12px;line-height:1.5}
+.it.hb .off,.it.hb .so{top:50px}.it.hb:not(.out) .go{background:var(--bd)}.ls .bd{display:inline-block;height:auto;margin:0 0 3px;padding:1px 9px;border-radius:99px;font-size:12px;line-height:1.5}
 .off{position:absolute;top:12px;right:12px;background:#dc2626;color:#fff;border-radius:99px;padding:1px 8px;font-size:12px;font-weight:800;direction:ltr}
 .so{position:absolute;top:12px;left:12px;background:#111827;color:#fff;border-radius:99px;padding:1px 8px;font-size:12px;font-weight:700}
 .go{display:block;margin-top:8px;border-radius:10px;background:var(--c);color:#fff;font-weight:800;padding:9px;text-align:center;font-size:15px}
@@ -554,7 +554,7 @@ export function renderGroup(v: GroupView, r: GroupRender): string {
     return b ? `<span class="bd" style="--bd:${b.color}">${esc(b.text)}</span>` : '';
   };
   const open = (x: GroupItem, extra = '') =>
-    `<a class="it${x.soldOut ? ' out' : ''}${badge(x) ? ' hb' : ''}${extra}" href="${esc(x.slug)}?g=${esc(v.slug)}" data-s="${esc(x.slug)}" data-n="${esc(x.title.toLowerCase())}" data-t="${esc(x.tab ?? '')}">`;
+    `<a class="it${x.soldOut ? ' out' : ''}${badge(x) ? ' hb' : ''}${extra}"${badge(x) ? ` style="--bd:${badge(x)!.color}"` : ''} href="${esc(x.slug)}?g=${esc(v.slug)}" data-s="${esc(x.slug)}" data-n="${esc(x.title.toLowerCase())}" data-t="${esc(x.tab ?? '')}">`;
   const go = (x: GroupItem, label = 'اطلب الآن') => `<span class="go">${x.soldOut ? 'نفذت الكمية' : label}</span>`;
   const card = (x: GroupItem, size = '(min-width:980px) 250px, (min-width:700px) 320px, 46vw') => `${open(x)}${bd(x)}${img(x, size)}${off(x)}${so(x)}<h2>${esc(x.title)}</h2>${price(x)}${go(x)}</a>`;
   let body = '';
