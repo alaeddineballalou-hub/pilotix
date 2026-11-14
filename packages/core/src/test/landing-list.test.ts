@@ -79,6 +79,9 @@ test('groups: badges above the photo, one product per badge, kept on save, copie
   const h = await html('badges');
   assert.match(h, /<span class="bd" style="--bd:#dc2626">أفضل سعر<\/span>/);
   assert.equal((h.match(/class="bd"/g) ?? []).length, 1);
+  // its « اطلب الآن » button takes the badge's colour (the others keep the group's)
+  assert.match(h, /<a class="it hb" style="--bd:#dc2626"/);
+  assert.match(h, /\.it\.hb:not\(\.out\) \.go\{background:var\(--bd\)\}/);
   // the product without a badge keeps the same height (photos stay level)
   assert.match(h, /<main class="w hb-on">/);
   // a bad colour: refused
