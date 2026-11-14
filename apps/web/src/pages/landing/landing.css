@@ -396,7 +396,7 @@
 .lp-row-a .btn.icon { width: 32px; padding: 0; justify-content: center; }
 @media (hover: hover) { .lp-tbl tbody tr:hover td { background: var(--raise); } }
 @media (max-width: 760px) {
-  .lp-tbl tr { grid-template-columns: repeat(5, minmax(0, 1fr)); padding-inline-end: 34px; }
+  .lp-tbl tr { grid-template-columns: repeat(3, minmax(0, 1fr)); padding-inline-end: 34px; }
   .lp-tbl td:nth-child(2), .lp-tbl td:nth-child(3), .lp-tbl td.lp-row-a { grid-column: 1 / -1; }
   .lp-tbl td:nth-child(2)::before, .lp-tbl td:nth-child(3)::before { display: none !important; }
   .lp-tbl td.num { text-align: center !important; }

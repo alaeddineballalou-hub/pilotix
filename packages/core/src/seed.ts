@@ -28,7 +28,7 @@ import { seed as seed_campaigns } from './seeds/campaigns';
 import { seed as seed_metacatalog } from './seeds/metacatalog';
 import { seed as seed_cmplan } from './seeds/cmplan';
 import { seed as seed_notify } from './seeds/notify';
-import { seed as seed_landing } from './seeds/landing';
+import { seed as seed_landing, seedVisits } from './seeds/landing';
 import { seed as seed_spy } from './seeds/spy';
 import { seed as seed_pilotads } from './seeds/pilotads';
 import { seed as seed_partners } from './seeds/partners';
@@ -400,6 +400,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
   await seed_landing(db, users, now);
   // after the landing pages (the catalog sends products that have one)
   await seed_metacatalog(db, users, now);
+  await seedVisits(db, now);
   // Dellal and photos: shows the stroller's drawn pictures (made by the landing pages above)
   await seedPhotoChat(db, now);
   await seedSizeChart(db);

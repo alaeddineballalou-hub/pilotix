@@ -260,21 +260,6 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     `INSERT INTO tracking_pixels (platform, name, pixel_id, is_default) VALUES ('meta', 'Pixel principal', '1234567890123456', false), ('meta', 'Pixel bébé (2e compte)', '6543210987654321', false), ('tiktok', 'TikTok bébé', 'CQDEMO1ABC2DEF3GHI4J', false)
      ON CONFLICT (platform, pixel_id) DO NOTHING`,
   );
-  // unique visitors of the last 30 days (Landing pages › Conversion): about 3 % of them order, as on a good page
-  const DAY = 86_400_000;
-  const since = new Date(now + 3_600_000 - 29 * DAY).toISOString().slice(0, 10);
-  for (const [k, r] of (await db.query(
-    `SELECT l.id, (SELECT count(*)::int FROM orders o WHERE o.landing_id = l.id AND o.created_at >= $1::timestamp - interval '1 hour') AS n FROM landing_pages l ORDER BY l.id`,
-    [since],
-  )).entries()) {
-    const total = Math.max(60, Math.round((num(r.n) || 1) * (100 / (2.4 + ((k * 7) % 5) * 0.5))));
-    for (let d = 0; d < 30; d++) {
-      const day = new Date(now + 3_600_000 - (29 - d) * DAY).toISOString().slice(0, 10);
-      const c = Math.round((total / 30) * (0.7 + ((d * 13 + k) % 7) / 10));
-      if (c > 0)
-        await db.query(`INSERT INTO landing_visits (landing_id, day, visitor) SELECT $1::bigint, $2::date, 'demo' || $1::text || 'd' || $3::text || 'v' || g FROM generate_series(1, $4::int) g ON CONFLICT DO NOTHING`, [r.id, day, d, c]);
-    }
-  }
   // a group page: several products on one page (each opens its landing page)
   const pages = await db.query('SELECT id FROM landing_pages WHERE active ORDER BY id LIMIT 6');
   if (pages.length >= 2) {
@@ -287,4 +272,19 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     for (const [k, p] of pages.entries()) await db.query('INSERT INTO landing_group_clicks (group_id, page_id, clicks) VALUES ($1,$2,$3)', [g.id, p.id, 90 - k * 13]);
   }
   void p2;
+}
+
+/** Unique visitors of the last 30 days (Landing pages › Conversion), about 60 % of each page's views; run after every
+ *  seed that makes landing pages (Meta catalogue makes some). */
+export async function seedVisits(db: Db, now: number) {
+  const DAY = 86_400_000;
+  for (const [k, r] of (await db.query('SELECT id, views FROM landing_pages ORDER BY id')).entries()) {
+    const total = Math.max(40, Math.round(num(r.views) * (0.55 + (k % 3) * 0.05)));
+    for (let d = 0; d < 30; d++) {
+      const day = new Date(now + 3_600_000 - (29 - d) * DAY).toISOString().slice(0, 10);
+      const c = Math.round((total / 30) * (0.7 + ((d * 13 + k) % 7) / 10));
+      if (c > 0)
+        await db.query(`INSERT INTO landing_visits (landing_id, day, visitor) SELECT $1::bigint, $2::date, 'demo' || $1::text || 'd' || $3::text || 'v' || g FROM generate_series(1, $4::int) g ON CONFLICT DO NOTHING`, [r.id, day, d, c]);
+    }
+  }
 }
