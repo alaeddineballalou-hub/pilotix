@@ -202,13 +202,13 @@ function GroupList() {
                       <b className="ltr">{n(g.orders)}</b>
                     </td>
                     <td className="lp-row-a">
-                      <a className="btn small" href={`#/landing/groupes/${g.id}`}>
-                        <Icon name="pencil" /> {t('landing.list.edit')}
+                      <a className="btn small lp-edit" title={t('landing.list.edit')} href={`#/landing/groupes/${g.id}`}>
+                        <Icon name="pencil" /> <span className="lp-edit-t">{t('landing.list.edit')}</span>
                       </a>
-                      <a className="btn small icon" href={publicUrl(g.slug, store, base)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer" aria-label={t('landing.list.open')} title={t('landing.list.open')}>
+                      <a className="btn small icon lp-sec" href={publicUrl(g.slug, store, base)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer" aria-label={t('landing.list.open')} title={t('landing.list.open')}>
                         <Icon name="external" />
                       </a>
-                      <button type="button" className="btn small icon" onClick={() => copy(g.slug)} aria-label={t('landing.list.copy')} title={t('landing.list.copy')}>
+                      <button type="button" className="btn small icon lp-sec" onClick={() => copy(g.slug)} aria-label={t('landing.list.copy')} title={t('landing.list.copy')}>
                         <Icon name="link" />
                       </button>
                       <button type="button" className="btn small icon" disabled={busy} onClick={() => duplicate([g.id])} aria-label={t('landing.list.duplicate')} title={t('landing.list.duplicate')}>
