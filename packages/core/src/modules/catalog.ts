@@ -515,6 +515,8 @@ const PackInput = z.object({ qty: z.number().int().min(2).max(999), price: z.num
 const VariantInput = z.object({
   id: id.optional(),
   title: z.string().trim().max(120),
+  /** its name in Arabic for the landing pages (empty: the page translates the colour words) */
+  titleAr: z.string().trim().max(120).optional(),
   sku: z.string().trim().max(120).nullable().optional(),
   price: z.number().int().min(0).max(100_000_000).nullable().optional(),
   cost: z.number().int().min(0).max(100_000_000).nullable().optional(),
@@ -722,11 +724,12 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
         if (!ctx.session.isAdmin && v.maxDiscount !== undefined && v.maxDiscount !== numOrNull(old.max_discount)) throw forbidden('Seul l’administrateur modifie la remise maximale');
         // a renamed size keeps its row (its stock, price list, photo and orders stay with it); its former name and code
         // are kept for what still writes them (a sheet, a Meta lead form, the website)
+        if (v.titleAr !== undefined) await tx.query('UPDATE product_variants SET title_ar = $2 WHERE id = $1', [v.id, v.titleAr]);
         await tx.query('UPDATE product_variants SET title=$2, sku=$3, price=$4, active=$5, cost=$6, max_discount=$7, weight_kg=$8, alert_qty=$9, fee_grid=$10, photo=$11, old_titles=$12, old_skus=$13 WHERE id=$1', [v.id, v.title.trim(), vsku || old.sku, v.price === undefined ? old.price : v.price, v.active, v.cost === undefined ? old.cost : v.cost, v.maxDiscount === undefined ? old.max_discount : v.maxDiscount, v.weightKg === undefined ? old.weight_kg : v.weightKg, v.alertQty === undefined ? old.alert_qty : v.alertQty, v.feeGrid === undefined ? old.fee_grid : v.feeGrid, v.photo === undefined ? old.photo : v.photo, rememberOld(old.old_titles, old.title, v.title.trim(), true), rememberOld(old.old_skus, old.sku, vsku || old.sku, false)]);
       } else {
         vsku ||= await freeSku(tx, 'product_variants', `${sku}-${slug(v.title).slice(0, 12)}`);
         if (!ctx.session.isAdmin && v.maxDiscount != null) throw forbidden('Seul l’administrateur modifie la remise maximale');
-        await tx.query('INSERT INTO product_variants (product_id, title, sku, price, active, cost, max_discount, weight_kg, alert_qty, fee_grid, photo) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)', [productId, v.title.trim(), vsku, v.price ?? null, v.active, v.cost ?? null, v.maxDiscount ?? null, v.weightKg ?? null, v.alertQty ?? null, v.feeGrid ?? null, v.photo ?? null]);
+        await tx.query('INSERT INTO product_variants (product_id, title, sku, price, active, cost, max_discount, weight_kg, alert_qty, fee_grid, photo, title_ar) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)', [productId, v.title.trim(), vsku, v.price ?? null, v.active, v.cost ?? null, v.maxDiscount ?? null, v.weightKg ?? null, v.alertQty ?? null, v.feeGrid ?? null, v.photo ?? null, v.titleAr ?? '']);
       }
     }
     // Update per-depot thresholds only when a variant's minimum stock changes.
@@ -1133,7 +1136,9 @@ export const catalogProcs = {
     if (!p) throw notFound('Produit introuvable');
     // the product form also edits its sales guide (tab « Guide de vente »)
     const g = await readGuide(ctx.db, id);
-    return { ...p, guide: g?.guide ?? null, guideTr: g?.tr ?? {}, guideAt: g?.updatedAt ?? null, guideBy: g?.updatedBy ?? null };
+    // each variant's Arabic name for the landing pages
+    const ar = new Map<number, string>((await ctx.db.query('SELECT id, title_ar FROM product_variants WHERE product_id = $1', [id])).map((r: any) => [num(r.id), String(r.title_ar ?? '')]));
+    return { ...p, variants: p.variants.map((v) => ({ ...v, titleAr: ar.get(v.id) ?? '' })), guide: g?.guide ?? null, guideTr: g?.tr ?? {}, guideAt: g?.updatedAt ?? null, guideBy: g?.updatedBy ?? null };
   }),
 
   /** Names of the delivery price grids (product form, "Grille de prix de livraison"). */

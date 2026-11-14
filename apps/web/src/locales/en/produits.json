@@ -553,7 +553,9 @@
     "removeAsk": "Delete « {{name}} » for good? Only if the product was never used (no order, no stock).",
     "removed": "Product deleted",
     "hasBatches": "Has lots (expiry date)",
-    "hasBatchesHint": "Its purchases say each lot and its expiry date; stock leaves from the lot that expires first."
+    "hasBatchesHint": "Its purchases say each lot and its expiry date; stock leaves from the lot that expires first.",
+    "titleAr": "Arabic name (page)",
+    "titleArHint": "The name the customer sees in the landing page's colour list. Empty: Pilotix translates the colours by itself (Rose → وردي)."
   },
   "landing": {
     "none": "No landing page",
