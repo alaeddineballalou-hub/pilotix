@@ -186,6 +186,7 @@ export const PROC_RIGHTS: Record<string, Need> = {
   'sav.settle': 'act:sav.settle',
   // Produits & stock
   'catalog.saveProduct': 'act:stock.products',
+  'catalog.saveMontage': 'act:stock.products',
   'catalog.importProducts': 'act:stock.products',
   'catalog.setAvailability': 'act:stock.products',
   'photos.add': 'act:stock.products',

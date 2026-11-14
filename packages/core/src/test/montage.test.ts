@@ -35,6 +35,7 @@ test('montage: one shared service, priced from the product, only in its wilayas'
   const depot = await as(EMAILS.depot);
   const conf = await as(EMAILS.admin); // samira only sees the products given to her
   const agent = await as(EMAILS.conf);
+  await call('catalog.saveMontage', depot, { wilayas: [] }); // the demo's list: every wilaya here
   const p: any = await call('catalog.saveProduct', depot, { name: 'Armoire 3 portes', price: 40000, montage: { price: 2000, cost: 800, wilayas: [16, 9] } });
   const q: any = await call('catalog.saveProduct', depot, { name: 'Commode', price: 20000, montage: { price: 1000, cost: 300, wilayas: null } });
   assert.deepEqual(p.montage, { price: 2000, cost: 800, wilayas: [9, 16] });
