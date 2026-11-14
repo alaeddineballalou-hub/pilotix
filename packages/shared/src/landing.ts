@@ -611,7 +611,18 @@ ${head}<meta name="theme-color" content="${c}"><style>${GROUP_CSS(c)}</style></h
 /** a product's photos as its pages follow them: its main photo, each variant's (off ones too: their photos leave the page) */
 export interface ProductPhotoSet {
   photo: string | null;
-  variants: { id: number; photo: string | null; active: boolean; title?: string }[];
+  /** the product's first HD photo (Photos HD, for the whole product): sharper, used before the small photo */
+  hd?: ProductHd | null;
+  variants: { id: number; photo: string | null; active: boolean; title?: string; hd?: ProductHd | null }[];
+}
+
+/** an HD photo as pages use it: its light copies are made by the server (/lp/hd/<id>/<width>-<tag>.webp); thumb: its 320 px copy */
+export interface ProductHd {
+  id: number;
+  tag: string;
+  thumb: string;
+  w: number;
+  h: number;
 }
 
 /**
@@ -632,7 +643,10 @@ const photoOk = (u: string | null | undefined): u is string => !!u && /^(https?:
  * poster on the page does not get its product photo as well. 12 at most.
  * Returns the own photos kept (their index in `own`) and the product photos to add after them.
  */
-export function followProduct(own: { url?: string | null; id?: number | null; v?: number | null }[], p: ProductPhotoSet): { keep: number[]; add: { url: string; v: number | null; key: string }[] } {
+export function followProduct(
+  own: { url?: string | null; id?: number | null; v?: number | null }[],
+  p: ProductPhotoSet,
+): { keep: number[]; add: { url: string; v: number | null; key: string; hd?: ProductHd }[] } {
   const on = new Set(p.variants.filter((v) => v.active && (v.title === undefined || v.title.trim() !== '')).map((v) => v.id));
   const keep: number[] = [];
   own.forEach((x, i) => {
@@ -641,21 +655,24 @@ export function followProduct(own: { url?: string | null; id?: number | null; v?
     keep.push(i);
   });
   const has = new Set(keep.map((i) => own[i].url).filter(Boolean));
-  const add: { url: string; v: number | null; key: string }[] = [];
-  if (photoOk(p.photo) && !has.has(p.photo)) {
-    add.push({ url: p.photo, v: null, key: 'm' });
-    has.add(p.photo);
-  }
-  for (const v of p.variants) {
-    if (!on.has(v.id) || !photoOk(v.photo) || keep.some((i) => own[i].v === v.id)) continue;
-    const dup = add.find((a) => a.url === v.photo);
+  const add: { url: string; v: number | null; key: string; hd?: ProductHd }[] = [];
+  // the HD photo when there is one (sharp), else the small one; `url` is what the editor shows (the HD's 320 px copy)
+  const pick = (photo: string | null, hd: ProductHd | null | undefined, v: number | null, key: string) => {
+    const url = hd ? hd.thumb : photo;
+    if (!photoOk(url)) return;
+    const dup = add.find((a) => a.url === url || (!!hd && a.hd?.id === hd.id));
     if (dup) {
-      dup.v ??= v.id;
-      continue;
+      if (v !== null) dup.v ??= v;
+      return;
     }
-    if (has.has(v.photo)) continue;
-    add.push({ url: v.photo, v: v.id, key: `v${v.id}` });
-    has.add(v.photo);
+    if (has.has(url) || (!hd && photo && has.has(photo))) return;
+    add.push({ url, v, key, ...(hd ? { hd } : {}) });
+    has.add(url);
+  };
+  pick(p.photo, p.hd, null, 'm');
+  for (const v of p.variants) {
+    if (!on.has(v.id) || keep.some((i) => own[i].v === v.id)) continue;
+    pick(v.photo, v.hd, v.id, `v${v.id}`);
   }
   const room = Math.max(0, 12 - keep.length);
   return { keep: keep.slice(0, 12), add: add.slice(0, room) };

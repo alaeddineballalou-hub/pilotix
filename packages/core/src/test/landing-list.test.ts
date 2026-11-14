@@ -185,6 +185,32 @@ test('pages follow their product: its photo, a new variant photo, an off variant
   // the preview (no server address): the photos themselves
   const pv = ((await call('landing.html', admin, { slug: String(pg.slug), mode: 'preview', post: '/o', geo: '/g/', lead: '/l', imgBase: null })) as any).html as string;
   assert.ok(pv.includes(png(4)));
+  // HD photos (Produits › Photos HD): the product's own and colour a's are used before the small photos, by the server's light copies
+  const thumb = (n: number) => `data:image/jpeg;base64,${Buffer.from(`thumb-${n}`).toString('base64')}`;
+  const hdMain = Number((await db.query(`INSERT INTO product_photos (product_id, variant_id, kind, store, data, w, h, bytes, thumb, position) VALUES ($1, NULL, 'photo', 'local', 'AAAA', 2000, 2500, 3, $2, 0) RETURNING id`, [pid, thumb(1)]))[0].id);
+  const hdA = Number((await db.query(`INSERT INTO product_photos (product_id, variant_id, kind, store, data, w, h, bytes, thumb, position) VALUES ($1, $2, 'photo', 'local', 'AAAA', 2000, 2000, 3, $3, 1) RETURNING id`, [pid, a, thumb(2)]))[0].id);
+  h = await live();
+  assert.doesNotMatch(h, new RegExp(`/api/lp/pp/${pid}/(m|v${a})-`), 'the small photos give way to the HD ones');
+  const tagOf = (id: number) => h.match(new RegExp(`/api/lp/hd/${id}/720-([a-z0-9]+)\\.webp`))?.[1];
+  assert.ok(tagOf(hdMain) && tagOf(hdA));
+  assert.match(h, new RegExp(`/api/lp/hd/${hdA}/480-[a-z0-9]+\\.webp 480w, /api/lp/hd/${hdA}/720-[a-z0-9]+\\.webp 720w, /api/lp/hd/${hdA}/960-[a-z0-9]+\\.webp 960w`));
+  assert.ok(h.indexOf('https://cdn.example/poster.jpg') < h.indexOf(`/api/lp/hd/${hdMain}/`), 'own poster still first');
+  // the copies: without a server (here) the 320 px copy; a wrong tag or width: nothing
+  assert.deepEqual(await call('landing.hdPhoto', admin, { id: hdA, w: 720, tag: tagOf(hdA)! }), { type: 'image/jpeg', base64: Buffer.from('thumb-2').toString('base64') });
+  assert.equal(await call('landing.hdPhoto', admin, { id: hdA, w: 720, tag: 'wrong' }), null);
+  await assert.rejects(() => call('landing.hdPhoto', admin, { id: hdA, w: 300, tag: tagOf(hdA)! }));
+  // the editor gets the same photos (HD included)
+  const cx: any = await call('landing.context', admin, { productId: pid });
+  assert.equal(cx.photos.hd.id, hdMain);
+  assert.equal(cx.photos.variants.find((v: any) => v.id === a).hd.id, hdA);
+  // colour a off: its HD photo leaves too
+  await db.query('UPDATE product_variants SET active = false WHERE id = $1', [a]);
+  assert.doesNotMatch(await live(), new RegExp(`/api/lp/hd/${hdA}/`));
+  await db.query('UPDATE product_variants SET active = true WHERE id = $1', [a]);
+  // an HD photo removed: back to the small photo
+  await db.query('DELETE FROM product_photos WHERE id = $1', [hdA]);
+  assert.match(await live(), new RegExp(`/api/lp/pp/${pid}/v${a}-`));
+
   // the list's picture and a group's: the page's first photo (its poster)
   const row: any = (await call('landing.list', admin, {}) as any[]).find((x: any) => x.id === Number(pg.id));
   assert.equal(row.thumb, 'https://cdn.example/poster.jpg');

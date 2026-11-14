@@ -39,7 +39,7 @@ export function Photos({
   onBusy: (n: number) => void;
   product?: ProductPhotos | null;
   /** the product's live photos the page shows after its own ones (they follow the product by themselves) */
-  auto?: { url: string; v: number | null }[];
+  auto?: { url: string; v: number | null; hd?: unknown }[];
 }) {
   const { t } = useTranslation();
   const [preset, setPreset] = useState<Preset>(presetOf);
@@ -271,6 +271,7 @@ export function Photos({
               <figure key={a.url} className="lp-img lp-img-auto">
                 <img src={a.url} alt="" />
                 <span className="chip">{a.v ? (vars.find((v) => v.id === a.v)?.title ?? '') : t('landing.ph.autoMain')}</span>
+                {!!a.hd && <span className="chip lp-hd">HD</span>}
               </figure>
             ))}
           </div>

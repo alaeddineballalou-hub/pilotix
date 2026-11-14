@@ -65,7 +65,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
   const products = useRpc('landing.products', {});
   const ctx = useRpc('landing.context', { productId: d.productId }, { enabled: !!d.productId });
   // the product's photos the page follows (its ON variants only: an off one's photos leave the page)
-  const photoSet = useMemo<ProductPhotoSet | null>(() => (ctx.data ? { photo: ctx.data.photo, variants: ctx.data.variants.map((v) => ({ id: v.id, photo: v.photo, active: true })) } : null), [ctx.data]);
+  const photoSet = useMemo<ProductPhotoSet | null>(() => (ctx.data ? ctx.data.photos : null), [ctx.data]);
   // copies the page kept of the product's photos: dropped once (the live ones replace them), without counting as a change
   const cleaned = useRef(false);
   useEffect(() => {

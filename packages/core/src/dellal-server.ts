@@ -754,6 +754,7 @@ export async function runDellal(action: string, args: unknown, ctx: Ctx): Promis
   if (action === 'media') return readMedia(ctx, args as MediaArgs);
   if (action === 'photos') return sendPhotos(ctx, args as PhotosArgs);
   if (action === 'photoLinks') return photoLinks(ctx, args as { photos: PhotosArgs['photos'] });
+  if (action === 'landingHd') return landingHd(ctx, args as { key: string | null; data: string | null; width: number });
   if (action === 'catchUp') return catchUpMeta(args as CatchUpArgs);
   if (action === 'igLogin') return igLogin(String((args as any)?.token ?? ''), (args as any)?.igId ? String((args as any).igId) : null);
   if (action === 'igRefresh') return igRefresh(String((args as any)?.token ?? ''));
@@ -1436,6 +1437,34 @@ async function photoLinks(ctx: Ctx, a: { photos: PhotosArgs['photos'] }): Promis
     }
   }
   return { urls, errors };
+}
+
+/**
+ * Landing pages: a light copy of an HD photo (WebP, at most `width` px wide, turned the right way up), from the bucket
+ * (key) or from the shop's database (data, base64). null: sharp is missing, or the photo cannot be read.
+ */
+async function landingHd(ctx: Ctx, a: { key: string | null; data: string | null; width: number }): Promise<{ base64: string } | null> {
+  const s = sharp();
+  if (!s || ![160, 480, 720, 960].includes(Number(a?.width))) return null;
+  let bytes: Buffer;
+  if (a.data) bytes = Buffer.from(String(a.data), 'base64');
+  else if (a.key) {
+    const bucket = ctx.t ? await readStore(ctx.t.platform).catch(() => null) : null;
+    if (!bucket) return null;
+    const got = await fetchBytes(await presign(bucket, 'GET', String(a.key), 600), {}, 12_000_000);
+    if ('error' in got) return null;
+    bytes = got.bytes;
+  } else return null;
+  try {
+    const out: Buffer = await s(bytes, { failOn: 'none', limitInputPixels: 80_000_000 })
+      .rotate()
+      .resize({ width: Number(a.width), withoutEnlargement: true })
+      .webp({ quality: Number(a.width) <= 160 ? 70 : 78, effort: 4 })
+      .toBuffer();
+    return { base64: out.toString('base64') };
+  } catch {
+    return null;
+  }
 }
 
 /** the moment the words wait after the photos (0 in the tests) */

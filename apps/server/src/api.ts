@@ -1532,6 +1532,26 @@ class ApiController {
   }
 
   /**
+   * An HD product photo on the landing pages: /lp/hd/<photo>/<160|480|720|960>-<tag>.webp, a light copy the server makes
+   * the first time and keeps. A photo never changes under its address (a new photo is a new one): cached a year.
+   */
+  @Public()
+  @Get(['lp/hd/:id/:file', 's/:shop/lp/hd/:id/:file'])
+  async landingHdPhoto(@Param('shop') shop: string | undefined, @Param('id') idp: string, @Param('file') file: string, @Res() res: any) {
+    const m = file.match(/^(160|480|720|960)-([a-z0-9]{1,12})\.webp$/);
+    if (!/^\d{1,12}$/.test(idp) || !m) return res.status(404).send();
+    try {
+      const ref = intake(await this.publicShop(shop));
+      const r: any = await this.core.call(ref, 'landing.hdPhoto', await this.core.systemSession(ref), { id: Number(idp), w: Number(m[1]), tag: m[2] });
+      if (!r) return res.status(404).send();
+      const cache = r.type === 'image/webp' ? 'public, max-age=31536000, immutable' : 'public, max-age=300';
+      return res.status(200).header('Content-Type', r.type).header('Cache-Control', cache).send(Buffer.from(r.base64, 'base64'));
+    } catch {
+      return res.status(404).send();
+    }
+  }
+
+  /**
    * A product's photo on its landing pages: /lp/pp/<product>/<m|v<variant>>-<version>.<ext> (m: its main photo, v: a
    * variant's). The version changes with the photo, so browsers keep it a year.
    */

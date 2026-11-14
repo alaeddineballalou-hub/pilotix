@@ -34,6 +34,7 @@ import {
   zeroBits,
   followProduct,
   photoVersion,
+  ProductHd,
   ProductPhotoSet,
 } from '@pilotix/shared';
 import { z } from 'zod';
@@ -129,7 +130,7 @@ export interface LandingImageRow {
 }
 
 /** a page's photo; v: the variant (colour) it shows, so picking that colour brings it to the top */
-export type ImgRef = ({ id: number } | { url: string; w: number; h: number }) & { v?: number | null };
+export type ImgRef = ({ id: number } | { url: string; w: number; h: number; srcset?: string; thumb?: string }) & { v?: number | null };
 
 export const readImgs = (v: unknown): ImgRef[] => {
   const a = typeof v === 'string' ? JSON.parse(v) : v;
@@ -350,10 +351,23 @@ export async function productPhotoSets(db: Db, productIds: number[]): Promise<Ma
   const out = new Map<number, ProductPhotoSet>();
   if (!ids.length) return out;
   for (const r of await db.query('SELECT id, photo FROM products WHERE id = ANY($1)', [ids])) out.set(num(r.id), { photo: r.photo ?? null, variants: [] });
+  // each one's first HD photo (Photos HD): the product's own (no variant), and each variant's
+  const hd = new Map<string, ProductHd>();
+  const hds = await db.query(`SELECT id, product_id, variant_id, key, w, h, thumb FROM product_photos WHERE product_id = ANY($1) AND kind = 'photo' ORDER BY position, id`, [ids]).catch(() => []);
+  for (const r of hds) {
+    const k = `${r.product_id}:${r.variant_id ?? ''}`;
+    if (!hd.has(k) && r.thumb) hd.set(k, { id: num(r.id), tag: hdTag(r), thumb: String(r.thumb), w: num(r.w) || 960, h: num(r.h) || 1200 });
+  }
+  for (const [pid, set] of out) set.hd = hd.get(`${pid}:`) ?? null;
   for (const v of await db.query('SELECT id, product_id, title, photo, active FROM product_variants WHERE product_id = ANY($1) ORDER BY id', [ids]))
-    out.get(num(v.product_id))?.variants.push({ id: num(v.id), photo: v.photo ?? null, active: !!v.active, title: String(v.title ?? '') });
+    out.get(num(v.product_id))?.variants.push({ id: num(v.id), photo: v.photo ?? null, active: !!v.active, title: String(v.title ?? ''), hd: hd.get(`${v.product_id}:${v.id}`) ?? null });
   return out;
 }
+
+/** an HD photo's tag in its address: from its file's random name (or its small copy), so addresses cannot be guessed */
+const hdTag = (r: { key?: unknown; thumb?: unknown }) => photoVersion(String(r.key || r.thumb || '')).slice(0, 12);
+/** the widths the server makes of an HD photo for the pages */
+export const HD_WIDTHS = [160, 480, 720, 960] as const;
 
 /**
  * A page's photos as customers see them: its own ones, then its product's live photos (followProduct). On the server a
@@ -365,6 +379,12 @@ export function followedRefs(refs: ImgRef[], productId: number, set: ProductPhot
   const f = followProduct(refs.map((r) => ('url' in r ? { url: r.url, v: r.v ?? null } : { id: r.id, v: r.v ?? null })), set);
   const base = imgBase && /\/img\/$/.test(imgBase) ? imgBase.slice(0, -'img/'.length) : null;
   const live = f.add.map((a): ImgRef => {
+    // an HD photo: the server's light copies (the phone takes the width it needs)
+    if (a.hd && base) {
+      const at = (w: number) => `${base}hd/${a.hd!.id}/${w}-${a.hd!.tag}.webp`;
+      const h = Math.round((a.hd.h / Math.max(1, a.hd.w)) * 960);
+      return { url: at(720), w: 960, h, srcset: [480, 720, 960].map((w) => `${at(w)} ${w}w`).join(', '), thumb: at(160), v: a.v };
+    }
     const m = /^data:image\/(png|jpeg|webp|gif);base64,/.exec(a.url);
     const url = base && m ? `${base}pp/${productId}/${a.key}-${photoVersion(a.url)}.${m[1] === 'jpeg' ? 'jpg' : m[1]}` : a.url;
     return { url, w: 960, h: 1200, v: a.v };
@@ -383,7 +403,7 @@ export function viewImages(refs: ImgRef[], rows: Map<number, any>, imgBase: stri
   const out: LandingImage[] = [];
   for (const r of refs) {
     const v = r.v ? { v: r.v } : {};
-    if ('url' in r) out.push({ src: r.url, srcset: `${r.url} ${r.w || 960}w`, thumb: r.url, w: r.w || 960, h: r.h || 960, ...v });
+    if ('url' in r) out.push({ src: r.url, srcset: r.srcset ?? `${r.url} ${r.w || 960}w`, thumb: r.thumb ?? r.url, w: r.w || 960, h: r.h || 960, ...v });
     else {
       const x = rows.get(r.id);
       if (!x) continue;
@@ -1724,7 +1744,11 @@ export const landingProcs = {
   /** price, variants (own price, stock), delivery prices and shop name of a product (the editor's preview) */
   'landing.context': proc([...WHO], z.object({ productId: id }), async (ctx, { productId }) => {
     const pc = await productContext(ctx.db, productId);
-    return { name: pc.name, price: pc.price, photo: pc.photo, fixedPrice: pc.fixedPrice, variants: pc.variants, soldOut: pc.soldOut, fees: pc.fees, feeSets: pc.feeSets, variantFee: pc.variantFee, shopName: pc.shopName, shopLogo: pc.shopLogo, bits: LANDING_POW_BITS };
+    const set = (await productPhotoSets(ctx.db, [productId])).get(productId);
+    return {
+      // the product's photos the page follows (with their HD photo: the editor shows its 320 px copy)
+      photos: set ?? { photo: null, hd: null, variants: [] },
+      name: pc.name, price: pc.price, photo: pc.photo, fixedPrice: pc.fixedPrice, variants: pc.variants, soldOut: pc.soldOut, fees: pc.fees, feeSets: pc.feeSets, variantFee: pc.variantFee, shopName: pc.shopName, shopLogo: pc.shopLogo, bits: LANDING_POW_BITS };
   }),
 
   'landing.freeSlug': proc([...WHO], z.object({ name: z.string().max(200), sku: z.string().max(120).optional(), id: id.optional() }), async (ctx, i) => ({
@@ -2004,6 +2028,25 @@ export const landingProcs = {
   /** the store's part of the pages' address (site/<store>/<page>): for the links shown in Pilotix, and the server's check */
   // the store's part of the pages' address, and the address they live at (go.<domain> once it answers; '' in the demo)
   'landing.store': proc(null, z.object({}), async (ctx) => ({ store: await landingStore(ctx.db), pagesUrl: ctx.server?.pagesUrl?.() ?? '' })),
+
+  /**
+   * An HD photo's light copy for the pages (/lp/hd/<id>/<width>-<tag>.webp): made once by the server (WebP, at most that
+   * width) and kept; null: no such photo (or the tag is wrong).
+   */
+  'landing.hdPhoto': proc([], z.object({ id, w: z.number().int().refine((w) => (HD_WIDTHS as readonly number[]).includes(w)), tag: z.string().regex(/^[a-z0-9]{1,12}$/) }), async (ctx, i) => {
+    const r = (await ctx.db.query(`SELECT id, store, key, data, thumb FROM product_photos WHERE id = $1 AND kind = 'photo'`, [i.id]))[0];
+    if (!r || hdTag(r) !== i.tag) return null;
+    const have = (await ctx.db.query('SELECT webp FROM landing_hd WHERE photo_id = $1 AND width = $2', [i.id, i.w]))[0];
+    if (have) return { type: 'image/webp', base64: String(have.webp) };
+    const made: any = ctx.server?.dellal ? await ctx.server.dellal('landingHd', { key: r.store === 'r2' ? r.key : null, data: r.store === 'local' ? r.data : null, width: i.w }, ctx).catch(() => null) : null;
+    if (!made?.base64) {
+      // no server to make it (the browser preview): its 320 px copy
+      const t = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(String(r.thumb ?? ''));
+      return t ? { type: t[1], base64: t[2] } : null;
+    }
+    await ctx.db.query('INSERT INTO landing_hd (photo_id, width, webp) VALUES ($1, $2, $3) ON CONFLICT (photo_id, width) DO NOTHING', [i.id, i.w, made.base64]);
+    return { type: 'image/webp', base64: String(made.base64) };
+  }),
 
   /** a product's photo for its pages (/lp/pp/<product>/<m|v<id>>-<version>.<ext>); null: none */
   'landing.productPhoto': proc([], z.object({ productId: id, key: z.string().regex(/^(m|v\d{1,12})$/) }), async (ctx, i) => productPhotoFile(ctx.db, i.productId, i.key)),
