@@ -109,7 +109,7 @@ const ClientReports = z.object({
   items: z
     .array(
       z.object({
-        kind: z.enum(['error', 'loop', 'slow']),
+        kind: z.enum(['error', 'loop', 'slow', 'cut']),
         page: z.string().max(40),
         message: z.string().min(1).max(300),
         device: z.enum(['phone', 'computer']),
@@ -691,8 +691,8 @@ class ApiController {
     if (!items.success) throw new core.AppError('bad_request', 'Rapport illisible');
     const role = (req.session.roles ?? []).join('+') || '—';
     for (const r of items.data.items) {
-      const what = r.kind === 'loop' ? 'Boucle' : r.kind === 'slow' ? 'Lent' : 'Erreur';
-      doctorState.record(r.kind === 'slow' ? 'warn' : 'error', `Navigateur · ${r.page}`, `[${req.shop.shop.slug}] ${what} : ${r.message} (${role}, ${r.device === 'phone' ? 'téléphone' : 'ordinateur'})`);
+      const what = r.kind === 'loop' ? 'Boucle' : r.kind === 'slow' ? 'Lent' : r.kind === 'cut' ? 'Coupure' : 'Erreur';
+      doctorState.record(r.kind === 'slow' || r.kind === 'cut' ? 'warn' : 'error', r.kind === 'cut' ? 'Navigateur · coupures' : `Navigateur · ${r.page}`, `[${req.shop.shop.slug}] ${what} : ${r.message} (${role}, ${r.device === 'phone' ? 'téléphone' : 'ordinateur'})`);
     }
     return { ok: true };
   }

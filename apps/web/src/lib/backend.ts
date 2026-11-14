@@ -1,4 +1,4 @@
-import { noteCall, type ClientReport } from './watch';
+import { noteCall, noteNetFail, noteNetOk, type ClientReport } from './watch';
 import type { REGISTRY } from '@pilotix/core';
 import { withRobotCheck } from './robot';
 import type { Session, AppInfo } from '@pilotix/shared';
@@ -266,8 +266,12 @@ class RemoteBackend implements Backend {
         body: body === undefined ? undefined : JSON.stringify(body),
       });
     } catch {
+      noteNetFail('rien ne répondait', `${base}/api/health`);
       throw new ApiError(0, 'Serveur injoignable. Vérifiez votre connexion.');
     }
+    // Cloudflare answered but could not reach the server (520-526): a cut too; any other answer means it is back
+    if (res.status >= 520 && res.status <= 526) noteNetFail(`Cloudflare ne joignait pas le serveur (${res.status})`, `${base}/api/health`);
+    else noteNetOk();
     const data = await res.json().catch(() => undefined);
     // after a password change the server hands this session a fresh token (the old ones stop working in every store)
     if (res.ok && path === '/rpc/me.password' && typeof (data as any)?.token === 'string') this.keep((data as any).token);
