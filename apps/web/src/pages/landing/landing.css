@@ -45,6 +45,18 @@
 .lp-sw-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
 .lp-sw-pick .bji { width: 15px; height: 15px; filter: drop-shadow(0 0 2px #0008); pointer-events: none; }
 .lp-colors code { color: var(--muted); font-size: 12.5px; }
+/* « Titre affiché » and its « Écrire avec l'IA » button (one title per click), then the note with « Revenir à avant » */
+.lp-ttl-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.lp-ttl-top .lab { min-width: 0; }
+.btn.small.lp-ttl-ai { gap: 6px; font-weight: 700; white-space: nowrap; }
+.lp-ttl-ai .bji { width: 15px; height: 15px; }
+.lp-ttl-note { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px 10px; padding: 8px 11px; border: 1px solid var(--butter-deep); border-radius: 10px; background: var(--butter); color: var(--ink); font-size: 12.5px; line-height: 1.4; }
+.lp-ttl-note .bji { width: 15px; height: 15px; flex: none; }
+.lp-ttl-note .linkish { font-size: 12.5px; white-space: nowrap; }
+@media (max-width: 640px) {
+  .lp-ttl-note { grid-template-columns: auto minmax(0, 1fr); }
+  .lp-ttl-note .linkish { grid-column: 2; justify-self: start; }
+}
 
 .lp-imgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
 .lp-img { position: relative; margin: 0; aspect-ratio: 4 / 5; border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--raise); }

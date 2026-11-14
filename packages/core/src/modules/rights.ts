@@ -273,6 +273,7 @@ export const PROC_RIGHTS: Record<string, Need> = {
   'mk.unpay': 'act:marketers.pay',
   'mk.price': 'act:marketers.pay',
   'landing.save': 'act:landing.edit',
+  'landing.aiTitle': 'act:landing.edit',
   'landing.remove': 'act:landing.edit',
   'landing.quickCreate': 'act:landing.edit',
   'landing.addImage': 'act:landing.edit',

@@ -2,7 +2,7 @@
 // by the very function the server uses, so what is seen here is what customers get.
 import { LandingPreview } from './Preview';
 import { followProduct, isProductCopy, LANDING_COLORS, LANDING_DEFAULT_COLOR, LandingView, ProductPhotoSet, renderLanding, WHATSAPP_DEFAULT, WHATSAPP_VARS } from '@pilotix/shared';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, Out, rpc, serverUrl, shopApi } from '../../lib/backend';
 import { da } from '../../lib/format';
@@ -99,6 +99,44 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
       live = false;
     };
   }, [d.productId, products.data]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // « Écrire avec l'IA » next to the title: one title per click. Claude writes 3 at once: the next clicks show the other
+  // two (for the same product and text), then Claude is asked again without the titles already shown.
+  const titleId = useId();
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiNext, setAiNext] = useState<{ key: string; titles: string[] }>({ key: '', titles: [] });
+  const [aiShown, setAiShown] = useState<string[]>([]);
+  /** the title before the AI's (« Revenir à avant »), and who wrote the one in the box */
+  const [aiUndo, setAiUndo] = useState<{ before: string; by: 'ai' | 'rules' } | null>(null);
+  useEffect(() => setAiShown([]), [d.productId]);
+  const num = (v: string) => (v === '' || !Number.isFinite(Number(v)) ? null : Math.max(0, Math.round(Number(v))));
+  const aiTitle = async () => {
+    if (!d.productId) return toast(t('landing.ed.aiNeedProduct'), 'bad');
+    const key = `${d.productId}|${d.description}`;
+    const before = aiUndo ? aiUndo.before : d.title;
+    const show = (title: string, by: 'ai' | 'rules') => {
+      set('title', title);
+      setAiShown((x) => [...x, title].slice(-12));
+      setAiUndo({ before, by });
+    };
+    const queued = aiNext.key === key ? aiNext.titles.find((x) => x !== d.title) : undefined;
+    if (queued) {
+      setAiNext((q) => ({ ...q, titles: q.titles.filter((x) => x !== queued) }));
+      return show(queued, aiUndo?.by ?? 'ai');
+    }
+    setAiBusy(true);
+    try {
+      const r = await rpc('landing.aiTitle', { productId: d.productId, title: d.title, description: d.description, price: num(d.price), oldPrice: num(d.oldPrice), avoid: aiShown.slice(-12) });
+      const [first, ...rest] = r.titles;
+      if (!first) throw new Error(t('common.error'));
+      setAiNext({ key, titles: rest });
+      show(first, r.by);
+    } catch (e) {
+      toast((e as Error).message, 'bad');
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   const submit = () => {
     if (!d.productId) return toast(t('landing.ed.pickProduct'), 'bad');
@@ -257,9 +295,44 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
                 <code className="ltr">{d.color}</code>
               </div>
             </Field>
-            <Field label={t('landing.ed.title')} hint={t('landing.ed.titleHint')}>
-              <input dir="auto" value={d.title} placeholder={prod?.name ?? ''} onChange={(e) => set('title', e.target.value)} />
-            </Field>
+            <div className="field lp-ttl">
+              <div className="lp-ttl-top">
+                <label className="lab" htmlFor={titleId}>
+                  {t('landing.ed.title')}
+                </label>
+                <button type="button" className="btn small lp-ttl-ai" disabled={aiBusy || !d.productId} onClick={aiTitle}>
+                  <Icon name="sparkles" /> {aiBusy ? t('landing.ed.aiBusy') : aiUndo ? t('landing.ed.aiAgain') : t('landing.ed.ai')}
+                </button>
+              </div>
+              <input
+                id={titleId}
+                dir="auto"
+                value={d.title}
+                placeholder={prod?.name ?? ''}
+                onChange={(e) => {
+                  set('title', e.target.value);
+                  setAiUndo(null);
+                }}
+              />
+              {aiUndo ? (
+                <div className="lp-ttl-note" role="status">
+                  <Icon name="sparkles" />
+                  <span>{aiUndo.by === 'ai' ? t('landing.ed.aiDone') : t('landing.ed.aiRules')}</span>
+                  <button
+                    type="button"
+                    className="linkish"
+                    onClick={() => {
+                      set('title', aiUndo.before);
+                      setAiUndo(null);
+                    }}
+                  >
+                    {t('landing.ed.aiUndo')}
+                  </button>
+                </div>
+              ) : (
+                <span className="hint">{t('landing.ed.titleHint')}</span>
+              )}
+            </div>
             <div className="grid2">
               <Field label={t('landing.ed.price')} hint={ctx.data ? t('landing.ed.priceHint', { price: da(ctx.data.price) }) : undefined}>
                 <input type="number" min={0} step={50} value={d.price} placeholder={ctx.data ? String(ctx.data.price) : ''} onChange={(e) => set('price', e.target.value)} />

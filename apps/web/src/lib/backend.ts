@@ -567,8 +567,9 @@ class DemoBackend implements Backend {
         window.setTimeout(() => void this.withBoutiques(), 4000);
       }
     }
-    // Dellal, Pilot Comments and AI Spy answer with Claude when the preview is opened in Claude (see dellal-page-ai.ts)
-    const dellalAi = /^(dellal|cm|spy)\./.test(String(name)) ? await pageAi() : null;
+    // Dellal, Pilot Comments, AI Spy and the landing pages' AI title answer with Claude when the preview is opened in
+    // Claude (see dellal-page-ai.ts)
+    const dellalAi = /^(dellal|cm|spy)\.|^landing\.aiTitle$/.test(String(name)) ? await pageAi() : null;
     const base = { session: s, now: () => Date.now(), emit: (e: LiveEvent) => setTimeout(() => this.listeners.forEach((l) => l(e)), 0), ...(dellalAi ? { dellalAi } : {}) };
     // a partner's space: its own shop, and the seller chosen at the top of the page (its work runs in that store); a
     // store: « Toutes les boutiques », or an order of another of the owner's boutiques (boutiquework.ts)
