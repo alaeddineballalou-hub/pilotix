@@ -84,7 +84,9 @@ test('the demo week: posts out, one Instagram refused, planned ones, a draft', a
   assert.ok(out && out.photos.length === 2 && out.instagram.done && out.facebook.done);
   assert.ok(by('published').length >= 4 && by('published').some((p: any) => p.kind === 'story'));
   const failed = by('failed')[0];
-  assert.ok(failed.facebook.done && !failed.instagram.done && /instagram_content_publish/.test(failed.instagram.error));
+  assert.ok(failed.facebook.done && !failed.instagram.done && /télécharger la photo/.test(failed.instagram.error));
+  // the file it was, to find it again
+  assert.equal(failed.photos[0].name, 'IMG_2034.jpg');
   assert.equal(by('scheduled').filter((p: any) => p.kind === 'post').length, 4);
   assert.equal(by('scheduled').filter((p: any) => p.kind === 'story').length, 1);
   assert.equal(r.review.length, 1);
