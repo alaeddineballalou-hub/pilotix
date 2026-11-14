@@ -6,6 +6,7 @@ import { sealString } from '../secretbox';
 import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
+import { getSetting } from '../settings';
 
 export const PIXEL_PLATFORMS = ['meta', 'tiktok'] as const;
 export type PixelPlatform = (typeof PIXEL_PLATFORMS)[number];
@@ -112,8 +113,33 @@ const PixelInput = z.object({
   token: z.string().max(1000).nullable().default(''),
 });
 
+/** how often the pixel list asks Meta again by itself */
+const SYNC_EVERY_MS = 10 * 60_000;
+
 export const pixelProcs = {
   'landing.pixels': proc([...WHO], z.object({}), (ctx) => listPixels(ctx.db)),
+
+  /**
+   * « Récupérer depuis Meta »: the pixels of the ad accounts this boutique is connected to (Pilot AI › Comptes) join
+   * Réglages › Pixels. One already there is left as it is (its name, its token); none is ever removed, so they stay when
+   * Meta is disconnected. Without `force`, at most every 10 minutes (the pixel lists ask by themselves when they open).
+   */
+  'landing.pixelsSync': proc([...WHO], z.object({ force: z.boolean().default(false) }), async (ctx, i) => {
+    const meta = await getSetting(ctx.db, 'meta');
+    const acts = meta.adAccountIds?.length ? meta.adAccountIds : meta.adAccountId ? [meta.adAccountId] : [];
+    if (!ctx.server?.meta || !acts.length || !meta.hasToken) return { connected: false, found: 0, added: 0 };
+    const last = Date.parse(String((await ctx.db.query(`SELECT value FROM settings WHERE key = 'pixels_sync'`))[0]?.value?.at ?? '')) || 0;
+    if (!i.force && Date.now() - last < SYNC_EVERY_MS) return { connected: true, found: -1, added: 0 };
+    await ctx.db.query(`INSERT INTO settings (key, value) VALUES ('pixels_sync', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [JSON.stringify({ at: new Date().toISOString() })]);
+    const got = (await ctx.server.meta('pixels', {}, ctx)) as { id: string; name: string; account: string }[];
+    let added = 0;
+    for (const p of got) {
+      const r = await ctx.db.query(`INSERT INTO tracking_pixels (platform, name, pixel_id) VALUES ('meta', $1, $2) ON CONFLICT (platform, pixel_id) DO NOTHING RETURNING id`, [p.name || `Pixel ${p.id}`, p.id]);
+      if (r.length) added++;
+    }
+    if (added) ctx.emit({ type: 'settings' });
+    return { connected: true, found: new Set(got.map((p) => p.id)).size, added };
+  }),
 
   'landing.pixelSave': proc([...WHO], PixelInput, async (ctx: Ctx, i) => {
     const pixelId = i.platform === 'tiktok' ? i.pixelId.toUpperCase() : i.pixelId.replace(/\s/g, '');

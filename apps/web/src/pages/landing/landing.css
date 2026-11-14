@@ -417,3 +417,4 @@
 .lp-img-auto { opacity: 0.92; }
 .lp-img-off { background: var(--coral-soft); color: var(--coral); top: auto; bottom: 6px; }
 .lp-img-auto .lp-hd { top: auto; bottom: 6px; inset-inline-start: auto; inset-inline-end: 6px; background: var(--navy, #1b2a47); color: #fff; }
+.lp-px-sync { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }

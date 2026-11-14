@@ -626,7 +626,14 @@
     "noDefault": "Default (none)",
     "off": "No pixel",
     "legacy": "This page still uses the pixel {{id}} typed by hand: pick a pixel above to replace it.",
-    "choose": "Pick one or several pixels…"
+    "choose": "Pick one or several pixels…",
+    "sync": "Get from Meta",
+    "syncHelp": "The pixels of your connected Meta ad accounts (Pilot AI › Accounts) come here by themselves and stay, even if Meta is disconnected.",
+    "syncOff": "No Meta ad account connected to this boutique (Pilot AI › Accounts).",
+    "syncAdded_one": "{{count}} pixel added from Meta",
+    "syncAdded_other": "{{count}} pixels added from Meta",
+    "syncNone_one": "Up to date: {{count}} pixel found on Meta",
+    "syncNone_other": "Up to date: {{count}} pixels found on Meta"
   },
   "wa": {
     "title": "WhatsApp button (after the order)",

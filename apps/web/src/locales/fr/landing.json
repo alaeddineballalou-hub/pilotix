@@ -626,7 +626,14 @@
     "noDefault": "Par défaut (aucun)",
     "off": "Aucun pixel",
     "legacy": "Cette page utilise encore le pixel {{id}} tapé à la main : choisissez un pixel ci-dessus pour le remplacer.",
-    "choose": "Choisir un ou plusieurs pixels…"
+    "choose": "Choisir un ou plusieurs pixels…",
+    "sync": "Récupérer depuis Meta",
+    "syncHelp": "Les pixels de vos comptes pub Meta connectés (Pilot AI › Comptes) arrivent ici tout seuls et y restent, même si Meta est déconnecté.",
+    "syncOff": "Aucun compte pub Meta connecté à cette boutique (Pilot AI › Comptes).",
+    "syncAdded_one": "{{count}} pixel ajouté depuis Meta",
+    "syncAdded_other": "{{count}} pixels ajoutés depuis Meta",
+    "syncNone_one": "Déjà à jour : {{count}} pixel trouvé sur Meta",
+    "syncNone_other": "Déjà à jour : {{count}} pixels trouvés sur Meta"
   },
   "wa": {
     "title": "Bouton WhatsApp (après la commande)",

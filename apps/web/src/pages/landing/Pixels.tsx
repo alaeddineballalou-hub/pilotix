@@ -1,8 +1,8 @@
 // Landing pages › Réglages › Pixels: the shop's Meta and TikTok pixels, by name (each with its own token if wanted),
 // and the two menus a landing page or a group page uses to pick its Meta pixel and its TikTok pixel.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Out } from '../../lib/backend';
+import { Out, rpc } from '../../lib/backend';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { Field, Icon, Loading } from '../../ui/kit';
@@ -12,10 +12,43 @@ type Pixel = Out<'landing.pixels'>[number];
 type Platform = 'meta' | 'tiktok';
 const PLATFORMS: Platform[] = ['meta', 'tiktok'];
 
+/**
+ * The pixels of the ad accounts this boutique is connected to come by themselves (Meta, at most every 10 minutes): asked
+ * once when a pixel list opens; the list shows them as soon as they are in.
+ */
+function useMetaPixels(refetch: () => unknown) {
+  useEffect(() => {
+    let off = false;
+    rpc('landing.pixelsSync', {})
+      .then((r) => {
+        if (!off && r.added) refetch();
+      })
+      .catch(() => undefined);
+    return () => {
+      off = true;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
 /** The pixels of the shop (Réglages). */
 export function PixelsCard() {
   const { t } = useTranslation();
   const q = useRpc('landing.pixels', {});
+  useMetaPixels(q.refetch);
+  const [syncing, setSyncing] = useState(false);
+  const sync = async () => {
+    setSyncing(true);
+    try {
+      const r = await rpc('landing.pixelsSync', { force: true });
+      if (!r.connected) toast(t('landing.px.syncOff'), 'bad');
+      else toast(r.added ? t('landing.px.syncAdded', { count: r.added }) : t('landing.px.syncNone', { count: r.found }), 'ok');
+      if (r.added) q.refetch();
+    } catch (e) {
+      toast((e as Error).message, 'bad');
+    } finally {
+      setSyncing(false);
+    }
+  };
   const [edit, setEdit] = useState<{ platform: Platform; p: Pixel | null } | null>(null);
   return (
     <section className="card">
@@ -23,6 +56,12 @@ export function PixelsCard() {
         <Icon name="megaphone" /> {t('landing.px.title')}
       </h2>
       <p className="pd-note">{t('landing.px.help')}</p>
+      <p className="lp-px-sync">
+        <button type="button" className="btn small" disabled={syncing} onClick={sync}>
+          <Icon name="refresh" /> {t('landing.px.sync')}
+        </button>
+        <small className="muted">{t('landing.px.syncHelp')}</small>
+      </p>
       {q.isLoading && <Loading />}
       <div className="lp-px-cols">
         {PLATFORMS.map((pf) => {
@@ -142,6 +181,7 @@ export function PixelSelects({
 }) {
   const { t } = useTranslation();
   const q = useRpc('landing.pixels', {});
+  useMetaPixels(q.refetch);
   const list = q.data ?? [];
   const pick = (pf: Platform, v: number[] | null) => {
     const mine = list.filter((p) => p.platform === pf);

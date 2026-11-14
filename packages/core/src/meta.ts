@@ -455,6 +455,16 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
   if (action.startsWith('catalog')) return runCatalog(action, args, token, acts);
   if (action.startsWith('partner')) return runPartners(action, args, token, acts);
 
+  // the pixels of every connected ad account (Réglages › Pixels takes them in): one that cannot be read is skipped
+  if (action === 'pixels') {
+    const out: { id: string; name: string; account: string }[] = [];
+    for (const act of acts) {
+      const got = await all(`${act}/adspixels`, { fields: 'id,name', limit: '100' }, token, 5).catch(() => []);
+      for (const p of got) if (/^\d{5,20}$/.test(String(p?.id ?? ''))) out.push({ id: String(p.id), name: String(p.name ?? '').slice(0, 80), account: act.replace(/^act_/, '') });
+    }
+    return out;
+  }
+
   if (action === 'test') {
     const r = await graph(acts[0], { fields: 'name,currency,account_status' }, token);
     return { name: r.name as string, currency: r.currency as string };
