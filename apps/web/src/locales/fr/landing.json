@@ -633,7 +633,8 @@
     "syncAdded_one": "{{count}} pixel ajouté depuis Meta",
     "syncAdded_other": "{{count}} pixels ajoutés depuis Meta",
     "syncNone_one": "Déjà à jour : {{count}} pixel trouvé sur Meta",
-    "syncNone_other": "Déjà à jour : {{count}} pixels trouvés sur Meta"
+    "syncNone_other": "Déjà à jour : {{count}} pixels trouvés sur Meta",
+    "syncDefault": "« {{name}} » est maintenant le pixel Meta par défaut : les pages et groupes « Par défaut » l’utilisent."
   },
   "wa": {
     "title": "Bouton WhatsApp (après la commande)",

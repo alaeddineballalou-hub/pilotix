@@ -633,7 +633,8 @@
     "syncAdded_one": "{{count}} pixel added from Meta",
     "syncAdded_other": "{{count}} pixels added from Meta",
     "syncNone_one": "Up to date: {{count}} pixel found on Meta",
-    "syncNone_other": "Up to date: {{count}} pixels found on Meta"
+    "syncNone_other": "Up to date: {{count}} pixels found on Meta",
+    "syncDefault": "“{{name}}” is now the default Meta pixel: pages and groups set to “Default” use it."
   },
   "wa": {
     "title": "WhatsApp button (after the order)",

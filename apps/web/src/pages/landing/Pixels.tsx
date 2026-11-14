@@ -21,7 +21,7 @@ function useMetaPixels(refetch: () => unknown) {
     let off = false;
     rpc('landing.pixelsSync', {})
       .then((r) => {
-        if (!off && r.added) refetch();
+        if (!off && (r.added || r.madeDefault)) refetch();
       })
       .catch(() => undefined);
     return () => {
@@ -42,7 +42,8 @@ export function PixelsCard() {
       const r = await rpc('landing.pixelsSync', { force: true });
       if (!r.connected) toast(t('landing.px.syncOff'), 'bad');
       else toast(r.added ? t('landing.px.syncAdded', { count: r.added }) : t('landing.px.syncNone', { count: r.found }), 'ok');
-      if (r.added) q.refetch();
+      if (r.madeDefault) toast(t('landing.px.syncDefault', { name: r.madeDefault }), 'ok');
+      if (r.added || r.madeDefault) q.refetch();
     } catch (e) {
       toast((e as Error).message, 'bad');
     } finally {
