@@ -1,0 +1,74 @@
+# Pilotix watcher (owner's ask, 14 Nov 2026): every 5 minutes, from GitHub's computers (outside Algeria), test each
+# layer separately and write one line to watch/log.csv on the « watch » branch, so every cut has a time and a place:
+#   dns     pilotix.online still points to Cloudflare
+#   cf      Cloudflare answers by itself (/cdn-cgi/trace never touches the server)
+#   site    the site answers through Cloudflare (/healthz: Cloudflare → the server)
+#   server  the Contabo server is alive (its SSH door answers; nothing is logged in, nothing runs on it)
+# The server's address stays secret: only « ok » or « fail » is written.
+# GitHub may start a run a few minutes late or skip one when it is busy: a missing line is not a cut.
+name: Pilotix watcher
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Test every layer
+        id: t
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          when=$(TZ=Africa/Algiers date '+%Y-%m-%d %H:%M')
+          ips=$(getent ahostsv4 pilotix.online | awk '{print $1}' | sort -u | tr '\n' ' ')
+          case "$ips" in *104.*|*172.*) dns=ok ;; '') dns=fail ;; *) dns="other" ;; esac
+          if curl -fsS -m 15 https://pilotix.online/cdn-cgi/trace | grep -q '^h=pilotix.online'; then cf=ok; else cf=fail; fi
+          code=$(curl -s -o /dev/null -m 15 -w '%{http_code}' "https://pilotix.online/healthz?w=$(date +%s)") || true
+          secs=$(curl -s -o /dev/null -m 15 -w '%{time_total}' "https://pilotix.online/healthz?w2=$(date +%s)") || true
+          [ "$code" = 200 ] && site=ok || site="fail-$code"
+          host=${HOST#*@}; host=${host%%:*}
+          if [ -n "$host" ] && timeout 8 bash -c "</dev/tcp/$host/22" 2>/dev/null; then server=ok; else server=fail; fi
+          line="$when,$dns,$cf,$site,$server,${secs:-}"
+          echo "$line"
+          echo "line=$line" >> "$GITHUB_OUTPUT"
+          {
+            echo "| time (Algiers) | dns | cloudflare | site | server | site time (s) |"
+            echo "|---|---|---|---|---|---|"
+            echo "| ${line//,/ | } |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Write the line to the watch branch
+        env:
+          LINE: ${{ steps.t.outputs.line }}
+          REPO: ${{ github.repository }}
+          TOKEN: ${{ github.token }}
+        run: |
+          git config --global user.name pilotix-watch
+          git config --global user.email pilotix-watch@users.noreply.github.com
+          for try in 1 2 3; do
+            rm -rf w
+            if git clone -q --depth 1 --branch watch "https://x-access-token:$TOKEN@github.com/$REPO" w 2>/dev/null; then :; else
+              mkdir w && cd w && git init -q -b watch && git remote add origin "https://x-access-token:$TOKEN@github.com/$REPO" && cd ..
+            fi
+            cd w
+            mkdir -p watch
+            [ -f watch/log.csv ] || echo "time_algiers,dns,cloudflare,site,server,site_seconds" > watch/log.csv
+            echo "$LINE" >> watch/log.csv
+            git add watch/log.csv
+            git commit -qm "watch: $LINE"
+            if git push -q origin watch; then exit 0; fi
+            cd ..
+            sleep 5
+          done
+          echo "::warning::could not write the line (it is still in this run's summary)"
