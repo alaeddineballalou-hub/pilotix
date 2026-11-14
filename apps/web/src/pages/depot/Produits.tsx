@@ -78,6 +78,41 @@ const isOut = (r: StockRowT) => !isHidden(r) && r.available <= 0;
 /** pieces that came back broken, kept apart (never sold) */
 const isBroken = (r: StockRowT) => r.broken > 0;
 
+type StockSort = 'name' | 'value' | 'soon' | 'sleep';
+const STOCK_SORTS: StockSort[] = ['name', 'value', 'soon', 'sleep'];
+/** a product's line in « Stock »: what is left, what it is worth at the purchase price, what sold in 30 days, and how
+ *  long what is left lasts at that speed — « out » (nothing left), « sleep » (none sold in 30 days), « low » (2 weeks
+ *  or less), « ok » */
+function groupStats(productId: number, productName: string, rows: StockRowT[]) {
+  const sum = (fn: (r: StockRowT) => number) => rows.reduce((v, r) => v + fn(r), 0);
+  const available = sum((r) => r.available);
+  const sold30 = sum((r) => r.sold30 ?? 0);
+  const days = sold30 > 0 ? Math.floor(Math.max(0, available) / (sold30 / 30)) : null;
+  const state = available <= 0 ? 'out' : sold30 === 0 ? 'sleep' : (days ?? 0) <= 14 ? 'low' : 'ok';
+  return {
+    productId,
+    productName,
+    rows,
+    available,
+    reserved: sum((r) => r.reserved),
+    broken: sum((r) => r.broken),
+    value: sum((r) => Math.max(0, r.qty) * r.cost),
+    sold30,
+    days,
+    state,
+    hidden: rows.every(isHidden),
+  };
+}
+type GroupStats = ReturnType<typeof groupStats>;
+function sortGroups(gs: GroupStats[], sort: StockSort): GroupStats[] {
+  if (sort === 'value') return [...gs].sort((a, b) => b.value - a.value);
+  // runs out soonest: nothing left first, then the fewest days; never sold last
+  if (sort === 'soon') return [...gs].sort((a, b) => (a.state === 'out' ? -1 : a.days ?? 1e9) - (b.state === 'out' ? -1 : b.days ?? 1e9));
+  // money asleep: what did not sell in 30 days, worth the most first, then the rest by value
+  if (sort === 'sleep') return [...gs].sort((a, b) => Number(b.state === 'sleep') - Number(a.state === 'sleep') || b.value - a.value);
+  return gs;
+}
+
 function StockTab() {
   const { t } = useTranslation();
   const { depots, many } = useDepots();
@@ -86,12 +121,18 @@ function StockTab() {
   const [wh, setWh] = useState('');
   const [dlg, setDlg] = useState<Dialog>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [sort, setSort] = useState<StockSort>('name');
   const st = useRpc('catalog.stock', { withHidden: true });
+  const prods = useRpc('catalog.products', {});
+  const photoOf = useMemo(() => new Map((prods.data ?? []).map((p) => [p.id, p.photo])), [prods.data]);
   const inDepot = (st.data ?? []).filter((r) => !wh || r.warehouseId === Number(wh));
   const found = inDepot.filter((r) => !q.trim() || matches(q, nameOf(r), r.sku));
   const test: Record<StockFilter, (r: StockRowT) => boolean> = { all: isListed, low: isLow, out: isOut, hidden: isHidden, broken: isBroken };
   const list = found.filter(test[f]);
-  const groups = [...new Map(list.map((r) => [r.productId, r.productName])).entries()].map(([productId, productName]) => ({ productId, productName, rows: list.filter((r) => r.productId === productId) }));
+  const groups = sortGroups(
+    [...new Map(list.map((r) => [r.productId, r.productName])).entries()].map(([productId, productName]) => groupStats(productId, productName, list.filter((r) => r.productId === productId))),
+    sort,
+  );
   const sum = (fn: (r: StockRowT) => number) => inDepot.reduce((s, r) => s + fn(r), 0);
   const value = sum((r) => Math.max(0, r.qty) * r.cost);
   const pieces = sum((r) => Math.max(0, r.qty));
@@ -120,6 +161,16 @@ function StockTab() {
               ...(found.some(isBroken) || f === 'broken' ? [{ value: 'broken' as const, label: t('produits.stock.fBroken'), count: found.filter(isBroken).length, alert: true }] : []),
             ]}
           />
+          <label className="pd-sort">
+            <span>{t('produits.stock.sortBy')}</span>
+            <select value={sort} onChange={(e) => setSort(e.target.value as StockSort)}>
+              {STOCK_SORTS.map((x) => (
+                <option key={x} value={x}>
+                  {t(`produits.stock.sort_${x}`)}
+                </option>
+              ))}
+            </select>
+          </label>
         </Toolbar>
         {st.isLoading ? (
           <Loading />
@@ -129,26 +180,23 @@ function StockTab() {
           <Empty>{q.trim() ? t('produits.ui.noMatch') : t(`produits.stock.empty_${f}`)}</Empty>
         ) : (
           <div className="pd-list">
-            <div className={`pd-row pd-head pd-stock ${many ? 'many' : ''}`} aria-hidden="true">
+            <div className="pd-ghead" aria-hidden="true">
               <span>{t('produits.stock.product')}</span>
-              {many && <span>{t('produits.stock.depot')}</span>}
-              <span className="num">{t('produits.stock.inStock')}</span>
-              <span className="num">{t('produits.stock.reserved')}</span>
               <span className="num">{t('produits.stock.available')}</span>
-              <span className="num">{t('produits.stock.cost')}</span>
-              <span />
+              <span className="num">{t('produits.stock.value')}</span>
+              <span className="num">{t('produits.stock.sold30')}</span>
+              <span className="num">{t('produits.stock.lasts')}</span>
             </div>
             <div className="pd-rows">
               {groups.map((group) => (
                 <div key={group.productId}>
                   {(() => {
                     const open = expanded.has(group.productId);
-                    const total = (fn: (r: StockRowT) => number) => group.rows.reduce((v, r) => v + fn(r), 0);
-                    const broken = total((r) => r.broken);
+                    const photo = photoOf.get(group.productId);
                     return (
                       <button
                         type="button"
-                        className="pd-group"
+                        className={`pd-group pd-g2 ${group.hidden ? 'dim' : ''}`}
                         aria-expanded={open}
                         onClick={() =>
                           setExpanded((old) => {
@@ -158,28 +206,52 @@ function StockTab() {
                           })
                         }
                       >
-                        <Icon name="chevron" className={`pd-chev ${open ? 'open' : ''}`} />
-                        <b className="pd-gname">{group.productName}</b>
-                        <small className="pd-gcount">{t('produits.stock.groupVariants', { count: group.rows.length })}</small>
-                        <span className="pd-gsum">
-                          <span>
-                            <small>{t('produits.stock.inStock')}</small> <b className="ltr">{n(total((r) => r.qty))}</b>
+                        <span className="pd-gwho">
+                          <Icon name="chevron" className={`pd-chev ${open ? 'open' : ''}`} />
+                          <span className="pd-thumb">{photo ? <img src={photo} alt="" loading="lazy" /> : <Icon name="package" />}</span>
+                          <span className="pd-gtitle">
+                            <b className="pd-gname">{group.productName}</b>
+                            <small className="pd-gcount">
+                              {t('produits.stock.groupVariants', { count: group.rows.length })}
+                              {group.reserved > 0 && <> · {t('produits.stock.reservedN', { n: n(group.reserved) })}</>}
+                              {group.broken > 0 && <span className="bk"> · {t('produits.stock.brokenChip', { n: n(group.broken) })}</span>}
+                            </small>
                           </span>
-                          <span>
-                            <small>{t('produits.stock.reserved')}</small> <b className="ltr">{n(total((r) => r.reserved))}</b>
+                        </span>
+                        <span className={`pd-gq num ${group.state}`} data-l={t('produits.stock.available')}>
+                          <b className="ltr">{n(group.available)}</b>
+                        </span>
+                        <span className="pd-gv num" data-l={t('produits.stock.value')}>
+                          <span className="ltr">{da(group.value)}</span>
+                        </span>
+                        <span className="pd-gs num" data-l={t('produits.stock.sold30')}>
+                          <span className="ltr">{n(group.sold30)}</span>
+                        </span>
+                        <span className="pd-gd num">
+                          <span className={`pd-pill ${group.state}`}>
+                            {group.state === 'out'
+                              ? t('produits.stock.dOut')
+                              : group.state === 'sleep'
+                                ? t('produits.stock.dSleep')
+                                : (group.days ?? 0) <= 60
+                                  ? t('produits.stock.dDays', { n: group.days })
+                                  : t('produits.stock.dMonths', { n: Math.round((group.days ?? 0) / 30) })}
                           </span>
-                          <span>
-                            <small>{t('produits.stock.available')}</small> <b className="ltr">{n(total((r) => r.available))}</b>
-                          </span>
-                          {broken > 0 && (
-                            <span className="bk">
-                              <small>{t('produits.stock.fBroken')}</small> <b className="ltr">{n(broken)}</b>
-                            </span>
-                          )}
                         </span>
                       </button>
                     );
                   })()}
+                  {expanded.has(group.productId) && (
+                    <div className={`pd-row pd-head pd-stock pd-vhead ${many ? 'many' : ''}`} aria-hidden="true">
+                      <span>{t('produits.stock.variant')}</span>
+                      {many && <span>{t('produits.stock.depot')}</span>}
+                      <span className="num">{t('produits.stock.inStock')}</span>
+                      <span className="num">{t('produits.stock.reserved')}</span>
+                      <span className="num">{t('produits.stock.available')}</span>
+                      <span className="num">{t('produits.stock.cost')}</span>
+                      <span />
+                    </div>
+                  )}
                   {expanded.has(group.productId) && group.rows.map((r) => (
                 <div key={`${r.variantId}-${r.warehouseId}`} className={`pd-row pd-stock ${many ? 'many' : ''} ${isHidden(r) ? 'dim' : ''}`}>
                   <span className="pd-name">

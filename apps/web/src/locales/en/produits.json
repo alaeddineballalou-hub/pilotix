@@ -102,7 +102,21 @@
     "entryCostNeeded": "Type the purchase price of this stock entry.",
     "entryCostLast": "Required for every entry. Last price: {{cost}}.",
     "groupVariants_one": "{{count}} variant",
-    "groupVariants_other": "{{count}} variants"
+    "groupVariants_other": "{{count}} variants",
+    "sortBy": "Sort",
+    "sort_name": "Name",
+    "sort_value": "Value (highest)",
+    "sort_soon": "Runs out soonest",
+    "sort_sleep": "Money asleep",
+    "value": "Value",
+    "sold30": "Sold 30 d",
+    "lasts": "Lasts",
+    "dOut": "Out of stock",
+    "dSleep": "No sale in 30 d",
+    "dDays": "~{{n}} d",
+    "dMonths": "~{{n}} mo",
+    "reservedN": "{{n}} reserved",
+    "variant": "Variant"
   },
   "products": {
     "count_one": "{{count}} product",

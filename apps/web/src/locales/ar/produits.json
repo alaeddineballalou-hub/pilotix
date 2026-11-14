@@ -110,7 +110,21 @@
     "groupVariants_two": "متغيران",
     "groupVariants_few": "{{count}} متغيرات",
     "groupVariants_many": "{{count}} متغيرًا",
-    "groupVariants_other": "{{count}} متغير"
+    "groupVariants_other": "{{count}} متغير",
+    "sortBy": "ترتيب",
+    "sort_name": "الاسم",
+    "sort_value": "القيمة (الأعلى)",
+    "sort_soon": "ينفد قريبًا",
+    "sort_sleep": "أموال راكدة",
+    "value": "القيمة",
+    "sold30": "مبيع 30 يومًا",
+    "lasts": "المدة",
+    "dOut": "نفد",
+    "dSleep": "لا مبيع منذ 30 يومًا",
+    "dDays": "~{{n}} يوم",
+    "dMonths": "~{{n}} شهر",
+    "reservedN": "{{n}} محجوز",
+    "variant": "المتغير"
   },
   "products": {
     "count_zero": "لا منتج",

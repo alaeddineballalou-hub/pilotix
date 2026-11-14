@@ -437,6 +437,8 @@ export interface StockRow {
   cost: number;
   /** pieces that came back broken, kept apart (never sold): repaired → back on sale, or thrown away */
   broken: number;
+  /** pieces shipped to customers from this depot in the last 30 days (how fast it sells) */
+  sold30?: number;
 }
 
 export interface Complaint {

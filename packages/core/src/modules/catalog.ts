@@ -227,10 +227,23 @@ export async function stockRows(db: Db, f: z.infer<typeof StockInput>): Promise<
      ORDER BY lower(p.name), lower(v.title), v.id, wh.is_default DESC, wh.id LIMIT 5000`,
     w.params,
   );
+  // how fast each line sells: pieces shipped to customers in the last 30 days, from its depot (the default one when the
+  // order has none), as « Alertes » counts them
+  const vids = [...new Set(rows.map((r: any) => num(r.variant_id)))];
+  const sold = vids.length
+    ? await db.query(
+        `SELECT i.variant_id, COALESCE(o.warehouse_id, (SELECT id FROM warehouses WHERE active ORDER BY is_default DESC, id LIMIT 1)) AS wid, sum(i.qty)::int AS n
+         FROM order_items i JOIN orders o ON o.id = i.order_id
+         WHERE i.variant_id = ANY($1) AND o.shipped_at >= now() - interval '30 days' GROUP BY 1, 2`,
+        [vids],
+      )
+    : [];
+  const S = new Map(sold.map((r: any) => [`${num(r.variant_id)}-${num(r.wid)}`, num(r.n)]));
   return rows.map((r: any) => {
     const qty = num(r.qty);
     const reserved = num(r.reserved);
     return {
+      sold30: S.get(`${num(r.variant_id)}-${num(r.wid)}`) ?? 0,
       variantId: num(r.variant_id),
       productId: num(r.product_id),
       productName: r.name,

@@ -739,3 +739,43 @@ a.chip.lp-nolp:hover { text-decoration: underline; }
 .pd-agrp-t b { font-size: 15px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
 .pd-agrp-t small { font-size: 12.5px; font-weight: 600; color: var(--muted); }
 .pd-agrp-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; padding: 4px 6px 6px; }
+
+/* « Stock »: one line per product — photo, what is left, its value at the purchase price, what sold in 30 days and how
+   long it lasts (a table on a computer, a card with its numbers under the name on a phone). */
+.pd-ghead, .pd-group.pd-g2 { display: grid; grid-template-columns: minmax(0, 1fr) 90px 150px 100px 120px; align-items: center; gap: 12px; }
+.pd-ghead { padding: 9px 16px; color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: var(--raise); }
+.pd-ghead .num, .pd-g2 > .num { text-align: end; }
+.pd-gwho { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pd-gtitle { display: flex; flex-direction: column; min-width: 0; }
+.pd-gtitle .pd-gcount .bk { color: var(--coral); }
+.pd-thumb { flex: none; width: 40px; height: 40px; border-radius: 10px; overflow: hidden; background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); }
+.pd-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.pd-gq b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.pd-gq.out b { color: var(--coral); }
+.pd-gq.low b { color: #B7791F; }
+.pd-gv, .pd-gs { font-variant-numeric: tabular-nums; }
+.pd-pill { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.pd-pill.ok { background: #E3F5EC; color: #146C43; }
+.pd-pill.low { background: #FFF1D6; color: #8A5300; }
+.pd-pill.out { background: #FDE7E4; color: #B42318; }
+.pd-pill.sleep { background: #EEF0F4; color: #4B5563; }
+.pd-group.pd-g2.dim { opacity: .6; }
+.pd-g2 > .num[data-l]::before { display: none; content: attr(data-l); }
+.pd-vhead { border-top: 1px solid var(--line); }
+.pd-sort { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.pd-sort select { min-height: 38px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-weight: 600; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .pd-pill.ok { background: #12372A; color: #8FE0B8; }
+  :root:not([data-theme="light"]) .pd-pill.low { background: #3D2A08; color: #F5C46B; }
+  :root:not([data-theme="light"]) .pd-pill.out { background: #42150F; color: #F8A49A; }
+  :root:not([data-theme="light"]) .pd-pill.sleep { background: #263040; color: #B8C2D3; }
+}
+@media (max-width: 760px) {
+  .pd-ghead { display: none; }
+  .pd-group.pd-g2 { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 8px 10px; padding: 12px; }
+  .pd-g2 > .pd-gwho { grid-column: 1 / -1; }
+  .pd-g2 > .num { text-align: start; }
+  .pd-g2 > .num[data-l]::before { display: block; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+  .pd-g2 > .pd-gd { align-self: center; }
+  .pd-vhead { display: none; }
+}

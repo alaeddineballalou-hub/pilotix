@@ -102,7 +102,21 @@
     "entryCostNeeded": "Saisissez le prix d’achat de cette entrée de stock.",
     "entryCostLast": "Obligatoire à chaque entrée. Dernier prix : {{cost}}.",
     "groupVariants_one": "{{count}} variante",
-    "groupVariants_other": "{{count}} variantes"
+    "groupVariants_other": "{{count}} variantes",
+    "sortBy": "Trier",
+    "sort_name": "Nom",
+    "sort_value": "Valeur (la plus haute)",
+    "sort_soon": "Se termine bientôt",
+    "sort_sleep": "Argent qui dort",
+    "value": "Valeur",
+    "sold30": "Vendu 30 j",
+    "lasts": "Durée",
+    "dOut": "Rupture",
+    "dSleep": "Pas vendu 30 j",
+    "dDays": "~{{n}} j",
+    "dMonths": "~{{n}} mois",
+    "reservedN": "{{n}} réservé(s)",
+    "variant": "Variante"
   },
   "products": {
     "count_one": "{{count}} produit",
