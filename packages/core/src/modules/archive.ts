@@ -112,6 +112,8 @@ export const USER_REFS: readonly Ref[] = [
   ['pay_payments', 'paid_by', 'cash'],
   ['pay_payments', 'cancelled_by', 'cash'],
   ['profiles', 'created_by', 'history'],
+  // Pilot Checks: the change list of the owner's rules says who changed what
+  ['pilot_check_log', 'user_id', 'history'],
 ];
 
 /** Columns that point to a product (products.id). */
@@ -168,6 +170,8 @@ export const NOT_REFS: readonly string[] = [
   'password_resets.profile_id',
   'action_locks.user_id',
   'settings.updated_by',
+  // Pilot Checks: who last changed a rule (the change list keeps the history: pilot_check_log)
+  'pilot_checks.updated_by',
   'referrals.referrer_id',
   'product_variants.product_id',
   'product_changes.product_id',

@@ -17,6 +17,7 @@ import { prefsProcs } from './modules/prefs';
 import { confirmCheckProcs } from './modules/confirmcheck';
 import { noStockProcs } from './modules/nostock';
 import { automationsProcs } from './modules/automations';
+import { pilotChecksProcs } from './modules/pilotchecks';
 import { dispatchProcs } from './modules/dispatch';
 import { livreurProcs } from './modules/livreur';
 import { pilotProcs } from './modules/pilot';
@@ -116,6 +117,7 @@ export const REGISTRY = {
   ...confirmCheckProcs,
   ...noStockProcs,
   ...automationsProcs,
+  ...pilotChecksProcs,
   ...dispatchProcs,
   ...livreurProcs,
   ...pilotProcs,

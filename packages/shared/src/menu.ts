@@ -187,6 +187,8 @@ export const STORE_MENU: MenuItem[] = [
       { id: 'auto', href: '#/notify/auto', icon: 'zap', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['auto'] } },
       { id: 'assign', href: '#/notify/assign', icon: 'truck', roles: [], rules: true, plan: ['notify'], match: { page: 'notify', subs: ['assign'] } },
       { id: 'affectation', href: '#/notify/affectation', icon: 'users', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['affectation'] } },
+      // Pilot Checks: the owner's rules for the cases of the « Pilotix Judge » (offer, video, landing page, page trust, Meta, team)
+      { id: 'autochecks', href: '#/notify/checks', icon: 'shield', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['checks'] } },
       { id: 'automessages', href: '#/notify/messages', count: 'notify', tone: 'nc-a', icon: 'send', roles: ['suivi'], plan: ['notify'], match: { page: 'notify', subs: ['messages', 'cas', 'tester', 'resultats'] } },
       { id: 'autoreglages', href: '#/notify/reglages', icon: 'settings', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['reglages'] } },
     ],
@@ -256,9 +258,9 @@ export interface Space {
 export const SPACE_ALWAYS = ['accueil', 'aide'];
 export const SPACES: Space[] = [
   { id: 'marketing', icon: 'megaphone', items: ['marketing', 'createur', 'social', 'influenceurs', 'parrainage', 'codepromo'], counts: ['posts'] },
-  { id: 'sponsor', icon: 'trend', items: ['marketing', 'landing', 'spy'], counts: ['landing'] },
+  { id: 'sponsor', icon: 'trend', items: ['marketing', 'landing', 'spy', 'autochecks'], counts: ['landing'] },
   { id: 'cm', icon: 'chat', items: ['messages', 'cm', 'codepromo'], counts: ['msgs', 'cm'] },
-  { id: 'service', icon: 'phone', items: ['dashboard', 'confirmation', 'suivi', 'livrees', 'annulees', 'sav', 'auto', 'assign', 'affectation', 'automessages', 'autoreglages', 'clients', 'codepromo'], counts: ['conf', 'suivi', 'sav', 'notify'] },
+  { id: 'service', icon: 'phone', items: ['dashboard', 'confirmation', 'suivi', 'livrees', 'annulees', 'sav', 'auto', 'assign', 'affectation', 'autochecks', 'automessages', 'autoreglages', 'clients', 'codepromo'], counts: ['conf', 'suivi', 'sav', 'notify'] },
   { id: 'depot', icon: 'package', items: ['dashboard', 'depot', 'scanner', 'produits', 'pos', 'tournee', 'livreurs'], counts: ['depot', 'lowStock'] },
   { id: 'finance', icon: 'wallet', items: ['caisse', 'macaisse'], counts: [] },
   { id: 'admin', icon: 'usercog', items: ['utilisateurs', 'management', 'reglages', 'livraison', 'agences', 'marketers', 'comptes'], counts: [] },

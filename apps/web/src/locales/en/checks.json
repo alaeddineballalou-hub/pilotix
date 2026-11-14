@@ -1,0 +1,602 @@
+{
+  "title": "Pilot Checks",
+  "lead": "The cases of your table, one by one. You choose when it is bad, what to do, and which helper watches it.",
+  "step": {
+    "title": "Step 1: your rules",
+    "text": "Here you set the rules. Pilotix does not use them yet: it does not block, ring or judge with them. That comes in the next steps."
+  },
+  "level": {
+    "off": "Off",
+    "doctor": "Doctor",
+    "bell": "Bell",
+    "door": "Door"
+  },
+  "levelHelp": {
+    "off": "Pilotix does not look at this case.",
+    "doctor": "It happened: Pilotix names the case, with its numbers and what to do.",
+    "bell": "It rings early, before money is lost.",
+    "door": "The mistake can't happen: the button stays locked."
+  },
+  "cases_one": "{{count}} case",
+  "cases_other": "{{count}} cases",
+  "cases": "{{count}} cases",
+  "door": {
+    "price": "when a price or a cost is saved",
+    "ad": "when an ad is launched",
+    "page": "when a page is published",
+    "agent": "on the agent's screen"
+  },
+  "doorAt": "Its door: {{where}}",
+  "parts": {
+    "all": "All",
+    "offer": "Offer",
+    "video": "Video",
+    "landing": "Landing page",
+    "trust": "Page trust",
+    "meta": "Meta",
+    "team": "Team"
+  },
+  "data": {
+    "ready": "Pilotix has the data",
+    "reason": "A reason is missing in the agents' list",
+    "tags": "The videos have no tags yet",
+    "tick": "A person has to tick a list",
+    "none": "Pilotix does not have this data",
+    "unverified": "To check: does Pilotix keep this data?"
+  },
+  "dataGroup": {
+    "all": "All",
+    "ready": "Data is there",
+    "toAdd": "To add",
+    "unverified": "To check"
+  },
+  "dataSum": "Today Pilotix has the data for {{ready}} of the {{total}} cases. {{toAdd}} need something added, {{unverified}} are to check.",
+  "dataFilter": "Data",
+  "unit": {
+    "pct": "%",
+    "pts": "points",
+    "n": "",
+    "days": "days",
+    "pieces": "pieces",
+    "times": "times",
+    "of10": "out of 10",
+    "of3": "out of 3"
+  },
+  "when": {
+    "lt": {
+      "pct": "Under {{v}}%",
+      "n": "Under {{v}}",
+      "pieces": "Under {{v}} pieces per order",
+      "of10": "Under {{v}} out of 10",
+      "of3": "Under {{v}} out of 3"
+    },
+    "gt": {
+      "pct": "Over {{v}}%",
+      "days": "Over {{v}} days",
+      "times": "Over {{v}} times"
+    },
+    "gte": {
+      "n": "{{v}} or more"
+    },
+    "out": {
+      "pct": "Under {{v}}% or over {{v2}}%"
+    },
+    "gap": {
+      "pts": "Lower by {{v}} points or more"
+    }
+  },
+  "wait": {
+    "shown_one": "{{v}} time shown",
+    "shown_other": "{{v}} times shown",
+    "shown": "{{v}} times shown",
+    "views3s_one": "{{v}} view of 3 seconds",
+    "views3s_other": "{{v}} views of 3 seconds",
+    "views3s": "{{v}} views of 3 seconds",
+    "comments_one": "{{v}} comment",
+    "comments_other": "{{v}} comments",
+    "comments": "{{v}} comments",
+    "orders_one": "{{v}} order from this video",
+    "orders_other": "{{v}} orders from this video",
+    "orders": "{{v}} orders from this video",
+    "parcels_one": "{{v}} finished parcel from this video",
+    "parcels_other": "{{v}} finished parcels from this video",
+    "parcels": "{{v}} finished parcels from this video",
+    "weeks_one": "{{v}} week of life",
+    "weeks_other": "{{v}} weeks of life",
+    "weeks": "{{v}} weeks of life",
+    "days_one": "{{v}} full day with the bid cap on",
+    "days_other": "{{v}} full days with the bid cap on",
+    "days": "{{v}} full days with the bid cap on",
+    "videos_one": "{{v}} video with enough data",
+    "videos_other": "{{v}} videos with enough data",
+    "videos": "{{v}} videos with enough data",
+    "cancelled_one": "{{v}} cancelled order",
+    "cancelled_other": "{{v}} cancelled orders",
+    "cancelled": "{{v}} cancelled orders",
+    "unconfirmed_one": "{{v}} order not confirmed",
+    "unconfirmed_other": "{{v}} orders not confirmed",
+    "unconfirmed": "{{v}} orders not confirmed"
+  },
+  "waitUnit": {
+    "shown": "times shown",
+    "views3s": "views of 3 seconds",
+    "comments": "comments",
+    "orders": "orders from this video",
+    "parcels": "finished parcels from this video",
+    "weeks": "weeks of life",
+    "days": "full days with the bid cap on",
+    "videos": "videos with enough data",
+    "cancelled": "cancelled orders",
+    "unconfirmed": "orders not confirmed"
+  },
+  "f": {
+    "number": "The number",
+    "when": "Bad when",
+    "do": "What to do",
+    "also": "Also fix",
+    "wait": "Waits for {{what}} before judging"
+  },
+  "changed": "Changed by you",
+  "edit": "Edit",
+  "editOf": "Edit “{{name}}”",
+  "filterLevel": "Helper",
+  "search": "Search a case",
+  "none": "No case matches.",
+  "clear": "Show everything",
+  "ed": {
+    "limit": "Bad when",
+    "low": "Under",
+    "high": "Or over",
+    "fixed": "This case has no number to set.",
+    "start": "At the start: {{v}}",
+    "do": "What to do",
+    "also": "Other part to fix",
+    "own": "Empty: Pilotix's own words come back.",
+    "level": "Which helper watches it",
+    "noDoor": "This case has no door: no button can be locked for it.",
+    "wait": "Wait before judging (« en apprentissage »)",
+    "save": "Save",
+    "cancel": "Cancel",
+    "reset": "Back to the start",
+    "saved": "Saved",
+    "resetDone": "Back to the starting values",
+    "nothing": "Nothing changed",
+    "history": "Changes on this case",
+    "badNumber": "Type a number between {{min}} and {{max}}.",
+    "badOrder": "The first number must be smaller than the second.",
+    "badWait": "Type a whole number, 1 or more."
+  },
+  "log": {
+    "title": "Last changes",
+    "empty": "No change yet. Every change you make is kept here.",
+    "field": {
+      "v": "limit",
+      "v2": "high limit",
+      "level": "helper",
+      "wait": "wait",
+      "action": "what to do",
+      "other": "other part",
+      "reset": "back to the start"
+    },
+    "own": "Pilotix's words",
+    "line": "{{field}}: {{old}} → {{new}}",
+    "someone": "Someone"
+  },
+  "close": "Close",
+  "keyLabel": "The helpers",
+  "shownOf": "{{shown}} of {{total}} cases",
+  "head": {
+    "case": "Case"
+  },
+  "val": {
+    "pct": "{{v}}%",
+    "pts": "{{v}} points",
+    "n": "{{v}}",
+    "days": "{{v}} days",
+    "pieces": "{{v}} pieces",
+    "times": "{{v}} times",
+    "of10": "{{v}} out of 10",
+    "of3": "{{v}} out of 3"
+  },
+  "c": {
+    "O1": {
+      "name": "Nobody wants it",
+      "kpi": "Link clicks ÷ people who saw the ad, on each of 3 or more different videos (first 3 seconds normal)",
+      "tail": "on every one of the videos",
+      "do": "Stop the product. Test another one."
+    },
+    "O2": {
+      "name": "Bad quality",
+      "kpi": "Delivered orders with a complaint ÷ all delivered orders",
+      "do": "Change supplier, or stop the product."
+    },
+    "O3": {
+      "name": "Everyone already has it",
+      "kpi": "Orders this week ÷ orders last week (same ad spend)",
+      "tail": "for 3 weeks in a row, and a new video fails too",
+      "do": "New model or new version. Lower the budget.",
+      "also": "Video: a truly new angle"
+    },
+    "O4": {
+      "name": "Colour or size missing",
+      "kpi": "Cancelled orders with reason “Not my colour / size” ÷ all cancelled orders",
+      "do": "Add the asked colours and sizes."
+    },
+    "O5": {
+      "name": "Too expensive",
+      "kpi": "Cancelled orders with reason “Price too high” ÷ all cancelled orders",
+      "do": "Add value first (gift, pack). Lower the price only if profit stays.",
+      "also": "Page trust: show your values, so the price feels fair"
+    },
+    "O6": {
+      "name": "Delivery fee too high",
+      "kpi": "Cancelled orders with reason “Delivery fee too high” ÷ all cancelled orders",
+      "do": "Fix the delivery fee.",
+      "also": "Landing page: show the fee early"
+    },
+    "O7": {
+      "name": "Too cheap to be trusted",
+      "kpi": "Cancelled orders with reason “Is it fake?” ÷ all cancelled orders",
+      "do": "Show proof: real photos, reviews. Raise the price a little.",
+      "also": "Page trust: reviews and real photos"
+    },
+    "O8": {
+      "name": "No margin",
+      "kpi": "Profit after ads ÷ price",
+      "do": "Raise the price, find a cheaper supplier, or sell in packs.",
+      "also": "Video or Meta: if profit before ads is fine, the ads cost too much"
+    },
+    "O9": {
+      "name": "Your costs went up",
+      "kpi": "Cost of one piece this month ÷ cost of one piece last month",
+      "do": "Renegotiate, or raise the price by the same amount."
+    },
+    "O10": {
+      "name": "Same as everyone",
+      "kpi": "Cancelled orders with reason “Ordered elsewhere” ÷ all cancelled orders",
+      "do": "Add something they don't have: gift, guarantee, faster delivery.",
+      "also": "Page trust: awareness ads on your values"
+    },
+    "O11": {
+      "name": "No reason to buy now",
+      "kpi": "Orders with answer “I'll think about it” ÷ all orders not confirmed",
+      "do": "A real time limit: offer ends Friday, limited stock.",
+      "also": "Landing page: show the time limit"
+    },
+    "O12": {
+      "name": "Small basket",
+      "kpi": "Pieces sold ÷ number of orders",
+      "do": "Offer “2 for…”. The agent proposes a second piece.",
+      "also": "Team: the agent proposes a second piece"
+    },
+    "O13": {
+      "name": "The pack doesn't attract",
+      "kpi": "Orders that took a pack ÷ all orders",
+      "do": "Make the pack saving bigger and show it first.",
+      "also": "Landing page: show the pack first"
+    },
+    "O14": {
+      "name": "Fear, no guarantee",
+      "kpi": "Cancelled orders with reason “I'm afraid / I want to see first” ÷ all cancelled orders",
+      "do": "Say it clearly: open and check before paying, exchange possible.",
+      "also": "Page trust and landing page: show the guarantee"
+    },
+    "O15": {
+      "name": "Delivery too slow",
+      "kpi": "Cancelled orders with reason “Takes too long” ÷ all cancelled orders",
+      "do": "Show the real delay per wilaya. Ship the same day.",
+      "also": "Team: ship faster"
+    },
+    "O16": {
+      "name": "The offer is confusing",
+      "kpi": "Confirmed orders changed during the call ÷ all confirmed orders",
+      "do": "Fewer choices: one main offer, one pack.",
+      "also": "Landing page: fewer choices"
+    },
+    "O17": {
+      "name": "Wrong season",
+      "kpi": "This category's orders this month ÷ last month, next to your other categories",
+      "tail": "while your other categories stay near 100%",
+      "do": "Lower the budget. Push in-season products."
+    },
+    "O18": {
+      "name": "Competitor dropped price",
+      "kpi": "Their new price ÷ their old price, plus the reason “Cheaper elsewhere”",
+      "tail": "and that reason rises the same week",
+      "do": "Wait 3 days. If orders fall: add a pack or a gift before cutting the price.",
+      "also": "Page trust: awareness ads on your values"
+    },
+    "O19": {
+      "name": "Competitor launched the same",
+      "kpi": "New competitor ads on the same product in 7 days (count)",
+      "do": "New angle, stronger proof, faster delivery message.",
+      "also": "Page trust: awareness on your values. Video: a new angle"
+    },
+    "V1": {
+      "name": "Weak first 3 seconds",
+      "kpi": "People who stay 3 seconds ÷ times shown (same placement)",
+      "do": "Make 3 new first-3-seconds on the same video."
+    },
+    "V2": {
+      "name": "Boring body",
+      "kpi": "People who watch to the end or 15 seconds ÷ people who stay 3 seconds (first 3 seconds normal)",
+      "do": "Shorten. Cut dead moments. Change the scene every 2–3 seconds."
+    },
+    "V3": {
+      "name": "Product shown too late",
+      "kpi": "People who reach a quarter of the video ÷ people who stay 3 seconds",
+      "do": "Show the product in use before second 5."
+    },
+    "V4": {
+      "name": "Entertains but doesn't sell",
+      "kpi": "Link clicks ÷ times shown (first 3 seconds and body normal, the product's other videos click normally)",
+      "do": "Add the price, the offer and “order now” in the video.",
+      "also": "Offer: if all videos click low, it's the offer"
+    },
+    "V5": {
+      "name": "Not understood",
+      "kpi": "Comments asking “What is it?” ÷ all comments",
+      "do": "Show the product working, step by step."
+    },
+    "V6": {
+      "name": "Brings curious people",
+      "kpi": "Confirmed ÷ orders from this video, minus the same for the product's other videos",
+      "do": "Less clickbait. Show the real price and the real product."
+    },
+    "V7": {
+      "name": "Promise too big",
+      "kpi": "Delivered ÷ confirmed from this video, minus the same for the product's other videos",
+      "do": "Show the real product and the real size. Remove the exaggeration.",
+      "also": "Landing page: the same honest photos"
+    },
+    "V8": {
+      "name": "Copy of another video",
+      "kpi": "Same angle + same first scene + same person as a live video",
+      "when": "The three are the same",
+      "do": "Make a truly new idea, not a variation.",
+      "also": "Meta: count of ideas"
+    },
+    "V9": {
+      "name": "Tired video",
+      "kpi": "First-3-seconds number this week ÷ the same in its first week (seen more than 2.5 times)",
+      "do": "New first 3 seconds on the same idea. Never edit the winner."
+    },
+    "V10": {
+      "name": "Meta won't show it",
+      "kpi": "Spent in 3 days ÷ budget for 3 days (bid cap on)",
+      "do": "Make a new idea. Don't raise the bid cap.",
+      "also": "Meta: check the bid cap"
+    },
+    "L1": {
+      "name": "Page slow",
+      "kpi": "Page views ÷ link clicks",
+      "do": "Lighter photos. Test on a cheap phone with 4G."
+    },
+    "L2": {
+      "name": "The top doesn't hold them",
+      "kpi": "Forms started ÷ page views, next to another page of the same product",
+      "tail": "of the other page's number",
+      "do": "First screen: same picture and promise as the video, the price, “pay on delivery”."
+    },
+    "L3": {
+      "name": "Doesn't match the video",
+      "kpi": "Forms started ÷ page views, for each video",
+      "tail": "of the number with the best video",
+      "do": "Same photo and same words as that video.",
+      "also": "Video: or change the video's promise"
+    },
+    "L4": {
+      "name": "Form too long",
+      "kpi": "Orders ÷ forms started (“Price too high” normal)",
+      "do": "Only name, phone, wilaya, commune. A big button.",
+      "also": "Offer: if “Price too high” is high, it's the price"
+    },
+    "L5": {
+      "name": "Fee surprise",
+      "kpi": "Forms left after choosing the wilaya ÷ forms started",
+      "do": "Show the delivery fees before the form.",
+      "also": "Offer: delivery fee"
+    },
+    "L6": {
+      "name": "Bad on phones",
+      "kpi": "Orders ÷ visits on phones, divided by orders ÷ visits on computers",
+      "do": "Fix the phone view: button visible, text readable."
+    },
+    "L7": {
+      "name": "No proof",
+      "kpi": "Cancelled orders from this page with reason “No trust” ÷ all cancelled orders from this page",
+      "tail": "on this page, while your other pages are under it",
+      "do": "Add real photos, reviews, a short customer video.",
+      "also": "Page trust: if all pages are over the limit, people don't know the shop"
+    },
+    "L8": {
+      "name": "Button hidden",
+      "kpi": "Visitors who reach the button ÷ visitors",
+      "do": "Button on the first screen, repeated down the page."
+    },
+    "L9": {
+      "name": "Weak pictures",
+      "kpi": "Picture list: number of “yes” out of 10",
+      "do": "Redo the “no” lines: real photo, size shown, benefit shown."
+    },
+    "L10": {
+      "name": "Abandoned forms not recovered",
+      "kpi": "Abandoned forms turned into orders ÷ abandoned forms",
+      "do": "Call abandoned forms within 30 minutes.",
+      "also": "Team: call speed"
+    },
+    "P1": {
+      "name": "The page looks empty",
+      "kpi": "Posts in the last 30 days (count)",
+      "do": "Post 2–3 times a week: products, customers, behind the scenes."
+    },
+    "P2": {
+      "name": "Bad comments under the ads",
+      "kpi": "Negative comments ÷ all comments on the ads",
+      "do": "Answer each one within the day. Hide insults. Fix the real cause.",
+      "also": "Offer or team: the cause is often there"
+    },
+    "P3": {
+      "name": "Messages not answered",
+      "kpi": "Messages answered within 1 hour ÷ all messages",
+      "do": "Answer faster, or let Pilot Message answer."
+    },
+    "P4": {
+      "name": "No reviews",
+      "kpi": "Real customer reviews or photos on the page (count)",
+      "do": "Ask each delivered customer for a photo. Post them."
+    },
+    "P5": {
+      "name": "People don't know the shop",
+      "kpi": "Cancelled orders with reason “I don't know the shop / no trust” ÷ all cancelled orders",
+      "do": "Awareness ads on your values: who you are, the guarantee, real customers."
+    },
+    "P6": {
+      "name": "Values not clear",
+      "kpi": "Your values shown on the page, the ads and the landing page (out of 3)",
+      "do": "Write your 3 values and show them everywhere.",
+      "also": "Landing page and video"
+    },
+    "P7": {
+      "name": "Customers don't come back",
+      "kpi": "Customers with a second order ÷ customers delivered",
+      "do": "A message after delivery, and a code for the next order.",
+      "also": "Offer: quality"
+    },
+    "P8": {
+      "name": "Meta finds the ads low quality",
+      "kpi": "Meta's quality ranking of the ad",
+      "when": "Below average",
+      "do": "Less clickbait, honest claims, answer the comments.",
+      "also": "Video"
+    },
+    "M1": {
+      "name": "Tracking broken",
+      "kpi": "Landing page orders with an ad ID ÷ all landing page orders",
+      "do": "Paste the link tags on every hand-made ad."
+    },
+    "M2": {
+      "name": "Meta counts wrong",
+      "kpi": "Purchases counted by Meta ÷ orders in Pilotix",
+      "do": "Check the pixel and the Conversions API."
+    },
+    "M3": {
+      "name": "Too few ideas",
+      "kpi": "Different ideas live (count)",
+      "do": "One truly new idea per week.",
+      "also": "Video"
+    },
+    "M4": {
+      "name": "One idea takes everything",
+      "kpi": "Spend of the top idea ÷ total spend",
+      "do": "Launch new ideas before the top one gets tired.",
+      "also": "Video"
+    },
+    "M5": {
+      "name": "Learning restarted",
+      "kpi": "Edits or budget changes over 20% in 7 days (count)",
+      "do": "No edits for 3 days. Raise budgets by 20% at most."
+    },
+    "M6": {
+      "name": "Bid cap too high",
+      "kpi": "Bid cap ÷ the most you can pay for one order",
+      "do": "Lower the cap to what your confirmation and delivery rates allow."
+    },
+    "M7": {
+      "name": "Bid cap too low",
+      "kpi": "Spent ÷ budget over 3 days, on all ad sets",
+      "do": "Raise the cap a little, step by step.",
+      "also": "Video: if only one ad doesn't spend, it's the video"
+    },
+    "M8": {
+      "name": "Cost of views up",
+      "kpi": "Cost of 1,000 views this week ÷ your normal cost, on all ads",
+      "do": "Check the season and the competitors. Add new ideas.",
+      "also": "Offer: market"
+    },
+    "M9": {
+      "name": "Audience tired",
+      "kpi": "Times shown ÷ people reached (how many times each person saw it), with new ideas live",
+      "do": "Widen: more wilayas, fewer limits."
+    },
+    "M10": {
+      "name": "Wrong wilayas",
+      "kpi": "Orders from wilayas with weak delivery ÷ all orders",
+      "do": "Remove those wilayas from the ads.",
+      "also": "Team: courier"
+    },
+    "M11": {
+      "name": "Account trouble",
+      "kpi": "Rejected ads or failed payments in 7 days (count)",
+      "do": "Fix the payment. Rewrite the rejected ad."
+    },
+    "M12": {
+      "name": "Loses when scaling",
+      "kpi": "Cost per order after a budget raise ÷ cost per order before",
+      "do": "Go back one step. Scale with new ideas, not only budget.",
+      "also": "Video"
+    },
+    "T1": {
+      "name": "Calls too late",
+      "kpi": "Orders first called within 1 hour ÷ all orders",
+      "do": "Call new orders first. More agents at peak hours."
+    },
+    "T2": {
+      "name": "Not enough tries",
+      "kpi": "Unreachable orders with fewer than 3 call tries ÷ unreachable orders",
+      "do": "Three tries at different hours, plus a message."
+    },
+    "T3": {
+      "name": "An agent confirms too little",
+      "kpi": "The agent's confirmed ÷ orders, minus the team's (same products)",
+      "do": "Listen to the calls. Coach with the sales guide."
+    },
+    "T4": {
+      "name": "An agent confirms too easily",
+      "kpi": "The agent's delivered ÷ confirmed, minus the team's",
+      "do": "Confirm the address, the price and the date on every call."
+    },
+    "T5": {
+      "name": "No upsell",
+      "kpi": "Confirmed orders with an upsell ÷ confirmed orders, per agent",
+      "do": "Propose the second piece or the pack on every call.",
+      "also": "Offer: pack"
+    },
+    "T6": {
+      "name": "Abandoned forms not called",
+      "kpi": "Abandoned forms called within 30 minutes ÷ abandoned forms",
+      "do": "Put them at the top of the call list."
+    },
+    "T7": {
+      "name": "Slow shipping",
+      "kpi": "Confirmed orders shipped within 24 hours ÷ confirmed orders",
+      "do": "Prepare and hand over the same day."
+    },
+    "T8": {
+      "name": "Slow delivery in a wilaya",
+      "kpi": "Days from shipped to delivered, per wilaya",
+      "do": "Push the courier, or change it for that wilaya."
+    },
+    "T9": {
+      "name": "Courier weak in a wilaya",
+      "kpi": "Delivered ÷ shipped in that wilaya, minus your normal",
+      "do": "Follow each parcel there. Change courier if it stays low.",
+      "also": "Meta: remove the wilaya from the ads"
+    },
+    "T10": {
+      "name": "Parcels not followed",
+      "kpi": "Parcels in delivery over 3 days with no follow-up call ÷ parcels in delivery over 3 days",
+      "do": "Suivi calls the customer and the courier."
+    },
+    "T11": {
+      "name": "Fake orders pass",
+      "kpi": "Orders from a phone that refused before ÷ all orders",
+      "do": "Block after 2 refusals. One extra call before shipping."
+    },
+    "T12": {
+      "name": "Returns come back late",
+      "kpi": "Returned parcels back in stock within 10 days ÷ returned parcels",
+      "do": "Chase the courier each week."
+    }
+  }
+}

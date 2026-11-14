@@ -22,6 +22,7 @@ import { Pilot } from '../livraison/Pilot';
 import { Preferences } from '../livraison/Preferences';
 import type { PageProps } from '../registry';
 import { Automations } from './Automations';
+import { Checks } from './Checks';
 import '../messages/messages.css';
 import '../cm/cm.css';
 import './notify.css';
@@ -59,7 +60,7 @@ function whenSend(iso: string, t: (k: string) => string) {
   return d === today ? `${t('notify.tomorrow')} ${time}` : when(iso);
 }
 
-const TAB_ICON: Record<string, string> = { auto: 'zap', assign: 'truck', affectation: 'users', messages: 'send', cas: 'route', tester: 'play', resultats: 'chart', reglages: 'settings' };
+const TAB_ICON: Record<string, string> = { auto: 'zap', assign: 'truck', affectation: 'users', checks: 'shield', messages: 'send', cas: 'route', tester: 'play', resultats: 'chart', reglages: 'settings' };
 /** The tabs of the menu's « Messages » line; its other lines (Automatisations, Auto Pilot Assign, …) have none */
 const MSG_TABS = ['messages', 'cas', 'tester', 'resultats'];
 
@@ -75,8 +76,9 @@ export function Notify({ sub }: PageProps) {
   const st = useRpc('notify.feed', { limit: 1 }, { enabled: msgs });
   // each part is a line of the menu's « Pilot Automations »: Automatisations, Auto Pilot Assign (the delivery company — with
   // Pilot Auto Assign's rules and the Préférences —, the dispatch and the livreur), Auto Pilot Affectation (the agents) and
-  // Réglages for admins, Messages (with its four tabs) for the agents
-  const keys = [...(admin ? ['auto'] : []), ...(rules.can ? ['assign'] : []), ...(admin ? ['affectation'] : []), ...(msgs ? MSG_TABS : []), ...(admin ? ['reglages'] : [])];
+  // Réglages for admins, Messages (with its four tabs) for the agents; Pilot Checks (the owner's rules for the cases of
+  // the « Pilotix Judge », Checks.tsx) for admins
+  const keys = [...(admin ? ['auto'] : []), ...(rules.can ? ['assign'] : []), ...(admin ? ['affectation', 'checks'] : []), ...(msgs ? MSG_TABS : []), ...(admin ? ['reglages'] : [])];
   const current = keys.includes(sub ?? '') ? sub! : keys[0];
   // whether the person writes the rules is not known yet (their Préférences are on their way): Auto Pilot Assign waits
   const waiting = !rules.known && sub === 'assign';
@@ -88,7 +90,7 @@ export function Notify({ sub }: PageProps) {
   if (waiting) return <Loading />;
   return (
     <>
-      <AgentHeader agent="notify" title={t('notify.title')} help={t('notify.help')} about={t('ai.about.notify')} on={['auto', 'assign', 'affectation'].includes(current) ? undefined : st.data?.enabled} settings={admin ? '#/notify/reglages' : undefined} tabs={tabs} current={current} />
+      <AgentHeader agent="notify" title={t('notify.title')} help={t('notify.help')} about={t('ai.about.notify')} on={['auto', 'assign', 'affectation', 'checks'].includes(current) ? undefined : st.data?.enabled} settings={admin ? '#/notify/reglages' : undefined} tabs={tabs} current={current} />
       {current === 'auto' && <Automations />}
       {current === 'assign' && (
         <div className="nt-assign">
@@ -99,6 +101,7 @@ export function Notify({ sub }: PageProps) {
         </div>
       )}
       {current === 'affectation' && <Automations view="affectation" />}
+      {current === 'checks' && <Checks />}
       {current === 'messages' && <Feed admin={admin} />}
       {current === 'cas' && <Cases admin={admin} />}
       {current === 'tester' && <Tester admin={admin} />}

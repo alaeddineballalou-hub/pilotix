@@ -498,3 +498,4 @@ export * from './pay';
 export * from './appUpdate';
 export * from './menu';
 export * from './rights';
+export * from './pilotchecks';

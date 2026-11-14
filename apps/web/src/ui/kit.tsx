@@ -105,6 +105,9 @@ EXTRA.beaker = '<path d="M10 2v7.53a2 2 0 0 1-.21.9L4.72 20.55a1 1 0 0 0 .9 1.45
 EXTRA.zap = '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>';
 // AI Pilot › Espace créateur: the folder of the user's computer where the videos stay
 EXTRA.folder = '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>';
+// Pilot Automations › Pilot Checks: the helpers of a case — a door (it blocks), a doctor (it names the case)
+EXTRA.door = '<path d="M18 20V6a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v14"/><path d="M2 20h20"/><path d="M14 12v.01"/>';
+EXTRA.stethoscope = '<path d="M11 2v2"/><path d="M5 2v2"/><path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1"/><path d="M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/>';
 const ALL = { ...(icons as Record<string, string>), ...EXTRA };
 export type IconName = keyof typeof ALL | string;
 
