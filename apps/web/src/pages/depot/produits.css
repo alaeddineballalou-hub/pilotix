@@ -772,7 +772,7 @@ a.chip.lp-nolp:hover { text-decoration: underline; }
 }
 @media (max-width: 760px) {
   .pd-ghead { display: none; }
-  .pd-group.pd-g2 { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 8px 10px; padding: 12px; }
+  .pd-group.pd-g2 { grid-template-columns: minmax(0, .9fr) minmax(0, 1.5fr) minmax(0, .9fr) auto; gap: 8px 12px; padding: 12px; }
   .pd-g2 > .pd-gwho { grid-column: 1 / -1; }
   .pd-g2 > .num { text-align: start; }
   .pd-g2 > .num[data-l]::before { display: block; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
