@@ -499,7 +499,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
                     ) : (
                       l.variantTitle && <span className="qd6-vt">{l.variantTitle}</span>
                     )}
-                    {p && <span className="ltr">{p.variants.find((v) => v.id === l.variantId)?.sku ?? p.sku}</span>}
+                    {p && !l.forProductId && <span className="ltr">{p.variants.find((v) => v.id === l.variantId)?.sku ?? p.sku}</span>}
                     {p?.hasGuide && <GuideButton productId={p.id} className="qd6-guide" />}
                   </div>
                 </div>
