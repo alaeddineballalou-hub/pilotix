@@ -553,7 +553,9 @@
     "removeAsk": "Supprimer « {{name}} » pour toujours ? Seulement si le produit n’a jamais servi (aucune commande, aucun stock).",
     "removed": "Produit supprimé",
     "hasBatches": "A des lots (date d’expiration)",
-    "hasBatchesHint": "Ses achats disent chaque lot et sa date d’expiration ; le stock part du lot qui expire en premier."
+    "hasBatchesHint": "Ses achats disent chaque lot et sa date d’expiration ; le stock part du lot qui expire en premier.",
+    "titleAr": "Nom en arabe (page)",
+    "titleArHint": "Le nom que le client voit dans la liste des couleurs de la landing page. Vide : Pilotix traduit les couleurs tout seul (Rose → وردي)."
   },
   "landing": {
     "none": "Sans landing page",

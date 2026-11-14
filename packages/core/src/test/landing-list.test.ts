@@ -218,3 +218,38 @@ test('pages follow their product: its photo, a new variant photo, an off variant
   const row: any = (await call('landing.list', admin, {}) as any[]).find((x: any) => x.id === Number(pg.id));
   assert.equal(row.thumb, 'https://cdn.example/poster.jpg');
 });
+
+test('colour names in Arabic on the page: translated by themselves, or the Arabic name written in Produits', async () => {
+  const { arabicName } = await import('@pilotix/shared');
+  assert.equal(arabicName('Rose'), 'وردي');
+  assert.equal(arabicName('Bleu clair'), 'أزرق فاتح');
+  assert.equal(arabicName('bleu-marine'), 'أزرق كحلي');
+  assert.equal(arabicName('Rose et Gris'), 'وردي ورمادي');
+  assert.equal(arabicName('Doré'), 'ذهبي');
+  assert.equal(arabicName('Couleur'), 'اللون');
+  assert.equal(arabicName('أحمر'), 'أحمر');
+  assert.equal(arabicName('6-12 mois'), '6-12 mois');
+  assert.equal(arabicName('Rose XL'), 'Rose XL');
+  // a product with colours: the page's list shows them in Arabic; one with its own Arabic name shows that
+  const pg = (await db.query('SELECT id, slug, product_id FROM landing_pages WHERE id = $1', [pages[0].id]))[0];
+  const pid = Number(pg.product_id);
+  const p: any = await call('catalog.product', admin, { id: pid });
+  const named = p.variants.filter((v: any) => v.title !== '');
+  const mk = (title: string, titleAr?: string, x?: any) => ({ ...(x ? { id: x.id } : {}), title, sku: x?.sku ?? null, active: true, ...(titleAr !== undefined ? { titleAr } : {}) });
+  await call('catalog.saveProduct', admin, {
+    id: pid, name: p.name, sku: p.sku, price: p.price, cost: p.cost || 100, active: true,
+    variants: [mk('Rose', undefined, named[0]), mk('Bleu clair', 'سماوي', named[1]), mk('Taupe foncé spécial')],
+  });
+  const after: any = await call('catalog.product', admin, { id: pid });
+  assert.equal(after.variants.find((v: any) => v.title === 'Bleu clair').titleAr, 'سماوي');
+  assert.equal(after.variants.find((v: any) => v.title === 'Rose').titleAr, '');
+  await db.query('UPDATE landing_pages SET active = true WHERE id = $1', [pg.id]);
+  const h = await html(String(pg.slug));
+  assert.match(h, />وردي</);
+  assert.match(h, />سماوي</);
+  assert.doesNotMatch(h, />Rose</);
+  assert.match(h, />Taupe foncé spécial( — |<)/);
+  // the thumbnails: small and centred
+  assert.match(h, /\.th img\{width:40px;height:50px/);
+  assert.match(h, /\.th:before,\.th:after\{content:'';margin:auto\}/);
+});

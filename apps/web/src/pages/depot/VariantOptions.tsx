@@ -3,6 +3,7 @@
 // not follow the options stay listed (orders and stock may use them): they are switched off, never deleted.
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { arabicName } from '@pilotix/shared';
 import { da } from '../../lib/format';
 import { Icon } from '../../ui/kit';
 import { toast } from '../../ui/toast';
@@ -20,6 +21,8 @@ export interface VRow {
   feeGrid: string;
   photo: string;
   active: boolean;
+  /** its name in Arabic for the landing pages (empty: the page translates the colour words) */
+  titleAr?: string;
 }
 export interface Opt {
   name: string;
@@ -360,6 +363,7 @@ export function VariantOptions({
                     <th key={k}>{o.name}</th>
                   ))}
                   <th>Photo</th>
+                  <th>{t('produits.form.titleAr')}</th>
                   <th>Variant SKU</th>
                   <th>Purchase (DA)</th>
                   <th>Sale (DA)</th>
@@ -390,6 +394,7 @@ export function VariantOptions({
                         <input type="file" accept="image/*" aria-label={`Upload photo for ${title}`} onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; try { editRow(title, { photo: await onPhotoFile(file) }); } catch { /* Retain previous photo on invalid upload */ } }} />
                         {v.photo && <button className="btn small ghost" type="button" aria-label={`Remove photo for ${title}`} onClick={() => editRow(title, { photo: '' })}>×</button>}
                       </td>
+                      <td data-l={t('produits.form.titleAr')}><input dir="rtl" value={v.titleAr ?? ''} placeholder={arabicName(title)} aria-label={`${t('produits.form.titleAr')} ${title}`} onChange={(e) => editRow(title, { titleAr: e.target.value })} /></td>
                       <td data-l="Variant SKU"><input className="ltr" value={v.sku} placeholder={skuOf(baseSku, c)} aria-label={`SKU ${title}`} onChange={(e) => editRow(title, { sku: e.target.value })} /></td>
                       <td data-l="Purchase (DA)"><input type="number" min={0} step={50} value={v.cost} placeholder={baseCost ? String(baseCost) : 'Required'} aria-label={`Purchase price ${title}`} onChange={(e) => editRow(title, { cost: e.target.value })} /></td>
                       <td data-l="Sale (DA)"><input type="number" min={0} step={50} value={v.price} placeholder={basePrice ? String(basePrice) : 'Required'} aria-label={`Selling price ${title}`} onChange={(e) => editRow(title, { price: e.target.value })} /></td>

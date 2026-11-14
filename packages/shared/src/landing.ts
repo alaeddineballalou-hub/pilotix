@@ -29,7 +29,8 @@ export interface LandingView {
   description: string;
   variantLabel: string;
   /** price: the variant's own price when it differs from the page's; out: sold out (shown, not orderable) */
-  variants: { id: number; title: string; price?: number | null; out?: boolean }[];
+  /** label: the name shown to the customer (its Arabic name from Produits, else the colour words translated) */
+  variants: { id: number; title: string; label?: string; price?: number | null; out?: boolean }[];
   /** the product's options (Taille, Couleur…) when every variant is one of their combinations: one list each on the page */
   options?: { name: string; values: string[] }[];
   /** everything sold out: the page says so instead of taking orders */
@@ -185,8 +186,8 @@ const CSS = (c: string) => `:root{--c:${c};--cd:${shade(c, -0.25)};--cl:${shade(
 .g{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}.g>*{min-width:0}@media(min-width:860px){.g{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}.gal{position:sticky;top:12px}}
 .card{background:#fff;border:1px solid var(--b);border-radius:14px;padding:14px}
 .main{display:block;width:100%;height:auto;aspect-ratio:var(--r,1);object-fit:cover;border-radius:10px;background:var(--cl) center/cover no-repeat}
-.th{display:flex;gap:8px;margin-top:8px;overflow-x:auto;padding-bottom:2px}.th button{flex:0 0 auto;padding:0;border:2px solid transparent;border-radius:8px;background:none;cursor:pointer;line-height:0}
-.th button.on{border-color:var(--c)}.th img{width:64px;height:80px;object-fit:cover;border-radius:6px;background:var(--cl)}
+.th{display:flex;gap:6px;margin-top:8px;overflow-x:auto}.th:before,.th:after{content:'';margin:auto}.th button{flex:none;padding:0;border:2px solid transparent;border-radius:7px;background:none;cursor:pointer;line-height:0}
+.th button.on{border-color:var(--c)}.th img{width:40px;height:50px;object-fit:cover;border-radius:5px;background:var(--cl)}
 h1{font-size:22px;line-height:1.3;margin:0 0 4px}.pr{display:flex;align-items:baseline;gap:10px;margin:0 0 12px;flex-wrap:wrap}
 .pr b{color:var(--c);font-size:26px}.pr s{color:var(--m);font-size:16px}.pr.no s,.pr.no .off{display:none}.off{background:#fee2e2;color:#b91c1c;border-radius:99px;padding:1px 8px;font-size:13px;font-weight:700}
 label{display:block;font-size:14px;font-weight:600;margin:10px 0 4px}
@@ -365,13 +366,13 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
   // several options (Taille, Couleur…): one list each, the variant list stays (hidden) and is set from them
   const split = !!v.variants.length && (v.options?.length ?? 0) >= 2;
   const vopts = v.variants
-    .map((x) => `<option value="${x.id}"${x.out ? ' disabled' : ''}>${esc(x.title)}${x.out ? ' — نفذت الكمية' : x.price != null ? ` — ${landingPrice(x.price)}` : ''}</option>`)
+    .map((x) => `<option value="${x.id}"${x.out ? ' disabled' : ''}>${esc(x.label || arabicName(x.title))}${x.out ? ' — نفذت الكمية' : x.price != null ? ` — ${landingPrice(x.price)}` : ''}</option>`)
     .join('');
   const vrow = !v.variants.length
     ? ''
     : split
-      ? `${v.options!.map((o, k) => `<label for="vo${k}">${esc(o.name)}</label><select id="vo${k}" class="vo"><option value="">${esc(o.name)}…</option>${o.values.map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select>`).join('')}<select id="vr" name="vr" hidden><option value=""></option>${vopts}</select><div class="e" id="vre"></div>`
-      : `<label for="vr">${esc(v.variantLabel)}</label><select id="vr" name="vr"><option value="">${esc(v.variantLabel)}…</option>${vopts}</select><div class="e" id="vre"></div>`;
+      ? `${v.options!.map((o, k) => `<label for="vo${k}">${esc(arabicName(o.name))}</label><select id="vo${k}" class="vo"><option value="">${esc(arabicName(o.name))}…</option>${o.values.map((x) => `<option value="${esc(x)}">${esc(arabicName(x))}</option>`).join('')}</select>`).join('')}<select id="vr" name="vr" hidden><option value=""></option>${vopts}</select><div class="e" id="vre"></div>`
+      : `<label for="vr">${esc(arabicName(v.variantLabel))}</label><select id="vr" name="vr"><option value="">${esc(arabicName(v.variantLabel))}…</option>${vopts}</select><div class="e" id="vre"></div>`;
   // one row per piece: the page adds a row (empty, to choose) for each piece the customer adds
   const variants = vrow ? `<div id="vrs"><div class="vrow"><b class="vh" style="display:none"></b>${vrow}</div></div>` : '';
   const off = v.oldPrice && v.oldPrice > v.price ? Math.round((1 - v.price / v.oldPrice) * 100) : 0;
@@ -686,4 +687,50 @@ export function photoVersion(s: string): string {
     h = Math.imul(h, 0x01000193) >>> 0;
   }
   return `${h.toString(36)}${s.length.toString(36)}`;
+}
+
+// ---------------------------------------------------------------- variant names in Arabic (فصحى) on the pages
+
+/** colour (and option) words as the shops write them (French, English, Darija in Latin letters) → Modern Standard Arabic */
+const AR_WORDS: Record<string, string> = {
+  // colours
+  rose: 'وردي', pink: 'وردي', rouge: 'أحمر', red: 'أحمر', bleu: 'أزرق', blue: 'أزرق', vert: 'أخضر', green: 'أخضر',
+  noir: 'أسود', black: 'أسود', blanc: 'أبيض', white: 'أبيض', gris: 'رمادي', grey: 'رمادي', gray: 'رمادي',
+  jaune: 'أصفر', yellow: 'أصفر', orange: 'برتقالي', violet: 'بنفسجي', purple: 'بنفسجي', mauve: 'بنفسجي فاتح',
+  marron: 'بني', brun: 'بني', brown: 'بني', chocolat: 'بني داكن', beige: 'بيج', creme: 'كريمي', cream: 'كريمي',
+  dore: 'ذهبي', or: 'ذهبي', gold: 'ذهبي', golden: 'ذهبي', argent: 'فضي', argente: 'فضي', silver: 'فضي',
+  turquoise: 'فيروزي', bordeaux: 'عنابي', bordo: 'عنابي', kaki: 'كاكي', khaki: 'كاكي', fuchsia: 'فوشيا',
+  lilas: 'ليلكي', lilac: 'ليلكي', corail: 'مرجاني', coral: 'مرجاني', menthe: 'نعناعي', mint: 'نعناعي',
+  saumon: 'سلموني', salmon: 'سلموني', marine: 'كحلي', navy: 'كحلي', ciel: 'سماوي', sky: 'سماوي',
+  multicolore: 'متعدد الألوان', multicolor: 'متعدد الألوان', transparent: 'شفاف', camel: 'جملي', taupe: 'رمادي بني',
+  // shades
+  clair: 'فاتح', claire: 'فاتح', light: 'فاتح', fonce: 'داكن', foncee: 'داكن', dark: 'داكن', pastel: 'باستيل',
+  // option names
+  couleur: 'اللون', couleurs: 'اللون', color: 'اللون', colour: 'اللون', taille: 'المقاس', size: 'المقاس',
+  pointure: 'المقاس', age: 'العمر', modele: 'الموديل', model: 'الموديل', type: 'النوع',
+};
+/** words that only join the others (« bleu et blanc », « rose avec gris ») */
+const AR_JOIN: Record<string, string> = { et: 'و', and: 'و', avec: 'مع', with: 'مع' };
+
+/**
+ * A variant's or an option's name in Arabic for the customer: already Arabic, kept; every word known (« Bleu clair »,
+ * « rose et gris »): translated; anything else (a size like « 6-12 mois », a model name): kept as the shop wrote it.
+ */
+export function arabicName(name: string): string {
+  const t = String(name ?? '').trim();
+  if (!t || /[\u0600-\u06ff]/.test(t)) return t;
+  const words = t
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .split(/[\s\-_/]+/)
+    .filter(Boolean);
+  if (!words.length) return t;
+  const out: string[] = [];
+  for (const w of words) {
+    if (AR_WORDS[w]) out.push(AR_WORDS[w]);
+    else if (AR_JOIN[w] && out.length) out.push(AR_JOIN[w]);
+    else return t;
+  }
+  return out.join(' ').replace(/ و /g, ' و');
 }

@@ -204,7 +204,7 @@ export async function productContext(db: Db, productId: number) {
     `WITH r AS (${RESERVED}),
        s AS (SELECT s.variant_id, sum(s.qty)::int AS qty FROM stock s JOIN warehouses wh ON wh.id = s.warehouse_id AND wh.active GROUP BY 1),
        rv AS (SELECT r.variant_id, sum(r.n)::int AS n FROM r JOIN warehouses wh ON wh.id = r.wid AND wh.active GROUP BY 1)
-     SELECT v.id, v.title, v.active, v.price, v.photo, v.fee_grid, COALESCE(s.qty, 0) - COALESCE(rv.n, 0) AS available
+     SELECT v.id, v.title, v.title_ar, v.active, v.price, v.photo, v.fee_grid, COALESCE(s.qty, 0) - COALESCE(rv.n, 0) AS available
      FROM product_variants v LEFT JOIN s ON s.variant_id = v.id LEFT JOIN rv ON rv.variant_id = v.id
      WHERE v.product_id = $1 ORDER BY v.id`,
     [productId],
@@ -212,7 +212,7 @@ export async function productContext(db: Db, productId: number) {
   const service = !!p.is_service;
   const variants = vars
     .filter((v: any) => v.active && v.title !== '')
-    .map((v: any) => ({ id: num(v.id), title: String(v.title), price: numOrNull(v.price), available: service ? null : num(v.available), photo: (v.photo as string | null) || null }));
+    .map((v: any) => ({ id: num(v.id), title: String(v.title), titleAr: String(v.title_ar ?? ''), price: numOrNull(v.price), available: service ? null : num(v.available), photo: (v.photo as string | null) || null }));
   const plain = vars.find((v: any) => v.title === '');
   const fees = await clientHomeFees(db, p.fee_grid);
   // a size with its own delivery price list (Gestion › Prix de livraison, « par taille »): the page shows its prices
@@ -296,7 +296,7 @@ function viewVariants(l: any, pc: ProductCtx, hide: boolean): LandingView['varia
   const shown = page ?? pc.price;
   return pc.variants.map((v) => {
     const price = unitPriceOf(page, pc, v.id);
-    return { id: v.id, title: v.title, ...(price !== shown ? { price } : {}), ...(hide && v.available !== null && v.available <= 0 ? { out: true } : {}) };
+    return { id: v.id, title: v.title, ...(v.titleAr ? { label: v.titleAr } : {}), ...(price !== shown ? { price } : {}), ...(hide && v.available !== null && v.available <= 0 ? { out: true } : {}) };
   });
 }
 
