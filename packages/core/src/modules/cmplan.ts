@@ -536,7 +536,7 @@ export async function alertFailed(ctx: Ctx, r: any): Promise<number> {
     const missed = PLAN_CHANNELS.filter((c) => ((r.channels ?? []) as string[]).includes(c) && !r[`${c === 'facebook' ? 'fb' : 'ig'}_id`]);
     const why = missed.map((c) => String(r[`${c === 'facebook' ? 'fb' : 'ig'}_error`] ?? '')).find(Boolean) ?? '';
     // the reason in a few words (Meta's own message stays in Pilot Content)
-    const short = why.split(' (')[0].slice(0, 120);
+    const short = why.split(' (')[0].replace(/^(Facebook|Instagram)\s*:\s*/, '').slice(0, 120);
     const nets = missed.map((c) => (c === 'facebook' ? 'Facebook' : 'Instagram')).join(' + ');
     const people = [numOrNull(r.created_by), numOrNull(r.updated_by)].filter((x): x is number => x !== null);
     const to = (await ctx.db.query(`SELECT id FROM profiles WHERE active AND (id = ANY($1) OR 'admin' = ANY(roles))`, [people])).map((x: any) => num(x.id));

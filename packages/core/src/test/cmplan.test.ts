@@ -583,7 +583,7 @@ test('a post that does not go out: its file’s name is kept, and its writer and
   const told = pushes.find((x) => x.payload.tag === `plan-fail-${s2.id}`);
   assert.ok(told, 'the failure is told');
   assert.match(told.payload.title, /tricycle-rouge\.jpg/);
-  assert.match(told.payload.body, /^Instagram · Instagram : Meta ne permet pas encore/);
+  assert.match(told.payload.body, /^Instagram · Meta ne permet pas encore/);
   assert.ok(told.to.includes(mkPhone) && told.to.includes(adPhone));
   // the menu's red count on Pilot Content: the posts that did not go out
   const c: any = await call('orders.counts', job, {});

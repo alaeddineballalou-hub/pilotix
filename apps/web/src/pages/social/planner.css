@@ -331,6 +331,7 @@ button.pl-dn:hover { background: var(--sky-soft); }
 
 /* a post that did not go out: its file (as named on the device it was picked on) and why, in « Pas sortis » */
 .pl-row-why { display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border-radius: 8px; background: var(--c-bad-tint); color: var(--c-bad-ink); font-size: 12.5px; line-height: 1.4; overflow-wrap: anywhere; }
+.pl-row-why > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .pl-file { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-weight: 800; color: var(--ink); }
 .pl-file .bji { flex: none; width: 14px; height: 14px; }
 /* the editor: the files' names under the photos, and a video Pilotix does not have whole */

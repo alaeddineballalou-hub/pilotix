@@ -620,7 +620,7 @@ function FailWhy({ p }: { p: Post }) {
       {missed.length > 0 && (
         <span>
           {t('social.plan.notOn', { nets: missed.map((c) => t(`cm.ch.${c}`)).join(' + ') })}
-          {why ? ` · ${why.split(' (')[0]}` : ''}
+          {why ? ` · ${why.split(' (')[0].replace(/^(Facebook|Instagram)\s*:\s*/, '')}` : ''}
         </span>
       )}
     </span>
