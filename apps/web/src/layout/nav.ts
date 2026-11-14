@@ -337,7 +337,7 @@ export const SPACES: Space[] = [
   { id: 'cm', icon: 'chat', items: ['messages', 'cm', 'codepromo'], counts: ['msgs', 'cm'] },
   { id: 'service', icon: 'phone', items: ['dashboard', 'confirmation', 'suivi', 'livrees', 'annulees', 'sav', 'auto', 'assign', 'affectation', 'automessages', 'autoreglages', 'clients', 'codepromo'], counts: ['conf', 'suivi', 'sav', 'notify'] },
   { id: 'depot', icon: 'package', items: ['dashboard', 'depot', 'scanner', 'produits', 'pos', 'tournee', 'livreurs'], counts: ['depot', 'lowStock'] },
-  { id: 'finance', icon: 'wallet', items: ['caisse', 'macaisse'], counts: ['uncashed'] },
+  { id: 'finance', icon: 'wallet', items: ['caisse', 'macaisse'], counts: [] },
   { id: 'admin', icon: 'usercog', items: ['utilisateurs', 'management', 'reglages', 'livraison', 'agences', 'marketers', 'comptes'], counts: [] },
 ];
 /** Is this menu item or group child on the screen? */
