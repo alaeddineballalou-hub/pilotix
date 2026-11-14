@@ -9,6 +9,7 @@ import { ConfInput, dueNowSql, getOrder, highestGridFee, holdOrder, lineGrids, L
 import { andSql, queueSql } from './agencyscope';
 import { HAS_GUIDE } from './guide';
 import { assignedProductIds } from './productscope';
+import { readMontage } from './montage';
 import { rotateTimes } from './assign';
 import { blackNumbers, shareBlacklist } from './sharedblacklist';
 
@@ -718,7 +719,7 @@ export const confirmationProcs = {
   /** Products for the open row: variants, packs, linked products, and the client delivery price of the order. */
   'confirmation.catalog': proc(['confirmation'], z.object({}), async (ctx) => {
     const allowed = await assignedProductIds(ctx);
-    const P = await ctx.db.query(`SELECT id, name, sku, price, fixed_price, max_discount, packs, linked, is_service, fee_grid, ${HAS_GUIDE('products')} AS has_guide FROM products WHERE active AND archived_at IS NULL${allowed ? ' AND id = ANY($1)' : ''} ORDER BY name`, allowed ? [allowed] : []);
+    const P = await ctx.db.query(`SELECT id, name, sku, price, fixed_price, max_discount, packs, linked, is_service, fee_grid, montage, ${HAS_GUIDE('products')} AS has_guide FROM products WHERE active AND archived_at IS NULL${allowed ? ' AND id = ANY($1)' : ''} ORDER BY name`, allowed ? [allowed] : []);
     const V = P.length ? await ctx.db.query('SELECT v.id, v.product_id, v.title, v.sku, v.price, COALESCE((SELECT sum(qty) FROM stock s WHERE s.variant_id = v.id), 0)::int AS stock FROM product_variants v WHERE v.active AND v.product_id = ANY($1) ORDER BY v.id', [P.map((p) => num(p.id))]) : [];
     return P.map((p: any) => ({
       id: num(p.id),
@@ -732,6 +733,8 @@ export const confirmationProcs = {
       feeGrid: (p.fee_grid as string | null) ?? null,
       /** a sales guide to open during the call (« Guide » on the order's line) */
       hasGuide: !!p.has_guide,
+      /** montage: price, cost, wilayas (null: the shop's list); null: none */
+      montage: readMontage(p.montage),
       packs: ((typeof p.packs === 'string' ? JSON.parse(p.packs) : p.packs) ?? []).map((x: any) => ({ qty: Number(x.qty), price: Number(x.price) })) as { qty: number; price: number }[],
       linked: ((p.linked ?? []) as unknown[]).map(num).filter((id) => allowed === null || allowed.includes(id)),
       variants: V.filter((v: any) => num(v.product_id) === num(p.id)).map((v: any) => ({ id: num(v.id), title: v.title as string, sku: v.sku as string, price: numOrNull(v.price), stock: num(v.stock) })),

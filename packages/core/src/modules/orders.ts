@@ -23,6 +23,7 @@ import {
   Page,
   SALES_CHANNELS,
   slotStartOf,
+  WILAYAS,
 } from '@pilotix/shared';
 import { officialCommune } from './coverage';
 import { z } from 'zod';
@@ -47,13 +48,14 @@ import { applyTrust, lookAlikeNote, lookAlikeOf } from './trust';
 import { companyLock, pilotMayRun, pilotPick, setPick, type Pick } from './pilot';
 import { apiFees, courierFeesOf, declaredKg, feesByApi, knownKg, ruleFee, weightRuleOf, weightRuleSet, wholeKg } from './courierfees';
 import { assignedProductIds, seesPurchaseCosts } from './productscope';
+import { checkMontageLines, MONTAGE_SKU, montageProductId, readMontage, shopMontageWilayas } from './montage';
 
 export const STOPDESK_NOTE = '🏬 Ce client a refusé 2 colis : livraison au bureau (stop-desk) uniquement. Proposez-lui le stop-desk le plus proche.';
 
 // ---------------------------------------------------------------- reading
 const ORDER_COLS = `o.*,
   (SELECT coalesce(json_agg(json_build_object('id', i.id, 'productId', i.product_id, 'variantId', i.variant_id, 'name', i.name,
-     'variantTitle', i.variant_title, 'qty', i.qty, 'unitPrice', i.unit_price, 'purchasePrice', i.purchase_price, 'isUpsell', i.is_upsell) ORDER BY i.id), '[]')
+     'variantTitle', i.variant_title, 'qty', i.qty, 'unitPrice', i.unit_price, 'purchasePrice', i.purchase_price, 'isUpsell', i.is_upsell, 'forProductId', i.for_product_id) ORDER BY i.id), '[]')
    FROM order_items i WHERE i.order_id = o.id) AS items_json,
   ag.name AS agent_name, fa.name AS follow_agent_name, co.name AS company_name, lv.name AS livreur_name,
   CASE WHEN o.is_exchange THEN (SELECT k.ref FROM complaints k WHERE k.exchange_order_id = o.id ORDER BY k.id DESC LIMIT 1) END AS sav_ref,
@@ -405,6 +407,8 @@ const ItemInput = z.object({
   qty: z.number().int().min(1).max(999),
   unitPrice: z.number().int().min(0).max(10_000_000).optional(),
   isUpsell: z.boolean().optional(),
+  /** a « Montage » line: the product it mounts (its price and cost are that product's montage ones) */
+  forProductId: id.nullable().optional(),
 });
 
 export const OrderInput = z.object({
@@ -439,7 +443,8 @@ export type OrderInput = z.infer<typeof OrderInput>;
 /** `kept`: unit prices this order already had (product:variant → price), accepted as they are when the order is edited. */
 async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice = false, kept: Map<string, number> = new Map(), strictVariant = true) {
   const pids = [...new Set(items.map((i) => i.productId))];
-  const prods = await db.query('SELECT id, name, price, cost, fixed_price, max_discount, active, fee_grid, weight_kg, packs FROM products WHERE id = ANY($1)', [pids]);
+  const mountFor = [...new Set(items.map((i) => (i as { forProductId?: number | null }).forProductId).filter((x): x is number => !!x))];
+  const prods = await db.query('SELECT id, name, price, cost, fixed_price, max_discount, active, fee_grid, weight_kg, packs, is_service, sku, montage FROM products WHERE id = ANY($1)', [[...new Set([...pids, ...mountFor])]]);
   // a line without its variant would leave the depot without a stock movement: a product without colours / sizes uses
   // its plain variant; one with them needs the customer's choice
   if (items.some((i) => !i.variantId)) {
@@ -471,6 +476,18 @@ async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice 
   const lines: OrderItem[] = items.map((i) => {
     const p: any = P.get(i.productId);
     if (!p) throw bad(`Produit inconnu (${i.productId})`);
+    // a « Montage » line: the shared service, priced with the mounted product's montage (no discount room, no stock)
+    const forId = (i as { forProductId?: number | null }).forProductId ?? null;
+    if (forId) {
+      const parent: any = P.get(forId);
+      if (!p.is_service || p.sku !== MONTAGE_SKU) throw bad('Une ligne de montage doit être le service « Montage »');
+      const m = parent ? readMontage(parent.montage) : null;
+      if (!parent || !m) throw bad(`« ${parent?.name ?? forId} » n’a pas de montage`);
+      const mv: any = i.variantId ? V.get(i.variantId) : null;
+      if (i.variantId && (!mv || num(mv.product_id) !== i.productId)) throw bad('Variante inconnue pour le montage');
+      grids.push(null);
+      return { productId: i.productId, variantId: i.variantId ?? null, name: `Montage — ${parent.name}`, variantTitle: '', qty: i.qty, unitPrice: m.price, purchasePrice: m.cost, isUpsell: !!i.isUpsell, forProductId: forId };
+    }
     const v: any = i.variantId ? V.get(i.variantId) : null;
     if (i.variantId && (!v || num(v.product_id) !== i.productId)) throw bad(`Variante inconnue pour ${p.name}`);
     const listPrice = v?.price ?? p.price;
@@ -635,8 +652,8 @@ async function keepPicked(db: Db, orderId: number, had: { productId: number; var
 async function insertItems(db: Db, orderId: number, lines: OrderItem[]) {
   for (const l of lines) {
     await db.query(
-      'INSERT INTO order_items (order_id, product_id, variant_id, name, variant_title, qty, unit_price, purchase_price, is_upsell) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
-      [orderId, l.productId, l.variantId, l.name, l.variantTitle, l.qty, l.unitPrice, l.purchasePrice, l.isUpsell],
+      'INSERT INTO order_items (order_id, product_id, variant_id, name, variant_title, qty, unit_price, purchase_price, is_upsell, for_product_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+      [orderId, l.productId, l.variantId, l.name, l.variantTitle, l.qty, l.unitPrice, l.purchasePrice, l.isUpsell, l.forProductId ?? null],
     );
   }
 }
@@ -693,6 +710,7 @@ export async function createOrder(
       : null;
   const order = await db.tx(async (tx) => {
     const priced = await priceItems(tx, input.items, input.isExchange);
+    await checkMontageLines(tx, priced.lines, input.wilayaId, WILAYAS[input.wilayaId - 1] ?? '');
     // New orders cannot contain disabled products or variants. Stock shortages are
     // intentionally different: enabled items are allowed into "confirmed without stock".
     const availability = await checkLines(tx, priced.lines.map((l) => ({ productId: l.productId, variantId: l.variantId, qty: l.qty })), null);
@@ -850,12 +868,14 @@ async function priceChange(db: Db, cur: any, input: z.infer<typeof UpdateInput>,
   let priceCut = 0;
   const recount = !!input.items || input.discount !== undefined;
   const old = recount
-    ? (await db.query('SELECT id, product_id, variant_id, qty, unit_price, is_upsell FROM order_items WHERE order_id = $1 ORDER BY id', [input.id])).map((r: any) => ({ id: num(r.id), productId: num(r.product_id), variantId: numOrNull(r.variant_id), qty: num(r.qty), unitPrice: num(r.unit_price), isUpsell: !!r.is_upsell }))
+    ? (await db.query('SELECT id, product_id, variant_id, qty, unit_price, is_upsell, for_product_id FROM order_items WHERE order_id = $1 ORDER BY id', [input.id])).map((r: any) => ({ id: num(r.id), productId: num(r.product_id), variantId: numOrNull(r.variant_id), qty: num(r.qty), unitPrice: num(r.unit_price), isUpsell: !!r.is_upsell, forProductId: numOrNull(r.for_product_id) }))
     : [];
   const first = new Map((readOrig(cur.orig_items) ?? origOf(old)).map((l) => [`${l.productId}:${l.variantId ?? ''}`, l.unitPrice]));
   let lines: OrderItem[] | null = null;
   if (input.items) {
     const priced = await priceItems(db, input.items, !!cur.is_exchange, first);
+    const wid = input.wilayaId ?? num(cur.wilaya_id);
+    await checkMontageLines(db, priced.lines, wid, WILAYAS[wid - 1] ?? '');
     lines = priced.lines;
     subtotal = priced.subtotal;
     maxDiscount = priced.maxDiscount;
@@ -865,6 +885,11 @@ async function priceChange(db: Db, cur: any, input: z.infer<typeof UpdateInput>,
     const priced = await priceItems(db, old, !!cur.is_exchange, first, false);
     maxDiscount = priced.maxDiscount;
     priceCut = priced.priceCut;
+  }
+  // the wilaya changes and the products stay: their montage must still be possible there
+  if (!input.items && input.wilayaId !== undefined && input.wilayaId !== num(cur.wilaya_id)) {
+    const mounted = (await db.query('SELECT product_id, for_product_id, name FROM order_items WHERE order_id = $1', [input.id])).map((r: any) => ({ productId: num(r.product_id), forProductId: numOrNull(r.for_product_id), name: String(r.name) }));
+    await checkMontageLines(db, mounted, input.wilayaId, WILAYAS[input.wilayaId - 1] ?? '');
   }
   // the welcome code (Referral › Code promo) apart: `discount` here is the other remise, the code's is added and may go
   // above the products' maximum. The code kept is worked out again on the new products' total.
@@ -1746,7 +1771,7 @@ function orderExtraProcs() {
     /** Everything the order form needs: products (variants, stock, packs, linked), companies, stop desks, settings. */
     'orders.formData': proc(['confirmation', 'suivi', 'depot'], z.object({}), async (ctx) => {
       const allowed = await assignedProductIds(ctx);
-      const prods = await ctx.db.query(`SELECT id, name, sku, price, fixed_price, max_discount, packs, linked, active, is_service, fee_grid, weight_kg FROM products WHERE archived_at IS NULL${allowed ? ' AND id = ANY($1)' : ''} ORDER BY name`, allowed ? [allowed] : []);
+      const prods = await ctx.db.query(`SELECT id, name, sku, price, fixed_price, max_discount, packs, linked, active, is_service, fee_grid, weight_kg, montage FROM products WHERE archived_at IS NULL${allowed ? ' AND id = ANY($1)' : ''} ORDER BY name`, allowed ? [allowed] : []);
       const vars = await ctx.db.query(
         `SELECT v.id, v.product_id, v.title, v.sku, v.price, v.active,
            coalesce((SELECT sum(s.qty) FROM stock s WHERE s.variant_id = v.id), 0) AS qty,
@@ -1764,6 +1789,7 @@ function orderExtraProcs() {
       const products = prods.map((p: any) => ({
         id: num(p.id), name: p.name, sku: p.sku, price: num(p.price), fixedPrice: !!p.fixed_price, maxDiscount: numOrNull(p.max_discount),
         packs: parse(p.packs).map((k: any) => ({ qty: num(k.qty), price: num(k.price) })) as { qty: number; price: number }[], linked: ((p.linked ?? []) as unknown[]).map(num).filter((id) => allowed === null || allowed.includes(id)), active: !!p.active, isService: !!p.is_service,
+        montage: readMontage(p.montage),
         variants: (byP.get(num(p.id)) ?? []) as { id: number; title: string; sku: string; price: number | null; active: boolean; stock: number }[],
       }));
       const companies = (await ctx.db.query('SELECT id, name, kind, active FROM delivery_companies ORDER BY name')).map((c: any) => ({ id: num(c.id), name: c.name, kind: c.kind, active: !!c.active }));
@@ -1771,7 +1797,11 @@ function orderExtraProcs() {
         id: num(d.id), companyId: num(d.company_id), wilayaId: num(d.wilaya_id), commune: d.commune, name: d.name, address: d.address,
       }));
       const shop = await getSetting(ctx.db, 'shop');
-      return { products, companies, stopdesks, defaultCompanyId: shop.defaultCompanyId ?? null };
+      // Montage: the shop's one service (its id for the « + Montage » lines) and its wilayas (empty: every wilaya)
+      const mid = prods.some((p: any) => p.montage) ? await montageProductId(ctx.db, false) : null;
+      const mvar = mid ? numOrNull((await ctx.db.query('SELECT id FROM product_variants WHERE product_id = $1 ORDER BY id LIMIT 1', [mid]))[0]?.id) : null;
+      const montage = mid && mvar ? { productId: mid, variantId: mvar, wilayas: await shopMontageWilayas(ctx.db) } : null;
+      return { products, companies, stopdesks, defaultCompanyId: shop.defaultCompanyId ?? null, montage };
     }),
 
     /** Small lists used by the order screens: delivery companies (with kind), the shop name / WhatsApp template, and the

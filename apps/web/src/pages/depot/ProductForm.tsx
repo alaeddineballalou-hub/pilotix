@@ -12,6 +12,7 @@ import { bidi } from './stockui';
 import { combosOf, MAX_COMBOS, Opt, skuOf, titleOf, VariantOptions, VRow } from './VariantOptions';
 import { DraftFacts, formToGuide, formTr, GuideEditor, GuideForm, guideProblem, guideToForm, isSizeOption, readLang, renameGuideSize, sizeValues, useGuideTranslate } from './guide';
 import { HdPhotos } from './HdPhotos';
+import { MontageBlock, montageForm, montageInput } from './Montage';
 
 interface PackRow {
   qty: string;
@@ -96,6 +97,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
     return new Set(combosOf(p?.options ?? []).map((c) => titleOf(c).toLowerCase()).filter((x) => !saved.has(x)));
   });
   const [packs, setPacks] = useState<PackRow[]>(() => (p?.packs ?? []).map((x: any) => ({ qty: String(x.qty), price: String(x.price) })));
+  const [montage, setMontage] = useState(() => montageForm(p?.montage));
   const [services, setServices] = useState<ServiceRow[]>(() => (p?.services ?? []).map((s: any) => ({ id: s.id, name: s.name, price: String(s.price), cost: String(s.cost) })));
   const [hasParts, setHasParts] = useState((p?.parts ?? []).length > 0);
   const [parts, setParts] = useState<PartRow[]>(() => (p?.parts ?? []).map((x: any) => ({ name: x.name, max: x.max === null ? '' : String(x.max) })));
@@ -167,6 +169,8 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
       return toast('Enter purchase and selling prices for every active variant.', 'bad');
     }
     if (services.some((s) => !s.name.trim() || s.price === '' || s.cost === '')) return toast('Enter a name, selling price and service cost for each additional service.', 'bad');
+    if (services.some((s) => /^montage/i.test(s.name.trim()))) return toast(t('produits.montage.useSwitch'), 'bad');
+    if (montage.on && (montage.price === '' || montage.cost === '')) return toast(t('produits.montage.needPrice'), 'bad');
     const sales = formToGuide(guide, sizeValues(optMode ? opts : []));
     const problem = guideProblem(sales, t);
     if (problem) {
@@ -201,6 +205,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
       linked: [...linked],
       parts: hasParts ? parts.filter((x) => x.name.trim()).map((x) => ({ name: x.name.trim(), max: x.max === '' ? null : Math.round(Number(x.max)) || null })) : [],
       services: services.map((x) => ({ id: x.id, name: x.name.trim(), price: Math.round(Number(x.price)), cost: Math.round(Number(x.cost)) })),
+      montage: f.isService ? null : montageInput(montage),
       guide: sales,
       guideTr: formTr(guide, sales),
     });
@@ -480,19 +485,21 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
           <HdPhotos productId={p?.id ?? null} variants={(p?.variants ?? []).filter((v: any) => v.title && v.active).map((v: any) => ({ id: Number(v.id), title: String(v.title) }))} />
         </section>
 
+        {!f.isService && <MontageBlock value={montage} onChange={setMontage} />}
+
         <section className="pf-sec">
-        <h3>Additional paid services</h3>
-        <p className="muted small">Optional add-ons such as Montage are offered in new orders as linked services. They have a selling price and a service cost and do not consume physical stock.</p>
+        <h3>{t('produits.montage.otherTitle')}</h3>
+        <p className="muted small">{t('produits.montage.otherHelp')}</p>
         <div className="items-ed">
           {services.map((sv, index) => (
             <div key={sv.id ?? `new-${index}`} className="item-row bjpt-row">
-              <input aria-label="Service name" placeholder="Montage" value={sv.name} onChange={(e) => setServices((old) => old.map((x, k) => k === index ? { ...x, name: e.target.value } : x))} />
+              <input aria-label="Service name" placeholder={t('produits.montage.otherPh')} value={sv.name} onChange={(e) => setServices((old) => old.map((x, k) => k === index ? { ...x, name: e.target.value } : x))} />
               <input aria-label="Service selling price (DA)" type="number" min={0} step={50} placeholder="Selling price (DA)" value={sv.price} onChange={(e) => setServices((old) => old.map((x, k) => k === index ? { ...x, price: e.target.value } : x))} />
               <input aria-label="Service cost (DA)" type="number" min={0} step={50} placeholder="Service cost (DA)" value={sv.cost} onChange={(e) => setServices((old) => old.map((x, k) => k === index ? { ...x, cost: e.target.value } : x))} />
               <button type="button" className="icon-btn" aria-label="Remove service" onClick={() => setServices((old) => old.filter((_, k) => k !== index))}>✕</button>
             </div>
           ))}
-          <button type="button" className="btn small" onClick={() => setServices((old) => [...old, { name: '', price: '', cost: '' }])}>+ Add paid service</button>
+          <button type="button" className="btn small" onClick={() => setServices((old) => [...old, { name: '', price: '', cost: '' }])}>{t('produits.montage.otherAdd')}</button>
         </div>
         </section>
 

@@ -253,6 +253,8 @@ export interface OrderItem {
   unitPrice: number;
   purchasePrice: number;
   isUpsell: boolean;
+  /** a « Montage » line: the product it mounts (null / absent: an ordinary line) */
+  forProductId?: number | null;
 }
 
 /**

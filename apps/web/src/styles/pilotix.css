@@ -1937,3 +1937,4 @@ html[data-theme="dark"] .topbar .px-lang-sel option { background: #16202B; color
 .px-scr select:focus-visible { outline: 2px solid var(--px-orange); outline-offset: 1px; }
 .px-scr option { background: #fff; color: #1B2A47; }
 .px-folded .px-scr { display: none; }
+.qd6-mtno { background: color-mix(in srgb, #dc2626 12%, transparent); color: #b91c1c; font-weight: 600; }

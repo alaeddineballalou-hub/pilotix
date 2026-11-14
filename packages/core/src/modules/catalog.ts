@@ -16,6 +16,7 @@ import { getPrefs } from './prefs';
 import { assignedProductIds } from './productscope';
 import { checkGuide, GuideInput, HAS_GUIDE, readGuide, saveGuide, TrFix, TrInput } from './guide';
 import { lessonsFromGuide } from './lahja';
+import { montageProductId, MontageInput, ProductMontage, readMontage } from './montage';
 
 // ---------------------------------------------------------------- types
 export interface CatalogVariant {
@@ -66,6 +67,8 @@ export interface CatalogProduct {
   options: ProductOption[];
   variants: CatalogVariant[];
   services: ProductService[];
+  /** Montage: the product can be mounted (its price, cost and wilayas; null: no montage) */
+  montage: ProductMontage | null;
   /** the product has a sales guide (Guide de vente: modules/guide.ts) */
   hasGuide: boolean;
 }
@@ -161,6 +164,7 @@ function toProduct(p: any, vars: any[]): CatalogProduct {
     defaultCompanyId: numOrNull(p.default_company_id),
     options: j(p.options),
     services: j(p.services),
+    montage: readMontage(p.montage),
     hasGuide: !!p.has_guide,
     variants: vars.map((v) => ({ id: num(v.id), productId: num(v.product_id), title: v.title, sku: v.sku, price: numOrNull(v.price), cost: numOrNull(v.cost), maxDiscount: numOrNull(v.max_discount), weightKg: numOrNull(v.weight_kg), alertQty: numOrNull(v.alert_qty), feeGrid: v.fee_grid ?? null, photo: v.photo ?? null, active: !!v.active })),
   };
@@ -541,6 +545,8 @@ export const ProductInput = z.object({
   parts: z.array(z.object({ name: z.string().trim().min(1).max(120), max: z.number().int().min(1).max(999).nullable().optional() })).max(50).default([]),
   /** Optional paid services such as montage; each becomes a linked stock-free service product. */
   services: z.array(z.object({ id: id.optional(), name: z.string().trim().min(1).max(120), price: z.number().int().min(0).max(100_000_000), cost: z.number().int().min(0).max(100_000_000) })).max(20).optional(),
+  /** Montage (one shared service for the shop): null = none; not sent = kept as it is */
+  montage: MontageInput.optional(),
   feeGrid: z.string().trim().max(80).nullable().optional(),
   barcode: z.string().trim().max(120).nullable().optional(),
   brand: z.string().trim().max(120).nullable().optional(),
@@ -648,6 +654,7 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
     let services: ProductService[] = previousServices;
     if (i.services !== undefined) {
       if (new Set(i.services.map((s) => s.name.trim().toLowerCase())).size !== i.services.length) throw bad('Deux services portent le même nom');
+      if (i.services.some((s) => /^montage/i.test(s.name.trim()))) throw bad('Le montage se règle avec le bouton « Montage » du produit, pas comme service');
       services = [];
       const oldIds = new Set(previousServices.map((s) => Number(s.id)));
       for (const service of i.services) {
@@ -693,6 +700,12 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
           [...vals, JSON.stringify(options), JSON.stringify(services)],
         ))[0].id,
       );
+    }
+    // Montage: kept on the product; the shop's one « Montage » service is made the first time one is turned on
+    if (i.montage !== undefined) {
+      if (i.montage && i.isService) throw bad('Un service ne peut pas avoir de montage');
+      await tx.query('UPDATE products SET montage = $2 WHERE id = $1', [productId, i.montage ? JSON.stringify({ ...i.montage, wilayas: i.montage.wilayas ? [...new Set(i.montage.wilayas)].sort((a, b) => a - b) : null }) : null]);
+      if (i.montage) await montageProductId(tx);
     }
     // Variants: rename / reprice / disable; never deleted (orders and stock point to them).
     const existing = await tx.query('SELECT * FROM product_variants WHERE product_id = $1 ORDER BY id', [productId]);

@@ -209,12 +209,12 @@ test('receive a return from the Retours page, and "Retirer" from dispatch', asyn
 });
 
 
-test('paid montage, per-variant availability and zero-stock confirmation rules', async () => {
+test('paid service (gift wrap), per-variant availability and zero-stock confirmation rules', async () => {
   const admin = await as(EMAILS.admin);
   const p: any = await call('catalog.saveProduct', admin, {
-    name: 'Montage option test product', price: 10000, cost: 6000, weightKg: 5,
+    name: 'Service option test product', price: 10000, cost: 6000, weightKg: 5,
     variants: [{ title: 'Gris', price: 10000, cost: 6000 }],
-    services: [{ name: 'Montage', price: 1500, cost: 500 }],
+    services: [{ name: 'Emballage cadeau', price: 1500, cost: 500 }],
   });
   assert.equal(p.services.length, 1);
   const svc: any = (await call('catalog.product', admin, { id: p.services[0].id }));

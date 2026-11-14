@@ -34,6 +34,8 @@ interface Line {
   qty: number;
   unitPrice: number;
   isUpsell: boolean;
+  /** a « Montage » line: the product it mounts */
+  forProductId?: number | null;
 }
 export type Catalog = NonNullable<ReturnType<typeof useCatalog>['data']>;
 type Prod = Catalog[number];
@@ -59,7 +61,7 @@ const norm = (s: string) =>
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '');
-const key = (L: Line[]) => JSON.stringify(L.map((l) => [l.variantId, l.productId, l.qty, l.unitPrice, l.isUpsell]));
+const key = (L: Line[]) => JSON.stringify(L.map((l) => [l.variantId, l.productId, l.qty, l.unitPrice, l.isUpsell, l.forProductId ?? null]));
 
 /** onDone: called after a status change, Confirmer or Enregistrer worked, so the list can move on to the next order. */
 /** phone: the order full screen on a phone — the customer first (name, phones, address editable), then delivery, products, the totals, and the Statut / Confirmer bar. */
@@ -67,13 +69,14 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
   const { t } = useTranslation();
   const qc = useQueryClient();
   const cat = useCatalog();
+  const mt = useRpc('catalog.montage', {}, { staleTime: 5 * 60_000 });
   const grid = useRpc('confirmation.gridFee', { id: order.id }, { staleTime: 60_000 });
   /** another agent has this order open: he works on it, this card only shows it */
   const heldBy = useHold(order);
   const { has: hasRole } = useSession();
   /** a manager or the owner may still act on it (to unblock it) */
   const mgrHold = hasRole('agent_manager', 'vendeur');
-  const initial = useMemo<Line[]>(() => order.items.map((i) => ({ productId: i.productId, variantId: i.variantId, name: i.name, variantTitle: i.variantTitle, qty: i.qty, unitPrice: i.unitPrice, isUpsell: i.isUpsell })), [order]);
+  const initial = useMemo<Line[]>(() => order.items.map((i) => ({ productId: i.productId, variantId: i.variantId, name: i.name, variantTitle: i.variantTitle, qty: i.qty, unitPrice: i.unitPrice, isUpsell: i.isUpsell, forProductId: i.forProductId ?? null })), [order]);
   const [L, setL] = useState<Line[]>(initial);
   /** the pictures of the cart's products */
   const cartIds = useMemo(() => [...new Set(L.map((l) => l.productId))].sort((a, b) => a - b), [L]);
@@ -224,7 +227,38 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
       return [...cur, { productId: p.id, variantId: vid, name: p.name, variantTitle: v?.title ?? '', qty: 1, unitPrice: priceOf(p, vid), isUpsell: false }];
     });
   };
-  const upd = (i: number, patch: Partial<Line>) => setL((cur) => cur.map((l, k) => (k === i ? { ...l, ...patch } : l)));
+  const upd = (i: number, patch: Partial<Line>) =>
+    setL((cur) => {
+      const r = cur.map((l, k) => (k === i ? { ...l, ...patch } : l));
+      // the montage follows its product's quantity
+      const ch = r[i];
+      if (patch.qty === undefined || !ch || ch.forProductId) return r;
+      const pieces = r.filter((l) => !l.forProductId && l.productId === ch.productId).reduce((n, l) => n + l.qty, 0);
+      return r.map((l) => (l.forProductId === ch.productId ? { ...l, qty: pieces } : l));
+    });
+  /** a line leaves the cart (a product leaving takes its montage with it) */
+  const rm = (i: number) =>
+    setL((cur) => {
+      const gone = cur[i];
+      let r = cur.filter((_, k) => k !== i);
+      if (gone && !gone.forProductId && !r.some((l) => !l.forProductId && l.productId === gone.productId)) r = r.filter((l) => l.forProductId !== gone.productId);
+      return r;
+    });
+  // Montage: the shop's one service; a product of the cart that can be mounted in this wilaya gets « + Montage »
+  const montageHere = (p: Prod | undefined, w: number | null) => {
+    if (!p?.montage || !w) return false;
+    const list = p.montage.wilayas ?? mt.data?.wilayas ?? [];
+    return !list.length || list.includes(w);
+  };
+  const mountable = mt.data?.productId && mt.data.variantId
+    ? [...new Set(L.filter((l) => !l.forProductId).map((l) => l.productId))].map((id) => P.get(id)).filter((p): p is Prod => !!p && montageHere(p, wil) && !L.some((l) => l.forProductId === p.id))
+    : [];
+  const addMontage = (p: Prod) => {
+    if (!mt.data?.productId || !mt.data.variantId || !p.montage) return;
+    setErr('');
+    const pieces = L.filter((l) => !l.forProductId && l.productId === p.id).reduce((n, l) => n + l.qty, 0) || 1;
+    setL((cur) => [...cur, { productId: mt.data!.productId!, variantId: mt.data!.variantId!, name: `Montage — ${p.name}`, variantTitle: '', qty: pieces, unitPrice: p.montage!.price, isUpsell: false, forProductId: p.id }]);
+  };
   const setVar = (i: number, vid: number) => {
     const l = L[i];
     const p = P.get(l.productId);
@@ -244,7 +278,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
   const linked = new Map<number, Prod>();
   L.forEach((l, i) => {
     const p = P.get(l.productId);
-    if (!p) return;
+    if (!p || l.forProductId) return;
     for (const pk of p.packs) if (pk.qty !== l.qty) packs.push({ i, qty: pk.qty, price: pk.price, save: l.unitPrice * pk.qty - pk.price });
     for (const id of p.linked) {
       const lp = P.get(id);
@@ -302,7 +336,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
   const blockedNow = !!C && (!C.canConfirm || !L.length);
   const sansStock = !!C && C.canConfirm && C.noStock;
   const stillNoStock = sansStock && order.confStatus === 'no_stock';
-  const cartBody = L.map((l) => ({ productId: l.productId, variantId: l.variantId, qty: l.qty, unitPrice: l.unitPrice, isUpsell: l.isUpsell }));
+  const cartBody = L.map((l) => ({ productId: l.productId, variantId: l.variantId, qty: l.qty, unitPrice: l.unitPrice, isUpsell: l.isUpsell, ...(l.forProductId ? { forProductId: l.forProductId } : {}) }));
   /** Saves the cart and the delivery when they changed (before any status change). Returns false when it could not. */
   const saveFirst = async (): Promise<boolean> => {
     if (!L.length) return setErr(t('confirmation.d.keepOne')), false;
@@ -457,6 +491,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
                       </span>
                     )}{' '}
                     {pk && <span className="chip qd2-pk">pack {l.qty}</span>}
+                    {l.forProductId && wil && !montageHere(P.get(l.forProductId), wil) && P.get(l.forProductId) && <span className="chip qd6-mtno">{t('produits.montage.notHere', { w: wilayaName(wil) })}</span>}
                   </b>
                   <div className="qd6-meta">
                     {p && (vs.length > 1 || (vs.length === 1 && vs[0].id !== l.variantId)) ? (
@@ -506,7 +541,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
                   )}
                 </div>
                 {editable ? (
-                  <button type="button" className="qd6-rm" aria-label={t('confirmation.d.remove', { name: l.name })} title={t('confirmation.d.removeShort')} onClick={() => setL((cur) => cur.filter((_, k) => k !== i))}>
+                  <button type="button" className="qd6-rm" aria-label={t('confirmation.d.remove', { name: l.name })} title={t('confirmation.d.removeShort')} onClick={() => rm(i)}>
                     <Icon name="x" />
                   </button>
                 ) : (
@@ -523,8 +558,21 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
                 <Icon name="sparkles" />
                 {t('confirmation.d6.offer')}
               </div>
-              {packs.length === 0 && linked.size === 0 && <p className="qd6-none">{t('confirmation.d6.noOffer')}</p>}
+              {packs.length === 0 && linked.size === 0 && mountable.length === 0 && <p className="qd6-none">{t('confirmation.d6.noOffer')}</p>}
               <div className="qd6-chips">
+                {mountable.map((p) => (
+                  <button key={`m${p.id}`} type="button" className="qd6-chip" title={t('produits.montage.offerTip', { name: p.name, price: da(p.montage!.price) })} onClick={() => addMontage(p)}>
+                    <span className="qd6-plus">
+                      <Icon name="plus" />
+                    </span>
+                    <span>
+                      <b>
+                        {t('produits.montage.offer')} {p.name}
+                      </b>
+                      <small className="ltr">{da(p.montage!.price)}</small>
+                    </span>
+                  </button>
+                ))}
                 {packs.map((x, k) => {
                   const l = L[x.i];
                   return (

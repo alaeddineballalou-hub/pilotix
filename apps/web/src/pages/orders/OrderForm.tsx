@@ -28,6 +28,8 @@ interface Line {
   unitPrice: number | null;
   isUpsell: boolean;
   name?: string;
+  /** a « Montage » line: the product it mounts */
+  forProductId?: number | null;
 }
 let lineKey = 1;
 const emptyLine = (isUpsell = false): Line => ({ key: lineKey++, productId: null, variantId: null, qty: 1, unitPrice: null, isUpsell });
@@ -63,7 +65,7 @@ function ProductPick({ products, value, onPick, disabled }: { products: Product[
   const list = useMemo(() => {
     if (q === null) return [];
     const k = norm(q.trim());
-    return products.filter((p) => p.active && (!k || norm(`${p.name} ${p.sku} ${p.variants.map((v) => `${v.title} ${v.sku}`).join(' ')}`).includes(k))).slice(0, 30);
+    return products.filter((p) => p.active && p.sku !== 'SERVICE-MONTAGE' && (!k || norm(`${p.name} ${p.sku} ${p.variants.map((v) => `${v.title} ${v.sku}`).join(' ')}`).includes(k))).slice(0, 30);
   }, [q, products]);
   const pick = (p: Product) => {
     setQ(null);
@@ -167,7 +169,7 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
   const [lines, setLines] = useState<Line[]>(() => {
     const items = (base.items ?? []) as any[];
     if (!items.length) return [emptyLine()];
-    return items.map((i) => ({ key: lineKey++, productId: i.productId ?? null, variantId: i.variantId ?? null, qty: Number(i.qty) || 1, unitPrice: isExchange ? 0 : i.unitPrice ?? null, isUpsell: !!i.isUpsell, name: i.name }));
+    return items.map((i) => ({ key: lineKey++, productId: i.productId ?? null, variantId: i.variantId ?? null, qty: Number(i.qty) || 1, unitPrice: isExchange ? 0 : i.unitPrice ?? null, isUpsell: !!i.isUpsell, name: i.name, forProductId: i.forProductId ?? null }));
   });
   const [fee, setFee] = useState<string>(isEdit || base.deliveryFee !== undefined ? String(base.deliveryFee ?? '') : '');
   const [feeAuto, setFeeAuto] = useState<boolean>(!isEdit && base.deliveryFee === undefined);
@@ -206,7 +208,14 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
   };
   const update = (key: number, patch: Partial<Line>, items = true) => {
     setPErr('');
-    setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+    setLines((ls) => {
+      const r = ls.map((l) => (l.key === key ? { ...l, ...patch } : l));
+      // the montage follows its product's quantity
+      const changed = r.find((l) => l.key === key);
+      if (patch.qty === undefined || !changed || changed.forProductId || !changed.productId) return r;
+      const pieces = r.filter((l) => !l.forProductId && l.productId === changed.productId).reduce((n, l) => n + l.qty, 0);
+      return r.map((l) => (l.forProductId === changed.productId ? { ...l, qty: pieces } : l));
+    });
     if (items) setFeeAuto(true);
   };
   const pickProduct = (it: Line, pr: Product) => {
@@ -221,18 +230,32 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
   const removeLine = (key: number) => {
     setFeeAuto(true);
     setLines((ls) => {
-      const r = ls.filter((l) => l.key !== key);
+      const gone = ls.find((l) => l.key === key);
+      let r = ls.filter((l) => l.key !== key);
+      // the product leaves the order: its montage too
+      if (gone && !gone.forProductId && gone.productId && !r.some((l) => !l.forProductId && l.productId === gone.productId)) r = r.filter((l) => l.forProductId !== gone.productId);
       return r.length ? r : [emptyLine()];
     });
   };
 
+  /** can this product be mounted in this wilaya (its own list, else the shop's; empty: everywhere)? */
+  const montageHere = (pr: Product, w: number) => {
+    if (!pr.montage) return false;
+    const list = pr.montage.wilayas ?? data.montage?.wilayas ?? [];
+    return !list.length || list.includes(w);
+  };
+  const addMontage = (pr: Product, qty: number) => {
+    if (!data.montage || !pr.montage) return;
+    setFeeAuto(true);
+    setLines((ls) => [...ls.filter((x) => x.variantId || x.productId), { key: lineKey++, productId: data.montage!.productId, variantId: data.montage!.variantId, qty, unitPrice: isExchange ? 0 : pr.montage!.price, isUpsell: false, name: `Montage — ${pr.name}`, forProductId: pr.id }]);
+  };
   // offers: packs of the products in the order, linked products not yet in it
   const offers = useMemo(() => {
     const inP = new Set(lines.map((l) => l.productId).filter(Boolean));
     const packs: { it: Line; pr: Product; pk: { qty: number; price: number } }[] = [];
     const rel = new Map<number, Product>();
     for (const it of lines) {
-      if (!it.variantId || !it.productId) continue;
+      if (!it.variantId || !it.productId || it.forProductId) continue;
       const pr = P.get(it.productId);
       if (!pr) continue;
       for (const pk of pr.packs) if (pk.qty !== it.qty) packs.push({ it, pr, pk });
@@ -241,8 +264,16 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
         if (lp && lp.active && !inP.has(lid)) rel.set(lid, lp);
       }
     }
-    return { packs, rel: [...rel.values()] };
-  }, [lines, P]);
+    // « + Montage »: a product of the order that can be mounted in this wilaya, not mounted yet
+    const mount: { pr: Product; qty: number }[] = [];
+    if (data.montage && wil !== '')
+      for (const pid of new Set(lines.filter((l) => l.variantId && l.productId && !l.forProductId).map((l) => l.productId!))) {
+        const pr = P.get(pid);
+        if (!pr?.montage || lines.some((l) => l.forProductId === pid) || !montageHere(pr, wil)) continue;
+        mount.push({ pr, qty: lines.filter((l) => !l.forProductId && l.productId === pid).reduce((n, l) => n + l.qty, 0) });
+      }
+    return { packs, rel: [...rel.values()], mount };
+  }, [lines, P, wil, data.montage]);
 
   // ---- delivery state ("Livrable : OUI / NON / à compléter")
   const wName = wil === '' ? '' : WILAYAS[wil - 1];
@@ -297,6 +328,11 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
     if (lines.some((x) => !x.variantId)) return t('orders.form.eEmptyLine');
     const seen = new Set<number>();
     for (const x of lines) {
+      if (x.forProductId) {
+        const pr = P.get(x.forProductId);
+        if (pr && !montageHere(pr, wil)) return t('produits.montage.notHere', { w: wName }) + ` — ${pr.name}`;
+        continue;
+      }
       if (seen.has(x.variantId!)) return t('orders.form.eDupVariant');
       seen.add(x.variantId!);
     }
@@ -339,7 +375,7 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
       deliveryNote: noteL.trim() || null,
       internalNote: (isExchange ? [noteT.trim(), `Échange de ${original!.ref}`].filter(Boolean).join(' · ') : noteT.trim()) || null,
     };
-    const items = lines.filter((x) => x.variantId).map((x) => ({ productId: x.productId!, variantId: x.variantId!, qty: x.qty, unitPrice: x.unitPrice ?? undefined }));
+    const items = lines.filter((x) => x.variantId).map((x) => ({ productId: x.productId!, variantId: x.variantId!, qty: x.qty, unitPrice: x.unitPrice ?? undefined, ...(x.forProductId ? { forProductId: x.forProductId } : {}) }));
     try {
       let saved: Order;
       if (isEdit) {
@@ -531,6 +567,51 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
                 <span />
               </div>
               {lines.map((it, idx) => {
+                if (it.forProductId) {
+                  const of = P.get(it.forProductId);
+                  const here = !of || wil === '' || montageHere(of, wil);
+                  return (
+                    <div key={it.key} className="pxo-line mt-line">
+                      <div className="pxo-li">
+                        <div className="pxo-c-p">
+                          <span className="pxo-novar">
+                            🔧 <b>{it.name ?? `Montage — ${of?.name ?? ''}`}</b>
+                          </span>
+                        </div>
+                        <div className="pxo-c-v">
+                          <span className="pxo-novar">{t('produits.montage.title')}</span>
+                        </div>
+                        <div className="pxo-c-q">
+                          <div className="pxo-qty">
+                            <button type="button" aria-label={t('orders.form.minus')} disabled={it.qty <= 1 || locked} onClick={() => update(it.key, { qty: Math.max(1, it.qty - 1) })}>
+                              −
+                            </button>
+                            <input type="number" min={1} step={1} value={it.qty} disabled={locked} aria-label={t('orders.form.qty')} onChange={(e) => update(it.key, { qty: Math.max(1, Math.round(Number(e.target.value) || 1)) })} />
+                            <button type="button" aria-label={t('orders.form.plus')} disabled={locked} onClick={() => update(it.key, { qty: it.qty + 1 })}>
+                              +
+                            </button>
+                          </div>
+                        </div>
+                        <div className="pxo-c-pr">
+                          <input type="number" className="pxo-num px-locked" value={it.unitPrice ?? ''} aria-label={t('orders.form.price')} readOnly tabIndex={-1} />
+                        </div>
+                        <div className="pxo-c-t ltr">{da((Number(it.unitPrice) || 0) * it.qty)}</div>
+                        <div className="pxo-c-x">
+                          {!locked && (
+                            <button type="button" className="pxo-rm" aria-label={t('orders.form.remove')} title={t('orders.form.remove')} onClick={() => removeLine(it.key)}>
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {!here && (
+                        <div className="pxo-meta">
+                          <span className="pxo-tag bad">{t('produits.montage.notHere', { w: wName })}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
                 const pr = it.productId ? P.get(it.productId) : undefined;
                 const ups = !!autoUp?.flags[idx];
                 const v = it.variantId ? V.get(it.variantId) : undefined;
@@ -640,8 +721,21 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
             {pErr && <p className="pxo-perr">{pErr}</p>}
             {!locked && (
               <div className="pxo-offers">
-                {offers.packs.length || offers.rel.length ? (
+                {offers.packs.length || offers.rel.length || offers.mount.length ? (
                   <>
+                    {offers.mount.length > 0 && (
+                      <div className="pxo-orow">
+                        <span className="pxo-ol">{t('produits.montage.title')}</span>
+                        {offers.mount.map(({ pr, qty }) => (
+                          <button key={`m${pr.id}`} type="button" className="pxo-chip rel" title={t('produits.montage.offerTip', { name: pr.name, price: da(pr.montage!.price) })} onClick={() => addMontage(pr, qty)}>
+                            <b>
+                              {t('produits.montage.offer')} {pr.name}
+                            </b>
+                            <span className="ltr">{da(pr.montage!.price)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {offers.packs.length > 0 && (
                       <div className="pxo-orow">
                         <span className="pxo-ol">{t('orders.form.packs')}</span>

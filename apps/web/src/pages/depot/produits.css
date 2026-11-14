@@ -779,3 +779,23 @@ a.chip.lp-nolp:hover { text-decoration: underline; }
   .pd-g2 > .pd-gd { align-self: center; }
   .pd-vhead { display: none; }
 }
+
+/* Montage: the switch, price/cost, where (Montage.tsx) */
+.mt-switch { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.mt-switch input { margin-top: 3px; width: 18px; height: 18px; }
+.mt-switch span { display: flex; flex-direction: column; gap: 2px; }
+.mt-switch b { font-size: 15px; }
+.mt-prices { display: grid; grid-template-columns: repeat(2, minmax(0, 220px)); gap: 10px; }
+.mt-prices .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.mt-where { display: flex; flex-direction: column; gap: 8px; }
+.mt-radio { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; cursor: pointer; }
+.mt-pick { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+.mt-pick-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mt-pick-bar input { flex: 1 1 180px; min-width: 0; }
+.mt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 10px; max-height: 260px; overflow: auto; }
+.mt-w { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 3px 4px; border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mt-w.on { background: color-mix(in srgb, var(--accent, #2563eb) 10%, transparent); }
+@media (max-width: 520px) { .mt-prices { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+/* « + Montage » in an order's cart */
+.mt-offer { display: inline-flex; align-items: center; gap: 4px; }
+.mt-line-of { font-size: 12px; }

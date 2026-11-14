@@ -76,8 +76,9 @@ export async function checkLines(db: Db, lines: CheckLine[], orderId: number | n
     const v = l.variantId ? V.find((x) => x.id === l.variantId) : undefined;
     const name = p ? `${p.name}${v?.title ? ` ${v.title}` : ''}` : `#${l.productId}`;
     const base = { productId: l.productId, variantId: l.variantId, name };
+    // a service line (Montage…) never runs out, even one switched off since (the old « Montage — X » lines)
+    if (p?.is_service) return { ...base, state: 'ok' as const, available: null };
     if (!p || !p.active || (l.variantId && (!v || !v.active))) return { ...base, state: 'off' as const, available: null };
-    if (p.is_service) return { ...base, state: 'ok' as const, available: null };
     const ids = l.variantId ? [l.variantId] : V.filter((x) => x.productId === l.productId && x.active).map((x) => x.id);
     const avail = ids.reduce((n, i) => n + (left.get(i) ?? 0), 0);
     return { ...base, state: avail >= (need.get(keyOf(l)) ?? l.qty) ? ('ok' as const) : ('empty' as const), available: Math.max(0, avail) };
