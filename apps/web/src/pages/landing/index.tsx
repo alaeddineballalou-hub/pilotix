@@ -219,7 +219,7 @@ function Pages() {
                       <td className="num" data-l={t('landing.list.orders')}>
                         <b className="ltr">{n(p.orders)}</b>
                       </td>
-                      <td className="num lp-conv" data-l={t('landing.list.conv')} title={p.uniqueSince ? t('landing.list.convSince', { date: p.uniqueSince }) : t('landing.list.convNone')}>
+                      <td className={`num lp-conv ${p.conversion ? "" : "z"}`} data-l={t('landing.list.conv')} title={p.uniqueSince ? t('landing.list.convSince', { date: p.uniqueSince }) : t('landing.list.convNone')}>
                         <b className="ltr">{p.conversion == null ? '—' : `${p.conversion.toLocaleString(undefined, { maximumFractionDigits: 1 })} %`}</b>
                         {p.unique > 0 && <small className="ltr">{n(p.convOrders)} / {n(p.unique)}</small>}
                       </td>
