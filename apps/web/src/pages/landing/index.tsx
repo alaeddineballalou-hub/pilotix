@@ -206,6 +206,7 @@ function Pages() {
                           <span className="lp-row-t">
                             <b dir="auto">{p.title || p.productName}</b>
                             <code className="ltr">/{p.slug}</code>
+                            {!p.active && <em className="lp-off-m">{t('landing.list.offline')}</em>}
                           </span>
                         </a>
                       </td>
