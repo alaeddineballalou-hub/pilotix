@@ -328,3 +328,13 @@ button.pl-dn:hover { background: var(--sky-soft); }
 .pl-fillrow .pl-row-cap b { font-weight: 800; }
 .pl-why { padding: 1px 7px; border-radius: 999px; background: var(--c-mk-tint); color: var(--c-mk-ink); font-size: 11px; font-weight: 800; white-space: nowrap; }
 .pl-fillrow .pl-score-b { margin-inline-start: auto; }
+
+/* a post that did not go out: its file (as named on the device it was picked on) and why, in « Pas sortis » */
+.pl-row-why { display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border-radius: 8px; background: var(--c-bad-tint); color: var(--c-bad-ink); font-size: 12.5px; line-height: 1.4; overflow-wrap: anywhere; }
+.pl-file { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-weight: 800; color: var(--ink); }
+.pl-file .bji { flex: none; width: 14px; height: 14px; }
+/* the editor: the files' names under the photos, and a video Pilotix does not have whole */
+.pl-files { display: flex; align-items: center; gap: 6px; margin: 6px 0 0; color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.pl-files .bji { flex: none; width: 14px; height: 14px; }
+.pl-again { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 8px; padding: 10px 12px; border: 1px solid var(--c-bad-line); border-radius: 10px; background: var(--c-bad-tint); color: var(--c-bad-ink); font-size: 13px; }
+.pl-again > span { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }

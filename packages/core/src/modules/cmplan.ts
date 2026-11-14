@@ -19,6 +19,7 @@ import { getRaw } from './admin';
 import { cmSettings } from './cm';
 import { AiResponse, aiKeyed, Complete, dellalSettings, PILOT_CHEAP_MODEL, pilotOn } from './dellal';
 import { guideText, readGuide } from './guide';
+import { sendPush } from './push';
 import { linkedPage } from './social';
 
 export const PLAN_CHANNELS = ['facebook', 'instagram'] as const;
@@ -39,6 +40,18 @@ const extOf = (mime: string | null | undefined) => (mime === 'video/quicktime' ?
 /** who plans posts (an admin always can) */
 export const PLAN_ROLES = ['marketer'] as const;
 const id = z.number().int().positive();
+/** a picked file's name, as the device gave it (only its last part, never a folder path) */
+export const FILE_NAME = z
+  .string()
+  .max(400)
+  .default('')
+  .transform((x) =>
+    [...(x.split(/[\\/]/).pop() ?? '')]
+      .filter((c) => c.charCodeAt(0) >= 32 && c.charCodeAt(0) !== 127)
+      .join('')
+      .trim()
+      .slice(0, 200),
+  );
 export const B64 = (max: number) => z.string().max(max).regex(/^[A-Za-z0-9+/=]+$/, 'Photo invalide');
 export const me = (ctx: Ctx) => ctx.session.profile.id;
 export const stamp = (ctx: Ctx) => new Date(ctx.now()).toISOString();
@@ -131,13 +144,15 @@ export interface MediaRow {
   /** the small copy itself, read only in the preview (on the server the browser loads it from its address) */
   thumb: string | null;
   src: string | null;
+  /** the file's name on the device it was picked on (« IMG_2034.mp4 »): a post that did not go out says which file it was */
+  name?: string;
 }
 
 export async function mediaOf(ctx: Ctx, ids: number[]): Promise<MediaRow[]> {
   if (!ids.length) return [];
   const inline = !ctx.server;
   const rows = await ctx.db.query(
-    `SELECT id, key, kind, mime, duration, ready, w, h, jpeg IS NOT NULL AS has_jpeg, thumb IS NOT NULL AS has_thumb, ${inline ? 'thumb' : 'NULL::text AS thumb'}, src FROM cm_media WHERE id = ANY($1)`,
+    `SELECT id, key, kind, mime, duration, ready, w, h, jpeg IS NOT NULL AS has_jpeg, thumb IS NOT NULL AS has_thumb, ${inline ? 'thumb' : 'NULL::text AS thumb'}, src, name FROM cm_media WHERE id = ANY($1)`,
     [ids],
   );
   const by = new Map(rows.map((r: any) => [num(r.id), r]));
@@ -158,6 +173,7 @@ export async function mediaOf(ctx: Ctx, ids: number[]): Promise<MediaRow[]> {
             hasThumb: !!r.has_thumb,
             thumb: (r.thumb as string | null) ?? null,
             src: (r.src as string | null) ?? null,
+            name: String(r.name ?? ''),
           },
         ]
       : [];
@@ -178,7 +194,7 @@ export function photoUrl(ctx: Ctx, m: MediaRow, small: boolean): string | null {
 }
 
 /** A photo or video as the editor shows it. */
-export const mediaView = (ctx: Ctx, m: MediaRow) => ({ id: m.id, kind: m.kind, w: m.w, h: m.h, url: photoUrl(ctx, m, true), video: m.kind === 'video' ? photoUrl(ctx, m, false) : null, duration: m.duration, ready: m.ready });
+export const mediaView = (ctx: Ctx, m: MediaRow) => ({ id: m.id, kind: m.kind, w: m.w, h: m.h, url: photoUrl(ctx, m, true), video: m.kind === 'video' ? photoUrl(ctx, m, false) : null, duration: m.duration, ready: m.ready, name: m.name ?? '' });
 
 const randomKey = () => Array.from(globalThis.crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join('');
 
@@ -491,7 +507,7 @@ async function wentOut(ctx: Ctx, r: any, ch: PlanChannel, accountId: string, out
 }
 
 /** The post's state once its networks answered: out everywhere, still being prepared by Instagram (a video), or not out. */
-async function settle(ctx: Ctx, r: any): Promise<PlanStatus> {
+async function settle(ctx: Ctx, r: any, alert = false): Promise<PlanStatus> {
   const chans = PLAN_CHANNELS.filter((c) => ((r.channels ?? []) as string[]).includes(c));
   const done = chans.every((c) => !!r[`${c === 'facebook' ? 'fb' : 'ig'}_id`]);
   const waiting = !done && !!r.ig_container && !r.ig_error;
@@ -502,11 +518,41 @@ async function settle(ctx: Ctx, r: any): Promise<PlanStatus> {
     [num(r.id), status, stamp(ctx)],
   );
   ctx.emit({ type: 'chat', data: { plan: num(r.id) } });
+  if (status === 'failed' && alert) await alertFailed(ctx, r);
   return status;
 }
 
+/**
+ * A post that did not go out by itself (its time came while nobody watched, or Instagram's preparation failed): its
+ * writer and the administrators get a notification on their phone / computer with the file's name (« IMG_2034.mp4 »),
+ * the networks it missed and why, to find the file again and post it again. A notification never stops the posts.
+ */
+export async function alertFailed(ctx: Ctx, r: any): Promise<number> {
+  try {
+    const media = await mediaOf(ctx, ((r.media ?? []) as unknown[]).map(num));
+    const names = media.map((m) => m.name ?? '').filter(Boolean);
+    const caption = String(r.caption ?? '').trim().replace(/\s+/g, ' ');
+    const what = names.length ? `${names.slice(0, 2).join(', ')}${names.length > 2 ? ` +${names.length - 2}` : ''}` : caption ? `« ${caption.slice(0, 40)}${caption.length > 40 ? '…' : ''} »` : 'un post sans texte';
+    const missed = PLAN_CHANNELS.filter((c) => ((r.channels ?? []) as string[]).includes(c) && !r[`${c === 'facebook' ? 'fb' : 'ig'}_id`]);
+    const why = missed.map((c) => String(r[`${c === 'facebook' ? 'fb' : 'ig'}_error`] ?? '')).find(Boolean) ?? '';
+    // the reason in a few words (Meta's own message stays in Pilot Content)
+    const short = why.split(' (')[0].slice(0, 120);
+    const nets = missed.map((c) => (c === 'facebook' ? 'Facebook' : 'Instagram')).join(' + ');
+    const people = [numOrNull(r.created_by), numOrNull(r.updated_by)].filter((x): x is number => x !== null);
+    const to = (await ctx.db.query(`SELECT id FROM profiles WHERE active AND (id = ANY($1) OR 'admin' = ANY(roles))`, [people])).map((x: any) => num(x.id));
+    return await sendPush(ctx, to, {
+      title: `Post pas sorti : ${what}`,
+      body: `${nets || 'Facebook / Instagram'}${short ? ` · ${short}` : ''}. Ouvrez Pilot Content pour le republier.`,
+      tag: `plan-fail-${num(r.id)}`,
+      url: '#/social',
+    });
+  } catch {
+    return 0;
+  }
+}
+
 /** Sends one post to its networks (only those it has not reached yet) and writes down what each one answered. */
-async function publishOne(ctx: Ctx, pid: number): Promise<PlanStatus> {
+async function publishOne(ctx: Ctx, pid: number, alert = false): Promise<PlanStatus> {
   const r = (await ctx.db.query(`SELECT * FROM cm_planned WHERE id = $1`, [pid]))[0];
   if (!r) return 'failed';
   const chans = PLAN_CHANNELS.filter((c) => ((r.channels ?? []) as string[]).includes(c));
@@ -551,7 +597,7 @@ async function publishOne(ctx: Ctx, pid: number): Promise<PlanStatus> {
       r[`${col}_error`] = msg;
     }
   }
-  return settle(ctx, r);
+  return settle(ctx, r, alert);
 }
 
 /** A video Instagram was preparing: posted once it is ready (30 minutes at most). */
@@ -569,7 +615,8 @@ async function checkPrepared(ctx: Ctx, r: any): Promise<PlanStatus> {
     r.ig_error = msg;
     r.ig_container = null;
   }
-  return settle(ctx, r);
+  // only the job looks at Instagram's prepared videos: nobody is watching, so a failure is told
+  return settle(ctx, r, true);
 }
 
 /** Removes photos and videos (their rows, and the videos' files on the server). */
@@ -583,13 +630,14 @@ async function dropMedia(ctx: Ctx, where: string, params: unknown[]): Promise<vo
 export async function runPlanned(ctx: Ctx): Promise<{ published: number; failed: number }> {
   const now = stamp(ctx);
   // a post left « publishing » for 10 minutes: the server stopped while it was going out (a video Instagram prepares waits)
-  await ctx.db.query(
+  const cut = await ctx.db.query(
     `UPDATE cm_planned SET status = 'failed', updated_at = $1,
        fb_error = CASE WHEN 'facebook' = ANY(channels) AND fb_id IS NULL THEN coalesce(fb_error, $2) ELSE fb_error END,
        ig_error = CASE WHEN 'instagram' = ANY(channels) AND ig_id IS NULL THEN coalesce(ig_error, $2) ELSE ig_error END
-     WHERE status = 'publishing' AND ig_container IS NULL AND updated_at < $1::timestamptz - interval '10 minutes'`,
+     WHERE status = 'publishing' AND ig_container IS NULL AND updated_at < $1::timestamptz - interval '10 minutes' RETURNING *`,
     [now, INTERRUPTED],
   );
+  for (const r of cut) await alertFailed(ctx, r);
   let published = 0;
   let failed = 0;
   const count = (s: PlanStatus) => {
@@ -602,7 +650,8 @@ export async function runPlanned(ctx: Ctx): Promise<{ published: number; failed:
      WHERE id IN (SELECT id FROM cm_planned WHERE status = 'scheduled' AND publish_at <= $1::timestamptz ORDER BY publish_at, id LIMIT 10) RETURNING id`,
     [now],
   );
-  for (const d of due) count(await publishOne(ctx, num(d.id)));
+  // the posts whose time came go out with nobody watching: a failure is told (alertFailed)
+  for (const d of due) count(await publishOne(ctx, num(d.id), true));
   // photos and videos nobody kept (an editor closed without saving) after 2 days
   // (Pilot Ads' photos and videos are kept: the shop's ads use them)
   await dropMedia(ctx, `m.created_at < $1::timestamptz - interval '2 days' AND NOT m.for_ads AND NOT EXISTS (SELECT 1 FROM cm_planned p WHERE m.id = ANY(p.media))`, [now]);
@@ -682,7 +731,7 @@ export const cmPlanProcs = {
    */
   'cm.plan.photo': proc(
     [...PLAN_ROLES],
-    z.object({ jpeg: B64(4_850_000), thumb: B64(200_000), w: z.number().int().min(320).max(1440), h: z.number().int().min(160).max(2560), story: z.boolean().default(false) }),
+    z.object({ jpeg: B64(4_850_000), thumb: B64(200_000), w: z.number().int().min(320).max(1440), h: z.number().int().min(160).max(2560), story: z.boolean().default(false), name: FILE_NAME }),
     async (ctx, i) => {
       if (!i.jpeg.startsWith('/9j/') || !i.thumb.startsWith('/9j/')) throw bad('Envoyez une photo JPEG.');
       const ratio = i.w / i.h;
@@ -690,7 +739,7 @@ export const cmPlanProcs = {
       if (ratio < (i.story ? 0.5 : 0.795) || ratio > 1.915) throw bad(i.story ? 'Une story prend une photo entre 9:16 (en hauteur) et 1,91:1 (en largeur).' : 'Instagram prend des photos entre 4:5 (en hauteur) et 1,91:1 (en largeur).');
       const key = randomKey();
       const r = (
-        await ctx.db.query(`INSERT INTO cm_media (key, w, h, jpeg, thumb, bytes, created_by, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, [
+        await ctx.db.query(`INSERT INTO cm_media (key, w, h, jpeg, thumb, bytes, created_by, created_at, name) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`, [
           key,
           i.w,
           i.h,
@@ -699,9 +748,10 @@ export const cmPlanProcs = {
           Math.floor((i.jpeg.length * 3) / 4),
           me(ctx),
           stamp(ctx),
+          i.name,
         ])
       )[0];
-      const m: MediaRow = { id: num(r.id), key, kind: 'photo', mime: null, duration: null, ready: true, w: i.w, h: i.h, hasJpeg: true, hasThumb: true, thumb: i.thumb, src: null };
+      const m: MediaRow = { id: num(r.id), key, kind: 'photo', mime: null, duration: null, ready: true, w: i.w, h: i.h, hasJpeg: true, hasThumb: true, thumb: i.thumb, src: null, name: i.name };
       return mediaView(ctx, m);
     },
   ),
@@ -720,6 +770,7 @@ export const cmPlanProcs = {
       h: z.number().int().min(16).max(8192),
       duration: z.number().min(0).max(4 * 3600),
       thumb: B64(200_000),
+      name: FILE_NAME,
     }),
     async (ctx, i) => {
       if (!i.thumb.startsWith('/9j/')) throw bad('Image de la vidéo illisible.');
@@ -728,7 +779,7 @@ export const cmPlanProcs = {
       const key = randomKey();
       const upload = !!ctx.server?.media;
       const r = (
-        await ctx.db.query(`INSERT INTO cm_media (key, kind, mime, duration, ready, w, h, thumb, bytes, created_by, created_at) VALUES ($1,'video',$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`, [
+        await ctx.db.query(`INSERT INTO cm_media (key, kind, mime, duration, ready, w, h, thumb, bytes, created_by, created_at, name) VALUES ($1,'video',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`, [
           key,
           i.mime,
           i.duration,
@@ -739,9 +790,10 @@ export const cmPlanProcs = {
           i.size,
           me(ctx),
           stamp(ctx),
+          i.name,
         ])
       )[0];
-      const m: MediaRow = { id: num(r.id), key, kind: 'video', mime: i.mime, duration: i.duration, ready: !upload, w: i.w, h: i.h, hasJpeg: false, hasThumb: true, thumb: i.thumb, src: null };
+      const m: MediaRow = { id: num(r.id), key, kind: 'video', mime: i.mime, duration: i.duration, ready: !upload, w: i.w, h: i.h, hasJpeg: false, hasThumb: true, thumb: i.thumb, src: null, name: i.name };
       return { ...mediaView(ctx, m), key, upload, chunk: VIDEO_CHUNK };
     },
   ),

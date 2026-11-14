@@ -159,7 +159,11 @@
       "ask": "Demander la validation",
       "backDraft": "Remettre en brouillon",
       "editStory": "Story",
-      "newStory": "Nouvelle story"
+      "newStory": "Nouvelle story",
+      "videoLostName": "L’envoi de « {{name}} » a été coupé : choisissez-la encore.",
+      "notWhole": "« {{name}} » n’est pas arrivée entière sur Pilotix.",
+      "pickAgain": "Choisir la vidéo à nouveau",
+      "pickAgainName": "Choisir à nouveau « {{name}} »"
     },
     "review": "À valider",
     "reviewMine": "Attend le oui de l’admin",
@@ -167,7 +171,9 @@
     "mv": {
       "past": "Choisissez un jour à venir.",
       "done": "Déplacé au {{when}}."
-    }
+    },
+    "noName": "Fichier sans nom (ajouté avant cette mise à jour)",
+    "notOn": "Pas sorti sur {{nets}}"
   },
   "ev": {
     "coming": "À venir",

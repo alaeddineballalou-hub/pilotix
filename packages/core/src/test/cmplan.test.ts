@@ -545,3 +545,47 @@ test('on the server: the first comment, a story, and Meta’s numbers once an ho
   await call('cm.plan.delete', mk, { id: story.id });
   assert.equal(log.filter((l) => l.action === 'planDelete').length, n);
 });
+
+test('a post that does not go out: its file’s name is kept, and its writer and the administrators are told (not while they watch)', async () => {
+  await linkPage();
+  const log: { action: string; args: any }[] = [];
+  const pushes: { to: string[]; payload: any }[] = [];
+  const withPush = (fail?: 'facebook' | 'instagram'): ServerHooks => ({
+    ...fakeServer(log, { fail }),
+    pushKeys: () => ({ publicKey: 'pub', privateKey: 'priv' }),
+    push: async (_k, subs, payload) => {
+      pushes.push({ to: subs.map((x) => x.endpoint), payload });
+      return subs.map((x) => ({ endpoint: x.endpoint, ok: true, gone: false }));
+    },
+  });
+  const mk = await as(EMAILS.marketer, withPush('instagram'));
+  const job = await as(EMAILS.admin, withPush('instagram'));
+  const mkPhone = 'https://fcm.googleapis.com/fcm/send/plan-marketer';
+  const adPhone = 'https://fcm.googleapis.com/fcm/send/plan-admin';
+  for (const [who, end] of [
+    [mk.session.profile.id, mkPhone],
+    [job.session.profile.id, adPhone],
+  ] as const)
+    await db.query(`INSERT INTO push_subs (profile_id, endpoint, p256dh, auth) VALUES ($1, $2, 'k', 'a') ON CONFLICT (endpoint) DO NOTHING`, [who, end]);
+  // only the file's own name is kept (never the folder it was in)
+  const a: any = await call('cm.plan.photo', mk, { jpeg: JPEG, thumb: JPEG, w: 1080, h: 1080, name: 'C:\\Users\\Baby Joy\\Vidéos\\IMG_2034.jpg' });
+  assert.equal(a.name, 'IMG_2034.jpg');
+  // « Publier maintenant »: the person watches, the result is on the screen, no notification
+  const s1: any = await call('cm.plan.save', mk, { caption: 'Trottinette', photos: [a.id], channels: ['facebook', 'instagram'] });
+  const r1: any = await call('cm.plan.publishNow', mk, { id: s1.id });
+  assert.equal(r1.status, 'failed');
+  assert.equal(r1.post.photos[0].name, 'IMG_2034.jpg');
+  assert.equal(pushes.length, 0);
+  // planned for later, nobody watching: the failure is told with the file's name, the network and why
+  const b: any = await call('cm.plan.photo', mk, { jpeg: JPEG, thumb: JPEG, w: 1080, h: 1080, name: 'tricycle-rouge.jpg' });
+  const s2: any = await call('cm.plan.save', mk, { caption: 'Tricycle', photos: [b.id], channels: ['instagram'], publishAt: soon(30), schedule: true });
+  await call('cm.plan.run', { ...job, now: () => Date.now() + 31 * 60_000 }, {});
+  const told = pushes.find((x) => x.payload.tag === `plan-fail-${s2.id}`);
+  assert.ok(told, 'the failure is told');
+  assert.match(told.payload.title, /tricycle-rouge\.jpg/);
+  assert.match(told.payload.body, /^Instagram · Instagram : Meta ne permet pas encore/);
+  assert.ok(told.to.includes(mkPhone) && told.to.includes(adPhone));
+  // the menu's red count on Pilot Content: the posts that did not go out
+  const c: any = await call('orders.counts', job, {});
+  assert.ok(c.ai.posts >= 2);
+});

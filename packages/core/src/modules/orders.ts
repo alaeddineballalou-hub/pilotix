@@ -1664,7 +1664,7 @@ export async function orderCounts(ctx: Ctx) {
       uncashed: 0,
       tickets: { toShip: 0, prepared: 0, onRoad: 0, uncashed: 0 },
       lowStock: 0,
-      ai: { messages: 0, cm: 0, notify: 0 },
+      ai: { messages: 0, cm: 0, notify: 0, posts: 0 },
       landing: undefined as Awaited<ReturnType<typeof landingCounts>> | undefined,
       all,
     };
@@ -1699,15 +1699,17 @@ export async function orderCounts(ctx: Ctx) {
   )[0];
   const tickets = { toShip: num(tk?.to_ship), prepared: num(tk?.prepared), onRoad: num(tk?.on_road), uncashed: num(tk?.uncashed) };
   // Pilot AI: conversations waiting for a person or unread (Pilot Message), comments still to handle (Pilot Comments),
-  // delivery messages to send by hand or that failed in the last 3 days (Pilot Automations)
+  // delivery messages to send by hand or that failed in the last 3 days (Pilot Automations), posts that did not go out
+  // (Pilot Content: to post again or delete)
   const aiRow = (
     await ctx.db.query(
       `SELECT (SELECT count(*) FROM conversations WHERE channel <> 'test' AND (mode = 'handoff' OR unread > 0))::int AS msgs,
               (SELECT count(*) FROM cm_comments WHERE status IN ('new','handoff','error'))::int AS cm,
-              (SELECT count(*) FROM notifications WHERE status = 'manual' OR (status = 'failed' AND created_at > now() - interval '3 days'))::int AS notify`,
+              (SELECT count(*) FROM notifications WHERE status = 'manual' OR (status = 'failed' AND created_at > now() - interval '3 days'))::int AS notify,
+              (SELECT count(*) FROM cm_planned WHERE status = 'failed')::int AS posts`,
     )
   )[0];
-  const ai = { messages: num(aiRow?.msgs), cm: num(aiRow?.cm), notify: num(aiRow?.notify) };
+  const ai = { messages: num(aiRow?.msgs), cm: num(aiRow?.cm), notify: num(aiRow?.notify), posts: num(aiRow?.posts) };
   const toObj = (rows: { k: string; n: number }[]) => Object.fromEntries(rows.map((r) => [r.k, num(r.n)]));
   // Landing pages (marketers and agents): blocked and abandoned orders to handle, products without a page
   const landing = hasRole(ctx.session, 'marketer', 'confirmation') ? await landingCounts(ctx.db, ctx.now()) : undefined;

@@ -231,7 +231,7 @@ export function PublishTab(p: {
       try {
         const meta = await readVideo(a.file);
         URL.revokeObjectURL(meta.local);
-        const r = await rpc('cm.plan.videoStart', { mime: meta.mime, size: a.file.size, w: meta.w, h: meta.h, duration: meta.duration, thumb: meta.thumb });
+        const r = await rpc('cm.plan.videoStart', { mime: meta.mime, size: a.file.size, w: meta.w, h: meta.h, duration: meta.duration, thumb: meta.thumb, name: a.file.name });
         if (r.upload) {
           const body = await videoBody(a.file, meta.mime);
           await sendPieces(

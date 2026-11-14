@@ -599,8 +599,31 @@ function PostRow({ p, onOpen, withDay, drag }: { p: Post; onOpen: (p: Post) => v
         <span className="pl-row-cap" dir="auto">
           {p.kind === 'story' ? <i>{t('social.plan.ed.story')}</i> : p.caption || <i>{t('social.plan.noCaption')}</i>}
         </span>
+        {p.status === 'failed' && <FailWhy p={p} />}
       </span>
     </button>
+  );
+}
+
+/** A post that did not go out: its file(s), as named on the device they were picked on, and why (in a few words). */
+function FailWhy({ p }: { p: Post }) {
+  const { t } = useTranslation();
+  const names = p.photos.map((x) => x.name).filter(Boolean);
+  const missed = p.channels.filter((c) => !(c === 'facebook' ? p.facebook : p.instagram)?.done);
+  const why = missed.map((c) => (c === 'facebook' ? p.facebook : p.instagram)?.error ?? '').find(Boolean) ?? '';
+  return (
+    <span className="pl-row-why">
+      <b className="pl-file" dir="ltr">
+        <Icon name={p.photos[0]?.kind === 'video' ? 'film' : 'image'} />
+        {names.length ? names.join(', ') : t('social.plan.noName')}
+      </b>
+      {missed.length > 0 && (
+        <span>
+          {t('social.plan.notOn', { nets: missed.map((c) => t(`cm.ch.${c}`)).join(' + ') })}
+          {why ? ` · ${why.split(' (')[0]}` : ''}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -865,9 +888,9 @@ function useEditor(start: Draft, data: ListOut, onDone: () => void, onOpen: (p: 
         toast(meta.duration < lim.videoMin ? t('social.plan.ed.videoShort') : story ? t('social.plan.pb.storyLong', { max: lim.storyVideoMax }) : t('social.plan.ed.videoLong'), 'bad');
         return;
       }
-      const r = await rpc('cm.plan.videoStart', { mime: meta.mime, size: f.size, w: meta.w, h: meta.h, duration: meta.duration, thumb: meta.thumb });
+      const r = await rpc('cm.plan.videoStart', { mime: meta.mime, size: f.size, w: meta.w, h: meta.h, duration: meta.duration, thumb: meta.thumb, name: f.name });
       localVideo.set(r.id, meta.local);
-      let item: Photo = { id: r.id, kind: r.kind, w: r.w, h: r.h, url: r.url, video: r.video, duration: r.duration, ready: r.ready };
+      let item: Photo = { id: r.id, kind: r.kind, w: r.w, h: r.h, url: r.url, video: r.video, duration: r.duration, ready: r.ready, name: r.name };
       if (r.upload) {
         if (!backend.upload) throw new Error(t('social.plan.ed.videoLost'));
         const body = await videoBody(f, meta.mime);
@@ -876,7 +899,8 @@ function useEditor(start: Draft, data: ListOut, onDone: () => void, onOpen: (p: 
       }
       setD((o) => ({ ...o, photos: [item] }));
     } catch (e: any) {
-      toast(e?.message ?? t('social.plan.ed.videoLost'), 'bad');
+      // the file's name, to pick the same one again
+      toast(`${t('social.plan.ed.videoLostName', { name: f.name })}${e?.message ? ` (${e.message})` : ''}`, 'bad');
     } finally {
       setBusy('');
       setPct(0);
@@ -909,7 +933,7 @@ function useEditor(start: Draft, data: ListOut, onDone: () => void, onOpen: (p: 
           continue;
         }
         cut ||= ph.cropped;
-        const r = await rpc('cm.plan.photo', { jpeg: ph.jpeg, thumb: ph.thumb, w: ph.w, h: ph.h, story });
+        const r = await rpc('cm.plan.photo', { jpeg: ph.jpeg, thumb: ph.thumb, w: ph.w, h: ph.h, story, name: f.name });
         setD((o) => ({ ...o, photos: [...o.photos, r] }));
       }
       if (cut) toast(t('social.plan.ed.cropped'), 'ok');
@@ -1129,6 +1153,32 @@ function useEditor(start: Draft, data: ListOut, onDone: () => void, onOpen: (p: 
             </label>
           )}
         </div>
+        {d.photos.some((x) => x.name) && (
+          <p className="pl-files" dir="ltr">
+            <Icon name={clip ? 'film' : 'image'} />
+            {d.photos
+              .map((x) => x.name)
+              .filter(Boolean)
+              .join(', ')}
+          </p>
+        )}
+        {!locked && clip && !clip.ready && busy !== 'video' && (
+          <div className="pl-again">
+            <span>{t('social.plan.ed.notWhole', { name: clip.name || t('social.plan.ed.video') })}</span>
+            <button
+              type="button"
+              className="btn small primary"
+              onClick={() => {
+                // the video comes out of the post, and the picker opens for the same file
+                set({ photos: d.photos.filter((x) => x.id !== clip.id) });
+                setTimeout(() => file.current?.click(), 0);
+              }}
+            >
+              <Icon name="upload" />
+              {clip.name ? t('social.plan.ed.pickAgainName', { name: clip.name }) : t('social.plan.ed.pickAgain')}
+            </button>
+          </div>
+        )}
         {clip && (clip.video || localVideo.get(clip.id)) && (
           <video className="pl-player" controls preload="metadata" playsInline poster={clip.url ?? undefined} src={clip.video ?? localVideo.get(clip.id)} />
         )}

@@ -162,7 +162,7 @@ export const STORE_MENU: MenuItem[] = [
     pages: ['messages', 'social', 'createur', 'cm', 'spy', 'comptes'],
     children: [
       { id: 'messages', href: '#/messages', count: 'msgs', tone: 'nc-a', icon: 'chat', roles: ['vendeur'] },
-      { id: 'social', href: '#/social', icon: 'calendar', roles: ['marketer'] },
+      { id: 'social', href: '#/social', count: 'posts', tone: 'nc-a', icon: 'calendar', roles: ['marketer'] },
       { id: 'createur', href: '#/createur', icon: 'film', roles: ['marketer'] },
       { id: 'cm', href: '#/cm', count: 'cm', tone: 'nc-a', icon: 'comments', roles: ['marketer'] },
       { id: 'spy', href: '#/spy', icon: 'eye', roles: ['marketer'] },
@@ -255,7 +255,7 @@ export interface Space {
 /** always shown, whatever the screen */
 export const SPACE_ALWAYS = ['accueil', 'aide'];
 export const SPACES: Space[] = [
-  { id: 'marketing', icon: 'megaphone', items: ['marketing', 'createur', 'social', 'influenceurs', 'parrainage', 'codepromo'], counts: [] },
+  { id: 'marketing', icon: 'megaphone', items: ['marketing', 'createur', 'social', 'influenceurs', 'parrainage', 'codepromo'], counts: ['posts'] },
   { id: 'sponsor', icon: 'trend', items: ['marketing', 'landing', 'spy'], counts: ['landing'] },
   { id: 'cm', icon: 'chat', items: ['messages', 'cm', 'codepromo'], counts: ['msgs', 'cm'] },
   { id: 'service', icon: 'phone', items: ['dashboard', 'confirmation', 'suivi', 'livrees', 'annulees', 'sav', 'auto', 'assign', 'affectation', 'automessages', 'autoreglages', 'clients', 'codepromo'], counts: ['conf', 'suivi', 'sav', 'notify'] },

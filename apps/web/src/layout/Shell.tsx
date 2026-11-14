@@ -71,6 +71,8 @@ export function useMenuCounts(seller: Seller | null = null, enabled = true) {
       msgs: c.ai?.messages ?? 0,
       cm: c.ai?.cm ?? 0,
       notify: c.ai?.notify ?? 0,
+      // Pilot Content: posts that did not go out (to post again or delete)
+      posts: (c.ai as { posts?: number } | undefined)?.posts ?? 0,
       // landing pages (marketers and agents only: undefined hides the badge): blocked + abandoned to handle, and for
       // marketers the products still without a page
       ...(c.landing ? { landing: c.landing.blocked + c.landing.abandoned + c.landing.noPage } : {}),

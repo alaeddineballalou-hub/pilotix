@@ -159,7 +159,11 @@
       "ask": "Ask for approval",
       "backDraft": "Back to draft",
       "editStory": "Story",
-      "newStory": "New story"
+      "newStory": "New story",
+      "videoLostName": "Sending « {{name}} » was cut: pick it again.",
+      "notWhole": "« {{name}} » did not reach Pilotix whole.",
+      "pickAgain": "Pick the video again",
+      "pickAgainName": "Pick « {{name}} » again"
     },
     "review": "To approve",
     "reviewMine": "Waiting for the admin's yes",
@@ -167,7 +171,9 @@
     "mv": {
       "past": "Pick a day still to come.",
       "done": "Moved to {{when}}."
-    }
+    },
+    "noName": "File without a name (added before this update)",
+    "notOn": "Not out on {{nets}}"
   },
   "ev": {
     "coming": "Coming up",
