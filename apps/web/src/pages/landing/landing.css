@@ -418,3 +418,18 @@
 .lp-img-off { background: var(--coral-soft); color: var(--coral); top: auto; bottom: 6px; }
 .lp-img-auto .lp-hd { top: auto; bottom: 6px; inset-inline-start: auto; inset-inline-end: 6px; background: var(--navy, #1b2a47); color: #fff; }
 .lp-px-sync { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+/* Pages / Groupes lists: every button stays visible on smaller computers and tablets */
+@media (min-width: 761px) and (max-width: 1599px) {
+  .lp-row-a .lp-edit { width: 32px; padding: 0; justify-content: center; }
+  .lp-row-a .lp-edit-t { display: none; }
+  .lp-row-t b { max-width: 190px; }
+  .lp-tbl th, .lp-tbl td { padding-inline: 6px; }
+  .lp-tbl th { white-space: normal; font-size: 12px; }
+  .lp-gmeta { white-space: normal; }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .lp-row-a .lp-sec { display: none; }
+  .lp-row-t b { max-width: 140px; }
+  .lp-row-t code { max-width: 140px; }
+  .lp-tbl td.num b { font-size: 14px; }
+}
