@@ -10,6 +10,7 @@ import {
   rightsOf,
   type RoleRights,
   type Session,
+  tabRight,
 } from '@pilotix/shared';
 import { z } from 'zod';
 import type { Db } from '../db';
@@ -125,8 +126,9 @@ export async function sessionWithRights<S extends Session>(db: Db, session: S, s
 type Need = string | readonly string[] | ((input: any, ctx: Ctx) => string | readonly string[] | null);
 
 const BAD_CONF = new Set(['cancelled', 'duplicate', 'wrong_number', 'fake']);
-/** Suivi's list tabs ('alertes_new', 'alertes_encours': the « Alertes » tab) */
-const suiviTab = (t: unknown) => (typeof t === 'string' ? `tab:suivi/${t.startsWith('alertes') ? 'alertes' : t}` : null);
+/** Suivi's list tabs, as the menu names them ('alertes_new', 'alertes_encours': the « Alertes » tab); one it does not know
+ *  is a right nobody has */
+const suiviTab = (t: unknown) => (typeof t === 'string' ? (tabRight('suivi', t) ?? `tab:suivi/${t}`) : null);
 
 /**
  * Which right an action needs (any one of a list). An action left out needs none (its roles decide, as before). The

@@ -1,12 +1,13 @@
-import { CONF_TONE, ConfStatus, phoneIntl, Tone } from '@pilotix/shared';
+import { CONF_TONE, ConfStatus, MENU_TABS, phoneIntl, Tone } from '@pilotix/shared';
 import type { TFunction } from 'i18next';
 import { store } from '../../lib/store';
 import { toLocalInput } from '../../lib/format';
 import { rightOn } from '../../lib/rights';
 
 export type Sub = 'nouvelles' | 'attente' | 'confirmees' | 'livrees' | 'terminees';
-/** no Livrées tab in Confirmation (removed on request) */
-export const SUBS: Sub[] = ['nouvelles', 'attente', 'confirmees', 'terminees'];
+/** the page's tabs: the menu's list (packages/shared/src/menu.ts), shared with Utilisateurs › Rôles (no Livrées tab in
+ *  Confirmation: removed on request) */
+export const SUBS: readonly Sub[] = MENU_TABS.confirmation;
 export const SUB_STATUSES: Record<Sub, ConfStatus[]> = {
   nouvelles: ['new'],
   attente: ['to_check', 'no_answer', 'busy', 'callback', 'postponed'],

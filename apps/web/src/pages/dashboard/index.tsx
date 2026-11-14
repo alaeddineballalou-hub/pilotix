@@ -2,6 +2,7 @@
 import { ClaimsLateCard, SuiviMotifStats } from './SuiviMotifs';
 import { RiskConfirmStats } from './RiskConfirms';
 import { OverweightStats } from './Overweight';
+import { MENU_TABS, menuTabName } from '@pilotix/shared';
 import { lazy, ReactNode, Suspense, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
@@ -19,7 +20,8 @@ import './dashboard.css';
 import { useAllMode } from '../../layout/AllBoutiques';
 import { tabOn } from '../../lib/rights';
 
-const AREAS = ['overview', 'confirmation', 'depot', 'suivi', 'livreurs', 'sav'] as const;
+/** the team boards (the page's tabs): the menu's list (packages/shared/src/menu.ts), shared with Utilisateurs › Rôles */
+const AREAS = MENU_TABS.dashboard;
 type Area = (typeof AREAS)[number];
 /** areas an admin can give to an agent manager (the overview is for admin / vendeur only) */
 const SCOPE_AREAS = AREAS.filter((a): a is Exclude<Area, 'overview'> => a !== 'overview');
@@ -55,7 +57,7 @@ function TeamDashboard({ sub }: PageProps) {
       <nav className="bjm-bar bjd-tabs" aria-label={t('dashboard.areasAria')} data-g="dashboard">
         {allowed.map((a) => (
           <a key={a} className={`bjm-p ${a === area ? 'on' : ''}`} href={`#/dashboard/${a}`} aria-current={a === area ? 'page' : undefined}>
-            {t(`dashboard.areas.${a}`)}
+            {t(menuTabName('dashboard', a))}
           </a>
         ))}
       </nav>

@@ -1,10 +1,12 @@
 // The Dépôt's stage bar, for one boutique (Depot.tsx) and for « Toutes les boutiques » (boutiques/all.tsx).
+import { MENU_TABS, menuTabName } from '@pilotix/shared';
 import { useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { tabOn } from '../../lib/rights';
 
 // « En livraison » moved to Suivi (the parcels on the road are the suivi's work); an old link goes there
-export const DEPOT_STAGES = ['preparer', 'prepares', 'dispatchees', 'retours'] as const;
+/** Dépôt's steps: the menu's tabs (packages/shared/src/menu.ts), shared with Utilisateurs › Rôles */
+export const DEPOT_STAGES = MENU_TABS.depot;
 export type DepotStage = (typeof DEPOT_STAGES)[number];
 
 /** The stage of the address (#/depot/<stage>): « En préparation » when none. */
@@ -41,7 +43,7 @@ export function DepotStageBar({ stage, counts, phone }: { stage: DepotStage; cou
             </span>
           )}
           <a className={`bjm-p ${stage === k ? 'on' : ''} ${k === 'retours' ? 'end' : ''}`} href={`#/depot/${k}`} aria-current={stage === k ? 'page' : undefined}>
-            <span className="bjm-l">{phone && k === 'preparer' ? t('depot.ph.stage') : t(`depot.stage.${k}`)}</span>
+            <span className="bjm-l">{phone && k === 'preparer' ? t('depot.ph.stage') : t(menuTabName('depot', k))}</span>
             {counts && <b className={`bjm-n ltr${k === 'prepares' && counts.prepAlerts ? ' bad' : ''}`}>{counts[k] ?? 0}</b>}
           </a>
         </span>

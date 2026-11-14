@@ -1,3 +1,4 @@
+import { MENU_TABS, menuTabName } from '@pilotix/shared';
 import { useEffect, useState } from 'react';
 import { useIsPhone } from '../../lib/useMedia';
 import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
@@ -14,7 +15,8 @@ import { useSavFilters } from './filters';
 import { TicketModal } from './Ticket';
 import { tabOn } from '../../lib/rights';
 
-const VIEWS = ['tickets', 'nouveau', 'attente', 'depot', 'livraison', 'livres', 'annules', 'satisfaction', 'stats'] as const;
+/** the page's tabs: the menu's list (packages/shared/src/menu.ts), shared with Utilisateurs › Rôles */
+const VIEWS = MENU_TABS.sav;
 type View = (typeof VIEWS)[number];
 export function Sav({ sub }: PageProps) {
   const { t } = useTranslation();
@@ -97,7 +99,7 @@ function SavDesktop({ sub }: PageProps) {
 
   return (
     <>
-      <StageBar flow={false} current={view} items={VIEWS.filter((v) => tabOn('sav', v)).map((v) => ({ key: v, label: t(`sav.views.${v}`), href: `#/sav/${v}`, count: stageCount(v) }))} />
+      <StageBar flow={false} current={view} items={VIEWS.filter((v) => tabOn('sav', v)).map((v) => ({ key: v, label: t(menuTabName('sav', v)), href: `#/sav/${v}`, count: stageCount(v) }))} />
       <div className="bjt">
         <div className="card">
           <div className="card-head">

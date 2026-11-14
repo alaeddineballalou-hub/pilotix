@@ -1,5 +1,5 @@
 // Confirmation: Nouvelles › En cours › Confirmées (+ Terminées). Same screens as the original app.
-import { CLIENT_LEVELS, SALES_CHANNELS, SalesChannel, WILAYAS, type ClientLevel } from '@pilotix/shared';
+import { CLIENT_LEVELS, MENU_TABS, menuTabName, SALES_CHANNELS, SalesChannel, WILAYAS, type ClientLevel } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { Fragment, lazy, ReactNode, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -108,12 +108,8 @@ function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
   const counts = useRpc('confirmation.counts', {}, { refetchInterval: 60_000 });
   const manager = has('agent_manager', 'vendeur');
   const c = counts.data;
-  const items = [
-    { key: 'nouvelles', label: t('confirmation.sub.nouvelles'), href: '#/confirmation/nouvelles', count: c?.nouvelles },
-    { key: 'attente', label: t('confirmation.sub.attente'), href: '#/confirmation/attente', count: c?.attente },
-    { key: 'confirmees', label: t('confirmation.sub.confirmees'), href: '#/confirmation/confirmees', count: c?.confirmees },
-    ...(sub === 'terminees' ? [{ key: 'terminees', label: t('confirmation.sub.terminees'), href: '#/confirmation/terminees', count: c?.terminees }] : []),
-  ].filter((x) => tabOn('confirmation', x.key));
+  // the menu's tabs; « Terminées » only while on it (reached from the numbers)
+  const items = MENU_TABS.confirmation.filter((k) => (k !== 'terminees' || sub === 'terminees') && tabOn('confirmation', k)).map((k) => ({ key: k, label: t(menuTabName('confirmation', k)), href: `#/confirmation/${k}`, count: c?.[k] }));
   const focusId = rest?.[0] ? Number(rest[0]) : null;
   // phones: the queue comes first; the big statistics stay on tablets and computers
   const phone = useIsPhone();

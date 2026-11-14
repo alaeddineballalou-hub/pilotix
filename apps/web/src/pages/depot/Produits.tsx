@@ -1,6 +1,7 @@
 // Produits & stock, in tabs: Stock · Inventaire · Produits (prices, margin and maximum discount included) ·
 // Mouvements · Alertes · Prévisions · Achats (and suppliers) · Dépôts (and transfers). The header is the one of the Pilot AI pages: an icon, a name, a sentence
 // about the current tab, and the tabs underneath.
+import { MENU_TABS, menuTabName, menuTabOf } from '@pilotix/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, dateTime, n } from '../../lib/format';
@@ -28,7 +29,8 @@ import { AssignedCatalog } from './AssignedCatalog';
 import { Guides } from './Guides';
 import { tabOn } from '../../lib/rights';
 
-const TABS = ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'prevision', 'lots', 'fabrication', 'achats', 'depots'] as const;
+/** the page's tabs: the menu's list (packages/shared/src/menu.ts), shared with Utilisateurs › Rôles */
+const TABS = MENU_TABS.produits;
 type Tab = (typeof TABS)[number];
 const ICONS: Record<Tab, string> = { stock: 'package', inventaire: 'clipboard', produits: 'tag', guides: 'book', mouvements: 'swap', alertes: 'alert', prevision: 'chart', lots: 'calendar', fabrication: 'box', achats: 'receipt', depots: 'building' };
 
@@ -39,12 +41,13 @@ export function Produits(props: PageProps) {
 
 function DepotProduits({ sub, rest }: PageProps) {
   const { t } = useTranslation();
-  // the former « Prix » tab lives in Produits now
-  const tab: Tab = sub === 'prix' ? 'produits' : (TABS as readonly string[]).includes(sub ?? '') ? (sub as Tab) : 'stock';
+  // (the former « Prix » tab lives in Produits now: the menu's alias)
+  const asked = menuTabOf('produits', sub ?? '');
+  const tab: Tab = (TABS as readonly string[]).includes(asked) ? (asked as Tab) : 'stock';
   const alerts = useRpc('catalog.alerts', {});
   const lotsCfg = useRpc('stock.batchConfig', {});
   const makeCfg = useRpc('stock.makingConfig', {});
-  const tabs = TABS.filter((k) => pageIsOn('produits', k) && tabOn('produits', k) && (k !== 'lots' || !!lotsCfg.data?.on) && (k !== 'fabrication' || !!makeCfg.data?.on)).map((k) => ({ key: k, label: t(`produits.tabs.${k}`), icon: ICONS[k], href: `#/produits/${k}`, count: k === 'alertes' ? alerts.data?.length : undefined, alert: k === 'alertes' }));
+  const tabs = TABS.filter((k) => pageIsOn('produits', k) && tabOn('produits', k) && (k !== 'lots' || !!lotsCfg.data?.on) && (k !== 'fabrication' || !!makeCfg.data?.on)).map((k) => ({ key: k, label: t(menuTabName('produits', k)), icon: ICONS[k], href: `#/produits/${k}`, count: k === 'alertes' ? alerts.data?.length : undefined, alert: k === 'alertes' }));
   const arg = rest?.[0] ? decodeURIComponent(rest[0]) : undefined;
   return (
     <div className="pd">

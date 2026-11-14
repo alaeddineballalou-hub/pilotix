@@ -1,5 +1,6 @@
 // Publicité (marketer): Meta spend against the shop's real orders. Everything is computed in core (ads.*);
 // this page only shows it, with the original layout (#ads: header controls, KPIs, products, ad sets, days, months).
+import { MENU_TABS, menuTabName } from '@pilotix/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PageProps } from '../registry';
@@ -37,7 +38,8 @@ export function Marketing({ sub, rest }: PageProps) {
 }
 
 function MarketingDesktop({ sub, rest, t }: { sub?: string; rest?: string[]; t: (k: string) => string }) {
-  const cur = sub === 'marketer' ? 'marketer' : sub === 'strategies' ? 'strategies' : sub === 'formulaires' ? 'formulaires' : sub === 'campagnes' ? 'campagnes' : sub === 'catalogue' ? 'catalogue' : 'publicite';
+  // the page's tabs: the menu's list (packages/shared/src/menu.ts), shared with Utilisateurs › Rôles
+  const cur = MENU_TABS.marketing.find((k) => k === sub) ?? 'publicite';
   // Formulaires: the leads waiting for a person (a wilaya, a number, a product), on its tab
   const todo = useLeadsTodo();
   return (
@@ -45,7 +47,7 @@ function MarketingDesktop({ sub, rest, t }: { sub?: string; rest?: string[]; t: 
       <StageBar
         flow={false}
         current={cur}
-        items={(['publicite', 'strategies', 'formulaires', 'campagnes', 'catalogue', 'marketer'] as const).filter((k) => tabOn('marketing', k)).map((k) => ({ key: k, label: t(`nav.${k}`), href: `#/marketing/${k}`, ...(k === 'formulaires' && todo ? { count: todo } : {}) }))}
+        items={MENU_TABS.marketing.filter((k) => tabOn('marketing', k)).map((k) => ({ key: k, label: t(menuTabName('marketing', k)), href: `#/marketing/${k}`, ...(k === 'formulaires' && todo ? { count: todo } : {}) }))}
       />
       {cur === 'marketer' ? (
         <Marketer rest={rest} />

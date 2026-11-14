@@ -492,4 +492,5 @@ export * from './pos';
 export * from './modules';
 export * from './pay';
 export * from './appUpdate';
+export * from './menu';
 export * from './rights';

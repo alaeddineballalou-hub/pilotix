@@ -8,6 +8,10 @@
   "agence": "Agency agents",
   "agenceHint": "The agents of a confirmation agency working in the shop",
   "menuOf": "{{role}}'s menu",
+  "partAlways": "On every screen",
+  "partNone": "Old menu only",
+  "partNoneHint": "On no team screen: only in « Old menu (everything) »",
+  "alsoOn": "also in {{list}}",
   "always": "Always",
   "tabs": "Tabs",
   "acts": "Buttons",
@@ -277,9 +281,5 @@
   "nTabs_one": "{{count}} tab",
   "nTabs_other": "{{count}} tabs",
   "nActs_one": "{{count}} button",
-  "nActs_other": "{{count}} buttons",
-  "page": {
-    "automessages": "Delivery messages",
-    "autoreglages": "Automations' settings"
-  }
+  "nActs_other": "{{count}} buttons"
 }

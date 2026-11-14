@@ -14,6 +14,7 @@
 
 import type { Role } from './index';
 import { expandRoles, personIs, ROLE_INCLUDES } from './index';
+import { MENU_PAGES, menuTabOf, TAB_LINES } from './menu';
 
 /** The roles whose rights are edited (the administrator has everything), and the agency agents' own line. */
 export const RIGHTS_ROLES = ['vendeur', 'agent_manager', 'confirmation', 'agence', 'suivi', 'depot', 'livreur', 'marketer'] as const;
@@ -45,162 +46,7 @@ export interface RightDef {
 const CONF = ['confirmation'] as const;
 const AGENTS = ['confirmation', 'suivi', 'depot'] as const;
 
-type PageIn = { id: string; in?: string; roles: readonly RightsRole[] | null; label?: string; tabs?: readonly TabIn[]; locked?: true };
-type TabIn = [id: string, label: string, roles?: readonly RightsRole[]];
 type ActIn = { id: string; in: string; roles: readonly RightsRole[]; noAgence?: true; extraFor?: readonly RightsRole[]; person?: true; hideOnly?: true };
-
-/** The store's menu (apps/web/src/layout/nav.ts), page by page, with the tabs of each. Admin-only pages: roles []. */
-const PAGES: readonly PageIn[] = [
-  { id: 'accueil', roles: null, locked: true },
-  {
-    id: 'dashboard',
-    roles: ['agent_manager', 'vendeur', 'confirmation', 'suivi', 'depot', 'livreur'],
-    // the team boards are for the owners and the managers; the agents have their own numbers (no tabs)
-    tabs: [
-      ['overview', 'dashboard.areas.overview', ['vendeur']],
-      ['confirmation', 'dashboard.areas.confirmation', ['vendeur', 'agent_manager']],
-      ['depot', 'dashboard.areas.depot', ['vendeur', 'agent_manager']],
-      ['suivi', 'dashboard.areas.suivi', ['vendeur', 'agent_manager']],
-      ['livreurs', 'dashboard.areas.livreurs', ['vendeur', 'agent_manager']],
-      ['sav', 'dashboard.areas.sav', ['vendeur', 'agent_manager']],
-    ],
-  },
-  {
-    id: 'commandes',
-    in: 'commandes',
-    roles: AGENTS,
-    label: 'orders.allOrders',
-    tabs: [
-      ['tout', 'orders.tabs.all'],
-      ['livrees', 'nav.sub.livrees'],
-      ['annulees', 'nav.sub.annulees'],
-    ],
-  },
-  {
-    id: 'confirmation',
-    in: 'commandes',
-    roles: CONF,
-    tabs: [
-      ['nouvelles', 'confirmation.sub.nouvelles'],
-      ['attente', 'confirmation.sub.attente'],
-      ['confirmees', 'confirmation.sub.confirmees'],
-      ['terminees', 'confirmation.sub.terminees'],
-    ],
-  },
-  {
-    id: 'depot',
-    in: 'commandes',
-    roles: ['depot'],
-    tabs: [
-      ['preparer', 'depot.stage.preparer'],
-      ['prepares', 'depot.stage.prepares'],
-      ['dispatchees', 'depot.stage.dispatchees'],
-      ['retours', 'depot.stage.retours'],
-    ],
-  },
-  {
-    id: 'suivi',
-    in: 'commandes',
-    roles: ['suivi', 'confirmation'],
-    tabs: [
-      ['enlivraison', 'suivi.tabs.enlivraison'],
-      ['alertes', 'suivi.tabs.alertes'],
-      ['traites', 'suivi.tabs.traites'],
-      ['bloques', 'suivi.tabs.bloques'],
-      ['livres', 'suivi.tabs.livres'],
-      ['annules', 'suivi.tabs.annules'],
-      ['reclamation', 'suivi.tabs.reclamation'],
-      ['swap', 'suivi.tabs.swap'],
-    ],
-  },
-  { id: 'scanner', roles: ['depot'] },
-  {
-    id: 'sav',
-    roles: AGENTS,
-    tabs: [
-      ['tickets', 'sav.views.tickets'],
-      ['nouveau', 'sav.views.nouveau'],
-      ['attente', 'sav.views.attente'],
-      ['depot', 'sav.views.depot'],
-      ['livraison', 'sav.views.livraison'],
-      ['livres', 'sav.views.livres'],
-      ['annules', 'sav.views.annules'],
-      ['satisfaction', 'sav.views.satisfaction'],
-      ['stats', 'sav.views.stats'],
-    ],
-  },
-  { id: 'tournee', roles: ['livreur'] },
-  {
-    id: 'produits',
-    roles: ['depot', 'confirmation', 'suivi'],
-    // the agents see the products, the sales guides and the stock; the depot every tab
-    tabs: [
-      ['stock', 'produits.tabs.stock'],
-      ['inventaire', 'produits.tabs.inventaire', ['depot']],
-      ['produits', 'produits.tabs.produits'],
-      ['guides', 'produits.tabs.guides'],
-      ['mouvements', 'produits.tabs.mouvements', ['depot']],
-      ['alertes', 'produits.tabs.alertes', ['depot']],
-      ['prevision', 'produits.tabs.prevision', ['depot']],
-      ['lots', 'produits.tabs.lots', ['depot']],
-      ['fabrication', 'produits.tabs.fabrication', ['depot']],
-      ['achats', 'produits.tabs.achats', ['depot']],
-      ['depots', 'produits.tabs.depots', ['depot']],
-    ],
-  },
-  {
-    id: 'pos',
-    roles: ['depot'],
-    tabs: [
-      ['vendre', 'pos.tabs.vendre'],
-      ['ventes', 'pos.tabs.ventes'],
-      ['cloture', 'pos.tabs.cloture'],
-      ['reglages', 'pos.tabs.reglages', ['vendeur']],
-    ],
-  },
-  // AI Pilot
-  { id: 'messages', in: 'pilotai', roles: ['vendeur'] },
-  { id: 'social', in: 'pilotai', roles: ['marketer'] },
-  { id: 'createur', in: 'pilotai', roles: ['marketer'] },
-  { id: 'cm', in: 'pilotai', roles: ['marketer'] },
-  { id: 'spy', in: 'pilotai', roles: ['marketer'] },
-  { id: 'comptes', in: 'pilotai', roles: [] },
-  // Pilot Automations
-  { id: 'automessages', in: 'notify', roles: ['suivi'], label: 'rights.page.automessages' },
-  { id: 'auto', in: 'notify', roles: [], label: 'nav.sub.auto' },
-  { id: 'assign', in: 'notify', roles: [], label: 'nav.sub.assign' },
-  { id: 'affectation', in: 'notify', roles: [], label: 'nav.sub.affectation' },
-  { id: 'autoreglages', in: 'notify', roles: [], label: 'rights.page.autoreglages' },
-  // Referral
-  { id: 'parrainage', in: 'referral', roles: [] },
-  { id: 'codepromo', in: 'referral', roles: ['marketer', 'vendeur'] },
-  { id: 'clients', roles: ['suivi'] },
-  {
-    id: 'marketing',
-    roles: ['marketer'],
-    tabs: [
-      ['publicite', 'nav.publicite'],
-      ['strategies', 'nav.strategies'],
-      ['formulaires', 'nav.formulaires'],
-      ['campagnes', 'nav.campagnes'],
-      ['catalogue', 'nav.catalogue'],
-      ['marketer', 'nav.marketer'],
-    ],
-  },
-  { id: 'landing', roles: ['marketer'] },
-  { id: 'caisse', roles: [] },
-  { id: 'macaisse', roles: ['confirmation', 'suivi', 'depot', 'agent_manager'] },
-  // Partenaires
-  { id: 'livraison', in: 'partenaires', roles: [] },
-  { id: 'livreurs', in: 'partenaires', roles: [], label: 'nav.sub.livreurs' },
-  { id: 'agences', in: 'partenaires', roles: [] },
-  { id: 'marketers', in: 'partenaires', roles: [] },
-  { id: 'influenceurs', in: 'partenaires', roles: ['marketer'] },
-  { id: 'utilisateurs', roles: [] },
-  { id: 'management', roles: [] },
-  { id: 'reglages', roles: [] },
-  { id: 'aide', roles: null, locked: true },
-];
 
 /**
  * The main buttons. Their roles are the ones the server lets do it today (nobody loses anything on the first day). A
@@ -278,11 +124,18 @@ const EXTRAS: readonly ActIn[] = [
   { id: 'x:rules', in: 'extra', roles: [], extraFor: ['vendeur', 'agent_manager', 'confirmation', 'agence', 'depot', 'suivi'], person: true },
 ];
 
+/** A menu's roles as rights roles (the administrators are not in the list: they have everything). */
+const asRights = (roles: readonly Role[] | null): readonly RightsRole[] | null => (roles === null ? null : (roles.filter((r) => r !== 'admin') as RightsRole[]));
+
+/**
+ * The list: the store's menu page by page with each page's tabs (packages/shared/src/menu.ts — a page, a tab or a
+ * screen added there is here too), then the buttons, then the « en plus ».
+ */
 function build(): RightDef[] {
   const out: RightDef[] = [];
-  for (const p of PAGES) {
-    out.push({ id: `page:${p.id}`, kind: 'page', in: p.in ?? null, roles: p.roles, label: p.label ?? `nav.${p.id}`, ...(p.locked ? { locked: true as const } : {}) });
-    for (const [t, label, roles] of p.tabs ?? []) out.push({ id: `tab:${p.id}/${t}`, kind: 'tab', in: p.id, roles: roles ?? p.roles, label });
+  for (const p of MENU_PAGES) {
+    out.push({ id: `page:${p.id}`, kind: 'page', in: p.group, roles: asRights(p.roles), label: p.label, ...(p.always ? { locked: true as const } : {}) });
+    for (const t of p.tabs) out.push({ id: `tab:${p.id}/${t.id}`, kind: 'tab', in: p.id, roles: asRights(t.roles), label: t.label });
   }
   for (const a of ACTS) out.push({ ...a, id: `act:${a.id}`, kind: 'act', label: `rights.act.${a.id}` });
   for (const a of EXTRAS) out.push({ ...a, kind: 'x', label: `rights.x.${a.id.slice(2)}` });
@@ -434,11 +287,12 @@ export function cleanRoleRights(v: unknown, people?: Map<number, { roles: readon
 
 // ---------------------------------------------------------------- the menu's entries
 /**
- * The right that shows a menu line: a page ('page:suivi'), or for the Commandes group's « Livré » / « Annulé » lines,
- * the tabs of Commandes they open. null: not a line of the list (groups, admin pages without a right).
+ * The right that shows a menu line: its page ('page:suivi'), or the tab a line opens (Commandes › Livré:
+ * 'tab:commandes/livrees'). null: not a line of the list (a group, one's own pages).
  */
 export function menuRight(id: string): string | null {
-  if (id === 'livrees' || id === 'annulees') return `tab:commandes/${id}`;
+  const tabOf = TAB_LINES.get(id);
+  if (tabOf) return `tab:${tabOf}/${id}`;
   return BY_ID.has(`page:${id}`) ? `page:${id}` : null;
 }
 
@@ -498,9 +352,6 @@ export function rightsFromOldTicks(t: OldTicks): RoleRights {
  */
 export function tabRight(page: string, sub: string | undefined | null): string | null {
   if (!sub) return null;
-  let s = sub;
-  if (page === 'suivi' && s.startsWith('alertes')) s = 'alertes';
-  if (page === 'produits' && s === 'prix') s = 'produits';
-  const id = `tab:${page}/${s}`;
+  const id = `tab:${page}/${menuTabOf(page, sub)}`;
   return BY_ID.has(id) ? id : null;
 }

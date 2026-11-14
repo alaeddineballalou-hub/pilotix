@@ -1,6 +1,11 @@
-// Utilisateurs › Rôles › <role>: what a role sees and does, as its own menu (« Menu miroir »). Each page of the role's
-// menu has its switch; opened, its tabs and its buttons. Then « En plus du rôle » (the short safe list), what the role
-// can never have, « Une personne à part », and on the side the menu the person will see. Saved with rights.save.
+// Utilisateurs › Rôles › <role>: what a role sees and does, as its own menu (« Menu miroir »), screen by screen (the
+// team screens, Écrans). Each page of the role's menu has its switch; opened, its tabs and its buttons. Then « En plus du
+// rôle » (the short safe list), what the role can never have, « Une personne à part », and on the side the menu the
+// person will see, with its screens dropdown. Saved with rights.save.
+//
+// Everything here is read from the store's menu list (packages/shared/src/menu.ts): its pages and their groups, icons,
+// tabs and screens. A page, a tab or a screen added or moved there shows here by itself; the preview is drawn by the
+// menu's own function (menuView, layout/nav.ts).
 import {
   actsOf,
   byDefault,
@@ -18,12 +23,16 @@ import {
   roleHas,
   type RoleRights,
   roleRightsSet,
+  MENU_PAGES,
+  SPACES,
+  type SpaceId,
   tabsOf,
 } from '@pilotix/shared';
+import type { TFunction } from 'i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NAV } from '../../layout/nav';
+import { canSee, canSeeChild, menuView, NAV } from '../../layout/nav';
 import { rpc } from '../../lib/backend';
 import { pageIsOn } from '../../lib/features';
 import { useRpc } from '../../lib/query';
@@ -44,43 +53,37 @@ interface Line {
   acts: RightDef[];
   /** the menu group it sits in (Commandes, AI Pilot…) */
   group: string | null;
+  /** the team screens it is on */
+  screens: SpaceId[];
 }
 
-/** The menu's icon of each page (the menu's lines, apps/web/src/layout/nav.ts). */
-const ICONS: Record<string, string> = Object.fromEntries(NAV.flatMap((n) => [[n.id, n.icon] as const, ...(n.children ?? []).map((c) => [c.id, c.icon ?? n.icon] as const)]));
+/** A part of the role's menu: one team screen, what is on every screen, or what is on none (« Ancien menu » only). */
+type PartId = SpaceId | 'always' | 'none';
+interface Part {
+  id: PartId;
+  icon: string;
+  lines: Line[];
+}
 
-/** The store's menu in order, as the right ids of its pages (a group's lines under it). */
-function menuOrder(): { id: string; group: string | null }[] {
-  const out: { id: string; group: string | null }[] = [];
-  const seen = new Set<string>();
-  const add = (id: string, group: string | null) => {
-    const d = rightDef(`page:${id}`);
-    if (d && !seen.has(d.id)) {
-      seen.add(d.id);
-      out.push({ id, group });
-    }
-  };
-  for (const n of NAV) {
-    if (n.hidden) continue;
-    if (n.children) {
-      if (n.id === 'commandes') add('commandes', 'commandes');
-      for (const c of n.children) if (c.id !== 'livrees' && c.id !== 'annulees') add(c.id, n.id);
-      continue;
-    }
-    add(n.id, null);
+/**
+ * A right's name where it stands alone (the list of what a role can never have, a person's changes, the changes bar):
+ * a group's line with its group (« Pilot Automations › Réglages » is not « Réglages »), a tab with its page.
+ */
+function fullName(t: TFunction, d: RightDef): string {
+  if (d.kind === 'tab' && d.in) {
+    const p = rightDef(`page:${d.in}`);
+    return p ? `${fullName(t, p)} › ${t(d.label)}` : t(d.label);
   }
-  // pages of the list the menu reaches another way
-  for (const d of RIGHTS) if (d.kind === 'page' && !seen.has(d.id)) out.push({ id: d.id.slice(5), group: d.in });
-  return out;
+  if (d.kind === 'page' && d.in && d.in !== d.id.slice(5) && d.in !== 'commandes') return `${t(`nav.${d.in}`)} › ${t(d.label)}`;
+  return t(d.label);
 }
-const MENU = menuOrder();
 
 /** Is this page of the menu in the shop's plan (and its module on) for these roles? */
 function inPlan(id: string, roles: Role[]): boolean {
   const item = NAV.find((n) => n.id === id);
   if (item) return pageIsOn(item.id) && (!item.onlyIf || item.onlyIf(roles, false));
   const child = NAV.flatMap((n) => n.children ?? []).find((c) => c.id === id);
-  if (child) return (child.plan ? pageIsOn(...child.plan) : pageIsOn(child.id)) && (!child.onlyIf || child.onlyIf());
+  if (child) return (child.plan ? pageIsOn(...child.plan) : pageIsOn(child.id)) && (!child.onlyIf || child.onlyIf(roles, false));
   return true;
 }
 
@@ -122,6 +125,8 @@ export function RoleRightsPage({ role: asked }: { role?: string }) {
   const [open, setOpen] = useState<string | null>(null);
   const [person, setPerson] = useState<{ id: number | null } | null>(null);
   const [busy, setBusy] = useState(false);
+  // the screen picked in the preview's dropdown (« Ancien menu » first, as in the app)
+  const [pv, setPv] = useState<SpaceId>('all');
   const saved = q.data?.rights ?? null;
   useEffect(() => {
     if (saved && !draft) setDraft(saved);
@@ -155,32 +160,58 @@ export function RoleRightsPage({ role: asked }: { role?: string }) {
   // the role's menu: its pages (by default, in the shop's plan), each with its tabs and buttons
   const asRoles = expandRoles([role === 'agence' ? 'confirmation' : (role as Role)]);
   const lines: Line[] = [];
-  for (const m of MENU) {
-    const d = rightDef(`page:${m.id}`)!;
-    if (!byDefault(role, d) || !inPlan(m.id, asRoles)) continue;
+  for (const p of MENU_PAGES) {
+    const d = rightDef(`page:${p.id}`)!;
+    if (!byDefault(role, d) || !inPlan(p.id, asRoles)) continue;
     lines.push({
       key: d.id,
-      icon: ICONS[m.id] ?? 'list',
+      icon: p.icon,
       page: d,
       label: name(d),
-      tabs: tabsOf(m.id).filter((x) => byDefault(role, x)),
-      acts: actsOf(m.id).filter((x) => byDefault(role, x)),
-      group: m.group,
+      tabs: tabsOf(p.id).filter((x) => byDefault(role, x)),
+      acts: actsOf(p.id).filter((x) => byDefault(role, x)),
+      group: p.group,
+      screens: p.screens,
     });
   }
-  // the orders' buttons (and what is everywhere), right after the Commandes group's pages
+  // the orders' buttons (and what is everywhere), right after the Commandes group's pages, on their screen
   const orderActs = [...actsOf('orders'), ...actsOf('general')].filter((x) => byDefault(role, x));
   if (orderActs.length) {
     const after = lines.map((l) => l.group).lastIndexOf('commandes');
-    const line: Line = { key: 'orders', icon: 'list', page: null, label: t(after >= 0 ? 'rights.orders' : 'rights.general'), tabs: [], acts: orderActs, group: after >= 0 ? 'commandes' : null };
+    const cmd = lines.find((l) => l.key === 'page:commandes') ?? lines[after];
+    const line: Line = { key: 'orders', icon: 'list', page: null, label: t(after >= 0 ? 'rights.orders' : 'rights.general'), tabs: [], acts: orderActs, group: after >= 0 ? 'commandes' : null, screens: cmd?.screens ?? [] };
     lines.splice(after >= 0 ? after + 1 : lines.length, 0, line);
   }
+  // the role's screens, the one holding most of its pages first (then the menu's order): each page sits under the
+  // first of its screens, and names the others; Accueil and Aide are on every screen
+  const nOn = (s: SpaceId) => lines.filter((l) => l.page && !l.page.locked && l.screens.includes(s)).length;
+  const order = SPACES.map((s) => s.id).filter((s) => nOn(s) > 0).sort((a, b) => nOn(b) - nOn(a));
+  const home = (l: Line): PartId => (l.page?.locked ? 'always' : (order.find((s) => l.screens.includes(s)) ?? 'none'));
+  const also = (l: Line) => (l.page ? l.screens.filter((s) => s !== home(l)) : []);
+  const parts: Part[] = [
+    { id: 'always' as PartId, icon: 'home' },
+    ...order.map((s) => ({ id: s as PartId, icon: SPACES.find((x) => x.id === s)!.icon })),
+    { id: 'none' as PartId, icon: 'list' },
+  ]
+    .map((p) => ({ ...p, lines: lines.filter((l) => home(l) === p.id) }))
+    .filter((p) => p.lines.length > 0);
+  const partName = (id: PartId) => (id === 'always' ? t('rights.partAlways') : id === 'none' ? t('rights.partNone') : t(`nav.screens.${id}`));
   const extras = RIGHTS.filter((d) => extraOk(role, d));
-  // (a group's line named with its group: « Pilot Automations › Réglages » is not « Réglages »)
-  const never = [...new Set(RIGHTS.filter((d) => d.kind === 'page' && !byDefault(role, d) && !extraOk(role, d) && !d.locked).map((d) => (d.in && d.in !== d.id.slice(5) && d.in !== 'commandes' ? `${t(`nav.${d.in}`)} › ${name(d)}` : name(d))))];
+  const never = [...new Set(RIGHTS.filter((d) => d.kind === 'page' && !byDefault(role, d) && !extraOk(role, d) && !d.locked).map((d) => fullName(t, d)))];
   const firstPerson = ofRole(role)[0];
-  const seen = (l: Line) => !l.page || set.has(l.page.id);
   const opened = lines.find((l) => l.key === open && l.page) ?? null;
+  // the menu the person will see: the app's own menu function, with the role's rights (its screens dropdown too)
+  const hasR = (id: string | null) => !id || set.has(id);
+  const view = menuView(
+    NAV,
+    {
+      item: (n) => canSee(n, asRoles, false, set.has('x:users'), set.has('x:rules'), set.has('x:affect'), hasR),
+      line: (c) => canSeeChild(c, asRoles, false, set.has('x:rules'), hasR),
+    },
+    pv,
+    true,
+  );
+  const lit = (id: string) => opened?.key === `page:${id}`;
 
   const save = async () => {
     setBusy(true);
@@ -199,7 +230,7 @@ export function RoleRightsPage({ role: asked }: { role?: string }) {
   const describe = (c: { who: string; id: string; on: boolean }) => {
     if (c.who.startsWith('p')) return t('rights.personTitle', { name: people.find((p) => `p${p.id}` === c.who)?.name ?? '' });
     const d = rightDef(c.id);
-    return t(c.on ? 'rights.changeOn' : 'rights.changeOff', { who: roleName(c.who as RightsRole), what: d ? name(d) : c.id });
+    return t(c.on ? 'rights.changeOn' : 'rights.changeOff', { who: roleName(c.who as RightsRole), what: d ? fullName(t, d) : c.id });
   };
 
   return (
@@ -242,71 +273,87 @@ export function RoleRightsPage({ role: asked }: { role?: string }) {
         <div className="rr-l">
           <section className="rr-tree" aria-label={t('rights.menuOf', { role: roleName(role) })}>
             <h2>{t('rights.menuOf', { role: roleName(role) })}</h2>
-            {lines.map((l, i) => {
-              const groupStart = l.group && l.group !== lines[i - 1]?.group;
-              const isOpen = open === l.key;
-              const on = !l.page || has(l.page);
-              const tabsOn = l.tabs.filter((x) => roleHas(role, x, draft)).length;
-              const actsOn = l.acts.filter((x) => roleHas(role, x, draft)).length;
-              const sub = [l.tabs.length ? t('rights.tabsN', { count: tabsOn, of: l.tabs.length }) : '', l.acts.length ? t('rights.actsN', { count: actsOn, of: l.acts.length }) : ''].filter(Boolean).join(' · ');
-              const anyChange = (l.page && changed(l.page)) || l.tabs.some(changed) || l.acts.some(changed);
-              return (
-                <div key={l.key} className={`rr-line${isOpen ? ' open' : ''}${on ? '' : ' off'}`}>
-                  {groupStart && <div className="rr-group">{t(`nav.${l.group}`)}</div>}
-                  <div className="rr-it">
-                    <Icon name={l.icon} className="rr-ic" />
-                    <div className="rr-t">
-                      <b>{l.label}</b>
-                      {l.key === 'orders' && <small>{t('rights.ordersSub')}</small>}
-                      {sub && <small>{sub}</small>}
-                    </div>
-                    {anyChange && <span className="rr-mod">{t('rights.modified')}</span>}
-                    {(l.tabs.length > 0 || l.acts.length > 0) && (
-                      <button type="button" className="rr-exp" aria-expanded={isOpen} aria-label={t(isOpen ? 'rights.close' : 'rights.open', { name: l.label })} onClick={() => setOpen(isOpen ? null : l.key)}>
-                        <Icon name={isOpen ? 'chevron' : 'chevr'} />
-                      </button>
-                    )}
-                    {l.page?.locked ? (
-                      <span className="rr-lock">
-                        <Icon name="lock" />
-                        {t('rights.always')}
-                      </span>
-                    ) : l.page ? (
-                      <Switch checked={on} label={l.label} onChange={(v) => flip(l.page!, v)} />
-                    ) : null}
-                  </div>
-                  {isOpen && (
-                    <div className="rr-in">
-                      {!on && <p className="rr-note">{t('rights.pageOff')}</p>}
-                      {l.tabs.length > 0 && (
-                        <>
-                          <div className="rr-lab">{t('rights.tabs')}</div>
-                          <div className="rr-chips">
-                            {l.tabs.map((x) => {
-                              const v = roleHas(role, x, draft);
-                              return (
-                                <button key={x.id} type="button" className={`rr-chip${v ? ' on' : ''}`} aria-pressed={v} disabled={!on} onClick={() => flip(x, !v)}>
-                                  {changed(x) && <i className="rr-dot" aria-hidden="true" />}
-                                  {name(x)}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </>
-                      )}
-                      {l.acts.length > 0 && (
-                        <>
-                          <div className="rr-lab">{t('rights.acts')}</div>
-                          {l.acts.map((x) => (
-                            <ActRow key={x.id} d={x} on={roleHas(role, x, draft)} changed={changed(x)} onChange={(v) => flip(x, v)} />
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  )}
+            {parts.map((p) => (
+              <section key={p.id} className="rr-part" aria-labelledby={`rr-part-${p.id}`}>
+                <div className="rr-part-h">
+                  <Icon name={p.icon} />
+                  <b id={`rr-part-${p.id}`}>{partName(p.id)}</b>
+                  <small>{p.id === 'none' ? t('rights.partNoneHint') : t('rights.nPages', { count: p.lines.filter((l) => l.page).length })}</small>
                 </div>
-              );
-            })}
+                {p.lines.map((l, i) => {
+                  const groupStart = l.group && l.group !== p.lines[i - 1]?.group;
+                  const isOpen = open === l.key;
+                  const on = !l.page || has(l.page);
+                  const tabsOn = l.tabs.filter((x) => roleHas(role, x, draft)).length;
+                  const actsOn = l.acts.filter((x) => roleHas(role, x, draft)).length;
+                  const elsewhere = also(l);
+                  const sub = [
+                    l.tabs.length ? t('rights.tabsN', { count: tabsOn, of: l.tabs.length }) : '',
+                    l.acts.length ? t('rights.actsN', { count: actsOn, of: l.acts.length }) : '',
+                    elsewhere.length ? t('rights.alsoOn', { list: elsewhere.map((s) => t(`nav.screens.${s}`)).join(', ') }) : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ');
+                  const anyChange = (l.page && changed(l.page)) || l.tabs.some(changed) || l.acts.some(changed);
+                  return (
+                    <div key={l.key} className={`rr-line${l.group ? ' g' : ''}${isOpen ? ' open' : ''}${on ? '' : ' off'}`}>
+                      {groupStart && <div className="rr-group">{t(`nav.${l.group}`)}</div>}
+                      <div className="rr-it">
+                        <Icon name={l.icon} className="rr-ic" />
+                        <div className="rr-t">
+                          <b>{l.label}</b>
+                          {l.key === 'orders' && <small>{t('rights.ordersSub')}</small>}
+                          {sub && <small>{sub}</small>}
+                        </div>
+                        {anyChange && <span className="rr-mod">{t('rights.modified')}</span>}
+                        {(l.tabs.length > 0 || l.acts.length > 0) && (
+                          <button type="button" className="rr-exp" aria-expanded={isOpen} aria-label={t(isOpen ? 'rights.close' : 'rights.open', { name: l.label })} onClick={() => setOpen(isOpen ? null : l.key)}>
+                            <Icon name={isOpen ? 'chevron' : 'chevr'} />
+                          </button>
+                        )}
+                        {l.page?.locked ? (
+                          <span className="rr-lock">
+                            <Icon name="lock" />
+                            {t('rights.always')}
+                          </span>
+                        ) : l.page ? (
+                          <Switch checked={on} label={l.label} onChange={(v) => flip(l.page!, v)} />
+                        ) : null}
+                      </div>
+                      {isOpen && (
+                        <div className="rr-in">
+                          {!on && <p className="rr-note">{t('rights.pageOff')}</p>}
+                          {l.tabs.length > 0 && (
+                            <>
+                              <div className="rr-lab">{t('rights.tabs')}</div>
+                              <div className="rr-chips">
+                                {l.tabs.map((x) => {
+                                  const v = roleHas(role, x, draft);
+                                  return (
+                                    <button key={x.id} type="button" className={`rr-chip${v ? ' on' : ''}`} aria-pressed={v} disabled={!on} onClick={() => flip(x, !v)}>
+                                      {changed(x) && <i className="rr-dot" aria-hidden="true" />}
+                                      {name(x)}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </>
+                          )}
+                          {l.acts.length > 0 && (
+                            <>
+                              <div className="rr-lab">{t('rights.acts')}</div>
+                              {l.acts.map((x) => (
+                                <ActRow key={x.id} d={x} on={roleHas(role, x, draft)} changed={changed(x)} onChange={(v) => flip(x, v)} />
+                              ))}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </section>
+            ))}
             {extras.length > 0 && (
               <>
                 <div className="rr-sep" />
@@ -332,7 +379,7 @@ export function RoleRightsPage({ role: asked }: { role?: string }) {
             {Object.entries(draft.people).map(([k, e]) => {
               const p = people.find((x) => String(x.id) === k);
               if (!p) return null;
-              const list = (ids?: string[]) => (ids ?? []).map((id) => rightDef(id)).filter((d): d is RightDef => !!d).map(name).join(', ');
+              const list = (ids?: string[]) => (ids ?? []).map((id) => rightDef(id)).filter((d): d is RightDef => !!d).map((d) => fullName(t, d)).join(', ');
               return (
                 <div key={k} className="rr-it rr-person">
                   <span className="rr-av" aria-hidden="true">
@@ -366,17 +413,43 @@ export function RoleRightsPage({ role: asked }: { role?: string }) {
           </div>
           <div className="rr-phone">
             <div className="rr-scr">
+              {view.screens.length > 1 && (
+                <label className="rr-pscr">
+                  <span>{t('nav.screens.title')}</span>
+                  <select value={view.screen} onChange={(e) => setPv(e.target.value as SpaceId)}>
+                    <option value="all">{t('nav.screens.all')}</option>
+                    {view.screens.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {t(`nav.screens.${s.id}`)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <div className="rr-menu">
-                {lines
-                  .filter((l) => l.page && seen(l))
-                  .map((l) => (
-                    <div key={l.key} className={`rr-mi${opened?.key === l.key ? ' on' : ''}`}>
-                      <Icon name={l.icon} />
-                      <span>{l.label}</span>
+                {view.items.map((n) =>
+                  n.children ? (
+                    <div key={n.id} className="rr-mg">
+                      <div className={`rr-mi rr-mh${lit(n.id) ? ' on' : ''}`}>
+                        <Icon name={n.icon} />
+                        <span>{t(`nav.${n.id}`)}</span>
+                      </div>
+                      {view.kidsOn(n).map((c) => (
+                        <div key={c.id} className={`rr-mi rr-ms${lit(c.id) ? ' on' : ''}`}>
+                          <Icon name={c.icon ?? n.icon} />
+                          <span>{t(`nav.sub.${c.id}`)}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  ) : (
+                    <div key={n.id} className={`rr-mi${lit(n.id) ? ' on' : ''}`}>
+                      <Icon name={n.icon} />
+                      <span>{t(`nav.${n.id}`)}</span>
+                    </div>
+                  ),
+                )}
               </div>
-              {opened && opened.tabs.length > 0 && seen(opened) && (
+              {opened && opened.tabs.length > 0 && opened.page && set.has(opened.page.id) && (
                 <div className="rr-ptabs">
                   <small>{t('rights.previewTabs', { page: opened.label })}</small>
                   <div>
@@ -413,18 +486,18 @@ export function RoleRightsPage({ role: asked }: { role?: string }) {
   );
 }
 
-function ActRow({ d, on, changed, extra, onChange }: { d: RightDef; on: boolean; changed: boolean; extra?: boolean; onChange: (v: boolean) => void }) {
+function ActRow({ d, on, changed, extra, onChange, label }: { d: RightDef; on: boolean; changed: boolean; extra?: boolean; onChange: (v: boolean) => void; label?: string }) {
   const { t } = useTranslation();
-  const help = d.kind === 'x' ? t(`rights.xHelp.${d.id.slice(2)}`) : t(`rights.actHelp.${d.id.slice(4)}`, { defaultValue: '' });
+  const help = d.kind === 'x' ? t(`rights.xHelp.${d.id.slice(2)}`) : d.kind === 'act' ? t(`rights.actHelp.${d.id.slice(4)}`, { defaultValue: '' }) : '';
   return (
     <div className="rr-row">
       <div className="rr-t">
-        <b>{t(d.label)}</b>
+        <b>{label ?? t(d.label)}</b>
         {help && <small>{help}</small>}
       </div>
       {extra && on && <span className="rr-plus-pill">{t('rights.extraPill')}</span>}
       {changed && !extra && <span className="rr-mod">{t('rights.modified')}</span>}
-      <Switch checked={on} label={t(d.label)} onChange={onChange} />
+      <Switch checked={on} label={label ?? t(d.label)} onChange={onChange} />
     </div>
   );
 }
@@ -475,11 +548,11 @@ function PersonApart({ people, draft, id, onChange, onClose }: { people: Person[
             <div className="rr-lab">{t('rights.personCan')}</div>
             {giveable.length === 0 && <p className="rr-hint">{t('rights.personNothing')}</p>}
             {giveable.map((d) => (
-              <ActRow key={d.id} d={d} on={on.includes(d.id)} changed={false} extra onChange={(v) => setMine(off, v ? [...new Set([...on, d.id])] : on.filter((x) => x !== d.id))} />
+              <ActRow key={d.id} d={d} label={fullName(t, d)} on={on.includes(d.id)} changed={false} extra onChange={(v) => setMine(off, v ? [...new Set([...on, d.id])] : on.filter((x) => x !== d.id))} />
             ))}
             <div className="rr-lab">{t('rights.personHas')}</div>
             {theirs.map((d) => (
-              <ActRow key={d.id} d={d} on={!off.includes(d.id)} changed={off.includes(d.id)} onChange={(v) => setMine(v ? off.filter((x) => x !== d.id) : [...new Set([...off, d.id])], on)} />
+              <ActRow key={d.id} d={d} label={fullName(t, d)} on={!off.includes(d.id)} changed={off.includes(d.id)} onChange={(v) => setMine(v ? off.filter((x) => x !== d.id) : [...new Set([...off, d.id])], on)} />
             ))}
           </>
         )}

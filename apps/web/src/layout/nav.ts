@@ -1,4 +1,4 @@
-import { menuRight, type Role } from '@pilotix/shared';
+import { type MenuCond, menuRight, onSpace, type Role, SPACE_ALWAYS, SPACES, type SpaceId, STORE_MENU } from '@pilotix/shared';
 import { backend } from '../lib/backend';
 import { currentShop, pageIsOn } from '../lib/features';
 import { moduleOn } from '../lib/modules';
@@ -7,7 +7,7 @@ import { rightOn } from '../lib/rights';
 /**
  * The menu, as in the original Pilotix (final layout): sub-pages appear as a stage bar inside the page,
  * except the groups ("Commandes", "Pilot AI") whose children stay in the menu with their counts.
- * roles: null = everyone, [] = admin only.
+ * roles: null = everyone, [] = admin only. A store's menu is the shared list (STORE_MENU); a partner's spaces are below.
  */
 export interface NavChild {
   id: string;
@@ -23,18 +23,20 @@ export interface NavChild {
   match?: { page: string; subs: string[] };
   /** the plan's menu (and sub-menu) this child belongs to, when its id is not a page of its own (default: its id) */
   plan?: [page: string, sub?: string];
-  /** also shown to the people who write the « Pilot Auto Assign » rules (ticked in Préférences) */
+  /** also shown to the people who write the « Pilot Auto Assign » rules (Utilisateurs › Rôles) */
   rules?: boolean;
-  /** only shown when this returns true */
-  onlyIf?: () => boolean;
+  /** only shown when this returns true (session roles) */
+  onlyIf?: (roles: Role[], isAdmin: boolean) => boolean;
+  /** the line opens the tab of the same id of this page (Commandes › Livré) */
+  tabOf?: string;
 }
 
 export interface NavItem {
   id: string;
   icon: string;
   roles: Role[] | null;
-  /** sub-pages shown in the stage bar (key, label key in nav.json) */
-  subs?: string[];
+  /** the page's tabs (its first one opens when the address names none) */
+  subs?: readonly string[];
   /** stage bar drawn with › arrows (a flow) instead of tabs */
   flow?: boolean;
   /** only shown when this returns true (session roles) */
@@ -52,6 +54,13 @@ export interface NavItem {
   pages?: string[];
   /** where the group's line leads when the sidebar is folded (default: its first child) */
   href?: string;
+  /** a group that is also a page of its own (Commandes) */
+  ownPage?: boolean;
+  pageName?: string;
+  tabRoles?: Record<string, Role[]>;
+  tabNames?: { prefix?: string; each?: Record<string, string> };
+  tabAlias?: Record<string, string>;
+  personal?: boolean;
 }
 
 /**
@@ -62,152 +71,34 @@ export function isPlainAgent(roles: Role[], isAdmin: boolean): boolean {
   return !isAdmin && roles.some((r) => r === 'confirmation' || r === 'suivi' || r === 'depot') && !roles.some((r) => r === 'agent_manager' || r === 'vendeur');
 }
 
-export const NAV: NavItem[] = [
-  // an agent who leads no one has no Accueil (his Dashboard is his home), unless the shop's plan has no Dashboard
-  { id: 'accueil', icon: 'home', roles: null, onlyIf: (r, admin) => !isPlainAgent(r, admin) || !pageIsOn('dashboard') },
-  // everyone: owners and managers see the teams' boards, the others their own numbers (Mine.tsx)
-  { id: 'dashboard', icon: 'chart', roles: ['agent_manager', 'vendeur', 'confirmation', 'suivi', 'depot', 'livreur'], subs: ['overview', 'confirmation', 'depot', 'suivi', 'livreurs', 'sav'] },
-  {
-    id: 'commandes',
-    icon: 'list',
-    roles: ['confirmation', 'suivi', 'depot'],
-    subs: ['tout', 'livrees', 'annulees'],
-    href: '#/commandes',
-    pages: ['commandes', 'confirmation', 'depot', 'suivi', 'livrees', 'retournees'],
-    children: [
-      { id: 'confirmation', href: '#/confirmation', count: 'conf', tone: 'nc-n', icon: 'phone', roles: ['confirmation'] },
-      { id: 'depot', href: '#/depot', count: 'depot', tone: 'nc-a', icon: 'package', roles: ['depot'] },
-      { id: 'suivi', href: '#/suivi', count: 'suivi', tone: 'nc-a', icon: 'route', roles: ['suivi', 'confirmation'] },
-      { id: 'livrees', href: '#/commandes/livrees', count: 'delivered', tone: 'nc-c', icon: 'checkcircle' },
-      { id: 'annulees', href: '#/commandes/annulees', count: 'cancelled', tone: '', icon: 'xcircle' },
-    ],
-  },
-  { id: 'confirmation', icon: 'phone', roles: ['confirmation'], subs: ['nouvelles', 'attente', 'confirmees', 'terminees'], flow: true, hidden: true },
-  { id: 'depot', icon: 'package', roles: ['depot'], subs: ['preparer', 'prepares', 'dispatchees', 'retours'], flow: true, hidden: true },
-  { id: 'suivi', icon: 'route', roles: ['suivi', 'confirmation'], subs: ['enlivraison', 'alertes', 'traites', 'bloques', 'livres', 'annules', 'reclamation', 'swap'], hidden: true },
-  { id: 'scanner', icon: 'scanbar', roles: ['depot'] },
-  { id: 'sav', icon: 'headset', roles: ['confirmation', 'suivi', 'depot'], subs: ['tickets', 'nouveau', 'attente', 'depot', 'livraison', 'livres', 'annules', 'stats'] },
-  { id: 'tournee', icon: 'navigation', roles: ['livreur'], onlyIf: (r) => r.includes('livreur') },
-  { id: 'produits', icon: 'layers', roles: ['depot', 'confirmation', 'suivi'], subs: ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'achats', 'depots'] },
-  // Point de vente: the boutique's counter, shown once an administrator turns it on (Management › Modules)
-  { id: 'pos', icon: 'store', roles: ['depot'], subs: ['vendre', 'ventes', 'cloture', 'reglages'], onlyIf: () => moduleOn('pos') },
-  // AI Pilot: the AI agents. Pilot Message (Dellal) sells in the inbox, Pilot Content plans the posts and publishes them,
-  // Espace créateur (under it) keeps the video pieces on the user's computer, Pilot Comments answers the comments,
-  // AI Spy reads the competitors' Facebook ads in Algeria (pages/ads/Spy.tsx; in
-  // the plans it is still Marketing's AI Spy); Comptes: the Facebook and TikTok accounts they use (an administrator
-  // links them, pages/comptes).
-  // Confirmation agents and their supervisors do not see it (they confirm orders): the owner (vendeur), the marketers,
-  // the administrators.
-  {
-    id: 'pilotai',
-    icon: 'sparkles',
-    roles: ['vendeur', 'marketer'],
-    pages: ['messages', 'social', 'createur', 'cm', 'spy', 'comptes'],
-    children: [
-      { id: 'messages', href: '#/messages', count: 'msgs', tone: 'nc-a', icon: 'chat', roles: ['vendeur'] },
-      { id: 'social', href: '#/social', icon: 'calendar', roles: ['marketer'] },
-      // Espace créateur, under Pilot Content (its plan switch): the video pieces, kept on the user's computer
-      { id: 'createur', href: '#/createur', icon: 'film', roles: ['marketer'] },
-      { id: 'cm', href: '#/cm', count: 'cm', tone: 'nc-a', icon: 'comments', roles: ['marketer'] },
-      { id: 'spy', href: '#/spy', icon: 'eye', roles: ['marketer'] },
-      { id: 'comptes', href: '#/comptes', icon: 'link', roles: [] },
-    ],
-  },
-  { id: 'messages', icon: 'chat', roles: ['vendeur'], hidden: true },
-  { id: 'cm', icon: 'comments', roles: ['marketer'], hidden: true },
-  { id: 'social', icon: 'calendar', roles: ['marketer'], hidden: true },
-  { id: 'createur', icon: 'film', roles: ['marketer'], hidden: true },
-  { id: 'spy', icon: 'eye', roles: ['marketer'], hidden: true },
-  { id: 'comptes', icon: 'link', roles: [], hidden: true },
-  // Pilot Automations: what Pilotix does by itself, a group of its own whose lines are the parts of pages/notify — the
-  // automations (Automatisations, Auto Pilot Affectation: admins; Auto Pilot Assign, with the Pilot Auto Assign rules and
-  // the Préférences: admins, and the rules alone for the people who write them), the delivery messages each customer gets
-  // (Messages, its Cas, Tester and Résultats tabs inside: WhatsApp, SMS: the suivi agents, not the confirmation agents
-  // nor their supervisors) and their Réglages (admins)
-  {
-    id: 'notify',
-    icon: 'zap',
-    roles: ['suivi'],
-    rules: true,
-    pages: ['notify'],
-    children: [
-      { id: 'auto', href: '#/notify/auto', icon: 'zap', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['auto'] } },
-      { id: 'assign', href: '#/notify/assign', icon: 'truck', roles: [], rules: true, plan: ['notify'], match: { page: 'notify', subs: ['assign'] } },
-      { id: 'affectation', href: '#/notify/affectation', icon: 'users', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['affectation'] } },
-      { id: 'automessages', href: '#/notify/messages', count: 'notify', tone: 'nc-a', icon: 'send', roles: ['suivi'], plan: ['notify'], match: { page: 'notify', subs: ['messages', 'cas', 'tester', 'resultats'] } },
-      { id: 'autoreglages', href: '#/notify/reglages', icon: 'settings', roles: [], plan: ['notify'], match: { page: 'notify', subs: ['reglages'] } },
-    ],
-  },
-  // Referral: « Referral » (other shops invited to Pilotix: the store's code and link, the stores it brought, the free
-  // months — the store's administrators only) and « Code promo » (the welcome codes of the « Awareness 🎁 » posts and ads)
-  {
-    id: 'referral',
-    icon: 'gift',
-    roles: ['marketer', 'vendeur'],
-    pages: ['parrainage'],
-    href: '#/parrainage',
-    children: [
-      { id: 'parrainage', href: '#/parrainage', icon: 'gift', roles: [], onlyIf: storeOnly, match: { page: 'parrainage', subs: ['', 'amis'] } },
-      { id: 'codepromo', href: '#/parrainage/codes', icon: 'tag', roles: ['marketer', 'vendeur'], plan: ['parrainage'], match: { page: 'parrainage', subs: ['codes'] } },
-    ],
-  },
-  { id: 'parrainage', icon: 'gift', roles: ['marketer', 'vendeur'], hidden: true },
-  // the customers: the suivi agents (not the confirmation agents nor their supervisors)
-  { id: 'clients', icon: 'users', roles: ['suivi'] },
-  // Publicité (Meta spend face to the orders), Formulaires (the ads' lead forms become orders), Campagnes (WhatsApp offers
-  // to the customers who said yes), Marketer (paying marketers); AI Spy (competitors' ads in Algeria) is in AI Pilot,
-  // Influenceurs (ads in the shop's name and a creator's) in Partenaires
-  { id: 'marketing', icon: 'megaphone', roles: ['marketer'], subs: ['publicite', 'strategies', 'formulaires', 'campagnes', 'catalogue', 'marketer'] },
-  // a public page per product, and the orders its fake-order check held back (the marketers, the owner and the
-  // administrators restore the real ones; not the confirmation agents)
-  { id: 'landing', icon: 'globe', roles: ['marketer'] },
-  // Caisse › Paie: the agents' pay (their plans, pay days, acomptes, paying from a caisse)
-  { id: 'caisse', icon: 'wallet', roles: [], subs: ['overview', 'due', 'done', 'livreurs', 'journal', 'paie'] },
-  // an employee's own caisse (money he received, his expenses, what he handed to the main caisse)
-  { id: 'macaisse', icon: 'wallet', roles: ['confirmation', 'suivi', 'depot', 'agent_manager'], onlyIf: (_r, admin) => !admin },
-  // Partenaires: everyone the store works with, in one group — couriers, its own livreurs, confirmation agencies, marketers,
-  // influenceurs (pages/ads/Influenceurs.tsx; in the plans it is still Marketing's Influenceurs). Administrators see every
-  // line; a marketer sees the group with Influenceurs only (it was his Marketing tab). (Pilot Auto Assign's rules and the
-  // Préférences are in Pilot Automations › Auto Pilot Assign)
-  {
-    id: 'partenaires',
-    icon: 'handshake',
-    roles: ['marketer'],
-    pages: ['livraison', 'agences', 'marketers', 'influenceurs'],
-    children: [
-      { id: 'livraison', href: '#/livraison/societes', icon: 'truck', roles: [], plan: ['livraison'], match: { page: 'livraison', subs: ['', 'societes', 'api'] } },
-      { id: 'livreurs', href: '#/livraison/livreurs', icon: 'navigation', roles: [], plan: ['livraison', 'livreurs'], match: { page: 'livraison', subs: ['livreurs'] } },
-      { id: 'agences', href: '#/agences', icon: 'handshake', roles: [], onlyIf: partnersOn },
-      { id: 'marketers', href: '#/marketers', icon: 'trend', roles: [], onlyIf: partnersOn },
-      { id: 'influenceurs', href: '#/influenceurs', icon: 'camera', roles: ['marketer'] },
-    ],
-  },
-  { id: 'livraison', icon: 'truck', roles: [], subs: ['societes', 'api', 'livreurs'], hidden: true },
-  // Partenaires › Influenceurs (it was a tab of Marketing: old links follow, main.tsx)
-  { id: 'influenceurs', icon: 'camera', roles: ['marketer'], hidden: true },
-  // no « Vendeurs »: a seller never adds another seller
-  { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true, subs: ['roles', 'admins', 'agents', 'managers'] },
-  // confirmation agencies working for the store (its code, requests both ways, contracts, numbers, payments)
-  { id: 'agences', icon: 'handshake', roles: [], onlyIf: partnersOn, hidden: true },
-  // marketers running the store's ads (the same, on their own: a marketer has nothing to do with the agencies)
-  { id: 'marketers', icon: 'trend', roles: [], onlyIf: partnersOn, hidden: true },
-  { id: 'management', icon: 'briefcase', roles: [], affect: true, subs: ['plans', 'statuts', 'affectation', 'prix', 'canaux', 'alertes', 'livreur', 'modules', 'archive'] },
-  { id: 'reglages', icon: 'settings', roles: [] },
-  // « Aide »: short films for everyone (installing the WhatsApp add-on…); « Contacter Pilotix » there for the admins
-  { id: 'aide', icon: 'help', roles: null },
-  { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'parrainage', 'securite'] },
-  // « Mes boutiques »: opened from the boutique at the bottom of the menu (and the account menu)
-  { id: 'boutiques', icon: 'store', roles: null, hidden: true },
-];
+/** When a line is shown, beyond its roles (the store's menu says which: packages/shared/src/menu.ts). */
+const COND: Record<MenuCond, (roles: Role[], isAdmin: boolean) => boolean> = {
+  home: (r, admin) => !isPlainAgent(r, admin) || !pageIsOn('dashboard'),
+  livreur: (r) => r.includes('livreur'),
+  pos: () => moduleOn('pos'),
+  notAdmin: (_r, admin) => !admin,
+  store: () => storeOnly(),
+  partners: () => partnersOn(),
+};
+
+/**
+ * A store's menu: the shared list (packages/shared/src/menu.ts: its pages, groups, tabs, team screens), the same one
+ * Utilisateurs › Rôles and the server read.
+ */
+export const NAV: NavItem[] = STORE_MENU.map(({ cond, children, ...n }) => ({
+  ...n,
+  ...(cond ? { onlyIf: COND[cond] } : {}),
+  ...(children ? { children: children.map(({ cond: c, ...ch }) => ({ ...ch, ...(c ? { onlyIf: COND[c] } : {}) })) } : {}),
+}));
 
 /**
  * A group's child: its own roles (or the people who write the Pilot rules), or everyone who sees the group — left to
  * their role in Utilisateurs › Rôles — and in the shop's plan.
  */
-export const canSeeChild = (c: NavChild, roles: Role[], isAdmin: boolean, canRules = false) =>
-  ((isAdmin || ((!c.roles || c.roles.some((r) => roles.includes(r))) && rightOn(menuRight(c.id)))) || (!!c.rules && canRules)) &&
+export const canSeeChild = (c: NavChild, roles: Role[], isAdmin: boolean, canRules = false, has: (right: string | null) => boolean = rightOn) =>
+  ((isAdmin || ((!c.roles || c.roles.some((r) => roles.includes(r))) && has(menuRight(c.id)))) || (!!c.rules && canRules)) &&
   (c.plan ? pageIsOn(...c.plan) : pageIsOn(c.id)) &&
-  (!c.onlyIf || c.onlyIf());
+  (!c.onlyIf || c.onlyIf(roles, isAdmin));
 
 /**
  * The store's pages opened by a group's lines (Pilot Automations' tabs, Referral's, Partenaires'): the line's own right
@@ -215,7 +106,8 @@ export const canSeeChild = (c: NavChild, roles: Role[], isAdmin: boolean, canRul
  */
 const BY_LINES = new Set(NAV.flatMap((n) => n.children ?? []).map((c) => c.match?.page).filter((p): p is string => !!p));
 
-export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManageUsers = false, canRules = false, canAffect = false): boolean {
+/** (`has`: the person's rights, theirs by default; Utilisateurs › Rôles passes a role's to show its menu) */
+export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManageUsers = false, canRules = false, canAffect = false, has: (right: string | null) => boolean = rightOn): boolean {
   // a menu the shop's plan does not include is not shown to anyone, administrators included
   if (!pageIsOn(item.id)) return false;
   if (item.onlyIf && !item.onlyIf(roles, isAdmin)) return false;
@@ -226,7 +118,22 @@ export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManage
   if (item.roles === null || isAdmin) return true;
   if (!item.roles.some((r) => roles.includes(r))) return false;
   // Utilisateurs › Rôles: a page taken from the role (a group shows while one of its lines does)
-  return !!item.children || BY_LINES.has(item.id) || rightOn(menuRight(item.id));
+  return !!item.children || BY_LINES.has(item.id) || has(menuRight(item.id));
+}
+
+/**
+ * What a menu shows a person: its lines (a group: the lines it shows), and in a store the team screens (Écrans) they have,
+ * with the one picked (« Ancien menu » when it is not one of theirs). The app's menu (Shell) and the role's menu in
+ * Utilisateurs › Rôles both use it, so the two never differ.
+ */
+export function menuView(nav: NavItem[], see: { item: (n: NavItem) => boolean; line: (c: NavChild) => boolean }, picked: SpaceId, withScreens: boolean) {
+  const kids = (n: NavItem) => (n.children ?? []).filter(see.line);
+  // a group whose lines are all hidden (or out of the shop's plan) is not shown
+  const all = nav.filter((n) => !n.hidden && see.item(n) && (!n.children || kids(n).length > 0));
+  const onLine = (s: SpaceId, n: NavItem) => (n.children ? kids(n).some((c) => onSpace(s, c.id)) : onSpace(s, n.id));
+  const screens = withScreens ? SPACES.filter((s) => all.some((n) => !SPACE_ALWAYS.includes(n.id) && onLine(s.id, n))) : [];
+  const screen: SpaceId = screens.length > 1 && screens.some((s) => s.id === picked) ? picked : 'all';
+  return { kids, screens, screen, items: all.filter((n) => onLine(screen, n)), kidsOn: (n: NavItem) => kids(n).filter((c) => onSpace(screen, c.id)) };
 }
 
 /** The group's line that opens this page and tab (#/notify/messages: « Messages »), if one does. */
@@ -336,33 +243,5 @@ export const MARKETER_NAV: NavItem[] = [
 ];
 
 // ---------------------------------------------------------------- a store's team screens (Écrans)
-/**
- * The store's menu split into one screen per team, picked in a dropdown at the top of the menu (with each screen's red
- * counts). A screen lists the menu items and group children it shows (by id); « Ancien menu » (all) shows everything,
- * as before. The pages and their links do not change: a screen only chooses which menu lines are shown.
- */
-export type SpaceId = 'all' | 'marketing' | 'sponsor' | 'cm' | 'service' | 'depot' | 'finance' | 'admin';
-export interface Space {
-  id: SpaceId;
-  icon: string;
-  /** menu items (top level) and group children (by id) shown on this screen */
-  items: string[];
-  /** menu counts (useMenuCounts keys) summed in the dropdown's red badge */
-  counts: string[];
-}
-/** always shown, whatever the screen */
-export const SPACE_ALWAYS = ['accueil', 'aide'];
-export const SPACES: Space[] = [
-  { id: 'marketing', icon: 'megaphone', items: ['marketing', 'createur', 'social', 'influenceurs', 'parrainage', 'codepromo'], counts: [] },
-  { id: 'sponsor', icon: 'trend', items: ['marketing', 'landing', 'spy'], counts: ['landing'] },
-  { id: 'cm', icon: 'chat', items: ['messages', 'cm', 'codepromo'], counts: ['msgs', 'cm'] },
-  { id: 'service', icon: 'phone', items: ['dashboard', 'confirmation', 'suivi', 'livrees', 'annulees', 'sav', 'auto', 'assign', 'affectation', 'automessages', 'autoreglages', 'clients', 'codepromo'], counts: ['conf', 'suivi', 'sav', 'notify'] },
-  { id: 'depot', icon: 'package', items: ['dashboard', 'depot', 'scanner', 'produits', 'pos', 'tournee', 'livreurs'], counts: ['depot', 'lowStock'] },
-  { id: 'finance', icon: 'wallet', items: ['caisse', 'macaisse'], counts: [] },
-  { id: 'admin', icon: 'usercog', items: ['utilisateurs', 'management', 'reglages', 'livraison', 'agences', 'marketers', 'comptes'], counts: [] },
-];
-/** Is this menu item or group child on the screen? */
-export const onSpace = (space: SpaceId, id: string): boolean => {
-  if (space === 'all' || SPACE_ALWAYS.includes(id)) return true;
-  return !!SPACES.find((s) => s.id === space)?.items.includes(id);
-};
+// (in the shared menu list, with the pages: packages/shared/src/menu.ts)
+export { onSpace, SPACE_ALWAYS, SPACES, type Space, type SpaceId } from '@pilotix/shared';

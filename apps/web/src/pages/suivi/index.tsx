@@ -1,4 +1,4 @@
-import type { Order } from '@pilotix/shared';
+import { MENU_TABS, type Order } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { lazy, ReactNode, Suspense, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -45,6 +45,11 @@ const useInAgency = () => {
 const isAlertTab = (tab: string) => tab === 'alertes' || tab === 'alertes_new' || tab === 'alertes_encours';
 type ListTab = (typeof LIST_TABS)[number];
 type Sub = ListTab | 'reclamation';
+// The bar is drawn by hand (Alertes and its parts, an agency's steps), but its tabs are the menu's (MENU_TABS.suivi,
+// packages/shared/src/menu.ts, shared with Utilisateurs › Rôles): a tab added on one side only stops the build here.
+type MenuSuivi = (typeof MENU_TABS.suivi)[number];
+const sameTabs: [Exclude<MenuSuivi, Sub>, Exclude<Sub, MenuSuivi | 'alertes_new' | 'alertes_encours'>] extends [never, never] ? true : false = true;
+void sameTabs;
 
 /** « Suivi »: this boutique's, or every boutique's with « Toutes les boutiques ». */
 export function Suivi(p: PageProps) {

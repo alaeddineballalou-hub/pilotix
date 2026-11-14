@@ -17,7 +17,7 @@ import { store } from '../lib/store';
 import { toast } from '../ui/toast';
 import { Field, Icon, StageBar, TicketTag } from '../ui/kit';
 import { Modal } from '../ui/modal';
-import { canSee, canSeeChild, NAV, NavItem, onSpace, SpaceId, SPACES } from './nav';
+import { canSee, canSeeChild, menuView, NAV, NavItem, SpaceId } from './nav';
 import { useCanRules } from '../lib/pilot';
 import { AccountMenu } from './AccountMenu';
 import { BoutiqueSwitch, useBoutiques } from './Boutiques';
@@ -177,23 +177,24 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
     document.body.classList.toggle('nav-open', navOpen);
   }, [navOpen]);
 
-  /** a group's children this user sees (an agency: the work its sellers give it) */
-  const kids = (n: NavItem) =>
-    (n.children ?? []).filter((c) => canSeeChild(c, roles, isAdmin, canRules) && (!agency || !work.loaded || (c.id === 'confirmation' ? work.tasks.has('confirmation') : c.id === 'alertes' ? work.tasks.has('suivi') : ['suivi', 'enlivraison', 'livrees', 'annulees'].includes(c.id) ? work.tasks.has('suivi') || work.tasks.has('confirmation') : true)));
-  // a group whose children are all out of the shop's plan is not shown
-  const allItems = nav.filter((n) => !n.hidden && canSee(n, roles, isAdmin, !!session!.canManageUsers, canRules, !!session!.profile.canAffect) && (!n.children || kids(n).length > 0));
   // a store's team screens (Écrans): the dropdown at the top of the menu shows one team's lines, « Ancien menu » all of them
-  const onLine = (scr: SpaceId, n: NavItem) => (n.children ? kids(n).some((c) => onSpace(scr, c.id)) : onSpace(scr, n.id));
-  const screens = space === 'store' ? SPACES.filter((s) => allItems.some((n) => !['accueil', 'aide'].includes(n.id) && onLine(s.id, n))) : [];
   const [scrPicked, setScrPicked] = useState<SpaceId>(() => (store.get('screen') as SpaceId) || 'all');
-  const scr: SpaceId = screens.length > 1 && screens.some((s) => s.id === scrPicked) ? scrPicked : 'all';
   const pickScreen = (id: SpaceId) => {
     store.set('screen', id === 'all' ? null : id);
     setScrPicked(id);
   };
-  const items = allItems.filter((n) => onLine(scr, n));
-  /** a group's children on the screen picked */
-  const kidsOn = (n: NavItem) => kids(n).filter((c) => onSpace(scr, c.id));
+  // the lines this user sees (a group's: an agency's, the work its sellers give it), on the screen picked (nav.ts)
+  const view = menuView(
+    nav,
+    {
+      item: (n) => canSee(n, roles, isAdmin, !!session!.canManageUsers, canRules, !!session!.profile.canAffect),
+      line: (c) => canSeeChild(c, roles, isAdmin, canRules) && (!agency || !work.loaded || (c.id === 'confirmation' ? work.tasks.has('confirmation') : c.id === 'alertes' ? work.tasks.has('suivi') : ['suivi', 'enlivraison', 'livrees', 'annulees'].includes(c.id) ? work.tasks.has('suivi') || work.tasks.has('confirmation') : true)),
+    },
+    scrPicked,
+    space === 'store',
+  );
+  const { kids, screens, items, kidsOn } = view;
+  const scr = view.screen;
   const scrCount = (keys: string[]) => keys.reduce((a, k) => a + (counts[k] ?? 0), 0);
   /** the group of the page on screen: its children show in a bar under the header when the sidebar is folded */
   const curGrp = items.find((n) => n.children && n.pages?.includes(page));

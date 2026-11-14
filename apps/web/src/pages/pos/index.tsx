@@ -1,5 +1,6 @@
 // Point de vente: the boutique's counter — Vendre (the products and the ticket), Ventes du jour, Clôture (the drawer
 // counted) and Réglages (the owner). Shown once an administrator turns it on (Management › Modules).
+import { MENU_TABS, menuTabName } from '@pilotix/shared';
 import { useTranslation } from 'react-i18next';
 import { useSession } from '../../lib/session';
 import { StageBar } from '../../ui/kit';
@@ -11,7 +12,8 @@ import { PosSettingsPage } from './Settings';
 import './pos.css';
 import { tabOn } from '../../lib/rights';
 
-const TABS = ['vendre', 'ventes', 'cloture', 'reglages'] as const;
+/** the page's tabs: the menu's list (packages/shared/src/menu.ts), shared with Utilisateurs › Rôles */
+const TABS = MENU_TABS.pos;
 type Tab = (typeof TABS)[number];
 
 export function Pos({ sub }: PageProps) {
@@ -22,7 +24,7 @@ export function Pos({ sub }: PageProps) {
   const view: Tab = (tabs as readonly string[]).includes(sub ?? '') ? (sub as Tab) : 'vendre';
   return (
     <div className="pos">
-      <StageBar flow={false} current={view} items={tabs.map((k) => ({ key: k, label: t(`pos.tabs.${k}`), href: `#/pos/${k}` }))} />
+      <StageBar flow={false} current={view} items={tabs.map((k) => ({ key: k, label: t(menuTabName('pos', k)), href: `#/pos/${k}` }))} />
       {view === 'vendre' ? <Sell /> : view === 'ventes' ? <Sales /> : view === 'cloture' ? <Close /> : <PosSettingsPage />}
     </div>
   );

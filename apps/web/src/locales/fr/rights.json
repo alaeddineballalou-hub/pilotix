@@ -8,6 +8,10 @@
   "agence": "Agents d’agence",
   "agenceHint": "Les agents d’une agence de confirmation qui travaillent dans la boutique",
   "menuOf": "Le menu de {{role}}",
+  "partAlways": "Sur tous les écrans",
+  "partNone": "Ancien menu seulement",
+  "partNoneHint": "Sur aucun écran d’équipe : seulement dans « Ancien menu (tout) »",
+  "alsoOn": "aussi dans {{list}}",
   "always": "Toujours",
   "tabs": "Onglets",
   "acts": "Boutons",
@@ -277,9 +281,5 @@
   "nTabs_one": "{{count}} onglet",
   "nTabs_other": "{{count}} onglets",
   "nActs_one": "{{count}} bouton",
-  "nActs_other": "{{count}} boutons",
-  "page": {
-    "automessages": "Messages de livraison",
-    "autoreglages": "Réglages des automatisations"
-  }
+  "nActs_other": "{{count}} boutons"
 }

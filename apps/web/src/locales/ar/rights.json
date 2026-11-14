@@ -8,6 +8,10 @@
   "agence": "أعوان الوكالة",
   "agenceHint": "أعوان وكالة التأكيد الذين يعملون في المتجر",
   "menuOf": "قائمة {{role}}",
+  "partAlways": "في كل الشاشات",
+  "partNone": "القائمة القديمة فقط",
+  "partNoneHint": "ليست في أي شاشة فريق: فقط في « القائمة القديمة (الكل) »",
+  "alsoOn": "أيضًا في {{list}}",
   "always": "دائمًا",
   "tabs": "التبويبات",
   "acts": "الأزرار",
@@ -305,9 +309,5 @@
   "nActs_two": "زران",
   "nActs_few": "{{count}} أزرار",
   "nActs_many": "{{count}} زرًا",
-  "nActs_other": "{{count}} زر",
-  "page": {
-    "automessages": "رسائل التوصيل",
-    "autoreglages": "إعدادات الأتمتة"
-  }
+  "nActs_other": "{{count}} زر"
 }
