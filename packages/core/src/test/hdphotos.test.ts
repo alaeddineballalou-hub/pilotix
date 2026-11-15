@@ -8,7 +8,9 @@ import { call, Ctx, Db, login, migrate, migrateAll, pgliteTenancy, seedBase, Ser
 import { runDellal, setPhotosPause } from '../dellal-server';
 import { getRaw, setRaw } from '../modules/admin';
 import { runAgent } from '../modules/dellal';
+import { followProduct } from '@pilotix/shared';
 import { productPhotos } from '../modules/dellalphotos';
+import { productPhotoSets } from '../modules/landing';
 import { presign, saveStore, signQuery, storeStatus } from '../photostore';
 import { savePilotConfig } from '../platform/pilotai';
 import { loadShop } from '../platform/shops';
@@ -232,4 +234,97 @@ test('on the server: refused until the bucket is set; then each photo goes once 
   } finally {
     globalThis.fetch = realFetch;
   }
+});
+
+test('one upload feeds the screens: a line’s first photo is its picture, the product’s first photo its main picture', async () => {
+  const SMALL = (tag: string) => `data:image/webp;base64,${Buffer.from(`small-${tag}`.padEnd(60, 'x')).toString('base64')}`;
+  const made: any = await call('catalog.saveProduct', preview, { name: 'Vélo Star', sku: 'VS-1', price: 9500, cost: 7500, variants: [{ title: '12P / Noir' }, { title: '12P / Rouge' }, { title: '12P / Bleu' }] });
+  const p2 = made.id as number;
+  const [black, redLine, blueLine] = ['12P / Noir', '12P / Rouge', '12P / Bleu'].map((title) => made.variants.find((v: any) => v.title === title).id as number);
+  // pictures from before (the old « Image » and per-line buttons): small ones, kept until a real photo replaces them
+  await db.query(`UPDATE products SET photo = $2 WHERE id = $1`, [p2, SMALL('old-main')]);
+  await db.query(`UPDATE product_variants SET photo = $2 WHERE id = $1`, [black, SMALL('old-black')]);
+  await db.query(`UPDATE product_variants SET photo = $2 WHERE id = $1`, [blueLine, SMALL('old-blue')]);
+  const put = (o: { variantId: number | null; tag: string; small?: boolean; kind?: 'photo' | 'sizes' }) =>
+    call('photos.add', preview, { productId: p2, variantId: o.variantId, kind: o.kind ?? 'photo', data: JPEG(o.tag), w: 2048, h: 1536, thumb: THUMB(o.tag), mini: MINI(o.tag), ...(o.small ? { small: SMALL(o.tag) } : {}) }) as Promise<any>;
+  const pics = async () => {
+    const lines = new Map<number, string | null>((await db.query(`SELECT id, photo FROM product_variants WHERE product_id = $1`, [p2])).map((r: any) => [Number(r.id), r.photo]));
+    return { product: (await db.query(`SELECT photo FROM products WHERE id = $1`, [p2]))[0].photo as string | null, black: lines.get(black), red: lines.get(redLine), blue: lines.get(blueLine) };
+  };
+
+  // the size chart is never a picture
+  let v: any = await put({ variantId: null, tag: 'chart', kind: 'sizes' });
+  assert.deepEqual(v.changed, { variants: {} });
+  assert.equal((await pics()).product, SMALL('old-main'));
+
+  // the product's first photo, for « 12P / Noir »: that line's picture and the main one (the page's lighter copy)
+  v = await put({ variantId: black, tag: 'n1', small: true });
+  assert.deepEqual(v.changed, { product: SMALL('n1'), variants: { [black]: SMALL('n1') } });
+  assert.deepEqual(await pics(), { product: SMALL('n1'), black: SMALL('n1'), red: null, blue: SMALL('old-blue') });
+  // Dellal sends the real photo, not its small copy too; a line that only has an old small picture still sends it
+  const b64 = (dataUrl: string) => dataUrl.slice(dataUrl.indexOf(',') + 1);
+  assert.deepEqual((await productPhotos(db, p2, { variantId: black, size: 'send', max: 5 })).map((p) => p.data), [JPEG('n1')]);
+  assert.deepEqual((await productPhotos(db, p2, { variantId: blueLine, size: 'send', max: 5 })).map((p) => p.data), [b64(SMALL('old-blue'))]);
+  assert.deepEqual((await productPhotos(db, p2, { size: 'send', max: 5 })).map((p) => p.data), [JPEG('n1'), b64(SMALL('old-blue'))]);
+  // its landing pages: the main photo is that photo, sharp, once (tied to its line), not its small copy
+  const set = (await productPhotoSets(db, [p2])).get(p2)!;
+  assert.equal(set.hd?.thumb, THUMB('n1'));
+  assert.deepEqual(
+    followProduct([], set).add.map((a) => [a.key, a.v, a.hd ? 'hd' : a.url]),
+    [
+      ['m', black, 'hd'],
+      [`v${blueLine}`, blueLine, SMALL('old-blue')],
+    ],
+  );
+
+  // another photo of the same line changes nothing; another line's first photo is that line's (no lighter copy sent: its 320 px one)
+  v = await put({ variantId: black, tag: 'n2', small: true });
+  assert.deepEqual(v.changed, { variants: {} });
+  v = await put({ variantId: redLine, tag: 'r1' });
+  assert.deepEqual(v.changed, { variants: { [redLine]: THUMB('r1') } });
+  assert.deepEqual(await pics(), { product: SMALL('n1'), black: SMALL('n1'), red: THUMB('r1'), blue: SMALL('old-blue') });
+  await assert.rejects(call('photos.add', preview, { productId: p2, variantId: redLine, kind: 'photo', data: JPEG('bad'), w: 10, h: 10, thumb: THUMB('bad'), small: 'data:image/png;base64,' + 'A'.repeat(60) }), /Petite copie invalide/);
+
+  // « Photo principale »: the red one goes first, it is the main picture
+  const r1 = v.photos.find((p: any) => p.variantId === redLine);
+  v = await call('photos.update', preview, { id: r1.id, position: 0 });
+  assert.equal(v.photos.filter((p: any) => p.kind === 'photo')[0].id, r1.id);
+  assert.deepEqual(v.changed, { product: THUMB('r1'), variants: {} });
+
+  // moved to another line: its old line has no photo left, the new one has it first; and back
+  v = await call('photos.update', preview, { id: r1.id, variantId: black });
+  assert.deepEqual(v.changed, { variants: { [redLine]: null, [black]: THUMB('r1') } });
+  v = await call('photos.update', preview, { id: r1.id, variantId: redLine });
+  assert.deepEqual(v.changed, { variants: { [redLine]: THUMB('r1'), [black]: THUMB('n1') } });
+
+  // the product form cannot change the pictures the photos feed (a page opened earlier sends what it knew);
+  // a line without photo keeps the form's
+  await call('catalog.saveProduct', preview, {
+    id: p2,
+    name: 'Vélo Star',
+    price: 9500,
+    cost: 7500,
+    photo: SMALL('stale'),
+    variants: [
+      { id: black, title: '12P / Noir', photo: SMALL('stale') },
+      { id: redLine, title: '12P / Rouge', photo: null },
+      { id: blueLine, title: '12P / Bleu', photo: SMALL('new-blue') },
+    ],
+  });
+  assert.deepEqual(await pics(), { product: THUMB('r1'), black: THUMB('n1'), red: THUMB('r1'), blue: SMALL('new-blue') });
+
+  // removed: the main picture is the next photo's; a line left without photo loses its picture
+  v = await call('photos.remove', preview, { id: r1.id });
+  assert.deepEqual(v.changed, { product: THUMB('n1'), variants: { [redLine]: null } });
+  const n1 = v.photos.find((p: any) => p.thumb === THUMB('n1'));
+  v = await call('photos.remove', preview, { id: n1.id });
+  assert.deepEqual(v.changed, { product: THUMB('n2'), variants: { [black]: THUMB('n2') } });
+  // a photo of the whole product put first (Studio's poster does this): the main picture, no line's
+  v = await call('photos.update', preview, { id: (await put({ variantId: null, tag: 'all' })).photos.find((p: any) => p.thumb === THUMB('all')).id, position: 0 });
+  assert.deepEqual(v.changed, { product: THUMB('all'), variants: {} });
+  // the last ones removed: no picture left, and the form sets them again
+  for (const p of v.photos.filter((x: any) => x.kind === 'photo')) v = await call('photos.remove', preview, { id: p.id });
+  assert.deepEqual(await pics(), { product: null, black: null, red: null, blue: SMALL('new-blue') });
+  await call('catalog.saveProduct', preview, { id: p2, name: 'Vélo Star', price: 9500, cost: 7500, photo: SMALL('by-form'), variants: [{ id: black, title: '12P / Noir', photo: SMALL('by-form-black') }] });
+  assert.deepEqual(await pics(), { product: SMALL('by-form'), black: SMALL('by-form-black'), red: null, blue: SMALL('new-blue') });
 });

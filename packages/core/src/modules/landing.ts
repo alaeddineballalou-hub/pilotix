@@ -369,11 +369,17 @@ export async function productPhotoSets(db: Db, productIds: number[]): Promise<Ma
   // each one's first HD photo (Photos HD): the product's own (no variant), and each variant's
   const hd = new Map<string, ProductHd>();
   const hds = await db.query(`SELECT id, product_id, variant_id, key, w, h, thumb FROM product_photos WHERE product_id = ANY($1) AND kind = 'photo' ORDER BY position, id`, [ids]).catch(() => []);
+  // a product whose photos are all a colour's / size's: its main photo is its first one (Produits › Photos, « photo
+  // principale »: the main picture is that photo's small copy), shown sharp instead of the copy
+  const first = new Map<number, ProductHd>();
   for (const r of hds) {
     const k = `${r.product_id}:${r.variant_id ?? ''}`;
-    if (!hd.has(k) && r.thumb) hd.set(k, { id: num(r.id), tag: hdTag(r), thumb: String(r.thumb), w: num(r.w) || 960, h: num(r.h) || 1200 });
+    const one = r.thumb ? { id: num(r.id), tag: hdTag(r), thumb: String(r.thumb), w: num(r.w) || 960, h: num(r.h) || 1200 } : null;
+    if (!one) continue;
+    if (!hd.has(k)) hd.set(k, one);
+    if (!first.has(num(r.product_id))) first.set(num(r.product_id), one);
   }
-  for (const [pid, set] of out) set.hd = hd.get(`${pid}:`) ?? null;
+  for (const [pid, set] of out) set.hd = hd.get(`${pid}:`) ?? first.get(pid) ?? null;
   for (const v of await db.query('SELECT id, product_id, title, photo, active FROM product_variants WHERE product_id = ANY($1) ORDER BY id', [ids]))
     out.get(num(v.product_id))?.variants.push({ id: num(v.id), photo: v.photo ?? null, active: !!v.active, title: String(v.title ?? ''), hd: hd.get(`${v.product_id}:${v.id}`) ?? null });
   return out;

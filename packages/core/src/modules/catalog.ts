@@ -680,8 +680,13 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
 
     // fields not sent keep their value (older callers send only the first ones)
     const keep = <T,>(v: T | undefined, col: string): T | null => (v === undefined ? (cur?.[col] ?? null) : (v as any) === '' ? null : v);
+    // Pictures that come from the product's photos (Produits › Photos) are not this form's to change: the product's first
+    // photo is its main picture, a colour's / size's first photo is that line's (hdphotos.ts keeps them in step). A page
+    // opened before a photo was added, or an older app, sends the picture it knew: it is left out.
+    const hdLines = cur ? await tx.query(`SELECT DISTINCT variant_id FROM product_photos WHERE product_id = $1 AND kind = 'photo'`, [i.id]) : [];
+    const hdLine = new Set<number>(hdLines.filter((r: any) => r.variant_id != null).map((r: any) => num(r.variant_id)));
     const extra = [keep(i.barcode, 'barcode'), keep(i.brand, 'brand'), keep(i.externalId, 'external_id'), keep(i.pageUrl, 'page_url'), keep(i.sellerId, 'seller_id'), keep(i.description, 'description'), i.alertQty ?? num(cur?.alert_qty), keep(i.defaultCompanyId, 'default_company_id')];
-    const vals = [i.name, sku, i.price, i.cost, i.weightKg, i.photo || null, i.isService, i.active, i.fixedPrice, maxDiscount, JSON.stringify(i.packs.sort((a, b) => a.qty - b.qty)), linked, JSON.stringify(i.parts.map((p) => ({ name: p.name, max: p.max ?? null }))), i.feeGrid || null, ...extra];
+    const vals = [i.name, sku, i.price, i.cost, i.weightKg, hdLines.length ? (cur.photo ?? null) : i.photo || null, i.isService, i.active, i.fixedPrice, maxDiscount, JSON.stringify(i.packs.sort((a, b) => a.qty - b.qty)), linked, JSON.stringify(i.parts.map((p) => ({ name: p.name, max: p.max ?? null }))), i.feeGrid || null, ...extra];
     let productId: number;
     if (cur) {
       await logProductChange(tx, i.id!, ctx.session.profile.id, { price: cur.price, cost: cur.cost, max_discount: cur.max_discount }, { price: i.price, cost: i.cost, max_discount: maxDiscount }, 'Fiche produit');
@@ -725,7 +730,7 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
         // a renamed size keeps its row (its stock, price list, photo and orders stay with it); its former name and code
         // are kept for what still writes them (a sheet, a Meta lead form, the website)
         if (v.titleAr !== undefined) await tx.query('UPDATE product_variants SET title_ar = $2 WHERE id = $1', [v.id, v.titleAr]);
-        await tx.query('UPDATE product_variants SET title=$2, sku=$3, price=$4, active=$5, cost=$6, max_discount=$7, weight_kg=$8, alert_qty=$9, fee_grid=$10, photo=$11, old_titles=$12, old_skus=$13 WHERE id=$1', [v.id, v.title.trim(), vsku || old.sku, v.price === undefined ? old.price : v.price, v.active, v.cost === undefined ? old.cost : v.cost, v.maxDiscount === undefined ? old.max_discount : v.maxDiscount, v.weightKg === undefined ? old.weight_kg : v.weightKg, v.alertQty === undefined ? old.alert_qty : v.alertQty, v.feeGrid === undefined ? old.fee_grid : v.feeGrid, v.photo === undefined ? old.photo : v.photo, rememberOld(old.old_titles, old.title, v.title.trim(), true), rememberOld(old.old_skus, old.sku, vsku || old.sku, false)]);
+        await tx.query('UPDATE product_variants SET title=$2, sku=$3, price=$4, active=$5, cost=$6, max_discount=$7, weight_kg=$8, alert_qty=$9, fee_grid=$10, photo=$11, old_titles=$12, old_skus=$13 WHERE id=$1', [v.id, v.title.trim(), vsku || old.sku, v.price === undefined ? old.price : v.price, v.active, v.cost === undefined ? old.cost : v.cost, v.maxDiscount === undefined ? old.max_discount : v.maxDiscount, v.weightKg === undefined ? old.weight_kg : v.weightKg, v.alertQty === undefined ? old.alert_qty : v.alertQty, v.feeGrid === undefined ? old.fee_grid : v.feeGrid, v.photo === undefined || hdLine.has(v.id) ? old.photo : v.photo, rememberOld(old.old_titles, old.title, v.title.trim(), true), rememberOld(old.old_skus, old.sku, vsku || old.sku, false)]);
       } else {
         vsku ||= await freeSku(tx, 'product_variants', `${sku}-${slug(v.title).slice(0, 12)}`);
         if (!ctx.session.isAdmin && v.maxDiscount != null) throw forbidden('Seul l’administrateur modifie la remise maximale');

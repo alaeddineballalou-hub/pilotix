@@ -141,8 +141,11 @@ export async function productPhotos(
       if (url) out.push({ src: `url:${shortHash(url)}`, mime: 'image/jpeg', data: null, url, thumb: url, variantId: v, rank: rk + 0.5, order: order++ });
     }
   };
-  for (const v of vars) if (v.photo) photoOf(v.photo, `pv:${num(v.id)}`, num(v.id), variantId && num(v.id) === variantId ? 0 : 3);
-  if (prod.photo) photoOf(prod.photo, `pp:${productId}`, null, 1.5);
+  // a line with HD photos: its small picture is its first photo's copy, and the product's main picture is the copy of
+  // its first photo (hdphotos.ts keeps them in step): the real photo is already in the list, its copy is not sent too
+  const hdLine = new Set<number>(hd.filter((r: any) => r.variant_id != null).map((r: any) => num(r.variant_id)));
+  for (const v of vars) if (v.photo && !hdLine.has(num(v.id))) photoOf(v.photo, `pv:${num(v.id)}`, num(v.id), variantId && num(v.id) === variantId ? 0 : 3);
+  if (prod.photo && !hd.length) photoOf(prod.photo, `pp:${productId}`, null, 1.5);
   // the same picture once (a page's photo is often the product's too)
   const seen = new Set<string>();
   const uniq = out

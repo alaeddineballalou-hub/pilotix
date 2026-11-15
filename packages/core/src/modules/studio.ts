@@ -398,7 +398,7 @@ export const studioProcs = {
     }),
     async (ctx, i) => {
       if (!/^data:image\/(jpeg|webp);base64,/.test(i.small)) throw bad('Petite copie invalide.');
-      await addHdPhoto(ctx, { productId: i.productId, variantId: i.main ? null : (i.variantId ?? null), kind: 'photo', data: i.data, w: i.w, h: i.h, thumb: i.thumb, mini: i.mini }, true);
+      await addHdPhoto(ctx, { productId: i.productId, variantId: i.main ? null : (i.variantId ?? null), kind: 'photo', data: i.data, w: i.w, h: i.h, thumb: i.thumb, mini: i.mini, small: i.small }, true);
       if (!i.main && i.variantId) await ctx.db.query(`UPDATE product_variants SET photo = $3 WHERE id = $1 AND product_id = $2`, [i.variantId, i.productId, i.small]);
       else await ctx.db.query(`UPDATE products SET photo = $2 WHERE id = $1`, [i.productId, i.small]);
       return { ok: true };

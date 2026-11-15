@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { pageIsOn } from '../../lib/features';
 import { useAction, useRpc } from '../../lib/query';
@@ -12,7 +12,7 @@ import { bidi } from './stockui';
 import { arabicName } from '@pilotix/shared';
 import { combosOf, MAX_COMBOS, Opt, skuOf, titleOf, VariantOptions, VRow } from './VariantOptions';
 import { DraftFacts, formToGuide, formTr, GuideEditor, GuideForm, guideProblem, guideToForm, isSizeOption, readLang, renameGuideSize, sizeValues, useGuideTranslate } from './guide';
-import { HdPhotos } from './HdPhotos';
+import { PhotoLine, PhotosHandle, ProductPhotos } from './ProductPhotos';
 import { MontageBlock, montageForm, montageInput } from './Montage';
 
 interface PackRow {
@@ -32,22 +32,11 @@ const Req = ({ children }: { children: ReactNode }) => (
   </>
 );
 
-/** A picked photo becomes a small WebP (or JPEG) thumbnail kept with the product: 320 px is enough for lists and orders. */
-async function thumb(file: File): Promise<string> {
-  const img = await createImageBitmap(file);
-  const k = Math.min(1, 320 / Math.max(img.width, img.height));
-  const c = document.createElement('canvas');
-  c.width = Math.max(1, Math.round(img.width * k));
-  c.height = Math.max(1, Math.round(img.height * k));
-  c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
-  const webp = c.toDataURL('image/webp', 0.75);
-  return webp.startsWith('data:image/webp') ? webp : c.toDataURL('image/jpeg', 0.75);
-}
-
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 /** Create / edit a product, in the sections of the « Nouveau produit » screen: basic information, prices & margin (with the
- *  maximum discount), stock & logistics, options (variants), images, then SAV parts, packs and linked products. */
+ *  maximum discount), stock & logistics, options (variants), photos (the one place where its pictures are added:
+ *  ProductPhotos), then SAV parts, packs and linked products. */
 /** onCreated: a NEW product was saved (Produits proposes its landing page). */
 /** tab: « guide » opens the product's Guide de vente (the product list's chip). */
 export function ProductForm({ id, onClose, onCreated, tab }: { id: number | null; onClose: () => void; onCreated?: (p: { id: number; name: string; isService: boolean; active: boolean }) => void; tab?: 'product' | 'guide' }) {
@@ -114,12 +103,22 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
     if (hasParts && !parts.length) setParts([{ name: '', max: '' }]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasParts]);
+  // Photos picked before the product (or a new colour / size) was saved wait in the Photos box: sent once it is saved,
+  // each to its line; the form stays open meanwhile
+  const photos = useRef<PhotosHandle>(null);
+  const [sending, setSending] = useState<{ done: number; total: number } | null>(null);
   const save = useAction('catalog.saveProduct', {
     success: t('produits.form.saved'),
     onDone: (r) => {
-      onClose();
-      if (!p) onCreated?.(r);
-      if (r.hasGuide) void translate.run(r.id);
+      const done = () => {
+        onClose();
+        if (!p) onCreated?.(r);
+        if (r.hasGuide) void translate.run(r.id);
+      };
+      const n = photos.current?.waiting() ?? 0;
+      if (!n) return done();
+      setSending({ done: 0, total: n });
+      void photos.current!.flush({ id: r.id, variants: r.variants.map((v) => ({ id: v.id, title: v.title })) }, (d, total) => setSending({ done: d, total })).finally(done);
     },
   });
   // Archiver (administrators): out of the lists, kept for the orders; deleted later from Management › Archives
@@ -127,6 +126,15 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
   const canArchive = !!p && admin && pageIsOn('management', 'archive');
   const removeProduct = useAction('archive.removeProduct', { success: t('produits.form.removed'), onDone: () => onClose() });
   const set = (k: keyof typeof f, v: string | boolean) => setF({ ...f, [k]: v });
+  // the colours / sizes that are on, in the options' order: each one has its photos (the Photos box)
+  const low = (x: string) => x.trim().toLowerCase();
+  const photoLines: PhotoLine[] = (() => {
+    const on = vars.filter((v) => v.title.trim() && v.active);
+    const first = optMode ? combosOf(opts).flatMap((c) => on.filter((v) => low(v.title) === low(titleOf(c))).slice(0, 1)) : [];
+    return [...first, ...on.filter((v) => !first.includes(v))].map((v) => ({ id: v.id, title: v.title.trim(), photo: v.photo }));
+  })();
+  const setMainPhoto = (photo: string) => setF((old) => ({ ...old, photo }));
+  const setLinePhoto = (line: { id?: number; title: string }, photo: string) => setVars((prev) => prev.map((x) => ((line.id ? x.id === line.id : low(x.title) === low(line.title)) ? { ...x, photo } : x)));
   const brands = [...new Set((all.data ?? []).map((x) => x.brand).filter((x): x is string => !!x))].sort();
   const others = (all.data ?? []).filter((x) => !x.isService && x.id !== p?.id);
   const q = norm(relQ);
@@ -244,11 +252,11 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
             </ConfirmButton>
           )}
           <span className="grow" />
-          <button className="btn" onClick={onClose}>
+          <button className="btn" disabled={!!sending} onClick={onClose}>
             {t('common.close')}
           </button>
-          <button className="btn primary" disabled={save.isPending} onClick={submit}>
-            {p ? t('common.save') : t('produits.form.create')}
+          <button className="btn primary" disabled={save.isPending || !!sending} onClick={submit}>
+            {sending ? t('produits.hd.sending', sending) : p ? t('common.save') : t('produits.form.create')}
           </button>
         </>
       }
@@ -413,7 +421,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
             )}
           </div>
           {optMode ? (
-            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseCost={Number(f.cost) || 0} baseSku={f.sku.trim() || f.name.trim()} basePhoto={f.photo} baseDiscount={f.maxDiscount === '' ? null : Number(f.maxDiscount) || 0} admin={admin} used={usedValues} skipped={skipped} feeGrids={grids.data?.grids ?? []} onPhotoFile={thumb} onRenameValue={(o, from, to) => isSizeOption(o.name) && setGuide((g) => renameGuideSize(g, from, to))} />
+            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseCost={Number(f.cost) || 0} baseSku={f.sku.trim() || f.name.trim()} basePhoto={f.photo} baseDiscount={f.maxDiscount === '' ? null : Number(f.maxDiscount) || 0} admin={admin} used={usedValues} skipped={skipped} feeGrids={grids.data?.grids ?? []} onRenameValue={(o, from, to) => isSizeOption(o.name) && setGuide((g) => renameGuideSize(g, from, to))} />
           ) : (
             <>
               {vars.length ? (
@@ -422,7 +430,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
                     <div key={v.id ?? `n${i}`} className="item-row bjpv-row">
                       <input aria-label={t('produits.form.variants')} value={v.title} placeholder={t('produits.form.variantPh')} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, title: e.target.value } : x)))} />
                       <input dir="rtl" aria-label={`${t('produits.form.titleAr')} ${v.title}`} title={t('produits.form.titleArHint')} value={v.titleAr ?? ''} placeholder={arabicName(v.title) || t('produits.form.titleAr')} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, titleAr: e.target.value } : x)))} />
-                      <span className="muted small">{(v.photo || f.photo) && <img src={v.photo || f.photo} alt="" style={{ width: 32, height: 32, objectFit: 'contain', verticalAlign: 'middle' }} />} <input type="file" accept="image/*" aria-label={`Photo ${v.title}`} onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; try { const photo = await thumb(file); setVars((old) => old.map((x,k) => k === i ? { ...x, photo } : x)); } catch { toast(t('produits.form.photoBad'), 'bad'); } }} /> Margin: {da(Number(v.price || f.price || 0) - Number(v.cost || f.cost || 0))}</span>
+                      <span className="muted small">{(v.photo || f.photo) && <img src={v.photo || f.photo} alt="" style={{ width: 32, height: 32, objectFit: 'contain', verticalAlign: 'middle' }} />} Margin: {da(Number(v.price || f.price || 0) - Number(v.cost || f.cost || 0))}</span>
                       <input className="ltr" aria-label={`SKU ${v.title}`} placeholder="Variant SKU" value={v.sku} onChange={(e) => setVars(vars.map((x, k) => k === i ? { ...x, sku: e.target.value } : x))} />
                       <input type="number" min={0} step={50} aria-label={`Purchase price ${v.title}`} value={v.cost} placeholder={f.cost || 'Purchase (DA)'} onChange={(e) => setVars(vars.map((x, k) => k === i ? { ...x, cost: e.target.value } : x))} />
                       <input type="number" min={0} step={50} aria-label={`Selling price ${v.title}`} value={v.price} placeholder={f.price || 'Sale (DA)'} onChange={(e) => setVars(vars.map((x, k) => k === i ? { ...x, price: e.target.value } : x))} />
@@ -456,35 +464,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
         </section>
 
         <section className="pf-sec">
-          <h3>{t('produits.form.images')}</h3>
-          <div className="pf-img">
-            <span className="pf-thumb" aria-hidden="true">
-              {f.photo ? <img src={f.photo} alt="" /> : <Icon name="package" />}
-            </span>
-            <div className="pf-img-f">
-              <input
-                type="file"
-                accept="image/*"
-                aria-label={t('produits.form.photoFile')}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  try {
-                    set('photo', await thumb(file));
-                  } catch {
-                    toast(t('produits.form.photoBad'), 'bad');
-                  }
-                }}
-              />
-              <input className="ltr" placeholder={t('produits.form.photoPh')} value={f.photo.startsWith('data:') ? '' : f.photo} onChange={(e) => set('photo', e.target.value)} />
-              {f.photo && (
-                <button type="button" className="btn small ghost" onClick={() => set('photo', '')}>
-                  {t('produits.form.photoRemove')}
-                </button>
-              )}
-            </div>
-          </div>
-          <HdPhotos productId={p?.id ?? null} variants={(p?.variants ?? []).filter((v: any) => v.title && v.active).map((v: any) => ({ id: Number(v.id), title: String(v.title) }))} />
+          <ProductPhotos ref={photos} productId={p?.id ?? null} lines={photoLines} photo={f.photo} onMain={setMainPhoto} onLine={setLinePhoto} />
         </section>
 
         {!f.isService && <MontageBlock value={montage} onChange={setMontage} />}
