@@ -2,7 +2,7 @@
 // to send for couriers without an API (WhatsApp first), the relance, the answer — and Suivi › Réclamation as an inbox
 // of cards with ZR's answers and one-tap actions.
 import type { Order } from '@pilotix/shared';
-import { ClaimStage } from './Claims';
+import { ClaimStage, DeleteClaim } from './Claims';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AskCall } from '../confirmation/History';
@@ -290,6 +290,7 @@ export function AnswerSheet({ c, name, onClose }: { c: ClaimRow; name: string; o
           </ol>
         </fieldset>
       )}
+      <DeleteClaim c={c} onDone={onClose} />
     </Sheet>
   );
 }

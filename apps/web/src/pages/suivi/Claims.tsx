@@ -9,6 +9,8 @@ import { useIsPhone } from '../../lib/useMedia';
 import { Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
+import { useSession } from '../../lib/session';
+import { ConfirmButton } from '../admin/bits';
 import { ClaimCompany, waLink } from './common';
 import { trackOf } from '../../lib/items';
 import { CLAIM_REASONS, ClaimFormProps, ClaimRow, Reason, SentClaim, STATUS_TONE, Target, useClaimForm, useSendClaim } from './claimKit';
@@ -221,6 +223,21 @@ function RemindDesk({ c, onClose }: { c: ClaimRow; onClose: () => void }) {
   );
 }
 
+/** « Supprimer la réclamation » (admin only): removed from Pilotix only, nothing is sent to the company. */
+export function DeleteClaim({ c, onDone }: { c: ClaimRow; onDone: () => void }) {
+  const { t } = useTranslation();
+  const { session } = useSession();
+  const del = useAction('suivi.claimDelete', { success: t('suivi.rec.deleted', { ref: c.ref }), onDone });
+  if (!session?.isAdmin) return null;
+  return (
+    <div style={{ marginTop: 12 }}>
+      <ConfirmButton className="btn small danger" disabled={del.isPending} question={t('suivi.rec.deleteAsk', { ref: c.ref })} onConfirm={() => del.mutate({ id: c.id })}>
+        <Icon name="trash" /> {t('suivi.rec.delete')}
+      </ConfirmButton>
+    </div>
+  );
+}
+
 function AnswerModal(p: { c: ClaimRow; name: string; onClose: () => void }) {
   return useIsPhone() ? <AnswerSheet {...p} /> : <AnswerDesk {...p} />;
 }
@@ -271,6 +288,7 @@ function AnswerDesk({ c, name, onClose }: { c: ClaimRow; name: string; onClose: 
             ))}
           </ul>
         </details>
+        <DeleteClaim c={c} onDone={onClose} />
       </div>
     </Modal>
   );
