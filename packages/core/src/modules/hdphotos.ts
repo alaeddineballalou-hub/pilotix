@@ -6,9 +6,11 @@
 // The browser preview has no bucket: its photos stay in its own database. A server whose bucket is not set refuses them.
 // One upload feeds the screens too (Produits › a product › Photos, the only place to add a picture): the first photo of
 // a colour / size is that line's small picture, and the product's first photo is its main picture (lists, orders, depot).
+// The pictures of a sales guide's answers are kept the same way, under their own kind ('guide': never among the
+// product's photos, nor counted with them): guide.ts names them on their answer, Dellal sends them with it.
 import { z } from 'zod';
 import { Db, num } from '../db';
-import { deleteObjects, OBJECT_KEY, putObject, readStore, StoreConf } from '../photostore';
+import { deleteObjects, OBJECT_KEY, presign, putObject, readStore, StoreConf } from '../photostore';
 import { bad, Ctx, notFound, proc } from '../rpc';
 import { fromDataUrl, mimeOf } from './dellalphotos';
 
@@ -44,6 +46,12 @@ async function purgeTrash(db: Db, s: Store): Promise<void> {
   if (!keys.length) return;
   const done = await deleteObjects(s.conf, keys).catch(() => [] as string[]);
   if (done.length) await db.query(`DELETE FROM product_photo_trash WHERE key = ANY($1)`, [done]);
+}
+
+/** After a save that may have removed pictures (a guide's answers): their files leave the bucket now. */
+export async function purgePhotos(ctx: Ctx): Promise<void> {
+  if (!(await ctx.db.query(`SELECT 1 FROM product_photo_trash LIMIT 1`).catch(() => [])).length) return;
+  await purgeTrash(ctx.db, await photoStore(ctx)).catch(() => undefined);
 }
 
 export interface HdPhoto {
@@ -100,7 +108,7 @@ async function syncSmall(db: Db, productId: number, before: Firsts, added?: { id
 
 async function view(ctx: Ctx, productId: number, s?: Store, changed: SmallChange = { variants: {} }) {
   const store = s ?? (await photoStore(ctx));
-  const rows = await ctx.db.query(`SELECT id, variant_id, kind, thumb, w, h, bytes, position FROM product_photos WHERE product_id = $1 ORDER BY kind, position, id`, [productId]);
+  const rows = await ctx.db.query(`SELECT id, variant_id, kind, thumb, w, h, bytes, position FROM product_photos WHERE product_id = $1 AND kind <> 'guide' ORDER BY kind, position, id`, [productId]);
   const photos: HdPhoto[] = rows.map((r: any) => ({
     id: num(r.id),
     variantId: r.variant_id == null ? null : num(r.variant_id),
@@ -154,7 +162,7 @@ export async function addHdPhoto(ctx: Ctx, i: z.infer<typeof AddInput>, first = 
   if (i.mini && (!mini || mini.mime !== 'image/jpeg')) throw bad('Petite copie invalide.');
   if (i.small && !/^data:image\/(jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(i.small)) throw bad('Petite copie invalide.');
   const n = (await ctx.db.query(
-    `SELECT count(*)::int AS total, count(*) FILTER (WHERE kind = $2 AND variant_id IS NOT DISTINCT FROM $3::bigint)::int AS here FROM product_photos WHERE product_id = $1`,
+    `SELECT count(*)::int AS total, count(*) FILTER (WHERE kind = $2 AND variant_id IS NOT DISTINCT FROM $3::bigint)::int AS here FROM product_photos WHERE product_id = $1 AND kind <> 'guide'`,
     [i.productId, i.kind, variantId],
   ))[0];
   if (num(n?.total) >= HD.perProduct) throw bad(`${HD.perProduct} photos au plus par produit.`);
@@ -176,8 +184,8 @@ export async function addHdPhoto(ctx: Ctx, i: z.infer<typeof AddInput>, first = 
   // first: before its own colour's / size's photos (the whole product's: before all); else after the others
   const head = first && variantId != null ? (await ctx.db.query(`SELECT min(position) AS p FROM product_photos WHERE product_id = $1 AND kind = 'photo' AND variant_id = $2`, [i.productId, variantId]))[0]?.p : null;
   const at = !first ? null : variantId == null ? 0 : head == null ? null : num(head);
-  if (at != null) await ctx.db.query(`UPDATE product_photos SET position = position + 1 WHERE product_id = $1 AND position >= $2`, [i.productId, at]);
-  const pos = at ?? num((await ctx.db.query(`SELECT coalesce(max(position), -1) + 1 AS p FROM product_photos WHERE product_id = $1`, [i.productId]))[0]?.p);
+  if (at != null) await ctx.db.query(`UPDATE product_photos SET position = position + 1 WHERE product_id = $1 AND kind <> 'guide' AND position >= $2`, [i.productId, at]);
+  const pos = at ?? num((await ctx.db.query(`SELECT coalesce(max(position), -1) + 1 AS p FROM product_photos WHERE product_id = $1 AND kind <> 'guide'`, [i.productId]))[0]?.p);
   const row = (await ctx.db.query(
     `INSERT INTO product_photos (product_id, variant_id, kind, store, key, data, w, h, bytes, thumb, mini, position) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
     [i.productId, variantId, i.kind, s.kind, key, s.kind === 'local' ? data : null, i.w, i.h, bytes, `data:image/jpeg;base64,${t.data}`, mini ? `data:image/jpeg;base64,${mini.data}` : null, pos],
@@ -185,6 +193,64 @@ export async function addHdPhoto(ctx: Ctx, i: z.infer<typeof AddInput>, first = 
   const changed = await syncSmall(ctx.db, i.productId, before, { id: num(row.id), small: i.small ?? null });
   await purgeTrash(ctx.db, s).catch(() => undefined);
   return view(ctx, i.productId, s, changed);
+}
+
+/** A picture as the page sends it (a JPEG of 2048 px at most, its 320 px copy and its 160 px one). */
+export const PicInput = z.object({ data: AddInput.shape.data, w: AddInput.shape.w, h: AddInput.shape.h, thumb: AddInput.shape.thumb, mini: AddInput.shape.mini });
+
+/**
+ * A picture of a sales guide's answer: its file goes to the bucket like an HD photo's, and `attach` writes it on its
+ * answer in the same go (refused there: nothing is kept, the file leaves the bucket). Returns its id and its small copy.
+ */
+export async function addGuidePic(ctx: Ctx, productId: number, i: z.infer<typeof PicInput>, attach: (tx: Db, id: number) => Promise<void>): Promise<{ id: number; thumb: string }> {
+  const data = i.data.replace(/\s+/g, '');
+  if (mimeOf(data) !== 'image/jpeg') throw bad('L’image doit être un JPEG (la page la prépare elle-même : réessayez).');
+  const bytes = b64Bytes(data);
+  if (bytes > HD.maxBytes) throw bad('Image trop lourde (3,4 Mo au plus).');
+  const t = fromDataUrl(i.thumb);
+  const mini = i.mini ? fromDataUrl(i.mini) : null;
+  if (!t || t.mime !== 'image/jpeg' || (i.mini && (!mini || mini.mime !== 'image/jpeg'))) throw bad('Petite copie invalide.');
+  const s = await photoStore(ctx);
+  if (s.kind === 'off') throw bad('Le stockage des photos HD n’est pas encore activé sur ce serveur : Pilotix doit d’abord le configurer.');
+  let key: string | null = null;
+  if (s.kind === 'r2') {
+    key = `${slugOf(ctx)}/p${productId}/g-${randomName()}.jpg`;
+    if (!OBJECT_KEY.test(key)) throw bad('Nom d’image invalide');
+    try {
+      await putObject(s.conf, key, fromB64(data), 'image/jpeg');
+    } catch (e: any) {
+      throw bad(`L’image n’a pas pu être enregistrée : ${String(e?.message ?? e).slice(0, 200)}`);
+    }
+  }
+  const thumb = `data:image/jpeg;base64,${t.data}`;
+  const small = mini ? `data:image/jpeg;base64,${mini.data}` : null;
+  try {
+    const id = await ctx.db.tx(async (tx) => {
+      const row = (await tx.query(
+        `INSERT INTO product_photos (product_id, variant_id, kind, store, key, data, w, h, bytes, thumb, mini, position) VALUES ($1, NULL, 'guide', $2, $3, $4, $5, $6, $7, $8, $9, 0) RETURNING id`,
+        [productId, s.kind, key, s.kind === 'local' ? data : null, i.w, i.h, bytes, thumb, small],
+      ))[0];
+      await attach(tx, num(row.id));
+      return num(row.id);
+    });
+    return { id, thumb: small ?? thumb };
+  } catch (e) {
+    // its answer refused it: the file just sent leaves the bucket
+    if (key) await ctx.db.query(`INSERT INTO product_photo_trash (key) VALUES ($1) ON CONFLICT DO NOTHING`, [key]).catch(() => undefined);
+    throw e;
+  } finally {
+    await purgeTrash(ctx.db, s).catch(() => undefined);
+  }
+}
+
+/** A stored picture, whole, for a screen that opens it: a link good for ten minutes (the bucket), or its bytes (the preview). */
+export async function picSrc(ctx: Ctx, r: { store: unknown; key: unknown; data: unknown; thumb: unknown }): Promise<string> {
+  if (r.store === 'r2' && r.key) {
+    const s = await photoStore(ctx);
+    if (s.kind === 'r2') return presign(s.conf, 'GET', String(r.key), 600, new Date(ctx.now()));
+  }
+  if (r.store === 'local' && r.data) return `data:image/jpeg;base64,${String(r.data)}`;
+  return String(r.thumb ?? '');
 }
 
 export const hdPhotoProcs = {
@@ -202,7 +268,7 @@ export const hdPhotoProcs = {
     [...DEPOT],
     z.object({ id: Id, variantId: Id.nullable().optional(), kind: z.enum(['photo', 'sizes']).optional(), position: z.number().int().min(0).max(999).optional() }),
     async (ctx, i) => {
-      const r = (await ctx.db.query('SELECT id, product_id, kind, variant_id FROM product_photos WHERE id = $1', [i.id]))[0];
+      const r = (await ctx.db.query(`SELECT id, product_id, kind, variant_id FROM product_photos WHERE id = $1 AND kind <> 'guide'`, [i.id]))[0];
       if (!r) throw notFound('Photo introuvable');
       const productId = num(r.product_id);
       const before = await firsts(ctx.db, productId);
@@ -211,7 +277,7 @@ export const hdPhotoProcs = {
       await ctx.db.query('UPDATE product_photos SET kind = $2, variant_id = $3, position = coalesce($4, position) WHERE id = $1', [i.id, kind, variantId, i.position ?? null]);
       if (i.position !== undefined) {
         // the others move to make room, in their order
-        const rows = await ctx.db.query(`SELECT id FROM product_photos WHERE product_id = $1 AND id <> $2 ORDER BY position, id`, [productId, i.id]);
+        const rows = await ctx.db.query(`SELECT id FROM product_photos WHERE product_id = $1 AND id <> $2 AND kind <> 'guide' ORDER BY position, id`, [productId, i.id]);
         let p = 0;
         for (const x of rows) {
           if (p === i.position) p++;
@@ -223,7 +289,8 @@ export const hdPhotoProcs = {
   ),
 
   'photos.remove': proc([...DEPOT], z.object({ id: Id }), async (ctx, i) => {
-    const r = (await ctx.db.query('SELECT product_id FROM product_photos WHERE id = $1', [i.id]))[0];
+    // (a guide's picture leaves with its answer: the guide's save)
+    const r = (await ctx.db.query(`SELECT product_id FROM product_photos WHERE id = $1 AND kind <> 'guide'`, [i.id]))[0];
     if (!r) throw notFound('Photo introuvable');
     const productId = num(r.product_id);
     const before = await firsts(ctx.db, productId);

@@ -161,6 +161,14 @@ export async function productPhotos(
   return pick.slice(0, Math.max(1, o.max)).map(({ rank: _r, order: _o, hd: _h, ...p }) => p);
 }
 
+/** The pictures of a sales guide's answer (their ids, in the answer's order), ready to be sent. */
+export async function guidePhotos(db: Db, productId: number, ids: number[]): Promise<PhotoSrc[]> {
+  if (!ids.length) return [];
+  const rows = await db.query(`SELECT id, store, key, data, thumb, mini FROM product_photos WHERE product_id = $1 AND kind = 'guide' AND id = ANY($2)`, [productId, ids]).catch(() => []);
+  const by = new Map<number, any>(rows.map((r: any) => [num(r.id), r]));
+  return ids.flatMap((x) => (by.has(x) ? [hdPhoto(by.get(x), 'send', null)] : [])).filter((p): p is PhotoSrc => !!p);
+}
+
 /**
  * One HD photo, for its use: sending, the photo itself (in the bucket: its name, the server makes the link; in the
  * preview: its bytes); looking at it or comparing a customer's photo with it, its small copy (320 px).

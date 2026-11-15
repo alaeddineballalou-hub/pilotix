@@ -9,7 +9,7 @@ import { runDellal, setPhotosPause } from '../dellal-server';
 import { getRaw, setRaw } from '../modules/admin';
 import { runAgent } from '../modules/dellal';
 import { followProduct } from '@pilotix/shared';
-import { productPhotos } from '../modules/dellalphotos';
+import { guidePhotos, productPhotos } from '../modules/dellalphotos';
 import { productPhotoSets } from '../modules/landing';
 import { presign, saveStore, signQuery, storeStatus } from '../photostore';
 import { savePilotConfig } from '../platform/pilotai';
@@ -215,6 +215,35 @@ test('on the server: refused until the bucket is set; then each photo goes once 
     assert.deepEqual(
       r2calls.map((c) => [c.method, new URL(c.url).pathname]),
       [['DELETE', `/pilotix-photos/${key}`]],
+    );
+    assert.equal((await db.query(`SELECT count(*)::int AS n FROM product_photo_trash`))[0].n, 0);
+
+    // a picture of a guide's answer goes to the bucket the same way (under its own name there), is opened by a link good
+    // for ten minutes, and leaves the bucket as soon as its answer lets it go
+    const wash = { q: 'Elle rétrécit au lavage ?', a: 'Non, lavage à 30°.' };
+    await call('catalog.saveGuide', server, { id: pid, guide: { brief: 'Robe d’été.', faq: [wash] } });
+    r2calls.length = 0;
+    await assert.rejects(call('catalog.guidePhotoAdd', server, { id: pid, part: 'faq', q: 'Autre question', data: JPEG('g-0'), w: 800, h: 600, thumb: THUMB('g-0') }), /pas dans le guide enregistré/);
+    assert.equal(r2calls.length, 0, 'refused before anything leaves for the bucket');
+    const gp: any = await call('catalog.guidePhotoAdd', server, { id: pid, part: 'faq', q: wash.q, data: JPEG('g-1'), w: 800, h: 600, thumb: THUMB('g-1'), mini: MINI('g-1') });
+    assert.deepEqual(
+      r2calls.map((c) => [c.method, c.type]),
+      [['PUT', 'image/jpeg']],
+    );
+    const gkey = new URL(r2calls[0].url).pathname.replace('/pilotix-photos/', '');
+    assert.match(gkey, new RegExp(`^boutique/p${pid}/g-[a-f0-9]{24}\\.jpg$`));
+    assert.deepEqual({ ...(await db.query(`SELECT kind, store, key, data FROM product_photos WHERE id = $1`, [gp.id]))[0] }, { kind: 'guide', store: 'r2', key: gkey, data: null });
+    assert.equal(((await call('photos.list', server, { productId: pid })) as any).photos.length, 0, 'not one of the product’s photos');
+    const whole: any = await call('catalog.guidePhoto', server, { id: gp.id });
+    assert.match(whole.src, new RegExp(`^https://${R2.account}\\.r2\\.cloudflarestorage\\.com/pilotix-photos/${gkey.replace(/\./g, '\\.')}\\?X-Amz-Algorithm=AWS4-HMAC-SHA256&.*X-Amz-Expires=600&.*X-Amz-Signature=[0-9a-f]{64}$`));
+    const [toSend] = await guidePhotos(db, pid, [gp.id]);
+    assert.deepEqual([toSend.src, toSend.key, toSend.data, toSend.thumb], [`hd:${gp.id}`, gkey, null, MINI('g-1')]);
+    r2calls.length = 0;
+    await call('catalog.saveGuide', server, { id: pid, guide: { brief: 'Robe d’été.', faq: [{ ...wash, photos: [] }] } });
+    assert.equal((await db.query(`SELECT count(*)::int AS n FROM product_photos WHERE kind = 'guide'`))[0].n, 0);
+    assert.deepEqual(
+      r2calls.map((c) => [c.method, new URL(c.url).pathname]),
+      [['DELETE', `/pilotix-photos/${gkey}`]],
     );
     assert.equal((await db.query(`SELECT count(*)::int AS n FROM product_photo_trash`))[0].n, 0);
 

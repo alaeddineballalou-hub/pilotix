@@ -1,9 +1,11 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { pageIsOn } from '../../lib/features';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { da, pct } from '../../lib/format';
+import { useScope } from '../../lib/seller';
 import { ErrorBox, Field, Icon, Loading, Tabs } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
@@ -11,7 +13,7 @@ import { ConfirmButton } from '../admin/bits';
 import { bidi } from './stockui';
 import { arabicName } from '@pilotix/shared';
 import { combosOf, MAX_COMBOS, Opt, skuOf, titleOf, VariantOptions, VRow } from './VariantOptions';
-import { DraftFacts, formToGuide, formTr, GuideEditor, GuideForm, guideProblem, guideToForm, isSizeOption, readLang, renameGuideSize, sizeValues, useGuideTranslate } from './guide';
+import { DraftFacts, formToGuide, formTr, GuideEditor, GuideForm, guideProblem, guideToForm, guideWaiting, isSizeOption, readLang, renameGuideSize, sendGuidePics, sizeValues, useGuideTranslate } from './guide';
 import { PhotoLine, PhotosHandle, ProductPhotos } from './ProductPhotos';
 import { MontageBlock, montageForm, montageInput } from './Montage';
 
@@ -96,7 +98,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
   // the second tab: the product's sales guide (what the agents read during a call, what Dellal and CM AI answer with)
   const [tab, setTab] = useState<'product' | 'guide'>(firstTab ?? 'product');
   const { i18n } = useTranslation();
-  const [guide, setGuide] = useState<GuideForm>(() => guideToForm(p?.guide ?? null, p?.guideTr, readLang(i18n.language)));
+  const [guide, setGuide] = useState<GuideForm>(() => guideToForm(p?.guide ?? null, p?.guideTr, readLang(i18n.language), p?.guidePics));
   // saved: Pilot AI translates the guide's new lines into the other languages
   const translate = useGuideTranslate();
   useEffect(() => {
@@ -104,9 +106,14 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasParts]);
   // Photos picked before the product (or a new colour / size) was saved wait in the Photos box: sent once it is saved,
-  // each to its line; the form stays open meanwhile
+  // each to its line; the form stays open meanwhile. The same for the pictures just put on the guide's answers: the
+  // guide is saved with the product, then each one leaves for its answer.
   const photos = useRef<PhotosHandle>(null);
   const [sending, setSending] = useState<{ done: number; total: number } | null>(null);
+  const scope = useScope();
+  const qc = useQueryClient();
+  const guideNow = useRef(guide);
+  guideNow.current = guide;
   const save = useAction('catalog.saveProduct', {
     success: t('produits.form.saved'),
     onDone: (r) => {
@@ -116,9 +123,18 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
         if (r.hasGuide) void translate.run(r.id);
       };
       const n = photos.current?.waiting() ?? 0;
-      if (!n) return done();
-      setSending({ done: 0, total: n });
-      void photos.current!.flush({ id: r.id, variants: r.variants.map((v) => ({ id: v.id, title: v.title })) }, (d, total) => setSending({ done: d, total })).finally(done);
+      const pics = guideWaiting(guideNow.current).length;
+      if (!n && !pics) return done();
+      const total = n + pics;
+      setSending({ done: 0, total });
+      void (async () => {
+        if (n) await photos.current!.flush({ id: r.id, variants: r.variants.map((v) => ({ id: v.id, title: v.title })) }, (d) => setSending({ done: d, total }));
+        if (!pics) return;
+        const out = await sendGuidePics(r.id, guideNow.current, scope, (d) => setSending({ done: n + d, total }));
+        if (out.failed) toast(`${t('produits.guide.pics.notSent', { count: out.failed })}${out.error ? ` ${out.error}` : ''}`, 'bad');
+        // the product and its guide as they are now, pictures included
+        await qc.invalidateQueries();
+      })().finally(done);
     },
   });
   // Archiver (administrators): out of the lists, kept for the orders; deleted later from Management › Archives
@@ -147,6 +163,8 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
       usedValues.set(k, [...new Set([...(usedValues.get(k) ?? []), ...o.values])]);
     }
 
+  // The codes (SKU) are Pilotix's: a new product or line gets its own when it is saved, one already saved keeps its
+  // code (the form does not show or change them; the Excel import still sets them, and a former code keeps working).
   const submit = () => {
     if (!f.name.trim()) return toast(t('produits.form.needName'), 'bad');
     if (!variantPricing && (f.price === '' || f.cost === '' || f.alertQty === '')) return toast(t('produits.form.needRequired'), 'bad');
@@ -265,7 +283,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
         <Tabs value={tab} onChange={setTab} items={[{ value: 'product', label: t('produits.guide.productTab') }, { value: 'guide', label: t('produits.guide.tab') }]} />
       </div>
       <div hidden={tab !== 'guide'}>
-        <GuideEditor value={guide} onChange={setGuide} facts={draftFacts} products={others.map((x) => ({ id: x.id, name: x.name }))} />
+        <GuideEditor value={guide} onChange={setGuide} facts={draftFacts} products={others.map((x) => ({ id: x.id, name: x.name }))} pictures={p?.guidePictures !== false} />
       </div>
       <form
         className="pf"
@@ -281,11 +299,6 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
             <Field label={<Req>{t('produits.form.name')}</Req>}>
               <input required value={f.name} onChange={(e) => set('name', e.target.value)} />
             </Field>
-            {!variantPricing && (
-              <Field label={t('produits.form.sku')} hint={!p ? t('produits.form.skuAuto') : undefined}>
-                <input className="ltr" value={f.sku} onChange={(e) => set('sku', e.target.value)} />
-              </Field>
-            )}
             <Field label={t('produits.form.barcode')}>
               <input className="ltr" value={f.barcode} onChange={(e) => set('barcode', e.target.value)} />
             </Field>
@@ -421,7 +434,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
             )}
           </div>
           {optMode ? (
-            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseCost={Number(f.cost) || 0} baseSku={f.sku.trim() || f.name.trim()} basePhoto={f.photo} baseDiscount={f.maxDiscount === '' ? null : Number(f.maxDiscount) || 0} admin={admin} used={usedValues} skipped={skipped} feeGrids={grids.data?.grids ?? []} onRenameValue={(o, from, to) => isSizeOption(o.name) && setGuide((g) => renameGuideSize(g, from, to))} />
+            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseCost={Number(f.cost) || 0} basePhoto={f.photo} baseDiscount={f.maxDiscount === '' ? null : Number(f.maxDiscount) || 0} admin={admin} used={usedValues} skipped={skipped} feeGrids={grids.data?.grids ?? []} onRenameValue={(o, from, to) => isSizeOption(o.name) && setGuide((g) => renameGuideSize(g, from, to))} />
           ) : (
             <>
               {vars.length ? (
@@ -431,7 +444,6 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
                       <input aria-label={t('produits.form.variants')} value={v.title} placeholder={t('produits.form.variantPh')} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, title: e.target.value } : x)))} />
                       <input dir="rtl" aria-label={`${t('produits.form.titleAr')} ${v.title}`} title={t('produits.form.titleArHint')} value={v.titleAr ?? ''} placeholder={arabicName(v.title) || t('produits.form.titleAr')} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, titleAr: e.target.value } : x)))} />
                       <span className="muted small">{(v.photo || f.photo) && <img src={v.photo || f.photo} alt="" style={{ width: 32, height: 32, objectFit: 'contain', verticalAlign: 'middle' }} />} Margin: {da(Number(v.price || f.price || 0) - Number(v.cost || f.cost || 0))}</span>
-                      <input className="ltr" aria-label={`SKU ${v.title}`} placeholder="Variant SKU" value={v.sku} onChange={(e) => setVars(vars.map((x, k) => k === i ? { ...x, sku: e.target.value } : x))} />
                       <input type="number" min={0} step={50} aria-label={`Purchase price ${v.title}`} value={v.cost} placeholder={f.cost || 'Purchase (DA)'} onChange={(e) => setVars(vars.map((x, k) => k === i ? { ...x, cost: e.target.value } : x))} />
                       <input type="number" min={0} step={50} aria-label={`Selling price ${v.title}`} value={v.price} placeholder={f.price || 'Sale (DA)'} onChange={(e) => setVars(vars.map((x, k) => k === i ? { ...x, price: e.target.value } : x))} />
                       <input type="number" min={0} step={50} disabled={!admin} aria-label={`Maximum discount ${v.title}`} value={v.maxDiscount} placeholder={f.maxDiscount || 'Max. discount'} onChange={(e) => setVars(vars.map((x, k) => k === i ? { ...x, maxDiscount: e.target.value } : x))} />

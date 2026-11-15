@@ -80,26 +80,96 @@
 .gd-drafted .linkish { font-weight: 700; white-space: nowrap; }
 .gd-ed-sec .gd-h { margin: 0; font-size: 15px; }
 .gd-hint { margin: -4px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.4; }
-.gd-ed textarea { width: 100%; resize: vertical; min-height: 0; line-height: 1.45; }
+/* a box takes the room of what is written in it (no size for a line): it grows with its text, up to most of the screen */
+.gd-ed textarea { width: 100%; resize: vertical; min-height: 0; line-height: 1.45; field-sizing: content; max-height: 70vh; }
+.gd-ed textarea[rows='1'] { min-height: 44px; resize: none; }
+.gd-ed textarea[rows='2'] { min-height: 64px; }
+.gd-ed textarea[rows='5'] { min-height: 132px; }
 .gd-ed input { width: 100%; }
 .gd-pairs { display: grid; gap: 10px; }
-.gd-ed-pair { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto; gap: 8px; align-items: start; }
+.gd-ed-pair { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto auto; gap: 8px; align-items: start; }
+.gd-ed-pair.no-img { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto; }
 .gd-ed-pair label { display: block; min-width: 0; }
+.gd-ed-a { min-width: 0; }
+
+/* An answer's pictures (Dellal sends them with it): small, each opens big; in the editor a × takes one off (they are
+   added by the answer's picture button, beside its bin). */
+.gd-pics { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; }
+.gd-pic { position: relative; flex: none; display: block; inline-size: 64px; block-size: 64px; }
+.gd-pic-b { display: block; inline-size: 100%; block-size: 100%; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--raise); overflow: hidden; cursor: zoom-in; }
+.gd-pic-b img { display: block; inline-size: 100%; block-size: 100%; object-fit: cover; }
+.gd-pic-b:hover { border-color: var(--c-accent); }
+.gd-pic-b:focus-visible, .gd-pic-x:focus-visible, .gd-zoom-b:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.gd-pic-x { position: absolute; inset-block-start: -8px; inset-inline-end: -8px; display: grid; place-items: center; inline-size: 24px; block-size: 24px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--ink); cursor: pointer; box-shadow: 0 1px 3px rgb(15 24 41 / .18); }
+/* a finger gets more room than the eye sees */
+.gd-pic-x::after { content: ''; position: absolute; inset: -8px; }
+.gd-pic-x .bji { inline-size: 12px; block-size: 12px; }
+.gd-pic-x:hover { border-color: var(--c-bad-line); color: var(--c-bad-ink); }
+.gd-pic-note { font-size: 12.5px; color: var(--muted); }
+/* the reader: under its answer, a little bigger (it is looked at during a call) */
+.gd-qa .gd-pics-dd { margin: 0; padding: 0; background: none; border: 0; }
+.gd-qa .gd-pics { margin-top: 6px; }
+.gd-qa .gd-pic { inline-size: 72px; block-size: 72px; }
+
+/* a picture opened big, over everything (the guide beside an order, the product form, a sheet) */
+html.gd-zoom { overflow: hidden; }
+.gd-zoom-wrap { position: fixed; inset: 0; z-index: 9000; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); background: rgb(10 16 28 / .9); color: #fff; overscroll-behavior: contain; }
+.gd-zoom-bar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: max(10px, env(safe-area-inset-top, 0px)) 12px 6px; }
+.gd-zoom-n { margin-inline-end: auto; padding-inline-start: 6px; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* its buttons are read on a white picture as well as on the dark around it */
+.gd-zoom-b { display: grid; place-items: center; inline-size: 44px; block-size: 44px; padding: 0; border: 1px solid rgb(255 255 255 / .32); border-radius: 50%; background: rgb(10 16 28 / .66); color: #fff; cursor: pointer; }
+.gd-zoom-b:hover, .gd-zoom-b[aria-pressed='true'] { background: rgb(10 16 28 / .9); border-color: rgb(255 255 255 / .6); }
+.gd-zoom-b:focus-visible { outline-color: #fff; }
+.gd-zoom-b .bji { inline-size: 20px; block-size: 20px; }
+.gd-zoom-stage { position: relative; display: grid; place-items: center; min-block-size: 0; padding: 8px 12px max(16px, env(safe-area-inset-bottom, 0px)); }
+.gd-zoom-img { max-inline-size: 100%; max-block-size: 100%; min-block-size: 0; object-fit: contain; border-radius: 8px; background: rgb(255 255 255 / .06); }
+/* its small copy while the whole picture comes: as large as it will be, soft */
+.gd-zoom-img.is-wait { inline-size: min(100%, 560px); filter: blur(6px); opacity: .7; }
+.gd-zoom-load { position: absolute; inset-block-end: max(28px, env(safe-area-inset-bottom, 0px)); inset-inline: 0; margin-inline: auto; inline-size: max-content; max-inline-size: calc(100% - 32px); padding: 6px 12px; border-radius: 999px; background: rgb(10 16 28 / .8); font-size: 13px; }
+/* brought closer (a tap on it, the magnifier): larger than the screen, it moves under the finger */
+.gd-zoom-img.is-in { cursor: zoom-in; }
+.gd-zoom-img.is-out { cursor: zoom-out; }
+.gd-zoom-stage.is-big { display: block; overflow: auto; padding: 8px; text-align: center; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.gd-zoom-stage.is-big .gd-zoom-img { display: inline-block; max-inline-size: none; max-block-size: none; vertical-align: top; }
+.gd-zoom-msg { display: grid; justify-items: center; gap: 12px; max-inline-size: 320px; text-align: center; }
+.gd-zoom-msg p { margin: 0; }
+.gd-zoom-prev, .gd-zoom-next { position: absolute; inset-block-start: 50%; translate: 0 -50%; }
+.gd-zoom-prev { inset-inline-start: 10px; }
+.gd-zoom-next { inset-inline-end: 10px; }
+[dir='rtl'] .gd-zoom-prev .bji, [dir='rtl'] .gd-zoom-next .bji { transform: scaleX(-1); }
+/* a phone, a tablet (the picture takes the screen's width): the arrows under it, at the thumbs, never over what it shows */
+@media (max-width: 1024px) {
+  .gd-zoom-prev, .gd-zoom-next { inset-block-start: auto; inset-block-end: max(16px, env(safe-area-inset-bottom, 0px)); translate: none; }
+  .gd-zoom-prev { inset-inline-start: 16px; }
+  .gd-zoom-next { inset-inline-end: 16px; }
+  .gd-zoom-wrap.is-many .gd-zoom-stage { padding-block-end: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  .gd-zoom-wrap.is-many .gd-zoom-load { inset-block-end: calc(84px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-width: 820px) {
+  .gd-ed .btn.small { height: 38px; padding-inline: 14px; }
+}
 .gd-ed textarea.gd-fill { border-color: var(--butter-deep); background: var(--warn-soft); font-style: italic; }
 .gd-ed-pair .icon-btn { margin-top: 4px; }
 .gd-pairs .btn .bji { width: 14px; height: 14px; }
-.gd-size { margin: -4px 0 0; text-align: end; font-size: 12px; color: var(--muted); }
-.gd-size.bad { color: var(--coral); font-weight: 800; }
+/* the guide's length: said only once it is long (a longer guide costs more at each answer), red past its ceiling */
+.gd-size { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 10px 12px; border: 1px solid var(--c-warn-line); border-radius: 12px; background: var(--c-warn-tint); color: var(--c-warn-ink); font-size: 13px; line-height: 1.45; font-variant-numeric: tabular-nums; }
+.gd-size .bji { flex: none; width: 16px; height: 16px; margin-top: 1px; }
+.gd-size span { min-width: 0; overflow-wrap: anywhere; }
+.gd-size.bad { border-color: var(--c-bad-line); background: var(--c-bad-tint); color: var(--c-bad-ink); font-weight: 700; }
 @media (max-width: 640px) {
-  .gd-ed-pair { grid-template-columns: minmax(0, 1fr) auto; }
+  /* the question and its bin, then the answer and its picture button */
+  .gd-ed-pair, .gd-ed-pair.no-img { grid-template-columns: minmax(0, 1fr) auto; }
   .gd-ed-pair .gd-ed-q { grid-column: 1; grid-row: 1; }
   .gd-ed-pair .gd-ed-a { grid-column: 1; grid-row: 2; }
-  .gd-ed-pair .icon-btn { grid-column: 2; grid-row: 1; }
+  .gd-ed-pair .gd-ed-del { grid-column: 2; grid-row: 1; }
+  .gd-ed-pair .gd-ed-img { grid-column: 2; grid-row: 2; }
   .gd-ed-pair + .gd-ed-pair { padding-top: 10px; border-top: 1px dashed var(--line); }
-  .gd-ed-ai { width: 100%; }
+  /* the language and « Écrire avec l'IA » side by side while they fit (in Arabic the button's words are long: it goes under) */
+  .gd-ed-ai { width: 100%; flex-wrap: wrap; }
+  .gd-ed-ai select { flex: 1 1 120px; }
   .gd-drafted { grid-template-columns: auto minmax(0, 1fr); }
   .gd-drafted .linkish { grid-column: 2; justify-self: start; }
-  .gd-ed-ai .btn { flex: 1; justify-content: center; }
+  .gd-ed-ai .btn { flex: 1 1 auto; justify-content: center; }
 }
 
 /* ---- the product list: which products have a guide */
@@ -160,7 +230,7 @@
 .gd-none p { margin: 0; max-width: 46ch; color: var(--ink); font-size: 14px; line-height: 1.5; }
 .gd-none .btn .bji { width: 15px; height: 15px; }
 .gd-sheet-foot { display: flex; gap: 8px; justify-content: flex-end; width: 100%; }
-.gd-sheet-foot .btn { flex: 1; justify-content: center; }
+.gd-sheet-foot .btn { flex: 1; min-width: 0; justify-content: center; }
 @media (max-width: 1100px) { .gd-page { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); } .gd-detail-body .pf-two { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 760px) {
   .gd-page { grid-template-columns: minmax(0, 1fr); }
@@ -230,4 +300,4 @@
 .gd-tr-line { display: grid; gap: 5px; }
 .gd-tr-line + .gd-tr-line { margin-top: 4px; }
 .gd-tr-line > span { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
-.gd-tr-line textarea { resize: vertical; min-height: 40px; }
+.gd-tr-line textarea { resize: vertical; min-height: 40px; field-sizing: content; max-height: 70vh; }

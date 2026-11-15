@@ -180,7 +180,6 @@ export function VariantOptions({
   setVars,
   basePrice,
   baseCost,
-  baseSku,
   basePhoto,
   baseDiscount,
   admin,
@@ -195,7 +194,6 @@ export function VariantOptions({
   setVars: (fn: (v: VRow[]) => VRow[]) => void;
   basePrice: number;
   baseCost: number;
-  baseSku: string;
   basePhoto: string;
   baseDiscount: number | null;
   admin: boolean;
@@ -362,7 +360,6 @@ export function VariantOptions({
                   ))}
                   <th>Photo</th>
                   <th>{t('produits.form.titleAr')}</th>
-                  <th>Variant SKU</th>
                   <th>Purchase (DA)</th>
                   <th>Sale (DA)</th>
                   <th>Max. discount (DA)</th>
@@ -392,7 +389,6 @@ export function VariantOptions({
                         {(v.photo || basePhoto) ? <img src={v.photo || basePhoto} alt="" className={v.photo ? '' : 'is-base'} /> : <Icon name="package" />}
                       </td>
                       <td data-l={t('produits.form.titleAr')}><input dir="rtl" value={v.titleAr ?? ''} placeholder={arabicName(title)} aria-label={`${t('produits.form.titleAr')} ${title}`} onChange={(e) => editRow(title, { titleAr: e.target.value })} /></td>
-                      <td data-l="Variant SKU"><input className="ltr" value={v.sku} placeholder={skuOf(baseSku, c)} aria-label={`SKU ${title}`} onChange={(e) => editRow(title, { sku: e.target.value })} /></td>
                       <td data-l="Purchase (DA)"><input type="number" min={0} step={50} value={v.cost} placeholder={baseCost ? String(baseCost) : 'Required'} aria-label={`Purchase price ${title}`} onChange={(e) => editRow(title, { cost: e.target.value })} /></td>
                       <td data-l="Sale (DA)"><input type="number" min={0} step={50} value={v.price} placeholder={basePrice ? String(basePrice) : 'Required'} aria-label={`Selling price ${title}`} onChange={(e) => editRow(title, { price: e.target.value })} /></td>
                       <td data-l="Max. discount (DA)"><input type="number" min={0} step={50} disabled={!admin} value={v.maxDiscount} placeholder={baseDiscount === null ? 'No limit' : String(baseDiscount)} aria-label={`Max. discount ${title}`} onChange={(e) => editRow(title, { maxDiscount: e.target.value })} /></td>

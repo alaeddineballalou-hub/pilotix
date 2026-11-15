@@ -202,6 +202,7 @@ export const PROC_RIGHTS: Record<string, Need> = {
   'purchases.pay': 'act:stock.purchases',
   'suppliers.save': 'act:stock.purchases',
   'catalog.saveGuide': 'act:stock.guides',
+  'catalog.guidePhotoAdd': 'act:stock.guides',
   'catalog.translateGuide': 'act:stock.guides',
   'catalog.guideDraft': 'act:stock.guides',
   // Point de vente

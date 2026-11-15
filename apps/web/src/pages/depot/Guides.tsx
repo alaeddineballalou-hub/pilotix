@@ -2,17 +2,18 @@
 // right. The owner and the depot team write it there (« Modifier », with « Écrire avec l'IA »); the agents read it, for
 // their own products only, in the app's language (Pilot AI translates it after each save). On a phone the guide rises
 // from the bottom. The same guide as the product form's tab.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
 import { dateOnly, n } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
-import { SellerScope } from '../../lib/seller';
+import { SellerScope, useScope } from '../../lib/seller';
 import { useIsPhone } from '../../lib/useMedia';
 import { Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { Sheet } from '../../ui/Sheet';
 import { toast } from '../../ui/toast';
-import { DraftFacts, formToGuide, formTr, GuideEditor, GuideForm, guideProblem, guideToForm, GuideView, readLang, sizeValues, useGuideTranslate } from './guide';
+import { DraftFacts, formToGuide, formTr, GuideEditor, GuideForm, guideProblem, guideToForm, GuideView, guideWaiting, readLang, sendGuidePics, sizeValues, useGuideTranslate } from './guide';
 
 type Row = Out<'catalog.guides'>['rows'][number];
 type Filter = 'all' | 'with' | 'without' | 'todo';
@@ -114,12 +115,32 @@ function GuideBox({ row, manager, products, phone, onEditing, onClose }: { row: 
   const editing = form !== null;
   const prod = useRpc('catalog.guideFacts', { id: row.id }, { enabled: manager && editing });
   const translate = useGuideTranslate();
-  // saved: Pilot AI translates what changed into the other languages
+  // saved: the pictures just put on its answers leave (each for its answer), then Pilot AI translates what changed
+  // into the other languages
+  const scope = useScope();
+  const qc = useQueryClient();
+  const formNow = useRef(form);
+  formNow.current = form;
+  const [sending, setSending] = useState<{ done: number; total: number } | null>(null);
   const save = useAction('catalog.saveGuide', {
     success: t('produits.guide.page.saved'),
     onDone: (r) => {
-      setForm(null);
-      if (Object.keys(r.trMissing).length) void translate.run(row.id);
+      const done = () => {
+        setSending(null);
+        setForm(null);
+        if (Object.keys(r.trMissing).length) void translate.run(row.id);
+      };
+      const f = formNow.current;
+      const total = f ? guideWaiting(f).length : 0;
+      if (!f || !total) return done();
+      setSending({ done: 0, total });
+      void sendGuidePics(row.id, f, scope, (d) => setSending({ done: d, total }))
+        .then((out) => {
+          if (out.failed) toast(`${t('produits.guide.pics.notSent', { count: out.failed })}${out.error ? ` ${out.error}` : ''}`, 'bad');
+          // the guide as it is now, with its pictures
+          return qc.invalidateQueries();
+        })
+        .finally(done);
     },
   });
   useEffect(() => onEditing(editing), [editing]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -135,7 +156,7 @@ function GuideBox({ row, manager, products, phone, onEditing, onClose }: { row: 
     if (problem) return toast(problem, 'bad');
     save.mutate({ id: row.id, guide: g, tr: formTr(form, g) });
   };
-  const write = () => setForm(guideToForm(d?.guide ?? null, null, lang));
+  const write = () => setForm(guideToForm(d?.guide ?? null, null, lang, d?.pics));
   // the translations to correct come with the product's facts (the editor waits for them): taken once per edit
   const [trTaken, setTrTaken] = useState(false);
   useEffect(() => {
@@ -147,11 +168,12 @@ function GuideBox({ row, manager, products, phone, onEditing, onClose }: { row: 
   }, [editing, prod.data, trTaken]);
   const actions = editing ? (
     <>
-      <button type="button" className="btn" disabled={save.isPending} onClick={() => setForm(null)}>
+      <button type="button" className="btn" disabled={save.isPending || !!sending} onClick={() => setForm(null)}>
         {t('common.cancel')}
       </button>
-      <button type="button" className="btn primary" disabled={save.isPending} onClick={submit}>
-        <Icon name="check" /> {t('common.save')}
+      <button type="button" className="btn primary" disabled={save.isPending || !!sending} onClick={submit}>
+        {/* while its pictures leave, the words alone (they fit the phone's half-width button) */}
+        {!sending && <Icon name="check" />} {sending ? t('produits.hd.sending', sending) : t('common.save')}
       </button>
     </>
   ) : manager && d ? (
@@ -165,9 +187,9 @@ function GuideBox({ row, manager, products, phone, onEditing, onClose }: { row: 
     <Loading />
   ) : editing ? (
     // the product's options say which size guide it gets (one line per size, or the small one): wait for them
-    trTaken || prod.error ? <GuideEditor value={form!} onChange={setForm} facts={facts} products={products} /> : <Loading />
+    trTaken || prod.error ? <GuideEditor value={form!} onChange={setForm} facts={facts} products={products} pictures={prod.data?.pictures !== false} /> : <Loading />
   ) : d.guide ? (
-    <GuideView guide={d.guide} id={id} upsell={d.upsell} tr={d.tr} trMissing={d.trMissing} onTranslate={manager ? () => void translate.run(row.id) : undefined} translating={translate.busy === row.id} />
+    <GuideView guide={d.guide} id={id} upsell={d.upsell} pics={d.pics} tr={d.tr} trMissing={d.trMissing} onTranslate={manager ? () => void translate.run(row.id) : undefined} translating={translate.busy === row.id} />
   ) : (
     <div className="gd-none">
       <Icon name="book" />

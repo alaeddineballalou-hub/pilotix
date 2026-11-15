@@ -110,6 +110,11 @@ EXTRA.door = '<path d="M18 20V6a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v14"/><path d="M2 2
 EXTRA.stethoscope = '<path d="M11 2v2"/><path d="M5 2v2"/><path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1"/><path d="M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/>';
 // Produits › a product › Photos: the photo that is the product's main picture
 EXTRA.star = '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>';
+// a picture opened big: closer, back
+EXTRA.zoomin = '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3M11 8v6M8 11h6"/>';
+EXTRA.zoomout = '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3M8 11h6"/>';
+// a picture to add (the guide's answers)
+EXTRA.imageplus = '<path d="M16 5h6"/><path d="M19 2v6"/><path d="M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/><circle cx="9" cy="9" r="2"/>';
 const ALL = { ...(icons as Record<string, string>), ...EXTRA };
 export type IconName = keyof typeof ALL | string;
 

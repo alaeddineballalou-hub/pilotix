@@ -15,6 +15,7 @@ import { checkDispatch, dispatchOrders } from './dispatch';
 import { getPrefs } from './prefs';
 import { assignedProductIds } from './productscope';
 import { checkGuide, GuideInput, HAS_GUIDE, readGuide, saveGuide, TrFix, TrInput } from './guide';
+import { photoStore, purgePhotos } from './hdphotos';
 import { lessonsFromGuide } from './lahja';
 import { montageProductId, MontageInput, ProductMontage, readMontage } from './montage';
 
@@ -770,6 +771,8 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
   if (!i.id && i.active && !i.isService && (await landingSettings(ctx.db)).autoCreate) await quickCreatePage(ctx.db, pid, ctx.session.profile.id).catch(() => null);
   // an Arabic translation of its guide corrected by the team: the words it changed teach Dellal (lahja.ts)
   if (fixes.length) await lessonsFromGuide(ctx, fixes);
+  // the pictures its guide's answers let go leave the bucket
+  if (i.guide !== undefined) await purgePhotos(ctx).catch(() => undefined);
   ctx.emit({ type: 'stock' });
   return (await listProducts(ctx.db, { ids: [pid] }))[0];
 }
@@ -1143,7 +1146,7 @@ export const catalogProcs = {
     const g = await readGuide(ctx.db, id);
     // each variant's Arabic name for the landing pages
     const ar = new Map<number, string>((await ctx.db.query('SELECT id, title_ar FROM product_variants WHERE product_id = $1', [id])).map((r: any) => [num(r.id), String(r.title_ar ?? '')]));
-    return { ...p, variants: p.variants.map((v) => ({ ...v, titleAr: ar.get(v.id) ?? '' })), guide: g?.guide ?? null, guideTr: g?.tr ?? {}, guideAt: g?.updatedAt ?? null, guideBy: g?.updatedBy ?? null };
+    return { ...p, variants: p.variants.map((v) => ({ ...v, titleAr: ar.get(v.id) ?? '' })), guide: g?.guide ?? null, guideTr: g?.tr ?? {}, guidePics: g?.pics ?? {}, guidePictures: (await photoStore(ctx)).kind !== 'off', guideAt: g?.updatedAt ?? null, guideBy: g?.updatedBy ?? null };
   }),
 
   /** Names of the delivery price grids (product form, "Grille de prix de livraison"). */

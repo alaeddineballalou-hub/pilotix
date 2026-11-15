@@ -14,7 +14,7 @@ export const FREE_ACTIONS: readonly string[] = [
   'campaigns.optin',
   'cash.chat', 'cash.chatSend', 'cash.chatThreads', 'cash.livreurs',
   'catalog.alerts', 'catalog.assigned', 'catalog.depots', 'catalog.feeGrids', 'catalog.forecast', 'catalog.guide',
-  'catalog.guideFacts', 'catalog.guides', 'catalog.inventories', 'catalog.inventory', 'catalog.movements',
+  'catalog.guideFacts', 'catalog.guidePhoto', 'catalog.guides', 'catalog.inventories', 'catalog.inventory', 'catalog.movements',
   'catalog.picking', 'catalog.ping', 'catalog.montage', 'catalog.product', 'catalog.products', 'catalog.search', 'catalog.setAlert',
   'catalog.setBatches', 'catalog.stock', 'catalog.transfers', 'catalog.warehouses',
   'clientscore.rules',

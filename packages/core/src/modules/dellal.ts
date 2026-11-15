@@ -21,10 +21,10 @@ import { addEvent, createOrder, customerFee, updateOrder } from './orders';
 import { anonymize, bookFor, BookRef, pickModel } from './pilotlearn';
 import { asWords, checkLahjaWords, LAHJA_NO_CHANGE, LAHJA_PERSONAL, lahjaAvoid, lahjaBlocks, lahjaDiff, lahjaErr, lahjaFor, lahjaWith, LahjaWord } from './lahja';
 import { pilotConfig, pilotToday } from '../platform/pilotai';
-import { guideText, HAS_GUIDE, readGuide, toFill } from './guide';
+import { guidePics, guideText, HAS_GUIDE, readGuide, toFill } from './guide';
 import { vocabBlock, vocabFor } from './vocab';
 import { linkedPage, noteIgLogin, noteWaLogin } from './social';
-import { catalogueThumbs, imageBlock, PHOTO_MODEL, PHOTO_SYSTEM, photoBody, PhotoReading, photoRequest, PhotoSrc, productPhotos, productsWithPhotos, productsWithSizeChart, readPhotoAnswer } from './dellalphotos';
+import { catalogueThumbs, guidePhotos, imageBlock, PHOTO_MODEL, PHOTO_SYSTEM, photoBody, PhotoReading, photoRequest, PhotoSrc, productPhotos, productsWithPhotos, productsWithSizeChart, readPhotoAnswer } from './dellalphotos';
 
 // ---------------------------------------------------------------- settings and secrets
 export const DELLAL_CHANNELS = ['whatsapp', 'messenger', 'instagram', 'tiktok', 'test'] as const;
@@ -601,6 +601,7 @@ export const DELLAL_TOOLS = [
         variant_id: { type: 'integer', description: 'la couleur / taille qu’il veut voir, si tu la connais' },
         count: { type: 'integer', description: 'combien de photos, de 1 à 3 (2 par défaut)' },
         sizes: { type: 'boolean', description: 'true : le guide des tailles du produit (marqué « guide des tailles »), quand il demande quelle taille prendre' },
+        guide_images: { type: 'array', items: { type: 'integer' }, description: 'les images d’une réponse du guide de vente (leurs numéros sont écrits après la réponse, dans product_guide) : envoie-les quand tu donnes cette réponse' },
       },
       required: ['product_id'],
     },
@@ -916,20 +917,33 @@ async function photoTool(t: ToolCtx, name: 'product_photos' | 'send_photos', inp
   if (!settings.photos) return { error: 'La boutique n’envoie pas de photos dans le chat : dis-le simplement, sans promettre, et décris le produit avec le catalogue.' };
   const sizes = input?.sizes === true;
   const want = Math.min(3, Math.max(1, Math.round(Number(input?.count) || 2)));
-  const ph = await productPhotos(ctx.db, pid, sizes ? { size: 'send', max: 2, kind: 'sizes' } : { variantId, size: 'send', max: want });
+  // the pictures of one answer of the product's guide (only the ones its answers name now)
+  const asked: number[] = Array.isArray(input?.guide_images) ? [...new Set<number>(input.guide_images.map(Number).filter((x: number) => Number.isSafeInteger(x) && x > 0))].slice(0, 6) : [];
+  const ofGuide = asked.length > 0 && !sizes;
+  let named: number[] = [];
+  if (ofGuide) {
+    const g = await readGuide(ctx.db, pid);
+    const known = new Set(g ? guidePics(g.guide) : []);
+    named = asked.filter((x) => known.has(x));
+  }
+  const ph = ofGuide ? await guidePhotos(ctx.db, pid, named) : await productPhotos(ctx.db, pid, sizes ? { size: 'send', max: 2, kind: 'sizes' } : { variantId, size: 'send', max: want });
+  if (!ph.length && ofGuide) return { error: 'Ces images ne sont pas (ou plus) dans le guide de ce produit : donne simplement la réponse du guide, sans image et sans en promettre.' };
   if (!ph.length && sizes) return { error: 'Ce produit n’a pas de guide des tailles en photo : demande au client sa taille habituelle (ou sa taille et son poids) et réponds avec le catalogue et son guide.' };
   if (!ph.length) return { error: 'Pas de photo pour ce produit : dis-le simplement au client, sans promettre de l’envoyer plus tard, et décris-le avec le catalogue.' };
   if (sizes) label = `${prod.name} — guide des tailles`;
+  if (ofGuide) label = `${prod.name} — guide`;
   // the same photos already went in this conversation today: a reminder, not the same pictures again
   const sent = new Set<string>();
   for (const r of await ctx.db.query(`SELECT meta->'photos' AS ph FROM conv_messages WHERE conversation_id = $1 AND role = 'agent' AND meta ? 'photos' AND created_at > $2`, [conv.id, new Date(ctx.now() - 86_400_000).toISOString()]))
     for (const p of Array.isArray(r.ph) ? r.ph : typeof r.ph === 'string' ? JSON.parse(r.ph) : []) sent.add(String(p?.src ?? ''));
   const fresh = ph.filter((p) => !sent.has(p.src));
+  if (!fresh.length && ofGuide) return { ok: true, already: true, of: label, note: 'Tu as déjà envoyé ces images aujourd’hui dans cette conversation (elles sont plus haut) : donne la réponse du guide sans les renvoyer.' };
   if (!fresh.length) return { ok: true, already: true, of: label, note: 'Tu as déjà envoyé ces photos aujourd’hui dans cette conversation : rappelle-le simplement (elles sont plus haut), sans les renvoyer.' };
   t.outbox ??= [];
   const room = 6 - t.outbox.length;
   if (room <= 0) return { error: 'Assez de photos pour ce message.' };
   for (const p of fresh.slice(0, room)) t.outbox.push({ ...p, productId: pid, label });
+  if (ofGuide) return { ok: true, sent: Math.min(fresh.length, room), of: label, note: 'Les images partent juste avant ton message : donne maintenant la réponse du guide avec tes mots, courte, sans décrire les images.' };
   return { ok: true, sent: Math.min(fresh.length, room), of: label, note: 'Les photos partent juste avant ton message : dis simplement que la voilà, puis pose UNE question (la couleur, la taille, la wilaya…). Ne les décris pas en détail.' };
 }
 
@@ -941,7 +955,12 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
     const pid = Number(input?.product_id);
     const g = Number.isSafeInteger(pid) && pid > 0 ? await readGuide(ctx.db, pid) : null;
     if (!g) return { error: 'Pas de guide de vente pour ce produit : réponds avec le catalogue et les informations de la boutique, sans rien inventer (si la réponse n’y est pas : callback).' };
-    return { product_id: pid, guide: guideText(g.guide, g.upsell) };
+    const pics = settings.photos && guidePics(g.guide).length > 0;
+    return {
+      product_id: pid,
+      guide: guideText(g.guide, g.upsell, { pics }),
+      ...(pics ? { images: 'Une réponse suivie de [images de cette réponse : guide_images […]] a des images de la boutique : quand tu donnes cette réponse, envoie-les avec send_photos (product_id et guide_images), puis donne la réponse avec tes mots.' } : {}),
+    };
   }
   if (name === 'product_photos' || name === 'send_photos') return photoTool(t, name, input ?? {});
   if (name === 'callback') return callbackFromChat(t, input ?? {});
@@ -1133,7 +1152,7 @@ async function systemPrompt(
       .join('\n')}\n  • le client est fâché`,
     `- Question dont tu n’as pas la réponse (ni dans le catalogue, ni dans un guide de vente, ni dans les informations de la boutique) : n’invente jamais. Appelle callback avec sa question et fais ce que l’outil répond : lui demander simplement son numéro pour qu’un conseiller l’appelle et lui réponde, ou lui donner le numéro du service client. S’il répond sans donner son numéro, ou revient sur cette question, rappelle callback (refused: true s’il refuse de le donner) : l’outil compte les demandes. S’il parle d’autre chose, réponds normalement. Dès qu’il envoie son numéro, rappelle callback avec sa question et phone.`,
     guided
-      ? `- Guides de vente : un produit marqué « guide » a un guide écrit par l’équipe. Avant de répondre à une question sur ce produit (utilisation, taille, âge, matière, qualité, garantie, échange…) ou à une hésitation du client (« ghali », « nkhamem »…), lis son guide avec product_guide, puis réponds avec tes mots, court, dans la langue du client. Ses réponses sont les vraies informations de la boutique : ne promets jamais ce que sa partie « À ne jamais promettre » interdit, et ne devine pas une réponse qu’il ne donne pas (sa question va alors à callback).`
+      ? `- Guides de vente : un produit marqué « guide » a un guide écrit par l’équipe. Avant de répondre à une question sur ce produit (utilisation, taille, âge, matière, qualité, garantie, échange…) ou à une hésitation du client (« ghali », « nkhamem »…), lis son guide avec product_guide, puis réponds avec tes mots, court, dans la langue du client. Ses réponses sont les vraies informations de la boutique : ne promets jamais ce que sa partie « À ne jamais promettre » interdit, et ne devine pas une réponse qu’il ne donne pas (sa question va alors à callback).${s.photos ? ' Une réponse du guide suivie de « images de cette réponse » a des images de la boutique : quand tu donnes cette réponse, envoie-les avec send_photos (product_id et guide_images).' : ''}`
       : '',
     pics.size || charts.size
       ? s.photos
@@ -1802,6 +1821,7 @@ function toolLine(name: string, input: any, out: any): string {
   }
   if (name === 'product_guide') return `product_guide #${input?.product_id ?? '?'} → guide de vente lu`;
   if (name === 'product_photos') return `product_photos #${input?.product_id ?? '?'} → ${out?.photos ?? 0} photo(s) regardée(s)`;
+  if (name === 'send_photos' && Array.isArray(input?.guide_images) && !out?.error) return out?.already ? `send_photos #${input?.product_id ?? '?'} → images du guide déjà envoyées aujourd’hui` : `send_photos #${input?.product_id ?? '?'} → ${out?.sent ?? 0} image(s) du guide envoyée(s)`;
   if (name === 'send_photos') return out?.already ? `send_photos #${input?.product_id ?? '?'} → déjà envoyées aujourd’hui` : `send_photos #${input?.product_id ?? '?'} → ${out?.sent ?? 0} photo(s) envoyée(s)`;
   return name;
 }
@@ -1839,9 +1859,9 @@ async function pendingCallback(db: Db, convId: number): Promise<{ question: stri
 const GUIDE_STOP = new Set(['est', 'les', 'des', 'une', 'pour', 'avec', 'que', 'qui', 'dans', 'elle', 'il', 'wach', 'kayen', 'kayna', 'fiha', 'fih', 'had', 'hadi', 'hada', 'bien', 'tres', 'plus']);
 /**
  * The demo seller's pick in a guide: the answer whose question shares the most words with what the customer wrote (the
- * small size guide answers the age, the weight and the measures of a product with one size).
+ * small size guide answers the age, the weight and the measures of a product with one size), with its pictures.
  */
-function guideAnswer(g: { faq: { q: string; a: string }[]; doubts: { q: string; a: string }[]; fit?: { age: string; weight: string; measures: string } }, asked: string): string | null {
+function guideAnswer(g: { faq: { q: string; a: string; photos?: number[] }[]; doubts: { q: string; a: string; photos?: number[] }[]; fit?: { age: string; weight: string; measures: string } }, asked: string): { a: string; photos: number[] } | null {
   const words = (x: string) => new Set(strip(x).split(/[^a-z0-9؀-ۿ]+/).filter((w) => w.length >= 3 && !GUIDE_STOP.has(w)));
   const want = words(asked);
   const fit = [
@@ -1849,13 +1869,13 @@ function guideAnswer(g: { faq: { q: string; a: string }[]; doubts: { q: string; 
     g.fit?.weight ? { q: 'Quel poids, poids maximum, وزن', a: `Poids : ${g.fit.weight}.` } : null,
     g.fit?.measures ? { q: 'Quelles mesures, dimensions, quelle taille, قياس', a: `Mesures : ${g.fit.measures}.` } : null,
   ].filter((p): p is { q: string; a: string } => !!p);
-  let best: { a: string; n: number } | null = null;
-  for (const p of [...g.faq, ...g.doubts, ...fit]) {
+  let best: { a: string; photos: number[]; n: number } | null = null;
+  for (const p of [...g.faq, ...g.doubts, ...fit] as { q: string; a: string; photos?: number[] }[]) {
     if (toFill(p.a)) continue;
     const n = [...words(p.q)].filter((w) => [...want].some((x) => x === w || (x.length >= 5 && w.startsWith(x.slice(0, 5))))).length;
-    if (n && (!best || n > best.n)) best = { a: p.a, n };
+    if (n && (!best || n > best.n)) best = { a: p.a, photos: p.photos ?? [], n };
   }
-  return best?.a ?? null;
+  return best ? { a: best.a, photos: best.photos } : null;
 }
 
 /** A phone number as it is read out, kept on one line: 0661 23 45 18. */
@@ -1875,6 +1895,13 @@ async function demoBrain(ctx: Ctx, req: AiRequest, convId?: number): Promise<AiR
     const prev = msgs[msgs.length - 2].content as any[];
     const tool = prev.find((b) => b.type === 'tool_use');
     const out = JSON.parse(last.content[0].content);
+    if (tool.name === 'send_photos' && Array.isArray(tool.input?.guide_images)) {
+      // the pictures of a guide's answer left (or could not): the answer they go with, in any case
+      const g = await readGuide(ctx.db, Number(tool.input?.product_id));
+      const asked = [...msgs].reverse().find((m) => m.role === 'user' && typeof m.content === 'string')?.content as string | undefined;
+      const hit = g ? guideAnswer(g.guide, asked ?? '') : null;
+      return say(hit ? hit.a : 'Voilà 👆');
+    }
     if (out.error) return say(String(out.error));
     if (tool.name === 'handoff') return say('Je passe ta demande à un conseiller de l’équipe, il te répond très vite 🙏');
     if (tool.name === 'callback') {
@@ -1890,7 +1917,9 @@ async function demoBrain(ctx: Ctx, req: AiRequest, convId?: number): Promise<AiR
       const g = await readGuide(ctx.db, Number(tool.input?.product_id));
       const asked = [...msgs].reverse().find((m) => m.role === 'user' && typeof m.content === 'string')?.content as string | undefined;
       const hit = g ? guideAnswer(g.guide, asked ?? '') : null;
-      if (hit) return say(hit);
+      // its pictures leave first (a shop that sends photos in the chat), then its words
+      if (hit?.photos.length && (await dellalSettings(ctx.db)).photos) return use('send_photos', { product_id: Number(tool.input?.product_id), guide_images: hit.photos });
+      if (hit) return say(hit.a);
       // a hesitation the guide does not answer: its summary; a question it does not answer: never a guess, the team calls back
       if (g?.guide.brief && DOUBT_RE.test(strip(asked ?? ''))) return say(`${g.guide.brief} Tu es de quelle wilaya ? Je te donne le prix de la livraison.`);
       return use('callback', { question: String(asked ?? '').slice(0, 300) });

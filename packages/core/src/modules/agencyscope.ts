@@ -251,6 +251,8 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   // keep to them)
   'catalog.guides': free,
   'catalog.saveGuide': free,
+  'catalog.guidePhotoAdd': free,
+  'catalog.guidePhoto': free,
   'catalog.guideFacts': free,
   'catalog.translateGuide': free,
   'catalog.guideDraft': free,

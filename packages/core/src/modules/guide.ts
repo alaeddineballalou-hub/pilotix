@@ -6,7 +6,9 @@
 // Its parts: En bref, Guide des tailles (age and weight for each size, when the product has a size option; a small one,
 // the age, the weight and the measures it fits, when it has none: customers ask it), Points forts, Questions & réponses
 // (picked from fixed questions or written), Hésitations (what the customer says → what to answer), Vente en plus
-// (products picked, and how to say it), À ne jamais promettre. A product without a guide has no row
+// (products picked, and how to say it), À ne jamais promettre. An answer (a question's, a hesitation's) can carry
+// pictures: Dellal sends them to the customer when it gives that answer, the agents see them (their files are kept like
+// the product's HD photos: hdphotos.ts, kind 'guide'). A product without a guide has no row
 // (migrations/072_product_guides.ts). Everyone reads it in the app's language (French, Arabic or English): Pilot AI
 // translates each line after a save, the team corrects the translations in the editor's tabs, and the original words
 // stay one click away (migrations/073_guide_translations.ts). The AI agents read the original.
@@ -23,6 +25,8 @@ export type ReadLang = (typeof READ_LANGS)[number];
 export interface GuidePair {
   q: string;
   a: string;
+  /** the pictures that go with this answer (product_photos of kind 'guide'): Dellal sends them when it gives it */
+  photos?: number[];
 }
 /** one size of the product (a value of its « Taille » option) with the age and the weight it fits */
 export interface GuideSize {
@@ -59,6 +63,10 @@ export interface ProductGuide {
   lang: GuideLang;
 }
 
+/**
+ * The sizes of a draft: what Pilot AI writes within (« Écrire avec l'IA », guidedraft.ts), and how many sizes and
+ * « vente en plus » products a guide holds. The team itself writes without them (GUIDE_ROOM).
+ */
 export const GUIDE_LIMITS = {
   brief: 400,
   strengths: 12,
@@ -76,8 +84,24 @@ export const GUIDE_LIMITS = {
   sizeText: 60,
   /** each line of the small size guide (« 60 × 80 × 100 cm, 45 × 60 cm plié ») */
   fitText: 120,
-  /** the whole guide (what Dellal reads in one go) */
+  /** a draft in all; past it the editor reminds that Dellal reads the whole guide each time it opens it */
   total: 15_000,
+} as const;
+
+/**
+ * What the team may write: every part takes the room it needs — no size for a line, no count of lines. One ceiling only,
+ * for the whole guide: Dellal reads all of it each time it opens it, so a guide the length of a book would cost at every
+ * answer, and past what an AI reads at once it could not be read at all. `auto`: a single line longer than this is not
+ * translated by Pilot AI (one answer could not hold it): its readers see it in the guide's own language.
+ */
+export const GUIDE_ROOM = {
+  total: 50_000,
+  lines: 500,
+  auto: 10_000,
+  /** the pictures of one answer: what one message carries */
+  perAnswer: 6,
+  /** the pictures of a whole guide */
+  pictures: 60,
 } as const;
 
 /** An answer the AI could not know (its draft): the team writes it. Agents see it marked; the AI agents never use it. */
@@ -91,22 +115,23 @@ export const sizeValues = (options: { name: string; values: string[] }[] | null 
   [...new Set((options ?? []).filter((o) => SIZE_OPTION.test(o.name)).flatMap((o) => o.values.map((v) => v.trim()).filter(Boolean)))].slice(0, GUIDE_LIMITS.sizes);
 
 const L = GUIDE_LIMITS;
-const pair = (q: number) => z.object({ q: z.string().trim().max(q), a: z.string().trim().max(L.answer) });
+const R = GUIDE_ROOM;
+/** a text of the guide: as long as the team writes it (the whole guide has the one ceiling, checkGuide) */
+const text = () => z.string().trim().max(R.total);
+const pair = () => z.object({ q: text(), a: text(), photos: z.array(z.number().int().positive()).max(R.perAnswer).optional() });
 export const GuideInput = z.object({
-  brief: z.string().trim().max(L.brief).default(''),
-  strengths: z.array(z.string().trim().max(L.strength)).max(L.strengths).default([]),
-  faq: z.array(pair(L.question)).max(L.faq).default([]),
-  doubts: z.array(pair(L.doubt)).max(L.doubts).default([]),
-  upsell: z.string().trim().max(L.upsell).default(''),
+  brief: text().default(''),
+  strengths: z.array(text()).max(R.lines).default([]),
+  faq: z.array(pair()).max(R.lines).default([]),
+  doubts: z.array(pair()).max(R.lines).default([]),
+  upsell: text().default(''),
   upsellIds: z.array(z.number().int().positive()).max(L.upsellIds).default([]),
-  never: z.array(z.string().trim().max(L.neverLine)).max(L.never).default([]),
+  never: z.array(text()).max(R.lines).default([]),
   sizes: z
-    .array(z.object({ size: z.string().trim().min(1).max(L.sizeText), age: z.string().trim().max(L.sizeText).default(''), weight: z.string().trim().max(L.sizeText).default('') }))
+    .array(z.object({ size: z.string().trim().min(1).max(L.sizeText), age: text().default(''), weight: text().default('') }))
     .max(L.sizes)
     .default([]),
-  fit: z
-    .object({ age: z.string().trim().max(L.fitText).default(''), weight: z.string().trim().max(L.fitText).default(''), measures: z.string().trim().max(L.fitText).default('') })
-    .default({}),
+  fit: z.object({ age: text().default(''), weight: text().default(''), measures: text().default('') }).default({}),
   lang: z.enum(GUIDE_LANGS).optional(),
 });
 export type GuideInputT = z.input<typeof GuideInput>;
@@ -120,7 +145,9 @@ export const fitFilled = (f: GuideFit | null | undefined) => !!f && !!(f.age || 
 export function cleanGuide(g: Partial<ProductGuide> | null | undefined): ProductGuide {
   const s = (v: unknown) => String(v ?? '').trim();
   const lines = (v: unknown) => (Array.isArray(v) ? v.map(s).filter(Boolean) : []);
-  const pairs = (v: unknown) => (Array.isArray(v) ? v.map((p: any) => ({ q: s(p?.q), a: s(p?.a) })).filter((p) => p.q) : []);
+  // an answer's pictures: kept as said (none said: the save keeps the ones it had, saveGuide)
+  const pics = (v: unknown[]) => [...new Set(v.map(Number).filter((x) => Number.isSafeInteger(x) && x > 0))].slice(0, GUIDE_ROOM.perAnswer);
+  const pairs = (v: unknown): GuidePair[] => (Array.isArray(v) ? v.map((p: any) => ({ q: s(p?.q), a: s(p?.a), ...(Array.isArray(p?.photos) ? { photos: pics(p.photos) } : {}) })).filter((p) => p.q) : []);
   const ids = Array.isArray(g?.upsellIds) ? [...new Set(g!.upsellIds.map(Number).filter((x) => Number.isSafeInteger(x) && x > 0))] : [];
   const sizes = Array.isArray(g?.sizes)
     ? g!.sizes
@@ -149,7 +176,7 @@ function langOf(chosen: unknown, lines: string[]): GuideLang {
 export const guideEmpty = (g: ProductGuide) =>
   !g.brief && !g.strengths.length && !g.faq.length && !g.doubts.length && !g.upsell && !g.upsellIds.length && !g.never.length && !g.sizes.length && !fitFilled(g.fit);
 
-/** Characters of the whole guide (its limit keeps what Dellal reads at once small). */
+/** Characters of the whole guide (what Dellal reads at once: its one ceiling is GUIDE_ROOM.total). */
 export const guideSize = (g: ProductGuide) =>
   g.brief.length +
   g.upsell.length +
@@ -160,14 +187,18 @@ export const guideSize = (g: ProductGuide) =>
   g.fit.weight.length +
   g.fit.measures.length;
 
+/** The pictures of the guide's answers (their ids), in the guide's order. */
+export const guidePics = (g: Pick<ProductGuide, 'faq' | 'doubts'>): number[] => [...g.faq, ...g.doubts].flatMap((p) => p.photos ?? []);
+
 /** How many answers are still to write. */
 export const guideToFill = (g: ProductGuide) => [...g.faq, ...g.doubts].filter((p) => toFill(p.a)).length;
 
 // ---------------------------------------------------------------- the other reading languages
 /** The guide in each other reading language: each of its lines → the translation (Pilot AI's, or the team's). */
 export type GuideTr = Partial<Record<ReadLang, Record<string, string>>>;
-const TR_LINE = 1500;
-const trLines = z.record(z.string().max(800), z.string().max(TR_LINE)).optional();
+/** a line and its translation: as long as the guide's lines may be */
+const TR_LINE = GUIDE_ROOM.total;
+const trLines = z.record(z.string().max(TR_LINE), z.string().max(TR_LINE)).optional();
 /** The team's corrections from the editor's tabs: a line → its translation (emptied: Pilot AI translates it again). */
 export const TrInput = z.object({ fr: trLines, ar: trLines, en: trLines });
 export type TrEdits = z.output<typeof TrInput>;
@@ -223,15 +254,17 @@ export interface UpsellProduct {
 
 /**
  * The guide as the AI agents read it: plain text in the guide's own words, without the answers still to write (an AI
- * never says « [À compléter] » nor guesses that answer).
+ * never says « [À compléter] » nor guesses that answer). pics: for the one that sends pictures (Dellal, in a shop that
+ * sends photos in the chat), each answer is followed by its pictures' numbers (send_photos › guide_images).
  */
-export function guideText(g: ProductGuide, upsell: UpsellProduct[] = []): string {
+export function guideText(g: ProductGuide, upsell: UpsellProduct[] = [], o: { pics?: boolean } = {}): string {
   const real = (x: string) => !toFill(x);
   const faq = g.faq.filter((p) => real(p.a));
   const doubts = g.doubts.filter((p) => real(p.a));
   const strengths = g.strengths.filter(real);
   const never = g.never.filter(real);
   const da = (n: number) => `${n} DA`;
+  const pic = (p: GuidePair) => (o.pics && p.photos?.length ? ` [images de cette réponse : guide_images ${JSON.stringify(p.photos)}]` : '');
   const offer = [upsell.length ? `propose aussi ${upsell.map((p) => `#${p.id} ${p.name} (${da(p.price)})`).join(', ')}` : '', real(g.upsell) ? g.upsell : ''].filter(Boolean).join(' — ');
   // one size only: who it fits and how big it is
   const fit = g.sizes.length ? [] : [real(g.fit.age) && `- âge : ${g.fit.age}`, real(g.fit.weight) && `- poids : ${g.fit.weight}`, real(g.fit.measures) && `- mesures : ${g.fit.measures}`].filter(Boolean);
@@ -242,8 +275,8 @@ export function guideText(g: ProductGuide, upsell: UpsellProduct[] = []): string
       : '',
     fit.length ? `GUIDE DES TAILLES (une seule taille ; réponds avec ceci quand le client demande l’âge, le poids ou les mesures, et dis-le honnêtement si le produit ne lui va pas) :\n${fit.join('\n')}` : '',
     strengths.length ? `POINTS FORTS :\n${strengths.map((x) => `- ${x}`).join('\n')}` : '',
-    faq.length ? `QUESTIONS DES CLIENTS ET RÉPONSES DE LA BOUTIQUE :\n${faq.map((p) => `- ${p.q} → ${p.a}`).join('\n')}` : '',
-    doubts.length ? `HÉSITATIONS (ce que le client dit → quoi répondre) :\n${doubts.map((p) => `- ${p.q} → ${p.a}`).join('\n')}` : '',
+    faq.length ? `QUESTIONS DES CLIENTS ET RÉPONSES DE LA BOUTIQUE :\n${faq.map((p) => `- ${p.q} → ${p.a}${pic(p)}`).join('\n')}` : '',
+    doubts.length ? `HÉSITATIONS (ce que le client dit → quoi répondre) :\n${doubts.map((p) => `- ${p.q} → ${p.a}${pic(p)}`).join('\n')}` : '',
     offer ? `VENTE EN PLUS : ${offer}` : '',
     never.length ? `À NE JAMAIS PROMETTRE NI DIRE :\n${never.map((x) => `- ${x}`).join('\n')}` : '',
   ]
@@ -257,6 +290,8 @@ export interface SavedGuide {
   upsell: UpsellProduct[];
   /** the guide in the other reading languages */
   tr: GuideTr;
+  /** the pictures of its answers: id → a small copy (160 px) for the screens */
+  pics: Record<number, string>;
   updatedAt: string;
   updatedBy: string | null;
 }
@@ -264,22 +299,56 @@ export interface SavedGuide {
 export async function readGuide(db: Db, productId: number): Promise<SavedGuide | null> {
   const r = (await db.query('SELECT g.guide, g.tr, g.updated_at, u.name AS by_name FROM product_guides g LEFT JOIN profiles u ON u.id = g.updated_by WHERE g.product_id = $1', [productId]))[0];
   if (!r) return null;
-  const guide = cleanGuide(json(r.guide));
+  let guide = cleanGuide(json(r.guide));
   if (guideEmpty(guide)) return null;
+  // its answers' pictures (one removed elsewhere leaves its answer)
+  const pics: Record<number, string> = {};
+  if (guidePics(guide).length) {
+    for (const x of await db.query(`SELECT id, coalesce(mini, thumb) AS small FROM product_photos WHERE product_id = $1 AND kind = 'guide' AND id = ANY($2)`, [productId, guidePics(guide)])) pics[num(x.id)] = String(x.small);
+    guide = { ...guide, faq: guide.faq.map((p) => withPics(p, (p.photos ?? []).filter((x) => pics[x]))), doubts: guide.doubts.map((p) => withPics(p, (p.photos ?? []).filter((x) => pics[x]))) };
+  }
   const upsell = guide.upsellIds.length
     ? (await db.query('SELECT id, name, price, photo FROM products WHERE id = ANY($1) AND active AND archived_at IS NULL', [guide.upsellIds]))
         .map((p) => ({ id: num(p.id), name: String(p.name), price: num(p.price), photo: (p.photo as string | null) ?? null }))
         .sort((a, b) => guide.upsellIds.indexOf(a.id) - guide.upsellIds.indexOf(b.id))
     : [];
-  return { guide, upsell, tr: cleanTr(json(r.tr), guide), updatedAt: iso(r.updated_at), updatedBy: (r.by_name as string | null) ?? null };
+  return { guide, upsell, tr: cleanTr(json(r.tr), guide), pics, updatedAt: iso(r.updated_at), updatedBy: (r.by_name as string | null) ?? null };
 }
 const json = (v: unknown): any => (typeof v === 'string' ? JSON.parse(v) : v);
+/** An answer with these pictures (none: no `photos` at all, so a guide without pictures is written as before). */
+const withPics = (p: GuidePair, ids: number[]): GuidePair => {
+  const { photos: _was, ...rest } = p;
+  return ids.length ? { ...rest, photos: ids } : rest;
+};
 
-/** A guide from a form (already the right sizes, GuideInput), cleaned, and not too long in all. */
+/**
+ * The answers' pictures as they are saved: an answer that says nothing of its pictures (a page opened before they
+ * existed, a draft) keeps the ones it had (the same question, in the same part); only this product's guide pictures
+ * count, each on one answer.
+ */
+async function keepPics(db: Db, productId: number, g: ProductGuide, was: ProductGuide | null): Promise<ProductGuide> {
+  const low = (x: string) => x.trim().toLowerCase();
+  const said = (k: 'faq' | 'doubts', p: GuidePair) => p.photos ?? was?.[k].find((o) => low(o.q) === low(p.q))?.photos ?? [];
+  const all = (['faq', 'doubts'] as const).flatMap((k) => g[k].flatMap((p) => said(k, p)));
+  const real = new Set(all.length ? (await db.query(`SELECT id FROM product_photos WHERE product_id = $1 AND kind = 'guide' AND id = ANY($2)`, [productId, all])).map((r) => num(r.id)) : []);
+  const used = new Set<number>();
+  const part = (k: 'faq' | 'doubts') =>
+    g[k].map((p) =>
+      withPics(
+        p,
+        said(k, p)
+          .filter((x) => real.has(x) && !used.has(x) && !!used.add(x))
+          .slice(0, R.perAnswer),
+      ),
+    );
+  return { ...g, faq: part('faq'), doubts: part('doubts') };
+}
+
+/** A guide from a form (GuideInput), cleaned, and under the one ceiling of the whole guide. */
 export function checkGuide(input: z.output<typeof GuideInput>): ProductGuide {
   const g = cleanGuide(input);
   const n = guideSize(g);
-  if (n > L.total) throw bad(`Guide de vente trop long (${n} caractères, ${L.total} au plus) : raccourcissez les réponses.`);
+  if (n > R.total) throw bad(`Guide de vente trop long (${n} caractères, ${R.total} au plus) : Dellal le lit en entier à chaque réponse, raccourcissez-le.`);
   return g;
 }
 
@@ -288,7 +357,7 @@ export function checkGuide(input: z.output<typeof GuideInput>): ProductGuide {
  * same guide again changes nothing (not even who wrote it last). Vente en plus keeps real products only, never the
  * product itself (`allowed`: the products the writer's work gives them, null: every product). `trEdits`: the team's
  * corrections of the translations (the lines it changed or emptied); the translations of lines no longer in the guide
- * leave with them.
+ * leave with them. A picture no answer names any more is removed (its file leaves the bucket).
  */
 export async function saveGuide(db: Db, productId: number, input: ProductGuide, userId: number | null, allowed: number[] | null = null, trEdits?: TrEdits): Promise<{ fixes: TrFix[] }> {
   let g = input;
@@ -296,11 +365,14 @@ export async function saveGuide(db: Db, productId: number, input: ProductGuide, 
     const ok = new Set((await db.query('SELECT id FROM products WHERE id = ANY($1) AND id <> $2 AND archived_at IS NULL', [g.upsellIds, productId])).map((r) => num(r.id)));
     g = { ...g, upsellIds: g.upsellIds.filter((x) => ok.has(x) && (!allowed || allowed.includes(x))) };
   }
+  const cur = (await db.query('SELECT guide, tr FROM product_guides WHERE product_id = $1', [productId]))[0];
+  const was = cur ? cleanGuide(json(cur.guide)) : null;
+  g = await keepPics(db, productId, g, was);
   if (guideEmpty(g)) {
     await db.query('DELETE FROM product_guides WHERE product_id = $1', [productId]);
+    await db.query(`DELETE FROM product_photos WHERE product_id = $1 AND kind = 'guide'`, [productId]);
     return { fixes: [] };
   }
-  const cur = (await db.query('SELECT guide, tr FROM product_guides WHERE product_id = $1', [productId]))[0];
   const old: any = (cur && json(cur.tr)) || {};
   // the team's corrections over the translations there (a line emptied goes back to Pilot AI)
   const merged: Record<string, Record<string, string>> = {};
@@ -319,12 +391,16 @@ export async function saveGuide(db: Db, productId: number, input: ProductGuide, 
     merged[l] = m;
   }
   const tr = cleanTr(merged, g);
-  if (cur && JSON.stringify(cleanGuide(json(cur.guide))) === JSON.stringify(g) && JSON.stringify(cleanTr(old, g)) === JSON.stringify(tr)) return { fixes: [] };
+  if (was && JSON.stringify(was) === JSON.stringify(g) && JSON.stringify(cleanTr(old, g)) === JSON.stringify(tr)) return { fixes: [] };
   await db.query(
     `INSERT INTO product_guides (product_id, guide, tr, updated_by, updated_at) VALUES ($1, $2, $3, $4, now())
      ON CONFLICT (product_id) DO UPDATE SET guide = EXCLUDED.guide, tr = EXCLUDED.tr, updated_by = EXCLUDED.updated_by, updated_at = now()`,
     [productId, JSON.stringify(g), JSON.stringify(tr), userId],
   );
+  // the pictures this save took off their answers
+  const kept = new Set(guidePics(g));
+  const gone = was ? guidePics(was).filter((x) => !kept.has(x)) : [];
+  if (gone.length) await db.query(`DELETE FROM product_photos WHERE product_id = $1 AND kind = 'guide' AND id = ANY($2)`, [productId, gone]);
   return { fixes };
 }
 /** A translation line the team corrected (the AI's words, the team's words). */

@@ -14,8 +14,8 @@
 // - catalog.translateGuide: after a save, Pilot AI translates the lines still without a translation into the other
 //   reading languages (French, Arabic, English); the team's corrections stay. Without the AI they wait for the next save.
 import { z } from 'zod';
-import { iso, num } from '../db';
-import { Ctx, forbidden, hasRole, notFound, proc, withActionLock } from '../rpc';
+import { Db, iso, num } from '../db';
+import { bad, Ctx, forbidden, hasRole, notFound, proc, withActionLock } from '../rpc';
 import { getSetting } from '../settings';
 import { darijaGuide } from './darijabook';
 import { aiKeyed, dellalSettings, pilotOn } from './dellal';
@@ -27,17 +27,19 @@ import {
   fitFilled,
   GUIDE_LANGS,
   GUIDE_LIMITS as L,
+  GUIDE_ROOM,
   guideEmpty,
   GuideFit,
   GuideInput,
   GuideLang,
+  guidePics,
   guideSources,
   guideToFill,
   GuideTr,
   ProductGuide,
   READ_LANGS,
-  ReadLang,
   readGuide,
+  ReadLang,
   saveGuide,
   sizeValues,
   TO_FILL,
@@ -46,6 +48,7 @@ import {
   trMissing,
 } from './guide';
 import { agencyOf } from './agencyscope';
+import { addGuidePic, photoStore, PicInput, picSrc, purgePhotos } from './hdphotos';
 import { assignedProductIds, requireAssignedProducts } from './productscope';
 import { lahjaFor, lahjaLines, lessonsFromGuide } from './lahja';
 import { vocabBlock, vocabFor } from './vocab';
@@ -379,9 +382,11 @@ async function translateLines(ctx: Ctx, lines: string[], from: GuideLang, to: Re
   let error: string | null = null;
   const parts = await Promise.all(
     batches(lines).map(async (part) => {
+      // a line too long for one answer (it is alone in its batch) stays in the guide's own language: not asked, save after save
+      if (part.length === 1 && part[0].length > GUIDE_ROOM.auto) return [null];
       const messages = [{ role: 'user' as const, content: JSON.stringify({ lines: part }) }];
-      // Arabic takes more room than French: enough for the longest
-      const max_tokens = Math.min(8000, 400 + Math.ceil(part.join('').length * 1.5));
+      // Arabic takes more room than French: enough for the longest line a batch may hold
+      const max_tokens = Math.min(16_000, 400 + Math.ceil(part.join('').length * 1.5));
       try {
         const res: any = inPage
           ? await inPage({ model: GUIDE_MODEL, system, messages, tools: [], max_tokens, runTool: async () => ({ error: 'Pas d’outil ici' }) })
@@ -448,6 +453,8 @@ export const guideProcs = {
       photo: (p.photo as string | null) ?? null,
       guide: g?.guide ?? null,
       upsell: g?.upsell ?? [],
+      /** the pictures of its answers: id → a small copy (the whole one: catalog.guidePhoto) */
+      pics: g?.pics ?? {},
       tr: other ? (g!.tr[lang!] ?? {}) : null,
       trMissing: other ? (trMissing(g!.guide, g!.tr)[lang!]?.length ?? 0) : 0,
       updatedAt: g?.updatedAt ?? null,
@@ -484,6 +491,8 @@ export const guideProcs = {
       options: (j(p.options) as any[]).map((o) => ({ name: String(o.name), values: (o.values ?? []).map(String) })),
       /** the guide's translations, for the editor's language tabs */
       guideTr: (await readGuide(ctx.db, id))?.tr ?? {},
+      /** can an answer get pictures here (a server whose photo storage is not set keeps none) */
+      pictures: (await photoStore(ctx)).kind !== 'off',
     };
   }),
 
@@ -529,6 +538,8 @@ export const guideProcs = {
     if (!p) throw notFound('Produit introuvable');
     const g = checkGuide(i.guide);
     const { fixes } = await ctx.db.tx((tx) => saveGuide(tx, i.id, g, ctx.session.profile.id, allowed, i.tr));
+    // the pictures this save took off their answers leave the bucket
+    await purgePhotos(ctx).catch(() => undefined);
     // an Arabic translation corrected by the team: the words it changed teach Dellal (lahja.ts, then the vocabulary book)
     await lessonsFromGuide(ctx, fixes);
     const saved = await readGuide(ctx.db, i.id);
@@ -536,12 +547,47 @@ export const guideProcs = {
       id: i.id,
       guide: saved?.guide ?? null,
       upsell: saved?.upsell ?? [],
+      pics: saved?.pics ?? {},
       tr: saved?.tr ?? {},
       /** lines to translate now (the client asks catalog.translateGuide) */
       trMissing: saved ? counts(trMissing(saved.guide, saved.tr)) : {},
       updatedAt: saved?.updatedAt ?? null,
       updatedBy: saved?.updatedBy ?? null,
     };
+  }),
+
+  /**
+   * A picture for one answer of the saved guide (a question's, a hesitation's): Dellal sends it to the customer when it
+   * gives that answer, the agents see it in the guide. The answer is the one of that question, as saved: the page
+   * saves the guide first, then sends its new pictures one by one.
+   */
+  'catalog.guidePhotoAdd': proc([...WRITERS], z.object({ id, part: z.enum(['faq', 'doubts']), q: z.string().trim().min(1).max(GUIDE_ROOM.total) }).merge(PicInput), async (ctx, i) => {
+    await writerOf(ctx, i.id);
+    const place = async (db: Db, lock = '') => {
+      const cur = (await db.query(`SELECT guide FROM product_guides WHERE product_id = $1${lock}`, [i.id]))[0];
+      const g = cur ? cleanGuide(typeof cur.guide === 'string' ? JSON.parse(cur.guide) : cur.guide) : null;
+      const k = g ? g[i.part].findIndex((p) => p.q.trim().toLowerCase() === i.q.toLowerCase()) : -1;
+      if (!g || k < 0) throw bad('Cette question n’est pas dans le guide enregistré : enregistrez d’abord le guide, puis ajoutez l’image.');
+      if ((g[i.part][k].photos?.length ?? 0) >= GUIDE_ROOM.perAnswer) throw bad(`${GUIDE_ROOM.perAnswer} images au plus pour une réponse (ce qu’un message peut porter).`);
+      if (guidePics(g).length >= GUIDE_ROOM.pictures) throw bad(`${GUIDE_ROOM.pictures} images au plus dans un guide.`);
+      return { g, k };
+    };
+    // refused before the picture leaves for the bucket; checked again when it is written on its answer
+    await place(ctx.db);
+    const pic = await addGuidePic(ctx, i.id, i, async (tx, photoId) => {
+      const { g, k } = await place(tx, ' FOR UPDATE');
+      const pairs = g[i.part].map((p, n) => (n === k ? { ...p, photos: [...(p.photos ?? []), photoId] } : p));
+      await tx.query('UPDATE product_guides SET guide = $2, updated_by = $3, updated_at = now() WHERE product_id = $1', [i.id, JSON.stringify({ ...g, [i.part]: pairs }), ctx.session.profile.id]);
+    });
+    return { id: pic.id, thumb: pic.thumb, part: i.part, q: i.q };
+  }),
+
+  /** One picture of a guide's answer, whole (the reader opens it), for whoever may read that product's guide. */
+  'catalog.guidePhoto': proc(['confirmation', 'suivi', 'depot'], z.object({ id }), async (ctx, { id: photoId }) => {
+    const r = (await ctx.db.query(`SELECT product_id, store, key, data, thumb, w, h FROM product_photos WHERE id = $1 AND kind = 'guide'`, [photoId]))[0];
+    if (!r) throw notFound('Image introuvable');
+    await requireAssignedProducts(ctx, [num(r.product_id)]);
+    return { id: photoId, src: await picSrc(ctx, r), w: num(r.w), h: num(r.h) };
   }),
 
   /** After a save (the tab, the product form): Pilot AI translates the lines still without a translation. */

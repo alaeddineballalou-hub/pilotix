@@ -6,24 +6,45 @@
 // each product of the order opens it beside the order, without hiding it) and in Produits & stock, in the app's language:
 // Pilot AI translates each line after a save, the team corrects the translations in the editor's language tabs, and the
 // original words stay one click away. Dellal and CM AI read the original guide.
-import { ReactNode, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { ReactNode, TextareaHTMLAttributes, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
 import { da, dateOnly, n } from '../../lib/format';
 import { useRpc } from '../../lib/query';
-import { useScope } from '../../lib/seller';
+import { Seller, useScope } from '../../lib/seller';
 import { useIsPhone } from '../../lib/useMedia';
 import { Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { Sheet } from '../../ui/Sheet';
 import { toast } from '../../ui/toast';
+import { hdPhoto } from '../messages/photo';
 import './guide.css';
 
 export interface GuidePair {
   q: string;
   a: string;
+  /** the pictures that go with this answer (their ids): Dellal sends them to the customer when it gives it */
+  photos?: number[];
 }
+/**
+ * A picture of an answer, in the form: one already saved (id), or one just picked, waiting for the guide's save (send:
+ * what leaves then). thumb: its small copy for the screen.
+ */
+export interface GuidePic {
+  key: string;
+  thumb: string;
+  id?: number;
+  send?: { data: string; w: number; h: number; thumb: string; mini: string };
+}
+/** an answer in the form: its words and its pictures */
+export interface GuideFormPair {
+  q: string;
+  a: string;
+  pics: GuidePic[];
+}
+/** the pictures of a guide's answers: id → a small copy */
+export type GuidePics = Record<number, string>;
 /** one size (a value of the product's « Taille » option) with the age and the weight it fits */
 export interface GuideSize {
   size: string;
@@ -66,8 +87,8 @@ export interface Guide {
 export interface GuideForm {
   brief: string;
   strengths: string;
-  faq: GuidePair[];
-  doubts: GuidePair[];
+  faq: GuideFormPair[];
+  doubts: GuideFormPair[];
   upsell: string;
   upsellIds: number[];
   never: string;
@@ -82,8 +103,14 @@ export interface GuideForm {
 export const TO_FILL = '[À compléter]';
 const TO_FILL_RE = /\[\s*(?:à|a)\s+compl[ée]ter\s*\]/i;
 export const toFill = (s: string) => TO_FILL_RE.test(s) || !s.trim();
-/** The guide's sizes (the same as the server's, modules/guide.ts). */
-export const GUIDE_MAX = { brief: 400, strengths: 12, strength: 200, faq: 20, question: 200, answer: 600, doubts: 12, doubt: 160, upsell: 800, upsellIds: 10, never: 10, neverLine: 200, sizes: 40, sizeText: 60, fitText: 120, total: 15_000 };
+/**
+ * The guide's room (the same as the server's, modules/guide.ts): every part takes what the team writes — no size for a
+ * line, no count of lines. One ceiling only, for the whole guide (`total`): Dellal reads all of it each time it opens it.
+ * Nothing is counted on screen while a guide is of an ordinary length. `long`: past it the editor says that a longer
+ * guide costs more at each answer (nothing is blocked); `near`: past it, it shows how far the ceiling is. `perAnswer`:
+ * the pictures of one answer (what one message carries); `pictures`: of the whole guide.
+ */
+export const GUIDE_MAX = { lines: 500, upsellIds: 10, sizes: 40, long: 15_000, near: 40_000, total: 50_000, perAnswer: 6, pictures: 60 };
 /** The option that holds the sizes (the same as the server's): its values get an age and a weight. */
 const SIZE_OPTION = /taille|size|pointure|mesure|âge|\bage\b|مقاس|القياس|العمر/i;
 const COLOR_OPTION = /couleur|color|colour|لون|الألوان/i;
@@ -103,12 +130,13 @@ const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLow
 export const renameGuideSize = (f: GuideForm, from: string, to: string): GuideForm =>
   f.sizes.some((x) => same(x.size, from)) ? { ...f, sizes: f.sizes.map((x) => (same(x.size, from) ? { ...x, size: to } : x)) } : f;
 const copyTr = (tr: GuideTr | null | undefined): GuideTr => Object.fromEntries(Object.entries(tr ?? {}).map(([l, m]) => [l, { ...m }]));
-/** lang: the language of a new guide (the writer's) */
-export const guideToForm = (g: Guide | null | undefined, tr?: GuideTr | null, lang: GuideLang = 'fr'): GuideForm => ({
+const formPair = (p: GuidePair, pics: GuidePics): GuideFormPair => ({ q: p.q, a: p.a, pics: (p.photos ?? []).filter((x) => pics[x]).map((x) => ({ key: `s${x}`, id: x, thumb: pics[x] })) });
+/** lang: the language of a new guide (the writer's); pics: the small copies of its answers' pictures */
+export const guideToForm = (g: Guide | null | undefined, tr?: GuideTr | null, lang: GuideLang = 'fr', pics: GuidePics = {}): GuideForm => ({
   brief: g?.brief ?? '',
   strengths: (g?.strengths ?? []).join('\n'),
-  faq: (g?.faq ?? []).map((p) => ({ ...p })),
-  doubts: (g?.doubts ?? []).map((p) => ({ ...p })),
+  faq: (g?.faq ?? []).map((p) => formPair(p, pics)),
+  doubts: (g?.doubts ?? []).map((p) => formPair(p, pics)),
   upsell: g?.upsell ?? '',
   upsellIds: [...(g?.upsellIds ?? [])],
   never: (g?.never ?? []).join('\n'),
@@ -118,15 +146,17 @@ export const guideToForm = (g: Guide | null | undefined, tr?: GuideTr | null, la
   tr: copyTr(tr),
   trBase: copyTr(tr),
 });
+const savedPair = (p: GuideFormPair): GuidePair => ({ q: p.q.trim(), a: p.a.trim(), photos: p.pics.flatMap((x) => (x.id ? [x.id] : [])) });
 /**
  * sizes: the product's sizes now (a size it no longer has leaves the guide; a product with sizes has no small size
- * guide, one without has no size lines); undefined: keep them all
+ * guide, one without has no size lines); undefined: keep them all. An answer's pictures: the saved ones it still has
+ * (always said, even none: the save removes the ones taken off); the ones just picked leave after it (sendGuidePics).
  */
 export const formToGuide = (f: GuideForm, sizes?: string[]): Guide => ({
   brief: f.brief.trim(),
   strengths: lines(f.strengths),
-  faq: f.faq.map((p) => ({ q: p.q.trim(), a: p.a.trim() })).filter((p) => p.q),
-  doubts: f.doubts.map((p) => ({ q: p.q.trim(), a: p.a.trim() })).filter((p) => p.q),
+  faq: f.faq.map(savedPair).filter((p) => p.q),
+  doubts: f.doubts.map(savedPair).filter((p) => p.q),
   upsell: f.upsell.trim(),
   upsellIds: [...new Set(f.upsellIds)].slice(0, GUIDE_MAX.upsellIds),
   never: lines(f.never),
@@ -172,8 +202,8 @@ export function inLang(g: Guide, tr: Record<string, string>): Guide {
     ...g,
     brief: t(g.brief),
     strengths: g.strengths.map(t),
-    faq: g.faq.map((p) => ({ q: t(p.q), a: t(p.a) })),
-    doubts: g.doubts.map((p) => ({ q: t(p.q), a: t(p.a) })),
+    faq: g.faq.map((p) => ({ ...p, q: t(p.q), a: t(p.a) })),
+    doubts: g.doubts.map((p) => ({ ...p, q: t(p.q), a: t(p.a) })),
     upsell: t(g.upsell),
     never: g.never.map(t),
     sizes: g.sizes.map((x) => ({ ...x, age: t(x.age), weight: t(x.weight) })),
@@ -191,28 +221,221 @@ const sizeOf = (g: Guide) =>
   g.fit.measures.length;
 export const guideIsEmpty = (g: Guide) => !g.brief && !g.strengths.length && !g.faq.length && !g.doubts.length && !g.upsell && !g.upsellIds.length && !g.never.length && !g.sizes.length && !fitFilled(g.fit);
 
+/** The pictures picked in the form and not sent yet, each with the answer (its part, its question) it goes with. */
+export const guideWaiting = (f: GuideForm) =>
+  (['faq', 'doubts'] as const).flatMap((part) => f[part].flatMap((p) => (p.q.trim() ? p.pics.flatMap((x) => (x.send ? [{ part, q: p.q.trim(), send: x.send }] : [])) : [])));
+
+/**
+ * Once the guide is saved: its new pictures leave one by one, each for its answer (the server finds it by its
+ * question). The first refusal stops the rest; returns how many did not leave and why.
+ */
+export async function sendGuidePics(productId: number, f: GuideForm, seller: Seller | null | undefined, onStep?: (done: number, total: number) => void): Promise<{ failed: number; error: string | null }> {
+  const todo = guideWaiting(f);
+  let done = 0;
+  for (const x of todo) {
+    try {
+      await rpc('catalog.guidePhotoAdd', { id: productId, part: x.part, q: x.q, ...x.send }, seller);
+    } catch (e) {
+      return { failed: todo.length - done, error: (e as Error)?.message || null };
+    }
+    onStep?.(++done, todo.length);
+  }
+  return { failed: 0, error: null };
+}
+
 /** What would stop the save (the server says the same), in words, or null. */
 export function guideProblem(g: Guide, t: (k: string, o?: any) => string): string | null {
   const M = GUIDE_MAX;
-  if (g.strengths.length > M.strengths) return t('produits.guide.ed.tooMany', { part: t('produits.guide.strengths'), max: M.strengths });
-  if (g.never.length > M.never) return t('produits.guide.ed.tooMany', { part: t('produits.guide.never'), max: M.never });
-  if (g.strengths.some((x) => x.length > M.strength)) return t('produits.guide.ed.tooLong', { part: t('produits.guide.strengths'), max: M.strength });
-  if (g.never.some((x) => x.length > M.neverLine)) return t('produits.guide.ed.tooLong', { part: t('produits.guide.never'), max: M.neverLine });
+  for (const k of ['strengths', 'never', 'faq', 'doubts'] as const) if (g[k].length > M.lines) return t('produits.guide.ed.tooMany', { part: t(`produits.guide.${k}`), max: M.lines });
   const total = sizeOf(g);
   if (total > M.total) return t('produits.guide.ed.tooBig', { n: n(total), max: n(M.total) });
   return null;
 }
 
+// ---------------------------------------------------------------- an answer's pictures
+/** the whole pictures already opened: id → its address (a link good for ten minutes: kept nine) */
+const WHOLE = new Map<number, { src: string; at: number }>();
+const wholeOf = (id: number) => {
+  const x = WHOLE.get(id);
+  return x && Date.now() - x.at < 9 * 60_000 ? x.src : null;
+};
+
+/**
+ * A picture opened big, over everything (the guide beside an order, the product form): its small copy first, then the
+ * whole picture; the others of the same answer one arrow away. A tap on it (or the magnifier) brings it closer, to read
+ * a size table on a phone; it then moves under the finger. Closes with Escape, the × or a tap outside.
+ */
+function PicViewer({ items, start, onClose }: { items: GuidePic[]; start: number; onClose: () => void }) {
+  const { t } = useTranslation();
+  const seller = useScope();
+  const [at, setAt] = useState(Math.min(Math.max(0, start), items.length - 1));
+  const [state, setState] = useState<{ key: string; src: string | null; error: boolean }>({ key: '', src: null, error: false });
+  const [turn, setTurn] = useState(0);
+  // closer: `fit` is its width as it fits the screen, `room` whether it has more to show than that
+  const [big, setBig] = useState(false);
+  const [fit, setFit] = useState<{ w: number; full: number } | null>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const shut = useRef<HTMLButtonElement>(null);
+  // (the page under it may draw again while it is open: its keys and its focus do not start over for that)
+  const close = useRef(onClose);
+  close.current = onClose;
+  const it = items[at];
+  const many = items.length > 1;
+  const go = useCallback((d: number) => setAt((x) => (x + d + items.length) % items.length), [items.length]);
+  // the whole picture: the one just picked is here; a saved one is asked for (once)
+  useEffect(() => {
+    setBig(false);
+    setFit(null);
+    if (!it) return;
+    const local = it.send ? `data:image/jpeg;base64,${it.send.data}` : it.id ? wholeOf(it.id) : it.thumb;
+    setState({ key: it.key, src: local, error: false });
+    if (local || !it.id) return;
+    let alive = true;
+    const id = it.id;
+    rpc('catalog.guidePhoto', { id }, seller)
+      .then((r) => {
+        WHOLE.set(id, { src: r.src, at: Date.now() });
+        if (alive) setState({ key: it.key, src: r.src, error: false });
+      })
+      .catch(() => alive && setState({ key: it.key, src: null, error: true }));
+    return () => {
+      alive = false;
+    };
+  }, [it?.key, turn]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Escape and the arrows are this picture's while it is open (the form under it keeps its own Escape for later)
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' && !(many && (e.key === 'ArrowLeft' || e.key === 'ArrowRight'))) return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      if (e.key === 'Escape') return close.current();
+      const rtl = document.documentElement.dir === 'rtl';
+      go((e.key === 'ArrowRight') !== rtl ? 1 : -1);
+    };
+    window.addEventListener('keydown', k, true);
+    const prev = document.activeElement as HTMLElement | null;
+    shut.current?.focus();
+    document.documentElement.classList.add('gd-zoom');
+    return () => {
+      window.removeEventListener('keydown', k, true);
+      document.documentElement.classList.remove('gd-zoom');
+      prev?.focus?.();
+    };
+  }, [go, many]);
+  // brought closer: its middle stays in the middle
+  useLayoutEffect(() => {
+    const el = stage.current;
+    if (!el || !big) return;
+    el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2 * (document.documentElement.dir === 'rtl' ? -1 : 1);
+    el.scrollTop = (el.scrollHeight - el.clientHeight) / 2;
+  }, [big]);
+  if (!it) return null;
+  const ready = state.key === it.key ? state : { key: it.key, src: null, error: false };
+  const room = !!ready.src && !!fit && fit.full > fit.w * 1.15;
+  const closer = big && room;
+  return createPortal(
+    <div className={`gd-zoom-wrap ${many ? 'is-many' : ''}`} role="dialog" aria-modal="true" aria-label={t('produits.guide.pics.title')} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="gd-zoom-bar">
+        {many && (
+          <span className="gd-zoom-n ltr" aria-live="polite">
+            {at + 1} / {items.length}
+          </span>
+        )}
+        {room && (
+          <button type="button" className="gd-zoom-b" aria-pressed={closer} aria-label={t(closer ? 'produits.guide.pics.zoomOut' : 'produits.guide.pics.zoomIn')} onClick={() => setBig((x) => !x)}>
+            <Icon name={closer ? 'zoomout' : 'zoomin'} />
+          </button>
+        )}
+        <button ref={shut} type="button" className="gd-zoom-b" aria-label={t('common.close')} onClick={onClose}>
+          <Icon name="x" />
+        </button>
+      </div>
+      <div ref={stage} className={`gd-zoom-stage ${closer ? 'is-big' : ''}`} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+        {ready.error ? (
+          <div className="gd-zoom-msg" role="alert">
+            <p>{t('produits.guide.pics.openFailed')}</p>
+            <button type="button" className="btn" onClick={() => setTurn((x) => x + 1)}>
+              {t('common.retry')}
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* its small copy holds the place (and shows what is coming) until the whole picture is there */}
+            <img
+              key={it.key}
+              className={`gd-zoom-img ${ready.src ? '' : 'is-wait'} ${room ? (closer ? 'is-out' : 'is-in') : ''}`}
+              style={closer ? { inlineSize: Math.min(fit!.full, Math.round(fit!.w * 2.5)) } : undefined}
+              src={ready.src ?? it.thumb}
+              alt=""
+              onLoad={(e) => ready.src && !big && setFit({ w: e.currentTarget.getBoundingClientRect().width, full: e.currentTarget.naturalWidth })}
+              onClick={() => room && setBig((x) => !x)}
+              onError={() => ready.src && it.id && (WHOLE.delete(it.id), setState({ key: it.key, src: null, error: true }))}
+            />
+            {!ready.src && (
+              <span className="gd-zoom-load" role="status">
+                {t('produits.guide.pics.opening')}
+              </span>
+            )}
+          </>
+        )}
+      </div>
+      {many && (
+        <>
+          <button type="button" className="gd-zoom-b gd-zoom-prev" aria-label={t('produits.guide.pics.prev')} onClick={() => go(-1)}>
+            <Icon name="chevl" />
+          </button>
+          <button type="button" className="gd-zoom-b gd-zoom-next" aria-label={t('produits.guide.pics.next')} onClick={() => go(1)}>
+            <Icon name="chevr" />
+          </button>
+        </>
+      )}
+    </div>,
+    document.body,
+  );
+}
+
+/**
+ * The pictures of one answer, small: each opens big. onRemove: the writer takes one off (the editor); children: what
+ * follows them on the same line (the editor's « Préparation de l'image… »).
+ */
+function PicRow({ items, onRemove, children }: { items: GuidePic[]; onRemove?: (key: string) => void; children?: ReactNode }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState<number | null>(null);
+  if (!items.length && !children) return null;
+  return (
+    <div className="gd-pics">
+      {items.map((x, k) => (
+        <span key={x.key} className={`gd-pic ${x.send ? 'is-new' : ''}`}>
+          <button type="button" className="gd-pic-b" aria-label={t('produits.guide.pics.open', { n: k + 1 })} onClick={() => setOpen(k)}>
+            <img src={x.thumb} alt="" loading="lazy" />
+          </button>
+          {onRemove && (
+            <button type="button" className="gd-pic-x" aria-label={t('produits.guide.pics.remove', { n: k + 1 })} onClick={() => onRemove(x.key)}>
+              <Icon name="x" />
+            </button>
+          )}
+        </span>
+      ))}
+      {children}
+      {open !== null && items[open] && <PicViewer items={items} start={open} onClose={() => setOpen(null)} />}
+    </div>
+  );
+}
+/** An answer's saved pictures, as the reader gets them (ids and their small copies). */
+const picsOf = (ids: number[] | undefined, pics: GuidePics): GuidePic[] => (ids ?? []).filter((x) => pics[x]).map((x) => ({ key: `s${x}`, id: x, thumb: pics[x] }));
+
 // ---------------------------------------------------------------- reading (agents, during the call)
 /**
  * The guide's parts, for reading fast during a call: the brief, the size guide, then each part with what it holds. tr:
  * its lines in the reader's language (null: written in it); the original words are one click away. onTranslate: a
- * writer's « Traduire maintenant » when nothing is translated yet.
+ * writer's « Traduire maintenant » when nothing is translated yet. pics: the small copies of its answers' pictures (the
+ * ones Dellal sends with that answer): each opens big.
  */
 export function GuideView({
   guide: original,
   id,
   upsell = [],
+  pics = {},
   tr = null,
   trMissing = 0,
   onTranslate,
@@ -221,6 +444,7 @@ export function GuideView({
   guide: Guide;
   id: string;
   upsell?: UpsellProduct[];
+  pics?: GuidePics;
   tr?: Record<string, string> | null;
   trMissing?: number;
   onTranslate?: () => void;
@@ -352,6 +576,11 @@ export function GuideView({
               <div key={k} className="gd-pair">
                 <dt dir="auto">{p.q}</dt>
                 <dd className={toFill(p.a) ? 'gd-fill' : ''} dir="auto">{toFill(p.a) ? t('produits.guide.toFill') : p.a}</dd>
+                {!!p.photos?.length && (
+                  <dd className="gd-pics-dd">
+                    <PicRow items={picsOf(p.photos, pics)} />
+                  </dd>
+                )}
               </div>
             ))}
           </dl>
@@ -367,6 +596,11 @@ export function GuideView({
                   <span className="gd-says">{t('produits.guide.says')}</span> <bdi>{p.q}</bdi>
                 </dt>
                 <dd className={toFill(p.a) ? 'gd-fill' : ''} dir="auto">{toFill(p.a) ? t('produits.guide.toFill') : p.a}</dd>
+                {!!p.photos?.length && (
+                  <dd className="gd-pics-dd">
+                    <PicRow items={picsOf(p.photos, pics)} />
+                  </dd>
+                )}
               </div>
             ))}
           </dl>
@@ -448,7 +682,7 @@ function GuidePanel({ productId, onClose }: { productId: number; onClose: () => 
   const q = useRpc('catalog.guide', { id: productId, lang: readLang(i18n.language) }, { staleTime: 60_000 });
   const d = q.data;
   const meta = d?.updatedAt ? (d.updatedBy ? t('produits.guide.updated', { date: dateOnly(d.updatedAt), name: d.updatedBy }) : t('produits.guide.updatedNoName', { date: dateOnly(d.updatedAt) })) : null;
-  const body = q.error ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : !d ? <Loading /> : d.guide ? <GuideView guide={d.guide} id={id} upsell={d.upsell} tr={d.tr} trMissing={d.trMissing} /> : <Empty>{t('produits.guide.empty')}</Empty>;
+  const body = q.error ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : !d ? <Loading /> : d.guide ? <GuideView guide={d.guide} id={id} upsell={d.upsell} pics={d.pics} tr={d.tr} trMissing={d.trMissing} /> : <Empty>{t('produits.guide.empty')}</Empty>;
   if (phone)
     return (
       <Sheet title={d?.name ?? t('produits.guide.title')} sub={[t('produits.guide.title'), meta].filter(Boolean).join(' · ')} onClose={onClose} tall className="gd-sheet">
@@ -532,6 +766,52 @@ export interface DraftFacts {
   /** Produits liés: the draft's Vente en plus picks them */
   linkedIds?: number[];
 }
+/** Does the browser give a text box the height of its text by itself (CSS field-sizing, guide.css)? */
+const SELF_SIZED = typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('field-sizing', 'content');
+/** What a field scrolls in (the form, the sheet, the page). */
+const scrollerOf = (el: HTMLElement): HTMLElement | null => {
+  for (let p = el.parentElement; p; p = p.parentElement) if (/auto|scroll/.test(getComputedStyle(p).overflowY)) return p;
+  return document.scrollingElement as HTMLElement | null;
+};
+/**
+ * A text box as tall as what is written in it (up to most of the screen, guide.css; then it scrolls): a long answer is
+ * read whole, not through a two-line window. Most browsers do it by themselves; in the others its height is measured
+ * here, when its text or its width changes (and when its tab opens: a closed tab has no size).
+ */
+function Area(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const fit = useCallback(() => {
+    const el = ref.current;
+    if (!el || !el.offsetParent) return;
+    const sc = scrollerOf(el);
+    const top = sc?.scrollTop ?? 0;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+    if (sc && sc.scrollTop !== top) sc.scrollTop = top; // the form stays where it was
+  }, []);
+  useLayoutEffect(() => {
+    if (!SELF_SIZED) fit();
+  }, [fit, props.value]);
+  useEffect(() => {
+    const el = ref.current;
+    if (SELF_SIZED || !el || typeof ResizeObserver === 'undefined') return;
+    let width = -1;
+    let frame = 0;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth === width) return; // its height only (set here): nothing to measure again
+      width = el.clientWidth;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(fit);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [fit]);
+  return <textarea ref={ref} {...props} />;
+}
+
 const LANGS: GuideLang[] = ['fr', 'ar', 'dz', 'en'];
 /** The questions every guide can pick (in this order), and the answers Pilotix knows for them. */
 const FIXED = ['pay', 'delivery', 'delay', 'colors', 'size', 'age', 'weight', 'measures', 'warranty', 'exchange', 'quality', 'assembled', 'use'] as const;
@@ -539,9 +819,24 @@ type Fixed = (typeof FIXED)[number];
 
 /**
  * The guide's parts as a form, with « Écrire avec l'IA » (a first draft to correct; nothing is saved before
- * Enregistrer). products: what Vente en plus can pick (this shop's, the writer's ones).
+ * Enregistrer). products: what Vente en plus can pick (this shop's, the writer's ones). An answer (a question's, a
+ * hesitation's) takes pictures: Dellal sends them to the customer with that answer; the ones just picked wait here and
+ * leave once the guide is saved (sendGuidePics). pictures: false where no picture can be kept (a server whose photo
+ * storage is not set): the ones already there stay, none is added.
  */
-export function GuideEditor({ value, onChange, facts, products }: { value: GuideForm; onChange: (v: GuideForm) => void; facts: () => DraftFacts; products: { id: number; name: string }[] }) {
+export function GuideEditor({
+  value,
+  onChange,
+  facts,
+  products,
+  pictures = true,
+}: {
+  value: GuideForm;
+  onChange: (v: GuideForm) => void;
+  facts: () => DraftFacts;
+  products: { id: number; name: string }[];
+  pictures?: boolean;
+}) {
   const { t } = useTranslation();
   const seller = useScope();
   const lang = value.lang;
@@ -563,7 +858,10 @@ export function GuideEditor({ value, onChange, facts, products }: { value: Guide
     try {
       const r = await rpc('catalog.guideDraft', { ...f, lang }, seller);
       setUndo({ before: value, by: r.by });
-      onChange({ ...guideToForm(r.guide), tr: value.tr, trBase: value.trBase });
+      // an answer the draft kept (the same question) keeps its pictures
+      const drafted = guideToForm(r.guide);
+      const kept = (k: 'faq' | 'doubts') => drafted[k].map((p) => ({ ...p, pics: value[k].find((o) => same(o.q, p.q))?.pics ?? [] }));
+      onChange({ ...drafted, faq: kept('faq'), doubts: kept('doubts'), tr: value.tr, trBase: value.trBase });
       if (r.guide.upsell) setPhrase(true);
     } catch (e) {
       toast((e as Error).message, 'bad');
@@ -592,7 +890,44 @@ export function GuideEditor({ value, onChange, facts, products }: { value: Guide
   const has = (q: string) => value.faq.some((p) => same(p.q, q));
   // « Quelle taille choisir ? » for a product with sizes, « Quelles sont ses mesures ? » for one with one size
   const fixed = FIXED.filter((k) => (k !== 'size' || sizes.length > 0) && (k !== 'measures' || !sizes.length) && !has(t(`produits.guide.qa.${k}`)));
-  const pick = (k: Fixed) => value.faq.length < GUIDE_MAX.faq && set('faq', [...value.faq, { q: t(`produits.guide.qa.${k}`), a: known[k] ?? '' }]);
+  const pick = (k: Fixed) => value.faq.length < GUIDE_MAX.lines && set('faq', [...value.faq, { q: t(`produits.guide.qa.${k}`), a: known[k] ?? '', pics: [] }]);
+  // an answer's pictures: picked for one answer, made small enough here (the phone's file never leaves as it is), then
+  // kept in the form until the save. What finishes later writes on the form as it is then, never on an older copy.
+  const latest = useRef(value);
+  latest.current = value;
+  const file = useRef<HTMLInputElement>(null);
+  const fileFor = useRef<{ k: 'faq' | 'doubts'; i: number } | null>(null);
+  const [preparing, setPreparing] = useState<string | null>(null);
+  const picCount = (f: GuideForm) => [...f.faq, ...f.doubts].reduce((a, p) => a + p.pics.length, 0);
+  const pickPics = (k: 'faq' | 'doubts', i: number) => {
+    // why not, said when it is asked (the button stays the same on every answer)
+    if (!value[k][i]?.q.trim()) return toast(t('produits.guide.pics.needQ'), 'bad');
+    if (value[k][i].pics.length >= GUIDE_MAX.perAnswer) return toast(t('produits.guide.pics.full', { max: GUIDE_MAX.perAnswer }), 'bad');
+    if (picCount(value) >= GUIDE_MAX.pictures) return toast(t('produits.guide.pics.fullGuide', { max: GUIDE_MAX.pictures }), 'bad');
+    fileFor.current = { k, i };
+    file.current?.click();
+  };
+  const addPics = async (files: File[]) => {
+    const to = fileFor.current;
+    if (!to || !files.length) return;
+    const room = Math.max(0, Math.min(GUIDE_MAX.perAnswer - (latest.current[to.k][to.i]?.pics.length ?? 0), GUIDE_MAX.pictures - picCount(latest.current)));
+    if (files.length > room) toast(t('produits.guide.pics.full', { max: GUIDE_MAX.perAnswer }), 'bad');
+    setPreparing(`${to.k}:${to.i}`);
+    const got: GuidePic[] = [];
+    for (const f of files.slice(0, room)) {
+      try {
+        const p = await hdPhoto(f);
+        got.push({ key: `w${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`, thumb: p.mini, send: { data: p.data, w: p.w, h: p.h, thumb: p.thumb, mini: p.mini } });
+      } catch (e) {
+        const why = (e as Error)?.message;
+        toast(why === 'not_image' ? t('produits.hd.notImage') : why === 'too_big' ? t('produits.hd.tooBig') : t('produits.guide.pics.failed'), 'bad');
+      }
+    }
+    setPreparing(null);
+    if (!got.length) return;
+    const now = latest.current;
+    onChange({ ...now, [to.k]: now[to.k].map((x, j) => (j === to.i ? { ...x, pics: [...x.pics, ...got] } : x)) });
+  };
   // Vente en plus: products picked (not this one), the chosen ones first
   const others = products.filter((p) => p.id !== f.productId);
   const chosen = value.upsellIds.map((x) => others.find((p) => p.id === x)).filter((p): p is { id: number; name: string } => !!p);
@@ -606,9 +941,8 @@ export function GuideEditor({ value, onChange, facts, products }: { value: Guide
 
   const pairs = (k: 'faq' | 'doubts') => {
     const list = value[k];
-    const max = k === 'faq' ? GUIDE_MAX.faq : GUIDE_MAX.doubts;
-    const qMax = k === 'faq' ? GUIDE_MAX.question : GUIDE_MAX.doubt;
-    const upd = (i: number, p: Partial<GuidePair>) => set(k, list.map((x, j) => (j === i ? { ...x, ...p } : x)));
+    const max = GUIDE_MAX.lines;
+    const upd = (i: number, p: Partial<GuideFormPair>) => set(k, list.map((x, j) => (j === i ? { ...x, ...p } : x)));
     return (
       <div className="gd-pairs">
         {k === 'faq' && fixed.length > 0 && list.length < max && (
@@ -622,23 +956,38 @@ export function GuideEditor({ value, onChange, facts, products }: { value: Guide
           </div>
         )}
         {list.map((p, i) => (
-          <div key={i} className="gd-ed-pair">
+          <div key={i} className={`gd-ed-pair ${pictures ? '' : 'no-img'}`}>
             <label className="gd-ed-q">
               <span className="sr-only">{k === 'faq' ? t('produits.guide.ed.q') : t('produits.guide.ed.dq')}</span>
-              <input dir="auto" value={p.q} maxLength={qMax} placeholder={k === 'faq' ? t('produits.guide.ed.qPh') : t('produits.guide.ed.dqPh')} onChange={(e) => upd(i, { q: e.target.value })} />
+              <Area dir="auto" rows={1} value={p.q} placeholder={k === 'faq' ? t('produits.guide.ed.qPh') : t('produits.guide.ed.dqPh')} onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()} onChange={(e) => upd(i, { q: e.target.value.replace(/\s*\n\s*/g, ' ') })} />
             </label>
-            <label className="gd-ed-a">
-              <span className="sr-only">{k === 'faq' ? t('produits.guide.ed.a') : t('produits.guide.ed.da')}</span>
-              <textarea dir="auto" rows={2} value={p.a} maxLength={GUIDE_MAX.answer} className={p.q.trim() && toFill(p.a) ? 'gd-fill' : ''} placeholder={k === 'faq' ? t('produits.guide.ed.aPh') : t('produits.guide.ed.daPh')} onChange={(e) => upd(i, { a: e.target.value })} />
-            </label>
-            <button type="button" className="icon-btn" aria-label={t('produits.guide.ed.remove')} onClick={() => set(k, list.filter((_, j) => j !== i))}>
+            <div className="gd-ed-a">
+              <label>
+                <span className="sr-only">{k === 'faq' ? t('produits.guide.ed.a') : t('produits.guide.ed.da')}</span>
+                <Area dir="auto" rows={2} value={p.a} className={p.q.trim() && toFill(p.a) ? 'gd-fill' : ''} placeholder={k === 'faq' ? t('produits.guide.ed.aPh') : t('produits.guide.ed.daPh')} onChange={(e) => upd(i, { a: e.target.value })} />
+              </label>
+              {/* the pictures that go with this answer: each opens big, a × takes it off */}
+              <PicRow items={p.pics} onRemove={(key) => upd(i, { pics: p.pics.filter((x) => x.key !== key) })}>
+                {preparing === `${k}:${i}` ? (
+                  <span className="gd-pic-note" role="status">
+                    {t('produits.guide.pics.preparing')}
+                  </span>
+                ) : null}
+              </PicRow>
+            </div>
+            {pictures && (
+              <button type="button" className="icon-btn gd-ed-img" disabled={preparing !== null} title={t('produits.guide.pics.add')} aria-label={p.q.trim() ? t('produits.guide.pics.addFor', { q: p.q.trim() }) : t('produits.guide.pics.add')} onClick={() => pickPics(k, i)}>
+                <Icon name="imageplus" />
+              </button>
+            )}
+            <button type="button" className="icon-btn gd-ed-del" aria-label={t('produits.guide.ed.remove')} onClick={() => set(k, list.filter((_, j) => j !== i))}>
               <Icon name="trash" />
             </button>
           </div>
         ))}
         {list.length < max && (
           <div>
-            <button type="button" className="btn small" onClick={() => set(k, [...list, { q: '', a: '' }])}>
+            <button type="button" className="btn small" onClick={() => set(k, [...list, { q: '', a: '', pics: [] }])}>
               <Icon name="plus" /> {k === 'faq' ? t('produits.guide.ed.addQ') : t('produits.guide.ed.addD')}
             </button>
           </div>
@@ -682,6 +1031,18 @@ export function GuideEditor({ value, onChange, facts, products }: { value: Guide
     );
   return (
     <div className="gd-ed">
+      <input
+        ref={file}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={(e) => {
+          const picked = [...(e.target.files ?? [])];
+          e.target.value = '';
+          void addPics(picked);
+        }}
+      />
       {langTabs}
       <div className="gd-ed-top">
         <p>{t('produits.guide.ed.help')}</p>
@@ -710,7 +1071,7 @@ export function GuideEditor({ value, onChange, facts, products }: { value: Guide
           </button>
         </div>
       )}
-      {part('brief', 'info', t('produits.guide.ed.briefHint'), <textarea dir="auto" rows={2} maxLength={GUIDE_MAX.brief} aria-label={t('produits.guide.brief')} value={value.brief} onChange={(e) => set('brief', e.target.value)} />)}
+      {part('brief', 'info', t('produits.guide.ed.briefHint'), <Area dir="auto" rows={2} aria-label={t('produits.guide.brief')} value={value.brief} onChange={(e) => set('brief', e.target.value)} />)}
       {sizes.length > 0 &&
         part(
           'sizes',
@@ -725,8 +1086,8 @@ export function GuideEditor({ value, onChange, facts, products }: { value: Guide
             {sizes.map((x) => (
               <div key={x} className="gd-ed-size" role="row">
                 <b role="rowheader" dir="auto">{x}</b>
-                <input dir="auto" role="cell" aria-label={`${x} · ${t('produits.guide.ageCol')}`} maxLength={GUIDE_MAX.sizeText} placeholder={t('produits.guide.ed.agePh')} value={sizeRow(x).age} onChange={(e) => setSize(x, { age: e.target.value })} />
-                <input dir="auto" role="cell" aria-label={`${x} · ${t('produits.guide.weightCol')}`} maxLength={GUIDE_MAX.sizeText} placeholder={t('produits.guide.ed.weightPh')} value={sizeRow(x).weight} onChange={(e) => setSize(x, { weight: e.target.value })} />
+                <input dir="auto" role="cell" aria-label={`${x} · ${t('produits.guide.ageCol')}`} placeholder={t('produits.guide.ed.agePh')} value={sizeRow(x).age} onChange={(e) => setSize(x, { age: e.target.value })} />
+                <input dir="auto" role="cell" aria-label={`${x} · ${t('produits.guide.weightCol')}`} placeholder={t('produits.guide.ed.weightPh')} value={sizeRow(x).weight} onChange={(e) => setSize(x, { weight: e.target.value })} />
               </div>
             ))}
           </div>,
@@ -740,14 +1101,14 @@ export function GuideEditor({ value, onChange, facts, products }: { value: Guide
             {(['age', 'weight', 'measures'] as const).map((k) => (
               <label key={k} className="gd-ed-fit-row">
                 <span>{t(`produits.guide.${k}Col`)}</span>
-                <input dir="auto" maxLength={GUIDE_MAX.fitText} placeholder={t(`produits.guide.ed.fit${k[0].toUpperCase()}${k.slice(1)}Ph`)} value={value.fit[k]} onChange={(e) => setFit(k, e.target.value)} />
+                <input dir="auto" placeholder={t(`produits.guide.ed.fit${k[0].toUpperCase()}${k.slice(1)}Ph`)} value={value.fit[k]} onChange={(e) => setFit(k, e.target.value)} />
               </label>
             ))}
           </div>,
         )}
       <div className="pf-two">
-        {part('strengths', 'check', t('produits.guide.ed.strengthsHint'), <textarea dir="auto" rows={5} aria-label={t('produits.guide.strengths')} className={lines(value.strengths).some((x) => toFill(x)) ? 'gd-fill' : ''} value={value.strengths} onChange={(e) => set('strengths', e.target.value)} />)}
-        {part('never', 'ban', t('produits.guide.ed.neverHint'), <textarea dir="auto" rows={5} aria-label={t('produits.guide.never')} value={value.never} onChange={(e) => set('never', e.target.value)} />)}
+        {part('strengths', 'check', t('produits.guide.ed.strengthsHint'), <Area dir="auto" rows={5} aria-label={t('produits.guide.strengths')} className={lines(value.strengths).some((x) => toFill(x)) ? 'gd-fill' : ''} value={value.strengths} onChange={(e) => set('strengths', e.target.value)} />)}
+        {part('never', 'ban', t('produits.guide.ed.neverHint'), <Area dir="auto" rows={5} aria-label={t('produits.guide.never')} value={value.never} onChange={(e) => set('never', e.target.value)} />)}
       </div>
       {part('faq', 'help', t('produits.guide.ed.faqHint'), pairs('faq'))}
       {part('doubts', 'message', t('produits.guide.ed.doubtsHint'), pairs('doubts'))}
@@ -788,7 +1149,7 @@ export function GuideEditor({ value, onChange, facts, products }: { value: Guide
             </>
           )}
           {phrase ? (
-            <textarea dir="auto" rows={2} maxLength={GUIDE_MAX.upsell} aria-label={t('produits.guide.ed.upsellPhrasePh')} placeholder={t('produits.guide.ed.upsellPhrasePh')} value={value.upsell} onChange={(e) => set('upsell', e.target.value)} />
+            <Area dir="auto" rows={2} aria-label={t('produits.guide.ed.upsellPhrasePh')} placeholder={t('produits.guide.ed.upsellPhrasePh')} value={value.upsell} onChange={(e) => set('upsell', e.target.value)} />
           ) : (
             <button type="button" className="linkish gd-phrase" onClick={() => setPhrase(true)}>
               {t('produits.guide.ed.upsellPhrase')}
@@ -796,7 +1157,18 @@ export function GuideEditor({ value, onChange, facts, products }: { value: Guide
           )}
         </div>,
       )}
-      <p className={`gd-size ${size > GUIDE_MAX.total ? 'bad' : ''}`}>{t('produits.guide.ed.size', { n: n(size), max: n(GUIDE_MAX.total) })}</p>
+      {size > GUIDE_MAX.long && (
+        <p className={`gd-size ${size > GUIDE_MAX.total ? 'bad' : ''}`} role="status">
+          <Icon name={size > GUIDE_MAX.total ? 'alert' : 'info'} />
+          <span>
+            {size > GUIDE_MAX.total
+              ? t('produits.guide.ed.tooBig', { n: n(size), max: n(GUIDE_MAX.total) })
+              : size > GUIDE_MAX.near
+                ? t('produits.guide.ed.nearFull', { n: n(size), max: n(GUIDE_MAX.total) })
+                : t('produits.guide.ed.long', { n: n(size) })}
+          </span>
+        </p>
+      )}
     </div>
   );
 }
@@ -841,11 +1213,10 @@ function TrTab({ lang, g, value, onChange }: { lang: ReadLang; g: Guide; value: 
           {x.lines.map((src) => (
             <label key={src} className="gd-tr-line">
               <span dir="auto">{src}</span>
-              <textarea
+              <Area
                 dir={lang === 'ar' ? 'rtl' : 'ltr'}
                 lang={lang}
                 rows={Math.min(5, Math.max(1, Math.ceil(src.length / 64)))}
-                maxLength={1500}
                 value={mem[src] ?? ''}
                 placeholder={t('produits.guide.ed.trPh')}
                 onChange={(e) => set(src, e.target.value)}

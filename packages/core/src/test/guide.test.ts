@@ -63,9 +63,18 @@ test('saved with the product form: cleaned, the same guide keeps its date, an em
   // saving the product without the guide field leaves the guide alone
   await call('catalog.saveProduct', depot, { ...base, price: p.price });
   assert.ok((await call('catalog.product', depot, { id: thermo }) as any).guide);
-  // too long in all (each part within its own size)
-  const long = { ...GUIDE, faq: Array.from({ length: 20 }, (_, k) => ({ q: `Question ${k} ${'q'.repeat(150)}`, a: 'r'.repeat(600) })) };
-  await assert.rejects(call('catalog.saveProduct', depot, { ...base, guide: long }), /trop long/);
+  // each part takes the room the team gives it: long answers, many lines (no size for a line, no count of lines)
+  const roomy = { ...GUIDE, brief: 'b'.repeat(2000), strengths: Array.from({ length: 40 }, (_, k) => `Point ${k} ${'s'.repeat(400)}`), faq: Array.from({ length: 30 }, (_, k) => ({ q: `Question ${k} ${'q'.repeat(300)}`, a: 'r'.repeat(700) })) };
+  await call('catalog.saveProduct', depot, { ...base, guide: roomy });
+  const kept: any = (await call('catalog.product', depot, { id: thermo })).guide;
+  assert.equal(kept.brief.length, 2000);
+  assert.equal(kept.strengths.length, 40);
+  assert.equal(kept.faq.length, 30);
+  assert.equal(kept.faq[29].a.length, 700);
+  // one ceiling only, for the whole guide (what Dellal reads at once)
+  const long = { ...GUIDE, faq: Array.from({ length: 20 }, (_, k) => ({ q: `Question ${k}`, a: 'r'.repeat(2600) })) };
+  await assert.rejects(call('catalog.saveProduct', depot, { ...base, guide: long }), /trop long \(\d+ caractères, 50000 au plus\)/);
+  await call('catalog.saveProduct', depot, { ...base, guide: GUIDE });
   // emptied: removed
   const cleared: any = await call('catalog.saveProduct', depot, { ...base, guide: { brief: '', strengths: [], faq: [], doubts: [], upsell: '', never: [] } });
   assert.equal(cleared.hasGuide, false);
@@ -316,7 +325,8 @@ test('one size only: the small size guide (age, weight, measures), saved, read, 
   const saved: any = await call('catalog.saveGuide', depot, { id: thermo, guide: { fit: { measures: ' 15 × 4 cm ' } } });
   assert.deepEqual(saved.guide.fit, { age: '', weight: '', measures: '15 × 4 cm' });
   assert.equal(((await call('catalog.guides', depot, {})) as any).rows.find((x: any) => x.id === thermo).parts.sizes, 1);
-  await assert.rejects(call('catalog.saveGuide', depot, { id: thermo, guide: { fit: { measures: 'x'.repeat(121) } } }));
+  // no size for a line: a long one is kept whole
+  assert.equal(((await call('catalog.saveGuide', depot, { id: thermo, guide: { fit: { measures: 'x'.repeat(900) } } })) as any).guide.fit.measures.length, 900);
   await call('catalog.saveGuide', depot, { id: thermo, guide: { fit: { age: '', weight: '', measures: '' } } });
   assert.equal((await db.query('SELECT count(*)::int AS n FROM product_guides WHERE product_id = $1', [thermo]))[0].n, 0);
   // the plain draft takes them from the product's own words; a product with sizes gets none
@@ -397,6 +407,13 @@ test('the other languages: Pilot AI translates after a save, the team corrects, 
   assert.deepEqual(Object.keys(s3.trMissing).sort(), ['en', 'fr']);
   // the store's own agents read only
   await assert.rejects(call('catalog.translateGuide', conf, { id: thermo }), /agences de confirmation/);
+  // a line longer than one answer can hold is not asked (it stays in the guide's language); the others are translated
+  const huge = 'Très long. '.repeat(1000);
+  await call('catalog.saveGuide', writer, { id: thermo, guide: { brief: huge, strengths: ['Mesure en 1 seconde'], lang: 'fr' } });
+  const before = asked.length;
+  const t4: any = await call('catalog.translateGuide', writer, { id: thermo });
+  assert.deepEqual([t4.by, t4.missing], ['ai', { ar: 1, en: 1 }]);
+  assert.deepEqual(asked.slice(before).map((x) => x.lines), [['Mesure en 1 seconde'], ['Mesure en 1 seconde']]);
   await call('catalog.saveGuide', depot, { id: thermo, guide: {} });
 });
 

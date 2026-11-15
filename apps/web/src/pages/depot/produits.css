@@ -846,3 +846,11 @@ a.chip.lp-nolp:hover { text-decoration: underline; }
 /* « + Montage » in an order's cart */
 .mt-offer { display: inline-flex; align-items: center; gap: 4px; }
 .mt-line-of { font-size: 12px; }
+
+/* The simple list of lines (a product without options): each line's fields in equal columns, as many as the screen
+   takes, the rest on the next row; none wider than its column, so none goes over another. */
+.pf .items-ed .item-row.bjpv-row { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); align-items: center; }
+.pf .items-ed .item-row.bjpv-row > * { min-width: 0; }
+.pf .items-ed .item-row.bjpv-row > input, .pf .items-ed .item-row.bjpv-row > select { width: 100%; min-width: 0; }
+.pf .items-ed .item-row.bjpv-row > .icon-btn { justify-self: start; }
+.pf .items-ed .item-row.bjpv-row + .item-row.bjpv-row { margin-top: 6px; padding-top: 12px; border-top: 1px dashed var(--line); }
