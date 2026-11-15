@@ -1237,5 +1237,15 @@ export const suiviProcs = {
     ctx.emit({ type: 'order', id: cur.orderId ?? undefined });
     return getClaim(ctx.db, i.id);
   }),
+
+  /** « Supprimer la réclamation » (admin only): removes it from Pilotix only — nothing is sent to the company. */
+  'suivi.claimDelete': proc([], z.object({ id }), async (ctx, i) => {
+    if (!ctx.session.isAdmin) throw bad('Seul un administrateur peut supprimer une réclamation');
+    const cur = await getClaim(ctx.db, i.id);
+    await ctx.db.query('DELETE FROM claims WHERE id = $1', [i.id]);
+    if (cur.orderId) await addEvent(ctx.db, cur.orderId, ctx.session.profile.id, 'note', null, 'event', `Réclamation ${cur.ref} supprimée (dans Pilotix seulement)`);
+    ctx.emit({ type: 'order', id: cur.orderId ?? undefined });
+    return { ok: true };
+  }),
 };
 
