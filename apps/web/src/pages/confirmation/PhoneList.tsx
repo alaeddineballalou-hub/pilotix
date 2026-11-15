@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { HeldChip } from './hold';
 import { da, when, wilayaName } from '../../lib/format';
 import { namesOf } from '../../lib/items';
-import { Icon } from '../../ui/kit';
+import { Icon, StatusBadge } from '../../ui/kit';
 import { Countdown, Deadline, RotateChip } from './Countdown';
 import { Detail } from './Detail';
 import { currentLabel } from './shared';
@@ -71,6 +71,8 @@ export function PhoneCards({ rows, empty, onOpen }: { rows: PRow[]; empty: strin
                 </div>
                 <div className="pxp-st">
                   <span className={`badge t-${o.confStatus === 'no_answer' ? 'mid' : CONF_TONE[o.confStatus] ?? 'off'}`}>{currentLabel(t, o.confStatus, o.attempts)}</span>
+                  {/* a confirmed order: where its parcel is (À préparer, Préparée), as in the list's « Livraison » column */}
+                  {o.confStatus === 'confirmed' && o.followStatus && <StatusBadge kind="follow" status={o.followStatus} />}
                   {o.attempts > 0 && <small>{t('confirmation.focus.calls', { n: o.attempts })}</small>}
                   <RotateChip at={o.rotateAt} />
                 </div>
