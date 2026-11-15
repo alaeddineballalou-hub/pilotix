@@ -628,6 +628,9 @@ async function fillDemo(db: Db, name: string, now: number) {
 export async function dropShopData(t: Tenancy, id: number, schema: string) {
   if (!/^shop_\d+$/.test(schema) || schema !== schemaOf(id)) throw new Error('Only a shop_<id> schema can be dropped');
   await t.platform.query('DELETE FROM platform.logins WHERE shop_id = $1', [id]);
+  // its AI assistants' links too (mcp-server.ts): a link names a person of this boutique by their number, and must
+  // never outlive them (the demo boutique starts again with the same numbers)
+  await t.platform.query('DELETE FROM platform.mcp_grants WHERE shop_id = $1', [id]);
   if (await isShared(t))
     await t.exec(
       'public',

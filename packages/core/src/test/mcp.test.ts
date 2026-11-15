@@ -6,6 +6,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { before, test } from 'node:test';
 import { DEMO_PASSWORD } from '@pilotix/shared';
 import { call, Ctx, Db, login, migrate, migrateAll, pgliteTenancy, seedDemo, Tenancy } from '../index';
+import { dropShopData } from '../platform/shops';
 import {
   ACCESS_SECONDS,
   ASK_SECONDS,
@@ -393,6 +394,19 @@ test('Mon profil: my links only; « Couper » stops one at once; at most 20 link
   assert.equal(left.length, 20);
   assert.ok(!left.includes(b.id) && left.includes(made[20]) && left.includes(made[1]));
   assert.equal(await why(b.id), 'limit');
+});
+
+test('a boutique whose data is removed takes its links with it', async () => {
+  people.set('77:3', 0);
+  people.set('78:3', 0);
+  const gone = await link({ shopId: 77, profileId: 3, tv: 0 });
+  const kept = await link({ shopId: 78, profileId: 3, tv: 0 });
+  await dropShopData(t, 77, 'shop_77');
+  // the same number in that boutique is someone else afterwards: the old key opens nothing, and nothing is left of it
+  assert.equal(await mcpAccess(t, SECRET, BASE, gone.access, person, T0), null);
+  assert.equal((await refresh(gone.refresh, T0, gone.client.client_id)).json.error, 'invalid_grant');
+  assert.deepEqual(await t.platform.query('SELECT id FROM platform.mcp_grants WHERE shop_id = 77'), []);
+  assert.ok(await mcpAccess(t, SECRET, BASE, kept.access, person, T0));
 });
 
 test('a link is made in a live boutique only: not the shared demo, not a partner’s space, not an unpaid boutique', () => {
