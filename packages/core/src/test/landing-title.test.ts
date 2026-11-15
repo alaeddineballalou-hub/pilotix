@@ -114,7 +114,7 @@ test('« طبيعي » (natural) is not a health word; « طبي » (medical) is
   assert.equal(titleProblem('كرسي الأطفال الطبية 🚗 راحة لصغارك', facts('كرسي')), 'santé');
 });
 
-test('every title refused: Claude is told why and writes 3 more (once); still none: the seller is told why', async () => {
+test('every title refused: Claude is told why and writes 3 more (twice at most); still none: the seller is told why', async () => {
   const seat = 'مقعد جلوس للاطفال سيارة';
   const invented = '{"titles": ["كرسي السيارة للأطفال 🚗 من 0 حتى 4 سنين", "كرسي السيارة 🚗 لولادك حتى 18 كغ"]}';
   const good = '{"titles": ["كرسي السيارة لولادك 🚗 سوق وانت مرتاح البال"]}';
@@ -144,5 +144,10 @@ test('every title refused: Claude is told why and writes 3 more (once); still no
   await assert.rejects(call('landing.aiTitle', never, { productId, title: seat }), /pas donné de titre sûr : ses titres avaient des chiffres que la page ne donne pas/);
   // not JSON: Claude is asked for the JSON; an unknown reason keeps the general message
   assert.match(retryQuestion([], facts('كرسي')), /UNIQUEMENT avec \{"titles"/);
-  assert.match(noSafeTitle([{ why: 'urgence' }]), /recliquez pour réessayer/);
+  assert.match(noSafeTitle([{ why: 'urgence' }]), /fausse urgence[\s\S]*Recliquez/);
+  // every reason is told to the seller, and an answer that was never JSON too
+  assert.match(noSafeTitle([{ why: 'garantie' }, { why: 'garantie' }, { why: 'prix' }]), /« مضمون \/ ضمان »/);
+  assert.match(noSafeTitle([]), /illisible/);
+  assert.equal(titleProblem('كرسي السيارة لولادك 🚗 أمان مضمون', facts('كرسي')), 'garantie');
+  assert.equal(titleProblem('كرسي السيارة لولادك 🚗 أمان وراحة البال', facts('كرسي')), null);
 });
