@@ -22,8 +22,8 @@ import { lahjaAvoid, lahjaBlocks, lahjaFor } from './lahja';
 import { splitOptions, WHO } from './landing';
 
 export const TITLE_MODEL = 'claude-sonnet-5-5';
-/** max: the length asked for (2 lines on a phone); hard: longer is refused; ask: titles per answer; avoid: shown ones sent back */
-export const TITLE = { max: 60, hard: 70, min: 12, emojis: 2, ask: 3, avoid: 12 } as const;
+/** max: the length asked for (2 lines on a phone); hard: longer is refused; ask: titles per answer; avoid: shown ones sent back; rounds: tries */
+export const TITLE = { max: 60, hard: 70, min: 12, emojis: 2, ask: 3, avoid: 12, rounds: 3 } as const;
 export const NO_AI = 'L’IA n’est pas disponible maintenant : réessayez dans un moment.';
 export const NO_SAFE_TITLE = 'L’IA n’a pas donné de titre sûr cette fois : recliquez pour réessayer.';
 
@@ -71,7 +71,8 @@ Interdit (Pilotix refuse le titre s’il en a un) :
 - Le prix, une réduction ou un pourcentage (la page les montre juste en dessous, et ils changent) : pas « تخفيض »، « برومو »، « -50% »، « مجانا ».
 - Le paiement et la livraison : la page les montre déjà.
 - La fausse urgence et la fausse rareté : « كمية محدودة »، « آخر قطع »، « العرض ينتهي »، « اليوم برك »، « سارع » : les Algériens y voient une arnaque.
-- Les grands mots sans preuve : « الأفضل »، « رقم 1 »، « الأكثر مبيعا »، « 100% »، « مضمون »، « ما كانش كيفو ».
+- Les grands mots sans preuve : « الأفضل »، « رقم 1 »، « الأكثر مبيعا »، « 100% »، « ما كانش كيفو ».
+- « مضمون »، « ضمان » (garanti) quand les informations ne le disent pas, même pour la sécurité : écris « أمان »، « مرتاح البال »، « محمي » sans « مضمون ».
 - La santé et le corps : guérir, soigner, maigrir, « قبل و بعد », et toute question sur un défaut du corps (« راك سمين؟ ») : Meta et TikTok refusent ces pubs.
 - Le nom d’une autre marque que celle du produit.
 - Ce que le guide de vente range dans « à ne jamais dire ».
@@ -284,7 +285,7 @@ const TOLD: Record<string, string> = {
   livraison: 'le paiement ou la livraison',
   urgence: 'une fausse urgence ou une fausse rareté',
   gratuit: '« gratuit » que la boutique n’a pas écrit',
-  garantie: 'une garantie que la boutique n’a pas écrite',
+  garantie: 'une garantie que la boutique n’a pas écrite (« مضمون »، « ضمان ») : pour la sécurité, dis « أمان » ou « مرتاح البال » sans « مضمون »',
   original: '« original » que la boutique n’a pas écrit',
   superlatif: 'un grand mot sans preuve (le meilleur, n° 1…)',
   santé: 'une promesse de santé ou un mot médical',
@@ -298,6 +299,19 @@ const TOLD: Record<string, string> = {
 };
 /** The main reason all the titles were refused, told to the seller with what to do. */
 const SELLER: Record<string, string> = {
+  '': 'sa réponse était illisible. Recliquez pour réessayer.',
+  prix: 'ses titres parlaient du prix ou d’une réduction (la page les montre déjà). Recliquez pour réessayer.',
+  livraison: 'ses titres parlaient de livraison ou de paiement (la page les montre déjà). Recliquez pour réessayer.',
+  urgence: 'ses titres avaient une fausse urgence (« كمية محدودة »، « ينتهي »…). Recliquez pour réessayer.',
+  gratuit: 'ses titres disaient « gratuit » sans que la page le dise. Recliquez pour réessayer.',
+  garantie: 'ses titres disaient « مضمون / ضمان » (garanti) sans que la page le dise. Écrivez la garantie dans le texte de la page si elle existe, ou recliquez.',
+  original: 'ses titres disaient « أصلي » (original) sans que la page le dise. Recliquez pour réessayer.',
+  superlatif: 'ses titres avaient des grands mots sans preuve (الأفضل، رقم 1…). Recliquez pour réessayer.',
+  'avant-après': 'ses titres disaient « avant / après ». Recliquez pour réessayer.',
+  'trop long': 'ses titres étaient trop longs. Recliquez pour réessayer.',
+  'trop court': 'ses titres étaient trop courts. Recliquez pour réessayer.',
+  'pas en lettres arabes': 'ses titres n’étaient pas en lettres arabes. Recliquez pour réessayer.',
+  ponctuation: 'ses titres avaient trop de « ! » ou de « ؟ ». Recliquez pour réessayer.',
   'chiffre inventé': 'ses titres avaient des chiffres que la page ne donne pas (âge, poids, taille…). Écrivez-les dans le texte de la page, puis recliquez.',
   santé: 'ses titres promettaient quelque chose sur la santé. Recliquez pour réessayer.',
   darija: 'ses titres avaient des mots que vos règles de darija refusent. Recliquez pour réessayer.',
@@ -325,6 +339,7 @@ export function retryQuestion(refused: { title: string; why: string }[], f: Titl
 
 /** The error when no title could be shown: why (the most frequent reason), and what the seller can do. */
 export function noSafeTitle(refused: { why: string }[]): string {
+  if (!refused.length) return `L’IA n’a pas donné de titre sûr : ${SELLER['']}`;
   const count = new Map<string, number>();
   for (const r of refused) count.set(r.why, (count.get(r.why) ?? 0) + 1);
   const main = [...count.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
@@ -364,15 +379,17 @@ export async function aiTitles(ctx: Ctx, i: TitleIn): Promise<{ titles: string[]
       throw bad(`L’IA n’a pas pu écrire le titre : ${(e as Error)?.message ?? 'réessayez'}`);
     }
   };
-  // every title Claude wrote is checked; when none can be shown, Claude is told why and writes 3 more (once)
+  // every title Claude wrote is checked; when none can be shown, Claude is told why and writes 3 more (twice at most)
   const refused: { title: string; why: string }[] = [];
-  for (let round = 0; round < 2; round++) {
+  for (let round = 0; round < TITLE.rounds; round++) {
     const text = await ask();
     const r = readTitles(text, f, { avoid, words });
     if (r.titles.length) return { titles: r.titles, by: 'ai' };
     refused.push(...r.refused);
     messages.push({ role: 'assistant', content: text.trim() || '(vide)' }, { role: 'user', content: retryQuestion(r.refused, f, words) });
   }
+  // the server's log keeps what was refused and why (to see it and improve the rules)
+  console.warn(`[landing.aiTitle] shop ${ctx.shop?.id ?? '?'} product ${i.productId}: no safe title — ${refused.length ? refused.map((r) => `« ${r.title} » (${r.why})`).join(' | ') : 'answer not JSON'}`);
   throw bad(noSafeTitle(refused));
 }
 
