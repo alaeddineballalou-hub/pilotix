@@ -9,7 +9,7 @@
 //   - a renewal key, changed at every use (an older one used again cuts the link: it was copied).
 // Every call then runs as that person in that boutique, through the app's own actions (index.ts › call): the same role
 // checks, the same rights (Utilisateurs › Rôles), the same rows as on their own screen. Read-only for now (« read »).
-// The person cuts a link in Mon profil › Sécurité; a new password, a closed account or 90 days without use cut it too.
+// The person cuts a link in Mon profil › Assistants IA; a new password, a closed account or 90 days without use cut it too.
 // Only the answers of Claude's and ChatGPT's own sites (and of a tool on the person's own computer) are accepted.
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { iso, isoOrNull, num } from './db';
@@ -541,7 +541,7 @@ export function mcpCannot(shop: McpShop, locked: boolean, agencyId?: number | nu
   return null;
 }
 
-// ---------------------------------------------------------------- Mon profil › Sécurité: the person's links
+// ---------------------------------------------------------------- Mon profil › Assistants IA: the person's links
 export interface McpLink {
   id: number;
   /** the assistant's name, as it gave it */

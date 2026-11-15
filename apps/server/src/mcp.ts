@@ -7,7 +7,7 @@
 //   POST /api/mcp/register                      → an assistant registers (its name, where its answers go)
 //   GET  /api/mcp/authorize                     → the assistant sends the person here; on to the app's « Autoriser » page
 //   POST /api/mcp/token                         → the code of « Autoriser » (or a renewal key) for the keys
-//   POST /api/mcp/ask | answer | links | cut    → the app's own (logged in): the « Autoriser » page, Mon profil › Sécurité
+//   POST /api/mcp/ask | answer | links | cut    → the app's own (logged in): the « Autoriser » page, Mon profil › Assistants IA
 import { Body, Controller, Delete, Get, Logger, Module, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import * as core from '@pilotix/core';
 import * as mcp from '@pilotix/core/dist/mcp-server';
@@ -248,7 +248,7 @@ export class McpController {
     if (await this.opened(req, res)) res.status(405).header('Allow', 'POST').send({ error: 'method_not_allowed' });
   }
 
-  // ---------------------------------------------------------------- the app's own: « Autoriser », Mon profil › Sécurité
+  // ---------------------------------------------------------------- the app's own: « Autoriser », Mon profil › Assistants IA
   /** Why this space cannot be linked (null: it can): a partner's space, the shared demo, an unpaid boutique. */
   private cannot(req: ShopRequest): 'partner' | 'demo' | 'locked' | null {
     return mcp.mcpCannot(req.shop.shop, req.shop.status.locked, req.session.profile.agencyId);
@@ -281,11 +281,14 @@ export class McpController {
     return mcp.mcpAnswer(this.core.t, secret(), body?.ticket, { shopId: req.shop.shop.id, profileId: me, tv: await tokenVersion(req.shop.db, me) }, yes);
   }
 
-  /** Mon profil › Sécurité: the assistants linked to my account in this boutique. */
+  /**
+   * Mon profil › Assistants IA: the assistants linked to my account in this boutique, and the link to give one (the
+   * site's own address, whichever door the app was opened through).
+   */
   @Post('mcp/links')
   async links(@Req() req: ShopRequest) {
     const me = req.session.profile.id;
-    return { links: await mcp.mcpLinks(this.core.t, req.shop.shop.id, me, await tokenVersion(req.shop.db, me)) };
+    return { links: await mcp.mcpLinks(this.core.t, req.shop.shop.id, me, await tokenVersion(req.shop.db, me)), link: mcp.mcpUrls(config.publicUrl || this.base(req as unknown as Req0)).resource };
   }
 
   /** « Couper »: that assistant's keys stop now. */

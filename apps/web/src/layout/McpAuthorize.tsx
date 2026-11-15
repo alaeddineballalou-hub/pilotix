@@ -1,12 +1,13 @@
 // « Autoriser »: an AI assistant (Claude, ChatGPT) asks to be linked to the person's Pilotix (lib/mcpAsk: the address
 // carries its question). The page says who asks and where the answer goes, in whose name and in which boutique it will
 // read, what it will read, and that it changes nothing. « Autoriser » / « Refuser » send the browser back to the
-// assistant's site with the answer. The link is cut later in Mon profil › Sécurité.
+// assistant's site with the answer. The link is cut later in Mon profil › Assistants IA.
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, server, StoreChoice } from '../lib/backend';
 import { dropMcpTicket } from '../lib/mcpAsk';
 import { useSession } from '../lib/session';
+import { AssistantLogo } from '../ui/AssistantLogo';
 import { Icon } from '../ui/kit';
 import { toast } from '../ui/toast';
 import { AuthShell, AuthTitle } from './AuthShell';
@@ -116,15 +117,18 @@ export function McpAuthorize({ ticket }: { ticket: string }) {
           <dt>{t('mcp.who')}</dt>
           <dd>
             {ask ? (
-              <>
-                <b>{ask.client}</b>
-                <span className={`pxm-site${ask.site === 'local' ? ' warn' : ''}`}>
-                  <Icon name={ask.site === 'known' ? 'checkcircle' : 'alert'} />
-                  <span>
-                    {ask.site === 'known' ? t('mcp.siteKnown') : t('mcp.siteLocal')} <bdi className="ltr">{ask.host}</bdi>
+              <span className="pxm-asst">
+                <AssistantLogo host={ask.host} />
+                <span className="pxm-asst-t">
+                  <b>{ask.client}</b>
+                  <span className={`pxm-site${ask.site === 'local' ? ' warn' : ''}`}>
+                    <Icon name={ask.site === 'known' ? 'checkcircle' : 'alert'} />
+                    <span>
+                      {ask.site === 'known' ? t('mcp.siteKnown') : t('mcp.siteLocal')} <bdi className="ltr">{ask.host}</bdi>
+                    </span>
                   </span>
                 </span>
-              </>
+              </span>
             ) : (
               <span className="pxm-skel" />
             )}

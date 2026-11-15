@@ -1,7 +1,8 @@
-// "Mon profil" (#/profil/infos | parametres | parrainage | securite): my name, phone and picture, my app settings,
-// inviting friends to Pilotix (referral), and my password / deleting my account.
+// "Mon profil" (#/profil/infos | parametres | parrainage | assistants | securite): my name, phone and picture, my app
+// settings, inviting friends to Pilotix (referral), the AI assistants linked to my account, and my password / deleting
+// my account.
 import { LANGUAGES, Language, Profile } from '@pilotix/shared';
-import { FormEvent, ReactNode, useRef, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, rpc } from '../../lib/backend';
 import { da, n } from '../../lib/format';
@@ -15,13 +16,14 @@ import { Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import type { PageProps } from '../registry';
-import { AiLinks } from './AiLinks';
+import { Assistants } from './Assistants';
 import { Avatar } from './Avatar';
 
 const TABS = [
   ['infos', 'tInfos', 'usercog'],
   ['parametres', 'tSettings', 'settings'],
   ['parrainage', 'tRef', 'gift'],
+  ['assistants', 'tAi', 'sparkles'],
   ['securite', 'tSec', 'lock'],
 ] as const;
 type Tab = (typeof TABS)[number][0];
@@ -69,8 +71,17 @@ export function Profil({ sub }: PageProps) {
   // a confirmation agency's people (its own space, or working in a store for it) have no referral programme
   const agencyPerson = (!!session!.shop?.kind && session!.shop.kind !== 'store') || !!p.agencyId;
   // Referral › Referral is the owner's (the administrators of the store)
-  const tabs = TABS.filter(([k]) => k !== 'parrainage' || (!agencyPerson && session!.isAdmin));
+  // an AI assistant is linked to a person's account in a store (not a partner's space, not a demo: no server, or everyone's accounts)
+  const canLink = !agencyPerson && backend.kind !== 'demo' && !session!.shop?.demo;
+  const tabs = TABS.filter(([k]) => (k !== 'parrainage' || (!agencyPerson && session!.isAdmin)) && (k !== 'assistants' || canLink));
   const tab: Tab = tabs.some((x) => x[0] === sub) ? (sub as Tab) : 'infos';
+  // a bar wider than the screen (a phone): the current tab is brought into view, not left behind the edge
+  const bar = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const b = bar.current;
+    const on = b?.querySelector<HTMLElement>('.px-pf-tab.on');
+    if (b && on && b.scrollWidth > b.clientWidth + 1) on.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [tab]);
   return (
     <div className="px-pf">
       <section className="card px-pf-hero">
@@ -87,7 +98,7 @@ export function Profil({ sub }: PageProps) {
           </div>
         </div>
       </section>
-      <nav className="px-pf-tabs" aria-label={t('profil.title')}>
+      <nav ref={bar} className="px-pf-tabs" aria-label={t('profil.title')}>
         {tabs.map(([k, l, ic]) => (
           <a key={k} href={`#/profil/${k}`} className={`px-pf-tab${tab === k ? ' on' : ''}`} aria-current={tab === k ? 'page' : undefined}>
             <Icon name={ic} />
@@ -95,7 +106,7 @@ export function Profil({ sub }: PageProps) {
           </a>
         ))}
       </nav>
-      {tab === 'infos' ? <Infos p={p} /> : tab === 'parametres' ? <Settings /> : tab === 'parrainage' ? <RefMoved /> : <Security p={p} />}
+      {tab === 'infos' ? <Infos p={p} /> : tab === 'parametres' ? <Settings /> : tab === 'parrainage' ? <RefMoved /> : tab === 'assistants' ? <Assistants /> : <Security p={p} />}
     </div>
   );
 }
@@ -288,8 +299,6 @@ function Security({ p }: { p: Profile }) {
           </button>
         </div>
       </form>
-      {/* the AI assistants (Claude, ChatGPT) linked to this account: seen and cut here */}
-      <AiLinks />
       <section className="card px-pf-card px-pf-danger">
         <h2>{t('profil.del')}</h2>
         <p className="muted">{t('profil.delTxt')}</p>

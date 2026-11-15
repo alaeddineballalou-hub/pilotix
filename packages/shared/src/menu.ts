@@ -23,7 +23,7 @@ export const MENU_TABS = {
   livraison: ['societes', 'api', 'livreurs'],
   utilisateurs: ['roles', 'admins', 'agents', 'managers'],
   management: ['plans', 'statuts', 'affectation', 'prix', 'canaux', 'alertes', 'livreur', 'modules', 'archive'],
-  profil: ['infos', 'parametres', 'parrainage', 'securite'],
+  profil: ['infos', 'parametres', 'parrainage', 'assistants', 'securite'],
 } as const;
 
 /** When a line is shown, beyond the roles (the app works them out: apps/web/src/layout/nav.ts). */

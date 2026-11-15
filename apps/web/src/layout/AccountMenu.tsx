@@ -65,6 +65,7 @@ export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Ses
           {item('usercog', t('profil.title'), () => go('infos'))}
           {item('settings', t('profil.tSettings'), () => go('parametres'))}
           {(!shop?.kind || shop.kind === 'store') && !p.agencyId && item('gift', t('profil.tRef'), () => go('parrainage'))}
+          {(!shop?.kind || shop.kind === 'store') && !p.agencyId && !shop?.demo && backend.kind !== 'demo' && item('sparkles', t('profil.tAi'), () => go('assistants'))}
           {item('lock', t('profil.pwd'), () => go('securite'))}
           {owns && item('store', t('boutiques.title'), () => (setOpen(false), (location.hash = '#/boutiques')))}
           {shop && !shop.demo && backend.kind !== 'demo' && (shop.canAddStore || shop.canAddAgency || shop.canAddMarketer || session.isAdmin) && (

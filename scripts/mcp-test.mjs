@@ -383,13 +383,16 @@ await section('« Couper » and a new password', async () => {
   const tok = await login(email, 'Mcp-Test-0001');
   const a = await link(tok);
   const b = await link(tok);
-  let links = (await http('/mcp/links', { body: {}, token: tok })).data.links;
+  const mine = (await http('/mcp/links', { body: {}, token: tok })).data;
+  // the page also gets the link to give an assistant: the site's own (the one its papers name)
+  assert.equal(mine.link, META.resource.resource);
+  let links = mine.links;
   assert.equal(links.length, 2);
   assert.deepEqual([links[0].client, links[0].host, links[0].scope], ['Claude', 'claude.ai', ['read']]);
   // nobody else's
   assert.equal((await http('/mcp/links', { body: {}, token: ADMIN })).data.links.some((x) => links.some((y) => y.id === x.id)), false);
   assert.equal((await http('/mcp/cut', { body: { id: links[0].id }, token: ADMIN })).status, 404);
-  ok('Mon profil: my own links only, and nobody else cuts them');
+  ok('Mon profil › Assistants IA: the link to give, my own links only, and nobody else cuts them');
   const cut = links.find((x) => x.id === Number(/^pxr_(\d+)\./.exec(a.refresh_token)[1]));
   assert.equal((await http('/mcp/cut', { body: { id: cut.id }, token: tok })).status, 201);
   assert.equal((await mcp(a.access_token, 'ping')).status, 401);
