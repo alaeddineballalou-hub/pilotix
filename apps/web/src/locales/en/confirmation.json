@@ -739,5 +739,10 @@
     "extNote": "WhatsApp Web must be linked in this same browser.",
     "extVideo": "Watch the video (1 min, in French)",
     "extVideoHide": "Hide the video"
+  },
+  "cview": {
+    "label": "View",
+    "list": "List",
+    "stats": "Statistics"
   }
 }

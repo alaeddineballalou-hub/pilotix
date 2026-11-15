@@ -24,6 +24,11 @@ export const CONF_SUBS = {
 } as const satisfies Record<string, readonly ConfStatus[]>;
 export type ConfSub = keyof typeof CONF_SUBS;
 const SUB = z.enum(['nouvelles', 'attente', 'confirmees', 'terminees', 'livrees']);
+/** « Confirmées »: the confirmed orders the courier does not have yet (not in the dépôt yet, « À préparer », « Préparée »:
+ *  an agent can still cancel them, and the dépôt is alerted for a printed label). Once the dépôt hands the parcel to its
+ *  courier it leaves this list: it is in Suivi › En livraison. */
+const NOT_SENT = ['none', 'to_prepare', 'prepared'] as const;
+const NOT_SENT_SQL = "(follow_status IS NULL OR follow_status IN ('to_prepare', 'prepared'))";
 const id = z.number().int().positive();
 const ids = z.array(id).min(1).max(500);
 const MIN = 60_000;
@@ -249,7 +254,7 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
   const base = byDeadline || byScore ? (queue ? 'deadline' : def.sort === 'deadline' ? 'created_at' : def.sort) : sort;
   const found = await listOrders(ctx, {
     conf: i.status ? [i.status] : [...allowed],
-    follow: i.sub === 'livrees' ? ['delivered'] : undefined,
+    follow: i.sub === 'livrees' ? ['delivered'] : i.sub === 'confirmees' ? [...NOT_SENT] : undefined,
     q: i.q,
     wilayaId: i.wilayaId,
     agentId: i.sub === 'livrees' && !ctx.session.isAdmin && !isManager(ctx) ? ctx.session.profile.id : i.agentId,
@@ -710,7 +715,8 @@ export const confirmationProcs = {
     const sum = (s: readonly string[]) => s.reduce((t, k) => t + (by[k] ?? 0), 0);
     const all = ctx.session.isAdmin || isManager(ctx);
     const dl = (await ctx.db.query(`SELECT count(*)::int AS n FROM sales o WHERE conf_status = 'confirmed' AND follow_status = 'delivered'${all ? '' : ' AND agent_id = $1'}${q}`, all ? [] : [ctx.session.profile.id]))[0];
-    return { nouvelles: sum(CONF_SUBS.nouvelles), attente: sum(CONF_SUBS.attente), confirmees: sum(CONF_SUBS.confirmees), terminees: sum(CONF_SUBS.terminees), livrees: num(dl?.n) };
+    const cf = (await ctx.db.query(`SELECT count(*)::int AS n FROM sales o WHERE conf_status = ANY($1) AND ${NOT_SENT_SQL}${q}`, [[...CONF_SUBS.confirmees]]))[0];
+    return { nouvelles: sum(CONF_SUBS.nouvelles), attente: sum(CONF_SUBS.attente), confirmees: num(cf?.n), terminees: sum(CONF_SUBS.terminees), livrees: num(dl?.n) };
   }),
 
   /** One page of a confirmation list, with SKUs, creator and call deadline per row. */

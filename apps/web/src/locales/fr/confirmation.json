@@ -739,5 +739,10 @@
     "extNote": "WhatsApp Web doit être connecté dans ce même navigateur.",
     "extVideo": "Voir la vidéo (1 min)",
     "extVideoHide": "Masquer la vidéo"
+  },
+  "cview": {
+    "label": "Affichage",
+    "list": "Liste",
+    "stats": "Statistiques"
   }
 }

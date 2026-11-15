@@ -66,6 +66,8 @@ const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
   { k: 'sku' },
   ...(sub === 'nouvelles' || sub === 'attente' ? [{ k: 'chrono' as const, sort: 'deadline' as const }] : []),
   { k: 'name', sort: 'customer_name' },
+  // Confirmées: where the parcel is (À préparer, Préparée) right after the client
+  ...(sub === 'confirmees' || sub === 'livrees' ? [{ k: 'follow' as const }] : []),
   { k: 'phone' },
   { k: 'wilaya' },
   { k: 'commune' },
@@ -77,7 +79,7 @@ const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
   { k: 'stock' },
   { k: 'desk' },
   { k: 'passed' },
-  ...(sub === 'confirmees' || sub === 'livrees' ? [{ k: 'confirmed' as const, sort: 'confirmed_at' as const }, { k: 'follow' as const }] : [{ k: 'next' as const, sort: 'next_call_at' as const }]),
+  ...(sub === 'confirmees' || sub === 'livrees' ? [{ k: 'confirmed' as const, sort: 'confirmed_at' as const }] : [{ k: 'next' as const, sort: 'next_call_at' as const }]),
   { k: 'status' },
 ];
 
@@ -101,6 +103,20 @@ export function Confirmation(p: PageProps) {
 }
 const AllConf = lazy(() => import('../boutiques/all').then((m) => ({ default: m.BoutiquesConfirmation })));
 
+/** « Liste » / « Statistiques » at the top of Confirmées, for managers (the agents only have the list) */
+function ConfirmedView({ view, onChange }: { view: 'list' | 'stats'; onChange: (v: 'list' | 'stats') => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="px-vsw cf-view" role="radiogroup" aria-label={t('confirmation.cview.label')}>
+      {(['list', 'stats'] as const).map((k) => (
+        <button key={k} type="button" role="radio" aria-checked={view === k} className={view === k ? 'on' : ''} onClick={() => onChange(k)}>
+          <Icon name={k === 'list' ? 'list' : 'chart'} /> {t(`confirmation.cview.${k}`)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
   const { t } = useTranslation();
   const sub: Sub = SUBS.includes(rawSub as Sub) ? (rawSub as Sub) : 'nouvelles';
@@ -113,12 +129,20 @@ function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
   const focusId = rest?.[0] ? Number(rest[0]) : null;
   // phones: the queue comes first; the big statistics stay on tablets and computers
   const phone = useIsPhone();
+  const [cview, setCviewState] = useState<'list' | 'stats'>(() => (store.get('conf-confirmees-view') === 'stats' ? 'stats' : 'list'));
+  const setCview = (v: 'list' | 'stats') => {
+    setCviewState(v);
+    store.set('conf-confirmees-view', v === 'stats' ? v : null);
+  };
   return (
     <>
       <StageBar items={items} current={sub} />
       {sub === 'confirmees' && manager ? (
-        // managers: « Confirmées » shows statistics only (computers and phones)
-        <ConfirmedStatsPage />
+        // managers: « Confirmées » is the list (as for the agents) or its statistics, the choice kept on this device
+        <>
+          <ConfirmedView view={cview} onChange={setCview} />
+          {cview === 'stats' ? <ConfirmedStatsPage /> : <Queue key={sub} sub={sub} focusId={focusId} />}
+        </>
       ) : (
         <>
           {manager && !phone && <StatsSection sub={sub} />}

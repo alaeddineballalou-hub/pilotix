@@ -75,3 +75,6 @@ html:not([data-theme="dark"]) .px-dr-pop { background: #FFFFFF; }
 .px-cs .kpi { min-height: 0 !important; }
 .px-cs .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 760px) { .px-cs .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } }
+
+/* Confirmées, for managers: « Liste » / « Statistiques » above the page */
+.px-vsw.cf-view { width: max-content; margin: 0 0 12px; }
