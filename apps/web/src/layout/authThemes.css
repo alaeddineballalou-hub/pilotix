@@ -37,6 +37,20 @@
   .pxt-vis { height: 250px; }
 }
 
+/* a question to answer (AuthShell `plain`, the « Autoriser » page): on phones and small windows the design's picture
+   leaves and the question comes first — the same clean page whichever of the 20 designs was drawn. The designs place
+   their card under their picture with their own margins (`:has(.pxnNN)` below): `!important` puts it back at the top. */
+@media (max-width: 960px) {
+  .pxa.pxt.pxa-plain { display: block; padding: 0; background: var(--surface); }
+  .pxa-plain > .pxt-vis, .pxa-plain > .pxt-bg, .pxa-plain > .pxt-copy { display: none; }
+  .pxa.pxt.pxa-plain > .pxa-side { width: auto; min-height: 100vh; min-height: 100dvh; margin: 0 !important; padding: 22px clamp(20px, 5vw, 64px) 18px; border: 0; border-radius: 0; box-shadow: none; background: var(--surface); backdrop-filter: none; -webkit-backdrop-filter: none; animation: none; }
+  .pxa.pxt.pxa-plain .pxa-form { padding: 28px 0; }
+}
+@media (max-width: 480px) {
+  .pxa.pxt.pxa-plain > .pxa-side { padding: 16px 18px 14px; }
+  .pxa.pxt.pxa-plain .pxa-form { padding: 18px 0; }
+}
+
 @keyframes pxt-up { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .pxt *, .pxt > * { animation: none !important; } }
 

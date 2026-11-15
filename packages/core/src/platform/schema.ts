@@ -648,6 +648,39 @@ ALTER TABLE platform.referrals ADD COLUMN IF NOT EXISTS reward_to timestamptz;
 ALTER TABLE platform.referrals ADD COLUMN IF NOT EXISTS told_at timestamptz;
 `;
 
+/**
+ * AI assistants linked to an account (Claude, ChatGPT: core mcp-server.ts): one line per link — whose it is (a person's
+ * account in one boutique), which assistant asked (and whether it has a secret to show), the code it was given once
+ * (its fingerprint), the counter of its renewal key, when it was last used, when and why it was cut. No key is kept
+ * readable.
+ */
+const MCP_SQL = `
+CREATE TABLE IF NOT EXISTS platform.mcp_grants (
+  id              bigserial PRIMARY KEY,
+  shop_id         bigint      NOT NULL,
+  profile_id      bigint      NOT NULL,
+  token_version   integer     NOT NULL DEFAULT 0,
+  client_hash     text        NOT NULL,
+  client_auth     boolean     NOT NULL DEFAULT false,
+  client_name     text        NOT NULL,
+  redirect_uri    text        NOT NULL,
+  scope           text        NOT NULL DEFAULT 'read',
+  code_hash       text        NOT NULL,
+  code_challenge  text        NOT NULL,
+  code_expires_at timestamptz NOT NULL,
+  code_used_at    timestamptz,
+  refresh_salt    text        NOT NULL,
+  refresh_n       integer     NOT NULL DEFAULT 0,
+  rotated_at      timestamptz,
+  expires_at      timestamptz,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  last_used_at    timestamptz,
+  revoked_at      timestamptz,
+  revoked_why     text
+);
+CREATE INDEX IF NOT EXISTS mcp_grants_person ON platform.mcp_grants (shop_id, profile_id) WHERE revoked_at IS NULL;
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
@@ -732,6 +765,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   // AI credits (Espace créateur): each shop's wallet and its moves; a pack is bought with « J'ai payé » (months = 0)
   ['p038_ai_credits', CREDITS_SQL],
   ['p039_referral_period', REFERRAL_PERIOD_SQL],
+  // AI assistants (Claude, ChatGPT) linked to a person's account in a boutique: https://<site>/mcp (core mcp-server.ts)
+  ['p040_mcp', MCP_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

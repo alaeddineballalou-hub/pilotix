@@ -2,8 +2,10 @@ import { DEMO_ACCOUNTS, DEMO_PARTNER_ACCOUNTS, DEMO_PASSWORD } from '@pilotix/sh
 import { FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BACKUP_DOOR, backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, forgotAvailable, onDemoProgress, requestPasswordReset, serverDemo, serverUrl, setServerUrl, signupInfo, switchDemo } from '../lib/backend';
+import { useMcpAsked } from '../lib/mcpAsk';
 import { useSession } from '../lib/session';
 import { AuthShell, AuthTabs, AuthTitle, PasswordInput } from './AuthShell';
+import { McpLoginNote } from './McpAuthorize';
 import { SocialButtons } from './SocialButtons';
 
 export function Login() {
@@ -25,6 +27,8 @@ export function Login() {
   const [srvDemo, setSrvDemo] = useState<{ key: string; name: string; role: string }[]>([]);
   // « Créer ma boutique » when Pilotix opened sign-ups
   const [canSignup, setCanSignup] = useState(false);
+  // an AI assistant sent the person here to be linked (layout/McpAuthorize): said above the form, no picture on phones
+  const asked = useMcpAsked();
 
   useEffect(() => onDemoProgress(setProgress), [busy]);
   useEffect(() => {
@@ -127,10 +131,11 @@ export function Login() {
   }
 
   return (
-    <AuthShell>
+    <AuthShell plain={asked}>
       <form onSubmit={submit} style={{ display: 'contents' }}>
         {(canSignup || DEMO_ONLY) && <AuthTabs on="login" />}
         <AuthTitle a={t('auth.welcome1')} b={t('auth.welcome2')} />
+        {asked && <McpLoginNote />}
         {BACKUP_DOOR && <p className="warnbox">{t('login.backupDoor')}</p>}
         <SocialButtons mode="login" onError={setError} />
         <label className="field">

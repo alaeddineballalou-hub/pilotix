@@ -88,6 +88,8 @@ jobs:
         run: node scripts/offsite-test.mjs
       - name: End-to-end test of Cloudflare's robot check after a few wrong passwords (a second server on port 3040)
         run: node scripts/robot-test.mjs
+      - name: End-to-end test of the AI assistants' link (Claude, ChatGPT; the sign-in door, the keys, every tool as each role)
+        run: node scripts/mcp-test.mjs
       - name: End-to-end test of the public Pro marketers page
         run: |
           curl -fs http://localhost:3000/api/pro | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const d=JSON.parse(s);if(!Array.isArray(d.pros))process.exit(1);console.log('pros',d.pros.length)})"

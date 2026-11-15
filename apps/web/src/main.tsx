@@ -7,7 +7,9 @@ import { Login } from './layout/Login';
 import { ResetPassword } from './layout/ResetPassword';
 import { AGENCY_NAV, canSee, canSeeChild, homeFor, isPlainAgent, lineFor, MARKETER_NAV, NAV, NavChild, NavItem } from './layout/nav';
 import { applyTheme, Shell } from './layout/Shell';
-import { ApiError, DEMO_ONLY, sendClientReport, server } from './lib/backend';
+import { ApiError, DEMO_ONLY, inBrowserDemo, sendClientReport, server } from './lib/backend';
+import { useMcpTicket } from './lib/mcpAsk';
+import { McpAuthorize } from './layout/McpAuthorize';
 import { readTryLink, type TryLink } from './lib/tryLink';
 import { DEMO_PASSWORD, menuRight, tabsOf } from '@pilotix/shared';
 import { firstSubOn, hasPlanSubs, pageIsOn } from './lib/features';
@@ -175,6 +177,9 @@ function App() {
   const opening = useAddressBoutique(session?.shop?.slug, !!session && ready, parts.join('/'));
   // the demo only: an « Essayer » link of the Deploy page logs in with its demo account and opens its page
   const trying = useTryLink(ready);
+  // an AI assistant (Claude, ChatGPT) sent the person here to be linked to their account (lib/mcpAsk): the « Autoriser »
+  // page comes once they are logged in (the login page says why they are asked to sign in: McpLoginNote)
+  const asked = useMcpTicket();
   if (trying) return <Loading />;
   if (parts[0] === 'platform')
     return (
@@ -209,6 +214,8 @@ function App() {
   if (!session) return phoneStep ? <PhoneStep /> : picker ? <StorePicker /> : <Login />;
   // the address names another of the person's boutiques: it opens first
   if (opening) return <Loading />;
+  // an assistant asks to be linked: yes or no, before anything else (a closed boutique says so there)
+  if (asked && !inBrowserDemo()) return <McpAuthorize ticket={asked} />;
   // unpaid or suspended: the lock screen (how to pay), nothing else
   if (session.shop?.locked) return <LockScreen />;
 

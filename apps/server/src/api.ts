@@ -122,7 +122,7 @@ const ClientReports = z.object({
 const pickSecret = () => `${config.jwtSecret}:pick`;
 
 @Injectable()
-class AuthGuard implements CanActivate {
+export class AuthGuard implements CanActivate {
   /** Profiles are re-read at most every 30 s, so a deactivated account loses access quickly. */
   private cache = new Map<string, { s: Session; at: number; tv: number; ep: number }>();
   constructor(

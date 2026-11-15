@@ -15,6 +15,7 @@ import { Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import type { PageProps } from '../registry';
+import { AiLinks } from './AiLinks';
 import { Avatar } from './Avatar';
 
 const TABS = [
@@ -287,6 +288,8 @@ function Security({ p }: { p: Profile }) {
           </button>
         </div>
       </form>
+      {/* the AI assistants (Claude, ChatGPT) linked to this account: seen and cut here */}
+      <AiLinks />
       <section className="card px-pf-card px-pf-danger">
         <h2>{t('profil.del')}</h2>
         <p className="muted">{t('profil.delTxt')}</p>

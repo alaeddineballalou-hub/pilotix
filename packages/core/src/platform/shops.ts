@@ -452,7 +452,8 @@ export const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/;
  * that would pass for Pilotix itself.
  */
 export const NAME_RESERVED = [
-  ...new Set([...STORE_RESERVED, ...PUBLIC_ROOTS, ...APP_PAGES, 'pilotix', 'plateforme', 'support', 'help', 'contact', 'login', 'connexion', 'legal', 'privacy', 'terms', 'confidentialite', 'compte', 'account']),
+  // « mcp »: pilotix.online/mcp is the AI assistants' link (deploy/Caddyfile, apps/server mcp.ts), never a boutique
+  ...new Set([...STORE_RESERVED, ...PUBLIC_ROOTS, ...APP_PAGES, 'pilotix', 'plateforme', 'support', 'help', 'contact', 'login', 'connexion', 'legal', 'privacy', 'terms', 'confidentialite', 'compte', 'account', 'mcp']),
 ];
 /** a name a new shop can have (the format, and not a reserved word) */
 export const slugOk = (s: string): boolean => SLUG_RE.test(s) && !NAME_RESERVED.includes(s);

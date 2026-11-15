@@ -1,0 +1,46 @@
+/* « Autoriser » (McpAuthorize): an AI assistant asks to be linked. Inside the sign-in pages' form (auth.css). */
+.pxm-who { margin: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.pxm-who > div { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 12px; align-items: start; padding: 12px 14px; }
+.pxm-who > div + div { border-top: 1px solid var(--line); }
+.pxm-who dt { margin: 0; padding-top: 1px; color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+.pxm-who dd { margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; color: var(--ink); font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
+.pxm-who dd b { font-weight: 700; }
+.pxm-site { display: flex; align-items: flex-start; gap: 6px; font-size: 13.5px; color: var(--c-ok-ink); }
+.pxm-site.warn { color: var(--c-warn-ink); }
+.pxm-site .bji { flex: none; width: 16px; height: 16px; margin-top: 2px; }
+.pxm-site .bji svg { width: 16px; height: 16px; }
+.pxm-roles { display: flex; flex-wrap: wrap; gap: 6px; }
+.pxm-roles .chip { margin: 0; }
+.pxm-shop { width: 100%; min-height: 44px; }
+.pxm-skel { display: block; width: 62%; height: 18px; margin: 3px 0 22px; border-radius: 6px; background: var(--line); animation: pxm-wait 1.2s ease-in-out infinite alternate; }
+@keyframes pxm-wait { from { opacity: .45; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pxm-skel { animation: none; } }
+
+.pxm-can { display: flex; flex-direction: column; gap: 10px; }
+.pxm-can h2 { margin: 6px 0 0; font-size: 15px; font-weight: 700; color: var(--ink); }
+.pxm-can ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pxm-can li, .pxm-lock, .pxm-cannot { display: flex; align-items: flex-start; gap: 10px; margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--ink); }
+.pxm-can li .bji, .pxm-lock .bji, .pxm-cannot .bji { flex: none; width: 18px; height: 18px; margin-top: 2px; }
+.pxm-can li .bji svg, .pxm-lock .bji svg, .pxm-cannot .bji svg { width: 18px; height: 18px; }
+.pxm-can li .bji { color: var(--c-ok-ink); }
+.pxm-lock { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); }
+.pxm-lock b { color: var(--ink); font-weight: 700; }
+.pxm-cannot { padding: 12px 14px; border-radius: 12px; background: var(--c-warn-tint); color: var(--c-warn-ink); }
+
+.pxm-acts { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; margin-top: 4px; }
+.pxm-acts .btn { width: 100%; justify-content: center; min-height: 48px; }
+.pxm-care { font-size: 13.5px; }
+
+/* the sign-in page, when an assistant sent the person here */
+.pxm-first { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--raise); color: var(--ink); font-size: 14.5px; line-height: 1.5; font-weight: 600; }
+.pxm-first .bji { flex: none; width: 18px; height: 18px; margin-top: 2px; }
+.pxm-first .bji svg { width: 18px; height: 18px; }
+
+/* Mon profil › Sécurité: the assistants linked to the account */
+.pxm-links { list-style: none; margin: 0; padding: 0; }
+.pxm-links li { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.pxm-links li:last-child { border-bottom: 0; padding-bottom: 0; }
+.pxm-links li > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.pxm-links .btn { flex: none; }
+/* phones: « Couper » big enough for a finger */
+@media (max-width: 760px) { html .pxm-links .btn { min-height: 44px; } html[data-skin][data-theme] .pxm-links .btn { min-height: 44px; } }

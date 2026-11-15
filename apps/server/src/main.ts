@@ -12,6 +12,7 @@
 //   POST /api/hooks/tiktok          → Dellal: TikTok messages (?key= the Dellal verify token)
 //   POST /api/hooks/sms             → Delivery AI agent: SMS gateway reports and SMS answers (?key= the SMS hook key)
 //   GET  /api/lp/:slug              → a product's landing page (public HTML); POST /api/lp/:slug/order, GET /api/lp/geo/:w, /api/lp/img/:id/:w.webp
+//   POST /api/mcp (the site's /mcp)  → an AI assistant (Claude, ChatGPT) linked to a person's account, see mcp.ts
 //   GET  /api/health
 //   Socket.IO at /live              → "something changed" events for open screens
 import 'reflect-metadata';
@@ -26,6 +27,7 @@ import { CoreModule, CoreService } from './core.service';
 import { JobsModule } from './jobs';
 import { keepLimits, stopKeepingLimits } from './limits';
 import { LiveModule } from './live';
+import { McpModule } from './mcp';
 import { startSecretBox } from './secretbox';
 
 /** The login counters, written down when the server stops (read back at the start: see keepLimits below). */
@@ -36,7 +38,7 @@ class LimitsKeeper implements OnApplicationShutdown {
   }
 }
 
-@Module({ imports: [CoreModule, LiveModule, ApiModule, JobsModule], providers: [LimitsKeeper] })
+@Module({ imports: [CoreModule, LiveModule, ApiModule, McpModule, JobsModule], providers: [LimitsKeeper] })
 class AppModule {}
 
 async function bootstrap() {
@@ -58,6 +60,8 @@ async function bootstrap() {
     .addHook('onRoute', (route: { url?: string; bodyLimit?: number }) => {
       const url = String(route.url ?? '');
       if (/^\/api\/(auth|platform\/auth)\//.test(url)) route.bodyLimit = 64 * 1024;
+      // an AI assistant's link and its sign-in door (mcp.ts): short messages only
+      else if (/^\/api\/mcp(\/|$)/.test(url)) route.bodyLimit = 256 * 1024;
       else if (/^\/api\/(s\/[^/]+\/)?lp\//.test(url)) route.bodyLimit = 64 * 1024;
       else if (/^\/api\/(s\/[^/]+\/)?hooks\//.test(url)) route.bodyLimit = 1024 * 1024;
       // a planned post's video comes in pieces of 8 MB (CM AI agent › Planner)

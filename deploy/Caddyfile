@@ -69,6 +69,22 @@
 		import server
 	}
 
+	# AI assistants (Claude, ChatGPT) linked to a Pilotix account: the link itself (https://<site>/mcp), and the two
+	# papers an assistant reads to find its sign-in door (apps/server/src/mcp.ts; the door's other addresses are /api/mcp/…)
+	@mcp path /mcp /mcp/
+	handle @mcp {
+		rewrite * /api/mcp
+		import server
+	}
+	handle /.well-known/oauth-protected-resource* {
+		rewrite * /api/mcp/resource
+		import server
+	}
+	handle /.well-known/oauth-authorization-server* {
+		rewrite * /api/mcp/server
+		import server
+	}
+
 	# for AI assistants: the shop and its landing pages (made by the server); no ai-catalog.json (a 404, not the app's page)
 	handle /llms.txt {
 		rewrite * /api/llms.txt

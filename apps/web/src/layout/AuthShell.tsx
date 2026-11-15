@@ -60,7 +60,8 @@ export function PasswordInput(props: InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 
-export function AuthShell({ children, wide }: { children: ReactNode; wide?: boolean }) {
+/** `plain`: a question to answer (« Autoriser »): on phones the picture leaves, the question comes first. */
+export function AuthShell({ children, wide, plain }: { children: ReactNode; wide?: boolean; plain?: boolean }) {
   const { t, i18n } = useTranslation();
   const theme = useAuthTheme();
   const [wa, setWa] = useState('');
@@ -109,7 +110,7 @@ export function AuthShell({ children, wide }: { children: ReactNode; wide?: bool
       </footer>
     </main>
   );
-  const cls = `pxa pxt pxt-${theme.layout} pxt-s-${theme.side} pxt-id${theme.id} pxt-new${theme.dark ? ' pxt-dark' : ''}`;
+  const cls = `pxa pxt pxt-${theme.layout} pxt-s-${theme.side} pxt-id${theme.id} pxt-new${theme.dark ? ' pxt-dark' : ''}${plain ? ' pxa-plain' : ''}`;
   return theme.layout === 'split' ? (
     <div className={cls} data-design={theme.id}>
       {side}
