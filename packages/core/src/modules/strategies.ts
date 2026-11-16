@@ -2,9 +2,11 @@
 // competitor's), and Pilotix recommends the video formats that fit it best, from the control room's strategies library
 // (platform/credits.ts: each format says the types and the funnel stages it fits). « Envoyer à l'Espace créateur »
 // opens Espace créateur with the product, the stage and the formats chosen (in the browser: nothing is kept here).
+import { CIRCLE_STEPS, circleBad, circleField, circleValues } from '@pilotix/shared';
 import { z } from 'zod';
 import { num, numOrNull } from '../db';
 import { bad, Ctx, proc } from '../rpc';
+import { getRaw, setRaw } from './admin';
 import { CreditStrategy, creditsConfig, DEFAULT_CREDITS, FUNNEL_STAGES, FunnelStage, PRODUCT_TYPES, ProductType } from '../platform/credits';
 
 export interface StratFormat {
@@ -42,6 +44,13 @@ async function formats(ctx: Ctx): Promise<StratFormat[]> {
 
 const Type = z.union([z.literal(1), z.literal(2), z.literal(3)]);
 
+/** The shop's « Life ad circle » settings are one settings row; a field never saved keeps its default. */
+const CIRCLE_KEY = 'ad_circle';
+async function circleSaved(ctx: Ctx): Promise<Record<string, unknown>> {
+  const v = await getRaw<unknown>(ctx.db, CIRCLE_KEY, null);
+  return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+}
+
 export const strategiesProcs = {
   /** The shop's products with their type, the formats library, and the recommended formats for each type. */
   'strat.state': proc(['vendeur', 'marketer'], z.object({}), async (ctx) => {
@@ -73,4 +82,26 @@ export const strategiesProcs = {
     if (!r[0]) throw bad('Produit introuvable');
     return { ok: true };
   }),
+
+  /** « Life ad circle »: the five steps and the shop's value for every setting (its own, else the default). */
+  'strat.circle': proc(['vendeur', 'marketer'], z.object({}), async (ctx) => {
+    return { steps: [...CIRCLE_STEPS], values: circleValues(await circleSaved(ctx)) };
+  }),
+
+  /** Changes one setting of the circle. An empty value is kept only where the setting may stay « not chosen ». */
+  'strat.circleSet': proc(
+    ['vendeur', 'marketer'],
+    z.object({ key: z.string().max(40), value: z.union([z.number(), z.boolean(), z.null()]) }),
+    async (ctx, i) => {
+      const f = circleField(i.key);
+      if (!f) throw bad('Réglage inconnu');
+      const why = circleBad(f, i.value);
+      if (why === 'empty') throw bad('Ce réglage ne peut pas rester vide');
+      if (why === 'range') throw bad(f.kind === 'day' ? 'Jour inconnu' : `Valeur entre ${f.min} et ${f.max}`);
+      if (why) throw bad('Valeur incorrecte');
+      const next = { ...(await circleSaved(ctx)), [f.key]: i.value };
+      await setRaw(ctx.db, CIRCLE_KEY, next, ctx.session.profile.id);
+      return { values: circleValues(next) };
+    },
+  ),
 };

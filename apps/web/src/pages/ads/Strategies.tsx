@@ -8,6 +8,7 @@ import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { FunnelStage, saveBrief } from '../createur/brief';
+import { AdCircle } from './Circle';
 
 type Type = 1 | 2 | 3;
 const TYPES: Type[] = [1, 2, 3];
@@ -38,7 +39,13 @@ export function Strategies() {
 
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   if (!data) return <Loading />;
-  if (!data.products.length) return <Empty>{t(K + 'noProducts')}</Empty>;
+  if (!data.products.length)
+    return (
+      <div className="st">
+        <AdCircle />
+        <Empty>{t(K + 'noProducts')}</Empty>
+      </div>
+    );
 
   const cur = data.products.find((p) => p.id === pick) ?? products[0] ?? data.products[0];
   const missing = data.products.filter((p) => p.type === null).length;
@@ -51,6 +58,7 @@ export function Strategies() {
 
   return (
     <div className="st">
+      <AdCircle />
       <section className="card st-intro">
         <h2>{t(K + 'title')}</h2>
         <p className="muted">{t(K + 'intro')}</p>

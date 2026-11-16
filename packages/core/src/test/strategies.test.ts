@@ -60,3 +60,38 @@ test('a product gets its type; the marketer and the seller may, a confirmation a
 });
 
 const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+
+test('« Life ad circle »: defaults, one setting changed, wrong values refused', async () => {
+  const vendeur = await as(EMAILS.vendeur);
+  const first = await call('strat.circle', vendeur, {});
+  assert.deepEqual(first.steps, ['test', 'judge', 'scale', 'watch', 'again']);
+  // the plan as written: tests start on Tuesday, the verdict is on Wednesday, 5 confirmed orders win
+  assert.equal(first.values.testDay, 2);
+  assert.equal(first.values.judgeDay, 3);
+  assert.equal(first.values.judgeWin, 5);
+  assert.equal(first.values.testPerWeek, null);
+  assert.equal(first.values.scaleDay, null);
+
+  const r = await call('strat.circleSet', vendeur, { key: 'judgeWin', value: 8 });
+  assert.equal(r.values.judgeWin, 8);
+  await call('strat.circleSet', vendeur, { key: 'scaleDay', value: 5 });
+  await call('strat.circleSet', vendeur, { key: 'testBidCap', value: true });
+  const again = await call('strat.circle', vendeur, {});
+  assert.equal(again.values.judgeWin, 8);
+  assert.equal(again.values.scaleDay, 5);
+  assert.equal(again.values.testBidCap, true);
+  // everything else keeps its default
+  assert.equal(again.values.watchGrow, 20);
+  // a setting that may stay « not chosen » can be emptied again
+  await call('strat.circleSet', vendeur, { key: 'scaleDay', value: null });
+  assert.equal((await call('strat.circle', vendeur, {})).values.scaleDay, null);
+
+  await assert.rejects(call('strat.circleSet', vendeur, { key: 'nope', value: 1 }), /inconnu/);
+  await assert.rejects(call('strat.circleSet', vendeur, { key: 'judgeWin', value: null }), /vide/);
+  await assert.rejects(call('strat.circleSet', vendeur, { key: 'judgeDay', value: 9 }), /Jour/);
+  await assert.rejects(call('strat.circleSet', vendeur, { key: 'judgeWin', value: 2.5 }), /incorrecte/);
+  await assert.rejects(call('strat.circleSet', vendeur, { key: 'watchGrow', value: 500 }), /entre/);
+  await assert.rejects(call('strat.circleSet', vendeur, { key: 'testBidCap', value: 1 }), /incorrecte/);
+  // an agent has no business here
+  await assert.rejects(call('strat.circle', await as(EMAILS.conf), {}));
+});
