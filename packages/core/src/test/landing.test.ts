@@ -49,7 +49,8 @@ test('the page is one small HTML file with the form, the colour and the descript
   assert.ok(r.html.includes('9950.00 دج'));
   assert.ok(r.html.includes('<li>خفيفة</li>'));
   assert.ok(r.html.includes('اطلب الآن'));
-  assert.ok(Buffer.byteLength(r.html) < 30_000, `page is ${Buffer.byteLength(r.html)} bytes`);
+  // (with its product's HD photo and its sizes, as every product on sale has one: Produits › « Prêt »)
+  assert.ok(Buffer.byteLength(r.html) < 32_000, `page is ${Buffer.byteLength(r.html)} bytes`);
   assert.ok(!/<script src=/.test(r.html), 'no external script');
 });
 

@@ -16,6 +16,7 @@ import { getPrefs } from './prefs';
 import { assignedProductIds } from './productscope';
 import { checkGuide, GuideInput, HAS_GUIDE, readGuide, saveGuide, TrFix, TrInput } from './guide';
 import { photoStore, purgePhotos } from './hdphotos';
+import { assertReady } from './readiness';
 import { lessonsFromGuide } from './lahja';
 import { montageProductId, MontageInput, ProductMontage, readMontage } from './montage';
 
@@ -692,7 +693,8 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
     if (cur) {
       await logProductChange(tx, i.id!, ctx.session.profile.id, { price: cur.price, cost: cur.cost, max_discount: cur.max_discount }, { price: i.price, cost: i.cost, max_discount: maxDiscount }, 'Fiche produit');
       await tx.query(
-        `UPDATE products SET name=$2, sku=$3, price=$4, cost=$5, weight_kg=$6, photo=$7, is_service=$8, active=$9, fixed_price=$10, max_discount=$11, packs=$12, linked=$13, parts=$14, fee_grid=$15,
+        // « Actif » is the seller's say (Produits › « Prêt »: Pilotix checks again right after, and keeps it off while not Ready)
+        `UPDATE products SET name=$2, sku=$3, price=$4, cost=$5, weight_kg=$6, photo=$7, is_service=$8, active=$9, ready_off=false, fixed_price=$10, max_discount=$11, packs=$12, linked=$13, parts=$14, fee_grid=$15,
          barcode=$16, brand=$17, external_id=$18, page_url=$19, seller_id=$20, description=$21, alert_qty=$22, default_company_id=$23, options=$24, services=$25,
          old_names=$26, old_skus=$27 WHERE id=$1`,
         // its former name and code are kept: what still writes them (a sheet, the website, an import) finds it
@@ -1171,11 +1173,14 @@ export const catalogProcs = {
     variantId: id.optional(),
     active: z.boolean(),
   }).refine((x) => Number(!!x.productId) + Number(!!x.variantId) === 1, 'Choisissez un produit ou une variante'), async (ctx, i) => {
+    // Produits › « Prêt »: a product that is not Ready cannot be switched on (it goes on sale by itself once it is)
+    if (i.productId && i.active) await assertReady(ctx, i.productId);
     await ctx.db.tx(async (tx) => {
       if (i.productId) {
         const product = (await tx.query('SELECT id FROM products WHERE id = $1 AND archived_at IS NULL FOR UPDATE', [i.productId]))[0];
         if (!product) throw notFound('Produit introuvable');
-        await tx.query('UPDATE products SET active = $2 WHERE id = $1', [i.productId, i.active]);
+        // switched by hand: no longer Pilotix's switch (switched off by the seller, it stays off once Ready)
+        await tx.query('UPDATE products SET active = $2, ready_off = false WHERE id = $1', [i.productId, i.active]);
         const addons = (await tx.query('SELECT services FROM products WHERE id = $1', [i.productId]))[0]?.services ?? [];
         const services = typeof addons === 'string' ? JSON.parse(addons) : addons;
         for (const service of services) await tx.query('UPDATE products SET active = $2 WHERE id = $1 AND is_service', [service.id, i.active]);

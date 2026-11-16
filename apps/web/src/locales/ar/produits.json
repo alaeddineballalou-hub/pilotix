@@ -149,6 +149,7 @@
     "searchPh": "ابحث عن منتج أو متغير أو رمز…",
     "filters": "تصفية المنتجات",
     "f_active": "النشطة",
+    "f_todo": "للإنجاز",
     "f_hidden": "المخفية",
     "f_service": "الخدمات",
     "f_all": "الكل",
@@ -1086,5 +1087,25 @@
     "offer": "+ تركيب",
     "offerTip": "إضافة تركيب {{name}} ({{price}})",
     "notHere": "لا يوجد تركيب في {{w}}"
+  },
+  "ready": {
+    "bannerTitle_one": "{{count}} منتج لا يُباع",
+    "bannerTitle_other": "{{count}} منتجات لا تُباع",
+    "bannerTitle_zero": "{{count}} منتجات لا تُباع",
+    "bannerTitle_two": "{{count}} منتجات لا تُباع",
+    "bannerTitle_few": "{{count}} منتجات لا تُباع",
+    "bannerTitle_many": "{{count}} منتجات لا تُباع",
+    "bannerText": "حتى يكون لكل منها: {{steps}}. يُعرض للبيع وحده عندما يكتمل كل شيء.",
+    "missingCount": "ينقص {{n}} من {{total}}",
+    "notSold": "لا يُباع",
+    "lockedHint": "غير جاهز بعد: يُعرض للبيع وحده عندما يكتمل كل شيء.",
+    "lockedAria": "{{name}} لا يُباع: غير جاهز بعد",
+    "step": {
+      "photo": "صورة HD",
+      "prices": "الأسعار",
+      "description": "الوصف",
+      "landing": "صفحة هبوط",
+      "guide": "دليل البيع"
+    }
   }
 }

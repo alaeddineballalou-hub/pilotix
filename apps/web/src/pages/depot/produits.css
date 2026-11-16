@@ -407,8 +407,9 @@ select.pd-sel.on, .pd-tools-a select.pd-sel { border-color: var(--ai-tint-line);
 .pd-ell { display: block !important; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pd-qty { font: 700 16px/1 var(--f-display); font-variant-numeric: tabular-nums; }
 
-/* Produits */
-.pd-prows { grid-template-columns: minmax(220px, 1.5fr) minmax(110px, 1fr) 104px 104px 104px 110px 84px 84px; grid-template-areas: "name vars price cost margin disc avail state"; }
+/* Produits (the figures give some width back on a laptop, so the row never runs past the card; « 2 of 5 missing »
+   fits the status) */
+.pd-prows { grid-template-columns: minmax(190px, 1.5fr) minmax(90px, 1fr) repeat(3, minmax(84px, 104px)) minmax(92px, 110px) 84px 112px; grid-template-areas: "name vars price cost margin disc avail state"; }
 .pd-row .a-disc { grid-area: disc; }
 .pd-disc small { display: block; color: var(--muted); font-size: 12px; }
 .pd-prod { display: flex; align-items: center; gap: 12px; min-width: 0; }
@@ -854,3 +855,16 @@ a.chip.lp-nolp:hover { text-decoration: underline; }
 .pf .items-ed .item-row.bjpv-row > input, .pf .items-ed .item-row.bjpv-row > select { width: 100%; min-width: 0; }
 .pf .items-ed .item-row.bjpv-row > .icon-btn { justify-self: start; }
 .pf .items-ed .item-row.bjpv-row + .item-row.bjpv-row { margin-top: 6px; padding-top: 12px; border-top: 1px dashed var(--line); }
+
+/* ---- Produits › « Prêt » / « À faire »: what a product still misses (red chips, each opens its fix), « Pas vendu »,
+   and the line above the « À faire » list */
+.pd-name > small .chip.pd-miss { background: var(--c-bad-tint); color: var(--c-bad-ink); font-weight: 700; text-decoration: none; border: 0; cursor: pointer; font: inherit; font-size: 12px; }
+.pd-name > small .chip.pd-miss:hover { text-decoration: underline; }
+.pd-name > small .chip.pd-miss.is-static { cursor: default; }
+.pd-name > small .chip.pd-miss.is-static:hover { text-decoration: none; }
+.pd-notready { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.pd-miss-count { max-width: 100%; font-size: 12px; font-weight: 700; color: var(--c-warn-ink); background: var(--c-warn-tint); border-radius: 10px; padding: 2px 9px; }
+.pd-availability.is-locked { opacity: 0.75; cursor: not-allowed; }
+.pd-availability.is-locked .pd-switch-state { white-space: nowrap; }
+.pd-ready-banner { display: flex; gap: 10px; align-items: center; margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: var(--c-warn-tint); color: var(--c-warn-ink); font-size: 14px; }
+.pd-ready-banner svg { flex: none; }

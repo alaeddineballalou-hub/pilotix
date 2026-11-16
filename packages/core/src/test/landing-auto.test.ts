@@ -226,6 +226,8 @@ test('abandoned: a customer who orders is not added twice; one without wilaya wa
 
 test('products without a page: counted for marketers, one-click page, set aside, and made automatically when asked', async () => {
   const mk = await as(EMAILS.marketer);
+  // the demo's products have their page: two new ones have none (« À faire » until they have one, among the rest)
+  for (const name of ['Bavoir silicone', 'Hochet en bois']) await call('catalog.saveProduct', await as(EMAILS.depot), { name, price: 1200, variants: [{ title: 'Rose' }, { title: 'Bleu' }] });
   const before = (await call('orders.counts', mk, {})) as any;
   assert.ok(before.landing.noPage >= 1);
   assert.equal(((await call('orders.counts', await as(EMAILS.depot), {})) as any).landing, undefined, 'not for the depot');

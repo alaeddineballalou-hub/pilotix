@@ -30,6 +30,7 @@ import { pushProcs } from './modules/push';
 import { promoProcs } from './modules/promo';
 import { rightsProcs } from './modules/rights';
 import { catalogProcs } from './modules/catalog';
+import { readinessProcs } from './modules/readiness';
 import { hdPhotoProcs } from './modules/hdphotos';
 import { guideProcs } from './modules/guidedraft';
 import { productImportProcs } from './modules/productimport';
@@ -97,6 +98,7 @@ export const REGISTRY = {
   ...boardProcs,
   ...doctorProcs,
   ...catalogProcs,
+  ...readinessProcs,
   ...hdPhotoProcs,
   ...guideProcs,
   ...productImportProcs,

@@ -137,6 +137,7 @@
     "searchPh": "Chercher un produit, une variante, un code…",
     "filters": "Filtrer les produits",
     "f_active": "Actifs",
+    "f_todo": "À faire",
     "f_hidden": "Masqués",
     "f_service": "Services",
     "f_all": "Tous",
@@ -934,5 +935,21 @@
     "offer": "+ Montage",
     "offerTip": "Ajouter le montage de {{name}} ({{price}})",
     "notHere": "Pas de montage à {{w}}"
+  },
+  "ready": {
+    "bannerTitle_one": "{{count}} produit n’est pas vendu",
+    "bannerTitle_other": "{{count}} produits ne sont pas vendus",
+    "bannerText": "tant que chacun n’a pas : {{steps}}. Il se met en vente tout seul dès qu’il a tout.",
+    "missingCount": "{{n}}/{{total}} manquent",
+    "notSold": "Pas vendu",
+    "lockedHint": "Pas encore prêt : il se met en vente tout seul dès qu’il a tout.",
+    "lockedAria": "{{name}} n’est pas vendu : pas encore prêt",
+    "step": {
+      "photo": "Photo HD",
+      "prices": "Prix",
+      "description": "Description",
+      "landing": "Landing page",
+      "guide": "Guide de vente"
+    }
   }
 }

@@ -59,6 +59,7 @@ import { shareBlacklist } from './sharedblacklist';
 import { ipPrefix } from '../net';
 import { sharedReputation } from '../platform/reputation';
 import { RESERVED } from './stockquery';
+import { WORKED_ON } from './readiness';
 
 const id = z.number().int().positive();
 export const WHO = ['marketer'] as const;
@@ -2003,9 +2004,10 @@ export const landingProcs = {
     return { ok: r.length > 0, info: r[0] ? readJson<LandingImageInfo>(r[0].info) : null };
   }),
 
-  /** products a page can be made for (with their SKU, for an address when the name is in Arabic) */
+  /** products a page can be made for (with their SKU, for an address when the name is in Arabic): those on sale, and
+   *  those « À faire » (a page is one of the things they wait for) */
   'landing.products': proc([...WHO], z.object({}), async (ctx) =>
-    (await ctx.db.query(`SELECT id, name, sku, price FROM products WHERE active AND NOT is_service ORDER BY lower(name)`)).map((r: any) => ({
+    (await ctx.db.query(`SELECT id, name, sku, price FROM products p WHERE ${WORKED_ON('p')} AND NOT is_service ORDER BY lower(name)`)).map((r: any) => ({
       id: num(r.id),
       name: String(r.name),
       sku: String(r.sku ?? ''),
@@ -2019,13 +2021,13 @@ export const landingProcs = {
   })),
 
   // ---------------------------------------------------------------- products without a page
-  /** active products (not services) with no page yet, newest first, except those set aside */
+  /** products on sale or « À faire » (not services) with no page yet, newest first, except those set aside */
   'landing.missing': proc([...WHO], z.object({}), async (ctx) => {
     const s = await landingSettings(ctx.db);
     const rows = await ctx.db.query(
       `SELECT p.id, p.name, p.sku, p.price, p.photo, p.created_at,
          (SELECT COALESCE(sum(st.qty), 0)::int FROM stock st JOIN product_variants v ON v.id = st.variant_id WHERE v.product_id = p.id) AS stock
-       FROM products p WHERE p.active AND NOT p.is_service AND NOT (p.id = ANY($1::bigint[]))
+       FROM products p WHERE ${WORKED_ON('p')} AND NOT p.is_service AND NOT (p.id = ANY($1::bigint[]))
          AND NOT EXISTS (SELECT 1 FROM landing_pages l WHERE l.product_id = p.id)
        ORDER BY p.created_at DESC, p.id DESC LIMIT 100`,
       [s.ignored ?? []],

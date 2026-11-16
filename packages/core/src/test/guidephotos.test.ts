@@ -64,9 +64,11 @@ test('a picture on an answer: written on it, read with the guide, never among th
   // kept like an HD photo (the preview keeps the file itself), under its own kind: the Photos box never shows it
   const row = (await db.query(`SELECT kind, store, variant_id, data, bytes FROM product_photos WHERE id = $1`, [p1.id]))[0];
   assert.deepEqual({ ...row, bytes: Number(row.bytes) }, { kind: 'guide', store: 'local', variant_id: null, data: JPEG('q1'), bytes: Buffer.from(JPEG('q1'), 'base64').length });
+  // (the box holds the thermometer's own HD photo only)
+  const own = await db.query(`SELECT id, bytes FROM product_photos WHERE product_id = $1 AND kind <> 'guide' ORDER BY id`, [thermo]);
   const box: any = await call('photos.list', depot, { productId: thermo });
-  assert.equal(box.photos.length, 0);
-  assert.equal(box.bytes, 0);
+  assert.deepEqual(box.photos.map((x: any) => x.id), own.map((r: any) => Number(r.id)));
+  assert.equal(box.bytes, own.reduce((a: number, r: any) => a + Number(r.bytes), 0));
   await assert.rejects(call('photos.remove', depot, { id: p1.id }), /introuvable/);
   await assert.rejects(call('photos.update', depot, { id: p1.id, kind: 'photo' }), /introuvable/);
   assert.equal((await db.query(`SELECT photo FROM products WHERE id = $1`, [thermo]))[0].photo, form.photo, 'the product’s own picture did not move');

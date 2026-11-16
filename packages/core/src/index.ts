@@ -8,6 +8,7 @@ import { boutiqueCall } from './modules/boutiquework';
 import { stopAgentPlan } from './modules/planledger';
 import { requireAssignedProducts, seesPurchaseCosts, withoutPurchaseCosts } from './modules/productscope';
 import { can, rightsGate } from './modules/rights';
+import { READY_TOUCH, syncReadiness } from './modules/readiness';
 
 export * from './db';
 export * from './rpc';
@@ -30,6 +31,7 @@ export { pgliteDb } from './pglite';
 export * from './platform';
 export { landingCommunes } from './modules/landing';
 export { findBySku } from './modules/catalog';
+export { HD_MIN_WIDTH, READY_CHECKS, readinessOf, syncReadiness, type ReadyCheck } from './modules/readiness';
 export { photoPageHtml } from './modules/photoshare';
 export { fromLibrary } from './modules/spy';
 export type { RawAd, SpyAd, SpyBrief, SpyFinding, SpyKeyword, SpyProductRow, SpySettings, SpySite, SpySource, ScorePart } from './modules/spy';
@@ -67,6 +69,8 @@ const run = async (ctx: Ctx, name: string, input: unknown) => {
     if (['orders.quote', 'orders.create', 'orders.update'].includes(n) && i.items?.length)
       await requireAssignedProducts(c, i.items.map((l: any) => l.productId));
   });
+  // Produits › « Prêt »: a change that can make a product ready (or not) puts every product back where it belongs
+  if (READY_TOUCH.has(name)) await syncReadiness(ctx);
   return seesPurchaseCosts(ctx) && (await can(ctx, 'act:costs')) ? out : withoutPurchaseCosts(out);
 };
 

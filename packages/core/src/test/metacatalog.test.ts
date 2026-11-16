@@ -112,7 +112,9 @@ test('plain text, the lines of a product and the fingerprint', () => {
 });
 
 test('demo: the lists, their states and what stops a product', async () => {
-  const { as } = await setup(120);
+  const { db, as } = await setup(120);
+  // the scarf's page taken offline (Pilotix keeps it « À faire » at its next check; the catalogue says why first)
+  await db.query(`DELETE FROM landing_pages WHERE product_id = (SELECT id FROM products WHERE sku = 'PX-ECH')`);
   const mk = await as(EMAILS.marketer);
   const b: any = await call('metacatalog.board', mk, {});
   assert.equal(b.catalog.connected, true);
@@ -153,6 +155,7 @@ test('lists: make, drop, move, take out, send and remove (preview)', async () =>
   const pou = await pid('PX-POU');
   const sac = await pid('PX-SAC');
   const ech = await pid('PX-ECH');
+  await db.query(`DELETE FROM landing_pages WHERE product_id = $1`, [ech]);
   const a: any = await call('metacatalog.listSave', mk, { name: 'Hiver' });
   const b: any = await call('metacatalog.listSave', mk, { name: 'Soldes' });
   await call('metacatalog.add', mk, { listId: a.id, productId: pou });

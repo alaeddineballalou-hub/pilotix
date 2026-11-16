@@ -33,6 +33,7 @@ export const JOB_EVERY: Record<string, number> = {
   'leads-catchup': 10 * MIN,
   'campaigns-run': MIN,
   'catalog-run': 10 * MIN,
+  'ready-sync': 10 * MIN,
   'ads-pilot': 15 * MIN,
   'dellal-catchup': 3 * MIN,
   'dellal-followups': 15 * MIN,

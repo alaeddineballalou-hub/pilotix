@@ -135,6 +135,8 @@ test('pages follow their product: its photo, a new variant photo, an off variant
   const pg = (await db.query('SELECT id, slug, product_id FROM landing_pages WHERE id = $1', [pages[1].id]))[0];
   const pid = Number(pg.product_id);
   const png = (n: number) => `data:image/png;base64,${Buffer.from(`photo-${n}`).toString('base64')}`;
+  // no HD photo first (its demo one taken away): the small photos, then the HD ones below
+  await db.query(`DELETE FROM product_photos WHERE product_id = $1 AND kind = 'photo'`, [pid]);
   // the product: a main photo, two colours with their own photo (a third colour without)
   await db.query('UPDATE products SET photo = $2 WHERE id = $1', [pid, png(1)]);
   await db.query(`DELETE FROM landing_blocked WHERE landing_id = $1`, [pg.id]).catch(() => null);

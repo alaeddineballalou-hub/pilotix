@@ -5,6 +5,7 @@ import { Db, num } from '../db';
 import { bad, notFound } from '../rpc';
 import { getSetting, SettingsMap } from '../settings';
 import { pixelsOf } from './pixels';
+import { WORKED_ON } from './readiness';
 
 export type LandingSettings = SettingsMap['landing'];
 export const landingSettings = (db: Db): Promise<LandingSettings> => getSetting(db, 'landing');
@@ -83,14 +84,14 @@ export const ABANDONED = (cut: string) =>
   `(a.status = 'abandoned' OR (a.status = 'open' AND a.last_at < ${cut}))
    AND NOT EXISTS (SELECT 1 FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.phone = a.phone AND oi.product_id = a.product_id AND o.created_at >= a.at - interval '24 hours')`;
 
-/** The menu's landing numbers: blocked orders and abandoned orders to handle, active products without a page. */
+/** The menu's landing numbers: blocked orders and abandoned orders to handle, products on sale or « À faire » without a page. */
 export async function landingCounts(db: Db, now: number): Promise<{ blocked: number; abandoned: number; noPage: number }> {
   const s = await landingSettings(db);
   const r = (
     await db.query(
       `SELECT (SELECT count(*)::int FROM landing_blocked WHERE status = 'blocked') AS blocked,
               (SELECT count(*)::int FROM landing_leads a WHERE ${ABANDONED('$1::timestamptz')}) AS abandoned,
-              (SELECT count(*)::int FROM products p WHERE p.active AND NOT p.is_service AND NOT (p.id = ANY($2::bigint[]))
+              (SELECT count(*)::int FROM products p WHERE ${WORKED_ON('p')} AND NOT p.is_service AND NOT (p.id = ANY($2::bigint[]))
                  AND NOT EXISTS (SELECT 1 FROM landing_pages l WHERE l.product_id = p.id)) AS no_page`,
       [abandonCutoff(s, now), s.ignored ?? []],
     )

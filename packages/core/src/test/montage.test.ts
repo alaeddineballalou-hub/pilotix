@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
 import m105 from '../migrations/105_montage';
-import { EMAILS, setup } from './harness';
+import { EMAILS, makeReady, setup } from './harness';
 
 let db: Db;
 let pg: any;
@@ -39,6 +39,9 @@ test('montage: one shared service, priced from the product, only in its wilayas'
   await call('catalog.saveMontage', depot, { wilayas: [] }); // the demo's list: every wilaya here
   const p: any = await call('catalog.saveProduct', depot, { name: 'Armoire 3 portes', price: 40000, montage: { price: 2000, cost: 800, wilayas: [16, 9] } });
   const q: any = await call('catalog.saveProduct', depot, { name: 'Commode', price: 20000, montage: { price: 1000, cost: 300, wilayas: null } });
+  // new products sell once they are Ready (Produits › « Prêt »)
+  await makeReady(db, p.id);
+  await makeReady(db, q.id);
   assert.deepEqual(p.montage, { price: 2000, cost: 800, wilayas: [9, 16] });
   const d: any = await call('orders.formData', conf, {});
   const mid = d.montage.productId;

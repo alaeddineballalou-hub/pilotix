@@ -40,16 +40,19 @@ const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCa
  *  maximum discount), stock & logistics, options (variants), photos (the one place where its pictures are added:
  *  ProductPhotos), then SAV parts, packs and linked products. */
 /** onCreated: a NEW product was saved (Produits proposes its landing page). */
-/** tab: « guide » opens the product's Guide de vente (the product list's chip). */
-export function ProductForm({ id, onClose, onCreated, tab }: { id: number | null; onClose: () => void; onCreated?: (p: { id: number; name: string; isService: boolean; active: boolean }) => void; tab?: 'product' | 'guide' }) {
+/** tab: « guide » opens the product's Guide de vente (the product list's chip). focus: the part a « À faire » chip of the
+ *  list opens (its HD photos, its prices, its description). */
+export type FormFocus = 'photo' | 'prices' | 'description';
+/** waiting: Pilotix keeps it off until it is Ready (« À faire »): its « Actif » box stays ticked (the seller wants it sold). */
+export function ProductForm({ id, onClose, onCreated, tab, focus, waiting }: { id: number | null; onClose: () => void; onCreated?: (p: { id: number; name: string; isService: boolean; active: boolean }) => void; tab?: 'product' | 'guide'; focus?: FormFocus; waiting?: boolean }) {
   const { t } = useTranslation();
   const cur = useRpc('catalog.product', { id: id ?? 0 }, { enabled: !!id });
   if (id && cur.isLoading) return <Modal title="…" onClose={onClose}><Loading /></Modal>;
   if (id && cur.error) return <Modal title="…" onClose={onClose}><ErrorBox error={cur.error} /></Modal>;
-  return <Form p={id ? cur.data ?? null : null} onClose={onClose} onCreated={onCreated} key={id ?? 'new'} t={t} tab={tab} />;
+  return <Form p={id ? cur.data ?? null : null} onClose={onClose} onCreated={onCreated} key={id ?? 'new'} t={t} tab={tab} focus={focus} waiting={waiting} />;
 }
 
-function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: () => void; onCreated?: (p: { id: number; name: string; isService: boolean; active: boolean }) => void; t: (k: string, o?: any) => string; tab?: 'product' | 'guide' }) {
+function Form({ p, onClose, onCreated, t, tab: firstTab, focus, waiting }: { p: any; onClose: () => void; onCreated?: (p: { id: number; name: string; isService: boolean; active: boolean }) => void; t: (k: string, o?: any) => string; tab?: 'product' | 'guide'; focus?: FormFocus; waiting?: boolean }) {
   const { session } = useSession();
   const admin = !!session?.isAdmin;
   const all = useRpc('catalog.products', {});
@@ -64,7 +67,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
     photo: p?.photo ?? '',
     isService: !!p?.isService,
     hasBatches: !!p?.hasBatches,
-    active: p ? !!p.active : true,
+    active: p ? !!p.active || !!waiting : true,
     fixedPrice: !!p?.fixedPrice,
     maxDiscount: p ? (p.maxDiscount === null ? '' : String(p.maxDiscount)) : '',
     feeGrid: p?.feeGrid ?? '',
@@ -110,6 +113,17 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
   // guide is saved with the product, then each one leaves for its answer.
   const photos = useRef<PhotosHandle>(null);
   const [sending, setSending] = useState<{ done: number; total: number } | null>(null);
+  // Produits › « À faire »: the chip « + Photo HD / Prix / Description » opens the form on that part
+  const formEl = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (!focus) return;
+    const go = window.setTimeout(() => {
+      const el = formEl.current?.querySelector<HTMLElement>(`[data-focus="${focus}"]`);
+      el?.scrollIntoView({ block: 'center' });
+      (el?.matches('input, textarea') ? el : el?.querySelector<HTMLElement>('input:not([type=file]), textarea'))?.focus({ preventScroll: true });
+    }, 80);
+    return () => window.clearTimeout(go);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const scope = useScope();
   const qc = useQueryClient();
   const guideNow = useRef(guide);
@@ -286,6 +300,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
         <GuideEditor value={guide} onChange={setGuide} facts={draftFacts} products={others.map((x) => ({ id: x.id, name: x.name }))} pictures={p?.guidePictures !== false} />
       </div>
       <form
+        ref={formEl}
         className="pf"
         hidden={tab !== 'product'}
         onSubmit={(e) => {
@@ -328,12 +343,12 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
             </Field>
           </div>
           <Field label={t('produits.form.description')}>
-            <textarea rows={3} value={f.description} onChange={(e) => set('description', e.target.value)} />
+            <textarea rows={3} data-focus="description" value={f.description} onChange={(e) => set('description', e.target.value)} />
           </Field>
         </section>
 
         <div className="pf-two">
-          {!variantPricing && <section className="pf-sec">
+          {!variantPricing && <section className="pf-sec" data-focus="prices">
             <h3>{t('produits.form.pricing')}</h3>
             <div className="grid2">
               <Field label={<Req>{t('produits.form.cost')}</Req>}>
@@ -407,6 +422,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
                 <input type="checkbox" checked={f.active} onChange={(e) => set('active', e.target.checked)} />
                 {t('produits.form.active')}
               </label>
+              {waiting && f.active && <p className="muted small">{t('produits.ready.lockedHint')}</p>}
               {lotsCfg.data?.on && !f.isService && (
                 <label className="check" title={t('produits.form.hasBatchesHint')}>
                   <input type="checkbox" checked={f.hasBatches} onChange={(e) => set('hasBatches', e.target.checked)} />
@@ -475,7 +491,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
           )}
         </section>
 
-        <section className="pf-sec">
+        <section className="pf-sec" data-focus="photo">
           <ProductPhotos ref={photos} productId={p?.id ?? null} lines={photoLines} photo={f.photo} onMain={setMainPhoto} onLine={setLinePhoto} />
         </section>
 

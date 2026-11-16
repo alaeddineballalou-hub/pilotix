@@ -16,6 +16,7 @@ import { getRaw, setRaw } from './admin';
 import { ask, giveBack, take } from './createur';
 import { AddInput, addHdPhoto } from './hdphotos';
 import { mimeOf } from './dellalphotos';
+import { WORKED_ON } from './readiness';
 
 const M = ['marketer'] as const;
 const Id = z.number().int().positive();
@@ -213,7 +214,8 @@ export const studioProcs = {
     const cfg = ctx.t && ctx.shop ? await creditsConfig(ctx.t) : DEFAULT_CREDITS;
     const tool = cfg.tools.find((x) => x.key === TOOL_PHOTO);
     const k = await ownKey(ctx);
-    const prods = await ctx.db.query(`SELECT id, name, price, photo FROM products WHERE active ORDER BY name LIMIT 500`);
+    // the products on sale, and those « À faire » (their photos and their page are made here)
+    const prods = await ctx.db.query(`SELECT id, name, price, photo FROM products p WHERE ${WORKED_ON('p')} ORDER BY name LIMIT 500`);
     const vars = prods.length
       ? await ctx.db.query(`SELECT id, product_id, title, price, photo FROM product_variants WHERE active AND title <> '' AND product_id = ANY($1) ORDER BY id`, [prods.map((p: any) => p.id)])
       : [];

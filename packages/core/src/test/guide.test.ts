@@ -32,9 +32,11 @@ const GUIDE = {
   never: ['Qu’il remplace le médecin.'],
 };
 
-test('the demo shop: five products have a guide, flagged in the lists, the form reads it', async () => {
+test('the demo shop: its products have a guide (one is needed to sell), flagged in the lists, the form reads it', async () => {
+  // the thermometer's is still to write (a shop's new product)
+  await db.query('DELETE FROM product_guides WHERE product_id = $1', [thermo]);
   const list: any[] = await call('catalog.products', depot, {});
-  assert.equal(list.filter((p) => p.hasGuide).length, 5);
+  assert.equal(list.filter((p) => p.hasGuide).length, list.filter((p) => !p.isService).length - 1);
   assert.equal(list.find((p) => p.id === chair).hasGuide, true);
   assert.equal(list.find((p) => p.id === thermo).hasGuide, false);
   const one: any = await call('catalog.product', depot, { id: chair });
@@ -244,7 +246,9 @@ test('Produits & stock › Guide de vente: every product and where its guide sta
   assert.equal(saved.guide.brief, 'Thermomètre sans contact.');
   assert.ok(saved.updatedAt && saved.updatedBy);
   const after: any = await call('catalog.product', depot, { id: thermo });
-  assert.deepEqual({ ...after, guide: null, guideAt: null, guideBy: null, hasGuide: false }, { ...before, guide: null, guideAt: null, guideBy: null, hasGuide: false });
+  assert.deepEqual({ ...after, guide: null, guideAt: null, guideBy: null, hasGuide: false, active: null }, { ...before, guide: null, guideAt: null, guideBy: null, hasGuide: false, active: null });
+  // its guide was all it missed (Produits › « Prêt »): it went on sale by itself
+  assert.deepEqual([before.active, after.active], [false, true]);
   assert.equal(((await call('catalog.guides', depot, {})) as any).rows.find((r: any) => r.id === thermo).toFill, 1);
   await assert.rejects(call('catalog.saveGuide', depot, { id: 999999, guide: {} }), /introuvable/);
   // agents read their own products only, and never write

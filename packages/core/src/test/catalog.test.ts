@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
-import { EMAILS, setup } from './harness';
+import { EMAILS, makeReady, setup } from './harness';
 
 let db: Db;
 let as: (email: string) => Promise<Ctx>;
@@ -223,6 +223,9 @@ test('paid service (gift wrap), per-variant availability and zero-stock confirma
   assert.equal(svc.cost, 500);
   assert.equal(svc.weightKg, 0);
   assert.ok(p.linked.includes(svc.id));
+  // a new product is « À faire » until it has its photo, page, guide…: given them, it sells (its service is never checked)
+  assert.equal((await call('catalog.product', admin, { id: p.id }) as any).active, false);
+  await makeReady(db, p.id);
   const variant = p.variants.find((v: any) => v.title === 'Gris');
   const { checkLines } = await import('../modules/confirmcheck');
   const line = [{ productId: p.id, variantId: variant.id, qty: 1 }];

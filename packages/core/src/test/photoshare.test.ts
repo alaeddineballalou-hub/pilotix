@@ -93,10 +93,11 @@ test('only the agent’s own orders and products; at most 10 products; a product
   // a colour of another product
   const wrong = (await db.query('SELECT id FROM product_variants WHERE product_id <> $1 ORDER BY id LIMIT 1', [productId]))[0];
   await assert.rejects(call('confirmation.photoShare', samira, { orderId, items: [{ productId, variantId: Number(wrong.id) }] }), /Variante introuvable/);
-  // a product of hers without any photo: said, nothing made
+  // a product of hers without any photo (its demo HD photo taken away): said, nothing made
   const mine: any[] = (await call('confirmation.catalog', samira, {})) as any[];
   let bare: number | null = null;
   for (const p of mine.filter((x) => x.id !== productId && !x.isService)) {
+    await db.query(`DELETE FROM product_photos WHERE product_id = $1 AND kind = 'photo'`, [p.id]);
     const th: any = await call('confirmation.photoThumbs', samira, { items: [{ productId: p.id, variantId: null }] });
     if (th[0].count === 0) {
       bare = p.id;

@@ -4,6 +4,7 @@
 // tables (shop #1 = the demo store), as on a server. Safe to call again: it finds them. Only for the in-browser demo
 // (its own database): never called on a server.
 import { Db, num } from './db';
+import { seedReady } from './seed';
 import { setShopLogo } from './modules/boutiques';
 import { ensureAccount } from './platform/accounts';
 import { loadShop, migrateAll, provisionShop } from './platform/shops';
@@ -116,6 +117,8 @@ async function seedBoutiqueData(db: Db, b: DemoBoutique, ownerId: number, passwo
     }
     catalog.push({ id: pid, name: p.name, price: p.price, cost: p.cost, variants: vs });
   }
+  // Produits › « Prêt »: its products have what a product needs to sell (a description, an HD photo, a page, a guide)
+  await seedReady(db, now, false);
   const N = 45;
   for (let i = 0; i < N; i++) {
     const created = now - Math.pow(rnd(), 1.6) * 21 * 86_400_000;

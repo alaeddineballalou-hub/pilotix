@@ -21,7 +21,7 @@ import { Depots } from './Depots';
 import { Inventaire } from './Inventaire';
 import { useDebounced } from './OrderList';
 import { ImportDialog } from './ImportDialog';
-import { ProductForm } from './ProductForm';
+import { FormFocus, ProductForm } from './ProductForm';
 import { AlertDialog, BrokenDialog, MoveDialog, TransferDialog } from './StockDialogs';
 import { bidi, Delta, DepotSelect, LevelBar, matches, nameOf, RowMenu, StockRowT, Toolbar, useDepots } from './stockui';
 import './produits.css';
@@ -325,7 +325,9 @@ function StockTab() {
 }
 
 // ---------------------------------------------------------------- Produits
-type ProdFilter = 'active' | 'hidden' | 'service' | 'all';
+type ProdFilter = 'active' | 'todo' | 'hidden' | 'service' | 'all';
+/** Produits › « Prêt »: the five things a product needs to be sold, in the order the chips show them. */
+const READY_STEPS = ['photo', 'prices', 'description', 'landing', 'guide'] as const;
 
 function ProductsTab() {
   const { t } = useTranslation();
@@ -334,10 +336,18 @@ function ProductsTab() {
   const [openProduct, setOpenProduct] = useState<Set<number>>(new Set());
   const availability = useAction('catalog.setAvailability', { success: 'Disponibilité mise à jour' });
   const prods = useRpc('catalog.products', {});
+  // Produits › « Prêt »: what each product still misses (a product missing something is in « À faire », not sold)
+  const ready = useRpc('catalog.readiness', {});
+  const missingOf = useMemo(() => new Map((ready.data?.products ?? []).map((x) => [x.id, x.missing])), [ready.data]);
+  // kept off by Pilotix only until it is Ready (wanted on sale): the others off are the seller's own choice (« Hidden »)
+  const waiting = useMemo(() => new Set((ready.data?.products ?? []).filter((x) => x.waiting).map((x) => x.id)), [ready.data]);
+  // what this shop's products need (a shop without landing pages in its plan is not asked for one)
+  const checks: readonly string[] = ready.data?.checks ?? READY_STEPS;
   const st = useRpc('catalog.stock', { withHidden: true });
   const [edit, setEdit] = useState<number | 'new' | null>(null);
-  // the product form opens on its Guide de vente tab from the list's « Guide » chip
+  // the product form opens on its Guide de vente tab from the list's « Guide » chip, on a part from a « À faire » chip
   const [editTab, setEditTab] = useState<'product' | 'guide'>('product');
+  const [editFocus, setEditFocus] = useState<FormFocus | undefined>();
   const [importing, setImporting] = useState(false);
   // landing pages: which products have one (a product just created without one gets a banner)
   const { session } = useSession();
@@ -354,7 +364,8 @@ function ProductsTab() {
   }, [st.data]);
   const all = prods.data ?? [];
   const found = all.filter((p) => !q.trim() || matches(q, p.name, p.sku, ...p.variants.map((v) => `${v.title} ${v.sku}`)));
-  const test: Record<ProdFilter, (p: (typeof all)[number]) => boolean> = { active: (p) => p.active, hidden: (p) => !p.active, service: (p) => p.isService, all: () => true };
+  const todo = (p: (typeof all)[number]) => !p.isService && (missingOf.get(p.id)?.length ?? 0) > 0 && (p.active || waiting.has(p.id));
+  const test: Record<ProdFilter, (p: (typeof all)[number]) => boolean> = { active: (p) => p.active, todo, hidden: (p) => !p.active && !todo(p), service: (p) => p.isService, all: () => true };
   const rows = found.filter(test[f]);
   const stockByVariant = new Map<number, number>();
   for (const r of st.data ?? []) stockByVariant.set(r.variantId, (stockByVariant.get(r.variantId) ?? 0) + r.available);
@@ -380,7 +391,7 @@ function ProductsTab() {
           value={f}
           onChange={setF}
           label={t('produits.products.filters')}
-          items={(['active', 'hidden', 'service', 'all'] as const).map((k) => ({ value: k, label: t(`produits.products.f_${k}`), count: found.filter(test[k]).length }))}
+          items={(['active', 'todo', 'hidden', 'service', 'all'] as const).map((k) => ({ value: k, label: t(`produits.products.f_${k}`), count: found.filter(test[k]).length }))}
         />
       </Toolbar>
       {fresh && !cov.isFetching && !pages.has(fresh.id) && (
@@ -398,6 +409,14 @@ function ProductsTab() {
           <button className="icon-btn" aria-label={t('common.close')} onClick={() => setFresh(null)}>
             <Icon name="x" />
           </button>
+        </div>
+      )}
+      {f === 'todo' && rows.length > 0 && (
+        <div className="pd-ready-banner" role="status">
+          <Icon name="info" />
+          <span>
+            <b>{t('produits.ready.bannerTitle', { count: rows.length })}</b> {t('produits.ready.bannerText', { steps: checks.map((c) => t(`produits.ready.step.${c}`)).join(' · ') })}
+          </span>
         </div>
       )}
       {prods.isLoading ? (
@@ -420,15 +439,16 @@ function ProductsTab() {
           </div>
           {rows.map((p) => {
             const detailed = p.variants.filter((v) => v.title);
+            const missing = p.isService ? [] : (missingOf.get(p.id) ?? []);
             return (
               <div key={p.id} className="pd-product-group">
               <div
-                className={`pd-row pd-prows pd-click ${p.active ? '' : 'dim'}`}
+                className={`pd-row pd-prows pd-click ${p.active || todo(p) ? '' : 'dim'}`}
                 role="button"
                 tabIndex={0}
                 aria-label={t('produits.form.editTitle', { name: p.name })}
-                onClick={() => (setEditTab('product'), setEdit(p.id))}
-                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setEditTab('product'), setEdit(p.id))}
+                onClick={() => (setEditTab('product'), setEditFocus(undefined), setEdit(p.id))}
+                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setEditTab('product'), setEditFocus(undefined), setEdit(p.id))}
               >
                 <span className="a-name pd-prod">
                   {detailed.length > 0 && <button type="button" className="btn small ghost" aria-label={openProduct.has(p.id) ? `Collapse ${p.name} variants` : `Expand ${p.name} variants`} aria-expanded={openProduct.has(p.id)} onClick={(e) => { e.stopPropagation(); toggleOpen(p.id); }}>{openProduct.has(p.id) ? '▾' : '▸'}</button>}
@@ -441,7 +461,30 @@ function ProductsTab() {
                       {detailed.length === 0 && <span className="ltr">{p.sku}</span>}
                       {p.isService && <span className="chip">{t('produits.products.service')}</span>}
                       {p.parts.length > 0 && <span className="chip">{t('produits.products.parts', { n: p.parts.length })}</span>}
-                      {cov.data && p.active && !p.isService && !pages.has(p.id) && !ignored.has(p.id) &&
+                      {missing.length > 0 &&
+                        READY_STEPS.filter((m) => missing.includes(m)).map((m) =>
+                          m === 'landing' && marketer ? (
+                            <a key={m} className="chip pd-miss" href={`#/landing/pages/new/${p.id}`} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                              + {t(`produits.ready.step.${m}`)}
+                            </a>
+                          ) : m === 'landing' ? (
+                            // the marketers make the pages: said, not a button
+                            <span key={m} className="chip pd-miss is-static" title={t('produits.landing.freshMarketer')}>
+                              + {t(`produits.ready.step.${m}`)}
+                            </span>
+                          ) : (
+                            <button
+                              key={m}
+                              type="button"
+                              className="chip pd-miss"
+                              onClick={(e) => (e.stopPropagation(), setEditTab(m === 'guide' ? 'guide' : 'product'), setEditFocus(m === 'guide' ? undefined : m), setEdit(p.id))}
+                              onKeyDown={(e) => e.stopPropagation()}
+                            >
+                              + {t(`produits.ready.step.${m}`)}
+                            </button>
+                          ),
+                        )}
+                      {missing.length === 0 && cov.data && p.active && !p.isService && !pages.has(p.id) && !ignored.has(p.id) &&
                         (marketer ? (
                           <a className="chip lp-nolp" href={`#/landing/pages/new/${p.id}`} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                             {t('produits.landing.none')} · {t('produits.landing.create')}
@@ -449,12 +492,12 @@ function ProductsTab() {
                         ) : (
                           <span className="chip lp-nolp">{t('produits.landing.none')}</span>
                         ))}
-                      {!p.isService && (
+                      {!p.isService && missing.length === 0 && (
                         <button
                           type="button"
                           className={`chip gd-chip ${p.hasGuide ? 'on' : 'off'}`}
                           title={p.hasGuide ? t('produits.guide.hasHint') : t('produits.guide.noneHint')}
-                          onClick={(e) => (e.stopPropagation(), setEditTab('guide'), setEdit(p.id))}
+                          onClick={(e) => (e.stopPropagation(), setEditTab('guide'), setEditFocus(undefined), setEdit(p.id))}
                           onKeyDown={(e) => e.stopPropagation()}
                         >
                           {p.hasGuide && <Icon name="book" />}
@@ -493,10 +536,20 @@ function ProductsTab() {
                   </span>
                 </span>
                 <span className="a-state">
-                  <label className="pd-availability" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-                    <input type="checkbox" checked={p.active} disabled={availability.isPending} aria-label={`Product ${p.name} available for orders`} onChange={(e) => availability.mutate({ productId: p.id, active: e.target.checked })} />
-                    <span className="pd-switch-track" aria-hidden="true" /> <span className="pd-switch-state">{p.active ? "ON" : "OFF"}</span>
-                  </label>
+                  {missing.length > 0 ? (
+                    <span className="pd-notready">
+                      <span className="pd-miss-count">{t('produits.ready.missingCount', { n: missing.length, total: checks.length })}</span>
+                      <span className="pd-availability is-locked" title={t('produits.ready.lockedHint')}>
+                        <input type="checkbox" checked={false} disabled aria-label={t('produits.ready.lockedAria', { name: p.name })} />
+                        <span className="pd-switch-track" aria-hidden="true" /> <span className="pd-switch-state">{t('produits.ready.notSold')}</span>
+                      </span>
+                    </span>
+                  ) : (
+                    <label className="pd-availability" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={p.active} disabled={availability.isPending} aria-label={`Product ${p.name} available for orders`} onChange={(e) => availability.mutate({ productId: p.id, active: e.target.checked })} />
+                      <span className="pd-switch-track" aria-hidden="true" /> <span className="pd-switch-state">{p.active ? "ON" : "OFF"}</span>
+                    </label>
+                  )}
                 </span>
               </div>
               {openProduct.has(p.id) && detailed.length > 0 && (
@@ -528,7 +581,7 @@ function ProductsTab() {
         </div>
       )}
       {importing && <ImportDialog onClose={() => setImporting(false)} />}
-      {edit !== null && <ProductForm id={edit === 'new' ? null : edit} tab={edit === 'new' ? 'product' : editTab} onClose={() => setEdit(null)} onCreated={(r) => r.active && !r.isService && setFresh({ id: r.id, name: r.name })} />}
+      {edit !== null && <ProductForm id={edit === 'new' ? null : edit} tab={edit === 'new' ? 'product' : editTab} focus={edit === 'new' ? undefined : editFocus} waiting={edit !== 'new' && waiting.has(edit)} onClose={() => setEdit(null)} onCreated={(r) => r.active && !r.isService && setFresh({ id: r.id, name: r.name })} />}
     </section>
   );
 }

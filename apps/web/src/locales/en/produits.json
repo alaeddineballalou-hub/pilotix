@@ -137,6 +137,7 @@
     "searchPh": "Search a product, a variant, a code…",
     "filters": "Filter the products",
     "f_active": "Active",
+    "f_todo": "To do",
     "f_hidden": "Hidden",
     "f_service": "Services",
     "f_all": "All",
@@ -934,5 +935,21 @@
     "offer": "+ Assembly",
     "offerTip": "Add assembly of {{name}} ({{price}})",
     "notHere": "No assembly in {{w}}"
+  },
+  "ready": {
+    "bannerTitle_one": "{{count}} product is not sold",
+    "bannerTitle_other": "{{count}} products are not sold",
+    "bannerText": "until each one has: {{steps}}. It goes on sale by itself once it has them all.",
+    "missingCount": "{{n}} of {{total}} missing",
+    "notSold": "Not sold",
+    "lockedHint": "Not ready yet: it goes on sale by itself once it has everything.",
+    "lockedAria": "{{name}} is not sold: not ready yet",
+    "step": {
+      "photo": "HD photo",
+      "prices": "Prices",
+      "description": "Description",
+      "landing": "Landing page",
+      "guide": "Sales guide"
+    }
   }
 }

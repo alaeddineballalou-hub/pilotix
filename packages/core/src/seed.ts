@@ -421,6 +421,63 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
   await db.query(`UPDATE products SET montage = $2 WHERE sku = $1`, ['PX-POU', JSON.stringify({ price: 800, cost: 300, wilayas: [16] })]);
   await setRaw(db, 'montage', { wilayas: [9, 16, 35, 42] });
   await montageProductId(db);
+  // Produits › « Prêt » last: every demo product has its five (it keeps selling), and the full demo shows « À faire »
+  await seedReady(db, now, expanded);
 
   return { users, orders: N, todo: CONF_TODO.length };
+}
+
+/** A 4 × 5 px JPEG: the demo's HD photos stand for real ones (only their size counts for « Prêt »). */
+const DEMO_HD_JPEG =
+  '/9j/2wBDAA0JCgsKCA0LCgsODg0PEyAVExISEyccHhcgLikxMC4pLSwzOko+MzZGNywtQFdBRkxOUlNSMj5aYVpQYEpRUk//2wBDAQ4ODhMREyYVFSZPNS01T09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0//wAARCAAFAAQDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAgP/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwC+ATN//9k=';
+
+/**
+ * Produits › « Prêt » (modules/readiness.ts): the demo's products get what they lack (a description, an HD main photo, a
+ * live landing page, a sales guide), so they stay on sale. The full demo (the app's demo, the demo shop) adds two
+ * products that are not Ready yet, in « À faire », to show the tab.
+ */
+export async function seedReady(db: Db, now: number, withTodo: boolean) {
+  const at = new Date(now).toISOString();
+  await db.query(
+    `UPDATE products SET description = name || ' : produit de qualité, livré dans les 69 wilayas, paiement à la livraison.'
+      WHERE NOT is_service AND length(btrim(COALESCE(description, ''))) = 0`,
+  );
+  await db.query(
+    `INSERT INTO product_photos (product_id, kind, store, data, w, h, bytes, thumb, position, created_at)
+     SELECT p.id, 'photo', 'local', $1, 1080, 1350, 269, 'data:image/jpeg;base64,' || $1, 0, $2
+       FROM products p WHERE NOT p.is_service AND NOT EXISTS (SELECT 1 FROM product_photos ph WHERE ph.product_id = p.id AND ph.kind = 'photo')`,
+    [DEMO_HD_JPEG, at],
+  );
+  await db.query(
+    `INSERT INTO landing_pages (product_id, slug, title, price, description, created_at, updated_at)
+     SELECT p.id, 'demo-' || trim(both '-' from lower(regexp_replace(p.sku, '[^A-Za-z0-9]+', '-', 'g'))), p.name, p.price, COALESCE(p.description, ''), $1, $1
+       FROM products p WHERE NOT p.is_service AND NOT EXISTS (SELECT 1 FROM landing_pages l WHERE l.product_id = p.id AND l.active)
+     ON CONFLICT (slug) DO NOTHING`,
+    [at],
+  );
+  // a short sales guide for each product without one (the demo's own guides stay as they are)
+  await db.query(
+    `INSERT INTO product_guides (product_id, guide, updated_at)
+     SELECT p.id, jsonb_build_object(
+         'brief', p.name || ' : livré dans les 69 wilayas, paiement à la livraison.',
+         'strengths', jsonb_build_array('Paiement à la livraison : le client paie quand il reçoit', 'Livré dans les 69 wilayas'),
+         'faq', jsonb_build_array(jsonb_build_object('q', 'La livraison prend combien de temps ?', 'a', '24 à 72 heures selon la wilaya.'))),
+       $1
+       FROM products p WHERE NOT p.is_service ON CONFLICT (product_id) DO NOTHING`,
+    [at],
+  );
+  if (!withTodo) return;
+  // two products still to finish: not sold until they have all five (the bath mat only lacks its HD photo and its page)
+  const todo = [
+    { name: 'Trottinette 3 roues', sku: 'PX-TRO', price: 6900, cost: 4200, kg: 2.5, qty: 40, description: null as string | null },
+    { name: 'Tapis de bain antidérapant', sku: 'PX-TAB', price: 1900, cost: 900, kg: 0.6, qty: 75, description: 'Tapis de bain antidérapant pour bébé, ventouses sous le tapis.' },
+  ];
+  for (const p of todo) {
+    const pid = num(
+      (await db.query(`INSERT INTO products (name, sku, price, cost, weight_kg, packs, description, active, ready_off) VALUES ($1,$2,$3,$4,$5,'[]',$6,false,true) RETURNING id`, [p.name, p.sku, p.price, p.cost, p.kg, p.description]))[0].id,
+    );
+    const vid = num((await db.query('INSERT INTO product_variants (product_id, title, sku) VALUES ($1, $2, $3) RETURNING id', [pid, '', `${p.sku}-1`]))[0].id);
+    await db.query(`INSERT INTO stock (variant_id, warehouse_id, qty, alert_qty) SELECT $1, w.id, $2, 5 FROM warehouses w ORDER BY w.is_default DESC, w.id LIMIT 1`, [vid, p.qty]);
+    if (p.description) await db.query(`INSERT INTO product_guides (product_id, guide) VALUES ($1, $2) ON CONFLICT (product_id) DO NOTHING`, [pid, JSON.stringify({ brief: `${p.name} : ventouses sous le tapis, il ne glisse pas dans la baignoire.` })]);
+  }
 }

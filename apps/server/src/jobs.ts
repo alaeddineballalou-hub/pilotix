@@ -16,6 +16,7 @@ import { runWatch } from './watchers';
 /**
  * Background work, outside user requests, for every shop that is active and paid (needs REDIS_URL; without it the app
  * works and these jobs are skipped — use POST /api/hooks/cron from an external scheduler instead):
+ *  - Produits › « Prêt »: a product that is not Ready is not sold, a Ready one switched off by Pilotix sells again, every 10 minutes
  *  - courier status sync every 5 minutes (companies with live updates (webhook): every 30 minutes, in case one was lost)
  *  - Meta Ads insights sync every night
  *  - monthly partitions of the order history (every shop, even unpaid: their orders keep coming in)
@@ -63,6 +64,8 @@ const FEATURE: Record<string, string | null> = {
   'leads-catchup': 'marketing/formulaires',
   'campaigns-run': 'marketing/campagnes',
   'catalog-run': 'marketing/catalogue',
+  // Produits › « Prêt »: every shop (what it can give is asked: readiness.ts)
+  'ready-sync': null,
   'ads-pilot': 'marketing/publicite',
   'sheets-sync': 'management/canaux',
   // agent pay: the people still without a pay plan, told to the admins and to whoever added them (a store with
@@ -126,6 +129,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     if (name === 'spy-scan') return call('spy.scan');
     if (name === 'campaigns-run') return call('campaigns.run');
     if (name === 'catalog-run') return call('metacatalog.run');
+    // Produits › « Prêt »: every product where its readiness says (not Ready: not sold; Ready again: back on sale)
+    if (name === 'ready-sync') return call('catalog.readiness');
     if (name === 'ads-pilot') return call('ads.pilot.run');
     if (name === 'leads-catchup') {
       const r: any = await call('leads.catchUp');
@@ -283,6 +288,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('campaigns-run', {}, { repeat: { every: 60_000 }, jobId: 'campaigns-run', removeOnComplete: 20, removeOnFail: 50 });
     // Marketing › Catalogue: what changed in the lists' products goes to Meta, and Meta's answers come back
     await this.queue.add('catalog-run', {}, { repeat: { every: 10 * 60_000 }, jobId: 'catalog-run', removeOnComplete: 20, removeOnFail: 50 });
+    await this.queue.add('ready-sync', {}, { repeat: { every: 10 * 60_000 }, jobId: 'ready-sync', removeOnComplete: 20, removeOnFail: 50 });
     // Marketing › Publicité › Pilote auto: the ads' rules (stop the loss, trim, the daily cap…), every 15 minutes
     await this.queue.add('ads-pilot', {}, { repeat: { every: 15 * 60_000 }, jobId: 'ads-pilot', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('turnstile-sync', {}, { repeat: { every: 30 * 60_000 }, jobId: 'turnstile-sync', removeOnComplete: 20, removeOnFail: 50 });

@@ -15,6 +15,7 @@ import { presign, saveStore, signQuery, storeStatus } from '../photostore';
 import { savePilotConfig } from '../platform/pilotai';
 import { loadShop } from '../platform/shops';
 import type { Tenancy } from '../platform/tenancy';
+import { makeReady } from './harness';
 
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
 const JPEG = (tag: string) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from(`JFIF-${tag}-`.padEnd(160, 'x'))]).toString('base64');
@@ -78,6 +79,8 @@ before(async () => {
   pid = Number((await db.query(`INSERT INTO products (name, sku, price) VALUES ('Robe Lina', 'RL-1', 5900) RETURNING id`))[0].id);
   red = Number((await db.query(`INSERT INTO product_variants (product_id, title, sku) VALUES ($1, 'Rouge', 'RL-1-R') RETURNING id`, [pid]))[0].id);
   blue = Number((await db.query(`INSERT INTO product_variants (product_id, title, sku) VALUES ($1, 'Bleu', 'RL-1-B') RETURNING id`, [pid]))[0].id);
+  // on sale (Produits › « Prêt »): its page, its guide, its prices; its HD photos are the tests'
+  await makeReady(db, pid, { photo: false });
 });
 
 const add = (ctx: Ctx, o: { variantId?: number | null; kind?: 'photo' | 'sizes'; tag: string }) =>
