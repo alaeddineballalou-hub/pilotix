@@ -104,3 +104,26 @@ html[data-theme='dark'] .lc-stop:focus-visible, html[data-theme='dark'] .lc-in:f
   .lc-row .lc-in { width: 100%; }
   .lc-row label { flex-basis: 100%; }
 }
+.lc-next { margin-top: 12px; padding-top: 12px; border-top: 2px solid var(--line, #e3e1dc); }
+.lc-next h4, .lc-todo h2 { margin: 0 0 4px; }
+.lc-count { margin: 6px 0; }
+.lc-over2 { color: #9a3412; font-weight: 700; }
+.lc-find { display: block; margin: 6px 0; }
+.lc-find .lc-in { width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid var(--line, #e3e1dc); border-radius: 12px; background: var(--field, #fff); color: inherit; font: inherit; }
+.lc-plist { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 340px; overflow: auto; }
+.lc-plist.todo { max-height: none; }
+.lc-prod { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 4px 8px; border: 1px solid transparent; border-radius: 12px; cursor: pointer; flex: 1; min-width: 0; }
+.lc-prod.on { border-color: var(--orange, #f39a1e); background: #fff8ee; }
+.lc-prod input.lc-tick { width: 24px; height: 24px; min-width: 24px; min-height: 24px; margin: 0; flex: none; accent-color: #f39a1e; }
+.lc-prod img, .lc-ph { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; flex: none; background: #f0efec; }
+.lc-pn { flex: 1; min-width: 0; display: flex; flex-direction: column; font-weight: 700; overflow-wrap: anywhere; }
+.lc-pn small { font-weight: 400; color: var(--muted, #5e6875); }
+.lc-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.lc-sent { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-weight: 700; color: #1d5e2a; }
+.lc-trow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border-top: 1px solid var(--line, #e3e1dc); padding: 4px 0; }
+.lc-trow.done .lc-pn { color: var(--muted, #5e6875); }
+html[data-theme='dark'] .lc-prod.on { background: #3a2c12; }
+html[data-theme='dark'] .lc-sent { color: #8fd19e; }
+html[data-theme='dark'] .lc-over2 { color: #fdba74; }
+.lc-trow .btn, .lc-acts .btn { min-height: 44px; }
+.lc-trow .lc-prod { flex: 1 1 220px; }

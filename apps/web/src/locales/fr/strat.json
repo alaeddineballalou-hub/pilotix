@@ -115,7 +115,7 @@
       "watchGoodDays": "Bons jours avant de grandir",
       "watchBadDays": "Mauvais jours avant de reculer ou couper",
       "watchBrakeDays": "Frein d’urgence après (jours)",
-      "againVideoDay": "Jour des vidéos",
+      "againVideoDay": "Vidéos prêtes le",
       "againVideos": "Nouvelles vidéos pour un gagnant",
       "againWeeks": "Toutes les (semaines)",
       "againMessages": "Produit perdu avec des commandes : pub message",
@@ -144,11 +144,36 @@
       "watchGoodDays": "Puis on attend autant de jours avant de regrandir.",
       "watchBadDays": "Une pub qui a dépensé et reste trop chère est coupée.",
       "watchBrakeDays": "Tout le compte trop cher ce nombre de jours de suite : plus de nouveaux tests.",
-      "againVideoDay": "Le jour où l’on filme les vidéos de la semaine suivante.",
+      "againVideoDay": "Le jour où toutes les vidéos du prochain test doivent être finies.",
       "againVideos": "Un produit coupé n’en reçoit pas.",
       "againWeeks": "Le rythme des nouvelles vidéos d’un gagnant.",
       "againMessages": "À un prix plus bas, avec l’IA qui répond.",
       "againAlways": "Elles tournent pendant tout le cercle."
+    },
+    "next": {
+      "title": "Produits du prochain test",
+      "help": "Choisissez-les une semaine avant : ils partent à l’Espace créateur pour faire leurs vidéos.",
+      "count_one": "{{count}} produit choisi",
+      "count_other": "{{count}} produits choisis",
+      "countOf": "{{n}} choisis sur {{max}}",
+      "tooMany": "Plus que prévu par semaine.",
+      "find": "Chercher un produit",
+      "noProducts": "Aucun produit actif dans cette boutique.",
+      "noMatch": "Aucun produit avec ce nom.",
+      "send": "Envoyer à l’Espace créateur",
+      "sendAgain": "Renvoyer la liste",
+      "clear": "Le test a démarré : vider la liste",
+      "sentOk": "Liste envoyée à l’Espace créateur",
+      "cleared": "Liste vidée",
+      "sentAt": "Envoyée {{date}} · vidéos prêtes pour {{done}} sur {{n}}"
+    },
+    "todo": {
+      "title": "Vidéos à faire pour le test de {{start}}",
+      "help": "Pour chaque produit : {{videos}} vidéos et {{images}} image. Tout doit être prêt {{day}}.",
+      "progress": "Produits prêts : {{done}} sur {{n}}",
+      "toDo": "Vidéos à faire",
+      "isDone": "Vidéos prêtes",
+      "open": "Ouvrir ce produit"
     }
   }
 }

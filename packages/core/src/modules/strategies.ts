@@ -46,6 +46,18 @@ const Type = z.union([z.literal(1), z.literal(2), z.literal(3)]);
 
 /** The shop's « Life ad circle » settings are one settings row; a field never saved keeps its default. */
 const CIRCLE_KEY = 'ad_circle';
+/** Next test's products: picked a week early, sent to Espace créateur, ticked when their videos are done. */
+export interface CircleNext { ids: number[]; sentAt: string | null; done: number[] }
+function circleNext(saved: Record<string, unknown>): CircleNext {
+  const n = saved.next && typeof saved.next === 'object' ? (saved.next as Record<string, unknown>) : {};
+  const list = (v: unknown) => (Array.isArray(v) ? [...new Set(v.filter((x): x is number => Number.isInteger(x) && (x as number) > 0))] : []);
+  const ids = list(n.ids);
+  return { ids, sentAt: typeof n.sentAt === 'string' && ids.length ? n.sentAt : null, done: list(n.done).filter((id) => ids.includes(id)) };
+}
+const CIRCLE_PICKS = 200;
+const circleProducts = (ctx: Ctx) =>
+  ctx.db.query(`SELECT id, name, photo FROM products WHERE active AND NOT is_service AND archived_at IS NULL ORDER BY lower(name) LIMIT 500`);
+
 async function circleSaved(ctx: Ctx): Promise<Record<string, unknown>> {
   const v = await getRaw<unknown>(ctx.db, CIRCLE_KEY, null);
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -83,9 +95,65 @@ export const strategiesProcs = {
     return { ok: true };
   }),
 
-  /** « Life ad circle »: the five steps and the shop's value for every setting (its own, else the default). */
+  /**
+   * « Life ad circle »: the five steps, the shop's value for every setting (its own, else the default), its products,
+   * and the ones picked for the next test (a product archived since is left out).
+   */
   'strat.circle': proc(['vendeur', 'marketer'], z.object({}), async (ctx) => {
-    return { steps: [...CIRCLE_STEPS], values: circleValues(await circleSaved(ctx)) };
+    const saved = await circleSaved(ctx);
+    const rows = await circleProducts(ctx);
+    const products = rows.map((r: any) => ({ id: num(r.id), name: String(r.name), photo: typeof r.photo === 'string' && r.photo.length < 2000 ? (r.photo as string) : null }));
+    const have = new Set(products.map((p) => p.id));
+    const next = circleNext(saved);
+    const ids = next.ids.filter((id) => have.has(id));
+    return { steps: [...CIRCLE_STEPS], values: circleValues(saved), products, next: { ids, sentAt: ids.length ? next.sentAt : null, done: next.done.filter((id) => have.has(id)) } };
+  }),
+
+  /** Picks a product for the next test, or takes it back out. */
+  'strat.circlePick': proc(['vendeur', 'marketer'], z.object({ id: z.number().int().positive(), on: z.boolean() }), async (ctx, i) => {
+    const saved = await circleSaved(ctx);
+    const next = circleNext(saved);
+    if (i.on) {
+      if (!(await ctx.db.query('SELECT 1 FROM products WHERE id = $1 AND active AND NOT is_service AND archived_at IS NULL', [i.id]))[0]) throw bad('Produit introuvable');
+      if (!next.ids.includes(i.id)) {
+        if (next.ids.length >= CIRCLE_PICKS) throw bad(`Pas plus de ${CIRCLE_PICKS} produits`);
+        next.ids.push(i.id);
+      }
+    } else {
+      next.ids = next.ids.filter((id) => id !== i.id);
+      next.done = next.done.filter((id) => id !== i.id);
+      if (!next.ids.length) next.sentAt = null;
+    }
+    await setRaw(ctx.db, CIRCLE_KEY, { ...saved, next }, ctx.session.profile.id);
+    return { next };
+  }),
+
+  /** Sends the picked products to Espace créateur: from then on its page shows them as videos to make. */
+  'strat.circleSend': proc(['vendeur', 'marketer'], z.object({}), async (ctx) => {
+    const saved = await circleSaved(ctx);
+    const next = circleNext(saved);
+    if (!next.ids.length) throw bad('Choisissez au moins un produit');
+    next.sentAt = new Date(ctx.now()).toISOString();
+    await setRaw(ctx.db, CIRCLE_KEY, { ...saved, next }, ctx.session.profile.id);
+    return { next };
+  }),
+
+  /** Ticks a picked product when its videos are done (or unticks it). */
+  'strat.circleDone': proc(['vendeur', 'marketer'], z.object({ id: z.number().int().positive(), on: z.boolean() }), async (ctx, i) => {
+    const saved = await circleSaved(ctx);
+    const next = circleNext(saved);
+    if (!next.ids.includes(i.id)) throw bad('Ce produit n’est pas dans le prochain test');
+    next.done = i.on ? [...new Set([...next.done, i.id])] : next.done.filter((id) => id !== i.id);
+    await setRaw(ctx.db, CIRCLE_KEY, { ...saved, next }, ctx.session.profile.id);
+    return { next };
+  }),
+
+  /** The test has started: the list is emptied for the week after. */
+  'strat.circleClear': proc(['vendeur', 'marketer'], z.object({}), async (ctx) => {
+    const saved = await circleSaved(ctx);
+    const next: CircleNext = { ids: [], sentAt: null, done: [] };
+    await setRaw(ctx.db, CIRCLE_KEY, { ...saved, next }, ctx.session.profile.id);
+    return { next };
   }),
 
   /** Changes one setting of the circle. An empty value is kept only where the setting may stay « not chosen ». */

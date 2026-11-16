@@ -115,7 +115,7 @@
       "watchGoodDays": "Good days before growing",
       "watchBadDays": "Bad days before stepping back or cutting",
       "watchBrakeDays": "Emergency brake after (days)",
-      "againVideoDay": "Video day",
+      "againVideoDay": "Videos ready on",
       "againVideos": "New videos for a winner",
       "againWeeks": "Every (weeks)",
       "againMessages": "Lost product with some orders: message ad",
@@ -144,11 +144,36 @@
       "watchGoodDays": "Then we wait as many days before growing again.",
       "watchBadDays": "An ad that spent and stays too expensive is cut.",
       "watchBrakeDays": "The whole account too expensive this many days in a row: no new tests.",
-      "againVideoDay": "The day next week’s videos are filmed.",
+      "againVideoDay": "The day all the videos of the next test must be finished.",
       "againVideos": "A cut product gets none.",
       "againWeeks": "How often a winner gets new videos.",
       "againMessages": "At a lower price, with the AI answering.",
       "againAlways": "They run during the whole circle."
+    },
+    "next": {
+      "title": "Products of the next test",
+      "help": "Pick them one week early: they go to Espace créateur so their videos get made.",
+      "count_one": "{{count}} product picked",
+      "count_other": "{{count}} products picked",
+      "countOf": "{{n}} picked out of {{max}}",
+      "tooMany": "More than planned per week.",
+      "find": "Search a product",
+      "noProducts": "No active product in this shop.",
+      "noMatch": "No product with this name.",
+      "send": "Send to Espace créateur",
+      "sendAgain": "Send the list again",
+      "clear": "The test has started: empty the list",
+      "sentOk": "List sent to Espace créateur",
+      "cleared": "List emptied",
+      "sentAt": "Sent {{date}} · videos ready for {{done}} of {{n}}"
+    },
+    "todo": {
+      "title": "Videos to make for {{start}}’s test",
+      "help": "For each product: {{videos}} videos and {{images}} image. Everything must be ready on {{day}}.",
+      "progress": "{{done}} ready out of {{n}}",
+      "toDo": "Videos to make",
+      "isDone": "Videos ready",
+      "open": "Open this product"
     }
   }
 }

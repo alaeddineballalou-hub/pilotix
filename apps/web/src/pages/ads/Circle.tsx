@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAction, useRpc } from '../../lib/query';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
+import { CircleNextPick } from './CircleNext';
 
 const K = 'strat.circle.';
 const DAYS = [0, 1, 2, 3, 4, 5, 6];
@@ -138,6 +139,7 @@ export function AdCircle() {
                   </li>
                 ))}
               </ul>
+              {step === 'again' && <CircleNextPick products={q.data.products} next={q.data.next} perWeek={typeof values.testPerWeek === 'number' ? values.testPerWeek : null} />}
               <p className="lc-note">{t(K + 'note')}</p>
             </div>
           </div>

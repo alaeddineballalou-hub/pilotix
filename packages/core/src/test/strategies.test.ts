@@ -95,3 +95,34 @@ test('« Life ad circle »: defaults, one setting changed, wrong values refused'
   // an agent has no business here
   await assert.rejects(call('strat.circle', await as(EMAILS.conf), {}));
 });
+
+test('« Life ad circle »: next test’s products are picked, sent to Espace créateur, ticked, then emptied', async () => {
+  const vendeur = await as(EMAILS.vendeur);
+  const st = await call('strat.circle', vendeur, {});
+  assert.ok(st.products.length >= 2);
+  assert.deepEqual(st.next, { ids: [], sentAt: null, done: [] });
+  const [a, b] = st.products;
+  await assert.rejects(call('strat.circleSend', vendeur, {}), /au moins un produit/);
+  await call('strat.circlePick', vendeur, { id: a.id, on: true });
+  await call('strat.circlePick', vendeur, { id: a.id, on: true }); // twice = once
+  const two = await call('strat.circlePick', vendeur, { id: b.id, on: true });
+  assert.deepEqual(two.next.ids, [a.id, b.id]);
+  assert.equal(two.next.sentAt, null);
+  await assert.rejects(call('strat.circlePick', vendeur, { id: 999999, on: true }), /introuvable/);
+  const sent = await call('strat.circleSend', vendeur, {});
+  assert.ok(sent.next.sentAt);
+  await assert.rejects(call('strat.circleDone', vendeur, { id: 999999, on: true }), /prochain test/);
+  assert.deepEqual((await call('strat.circleDone', vendeur, { id: a.id, on: true })).next.done, [a.id]);
+  // a setting changed meanwhile keeps the list
+  await call('strat.circleSet', vendeur, { key: 'testVideos', value: 4 });
+  const mid = await call('strat.circle', vendeur, {});
+  assert.deepEqual(mid.next.ids, [a.id, b.id]);
+  assert.deepEqual(mid.next.done, [a.id]);
+  assert.equal(mid.values.testVideos, 4);
+  // taken back out: its tick goes with it; the last one out un-sends the list
+  assert.deepEqual((await call('strat.circlePick', vendeur, { id: a.id, on: false })).next.done, []);
+  assert.equal((await call('strat.circlePick', vendeur, { id: b.id, on: false })).next.sentAt, null);
+  await call('strat.circlePick', vendeur, { id: a.id, on: true });
+  assert.deepEqual((await call('strat.circleClear', vendeur, {})).next, { ids: [], sentAt: null, done: [] });
+  await call('strat.circleSet', vendeur, { key: 'testVideos', value: 3 });
+});

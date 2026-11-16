@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useSession } from '../../lib/session';
 import { useRpc } from '../../lib/query';
 import { store } from '../../lib/store';
+import { CircleTodo } from './CircleTodo';
 import { Empty, ErrorBox, Help, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
@@ -60,6 +61,8 @@ export function Createur({ sub }: PageProps) {
   const boutique = String(session?.shop?.id ?? 0);
   const on = useMemo(folderApiOn, []);
   const [stage, setStage] = useState<Stage>({ s: 'loading' });
+  // the product « Ouvrir » asked for in the circle's to-do list
+  const [want, setWant] = useState<number | null>(null);
 
   useEffect(() => {
     if (!on) return;
@@ -132,6 +135,14 @@ export function Createur({ sub }: PageProps) {
         </div>
       </header>
 
+      {!studio && (
+        <CircleTodo
+          onOpen={(id) => {
+            store.set(`createur.product.${boutique}`, String(id));
+            setWant(id);
+          }}
+        />
+      )}
       <nav className="cr-mode" aria-label={t(K + 'mode.label')}>
         <a href="#/createur" className={studio ? '' : 'on'} aria-current={studio ? undefined : 'page'}>
           <Icon name="film" /> {t(K + 'mode.videos')}
@@ -165,7 +176,7 @@ export function Createur({ sub }: PageProps) {
           </div>
         </Notice>
       ) : (
-        <Workspace key={boutique} root={stage.dir} boutique={boutique} onLost={(e) => lost(e, stage.dir)} />
+        <Workspace key={boutique} root={stage.dir} boutique={boutique} want={want} onLost={(e) => lost(e, stage.dir)} />
       )}
     </div>
   );
@@ -188,7 +199,7 @@ function Notice({ icon, title, text, children }: { icon: string; title: string; 
 type Clips = Record<Kind, Clip[]>;
 type Copying = { kind: Kind; n: number; total: number; share: number };
 
-function Workspace({ root, boutique, onLost }: { root: FileSystemDirectoryHandle; boutique: string; onLost: (e: unknown) => void }) {
+function Workspace({ root, boutique, want, onLost }: { root: FileSystemDirectoryHandle; boutique: string; want: number | null; onLost: (e: unknown) => void }) {
   const { t } = useTranslation();
   // the products Pilot Content offers (same people, same plan switch): the boutique's active products
   const day = useMemo(() => new Date(new Date().setHours(0, 0, 0, 0)).toISOString(), []);
@@ -196,6 +207,9 @@ function Workspace({ root, boutique, onLost }: { root: FileSystemDirectoryHandle
   const products = q.data?.products ?? [];
   const pKey = `createur.product.${boutique}`;
   const [pid, setPid] = useState<number | null>(() => Number(store.get(pKey)) || null);
+  useEffect(() => {
+    if (want !== null) setPid(want);
+  }, [want]);
   const product = products.find((p) => p.id === pid) ?? products[0] ?? null;
   const [dir, setDir] = useState<FileSystemDirectoryHandle | null>(null);
   const [clips, setClips] = useState<Clips | null>(null);
