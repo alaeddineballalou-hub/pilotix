@@ -195,6 +195,13 @@
 .lp-ev.st-failed { background: var(--coral-soft); color: var(--coral); border-color: transparent; }
 .lp-ev.st-queued, .lp-ev.st-sending { background: var(--sky-soft); color: var(--navy); border-color: transparent; }
 .lp-evr { grid-template-columns: 120px minmax(0, 1fr) auto; }
+/* a phone: the state and the time on one line, the event under them (its name was cut in the middle of a word) */
+@container (max-width: 520px) {
+  .lp-evr { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "state when" "name name"; }
+  .lp-evr > .lp-ev { grid-area: state; justify-self: start; }
+  .lp-evr > .pd-name { grid-area: name; }
+  .lp-evr > .muted { grid-area: when; }
+}
 .lp-everr { color: var(--coral) !important; }
 
 .lp-lnote { color: var(--warn) !important; font-weight: 600; }

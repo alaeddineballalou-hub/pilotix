@@ -201,7 +201,7 @@ test('Meta: an event Meta refuses does not take the others down with it', async 
   await call('orders.setConf', conf, { ids: [Number(g.id), Number(b.id)], status: 'confirmed' });
   await db.query(`UPDATE orders SET total = 1 WHERE id = $1`, [b.id]);
   await call('landing.run', await as(EMAILS.admin, server), {});
-  const st = async (id: number) => (await db.query(`SELECT status, attempts FROM meta_events WHERE order_id = $1`, [id]))[0];
+  const st = async (id: number) => (await db.query(`SELECT status, attempts FROM meta_events WHERE order_id = $1 AND event_name = 'Purchase'`, [id]))[0];
   assert.equal((await st(Number(g.id))).status, 'sent');
   const x = await st(Number(b.id));
   assert.equal(x.status, 'queued');

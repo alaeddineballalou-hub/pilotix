@@ -295,7 +295,7 @@
     "saved": "Réglages enregistrés",
     "footer": "Les pages ne chargent le pixel Meta qu’après l’affichage (pour rester rapides en 3G), et jamais dans Pilotix (aperçu, démo).",
     "meta": "Pixel Meta (Facebook, Instagram)",
-    "metaHelp": "Le navigateur envoie PageView, ViewContent et InitiateCheckout. Le serveur envoie Purchase par la Conversions API, uniquement pour une vraie commande : une commande bloquée ou marquée fausse n’est jamais une vente pour Meta.",
+    "metaHelp": "Le navigateur envoie PageView, ViewContent et InitiateCheckout. Le serveur envoie par la Conversions API : Lead quand le formulaire d’une commande propre arrive (une commande « À vérifier » : quand un agent la confirme) ; Purchase uniquement pour une vraie commande (une commande bloquée ou marquée fausse n’est jamais une vente pour Meta) ; FakeOrder et Competitor pour le navigateur derrière une commande qu’un agent marque fausse, ou une commande bloquée que personne n’a restaurée en 24 h. Avec ces deux derniers, créez dans Meta deux audiences à exclure de vos pubs.",
     "pixel": "ID du pixel (par défaut)",
     "pixelHint": "Events Manager › Sources de données. Une page peut avoir son propre pixel.",
     "testCode": "Code de test (facultatif)",
@@ -358,7 +358,7 @@
   },
   "ev": {
     "title": "Événements envoyés à Meta",
-    "help": "Ce que le serveur a envoyé (ou non, et pourquoi). Une commande fausse apparaît « ignorée », jamais « envoyée ».",
+    "help": "Ce que le serveur a envoyé (ou non, et pourquoi). Le Purchase d’une commande fausse apparaît « ignoré », jamais « envoyé » ; FakeOrder et Competitor disent à Meta le navigateur (jamais le numéro tapé) pour l’exclure de vos pubs.",
     "empty": "Rien envoyé pour l’instant (ajoutez l’ID du pixel).",
     "purchase": "Purchase (vente)",
     "checkout": "InitiateCheckout (commande commencée)",
@@ -375,7 +375,10 @@
     "retry": "Renvoyer les échoués",
     "retried_one": "{{count}} événement renvoyé",
     "retried_other": "{{count}} événements renvoyés",
-    "confirmed": "Confirmed (confirmée par un agent)"
+    "confirmed": "Confirmed (confirmée par un agent)",
+    "lead": "Lead (formulaire envoyé)",
+    "fake": "FakeOrder (fausse commande)",
+    "competitor": "Competitor (concurrent)"
   },
   "alertOn": "Alerte commandes : oui",
   "alertOff": "Alerte commandes : non",

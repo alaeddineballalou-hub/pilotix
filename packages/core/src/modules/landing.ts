@@ -6,8 +6,10 @@
 //   Commandes as « Nouvelle » by itself (the agents call; no message is sent to the customer), and is counted in
 //   « Abandonnées » (an incomplete one, without wilaya, waits there for a person);
 // - Meta: the page's pixel (PageView, ViewContent, InitiateCheckout in the browser) and the Conversions API from the
-//   server: InitiateCheckout for an abandoned order, Purchase only for a real order (received, confirmed or delivered,
-//   as chosen), never for a blocked one;
+//   server: InitiateCheckout for an abandoned order, Lead for the form of a clean order (a borderline or blocked one:
+//   once a person accepted it), Purchase only for a real order (received, confirmed or delivered, as chosen), never
+//   for a blocked one; FakeOrder / Competitor for the browser behind an order an agent marked fake, or a blocked
+//   order nobody restored in a day (two audiences the ads can leave out);
 // - the products still without a page (menu badge, one-click page, automatic page for each new product).
 import { sealString } from '../secretbox';
 import { AD_KEY_SQL, algeriaDay, QUALITY_OPEN_DAYS, QUALITY_SQL } from './quality';
@@ -50,7 +52,7 @@ import { groupHtml, groupOf } from './landinggroups';
 import { runAttackTest } from './attacktest';
 import { checkPixels, PixelList, pixelsJson, pixelsOf, pixelTestCode, pixelToken, readPixels } from './pixels';
 import { campaignSettings, giveConsent } from './campaigns';
-import { ABANDONED, abandonCutoff, addressTaken, APP_WORD, freeLandingSlug, keepFormerAddress, landingCounts, landingSettings, LandingSettings, landingStore, pageRowAt, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
+import { ABANDONED, abandonCutoff, addressTaken, APP_WORD, BLOCKED_FAKE_AFTER_MS, FAKE_EVENTS, freeLandingSlug, keepFormerAddress, landingCounts, landingSettings, LandingSettings, landingStore, NOT_A_LEAD, pageRowAt, queueLead, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
 import { sendInPreview } from './notify';
 import { addEvent, createOrder, noOrderAccess } from './orders';
 import { shareBlacklist } from './sharedblacklist';
@@ -1151,6 +1153,8 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
   // Meta Purchase « when the order is received »: only a clear order (a borderline one counts once a person confirms it);
   // an order sent again is the same sale (queuePurchase is once per order anyway)
   if (orderId && !merged && s.purchaseAt === 'order' && result.verdict === 'allow') await queuePurchase(db, s, orderId, now);
+  // Meta Lead: the form of a clear order, at once (a borderline one waits for the agent who confirms it)
+  if (orderId && !merged && result.verdict === 'allow') await queueLead(db, s, orderId, now);
   // the agency it went to (its agents are told; the store's own team only of its own orders)
   ctx.emit({ type: 'orders', ...(ref ? { id: orderId!, data: { created: { ref, channel: 'landing', agency } } } : {}) });
   await afterChange(ctx);
@@ -1508,7 +1512,8 @@ async function buildMetaEvent(db: Db, e: any, api: string, publicUrl: string, no
   const sourceUrl = (slug: string | null, url: string | null) => url || (slug && api ? `${api}/lp/${slug}` : publicUrl || 'https://pilotix.app');
   const nowS = Math.floor(now / 1000);
   if (e.platform === 'chat') return buildChatEvent(db, e, nowS);
-  if (e.event_name === 'Purchase' || e.event_name === 'Confirmed') {
+  if ((FAKE_EVENTS as readonly string[]).includes(e.event_name)) return buildFakeEvent(db, e, sourceUrl, nowS);
+  if (e.event_name === 'Purchase' || e.event_name === 'Confirmed' || e.event_name === 'Lead') {
     // the browser's data comes from the customer's submit, or from what they typed (an abandoned order)
     const o = (
       await db.query(
@@ -1523,8 +1528,11 @@ async function buildMetaEvent(db: Db, e: any, api: string, publicUrl: string, no
       )
     )[0];
     if (!o) return { skip: 'Commande supprimée' };
-    // an order found fake, a duplicate, a wrong number or cancelled before the event left: never a sale
-    if ((CONF_DONE_BAD as string[]).includes(o.conf_status)) return { skip: 'Commande annulée ou fausse : pas de Purchase' };
+    // an order found fake, a duplicate, a wrong number or cancelled before the event left: never a sale; a Lead is the
+    // form a real person sent (a cancelled order was still one)
+    if (e.event_name === 'Lead') {
+      if (NOT_A_LEAD.includes(o.conf_status)) return { skip: 'Commande fausse, en double ou mauvais numéro : pas de Lead' };
+    } else if ((CONF_DONE_BAD as string[]).includes(o.conf_status)) return { skip: 'Commande annulée ou fausse : pas de Purchase' };
     const items = (readJson<any[]>(o.items) ?? []).map((x) => ({ id: String(x.id), quantity: num(x.quantity), item_price: num(x.item_price) }));
     // a website event needs the browser; without it (an old order) the sale is reported as confirmed by Pilotix itself
     const web = !!o.v_ua;
@@ -1565,6 +1573,91 @@ async function buildMetaEvent(db: Db, e: any, api: string, publicUrl: string, no
       url: sourceUrl(a.slug, a.url), value: num(e.value), contents: [{ id: String(a.product_id), quantity: Math.max(1, num(a.qty)), item_price: num(a.unit_price) }],
     }),
   };
+}
+
+/**
+ * « FakeOrder » / « Competitor »: Meta is told the browser that sent the order (its Meta cookie, the ad it clicked, its
+ * IP and user agent), never the phone, the name or the place typed in the form: a fake order often carries a
+ * stranger's number, and that person must not lose the shop's ads. A browser Meta cannot recognise (no cookie and no ad
+ * click: a script, a pixel that never ran) is not sent: an IP alone is shared by a whole neighbourhood.
+ */
+async function buildFakeEvent(db: Db, e: any, sourceUrl: (slug: string | null, url: string | null) => string, nowS: number): Promise<{ event?: Record<string, unknown>; skip?: string }> {
+  let b: any = null;
+  if (e.order_id) {
+    b = (
+      await db.query(
+        `SELECT o.conf_status, l.slug, COALESCE(s.ip, a.ip) AS ip, COALESCE(s.ua, a.ua) AS ua, COALESCE(s.fbp, a.fbp) AS fbp, COALESCE(s.fbc, a.fbc) AS fbc, COALESCE(s.url, a.url) AS url,
+           (SELECT i.product_id FROM order_items i WHERE i.order_id = o.id ORDER BY i.id LIMIT 1) AS product_id
+         FROM orders o LEFT JOIN landing_pages l ON l.id = o.landing_id
+         LEFT JOIN LATERAL (SELECT * FROM landing_submits x WHERE x.order_id = o.id ORDER BY x.id DESC LIMIT 1) s ON true
+         LEFT JOIN LATERAL (SELECT * FROM landing_leads y WHERE y.order_id = o.id ORDER BY y.id DESC LIMIT 1) a ON true
+         WHERE o.id = $1`,
+        [e.order_id],
+      )
+    )[0];
+    if (!b) return { skip: 'Commande supprimée' };
+    if (b.conf_status !== 'fake') return { skip: 'Plus marquée fausse' };
+  } else if (e.blocked_id) {
+    b = (await db.query(`SELECT k.status, k.product_id, k.at AS happened, l.slug, ${BLOCKED_BROWSER} FROM landing_blocked k LEFT JOIN landing_pages l ON l.id = k.landing_id ${BLOCKED_FROM} WHERE k.id = $1`, [e.blocked_id]))[0];
+    if (!b) return { skip: 'Commande bloquée supprimée' };
+    if (b.status === 'restored') return { skip: 'Commande restaurée' };
+  } else return { skip: 'Commande introuvable' };
+  // when it happened: the agent's mark, or the moment the order was blocked (a day before its event was queued)
+  const t = Math.floor(Date.parse(iso(b.happened ?? e.at)) / 1000);
+  if (nowS - t > META_MAX_AGE - 3600) return { skip: 'Plus de 7 jours : Meta ne l’accepte plus' };
+  if (!b.ua || (!b.fbp && !b.fbc)) return { skip: 'Navigateur que Meta ne reconnaît pas (ni cookie, ni clic sur une pub)' };
+  return {
+    event: {
+      event_name: e.event_name,
+      event_time: Math.min(t, nowS),
+      event_id: e.event_id,
+      action_source: 'website',
+      event_source_url: sourceUrl(b.slug, b.url),
+      user_data: { client_user_agent: b.ua, ...(b.ip ? { client_ip_address: b.ip } : {}), ...(b.fbp ? { fbp: b.fbp } : {}), ...(b.fbc ? { fbc: b.fbc } : {}) },
+      custom_data: b.product_id ? { content_type: 'product_group', content_ids: [String(b.product_id)] } : {},
+    },
+  };
+}
+
+/** A blocked order's browser: what its form sent, else (an abandoned order blocked) what its lead kept. */
+const BLOCKED_FROM = `
+  LEFT JOIN LATERAL (SELECT * FROM landing_submits x WHERE x.blocked_id = k.id ORDER BY x.id DESC LIMIT 1) sb ON true
+  LEFT JOIN LATERAL (SELECT * FROM landing_leads y WHERE sb.id IS NULL AND y.status = 'blocked' AND y.landing_id = k.landing_id AND y.phone = k.phone ORDER BY y.id DESC LIMIT 1) ld ON true`;
+const BLOCKED_BROWSER = `COALESCE(sb.ip, ld.ip, k.ip) AS ip, COALESCE(sb.ua, ld.ua, k.user_agent) AS ua, COALESCE(sb.fbp, ld.fbp) AS fbp, COALESCE(sb.fbc, ld.fbc) AS fbc, COALESCE(sb.url, ld.url) AS url`;
+
+/**
+ * Blocked orders nobody restored in a day: the browser behind each is told to Meta as « FakeOrder » (« Competitor »
+ * when it was blocked as a device an agent had marked « concurrent »), dated when it was blocked. Each blocked order
+ * is looked at once (meta_at); one whose browser Meta cannot recognise (a script: no cookie, no ad click) gets no
+ * event. Meta takes the last 7 days only: older ones are left alone.
+ */
+export async function sweepBlockedFakes(ctx: Ctx): Promise<number> {
+  const db = ctx.db;
+  const now = ctx.now();
+  const rows = await db.query(
+    `SELECT k.id, k.at, k.landing_id, k.reasons, l.pixel_id, l.meta_pixels, l.tiktok_pixels, ${BLOCKED_BROWSER}
+     FROM landing_blocked k LEFT JOIN landing_pages l ON l.id = k.landing_id ${BLOCKED_FROM}
+     WHERE k.meta_at IS NULL AND k.status <> 'restored' AND k.at < $1 AND k.at > $2 ORDER BY k.id LIMIT 500`,
+    [isoAt(now - BLOCKED_FAKE_AFTER_MS), isoAt(now - (META_MAX_AGE - 6 * 3600) * 1000)],
+  );
+  if (!rows.length) return 0;
+  const s = await landingSettings(db);
+  let queued = 0;
+  for (const k of rows) {
+    if (k.landing_id && k.ua && (k.fbp || k.fbc)) {
+      const name = (readJson<FraudReason[]>(k.reasons) ?? []).some((r) => r.code === 'device_competitor') ? 'Competitor' : 'FakeOrder';
+      for (const pixel of (await pixelsOf(db, k, s.pixelId)).meta) {
+        await db.query(
+          `INSERT INTO meta_events (pixel_id, event_name, event_id, blocked_id, landing_id, at, send_after) VALUES ($1,$2,$3,$4,$5,$6,$7)
+           ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
+          [pixel, name, `${name === 'Competitor' ? 'competitor' : 'fake'}-blocked-${k.id}`, k.id, k.landing_id, isoAt(now), isoAt(now)],
+        );
+        queued++;
+      }
+    }
+    await db.query(`UPDATE landing_blocked SET meta_at = $2 WHERE id = $1`, [k.id, isoAt(now)]);
+  }
+  return queued;
 }
 
 /** Meta's answer to a request, sorted: wait (no token, token refused, limits, network) or a real error of these events. */
@@ -1669,11 +1762,12 @@ async function requeueMetaEvents(db: Db, now: number) {
   return r.length;
 }
 
-/** The landing pages' background work: abandoned orders, then Meta events. */
+/** The landing pages' background work: abandoned orders, blocked orders nobody restored (fake for Meta), then Meta events. */
 export async function landingRun(ctx: Ctx) {
   const abandoned = await sweepAbandoned(ctx);
+  const fakes = await sweepBlockedFakes(ctx).catch(() => 0);
   const meta = await sendMetaEvents(ctx);
-  return { abandoned, meta };
+  return { abandoned, fakes, meta };
 }
 
 /** In the preview nothing runs in the background: the work is done when its lists are read, and after a change. */
@@ -2038,8 +2132,9 @@ export const landingProcs = {
     await afterChange(ctx);
     const hide = noOrderAccess(ctx);
     const rows = await ctx.db.query(
-      `SELECT e.*, o.ref, o.customer_name AS o_name, a.customer_name AS a_name, a.phone AS a_phone, l.slug
-       FROM meta_events e LEFT JOIN orders o ON o.id = e.order_id LEFT JOIN landing_leads a ON a.id = e.lead_id LEFT JOIN landing_pages l ON l.id = e.landing_id
+      `SELECT e.*, o.ref, o.customer_name AS o_name, a.customer_name AS a_name, a.phone AS a_phone, k.customer_name AS k_name, l.slug
+       FROM meta_events e LEFT JOIN orders o ON o.id = e.order_id LEFT JOIN landing_leads a ON a.id = e.lead_id LEFT JOIN landing_blocked k ON k.id = e.blocked_id
+         LEFT JOIN landing_pages l ON l.id = e.landing_id
        ORDER BY e.at DESC, e.id DESC LIMIT ${i.limit}`,
     );
     const k = (await ctx.db.query(`SELECT status, count(*)::int AS n FROM meta_events WHERE at > now() - interval '30 days' GROUP BY 1`)).reduce(
@@ -2052,14 +2147,14 @@ export const landingProcs = {
         id: num(r.id),
         at: iso(r.at),
         sentAt: isoOrNull(r.sent_at),
-        name: r.event_name as 'Purchase' | 'InitiateCheckout' | 'Confirmed',
+        name: r.event_name as 'Purchase' | 'InitiateCheckout' | 'Confirmed' | 'Lead' | 'FakeOrder' | 'Competitor',
         pixelId: r.pixel_id,
         status: r.status as 'queued' | 'sending' | 'sent' | 'failed' | 'skipped' | 'simulated',
         error: r.error ?? null,
         value: numOrNull(r.value),
         orderId: numOrNull(r.order_id),
         ref: r.ref ?? null,
-        customer: hide ? (r.o_name ?? r.a_name ? PII_HIDDEN : null) : r.o_name ?? r.a_name ?? null,
+        customer: hide ? (r.o_name ?? r.a_name ?? r.k_name ? PII_HIDDEN : null) : r.o_name ?? r.a_name ?? r.k_name ?? null,
         phone: hide ? (r.a_phone ? PII_HIDDEN : null) : r.a_phone ?? null,
         slug: r.slug ?? null,
       })),
@@ -2443,9 +2538,12 @@ export const landingProcs = {
       );
       await tx.query(`UPDATE landing_blocked SET status = 'restored', order_id = $2, handled_by = $3, handled_at = now() WHERE id = $1`, [id, order.id, ctx.session.profile.id]);
       await tx.query('UPDATE landing_submits SET order_id = $2 WHERE blocked_id = $1', [id, order.id]);
-      // a person decided it is real: with « Purchase when received », it counts now
+      // a person decided it is real: with « Purchase when received », it counts now; its form is a Lead; and the fake
+      // event Meta was not told yet never leaves
       const s = await landingSettings(tx);
       if (s.purchaseAt === 'order') await queuePurchase(tx, s, order.id, ctx.now());
+      await queueLead(tx, s, order.id, ctx.now());
+      await tx.query(`UPDATE meta_events SET status = 'skipped', error = 'Commande restaurée', claimed_at = NULL WHERE blocked_id = $1 AND status = 'queued'`, [id]);
       return order;
     });
     ctx.emit({ type: 'orders' });

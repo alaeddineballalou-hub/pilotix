@@ -295,7 +295,7 @@
     "saved": "Settings saved",
     "footer": "Pages load the Meta pixel only after they are shown (to stay fast on 3G), and never inside Pilotix (preview, demo).",
     "meta": "Meta pixel (Facebook, Instagram)",
-    "metaHelp": "The browser sends PageView, ViewContent and InitiateCheckout. The server sends Purchase through the Conversions API, only for a real order: a blocked order or one marked fake is never a sale for Meta.",
+    "metaHelp": "The browser sends PageView, ViewContent and InitiateCheckout. The server sends through the Conversions API: Lead when the form of a clean order arrives (an order \"to check\": when an agent confirms it); Purchase only for a real order (a blocked order or one marked fake is never a sale for Meta); FakeOrder and Competitor for the browser behind an order an agent marks fake, or a blocked order nobody restored in 24 hours. With those two, make two audiences in Meta to exclude from your ads.",
     "pixel": "Pixel ID (default)",
     "pixelHint": "Events Manager › Data sources. A page may have its own pixel.",
     "testCode": "Test code (optional)",
@@ -358,7 +358,7 @@
   },
   "ev": {
     "title": "Events sent to Meta",
-    "help": "What the server sent (or not, and why). A fake order shows as \"skipped\", never \"sent\".",
+    "help": "What the server sent (or not, and why). The Purchase of a fake order shows as \"skipped\", never \"sent\"; FakeOrder and Competitor tell Meta the browser (never the number typed) so your ads can leave it out.",
     "empty": "Nothing sent yet (add the pixel ID).",
     "purchase": "Purchase (sale)",
     "checkout": "InitiateCheckout (order started)",
@@ -375,7 +375,10 @@
     "retry": "Send failed ones again",
     "retried_one": "{{count}} event sent again",
     "retried_other": "{{count}} events sent again",
-    "confirmed": "Confirmed (confirmed by an agent)"
+    "confirmed": "Confirmed (confirmed by an agent)",
+    "lead": "Lead (form sent)",
+    "fake": "FakeOrder (fake order)",
+    "competitor": "Competitor"
   },
   "alertOn": "Order alert: on",
   "alertOff": "Order alert: off",

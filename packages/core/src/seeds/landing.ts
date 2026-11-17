@@ -98,9 +98,20 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     `INSERT INTO settings (key, value) VALUES ('landing', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
     [JSON.stringify({ pixelId: '1234567890123456', testEventCode: '', purchaseAt: 'confirmed', abandonAfterMin: 20, autoCreate: false, ignored: [] })],
   );
-  // what the server sent to Meta (simulated in the demo): Purchase for the confirmed ones, never for a fake one
+  // what the server sent to Meta (simulated in the demo): Lead for a real person's form, Purchase for the confirmed
+  // ones, never for a fake one, whose browser is told to Meta as FakeOrder
   const confirmed = await db.query(`SELECT id, ref, total, conf_status, confirmed_at, created_at FROM orders WHERE landing_id = $1 ORDER BY created_at DESC LIMIT 14`, [p1]);
   for (const o of confirmed) {
+    if (!['fake', 'duplicate', 'wrong_number'].includes(o.conf_status))
+      await db.query(
+        `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, value, at, send_after, status, sent_at) VALUES ('1234567890123456','Lead',$1,$2,$3,$4,$5,$5,'simulated',$5)`,
+        [`lead-${o.ref}`, o.id, p1, num(o.total), o.created_at],
+      );
+    if (o.conf_status === 'fake')
+      await db.query(
+        `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, at, send_after, status, sent_at) VALUES ('1234567890123456','FakeOrder',$1,$2,$3,$4,$4,'simulated',$4)`,
+        [`fake-${o.ref}`, o.id, p1, o.confirmed_at ?? o.created_at],
+      );
     const fake = ['fake', 'duplicate', 'wrong_number', 'cancelled'].includes(o.conf_status);
     const real = ['confirmed', 'no_stock'].includes(o.conf_status) || fake;
     if (!real) continue;
@@ -245,6 +256,16 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     );
   await db.query(`INSERT INTO fraud_marks (at, kind, value, reason, device, phone, by_user) VALUES ($1,'device','d:x92k','competitor','d:x92k','0770219999',$2)`, [at(5 * day + 3600_000), users.conf1 ?? null]);
   await db.query(`INSERT INTO fraud_marks (at, kind, value, reason, device, phone, by_user) VALUES ($1,'device','d:s3x41','fake','d:s3x41','0661448210',$2)`, [at(3 * day), users.conf1 ?? null]);
+  // a day later nobody had restored them: Meta was told the browsers behind them (simulated in the demo), the team's as
+  // « FakeOrder », the marked device's as « Competitor » (two audiences the ads can leave out)
+  await db.query(
+    `INSERT INTO meta_events (pixel_id, event_name, event_id, blocked_id, landing_id, at, send_after, status, sent_at)
+     SELECT '1234567890123456', CASE WHEN b.fp = 'd:x92k' THEN 'Competitor' ELSE 'FakeOrder' END,
+            CASE WHEN b.fp = 'd:x92k' THEN 'competitor' ELSE 'fake' END || '-blocked-' || b.id, b.id, b.landing_id, b.at + interval '24 hours', b.at + interval '24 hours', 'simulated', b.at + interval '24 hours'
+       FROM landing_blocked b WHERE b.fp IN ('d:team7a', 'd:x92k') AND b.at < $1`,
+    [at(day)],
+  );
+  await db.query(`UPDATE landing_blocked SET meta_at = at + interval '24 hours' WHERE fp IN ('d:team7a', 'd:x92k') AND at < $1`, [at(day)]);
   // the demo's other customers each have their own phone (one device for all of them would look like an attack)
   await db.query(`UPDATE landing_submits SET fp = 'd:demo' || id WHERE fp = 'd:demo'`);
   await db.query(`UPDATE landing_blocked SET fp = 'd:demo' || id WHERE fp = 'd:demo'`);

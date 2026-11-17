@@ -183,6 +183,70 @@ async function chatTarget(db: Db, channel: string, accountId: unknown): Promise<
   return /^\d{5,30}$/.test(id) ? `${channel}:${id}` : null;
 }
 
+/** An order that is not a real person's (Meta's « Lead » never counts it; a cancelled order was still a real one). */
+export const NOT_A_LEAD = ['fake', 'duplicate', 'wrong_number'];
+
+/**
+ * Queues the Meta « Lead » of an order whose form was sent from a landing page: at once for a clean order, and for a
+ * borderline or blocked one only when a person accepted it (the agent who confirms it, the one who restores it). Never
+ * for an abandoned order (its form was never sent: InitiateCheckout says it), an exchange, or an order marked fake /
+ * duplicate / wrong number. Meta only, once per order.
+ */
+export async function queueLead(db: Db, s: LandingSettings, orderId: number, now: number): Promise<void> {
+  await guarded(db, async (db) => {
+    const o = (
+      await db.query(
+        `SELECT o.id, o.ref, o.total, o.landing_id, o.conf_status, o.is_exchange, l.pixel_id, l.meta_pixels, l.tiktok_pixels,
+           EXISTS (SELECT 1 FROM landing_submits x WHERE x.order_id = o.id) AS sent
+         FROM orders o LEFT JOIN landing_pages l ON l.id = o.landing_id WHERE o.id = $1`,
+        [orderId],
+      )
+    )[0];
+    if (!o || !o.landing_id || !o.sent || o.is_exchange || NOT_A_LEAD.includes(o.conf_status)) return;
+    const at = new Date(now).toISOString();
+    for (const pixel of (await pixelsOf(db, o, s.pixelId)).meta)
+      await db.query(
+        `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, value, at, send_after) VALUES ($1,'Lead',$2,$3,$4,$5,$6,$6)
+         ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
+        [pixel, `lead-${o.ref}`, o.id, o.landing_id, num(o.total), at],
+      );
+  });
+}
+
+/** An agent who clicked « fausse » by mistake puts it right first: Meta is told only after this long. */
+export const FAKE_EVENT_DELAY_MS = 10 * 60_000;
+/** A blocked order is told to Meta as fake once it stayed blocked this long (nobody restored it). */
+export const BLOCKED_FAKE_AFTER_MS = 24 * 3600_000;
+/** Meta's names: who gave a fake order, and who did it as a competitor (two audiences the ads leave out). */
+export const FAKE_EVENTS = ['FakeOrder', 'Competitor'] as const;
+
+/**
+ * An agent marked a landing-page order fake: « FakeOrder » (« Competitor » when the reason says so) is queued for
+ * Meta, a few minutes later. It names the browser that sent the order, never the phone typed in the form (a fake
+ * order often carries a stranger's number). Marked again after a correction, it is queued again.
+ */
+async function queueFake(db: Db, s: LandingSettings, orderId: number, reason: string | null, now: number) {
+  await guarded(db, async (db) => {
+    const o = (await db.query(`SELECT o.id, o.ref, o.landing_id, l.pixel_id, l.meta_pixels, l.tiktok_pixels FROM orders o LEFT JOIN landing_pages l ON l.id = o.landing_id WHERE o.id = $1`, [orderId]))[0];
+    if (!o?.landing_id) return;
+    const name = isCompetitorReason(reason) ? 'Competitor' : 'FakeOrder';
+    for (const pixel of (await pixelsOf(db, o, s.pixelId)).meta)
+      await db.query(
+        `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, at, send_after) VALUES ($1,$2,$3,$4,$5,$6,$7)
+         ON CONFLICT (pixel_id, event_name, event_id) DO UPDATE SET status = 'queued', error = NULL, attempts = 0, at = EXCLUDED.at, send_after = EXCLUDED.send_after
+           WHERE meta_events.status = 'skipped'`,
+        [pixel, name, `${name === 'Competitor' ? 'competitor' : 'fake'}-${o.ref}`, o.id, o.landing_id, new Date(now).toISOString(), new Date(now + FAKE_EVENT_DELAY_MS).toISOString()],
+      );
+  });
+}
+
+/** Not fake after all: what Meta was not told yet is never sent. */
+async function dropFake(db: Db, orderId: number) {
+  await guarded(db, (db) =>
+    db.query(`UPDATE meta_events SET status = 'skipped', error = 'Plus marquée fausse', claimed_at = NULL WHERE order_id = $1 AND event_name = ANY($2) AND status = 'queued'`, [orderId, [...FAKE_EVENTS]]),
+  );
+}
+
 const CONFIRMED = ['confirmed', 'no_stock'];
 const DELIVERED = ['delivered', 'exchanged'];
 
@@ -241,7 +305,10 @@ async function queueConfirmed(db: Db, s: LandingSettings, orderId: number, now: 
   });
 }
 
-/** setConf: an agent confirmed an order from a landing page (Purchase « at confirmation », the default, or « at order »). */
+/**
+ * setConf: an agent confirmed an order from a landing page (Purchase « at confirmation », the default, or « at order »;
+ * the Lead of an order that waited for a person), or marked it fake (the device's mark; FakeOrder / Competitor).
+ */
 export async function onLandingConf(
   db: Db,
   s: LandingSettings,
@@ -259,12 +326,20 @@ export async function onLandingConf(
     return;
   }
   if (!row.landing_id) return;
-  if (to === 'fake' && from !== 'fake') await markFake(db, num(row.id), reason, userId);
-  else if (from === 'fake' && to !== 'fake') await liftMark(db, num(row.id));
+  if (to === 'fake' && from !== 'fake') {
+    await markFake(db, num(row.id), reason, userId);
+    await queueFake(db, s, num(row.id), reason, now);
+  } else if (from === 'fake' && to !== 'fake') {
+    await liftMark(db, num(row.id));
+    await dropFake(db, num(row.id));
+  }
+  const confirmed = CONFIRMED.includes(to) && !CONFIRMED.includes(String(from));
+  // « Lead »: a clean order's left when its form arrived; a borderline one counts now that a person accepted it
+  if (confirmed) await queueLead(db, s, num(row.id), now);
   // « at order »: clear orders were reported when received; borderline and abandoned ones count once confirmed
   // (queuePurchase is once per order). « At delivery »: not yet.
   if (s.purchaseAt === 'delivered') return;
-  if (CONFIRMED.includes(to) && !CONFIRMED.includes(String(from))) {
+  if (confirmed) {
     await queuePurchase(db, s, num(row.id), now);
     if (s.purchaseAt === 'order') await queueConfirmed(db, s, num(row.id), now);
   }

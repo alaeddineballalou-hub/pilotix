@@ -83,19 +83,20 @@ test('Meta: a Purchase only when an agent confirms a landing order (never at sub
   const input = await human();
   await call('landing.submit', admin, input);
   const o = await orderOf(input.phone as string);
-  assert.equal((await events(`order_id = $1`, [o.id])).length, 0, 'nothing at submit with « at confirmation »');
+  // no sale at submit with « at confirmation » (its form is a « Lead » at once: landing-events.test.ts)
+  assert.deepEqual((await events(`order_id = $1`, [o.id])).map((e: any) => e.event_name), ['Lead']);
   const conf = await as(EMAILS.conf);
   // given to the agent (she works on her own orders)
   await db.query('UPDATE orders SET agent_id = $2 WHERE id = $1', [o.id, conf.session.profile.id]);
   await call('orders.setConf', conf, { ids: [Number(o.id)], status: 'confirmed' });
-  let ev = await events(`order_id = $1`, [o.id]);
+  let ev = await events(`order_id = $1 AND event_name = 'Purchase'`, [o.id]);
   assert.equal(ev.length, 1);
   assert.equal(ev[0].event_name, 'Purchase');
   assert.equal(ev[0].pixel_id, PIXEL);
   assert.equal(ev[0].event_id, `purchase-${o.ref}`);
   await call('orders.setConf', conf, { ids: [Number(o.id)], status: 'callback', nextCallAt: new Date(Date.now() + 3600_000).toISOString() });
   await call('orders.setConf', conf, { ids: [Number(o.id)], status: 'confirmed' });
-  ev = await events(`order_id = $1`, [o.id]);
+  ev = await events(`order_id = $1 AND event_name = 'Purchase'`, [o.id]);
   assert.equal(ev.length, 1, 'once per order');
 });
 
@@ -108,7 +109,7 @@ test('Meta: a blocked order is never a Purchase, even in « at order » mode; a 
   const clear = await human();
   await call('landing.submit', admin, clear);
   const o = await orderOf(clear.phone as string);
-  assert.equal((await events(`order_id = $1`, [o.id])).length, 1, 'a clear order counts at once in « at order » mode');
+  assert.equal((await events(`order_id = $1 AND event_name = 'Purchase'`, [o.id])).length, 1, 'a clear order counts at once in « at order » mode');
   // the same number sends it again the same day: merged into the first order → no second Purchase
   await call('landing.submit', admin, await human({}, clear.phone as string));
   const o2 = await orderOf(clear.phone as string);
@@ -151,7 +152,7 @@ test('Meta: the outbox sends hashed customer data through the Conversions API, a
   assert.equal(purchase.user_data.client_user_agent, UA);
   assert.equal(purchase.custom_data.currency, 'DZD');
   assert.ok(!sent.flatMap((x) => x.args.events).some((e: any) => e.event_id === `purchase-${b.ref}`), 'the fake one was not');
-  const skipped = (await events(`order_id = $1`, [b.id]))[0];
+  const skipped = (await events(`order_id = $1 AND event_name = 'Purchase'`, [b.id]))[0];
   assert.equal(skipped.status, 'skipped');
   // the log shows both
   const log: any = await call('landing.events', await as(EMAILS.marketer), {});

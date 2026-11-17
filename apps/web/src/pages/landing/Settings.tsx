@@ -282,6 +282,16 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
   );
 }
 
+/** the name of each event Meta receives, as the list says it */
+const EVENT_LABEL: Record<string, string> = {
+  Purchase: 'landing.ev.purchase',
+  Confirmed: 'landing.ev.confirmed',
+  InitiateCheckout: 'landing.ev.checkout',
+  Lead: 'landing.ev.lead',
+  FakeOrder: 'landing.ev.fake',
+  Competitor: 'landing.ev.competitor',
+};
+
 /** What was sent to Meta, and what was not (with the reason): fake orders never appear as « Purchase envoyé ». */
 function Events() {
   const { t } = useTranslation();
@@ -322,7 +332,7 @@ function Events() {
             <div key={e.id} className="pd-row lp-evr">
               <span className={`lp-ev st-${e.status}`}>{t(`landing.ev.st.${e.status}`)}</span>
               <span className="pd-name">
-                <b>{e.name === 'Purchase' ? t('landing.ev.purchase') : e.name === 'Confirmed' ? t('landing.ev.confirmed') : t('landing.ev.checkout')}</b>
+                <b>{t(EVENT_LABEL[e.name] ?? 'landing.ev.checkout')}</b>
                 <small>
                   {e.ref && <span className="ltr">{e.ref}</span>}
                   {e.customer && <span dir="auto">{e.customer}</span>}
