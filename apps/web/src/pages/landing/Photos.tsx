@@ -16,7 +16,7 @@ export type Img = { id: number | null; url: string | null; w: number; h: number;
 export type ProductPhotos = { photo: string | null; variants: { id: number; title: string; photo: string | null }[] };
 
 const PRESET_KEYS = Object.keys(PRESETS) as Preset[];
-const presetOf = (): Preset => {
+export const presetOf = (): Preset => {
   const v = store.get('lp-img-preset');
   return PRESET_KEYS.includes(v as Preset) ? (v as Preset) : 'balanced';
 };

@@ -96,7 +96,18 @@
     "variantLabel": "Nom du choix de variante",
     "variantHint": "Affiché au-dessus de la liste : {{list}}",
     "description": "Description du produit",
-    "descriptionHint": "Une ligne qui commence par « - » devient une puce, « # » un titre, **gras** en gras. Laissez une ligne vide entre les paragraphes.",
+    "descriptionHint": "Une ligne qui commence par « - » devient une puce, « # » un titre, **gras** en gras. Laissez une ligne vide entre les paragraphes. Une ligne [image:12] est une image : déplacez-la ou effacez-la comme du texte.",
+    "di": {
+      "add": "Ajouter une image",
+      "working": "Préparation {{i}}/{{n}}…",
+      "hint": "L’image se place là où est le curseur dans le texte.",
+      "name": "Image {{n}}",
+      "missing": "Image introuvable",
+      "remove": "Retirer",
+      "max": "{{n}} images au plus dans la description.",
+      "tooTall": "Image trop longue (plus de {{n}} fois sa largeur) : coupez-la en deux images.",
+      "fail": "L’image n’a pas pu être ajoutée."
+    },
     "sFraud": "Anti-fausses commandes",
     "fraudHelp": "Chaque commande reçoit un score de 0 à 100 (téléphone, nom, vitesse, robot, historique du numéro, répétitions…). Au-dessus du seuil elle est bloquée en silence ; un peu en dessous elle arrive « À vérifier ».",
     "lvl": {

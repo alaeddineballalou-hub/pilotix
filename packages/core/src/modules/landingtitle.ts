@@ -12,6 +12,7 @@
 // The preview without Claude gives example titles made from the product's name (by: 'rules').
 // The instructions are built from the skills Pilotix's owner uses for selling (Algerian cash-on-delivery selling,
 // marketing psychology, copywriting, content creation) and Pilotix's Darija book (darijabook.ts), shared with Dellal.
+import { landingDescriptionText } from '@pilotix/shared';
 import { z } from 'zod';
 import { bad, Ctx, notFound, proc } from '../rpc';
 import { checkDarija } from './darija';
@@ -120,7 +121,7 @@ export async function titleFactsOf(ctx: Ctx, i: TitleIn): Promise<TitleFacts> {
   const name = cut(p.name, 200);
   const brand = cut(p.brand, 120);
   const sheet = cut(p.description, 3000);
-  const page = cut(i.description, 4000);
+  const page = cut(landingDescriptionText(i.description ?? ''), 4000);
   const options = opts?.length
     ? opts.map((o) => `${o.name} (${o.values.length}) : ${o.values.join(', ')}`)
     : vars.length

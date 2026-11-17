@@ -1,7 +1,7 @@
 // The editor of one landing page: the form on one side, the page itself on the other (live, desktop or phone), drawn
 // by the very function the server uses, so what is seen here is what customers get.
 import { LandingPreview } from './Preview';
-import { followProduct, isProductCopy, LANDING_COLORS, LANDING_DEFAULT_COLOR, LandingView, ProductPhotoSet, renderLanding, WHATSAPP_DEFAULT, WHATSAPP_VARS } from '@pilotix/shared';
+import { followProduct, isProductCopy, LANDING_COLORS, LANDING_DEFAULT_COLOR, landingDescriptionImageIds, landingDescriptionImageLine, LandingView, ProductPhotoSet, renderLanding, WHATSAPP_DEFAULT, WHATSAPP_VARS } from '@pilotix/shared';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, Out, rpc, serverUrl, shopApi } from '../../lib/backend';
@@ -11,6 +11,7 @@ import { ErrorBox, Field, Icon, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { SaveBar } from '../ai/agent';
 import { useDebounced } from '../depot/OrderList';
+import { DescImages, DescImg } from './DescImages';
 import { useLandingFrame } from './frame';
 import { publicUrl, usePagesBase, useStore } from './index';
 import { Img, Photos } from './Photos';
@@ -88,6 +89,40 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
     },
   });
   const dirty = keyOf(d) !== saved;
+
+  // pictures inside the description: each one is a line « [image:12] » of the text. The editor keeps what it has seen
+  // of them (the saved page's, the ones added in this visit) for the preview and the list under the text.
+  const [descImgs, setDescImgs] = useState<Record<number, DescImg>>(() => Object.fromEntries((p?.descImages ?? []).flatMap((x) => (x.id ? [[x.id, { id: x.id, w: x.w, h: x.h, thumb: x.thumb, src: x.src }]] : []))));
+  const descRef = useRef<HTMLTextAreaElement>(null);
+  /** where the cursor last was in the description (null: never put there, a picture goes at the end) */
+  const descAt = useRef<number | null>(null);
+  const descText = useRef(d.description);
+  descText.current = d.description;
+  const noteCursor = (el: HTMLTextAreaElement) => (descAt.current = el.selectionStart);
+  /** a new picture: its line on its own, before the cursor's line when the cursor is at its start, else after it */
+  const addDescImage = (img: DescImg) => {
+    const text = descText.current;
+    const at = Math.min(descAt.current ?? text.length, text.length);
+    const nl = text.indexOf('\n', at);
+    const pos = at === 0 || text[at - 1] === '\n' ? at : nl === -1 ? text.length : nl;
+    const head = `${text.slice(0, pos)}${pos > 0 && text[pos - 1] !== '\n' ? '\n' : ''}${landingDescriptionImageLine(img.id)}`;
+    const tail = text.slice(pos);
+    const next = `${head}${tail && !tail.startsWith('\n') ? '\n' : ''}${tail}`;
+    // the next picture of the same batch goes right after this one
+    descAt.current = head.length;
+    descText.current = next;
+    setDescImgs((m) => ({ ...m, [img.id]: img }));
+    set('description', next);
+    requestAnimationFrame(() => descRef.current?.setSelectionRange(head.length, head.length));
+  };
+  const removeDescImage = (id: number) =>
+    set(
+      'description',
+      d.description
+        .split('\n')
+        .filter((l) => landingDescriptionImageIds(l)[0] !== id)
+        .join('\n'),
+    );
 
   // a new page takes its product's name as address, until the address is typed by hand
   useEffect(() => {
@@ -188,6 +223,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
       price: shown,
       oldPrice: view.oldPrice === '' ? null : Math.round(Number(view.oldPrice) || 0),
       description: view.description,
+      descImages: Object.fromEntries(landingDescriptionImageIds(view.description).flatMap((k) => (descImgs[k] ? [[k, { src: descImgs[k].src, srcset: `${descImgs[k].src} 480w`, thumb: descImgs[k].thumb, w: descImgs[k].w, h: descImgs[k].h }]] : []))),
       variantLabel: view.variantLabel.trim() || 'اللون',
       variants,
       soldOut: hide && c.soldOut,
@@ -212,9 +248,10 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
     };
     const r = { mode: 'preview' as const, post: '', geo: '', challenge: 'apercu', bits: c.bits };
     // the weight customers download before pictures (here the pictures are inside the page, as data)
-    const bare = renderLanding({ ...v, images: v.images.map((i) => ({ ...i, src: 'x', srcset: 'x 480w', thumb: 'x' })) }, r);
+    const light = <T extends { src: string; srcset: string; thumb: string }>(i: T) => ({ ...i, src: 'x', srcset: 'x 480w', thumb: 'x' });
+    const bare = renderLanding({ ...v, images: v.images.map(light), descImages: Object.fromEntries(Object.entries(v.descImages ?? {}).map(([k, i]) => [k, light(i)])) }, r);
     return { html: renderLanding(v, r), weight: new Blob([bare]).size };
-  }, [view, ctx.data, shopWa, photoSet]);
+  }, [view, ctx.data, shopWa, photoSet, descImgs]);
   const frame = useRef<HTMLIFrameElement>(null);
   useLandingFrame(frame);
   // « Ordinateur »: the page drawn 1280 px wide, then scaled down to fit the box
@@ -354,8 +391,22 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
               </Field>
             )}
             <Field label={t('landing.ed.description')} hint={t('landing.ed.descriptionHint')}>
-              <textarea dir="auto" rows={10} value={d.description} onChange={(e) => set('description', e.target.value)} />
+              <textarea
+                ref={descRef}
+                dir="auto"
+                rows={10}
+                value={d.description}
+                onChange={(e) => {
+                  noteCursor(e.target);
+                  set('description', e.target.value);
+                }}
+                onSelect={(e) => noteCursor(e.currentTarget)}
+                onKeyUp={(e) => noteCursor(e.currentTarget)}
+                onClick={(e) => noteCursor(e.currentTarget)}
+                onBlur={(e) => noteCursor(e.currentTarget)}
+              />
             </Field>
+            <DescImages text={d.description} known={descImgs} onAdd={addDescImage} onRemove={removeDescImage} onBusy={(n) => setBusy((b) => b + n)} />
           </section>
 
           <section className="card">

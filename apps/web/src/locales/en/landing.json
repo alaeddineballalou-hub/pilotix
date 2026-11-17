@@ -96,7 +96,18 @@
     "variantLabel": "Variant choice label",
     "variantHint": "Shown above the list: {{list}}",
     "description": "Product description",
-    "descriptionHint": "A line starting with \"- \" becomes a bullet, \"# \" a heading, **bold** bold. Leave an empty line between paragraphs.",
+    "descriptionHint": "A line starting with \"- \" becomes a bullet, \"# \" a heading, **bold** bold. Leave an empty line between paragraphs. A line [image:12] is a picture: move it or delete it like text.",
+    "di": {
+      "add": "Add a picture",
+      "working": "Preparing {{i}}/{{n}}…",
+      "hint": "The picture goes where the cursor is in the text.",
+      "name": "Picture {{n}}",
+      "missing": "Picture not found",
+      "remove": "Remove",
+      "max": "{{n}} pictures at most in the description.",
+      "tooTall": "Picture too long (more than {{n}} times its width): cut it into two pictures.",
+      "fail": "The picture could not be added."
+    },
     "sFraud": "Fake-order check",
     "fraudHelp": "Each order gets a score from 0 to 100 (phone, name, speed, bot, the number’s history, repeats…). Above the threshold it is blocked silently; a bit below it arrives as \"To check\".",
     "lvl": {

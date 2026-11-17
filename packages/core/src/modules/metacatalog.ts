@@ -9,7 +9,7 @@
 // every list leaves the catalogs. TikTok's problems never stop Meta's sending: they show on the page.
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
-import { algiersDayStart } from '@pilotix/shared';
+import { algiersDayStart, landingDescriptionText } from '@pilotix/shared';
 import { bad, Ctx, notFound, proc, publicApi } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, META_TOKEN_KEY } from './admin';
@@ -232,7 +232,7 @@ export function linesOf(p: Prod, w: Where): Line[] {
   const link = `${w.pages}/${w.store ? `${w.store}/` : ''}${page.slug}`;
   const urlOf = (x: Pic) => (x.id ? `${w.api}/lp/img/${x.id}/meta.jpg` : String(x.url));
   const good = page.pics.filter((x) => usable(x, w.demo));
-  const text = plainText(page.description).slice(0, 5000) || page.title;
+  const text = plainText(landingDescriptionText(page.description)).slice(0, 5000) || page.title;
   const many = p.variants.length > 1;
   return p.variants.map((v) => {
     const now = v.price ?? page.price ?? p.price;

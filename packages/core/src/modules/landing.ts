@@ -23,6 +23,8 @@ import {
   LandingRender,
   LandingView,
   normalizePhone,
+  LANDING_DESC_IMAGES_MAX,
+  landingDescriptionImageIds,
   landingMetaDescription,
   landingPreloadLink,
   landingPrice,
@@ -438,6 +440,19 @@ export function viewImages(refs: ImgRef[], rows: Map<number, any>, imgBase: stri
   return out;
 }
 
+/** The pictures placed in a description (its « [image:12] » lines) as the page shows them, by their number. */
+export async function descriptionImages(db: Db, text: string, imgBase: string | null): Promise<Record<number, LandingImage>> {
+  const refs: ImgRef[] = landingDescriptionImageIds(text).map((id) => ({ id }));
+  const out: Record<number, LandingImage> = {};
+  if (!refs.length) return out;
+  const rows = await imageRows(db, refs, !imgBase);
+  for (const r of refs) {
+    const one = viewImages([r], rows, imgBase)[0];
+    if (one && 'id' in r) out[r.id] = one;
+  }
+  return out;
+}
+
 const randomId = () => Array.from(globalThis.crypto.getRandomValues(new Uint8Array(9)), (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 14);
 
 /** the page's own WhatsApp button, else the one of Réglages (null: no button) */
@@ -485,6 +500,7 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     price: numOrNull(l.price) ?? pc.price,
     oldPrice: numOrNull(l.old_price),
     description: l.description,
+    descImages: await descriptionImages(ctx.db, String(l.description ?? ''), o.imgBase),
     variantLabel: l.variant_label || 'اللون',
     variants: viewVariants(l, pc, hide),
     ...(pc.options ? { options: pc.options } : {}),
@@ -1752,17 +1768,24 @@ export const landingProcs = {
   'landing.list': proc([...WHO], z.object({}), (ctx) => listPages(ctx.db, ctx.now())),
 
   'landing.get': proc([...WHO], z.object({ id }), async (ctx, { id }) => {
-    const l = (await ctx.db.query('SELECT images FROM landing_pages WHERE id = $1', [id]))[0];
+    const l = (await ctx.db.query('SELECT images, description FROM landing_pages WHERE id = $1', [id]))[0];
     if (!l) throw notFound('Page introuvable');
     const refs = readImgs(l.images);
     const rows = await imageRows(ctx.db, refs, true);
+    // the pictures inside the description (« [image:12] »): what the editor shows of each
+    const dIds = landingDescriptionImageIds(String(l.description ?? ''));
+    const dRows = await imageRows(ctx.db, dIds.map((x) => ({ id: x })), true);
+    const descImages: LandingImageRow[] = dIds.flatMap((x): LandingImageRow[] => {
+      const r = dRows.get(x);
+      return r ? [{ id: x, url: null, w: num(r.w), h: num(r.h), thumb: b64(r.t160), src: b64(r.w480) }] : [];
+    });
     const images: LandingImageRow[] = refs.flatMap((r): LandingImageRow[] => {
       const v = r.v ?? null;
       if ('url' in r) return [{ id: null, url: r.url, w: r.w, h: r.h, thumb: r.url, src: r.url, v }];
       const x = rows.get(r.id);
       return x ? [{ id: r.id, url: null, w: num(x.w), h: num(x.h), thumb: b64(x.t160), src: b64(x.w480), info: readJson<LandingImageInfo>(x.info), v }] : [];
     });
-    return { ...(await listPages(ctx.db, ctx.now(), [id]))[0], images };
+    return { ...(await listPages(ctx.db, ctx.now(), [id]))[0], images, descImages };
   }),
 
   /** price, variants (own price, stock), delivery prices and shop name of a product (the editor's preview) */
@@ -1785,6 +1808,7 @@ export const landingProcs = {
     if (taken) throw bad(taken);
     const before = i.id ? ((await ctx.db.query('SELECT slug FROM landing_pages WHERE id = $1', [i.id]))[0]?.slug as string | undefined) : undefined;
     if (!(await ctx.db.query('SELECT 1 FROM products WHERE id = $1', [i.productId])).length) throw notFound('Produit introuvable');
+    if (landingDescriptionImageIds(i.description).length > LANDING_DESC_IMAGES_MAX) throw bad(`${LANDING_DESC_IMAGES_MAX} images au plus dans la description`);
     await checkPixels(ctx.db, 'meta', i.metaPixels);
     await checkPixels(ctx.db, 'tiktok', i.tiktokPixels);
     const vals = [i.productId, i.slug, i.active, i.title, i.color.toLowerCase(), i.price, i.oldPrice, i.description, i.variantLabel || 'اللون', i.fraudLevel, JSON.stringify(i.images), i.pixelId, i.stockMode, pixelsJson(i.metaPixels), pixelsJson(i.tiktokPixels), i.whatsapp ? JSON.stringify(i.whatsapp) : null];

@@ -13,6 +13,7 @@
 //   made by rules from the same facts. The team reads and corrects it; nothing is saved before « Enregistrer »;
 // - catalog.translateGuide: after a save, Pilot AI translates the lines still without a translation into the other
 //   reading languages (French, Arabic, English); the team's corrections stay. Without the AI they wait for the next save.
+import { landingDescriptionText } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { bad, Ctx, forbidden, hasRole, notFound, proc, withActionLock } from '../rpc';
@@ -105,7 +106,7 @@ async function factsOf(ctx: Ctx, i: DraftIn): Promise<Facts> {
     ? (await ctx.db.query(`SELECT title, description FROM landing_pages WHERE product_id = $1 ORDER BY active DESC, updated_at DESC LIMIT 1`, [i.productId]))[0]
     : null;
   const notes = (await dellalSettings(ctx.db)).notes.trim();
-  return { ...i, shop, page: page ? { title: String(page.title ?? ''), description: String(page.description ?? '').slice(0, 4000) } : null, notes: notes.slice(0, 3000) };
+  return { ...i, shop, page: page ? { title: String(page.title ?? ''), description: landingDescriptionText(String(page.description ?? '')).slice(0, 4000) } : null, notes: notes.slice(0, 3000) };
 }
 
 const da = (n: number) => `${n.toLocaleString('fr-FR').replace(/\s/g, ' ')} DA`;

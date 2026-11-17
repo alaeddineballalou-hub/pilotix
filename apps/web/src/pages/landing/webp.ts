@@ -337,11 +337,20 @@ function flatten(c: HTMLCanvasElement): HTMLCanvasElement {
   return out;
 }
 
+/** a description's picture taller than this many times its width is refused (too heavy for a phone to draw) */
+export const TALL_MAX = 10;
+export class TooTall extends Error {}
+
 /**
  * Compresses one picture for a landing page. `step` tells what is being done (for the editor's progress line).
+ * `tall`: a picture of the description (a long poster, read lower in the page, loaded only when the customer gets
+ * there): the cap of each width grows with its height, so its text stays sharp; the thumbnail keeps its cap.
  */
-export async function optimize(file: Blob, preset: Preset, step?: (size: Size | 'lqip') => void): Promise<Encoded> {
+export async function optimize(file: Blob, preset: Preset, step?: (size: Size | 'lqip') => void, o?: { tall?: boolean }): Promise<Encoded> {
   const src = await load(file);
+  if (o?.tall && src.height > src.width * TALL_MAX) throw new TooTall();
+  // a photo is about 4:5; a poster 5 times taller gets about 4 times the cap (never more than the server takes)
+  const room = o?.tall ? Math.min(5.5, Math.max(1, src.height / src.width / 1.25)) : 1;
   const webp = await canWebp();
   const type = webp ? 'image/webp' : 'image/jpeg';
   const p = PRESETS[preset];
@@ -365,7 +374,7 @@ export async function optimize(file: Blob, preset: Preset, step?: (size: Size | 
     let c = k === 'w960' ? big : resize(big, w, h);
     if (!webp && alpha) c = flatten(c);
     const ref = luma(ctx2d(c).getImageData(0, 0, w, h));
-    const pick = await lightest(c, ref, type, k === 't160' ? p.thumb : p.ssim, CAP[k], webp && lossless !== false, k === 'w960' || k === 'w720' || k === 'w320' ? out.w480?.q : undefined);
+    const pick = await lightest(c, ref, type, k === 't160' ? p.thumb : p.ssim, k === 't160' ? CAP[k] : Math.round(CAP[k] * room), webp && lossless !== false, k === 'w960' || k === 'w720' || k === 'w320' ? out.w480?.q : undefined);
     if (k === 'w480' && webp) lossless = pick.q === 1;
     out[k] = { ...pick, w, h };
   }

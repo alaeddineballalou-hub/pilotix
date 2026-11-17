@@ -25,8 +25,10 @@ export interface LandingView {
   color: string;
   price: number;
   oldPrice: number | null;
-  /** simple text: "- " lines are bullets, "# " a heading, **bold**, a blank line between paragraphs */
+  /** simple text: "- " lines are bullets, "# " a heading, **bold**, a blank line between paragraphs, "[image:12]" a picture */
   description: string;
+  /** the pictures the description shows (its « [image:12] » lines), by their number; a line whose picture is missing shows nothing */
+  descImages?: Record<number, LandingImage>;
   variantLabel: string;
   /** price: the variant's own price when it differs from the page's; out: sold out (shown, not orderable) */
   /** label: the name shown to the customer (its Arabic name from Produits, else the colour words translated) */
@@ -142,8 +144,39 @@ function shade(hex: string, t: number): string {
   return '#' + ch.map((v) => v.toString(16).padStart(2, '0')).join('');
 }
 
-/** The description as safe HTML: escaped first, then bullets, headings, bold and paragraphs. */
-export function landingDescriptionHtml(text: string): string {
+/** A picture inside the description: a line « [image:12] » (12 = the picture's number among the shop's stored pictures). */
+const DESC_IMAGE = /^\[\s*image\s*:\s*(\d{1,12})\s*\]$/i;
+/** pictures a description can show */
+export const LANDING_DESC_IMAGES_MAX = 12;
+export const landingDescriptionImageLine = (id: number) => `[image:${id}]`;
+/** the pictures a description shows, in their order (each one once) */
+export function landingDescriptionImageIds(text: string): number[] {
+  const ids: number[] = [];
+  for (const l of String(text ?? '').replace(/\r/g, '').split('\n')) {
+    const m = l.trim().match(DESC_IMAGE);
+    if (m && Number(m[1]) > 0 && !ids.includes(Number(m[1]))) ids.push(Number(m[1]));
+  }
+  return ids;
+}
+/** the description without its pictures' lines: what is read as text (the search snippet, the AI, the catalog) */
+export function landingDescriptionText(text: string): string {
+  return String(text ?? '')
+    .replace(/\r/g, '')
+    .split('\n')
+    .filter((l) => !DESC_IMAGE.test(l.trim()))
+    .join('\n');
+}
+/** the style of a description's pictures: only in the pages that have one (the others stay as light as before) */
+const DESC_IMAGE_CSS = '.di{display:block;width:100%;max-width:640px;height:auto;margin:10px auto;border-radius:10px;background:center/cover no-repeat}';
+/** where a description's picture is drawn: the card's width on a phone, 640 px at most on a computer */
+export const LANDING_DESC_SIZES = '(min-width:700px) 640px, calc(100vw - 54px)';
+function descImageHtml(x: LandingImage): string {
+  const lqip = x.lqip && /^data:image\/(webp|jpeg);base64,[A-Za-z0-9+/=]+$/.test(x.lqip) ? ` style="background-image:url(${x.lqip})"` : '';
+  return `<img class="di"${lqip} src="${esc(x.src)}" srcset="${esc(x.srcset)}" sizes="${LANDING_DESC_SIZES}" width="${Math.round(x.w) || 960}" height="${Math.round(x.h) || 960}" alt="" loading="lazy" decoding="async">`;
+}
+
+/** The description as safe HTML: escaped first, then bullets, headings, bold, paragraphs and its pictures. */
+export function landingDescriptionHtml(text: string, images?: Record<number, LandingImage>): string {
   const inline = (s: string) => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
   const out: string[] = [];
   for (const block of text.replace(/\r/g, '').split(/\n\s*\n/)) {
@@ -159,6 +192,14 @@ export function landingDescriptionHtml(text: string): string {
     };
     for (const raw of lines) {
       const l = raw.trim();
+      const im = l.match(DESC_IMAGE);
+      if (im) {
+        // a picture: on its own, between what is before and after it (nothing when it is not one of the shop's)
+        flush();
+        const x = images?.[Number(im[1])];
+        if (x) out.push(descImageHtml(x));
+        continue;
+      }
       const h = l.match(/^#+\s+(.*)$/);
       const b = l.match(/^(?:[-•*·✓✔]|✅)\s*(.*)$/);
       if (h) {
@@ -322,7 +363,7 @@ export function landingPreloadLink(v: LandingView): string | null {
 
 /** The search and share snippet: the start of the description (no markup), else the title, the price and the delivery. */
 export function landingMetaDescription(v: Pick<LandingView, 'title' | 'price' | 'description'>): string {
-  const plain = String(v.description ?? '')
+  const plain = landingDescriptionText(v.description)
     .replace(/^\s*(#+|-)\s+/gm, '')
     .replace(/\*\*/g, '')
     .replace(/\s+/g, ' ')
@@ -393,7 +434,7 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
     tts: r.mode === 'live' ? pixelIds(v.tiktokId, TIKTOK_PIXEL) : [],
     ts: r.mode === 'live' && v.turnstileKey && /^[0-9A-Za-z_-]{10,100}$/.test(v.turnstileKey) ? v.turnstileKey : '',
   };
-  const desc = landingDescriptionHtml(v.description);
+  const desc = landingDescriptionHtml(v.description, v.descImages);
   // search engines and shared links (Facebook, WhatsApp): the real page only, at its own address (site/<store>/<page>; else the order address minus /order)
   const meta = esc(landingMetaDescription(v));
   const url = r.mode !== 'live' ? '' : r.url && /^https?:\/\/[^\s"<>]+$/.test(r.url) ? r.url : /^https?:\/\/[^\s"<>]+\/order$/.test(r.post) ? r.post.slice(0, -'/order'.length) : '';
@@ -406,7 +447,7 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
         (img && /^https?:\/\//.test(img.src) ? `<meta property="og:image" content="${esc(img.src)}"><meta name="twitter:card" content="summary_large_image">` : '')
       : '<meta name="robots" content="noindex">');
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(v.title)}</title>${favicon(r.icon, v.shopLogo)}
-${head}<meta name="theme-color" content="${c}">${img ? `<link rel="preload" as="image" href="${esc(img.src)}" imagesrcset="${esc(img.srcset)}" imagesizes="${sizes}">` : ''}<style>${CSS(c)}</style></head><body>
+${head}<meta name="theme-color" content="${c}">${img ? `<link rel="preload" as="image" href="${esc(img.src)}" imagesrcset="${esc(img.srcset)}" imagesizes="${sizes}">` : ''}<style>${CSS(c)}${desc.includes('<img class="di"') ? DESC_IMAGE_CSS : ''}</style></head><body>
 <div class="top">🚚 التوصيل لجميع الولايات · الدفع عند الاستلام</div>${brandTop(v.shopName, v.shopLogo)}${r.group ? `<a class="bk" id="bk" href="${esc(r.group.slug)}">→ ${esc(GROUP_BACK)}</a>` : ''}<main class="w"><div class="g">
 <section class="gal card">${gallery}</section>
 <section class="card">${v.soldOut ? `<h1>${esc(v.title)}</h1><div class="so"><b>نفذت الكمية مؤقتاً</b><p>هذا المنتج غير متوفر حالياً، عودوا قريباً.</p></div>` : `<form id="f" novalidate autocomplete="on"><h1>${esc(v.title)}</h1><div class="pr"><b id="pp">${landingPrice(v.price)}</b>${off ? `<s>${landingPrice(v.oldPrice!)}</s><span class="off" dir="ltr">-${off}%</span>` : ''}</div>
