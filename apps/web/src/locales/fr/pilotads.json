@@ -492,7 +492,9 @@
     "include": "Ciblés",
     "recommended": "Conseillé",
     "people": "personnes",
+    "byMeta": "Meta la remplit tout seul",
     "syncedAt": "mis à jour {{when}}",
+    "where": "Une pub lancée depuis Pilotix enlève ces listes toute seule. Pour une pub faite dans Meta, choisissez-les vous-même dans les exclusions : leur nom commence par « Pilotix ».",
     "privacy": "Seulement les clients de votre boutique. Les numéros sont chiffrés (SHA-256) sur le serveur avant d’aller chez Meta, jamais en clair.",
     "returners": {
       "name": "Ceux qui renvoient les colis",
@@ -501,6 +503,14 @@
     "fake": {
       "name": "Faux numéros et fausses commandes",
       "text": "Les numéros marqués faux ou mauvais numéro ne voient plus vos pubs."
+    },
+    "fakeorder": {
+      "name": "Fausses commandes (navigateurs)",
+      "text": "Le navigateur derrière une commande marquée fausse, ou bloquée et jamais restaurée, ne voit plus vos pubs. Meta remplit cette liste tout seul avec l’événement « FakeOrder » de vos pages ; aucun numéro n’est envoyé."
+    },
+    "competitor": {
+      "name": "Concurrents (navigateurs)",
+      "text": "Le navigateur d’un concurrent qui commande pour vous faire perdre de l’argent ne voit plus vos pubs. Meta remplit cette liste tout seul avec l’événement « Competitor » de vos pages ; aucun numéro n’est envoyé."
     },
     "buyers": {
       "name": "Clients livrés",
@@ -515,7 +525,9 @@
       "off": "Éteint",
       "waiting": "En attente",
       "small": "Trop petit",
-      "failed": "Erreur"
+      "failed": "Erreur",
+      "nopixel": "Pas de pixel",
+      "nometa": "Meta non relié"
     }
   },
   "ago": "il y a {{d}}",

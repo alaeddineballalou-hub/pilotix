@@ -7,7 +7,8 @@
 import { z } from 'zod';
 import { Db, num } from '../db';
 import { bad, Ctx, forbidden, notFound, proc, withActionLock } from '../rpc';
-import { getRaw, setRaw } from './admin';
+import { getSetting } from '../settings';
+import { getRaw, META_TOKEN_KEY, setRaw } from './admin';
 import { addDays, adsetDiagnostic, dayStart, fxTable, insights, isOwner, moneyOf, ordersOf, productAdvice, sumDays, syncMeta, visibleAdsets } from './ads';
 import {
   AUDIENCE_DEFAULT_ON,
@@ -17,12 +18,16 @@ import {
   checkChange,
   DEFAULT_GUARD,
   DEFAULT_RULES,
+  EVENT_AUDIENCE_DAYS,
+  EVENT_AUDIENCES,
+  isEventAudience,
   metaPhone,
   RULE_COOLDOWN_H,
   RULE_KEYS,
   suggestFor,
   type AdsetStats,
   type AudienceKind,
+  type EventAudienceKind,
   type Guard,
   type RuleKey,
   type RuleMode,
@@ -605,36 +610,83 @@ export async function wilayaRates(db: Db, now: number): Promise<Map<number, { se
 }
 
 // ---------------------------------------------------------------- audiences
-const AUDIENCE_SQL: Record<Exclude<AudienceKind, 'lookalike'>, string> = {
+/** the audiences made of the shop's own customers (their phones, hashed): the others are a lookalike, or Meta's own lists */
+type ListKind = Exclude<AudienceKind, 'lookalike' | EventAudienceKind>;
+const AUDIENCE_SQL: Record<ListKind, string> = {
   returners: `follow_status IN ('returned','lost')`,
   fake: `conf_status IN ('fake','wrong_number')`,
   buyers: `follow_status IN ('delivered','exchanged')`,
 };
-const AUDIENCE_NAME: Record<AudienceKind, string> = { returners: 'Pilotix · retours', fake: 'Pilotix · faux numéros', buyers: 'Pilotix · clients livrés', lookalike: 'Pilotix · comme mes clients livrés' };
+const AUDIENCE_NAME: Record<AudienceKind, string> = {
+  returners: 'Pilotix · retours',
+  fake: 'Pilotix · faux numéros',
+  fakeorder: 'Pilotix · fausses commandes (navigateurs)',
+  competitor: 'Pilotix · concurrents (navigateurs)',
+  buyers: 'Pilotix · clients livrés',
+  lookalike: 'Pilotix · comme mes clients livrés',
+};
+/** the pixels each event audience was last made on (its rule is sent again when the shop's pixels change) */
+const EVENT_PIXELS_KEY = 'pilot_ads_event_pixels';
 
-async function phonesOf(db: Db, kind: Exclude<AudienceKind, 'lookalike'>, now: number): Promise<string[]> {
+/**
+ * The shop's Meta pixels (Réglages › Pixels, the pixel of the pages, a page's own): the landing pages send « FakeOrder »
+ * and « Competitor » to them (modules/pixels.ts pixelsOf), so the two lists are read from all of them: 10 at most, the
+ * main one first (the one a page uses when it names none).
+ */
+async function eventPixels(db: Db): Promise<string[]> {
+  const named = await db.query(`SELECT pixel_id, is_default FROM tracking_pixels WHERE platform = 'meta' ORDER BY is_default DESC, id`).catch(() => []);
+  const pages = await db.query(`SELECT DISTINCT pixel_id FROM landing_pages WHERE COALESCE(pixel_id, '') <> '' ORDER BY 1`).catch(() => []);
+  const pages0 = String((await getSetting(db, 'landing')).pixelId ?? '').trim();
+  const ids = [...named.filter((r: any) => r.is_default), { pixel_id: pages0 }, ...named.filter((r: any) => !r.is_default), ...pages].map((r: any) => String(r.pixel_id ?? '').trim());
+  return [...new Set(ids)].filter((p) => /^\d{5,20}$/.test(p)).slice(0, 10);
+}
+
+/** the shop's ads are linked to Meta (an ad account and its key): without them no list can be made there */
+const metaLinked = async (db: Db) => !!(await getSetting(db, 'meta')).adAccountId && !!(await getRaw<string>(db, META_TOKEN_KEY, ''));
+
+async function phonesOf(db: Db, kind: ListKind, now: number): Promise<string[]> {
   const rows = await db.query(`SELECT DISTINCT phone FROM sales WHERE ${AUDIENCE_SQL[kind]} AND created_at >= $1`, [new Date(now - 365 * 86_400_000).toISOString()]);
   return [...new Set(rows.map((r: any) => metaPhone(r.phone)).filter((p): p is string => !!p))];
 }
 
 /**
- * Nothing goes to Meta before the owner turns an audience on (its row exists): the shop's customers are its own, and
- * uploading them is the owner's choice. « recommended »: what Pilotix advises (leave out returners and fake orders).
+ * No customer goes to Meta before the owner turns an audience on (its row exists): the shop's customers are its own,
+ * and uploading them is the owner's choice. « recommended »: what Pilotix advises (leave out returners and fake orders).
+ * The two lists Meta fills from the pages' events (« events »: fake orders, competitors) upload nothing: they are on
+ * unless the owner turned them off, and wait to be made (« waiting ») until the first update or launch.
  */
 async function audienceRows(db: Db) {
   const rows = new Map((await db.query(`SELECT * FROM ad_audiences`)).map((r: any) => [String(r.kind), r]));
   return AUDIENCE_KINDS.map((kind) => {
     const r: any = rows.get(kind);
-    return { kind, on: r ? !!r.is_on : false, recommended: AUDIENCE_DEFAULT_ON[kind], metaId: r?.meta_id ?? null, size: r ? num(r.size) : 0, status: r ? String(r.status) : 'off', error: r?.error ?? null, syncedAt: r?.synced_at ? new Date(r.synced_at).toISOString() : null };
+    const events = isEventAudience(kind);
+    return {
+      kind,
+      events,
+      on: r ? !!r.is_on : events,
+      recommended: AUDIENCE_DEFAULT_ON[kind],
+      metaId: r?.meta_id ?? null,
+      size: r ? num(r.size) : 0,
+      // an event list switched back on, or left without its Meta list (a new ad account): to be made again
+      status: r ? (events && r.is_on && String(r.status) === 'off' ? 'waiting' : String(r.status)) : events ? 'waiting' : 'off',
+      error: r?.error ?? null,
+      syncedAt: r?.synced_at ? new Date(r.synced_at).toISOString() : null,
+    };
   });
 }
 
 /**
  * The audiences sent to Meta again (the server each night; the demo only counts): only those the owner turned on, and
- * only this shop's own customers, hashed on the server (meta.ts). The lookalike needs 100 delivered customers.
+ * only this shop's own customers, hashed on the server (meta.ts). The lookalike needs 100 delivered customers. The two
+ * event lists are only made (once, in the ad account new ads start from) and kept on the shop's pixels: Meta fills them.
+ * `only`: these kinds alone (before a launch), the daily update still to come.
  */
-export async function syncAudiences(ctx: Ctx) {
-  const list = await audienceRows(ctx.db);
+export async function syncAudiences(ctx: Ctx, only?: readonly AudienceKind[]) {
+  // one at a time (the daily update, the owner's button, a launch): a list is never made twice at Meta
+  return withActionLock(ctx.db, 'ads:audiences', me(ctx), 'Les audiences sont déjà en cours de mise à jour : réessayez dans un instant.', () => syncAudiencesNow(ctx, only));
+}
+async function syncAudiencesNow(ctx: Ctx, only?: readonly AudienceKind[]) {
+  const list = (await audienceRows(ctx.db)).filter((a) => !only || only.includes(a.kind));
   const out: { kind: string; size: number; status: string }[] = [];
   let buyersId: string | null = list.find((x) => x.kind === 'buyers')?.metaId ?? null;
   const lookalikeOn = !!list.find((x) => x.kind === 'lookalike')?.on;
@@ -646,7 +698,27 @@ export async function syncAudiences(ctx: Ctx) {
     let status = 'ready';
     let error: string | null = null;
     try {
-      if (a.kind === 'lookalike') {
+      if (isEventAudience(a.kind)) {
+        // Meta's own list: nothing uploaded. Made once, checked each day (deleted at Meta: made again), its rule sent
+        // again when the shop's pixels changed. A shop without a Meta pixel has nothing to read it from (« nopixel »);
+        // one whose ads are not linked to Meta has nowhere to make it (« nometa »): neither is an error.
+        const pixels = await eventPixels(ctx.db);
+        size = 0;
+        if (!pixels.length) status = 'nopixel';
+        else if (ctx.server && !(await metaLinked(ctx.db))) status = 'nometa';
+        else if (ctx.server) {
+          const used = await getRaw<Record<string, string>>(ctx.db, EVENT_PIXELS_KEY, {});
+          const r = (await ctx.server.meta(
+            'eventAudience',
+            { name: AUDIENCE_NAME[a.kind], event: EVENT_AUDIENCES[a.kind], pixels, days: EVENT_AUDIENCE_DAYS, metaId, refresh: !!metaId && (used[a.kind] ?? '') !== pixels.join(',') },
+            ctx,
+          )) as { id: string; partial?: boolean };
+          metaId = r.id;
+          // a pixel this ad account cannot read: the list follows the others, and the card says so
+          if (r.partial) error = 'Meta n’a pas accepté tous les pixels de la boutique pour cette liste : elle suit seulement ceux qu’il a pris.';
+          await setRaw(ctx.db, EVENT_PIXELS_KEY, { ...(await getRaw<Record<string, string>>(ctx.db, EVENT_PIXELS_KEY, {})), [a.kind]: pixels.join(',') });
+        }
+      } else if (a.kind === 'lookalike') {
         const seed = await phonesOf(ctx.db, 'buyers', ctx.now());
         size = seed.length;
         if (seed.length < 100) {
@@ -672,8 +744,19 @@ export async function syncAudiences(ctx: Ctx) {
     );
     out.push({ kind: a.kind, size, status });
   }
-  await setRaw(ctx.db, KEY, { ...(await getRaw(ctx.db, KEY, {})), audiencesAt: stamp(ctx) });
+  if (!only) await setRaw(ctx.db, KEY, { ...(await getRaw(ctx.db, KEY, {})), audiencesAt: stamp(ctx) });
   return out;
+}
+
+/**
+ * Before a launch (server): the two lists Meta fills from the pages' events are made if they are not yet (a shop's
+ * first launch, a new ad account), so the new ad sets already leave them out. It never stops a launch: a list Meta
+ * refuses is marked « Erreur » in Audiences, and the launch goes without it.
+ */
+export async function ensureEventAudiences(ctx: Ctx): Promise<void> {
+  if (!ctx.server) return;
+  const missing = (await audienceRows(ctx.db)).filter((a) => a.events && a.on && !(a.metaId && a.status === 'ready'));
+  if (missing.length) await syncAudiences(ctx, missing.map((a) => a.kind)).catch(() => null);
 }
 
 /** the audiences a launch uses: Meta ids of those on (exclusions) and the lookalike (inclusion) */

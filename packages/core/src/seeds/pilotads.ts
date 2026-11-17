@@ -111,12 +111,15 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     [pous || null, spec('calls', 'Poussette — appels', pous || null, 15, { phone: '+213661223344' }), spec('form', 'Poussette — formulaire', pous || null, 8), users.marketer, iso(3 * H), iso(26 * H)],
   );
 
-  // the audiences from the shop's own customers: returners and fake orders left out of the ads (owner's choice)
+  // the audiences from the shop's own customers: returners and fake orders left out of the ads (owner's choice), and
+  // the two lists Meta fills by itself from the pages' events (the browsers behind fake orders and competitors)
   const count = async (where: string) => num((await db.query(`SELECT count(DISTINCT phone) AS n FROM sales WHERE ${where}`))[0]?.n);
   await db.query(
     `INSERT INTO ad_audiences (kind, is_on, meta_id, size, status, synced_at) VALUES
       ('returners', true, '23851000000000001', $1, 'ready', $4),
       ('fake', true, '23851000000000002', $2, 'ready', $4),
+      ('fakeorder', true, '23851000000000003', 0, 'ready', $4),
+      ('competitor', true, '23851000000000004', 0, 'ready', $4),
       ('buyers', false, NULL, $3, 'off', NULL)
      ON CONFLICT (kind) DO NOTHING`,
     [await count(`follow_status IN ('returned','lost')`), await count(`conf_status IN ('fake','wrong_number')`), await count(`follow_status IN ('delivered','exchanged')`), iso(5 * H)],

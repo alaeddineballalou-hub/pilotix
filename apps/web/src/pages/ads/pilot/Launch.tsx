@@ -885,7 +885,7 @@ function Targeting({ o, d, set }: { o: Opt; d: Draft; set: (p: Partial<Draft>) =
         <input type="checkbox" checked={d.useAudiences} onChange={(e) => set({ useAudiences: e.target.checked })} />
         <span>
           <b>{t('pilotads.who.audiences')}</b>
-          <small>{aud.length ? aud.map((a) => `${t(`pilotads.aud.${a.kind}.name`)} (${n(a.size)})`).join(' · ') : t('pilotads.who.noAudiences')}</small>
+          <small>{aud.length ? aud.map((a) => (a.events ? t(`pilotads.aud.${a.kind}.name`) : `${t(`pilotads.aud.${a.kind}.name`)} (${n(a.size)})`)).join(' · ') : t('pilotads.who.noAudiences')}</small>
         </span>
       </label>
       {d.goal === 'sales' && o.pixels.length > 1 && (

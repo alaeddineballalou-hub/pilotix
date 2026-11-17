@@ -492,7 +492,9 @@
     "include": "Targeted",
     "recommended": "Advised",
     "people": "people",
+    "byMeta": "Filled by Meta",
     "syncedAt": "updated {{when}}",
+    "where": "An ad launched from Pilotix leaves these lists out by itself. For an ad made in Meta, pick them yourself in the exclusions: their name starts with “Pilotix”.",
     "privacy": "Only your shop’s customers. Numbers are hashed (SHA-256) on the server before going to Meta, never in clear.",
     "returners": {
       "name": "People who return parcels",
@@ -501,6 +503,14 @@
     "fake": {
       "name": "Fake numbers and fake orders",
       "text": "Numbers marked fake or wrong number no longer see your ads."
+    },
+    "fakeorder": {
+      "name": "Fake orders (browsers)",
+      "text": "The browser behind an order marked fake, or blocked and never restored, no longer sees your ads. Meta fills this list by itself from your pages’ “FakeOrder” event; no number is sent."
+    },
+    "competitor": {
+      "name": "Competitors (browsers)",
+      "text": "The browser of a competitor who orders to make you lose money no longer sees your ads. Meta fills this list by itself from your pages’ “Competitor” event; no number is sent."
     },
     "buyers": {
       "name": "Delivered customers",
@@ -515,7 +525,9 @@
       "off": "Off",
       "waiting": "Waiting",
       "small": "Too small",
-      "failed": "Error"
+      "failed": "Error",
+      "nopixel": "No pixel",
+      "nometa": "Meta not linked"
     }
   },
   "ago": "{{d}} ago",

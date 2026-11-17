@@ -1,13 +1,18 @@
 // Pilot Ads: what goes to Meta for each goal (all PAUSED, the shop's ids in the link, photos as bytes), the owner's
 // limits, Pilote auto's rules, the buttons (pause, budget, undo, the owner's yes, « Tout arrêter »), the launcher in the
 // demo (options, words, a launch live at once, a marketer's launch waiting for the owner), the audiences, the report by
-// wilaya, and the order a chat brings keeping its ad.
+// wilaya, the order a chat brings keeping its ad, and Meta's own two lists (the browsers behind fake orders and
+// competitors): made by Pilotix before a launch, left out of its ad sets, asked from Meta by their rule.
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
+import { AppError } from '../rpc';
+import { getSetting, setSetting } from '../settings';
+import { setRaw } from '../modules/admin';
 import { chatAdOf } from '../modules/dellal';
 import { demoCopy, regionMatches } from '../modules/adslaunch';
-import { checkChange, DEFAULT_GUARD, launchProblems, metaPhone, metaPlan, suggestFor, type AdsetStats, type LaunchInput } from '../modules/pilotads';
+import { FAKE_EVENTS } from '../modules/landingquery';
+import { checkChange, DEFAULT_GUARD, EVENT_AUDIENCE_DAYS, EVENT_AUDIENCES, launchProblems, metaPhone, metaPlan, suggestFor, type AdsetStats, type LaunchInput } from '../modules/pilotads';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -279,7 +284,9 @@ test('a sales ad needs its sales page; the problems come back before Meta', asyn
 
 test('audiences: nothing sent before the owner turns one on; the report by wilaya and hour', async () => {
   const a: any = await call('ads.aud.list', await mk(), {});
-  assert.deepEqual(a.list.filter((x: any) => x.on).map((x: any) => x.kind).sort(), ['fake', 'returners']);
+  // the customers' lists the owner chose, and Meta's own two lists (nothing uploaded for them: on from the start)
+  assert.deepEqual(a.list.filter((x: any) => x.on).map((x: any) => x.kind).sort(), ['competitor', 'fake', 'fakeorder', 'returners']);
+  assert.deepEqual(a.list.filter((x: any) => x.events).map((x: any) => x.kind), ['fakeorder', 'competitor']);
   await assert.rejects(call('ads.aud.save', await mk(), { kind: 'buyers', on: true }), /Accès refusé/);
   await call('ads.aud.save', await owner(), { kind: 'buyers', on: true });
   const synced: any = await call('ads.aud.sync', await owner(), {});
@@ -292,3 +299,247 @@ test('audiences: nothing sent before the owner turns one on; the report by wilay
   assert.equal(w.hours.length, 24);
   assert.ok(w.goals.some((g: any) => g.goal === 'messages'), 'the messages campaign’s orders');
 });
+
+// ---------------------------------------------------------------- Meta's own two lists (fake orders, competitors)
+type Seen = { action: string; args: any };
+/** a server whose Meta answers: the lists it is asked for get an id, a launch gets its ids */
+const metaServer = (seen: Seen[], o: { refuse?: () => boolean } = {}): NonNullable<Ctx['server']> => {
+  let n = 0;
+  return {
+    courier: async () => ({}),
+    hashPassword: async (p) => p,
+    publicUrl: 'https://pilotix.test',
+    meta: async (action, args: any) => {
+      seen.push({ action, args });
+      if (action === 'test') return { name: 'Compte test', currency: 'USD' };
+      if (action === 'eventAudience') {
+        if (o.refuse?.()) throw new AppError('bad_request', 'Meta : ce pixel n’est pas à ce compte pub');
+        return { id: args.metaId ?? `99000000000000${++n}`, made: !args.metaId, partial: false };
+      }
+      if (action === 'audience') return { id: args.metaId ?? '23851000000000009', received: args.phones.length };
+      if (action === 'launch') {
+        const ids: Record<string, string> = { ...(args.done ?? {}), campaign: `1203000000000${seen.length}` };
+        args.plan.adsets.forEach((a: any, k: number) => (ids[`adset:${a.key}`] = `1203100000${seen.length}${k}`));
+        args.plan.ads.forEach((a: any, k: number) => (ids[`ad:${a.key}`] = `1203200000${seen.length}${k}`));
+        return { ids, error: null, step: 'done' };
+      }
+      return {};
+    },
+  };
+};
+const TOKEN = 'EAAG-test-token-' + 'y'.repeat(40);
+const lists = async (): Promise<any[]> => ((await call('ads.aud.list', await owner(), {})) as any).list.filter((x: any) => x.events);
+
+test('fake orders and competitors: the two lists carry the names of the events the pages send', () => {
+  assert.deepEqual(Object.values(EVENT_AUDIENCES), [...FAKE_EVENTS]);
+  assert.equal(EVENT_AUDIENCE_DAYS, 180);
+});
+
+test('Meta’s own two lists: made before a launch, left out of its ad sets; the check sends nothing', async () => {
+  // a shop where nothing is made yet, its ads not linked to Meta
+  await db.query(`DELETE FROM ad_audiences WHERE kind IN ('fakeorder','competitor')`);
+  await call('admin.meta.disconnect', await as(EMAILS.admin), {});
+  assert.deepEqual((await lists()).map((x) => [x.kind, x.on, x.recommended, x.status, x.metaId]), [
+    ['fakeorder', true, true, 'waiting', null],
+    ['competitor', true, true, 'waiting', null],
+  ]);
+  const seen: Seen[] = [];
+  let refuse = false;
+  const server = metaServer(seen, { refuse: () => refuse });
+  const boss = () => as(EMAILS.vendeur, server);
+  const asked = () => seen.filter((c) => c.action === 'eventAudience');
+  // not linked to Meta: nowhere to make them. The card says so; it is not an error
+  await call('ads.aud.sync', await boss(), {});
+  assert.equal(asked().length, 0);
+  assert.deepEqual((await lists()).map((x) => [x.status, x.error, x.metaId]), [['nometa', null, null], ['nometa', null, null]]);
+
+  await call('admin.meta.save', await as(EMAILS.admin, server), { adAccountId: 'act_1234567890', token: TOKEN });
+  await setRaw(db, 'social_page', { pageId: '104500000000001', name: 'Bébé Confort DZ' });
+  const o: any = await call('ads.launch.options', await owner(), {});
+  const p = o.products.find((x: any) => x.landing);
+  const photo: any = await call('ads.media.photo', await owner(), { jpeg: JPEG, thumb: JPEG, w: 1080, h: 1350 });
+  const draft = async (name: string): Promise<number> =>
+    ((await call('ads.launch.save', await boss(), { mode: 'simple', spec: { goal: 'sales', productId: p.id, name, mediaIds: [photo.id], text: { primary: 'Texte', headline: 'Titre' }, budgetUsd: 5 } })) as any).id;
+  const outOf = (c: Seen): string[] => c.args.plan.adsets.flatMap((a: any) => (a.body.targeting.excluded_custom_audiences ?? []).map((x: any) => x.id));
+
+  // the check before the launch: nothing goes to Meta, nothing is made
+  const id1 = await draft('Listes Meta 1');
+  seen.length = 0;
+  const chk: any = await call('ads.launch.check', await boss(), { id: id1 });
+  assert.equal(chk.ok, true, chk.problems.join(' | '));
+  assert.equal(seen.length, 0, 'the check asks Meta nothing');
+  assert.deepEqual((await lists()).map((x) => [x.status, x.metaId]), [['nometa', null], ['nometa', null]]);
+
+  // the launch: the two lists first (the shop's pixels, 180 days), then the ad sets that leave them out
+  const live: any = await call('ads.launch.go', await boss(), { id: id1 });
+  assert.equal(live.status, 'live');
+  assert.deepEqual(seen.map((c) => c.action), ['eventAudience', 'eventAudience', 'launch', 'activate']);
+  assert.deepEqual(asked().map((c) => [c.args.event, c.args.days, c.args.metaId, c.args.refresh]), [
+    ['FakeOrder', 180, null, false],
+    ['Competitor', 180, null, false],
+  ]);
+  for (const c of asked()) {
+    assert.match(c.args.name, /^Pilotix · /);
+    assert.ok(c.args.pixels.includes('1234567890123456') && c.args.pixels.every((x: string) => /^\d{5,20}$/.test(x)), 'the shop’s Meta pixels');
+  }
+  const made = await lists();
+  assert.deepEqual(made.map((x) => [x.status, x.size, x.error]), [['ready', 0, null], ['ready', 0, null]]);
+  assert.ok(made.every((x) => /^99/.test(x.metaId)));
+  const out1 = outOf(seen[2]);
+  assert.ok(made.every((x) => out1.includes(x.metaId)), 'the new ad sets leave both lists out');
+  assert.ok(out1.includes('23851000000000001') && out1.includes('23851000000000002'), 'with the customers’ lists the owner chose');
+
+  // the next launch makes nothing twice
+  seen.length = 0;
+  await call('ads.launch.go', await boss(), { id: await draft('Listes Meta 2') });
+  assert.deepEqual(seen.map((c) => c.action), ['launch', 'activate']);
+  assert.deepEqual(outOf(seen[0]).sort(), [...out1].sort());
+
+  // each day: still there? (its id), the rule sent again only when the shop's pixels changed
+  seen.length = 0;
+  await call('ads.aud.sync', await boss(), {});
+  assert.deepEqual(asked().map((c) => [c.args.event, c.args.metaId, c.args.refresh]), [
+    ['FakeOrder', made[0].metaId, false],
+    ['Competitor', made[1].metaId, false],
+  ]);
+  await db.query(`INSERT INTO tracking_pixels (platform, name, pixel_id) VALUES ('meta', 'Pixel ajouté', '7777777777777777')`);
+  seen.length = 0;
+  await call('ads.aud.sync', await boss(), {});
+  assert.deepEqual(asked().map((c) => [c.args.refresh, c.args.pixels.includes('7777777777777777')]), [[true, true], [true, true]]);
+  seen.length = 0;
+  await call('ads.aud.sync', await boss(), {});
+  assert.deepEqual(asked().map((c) => c.args.refresh), [false, false]);
+
+  // the owner turns one off: not asked from Meta any more, not left out any more
+  await call('ads.aud.save', await owner(), { kind: 'competitor', on: false });
+  seen.length = 0;
+  await call('ads.launch.go', await boss(), { id: await draft('Listes Meta 3') });
+  assert.equal(asked().length, 0);
+  const out3 = outOf(seen.find((c) => c.action === 'launch')!);
+  assert.ok(out3.includes(made[0].metaId) && !out3.includes(made[1].metaId));
+  await call('ads.aud.save', await owner(), { kind: 'competitor', on: true });
+
+  // new ads start from another ad account (social.ts setLaunchAccount): the lists are made again there, at the next launch
+  await db.query(`UPDATE ad_audiences SET meta_id = NULL, status = 'off', error = NULL, synced_at = NULL WHERE meta_id IS NOT NULL`);
+  assert.deepEqual((await lists()).map((x) => [x.on, x.status]), [[true, 'waiting'], [true, 'waiting']]);
+  // Meta says no to one (a pixel this ad account cannot read): the card says why, and the launch still goes
+  refuse = true;
+  seen.length = 0;
+  const live4: any = await call('ads.launch.go', await boss(), { id: await draft('Listes Meta 4') });
+  assert.equal(live4.status, 'live');
+  assert.equal(asked().length, 2);
+  assert.deepEqual((await lists()).map((x) => [x.status, x.metaId, /pixel/.test(String(x.error))]), [['failed', null, true], ['failed', null, true]]);
+  assert.deepEqual(outOf(seen.find((c) => c.action === 'launch')!), [], 'no list of this ad account yet');
+  refuse = false;
+  seen.length = 0;
+  await call('ads.launch.go', await boss(), { id: await draft('Listes Meta 5') });
+  assert.equal(asked().length, 2, 'asked again at the next launch');
+  const again = await lists();
+  assert.deepEqual(again.map((x) => [x.status, x.error]), [['ready', null], ['ready', null]]);
+  assert.deepEqual(outOf(seen.find((c) => c.action === 'launch')!).sort(), again.map((x) => x.metaId).sort());
+
+  // a marketer cannot switch them
+  await assert.rejects(call('ads.aud.save', await mk(), { kind: 'fakeorder', on: false }), /Accès refusé/);
+});
+
+test('Meta is asked for a list by its rule: the event on the shop’s pixels, in the ad account new ads start from', async () => {
+  const { runMeta } = await import('../meta');
+  const ctx = await as(EMAILS.admin);
+  await call('admin.meta.save', ctx, { adAccountId: 'act_1234567890', token: TOKEN });
+  const calls: { method: string; url: string; body: URLSearchParams | null }[] = [];
+  const real = globalThis.fetch;
+  let answer: (c: { method: string; url: string; body: URLSearchParams | null }) => { status?: number; body: unknown } = () => ({ body: {} });
+  globalThis.fetch = (async (url: any, init: any = {}) => {
+    const c = { method: String(init.method ?? 'GET'), url: String(url), body: init.body ? new URLSearchParams(String(init.body)) : null };
+    calls.push(c);
+    const r = answer(c);
+    return new Response(JSON.stringify(r.body), { status: r.status ?? 200 });
+  }) as any;
+  const P1 = '1234567890123456';
+  const P2 = '6543210987654321';
+  const ask = (x: Record<string, unknown>) => runMeta('eventAudience', { name: 'Pilotix · fausses commandes (navigateurs)', event: 'FakeOrder', pixels: [P1, P2], days: 180, metaId: null, ...x }, ctx);
+  const ruleFor = (pixels: string[]) => ({
+    inclusions: {
+      operator: 'or',
+      rules: pixels.map((id) => ({ event_sources: [{ id, type: 'pixel' }], retention_seconds: 180 * 86_400, filter: { operator: 'and', filters: [{ field: 'event', operator: 'eq', value: 'FakeOrder' }] } })),
+    },
+  });
+  const gone = { status: 400, body: { error: { code: 100, message: "Unsupported get request. Object with ID '23860000000000001' does not exist, cannot be loaded due to missing permissions, or does not support this operation" } } };
+  try {
+    // made once: one request, to the ad account, with the rule and nothing about a customer
+    answer = () => ({ body: { id: '23860000000000001' } });
+    assert.deepEqual(await ask({}), { id: '23860000000000001', made: true, partial: false });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].method, 'POST');
+    assert.match(calls[0].url, /\/v26\.0\/act_1234567890\/customaudiences$/);
+    assert.ok(!calls[0].url.includes(TOKEN), 'the key is in the body, never in the address');
+    const b = calls[0].body!;
+    assert.deepEqual([...b.keys()].sort(), ['access_token', 'description', 'name', 'prefill', 'rule']);
+    assert.equal(b.get('name'), 'Pilotix · fausses commandes (navigateurs)');
+    assert.equal(b.get('prefill'), '1');
+    assert.deepEqual(JSON.parse(b.get('rule')!), ruleFor([P1, P2]));
+
+    // known and still at Meta: looked at, nothing made, nothing changed
+    calls.length = 0;
+    assert.deepEqual(await ask({ metaId: '23860000000000001' }), { id: '23860000000000001', made: false, partial: false });
+    assert.deepEqual(calls.map((c) => c.method), ['GET']);
+    assert.match(calls[0].url, /\/23860000000000001\?/);
+
+    // the shop's pixels changed: the rule is sent again to the same list
+    calls.length = 0;
+    assert.deepEqual(await ask({ metaId: '23860000000000001', refresh: true, pixels: [P1] }), { id: '23860000000000001', made: false, partial: false });
+    assert.deepEqual(calls.map((c) => c.method), ['GET', 'POST']);
+    assert.match(calls[1].url, /\/v26\.0\/23860000000000001$/);
+    assert.deepEqual(JSON.parse(calls[1].body!.get('rule')!), ruleFor([P1]));
+    // Meta does not take the new rule: the list stays as it was, and says so
+    calls.length = 0;
+    answer = (c) => (c.method === 'POST' ? { status: 400, body: { error: { code: 100, message: 'Invalid parameter' } } } : { body: { id: '23860000000000001' } });
+    assert.deepEqual(await ask({ metaId: '23860000000000001', refresh: true }), { id: '23860000000000001', made: false, partial: true });
+
+    // deleted at Meta: made again
+    calls.length = 0;
+    answer = (c) => (c.method === 'GET' ? gone : { body: { id: '23860000000000002' } });
+    assert.deepEqual(await ask({ metaId: '23860000000000001' }), { id: '23860000000000002', made: true, partial: false });
+    assert.deepEqual(calls.map((c) => c.method), ['GET', 'POST']);
+
+    // one of the pixels is not this ad account's: the main one alone
+    calls.length = 0;
+    let posts = 0;
+    answer = () => (++posts === 1 ? { status: 400, body: { error: { code: 100, message: 'Invalid parameter', error_user_msg: 'Pixel non accessible' } } } : { body: { id: '23860000000000003' } });
+    assert.deepEqual(await ask({}), { id: '23860000000000003', made: true, partial: true });
+    assert.deepEqual(JSON.parse(calls[1].body!.get('rule')!), ruleFor([P1]));
+
+    // Meta limits the requests, or the key is over: said as it is, nothing made in a hurry
+    calls.length = 0;
+    answer = () => ({ status: 400, body: { error: { code: 17, message: 'User request limit reached' } } });
+    await assert.rejects(ask({}), (e: any) => e.code === 'conflict');
+    assert.equal(calls.length, 1, 'no second try with fewer pixels');
+    await assert.rejects(ask({ metaId: '23860000000000001' }), (e: any) => e.code === 'conflict');
+    answer = () => ({ status: 400, body: { error: { code: 190, message: 'Error validating access token' } } });
+    await assert.rejects(ask({ metaId: '23860000000000001' }), /jeton Meta/);
+
+    // never an event or a pixel that is not one
+    calls.length = 0;
+    await assert.rejects(ask({ event: 'Fake Order"}' }), /événement ou le pixel/);
+    await assert.rejects(ask({ pixels: ['abc'] }), /événement ou le pixel/);
+    assert.equal(calls.length, 0);
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test('a shop with no Meta pixel: no list to make (« Pas de pixel »)', async () => {
+  const seen: Seen[] = [];
+  const server = metaServer(seen);
+  await db.query(`DELETE FROM tracking_pixels WHERE platform = 'meta'`);
+  await db.query(`UPDATE landing_pages SET pixel_id = '' WHERE COALESCE(pixel_id, '') <> ''`);
+  await setSetting(db, 'landing', { ...(await getSetting(db, 'landing')), pixelId: '' });
+  await call('ads.aud.sync', await as(EMAILS.vendeur, server), {});
+  assert.equal(seen.filter((c) => c.action === 'eventAudience').length, 0);
+  assert.deepEqual((await lists()).map((x) => x.status), ['nopixel', 'nopixel']);
+  // such a list is never left out of an ad set (nothing behind it)
+  const o: any = await call('ads.launch.options', await owner(), {});
+  assert.ok(o.audiences.filter((x: any) => x.events).every((x: any) => x.status === 'nopixel'));
+  await call('admin.meta.disconnect', await as(EMAILS.admin), {});
+});
+

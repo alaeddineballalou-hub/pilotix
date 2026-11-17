@@ -295,7 +295,7 @@
     "saved": "Settings saved",
     "footer": "Pages load the Meta pixel only after they are shown (to stay fast on 3G), and never inside Pilotix (preview, demo).",
     "meta": "Meta pixel (Facebook, Instagram)",
-    "metaHelp": "The browser sends PageView, ViewContent and InitiateCheckout. The server sends through the Conversions API: Lead when the form of a clean order arrives (an order \"to check\": when an agent confirms it); Purchase only for a real order (a blocked order or one marked fake is never a sale for Meta); FakeOrder and Competitor for the browser behind an order an agent marks fake, or a blocked order nobody restored in 24 hours. With those two, make two audiences in Meta to exclude from your ads.",
+    "metaHelp": "The browser sends PageView, ViewContent and InitiateCheckout, nothing else: what the pixel sends by itself on every click (“SubscribedButtonClick”) is switched off. The server sends through the Conversions API: Lead when the form of a clean order arrives (an order \"to check\": when an agent confirms it); Purchase only for a real order (a blocked order or one marked fake is never a sale for Meta); FakeOrder and Competitor for the browser behind an order an agent marks fake, or a blocked order nobody restored in 24 hours. With those two, Pilotix makes two lists by itself in your Meta ad account (Advertising › Audiences): ads launched from Pilotix leave them out; for an ad made in Meta, pick them yourself in the exclusions.",
     "pixel": "Pixel ID (default)",
     "pixelHint": "Events Manager › Data sources. A page may have its own pixel.",
     "testCode": "Test code (optional)",

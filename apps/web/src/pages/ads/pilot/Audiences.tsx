@@ -1,12 +1,14 @@
 // « Audiences »: the shop's own customers as Meta audiences. Left out of the ads: who returned a parcel, who gave a
 // fake order; optional: the delivered customers, and people who look like them (a lookalike, 100 customers at least).
-// Nothing goes to Meta before the owner turns one on; the phones are hashed on the server (SHA-256) before they leave.
+// No customer goes to Meta before the owner turns one on; the phones are hashed on the server (SHA-256) before they
+// leave. Two more lists are Meta's own (« events »): the browsers behind fake orders and competitors, which Meta fills
+// from the landing pages' events. Nothing is uploaded for them, so they are on unless the owner turns them off.
 import { useTranslation } from 'react-i18next';
 import { n, since } from '../../../lib/format';
 import { useAction, useRpc } from '../../../lib/query';
 import { ErrorBox, Icon, Loading } from '../../../ui/kit';
 
-const ICON: Record<string, string> = { returners: 'undo', fake: 'ban', buyers: 'checkcircle', lookalike: 'users' };
+const ICON: Record<string, string> = { returners: 'undo', fake: 'ban', fakeorder: 'shield', competitor: 'eye', buyers: 'checkcircle', lookalike: 'users' };
 
 export function Audiences() {
   const { t } = useTranslation();
@@ -48,9 +50,13 @@ export function Audiences() {
             </header>
             <p>{t(`pilotads.aud.${a.kind}.text`)}</p>
             <footer>
-              <span>
-                <b className="ltr">{n(a.size)}</b> {t('pilotads.aud.people')}
-              </span>
+              {a.events ? (
+                <span>{t('pilotads.aud.byMeta')}</span>
+              ) : (
+                <span>
+                  <b className="ltr">{n(a.size)}</b> {t('pilotads.aud.people')}
+                </span>
+              )}
               <span className={`pa-aud-st s-${a.status}`}>{t(`pilotads.aud.st.${a.status}`, { defaultValue: a.status })}</span>
               {a.syncedAt && <small className="muted">{t('pilotads.aud.syncedAt', { when: t('pilotads.ago', { d: since(a.syncedAt) }) })}</small>}
             </footer>
@@ -58,6 +64,9 @@ export function Audiences() {
           </article>
         ))}
       </div>
+      <p className="note pa-privacy">
+        <Icon name="info" /> {t('pilotads.aud.where')}
+      </p>
       <p className="note pa-privacy">
         <Icon name="lock" /> {t('pilotads.aud.privacy')}
       </p>

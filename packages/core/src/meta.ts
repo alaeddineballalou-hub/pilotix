@@ -440,6 +440,7 @@ async function runPartners(action: string, args: any, token: string, acts: strin
  *  - 'capi'      → { pixelId, token, events, testEventCode? }: Conversions API events (landing pages)
  *  - 'chatCapi'  → { target, token, events }: Purchases of Messenger / Instagram chat orders (Business Messaging)
  *  - 'catalog…'  → Marketing › Catalogue (runCatalog above)
+ *  - 'audience', 'lookalike', 'eventAudience' → Publicité › Audiences (the shop's customers hashed; Meta's own lists)
  */
 export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
   // the Conversions API needs a pixel and its token, not the ad account
@@ -658,6 +659,60 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
     if (!a.seedId) throw new AppError('bad_request', 'Audience de départ manquante');
     const r = await post(`${acts[0]}/customaudiences`, { name: 'Pilotix · comme mes clients livrés', subtype: 'LOOKALIKE', origin_audience_id: a.seedId, lookalike_spec: { country: 'DZ', ratio: Math.min(0.2, Math.max(0.01, a.ratio ?? 0.01)) } }, token);
     return { id: String(r.id) };
+  }
+
+  /**
+   * A list Meta fills by itself (a website audience): the browsers one of the shop's pixels saw doing `event` in the
+   * last `days` days. The landing pages' server sends those events (« FakeOrder », « Competitor »); nothing is uploaded
+   * here, only the rule. Made once, in the ad account new ads start from; an id Meta no longer knows (deleted there) is
+   * made again; `refresh`: the shop's pixels changed, the rule is sent again. `partial`: Meta did not take every pixel
+   * (one this ad account cannot read), the list follows the others.
+   */
+  if (action === 'eventAudience') {
+    const a = (args ?? {}) as { name?: string; event?: string; pixels?: string[]; days?: number; metaId?: string | null; refresh?: boolean };
+    const event = String(a.event ?? '');
+    const pixels = [...new Set((a.pixels ?? []).map((p) => String(p)))].filter((p) => /^\d{5,20}$/.test(p)).slice(0, 10);
+    if (!/^[A-Za-z][A-Za-z0-9_]{1,39}$/.test(event) || !pixels.length) throw new AppError('bad_request', 'Liste Meta : il manque l’événement ou le pixel.');
+    const seconds = Math.min(180, Math.max(1, Math.round(Number(a.days) || 180))) * 86_400;
+    const ruleOf = (list: string[]) => ({
+      inclusions: {
+        operator: 'or',
+        rules: list.map((id) => ({ event_sources: [{ id, type: 'pixel' }], retention_seconds: seconds, filter: { operator: 'and', filters: [{ field: 'event', operator: 'eq', value: event }] } })),
+      },
+    });
+    // the ad account a launch goes to (the one the ad sets leaving this list out are made in)
+    const act = acts.includes(actOf(String(meta.adAccountId))) ? actOf(String(meta.adAccountId)) : acts[0];
+    // not a « no » to this list: Meta is out of reach, limits the requests, or the key is over. Told as it is.
+    const later = (e: any) => e?.code === 'conflict' || /jeton Meta|injoignable/i.test(String(e?.message ?? ''));
+    const known = a.metaId && /^\d{5,25}$/.test(String(a.metaId)) ? String(a.metaId) : null;
+    if (known) {
+      let there = true;
+      try {
+        await graph(known, { fields: 'id' }, token);
+      } catch (e: any) {
+        if (later(e) || !/does not exist|unsupported (get|post) request|cannot be loaded/i.test(String(e?.message ?? ''))) throw e;
+        there = false;
+      }
+      if (there) {
+        if (!a.refresh) return { id: known, made: false, partial: false };
+        try {
+          await post(known, { rule: ruleOf(pixels) }, token);
+          return { id: known, made: false, partial: false };
+        } catch (e: any) {
+          if (later(e)) throw e;
+          return { id: known, made: false, partial: true };
+        }
+      }
+    }
+    // prefill: the browsers Meta already saw doing it before today count too (Meta's own example writes it « 1 »)
+    const make = async (list: string[]) => String((await post(`${act}/customaudiences`, { name: String(a.name ?? 'Pilotix').slice(0, 100), description: 'Pilotix', rule: ruleOf(list), prefill: 1 }, token)).id);
+    try {
+      return { id: await make(pixels), made: true, partial: false };
+    } catch (e: any) {
+      if (pixels.length < 2 || later(e)) throw e;
+      // one of the pixels is not this ad account's: the main one alone
+      return { id: await make(pixels.slice(0, 1)), made: true, partial: true };
+    }
   }
 
   throw new AppError('bad_request', `Action Meta inconnue : ${action}`);

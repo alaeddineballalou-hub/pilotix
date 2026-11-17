@@ -13,7 +13,7 @@ import { bad, Ctx, forbidden, notFound, proc, publicApi, withActionLock } from '
 import { getSetting } from '../settings';
 import { getRaw, setRaw } from './admin';
 import { addDays, fxTable, isOwner, moneyOf, ordersOf } from './ads';
-import { audienceIds, pilotSettings, shopDailyUsd, wilayaRates, type AccountHealth } from './adsmgr';
+import { audienceIds, ensureEventAudiences, pilotSettings, shopDailyUsd, wilayaRates, type AccountHealth } from './adsmgr';
 import { B64, mediaOf, mediaView, PLAN_LIMITS, VIDEO_CHUNK, VIDEO_TYPES, type MediaRow } from './cmplan';
 import { aiKeyed, dellalSettings, PILOT_CHEAP_MODEL, pilotOn, type AiResponse } from './dellal';
 import { landingStore } from './landingquery';
@@ -462,6 +462,14 @@ async function go(ctx: Ctx, id: number, approved = false) {
     const done: Record<string, string> = { ...(r.meta_ids ?? {}) };
     try {
       const spec = LaunchSpec.parse(r.spec);
+      // the two lists Meta fills from the pages' events (fake orders, competitors): made now if they are not yet, so
+      // this launch already leaves them out. Only here: the check above (« ads.launch.check ») sends nothing to Meta.
+      if (spec.useAudiences && ctx.server) {
+        await ensureEventAudiences(ctx);
+        const aud = await audienceIds(ctx.db);
+        input.excludeAudiences = aud.exclude;
+        input.includeAudiences = aud.include;
+      }
       // the wilayas left out: Meta's own keys
       if (excluded.length) input.excludeRegions = (await regionKeys(ctx, excluded)).keys;
       // a new instant form: made on the Page now, and known by Formulaires (its leads become orders)

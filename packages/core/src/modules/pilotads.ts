@@ -474,7 +474,18 @@ export function metaPhone(raw: string | null | undefined): string | null {
   if (/^00213[5-7]\d{8}$/.test(d)) return d.slice(2);
   return null;
 }
-export const AUDIENCE_KINDS = ['returners', 'fake', 'buyers', 'lookalike'] as const;
+export const AUDIENCE_KINDS = ['returners', 'fake', 'fakeorder', 'competitor', 'buyers', 'lookalike'] as const;
 export type AudienceKind = (typeof AUDIENCE_KINDS)[number];
 /** by default the ads skip people who returned a parcel or gave a fake order; buyers are welcome again */
-export const AUDIENCE_DEFAULT_ON: Record<AudienceKind, boolean> = { returners: true, fake: true, buyers: false, lookalike: false };
+export const AUDIENCE_DEFAULT_ON: Record<AudienceKind, boolean> = { returners: true, fake: true, fakeorder: true, competitor: true, buyers: false, lookalike: false };
+/**
+ * The two audiences Meta fills by itself, from the events the landing pages' server sends it (« FakeOrder »,
+ * « Competitor »: the browser behind a fake order, modules/landing.ts). No customer is uploaded for them, so they are
+ * on unless the owner turns them off, and Pilotix makes them in the ad account by itself (the daily update, and before
+ * a launch): every ad set it launches leaves them out.
+ */
+export const EVENT_AUDIENCES = { fakeorder: 'FakeOrder', competitor: 'Competitor' } as const;
+export type EventAudienceKind = keyof typeof EVENT_AUDIENCES;
+export const isEventAudience = (kind: string): kind is EventAudienceKind => Object.prototype.hasOwnProperty.call(EVENT_AUDIENCES, kind);
+/** Meta keeps a browser in such an audience this long after its last event (the longest a website audience allows). */
+export const EVENT_AUDIENCE_DAYS = 180;
