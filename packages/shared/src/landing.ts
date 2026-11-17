@@ -241,7 +241,7 @@ input:focus,select:focus{outline:2px solid var(--c);outline-offset:-1px;border-c
 .sum{background:var(--cl);border-radius:10px;padding:10px 12px;margin-top:14px;font-size:15px}.sum div{display:flex;justify-content:space-between;gap:8px}.sum .tt{font-weight:800;font-size:17px;border-top:1px dashed #cbd5e1;margin-top:6px;padding-top:6px}
 .go{display:block;width:100%;margin-top:14px;padding:14px;border:0;border-radius:12px;background:var(--c);color:#fff;font:inherit;font-size:19px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px ${shade(c, 0.55)}}
 .go:active{background:var(--cd)}.go[disabled]{opacity:.7}
-.sb{position:fixed;z-index:9;bottom:max(10px,env(safe-area-inset-bottom));left:10px;right:10px;width:auto;max-width:520px;margin:0 auto}.sb[hidden]{display:none}
+.sb{position:fixed;z-index:9;bottom:0;left:0;right:0;padding:44px 10px max(10px,env(safe-area-inset-bottom));background:linear-gradient(rgba(255,255,255,0),#fff 62%);pointer-events:none}.sb[hidden]{display:none}.sb .go{max-width:520px;margin:0 auto;pointer-events:auto}
 .hp{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;opacity:0;pointer-events:none}
 .d{margin-top:16px}.d h2{font-size:18px;margin:0 0 6px}.d h3{font-size:17px;margin:12px 0 4px}.d ul{padding-inline-start:20px;margin:6px 0}.d li{margin:3px 0}.d p{margin:6px 0}
 .ok{text-align:center;padding:26px 10px}.ok i{display:inline-grid;place-items:center;width:64px;height:64px;border-radius:50%;background:var(--c);color:#fff;font-size:34px;font-style:normal}
@@ -345,7 +345,7 @@ done=1;var fee=fz()[w.value];$('okn').textContent=nm;$('o1').textContent=C.title
 var wa=$('wa');if(wa&&C.wa){var V={nom:nm,produit:C.title+vtx(),quantite:q,total:money(tot()-pdisc(tot())+(fee||0)),telephone:nph(f.ph.value),wilaya:w.value?w.options[w.selectedIndex].text.replace(/^\\d+\\s*-\\s*/,''):'',commune:cm.value?cm.options[cm.selectedIndex].text:''};wa.href='https://wa.me/'+C.wa.n+'?text='+encodeURIComponent(C.wa.m.replace(/\\{(\\w+)\\}/g,function(x,k){return V[k]!=null?V[k]:x}))}
 var wo=$('wo');if(wo)wo.onchange=function(){if(wo.checked&&!wo.s&&C.mode=='live'){wo.s=1;ask('optin',{ch:C.ch,phone:ph},function(){})}};
 f.style.display='none';$('ok').style.display='block';sbs();window.scrollTo(0,0)})})()};
-var sb=$('sb'),gv=1;function sbs(){sb.hidden=!!(gv||done);d.body.style.paddingBottom=sb.hidden?'':'76px'}
+var sb=$('sb'),gv=1;function sbs(){sb.hidden=!!(gv||done);d.body.style.paddingBottom=sb.hidden?'':'82px'}
 if(window.IntersectionObserver)new IntersectionObserver(function(x){gv=x[x.length-1].isIntersecting;sbs()}).observe($('go'));
 sb.onclick=function(){f.onsubmit({preventDefault:function(){}});if(!busy){var b=f.querySelector('.bad')||f;b.scrollIntoView({block:'center',behavior:'smooth'});if(b.focus&&b!=f)try{b.focus({preventScroll:true})}catch(e){}}};sum()})();`;
 
@@ -472,7 +472,7 @@ ${v.promo ? `<label for="pc">كود الخصم (اختياري)</label><div clas
     ? `<a id="wa" class="wa" href="https://wa.me/${whatsappNumber(v.whatsapp.number)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 2.9 2.9 0 0 0-.9 2.2 5 5 0 0 0 1.1 2.7 11.5 11.5 0 0 0 4.4 3.9c1.6.7 2.3.8 3.1.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3Z"/></svg>${esc(v.whatsapp.label || WHATSAPP_DEFAULT.label)}</a>`
     : ''
 }</div>`}</section></div>
-${desc ? `<section class="card d${descPics ? ' dx' : ''}">${desc}</section>` : ''}</main>${v.soldOut ? '' : `<button class="go sb" id="sb" type="button" hidden>${cta}</button>`}${brandFoot(v.shopName, v.shopLogo)}
+${desc ? `<section class="card d${descPics ? ' dx' : ''}">${desc}</section>` : ''}</main>${v.soldOut ? '' : `<div class="sb" id="sb" hidden><button class="go" type="button">${cta}</button></div>`}${brandFoot(v.shopName, v.shopLogo)}
 <script>window.__LP=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script><script>${JS}</script></body></html>`;
 }
 
