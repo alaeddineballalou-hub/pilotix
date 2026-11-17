@@ -107,6 +107,10 @@
     "tiktok": "TikTok ad accounts ({{n}})"
   },
   "adsHint": "Publicité adds up the numbers of all these accounts.",
+  "launchLabel": "Account to launch from",
+  "launchHint": "New ads launched from Pilotix go out from this account. The numbers of all accounts are still counted.",
+  "launchOption": "{{name}} · {{money}}",
+  "launchSaved": "New ads now go out from “{{name}}”.",
   "adsUse": "Count them in “{{name}}”",
   "adsOther": "This store counts those of “{{account}}”: turning these on replaces them.",
   "adsAlso": "Also counted in {{names}}.",

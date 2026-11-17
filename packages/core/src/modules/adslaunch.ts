@@ -20,7 +20,7 @@ import { landingStore } from './landingquery';
 import { fieldOf } from './leads';
 import { budgetPacks, CHANNELS, GOAL_META, GOALS, launchProblems, limitOf, metaPlan, type Goal, type LaunchInput, type LaunchMedia } from './pilotads';
 import { contentFor, partnerChoices, partnerFor, USABLE } from './partners';
-import { linkedPage } from './social';
+import { launchAccounts, linkedPage } from './social';
 
 const algDay = (ms: number) => new Date(ms + 3_600_000).toISOString().slice(0, 10);
 const me = (ctx: Ctx) => ctx.session.profile.id || null;
@@ -119,6 +119,9 @@ async function account(ctx: Ctx): Promise<{ id: string; currency: string; name: 
   const known = await getRaw<AccountHealth[]>(ctx.db, 'pilot_ads_accounts', []);
   const h = known.find((a) => a.id === id);
   if (h) return { id, currency: h.currency, name: h.name, status: h.status };
+  // not read from Meta yet (just chosen in Comptes): its money is the one its linked account gave, never a guess
+  const linked = (await launchAccounts(ctx.db))?.accounts.find((a) => a.id === id);
+  if (linked?.currency) return { id, currency: linked.currency.toUpperCase(), name: linked.name, status: null };
   const cur = (await ctx.db.query(`SELECT currency, count(*) AS n FROM adsets WHERE currency IS NOT NULL GROUP BY currency ORDER BY n DESC LIMIT 1`))[0]?.currency;
   if (id) return { id, currency: String(cur ?? 'USD').toUpperCase(), name: '', status: null };
   // the demo: a dollar account

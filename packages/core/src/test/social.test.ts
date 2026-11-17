@@ -641,6 +641,23 @@ test('several ad accounts: a boutique counts them all, Publicité reads each one
   assert.deepEqual([(await setting(a, 'meta')).adAccountIds, (await setting(a, 'meta')).hasToken], [[], false]);
   list = await call('social.ads', a, { linkId: karim(list).id, on: true });
   assert.equal(list.here.ad_account.count, 3);
+  // « Compte pour lancer »: the first by default; the owner's choice goes first (launches and customer lists use it), all stay counted
+  assert.equal(list.launch.id, '3003');
+  assert.deepEqual(list.launch.accounts.map((x: any) => [x.id, x.name, x.currency]), [['3003', 'Bébé pub', 'USD'], ['3004', 'Bébé pub 2', 'USD'], ['3005', 'Promo', 'USD']]);
+  list = await call('social.launchAccount', a, { adAccountId: '3005' });
+  assert.equal(list.launch.id, '3005');
+  assert.deepEqual([(await setting(a, 'meta')).adAccountId, (await setting(a, 'meta')).adAccountIds, (await setting(a, 'meta')).hasToken], ['3005', ['3005', '3003', '3004'], true]);
+  assert.deepEqual([(await setting(a, 'social_ads')).adAccountId, (await setting(a, 'social_ads')).name], ['3005', 'Promo']);
+  await assert.rejects(() => call('social.launchAccount', a, { adAccountId: '999999' }), /n’est pas compté/);
+  // it is kept when the page writes the accounts again, and when the account is linked again with it
+  await a.db.query(`UPDATE settings SET value = $1 WHERE key = 'meta'`, [JSON.stringify({ adAccountId: '3003', hasToken: true })]);
+  await call('social.list', a, {});
+  assert.deepEqual((await setting(a, 'meta')).adAccountIds, ['3005', '3003', '3004']);
+  await login([act('3003', 'Bébé pub'), act('3004', 'Bébé pub 2'), act('3005', 'Promo')]);
+  assert.equal(((await call('social.list', a, {})) as any).launch.id, '3005');
+  list = await call('social.launchAccount', a, { adAccountId: 'act_3003' });
+  assert.equal((await setting(a, 'meta')).adAccountId, '3003');
+  assert.deepEqual([...(await setting(a, 'meta')).adAccountIds].sort(), ['3003', '3004', '3005']);
   // a new login without the first ad account: the boutique keeps counting the two others
   await login([act('3004', 'Bébé pub 2'), act('3005', 'Promo')]);
   assert.deepEqual((await setting(a, 'meta')).adAccountIds, ['3004', '3005']);

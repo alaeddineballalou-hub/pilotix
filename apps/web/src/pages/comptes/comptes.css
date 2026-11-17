@@ -95,6 +95,8 @@
 .cpt-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .cpt-chips li { display: inline-flex; align-items: baseline; gap: 6px; max-width: 100%; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; transition: background-color .3s, border-color .3s, color .3s; }
 .cpt-chips li span { color: var(--muted); font-size: 11.5px; font-weight: 700; }
+.cpt-launch { display: grid; gap: 6px; margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--line); }
+.cpt-launch .cpt-row-note { margin: 0; }
 .cpt-chips.on li { border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); background: color-mix(in srgb, var(--ok-soft) 65%, transparent); color: var(--ink); }
 
 /* « Tester »: one line per thing tried */

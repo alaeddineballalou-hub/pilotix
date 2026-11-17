@@ -288,6 +288,7 @@ function LinkCard({ l, d, fresh, open, onToggle, onRelink, busy }: { l: Link; d:
   const unuse = useAction('social.unuse', { success: t(K + 'pageStopped') });
   const ads = useAction('social.ads', { success: (r) => (r.links.find((x) => x.id === l.id)?.assets.some((a) => a.kind === AD_KIND[l.provider] && a.usedHere) ? t(K + 'adsOn') : t(K + 'adsOff')) });
   const [result, setResult] = useState<TestResult | null>(null);
+  const launch = useAction('social.launchAccount', { success: (r) => t(K + 'launchSaved', { name: r.launch?.accounts.find((a) => a.id === r.launch?.id)?.name || r.launch?.id || '' }) });
   const test = useAction('social.test', { onDone: (r) => setResult(r) });
   const bodyId = `cpt-link-${l.id}`;
   const status =
@@ -403,6 +404,21 @@ function LinkCard({ l, d, fresh, open, onToggle, onRelink, busy }: { l: Link; d:
                       </li>
                     ))}
                   </ul>
+                  {adsHere && l.provider === 'meta' && d.launch && d.launch.accounts.length > 1 && (
+                    <div className="cpt-launch">
+                      <label className="cpt-row-t" htmlFor={`cpt-launch-${l.id}`}>
+                        {t(K + 'launchLabel')}
+                      </label>
+                      <select id={`cpt-launch-${l.id}`} className="cpt-pick" value={d.launch.id} disabled={launch.isPending} onChange={(e) => launch.mutate({ adAccountId: e.target.value })}>
+                        {d.launch.accounts.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.currency ? t(K + 'launchOption', { name: a.name || a.id, money: a.currency }) : a.name || a.id}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="cpt-row-note">{t(K + 'launchHint')}</p>
+                    </div>
+                  )}
                   {adsOther && <p className="cpt-row-note">{t(K + 'adsOther', { account: adsOther.account })}</p>}
                   {adsAlso.length > 0 && <p className="cpt-row-note">{t(K + 'adsAlso', { names: adsAlso.map((x) => t(K + 'quoted', { name: x.name })).join(', ') })}</p>}
                   {otherMoney.length > 0 ? (

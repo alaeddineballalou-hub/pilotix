@@ -633,7 +633,9 @@ async function applyShop(db: Db, a: Applied) {
     await put(db, SOCIAL_KEYS.page, { linkId: a.linkId, assetId: a.assetId, pageId: a.extId, name: a.name, igId: ig?.id ?? null, igUsername: ig?.username || null, picture: a.extra?.picture ?? null, account: a.account, at });
   } else if (a.kind === 'ad_account') {
     // Publicité reads every one of them (meta.ts) and adds them up
-    const list = (a.accounts?.length ? a.accounts : [{ extId: a.extId, name: a.name, currency: a.extra?.currency ?? null }]).map((x) => ({ adAccountId: x.extId.replace(/^act_/, ''), name: x.name, currency: x.currency }));
+    const all = (a.accounts?.length ? a.accounts : [{ extId: a.extId, name: a.name, currency: a.extra?.currency ?? null }]).map((x) => ({ adAccountId: x.extId.replace(/^act_/, ''), name: x.name, currency: x.currency }));
+    // the first is the one new ads are launched from: the one the owner chose (Comptes › « Compte pour lancer ») stays first
+    const list = launchFirst(all, String((await raw(db, LAUNCH_KEY)) ?? ''));
     await put(db, SOCIAL_KEYS.adsToken, a.token);
     await setSetting(db, 'meta', { ...(await getSetting(db, 'meta')), adAccountId: list[0].adAccountId, adAccountIds: list.map((x) => x.adAccountId), hasToken: true });
     await put(db, SOCIAL_KEYS.ads, { linkId: a.linkId, assetId: a.assetId, adAccountId: list[0].adAccountId, name: list[0].name, currency: list[0].currency, accounts: list, account: a.account, at });
@@ -652,6 +654,40 @@ async function clearShop(db: Db, kind: AssetKind) {
     await drop(db, [SOCIAL_KEYS.adsToken, SOCIAL_KEYS.ads]);
     await setSetting(db, 'meta', { ...(await getSetting(db, 'meta')), adAccountId: '', adAccountIds: [], hasToken: false });
   } else await drop(db, [SOCIAL_KEYS.tiktokAdsToken, SOCIAL_KEYS.tiktokAds]);
+}
+
+/** The ad account new ads are launched from, when the owner chose one (else the linked account's first). */
+const LAUNCH_KEY = 'ads_launch_account';
+const launchFirst = <T extends { adAccountId: string }>(list: T[], chosen: string): T[] => {
+  const mine = list.find((x) => x.adAccountId === chosen);
+  return mine ? [mine, ...list.filter((x) => x !== mine)] : list;
+};
+export interface LaunchAccounts {
+  id: string;
+  accounts: { id: string; name: string; currency: string | null }[];
+}
+/** The ad accounts this boutique counts and the one its new ads go to (Comptes › « Compte pour lancer »). */
+export async function launchAccounts(db: Db): Promise<LaunchAccounts | null> {
+  const v = await raw(db, SOCIAL_KEYS.ads);
+  if (!v?.adAccountId) return null;
+  const accounts = (Array.isArray(v.accounts) && v.accounts.length ? v.accounts : [v]).map((x: any) => ({ id: String(x.adAccountId), name: String(x.name ?? ''), currency: x.currency ? String(x.currency) : null }));
+  return { id: String(v.adAccountId), accounts };
+}
+/**
+ * New ads are launched from this ad account from now on (one of those the boutique counts). The customer lists Pilotix
+ * made in the former account stay there: they are made again in this one at the next update (Audiences).
+ */
+async function setLaunchAccount(db: Db, adAccountId: string): Promise<void> {
+  const v = await raw(db, SOCIAL_KEYS.ads);
+  const all: { adAccountId: string; name: string; currency: string | null }[] = Array.isArray(v?.accounts) && v.accounts.length ? v.accounts : v?.adAccountId ? [{ adAccountId: v.adAccountId, name: v.name, currency: v.currency ?? null }] : [];
+  const id = adAccountId.replace(/^act_/, '');
+  if (!all.some((x) => String(x.adAccountId) === id)) throw new AppError('bad_request', 'Ce compte pub n’est pas compté dans cette boutique.');
+  const was = String(v.adAccountId ?? '');
+  const list = launchFirst(all, id);
+  await put(db, LAUNCH_KEY, id);
+  await put(db, SOCIAL_KEYS.ads, { ...v, adAccountId: list[0].adAccountId, name: list[0].name, currency: list[0].currency ?? null, accounts: list });
+  await setSetting(db, 'meta', { ...(await getSetting(db, 'meta')), adAccountId: list[0].adAccountId, adAccountIds: list.map((x) => String(x.adAccountId)) });
+  if (was !== id) await db.query(`UPDATE ad_audiences SET meta_id = NULL, status = 'off', error = NULL, synced_at = NULL WHERE meta_id IS NOT NULL`).catch(() => null);
 }
 
 /** The Page this boutique answers on (Pilot Message and Pilot Comments show it), from its linked account. */
@@ -834,6 +870,8 @@ export interface SocialListView {
   sisters: { id: number; name: string }[];
   links: LinkView[];
   here: HereView;
+  /** the ad accounts this boutique counts, and the one its new ads are launched from */
+  launch: LaunchAccounts | null;
   preview: boolean;
 }
 
@@ -908,7 +946,7 @@ async function listFor(ctx: Ctx): Promise<SocialListView> {
     if (written !== all) await writeUse(w.t, w.shopId, num(mine.asset_id));
   }
   const name = String((await w.t.platform.query(`SELECT name FROM platform.shops WHERE id = $1`, [w.shopId]))[0]?.name ?? '');
-  return { apps: { meta: appReady(apps, 'meta'), tiktok: appReady(apps, 'tiktok') }, canAll: canAll(w), isOwner: w.isOwner, shop: { id: w.shopId, name }, sisters: w.sisters, links: view, here: hereOf(view), preview: false };
+  return { apps: { meta: appReady(apps, 'meta'), tiktok: appReady(apps, 'tiktok') }, canAll: canAll(w), isOwner: w.isOwner, shop: { id: w.shopId, name }, sisters: w.sisters, links: view, here: hereOf(view), launch: await launchAccounts(ctx.db), preview: false };
 }
 function hereOf(links: LinkView[]): HereView {
   const find = (kind: AssetKind) => {
@@ -1068,6 +1106,13 @@ export const socialProcs = {
     return listFor(ctx);
   }),
 
+  /** New ads are launched from this ad account (one of those this boutique counts): the owner's choice, kept when the account is linked again. */
+  'social.launchAccount': proc([], z.object({ adAccountId: z.string().trim().regex(/^(act_)?\d{1,25}$/) }), async (ctx, i) => {
+    await setLaunchAccount(ctx.db, i.adAccountId);
+    ctx.emit({ type: 'settings' });
+    return listFor(ctx);
+  }),
+
   /**
    * « Tester »: tries the account now, on the server — its key, its permissions, the Page this boutique uses (subscribed
    * again when its messages no longer come), its Instagram account, Pilotix's Meta webhook (its address and fields, and
@@ -1200,7 +1245,7 @@ async function demoList(ctx: Ctx): Promise<SocialListView> {
       usedBy: a.usedBy.filter((x) => x !== me).map((x) => ({ id: x, name: nameOf(x) })),
     })),
   }));
-  return { apps: { meta: true, tiktok: true }, canAll: true, isOwner: true, shop: { id: me, name }, sisters: shops, links, here: hereOf(links), preview: true };
+  return { apps: { meta: true, tiktok: true }, canAll: true, isOwner: true, shop: { id: me, name }, sisters: shops, links, here: hereOf(links), launch: await launchAccounts(ctx.db), preview: true };
 }
 async function demoStart(ctx: Ctx, provider: SocialProvider, scope: 'here' | 'all', kind: LoginKind = 'account') {
   const d = demoData(ctx);

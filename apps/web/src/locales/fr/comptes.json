@@ -107,6 +107,10 @@
     "tiktok": "Comptes pub TikTok ({{n}})"
   },
   "adsHint": "Publicité additionne les chiffres de tous ces comptes.",
+  "launchLabel": "Compte pour lancer",
+  "launchHint": "Les nouvelles pubs lancées depuis Pilotix partent de ce compte. Les chiffres de tous les comptes restent comptés.",
+  "launchOption": "{{name}} · {{money}}",
+  "launchSaved": "Les nouvelles pubs partent maintenant de « {{name}} ».",
   "adsUse": "Les compter dans « {{name}} »",
   "adsOther": "Cette boutique compte ceux de « {{account}} » : les activer ici les remplace.",
   "adsAlso": "Aussi comptés dans {{names}}.",
