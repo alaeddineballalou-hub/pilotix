@@ -77,7 +77,9 @@ try {
   assert.equal((await rpc(T, 'landing.settings.get')).pagesUrl, PAGES);
 
   // a page of shop #1
-  const product = (await rpc(T, 'catalog.products', {}))[0];
+  // (a product on sale: the page of a product still « À faire » is not served)
+  const product = (await rpc(T, 'catalog.products', {})).find((p) => p.active && !p.isService);
+  assert.ok(product, 'no product on sale in shop #1');
   const slug = `adresse-${run}`;
   await rpc(T, 'landing.save', { productId: product.id, slug, title: 'Page adresse', color: '#0f766e', price: 4500, description: 'Une page de test' });
   const store = st.store;

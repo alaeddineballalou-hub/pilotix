@@ -56,6 +56,24 @@ const rpc = (token, name, input = {}) => must(`/rpc/${name}`, input, token);
 const rpcSeller = (token, seller, name, input = {}) => must(`/rpc/${name}`, input, token, { 'X-Seller': String(seller) });
 let P; // the control room's token
 const prpc = (name, input = {}) => must(`/platform/rpc/${name}`, input, P);
+/** A new product's form, filled as a shop fills it before selling: its purchase price and a description. */
+const FORM = { cost: 500, description: 'Livré partout en Algérie, paiement à la livraison.' };
+/**
+ * Produits › « Prêt »: a new product waits in « À faire », sold nowhere, until it has its prices, a description, a live
+ * landing page and a sales guide (an HD photo too, on a server that keeps them: not this one). Gives this product the
+ * guide and the page it still misses, as a shop does before it sells a new product, and checks Pilotix put it on sale
+ * by itself.
+ */
+let readyN = 0;
+async function onSale(token, productId) {
+  const state = async () => (await rpc(token, 'catalog.readiness')).products.find((p) => p.id === productId);
+  const before = await state();
+  assert.ok(before, 'the product is not in the store’s list');
+  if (before.missing.includes('guide')) await rpc(token, 'catalog.saveGuide', { id: productId, guide: { brief: 'Livré partout en Algérie, paiement à la livraison.' } });
+  if (before.missing.includes('landing')) await rpc(token, 'landing.save', { productId, slug: `pret-${run}-${++readyN}`, title: 'Page du produit' });
+  assert.deepEqual((await state()).missing, [], 'the product still misses something to be sold');
+  assert.equal((await rpc(token, 'catalog.products', {})).find((p) => p.id === productId)?.active, true, 'a Ready product goes on sale by itself');
+}
 /** The call must fail (with this status, and a message matching re). */
 async function fails(p, status, re) {
   try {
@@ -405,9 +423,13 @@ await section('An account turned off: out of that store at once', async () => {
 
 // ---------------------------------------------------------------- stores never see each other
 await section('Stores never see each other’s data', async () => {
-  const p = await rpc(ctx.owner1.token, 'catalog.saveProduct', { name: 'Bague argent', sku: `BAG-${run}`, price: 4500, cost: 1500, variants: [] });
+  const p = await rpc(ctx.owner1.token, 'catalog.saveProduct', { name: 'Bague argent', sku: `BAG-${run}`, price: 4500, ...FORM, cost: 1500, variants: [] });
   ctx.product = p.id ?? p.product?.id;
   assert.ok(ctx.product);
+  // a new product is not sold yet (Produits › « À faire »): refused in an order until it has its guide and its page
+  await fails(rpc(ctx.owner1.token, 'orders.create', { customerName: 'Client Sétif', phone: '0661998877', wilayaId: 19, commune: 'Sétif', items: [{ productId: ctx.product, variantId: null, qty: 1 }] }), 400, /indisponible/);
+  await onSale(ctx.owner1.token, ctx.product);
+  ok('a new product waits in « À faire » (refused in an order), then goes on sale by itself with its guide and its page');
   const o = await rpc(ctx.owner1.token, 'orders.create', { customerName: 'Client Sétif', phone: '0661998877', wilayaId: 19, commune: 'Sétif', items: [{ productId: ctx.product, variantId: null, qty: 1 }] });
   assert.ok(o.ref);
   const mine = await rpc(ctx.owner1.token, 'orders.list', { pageSize: 50 });
@@ -463,7 +485,8 @@ await section('Management › Archives: the owner is never archived, only the ow
   await rpc(O, 'archive.set', { kind: 'products', ids: [prod.id], archived: true });
   assert.ok(!(await rpc(O, 'catalog.products', {})).some((p) => p.id === prod.id));
   assert.equal((await rpc(O, 'archive.delete', { kind: 'products', ids: [prod.id] })).deleted, 1);
-  const sold = await rpc(O, 'catalog.saveProduct', { name: `Produit Vendu ${run}`, price: 2000, variants: [] });
+  const sold = await rpc(O, 'catalog.saveProduct', { name: `Produit Vendu ${run}`, price: 2000, ...FORM, variants: [] });
+  await onSale(O, sold.id);
   await rpc(O, 'orders.create', { customerName: 'Client Archive', phone: '0661334455', wilayaId: 16, commune: 'Alger', items: [{ productId: sold.id, variantId: null, qty: 1 }] });
   assert.equal((await rpc(O, 'archive.set', { kind: 'products', ids: [sold.id], archived: true })).done, 1, 'a sold product with no stock is archived');
   const kept = await rpc(O, 'archive.delete', { kind: 'products', ids: [sold.id] });
@@ -711,10 +734,13 @@ await section('Confirmation agencies: « Créer mon agence », Pilotix’s check
   await prpc('p.agencies.verify', { id: agencyId, verified: true });
   ok(`control room › Agences: checked; the store’s code is ${sh.code}`);
   // the store asks for one product; the agency accepts and sends its agent
-  const prod = await rpc(ctx.signup1.token, 'catalog.saveProduct', { name: `Montre ${run}`, price: 3000, variants: [] });
+  const prod = await rpc(ctx.signup1.token, 'catalog.saveProduct', { name: `Montre ${run}`, price: 3000, ...FORM, variants: [] });
   const pid = prod.id ?? prod.product?.id;
-  const other = await rpc(ctx.signup1.token, 'catalog.saveProduct', { name: `Sac ${run}`, price: 2000, variants: [] });
+  const other = await rpc(ctx.signup1.token, 'catalog.saveProduct', { name: `Sac ${run}`, price: 2000, ...FORM, variants: [] });
   const oid2 = other.id ?? other.product?.id;
+  // both on sale (Produits › « Prêt »): their orders come below
+  await onSale(ctx.signup1.token, pid);
+  await onSale(ctx.signup1.token, oid2);
   const f = await rpc(ctx.signup1.token, 'partners.find', { code: a.session.shop.code.toLowerCase().replace('-', '') });
   assert.equal(f.agency.prices.perDelivered, 150);
   const link = await rpc(ctx.signup1.token, 'partners.request', { agencyId, tasks: ['confirmation'], products: [pid] });
