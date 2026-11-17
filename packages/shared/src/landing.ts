@@ -257,6 +257,8 @@ footer{text-align:center;color:var(--m);font-size:12px;padding:18px;display:flex
 // The page's script, kept small and old-browser friendly (no build step on the page itself). Meta's pixel (~94 KB)
 // loads after the page: 2.5 s after it, or at the first touch — but never before the photos (a touch while they load
 // waits for them: on 2G / 3G the pixel would otherwise share the line with the main photo).
+// The pixel sends only the events named here (PageView, ViewContent, InitiateCheckout): what it would report by itself
+// on every click (« SubscribedButtonClick », page « Microdata ») is switched off (autoConfig), on the group pages too.
 const JS = `(function(){var C=window.__LP,d=document,$=function(i){return d.getElementById(i)};
 function ar2(s){return String(s||'').replace(/[\\u0660-\\u0669]/g,function(c){return c.charCodeAt(0)-1632}).replace(/[\\u06f0-\\u06f9]/g,function(c){return c.charCodeAt(0)-1776})}
 function nph(v){var p=ar2(v).replace(/[^\\d+]/g,'').replace(/^(\\+|00)213/,'0');return /^[567]\\d{8}$/.test(p)?'0'+p:p}
@@ -264,7 +266,7 @@ var utm={};try{utm=JSON.parse(sessionStorage.getItem('pxu')||'{}')}catch(e){}
 location.search.slice(1).split('&').forEach(function(kv){var p=kv.split('='),k=p.shift(),v=p.join('=').replace(/\\+/g,' ');if(!/^(utm_\\w+|fbclid|ttclid|gclid|ad_id|adset_id|campaign_id|placement|g|px_cat)$/.test(k)||!v)return;try{v=decodeURIComponent(v)}catch(e){}utm[k]=v.slice(0,500)});try{sessionStorage.setItem('pxu',JSON.stringify(utm))}catch(e){}
 function ck(n){try{var m=d.cookie.match(new RegExp('(?:^|; )'+n+'=([^;]*)'));return m?m[1]:''}catch(e){return''}}
 var px=C.px,ic=0;if(px){var n=window.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!window._fbq)window._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];
-(C.pxs&&C.pxs.length?C.pxs:[px]).forEach(function(i){fbq('init',i)});fbq('track','PageView');fbq('track','ViewContent',{content_ids:[String(C.pid)],content_type:'product_group',value:C.price,currency:'DZD'},{eventID:'vc-'+C.vid});
+(C.pxs&&C.pxs.length?C.pxs:[px]).forEach(function(i){fbq('set','autoConfig',false,i);fbq('init',i)});fbq('track','PageView');fbq('track','ViewContent',{content_ids:[String(C.pid)],content_type:'product_group',value:C.price,currency:'DZD'},{eventID:'vc-'+C.vid});
 var lp=0,ld=0,lw=0,lpx=function(){if(lp)return;if(!ld){lw=1;return}lp=1;var t=d.createElement('script');t.async=1;t.src='https://connect.facebook.net/en_US/fbevents.js';d.head.appendChild(t)};
 window.addEventListener('load',function(){ld=1;if(lw)lpx();else setTimeout(lpx,2500)});['touchstart','scroll','keydown','mousemove'].forEach(function(e){window.addEventListener(e,lpx,{once:true,passive:true})})}
 var tic=0;if(C.tt){${TT_STUB}var tl=0,tlx=function(){if(tl)return;tl=1;(C.tts&&C.tts.length?C.tts:[C.tt]).forEach(function(i){ttq.load(i)});ttq.page();ttq.track('ViewContent',{contents:[{content_id:String(C.pid),content_type:'product_group',content_name:C.title}],value:C.price,currency:'DZD'},{event_id:'vc-'+C.vid})};
@@ -575,7 +577,7 @@ for(var i=0;i<a.length;i++){if(C.mode=='live'){if(q)a[i].href=a[i].getAttribute(
 var sr=d.getElementById('sr'),tb=d.querySelectorAll('.tb button'),tab='',em=d.getElementById('em');
 function f(){var t=sr?sr.value.trim().toLowerCase():'',n=0;for(var i=0;i<a.length;i++){var x=a[i],ok=(!tab||x.getAttribute('data-t')==tab)&&(!t||x.getAttribute('data-n').indexOf(t)>=0);x.className=x.className.replace(/ no/g,'')+(ok?'':' no');if(ok)n++}if(em)em.className=n?'em no':'em'}
 if(sr)sr.oninput=f;for(var j=0;j<tb.length;j++)tb[j].onclick=function(){for(var k=0;k<tb.length;k++)tb[k].className='';this.className='on';tab=this.getAttribute('data-t');f()};
-if(C.px){var n=window.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!window._fbq)window._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];(C.pxs&&C.pxs.length?C.pxs:[C.px]).forEach(function(i){fbq('init',i)});fbq('track','PageView');
+if(C.px){var n=window.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!window._fbq)window._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];(C.pxs&&C.pxs.length?C.pxs:[C.px]).forEach(function(i){fbq('set','autoConfig',false,i);fbq('init',i)});fbq('track','PageView');
 var lp=0,lx=function(){if(lp)return;lp=1;var s=d.createElement('script');s.async=1;s.src='https://connect.facebook.net/en_US/fbevents.js';d.head.appendChild(s)};
 window.addEventListener('load',function(){setTimeout(lx,2500)});['touchstart','scroll'].forEach(function(e){window.addEventListener(e,lx,{once:true,passive:true})})}
 if(C.tt){${TT_STUB}var tl=0,tlx=function(){if(tl)return;tl=1;(C.tts&&C.tts.length?C.tts:[C.tt]).forEach(function(i){ttq.load(i)});ttq.page()};window.addEventListener('load',function(){setTimeout(tlx,2500)});['touchstart','scroll'].forEach(function(e){window.addEventListener(e,tlx,{once:true,passive:true})})}
