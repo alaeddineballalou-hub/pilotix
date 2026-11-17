@@ -728,13 +728,17 @@ async function syncAudiencesNow(ctx: Ctx, only?: readonly AudienceKind[]) {
         const phones = await phonesOf(ctx.db, a.kind, ctx.now());
         size = phones.length;
         if (ctx.server && phones.length) {
-          const r = (await ctx.server.meta('audience', { name: AUDIENCE_NAME[a.kind], metaId, phones }, ctx)) as { id: string };
+          const r = (await ctx.server.meta('audience', { name: AUDIENCE_NAME[a.kind], metaId, phones }, ctx)) as { id: string; busy?: boolean };
           metaId = r.id;
           if (a.kind === 'buyers') buyersId = r.id;
+          // nothing was sent tonight: said on the card, so a list Meta never finishes is seen
+          if (r.busy) error = 'Meta n’a pas fini la dernière mise à jour de cette liste : Pilotix la renvoie à la prochaine mise à jour.';
         }
       }
     } catch (e: any) {
-      status = 'failed';
+      // a list Meta already has stays in use when tonight's sending fails (the card says why): the next ad sets still
+      // leave these people out. One never made is an error.
+      status = metaId ? 'ready' : 'failed';
       error = String(e?.message ?? e).slice(0, 300);
     }
     await ctx.db.query(

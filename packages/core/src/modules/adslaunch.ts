@@ -23,6 +23,15 @@ import { contentFor, partnerChoices, partnerFor, USABLE } from './partners';
 import { launchAccounts, linkedPage } from './social';
 
 const algDay = (ms: number) => new Date(ms + 3_600_000).toISOString().slice(0, 10);
+/**
+ * Meta's refusal of a new ad set, with the way out when it is about one of the shop's lists (Audiences): the launch
+ * can go again without that list (what Meta already made is kept, nothing is made twice).
+ */
+export function audienceRefusal(error: string, input: Pick<LaunchInput, 'excludeAudiences' | 'includeAudiences'>): string {
+  if (!input.excludeAudiences.length && !input.includeAudiences.length) return error;
+  if (!/custom[ _]?audience|audiences? personnalisée|publics? personnalisé/i.test(error)) return error;
+  return `${error} · Meta refuse une de vos audiences : éteignez-la dans Publicité › Audiences (ou décochez « Utiliser mes audiences »), puis relancez.`;
+}
 const me = (ctx: Ctx) => ctx.session.profile.id || null;
 const stamp = (ctx: Ctx) => new Date(ctx.now()).toISOString();
 const extOf = (mime: string | null | undefined) => (mime === 'video/quicktime' ? 'mov' : 'mp4');
@@ -511,7 +520,7 @@ async function go(ctx: Ctx, id: number, approved = false) {
         const res = (await ctx.server.meta('launch', { plan, accountId: acct.id, done }, ctx)) as { ids: Record<string, string>; error: string | null; step: string };
         ids = res.ids;
         await ctx.db.query(`UPDATE ad_launches SET meta_ids = $2, step = $3, updated_at = now() WHERE id = $1`, [id, JSON.stringify(res.ids), res.step]);
-        if (res.error) throw bad(res.error);
+        if (res.error) throw bad(res.step === 'adsets' ? audienceRefusal(res.error, input) : res.error);
       } else {
         // the demo: made-up ids, nothing leaves Pilotix
         ids = { ...done, campaign: done.campaign ?? fakeId(ctx, 0) };

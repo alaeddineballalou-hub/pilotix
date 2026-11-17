@@ -494,7 +494,7 @@
     "people": "people",
     "byMeta": "Filled by Meta",
     "syncedAt": "updated {{when}}",
-    "where": "An ad launched from Pilotix leaves these lists out by itself. For an ad made in Meta, pick them yourself in the exclusions: their name starts with “Pilotix”.",
+    "where": "An ad launched from Pilotix leaves these lists out by itself. For an ad made in Meta, pick them yourself in the exclusions: their name starts with “Pilotix”. Pilotix puts a list on an ad set when it creates it, never on a running one: Meta would restart its learning. The people inside the list can change every day without restarting anything.",
     "privacy": "Only your shop’s customers. Numbers are hashed (SHA-256) on the server before going to Meta, never in clear.",
     "returners": {
       "name": "People who return parcels",

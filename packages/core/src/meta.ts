@@ -197,10 +197,16 @@ async function post(path: string, body: Record<string, unknown>, token: string):
     const e = data?.error;
     if (e?.code === 190) throw new AppError('bad_request', 'Le jeton Meta a expiré ou a été révoqué : reconnectez Meta (Pilot AI › Comptes).');
     if ([4, 17, 613, 80000, 80004].includes(Number(e?.code))) throw new AppError('conflict', 'Meta limite les demandes pour l’instant : réessayez dans quelques minutes.');
-    throw new AppError('bad_request', `Meta : ${e?.error_user_msg ?? e?.message ?? res.statusText}`);
+    // Meta's own numbers stay on the error: a caller that tells two refusals apart reads them (metaNumbers)
+    throw Object.assign(new AppError('bad_request', `Meta : ${e?.error_user_msg ?? e?.message ?? res.statusText}`), { meta: { code: Number(e?.code) || null, subcode: Number(e?.error_subcode) || null } });
   }
   return data;
 }
+const metaNumbers = (e: unknown): { code: number | null; subcode: number | null } | null => (e as any)?.meta ?? null;
+/** the object is no longer at Meta: deleted there, or no longer this connection's */
+const metaGone = (e: unknown) => (metaNumbers(e)?.code === 100 && metaNumbers(e)?.subcode === 33) || /does not exist|unsupported post request|cannot be loaded/i.test(String((e as any)?.message ?? ''));
+/** Meta is still working on the list's last update: nothing is lost, the next sending replaces it */
+const audienceBusy = (e: unknown) => metaNumbers(e)?.code === 2650 && metaNumbers(e)?.subcode === 1870145;
 const cents = (v: unknown): number | null => (v === undefined || v === null || v === '' ? null : Math.round(Number(v)) || 0);
 const actOf = (x: string) => `act_${String(x).replace(/^act_/, '')}`;
 /** fills `{campaign}`, `{adset:k}`, `{creative:k}`, `{video:k}`, `{image:k}`, `{form}` with the ids Meta gave */
@@ -638,19 +644,41 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
 
   /**
    * An audience from the shop's own customers: phones hashed here (SHA-256 of 213XXXXXXXXX), never sent in clear.
-   * Made the first time, then refilled (Meta adds; Pilotix sends the whole list each night).
+   * A new list is made and filled. A list Meta already has is REPLACED by tonight's whole list (Meta's « replace »,
+   * one session for the whole list): Meta writes that this call leaves the ad sets using the list out of the learning
+   * phase, when its « add » may send them back into it; and a number that left the list (an order no longer fake)
+   * leaves Meta's too. `busy`: Meta is still working on the list's last update, nothing was sent (the next night
+   * sends it again). A list deleted at Meta is made again (`remade`), so the next ad sets still leave these people out.
    */
   if (action === 'audience') {
     const a = (args ?? {}) as { name?: string; metaId?: string | null; phones?: string[] };
-    let id = a.metaId ?? null;
-    if (!id) id = String((await post(`${acts[0]}/customaudiences`, { name: String(a.name ?? 'Pilotix').slice(0, 100), subtype: 'CUSTOM', customer_file_source: 'USER_PROVIDED_ONLY', description: 'Pilotix' }, token)).id);
     const hashed = (a.phones ?? []).map((p) => [createHash('sha256').update(p).digest('hex')]);
-    let received = 0;
-    for (let k = 0; k < hashed.length; k += 10_000) {
-      const r = await post(`${id}/users`, { payload: { schema: ['PHONE'], data: hashed.slice(k, k + 10_000) } }, token);
-      received += Number(r.num_received ?? 0);
+    const make = async () => String((await post(`${acts[0]}/customaudiences`, { name: String(a.name ?? 'Pilotix').slice(0, 100), subtype: 'CUSTOM', customer_file_source: 'USER_PROVIDED_ONLY', description: 'Pilotix' }, token)).id);
+    const send = async (id: string, replace: boolean) => {
+      // a replace is one session (10 000 numbers a batch); its number is ours, unique in the ad account
+      const session = replace ? Date.now() * 1000 + Math.floor(Math.random() * 1000) : null;
+      let received = 0;
+      for (let k = 0; k < hashed.length; k += 10_000) {
+        const body: Record<string, unknown> = { payload: { schema: ['PHONE'], data: hashed.slice(k, k + 10_000) } };
+        if (session) body.session = { session_id: session, batch_seq: k / 10_000 + 1, last_batch_flag: k + 10_000 >= hashed.length, estimated_num_total: hashed.length };
+        const r = await post(`${id}/${replace ? 'usersreplace' : 'users'}`, body, token);
+        // « replace » answers the session's count so far, « add » the batch's
+        received = replace ? Math.max(received, Number(r.num_received ?? 0)) : received + Number(r.num_received ?? 0);
+      }
+      return received;
+    };
+    if (!a.metaId) {
+      const id = await make();
+      return { id, received: await send(id, false) };
     }
-    return { id, received };
+    try {
+      return { id: a.metaId, received: await send(a.metaId, true) };
+    } catch (e) {
+      if (audienceBusy(e)) return { id: a.metaId, received: 0, busy: true };
+      if (!metaGone(e)) throw e;
+      const id = await make();
+      return { id, received: await send(id, false), remade: true };
+    }
   }
 
   /** people who look like the shop's delivered customers (1 % of Algeria by default) */
