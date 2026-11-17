@@ -343,6 +343,17 @@
 .pa-aud-card footer b { font-size: 17px; }
 .pa-aud-ico { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: var(--sky-soft, var(--raise)); color: var(--c-accent-ink); flex: none; }
 .pa-aud-ico svg { width: 19px; height: 19px; }
+/* the owner's own numbers, added to a list */
+.pa-aud-add { border-top: 1px solid var(--line); padding-top: 10px; font-size: 13px; }
+.pa-aud-add summary { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 44px; cursor: pointer; font-weight: 600; color: var(--c-accent-ink); list-style: none; }
+.pa-aud-add summary::-webkit-details-marker { display: none; }
+.pa-aud-add summary svg { width: 15px; height: 15px; flex: none; }
+.pa-aud-add summary .muted { font-weight: 500; }
+.pa-aud-add > label { display: block; margin: 4px 0 6px; font-weight: 600; }
+.pa-aud-add textarea { width: 100%; min-height: 96px; font: inherit; font-size: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: inherit; resize: vertical; }
+.pa-aud-add-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.pa-aud-add-row .btn, html[data-skin][data-theme] .pa-aud-add-row .btn.small { height: auto; min-height: 44px; display: inline-flex; align-items: center; gap: 6px; max-width: 100%; overflow-wrap: anywhere; }
+.pa-aud-card p.pa-aud-add-hint { margin-top: 8px; font-size: 12.5px; }
 .pa-aud-st { padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--sky-soft, var(--raise)); color: var(--c-muted); }
 .pa-aud-st.s-ready { background: var(--c-ok-tint); color: var(--c-ok-ink); }
 .pa-aud-st.s-failed { background: var(--c-bad-tint); color: var(--c-bad-ink); }

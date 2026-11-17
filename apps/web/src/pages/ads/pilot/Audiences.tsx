@@ -3,6 +3,7 @@
 // No customer goes to Meta before the owner turns one on; the phones are hashed on the server (SHA-256) before they
 // leave. Two more lists are Meta's own (« events »): the browsers behind fake orders and competitors, which Meta fills
 // from the landing pages' events. Nothing is uploaded for them, so they are on unless the owner turns them off.
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { n, since } from '../../../lib/format';
 import { useAction, useRpc } from '../../../lib/query';
@@ -61,6 +62,7 @@ export function Audiences() {
               {a.syncedAt && <small className="muted">{t('pilotads.aud.syncedAt', { when: t('pilotads.ago', { d: since(a.syncedAt) }) })}</small>}
             </footer>
             {a.error && <p className="pa-err">{a.error}</p>}
+            {d.owner && (a.kind === 'returners' || a.kind === 'fake' || a.kind === 'buyers') && <AddPhones kind={a.kind} count={d.added_by_kind[a.kind] ?? 0} onDone={() => q.refetch()} />}
           </article>
         ))}
       </div>
@@ -71,5 +73,54 @@ export function Audiences() {
         <Icon name="lock" /> {t('pilotads.aud.privacy')}
       </p>
     </div>
+  );
+}
+
+/**
+ * The owner adds numbers to a list himself: pasted, or read from a file in the browser (a column copied from his former
+ * tool, a courier's export). Pilotix keeps the Algerian mobile numbers it finds, each once; they count for a year.
+ */
+function AddPhones({ kind, count, onDone }: { kind: 'returners' | 'fake' | 'buyers'; count: number; onDone: () => void }) {
+  const { t } = useTranslation();
+  const [text, setText] = useState('');
+  const [file, setFile] = useState('');
+  const add = useAction('ads.aud.add', {
+    success: (r) => (r.removed ? t('pilotads.aud.add.removed', { n: n(r.removed) }) : t('pilotads.aud.add.done', { found: n(r.found), added: n(r.added) })),
+    onDone: () => {
+      setText('');
+      setFile('');
+      onDone();
+    },
+  });
+  const read = async (f: File | undefined) => {
+    if (!f) return;
+    setFile(f.name);
+    setText(await f.text());
+  };
+  const id = `pa-add-${kind}`;
+  return (
+    <details className="pa-aud-add">
+      <summary>
+        <Icon name="plus" /> {t('pilotads.aud.add.open')}
+        {count > 0 && <span className="muted">{t('pilotads.aud.add.count', { n: n(count) })}</span>}
+      </summary>
+      <label htmlFor={id}>{t('pilotads.aud.add.label')}</label>
+      <textarea id={id} className="ltr" rows={4} value={text} placeholder={'0555 12 34 56\n0661234567'} onChange={(e) => setText(e.target.value)} />
+      <div className="pa-aud-add-row">
+        <label className="btn small ghost">
+          <Icon name="upload" /> {file || t('pilotads.aud.add.file')}
+          <input type="file" accept=".csv,.txt,text/csv,text/plain" hidden onChange={(e) => read(e.target.files?.[0])} />
+        </label>
+        <button type="button" className="btn small primary" disabled={!text.trim() || add.isPending} onClick={() => add.mutate({ kind, text })}>
+          {add.isPending ? t('pilotads.aud.add.working') : t('pilotads.aud.add.go')}
+        </button>
+        {count > 0 && (
+          <button type="button" className="btn small ghost" disabled={add.isPending} onClick={() => add.mutate({ kind, clear: true })}>
+            {t('pilotads.aud.add.clear')}
+          </button>
+        )}
+      </div>
+      <p className="pa-aud-add-hint">{t('pilotads.aud.add.hint')}</p>
+    </details>
   );
 }

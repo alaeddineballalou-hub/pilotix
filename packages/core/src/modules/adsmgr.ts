@@ -644,9 +644,24 @@ async function eventPixels(db: Db): Promise<string[]> {
 /** the shop's ads are linked to Meta (an ad account and its key): without them no list can be made there */
 const metaLinked = async (db: Db) => !!(await getSetting(db, 'meta')).adAccountId && !!(await getRaw<string>(db, META_TOKEN_KEY, ''));
 
+/** the lists of phones: Pilotix's own orders of the last year, and the numbers the owner added himself in the last year */
+const LIST_KINDS = ['returners', 'fake', 'buyers'] as const satisfies readonly ListKind[];
+const LIST_DAYS = 365;
 async function phonesOf(db: Db, kind: ListKind, now: number): Promise<string[]> {
-  const rows = await db.query(`SELECT DISTINCT phone FROM sales WHERE ${AUDIENCE_SQL[kind]} AND created_at >= $1`, [new Date(now - 365 * 86_400_000).toISOString()]);
-  return [...new Set(rows.map((r: any) => metaPhone(r.phone)).filter((p): p is string => !!p))];
+  const since = new Date(now - LIST_DAYS * 86_400_000).toISOString();
+  const rows = await db.query(`SELECT DISTINCT phone FROM sales WHERE ${AUDIENCE_SQL[kind]} AND created_at >= $1`, [since]);
+  const added = await db.query(`SELECT phone FROM ad_audience_phones WHERE kind = $1 AND added_at >= $2`, [kind, since]);
+  return [...new Set([...rows.map((r: any) => metaPhone(r.phone)), ...added.map((r: any) => String(r.phone))].filter((p): p is string => !!p))];
+}
+/** how many numbers the owner added to each list himself and that still count */
+async function addedCounts(db: Db, now: number): Promise<Record<string, number>> {
+  const rows = await db.query(`SELECT kind, count(*) AS n FROM ad_audience_phones WHERE added_at >= $1 GROUP BY kind`, [new Date(now - LIST_DAYS * 86_400_000).toISOString()]);
+  return Object.fromEntries(rows.map((r: any) => [String(r.kind), num(r.n)]));
+}
+/** every Algerian mobile number found in a text (a pasted column, a CSV file): one per number, as Meta takes them */
+export function phonesIn(text: string): string[] {
+  const found = text.match(/(?:\+|00)?213[\s.-]?[5-7](?:[\s.-]?\d){8}|0[5-7](?:[\s.-]?\d){8}/g) ?? [];
+  return [...new Set(found.map((x) => metaPhone(x.replace(/[\s.-]/g, ''))).filter((p): p is string => !!p))];
 }
 
 /**
@@ -842,10 +857,30 @@ export const adsMgrProcs = {
     return where(ctx, i.from, i.to);
   }),
 
-  'ads.aud.list': proc(['marketer'], z.object({}), async (ctx) => ({ owner: isOwner(ctx), demo: !ctx.server, list: await audienceRows(ctx.db), syncedAt: (await pilotSettings(ctx.db)).audiencesAt })),
+  'ads.aud.list': proc(['marketer'], z.object({}), async (ctx) => ({ owner: isOwner(ctx), demo: !ctx.server, list: await audienceRows(ctx.db), added_by_kind: await addedCounts(ctx.db, ctx.now()), syncedAt: (await pilotSettings(ctx.db)).audiencesAt })),
   'ads.aud.save': proc(['vendeur'], z.object({ kind: z.enum(AUDIENCE_KINDS), on: z.boolean() }), async (ctx, i) => {
     await ctx.db.query(`INSERT INTO ad_audiences (kind, is_on) VALUES ($1,$2) ON CONFLICT (kind) DO UPDATE SET is_on = EXCLUDED.is_on`, [i.kind, i.on]);
     return { list: await audienceRows(ctx.db) };
+  }),
+  /**
+   * The owner adds phone numbers to a list himself (pasted, or a file read in the browser): a start for a shop whose
+   * past orders are elsewhere. Only Algerian mobile numbers are kept, each once; nothing goes to Meta here (the list's
+   * switch and the next update do that). `clear`: the numbers he added to that list are taken out again.
+   */
+  'ads.aud.add': proc(['vendeur'], z.object({ kind: z.enum(LIST_KINDS), text: z.string().max(3_000_000).default(''), clear: z.boolean().default(false) }), async (ctx, i) => {
+    if (i.clear) {
+      const gone = await ctx.db.query(`DELETE FROM ad_audience_phones WHERE kind = $1 RETURNING phone`, [i.kind]);
+      return { found: 0, added: 0, removed: gone.length, list: await audienceRows(ctx.db), added_by_kind: await addedCounts(ctx.db, ctx.now()) };
+    }
+    const phones = phonesIn(i.text);
+    if (!phones.length) throw bad('Aucun numéro algérien trouvé (05, 06 ou 07, 10 chiffres).');
+    let added = 0;
+    for (let k = 0; k < phones.length; k += 1000) {
+      const part = phones.slice(k, k + 1000);
+      const r = await ctx.db.query(`INSERT INTO ad_audience_phones (kind, phone, added_at) SELECT $1, x, $3 FROM unnest($2::text[]) AS x ON CONFLICT (kind, phone) DO UPDATE SET added_at = EXCLUDED.added_at RETURNING (xmax = 0) AS fresh`, [i.kind, part, stamp(ctx)]);
+      added += r.filter((x: any) => x.fresh).length;
+    }
+    return { found: phones.length, added, removed: 0, list: await audienceRows(ctx.db), added_by_kind: await addedCounts(ctx.db, ctx.now()) };
   }),
   'ads.aud.sync': proc(['vendeur'], z.object({}), async (ctx) => {
     await syncAudiences(ctx);

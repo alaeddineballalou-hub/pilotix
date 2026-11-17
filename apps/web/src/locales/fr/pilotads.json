@@ -496,6 +496,18 @@
     "syncedAt": "mis à jour {{when}}",
     "where": "Une pub lancée depuis Pilotix enlève ces listes toute seule. Pour une pub faite dans Meta, choisissez-les vous-même dans les exclusions : leur nom commence par « Pilotix ». Pilotix met une liste sur un ad set au moment où il le crée, jamais sur un ad set qui tourne : Meta relancerait son apprentissage. Les personnes dans la liste, elles, peuvent changer chaque jour sans rien relancer.",
     "privacy": "Seulement les clients de votre boutique. Les numéros sont chiffrés (SHA-256) sur le serveur avant d’aller chez Meta, jamais en clair.",
+    "add": {
+      "open": "Ajouter des numéros",
+      "count": "· {{n}} ajoutés à la main",
+      "label": "Collez les numéros (un par ligne, ou une colonne copiée) ou choisissez un fichier",
+      "file": "Fichier .csv ou .txt",
+      "go": "Ajouter à la liste",
+      "working": "Ajout…",
+      "clear": "Retirer mes numéros",
+      "hint": "Pour démarrer avec les retours ou les faux numéros de votre ancien outil. Pilotix garde les numéros algériens (05, 06, 07), une fois chacun, pendant un an, et y ajoute ensuite ceux de vos commandes tout seul. Rien ne part chez Meta tant que la liste est éteinte.",
+      "done": "{{found}} numéros trouvés, {{added}} nouveaux dans la liste.",
+      "removed": "{{n}} numéros retirés de la liste."
+    },
     "returners": {
       "name": "Ceux qui renvoient les colis",
       "text": "Les clients qui ont refusé ou renvoyé un colis cette année ne voient plus vos pubs."

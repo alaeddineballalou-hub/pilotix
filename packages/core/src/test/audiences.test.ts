@@ -144,3 +144,32 @@ test('a sending that fails keeps a list Meta already has in use; a list never ma
   assert.deepEqual([(await row('returners')).error, (await row('buyers')).meta_id, (await row('buyers')).status], [null, '881', 'ready']);
   await call('ads.aud.save', await owner(), { kind: 'buyers', on: false });
 });
+
+test('the owner adds numbers to a list himself (a start from his former tool): kept once, sent with the shop’s own, taken out again', async () => {
+  const { phonesIn } = await import('../modules/adsmgr');
+  assert.deepEqual(phonesIn('Nom;Tel\nKarim;0555 12 34 56\nSara;+213 661-23-45-67\nx;00213770000001\ny;0555123456\nfixe;021 23 45 67\nz;0412345678'), ['213555123456', '213661234567', '213770000001']);
+  await assert.rejects(call('ads.aud.add', await as(EMAILS.marketer), { kind: 'returners', text: '0555123456' }), /Accès refusé/);
+  await assert.rejects(call('ads.aud.add', await owner(), { kind: 'returners', text: 'rien ici 021234567' }), /Aucun numéro algérien/);
+  const a: any = await call('ads.aud.add', await owner(), { kind: 'returners', text: '0799000001\n0799000002\n0799000001' });
+  assert.deepEqual([a.found, a.added, a.added_by_kind.returners], [2, 2, 2]);
+  const b: any = await call('ads.aud.add', await owner(), { kind: 'returners', text: '0799000002, 0799000003' });
+  assert.deepEqual([b.found, b.added, b.added_by_kind.returners], [2, 1, 3], 'a number already there is not counted twice');
+  assert.equal(((await call('ads.aud.list', await owner(), {})) as any).added_by_kind.returners, 3);
+  // the next update sends them with the shop's own returners, the other lists do not get them
+  const { sent, server } = fakeServer((action, args) => ({ id: args.metaId ?? '990' }));
+  await syncAudiences(await owner(server));
+  const ret = sent.find((x) => x.action === 'audience' && x.args.name === 'Pilotix · retours')!;
+  for (const p of ['213799000001', '213799000002', '213799000003']) assert.ok(ret.args.phones.includes(p), p);
+  assert.equal(new Set(ret.args.phones).size, ret.args.phones.length, 'each number once');
+  const fake = sent.find((x) => x.action === 'audience' && x.args.name === 'Pilotix · faux numéros')!;
+  assert.ok(!fake.args.phones.includes('213799000001'));
+  // a number added more than a year ago no longer counts
+  await db.query(`UPDATE ad_audience_phones SET added_at = now() - interval '400 days' WHERE phone = '213799000003'`);
+  assert.equal(((await call('ads.aud.list', await owner(), {})) as any).added_by_kind.returners, 2);
+  // « Retirer mes numéros »
+  const c: any = await call('ads.aud.add', await owner(), { kind: 'returners', clear: true });
+  assert.deepEqual([c.removed, c.added_by_kind.returners ?? 0], [3, 0]);
+  sent.length = 0;
+  await syncAudiences(await owner(server));
+  assert.ok(!sent.find((x) => x.action === 'audience' && x.args.name === 'Pilotix · retours')!.args.phones.includes('213799000001'));
+});

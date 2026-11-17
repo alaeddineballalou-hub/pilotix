@@ -496,6 +496,18 @@
     "syncedAt": "updated {{when}}",
     "where": "An ad launched from Pilotix leaves these lists out by itself. For an ad made in Meta, pick them yourself in the exclusions: their name starts with “Pilotix”. Pilotix puts a list on an ad set when it creates it, never on a running one: Meta would restart its learning. The people inside the list can change every day without restarting anything.",
     "privacy": "Only your shop’s customers. Numbers are hashed (SHA-256) on the server before going to Meta, never in clear.",
+    "add": {
+      "open": "Add numbers",
+      "count": "· {{n}} added by hand",
+      "label": "Paste the numbers (one per line, or a copied column) or choose a file",
+      "file": ".csv or .txt file",
+      "go": "Add to the list",
+      "working": "Adding…",
+      "clear": "Remove my numbers",
+      "hint": "To start with the returns or fake numbers of your former tool. Pilotix keeps Algerian numbers (05, 06, 07), each once, for a year, then adds those of your orders by itself. Nothing goes to Meta while the list is off.",
+      "done": "{{found}} numbers found, {{added}} new in the list.",
+      "removed": "{{n}} numbers removed from the list."
+    },
     "returners": {
       "name": "People who return parcels",
       "text": "Customers who refused or returned a parcel this year no longer see your ads."
