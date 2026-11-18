@@ -22,6 +22,7 @@ import { useCanRules } from '../lib/pilot';
 import { AccountMenu } from './AccountMenu';
 import { BoutiqueSwitch, useBoutiques } from './Boutiques';
 import { ShopBanner } from './ShopBanner';
+import { PubFooter } from './PubFooter';
 import { AllBanner, useAllMode } from './AllBoutiques';
 import { rightOn, tabOn } from '../lib/rights';
 const DepotAlert = lazy(() => import('./DepotAlert').then((m) => ({ default: m.DepotAlert })));
@@ -425,6 +426,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
           )}
           {all.on && !ALL_PAGES.has(page) && <AllBanner />}
           {children}
+          <PubFooter />
         </main>
       </div>
       {pwOpen && <PasswordModal onClose={() => setPwOpen(false)} />}

@@ -1,0 +1,8 @@
+/* the company that publishes Pilotix, at the bottom of every page inside it: quiet, small, never in the way */
+.px-pubfoot { margin-top: auto; padding: 14px 2px 4px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 6px 16px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.px-pubfoot address { display: grid; gap: 1px; min-width: 0; font-style: normal; }
+.px-pubfoot address > span { overflow-wrap: anywhere; }
+.px-pubfoot-name { color: var(--ink); font-weight: 600; }
+.px-pubfoot-ids > span { display: inline-block; margin-inline-end: 16px; }
+.px-pubfoot-ids > span:last-child { margin-inline-end: 0; }
+.px-pubfoot a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
