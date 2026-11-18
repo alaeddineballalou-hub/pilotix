@@ -45,7 +45,10 @@ export function PubFooter() {
           </span>
         )}
       </address>
-      <a href="#/conditions">{t('auth.terms')}</a>
+      <span className="px-pubfoot-links">
+        © {new Date().getFullYear()} {pub.company.trim()} · <a href="/mentions-legales.html">{t('auth.legalNotice')}</a> ·{' '}
+        <a href="#/conditions">{t('auth.terms')}</a>
+      </span>
     </footer>
   );
 }

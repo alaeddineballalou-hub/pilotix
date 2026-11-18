@@ -824,6 +824,7 @@ export function Legal() {
       <article className="card">
         <BrandBig />
         <h1>{t('legal.title')}</h1>
+        {publisherOf(d) && <p><strong>{t('legal.operatedBy', { company: publisherOf(d)!.company.trim() })}</strong></p>}
         {d?.text.trim() ? (
           <>
             <div className="px-legal-own">{d.text}</div>

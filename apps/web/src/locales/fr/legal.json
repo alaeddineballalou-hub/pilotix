@@ -63,6 +63,7 @@
     ]
   },
   "publisherTitle": "Éditeur",
+  "operatedBy": "Ce site est édité par {{company}}. Pilotix est un produit de {{company}}.",
   "publisher": "Pilotix est un produit de {{company}}.",
   "phone": "Tél."
 }

@@ -105,12 +105,14 @@ export function AuthShell({ children, wide, plain }: { children: ReactNode; wide
         <span className="pxa-legal">
           <a href="#/conditions">{t('auth.terms')}</a>
           <a href="#/conditions">{t('auth.privacy')}</a>
+          <a href="/mentions-legales.html">{t('auth.legalNotice')}</a>
         </span>
         {/* who publishes Pilotix, as on its papers and in Meta: its name (in Arabic on the pages in Arabic), its address,
             its phone and tax number (control room › Réglages › Société) */}
         {pub && (
           <address className="pxa-pub">
             <span className="pxa-pub-name">{t('auth.publisher', { company: publisherName(pub, i18n.language) })}</span>
+            <span>© {new Date().getFullYear()} {pub.company.trim()}</span>
             {pub.address?.trim() && (
               <span className="pxa-pub-addr">
                 <bdi>{pub.address.trim()}</bdi>

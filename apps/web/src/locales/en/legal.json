@@ -63,6 +63,7 @@
     ]
   },
   "publisherTitle": "Publisher",
+  "operatedBy": "This website is operated by {{company}}. Pilotix is a product of {{company}}.",
   "publisher": "Pilotix is a product of {{company}}.",
   "phone": "Phone"
 }

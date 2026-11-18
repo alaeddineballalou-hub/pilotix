@@ -63,6 +63,7 @@
     ]
   },
   "publisherTitle": "الناشر",
+  "operatedBy": "يُدار هذا الموقع من طرف {{company}}. Pilotix منتج تابع لـ {{company}}.",
   "publisher": "Pilotix منتج تابع لـ {{company}}.",
   "phone": "الهاتف"
 }
