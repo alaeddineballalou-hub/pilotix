@@ -1,6 +1,6 @@
 {
   "title": "Pilot Checks",
-  "lead": "Les cas de votre tableau, un par un. Vous choisissez quand c’est mauvais, quoi faire, et quelle aide le surveille.",
+  "lead": "Tous vos KPI pub, un par un : le chiffre, quand c’est bon, mauvais ou à arrêter, et quoi faire. Vous pouvez tout régler.",
   "step": {
     "title": "Étape 1 : vos règles",
     "text": "Ici vous réglez les règles. Pilotix ne s’en sert pas encore : il ne bloque pas, ne sonne pas et ne juge pas avec. Ça vient aux étapes suivantes."
@@ -12,14 +12,14 @@
     "door": "Porte"
   },
   "levelHelp": {
-    "off": "Pilotix ne regarde pas ce cas.",
-    "doctor": "C’est arrivé : Pilotix nomme le cas, avec ses chiffres et quoi faire.",
+    "off": "Pilotix ne regarde pas ce KPI.",
+    "doctor": "C’est arrivé : Pilotix dit quel KPI, avec ses chiffres et quoi faire.",
     "bell": "Elle sonne tôt, avant de perdre de l’argent.",
     "door": "L’erreur ne peut pas arriver : le bouton reste bloqué."
   },
-  "cases_one": "{{count}} cas",
-  "cases_other": "{{count}} cas",
-  "cases": "{{count}} cas",
+  "cases_one": "{{count}} KPI",
+  "cases_other": "{{count}} KPI",
+  "cases": "{{count}} KPI",
   "door": {
     "price": "quand un prix ou un coût est enregistré",
     "ad": "au lancement d’une pub",
@@ -34,7 +34,9 @@
     "landing": "Landing page",
     "trust": "Confiance de la page",
     "meta": "Meta",
-    "team": "Équipe"
+    "team": "Équipe",
+    "money": "Argent",
+    "leads": "Leads et colis"
   },
   "data": {
     "ready": "Pilotix a les données",
@@ -50,7 +52,7 @@
     "toAdd": "À ajouter",
     "unverified": "À vérifier"
   },
-  "dataSum": "Aujourd’hui Pilotix a les données pour {{ready}} des {{total}} cas. {{toAdd}} demandent un ajout, {{unverified}} sont à vérifier.",
+  "dataSum": "Aujourd’hui Pilotix a les données pour {{ready}} des {{total}} KPI. {{toAdd}} demandent un ajout, {{unverified}} sont à vérifier.",
   "dataFilter": "Données",
   "unit": {
     "pct": "%",
@@ -60,7 +62,9 @@
     "pieces": "pièces",
     "times": "fois",
     "of10": "sur 10",
-    "of3": "sur 3"
+    "of3": "sur 3",
+    "x": "× bid limit",
+    "da": "DA"
   },
   "when": {
     "lt": {
@@ -68,12 +72,15 @@
       "n": "Moins de {{v}}",
       "pieces": "Moins de {{v}} pièces par commande",
       "of10": "Moins de {{v}} sur 10",
-      "of3": "Moins de {{v}} sur 3"
+      "of3": "Moins de {{v}} sur 3",
+      "da": "Moins de {{v}} DA",
+      "days": "Moins de {{v}} jours"
     },
     "gt": {
       "pct": "Plus de {{v}} %",
       "days": "Plus de {{v}} jours",
-      "times": "Plus de {{v}} fois"
+      "times": "Plus de {{v}} fois",
+      "x": "Plus de {{v}} fois le bid limit"
     },
     "gte": {
       "n": "{{v}} ou plus"
@@ -95,18 +102,9 @@
     "comments_one": "{{v}} commentaire",
     "comments_other": "{{v}} commentaires",
     "comments": "{{v}} commentaires",
-    "orders_one": "{{v}} commande venue de cette vidéo",
-    "orders_other": "{{v}} commandes venues de cette vidéo",
-    "orders": "{{v}} commandes venues de cette vidéo",
-    "parcels_one": "{{v}} colis terminé venu de cette vidéo",
-    "parcels_other": "{{v}} colis terminés venus de cette vidéo",
-    "parcels": "{{v}} colis terminés venus de cette vidéo",
     "weeks_one": "{{v}} semaine de vie",
     "weeks_other": "{{v}} semaines de vie",
     "weeks": "{{v}} semaines de vie",
-    "days_one": "{{v}} jour entier avec l’enchère maximum",
-    "days_other": "{{v}} jours entiers avec l’enchère maximum",
-    "days": "{{v}} jours entiers avec l’enchère maximum",
     "videos_one": "{{v}} vidéo avec assez de données",
     "videos_other": "{{v}} vidéos avec assez de données",
     "videos": "{{v}} vidéos avec assez de données",
@@ -115,45 +113,119 @@
     "cancelled": "{{v}} commandes annulées",
     "unconfirmed_one": "{{v}} commande non confirmée",
     "unconfirmed_other": "{{v}} commandes non confirmées",
-    "unconfirmed": "{{v}} commandes non confirmées"
+    "unconfirmed": "{{v}} commandes non confirmées",
+    "confirmed_one": "{{v}} commande confirmée",
+    "confirmed_other": "{{v}} commandes confirmées",
+    "confirmed": "{{v}} commandes confirmées",
+    "delivered_one": "{{v}} commande livrée",
+    "delivered_other": "{{v}} commandes livrées",
+    "delivered": "{{v}} commandes livrées",
+    "leads_one": "{{v}} lead",
+    "leads_other": "{{v}} leads",
+    "leads": "{{v}} leads",
+    "realleads_one": "{{v}} vrai lead",
+    "realleads_other": "{{v}} vrais leads",
+    "realleads": "{{v}} vrais leads",
+    "products_one": "{{v}} produit testé",
+    "products_other": "{{v}} produits testés",
+    "products": "{{v}} produits testés",
+    "views_one": "{{v}} vue de la page",
+    "views_other": "{{v}} vues de la page",
+    "views": "{{v}} vues de la page",
+    "clicks_one": "{{v}} clic sur le lien",
+    "clicks_other": "{{v}} clics sur le lien",
+    "clicks": "{{v}} clics sur le lien",
+    "forms_one": "{{v}} formulaire",
+    "forms_other": "{{v}} formulaires",
+    "forms": "{{v}} formulaires",
+    "units_one": "{{v}} pièce achetée",
+    "units_other": "{{v}} pièces achetées",
+    "units": "{{v}} pièces achetées",
+    "messages_one": "{{v}} message",
+    "messages_other": "{{v}} messages",
+    "messages": "{{v}} messages",
+    "customers_one": "{{v}} client",
+    "customers_other": "{{v}} clients",
+    "customers": "{{v}} clients",
+    "calls_one": "{{v}} lead appelé",
+    "calls_other": "{{v}} leads appelés",
+    "calls": "{{v}} leads appelés",
+    "unreachable_one": "{{v}} commande injoignable",
+    "unreachable_other": "{{v}} commandes injoignables",
+    "unreachable": "{{v}} commandes injoignables",
+    "orders_one": "{{v}} commande",
+    "orders_other": "{{v}} commandes",
+    "orders": "{{v}} commandes",
+    "parcels_one": "{{v}} colis terminé",
+    "parcels_other": "{{v}} colis terminés",
+    "parcels": "{{v}} colis terminés",
+    "days_one": "{{v}} jour entier",
+    "days_other": "{{v}} jours entiers",
+    "days": "{{v}} jours entiers",
+    "decided_one": "{{v}} colis livré ou refusé",
+    "decided_other": "{{v}} colis livrés ou refusés",
+    "decided": "{{v}} colis livrés ou refusés",
+    "shipping_one": "{{v}} colis en livraison depuis plus de 3 jours",
+    "shipping_other": "{{v}} colis en livraison depuis plus de 3 jours",
+    "shipping": "{{v}} colis en livraison depuis plus de 3 jours",
+    "returned_one": "{{v}} colis retourné",
+    "returned_other": "{{v}} colis retournés",
+    "returned": "{{v}} colis retournés"
   },
   "waitUnit": {
     "shown": "affichages",
     "views3s": "vues de 3 secondes",
     "comments": "commentaires",
-    "orders": "commandes venues de cette vidéo",
-    "parcels": "colis terminés venus de cette vidéo",
+    "orders": "commandes",
+    "parcels": "colis terminés",
     "weeks": "semaines de vie",
-    "days": "jours entiers avec l’enchère maximum",
+    "days": "jours entiers",
     "videos": "vidéos avec assez de données",
     "cancelled": "commandes annulées",
-    "unconfirmed": "commandes non confirmées"
+    "unconfirmed": "commandes non confirmées",
+    "confirmed": "commandes confirmées",
+    "delivered": "commandes livrées",
+    "leads": "leads",
+    "realleads": "vrais leads",
+    "products": "produits testés",
+    "views": "vues de la page",
+    "clicks": "clics sur le lien",
+    "forms": "formulaires",
+    "units": "pièces achetées",
+    "messages": "messages",
+    "customers": "clients",
+    "calls": "leads appelés",
+    "unreachable": "commandes injoignables",
+    "decided": "colis livrés ou refusés",
+    "shipping": "colis en livraison depuis plus de 3 jours",
+    "returned": "colis retournés"
   },
   "f": {
     "number": "Le chiffre",
     "when": "Mauvais quand",
     "do": "Quoi faire",
     "also": "Corriger aussi",
-    "wait": "Attend {{what}} avant de juger"
+    "wait": "Attend {{what}} avant de juger",
+    "lines": "Bon ou mauvais"
   },
   "changed": "Modifié par vous",
   "edit": "Modifier",
   "editOf": "Modifier « {{name}} »",
   "filterLevel": "Aide",
-  "search": "Chercher un cas",
-  "none": "Aucun cas ne correspond.",
+  "search": "Chercher un KPI",
+  "none": "Aucun KPI ne correspond.",
   "clear": "Tout afficher",
   "ed": {
     "limit": "Mauvais quand",
     "low": "Moins de",
     "high": "Ou plus de",
-    "fixed": "Ce cas n’a pas de chiffre à régler.",
+    "fixed": "Ce KPI n’a pas de chiffre à régler.",
     "start": "Au départ : {{v}}",
     "do": "Quoi faire",
     "also": "L’autre partie à corriger",
     "own": "Vide : les mots de Pilotix reviennent.",
     "level": "Quelle aide le surveille",
-    "noDoor": "Ce cas n’a pas de porte : aucun bouton ne peut être bloqué pour lui.",
+    "noDoor": "Ce KPI n’a pas de porte : aucun bouton ne peut être bloqué pour lui.",
     "wait": "Attendre avant de juger (« en apprentissage »)",
     "save": "Enregistrer",
     "cancel": "Annuler",
@@ -161,10 +233,18 @@
     "saved": "Enregistré",
     "resetDone": "Revenu aux valeurs de départ",
     "nothing": "Rien n’a changé",
-    "history": "Les changements de ce cas",
+    "history": "Les changements de ce KPI",
     "badNumber": "Tapez un chiffre entre {{min}} et {{max}}.",
     "badOrder": "Le premier chiffre doit être plus petit que le second.",
-    "badWait": "Tapez un nombre entier, 1 ou plus."
+    "badWait": "Tapez un nombre entier, 1 ou plus.",
+    "good": "Bon quand",
+    "second": {
+      "stop": "Arrêt quand",
+      "urgent": "Urgent quand"
+    },
+    "proofNote": "Cet arrêt attend que la pub ait l’âge réglé et que Pilotix soit sûr (voir Réglages généraux).",
+    "badLinesUp": "Les chiffres doivent monter : bon, puis mauvais, puis arrêt ou urgent.",
+    "badLinesDown": "Les chiffres doivent descendre : bon, puis mauvais, puis arrêt ou urgent."
   },
   "log": {
     "title": "Derniers changements",
@@ -176,17 +256,21 @@
       "wait": "attente",
       "action": "quoi faire",
       "other": "autre partie",
-      "reset": "revenu au départ"
+      "reset": "revenu au départ",
+      "g": "ligne « bon »",
+      "s": "deuxième ligne"
     },
     "own": "les mots de Pilotix",
     "line": "{{field}} : {{old}} → {{new}}",
-    "someone": "Quelqu’un"
+    "someone": "Quelqu’un",
+    "setting": "Réglage général",
+    "unset": "pas rempli"
   },
   "close": "Fermer",
   "keyLabel": "Les aides",
-  "shownOf": "{{shown}} cas sur {{total}}",
+  "shownOf": "{{shown}} KPI sur {{total}}",
   "head": {
-    "case": "Cas"
+    "case": "KPI"
   },
   "val": {
     "pct": "{{v}} %",
@@ -196,9 +280,77 @@
     "pieces": "{{v}} pièces",
     "times": "{{v}} fois",
     "of10": "{{v}} sur 10",
-    "of3": "{{v}} sur 3"
+    "of3": "{{v}} sur 3",
+    "x": "{{v}} × bid limit",
+    "da": "{{v}} DA"
   },
   "c": {
+    "D1": {
+      "name": "Bénéfice gardé",
+      "kpi": "Coût pub d’une commande confirmée ÷ bid limit du produit",
+      "tail": "sur le total de l’ensemble de pubs",
+      "do": "Bon : le budget monte d’un pas si l’ensemble dépense presque tout. Moyen : on ne touche pas. Mauvais : le budget baisse d’un pas. Arrêt : la pub est coupée, seulement quand Pilotix est sûr.",
+      "also": "Offre : si le bid limit est plus bas que votre coût le moins cher, la marge est trop fine (prix, fournisseur, packs)"
+    },
+    "D7": {
+      "name": "Frein du compte",
+      "kpi": "Coût pub d’une commande confirmée sur toutes vos pubs SCALE ÷ ce que leurs bid limits permettent (les tests ne comptent pas)",
+      "tail": "{{brakeDays}} de suite",
+      "do": "Aucun nouveau produit en test tant que ça dure. Les pubs déjà en ligne continuent. Le frein se lève dès le premier jour redevenu normal."
+    },
+    "D2": {
+      "name": "Coût d’une commande livrée",
+      "kpi": "Dépense pub ÷ commandes livrées, comparé au bid limit",
+      "do": "À lire avec « Bénéfice gardé ». Si celui-là est bon et celui-ci mauvais : le problème vient des colis (retours, refus), pas de la pub."
+    },
+    "D3": {
+      "name": "Coût d’un lead",
+      "kpi": "Dépense pub ÷ leads (formulaires envoyés), comparé au bid limit",
+      "do": "Un signal tôt pendant les tests. Il n’arrête jamais rien : c’est « Bénéfice gardé » qui décide."
+    },
+    "D4": {
+      "name": "Bénéfice net du mois",
+      "kpi": "Ventes encaissées − produits − équipe − retours − pub − loyer et salaires (en DA)",
+      "do": "Sous 0 : aucun nouveau produit en test. S’il baisse de 10 % deux mois de suite : cherchez la cause avant d’ajouter des produits."
+    },
+    "D5": {
+      "name": "Coût d’un retour",
+      "kpi": "Frais de retour payés à la société de livraison ÷ colis retournés",
+      "when": "Chaque mois, dès 30 colis retournés",
+      "do": "Pilotix met à jour le coût d’un retour utilisé dans le bid limit. Rien à faire."
+    },
+    "D6": {
+      "name": "Taux de produits gagnants",
+      "kpi": "Produits gagnants ÷ produits testés, sur 4 semaines",
+      "do": "Mauvais : revoyez le choix des produits et les offres avant de tester plus. Arrêt : aucun nouveau produit en test, seulement quand Pilotix est sûr."
+    },
+    "Q1": {
+      "name": "Qualité de la pub",
+      "kpi": "Vrais leads ÷ tous les leads de cette pub (faux numéros, mauvais numéros et injoignables à part)",
+      "do": "Mauvais : trouvez la raison (faux numéros, mauvais public). Arrêt : la pub est coupée, seulement quand Pilotix est sûr."
+    },
+    "Q2": {
+      "name": "Qualité des leads",
+      "kpi": "Commandes confirmées ÷ vrais leads de cette pub",
+      "do": "Mauvais : écoutez les appels, regardez les raisons d’annulation. Arrêt : la pub est coupée, seulement quand Pilotix est sûr.",
+      "also": "Vidéo : si cette pub confirme 10 points de moins que les autres pubs du produit, elle attire des curieux : nouvelle vidéo plus honnête"
+    },
+    "Q3": {
+      "name": "Qualité de la livraison",
+      "kpi": "Colis livrés ou refusés à la porte ÷ colis terminés de cette pub (le reste = faux colis)",
+      "do": "Mauvais : vérifiez le téléphone et l’adresse à la confirmation ; le Suivi rappelle les faux colis. Arrêt : la pub est coupée, seulement quand Pilotix est sûr."
+    },
+    "Q4": {
+      "name": "Taux de livraison",
+      "kpi": "Colis livrés ÷ colis livrés + refusés à la porte, pour cette pub",
+      "do": "Mauvais : regardez les raisons de refus. Arrêt : la pub est coupée, seulement quand Pilotix est sûr.",
+      "also": "Offre : si cette pub livre 10 points de moins que les autres pubs du produit, la promesse est trop grande : comparez le prix dit à l’appel, la page, les frais, le délai, la taille"
+    },
+    "O20": {
+      "name": "Stock",
+      "kpi": "Pièces en stock ÷ pièces confirmées par jour (moyenne des 7 derniers jours)",
+      "do": "Mauvais : recommandez 21 jours de stock le jour même. Arrêt : plus de nouvelle dépense sur le produit. À 0 pièce, ses pubs sont coupées jusqu’au retour du stock."
+    },
     "O1": {
       "name": "Personne n’en veut",
       "kpi": "Clics sur le lien ÷ personnes qui ont vu la pub, sur chacune de 3 vidéos différentes ou plus (3 premières secondes normales)",
@@ -208,13 +360,13 @@
     "O2": {
       "name": "Mauvaise qualité",
       "kpi": "Commandes livrées avec une réclamation ÷ toutes les commandes livrées",
-      "do": "Changez de fournisseur, ou arrêtez le produit."
+      "do": "Mauvais : réglez le problème avec le fournisseur. Arrêt : le produit est arrêté, seulement quand Pilotix est sûr."
     },
     "O3": {
       "name": "Tout le monde l’a déjà",
-      "kpi": "Commandes de cette semaine ÷ commandes de la semaine dernière (même dépense pub)",
+      "kpi": "Leads pour 1 000 DA dépensés cette semaine ÷ votre chiffre normal des 4 semaines d’avant",
       "tail": "pendant 3 semaines de suite, et une nouvelle vidéo échoue aussi",
-      "do": "Nouveau modèle ou nouvelle version. Baissez le budget.",
+      "do": "Nouveau modèle ou nouvelle version. Le budget de ses ensembles baisse d’un pas pendant 2 semaines.",
       "also": "Vidéo : un angle vraiment nouveau"
     },
     "O4": {
@@ -237,14 +389,8 @@
     "O7": {
       "name": "Trop bon marché pour y croire",
       "kpi": "Commandes annulées avec la raison « C’est du faux ? » ÷ toutes les commandes annulées",
-      "do": "Montrez des preuves : vraies photos, avis. Montez un peu le prix.",
+      "do": "Des preuves d’abord : vraies photos, avis. Montez le prix seulement si ça continue 2 semaines après les preuves.",
       "also": "Confiance de la page : avis et vraies photos"
-    },
-    "O8": {
-      "name": "Pas de marge",
-      "kpi": "Bénéfice après la pub ÷ prix",
-      "do": "Montez le prix, trouvez un fournisseur moins cher, ou vendez en packs.",
-      "also": "Vidéo ou Meta : si le bénéfice avant la pub est bon, c’est la pub qui coûte trop"
     },
     "O9": {
       "name": "Vos coûts ont monté",
@@ -263,13 +409,13 @@
       "do": "Une vraie limite de temps : l’offre finit vendredi, stock limité.",
       "also": "Landing page : montrez la limite de temps"
     },
-    "O12": {
+    "O12a": {
       "name": "Petit panier",
       "kpi": "Pièces vendues ÷ nombre de commandes",
       "do": "Proposez « 2 pour… ». L’agent propose une deuxième pièce.",
       "also": "Équipe : l’agent propose une deuxième pièce"
     },
-    "O13": {
+    "O12b": {
       "name": "Le pack n’attire pas",
       "kpi": "Commandes avec un pack ÷ toutes les commandes",
       "do": "Agrandissez l’économie du pack et montrez-le en premier.",
@@ -295,9 +441,9 @@
     },
     "O17": {
       "name": "Mauvaise saison",
-      "kpi": "Commandes de cette catégorie ce mois-ci ÷ le mois dernier, à côté de vos autres catégories",
-      "tail": "alors que vos autres catégories restent près de 100 %",
-      "do": "Baissez le budget. Poussez les produits de saison."
+      "kpi": "Leads pour 1 000 DA de cette catégorie ce mois-ci ÷ le mois dernier",
+      "tail": "alors que 2 autres catégories ou plus restent entre 90 % et 110 %",
+      "do": "Le budget de la catégorie baisse d’un pas ce mois-ci. Poussez les produits de saison."
     },
     "O18": {
       "name": "Un concurrent a baissé son prix",
@@ -308,14 +454,14 @@
     },
     "O19": {
       "name": "Un concurrent a lancé le même produit",
-      "kpi": "Nouvelles pubs de concurrents sur le même produit en 7 jours (nombre)",
+      "kpi": "Nouvelles pages qui lancent le même modèle en 7 jours (à regarder chaque lundi dans la Bibliothèque publicitaire de Meta)",
       "do": "Nouvel angle, preuve plus forte, message de livraison plus rapide.",
       "also": "Confiance de la page : notoriété sur vos valeurs. Vidéo : un nouvel angle"
     },
     "V1": {
       "name": "3 premières secondes faibles",
       "kpi": "Personnes qui restent 3 secondes ÷ affichages (même emplacement)",
-      "do": "Faites 3 nouveaux débuts de 3 secondes sur la même vidéo."
+      "do": "3 nouveaux débuts de 3 secondes, chacun dans une nouvelle vidéo. On ne modifie jamais une pub en ligne."
     },
     "V2": {
       "name": "Milieu ennuyeux",
@@ -329,25 +475,20 @@
     },
     "V4": {
       "name": "Amuse mais ne vend pas",
-      "kpi": "Clics sur le lien ÷ affichages (début et milieu normaux, les autres vidéos du produit cliquent normalement)",
-      "do": "Ajoutez le prix, l’offre et « commandez maintenant » dans la vidéo.",
+      "kpi": "Personnes qui cliquent sur le lien ÷ personnes qui ont vu la pub",
+      "tail": "alors que le début et le milieu sont normaux et qu’une autre pub du produit clique bien",
+      "do": "Ajoutez la valeur du produit et « commandez maintenant ». Pas de prix dans la vidéo.",
       "also": "Offre : si toutes les vidéos cliquent peu, c’est l’offre"
     },
-    "V5": {
-      "name": "Pas compris",
+    "V5a": {
+      "name": "Pas compris (commentaires)",
       "kpi": "Commentaires qui demandent « C’est quoi ? » ÷ tous les commentaires",
       "do": "Montrez le produit qui marche, étape par étape."
     },
-    "V6": {
-      "name": "Attire des curieux",
-      "kpi": "Confirmées ÷ commandes venues de cette vidéo, moins la même chose pour les autres vidéos du produit",
-      "do": "Moins de piège à clics. Montrez le vrai prix et le vrai produit."
-    },
-    "V7": {
-      "name": "Promesse trop grande",
-      "kpi": "Livrées ÷ confirmées venues de cette vidéo, moins la même chose pour les autres vidéos du produit",
-      "do": "Montrez le vrai produit et la vraie taille. Enlevez l’exagération.",
-      "also": "Landing page : les mêmes photos honnêtes"
+    "V5b": {
+      "name": "Pas compris (appels)",
+      "kpi": "Commandes annulées avec la raison « Je n’ai pas compris » ÷ commandes annulées venues de cette pub",
+      "do": "Montrez le produit qui marche, étape par étape. Avec « Pas compris (commentaires) » : une seule nouvelle vidéo."
     },
     "V8": {
       "name": "Copie d’une autre vidéo",
@@ -358,14 +499,20 @@
     },
     "V9": {
       "name": "Vidéo fatiguée",
-      "kpi": "Chiffre des 3 premières secondes cette semaine ÷ le même pendant sa première semaine (vue plus de 2,5 fois)",
+      "kpi": "Chiffre des 3 premières secondes cette semaine ÷ le même pendant sa première semaine",
+      "tail": "alors que chaque personne l’a vue 3 fois ou plus",
       "do": "Nouveau début sur la même idée. Ne modifiez jamais la vidéo gagnante."
     },
     "V10": {
       "name": "Meta ne la montre pas",
-      "kpi": "Dépensé en 3 jours ÷ budget de 3 jours (enchère maximum active)",
-      "do": "Faites une nouvelle idée. Ne montez pas l’enchère maximum.",
-      "also": "Meta : vérifiez l’enchère maximum"
+      "kpi": "Dépense de cette pub ÷ dépense de son ensemble de pubs, sur 3 jours",
+      "tail": "alors que l’ensemble dépense presque tout son budget",
+      "do": "En SCALE : un seul re-test au prochain test du mardi. En TEST : elle est simplement « à re-tester ». Pas de changement de budget ni d’enchère."
+    },
+    "L11": {
+      "name": "La page ne convertit pas",
+      "kpi": "Leads ÷ vues de la page",
+      "do": "Regardez les KPI de la page juste en dessous : l’un d’eux explique pourquoi."
     },
     "L1": {
       "name": "Page lente",
@@ -397,18 +544,6 @@
       "do": "Montrez les frais de livraison avant le formulaire.",
       "also": "Offre : frais de livraison"
     },
-    "L6": {
-      "name": "Mauvaise sur téléphone",
-      "kpi": "Commandes ÷ visites sur téléphone, divisé par commandes ÷ visites sur ordinateur",
-      "do": "Corrigez la vue téléphone : bouton visible, texte lisible."
-    },
-    "L7": {
-      "name": "Pas de preuve",
-      "kpi": "Commandes annulées de cette page avec la raison « Pas confiance » ÷ toutes les commandes annulées de cette page",
-      "tail": "sur cette page, alors que vos autres pages sont en dessous",
-      "do": "Ajoutez de vraies photos, des avis, une courte vidéo de client.",
-      "also": "Confiance de la page : si toutes les pages dépassent la limite, les gens ne connaissent pas la boutique"
-    },
     "L8": {
       "name": "Bouton caché",
       "kpi": "Visiteurs qui arrivent au bouton ÷ visiteurs",
@@ -419,11 +554,11 @@
       "kpi": "Liste des images : nombre de « oui » sur 10",
       "do": "Refaites les lignes « non » : vraie photo, taille montrée, avantage montré."
     },
-    "L10": {
-      "name": "Formulaires abandonnés pas récupérés",
-      "kpi": "Formulaires abandonnés devenus des commandes ÷ formulaires abandonnés",
-      "do": "Appelez les formulaires abandonnés dans les 30 minutes.",
-      "also": "Équipe : vitesse d’appel"
+    "L12": {
+      "name": "Formulaire cassé",
+      "kpi": "Pages qui ne s’ouvrent pas + formulaires envoyés sans commande créée (nombre)",
+      "tail": "en 1 heure, ou une seule fois si une personne le confirme",
+      "do": "Réparez tout de suite. Si une personne confirme la panne, les pubs vers cette page sont en pause jusqu’à la réparation. Ces jours-là ne comptent pas contre la pub."
     },
     "P1": {
       "name": "La page a l’air vide",
@@ -441,21 +576,20 @@
       "kpi": "Messages répondus en moins d’1 heure ÷ tous les messages",
       "do": "Répondez plus vite, ou laissez Pilot Message répondre."
     },
-    "P4": {
-      "name": "Pas d’avis",
-      "kpi": "Vrais avis ou photos de clients sur la page (nombre)",
-      "do": "Demandez une photo à chaque client livré. Publiez-les."
+    "P4a": {
+      "name": "Pas assez d’avis",
+      "kpi": "Nouveaux vrais avis de clients livrés, sur 30 jours (nombre)",
+      "do": "Demandez un avis à chaque client le lendemain de la livraison."
+    },
+    "P4b": {
+      "name": "Pas assez de photos de clients",
+      "kpi": "Nouvelles photos ou vidéos de clients publiées avec leur accord, sur 30 jours (nombre)",
+      "do": "Demandez une photo après la livraison. Publiez-les."
     },
     "P5": {
       "name": "Les gens ne connaissent pas la boutique",
       "kpi": "Commandes annulées avec la raison « Je ne connais pas la boutique / pas confiance » ÷ toutes les commandes annulées",
       "do": "Pubs de notoriété sur vos valeurs : qui vous êtes, la garantie, de vrais clients."
-    },
-    "P6": {
-      "name": "Valeurs pas claires",
-      "kpi": "Vos valeurs montrées sur la page, les pubs et la landing page (sur 3)",
-      "do": "Écrivez vos 3 valeurs et montrez-les partout.",
-      "also": "Landing page et vidéo"
     },
     "P7": {
       "name": "Les clients ne reviennent pas",
@@ -473,12 +607,17 @@
     "M1": {
       "name": "Suivi des pubs cassé",
       "kpi": "Commandes des landing pages avec un ID de pub ÷ toutes les commandes des landing pages",
-      "do": "Collez les paramètres du lien sur chaque pub faite à la main."
+      "do": "Mettez l’étiquette de suivi (ad.id) sur chaque pub le jour même. Sans elle, une pub n’est pas lancée."
     },
     "M2": {
       "name": "Meta compte mal",
       "kpi": "Achats comptés par Meta ÷ commandes dans Pilotix",
       "do": "Vérifiez le pixel et l’API Conversions."
+    },
+    "M13": {
+      "name": "Meta reconnaît mal vos clients",
+      "kpi": "La note « qualité de correspondance des événements » de Meta pour l’achat (sur 10)",
+      "do": "Envoyez à Meta le téléphone, le prénom et la wilaya de chaque commande (protégés comme Meta le demande)."
     },
     "M3": {
       "name": "Trop peu d’idées",
@@ -489,13 +628,14 @@
     "M4": {
       "name": "Une idée prend tout",
       "kpi": "Dépense de la première idée ÷ dépense totale",
+      "tail": "et aucune nouvelle idée depuis 7 jours",
       "do": "Lancez de nouvelles idées avant que la première se fatigue.",
       "also": "Vidéo"
     },
     "M5": {
       "name": "L’apprentissage a recommencé",
-      "kpi": "Modifications ou changements de budget de plus de 20 % en 7 jours (nombre)",
-      "do": "Aucune modification pendant 3 jours. Montez les budgets de 20 % au plus."
+      "kpi": "Modifications ou changements de budget de plus de {{budgetStep}} en 7 jours (nombre)",
+      "do": "Aucune modification pendant {{freezeDays}}. Montez les budgets de {{budgetStep}} au plus."
     },
     "M6": {
       "name": "Enchère maximum trop haute",
@@ -503,9 +643,9 @@
       "do": "Baissez l’enchère à ce que vos taux de confirmation et de livraison permettent."
     },
     "M7": {
-      "name": "Enchère maximum trop basse",
-      "kpi": "Dépensé ÷ budget sur 3 jours, sur tous les ensembles de pubs",
-      "do": "Montez un peu l’enchère, pas à pas.",
+      "name": "L’ensemble ne dépense pas",
+      "kpi": "Dépensé ÷ budget sur 3 jours (ensemble de pubs SCALE)",
+      "do": "Enchère sous le bid limit : +10 %, une seule fois. Enchère déjà au bid limit : ne touchez pas, lancez une nouvelle idée au prochain test.",
       "also": "Vidéo : si une seule pub ne dépense pas, c’est la vidéo"
     },
     "M8": {
@@ -513,17 +653,6 @@
       "kpi": "Coût de 1 000 vues cette semaine ÷ votre coût normal, sur toutes les pubs",
       "do": "Regardez la saison et les concurrents. Ajoutez de nouvelles idées.",
       "also": "Offre : marché"
-    },
-    "M9": {
-      "name": "Public fatigué",
-      "kpi": "Affichages ÷ personnes touchées (combien de fois chacun l’a vue), avec de nouvelles idées en ligne",
-      "do": "Élargissez : plus de wilayas, moins de limites."
-    },
-    "M10": {
-      "name": "Mauvaises wilayas",
-      "kpi": "Commandes des wilayas où la livraison est faible ÷ toutes les commandes",
-      "do": "Retirez ces wilayas des pubs.",
-      "also": "Équipe : société de livraison"
     },
     "M11": {
       "name": "Problème de compte",
@@ -535,6 +664,16 @@
       "kpi": "Coût par commande après une hausse de budget ÷ coût par commande avant",
       "do": "Revenez un pas en arrière. Augmentez avec de nouvelles idées, pas seulement le budget.",
       "also": "Vidéo"
+    },
+    "T14": {
+      "name": "Appels non notés",
+      "kpi": "Leads appelés avec un résultat noté ÷ leads appelés",
+      "do": "Notez le résultat de chaque appel le jour même. Tant que c’est mauvais, Pilotix ne juge ni les agents ni les raisons."
+    },
+    "T13": {
+      "name": "Les confirmations chutent",
+      "kpi": "Confirmées ÷ vrais leads aujourd’hui, comparé à votre chiffre normal des 7 derniers jours",
+      "do": "Regardez d’abord la vitesse d’appel et le nombre d’essais, puis la qualité des pubs, puis le formulaire."
     },
     "T1": {
       "name": "Appels trop tard",
@@ -548,8 +687,8 @@
     },
     "T3": {
       "name": "Un agent confirme trop peu",
-      "kpi": "Confirmées ÷ commandes de l’agent, moins le chiffre de l’équipe (mêmes produits)",
-      "do": "Écoutez les appels. Formez avec le guide de vente."
+      "kpi": "Confirmées ÷ vrais leads de l’agent, moins le chiffre des autres agents (mêmes produits)",
+      "do": "Mauvais : coaching (2 appels écoutés + guide de vente chaque semaine). Urgent : écoutez 5 appels. Changez l’agent après 4 semaines sans progrès."
     },
     "T4": {
       "name": "Un agent confirme trop facilement",
@@ -562,26 +701,36 @@
       "do": "Proposez la deuxième pièce ou le pack à chaque appel.",
       "also": "Offre : pack"
     },
-    "T6": {
+    "T6a": {
       "name": "Formulaires abandonnés pas appelés",
       "kpi": "Formulaires abandonnés appelés dans les 30 minutes ÷ formulaires abandonnés",
       "do": "Mettez-les en haut de la liste d’appels."
+    },
+    "T6b": {
+      "name": "Formulaires abandonnés pas récupérés",
+      "kpi": "Formulaires abandonnés devenus des commandes ÷ formulaires abandonnés appelés",
+      "do": "Un script d’appel spécial pour les formulaires abandonnés."
     },
     "T7": {
       "name": "Expédition lente",
       "kpi": "Commandes confirmées expédiées en moins de 24 heures ÷ commandes confirmées",
       "do": "Préparez et remettez le jour même."
     },
-    "T8": {
+    "T8a": {
+      "name": "Livraison lente partout",
+      "kpi": "Jours entre l’expédition et la livraison, toutes wilayas (la moitié des colis arrive avant)",
+      "do": "Relancez la société de livraison."
+    },
+    "T8b": {
       "name": "Livraison lente dans une wilaya",
       "kpi": "Jours entre l’expédition et la livraison, par wilaya",
       "do": "Relancez la société de livraison, ou changez-la pour cette wilaya."
     },
     "T9": {
-      "name": "Société de livraison faible dans une wilaya",
-      "kpi": "Livrées ÷ expédiées dans cette wilaya, moins votre chiffre normal",
-      "do": "Suivez chaque colis là-bas. Changez de société si ça reste bas.",
-      "also": "Meta : retirez la wilaya des pubs"
+      "name": "Wilaya faible",
+      "kpi": "Colis livrés ÷ colis terminés dans cette wilaya",
+      "do": "D’abord le délai annoncé, puis la société de livraison. Arrêt : la wilaya est retirée des pubs, seulement quand Pilotix est sûr.",
+      "also": "Équipe : suivez chaque colis là-bas"
     },
     "T10": {
       "name": "Colis pas suivis",
@@ -590,13 +739,194 @@
     },
     "T11": {
       "name": "Les fausses commandes passent",
-      "kpi": "Commandes d’un téléphone qui a déjà refusé ÷ toutes les commandes",
-      "do": "Bloquez après 2 refus. Un appel en plus avant l’expédition."
+      "kpi": "Commandes expédiées d’un téléphone qui a déjà 2 refus ou faux colis (nombre)",
+      "do": "La 3ᵉ commande est bloquée avant la confirmation. Un appel en plus avant l’expédition pour ceux qui ont 1 refus."
     },
     "T12": {
       "name": "Les retours reviennent tard",
       "kpi": "Colis retournés revenus en stock en moins de 10 jours ÷ colis retournés",
       "do": "Relancez la société de livraison chaque semaine."
     }
+  },
+  "view": {
+    "label": "Ce que vous voulez voir",
+    "checks": "Mes KPI",
+    "settings": "Réglages généraux",
+    "how": "Comment Pilotix décide"
+  },
+  "every": {
+    "day": "Chaque jour",
+    "week": "Chaque semaine",
+    "month": "Chaque mois",
+    "launch": "Avant le lancement"
+  },
+  "line": {
+    "good": "Bon",
+    "bad": "Mauvais",
+    "urgent": "Urgent",
+    "stop": "Arrêt",
+    "sure": "seulement quand Pilotix est sûr",
+    "say": "{{what}} : {{when}}",
+    "when": "Quand"
+  },
+  "stops": "Peut arrêter",
+  "good": {
+    "lt": {
+      "pct": "{{v}} % ou plus"
+    },
+    "gt": {
+      "x": "{{v}} fois le bid limit ou moins"
+    }
+  },
+  "set": {
+    "title": "Réglages généraux",
+    "lead": "Les chiffres qui ne sont à aucun KPI en particulier. Chaque boutique règle les siens.",
+    "start": "Au départ : {{v}}",
+    "startNone": "Au départ : pas rempli",
+    "save": "Enregistrer",
+    "reset": "Revenir au départ",
+    "saved": "Enregistré",
+    "nothing": "Rien n’a changé",
+    "bad": "Tapez un nombre entier entre {{min}} et {{max}}.",
+    "changed": "Modifié par vous",
+    "fill": "À remplir",
+    "unit": {
+      "days": "jours",
+      "hours": "heures",
+      "pct": "%",
+      "n": "",
+      "orders": "commandes",
+      "da": "DA",
+      "money": "par jour"
+    },
+    "val": {
+      "days": "{{v}} jours",
+      "hours": "{{v}} heures",
+      "pct": "{{v}} %",
+      "n": "{{v}}",
+      "orders": "{{v}} commandes",
+      "da": "{{v}} DA",
+      "money": "{{v}} par jour",
+      "days_one": "{{v}} jour",
+      "days_other": "{{v}} jours",
+      "hours_one": "{{v}} heure",
+      "hours_other": "{{v}} heures",
+      "orders_one": "{{v}} commande",
+      "orders_other": "{{v}} commandes"
+    },
+    "groups": {
+      "judge": "Quand une pub est jugée",
+      "bid": "Le bid limit",
+      "budget": "Le budget",
+      "scale": "SCALE",
+      "test": "TEST",
+      "time": "Rien n’attend pour toujours",
+      "freeze": "Trop de modifications",
+      "brake": "Frein du compte et liste du jour",
+      "outside": "Hors des KPI"
+    },
+    "k": {
+      "judgeDays": {
+        "name": "Jours avant de juger une pub",
+        "help": "Avant, Pilotix ne coupe pas une pub pour ses résultats. Le stock à zéro coupe toujours tout de suite."
+      },
+      "proofPct": {
+        "name": "À quel point Pilotix doit être sûr avant de couper",
+        "help": "À 5 %, il coupe seulement s’il y a moins de 5 chances sur 100 que ce soit de la malchance. Plus haut : il coupe plus vite, et coupe plus de bonnes pubs."
+      },
+      "keepGood": {
+        "name": "Part du bénéfice que vous gardez au bid limit",
+        "help": "Le bid limit est ce qu’une commande confirmée peut coûter en pub en gardant cette part."
+      },
+      "delivered": {
+        "name": "Taux de livraison compté au départ",
+        "help": "Utilisé pour le bid limit tant qu’un produit n’a pas 30 colis terminés. Après, c’est son vrai taux."
+      },
+      "returnCost": {
+        "name": "Coût d’un colis retourné",
+        "help": "Utilisé dans le bid limit. Pilotix le met à jour chaque mois avec vos vrais frais."
+      },
+      "limitMove": {
+        "name": "Le bid limit bouge seulement s’il change d’au moins",
+        "help": "Il est recalculé une fois par semaine. Sous ce changement il reste le même, pour ne pas toucher les enchères pour rien."
+      },
+      "budgetStep": {
+        "name": "Un pas de budget",
+        "help": "De combien le budget d’un ensemble de pubs monte ou baisse à la fois."
+      },
+      "budgetCuts": {
+        "name": "Baisses de suite au maximum",
+        "help": "Après, si l’ensemble coûte encore trop, sa plus mauvaise pub est coupée."
+      },
+      "budgetBase": {
+        "name": "Budget de base par produit",
+        "help": "Le budget d’un ensemble ne descend jamais sous ce montant multiplié par ses produits. Dans la monnaie de votre compte pub."
+      },
+      "groupBand": {
+        "name": "Écart de bid limit permis dans un groupe",
+        "help": "Des produits partagent un ensemble de pubs seulement si leurs bid limits sont proches."
+      },
+      "ownOrders": {
+        "name": "Un gagnant a son propre ensemble à partir de",
+        "help": "Commandes confirmées sur les 7 derniers jours."
+      },
+      "batchWait": {
+        "name": "Entrées en SCALE qu’un gagnant peut attendre",
+        "help": "Si son ensemble reste bloqué plus longtemps, il a son propre ensemble ou un re-test."
+      },
+      "testAds": {
+        "name": "Pubs au maximum dans un test",
+        "help": "Par produit, chaque mardi."
+      },
+      "winOrders": {
+        "name": "Commandes confirmées pour gagner un test",
+        "help": "Avec un coût au bid limit ou en dessous."
+      },
+      "pendingHours": {
+        "name": "Un lead sans réponse devient « injoignable » après",
+        "help": "Passé ce délai, il n’est plus « en attente »."
+      },
+      "postponeDays": {
+        "name": "Un client reporté attend au maximum",
+        "help": "Il n’est jamais compté comme un refus."
+      },
+      "parcelDays": {
+        "name": "Un colis en livraison devient un faux colis après",
+        "help": "S’il est livré plus tard, Pilotix corrige."
+      },
+      "freezeDays": {
+        "name": "Durée du gel",
+        "help": "Quand le KPI « L’apprentissage a recommencé » est mauvais : aucune modification sur cet ensemble de pubs pendant ce temps. Les arrêts restent permis."
+      },
+      "brakeDays": {
+        "name": "Jours de suite avant le frein du compte",
+        "help": "Pour le KPI « Frein du compte » : si vos pubs SCALE coûtent trop pendant tout ce temps, aucun nouveau produit n’est testé."
+      },
+      "listTop": {
+        "name": "Actions montrées dans la liste du jour",
+        "help": "Les arrêts d’abord, puis les actions les plus importantes."
+      },
+      "awarenessBudget": {
+        "name": "Budget des pubs de notoriété et de catalogue",
+        "help": "Ces pubs sont hors des KPI. Remplissez votre montant ; sinon Pilotix montre seulement ce qu’elles dépensent."
+      }
+    }
+  },
+  "how": {
+    "title": "Comment Pilotix décide",
+    "lead": "Les 10 idées derrière vos KPI, en mots simples.",
+    "l": [
+      "Chaque produit a un bid limit : ce qu’une commande confirmée peut coûter en pub.",
+      "Une pub est jugée d’abord sur l’argent, puis sur ses leads et ses colis, puis sur l’offre, la page et la vidéo.",
+      "Aucune pub n’est jugée avant {{days}} de vie.",
+      "Un arrêt a besoin d’une preuve : Pilotix coupe seulement quand il est sûr que ce n’est pas de la malchance. Peu de commandes : il attend.",
+      "Avant la preuve, un mauvais chiffre veut dire : corriger, et le budget de l’ensemble baisse d’un pas.",
+      "S’il manque des données (pas d’étiquette de pub, appels non notés), Pilotix utilise ce qui reste exact et ne monte aucun budget.",
+      "Deux KPI qui parlent de la même chose n’agissent jamais tous les deux : un seul décide, et le plus prudent gagne.",
+      "Le stock gagne toujours : à 0 pièce, les pubs sont coupées. Un produit sans marge est mis en pause.",
+      "TEST : lancement le mardi, on ne touche à rien, verdict le mercredi suivant : gagnant, pas gagnant, ou un re-test. Les gagnants entrent en SCALE une fois par semaine.",
+      "Quand aucune règle ne décide, Pilotix ne fait rien sur cette pub, garde les arrêts, et vous demande."
+    ],
+    "noWait": "Une pub peut être jugée dès sa première heure : vous avez réglé 0 jour d’attente."
   }
 }

@@ -1,13 +1,25 @@
-/* Pilot Automations › Pilot Checks: the helpers (what each one does, a tap filters), the search and the parts, then one
-   card per part with a row per case — its helper, its name and number, when it is bad, what to do, « Modifier » — and
-   the change list. A row opens in place to be edited. The helpers' colours are the status colours (tokens.css): door =
-   it blocks (bad), bell = it warns (warn), doctor = it explains (info), off = grey. */
+/* Pilot Automations › Pilot Checks: the three views (« Mes KPI », « Réglages généraux », « Comment Pilotix décide »).
+   « Mes KPI »: the helpers (what each one does, a tap filters), the search and the parts, then one card per part with a
+   row per KPI — its helper, its name and number, its lines (good, bad, then stop or urgent), what to do, « Modifier » —
+   and the change list. A row opens in place to be edited. The helpers' colours are the status colours (tokens.css):
+   door = it blocks (bad), bell = it warns (warn), doctor = it explains (info), off = grey. A line's colour says what it
+   is: good = ok, bad = warn, stop and urgent = bad, a condition in words (« when ») = grey. */
 .pc { container-type: inline-size; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
 /* this step only keeps the rules: said once, at the top */
 .pc-step { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; margin: 0; padding: 11px 14px; border-radius: 12px; background: var(--c-info-tint); color: var(--ink); font-size: 13.5px; line-height: 1.5; }
 .pc-step .bji { width: 18px; height: 18px; margin-top: 1px; color: var(--c-info-ink); }
 .pc-step b { font-weight: 800; }
+
+/* the three views: one strip, a part each, all three in sight on every screen */
+.pc-views { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--ai-shadow); }
+.pc-view { display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font: inherit; font-size: 14px; font-weight: 800; line-height: 1.25; text-align: center; cursor: pointer; transition: background-color .16s ease, color .16s ease; }
+.pc-view .bji { flex: none; width: 17px; height: 17px; }
+.pc-view > span:not(.bji) { min-width: 0; overflow-wrap: anywhere; }
+.pc-view > i { flex: none; font-style: normal; font-size: 12.5px; font-variant-numeric: tabular-nums; opacity: .75; }
+.pc-view:hover { background: var(--raise); color: var(--ink); }
+.pc-view.on { background: var(--navy); color: var(--on-navy); }
+.pc-view:focus-visible { outline: 2px solid var(--ai-dot-2); outline-offset: 2px; }
 
 /* a helper's mark */
 .pc-glyph { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 11px; border: 1px solid transparent; }
@@ -40,7 +52,7 @@
 /* a part: its cases, row by row (the rows reach the card's edges) */
 .card.pc-part { padding: 0; gap: 0; overflow: hidden; }
 .pc-part > .card-head { padding: 14px 16px 12px; }
-.pc-head, .pc-line { display: grid; grid-template-columns: 36px minmax(0, 1.45fr) minmax(0, 1fr) minmax(0, 1.25fr) 108px; column-gap: 16px; align-items: start; }
+.pc-head, .pc-line { display: grid; grid-template-columns: 36px minmax(0, 1.2fr) minmax(0, 1.25fr) minmax(0, 1.25fr) 108px; column-gap: 16px; align-items: start; }
 .pc-head { padding: 0 16px 8px; font-size: 12px; font-weight: 700; color: var(--muted); }
 .pc-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
 .pc-row { border-top: 1px solid var(--line); }
@@ -58,12 +70,25 @@
 .pc-data, .pc-mine { display: inline-flex; align-items: center; gap: 5px; min-width: 0; font-weight: 600; color: var(--muted); }
 .pc-data .bji, .pc-mine .bji { flex: none; width: 13px; height: 13px; }
 .pc-mine { color: var(--ai-tint-ink); }
+/* this KPI can switch an ad off */
+.pc-stops { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 999px; background: var(--c-bad-tint); color: var(--c-bad-ink); font-weight: 800; white-space: nowrap; }
+.pc-stops .bji { flex: none; width: 12px; height: 12px; }
 .pc-row.is-off .pc-what h3, .pc-row.is-off .pc-when b { color: var(--muted); }
 
 .pc-cell { min-width: 0; font-size: 13.5px; line-height: 1.5; }
 .pc-lab { display: none; margin-bottom: 2px; font-size: 12px; font-weight: 700; color: var(--muted); }
-.pc-when b { display: block; font-weight: 800; color: var(--ink); }
-.pc-tail { display: block; color: var(--ink); }
+/* a KPI's lines, one under the other: what the line is (its colour), then its sentence */
+.pc-lns { list-style: none; display: flex; flex-direction: column; gap: 7px; margin: 0; padding: 0; }
+.pc-lns li { display: grid; grid-template-columns: 70px minmax(0, 1fr); column-gap: 8px; align-items: start; }
+.pc-lns li > span { justify-self: start; max-width: 100%; padding: 2px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 800; line-height: 1.45; overflow-wrap: anywhere; }
+.pc-lns li > b { min-width: 0; font-weight: 800; color: var(--ink); overflow-wrap: anywhere; }
+.pc-lns li > em { grid-column: 2; min-width: 0; font-style: normal; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.pc-lns .ln-good > span { background: var(--c-ok-tint); color: var(--c-ok-ink); }
+.pc-lns .ln-bad > span { background: var(--c-warn-tint); color: var(--c-warn-ink); }
+.pc-lns .ln-stop > span, .pc-lns .ln-urgent > span { background: var(--c-bad-tint); color: var(--c-bad-ink); }
+.pc-lns .ln-when > span { background: var(--raise); color: var(--muted); }
+.pc-row.is-off .pc-lns li > b { color: var(--muted); }
+.pc-row.is-off .pc-lns li > span { background: var(--raise); color: var(--muted); }
 .pc-wait { display: flex; align-items: flex-start; gap: 5px; margin-top: 5px; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
 .pc-wait .bji { flex: none; width: 13px; height: 13px; margin-top: 2.5px; }
 .pc-do p { margin: 0; overflow-wrap: anywhere; }
@@ -82,6 +107,14 @@
 .pc-num > span { font-size: 13.5px; font-weight: 600; }
 .pc .pc-num input { flex: none; width: 96px; height: 40px; padding-inline: 8px; text-align: center; font-weight: 800; font-variant-numeric: tabular-nums; }
 .pc-num > i { font-style: normal; font-size: 13.5px; line-height: 1.35; color: var(--muted); }
+/* the lines of a KPI, edited one under the other: the line's name, its number, its unit */
+.pc-nums.pc-stack { flex-direction: column; flex-wrap: nowrap; gap: 8px; }
+.pc-stack .pc-num { display: grid; grid-template-columns: minmax(96px, 132px) 96px minmax(0, 1fr); column-gap: 10px; align-items: center; }
+.pc-stack .pc-num > span { font-weight: 700; }
+.pc-stack .pc-num.ln-good > span { color: var(--c-ok-ink); }
+.pc-stack .pc-num.ln-bad > span { color: var(--c-warn-ink); }
+.pc-stack .pc-num.ln-stop > span, .pc-stack .pc-num.ln-urgent > span { color: var(--c-bad-ink); }
+.pc-prev { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 13.5px; line-height: 1.5; }
 .pc .pc-num.bad input { border-color: var(--c-bad-line); }
 .pc-read { margin: 0; font-size: 13.5px; font-weight: 700; line-height: 1.45; color: var(--ink); }
 .pc-hint { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
@@ -120,10 +153,30 @@
 .pc-lines time { color: var(--muted); font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .pc-logempty { margin: 0; max-width: 70ch; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
 
-/* tablets and narrow computers: the name on its line, « bad when » and « what to do » side by side under it */
+/* « Réglages généraux »: one card per group, a row per number — what it is and why, then its field */
+.pc-set { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.pc-setlead { margin: 0; max-width: 80ch; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.pc-setrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 280px); column-gap: 24px; align-items: start; padding: 14px 16px; border-top: 1px solid var(--line); }
+.pc-setrow:first-child { border-top: 0; }
+/* its name and help keep their own place in this grid, whatever the screen (a KPI row moves its name around) */
+.pc-setrow .pc-what { grid-column: auto; grid-row: auto; }
+.pc-setrow h3 label { cursor: pointer; }
+.pc-setform { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.pc-setbtns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+
+/* « Comment Pilotix décide »: the ideas, numbered */
+.card.pc-how { gap: 0; }
+.pc-how .pc-setlead { margin-bottom: 6px; }
+.pc-howl { list-style: none; margin: 0; padding: 0; }
+.pc-howl li { display: grid; grid-template-columns: 30px minmax(0, 1fr); column-gap: 12px; align-items: start; padding: 11px 0; border-top: 1px solid var(--line); }
+.pc-howl li:first-child { border-top: 0; }
+.pc-howl li > span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; background: var(--ai-tint); color: var(--ai-tint-ink); font-size: 13.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pc-howl p { margin: 0; padding-top: 4px; max-width: 78ch; font-size: 14.5px; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere; }
+
+/* tablets and narrow computers: the name on its line, its lines and « what to do » side by side under it */
 @container (max-width: 979px) {
   .pc-head { display: none; }
-  .pc-line { grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1.2fr) auto; row-gap: 12px; }
+  .pc-line { grid-template-columns: 36px minmax(0, 1.15fr) minmax(0, 1fr) auto; row-gap: 12px; }
   .pc-what { grid-column: 2 / 4; }
   .pc-edit { grid-column: 4; grid-row: 1; }
   .pc-when { grid-column: 2; }
@@ -136,6 +189,7 @@
   .pc-keyb { padding: 12px 14px; border-inline-start: 0; border-top: 1px solid var(--line); }
   .pc-keyb:first-child { border-top: 0; }
   .pc-edgrid { grid-template-columns: minmax(0, 1fr); }
+  .pc-setrow { grid-template-columns: minmax(0, 1fr); row-gap: 10px; }
 }
 /* phones: everything in one column; « Modifier » is its pencil */
 @container (max-width: 599px) {
@@ -152,5 +206,12 @@
   .pc-edfoot .pc-reset { flex: 1 1 100%; order: 3; margin: 0; }
   .pc-lines li { grid-template-columns: 28px minmax(0, 1fr); }
   .pc-lines time { grid-column: 2; margin-top: -4px; white-space: normal; }
+  /* the three views stay side by side: the mark over its name */
+  .pc-view { flex-direction: column; gap: 4px; padding: 8px 6px; font-size: 12.5px; }
+  .pc-view > i { display: none; }
+  .pc-setrow { padding: 14px; }
+  .pc-setbtns { width: 100%; }
+  .pc-setbtns .btn { flex: 1 1 0; }
+  .pc-stack .pc-num { grid-template-columns: minmax(0, 1fr) 96px auto; }
 }
-@media (prefers-reduced-motion: reduce) { .pc-keyb, .pc-level { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .pc-keyb, .pc-level, .pc-view { transition: none; } }

@@ -1,6 +1,6 @@
 {
   "title": "Pilot Checks",
-  "lead": "The cases of your table, one by one. You choose when it is bad, what to do, and which helper watches it.",
+  "lead": "All your ad KPIs, one by one: the number, when it is good, bad or to stop, and what to do. You can set everything.",
   "step": {
     "title": "Step 1: your rules",
     "text": "Here you set the rules. Pilotix does not use them yet: it does not block, ring or judge with them. That comes in the next steps."
@@ -12,14 +12,14 @@
     "door": "Door"
   },
   "levelHelp": {
-    "off": "Pilotix does not look at this case.",
-    "doctor": "It happened: Pilotix names the case, with its numbers and what to do.",
+    "off": "Pilotix does not look at this KPI.",
+    "doctor": "It happened: Pilotix names the KPI, with its numbers and what to do.",
     "bell": "It rings early, before money is lost.",
     "door": "The mistake can't happen: the button stays locked."
   },
-  "cases_one": "{{count}} case",
-  "cases_other": "{{count}} cases",
-  "cases": "{{count}} cases",
+  "cases_one": "{{count}} KPI",
+  "cases_other": "{{count}} KPIs",
+  "cases": "{{count}} KPIs",
   "door": {
     "price": "when a price or a cost is saved",
     "ad": "when an ad is launched",
@@ -34,7 +34,9 @@
     "landing": "Landing page",
     "trust": "Page trust",
     "meta": "Meta",
-    "team": "Team"
+    "team": "Team",
+    "money": "Money",
+    "leads": "Leads and parcels"
   },
   "data": {
     "ready": "Pilotix has the data",
@@ -50,7 +52,7 @@
     "toAdd": "To add",
     "unverified": "To check"
   },
-  "dataSum": "Today Pilotix has the data for {{ready}} of the {{total}} cases. {{toAdd}} need something added, {{unverified}} are to check.",
+  "dataSum": "Today Pilotix has the data for {{ready}} of the {{total}} KPIs. {{toAdd}} need something added, {{unverified}} are to check.",
   "dataFilter": "Data",
   "unit": {
     "pct": "%",
@@ -60,7 +62,9 @@
     "pieces": "pieces",
     "times": "times",
     "of10": "out of 10",
-    "of3": "out of 3"
+    "of3": "out of 3",
+    "x": "× bid limit",
+    "da": "DA"
   },
   "when": {
     "lt": {
@@ -68,12 +72,15 @@
       "n": "Under {{v}}",
       "pieces": "Under {{v}} pieces per order",
       "of10": "Under {{v}} out of 10",
-      "of3": "Under {{v}} out of 3"
+      "of3": "Under {{v}} out of 3",
+      "da": "Under {{v}} DA",
+      "days": "Under {{v}} days"
     },
     "gt": {
       "pct": "Over {{v}}%",
       "days": "Over {{v}} days",
-      "times": "Over {{v}} times"
+      "times": "Over {{v}} times",
+      "x": "Over {{v}} times the bid limit"
     },
     "gte": {
       "n": "{{v}} or more"
@@ -95,18 +102,9 @@
     "comments_one": "{{v}} comment",
     "comments_other": "{{v}} comments",
     "comments": "{{v}} comments",
-    "orders_one": "{{v}} order from this video",
-    "orders_other": "{{v}} orders from this video",
-    "orders": "{{v}} orders from this video",
-    "parcels_one": "{{v}} finished parcel from this video",
-    "parcels_other": "{{v}} finished parcels from this video",
-    "parcels": "{{v}} finished parcels from this video",
     "weeks_one": "{{v}} week of life",
     "weeks_other": "{{v}} weeks of life",
     "weeks": "{{v}} weeks of life",
-    "days_one": "{{v}} full day with the bid cap on",
-    "days_other": "{{v}} full days with the bid cap on",
-    "days": "{{v}} full days with the bid cap on",
     "videos_one": "{{v}} video with enough data",
     "videos_other": "{{v}} videos with enough data",
     "videos": "{{v}} videos with enough data",
@@ -115,45 +113,119 @@
     "cancelled": "{{v}} cancelled orders",
     "unconfirmed_one": "{{v}} order not confirmed",
     "unconfirmed_other": "{{v}} orders not confirmed",
-    "unconfirmed": "{{v}} orders not confirmed"
+    "unconfirmed": "{{v}} orders not confirmed",
+    "confirmed_one": "{{v}} confirmed order",
+    "confirmed_other": "{{v}} confirmed orders",
+    "confirmed": "{{v}} confirmed orders",
+    "delivered_one": "{{v}} delivered order",
+    "delivered_other": "{{v}} delivered orders",
+    "delivered": "{{v}} delivered orders",
+    "leads_one": "{{v}} lead",
+    "leads_other": "{{v}} leads",
+    "leads": "{{v}} leads",
+    "realleads_one": "{{v}} real lead",
+    "realleads_other": "{{v}} real leads",
+    "realleads": "{{v}} real leads",
+    "products_one": "{{v}} product tested",
+    "products_other": "{{v}} products tested",
+    "products": "{{v}} products tested",
+    "views_one": "{{v}} page view",
+    "views_other": "{{v}} page views",
+    "views": "{{v}} page views",
+    "clicks_one": "{{v}} link click",
+    "clicks_other": "{{v}} link clicks",
+    "clicks": "{{v}} link clicks",
+    "forms_one": "{{v}} form",
+    "forms_other": "{{v}} forms",
+    "forms": "{{v}} forms",
+    "units_one": "{{v}} piece bought",
+    "units_other": "{{v}} pieces bought",
+    "units": "{{v}} pieces bought",
+    "messages_one": "{{v}} message",
+    "messages_other": "{{v}} messages",
+    "messages": "{{v}} messages",
+    "customers_one": "{{v}} customer",
+    "customers_other": "{{v}} customers",
+    "customers": "{{v}} customers",
+    "calls_one": "{{v}} called lead",
+    "calls_other": "{{v}} called leads",
+    "calls": "{{v}} called leads",
+    "unreachable_one": "{{v}} unreachable order",
+    "unreachable_other": "{{v}} unreachable orders",
+    "unreachable": "{{v}} unreachable orders",
+    "orders_one": "{{v}} order",
+    "orders_other": "{{v}} orders",
+    "orders": "{{v}} orders",
+    "parcels_one": "{{v}} finished parcel",
+    "parcels_other": "{{v}} finished parcels",
+    "parcels": "{{v}} finished parcels",
+    "days_one": "{{v}} full day",
+    "days_other": "{{v}} full days",
+    "days": "{{v}} full days",
+    "decided_one": "{{v}} parcel delivered or refused",
+    "decided_other": "{{v}} parcels delivered or refused",
+    "decided": "{{v}} parcels delivered or refused",
+    "shipping_one": "{{v}} parcel out for over 3 days",
+    "shipping_other": "{{v}} parcels out for over 3 days",
+    "shipping": "{{v}} parcels out for over 3 days",
+    "returned_one": "{{v}} returned parcel",
+    "returned_other": "{{v}} returned parcels",
+    "returned": "{{v}} returned parcels"
   },
   "waitUnit": {
     "shown": "times shown",
     "views3s": "views of 3 seconds",
     "comments": "comments",
-    "orders": "orders from this video",
-    "parcels": "finished parcels from this video",
+    "orders": "orders",
+    "parcels": "finished parcels",
     "weeks": "weeks of life",
-    "days": "full days with the bid cap on",
+    "days": "full days",
     "videos": "videos with enough data",
     "cancelled": "cancelled orders",
-    "unconfirmed": "orders not confirmed"
+    "unconfirmed": "orders not confirmed",
+    "confirmed": "confirmed orders",
+    "delivered": "delivered orders",
+    "leads": "leads",
+    "realleads": "real leads",
+    "products": "products tested",
+    "views": "page views",
+    "clicks": "link clicks",
+    "forms": "forms",
+    "units": "pieces bought",
+    "messages": "messages",
+    "customers": "customers",
+    "calls": "called leads",
+    "unreachable": "unreachable orders",
+    "decided": "parcels delivered or refused",
+    "shipping": "parcels out for over 3 days",
+    "returned": "returned parcels"
   },
   "f": {
     "number": "The number",
     "when": "Bad when",
     "do": "What to do",
     "also": "Also fix",
-    "wait": "Waits for {{what}} before judging"
+    "wait": "Waits for {{what}} before judging",
+    "lines": "Good or bad"
   },
   "changed": "Changed by you",
   "edit": "Edit",
   "editOf": "Edit “{{name}}”",
   "filterLevel": "Helper",
-  "search": "Search a case",
-  "none": "No case matches.",
+  "search": "Search a KPI",
+  "none": "No KPI matches.",
   "clear": "Show everything",
   "ed": {
     "limit": "Bad when",
     "low": "Under",
     "high": "Or over",
-    "fixed": "This case has no number to set.",
+    "fixed": "This KPI has no number to set.",
     "start": "At the start: {{v}}",
     "do": "What to do",
     "also": "Other part to fix",
     "own": "Empty: Pilotix's own words come back.",
     "level": "Which helper watches it",
-    "noDoor": "This case has no door: no button can be locked for it.",
+    "noDoor": "This KPI has no door: no button can be locked for it.",
     "wait": "Wait before judging (« en apprentissage »)",
     "save": "Save",
     "cancel": "Cancel",
@@ -161,10 +233,18 @@
     "saved": "Saved",
     "resetDone": "Back to the starting values",
     "nothing": "Nothing changed",
-    "history": "Changes on this case",
+    "history": "Changes on this KPI",
     "badNumber": "Type a number between {{min}} and {{max}}.",
     "badOrder": "The first number must be smaller than the second.",
-    "badWait": "Type a whole number, 1 or more."
+    "badWait": "Type a whole number, 1 or more.",
+    "good": "Good when",
+    "second": {
+      "stop": "Stop when",
+      "urgent": "Urgent when"
+    },
+    "proofNote": "This stop waits until the ad has the age you set and Pilotix is sure (see General settings).",
+    "badLinesUp": "The numbers must go up: good, then bad, then stop or urgent.",
+    "badLinesDown": "The numbers must go down: good, then bad, then stop or urgent."
   },
   "log": {
     "title": "Last changes",
@@ -176,17 +256,21 @@
       "wait": "wait",
       "action": "what to do",
       "other": "other part",
-      "reset": "back to the start"
+      "reset": "back to the start",
+      "g": "“good” line",
+      "s": "second line"
     },
     "own": "Pilotix's words",
     "line": "{{field}}: {{old}} → {{new}}",
-    "someone": "Someone"
+    "someone": "Someone",
+    "setting": "General setting",
+    "unset": "not filled in"
   },
   "close": "Close",
   "keyLabel": "The helpers",
-  "shownOf": "{{shown}} of {{total}} cases",
+  "shownOf": "{{shown}} of {{total}} KPIs",
   "head": {
-    "case": "Case"
+    "case": "KPI"
   },
   "val": {
     "pct": "{{v}}%",
@@ -196,9 +280,77 @@
     "pieces": "{{v}} pieces",
     "times": "{{v}} times",
     "of10": "{{v}} out of 10",
-    "of3": "{{v}} out of 3"
+    "of3": "{{v}} out of 3",
+    "x": "{{v}} × bid limit",
+    "da": "{{v}} DA"
   },
   "c": {
+    "D1": {
+      "name": "Profit kept",
+      "kpi": "Ad cost of a confirmed order ÷ the product’s bid limit",
+      "tail": "on the ad set’s total",
+      "do": "Good: the budget goes up one step if the ad set spends almost everything. Average: nothing moves. Bad: the budget goes down one step. Stop: the ad is switched off, only when Pilotix is sure.",
+      "also": "Offer: if the bid limit is lower than your cheapest cost, the margin is too thin (price, supplier, packs)"
+    },
+    "D7": {
+      "name": "Account brake",
+      "kpi": "Ad cost of a confirmed order on all your SCALE ads ÷ what their bid limits allow (tests are not counted)",
+      "tail": "{{brakeDays}} in a row",
+      "do": "No new product is tested while it lasts. Ads already running keep running. The brake lifts the first day back to normal."
+    },
+    "D2": {
+      "name": "Cost of a delivered order",
+      "kpi": "Ad spend ÷ delivered orders, compared with the bid limit",
+      "do": "Read it with “Profit kept”. If that one is good and this one is bad, the problem is the parcels (returns, refusals), not the ad."
+    },
+    "D3": {
+      "name": "Cost of a lead",
+      "kpi": "Ad spend ÷ leads (forms sent), compared with the bid limit",
+      "do": "An early signal during tests. It never stops anything: “Profit kept” decides."
+    },
+    "D4": {
+      "name": "Net profit of the month",
+      "kpi": "Cash collected − products − team − returns − ads − rent and salaries (in DA)",
+      "do": "Under 0: no new product is tested. If it falls 10% two months in a row: find the cause before adding products."
+    },
+    "D5": {
+      "name": "Cost of a return",
+      "kpi": "Return fees paid to the courier ÷ returned parcels",
+      "when": "Every month, from 30 returned parcels",
+      "do": "Pilotix updates the return cost used in the bid limit. Nothing to do."
+    },
+    "D6": {
+      "name": "Winner rate",
+      "kpi": "Winning products ÷ products tested, over 4 weeks",
+      "do": "Bad: review your product choices and offers before testing more. Stop: no new product is tested, only when Pilotix is sure."
+    },
+    "Q1": {
+      "name": "Ad quality",
+      "kpi": "Real leads ÷ all the leads of this ad (fake numbers, wrong numbers and no answer shown apart)",
+      "do": "Bad: find the reason (fake numbers, wrong audience). Stop: the ad is switched off, only when Pilotix is sure."
+    },
+    "Q2": {
+      "name": "Leads quality",
+      "kpi": "Confirmed orders ÷ real leads of this ad",
+      "do": "Bad: listen to the calls, look at the cancel reasons. Stop: the ad is switched off, only when Pilotix is sure.",
+      "also": "Video: if this ad confirms 10 points less than the product’s other ads, it attracts the curious: a new, more honest video"
+    },
+    "Q3": {
+      "name": "Delivery quality",
+      "kpi": "Parcels delivered or refused at the door ÷ finished parcels of this ad (the rest = fake parcels)",
+      "do": "Bad: check phone and address at confirmation; Suivi calls back the fake parcels. Stop: the ad is switched off, only when Pilotix is sure."
+    },
+    "Q4": {
+      "name": "Delivered rate",
+      "kpi": "Parcels delivered ÷ delivered + refused at the door, for this ad",
+      "do": "Bad: look at the refusal reasons. Stop: the ad is switched off, only when Pilotix is sure.",
+      "also": "Offer: if this ad delivers 10 points less than the product’s other ads, the promise is too big: compare the price said on the call, the page, the fees, the delay, the size"
+    },
+    "O20": {
+      "name": "Stock",
+      "kpi": "Pieces in stock ÷ pieces confirmed per day (average of the last 7 days)",
+      "do": "Bad: reorder 21 days of stock the same day. Stop: no new spend on the product. At 0 pieces its ads are switched off until stock is back."
+    },
     "O1": {
       "name": "Nobody wants it",
       "kpi": "Link clicks ÷ people who saw the ad, on each of 3 or more different videos (first 3 seconds normal)",
@@ -208,13 +360,13 @@
     "O2": {
       "name": "Bad quality",
       "kpi": "Delivered orders with a complaint ÷ all delivered orders",
-      "do": "Change supplier, or stop the product."
+      "do": "Bad: fix the problem with the supplier. Stop: the product is stopped, only when Pilotix is sure."
     },
     "O3": {
       "name": "Everyone already has it",
-      "kpi": "Orders this week ÷ orders last week (same ad spend)",
+      "kpi": "Leads per 1,000 DA spent this week ÷ your normal of the 4 weeks before",
       "tail": "for 3 weeks in a row, and a new video fails too",
-      "do": "New model or new version. Lower the budget.",
+      "do": "New model or new version. The budget of its ad sets goes down one step for 2 weeks.",
       "also": "Video: a truly new angle"
     },
     "O4": {
@@ -237,14 +389,8 @@
     "O7": {
       "name": "Too cheap to be trusted",
       "kpi": "Cancelled orders with reason “Is it fake?” ÷ all cancelled orders",
-      "do": "Show proof: real photos, reviews. Raise the price a little.",
+      "do": "Proof first: real photos, reviews. Raise the price only if it goes on 2 weeks after the proof.",
       "also": "Page trust: reviews and real photos"
-    },
-    "O8": {
-      "name": "No margin",
-      "kpi": "Profit after ads ÷ price",
-      "do": "Raise the price, find a cheaper supplier, or sell in packs.",
-      "also": "Video or Meta: if profit before ads is fine, the ads cost too much"
     },
     "O9": {
       "name": "Your costs went up",
@@ -263,13 +409,13 @@
       "do": "A real time limit: offer ends Friday, limited stock.",
       "also": "Landing page: show the time limit"
     },
-    "O12": {
+    "O12a": {
       "name": "Small basket",
       "kpi": "Pieces sold ÷ number of orders",
       "do": "Offer “2 for…”. The agent proposes a second piece.",
       "also": "Team: the agent proposes a second piece"
     },
-    "O13": {
+    "O12b": {
       "name": "The pack doesn't attract",
       "kpi": "Orders that took a pack ÷ all orders",
       "do": "Make the pack saving bigger and show it first.",
@@ -295,9 +441,9 @@
     },
     "O17": {
       "name": "Wrong season",
-      "kpi": "This category's orders this month ÷ last month, next to your other categories",
-      "tail": "while your other categories stay near 100%",
-      "do": "Lower the budget. Push in-season products."
+      "kpi": "Leads per 1,000 DA of this category this month ÷ last month",
+      "tail": "while 2 or more other categories stay between 90% and 110%",
+      "do": "The category’s budget goes down one step this month. Push in-season products."
     },
     "O18": {
       "name": "Competitor dropped price",
@@ -308,14 +454,14 @@
     },
     "O19": {
       "name": "Competitor launched the same",
-      "kpi": "New competitor ads on the same product in 7 days (count)",
+      "kpi": "New pages launching the same model in 7 days (to check every Monday in Meta’s Ad Library)",
       "do": "New angle, stronger proof, faster delivery message.",
       "also": "Page trust: awareness on your values. Video: a new angle"
     },
     "V1": {
       "name": "Weak first 3 seconds",
       "kpi": "People who stay 3 seconds ÷ times shown (same placement)",
-      "do": "Make 3 new first-3-seconds on the same video."
+      "do": "3 new first-3-seconds, each in a new video. A running ad is never edited."
     },
     "V2": {
       "name": "Boring body",
@@ -329,25 +475,20 @@
     },
     "V4": {
       "name": "Entertains but doesn't sell",
-      "kpi": "Link clicks ÷ times shown (first 3 seconds and body normal, the product's other videos click normally)",
-      "do": "Add the price, the offer and “order now” in the video.",
+      "kpi": "People who click the link ÷ people who saw the ad",
+      "tail": "while the start and the middle are normal and another ad of the product gets clicks",
+      "do": "Add the product’s value and “order now”. No price in the video.",
       "also": "Offer: if all videos click low, it's the offer"
     },
-    "V5": {
-      "name": "Not understood",
+    "V5a": {
+      "name": "Not understood (comments)",
       "kpi": "Comments asking “What is it?” ÷ all comments",
       "do": "Show the product working, step by step."
     },
-    "V6": {
-      "name": "Brings curious people",
-      "kpi": "Confirmed ÷ orders from this video, minus the same for the product's other videos",
-      "do": "Less clickbait. Show the real price and the real product."
-    },
-    "V7": {
-      "name": "Promise too big",
-      "kpi": "Delivered ÷ confirmed from this video, minus the same for the product's other videos",
-      "do": "Show the real product and the real size. Remove the exaggeration.",
-      "also": "Landing page: the same honest photos"
+    "V5b": {
+      "name": "Not understood (calls)",
+      "kpi": "Cancelled orders with reason “I didn’t understand” ÷ cancelled orders from this ad",
+      "do": "Show the product working, step by step. With “Not understood (comments)”: one new video only."
     },
     "V8": {
       "name": "Copy of another video",
@@ -358,14 +499,20 @@
     },
     "V9": {
       "name": "Tired video",
-      "kpi": "First-3-seconds number this week ÷ the same in its first week (seen more than 2.5 times)",
+      "kpi": "First-3-seconds number this week ÷ the same in its first week",
+      "tail": "while each person saw it 3 times or more",
       "do": "New first 3 seconds on the same idea. Never edit the winner."
     },
     "V10": {
       "name": "Meta won't show it",
-      "kpi": "Spent in 3 days ÷ budget for 3 days (bid cap on)",
-      "do": "Make a new idea. Don't raise the bid cap.",
-      "also": "Meta: check the bid cap"
+      "kpi": "This ad’s spend ÷ its ad set’s spend, over 3 days",
+      "tail": "while the ad set spends almost all its budget",
+      "do": "In SCALE: one retest only, in the next Tuesday test. In TEST: it is simply “to retest”. No budget or bid change."
+    },
+    "L11": {
+      "name": "The page does not convert",
+      "kpi": "Leads ÷ page views",
+      "do": "Look at the page KPIs just below: one of them explains why."
     },
     "L1": {
       "name": "Page slow",
@@ -397,18 +544,6 @@
       "do": "Show the delivery fees before the form.",
       "also": "Offer: delivery fee"
     },
-    "L6": {
-      "name": "Bad on phones",
-      "kpi": "Orders ÷ visits on phones, divided by orders ÷ visits on computers",
-      "do": "Fix the phone view: button visible, text readable."
-    },
-    "L7": {
-      "name": "No proof",
-      "kpi": "Cancelled orders from this page with reason “No trust” ÷ all cancelled orders from this page",
-      "tail": "on this page, while your other pages are under it",
-      "do": "Add real photos, reviews, a short customer video.",
-      "also": "Page trust: if all pages are over the limit, people don't know the shop"
-    },
     "L8": {
       "name": "Button hidden",
       "kpi": "Visitors who reach the button ÷ visitors",
@@ -419,11 +554,11 @@
       "kpi": "Picture list: number of “yes” out of 10",
       "do": "Redo the “no” lines: real photo, size shown, benefit shown."
     },
-    "L10": {
-      "name": "Abandoned forms not recovered",
-      "kpi": "Abandoned forms turned into orders ÷ abandoned forms",
-      "do": "Call abandoned forms within 30 minutes.",
-      "also": "Team: call speed"
+    "L12": {
+      "name": "Form broken",
+      "kpi": "Pages that do not open + forms sent with no order created (count)",
+      "tail": "in 1 hour, or once if a person confirms it",
+      "do": "Fix it now. If a person confirms the failure, the ads to this page are paused until the fix. Those days do not count against the ad."
     },
     "P1": {
       "name": "The page looks empty",
@@ -441,21 +576,20 @@
       "kpi": "Messages answered within 1 hour ÷ all messages",
       "do": "Answer faster, or let Pilot Message answer."
     },
-    "P4": {
-      "name": "No reviews",
-      "kpi": "Real customer reviews or photos on the page (count)",
-      "do": "Ask each delivered customer for a photo. Post them."
+    "P4a": {
+      "name": "Not enough reviews",
+      "kpi": "New real reviews from delivered customers, over 30 days (count)",
+      "do": "Ask each customer for a review the day after delivery."
+    },
+    "P4b": {
+      "name": "Not enough customer photos",
+      "kpi": "New customer photos or videos posted with their permission, over 30 days (count)",
+      "do": "Ask for a photo after delivery. Post them."
     },
     "P5": {
       "name": "People don't know the shop",
       "kpi": "Cancelled orders with reason “I don't know the shop / no trust” ÷ all cancelled orders",
       "do": "Awareness ads on your values: who you are, the guarantee, real customers."
-    },
-    "P6": {
-      "name": "Values not clear",
-      "kpi": "Your values shown on the page, the ads and the landing page (out of 3)",
-      "do": "Write your 3 values and show them everywhere.",
-      "also": "Landing page and video"
     },
     "P7": {
       "name": "Customers don't come back",
@@ -473,12 +607,17 @@
     "M1": {
       "name": "Tracking broken",
       "kpi": "Landing page orders with an ad ID ÷ all landing page orders",
-      "do": "Paste the link tags on every hand-made ad."
+      "do": "Put the tracking tag (ad.id) on every ad the same day. Without it an ad is not launched."
     },
     "M2": {
       "name": "Meta counts wrong",
       "kpi": "Purchases counted by Meta ÷ orders in Pilotix",
       "do": "Check the pixel and the Conversions API."
+    },
+    "M13": {
+      "name": "Meta matches your customers badly",
+      "kpi": "Meta’s “Event Match Quality” score for Purchase (out of 10)",
+      "do": "Send Meta the phone, first name and wilaya of each order (protected as Meta requires)."
     },
     "M3": {
       "name": "Too few ideas",
@@ -489,13 +628,14 @@
     "M4": {
       "name": "One idea takes everything",
       "kpi": "Spend of the top idea ÷ total spend",
+      "tail": "and no new idea for 7 days",
       "do": "Launch new ideas before the top one gets tired.",
       "also": "Video"
     },
     "M5": {
       "name": "Learning restarted",
-      "kpi": "Edits or budget changes over 20% in 7 days (count)",
-      "do": "No edits for 3 days. Raise budgets by 20% at most."
+      "kpi": "Edits or budget changes over {{budgetStep}} in 7 days (count)",
+      "do": "No edits for {{freezeDays}}. Raise budgets by {{budgetStep}} at most."
     },
     "M6": {
       "name": "Bid cap too high",
@@ -503,9 +643,9 @@
       "do": "Lower the cap to what your confirmation and delivery rates allow."
     },
     "M7": {
-      "name": "Bid cap too low",
-      "kpi": "Spent ÷ budget over 3 days, on all ad sets",
-      "do": "Raise the cap a little, step by step.",
+      "name": "The ad set does not spend",
+      "kpi": "Spent ÷ budget over 3 days (SCALE ad set)",
+      "do": "Bid cap under the bid limit: +10%, once only. Bid cap already at the bid limit: leave it, launch a new idea in the next test.",
       "also": "Video: if only one ad doesn't spend, it's the video"
     },
     "M8": {
@@ -513,17 +653,6 @@
       "kpi": "Cost of 1,000 views this week ÷ your normal cost, on all ads",
       "do": "Check the season and the competitors. Add new ideas.",
       "also": "Offer: market"
-    },
-    "M9": {
-      "name": "Audience tired",
-      "kpi": "Times shown ÷ people reached (how many times each person saw it), with new ideas live",
-      "do": "Widen: more wilayas, fewer limits."
-    },
-    "M10": {
-      "name": "Wrong wilayas",
-      "kpi": "Orders from wilayas with weak delivery ÷ all orders",
-      "do": "Remove those wilayas from the ads.",
-      "also": "Team: courier"
     },
     "M11": {
       "name": "Account trouble",
@@ -535,6 +664,16 @@
       "kpi": "Cost per order after a budget raise ÷ cost per order before",
       "do": "Go back one step. Scale with new ideas, not only budget.",
       "also": "Video"
+    },
+    "T14": {
+      "name": "Calls not logged",
+      "kpi": "Called leads with a logged result ÷ called leads",
+      "do": "Log the result of every call the same day. While it is bad, Pilotix judges neither the agents nor the reasons."
+    },
+    "T13": {
+      "name": "Confirmations drop",
+      "kpi": "Confirmed ÷ real leads today, compared with your normal of the last 7 days",
+      "do": "Look first at call speed and the number of tries, then ad quality, then the form."
     },
     "T1": {
       "name": "Calls too late",
@@ -548,8 +687,8 @@
     },
     "T3": {
       "name": "An agent confirms too little",
-      "kpi": "The agent's confirmed ÷ orders, minus the team's (same products)",
-      "do": "Listen to the calls. Coach with the sales guide."
+      "kpi": "Confirmed ÷ real leads of the agent, minus the other agents’ number (same products)",
+      "do": "Bad: coaching (2 listened calls + sales guide every week). Urgent: listen to 5 calls. Change the agent after 4 weeks with no progress."
     },
     "T4": {
       "name": "An agent confirms too easily",
@@ -562,26 +701,36 @@
       "do": "Propose the second piece or the pack on every call.",
       "also": "Offer: pack"
     },
-    "T6": {
+    "T6a": {
       "name": "Abandoned forms not called",
       "kpi": "Abandoned forms called within 30 minutes ÷ abandoned forms",
       "do": "Put them at the top of the call list."
+    },
+    "T6b": {
+      "name": "Abandoned forms not recovered",
+      "kpi": "Abandoned forms turned into orders ÷ abandoned forms called",
+      "do": "A call script made for abandoned forms."
     },
     "T7": {
       "name": "Slow shipping",
       "kpi": "Confirmed orders shipped within 24 hours ÷ confirmed orders",
       "do": "Prepare and hand over the same day."
     },
-    "T8": {
+    "T8a": {
+      "name": "Slow delivery everywhere",
+      "kpi": "Days between shipping and delivery, all wilayas (half of the parcels arrive sooner)",
+      "do": "Push the courier."
+    },
+    "T8b": {
       "name": "Slow delivery in a wilaya",
       "kpi": "Days from shipped to delivered, per wilaya",
       "do": "Push the courier, or change it for that wilaya."
     },
     "T9": {
-      "name": "Courier weak in a wilaya",
-      "kpi": "Delivered ÷ shipped in that wilaya, minus your normal",
-      "do": "Follow each parcel there. Change courier if it stays low.",
-      "also": "Meta: remove the wilaya from the ads"
+      "name": "Weak wilaya",
+      "kpi": "Delivered parcels ÷ finished parcels in that wilaya",
+      "do": "First the announced delay, then the courier. Stop: the wilaya is removed from the ads, only when Pilotix is sure.",
+      "also": "Team: follow each parcel there"
     },
     "T10": {
       "name": "Parcels not followed",
@@ -590,13 +739,194 @@
     },
     "T11": {
       "name": "Fake orders pass",
-      "kpi": "Orders from a phone that refused before ÷ all orders",
-      "do": "Block after 2 refusals. One extra call before shipping."
+      "kpi": "Orders shipped from a phone that already has 2 refusals or fake parcels (count)",
+      "do": "The 3rd order is blocked before confirmation. One more call before shipping for those with 1 refusal."
     },
     "T12": {
       "name": "Returns come back late",
       "kpi": "Returned parcels back in stock within 10 days ÷ returned parcels",
       "do": "Chase the courier each week."
     }
+  },
+  "view": {
+    "label": "What you want to see",
+    "checks": "My KPIs",
+    "settings": "General settings",
+    "how": "How Pilotix decides"
+  },
+  "every": {
+    "day": "Every day",
+    "week": "Every week",
+    "month": "Every month",
+    "launch": "Before launch"
+  },
+  "line": {
+    "good": "Good",
+    "bad": "Bad",
+    "urgent": "Urgent",
+    "stop": "Stop",
+    "sure": "only when Pilotix is sure",
+    "say": "{{what}}: {{when}}",
+    "when": "When"
+  },
+  "stops": "Can stop",
+  "good": {
+    "lt": {
+      "pct": "{{v}}% or more"
+    },
+    "gt": {
+      "x": "{{v}} times the bid limit or less"
+    }
+  },
+  "set": {
+    "title": "General settings",
+    "lead": "The numbers that belong to no single KPI. Each shop sets its own.",
+    "start": "At the start: {{v}}",
+    "startNone": "At the start: not filled in",
+    "save": "Save",
+    "reset": "Back to the start",
+    "saved": "Saved",
+    "nothing": "Nothing changed",
+    "bad": "Type a whole number between {{min}} and {{max}}.",
+    "changed": "Changed by you",
+    "fill": "To fill in",
+    "unit": {
+      "days": "days",
+      "hours": "hours",
+      "pct": "%",
+      "n": "",
+      "orders": "orders",
+      "da": "DA",
+      "money": "a day"
+    },
+    "val": {
+      "days": "{{v}} days",
+      "hours": "{{v}} hours",
+      "pct": "{{v}}%",
+      "n": "{{v}}",
+      "orders": "{{v}} orders",
+      "da": "{{v}} DA",
+      "money": "{{v}} a day",
+      "days_one": "{{v}} day",
+      "days_other": "{{v}} days",
+      "hours_one": "{{v}} hour",
+      "hours_other": "{{v}} hours",
+      "orders_one": "{{v}} order",
+      "orders_other": "{{v}} orders"
+    },
+    "groups": {
+      "judge": "When an ad is judged",
+      "bid": "The bid limit",
+      "budget": "The budget",
+      "scale": "SCALE",
+      "test": "TEST",
+      "time": "Nothing waits forever",
+      "freeze": "Too many edits",
+      "brake": "Account brake and daily list",
+      "outside": "Outside the KPIs"
+    },
+    "k": {
+      "judgeDays": {
+        "name": "Days before an ad is judged",
+        "help": "Before that, Pilotix never switches an ad off for its results. Zero stock still switches off at once."
+      },
+      "proofPct": {
+        "name": "How sure Pilotix must be before it switches off",
+        "help": "At 5%, it switches off only if there are fewer than 5 chances in 100 that it is bad luck. Higher: it stops faster, and stops more good ads."
+      },
+      "keepGood": {
+        "name": "Share of profit you keep at the bid limit",
+        "help": "The bid limit is what a confirmed order may cost in ads while keeping this share."
+      },
+      "delivered": {
+        "name": "Delivered rate counted at the start",
+        "help": "Used for the bid limit until a product has 30 finished parcels. After that, its real rate."
+      },
+      "returnCost": {
+        "name": "Cost of a returned parcel",
+        "help": "Used in the bid limit. Pilotix updates it every month with your real fees."
+      },
+      "limitMove": {
+        "name": "The bid limit moves only if it changes by at least",
+        "help": "It is recomputed once a week. Under this change it stays the same, so bid caps are not touched for nothing."
+      },
+      "budgetStep": {
+        "name": "One budget step",
+        "help": "How much an ad set’s budget goes up or down at a time."
+      },
+      "budgetCuts": {
+        "name": "Cuts in a row at most",
+        "help": "After that, if the ad set still costs too much, its worst ad is switched off."
+      },
+      "budgetBase": {
+        "name": "Base budget per product",
+        "help": "An ad set’s budget never goes under this amount times its products. In your ad account’s currency."
+      },
+      "groupBand": {
+        "name": "Bid limit gap allowed in a group",
+        "help": "Products share an ad set only if their bid limits are close."
+      },
+      "ownOrders": {
+        "name": "A winner gets its own ad set from",
+        "help": "Confirmed orders in the last 7 days."
+      },
+      "batchWait": {
+        "name": "SCALE entries a winner may wait",
+        "help": "If its ad set stays frozen longer, it gets its own ad set or a retest."
+      },
+      "testAds": {
+        "name": "Ads at most in a test",
+        "help": "Per product, every Tuesday."
+      },
+      "winOrders": {
+        "name": "Confirmed orders to win a test",
+        "help": "With a cost at or under the bid limit."
+      },
+      "pendingHours": {
+        "name": "A lead with no answer becomes “unreachable” after",
+        "help": "After this delay it is no longer “pending”."
+      },
+      "postponeDays": {
+        "name": "A postponed customer waits at most",
+        "help": "It is never counted as a refusal."
+      },
+      "parcelDays": {
+        "name": "A parcel in delivery becomes a fake parcel after",
+        "help": "If it is delivered later, Pilotix corrects it."
+      },
+      "freezeDays": {
+        "name": "Length of the freeze",
+        "help": "When the KPI “Learning restarted” is bad: no edit on that ad set during this time. Stops stay allowed."
+      },
+      "brakeDays": {
+        "name": "Days in a row before the account brake",
+        "help": "For the KPI “Account brake”: if your SCALE ads cost too much all that time, no new product is tested."
+      },
+      "listTop": {
+        "name": "Actions shown in the daily list",
+        "help": "Stops first, then the most important actions."
+      },
+      "awarenessBudget": {
+        "name": "Budget of awareness and catalogue ads",
+        "help": "These ads are outside the KPIs. Fill in your amount; until then Pilotix only shows what they spend."
+      }
+    }
+  },
+  "how": {
+    "title": "How Pilotix decides",
+    "lead": "The 10 ideas behind your KPIs, in simple words.",
+    "l": [
+      "Each product has a bid limit: what a confirmed order may cost in ads.",
+      "An ad is judged on money first, then on its leads and parcels, then on the offer, the page and the video.",
+      "No ad is judged before it has run for {{days}}.",
+      "A stop needs proof: Pilotix switches off only when it is sure it is not bad luck. Few orders: it waits.",
+      "Before proof, a bad number means: fix it, and the ad set’s budget goes down one step.",
+      "When data is missing (no ad tag, calls not logged), Pilotix uses what is still exact and raises no budget.",
+      "Two KPIs that talk about the same thing never both act: one decides, and the most careful wins.",
+      "Stock always wins: at 0 pieces the ads are switched off. A product with no margin is paused.",
+      "TEST: launch on Tuesday, nothing is touched, verdict the next Wednesday: winner, not a winner, or one retest. Winners enter SCALE once a week.",
+      "When no rule decides, Pilotix does nothing on that ad, keeps the stops, and asks you."
+    ],
+    "noWait": "An ad can be judged from its first hour: you set 0 days of waiting."
   }
 }
