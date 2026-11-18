@@ -139,12 +139,17 @@ async function targetOf(ctx: Ctx, objectId: string): Promise<Target> {
   return { level: 'campaign', id: String(c.id), name: String(c.name), status: c.status ?? null, budgetCents: c.daily_budget_cents === null ? null : num(c.daily_budget_cents), currency: String(c.currency ?? 'USD'), marketerId: null, campaignId: null };
 }
 
-/** what all the shop's running ads may spend per day, in dollars (ad set budgets + campaign budgets) */
+/**
+ * what all the shop's running ads may spend per day, in dollars (ad set budgets + campaign budgets). A campaign's
+ * budget counts while one of its ad sets may still spend: every ad set paused or deleted, it spends nothing.
+ */
 export async function shopDailyUsd(db: Db, rate: number | null): Promise<number> {
   const sets = await db.query(`SELECT daily_budget_cents, currency FROM adsets WHERE status = 'ACTIVE' AND daily_budget_cents IS NOT NULL`);
   const camps = await db.query(
     `SELECT c.daily_budget_cents, (SELECT currency FROM adsets WHERE campaign_id = c.id LIMIT 1) AS currency FROM ad_campaigns c
-     WHERE c.status = 'ACTIVE' AND c.daily_budget_cents IS NOT NULL`,
+     WHERE c.status = 'ACTIVE' AND c.daily_budget_cents IS NOT NULL
+       AND (NOT EXISTS (SELECT 1 FROM adsets s WHERE s.campaign_id = c.id)
+            OR EXISTS (SELECT 1 FROM adsets s WHERE s.campaign_id = c.id AND coalesce(s.status, '') NOT IN ('PAUSED','CAMPAIGN_PAUSED','DELETED','ARCHIVED')))`,
   );
   return [...sets, ...camps].reduce((s: number, r: any) => s + (usdOf(num(r.daily_budget_cents), String(r.currency ?? 'USD'), rate) ?? 0), 0);
 }

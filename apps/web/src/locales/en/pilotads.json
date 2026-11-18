@@ -414,6 +414,9 @@
     "waiting_yes": "Waiting for a yes",
     "launching": "Sending",
     "live": "Live",
+    "paused": "Paused",
+    "stopped": "Deleted",
+    "issue": "Problem at Meta",
     "failed": "Failed",
     "refused": "Refused"
   },

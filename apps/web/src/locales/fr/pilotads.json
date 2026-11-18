@@ -414,6 +414,9 @@
     "waiting_yes": "Attend un oui",
     "launching": "En envoi",
     "live": "En ligne",
+    "paused": "En pause",
+    "stopped": "Supprimée",
+    "issue": "Problème chez Meta",
     "failed": "Échec",
     "refused": "Refusé"
   },

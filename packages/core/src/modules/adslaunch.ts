@@ -299,6 +299,27 @@ export const LaunchSpec = z.object({
 export type LaunchSpec = z.infer<typeof LaunchSpec>;
 
 type Status = 'draft' | 'waiting_yes' | 'launching' | 'live' | 'failed' | 'refused';
+
+/** A live launch as Meta has it now: running, paused, deleted, or with a problem at Meta. */
+export type LaunchNow = 'live' | 'paused' | 'stopped' | 'issue';
+const GONE = ['DELETED', 'ARCHIVED'];
+const HELD = ['PAUSED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED'];
+/**
+ * « En ligne » is only what the launch did; what runs now is its campaign and ad sets as Meta has them (read at each
+ * sync, and at once when Pilotix pauses or starts one). Nothing known yet: still « En ligne ».
+ */
+export function launchNow(campaign: string | null, adsets: (string | null)[]): LaunchNow {
+  const c = String(campaign ?? '').toUpperCase();
+  const sets = adsets.filter((s): s is string => !!s).map((s) => s.toUpperCase());
+  if (GONE.includes(c) || (sets.length > 0 && sets.every((s) => GONE.includes(s)))) return 'stopped';
+  if (c === 'PAUSED') return 'paused';
+  if (c === 'WITH_ISSUES') return 'issue';
+  if (sets.some((s) => s === 'ACTIVE' || s === 'IN_PROCESS')) return 'live';
+  if (sets.includes('WITH_ISSUES')) return 'issue';
+  if (sets.length > 0 && sets.every((s) => HELD.includes(s) || GONE.includes(s))) return 'paused';
+  return 'live';
+}
+
 const view = (r: any) => ({
   id: num(r.id),
   mode: String(r.mode) as 'simple' | 'pro',
@@ -309,6 +330,8 @@ const view = (r: any) => ({
   spec: r.spec as LaunchSpec,
   budgetUsd: Number(r.spec?.budgetUsd ?? 0),
   status: String(r.status) as Status,
+  /** a live launch: what Meta does with it now (the badge); null when it is not live */
+  now: r.status === 'live' ? launchNow(r.campaign_status ?? null, r.adset_statuses ?? []) : null,
   step: r.step ?? null,
   error: r.error ?? null,
   campaignId: r.campaign_id ?? null,
@@ -321,8 +344,13 @@ const view = (r: any) => ({
   partnerId: numOrNull(r.partner_id),
   partnerName: r.partner_name ?? null,
 });
+/** a launch with its names, and its campaign and ad sets as Meta has them now */
+const LAUNCH_SQL = `SELECT l.*, p.name AS product_name, u.name AS by_name, a.name AS approved_name, pt.name AS partner_name,
+    c.status AS campaign_status, (SELECT array_agg(s.status) FROM adsets s WHERE s.id = ANY(l.adset_ids)) AS adset_statuses
+  FROM ad_launches l LEFT JOIN products p ON p.id = l.product_id LEFT JOIN profiles u ON u.id = l.by_user
+  LEFT JOIN profiles a ON a.id = l.approved_by LEFT JOIN ad_partners pt ON pt.id = l.partner_id LEFT JOIN ad_campaigns c ON c.id = l.campaign_id`;
 async function launchRow(db: Db, id: number) {
-  const r = (await db.query(`SELECT l.*, p.name AS product_name, u.name AS by_name, a.name AS approved_name, pt.name AS partner_name FROM ad_launches l LEFT JOIN products p ON p.id = l.product_id LEFT JOIN profiles u ON u.id = l.by_user LEFT JOIN profiles a ON a.id = l.approved_by LEFT JOIN ad_partners pt ON pt.id = l.partner_id WHERE l.id = $1`, [id]))[0];
+  const r = (await db.query(`${LAUNCH_SQL} WHERE l.id = $1`, [id]))[0];
   if (!r) throw notFound('Lancement introuvable');
   return r;
 }
@@ -646,12 +674,7 @@ export const adsLaunchProcs = {
   'ads.launch.copy': proc(['marketer'], z.object({ productId: Id, goal: z.enum(GOALS), lang: Lang, idea: z.string().max(400).default('') }), (ctx, i) => writeCopy(ctx, i)),
   'ads.launch.save': proc(['marketer'], z.object({ id: Id.nullable().optional(), clientId: z.string().max(64).nullable().optional(), mode: z.enum(['simple', 'pro']), spec: LaunchSpec }), (ctx, i) => saveLaunch(ctx, i)),
   'ads.launch.list': proc(['marketer'], z.object({}), async (ctx) => {
-    const rows = await ctx.db.query(
-      `SELECT l.*, p.name AS product_name, u.name AS by_name, a.name AS approved_name, pt.name AS partner_name FROM ad_launches l LEFT JOIN products p ON p.id = l.product_id LEFT JOIN profiles u ON u.id = l.by_user
-       LEFT JOIN profiles a ON a.id = l.approved_by LEFT JOIN ad_partners pt ON pt.id = l.partner_id
-       WHERE ($1::bigint IS NULL OR l.by_user = $1) ORDER BY l.id DESC LIMIT 60`,
-      [isOwner(ctx) ? null : me(ctx)],
-    );
+    const rows = await ctx.db.query(`${LAUNCH_SQL} WHERE ($1::bigint IS NULL OR l.by_user = $1) ORDER BY l.id DESC LIMIT 60`, [isOwner(ctx) ? null : me(ctx)]);
     return { owner: isOwner(ctx), launches: rows.map(view) };
   }),
   'ads.launch.get': proc(['marketer'], z.object({ id: Id }), async (ctx, i) => {

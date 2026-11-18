@@ -1078,7 +1078,7 @@ function Launches({ onOpen }: { onOpen: (l: L) => void }) {
   const yes = useAction('ads.launch.approve', { success: (r) => (r.status === 'live' ? t('pilotads.done.live') : t('pilotads.wait.refused')) });
   const remove = useAction('ads.launch.remove', { success: t('pilotads.launch.removed') });
   const rows = q.data?.launches ?? [];
-  const tone = useMemo(() => ({ live: 'ok', draft: 'off', waiting_yes: 'mid', launching: 'mid', failed: 'bad', refused: 'bad' }) as Record<string, string>, []);
+  const tone = useMemo(() => ({ live: 'ok', paused: 'mid', stopped: 'off', issue: 'bad', draft: 'off', waiting_yes: 'mid', launching: 'mid', failed: 'bad', refused: 'bad' }) as Record<string, string>, []);
   if (!rows.length) return null;
   return (
     <section className="card pa-launches">
@@ -1100,7 +1100,8 @@ function Launches({ onOpen }: { onOpen: (l: L) => void }) {
               </span>
               {l.error && <span className="pa-err">{l.error}</span>}
             </div>
-            <span className={`badge t-${tone[l.status] ?? 'off'}`}>{t(`pilotads.lst.${l.status}`)}</span>
+            {/* a live launch: what Meta does with it now (paused in Mes pubs or in Meta: « En pause ») */}
+            <span className={`badge t-${tone[l.now ?? l.status] ?? 'off'}`}>{t(`pilotads.lst.${l.now ?? l.status}`)}</span>
             <span className="pa-l-btns">
               {(l.status === 'draft' || l.status === 'failed') && (
                 <button type="button" className="btn small" onClick={() => onOpen(l)}>

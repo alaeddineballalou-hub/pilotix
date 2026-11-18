@@ -90,18 +90,32 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
       [level, id, name, op, JSON.stringify(before), JSON.stringify(after), source, rule, status, why, by, iso(ago), status === 'done' ? iso(ago) : null],
     );
 
-  // the launches: two live (made with « Lancer une pub »), a marketer's waiting for the owner, a draft
+  // the launches: three live (made with « Lancer une pub »; the marketer's « avis mamans » paused since, so « En pause »),
+  // a marketer's waiting for the owner, a draft
   const spec = (goal: string, name: string, productId: number | null, usd: number, extra: object = {}) =>
     JSON.stringify({ goal, productId, name, mediaIds: [], text: { primary: '', headline: '' }, channels: ['messenger'], welcome: null, phone: null, formId: null, newForm: null, postId: null, budgetUsd: usd, budgetLevel: 'adset', split: 'one', excludeWilayas: [], ageMin: 18, ageMax: 65, genders: [], advantageAudience: true, useAudiences: true, bid: null, start: null, pixelId: null, ...extra });
   const L = await db.query(
     `INSERT INTO ad_launches (mode, goal, product_id, name, spec, budget_cents, status, step, campaign_id, adset_ids, by_user, approved_by, created_at, updated_at, live_at) VALUES
       ('simple','sales',$1,'Poussette — Algérie 25-45',$3,2200,'live','done','120330001','{120200001}',$5,NULL,$7,$7,$7),
-      ('pro','messages',$2,'Ensemble bébé — messages',$4,1000,'live','done','120330005','{120200009}',$5,$6,$8,$8,$8)
+      ('pro','messages',$2,'Ensemble bébé — messages',$4,1000,'live','done','120330005','{120200009}',$5,$6,$8,$8,$8),
+      ('simple','sales',$1,'Poussette — avis mamans',$9,900,'live','done','120330001','{120200006}',$5,NULL,$10,$10,$10)
      RETURNING id`,
-    [pous || null, ens || null, spec('sales', 'Poussette — Algérie 25-45', pous || null, 22), spec('messages', 'Ensemble bébé — messages', ens || null, 10, { channels: ['messenger', 'whatsapp'] }), users.marketer, users.vendeur, iso(28 * D), iso(11 * D)],
+    [
+      pous || null,
+      ens || null,
+      spec('sales', 'Poussette — Algérie 25-45', pous || null, 22),
+      spec('messages', 'Ensemble bébé — messages', ens || null, 10, { channels: ['messenger', 'whatsapp'] }),
+      users.marketer,
+      users.vendeur,
+      iso(28 * D),
+      iso(11 * D),
+      spec('sales', 'Poussette — avis mamans', pous || null, 9),
+      iso(6 * D),
+    ],
   );
   await db.query(`UPDATE adsets SET launch_id = $1 WHERE id = '120200001'`, [num(L[0].id)]);
   await db.query(`UPDATE adsets SET launch_id = $1 WHERE id = '120200009'`, [num(L[1].id)]);
+  await db.query(`UPDATE adsets SET launch_id = $1 WHERE id = '120200006'`, [num(L[2].id)]);
   await db.query(`UPDATE ad_campaigns SET launch_id = $1 WHERE id = '120330001'`, [num(L[0].id)]);
   await db.query(`UPDATE ad_campaigns SET launch_id = $1 WHERE id = '120330005'`, [num(L[1].id)]);
   await db.query(

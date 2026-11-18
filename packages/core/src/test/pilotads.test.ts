@@ -10,7 +10,7 @@ import { AppError } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { setRaw } from '../modules/admin';
 import { chatAdOf } from '../modules/dellal';
-import { demoCopy, regionMatches } from '../modules/adslaunch';
+import { demoCopy, launchNow, regionMatches } from '../modules/adslaunch';
 import { FAKE_EVENTS } from '../modules/landingquery';
 import { checkChange, DEFAULT_GUARD, EVENT_AUDIENCE_DAYS, EVENT_AUDIENCES, launchProblems, metaPhone, metaPlan, suggestFor, type AdsetStats, type LaunchInput } from '../modules/pilotads';
 import { EMAILS, setup } from './harness';
@@ -115,6 +115,21 @@ test('nothing goes to Meta while something is missing', () => {
   assert.match(launchProblems(base({ goal: 'calls', phone: '0661223344' })).join(' '), /\+213/);
   assert.match(launchProblems(base({ goal: 'messages', channels: [] })).join(' '), /Messenger/);
   assert.match(launchProblems(base({ media: [{ kind: 'video', mediaId: 3, url: null, name: 'V' }] })).join(' '), /pas encore prête/);
+});
+
+test('« Mes lancements »: a live launch shows what Meta does with it now', () => {
+  assert.equal(launchNow(null, []), 'live', 'nothing read yet: as it was launched');
+  assert.equal(launchNow('ACTIVE', ['ACTIVE']), 'live');
+  assert.equal(launchNow('ACTIVE', ['PAUSED']), 'paused', 'its ad set paused (Mes pubs, Pilote auto or Meta)');
+  assert.equal(launchNow('PAUSED', ['ACTIVE']), 'paused', 'its campaign paused, its ad sets not read again yet');
+  assert.equal(launchNow('ACTIVE', ['CAMPAIGN_PAUSED']), 'paused');
+  assert.equal(launchNow('ACTIVE', ['PAUSED', 'ACTIVE']), 'live', 'one of its ad sets still runs');
+  assert.equal(launchNow('ACTIVE', ['PAUSED', 'DELETED']), 'paused');
+  assert.equal(launchNow('DELETED', ['ACTIVE']), 'stopped', 'deleted at Meta');
+  assert.equal(launchNow('ACTIVE', ['ARCHIVED', 'DELETED']), 'stopped');
+  assert.equal(launchNow('WITH_ISSUES', ['ACTIVE']), 'issue');
+  assert.equal(launchNow('ACTIVE', ['WITH_ISSUES']), 'issue');
+  assert.equal(launchNow('ACTIVE', [null, 'IN_PROCESS']), 'live');
 });
 
 test('the owner’s limits: pausing always, a big raise waits for the owner, « Tout arrêter » holds', () => {
@@ -253,6 +268,28 @@ test('the launcher in the demo: products with what an order may cost, words, a l
   assert.equal((await db.query(`SELECT for_ads FROM cm_media WHERE id = $1`, [photo.id]))[0].for_ads, true);
   assert.ok((await db.query(`SELECT 1 FROM ad_actions WHERE op = 'launch' AND object_id = $1`, [live.campaignId])).length);
   await assert.rejects(call('ads.launch.remove', await owner(), { id: d.id }), /pause/);
+});
+
+test('a launch paused since: « En pause » in Mes lancements, and its money no longer counted as running', async () => {
+  const list = async (): Promise<any[]> => ((await call('ads.launch.list', await owner(), {})) as any).launches;
+  const running = async (): Promise<number> => ((await call('ads.ctl.state', await owner(), {})) as any).shopDailyUsd;
+  const seeded = (await list()).find((l) => l.name === 'Poussette — avis mamans');
+  assert.equal(seeded?.status, 'live');
+  assert.equal(seeded?.now, 'paused', 'the demo: the marketer paused its ad set');
+  const l = (await list()).find((x) => x.status === 'live' && x.name.endsWith(' — test'));
+  assert.ok(l, 'the launch of the test above');
+  assert.equal(l.now, 'live');
+  const before = await running();
+  assert.equal((await call('ads.ctl.act', await owner(), { objectId: l.adsetIds[0], op: 'pause' }) as any).status, 'done');
+  assert.equal((await list()).find((x) => x.id === l.id)?.now, 'paused', 'paused from Pilotix: at once');
+  assert.ok(Math.abs((await running()) - (before - 10)) < 0.01, 'its campaign holds the 10 $, and nothing in it can spend');
+  assert.equal((await call('ads.ctl.act', await owner(), { objectId: l.adsetIds[0], op: 'resume' }) as any).status, 'done');
+  assert.equal((await list()).find((x) => x.id === l.id)?.now, 'live');
+  assert.ok(Math.abs((await running()) - before) < 0.01);
+  // deleted in Meta, read at the next sync
+  await db.query(`UPDATE ad_campaigns SET status = 'DELETED' WHERE id = $1`, [l.campaignId]);
+  assert.equal((await list()).find((x) => x.id === l.id)?.now, 'stopped');
+  await db.query(`UPDATE ad_campaigns SET status = 'ACTIVE' WHERE id = $1`, [l.campaignId]);
 });
 
 test('a marketer’s launch waits for the owner when the owner wants it, then goes live', async () => {
