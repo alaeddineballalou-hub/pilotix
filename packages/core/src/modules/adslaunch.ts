@@ -298,6 +298,24 @@ export const LaunchSpec = z.object({
 });
 export type LaunchSpec = z.infer<typeof LaunchSpec>;
 
+/**
+ * What a launch that changed keeps of what Meta already made for it (« meta_ids »). A retry with the same choices goes
+ * on where it stopped and makes nothing twice. Once a choice changed, the campaign, its ad sets, créas and ads are
+ * made again: a campaign made for another goal cannot take the new ad sets (Meta refuses the mix: « You can't use the
+ * selected performance goal with your campaign objective »). The photos and videos already sent to the ad account stay,
+ * and so does the instant form while the goal is still a form with the same questions. `account`: the ad account they
+ * were made in (see go()).
+ */
+export function idsKept(before: unknown, after: LaunchSpec, ids: Record<string, string> | null | undefined): Record<string, string> {
+  const all = ids ?? {};
+  const old = LaunchSpec.safeParse(before ?? {});
+  if (old.success && JSON.stringify(old.data) === JSON.stringify(after)) return { ...all };
+  const kept: Record<string, string> = {};
+  for (const [k, v] of Object.entries(all)) if (k === 'account' || k.startsWith('image:') || k.startsWith('video:')) kept[k] = v;
+  if (all.form && old.success && old.data.goal === 'form' && after.goal === 'form' && JSON.stringify(old.data.newForm) === JSON.stringify(after.newForm)) kept.form = all.form;
+  return kept;
+}
+
 type Status = 'draft' | 'waiting_yes' | 'launching' | 'live' | 'failed' | 'refused';
 const view = (r: any) => ({
   id: num(r.id),
@@ -469,6 +487,9 @@ async function go(ctx: Ctx, id: number, approved = false) {
     }
     await ctx.db.query(`UPDATE ad_launches SET status = 'launching', error = NULL, updated_at = now() WHERE id = $1`, [id]);
     const done: Record<string, string> = { ...(r.meta_ids ?? {}) };
+    // made in another ad account (the boutique's launch account changed since the last try): none of it is usable here
+    if (done.account && done.account !== String(acct.id)) for (const k of Object.keys(done)) delete done[k];
+    done.account = String(acct.id);
     try {
       const spec = LaunchSpec.parse(r.spec);
       // the two lists Meta fills from the pages' events (fake orders, competitors): made now if they are not yet, so
@@ -598,9 +619,12 @@ async function saveLaunch(ctx: Ctx, i: { id?: number | null; clientId?: string |
     const r = await launchRow(ctx.db, i.id);
     mayOpen(ctx, r);
     if (!['draft', 'failed', 'refused'].includes(r.status)) throw bad('Ce lancement est déjà parti : il ne change plus.');
+    // a changed launch makes its campaign again (see idsKept); the same one goes on where it stopped
+    const kept = idsKept(r.spec, LaunchSpec.parse(i.spec), r.meta_ids);
+    const same = Object.keys(kept).length === Object.keys(r.meta_ids ?? {}).length;
     await ctx.db.query(
-      `UPDATE ad_launches SET mode = $2, goal = $3, product_id = $4, name = $5, spec = $6, budget_cents = $7, partner_id = $8, partner_content_id = $9, status = 'draft', error = NULL, updated_at = now() WHERE id = $1`,
-      [i.id, i.mode, i.spec.goal, i.spec.productId, i.spec.name, JSON.stringify(i.spec), usdCents, i.spec.partnerId, i.spec.partnerContentId],
+      `UPDATE ad_launches SET mode = $2, goal = $3, product_id = $4, name = $5, spec = $6, budget_cents = $7, partner_id = $8, partner_content_id = $9, meta_ids = $10, step = CASE WHEN $11::boolean THEN step ELSE NULL END, status = 'draft', error = NULL, updated_at = now() WHERE id = $1`,
+      [i.id, i.mode, i.spec.goal, i.spec.productId, i.spec.name, JSON.stringify(i.spec), usdCents, i.spec.partnerId, i.spec.partnerContentId, JSON.stringify(kept), same],
     );
     return view(await launchRow(ctx.db, i.id));
   }

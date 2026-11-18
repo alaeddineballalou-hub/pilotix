@@ -264,8 +264,9 @@ function catalogError(e: any, fallback: string): AppError {
 
 /**
  * The catalog actions (the token and the ad account of the shop):
- *  - 'catalogSetup'  → { catalogId?, name, pixelIds }: the shop's catalog (made in the ad account's business when there is
- *    none) and its pixels linked to it (each visit of a page finds its product)
+ *  - 'catalogSetup'  → { catalogId?, name, pixelIds }: the shop's catalog (when there is none, made in the ad account's
+ *    business, else in the token's own one: see businessesOf) and its pixels linked to it (each visit of a page finds
+ *    its product)
  *  - 'catalogBatch'  → { catalogId, requests }: up to 5,000 lines sent at once; Meta's first checks come back at once
  *  - 'catalogStatus' → { catalogId, handle }: how a batch ended, line by line
  *  - 'catalogSet'    → { catalogId, setId?, name, ids }: a list as a product set (made, or changed)
@@ -278,14 +279,27 @@ async function runCatalog(action: string, args: any, token: string, acts: string
     let businessId: string | null = null;
     let businessName: string | null = null;
     if (!catalogId) {
-      const acc = await graph(acts[0], { fields: 'business{id,name}' }, token).catch((e) => {
-        throw e instanceof AppError ? e : catalogError(null, 'compte pub illisible');
-      });
-      if (!acc?.business?.id) throw new AppError('bad_request', 'Votre compte pub n’est pas dans un portefeuille business Meta : ajoutez-le dans Meta Business Suite, puis réessayez.');
-      businessId = String(acc.business.id);
-      businessName = String(acc.business.name ?? '');
-      const made = await graphWrite(`${enc(businessId)}/owned_product_catalogs`, { name: String(args?.name ?? 'Pilotix').slice(0, 100) }, token);
-      catalogId = String(made.id);
+      // made in the first business that takes it (see businessesOf): the ad account's, else the token's own
+      const notes: BizNotes = {};
+      let refused: unknown = null;
+      for await (const b of businessesOf(token, acts, null, notes)) {
+        try {
+          const made = await graphWrite(`${enc(b.id)}/owned_product_catalogs`, { name: String(args?.name ?? 'Pilotix').slice(0, 100) }, token);
+          catalogId = String(made.id);
+          businessId = b.id;
+          businessName = b.name;
+          break;
+        } catch (e) {
+          // Meta limiting the calls is not a « no »: said as it is
+          if (e instanceof AppError && e.code === 'conflict') throw e;
+          refused ??= e;
+        }
+      }
+      if (!catalogId) {
+        if (refused) throw refused instanceof AppError ? refused : catalogError(null, 'catalogue refusé');
+        if (notes.error instanceof AppError) throw notes.error;
+        throw new AppError('bad_request', 'Votre compte pub n’est pas dans un portefeuille business Meta : ajoutez-le dans Meta Business Suite, puis réessayez.');
+      }
     }
     const pixels = (Array.isArray(args?.pixelIds) ? args.pixelIds : []).map(String).filter((x: string) => /^\d{5,20}$/.test(x));
     let pixelsLinked = false;
@@ -371,17 +385,42 @@ async function pall(path: string, token: string, params: Record<string, string>,
   }
   return out;
 }
-/** The business that holds the shop's ad account (else its Page): the Advertisable Content API asks through it. */
-async function businessOf(token: string, acts: string[], pageId: string | null): Promise<string | null> {
+type Biz = { id: string; name: string };
+/** what businessesOf could not read (the first refusal), for the message when no business is found at all */
+type BizNotes = { error?: unknown };
+/**
+ * The businesses Pilotix may ask Meta through for the shop (its catalog, the creators' posts), one after the other and
+ * each once: the one that holds the shop's ad accounts first (as before), then the Page's (`pageId`), then the token's
+ * own ones (`me/businesses`; a system user's is the business it was made in). A token made in the agency's business
+ * reaches an ad account another business holds (shared to the agency as a partner), but Meta refuses it that other
+ * business's catalogs and creators' posts: the caller then goes on to the next one. Read lazily: a business is only
+ * looked for when the one before was refused.
+ */
+async function* businessesOf(token: string, acts: string[], pageId: string | null, notes: BizNotes): AsyncGenerator<Biz> {
+  const seen = new Set<string>();
+  const one = (b: any): Biz | null => {
+    const id = String(b?.id ?? '');
+    if (!/^\d{5,25}$/.test(id) || seen.has(id)) return null;
+    seen.add(id);
+    return { id, name: String(b?.name ?? '') };
+  };
+  const read = (path: string, params: Record<string, string>) =>
+    graph(path, params, token).catch((e) => {
+      notes.error ??= e;
+      return null;
+    });
   for (const act of acts.slice(0, 3)) {
-    const r = await pcall(act, token, { params: { fields: 'business{id}' } }).catch(() => null);
-    if (r?.business?.id) return String(r.business.id);
+    const b = one((await read(act, { fields: 'business{id,name}' }))?.business);
+    if (b) yield b;
   }
   if (pageId && /^\d{5,25}$/.test(pageId)) {
-    const r = await pcall(pageId, token, { params: { fields: 'business{id}' } }).catch(() => null);
-    if (r?.business?.id) return String(r.business.id);
+    const b = one((await read(pageId, { fields: 'business{id,name}' }))?.business);
+    if (b) yield b;
   }
-  return null;
+  for (const x of (await read('me/businesses', { fields: 'id,name', limit: '25' }))?.data ?? []) {
+    const b = one(x);
+    if (b) yield b;
+  }
 }
 const igOk = (v: unknown) => /^\d{5,25}$/.test(String(v ?? ''));
 const said = (e: unknown) => String((e as any)?.message ?? e).slice(0, 300);
@@ -420,21 +459,43 @@ async function runPartners(action: string, args: any, token: string, acts: strin
         return [];
       });
     let content: any[] = [];
-    const business = await businessOf(token, acts, page);
-    if (!business) errors.push('Votre Page n’est pas dans un portefeuille business Meta : ajoutez-la dans Meta Business Suite, puis actualisez.');
-    else if (Object.keys(where).length)
-      content = await pall(`${enc(business)}/partnership-ads-advertisable-content`, token, { ...where, fields: CONTENT_FIELDS, sort_by: 'DATE', limit: '50' }, 4).catch((e) => {
-        errors.push(said(e));
-        return [];
-      });
+    if (Object.keys(where).length) {
+      // asked through the first business Meta answers for (see businessesOf); the first refusal is told when none does
+      const notes: BizNotes = {};
+      let tried = 0;
+      let refused: string | null = null;
+      for await (const b of businessesOf(token, acts, page, notes)) {
+        tried++;
+        try {
+          content = await pall(`${enc(b.id)}/partnership-ads-advertisable-content`, token, { ...where, fields: CONTENT_FIELDS, sort_by: 'DATE', limit: '50' }, 4);
+          refused = null;
+          break;
+        } catch (e) {
+          refused ??= said(e);
+          // Meta limiting the calls is not a « no »: the next business would be limited too
+          if (e instanceof AppError && e.code === 'conflict') break;
+        }
+      }
+      if (!tried) errors.push('Votre Page n’est pas dans un portefeuille business Meta : ajoutez-la dans Meta Business Suite, puis actualisez.');
+      else if (refused) errors.push(refused);
+    }
     return { permissions, content, errors };
   }
   if (action === 'partnerLookup') {
-    const business = await businessOf(token, acts, page);
-    if (!business) throw new AppError('bad_request', 'Votre Page n’est pas dans un portefeuille business Meta : ajoutez-la dans Meta Business Suite.');
     const one: Record<string, string> = args?.adCode ? { ad_codes: JSON.stringify([String(args.adCode)]) } : { permalinks: JSON.stringify([String(args?.permalink ?? '')]) };
-    const r = await pcall(`${enc(business)}/partnership-ads-advertisable-content`, token, { params: { ...where, ...one, fields: CONTENT_FIELDS } });
-    return { content: Array.isArray(r?.data) ? r.data : [] };
+    const notes: BizNotes = {};
+    let refused: unknown = null;
+    for await (const b of businessesOf(token, acts, page, notes)) {
+      try {
+        const r = await pcall(`${enc(b.id)}/partnership-ads-advertisable-content`, token, { params: { ...where, ...one, fields: CONTENT_FIELDS } });
+        return { content: Array.isArray(r?.data) ? r.data : [] };
+      } catch (e) {
+        if (e instanceof AppError && e.code === 'conflict') throw e;
+        refused ??= e;
+      }
+    }
+    if (refused) throw refused;
+    throw new AppError('bad_request', 'Votre Page n’est pas dans un portefeuille business Meta : ajoutez-la dans Meta Business Suite.');
   }
   throw new AppError('bad_request', `Action Meta inconnue : ${action}`);
 }
