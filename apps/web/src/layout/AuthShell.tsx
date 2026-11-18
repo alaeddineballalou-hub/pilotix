@@ -4,7 +4,7 @@
 import { Language, LANGUAGES } from '@pilotix/shared';
 import { InputHTMLAttributes, ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LegalInfo, legalText, publisherOf, signupInfo } from '../lib/backend';
+import { LegalInfo, legalText, publisherName, publisherOf, signupInfo } from '../lib/backend';
 import { applyLanguage } from '../lib/i18n';
 import { Icon } from '../ui/kit';
 import { ThemeGround, ThemePanel, useAuthTheme } from './authThemes';
@@ -106,11 +106,11 @@ export function AuthShell({ children, wide, plain }: { children: ReactNode; wide
           <a href="#/conditions">{t('auth.terms')}</a>
           <a href="#/conditions">{t('auth.privacy')}</a>
         </span>
-        {/* who publishes Pilotix, as on its papers and in Meta: its legal name, its address, its phone and tax number
-            (control room › Réglages › Société) */}
+        {/* who publishes Pilotix, as on its papers and in Meta: its name (in Arabic on the pages in Arabic), its address,
+            its phone and tax number (control room › Réglages › Société) */}
         {pub && (
           <address className="pxa-pub">
-            <span className="pxa-pub-name">{t('auth.publisher', { company: pub.company.trim() })}</span>
+            <span className="pxa-pub-name">{t('auth.publisher', { company: publisherName(pub, i18n.language) })}</span>
             {pub.address?.trim() && (
               <span className="pxa-pub-addr">
                 <bdi>{pub.address.trim()}</bdi>

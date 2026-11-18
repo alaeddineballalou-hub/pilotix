@@ -1156,7 +1156,7 @@ export const PLATFORM_REGISTRY = {
       reminders: z.object({ on: z.boolean(), daysBefore: z.number().int().min(1).max(30) }).optional(),
       referral: z.object({ on: z.boolean(), months: z.number().int().min(0).max(12) }).optional(),
       security: z.object({ twoStep: z.boolean() }).optional(),
-      company: z.object({ name: z.string().trim().max(120), address: z.string().trim().max(300), phone: z.string().trim().max(40), email: z.string().trim().max(200), taxId: z.string().trim().max(80) }).optional(),
+      company: z.object({ name: z.string().trim().max(120), nameAr: z.string().trim().max(120).default(''), address: z.string().trim().max(300), phone: z.string().trim().max(40), email: z.string().trim().max(200), taxId: z.string().trim().max(80) }).optional(),
       legal: z.object({ text: z.string().max(30_000) }).optional(),
       login: z.object({ designs: z.array(z.number().int().min(1).max(20)).min(1, 'Gardez au moins un design').max(20) }).optional(),
       social: z

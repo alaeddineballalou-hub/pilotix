@@ -181,13 +181,16 @@ export function Settings({ staff }: { staff: Staff }) {
       <Card title={t('platform.set.companyTitle')} help={t('platform.set.companyHelp')}>
         <div className="grid2 pp-form">
           <Field label={t('platform.set.coName')}>
-            <input disabled={!owner} maxLength={120} value={f.company.name} onChange={(e) => setF({ ...f, company: { ...f.company, name: e.target.value } })} />
+            <input disabled={!owner} dir="auto" maxLength={120} value={f.company.name} onChange={(e) => setF({ ...f, company: { ...f.company, name: e.target.value } })} />
+          </Field>
+          <Field label={t('platform.set.coNameAr')} hint={t('platform.set.coNameArHint')}>
+            <input disabled={!owner} dir="rtl" lang="ar" maxLength={120} value={f.company.nameAr ?? ''} onChange={(e) => setF({ ...f, company: { ...f.company, nameAr: e.target.value } })} />
+          </Field>
+          <Field label={t('platform.set.coAddress')} wide>
+            <input disabled={!owner} dir="auto" maxLength={300} value={f.company.address} onChange={(e) => setF({ ...f, company: { ...f.company, address: e.target.value } })} />
           </Field>
           <Field label={t('platform.set.coTax')}>
             <input disabled={!owner} dir="ltr" maxLength={80} value={f.company.taxId} onChange={(e) => setF({ ...f, company: { ...f.company, taxId: e.target.value } })} />
-          </Field>
-          <Field label={t('platform.set.coAddress')} wide>
-            <input disabled={!owner} maxLength={300} value={f.company.address} onChange={(e) => setF({ ...f, company: { ...f.company, address: e.target.value } })} />
           </Field>
           <Field label={t('platform.set.payPhone')}>
             <input disabled={!owner} dir="ltr" maxLength={40} value={f.company.phone} onChange={(e) => setF({ ...f, company: { ...f.company, phone: e.target.value } })} />

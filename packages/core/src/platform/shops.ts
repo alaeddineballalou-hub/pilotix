@@ -250,8 +250,9 @@ export interface PlatformSettings {
   referral: { on: boolean; months: number };
   /** the control room asks for a code sent by e-mail at each login (when the server sends e-mails) */
   security: { twoStep: boolean };
-  /** Pilotix's own details, printed on payment receipts */
-  company: { name: string; address: string; phone: string; email: string; taxId: string };
+  /** Pilotix's own details: printed on payment receipts, shown under the login page and on the terms page (the way
+   *  Meta checks a business against its papers). nameAr: its name written in Arabic, for the pages in Arabic (empty: name) */
+  company: { name: string; nameAr: string; address: string; phone: string; email: string; taxId: string };
   /** the terms of use and privacy page (empty = Pilotix's standard text) */
   legal: { text: string };
   /** the sign-in and sign-up pages: the designs turned on (1–20); each visit shows one of them at random */
@@ -291,7 +292,7 @@ export const PLATFORM_DEFAULTS: PlatformSettings = {
   reminders: { on: true, daysBefore: 3 },
   referral: { on: true, months: 1 },
   security: { twoStep: true },
-  company: { name: 'Pilotix', address: '', phone: '', email: '', taxId: '' },
+  company: { name: 'Pilotix', nameAr: '', address: '', phone: '', email: '', taxId: '' },
   legal: { text: '' },
   login: { designs: Array.from({ length: LOGIN_DESIGNS }, (_, i) => i + 1) },
   social: { googleClientId: '', facebookAppId: '' },

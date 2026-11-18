@@ -4,7 +4,7 @@
 // e-mail check link, and the terms of use and privacy page.
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError, DEMO_ONLY, isPhone, LegalInfo, legalText, phoneCheck, publisherOf, PhoneSent, requestPasswordReset, server, signup, signupCode, SignupInfo, signupInfo, StoreChoice, storeNameCheck, verifyEmail } from '../lib/backend';
+import { ApiError, DEMO_ONLY, isPhone, LegalInfo, legalText, phoneCheck, publisherName, publisherOf, PhoneSent, requestPasswordReset, server, signup, signupCode, SignupInfo, signupInfo, StoreChoice, storeNameCheck, verifyEmail } from '../lib/backend';
 import { usePhoneProblem } from '../lib/phoneCheck';
 import { useRpcFor } from '../lib/query';
 import { addressShop, go, leaveAddress } from '../lib/route';
@@ -784,16 +784,16 @@ function LegalPart({ k, email }: { k: string; email: string }) {
   );
 }
 
-/** Who publishes Pilotix: its legal name, address, phone, tax number and email (control room › Réglages › Société). */
+/** Who publishes Pilotix: its legal name (in Arabic on the page in Arabic), address, phone, tax number and email (control room › Réglages › Société). */
 function Publisher({ d }: { d: LegalInfo | null }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const p = publisherOf(d);
   if (!p) return null;
   const lines = [p.address, p.phone && `${t('legal.phone')} ${p.phone}`, p.taxId && `NIF ${p.taxId}`, p.email].filter(Boolean) as string[];
   return (
     <section className="px-legal-pub">
       <h2>{t('legal.publisherTitle')}</h2>
-      <p>{t('legal.publisher', { company: p.company })}</p>
+      <p>{t('legal.publisher', { company: publisherName(p, i18n.language) })}</p>
       {lines.length > 0 && (
         <p>
           {lines.map((l, i) => (

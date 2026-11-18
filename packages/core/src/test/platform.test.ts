@@ -571,6 +571,15 @@ test('staff roles, plans, settings', async () => {
   assert.equal(set.trial.days, 7);
   assert.equal(set.payment.whatsapp, '213550112233');
   await assert.rejects(p('p.settings.save', { trial: { days: 7, graceDays: 2, planCode: 'pro' } }, yanis), /Réservé/);
+  // the company that publishes Pilotix (receipts, the login page's footer, the terms page): its name in Arabic too
+  assert.equal(set.company.nameAr, '');
+  const co = { name: 'WESH VISION', nameAr: ' واش فيزيون ', address: '435 City Ben Zerga 02 El Dom, Bordj El Kifan', phone: '+213770650701', email: '', taxId: '002616105465954' };
+  await p('p.settings.save', { company: co });
+  assert.deepEqual((await p('p.settings.get')).company, { ...co, nameAr: 'واش فيزيون' });
+  // saved without it (an older page): no Arabic name, the name is used
+  const { nameAr: _ar, ...old } = co;
+  await p('p.settings.save', { company: old });
+  assert.equal((await p('p.settings.get')).company.nameAr, '');
   // the dashboard
   const d = await p('p.dashboard');
   assert.equal(d.counts.total, 1);

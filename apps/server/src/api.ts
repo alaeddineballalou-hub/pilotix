@@ -1094,15 +1094,16 @@ class ApiController {
 
   /**
    * The terms of use and privacy page: Pilotix's own text when it wrote one (else the app's standard text), and the
-   * company that publishes Pilotix (control room › Réglages › Société: its legal name, address, phone and tax number),
-   * shown on that page and under the login page, the way Meta checks a business against its papers.
+   * company that publishes Pilotix (control room › Réglages › Société: its legal name, its name in Arabic for the pages
+   * in Arabic, address, phone and tax number), shown on that page and under the login page, the way Meta checks a
+   * business against its papers.
    */
   @Public()
   @Get('legal')
   async legal() {
     const set = await this.core.settings();
     const c = set.company;
-    return { text: set.legal.text, company: c.name, email: c.email, address: c.address, phone: c.phone, taxId: c.taxId };
+    return { text: set.legal.text, company: c.name, companyAr: c.nameAr ?? '', email: c.email, address: c.address, phone: c.phone, taxId: c.taxId };
   }
 
   /**

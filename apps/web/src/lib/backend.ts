@@ -203,12 +203,14 @@ export const phoneCheck = (phone: string, ticket?: string) =>
 /** « Recevoir le code »: a WhatsApp code to the phone typed in the sign-up form. */
 export const signupCode = (phone: string) => authRequest<PhoneSent>('/auth/signup/code', { phone });
 /** The terms of use and privacy page (Pilotix's own text, else the app's standard one). */
-export type LegalInfo = { text: string; company: string; email: string; address?: string; phone?: string; taxId?: string };
+export type LegalInfo = { text: string; company: string; companyAr?: string; email: string; address?: string; phone?: string; taxId?: string };
 /** The phone app's latest version and the oldest one still allowed (lib/appUpdate). */
 export const appInfo = () => authRequest<AppInfo>('/app');
 export const legalText = () => authRequest<LegalInfo>('/legal').catch((): LegalInfo => ({ text: '', company: 'Pilotix', email: '' }));
 /** The company that publishes Pilotix, when the control room names one (« Pilotix » alone is the product, not a company). */
 export const publisherOf = (d: LegalInfo | null) => (d && d.company.trim() && d.company.trim() !== 'Pilotix' ? d : null);
+/** The publisher's name in the page's language: its Arabic name on the pages in Arabic (when written), else its name. */
+export const publisherName = (d: LegalInfo, lang: string) => (lang.startsWith('ar') && d.companyAr?.trim()) || d.company.trim();
 
 /** Pilotix's list of Pro marketers (the public page #/pro), or one of them by its code. */
 export const publicPros = () => authRequest<{ pros: import('@pilotix/shared').ProCard[] }>('/pro');
