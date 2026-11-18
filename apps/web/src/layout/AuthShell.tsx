@@ -65,7 +65,7 @@ export function AuthShell({ children, wide, plain }: { children: ReactNode; wide
   const { t, i18n } = useTranslation();
   const theme = useAuthTheme();
   const [wa, setWa] = useState('');
-  // the company that publishes Pilotix, under the form (its legal name, as on its papers)
+  // the company that publishes Pilotix, under the form (its legal name and its address, as on its papers)
   const [pub, setPub] = useState<LegalInfo | null>(null);
   useEffect(() => {
     let on = true;
@@ -106,7 +106,17 @@ export function AuthShell({ children, wide, plain }: { children: ReactNode; wide
           <a href="#/conditions">{t('auth.terms')}</a>
           <a href="#/conditions">{t('auth.privacy')}</a>
         </span>
-        {pub && <span className="pxa-pub">{t('auth.publisher', { company: pub.company })}</span>}
+        {/* who publishes Pilotix, as on its papers: its legal name, then its address (control room › Réglages › Société) */}
+        {pub && (
+          <address className="pxa-pub">
+            <span className="pxa-pub-name">{t('auth.publisher', { company: pub.company.trim() })}</span>
+            {pub.address?.trim() && (
+              <span className="pxa-pub-addr">
+                <bdi>{pub.address.trim()}</bdi>
+              </span>
+            )}
+          </address>
+        )}
       </footer>
     </main>
   );

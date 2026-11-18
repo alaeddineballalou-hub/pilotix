@@ -48,8 +48,10 @@
 .pxa-foot a:hover { text-decoration: underline; }
 .pxa-legal { display: flex; gap: 16px; }
 .pxa-legal a { font-weight: 500; color: var(--muted); }
-/* the company that publishes Pilotix, under the links */
-.pxa-pub { flex-basis: 100%; font-size: 12px; color: var(--muted); }
+/* the company that publishes Pilotix, under the links: its legal name (read at a glance), then its address */
+.pxa-pub { flex-basis: 100%; display: grid; gap: 2px; min-width: 0; font-size: 12.5px; font-style: normal; line-height: 1.5; color: var(--muted); }
+.pxa-pub-name { color: var(--ink); font-weight: 600; }
+.pxa-pub-addr { overflow-wrap: anywhere; }
 
 /* ---- smaller screens: one column (the designs put their picture above the form, authThemes.css) */
 @media (max-width: 960px) {
