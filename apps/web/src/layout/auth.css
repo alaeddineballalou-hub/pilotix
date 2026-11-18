@@ -48,13 +48,6 @@
 .pxa-foot a:hover { text-decoration: underline; }
 .pxa-legal { display: flex; gap: 16px; }
 .pxa-legal a { font-weight: 500; color: var(--muted); }
-/* the company that publishes Pilotix, under the links: its legal name (read at a glance), then its address */
-.pxa-pub { flex-basis: 100%; display: grid; gap: 2px; min-width: 0; font-size: 12.5px; font-style: normal; line-height: 1.5; color: var(--muted); }
-.pxa-pub-name { color: var(--ink); font-weight: 600; }
-.pxa-pub-addr { overflow-wrap: anywhere; }
-/* phone and tax number: each kept whole, side by side, one under the other when the line is too short */
-.pxa-pub-ids > span { display: inline-block; margin-inline-end: 16px; }
-.pxa-pub-ids > span:last-child { margin-inline-end: 0; }
 
 /* ---- smaller screens: one column (the designs put their picture above the form, authThemes.css) */
 @media (max-width: 960px) {
@@ -65,7 +58,6 @@
   .pxa-form { padding: 18px 0; gap: 14px; }
   .pxa .field input { font-size: 16px; }
   .pxa-foot { justify-content: center; text-align: center; }
-  .pxa-pub-ids > span, .pxa-pub-ids > span:last-child { margin-inline: 8px; }
 }
 
 /* dark theme: the pictures stay as drawn, the form follows the theme */
@@ -118,3 +110,8 @@
 .pxa-social .pxa-sep { margin-top: 2px; }
 .px-otp{font-size:26px;letter-spacing:.45em;text-align:center;font-variant-numeric:tabular-nums}
 .px-signup-otp{display:flex;flex-direction:column;gap:10px;margin:-4px 0 4px}.px-signup-otp>.btn{align-self:flex-start}
+
+/* the company that publishes Pilotix: a plain footer across the bottom of the sign-in pages, under the card */
+.pxa-site-foot { padding: 4px clamp(20px, 5vw, 64px) 18px; background: var(--surface); }
+.pxa-site-foot.pxt-dark { --surface: #0F1B2E; --ink: #FFFFFF; --muted: #AEB9CC; --line: #2A3B5C; }
+.pxa-site-foot .px-pubfoot { max-width: 1400px; margin: 0 auto; }

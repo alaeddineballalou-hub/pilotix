@@ -4,7 +4,8 @@
 import { Language, LANGUAGES } from '@pilotix/shared';
 import { InputHTMLAttributes, ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LegalInfo, legalText, publisherName, publisherOf, signupInfo } from '../lib/backend';
+import { signupInfo } from '../lib/backend';
+import { PubFooter } from './PubFooter';
 import { applyLanguage } from '../lib/i18n';
 import { Icon } from '../ui/kit';
 import { ThemeGround, ThemePanel, useAuthTheme } from './authThemes';
@@ -66,11 +67,9 @@ export function AuthShell({ children, wide, plain }: { children: ReactNode; wide
   const theme = useAuthTheme();
   const [wa, setWa] = useState('');
   // the company that publishes Pilotix, under the form (its legal name, address, phone and tax number, as on its papers)
-  const [pub, setPub] = useState<LegalInfo | null>(null);
   useEffect(() => {
     let on = true;
     signupInfo().then((r) => on && setWa(String(r.whatsapp ?? '').replace(/[^\d+]/g, '')));
-    legalText().then((d) => on && setPub(publisherOf(d)));
     return () => {
       on = false;
     };
@@ -107,46 +106,32 @@ export function AuthShell({ children, wide, plain }: { children: ReactNode; wide
           <a href="#/conditions">{t('auth.privacy')}</a>
           <a href="/mentions-legales.html">{t('auth.legalNotice')}</a>
         </span>
-        {/* who publishes Pilotix, as on its papers and in Meta: its name (in Arabic on the pages in Arabic), its address,
-            its phone and tax number (control room › Réglages › Société) */}
-        {pub && (
-          <address className="pxa-pub">
-            <span className="pxa-pub-name">{t('auth.publisher', { company: publisherName(pub, i18n.language) })}</span>
-            <span>© {new Date().getFullYear()} {pub.company.trim()}</span>
-            {pub.address?.trim() && (
-              <span className="pxa-pub-addr">
-                <bdi>{pub.address.trim()}</bdi>
-              </span>
-            )}
-            {(pub.phone?.trim() || pub.taxId?.trim()) && (
-              <span className="pxa-pub-ids">
-                {pub.phone?.trim() && (
-                  <span>
-                    {t('auth.pubPhone')} <bdi dir="ltr">{pub.phone.trim()}</bdi>
-                  </span>
-                )}
-                {pub.taxId?.trim() && (
-                  <span>
-                    {t('auth.pubTax')} <bdi dir="ltr">{pub.taxId.trim()}</bdi>
-                  </span>
-                )}
-              </span>
-            )}
-          </address>
-        )}
       </footer>
     </main>
   );
   const cls = `pxa pxt pxt-${theme.layout} pxt-s-${theme.side} pxt-id${theme.id} pxt-new${theme.dark ? ' pxt-dark' : ''}${plain ? ' pxa-plain' : ''}`;
+  // the company that publishes Pilotix, in a plain footer across the bottom of the page (as Meta's verification looks
+  // for it), under the sign-in card and its picture, not inside them
+  const foot = (
+    <div className={`pxa-site-foot${theme.dark ? ' pxt-dark' : ''}`}>
+      <PubFooter />
+    </div>
+  );
   return theme.layout === 'split' ? (
-    <div className={cls} data-design={theme.id}>
-      {side}
-      <ThemePanel theme={theme} />
-    </div>
+    <>
+      <div className={cls} data-design={theme.id}>
+        {side}
+        <ThemePanel theme={theme} />
+      </div>
+      {foot}
+    </>
   ) : (
-    <div className={cls} data-design={theme.id}>
-      <ThemeGround theme={theme} />
-      {side}
-    </div>
+    <>
+      <div className={cls} data-design={theme.id}>
+        <ThemeGround theme={theme} />
+        {side}
+      </div>
+      {foot}
+    </>
   );
 }
