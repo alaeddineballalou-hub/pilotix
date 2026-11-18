@@ -52,6 +52,9 @@
 .pxa-pub { flex-basis: 100%; display: grid; gap: 2px; min-width: 0; font-size: 12.5px; font-style: normal; line-height: 1.5; color: var(--muted); }
 .pxa-pub-name { color: var(--ink); font-weight: 600; }
 .pxa-pub-addr { overflow-wrap: anywhere; }
+/* phone and tax number: each kept whole, side by side, one under the other when the line is too short */
+.pxa-pub-ids > span { display: inline-block; margin-inline-end: 16px; }
+.pxa-pub-ids > span:last-child { margin-inline-end: 0; }
 
 /* ---- smaller screens: one column (the designs put their picture above the form, authThemes.css) */
 @media (max-width: 960px) {
@@ -62,6 +65,7 @@
   .pxa-form { padding: 18px 0; gap: 14px; }
   .pxa .field input { font-size: 16px; }
   .pxa-foot { justify-content: center; text-align: center; }
+  .pxa-pub-ids > span, .pxa-pub-ids > span:last-child { margin-inline: 8px; }
 }
 
 /* dark theme: the pictures stay as drawn, the form follows the theme */
