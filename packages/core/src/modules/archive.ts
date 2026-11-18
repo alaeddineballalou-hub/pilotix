@@ -172,6 +172,7 @@ export const NOT_REFS: readonly string[] = [
   'settings.updated_by',
   // Pilot Checks: who last changed a rule (the change list keeps the history: pilot_check_log)
   'pilot_checks.updated_by',
+  'pilot_check_settings.updated_by',
   'referrals.referrer_id',
   'product_variants.product_id',
   'product_changes.product_id',
