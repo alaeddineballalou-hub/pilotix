@@ -1,6 +1,7 @@
 // « Autoriser »: an AI assistant (Claude, ChatGPT) asks to be linked to the person's Pilotix (lib/mcpAsk: the address
 // carries its question). The page says who asks and where the answer goes, in whose name and in which boutique it will
-// read, what it will read, and that it changes nothing. « Autoriser » / « Refuser » send the browser back to the
+// read, what it will read, and that it changes nothing: changing is never given from here, only afterwards by the person
+// in Mon profil › Assistants IA (« Peut modifier »). « Autoriser » / « Refuser » send the browser back to the
 // assistant's site with the answer. The link is cut later in Mon profil › Assistants IA.
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -185,6 +186,13 @@ export function McpAuthorize({ ticket }: { ticket: string }) {
             <Icon name="lock" />
             <span>
               <b>{t('mcp.readOnly')}</b> {t('mcp.asYou')}
+            </span>
+          </p>
+          {/* changing is never given here: only by the person, afterwards, in Mon profil › Assistants IA */}
+          <p className="pxm-later">
+            <Icon name="pencil" />
+            <span>
+              <b>{t('mcp.laterTitle')}</b> {t('mcp.laterText', { client: ask?.client || t('mcp.who') })}
             </span>
           </p>
         </section>

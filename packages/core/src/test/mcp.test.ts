@@ -23,7 +23,12 @@ import {
   mcpClient,
   mcpCut,
   mcpLinks,
+  mcpLog,
+  mcpLogAdd,
   mcpMessage,
+  mcpSetWrite,
+  LOG_DAYS,
+  McpCall,
   mcpRegister,
   mcpResourceMeta,
   mcpServerMeta,
@@ -266,7 +271,7 @@ test('an assistant with a secret gets no keys without it', async () => {
 test('an access key: one hour, for this link only, never changed', async () => {
   const l = await link();
   const a = await mcpAccess(t, SECRET, BASE, l.access, person, T0 + 1000);
-  assert.deepEqual(a, { grantId: l.id, shopId: 1, profileId: 7, scope: ['read'] });
+  assert.deepEqual(a, { grantId: l.id, shopId: 1, profileId: 7, scope: ['read'], write: [], client: 'Claude', host: 'claude.ai' });
   assert.ok(await mcpAccess(t, SECRET, BASE, l.access, person, T0 + (ACCESS_SECONDS - 1) * 1000));
   assert.equal(await mcpAccess(t, SECRET, BASE, l.access, person, T0 + ACCESS_SECONDS * 1000), null, 'over after an hour');
   // for another site's link, signed by another server, changed, or not an access key at all
@@ -401,11 +406,13 @@ test('a boutique whose data is removed takes its links with it', async () => {
   people.set('78:3', 0);
   const gone = await link({ shopId: 77, profileId: 3, tv: 0 });
   const kept = await link({ shopId: 78, profileId: 3, tv: 0 });
+  await mcpSetWrite(t, 77, 3, gone.id, ['orders'], T0);
   await dropShopData(t, 77, 'shop_77');
   // the same number in that boutique is someone else afterwards: the old key opens nothing, and nothing is left of it
   assert.equal(await mcpAccess(t, SECRET, BASE, gone.access, person, T0), null);
   assert.equal((await refresh(gone.refresh, T0, gone.client.client_id)).json.error, 'invalid_grant');
   assert.deepEqual(await t.platform.query('SELECT id FROM platform.mcp_grants WHERE shop_id = 77'), []);
+  assert.deepEqual(await t.platform.query('SELECT id FROM platform.mcp_log WHERE shop_id = 77'), []);
   assert.ok(await mcpAccess(t, SECRET, BASE, kept.access, person, T0));
 });
 
@@ -606,4 +613,84 @@ test('an agent, the depot and a livreur see through the link what their own scre
   const notHis = (await tool(admin, 'search_orders', { limit: 50 })).orders.find((x: any) => !appLiv.rows.some((y: any) => y.id === x.id));
   assert.match((await tool(liv, 'get_order', { id: notHis.id })).error, /Accès refusé/);
   assert.match((await tool(liv, 'stats_overview')).error, /Accès refusé/);
+});
+
+// ---------------------------------------------------------------- the log, and « Peut modifier »
+test('the log: each tool an assistant used, with what came of it — a phone number cut, never the answer', async () => {
+  const calls: McpCall[] = [];
+  const plain = await envFor(EMAILS.conf);
+  const phone = String((await tool(plain, 'search_orders', { limit: 1 })).orders[0].phone);
+  const conf = { ...plain, log: (c: McpCall) => calls.push(c) };
+  const found = await tool(conf, 'search_orders', { limit: 5, q: '  Vélo  ', delivery: ['delivered'] });
+  await tool(conf, 'shop_dashboard');
+  await tool(conf, 'customer_history', { phone });
+  await tool(conf, 'search_orders', { limit: 500 });
+  // what is not a tool call is not written
+  await say(conf, 'tools/list');
+  await say(conf, 'ping');
+  assert.deepEqual(
+    calls.map((c) => [c.tool, c.kind]),
+    [
+      ['search_orders', 'read'],
+      ['shop_dashboard', 'refused'],
+      ['customer_history', 'read'],
+      ['search_orders', 'error'],
+    ],
+  );
+  assert.deepEqual(calls[0].detail, { q: 'Vélo', delivery: ['delivered'], count: found.total });
+  assert.match(String(calls[1].detail.why), /Accès refusé/);
+  const digits = String(phone).replace(/\D/g, '');
+  assert.equal(calls[2].detail.phone, `${digits.slice(0, 4)} •• •• ${digits.slice(-2)}`);
+  assert.ok(!JSON.stringify(calls).includes(digits), 'the whole number is never kept');
+  assert.match(String(calls[3].detail.why), /Invalid arguments/);
+  // a log that fails never stops the answer
+  const broken = { ...(await envFor(EMAILS.admin)), log: () => { throw new Error('log down'); } };
+  assert.ok((await tool(broken, 'order_counts')) && true);
+});
+
+test('the log is read by its person, or by the boutique’s administrators for the whole team; 90 days', async () => {
+  const at = T0 + 10 * DAY;
+  const add = (shopId: number, profileId: number, tool: string, kind: 'read' | 'refused' | 'error', now: number) =>
+    mcpLogAdd(t, { shopId, profileId, grantId: null, client: 'Claude', host: 'claude.ai', kind, tool, detail: { count: 3 } }, now);
+  await add(5, 7, 'search_orders', 'read', at);
+  await add(5, 8, 'stock_levels', 'refused', at + 1000);
+  await add(5, 7, 'whoami', 'read', at + 2000);
+  await add(6, 7, 'whoami', 'read', at + 2000);
+  const mine = await mcpLog(t, 5, { profileId: 7 }, at + 5000);
+  assert.deepEqual(mine.lines.map((l) => l.tool), ['whoami', 'search_orders']);
+  assert.deepEqual([mine.lines[1].client, mine.lines[1].host, mine.lines[1].kind, mine.lines[1].detail, mine.more], ['Claude', 'claude.ai', 'read', { count: 3 }, false]);
+  const team = await mcpLog(t, 5, { profileId: null }, at + 5000);
+  assert.deepEqual(team.lines.map((l) => [l.profileId, l.tool]), [[7, 'whoami'], [8, 'stock_levels'], [7, 'search_orders']]);
+  assert.deepEqual((await mcpLog(t, 5, { profileId: null, filter: 'refused' }, at + 5000)).lines.map((l) => l.tool), ['stock_levels']);
+  // 2 at a time: the next ones after the last shown
+  const p1 = await mcpLog(t, 5, { profileId: null, limit: 2 }, at + 5000);
+  const p2 = await mcpLog(t, 5, { profileId: null, limit: 2, before: p1.lines[1].id }, at + 5000);
+  assert.deepEqual([p1.more, p2.more, p2.lines.map((l) => l.tool)], [true, false, ['search_orders']]);
+  // after 90 days the lines are gone
+  assert.deepEqual((await mcpLog(t, 5, { profileId: null }, at + (LOG_DAYS + 1) * DAY)).lines, []);
+  assert.equal((await mcpLog(t, 6, { profileId: null }, at + 5000)).lines.length, 1);
+});
+
+test('« Peut modifier »: only the link’s person turns it on, part by part, and the log says so', async () => {
+  const l = await link();
+  const mine = async () => (await mcpLinks(t, 1, 7, 0, T0)).find((x) => x.id === l.id)!;
+  assert.deepEqual((await mine()).write, []);
+  assert.deepEqual((await mcpAccess(t, SECRET, BASE, l.access, person, T0))!.write, []);
+  // someone else's link, an unknown part, not a list
+  await assert.rejects(mcpSetWrite(t, 1, 8, l.id, ['orders'], T0), /introuvable/);
+  await assert.rejects(mcpSetWrite(t, 2, 7, l.id, ['orders'], T0), /introuvable/);
+  await assert.rejects(mcpSetWrite(t, 1, 7, l.id, ['orders', 'delete'], T0), /inconnue/);
+  await assert.rejects(mcpSetWrite(t, 1, 7, l.id, 'orders', T0), /inconnue/);
+  assert.deepEqual((await mcpSetWrite(t, 1, 7, l.id, ['products', 'orders', 'orders'], T0)).write, ['orders', 'products']);
+  assert.deepEqual((await mine()).write, ['orders', 'products']);
+  // the link's own key knows it (for the tools that change things), with the assistant's name and site
+  const a = (await mcpAccess(t, SECRET, BASE, l.access, person, T0 + 1000))!;
+  assert.deepEqual([a.write, a.client, a.host], [['orders', 'products'], 'Claude', 'claude.ai']);
+  // written in the log, as a change
+  const log = await mcpLog(t, 1, { profileId: 7, filter: 'change' }, T0 + 2000);
+  assert.deepEqual([log.lines[0].kind, log.lines[0].tool, log.lines[0].detail], ['setting', 'write', { parts: ['orders', 'products'] }]);
+  // back to reading only; a cut link cannot be changed
+  assert.deepEqual((await mcpSetWrite(t, 1, 7, l.id, [], T0)).write, []);
+  await mcpCut(t, 1, 7, l.id, T0);
+  await assert.rejects(mcpSetWrite(t, 1, 7, l.id, ['orders'], T0), /introuvable/);
 });

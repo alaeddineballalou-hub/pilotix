@@ -418,6 +418,43 @@ await section('« Couper » and a new password', async () => {
   ok('the account closed by the administrator: its link stops');
 });
 
+await section('The log, and « Peut modifier »', async () => {
+  const conf = await login('samira@demo.pilotix.dz');
+  const S = await link(conf);
+  const sid = Number(/^pxr_(\d+)\./.exec(S.refresh_token)[1]);
+  await tool(S.access_token, 'search_orders', { limit: 1 });
+  assert.match((await tool(S.access_token, 'shop_dashboard')).error, /Accès refusé/);
+  // the log is written just after the answer: a moment
+  let mine = { lines: [] };
+  for (let i = 0; i < 30 && !mine.lines.some((l) => l.tool === 'shop_dashboard'); i++) {
+    if (i) await new Promise((r) => setTimeout(r, 100));
+    mine = (await http('/mcp/log', { body: {}, token: conf })).data;
+  }
+  const said = mine.lines.map((l) => `${l.tool}:${l.kind}`);
+  assert.ok(said.includes('search_orders:read') && said.includes('shop_dashboard:refused'), said.join(' '));
+  assert.ok(mine.lines.every((l) => l.mine && l.client === 'Claude' && l.host === 'claude.ai'), JSON.stringify(mine.lines[0]));
+  assert.match(mine.lines.find((l) => l.tool === 'shop_dashboard').detail.why, /Accès refusé/);
+  ok('the log: each tool the assistant used and what came of it, in its person’s log');
+  // the whole team's log: the boutique's administrators only, each line with its person
+  assert.equal((await http('/mcp/log', { body: { team: true }, token: conf })).status, 403);
+  const team = (await http('/mcp/log', { body: { team: true }, token: ADMIN })).data;
+  assert.ok(team.lines.some((l) => l.tool === 'shop_dashboard' && !l.mine && l.person), 'the administrator sees the agent’s lines, with her name');
+  assert.equal((await http('/mcp/log', { body: {}, token: ADMIN })).data.lines.some((l) => l.tool === 'shop_dashboard' && !l.mine), false);
+  assert.ok((await http('/mcp/log', { body: { team: true, filter: 'refused' }, token: ADMIN })).data.lines.every((l) => l.kind === 'refused'));
+  ok('the whole team’s log: its administrators only, each line with its person');
+  // « Peut modifier »: the person turns it on from Pilotix, part by part — nobody else
+  assert.equal((await http('/mcp/write', { body: { id: sid, parts: ['orders'] }, token: ADMIN })).status, 404);
+  assert.equal((await http('/mcp/write', { body: { id: sid, parts: ['delete'] }, token: conf })).status, 400);
+  const w = await http('/mcp/write', { body: { id: sid, parts: ['products', 'orders'] }, token: conf });
+  assert.equal(w.status, 201, JSON.stringify(w.data));
+  assert.deepEqual(w.data.write, ['orders', 'products']);
+  assert.deepEqual((await http('/mcp/links', { body: {}, token: conf })).data.links.find((x) => x.id === sid).write, ['orders', 'products']);
+  assert.ok((await http('/mcp/log', { body: { filter: 'change' }, token: conf })).data.lines.some((l) => l.tool === 'write' && l.kind === 'setting'));
+  // still only reading: no tool changes anything yet
+  assert.ok((await mcp(S.access_token, 'tools/list')).data.result.tools.every((x) => x.annotations.readOnlyHint === true));
+  ok('« Peut modifier »: its person turns it on from Pilotix, part by part, nobody else; the log says so');
+});
+
 const failed = results.filter(([, e]) => e);
 console.log(`\n${results.length - failed.length}/${results.length} sections passed`);
 if (failed.length) {

@@ -225,6 +225,11 @@ export class McpController {
       now: Date.now(),
       version: LINK_VERSION,
       onError: (e, where) => this.log.error(`[${ref.shop.slug}] ${where}: ${(e as Error)?.stack || e}`),
+      // the person's log (Mon profil › Assistants IA › Journal): written after the answer, never in its way
+      log: (c) =>
+        void mcp
+          .mcpLogAdd(this.core.t, { shopId: access.shopId, profileId: access.profileId, grantId: access.grantId, client: access.client, host: access.host, kind: c.kind, tool: c.tool, detail: c.detail })
+          .catch((e) => this.log.warn(`[${ref.shop.slug}] log: ${(e as Error)?.message || e}`)),
     };
     const out: Record<string, unknown>[] = [];
     for (const m of list) {
@@ -297,6 +302,32 @@ export class McpController {
     const id = Number(body?.id);
     if (!Number.isSafeInteger(id) || id <= 0) throw new core.AppError('bad_request', 'Connexion inconnue');
     return mcp.mcpCut(this.core.t, req.shop.shop.id, req.session.profile.id, id);
+  }
+
+  /** « Peut modifier »: the parts of Pilotix this link may change — the person's own link, and only from here. */
+  @Post('mcp/write')
+  write(@Body() body: any, @Req() req: ShopRequest) {
+    const id = Number(body?.id);
+    if (!Number.isSafeInteger(id) || id <= 0) throw new core.AppError('bad_request', 'Connexion inconnue');
+    return mcp.mcpSetWrite(this.core.t, req.shop.shop.id, req.session.profile.id, id, body?.parts);
+  }
+
+  /**
+   * Mon profil › Assistants IA › Journal: what the assistants did, newest first — the person's own, or the whole
+   * boutique's (`team`: its administrators only), each line with its person's name.
+   */
+  @Post('mcp/log')
+  async journal(@Body() body: any, @Req() req: ShopRequest) {
+    const me = req.session.profile.id;
+    const team = body?.team === true;
+    if (team && !req.session.isAdmin) throw new core.AppError('forbidden', 'Seuls les administrateurs voient le journal de toute l’équipe');
+    const filter: mcp.McpLogFilter = body?.filter === 'change' || body?.filter === 'refused' ? body.filter : 'all';
+    const before = Number(body?.before);
+    const r = await mcp.mcpLog(this.core.t, req.shop.shop.id, { profileId: team ? null : me, filter, before: Number.isSafeInteger(before) && before > 0 ? before : null });
+    const names = new Map<number, string>();
+    for (const id of new Set(r.lines.map((l) => l.profileId)))
+      names.set(id, id === me ? req.session.profile.name : ((await core.profileById(req.shop.db, id).catch(() => null))?.name ?? ''));
+    return { lines: r.lines.map((l) => ({ ...l, person: names.get(l.profileId) ?? '', mine: l.profileId === me })), more: r.more, team };
   }
 }
 

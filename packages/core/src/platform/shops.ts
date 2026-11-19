@@ -632,6 +632,7 @@ export async function dropShopData(t: Tenancy, id: number, schema: string) {
   // its AI assistants' links too (mcp-server.ts): a link names a person of this boutique by their number, and must
   // never outlive them (the demo boutique starts again with the same numbers)
   await t.platform.query('DELETE FROM platform.mcp_grants WHERE shop_id = $1', [id]);
+  await t.platform.query('DELETE FROM platform.mcp_log WHERE shop_id = $1', [id]);
   if (await isShared(t))
     await t.exec(
       'public',

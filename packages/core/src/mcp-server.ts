@@ -11,14 +11,16 @@
 // checks, the same rights (Utilisateurs › Rôles), the same rows as on their own screen. Read-only for now (« read »).
 // The person cuts a link in Mon profil › Assistants IA; a new password, a closed account or 90 days without use cut it too.
 // Only the answers of Claude's and ChatGPT's own sites (and of a tool on the person's own computer) are accepted.
+// Each tool an assistant uses is written in its person's log (Mon profil › Assistants IA › Journal, kept 90 days), and
+// what a link may change is turned on there by its person, part by part — never from the assistant's side.
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { iso, isoOrNull, num } from './db';
 import { AppError, bad } from './rpc';
 import type { Tenancy } from './platform/tenancy';
-import { describeTool, McpEnv, MCP_TOOLS, runTool, toolsFor } from './mcp-tools';
+import { callDetail, describeTool, McpEnv, MCP_TOOLS, runTool, toolsFor } from './mcp-tools';
 
-export type { McpEnv } from './mcp-tools';
-export { MCP_TOOLS } from './mcp-tools';
+export type { McpCall, McpEnv } from './mcp-tools';
+export { cutPhone, MCP_TOOLS } from './mcp-tools';
 
 // ---------------------------------------------------------------- what the door allows
 /** What a link may do. « read »: look, change nothing. */
@@ -377,6 +379,7 @@ interface GrantRow {
   client_hash: string;
   /** the assistant has a secret: no key without it */
   client_auth: boolean;
+  client_name: string;
   redirect_uri: string;
   scope: string;
   code_hash: string;
@@ -389,6 +392,8 @@ interface GrantRow {
   expires_at: string | null;
   last_used_at: string | null;
   revoked_at: string | null;
+  /** the parts it may change, turned on by its person (MCP_PARTS, space-separated; empty: it only reads) */
+  write_parts: string;
 }
 const grantById = async (t: Tenancy, id: number): Promise<GrantRow | null> => {
   if (!Number.isSafeInteger(id) || id <= 0) return null;
@@ -499,6 +504,11 @@ export interface McpAccess {
   shopId: number;
   profileId: number;
   scope: string[];
+  /** the parts of Pilotix this link may change (its person turned them on in Mon profil); empty: it only reads */
+  write: McpPart[];
+  /** the assistant, as its log names it: its name, and the site its answers go to */
+  client: string;
+  host: string;
 }
 
 /** The link an access key opens, checked now: not cut, not over, its person still allowed in with the same password. */
@@ -515,7 +525,7 @@ export async function mcpAccess(t: Tenancy, secret: string, base: string, bearer
   // « last used », at most every 5 minutes (and the 90 days start again)
   if (!g.last_used_at || now - Date.parse(new Date(g.last_used_at).toISOString()) > 5 * 60_000)
     await t.platform.query('UPDATE platform.mcp_grants SET last_used_at = $2, expires_at = $3 WHERE id = $1', [g.id, new Date(now).toISOString(), idleEnd(now)]).catch(() => undefined);
-  return { grantId: g.id, shopId: g.shop_id, profileId: g.profile_id, scope: g.scope.split(' ') };
+  return { grantId: g.id, shopId: g.shop_id, profileId: g.profile_id, scope: g.scope.split(' '), write: partsOf(g.write_parts), client: g.client_name, host: hostOf(g.redirect_uri) };
 }
 
 // ---------------------------------------------------------------- which boutique a link can be made in
@@ -551,26 +561,37 @@ export interface McpLink {
   scope: string[];
   createdAt: string;
   lastUsedAt: string | null;
+  /** the parts it may change (« Peut modifier »); empty: it only reads */
+  write: McpPart[];
+}
+
+/** The site an address answers from ('' when it is not an address: shown without its site). */
+function hostOf(uri: unknown): string {
+  try {
+    return new URL(String(uri)).host;
+  } catch {
+    return '';
+  }
 }
 
 /** The assistants linked to this person's account in this boutique (those that got their keys and were not cut). */
 export async function mcpLinks(t: Tenancy, shopId: number, profileId: number, tv: number, now = Date.now()): Promise<McpLink[]> {
   // `tv`: the person's token version now — the links made before a new password are over, and not shown
   const rows = await t.platform.query(
-    `SELECT id, client_name, redirect_uri, scope, created_at, last_used_at FROM platform.mcp_grants
+    `SELECT id, client_name, redirect_uri, scope, created_at, last_used_at, write_parts FROM platform.mcp_grants
       WHERE shop_id = $1 AND profile_id = $2 AND token_version = $4 AND revoked_at IS NULL AND code_used_at IS NOT NULL AND (expires_at IS NULL OR expires_at > $3)
       ORDER BY created_at DESC, id DESC`,
     [shopId, profileId, new Date(now).toISOString(), tv],
   );
-  return rows.map((r: any) => {
-    let host = '';
-    try {
-      host = new URL(String(r.redirect_uri)).host;
-    } catch {
-      /* shown without its site */
-    }
-    return { id: num(r.id), client: String(r.client_name), host, scope: String(r.scope).split(' '), createdAt: iso(r.created_at), lastUsedAt: isoOrNull(r.last_used_at) };
-  });
+  return rows.map((r: any) => ({
+    id: num(r.id),
+    client: String(r.client_name),
+    host: hostOf(r.redirect_uri),
+    scope: String(r.scope).split(' '),
+    createdAt: iso(r.created_at),
+    lastUsedAt: isoOrNull(r.last_used_at),
+    write: partsOf(r.write_parts),
+  }));
 }
 
 /** « Couper »: this link stops now (its keys are refused at once). Only the person's own, in this boutique. */
@@ -578,6 +599,110 @@ export async function mcpCut(t: Tenancy, shopId: number, profileId: number, id: 
   const r = await t.platform.query(`UPDATE platform.mcp_grants SET revoked_at = $4, revoked_why = 'person' WHERE id = $1 AND shop_id = $2 AND profile_id = $3 AND revoked_at IS NULL RETURNING id`, [id, shopId, profileId, new Date(now).toISOString()]);
   if (!r.length) throw new AppError('not_found', 'Connexion introuvable (déjà coupée ?)');
   return { ok: true };
+}
+
+// ---------------------------------------------------------------- « Peut modifier »: what a link may change
+/**
+ * The parts of Pilotix a link may change, each turned on by its person in Mon profil › Assistants IA — never from the
+ * assistant's side (« Autoriser » only ever gives reading). What it changes stays inside the person's own rights, and
+ * the big changes (cancelling an order, a price, money, a page online or offline, an ad) wait for their yes.
+ */
+export const MCP_PARTS = ['orders', 'products', 'pages', 'marketing'] as const;
+export type McpPart = (typeof MCP_PARTS)[number];
+/** The parts written on a link (space-separated), in MCP_PARTS' order; anything else is dropped. */
+function partsOf(raw: unknown): McpPart[] {
+  const said = String(raw ?? '').split(/\s+/);
+  return MCP_PARTS.filter((p) => said.includes(p));
+}
+
+/**
+ * « Peut modifier »: the parts this link may change (an empty list: it only reads again). Only the person's own link,
+ * still alive, in this boutique. The change is written in their log.
+ */
+export async function mcpSetWrite(t: Tenancy, shopId: number, profileId: number, id: number, parts: unknown, now = Date.now()): Promise<{ write: McpPart[] }> {
+  if (!Array.isArray(parts) || parts.some((p) => !(MCP_PARTS as readonly unknown[]).includes(p))) throw bad('Partie de Pilotix inconnue');
+  const write = MCP_PARTS.filter((p) => parts.includes(p));
+  const r = await t.platform.query(
+    `UPDATE platform.mcp_grants SET write_parts = $4
+      WHERE id = $1 AND shop_id = $2 AND profile_id = $3 AND revoked_at IS NULL AND code_used_at IS NOT NULL
+      RETURNING client_name, redirect_uri`,
+    [id, shopId, profileId, write.join(' ')],
+  );
+  if (!r.length) throw new AppError('not_found', 'Connexion introuvable (déjà coupée ?)');
+  await mcpLogAdd(t, { shopId, profileId, grantId: id, client: String(r[0].client_name), host: hostOf(r[0].redirect_uri), kind: 'setting', tool: 'write', detail: { parts: write } }, now);
+  return { write };
+}
+
+// ---------------------------------------------------------------- the log (Mon profil › Assistants IA › Journal)
+/** How long a line of the log is kept. */
+export const LOG_DAYS = 90;
+/** read / refused / error: a tool an assistant used · setting: its person changed what the link may do */
+export type McpLogKind = 'read' | 'change' | 'refused' | 'error' | 'setting';
+export interface McpLogLine {
+  id: number;
+  at: string;
+  profileId: number;
+  client: string;
+  host: string;
+  kind: McpLogKind;
+  tool: string;
+  detail: Record<string, unknown>;
+}
+/** What the log's filter keeps: everything, the changes (a link's own, or its person's « Peut modifier »), what was refused. */
+export type McpLogFilter = 'all' | 'change' | 'refused';
+const FILTER_KINDS: Record<Exclude<McpLogFilter, 'all'>, McpLogKind[]> = { change: ['change', 'setting'], refused: ['refused'] };
+
+/** One line of the log. Every 500th line also clears the lines older than LOG_DAYS, in every boutique. */
+export async function mcpLogAdd(
+  t: Tenancy,
+  line: { shopId: number; profileId: number; grantId?: number | null; client: string; host: string; kind: McpLogKind; tool: string; detail: Record<string, unknown> },
+  now = Date.now(),
+): Promise<void> {
+  const r = await t.platform.query(
+    `INSERT INTO platform.mcp_log (at, shop_id, profile_id, grant_id, client, host, kind, tool, detail) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb) RETURNING id`,
+    [new Date(now).toISOString(), line.shopId, line.profileId, line.grantId ?? null, line.client.slice(0, 80), line.host.slice(0, 120), line.kind, line.tool.slice(0, 60), JSON.stringify(line.detail ?? {})],
+  );
+  if (num(r[0]?.id) % 500 === 0) await t.platform.query('DELETE FROM platform.mcp_log WHERE at < $1', [new Date(now - LOG_DAYS * DAY_MS).toISOString()]);
+}
+
+/**
+ * The log, newest first, 50 lines at a time (`before`: the id of the last line shown): one person's (`profileId`), or
+ * the whole boutique's (null: its administrators). Lines older than LOG_DAYS are cleared first.
+ */
+export async function mcpLog(
+  t: Tenancy,
+  shopId: number,
+  o: { profileId: number | null; filter?: McpLogFilter; before?: number | null; limit?: number },
+  now = Date.now(),
+): Promise<{ lines: McpLogLine[]; more: boolean }> {
+  await t.platform.query('DELETE FROM platform.mcp_log WHERE shop_id = $1 AND at < $2', [shopId, new Date(now - LOG_DAYS * DAY_MS).toISOString()]);
+  const limit = Math.min(100, Math.max(1, Math.floor(o.limit ?? 50)));
+  const args: unknown[] = [shopId];
+  let where = 'shop_id = $1';
+  if (o.profileId !== null) {
+    args.push(o.profileId);
+    where += ` AND profile_id = $${args.length}`;
+  }
+  if (o.filter && o.filter !== 'all') {
+    args.push(FILTER_KINDS[o.filter]);
+    where += ` AND kind = ANY($${args.length}::text[])`;
+  }
+  if (o.before && Number.isSafeInteger(o.before) && o.before > 0) {
+    args.push(o.before);
+    where += ` AND id < $${args.length}`;
+  }
+  const rows = await t.platform.query(`SELECT id, at, profile_id, client, host, kind, tool, detail FROM platform.mcp_log WHERE ${where} ORDER BY id DESC LIMIT ${limit + 1}`, args);
+  const lines = rows.slice(0, limit).map((r: any) => ({
+    id: num(r.id),
+    at: iso(r.at),
+    profileId: num(r.profile_id),
+    client: String(r.client ?? ''),
+    host: String(r.host ?? ''),
+    kind: String(r.kind) as McpLogKind,
+    tool: String(r.tool),
+    detail: (typeof r.detail === 'string' ? JSON.parse(r.detail) : r.detail) ?? {},
+  }));
+  return { lines, more: rows.length > limit };
 }
 
 // ---------------------------------------------------------------- what the assistant says to the link (JSON-RPC, MCP)
@@ -625,10 +750,25 @@ export async function mcpMessage(msg: unknown, env: McpEnv): Promise<Record<stri
       const tool = MCP_TOOLS.find((x) => x.name === name);
       if (!tool) return rpcError(m.id, -32602, `Unknown tool: ${name.slice(0, 80)}`);
       const say = (text: string, isError: boolean) => ok({ content: [{ type: 'text', text }], isError });
+      const args = m.params?.arguments;
+      // the person's log: what was asked, what came of it (a failing log never stops the answer)
+      const log = (kind: 'read' | 'refused' | 'error', detail: Record<string, unknown>) => {
+        try {
+          env.log?.({ tool: name, kind, detail });
+        } catch {
+          /* the answer goes on */
+        }
+      };
       try {
-        return say(JSON.stringify(await runTool(tool, m.params?.arguments, env)), false);
+        const out = await runTool(tool, args, env);
+        log('read', callDetail(name, args, out));
+        return say(JSON.stringify(out), false);
       } catch (e) {
-        if (e instanceof AppError) return say(e.message, true);
+        if (e instanceof AppError) {
+          log(e.code === 'forbidden' ? 'refused' : 'error', { ...callDetail(name, args, null), why: e.message.slice(0, 160) });
+          return say(e.message, true);
+        }
+        log('error', callDetail(name, args, null));
         env.onError?.(e, `tool ${name}`);
         return say('Pilotix could not answer (an error on its side). Try again in a moment.', true);
       }

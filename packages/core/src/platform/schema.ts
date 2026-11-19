@@ -681,6 +681,32 @@ CREATE TABLE IF NOT EXISTS platform.mcp_grants (
 CREATE INDEX IF NOT EXISTS mcp_grants_person ON platform.mcp_grants (shop_id, profile_id) WHERE revoked_at IS NULL;
 `;
 
+/**
+ * The AI assistants' log (Mon profil › Assistants IA › Journal): one line per tool an assistant used, and per change of
+ * what a link may do — whose link (a person in a boutique), which assistant (its name and site, kept here so a line
+ * outlives its link), what it asked in a few short facts (a phone number cut), what came of it. Kept 90 days.
+ * And on each link, the parts of Pilotix it may change: turned on by its person in Mon profil, never from the
+ * assistant's side (« Autoriser » only ever gives reading).
+ */
+const MCP_LOG_SQL = `
+ALTER TABLE platform.mcp_grants ADD COLUMN IF NOT EXISTS write_parts text NOT NULL DEFAULT '';
+CREATE TABLE IF NOT EXISTS platform.mcp_log (
+  id          bigserial   PRIMARY KEY,
+  at          timestamptz NOT NULL DEFAULT now(),
+  shop_id     bigint      NOT NULL,
+  profile_id  bigint      NOT NULL,
+  grant_id    bigint,
+  client      text        NOT NULL DEFAULT '',
+  host        text        NOT NULL DEFAULT '',
+  kind        text        NOT NULL,
+  tool        text        NOT NULL,
+  detail      jsonb       NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS mcp_log_shop ON platform.mcp_log (shop_id, id DESC);
+CREATE INDEX IF NOT EXISTS mcp_log_person ON platform.mcp_log (shop_id, profile_id, id DESC);
+CREATE INDEX IF NOT EXISTS mcp_log_at ON platform.mcp_log (at);
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
@@ -767,6 +793,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p039_referral_period', REFERRAL_PERIOD_SQL],
   // AI assistants (Claude, ChatGPT) linked to a person's account in a boutique: https://<site>/mcp (core mcp-server.ts)
   ['p040_mcp', MCP_SQL],
+  // their log (what each assistant did) and the parts each link may change (Mon profil › Assistants IA)
+  ['p041_mcp_log', MCP_LOG_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

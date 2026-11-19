@@ -19,6 +19,16 @@ export interface McpEnv {
   version: string;
   /** an unexpected error (a bug): written in the server's log */
   onError?: (e: unknown, where: string) => void;
+  /** each tool the assistant used, for the person's log (Mon profil › Assistants IA › Journal) */
+  log?: (call: McpCall) => void;
+}
+
+/** One tool an assistant used, as its log keeps it: what came of it, and a few short facts (callDetail). */
+export interface McpCall {
+  tool: string;
+  /** read: it answered · refused: not allowed (the person's role, or what the link may do) · error: anything else */
+  kind: 'read' | 'refused' | 'error';
+  detail: Record<string, unknown>;
 }
 
 export interface McpTool {
@@ -554,4 +564,71 @@ export async function runTool(t: McpTool, args: unknown, env: McpEnv): Promise<u
     throw bad(`Invalid arguments for ${t.name}: ${i.path.join('.') || 'input'} (${i.message})`);
   }
   return t.run(env, parsed.data);
+}
+
+// ---------------------------------------------------------------- what the log keeps of a call
+/** A phone number as the log shows it: its first four digits and its last two (« 0550 •• •• 56 »). */
+export const cutPhone = (v: unknown): string | undefined => {
+  const d = String(v ?? '').replace(/\D/g, '');
+  return d.length >= 8 ? `${d.slice(0, 4)} •• •• ${d.slice(-2)}` : undefined;
+};
+
+/**
+ * What the person's log keeps of one call (Mon profil › Assistants IA › Journal): a few short facts the page turns into
+ * a sentence — what was searched (cut short), the period, how many lines came back, a phone number cut — never the
+ * answer itself. What the assistant sent is read as it came (it may be wrong): only well-formed facts are kept.
+ */
+export function callDetail(name: string, args: unknown, result: unknown): Record<string, unknown> {
+  const a = (args && typeof args === 'object' && !Array.isArray(args) ? args : {}) as Record<string, unknown>;
+  const r = (result && typeof result === 'object' && !Array.isArray(result) ? result : {}) as Record<string, any>;
+  const d: Record<string, unknown> = {};
+  const word = (v: unknown, max = 60) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);
+  const day = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : undefined);
+  const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(0, 6).map((x) => x.slice(0, 30)) : undefined);
+  const put = (k: string, v: unknown) => {
+    if (v !== undefined && !(Array.isArray(v) && !v.length)) d[k] = v;
+  };
+  const count = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : Array.isArray(v) ? v.length : undefined);
+  switch (name) {
+    case 'search_orders':
+      put('q', word(a.q));
+      put('confirmation', list(a.confirmation));
+      put('delivery', list(a.delivery));
+      put('wilaya', typeof a.wilaya === 'number' ? a.wilaya : undefined);
+      put('from', day(a.from));
+      put('to', day(a.to));
+      put('count', count(r.total));
+      break;
+    case 'get_order':
+      put('ref', word(r.ref, 40) ?? word(a.ref, 40) ?? (typeof a.id === 'number' ? `#${a.id}` : undefined));
+      break;
+    case 'stats_overview':
+    case 'shop_dashboard':
+    case 'agent_stats':
+      put('from', day(a.from));
+      put('to', day(a.to));
+      break;
+    case 'search_products':
+      put('q', word(a.q));
+      put('count', count(r.products));
+      break;
+    case 'stock_levels':
+      put('q', word(a.q));
+      if (a.low_only === true) d.low = true;
+      put('count', count(r.lines));
+      break;
+    case 'delivery_follow_up':
+      put('list', word(a.list, 30));
+      put('q', word(a.q));
+      put('count', count(r.total));
+      break;
+    case 'delivery_companies':
+      put('count', count(r.companies));
+      break;
+    case 'customer_history':
+      put('phone', cutPhone(a.phone));
+      put('count', count(r.orders));
+      break;
+  }
+  return d;
 }
