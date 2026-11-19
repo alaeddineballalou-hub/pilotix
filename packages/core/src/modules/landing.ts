@@ -1831,11 +1831,15 @@ export async function sendMetaEvents(ctx: Ctx, limit = 100): Promise<{ sent: num
       out.sent += ids.length;
       continue;
     }
-    // a chat's Purchase: the Page's token (Pilot AI › Comptes), which carries page_events / instagram_manage_events
+    // a chat's Purchase (Conversions API for Business Messaging): the shop's ads key first (« Publicité Meta », or a Meta
+    // Ads key pasted in Pilot AI › Comptes, carries page_events / instagram_manage_events with the pixels), else the
+    // Page's key (Meta's two doors: « Facebook et Instagram » asks for the content rights only)
     if (platform === 'chat') {
+      const adsKey = String((await db.query(`SELECT value FROM settings WHERE key = 'secret_meta_token'`))[0]?.value ?? '');
       const pageToken = String((await db.query(`SELECT value FROM settings WHERE key = 'secret_dellal_page_token'`))[0]?.value ?? '');
-      if (!pageToken) await wait(ids, 'Jeton de la Page Facebook manquant (Pilot AI › Comptes)', 30);
-      else await send(key, pageToken, list);
+      const token = adsKey || pageToken;
+      if (!token) await wait(ids, 'Clé Meta manquante : liez « Publicité Meta » ou la page (Pilot AI › Comptes)', 30);
+      else await send(key, token, list);
       continue;
     }
     // the pixel's own token, else (Meta) the shop's Conversions API token

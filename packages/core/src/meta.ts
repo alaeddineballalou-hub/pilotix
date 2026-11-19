@@ -49,7 +49,7 @@ function chatError(res: Response, data: any): AppError {
   if (e?.code === 190) return new AppError('bad_request', 'Jeton de la Page expiré ou révoqué : liez le compte à nouveau (Pilot AI › Comptes).');
   if (e?.code === 4 || e?.code === 17 || e?.code === 613 || res.status === 429) return new AppError('conflict', 'Meta limite les demandes pour l’instant.');
   if (e?.code === 10 || e?.code === 200 || /permission/i.test(String(e?.message ?? '')))
-    return new AppError('bad_request', 'Meta n’a pas encore accordé page_events / instagram_manage_events à Pilotix : réessayez après l’App Review.');
+    return new AppError('bad_request', 'Meta refuse page_events / instagram_manage_events à cette clé : cochez-les dans la clé Meta Ads (Pilot AI › Comptes), ou réessayez après l’App Review.');
   return new AppError('bad_request', `Meta : ${e?.error_user_msg ?? e?.message ?? res.statusText}`);
 }
 

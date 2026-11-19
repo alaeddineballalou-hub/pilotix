@@ -46,6 +46,22 @@ async function confirm(ids: number[]) {
   await call('orders.setConf', conf, { ids, status: 'confirmed' });
 }
 
+test('a chat’s Purchase goes with the shop’s ads key when there is one (Meta’s two doors: the Page’s key has the content rights only)', async () => {
+  const o = await chatOrder('messenger', PAGE);
+  await confirm([o.id]);
+  await db.query(`INSERT INTO settings (key, value) VALUES ('secret_meta_token', '"EAAads"') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  try {
+    const sent: any[] = [];
+    const server: Ctx['server'] = { courier: async () => ({}), hashPassword: async (p) => p, meta: async (action: string, args: any) => (sent.push({ action, args }), { received: args.events.length }) };
+    await db.query(`UPDATE meta_events SET status = 'sent' WHERE status = 'queued' AND order_id <> $1`, [o.id]);
+    const r: any = await call('landing.run', await as(EMAILS.admin, server), {});
+    assert.equal(r.meta.sent, 1);
+    assert.deepEqual([sent[0].action, sent[0].args.target, sent[0].args.token], ['chatCapi', `messenger:${PAGE}`, 'EAAads']);
+  } finally {
+    await db.query(`DELETE FROM settings WHERE key = 'secret_meta_token'`);
+  }
+});
+
 test('a Messenger order confirmed by an agent: one Purchase for its Page, sent as a business-messaging event', async () => {
   const o = await chatOrder('messenger', PAGE);
   assert.equal((await events(o.id)).length, 0, 'nothing before it is confirmed');
@@ -63,7 +79,7 @@ test('a Messenger order confirmed by an agent: one Purchase for its Page, sent a
   assert.equal(r.meta.sent, 1);
   assert.equal(sent[0].action, 'chatCapi');
   assert.equal(sent[0].args.target, `messenger:${PAGE}`);
-  assert.equal(sent[0].args.token, 'EAApage');
+  assert.equal(sent[0].args.token, 'EAApage', 'no ads key: the Page’s key');
   const e = sent[0].args.events[0];
   assert.equal(e.event_name, 'Purchase');
   assert.equal(e.action_source, 'business_messaging');
