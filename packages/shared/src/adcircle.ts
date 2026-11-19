@@ -43,6 +43,8 @@ export const CIRCLE_FIELDS: readonly CircleField[] = [
   // these two steps read is a line or a general setting of Pilot Checks
 
   { key: 'againVideoDay', step: 'again', kind: 'day', def: 6 },
+  // the one exception to « a lost product gets no ad »: on, the rule that says so is shown right under it
+  { key: 'againMessages', step: 'again', kind: 'bool', def: true },
   { key: 'againAlways', step: 'again', kind: 'bool', def: true },
 ];
 
@@ -101,7 +103,7 @@ export const CIRCLE_RULES: Readonly<Record<CircleStep, readonly string[]>> = {
   judge: ['verdict', 'winner', 'notWinner', 'undecided', 'pending', 'after'],
   scale: ['batch', 'keep', 'group', 'own', 'startBudget'],
   watch: ['lines', 'budgetWait', 'budgetUp', 'budgetDown', 'proof', 'stock', 'freeze', 'brake', 'noData'],
-  again: ['round', 'videoDay', 'newIdea', 'copy', 'lost', 'always', 'noRule'],
+  again: ['round', 'videoDay', 'newIdea', 'copy', 'lost', 'messages', 'always', 'noRule'],
 };
 
 /** A rule whose words follow a choice of the shop: every text it can take (the first is the default's). */
@@ -130,6 +132,7 @@ export function circleRules(step: CircleStep, v: CircleValues, c: CircleChecks):
     else if (k === 'handsOff') out.push(wait ? 'handsOff' : 'handsOffNow');
     else if (k === 'proof') out.push(wait ? 'proof' : 'proofNow');
     else if (k === 'round') out.push(typeof v.testPerWeek === 'number' ? 'roundN' : 'round');
+    else if (k === 'messages') { if (v.againMessages === true) out.push(k); }
     else if (k === 'always') { if (v.againAlways === true) out.push(c.set.awarenessBudget !== null ? 'alwaysBudget' : 'always'); }
     else out.push(k);
   }
