@@ -80,11 +80,12 @@ test('« Life ad circle »: its own settings, one changed, wrong values refused'
   const r = await call('strat.circleSet', vendeur, { key: 'testBuys', value: 60 });
   assert.equal(r.values.testBuys, 60);
   await call('strat.circleSet', vendeur, { key: 'testPerWeek', value: 6 });
-  await call('strat.circleSet', vendeur, { key: 'againMessages', value: false });
+  await call('strat.circleSet', vendeur, { key: 'againAlways', value: false });
   const again = await call('strat.circle', vendeur, {});
   assert.equal(again.values.testBuys, 60);
   assert.equal(again.values.testPerWeek, 6);
-  assert.equal(again.values.againMessages, false);
+  assert.equal(again.values.againAlways, false);
+  await call('strat.circleSet', vendeur, { key: 'againAlways', value: true });
   // everything else keeps its default
   assert.equal(again.values.testDays, 7);
   // a setting that may stay « not chosen » can be emptied again
@@ -124,7 +125,7 @@ test('« Life ad circle »: the numbers that judge an ad are Pilot Checks’, sh
   assert.deepEqual([c2.set.winOrders, c2.set.awarenessBudget, c2.good, c2.bad, c2.stop, c2.ideasMin, c2.budgetWait], [8, 12, 1, 1.4, 1.7, 4, 12]);
   // … and only the administrators change them: the circle has no setting of that name any more
   await assert.rejects(call('auto.checkSetting', vendeur, { key: 'winOrders', v: 3 }));
-  for (const gone of ['judgeWin', 'judgeCut', 'judgeCutCost', 'judgeMoreDays', 'scaleGroups', 'scaleBudget', 'scaleKeepAds', 'scaleDay', 'watchGrow', 'watchBack', 'watchBrakeDays', 'againVideos', 'againWeeks', 'testBidCap', 'winOrders'])
+  for (const gone of ['judgeWin', 'judgeCut', 'judgeCutCost', 'judgeMoreDays', 'scaleGroups', 'scaleBudget', 'scaleKeepAds', 'scaleDay', 'watchGrow', 'watchBack', 'watchBrakeDays', 'againVideos', 'againWeeks', 'againMessages', 'testBidCap', 'winOrders'])
     await assert.rejects(call('strat.circleSet', vendeur, { key: gone, value: 3 }), /inconnu/, gone);
   // a value saved for a setting the circle no longer has stays in the row, unread
   const row = (await db.query<{ value: any }>(`SELECT value FROM settings WHERE key = 'ad_circle'`))[0].value;
@@ -190,7 +191,7 @@ test('« Life ad circle »: each step tells its rules, and a rule follows the sh
   assert.deepEqual(circleRules('judge', v, c), ['verdict', 'winner', 'notWinner', 'undecided', 'pending', 'after']);
   assert.deepEqual(circleRules('scale', v, c), ['batch', 'keep', 'group', 'own', 'startBudget']);
   assert.deepEqual(circleRules('watch', v, c), ['lines', 'budgetWait', 'budgetUp', 'budgetDown', 'proof', 'stock', 'freeze', 'brake', 'noData']);
-  assert.deepEqual(circleRules('again', v, c), ['round', 'videoDay', 'newIdea', 'copy', 'messages', 'always', 'noRule']);
+  assert.deepEqual(circleRules('again', v, c), ['round', 'videoDay', 'newIdea', 'copy', 'always', 'noRule']);
   // a test of videos only, or of images only, says so
   assert.ok(circleRules('test', { ...v, testImages: 0 }, c).includes('launchVideos'));
   assert.ok(circleRules('test', { ...v, testVideos: 0 }, c).includes('launchImages'));
@@ -202,7 +203,7 @@ test('« Life ad circle »: each step tells its rules, and a rule follows the sh
   assert.ok(circleRules('again', { ...v, testPerWeek: 4 }, c).includes('roundN'));
   assert.ok(circleRules('again', v, { ...c, set: { ...set, awarenessBudget: 10 } }).includes('alwaysBudget'));
   // a rule about something the shop switched off is left out
-  assert.deepEqual(circleRules('again', { ...v, againMessages: false, againAlways: false }, c), ['round', 'videoDay', 'newIdea', 'copy', 'noRule']);
+  assert.deepEqual(circleRules('again', { ...v, againAlways: false }, c), ['round', 'videoDay', 'newIdea', 'copy', 'noRule']);
   // every text a rule can take is in the list the languages are checked against
   for (const st of CIRCLE_STEPS) for (const k of circleRules(st, v, c)) assert.ok(CIRCLE_RULE_TEXTS.includes(k), k);
   assert.equal(new Set(CIRCLE_RULE_TEXTS).size, CIRCLE_RULE_TEXTS.length);
