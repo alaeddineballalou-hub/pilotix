@@ -8,7 +8,9 @@
 //   GET  /api/mcp/authorize                     → the assistant sends the person here; on to the app's « Autoriser » page
 //   POST /api/mcp/token                         → the code of « Autoriser » (or a renewal key) for the keys
 //   POST /api/mcp/ask | answer | links | cut    → the app's own (logged in): the « Autoriser » page, Mon profil › Assistants IA
-import { Body, Controller, Delete, Get, Logger, Module, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+//   POST /mcp/upload/<ticket>                   → /api/mcp/upload/<ticket>: a photo file an assistant sends for a product
+//                                                 (the one-time address of its tool add_product_photo: 10 minutes, once)
+import { Body, Controller, Delete, Get, Logger, Module, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import * as core from '@pilotix/core';
 import * as mcp from '@pilotix/core/dist/mcp-server';
 import type { Session } from '@pilotix/shared';
@@ -26,6 +28,8 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const LINK_VERSION = '1.0.0';
 /** calls of one link per minute (an assistant in a loop stops there) */
 const CALLS_PER_MINUTE = 120;
+/** photos sent from one address per minute (add_product_photo) */
+const PHOTOS_PER_MINUTE = 30;
 
 type Req0 = { ip?: string; protocol?: string; method?: string; headers: Record<string, string | string[] | undefined> };
 const header = (req: Req0, name: string) => {
@@ -195,6 +199,32 @@ export class McpController {
     return null;
   }
 
+  /** What a link's tools act as: its person, in its boutique (null: that account or boutique can no longer be used). */
+  private async envOf(req: Req0, access: mcp.McpAccess): Promise<mcp.McpEnv | null> {
+    const ref = await this.store(access.shopId);
+    const who = ref ? await this.person(ref, access.profileId) : null;
+    if (!ref || !who) return null;
+    this.core.touch(ref);
+    const p = who.session.profile;
+    const base = this.base(req);
+    return {
+      call: (name, input) => this.core.call(ref, name, who.session, input),
+      who: { name: p.name, email: p.email, roles: who.session.roles, isAdmin: who.session.isAdmin },
+      shop: { name: ref.shop.name, slug: ref.shop.slug },
+      scope: access.scope,
+      write: access.write,
+      photoUpload: (x) => mcp.mcpPhotoTicket(secret(), base, access, x),
+      now: Date.now(),
+      version: LINK_VERSION,
+      onError: (e, where) => this.log.error(`[${ref.shop.slug}] ${where}: ${(e as Error)?.stack || e}`),
+      // the person's log (Mon profil › Assistants IA › Journal): written after the answer, never in its way
+      log: (c) =>
+        void mcp
+          .mcpLogAdd(this.core.t, { shopId: access.shopId, profileId: access.profileId, grantId: access.grantId, client: access.client, host: access.host, kind: c.kind, tool: c.tool, detail: c.detail })
+          .catch((e) => this.log.warn(`[${ref.shop.slug}] log: ${(e as Error)?.message || e}`)),
+    };
+  }
+
   /**
    * One message of an assistant (or, for older ones, a few at once). No browser session is used here — only the key in
    * the Authorization header — so another site's page can do nothing with a visitor's Pilotix session through it.
@@ -212,25 +242,8 @@ export class McpController {
     const version = header(req, 'mcp-protocol-version');
     if (version && !mcp.MCP_VERSIONS.includes(version) && !list.some((m) => (m as { method?: unknown } | null)?.method === 'initialize'))
       return fail(400, -32600, `Unsupported MCP-Protocol-Version: ${version.slice(0, 20)}`);
-    const ref = await this.store(access.shopId);
-    const who = ref ? await this.person(ref, access.profileId) : null;
-    if (!ref || !who) return fail(401, -32001, 'This account can no longer be used');
-    this.core.touch(ref);
-    const p = who.session.profile;
-    const env: mcp.McpEnv = {
-      call: (name, input) => this.core.call(ref, name, who.session, input),
-      who: { name: p.name, email: p.email, roles: who.session.roles, isAdmin: who.session.isAdmin },
-      shop: { name: ref.shop.name, slug: ref.shop.slug },
-      scope: access.scope,
-      now: Date.now(),
-      version: LINK_VERSION,
-      onError: (e, where) => this.log.error(`[${ref.shop.slug}] ${where}: ${(e as Error)?.stack || e}`),
-      // the person's log (Mon profil › Assistants IA › Journal): written after the answer, never in its way
-      log: (c) =>
-        void mcp
-          .mcpLogAdd(this.core.t, { shopId: access.shopId, profileId: access.profileId, grantId: access.grantId, client: access.client, host: access.host, kind: c.kind, tool: c.tool, detail: c.detail })
-          .catch((e) => this.log.warn(`[${ref.shop.slug}] log: ${(e as Error)?.message || e}`)),
-    };
+    const env = await this.envOf(req, access);
+    if (!env) return fail(401, -32001, 'This account can no longer be used');
     const out: Record<string, unknown>[] = [];
     for (const m of list) {
       const r = await mcp.mcpMessage(m, env);
@@ -251,6 +264,34 @@ export class McpController {
   @Delete('mcp')
   async noSession(@Req() req: Req0, @Res() res: any) {
     if (await this.opened(req, res)) res.status(405).header('Allow', 'POST').send({ error: 'method_not_allowed' });
+  }
+
+  /** the photos sent from each address in the current minute */
+  private photos = new Map<string, { n: number; until: number }>();
+  /**
+   * A photo file an assistant sends for a product, at the one-time address its tool add_product_photo gave
+   * (https://<site>/mcp/upload/<ticket>: deploy/Caddyfile sends it here). The file's bytes are the body, its type in
+   * Content-Type (image/jpeg, image/png or image/webp: main.ts takes them as they are, 15 MB at most). The address
+   * itself is the key (signed, 10 minutes, once): no session, no other key. The answer's words are for the assistant
+   * to pass on to its person.
+   */
+  @Public()
+  @Post('mcp/upload/:ticket')
+  async photo(@Param('ticket') ticket: string, @Body() body: unknown, @Req() req: Req0, @Res() res: any) {
+    const ip = ipOf(req);
+    const now = Date.now();
+    let c = this.photos.get(ip);
+    if (!c || c.until < now) {
+      if (this.photos.size > 5000) for (const [k, v] of this.photos) if (v.until < now) this.photos.delete(k);
+      this.photos.set(ip, (c = { n: 0, until: now + 60_000 }));
+    }
+    const reply = (status: number, json: Record<string, unknown>) => res.status(status).header('Cache-Control', 'no-store').send(json);
+    if (++c.n > PHOTOS_PER_MINUTE) return reply(429, { ok: false, message: 'Trop de photos d’un coup : attendez une minute.' });
+    // the file as it came (a JSON or a form instead of the file itself: nothing usable)
+    const file = Buffer.isBuffer(body) ? body : null;
+    const r = await mcp.mcpPhotoAdd(this.core.t, secret(), ticket, file, this.personOf, (a) => this.envOf(req, a), now);
+    if (r.status === 201) this.log.log(`photo added through a link (${String(r.json.message).slice(0, 120)})`);
+    return reply(r.status, r.json);
   }
 
   // ---------------------------------------------------------------- the app's own: « Autoriser », Mon profil › Assistants IA

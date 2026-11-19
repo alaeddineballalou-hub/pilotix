@@ -57,6 +57,7 @@
   "write": "Peut modifier",
   "writeHint": "Les gros changements attendent votre oui. Il ne supprime jamais rien.",
   "writeSoon": "Pour l’instant il lit seulement : les outils pour modifier arrivent avec les prochaines mises à jour.",
+  "writePhotos": "Il peut déjà ajouter des photos à vos produits, avec Claude seulement (dans les réglages de Claude, autorisez le site pilotix.online). Le reste arrive avec les prochaines mises à jour.",
   "part": {
     "orders": "Commandes",
     "products": "Produits et photos",
@@ -89,6 +90,8 @@
     "error": "Erreur"
   },
   "log": {
+    "add_product_photo": "A ajouté une photo à « {{name}} »",
+    "add_product_photo_try": "A voulu ajouter une photo à « {{name}} »",
     "whoami": "A vérifié pour qui il travaille",
     "search_orders": "A cherché des commandes",
     "get_order": "A ouvert la commande {{ref}}",

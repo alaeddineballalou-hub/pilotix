@@ -27,6 +27,9 @@ import {
   mcpLogAdd,
   mcpMessage,
   mcpSetWrite,
+  mcpPhotoAdd,
+  mcpPhotoTicket,
+  PHOTO_SECONDS,
   LOG_DAYS,
   McpCall,
   mcpRegister,
@@ -36,6 +39,7 @@ import {
   mcpToken,
   redirectKind,
 } from '../mcp-server';
+import { photoKind, preparePhoto } from '../photo-prepare';
 import { EMAILS } from './harness';
 
 const SECRET = 'test-secret-0123456789abcdefghijklmnopqrstuv:mcp';
@@ -271,7 +275,7 @@ test('an assistant with a secret gets no keys without it', async () => {
 test('an access key: one hour, for this link only, never changed', async () => {
   const l = await link();
   const a = await mcpAccess(t, SECRET, BASE, l.access, person, T0 + 1000);
-  assert.deepEqual(a, { grantId: l.id, shopId: 1, profileId: 7, scope: ['read'], write: [], client: 'Claude', host: 'claude.ai' });
+  assert.deepEqual(a, { grantId: l.id, shopId: 1, profileId: 7, tv: 0, scope: ['read'], write: [], client: 'Claude', host: 'claude.ai' });
   assert.ok(await mcpAccess(t, SECRET, BASE, l.access, person, T0 + (ACCESS_SECONDS - 1) * 1000));
   assert.equal(await mcpAccess(t, SECRET, BASE, l.access, person, T0 + ACCESS_SECONDS * 1000), null, 'over after an hour');
   // for another site's link, signed by another server, changed, or not an access key at all
@@ -473,10 +477,11 @@ test('the link speaks MCP: initialize, the tools of the person’s role, what it
   assert.deepEqual([(await say(admin, 'resources/list')).result, (await say(admin, 'prompts/list')).result], [{ resources: [] }, { prompts: [] }]);
   const names = async (email: string) => (await say(await envFor(email), 'tools/list')).result.tools.map((x: any) => x.name).sort();
   const all = await names(EMAILS.admin);
-  assert.deepEqual(all, ['agent_stats', 'customer_history', 'delivery_companies', 'delivery_follow_up', 'get_order', 'order_counts', 'search_orders', 'search_products', 'shop_dashboard', 'stats_overview', 'stock_levels', 'whoami']);
+  assert.deepEqual(all, ['add_product_photo', 'agent_stats', 'customer_history', 'delivery_companies', 'delivery_follow_up', 'get_order', 'order_counts', 'search_orders', 'search_products', 'shop_dashboard', 'stats_overview', 'stock_levels', 'whoami']);
   const tools = (await say(admin, 'tools/list')).result.tools;
   for (const x of tools) {
-    assert.deepEqual([x.inputSchema.type, x.inputSchema.additionalProperties, x.annotations.readOnlyHint, x.annotations.destructiveHint], ['object', false, true, false], x.name);
+    // only add_product_photo changes something (it adds; nothing deletes)
+    assert.deepEqual([x.inputSchema.type, x.inputSchema.additionalProperties, x.annotations.readOnlyHint, x.annotations.destructiveHint], ['object', false, x.name !== 'add_product_photo', false], x.name);
     assert.ok(x.title && x.description.length > 30, x.name);
   }
   // each role: the tools of its own screens
@@ -693,4 +698,117 @@ test('« Peut modifier »: only the link’s person turns it on, part by part, a
   assert.deepEqual((await mcpSetWrite(t, 1, 7, l.id, [], T0)).write, []);
   await mcpCut(t, 1, 7, l.id, T0);
   await assert.rejects(mcpSetWrite(t, 1, 7, l.id, ['orders'], T0), /introuvable/);
+});
+
+// ---------------------------------------------------------------- a photo an assistant sends for a product
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const sharp = require('sharp');
+/** a picture made here: `w` × `h`, half see-through pink (a PNG), or a JPEG */
+const picture = (w: number, h: number, as: 'png' | 'jpeg' = 'png'): Promise<Buffer> => {
+  const s = sharp({ create: { width: w, height: h, channels: 4, background: { r: 240, g: 120, b: 180, alpha: 0.5 } } });
+  return (as === 'png' ? s.png() : s.jpeg()).toBuffer();
+};
+
+test('a photo file made ready as Produits › Photos keeps it: JPEG 2048 px at most, the right way up, its small copies', async () => {
+  assert.equal(photoKind(await picture(10, 10)), 'png');
+  assert.equal(photoKind(await picture(10, 10, 'jpeg')), 'jpeg');
+  assert.equal(photoKind(Buffer.from('RIFF0000WEBPVP8 ')), 'webp');
+  assert.equal(photoKind(Buffer.from('<html>not a photo</html>')), null);
+  const big = await preparePhoto(await picture(3000, 1000));
+  assert.deepEqual([big.w, big.h], [2048, 683]);
+  assert.match(big.data, /^\/9j\//, 'a JPEG');
+  assert.match(big.thumb, /^data:image\/jpeg;base64,/);
+  assert.match(big.mini, /^data:image\/jpeg;base64,/);
+  assert.match(big.small, /^data:image\/webp;base64,/);
+  // a see-through PNG lands on white (a JPEG has no see-through)
+  const px = await sharp(Buffer.from(big.data, 'base64')).raw().toBuffer();
+  assert.ok(px[0] > 240 && px[1] > 180, 'pink on white, not on black');
+  // a small one stays its size
+  const small = await preparePhoto(await picture(600, 800, 'jpeg'));
+  assert.deepEqual([small.w, small.h], [600, 800]);
+  await assert.rejects(preparePhoto(Buffer.from('<html>not a photo</html>')), /JPEG, PNG ou WebP/);
+  await assert.rejects(preparePhoto(Buffer.concat([(await picture(10, 10)).subarray(0, 40)])), /ne peut pas être lue/);
+});
+
+test('add_product_photo: only with « Produits et photos » on; a one-time address; the photo becomes the product’s, in the log', async () => {
+  const pid = Number((await db.query('SELECT id FROM products ORDER BY id LIMIT 1'))[0].id);
+  const variant = (await db.query('SELECT id, title FROM product_variants WHERE product_id = $1 ORDER BY id LIMIT 1', [pid]))[0];
+  // who sees the tool: the administrator and the depot (Produits › Photos is theirs), not a confirmation agent
+  const names = async (email: string) => ((await say(await envFor(email), 'tools/list')).result.tools as any[]).map((x) => x.name);
+  assert.ok((await names(EMAILS.admin)).includes('add_product_photo'));
+  assert.ok((await names(EMAILS.depot)).includes('add_product_photo'));
+  assert.ok(!(await names(EMAILS.conf)).includes('add_product_photo'));
+  const listed = ((await say(await envFor(EMAILS.admin), 'tools/list')).result.tools as any[]).find((x) => x.name === 'add_product_photo');
+  assert.equal(listed.annotations.readOnlyHint, false);
+  assert.equal(listed.annotations.destructiveHint, false);
+
+  const l = await link();
+  const logs: McpCall[] = [];
+  const envOf = async (a: { write: string[] }, email = EMAILS.admin): Promise<McpEnv> => ({ ...(await envFor(email)), write: a.write, log: (c) => void logs.push(c) });
+  // « Peut modifier » off: refused, and the log says so
+  const off = await mcpAccess(t, SECRET, BASE, l.access, person, T0);
+  const r0 = await tool({ ...(await envOf(off!)), photoUpload: (p) => mcpPhotoTicket(SECRET, BASE, off!, p, T0) }, 'add_product_photo', { product_id: pid });
+  assert.match(r0.error, /Peut modifier/);
+  assert.deepEqual([logs.at(-1)!.kind, logs.at(-1)!.tool], ['refused', 'add_product_photo']);
+  // on: an address, for 10 minutes; asking for it is not a change yet (no line)
+  await mcpSetWrite(t, 1, 7, l.id, ['products'], T0);
+  const a = (await mcpAccess(t, SECRET, BASE, l.access, person, T0 + 500))!;
+  const env = { ...(await envOf(a)), photoUpload: (p: { productId: number; variantId: number | null }) => mcpPhotoTicket(SECRET, BASE, a, p, T0 + 500) };
+  // what the assistant is told it may change: only a part that has a tool today
+  assert.deepEqual((await tool(env, 'whoami')).can_change, ['products']);
+  assert.deepEqual((await tool({ ...env, write: ['orders'] }, 'whoami')).can_change, []);
+  assert.match((await say(env, 'initialize', {})).result.instructions, /add photos to products/);
+  assert.match((await say({ ...env, write: ['orders'] }, 'initialize', {})).result.instructions, /read-only/);
+  const n0 = logs.length;
+  const r1 = await tool(env, 'add_product_photo', { product_id: pid });
+  assert.equal(r1.product.id, pid);
+  assert.equal(r1.expires_in_seconds, PHOTO_SECONDS);
+  assert.ok(r1.upload_url.startsWith(`${BASE}/mcp/upload/pxu_`), r1.upload_url);
+  assert.match(r1.example, /curl .*--data-binary/);
+  assert.equal(logs.length, n0);
+  const ticket = r1.upload_url.split('/mcp/upload/')[1];
+  // the address as the web server lets it through (deploy/Caddyfile › @mcpPhoto)
+  assert.match(ticket, /^[A-Za-z0-9_.-]{20,1000}$/);
+  const count = async () => ((await call('photos.list', { db, session: await login(db, EMAILS.admin, DEMO_PASSWORD), now: () => Date.now(), emit: () => undefined }, { productId: pid })) as any).photos.length;
+  const before = await count();
+  // not a photo, nothing sent: refused, and the address still serves
+  assert.equal((await mcpPhotoAdd(t, SECRET, ticket, Buffer.from('<html>no</html>'), person, envOf, T0 + 1000)).status, 415);
+  assert.equal((await mcpPhotoAdd(t, SECRET, ticket, null, person, envOf, T0 + 1000)).status, 400);
+  assert.equal((await mcpPhotoAdd(t, SECRET, ticket, Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(15 * 1024 * 1024)]), person, envOf, T0 + 1000)).status, 413);
+  // the photo: added as the person, one more on the product, written as a change
+  const ok = await mcpPhotoAdd(t, SECRET, ticket, await picture(900, 1200), person, envOf, T0 + 2000);
+  assert.equal(ok.status, 201, JSON.stringify(ok.json));
+  assert.equal(ok.json.ok, true);
+  assert.match(String(ok.json.message), /^Photo ajoutée à « .+ »/);
+  assert.deepEqual([ok.json.width, ok.json.height], [900, 1200]);
+  assert.equal(await count(), before + 1);
+  assert.deepEqual([logs.at(-1)!.kind, logs.at(-1)!.tool, typeof logs.at(-1)!.detail.product], ['change', 'add_product_photo', 'string']);
+  // once only; a changed address is not ours; an address over its 10 minutes
+  assert.equal((await mcpPhotoAdd(t, SECRET, ticket, await picture(50, 50), person, envOf, T0 + 3000)).status, 410);
+  assert.equal((await mcpPhotoAdd(t, SECRET, ticket.slice(0, -2) + 'xx', await picture(50, 50), person, envOf, T0 + 3000)).status, 404);
+  assert.equal((await mcpPhotoAdd(t, 'another-secret', ticket, await picture(50, 50), person, envOf, T0 + 3000)).status, 404);
+  const late = mcpPhotoTicket(SECRET, BASE, a, { productId: pid, variantId: null }, T0).url.split('/mcp/upload/')[1];
+  assert.equal((await mcpPhotoAdd(t, SECRET, late, await picture(50, 50), person, envOf, T0 + (PHOTO_SECONDS + 1) * 1000)).status, 410);
+  // a colour / size of the product: its own photo
+  if (variant) {
+    const r2 = await tool(env, 'add_product_photo', { product_id: pid, variant_id: Number(variant.id) });
+    const v = await mcpPhotoAdd(t, SECRET, r2.upload_url.split('/mcp/upload/')[1], await picture(400, 400, 'jpeg'), person, envOf, T0 + 4000);
+    assert.equal(v.status, 201, JSON.stringify(v.json));
+    assert.equal(await count(), before + 2);
+  }
+  assert.match((await tool(env, 'add_product_photo', { product_id: pid, variant_id: 999999 })).error, /variante/);
+  // the person's role decides too: through a confirmation agent's account, Produits › Photos is not theirs
+  const r3 = await tool(env, 'add_product_photo', { product_id: pid });
+  const agent = await mcpPhotoAdd(t, SECRET, r3.upload_url.split('/mcp/upload/')[1], await picture(50, 50), person, (x) => envOf(x, EMAILS.conf), T0 + 5000);
+  assert.equal(agent.status, 403, JSON.stringify(agent.json));
+  assert.deepEqual([logs.at(-1)!.kind, logs.at(-1)!.tool], ['refused', 'add_product_photo']);
+  // turned off in Pilotix after the address was given: refused; a cut link: refused
+  const r4 = await tool(env, 'add_product_photo', { product_id: pid });
+  await mcpSetWrite(t, 1, 7, l.id, [], T0);
+  const k4 = r4.upload_url.split('/mcp/upload/')[1];
+  assert.match(String((await mcpPhotoAdd(t, SECRET, k4, await picture(50, 50), person, envOf, T0 + 6000)).json.message), /Peut modifier/);
+  await mcpSetWrite(t, 1, 7, l.id, ['products'], T0);
+  await mcpCut(t, 1, 7, l.id, T0);
+  assert.equal((await mcpPhotoAdd(t, SECRET, k4, await picture(50, 50), person, envOf, T0 + 7000)).status, 403);
+  assert.equal(await count(), before + (variant ? 2 : 1));
 });

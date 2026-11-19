@@ -707,6 +707,20 @@ CREATE INDEX IF NOT EXISTS mcp_log_person ON platform.mcp_log (shop_id, profile_
 CREATE INDEX IF NOT EXISTS mcp_log_at ON platform.mcp_log (at);
 `;
 
+/**
+ * The photo addresses an AI assistant used (core mcp-server.ts › mcpPhotoAdd): the tool add_product_photo gives a
+ * signed address that waits 10 minutes; its number is written here when the photo arrives, so it serves once. A day
+ * later the line goes (the address is long over).
+ */
+const MCP_UPLOADS_SQL = `
+CREATE TABLE IF NOT EXISTS platform.mcp_uploads (
+  nonce     text        PRIMARY KEY,
+  grant_id  bigint      NOT NULL,
+  at        timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS mcp_uploads_at ON platform.mcp_uploads (at);
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
@@ -795,6 +809,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p040_mcp', MCP_SQL],
   // their log (what each assistant did) and the parts each link may change (Mon profil › Assistants IA)
   ['p041_mcp_log', MCP_LOG_SQL],
+  // the photo addresses an assistant used (add_product_photo: each one once)
+  ['p042_mcp_uploads', MCP_UPLOADS_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

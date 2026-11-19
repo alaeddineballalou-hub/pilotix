@@ -60,6 +60,8 @@ async function bootstrap() {
     .addHook('onRoute', (route: { url?: string; bodyLimit?: number }) => {
       const url = String(route.url ?? '');
       if (/^\/api\/(auth|platform\/auth)\//.test(url)) route.bodyLimit = 64 * 1024;
+      // a photo an assistant sends for a product (mcp.ts › photo): the file itself, 15 MB at most (and a little room)
+      else if (/^\/api\/mcp\/upload\//.test(url)) route.bodyLimit = 16 * 1024 * 1024;
       // an AI assistant's link and its sign-in door (mcp.ts): short messages only
       else if (/^\/api\/mcp(\/|$)/.test(url)) route.bodyLimit = 256 * 1024;
       else if (/^\/api\/(s\/[^/]+\/)?lp\//.test(url)) route.bodyLimit = 64 * 1024;
@@ -79,6 +81,12 @@ async function bootstrap() {
     .getHttpAdapter()
     .getInstance()
     .addContentTypeParser('application/octet-stream', { parseAs: 'buffer', bodyLimit: 9 * 1024 * 1024 }, (_req: unknown, body: Buffer, done: (e: Error | null, b?: Buffer) => void) => done(null, body));
+  // and a photo an assistant sends for a product (POST /api/mcp/upload/…, mcp.ts › photo): the file as it is (its
+  // route's own limit above, 16 MB; anywhere else the server's 5 MB)
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .addContentTypeParser(['image/jpeg', 'image/png', 'image/webp'], { parseAs: 'buffer' }, (_req: unknown, body: Buffer, done: (e: Error | null, b?: Buffer) => void) => done(null, body));
   app.setGlobalPrefix('api');
   app.enableCors({ origin: config.corsOrigins, credentials: true });
   app.enableShutdownHooks();

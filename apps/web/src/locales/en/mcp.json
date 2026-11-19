@@ -57,6 +57,7 @@
   "write": "Can change things",
   "writeHint": "Big changes wait for your yes. It never deletes anything.",
   "writeSoon": "For now it still only reads: the tools to change things come with the next updates.",
+  "writePhotos": "It can already add photos to your products, with Claude only (in Claude: Settings › Capabilities, allow pilotix.online). The rest comes with the next updates.",
   "part": {
     "orders": "Orders",
     "products": "Products and photos",
@@ -89,6 +90,8 @@
     "error": "Error"
   },
   "log": {
+    "add_product_photo": "Added a photo to “{{name}}”",
+    "add_product_photo_try": "Tried to add a photo to “{{name}}”",
     "whoami": "Checked who it works for",
     "search_orders": "Searched orders",
     "get_order": "Opened order {{ref}}",

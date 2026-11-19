@@ -259,9 +259,9 @@ await section('The link, as an administrator', async () => {
   assert.equal(note.status, 202);
   ok('initialize (the version asked, else the newest), notifications taken');
   const list = (await mcp(A, 'tools/list')).data.result.tools;
-  assert.deepEqual(list.map((t) => t.name).sort(), ['agent_stats', 'customer_history', 'delivery_companies', 'delivery_follow_up', 'get_order', 'order_counts', 'search_orders', 'search_products', 'shop_dashboard', 'stats_overview', 'stock_levels', 'whoami']);
-  assert.ok(list.every((t) => t.annotations.readOnlyHint === true && t.inputSchema.type === 'object' && t.description.length > 20));
-  ok(`${list.length} tools, all read-only`);
+  assert.deepEqual(list.map((t) => t.name).sort(), ['add_product_photo', 'agent_stats', 'customer_history', 'delivery_companies', 'delivery_follow_up', 'get_order', 'order_counts', 'search_orders', 'search_products', 'shop_dashboard', 'stats_overview', 'stock_levels', 'whoami']);
+  assert.ok(list.every((t) => t.annotations.readOnlyHint === (t.name !== 'add_product_photo') && t.annotations.destructiveHint === false && t.inputSchema.type === 'object' && t.description.length > 20));
+  ok(`${list.length} tools, all read-only but add_product_photo (it adds, never deletes)`);
   const me = await tool(A, 'whoami');
   assert.equal(me.email, 'admin@demo.pilotix.dz');
   assert.equal(me.administrator, true);
@@ -450,9 +450,29 @@ await section('The log, and « Peut modifier »', async () => {
   assert.deepEqual(w.data.write, ['orders', 'products']);
   assert.deepEqual((await http('/mcp/links', { body: {}, token: conf })).data.links.find((x) => x.id === sid).write, ['orders', 'products']);
   assert.ok((await http('/mcp/log', { body: { filter: 'change' }, token: conf })).data.lines.some((l) => l.tool === 'write' && l.kind === 'setting'));
-  // still only reading: no tool changes anything yet
+  // a confirmation agent's link: no tool of hers changes anything (adding photos is the depot's and the administrators')
   assert.ok((await mcp(S.access_token, 'tools/list')).data.result.tools.every((x) => x.annotations.readOnlyHint === true));
   ok('« Peut modifier »: its person turns it on from Pilotix, part by part, nobody else; the log says so');
+});
+
+await section('A photo for a product (add_product_photo)', async () => {
+  const P = await link(ADMIN);
+  const pid = Number(/^pxr_(\d+)\./.exec(P.refresh_token)[1]);
+  const product = (await tool(P.access_token, 'search_products', { limit: 1 })).products[0];
+  // « Peut modifier › Produits et photos » off: refused, with the way to turn it on
+  assert.match((await tool(P.access_token, 'add_product_photo', { product_id: product.id })).error, /Peut modifier/);
+  // on: this test server keeps no HD photos (no bucket), so the tool says it before giving an address
+  assert.equal((await http('/mcp/write', { body: { id: pid, parts: ['products'] }, token: ADMIN })).status, 201);
+  const r = await tool(P.access_token, 'add_product_photo', { product_id: product.id });
+  if (r.error) assert.match(r.error, /stockage des photos/);
+  else assert.match(r.upload_url, /\/mcp\/upload\/pxu_/);
+  assert.match((await tool(P.access_token, 'whoami')).access, /may also change: products/);
+  // the address takes the file itself (its image type): one that is not ours is refused, with words to pass on
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const up = await fetch(`${API}/mcp/upload/pxu_${'x'.repeat(40)}.${'y'.repeat(43)}`, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: png });
+  assert.equal(up.status, 404);
+  assert.deepEqual(await up.json(), { ok: false, message: 'Adresse de photo inconnue.' });
+  ok('add_product_photo: refused until « Produits et photos » is on; then an address (or the missing photo storage said); the address takes the file itself');
 });
 
 const failed = results.filter(([, e]) => e);

@@ -76,6 +76,12 @@
 		rewrite * /api/mcp
 		import server
 	}
+	# a photo an assistant sends for a product: the one-time address its tool add_product_photo gives (mcp.ts › photo)
+	@mcpPhoto path_regexp mcpPhoto ^/mcp/upload/([A-Za-z0-9_.-]{20,1000})$
+	handle @mcpPhoto {
+		rewrite * /api/mcp/upload/{re.mcpPhoto.1}
+		import server
+	}
 	handle /.well-known/oauth-protected-resource* {
 		rewrite * /api/mcp/resource
 		import server

@@ -20,10 +20,10 @@ import '../../layout/mcp.css';
 const PARTS = ['orders', 'products', 'pages', 'marketing'] as const;
 type Part = (typeof PARTS)[number];
 /**
- * The parts an assistant can really change today (core mcp-tools.ts has their tools). None yet: the switch is kept, but
- * the card keeps saying « Lecture seule » and the box says the tools come later. Add a part here with its tools.
+ * The parts an assistant can really change today (core mcp-tools.ts has their tools): « Produits et photos » (adding a
+ * photo, add_product_photo). A link with none of them ticked keeps saying « Lecture seule ». Add a part with its tools.
  */
-const READY: readonly Part[] = [];
+const READY: readonly Part[] = ['products'];
 
 interface Link {
   id: number;
@@ -194,7 +194,7 @@ function WriteBox({ l, busy, onWrite }: { l: Link; busy: boolean; onWrite: (l: L
               </label>
             ))}
           </div>
-          {!l.write.some((p) => READY.includes(p)) && <p className="pxm-soon">{t('mcp.writeSoon')}</p>}
+          <p className="pxm-soon">{t(l.write.includes('products') ? 'mcp.writePhotos' : 'mcp.writeSoon')}</p>
         </>
       )}
     </div>
@@ -296,7 +296,7 @@ interface LogLine {
   host: string;
   kind: Kind;
   tool: string;
-  detail: { q?: string; ref?: string; phone?: string; from?: string; to?: string; count?: number; parts?: string[]; why?: string };
+  detail: { q?: string; ref?: string; phone?: string; from?: string; to?: string; count?: number; parts?: string[]; why?: string; product?: string; variant?: string };
 }
 type Filter = 'all' | 'change' | 'refused';
 const FILTERS: Filter[] = ['all', 'change', 'refused'];
@@ -320,8 +320,9 @@ function useSentence() {
   return (l: LogLine): string => {
     const d = l.detail ?? {};
     if (l.tool === 'write') return d.parts?.length ? t('mcp.log.write', { parts: d.parts.map((p) => t(`mcp.part.${p}`)).join(', ') }) : t('mcp.log.writeOff');
-    const key = `mcp.log.${l.tool}`;
-    const bits = [i18n.exists(key) ? t(key, { ref: d.ref ?? '', phone: d.phone ?? '' }) : t('mcp.log.other', { tool: l.tool })];
+    // a photo: added (a change), or only tried (refused, an error)
+    const key = l.tool === 'add_product_photo' && l.kind !== 'change' ? 'mcp.log.add_product_photo_try' : `mcp.log.${l.tool}`;
+    const bits = [i18n.exists(key) ? t(key, { ref: d.ref ?? '', phone: d.phone ?? '', name: d.variant ? `${d.product ?? ''} (${d.variant})` : (d.product ?? '') }) : t('mcp.log.other', { tool: l.tool })];
     if (d.q) bits.push(t('mcp.log.q', { q: d.q }));
     if (d.from || d.to) bits.push(d.from && d.to && d.from !== d.to ? `${dateOnly(d.from)} – ${dateOnly(d.to)}` : dateOnly(d.from ?? d.to));
     if (typeof d.count === 'number') bits.push(t('mcp.log.found', { count: d.count }));

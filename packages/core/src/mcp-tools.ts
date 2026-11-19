@@ -1,7 +1,9 @@
-// What an AI assistant linked to Pilotix (mcp-server.ts) can ask — SERVER ONLY. Read-only for now: every tool reads
-// through the app's own actions (index.ts › call), as the person who linked the assistant: the same role checks, the
-// same rights (Utilisateurs › Rôles), the same rows as on their own screen. A tool only gives the fields listed here
-// (never a photo, a key, a courier's settings or a purchase price), in short lines an assistant reads well.
+// What an AI assistant linked to Pilotix (mcp-server.ts) can ask — SERVER ONLY. Every tool goes through the app's own
+// actions (index.ts › call), as the person who linked the assistant: the same role checks, the same rights (Utilisateurs
+// › Rôles), the same rows as on their own screen. A tool only gives the fields listed here (never a photo, a key, a
+// courier's settings or a purchase price), in short lines an assistant reads well. The tools that change something
+// (`writes`) work only for the parts the person turned on for that link (Mon profil › Assistants IA › « Peut modifier »);
+// none of them deletes anything. The only one so far: add_product_photo.
 import { CONF_STATUSES, FOLLOW_STATUSES, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { AppError, bad } from './rpc';
@@ -14,6 +16,10 @@ export interface McpEnv {
   shop: { name: string; slug: string };
   /** what the person allowed (« read ») */
   scope: string[];
+  /** the parts this link may change, turned on by its person in Mon profil › Assistants IA (none: it only reads) */
+  write?: string[];
+  /** a one-time address where the assistant sends one photo for a product (add_product_photo); made by the server */
+  photoUpload?: (p: { productId: number; variantId: number | null }) => { url: string; expiresIn: number };
   now: number;
   /** the server's version (shown to the assistant) */
   version: string;
@@ -26,8 +32,9 @@ export interface McpEnv {
 /** One tool an assistant used, as its log keeps it: what came of it, and a few short facts (callDetail). */
 export interface McpCall {
   tool: string;
-  /** read: it answered · refused: not allowed (the person's role, or what the link may do) · error: anything else */
-  kind: 'read' | 'refused' | 'error';
+  /** read: it answered · change: it changed something (a photo added) · refused: not allowed (the person's role, or what
+   *  the link may do) · error: anything else */
+  kind: 'read' | 'change' | 'refused' | 'error';
   detail: Record<string, unknown>;
 }
 
@@ -37,11 +44,22 @@ export interface McpTool {
   description: string;
   /** the roles that may use it (as the action it reads); null: everyone. Administrators always may. */
   roles: string[] | null;
+  /** the part of Pilotix it changes: only for a link whose person turned that part on (« Peut modifier »). None: it reads. */
+  writes?: McpPart;
   /** what the assistant sends, as it is told (JSON Schema) and as it is checked (zod) */
   inputSchema: Record<string, unknown>;
   input: z.ZodTypeAny;
   run: (env: McpEnv, input: any) => Promise<unknown>;
 }
+
+/** The parts of Pilotix a link may change, as its person turns them on (Mon profil › Assistants IA › « Peut modifier »). */
+export const MCP_PARTS = ['orders', 'products', 'pages', 'marketing'] as const;
+export type McpPart = (typeof MCP_PARTS)[number];
+/** their names on the person's screen (the words of a refusal) */
+const PART_NAMES: Record<McpPart, string> = { orders: 'Commandes', products: 'Produits et photos', pages: 'Landing pages', marketing: 'Marketing et pub' };
+/** a photo an assistant sends: how long its one-time address waits, how big the file may be */
+export const PHOTO_SECONDS = 600;
+export const PHOTO_MAX_MB = 15;
 
 // ---------------------------------------------------------------- small helpers
 const DAY_MS = 86_400_000;
@@ -110,6 +128,8 @@ const orderLine = (o: any) => ({
 const day = z.string().min(8).max(40);
 const DAY_DOC = 'A day as YYYY-MM-DD (the day in Algeria), or a full ISO date-time.';
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+/** a tool that adds something (never deletes nor overwrites) */
+const ADDS = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
 
 const DATE_OF = { created: 'created_at', confirmed: 'confirmed_at', shipped: 'shipped_at', delivered: 'delivered_at', returned: 'back_at', updated: 'updated_at' } as const;
 const SORT_OF = { created: 'created_at', confirmed: 'confirmed_at', shipped: 'shipped_at', delivered: 'delivered_at', returned: 'updated_at', updated: 'updated_at' } as const;
@@ -131,7 +151,8 @@ export const MCP_TOOLS: McpTool[] = [
       administrator: env.who.isAdmin,
       boutique: env.shop.name,
       boutique_link: env.shop.slug,
-      access: 'read-only (nothing can be changed from this assistant)',
+      access: canChange(env).length ? `reads; may also change: ${canChange(env).join(', ')} (turned on by this person in Pilotix; for now: adding photos to products)` : 'read-only (nothing can be changed from this assistant)',
+      can_change: canChange(env),
       today: algiersDay(env.now),
       now: new Date(env.now).toISOString(),
       timezone: 'Africa/Algiers (UTC+1)',
@@ -403,6 +424,47 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
+    name: 'add_product_photo',
+    title: 'Add a photo to a product',
+    description: [
+      'Adds one photo to a product (Pilotix › Produits › the product › Photos): a photo of the whole product, or of one of its colours / sizes (variant_id). It goes after the product’s other photos; nothing is ever deleted or replaced from here.',
+      `It answers with a one-time upload address, valid ${PHOTO_SECONDS / 60} minutes: send the photo file itself there, with an HTTP POST from your code environment, its type in Content-Type — for example: curl -sS -X POST -H "Content-Type: image/jpeg" --data-binary @/path/to/photo.jpg "<upload_url>". JPEG, PNG or WebP, ${PHOTO_MAX_MB} MB at most; Pilotix makes its own copies. The answer of that POST says whether the photo was added. One address for one photo: call this tool again for the next one.`,
+      'Find the product’s id (and its variants’ ids) with search_products. The person must have turned on « Peut modifier › Produits et photos » for this link in Pilotix (Mon profil › Assistants IA); you cannot turn it on. If your environment cannot reach pilotix.online, tell the person: in Claude, Settings › Capabilities, allow pilotix.online (code execution on).',
+    ].join(' '),
+    roles: ['depot'],
+    writes: 'products',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        product_id: { type: 'integer', minimum: 1, description: 'The product (search_products › id).' },
+        variant_id: { type: 'integer', minimum: 1, description: 'One of its colours / sizes (search_products › variants › id). Leave it out for a photo of the whole product.' },
+      },
+      required: ['product_id'],
+      additionalProperties: false,
+    },
+    input: z.object({ product_id: z.number().int().positive(), variant_id: z.number().int().positive().optional() }).strict(),
+    run: async (env, i) => {
+      if (!env.photoUpload) throw bad('Pilotix ne peut pas recevoir de photo ici.');
+      const p: any = await env.call('catalog.product', { id: i.product_id });
+      const v = i.variant_id ? (Array.isArray(p?.variants) ? p.variants : []).find((x: any) => Number(x.id) === i.variant_id) : null;
+      if (i.variant_id && !v) throw bad(`La variante ${i.variant_id} n’est pas celle de ce produit (search_products montre les siennes).`);
+      const now: any = await env.call('photos.list', { productId: i.product_id });
+      if (now?.store === 'off') throw bad('Le stockage des photos HD n’est pas encore activé sur ce serveur : Pilotix doit d’abord le configurer.');
+      const u = env.photoUpload({ productId: i.product_id, variantId: v ? Number(v.id) : null });
+      return {
+        product: { id: Number(p.id), name: String(p.name ?? '') },
+        variant: v ? { id: Number(v.id), name: text(v.title, 80) } : null,
+        photos_now: Array.isArray(now?.photos) ? now.photos.filter((x: any) => x?.kind !== 'sizes').length : null,
+        upload_url: u.url,
+        method: 'POST',
+        content_type: 'image/jpeg, image/png or image/webp (the file’s own type)',
+        max_mb: PHOTO_MAX_MB,
+        expires_in_seconds: u.expiresIn,
+        example: `curl -sS -X POST -H "Content-Type: image/jpeg" --data-binary @/path/to/photo.jpg "${u.url}"`,
+      };
+    },
+  },
+  {
     name: 'stock_levels',
     title: 'Stock by depot',
     description: 'The stock of each product variant in each depot: pieces in stock, held by waiting orders, available, the alert level, and pieces shipped in the last 30 days. low_only: only what is at or under its alert level.',
@@ -541,6 +603,9 @@ export const MCP_TOOLS: McpTool[] = [
   },
 ];
 
+/** The parts this link may change that have a tool today (« Peut modifier » can be on for a part whose tools are to come). */
+export const canChange = (env: McpEnv): McpPart[] => MCP_PARTS.filter((p) => (env.write ?? []).includes(p) && MCP_TOOLS.some((t) => t.writes === p));
+
 /** The tools this person's roles may use (an administrator: all of them). */
 export const toolsFor = (who: McpEnv['who']): McpTool[] => MCP_TOOLS.filter((t) => t.roles === null || who.isAdmin || t.roles.some((r) => who.roles.includes(r)));
 
@@ -550,7 +615,7 @@ export const describeTool = (t: McpTool) => ({
   title: t.title,
   description: t.description,
   inputSchema: t.inputSchema,
-  annotations: { title: t.title, ...READ_ONLY },
+  annotations: { title: t.title, ...(t.writes ? ADDS : READ_ONLY) },
   _meta: { securitySchemes: [{ type: 'oauth2', scopes: ['read'] }] },
 });
 
@@ -558,6 +623,9 @@ export const describeTool = (t: McpTool) => ({
 export async function runTool(t: McpTool, args: unknown, env: McpEnv): Promise<unknown> {
   if (t.roles !== null && !env.who.isAdmin && !t.roles.some((r) => env.who.roles.includes(r))) throw new AppError('forbidden', 'Accès refusé : votre rôle dans Pilotix ne donne pas accès à cela');
   if (!env.scope.includes('read')) throw new AppError('forbidden', 'Accès refusé : ce lien ne permet pas de lire');
+  // what changes something: only what the link's person turned on, in Pilotix (never from the assistant's side)
+  if (t.writes && !(env.write ?? []).includes(t.writes))
+    throw new AppError('forbidden', `Ce lien ne peut pas modifier « ${PART_NAMES[t.writes]} » : la personne doit l’activer dans Pilotix (Mon profil › Assistants IA › Peut modifier).`);
   const parsed = t.input.safeParse(args ?? {});
   if (!parsed.success) {
     const i = parsed.error.issues[0];
@@ -611,6 +679,10 @@ export function callDetail(name: string, args: unknown, result: unknown): Record
     case 'search_products':
       put('q', word(a.q));
       put('count', count(r.products));
+      break;
+    case 'add_product_photo':
+      put('product', word(r.product?.name) ?? (typeof a.product_id === 'number' ? `#${a.product_id}` : undefined));
+      put('variant', word(r.variant?.name));
       break;
     case 'stock_levels':
       put('q', word(a.q));
