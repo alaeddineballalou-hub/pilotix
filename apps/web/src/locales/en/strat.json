@@ -182,6 +182,7 @@
       "newIdea": "While fewer than {{ideasMin}} are live, one truly new video idea is added in each test: only one, for a product that already wins.",
       "copy": "A live ad is never edited. To fix a video, we make a copy, tested in the test of the next {{testDay}}.",
       "lost": "A lost product gets no ad until the manager brings it back as a new test.",
+      "messages": "Exception: a lost product that still got some orders moves to a message ad, at a lower price, with the AI answering.",
       "always": "Awareness and catalogue ads always run, with their own budget, outside the KPIs.",
       "alwaysBudget": "Awareness and catalogue ads always run, with their own budget: {{awarenessBudget}}.",
       "noRule": "When no rule decides, nothing is done on that ad: the manager decides, and the decision becomes a new rule."
@@ -195,6 +196,7 @@
       "testDays": "Length of a test (days)",
       "judgeDay": "Verdict day",
       "againVideoDay": "Videos ready on",
+      "againMessages": "Lost product with some orders: message ad",
       "againAlways": "Awareness and catalogue ads always on"
     },
     "h": {
@@ -206,6 +208,7 @@
       "testDays": "The budget is for this whole length, not per day.",
       "judgeDay": "The day tests are judged. Winning ads enter SCALE that day.",
       "againVideoDay": "The day all the videos of the next test must be finished.",
+      "againMessages": "At a lower price, with the AI answering.",
       "againAlways": "They run during the whole circle."
     }
   }
