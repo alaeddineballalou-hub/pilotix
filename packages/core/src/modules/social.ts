@@ -1,9 +1,14 @@
-// Linked accounts (Pilot AI › Comptes): THE one place where a boutique connects Meta and TikTok. One Facebook login, in
-// a new tab, brings everything at once: its Facebook Pages (messages, comments, the ads' forms), their Instagram accounts
-// (messages and comments), its Meta ad accounts (Publicité, the catalogue, the pixels); WhatsApp (Meta's own window for a
-// number) and TikTok are connected in the same card. Nothing is pasted by hand anywhere else: the keys pasted before
-// (Réglages › Meta Ads, Pilot Message › Réglages) keep working until the linked account replaces them, and « Tester »
-// names them.
+// Linked accounts (Pilot AI › Comptes): THE one place where a boutique connects Meta and TikTok. Meta has two doors, each
+// with its own Facebook window and its own key (once Pilotix's control room has the ads configuration):
+//   « Facebook et Instagram »: ONE Page and its Instagram account per boutique (messages, comments, posts, their
+//     numbers). When Facebook's window gave several Pages, the login's tab asks which one is the boutique's; the others
+//     are forgotten (no key kept, nothing listened to). Never an ad account.
+//   « Publicité Meta »: the ad accounts (Publicité, the catalogue, the pixels, the ads' forms), a connection of its own
+//     (part 'ads'): the same Facebook account or another one, it never touches the Page's key.
+// While the control room has no ads configuration, one Facebook login still brings everything at once (the way it was;
+// the emergency brake while the two doors are new). WhatsApp (Meta's own window for a number) and TikTok are connected
+// in the same card. The keys pasted before (Réglages › Meta Ads, Pilot Message › Réglages) keep working until a linked
+// account replaces them, and « Tester » names them.
 //
 // Pilotix keeps the tokens on the server (never in a page) and finds what each account may use. An account goes to one
 // boutique (which uses its Page and its ad accounts at once) or to all the owner's boutiques (each boutique picks its
@@ -203,6 +208,16 @@ CREATE TABLE IF NOT EXISTS platform.social_states (
 `;
 
 /**
+ * A linked account's part (p043): 'main' (a Facebook account with its Page; a TikTok account) or 'ads' (« Publicité
+ * Meta »: ad accounts only, with a key of its own). The same Facebook account may be linked once as each, so the ads'
+ * key never replaces the Page's.
+ */
+export const SOCIAL_PART_SQL = `
+ALTER TABLE platform.social_links ADD COLUMN IF NOT EXISTS part text NOT NULL DEFAULT 'main';
+`;
+export type LinkPart = 'main' | 'ads';
+
+/**
  * « Oui, c'est ma boutique »: what a login brought back waits in its state (its tokens sealed) until the person in the
  * login's own tab says it is their boutique, with that tab's one-time key (nobody else has it: not even the person who
  * started the login, should someone else's account come back in it).
@@ -354,6 +369,11 @@ async function waLoginShop(t: Tenancy, phoneId: string): Promise<number | null> 
   const v = (await platformRow(t, WA_LOGINS_ROW))[phoneId];
   return v?.shopId ? num(v.shopId) : null;
 }
+/**
+ * The two doors: Pilotix's control room has the ads configuration, so « Publicité Meta » has its own Facebook window
+ * and « Facebook et Instagram » keeps one Page per boutique and never an ad account.
+ */
+export const twoDoors = (a: SocialApps) => !!(a.meta.appId && a.meta.adsConfigId);
 export const appReady = (a: SocialApps, p: SocialProvider) => (p === 'meta' ? !!(a.meta.appId && a.meta.hasSecret) : !!(a.tiktok.appId && a.tiktok.hasSecret));
 /** Where the login tab comes back, where Meta sends the Pages' messages and comments, and its data deletion requests. */
 export const socialUrls = (publicUrl: string) => ({
@@ -502,6 +522,13 @@ export interface FoundAccount {
   token: string;
   tokenKind: 'user' | 'system' | 'advertiser';
   expiresAt: string | null;
+  /** 'ads': « Publicité Meta » (or a pasted ads key): a connection of its own, ad accounts only */
+  part?: LinkPart;
+  /**
+   * « Facebook et Instagram » with the two doors: the boutique's one Page, nothing else. Ad accounts this account kept
+   * before (one login asked for everything then) move, with the key they had, to an ads connection of their own.
+   */
+  pageOnly?: boolean;
   assets: FoundAsset[];
   /** « Connecter WhatsApp »: the WhatsApp Business account, its number's id, the number as Meta shows it, its name */
   whatsapp?: { wabaId: string; phoneId: string; phone: string; name: string };
@@ -513,26 +540,69 @@ const schemaOfShop = async (t: Tenancy, shopId: number): Promise<string | null> 
 };
 
 /**
- * Keeps the account a login brought back (the same Facebook / TikTok person linked again for the same boutiques: its row is
- * updated), its Pages and ad accounts (those gone are taken away from the boutiques that used them, the others keep their
- * new token), and, for an account linked to one boutique, uses its first free Page and ad account there at once.
+ * The ad accounts a Facebook account kept from the time one login asked for everything move to an ads connection of
+ * their own (made here with the key the account had, unless it has one already): Publicité keeps running on that key
+ * while « Facebook et Instagram » gets a new one. Returns the moved ad accounts (their boutiques' settings follow).
+ */
+async function splitAds(db: Db, linkId: number): Promise<number[]> {
+  const had = await db.query(`SELECT id, ext_id FROM platform.social_assets WHERE link_id = $1 AND kind = 'ad_account' ORDER BY id`, [linkId]);
+  if (!had.length) return [];
+  const l = (await db.query(`SELECT provider, owner_id, shop_id, ext_id FROM platform.social_links WHERE id = $1`, [linkId]))[0];
+  const twinOf = () => db.query(`SELECT id FROM platform.social_links WHERE provider = $1 AND owner_id = $2 AND ext_id = $3 AND coalesce(shop_id, 0) = $4 AND part = 'ads'`, [l.provider, num(l.owner_id), l.ext_id, l.shop_id === null ? 0 : num(l.shop_id)]);
+  let twin = (await twinOf())[0];
+  if (!twin) {
+    // the key as it is kept (sealed): copied by the database itself
+    await db.query(
+      `INSERT INTO platform.social_links (provider, owner_id, shop_id, ext_id, name, picture, token, token_kind, expires_at, status, error, by_name, part)
+       SELECT provider, owner_id, shop_id, ext_id, name, picture, token, token_kind, expires_at, status, error, by_name, 'ads' FROM platform.social_links WHERE id = $1`,
+      [linkId],
+    );
+    twin = (await twinOf())[0];
+  }
+  const out: number[] = [];
+  for (const a of had) {
+    const dup = (await db.query(`SELECT id FROM platform.social_assets WHERE link_id = $1 AND kind = 'ad_account' AND ext_id = $2`, [num(twin.id), a.ext_id]))[0];
+    if (dup) {
+      // the ads connection has this ad account already: the boutiques counting the old one count that one
+      await db.query(`UPDATE platform.social_uses SET asset_id = $2 WHERE asset_id = $1`, [num(a.id), num(dup.id)]);
+      await db.query(`DELETE FROM platform.social_assets WHERE id = $1`, [num(a.id)]);
+      out.push(num(dup.id));
+    } else {
+      await db.query(`UPDATE platform.social_assets SET link_id = $2 WHERE id = $1`, [num(a.id), num(twin.id)]);
+      out.push(num(a.id));
+    }
+  }
+  return out;
+}
+
+/**
+ * Keeps the account a login brought back (the same Facebook / TikTok person linked again for the same boutiques, as the
+ * same part: its row is updated), its Pages and ad accounts (those gone are taken away from the boutiques that used
+ * them, the others keep their new token), and, for an account linked to one boutique, uses its first free Page and ad
+ * account there at once. « Facebook et Instagram » with the two doors (pageOnly): the boutique answers on that one Page
+ * from now on, and its other Facebook accounts go.
  */
 export async function saveLink(t: Tenancy, st: StateRow, f: FoundAccount): Promise<number> {
+  const part: LinkPart = f.part ?? 'main';
+  let moved: number[] = [];
   const linkId = await t.platform.tx(async (db) => {
     const same = (
-      await db.query(`SELECT id FROM platform.social_links WHERE provider = $1 AND owner_id = $2 AND ext_id = $3 AND coalesce(shop_id, 0) = $4`, [f.provider, st.ownerId, f.extId, st.shopId ?? 0])
+      await db.query(`SELECT id FROM platform.social_links WHERE provider = $1 AND owner_id = $2 AND ext_id = $3 AND coalesce(shop_id, 0) = $4 AND part = $5`, [f.provider, st.ownerId, f.extId, st.shopId ?? 0, part])
     )[0];
     const vals = [f.name.slice(0, 200), (f.picture ?? '').slice(0, 1000), sealString(f.token), f.tokenKind, f.expiresAt, st.by.slice(0, 120)];
     if (same) {
+      if (f.pageOnly) moved = await splitAds(db, num(same.id));
       await db.query(`UPDATE platform.social_links SET name = $2, picture = $3, token = $4, token_kind = $5, expires_at = $6, by_name = $7, status = 'ok', error = NULL, updated_at = now() WHERE id = $1`, [num(same.id), ...vals]);
       return num(same.id);
     }
     const r = await db.query(
-      `INSERT INTO platform.social_links (provider, owner_id, shop_id, ext_id, name, picture, token, token_kind, expires_at, by_name) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-      [f.provider, st.ownerId, st.shopId, f.extId, ...vals],
+      `INSERT INTO platform.social_links (provider, owner_id, shop_id, ext_id, name, picture, token, token_kind, expires_at, by_name, part) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+      [f.provider, st.ownerId, st.shopId, f.extId, ...vals, part],
     );
     return num(r[0].id);
   });
+  // the boutiques counting ad accounts that moved to their own connection: written again (same key, its new place)
+  for (const assetId of moved) for (const u of await t.platform.query(`SELECT shop_id FROM platform.social_uses WHERE asset_id = $1`, [assetId])) await writeUse(t, num(u.shop_id), assetId);
   const keep = new Set(f.assets.map((a) => `${a.kind}:${a.extId}`));
   for (const a of f.assets)
     await t.platform.query(
@@ -543,6 +613,10 @@ export async function saveLink(t: Tenancy, st: StateRow, f: FoundAccount): Promi
   // The Pages and ad accounts no longer shared with Pilotix: a boutique that used such a Page stops; one that counted this
   // account's ad accounts keeps counting the others (its use moves to one of them), and stops only when none is left.
   const now = await t.platform.query(`SELECT id, kind, ext_id FROM platform.social_assets WHERE link_id = $1 ORDER BY id`, [linkId]);
+  // « Facebook et Instagram » with the two doors: the boutique answers on this Page from now on (before the Pages it
+  // had are taken away, so its answers never stop in between)
+  const onePage = f.pageOnly && st.shopId ? now.find((x: any) => x.kind === 'page' && keep.has(`page:${x.ext_id}`)) : null;
+  if (onePage && st.shopId) await useAsset(t, st.shopId, num(onePage.id), st.by);
   for (const a of now) {
     if (keep.has(`${a.kind}:${a.ext_id}`)) continue;
     const heir = isAdKind(a.kind) ? now.find((x: any) => x.kind === a.kind && keep.has(`${x.kind}:${x.ext_id}`)) : undefined;
@@ -555,7 +629,15 @@ export async function saveLink(t: Tenancy, st: StateRow, f: FoundAccount): Promi
   // the boutiques using them get the new tokens (and the ad accounts' new list)
   for (const u of await t.platform.query(`SELECT u.shop_id, u.asset_id FROM platform.social_uses u JOIN platform.social_assets a ON a.id = u.asset_id WHERE a.link_id = $1`, [linkId]))
     await writeUse(t, num(u.shop_id), num(u.asset_id));
-  if (st.shopId) await autoUse(t, st.shopId, linkId, st.by);
+  if (onePage && st.shopId) {
+    // one boutique, one Page: the other Facebook accounts linked to this boutique alone go (ad accounts one of them
+    // still kept stay, as an ads connection with its key)
+    for (const o of await t.platform.query(`SELECT id FROM platform.social_links WHERE provider = 'meta' AND part = 'main' AND shop_id = $1 AND id <> $2`, [st.shopId, linkId])) {
+      const went = await t.platform.tx((db) => splitAds(db, num(o.id)));
+      for (const assetId of went) for (const u of await t.platform.query(`SELECT shop_id FROM platform.social_uses WHERE asset_id = $1`, [assetId])) await writeUse(t, num(u.shop_id), assetId);
+      await removeLink(t, num(o.id));
+    }
+  } else if (st.shopId) await autoUse(t, st.shopId, linkId, st.by);
   return linkId;
 }
 
@@ -986,6 +1068,8 @@ export interface AssetView {
 export interface LinkView {
   id: number;
   provider: SocialProvider;
+  /** 'ads': « Publicité Meta », a connection of its own (ad accounts only) */
+  part: LinkPart;
   name: string;
   picture: string | null;
   scope: 'here' | 'all';
@@ -1073,6 +1157,7 @@ async function listFor(ctx: Ctx): Promise<SocialListView> {
   const view: LinkView[] = links.map((l: any) => ({
     id: num(l.id),
     provider: l.provider,
+    part: l.part === 'ads' ? 'ads' : 'main',
     name: String(l.name ?? ''),
     picture: l.picture ? String(l.picture) : null,
     scope: l.shop_id === null ? 'all' : 'here',
@@ -1113,7 +1198,7 @@ async function listFor(ctx: Ctx): Promise<SocialListView> {
     launch: await launchAccounts(ctx.db),
     whatsapp: await whatsappOf(ctx.db),
     waReady: !!apps.meta.appId && apps.meta.hasSecret && !!apps.meta.waConfigId,
-    adsReady: appReady(apps, 'meta') && !!apps.meta.adsConfigId,
+    adsReady: appReady(apps, 'meta') && twoDoors(apps),
     old: await oldHere(),
     preview: false,
   };
@@ -1170,8 +1255,10 @@ export const socialProcs = {
       const ads = i.kind === 'ads';
       if (ads && i.provider !== 'meta') throw new AppError('bad_request', 'Seul Meta connecte la publicité ainsi.');
       const w = await who(ctx);
-      if (i.scope === 'all' && !canAll(w)) throw new AppError('forbidden', 'Seul le propriétaire des boutiques lie un compte pour toutes ses boutiques.');
       const apps = await socialApps(w.t);
+      // the two doors: « Facebook et Instagram » is one Page for one boutique, never for all of them
+      const scope = i.provider === 'meta' && i.kind === 'account' && twoDoors(apps) ? 'here' : i.scope;
+      if (scope === 'all' && !canAll(w)) throw new AppError('forbidden', 'Seul le propriétaire des boutiques lie un compte pour toutes ses boutiques.');
       if (wa && !apps.meta.waConfigId)
         throw new AppError('bad_request', 'La connexion WhatsApp n’est pas encore prête : Pilotix doit d’abord ajouter l’ID de configuration WhatsApp (Pilot AI › Réglages).');
       if (ads && !apps.meta.adsConfigId)
@@ -1189,7 +1276,7 @@ export const socialProcs = {
       await w.t.platform.query(`DELETE FROM platform.social_states WHERE expires_at < now() - interval '1 day'`);
       await w.t.platform.query(
         `INSERT INTO platform.social_states (state, provider, owner_id, shop_id, from_shop, by_name, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + interval '${SOCIAL.stateMinutes} minutes')`,
-        [state, i.provider, w.ownerId, i.scope === 'all' && !wa ? null : w.shopId, w.shopId, w.by.slice(0, 120)],
+        [state, i.provider, w.ownerId, scope === 'all' && !wa ? null : w.shopId, w.shopId, w.by.slice(0, 120)],
       );
       return {
         state,
@@ -1365,7 +1452,11 @@ export const socialProcs = {
     if (!canAll(w)) throw new AppError('forbidden', 'Seul le propriétaire des boutiques change cela.');
     const to = i.scope === 'all' ? null : w.shopId;
     if ((l.shop_id === null ? null : num(l.shop_id)) === to) return listFor(ctx);
-    const twin = (await w.t.platform.query(`SELECT 1 FROM platform.social_links WHERE provider = $1 AND owner_id = $2 AND ext_id = $3 AND coalesce(shop_id, 0) = $4 AND id <> $5`, [l.provider, num(l.owner_id), l.ext_id, to ?? 0, i.linkId]))[0];
+    if (to === null && l.provider === 'meta' && String(l.part ?? 'main') === 'main' && twoDoors(await socialApps(w.t)))
+      throw new AppError('bad_request', 'Une page Facebook se lie à une seule boutique : liez la page de chaque boutique depuis cette boutique.');
+    const twin = (
+      await w.t.platform.query(`SELECT 1 FROM platform.social_links WHERE provider = $1 AND owner_id = $2 AND ext_id = $3 AND coalesce(shop_id, 0) = $4 AND part = $5 AND id <> $6`, [l.provider, num(l.owner_id), l.ext_id, to ?? 0, String(l.part ?? 'main'), i.linkId])
+    )[0];
     if (twin) throw new AppError('conflict', 'Ce compte est déjà lié ainsi : retirez l’autre d’abord.');
     if (to !== null) {
       // only this boutique now: the others stop using it
@@ -1394,6 +1485,7 @@ export const socialProcs = {
 interface DemoLink {
   id: number;
   provider: SocialProvider;
+  part: LinkPart;
   name: string;
   scope: 'here' | 'all';
   createdAt: string;
@@ -1409,24 +1501,25 @@ function demoData(ctx: Ctx) {
     next: 100,
     states: new Map(),
     links: [
+      // « Facebook et Instagram »: the boutique's one Page, with its Instagram account
       {
         id: 1,
         provider: 'meta',
+        part: 'main',
+        name: 'Alaeddine Benali',
+        scope: 'here',
+        createdAt: new Date(ctx.now() - 9 * 86_400_000).toISOString(),
+        assets: [{ id: 11, kind: 'page', extId: '104920331', name: 'Bébé Confort DZ', igUsername: 'bebeconfort.dz', currency: null, usedBy: [me] }],
+      },
+      // « Publicité Meta »: a connection of its own; an account often has several ad accounts (all counted)
+      {
+        id: 2,
+        provider: 'meta',
+        part: 'ads',
         name: 'Alaeddine Benali',
         scope: 'all',
         createdAt: new Date(ctx.now() - 9 * 86_400_000).toISOString(),
-        // a real account often manages many Pages (each boutique picks one) and several ad accounts (all counted)
         assets: [
-          { id: 11, kind: 'page', extId: '104920331', name: 'Bébé Confort DZ', igUsername: 'bebeconfort.dz', currency: null, usedBy: [me] },
-          { id: 12, kind: 'page', extId: '104920332', name: 'Bébé Confort Oran', igUsername: null, currency: null, usedBy: [DEMO_SISTER.id] },
-          { id: 14, kind: 'page', extId: '104920334', name: 'Bébé Confort Annaba', igUsername: null, currency: null, usedBy: [] },
-          { id: 15, kind: 'page', extId: '104920335', name: 'Jouets Kids DZ', igUsername: 'jouetskids.dz', currency: null, usedBy: [] },
-          { id: 16, kind: 'page', extId: '104920336', name: 'Maman & Bébé Alger', igUsername: null, currency: null, usedBy: [] },
-          { id: 17, kind: 'page', extId: '104920337', name: 'Poussettes Pro', igUsername: null, currency: null, usedBy: [] },
-          { id: 18, kind: 'page', extId: '104920338', name: 'Le coin des mamans', igUsername: 'lecoindesmamans', currency: null, usedBy: [] },
-          { id: 19, kind: 'page', extId: '104920339', name: 'Petits Pas DZ', igUsername: null, currency: null, usedBy: [] },
-          { id: 20, kind: 'page', extId: '104920340', name: 'Doudou Store', igUsername: null, currency: null, usedBy: [] },
-          { id: 21, kind: 'page', extId: '104920341', name: 'Bébé Shop Sétif', igUsername: null, currency: null, usedBy: [] },
           { id: 13, kind: 'ad_account', extId: '120211887', name: 'Bébé Confort — publicité', igUsername: null, currency: 'USD', usedBy: [me, DEMO_SISTER.id] },
           { id: 22, kind: 'ad_account', extId: '120211888', name: 'Bébé Confort — tests', igUsername: null, currency: 'USD', usedBy: [me, DEMO_SISTER.id] },
           { id: 23, kind: 'ad_account', extId: '120211889', name: 'Promo Ramadan', igUsername: null, currency: 'USD', usedBy: [me, DEMO_SISTER.id] },
@@ -1450,6 +1543,7 @@ async function demoList(ctx: Ctx): Promise<SocialListView> {
   const links: LinkView[] = d.links.map((l) => ({
     id: l.id,
     provider: l.provider,
+    part: l.part,
     name: l.name,
     picture: null,
     scope: l.scope,
@@ -1512,26 +1606,30 @@ async function demoState(ctx: Ctx, state: string) {
     const me = demoShop(ctx);
     const n = d.next++;
     const tiktok = s.provider === 'tiktok';
+    // « Publicité Meta »: Facebook's window gave the ad accounts only; « Facebook et Instagram »: the boutique's one Page
+    const ads = !tiktok && s.kind === 'ads';
+    const page = !tiktok && !ads;
     const link: DemoLink = {
       id: n,
       provider: s.provider,
+      part: ads ? 'ads' : 'main',
       name: tiktok ? 'Bébé Confort Ads' : 'Sara Benali',
-      scope: s.scope,
+      scope: page ? 'here' : s.scope,
       createdAt: new Date(ctx.now()).toISOString(),
       assets: tiktok
         ? [{ id: n * 10 + 1, kind: 'advertiser', extId: '7311021845', name: 'Bébé Confort TikTok', igUsername: null, currency: 'USD', usedBy: [] }]
-        : s.kind === 'ads'
-          ? // « Connecter la publicité »: Facebook's window gave the ad accounts only
-            [{ id: n * 10 + 2, kind: 'ad_account', extId: `9930${n}`, name: 'Sara — publicité', igUsername: null, currency: 'USD', usedBy: [] }]
-        : [
-            { id: n * 10 + 1, kind: 'page', extId: `2049${n}`, name: 'Bébé Confort Alger', igUsername: 'bebeconfort.alger', currency: null, usedBy: [] },
-            { id: n * 10 + 2, kind: 'ad_account', extId: `9930${n}`, name: 'Sara — publicité', igUsername: null, currency: 'USD', usedBy: [] },
-          ],
+        : ads
+          ? [{ id: n * 10 + 2, kind: 'ad_account', extId: `9930${n}`, name: 'Sara — publicité', igUsername: null, currency: 'USD', usedBy: [] }]
+          : [{ id: n * 10 + 1, kind: 'page', extId: `2049${n}`, name: 'Bébé Confort Alger', igUsername: 'bebeconfort.alger', currency: null, usedBy: [] }],
     };
     d.links.push(link);
     s.linkId = n;
-    // one boutique: what it can use, used at once (the first free of each kind)
-    if (s.scope === 'here')
+    if (page) {
+      // one boutique, one Page: it answers on this one from now on, and the Facebook account it had goes
+      await demoUseOne(ctx, d, me, link.assets[0].id);
+      d.links = d.links.filter((l) => l.id === n || !(l.provider === 'meta' && l.part === 'main' && l.scope === 'here'));
+    } else if (link.scope === 'here')
+      // one boutique: what it can use, used at once (the first free of each kind)
       for (const kind of ASSET_KINDS) {
         const usedAlready = d.links.some((l) => l.assets.some((a) => a.kind === kind && a.usedBy.includes(me)));
         const free = link.assets.find((a) => a.kind === kind);
@@ -1547,6 +1645,7 @@ async function demoAdsKey(ctx: Ctx) {
   d.links.push({
     id: n,
     provider: 'meta',
+    part: 'ads',
     name: 'Clé Meta Ads (utilisateur système)',
     scope: 'here',
     createdAt: new Date(ctx.now()).toISOString(),
@@ -1659,6 +1758,7 @@ async function demoUnuse(ctx: Ctx, kind: AssetKind) {
 async function demoScope(ctx: Ctx, linkId: number, scope: 'here' | 'all') {
   const l = demoData(ctx).links.find((x) => x.id === linkId);
   if (!l) throw new AppError('not_found', 'Compte introuvable');
+  if (scope === 'all' && l.provider === 'meta' && l.part === 'main') throw new AppError('bad_request', 'Une page Facebook se lie à une seule boutique : liez la page de chaque boutique depuis cette boutique.');
   l.scope = scope;
   if (scope === 'here') for (const a of l.assets) a.usedBy = a.usedBy.filter((x) => x === demoShop(ctx));
   return demoList(ctx);
@@ -1688,7 +1788,7 @@ export async function seedSocialPreview(db: Db, now = Date.now()) {
     JSON.stringify({ linkId: 1, assetId: 11, pageId: '104920331', name: 'Bébé Confort DZ', igId: ig.id, igUsername: ig.username, picture: null, account: 'Alaeddine Benali', igKey: true, at }),
     SOCIAL_KEYS.ads,
     JSON.stringify({
-      linkId: 1,
+      linkId: 2,
       assetId: 13,
       adAccountId: '120211887',
       name: 'Bébé Confort — publicité',

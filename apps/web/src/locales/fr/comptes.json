@@ -2,6 +2,7 @@
   "title": "Comptes",
   "about": "Un seul endroit pour tout connecter : Facebook, Instagram, vos comptes pub, votre catalogue, WhatsApp et TikTok. Vos agents IA s’en servent pour répondre aux messages et aux commentaires, et pour vos publicités.",
   "help": "« Continuer avec Facebook » ouvre Facebook dans un nouvel onglet. Connectez-vous, cochez tout (pages, Instagram, comptes pub, catalogue, pixels) et acceptez : Pilotix fait le reste et le compte devient vert. Rien ne se colle ailleurs. « Tester » vous dit, partie par partie, ce qui marche et où est le problème. Les clés restent sur le serveur de Pilotix, jamais dans une page.",
+  "helpTwo": "Meta a deux boutons, chacun ouvre Facebook dans un nouvel onglet. « Facebook et Instagram » : cochez seulement la page de cette boutique et son Instagram. « Publicité Meta » : cochez vos comptes pub, votre catalogue et vos pixels. Acceptez : Pilotix fait le reste et le compte passe au vert. « Tester » vous dit, partie par partie, ce qui marche et où est le problème. Les clés restent sur le serveur de Pilotix, jamais dans une page.",
   "here": {
     "title": "Utilisé dans « {{name}} »",
     "page": "Messages et commentaires",
@@ -25,6 +26,7 @@
   "scopeAll": "Toutes mes boutiques ({{n}})",
   "scopeHereHint": "Sa page et ses comptes pub servent ici tout de suite.",
   "scopeAllHint": "Chaque boutique choisit ensuite sa page en un clic. Une page répond pour une seule boutique.",
+  "scopeAllHintTwo": "Pour la publicité et TikTok : chaque boutique les compte. La page Facebook se lie depuis chaque boutique.",
   "scopeHereOnly": "Seulement « {{name}} »",
   "scopeAllShort": "Toutes les boutiques",
   "scopeSaved": "C’est changé.",
@@ -54,20 +56,21 @@
     },
     "metaContent": {
       "name": "Facebook et Instagram",
-      "what": "Vos pages et Instagram : messages, commentaires, publications.",
-      "allow": "Dans la fenêtre de Facebook, cochez vos pages et vos comptes Instagram, puis acceptez tout. Ce qui n’est pas coché ne marche pas dans Pilotix.",
+      "what": "La page de cette boutique et son Instagram : messages, commentaires, publications.",
+      "allow": "Dans la fenêtre de Facebook, cochez seulement la page de cette boutique et son compte Instagram, puis acceptez tout. Pilotix garde une seule page par boutique.",
       "notReady": "Bientôt : Pilotix prépare la connexion Facebook.",
       "all": [
         "Messages Facebook",
         "Commentaires",
         "Instagram",
         "Publications"
-      ]
+      ],
+      "hereOnly": "Toujours pour cette boutique : une page se lie à une seule boutique."
     },
     "metaAds": {
       "name": "Publicité Meta",
       "what": "Vos comptes pub, votre catalogue, vos pixels et vos formulaires.",
-      "allow": "Dans la fenêtre de Facebook, cochez votre page, vos comptes pub, votre catalogue et vos pixels, puis acceptez tout.",
+      "allow": "Dans la fenêtre de Facebook, cochez vos comptes pub, votre catalogue, vos pixels et votre page (les pubs sortent en son nom), puis acceptez tout. Le même compte Facebook ou un autre.",
       "notReady": "Bientôt : Pilotix prépare la connexion de la publicité.",
       "viaFirst": "Le bouton « Continuer avec Facebook » connecte aussi la publicité : cochez-y vos comptes pub.",
       "all": [

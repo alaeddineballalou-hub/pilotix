@@ -41,6 +41,7 @@ import {
   SocialTest,
   socialUrls,
   takeState,
+  twoDoors,
 } from './modules/social';
 
 async function fetchJson(url: string, init: RequestInit, who: string): Promise<any> {
@@ -143,10 +144,65 @@ async function adAccountAssets(token: string, system: boolean): Promise<FoundAss
   return assets;
 }
 
+/** What Pilotix reads of a Page: its own key, its picture, its Instagram account. */
+const PAGE_FIELDS = 'id,name,access_token,picture{url},instagram_business_account{id,username}';
+
+/** A Page as a login brought it back: its own key and its Instagram account; not subscribed yet (settlePage). */
+function pageFound(p: any): FoundAsset | null {
+  if (!p?.id || !p?.access_token) return null;
+  const ig = p.instagram_business_account?.id ? { id: String(p.instagram_business_account.id), username: String(p.instagram_business_account.username ?? '') } : undefined;
+  return { kind: 'page', extId: String(p.id), name: String(p.name ?? p.id), extra: { picture: p.picture?.data?.url ?? null, ...(ig ? { ig } : {}) }, token: String(p.access_token) };
+}
+
 /**
- * A Facebook login: the account, its Pages (each subscribed to Pilotix's webhook) and its ad accounts. « Connecter la
- * publicité » (kind 'ads') is the same account coming back through its own Facebook window: Meta adds what that window
- * gave to what the account already gave, so the account is read the same way (its Pages keep answering).
+ * A Page starts answering in Pilotix: its messages and comments come to Pilotix's webhook. The account's key is tried
+ * on its Instagram inbox: when it reaches it, that key will answer every Instagram customer of the boutique that takes
+ * this Page (no second connection for Instagram), and the account's messages are asked for with it too (Meta may refuse
+ * that one: they still come through the Page).
+ */
+async function settlePage(a: FoundAsset, accountToken: string): Promise<FoundAsset> {
+  let hook = true;
+  await subscribePage(a.extId, String(a.token ?? '')).catch(() => (hook = false));
+  const extra: Record<string, any> = { ...(a.extra ?? {}) };
+  const ig: { id: string; username: string; key?: boolean } | undefined = extra.ig?.id ? { id: String(extra.ig.id), username: String(extra.ig.username ?? '') } : undefined;
+  if (ig && (await igReach(accountToken, ig.id)).ok) {
+    ig.key = true;
+    await graph(`${IG_UNI}/${ig.id}/subscribed_apps`, { subscribed_fields: IG_FIELDS, access_token: accountToken }, 'POST').catch(() => null);
+  }
+  return { ...a, extra: { picture: extra.picture ?? null, ...(ig ? { ig } : {}), hook } };
+}
+
+/** What Facebook gave a key (its rights, and for which Pages…), from Facebook itself; null when it will not say. */
+async function keyRights(t: Tenancy, token: string): Promise<{ scopes: string[]; granular: any[] } | null> {
+  const apps = await socialApps(t);
+  const secret = await socialSecret(t, 'meta');
+  const dbg = (await graph('debug_token', { input_token: token, access_token: `${apps.meta.appId}|${secret}` }).catch(() => null))?.data;
+  if (!dbg) return null;
+  return { scopes: (Array.isArray(dbg.scopes) ? dbg.scopes : []).map(String), granular: Array.isArray(dbg.granular_scopes) ? dbg.granular_scopes : [] };
+}
+
+/**
+ * The Pages a key was given: its own list, or, for a business key whose list comes back empty, the Pages its rights
+ * name (Facebook says for which Pages each right was given), read one by one.
+ */
+async function pagesOf(t: Tenancy, token: string, system: boolean): Promise<any[]> {
+  const pages = await graphAll('me/accounts', { fields: PAGE_FIELDS, limit: '100', access_token: token });
+  if (pages.length || !system) return pages;
+  const rights = await keyRights(t, token);
+  const ids = [...new Set((rights?.granular ?? []).filter((x) => /^pages_/.test(String(x?.scope ?? ''))).flatMap((x) => (Array.isArray(x?.target_ids) ? x.target_ids.map(String) : [])))].filter((x) => /^\d{1,30}$/.test(x)).slice(0, 50);
+  const out: any[] = [];
+  for (const id of ids) {
+    const p = await graph(id, { fields: PAGE_FIELDS, access_token: token }).catch(() => null);
+    if (p?.id) out.push(p);
+  }
+  return out;
+}
+
+/**
+ * A Facebook login. With the two doors (twoDoors): « Facebook et Instagram » brings the account and the Pages Facebook's
+ * window gave, waiting for the boutique's choice (one Page is kept: confirmLogin subscribes that one alone; never an ad
+ * account); « Publicité Meta » (kind 'ads') brings the ad accounts alone, as a connection of its own. Without them, the
+ * way it was: the account, its Pages (each subscribed to Pilotix's webhook) and its ad accounts, all at once.
  */
 async function metaAccount(t: Tenancy, code: string, publicUrl: string, kind: LoginKind = 'account'): Promise<FoundAccount> {
   const apps = await socialApps(t);
@@ -170,36 +226,26 @@ async function metaAccount(t: Tenancy, code: string, publicUrl: string, kind: Lo
     expiresIn = Number(ll.expires_in) || 60 * 86_400;
   }
   const me = await graph('me', { fields: 'id,name,picture{url}', access_token: token });
-  const pages = await graphAll('me/accounts', { fields: 'id,name,access_token,picture{url},instagram_business_account{id,username}', limit: '100', access_token: token });
-  const assets: FoundAsset[] = [];
-  for (const p of pages) {
-    if (!p?.id || !p?.access_token) continue;
-    // its messages and comments come to Pilotix's webhook
-    let hook = true;
-    await subscribePage(String(p.id), String(p.access_token)).catch(() => (hook = false));
-    const ig: { id: string; username: string; key?: boolean } | undefined = p.instagram_business_account?.id
-      ? { id: String(p.instagram_business_account.id), username: String(p.instagram_business_account.username ?? '') }
-      : undefined;
-    // The account's key reaches the Instagram inbox itself: it will answer every Instagram customer of the boutique
-    // that takes this Page (no second connection for Instagram); the account's messages are asked for with it too
-    // (Meta may refuse that one: they still come through the Page).
-    if (ig && (await igReach(token, ig.id)).ok) {
-      ig.key = true;
-      await graph(`${IG_UNI}/${ig.id}/subscribed_apps`, { subscribed_fields: IG_FIELDS, access_token: token }, 'POST').catch(() => null);
-    }
-    assets.push({ kind: 'page', extId: String(p.id), name: String(p.name ?? p.id), extra: { picture: p.picture?.data?.url ?? null, ...(ig ? { ig } : {}), hook }, token: String(p.access_token) });
-  }
-  assets.push(...(await adAccountAssets(token, system)));
-  return {
-    provider: 'meta',
+  const account = {
+    provider: 'meta' as const,
     extId: String(me.id),
     name: String(me.name ?? 'Facebook'),
     picture: me.picture?.data?.url ? String(me.picture.data.url) : '',
     token,
-    tokenKind: system ? 'system' : 'user',
+    tokenKind: system ? ('system' as const) : ('user' as const),
     expiresAt: expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : null,
-    assets,
   };
+  // « Publicité Meta »: the ad accounts and nothing else; it never touches the Page's key
+  if (kind === 'ads') return { ...account, part: 'ads', assets: await adAccountAssets(token, system) };
+  const two = twoDoors(apps);
+  const pages = (two ? await pagesOf(t, token, system) : await graphAll('me/accounts', { fields: PAGE_FIELDS, limit: '100', access_token: token })).map(pageFound).filter((x): x is FoundAsset => !!x);
+  if (two) return { ...account, part: 'main', pageOnly: true, assets: pages };
+  const assets: FoundAsset[] = [];
+  // each Page's messages and comments come to Pilotix's webhook
+  for (const p of pages) assets.push(await settlePage(p, token));
+  // without the ads permission there are no ad accounts: the Pages still work
+  assets.push(...(await adAccountAssets(token, system)));
+  return { ...account, assets };
 }
 
 /** Meta's API version of the Instagram key's own calls (dellal-server.ts answers and reads Instagram with the same). */
@@ -373,7 +419,34 @@ export interface LoginEnd {
   /** done, but something did not go (« Connecter WhatsApp »: the number not registered): the tab says it and stays open */
   warn?: string;
   /** the account is back: its tab asks « Oui, c'est ma boutique ? » (key: that page's one-time key; net: what the account is, Facebook by default) */
-  confirm?: { state: string; key: string; provider: SocialProvider; account: string; shop: string | null; by: string; assets: { kind: string; name: string }[]; net?: string };
+  confirm?: {
+    state: string;
+    key: string;
+    provider: SocialProvider;
+    account: string;
+    shop: string | null;
+    by: string;
+    assets: { kind: string; name: string }[];
+    net?: string;
+    /**
+     * « Facebook et Instagram » with the two doors: the Pages Facebook's window gave. The boutique keeps one (asked when
+     * there are several); taken: the boutique a Page already answers for (it cannot be chosen); current: the one this
+     * boutique answers on today.
+     */
+    pages?: { id: string; name: string; ig: string | null; taken: string | null; current: boolean }[];
+    /** the Page this boutique answers on today, when another one may take its place */
+    was?: string | null;
+  };
+}
+
+/** The Page a boutique answers on today (its name), and the boutique another Page already answers for. */
+async function pageNow(t: Tenancy, shopId: number): Promise<{ extId: string; name: string } | null> {
+  const r = (await t.platform.query(`SELECT u.ext_id, a.name FROM platform.social_uses u JOIN platform.social_assets a ON a.id = u.asset_id WHERE u.shop_id = $1 AND u.kind = 'page'`, [shopId]))[0];
+  return r ? { extId: String(r.ext_id), name: String(r.name ?? '') } : null;
+}
+async function pageTaken(t: Tenancy, pageId: string, shopId: number): Promise<string | null> {
+  const r = (await t.platform.query(`SELECT s.name FROM platform.social_uses u JOIN platform.shops s ON s.id = u.shop_id WHERE u.kind = 'page' AND u.ext_id = $1 AND u.shop_id <> $2`, [pageId, shopId]))[0];
+  return r ? String(r.name ?? '') : null;
 }
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -407,6 +480,23 @@ export async function finishLogin(t: Tenancy, provider: SocialProvider, q: Recor
   try {
     const kind = loginKindOf(st.state);
     const found = provider === 'meta' ? (kind === 'whatsapp' ? await whatsappAccount(t, code, publicUrl) : await metaAccount(t, code, publicUrl, kind)) : await tiktokAccount(t, code);
+    // « Facebook et Instagram » with the two doors: one Page, for one boutique
+    let pages: NonNullable<NonNullable<LoginEnd['confirm']>['pages']> | undefined;
+    let was: string | null = null;
+    if (found.pageOnly) {
+      if (!st.shopId) throw new AppError('bad_request', 'Une page Facebook se lie à une seule boutique : recommencez depuis cette boutique (Pilot AI › Comptes).');
+      if (!found.assets.length) {
+        // what the key was given helps to see why (a window where no Page was ticked, or a right Facebook did not give)
+        const rights = await keyRights(t, found.token);
+        throw new AppError('bad_request', `Facebook n’a donné aucune page à Pilotix : dans sa fenêtre, cochez la page de cette boutique, puis acceptez tout.${rights?.scopes.length ? ` (Droits reçus : ${rights.scopes.join(', ').slice(0, 170)})` : ''}`);
+      }
+      const now = await pageNow(t, st.shopId);
+      pages = [];
+      for (const a of found.assets) pages.push({ id: a.extId, name: a.name, ig: (a.extra as any)?.ig?.username ? String((a.extra as any).ig.username) : null, taken: await pageTaken(t, a.extId, st.shopId), current: now?.extId === a.extId });
+      const free = pages.filter((x) => !x.taken);
+      if (!free.length) throw new AppError('conflict', pages.length === 1 ? `Cette page répond déjà pour « ${pages[0].taken} ». Retirez-la là-bas d’abord.` : 'Ces pages répondent déjà pour d’autres boutiques. Retirez-en une là-bas d’abord.');
+      was = now && !(free.length === 1 && free[0].current) ? now.name : null;
+    }
     const key = randomBytes(24).toString('base64url');
     await holdFound(t, st.state, found, sha256(key));
     const shop = st.shopId ? String((await t.platform.query('SELECT name FROM platform.shops WHERE id = $1', [st.shopId]))[0]?.name ?? '') : null;
@@ -416,7 +506,7 @@ export async function finishLogin(t: Tenancy, provider: SocialProvider, q: Recor
       account: found.name,
       confirm: found.whatsapp
         ? { state: st.state, key, provider, account: found.name, shop, by: st.by, assets: found.whatsapp.phone ? [{ kind: 'whatsapp', name: found.whatsapp.phone }] : [], net: 'WhatsApp Business' }
-        : { state: st.state, key, provider, account: found.name, shop, by: st.by, assets: found.assets.slice(0, 8).map((a) => ({ kind: a.kind, name: a.name })) },
+        : { state: st.state, key, provider, account: found.name, shop, by: st.by, assets: pages ? [] : found.assets.slice(0, 8).map((a) => ({ kind: a.kind, name: a.name })), ...(pages ? { pages, was } : {}) },
     };
   } catch (e: any) {
     const m = String(e?.message ?? 'Erreur').slice(0, 300);
@@ -426,7 +516,7 @@ export async function finishLogin(t: Tenancy, provider: SocialProvider, q: Recor
 }
 
 /** « Oui, c'est ma boutique » (or « Non ») in the login's tab: the account goes to the boutique, or nothing happens. */
-export async function confirmLogin(t: Tenancy, state: string, key: string, yes: boolean): Promise<LoginEnd> {
+export async function confirmLogin(t: Tenancy, state: string, key: string, yes: boolean, pick = ''): Promise<LoginEnd> {
   const st = await takeState(t, String(state ?? ''));
   if (!st || st.done || !st.found || !st.confirmHash) return { ok: false, message: 'Cette liaison est déjà faite ou n’existe plus. Fermez cet onglet.' };
   const want = Buffer.from(st.confirmHash, 'hex');
@@ -445,6 +535,37 @@ export async function confirmLogin(t: Tenancy, state: string, key: string, yes: 
     const r = await linkWhatsapp(t, st.shopId, st.found).catch((e: any) => ({ ok: false, message: String(e?.message ?? 'Erreur').slice(0, 300), account: undefined }));
     await endState(t, st.state, r.ok ? { linkId: null } : { error: r.message });
     return r;
+  }
+  // « Facebook et Instagram » with the two doors: the boutique keeps ONE Page, the one chosen in this tab
+  if (st.found.pageOnly) {
+    const pages = st.found.assets.filter((a) => a.kind === 'page');
+    const want = pages.length === 1 ? pages[0] : pages.find((p) => p.extId === String(pick ?? ''));
+    // nothing chosen: the question stays open (the tab's « back » shows it again)
+    if (!want) return { ok: false, message: 'Choisissez la page de cette boutique, puis « Oui, c’est ma boutique ». Revenez à la page précédente.' };
+    if (!st.shopId) return { ok: false, message: 'Une page Facebook se lie à une seule boutique : recommencez depuis cette boutique (Pilot AI › Comptes).' };
+    const taken = await pageTaken(t, want.extId, st.shopId);
+    if (taken) {
+      const m = `Cette page répond déjà pour « ${taken} ». Retirez-la là-bas d’abord.`;
+      await endState(t, st.state, { error: m });
+      return { ok: false, message: m };
+    }
+    try {
+      const kept = await settlePage(want, st.found.token);
+      const linkId = await saveLink(t, st, { ...st.found, assets: [kept] });
+      // the other Pages Facebook's window gave: nothing of them is kept, and Pilotix stops listening to those it holds
+      // nowhere (a Page another account of Pilotix still holds keeps its messages)
+      for (const p of pages) {
+        if (p === want) continue;
+        const held = (await t.platform.query(`SELECT 1 FROM platform.social_assets WHERE kind = 'page' AND ext_id = $1 LIMIT 1`, [p.extId]))[0];
+        if (!held) await graph(`${p.extId}/subscribed_apps`, { method: 'delete', access_token: String(p.token ?? '') }, 'POST').catch(() => null);
+      }
+      await endState(t, st.state, { linkId });
+      return { ok: true, message: 'Compte lié', account: want.name };
+    } catch (e: any) {
+      const m = String(e?.message ?? 'Erreur').slice(0, 300);
+      await endState(t, st.state, { error: m });
+      return { ok: false, message: m };
+    }
   }
   const linkId = await saveLink(t, st, st.found);
   await endState(t, st.state, { linkId });
@@ -479,7 +600,7 @@ export async function pasteAdsKey(t: Tenancy, a: { token: string; shopId: number
   return saveLink(
     t,
     { state: '', provider: 'meta', ownerId: a.ownerId, shopId: a.shopId, fromShop: a.shopId, by: a.by, expired: false, done: false, found: null, confirmHash: null },
-    { provider: 'meta', extId: String(me.id), name: String(me.name ?? 'Meta Ads'), picture: '', token, tokenKind: system ? 'system' : 'user', expiresAt: ends ? new Date(ends * 1000).toISOString() : null, assets },
+    { provider: 'meta', part: 'ads', extId: String(me.id), name: String(me.name ?? 'Meta Ads'), picture: '', token, tokenKind: system ? 'system' : 'user', expiresAt: ends ? new Date(ends * 1000).toISOString() : null, assets },
   );
 }
 
@@ -745,7 +866,11 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
   const adsAll = assets.filter((a: any) => a.kind === 'ad_account');
   const igsAll = pagesAll.filter((a: any) => jsonOf(a.extra).ig?.id).length;
   // what Facebook gave Pilotix at the last login: a zero says what was not ticked in Facebook's window
-  if (keyOk) add('key', 'given', pagesAll.length && adsAll.length ? 'ok' : 'info', { pages: pagesAll.length, igs: igsAll, ads: adsAll.length });
+  // (the two doors: a Facebook account is asked for its Page only, « Publicité Meta » for its ad accounts only)
+  const part = l.part === 'ads' ? 'ads' : 'main';
+  const two = twoDoors(apps);
+  const givenAll = part === 'ads' ? adsAll.length > 0 : two ? pagesAll.length > 0 : pagesAll.length > 0 && adsAll.length > 0;
+  if (keyOk) add('key', 'given', givenAll ? 'ok' : 'info', { pages: pagesAll.length, igs: igsAll, ads: adsAll.length });
 
   // this boutique's own settings (what its agents read)
   const schema = (await t.platform.query(`SELECT schema_name FROM platform.shops WHERE id = $1`, [shopId]).catch(() => []))[0]?.schema_name;
@@ -886,6 +1011,8 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
       }
       if (perm('content', 'content', 'warn')) add('content', 'content', 'ok');
     }
+  } else if (part === 'ads') {
+    // « Publicité Meta »: no Page here (the boutique's Page has its own connection, « Facebook et Instagram »)
   } else if (pagesAll.length) add('fb', 'pageNone', 'warn');
   else if (keyOk) add('fb', 'pagesNone', 'warn');
 
@@ -972,7 +1099,8 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
     noAdsRight('info');
   } else if (adsRow?.adAccountId) add('ads', 'adsOther', 'info', { account: String(adsRow.account ?? '') });
   else if (adsAll.length) add('ads', 'adsOff', 'warn', { count: adsAll.length });
-  else if (keyOk) {
+  else if (keyOk && !(two && part === 'main')) {
+    // (the two doors: a Facebook account never has ad accounts, they come with « Publicité Meta »)
     add('ads', 'adsNone', 'warn');
     noAdsRight('warn');
   }
@@ -1099,17 +1227,41 @@ function confirmPage(c: NonNullable<LoginEnd['confirm']>): string {
   const q = (x: string) => `«&nbsp;<b>${esc(x)}</b>&nbsp;»`;
   const where = c.shop ? `la boutique ${q(c.shop)}` : 'toutes les boutiques de la personne qui l’a demandé';
   const list = c.assets.length ? `<ul>${c.assets.map((a) => `<li>${esc(KIND_WORD[a.kind] ?? a.kind)} : <b>${esc(a.name)}</b></li>`).join('')}</ul>` : '';
+  // « Facebook et Instagram » with the two doors: the boutique keeps one Page (asked when Facebook's window gave several)
+  const pages = c.pages ?? [];
+  const free = pages.filter((x) => !x.taken);
+  const pre = free.find((x) => x.current) ?? (free.length === 1 ? free[0] : null);
+  const igOf = (x: { ig: string | null }) => (x.ig ? ` <span class="ig">Instagram @${esc(x.ig)}</span>` : '');
+  const one = pages.length === 1 ? `<ul><li>Page Facebook : <b>${esc(pages[0].name)}</b>${igOf(pages[0])}</li></ul><input type="hidden" name="page" value="${esc(pages[0].id)}">` : '';
+  const pick =
+    pages.length > 1
+      ? `<fieldset><legend>Quelle page est celle de cette boutique ?</legend>${pages
+          .map(
+            (x) =>
+              `<label class="pg${x.taken ? ' off' : ''}"><input type="radio" name="page" value="${esc(x.id)}" required${x.taken ? ' disabled' : ''}${pre === x ? ' checked' : ''}><span><b>${esc(x.name)}</b>${igOf(x)}${
+                x.taken ? `<small>Répond déjà pour «&nbsp;${esc(x.taken)}&nbsp;»</small>` : x.current ? '<small>La page de cette boutique aujourd’hui</small>' : ''
+              }</span></label>`,
+          )
+          .join('')}</fieldset><p class="note">Pilotix garde une seule page par boutique : les autres ne sont pas gardées.</p>`
+      : '';
+  const swap =
+    pages.length && c.was
+      ? `<p class="note">Cette boutique répond aujourd’hui sur ${q(c.was)} : ${pages.length > 1 ? 'une autre page choisie ici prend sa place' : `${q(pages[0].name)} prend sa place`}.</p>`
+      : '';
   return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lier ce compte ? · Pilotix</title>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f5f8;color:#16202e}
 main{max-width:460px;margin:24px;padding:28px;border-radius:16px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.08)}h1{margin:0 0 10px;font-size:22px}p{margin:0 0 12px;color:#374151}
 ul{margin:0 0 14px;padding-left:20px;color:#374151}.who{padding:12px 14px;border-radius:12px;background:#f8fafc;border:1px solid #e5e7eb;margin-bottom:16px}
 .q{font-weight:600;color:#16202e}form{display:grid;gap:10px;margin-top:18px}button{font:inherit;font-weight:600;padding:12px 16px;border-radius:10px;border:1px solid #d1d5db;background:#fff;color:#16202e;cursor:pointer}
-button.yes{background:#1f6feb;border-color:#1f6feb;color:#fff}small{display:block;margin-top:14px;color:#6b7280}</style></head>
+button.yes{background:#1f6feb;border-color:#1f6feb;color:#fff}small{display:block;margin-top:14px;color:#6b7280}
+fieldset{margin:0 0 12px;padding:0;border:0;display:grid;gap:8px}legend{padding:0;margin-bottom:8px;font-weight:600;color:#16202e}
+.pg{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid #d1d5db;border-radius:10px;background:#fff;cursor:pointer}.pg.off{opacity:.55;cursor:not-allowed}
+.pg input{margin-top:4px;flex:none}.pg span{min-width:0;overflow-wrap:anywhere}.pg small{margin-top:2px}.ig{color:#6b7280;font-size:14px;white-space:nowrap}.note{font-size:14px;color:#6b7280}</style></head>
 <body><main><h1>Lier ce compte à Pilotix ?</h1>
-<div class="who"><p>Le compte ${net} ${q(c.account)}</p>${list}<p>va être lié à ${where}${c.by ? `, à la demande de ${q(c.by)}` : ''}.</p></div>
-<p class="q">Est-ce bien votre boutique ?</p>
 <form method="post" action="/api/oauth/confirm"><input type="hidden" name="state" value="${esc(c.state)}"><input type="hidden" name="key" value="${esc(c.key)}">
-<button class="yes" type="submit" name="choice" value="yes">Oui, c’est ma boutique</button><button type="submit" name="choice" value="no">Non, ce n’est pas moi</button></form>
+<div class="who"><p>Le compte ${net} ${q(c.account)}</p>${list}${one}<p>va être lié à ${where}${c.by ? `, à la demande de ${q(c.by)}` : ''}.</p></div>
+${pick}${swap}<p class="q">Est-ce bien votre boutique ?</p>
+<button class="yes" type="submit" name="choice" value="yes">Oui, c’est ma boutique</button><button type="submit" name="choice" value="no" formnovalidate>Non, ce n’est pas moi</button></form>
 <small>Si vous n’avez rien demandé à Pilotix, choisissez «&nbsp;Non&nbsp;» : rien ne sera lié.</small></main></body></html>`;
 }
 

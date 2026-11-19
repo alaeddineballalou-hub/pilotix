@@ -45,7 +45,10 @@ const setting = async (ctx: Ctx, key: string) => (await ctx.db.query('SELECT val
 
 // ---------------------------------------------------------------- Facebook and TikTok, answered here
 const calls: { url: string; method: string; body: string }[] = [];
-let graph: { me: any; pages: any[]; ads: any[]; assigned?: any[] } = { me: {}, pages: [], ads: [] };
+// byId: Pages Facebook gives one by one (a business key whose own list is empty)
+let graph: { me: any; pages: any[]; ads: any[]; assigned?: any[]; byId?: Record<string, any> } = { me: {}, pages: [], ads: [] };
+// the key Facebook gives for a login's code (each door of Meta gets its own)
+let codeToken = 'SHORT_USER_TOKEN';
 let tiktok: { token: string; ids: string[]; list: any[]; user: any } = { token: '', ids: [], list: [], user: {} };
 // a configuration « System-user access token »: Facebook will not turn its token into another one
 let refuseSwap = false;
@@ -100,7 +103,7 @@ before(async () => {
       const path = u.pathname.replace(/^\/v[\d.]+\//, '');
       if (path === 'oauth/access_token' && u.searchParams.get('grant_type') === 'fb_exchange_token' && refuseSwap)
         return new Response(JSON.stringify({ error: { message: 'Unsupported token type', code: 100 } }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-      if (path === 'oauth/access_token') return answer(u.searchParams.get('grant_type') === 'fb_exchange_token' ? { access_token: 'LONG_USER_TOKEN', expires_in: 5_184_000 } : { access_token: 'SHORT_USER_TOKEN' });
+      if (path === 'oauth/access_token') return answer(u.searchParams.get('grant_type') === 'fb_exchange_token' ? { access_token: 'LONG_USER_TOKEN', expires_in: 5_184_000 } : { access_token: codeToken });
       if (path === 'me' && probe.refuse) return new Response(JSON.stringify({ error: { message: 'Error validating access token', code: 190 } }), { status: 400 });
       if (path === 'me') return answer(graph.me);
       // « Connecter WhatsApp »: what the key was given (Embedded Signup), the account's numbers, a number's registration
@@ -157,6 +160,7 @@ before(async () => {
       if (probe.catalog && path === probe.catalog.id)
         return probe.catalog.refuse ? new Response(JSON.stringify({ error: { message: '(#100) Missing permissions', code: 100 } }), { status: 400 }) : answer({ id: path, name: 'Catalogue Bébé', product_count: 36 });
       if (probe.pixelRefuse?.includes(path)) return new Response(JSON.stringify({ error: { message: '(#100) Unsupported get request', code: 100 } }), { status: 400 });
+      if (graph.byId?.[path]) return answer(graph.byId[path]);
       if (/^\d+$/.test(path)) return answer({ id: path, name: 'Page', username: 'bebeconfort.dz' });
     }
     // Instagram's own login (graph.instagram.com): its key's account
@@ -453,13 +457,14 @@ test('TikTok for Business: the advertiser’s token and its ad accounts; linked 
   assert.deepEqual(apps.counts, { meta: 1, tiktok: 1, shops: 1 });
 });
 
-test('the preview: a sample account, and a « login » that links a new one after two seconds', async () => {
+test('the preview: the boutique’s one Page and its ads connection; a « login » links after two seconds, and a new Page takes the old one’s place', async () => {
   resetSocialDemo();
   let now = Date.parse('2026-11-03T16:00:00Z');
   const demo: Ctx = { ...a, t: undefined, server: undefined, now: () => now };
   const first: any = await call('social.list', demo, {});
   assert.equal(first.preview, true);
-  assert.equal(first.links[0].scope, 'all');
+  // Meta's two doors: a Facebook account with the boutique's one Page; the ads, a connection of their own
+  assert.deepEqual(first.links.map((x: any) => [x.part, x.scope, x.assets.map((y: any) => y.kind).join()]), [['main', 'here', 'page'], ['ads', 'all', 'ad_account,ad_account,ad_account,ad_account']]);
   assert.equal(first.here.page.name, 'Bébé Confort DZ');
   const s: any = await call('social.start', demo, { provider: 'tiktok', scope: 'here' });
   assert.equal(s.url, null);
@@ -467,11 +472,21 @@ test('the preview: a sample account, and a « login » that links a new one afte
   now += 2500;
   assert.equal((await call('social.state', demo, { state: s.state })).status, 'done');
   const after: any = await call('social.list', demo, {});
-  assert.equal(after.links.length, 2);
+  assert.equal(after.links.length, 3);
   assert.equal(after.here.advertiser.name, 'Bébé Confort TikTok');
-  // a page used by the other sample boutique
-  const oran = after.links[0].assets.find((x: any) => x.name === 'Bébé Confort Oran');
-  await assert.rejects(() => call('social.use', demo, { assetId: oran.id }), /répond déjà/);
+  // « Facebook et Instagram » again: the boutique answers on the new Page, the Facebook account it had goes
+  const s2: any = await call('social.start', demo, { provider: 'meta', scope: 'all' });
+  now += 2500;
+  const done: any = await call('social.state', demo, { state: s2.state });
+  assert.equal(done.status, 'done');
+  const again: any = await call('social.list', demo, {});
+  const pages = again.links.filter((x: any) => x.provider === 'meta' && x.part === 'main');
+  assert.deepEqual(pages.map((x: any) => [x.id, x.scope, x.assets.map((y: any) => `${y.name}:${y.usedHere}`).join()]), [[done.linkId, 'here', 'Bébé Confort Alger:true']]);
+  assert.equal(again.here.page.name, 'Bébé Confort Alger');
+  assert.equal(again.here.ad_account.count, 4, 'the ads keep their own connection');
+  // a Page's account stays with its boutique
+  await assert.rejects(() => call('social.scope', demo, { linkId: done.linkId, scope: 'all' }), /une seule boutique/);
+  resetSocialDemo();
 });
 
 test('« Connecter Instagram » is gone: Instagram comes with the Facebook account; a key connected before stays until the boutique removes it', async () => {
@@ -1240,43 +1255,172 @@ test('a business key (« system user ») lists its ad accounts as the ones it wa
   }
 });
 
-test('Meta in two steps: « Publicité Meta » opens its own Facebook window; the same account comes back with its ad accounts and its Page keeps answering', async () => {
+/** Meta's two doors, opened and closed around a test (the control room's ads configuration). */
+const twoDoorsOn = () => p('p.social.apps.save', { meta: { ...APPS.meta, configId: '777000111', adsConfigId: '777000222', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+const twoDoorsOff = () => p('p.social.apps.save', { meta: { ...APPS.meta, configId: '', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+const subscriptions = () => calls.filter((c) => c.method === 'POST' && /\/subscribed_apps$/.test(new URL(c.url).pathname)).map((c) => `${new URL(c.url).pathname.split('/').slice(-2)[0]}${/method=delete/.test(c.body) ? ':stop' : ''}`);
+
+test('Meta’s two doors: « Facebook et Instagram » keeps the boutique’s one Page (asked when Facebook gave several), never an ad account; « Publicité Meta » is a connection of its own, with its own key', async () => {
   // one configuration for everything: the second window is not offered, and asking for it says why
   assert.equal(((await call('social.list', b, {})) as any).adsReady, false);
   await assert.rejects(() => call('social.start', b, { provider: 'meta', kind: 'ads' }), /Publicité n’est pas encore prête/);
   await assert.rejects(() => call('social.start', b, { provider: 'tiktok', kind: 'ads' }), /Seul Meta/);
-  const saved: any = await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '777000111', adsConfigId: '777000222', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+  const saved: any = await twoDoorsOn();
   assert.equal(saved.meta.adsConfigId, '777000222');
   assert.equal(((await call('social.list', b, {})) as any).adsReady, true);
+  const adsKeyBefore = await setting(b, 'secret_meta_token');
+  // a Page another boutique answers on: Facebook's window may give it too
+  const theirs = (await t.platform.query(`SELECT u.ext_id FROM platform.social_uses u WHERE u.kind = 'page' AND u.shop_id = $1`, [a.shop!.id]))[0];
+  assert.ok(theirs, 'the other boutique answers on a Page');
   refuseSwap = true;
   try {
-    // step 1, « Facebook et Instagram »: the first configuration's window; the key has no ad account yet
-    const s1: any = await call('social.start', b, { provider: 'meta', scope: 'here' });
+    // door 1, « Facebook et Instagram »: the first configuration's window, for this boutique alone (never « all »)
+    const s1: any = await call('social.start', b, { provider: 'meta', scope: 'all' });
     assert.equal(new URL(s1.url).searchParams.get('config_id'), '777000111');
-    graph = { me: { id: '5300', name: 'PILOTIX APP System User' }, pages: [{ id: '9960', name: 'Bébé Oran Deux', access_token: 'PAGE_TOKEN_60' }], ads: [], assigned: [] };
-    assert.equal((await linked(t, 'meta', { code: 'STEP_1', state: s1.state }, URL0)).ok, true);
-    const first = ((await call('social.list', b, {})) as any).links.filter((x: any) => x.name === 'PILOTIX APP System User');
-    assert.deepEqual(first[0].assets.map((x: any) => [x.kind, x.name]), [['page', 'Bébé Oran Deux']]);
-    // step 2, « Publicité Meta »: its own window (the second configuration), and its state says which login it is
+    assert.equal(Number((await t.platform.query(`SELECT shop_id FROM platform.social_states WHERE state = $1`, [s1.state]))[0].shop_id), b.shop!.id);
+    // Facebook's window gave several Pages, and its key would list an ad account too
+    graph = {
+      me: { id: '5300', name: 'PILOTIX APP System User' },
+      pages: [
+        { id: '9960', name: 'Bébé Oran Deux', access_token: 'PAGE_TOKEN_60', instagram_business_account: { id: '178960', username: 'oran.deux' } },
+        { id: '9961', name: 'Une autre page', access_token: 'PAGE_TOKEN_61' },
+        ...(theirs ? [{ id: String(theirs.ext_id), name: 'La page d’Alger', access_token: 'PAGE_TOKEN_A' }] : []),
+      ],
+      ads: [],
+      assigned: [{ id: 'act_3190', account_id: '3190', name: 'Oran pub deux', currency: 'USD', account_status: 1 }],
+    };
+    codeToken = 'DOOR_1_KEY';
+    calls.length = 0;
+    const back = await finishLogin(t, 'meta', { code: 'DOOR_1', state: s1.state }, URL0);
+    assert.equal(back.ok, true);
+    assert.deepEqual(back.confirm!.pages!.map((x) => [x.id, x.ig, !!x.taken]), [['9960', 'oran.deux', false], ['9961', null, false], ...(theirs ? [[String(theirs.ext_id), null, true]] : [])]);
+    assert.deepEqual(back.confirm!.assets, []);
+    assert.deepEqual(subscriptions(), [], 'nothing is listened to before the boutique chose its Page');
+    const html = loginPage(back);
+    assert.match(html, /Quelle page est celle de cette boutique/);
+    assert.match(html, /name="page" value="9960"/);
+    assert.match(html, /garde une seule page par boutique/);
+    if (theirs) assert.match(html, /Répond déjà pour/);
+    // no Page chosen: the question stays open; another boutique's Page: refused in the test below
+    assert.match((await confirmLogin(t, back.confirm!.state, back.confirm!.key, true)).message, /Choisissez la page/);
+    const end = await confirmLogin(t, back.confirm!.state, back.confirm!.key, true, '9960');
+    assert.deepEqual([end.ok, end.account], [true, 'Bébé Oran Deux']);
+    const l1: any = await call('social.list', b, {});
+    const mine = l1.links.filter((x: any) => x.name === 'PILOTIX APP System User');
+    assert.deepEqual(mine.map((x: any) => [x.part, x.scope, x.assets.map((y: any) => `${y.kind}:${y.name}:${y.usedHere}`)]), [['main', 'here', ['page:Bébé Oran Deux:true']]]);
+    assert.equal(l1.here.page.name, 'Bébé Oran Deux');
+    assert.deepEqual(l1.links.filter((x: any) => x.provider === 'meta' && x.part === 'main' && x.scope === 'here').length, 1, 'one boutique, one Page: its other Facebook accounts went');
+    // the kept Page alone is subscribed; the other one, held nowhere in Pilotix, is no longer listened to
+    assert.deepEqual(subscriptions().sort(), ['178960', '9960', '9961:stop']);
+    assert.equal(await setting(b, 'secret_dellal_page_token'), 'PAGE_TOKEN_60');
+    assert.equal(await setting(b, 'secret_meta_token'), adsKeyBefore, 'the first door never touches Publicité');
+    // door 2, « Publicité Meta »: its own window (the second configuration); its state says which login it is
     const s2: any = await call('social.start', b, { provider: 'meta', scope: 'here', kind: 'ads' });
     assert.ok(s2.state.startsWith('ads.'));
     const u2 = new URL(s2.url);
     assert.equal(u2.searchParams.get('config_id'), '777000222');
     assert.equal(u2.searchParams.get('scope'), null, 'the configuration says what is asked');
-    // Meta added the ads to what the account had: the same account comes back, with its ad accounts too
-    graph = { ...graph, assigned: [{ id: 'act_3190', account_id: '3190', name: 'Oran pub deux', currency: 'USD', account_status: 1 }] };
-    assert.equal((await linked(t, 'meta', { code: 'STEP_2', state: s2.state }, URL0)).ok, true);
-    const both = ((await call('social.list', b, {})) as any).links.filter((x: any) => x.name === 'PILOTIX APP System User');
-    assert.equal(both.length, 1, 'the same account, not a second one');
-    assert.deepEqual(both[0].assets.map((x: any) => `${x.kind}:${x.name}`).sort(), ['ad_account:Oran pub deux', 'page:Bébé Oran Deux']);
-    assert.equal(both[0].assets.find((x: any) => x.kind === 'ad_account').usedHere, true, 'its ads are counted at once');
-    assert.equal(await setting(b, 'secret_meta_token'), 'SHORT_USER_TOKEN');
-    await call('social.remove', b, { linkId: both[0].id });
+    // the same Facebook account comes back with the door's own key: a connection of its own, the ad accounts only
+    codeToken = 'DOOR_2_KEY';
+    calls.length = 0;
+    assert.equal((await linked(t, 'meta', { code: 'DOOR_2', state: s2.state }, URL0)).ok, true);
+    assert.deepEqual(subscriptions().filter((x) => !x.startsWith('act_')), [], 'no Page is touched by the ads’ door');
+    const l2: any = await call('social.list', b, {});
+    const both = l2.links.filter((x: any) => x.name === 'PILOTIX APP System User');
+    assert.deepEqual(both.map((x: any) => [x.part, x.assets.map((y: any) => `${y.kind}:${y.name}`)]), [['main', ['page:Bébé Oran Deux']], ['ads', ['ad_account:Oran pub deux']]]);
+    const [pageLink, adsLink] = both;
+    if (!adsKeyBefore) {
+      assert.equal(adsLink.assets[0].usedHere, true, 'its ads are counted at once');
+      assert.equal(await setting(b, 'secret_meta_token'), 'DOOR_2_KEY');
+    } else await call('social.ads', b, { linkId: adsLink.id, on: true });
+    assert.equal(await setting(b, 'secret_meta_token'), 'DOOR_2_KEY', 'Publicité runs on the ads’ own key');
+    assert.equal(await setting(b, 'secret_dellal_page_token'), 'PAGE_TOKEN_60', 'the Page keeps its key');
+    // the Page linked again (a new key for it): the ads keep theirs
+    codeToken = 'DOOR_1_KEY_AGAIN';
+    graph = { ...graph, pages: [{ id: '9960', name: 'Bébé Oran Deux', access_token: 'PAGE_TOKEN_60_B', instagram_business_account: { id: '178960', username: 'oran.deux' } }] };
+    const s3: any = await call('social.start', b, { provider: 'meta', scope: 'here' });
+    const back3 = await finishLogin(t, 'meta', { code: 'DOOR_1_AGAIN', state: s3.state }, URL0);
+    assert.equal(back3.confirm!.pages!.length, 1);
+    assert.equal(back3.confirm!.was ?? null, null, 'the same Page: nothing is replaced');
+    assert.doesNotMatch(loginPage(back3), /Quelle page/);
+    assert.equal((await confirmLogin(t, back3.confirm!.state, back3.confirm!.key, true)).ok, true, 'one Page: no choice to make');
+    assert.equal(await setting(b, 'secret_dellal_page_token'), 'PAGE_TOKEN_60_B');
+    assert.equal(await setting(b, 'secret_meta_token'), 'DOOR_2_KEY');
+    const l3: any = await call('social.list', b, {});
+    assert.deepEqual(l3.links.filter((x: any) => x.name === 'PILOTIX APP System User').map((x: any) => [x.id, x.part]), [[pageLink.id, 'main'], [adsLink.id, 'ads']]);
+    // « Tester »: each connection answers for its own part
+    const keysOf = async (linkId: number) => ((await call('social.test', b, { linkId })) as any).checks.map((c: any) => c.key);
+    const k1 = await keysOf(pageLink.id);
+    assert.ok(k1.includes('page') && !k1.includes('adsNone') && !k1.includes('adsRight'), k1.join());
+    const k2 = await keysOf(adsLink.id);
+    assert.ok(k2.includes('ads') && !k2.includes('pageNone') && !k2.includes('pagesNone') && !k2.includes('page'), k2.join());
+    // a Page that already answers for another boutique cannot be taken
+    if (theirs) {
+      graph = { ...graph, pages: [{ id: String(theirs.ext_id), name: 'La page d’Alger', access_token: 'PAGE_TOKEN_A' }] };
+      const s4: any = await call('social.start', b, { provider: 'meta', scope: 'here' });
+      assert.match((await finishLogin(t, 'meta', { code: 'DOOR_1_THEIRS', state: s4.state }, URL0)).message, /répond déjà pour/);
+    }
+    // Facebook gave no Page: said in plain words, nothing changes
+    graph = { ...graph, pages: [] };
+    const s5: any = await call('social.start', b, { provider: 'meta', scope: 'here' });
+    assert.match((await finishLogin(t, 'meta', { code: 'DOOR_1_NONE', state: s5.state }, URL0)).message, /aucune page/);
+    assert.equal(((await call('social.list', b, {})) as any).here.page.name, 'Bébé Oran Deux');
+    await call('social.remove', b, { linkId: adsLink.id });
+    await call('social.remove', b, { linkId: pageLink.id });
   } finally {
     refuseSwap = false;
-    await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+    codeToken = 'SHORT_USER_TOKEN';
+    await twoDoorsOff();
   }
   assert.equal(((await p('p.social.apps', {})) as any).meta.adsConfigId, '', 'saved without it: one login for everything again');
+});
+
+test('the two doors, an account linked before them: its ad accounts move to a connection of their own with the key they had; a business key whose list is empty still shows its Page', async () => {
+  // before the two doors: one login brought the Page and the ad account, on one key
+  graph = { me: { id: '5400', name: 'Nadia Oran' }, pages: [{ id: '9970', name: 'Page de Nadia', access_token: 'PAGE_TOKEN_70' }], ads: [{ id: 'act_3200', account_id: '3200', name: 'Pub de Nadia', currency: 'USD', account_status: 1 }] };
+  const s0: any = await call('social.start', b, { provider: 'meta', scope: 'here' });
+  assert.equal((await linked(t, 'meta', { code: 'BEFORE', state: s0.state }, URL0)).ok, true);
+  const before: any = ((await call('social.list', b, {})) as any).links.find((x: any) => x.name === 'Nadia Oran');
+  assert.deepEqual(before.assets.map((x: any) => x.kind).sort(), ['ad_account', 'page']);
+  await call('social.use', b, { assetId: before.assets.find((x: any) => x.kind === 'page').id });
+  await call('social.ads', b, { linkId: before.id, on: true });
+  assert.equal(await setting(b, 'secret_meta_token'), 'LONG_USER_TOKEN');
+  await twoDoorsOn();
+  refuseSwap = true;
+  try {
+    // « Facebook et Instagram » again, with the two doors: a business key now, whose own list of Pages comes back empty
+    // (Facebook still says which Page its rights were given for)
+    codeToken = 'CONTENT_KEY';
+    graph = { me: { id: '5400', name: 'Nadia Oran' }, pages: [], ads: [], assigned: [], byId: { '9970': { id: '9970', name: 'Page de Nadia', access_token: 'PAGE_TOKEN_70_B' } } };
+    probe = { ...probe, granular: [{ scope: 'pages_show_list', target_ids: ['9970'] }, { scope: 'pages_messaging', target_ids: ['9970'] }] };
+    const s1: any = await call('social.start', b, { provider: 'meta', scope: 'here' });
+    assert.equal((await linked(t, 'meta', { code: 'AFTER', state: s1.state }, URL0)).ok, true);
+    const now: any = await call('social.list', b, {});
+    const mine = now.links.filter((x: any) => x.name === 'Nadia Oran');
+    assert.deepEqual(mine.map((x: any) => [x.part, x.assets.map((y: any) => `${y.kind}:${y.name}:${y.usedHere}`)]).sort(), [['ads', ['ad_account:Pub de Nadia:true']], ['main', ['page:Page de Nadia:true']]]);
+    assert.equal(mine.find((x: any) => x.part === 'main').id, before.id, 'the Facebook account is the same one');
+    // Publicité keeps running on the key it had; the Page answers with its new one
+    assert.equal(await setting(b, 'secret_meta_token'), 'LONG_USER_TOKEN');
+    assert.equal(await setting(b, 'secret_dellal_page_token'), 'PAGE_TOKEN_70_B');
+    assert.equal(Number(((await setting(b, 'social_ads')) as any).linkId), mine.find((x: any) => x.part === 'ads').id);
+    assert.equal(now.here.ad_account.name, 'Pub de Nadia');
+    // a pasted ads key of the very same Facebook account: an ads connection, it never replaces the Page's key
+    const key = `EAAG${'z'.repeat(60)}`;
+    probe = { ...probe, keyValid: true, keyApp: APPS.meta.appId, scopes: ['ads_read', 'ads_management'], keyType: 'SYSTEM_USER' };
+    graph = { ...graph, assigned: [{ id: 'act_3200', account_id: '3200', name: 'Pub de Nadia', currency: 'USD', account_status: 1 }] };
+    const r: any = await call('social.adsKey', b, { token: key });
+    const after = r.list.links.filter((x: any) => x.name === 'Nadia Oran');
+    assert.deepEqual(after.map((x: any) => [x.part, x.assets.map((y: any) => y.kind).join()]).sort(), [['ads', 'ad_account'], ['main', 'page']]);
+    assert.equal(r.linkId, mine.find((x: any) => x.part === 'ads').id, 'the same ads connection, with its new key');
+    assert.equal(await setting(b, 'secret_dellal_page_token'), 'PAGE_TOKEN_70_B');
+    assert.equal(await setting(b, 'secret_meta_token'), key);
+    for (const l of after) await call('social.remove', b, { linkId: l.id });
+  } finally {
+    refuseSwap = false;
+    codeToken = 'SHORT_USER_TOKEN';
+    probe = { ...probe, granular: undefined, keyValid: undefined, keyApp: undefined, keyType: undefined, scopes: undefined };
+    await twoDoorsOff();
+  }
 });
 
 test('« Coller une clé Meta Ads »: Meta is asked about the key; its ad accounts join the boutique like a linked account; a wrong key is refused in plain words', async () => {
@@ -1330,21 +1474,24 @@ test('the preview: « Publicité Meta » links a sample ad account, a pasted key
   resetSocialDemo();
 });
 
-test('the preview: « Tester » answers a sample, the ad accounts switch off and on', async () => {
+test('the preview: « Tester » answers a sample for each connection, the ad accounts switch off and on', async () => {
   resetSocialDemo();
   const demo: Ctx = { ...a, t: undefined, server: undefined };
   const first: any = await call('social.list', demo, {});
   assert.deepEqual(first.here.ad_account, { name: 'Bébé Confort — publicité', account: 'Alaeddine Benali', count: 4 });
-  assert.ok(first.links[0].assets.filter((x: any) => x.kind === 'page').length >= 10, 'many Pages: the boutique picks one');
-  const r: any = await call('social.test', demo, { linkId: first.links[0].id });
+  const [page, ads] = first.links;
+  assert.deepEqual([page.part, page.assets.length, ads.part, ads.assets.length], ['main', 1, 'ads', 4]);
+  // part by part, as on the server: the page folds the parts that work and opens the one with a problem
+  const r: any = await call('social.test', demo, { linkId: page.id });
   assert.equal(r.checks.find((c: any) => c.key === 'appHookIg').state, 'warn');
   assert.ok(r.checks.filter((c: any) => c.key !== 'appHookIg').every((c: any) => c.state === 'ok'));
-  // part by part, as on the server: the page folds the parts that work and opens the one with a problem
-  assert.deepEqual([...new Set(r.checks.map((c: any) => c.group))], ['key', 'fb', 'ig', 'forms', 'content', 'ads', 'catalog', 'pixels', 'app']);
+  assert.deepEqual([...new Set(r.checks.map((c: any) => c.group))], ['key', 'fb', 'ig', 'forms', 'content', 'app']);
+  const r2: any = await call('social.test', demo, { linkId: ads.id });
+  assert.deepEqual([...new Set(r2.checks.map((c: any) => c.group))], ['key', 'ads', 'catalog', 'pixels', 'app']);
   assert.deepEqual([first.old, first.whatsapp, first.waReady], [{ ads: null, instagram: null }, null, true]);
-  const off: any = await call('social.ads', demo, { linkId: first.links[0].id, on: false });
+  const off: any = await call('social.ads', demo, { linkId: ads.id, on: false });
   assert.equal(off.here.ad_account, null);
-  const on: any = await call('social.ads', demo, { linkId: first.links[0].id, on: true });
+  const on: any = await call('social.ads', demo, { linkId: ads.id, on: true });
   assert.equal(on.here.ad_account.count, 4);
   resetSocialDemo();
 });
