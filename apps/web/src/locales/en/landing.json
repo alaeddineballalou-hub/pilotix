@@ -706,5 +706,18 @@
     "cf": "Simulate Cloudflare (as on the live site)",
     "cfOn": "With Cloudflare",
     "cfOff": "Without Cloudflare"
+  },
+  "why": {
+    "title": "“Why us” picture (every page)",
+    "sub_one": "One picture for the whole shop: it shows on your landing page ({{count}} online). Change it here, it changes everywhere.",
+    "sub_other": "One picture for the whole shop: it shows on all your landing pages ({{count}} online). Change it here, it changes everywhere.",
+    "none": "No picture",
+    "add": "Choose the picture",
+    "change": "Change the picture",
+    "remove": "Remove from every page",
+    "order": "Its place on the page",
+    "after": "After the description",
+    "before": "Before the description",
+    "saved": "Saved: all your pages are up to date."
   }
 }

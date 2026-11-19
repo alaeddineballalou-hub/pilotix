@@ -482,3 +482,16 @@
 .lp-di-n code { font-size: 12px; color: var(--muted); }
 .lp-di-list .btn { flex: none; }
 
+
+/* Réglages › « Pourquoi nous »: the shop's picture shown on every page */
+.lp-why { margin-bottom: 14px; }
+.lp-why h2 { display: flex; align-items: center; gap: 8px; }
+.lp-why h2 svg { width: 18px; height: 18px; flex: none; }
+.lp-why-row { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-top: 12px; }
+.lp-why-img { width: 96px; height: auto; max-height: 220px; object-fit: cover; object-position: top; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
+.lp-why-none { width: 96px; height: 120px; display: grid; place-items: center; text-align: center; padding: 6px; border-radius: 10px; border: 1.5px dashed var(--line); color: var(--c-muted); font-size: 12.5px; }
+.lp-why-acts { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 220px; }
+.lp-why-acts .btn, html[data-skin][data-theme] .lp-why-acts .btn { height: auto; min-height: 44px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.lp-why-order { border: 0; padding: 0; margin: 14px 0 0; min-width: 0; }
+.lp-why-order legend { padding: 0; margin-bottom: 6px; font-weight: 600; font-size: 13.5px; }
+.lp-why-order .px-seg button { min-height: 44px; }

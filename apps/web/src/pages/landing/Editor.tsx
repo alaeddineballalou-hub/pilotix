@@ -81,6 +81,8 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
   const auto = useMemo(() => (photoSet ? followProduct(d.images, photoSet).add : []), [d.images, photoSet]);
   // the WhatsApp button of Réglages (the preview's thank-you screen shows the one the page will have)
   const shopWa = useRpc('landing.settings.get', {}, { staleTime: 60_000 }).data?.settings.whatsapp;
+  // the shop's « Pourquoi nous » picture: every page shows it, the preview too
+  const why = useRpc('landing.why.get', {}, { staleTime: 60_000 }).data;
   const save = useAction('landing.save', {
     success: t('landing.ed.saved'),
     onDone: (r) => {
@@ -239,6 +241,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
       variantFee: c.variantFee,
       shopName: c.shopName,
       shopLogo: c.shopLogo,
+      ...(why?.image ? { why: { src: why.image.src, srcset: `${why.image.src} 480w`, thumb: why.image.thumb, w: why.image.w, h: why.image.h }, whyFirst: why.first } : {}),
       whatsapp:
         view.waMode === 'own'
           ? { number: view.waNumber, label: view.waLabel || shopWa?.label || WHATSAPP_DEFAULT.label, message: view.waMessage || shopWa?.message || WHATSAPP_DEFAULT.message }
@@ -249,9 +252,9 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
     const r = { mode: 'preview' as const, post: '', geo: '', challenge: 'apercu', bits: c.bits };
     // the weight customers download before pictures (here the pictures are inside the page, as data)
     const light = <T extends { src: string; srcset: string; thumb: string }>(i: T) => ({ ...i, src: 'x', srcset: 'x 480w', thumb: 'x' });
-    const bare = renderLanding({ ...v, images: v.images.map(light), descImages: Object.fromEntries(Object.entries(v.descImages ?? {}).map(([k, i]) => [k, light(i)])) }, r);
+    const bare = renderLanding({ ...v, ...(v.why ? { why: light(v.why) } : {}), images: v.images.map(light), descImages: Object.fromEntries(Object.entries(v.descImages ?? {}).map(([k, i]) => [k, light(i)])) }, r);
     return { html: renderLanding(v, r), weight: new Blob([bare]).size };
-  }, [view, ctx.data, shopWa, photoSet, descImgs]);
+  }, [view, ctx.data, shopWa, photoSet, descImgs, why]);
   const frame = useRef<HTMLIFrameElement>(null);
   useLandingFrame(frame);
   // « Ordinateur »: the page drawn 1280 px wide, then scaled down to fit the box

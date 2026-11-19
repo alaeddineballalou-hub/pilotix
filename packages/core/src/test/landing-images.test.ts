@@ -137,3 +137,28 @@ test('a picture inside the description: its line « [image:N] » draws it there;
   await call('landing.save', marketer, { id: page.id, productId, slug: 'desc-img', title: 'Desc', price: 5000, description: many(12), images: [] });
 });
 
+
+test('« Pourquoi nous »: one picture for the shop, on every page, before or after the description', async () => {
+  const html = async () => ((await call('landing.html', admin, { slug: 'desc-img', mode: 'live', post: '/o', geo: '/g/', lead: '/l', imgBase: '/i/' })) as any).html as string;
+  const why = `<section class="d dx"><img class="di"`;
+  assert.ok(!(await html()).includes(why), 'nothing before a picture is chosen');
+  const img: any = await call('landing.addImage', marketer, { w: 960, h: 1800, t160: B('y160'), w480: B('y480'), w720: B('y720'), w960: B('y960') });
+  await assert.rejects(call('landing.why.save', marketer, { imageId: 999_999, first: false }), /Image introuvable/);
+  await call('landing.why.save', marketer, { imageId: img.id, first: false });
+  const got: any = await call('landing.why.get', marketer, {});
+  assert.deepEqual([got.imageId, got.first, got.image.w, got.image.h], [img.id, false, 960, 1800]);
+  // every page shows it, edge to edge, after the description by default
+  let h = await html();
+  assert.ok(h.includes(why) && h.includes(`/i/${img.id}/480.webp`));
+  const desc = `<section class="card d`;
+  assert.ok(h.indexOf(desc) > 0 && h.indexOf(desc) < h.indexOf(why));
+  assert.ok(((await call('landing.html', admin, { slug: SLUG, mode: 'live', post: '/o', geo: '/g/', lead: '/l', imgBase: '/i/' })) as any).html.includes(why), 'another page of the shop too');
+  // before the description when asked
+  await call('landing.why.save', marketer, { imageId: img.id, first: true });
+  h = await html();
+  assert.ok(h.indexOf(why) < h.indexOf(desc));
+  // other settings are kept, and the picture is taken off every page again
+  assert.equal(((await call('landing.settings.get', marketer, {})) as any).settings.purchaseAt, 'confirmed');
+  await call('landing.why.save', marketer, { imageId: null, first: true });
+  assert.ok(!(await html()).includes(why));
+});

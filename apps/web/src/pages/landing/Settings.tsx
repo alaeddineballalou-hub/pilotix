@@ -1,5 +1,6 @@
 // Landing pages › Réglages: the Meta pixel (browser + Conversions API, and when a real order counts as a Purchase),
 // abandoned orders (after how long they go to Commandes), the automations, and the log of what was sent to Meta.
+import { Why } from './Why';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, serverUrl, type Out } from '../../lib/backend';
@@ -73,6 +74,8 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
   const removeToken = () => window.confirm(t('landing.set.removeTokenAsk')) && save.mutate({ ...values(), capiToken: null });
   const capiOk = data.capi.own || data.capi.ads;
   return (
+    <>
+      <Why />
     <form
       className="lp-set"
       onSubmit={(e) => {
@@ -279,6 +282,7 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
         <SaveBar dirty={dirty} busy={save.isPending} onSave={submit} label={t('common.save')} />
       </div>
     </form>
+    </>
   );
 }
 

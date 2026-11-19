@@ -706,5 +706,18 @@
     "cf": "Simuler Cloudflare (comme sur le vrai site)",
     "cfOn": "Avec Cloudflare",
     "cfOff": "Sans Cloudflare"
+  },
+  "why": {
+    "title": "Image « Pourquoi nous » (toutes les pages)",
+    "sub_one": "Une seule image pour toute la boutique : elle s’affiche sur votre landing page ({{count}} en ligne). Changez-la ici, elle change partout.",
+    "sub_other": "Une seule image pour toute la boutique : elle s’affiche sur toutes vos landing pages ({{count}} en ligne). Changez-la ici, elle change partout.",
+    "none": "Pas d’image",
+    "add": "Choisir l’image",
+    "change": "Changer l’image",
+    "remove": "Retirer de toutes les pages",
+    "order": "Sa place sur la page",
+    "after": "Après la description",
+    "before": "Avant la description",
+    "saved": "Enregistré : toutes vos pages sont à jour."
   }
 }

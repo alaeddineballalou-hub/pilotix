@@ -444,6 +444,13 @@ export function viewImages(refs: ImgRef[], rows: Map<number, any>, imgBase: stri
 }
 
 /** The pictures placed in a description (its « [image:12] » lines) as the page shows them, by their number. */
+/** « Pourquoi nous »: the shop's picture every landing page shows (Landing pages › Réglages), and its place. */
+export async function whyView(db: Db, why: { imageId: number | null; first: boolean } | undefined, imgBase: string | null): Promise<{ why?: LandingImage; whyFirst?: boolean }> {
+  if (!why?.imageId) return {};
+  const refs: ImgRef[] = [{ id: why.imageId }];
+  const one = viewImages(refs, await imageRows(db, refs, !imgBase), imgBase)[0];
+  return one ? { why: one, whyFirst: !!why.first } : {};
+}
 export async function descriptionImages(db: Db, text: string, imgBase: string | null): Promise<Record<number, LandingImage>> {
   const refs: ImgRef[] = landingDescriptionImageIds(text).map((id) => ({ id }));
   const out: Record<number, LandingImage> = {};
@@ -504,6 +511,7 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     oldPrice: numOrNull(l.old_price),
     description: l.description,
     descImages: await descriptionImages(ctx.db, String(l.description ?? ''), o.imgBase),
+    ...(await whyView(ctx.db, s.why, o.imgBase)),
     variantLabel: l.variant_label || 'اللون',
     variants: viewVariants(l, pc, hide),
     ...(pc.options ? { options: pc.options } : {}),
@@ -2090,6 +2098,22 @@ export const landingProcs = {
       /** the same for TikTok (its « URL parameters » / tracking: TikTok fills the __…__; an ad group is « adset », an ad « ad ») */
       tiktokUrlParams: 'utm_source=tiktok&utm_medium=paid&utm_campaign=__CAMPAIGN_NAME__&utm_content=__CID_NAME__&campaign_id=__CAMPAIGN_ID__&adset_id=__AID__&ad_id=__CID__&placement=__PLACEMENT__',
     };
+  }),
+
+  /**
+   * « Pourquoi nous »: one picture for the whole shop (stored like a description picture: landing.addImage), shown on
+   * every landing page before or after the product's description. imageId null takes it off every page.
+   */
+  'landing.why.get': proc([...WHO], z.object({}), async (ctx) => {
+    const w = (await landingSettings(ctx.db)).why ?? { imageId: null, first: false };
+    const row = w.imageId ? (await ctx.db.query(`SELECT id, w, h, t160, w480 FROM landing_images WHERE id = $1`, [w.imageId]))[0] : null;
+    return { imageId: row ? num(row.id) : null, first: !!w.first, image: row ? { id: num(row.id), w: num(row.w), h: num(row.h), thumb: `data:image/webp;base64,${row.t160}`, src: `data:image/webp;base64,${row.w480}` } : null, pages: num((await ctx.db.query(`SELECT count(*) AS n FROM landing_pages WHERE active`))[0]?.n) };
+  }),
+  'landing.why.save': proc([...WHO], z.object({ imageId: id.nullable(), first: z.boolean() }), async (ctx, i) => {
+    if (i.imageId && !(await ctx.db.query(`SELECT 1 FROM landing_images WHERE id = $1`, [i.imageId])).length) throw bad('Image introuvable : envoyez-la de nouveau.');
+    await setSetting(ctx.db, 'landing', { ...(await landingSettings(ctx.db)), why: { imageId: i.imageId, first: i.first } }, ctx.session.profile.id);
+    ctx.emit({ type: 'settings' });
+    return { ok: true };
   }),
 
   'landing.settings.save': proc([...WHO], SettingsInput, async (ctx, i) => {
