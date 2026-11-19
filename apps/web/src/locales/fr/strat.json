@@ -181,6 +181,7 @@
       "videoDay": "Les vidéos du prochain test sont prêtes le {{againVideoDay}}.",
       "newIdea": "Tant qu’il y a moins de {{ideasMin}} différentes en ligne, on ajoute une idée de vidéo vraiment nouvelle à chaque test : une seule, pour un produit qui gagne déjà.",
       "copy": "On ne modifie jamais une pub en ligne. Pour corriger une vidéo, on en fait une copie, testée au test du {{testDay}} suivant.",
+      "lost": "Un produit perdu n’a plus de pub tant que le manager ne le relance pas comme un nouveau test.",
       "always": "Les pubs de notoriété et le catalogue tournent toujours, avec leur propre budget, hors des KPI.",
       "alwaysBudget": "Les pubs de notoriété et le catalogue tournent toujours, avec leur propre budget : {{awarenessBudget}}.",
       "noRule": "Quand aucune règle ne décide, on ne fait rien sur cette pub : le manager décide, et sa décision devient une nouvelle règle."

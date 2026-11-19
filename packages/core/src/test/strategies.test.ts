@@ -191,7 +191,7 @@ test('« Life ad circle »: each step tells its rules, and a rule follows the sh
   assert.deepEqual(circleRules('judge', v, c), ['verdict', 'winner', 'notWinner', 'undecided', 'pending', 'after']);
   assert.deepEqual(circleRules('scale', v, c), ['batch', 'keep', 'group', 'own', 'startBudget']);
   assert.deepEqual(circleRules('watch', v, c), ['lines', 'budgetWait', 'budgetUp', 'budgetDown', 'proof', 'stock', 'freeze', 'brake', 'noData']);
-  assert.deepEqual(circleRules('again', v, c), ['round', 'videoDay', 'newIdea', 'copy', 'always', 'noRule']);
+  assert.deepEqual(circleRules('again', v, c), ['round', 'videoDay', 'newIdea', 'copy', 'lost', 'always', 'noRule']);
   // a test of videos only, or of images only, says so
   assert.ok(circleRules('test', { ...v, testImages: 0 }, c).includes('launchVideos'));
   assert.ok(circleRules('test', { ...v, testVideos: 0 }, c).includes('launchImages'));
@@ -203,7 +203,7 @@ test('« Life ad circle »: each step tells its rules, and a rule follows the sh
   assert.ok(circleRules('again', { ...v, testPerWeek: 4 }, c).includes('roundN'));
   assert.ok(circleRules('again', v, { ...c, set: { ...set, awarenessBudget: 10 } }).includes('alwaysBudget'));
   // a rule about something the shop switched off is left out
-  assert.deepEqual(circleRules('again', { ...v, againAlways: false }, c), ['round', 'videoDay', 'newIdea', 'copy', 'noRule']);
+  assert.deepEqual(circleRules('again', { ...v, againAlways: false }, c), ['round', 'videoDay', 'newIdea', 'copy', 'lost', 'noRule']);
   // every text a rule can take is in the list the languages are checked against
   for (const st of CIRCLE_STEPS) for (const k of circleRules(st, v, c)) assert.ok(CIRCLE_RULE_TEXTS.includes(k), k);
   assert.equal(new Set(CIRCLE_RULE_TEXTS).size, CIRCLE_RULE_TEXTS.length);

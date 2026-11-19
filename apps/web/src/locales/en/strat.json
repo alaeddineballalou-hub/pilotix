@@ -181,6 +181,7 @@
       "videoDay": "The videos of the next test are ready on {{againVideoDay}}.",
       "newIdea": "While fewer than {{ideasMin}} are live, one truly new video idea is added in each test: only one, for a product that already wins.",
       "copy": "A live ad is never edited. To fix a video, we make a copy, tested in the test of the next {{testDay}}.",
+      "lost": "A lost product gets no ad until the manager brings it back as a new test.",
       "always": "Awareness and catalogue ads always run, with their own budget, outside the KPIs.",
       "alwaysBudget": "Awareness and catalogue ads always run, with their own budget: {{awarenessBudget}}.",
       "noRule": "When no rule decides, nothing is done on that ad: the manager decides, and the decision becomes a new rule."

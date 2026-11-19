@@ -101,7 +101,7 @@ export const CIRCLE_RULES: Readonly<Record<CircleStep, readonly string[]>> = {
   judge: ['verdict', 'winner', 'notWinner', 'undecided', 'pending', 'after'],
   scale: ['batch', 'keep', 'group', 'own', 'startBudget'],
   watch: ['lines', 'budgetWait', 'budgetUp', 'budgetDown', 'proof', 'stock', 'freeze', 'brake', 'noData'],
-  again: ['round', 'videoDay', 'newIdea', 'copy', 'always', 'noRule'],
+  again: ['round', 'videoDay', 'newIdea', 'copy', 'lost', 'always', 'noRule'],
 };
 
 /** A rule whose words follow a choice of the shop: every text it can take (the first is the default's). */
