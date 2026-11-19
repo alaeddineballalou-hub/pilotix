@@ -348,7 +348,7 @@ function Empty({ page }: { page: Feed['page'] }) {
       {page ? (
         <p className="lf-muted">{t('leads.empty.page', { page: page.name })}</p>
       ) : (
-        <a className="lf-btn primary" href="#/comptes">
+        <a className="lf-btn primary" href="#/comptes/pub">
           {t('leads.empty.link')}
         </a>
       )}

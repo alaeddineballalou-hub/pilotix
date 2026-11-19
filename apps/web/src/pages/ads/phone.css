@@ -146,3 +146,7 @@
 .pxm-why { font-size: 12px; color: var(--muted); }
 .pxm-row { display: flex; align-items: center; gap: 8px; }
 .pxm-row b { flex: 1; }
+/* « Meta n'est pas connecté »: the words, and the door to Pilot AI › Comptes › Publicité Meta */
+.ads-connect { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.ads-connect > span { flex: 1 1 220px; }
+.ads-connect .btn { flex: none; min-height: 44px; }

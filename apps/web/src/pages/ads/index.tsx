@@ -8,7 +8,7 @@ import { da, n, pct, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { store } from '../../lib/store';
-import { Empty, ErrorBox, Help, Loading, StageBar } from '../../ui/kit';
+import { Empty, ErrorBox, Help, Icon, Loading, StageBar } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { Marketer } from './Marketer';
 import { PhoneMarketing } from './PhoneAds';
@@ -204,7 +204,17 @@ export function Publicite(_: Partial<PageProps> = {}) {
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
       ) : d ? (
         <>
-          {!d.connected && !d.demo && <div className="warnbox">{t(atSeller ? 'ads.notConnectedSeller' : 'ads.notConnected')}</div>}
+          {!d.connected && !d.demo && (
+            <div className="warnbox ads-connect">
+              <span>{t(atSeller ? 'ads.notConnectedSeller' : 'ads.notConnected')}</span>
+              {/* the door to the one place where Meta is connected: straight to its « Publicité Meta » part (the admin's page) */}
+              {!atSeller && has() && (
+                <a className="btn small primary" href="#/comptes/pub">
+                  <Icon name="link" /> {t('ads.connectBtn')}
+                </a>
+              )}
+            </div>
+          )}
           {d.syncWarning && <div className="error">{d.syncWarning}</div>}
           {!fxOk && <div className="fxcard warnbox">{t('ads.fxMissing')}</div>}
           {productId && (

@@ -79,7 +79,7 @@ export function Catalogue({ rest }: { rest?: string[] } = {}) {
           <div className="cp-warn ct-warn" role="note">
             <Icon name="alert" />
             <span>
-              {t('metacatalog.ready')} <a href="#/comptes">{t('metacatalog.readyFix')}</a>
+              {t('metacatalog.ready')} <a href="#/comptes/pub">{t('metacatalog.readyFix')}</a>
             </span>
           </div>
         )}
@@ -151,7 +151,7 @@ function Networks({ d }: { d: Board }) {
             <span>{t('metacatalog.notYet')}</span>
           ) : (
             <span>
-              {t('metacatalog.notLinked')} <a href="#/comptes">{t('metacatalog.readyFix')}</a>
+              {t('metacatalog.notLinked')} <a href="#/comptes/pub">{t('metacatalog.readyFix')}</a>
             </span>
           )}
           {m.connected && <span>{m.pixelsLinked ? t('metacatalog.pixelOn') : t('metacatalog.pixelOff')}</span>}

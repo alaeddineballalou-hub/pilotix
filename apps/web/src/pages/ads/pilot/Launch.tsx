@@ -11,6 +11,7 @@ import { da, dec1, n, since, wilayaName } from '../../../lib/format';
 import { useAction, useRpc } from '../../../lib/query';
 import { store } from '../../../lib/store';
 import { Empty, ErrorBox, Icon, Loading } from '../../../ui/kit';
+import { useSession } from '../../../lib/session';
 import { toast } from '../../../ui/toast';
 import { toPlanPhoto } from '../../social/jpeg';
 import { readVideo, sendPieces, videoBody, VideoError } from '../../social/video';
@@ -121,6 +122,7 @@ const phoneOk = (v: string) => /^\+213[5-7]\d{8}$/.test(v.replace(/\s/g, '')) ||
 
 export function Launch({ base, rest }: { base: string; rest?: string[] }) {
   const { t } = useTranslation();
+  const { has } = useSession();
   // opened from Influenceurs: …/lancer/avec/<creator> or …/lancer/booster/<post>
   const pre = useMemo(() => {
     const id = rest?.[2] ? decodeURIComponent(rest[2]) : '';
@@ -188,7 +190,17 @@ export function Launch({ base, rest }: { base: string; rest?: string[] }) {
         </div>
       </div>
       {o.guard.stopped && <div className="error">{t('pilotads.stop.isOnLaunch')}</div>}
-      {!o.account && <div className="warnbox">{t('pilotads.launch.noAccount')}</div>}
+      {!o.account && (
+        <div className="warnbox ads-connect">
+          <span>{t('pilotads.launch.noAccount')}</span>
+          {/* the door to Pilot AI › Comptes › Publicité Meta (the admin's page) */}
+          {has() && (
+            <a className="btn small primary" href="#/comptes/pub">
+              <Icon name="link" /> {t('ads.connectBtn')}
+            </a>
+          )}
+        </div>
+      )}
       {mode === 'simple' ? (
         <div className="pa-wizard">
           <ol className="pa-steps" aria-label={t('pilotads.launch.stepsLabel')}>

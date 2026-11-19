@@ -246,12 +246,16 @@ CREATE TABLE IF NOT EXISTS platform.social_deletions (
 export interface SocialApps {
   /** configId: the Facebook Login for Business configuration « Continuer avec Facebook » opens (Pages, Instagram
    * accounts, ad accounts, catalogues, pixels: everything at once, with a key that does not end) */
-  /** waConfigId: a second one, of the « WhatsApp Embedded Signup » kind: « Connecter WhatsApp » in Pilot AI › Comptes */
+  /** adsConfigId: the configuration « Connecter la publicité » opens (ad accounts, catalogues, pixels, lead forms). With
+   * it, the boutiques connect in two steps, each asking Facebook for its own things: configId for the Pages and
+   * Instagram (messages, comments, posts), this one for the ads. Empty: one login asks for everything (configId). */
+  /** waConfigId: another one, of the « WhatsApp Embedded Signup » kind: « Connecter WhatsApp » in Pilot AI › Comptes */
   /** hasIgSecret: the secret of the app's Instagram login. Nobody connects with that login any more, but Meta still
    * signs with it the webhooks of the accounts connected that way before */
   meta: {
     appId: string;
     configId: string;
+    adsConfigId: string;
     waConfigId: string;
     hasSecret: boolean;
     hasIgSecret: boolean;
@@ -289,6 +293,7 @@ export async function socialApps(t: Tenancy): Promise<SocialApps> {
     meta: {
       appId: clean(a.meta?.appId, 40),
       configId: clean(a.meta?.configId, 40),
+      adsConfigId: clean(a.meta?.adsConfigId, 40),
       waConfigId: clean(a.meta?.waConfigId, 40),
       hasSecret: !!clean(s.meta),
       hasIgSecret: !!clean(s.metaIg),
@@ -362,6 +367,8 @@ export const SocialAppsInput = z.object({
   meta: z.object({
     appId: z.string().trim().max(40).regex(/^\d*$/, 'ID de l’app Meta (chiffres)'),
     configId: z.string().trim().max(40).regex(/^\d*$/, 'ID de configuration (chiffres)').default(''),
+    /** the configuration of « Connecter la publicité » (ad accounts, catalogues, pixels, lead forms) */
+    adsConfigId: z.string().trim().max(40).regex(/^\d*$/, 'ID de configuration Publicité (chiffres)').default(''),
     /** the WhatsApp Embedded Signup configuration (« Connecter WhatsApp ») */
     waConfigId: z.string().trim().max(40).regex(/^\d*$/, 'ID de configuration WhatsApp (chiffres)').default(''),
     /** a value replaces, '' keeps, null removes */
@@ -380,6 +387,7 @@ export async function saveSocialApps(t: Tenancy, i: z.output<typeof SocialAppsIn
     meta: {
       appId: i.meta.appId,
       configId: i.meta.configId,
+      adsConfigId: i.meta.adsConfigId,
       waConfigId: i.meta.waConfigId,
     },
     tiktok: { appId: i.tiktok.appId },
@@ -413,20 +421,26 @@ export function loginUrl(apps: SocialApps, p: SocialProvider, state: string, pub
   const base = `${SOCIAL.dialog}?client_id=${enc(apps.meta.appId)}&redirect_uri=${enc(u.metaRedirect)}&state=${enc(state)}&response_type=code`;
   // « Connecter WhatsApp »: Meta's Embedded Signup (the shop picks or makes its WhatsApp Business account and number)
   if (kind === 'whatsapp') return `${base}&config_id=${enc(apps.meta.waConfigId)}&override_default_response_type=true&extras=${enc(JSON.stringify(WA_EXTRAS))}`;
+  // « Connecter la publicité »: its own configuration (Facebook's window asks for the ad accounts, the catalogues, the
+  // pixels and the lead forms only)
+  if (kind === 'ads') return `${base}&config_id=${enc(apps.meta.adsConfigId)}&override_default_response_type=true`;
   // Facebook Login for Business: a token that does not expire (a configuration made in Pilotix's Meta app)
   return apps.meta.configId ? `${base}&config_id=${enc(apps.meta.configId)}&override_default_response_type=true` : `${base}&scope=${enc(SOCIAL.metaScopes.join(','))}`;
 }
 
 /**
- * What a login is for: an account (its Pages with their Instagram accounts, its ad accounts: everything Meta at once), or
- * « Connecter WhatsApp » (a number: Meta gives it in a window of its own).
+ * What a login is for: an account (its Pages with their Instagram accounts; its ad accounts too while Pilotix has one
+ * configuration for everything), « Connecter la publicité » (the same account's ad accounts, catalogues, pixels and
+ * lead forms, asked in a window of their own), or « Connecter WhatsApp » (a number: Meta gives it in a window of its own).
  */
-export type LoginKind = 'account' | 'whatsapp';
+export type LoginKind = 'account' | 'whatsapp' | 'ads';
 /** « Connecter WhatsApp »'s states start with it (a normal state never has a dot). */
 export const WA_STATE = 'wa.';
+/** « Connecter la publicité »'s states start with it. */
+export const ADS_STATE = 'ads.';
 /** The states of « Connecter Instagram », a login that no longer exists (one still open when Pilotix was updated is refused). */
 export const GONE_STATE = 'ig.';
-export const loginKindOf = (state: string): LoginKind => (state.startsWith(WA_STATE) ? 'whatsapp' : 'account');
+export const loginKindOf = (state: string): LoginKind => (state.startsWith(WA_STATE) ? 'whatsapp' : state.startsWith(ADS_STATE) ? 'ads' : 'account');
 /** Embedded Signup's own settings (Meta's « extras »): its usual flow, its version 3 */
 const WA_EXTRAS = { setup: {}, featureType: '', sessionInfoVersion: '3' };
 
@@ -1003,6 +1017,9 @@ export interface SocialListView {
   /** the boutique's WhatsApp number (null: none); waReady: Pilotix's « Connecter WhatsApp » is set up */
   whatsapp: WhatsappView | null;
   waReady: boolean;
+  /** Pilotix's « Connecter la publicité » is set up: the ads have their own Facebook window (the first one asks for the
+   *  Pages and Instagram only) */
+  adsReady: boolean;
   /** keys connected before, somewhere else: they still work; the page names them and lets the boutique remove them */
   old: OldKeys;
   preview: boolean;
@@ -1096,6 +1113,7 @@ async function listFor(ctx: Ctx): Promise<SocialListView> {
     launch: await launchAccounts(ctx.db),
     whatsapp: await whatsappOf(ctx.db),
     waReady: !!apps.meta.appId && apps.meta.hasSecret && !!apps.meta.waConfigId,
+    adsReady: appReady(apps, 'meta') && !!apps.meta.adsConfigId,
     old: await oldHere(),
     preview: false,
   };
@@ -1141,18 +1159,23 @@ export const socialProcs = {
     z.object({
       provider: z.enum(SOCIAL_PROVIDERS),
       scope: z.enum(['here', 'all']).default('here'),
-      kind: z.enum(['account', 'whatsapp']).default('account'),
+      kind: z.enum(['account', 'whatsapp', 'ads']).default('account'),
     }),
     async (ctx, i) => {
       if (!live(ctx)) return demoStart(ctx, i.provider, i.scope, i.kind);
       // « Connecter WhatsApp »: Meta's window for a number (its own configuration), for this boutique only
       const wa = i.kind === 'whatsapp';
       if (wa && i.provider !== 'meta') throw new AppError('bad_request', 'Seul Meta connecte WhatsApp.');
+      // « Connecter la publicité »: Facebook's window for the ad accounts (its own configuration)
+      const ads = i.kind === 'ads';
+      if (ads && i.provider !== 'meta') throw new AppError('bad_request', 'Seul Meta connecte la publicité ainsi.');
       const w = await who(ctx);
       if (i.scope === 'all' && !canAll(w)) throw new AppError('forbidden', 'Seul le propriétaire des boutiques lie un compte pour toutes ses boutiques.');
       const apps = await socialApps(w.t);
       if (wa && !apps.meta.waConfigId)
         throw new AppError('bad_request', 'La connexion WhatsApp n’est pas encore prête : Pilotix doit d’abord ajouter l’ID de configuration WhatsApp (Pilot AI › Réglages).');
+      if (ads && !apps.meta.adsConfigId)
+        throw new AppError('bad_request', 'La connexion Publicité n’est pas encore prête : Pilotix doit d’abord ajouter l’ID de configuration Publicité (salle de contrôle › Apps).');
       if (!appReady(apps, i.provider))
         throw new AppError(
           'bad_request',
@@ -1162,7 +1185,7 @@ export const socialProcs = {
         );
       const publicUrl = ctx.server?.publicUrl;
       if (!publicUrl) throw new AppError('bad_request', 'L’adresse publique du serveur manque (PUBLIC_URL).');
-      const state = (wa ? WA_STATE : '') + randomToken();
+      const state = (wa ? WA_STATE : ads ? ADS_STATE : '') + randomToken();
       await w.t.platform.query(`DELETE FROM platform.social_states WHERE expires_at < now() - interval '1 day'`);
       await w.t.platform.query(
         `INSERT INTO platform.social_states (state, provider, owner_id, shop_id, from_shop, by_name, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + interval '${SOCIAL.stateMinutes} minutes')`,
@@ -1247,6 +1270,21 @@ export const socialProcs = {
     }
     ctx.emit({ type: 'settings' });
     return listFor(ctx);
+  }),
+
+  /**
+   * « Coller une clé Meta Ads »: a key made in the boutique's own Meta business (Paramètres de l'entreprise ›
+   * Utilisateurs système › Générer un jeton, for Pilotix's app, with ads_read and ads_management). The server asks Meta
+   * about it, reads its ad accounts and keeps it like a linked account of this boutique (the key never comes back to a
+   * page). For a boutique whose Facebook window does not give the ads permissions (yet).
+   */
+  'social.adsKey': proc([], z.object({ token: z.string().trim().min(30, 'Collez la clé en entier.').max(700).regex(/^\S+$/, 'La clé ne contient pas d’espace : collez-la en entier.') }), async (ctx, i) => {
+    if (!live(ctx)) return demoAdsKey(ctx);
+    const w = await who(ctx);
+    if (!ctx.server?.social) throw new AppError('bad_request', 'La clé se vérifie sur le serveur de Pilotix.');
+    const linkId = num(await ctx.server.social('adsKey', { token: i.token, shopId: w.shopId, ownerId: w.ownerId, by: w.by }, ctx));
+    ctx.emit({ type: 'settings' });
+    return { linkId, list: await listFor(ctx) };
   }),
 
   /** Where a login is: waiting for its tab, done (its account is in the list), failed or too old. */
@@ -1446,6 +1484,7 @@ async function demoList(ctx: Ctx): Promise<SocialListView> {
     launch: await launchAccounts(ctx.db),
     whatsapp: await whatsappOf(ctx.db),
     waReady: true,
+    adsReady: true,
     old: await oldKeys(ctx.db),
     preview: true,
   };
@@ -1481,6 +1520,9 @@ async function demoState(ctx: Ctx, state: string) {
       createdAt: new Date(ctx.now()).toISOString(),
       assets: tiktok
         ? [{ id: n * 10 + 1, kind: 'advertiser', extId: '7311021845', name: 'Bébé Confort TikTok', igUsername: null, currency: 'USD', usedBy: [] }]
+        : s.kind === 'ads'
+          ? // « Connecter la publicité »: Facebook's window gave the ad accounts only
+            [{ id: n * 10 + 2, kind: 'ad_account', extId: `9930${n}`, name: 'Sara — publicité', igUsername: null, currency: 'USD', usedBy: [] }]
         : [
             { id: n * 10 + 1, kind: 'page', extId: `2049${n}`, name: 'Bébé Confort Alger', igUsername: 'bebeconfort.alger', currency: null, usedBy: [] },
             { id: n * 10 + 2, kind: 'ad_account', extId: `9930${n}`, name: 'Sara — publicité', igUsername: null, currency: 'USD', usedBy: [] },
@@ -1497,6 +1539,20 @@ async function demoState(ctx: Ctx, state: string) {
       }
   }
   return { status: 'done' as const, error: null, linkId: s.linkId };
+}
+/** In the preview a pasted key is a sample one: its account and its ad account join the list (nothing is asked to Meta). */
+async function demoAdsKey(ctx: Ctx) {
+  const d = demoData(ctx);
+  const n = d.next++;
+  d.links.push({
+    id: n,
+    provider: 'meta',
+    name: 'Clé Meta Ads (utilisateur système)',
+    scope: 'here',
+    createdAt: new Date(ctx.now()).toISOString(),
+    assets: [{ id: n * 10 + 2, kind: 'ad_account', extId: `8820${n}`, name: 'Compte publicitaire de la clé', igUsername: null, currency: 'USD', usedBy: [] }],
+  });
+  return { linkId: n, list: await demoList(ctx) };
 }
 async function demoUseOne(ctx: Ctx, d: NonNullable<typeof demo>, me: number, assetId: number) {
   let found: { l: DemoLink; a: DemoLink['assets'][number] } | null = null;

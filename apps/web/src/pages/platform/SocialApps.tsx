@@ -30,6 +30,8 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
   const { t } = useTranslation();
   const [metaId, setMetaId] = useState(d.meta.appId);
   const [config, setConfig] = useState(d.meta.configId);
+  // « Connecter la publicité »: a second configuration, for the ad accounts, the catalogues, the pixels and the lead forms
+  const [adsConfig, setAdsConfig] = useState(d.meta.adsConfigId ?? '');
   // the « WhatsApp Embedded Signup » configuration: one click connects a shop's WhatsApp number
   const [waConfig, setWaConfig] = useState(d.meta.waConfigId ?? '');
   const [metaSecret, setMetaSecret] = useState<string | null>('');
@@ -61,7 +63,7 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
       <input type="password" className="ltr" autoComplete="new-password" disabled={!manager || v === null} value={v ?? ''} placeholder={has ? '••••••••' : ''} onChange={(e) => set(e.target.value)} />
     </Field>
   );
-  const dirty = metaId !== d.meta.appId || config !== d.meta.configId || waConfig !== (d.meta.waConfigId ?? '') || ttId !== d.tiktok.appId || metaSecret !== '' || igSecret !== '' || ttSecret !== '';
+  const dirty = metaId !== d.meta.appId || config !== d.meta.configId || adsConfig !== (d.meta.adsConfigId ?? '') || waConfig !== (d.meta.waConfigId ?? '') || ttId !== d.tiktok.appId || metaSecret !== '' || igSecret !== '' || ttSecret !== '';
   return (
     <Card title={t(K + 'title')} badge={<span className="chip">{t(K + 'counts', { meta: n(d.counts.meta), tiktok: n(d.counts.tiktok), shops: n(d.counts.shops) })}</span>}>
       <p className="small muted">{t(K + 'text')}</p>
@@ -81,6 +83,9 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
           </div>
           <Field label={t(K + 'configId')} hint={t(K + 'configHint')}>
             <input className="ltr" inputMode="numeric" disabled={!manager} value={config} onChange={(e) => setConfig(digits(e.target.value))} />
+          </Field>
+          <Field label={t(K + 'adsConfigId')} hint={t(K + 'adsConfigHint')}>
+            <input className="ltr" inputMode="numeric" disabled={!manager} value={adsConfig} onChange={(e) => setAdsConfig(digits(e.target.value))} />
           </Field>
           <div className="pl-sa-ig" role="group" aria-labelledby="pl-sa-wa">
             <h4 id="pl-sa-wa">
@@ -171,6 +176,7 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
                 meta: {
                   appId: metaId,
                   configId: config,
+                  adsConfigId: adsConfig,
                   waConfigId: waConfig,
                   secret: metaSecret === null ? null : metaSecret.trim(),
                   igSecret: igSecret === null ? null : igSecret.trim(),

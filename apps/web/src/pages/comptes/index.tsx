@@ -5,7 +5,10 @@
 // TikTok are connected in the same card. An account serves this boutique (its first Page and ad account are used at
 // once) or all the owner's boutiques (each boutique picks its Page and its ad account in one click). « Tester » says,
 // part by part, what works and where a problem is. The tokens never come to a page (packages/core/src/modules/social.ts).
-import { useEffect, useRef, useState } from 'react';
+// When Pilotix's Meta app has a second configuration for the ads (the control room), Meta is connected in two steps,
+// each asking Facebook for its own things: « Facebook et Instagram » (Pages, messages, comments, posts), then
+// « Publicité Meta » (ad accounts, catalogue, pixels, lead forms). That slot also takes a Meta Ads key pasted by hand.
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { backend, Out, rpc } from '../../lib/backend';
@@ -42,6 +45,8 @@ const FB_LOGO = Object.values(import.meta.glob('../../assets/brand/facebook-f-lo
 /** A login in its tab: started here, asked about every two seconds until it is back. */
 interface Pending {
   provider: Provider;
+  /** « Connecter la publicité »: Meta's second window (the ads' own slot waits, not the Pages' one) */
+  ads?: boolean;
   state: string;
   url: string | null;
   win: Window | null;
@@ -49,6 +54,9 @@ interface Pending {
   /** the account is back: its tab asks « Oui, c'est ma boutique ? » */
   confirm?: boolean;
 }
+
+/** A Meta account that came for the ads alone (« Publicité Meta », a pasted key): linked again in the ads' own window. */
+const adsOnly = (l: Link) => l.provider === 'meta' && !l.assets.some((a) => a.kind === 'page') && l.assets.some((a) => a.kind === 'ad_account');
 
 export function ProviderBadge({ p }: { p: Provider }) {
   return (
@@ -58,12 +66,24 @@ export function ProviderBadge({ p }: { p: Provider }) {
   );
 }
 
-export function Comptes(_: PageProps) {
+export function Comptes({ sub }: PageProps) {
   const { t } = useTranslation();
   const q = useRpc('social.list', {});
+  // « #/comptes/pub » (the Ads pages' « Connecter la publicité »): the ads' part comes into view, lit for a moment
+  const [spot, setSpot] = useState(false);
+  const listed = !!q.data;
+  useEffect(() => {
+    if (sub !== 'pub' || !listed) return;
+    const el = document.getElementById('cpt-ads');
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    setSpot(true);
+    const id = window.setTimeout(() => setSpot(false), 4000);
+    return () => window.clearTimeout(id);
+  }, [sub, listed]);
   const [scope, setScope] = useState<Scope>('here');
   const [pending, setPending] = useState<Pending | null>(null);
-  const [done, setDone] = useState<{ provider: Provider; linkId: number | null } | null>(null);
+  const [done, setDone] = useState<{ provider: Provider; ads?: boolean; linkId: number | null } | null>(null);
   // which accounts are open (null: the first view — one account open, several folded)
   const [openIds, setOpenIds] = useState<Set<number> | null>(null);
   const closedTicks = useRef(0);
@@ -79,7 +99,7 @@ export function Comptes(_: PageProps) {
         if (stop) return;
         if (r.status === 'done') {
           setPending(null);
-          setDone({ provider: pending.provider, linkId: r.linkId });
+          setDone({ provider: pending.provider, ads: pending.ads, linkId: r.linkId });
           await q.refetch();
           return;
         }
@@ -119,15 +139,15 @@ export function Comptes(_: PageProps) {
   if (q.error || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const d = q.data;
 
-  const start = async (provider: Provider) => {
+  const start = async (provider: Provider, ads = false) => {
     if (pending) return;
     // the tab opens now, on the click (a tab opened after waiting for the server is blocked by browsers)
     const win = d.preview ? null : window.open('', '_blank');
     try {
-      const r = await rpc('social.start', { provider, scope: d.canAll ? scope : 'here' });
+      const r = await rpc('social.start', { provider, scope: d.canAll ? scope : 'here', ...(ads ? { kind: 'ads' as const } : {}) });
       if (r.url && win && !win.closed) win.location.href = r.url;
       setDone(null);
-      setPending({ provider, state: r.state, url: r.url, win, blocked: !!r.url && (!win || win.closed) });
+      setPending({ provider, ads, state: r.state, url: r.url, win, blocked: !!r.url && (!win || win.closed) });
     } catch (e) {
       win?.close();
       toast((e as Error).message, 'bad');
@@ -163,10 +183,16 @@ export function Comptes(_: PageProps) {
             <small className="cpt-muted">{scope === 'here' ? t(K + 'scopeHereHint') : t(K + 'scopeAllHint')}</small>
           </div>
         )}
-        <div className="cpt-providers">
+        <div className="cpt-providers four">
           {PROVIDERS.map((p) => [
-            <ProviderSlot key={p} p={p} ready={d.apps[p]} preview={d.preview} pending={pending?.provider === p ? pending : null} busy={!!pending} done={done?.provider === p ? (d.links.find((l) => l.id === done.linkId)?.name ?? '') : null} onStart={() => start(p)} onReopen={reopen} onCancel={() => setPending(null)} />,
-            // WhatsApp sits next to Facebook: Meta too, but a number is given in a window of its own
+            <ProviderSlot key={p} p={p} part={p === 'meta' && d.adsReady ? 'content' : undefined} ready={d.apps[p]} preview={d.preview} pending={pending?.provider === p && !pending.ads ? pending : null} busy={!!pending} done={done?.provider === p && !done.ads ? (d.links.find((l) => l.id === done.linkId)?.name ?? '') : null} onStart={() => start(p)} onReopen={reopen} onCancel={() => setPending(null)} />,
+            // the ads sit next to Facebook: their own Facebook window when Pilotix has its configuration, and a key pasted by hand
+            p === 'meta' && (
+              <ProviderSlot key="ads" id="cpt-ads" spot={spot} p="meta" part="ads" ready={d.apps.meta && d.adsReady} hideButton={!d.adsReady} preview={d.preview} pending={pending?.provider === 'meta' && pending.ads ? pending : null} busy={!!pending} done={done?.provider === 'meta' && done.ads ? (d.links.find((l) => l.id === done.linkId)?.name ?? '') : null} onStart={() => start('meta', true)} onReopen={reopen} onCancel={() => setPending(null)}>
+                <AdsKeyBox onSaved={(linkId) => setOpenIds((prev) => new Set([...(prev ?? []), linkId]))} />
+              </ProviderSlot>
+            ),
+            // WhatsApp too is Meta's, but a number is given in a window of its own
             p === 'meta' && <WhatsappSlot key="wa" d={d} busy={!!pending} />,
           ])}
         </div>
@@ -186,7 +212,7 @@ export function Comptes(_: PageProps) {
                 else next.add(l.id);
                 return next;
               });
-            return <LinkCard key={l.id} l={l} d={d} fresh={done?.linkId === l.id} open={isOpen} onToggle={toggle} onRelink={() => start(l.provider)} busy={!!pending} />;
+            return <LinkCard key={l.id} l={l} d={d} fresh={done?.linkId === l.id} open={isOpen} onToggle={toggle} onRelink={() => start(l.provider, adsOnly(l) && d.adsReady)} busy={!!pending} />;
           })
         )}
       </section>
@@ -266,20 +292,22 @@ function HereCard({ d }: { d: List }) {
 }
 
 /** One way to link: Facebook (and Instagram) or TikTok; it shows the login on its way, then the green « linked ». */
-function ProviderSlot({ p, ready, preview, pending, busy, done, onStart, onReopen, onCancel }: { p: Provider; ready: boolean; preview: boolean; pending: Pending | null; busy: boolean; done: string | null; onStart: () => void; onReopen: () => void; onCancel: () => void }) {
+function ProviderSlot({ p, part, id, spot, ready, hideButton, preview, pending, busy, done, onStart, onReopen, onCancel, children }: { p: Provider; part?: 'content' | 'ads'; id?: string; spot?: boolean; ready: boolean; hideButton?: boolean; preview: boolean; pending: Pending | null; busy: boolean; done: string | null; onStart: () => void; onReopen: () => void; onCancel: () => void; children?: ReactNode }) {
   const { t } = useTranslation();
-  const name = t(K + `p.${p}.name`);
+  // Meta in two steps: the Pages and Instagram (part 'content'), the ads (part 'ads'); without a part, one login for all
+  const base = K + (part === 'ads' ? 'p.metaAds' : part === 'content' ? 'p.metaContent' : `p.${p}`);
+  const name = t(base + '.name');
   return (
-    <div className={`cpt-slot ${pending ? 'wait' : ''} ${done !== null ? 'done' : ''}`} aria-live="polite">
+    <div id={id} className={`cpt-slot ${pending ? 'wait' : ''} ${done !== null ? 'done' : ''} ${spot ? 'spot' : ''}`} aria-live="polite">
       <div className="cpt-slot-id">
         <ProviderBadge p={p} />
         <div>
           <h3>{name}</h3>
-          <p className="cpt-muted">{t(K + `p.${p}.what`)}</p>
-          {/* one login brings all of this at once */}
+          <p className="cpt-muted">{t(base + '.what')}</p>
+          {/* what this login brings, at a glance */}
           {p === 'meta' && (
             <ul className="cpt-all" aria-label={t(K + 'p.meta.allLabel')}>
-              {(t(K + 'p.meta.all', { returnObjects: true }) as string[]).map((x) => (
+              {(t(base + '.all', { returnObjects: true }) as string[]).map((x) => (
                 <li key={x}>{x}</li>
               ))}
             </ul>
@@ -313,23 +341,70 @@ function ProviderSlot({ p, ready, preview, pending, busy, done, onStart, onReope
         </div>
       ) : (
         <div className="cpt-do">
-          {/* read before pressing (Meta asks to tell the Page admin to allow the business assets); above, so the two buttons line up */}
-          {p === 'meta' && ready && <small className="cpt-muted cpt-fb-allow">{t(K + 'p.meta.allow')}</small>}
-          {p === 'meta' ? (
-            // Meta's login button rules: « Continue with Facebook » inside the button, white on Facebook blue, its logo first
-            <button type="button" className="btn fb-btn" disabled={!ready || busy} onClick={onStart}>
-              {FB_LOGO && <img src={FB_LOGO} alt="" className="fb-btn-logo" />}
-              {t(K + 'p.meta.link')}
-            </button>
+          {hideButton ? (
+            // one login asks for everything: the first button brings the ads too
+            <small className="cpt-muted cpt-fb-allow">{t(base + '.viaFirst')}</small>
           ) : (
-            <button type="button" className="btn primary" disabled={!ready || busy} onClick={onStart}>
-              <Icon name="link" /> {t(K + `p.${p}.link`)}
-            </button>
+            <>
+              {/* read before pressing (Meta asks to tell the Page admin to allow the business assets); above, so the two buttons line up */}
+              {p === 'meta' && ready && <small className="cpt-muted cpt-fb-allow">{t(base + '.allow')}</small>}
+              {p === 'meta' ? (
+                // Meta's login button rules: « Continue with Facebook » inside the button, white on Facebook blue, its logo first
+                <button type="button" className="btn fb-btn" disabled={!ready || busy} onClick={onStart}>
+                  {FB_LOGO && <img src={FB_LOGO} alt="" className="fb-btn-logo" />}
+                  {t(K + 'p.meta.link')}
+                </button>
+              ) : (
+                <button type="button" className="btn primary" disabled={!ready || busy} onClick={onStart}>
+                  <Icon name="link" /> {t(K + `p.${p}.link`)}
+                </button>
+              )}
+              {!ready && <small className="cpt-muted">{t(base + '.notReady')}</small>}
+            </>
           )}
-          {!ready && <small className="cpt-muted">{t(K + `p.${p}.notReady`)}</small>}
         </div>
       )}
+      {children}
     </div>
+  );
+}
+
+/**
+ * « Coller une clé Meta Ads »: the other way to connect the ads, for a boutique whose Facebook window does not give its
+ * ad accounts. The key is made in the boutique's own Meta business (a system user's token, for Pilotix's app, with
+ * ads_read and ads_management); the server asks Meta about it and keeps it (it never comes back to a page).
+ */
+function AdsKeyBox({ onSaved }: { onSaved: (linkId: number) => void }) {
+  const { t } = useTranslation();
+  const [key, setKey] = useState('');
+  const save = useAction('social.adsKey', {
+    success: t(K + 'adsKey.saved'),
+    onDone: (r) => {
+      setKey('');
+      onSaved(r.linkId);
+    },
+  });
+  return (
+    <details className="cpt-key">
+      <summary>{t(K + 'adsKey.toggle')}</summary>
+      <p className="cpt-muted">{t(K + 'adsKey.help')}</p>
+      <bdi className="dl-path" dir="ltr">
+        Meta Business Suite › Settings › Users › System users › Generate token
+      </bdi>
+      <form
+        className="cpt-key-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (key.trim() && !save.isPending) save.mutate({ token: key.trim() });
+        }}
+      >
+        <label htmlFor="cpt-key-in">{t(K + 'adsKey.label')}</label>
+        <input id="cpt-key-in" type="password" className="ltr" autoComplete="off" spellCheck={false} value={key} placeholder="EAA…" onChange={(e) => setKey(e.target.value)} />
+        <button type="submit" className="btn small" disabled={key.trim().length < 30 || save.isPending}>
+          {save.isPending ? t(K + 'adsKey.saving') : t(K + 'adsKey.save')}
+        </button>
+      </form>
+    </details>
   );
 }
 
@@ -573,7 +648,8 @@ function LinkCard({ l, d, fresh, open, onToggle, onRelink, busy }: { l: Link; d:
       {open && (
         <div id={bodyId} className="cpt-link-body">
           {broken && <p className="cpt-link-err">{l.error || t(K + 'relinkNow')}</p>}
-          {l.provider === 'meta' && (
+          {/* an account that came for the ads alone (« Publicité Meta », a pasted key) has no Page to pick */}
+          {l.provider === 'meta' && !(pages.length === 0 && adList.length > 0) && (
             <div className="cpt-row">
               <div className="cpt-row-l">
                 <label className="cpt-row-t" htmlFor={`cpt-page-${l.id}`}>

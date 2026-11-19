@@ -130,3 +130,7 @@ html[data-theme='dark'] .lc-stop:focus-visible, html[data-theme='dark'] .lc-in:f
 @media (max-width: 860px) {
   .lc-body { grid-template-columns: 1fr; }
 }
+/* « Meta n'est pas connecté »: the words, and the door to Pilot AI › Comptes › Publicité Meta */
+.ads-connect { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.ads-connect > span { flex: 1 1 260px; }
+.ads-connect .btn { flex: none; min-height: 40px; }

@@ -188,7 +188,17 @@ function Pub() {
       ) : (
         <>
           {d.syncWarning && <div className="error">{d.syncWarning}</div>}
-          {!d.connected && !d.demo && <div className="warnbox">{t(atSeller ? 'ads.notConnectedSeller' : 'ads.notConnected')}</div>}
+          {!d.connected && !d.demo && (
+            <div className="warnbox ads-connect">
+              <span>{t(atSeller ? 'ads.notConnectedSeller' : 'ads.notConnected')}</span>
+              {/* the door to the one place where Meta is connected: straight to its « Publicité Meta » part (the admin's page) */}
+              {!atSeller && has() && (
+                <a className="btn small primary" href="#/comptes/pub">
+                  <Icon name="link" /> {t('ads.connectBtn')}
+                </a>
+              )}
+            </div>
+          )}
           <FxBar d={d} />
           <Dash d={d} prev={prev.data ?? null} label={t(`mkph.when.${p}`)} onProd={setProd} onAdset={setAdset} />
           {d && <Months rows={months.data ?? null} />}
