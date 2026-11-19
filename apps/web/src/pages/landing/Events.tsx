@@ -384,10 +384,10 @@ function Quality() {
 const GUIDE = [
   { key: 'view', tech: 'PageView · ViewContent', tiktok: true },
   { key: 'checkout', tech: 'InitiateCheckout', tiktok: true },
-  { key: 'lead', tech: 'Lead', tiktok: false },
+  { key: 'lead', tech: 'Lead', tiktok: true },
   { key: 'purchase', tech: 'Purchase', tiktok: true },
   { key: 'confirmed', tech: 'Confirmed', tiktok: false },
-  { key: 'delivered', tech: 'Delivered', tiktok: false },
+  { key: 'delivered', tech: 'Delivered', tiktok: true },
   { key: 'fake', tech: 'FakeOrder · Competitor', tiktok: false },
 ] as const;
 

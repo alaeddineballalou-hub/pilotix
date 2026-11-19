@@ -1527,7 +1527,9 @@ async function buildEvent(db: Db, e: any, api: string, publicUrl: string, now: n
 }
 
 /** TikTok's names for the events (Events API 2.0) */
-const TIKTOK_EVENT: Record<string, string> = { Purchase: 'CompletePayment', InitiateCheckout: 'InitiateCheckout' };
+// « Lead » is TikTok's standard form event (SubmitForm, its name before TikTok renamed it; still accepted); « Delivered »
+// has no standard event there: a custom one, which TikTok shows in its reports
+const TIKTOK_EVENT: Record<string, string> = { Purchase: 'CompletePayment', InitiateCheckout: 'InitiateCheckout', Lead: 'SubmitForm', Delivered: 'Delivered' };
 
 /** The same event for TikTok's Events API (phone in E.164, hashed; its click id and browser cookie when known). */
 function tiktokEvent(

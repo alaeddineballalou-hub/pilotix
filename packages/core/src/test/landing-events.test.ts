@@ -311,3 +311,32 @@ test('Delivered: the parcel reached its customer — an event of its own beside 
   await onLandingFollow(db, { ...s, purchaseAt: 'delivered' }, { id: Number(o2.id), landing_id: o2.landing_id }, 'shipped', 'delivered', Date.now());
   assert.ok(!(await events(`order_id = $1`, [o2.id])).some((e: any) => e.event_name === 'Delivered'));
 });
+
+test('TikTok too: the form (SubmitForm) and the delivered parcel (a custom « Delivered ») go to the page’s TikTok pixel, hashed; fake orders stay Meta only', async () => {
+  await call('landing.pixelSave', admin, { platform: 'tiktok', name: 'TikTok test', pixelId: 'CTESTPIXEL0000000001', isDefault: true, token: 'tt-token' } as any);
+  const f = await human();
+  await call('landing.submit', admin, f);
+  const o = await orderOf(f.phone);
+  await mine(o.id);
+  await call('orders.setConf', conf, { ids: [Number(o.id)], status: 'confirmed' });
+  const { onLandingFollow, landingSettings } = await import('../modules/landingquery');
+  await onLandingFollow(db, await landingSettings(db), { id: Number(o.id), landing_id: o.landing_id }, 'out_for_delivery', 'delivered', Date.now());
+  const tt = (await events(`order_id = $1 AND platform = 'tiktok'`, [o.id])).map((e: any) => e.event_name).sort();
+  assert.deepEqual(tt, ['Delivered', 'Lead', 'Purchase']);
+  assert.deepEqual((await events(`order_id = $1 AND platform = 'meta'`, [o.id])).map((e: any) => e.event_name).sort(), ['Delivered', 'Lead', 'Purchase']);
+  sent.length = 0;
+  await run(Date.now() + MIN);
+  const names = sent.filter((x) => x.action === 'tiktok').flatMap((x) => x.args.events.map((e: any) => e.event)).sort();
+  assert.deepEqual(names, ['CompletePayment', 'Delivered', 'SubmitForm']);
+  const lead = sent.filter((x) => x.action === 'tiktok').flatMap((x) => x.args.events).find((e: any) => e.event === 'SubmitForm');
+  assert.equal(lead.event_id, `lead-${o.ref}`);
+  assert.ok(lead.user?.phone && !JSON.stringify(lead).includes(f.phone), 'the phone hashed, never in clear');
+  // marked fake: Meta only (TikTok is not told)
+  const g = await human();
+  await call('landing.submit', admin, g);
+  const o2 = await orderOf(g.phone);
+  await mine(o2.id);
+  await call('orders.setConf', conf, { ids: [Number(o2.id)], status: 'fake', reason: 'faux numéro' } as any);
+  assert.ok(!(await events(`order_id = $1 AND platform = 'tiktok'`, [o2.id])).some((e: any) => e.event_name === 'FakeOrder'));
+  await db.query(`DELETE FROM tracking_pixels WHERE pixel_id = 'CTESTPIXEL0000000001'`);
+});

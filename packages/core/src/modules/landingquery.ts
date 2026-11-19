@@ -205,12 +205,15 @@ export async function queueLead(db: Db, s: LandingSettings, orderId: number, now
     )[0];
     if (!o || !o.landing_id || !o.sent || o.is_exchange || NOT_A_LEAD.includes(o.conf_status)) return;
     const at = new Date(now).toISOString();
-    for (const pixel of (await pixelsOf(db, o, s.pixelId)).meta)
-      await db.query(
-        `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, value, at, send_after) VALUES ($1,'Lead',$2,$3,$4,$5,$6,$6)
-         ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
-        [pixel, `lead-${o.ref}`, o.id, o.landing_id, num(o.total), at],
-      );
+    // the page's Meta pixels and TikTok pixels (TikTok's « SubmitForm »)
+    const px = await pixelsOf(db, o, s.pixelId);
+    for (const [platform, pixel] of [...px.meta.map((x) => ['meta', x] as const), ...px.tiktok.map((x) => ['tiktok', x] as const)])
+      if (pixel)
+        await db.query(
+          `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, value, at, send_after, platform) VALUES ($1,'Lead',$2,$3,$4,$5,$6,$6,$7)
+           ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
+          [pixel, `lead-${o.ref}`, o.id, o.landing_id, num(o.total), at, platform],
+        );
   });
 }
 
@@ -348,7 +351,8 @@ export async function onLandingConf(
 
 /**
  * « Delivered »: the parcel of an order from a landing page reached its customer (the real sale of a cash-on-delivery
- * shop). An event of its own beside Purchase, for audiences and reports; Meta only, once per order. Not queued when
+ * shop). An event of its own beside Purchase, for audiences and reports; Meta and TikTok (a custom event there), once
+ * per order and pixel. Not queued when
  * Purchase itself is sent « at delivery » (it would say the same thing twice).
  */
 async function queueDelivered(db: Db, s: LandingSettings, orderId: number, now: number) {
@@ -356,12 +360,13 @@ async function queueDelivered(db: Db, s: LandingSettings, orderId: number, now: 
     const o = (await db.query(`SELECT o.id, o.ref, o.total, o.landing_id, o.is_exchange, l.pixel_id, l.meta_pixels, l.tiktok_pixels FROM orders o LEFT JOIN landing_pages l ON l.id = o.landing_id WHERE o.id = $1`, [orderId]))[0];
     if (!o?.landing_id || o.is_exchange) return;
     const at = new Date(now).toISOString();
-    for (const pixel of (await pixelsOf(db, o, s.pixelId)).meta)
+    const px = await pixelsOf(db, o, s.pixelId);
+    for (const [platform, pixel] of [...px.meta.map((x) => ['meta', x] as const), ...px.tiktok.map((x) => ['tiktok', x] as const)])
       if (pixel)
         await db.query(
-          `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, value, at, send_after) VALUES ($1,'Delivered',$2,$3,$4,$5,$6,$6)
+          `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, value, at, send_after, platform) VALUES ($1,'Delivered',$2,$3,$4,$5,$6,$6,$7)
            ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
-          [pixel, `delivered-${o.ref}`, o.id, o.landing_id, num(o.total), at],
+          [pixel, `delivered-${o.ref}`, o.id, o.landing_id, num(o.total), at, platform],
         );
   });
 }
