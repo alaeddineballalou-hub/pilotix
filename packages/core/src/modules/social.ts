@@ -265,8 +265,8 @@ export interface SocialApps {
    * it, the boutiques connect in two steps, each asking Facebook for its own things: configId for the Pages and
    * Instagram (messages, comments, posts), this one for the ads. Empty: one login asks for everything (configId). */
   /** waConfigId: another one, of the « WhatsApp Embedded Signup » kind: « Connecter WhatsApp » in Pilot AI › Comptes */
-  /** hasIgSecret: the secret of the app's Instagram login. Nobody connects with that login any more, but Meta still
-   * signs with it the webhooks of the accounts connected that way before */
+  /** hasIgSecret: the secret of the app's old Instagram login. Nobody connects with that login any more and the control
+   * room no longer shows it (19 Nov 2026); one kept from before still checks the webhooks Meta may sign with it */
   meta: {
     appId: string;
     configId: string;

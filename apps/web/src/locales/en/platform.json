@@ -1721,8 +1721,6 @@
         "Paste the return address in “Advertiser redirect URL”.",
         "Paste the App ID and the Secret here, then save. TikTok approves the app in one to two weeks."
       ],
-      "igSecret": "Instagram app secret (old Instagram login)",
-      "igSecretHint": "Only if a boutique still answers with a key of the old Instagram login (nobody connects that way any more). Meta signs its messages with it. In the Meta app:",
       "waAlone": "WhatsApp",
       "waConfigId": "WhatsApp configuration ID (Embedded Signup)",
       "waAloneText": "With this ID, every shop gets a « Connect WhatsApp » button in Pilot AI › Accounts: one login, and its number answers in Pilotix. A « WhatsApp Embedded Signup » configuration, same return address (below)."
