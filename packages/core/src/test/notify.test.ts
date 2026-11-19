@@ -511,8 +511,12 @@ test('the demo: messages of the last days, answers, saved parcels; results', asy
   assert.ok(f.enabled);
   assert.ok(f.demo);
   assert.ok(f.counts.whatsapp > 10 && f.counts.sms > 0, JSON.stringify(f.counts));
-  assert.ok(f.counts.replies >= 2);
-  assert.ok(f.counts.problems >= 1);
+  // a confirmation agent sees the messages of her own orders only. The demo's answers and its two SMS that did not leave
+  // are the shop's: which agent's orders they fall on changes with the hour the demo is built (some minutes of the
+  // day, none is hers). Counted with the eyes of someone who sees every message.
+  const all: any = await call('notify.feed', await as(EMAILS.admin), { tab: 'all', limit: 1 });
+  assert.ok(all.counts.replies >= 2, JSON.stringify(all.counts));
+  assert.ok(all.counts.problems >= 1, JSON.stringify(all.counts));
   const kindsSeen = new Set(f.rows.map((r: any) => r.kind));
   for (const k of ['created', 'confirmed', 'shipped', 'out_for_delivery']) assert.ok(kindsSeen.has(k), k);
   for (const r of f.rows.filter((x: any) => x.status === 'whatsapp' || x.status === 'sms')) assert.doesNotMatch(r.body, /\{\w+\}/);
