@@ -312,7 +312,7 @@ test('Delivered: the parcel reached its customer — an event of its own beside 
   assert.ok(!(await events(`order_id = $1`, [o2.id])).some((e: any) => e.event_name === 'Delivered'));
 });
 
-test('TikTok too: the form (SubmitForm) and the delivered parcel (a custom « Delivered ») go to the page’s TikTok pixel, hashed; fake orders stay Meta only', async () => {
+test('TikTok too: the form (SubmitForm) and the delivered parcel (a custom « Delivered ») go to the page’s TikTok pixel, hashed; a fake order tells TikTok the browser it can recognise', async () => {
   await call('landing.pixelSave', admin, { platform: 'tiktok', name: 'TikTok test', pixelId: 'CTESTPIXEL0000000001', isDefault: true, token: 'tt-token' } as any);
   const f = await human();
   await call('landing.submit', admin, f);
@@ -331,12 +331,55 @@ test('TikTok too: the form (SubmitForm) and the delivered parcel (a custom « De
   const lead = sent.filter((x) => x.action === 'tiktok').flatMap((x) => x.args.events).find((e: any) => e.event === 'SubmitForm');
   assert.equal(lead.event_id, `lead-${o.ref}`);
   assert.ok(lead.user?.phone && !JSON.stringify(lead).includes(f.phone), 'the phone hashed, never in clear');
-  // marked fake: Meta only (TikTok is not told)
-  const g = await human();
+  // marked fake: TikTok is told the browser too (its own cookie), never the number typed; a browser it cannot recognise is not sent
+  const TTP = 'ttp-cookie-0123456789';
+  const g = await human({ ttp: TTP });
   await call('landing.submit', admin, g);
   const o2 = await orderOf(g.phone);
   await mine(o2.id);
-  await call('orders.setConf', conf, { ids: [Number(o2.id)], status: 'fake', reason: 'faux numéro' } as any);
-  assert.ok(!(await events(`order_id = $1 AND platform = 'tiktok'`, [o2.id])).some((e: any) => e.event_name === 'FakeOrder'));
+  const t0 = Date.now();
+  await call('orders.setConf', at(conf, t0), { ids: [Number(o2.id)], status: 'fake', reason: 'faux numéro' } as any);
+  assert.deepEqual((await events(`order_id = $1 AND event_name = 'FakeOrder'`, [o2.id])).map((e: any) => e.platform).sort(), ['meta', 'tiktok']);
+  const h = await human(); // no TikTok cookie
+  await call('landing.submit', admin, h);
+  const o3 = await orderOf(h.phone);
+  await mine(o3.id);
+  await call('orders.setConf', at(conf, t0), { ids: [Number(o3.id)], status: 'fake', reason: 'faux numéro' } as any);
+  sent.length = 0;
+  await run(t0 + FAKE_EVENT_DELAY_MS + MIN);
+  const fakes = sent.filter((x) => x.action === 'tiktok').flatMap((x) => x.args.events).filter((e: any) => e.event === 'FakeOrder');
+  assert.equal(fakes.length, 1, 'only the browser TikTok can recognise');
+  assert.equal(fakes[0].user.ttp, TTP);
+  assert.equal(fakes[0].user.user_agent, UA);
+  assert.ok(!fakes[0].user.phone && !JSON.stringify(fakes[0]).includes(g.phone), 'never the number typed');
+  const skipped = (await events(`order_id = $1 AND platform = 'tiktok' AND event_name = 'FakeOrder'`, [o3.id]))[0];
+  assert.equal(skipped.status, 'skipped');
+  assert.match(skipped.error, /TikTok ne reconnaît pas/);
+  // Meta still gets both (its own cookie is there)
+  assert.equal(received().filter((e: any) => e.event_name === 'FakeOrder').length, 2);
+  // put right in time: the TikTok event is dropped with Meta's
+  const k = await human({ ttp: TTP });
+  await call('landing.submit', admin, k);
+  const o4 = await orderOf(k.phone);
+  await mine(o4.id);
+  await call('orders.setConf', conf, { ids: [Number(o4.id)], status: 'fake', reason: 'faux numéro' } as any);
+  await call('orders.setConf', conf, { ids: [Number(o4.id)], status: 'new' } as any);
+  assert.ok((await events(`order_id = $1 AND event_name = 'FakeOrder'`, [o4.id])).every((e: any) => e.status === 'skipped'));
+  // a blocked order nobody restored in a day: TikTok is told when the browser carries its cookie; Meta's rule is unchanged
+  const tb = Date.now() + 40 * 3600_000;
+  const withTt = await hasty(tb + MIN, { ttp: TTP });
+  const metaOnly = await hasty(tb + MIN);
+  for (const x of [withTt, metaOnly]) await call('landing.submit', at(admin, tb + MIN), x);
+  const bl = async (phone: string) => (await db.query(`SELECT * FROM landing_blocked WHERE phone = $1`, [phone]))[0];
+  const [b1, b2] = [await bl(withTt.phone), await bl(metaOnly.phone)];
+  assert.ok(b1 && b2, 'both were blocked');
+  sent.length = 0;
+  await run(tb + MIN + BLOCKED_FAKE_AFTER_MS + MIN);
+  assert.deepEqual((await events(`blocked_id = $1`, [b1.id])).map((e: any) => e.platform).sort(), ['meta', 'tiktok']);
+  assert.deepEqual((await events(`blocked_id = $1`, [b2.id])).map((e: any) => e.platform), ['meta']);
+  const bt = sent.filter((x) => x.action === 'tiktok').flatMap((x) => x.args.events).filter((e: any) => e.event_id === `fake-blocked-${b1.id}`);
+  assert.equal(bt.length, 1);
+  assert.equal(bt[0].user.ttp, TTP);
+  assert.ok(!JSON.stringify(bt[0]).includes(withTt.phone));
   await db.query(`DELETE FROM tracking_pixels WHERE pixel_id = 'CTESTPIXEL0000000001'`);
 });

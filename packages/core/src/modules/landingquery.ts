@@ -234,13 +234,16 @@ async function queueFake(db: Db, s: LandingSettings, orderId: number, reason: st
     const o = (await db.query(`SELECT o.id, o.ref, o.landing_id, l.pixel_id, l.meta_pixels, l.tiktok_pixels FROM orders o LEFT JOIN landing_pages l ON l.id = o.landing_id WHERE o.id = $1`, [orderId]))[0];
     if (!o?.landing_id) return;
     const name = isCompetitorReason(reason) ? 'Competitor' : 'FakeOrder';
-    for (const pixel of (await pixelsOf(db, o, s.pixelId)).meta)
-      await db.query(
-        `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, at, send_after) VALUES ($1,$2,$3,$4,$5,$6,$7)
-         ON CONFLICT (pixel_id, event_name, event_id) DO UPDATE SET status = 'queued', error = NULL, attempts = 0, at = EXCLUDED.at, send_after = EXCLUDED.send_after
-           WHERE meta_events.status = 'skipped'`,
-        [pixel, name, `${name === 'Competitor' ? 'competitor' : 'fake'}-${o.ref}`, o.id, o.landing_id, new Date(now).toISOString(), new Date(now + FAKE_EVENT_DELAY_MS).toISOString()],
-      );
+    // Meta and TikTok (custom events there): each is told only when it can recognise the browser (decided when it is sent)
+    const px = await pixelsOf(db, o, s.pixelId);
+    for (const [platform, pixel] of [...px.meta.map((x) => ['meta', x] as const), ...px.tiktok.map((x) => ['tiktok', x] as const)])
+      if (pixel)
+        await db.query(
+          `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, at, send_after, platform) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+           ON CONFLICT (pixel_id, event_name, event_id) DO UPDATE SET status = 'queued', error = NULL, attempts = 0, at = EXCLUDED.at, send_after = EXCLUDED.send_after
+             WHERE meta_events.status = 'skipped'`,
+          [pixel, name, `${name === 'Competitor' ? 'competitor' : 'fake'}-${o.ref}`, o.id, o.landing_id, new Date(now).toISOString(), new Date(now + FAKE_EVENT_DELAY_MS).toISOString(), platform],
+        );
   });
 }
 

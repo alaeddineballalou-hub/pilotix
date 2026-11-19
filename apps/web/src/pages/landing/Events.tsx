@@ -388,7 +388,7 @@ const GUIDE = [
   { key: 'purchase', tech: 'Purchase', tiktok: true },
   { key: 'confirmed', tech: 'Confirmed', tiktok: false },
   { key: 'delivered', tech: 'Delivered', tiktok: true },
-  { key: 'fake', tech: 'FakeOrder · Competitor', tiktok: false },
+  { key: 'fake', tech: 'FakeOrder · Competitor', tiktok: true },
 ] as const;
 
 /** Read-only: what each event is for and when it leaves (nothing can be switched off here) */

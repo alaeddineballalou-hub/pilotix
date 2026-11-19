@@ -1659,12 +1659,12 @@ async function buildMetaEvent(db: Db, e: any, api: string, publicUrl: string, no
  * stranger's number, and that person must not lose the shop's ads. A browser Meta cannot recognise (no cookie and no ad
  * click: a script, a pixel that never ran) is not sent: an IP alone is shared by a whole neighbourhood.
  */
-async function buildFakeEvent(db: Db, e: any, sourceUrl: (slug: string | null, url: string | null) => string, nowS: number): Promise<{ event?: Record<string, unknown>; skip?: string }> {
+async function buildFakeEvent(db: Db, e: any, sourceUrl: (slug: string | null, url: string | null) => string, nowS: number): Promise<{ event?: Record<string, unknown>; tt?: Record<string, unknown>; skip?: string }> {
   let b: any = null;
   if (e.order_id) {
     b = (
       await db.query(
-        `SELECT o.conf_status, l.slug, COALESCE(s.ip, a.ip) AS ip, COALESCE(s.ua, a.ua) AS ua, COALESCE(s.fbp, a.fbp) AS fbp, COALESCE(s.fbc, a.fbc) AS fbc, COALESCE(s.url, a.url) AS url,
+        `SELECT o.conf_status, o.utm, l.slug, COALESCE(s.ip, a.ip) AS ip, COALESCE(s.ua, a.ua) AS ua, COALESCE(s.fbp, a.fbp) AS fbp, COALESCE(s.fbc, a.fbc) AS fbc, COALESCE(s.ttp, a.ttp) AS ttp, COALESCE(s.url, a.url) AS url,
            (SELECT i.product_id FROM order_items i WHERE i.order_id = o.id ORDER BY i.id LIMIT 1) AS product_id
          FROM orders o LEFT JOIN landing_pages l ON l.id = o.landing_id
          LEFT JOIN LATERAL (SELECT * FROM landing_submits x WHERE x.order_id = o.id ORDER BY x.id DESC LIMIT 1) s ON true
@@ -1676,13 +1676,27 @@ async function buildFakeEvent(db: Db, e: any, sourceUrl: (slug: string | null, u
     if (!b) return { skip: 'Commande supprimée' };
     if (b.conf_status !== 'fake') return { skip: 'Plus marquée fausse' };
   } else if (e.blocked_id) {
-    b = (await db.query(`SELECT k.status, k.product_id, k.at AS happened, l.slug, ${BLOCKED_BROWSER} FROM landing_blocked k LEFT JOIN landing_pages l ON l.id = k.landing_id ${BLOCKED_FROM} WHERE k.id = $1`, [e.blocked_id]))[0];
+    b = (await db.query(`SELECT k.status, k.product_id, k.utm, k.at AS happened, l.slug, ${BLOCKED_BROWSER} FROM landing_blocked k LEFT JOIN landing_pages l ON l.id = k.landing_id ${BLOCKED_FROM} WHERE k.id = $1`, [e.blocked_id]))[0];
     if (!b) return { skip: 'Commande bloquée supprimée' };
     if (b.status === 'restored') return { skip: 'Commande restaurée' };
   } else return { skip: 'Commande introuvable' };
   // when it happened: the agent's mark, or the moment the order was blocked (a day before its event was queued)
   const t = Math.floor(Date.parse(iso(b.happened ?? e.at)) / 1000);
   if (nowS - t > META_MAX_AGE - 3600) return { skip: 'Plus de 7 jours : Meta ne l’accepte plus' };
+  if (e.platform === 'tiktok') {
+    // TikTok: the same rule with its own cookie (_ttp) or the click on one of its ads (ttclid); never the phone typed
+    const ttclid = readJson<Record<string, string>>(b.utm)?.ttclid || null;
+    if (!b.ua || (!b.ttp && !ttclid)) return { skip: 'Navigateur que TikTok ne reconnaît pas (ni cookie, ni clic sur une pub)' };
+    const tt = {
+      event: e.event_name,
+      event_time: Math.min(t, nowS),
+      event_id: e.event_id,
+      user: { user_agent: b.ua, ...(b.ip ? { ip: b.ip } : {}), ...(b.ttp ? { ttp: b.ttp } : {}), ...(ttclid ? { ttclid } : {}) },
+      page: { url: sourceUrl(b.slug, b.url) },
+      properties: b.product_id ? { content_type: 'product_group', contents: [{ content_id: String(b.product_id) }] } : {},
+    };
+    return { event: tt, tt };
+  }
   if (!b.ua || (!b.fbp && !b.fbc)) return { skip: 'Navigateur que Meta ne reconnaît pas (ni cookie, ni clic sur une pub)' };
   return {
     event: {
@@ -1701,7 +1715,7 @@ async function buildFakeEvent(db: Db, e: any, sourceUrl: (slug: string | null, u
 const BLOCKED_FROM = `
   LEFT JOIN LATERAL (SELECT * FROM landing_submits x WHERE x.blocked_id = k.id ORDER BY x.id DESC LIMIT 1) sb ON true
   LEFT JOIN LATERAL (SELECT * FROM landing_leads y WHERE sb.id IS NULL AND y.status = 'blocked' AND y.landing_id = k.landing_id AND y.phone = k.phone ORDER BY y.id DESC LIMIT 1) ld ON true`;
-const BLOCKED_BROWSER = `COALESCE(sb.ip, ld.ip, k.ip) AS ip, COALESCE(sb.ua, ld.ua, k.user_agent) AS ua, COALESCE(sb.fbp, ld.fbp) AS fbp, COALESCE(sb.fbc, ld.fbc) AS fbc, COALESCE(sb.url, ld.url) AS url`;
+const BLOCKED_BROWSER = `COALESCE(sb.ip, ld.ip, k.ip) AS ip, COALESCE(sb.ua, ld.ua, k.user_agent) AS ua, COALESCE(sb.fbp, ld.fbp) AS fbp, COALESCE(sb.fbc, ld.fbc) AS fbc, COALESCE(sb.ttp, ld.ttp) AS ttp, COALESCE(sb.url, ld.url) AS url`;
 
 /**
  * Blocked orders nobody restored in a day: the browser behind each is told to Meta as « FakeOrder » (« Competitor »
@@ -1713,7 +1727,7 @@ export async function sweepBlockedFakes(ctx: Ctx): Promise<number> {
   const db = ctx.db;
   const now = ctx.now();
   const rows = await db.query(
-    `SELECT k.id, k.at, k.landing_id, k.reasons, l.pixel_id, l.meta_pixels, l.tiktok_pixels, ${BLOCKED_BROWSER}
+    `SELECT k.id, k.at, k.landing_id, k.reasons, k.utm, l.pixel_id, l.meta_pixels, l.tiktok_pixels, ${BLOCKED_BROWSER}
      FROM landing_blocked k LEFT JOIN landing_pages l ON l.id = k.landing_id ${BLOCKED_FROM}
      WHERE k.meta_at IS NULL AND k.status <> 'restored' AND k.at < $1 AND k.at > $2 ORDER BY k.id LIMIT 500`,
     [isoAt(now - BLOCKED_FAKE_AFTER_MS), isoAt(now - (META_MAX_AGE - 6 * 3600) * 1000)],
@@ -1722,13 +1736,18 @@ export async function sweepBlockedFakes(ctx: Ctx): Promise<number> {
   const s = await landingSettings(db);
   let queued = 0;
   for (const k of rows) {
-    if (k.landing_id && k.ua && (k.fbp || k.fbc)) {
+    // each platform is told only a browser it can recognise: Meta by its cookie or ad click, TikTok by its own
+    const forMeta = !!(k.fbp || k.fbc);
+    const forTiktok = !!(k.ttp || readJson<Record<string, string>>(k.utm)?.ttclid);
+    if (k.landing_id && k.ua && (forMeta || forTiktok)) {
       const name = (readJson<FraudReason[]>(k.reasons) ?? []).some((r) => r.code === 'device_competitor') ? 'Competitor' : 'FakeOrder';
-      for (const pixel of (await pixelsOf(db, k, s.pixelId)).meta) {
+      const px = await pixelsOf(db, k, s.pixelId);
+      for (const [platform, pixel] of [...(forMeta ? px.meta.map((x) => ['meta', x] as const) : []), ...(forTiktok ? px.tiktok.map((x) => ['tiktok', x] as const) : [])]) {
+        if (!pixel) continue;
         await db.query(
-          `INSERT INTO meta_events (pixel_id, event_name, event_id, blocked_id, landing_id, at, send_after) VALUES ($1,$2,$3,$4,$5,$6,$7)
+          `INSERT INTO meta_events (pixel_id, event_name, event_id, blocked_id, landing_id, at, send_after, platform) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
            ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
-          [pixel, name, `${name === 'Competitor' ? 'competitor' : 'fake'}-blocked-${k.id}`, k.id, k.landing_id, isoAt(now), isoAt(now)],
+          [pixel, name, `${name === 'Competitor' ? 'competitor' : 'fake'}-blocked-${k.id}`, k.id, k.landing_id, isoAt(now), isoAt(now), platform],
         );
         queued++;
       }
