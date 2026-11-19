@@ -248,7 +248,7 @@ input:focus,select:focus{outline:2px solid var(--c);outline-offset:-1px;border-c
 .go:active{background:var(--cd)}.go[disabled]{opacity:.7}
 .sb{position:fixed;z-index:9;bottom:0;left:0;right:0;padding:44px 10px max(10px,env(safe-area-inset-bottom));background:linear-gradient(#fff0,#fff 62%);pointer-events:none;visibility:hidden;opacity:0;transform:translateY(60%);transition:.36s cubic-bezier(.2,.9,.25,1)}.sb.on{visibility:visible;opacity:1;transform:none}
 .sb .go{position:relative;overflow:hidden;max-width:520px;margin:0 auto;pointer-events:auto}.sb.on .go:after{content:"";position:absolute;top:0;bottom:0;left:-45%;width:38%;background:linear-gradient(100deg,#fff0,#fff6,#fff0);animation:sh 3.6s 1s infinite}@keyframes sh{0%,62%{left:-45%}to{left:110%}}
-.nd{animation:nd .5s 2}@keyframes nd{50%{box-shadow:0 0 0 5px var(--cl)}}@media(prefers-reduced-motion:reduce){.sb{transition:none}.sb.on .go:after,.nd{animation:none}}
+@media(prefers-reduced-motion:reduce){.sb{transition:none}.sb.on .go:after{animation:none}}
 .hp{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;opacity:0;pointer-events:none}
 .d{margin-top:16px}.d h2{font-size:18px;margin:0 0 6px}.d h3{font-size:17px;margin:12px 0 4px}.d ul{padding-inline-start:20px;margin:6px 0}.d li{margin:3px 0}.d p{margin:6px 0}
 .ok{text-align:center;padding:26px 10px}.ok i{display:inline-grid;place-items:center;width:64px;height:64px;border-radius:50%;background:var(--c);color:#fff;font-size:34px;font-style:normal}
@@ -356,7 +356,7 @@ var wo=$('wo');if(wo)wo.onchange=function(){if(wo.checked&&!wo.s&&C.mode=='live'
 f.style.display='none';$('ok').style.display='block';sbs();window.scrollTo(0,0)})})()};
 var sb=$('sb'),gv=1;function sbs(){var on=!(gv||done);sb.className=on?'sb on':'sb';d.body.style.paddingBottom=on?'82px':''}
 if(window.IntersectionObserver)new IntersectionObserver(function(x){gv=x[x.length-1].isIntersecting;sbs()}).observe($('go'));
-sb.onclick=function(){f.onsubmit({preventDefault:function(){}});if(!busy){var b=f.querySelector('.bad')||f;b.scrollIntoView({block:'center',behavior:'smooth'});if(b!=f){try{b.focus({preventScroll:true})}catch(e){}b.classList.add('nd');setTimeout(function(){b.classList.remove('nd')},1100)}}};sum()})();`;
+sb.onclick=function(){f.onsubmit({preventDefault:function(){}});if(!busy){var b=f.querySelector('.bad'),r=(f.closest('.card')||f).getBoundingClientRect(),h=innerHeight-r.height;scrollBy({top:r.top-(h>0?h/2:8),behavior:'smooth'});b&&b.animate&&b.animate([{},{boxShadow:'0 0 0 5px var(--cl)'},{}],{duration:500,iterations:2})}};sum()})();`;
 
 /**
  * what the main photo's srcset is chosen for: its real width. On a computer, half of the 1080 px page minus the card's
