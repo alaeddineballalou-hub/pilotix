@@ -770,6 +770,50 @@
         "none": "—"
       },
       "legend": "Good from 7, medium from 5 to 6.9, bad under 5. FakeOrder and Competitor are low on purpose: that is normal."
+    },
+    "g": {
+      "title": "What each event is for",
+      "help": "What Pilotix sends by itself to Meta and TikTok. Nothing to set here: it is for understanding.",
+      "when": "It leaves:",
+      "view": {
+        "name": "Page visit",
+        "why": "Meta knows who looks at your products. Used for “saw the page” audiences.",
+        "when": "when the customer opens the page (their browser sends it)."
+      },
+      "checkout": {
+        "name": "Order started",
+        "why": "Meta knows who starts ordering. Used to reach those who did not finish.",
+        "when": "when the customer starts filling the form."
+      },
+      "lead": {
+        "name": "Form sent",
+        "why": "Meta knows who sent a real form, even if the order is cancelled later.",
+        "when": "when a safe form arrives; otherwise when an agent accepts it."
+      },
+      "purchase": {
+        "name": "Purchase",
+        "why": "The most important one: your “sales” ads learn on it.",
+        "at": {
+          "order": "at the order, if the anti-fraud check is sure.",
+          "confirmed": "when an agent confirms by phone.",
+          "delivered": "when the parcel is delivered."
+        }
+      },
+      "confirmed": {
+        "name": "Confirmed",
+        "why": "Tells Meta an agent confirmed an order already counted as a purchase.",
+        "when": "when an agent confirms by phone."
+      },
+      "delivered": {
+        "name": "Parcel delivered",
+        "why": "Meta knows who really paid. Used for audiences of real buyers, not as an ad’s goal (it arrives too late).",
+        "when": "when the parcel reaches the customer."
+      },
+      "fake": {
+        "name": "Fake order · Competitor",
+        "why": "Meta knows the fake customers’ browser to keep them out of your ads. Never the number typed.",
+        "when": "when an agent marks “Fake” or “Competitor”, or a day after a blocked order."
+      }
     }
   }
 }

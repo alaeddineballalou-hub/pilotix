@@ -68,6 +68,7 @@ export function Events({ page }: { page?: string }) {
             ))}
           </div>
           <p className="pd-note">{t('landing.evs.note')}</p>
+          <Guide />
         </>
       )}
     </div>
@@ -376,5 +377,52 @@ function Quality() {
         ))}
       </div>
     </section>
+  );
+}
+
+/** which events exist, in the order a customer goes through them; `tiktok`: Pilotix also sends it to TikTok */
+const GUIDE = [
+  { key: 'view', tech: 'PageView · ViewContent', tiktok: true },
+  { key: 'checkout', tech: 'InitiateCheckout', tiktok: true },
+  { key: 'lead', tech: 'Lead', tiktok: false },
+  { key: 'purchase', tech: 'Purchase', tiktok: true },
+  { key: 'confirmed', tech: 'Confirmed', tiktok: false },
+  { key: 'delivered', tech: 'Delivered', tiktok: false },
+  { key: 'fake', tech: 'FakeOrder · Competitor', tiktok: false },
+] as const;
+
+/** Read-only: what each event is for and when it leaves (nothing can be switched off here) */
+function Guide() {
+  const { t } = useTranslation();
+  const at = useRpc('landing.settings.get', {}, { staleTime: 60_000 }).data?.settings.purchaseAt ?? 'confirmed';
+  // « Confirmed » only exists when Purchase leaves at the order; « Delivered » not when Purchase itself waits for the delivery
+  const list = GUIDE.filter((g) => (g.key === 'confirmed' ? at === 'order' : g.key === 'delivered' ? at !== 'delivered' : true));
+  return (
+    <details className="card pd-card lp-evs-guide" open>
+      <summary>
+        <Icon name="info" /> {t('landing.evs.g.title')}
+      </summary>
+      <p className="pd-note">{t('landing.evs.g.help')}</p>
+      <div className="lp-evs-gs">
+        {list.map((g) => (
+          <div key={g.key} className="lp-evs-g">
+            <div className="lp-evs-top">
+              <span className="pd-name">
+                <b>{t(`landing.evs.g.${g.key}.name`)}</b>
+                <small className="ltr">{g.tech}</small>
+              </span>
+              <span className="lp-evs-pl">
+                <span className="lp-evs-b meta">Meta</span>
+                {g.tiktok && <span className="lp-evs-b tiktok">TikTok</span>}
+              </span>
+            </div>
+            <p>{t(`landing.evs.g.${g.key}.why`)}</p>
+            <p className="muted">
+              <b>{t('landing.evs.g.when')}</b> {g.key === 'purchase' ? t(`landing.evs.g.purchase.at.${at}`) : t(`landing.evs.g.${g.key}.when`)}
+            </p>
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }

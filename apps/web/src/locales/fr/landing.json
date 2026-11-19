@@ -770,6 +770,50 @@
         "none": "—"
       },
       "legend": "Bon à partir de 7, moyen de 5 à 6,9, mauvais sous 5. FakeOrder et Competitor sont bas exprès : c’est normal."
+    },
+    "g": {
+      "title": "À quoi sert chaque événement",
+      "help": "Ce que Pilotix envoie tout seul à Meta et à TikTok. Rien à régler ici : c’est pour comprendre.",
+      "when": "Il part :",
+      "view": {
+        "name": "Visite de la page",
+        "why": "Meta sait qui regarde vos produits. Sert aux audiences « a vu la page ».",
+        "when": "quand le client ouvre la page (c’est son navigateur qui l’envoie)."
+      },
+      "checkout": {
+        "name": "Commande commencée",
+        "why": "Meta sait qui commence à commander. Sert à relancer ceux qui n’ont pas fini.",
+        "when": "quand le client commence à remplir le formulaire."
+      },
+      "lead": {
+        "name": "Formulaire envoyé",
+        "why": "Meta sait qui a envoyé un vrai formulaire, même si la commande est annulée après.",
+        "when": "quand un formulaire sûr arrive ; sinon quand un agent l’accepte."
+      },
+      "purchase": {
+        "name": "Achat",
+        "why": "Le plus important : vos publicités « ventes » apprennent dessus.",
+        "at": {
+          "order": "dès la commande, si le contrôle anti-fraude est sûr.",
+          "confirmed": "quand un agent confirme au téléphone.",
+          "delivered": "quand le colis est livré."
+        }
+      },
+      "confirmed": {
+        "name": "Confirmée",
+        "why": "Dit à Meta qu’un agent a confirmé une commande déjà comptée comme achat.",
+        "when": "quand un agent confirme au téléphone."
+      },
+      "delivered": {
+        "name": "Colis livré",
+        "why": "Meta sait qui a vraiment payé. Sert aux audiences de vrais acheteurs, pas comme objectif d’une pub (il arrive trop tard).",
+        "when": "quand le colis arrive chez le client."
+      },
+      "fake": {
+        "name": "Fausse commande · Concurrent",
+        "why": "Meta connaît le navigateur des faux clients pour les sortir de vos pubs. Jamais le numéro tapé.",
+        "when": "quand un agent marque « Fausse » ou « Concurrent », ou un jour après une commande bloquée."
+      }
     }
   }
 }
