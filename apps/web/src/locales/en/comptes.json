@@ -2,6 +2,7 @@
   "title": "Accounts",
   "about": "One place to connect everything: Facebook, Instagram, your ad accounts, your catalog, WhatsApp and TikTok. Your AI agents use them to answer messages and comments, and for your ads.",
   "help": "“Continue with Facebook” opens Facebook in a new tab. Log in, tick everything (Pages, Instagram, ad accounts, catalog, pixels) and accept: Pilotix does the rest and the account turns green. Nothing is pasted anywhere else. “Test” tells you, part by part, what works and where the problem is. The keys stay on Pilotix’s server, never in a page.",
+  "helpTwo": "Meta has two buttons; each opens Facebook in a new tab. “Facebook and Instagram”: tick only this boutique’s Page and its Instagram. “Meta ads”: tick your ad accounts, your catalog and your pixels. Accept: Pilotix does the rest and the account turns green. “Test” tells you, part by part, what works and where the problem is. The keys stay on Pilotix’s server, never in a page.",
   "here": {
     "title": "Used in “{{name}}”",
     "page": "Messages and comments",
@@ -25,6 +26,7 @@
   "scopeAll": "All my boutiques ({{n}})",
   "scopeHereHint": "Its Page and ad accounts work here at once.",
   "scopeAllHint": "Each boutique then picks its Page in one click. A Page answers for one boutique only.",
+  "scopeAllHintTwo": "For the ads and TikTok: every boutique counts them. A Facebook Page is linked from each boutique.",
   "scopeHereOnly": "Only “{{name}}”",
   "scopeAllShort": "All boutiques",
   "scopeSaved": "Changed.",
@@ -54,20 +56,21 @@
     },
     "metaContent": {
       "name": "Facebook and Instagram",
-      "what": "Your Pages and Instagram: messages, comments, posts.",
-      "allow": "In Facebook’s window, tick your Pages and your Instagram accounts, then accept everything. What is not ticked does not work in Pilotix.",
+      "what": "This boutique’s Page and its Instagram: messages, comments, posts.",
+      "allow": "In Facebook’s window, tick only this boutique’s Page and its Instagram account, then accept everything. Pilotix keeps one Page per boutique.",
       "notReady": "Soon: Pilotix is getting the Facebook link ready.",
       "all": [
         "Facebook messages",
         "Comments",
         "Instagram",
         "Posts"
-      ]
+      ],
+      "hereOnly": "Always for this boutique: a Page is linked to one boutique only."
     },
     "metaAds": {
       "name": "Meta ads",
       "what": "Your ad accounts, your catalog, your pixels and your lead forms.",
-      "allow": "In Facebook’s window, tick your Page, your ad accounts, your catalog and your pixels, then accept everything.",
+      "allow": "In Facebook’s window, tick your ad accounts, your catalog, your pixels and your Page (ads go out in its name), then accept everything. The same Facebook account or another one.",
       "notReady": "Soon: Pilotix is getting the ads link ready.",
       "viaFirst": "The “Continue with Facebook” button connects your ads too: tick your ad accounts in it.",
       "all": [

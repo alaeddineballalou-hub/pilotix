@@ -223,3 +223,9 @@
 @media (max-width: 1100px) {
   .cpt-slot.spot { padding-inline: 12px; }
 }
+
+/* Meta's two doors: « Facebook et Instagram » is linked to this boutique alone, whatever « Pour » says */
+.cpt-here-only {
+  display: block;
+  margin-top: 8px;
+}

@@ -1693,7 +1693,7 @@
       "configId": "Configuration ID (Facebook Login for Business)",
       "configHint": "What “Continue with Facebook” asks for. Alone (the box below empty): one configuration for everything, tick Pages, Instagram accounts, ad accounts, catalogs and pixels in it, with every permission. With the Ads ID below: the one for Pages and Instagram only. « System-user access token »: the boutique’s key never ends (recommended). « User access token »: to link again about every 60 days.",
       "adsConfigId": "Ads configuration ID (optional)",
-      "adsConfigHint": "What “Meta ads” asks for: ad accounts, catalogs, pixels, lead forms. When filled, boutiques connect in two steps, each Facebook window asking for its own things: Pages and Instagram first, then ads. Empty: one login asks for everything.",
+      "adsConfigHint": "What “Meta ads” asks for: ad accounts, catalogs, pixels, lead forms. When filled, boutiques connect in two steps, each Facebook window with its own key: the Page and its Instagram first (one Page per boutique), then ads. Empty: one login asks for everything.",
       "redirect": "Return address (Facebook Login › Settings)",
       "deletion": "Data deletion address",
       "webhook": "Webhook address",

@@ -1693,7 +1693,7 @@
       "configId": "ID de configuration (Facebook Login for Business)",
       "configHint": "Ce que demande « Continuer avec Facebook ». Seul (case du dessous vide) : une configuration pour tout, cochez-y les pages, les comptes Instagram, les comptes pub, les catalogues et les pixels, avec toutes les autorisations. Avec l’ID Publicité en dessous : celle des pages et d’Instagram seulement. « System-user access token » : la clé de la boutique ne finit jamais (conseillé). « User access token » : à relier environ tous les 60 jours.",
       "adsConfigId": "ID de configuration Publicité (facultatif)",
-      "adsConfigHint": "Ce que demande « Publicité Meta » : comptes pub, catalogues, pixels, formulaires. Rempli, les boutiques se connectent en deux fois, chaque fenêtre de Facebook demande ses choses : d’abord les pages et Instagram, puis la publicité. Vide : une seule connexion demande tout.",
+      "adsConfigHint": "Ce que demande « Publicité Meta » : comptes pub, catalogues, pixels, formulaires. Remplie, les boutiques se connectent en deux fois, chaque fenêtre de Facebook avec sa propre clé : d’abord la page et son Instagram (une seule page par boutique), puis la publicité. Vide : une seule connexion demande tout.",
       "redirect": "Adresse de retour (Facebook Login › Réglages)",
       "deletion": "Adresse de suppression des données",
       "webhook": "Adresse du webhook",

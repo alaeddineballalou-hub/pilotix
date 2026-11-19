@@ -57,8 +57,10 @@ interface Pending {
   confirm?: boolean;
 }
 
-/** A Meta account that came for the ads alone (« Publicité Meta », a pasted key): linked again in the ads' own window. */
-const adsOnly = (l: Link) => l.provider === 'meta' && !l.assets.some((a) => a.kind === 'page') && l.assets.some((a) => a.kind === 'ad_account');
+/** A Meta connection for the ads alone (« Publicité Meta », a pasted key): linked again in the ads' own window, no Page. */
+const adsOnly = (l: Link) => l.provider === 'meta' && (l.part === 'ads' || (!l.assets.some((a) => a.kind === 'page') && l.assets.some((a) => a.kind === 'ad_account')));
+/** Meta's two doors are open (Pilotix has the ads configuration): a Facebook account is the boutique's one Page, for it alone. */
+const pageDoor = (l: Link, d: List) => l.provider === 'meta' && d.adsReady && !adsOnly(l);
 
 /** A provider's tile: its official logo once its file is in assets/brand/ (ui/BrandLogo), else its two letters as before.
  * Meta's ads slot is Meta's own (the ad accounts are Meta's, not Facebook's). */
@@ -171,7 +173,7 @@ export function Comptes({ sub }: PageProps) {
 
   return (
     <div className="cpt">
-      <SectionHeader icon="link" title={t(K + 'title')} help={t(K + 'help')} about={t(K + 'about')} tabs={[]} current="" />
+      <SectionHeader icon="link" title={t(K + 'title')} help={t(K + (d.adsReady ? 'helpTwo' : 'help'))} about={t(K + 'about')} tabs={[]} current="" />
       <HereCard d={d} />
       <Card title={t(K + 'add')} className="cpt-add">
         {d.canAll && (
@@ -190,12 +192,15 @@ export function Comptes({ sub }: PageProps) {
                 </button>
               ))}
             </div>
-            <small className="cpt-muted">{scope === 'here' ? t(K + 'scopeHereHint') : t(K + 'scopeAllHint')}</small>
+            <small className="cpt-muted">{scope === 'here' ? t(K + 'scopeHereHint') : t(K + (d.adsReady ? 'scopeAllHintTwo' : 'scopeAllHint'))}</small>
           </div>
         )}
         <div className="cpt-providers four">
           {PROVIDERS.map((p) => [
-            <ProviderSlot key={p} p={p} part={p === 'meta' && d.adsReady ? 'content' : undefined} ready={d.apps[p]} preview={d.preview} pending={pending?.provider === p && !pending.ads ? pending : null} busy={!!pending} done={done?.provider === p && !done.ads ? (d.links.find((l) => l.id === done.linkId)?.name ?? '') : null} onStart={() => start(p)} onReopen={reopen} onCancel={() => setPending(null)} />,
+            <ProviderSlot key={p} p={p} part={p === 'meta' && d.adsReady ? 'content' : undefined} ready={d.apps[p]} preview={d.preview} pending={pending?.provider === p && !pending.ads ? pending : null} busy={!!pending} done={done?.provider === p && !done.ads ? (d.links.find((l) => l.id === done.linkId)?.name ?? '') : null} onStart={() => start(p)} onReopen={reopen} onCancel={() => setPending(null)} >
+              {/* the two doors: a Page is linked to this boutique alone, whatever « Pour » says */}
+              {p === 'meta' && d.adsReady && d.canAll && scope === 'all' && <small className="cpt-muted cpt-here-only">{t(K + 'p.metaContent.hereOnly')}</small>}
+            </ProviderSlot>,
             // the ads sit next to Facebook: their own Facebook window when Pilotix has its configuration, and a key pasted by hand
             p === 'meta' && (
               <ProviderSlot key="ads" id="cpt-ads" spot={spot} p="meta" part="ads" ready={d.apps.meta && d.adsReady} hideButton={!d.adsReady} preview={d.preview} pending={pending?.provider === 'meta' && pending.ads ? pending : null} busy={!!pending} done={done?.provider === 'meta' && done.ads ? (d.links.find((l) => l.id === done.linkId)?.name ?? '') : null} onStart={() => start('meta', true)} onReopen={reopen} onCancel={() => setPending(null)}>
@@ -624,7 +629,10 @@ function LinkCard({ l, d, fresh, open, onToggle, onRelink, busy }: { l: Link; d:
   const money = [...new Set(adList.map((a) => a.currency).filter((c): c is string => !!c))];
   // dinars count in dinars in Publicité; any other money is taken as dollars
   const otherMoney = money.filter((c) => c !== 'USD' && c !== 'DZD');
-  const summary = [page ? t(K + 'sumPage', { name: page.name }) : null, adsHere ? t(K + 'sumAds', { n: adList.length }) : null].filter(Boolean).join(' · ') || t(K + 'sumNone');
+  // Meta's two doors: each card says which door it is (the same Facebook account may be linked through both)
+  const door = l.provider === 'meta' && d.adsReady ? t(K + (adsOnly(l) ? 'p.metaAds.name' : 'p.metaContent.name')) : null;
+  const mainTwo = pageDoor(l, d);
+  const summary = [door, page ? t(K + 'sumPage', { name: page.name }) : null, adsHere ? t(K + 'sumAds', { n: adList.length }) : null].filter(Boolean).join(' · ') || t(K + 'sumNone');
   const runTest = () => {
     if (!open) onToggle();
     test.mutate({ linkId: l.id });
@@ -638,7 +646,7 @@ function LinkCard({ l, d, fresh, open, onToggle, onRelink, busy }: { l: Link; d:
     <article className={`cpt-link ${fresh ? 'fresh' : ''} ${open ? 'open' : ''}`} aria-label={l.name}>
       <header>
         <button type="button" className="cpt-fold" aria-expanded={open} aria-controls={bodyId} onClick={onToggle}>
-          <ProviderBadge p={l.provider} />
+          <ProviderBadge p={l.provider} part={adsOnly(l) ? 'ads' : undefined} />
           <span className="cpt-link-id">
             <span className="cpt-link-name">
               <bdi>{l.name || t(K + `p.${l.provider}.name`)}</bdi>
@@ -665,7 +673,7 @@ function LinkCard({ l, d, fresh, open, onToggle, onRelink, busy }: { l: Link; d:
         <div id={bodyId} className="cpt-link-body">
           {broken && <p className="cpt-link-err">{l.error || t(K + 'relinkNow')}</p>}
           {/* an account that came for the ads alone (« Publicité Meta », a pasted key) has no Page to pick */}
-          {l.provider === 'meta' && !(pages.length === 0 && adList.length > 0) && (
+          {l.provider === 'meta' && !adsOnly(l) && (
             <div className="cpt-row">
               <div className="cpt-row-l">
                 <label className="cpt-row-t" htmlFor={`cpt-page-${l.id}`}>
@@ -696,6 +704,7 @@ function LinkCard({ l, d, fresh, open, onToggle, onRelink, busy }: { l: Link; d:
               </div>
             </div>
           )}
+          {!(mainTwo && !adList.length) && (
           <div className="cpt-row">
             <div className="cpt-row-l">
               <span className="cpt-row-t">{t(K + `adsLabel.${l.provider}`, { n: adList.length })}</span>
@@ -746,14 +755,18 @@ function LinkCard({ l, d, fresh, open, onToggle, onRelink, busy }: { l: Link; d:
               )}
             </div>
           </div>
+          )}
           {(result || test.isPending) && <TestLines r={result} pending={test.isPending} provider={l.provider} />}
           <footer>
             <span className="cpt-muted">{t(K + 'by', { by: l.by || '—', date: dateOnly(l.createdAt) })}</span>
             <span className="cpt-do">
-              {d.canAll ? (
+              {d.canAll && !(mainTwo && l.scope === 'here') ? (
                 <select className="cpt-scope-sel" aria-label={t(K + 'for')} value={l.scope} disabled={scope.isPending} onChange={(e) => scope.mutate({ linkId: l.id, scope: e.target.value as Scope })}>
                   <option value="here">{t(K + 'scopeHereOnly', { name: d.shop.name })}</option>
-                  <option value="all">{t(K + 'scopeAllShort')}</option>
+                  {/* the two doors: a Page's account is linked to one boutique only */}
+                  <option value="all" disabled={mainTwo}>
+                    {t(K + 'scopeAllShort')}
+                  </option>
                 </select>
               ) : (
                 <span className="chip">{l.scope === 'all' ? t(K + 'scopeAllShort') : t(K + 'scopeHereOnly', { name: l.shopName ?? d.shop.name })}</span>
