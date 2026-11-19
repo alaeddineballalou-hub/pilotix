@@ -278,3 +278,36 @@ test('a blocked order nobody restored in a day: FakeOrder for its browser, once;
   const full: any = await call('landing.events', admin, { limit: 200 });
   assert.ok(full.rows.some((x: any) => x.name === 'FakeOrder' && x.customer === odd.name), 'a blocked order’s event shows who it was');
 });
+
+test('Delivered: the parcel reached its customer — an event of its own beside Purchase, once, with the customer hashed; not when Purchase itself waits for the delivery', async () => {
+  const f = await human();
+  await call('landing.submit', admin, f);
+  const o = await orderOf(f.phone);
+  await mine(o.id);
+  await call('orders.setConf', conf, { ids: [Number(o.id)], status: 'confirmed' });
+  assert.ok(!(await events(`order_id = $1`, [o.id])).some((e: any) => e.event_name === 'Delivered'), 'confirmed is not delivered');
+  // the follow-up says delivered (the couriers' sync and the agents go through the same hook)
+  const { onLandingFollow, landingSettings } = await import('../modules/landingquery');
+  const s = await landingSettings(db);
+  await onLandingFollow(db, s, { id: Number(o.id), landing_id: o.landing_id }, 'out_for_delivery', 'delivered', Date.now());
+  await onLandingFollow(db, s, { id: Number(o.id), landing_id: o.landing_id }, 'out_for_delivery', 'delivered', Date.now());
+  const ev = (await events(`order_id = $1`, [o.id])).filter((e: any) => e.event_name === 'Delivered');
+  assert.deepEqual(ev.map((e: any) => [e.event_id, e.pixel_id, Number(e.value), e.platform]), [[`delivered-${o.ref}`, PIXEL, Number(o.total), 'meta']]);
+  sent.length = 0;
+  await run(Date.now() + MIN);
+  const got = received().find((e: any) => e.event_name === 'Delivered');
+  assert.ok(got, 'Meta received it');
+  assert.equal(got.event_id, `delivered-${o.ref}`);
+  assert.ok(got.user_data?.ph, 'the phone, hashed');
+  assert.ok(!JSON.stringify(got).includes(f.phone), 'never the number in clear');
+  // an exchange parcel, or a return: nothing
+  await onLandingFollow(db, s, { id: Number(o.id), landing_id: o.landing_id, is_exchange: true }, 'shipped', 'delivered', Date.now());
+  await onLandingFollow(db, s, { id: Number(o.id), landing_id: o.landing_id }, 'shipped', 'returned', Date.now());
+  assert.equal((await events(`order_id = $1 AND event_name = 'Delivered'`, [o.id])).length, 1);
+  // Purchase « at delivery »: the delivery is the Purchase, no second event saying the same
+  const g = await human();
+  await call('landing.submit', admin, g);
+  const o2 = await orderOf(g.phone);
+  await onLandingFollow(db, { ...s, purchaseAt: 'delivered' }, { id: Number(o2.id), landing_id: o2.landing_id }, 'shipped', 'delivered', Date.now());
+  assert.ok(!(await events(`order_id = $1`, [o2.id])).some((e: any) => e.event_name === 'Delivered'));
+});

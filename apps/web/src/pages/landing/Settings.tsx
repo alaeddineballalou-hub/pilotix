@@ -292,6 +292,7 @@ const EVENT_LABEL: Record<string, string> = {
   Confirmed: 'landing.ev.confirmed',
   InitiateCheckout: 'landing.ev.checkout',
   Lead: 'landing.ev.lead',
+  Delivered: 'landing.ev.delivered',
   FakeOrder: 'landing.ev.fake',
   Competitor: 'landing.ev.competitor',
 };

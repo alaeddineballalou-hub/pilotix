@@ -404,7 +404,8 @@
     "confirmed": "Confirmed (أكدها الوكيل)",
     "lead": "Lead (استمارة مُرسلة)",
     "fake": "FakeOrder (طلب مزيف)",
-    "competitor": "Competitor (منافس)"
+    "competitor": "Competitor (منافس)",
+    "delivered": "Delivered (تم تسليم الطرد)"
   },
   "alertOn": "تنبيه الطلبات: مفعل",
   "alertOff": "تنبيه الطلبات: معطل",
@@ -809,7 +810,8 @@
       "lead": "نماذج",
       "checkout": "بدأت",
       "fake": "وهمية",
-      "visits": "الزوار"
+      "visits": "الزوار",
+      "delivered": "مُسلَّمة"
     },
     "sparkLabel_zero": "{{count}} حدث مُرسَل في الفترة",
     "sparkLabel_one": "حدث واحد مُرسَل في الفترة",

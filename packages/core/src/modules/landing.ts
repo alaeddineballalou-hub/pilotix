@@ -91,7 +91,7 @@ function eventWhere(now: number, i: { days?: number; platform: 'all' | 'meta' | 
   }
   return { sql: sql.join(' AND '), args };
 }
-const EVENT_KIND: Record<string, 'purchase' | 'lead' | 'checkout' | 'fake'> = { Purchase: 'purchase', Lead: 'lead', InitiateCheckout: 'checkout', FakeOrder: 'fake', Competitor: 'fake' };
+const EVENT_KIND: Record<string, 'purchase' | 'lead' | 'checkout' | 'fake' | 'delivered'> = { Purchase: 'purchase', Lead: 'lead', InitiateCheckout: 'checkout', FakeOrder: 'fake', Competitor: 'fake', Delivered: 'delivered' };
 const QUALITY_KEY = 'landing_event_quality';
 const QUALITY_TTL_MS = 6 * 3_600_000;
 export interface QualitySet {
@@ -108,7 +108,7 @@ const QUALITY_DEMO: QualitySet['events'] = [
   { name: 'InitiateCheckout', score: 6.1, coverage: 74, keys: [{ id: 'phone', pct: 88 }, { id: 'ip_address', pct: 99 }, { id: 'fbp', pct: 84 }] },
   { name: 'ViewContent', score: 5.2, coverage: null, keys: [{ id: 'ip_address', pct: 100 }, { id: 'fbp', pct: 79 }] },
 ];
-const eventCard = (id: number, pg: any, series: { day: string; visits: number; purchase: number; lead: number; checkout: number; fake: number }[]) => ({
+const eventCard = (id: number, pg: any, series: { day: string; visits: number; purchase: number; lead: number; checkout: number; fake: number; delivered: number }[]) => ({
   id,
   slug: (pg?.slug as string | undefined) ?? null,
   title: (pg?.title as string | undefined) || (pg?.product as string | undefined) || null,
@@ -117,6 +117,7 @@ const eventCard = (id: number, pg: any, series: { day: string; visits: number; p
   meta: false,
   tiktok: false,
   visits: 0,
+  delivered: 0,
   purchase: 0,
   lead: 0,
   checkout: 0,
@@ -1586,7 +1587,7 @@ async function buildMetaEvent(db: Db, e: any, api: string, publicUrl: string, no
   const nowS = Math.floor(now / 1000);
   if (e.platform === 'chat') return buildChatEvent(db, e, nowS);
   if ((FAKE_EVENTS as readonly string[]).includes(e.event_name)) return buildFakeEvent(db, e, sourceUrl, nowS);
-  if (e.event_name === 'Purchase' || e.event_name === 'Confirmed' || e.event_name === 'Lead') {
+  if (e.event_name === 'Purchase' || e.event_name === 'Confirmed' || e.event_name === 'Lead' || e.event_name === 'Delivered') {
     // the browser's data comes from the customer's submit, or from what they typed (an abandoned order)
     const o = (
       await db.query(
@@ -2240,7 +2241,7 @@ export const landingProcs = {
         id: num(r.id),
         at: iso(r.at),
         sentAt: isoOrNull(r.sent_at),
-        name: r.event_name as 'Purchase' | 'InitiateCheckout' | 'Confirmed' | 'Lead' | 'FakeOrder' | 'Competitor',
+        name: r.event_name as 'Purchase' | 'InitiateCheckout' | 'Confirmed' | 'Lead' | 'Delivered' | 'FakeOrder' | 'Competitor',
         pixelId: r.pixel_id,
         status: r.status as 'queued' | 'sending' | 'sent' | 'failed' | 'skipped' | 'simulated',
         error: r.error ?? null,
@@ -2274,7 +2275,7 @@ export const landingProcs = {
     const pages = ids.length
       ? await ctx.db.query(`SELECT l.id, l.slug, l.title, l.active, p.name AS product FROM landing_pages l LEFT JOIN products p ON p.id = l.product_id WHERE l.id = ANY($1)`, [ids])
       : [];
-    const blank = () => ({ visits: 0, purchase: 0, lead: 0, checkout: 0, fake: 0 });
+    const blank = () => ({ visits: 0, purchase: 0, lead: 0, checkout: 0, fake: 0, delivered: 0 });
     const out = new Map<number, ReturnType<typeof eventCard>>();
     const cardOf = (lid: number) => {
       let c = out.get(lid);

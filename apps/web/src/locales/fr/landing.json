@@ -380,7 +380,8 @@
     "confirmed": "Confirmed (confirmée par un agent)",
     "lead": "Lead (formulaire envoyé)",
     "fake": "FakeOrder (fausse commande)",
-    "competitor": "Competitor (concurrent)"
+    "competitor": "Competitor (concurrent)",
+    "delivered": "Delivered (colis livré)"
   },
   "alertOn": "Alerte commandes : oui",
   "alertOff": "Alerte commandes : non",
@@ -742,7 +743,8 @@
       "lead": "Formulaires",
       "checkout": "Commencées",
       "fake": "Fausses",
-      "visits": "Visiteurs"
+      "visits": "Visiteurs",
+      "delivered": "Livrées"
     },
     "sparkLabel_one": "{{count}} événement envoyé sur la période",
     "sparkLabel_other": "{{count}} événements envoyés sur la période",

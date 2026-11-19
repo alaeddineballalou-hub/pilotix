@@ -380,7 +380,8 @@
     "confirmed": "Confirmed (confirmed by an agent)",
     "lead": "Lead (form sent)",
     "fake": "FakeOrder (fake order)",
-    "competitor": "Competitor"
+    "competitor": "Competitor",
+    "delivered": "Delivered (parcel delivered)"
   },
   "alertOn": "Order alert: on",
   "alertOff": "Order alert: off",
@@ -742,7 +743,8 @@
       "lead": "Forms",
       "checkout": "Started",
       "fake": "Fake",
-      "visits": "Visitors"
+      "visits": "Visitors",
+      "delivered": "Delivered"
     },
     "sparkLabel_one": "{{count}} event sent in the period",
     "sparkLabel_other": "{{count}} events sent in the period",

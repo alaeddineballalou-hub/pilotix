@@ -527,6 +527,7 @@
 .lp-evs-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .lp-evs-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .lp-evs-chart .k-purchase, .lp-evs-legend .k-purchase { fill: var(--ink); background: var(--ink); }
+.lp-evs-chart .k-delivered, .lp-evs-legend .k-delivered { fill: #1E8E5A; background: #1E8E5A; }
 .lp-evs-chart .k-lead, .lp-evs-legend .k-lead { fill: #2F6FD0; background: #2F6FD0; }
 .lp-evs-chart .k-checkout, .lp-evs-legend .k-checkout { fill: #F7A823; background: #F7A823; }
 .lp-evs-chart .k-fake, .lp-evs-legend .k-fake { fill: #E9A3A0; background: #E9A3A0; }

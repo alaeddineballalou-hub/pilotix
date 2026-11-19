@@ -12,8 +12,8 @@ import { Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
 type Card = Out<'landing.eventStats'>['cards'][number];
 type Platform = 'all' | 'meta' | 'tiktok';
 const DAYS = [1, 7, 14, 30] as const;
-const KINDS = ['purchase', 'lead', 'checkout', 'fake'] as const;
-const EVENT_LABEL: Record<string, string> = { Purchase: 'purchase', Confirmed: 'confirmed', InitiateCheckout: 'checkout', Lead: 'lead', FakeOrder: 'fake', Competitor: 'competitor' };
+const KINDS = ['delivered', 'purchase', 'lead', 'checkout', 'fake'] as const;
+const EVENT_LABEL: Record<string, string> = { Purchase: 'purchase', Confirmed: 'confirmed', InitiateCheckout: 'checkout', Lead: 'lead', Delivered: 'delivered', FakeOrder: 'fake', Competitor: 'competitor' };
 /** many fake orders for what the page sells: worth a look */
 const risky = (c: Card) => c.fake >= 5 && c.fake * 4 >= c.purchase + c.fake;
 /** the period and platform chosen: kept while moving between the cards and a page */
@@ -90,7 +90,7 @@ function Numbers({ c }: { c: Card }) {
   const all = c.sent + c.skipped + c.failed;
   return (
     <div className="lp-evs-nums">
-      {(['visits', 'checkout', 'lead', 'purchase'] as const).map((k) => (
+      {(['visits', 'checkout', 'lead', 'purchase', 'delivered'] as const).map((k) => (
         <div key={k}>
           <b className="ltr">{n(c[k])}</b>
           <small>{t(`landing.evs.k.${k}`)}</small>
@@ -106,7 +106,7 @@ function Numbers({ c }: { c: Card }) {
 
 function PageCard({ c }: { c: Card }) {
   const { t } = useTranslation();
-  const total = c.series.map((s) => s.purchase + s.lead + s.checkout + s.fake);
+  const total = c.series.map((s) => s.purchase + s.lead + s.checkout + s.fake + s.delivered);
   return (
     <a className="card lp-evs-card" href={`#/landing/evenements/${c.id}`}>
       <div className="lp-evs-top">
@@ -241,7 +241,7 @@ function Bars({ series }: { series: Card['series'] }) {
   const T = 8;
   const B = 24;
   const iw = W - L - R;
-  const ticks = ticksFor(Math.max(...series.map((s) => s.purchase + s.lead + s.checkout + s.fake)));
+  const ticks = ticksFor(Math.max(...series.map((s) => s.purchase + s.lead + s.checkout + s.fake + s.delivered)));
   const top = ticks[ticks.length - 1];
   const y = (v: number) => T + (H - T - B) * (1 - v / top);
   const slot = iw / series.length;
