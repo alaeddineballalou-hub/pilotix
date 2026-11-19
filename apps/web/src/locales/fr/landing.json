@@ -7,7 +7,8 @@
     "abandons": "Les clients qui ont laissé leur numéro sans valider : Pilotix les ajoute tout seul dans Commandes › Nouvelle pour que vos agents les appellent.",
     "reglages": "Pixel Meta et Conversions API, commandes abandonnées, automatisations.",
     "protection": "Ce que la protection anti-fausses commandes a fait : commandes passées, à vérifier, bloquées, et les attaques (un appareil qui envoie beaucoup de numéros, des numéros à la suite).",
-    "groupes": "Une page avec plusieurs produits : le client choisit, et arrive sur la landing page du produit."
+    "groupes": "Une page avec plusieurs produits : le client choisit, et arrive sur la landing page du produit.",
+    "evenements": "Ce que le serveur a envoyé à Meta et à TikTok, page par page : achats, formulaires, commandes commencées, fausses commandes."
   },
   "tabs": {
     "pages": "Pages",
@@ -15,7 +16,8 @@
     "bloquees": "Commandes bloquées",
     "abandons": "Abandonnées",
     "reglages": "Réglages",
-    "groupes": "Groupes"
+    "groupes": "Groupes",
+    "evenements": "Événements"
   },
   "copied": "Adresse copiée",
   "list": {
@@ -719,5 +721,34 @@
     "after": "Après la description",
     "before": "Avant la description",
     "saved": "Enregistré : toutes vos pages sont à jour."
+  },
+  "evs": {
+    "back": "Toutes les pages",
+    "period": "Période",
+    "platform": "Plateforme",
+    "today": "Aujourd’hui",
+    "days_one": "{{count}} jour",
+    "days_other": "{{count}} jours",
+    "all": "Tout",
+    "empty": "Aucun événement sur cette période.",
+    "emptyOne": "Aucun événement pour cette page sur cette période.",
+    "note": "Une carte par page. Touchez une carte pour voir ses jours et ses derniers événements. Les visites de page ne sont pas comptées ici : le navigateur du client les envoie tout seul.",
+    "noPage": "Sans page (ventes par message)",
+    "gone": "Page supprimée",
+    "sentPct": "envoyés",
+    "last": "Les derniers événements",
+    "k": {
+      "purchase": "Achats",
+      "lead": "Formulaires",
+      "checkout": "Commencées",
+      "fake": "Fausses"
+    },
+    "sparkLabel_one": "{{count}} événement envoyé sur la période",
+    "sparkLabel_other": "{{count}} événements envoyés sur la période",
+    "chartLabel": "Événements envoyés par jour, par type",
+    "fakeWarn_one": "{{count}} fausse commande : à surveiller",
+    "fakeWarn_other": "{{count}} fausses commandes : à surveiller",
+    "failedWarn_one": "{{count}} envoi échoué",
+    "failedWarn_other": "{{count}} envois échoués"
   }
 }

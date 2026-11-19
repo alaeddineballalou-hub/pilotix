@@ -7,7 +7,8 @@
     "abandons": "Customers who left their number without ordering: Pilotix adds them to Commandes › New by itself so your agents call them.",
     "reglages": "Meta pixel and Conversions API, abandoned orders, automations.",
     "protection": "What the fake-order protection did: orders passed, to check, blocked, and the attacks (one device sending many numbers, numbers in a row).",
-    "groupes": "One page with several products: the customer picks one and lands on that product’s landing page."
+    "groupes": "One page with several products: the customer picks one and lands on that product’s landing page.",
+    "evenements": "What the server sent to Meta and TikTok, page by page: purchases, forms, started orders, fake orders."
   },
   "tabs": {
     "pages": "Pages",
@@ -15,7 +16,8 @@
     "bloquees": "Blocked orders",
     "abandons": "Abandoned",
     "reglages": "Settings",
-    "groupes": "Groups"
+    "groupes": "Groups",
+    "evenements": "Events"
   },
   "copied": "Address copied",
   "list": {
@@ -719,5 +721,34 @@
     "after": "After the description",
     "before": "Before the description",
     "saved": "Saved: all your pages are up to date."
+  },
+  "evs": {
+    "back": "All pages",
+    "period": "Period",
+    "platform": "Platform",
+    "today": "Today",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "all": "All",
+    "empty": "No event in this period.",
+    "emptyOne": "No event for this page in this period.",
+    "note": "One card per page. Tap a card to see its days and its last events. Page visits are not counted here: the customer’s browser sends them by itself.",
+    "noPage": "No page (sales by message)",
+    "gone": "Deleted page",
+    "sentPct": "sent",
+    "last": "Latest events",
+    "k": {
+      "purchase": "Purchases",
+      "lead": "Forms",
+      "checkout": "Started",
+      "fake": "Fake"
+    },
+    "sparkLabel_one": "{{count}} event sent in the period",
+    "sparkLabel_other": "{{count}} events sent in the period",
+    "chartLabel": "Events sent per day, by type",
+    "fakeWarn_one": "{{count}} fake order: keep an eye on it",
+    "fakeWarn_other": "{{count}} fake orders: keep an eye on it",
+    "failedWarn_one": "{{count}} failed send",
+    "failedWarn_other": "{{count}} failed sends"
   }
 }

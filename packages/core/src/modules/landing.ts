@@ -63,6 +63,52 @@ import { WORKED_ON } from './readiness';
 
 const id = z.number().int().positive();
 export const WHO = ['marketer'] as const;
+
+/** which events a screen asks for: the last N days, one platform, one page (0 = the events that have no page) */
+const EventScope = {
+  days: z.number().int().min(1).max(90).optional(),
+  platform: z.enum(['all', 'meta', 'tiktok']).default('all'),
+  landingId: z.number().int().min(0).optional(),
+};
+function eventWhere(now: number, i: { days?: number; platform: 'all' | 'meta' | 'tiktok'; landingId?: number }) {
+  const sql: string[] = ['true'];
+  const args: unknown[] = [];
+  if (i.days) {
+    // whole days, in Algiers time (UTC+1): today and the days before it
+    const start = new Date(new Date(now + 3_600_000).toISOString().slice(0, 10) + 'T00:00:00Z').getTime() - 3_600_000 - (i.days - 1) * 86_400_000;
+    args.push(new Date(start));
+    sql.push(`e.at >= $${args.length}`);
+  }
+  if (i.platform === 'tiktok') sql.push(`e.platform = 'tiktok'`);
+  if (i.platform === 'meta') sql.push(`e.platform <> 'tiktok'`);
+  if (i.landingId !== undefined) {
+    if (i.landingId === 0) sql.push('e.landing_id IS NULL');
+    else {
+      args.push(i.landingId);
+      sql.push(`e.landing_id = $${args.length}`);
+    }
+  }
+  return { sql: sql.join(' AND '), args };
+}
+const EVENT_KIND: Record<string, 'purchase' | 'lead' | 'checkout' | 'fake'> = { Purchase: 'purchase', Lead: 'lead', InitiateCheckout: 'checkout', FakeOrder: 'fake', Competitor: 'fake' };
+const eventCard = (id: number, pg: any, series: { day: string; purchase: number; lead: number; checkout: number; fake: number }[]) => ({
+  id,
+  slug: (pg?.slug as string | undefined) ?? null,
+  title: (pg?.title as string | undefined) || (pg?.product as string | undefined) || null,
+  product: (pg?.product as string | undefined) ?? null,
+  active: pg ? !!pg.active : null,
+  meta: false,
+  tiktok: false,
+  purchase: 0,
+  lead: 0,
+  checkout: 0,
+  fake: 0,
+  sent: 0,
+  skipped: 0,
+  failed: 0,
+  waiting: 0,
+  series,
+});
 const WATCH = ['marketer', 'confirmation'] as const;
 /** A marketer-only account sees the leads and blocked orders as numbers, never who the customer is (name, phone). */
 const PII_HIDDEN = '•••';
@@ -2154,14 +2200,17 @@ export const landingProcs = {
   }),
 
   /** What was sent to Meta (or not, and why), newest first. */
-  'landing.events': proc([...WHO], z.object({ limit: z.number().int().min(1).max(200).default(60) }), async (ctx, i) => {
+  'landing.events': proc([...WHO], z.object({ limit: z.number().int().min(1).max(200).default(60), ...EventScope }), async (ctx, i) => {
     await afterChange(ctx);
     const hide = noOrderAccess(ctx);
+    const w = eventWhere(ctx.now(), i);
     const rows = await ctx.db.query(
       `SELECT e.*, o.ref, o.customer_name AS o_name, a.customer_name AS a_name, a.phone AS a_phone, k.customer_name AS k_name, l.slug
        FROM meta_events e LEFT JOIN orders o ON o.id = e.order_id LEFT JOIN landing_leads a ON a.id = e.lead_id LEFT JOIN landing_blocked k ON k.id = e.blocked_id
          LEFT JOIN landing_pages l ON l.id = e.landing_id
+       WHERE ${w.sql}
        ORDER BY e.at DESC, e.id DESC LIMIT ${i.limit}`,
+      w.args,
     );
     const k = (await ctx.db.query(`SELECT status, count(*)::int AS n FROM meta_events WHERE at > now() - interval '30 days' GROUP BY 1`)).reduce(
       (m: Record<string, number>, r: any) => ({ ...m, [r.status]: num(r.n) }),
@@ -2183,8 +2232,52 @@ export const landingProcs = {
         customer: hide ? (r.o_name ?? r.a_name ?? r.k_name ? PII_HIDDEN : null) : r.o_name ?? r.a_name ?? r.k_name ?? null,
         phone: hide ? (r.a_phone ? PII_HIDDEN : null) : r.a_phone ?? null,
         slug: r.slug ?? null,
+        platform: (r.platform === 'tiktok' ? 'tiktok' : 'meta') as 'meta' | 'tiktok',
       })),
     };
+  }),
+
+  /** Landing pages › Événements: what the server sent, page by page (one card per page), over the last days. */
+  'landing.eventStats': proc([...WHO], z.object(EventScope), async (ctx, i) => {
+    const days = i.days ?? 14;
+    const w = eventWhere(ctx.now(), { ...i, days });
+    const rows = await ctx.db.query(
+      `SELECT coalesce(e.landing_id, 0) AS lid, e.platform, e.event_name, e.status, to_char(e.at + interval '1 hour', 'YYYY-MM-DD') AS d, count(*)::int AS n
+       FROM meta_events e WHERE ${w.sql} GROUP BY 1, 2, 3, 4, 5`,
+      w.args,
+    );
+    const ids = [...new Set(rows.map((r: any) => num(r.lid)).filter(Boolean))];
+    const pages = ids.length
+      ? await ctx.db.query(`SELECT l.id, l.slug, l.title, l.active, p.name AS product FROM landing_pages l LEFT JOIN products p ON p.id = l.product_id WHERE l.id = ANY($1)`, [ids])
+      : [];
+    const dayList = Array.from({ length: days }, (_, k) => new Date(ctx.now() + 3_600_000 - (days - 1 - k) * 86_400_000).toISOString().slice(0, 10));
+    const blank = () => ({ purchase: 0, lead: 0, checkout: 0, fake: 0 });
+    const out = new Map<number, ReturnType<typeof eventCard>>();
+    for (const r of rows as any[]) {
+      const lid = num(r.lid);
+      let c = out.get(lid);
+      if (!c) {
+        const pg = (pages as any[]).find((x) => num(x.id) === lid);
+        c = eventCard(lid, pg, dayList.map((day) => ({ day, ...blank() })));
+        out.set(lid, c);
+      }
+      const n = num(r.n);
+      const kind = EVENT_KIND[r.event_name as string];
+      if (r.platform === 'tiktok') c.tiktok = true;
+      else c.meta = true;
+      if (r.status === 'sent' || r.status === 'simulated') {
+        c.sent += n;
+        if (kind) {
+          c[kind] += n;
+          const s = c.series.find((x) => x.day === r.d);
+          if (s) s[kind] += n;
+        }
+      } else if (r.status === 'skipped') c.skipped += n;
+      else if (r.status === 'failed') c.failed += n;
+      else c.waiting += n;
+    }
+    const cards = [...out.values()].sort((a, b) => b.sent + b.skipped + b.failed - (a.sent + a.skipped + a.failed) || a.id - b.id);
+    return { days, cards };
   }),
 
   // ---------------------------------------------------------------- public side (the server calls these as the system)

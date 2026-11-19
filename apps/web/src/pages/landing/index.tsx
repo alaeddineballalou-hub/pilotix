@@ -19,15 +19,16 @@ import type { PageProps } from '../registry';
 import { Abandoned } from './Abandoned';
 import { Blocked } from './Blocked';
 import { Editor } from './Editor';
+import { Events } from './Events';
 import { Groups } from './Groups';
 import { demoSubmit, useLandingFrame } from './frame';
 import { Protection } from './Protection';
 import { Settings } from './Settings';
 import './landing.css';
 
-const TABS = ['pages', 'groupes', 'protection', 'abandons', 'bloquees', 'reglages'] as const;
+const TABS = ['pages', 'groupes', 'protection', 'evenements', 'abandons', 'bloquees', 'reglages'] as const;
 type Tab = (typeof TABS)[number];
-const ICON: Record<Tab, string> = { pages: 'globe', groupes: 'grid', protection: 'shield', abandons: 'cart', bloquees: 'ban', reglages: 'settings' };
+const ICON: Record<Tab, string> = { pages: 'globe', groupes: 'grid', protection: 'shield', evenements: 'send', abandons: 'cart', bloquees: 'ban', reglages: 'settings' };
 /** what agents (confirmation) see: the orders to handle and the attacks, not the pages */
 const AGENT_TABS: Tab[] = ['protection', 'abandons', 'bloquees'];
 
@@ -57,7 +58,7 @@ export function Landing({ sub, rest }: PageProps) {
     icon: ICON[k],
     href: `#/landing/${k}`,
     count: k === 'bloquees' ? counts.data?.blocked : k === 'abandons' ? counts.data?.abandoned : k === 'pages' ? counts.data?.noPage : undefined,
-    alert: k !== 'reglages' && k !== 'protection' && k !== 'groupes',
+    alert: k !== 'reglages' && k !== 'protection' && k !== 'groupes' && k !== 'evenements',
   }));
   return (
     <div className="pd lp">
@@ -65,6 +66,7 @@ export function Landing({ sub, rest }: PageProps) {
       {tab === 'pages' && <Pages />}
       {tab === 'groupes' && <Groups />}
       {tab === 'protection' && <Protection />}
+      {tab === 'evenements' && <Events page={arg} />}
       {tab === 'abandons' && <Abandoned />}
       {tab === 'bloquees' && <Blocked />}
       {tab === 'reglages' && <Settings />}
