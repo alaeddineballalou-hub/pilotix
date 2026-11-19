@@ -12,11 +12,13 @@
 // checkSettings).
 import {
   CHECK_LEVELS, CHECK_RANGE, CHECK_SETTINGS, CHECK_TEXT_MAX, CHECK_WAIT_MAX, CHECKS, checkDef, checkLevels, checkLinesInOrder, checkRule, checkSetting, checkSettingDef,
+  CIRCLE_SETTING, circleValues,
   type CheckOverride, type CheckRule, type CheckSetting,
 } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, num, numOrNull } from '../db';
 import { bad, Ctx, proc } from '../rpc';
+import { getRaw } from './admin';
 
 export interface CheckLogLine {
   id: number;
@@ -173,9 +175,18 @@ async function saveSetting(ctx: Ctx, i: z.infer<typeof SettingIn>): Promise<{ se
   return { setting: next, changed: 1 };
 }
 
+/**
+ * The two days of the week the shop's tests follow: the day they start and the day of the verdict (0 Sunday … 6
+ * Saturday). They are set in Marketing › Stratégies (the « Life ad circle »); the texts here that name a day show them.
+ */
+export async function checkDays(db: Db): Promise<{ test: number; judge: number }> {
+  const v = circleValues(await getRaw<unknown>(db, CIRCLE_SETTING, null));
+  return { test: Number(v.testDay), judge: Number(v.judgeDay) };
+}
+
 export const pilotChecksProcs = {
   // administrators only: the rules are the owner's
-  'auto.checks': proc([], z.object({}), async (ctx) => ({ rules: await checkRules(ctx.db), settings: await checkSettings(ctx.db), log: await logLines(ctx.db) })),
+  'auto.checks': proc([], z.object({}), async (ctx) => ({ rules: await checkRules(ctx.db), settings: await checkSettings(ctx.db), log: await logLines(ctx.db), days: await checkDays(ctx.db) })),
   'auto.checkSave': proc([], SaveIn, (ctx, i) => save(ctx, i)),
   'auto.checkReset': proc([], z.object({ id: z.string().min(2).max(4) }), (ctx, i) => reset(ctx, i.id)),
   'auto.checkSetting': proc([], SettingIn, (ctx, i) => saveSetting(ctx, i)),

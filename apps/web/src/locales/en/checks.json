@@ -507,7 +507,7 @@
       "name": "Meta won't show it",
       "kpi": "This ad’s spend ÷ its ad set’s spend, over 3 days",
       "tail": "while the ad set spends almost all its budget",
-      "do": "In SCALE: one retest only, in the next Tuesday test. In TEST: it is simply “to retest”. No budget or bid change."
+      "do": "In SCALE: one retest only, in the next {{testDay}} test. In TEST: it is simply “to retest”. No budget or bid change."
     },
     "L11": {
       "name": "The page does not convert",
@@ -876,7 +876,7 @@
       },
       "testAds": {
         "name": "Ads at most in a test",
-        "help": "Per product, every Tuesday."
+        "help": "Per product, every {{testDay}}."
       },
       "winOrders": {
         "name": "Confirmed orders to win a test",
@@ -924,7 +924,7 @@
       "When data is missing (no ad tag, calls not logged), Pilotix uses what is still exact and raises no budget.",
       "Two KPIs that talk about the same thing never both act: one decides, and the most careful wins.",
       "Stock always wins: at 0 pieces the ads are switched off. A product with no margin is paused.",
-      "TEST: launch on Tuesday, nothing is touched, verdict the next Wednesday: winner, not a winner, or one retest. Winners enter SCALE once a week.",
+      "TEST: launch on {{testDay}}, nothing is touched, verdict on the first {{judgeDay}} after the test ends: winner, not a winner, or one retest. Winners enter SCALE once a week.",
       "When no rule decides, Pilotix does nothing on that ad, keeps the stops, and asks you."
     ],
     "noWait": "An ad can be judged from its first hour: you set 0 days of waiting."

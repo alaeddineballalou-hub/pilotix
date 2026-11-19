@@ -2,11 +2,12 @@
 // competitor's), and Pilotix recommends the video formats that fit it best, from the control room's strategies library
 // (platform/credits.ts: each format says the types and the funnel stages it fits). « Envoyer à l'Espace créateur »
 // opens Espace créateur with the product, the stage and the formats chosen (in the browser: nothing is kept here).
-import { CIRCLE_STEPS, circleBad, circleField, circleValues } from '@pilotix/shared';
+import { CIRCLE_FROM_SETTINGS, CIRCLE_SETTING, CIRCLE_STEPS, CircleChecks, CircleFromSetting, circleBad, circleField, circleTestAdsBad, circleValues } from '@pilotix/shared';
 import { z } from 'zod';
-import { num, numOrNull } from '../db';
+import { Db, num, numOrNull } from '../db';
 import { bad, Ctx, proc } from '../rpc';
 import { getRaw, setRaw } from './admin';
+import { checkRules, checkSettings } from './pilotchecks';
 import { CreditStrategy, creditsConfig, DEFAULT_CREDITS, FUNNEL_STAGES, FunnelStage, PRODUCT_TYPES, ProductType } from '../platform/credits';
 
 export interface StratFormat {
@@ -45,10 +46,32 @@ async function formats(ctx: Ctx): Promise<StratFormat[]> {
 const Type = z.union([z.literal(1), z.literal(2), z.literal(3)]);
 
 /** The shop's « Life ad circle » settings are one settings row; a field never saved keeps its default. */
-const CIRCLE_KEY = 'ad_circle';
+const CIRCLE_KEY = CIRCLE_SETTING;
 async function circleSaved(ctx: Ctx): Promise<Record<string, unknown>> {
   const v = await getRaw<unknown>(ctx.db, CIRCLE_KEY, null);
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+}
+
+/**
+ * The numbers the circle's rules take from Pilot Checks, as the shop has them now. They are set there only (by the
+ * admins); the circle shows them to everyone who plans the ads, so the two pages always say the same.
+ */
+export async function circleChecks(db: Db): Promise<CircleChecks> {
+  const settings = new Map((await checkSettings(db)).map((x) => [x.key, x.v]));
+  const kpi = new Map((await checkRules(db)).map((r) => [r.id, r]));
+  const set = Object.fromEntries(CIRCLE_FROM_SETTINGS.map((k) => [k, settings.get(k) ?? null])) as Record<CircleFromSetting, number | null>;
+  const cost = kpi.get('D1');
+  return {
+    set,
+    good: cost?.g ?? null,
+    bad: cost?.v ?? null,
+    stop: cost?.s ?? null,
+    brakeAt: kpi.get('D7')?.v ?? null,
+    stockStop: kpi.get('O20')?.s ?? null,
+    freezeEdits: kpi.get('M5')?.v ?? null,
+    ideasMin: kpi.get('M3')?.v ?? null,
+    budgetWait: cost?.wait ?? null,
+  };
 }
 
 export const strategiesProcs = {
@@ -83,9 +106,12 @@ export const strategiesProcs = {
     return { ok: true };
   }),
 
-  /** « Life ad circle »: the five steps and the shop's value for every setting (its own, else the default). */
+  /**
+   * « Life ad circle »: the five steps, the shop's value for every setting of the circle (its own, else the default),
+   * and the numbers its rules take from Pilot Checks.
+   */
   'strat.circle': proc(['vendeur', 'marketer'], z.object({}), async (ctx) => {
-    return { steps: [...CIRCLE_STEPS], values: circleValues(await circleSaved(ctx)) };
+    return { steps: [...CIRCLE_STEPS], values: circleValues(await circleSaved(ctx)), checks: await circleChecks(ctx.db) };
   }),
 
   /** Changes one setting of the circle. An empty value is kept only where the setting may stay « not chosen ». */
@@ -99,7 +125,15 @@ export const strategiesProcs = {
       if (why === 'empty') throw bad('Ce réglage ne peut pas rester vide');
       if (why === 'range') throw bad(f.kind === 'day' ? 'Jour inconnu' : `Valeur entre ${f.min} et ${f.max}`);
       if (why) throw bad('Valeur incorrecte');
-      const next = { ...(await circleSaved(ctx)), [f.key]: i.value };
+      const saved = await circleSaved(ctx);
+      const next = { ...saved, [f.key]: i.value };
+      // a test holds one ad at least, and never more than Pilot Checks allows in a test ad set (videos + images)
+      if (f.key === 'testVideos' || f.key === 'testImages') {
+        const cap = (await circleChecks(ctx.db)).set.testAds;
+        const ads = circleTestAdsBad(circleValues(next), cap, circleValues(saved));
+        if (ads === 'none') throw bad('Un test a au moins une pub : une vidéo ou une image');
+        if (ads === 'over') throw bad(`Un test a ${cap} pubs au plus (vidéos + images) : ce chiffre se règle dans Pilot Checks`);
+      }
       await setRaw(ctx.db, CIRCLE_KEY, next, ctx.session.profile.id);
       return { values: circleValues(next) };
     },

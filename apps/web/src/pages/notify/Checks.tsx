@@ -69,6 +69,8 @@ const firstKind = (d: CheckDef): 'bad' | 'stop' | 'when' => (d.op === 'fixed' ? 
 const settingText = (t: T, d: CheckSettingDef, v: number) => t(`checks.set.val.${d.unit}`, { count: v, v: num(v) });
 const settingVars = (t: T, settings: CheckSetting[]): Vars =>
   Object.fromEntries(settings.map((x) => { const def = checkSettingDef(x.key); return [x.key, def && x.v !== null ? settingText(t, def, x.v) : '']; }));
+/** the two days of the shop's tests (set in Marketing › Stratégies, the « Life ad circle »), as a sentence names them: {{testDay}}, {{judgeDay}} */
+const dayVars = (t: T, days: S['days']): Vars => ({ testDay: t(`strat.circle.dayIn.${days.test}`), judgeDay: t(`strat.circle.dayIn.${days.judge}`) });
 
 export function Checks() {
   const q = useRpc('auto.checks', {});
@@ -88,7 +90,7 @@ function Board({ d }: { d: S }) {
   const rules = useMemo(() => new Map(d.rules.map((r) => [r.id, r])), [d.rules]);
   const ruleOf = (c: CheckDef) => rules.get(c.id)!;
   const lang = i18n.language;
-  const vars = useMemo(() => settingVars(t, d.settings), [d.settings, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  const vars = useMemo(() => ({ ...settingVars(t, d.settings), ...dayVars(t, d.days) }), [d.settings, d.days, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   // what a search looks in: the KPI's name, its number, what to do, the other part (in the reader's language)
   const words = useMemo(
     () => new Map(CHECKS.map((c) => { const r = rules.get(c.id); return [c.id, fold([c.id, t(`checks.c.${c.id}.name`), t(`checks.c.${c.id}.kpi`, vars), r?.action ?? t(`checks.c.${c.id}.do`, vars), r?.other ?? (c.also ? t(`checks.c.${c.id}.also`, vars) : '')].join(' '))] as const; })),
@@ -129,8 +131,8 @@ function Board({ d }: { d: S }) {
         ))}
       </div>
 
-      {view === 'settings' && <Settings settings={d.settings} />}
-      {view === 'how' && <How days={d.settings.find((x) => x.key === 'judgeDays')?.v ?? 2} />}
+      {view === 'settings' && <Settings settings={d.settings} vars={vars} />}
+      {view === 'how' && <How days={d.settings.find((x) => x.key === 'judgeDays')?.v ?? 2} vars={vars} />}
       {view === 'checks' && (
         <>
       {/* the helpers: what each one does, how many cases it watches; a tap keeps only its cases */}
@@ -614,7 +616,7 @@ function LogLine({ l, withCase }: { l: Line; withCase?: boolean }) {
 }
 
 /** « Réglages généraux »: the numbers that belong to no single check, group by group; each field saves alone. */
-function Settings({ settings }: { settings: CheckSetting[] }) {
+function Settings({ settings, vars }: { settings: CheckSetting[]; vars: Vars }) {
   const { t } = useTranslation();
   const mine = useMemo(() => new Map(settings.map((x) => [x.key, x])), [settings]);
   return (
@@ -627,7 +629,7 @@ function Settings({ settings }: { settings: CheckSetting[] }) {
           </div>
           <ul className="pc-list">
             {CHECK_SETTINGS.filter((x) => x.group === g).map((def) => (
-              <SettingRow key={def.key} def={def} cur={mine.get(def.key) ?? { key: def.key, v: def.def, changed: false }} />
+              <SettingRow key={def.key} def={def} cur={mine.get(def.key) ?? { key: def.key, v: def.def, changed: false }} vars={vars} />
             ))}
           </ul>
         </section>
@@ -636,7 +638,7 @@ function Settings({ settings }: { settings: CheckSetting[] }) {
   );
 }
 
-function SettingRow({ def, cur }: { def: CheckSettingDef; cur: CheckSetting }) {
+function SettingRow({ def, cur, vars }: { def: CheckSettingDef; cur: CheckSetting; vars: Vars }) {
   const { t } = useTranslation();
   const uid = useId();
   const [v, setV] = useState(cur.v === null ? '' : String(cur.v));
@@ -664,7 +666,7 @@ function SettingRow({ def, cur }: { def: CheckSettingDef; cur: CheckSetting }) {
         <h3>
           <label htmlFor={`${uid}-v`}>{name}</label>
         </h3>
-        <p className="pc-kpi">{t(`checks.set.k.${def.key}.help`)}</p>
+        <p className="pc-kpi">{t(`checks.set.k.${def.key}.help`, vars)}</p>
         {(cur.changed || cur.v === null) && (
           <p className="pc-tags">
             {cur.changed ? (
@@ -723,11 +725,11 @@ function SettingRow({ def, cur }: { def: CheckSettingDef; cur: CheckSetting }) {
 }
 
 /** « Comment Pilotix décide »: the 10 ideas behind the list, in simple words. */
-function How({ days }: { days: number }) {
+function How({ days, vars }: { days: number; vars: Vars }) {
   const { t } = useTranslation();
   const def = checkSettingDef('judgeDays')!;
   // the third idea follows the shop's own setting (0 day: an ad can be judged from its first hour)
-  const line = (i: number) => (i === 2 ? (days > 0 ? t('checks.how.l.2', { days: settingText(t, def, days) }) : t('checks.how.noWait')) : t(`checks.how.l.${i}`));
+  const line = (i: number) => (i === 2 ? (days > 0 ? t('checks.how.l.2', { days: settingText(t, def, days) }) : t('checks.how.noWait')) : t(`checks.how.l.${i}`, vars));
   return (
     <section className="card pc-how">
       <div className="card-head">

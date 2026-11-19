@@ -507,7 +507,7 @@
       "name": "Meta ne la montre pas",
       "kpi": "Dépense de cette pub ÷ dépense de son ensemble de pubs, sur 3 jours",
       "tail": "alors que l’ensemble dépense presque tout son budget",
-      "do": "En SCALE : un seul re-test au prochain test du mardi. En TEST : elle est simplement « à re-tester ». Pas de changement de budget ni d’enchère."
+      "do": "En SCALE : un seul re-test au prochain test du {{testDay}}. En TEST : elle est simplement « à re-tester ». Pas de changement de budget ni d’enchère."
     },
     "L11": {
       "name": "La page ne convertit pas",
@@ -876,7 +876,7 @@
       },
       "testAds": {
         "name": "Pubs au maximum dans un test",
-        "help": "Par produit, chaque mardi."
+        "help": "Par produit, chaque {{testDay}}."
       },
       "winOrders": {
         "name": "Commandes confirmées pour gagner un test",
@@ -924,7 +924,7 @@
       "S’il manque des données (pas d’étiquette de pub, appels non notés), Pilotix utilise ce qui reste exact et ne monte aucun budget.",
       "Deux KPI qui parlent de la même chose n’agissent jamais tous les deux : un seul décide, et le plus prudent gagne.",
       "Le stock gagne toujours : à 0 pièce, les pubs sont coupées. Un produit sans marge est mis en pause.",
-      "TEST : lancement le mardi, on ne touche à rien, verdict le mercredi suivant : gagnant, pas gagnant, ou un re-test. Les gagnants entrent en SCALE une fois par semaine.",
+      "TEST : lancement le {{testDay}}, on ne touche à rien, verdict le premier {{judgeDay}} après la fin du test : gagnant, pas gagnant, ou un re-test. Les gagnants entrent en SCALE une fois par semaine.",
       "Quand aucune règle ne décide, Pilotix ne fait rien sur cette pub, garde les arrêts, et vous demande."
     ],
     "noWait": "Une pub peut être jugée dès sa première heure : vous avez réglé 0 jour d’attente."
