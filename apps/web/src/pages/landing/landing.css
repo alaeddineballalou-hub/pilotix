@@ -511,10 +511,10 @@
 .lp-evs-b.meta { background: color-mix(in srgb, #2F6FD0 14%, var(--surface)); color: color-mix(in srgb, #2F6FD0 70%, var(--ink)); }
 .lp-evs-spark { display: block; width: 100%; height: 44px; }
 .lp-evs-spark polyline, .lp-evs-spark line { fill: none; stroke: var(--ink); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-.lp-evs-nums { display: flex; gap: 18px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.lp-evs-nums { display: flex; gap: 6px 12px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
 .lp-evs-nums > div { display: flex; flex-direction: column; }
-.lp-evs-nums b { font-size: 22px; font-weight: 800; line-height: 1.15; }
-.lp-evs-nums small { font-size: 12px; color: var(--muted); }
+.lp-evs-nums b { font-size: 20px; font-weight: 800; line-height: 1.15; }
+.lp-evs-nums small { font-size: 11.5px; color: var(--muted); }
 .lp-evs-nums .lp-evs-ok { margin-inline-start: auto; text-align: end; }
 .lp-evs-nums .lp-evs-ok b { color: var(--ok); }
 .lp-evs-warn { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; color: var(--coral); }
@@ -531,3 +531,16 @@
 .lp-evs-chart .k-checkout, .lp-evs-legend .k-checkout { fill: #F7A823; background: #F7A823; }
 .lp-evs-chart .k-fake, .lp-evs-legend .k-fake { fill: #E9A3A0; background: #E9A3A0; }
 .lp-evr .lp-evs-b { height: 18px; }
+.lp-evs-chart .lp-evs-line { fill: none; stroke: #2F9E8F; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.lp-evs-chart .lp-evs-dot { fill: #2F9E8F; }
+.lp-evs-legend .k-visits { background: #2F9E8F; }
+.lp-evs-qsets { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 14px 28px; }
+.lp-evs-qset { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.lp-evs-qrows { display: flex; flex-direction: column; gap: 6px; }
+.lp-evs-qrow { display: grid; grid-template-columns: minmax(96px, 150px) minmax(40px, 1fr) 62px; gap: 2px 10px; align-items: center; font-size: 13px; }
+.lp-evs-qrow b { text-align: end; font-variant-numeric: tabular-nums; }
+.lp-evs-qrow small { grid-column: 1 / -1; font-size: 12px; }
+.lp-evs-qrow small:empty { display: none; }
+.lp-evs-qname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp-evs-qbar { height: 8px; border-radius: 99px; background: var(--sky-soft); overflow: hidden; }
+.lp-evs-qbar i { display: block; height: 100%; border-radius: 99px; background: var(--ink); }

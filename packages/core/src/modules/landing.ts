@@ -42,6 +42,7 @@ import {
   ProductPhotoSet,
 } from '@pilotix/shared';
 import { z } from 'zod';
+import { getRaw, setRaw } from './admin';
 import { checkPromo, promoSettings } from './promo';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, notFound, proc, publicApi } from '../rpc';
@@ -50,7 +51,7 @@ import { BOT_UA, FraudLevel, FraudReason, scoreOrder, verdictOf } from './fraud'
 import { lookAlikeOf, trustOf } from './trust';
 import { groupHtml, groupOf } from './landinggroups';
 import { runAttackTest } from './attacktest';
-import { checkPixels, PixelList, pixelsJson, pixelsOf, pixelTestCode, pixelToken, readPixels } from './pixels';
+import { checkPixels, listPixels, PixelList, pixelsJson, pixelsOf, pixelTestCode, pixelToken, readPixels } from './pixels';
 import { campaignSettings, giveConsent } from './campaigns';
 import { ABANDONED, abandonCutoff, addressTaken, APP_WORD, BLOCKED_FAKE_AFTER_MS, FAKE_EVENTS, freeLandingSlug, keepFormerAddress, landingCounts, landingSettings, LandingSettings, landingStore, NOT_A_LEAD, pageRowAt, queueLead, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
 import { sendInPreview } from './notify';
@@ -91,7 +92,23 @@ function eventWhere(now: number, i: { days?: number; platform: 'all' | 'meta' | 
   return { sql: sql.join(' AND '), args };
 }
 const EVENT_KIND: Record<string, 'purchase' | 'lead' | 'checkout' | 'fake'> = { Purchase: 'purchase', Lead: 'lead', InitiateCheckout: 'checkout', FakeOrder: 'fake', Competitor: 'fake' };
-const eventCard = (id: number, pg: any, series: { day: string; purchase: number; lead: number; checkout: number; fake: number }[]) => ({
+const QUALITY_KEY = 'landing_event_quality';
+const QUALITY_TTL_MS = 6 * 3_600_000;
+export interface QualitySet {
+  pixelId: string;
+  name: string;
+  pages: number;
+  error: string | null;
+  events: { name: string; score: number | null; coverage: number | null; keys: { id: string; pct: number }[] }[];
+}
+/** the demo's example (no Meta there) */
+const QUALITY_DEMO: QualitySet['events'] = [
+  { name: 'Purchase', score: 6.4, coverage: 92, keys: [{ id: 'phone', pct: 100 }, { id: 'ip_address', pct: 98 }, { id: 'fbp', pct: 81 }] },
+  { name: 'Lead', score: 6.4, coverage: 90, keys: [{ id: 'phone', pct: 100 }, { id: 'ip_address', pct: 99 }, { id: 'fbp', pct: 83 }] },
+  { name: 'InitiateCheckout', score: 6.1, coverage: 74, keys: [{ id: 'phone', pct: 88 }, { id: 'ip_address', pct: 99 }, { id: 'fbp', pct: 84 }] },
+  { name: 'ViewContent', score: 5.2, coverage: null, keys: [{ id: 'ip_address', pct: 100 }, { id: 'fbp', pct: 79 }] },
+];
+const eventCard = (id: number, pg: any, series: { day: string; visits: number; purchase: number; lead: number; checkout: number; fake: number }[]) => ({
   id,
   slug: (pg?.slug as string | undefined) ?? null,
   title: (pg?.title as string | undefined) || (pg?.product as string | undefined) || null,
@@ -99,6 +116,7 @@ const eventCard = (id: number, pg: any, series: { day: string; purchase: number;
   active: pg ? !!pg.active : null,
   meta: false,
   tiktok: false,
+  visits: 0,
   purchase: 0,
   lead: 0,
   checkout: 0,
@@ -2246,21 +2264,37 @@ export const landingProcs = {
        FROM meta_events e WHERE ${w.sql} GROUP BY 1, 2, 3, 4, 5`,
       w.args,
     );
-    const ids = [...new Set(rows.map((r: any) => num(r.lid)).filter(Boolean))];
+    // the pages' own visitors (one per device and day; robots are not counted): the top of the funnel, whatever the platform
+    const dayList = Array.from({ length: days }, (_, k) => new Date(ctx.now() + 3_600_000 - (days - 1 - k) * 86_400_000).toISOString().slice(0, 10));
+    const visits = i.landingId === 0 ? [] : await ctx.db.query(
+      `SELECT landing_id AS lid, to_char(day, 'YYYY-MM-DD') AS d, count(*)::int AS n FROM landing_visits WHERE day >= $1 ${i.landingId ? 'AND landing_id = $2' : ''} GROUP BY 1, 2`,
+      i.landingId ? [dayList[0], i.landingId] : [dayList[0]],
+    );
+    const ids = [...new Set([...rows, ...visits].map((r: any) => num(r.lid)).filter(Boolean))];
     const pages = ids.length
       ? await ctx.db.query(`SELECT l.id, l.slug, l.title, l.active, p.name AS product FROM landing_pages l LEFT JOIN products p ON p.id = l.product_id WHERE l.id = ANY($1)`, [ids])
       : [];
-    const dayList = Array.from({ length: days }, (_, k) => new Date(ctx.now() + 3_600_000 - (days - 1 - k) * 86_400_000).toISOString().slice(0, 10));
-    const blank = () => ({ purchase: 0, lead: 0, checkout: 0, fake: 0 });
+    const blank = () => ({ visits: 0, purchase: 0, lead: 0, checkout: 0, fake: 0 });
     const out = new Map<number, ReturnType<typeof eventCard>>();
-    for (const r of rows as any[]) {
-      const lid = num(r.lid);
+    const cardOf = (lid: number) => {
       let c = out.get(lid);
       if (!c) {
         const pg = (pages as any[]).find((x) => num(x.id) === lid);
         c = eventCard(lid, pg, dayList.map((day) => ({ day, ...blank() })));
         out.set(lid, c);
       }
+      return c;
+    };
+    for (const v of visits as any[]) {
+      // a removed page's visits are not shown (its events are: they were sent)
+      if (!(pages as any[]).some((x) => num(x.id) === num(v.lid))) continue;
+      const c = cardOf(num(v.lid));
+      c.visits += num(v.n);
+      const s = c.series.find((x) => x.day === v.d);
+      if (s) s.visits += num(v.n);
+    }
+    for (const r of rows as any[]) {
+      const c = cardOf(num(r.lid));
       const n = num(r.n);
       const kind = EVENT_KIND[r.event_name as string];
       if (r.platform === 'tiktok') c.tiktok = true;
@@ -2276,8 +2310,36 @@ export const landingProcs = {
       else if (r.status === 'failed') c.failed += n;
       else c.waiting += n;
     }
-    const cards = [...out.values()].sort((a, b) => b.sent + b.skipped + b.failed - (a.sent + a.skipped + a.failed) || a.id - b.id);
+    const cards = [...out.values()].sort((a, b) => b.sent + b.skipped + b.failed - (a.sent + a.skipped + a.failed) || b.visits - a.visits || a.id - b.id);
     return { days, cards };
+  }),
+
+  /**
+   * Landing pages › Événements: what Meta says of each Meta pixel (dataset): the match quality of its events (0–10)
+   * and how many browser events the server also sent. Asked from Meta at most once every 6 hours (kept in the
+   * settings), or at once with `refresh`. A pixel Meta refuses says why. In the demo: an example, said as such.
+   */
+  'landing.eventQuality': proc([...WHO], z.object({ refresh: z.boolean().default(false) }), async (ctx, i) => {
+    const pixels = (await listPixels(ctx.db)).filter((p) => p.platform === 'meta');
+    const kept = await getRaw<{ at: number; sets: QualitySet[] } | null>(ctx.db, QUALITY_KEY, null);
+    const same = kept && kept.sets.length === pixels.length && kept.sets.every((x) => pixels.some((p) => p.pixelId === x.pixelId));
+    if (kept && same && !i.refresh && ctx.now() - kept.at < QUALITY_TTL_MS) return { at: new Date(kept.at).toISOString(), demo: !ctx.server, sets: kept.sets };
+    const sets: QualitySet[] = [];
+    for (const p of pixels) {
+      const base = { pixelId: p.pixelId, name: p.name, pages: p.pages };
+      if (!ctx.server) {
+        sets.push({ ...base, error: null, events: QUALITY_DEMO });
+        continue;
+      }
+      try {
+        const r = (await ctx.server.meta('quality', { pixelId: p.pixelId, token: await pixelToken(ctx.db, 'meta', p.pixelId) }, ctx)) as { events: QualitySet['events'] };
+        sets.push({ ...base, error: null, events: r.events });
+      } catch (e) {
+        sets.push({ ...base, error: e instanceof Error ? e.message.slice(0, 300) : 'Meta n’a pas répondu', events: [] });
+      }
+    }
+    await setRaw(ctx.db, QUALITY_KEY, { at: ctx.now(), sets });
+    return { at: new Date(ctx.now()).toISOString(), demo: !ctx.server, sets };
   }),
 
   // ---------------------------------------------------------------- public side (the server calls these as the system)

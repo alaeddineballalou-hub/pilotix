@@ -732,7 +732,7 @@
     "all": "All",
     "empty": "No event in this period.",
     "emptyOne": "No event for this page in this period.",
-    "note": "One card per page. Tap a card to see its days and its last events. Page visits are not counted here: the customer’s browser sends them by itself.",
+    "note": "One card per page. Tap a card to see its days and its last events. Visitors are counted by Pilotix (one per device and day): close to Meta’s number, not the same.",
     "noPage": "No page (sales by message)",
     "gone": "Deleted page",
     "sentPct": "sent",
@@ -741,7 +741,8 @@
       "purchase": "Purchases",
       "lead": "Forms",
       "checkout": "Started",
-      "fake": "Fake"
+      "fake": "Fake",
+      "visits": "Visitors"
     },
     "sparkLabel_one": "{{count}} event sent in the period",
     "sparkLabel_other": "{{count}} events sent in the period",
@@ -749,6 +750,16 @@
     "fakeWarn_one": "{{count}} fake order: keep an eye on it",
     "fakeWarn_other": "{{count}} fake orders: keep an eye on it",
     "failedWarn_one": "{{count}} failed send",
-    "failedWarn_other": "{{count}} failed sends"
+    "failedWarn_other": "{{count}} failed sends",
+    "visitsChart": "Visitors per day",
+    "q": {
+      "title": "Match quality (Meta)",
+      "help": "The score Meta gives each event of your pixels, out of 10: the higher, the better Meta recognises your customers. Read from Meta on {{at}}.",
+      "demo": "Example (demo): in your shop these scores come from Meta.",
+      "refresh": "Read again from Meta",
+      "refreshed": "Scores read again from Meta",
+      "none": "Meta has no score for this pixel yet.",
+      "coverage": "{{pct}} % also sent by the server"
+    }
   }
 }

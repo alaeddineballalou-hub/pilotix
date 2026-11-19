@@ -1,6 +1,6 @@
 // Landing pages › Événements: what the server sent to Meta and TikTok, one card per page (its sales, forms, started
 // orders, fake orders, and a small line of the last days). A card opens the page's own view: its days by type and
-// its last events, with why one was skipped or failed.
+// its last events, with why one was skipped or failed. Above the cards: what Meta says of each pixel (match quality).
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
@@ -61,6 +61,7 @@ export function Events({ page }: { page?: string }) {
         <Empty>{t('landing.evs.empty')}</Empty>
       ) : (
         <>
+          {platform !== 'tiktok' && <Quality />}
           <div className="lp-evs-grid">
             {q.data.cards.map((c) => (
               <PageCard key={c.id} c={c} />
@@ -89,7 +90,7 @@ function Numbers({ c }: { c: Card }) {
   const all = c.sent + c.skipped + c.failed;
   return (
     <div className="lp-evs-nums">
-      {(['purchase', 'lead', 'checkout'] as const).map((k) => (
+      {(['visits', 'checkout', 'lead', 'purchase'] as const).map((k) => (
         <div key={k}>
           <b className="ltr">{n(c[k])}</b>
           <small>{t(`landing.evs.k.${k}`)}</small>
@@ -181,6 +182,7 @@ function One({ card, id, days, platform }: { card: Card | null; id: number; days
               </span>
             )}
           </div>
+          {days > 1 && card.visits > 0 && <Visits series={card.series} />}
           {days > 1 && <Bars series={card.series} />}
         </section>
       ) : (
@@ -276,5 +278,94 @@ function Bars({ series }: { series: Card['series'] }) {
         </svg>
       </div>
     </div>
+  );
+}
+
+/** the page's visitors, day by day (one per device and day) */
+function Visits({ series }: { series: Card['series'] }) {
+  const { t } = useTranslation();
+  const [ref, box] = useBox();
+  const W = Math.max(280, box.w);
+  const H = 150;
+  const L = 34;
+  const R = 6;
+  const T = 8;
+  const B = 24;
+  const iw = W - L - R;
+  const ticks = ticksFor(Math.max(...series.map((s) => s.visits)));
+  const top = ticks[ticks.length - 1];
+  const y = (v: number) => T + (H - T - B) * (1 - v / top);
+  const x = (i: number) => L + (iw / series.length) * (i + 0.5);
+  return (
+    <div className="lp-evs-chart">
+      <div className="lp-evs-legend">
+        <span>
+          <i className="k-visits" /> {t('landing.evs.visitsChart')}
+        </span>
+      </div>
+      <div ref={ref} dir="ltr">
+        <svg className="pp-chart" width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t('landing.evs.visitsChart')}>
+          <Axis ticks={ticks} y={y} L={L} R={R} W={W} />
+          <polyline className="lp-evs-line" points={series.map((s, i) => `${x(i).toFixed(1)},${y(s.visits).toFixed(1)}`).join(' ')} />
+          {series.map((s, i) => (
+            <circle key={s.day} className="lp-evs-dot" cx={x(i)} cy={y(s.visits)} r={3} />
+          ))}
+          <DateLabels days={series} x={x} iw={iw} L={L} R={R} W={W} Hy={H - 6} />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+/** what Meta says of each Meta pixel: the match quality of its events (0–10), and the share the server also sent */
+function Quality() {
+  const { t } = useTranslation();
+  const q = useRpc('landing.eventQuality', {}, { staleTime: 10 * 60_000 });
+  const refresh = useAction('landing.eventQuality', { success: () => t('landing.evs.q.refreshed') });
+  if (q.isLoading) return <Loading />;
+  if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
+  if (!q.data?.sets.length) return null;
+  return (
+    <section className="card pd-card lp-evs-q">
+      <div className="pd-tools">
+        <h2 className="lp-h2">
+          <Icon name="chart" /> {t('landing.evs.q.title')}
+        </h2>
+        <button type="button" className="btn small" disabled={refresh.isPending} onClick={() => refresh.mutate({ refresh: true })}>
+          <Icon name="refresh" /> {t('landing.evs.q.refresh')}
+        </button>
+      </div>
+      <p className="pd-note">
+        {q.data.demo ? t('landing.evs.q.demo') : t('landing.evs.q.help', { at: dateTime(q.data.at) })}
+      </p>
+      <div className="lp-evs-qsets">
+        {q.data.sets.map((s) => (
+          <div key={s.pixelId} className="lp-evs-qset">
+            <div className="pd-name">
+              <b dir="auto">{s.name}</b>
+              <small className="ltr">{s.pixelId}</small>
+            </div>
+            {s.error ? (
+              <p className="lp-everr">{s.error}</p>
+            ) : !s.events.length ? (
+              <p className="muted small">{t('landing.evs.q.none')}</p>
+            ) : (
+              <div className="lp-evs-qrows">
+                {s.events.map((e) => (
+                  <div key={e.name} className="lp-evs-qrow">
+                    <span className="lp-evs-qname ltr">{e.name}</span>
+                    <span className="lp-evs-qbar" aria-hidden="true">
+                      <i style={{ width: `${Math.max(0, Math.min(100, (e.score ?? 0) * 10))}%` }} />
+                    </span>
+                    <b className="ltr">{e.score === null ? '—' : `${e.score.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}/10`}</b>
+                    <small className="muted">{e.coverage === null ? '' : t('landing.evs.q.coverage', { pct: Math.round(e.coverage) })}</small>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

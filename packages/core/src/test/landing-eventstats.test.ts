@@ -71,7 +71,7 @@ test('day by day, in Algiers time: 14 days ending today; an older event is outsi
 
 test('one platform: TikTok alone, Meta alone (a conversation’s sale goes to Meta)', async () => {
   const tt = await call('landing.eventStats', marketer, { days: 14, platform: 'tiktok' });
-  assert.deepEqual(tt.cards.map((c: any) => [c.id, c.purchase, c.failed, c.meta]), [[pageA, 1, 1, false]]);
+  assert.deepEqual(tt.cards.filter((c: any) => c.sent + c.failed).map((c: any) => [c.id, c.purchase, c.failed, c.meta]), [[pageA, 1, 1, false]]);
   const meta = await call('landing.eventStats', marketer, { days: 14, platform: 'meta' });
   assert.equal(meta.cards.find((c: any) => c.id === pageA)!.purchase, 1);
   assert.ok(meta.cards.some((c: any) => c.id === 0));
@@ -85,6 +85,44 @@ test('the list of one page: its events only, with their platform; the old list (
   assert.equal((await call('landing.events', marketer, { landingId: pageA, days: 14, platform: 'tiktok' })).rows.length, 2);
   assert.equal((await call('landing.events', marketer, { landingId: 0 })).rows.length, 1);
   assert.equal((await call('landing.events', marketer, {})).rows.length, 11);
+});
+
+test('visitors: counted per page and day, whatever the platform; a page with visitors and no event has its card', async () => {
+  const p = await db.query(`SELECT id FROM products ORDER BY id OFFSET 2 LIMIT 1`);
+  const quiet = (await call('landing.save', marketer, { productId: Number(p[0].id), slug: 'stats-quiet', title: 'Quiet', price: 1000 })).id;
+  for (const [page, day, who] of [[pageA, '2026-11-19', 'v1'], [pageA, '2026-11-19', 'v2'], [pageA, '2026-11-18', 'v1'], [pageA, '2026-10-01', 'v9'], [quiet, '2026-11-19', 'v1']] as const)
+    await db.query(`INSERT INTO landing_visits (landing_id, day, visitor) VALUES ($1, $2, $3)`, [page, day, who]);
+  const r = await call('landing.eventStats', marketer, { days: 14 });
+  const a = r.cards.find((c: any) => c.id === pageA)!;
+  assert.deepEqual([a.visits, a.series[13].visits, a.series[12].visits], [3, 2, 1], 'the visit of October is outside the period');
+  const q = r.cards.find((c: any) => c.id === quiet)!;
+  assert.deepEqual([q.visits, q.sent, q.slug], [1, 0, 'stats-quiet']);
+  assert.equal((await call('landing.eventStats', marketer, { days: 14, platform: 'tiktok' })).cards.find((c: any) => c.id === pageA)!.visits, 3);
+});
+
+test('match quality: one block per Meta pixel; the demo gives an example and says so; asked again only after 6 hours or on demand', async () => {
+  await call('landing.pixelSave', marketer, { platform: 'meta', name: 'Pixel test', pixelId: '998877665544', token: '', isDefault: false } as any).catch(() => null);
+  const demo = await call('landing.eventQuality', marketer, {});
+  assert.equal(demo.demo, true);
+  assert.ok(demo.sets.length >= 1 && demo.sets.every((x: any) => x.error === null && x.events.some((e: any) => e.name === 'Purchase' && e.score > 0)));
+  // on a server: Meta is asked once, then the kept answer is given; a refusal names its reason
+  let asked = 0;
+  const server = { meta: async (action: string, args: any) => {
+    assert.equal(action, 'quality');
+    asked++;
+    if (asked === 1 && demo.sets.length > 1) throw new Error('Meta : (#100) no permission');
+    return { events: [{ name: 'Purchase', score: 6.4, coverage: 88.5, keys: [{ id: 'phone', pct: 100 }] }] };
+  } } as unknown as Ctx['server'];
+  const live = { ...marketer, server };
+  const first = await call('landing.eventQuality', live, { refresh: true });
+  assert.equal(first.demo, false);
+  assert.equal(asked, demo.sets.length);
+  assert.ok(first.sets.some((x: any) => x.events[0]?.score === 6.4 && x.events[0].coverage === 88.5));
+  if (demo.sets.length > 1) assert.match(first.sets[0].error, /no permission/);
+  await call('landing.eventQuality', live, {});
+  assert.equal(asked, demo.sets.length, 'kept: Meta is not asked again');
+  await call('landing.eventQuality', { ...live, now: () => NOW + 7 * H }, {});
+  assert.equal(asked, demo.sets.length * 2, 'after 6 hours it is asked again');
 });
 
 test('an agent cannot read the events', async () => {

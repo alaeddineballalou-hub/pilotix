@@ -448,11 +448,52 @@ async function runPartners(action: string, args: any, token: string, acts: strin
  *  - 'catalog…'  → Marketing › Catalogue (runCatalog above)
  *  - 'audience', 'lookalike', 'eventAudience' → Publicité › Audiences (the shop's customers hashed; Meta's own lists)
  */
+/** what Meta says of a dataset's events (Dataset Quality API): the match quality score (0–10) and, when given, the share of browser events the server also sent */
+export interface DatasetQuality {
+  events: { name: string; score: number | null; coverage: number | null; keys: { id: string; pct: number }[] }[];
+}
+/**
+ * Read with the pixel's own Conversions API key, else with the linked Facebook account's key (whichever Meta accepts).
+ * Web events only (Meta's limit). The detailed fields are asked first; if Meta refuses them, the score alone.
+ */
+async function datasetQuality(a: { pixelId: string; token: string }, ctx: Ctx): Promise<DatasetQuality> {
+  if (!/^\d{5,20}$/.test(String(a?.pixelId ?? ''))) throw new AppError('bad_request', 'ID de pixel invalide');
+  const tokens = [a.token, await getRaw<string>(ctx.db, META_TOKEN_KEY, '')].filter((t, i, l) => t && l.indexOf(t) === i);
+  if (!tokens.length) throw new AppError('bad_request', 'Aucune clé Meta pour ce pixel : ajoutez son jeton Conversions API ou liez votre compte Facebook dans Pilot AI › Comptes.');
+  const FIELDS = ['web{event_name,event_match_quality{composite_score,match_key_feedback{identifier,coverage{percentage}}},event_coverage{percentage}}', 'web{event_match_quality,event_name}'];
+  let last: unknown = null;
+  for (const token of tokens)
+    for (const fields of FIELDS) {
+      try {
+        const r = await graph('dataset_quality', { dataset_id: a.pixelId, fields }, token);
+        const pct = (v: unknown) => (Number.isFinite(Number(v)) && v !== null && v !== '' ? Math.round(Number(v) * 10) / 10 : null);
+        return {
+          events: (Array.isArray(r?.web) ? r.web : [])
+            .map((e: any) => ({
+              name: String(e?.event_name ?? '').slice(0, 60),
+              score: pct(e?.event_match_quality?.composite_score),
+              coverage: pct(e?.event_coverage?.percentage),
+              keys: (Array.isArray(e?.event_match_quality?.match_key_feedback) ? e.event_match_quality.match_key_feedback : [])
+                .map((k: any) => ({ id: String(k?.identifier ?? '').slice(0, 40), pct: pct(k?.coverage?.percentage) ?? 0 }))
+                .filter((k: { id: string }) => k.id)
+                .slice(0, 20),
+            }))
+            .filter((e: { name: string }) => e.name)
+            .slice(0, 40),
+        };
+      } catch (e) {
+        last = e;
+      }
+    }
+  throw last instanceof AppError ? last : new AppError('bad_request', 'Meta n’a pas donné la qualité de ce pixel.');
+}
+
 export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
   // the Conversions API needs a pixel and its token, not the ad account
   if (action === 'capi') return sendCapi(args as Parameters<typeof sendCapi>[0]);
   if (action === 'tiktok') return sendTiktok(args as Parameters<typeof sendTiktok>[0]);
   if (action === 'chatCapi') return sendChatCapi(args as Parameters<typeof sendChatCapi>[0]);
+  if (action === 'quality') return datasetQuality(args as { pixelId: string; token: string }, ctx);
   const meta = await getSetting(ctx.db, 'meta');
   const token = await getRaw<string>(ctx.db, META_TOKEN_KEY, '');
   if (!meta.adAccountId || !token) throw new AppError('bad_request', 'Meta n’est pas connecté : liez votre compte Facebook dans Pilot AI › Comptes et cochez votre compte pub.');

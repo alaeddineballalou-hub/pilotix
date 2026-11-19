@@ -732,7 +732,7 @@
     "all": "Tout",
     "empty": "Aucun événement sur cette période.",
     "emptyOne": "Aucun événement pour cette page sur cette période.",
-    "note": "Une carte par page. Touchez une carte pour voir ses jours et ses derniers événements. Les visites de page ne sont pas comptées ici : le navigateur du client les envoie tout seul.",
+    "note": "Une carte par page. Touchez une carte pour voir ses jours et ses derniers événements. Les visiteurs sont comptés par Pilotix (un par appareil et par jour) : proche du chiffre de Meta, pas identique.",
     "noPage": "Sans page (ventes par message)",
     "gone": "Page supprimée",
     "sentPct": "envoyés",
@@ -741,7 +741,8 @@
       "purchase": "Achats",
       "lead": "Formulaires",
       "checkout": "Commencées",
-      "fake": "Fausses"
+      "fake": "Fausses",
+      "visits": "Visiteurs"
     },
     "sparkLabel_one": "{{count}} événement envoyé sur la période",
     "sparkLabel_other": "{{count}} événements envoyés sur la période",
@@ -749,6 +750,16 @@
     "fakeWarn_one": "{{count}} fausse commande : à surveiller",
     "fakeWarn_other": "{{count}} fausses commandes : à surveiller",
     "failedWarn_one": "{{count}} envoi échoué",
-    "failedWarn_other": "{{count}} envois échoués"
+    "failedWarn_other": "{{count}} envois échoués",
+    "visitsChart": "Visiteurs par jour",
+    "q": {
+      "title": "Qualité de correspondance (Meta)",
+      "help": "La note que Meta donne à chaque événement de vos pixels, sur 10 : plus elle est haute, mieux Meta reconnaît vos clients. Lue chez Meta le {{at}}.",
+      "demo": "Exemple (démo) : dans votre boutique, ces notes viennent de Meta.",
+      "refresh": "Relire chez Meta",
+      "refreshed": "Notes relues chez Meta",
+      "none": "Meta n’a pas encore de note pour ce pixel.",
+      "coverage": "{{pct}} % envoyés aussi par le serveur"
+    }
   }
 }
