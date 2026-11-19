@@ -3,13 +3,12 @@
 // nothing shows. The logo is chosen by the site the assistant's answers go to (checked by the server: mcp-server.ts),
 // never by the name an assistant gives itself: a tool that calls itself « Claude » gets no logo.
 import '../layout/mcp.css';
+import { brandFile } from './BrandLogo';
 
-const FILES = import.meta.glob('../assets/brand/{claude,chatgpt}-logo.{svg,png,webp}', { eager: true, import: 'default' }) as Record<string, string>;
-const fileOf = (name: string): string | undefined => Object.entries(FILES).find(([path]) => path.includes(`/${name}-logo.`))?.[1];
 const BY_SITE = new Map<string, string | undefined>([
-  ['claude.ai', fileOf('claude')],
-  ['claude.com', fileOf('claude')],
-  ['chatgpt.com', fileOf('chatgpt')],
+  ['claude.ai', brandFile('claude')],
+  ['claude.com', brandFile('claude')],
+  ['chatgpt.com', brandFile('chatgpt')],
 ]);
 
 /** The logo of the assistant whose answers go to this site; nothing for any other site, or while its file is missing. */

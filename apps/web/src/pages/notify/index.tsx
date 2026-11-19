@@ -16,6 +16,7 @@ import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { CopyCode } from '../../ui/CopyCode';
 import { Card, ErrorBox, Field, Icon, Kpi, Kpis, Loading } from '../../ui/kit';
+import { BrandLogo } from '../../ui/BrandLogo';
 import { toast } from '../../ui/toast';
 import { AgentHeader, Filters, PeriodSwitch, SaveBar, SearchBox } from '../ai/agent';
 import { Pilot } from '../livraison/Pilot';
@@ -114,7 +115,7 @@ export function Notify({ sub }: PageProps) {
 // ---------------------------------------------------------------- messages
 function ChannelBadge({ m }: { m: Pick<Row, 'channel' | 'status'> }) {
   const { t } = useTranslation();
-  if (m.channel === 'whatsapp') return <span className="dl-ch dl-whatsapp" title="WhatsApp">WA</span>;
+  if (m.channel === 'whatsapp') return <BrandLogo name="whatsapp" size="sm" title="WhatsApp" fallback={<span className="dl-ch dl-whatsapp" title="WhatsApp">WA</span>} />;
   if (m.channel === 'sms') return <span className="dl-ch nt-sms" title="SMS">SMS</span>;
   if (m.channel === 'manual' || m.status === 'done') return <span className="dl-ch nt-hand" title={t('notify.msg.byHand')}><Icon name="send" /></span>;
   return (
@@ -409,7 +410,7 @@ function Cases({ admin }: { admin: boolean }) {
         <Flow />
         <ol className="nt-steps">
           <li>
-            <span className="dl-ch dl-whatsapp">WA</span>
+            <BrandLogo name="whatsapp" size="sm" fallback={<span className="dl-ch dl-whatsapp">WA</span>} />
             <span>
               <b>{t('notify.cases.step1')}</b>
               <small>{t('notify.cases.step1Hint')}</small>

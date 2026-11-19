@@ -15,6 +15,7 @@ import { backend, Out, rpc } from '../../lib/backend';
 import { clock, dateOnly, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { Card, ErrorBox, Icon, Loading } from '../../ui/kit';
+import { BrandLogo, brandFile } from '../../ui/BrandLogo';
 import { toast } from '../../ui/toast';
 import { ConfirmButton, Switch } from '../admin/bits';
 import { SectionHeader } from '../ai/agent';
@@ -38,9 +39,10 @@ const GROUPS: Check['group'][] = ['key', 'fb', 'ig', 'ads', 'forms', 'catalog', 
 /** each provider's ad accounts (a boutique counts all of a linked account's together) */
 const AD_KIND: Record<Provider, Kind> = { meta: 'ad_account', tiktok: 'advertiser' };
 const K = 'comptes.';
-/** Meta's own « f » logo for « Continue with Facebook »: the file from Meta's brand centre (facebookbrand.com), dropped as
- * it is in assets/brand/ — never redrawn or recoloured (Meta's rule). Until it is there, the button shows its words only. */
-const FB_LOGO = Object.values(import.meta.glob('../../assets/brand/facebook-f-logo.{svg,png}', { eager: true, import: 'default' }))[0] as string | undefined;
+/** Meta's own « f » logo for « Continue with Facebook »: the file from Meta's brand centre, dropped as it is in
+ * assets/brand/ (facebook-f-logo, else facebook-logo) — never redrawn or recoloured (Meta's rule). Until it is there,
+ * the button shows its words only. */
+const FB_LOGO = brandFile('facebook-f') ?? brandFile('facebook');
 
 /** A login in its tab: started here, asked about every two seconds until it is back. */
 interface Pending {
@@ -58,11 +60,19 @@ interface Pending {
 /** A Meta account that came for the ads alone (« Publicité Meta », a pasted key): linked again in the ads' own window. */
 const adsOnly = (l: Link) => l.provider === 'meta' && !l.assets.some((a) => a.kind === 'page') && l.assets.some((a) => a.kind === 'ad_account');
 
-export function ProviderBadge({ p }: { p: Provider }) {
+/** A provider's tile: its official logo once its file is in assets/brand/ (ui/BrandLogo), else its two letters as before.
+ * Meta's ads slot is Meta's own (the ad accounts are Meta's, not Facebook's). */
+export function ProviderBadge({ p, part }: { p: Provider; part?: 'ads' | 'content' }) {
   return (
-    <span className={`dl-ch ${p === 'meta' ? 'dl-messenger' : 'dl-tiktok'}`} aria-hidden="true">
-      {p === 'meta' ? 'FB' : 'TT'}
-    </span>
+    <BrandLogo
+      name={p === 'tiktok' ? 'tiktok' : part === 'ads' ? 'meta' : 'facebook'}
+      size="sm"
+      fallback={
+        <span className={`dl-ch ${p === 'meta' ? 'dl-messenger' : 'dl-tiktok'}`} aria-hidden="true">
+          {p === 'meta' ? 'FB' : 'TT'}
+        </span>
+      }
+    />
   );
 }
 
@@ -300,7 +310,7 @@ function ProviderSlot({ p, part, id, spot, ready, hideButton, preview, pending, 
   return (
     <div id={id} className={`cpt-slot ${pending ? 'wait' : ''} ${done !== null ? 'done' : ''} ${spot ? 'spot' : ''}`} aria-live="polite">
       <div className="cpt-slot-id">
-        <ProviderBadge p={p} />
+        <ProviderBadge p={p} part={part} />
         <div>
           <h3>{name}</h3>
           <p className="cpt-muted">{t(base + '.what')}</p>
@@ -512,9 +522,15 @@ function WhatsappSlot({ d, busy }: { d: List; busy: boolean }) {
   return (
     <div className={`cpt-slot ${waiting ? 'wait' : ''}`} aria-live="polite">
       <div className="cpt-slot-id">
-        <span className="dl-ch dl-whatsapp" aria-hidden="true">
-          WA
-        </span>
+        <BrandLogo
+          name="whatsapp"
+          size="sm"
+          fallback={
+            <span className="dl-ch dl-whatsapp" aria-hidden="true">
+              WA
+            </span>
+          }
+        />
         <div>
           <h3>{t(K + 'wa.name')}</h3>
           <p className="cpt-muted">{t(K + 'wa.what')}</p>

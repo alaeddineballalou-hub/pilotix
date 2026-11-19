@@ -15,6 +15,7 @@ import { toast } from '../../ui/toast';
 import { AgentHeader, Filters, initials, PeriodSwitch, SaveBar, SearchBox, useEdges } from '../ai/agent';
 import { CmLahjaFix, CmTestLahjaFix } from '../messages/lahja';
 import { LinkedPage } from '../messages/linkedPage';
+import { BrandLogo } from '../../ui/BrandLogo';
 import type { PageProps } from '../registry';
 import '../messages/messages.css';
 import './cm.css';
@@ -27,10 +28,18 @@ const CH_CLASS: Record<Channel, string> = { facebook: 'dl-messenger', instagram:
 
 function CmBadge({ ch }: { ch: Channel }) {
   const { t } = useTranslation();
+  // the network's official logo once its file is in assets/brand/ (ui/BrandLogo), else its two letters as before
   return (
-    <span className={`dl-ch ${CH_CLASS[ch]}`} title={t(`cm.ch.${ch}`)}>
-      {CH_SHORT[ch]}
-    </span>
+    <BrandLogo
+      name={ch}
+      size="sm"
+      title={t(`cm.ch.${ch}`)}
+      fallback={
+        <span className={`dl-ch ${CH_CLASS[ch]}`} title={t(`cm.ch.${ch}`)}>
+          {CH_SHORT[ch]}
+        </span>
+      }
+    />
   );
 }
 
