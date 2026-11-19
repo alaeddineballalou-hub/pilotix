@@ -51,6 +51,31 @@
       "what": "Your TikTok ad accounts: your Catalog lists can go there, and their numbers come to Ads soon.",
       "link": "Link a TikTok account",
       "notReady": "Soon: Pilotix is getting the TikTok link ready."
+    },
+    "metaContent": {
+      "name": "Facebook and Instagram",
+      "what": "Your Pages and Instagram: messages, comments, posts.",
+      "allow": "In Facebook’s window, tick your Pages and your Instagram accounts, then accept everything. What is not ticked does not work in Pilotix.",
+      "notReady": "Soon: Pilotix is getting the Facebook link ready.",
+      "all": [
+        "Facebook messages",
+        "Comments",
+        "Instagram",
+        "Posts"
+      ]
+    },
+    "metaAds": {
+      "name": "Meta ads",
+      "what": "Your ad accounts, your catalog, your pixels and your lead forms.",
+      "allow": "In Facebook’s window, tick your Page, your ad accounts, your catalog and your pixels, then accept everything.",
+      "notReady": "Soon: Pilotix is getting the ads link ready.",
+      "viaFirst": "The “Continue with Facebook” button connects your ads too: tick your ad accounts in it.",
+      "all": [
+        "Ads",
+        "Catalog",
+        "Lead forms",
+        "Pixels"
+      ]
     }
   },
   "waiting": "Linking…",
@@ -84,7 +109,7 @@
     "page": "Pages",
     "pageNone": "No Page given to Pilotix. Click “Link again” and tick your Pages.",
     "ad_account": "Meta ad accounts",
-    "ad_accountNone": "No ad account given to Pilotix. Click “Link again” and tick your ad account in Facebook’s window.",
+    "ad_accountNone": "No ad account given to Pilotix. If you did tick it in Facebook’s window, Facebook is not giving the ads permission to this connection yet (“Test” says so). Meanwhile: “Meta ads” › paste a Meta Ads key.",
     "advertiser": "TikTok ad accounts",
     "advertiserNone": "No TikTok ad account shared with Pilotix."
   },
@@ -390,5 +415,13 @@
     "content": "Publishing (Pilot Content)",
     "wa": "WhatsApp",
     "app": "Pilotix’s Meta app (for the Pilotix team)"
+  },
+  "adsKey": {
+    "toggle": "Another way: paste a Meta Ads key",
+    "help": "If Facebook’s window does not give your ad accounts. In your Meta Business Suite, make a system user key for Pilotix’s app, with ads_read and ads_management. Paste it here: Pilotix keeps it on its server and never shows it again.",
+    "label": "Meta Ads key",
+    "save": "Check and keep",
+    "saving": "Checking…",
+    "saved": "Meta Ads key kept: its ad accounts are in the list."
   }
 }

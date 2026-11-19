@@ -29,6 +29,7 @@ import {
   FoundAsset,
   holdFound,
   lastBadSignature,
+  LoginKind,
   removeLink,
   saveLink,
   SOCIAL,
@@ -123,8 +124,31 @@ async function subscribePage(pageId: string, token: string): Promise<{ leads: bo
   }
 }
 
-/** A Facebook login: the account, its Pages (each subscribed to Pilotix's webhook) and its ad accounts. */
-async function metaAccount(t: Tenancy, code: string, publicUrl: string): Promise<FoundAccount> {
+/** A key's ad accounts (each one's ad problems asked for Pilotix's webhook), as a login keeps them. */
+async function adAccountAssets(token: string, system: boolean): Promise<FoundAsset[]> {
+  // without the ads permission there are no ad accounts: the Pages still work
+  const adFields = { fields: 'id,account_id,name,currency,account_status', limit: '100', access_token: token };
+  let ads = await graphAll('me/adaccounts', adFields).catch(() => []);
+  // a key that does not end belongs to a « system user » of the business: its ad accounts are the ones it was given
+  if (!ads.length && system) ads = await graphAll('me/assigned_ad_accounts', adFields).catch(() => []);
+  const assets: FoundAsset[] = [];
+  for (const a of ads) {
+    const idOf = String(a?.account_id ?? String(a?.id ?? '').replace(/^act_/, ''));
+    if (!/^\d+$/.test(idOf)) continue;
+    // its ads' problems (rejected, payment…) come to Pilotix's webhook, so Co-Pilot warns (needs the account's admin)
+    let hook = true;
+    await graph(`act_${idOf}/subscribed_apps`, { access_token: token }, 'POST').catch(() => (hook = false));
+    assets.push({ kind: 'ad_account', extId: idOf, name: String(a.name ?? idOf), extra: { currency: a.currency ?? null, status: a.account_status ?? null, hook } });
+  }
+  return assets;
+}
+
+/**
+ * A Facebook login: the account, its Pages (each subscribed to Pilotix's webhook) and its ad accounts. « Connecter la
+ * publicité » (kind 'ads') is the same account coming back through its own Facebook window: Meta adds what that window
+ * gave to what the account already gave, so the account is read the same way (its Pages keep answering).
+ */
+async function metaAccount(t: Tenancy, code: string, publicUrl: string, kind: LoginKind = 'account'): Promise<FoundAccount> {
   const apps = await socialApps(t);
   const secret = await socialSecret(t, 'meta');
   if (!apps.meta.appId || !secret) throw new AppError('bad_request', 'L’app Meta de Pilotix n’est pas prête.');
@@ -135,7 +159,7 @@ async function metaAccount(t: Tenancy, code: string, publicUrl: string): Promise
   // A person's token (the classic login, or a configuration « User access token ») lasts an hour or two: Facebook turns
   // it into one of about 60 days, and the Pages' tokens read with that one do not expire. A configuration « System-user
   // access token » gives a token that does not expire already: Facebook refuses to turn it, and it is kept as it is.
-  const withConfig = !!apps.meta.configId;
+  const withConfig = !!(kind === 'ads' ? apps.meta.adsConfigId : apps.meta.configId);
   const ll = await graph('oauth/access_token', { grant_type: 'fb_exchange_token', client_id: apps.meta.appId, client_secret: secret, fb_exchange_token: token }).catch((e) => {
     if (!withConfig) throw e;
     return null;
@@ -147,11 +171,6 @@ async function metaAccount(t: Tenancy, code: string, publicUrl: string): Promise
   }
   const me = await graph('me', { fields: 'id,name,picture{url}', access_token: token });
   const pages = await graphAll('me/accounts', { fields: 'id,name,access_token,picture{url},instagram_business_account{id,username}', limit: '100', access_token: token });
-  // without the ads permission there are no ad accounts: the Pages still work
-  const adFields = { fields: 'id,account_id,name,currency,account_status', limit: '100', access_token: token };
-  let ads = await graphAll('me/adaccounts', adFields).catch(() => []);
-  // a key that does not end belongs to a « system user » of the business: its ad accounts are the ones it was given
-  if (!ads.length && system) ads = await graphAll('me/assigned_ad_accounts', adFields).catch(() => []);
   const assets: FoundAsset[] = [];
   for (const p of pages) {
     if (!p?.id || !p?.access_token) continue;
@@ -170,14 +189,7 @@ async function metaAccount(t: Tenancy, code: string, publicUrl: string): Promise
     }
     assets.push({ kind: 'page', extId: String(p.id), name: String(p.name ?? p.id), extra: { picture: p.picture?.data?.url ?? null, ...(ig ? { ig } : {}), hook }, token: String(p.access_token) });
   }
-  for (const a of ads) {
-    const idOf = String(a?.account_id ?? String(a?.id ?? '').replace(/^act_/, ''));
-    if (!/^\d+$/.test(idOf)) continue;
-    // its ads' problems (rejected, payment…) come to Pilotix's webhook, so Co-Pilot warns (needs the account's admin)
-    let hook = true;
-    await graph(`act_${idOf}/subscribed_apps`, { access_token: token }, 'POST').catch(() => (hook = false));
-    assets.push({ kind: 'ad_account', extId: idOf, name: String(a.name ?? idOf), extra: { currency: a.currency ?? null, status: a.account_status ?? null, hook } });
-  }
+  assets.push(...(await adAccountAssets(token, system)));
   return {
     provider: 'meta',
     extId: String(me.id),
@@ -394,7 +406,7 @@ export async function finishLogin(t: Tenancy, provider: SocialProvider, q: Recor
   }
   try {
     const kind = loginKindOf(st.state);
-    const found = provider === 'meta' ? (kind === 'whatsapp' ? await whatsappAccount(t, code, publicUrl) : await metaAccount(t, code, publicUrl)) : await tiktokAccount(t, code);
+    const found = provider === 'meta' ? (kind === 'whatsapp' ? await whatsappAccount(t, code, publicUrl) : await metaAccount(t, code, publicUrl, kind)) : await tiktokAccount(t, code);
     const key = randomBytes(24).toString('base64url');
     await holdFound(t, st.state, found, sha256(key));
     const shop = st.shopId ? String((await t.platform.query('SELECT name FROM platform.shops WHERE id = $1', [st.shopId]))[0]?.name ?? '') : null;
@@ -439,11 +451,44 @@ export async function confirmLogin(t: Tenancy, state: string, key: string, yes: 
   return { ok: true, message: 'Compte lié', account: st.found.name };
 }
 
+// ---------------------------------------------------------------- « Coller une clé Meta Ads » (Pilot AI › Comptes)
+/**
+ * A key the boutique made in its own Meta business (Paramètres de l'entreprise › Utilisateurs système › Générer un
+ * jeton, for Pilotix's app, with the ads permissions): asked to Meta (alive, of Pilotix's app, with an ads permission),
+ * its ad accounts read, then kept like a linked account of this boutique alone (its ad accounts counted at once when the
+ * boutique counted none). The way to count and launch ads while Facebook's own window does not give the ads permissions.
+ */
+export async function pasteAdsKey(t: Tenancy, a: { token: string; shopId: number; ownerId: number; by: string }): Promise<number> {
+  const apps = await socialApps(t);
+  const secret = await socialSecret(t, 'meta');
+  if (!apps.meta.appId || !secret) throw new AppError('bad_request', 'L’app Meta de Pilotix n’est pas prête.');
+  const token = String(a.token ?? '').trim();
+  const dbg = (await graph('debug_token', { input_token: token, access_token: `${apps.meta.appId}|${secret}` }).catch(() => null))?.data;
+  if (!dbg?.is_valid) throw new AppError('bad_request', 'Meta refuse cette clé (fausse, retirée ou finie). Générez-en une nouvelle et collez-la en entier.');
+  if (String(dbg.app_id ?? '') !== apps.meta.appId)
+    throw new AppError('bad_request', 'Cette clé vient d’une autre app. Générez-la pour l’app de Pilotix (Utilisateurs système › Générer un jeton › choisir l’app).');
+  const scopes = new Set((Array.isArray(dbg.scopes) ? dbg.scopes : []).map(String));
+  if (!scopes.has('ads_read') && !scopes.has('ads_management'))
+    throw new AppError('bad_request', 'Cette clé n’a pas la permission des publicités : cochez ads_read et ads_management en la générant.');
+  const me = await graph('me', { fields: 'id,name', access_token: token });
+  const system = String(dbg.type ?? '').toUpperCase() !== 'USER';
+  const assets = await adAccountAssets(token, system);
+  if (!assets.length)
+    throw new AppError('bad_request', 'Cette clé ne voit aucun compte publicitaire : donnez d’abord le compte publicitaire à l’utilisateur système (Ajouter des ressources), puis générez la clé.');
+  const ends = Number(dbg.expires_at) || 0;
+  return saveLink(
+    t,
+    { state: '', provider: 'meta', ownerId: a.ownerId, shopId: a.shopId, fromShop: a.shopId, by: a.by, expired: false, done: false, found: null, confirmHash: null },
+    { provider: 'meta', extId: String(me.id), name: String(me.name ?? 'Meta Ads'), picture: '', token, tokenKind: system ? 'system' : 'user', expiresAt: ends ? new Date(ends * 1000).toISOString() : null, assets },
+  );
+}
+
 // ---------------------------------------------------------------- « Tester » (Pilot AI › Comptes)
 /** The server's hook: 'test' (one linked account, for one boutique); 'ttCatalog…' (Marketing › Catalogue on TikTok). */
 export async function runSocial(action: string, args: any, ctx: Ctx): Promise<unknown> {
   if (action === 'test') return testLink(ctx.t!, num(args?.shopId), num(args?.linkId), ctx.server?.publicUrl ?? '');
   if (action === 'waFinish') return finishWhatsappPopup(ctx.t!, num(args?.shopId), args ?? {});
+  if (action === 'adsKey') return pasteAdsKey(ctx.t!, { token: String(args?.token ?? ''), shopId: num(args?.shopId), ownerId: num(args?.ownerId), by: String(args?.by ?? '') });
   if (action.startsWith('ttCatalog')) return runTtCatalog(action, args ?? {}, ctx);
   throw new AppError('bad_request', `Action inconnue : ${action}`);
 }

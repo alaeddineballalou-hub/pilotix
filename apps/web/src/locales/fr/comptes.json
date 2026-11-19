@@ -51,6 +51,31 @@
       "what": "Vos comptes publicitaires TikTok : vos listes du Catalogue peuvent y partir, et leurs chiffres arrivent bientôt dans Publicité.",
       "link": "Lier un compte TikTok",
       "notReady": "Bientôt : Pilotix prépare la connexion TikTok."
+    },
+    "metaContent": {
+      "name": "Facebook et Instagram",
+      "what": "Vos pages et Instagram : messages, commentaires, publications.",
+      "allow": "Dans la fenêtre de Facebook, cochez vos pages et vos comptes Instagram, puis acceptez tout. Ce qui n’est pas coché ne marche pas dans Pilotix.",
+      "notReady": "Bientôt : Pilotix prépare la connexion Facebook.",
+      "all": [
+        "Messages Facebook",
+        "Commentaires",
+        "Instagram",
+        "Publications"
+      ]
+    },
+    "metaAds": {
+      "name": "Publicité Meta",
+      "what": "Vos comptes pub, votre catalogue, vos pixels et vos formulaires.",
+      "allow": "Dans la fenêtre de Facebook, cochez votre page, vos comptes pub, votre catalogue et vos pixels, puis acceptez tout.",
+      "notReady": "Bientôt : Pilotix prépare la connexion de la publicité.",
+      "viaFirst": "Le bouton « Continuer avec Facebook » connecte aussi la publicité : cochez-y vos comptes pub.",
+      "all": [
+        "Publicité",
+        "Catalogue",
+        "Formulaires",
+        "Pixels"
+      ]
     }
   },
   "waiting": "Connexion en cours…",
@@ -84,7 +109,7 @@
     "page": "Pages",
     "pageNone": "Aucune page donnée à Pilotix. Cliquez sur « Relier » et cochez vos pages.",
     "ad_account": "Comptes pub Meta",
-    "ad_accountNone": "Aucun compte pub donné à Pilotix. Cliquez sur « Relier » et cochez votre compte pub dans la fenêtre de Facebook.",
+    "ad_accountNone": "Aucun compte pub donné à Pilotix. Si vous l’avez bien coché dans la fenêtre de Facebook, c’est Facebook qui ne donne pas encore la permission des publicités à cette connexion (« Tester » le dit). En attendant : « Publicité Meta » › coller une clé Meta Ads.",
     "advertiser": "Comptes pub TikTok",
     "advertiserNone": "Aucun compte pub TikTok partagé avec Pilotix."
   },
@@ -390,5 +415,13 @@
     "content": "Publication (Pilot Content)",
     "wa": "WhatsApp",
     "app": "App Meta de Pilotix (pour l’équipe Pilotix)"
+  },
+  "adsKey": {
+    "toggle": "Autre moyen : coller une clé Meta Ads",
+    "help": "Si la fenêtre de Facebook ne donne pas vos comptes pub. Dans votre Meta Business Suite, créez une clé d’utilisateur système pour l’app de Pilotix, avec ads_read et ads_management. Collez-la ici : Pilotix la garde sur son serveur et ne la montre plus jamais.",
+    "label": "Clé Meta Ads",
+    "save": "Vérifier et garder",
+    "saving": "Vérification…",
+    "saved": "Clé Meta Ads gardée : ses comptes pub sont dans la liste."
   }
 }

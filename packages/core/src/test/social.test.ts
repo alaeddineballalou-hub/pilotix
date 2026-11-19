@@ -74,6 +74,10 @@ let probe: {
   catalog?: { id: string; refuse?: boolean };
   pixelRefuse?: string[];
   formsRefuse?: boolean;
+  // « Coller une clé Meta Ads »: what Meta says of a pasted key (alive or not, whose app, a person's or a system user's)
+  keyValid?: boolean;
+  keyApp?: string;
+  keyType?: string;
 } = { perms: ALL_PERMS, pageSubs: [], appSubs: [], unreadable: [], cloudflare: false, refuse: false };
 const realFetch = globalThis.fetch;
 const answer = (data: unknown) => new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -105,6 +109,9 @@ before(async () => {
           data: {
             ...(probe.scopes ? { scopes: probe.scopes } : {}),
             ...(probe.expiresAt !== undefined ? { expires_at: probe.expiresAt } : {}),
+            ...(probe.keyValid !== undefined ? { is_valid: probe.keyValid } : {}),
+            ...(probe.keyApp ? { app_id: probe.keyApp } : {}),
+            ...(probe.keyType ? { type: probe.keyType } : {}),
             granular_scopes: [
               ...(wa.waba ? [{ scope: 'whatsapp_business_management', target_ids: [wa.waba] }, { scope: 'whatsapp_business_messaging', target_ids: [wa.waba] }] : [{ scope: 'business_management' }]),
               ...(probe.granular ?? []),
@@ -1231,6 +1238,96 @@ test('a business key (« system user ») lists its ad accounts as the ones it wa
     refuseSwap = false;
     await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
   }
+});
+
+test('Meta in two steps: « Publicité Meta » opens its own Facebook window; the same account comes back with its ad accounts and its Page keeps answering', async () => {
+  // one configuration for everything: the second window is not offered, and asking for it says why
+  assert.equal(((await call('social.list', b, {})) as any).adsReady, false);
+  await assert.rejects(() => call('social.start', b, { provider: 'meta', kind: 'ads' }), /Publicité n’est pas encore prête/);
+  await assert.rejects(() => call('social.start', b, { provider: 'tiktok', kind: 'ads' }), /Seul Meta/);
+  const saved: any = await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '777000111', adsConfigId: '777000222', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+  assert.equal(saved.meta.adsConfigId, '777000222');
+  assert.equal(((await call('social.list', b, {})) as any).adsReady, true);
+  refuseSwap = true;
+  try {
+    // step 1, « Facebook et Instagram »: the first configuration's window; the key has no ad account yet
+    const s1: any = await call('social.start', b, { provider: 'meta', scope: 'here' });
+    assert.equal(new URL(s1.url).searchParams.get('config_id'), '777000111');
+    graph = { me: { id: '5300', name: 'PILOTIX APP System User' }, pages: [{ id: '9960', name: 'Bébé Oran Deux', access_token: 'PAGE_TOKEN_60' }], ads: [], assigned: [] };
+    assert.equal((await linked(t, 'meta', { code: 'STEP_1', state: s1.state }, URL0)).ok, true);
+    const first = ((await call('social.list', b, {})) as any).links.filter((x: any) => x.name === 'PILOTIX APP System User');
+    assert.deepEqual(first[0].assets.map((x: any) => [x.kind, x.name]), [['page', 'Bébé Oran Deux']]);
+    // step 2, « Publicité Meta »: its own window (the second configuration), and its state says which login it is
+    const s2: any = await call('social.start', b, { provider: 'meta', scope: 'here', kind: 'ads' });
+    assert.ok(s2.state.startsWith('ads.'));
+    const u2 = new URL(s2.url);
+    assert.equal(u2.searchParams.get('config_id'), '777000222');
+    assert.equal(u2.searchParams.get('scope'), null, 'the configuration says what is asked');
+    // Meta added the ads to what the account had: the same account comes back, with its ad accounts too
+    graph = { ...graph, assigned: [{ id: 'act_3190', account_id: '3190', name: 'Oran pub deux', currency: 'USD', account_status: 1 }] };
+    assert.equal((await linked(t, 'meta', { code: 'STEP_2', state: s2.state }, URL0)).ok, true);
+    const both = ((await call('social.list', b, {})) as any).links.filter((x: any) => x.name === 'PILOTIX APP System User');
+    assert.equal(both.length, 1, 'the same account, not a second one');
+    assert.deepEqual(both[0].assets.map((x: any) => `${x.kind}:${x.name}`).sort(), ['ad_account:Oran pub deux', 'page:Bébé Oran Deux']);
+    assert.equal(both[0].assets.find((x: any) => x.kind === 'ad_account').usedHere, true, 'its ads are counted at once');
+    assert.equal(await setting(b, 'secret_meta_token'), 'SHORT_USER_TOKEN');
+    await call('social.remove', b, { linkId: both[0].id });
+  } finally {
+    refuseSwap = false;
+    await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+  }
+  assert.equal(((await p('p.social.apps', {})) as any).meta.adsConfigId, '', 'saved without it: one login for everything again');
+});
+
+test('« Coller une clé Meta Ads »: Meta is asked about the key; its ad accounts join the boutique like a linked account; a wrong key is refused in plain words', async () => {
+  const key = `EAAG${'x'.repeat(60)}`;
+  const before = ((await call('social.list', b, {})) as any).links.length;
+  try {
+    // dead, of another app, without an ads permission, or with no ad account: refused, nothing kept
+    probe = { ...probe, keyValid: false };
+    await assert.rejects(() => call('social.adsKey', b, { token: key }), /Meta refuse cette clé/);
+    probe = { ...probe, keyValid: true, keyApp: '999', scopes: ['ads_read'] };
+    await assert.rejects(() => call('social.adsKey', b, { token: key }), /autre app/);
+    probe = { ...probe, keyApp: APPS.meta.appId, scopes: ['pages_show_list'] };
+    await assert.rejects(() => call('social.adsKey', b, { token: key }), /permission des publicités/);
+    probe = { ...probe, scopes: ['ads_read', 'ads_management'], keyType: 'SYSTEM_USER' };
+    graph = { me: { id: '6100', name: 'pilotix' }, pages: [], ads: [], assigned: [] };
+    await assert.rejects(() => call('social.adsKey', b, { token: key }), /aucun compte publicitaire/);
+    await assert.rejects(() => call('social.adsKey', b, { token: 'trop court' }));
+    assert.equal(((await call('social.list', b, {})) as any).links.length, before);
+    // the right key: its account in the list, its ad account counted at once, the key kept on the server only
+    graph = { ...graph, assigned: [{ id: 'act_4100', account_id: '4100', name: 'Clé pub', currency: 'USD', account_status: 1 }] };
+    const r: any = await call('social.adsKey', b, { token: key });
+    const l = r.list.links.find((x: any) => x.id === r.linkId);
+    assert.equal(l.name, 'pilotix');
+    assert.deepEqual(l.assets.map((x: any) => [x.kind, x.name, x.usedHere]), [['ad_account', 'Clé pub', true]]);
+    assert.equal(await setting(b, 'secret_meta_token'), key);
+    assert.ok(!JSON.stringify(r).includes(key), 'the key never comes back to a page');
+    const row = (await t.platform.query(`SELECT token_kind, expires_at, shop_id FROM platform.social_links WHERE id = $1`, [r.linkId]))[0];
+    assert.deepEqual([row.token_kind, row.expires_at, Number(row.shop_id)], ['system', null, b.shop!.id]);
+    await call('social.remove', b, { linkId: r.linkId });
+    assert.equal(await setting(b, 'secret_meta_token'), null);
+  } finally {
+    probe = { ...probe, keyValid: undefined, keyApp: undefined, keyType: undefined, scopes: undefined };
+  }
+});
+
+test('the preview: « Publicité Meta » links a sample ad account, a pasted key too', async () => {
+  resetSocialDemo();
+  let now = Date.parse('2026-11-19T12:00:00Z');
+  const demo: Ctx = { ...a, t: undefined, server: undefined, now: () => now };
+  const first: any = await call('social.list', demo, {});
+  assert.equal(first.adsReady, true, 'the preview shows Meta in two steps');
+  const s: any = await call('social.start', demo, { provider: 'meta', scope: 'here', kind: 'ads' });
+  now += 2500;
+  const done: any = await call('social.state', demo, { state: s.state });
+  assert.equal(done.status, 'done');
+  const withAds: any = await call('social.list', demo, {});
+  assert.deepEqual(withAds.links.find((x: any) => x.id === done.linkId).assets.map((x: any) => x.kind), ['ad_account']);
+  const k: any = await call('social.adsKey', demo, { token: `EAAG${'y'.repeat(40)}` });
+  assert.equal(k.list.links.length, withAds.links.length + 1);
+  assert.deepEqual(k.list.links.find((x: any) => x.id === k.linkId).assets.map((x: any) => x.kind), ['ad_account']);
+  resetSocialDemo();
 });
 
 test('the preview: « Tester » answers a sample, the ad accounts switch off and on', async () => {

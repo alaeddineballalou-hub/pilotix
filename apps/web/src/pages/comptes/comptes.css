@@ -191,3 +191,30 @@
   .cpt-spin { animation-duration: 2.4s; }
   .cpt-slot, .cpt-link, .cpt-chev, .cpt-chips li, .cpt-test { transition: none; }
 }
+
+/* four ways to link (Facebook and Instagram, the ads, WhatsApp, TikTok): two by two on a wide screen */
+@media (min-width: 1101px) {
+  .cpt-providers.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cpt-providers.four .cpt-slot:nth-child(odd) { padding-inline-start: 0; border-inline-start: 0; border-radius: 12px; }
+  .cpt-providers.four .cpt-slot:nth-child(odd).wait, .cpt-providers.four .cpt-slot:nth-child(odd).done { padding-inline-start: 16px; }
+  .cpt-providers.four .cpt-slot:nth-child(-n + 2) { padding-bottom: 18px; }
+  .cpt-providers.four .cpt-slot:nth-child(n + 3) { padding-top: 18px; border-top: 1px solid var(--line); border-start-start-radius: 0; border-start-end-radius: 0; }
+}
+/* « Coller une clé Meta Ads »: the other way to connect the ads, folded until asked for */
+.cpt-key { font-size: 13px; line-height: 1.45; }
+.cpt-key summary { padding: 6px 0; color: var(--c-accent); font-weight: 650; cursor: pointer; }
+.cpt-key summary:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; border-radius: 6px; }
+.cpt-key p { margin: 6px 0; }
+.cpt-key .dl-path { display: inline-block; margin-bottom: 10px; font-size: 12px; }
+.cpt-key-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.cpt-key-form label { grid-column: 1 / -1; font-weight: 650; }
+.cpt-key-form input { min-width: 0; min-height: 40px; }
+@media (max-width: 640px) {
+  .cpt-key-form { grid-template-columns: 1fr; }
+  .cpt-key-form .btn { min-height: 44px; }
+}
+/* stacked (tablet, phone): the line between two ways to link is straight in Arabic too */
+@media (max-width: 1100px) {
+  [dir='rtl'] .cpt-slot + .cpt-slot { border-radius: 0; }
+  [dir='rtl'] .cpt-slot.wait, [dir='rtl'] .cpt-slot.done { border-radius: 12px; }
+}
