@@ -93,8 +93,9 @@
 .lc-rules { margin: 0; padding-inline-start: 20px; display: flex; flex-direction: column; gap: 8px; line-height: 1.6; max-width: 70ch; }
 .lc-rules b { font-weight: 800; white-space: nowrap; word-spacing: 0.08em; }
 .lc-pc { text-decoration: underline dotted; text-decoration-thickness: 2px; text-underline-offset: 5px; cursor: help; }
-.lc-from { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; max-width: 70ch; }
-.lc-from p { flex: 1 1 260px; margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted, #5e6875); }
+.lc-from { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
+.lc-from p { flex: 1 1 260px; max-width: 70ch; margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted, #5e6875); }
+.lc-from .btn { margin-inline-start: auto; }
 .lc-none { margin: 0; line-height: 1.5; max-width: 70ch; color: var(--muted, #5e6875); }
 .lc-warn { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 6px; line-height: 1.45; }
 .lc-warn .bji { flex: none; margin-top: 1px; }
@@ -111,11 +112,21 @@
 html[data-theme='dark'] .lc-stop.on { background: #3a2c12; }
 html[data-theme='dark'] .lc-n { background: #e7edf3; color: #1b2a47; }
 html[data-theme='dark'] .lc-stop:focus-visible, html[data-theme='dark'] .lc-in:focus-visible { outline-color: #e7edf3; }
-@media (min-width: 861px) {
+/* The circle beside its panel when the card is wide enough for both; else the circle, then the panel. The card's own
+   width decides (the menu beside it takes room on a small computer); the screen's width is for a browser that does not
+   know container queries. A setting's field goes under its name when the panel is narrow. */
+.lc { container: lc / inline-size; }
+.lc-panel { container: lcp / inline-size; }
+@container lc (min-width: 901px) {
   .lc-left { position: sticky; top: 76px; }
+}
+@container lc (max-width: 900px) {
+  .lc-body { grid-template-columns: 1fr; }
+}
+@container lcp (max-width: 520px) {
+  .lc-panel .lc-row .lc-in { width: 100%; }
+  .lc-row label { flex-basis: 100%; }
 }
 @media (max-width: 860px) {
   .lc-body { grid-template-columns: 1fr; }
-  .lc-panel .lc-row .lc-in { width: 100%; }
-  .lc-row label { flex-basis: 100%; }
 }
