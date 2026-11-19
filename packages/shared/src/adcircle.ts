@@ -43,8 +43,9 @@ export const CIRCLE_FIELDS: readonly CircleField[] = [
   // these two steps read is a line or a general setting of Pilot Checks
 
   { key: 'againVideoDay', step: 'again', kind: 'day', def: 6 },
-  // the one exception to « a lost product gets no ad »: on, the rule that says so is shown right under it
-  { key: 'againMessages', step: 'again', kind: 'bool', def: true },
+  // the one exception to « a lost product gets no ad »: off at the start (the final rules give a lost product no ad);
+  // a shop that switches it on reads the exception right under that rule
+  { key: 'againMessages', step: 'again', kind: 'bool', def: false },
   { key: 'againAlways', step: 'again', kind: 'bool', def: true },
 ];
 

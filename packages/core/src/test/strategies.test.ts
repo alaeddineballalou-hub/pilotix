@@ -86,10 +86,10 @@ test('« Life ad circle »: its own settings, one changed, wrong values refused'
   assert.equal(again.values.testPerWeek, 6);
   assert.equal(again.values.againAlways, false);
   await call('strat.circleSet', vendeur, { key: 'againAlways', value: true });
-  // the message ad for a lost product is the shop's choice: on at the start, it can be switched off
-  assert.equal(again.values.againMessages, true);
-  assert.equal((await call('strat.circleSet', vendeur, { key: 'againMessages', value: false })).values.againMessages, false);
-  await call('strat.circleSet', vendeur, { key: 'againMessages', value: true });
+  // the message ad for a lost product is the shop's choice: off at the start, it can be switched on
+  assert.equal(again.values.againMessages, false);
+  assert.equal((await call('strat.circleSet', vendeur, { key: 'againMessages', value: true })).values.againMessages, true);
+  await call('strat.circleSet', vendeur, { key: 'againMessages', value: false });
   // everything else keeps its default
   assert.equal(again.values.testDays, 7);
   // a setting that may stay « not chosen » can be emptied again
@@ -195,7 +195,7 @@ test('« Life ad circle »: each step tells its rules, and a rule follows the sh
   assert.deepEqual(circleRules('judge', v, c), ['verdict', 'winner', 'notWinner', 'undecided', 'pending', 'after']);
   assert.deepEqual(circleRules('scale', v, c), ['batch', 'keep', 'group', 'own', 'startBudget']);
   assert.deepEqual(circleRules('watch', v, c), ['lines', 'budgetWait', 'budgetUp', 'budgetDown', 'proof', 'stock', 'freeze', 'brake', 'noData']);
-  assert.deepEqual(circleRules('again', v, c), ['round', 'videoDay', 'newIdea', 'copy', 'lost', 'messages', 'always', 'noRule']);
+  assert.deepEqual(circleRules('again', v, c), ['round', 'videoDay', 'newIdea', 'copy', 'lost', 'always', 'noRule']);
   // a test of videos only, or of images only, says so
   assert.ok(circleRules('test', { ...v, testImages: 0 }, c).includes('launchVideos'));
   assert.ok(circleRules('test', { ...v, testVideos: 0 }, c).includes('launchImages'));
@@ -207,9 +207,9 @@ test('« Life ad circle »: each step tells its rules, and a rule follows the sh
   assert.ok(circleRules('again', { ...v, testPerWeek: 4 }, c).includes('roundN'));
   assert.ok(circleRules('again', v, { ...c, set: { ...set, awarenessBudget: 10 } }).includes('alwaysBudget'));
   // a rule about something the shop switched off is left out
-  assert.deepEqual(circleRules('again', { ...v, againMessages: false, againAlways: false }, c), ['round', 'videoDay', 'newIdea', 'copy', 'lost', 'noRule']);
-  // the exception for a lost product sits right under the rule it is an exception to
-  assert.deepEqual(circleRules('again', { ...v, againAlways: false }, c), ['round', 'videoDay', 'newIdea', 'copy', 'lost', 'messages', 'noRule']);
+  assert.deepEqual(circleRules('again', { ...v, againAlways: false }, c), ['round', 'videoDay', 'newIdea', 'copy', 'lost', 'noRule']);
+  // switched on, the exception for a lost product sits right under the rule it is an exception to
+  assert.deepEqual(circleRules('again', { ...v, againMessages: true }, c), ['round', 'videoDay', 'newIdea', 'copy', 'lost', 'messages', 'always', 'noRule']);
   // every text a rule can take is in the list the languages are checked against
   for (const st of CIRCLE_STEPS) for (const k of circleRules(st, v, c)) assert.ok(CIRCLE_RULE_TEXTS.includes(k), k);
   assert.equal(new Set(CIRCLE_RULE_TEXTS).size, CIRCLE_RULE_TEXTS.length);
