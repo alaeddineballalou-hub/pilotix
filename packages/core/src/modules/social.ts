@@ -1,12 +1,17 @@
-// Linked accounts (Pilot AI › Comptes): a boutique links its Facebook (Meta) and TikTok accounts with one login, in a new
-// tab; Pilotix keeps their tokens on the server (never in a page) and finds what each account may use: its Facebook Pages
-// (with their Instagram account), its Meta ad accounts, its TikTok ad accounts. An account goes to one boutique (which
-// uses its Page and its ad accounts at once) or to all the owner's boutiques (each boutique picks its Page and counts the
-// ad accounts or not, in one click; a Page answers for one boutique only). A boutique counts all the ad accounts of a
-// linked account together: Publicité adds them up. What a boutique uses is written where its agents already read it:
-// Pilot Message and Pilot Comments (the Page, its token, its Instagram account) and Publicité (the ad accounts and the
-// account's token). The hand-pasted Page token is gone: a Page comes only from a linked account. « Tester » tries an
-// account on the server (social-server.ts) and says, line by line, what works.
+// Linked accounts (Pilot AI › Comptes): THE one place where a boutique connects Meta and TikTok. One Facebook login, in
+// a new tab, brings everything at once: its Facebook Pages (messages, comments, the ads' forms), their Instagram accounts
+// (messages and comments), its Meta ad accounts (Publicité, the catalogue, the pixels); WhatsApp (Meta's own window for a
+// number) and TikTok are connected in the same card. Nothing is pasted by hand anywhere else: the keys pasted before
+// (Réglages › Meta Ads, Pilot Message › Réglages) keep working until the linked account replaces them, and « Tester »
+// names them.
+//
+// Pilotix keeps the tokens on the server (never in a page) and finds what each account may use. An account goes to one
+// boutique (which uses its Page and its ad accounts at once) or to all the owner's boutiques (each boutique picks its
+// Page and counts the ad accounts or not, in one click; a Page answers for one boutique only). A boutique counts all the
+// ad accounts of a linked account together: Publicité adds them up. What a boutique uses is written where its agents
+// already read it: Pilot Message and Pilot Comments (the Page, its token, its Instagram account and the key that answers
+// every Instagram customer) and Publicité (the ad accounts and the account's token). « Tester » tries an account on the
+// server (social-server.ts) and says, part by part, what works and where a problem is.
 //
 // The network part (the login's code turned into a token, the Pages and ad accounts read, the Pages subscribed to
 // Pilotix's webhook) is in social-server.ts, run by the server only. In the browser preview there is no platform: a
@@ -31,10 +36,20 @@ export const isAdKind = (k: string) => (AD_KINDS as readonly string[]).includes(
 /** The ad accounts' kind of each provider. */
 export const adKindOf = (p: SocialProvider): AssetKind => (p === 'tiktok' ? 'advertiser' : 'ad_account');
 
-/** One line of the « Tester » button: what was tried, how it went (the page words it), the platform's own words if it failed. */
+/**
+ * Where a line of « Tester » belongs: the page shows the lines part by part (a part that works is folded, one with a
+ * problem is open and named at the top), so the person sees where the problem is.
+ */
+export const CHECK_GROUPS = ['key', 'fb', 'ig', 'ads', 'forms', 'catalog', 'pixels', 'content', 'wa', 'app'] as const;
+export type CheckGroup = (typeof CHECK_GROUPS)[number];
+/**
+ * One line of the « Tester » button: what was tried, how it went (the page words it), the platform's own words if it
+ * failed. « info »: said, nothing to do (never counted as a problem).
+ */
 export interface SocialCheck {
   key: string;
-  state: 'ok' | 'warn' | 'bad';
+  group: CheckGroup;
+  state: 'ok' | 'warn' | 'bad' | 'info';
   params?: Record<string, string | number>;
   detail?: string | null;
 }
@@ -92,6 +107,25 @@ export const SOCIAL = {
   /** and its ads' lead forms, when the account gave Pilotix their permission (Facebook refuses the whole list without it) */
   leadFields: 'leadgen',
 } as const;
+
+/**
+ * What each part of Pilotix needs from the Facebook login (« Tester » names the part and the missing permission, so the
+ * person knows what to tick when linking again).
+ */
+export const META_FEATURES = {
+  fbMessages: ['pages_show_list', 'pages_messaging', 'pages_manage_metadata'],
+  fbComments: ['pages_read_engagement', 'pages_manage_engagement', 'pages_read_user_content'],
+  igMessages: ['instagram_basic', 'instagram_manage_messages'],
+  igComments: ['instagram_basic', 'instagram_manage_comments'],
+  adsRead: ['ads_read'],
+  adsManage: ['ads_management', 'pages_manage_ads', 'business_management'],
+  forms: ['leads_retrieval', 'pages_manage_ads'],
+  catalog: ['catalog_management', 'business_management'],
+  content: ['pages_manage_posts', 'instagram_content_publish', 'read_insights', 'instagram_manage_insights'],
+  /** partnership ads (Partenaires › Influenceurs): Pilotix's Facebook login does not ask for them yet */
+  partners: ['instagram_branded_content_ads_brand', 'facebook_branded_content_ads_brand'],
+} as const;
+export type MetaFeature = keyof typeof META_FEATURES;
 
 /** The shop settings a use writes (the agents read them there). */
 export const SOCIAL_KEYS = {
@@ -210,14 +244,14 @@ CREATE TABLE IF NOT EXISTS platform.social_deletions (
 // ---------------------------------------------------------------- Pilotix's own apps (the control room)
 /** Pilotix's Meta and TikTok apps: what the control room shows (never the secrets). */
 export interface SocialApps {
-  /** hasIgSecret: the secret of the app's Instagram login (Meta signs that login's webhooks with it) */
-  /** igConfigId: a second Facebook Login for Business configuration, made for Instagram alone (« Instagram API (unified
-   * login) », Instagram Login Compatible): « Connecter Instagram » in Pilot Message › Réglages opens it */
-  /** waConfigId: a third one, of the « WhatsApp Embedded Signup » kind: « Connecter WhatsApp » in Pilot Message › Réglages */
+  /** configId: the Facebook Login for Business configuration « Continuer avec Facebook » opens (Pages, Instagram
+   * accounts, ad accounts, catalogues, pixels: everything at once, with a key that does not end) */
+  /** waConfigId: a second one, of the « WhatsApp Embedded Signup » kind: « Connecter WhatsApp » in Pilot AI › Comptes */
+  /** hasIgSecret: the secret of the app's Instagram login. Nobody connects with that login any more, but Meta still
+   * signs with it the webhooks of the accounts connected that way before */
   meta: {
     appId: string;
     configId: string;
-    igConfigId: string;
     waConfigId: string;
     hasSecret: boolean;
     hasIgSecret: boolean;
@@ -255,7 +289,6 @@ export async function socialApps(t: Tenancy): Promise<SocialApps> {
     meta: {
       appId: clean(a.meta?.appId, 40),
       configId: clean(a.meta?.configId, 40),
-      igConfigId: clean(a.meta?.igConfigId, 40),
       waConfigId: clean(a.meta?.waConfigId, 40),
       hasSecret: !!clean(s.meta),
       hasIgSecret: !!clean(s.metaIg),
@@ -285,9 +318,9 @@ export async function lastBadSignature(t: Tenancy): Promise<{ at: string; object
 }
 
 /**
- * Instagram accounts a boutique linked with Instagram's own login (Pilot Message › Réglages): the number Meta gives
- * them in that login's webhooks → the boutique (one account per boutique). Without Meta's approval (Advanced Access),
- * that login is the way to answer every customer of the boutique's own account.
+ * The Instagram account whose key answers for a boutique (the linked account's key, or a key connected before with
+ * Instagram's own login): the number Meta gives it in its webhooks → the boutique (one account per boutique). That
+ * old login can give the account another number than the Page's Instagram: its webhooks find the boutique here.
  */
 const IG_LOGINS_ROW = 'ig_logins';
 export async function noteIgLogin(t: Tenancy, shopId: number, igId: string, username: string): Promise<void> {
@@ -301,7 +334,7 @@ async function igLoginShop(t: Tenancy, igId: string): Promise<number | null> {
   return v?.shopId ? num(v.shopId) : null;
 }
 /**
- * WhatsApp numbers a boutique connected with « Connecter WhatsApp » (Meta's Embedded Signup, Pilot Message › Réglages):
+ * WhatsApp numbers a boutique connected with « Connecter WhatsApp » (Meta's Embedded Signup, Pilot AI › Comptes):
  * the number's id in Meta's webhooks (phone_number_id) → the boutique (one number per boutique). Their messages and
  * delivery statuses come to Pilotix's own app, and routeMeta gives them to that boutique.
  */
@@ -329,13 +362,11 @@ export const SocialAppsInput = z.object({
   meta: z.object({
     appId: z.string().trim().max(40).regex(/^\d*$/, 'ID de l’app Meta (chiffres)'),
     configId: z.string().trim().max(40).regex(/^\d*$/, 'ID de configuration (chiffres)').default(''),
-    /** the Instagram-only configuration (« Connecter Instagram ») */
-    igConfigId: z.string().trim().max(40).regex(/^\d*$/, 'ID de configuration Instagram (chiffres)').default(''),
     /** the WhatsApp Embedded Signup configuration (« Connecter WhatsApp ») */
     waConfigId: z.string().trim().max(40).regex(/^\d*$/, 'ID de configuration WhatsApp (chiffres)').default(''),
     /** a value replaces, '' keeps, null removes */
     secret: z.string().trim().max(300).nullable().default(''),
-    /** the Instagram login's secret: the same (a value replaces, '' keeps, null removes) */
+    /** the old Instagram login's secret (accounts connected with it before): the same (a value replaces, '' keeps, null removes) */
     igSecret: z.string().trim().max(300).nullable().default(''),
   }),
   tiktok: z.object({
@@ -349,7 +380,6 @@ export async function saveSocialApps(t: Tenancy, i: z.output<typeof SocialAppsIn
     meta: {
       appId: i.meta.appId,
       configId: i.meta.configId,
-      igConfigId: i.meta.igConfigId,
       waConfigId: i.meta.waConfigId,
     },
     tiktok: { appId: i.tiktok.appId },
@@ -381,22 +411,22 @@ export function loginUrl(apps: SocialApps, p: SocialProvider, state: string, pub
   const enc = encodeURIComponent;
   if (p === 'tiktok') return `${SOCIAL.tiktokAuth}?app_id=${enc(apps.tiktok.appId)}&state=${enc(state)}&redirect_uri=${enc(u.tiktokRedirect)}`;
   const base = `${SOCIAL.dialog}?client_id=${enc(apps.meta.appId)}&redirect_uri=${enc(u.metaRedirect)}&state=${enc(state)}&response_type=code`;
-  // « Connecter Instagram »: the Instagram-only configuration (Instagram Login Compatible)
-  if (kind === 'instagram') return `${base}&config_id=${enc(apps.meta.igConfigId)}&override_default_response_type=true`;
   // « Connecter WhatsApp »: Meta's Embedded Signup (the shop picks or makes its WhatsApp Business account and number)
   if (kind === 'whatsapp') return `${base}&config_id=${enc(apps.meta.waConfigId)}&override_default_response_type=true&extras=${enc(JSON.stringify(WA_EXTRAS))}`;
   // Facebook Login for Business: a token that does not expire (a configuration made in Pilotix's Meta app)
   return apps.meta.configId ? `${base}&config_id=${enc(apps.meta.configId)}&override_default_response_type=true` : `${base}&scope=${enc(SOCIAL.metaScopes.join(','))}`;
 }
 
-/** What a login is for: an account (Pages, ad accounts), « Connecter Instagram » or « Connecter WhatsApp » (Pilot Message alone). */
-export type LoginKind = "account" | "instagram" | "whatsapp";
-/** « Connecter Instagram »'s states start with it (a normal state never has a dot). */
-export const IG_STATE = "ig.";
-/** « Connecter WhatsApp »'s states start with it. */
+/**
+ * What a login is for: an account (its Pages with their Instagram accounts, its ad accounts: everything Meta at once), or
+ * « Connecter WhatsApp » (a number: Meta gives it in a window of its own).
+ */
+export type LoginKind = 'account' | 'whatsapp';
+/** « Connecter WhatsApp »'s states start with it (a normal state never has a dot). */
 export const WA_STATE = 'wa.';
-export const loginKindOf = (state: string): LoginKind =>
-  state.startsWith(IG_STATE) ? "instagram" : state.startsWith(WA_STATE) ? 'whatsapp' : "account";
+/** The states of « Connecter Instagram », a login that no longer exists (one still open when Pilotix was updated is refused). */
+export const GONE_STATE = 'ig.';
+export const loginKindOf = (state: string): LoginKind => (state.startsWith(WA_STATE) ? 'whatsapp' : 'account');
 /** Embedded Signup's own settings (Meta's « extras »): its usual flow, its version 3 */
 const WA_EXTRAS = { setup: {}, featureType: '', sessionInfoVersion: '3' };
 
@@ -445,7 +475,8 @@ export interface FoundAsset {
   kind: AssetKind;
   extId: string;
   name: string;
-  /** page: { picture?, ig?: { id, username } }; ad account: { currency?, status? } */
+  /** page: { picture?, ig?: { id, username, key? }, hook? } (ig.key: the account's key reaches the Instagram inbox itself,
+   *  so it answers every Instagram customer); ad account: { currency?, status?, hook? } */
   extra?: Record<string, unknown>;
   token?: string | null;
 }
@@ -458,8 +489,6 @@ export interface FoundAccount {
   tokenKind: 'user' | 'system' | 'advertiser';
   expiresAt: string | null;
   assets: FoundAsset[];
-  /** « Connecter Instagram »: the Instagram account the login brought (it goes to Pilot Message, not to the accounts list) */
-  instagram?: { id: string; username: string };
   /** « Connecter WhatsApp »: the WhatsApp Business account, its number's id, the number as Meta shows it, its name */
   whatsapp?: { wabaId: string; phoneId: string; phone: string; name: string };
 }
@@ -556,7 +585,10 @@ export async function useAsset(t: Tenancy, shopId: number, assetId: number, by: 
 export async function stopUse(t: Tenancy, shopId: number, kind: AssetKind) {
   await t.platform.query(`DELETE FROM platform.social_uses WHERE shop_id = $1 AND kind = $2`, [shopId, kind]);
   const schema = await schemaOfShop(t, shopId);
-  if (schema) await clearShop(t.shop(schema), kind);
+  if (!schema) return;
+  const r = await clearShop(t.shop(schema), kind);
+  // the Instagram key came from this Page's account: its webhooks no longer find the boutique by it
+  if (r.igGone) await noteIgLogin(t, shopId, '', '');
 }
 
 /** A linked account goes: every boutique that used its Pages or ad accounts stops, its tokens and assets go with it. */
@@ -593,7 +625,7 @@ async function writeUse(t: Tenancy, shopId: number, assetId: number) {
         currency: json(x.extra)?.currency ? String(json(x.extra).currency) : null,
       }))
     : undefined;
-  await applyShop(t.shop(schema), {
+  const r = await applyShop(t.shop(schema), {
     kind: a.kind,
     linkId: num(a.link_id),
     assetId,
@@ -602,8 +634,44 @@ async function writeUse(t: Tenancy, shopId: number, assetId: number) {
     extra: json(a.extra) ?? {},
     account: String(a.account ?? ''),
     token: String((a.kind === 'page' ? a.token : a.link_token) ?? ''),
+    linkToken: String(a.link_token ?? ''),
     accounts,
   });
+  // Instagram answers with the account's key: its webhooks find the boutique by this account (and by no older one)
+  if (r.ig) await noteIgLogin(t, shopId, r.ig.id, r.ig.username);
+  else if (r.igGone) await noteIgLogin(t, shopId, '', '');
+}
+
+/**
+ * The account's key takes Instagram's answers for this boutique's Page (« Tester » saw it reach the Instagram inbox):
+ * marked on the Page, and a key connected before in Pilot Message leaves its place to it.
+ */
+export async function adoptLinkIg(t: Tenancy, shopId: number, assetId: number): Promise<boolean> {
+  const schema = await schemaOfShop(t, shopId);
+  if (!schema || !(await markIgKey(t, assetId))) return false;
+  await dropOldIg(t.shop(schema));
+  await writeUse(t, shopId, assetId);
+  return true;
+}
+/**
+ * « Tester » saw the account's key reach this Page's Instagram inbox: marked on the Page (nothing changes in a boutique
+ * by that alone: one that answers with a key connected before may now remove it, and the account's key takes over).
+ * Never unmarked here: a refusal may be Meta being slow; a new login decides again.
+ */
+export async function markIgKey(t: Tenancy, assetId: number): Promise<boolean> {
+  const a = (await t.platform.query(`SELECT id, kind, extra FROM platform.social_assets WHERE id = $1`, [assetId]))[0];
+  const x = a ? json(a.extra) ?? {} : {};
+  if (!a || a.kind !== 'page' || !x.ig?.id) return false;
+  if (!x.ig.key) await t.platform.query(`UPDATE platform.social_assets SET extra = $2 WHERE id = $1`, [assetId, JSON.stringify({ ...x, ig: { ...x.ig, key: true } })]);
+  return true;
+}
+/** An Instagram key connected before in Pilot Message goes (not one that came from a linked account). */
+async function dropOldIg(db: Db): Promise<boolean> {
+  if (!(await raw(db, IG_KEY)) || (await raw(db, SOCIAL_KEYS.page))?.igKey) return false;
+  await drop(db, [IG_KEY]);
+  const d = await raw(db, 'dellal');
+  if (d) await put(db, 'dellal', { ...d, ...IG_NONE });
+  return true;
 }
 
 interface Applied {
@@ -615,45 +683,105 @@ interface Applied {
   extra: any;
   account: string;
   token: string;
+  /** a Page: the linked account's own key (the Page's is `token`); it answers Instagram when it reaches its inbox */
+  linkToken?: string;
   /** ad accounts: every ad account of the linked account (the use's own one when missing) */
   accounts?: { extId: string; name: string; currency: string | null }[];
 }
+/** The key that answers every customer of the boutique's Instagram account (Pilot Message reads it: modules/dellal.ts). */
+const IG_KEY = 'secret_dellal_ig_token';
+/** The boutique's WhatsApp key (« Connecter WhatsApp »). */
+const WA_KEY = 'secret_dellal_wa_token';
+/** Pilot Message's settings without an Instagram key. */
+const IG_NONE = { instagramLoginId: '', instagramLoginUser: '', igTokenAt: '', igLoginKind: '' };
 const raw = async (db: Db, key: string): Promise<any> => (await db.query('SELECT value FROM settings WHERE key = $1', [key]))[0]?.value ?? null;
 const put = (db: Db, key: string, value: unknown) =>
   db.query(`INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [key, JSON.stringify(sealSetting(key, value))]);
 const drop = (db: Db, keys: string[]) => db.query('DELETE FROM settings WHERE key = ANY($1)', [keys]);
 
-async function applyShop(db: Db, a: Applied) {
+/**
+ * ig: the Instagram account the linked account's key now answers for; igGone: that key answered before and no longer does.
+ */
+async function applyShop(db: Db, a: Applied): Promise<{ ig: { id: string; username: string } | null; igGone: boolean }> {
   const at = new Date().toISOString();
   if (a.kind === 'page') {
     const ig = a.extra?.ig?.id ? { id: String(a.extra.ig.id), username: String(a.extra.ig.username ?? '') } : null;
     await put(db, SOCIAL_KEYS.pageToken, a.token);
     const d = (await raw(db, 'dellal')) ?? {};
-    await put(db, 'dellal', { ...d, messengerPageId: a.extId, instagramId: ig?.id ?? '' });
-    await put(db, SOCIAL_KEYS.page, { linkId: a.linkId, assetId: a.assetId, pageId: a.extId, name: a.name, igId: ig?.id ?? null, igUsername: ig?.username || null, picture: a.extra?.picture ?? null, account: a.account, at });
+    // Instagram's answers: the account's key when it reaches the Page's Instagram inbox (every customer is answered
+    // with it). A key connected before in Pilot Message stays the boutique's until « Tester » sees it fail (or the
+    // boutique removes it): only a key that came from a linked account is replaced or taken away here.
+    const fromLink = !!(await raw(db, SOCIAL_KEYS.page))?.igKey;
+    const own = !!(await raw(db, IG_KEY));
+    const takes = !!ig && !!a.extra?.ig?.key && !!a.linkToken && (!own || fromLink);
+    if (takes) await put(db, IG_KEY, a.linkToken);
+    else if (fromLink) await drop(db, [IG_KEY]);
+    const login = takes ? { instagramLoginId: ig!.id, instagramLoginUser: ig!.username, igTokenAt: at, igLoginKind: 'unified' } : fromLink ? IG_NONE : {};
+    await put(db, 'dellal', { ...d, messengerPageId: a.extId, instagramId: ig?.id ?? '', ...login });
+    await put(db, SOCIAL_KEYS.page, { linkId: a.linkId, assetId: a.assetId, pageId: a.extId, name: a.name, igId: ig?.id ?? null, igUsername: ig?.username || null, picture: a.extra?.picture ?? null, account: a.account, igKey: takes, at });
+    return { ig: takes ? ig : null, igGone: fromLink && !takes };
   } else if (a.kind === 'ad_account') {
     // Publicité reads every one of them (meta.ts) and adds them up
     const all = (a.accounts?.length ? a.accounts : [{ extId: a.extId, name: a.name, currency: a.extra?.currency ?? null }]).map((x) => ({ adAccountId: x.extId.replace(/^act_/, ''), name: x.name, currency: x.currency }));
-    // the first is the one new ads are launched from: the one the owner chose (Comptes › « Compte pour lancer ») stays first
-    const list = launchFirst(all, String((await raw(db, LAUNCH_KEY)) ?? ''));
+    // the first is the one new ads are launched from: the one the owner chose (Comptes › « Compte pour lancer ») stays
+    // first; without a choice, the one the boutique launched from until now (a new login, or the account's key taking
+    // over from a key pasted before, never moves the ads to another ad account by itself)
+    const cur = await getSetting(db, 'meta');
+    const chosen = [String((await raw(db, LAUNCH_KEY)) ?? ''), String(cur.adAccountId ?? '').replace(/^act_/, '')].find((id) => id && all.some((x) => x.adAccountId === id)) ?? '';
+    const list = launchFirst(all, chosen);
     await put(db, SOCIAL_KEYS.adsToken, a.token);
-    await setSetting(db, 'meta', { ...(await getSetting(db, 'meta')), adAccountId: list[0].adAccountId, adAccountIds: list.map((x) => x.adAccountId), hasToken: true });
+    await setSetting(db, 'meta', { ...cur, adAccountId: list[0].adAccountId, adAccountIds: list.map((x) => x.adAccountId), hasToken: true });
     await put(db, SOCIAL_KEYS.ads, { linkId: a.linkId, assetId: a.assetId, adAccountId: list[0].adAccountId, name: list[0].name, currency: list[0].currency, accounts: list, account: a.account, at });
   } else {
     const list = (a.accounts?.length ? a.accounts : [{ extId: a.extId, name: a.name, currency: null }]).map((x) => ({ advertiserId: x.extId, name: x.name }));
     await put(db, SOCIAL_KEYS.tiktokAdsToken, a.token);
     await put(db, SOCIAL_KEYS.tiktokAds, { linkId: a.linkId, assetId: a.assetId, advertiserId: list[0].advertiserId, name: list[0].name, advertisers: list, account: a.account, at });
   }
+  return { ig: null, igGone: false };
 }
-async function clearShop(db: Db, kind: AssetKind) {
+/** igGone: Instagram's key came from the Page's account and goes with the Page. */
+async function clearShop(db: Db, kind: AssetKind): Promise<{ igGone: boolean }> {
+  let igGone = false;
   if (kind === 'page') {
-    await drop(db, [SOCIAL_KEYS.pageToken, SOCIAL_KEYS.page]);
+    igGone = !!(await raw(db, SOCIAL_KEYS.page))?.igKey;
+    await drop(db, [SOCIAL_KEYS.pageToken, SOCIAL_KEYS.page, ...(igGone ? [IG_KEY] : [])]);
     const d = await raw(db, 'dellal');
-    if (d) await put(db, 'dellal', { ...d, messengerPageId: '', instagramId: '' });
+    if (d) await put(db, 'dellal', { ...d, messengerPageId: '', instagramId: '', ...(igGone ? IG_NONE : {}) });
   } else if (kind === 'ad_account') {
     await drop(db, [SOCIAL_KEYS.adsToken, SOCIAL_KEYS.ads]);
     await setSetting(db, 'meta', { ...(await getSetting(db, 'meta')), adAccountId: '', adAccountIds: [], hasToken: false });
   } else await drop(db, [SOCIAL_KEYS.tiktokAdsToken, SOCIAL_KEYS.tiktokAds]);
+  return { igGone };
+}
+
+/**
+ * What a boutique still runs on keys connected before everything came from a linked account: an ads key pasted in
+ * Réglages › Meta Ads, an Instagram key connected in Pilot Message. They work until the linked account takes their
+ * place (its ad accounts counted here; its key reaching the Instagram inbox) or the boutique removes them.
+ */
+export interface OldKeys {
+  ads: { adAccountId: string } | null;
+  /** ready: the linked account's key reaches the Instagram inbox, so it answers in the old key's place once that one is removed */
+  instagram: { username: string; ready: boolean } | null;
+}
+export async function oldKeys(db: Db): Promise<OldKeys> {
+  const ads = !!(await raw(db, SOCIAL_KEYS.adsToken)) && !(await raw(db, SOCIAL_KEYS.ads))?.adAccountId;
+  const ig = !!(await raw(db, IG_KEY)) && !(await raw(db, SOCIAL_KEYS.page))?.igKey;
+  return {
+    ads: ads ? { adAccountId: String((await getSetting(db, 'meta')).adAccountId ?? '') } : null,
+    instagram: ig ? { username: String((await raw(db, 'dellal'))?.instagramLoginUser ?? ''), ready: false } : null,
+  };
+}
+/** The boutique's WhatsApp number (« Connecter WhatsApp »); old: a number and a key typed by hand before. */
+export interface WhatsappView {
+  phone: string;
+  phoneId: string;
+  old: boolean;
+}
+export async function whatsappOf(db: Db): Promise<WhatsappView | null> {
+  const d = await raw(db, 'dellal');
+  if (!d?.whatsappPhoneId || !(await raw(db, WA_KEY))) return null;
+  return { phone: String(d.whatsappPhone ?? ''), phoneId: String(d.whatsappPhoneId), old: !d.whatsappPhone };
 }
 
 /** The ad account new ads are launched from, when the owner chose one (else the linked account's first). */
@@ -872,6 +1000,11 @@ export interface SocialListView {
   here: HereView;
   /** the ad accounts this boutique counts, and the one its new ads are launched from */
   launch: LaunchAccounts | null;
+  /** the boutique's WhatsApp number (null: none); waReady: Pilotix's « Connecter WhatsApp » is set up */
+  whatsapp: WhatsappView | null;
+  waReady: boolean;
+  /** keys connected before, somewhere else: they still work; the page names them and lets the boutique remove them */
+  old: OldKeys;
   preview: boolean;
 }
 
@@ -946,7 +1079,26 @@ async function listFor(ctx: Ctx): Promise<SocialListView> {
     if (written !== all) await writeUse(w.t, w.shopId, num(mine.asset_id));
   }
   const name = String((await w.t.platform.query(`SELECT name FROM platform.shops WHERE id = $1`, [w.shopId]))[0]?.name ?? '');
-  return { apps: { meta: appReady(apps, 'meta'), tiktok: appReady(apps, 'tiktok') }, canAll: canAll(w), isOwner: w.isOwner, shop: { id: w.shopId, name }, sisters: w.sisters, links: view, here: hereOf(view), launch: await launchAccounts(ctx.db), preview: false };
+  // an Instagram key connected before may go once the key of the account behind the boutique's Page reaches the inbox
+  const oldHere = async (): Promise<OldKeys> => {
+    const old = await oldKeys(ctx.db);
+    const ready = assets.some((a: any) => a.kind === 'page' && !!json(a.extra)?.ig?.key && uses.some((u: any) => num(u.asset_id) === num(a.id) && num(u.shop_id) === w.shopId));
+    return { ...old, instagram: old.instagram ? { ...old.instagram, ready } : null };
+  };
+  return {
+    apps: { meta: appReady(apps, 'meta'), tiktok: appReady(apps, 'tiktok') },
+    canAll: canAll(w),
+    isOwner: w.isOwner,
+    shop: { id: w.shopId, name },
+    sisters: w.sisters,
+    links: view,
+    here: hereOf(view),
+    launch: await launchAccounts(ctx.db),
+    whatsapp: await whatsappOf(ctx.db),
+    waReady: !!apps.meta.appId && apps.meta.hasSecret && !!apps.meta.waConfigId,
+    old: await oldHere(),
+    preview: false,
+  };
 }
 function hereOf(links: LinkView[]): HereView {
   const find = (kind: AssetKind) => {
@@ -989,20 +1141,16 @@ export const socialProcs = {
     z.object({
       provider: z.enum(SOCIAL_PROVIDERS),
       scope: z.enum(['here', 'all']).default('here'),
-      kind: z.enum(['account', 'instagram', 'whatsapp']).default('account'),
+      kind: z.enum(['account', 'whatsapp']).default('account'),
     }),
     async (ctx, i) => {
       if (!live(ctx)) return demoStart(ctx, i.provider, i.scope, i.kind);
-      // « Connecter Instagram » / « Connecter WhatsApp »: Facebook's login with their own configuration, for this boutique only
-      const ig = i.kind === 'instagram';
+      // « Connecter WhatsApp »: Meta's window for a number (its own configuration), for this boutique only
       const wa = i.kind === 'whatsapp';
-      if (ig && i.provider !== 'meta') throw new AppError('bad_request', 'Seul Meta connecte Instagram.');
       if (wa && i.provider !== 'meta') throw new AppError('bad_request', 'Seul Meta connecte WhatsApp.');
       const w = await who(ctx);
       if (i.scope === 'all' && !canAll(w)) throw new AppError('forbidden', 'Seul le propriétaire des boutiques lie un compte pour toutes ses boutiques.');
       const apps = await socialApps(w.t);
-      if (ig && !apps.meta.igConfigId)
-        throw new AppError('bad_request', 'La connexion Instagram n’est pas encore prête : Pilotix doit d’abord ajouter l’ID de configuration Instagram (Pilot AI › Réglages).');
       if (wa && !apps.meta.waConfigId)
         throw new AppError('bad_request', 'La connexion WhatsApp n’est pas encore prête : Pilotix doit d’abord ajouter l’ID de configuration WhatsApp (Pilot AI › Réglages).');
       if (!appReady(apps, i.provider))
@@ -1014,11 +1162,11 @@ export const socialProcs = {
         );
       const publicUrl = ctx.server?.publicUrl;
       if (!publicUrl) throw new AppError('bad_request', 'L’adresse publique du serveur manque (PUBLIC_URL).');
-      const state = (ig ? IG_STATE : wa ? WA_STATE : '') + randomToken();
+      const state = (wa ? WA_STATE : '') + randomToken();
       await w.t.platform.query(`DELETE FROM platform.social_states WHERE expires_at < now() - interval '1 day'`);
       await w.t.platform.query(
         `INSERT INTO platform.social_states (state, provider, owner_id, shop_id, from_shop, by_name, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + interval '${SOCIAL.stateMinutes} minutes')`,
-        [state, i.provider, w.ownerId, i.scope === 'all' && !ig && !wa ? null : w.shopId, w.shopId, w.by.slice(0, 120)],
+        [state, i.provider, w.ownerId, i.scope === 'all' && !wa ? null : w.shopId, w.shopId, w.by.slice(0, 120)],
       );
       return {
         state,
@@ -1060,6 +1208,46 @@ export const socialProcs = {
       return r;
     },
   ),
+
+  /** The boutique's WhatsApp number is no longer connected: Pilotix forgets its key, its messages stop coming here. */
+  'social.waRemove': proc([], z.object({}), async (ctx) => {
+    const d = await raw(ctx.db, 'dellal');
+    await drop(ctx.db, [WA_KEY]);
+    if (d) await put(ctx.db, 'dellal', { ...d, whatsappPhoneId: '', whatsappPhone: '' });
+    if (live(ctx)) await noteWaLogin(ctx.t, ctx.shop.id, '');
+    ctx.emit({ type: 'settings' });
+    return listFor(ctx);
+  }),
+
+  /**
+   * A key connected before, somewhere else, goes (an ads key pasted in Réglages › Meta Ads; an Instagram key connected
+   * in Pilot Message). Publicité then counts only a linked account's ad accounts; Instagram is answered with the
+   * linked account's key when it reaches the Page's Instagram inbox, else through the Page.
+   */
+  'social.dropOld': proc([], z.object({ what: z.enum(['ads', 'instagram']) }), async (ctx, i) => {
+    const old = await oldKeys(ctx.db);
+    if (i.what === 'ads' && old.ads) {
+      await drop(ctx.db, [SOCIAL_KEYS.adsToken]);
+      await setSetting(ctx.db, 'meta', { ...(await getSetting(ctx.db, 'meta')), adAccountId: '', adAccountIds: [], hasToken: false });
+    }
+    if (i.what === 'instagram' && old.instagram) {
+      // only once the key of the account behind the boutique's Page reaches the Instagram inbox (it takes over at
+      // once): removing a working key before would leave Instagram answered through the Page alone
+      const use = live(ctx)
+        ? (await ctx.t.platform.query(`SELECT u.asset_id, a.extra FROM platform.social_uses u JOIN platform.social_assets a ON a.id = u.asset_id WHERE u.shop_id = $1 AND u.kind = 'page'`, [ctx.shop.id]))[0]
+        : null;
+      if (live(ctx) && !json(use?.extra)?.ig?.key)
+        throw new AppError('bad_request', 'La clé de votre compte Facebook n’a pas encore la boîte Instagram : cliquez sur « Relier », cochez le compte Instagram, puis retirez l’ancienne clé.');
+      if (await dropOldIg(ctx.db)) {
+        if (live(ctx)) {
+          await noteIgLogin(ctx.t, ctx.shop.id, '', '');
+          await writeUse(ctx.t, ctx.shop.id, num(use.asset_id));
+        }
+      }
+    }
+    ctx.emit({ type: 'settings' });
+    return listFor(ctx);
+  }),
 
   /** Where a login is: waiting for its tab, done (its account is in the list), failed or too old. */
   'social.state': proc([], z.object({ state: z.string().min(8).max(100) }), async (ctx, i) => {
@@ -1114,9 +1302,11 @@ export const socialProcs = {
   }),
 
   /**
-   * « Tester »: tries the account now, on the server — its key, its permissions, the Page this boutique uses (subscribed
-   * again when its messages no longer come), its Instagram account, Pilotix's Meta webhook (its address and fields, and
-   * that it answers from the Internet), the ad accounts this boutique counts. Each line says how it went.
+   * « Tester »: tries the account now, on the server, part by part — its key and what it was given, the Page this
+   * boutique uses (subscribed again when its messages no longer come), Instagram (and the key that answers it),
+   * Publicité (each ad account, its numbers, launching), the ads' forms, the catalogue, the pixels, WhatsApp, Pilotix's
+   * Meta webhook (its address and fields, and that it answers from the Internet). Each line says how it went and what to
+   * do; what the test can repair by itself, it repairs.
    */
   'social.test': proc([], z.object({ linkId: id }), async (ctx, i): Promise<SocialTest> => {
     if (!live(ctx)) return demoTest(ctx, i.linkId);
@@ -1245,7 +1435,20 @@ async function demoList(ctx: Ctx): Promise<SocialListView> {
       usedBy: a.usedBy.filter((x) => x !== me).map((x) => ({ id: x, name: nameOf(x) })),
     })),
   }));
-  return { apps: { meta: true, tiktok: true }, canAll: true, isOwner: true, shop: { id: me, name }, sisters: shops, links, here: hereOf(links), launch: await launchAccounts(ctx.db), preview: true };
+  return {
+    apps: { meta: true, tiktok: true },
+    canAll: true,
+    isOwner: true,
+    shop: { id: me, name },
+    sisters: shops,
+    links,
+    here: hereOf(links),
+    launch: await launchAccounts(ctx.db),
+    whatsapp: await whatsappOf(ctx.db),
+    waReady: true,
+    old: await oldKeys(ctx.db),
+    preview: true,
+  };
 }
 async function demoStart(ctx: Ctx, provider: SocialProvider, scope: 'here' | 'all', kind: LoginKind = 'account') {
   const d = demoData(ctx);
@@ -1311,9 +1514,11 @@ async function demoUseOne(ctx: Ctx, d: NonNullable<typeof demo>, me: number, ass
     assetId: a.id,
     extId: a.extId,
     name: a.name,
-    extra: a.igUsername ? { ig: { id: `1784${a.extId}`, username: a.igUsername } } : a.currency ? { currency: a.currency } : {},
+    // the sample account's key reaches the Instagram inbox: it answers every Instagram customer
+    extra: a.igUsername ? { ig: { id: `1784${a.extId}`, username: a.igUsername, key: true } } : a.currency ? { currency: a.currency } : {},
     account: l.name,
     token: 'preview',
+    linkToken: 'preview',
     accounts: isAdKind(a.kind) ? together.map((x) => ({ extId: x.extId, name: x.name, currency: x.currency })) : undefined,
   });
 }
@@ -1333,34 +1538,56 @@ async function demoAds(ctx: Ctx, linkId: number, on: boolean) {
   }
   return demoList(ctx);
 }
-/** The preview's « Tester »: what a working account answers (its Instagram webhook still to subscribe, as often at first). */
+/**
+ * The preview's « Tester »: what a working account answers, part by part (Pilotix's Instagram webhook still to
+ * subscribe, as often at first: the page shows where a problem is).
+ */
 async function demoTest(ctx: Ctx, linkId: number): Promise<SocialTest> {
   const me = demoShop(ctx);
   const l = demoData(ctx).links.find((x) => x.id === linkId);
   if (!l) throw new AppError('not_found', 'Compte introuvable');
-  const checks: SocialCheck[] = [{ key: 'token', state: 'ok', params: { name: l.name } }];
-  const kind = adKindOf(l.provider);
+  const checks: SocialCheck[] = [];
+  const add = (group: CheckGroup, key: string, state: SocialCheck['state'], params?: SocialCheck['params']) => checks.push({ key, group, state, ...(params ? { params } : {}), detail: null });
+  const ago = (min: number) => new Date(ctx.now() - min * 60_000).toISOString();
+  const ads = l.assets.filter((a) => a.kind === adKindOf(l.provider));
+  const adsHere = ads.some((a) => a.usedBy.includes(me));
+  add('key', 'token', 'ok', { name: l.name, count: ads.length });
   if (l.provider === 'meta') {
-    checks.push({ key: 'perms', state: 'ok' });
-    const page = l.assets.find((a) => a.kind === 'page' && a.usedBy.includes(me));
+    const pages = l.assets.filter((a) => a.kind === 'page');
+    add('key', 'keyLife', 'ok', { why: 'never' });
+    add('key', 'given', 'ok', { pages: pages.length, igs: pages.filter((a) => a.igUsername).length, ads: ads.length });
+    const page = pages.find((a) => a.usedBy.includes(me));
     if (page) {
-      const ago = (min: number) => new Date(ctx.now() - min * 60_000).toISOString();
-      checks.push({ key: 'page', state: 'ok', params: { name: page.name } }, { key: 'pageHook', state: 'ok' }, { key: 'fbComment', state: 'ok', params: { name: page.name, at: ago(40) } });
-      if (page.igUsername)
-        checks.push(
-          { key: 'ig', state: 'ok', params: { username: page.igUsername } },
-          { key: 'igInbox', state: 'ok', params: { username: page.igUsername } },
-          { key: 'igSeen', state: 'ok', params: { username: page.igUsername, at: ago(25) } },
-          { key: 'igComment', state: 'ok', params: { username: page.igUsername, at: ago(120) } },
-          { key: 'catchUp', state: 'ok', params: { at: ago(2), count: 1 } },
-          { key: 'igLogin', state: 'ok', params: { username: page.igUsername } },
-        );
-      else checks.push({ key: 'igNone', state: 'warn', params: { name: page.name } });
-    } else if (l.assets.some((a) => a.kind === 'page')) checks.push({ key: 'pageNone', state: 'warn' });
-    checks.push({ key: 'appHook', state: 'ok' }, { key: 'appHookIg', state: 'warn', params: { list: 'messages, comments' } }, { key: 'reach', state: 'ok' });
-  }
-  const ads = l.assets.filter((a) => a.kind === kind);
-  if (ads.some((a) => a.usedBy.includes(me))) checks.push({ key: 'ads', state: 'ok', params: { count: ads.length, bad: 0 } });
+      add('fb', 'page', 'ok', { name: page.name });
+      add('fb', 'pageHook', 'ok');
+      add('fb', 'fbSeen', 'ok', { name: page.name, at: ago(12) });
+      add('fb', 'fbComment', 'ok', { name: page.name, at: ago(40) });
+      add('fb', 'catchUp', 'ok', { at: ago(2), count: 1 });
+      if (page.igUsername) {
+        add('ig', 'ig', 'ok', { username: page.igUsername });
+        add('ig', 'igInbox', 'ok', { username: page.igUsername });
+        add('ig', 'igSeen', 'ok', { username: page.igUsername, at: ago(25) });
+        add('ig', 'igComment', 'ok', { username: page.igUsername, at: ago(120) });
+        add('ig', 'igKey', 'ok', { username: page.igUsername });
+      } else add('ig', 'igNone', 'warn', { name: page.name });
+      add('forms', 'leadHook', 'ok');
+      add('forms', 'forms', 'ok');
+      add('content', 'content', 'ok');
+    } else if (pages.length) add('fb', 'pageNone', 'warn');
+    if (adsHere) {
+      const launch = (await launchAccounts(ctx.db))?.accounts[0]?.name || ads[0].name;
+      add('ads', 'ads', 'ok', { count: ads.length, bad: 0 });
+      add('ads', 'adsRead', 'ok', { name: launch });
+      add('ads', 'adsLaunch', 'ok', { name: launch });
+      add('catalog', 'catalog', 'ok', { name: 'Catalogue Pilotix', count: 36 });
+      add('pixels', 'pixel', 'ok', { name: 'Pixel Bébé Confort' });
+    } else if (ads.length) add('ads', 'adsOff', 'warn', { count: ads.length });
+    const wa = await whatsappOf(ctx.db);
+    if (wa) add('wa', 'wa', 'ok', { phone: wa.phone || wa.phoneId });
+    add('app', 'appHook', 'ok');
+    add('app', 'appHookIg', 'warn', { list: 'messages, comments' });
+    add('app', 'reach', 'ok');
+  } else if (adsHere) add('ads', 'ads', 'ok', { count: ads.length, bad: 0 });
   return { at: new Date(ctx.now()).toISOString(), checks };
 }
 async function demoUse(ctx: Ctx, assetId: number) {
@@ -1390,13 +1617,19 @@ async function demoRemove(ctx: Ctx, linkId: number) {
 }
 /**
  * The browser preview's boutique uses its sample account's Page and ad account from the start (Pilot Message ›
- * Réglages shows the Page): written once by the page (lib/backend.ts), never on a server.
+ * Réglages shows the Page): written once by the page (lib/backend.ts), never on a server. The sample account's key
+ * reaches the Instagram inbox, as « Tester » says there: it answers every Instagram customer from the start too.
  */
 export async function seedSocialPreview(db: Db, now = Date.now()) {
   const at = new Date(now).toISOString();
+  const ig = { id: '1784104920331', username: 'bebeconfort.dz' };
+  if (!(await raw(db, SOCIAL_KEYS.page)) && !(await raw(db, IG_KEY))) {
+    await put(db, IG_KEY, 'preview');
+    await put(db, 'dellal', { ...((await raw(db, 'dellal')) ?? {}), instagramLoginId: ig.id, instagramLoginUser: ig.username, igTokenAt: at, igLoginKind: 'unified' });
+  }
   await db.query(`INSERT INTO settings (key, value) VALUES ($1, $2), ($3, $4) ON CONFLICT (key) DO NOTHING`, [
     SOCIAL_KEYS.page,
-    JSON.stringify({ linkId: 1, assetId: 11, pageId: '104920331', name: 'Bébé Confort DZ', igId: '1784104920331', igUsername: 'bebeconfort.dz', picture: null, account: 'Alaeddine Benali', at }),
+    JSON.stringify({ linkId: 1, assetId: 11, pageId: '104920331', name: 'Bébé Confort DZ', igId: ig.id, igUsername: ig.username, picture: null, account: 'Alaeddine Benali', igKey: true, at }),
     SOCIAL_KEYS.ads,
     JSON.stringify({
       linkId: 1,

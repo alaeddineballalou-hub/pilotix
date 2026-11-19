@@ -408,7 +408,7 @@
     "waHelp": "WhatsApp only allows a business’s first message with an approved text (“Utility” template). Pilotix sends your texts to WhatsApp for approval; it often takes minutes, sometimes 24 h.",
     "waNumber": "WhatsApp number",
     "connected": "connected",
-    "waConnect": "Connect it in Pilot Message › Settings",
+    "waConnect": "To connect in Pilot AI › Accounts",
     "waba": "WhatsApp Business Account ID (WABA)",
     "wabaHint": "Meta Business › WhatsApp accounts, or in WhatsApp Manager. Used to send your texts for approval.",
     "waTemplates": "Texts are approved in the “Cases” tab: “Send the texts to WhatsApp”, then “Check approval”.",
@@ -444,8 +444,8 @@
     "hooksNeedSecret": "Save the password first",
     "manualNote": "Each message to send appears in Messages › To send, with “Open WhatsApp” and “Open SMS”: the text is already written, just press send.",
     "demo": "Preview: sending is simulated, no SMS or WhatsApp leaves.",
-    "appSecretMissing": "Without the Meta app secret, Pilotix does not accept WhatsApp reports (read, received, not received): a message not received switches to SMS only after 1 h.",
-    "appSecretLink": "Add it in Pilot Message › Settings"
+    "appSecretMissing": "This WhatsApp number was added by hand before: Pilotix does not get its receipts (read, delivered, not delivered), and a message that is not delivered goes to SMS only after 1 hour.",
+    "appSecretLink": "Connect it again in Pilot AI › Accounts"
   },
   "ev": {
     "sent": "{{via}} to the customer · {{kind}}",

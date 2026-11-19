@@ -2,11 +2,10 @@
 // (Dellal answers, a person can take over), a "Tester Dellal" chat, Dellal's results, and its settings (admin).
 // The inbox has three columns on a computer (conversations, the conversation, the customer), two on a tablet
 // (the customer opens as a panel) and one on a phone, where a conversation takes the whole screen.
-import { useEffect, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMenuCounts } from '../../layout/Shell';
-import { backend, rpc, serverUrl, shopApi } from '../../lib/backend';
+import { backend, serverUrl, shopApi } from '../../lib/backend';
 import { replyWindow } from '@pilotix/shared';
 import { da, n, shortWhen } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
@@ -20,9 +19,8 @@ import type { PageProps } from '../registry';
 import { Bubbles, Composer } from './chat';
 import { LahjaCard, LahjaFix } from './lahja';
 import { chatPhoto } from './photo';
-import { LinkedPage } from './linkedPage';
+import { LinkedLine, LinkedPage } from './linkedPage';
 import { VoiceRead } from './voice';
-import { loadFacebookSdk, openWaSignup } from './waSignup';
 import './messages.css';
 
 type Channel = 'whatsapp' | 'messenger' | 'instagram' | 'tiktok' | 'test';
@@ -492,129 +490,9 @@ function Results() {
   );
 }
 
-// « Connecter Instagram » / « Connecter WhatsApp »: one Meta login with Pilotix's own configuration for it (Centre de
-// contrôle › Comptes Meta et TikTok › Instagram seul / WhatsApp). The tab opens on the click; Pilotix keeps the key,
-// subscribes the account's messages and says « @x connecté » / « +213… connecté ». Asked every two seconds, like Pilot
-// AI › Comptes.
-type ConnectKind = 'instagram' | 'whatsapp';
-const CONNECT_TEXT: Record<ConnectKind, { connect: string; reconnect: string; connected: string; toast: string; help: string }> = {
-  instagram: { connect: 'igConnect', reconnect: 'igReconnect', connected: 'igConnected', toast: 'igConnectedToast', help: 'igConnectHelp' },
-  whatsapp: { connect: 'waConnect', reconnect: 'waReconnect', connected: 'waConnected', toast: 'waConnectedToast', help: 'waConnectHelp' },
-};
-function MetaConnect({ kind, linked }: { kind: ConnectKind; linked: string }) {
-  const { t } = useTranslation();
-  const k = (x: keyof (typeof CONNECT_TEXT)['instagram']) => `messages.settings.${CONNECT_TEXT[kind][x]}`;
-  const qc = useQueryClient();
-  const [pending, setPending] = useState<{
-    state: string;
-    url: string | null;
-    win: Window | null;
-  } | null>(null);
-  const closed = useRef(0);
-  useEffect(() => {
-    if (!pending) return;
-    closed.current = 0;
-    let stop = false;
-    const tick = async () => {
-      try {
-        const r = await rpc('social.state', { state: pending.state });
-        if (stop) return;
-        if (r.status === 'done') {
-          setPending(null);
-          await qc.invalidateQueries();
-          toast(t(k('toast')), 'ok');
-          return;
-        }
-        if (r.status === 'error' || r.status === 'expired') {
-          setPending(null);
-          toast(r.error ?? t('messages.settings.igExpired'), 'bad');
-          return;
-        }
-        if (pending.win?.closed && ++closed.current >= 3) {
-          setPending(null);
-          toast(t('messages.settings.igClosed'), 'bad');
-        }
-      } catch (e) {
-        if (!stop) {
-          setPending(null);
-          toast((e as Error).message, 'bad');
-        }
-      }
-    };
-    const id = window.setInterval(tick, 2000);
-    return () => {
-      stop = true;
-      window.clearInterval(id);
-    };
-  }, [pending]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const start = async () => {
-    if (pending) return;
-    // opened now, on the click: a tab opened after waiting for the server is blocked by browsers
-    const win = backend.kind === 'demo' ? null : window.open('', '_blank');
-    try {
-      const r = await rpc('social.start', { provider: 'meta', kind });
-      if (r.url && win && !win.closed) win.location.href = r.url;
-      setPending({ state: r.state, url: r.url, win });
-    } catch (e) {
-      win?.close();
-      toast((e as Error).message, 'bad');
-    }
-  };
-  const reopen = () => pending?.url && setPending({ ...pending, win: window.open(pending.url, '_blank') });
-
-  // « Connecter WhatsApp »: Meta's own popup (its JavaScript SDK), loaded before the click so the popup opens on it;
-  // without it (Meta's script blocked, the demo) the button opens Meta's page in a tab, as before
-  const sdkQ = useRpc('social.waSdk', {}, { enabled: kind === 'whatsapp' && backend.kind !== 'demo' });
-  const sdk = kind === 'whatsapp' ? sdkQ.data ?? null : null;
-  const [fb, setFb] = useState<Awaited<ReturnType<typeof loadFacebookSdk>> | null>(null);
-  const [popup, setPopup] = useState(false);
-  useEffect(() => {
-    if (!sdk) return;
-    let on = true;
-    loadFacebookSdk(sdk)
-      .then((x) => on && setFb(x))
-      .catch(() => undefined);
-    return () => {
-      on = false;
-    };
-  }, [sdk?.appId, sdk?.configId]); // eslint-disable-line react-hooks/exhaustive-deps
-  const startPopup = () => {
-    if (!fb || !sdk || popup) return;
-    setPopup(true);
-    // the login's state is asked while Meta's popup is open (the popup itself must open now, on the click)
-    const st = rpc('social.start', { provider: 'meta', kind: 'whatsapp' });
-    openWaSignup(fb, sdk)
-      .then(async (r) => {
-        const s = await st;
-        const done = await rpc('social.waFinish', { state: s.state, code: r.code, wabaId: r.wabaId, phoneId: r.phoneId });
-        await qc.invalidateQueries();
-        toast(done.warn ? done.warn : t(k('toast')), done.warn ? 'bad' : 'ok');
-      })
-      .catch((e: Error) => toast(e.message === 'cancelled' ? t('messages.settings.igClosed') : e.message, 'bad'))
-      .finally(() => setPopup(false));
-    st.catch(() => undefined);
-  };
-  const usePopup = kind === 'whatsapp' && !!fb && !!sdk;
-
-  return (
-    <div className="dl-igconnect">
-      <button type="button" className="btn primary" disabled={!!pending || popup} onClick={usePopup ? startPopup : start}>
-        <ChannelBadge ch={kind} /> {pending || popup ? t('messages.settings.igConnecting') : linked ? t(k('reconnect')) : t(k('connect'))}
-      </button>
-      {pending?.url && (
-        <button type="button" className="linkbtn" onClick={reopen}>
-          {t('messages.settings.igReopen')}
-        </button>
-      )}
-      {linked && !pending && <span className="dl-ok">✓ {t(k('connected'), { user: linked, phone: linked })}</span>}
-      <p className="muted small">{t(k('help'))}</p>
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------- settings (admin)
-type Secret = 'ai' | 'appSecret' | 'waToken' | 'tiktokToken' | 'igToken';
+/** What this form may still type: the AI's key (not on Pilotix's server). Nothing of Meta: it all comes from Pilot AI › Comptes. */
+type Secret = 'ai';
 
 function Settings() {
   const q = useRpc('dellal.settings.get', {});
@@ -632,12 +510,10 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
     onDone: (r) => {
       setSec({});
       if (r.aiTest) toast(r.aiTest.ok ? t('messages.settings.aiOk') : r.aiTest.message ?? 'IA', r.aiTest.ok ? 'ok' : 'bad');
-      if (r.igTest) toast(r.igTest.ok ? t('messages.settings.igOk', { user: r.igTest.username ?? '' }) : r.igTest.message ?? 'Instagram', r.igTest.ok ? 'ok' : 'bad');
     },
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF({ ...f, [k]: v });
   const base = serverUrl() || (backend.kind === 'demo' ? 'https://votre-serveur.dz' : window.location.origin);
-  const metaUrl = `${shopApi(base)}/hooks/meta`;
   const tiktokUrl = `${shopApi(base)}/hooks/tiktok?key=${f.verifyToken}`;
   const dirty = JSON.stringify(f) !== JSON.stringify(data.settings) || Object.values(sec).some((v) => v !== undefined && v !== '');
   const secret = (k: Secret, label: string, ph: string) => (
@@ -792,70 +668,18 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
           <ChannelBadge ch="messenger" /> <ChannelBadge ch="instagram" /> {t('messages.settings.pageTitle')}
         </h3>
         <LinkedPage page={data.page} old={data.has.pageToken} />
-        {/* Instagram's own login: the shop's own account, every customer answered (Meta's approval not needed for it) */}
-        <section className="dl-iglogin" aria-label={t('messages.settings.igLogin')}>
-          <h4>
-            <ChannelBadge ch="instagram" /> {t('messages.settings.igLogin')}
-          </h4>
-          <MetaConnect kind="instagram" linked={data.has.igToken && f.instagramLoginUser ? f.instagramLoginUser : ''} />
-          {/* the shop sees one button; Meta's developer steps and the pasted key are folded away for the Pilotix team */}
-          <details className="dl-ig-adv">
-            <summary>{t('messages.settings.igAdvanced')}</summary>
-            <p className="muted small">{t('messages.settings.igLoginHelp', { name: f.name })}</p>
-            <p className="muted small">{t('messages.settings.igOr')}</p>
-            {/* Meta's own words (its App Dashboard), kept left-to-right in every language. Newer apps: « Unified login »;
-                older ones: « Instagram login » (Pilotix takes both keys) */}
-            <ol>
-              <li>
-                {t('messages.settings.igStep1')}{' '}
-                <bdi className="dl-path" dir="ltr">
-                  App roles › Roles › Add people › Instagram Tester
-                </bdi>{' '}
-                {t('messages.settings.igStep1b')}{' '}
-                <bdi className="dl-path" dir="ltr">
-                  instagram.com/accounts/manage_access › Tester invites › Accept
-                </bdi>
-              </li>
-              <li>
-                {t('messages.settings.igStep2')}{' '}
-                <bdi className="dl-path" dir="ltr">
-                  Use cases › Instagram API › API setup with Unified login › Generate access tokens › Add account
-                </bdi>
-              </li>
-              <li>{t('messages.settings.igStep3')}</li>
-            </ol>
-            <p className="muted small">{t('messages.settings.igStepNote')}</p>
-            {secret('igToken', t('messages.settings.igToken'), 'EAA… / IGAA…')}
-          </details>
-        </section>
+        {/* Instagram's answers ride on the linked Facebook account's key (every customer answered), a key connected here
+            before, or the Page alone (only the accounts with a role in Pilotix's Meta app, until Meta approves it) */}
+        {data.page?.igUsername && (
+          <p className="muted small">
+            <bdi>{data.has.igToken ? t('messages.settings.igAll', { user: data.page.igUsername, name: f.name }) : t('messages.settings.igSome', { user: data.page.igUsername, name: f.name })}</bdi>
+          </p>
+        )}
         <h3 className="dl-h3">
           <ChannelBadge ch="whatsapp" /> {t('messages.ch.whatsapp')}
         </h3>
-        {/* « Connecter WhatsApp » (Meta's Embedded Signup): the shop sees one button and its number */}
-        <section className="dl-iglogin" aria-label={t('messages.ch.whatsapp')}>
-          <MetaConnect kind="whatsapp" linked={data.has.waToken && f.whatsappPhone ? f.whatsappPhone : ''} />
-          {data.has.waToken && f.whatsappPhoneId && !f.whatsappPhone && <p className="muted small">{t('messages.settings.waManual')}</p>}
-          {/* its own Meta app (the webhook, its keys, the number's id) is folded away for the Pilotix team */}
-          <details className="dl-ig-adv">
-            <summary>{t('messages.settings.waAdvanced')}</summary>
-            <p className="muted small">{t('messages.settings.waHelp')}</p>
-            <div className="dl-hook">
-              <Field label={t('messages.settings.metaUrl')}>
-                <CopyCode code={metaUrl} />
-              </Field>
-              <Field label={t('messages.settings.verifyToken')}>
-                <CopyCode code={f.verifyToken || '—'} />
-              </Field>
-            </div>
-            {secret('appSecret', t('messages.settings.appSecret'), '32 caractères')}
-            <div className="grid2">
-              <Field label={t('messages.settings.waPhoneId')}>
-                <input className="ltr" inputMode="numeric" value={f.whatsappPhoneId} onChange={(e) => set('whatsappPhoneId', e.target.value.replace(/\D/g, ''))} />
-              </Field>
-              {secret('waToken', t('messages.settings.waToken'), 'EAAG…')}
-            </div>
-          </details>
-        </section>
+        {/* the boutique's WhatsApp number is connected in Pilot AI › Comptes too (Meta's window for a number) */}
+        <LinkedLine ok={data.has.waToken && !!f.whatsappPhoneId} text={data.has.waToken && f.whatsappPhoneId ? t('messages.settings.waLinked', { phone: f.whatsappPhone || f.whatsappPhoneId }) : t('messages.settings.waNone')} hint={t('messages.settings.waWhere')} action={data.has.waToken && f.whatsappPhoneId ? t('messages.settings.pageChange') : t('messages.settings.waLink')} />
         <h3 className="dl-h3">
           <ChannelBadge ch="tiktok" /> {t('messages.ch.tiktok')}
         </h3>

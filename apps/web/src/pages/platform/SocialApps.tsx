@@ -1,6 +1,8 @@
 // Pilot AI › Réglages & coûts › Comptes Meta et TikTok: Pilotix's own Meta app and TikTok app, which let every boutique
 // link its accounts with one login (the shop app's Pilot AI › Comptes, modules/social.ts). Their ids, their secrets
 // (written here only, never shown again), the addresses to give them, how to make them, and how many accounts are linked.
+// One Facebook Login for Business configuration brings a boutique everything of Meta at once (Pages, Instagram, ad
+// accounts, catalogues, pixels); WhatsApp has its own (Embedded Signup). There is no Instagram-only login any more.
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { n } from '../../lib/format';
@@ -28,12 +30,10 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
   const { t } = useTranslation();
   const [metaId, setMetaId] = useState(d.meta.appId);
   const [config, setConfig] = useState(d.meta.configId);
-  // the « Instagram API (unified login) » configuration: one click links a shop's Instagram for its DMs
-  const [igConfig, setIgConfig] = useState(d.meta.igConfigId ?? '');
   // the « WhatsApp Embedded Signup » configuration: one click connects a shop's WhatsApp number
   const [waConfig, setWaConfig] = useState(d.meta.waConfigId ?? '');
   const [metaSecret, setMetaSecret] = useState<string | null>('');
-  // the secret of the app's Instagram login (Meta signs that login's webhooks with it)
+  // the secret of the app's old Instagram login (Meta still signs with it the webhooks of the accounts connected that way before)
   const [igSecret, setIgSecret] = useState<string | null>('');
   const [ttId, setTtId] = useState(d.tiktok.appId);
   const [ttSecret, setTtSecret] = useState<string | null>('');
@@ -61,7 +61,7 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
       <input type="password" className="ltr" autoComplete="new-password" disabled={!manager || v === null} value={v ?? ''} placeholder={has ? '••••••••' : ''} onChange={(e) => set(e.target.value)} />
     </Field>
   );
-  const dirty = metaId !== d.meta.appId || config !== d.meta.configId || igConfig !== (d.meta.igConfigId ?? '') || waConfig !== (d.meta.waConfigId ?? '') || ttId !== d.tiktok.appId || metaSecret !== '' || igSecret !== '' || ttSecret !== '';
+  const dirty = metaId !== d.meta.appId || config !== d.meta.configId || waConfig !== (d.meta.waConfigId ?? '') || ttId !== d.tiktok.appId || metaSecret !== '' || igSecret !== '' || ttSecret !== '';
   return (
     <Card title={t(K + 'title')} badge={<span className="chip">{t(K + 'counts', { meta: n(d.counts.meta), tiktok: n(d.counts.tiktok), shops: n(d.counts.shops) })}</span>}>
       <p className="small muted">{t(K + 'text')}</p>
@@ -82,15 +82,6 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
           <Field label={t(K + 'configId')} hint={t(K + 'configHint')}>
             <input className="ltr" inputMode="numeric" disabled={!manager} value={config} onChange={(e) => setConfig(digits(e.target.value))} />
           </Field>
-          <div className="pl-sa-ig" role="group" aria-labelledby="pl-sa-ig">
-            <h4 id="pl-sa-ig">
-              {t(K + 'igAlone')} {chip(!!d.meta.appId && !!(d.meta.igConfigId ?? ''))}
-            </h4>
-            <Field label={t(K + 'igConfigId')} hint={t(K + 'igConfigHint')}>
-              <input className="ltr" inputMode="numeric" disabled={!manager} value={igConfig} placeholder="1485334790168642" onChange={(e) => setIgConfig(digits(e.target.value))} />
-            </Field>
-            <p className="small muted">{t(K + 'igAloneText')}</p>
-          </div>
           <div className="pl-sa-ig" role="group" aria-labelledby="pl-sa-wa">
             <h4 id="pl-sa-wa">
               {t(K + 'waAlone')} {chip(!!d.meta.appId && !!(d.meta.waConfigId ?? ''))}
@@ -180,7 +171,6 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
                 meta: {
                   appId: metaId,
                   configId: config,
-                  igConfigId: igConfig,
                   waConfigId: waConfig,
                   secret: metaSecret === null ? null : metaSecret.trim(),
                   igSecret: igSecret === null ? null : igSecret.trim(),

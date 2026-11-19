@@ -23,7 +23,7 @@ import { asWords, checkLahjaWords, LAHJA_NO_CHANGE, LAHJA_PERSONAL, lahjaAvoid, 
 import { pilotConfig, pilotToday } from '../platform/pilotai';
 import { guidePics, guideText, HAS_GUIDE, readGuide, toFill } from './guide';
 import { vocabBlock, vocabFor } from './vocab';
-import { linkedPage, noteIgLogin, noteWaLogin } from './social';
+import { linkedPage } from './social';
 import { catalogueThumbs, guidePhotos, imageBlock, PHOTO_MODEL, PHOTO_SYSTEM, photoBody, PhotoReading, photoRequest, PhotoSrc, productPhotos, productsWithPhotos, productsWithSizeChart, readPhotoAnswer } from './dellalphotos';
 
 // ---------------------------------------------------------------- settings and secrets
@@ -72,14 +72,17 @@ export interface DellalSettings {
   verifyToken: string;
   messengerPageId: string;
   instagramId: string;
-  /** Instagram's own login (its key in the secrets): the account's number in its webhooks, its name, when the key was last renewed */
+  /** The key that answers every Instagram customer (in the secrets): its account's number in its webhooks, its name, when
+   *  it was written or last renewed. It comes from the linked Facebook account (Pilot AI › Comptes, modules/social.ts). */
   instagramLoginId: string;
   instagramLoginUser: string;
   igTokenAt: string;
-  /** 'ig': Instagram's own login (older apps, a 60-day key, renewed); 'unified': Meta's Unified login (newer apps, EAA…) */
+  /** 'unified': the linked account's key (graph.facebook.com, it does not end); 'ig': a key connected before with
+   *  Instagram's own login (graph.instagram.com, 60 days, renewed while it works) */
   igLoginKind: string;
+  /** the boutique's WhatsApp number (« Connecter WhatsApp », Pilot AI › Comptes): its id at Meta */
   whatsappPhoneId: string;
-  /** « Connecter WhatsApp »: the number as Meta shows it (+213 …), for Réglages ('': not connected with the button) */
+  /** the number as Meta shows it (+213 …) ('': a number typed by hand before) */
   whatsappPhone: string;
 }
 
@@ -119,11 +122,11 @@ export const DELLAL_SECRETS = {
   pageToken: 'secret_dellal_page_token',
   waToken: 'secret_dellal_wa_token',
   tiktokToken: 'secret_dellal_tiktok_token',
-  /** Instagram's own login (« Instagram API with Instagram Login »): the shop's own account, every customer answered */
+  /** the key that answers every customer of the shop's Instagram account (the linked Facebook account writes it) */
   igToken: 'secret_dellal_ig_token',
 } as const;
 export type DellalSecret = keyof typeof DELLAL_SECRETS;
-/** « Connecter WhatsApp »: the two-step PIN Pilotix gave the number when it registered it (Meta asks it to move the number) */
+/** « Connecter WhatsApp » (Pilot AI › Comptes): the two-step PIN Pilotix gave the number when it registered it (Meta asks it to move the number) */
 export const WA_PIN_KEY = 'secret_dellal_wa_pin';
 
 export async function dellalSettings(db: Db): Promise<DellalSettings> {
@@ -2204,62 +2207,10 @@ async function autoOrderOf(ctx: Ctx, s: DellalSettings, row: any): Promise<{ ref
   }
 }
 
-/**
- * Instagram's own login: the key the shop pasted (Meta app › Instagram › API setup with Instagram login › Generate access
- * tokens) is read on the server: its account (number, name), and the account is subscribed to Pilotix's webhook. Pilotix
- * then answers Instagram with it (dellal-server › send), and the boutique gets that login's webhooks (social › routeMeta).
- */
-/** What the Instagram login read (its account), kept in the boutique: Dellal answers Instagram with it. */
-export async function keepIgLogin(
-  db: Db,
-  r: { kind?: string; userId: string; username: string },
-  at: string,
-  userId?: number,
-): Promise<void> {
-  const s = await dellalSettings(db);
-  await setRaw(
-    db,
-    "dellal",
-    {
-      ...s,
-      instagramLoginId: String(r.userId),
-      instagramLoginUser: String(r.username ?? ""),
-      igTokenAt: at,
-      igLoginKind: r.kind === "unified" ? "unified" : "ig",
-    },
-    userId,
-  );
-}
-
-async function linkIgLogin(
-  ctx: Ctx,
-  token: string,
-): Promise<{ ok: boolean; username?: string; message?: string }> {
-  if (!ctx.server?.dellal)
-    return {
-      ok: false,
-      message: "Aperçu : la clé est gardée, elle sera lue sur le serveur.",
-    };
-  try {
-    const s = await dellalSettings(ctx.db);
-    const r = (await ctx.server.dellal('igLogin', { token, igId: s.instagramId || null }, ctx)) as {
-      kind?: string;
-      userId: string;
-      username: string;
-      subscribeError?: string | null;
-    };
-    await keepIgLogin(ctx.db, r, new Date(ctx.now()).toISOString(), me(ctx));
-    if (ctx.t && ctx.shop) await noteIgLogin(ctx.t, ctx.shop.id, String(r.userId), String(r.username ?? ''));
-    return r.subscribeError ? { ok: false, username: r.username, message: r.subscribeError } : { ok: true, username: r.username };
-  } catch (e: any) {
-    return { ok: false, message: String(e?.message ?? e).slice(0, 300) };
-  }
-}
-
-/** Instagram's own login key lasts 60 days: renewed every few days (on the server), while it works. */
+/** A key connected before with Instagram's own login lasts 60 days: renewed every few days (on the server), while it works. */
 const IG_RENEW_MS = 5 * 24 * 3_600_000;
 async function renewIgLogin(ctx: Ctx, s: DellalSettings, token: string): Promise<string> {
-  // a Unified login key (a system user's) does not end: nothing to renew
+  // the linked account's key does not end (or ends with the account, linked again): nothing to renew
   if (s.igLoginKind === 'unified') return token;
   if (!ctx.server?.dellal || (s.igTokenAt && ctx.now() - Date.parse(s.igTokenAt) < IG_RENEW_MS)) return token;
   try {
@@ -2416,12 +2367,12 @@ const SettingsInput = z.object({
   servicePhone: z.string().trim().max(40).regex(/^[\d\s+().-]*$/, 'Numéro du service client (chiffres)').default(''),
   darijaPrefer: z.string().max(4000).default(''),
   darijaAvoid: z.string().max(4000).default(''),
-  whatsappPhoneId: z.string().trim().max(40).regex(/^\d*$/, 'ID du numéro WhatsApp (chiffres)'),
   /**
-   * secrets: a value replaces, '' keeps, null removes. No Page token: the Facebook Page (and its Instagram account) comes
-   * only from a linked account (Pilot AI › Comptes, modules/social.ts), which writes it with its ids.
+   * secrets: a value replaces, '' keeps, null removes. Nothing of Meta is typed here: the Facebook Page, its Instagram
+   * account (and the key that answers it) and the WhatsApp number come only from Pilot AI › Comptes (modules/social.ts),
+   * which writes them with their ids.
    */
-  secrets: z.record(z.enum(['ai', 'appSecret', 'waToken', 'tiktokToken', 'igToken']), z.string().max(2000).nullable()).default({}),
+  secrets: z.record(z.enum(['ai', 'tiktokToken']), z.string().max(2000).nullable()).default({}),
 });
 
 async function settingsView(db: Db) {
@@ -2697,23 +2648,13 @@ export const dellalProcs = {
   'dellal.settings.save': proc([], SettingsInput, async (ctx, i) => {
     const cur = await dellalSettings(ctx.db);
     const { secrets, ...rest } = i;
+    // the Page, Instagram and WhatsApp (their ids, their keys) are not this form's: Pilot AI › Comptes writes them
     const next: DellalSettings = { ...cur, ...rest, verifyToken: cur.verifyToken || randomToken() };
-    // WhatsApp's key removed, or another number id typed by hand: the number « Connecter WhatsApp » brought is no longer
-    // this boutique's (Réglages stops showing it, and its messages stop coming here through Pilotix's app)
-    const waGone = secrets.waToken === null || next.whatsappPhoneId !== cur.whatsappPhoneId;
-    if (waGone) next.whatsappPhone = '';
     await setRaw(ctx.db, 'dellal', next, me(ctx));
-    if (waGone && ctx.t && ctx.shop) await noteWaLogin(ctx.t, ctx.shop.id, '');
     for (const [k, v] of Object.entries(secrets) as [DellalSecret, string | null][]) {
       if (v === null) await ctx.db.query('DELETE FROM settings WHERE key = $1', [DELLAL_SECRETS[k]]);
       else if (v.trim()) await setRaw(ctx.db, DELLAL_SECRETS[k], v.trim(), me(ctx));
     }
-    // Instagram's own login: the key is read at once (its account, its name) and the account subscribed to the webhook
-    let igTest: { ok: boolean; username?: string; message?: string } | null = null;
-    if (secrets.igToken === null) {
-      await setRaw(ctx.db, 'dellal', { ...next, instagramLoginId: '', instagramLoginUser: '', igTokenAt: '', igLoginKind: '' }, me(ctx));
-      if (ctx.t && ctx.shop) await noteIgLogin(ctx.t, ctx.shop.id, '', '');
-    } else if (secrets.igToken?.trim()) igTest = await linkIgLogin(ctx, secrets.igToken.trim());
     let aiTest: { ok: boolean; message?: string } | null = null;
     if (secrets.ai && ctx.server?.dellal) {
       try {
@@ -2724,7 +2665,7 @@ export const dellalProcs = {
       }
     }
     ctx.emit({ type: 'settings' });
-    return { ...(await settingsView(ctx.db)), aiTest, igTest, pilotAi: await pilotOn(ctx), platform: !!ctx.t };
+    return { ...(await settingsView(ctx.db)), aiTest, pilotAi: await pilotOn(ctx), platform: !!ctx.t };
   }),
 
   /** Server: a message arrived on a channel (webhooks). Admin/system only. */

@@ -408,7 +408,7 @@
     "waHelp": "WhatsApp n’autorise le premier message d’une entreprise qu’avec un texte validé (modèle « Utilitaire »). Pilotix envoie vos textes à WhatsApp pour validation ; c’est souvent fait en quelques minutes, parfois en 24 h.",
     "waNumber": "Numéro WhatsApp",
     "connected": "connecté",
-    "waConnect": "À connecter dans Pilot Message › Réglages",
+    "waConnect": "À connecter dans Pilot AI › Comptes",
     "waba": "ID du compte WhatsApp Business (WABA)",
     "wabaHint": "Meta Business › Comptes WhatsApp, ou dans le gestionnaire WhatsApp. Il sert à envoyer vos textes pour validation.",
     "waTemplates": "Les textes se valident dans l’onglet « Cas » : boutons « Envoyer les textes à WhatsApp » puis « Vérifier la validation ».",
@@ -444,8 +444,8 @@
     "hooksNeedSecret": "Enregistrez d’abord le mot de passe",
     "manualNote": "Chaque message à envoyer apparaît dans Messages › À envoyer, avec « Ouvrir WhatsApp » et « Ouvrir SMS » : le texte est déjà écrit, il reste à appuyer sur envoyer.",
     "demo": "Aperçu : les envois sont simulés, aucun SMS ni WhatsApp ne part.",
-    "appSecretMissing": "Sans le secret de l’app Meta, Pilotix n’accepte pas les accusés de WhatsApp (lu, reçu, non reçu) : un message non reçu passe au SMS seulement après 1 h.",
-    "appSecretLink": "L’ajouter dans Pilot Message › Réglages"
+    "appSecretMissing": "Ce numéro WhatsApp a été ajouté à la main avant : Pilotix ne reçoit pas ses accusés (lu, reçu, non reçu), et un message non reçu passe au SMS seulement après 1 h.",
+    "appSecretLink": "Le reconnecter dans Pilot AI › Comptes"
   },
   "ev": {
     "sent": "{{via}} au client · {{kind}}",

@@ -3,19 +3,28 @@
 // expire, or a configuration's « system user » token that does not expire; TikTok: an advertiser's token), then what the account may use
 // is read (Facebook Pages with their Instagram account and their own tokens, Meta ad accounts, TikTok ad accounts) and
 // each Page is subscribed to Pilotix's webhook (its messages and comments come to Pilotix). Tokens never leave the server.
+// This one Facebook login is the only way Meta is connected: Instagram's answers ride on its key (when the key reaches
+// the Instagram inbox), Publicité, the catalogue and the pixels on its ad accounts. WhatsApp keeps Meta's own window
+// (Embedded Signup), opened from the same card of Pilot AI › Comptes.
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { num } from './db';
 import { AppError, Ctx } from './rpc';
 import type { Tenancy } from './platform/tenancy';
 import { getRaw, setRaw } from './modules/admin';
-import { DELLAL_SECRETS, dellalSettings, keepIgLogin, WA_PIN_KEY } from './modules/dellal';
-import { igLogin, igPeek, uniAccounts } from './dellal-server';
+import { DELLAL_SECRETS, dellalSettings, WA_PIN_KEY } from './modules/dellal';
+import { uniAccounts } from './dellal-server';
+import { getSetting } from './settings';
 import {
+  adoptLinkIg,
+  CheckGroup,
+  markIgKey,
   deletionStatus,
   endState,
   FoundAccount,
+  GONE_STATE,
   loginKindOf,
-  noteIgLogin,
+  META_FEATURES,
+  MetaFeature,
   noteWaLogin,
   FoundAsset,
   holdFound,
@@ -61,12 +70,12 @@ async function graph(path: string, params: Record<string, string>, method: 'GET'
   }
   return data;
 }
-/** Instagram's own login (graph.instagram.com, its own keys): the same, in Instagram's words. */
+/** A key connected before with Instagram's own login (graph.instagram.com): the same, in Instagram's words (« Tester » reads it). */
 async function igGraph(path: string, params: Record<string, string>): Promise<any> {
   const { res, data } = await fetchJson(`https://graph.instagram.com/v23.0/${path}?${new URLSearchParams(params).toString()}`, {}, 'Instagram');
   if (!res.ok || data?.error) {
     const e = data?.error;
-    if (e?.code === 190) throw new AppError('bad_request', 'Instagram a refusé la clé (expirée ou retirée). Créez-en une nouvelle dans l’app Meta, puis collez-la dans Pilot Message › Réglages.');
+    if (e?.code === 190) throw new AppError('bad_request', 'Instagram a refusé la clé (expirée ou retirée).');
     throw new AppError('bad_request', `Instagram : ${e?.error_user_msg ?? e?.message ?? res.statusText}`);
   }
   return data;
@@ -139,14 +148,26 @@ async function metaAccount(t: Tenancy, code: string, publicUrl: string): Promise
   const me = await graph('me', { fields: 'id,name,picture{url}', access_token: token });
   const pages = await graphAll('me/accounts', { fields: 'id,name,access_token,picture{url},instagram_business_account{id,username}', limit: '100', access_token: token });
   // without the ads permission there are no ad accounts: the Pages still work
-  const ads = await graphAll('me/adaccounts', { fields: 'id,account_id,name,currency,account_status', limit: '100', access_token: token }).catch(() => []);
+  const adFields = { fields: 'id,account_id,name,currency,account_status', limit: '100', access_token: token };
+  let ads = await graphAll('me/adaccounts', adFields).catch(() => []);
+  // a key that does not end belongs to a « system user » of the business: its ad accounts are the ones it was given
+  if (!ads.length && system) ads = await graphAll('me/assigned_ad_accounts', adFields).catch(() => []);
   const assets: FoundAsset[] = [];
   for (const p of pages) {
     if (!p?.id || !p?.access_token) continue;
     // its messages and comments come to Pilotix's webhook
     let hook = true;
     await subscribePage(String(p.id), String(p.access_token)).catch(() => (hook = false));
-    const ig = p.instagram_business_account?.id ? { id: String(p.instagram_business_account.id), username: String(p.instagram_business_account.username ?? '') } : undefined;
+    const ig: { id: string; username: string; key?: boolean } | undefined = p.instagram_business_account?.id
+      ? { id: String(p.instagram_business_account.id), username: String(p.instagram_business_account.username ?? '') }
+      : undefined;
+    // The account's key reaches the Instagram inbox itself: it will answer every Instagram customer of the boutique
+    // that takes this Page (no second connection for Instagram); the account's messages are asked for with it too
+    // (Meta may refuse that one: they still come through the Page).
+    if (ig && (await igReach(token, ig.id)).ok) {
+      ig.key = true;
+      await graph(`${IG_UNI}/${ig.id}/subscribed_apps`, { subscribed_fields: IG_FIELDS, access_token: token }, 'POST').catch(() => null);
+    }
     assets.push({ kind: 'page', extId: String(p.id), name: String(p.name ?? p.id), extra: { picture: p.picture?.data?.url ?? null, ...(ig ? { ig } : {}), hook }, token: String(p.access_token) });
   }
   for (const a of ads) {
@@ -169,100 +190,25 @@ async function metaAccount(t: Tenancy, code: string, publicUrl: string): Promise
   };
 }
 
+/** Meta's API version of the Instagram key's own calls (dellal-server.ts answers and reads Instagram with the same). */
+const IG_UNI = 'https://graph.facebook.com/v23.0';
+/** What an Instagram account sends Pilotix's webhook when its key asks for it. */
+const IG_FIELDS = 'messages,messaging_postbacks,messaging_referral,comments';
 /**
- * « Connecter Instagram » (Pilot Message › Réglages): Facebook's login with the Instagram-only configuration. Its key and
- * the Instagram account it reaches wait for « Oui, c'est ma boutique »; nothing goes to the accounts list.
+ * Does this key reach an Instagram account's inbox itself (not only through its Page)? Then Pilotix answers every
+ * customer of the account with it, and reads its chats again with it (the very question the safety net asks).
  */
-async function instagramAccount(
-  t: Tenancy,
-  code: string,
-  publicUrl: string,
-): Promise<FoundAccount> {
-  const apps = await socialApps(t);
-  const secret = await socialSecret(t, "meta");
-  if (!apps.meta.appId || !secret)
-    throw new AppError("bad_request", "L’app Meta de Pilotix n’est pas prête.");
-  const tok = await graph("oauth/access_token", {
-    client_id: apps.meta.appId,
-    client_secret: secret,
-    redirect_uri: socialUrls(publicUrl).metaRedirect,
-    code,
-  });
-  let token = String(tok.access_token ?? "");
-  let expiresIn = Number(tok.expires_in) || 0;
-  if (!token)
-    throw new AppError(
-      "bad_request",
-      "Meta n’a pas donné de clé. Recommencez.",
-    );
-  // a person's key becomes one of about 60 days; a system user's key (that does not end) is kept as it is
-  const ll = await graph("oauth/access_token", {
-    grant_type: "fb_exchange_token",
-    client_id: apps.meta.appId,
-    client_secret: secret,
-    fb_exchange_token: token,
-  }).catch(() => null);
-  if (ll?.access_token) {
-    token = String(ll.access_token);
-    expiresIn = Number(ll.expires_in) || 60 * 86_400;
+export async function igReach(token: string, igId: string): Promise<{ ok: boolean; why: string | null }> {
+  try {
+    await graph(`${IG_UNI}/${igId}/conversations`, { platform: 'instagram', fields: 'id', limit: '1', access_token: token });
+    return { ok: true, why: null };
+  } catch (e) {
+    return { ok: false, why: String((e as any)?.message ?? e).slice(0, 240) };
   }
-  const ig = await igPeek(token);
-  if (!ig)
-    throw new AppError(
-      "bad_request",
-      "Aucun compte Instagram professionnel trouvé avec cette connexion. Choisissez votre compte Instagram dans la fenêtre de Meta, puis recommencez.",
-    );
-  return {
-    provider: "meta",
-    extId: ig.id,
-    name: ig.username ? `@${ig.username}` : "Instagram",
-    token,
-    tokenKind: "user",
-    expiresAt: expiresIn
-      ? new Date(Date.now() + expiresIn * 1000).toISOString()
-      : null,
-    assets: [],
-    instagram: ig,
-  };
-}
-
-/** « Oui, c'est ma boutique » for « Connecter Instagram »: the key goes to the boutique's Pilot Message, its DMs to Pilotix. */
-async function linkInstagram(
-  t: Tenancy,
-  shopId: number | null,
-  f: FoundAccount,
-): Promise<{ ok: boolean; message: string; account?: string }> {
-  if (!shopId || !f.instagram)
-    return {
-      ok: false,
-      message:
-        "Boutique introuvable. Recommencez depuis Pilot Message › Réglages.",
-    };
-  const r = (
-    await t.platform.query(
-      `SELECT schema_name FROM platform.shops WHERE id = $1 AND status NOT IN ('archived', 'deleted')`,
-      [shopId],
-    )
-  )[0];
-  if (!r) return { ok: false, message: "Boutique introuvable." };
-  const db = t.shop(String(r.schema_name));
-  // the account is read again with the key and subscribed to Pilotix's webhook (its DMs come to Pilotix)
-  const got = await igLogin(f.token, f.instagram.id);
-  await setRaw(db, DELLAL_SECRETS.igToken, f.token);
-  await keepIgLogin(db, got, new Date().toISOString());
-  await noteIgLogin(t, shopId, String(got.userId), String(got.username ?? ""));
-  const name = got.username ? `@${got.username}` : f.name;
-  return {
-    ok: true,
-    message: got.subscribeError
-      ? `Instagram connecté, mais Meta a refusé l’abonnement aux messages : ${got.subscribeError}`
-      : "Instagram connecté",
-    account: name,
-  };
 }
 
 /**
- * « Connecter WhatsApp » (Pilot Message › Réglages): Meta's Embedded Signup with the WhatsApp configuration. In Meta's
+ * « Connecter WhatsApp » (Pilot AI › Comptes): Meta's Embedded Signup with the WhatsApp configuration. In Meta's
  * window the shop picks (or makes) its WhatsApp Business account and its number; Pilotix reads which account the key was
  * given (debug_token's granular scopes), then its number. Its key and number wait for « Oui, c'est ma boutique ».
  */
@@ -326,7 +272,7 @@ async function whatsappAccount(t: Tenancy, code: string, publicUrl: string | nul
  * Pilot Message (Dellal answers on it), its delivery messages and its campaigns' templates (the account's id).
  */
 async function linkWhatsapp(t: Tenancy, shopId: number | null, f: FoundAccount): Promise<{ ok: boolean; message: string; account?: string; warn?: string }> {
-  if (!shopId || !f.whatsapp) return { ok: false, message: 'Boutique introuvable. Recommencez depuis Pilot Message › Réglages.' };
+  if (!shopId || !f.whatsapp) return { ok: false, message: 'Boutique introuvable. Recommencez depuis Pilot AI › Comptes.' };
   const r = (await t.platform.query(`SELECT schema_name FROM platform.shops WHERE id = $1 AND status NOT IN ('archived', 'deleted')`, [shopId]))[0];
   if (!r) return { ok: false, message: 'Boutique introuvable.' };
   const db = t.shop(String(r.schema_name));
@@ -363,7 +309,7 @@ async function linkWhatsapp(t: Tenancy, shopId: number | null, f: FoundAccount):
 export async function finishWhatsappPopup(t: Tenancy, shopId: number, a: { state: string; code: string; wabaId?: string | null; phoneId?: string | null }) {
   const st = await takeState(t, a.state);
   if (!st || st.provider !== 'meta' || loginKindOf(st.state) !== 'whatsapp' || st.fromShop !== shopId || st.shopId !== shopId)
-    return { ok: false, message: 'Connexion introuvable. Recommencez depuis Pilot Message › Réglages.' };
+    return { ok: false, message: 'Connexion introuvable. Recommencez depuis Pilot AI › Comptes.' };
   if (st.done) return { ok: false, message: 'Cette connexion a déjà servi. Recommencez.' };
   if (st.expired) {
     await endState(t, st.state, { error: 'Le temps est passé (20 minutes) : recommencez.' });
@@ -430,6 +376,12 @@ export async function finishLogin(t: Tenancy, provider: SocialProvider, q: Recor
   const st = await takeState(t, String(q.state ?? ''));
   if (!st || st.provider !== provider) return { ok: false, message: 'Ce lien de connexion est inconnu. Fermez cet onglet et recommencez depuis Pilotix.' };
   if (st.done) return { ok: false, message: 'Ce lien a déjà servi. Fermez cet onglet et revenez sur Pilotix.' };
+  // « Connecter Instagram » is gone (Instagram comes with the Facebook account now): a tab of it still open ends here
+  if (st.state.startsWith(GONE_STATE)) {
+    const gone = 'Cette connexion n’existe plus : Instagram se connecte maintenant avec « Continuer avec Facebook » (Pilot AI › Comptes).';
+    await endState(t, st.state, { error: gone });
+    return { ok: false, message: `${gone} Fermez cet onglet.` };
+  }
   if (st.expired) {
     await endState(t, st.state, { error: 'Le temps est passé (20 minutes) : recommencez.' });
     return { ok: false, message: 'Le temps est passé (20 minutes). Fermez cet onglet et recommencez depuis Pilotix.' };
@@ -442,14 +394,7 @@ export async function finishLogin(t: Tenancy, provider: SocialProvider, q: Recor
   }
   try {
     const kind = loginKindOf(st.state);
-    const found =
-      provider === 'meta'
-        ? kind === 'instagram'
-          ? await instagramAccount(t, code, publicUrl)
-          : kind === 'whatsapp'
-            ? await whatsappAccount(t, code, publicUrl)
-            : await metaAccount(t, code, publicUrl)
-        : await tiktokAccount(t, code);
+    const found = provider === 'meta' ? (kind === 'whatsapp' ? await whatsappAccount(t, code, publicUrl) : await metaAccount(t, code, publicUrl)) : await tiktokAccount(t, code);
     const key = randomBytes(24).toString('base64url');
     await holdFound(t, st.state, found, sha256(key));
     const shop = st.shopId ? String((await t.platform.query('SELECT name FROM platform.shops WHERE id = $1', [st.shopId]))[0]?.name ?? '') : null;
@@ -483,17 +428,7 @@ export async function confirmLogin(t: Tenancy, state: string, key: string, yes: 
     await endState(t, st.state, { error: 'Pas lié : « Ce n’est pas ma boutique » dans l’onglet de connexion.' });
     return { ok: false, message: 'Rien n’a été lié. Si vous n’avez rien demandé, vous pouvez retirer Pilotix de votre compte (Facebook : Paramètres › Intégrations professionnelles).' };
   }
-  // « Connecter Instagram »: to Pilot Message, not to the accounts list
-  if (st.found.instagram) {
-    const r = await linkInstagram(t, st.shopId, st.found).catch((e: any) => ({
-      ok: false,
-      message: String(e?.message ?? 'Erreur').slice(0, 300),
-      account: undefined,
-    }));
-    await endState(t, st.state, r.ok ? { linkId: null } : { error: r.message });
-    return r;
-  }
-  // « Connecter WhatsApp »: to Pilot Message too
+  // « Connecter WhatsApp »: a number, not an account of the list (it goes to the boutique's Pilot Message)
   if (st.found.whatsapp) {
     const r = await linkWhatsapp(t, st.shopId, st.found).catch((e: any) => ({ ok: false, message: String(e?.message ?? 'Erreur').slice(0, 300), account: undefined }));
     await endState(t, st.state, r.ok ? { linkId: null } : { error: r.message });
@@ -639,41 +574,56 @@ async function runTtCatalog(action: string, args: any, ctx: Ctx): Promise<unknow
   throw new AppError('bad_request', `Action TikTok inconnue : ${action}`);
 }
 
-/** What the agents need, by what they do (a missing one is named on the test's line). */
-const NEEDED = [
-  'pages_show_list',
-  'pages_messaging',
-  'pages_manage_metadata',
-  'pages_read_engagement',
-  'pages_manage_engagement',
-  'pages_read_user_content',
-  'instagram_basic',
-  'instagram_manage_messages',
-  'instagram_manage_comments',
-  'ads_read',
-];
 const jsonOf = (v: unknown): any => (typeof v === 'string' ? JSON.parse(v) : v ?? {});
 const why = (e: unknown) => String((e as any)?.message ?? e).slice(0, 240);
 
-/**
- * Tries a linked account now, for this boutique, one line per thing (none stops the others): the account's key, its
- * permissions, the Page this boutique uses (its key; subscribed to Pilotix's webhook again when its messages would not
- * come), its Instagram account (its inbox, and when Meta last sent its messages), Pilotix's Meta app webhook (Facebook
- * and Instagram: its address and fields), that the
- * webhook's address answers from the Internet (Cloudflare can block it), the ad accounts this boutique counts. A key
- * Facebook refuses turns the account red; a key that works again turns it green.
- */
 /** When Meta last sent Pilotix a customer's comment for a Page / an Instagram account (routeMeta writes it down). */
 async function lastComment(t: Tenancy, object: 'page' | 'instagram', extId: string): Promise<{ at: string; routed: boolean } | null> {
   const r = (await t.platform.query(`SELECT comment_at, routed FROM platform.social_hooks WHERE object = $1 AND ext_id = $2 AND comment_at IS NOT NULL`, [object, extId]).catch(() => []))[0];
   return r ? { at: new Date(r.comment_at).toISOString(), routed: !!r.routed } : null;
 }
 
+/**
+ * An ad account that is not simply active at Meta (account_status): the page says which case in plain words. Disabled,
+ * unpaid or closed: its ads do not run (red); the others: to look at.
+ */
+const AD_STATES: Record<number, { why: string; state: 'warn' | 'bad' }> = {
+  2: { why: 's2', state: 'bad' },
+  3: { why: 's3', state: 'bad' },
+  7: { why: 's7', state: 'warn' },
+  8: { why: 's8', state: 'warn' },
+  9: { why: 's9', state: 'warn' },
+  100: { why: 's100', state: 'warn' },
+  101: { why: 's101', state: 'bad' },
+};
+/** An ad account as its key sees it: its name, its state, and what the key may do there when Meta says it (user_tasks). */
+const readAdAccount = (id: string, token: string): Promise<any> =>
+  graph(`act_${id}`, { fields: 'id,name,account_status,currency,user_tasks', access_token: token }).catch(() => graph(`act_${id}`, { fields: 'id,name,account_status,currency', access_token: token }));
+
+/**
+ * Tries a linked account now, for this boutique, part by part and one line per thing (none stops the others), so the
+ * person sees WHERE a problem is and what to do:
+ *  - key: the account's key, how long it lasts, what Facebook gave it (how many Pages, Instagram accounts, ad accounts);
+ *  - fb: the Page this boutique uses (its key; subscribed to Pilotix's webhook again when its messages would not come),
+ *    its last message and comment, the safety net;
+ *  - ig: its Instagram account (its inbox, its last message and comment) and the key that answers it: the account's
+ *    own key when it reaches the inbox (taken at once when the boutique had none, or when the key connected before in
+ *    Pilot Message no longer works);
+ *  - ads: the ad accounts this boutique counts (each one read, its state at Meta, its numbers, launching), or the key
+ *    pasted before that Publicité still runs on;
+ *  - forms, catalog, pixels, content: the ads' forms, the catalogue and the pixels (read with the boutique's ads key),
+ *    publishing;
+ *  - wa: the boutique's WhatsApp number;
+ *  - app: Pilotix's Meta app webhook (its address and fields), and that the address answers from the Internet.
+ * Each part names the permission it misses (what the key was given comes from Meta's debug_token: the permissions, and
+ * for which accounts). A key Facebook refuses turns the account red; a key that works again turns it green.
+ */
 export async function testLink(t: Tenancy, shopId: number, linkId: number, publicUrl: string): Promise<SocialTest> {
   const l = (await t.platform.query(`SELECT * FROM platform.social_links WHERE id = $1`, [linkId]))[0];
   if (!l) throw new AppError('not_found', 'Compte introuvable');
   const checks: SocialCheck[] = [];
-  const add = (key: string, state: SocialCheck['state'], params?: SocialCheck['params'], detail?: string | null) => checks.push({ key, state, ...(params ? { params } : {}), detail: detail ?? null });
+  const add = (group: CheckGroup, key: string, state: SocialCheck['state'], params?: SocialCheck['params'], detail?: string | null) =>
+    checks.push({ key, group, state, ...(params ? { params } : {}), detail: detail ?? null });
   const assets = await t.platform.query(`SELECT * FROM platform.social_assets WHERE link_id = $1 ORDER BY kind, name, id`, [linkId]);
   const uses = await t.platform.query(`SELECT u.kind, u.asset_id FROM platform.social_uses u JOIN platform.social_assets a ON a.id = u.asset_id WHERE u.shop_id = $1 AND a.link_id = $2`, [shopId, linkId]);
   const counts = (kind: string) => uses.some((u: any) => u.kind === kind);
@@ -689,143 +639,350 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
     try {
       const r = await tiktok('oauth2/advertiser/get/', { token, query: { app_id: apps.tiktok.appId, secret } });
       const n = Array.isArray(r?.list) ? r.list.length : 0;
-      add('token', 'ok', { name: String(l.name ?? 'TikTok'), count: n });
+      add('key', 'token', 'ok', { name: String(l.name ?? 'TikTok'), count: n });
       if (l.status === 'error') await setStatus(true);
     } catch (e) {
-      add('token', 'bad', undefined, why(e));
+      add('key', 'token', 'bad', undefined, why(e));
       if (keyRefused(e)) await setStatus(false, why(e));
     }
-    if (counts('advertiser')) add('ads', 'ok', { count: assets.filter((a: any) => a.kind === 'advertiser').length, bad: 0 });
+    if (counts('advertiser')) add('ads', 'ads', 'ok', { count: assets.filter((a: any) => a.kind === 'advertiser').length, bad: 0 });
     return { at: new Date().toISOString(), checks };
   }
 
-  // the account's key, and what it was allowed
+  // ------------------------------------------------------------ the key, and what Facebook gave it
   let keyOk = false;
   try {
     const me = await graph('me', { fields: 'id,name', access_token: token });
     keyOk = true;
-    add('token', 'ok', { name: String(me.name ?? l.name ?? '') });
+    add('key', 'token', 'ok', { name: String(me.name ?? l.name ?? '') });
     if (l.status === 'error') await setStatus(true);
   } catch (e) {
-    add('token', 'bad', undefined, why(e));
+    add('key', 'token', 'bad', undefined, why(e));
     if (keyRefused(e)) await setStatus(false, why(e));
   }
-  if (keyOk) {
-    try {
-      const granted = new Set((await graphAll('me/permissions', { access_token: token })).filter((p) => p?.status === 'granted').map((p) => String(p.permission)));
-      const missing = NEEDED.filter((p) => !granted.has(p));
-      add('perms', missing.length ? 'warn' : 'ok', missing.length ? { list: missing.join(', ') } : undefined);
-    } catch (e) {
-      add('perms', 'warn', undefined, why(e));
-    }
-  }
-
-  // the Page this boutique answers on (from this account): its key, its webhook subscription, its Instagram account
   const apps = await socialApps(t);
+  const secret = await socialSecret(t, 'meta');
+  // its permissions, and for which accounts each was given (Meta's debug_token); without it, the permissions alone
+  let granted: Set<string> | null = null;
+  let granular: any[] = [];
+  let ends: number | null = l.expires_at ? new Date(l.expires_at).getTime() : null;
+  if (keyOk) {
+    const dbg = apps.meta.appId && secret ? (await graph('debug_token', { input_token: token, access_token: `${apps.meta.appId}|${secret}` }).catch(() => null))?.data : null;
+    if (Array.isArray(dbg?.scopes)) granted = new Set(dbg.scopes.map(String));
+    if (Array.isArray(dbg?.granular_scopes)) granular = dbg.granular_scopes;
+    if (dbg && Number.isFinite(Number(dbg.expires_at)) && dbg.expires_at !== undefined) ends = Number(dbg.expires_at) > 0 ? Number(dbg.expires_at) * 1000 : null;
+    if (!granted) {
+      try {
+        granted = new Set((await graphAll('me/permissions', { access_token: token })).filter((p) => p?.status === 'granted').map((p) => String(p.permission)));
+      } catch (e) {
+        add('key', 'perms', 'warn', undefined, why(e));
+      }
+    }
+    if (ends === null) add('key', 'keyLife', 'ok', { why: 'never' });
+    else add('key', 'keyLife', ends - Date.now() < SOCIAL.soonDays * 86_400_000 ? 'warn' : 'ok', { until: new Date(ends).toISOString() });
+  }
+  // reading the numbers is allowed by the permission to manage the ads too
+  const has = (p: string) => !granted || granted.has(p) || (p === 'ads_read' && granted.has('ads_management'));
+  /** A part's missing permissions, said on its own line (bad: the boutique uses this part now; warn: it would need it). */
+  const perm = (group: CheckGroup, feat: MetaFeature, state: SocialCheck['state']) => {
+    const missing = [...new Set(META_FEATURES[feat].filter((p) => !has(p)))];
+    if (missing.length) add(group, 'perm', state, { why: feat, list: missing.join(', ') });
+    return !missing.length;
+  };
+  /** Was this permission given for this very account? (null: Meta did not say; true: for it, or for all) */
+  const givenFor = (scope: string, id: string): boolean | null => {
+    const g = granular.find((x) => x?.scope === scope);
+    if (!g) return null;
+    const ids: string[] = Array.isArray(g.target_ids) ? g.target_ids.map(String) : [];
+    return !ids.length || ids.includes(id);
+  };
+  const pagesAll = assets.filter((a: any) => a.kind === 'page');
+  const adsAll = assets.filter((a: any) => a.kind === 'ad_account');
+  const igsAll = pagesAll.filter((a: any) => jsonOf(a.extra).ig?.id).length;
+  // what Facebook gave Pilotix at the last login: a zero says what was not ticked in Facebook's window
+  if (keyOk) add('key', 'given', pagesAll.length && adsAll.length ? 'ok' : 'info', { pages: pagesAll.length, igs: igsAll, ads: adsAll.length });
+
+  // this boutique's own settings (what its agents read)
+  const schema = (await t.platform.query(`SELECT schema_name FROM platform.shops WHERE id = $1`, [shopId]).catch(() => []))[0]?.schema_name;
+  const db = schema ? t.shop(String(schema)) : null;
+  const iso = (v: unknown) => new Date(v as string).toISOString();
+
+  // ------------------------------------------------------------ the Page this boutique answers on (from this account)
   const pageUse = uses.find((u: any) => u.kind === 'page');
   const page = pageUse ? assets.find((a: any) => num(a.id) === num(pageUse.asset_id)) : null;
   if (page) {
     const ptoken = String(page.token ?? '');
     const name = String(page.name ?? '');
+    const pageId = String(page.ext_id);
+    perm('fb', 'fbMessages', 'bad');
+    perm('fb', 'fbComments', 'bad');
     let pageOk = false;
     try {
-      await graph(String(page.ext_id), { fields: 'id,name', access_token: ptoken });
+      await graph(pageId, { fields: 'id,name', access_token: ptoken });
       pageOk = true;
-      add('page', 'ok', { name });
+      add('fb', 'page', 'ok', { name });
     } catch (e) {
-      add('page', 'bad', { name }, why(e));
+      add('fb', 'page', 'bad', { name }, why(e));
     }
     if (pageOk) {
       const extra = jsonOf(page.extra);
       let hook = false;
+      let leadLine: [SocialCheck['state'], SocialCheck['params']?] = ['warn'];
       try {
-        const subs = await graphAll(`${page.ext_id}/subscribed_apps`, { access_token: ptoken });
+        const subs = await graphAll(`${pageId}/subscribed_apps`, { access_token: ptoken });
         const mine = subs.find((s) => String(s?.id) === apps.meta.appId);
         const have = new Set<string>((mine?.subscribed_fields ?? []).map(String));
         // the ads' lead forms (Marketing › Formulaires): asked again when missing, if the account gave their permission
         let leads = have.has(SOCIAL.leadFields);
-        if (mine && SOCIAL.pageFields.split(',').every((f) => have.has(f)) && leads) add('pageHook', 'ok');
+        const all = !!mine && SOCIAL.pageFields.split(',').every((f) => have.has(f));
+        if (all && leads) add('fb', 'pageHook', 'ok');
         else {
-          const r = await subscribePage(String(page.ext_id), ptoken);
-          if (mine && SOCIAL.pageFields.split(',').every((f) => have.has(f))) add('pageHook', 'ok');
-          else add('pageHook', 'ok', { fixed: 1 });
-          if (r.leads && !leads) add('leadHook', 'ok', { fixed: 1 });
+          const r = await subscribePage(pageId, ptoken);
+          add('fb', 'pageHook', 'ok', all ? undefined : { fixed: 1 });
+          if (r.leads && !leads) leadLine = ['ok', { fixed: 1 }];
           leads = r.leads;
         }
-        if (leads && !checks.some((c) => c.key === 'leadHook')) add('leadHook', 'ok');
-        else if (!leads) add('leadHook', 'warn');
+        if (leads && leadLine[0] !== 'ok') leadLine = ['ok'];
         hook = true;
       } catch (e) {
-        add('pageHook', 'bad', undefined, why(e));
+        add('fb', 'pageHook', 'bad', undefined, why(e));
       }
       if (extra.hook !== hook) await t.platform.query(`UPDATE platform.social_assets SET extra = $2 WHERE id = $1`, [num(page.id), JSON.stringify({ ...extra, hook })]);
+      // Messenger: when Meta last sent Pilotix a customer's message for this Page (routeMeta writes it down)
+      const fbm = (await t.platform.query(`SELECT routed, message_at FROM platform.social_hooks WHERE object = 'page' AND ext_id = $1`, [pageId]).catch(() => []))[0];
+      add('fb', 'fbSeen', fbm?.message_at && fbm.routed ? 'ok' : 'warn', { name, ...(fbm?.message_at ? { at: iso(fbm.message_at) } : {}), ...(fbm?.message_at && !fbm.routed ? { lost: 1 } : {}) });
       // the Page's comments: when a customer's last came (Pilot Comments answers them)
-      const fbc = await lastComment(t, 'page', String(page.ext_id));
-      add('fbComment', fbc?.routed ? 'ok' : 'warn', { name, ...(fbc ? { at: fbc.at } : {}), ...(fbc && !fbc.routed ? { lost: 1 } : {}) });
+      const fbc = await lastComment(t, 'page', pageId);
+      add('fb', 'fbComment', fbc?.routed ? 'ok' : 'warn', { name, ...(fbc ? { at: fbc.at } : {}), ...(fbc && !fbc.routed ? { lost: 1 } : {}) });
+      // the safety net (dellal.catchUp, every 3 minutes): when it last read this Page's chats again, and what it caught
+      const run = db ? (await db.query(`SELECT value FROM settings WHERE key = 'dellal_catchup'`).catch(() => []))[0]?.value : null;
+      if (!run?.at) add('fb', 'catchUp', 'warn');
+      else if (run.error) add('fb', 'catchUp', 'warn', { at: String(run.at), why: 'error' }, String(run.error).slice(0, 240));
+      else add('fb', 'catchUp', 'ok', { at: String(run.at), count: num(run.found) });
+
+      // ---------------------------------------------------------- its Instagram account
       if (extra.ig?.id) {
+        const igId = String(extra.ig.id);
         let username = String(extra.ig.username ?? '');
+        perm('ig', 'igMessages', 'bad');
+        perm('ig', 'igComments', 'bad');
         try {
-          const r = await graph(String(extra.ig.id), { fields: 'id,username', access_token: ptoken });
+          const r = await graph(igId, { fields: 'id,username', access_token: ptoken });
           username = String(r.username ?? username);
-          add('ig', 'ok', { username });
+          add('ig', 'ig', 'ok', { username });
         } catch (e) {
-          add('ig', 'bad', undefined, why(e));
+          add('ig', 'ig', 'bad', undefined, why(e));
         }
         // its inbox through the Page: when Meta will not give Instagram's messages, it says why here (no role on the
         // Instagram account, « Allow access to messages » off, the app's access…); a creator account's first read also
         // starts its messages' webhook
         try {
-          await graph(`${page.ext_id}/conversations`, { platform: 'instagram', fields: 'id', limit: '1', access_token: ptoken });
-          add('igInbox', 'ok', { username });
+          await graph(`${pageId}/conversations`, { platform: 'instagram', fields: 'id', limit: '1', access_token: ptoken });
+          add('ig', 'igInbox', 'ok', { username });
         } catch (e) {
-          add('igInbox', 'bad', { username }, why(e));
+          add('ig', 'igInbox', 'bad', { username }, why(e));
         }
         // when Meta last sent Pilotix a customer's message from this Instagram account (routeMeta writes it down); only
         // other things (« standby »: another app has the conversations; an echo, a read…); or nothing for it, but an
         // Instagram message for an account no boutique uses (Meta gave it another number)
-        const iso = (v: unknown) => new Date(v as string).toISOString();
-        const seen = (await t.platform.query(`SELECT at, routed, what, message_at FROM platform.social_hooks WHERE object = 'instagram' AND ext_id = $1`, [String(extra.ig.id)]).catch(() => []))[0];
-        if (seen?.message_at) add('igSeen', seen.routed ? 'ok' : 'warn', { username, at: iso(seen.message_at), ...(seen.routed ? {} : { lost: 1 }) });
-        else if (seen) add('igSeen', 'warn', { username, at: iso(seen.at), why: seen.what === 'standby' ? 'standby' : 'other' });
+        const seen = (await t.platform.query(`SELECT at, routed, what, message_at FROM platform.social_hooks WHERE object = 'instagram' AND ext_id = $1`, [igId]).catch(() => []))[0];
+        if (seen?.message_at) add('ig', 'igSeen', seen.routed ? 'ok' : 'warn', { username, at: iso(seen.message_at), ...(seen.routed ? {} : { lost: 1 }) });
+        else if (seen) add('ig', 'igSeen', 'warn', { username, at: iso(seen.at), why: seen.what === 'standby' ? 'standby' : 'other' });
         else {
           const stray = (await t.platform.query(`SELECT max(at) AS at FROM platform.social_hooks WHERE object = 'instagram' AND NOT routed AND at > now() - interval '1 day'`).catch(() => []))[0];
-          add('igSeen', 'warn', { username, ...(stray?.at ? { at: iso(stray.at), why: 'unknown' } : {}) });
+          add('ig', 'igSeen', 'warn', { username, ...(stray?.at ? { at: iso(stray.at), why: 'unknown' } : {}) });
         }
         // its comments: when a customer's last came
-        const igc = await lastComment(t, 'instagram', String(extra.ig.id));
-        add('igComment', igc?.routed ? 'ok' : 'warn', { username, ...(igc ? { at: igc.at } : {}), ...(igc && !igc.routed ? { lost: 1 } : {}) });
-      } else add('igNone', 'warn', { name });
-      // the safety net (dellal.catchUp, every 3 minutes): when it last read this Page's chats again, and what it caught
-      const schema = (await t.platform.query(`SELECT schema_name FROM platform.shops WHERE id = $1`, [shopId]).catch(() => []))[0]?.schema_name;
-      const run = schema ? (await t.shop(String(schema)).query(`SELECT value FROM settings WHERE key = 'dellal_catchup'`).catch(() => []))[0]?.value : null;
-      if (!run?.at) add('catchUp', 'warn');
-      else if (run.error) add('catchUp', 'warn', { at: String(run.at), why: 'error' }, String(run.error).slice(0, 240));
-      else add('catchUp', 'ok', { at: String(run.at), count: num(run.found) });
-      // Instagram's own login (Pilot Message › Réglages): with it, Dellal answers every customer of this account
-      const igKey = schema ? (await t.shop(String(schema)).query(`SELECT value FROM settings WHERE key = 'secret_dellal_ig_token'`).catch(() => []))[0]?.value : null;
-      const dset = schema ? (await t.shop(String(schema)).query(`SELECT value FROM settings WHERE key = 'dellal'`).catch(() => []))[0]?.value : null;
-      if (igKey) {
-        try {
-          if (dset?.igLoginKind === 'unified') {
-            // Meta's Unified login (newer apps): the key's Instagram accounts (a system user's /me is not the account)
-            // (a system user's key lists them as assigned accounts; « Connecter Instagram »'s key, through its Pages)
-            const list = await uniAccounts(String(igKey));
-            const acc = list.find((x) => String(x?.id) === String(dset?.instagramLoginId ?? '')) ?? list[0];
-            if (!acc) throw new AppError('bad_request', 'Cette clé n’a plus accès au compte Instagram. Dans l’app Meta, donnez-lui le compte à nouveau.');
-            add('igLogin', 'ok', { username: String(acc.username ?? dset?.instagramLoginUser ?? '') });
-          } else {
-            const me = await igGraph('me', { fields: 'user_id,username', access_token: String(igKey) });
-            add('igLogin', 'ok', { username: String(me?.username ?? '') });
-          }
-        } catch (e) {
-          add('igLogin', 'bad', undefined, why(e));
-        }
-      } else if (extra.ig?.id) add('igLogin', 'warn', { username: String(extra.ig.username ?? '') });
-    }
-  } else if (assets.some((a: any) => a.kind === 'page')) add('pageNone', 'warn');
+        const igc = await lastComment(t, 'instagram', igId);
+        add('ig', 'igComment', igc?.routed ? 'ok' : 'warn', { username, ...(igc ? { at: igc.at } : {}), ...(igc && !igc.routed ? { lost: 1 } : {}) });
 
-  // Pilotix's Meta app: where Meta sends the Pages' and Instagram's messages and comments
-  const secret = await socialSecret(t, 'meta');
+        // The key that answers Instagram. The account's own key when it reaches the Instagram inbox (every customer is
+        // answered): taken at once when the boutique has none. A key connected before in Pilot Message keeps its place
+        // while it works; when it no longer does, the account's key takes over (if it reaches the inbox).
+        const own = db ? await getRaw<string>(db, DELLAL_SECRETS.igToken, '') : '';
+        const fromLink = db ? !!(await getRaw<any>(db, SOCIAL_KEYS.page, null))?.igKey : false;
+        const reach = keyOk ? await igReach(token, igId) : { ok: false, why: null };
+        // not reached: the Instagram account was not ticked in Facebook's window (Meta says for which accounts), or Meta's reason
+        const missed = givenFor('instagram_manage_messages', igId) === false ? 'tick' : 'none';
+        if (own && !fromLink) {
+          const dset = await dellalSettings(db!);
+          let oldWhy: string | null = null;
+          try {
+            if (dset.igLoginKind === 'unified') {
+              // a key of Meta's Unified login: its Instagram accounts (given to it, or through its Pages)
+              const list = await uniAccounts(own);
+              if (!(list.find((x) => String(x?.id) === String(dset.instagramLoginId ?? '')) ?? list[0])) throw new AppError('bad_request', 'Cette clé n’a plus accès au compte Instagram.');
+            } else await igGraph('me', { fields: 'user_id,username', access_token: own });
+          } catch (e) {
+            oldWhy = why(e);
+          }
+          // it works: it stays. When the account's key reaches the inbox too, the boutique may remove the old one (Comptes
+          // offers it then): said, and marked on the Page
+          if (oldWhy === null) {
+            if (reach.ok) await markIgKey(t, num(page.id));
+            add('ig', 'igKey', 'ok', { username: String(dset.instagramLoginUser || username), why: reach.ok ? 'oldReady' : 'old' });
+          } else if (reach.ok && (await adoptLinkIg(t, shopId, num(page.id)))) add('ig', 'igKey', 'ok', { username, fixed: 1 });
+          else add('ig', 'igKey', 'bad', { username, why: 'oldBad' }, oldWhy);
+        } else if (reach.ok) {
+          // nothing answered every customer yet: the account's key does from now on
+          if (!own && (await adoptLinkIg(t, shopId, num(page.id)))) add('ig', 'igKey', 'ok', { username, fixed: 1 });
+          else add('ig', 'igKey', 'ok', { username });
+        } else add('ig', 'igKey', fromLink ? 'bad' : 'warn', { username, why: missed }, reach.why);
+      } else add('ig', 'igNone', 'warn', { name });
+
+      // ---------------------------------------------------------- the ads' forms, publishing
+      perm('forms', 'forms', 'warn');
+      add('forms', 'leadHook', leadLine[0], leadLine[1]);
+      try {
+        await graph(`${pageId}/leadgen_forms`, { fields: 'id', limit: '1', access_token: ptoken });
+        add('forms', 'forms', 'ok');
+      } catch (e) {
+        add('forms', 'forms', 'warn', undefined, why(e));
+      }
+      if (perm('content', 'content', 'warn')) add('content', 'content', 'ok');
+    }
+  } else if (pagesAll.length) add('fb', 'pageNone', 'warn');
+  else if (keyOk) add('fb', 'pagesNone', 'warn');
+
+  // ------------------------------------------------------------ Publicité: the ad accounts this boutique counts
+  const shopMeta = db ? await getSetting(db, 'meta') : null;
+  const adsKey = db ? await getRaw<string>(db, SOCIAL_KEYS.adsToken, '') : '';
+  const adsRow = db ? await getRaw<any>(db, SOCIAL_KEYS.ads, null) : null;
+  // whose key Publicité, the catalogue and the pixels run on here: this account's, a key pasted before, or another account's
+  const adsMine = counts('ad_account');
+  const adsOld = !!adsKey && !adsRow?.adAccountId;
+  /**
+   * This login brought no ad account and Facebook gave its key no right on ads at all (not even to read them): linking
+   * again only helps when the ad account shows in Facebook's window. The line says to look there, and that an ad
+   * account Facebook does not offer is to settle at Meta, not in Pilotix (info: Publicité runs on another key meanwhile).
+   */
+  const noAdsRight = (state: SocialCheck['state']) => {
+    if (keyOk && !adsAll.length && granted && !granted.has('ads_read') && !granted.has('ads_management')) add('ads', 'adsRight', state, { why: 'none' });
+  };
+  if (adsMine) {
+    perm('ads', 'adsRead', 'bad');
+    perm('ads', 'adsManage', 'warn');
+    const launchId = String(shopMeta?.adAccountId ?? '').replace(/^act_/, '') || String(adsAll[0]?.ext_id ?? '').replace(/^act_/, '');
+    const unread: string[] = [];
+    let unreadWhy: string | null = null;
+    let launch: any = null;
+    for (const a of adsAll) {
+      const id = String(a.ext_id).replace(/^act_/, '');
+      const aname = String(a.name ?? a.ext_id);
+      if (!keyOk) {
+        unread.push(aname);
+        continue;
+      }
+      try {
+        const r = await readAdAccount(id, token);
+        if (id === launchId) launch = { ...r, name: String(r?.name ?? aname) };
+        // not simply active at Meta: said in plain words (1: active; 201: active, any)
+        const st = Number(r?.account_status);
+        if (Number.isFinite(st) && st > 0 && st !== 1 && st !== 201) {
+          const s = AD_STATES[st] ?? { why: 'sx', state: 'warn' as const };
+          add('ads', 'adsState', s.state, { name: aname, why: s.why }, AD_STATES[st] ? null : `account_status ${st}`);
+        }
+        // its ads' problems (rejected, blocked) reach Co-Pilot only when the account is subscribed: asked again
+        const x = jsonOf(a.extra);
+        if (x.hook === false) {
+          const again = await graph(`act_${id}/subscribed_apps`, { access_token: token }, 'POST').then(() => true).catch(() => false);
+          if (again) await t.platform.query(`UPDATE platform.social_assets SET extra = $2 WHERE id = $1`, [num(a.id), JSON.stringify({ ...x, hook: true })]);
+          add('ads', 'adsHook', again ? 'ok' : 'warn', { name: aname, ...(again ? { fixed: 1 } : {}) });
+        }
+      } catch (e) {
+        unread.push(aname);
+        unreadWhy ??= why(e);
+      }
+    }
+    add('ads', 'ads', !unread.length ? 'ok' : unread.length === adsAll.length ? 'bad' : 'warn', { count: adsAll.length, bad: unread.length }, unread.length ? [unread.join(', '), unreadWhy].filter(Boolean).join(' — ').slice(0, 300) : null);
+    if (launch) {
+      // its numbers, as Publicité reads them
+      try {
+        await graph(`act_${launchId}/insights`, { fields: 'spend', date_preset: 'today', limit: '1', access_token: token });
+        add('ads', 'adsRead', 'ok', { name: launch.name });
+      } catch (e) {
+        add('ads', 'adsRead', 'bad', { name: launch.name }, why(e));
+      }
+      // launching from Pilotix: the permission to manage ads, and a role that may advertise in this account
+      const tasks: string[] | null = Array.isArray(launch.user_tasks) ? launch.user_tasks.map(String) : null;
+      if (!has('ads_management')) add('ads', 'adsLaunch', 'warn', { name: launch.name, why: 'perm' });
+      else if (tasks && !tasks.some((x) => x === 'ADVERTISE' || x === 'MANAGE')) add('ads', 'adsLaunch', 'warn', { name: launch.name, why: 'task' });
+      else add('ads', 'adsLaunch', 'ok', { name: launch.name });
+    }
+    const money = [...new Set(adsAll.map((a: any) => jsonOf(a.extra).currency).filter(Boolean).map(String))];
+    // Publicité counts a dinar account in dinars (and in dollars with the month's rate); any other money as dollars
+    const other = money.filter((c) => c !== 'USD' && c !== 'DZD');
+    if (other.length) add('ads', 'adsCurrency', 'warn', { list: other.join(', ') });
+    else if (money.includes('DZD')) add('ads', 'adsCurrency', 'ok');
+  } else if (adsOld) {
+    // Publicité still runs on a key pasted before in Réglages › Meta Ads: tried too, and how to bring it here
+    const id = String(shopMeta?.adAccountId ?? '').replace(/^act_/, '');
+    const move = adsAll.length ? 'switch' : 'relink';
+    try {
+      const r = await readAdAccount(id, adsKey);
+      add('ads', 'adsOld', 'info', { name: String(r?.name ?? id), why: move });
+    } catch (e) {
+      add('ads', 'adsOld', 'bad', { name: id, why: `${move}Bad` }, why(e));
+    }
+    noAdsRight('info');
+  } else if (adsRow?.adAccountId) add('ads', 'adsOther', 'info', { account: String(adsRow.account ?? '') });
+  else if (adsAll.length) add('ads', 'adsOff', 'warn', { count: adsAll.length });
+  else if (keyOk) {
+    add('ads', 'adsNone', 'warn');
+    noAdsRight('warn');
+  }
+
+  // ------------------------------------------------------------ the catalogue and the pixels (with the boutique's ads key)
+  if (db && adsKey && (adsMine || adsOld)) {
+    const cat = await getRaw<any>(db, 'metacatalog', null);
+    if (adsMine) perm('catalog', 'catalog', cat?.catalogId ? 'bad' : 'warn');
+    if (cat?.catalogId) {
+      const id = String(cat.catalogId);
+      try {
+        const r = await graph(id, { fields: 'id,name,product_count', access_token: adsKey });
+        add('catalog', 'catalog', 'ok', { name: String(r?.name ?? id), count: num(r?.product_count) });
+      } catch (e) {
+        // refused: the catalogue was not ticked in Facebook's window (Meta says for which catalogues), or Meta's reason
+        add('catalog', 'catalog', 'bad', { why: adsMine && givenFor('catalog_management', id) === false ? 'tick' : 'bad' }, why(e));
+      }
+    } else add('catalog', 'catalogNone', 'info');
+    // the pixels of Landing pages › Réglages: one with a key of its own sends with it (not tried here); the others send
+    // with the ads key, which must reach them
+    const ownCapi = !!(await getRaw<string>(db, 'secret_landing_capi_token', ''));
+    const pixels = await db
+      .query(`SELECT p.name, p.pixel_id, EXISTS (SELECT 1 FROM settings s WHERE s.key = 'secret_pixel_' || p.id) AS own FROM tracking_pixels p WHERE p.platform = 'meta' ORDER BY p.is_default DESC, p.id LIMIT 5`)
+      .catch(() => []);
+    for (const p of pixels) {
+      const pname = String(p.name || p.pixel_id);
+      if (p.own || ownCapi) add('pixels', 'pixel', 'info', { name: pname, why: 'own' });
+      else
+        await graph(String(p.pixel_id), { fields: 'id,name', access_token: adsKey })
+          .then(() => add('pixels', 'pixel', 'ok', { name: pname }))
+          .catch((e) => add('pixels', 'pixel', 'bad', { name: pname }, why(e)));
+    }
+    if (!pixels.length) add('pixels', 'pixelNone', 'info');
+  }
+
+  // ------------------------------------------------------------ the boutique's WhatsApp number (« Connecter WhatsApp »)
+  if (db) {
+    const dset = await dellalSettings(db);
+    const waKey = await getRaw<string>(db, DELLAL_SECRETS.waToken, '');
+    if (waKey && dset.whatsappPhoneId) {
+      const phone = dset.whatsappPhone || dset.whatsappPhoneId;
+      try {
+        const r = await graph(String(dset.whatsappPhoneId), { fields: 'id,display_phone_number,verified_name', access_token: waKey });
+        add('wa', 'wa', 'ok', { phone: String(r?.display_phone_number || phone) });
+      } catch (e) {
+        add('wa', 'wa', 'bad', { phone }, why(e));
+      }
+      // when Meta last sent Pilotix something for this number (a number typed by hand before uses its own Meta app: not seen here)
+      const seen = (await t.platform.query(`SELECT at, routed FROM platform.social_hooks WHERE object = 'whatsapp_business_account' AND ext_id = $1`, [String(dset.whatsappPhoneId)]).catch(() => []))[0];
+      if (seen) add('wa', 'waSeen', seen.routed ? 'ok' : 'warn', { phone, at: iso(seen.at), ...(seen.routed ? {} : { lost: 1 }) });
+      else if (dset.whatsappPhone) add('wa', 'waSeen', 'warn', { phone });
+    }
+  }
+
+  // ------------------------------------------------------------ Pilotix's Meta app: where Meta sends everything
   const webhook = socialUrls(publicUrl).metaWebhook;
   if (apps.meta.appId && secret) {
     try {
@@ -834,10 +991,10 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
         const s = subs.find((x) => x?.object === object);
         const have = new Set<string>((s?.fields ?? []).map((f: any) => String(f?.name ?? f)));
         const missing = want.filter((w) => !have.has(w));
-        if (!s || missing.length) return add(key, 'warn', { list: (s ? missing : want).join(', ') });
-        if (s.active === false) return add(key, 'warn', { list: want.join(', ') }, 'Abonnement en pause dans l’app Meta.');
-        if (publicUrl && String(s.callback_url ?? '') !== webhook) return add(key, 'warn', { list: want.join(', ') }, `Adresse dans l’app Meta : ${String(s.callback_url ?? '—').slice(0, 160)}`);
-        add(key, 'ok');
+        if (!s || missing.length) return add('app', key, 'warn', { list: (s ? missing : want).join(', ') });
+        if (s.active === false) return add('app', key, 'warn', { list: want.join(', ') }, 'Abonnement en pause dans l’app Meta.');
+        if (publicUrl && String(s.callback_url ?? '') !== webhook) return add('app', key, 'warn', { list: want.join(', ') }, `Adresse dans l’app Meta : ${String(s.callback_url ?? '—').slice(0, 160)}`);
+        add('app', key, 'ok');
       };
       one('page', ['messages', 'feed'], 'appHook');
       one('page', ['leadgen'], 'appHookLeads');
@@ -847,39 +1004,27 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
       // the ad accounts' ads rejected or with a problem (Co-Pilot)
       one('ad_account', ['with_issues_ad_objects', 'in_process_ad_objects'], 'appHookAds');
     } catch (e) {
-      add('appHook', 'warn', { list: 'messages, feed' }, why(e));
+      add('app', 'appHook', 'warn', { list: 'messages, feed' }, why(e));
     }
   }
-  // a webhook Pilotix refused these 2 days: its signature matched no secret (Instagram's own login signs with its own)
+  // partnership ads (Partenaires › Influenceurs): Pilotix's Facebook login does not ask for their permission yet, so
+  // linking again cannot give it: said to the Pilotix team, never as the boutique's problem
+  if (keyOk && page) perm('app', 'partners', 'info');
+  // a webhook Pilotix refused these 2 days: its signature matched no secret (Instagram's old login signs with its own)
   const badSig = await lastBadSignature(t).catch(() => null);
-  if (badSig && Date.now() - Date.parse(badSig.at) < 2 * 24 * 3_600_000) add('badSig', 'warn', { at: badSig.at, count: badSig.n });
+  if (badSig && Date.now() - Date.parse(badSig.at) < 2 * 24 * 3_600_000) add('app', 'badSig', 'warn', { at: badSig.at, count: badSig.n });
   // the webhook's address, called from the Internet as Meta does (through Cloudflare)
   if (publicUrl && apps.verifyToken) {
     const challenge = String(Date.now());
     try {
       const res = await fetch(`${webhook}?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(apps.verifyToken)}&hub.challenge=${challenge}`, { signal: AbortSignal.timeout(10_000) });
       const body = await res.text().catch(() => '');
-      if (res.ok && body.trim() === challenge) add('reach', 'ok');
-      else if (res.headers.get('cf-mitigated') || /Just a moment/i.test(body)) add('reach', 'bad', { why: 'cloudflare' });
-      else add('reach', 'bad', { status: res.status });
+      if (res.ok && body.trim() === challenge) add('app', 'reach', 'ok');
+      else if (res.headers.get('cf-mitigated') || /Just a moment/i.test(body)) add('app', 'reach', 'bad', { why: 'cloudflare' });
+      else add('app', 'reach', 'bad', { status: res.status });
     } catch (e) {
-      add('reach', 'bad', { status: 0 }, why(e));
+      add('app', 'reach', 'bad', { status: 0 }, why(e));
     }
-  }
-
-  // the ad accounts this boutique counts (all of this account's)
-  if (counts('ad_account')) {
-    const ads = assets.filter((a: any) => a.kind === 'ad_account');
-    const unread: string[] = [];
-    if (keyOk)
-      for (const a of ads)
-        await graph(`act_${String(a.ext_id).replace(/^act_/, '')}`, { fields: 'id,account_status', access_token: token }).catch(() => unread.push(String(a.name ?? a.ext_id)));
-    add('ads', !keyOk || unread.length ? 'warn' : 'ok', { count: ads.length, bad: keyOk ? unread.length : ads.length }, unread.length ? unread.join(', ').slice(0, 240) : null);
-    const money = [...new Set(ads.map((a: any) => jsonOf(a.extra).currency).filter(Boolean).map(String))];
-    // Publicité counts a dinar account in dinars (and in dollars with the month's rate); any other money as dollars
-    const other = money.filter((c) => c !== 'USD' && c !== 'DZD');
-    if (other.length) add('adsCurrency', 'warn', { list: other.join(', ') });
-    else if (money.includes('DZD')) add('adsCurrency', 'ok');
   }
   return { at: new Date().toISOString(), checks };
 }

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, ServerHooks } from '../index';
-import { catchUpMeta, chunks, igLogin, missedMessages, parseMetaAdIssues, parseMetaEdits, parseMetaReactions, parseMetaWebhook, runDellal } from '../dellal-server';
+import { catchUpMeta, chunks, missedMessages, parseMetaAdIssues, parseMetaEdits, parseMetaReactions, parseMetaWebhook, runDellal, uniAccounts } from '../dellal-server';
 import { getRaw, setRaw } from '../modules/admin';
 import { findPlace, playbookFor } from '../modules/dellal';
 import { checkDarija, fixDarija, parseAvoid } from '../modules/darija';
@@ -38,14 +38,22 @@ test('settings: admin only, secrets never returned, verify token created', async
   const g: any = await call('dellal.settings.get', admin, {});
   assert.match(g.settings.verifyToken, /^dellal-/);
   assert.equal(g.has.ai, false);
-  const s: any = await call('dellal.settings.save', admin, { ...g.settings, enabled: true, secrets: { ai: 'sk-ant-test-1234567890', waToken: 'EAAB-wa' } });
+  const s: any = await call('dellal.settings.save', admin, { ...g.settings, enabled: true, secrets: { ai: 'sk-ant-test-1234567890', tiktokToken: 'tt-key-1' } });
   assert.equal(s.has.ai, true);
-  assert.equal(s.has.waToken, true);
+  assert.equal(s.has.tiktokToken, true);
   assert.ok(!JSON.stringify(s).includes('sk-ant-test'));
   assert.equal(s.settings.verifyToken, g.settings.verifyToken);
-  const cleared: any = await call('dellal.settings.save', admin, { ...s.settings, secrets: { waToken: null } });
-  assert.equal(cleared.has.waToken, false);
+  const cleared: any = await call('dellal.settings.save', admin, { ...s.settings, secrets: { tiktokToken: null } });
+  assert.equal(cleared.has.tiktokToken, false);
   assert.equal(cleared.has.ai, true);
+  // nothing of Meta is typed here any more: WhatsApp, Instagram and the Meta app's secret come from Pilot AI › Comptes
+  for (const k of ['waToken', 'igToken', 'appSecret'])
+    await assert.rejects(call('dellal.settings.save', admin, { ...s.settings, secrets: { [k]: 'EAAB-typed-by-hand' } }), new RegExp(`secrets\\.${k}`));
+  // a WhatsApp number's id sent by an old page changes nothing: what Comptes wrote stays
+  await setRaw(db, 'dellal', { ...(await getRaw<any>(db, 'dellal', {})), whatsappPhoneId: '1098', whatsappPhone: '+213 550 00 11 22' });
+  const kept: any = await call('dellal.settings.save', admin, { ...s.settings, whatsappPhoneId: '555', whatsappPhone: 'x', secrets: {} });
+  assert.deepEqual([kept.settings.whatsappPhoneId, kept.settings.whatsappPhone], ['1098', '+213 550 00 11 22']);
+  await setRaw(db, 'dellal', { ...(await getRaw<any>(db, 'dellal', {})), whatsappPhoneId: '', whatsappPhone: '' });
   // the Page token is no longer pasted by hand: it comes from a linked account (Pilot AI › Comptes)
   await assert.rejects(call('dellal.settings.save', admin, { ...s.settings, secrets: { pageToken: 'EAAB-page' } }), /secrets\.pageToken/);
   assert.equal(cleared.page, null, 'no Page linked: none shown');
@@ -915,43 +923,20 @@ test('safety net: when Meta says « reduce the amount of data », the same quest
   }
 });
 
-test('Instagram’s own login: the key is read when saved (its account, its name), never shown again; removed, it is forgotten', async () => {
-  const seen: any[] = [];
-  const server = fakeServer([], []);
-  const base = server.dellal!;
-  let refuse = false;
-  let kind = 'ig';
-  server.dellal = async (action, args, ctx) => {
-    if (action !== 'igLogin') return base(action, args, ctx);
-    seen.push(args);
-    if (refuse) throw new Error('Instagram : clé ou jeton refusé (Invalid OAuth access token). Vérifiez les réglages.');
-    return { kind, userId: '178555', username: 'babyjoy_dz', subscribeError: null };
-  };
-  const admin = await as(EMAILS.admin, server);
+test('the Instagram key is not typed in Pilot Message any more; one connected before stays, with its account, when the settings are saved', async () => {
+  const admin = await as(EMAILS.admin);
+  await setRaw(db, 'secret_dellal_ig_token', 'IGAA-SECRET-1');
+  await setRaw(db, 'dellal', { ...(await getRaw<any>(db, 'dellal', {})), instagramLoginId: '178555', instagramLoginUser: 'babyjoy_dz', igTokenAt: '2026-11-01T00:00:00.000Z', igLoginKind: 'ig' });
   const g: any = await call('dellal.settings.get', admin, {});
-  let r: any = await call('dellal.settings.save', admin, { ...g.settings, secrets: { igToken: 'IGAA-SECRET-1' } });
-  assert.equal(seen[0].token, 'IGAA-SECRET-1');
-  assert.deepEqual(r.igTest, { ok: true, username: 'babyjoy_dz' });
-  assert.deepEqual([r.has.igToken, r.settings.instagramLoginId, r.settings.instagramLoginUser], [true, '178555', 'babyjoy_dz']);
-  assert.ok(r.settings.igTokenAt);
-  assert.ok(!JSON.stringify(r).includes('IGAA-SECRET-1'), 'the key never comes back');
-  // saving other things keeps the key and its account
-  r = await call('dellal.settings.save', admin, { ...r.settings, secrets: {} });
-  assert.deepEqual([r.has.igToken, r.settings.instagramLoginUser], [true, 'babyjoy_dz']);
-  // a key Instagram refuses is said
-  refuse = true;
-  r = await call('dellal.settings.save', admin, { ...r.settings, secrets: { igToken: 'IGAA-BAD' } });
-  assert.equal(r.igTest.ok, false);
-  assert.match(r.igTest.message, /refusé/);
-  refuse = false;
-  // a Unified login key (newer Meta apps): its kind is kept (the server answers through it)
-  kind = 'unified';
-  r = await call('dellal.settings.save', admin, { ...r.settings, secrets: { igToken: 'EAA-SYSTEM-USER' } });
-  assert.deepEqual([r.igTest.ok, r.settings.igLoginKind], [true, 'unified']);
-  assert.ok('igId' in seen.at(-1), 'the boutique’s Instagram account goes with the key (a key with several accounts)');
-  // removed: forgotten
-  r = await call('dellal.settings.save', admin, { ...r.settings, secrets: { igToken: null } });
-  assert.deepEqual([r.has.igToken, r.settings.instagramLoginId, r.settings.instagramLoginUser, r.settings.igLoginKind], [false, '', '', '']);
+  assert.deepEqual([g.has.igToken, g.settings.instagramLoginUser], [true, 'babyjoy_dz']);
+  assert.ok(!JSON.stringify(g).includes('IGAA-SECRET-1'), 'the key never comes back');
+  const r: any = await call('dellal.settings.save', admin, { ...g.settings, tone: 'Court', secrets: {} });
+  assert.deepEqual([r.has.igToken, r.settings.instagramLoginId, r.settings.instagramLoginUser, r.settings.igLoginKind], [true, '178555', 'babyjoy_dz', 'ig']);
+  assert.equal('igTest' in r, false);
+  await assert.rejects(call('dellal.settings.save', admin, { ...g.settings, secrets: { igToken: 'IGAA-NEW' } }), /secrets\.igToken/);
+  assert.equal(await getRaw<string>(db, 'secret_dellal_ig_token', ''), 'IGAA-SECRET-1');
+  await db.query(`DELETE FROM settings WHERE key = 'secret_dellal_ig_token'`);
+  await setRaw(db, 'dellal', { ...(await getRaw<any>(db, 'dellal', {})), instagramLoginId: '', instagramLoginUser: '', igTokenAt: '', igLoginKind: '' });
 });
 
 test('Instagram’s own login: Dellal answers with it (graph.instagram.com); refused there, the Page tries; Messenger stays on the Page', async () => {
@@ -999,7 +984,7 @@ test('Instagram’s own login: Dellal answers with it (graph.instagram.com); ref
   }
 });
 
-test('a pasted Instagram key: its kind is found (IGAA… Instagram’s login, EAA… Meta’s Unified login), the other is tried when the first refuses', async () => {
+test('a graph.facebook.com key’s Instagram accounts: the ones a business key was given, else each Page’s; refused: Meta’s own reason', async () => {
   const real = globalThis.fetch;
   const asked: string[] = [];
   const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -1008,21 +993,17 @@ test('a pasted Instagram key: its kind is found (IGAA… Instagram’s login, EA
     const path = u.pathname.replace(/^\/v[\d.]+\//, '');
     const key = u.searchParams.get('access_token');
     asked.push(`${u.host} ${path}`);
-    if (u.host === 'graph.instagram.com' && path === 'me') return key === 'EAA-OLD-IG' || key?.startsWith('IG') ? reply({ user_id: '178111', username: 'old_ig' }) : reply({ error: { message: 'Cannot parse access token', code: 190 } }, 400);
-    if (u.host === 'graph.facebook.com' && path === 'me/assigned_instagram_accounts')
-      return key === 'EAA-SUAT' ? reply({ data: [{ id: '178001', username: 'other' }, { id: '178555', username: 'babyjoy_dz' }] }) : reply({ error: { message: 'Invalid OAuth access token', code: 190 } }, 400);
+    if (path === 'me/assigned_instagram_accounts')
+      return key === 'EAA-SUAT' ? reply({ data: [{ id: '178001', username: 'other' }, { id: '178555', username: 'babyjoy_dz' }] }) : key === 'EAA-PERSON' ? reply({ data: [] }) : reply({ error: { message: 'Invalid OAuth access token', code: 190 } }, 400);
+    if (path === 'me/accounts') return key === 'EAA-PERSON' ? reply({ data: [{ id: '9002', access_token: 'PAGE', instagram_business_account: { id: '178002', username: 'bebe.dz' } }, { id: '9003', access_token: 'P3' }] }) : reply({ error: { message: 'Invalid OAuth access token', code: 190 } }, 400);
     return reply({ success: true });
   }) as typeof fetch;
   try {
-    const uni = await igLogin('EAA-SUAT', '178555');
-    assert.deepEqual([uni.kind, uni.userId, uni.username], ['unified', '178555', 'babyjoy_dz'], 'the boutique’s own account among the key’s');
+    assert.deepEqual((await uniAccounts('EAA-SUAT')).map((x) => x.id), ['178001', '178555']);
     assert.equal(asked[0], 'graph.facebook.com me/assigned_instagram_accounts');
-    const ig = await igLogin('IGAA-123', null);
-    assert.deepEqual([ig.kind, ig.userId], ['ig', '178111']);
-    // an EAA… key Unified login does not take, Instagram's login does
-    const back = await igLogin('EAA-OLD-IG', null);
-    assert.equal(back.kind, 'ig');
-    await assert.rejects(igLogin('EAA-NOTHING', null), /Invalid OAuth|refusé/);
+    const person = await uniAccounts('EAA-PERSON');
+    assert.deepEqual(person.map((x) => [x.id, x.username, x.page.id]), [['178002', 'bebe.dz', '9002']]);
+    await assert.rejects(uniAccounts('EAA-NOTHING'), /Invalid OAuth|refusé/);
   } finally {
     globalThis.fetch = real;
   }

@@ -4,7 +4,7 @@ import { before, test } from 'node:test';
 import { call, Ctx, Db, setSetting } from '../index';
 import { computePayroll } from '../modules/admin';
 import { adsetDiagnostic, productAdvice } from '../modules/ads';
-import { EMAILS, setup } from './harness';
+import { EMAILS, metaAds, noMetaAds, setup } from './harness';
 
 let db: Db;
 let as: (email: string, server?: Ctx['server']) => Promise<Ctx>;
@@ -81,7 +81,7 @@ test('roles: non-admins are refused on admin procedures', async () => {
     const ctx = await as(email);
     await assert.rejects(call('admin.payroll', ctx, { month: YM }), (e: any) => e.code === 'forbidden');
     await assert.rejects(call('admin.settings.get', ctx, {}), (e: any) => e.code === 'forbidden');
-    await assert.rejects(call('admin.meta.save', ctx, { adAccountId: '123456789', token: 'x'.repeat(40) }), (e: any) => e.code === 'forbidden');
+    await assert.rejects(call('social.dropOld', ctx, { what: 'ads' }), (e: any) => e.code === 'forbidden');
   }
   // everyone can read the status labels (screens show them)
   const s: any = await call('admin.statuses.get', await as(EMAILS.conf), {});
@@ -90,20 +90,20 @@ test('roles: non-admins are refused on admin procedures', async () => {
   await assert.rejects(call('ads.overview', await as(EMAILS.depot), { from: '2026-10-01', to: '2026-10-21' }), (e: any) => e.code === 'forbidden');
 });
 
-test('Meta token is write-only: never returned by any procedure', async () => {
+test('Meta’s ads key is never returned by any procedure, and nothing pastes one any more (Réglages › Meta Ads is gone)', async () => {
   const admin = await as(EMAILS.admin);
   const token = 'EAAG-secret-token-' + 'z'.repeat(40);
-  const r: any = await call('admin.meta.save', admin, { adAccountId: 'act_1234567890', token });
-  assert.equal(r.connected, true);
-  assert.equal(r.adAccountId, '1234567890');
-  const outputs = [r, await call('admin.settings.get', admin, {}), await call('admin.statuses.get', admin, {}), await call('admin.pay.get', admin, {})];
+  // the paste form's two procedures no longer exist: the ad accounts come only from Pilot AI › Comptes
+  await assert.rejects(call('admin.meta.save', admin, { adAccountId: 'act_1234567890', token }), /Action inconnue/);
+  await assert.rejects(call('admin.meta.disconnect', admin, {}), /Action inconnue/);
+  // a key pasted before this change still works, and stays hidden
+  await metaAds(db, 'act_1234567890', token);
+  const outputs = [await call('social.list', admin, {}), await call('admin.settings.get', admin, {}), await call('admin.statuses.get', admin, {}), await call('admin.pay.get', admin, {})];
   for (const o of outputs) assert.ok(!JSON.stringify(o).includes('secret-token'), 'token leaked');
   const s: any = outputs[1];
-  // set by hand: no linked account's ad account (Pilot AI › Comptes) counts any more
+  // no linked account's ad account behind it: Comptes names it as an old key, with its ad account
   assert.deepEqual(s.meta, { adAccountId: '1234567890', connected: true, linked: null });
-  // saving again without a token keeps it
-  const again: any = await call('admin.meta.save', admin, { adAccountId: '1234567890' });
-  assert.equal(again.connected, true);
+  assert.deepEqual((outputs[0] as any).old.ads, { adAccountId: '1234567890' });
   // with a server, Publicité calls Meta with the stored connection (never the browser)
   const seen: string[] = [];
   const server: Ctx['server'] = {
@@ -118,8 +118,12 @@ test('Meta token is write-only: never returned by any procedure', async () => {
   const ov: any = await call('ads.overview', mk, { from: '2026-10-01', to: '2026-10-05' });
   assert.deepEqual(seen, ['insights']);
   assert.ok(!JSON.stringify(ov).includes('secret-token'));
-  await call('admin.meta.disconnect', admin, {});
-  assert.equal(((await call('admin.settings.get', admin, {})) as any).meta.connected, false);
+  // « Retirer » the old key in Comptes: Publicité no longer has Meta, the old key is forgotten
+  const gone: any = await call('social.dropOld', admin, { what: 'ads' });
+  assert.equal(gone.old.ads, null);
+  const after: any = await call('admin.settings.get', admin, {});
+  assert.deepEqual([after.meta.connected, after.meta.adAccountId], [false, '']);
+  assert.equal((await db.query(`SELECT 1 FROM settings WHERE key = 'secret_meta_token'`)).length, 0);
 });
 
 test('ads: a marketer only sees his own ad sets; the owner sees all', async () => {
@@ -138,7 +142,7 @@ test('ads: a marketer only sees his own ad sets; the owner sees all', async () =
 
 test('ads: a dinar ad account counts in dinars, and in dollars with the month rate', async () => {
   const admin = await as(EMAILS.admin);
-  await call('admin.meta.save', admin, { adAccountId: 'act_1234567890', token: 'EAAG-test-token-' + 'y'.repeat(40) });
+  await metaAds(db, 'act_1234567890', 'EAAG-test-token-' + 'y'.repeat(40));
   await call('ads.setFx', await as(EMAILS.vendeur), { ym: YM, rate: 250 });
   const day = (d: number, adsetId: string, spendCents: number, currency: string) => ({
     day: `${YM}-0${d}`, adsetId, adsetName: adsetId, campaign: 'C', spendCents, impressions: 1000, reach: 900, clicks: 10, lpv: 8, purchases: 1, video3s: 0, thruplays: 0, currency,
@@ -175,7 +179,7 @@ test('ads: a dinar ad account counts in dinars, and in dollars with the month ra
   const one: any = await call('ads.adset', owner, { id: 'dz-set', ...period });
   assert.ok(Math.abs(one.days.reduce((s: number, d: any) => s + d.spendUsd, 0) - 30) < 1e-9);
   assert.ok(Math.abs(one.ads[0].spendUsd - 30) < 1e-9);
-  await call('admin.meta.disconnect', admin, {});
+  await noMetaAds(db);
 });
 
 test('ads rules: advice and diagnostics', () => {

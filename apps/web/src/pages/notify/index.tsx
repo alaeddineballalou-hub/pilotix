@@ -806,11 +806,11 @@ function SettingsForm({ data }: { data: Out<'notify.settings.get'> }) {
         {sw('whatsapp')}
         <dl className="dl-kv cm-conn">
           <dt>{t('notify.settings.waNumber')}</dt>
-          <dd>{m.whatsappConnected ? <span className="cm-okc">✓ {t('notify.settings.connected')}</span> : <a href="#/messages/reglages">{t('notify.settings.waConnect')}</a>}</dd>
+          <dd>{m.whatsappConnected ? <span className="cm-okc">✓ {t('notify.settings.connected')}</span> : <a href="#/comptes">{t('notify.settings.waConnect')}</a>}</dd>
         </dl>
         {!m.appSecret && (
           <div className="warnbox" style={{ marginBottom: 12 }}>
-            {t('notify.settings.appSecretMissing')} <a href="#/messages/reglages">{t('notify.settings.appSecretLink')}</a>
+            {t('notify.settings.appSecretMissing')} <a href="#/comptes">{t('notify.settings.appSecretLink')}</a>
           </div>
         )}
         <Field label={t('notify.settings.waba')} hint={t('notify.settings.wabaHint')}>

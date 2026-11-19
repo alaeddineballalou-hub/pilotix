@@ -1,11 +1,11 @@
-/* Pilot AI › Comptes: the boutique's Facebook and TikTok accounts (pages/comptes/index.tsx) */
+/* Pilot AI › Comptes: the one place where a boutique connects Facebook, Instagram, its ads, WhatsApp and TikTok (pages/comptes/index.tsx) */
 .cpt { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .cpt .ai-head { padding-bottom: 18px; }
 .cpt .ai-tabs:empty { display: none; }
 .cpt-muted { color: var(--muted); }
 
 /* what this boutique's agents use */
-.cpt-here dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; }
+.cpt-here dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
 .cpt-here dl > div { min-width: 0; padding: 2px 16px; border-inline-start: 1px solid var(--line); }
 .cpt-here dl > div:first-child { padding-inline-start: 0; border-inline-start: 0; }
 .cpt-here dt { margin-bottom: 6px; color: var(--muted); font-size: 12.5px; font-weight: 700; }
@@ -13,8 +13,20 @@
 .cpt-here .ok dd { color: var(--ink); font-weight: 650; }
 .cpt-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
 .cpt-here .ok .cpt-dot { background: var(--ok); }
+/* still on a key connected before, somewhere else: it works (orange, not grey) */
+.cpt-here .old dd { color: var(--ink); font-weight: 650; }
+.cpt-here .old .cpt-dot { background: var(--warn); }
+/* those old keys, named, each with « Retirer » */
+.cpt-old { margin-top: 16px; padding: 12px 14px 2px; border-radius: 12px; background: var(--warn-soft); }
+.cpt-old h3 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--ink); font-size: 14px; }
+.cpt-old h3 .bji { flex: none; width: 18px; height: 18px; color: var(--warn); }
+.cpt-old > p { margin: 4px 0 8px; color: var(--ink); font-size: 13px; line-height: 1.45; }
+.cpt-old ul { display: grid; margin: 0; padding: 0; list-style: none; }
+.cpt-old li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 0; border-top: 1px solid color-mix(in srgb, var(--warn) 22%, transparent); }
+.cpt-old li > span { display: grid; flex: 1 1 260px; gap: 2px; min-width: 0; color: var(--ink); font-size: 13.5px; overflow-wrap: anywhere; }
+.cpt-old li small { color: var(--ink); font-size: 12.5px; line-height: 1.45; opacity: .78; }
 
-/* link: for which boutiques, then the two ways */
+/* link: for which boutiques, then the three ways (Facebook first: it brings everything of Meta at once) */
 .cpt-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 16px; }
 .cpt-scope > span { font-size: 13.5px; font-weight: 700; }
 .cpt-scope small { flex-basis: 100%; font-size: 12.5px; }
@@ -25,7 +37,7 @@
 .cpt-seg button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 .cpt-seg .cpt-muted { font-weight: 600; }
 
-.cpt-providers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; }
+.cpt-providers { display: grid; grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, 1fr)); gap: 0; }
 .cpt-slot { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 14px 16px; border-radius: 12px; transition: background-color .6s cubic-bezier(.16, 1, .3, 1); }
 .cpt-slot:first-child { padding-inline-start: 0; }
 .cpt-slot + .cpt-slot { border-inline-start: 1px solid var(--line); border-radius: 0 12px 12px 0; }
@@ -36,6 +48,13 @@
 .cpt-slot-id { display: flex; align-items: flex-start; gap: 12px; }
 .cpt-slot-id h3 { margin: 0; font-size: 15px; }
 .cpt-slot-id p { margin: 3px 0 0; font-size: 13px; line-height: 1.45; }
+/* what the one Facebook login brings, at a glance */
+.cpt-all { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0 0; padding: 0; list-style: none; }
+.cpt-all li { padding: 3px 9px; border-radius: 999px; background: var(--sky-soft); color: var(--ink); font-size: 12px; font-weight: 650; }
+/* the boutique's WhatsApp number, connected */
+.cpt-wa-on { display: flex; flex-basis: 100%; align-items: flex-start; gap: 10px; margin: 0; color: var(--ink); font-size: 14px; line-height: 1.45; }
+.cpt-wa-on .bji { flex: none; width: 20px; height: 20px; margin-top: 1px; color: var(--ok); }
+.cpt-wa-on small { display: block; color: var(--muted); font-size: 12.5px; }
 .cpt-slot > .cpt-do, .cpt-slot-wait, .cpt-slot-done { margin-top: auto; }
 .cpt-slot-done { display: flex; align-items: center; gap: 10px; margin-bottom: 0; color: var(--ok); font-size: 14px; }
 .cpt-slot-done .bji { flex: none; width: 22px; height: 22px; }
@@ -99,7 +118,7 @@
 .cpt-launch .cpt-row-note { margin: 0; }
 .cpt-chips.on li { border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); background: color-mix(in srgb, var(--ok-soft) 65%, transparent); color: var(--ink); }
 
-/* « Tester »: one line per thing tried */
+/* « Tester »: where the problems are, then part by part (a part that works is folded), one line per thing tried */
 .cpt-test { padding: 14px 0 6px; border-top: 1px solid var(--line); transition: opacity .2s; }
 .cpt-test.again { opacity: .55; }
 .cpt-test h4 { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin: 0 0 6px; color: var(--ink); font-size: 13.5px; }
@@ -109,19 +128,58 @@
 .cpt-test li.ok .bji { color: var(--ok); }
 .cpt-test li.warn .bji { color: var(--warn); }
 .cpt-test li.bad .bji { color: var(--coral); }
+.cpt-test li.info .bji { color: var(--muted); }
 .cpt-test li small { display: block; margin-top: 2px; color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.cpt-test-where { display: flex; align-items: flex-start; gap: 10px; margin: 4px 0 8px; padding: 10px 12px; border-radius: 10px; color: var(--ink); font-size: 13.5px; line-height: 1.45; }
+.cpt-test-where.bad { background: var(--coral-soft); }
+.cpt-test-where.warn { background: var(--warn-soft); }
+.cpt-test-where .bji { flex: none; width: 18px; height: 18px; margin-top: 1px; }
+.cpt-test-where.bad .bji { color: var(--coral); }
+.cpt-test-where.warn .bji { color: var(--warn); }
+.cpt-test-where b { overflow-wrap: anywhere; }
+.cpt-parts { display: grid; gap: 6px; }
+.cpt-part { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.cpt-part.bad { border-color: color-mix(in srgb, var(--coral) 45%, var(--line)); }
+.cpt-part.warn { border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); }
+.cpt-part > summary { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 12px; border-radius: 10px; color: var(--ink); font-size: 13.5px; cursor: pointer; list-style: none; }
+.cpt-part > summary::-webkit-details-marker { display: none; }
+.cpt-part > summary:hover { background: var(--raise); }
+.cpt-part > summary:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.cpt-part > summary > .bji:first-child { flex: none; width: 18px; height: 18px; }
+.cpt-part.ok > summary > .bji:first-child { color: var(--ok); }
+.cpt-part.warn > summary > .bji:first-child { color: var(--warn); }
+.cpt-part.bad > summary > .bji:first-child { color: var(--coral); }
+.cpt-part.info > summary > .bji:first-child { color: var(--muted); }
+.cpt-part > summary b { flex: 1; min-width: 0; font-weight: 750; overflow-wrap: anywhere; }
+.cpt-part-st { flex: none; color: var(--muted); font-size: 12.5px; font-weight: 700; }
+.cpt-part.bad .cpt-part-st { color: var(--coral); }
+.cpt-part.warn .cpt-part-st { color: var(--warn); }
+.cpt-part.ok .cpt-part-st { color: var(--ok); }
+/* a part's own arrow: down when folded, up when open (whatever the account's own arrow does around it) */
+.cpt-link .cpt-part > summary .cpt-chev { transform: none; }
+.cpt-link .cpt-part[open] > summary .cpt-chev { transform: rotate(180deg); }
+.cpt-part > ul { padding: 2px 12px 8px; border-top: 1px solid var(--line); }
 .cpt-test-wait { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--muted); font-size: 13.5px; }
 .cpt-link-body > footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12.5px; }
 
+/* four things used: two by two on a tablet, one under the other on a phone */
+@media (max-width: 1100px) {
+  .cpt-here dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 0; }
+  .cpt-here dl > div:nth-child(odd) { padding-inline-start: 0; border-inline-start: 0; }
+}
 @media (max-width: 760px) {
   .cpt-here dl { grid-template-columns: 1fr; gap: 12px; }
   .cpt-here dl > div { padding: 0; border: 0; }
 }
-@media (max-width: 640px) {
+/* the three ways to link: side by side on a computer, one under the other below */
+@media (max-width: 1100px) {
   .cpt-providers { grid-template-columns: 1fr; }
   .cpt-slot, .cpt-slot:first-child { padding-inline: 0; }
   .cpt-slot + .cpt-slot { border-inline-start: 0; border-top: 1px solid var(--line); border-radius: 0; }
   .cpt-slot.wait, .cpt-slot.done { padding-inline: 12px; border-radius: 12px; }
+}
+@media (max-width: 640px) {
+  .cpt-part-st { font-size: 12px; }
   .cpt-link > header { padding: 6px 10px 10px 6px; }
   [dir='rtl'] .cpt-link > header { padding: 6px 6px 10px 10px; }
   .cpt-link > header .cpt-do { width: 100%; padding-inline-start: 8px; }

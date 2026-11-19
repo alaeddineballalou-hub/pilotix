@@ -2,11 +2,14 @@
 // tab comes back to the server, which keeps the token (never shown), finds the Pages and ad accounts, subscribes the
 // Pages, and writes what the boutique uses where its agents read it. One boutique: used at once; all the owner's
 // boutiques: each picks its Page (a Page answers for one boutique only), and Meta's webhook sends each Page to its shop.
+// That one Facebook login is the only way Meta is connected: Instagram's answers ride on its key, Publicité on its ad
+// accounts; keys connected before somewhere else keep working until it replaces them, and « Tester » says, part by
+// part, where a problem is.
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, ServerHooks, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
 import { loadShop, passwordFromLink } from '../platform';
-import { noteBadSignature, noteIgLogin, resetSocialDemo, routeMeta } from '../modules/social';
+import { CHECK_GROUPS, noteBadSignature, noteIgLogin, resetSocialDemo, routeMeta } from '../modules/social';
 import { setRaw } from '../modules/admin';
 import { confirmLogin, deletionPage, finishLogin, finishWhatsappPopup, loginPage, metaDeletion, parseSignedRequest, runSocial } from '../social-server';
 import { createHmac } from 'node:crypto';
@@ -42,7 +45,7 @@ const setting = async (ctx: Ctx, key: string) => (await ctx.db.query('SELECT val
 
 // ---------------------------------------------------------------- Facebook and TikTok, answered here
 const calls: { url: string; method: string; body: string }[] = [];
-let graph: { me: any; pages: any[]; ads: any[] } = { me: {}, pages: [], ads: [] };
+let graph: { me: any; pages: any[]; ads: any[]; assigned?: any[] } = { me: {}, pages: [], ads: [] };
 let tiktok: { token: string; ids: string[]; list: any[]; user: any } = { token: '', ids: [], list: [], user: {} };
 // a configuration « System-user access token »: Facebook will not turn its token into another one
 let refuseSwap = false;
@@ -50,7 +53,28 @@ let refuseSwap = false;
 let wa: { waba: string; numbers: any[]; registerFail: boolean } = { waba: '', numbers: [], registerFail: false };
 // what « Tester » finds on Facebook's side
 const ALL_PERMS = ['pages_show_list', 'pages_messaging', 'pages_manage_metadata', 'pages_read_engagement', 'pages_manage_engagement', 'pages_read_user_content', 'instagram_basic', 'instagram_manage_messages', 'instagram_manage_comments', 'ads_read'];
-let probe: { perms: string[]; pageSubs: any[]; appSubs: any[]; unreadable: string[]; cloudflare: boolean; refuse: boolean; inbox?: string | null; igRefuse?: boolean } = { perms: ALL_PERMS, pageSubs: [], appSubs: [], unreadable: [], cloudflare: false, refuse: false };
+// scopes / granular / expiresAt: what Meta's debug_token says of the key (without scopes, « Tester » asks me/permissions);
+// igReach: Meta's refusal when the account's own key asks an Instagram account's inbox (null: it reaches it);
+// adStatus / tasks: an ad account's state at Meta and what the key may do there; catalog / pixelRefuse: the catalogue and pixels
+let probe: {
+  perms: string[];
+  pageSubs: any[];
+  appSubs: any[];
+  unreadable: string[];
+  cloudflare: boolean;
+  refuse: boolean;
+  inbox?: string | null;
+  igRefuse?: boolean;
+  igReach?: string | null;
+  scopes?: string[];
+  granular?: any[];
+  expiresAt?: number;
+  adStatus?: Record<string, number>;
+  tasks?: string[];
+  catalog?: { id: string; refuse?: boolean };
+  pixelRefuse?: string[];
+  formsRefuse?: boolean;
+} = { perms: ALL_PERMS, pageSubs: [], appSubs: [], unreadable: [], cloudflare: false, refuse: false };
 const realFetch = globalThis.fetch;
 const answer = (data: unknown) => new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
 before(async () => {
@@ -77,7 +101,16 @@ before(async () => {
       if (path === 'me') return answer(graph.me);
       // « Connecter WhatsApp »: what the key was given (Embedded Signup), the account's numbers, a number's registration
       if (path === 'debug_token')
-        return answer({ data: { granular_scopes: wa.waba ? [{ scope: 'whatsapp_business_management', target_ids: [wa.waba] }, { scope: 'whatsapp_business_messaging', target_ids: [wa.waba] }] : [{ scope: 'business_management' }] } });
+        return answer({
+          data: {
+            ...(probe.scopes ? { scopes: probe.scopes } : {}),
+            ...(probe.expiresAt !== undefined ? { expires_at: probe.expiresAt } : {}),
+            granular_scopes: [
+              ...(wa.waba ? [{ scope: 'whatsapp_business_management', target_ids: [wa.waba] }, { scope: 'whatsapp_business_messaging', target_ids: [wa.waba] }] : [{ scope: 'business_management' }]),
+              ...(probe.granular ?? []),
+            ],
+          },
+        });
       if (wa.waba && path === `${wa.waba}/phone_numbers`) return answer({ data: wa.numbers });
       if (/^\d+\/register$/.test(path))
         return wa.registerFail ? new Response(JSON.stringify({ error: { message: 'Two step verification PIN Mismatch', code: 133005 } }), { status: 400 }) : answer({ success: true });
@@ -94,13 +127,29 @@ before(async () => {
       }
       if (path === 'me/accounts') return answer({ data: graph.pages });
       if (path === 'me/adaccounts') return answer({ data: graph.ads });
+      // a business key (« system user »): the ad accounts it was given
+      if (path === 'me/assigned_ad_accounts') return answer({ data: graph.assigned ?? [] });
       // « Tester »: what the account was allowed, the Page's subscription, Pilotix's app webhook, a Page, an ad account
       if (path === 'me/permissions') return answer({ data: probe.perms.map((permission) => ({ permission, status: 'granted' })) });
       if (/\/subscribed_apps$/.test(path)) return method === 'GET' ? answer({ data: probe.pageSubs }) : answer({ success: true });
       if (path === `${APPS.meta.appId}/subscriptions`) return answer({ data: probe.appSubs });
-      // a Page's Instagram inbox (Meta can refuse it, and says why)
-      if (/^\d+\/conversations$/.test(path)) return probe.inbox ? new Response(JSON.stringify({ error: { message: probe.inbox, code: 3 } }), { status: 400 }) : answer({ data: [] });
-      if (/^act_\d+$/.test(path)) return probe.unreadable.includes(path) ? new Response(JSON.stringify({ error: { message: 'Pas d’accès', code: 200 } }), { status: 400 }) : answer({ id: path });
+      // an Instagram inbox: through the Page (9…), or asked of the Instagram account itself with the account's key (178…);
+      // Meta can refuse either, and says why
+      const inbox = path.match(/^(\d+)\/conversations$/);
+      if (inbox) {
+        const no = inbox[1].startsWith('178') ? probe.igReach : probe.inbox;
+        return no ? new Response(JSON.stringify({ error: { message: no, code: 3 } }), { status: 400 }) : answer({ data: [] });
+      }
+      // the ads' forms of a Page
+      if (/^\d+\/leadgen_forms$/.test(path)) return probe.formsRefuse ? new Response(JSON.stringify({ error: { message: '(#200) Requires leads_retrieval', code: 200 } }), { status: 400 }) : answer({ data: [] });
+      if (/^act_\d+$/.test(path))
+        return probe.unreadable.includes(path)
+          ? new Response(JSON.stringify({ error: { message: 'Pas d’accès', code: 200 } }), { status: 400 })
+          : answer({ id: path, name: `Compte ${path.slice(4)}`, account_status: probe.adStatus?.[path] ?? 1, ...(probe.tasks ? { user_tasks: probe.tasks } : {}) });
+      // the boutique's catalogue, its pixels
+      if (probe.catalog && path === probe.catalog.id)
+        return probe.catalog.refuse ? new Response(JSON.stringify({ error: { message: '(#100) Missing permissions', code: 100 } }), { status: 400 }) : answer({ id: path, name: 'Catalogue Bébé', product_count: 36 });
+      if (probe.pixelRefuse?.includes(path)) return new Response(JSON.stringify({ error: { message: '(#100) Unsupported get request', code: 100 } }), { status: 400 });
       if (/^\d+$/.test(path)) return answer({ id: path, name: 'Page', username: 'bebeconfort.dz' });
     }
     // Instagram's own login (graph.instagram.com): its key's account
@@ -178,8 +227,11 @@ test('one boutique: the login tab comes back, the account is kept, its first Pag
   assert.match(loginPage(end), /Karim Benali.*fermer cet onglet/s);
   assert.equal((await confirmLogin(t, back.confirm!.state, back.confirm!.key, true)).ok, false, 'a yes serves once');
   // each Page is subscribed to Pilotix's webhook with its own token
-  const subs = calls.filter((c) => /subscribed_apps/.test(c.url) && !/act_/.test(c.url));
+  const subs = calls.filter((c) => /\/900\d\/subscribed_apps/.test(c.url));
   assert.equal(subs.length, 2);
+  // the account's own key was tried on the Page's Instagram inbox (it reaches it), and the Instagram account's messages asked for
+  assert.ok(calls.some((c) => /\/v23\.0\/178002\/conversations\?platform=instagram/.test(c.url) && /access_token=LONG_USER_TOKEN/.test(c.url)), 'the Instagram inbox asked with the account’s key');
+  assert.ok(calls.some((c) => /178002\/subscribed_apps/.test(c.url) && c.method === 'POST' && /subscribed_fields=messages/.test(c.body)), 'the Instagram account subscribed');
   // and each ad account, so its ads' problems reach Co-Pilot
   assert.ok(calls.some((c) => /act_\d+\/subscribed_apps/.test(c.url) && c.method === 'POST'), 'the ad account subscribed');
   assert.ok(subs.every((c) => c.method === 'POST' && /subscribed_fields=messages/.test(c.body)));
@@ -204,6 +256,13 @@ test('one boutique: the login tab comes back, the account is kept, its first Pag
   assert.deepEqual((await setting(a, 'meta')).adAccountIds, ['3003']);
   const ds: any = await call('dellal.settings.get', a, {});
   assert.deepEqual(ds.page, { pageId: '9002', name: 'Bébé Confort DZ', igId: '178002', igUsername: 'bebeconfort.dz', account: 'Karim Benali' });
+  // Instagram came with the same login: the account's key answers every Instagram customer (no second connection)
+  assert.equal(await setting(a, 'secret_dellal_ig_token'), 'LONG_USER_TOKEN');
+  assert.deepEqual([d.instagramLoginId, d.instagramLoginUser, d.igLoginKind], ['178002', 'bebeconfort.dz', 'unified']);
+  assert.equal((await setting(a, 'social_page')).igKey, true);
+  assert.ok(ds.has.igToken);
+  // nothing connected somewhere else, no WhatsApp number yet
+  assert.deepEqual([list.old, list.whatsapp], [{ ads: null, instagram: null }, null]);
   // a state serves once
   assert.equal((await linked(t, 'meta', { code: 'AGAIN', state: s.state }, URL0)).ok, false);
 });
@@ -215,6 +274,10 @@ test('the Page is chosen by the boutique; a Page cannot be pasted by hand any mo
   assert.equal(r.here.page.name, 'Bébé Confort Promo');
   assert.equal(await setting(a, 'secret_dellal_page_token'), 'PAGE_TOKEN_1');
   assert.equal((await setting(a, 'dellal')).instagramId, '', 'this Page has no Instagram account');
+  // the Instagram key came with the other Page: it goes with it, and Instagram's webhooks no longer find the boutique by it
+  assert.equal(await setting(a, 'secret_dellal_ig_token'), null);
+  assert.deepEqual([(await setting(a, 'dellal')).instagramLoginId, (await setting(a, 'dellal')).igLoginKind], ['', '']);
+  assert.deepEqual(await routeMeta(t, { object: 'instagram', entry: [{ id: '178002' }] }), []);
   // the Message AI agent's settings no longer take a Page token or Page ids
   const cur: any = await call('dellal.settings.get', a, {});
   await call('dellal.settings.save', a, { ...cur.settings, messengerPageId: '1111', instagramId: '2222', secrets: {} });
@@ -223,6 +286,14 @@ test('the Page is chosen by the boutique; a Page cannot be pasted by hand any mo
   // another boutique cannot take a Page linked to this one
   await assert.rejects(() => call('social.use', b, { assetId: promo.id }), /pas lié à cette boutique/);
   await call('social.use', a, { assetId: list.links[0].assets.find((x: any) => x.name === 'Bébé Confort DZ').id });
+  // back on the Page with Instagram: its key answers again
+  assert.equal(await setting(a, 'secret_dellal_ig_token'), 'LONG_USER_TOKEN');
+  assert.equal((await setting(a, 'dellal')).instagramLoginId, '178002');
+  // no Page: no Instagram key either
+  await call('social.unuse', a, { kind: 'page' });
+  assert.deepEqual([await setting(a, 'secret_dellal_ig_token'), await setting(a, 'social_page')], [null, null]);
+  await call('social.use', a, { assetId: list.links[0].assets.find((x: any) => x.name === 'Bébé Confort DZ').id });
+  assert.equal(await setting(a, 'secret_dellal_ig_token'), 'LONG_USER_TOKEN');
 });
 
 test('all boutiques: each picks its Page in one click, a Page answers for one boutique only, the webhook sends each Page to its boutique', async () => {
@@ -309,9 +380,20 @@ test('linked again with Instagram: a Page first seen without its Instagram gets 
   // without Instagram's permissions Facebook does not show the Page's Instagram: its messages find no boutique
   await login(false);
   assert.deepEqual(await routeMeta(t, { object: 'instagram', entry: [{ id: '178002' }] }), []);
+  assert.equal(await setting(a, 'secret_dellal_ig_token'), null, 'and the key that answered Instagram goes');
   // a new login with them: boutique A gets its Instagram's messages, without taking the Page again
   await login(true);
   assert.deepEqual((await routeMeta(t, { object: 'instagram', entry: [{ id: '178002' }] })).map((x) => x.shopId), [a.shop!.id]);
+  assert.equal(await setting(a, 'secret_dellal_ig_token'), 'LONG_USER_TOKEN');
+  // Instagram ticked, but Meta does not let the account's key into its inbox: no Instagram key (the Page still answers
+  // the people Meta lets it), until a login where it does
+  probe.igReach = '(#3) Application does not have the capability to make this API call.';
+  await login(true);
+  assert.equal(await setting(a, 'secret_dellal_ig_token'), null);
+  assert.deepEqual([(await setting(a, 'social_page')).igId, (await setting(a, 'social_page')).igKey], ['178002', false]);
+  probe.igReach = null;
+  await login(true);
+  assert.deepEqual([await setting(a, 'secret_dellal_ig_token'), (await setting(a, 'social_page')).igKey], ['LONG_USER_TOKEN', true]);
 });
 
 test('a login cancelled, too old, or from another place: nothing is linked', async () => {
@@ -385,40 +467,56 @@ test('the preview: a sample account, and a « login » that links a new one afte
   await assert.rejects(() => call('social.use', demo, { assetId: oran.id }), /répond déjà/);
 });
 
-test('« Instagram seul »: the Instagram configuration opens its own login for one shop, and is asked for first', async () => {
-  await p('p.social.apps.save', {
-    meta: { ...APPS.meta, configId: '777000111', igConfigId: '', secret: '' },
-    tiktok: { ...APPS.tiktok, secret: '' },
-  });
-  await assert.rejects(() => call('social.start', b, { provider: 'meta', kind: 'instagram' }), /Instagram/);
-  await p('p.social.apps.save', {
-    meta: {
-      ...APPS.meta,
-      configId: '777000111',
-      igConfigId: '1485334790168642',
-      secret: '',
-    },
-    tiktok: { ...APPS.tiktok, secret: '' },
-  });
-  assert.equal(((await p('p.social.apps', {})) as any).meta.igConfigId, '1485334790168642');
-  const s: any = await call('social.start', b, {
-    provider: 'meta',
-    kind: 'instagram',
-  });
-  const u = new URL(s.url);
-  assert.equal(u.searchParams.get('config_id'), '1485334790168642');
-  assert.equal(u.searchParams.get('override_default_response_type'), 'true');
-  assert.ok(s.state.startsWith('ig.'));
-  // the shops' own login keeps the Pages configuration
-  const plain: any = await call('social.start', b, {
-    provider: 'meta',
-    scope: 'here',
-  });
-  assert.equal(new URL(plain.url).searchParams.get('config_id'), '777000111');
-  await p('p.social.apps.save', {
-    meta: { ...APPS.meta, configId: '', igConfigId: '', secret: '' },
-    tiktok: { ...APPS.tiktok, secret: '' },
-  });
+test('« Connecter Instagram » is gone: Instagram comes with the Facebook account; a key connected before stays until the boutique removes it', async () => {
+  // no Instagram-only login any more: not asked for, not kept in Pilotix's settings, and a tab of it still open ends
+  await assert.rejects(() => call('social.start', a, { provider: 'meta', kind: 'instagram' }), /kind/);
+  await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '777000111', igConfigId: '1485334790168642', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+  const apps: any = await p('p.social.apps', {});
+  assert.equal('igConfigId' in apps.meta, false);
+  assert.equal(apps.meta.configId, '777000111');
+  await t.platform.query(`INSERT INTO platform.social_states (state, provider, owner_id, shop_id, from_shop, by_name, expires_at) VALUES ('ig.old-tab-state-1234567890', 'meta', 0, $1, $1, 'Karim', now() + interval '10 minutes')`, [a.shop!.id]);
+  const old = await finishLogin(t, 'meta', { code: 'IG_ONLY', state: 'ig.old-tab-state-1234567890' }, URL0);
+  assert.equal(old.ok, false);
+  assert.match(old.message, /Continuer avec Facebook/);
+  await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+
+  // a boutique that connected Instagram before, in Pilot Message: its key is its own. Linking the Facebook account
+  // again, or picking the Page again, leaves it in place; the list names it
+  const page = ((await call('social.list', a, {})) as any).links.find((x: any) => x.name === 'Karim Benali').assets.find((x: any) => x.kind === 'page' && x.usedHere);
+  await call('social.unuse', a, { kind: 'page' });
+  await setRaw(a.db, 'secret_dellal_ig_token', 'IGAA-CONNECTED-BEFORE');
+  await setRaw(a.db, 'dellal', { ...(await setting(a, 'dellal')), instagramLoginId: '2601', instagramLoginUser: 'bebeconfort.dz', igTokenAt: '2026-11-01T00:00:00.000Z', igLoginKind: 'ig' });
+  await noteIgLogin(t, a.shop!.id, '2601', 'bebeconfort.dz');
+  const used: any = await call('social.use', a, { assetId: page.id });
+  assert.equal(await setting(a, 'secret_dellal_ig_token'), 'IGAA-CONNECTED-BEFORE');
+  assert.deepEqual([(await setting(a, 'dellal')).instagramLoginId, (await setting(a, 'dellal')).igLoginKind, (await setting(a, 'social_page')).igKey], ['2601', 'ig', false]);
+  // (the account's key reaches the Instagram inbox: the old key may be removed, the account's key is ready to take over)
+  assert.deepEqual(used.old.instagram, { username: 'bebeconfort.dz', ready: true });
+  // that old login gives the account another number in its webhooks: they still find the boutique
+  assert.deepEqual((await routeMeta(t, { object: 'instagram', entry: [{ id: '2601' }] })).map((x) => x.shopId), [a.shop!.id]);
+  const s: any = await call('social.start', a, { provider: 'meta', scope: 'here' });
+  graph = { me: { id: '5001', name: 'Karim Benali' }, pages: [{ id: '9002', name: 'Bébé Confort DZ', access_token: 'PAGE_TOKEN_2', instagram_business_account: { id: '178002', username: 'bebeconfort.dz' } }], ads: [] };
+  assert.equal((await linked(t, 'meta', { code: 'AGAIN', state: s.state }, URL0)).ok, true);
+  assert.equal(await setting(a, 'secret_dellal_ig_token'), 'IGAA-CONNECTED-BEFORE', 'a new login does not take a working key’s place');
+  // only an admin of the boutique removes it
+  const agent: Ctx = { ...a, session: { ...a.session, isAdmin: false, profile: { ...a.session.profile, role: 'confirmation' } } as any };
+  await assert.rejects(() => call('social.dropOld', agent, { what: 'instagram' }));
+  // and not while the account's key has not been seen to reach the Instagram inbox: Instagram would be left to the Page alone
+  await t.platform.query(`UPDATE platform.social_assets SET extra = extra #- '{ig,key}' WHERE id = $1`, [page.id]);
+  assert.deepEqual(((await call('social.list', a, {})) as any).old.instagram, { username: 'bebeconfort.dz', ready: false });
+  await assert.rejects(() => call('social.dropOld', a, { what: 'instagram' }), /Relier/);
+  assert.equal(await setting(a, 'secret_dellal_ig_token'), 'IGAA-CONNECTED-BEFORE');
+  await t.platform.query(`UPDATE platform.social_assets SET extra = jsonb_set(extra, '{ig,key}', 'true') WHERE id = $1`, [page.id]);
+  // removed, the Facebook account's key answers Instagram at once
+  const gone: any = await call('social.dropOld', a, { what: 'instagram' });
+  assert.equal(gone.old.instagram, null);
+  assert.equal(await setting(a, 'secret_dellal_ig_token'), 'LONG_USER_TOKEN');
+  assert.deepEqual([(await setting(a, 'dellal')).instagramLoginId, (await setting(a, 'dellal')).igLoginKind, (await setting(a, 'social_page')).igKey], ['178002', 'unified', true]);
+  assert.deepEqual(await routeMeta(t, { object: 'instagram', entry: [{ id: '2601' }] }), []);
+  assert.deepEqual((await routeMeta(t, { object: 'instagram', entry: [{ id: '178002' }] })).map((x) => x.shopId), [a.shop!.id]);
+  // asked twice: nothing more to remove, nothing breaks
+  await call('social.dropOld', a, { what: 'instagram' });
+  assert.equal(await setting(a, 'secret_dellal_ig_token'), 'LONG_USER_TOKEN');
 });
 
 test('« Connecter WhatsApp »: Meta’s Embedded Signup for one shop; its number answers there, and its messages come through Pilotix’s app', async () => {
@@ -464,6 +562,11 @@ test('« Connecter WhatsApp »: Meta’s Embedded Signup for one shop; its numbe
   assert.deepEqual([d.whatsappPhoneId, d.whatsappPhone], ['109988776655', '+213 550 98 76 54']);
   assert.equal((await setting(b, 'notify')).wabaId, '102030405060');
   assert.equal(await setting(a, 'secret_dellal_wa_token'), null, 'not the other boutique');
+  // Comptes shows the number (and that Pilotix's « Connecter WhatsApp » is ready); the other boutique has none
+  const lb: any = await call('social.list', b, {});
+  assert.deepEqual([lb.whatsapp, lb.waReady], [{ phone: '+213 550 98 76 54', phoneId: '109988776655', old: false }, true]);
+  assert.equal(((await call('social.list', a, {})) as any).whatsapp, null);
+  assert.ok(!/LONG_USER_TOKEN/.test(JSON.stringify(lb)), 'its key never reaches the page');
 
   // Meta's webhook: each number's changes to the boutique that connected it; another number is dropped (and noted)
   const hook = {
@@ -516,12 +619,24 @@ test('« Connecter WhatsApp »: Meta’s Embedded Signup for one shop; its numbe
   const s4: any = await call('social.start', b, { provider: 'meta', kind: 'whatsapp' });
   assert.match((await finishLogin(t, 'meta', { state: s4.state, code: 'WA_CODE_4' }, URL0)).message, /pas encore de numéro/);
 
-  // the shop removes WhatsApp's key (Avancé): its number is no longer shown, nor its messages routed here
+  // Pilot Message's settings no longer take a WhatsApp key or number: saving them changes nothing of it
   const g: any = await call('dellal.settings.get', b, {});
   assert.equal(g.settings.whatsappPhone, '+213 550 98 76 54');
-  await call('dellal.settings.save', b, { ...g.settings, secrets: { waToken: null } });
-  assert.equal((await setting(b, 'dellal')).whatsappPhone, '');
+  await assert.rejects(() => call('dellal.settings.save', b, { ...g.settings, secrets: { waToken: null } }), /secrets\.waToken/);
+  await call('dellal.settings.save', b, { ...g.settings, whatsappPhoneId: '', whatsappPhone: '', secrets: {} });
+  assert.deepEqual([(await setting(b, 'dellal')).whatsappPhoneId, await setting(b, 'secret_dellal_wa_token')], ['109988776655', 'LONG_USER_TOKEN']);
+  // « Retirer » in Comptes: the number and its key are forgotten, its messages are no longer routed here; the PIN
+  // Pilotix gave the number stays (Meta asks for it to move the number)
+  const off: any = await call('social.waRemove', b, {});
+  assert.equal(off.whatsapp, null);
+  assert.deepEqual([(await setting(b, 'dellal')).whatsappPhoneId, (await setting(b, 'dellal')).whatsappPhone, await setting(b, 'secret_dellal_wa_token')], ['', '', null]);
+  assert.ok(await setting(b, 'secret_dellal_wa_pin'));
   assert.deepEqual(await routeMeta(t, hook), []);
+  // a number and a key typed by hand before (the boutique's own Meta app): still the boutique's, shown as such
+  await setRaw(b.db, 'secret_dellal_wa_token', 'EAAB-typed-before');
+  await setRaw(b.db, 'dellal', { ...(await setting(b, 'dellal')), whatsappPhoneId: '555000999' });
+  assert.deepEqual(((await call('social.list', b, {})) as any).whatsapp, { phone: '', phoneId: '555000999', old: true });
+  await call('social.waRemove', b, {});
   wa = { waba: '', numbers: [], registerFail: false };
   await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '', waConfigId: '', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
 });
@@ -559,10 +674,10 @@ test('« Connecter WhatsApp » in Meta’s own popup (JavaScript SDK): the code 
   const bad: any = await finishWhatsappPopup(t, b.shop!.id, { state: s3.state, code: 'SDK_CODE', wabaId: '999999999999' });
   assert.equal(bad.ok, false);
   assert.match(bad.message, /n’a pas donné/);
-  // a state of an Instagram connection is not a WhatsApp one
-  await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '777000111', igConfigId: '1485334790168642', waConfigId: '880011223344', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
-  const s4: any = await call('social.start', b, { provider: 'meta', kind: 'instagram' });
+  // the state of a Facebook account's login is not a WhatsApp one
+  const s4: any = await call('social.start', b, { provider: 'meta', scope: 'here' });
   assert.match((await finishWhatsappPopup(t, b.shop!.id, { state: s4.state, code: 'SDK_CODE' })).message, /introuvable/);
+  await call('social.waRemove', b, {});
   wa = { waba: '', numbers: [], registerFail: false };
   await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '', waConfigId: '', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
 });
@@ -669,7 +784,12 @@ test('several ad accounts: a boutique counts them all, Publicité reads each one
   await login([act('3004', 'Bébé pub 2')]);
 });
 
-test('« Tester »: the key, the permissions, the Page (subscribed again), Instagram, the app webhook, the address from the Internet, the ad accounts', async () => {
+/** « Tester »'s lines as « part.line[:case] » → state (a line's case: fixed, lost, or its « why »). */
+const lines = (r: any): Record<string, string> =>
+  Object.fromEntries(r.checks.map((c: any) => [`${c.group}.${c.key}${c.params?.fixed ? ':fixed' : c.params?.lost ? ':lost' : c.params?.why ? `:${c.params.why}` : ''}`, c.state]));
+const karimOf = async () => ((await call('social.list', a, {})) as any).links.find((x: any) => x.name === 'Karim Benali');
+
+test('« Tester », part by part: the key and what Facebook gave it, the Page (subscribed again), Instagram, the forms, Publicité, the app webhook, the address from the Internet', async () => {
   const list: any = await call('social.list', a, {});
   const karim = list.links.find((x: any) => x.name === 'Karim Benali');
   assert.equal(list.here.page.name, 'Bébé Confort DZ');
@@ -685,51 +805,106 @@ test('« Tester »: the key, the permissions, the Page (subscribed again), Insta
   };
   calls.length = 0;
   const r: any = await call('social.test', a, { linkId: karim.id });
-  const st = Object.fromEntries(r.checks.map((c: any) => [c.key, c.state]));
-  assert.deepEqual(st, { token: 'ok', perms: 'warn', page: 'ok', pageHook: 'ok', leadHook: 'ok', ig: 'ok', fbComment: 'warn', igInbox: 'ok', igSeen: 'warn', igComment: 'warn', catchUp: 'warn', igLogin: 'warn', appHook: 'ok', appHookLeads: 'warn', appHookEdits: 'warn', appHookIg: 'warn', appHookAds: 'warn', reach: 'ok', ads: 'ok' });
+  // every line says where it belongs: the page shows the test part by part
+  assert.ok(r.checks.every((c: any) => (CHECK_GROUPS as readonly string[]).includes(c.group)));
+  assert.deepEqual(lines(r), {
+    'key.token': 'ok',
+    'key.keyLife': 'ok',
+    'key.given': 'ok',
+    'fb.page': 'ok',
+    'fb.pageHook:fixed': 'ok',
+    'fb.fbSeen': 'warn',
+    'fb.fbComment': 'warn',
+    'fb.catchUp': 'warn',
+    // each part names the permission it misses: here Instagram's comments (red: the boutique uses that part)…
+    'ig.perm:igComments': 'bad',
+    'ig.ig': 'ok',
+    'ig.igInbox': 'ok',
+    // (Meta already sent things for this Instagram account in the tests above, but no customer's message)
+    'ig.igSeen:other': 'warn',
+    'ig.igComment': 'warn',
+    'ig.igKey': 'ok',
+    // …and what the boutique would need for the forms, publishing, launching ads, the catalogue (to look at)
+    'forms.perm:forms': 'warn',
+    'forms.leadHook:fixed': 'ok',
+    'forms.forms': 'ok',
+    'content.perm:content': 'warn',
+    'ads.perm:adsManage': 'warn',
+    'ads.ads': 'ok',
+    'ads.adsRead': 'ok',
+    'ads.adsLaunch:perm': 'warn',
+    'catalog.perm:catalog': 'warn',
+    'catalog.catalogNone': 'info',
+    'pixels.pixelNone': 'info',
+    'app.appHook': 'ok',
+    'app.appHookLeads': 'warn',
+    'app.appHookEdits': 'warn',
+    'app.appHookIg': 'warn',
+    'app.appHookAds': 'warn',
+    // partnership ads: Pilotix's login does not ask for them yet (said, never the boutique's problem)
+    'app.perm:partners': 'info',
+    'app.reach': 'ok',
+  });
+  const find = (x: any, key: string, why?: string) => x.checks.find((c: any) => c.key === key && (why === undefined || c.params?.why === why));
+  assert.equal(find(r, 'perm', 'igComments').params.list, 'instagram_manage_comments');
+  assert.equal(find(r, 'perm', 'adsManage').params.list, 'ads_management, pages_manage_ads, business_management');
+  assert.equal(find(r, 'perm', 'forms').params.list, 'leads_retrieval, pages_manage_ads');
+  assert.equal(find(r, 'perm', 'partners').params.list, 'instagram_branded_content_ads_brand, facebook_branded_content_ads_brand');
+  // what Facebook gave at the last login, and how long the key lasts (a person's key: about 60 days)
+  assert.deepEqual(find(r, 'given').params, { pages: 1, igs: 1, ads: 1 });
+  assert.ok(Date.parse(find(r, 'keyLife').params.until) > Date.now() + 50 * 86_400_000);
   // Marketing › Formulaires: the Page subscribed to its ads' lead forms too; the app's webhook does not send them yet
   assert.ok(calls.some((c) => /9002\/subscribed_apps/.test(c.url) && c.method === 'POST' && /leadgen/.test(String(c.body ?? ''))), 'the lead forms asked');
-  assert.equal(r.checks.find((c: any) => c.key === 'appHookLeads').params.list, 'leadgen');
-  assert.equal(r.checks.find((c: any) => c.key === 'perms').params.list, 'instagram_manage_comments');
-  assert.equal(r.checks.find((c: any) => c.key === 'pageHook').params.fixed, 1);
+  assert.equal(find(r, 'appHookLeads').params.list, 'leadgen');
+  assert.equal(find(r, 'pageHook').params.fixed, 1);
   assert.ok(calls.some((c) => /9002\/subscribed_apps/.test(c.url) && c.method === 'POST'), 'subscribed again');
-  assert.equal(r.checks.find((c: any) => c.key === 'appHookIg').params.list, 'messages, comments');
+  assert.equal(find(r, 'appHookIg').params.list, 'messages, comments');
+  // Publicité: the ad account's numbers were read as Publicité reads them, with the account's key
+  assert.ok(calls.some((c) => /act_3004\/insights/.test(c.url) && /access_token=LONG_USER_TOKEN/.test(c.url)));
+  assert.deepEqual([find(r, 'ads').params, find(r, 'adsRead').params], [{ count: 1, bad: 0 }, { name: 'Compte 3004' }]);
   assert.ok(!/PAGE_TOKEN|LONG_USER_TOKEN|SHORT_USER_TOKEN|meta-app-secret/.test(JSON.stringify(r)), 'no token or secret reaches the page');
-  // Instagram's own login: not made yet (to look at); made: its account; a key Instagram refuses: red, with the reason
-  assert.deepEqual(r.checks.find((c: any) => c.key === 'igLogin').params, { username: 'bebeconfort.dz' });
-  await setRaw(a.db, 'secret_dellal_ig_token', 'IGAA-TEST-KEY');
-  const igl: any = await call('social.test', a, { linkId: karim.id });
-  assert.deepEqual(igl.checks.find((c: any) => c.key === 'igLogin'), { key: 'igLogin', state: 'ok', params: { username: 'bebeconfort.dz' }, detail: null });
-  assert.ok(!JSON.stringify(igl).includes('IGAA-TEST-KEY'), 'the Instagram key never reaches the page');
-  probe.igRefuse = true;
-  const igBad: any = (await call('social.test', a, { linkId: karim.id })) as any;
-  assert.equal(igBad.checks.find((c: any) => c.key === 'igLogin').state, 'bad');
-  assert.match(igBad.checks.find((c: any) => c.key === 'igLogin').detail, /refusé la clé/);
-  probe.igRefuse = false;
-  // a Unified login key (newer Meta apps): read on Facebook's side
-  const dset = (await a.db.query(`SELECT value FROM settings WHERE key = 'dellal'`))[0]?.value ?? {};
-  await setRaw(a.db, 'dellal', { ...dset, igLoginKind: 'unified', instagramLoginId: '178555' });
+
+  // Meta's own word on the key (debug_token) comes first when it gives the permissions: every one given, a key without an end
+  probe.scopes = [...ALL_PERMS, 'ads_management', 'pages_manage_ads', 'business_management', 'leads_retrieval', 'catalog_management', 'pages_manage_posts', 'instagram_content_publish', 'read_insights', 'instagram_manage_insights'];
+  probe.expiresAt = 0;
+  probe.pageSubs = [{ id: APPS.meta.appId, subscribed_fields: ['messages', 'messaging_postbacks', 'messaging_referrals', 'message_edits', 'message_reactions', 'feed', 'leadgen'] }];
   calls.length = 0;
-  const uni: any = await call('social.test', a, { linkId: karim.id });
-  assert.deepEqual(uni.checks.find((c: any) => c.key === 'igLogin'), { key: 'igLogin', state: 'ok', params: { username: 'bebeconfort.dz' }, detail: null });
-  assert.ok(calls.some((c) => /graph\.facebook\.com\/v23\.0\/me\/assigned_instagram_accounts/.test(c.url)));
-  await setRaw(a.db, 'dellal', dset);
-  await a.db.query(`DELETE FROM settings WHERE key = 'secret_dellal_ig_token'`);
+  const full: any = await call('social.test', a, { linkId: karim.id });
+  assert.ok(!calls.some((c) => /me\/permissions/.test(c.url)), 'debug_token said the permissions');
+  assert.equal(r.checks.filter((c: any) => c.key === 'perm').length, 6);
+  assert.deepEqual(full.checks.filter((c: any) => c.key === 'perm').map((c: any) => c.params.why), ['partners']);
+  assert.deepEqual([find(full, 'keyLife').params, find(full, 'pageHook').params, find(full, 'leadHook').params], [{ why: 'never' }, undefined, undefined]);
+  assert.deepEqual([lines(full)['content.content'], lines(full)['ads.adsLaunch']], ['ok', 'ok']);
+  // a key that ends within a week: to link again soon
+  probe.expiresAt = Math.round(Date.now() / 1000) + 3 * 86_400;
+  assert.equal(find(await call('social.test', a, { linkId: karim.id }), 'keyLife').state, 'warn');
+  // reading the numbers is allowed by the permission to manage ads too (no « ads_read » asked then)
+  probe.scopes = probe.scopes.filter((x) => x !== 'ads_read');
+  assert.equal(find(await call('social.test', a, { linkId: karim.id }), 'perm', 'adsRead'), undefined);
+  probe.scopes = undefined;
+  probe.expiresAt = undefined;
+  probe.pageSubs = [];
+  // the ads' forms Meta refuses: said in the forms' part, with Meta's words
+  probe.formsRefuse = true;
+  const noForms = find(await call('social.test', a, { linkId: karim.id }), 'forms');
+  assert.deepEqual([noForms.group, noForms.state], ['forms', 'warn']);
+  assert.match(noForms.detail, /leads_retrieval/);
+  probe.formsRefuse = false;
+
   // a webhook Pilotix refused (its signature matched no secret): said for 2 days
   await noteBadSignature(t, 'instagram');
   const sig: any = await call('social.test', a, { linkId: karim.id });
-  assert.equal(sig.checks.find((c: any) => c.key === 'badSig').state, 'warn');
-  assert.equal(sig.checks.find((c: any) => c.key === 'badSig').params.count, 1);
+  assert.deepEqual([find(sig, 'badSig').state, find(sig, 'badSig').group, find(sig, 'badSig').params.count], ['warn', 'app', 1]);
   await t.platform.query(`DELETE FROM platform.settings WHERE key = 'meta_badsig'`);
   // Cloudflare stops the webhook's address
   probe.cloudflare = true;
   const cf: any = await call('social.test', a, { linkId: karim.id });
-  assert.deepEqual(cf.checks.find((c: any) => c.key === 'reach'), { key: 'reach', state: 'bad', params: { why: 'cloudflare' }, detail: null });
+  assert.deepEqual(find(cf, 'reach'), { key: 'reach', group: 'app', state: 'bad', params: { why: 'cloudflare' }, detail: null });
   probe.cloudflare = false;
   // a key Facebook refuses turns the account red; working again, green
   probe.refuse = true;
   const bad: any = await call('social.test', a, { linkId: karim.id });
-  assert.equal(bad.checks[0].state, 'bad');
+  assert.deepEqual([bad.checks[0].key, bad.checks[0].group, bad.checks[0].state], ['token', 'key', 'bad']);
   assert.equal(((await call('social.list', a, {})) as any).links.find((x: any) => x.id === karim.id).status, 'error');
   probe.refuse = false;
   await call('social.test', a, { linkId: karim.id });
@@ -737,15 +912,15 @@ test('« Tester »: the key, the permissions, the Page (subscribed again), Insta
   // ad accounts in dinars: Publicité counts them in dinars (fine); in another money: as dollars (to look at)
   const money = (c: string) =>
     t.platform.query(`UPDATE platform.social_assets SET extra = jsonb_set(extra, '{currency}', to_jsonb($1::text)) WHERE link_id = $2 AND kind = 'ad_account'`, [c, karim.id]);
-  const currencyLine = async () => ((await call('social.test', a, { linkId: karim.id })) as any).checks.find((c: any) => c.key === 'adsCurrency');
+  const currencyLine = async () => find(await call('social.test', a, { linkId: karim.id }), 'adsCurrency');
   await money('DZD');
-  assert.deepEqual(await currencyLine(), { key: 'adsCurrency', state: 'ok', detail: null });
+  assert.deepEqual(await currencyLine(), { key: 'adsCurrency', group: 'ads', state: 'ok', detail: null });
   await money('EUR');
-  assert.deepEqual(await currencyLine(), { key: 'adsCurrency', state: 'warn', params: { list: 'EUR' }, detail: null });
+  assert.deepEqual(await currencyLine(), { key: 'adsCurrency', group: 'ads', state: 'warn', params: { list: 'EUR' }, detail: null });
   await money('USD');
   assert.equal(await currencyLine(), undefined);
   // Instagram: Meta refuses its inbox and says why; when Pilotix last got something from it, or never
-  const line = async (key: string) => ((await call('social.test', a, { linkId: karim.id })) as any).checks.find((c: any) => c.key === key);
+  const line = async (key: string) => find(await call('social.test', a, { linkId: karim.id }), key);
   probe.inbox = '(#3) Application does not have the capability to make this API call.';
   const inbox = await line('igInbox');
   assert.deepEqual([inbox.state, inbox.params.username], ['bad', 'bebeconfort.dz']);
@@ -775,6 +950,15 @@ test('« Tester »: the key, the permissions, the Page (subscribed again), Insta
   // taken by no boutique
   await t.platform.query(`UPDATE platform.social_hooks SET routed = false WHERE object = 'instagram' AND ext_id = '178002'`);
   assert.deepEqual(await seen(), ['warn', 'lost', 'string']);
+  // Messenger: a customer's message on the Page, written down the same way
+  const fbSeen = async () => {
+    const c = await line('fbSeen');
+    return [c.group, c.state, typeof c.params.at];
+  };
+  await t.platform.query(`DELETE FROM platform.social_hooks WHERE object = 'page'`);
+  assert.deepEqual(await fbSeen(), ['fb', 'warn', 'undefined']);
+  await routeMeta(t, { object: 'page', entry: [{ id: '9002', messaging: [{ sender: { id: 'psid-1' }, recipient: { id: '9002' }, message: { mid: 'm-fb-1', text: 'salam' } }] }] });
+  assert.deepEqual(await fbSeen(), ['fb', 'ok', 'string']);
   // comments: a customer's on the Page's post, then on Instagram; the account's own replies do not count
   const state = async (key: string) => {
     const c = await line(key);
@@ -789,8 +973,264 @@ test('« Tester »: the key, the permissions, the Page (subscribed again), Insta
   assert.deepEqual(await state('igComment'), ['warn', 'undefined']);
   await routeMeta(t, { object: 'instagram', entry: [{ id: '178002', changes: [{ field: 'comments', value: { from: { id: 'ig-u-1', username: 'amina' }, media: { id: 'm1' }, id: 'igc1', text: 'prix ?' } }] }] });
   assert.deepEqual(await state('igComment'), ['ok', 'string']);
+  // no Page chosen in this boutique: said in the Page's part, and nothing of Instagram, the forms or publishing is tried
+  const pageId = karim.assets.find((x: any) => x.kind === 'page' && x.usedHere).id;
+  await call('social.unuse', a, { kind: 'page' });
+  const none = lines(await call('social.test', a, { linkId: karim.id }));
+  assert.equal(none['fb.pageNone'], 'warn');
+  assert.deepEqual(Object.keys(none).filter((k) => /^(ig|forms|content)\./.test(k)), []);
+  await call('social.use', a, { assetId: pageId });
   // another boutique cannot test this boutique's account
   await assert.rejects(() => call('social.test', b, { linkId: karim.id }), /introuvable/);
+});
+
+test('« Tester », Instagram: which key answers every customer — the account’s own; one connected before while it works; repaired when it can be', async () => {
+  const karim = await karimOf();
+  const page = karim.assets.find((x: any) => x.kind === 'page' && x.usedHere);
+  const key = async () => {
+    const r: any = await call('social.test', a, { linkId: karim.id });
+    const c = r.checks.find((x: any) => x.key === 'igKey');
+    assert.ok(!/IGAA|LONG_USER_TOKEN/.test(JSON.stringify(r)), 'no key reaches the page');
+    return [c.group, c.state, c.params.fixed ? 'fixed' : c.params.why ?? null, c.detail];
+  };
+  const stored = async () => [await setting(a, 'secret_dellal_ig_token'), (await setting(a, 'dellal')).igLoginKind, (await setting(a, 'social_page')).igKey];
+  // the account's key answers Instagram (it came with the login) and reaches the inbox: nothing to do
+  assert.deepEqual(await stored(), ['LONG_USER_TOKEN', 'unified', true]);
+  assert.deepEqual(await key(), ['ig', 'ok', null, null]);
+  // Meta no longer lets it in: red, with Meta's reason; when Meta says the Instagram account was not ticked, said so
+  probe.igReach = '(#10) Application does not have permission for this action';
+  assert.deepEqual(await key(), ['ig', 'bad', 'none', 'Facebook : (#10) Application does not have permission for this action']);
+  probe.granular = [{ scope: 'instagram_manage_messages', target_ids: ['178999'] }];
+  assert.equal((await key())[2], 'tick');
+  probe.granular = [{ scope: 'instagram_manage_messages', target_ids: ['178002'] }];
+  assert.equal((await key())[2], 'none');
+  probe.granular = undefined;
+  assert.deepEqual(await stored(), ['LONG_USER_TOKEN', 'unified', true], 'a refusal takes nothing away (Meta may only be slow)');
+  probe.igReach = null;
+
+  // an account linked before Instagram came with it: no key yet. « Tester » sees the account's key reach the inbox and
+  // gives it Instagram's answers at once
+  const before = async () => {
+    await t.platform.query(`UPDATE platform.social_assets SET extra = extra #- '{ig,key}' WHERE id = $1`, [page.id]);
+    await a.db.query(`DELETE FROM settings WHERE key = 'secret_dellal_ig_token'`);
+    await setRaw(a.db, 'social_page', { ...(await setting(a, 'social_page')), igKey: false });
+    await setRaw(a.db, 'dellal', { ...(await setting(a, 'dellal')), instagramLoginId: '', instagramLoginUser: '', igTokenAt: '', igLoginKind: '' });
+  };
+  await before();
+  // …unless Meta does not let the key in: to look at (the Page still answers the people Meta lets it), nothing written
+  probe.igReach = '(#3) Application does not have the capability to make this API call.';
+  assert.deepEqual((await key()).slice(0, 3), ['ig', 'warn', 'none']);
+  assert.deepEqual(await stored(), [null, '', false]);
+  probe.igReach = null;
+  assert.deepEqual(await key(), ['ig', 'ok', 'fixed', null]);
+  assert.deepEqual(await stored(), ['LONG_USER_TOKEN', 'unified', true]);
+  assert.deepEqual([(await setting(a, 'dellal')).instagramLoginId, (await setting(a, 'dellal')).instagramLoginUser], ['178002', 'bebeconfort.dz']);
+  assert.deepEqual(await key(), ['ig', 'ok', null, null]);
+
+  // a key connected before in Pilot Message (Instagram's own login) that works: it keeps its place, named as the old one
+  const old = async (kind: string, loginId: string) => {
+    await before();
+    await setRaw(a.db, 'secret_dellal_ig_token', 'IGAA-CONNECTED-BEFORE');
+    await setRaw(a.db, 'dellal', { ...(await setting(a, 'dellal')), instagramLoginId: loginId, instagramLoginUser: 'bebeconfort.dz', igTokenAt: '2026-11-01T00:00:00.000Z', igLoginKind: kind });
+  };
+  const oldHere = async () => ((await call('social.list', a, {})) as any).old.instagram;
+  await old('ig', '2601');
+  // Meta does not let the account's key into the inbox: the old key is the only one, it cannot be removed yet
+  probe.igReach = '(#3) no';
+  assert.deepEqual(await key(), ['ig', 'ok', 'old', null]);
+  assert.deepEqual(await oldHere(), { username: 'bebeconfort.dz', ready: false });
+  probe.igReach = null;
+  // the account's key reaches the inbox too: the old key still answers (nothing changes by itself), and the boutique is
+  // told it may remove it to keep one single connection (Comptes offers « Retirer » from now on)
+  assert.deepEqual(await key(), ['ig', 'ok', 'oldReady', null]);
+  assert.deepEqual(await stored(), ['IGAA-CONNECTED-BEFORE', 'ig', false]);
+  assert.deepEqual(await oldHere(), { username: 'bebeconfort.dz', ready: true });
+  // one of Meta's Unified login: read on Facebook's side (its Instagram accounts)
+  await old('unified', '178555');
+  calls.length = 0;
+  assert.deepEqual(await key(), ['ig', 'ok', 'oldReady', null]);
+  assert.ok(calls.some((c) => /graph\.facebook\.com\/v23\.0\/me\/assigned_instagram_accounts/.test(c.url)));
+  // Instagram refuses the old key and Meta does not let the account's key in either: red, « Relier » is the way
+  await old('ig', '2601');
+  probe.igRefuse = true;
+  probe.igReach = '(#3) no';
+  const dead = await key();
+  assert.deepEqual(dead.slice(0, 3), ['ig', 'bad', 'oldBad']);
+  assert.match(String(dead[3]), /refusé la clé/);
+  assert.deepEqual(await stored(), ['IGAA-CONNECTED-BEFORE', 'ig', false]);
+  // the old key refused, the account's key reaches the inbox: it takes over, the old one is forgotten
+  probe.igReach = null;
+  assert.deepEqual(await key(), ['ig', 'ok', 'fixed', null]);
+  assert.deepEqual(await stored(), ['LONG_USER_TOKEN', 'unified', true]);
+  assert.equal(((await call('social.list', a, {})) as any).old.instagram, null);
+  probe.igRefuse = false;
+});
+
+test('« Tester », Publicité: each ad account and its state at Meta, its numbers, launching; a key pasted before in Réglages › Meta Ads; the catalogue, the pixels, WhatsApp', async () => {
+  const karim = await karimOf();
+  const run = async () => (await call('social.test', a, { linkId: karim.id })) as any;
+  const find = (x: any, key: string) => x.checks.find((c: any) => c.key === key);
+  // the ad account cannot be read: red (none can), and nothing more is tried on it
+  probe.unreadable = ['act_3004'];
+  let r = await run();
+  assert.deepEqual([find(r, 'ads').state, find(r, 'ads').params, find(r, 'adsRead'), find(r, 'adsLaunch')], ['bad', { count: 1, bad: 1 }, undefined, undefined]);
+  assert.match(find(r, 'ads').detail, /Bébé pub 2 — .*Pas d’accès/);
+  probe.unreadable = [];
+  // its state at Meta, in plain cases: disabled (red), in its grace period (to look at), a state Pilotix does not know
+  probe.adStatus = { act_3004: 2 };
+  assert.deepEqual([find(await run(), 'adsState').state, find(await run(), 'adsState').params], ['bad', { name: 'Bébé pub 2', why: 's2' }]);
+  probe.adStatus = { act_3004: 9 };
+  assert.deepEqual([find(await run(), 'adsState').state, find(await run(), 'adsState').params.why], ['warn', 's9']);
+  probe.adStatus = { act_3004: 55 };
+  assert.deepEqual([find(await run(), 'adsState').params.why, find(await run(), 'adsState').detail], ['sx', 'account_status 55']);
+  probe.adStatus = undefined;
+  assert.equal(find(await run(), 'adsState'), undefined);
+  // launching: the permission to manage ads, and a role that may advertise in the account
+  probe.scopes = [...ALL_PERMS, 'ads_management', 'pages_manage_ads', 'business_management'];
+  probe.tasks = ['ANALYZE'];
+  assert.deepEqual([find(await run(), 'adsLaunch').state, find(await run(), 'adsLaunch').params], ['warn', { name: 'Compte 3004', why: 'task' }]);
+  probe.tasks = ['DRAFT', 'ANALYZE', 'ADVERTISE'];
+  assert.equal(find(await run(), 'adsLaunch').state, 'ok');
+  probe.tasks = undefined;
+  // its ads' problems reach Co-Pilot only when the account is subscribed: one that was not is asked again
+  await t.platform.query(`UPDATE platform.social_assets SET extra = jsonb_set(extra, '{hook}', 'false') WHERE link_id = $1 AND kind = 'ad_account'`, [karim.id]);
+  r = await run();
+  assert.deepEqual([find(r, 'adsHook').state, find(r, 'adsHook').params], ['ok', { name: 'Bébé pub 2', fixed: 1 }]);
+  assert.equal(find(await run(), 'adsHook'), undefined);
+
+  // the catalogue and the pixels are read with the boutique's ads key: the catalogue ticked in Facebook's window or not
+  await setRaw(a.db, 'metacatalog', { catalogId: '424242', businessName: 'Bébé', pixelsLinked: true, at: '2026-11-01T00:00:00.000Z' });
+  probe.catalog = { id: '424242' };
+  r = await run();
+  assert.deepEqual([find(r, 'catalog').group, find(r, 'catalog').state, find(r, 'catalog').params], ['catalog', 'ok', { name: 'Catalogue Bébé', count: 36 }]);
+  probe.catalog = { id: '424242', refuse: true };
+  assert.deepEqual([find(await run(), 'catalog').state, find(await run(), 'catalog').params], ['bad', { why: 'bad' }]);
+  probe.granular = [{ scope: 'catalog_management', target_ids: ['111'] }];
+  r = await run();
+  assert.deepEqual([find(r, 'catalog').params, /Missing permissions/.test(find(r, 'catalog').detail)], [{ why: 'tick' }, true]);
+  probe.granular = undefined;
+  probe.catalog = { id: '424242' };
+  const px = Number((await a.db.query(`INSERT INTO tracking_pixels (platform, name, pixel_id, is_default) VALUES ('meta', 'Pixel Bébé', '880001', true) RETURNING id`))[0].id);
+  assert.deepEqual([find(await run(), 'pixel').group, find(await run(), 'pixel').state, find(await run(), 'pixel').params], ['pixels', 'ok', { name: 'Pixel Bébé' }]);
+  probe.pixelRefuse = ['880001'];
+  assert.equal(find(await run(), 'pixel').state, 'bad');
+  // a pixel with a key of its own (Landing pages › Réglages) sends with it: said, not tried
+  await setRaw(a.db, `secret_pixel_${px}`, 'EAA-PIXEL-OWN');
+  assert.deepEqual([find(await run(), 'pixel').state, find(await run(), 'pixel').params.why], ['info', 'own']);
+  await a.db.query(`DELETE FROM settings WHERE key = $1`, [`secret_pixel_${px}`]);
+  probe.pixelRefuse = undefined;
+  probe.scopes = undefined;
+
+  // the boutique stops counting this account's ad accounts: said, with the way back (the switch above)
+  await call('social.ads', a, { linkId: karim.id, on: false });
+  r = await run();
+  assert.deepEqual([find(r, 'adsOff').state, find(r, 'adsOff').params, find(r, 'ads'), find(r, 'catalog')], ['warn', { count: 1 }, undefined, undefined]);
+
+  // A key pasted before in Réglages › Meta Ads (that form is gone): Publicité still runs on it. « Tester » tries it and
+  // says how to bring the ads here; Comptes names it; the catalogue and the pixels are read with it
+  await setRaw(a.db, 'secret_meta_token', 'EAA-PASTED-BEFORE');
+  await a.db.query(`UPDATE settings SET value = $1 WHERE key = 'meta'`, [JSON.stringify({ adAccountId: '7007', hasToken: true })]);
+  assert.deepEqual(((await call('social.list', a, {})) as any).old.ads, { adAccountId: '7007' });
+  calls.length = 0;
+  r = await run();
+  assert.deepEqual([find(r, 'adsOld').group, find(r, 'adsOld').state, find(r, 'adsOld').params], ['ads', 'info', { name: 'Compte 7007', why: 'switch' }]);
+  assert.ok(calls.some((c) => /act_7007\?/.test(c.url) && /access_token=EAA-PASTED-BEFORE/.test(c.url)), 'the old key itself was tried');
+  assert.ok(calls.some((c) => /\/424242\?/.test(c.url) && /access_token=EAA-PASTED-BEFORE/.test(c.url)), 'the catalogue is read with the key Publicité uses');
+  assert.deepEqual([find(r, 'catalog').state, find(r, 'pixel').state], ['ok', 'ok']);
+  assert.ok(!JSON.stringify(r).includes('EAA-PASTED-BEFORE'));
+  // Meta refuses the old key: red
+  probe.unreadable = ['act_7007'];
+  assert.deepEqual([find(await run(), 'adsOld').state, find(await run(), 'adsOld').params.why], ['bad', 'switchBad']);
+  probe.unreadable = [];
+  // « Les compter dans … »: the account's key takes its place; the pasted key is forgotten
+  const on: any = await call('social.ads', a, { linkId: karim.id, on: true });
+  assert.deepEqual([on.old.ads, on.here.ad_account.count], [null, 1]);
+  assert.deepEqual([await setting(a, 'secret_meta_token'), (await setting(a, 'meta')).adAccountIds], ['LONG_USER_TOKEN', ['3004']]);
+  assert.equal(find(await run(), 'adsOld'), undefined);
+  // an account with no ad account (none ticked in Facebook's window): said, with what to tick
+  const sara = await (async () => {
+    const s: any = await call('social.start', a, { provider: 'meta', scope: 'here' });
+    graph = { me: { id: '5055', name: 'Sara Sans Pub' }, pages: [], ads: [] };
+    assert.equal((await linked(t, 'meta', { code: 'NOADS', state: s.state }, URL0)).ok, true);
+    return ((await call('social.list', a, {})) as any).links.find((x: any) => x.name === 'Sara Sans Pub');
+  })();
+  const alone = lines(await call('social.test', a, { linkId: sara.id }));
+  // this boutique counts another account's ad accounts: said, nothing to do
+  assert.deepEqual([alone['key.given'], alone['fb.pagesNone'], alone['ads.adsOther']], ['info', 'warn', 'info']);
+  await call('social.ads', a, { linkId: karim.id, on: false });
+  const none = lines(await call('social.test', a, { linkId: sara.id }));
+  assert.deepEqual([none['ads.adsNone'], none['ads.adsRight:none']], ['warn', undefined]);
+  // Facebook gave the key no right on ads at all (not even to read them): linking again only helps when the ad account
+  // shows in Facebook's window — said, with where to look and whose side the block is on
+  probe.scopes = ALL_PERMS.filter((x) => x !== 'ads_read');
+  const noRight = lines(await call('social.test', a, { linkId: sara.id }));
+  assert.deepEqual([noRight['ads.adsNone'], noRight['ads.adsRight:none']], ['warn', 'warn']);
+  // … while Publicité runs on a key pasted before: nothing is broken, the same line only informs
+  await setRaw(a.db, 'secret_meta_token', 'EAA-PASTED-BEFORE');
+  await a.db.query(`UPDATE settings SET value = $1 WHERE key = 'meta'`, [JSON.stringify({ adAccountId: '7007', hasToken: true })]);
+  const pasted = lines(await call('social.test', a, { linkId: sara.id }));
+  assert.deepEqual([pasted['ads.adsOld:relink'], pasted['ads.adsRight:none'], pasted['ads.adsNone']], ['info', 'info', undefined]);
+  probe.scopes = undefined;
+  assert.equal(lines(await call('social.test', a, { linkId: sara.id }))['ads.adsRight:none'], undefined);
+  await a.db.query(`DELETE FROM settings WHERE key = 'secret_meta_token'`);
+  await call('social.remove', a, { linkId: sara.id });
+  await call('social.ads', a, { linkId: karim.id, on: true });
+
+  // WhatsApp, in the same test: the boutique's number read with its key, and when Meta last sent something for it
+  assert.equal(find(await run(), 'wa'), undefined);
+  await setRaw(a.db, 'secret_dellal_wa_token', 'EAA-WA-KEY');
+  await setRaw(a.db, 'dellal', { ...(await setting(a, 'dellal')), whatsappPhoneId: '109911', whatsappPhone: '+213 550 11 22 33' });
+  r = await run();
+  assert.deepEqual([find(r, 'wa').group, find(r, 'wa').state, find(r, 'waSeen').state], ['wa', 'ok', 'warn']);
+  await t.platform.query(`INSERT INTO platform.social_hooks (object, ext_id, routed, what) VALUES ('whatsapp_business_account', '109911', true, 'message')`);
+  assert.equal(find(await run(), 'waSeen').state, 'ok');
+  assert.ok(!JSON.stringify(await run()).includes('EAA-WA-KEY'));
+  await call('social.waRemove', a, {});
+  await t.platform.query(`DELETE FROM platform.social_hooks WHERE object = 'whatsapp_business_account' AND ext_id = '109911'`);
+  await a.db.query(`DELETE FROM settings WHERE key = 'metacatalog'`);
+  await a.db.query(`DELETE FROM tracking_pixels WHERE id = $1`, [px]);
+});
+
+test('a key pasted before in Réglages › Meta Ads: linking the account again with its ad accounts takes its place, and new ads keep leaving from the same ad account', async () => {
+  // boutique A counted no ad account of its linked account; its ads ran on a pasted key, from ad account 3005
+  const karim = await karimOf();
+  await call('social.ads', a, { linkId: karim.id, on: false });
+  await a.db.query(`DELETE FROM settings WHERE key = 'ads_launch_account'`);
+  await setRaw(a.db, 'secret_meta_token', 'EAA-PASTED-BEFORE');
+  await a.db.query(`UPDATE settings SET value = $1 WHERE key = 'meta'`, [JSON.stringify({ adAccountId: '3005', hasToken: true })]);
+  // « Relier », every ad account ticked this time (3005 is not the first of them)
+  const s: any = await call('social.start', a, { provider: 'meta', scope: 'here' });
+  const act = (id: string, name: string) => ({ id: `act_${id}`, account_id: id, name, currency: 'USD', account_status: 1 });
+  graph = { me: { id: '5001', name: 'Karim Benali' }, pages: [{ id: '9002', name: 'Bébé Confort DZ', access_token: 'PAGE_TOKEN_2', instagram_business_account: { id: '178002', username: 'bebeconfort.dz' } }], ads: [act('3004', 'Bébé pub 2'), act('3005', 'Promo')] };
+  assert.equal((await linked(t, 'meta', { code: 'ALL_TICKED', state: s.state }, URL0)).ok, true);
+  // the account is this boutique's own: its ad accounts are counted at once, with its key; the pasted key is gone
+  const list: any = await call('social.list', a, {});
+  assert.deepEqual([list.old.ads, list.here.ad_account.count], [null, 2]);
+  assert.equal(await setting(a, 'secret_meta_token'), 'LONG_USER_TOKEN');
+  // 3005 stays the ad account new ads leave from; both are counted
+  assert.deepEqual([(await setting(a, 'meta')).adAccountId, (await setting(a, 'meta')).adAccountIds, list.launch.id], ['3005', ['3005', '3004'], '3005']);
+  // back to one ad account for the tests that follow
+  const s2: any = await call('social.start', a, { provider: 'meta', scope: 'here' });
+  graph = { ...graph, ads: [act('3004', 'Bébé pub 2')] };
+  assert.equal((await linked(t, 'meta', { code: 'ONE', state: s2.state }, URL0)).ok, true);
+  assert.deepEqual((await setting(a, 'meta')).adAccountIds, ['3004']);
+});
+
+test('a business key (« system user ») lists its ad accounts as the ones it was given', async () => {
+  await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '777000111', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+  refuseSwap = true;
+  try {
+    const s: any = await call('social.start', b, { provider: 'meta', scope: 'here' });
+    graph = { me: { id: '5200', name: 'PILOTIX APP System User' }, pages: [{ id: '9950', name: 'Bébé Oran Pro', access_token: 'PAGE_TOKEN_50' }], ads: [], assigned: [{ id: 'act_3090', account_id: '3090', name: 'Oran pub', currency: 'USD', account_status: 1 }] };
+    assert.equal((await linked(t, 'meta', { code: 'SYS_ADS', state: s.state }, URL0)).ok, true);
+    const l = ((await call('social.list', b, {})) as any).links.find((x: any) => x.name === 'PILOTIX APP System User');
+    assert.deepEqual(l.assets.filter((x: any) => x.kind === 'ad_account').map((x: any) => [x.name, x.usedHere]), [['Oran pub', true]]);
+    assert.equal(await setting(b, 'secret_meta_token'), 'SHORT_USER_TOKEN');
+    await call('social.remove', b, { linkId: l.id });
+  } finally {
+    refuseSwap = false;
+    await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+  }
 });
 
 test('the preview: « Tester » answers a sample, the ad accounts switch off and on', async () => {
@@ -802,6 +1242,9 @@ test('the preview: « Tester » answers a sample, the ad accounts switch off and
   const r: any = await call('social.test', demo, { linkId: first.links[0].id });
   assert.equal(r.checks.find((c: any) => c.key === 'appHookIg').state, 'warn');
   assert.ok(r.checks.filter((c: any) => c.key !== 'appHookIg').every((c: any) => c.state === 'ok'));
+  // part by part, as on the server: the page folds the parts that work and opens the one with a problem
+  assert.deepEqual([...new Set(r.checks.map((c: any) => c.group))], ['key', 'fb', 'ig', 'forms', 'content', 'ads', 'catalog', 'pixels', 'app']);
+  assert.deepEqual([first.old, first.whatsapp, first.waReady], [{ ads: null, instagram: null }, null, true]);
   const off: any = await call('social.ads', demo, { linkId: first.links[0].id, on: false });
   assert.equal(off.here.ad_account, null);
   const on: any = await call('social.ads', demo, { linkId: first.links[0].id, on: true });

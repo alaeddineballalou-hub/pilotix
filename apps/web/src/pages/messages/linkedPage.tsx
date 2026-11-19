@@ -1,5 +1,6 @@
 // The Facebook Page (and its Instagram account) the agents answer on, in Pilot Message › Réglages and Pilot Comments ›
-// Réglages: it comes only from a linked account (Pilot AI › Comptes, pages/comptes).
+// Réglages: it comes only from a linked account (Pilot AI › Comptes, pages/comptes). The boutique's WhatsApp number is
+// connected there too: here, a line that says what is connected and leads there.
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../../ui/kit';
 
@@ -35,6 +36,24 @@ export function LinkedPage({ page, old }: { page: { name: string; igUsername: st
       </p>
       <a className="btn primary small" href="#/comptes">
         {t('messages.settings.pageLink')}
+      </a>
+    </div>
+  );
+}
+
+/** Something connected in Pilot AI › Comptes (the WhatsApp number): what it is, and the way there. */
+export function LinkedLine({ ok, text, hint, action }: { ok: boolean; text: string; hint: string; action: string }) {
+  return (
+    <div className={`dl-linked ${ok ? 'ok' : ''}`}>
+      <Icon name={ok ? 'checkcircle' : 'link'} />
+      <p>
+        <b>
+          <bdi>{text}</bdi>
+        </b>
+        <small>{hint}</small>
+      </p>
+      <a className={`btn small ${ok ? 'ghost' : 'primary'}`} href="#/comptes">
+        {action}
       </a>
     </div>
   );

@@ -1,7 +1,7 @@
 {
   "title": "Accounts",
-  "about": "Link your Facebook and TikTok accounts. Your AI agents use them to answer messages and comments, and for your ad numbers.",
-  "help": "One click opens Facebook (or TikTok) in a new tab. Log in, choose your Pages and accept: Pilotix does the rest and the account turns green. The keys stay on Pilotix’s server, never in a page.",
+  "about": "One place to connect everything: Facebook, Instagram, your ad accounts, your catalog, WhatsApp and TikTok. Your AI agents use them to answer messages and comments, and for your ads.",
+  "help": "“Continue with Facebook” opens Facebook in a new tab. Log in, tick everything (Pages, Instagram, ad accounts, catalog, pixels) and accept: Pilotix does the rest and the account turns green. Nothing is pasted anywhere else. “Test” tells you, part by part, what works and where the problem is. The keys stay on Pilotix’s server, never in a page.",
   "here": {
     "title": "Used in “{{name}}”",
     "page": "Messages and comments",
@@ -13,7 +13,11 @@
     "noAds": "No ad account",
     "tiktok": "TikTok ads",
     "noTiktok": "No TikTok account",
-    "adsMany": "“{{account}}” · ad accounts: {{n}}"
+    "adsMany": "“{{account}}” · ad accounts: {{n}}",
+    "wa": "WhatsApp",
+    "noWa": "No number",
+    "waId": "Number no. {{id}}",
+    "adsOld": "Old pasted key"
   },
   "add": "Link an account",
   "for": "For",
@@ -26,11 +30,21 @@
   "scopeSaved": "Changed.",
   "p": {
     "meta": {
-      "name": "Facebook and Instagram",
-      "what": "Your Pages, their messages and comments, and your ad accounts.",
+      "name": "Facebook, Instagram and ads",
+      "what": "One button connects all of Meta at once.",
       "link": "Continue with Facebook",
-      "allow": "Facebook asks you to choose your Pages, Instagram accounts and ad accounts, then to allow Pilotix to manage them. Allow everything, or the agents cannot answer.",
-      "notReady": "Soon: Pilotix is getting the Facebook link ready."
+      "allow": "In Facebook’s window, tick everything: your Pages, your Instagram accounts, your ad accounts, your catalog and your pixels. Then accept everything. What is not ticked does not work in Pilotix.",
+      "notReady": "Soon: Pilotix is getting the Facebook link ready.",
+      "allLabel": "What this button connects",
+      "all": [
+        "Facebook messages",
+        "Comments",
+        "Instagram",
+        "Ads",
+        "Catalog",
+        "Lead forms",
+        "Pixels"
+      ]
     },
     "tiktok": {
       "name": "TikTok",
@@ -40,7 +54,7 @@
     }
   },
   "waiting": "Linking…",
-  "waitingHelp": "Finish in the {{name}} tab that opened: log in, choose your Pages and accept.",
+  "waitingHelp": "Finish in the {{name}} tab that opened: log in, tick everything and accept.",
   "confirmWait": "One last step…",
   "confirmHelp": "In the {{name}} tab, press « Oui, c’est ma boutique » (yes, this is my shop) to link this account.",
   "waitingPreview": "Preview: the login is simulated and takes two seconds.",
@@ -61,16 +75,16 @@
     "error": "Error"
   },
   "relink": "Link again",
-  "relinkHint": "Reconnect this account: a new token, Pages up to date.",
+  "relinkHint": "Reconnect this account and tick everything: a new key, Pages, Instagram and ad accounts up to date.",
   "relinkNow": "Facebook no longer accepts this account: link it again.",
   "remove": "Remove",
   "removeAsk": "Remove this account? The boutiques that use it lose its Page and ad accounts.",
   "removed": "Account removed.",
   "kind": {
     "page": "Pages",
-    "pageNone": "No Page shared with Pilotix. Link the account again and tick your Pages.",
+    "pageNone": "No Page given to Pilotix. Click “Link again” and tick your Pages.",
     "ad_account": "Meta ad accounts",
-    "ad_accountNone": "No ad account (or no right to read it).",
+    "ad_accountNone": "No ad account given to Pilotix. Click “Link again” and tick your ad account in Facebook’s window.",
     "advertiser": "TikTok ad accounts",
     "advertiserNone": "No TikTok ad account shared with Pilotix."
   },
@@ -126,8 +140,7 @@
       "bad": "TikTok refuses the key: click “Link again”."
     },
     "perms": {
-      "ok": "Permissions: all given.",
-      "warn": "Missing permissions: {{list}}. Click “Link again” and accept everything."
+      "warn": "Pilotix could not read this key’s permissions. The reason is just below."
     },
     "page": {
       "ok": "Page “{{name}}”: its key works.",
@@ -207,20 +220,175 @@
     },
     "ads": {
       "ok": "Ad accounts ({{n}}): Pilotix reads them.",
-      "warn": "Unreadable ad accounts: {{bad}} of {{n}}."
+      "warn": "Unreadable ad accounts: {{bad}} of {{n}}. Their names are just below.",
+      "bad": "No readable ad account ({{bad}} of {{n}}). Click “Link again” and tick your ad accounts. Meta’s reason is just below."
     },
     "adsCurrency": {
       "ok": "Ad accounts in dinars (DZD): Advertising counts them in dinars, and in dollars with your monthly rate.",
       "warn": "Ad accounts in {{list}}: Advertising counts them as dollars."
     },
-    "igLogin": {
-      "ok": "Instagram login: @{{username}}’s key works. Dellal uses it to answer all your Instagram customers.",
-      "warn": "Instagram login: not done yet for @{{username}}. Without it (or Meta’s approval), Dellal answers on Instagram only accounts that have a role on the app. Click « Connect Instagram » in Pilot Message › Settings › Instagram.",
-      "bad": "Instagram login: the key no longer works. The reason is just below."
-    },
     "badSig": {
-      "warn": "Pilotix refused messages from Meta {{when}} ({{n}} times): their signature matches no secret. With Instagram’s own login, paste the Instagram app secret in the control room › Pilot AI › Settings & costs › Meta and TikTok accounts."
+      "warn": "Pilotix refused messages from Meta {{when}} ({{n}} times): their signature matches no secret. If a boutique still answers with an old Instagram key, paste the Instagram app secret in the control room › Pilot AI › Settings & costs › Meta and TikTok accounts."
+    },
+    "keyLife": {
+      "never": "This key never ends.",
+      "ok": "This key works until {{date}}.",
+      "warn": "This key ends on {{date}}: click “Link again” before."
+    },
+    "given": {
+      "ok": "Facebook gave Pilotix: Pages {{pages}} · Instagram accounts {{igs}} · ad accounts {{ads}}.",
+      "info": "Facebook gave Pilotix: Pages {{pages}} · Instagram accounts {{igs}} · ad accounts {{ads}}. A zero means: not ticked in Facebook’s window, or Facebook did not offer it. Click “Link again” and tick it."
+    },
+    "perm": {
+      "fbMessages": "Facebook messages: the permission {{list}} is missing. Click “Link again”, tick your Page and accept everything.",
+      "fbComments": "Facebook comments: the permission {{list}} is missing. Click “Link again”, tick your Page and accept everything.",
+      "igMessages": "Instagram messages: the permission {{list}} is missing. Click “Link again”, tick your Instagram account and accept everything.",
+      "igComments": "Instagram comments: the permission {{list}} is missing. Click “Link again”, tick your Instagram account and accept everything.",
+      "adsRead": "Ad numbers: the permission {{list}} is missing. Click “Link again”, tick your ad account and accept everything.",
+      "adsManage": "Launching and managing ads from Pilotix: {{list}} is missing. Click “Link again”, tick your ad account and accept everything.",
+      "forms": "Ad lead forms: {{list}} is missing. Click “Link again”, tick your Page and your ad account, then accept everything.",
+      "catalog": "Catalog: {{list}} is missing. Click “Link again”, tick your catalog and accept everything.",
+      "content": "Publishing on the Page and on Instagram: {{list}} is missing. Click “Link again” and accept everything.",
+      "partners": "Partnership ads (Influencers): Pilotix’s Facebook login does not ask for {{list}} yet. Nothing to do on your side: the Pilotix team has to add it."
+    },
+    "pagesNone": {
+      "warn": "No Page given to Pilotix. Click “Link again” and tick your Page in Facebook’s window."
+    },
+    "fbSeen": {
+      "ok": "Last customer message from Messenger that Pilotix got: {{when}}.",
+      "warn": "Pilotix hasn’t got any Messenger message for “{{name}}” yet. Write to the Page from another account, then test again.",
+      "lost": "Facebook sent a message {{when}}, but no shop took it."
+    },
+    "igKey": {
+      "ok": "Instagram answers: with your Facebook account’s key. Dellal answers all your customers of @{{username}}.",
+      "fixed": "Instagram answers: Pilotix just switched to your Facebook account’s key. Dellal now answers all your customers of @{{username}}.",
+      "old": "Instagram answers: with an old key of @{{username}}, connected before in Pilot Message. It works: nothing to do.",
+      "oldBad": "Instagram answers: the old key no longer works, and your Facebook account’s key does not have @{{username}}’s inbox. Click “Link again”, tick the Instagram account and accept everything.",
+      "tick": "Instagram answers: the account @{{username}} was not ticked in Facebook’s window. Until then, Dellal only answers accounts that have a role on the app. Click “Link again” and tick it.",
+      "none": "Instagram answers: Meta does not give @{{username}}’s inbox to your Facebook account’s key. Until then, Dellal only answers accounts that have a role on the app. Meta’s reason is just below.",
+      "oldReady": "Instagram answers: with an old key of @{{username}}, connected before in Pilot Message. It works. Your Facebook account’s key can answer too: to keep one single connection, remove the old one in “Old connections”, at the top of the page."
+    },
+    "forms": {
+      "ok": "Ad lead forms: Pilotix can read them.",
+      "warn": "Ad lead forms: Meta refuses to give them. The reason is just below."
+    },
+    "content": {
+      "ok": "Publishing on the Page and on Instagram: permissions given."
+    },
+    "adsState": {
+      "s2": "Ad account “{{name}}”: Meta disabled it. Its ads do not run. Open it in Meta to see why.",
+      "s3": "Ad account “{{name}}”: a payment failed. Its ads are stopped. Pay it in Meta › Billing.",
+      "s7": "Ad account “{{name}}”: Meta is reviewing it right now. Its ads may be paused.",
+      "s8": "Ad account “{{name}}”: a payment is pending at Meta.",
+      "s9": "Ad account “{{name}}”: a payment is late. Meta still leaves some time: pay it quickly.",
+      "s100": "Ad account “{{name}}”: it is being closed.",
+      "s101": "Ad account “{{name}}”: it is closed. Its ads no longer run.",
+      "sx": "Ad account “{{name}}”: Meta says it is not active."
+    },
+    "adsRead": {
+      "ok": "Numbers: Pilotix reads the spend of “{{name}}”.",
+      "bad": "Numbers: Meta refuses to give the spend of “{{name}}”. The reason is just below."
+    },
+    "adsLaunch": {
+      "ok": "Launching ads: Pilotix can create ads in “{{name}}”.",
+      "perm": "Launching ads: not possible from Pilotix yet (the permission to manage ads is missing, see above). The numbers do work.",
+      "task": "Launching ads: this key can only read “{{name}}”. In Meta, give it the right to manage this ad account’s campaigns."
+    },
+    "adsHook": {
+      "fixed": "Ad account “{{name}}”: subscribed again. Co-Pilot will be told about its rejected ads.",
+      "warn": "Ad account “{{name}}”: Co-Pilot will not be told about its rejected ads (you must be an admin of this ad account)."
+    },
+    "adsOld": {
+      "switch": "Ads work with an old key pasted in Settings › Meta Ads (account “{{name}}”). To put everything on this Facebook account: turn on “Count them” above.",
+      "relink": "Ads work with an old key pasted in Settings › Meta Ads (account “{{name}}”). To put everything here: click “Link again” and tick your ad account.",
+      "switchBad": "Ads: the old pasted key no longer works (account {{name}}). Turn on “Count them” above: this Facebook account takes its place.",
+      "relinkBad": "Ads: the old pasted key no longer works (account {{name}}). Click “Link again” and tick your ad account."
+    },
+    "adsRight": {
+      "none": "Facebook gave this key no right on ads. Click “Link again” and look closely at Facebook’s window: your ad account must be listed there, and ticked. If it is not listed, the block is at Meta, not in Pilotix: the ad account must be in the business account (portfolio) you choose, and you must be its admin."
+    },
+    "adsOther": {
+      "info": "This boutique’s ads count the ad accounts of another linked account (“{{account}}”)."
+    },
+    "adsOff": {
+      "warn": "This account has ad accounts ({{n}}), but this boutique does not count them. Turn on “Count them” above."
+    },
+    "adsNone": {
+      "warn": "No ad account given to Pilotix. Click “Link again” and tick your ad account in Facebook’s window."
+    },
+    "catalog": {
+      "ok": "Catalog “{{name}}”: Pilotix reads it (products: {{n}}).",
+      "bad": "Catalog: Meta refuses. The reason is just below.",
+      "tick": "Catalog: it was not ticked in Facebook’s window. Click “Link again” and tick your catalog."
+    },
+    "catalogNone": {
+      "info": "No Meta catalog yet: Marketing › Catalog makes it at the first upload."
+    },
+    "pixel": {
+      "ok": "Pixel “{{name}}”: the ads key reaches it.",
+      "bad": "Pixel “{{name}}”: the ads key does not reach it. Click “Link again” and tick this pixel. Meta’s reason is just below.",
+      "own": "Pixel “{{name}}”: it sends with its own key (Landing pages › Settings). Not tested here."
+    },
+    "pixelNone": {
+      "info": "No Meta pixel in this boutique (Landing pages › Settings › Pixels)."
+    },
+    "wa": {
+      "ok": "WhatsApp {{phone}}: its key works.",
+      "bad": "WhatsApp {{phone}}: its key no longer works. Connect the number again in “Link an account › WhatsApp”."
+    },
+    "waSeen": {
+      "ok": "Last sign from WhatsApp that Pilotix got: {{when}}.",
+      "warn": "Pilotix hasn’t got anything from WhatsApp for {{phone}} yet. Write to this number from another phone, then test again.",
+      "lost": "WhatsApp sent something {{when}}, but no shop took it."
     }
   },
-  "quoted": "“{{name}}”"
+  "quoted": "“{{name}}”",
+  "old": {
+    "title": "Old connections",
+    "text": "They were made somewhere else, before, and Pilotix still uses them (“Test” says whether they work). To have everything in one place: click “Link again” on your Facebook account and tick everything.",
+    "ads": "Ads: key pasted in Settings › Meta Ads (ad account {{id}})",
+    "adsHint": "It goes by itself when you count your Facebook account’s ad accounts here.",
+    "ig": "Instagram: key connected in Pilot Message (@{{user}})",
+    "igHint": "Your Facebook account’s key can answer instead: remove the old one whenever you want.",
+    "ask": {
+      "ads": "Remove this old key? Ads will have no Meta numbers until an ad account of your Facebook account is counted here.",
+      "instagram": "Remove this old Instagram key? Your Facebook account’s key answers instead."
+    },
+    "removed": "Old key removed.",
+    "igWait": "It stays as long as your Facebook account’s key does not have the Instagram inbox. To replace it: “Link again”, tick the Instagram account, then “Test”."
+  },
+  "wa": {
+    "name": "WhatsApp",
+    "what": "This boutique’s WhatsApp number: your agents answer on it, and your delivery messages leave from it.",
+    "link": "Connect WhatsApp",
+    "again": "Connect again",
+    "on": "is connected.",
+    "old": "Number added by hand before. To change it, connect it again here.",
+    "allow": "Meta opens its own window: choose (or add) the boutique’s WhatsApp Business number.",
+    "notReady": "Soon: Pilotix is getting the WhatsApp connection ready.",
+    "waitingHelp": "Finish in Meta’s window: choose the boutique’s WhatsApp number and accept.",
+    "done": "WhatsApp connected: its messages reach Pilotix.",
+    "removed": "WhatsApp removed.",
+    "removeAsk": "Remove this WhatsApp number? Your agents will no longer answer on it and your delivery messages will no longer go out by WhatsApp."
+  },
+  "testBad": "To fix: {{n}}",
+  "testWhere": "Look here:",
+  "testWhereBad": "The problem is here:",
+  "testWhereAlso": "Also to check:",
+  "partOk": "Everything works",
+  "partBad": "To fix: {{n}}",
+  "partTodo": "To check: {{n}}",
+  "partInfo": "Good to know",
+  "grp": {
+    "key": "The account’s key",
+    "fb": "Facebook messages and comments",
+    "ig": "Instagram",
+    "ads": "Ads",
+    "forms": "Ad lead forms",
+    "catalog": "Catalog",
+    "pixels": "Pixels",
+    "content": "Publishing (Pilot Content)",
+    "wa": "WhatsApp",
+    "app": "Pilotix’s Meta app (for the Pilotix team)"
+  }
 }

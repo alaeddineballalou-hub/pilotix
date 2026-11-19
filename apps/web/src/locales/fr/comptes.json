@@ -1,7 +1,7 @@
 {
   "title": "Comptes",
-  "about": "Liez vos comptes Facebook et TikTok. Vos agents IA s’en servent pour répondre aux messages et aux commentaires, et pour vos chiffres de publicité.",
-  "help": "Un clic ouvre Facebook (ou TikTok) dans un nouvel onglet. Connectez-vous, choisissez vos pages et acceptez : Pilotix fait le reste et le compte devient vert. Les clés restent sur le serveur de Pilotix, jamais dans une page.",
+  "about": "Un seul endroit pour tout connecter : Facebook, Instagram, vos comptes pub, votre catalogue, WhatsApp et TikTok. Vos agents IA s’en servent pour répondre aux messages et aux commentaires, et pour vos publicités.",
+  "help": "« Continuer avec Facebook » ouvre Facebook dans un nouvel onglet. Connectez-vous, cochez tout (pages, Instagram, comptes pub, catalogue, pixels) et acceptez : Pilotix fait le reste et le compte devient vert. Rien ne se colle ailleurs. « Tester » vous dit, partie par partie, ce qui marche et où est le problème. Les clés restent sur le serveur de Pilotix, jamais dans une page.",
   "here": {
     "title": "Utilisé dans « {{name}} »",
     "page": "Messages et commentaires",
@@ -13,7 +13,11 @@
     "noAds": "Aucun compte pub",
     "tiktok": "Publicité TikTok",
     "noTiktok": "Aucun compte TikTok",
-    "adsMany": "« {{account}} » · comptes pub : {{n}}"
+    "adsMany": "« {{account}} » · comptes pub : {{n}}",
+    "wa": "WhatsApp",
+    "noWa": "Aucun numéro",
+    "waId": "Numéro n° {{id}}",
+    "adsOld": "Ancienne clé collée"
   },
   "add": "Lier un compte",
   "for": "Pour",
@@ -26,11 +30,21 @@
   "scopeSaved": "C’est changé.",
   "p": {
     "meta": {
-      "name": "Facebook et Instagram",
-      "what": "Vos pages, leurs messages et leurs commentaires, et vos comptes pub.",
+      "name": "Facebook, Instagram et publicité",
+      "what": "Un seul bouton connecte tout Meta d’un coup.",
       "link": "Continuer avec Facebook",
-      "allow": "Facebook vous demande de choisir vos pages, vos comptes Instagram et vos comptes pub, puis d’autoriser Pilotix à les gérer. Autorisez tout, sinon les agents ne peuvent pas répondre.",
-      "notReady": "Bientôt : Pilotix prépare la connexion Facebook."
+      "allow": "Dans la fenêtre de Facebook, cochez tout : vos pages, vos comptes Instagram, vos comptes pub, votre catalogue et vos pixels. Puis acceptez tout. Ce qui n’est pas coché ne marche pas dans Pilotix.",
+      "notReady": "Bientôt : Pilotix prépare la connexion Facebook.",
+      "allLabel": "Ce que ce bouton connecte",
+      "all": [
+        "Messages Facebook",
+        "Commentaires",
+        "Instagram",
+        "Publicité",
+        "Catalogue",
+        "Formulaires",
+        "Pixels"
+      ]
     },
     "tiktok": {
       "name": "TikTok",
@@ -40,7 +54,7 @@
     }
   },
   "waiting": "Connexion en cours…",
-  "waitingHelp": "Terminez dans l’onglet {{name}} qui s’est ouvert : connectez-vous, choisissez vos pages et acceptez.",
+  "waitingHelp": "Terminez dans l’onglet {{name}} qui s’est ouvert : connectez-vous, cochez tout et acceptez.",
   "confirmWait": "Une dernière étape…",
   "confirmHelp": "Dans l’onglet {{name}}, appuyez sur « Oui, c’est ma boutique » pour lier ce compte.",
   "waitingPreview": "Aperçu : la connexion est simulée, elle prend deux secondes.",
@@ -61,16 +75,16 @@
     "error": "Erreur"
   },
   "relink": "Relier",
-  "relinkHint": "Reconnecter ce compte : nouveau jeton, pages à jour.",
+  "relinkHint": "Reconnecter ce compte et tout cocher : nouvelle clé, pages, Instagram et comptes pub à jour.",
   "relinkNow": "Facebook n’accepte plus ce compte : reliez-le.",
   "remove": "Retirer",
   "removeAsk": "Retirer ce compte ? Les boutiques qui l’utilisent perdent sa page et ses comptes pub.",
   "removed": "Compte retiré.",
   "kind": {
     "page": "Pages",
-    "pageNone": "Aucune page partagée avec Pilotix. Reliez le compte et cochez vos pages.",
+    "pageNone": "Aucune page donnée à Pilotix. Cliquez sur « Relier » et cochez vos pages.",
     "ad_account": "Comptes pub Meta",
-    "ad_accountNone": "Aucun compte pub (ou pas le droit de le lire).",
+    "ad_accountNone": "Aucun compte pub donné à Pilotix. Cliquez sur « Relier » et cochez votre compte pub dans la fenêtre de Facebook.",
     "advertiser": "Comptes pub TikTok",
     "advertiserNone": "Aucun compte pub TikTok partagé avec Pilotix."
   },
@@ -126,8 +140,7 @@
       "bad": "TikTok refuse la clé : cliquez sur « Relier »."
     },
     "perms": {
-      "ok": "Autorisations : toutes données.",
-      "warn": "Autorisations manquantes : {{list}}. Cliquez sur « Relier » et acceptez tout."
+      "warn": "Pilotix n’a pas pu lire les autorisations de cette clé. La raison est juste en dessous."
     },
     "page": {
       "ok": "Page « {{name}} » : sa clé marche.",
@@ -207,20 +220,175 @@
     },
     "ads": {
       "ok": "Comptes pub ({{n}}) : Pilotix les lit.",
-      "warn": "Comptes pub illisibles : {{bad}} sur {{n}}."
+      "warn": "Comptes pub illisibles : {{bad}} sur {{n}}. Leurs noms sont juste en dessous.",
+      "bad": "Aucun compte pub lisible ({{bad}} sur {{n}}). Cliquez sur « Relier » et cochez vos comptes pub. La raison de Meta est juste en dessous."
     },
     "adsCurrency": {
       "ok": "Comptes pub en dinars (DZD) : Publicité les compte en dinars, et en dollars avec votre taux du mois.",
       "warn": "Comptes pub en {{list}} : Publicité les compte comme des dollars."
     },
-    "igLogin": {
-      "ok": "Connexion Instagram : la clé de @{{username}} marche. Dellal répond avec elle à tous vos clients Instagram.",
-      "warn": "Connexion Instagram : pas encore faite pour @{{username}}. Sans elle (ou sans l’accord de Meta), Dellal répond sur Instagram seulement aux comptes qui ont un rôle dans l’app. Cliquez « Connecter Instagram » dans Pilot Message › Réglages › Instagram.",
-      "bad": "Connexion Instagram : la clé ne marche plus. La raison est juste en dessous."
-    },
     "badSig": {
-      "warn": "Pilotix a refusé des messages de Meta {{when}} ({{n}} fois) : leur signature ne correspond à aucune clé secrète. Avec la connexion Instagram, collez la clé secrète de l’app Instagram dans le Centre de contrôle › Pilot AI › Réglages & coûts › Comptes Meta et TikTok."
+      "warn": "Pilotix a refusé des messages de Meta {{when}} ({{n}} fois) : leur signature ne correspond à aucune clé secrète. Si une boutique répond encore avec une ancienne clé Instagram, collez la clé secrète de l’app Instagram dans le Centre de contrôle › Pilot AI › Réglages & coûts › Comptes Meta et TikTok."
+    },
+    "keyLife": {
+      "never": "Cette clé ne finit jamais.",
+      "ok": "Cette clé marche jusqu’au {{date}}.",
+      "warn": "Cette clé finit le {{date}} : cliquez sur « Relier » avant."
+    },
+    "given": {
+      "ok": "Facebook a donné à Pilotix : pages {{pages}} · comptes Instagram {{igs}} · comptes pub {{ads}}.",
+      "info": "Facebook a donné à Pilotix : pages {{pages}} · comptes Instagram {{igs}} · comptes pub {{ads}}. Un zéro veut dire : pas coché dans la fenêtre de Facebook, ou Facebook ne l’a pas proposé. Cliquez sur « Relier » et cochez-le."
+    },
+    "perm": {
+      "fbMessages": "Messages Facebook : il manque l’autorisation {{list}}. Cliquez sur « Relier », cochez votre page et acceptez tout.",
+      "fbComments": "Commentaires Facebook : il manque l’autorisation {{list}}. Cliquez sur « Relier », cochez votre page et acceptez tout.",
+      "igMessages": "Messages Instagram : il manque l’autorisation {{list}}. Cliquez sur « Relier », cochez votre compte Instagram et acceptez tout.",
+      "igComments": "Commentaires Instagram : il manque l’autorisation {{list}}. Cliquez sur « Relier », cochez votre compte Instagram et acceptez tout.",
+      "adsRead": "Chiffres des pubs : il manque l’autorisation {{list}}. Cliquez sur « Relier », cochez votre compte pub et acceptez tout.",
+      "adsManage": "Lancer et gérer des pubs depuis Pilotix : il manque {{list}}. Cliquez sur « Relier », cochez votre compte pub et acceptez tout.",
+      "forms": "Formulaires de pub : il manque {{list}}. Cliquez sur « Relier », cochez votre page et votre compte pub, puis acceptez tout.",
+      "catalog": "Catalogue : il manque {{list}}. Cliquez sur « Relier », cochez votre catalogue et acceptez tout.",
+      "content": "Publier sur la page et sur Instagram : il manque {{list}}. Cliquez sur « Relier » et acceptez tout.",
+      "partners": "Pubs en partenariat (Influenceurs) : la connexion Facebook de Pilotix ne demande pas encore {{list}}. Rien à faire de votre côté : c’est à l’équipe Pilotix de l’ajouter."
+    },
+    "pagesNone": {
+      "warn": "Aucune page donnée à Pilotix. Cliquez sur « Relier » et cochez votre page dans la fenêtre de Facebook."
+    },
+    "fbSeen": {
+      "ok": "Dernier message d’un client sur Messenger reçu par Pilotix : {{when}}.",
+      "warn": "Pilotix n’a encore reçu aucun message Messenger pour « {{name}} ». Écrivez à la page depuis un autre compte, puis testez encore.",
+      "lost": "Facebook a envoyé un message {{when}}, mais aucune boutique ne l’a pris."
+    },
+    "igKey": {
+      "ok": "Réponses Instagram : avec la clé de votre compte Facebook. Dellal répond à tous vos clients de @{{username}}.",
+      "fixed": "Réponses Instagram : Pilotix vient de passer à la clé de votre compte Facebook. Dellal répond maintenant à tous vos clients de @{{username}}.",
+      "old": "Réponses Instagram : avec une ancienne clé de @{{username}}, connectée avant dans Pilot Message. Elle marche : rien à faire.",
+      "oldBad": "Réponses Instagram : l’ancienne clé ne marche plus, et la clé de votre compte Facebook n’a pas la boîte de @{{username}}. Cliquez sur « Relier », cochez le compte Instagram et acceptez tout.",
+      "tick": "Réponses Instagram : le compte @{{username}} n’a pas été coché dans la fenêtre de Facebook. En attendant, Dellal répond seulement aux comptes qui ont un rôle dans l’app. Cliquez sur « Relier » et cochez-le.",
+      "none": "Réponses Instagram : Meta ne donne pas la boîte de @{{username}} à la clé de votre compte Facebook. En attendant, Dellal répond seulement aux comptes qui ont un rôle dans l’app. La raison de Meta est juste en dessous.",
+      "oldReady": "Réponses Instagram : avec une ancienne clé de @{{username}}, connectée avant dans Pilot Message. Elle marche. La clé de votre compte Facebook peut aussi répondre : pour n’avoir qu’une seule connexion, retirez l’ancienne dans « Anciennes connexions », en haut de la page."
+    },
+    "forms": {
+      "ok": "Formulaires de pub : Pilotix peut les lire.",
+      "warn": "Formulaires de pub : Meta refuse de les donner. La raison est juste en dessous."
+    },
+    "content": {
+      "ok": "Publier sur la page et sur Instagram : autorisations données."
+    },
+    "adsState": {
+      "s2": "Compte pub « {{name}} » : Meta l’a désactivé. Ses pubs ne tournent pas. Ouvrez-le dans Meta pour voir pourquoi.",
+      "s3": "Compte pub « {{name}} » : un paiement n’est pas passé. Ses pubs sont arrêtées. Réglez-le dans Meta › Facturation.",
+      "s7": "Compte pub « {{name}} » : Meta le vérifie en ce moment. Ses pubs peuvent être en pause.",
+      "s8": "Compte pub « {{name}} » : un paiement est en attente chez Meta.",
+      "s9": "Compte pub « {{name}} » : un paiement est en retard. Meta laisse encore un délai : réglez-le vite.",
+      "s100": "Compte pub « {{name}} » : il est en train d’être fermé.",
+      "s101": "Compte pub « {{name}} » : il est fermé. Ses pubs ne tournent plus.",
+      "sx": "Compte pub « {{name}} » : Meta dit qu’il n’est pas actif."
+    },
+    "adsRead": {
+      "ok": "Chiffres : Pilotix lit les dépenses de « {{name}} ».",
+      "bad": "Chiffres : Meta refuse de donner les dépenses de « {{name}} ». La raison est juste en dessous."
+    },
+    "adsLaunch": {
+      "ok": "Lancer des pubs : Pilotix peut créer des pubs dans « {{name}} ».",
+      "perm": "Lancer des pubs : pas encore possible depuis Pilotix (il manque l’autorisation de gérer les pubs, voir plus haut). Les chiffres, eux, marchent.",
+      "task": "Lancer des pubs : cette clé peut seulement lire « {{name}} ». Dans Meta, donnez-lui le droit de gérer les campagnes de ce compte pub."
+    },
+    "adsHook": {
+      "fixed": "Compte pub « {{name}} » : abonné à nouveau. Co-Pilot sera prévenu de ses pubs refusées.",
+      "warn": "Compte pub « {{name}} » : Co-Pilot ne sera pas prévenu de ses pubs refusées (il faut être administrateur de ce compte pub)."
+    },
+    "adsOld": {
+      "switch": "Publicité marche avec une ancienne clé collée dans Réglages › Meta Ads (compte « {{name}} »). Pour tout mettre sur ce compte Facebook : activez « Les compter » plus haut.",
+      "relink": "Publicité marche avec une ancienne clé collée dans Réglages › Meta Ads (compte « {{name}} »). Pour tout mettre ici : cliquez sur « Relier » et cochez votre compte pub.",
+      "switchBad": "Publicité : l’ancienne clé collée ne marche plus (compte {{name}}). Activez « Les compter » plus haut : ce compte Facebook prend sa place.",
+      "relinkBad": "Publicité : l’ancienne clé collée ne marche plus (compte {{name}}). Cliquez sur « Relier » et cochez votre compte pub."
+    },
+    "adsRight": {
+      "none": "Facebook n’a donné à cette clé aucun droit sur la publicité. Cliquez sur « Relier » et regardez bien la fenêtre de Facebook : votre compte pub doit y apparaître, et être coché. S’il n’apparaît pas, le blocage est chez Meta, pas dans Pilotix : le compte pub doit être dans le compte business (portefeuille) que vous choisissez, et vous devez en être administrateur."
+    },
+    "adsOther": {
+      "info": "Publicité de cette boutique compte les comptes pub d’un autre compte lié (« {{account}} »)."
+    },
+    "adsOff": {
+      "warn": "Ce compte a des comptes pub ({{n}}), mais cette boutique ne les compte pas. Activez « Les compter » plus haut."
+    },
+    "adsNone": {
+      "warn": "Aucun compte pub donné à Pilotix. Cliquez sur « Relier » et cochez votre compte pub dans la fenêtre de Facebook."
+    },
+    "catalog": {
+      "ok": "Catalogue « {{name}} » : Pilotix le lit (produits : {{n}}).",
+      "bad": "Catalogue : Meta refuse. La raison est juste en dessous.",
+      "tick": "Catalogue : il n’a pas été coché dans la fenêtre de Facebook. Cliquez sur « Relier » et cochez votre catalogue."
+    },
+    "catalogNone": {
+      "info": "Pas encore de catalogue Meta : Marketing › Catalogue le crée au premier envoi."
+    },
+    "pixel": {
+      "ok": "Pixel « {{name}} » : la clé de la publicité y accède.",
+      "bad": "Pixel « {{name}} » : la clé de la publicité n’y accède pas. Cliquez sur « Relier » et cochez ce pixel. La raison de Meta est juste en dessous.",
+      "own": "Pixel « {{name}} » : il envoie avec sa propre clé (Landing pages › Réglages). Pas testé ici."
+    },
+    "pixelNone": {
+      "info": "Aucun pixel Meta dans cette boutique (Landing pages › Réglages › Pixels)."
+    },
+    "wa": {
+      "ok": "WhatsApp {{phone}} : sa clé marche.",
+      "bad": "WhatsApp {{phone}} : sa clé ne marche plus. Reconnectez le numéro dans « Lier un compte › WhatsApp »."
+    },
+    "waSeen": {
+      "ok": "Dernier signe de WhatsApp reçu par Pilotix : {{when}}.",
+      "warn": "Pilotix n’a encore rien reçu de WhatsApp pour {{phone}}. Écrivez à ce numéro depuis un autre téléphone, puis testez encore.",
+      "lost": "WhatsApp a envoyé quelque chose {{when}}, mais aucune boutique ne l’a pris."
     }
   },
-  "quoted": "« {{name}} »"
+  "quoted": "« {{name}} »",
+  "old": {
+    "title": "Anciennes connexions",
+    "text": "Elles ont été faites ailleurs, avant, et Pilotix s’en sert encore (« Tester » dit si elles marchent). Pour tout avoir au même endroit : cliquez sur « Relier » sur votre compte Facebook et cochez tout.",
+    "ads": "Publicité : clé collée dans Réglages › Meta Ads (compte pub {{id}})",
+    "adsHint": "Elle part toute seule quand vous comptez ici les comptes pub de votre compte Facebook.",
+    "ig": "Instagram : clé connectée dans Pilot Message (@{{user}})",
+    "igHint": "La clé de votre compte Facebook peut répondre à sa place : retirez l’ancienne quand vous voulez.",
+    "ask": {
+      "ads": "Retirer cette ancienne clé ? Publicité n’aura plus de chiffres Meta tant qu’un compte pub de votre compte Facebook n’est pas compté ici.",
+      "instagram": "Retirer cette ancienne clé Instagram ? La clé de votre compte Facebook répond à sa place."
+    },
+    "removed": "Ancienne clé retirée.",
+    "igWait": "Elle reste tant que la clé de votre compte Facebook n’a pas la boîte Instagram. Pour la remplacer : « Relier », cochez le compte Instagram, puis « Tester »."
+  },
+  "wa": {
+    "name": "WhatsApp",
+    "what": "Le numéro WhatsApp de cette boutique : vos agents y répondent, et vos messages de livraison en partent.",
+    "link": "Connecter WhatsApp",
+    "again": "Reconnecter",
+    "on": "est connecté.",
+    "old": "Numéro ajouté à la main avant. Pour le changer, reconnectez-le ici.",
+    "allow": "Meta ouvre sa propre fenêtre : choisissez (ou ajoutez) le numéro WhatsApp Business de la boutique.",
+    "notReady": "Bientôt : Pilotix prépare la connexion WhatsApp.",
+    "waitingHelp": "Terminez dans la fenêtre de Meta : choisissez le numéro WhatsApp de la boutique et acceptez.",
+    "done": "WhatsApp connecté : ses messages arrivent dans Pilotix.",
+    "removed": "WhatsApp retiré.",
+    "removeAsk": "Retirer ce numéro WhatsApp ? Vos agents n’y répondront plus et vos messages de livraison ne partiront plus par WhatsApp."
+  },
+  "testBad": "À corriger : {{n}}",
+  "testWhere": "À regarder ici :",
+  "testWhereBad": "Le problème est ici :",
+  "testWhereAlso": "À regarder aussi :",
+  "partOk": "Tout marche",
+  "partBad": "À corriger : {{n}}",
+  "partTodo": "À regarder : {{n}}",
+  "partInfo": "À savoir",
+  "grp": {
+    "key": "La clé du compte",
+    "fb": "Messages et commentaires Facebook",
+    "ig": "Instagram",
+    "ads": "Publicité",
+    "forms": "Formulaires de pub",
+    "catalog": "Catalogue",
+    "pixels": "Pixels",
+    "content": "Publication (Pilot Content)",
+    "wa": "WhatsApp",
+    "app": "App Meta de Pilotix (pour l’équipe Pilotix)"
+  }
 }

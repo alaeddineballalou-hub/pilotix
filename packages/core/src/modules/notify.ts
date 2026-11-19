@@ -863,8 +863,13 @@ async function settingsView(ctx: Ctx) {
     vars: NOTIFY_VARS,
     meta: {
       whatsappConnected: simulated(ctx) ? true : await waConnected(ctx.db),
-      /** without the Meta app secret, WhatsApp delivery reports are not trusted (not signed) */
-      appSecret: simulated(ctx) ? true : !!(await raw<string>(ctx.db, 'secret_dellal_meta_app_secret', '')),
+      /**
+       * WhatsApp's delivery reports reach Pilotix signed: a number connected in Pilot AI › Comptes (they come through
+       * Pilotix's own Meta app); for a number typed by hand before, only with that boutique's own Meta app secret
+       * (without it they are not trusted: to connect again in Comptes)
+       */
+      appSecret:
+        simulated(ctx) ? true : !!(await raw<{ whatsappPhone?: string }>(ctx.db, 'dellal', {})).whatsappPhone || !!(await raw<string>(ctx.db, 'secret_dellal_meta_app_secret', '')),
       smsSecret: !!(await raw<string>(ctx.db, NOTIFY_SMS_SECRET, '')),
       demo: simulated(ctx),
     },

@@ -204,13 +204,12 @@
     "bannedHint": "One word or phrase per line, on top of the known insults.",
     "bannedPh": "a competitor's name\nanother word",
     "channels": "Channels and connection",
-    "channelsHelp": "Pilot Comments uses the Meta connection of Pilot Message (page token, app secret, AI key). In your Meta app, also subscribe the page to the “feed” field and Instagram to the “comments” field, with the same webhook address.",
+    "channelsHelp": "Pilot Comments answers on the Facebook Page and the Instagram account linked in Pilot AI › Accounts. There is nothing else to connect.",
     "facebookHint": "The page's posts and ads.",
     "instagramHint": "Posts and ads of the professional Instagram account.",
     "soon": "Soon: TikTok does not open comments to apps yet.",
     "pageToken": "Page token",
     "connected": "connected",
-    "connect": "Connect it in Pilot Message › Settings",
     "pageId": "Facebook page ID",
     "igId": "Instagram account ID",
     "ai": "AI key (Claude)",
@@ -221,9 +220,7 @@
     "verifyToken": "Verify token",
     "fields": "Meta permissions: pages_manage_engagement, pages_read_user_content, pages_messaging, instagram_manage_comments, instagram_manage_messages.",
     "demo": "Preview: these are the demo's settings, nothing is sent to Meta.",
-    "save": "Save",
-    "appSecret": "Meta app secret",
-    "appSecretNone": "Required: without it, comments are not handled (Pilot Message › Settings)"
+    "save": "Save"
   },
   "lahja": {
     "fixHelp": "The reply that was sent does not change: write how CM AI should have said it. The words you change become a lesson, for CM AI and Dellal."

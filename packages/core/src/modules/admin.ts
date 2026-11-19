@@ -1,5 +1,5 @@
 // Administration: users (via users.*), statuses, pay plans + monthly payslips, client delivery prices,
-// sales channels, shop settings, depots, website webhook, cron key and the Meta Ads connection.
+// sales channels, shop settings, depots, website webhook and cron key (Meta's ad accounts: modules/social.ts).
 import { sealSetting } from '../secretbox';
 import { CONF_STATUSES, DEFAULT_CALL_SETTINGS, FOLLOW_STATUSES, SAV_STATUSES } from '@pilotix/shared';
 import { z } from 'zod';
@@ -35,16 +35,11 @@ export async function setRaw(db: Db, key: string, value: unknown, userId?: numbe
   );
 }
 
-/** Own setting keys. The Meta token lives ONLY under META_TOKEN_KEY and is never returned by any procedure. */
+/** Own setting keys. The Meta token lives ONLY under META_TOKEN_KEY (written by a linked account: modules/social.ts) and is never returned by any procedure. */
 export const STATUS_ORDER_KEY = 'statusOrder';
 export const META_TOKEN_KEY = 'secret_meta_token';
 
 const me = (ctx: Ctx) => ctx.session.profile.id;
-/** The ad account set by hand replaces a linked account's (Pilot AI › Comptes, modules/social.ts): its mark goes. */
-async function dropLinkedAds(ctx: Ctx) {
-  await ctx.db.query(`DELETE FROM settings WHERE key = 'social_ads'`);
-  if (ctx.t && ctx.shop) await ctx.t.platform.query(`DELETE FROM platform.social_uses WHERE shop_id = $1 AND kind = 'ad_account'`, [ctx.shop.id]).catch(() => undefined);
-}
 
 // ---------------------------------------------------------------- statuses
 /** The five groups of Management → Statuts, as in the original (which base statuses each one shows). */
@@ -575,7 +570,8 @@ export const adminProcs = {
       calls: await getSetting(ctx.db, 'calls'),
       webhook: await getSetting(ctx.db, 'webhook'),
       cron: await getSetting(ctx.db, 'cron'),
-      // token is write-only: only "connected" is ever sent back
+      // Meta's ad accounts come only from a linked account (Pilot AI › Comptes); the key is never sent back, only
+      // « connected ». Connected without « linked »: a key pasted here before, still working (Comptes names it)
       meta: { adAccountId: meta.adAccountId, connected: meta.hasToken && !!(await getRaw<string>(ctx.db, META_TOKEN_KEY, '')), linked: await linkedAds(ctx.db) },
       lastSync: await getRaw<{ at: string; checked: number; changed: number } | null>(ctx.db, 'courier_last_sync', null),
     };
@@ -661,32 +657,6 @@ export const adminProcs = {
     });
     await sendInPreview(ctx);
     return { id: o.id, ref: o.ref };
-  }),
-  /** Meta Ads connection. The token is write-only: stored under its own key, never returned. */
-  'admin.meta.save': proc([], z.object({ adAccountId: z.string().trim().regex(/^(act_)?\d{5,25}$/, 'ID du compte pub (chiffres)'), token: z.string().trim().min(20).max(1000).optional() }), async (ctx, i) => {
-    const adAccountId = i.adAccountId.replace(/^act_/, '');
-    if (i.token) await setRaw(ctx.db, META_TOKEN_KEY, i.token, me(ctx));
-    // set by hand: a linked account's ad account (Pilot AI › Comptes) no longer counts here
-    await dropLinkedAds(ctx);
-    const hasToken = !!(await getRaw<string>(ctx.db, META_TOKEN_KEY, ''));
-    await setSetting(ctx.db, 'meta', { adAccountId, hasToken }, me(ctx));
-    let test: { ok: boolean; name?: string; message?: string } | null = null;
-    if (ctx.server && hasToken) {
-      try {
-        const r = (await ctx.server.meta('test', {}, ctx)) as { name?: string };
-        test = { ok: true, name: r?.name };
-      } catch (e: any) {
-        test = { ok: false, message: e?.message ?? 'Erreur Meta' };
-      }
-    }
-    return { adAccountId, connected: hasToken, test };
-  }),
-  'admin.meta.disconnect': proc([], z.object({}), async (ctx) => {
-    await ctx.db.query('DELETE FROM settings WHERE key = $1', [META_TOKEN_KEY]);
-    await dropLinkedAds(ctx);
-    const meta = await getSetting(ctx.db, 'meta');
-    await setSetting(ctx.db, 'meta', { ...meta, hasToken: false }, me(ctx));
-    return { ok: true };
   }),
 };
 

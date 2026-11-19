@@ -1683,7 +1683,7 @@
     },
     "social": {
       "title": "Boutiques’ Meta and TikTok accounts",
-      "text": "Boutiques link their Facebook and TikTok accounts in one click (Pilot AI › Accounts). For that, Pilotix needs its own Meta app and TikTok app. Their secret keys stay here, on the server.",
+      "text": "Boutiques connect everything in one place (Pilot AI › Accounts): one Facebook button for their Pages, Instagram, ad accounts, catalog and pixels; one WhatsApp button; one TikTok button. For that, Pilotix needs its own Meta app and TikTok app. Their secret keys stay here, on the server.",
       "counts": "{{meta}} Meta · {{tiktok}} TikTok · {{shops}} boutiques",
       "ready": "Ready",
       "todo": "To do",
@@ -1691,7 +1691,7 @@
       "appId": "App ID",
       "appSecret": "App secret",
       "configId": "Configuration ID (Facebook Login for Business)",
-      "configHint": "Recommended: a « User access token » configuration. Sellers log in with their own Facebook account; their Pages stay linked with no end date, and ad numbers need a new login about every 60 days. « System-user » needs a business portfolio and Tech Provider status at Meta.",
+      "configHint": "One configuration for everything: tick Pages, Instagram accounts, ad accounts, catalogs and pixels in it, with every permission. « System-user access token »: the boutique’s key never ends (recommended). « User access token »: to link again about every 60 days.",
       "redirect": "Return address (Facebook Login › Settings)",
       "deletion": "Data deletion address",
       "webhook": "Webhook address",
@@ -1709,6 +1709,7 @@
         "On developers.facebook.com, create an app of the “Business” type.",
         "Add the products Facebook Login for Business, Messenger, Instagram and Webhooks.",
         "In Facebook Login › Settings, paste the return address.",
+        "In Facebook Login for Business › Configurations, make one single configuration with every asset (Pages, Instagram accounts, ad accounts, catalogs, pixels) and paste its ID here.",
         "In Webhooks, paste the webhook address and the verify token. Subscribe to “Page” (messages, feed) and “Instagram” (messages, comments).",
         "Paste the app ID and its secret (Settings › Basic) here, then save.",
         "Meta reviews the app (App Review) before other sellers’ Pages work. Your own Pages work at once."
@@ -1718,15 +1719,11 @@
         "Paste the return address in “Advertiser redirect URL”.",
         "Paste the App ID and the Secret here, then save. TikTok approves the app in one to two weeks."
       ],
-      "igSecret": "Instagram app secret (Instagram login)",
-      "igSecretHint": "Only if a boutique uses Instagram’s own login (Pilot Message › Settings). Meta signs that login’s messages with it. In the Meta app:",
-      "igAlone": "Instagram only",
-      "igConfigId": "Instagram configuration ID (Instagram API, unified login)",
-      "igConfigHint": "The « Instagram API (unified login) » configuration of Facebook Login for Business, Instagram Login compatible. It must use the same redirect address (below).",
-      "igAloneText": "With this ID, every shop gets a « Connect Instagram » button in Pilot Message › Settings › Instagram: one login, and its Instagram messages reach Pilotix.",
+      "igSecret": "Instagram app secret (old Instagram login)",
+      "igSecretHint": "Only if a boutique still answers with a key of the old Instagram login (nobody connects that way any more). Meta signs its messages with it. In the Meta app:",
       "waAlone": "WhatsApp",
       "waConfigId": "WhatsApp configuration ID (Embedded Signup)",
-      "waAloneText": "With this ID, every shop gets a « Connect WhatsApp » button in Pilot Message › Settings: one login, and its number answers in Pilotix. A « WhatsApp Embedded Signup » configuration, same return address (below)."
+      "waAloneText": "With this ID, every shop gets a « Connect WhatsApp » button in Pilot AI › Accounts: one login, and its number answers in Pilotix. A « WhatsApp Embedded Signup » configuration, same return address (below)."
     },
     "release": {
       "title": "Push: Dellal’s next version",

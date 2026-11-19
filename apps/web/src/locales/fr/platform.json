@@ -1683,7 +1683,7 @@
     },
     "social": {
       "title": "Comptes Meta et TikTok des boutiques",
-      "text": "Les boutiques lient leurs comptes Facebook et TikTok en un clic (Pilot AI › Comptes). Pour ça, Pilotix a besoin de sa propre app Meta et de son app TikTok. Leurs clés secrètes restent ici, sur le serveur.",
+      "text": "Les boutiques connectent tout au même endroit (Pilot AI › Comptes) : un bouton Facebook pour leurs pages, Instagram, leurs comptes pub, leur catalogue et leurs pixels ; un bouton WhatsApp ; un bouton TikTok. Pour ça, Pilotix a besoin de sa propre app Meta et de son app TikTok. Leurs clés secrètes restent ici, sur le serveur.",
       "counts": "{{meta}} Meta · {{tiktok}} TikTok · {{shops}} boutiques",
       "ready": "Prêt",
       "todo": "À faire",
@@ -1691,7 +1691,7 @@
       "appId": "ID de l’app",
       "appSecret": "Clé secrète de l’app",
       "configId": "ID de configuration (Facebook Login for Business)",
-      "configHint": "Conseillé : une configuration « User access token » (jeton d’accès utilisateur). Le vendeur se connecte avec son compte Facebook ; ses pages restent liées sans fin, les chiffres de pub demandent une nouvelle connexion environ tous les 60 jours. « System-user » demande un portefeuille business et le statut Tech Provider chez Meta.",
+      "configHint": "Une seule configuration pour tout : cochez-y les pages, les comptes Instagram, les comptes pub, les catalogues et les pixels, avec toutes les autorisations. « System-user access token » : la clé de la boutique ne finit jamais (conseillé). « User access token » : à relier environ tous les 60 jours.",
       "redirect": "Adresse de retour (Facebook Login › Réglages)",
       "deletion": "Adresse de suppression des données",
       "webhook": "Adresse du webhook",
@@ -1709,6 +1709,7 @@
         "Sur developers.facebook.com, créez une app de type « Entreprise ».",
         "Ajoutez les produits Facebook Login for Business, Messenger, Instagram et Webhooks.",
         "Dans Facebook Login › Réglages, collez l’adresse de retour.",
+        "Dans Facebook Login for Business › Configurations, créez une seule configuration avec tous les éléments (pages, comptes Instagram, comptes pub, catalogues, pixels) et collez son ID ici.",
         "Dans Webhooks, collez l’adresse du webhook et le jeton de vérification. Abonnez « Page » (messages, feed) et « Instagram » (messages, comments).",
         "Collez ici l’ID de l’app et sa clé secrète (Réglages › Général), puis enregistrez.",
         "Meta vérifie l’app (App Review) avant que les pages des autres vendeurs marchent. Vos propres pages marchent tout de suite."
@@ -1718,15 +1719,11 @@
         "Collez l’adresse de retour dans « Advertiser redirect URL ».",
         "Collez ici l’App ID et le Secret, puis enregistrez. TikTok valide l’app en une à deux semaines."
       ],
-      "igSecret": "Clé secrète de l’app Instagram (connexion Instagram)",
-      "igSecretHint": "Seulement si une boutique utilise la connexion Instagram (Pilot Message › Réglages). Meta signe les messages de cette connexion avec elle. Dans l’app Meta :",
-      "igAlone": "Instagram seul",
-      "igConfigId": "ID de configuration Instagram (Instagram API, unified login)",
-      "igConfigHint": "La configuration « Instagram API (unified login) » de Facebook Login for Business, compatible Instagram Login. Elle doit avoir la même adresse de retour (ci-dessous).",
-      "igAloneText": "Avec cet ID, chaque boutique a un bouton « Connecter Instagram » dans Pilot Message › Réglages › Instagram : une connexion, et ses messages Instagram arrivent dans Pilotix.",
+      "igSecret": "Clé secrète de l’app Instagram (ancienne connexion Instagram)",
+      "igSecretHint": "Seulement si une boutique répond encore avec une clé de l’ancienne connexion Instagram (plus personne ne se connecte ainsi). Meta signe ses messages avec elle. Dans l’app Meta :",
       "waAlone": "WhatsApp",
       "waConfigId": "ID de configuration WhatsApp (Embedded Signup)",
-      "waAloneText": "Avec cet ID, chaque boutique a un bouton « Connecter WhatsApp » dans Pilot Message › Réglages : une connexion, et son numéro répond dans Pilotix. Configuration de type « WhatsApp Embedded Signup », même adresse de retour (ci-dessous)."
+      "waAloneText": "Avec cet ID, chaque boutique a un bouton « Connecter WhatsApp » dans Pilot AI › Comptes : une connexion, et son numéro répond dans Pilotix. Configuration de type « WhatsApp Embedded Signup », même adresse de retour (ci-dessous)."
     },
     "release": {
       "title": "Push : la prochaine version de Dellal",

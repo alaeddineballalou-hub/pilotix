@@ -691,7 +691,7 @@ export const adsProcs = {
     const partner = !!ctx.session.profile.agencyId;
     const meta = await getSetting(ctx.db, 'meta');
     if (!meta.adAccountId || !meta.hasToken)
-      throw bad(partner ? 'Meta n’est pas connecté chez ce vendeur : il l’ajoute dans ses Réglages → Meta Ads.' : 'Meta n’est pas connecté : demandez à l’administrateur (Réglages → Meta Ads).');
+      throw bad(partner ? 'Meta n’est pas connecté chez ce vendeur : il lie son compte Facebook dans Pilot AI › Comptes.' : 'Meta n’est pas connecté : l’administrateur lie le compte Facebook dans Pilot AI › Comptes (et coche le compte pub).');
     const r = await syncMeta(ctx, i.from, i.to, !partner);
     if (r) return { ok: true, demo: false, at: r.at };
     // a partner's person within the 30 minutes: the last refresh stands

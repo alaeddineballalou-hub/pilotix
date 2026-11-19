@@ -13,7 +13,7 @@ import { chatAdOf } from '../modules/dellal';
 import { demoCopy, launchNow, regionMatches } from '../modules/adslaunch';
 import { FAKE_EVENTS } from '../modules/landingquery';
 import { checkChange, DEFAULT_GUARD, EVENT_AUDIENCE_DAYS, EVENT_AUDIENCES, launchProblems, metaPhone, metaPlan, suggestFor, type AdsetStats, type LaunchInput } from '../modules/pilotads';
-import { EMAILS, setup } from './harness';
+import { EMAILS, metaAds, noMetaAds, setup } from './harness';
 
 let db: Db;
 let as: (email: string, server?: Ctx['server']) => Promise<Ctx>;
@@ -375,7 +375,7 @@ test('fake orders and competitors: the two lists carry the names of the events t
 test('Meta’s own two lists: made before a launch, left out of its ad sets; the check sends nothing', async () => {
   // a shop where nothing is made yet, its ads not linked to Meta
   await db.query(`DELETE FROM ad_audiences WHERE kind IN ('fakeorder','competitor')`);
-  await call('admin.meta.disconnect', await as(EMAILS.admin), {});
+  await noMetaAds(db);
   assert.deepEqual((await lists()).map((x) => [x.kind, x.on, x.recommended, x.status, x.metaId]), [
     ['fakeorder', true, true, 'waiting', null],
     ['competitor', true, true, 'waiting', null],
@@ -390,7 +390,7 @@ test('Meta’s own two lists: made before a launch, left out of its ad sets; the
   assert.equal(asked().length, 0);
   assert.deepEqual((await lists()).map((x) => [x.status, x.error, x.metaId]), [['nometa', null, null], ['nometa', null, null]]);
 
-  await call('admin.meta.save', await as(EMAILS.admin, server), { adAccountId: 'act_1234567890', token: TOKEN });
+  await metaAds(db, 'act_1234567890', TOKEN);
   await setRaw(db, 'social_page', { pageId: '104500000000001', name: 'Bébé Confort DZ' });
   const o: any = await call('ads.launch.options', await owner(), {});
   const p = o.products.find((x: any) => x.landing);
@@ -482,7 +482,7 @@ test('Meta’s own two lists: made before a launch, left out of its ad sets; the
 test('Meta is asked for a list by its rule: the event on the shop’s pixels, in the ad account new ads start from', async () => {
   const { runMeta } = await import('../meta');
   const ctx = await as(EMAILS.admin);
-  await call('admin.meta.save', ctx, { adAccountId: 'act_1234567890', token: TOKEN });
+  await metaAds(db, 'act_1234567890', TOKEN);
   const calls: { method: string; url: string; body: URLSearchParams | null }[] = [];
   const real = globalThis.fetch;
   let answer: (c: { method: string; url: string; body: URLSearchParams | null }) => { status?: number; body: unknown } = () => ({ body: {} });
@@ -577,6 +577,6 @@ test('a shop with no Meta pixel: no list to make (« Pas de pixel »)', async ()
   // such a list is never left out of an ad set (nothing behind it)
   const o: any = await call('ads.launch.options', await owner(), {});
   assert.ok(o.audiences.filter((x: any) => x.events).every((x: any) => x.status === 'nopixel'));
-  await call('admin.meta.disconnect', await as(EMAILS.admin), {});
+  await noMetaAds(db);
 });
 

@@ -4,8 +4,8 @@
   "liveTip": "Meta spend read with Pilotix's Meta connection, against your real orders.",
   "demo": "Demo · examples",
   "demoTip": "Demo: example Meta spend, against the demo orders.",
-  "notConnected": "Meta is not connected: the administrator adds it in Settings → Ads · Meta Ads. Meanwhile, figures already saved are shown.",
-  "notConnectedSeller": "Meta is not connected at this seller: they add it in their Settings → Ads · Meta Ads. Meanwhile, figures already saved are shown.",
+  "notConnected": "Meta is not connected: the administrator links the Facebook account in Pilot AI › Accounts (and ticks the ad account). Meanwhile, figures already saved are shown.",
+  "notConnectedSeller": "Meta is not connected at this seller: they link their Facebook account in Pilot AI › Accounts. Meanwhile, figures already saved are shown.",
   "stamp": "Meta updated {{when}}",
   "period": "Period",
   "periods": {

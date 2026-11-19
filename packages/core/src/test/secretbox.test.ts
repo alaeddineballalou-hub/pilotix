@@ -70,6 +70,7 @@ test('what was saved readable is sealed at the start, once, everywhere; a new se
 
   // typed in the app: sealed as it is saved
   const admin = { db, session: await login(db, OWNER.email, OWNER.password), now: () => Date.now(), emit: () => {} };
-  await call('admin.meta.save', admin as any, { adAccountId: '1234567890', token: 'EAAB-new-token-typed-0123456789' });
-  assert.equal(await raw(`SELECT value::text AS v FROM settings WHERE key = 'secret_meta_token'`), JSON.stringify(fake('EAAB-new-token-typed-0123456789')));
+  const g: any = await call('dellal.settings.get', admin as any, {});
+  await call('dellal.settings.save', admin as any, { ...g.settings, secrets: { ai: 'sk-ant-new-key-typed-0123456789' } });
+  assert.equal(await raw(`SELECT value::text AS v FROM settings WHERE key = 'secret_dellal_ai_key'`), JSON.stringify(fake('sk-ant-new-key-typed-0123456789')));
 });

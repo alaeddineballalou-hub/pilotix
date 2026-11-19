@@ -1,11 +1,14 @@
-// Pilot AI › Comptes: the boutique's Facebook and TikTok accounts. « Lier » opens Facebook's (or TikTok's) login in a new
-// tab; the person logs in and accepts there, Pilotix does the rest on its server, and this page turns green (it asks
-// every two seconds). An account serves this boutique (its first Page and ad account are used at once) or all the
-// owner's boutiques (each boutique picks its Page and its ad account in one click). The tokens never come to a page
-// (packages/core/src/modules/social.ts).
+// Pilot AI › Comptes: THE one place where a boutique connects Meta and TikTok. « Continuer avec Facebook » opens
+// Facebook's login in a new tab; the person logs in, ticks everything and accepts there, Pilotix does the rest on its
+// server, and this page turns green (it asks every two seconds): the Pages (messages, comments, forms), Instagram, the
+// ad accounts (Publicité, the catalogue, the pixels) come together. WhatsApp (Meta's own window for a number) and
+// TikTok are connected in the same card. An account serves this boutique (its first Page and ad account are used at
+// once) or all the owner's boutiques (each boutique picks its Page and its ad account in one click). « Tester » says,
+// part by part, what works and where a problem is. The tokens never come to a page (packages/core/src/modules/social.ts).
 import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Out, rpc } from '../../lib/backend';
+import { backend, Out, rpc } from '../../lib/backend';
 import { clock, dateOnly, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { Card, ErrorBox, Icon, Loading } from '../../ui/kit';
@@ -13,6 +16,7 @@ import { toast } from '../../ui/toast';
 import { ConfirmButton, Switch } from '../admin/bits';
 import { SectionHeader } from '../ai/agent';
 import type { PageProps } from '../registry';
+import { loadFacebookSdk, openWaSignup } from '../messages/waSignup';
 import '../messages/messages.css';
 import './comptes.css';
 
@@ -23,7 +27,11 @@ type Provider = Link['provider'];
 type Kind = Asset['kind'];
 type Scope = 'here' | 'all';
 type TestResult = Out<'social.test'>;
+type Check = TestResult['checks'][number];
+type CheckState = Check['state'];
 const PROVIDERS: Provider[] = ['meta', 'tiktok'];
+/** « Tester »'s parts, in the order the page shows them (a part without a line is not shown). */
+const GROUPS: Check['group'][] = ['key', 'fb', 'ig', 'ads', 'forms', 'catalog', 'pixels', 'content', 'wa', 'app'];
 /** each provider's ad accounts (a boutique counts all of a linked account's together) */
 const AD_KIND: Record<Provider, Kind> = { meta: 'ad_account', tiktok: 'advertiser' };
 const K = 'comptes.';
@@ -156,9 +164,11 @@ export function Comptes(_: PageProps) {
           </div>
         )}
         <div className="cpt-providers">
-          {PROVIDERS.map((p) => (
-            <ProviderSlot key={p} p={p} ready={d.apps[p]} preview={d.preview} pending={pending?.provider === p ? pending : null} busy={!!pending} done={done?.provider === p ? (d.links.find((l) => l.id === done.linkId)?.name ?? '') : null} onStart={() => start(p)} onReopen={reopen} onCancel={() => setPending(null)} />
-          ))}
+          {PROVIDERS.map((p) => [
+            <ProviderSlot key={p} p={p} ready={d.apps[p]} preview={d.preview} pending={pending?.provider === p ? pending : null} busy={!!pending} done={done?.provider === p ? (d.links.find((l) => l.id === done.linkId)?.name ?? '') : null} onStart={() => start(p)} onReopen={reopen} onCancel={() => setPending(null)} />,
+            // WhatsApp sits next to Facebook: Meta too, but a number is given in a window of its own
+            p === 'meta' && <WhatsappSlot key="wa" d={d} busy={!!pending} />,
+          ])}
         </div>
       </Card>
 
@@ -184,25 +194,40 @@ export function Comptes(_: PageProps) {
   );
 }
 
-/** What this boutique's agents use right now: its Page (messages, comments), its Meta and TikTok ad accounts. */
+/**
+ * What this boutique's agents use right now: its Page (messages, comments), its Meta and TikTok ad accounts, its
+ * WhatsApp number. Below, the keys connected before somewhere else (Réglages › Meta Ads, Pilot Message): they still
+ * work, and go when the Facebook account takes their place or the boutique removes them.
+ */
 function HereCard({ d }: { d: List }) {
   const { t } = useTranslation();
+  const dropOld = useAction('social.dropOld', { success: t(K + 'old.removed') });
   const ads = (x: List['here']['ad_account'], none: string) => (x ? (x.count > 1 ? t(K + 'here.adsMany', { n: x.count, account: x.account }) : t(K + 'here.adsName', { name: x.name })) : t(K + none));
-  const rows: { key: string; label: string; ok: boolean; value: string }[] = [
+  // Publicité still on a key pasted before: it works (orange, not grey)
+  const adsOld = !d.here.ad_account && !!d.old.ads;
+  const rows: { key: string; label: string; state: 'ok' | 'old' | ''; value: string }[] = [
     {
       key: 'page',
       label: t(K + 'here.page'),
-      ok: !!d.here.page,
+      state: d.here.page ? 'ok' : '',
       value: d.here.page ? (d.here.page.igUsername ? t(K + 'here.pageIg', { name: d.here.page.name, ig: d.here.page.igUsername }) : t(K + 'here.pageOnly', { name: d.here.page.name })) : t(K + 'here.noPage'),
     },
-    { key: 'ads', label: t(K + 'here.ads'), ok: !!d.here.ad_account, value: ads(d.here.ad_account, 'here.noAds') },
-    { key: 'tt', label: t(K + 'here.tiktok'), ok: !!d.here.advertiser, value: ads(d.here.advertiser, 'here.noTiktok') },
+    { key: 'ads', label: t(K + 'here.ads'), state: d.here.ad_account ? 'ok' : adsOld ? 'old' : '', value: adsOld ? t(K + 'here.adsOld') : ads(d.here.ad_account, 'here.noAds') },
+    { key: 'wa', label: t(K + 'here.wa'), state: d.whatsapp ? 'ok' : '', value: d.whatsapp ? d.whatsapp.phone || t(K + 'here.waId', { id: d.whatsapp.phoneId }) : t(K + 'here.noWa') },
+    { key: 'tt', label: t(K + 'here.tiktok'), state: d.here.advertiser ? 'ok' : '', value: ads(d.here.advertiser, 'here.noTiktok') },
+  ];
+  // an old Instagram key may go only once the Facebook account's key can answer in its place (« Tester » or « Relier » says so)
+  const old: { what: 'ads' | 'instagram'; text: string; hint: string; can: boolean }[] = [
+    ...(d.old.ads ? [{ what: 'ads' as const, text: t(K + 'old.ads', { id: d.old.ads.adAccountId || '—' }), hint: t(K + 'old.adsHint'), can: true }] : []),
+    ...(d.old.instagram
+      ? [{ what: 'instagram' as const, text: t(K + 'old.ig', { user: d.old.instagram.username || '—' }), hint: t(K + (d.old.instagram.ready ? 'old.igHint' : 'old.igWait')), can: d.old.instagram.ready }]
+      : []),
   ];
   return (
     <Card title={t(K + 'here.title', { name: d.shop.name })} className="cpt-here">
       <dl>
         {rows.map((r) => (
-          <div key={r.key} className={r.ok ? 'ok' : ''}>
+          <div key={r.key} className={r.state}>
             <dt>{r.label}</dt>
             <dd>
               <i className="cpt-dot" aria-hidden="true" />
@@ -211,6 +236,31 @@ function HereCard({ d }: { d: List }) {
           </div>
         ))}
       </dl>
+      {old.length > 0 && (
+        <section className="cpt-old" aria-labelledby="cpt-old-h">
+          <h3 id="cpt-old-h">
+            <Icon name="history" /> {t(K + 'old.title')}
+          </h3>
+          <p className="cpt-muted">{t(K + 'old.text')}</p>
+          <ul>
+            {old.map((o) => (
+              <li key={o.what}>
+                <span>
+                  <b>
+                    <bdi>{o.text}</bdi>
+                  </b>
+                  <small>{o.hint}</small>
+                </span>
+                {o.can && (
+                  <ConfirmButton className="btn ghost small danger" question={t(K + `old.ask.${o.what}`)} onConfirm={() => dropOld.mutate({ what: o.what })} disabled={dropOld.isPending}>
+                    <Icon name="unlink" /> {t(K + 'remove')}
+                  </ConfirmButton>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </Card>
   );
 }
@@ -226,6 +276,14 @@ function ProviderSlot({ p, ready, preview, pending, busy, done, onStart, onReope
         <div>
           <h3>{name}</h3>
           <p className="cpt-muted">{t(K + `p.${p}.what`)}</p>
+          {/* one login brings all of this at once */}
+          {p === 'meta' && (
+            <ul className="cpt-all" aria-label={t(K + 'p.meta.allLabel')}>
+              {(t(K + 'p.meta.all', { returnObjects: true }) as string[]).map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
       {done !== null ? (
@@ -269,6 +327,170 @@ function ProviderSlot({ p, ready, preview, pending, busy, done, onStart, onReope
             </button>
           )}
           {!ready && <small className="cpt-muted">{t(K + `p.${p}.notReady`)}</small>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * « Connecter WhatsApp »: the boutique's WhatsApp number, in Meta's own window (Embedded Signup: the shop picks or makes
+ * its WhatsApp Business account and its number). Meta's popup (its JavaScript SDK) is loaded before the click so it
+ * opens on the click itself; without it (Meta's script blocked, the preview) a tab opens, asked about every two
+ * seconds like the Facebook login. Pilotix keeps the key; the number answers in Pilot Message and sends the delivery
+ * messages. Always for this boutique only.
+ */
+function WhatsappSlot({ d, busy }: { d: List; busy: boolean }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const remove = useAction('social.waRemove', { success: t(K + 'wa.removed') });
+  const [pending, setPending] = useState<{ state: string; url: string | null; win: Window | null } | null>(null);
+  const [popup, setPopup] = useState(false);
+  const closed = useRef(0);
+  const demo = backend.kind === 'demo';
+  useEffect(() => {
+    if (!pending) return;
+    closed.current = 0;
+    let stop = false;
+    const tick = async () => {
+      try {
+        const r = await rpc('social.state', { state: pending.state });
+        if (stop) return;
+        if (r.status === 'done') {
+          setPending(null);
+          await qc.invalidateQueries();
+          toast(t(K + 'wa.done'), 'ok');
+          return;
+        }
+        if (r.status === 'error' || r.status === 'expired') {
+          setPending(null);
+          toast(r.error ?? t(K + 'expired'), 'bad');
+          return;
+        }
+        if (pending.win?.closed && ++closed.current >= 3) {
+          setPending(null);
+          toast(t(K + 'closed'), 'bad');
+        }
+      } catch (e) {
+        if (!stop) {
+          setPending(null);
+          toast((e as Error).message, 'bad');
+        }
+      }
+    };
+    const id = window.setInterval(tick, 2000);
+    return () => {
+      stop = true;
+      window.clearInterval(id);
+    };
+  }, [pending]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const sdkQ = useRpc('social.waSdk', {}, { enabled: !demo && d.waReady });
+  const sdk = sdkQ.data ?? null;
+  const [fb, setFb] = useState<Awaited<ReturnType<typeof loadFacebookSdk>> | null>(null);
+  useEffect(() => {
+    if (!sdk) return;
+    let on = true;
+    loadFacebookSdk(sdk)
+      .then((x) => on && setFb(x))
+      .catch(() => undefined);
+    return () => {
+      on = false;
+    };
+  }, [sdk?.appId, sdk?.configId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startTab = async () => {
+    // opened now, on the click: a tab opened after waiting for the server is blocked by browsers
+    const win = demo ? null : window.open('', '_blank');
+    try {
+      const r = await rpc('social.start', { provider: 'meta', kind: 'whatsapp' });
+      if (r.url && win && !win.closed) win.location.href = r.url;
+      setPending({ state: r.state, url: r.url, win });
+    } catch (e) {
+      win?.close();
+      toast((e as Error).message, 'bad');
+    }
+  };
+  const startPopup = () => {
+    if (!fb || !sdk) return;
+    setPopup(true);
+    // the login's state is asked while Meta's popup is open (the popup itself must open now, on the click)
+    const st = rpc('social.start', { provider: 'meta', kind: 'whatsapp' });
+    openWaSignup(fb, sdk)
+      .then(async (r) => {
+        const s = await st;
+        const done = await rpc('social.waFinish', { state: s.state, code: r.code, wabaId: r.wabaId, phoneId: r.phoneId });
+        await qc.invalidateQueries();
+        toast(done.warn ? done.warn : t(K + 'wa.done'), done.warn ? 'bad' : 'ok');
+      })
+      .catch((e: Error) => toast(e.message === 'cancelled' ? t(K + 'closed') : e.message, 'bad'))
+      .finally(() => setPopup(false));
+    st.catch(() => undefined);
+  };
+  const start = () => {
+    if (pending || popup) return;
+    if (fb && sdk) startPopup();
+    else void startTab();
+  };
+  const waiting = !!pending || popup;
+  const wa = d.whatsapp;
+  return (
+    <div className={`cpt-slot ${waiting ? 'wait' : ''}`} aria-live="polite">
+      <div className="cpt-slot-id">
+        <span className="dl-ch dl-whatsapp" aria-hidden="true">
+          WA
+        </span>
+        <div>
+          <h3>{t(K + 'wa.name')}</h3>
+          <p className="cpt-muted">{t(K + 'wa.what')}</p>
+        </div>
+      </div>
+      {waiting ? (
+        <div className="cpt-slot-wait">
+          <p>
+            <span className="cpt-spin" aria-hidden="true" />
+            <b>{t(K + 'waiting')}</b>
+          </p>
+          <p className="cpt-muted">{d.preview ? t(K + 'waitingPreview') : t(K + 'wa.waitingHelp')}</p>
+          {pending && (
+            <div className="cpt-do">
+              {pending.url && (
+                <button type="button" className="btn ghost small" onClick={() => setPending({ ...pending, win: window.open(pending.url!, '_blank') })}>
+                  {t(K + 'reopen')}
+                </button>
+              )}
+              <button type="button" className="btn ghost small" onClick={() => setPending(null)}>
+                {t(K + 'cancel')}
+              </button>
+            </div>
+          )}
+        </div>
+      ) : wa ? (
+        <div className="cpt-do">
+          <p className="cpt-wa-on">
+            <Icon name="checkcircle" />
+            <span>
+              <b>
+                <bdi dir="ltr">{wa.phone || t(K + 'here.waId', { id: wa.phoneId })}</bdi>
+              </b>{' '}
+              {t(K + 'wa.on')}
+              {wa.old && <small>{t(K + 'wa.old')}</small>}
+            </span>
+          </p>
+          <button type="button" className="btn ghost small" disabled={!d.waReady || busy} onClick={start}>
+            <Icon name="refresh" /> {t(K + 'wa.again')}
+          </button>
+          <ConfirmButton className="btn ghost small danger" question={t(K + 'wa.removeAsk')} onConfirm={() => remove.mutate({})} disabled={remove.isPending}>
+            <Icon name="unlink" /> {t(K + 'remove')}
+          </ConfirmButton>
+        </div>
+      ) : (
+        <div className="cpt-do">
+          {d.waReady && <small className="cpt-muted cpt-fb-allow">{t(K + 'wa.allow')}</small>}
+          <button type="button" className="btn primary" disabled={!d.waReady || busy} onClick={start}>
+            <Icon name="whatsapp" /> {t(K + 'wa.link')}
+          </button>
+          {!d.waReady && <small className="cpt-muted">{t(K + 'wa.notReady')}</small>}
         </div>
       )}
     </div>
@@ -462,7 +684,16 @@ function LinkCard({ l, d, fresh, open, onToggle, onRelink, busy }: { l: Link; d:
   );
 }
 
-/** What « Tester » found, line by line: green works, orange to look at, red to fix (the platform's own words under it). */
+const WORST: CheckState[] = ['bad', 'warn', 'info', 'ok'];
+const worstOf = (list: Check[]): CheckState => WORST.find((s) => list.some((c) => c.state === s)) ?? 'ok';
+const ICON: Record<CheckState, string> = { ok: 'checkcircle', warn: 'alert', bad: 'xcircle', info: 'info' };
+
+/**
+ * What « Tester » found, part by part (the key, the Page, Instagram, Publicité, the forms, the catalogue, the pixels,
+ * WhatsApp, Pilotix's Meta app). The top says where the problems are; a part that works is folded to one green line,
+ * a part with a problem is open. In a part, line by line: green works, orange to look at, red to fix, grey to know
+ * (the platform's own words under a line).
+ */
 function TestLines({ r, pending, provider }: { r: TestResult | null; pending: boolean; provider: Provider }) {
   const { t } = useTranslation();
   if (!r)
@@ -473,31 +704,63 @@ function TestLines({ r, pending, provider }: { r: TestResult | null; pending: bo
         </p>
       </section>
     );
-  const todo = r.checks.filter((c) => c.state !== 'ok').length;
+  const parts = GROUPS.map((g) => ({ g, list: r.checks.filter((c) => c.group === g) })).filter((x) => x.list.length);
+  const count = (s: CheckState) => r.checks.filter((c) => c.state === s).length;
+  const bad = count('bad');
+  const warn = count('warn');
+  // where to look: the parts with something red (the problem), then the ones with something to look at
+  const namesOf = (s: CheckState) => parts.filter((x) => worstOf(x.list) === s).map((x) => t(K + `grp.${x.g}`));
+  const where: { state: 'bad' | 'warn'; text: string; names: string[] }[] = [
+    { state: 'bad' as const, text: t(K + 'testWhereBad'), names: namesOf('bad') },
+    { state: 'warn' as const, text: t(K + (bad ? 'testWhereAlso' : 'testWhere')), names: namesOf('warn') },
+  ].filter((x) => x.names.length);
   const time = clock(r.at);
+  const line = (c: Check, i: number) => {
+    const key = c.key === 'token' && provider === 'tiktok' ? 'tokenTiktok' : c.key;
+    // a line's own text when it says more than its state: fixed, taken by no shop, why (Cloudflare, standby, an error…)
+    const v = c.params?.fixed ? 'fixed' : c.params?.lost ? 'lost' : c.params?.why ? String(c.params.why) : c.state;
+    const { count: n, at, until, ...rest } = c.params ?? {};
+    return (
+      <li key={`${c.key}-${i}`} className={c.state}>
+        <Icon name={ICON[c.state]} />
+        <span>
+          <bdi>{t(K + `check.${key}.${v}`, { ...rest, n: n ?? '', when: at ? when(String(at)) : '', date: until ? dateOnly(String(until)) : '', defaultValue: c.key })}</bdi>
+          {c.detail && <small>{c.detail}</small>}
+        </span>
+      </li>
+    );
+  };
   return (
     <section className={`cpt-test ${pending ? 'again' : ''}`} aria-live="polite">
       <h4>
         <span>{t(K + 'testTitle', { time })}</span>
-        <span className={`cpt-st ${todo ? 'warn' : 'ok'}`}>{todo ? t(K + 'testTodo', { n: todo }) : t(K + 'testAll')}</span>
+        <span className={`cpt-st ${bad ? 'bad' : warn ? 'warn' : 'ok'}`}>{bad ? t(K + 'testBad', { n: bad }) : warn ? t(K + 'testTodo', { n: warn }) : t(K + 'testAll')}</span>
       </h4>
-      <ul>
-        {r.checks.map((c, i) => {
-          const key = c.key === 'token' && provider === 'tiktok' ? 'tokenTiktok' : c.key;
-          // a line's own text when it says more than its state: fixed, taken by no shop, why (Cloudflare, standby, an error…)
-          const v = (c.key === 'pageHook' || c.key === 'leadHook') && c.params?.fixed ? 'fixed' : c.params?.lost ? 'lost' : c.params?.why ? String(c.params.why) : c.state;
-          const { count, at, ...rest } = c.params ?? {};
+      {where.map((x) => (
+        <p key={x.state} className={`cpt-test-where ${x.state}`}>
+          <Icon name={ICON[x.state]} />
+          <span>
+            {x.text} <b>{x.names.join(' · ')}</b>
+          </span>
+        </p>
+      ))}
+      <div className="cpt-parts">
+        {parts.map(({ g, list }) => {
+          const state = worstOf(list);
+          const todo = list.filter((c) => c.state === 'bad' || c.state === 'warn').length;
           return (
-            <li key={`${c.key}-${i}`} className={c.state}>
-              <Icon name={c.state === 'ok' ? 'checkcircle' : c.state === 'warn' ? 'alert' : 'xcircle'} />
-              <span>
-                <bdi>{t(K + `check.${key}.${v}`, { ...rest, n: count ?? '', when: at ? when(String(at)) : '', defaultValue: c.key })}</bdi>
-                {c.detail && <small>{c.detail}</small>}
-              </span>
-            </li>
+            <details key={`${r.at}-${g}`} className={`cpt-part ${state}`} open={state !== 'ok'}>
+              <summary>
+                <Icon name={ICON[state]} />
+                <b>{t(K + `grp.${g}`)}</b>
+                <span className="cpt-part-st">{state === 'bad' || state === 'warn' ? t(K + (state === 'bad' ? 'partBad' : 'partTodo'), { n: todo }) : state === 'info' ? t(K + 'partInfo') : t(K + 'partOk')}</span>
+                <Icon name="chevron" className="cpt-chev" />
+              </summary>
+              <ul>{list.map(line)}</ul>
+            </details>
           );
         })}
-      </ul>
+      </div>
     </section>
   );
 }

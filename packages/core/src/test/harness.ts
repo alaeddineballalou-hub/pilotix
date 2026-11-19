@@ -1,5 +1,6 @@
 // Shared test setup: a fresh PostgreSQL (PGlite) with the demo shop, and a context per demo user.
-import { Ctx, Db, HD_MIN_WIDTH, login, migrate, seedDemo } from '../index';
+import { Ctx, Db, getSetting, HD_MIN_WIDTH, login, migrate, seedDemo, setSetting } from '../index';
+import { META_TOKEN_KEY, setRaw } from '../modules/admin';
 import { pgliteDb } from '../pglite';
 import { DEMO_PASSWORD } from '@pilotix/shared';
 
@@ -29,6 +30,21 @@ export const EMAILS = {
   livreur: 'lamine@demo.pilotix.dz',
   marketer: 'lyes@demo.pilotix.dz',
 };
+
+/**
+ * Meta's ads as a boutique has them once its Facebook account is linked and its ad account counted (Pilot AI › Comptes
+ * writes exactly this: the key under its own name, the ad account in « meta »). Nothing pastes a key any more.
+ */
+export async function metaAds(db: Db, adAccountId: string, token: string) {
+  const id = adAccountId.replace(/^act_/, '');
+  await setRaw(db, META_TOKEN_KEY, token);
+  await setSetting(db, 'meta', { ...(await getSetting(db, 'meta')), adAccountId: id, adAccountIds: [id], hasToken: true });
+}
+/** And without them (no ad account counted). */
+export async function noMetaAds(db: Db) {
+  await db.query('DELETE FROM settings WHERE key = $1', [META_TOKEN_KEY]);
+  await setSetting(db, 'meta', { ...(await getSetting(db, 'meta')), hasToken: false });
+}
 
 /**
  * Produits › « Prêt »: gives a product what it misses to be sold (an HD main photo, a purchase price, a description, a

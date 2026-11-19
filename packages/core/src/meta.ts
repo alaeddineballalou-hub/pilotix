@@ -1,6 +1,6 @@
 // Meta Ads (Marketing API v26.0) — SERVER ONLY. Loaded by the server as '@pilotix/core/dist/meta' and called through
 // ctx.server.meta(action, args, ctx). Never imported by the app: the browser demo uses the seeded tables instead.
-// The access token is read from the settings table (written by admin.meta.save) and never leaves the server.
+// The access token is read from the settings table (written by a linked account: modules/social.ts) and never leaves the server.
 import { createHash } from 'node:crypto';
 import { getSetting } from './settings';
 import { getRaw, META_TOKEN_KEY } from './modules/admin';
@@ -161,7 +161,7 @@ async function graph(path: string, params: Record<string, string>, token: string
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok || data?.error) {
     const code = data?.error?.code;
-    if (code === 190) throw new AppError('bad_request', 'Le jeton Meta a expiré ou a été révoqué : reconnectez Meta dans Réglages.');
+    if (code === 190) throw new AppError('bad_request', 'Le jeton Meta a expiré ou a été révoqué : reliez votre compte Facebook dans Pilot AI › Comptes.');
     if (code === 4 || code === 17 || code === 613) throw new AppError('conflict', 'Meta limite les demandes pour l’instant : réessayez dans quelques minutes.');
     throw new AppError('bad_request', `Meta : ${data?.error?.message ?? res.statusText}`);
   }
@@ -455,8 +455,8 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
   if (action === 'chatCapi') return sendChatCapi(args as Parameters<typeof sendChatCapi>[0]);
   const meta = await getSetting(ctx.db, 'meta');
   const token = await getRaw<string>(ctx.db, META_TOKEN_KEY, '');
-  if (!meta.adAccountId || !token) throw new AppError('bad_request', 'Meta n’est pas connecté : ajoutez le compte pub et le jeton dans Réglages.');
-  // a linked Facebook account: every one of its ad accounts, added up (Pilot AI › Comptes); pasted by hand: the one
+  if (!meta.adAccountId || !token) throw new AppError('bad_request', 'Meta n’est pas connecté : liez votre compte Facebook dans Pilot AI › Comptes et cochez votre compte pub.');
+  // a linked Facebook account: every one of its ad accounts, added up (Pilot AI › Comptes); a key pasted before: the one
   const acts = [...new Set((meta.adAccountIds?.length ? meta.adAccountIds : [meta.adAccountId]).map((x) => `act_${String(x).replace(/^act_/, '')}`))];
 
   if (action.startsWith('catalog')) return runCatalog(action, args, token, acts);

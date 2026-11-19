@@ -2,7 +2,7 @@
 // and for the store's owner only (a multi-shop server): delete the store and all its data.
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { backend, server, shopApi } from '../../lib/backend';
+import { server, shopApi } from '../../lib/backend';
 import { useSession } from '../../lib/session';
 import { when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
@@ -329,60 +329,39 @@ function CronCard({ cronKey, last }: { cronKey: string; last: { at: string; chec
   );
 }
 
+/**
+ * Publicité · Meta: read only. The ad accounts come from the Facebook account linked in Pilot AI › Comptes (the one place
+ * where Meta is connected); nothing is pasted here any more. A key pasted here before still works: said, with the way
+ * to Comptes (which names it and can remove it).
+ */
 function MetaCard({ meta }: { meta: { adAccountId: string; connected: boolean; linked?: { adAccountId: string; name: string; account: string; count?: number } | null } }) {
   const { t } = useTranslation();
-  const [acc, setAcc] = useState(meta.adAccountId);
-  const [token, setToken] = useState('');
-  const save = useAction('admin.meta.save', {
-    success: (r) => (r.test?.ok && r.test.name ? t('admin.settings.metaTestOk', { name: r.test.name }) : t('admin.settings.metaSaved')),
-    onDone: (r) => {
-      setToken('');
-      if (r.test && !r.test.ok) toast(r.test.message ?? 'Meta', 'bad');
-    },
-  });
-  const disc = useAction('admin.meta.disconnect', { success: t('admin.settings.metaDisconnected') });
+  const go = (label: string, primary = false) => (
+    <a className={`btn small ${primary ? 'primary' : 'ghost'}`} href="#/comptes">
+      {label}
+    </a>
+  );
   return (
     <Card title={t('admin.settings.meta')} help={t('admin.settings.metaHelp')}>
       {meta.linked ? (
-        // the ad account comes from a linked account (Pilot AI › Comptes): nothing to paste here
         <div className="okbox row" style={{ gap: 10, justifyContent: 'space-between', flexWrap: 'wrap' }}>
           <span>
             <bdi>{(meta.linked.count ?? 1) > 1 ? t('admin.settings.metaLinkedMany', { count: meta.linked.count, account: meta.linked.account }) : t('admin.settings.metaLinked', { name: meta.linked.name, account: meta.linked.account })}</bdi>
           </span>
-          <a className="btn ghost small" href="#/comptes">
-            {t('admin.settings.metaChange')}
-          </a>
+          {go(t('admin.settings.metaChange'))}
+        </div>
+      ) : meta.connected ? (
+        <div className="warnbox row" style={{ gap: 10, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <span>
+            <bdi>{t('admin.settings.metaOld', { id: meta.adAccountId })}</bdi>
+          </span>
+          {go(t('admin.settings.metaOpen'), true)}
         </div>
       ) : (
-        <>
-          {meta.connected ? <div className="okbox">{t('admin.settings.metaConnected')}</div> : <div className="warnbox">{t('admin.settings.metaNot')}</div>}
-          <p className="muted small">
-            {t('admin.settings.metaLinkHint')}{' '}
-            <a href="#/comptes">{t('admin.settings.metaLinkBtn')}</a>
-          </p>
-        </>
-      )}
-      {!meta.linked && (
-        <>
-          <Field label={t('admin.settings.metaAccount')}>
-            <input className="ltr" value={acc} inputMode="numeric" placeholder="act_1234567890" onChange={(e) => setAcc(e.target.value)} autoComplete="off" />
-          </Field>
-          <Field label={t('admin.settings.metaToken')}>
-            {/* write-only: the stored token is never sent back to the app */}
-            <input className="ltr" type="password" value={token} placeholder={meta.connected ? t('admin.settings.metaTokenKeep') : 'EAAG…'} onChange={(e) => setToken(e.target.value)} autoComplete="new-password" />
-          </Field>
-          {backend.kind === 'demo' && <p className="muted small">{t('admin.settings.metaDemo')}</p>}
-          <div className="row end" style={{ gap: 8 }}>
-            {meta.connected && (
-              <ConfirmButton className="btn ghost danger" question={t('admin.settings.metaDisconnectConfirm')} onConfirm={() => disc.mutate({})}>
-                {t('admin.settings.metaDisconnect')}
-              </ConfirmButton>
-            )}
-            <button className="btn primary" disabled={!acc.trim() || (!meta.connected && !token.trim()) || save.isPending} onClick={() => save.mutate({ adAccountId: acc.trim(), token: token.trim() || undefined })}>
-              {t('admin.settings.metaSave')}
-            </button>
-          </div>
-        </>
+        <div className="warnbox row" style={{ gap: 10, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <span>{t('admin.settings.metaNot')}</span>
+          {go(t('admin.settings.metaOpen'), true)}
+        </div>
       )}
     </Card>
   );

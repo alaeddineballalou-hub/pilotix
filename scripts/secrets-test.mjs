@@ -69,16 +69,14 @@ try {
 
   // a secret typed in the app: sealed as it is saved
   const login = await (await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@demo.pilotix.dz', password: 'demo-pilotix' }) })).json();
-  const token = `EAAB${run}${'x'.repeat(30)}`;
-  const saved = await fetch(`${API}/rpc/admin.meta.save`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${login.token}` },
-    body: JSON.stringify({ adAccountId: '1234567890', token }),
-  });
-  assert.ok(saved.status < 300, `admin.meta.save → ${saved.status}`);
-  const meta = String((await pg.query(`SELECT value::text AS t FROM public.settings WHERE key = 'secret_meta_token'`)).rows[0].t);
-  assert.ok(!meta.includes(token) && meta.startsWith('"enc:v1:'), `the Meta token is readable: ${meta.slice(0, 80)}`);
-  ok('a token typed in the app is sealed as it is saved');
+  const token = `tt-${run}${'x'.repeat(30)}`;
+  const auth = { 'Content-Type': 'application/json', Authorization: `Bearer ${login.token}` };
+  const cur = await (await fetch(`${API}/rpc/dellal.settings.get`, { method: 'POST', headers: auth, body: '{}' })).json();
+  const saved = await fetch(`${API}/rpc/dellal.settings.save`, { method: 'POST', headers: auth, body: JSON.stringify({ ...cur.settings, secrets: { tiktokToken: token } }) });
+  assert.ok(saved.status < 300, `dellal.settings.save → ${saved.status}`);
+  const typed = String((await pg.query(`SELECT value::text AS t FROM public.settings WHERE key = 'secret_dellal_tiktok_token'`)).rows[0].t);
+  assert.ok(!typed.includes(token) && typed.startsWith('"enc:v1:'), `the typed key is readable: ${typed.slice(0, 80)}`);
+  ok('a key typed in the app is sealed as it is saved');
   console.log('\nAll sealed secrets checks passed.');
 } catch (e) {
   console.log(`   ✗ FAILED: ${e.message}`);
@@ -87,7 +85,7 @@ try {
 } finally {
   server.kill('SIGTERM');
   // the test's values gone (they were sealed with this run's key only)
-  await pg.query(`DELETE FROM public.settings WHERE key IN ('secret_test_token', 'secret_meta_token')`);
+  await pg.query(`DELETE FROM public.settings WHERE key IN ('secret_test_token', 'secret_dellal_tiktok_token')`);
   await pg.query(`UPDATE public.delivery_companies SET credentials = credentials - 'webhook_key' WHERE id = $1`, [companyId]);
   await pg.end();
 }

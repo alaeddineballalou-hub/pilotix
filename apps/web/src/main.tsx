@@ -175,8 +175,11 @@ function App() {
   // the boutique's modules (Point de vente…): the menu shows their pages once they are on (Management › Modules)
   useShopModules();
   const opening = useAddressBoutique(session?.shop?.slug, !!session && ready, parts.join('/'));
-  // the demo only: an « Essayer » link of the Deploy page logs in with its demo account and opens its page
-  const trying = useTryLink(ready);
+  // the demo only: an « Essayer » link of the Deploy page logs in with its demo account and opens its page. The page
+  // changes as a transition (useRoute), a moment after the login ends: until the address shown here is the page's, the
+  // link is still on its way (else « #essayer-… » would be read as an unknown page and sent to the home page)
+  const onWay = useTryLink(ready);
+  const trying = onWay || (DEMO_ONLY && !!readTryLink(`#${parts.join('/')}`));
   // an AI assistant (Claude, ChatGPT) sent the person here to be linked to their account (lib/mcpAsk): the « Autoriser »
   // page comes once they are logged in (the login page says why they are asked to sign in: McpLoginNote)
   const asked = useMcpTicket();

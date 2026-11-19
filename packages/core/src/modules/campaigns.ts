@@ -491,7 +491,7 @@ export const campaignsProcs = {
     const name = `pilotix_offre_${num(c.id)}_v${version}`;
     if (!simulated(ctx)) {
       const r = await readiness(ctx);
-      if (!r.whatsapp) throw bad('WhatsApp n’est pas connecté : ajoutez le jeton et l’ID du numéro (Pilot Message › Réglages)');
+      if (!r.whatsapp) throw bad('WhatsApp n’est pas connecté : connectez votre numéro dans Pilot AI › Comptes');
       if (!n.wabaId) throw bad('Ajoutez l’ID du compte WhatsApp Business (Pilot Automations › Réglages)');
       const shop = (await getSetting(db, 'shop')).name;
       const example = templateParams(String(c.body), { nom: firstName('Amina', lang), boutique: shop });

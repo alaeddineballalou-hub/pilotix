@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # End-to-end check of a running Pilotix server filled with the demo shop (npm run seed:demo -w @pilotix/server).
+# DATABASE_URL: the server's database (one value no page writes any more is put there by hand).
 set -euo pipefail
 API="${API:-http://localhost:3000/api}"
 PASS="demo-pilotix"
@@ -47,7 +48,19 @@ echo "→ action names with a digit";   rpc "$ADMIN" stats.overview2 '{"from":"2
 echo "→ Meta comment webhook (CM AI agent): signed only, answered after the shop's delay"
 SECRET=smoke-app-secret
 merge() { node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const o=JSON.parse(s).settings;console.log(JSON.stringify(Object.assign(o,JSON.parse(process.argv[1]))))})" "$1"; }
-rpc "$ADMIN" dellal.settings.save "$(rpc "$ADMIN" dellal.settings.get | merge "{\"secrets\":{\"appSecret\":\"$SECRET\"}}")" >/dev/null
+# A boutique's own Meta app secret is no longer typed in the app (Meta is connected in Pilot AI › Comptes, with Pilotix's
+# app); one typed before stays where it was written and its webhook still works: written here as it was then (DATABASE_URL).
+( cd "$(dirname "$0")/.." && SECRET="$SECRET" node -e "
+const { createRequire } = require('module');
+const { Client } = createRequire(process.cwd() + '/apps/server/package.json')('pg');
+(async () => {
+  const pg = new Client({ connectionString: process.env.DATABASE_URL });
+  await pg.connect();
+  // on a server the shops share the tables: the row belongs to the demo shop (shop_id), as in scripts/secrets-test.mjs
+  await pg.query(\"INSERT INTO public.settings (shop_id, key, value) VALUES ((SELECT coalesce((SELECT id FROM platform.shops WHERE primary_shop), 1)), 'secret_dellal_meta_app_secret', to_jsonb(\$1::text)) ON CONFLICT (shop_id, key) DO UPDATE SET value = EXCLUDED.value\", [process.env.SECRET]);
+  await pg.end();
+})().catch((e) => { console.error(e.message); process.exit(1); });
+" )
 rpc "$ADMIN" cm.settings.save "$(rpc "$ADMIN" cm.settings.get | merge '{"enabled":true,"delaySec":0}')" >/dev/null
 BODY='{"object":"page","entry":[{"id":"111","time":1,"changes":[{"field":"feed","value":{"item":"comment","verb":"add","comment_id":"999_smoke1","post_id":"111_999","parent_id":"111_999","message":"ch7al la poussette ?","from":{"id":"5551","name":"Smoke Test"},"created_time":1}}]}]}'
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/hooks/meta" -H 'Content-Type: application/json' --data-binary "$BODY")" = 401 ]

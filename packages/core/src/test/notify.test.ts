@@ -6,6 +6,7 @@ import { before, test } from 'node:test';
 import { call, Ctx, Db, ServerHooks } from '../index';
 import { checkDarija } from '../modules/darija';
 import { DEFAULT_TEXTS, firstName, NOTIFY_KINDS, ordersForDellal, render, sendTime, smsParts, smsValidUntil, templateBody, templateParams, textProblems } from '../modules/notify';
+import { setRaw } from '../modules/admin';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -429,7 +430,10 @@ test('answers: the delivery message shows in Message AI agent before the answer,
   });
   const admin = await as(EMAILS.admin, server);
   const g: any = await call('dellal.settings.get', admin, {});
-  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, whatsappPhoneId: '1098765432', secrets: { ai: 'sk-ant-test-notify', waToken: 'EAAB-wa' } });
+  // the boutique's WhatsApp number, as « Connecter WhatsApp » writes it (Pilot AI › Comptes)
+  await setRaw(db, 'secret_dellal_wa_token', 'EAAB-wa');
+  await db.query(`UPDATE settings SET value = value || '{"whatsappPhoneId":"1098765432"}'::jsonb WHERE key = 'dellal'`);
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, secrets: { ai: 'sk-ant-test-notify' } });
   const wa = '213' + o.phone.slice(1);
   const r: any = await call('dellal.receive', admin, { channel: 'whatsapp', externalId: wa, text: 'Wah mazal nhabha', messageId: 'wamid.in.1' });
   const msgs = await db.query(`SELECT role, body, meta FROM conv_messages WHERE conversation_id = $1 ORDER BY id`, [r.conversationId]);
@@ -489,7 +493,10 @@ test('an order taken by Message AI agent on WhatsApp: no "received" or "confirme
   });
   const admin = await as(EMAILS.admin, server);
   const g: any = await call('dellal.settings.get', admin, {});
-  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, whatsappPhoneId: '1098765432', secrets: { ai: 'sk-ant-test-notify', waToken: 'EAAB-wa' } });
+  // the boutique's WhatsApp number, as « Connecter WhatsApp » writes it (Pilot AI › Comptes)
+  await setRaw(db, 'secret_dellal_wa_token', 'EAAB-wa');
+  await db.query(`UPDATE settings SET value = value || '{"whatsappPhoneId":"1098765432"}'::jsonb WHERE key = 'dellal'`);
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, secrets: { ai: 'sk-ant-test-notify' } });
   // stock for the product, so the order can be taken
   await db.query(`INSERT INTO stock (variant_id, warehouse_id, qty) VALUES ($1, (SELECT id FROM warehouses ORDER BY id LIMIT 1), 50) ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET qty = stock.qty + 50`, [p.vid]);
   const r: any = await call('dellal.receive', admin, { channel: 'whatsapp', externalId: '213' + ph.slice(1), text: 'nheb ncommandi', messageId: 'wamid.in.x' });

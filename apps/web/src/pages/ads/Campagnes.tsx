@@ -75,7 +75,7 @@ export function Campagnes() {
             <Icon name="alert" />
             <span>
               {!d.ready.whatsapp ? t('campaigns.ready.whatsapp') : t('campaigns.ready.waba')}{' '}
-              <a href={!d.ready.whatsapp ? '#/messages/reglages' : '#/notify/reglages'}>{t('campaigns.ready.fix')}</a>
+              <a href={!d.ready.whatsapp ? '#/comptes' : '#/notify/reglages'}>{t(!d.ready.whatsapp ? 'campaigns.ready.fixWa' : 'campaigns.ready.fix')}</a>
             </span>
           </div>
         )}

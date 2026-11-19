@@ -47,7 +47,8 @@
 .dl-linked small { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
 .dl-linked.ok { border-style: solid; border-color: transparent; background: var(--ok-soft); }
 .dl-linked.ok > .bji { color: var(--ok); }
-@media (max-width: 560px) { .dl-linked { flex-wrap: wrap; } .dl-linked .btn { margin-inline-start: 34px; } }
+/* a phone: the text takes the line, its button goes under it (a long button squeezed the text to a few letters a line) */
+@media (max-width: 560px) { .dl-linked { flex-wrap: wrap; } .dl-linked p { flex: 1 1 calc(100% - 34px); } .dl-linked .btn { margin-inline-start: 34px; } }
 @media (max-width: 700px) { .dl-hook { grid-template-columns: minmax(0, 1fr); } }
 .dl-h3 { display: flex; align-items: center; gap: 8px; font-size: 15px; margin: 16px 0 6px; }
 /* Instagram's own login (every customer of the shop's own account answered) */
