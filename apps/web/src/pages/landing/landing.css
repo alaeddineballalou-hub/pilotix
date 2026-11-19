@@ -554,3 +554,13 @@
 .lp-evs-qbar.g-medium i { background: #F7A823; }
 .lp-evs-qbar.g-bad i { background: var(--coral); }
 .lp-evs-qbar.g-normal i, .lp-evs-qbar.g-none i { background: var(--muted); }
+/* what each event is for (read-only) */
+.lp-evs-guide > summary { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 16px; font-weight: 700; cursor: pointer; list-style: none; }
+.lp-evs-guide > summary::-webkit-details-marker { display: none; }
+.lp-evs-guide > summary::after { content: ''; width: 9px; height: 9px; margin-inline-start: auto; border-inline-end: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform .15s; }
+.lp-evs-guide[open] > summary::after { transform: rotate(-135deg); }
+.lp-evs-gs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+.lp-evs-g { display: flex; flex-direction: column; gap: 6px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--raise); }
+.lp-evs-g p { margin: 0; font-size: 14px; }
+.lp-evs-g p.muted { font-size: 13px; }
+.lp-evs-g .pd-name b { font-size: 15px; }
