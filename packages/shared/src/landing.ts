@@ -355,7 +355,7 @@ var wa=$('wa');if(wa&&C.wa){var V={nom:nm,produit:C.title+vtx(),quantite:q,total
 var wo=$('wo');if(wo)wo.onchange=function(){if(wo.checked&&!wo.s&&C.mode=='live'){wo.s=1;ask('optin',{ch:C.ch,phone:ph},function(){})}};
 f.style.display='none';$('ok').style.display='block';sbs();window.scrollTo(0,0)})})()};
 var sb=$('sb'),gv=1;function sbs(){var on=!(gv||done);sb.className=on?'sb on':'sb';d.body.style.paddingBottom=on?'82px':''}
-if(window.IntersectionObserver)new IntersectionObserver(function(x){gv=x[x.length-1].isIntersecting;sbs()}).observe($('go'));
+if(window.IntersectionObserver)new IntersectionObserver(function(x){x=x[x.length-1];gv=x.isIntersecting||x.boundingClientRect.top>0;sbs()}).observe($('go'));
 sb.onclick=function(){f.onsubmit({preventDefault:function(){}});if(!busy){var b=f.querySelector('.bad'),r=(f.closest('.card')||f).getBoundingClientRect(),h=innerHeight-r.height;scrollBy({top:r.top-(h>0?h/2:8),behavior:'smooth'});b&&b.animate&&b.animate([{},{boxShadow:'0 0 0 5px var(--cl)'},{}],{duration:500,iterations:2})}};sum()})();`;
 
 /**
