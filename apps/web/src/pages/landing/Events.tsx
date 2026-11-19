@@ -317,6 +317,13 @@ function Visits({ series }: { series: Card['series'] }) {
   );
 }
 
+/**
+ * Good from 7, medium from 5, bad under 5 (a rule of thumb, not Meta's own words). FakeOrder and Competitor are low on
+ * purpose (the browser only, never the number typed): « normal », never « bad ».
+ */
+const grade = (e: { name: string; score: number | null }) =>
+  e.score === null ? 'none' : e.name === 'FakeOrder' || e.name === 'Competitor' ? 'normal' : e.score >= 7 ? 'good' : e.score >= 5 ? 'medium' : 'bad';
+
 /** what Meta says of each Meta pixel: the match quality of its events (0–10), and the share the server also sent */
 function Quality() {
   const { t } = useTranslation();
@@ -338,6 +345,7 @@ function Quality() {
       <p className="pd-note">
         {q.data.demo ? t('landing.evs.q.demo') : t('landing.evs.q.help', { at: dateTime(q.data.at) })}
       </p>
+      <p className="pd-note">{t('landing.evs.q.legend')}</p>
       <div className="lp-evs-qsets">
         {q.data.sets.map((s) => (
           <div key={s.pixelId} className="lp-evs-qset">
@@ -354,10 +362,11 @@ function Quality() {
                 {s.events.map((e) => (
                   <div key={e.name} className="lp-evs-qrow">
                     <span className="lp-evs-qname ltr">{e.name}</span>
-                    <span className="lp-evs-qbar" aria-hidden="true">
+                    <span className={`lp-evs-qbar g-${grade(e)}`} aria-hidden="true">
                       <i style={{ width: `${Math.max(0, Math.min(100, (e.score ?? 0) * 10))}%` }} />
                     </span>
                     <b className="ltr">{e.score === null ? '—' : `${e.score.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}/10`}</b>
+                    <span className={`lp-evs-qg g-${grade(e)}`}>{t(`landing.evs.q.g.${grade(e)}`)}</span>
                     <small className="muted">{e.coverage === null ? '' : t('landing.evs.q.coverage', { pct: Math.round(e.coverage) })}</small>
                   </div>
                 ))}

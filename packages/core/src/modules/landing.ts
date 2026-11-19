@@ -106,7 +106,9 @@ const QUALITY_DEMO: QualitySet['events'] = [
   { name: 'Purchase', score: 6.4, coverage: 92, keys: [{ id: 'phone', pct: 100 }, { id: 'ip_address', pct: 98 }, { id: 'fbp', pct: 81 }] },
   { name: 'Lead', score: 6.4, coverage: 90, keys: [{ id: 'phone', pct: 100 }, { id: 'ip_address', pct: 99 }, { id: 'fbp', pct: 83 }] },
   { name: 'InitiateCheckout', score: 6.1, coverage: 74, keys: [{ id: 'phone', pct: 88 }, { id: 'ip_address', pct: 99 }, { id: 'fbp', pct: 84 }] },
-  { name: 'ViewContent', score: 5.2, coverage: null, keys: [{ id: 'ip_address', pct: 100 }, { id: 'fbp', pct: 79 }] },
+  { name: 'ViewContent', score: 4.6, coverage: null, keys: [{ id: 'ip_address', pct: 100 }, { id: 'fbp', pct: 79 }] },
+  { name: 'Delivered', score: 7.1, coverage: null, keys: [{ id: 'phone', pct: 100 }, { id: 'ip_address', pct: 97 }] },
+  { name: 'FakeOrder', score: 4.4, coverage: null, keys: [{ id: 'ip_address', pct: 100 }] },
 ];
 const eventCard = (id: number, pg: any, series: { day: string; visits: number; purchase: number; lead: number; checkout: number; fake: number; delivered: number }[]) => ({
   id,

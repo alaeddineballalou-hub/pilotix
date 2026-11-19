@@ -761,7 +761,15 @@
       "refresh": "Read again from Meta",
       "refreshed": "Scores read again from Meta",
       "none": "Meta has no score for this pixel yet.",
-      "coverage": "{{pct}} % also sent by the server"
+      "coverage": "{{pct}} % also sent by the server",
+      "g": {
+        "good": "Good",
+        "medium": "Medium",
+        "bad": "Bad",
+        "normal": "Normal",
+        "none": "—"
+      },
+      "legend": "Good from 7, medium from 5 to 6.9, bad under 5. FakeOrder and Competitor are low on purpose: that is normal."
     }
   }
 }

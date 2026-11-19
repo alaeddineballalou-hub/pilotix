@@ -761,7 +761,15 @@
       "refresh": "Relire chez Meta",
       "refreshed": "Notes relues chez Meta",
       "none": "Meta n’a pas encore de note pour ce pixel.",
-      "coverage": "{{pct}} % envoyés aussi par le serveur"
+      "coverage": "{{pct}} % envoyés aussi par le serveur",
+      "g": {
+        "good": "Bon",
+        "medium": "Moyen",
+        "bad": "Mauvais",
+        "normal": "Normal",
+        "none": "—"
+      },
+      "legend": "Bon à partir de 7, moyen de 5 à 6,9, mauvais sous 5. FakeOrder et Competitor sont bas exprès : c’est normal."
     }
   }
 }
