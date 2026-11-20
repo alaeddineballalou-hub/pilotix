@@ -495,7 +495,7 @@ class DemoBackend implements Backend {
       if (s.primary) {
         this.session = await core.login(db, email, DEMO_PASSWORD);
         this.space = null;
-        setSoonAll((await core.platformSettings(t)).soon.features);
+        setSoonAll(core.PLATFORM_DEFAULTS.soon.features);
       } else {
         const set = await core.platformSettings(t);
         const st = core.shopStatus(s, Date.now(), set.trial.graceDays);
@@ -535,8 +535,9 @@ class DemoBackend implements Backend {
       } else {
         this.session = await core.login(db, email, password);
         this.space = null;
-        // the demo's own store carries no shop info: the menu takes the platform's « Bientôt » list from here
-        setSoonAll((await core.platformSettings(t)).soon.features);
+        // the demo's own store carries no shop info: the menu takes the « Bientôt » list from here (the platform's
+        // tables are not made yet at this point, and the demo has no control room: its list is Pilotix's own)
+        setSoonAll(core.PLATFORM_DEFAULTS.soon.features);
       }
     } catch (e: any) {
       throw new ApiError(401, e.message);
