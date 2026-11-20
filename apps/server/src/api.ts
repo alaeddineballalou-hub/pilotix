@@ -2073,6 +2073,10 @@ class ApiController {
         }
         const r: any = await this.core.call(ref, 'dellal.receive', session, msg);
         if (!r) continue;
+        // a Messenger or Instagram chat that came without the customer's name: Meta's user profile gives it (in the
+        // background: Dellal's answer does not wait for it)
+        if ((msg?.channel === 'messenger' || msg?.channel === 'instagram') && !msg?.name)
+          void this.core.call(ref, 'dellal.metaName', session, { id: r.conversationId }).catch((e: any) => log.warn(`[${ref.shop.slug}] conversation ${r.conversationId}, name: ${e?.message ?? e}`));
         const conv = `${ref.shop.id}:${r.conversationId}`;
         latest.set(conv, r.messageId);
         setTimeout(() => {

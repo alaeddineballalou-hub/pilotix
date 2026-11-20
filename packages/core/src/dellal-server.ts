@@ -219,6 +219,49 @@ async function igFollows(ctx: Ctx, a: { externalId: string }): Promise<{ follows
 }
 const midOf = (r: any): string | null => (r?.message_id ? String(r.message_id).slice(0, 200) : null);
 
+/**
+ * The customer's name, for a chat that started without one: a Messenger message brings only the person's number on
+ * the Page (PSID). Messenger's user profile gives first_name and last_name (« Business Asset User Profile Access »);
+ * Instagram's gives name, else the @username (the same permission as the messages). null: Meta gave none (the chat
+ * goes on without a name).
+ */
+async function chatProfile(ctx: Ctx, a: { channel: string; externalId: string }): Promise<{ name: string | null; error?: string }> {
+  const id = enc(String(a.externalId ?? ''));
+  if (!id || (a.channel !== 'messenger' && a.channel !== 'instagram')) return { name: null };
+  const nameOf = (r: any): string | null => {
+    const parts = [r?.first_name, r?.last_name].filter((x) => typeof x === 'string' && x.trim()).map((x) => String(x).trim());
+    const full = parts.join(' ') || (typeof r?.name === 'string' ? r.name.trim() : '');
+    if (full) return full.slice(0, 120);
+    return typeof r?.username === 'string' && r.username.trim() ? `@${r.username.trim()}`.slice(0, 120) : null;
+  };
+  let error = '';
+  if (a.channel === 'instagram') {
+    const ig = await dellalSecret(ctx.db, 'igToken');
+    if (ig) {
+      try {
+        const s = await dellalSettings(ctx.db);
+        const base = s.igLoginKind === 'unified' ? UNI_GRAPH : IG_GRAPH;
+        const n = nameOf(await postJson(`${base}/${id}?fields=name,username`, null, { Authorization: `Bearer ${ig}` }, 'Instagram', 'GET', 10_000));
+        if (n) return { name: n };
+      } catch (e: any) {
+        error = String(e?.message ?? e);
+      }
+    }
+  }
+  const page = await dellalSecret(ctx.db, 'pageToken');
+  if (page) {
+    const who = a.channel === 'messenger' ? 'Messenger' : 'Instagram';
+    const fields = a.channel === 'messenger' ? 'first_name,last_name' : 'name,username';
+    try {
+      const n = nameOf(await postJson(`${GRAPH}/${id}?fields=${fields}&access_token=${enc(page)}`, null, {}, who, 'GET', 10_000));
+      if (n) return { name: n };
+    } catch (e: any) {
+      error = String(e?.message ?? e);
+    }
+  }
+  return error ? { name: null, error: error.slice(0, 300) } : { name: null };
+}
+
 async function complete(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
   // Pilot AI: Pilotix's own key for every shop (the control room); otherwise, on an install without it, the shop's key
   // a job that started on Pilotix's key keeps it to its end; otherwise Pilotix's key only while today's limit is not reached
@@ -843,6 +886,7 @@ async function smsHooks(ctx: Ctx, a: { url: string }) {
  *  - 'media' → a customer's photo (WhatsApp media id or Meta's link): its bytes for Pilot AI, and a small copy
  *  - 'photos' → { channel, externalId, accountId, photos }: the product photos Dellal picked, sent as JPEG
  *  - 'photoLinks' → { photos }: « Envoyer des photos » (Confirmation): each photo's public JPEG copy (its link, or null)
+ *  - 'profile' → { channel, externalId }: a Messenger or Instagram customer's name from Meta ({ name: null } if none)
  */
 export async function runDellal(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
   if (action === 'complete') return complete(ctx, args as AiRequest);
@@ -878,6 +922,7 @@ export async function runDellal(action: string, args: unknown, ctx: Ctx): Promis
   if (action === 'catchUp') return catchUpMeta(args as CatchUpArgs);
   if (action === 'igRefresh') return igRefresh(String((args as any)?.token ?? ''));
   if (action === 'igFollows') return igFollows(ctx, args as { externalId: string });
+  if (action === 'profile') return chatProfile(ctx, args as { channel: string; externalId: string });
   if (action === 'ping') {
     await complete(ctx, { model: 'claude-haiku-5-5', system: 'Réponds OK.', messages: [{ role: 'user', content: 'ping' }], tools: [] as any, max_tokens: 5 });
     return { ok: true };
