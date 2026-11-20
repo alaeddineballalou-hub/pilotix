@@ -121,3 +121,18 @@ test('the addresses of a domain behind Cloudflare’s orange cloud are known as 
   for (const ip of ['104.21.32.1', '172.67.150.12', '188.114.97.3', '162.159.1.1', '173.245.48.0', '131.0.75.255']) assert.equal(isCloudflareIp(ip), true, ip);
   for (const ip of ['161.97.171.250', '203.0.113.10', '1.1.1.1', '104.32.0.1', '131.0.76.0', '2606:4700::1', '', 'not-an-ip', '104.21.32', '256.1.1.1']) assert.equal(isCloudflareIp(ip), false, ip);
 });
+
+test('one list of Cloudflare’s addresses: the web server (real visitor address), the domain check and the « only Cloudflare » switch', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { CLOUDFLARE_V4 } = await import('@pilotix/shared');
+  const root = join(__dirname, '../../../../deploy');
+  // deploy/Caddyfile trusts CF-Connecting-IP only from these addresses (the customer's real address behind Cloudflare)
+  const caddy = readFileSync(join(root, 'Caddyfile'), 'utf8').match(/trusted_proxies static ([^\n]+)/)?.[1].trim().split(/\s+/) ?? [];
+  assert.deepEqual(caddy.filter((r) => !r.includes(':')), CLOUDFLARE_V4, 'deploy/Caddyfile trusted_proxies (IPv4)');
+  assert.equal(readFileSync(join(root, 'Caddyfile'), 'utf8').includes('client_ip_headers CF-Connecting-IP'), true, 'the real address comes from CF-Connecting-IP');
+  // the « only Cloudflare » switch (off for now) lets in the same ones
+  const sw = readFileSync(join(root, 'web-cloudflare-only.sh'), 'utf8');
+  assert.deepEqual(sw.match(/^CF4="([^"]+)"/m)?.[1].split(' '), CLOUDFLARE_V4, 'deploy/web-cloudflare-only.sh CF4');
+  assert.deepEqual(sw.match(/^CF6="([^"]+)"/m)?.[1].split(' '), caddy.filter((r) => r.includes(':')), 'deploy/web-cloudflare-only.sh CF6');
+});
