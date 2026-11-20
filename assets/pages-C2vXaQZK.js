@@ -1,0 +1,1 @@
+import{G as s}from"./kit-B7eBG96V.js";import{u as a}from"./query-BSs_KvF_.js";const i=()=>a("landing.store",{},{staleTime:6e4}).data?.pagesUrl||s();function n(){const e=a("landing.store",{},{staleTime:6e4}).data;if(!e)return"";if(e.prefix)return e.prefix;const r=(e.pagesUrl||s()).replace(/\/+$/,"");return r&&e.store?`${r}/${e.store}/`:""}export{n as a,i as u};
