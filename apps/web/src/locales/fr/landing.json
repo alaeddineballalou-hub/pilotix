@@ -463,7 +463,7 @@
     "value": "Valeur",
     "howHelp": "Supprimez les autres enregistrements A ou AAAA de ce nom. Avec Cloudflare, le nuage orange et le nuage gris marchent tous les deux. Le changement prend de quelques minutes à quelques heures.",
     "found": "Adresse trouvée aujourd’hui : {{ips}}",
-    "proxied": "Ce ne sont pas les adresses du serveur : c’est normal avec le nuage orange de Cloudflare, et Pilotix répond bien par ce domaine.",
+    "proxied": "Ce sont les adresses de Cloudflare (nuage orange) : c’est normal. Dans Cloudflare, la ligne A garde la valeur du tableau.",
     "check": "Vérifier",
     "proofHelp": "Le TXT prouve que ce domaine est à vous : tout domaine pointe vers le même serveur Pilotix, seul son propriétaire peut ajouter ce TXT.",
     "proofMissing": "La ligne TXT n’est pas encore trouvée : ajoutez-la chez votre registraire, puis « Vérifier » (quelques minutes à quelques heures).",

@@ -114,3 +114,10 @@ test('own domain: an address that is none of its pages leads to the shop home, a
   assert.equal(domainFallback(''), null);
   assert.equal(domainFallback('/?x=1'), null);
 });
+
+test('the addresses of a domain behind Cloudflare’s orange cloud are known as Cloudflare’s', async () => {
+  const { isCloudflareIp } = await import('@pilotix/shared');
+  // babyjoydz.net behind the orange cloud would show such addresses; the server's own and other hosts' are not Cloudflare's
+  for (const ip of ['104.21.32.1', '172.67.150.12', '188.114.97.3', '162.159.1.1', '173.245.48.0', '131.0.75.255']) assert.equal(isCloudflareIp(ip), true, ip);
+  for (const ip of ['161.97.171.250', '203.0.113.10', '1.1.1.1', '104.32.0.1', '131.0.76.0', '2606:4700::1', '', 'not-an-ip', '104.21.32', '256.1.1.1']) assert.equal(isCloudflareIp(ip), false, ip);
+});
