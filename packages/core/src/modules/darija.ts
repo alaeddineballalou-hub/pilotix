@@ -36,7 +36,9 @@ export const DARIJA_RULES: DarijaRule[] = [
   { id: 'kan-verbe', words: ['kanbghi', 'kan3ref', 'kanchouf', 'kandir', 'kan9oul', 'kanqoul', 'kansift', 'kankhalles', 'kaydir', 'kaybghi', 'kaykhdem', 'tanbghi', 'كنبغي', 'كنعرف', 'كنشوف', 'كندير', 'كنقول', 'كيدير'], dialect: 'maroc', use: 'forme algérienne sans ka-/ta- : n7ab, na3ref, nchouf, ndir, n9oul' },
   { id: 'wakha', words: ['wakha', 'wakhkha', 'واخا'], dialect: 'maroc', use: 'mlih / d’accord / saha (مليح)', replace: 'd’accord' },
   { id: '3afak', words: ['3afak', '3afek', 'عافاك'], dialect: 'maroc', use: 'allah ykhalik / stp (الله يخليك)' },
-  { id: 'achnou', words: ['achnou', 'achno', 'achnu', 'اشنو', 'آشنو'], dialect: 'maroc', use: 'wach (واش)' },
+  // also without the a- (« Chno men produit ? », seen in a reply on 20 Nov 2026); Latin only: Algerian chats write
+  // وشنو (wachnou) without the alef, and و + شنو would match it
+  { id: 'achnou', words: ['achnou', 'achno', 'achnu', 'chnou', 'chno', 'chnu', 'اشنو', 'آشنو'], dialect: 'maroc', use: 'wach (واش)' },
   // Tunisian (El Tarf and El Oued speak close to Tunisian: a customer from there may write these, which is allowed)
   { id: 'barcha', words: ['barcha', 'barsha', 'برشا', 'برشة'], dialect: 'tunisie', use: 'bezzaf (بزاف)', replace: 'bezzaf' },
   { id: 'famma', words: ['famma', 'famme'], dialect: 'tunisie', use: 'kayen (كاين)', replace: 'kayen' },
@@ -256,7 +258,7 @@ E. Tournures sûres de vendeur (H = vues chez des vendeurs ou clients algériens
 - Machaallah / Tbarkallah : une fois, sur un produit ou une photo du client, jamais à chaque message.
 
 F. À ne jamais écrire
-- Mots d’autres dialectes : daba (→ dorka), wakha (→ d’accord / mlih), 3afak, dyal (→ ta3), kan- + verbe (kanbghi → n7ab), achnou, barcha (→ bezzaf), famma (→ kayen), chnowa, mouch (→ machi), aslema, hlba, keda (→ hakka), aywa (→ ih), 3ayez, delwa2ti, kwayes (→ mlih), shlonak, abshir, wayed, baddi, kifak, hek, halla2.
+- Mots d’autres dialectes : daba (→ dorka), wakha (→ d’accord / mlih), 3afak, dyal (→ ta3), kan- + verbe (kanbghi → n7ab), achnou / chno (→ wach), barcha (→ bezzaf), famma (→ kayen), chnowa, mouch (→ machi), aslema, hlba, keda (→ hakka), aywa (→ ih), 3ayez, delwa2ti, kwayes (→ mlih), shlonak, abshir, wayed, baddi, kifak, hek, halla2.
 - Faux ou déplacé : « ma3andek 7a9 » (= tu as tort ; dire « 3andek l7a9 »), « mrid » (malade) pour parler au client, habibti, 3omri, ya ghzala, zella, louza, bomba, « enti chaba » (drague) — « chaba » seulement pour un produit.
 - Politique, misère, régions, religion : yetnahaw ga3, hogra, harraga, zawali, « prix spécial zawali », blagues sur une région ou une ville, « wallah » pour prouver la qualité, « inchallah » à la place d’un vrai délai.
 - Argot de jeunes et répliques de séries ou de memes (nadi, hbel, wa3er, chriki, sahbi, kho, « ben 3ammi », répliques d’Achour El Acher, de Dar Lefchouch…) : seulement si le client l’utilise d’abord, une seule fois, jamais pendant une réclamation, un retard ou un paiement. Si le client fait une blague politique ou déplacée, ne la reprends pas et reviens à la commande.

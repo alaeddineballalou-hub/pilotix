@@ -640,6 +640,10 @@ test('darija checker: other dialects and wrong phrases are caught; clean Algeria
   assert.deepEqual(ids('وعليكم السلام، الكرسي بـ 8900 دج، تخلص كي تستلم. واش من لون تحب؟ بزاف مليح'), []);
   assert.deepEqual(ids('Wakha, daba nsiftlek la photo'), ['daba', 'wakha']);
   assert.deepEqual(ids('Achmen couleur bghiti ?'), ['achmen']);
+  // Moroccan « what » without its a- (a real reply, 20 Nov 2026); « bghiti » is western Algerian and stays
+  assert.deepEqual(ids('Wa 3likoum salam 😊 Mar7ba bik ! Chno men produit bghiti ?'), ['achnou']);
+  assert.equal(checkDarija('Chnou t7ab ?')[0].use, 'wach (واش)');
+  assert.deepEqual(ids('wchnou t7ab ? wachnou had l produit ? وشنو تحب ؟'), [], 'Algerian « wachnou » in any spelling is never caught');
   assert.deepEqual(ids('wach men couleur ?'), [], '"ach men" inside "wach men" is Algerian');
   assert.ok(ids('Smahli, ma3andek 7a9 tghdab').includes('ma3andek-7a9'));
   assert.deepEqual(ids('دابا نبعثلك التصويرة'), ['daba']);
