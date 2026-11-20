@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { backend, serverUrl, type Out } from '../../lib/backend';
 import { OwnDomain } from './Domain';
 import { PixelsCard } from './Pixels';
+import { TeamLists } from './TeamLists';
 import { WHATSAPP_DEFAULT, WHATSAPP_VARS } from '@pilotix/shared';
 
 import { da, dateTime } from '../../lib/format';
@@ -32,6 +33,8 @@ export function Settings() {
   return (
     <>
       <PixelsCard />
+      {/* the team's test numbers and the suppliers' blocked ones: the owner decides */}
+      {!!session?.isAdmin && <TeamLists />}
       <Form key={JSON.stringify(q.data.settings)} data={q.data} />
       {ownDomain && <OwnDomain />}
       <Events />

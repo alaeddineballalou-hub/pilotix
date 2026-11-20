@@ -83,11 +83,12 @@ export async function groupHtml(ctx: Ctx, slug: string, o: HtmlOpts): Promise<st
   // the group that has this address, or had it before (its old links keep working)
   const g = await groupRowAt(ctx.db, slug);
   if (!g || (!g.active && o.mode === 'live')) throw notFound('Page introuvable');
-  if (o.mode === 'live') await ctx.db.query('UPDATE landing_groups SET views = views + 1 WHERE id = $1', [g.id]);
+  // a team browser (Réglages › « Team et fournisseurs »: it sent a test) is not a visit
+  if (o.mode === 'live' && !o.team) await ctx.db.query('UPDATE landing_groups SET views = views + 1 WHERE id = $1', [g.id]);
   return renderRow(ctx, g, o);
 }
 
-async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'imgBase' | 'site' | 'url'>): Promise<string> {
+async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'imgBase' | 'site' | 'url' | 'team'>): Promise<string> {
   const list = readItems(g.items);
   const pages = list.length ? await ctx.db.query('SELECT * FROM landing_pages WHERE id = ANY($1)', [list.map((x) => x.pageId)]) : [];
   const P = new Map(pages.map((p: any) => [num(p.id), p]));
@@ -137,8 +138,9 @@ async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'im
         const u = logo;
         return u && u.length <= 60_000 ? u : null;
       })(),
-      pixelId: o.mode === 'live' ? px.meta.join(',') : '',
-      tiktokId: o.mode === 'live' ? px.tiktok.join(',') : '',
+      // no pixel for a team browser either: what the team does on the pages is never sent to Meta or TikTok
+      pixelId: o.mode === 'live' && !o.team ? px.meta.join(',') : '',
+      tiktokId: o.mode === 'live' && !o.team ? px.tiktok.join(',') : '',
     },
     { mode: o.mode, url: url || undefined, icon: await landingIconUrl(ctx.db, o.imgBase) },
   );

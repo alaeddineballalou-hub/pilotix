@@ -35,7 +35,7 @@ export const FREE_ACTIONS: readonly string[] = [
   'depot.companies', 'depot.counts', 'depot.dispatchAlerts', 'depot.find', 'depot.noStock', 'depot.pickList',
   'depot.resetTestParcels', 'depot.scan', 'depot.testParcels', 'depot.toAssign', 'depot.unassign',
   'filters.options',
-  'landing.blocked', 'landing.code', 'landing.counts', 'landing.coverage', 'landing.leads', 'landing.protection',
+  'landing.blocked', 'landing.code', 'landing.counts', 'landing.coverage', 'landing.leads', 'landing.protection', 'landing.tests',
   'landing.store',
   'livreur.messages',
   'making.list', 'making.make', 'making.saveRecipe',

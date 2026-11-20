@@ -175,6 +175,14 @@ export class AuthGuard implements CanActivate {
   }
 }
 
+/**
+ * A team browser (Landing pages › Réglages › « Team et fournisseurs »): it sent a test with a team number, so the page
+ * shows it no pixel and counts it nowhere for a year. Only on the page's own address; it never changes how an order is
+ * judged (that goes by the number).
+ */
+const TEAM_COOKIE = 'pxtm=1; Max-Age=31536000; Path=/; SameSite=Lax; Secure; HttpOnly';
+const teamBrowser = (req: { headers: Record<string, string | undefined> }) => /(?:^|;\s*)pxtm=1(?:;|$)/.test(String(req.headers.cookie ?? ''));
+
 /** What the server knows of a landing page's visitor: address, browser, Meta cookies, and the host's geolocation (a soft signal). */
 function visitorMeta(req: { ip?: string; headers: Record<string, string | undefined> }) {
   const h = req.headers;
@@ -1419,10 +1427,13 @@ class ApiController {
       // page's own address (no name, no number, nothing else in it); robots get none and are not counted
       const had = /(?:^|;\s*)pxv=([a-z0-9]{12,40})(?:;|$)/.exec(String(req.headers.cookie ?? ''))?.[1];
       const visitor = robot ? undefined : (had ?? randomBytes(10).toString('hex'));
+      // a team browser (it sent a test: Réglages › « Team et fournisseurs »): no pixel, its visit counts nowhere
+      const team = teamBrowser(req);
       const r: any = await this.core.call(ref, 'landing.html', await this.core.systemSession(ref), {
         slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, geo: `${base}geo/`, imgBase: `${base}img/`, site: atPages ? config.landingUrl : this.core.landingBase(), ...(own ? { url: own.url } : {}), ...(g ? { group: g } : {}),
         ...(cat && !robot ? { catalog: cat } : {}),
         ...(visitor ? { visitor } : {}),
+        ...(team ? { team: true } : {}),
       });
       res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store');
       if (visitor && !had) res.header('Set-Cookie', `pxv=${visitor}; Max-Age=31536000; Path=/; SameSite=Lax; Secure; HttpOnly`);
@@ -1713,17 +1724,28 @@ class ApiController {
    */
   @Public()
   @Post(['lp/:slug/order', 's/:shop/lp/:slug/order'])
-  async landingOrder(@Param('shop') shop: string | undefined, @Param('slug') slug: string, @Body() body: any, @Req() req: { ip?: string; headers: Record<string, string | undefined> }) {
+  async landingOrder(
+    @Param('shop') shop: string | undefined,
+    @Param('slug') slug: string,
+    @Body() body: any,
+    @Req() req: { ip?: string; headers: Record<string, string | undefined> },
+    @Res({ passthrough: true }) res: any,
+  ) {
     if (!/^[a-z0-9-]{2,60}$/.test(slug)) throw new core.AppError('not_found', 'Page introuvable');
     const ref = intake(await this.publicShop(shop));
     const start = Date.now();
+    let team = false;
     // a post from another site, or a flood from one address: the same answer, nothing done
     if (!crossSite(req) && !limitLanding(req.ip || 'unknown', 'order', 30)) {
-      await this.core.call(ref, 'landing.submit', await this.core.systemSession(ref), { ...(body && typeof body === 'object' ? body : {}), slug, meta: visitorMeta(req) });
+      const r: any = await this.core.call(ref, 'landing.submit', await this.core.systemSession(ref), { ...(body && typeof body === 'object' ? body : {}), slug, meta: visitorMeta(req) });
+      team = !!r?.team;
       noteSubmit(Date.now() - start);
     }
     // the answer never comes faster for a blocked order than for a real one (its timing would tell a fraudster)
     await new Promise((r) => setTimeout(r, Math.max(0, orderFloor() + Math.floor(Math.random() * 200) - (Date.now() - start))));
+    // a team test (Réglages › « Team et fournisseurs »): this browser is the team's, its next visits fire no pixel and
+    // count nowhere (the answer itself stays the same)
+    if (team) res.header('Set-Cookie', TEAM_COOKIE);
     return { ok: true };
   }
 
@@ -1767,7 +1789,8 @@ class ApiController {
         b = {};
       }
     }
-    if (crossSite(req) || limitLanding(req.ip || 'unknown', 'lead', 120)) return { ok: true };
+    // a team browser (Réglages › « Team et fournisseurs ») typing is no customer: never an abandoned order
+    if (crossSite(req) || limitLanding(req.ip || 'unknown', 'lead', 120) || teamBrowser(req)) return { ok: true };
     const ref = await this.core.fromParam(shop).then((r) => r && this.core.forPublic(r)).catch(() => null);
     if (!ref || ref.shop.status !== 'active') return { ok: true };
     const r = intake(ref);

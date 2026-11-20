@@ -336,7 +336,7 @@ const PAGE_PROCS: readonly (readonly [prefix: string, right: string | readonly s
   [
     'landing.',
     'page:landing',
-    ['landing.store', 'landing.code', 'landing.coverage', 'landing.counts', 'landing.blocked', 'landing.protection', 'landing.markDevice', 'landing.restore', 'landing.dismiss', 'landing.leads', 'landing.convertLead', 'landing.dismissLead'],
+    ['landing.store', 'landing.code', 'landing.coverage', 'landing.counts', 'landing.blocked', 'landing.protection', 'landing.markDevice', 'landing.restore', 'landing.dismiss', 'landing.leads', 'landing.convertLead', 'landing.dismissLead', 'landing.tests'],
   ],
 ];
 

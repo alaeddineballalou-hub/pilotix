@@ -128,6 +128,12 @@ export interface SettingsMap {
     whatsapp?: { on: boolean; number: string; label: string; message: string };
     /** « Pourquoi nous » : one picture shown on every landing page of the shop, before or after the product's description */
     why?: { imageId: number | null; first: boolean };
+    /**
+     * Réglages › « Team et fournisseurs » (modules/landinglists.ts), off unless turned on: the team's numbers test the
+     * pages (never blocked, nothing sent to Meta, counted nowhere), the suppliers' numbers are blocked and left out of the ads
+     */
+    team?: boolean;
+    suppliers?: boolean;
   };
   /** Dashboard goals (admin): delivered revenue per month */
   goals: { monthlyRevenue: number };

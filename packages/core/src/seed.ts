@@ -28,7 +28,7 @@ import { seed as seed_campaigns } from './seeds/campaigns';
 import { seed as seed_metacatalog } from './seeds/metacatalog';
 import { seed as seed_cmplan } from './seeds/cmplan';
 import { seed as seed_notify } from './seeds/notify';
-import { seed as seed_landing, seedVisits } from './seeds/landing';
+import { seed as seed_landing, seedTeamLists, seedVisits } from './seeds/landing';
 import { seed as seed_spy } from './seeds/spy';
 import { seed as seed_pilotads } from './seeds/pilotads';
 import { seed as seed_partners } from './seeds/partners';
@@ -398,6 +398,8 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
   for (const q of UPSELL_BACKFILL) await db.query(q);
   await seed_notify(db, users, now);
   await seed_landing(db, users, now);
+  // Landing pages › Réglages › « Team et fournisseurs »: on, with the team's last tests (the full demo only)
+  if (expanded) await seedTeamLists(db, users, now);
   // after the landing pages (the catalog sends products that have one)
   await seed_metacatalog(db, users, now);
   await seedVisits(db, now);

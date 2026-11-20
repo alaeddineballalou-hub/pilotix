@@ -9,6 +9,7 @@ import { Db, num } from '../db';
 import { bad, Ctx, forbidden, notFound, proc, withActionLock } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, META_TOKEN_KEY, setRaw } from './admin';
+import { listPhones, listSwitches } from './landinglists';
 import { addDays, adsetDiagnostic, dayStart, fxTable, insights, isOwner, moneyOf, ordersOf, productAdvice, sumDays, syncMeta, visibleAdsets } from './ads';
 import {
   AUDIENCE_DEFAULT_ON,
@@ -656,7 +657,12 @@ async function phonesOf(db: Db, kind: ListKind, now: number): Promise<string[]> 
   const since = new Date(now - LIST_DAYS * 86_400_000).toISOString();
   const rows = await db.query(`SELECT DISTINCT phone FROM sales WHERE ${AUDIENCE_SQL[kind]} AND created_at >= $1`, [since]);
   const added = await db.query(`SELECT phone FROM ad_audience_phones WHERE kind = $1 AND added_at >= $2`, [kind, since]);
-  return [...new Set([...rows.map((r: any) => metaPhone(r.phone)), ...added.map((r: any) => String(r.phone))].filter((p): p is string => !!p))];
+  // Landing pages › Réglages › « Team et fournisseurs »: the suppliers join the numbers the ads leave out (« faux
+  // numéros »), and the team's numbers are in no list at all — never left out of the ads (they still see them, to test)
+  const sw = await listSwitches(db);
+  const suppliers = kind === 'fake' && sw.suppliers ? [...(await listPhones(db, 'supplier', sw))].map((p) => metaPhone(p)) : [];
+  const team = new Set(sw.team ? [...(await listPhones(db, 'team', sw))].map((p) => metaPhone(p)) : []);
+  return [...new Set([...rows.map((r: any) => metaPhone(r.phone)), ...added.map((r: any) => String(r.phone)), ...suppliers].filter((p): p is string => !!p && !team.has(p)))];
 }
 /** how many numbers the owner added to each list himself and that still count */
 async function addedCounts(db: Db, now: number): Promise<Record<string, number>> {

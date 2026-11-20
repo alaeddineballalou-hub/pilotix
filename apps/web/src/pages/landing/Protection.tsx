@@ -11,6 +11,7 @@ import { useAction, useRpc } from '../../lib/query';
 import { Empty, ErrorBox, Icon, Kpi, Kpis, Loading } from '../../ui/kit';
 import { AdQuality, BuyerQuality } from '../../ui/quality';
 import { PeriodSwitch } from '../ai/agent';
+import { TeamTests } from './TeamLists';
 
 type Data = Out<'landing.protection'>;
 
@@ -59,6 +60,7 @@ export function Protection() {
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
       ) : (
         <>
+          <TeamTests />
           <BuyerQuality days={d.quality.days} previous={d.quality.previous} period={days} className="pd-card" />
           <AdQuality ads={d.ads} period={days} className="pd-card" />
           <div className="lp-pr-grid">

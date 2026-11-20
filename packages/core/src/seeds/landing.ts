@@ -1,5 +1,6 @@
 import type { Db } from '../db';
 import { num } from '../db';
+import { getSetting, setSetting } from '../settings';
 
 // Demo landing pages: the stroller (pictures drawn in SVG, one per colour) and the diaper bag, the orders their pages
 // brought, and a few orders the fake-order check held back. All people and numbers are invented.
@@ -308,4 +309,29 @@ export async function seedVisits(db: Db, now: number) {
         await db.query(`INSERT INTO landing_visits (landing_id, day, visitor) SELECT $1::bigint, $2::date, 'demo' || $1::text || 'd' || $3::text || 'v' || g FROM generate_series(1, $4::int) g ON CONFLICT DO NOTHING`, [r.id, day, d, c]);
     }
   }
+}
+
+/**
+ * Landing pages › Réglages › « Team et fournisseurs » (the full demo only: the app's demo, the demo shop): both lists on,
+ * a number added to each, and the team's last tests on the pages (Protection › « Tests de l'équipe »).
+ */
+export async function seedTeamLists(db: Db, users: Record<string, number>, now: number) {
+  await setSetting(db, 'landing', { ...(await getSetting(db, 'landing')), team: true, suppliers: true });
+  const at = (h: number) => new Date(now - h * 3_600_000).toISOString();
+  await db.query(
+    `INSERT INTO landing_lists (kind, phone, name, added_by, added_at) VALUES ('team', '0551203040', 'Frère de Yacine', $1, $2), ('supplier', '0770556677', 'Grossiste Bab Ezzouar', $1, $3)
+     ON CONFLICT (kind, phone) DO NOTHING`,
+    [users.admin ?? null, at(70), at(50)],
+  );
+  const pages = await db.query(`SELECT l.id, l.product_id, COALESCE(l.price, p.price) AS price FROM landing_pages l JOIN products p ON p.id = l.product_id WHERE l.active ORDER BY l.id LIMIT 2`);
+  const mates = await db.query(`SELECT name, phone FROM profiles WHERE id = ANY($1) AND phone IS NOT NULL ORDER BY id`, [[users.admin, users.manager1, users.conf1].filter((x) => !!x)]);
+  let k = 0;
+  for (const m of mates)
+    for (const pg of pages) {
+      k++;
+      await db.query(
+        `INSERT INTO landing_tests (landing_id, product_id, qty, unit_price, customer_name, phone, wilaya_id, commune, from_ad, at) VALUES ($1, $2, 1, $3, $4, $5, 16, 'Hydra', $6, $7)`,
+        [pg.id, pg.product_id, num(pg.price), String(m.name), String(m.phone), k % 2 === 0, at(k * 0.8)],
+      );
+    }
 }

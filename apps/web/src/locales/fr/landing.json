@@ -239,7 +239,8 @@
     "from_ad": "Vient de la pub",
     "not_from_ad": "Ne vient pas de la pub",
     "qty_unusual": "Quantité inhabituelle",
-    "phone_pattern": "Téléphone à motif"
+    "phone_pattern": "Téléphone à motif",
+    "supplier": "Numéro d’un fournisseur"
   },
   "miss": {
     "title_one": "{{count}} produit n’a pas encore de landing page",
@@ -815,5 +816,35 @@
         "when": "quand un agent marque « Fausse » ou « Concurrent », ou un jour après une commande bloquée."
       }
     }
+  },
+  "tm": {
+    "title": "Team et fournisseurs",
+    "sub": "Votre équipe teste vos pages sans être bloquée. Vos fournisseurs, eux, sont bloqués.",
+    "team": "Team",
+    "teamHelp": "Leurs commandes sur vos pages sont des tests : jamais bloquées, rien n’est envoyé à Meta, comptées nulle part, et ils voient toujours vos pubs. Vous les voyez dans Protection › Tests de l’équipe.",
+    "suppliers": "Fournisseurs",
+    "suppliersHelp": "Leurs commandes sont bloquées sans qu’ils le sachent (ils voient « merci »), et ils sont retirés de vos pubs.",
+    "on": "Activé",
+    "off": "Désactivé",
+    "saved": "Enregistré",
+    "accounts": "Votre équipe dans Pilotix ({{count}})",
+    "accountsNone": "Personne de l’équipe n’a de numéro mobile.",
+    "stock": "Stock › Fournisseurs ({{count}})",
+    "stockNone": "Aucun fournisseur avec un numéro mobile.",
+    "added": "Numéros ajoutés ici ({{count}})",
+    "addedNone": "Aucun numéro ajouté.",
+    "name": "Nom (facultatif)",
+    "phone": "Téléphone",
+    "add": "Ajouter",
+    "addedOk": "Numéro ajouté",
+    "removed": "Numéro retiré",
+    "adsOff": "Pour les retirer aussi de vos pubs, activez la liste « faux numéros » dans Publicité › Audiences.",
+    "both": "Un numéro qui est dans les deux listes compte comme Team.",
+    "tests": "Tests de l’équipe",
+    "test": "Test",
+    "testsHelp": "Les commandes de votre Team sur vos pages. Ce ne sont pas de vraies commandes : rien n’est envoyé à Meta, rien n’est compté.",
+    "testsNone": "Aucun test pour le moment.",
+    "testsOff": "Team est désactivé : activez-le dans Landing pages › Réglages pour que votre équipe puisse tester.",
+    "fromAd": "vient de la pub"
   }
 }

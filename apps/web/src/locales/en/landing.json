@@ -239,7 +239,8 @@
     "from_ad": "Came from the ad",
     "not_from_ad": "Did not come from the ad",
     "qty_unusual": "Unusual quantity",
-    "phone_pattern": "Patterned number"
+    "phone_pattern": "Patterned number",
+    "supplier": "A supplier’s number"
   },
   "miss": {
     "title_one": "{{count}} product has no landing page yet",
@@ -815,5 +816,35 @@
         "when": "when an agent marks “Fake” or “Competitor”, or a day after a blocked order."
       }
     }
+  },
+  "tm": {
+    "title": "Team and suppliers",
+    "sub": "Your team tests your pages without being blocked. Your suppliers are blocked.",
+    "team": "Team",
+    "teamHelp": "Their orders on your pages are tests: never blocked, nothing sent to Meta, counted nowhere, and they still see your ads. You see them in Protection › Team tests.",
+    "suppliers": "Suppliers",
+    "suppliersHelp": "Their orders are blocked without them knowing (they see “thank you”), and they are left out of your ads.",
+    "on": "On",
+    "off": "Off",
+    "saved": "Saved",
+    "accounts": "Your team in Pilotix ({{count}})",
+    "accountsNone": "Nobody in the team has a mobile number.",
+    "stock": "Stock › Suppliers ({{count}})",
+    "stockNone": "No supplier with a mobile number.",
+    "added": "Numbers added here ({{count}})",
+    "addedNone": "No number added.",
+    "name": "Name (optional)",
+    "phone": "Phone",
+    "add": "Add",
+    "addedOk": "Number added",
+    "removed": "Number removed",
+    "adsOff": "To leave them out of your ads too, turn on the “fake numbers” list in Advertising › Audiences.",
+    "both": "A number in both lists counts as Team.",
+    "tests": "Team tests",
+    "test": "Test",
+    "testsHelp": "Your Team’s orders on your pages. They are not real orders: nothing is sent to Meta, nothing is counted.",
+    "testsNone": "No test yet.",
+    "testsOff": "Team is off: turn it on in Landing pages › Settings so your team can test.",
+    "fromAd": "from the ad"
   }
 }

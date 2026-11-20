@@ -581,3 +581,18 @@
 .lp-evs-g p { margin: 0; font-size: 14px; }
 .lp-evs-g p.muted { font-size: 13px; }
 .lp-evs-g .pd-name b { font-size: 15px; }
+
+/* Réglages › « Team et fournisseurs »: a switch per list, its numbers as chips, a small form to add one */
+.lp-tm { display: flex; flex-direction: column; gap: 6px; }
+.lp-tm-list { border-top: 1px solid var(--line); padding-top: 4px; display: flex; flex-direction: column; gap: 10px; }
+.lp-tm-list .lp-switch b { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.lp-tm-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.lp-tm-groups h3 { margin: 0 0 6px; font-size: 13px; }
+.lp-tm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.lp-tm-chips .px-rmchip, .lp-tm-chips .px-rmchip-s { max-width: 100%; }
+.lp-tm-add { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; padding-bottom: 6px; }
+.lp-tm-add input { min-width: 0; }
+@media (max-width: 640px) {
+  .lp-tm-groups { grid-template-columns: minmax(0, 1fr); }
+  .lp-tm-add { grid-template-columns: minmax(0, 1fr); }
+}

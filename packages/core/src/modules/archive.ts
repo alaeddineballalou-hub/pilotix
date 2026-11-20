@@ -167,6 +167,11 @@ export const WAREHOUSE_REFS: readonly Ref[] = [
 export const NOT_REFS: readonly string[] = [
   // A seller's product id in an agency schema, not a reference to this schema's products table.
   'management_billing_terms.product_id',
+  // Landing pages › Réglages › « Team et fournisseurs »: who added a number, and the team's tests (never real orders:
+  // a product or account they name is not used for it, and the list shows a test of a deleted product without it)
+  'landing_lists.added_by',
+  'landing_tests.product_id',
+  'landing_tests.variant_id',
   'password_resets.profile_id',
   'action_locks.user_id',
   'settings.updated_by',

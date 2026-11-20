@@ -50,6 +50,7 @@ import { autoSettings, clientHomeFees, getSetting, setSetting } from '../setting
 import { BOT_UA, FraudLevel, FraudReason, scoreOrder, verdictOf } from './fraud';
 import { lookAlikeOf, trustOf } from './trust';
 import { groupHtml, groupOf } from './landinggroups';
+import { listOf, recordTest } from './landinglists';
 import { runAttackTest } from './attacktest';
 import { checkPixels, listPixels, PixelList, pixelsJson, pixelsOf, pixelTestCode, pixelToken, readPixels } from './pixels';
 import { campaignSettings, giveConsent } from './campaigns';
@@ -430,6 +431,8 @@ export interface HtmlOpts {
   catalog?: 'meta' | 'tiktok';
   /** the browser's anonymous visitor code (the server's cookie; none for robots): a unique visitor for the day */
   visitor?: string;
+  /** a team browser (Réglages › « Team et fournisseurs »: it sent a test; the server's cookie): no pixel, not counted */
+  team?: boolean;
 }
 
 /** the photos of these products as their pages follow them (main photo, every variant's, on or off) */
@@ -588,9 +591,10 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     ...(Object.keys(pc.variantFee).length ? { feeSets: pc.feeSets, variantFee: pc.variantFee } : {}),
     shopName: pc.shopName,
     shopLogo: pc.shopLogo,
-    // the pixel only on the real page: never in Pilotix (preview, demo), whose visits are not customers
-    pixelId: o.mode === 'live' ? px.meta.join(',') : '',
-    tiktokId: o.mode === 'live' ? px.tiktok.join(',') : '',
+    // the pixel only on the real page: never in Pilotix (preview, demo), whose visits are not customers, nor for a team
+    // browser (Réglages › « Team et fournisseurs »: what the team does on the pages is never sent to Meta or TikTok)
+    pixelId: o.mode === 'live' && !o.team ? px.meta.join(',') : '',
+    tiktokId: o.mode === 'live' && !o.team ? px.tiktok.join(',') : '',
     whatsapp: whatsappOf(readJson<{ on: boolean; number?: string; label?: string; message?: string }>(l.whatsapp), s.whatsapp),
     productId: num(l.product_id),
     // the shop's own Cloudflare keys, else the widget Pilotix keeps for the address the page is served at
@@ -600,12 +604,14 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     // Referral › Code promo: the optional code field
     promo: (await promoSettings(ctx.db)).enabled,
   };
-  if (o.mode === 'live') await ctx.db.query('UPDATE landing_pages SET views = views + 1 WHERE id = $1', [l.id]);
+  // a team browser's visit counts nowhere (views, unique visitors, catalog results)
+  const counted = o.mode === 'live' && !o.team;
+  if (counted) await ctx.db.query('UPDATE landing_pages SET views = views + 1 WHERE id = $1', [l.id]);
   // a unique visitor: this browser once per page per day (in Algeria), for the conversion rate
-  if (o.mode === 'live' && o.visitor && /^[a-z0-9]{12,40}$/.test(o.visitor))
+  if (counted && o.visitor && /^[a-z0-9]{12,40}$/.test(o.visitor))
     await ctx.db.query('INSERT INTO landing_visits (landing_id, day, visitor) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [l.id, new Date(ctx.now() + 3_600_000).toISOString().slice(0, 10), o.visitor]);
   // a visit from a catalog ad, by day (in Algeria), product and network (Marketing › Catalogue › Résultats)
-  if (o.mode === 'live' && o.catalog)
+  if (counted && o.catalog)
     await ctx.db.query(
       `INSERT INTO catalog_visits (day, product_id, net, n) VALUES ($1, $2, $3, 1) ON CONFLICT (day, product_id, net) DO UPDATE SET n = catalog_visits.n + 1`,
       [new Date(ctx.now() + 3_600_000).toISOString().slice(0, 10), num(l.product_id), o.catalog],
@@ -971,6 +977,7 @@ export const FRAUD_LABELS_FR: Record<string, string> = {
   not_from_ad: 'ne vient pas de la pub', qty_unusual: 'quantité inhabituelle', merged: 'commande renvoyée : fusionnée',
   refused_once: 'a déjà refusé un colis', refused_twice: 'a refusé 2 colis (stop-desk uniquement)', refuser_blocked: 'refuse ses colis (liste noire automatique)',
   looks_like: 'ressemble à un client qui refuse ses colis',
+  supplier: 'numéro d’un fournisseur (Landing pages › Réglages)',
 };
 export const reasonsText = (rs: FraudReason[]) => rs.filter((r) => r.points > 0).map((r) => FRAUD_LABELS_FR[r.code] ?? r.code).join(', ');
 
@@ -1047,7 +1054,7 @@ async function linkSameCustomer(db: Db, phone: string, orderId: number, ref: str
     ]);
 }
 
-export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Promise<{ ok: true }> {
+export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Promise<{ ok: true; team?: true }> {
   const db = ctx.db;
   // a page opened before its address changed still sends its order (its former address leads to it)
   const l = await pageRowAt(db, i.slug, true);
@@ -1074,6 +1081,30 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
   const device = i.did ? `d:${i.did}` : `f:${i.fp}:${ip}`;
   // the stable device fingerprint (survives a cleared or private browser), kept apart from the device key above
   const fphash = i.fp ? i.fp.slice(0, 24) : null;
+  // Réglages › « Team et fournisseurs »: a team number's order is a test — never blocked, never an order, nothing sent
+  // to Meta, counted nowhere (Protection › « Tests de l'équipe »); a supplier's is blocked further down
+  const list = await listOf(db, phone);
+  if (list === 'team' && phone) {
+    await recordTest(
+      db,
+      {
+        landingId: num(l.id),
+        productId,
+        variantId: variant?.id ?? (pc.variants.length ? null : pc.plainVariantId),
+        qty,
+        unitPrice: unitPriceOf(numOrNull(l.price), pc, variant?.id ?? null),
+        name: i.name.trim().replace(/\s+/g, ' '),
+        phone,
+        wilayaId: wilayaId || null,
+        commune: i.commune.trim(),
+        fromAd: fromAdOf(i.utm, i.meta.fbc || i.fbc),
+      },
+      now,
+    );
+    // what they typed before is no abandoned order either (and its start of checkout is never sent)
+    await closeLeads(db, { phone, landingId: num(l.id), viewId: i.vid, device }, 'blocked', null, abandonCutoff(s, now));
+    return { ok: true, team: true };
+  }
   const servedMs = await checkChallenge(db, i.ch, i.slug, now);
   let pow: 'ok' | 'missing' | 'bad' | 'replay' = 'missing';
   if (i.pw && servedMs !== null) {
@@ -1135,6 +1166,12 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
   // A variant sold out since the page opened is still a real customer: it is ordered (the agent sets « sans stock »).
   if (!wilayaId || !i.commune.trim() || (pc.variants.length && pieces.some((p) => !p.variant))) {
     result.reasons.unshift({ code: 'form_invalid', points: 100 });
+    result.score = 100;
+    result.verdict = 'block';
+  }
+  // Réglages › « Fournisseurs »: a supplier's order is blocked whatever the rest says (the page still says « merci »)
+  if (list === 'supplier') {
+    result.reasons.unshift({ code: 'supplier', points: 100 });
     result.score = 100;
     result.verdict = 'block';
   }
@@ -1280,6 +1317,8 @@ export async function captureLead(ctx: Ctx, i: z.infer<typeof CaptureInput>): Pr
   const at = await pageRowAt(db, i.slug, true);
   const l = at ? (await db.query('SELECT l.id, l.product_id, l.price, l.pixel_id, l.meta_pixels, l.tiktok_pixels, p.price AS p_price FROM landing_pages l JOIN products p ON p.id = l.product_id WHERE l.id = $1', [at.id]))[0] : null;
   if (!l || (await checkChallenge(db, i.ch, i.slug, now)) === null) return { ok: true };
+  // a team number (it tests the page) or a supplier's (Réglages › « Team et fournisseurs »): never an abandoned order
+  if (await listOf(db, phone)) return { ok: true };
   // blocked as fake, or already ordered this product (any channel) in the last day: not an abandoned order
   if (await recentlyBlocked(db, phone, now)) return { ok: true };
   if ((await db.query(`SELECT 1 FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.phone = $1 AND oi.product_id = $2 AND o.created_at > $3 LIMIT 1`, [phone, l.product_id, isoAt(now - 86_400_000)])).length)
@@ -2376,7 +2415,7 @@ export const landingProcs = {
   // ---------------------------------------------------------------- public side (the server calls these as the system)
   'landing.html': proc(
     [],
-    z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null), site: z.string().max(500).optional(), url: z.string().max(600).optional(), group: z.string().max(80).optional(), catalog: z.enum(['meta', 'tiktok']).optional(), visitor: z.string().max(40).optional() }),
+    z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null), site: z.string().max(500).optional(), url: z.string().max(600).optional(), group: z.string().max(80).optional(), catalog: z.enum(['meta', 'tiktok']).optional(), visitor: z.string().max(40).optional(), team: z.boolean().optional() }),
     async (ctx, i) => landingPage(ctx, i.slug, i),
   ),
 
