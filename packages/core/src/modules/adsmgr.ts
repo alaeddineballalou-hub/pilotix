@@ -164,8 +164,8 @@ async function applyChange(ctx: Ctx, t: Target, op: Op, valueCents: number | nul
     else id = String(10_000_000_000_000 + Math.floor(ctx.now() % 1_000_000_000));
     if (t.level === 'adset')
       await ctx.db.query(
-        `INSERT INTO adsets (id, name, campaign, campaign_id, account_id, daily_budget_cents, goal, product_ids, marketer_id, status, currency, launch_id, updated_at)
-         SELECT $2, name || ' · copie', campaign, campaign_id, account_id, daily_budget_cents, goal, product_ids, marketer_id, 'PAUSED', currency, launch_id, now() FROM adsets WHERE id = $1
+        `INSERT INTO adsets (id, name, campaign, campaign_id, account_id, daily_budget_cents, goal, product_ids, group_id, marketer_id, status, currency, launch_id, updated_at)
+         SELECT $2, name || ' · copie', campaign, campaign_id, account_id, daily_budget_cents, goal, product_ids, group_id, marketer_id, 'PAUSED', currency, launch_id, now() FROM adsets WHERE id = $1
          ON CONFLICT (id) DO NOTHING`,
         [t.id, id],
       );

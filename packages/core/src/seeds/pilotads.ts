@@ -125,6 +125,55 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     [pous || null, spec('calls', 'Poussette — appels', pous || null, 15, { phone: '+213661223344' }), spec('form', 'Poussette — formulaire', pous || null, 8), users.marketer, iso(3 * H), iso(26 * H)],
   );
 
+  // a group of Landing pages › Groupes sold by one ad (Lancer une pub › a group, 20 Nov 2026): its ad set sells the
+  // group's products, and the last landing orders of those products came through the group's page (utm « g »), so
+  // « Mes pubs » shows the group's own card with what sold
+  const grp = (await db.query(`SELECT id, slug, title, items FROM landing_groups ORDER BY id LIMIT 1`))[0];
+  const grpPages = grp ? ((typeof grp.items === 'string' ? JSON.parse(grp.items) : grp.items) as { pageId: number }[]).map((x) => Number(x.pageId)) : [];
+  const grpProducts = grpPages.length
+    ? (await db.query(`SELECT DISTINCT product_id FROM landing_pages WHERE id = ANY($1) AND product_id IS NOT NULL`, [grpPages])).map((r: any) => num(r.product_id))
+    : [];
+  if (grp && grpProducts.length) {
+    // in « Puériculture », whose budget is the campaign's (Advantage+): the shop's day stays what it was
+    await db.query(
+      `INSERT INTO adsets (id, name, campaign, campaign_id, account_id, daily_budget_cents, goal, product_ids, group_id, marketer_id, status, currency, changed_at)
+       VALUES ('120200010','Groupe bébé — Algérie','Puériculture','120330003',$1,NULL,'sales',$2,$3,$4,'ACTIVE','USD',$5) ON CONFLICT (id) DO NOTHING`,
+      [acct, grpProducts, num(grp.id), users.marketer, iso(9 * D)],
+    );
+    await db.query(`INSERT INTO ads (id, adset_id, name, status, is_video) VALUES ('120210000100','120200010','Vidéo — tous les produits','ACTIVE',true) ON CONFLICT (id) DO NOTHING`);
+    for (let k = 9; k >= 0; k--) {
+      const day = new Date(Date.parse(day0 + 'T00:00:00Z') - k * D).toISOString().slice(0, 10);
+      const cents = Math.round((10 + rnd() * 4) * 100);
+      const imp = Math.round((cents / 100 / 1.9) * 1000);
+      const reach = Math.round(imp / 1.35);
+      const clicks = Math.round(imp * 0.021);
+      const lpv = Math.round(clicks * 0.78);
+      const pur = Math.round(lpv * 0.03);
+      const v3 = Math.round(imp * 0.27);
+      const vals = [day, cents, imp, reach, clicks, lpv, pur, v3, Math.round(v3 * 0.22)];
+      await db.query(
+        `INSERT INTO ad_insights (day, adset_id, spend_cents, impressions, reach, clicks, lpv, purchases, video_3s, thruplays) VALUES ($1,'120200010',$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (day, adset_id) DO NOTHING`,
+        vals,
+      );
+      await db.query(
+        `INSERT INTO ad_daily (day, ad_id, adset_id, spend_cents, impressions, reach, clicks, lpv, purchases, video_3s, thruplays) VALUES ($1,'120210000100','120200010',$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (day, ad_id) DO NOTHING`,
+        vals,
+      );
+    }
+    await db.query(
+      `UPDATE orders o SET utm = COALESCE(o.utm, '{}'::jsonb) || jsonb_build_object('g', $1::text, 'adset_id', '120200010', 'ad_id', '120210000100', 'utm_campaign', 'Puériculture')
+       WHERE o.id IN (SELECT o2.id FROM orders o2 JOIN order_items i ON i.order_id = o2.id AND i.product_id = ANY($2)
+                      WHERE o2.created_at >= $3 AND o2.channel = 'landing' AND NOT o2.is_exchange ORDER BY o2.created_at DESC LIMIT 30)`,
+      [String(grp.slug), grpProducts, iso(9 * D)],
+    );
+    const gl = await db.query(
+      `INSERT INTO ad_launches (mode, goal, product_id, name, spec, budget_cents, status, step, campaign_id, adset_ids, by_user, created_at, updated_at, live_at)
+       VALUES ('pro','sales',NULL,'Groupe bébé — Algérie',$1,1800,'live','done','120330003','{120200010}',$2,$3,$3,$3) RETURNING id`,
+      [spec('sales', 'Groupe bébé — Algérie', null, 18, { groupId: num(grp.id), budgetLevel: 'campaign' }), users.marketer, iso(9 * D)],
+    );
+    await db.query(`UPDATE adsets SET launch_id = $1 WHERE id = '120200010'`, [num(gl[0].id)]);
+  }
+
   // the audiences from the shop's own customers: returners and fake orders left out of the ads (owner's choice), and
   // the two lists Meta fills by itself from the pages' events (the browsers behind fake orders and competitors)
   const count = async (where: string) => num((await db.query(`SELECT count(DISTINCT phone) AS n FROM sales WHERE ${where}`))[0]?.n);

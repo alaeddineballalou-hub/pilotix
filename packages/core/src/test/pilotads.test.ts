@@ -319,6 +319,77 @@ test('a sales ad needs its sales page; the problems come back before Meta', asyn
   await assert.rejects(call('ads.launch.go', await owner(), { id: d.id }), /page de vente/);
 });
 
+test('a group of Landing pages › Groupes: its lowest limit, page goals only, its products on its ad set', async () => {
+  const o: any = await call('ads.launch.options', await owner(), {});
+  const g = o.groups.find((x: any) => x.landing);
+  assert.ok(g, 'the demo group, online');
+  assert.ok(g.group.count >= 2 && g.landing.url.endsWith(`/${g.landing.slug}`));
+  const mine = o.products.filter((p: any) => g.group.productIds.includes(p.id));
+  assert.equal(mine.length, g.group.count);
+  assert.equal(g.limit.maxDzd, Math.min(...mine.map((p: any) => p.limit.maxDzd)), 'the lowest limit of its products');
+  assert.equal(g.price, Math.min(...mine.map((p: any) => p.price)));
+  assert.deepEqual(o.groupGoals, ['sales', 'traffic', 'awareness']);
+  assert.equal(o.groupMany, 5);
+  // its words sell the choice, never one product
+  const words: any = await call('ads.launch.copy', await owner(), { groupId: g.id, goal: 'sales', lang: 'fr' });
+  assert.equal(words.by, 'ready');
+  assert.ok(words.variants[0].primary.includes(`${g.group.count} modèles`));
+  const photo: any = await call('ads.media.photo', await owner(), { jpeg: JPEG, thumb: JPEG, w: 1080, h: 1350 });
+  const spec = { goal: 'sales', productId: null, groupId: g.id, name: `${g.name} — test`, mediaIds: [photo.id], text: words.variants[0], budgetUsd: 10 };
+  // never a product and a group together; a group's ad does not go to messages
+  await assert.rejects(call('ads.launch.save', await owner(), { mode: 'pro', spec: { ...spec, productId: mine[0].id } }), /pas les deux/);
+  const msg: any = await call('ads.launch.save', await owner(), { mode: 'pro', spec: { ...spec, goal: 'messages' } });
+  const chk: any = await call('ads.launch.check', await owner(), { id: msg.id });
+  assert.equal(chk.ok, false);
+  assert.ok(chk.problems.some((x: string) => /Un groupe se lance/.test(x)), chk.problems.join(' | '));
+  await call('ads.launch.remove', await owner(), { id: msg.id });
+  const d: any = await call('ads.launch.save', await owner(), { mode: 'pro', clientId: 'g-1', spec });
+  assert.equal(d.groupId, g.id);
+  assert.equal(d.groupName, g.name);
+  const ok: any = await call('ads.launch.check', await owner(), { id: d.id });
+  assert.equal(ok.ok, true, ok.problems.join(' | '));
+  const live: any = await call('ads.launch.go', await owner(), { id: d.id });
+  assert.equal(live.status, 'live');
+  const set = (await db.query(`SELECT product_ids, group_id FROM adsets WHERE id = $1`, [live.adsetIds[0]]))[0];
+  assert.equal(Number(set.group_id), g.id);
+  assert.deepEqual(set.product_ids.map(Number).sort(), [...g.group.productIds].sort());
+  // a group's ad set keeps the group's products: nobody moves it onto another product
+  await assert.rejects(call('ads.link', await owner(), { adsetId: live.adsetIds[0], productIds: [mine[0].id] }), /vend un groupe/);
+  // offline: its ad cannot open its page
+  await db.query(`UPDATE landing_groups SET active = false WHERE id = $1`, [g.id]);
+  const off: any = await call('ads.launch.save', await owner(), { mode: 'pro', spec: { ...spec, name: 'Hors ligne' } });
+  const offChk: any = await call('ads.launch.check', await owner(), { id: off.id });
+  assert.ok(offChk.problems.some((x: string) => /hors ligne/.test(x)), offChk.problems.join(' | '));
+  await db.query(`UPDATE landing_groups SET active = true WHERE id = $1`, [g.id]);
+  await call('ads.launch.remove', await owner(), { id: off.id });
+});
+
+test('Mes pubs: a group is one card; the orders through its page leave its products’ cards', async () => {
+  const day = (ago: number) => new Date(Date.now() + 3_600_000 - ago * 86_400_000).toISOString().slice(0, 10);
+  const period = { from: day(13), to: day(0), productId: null, marketerId: null };
+  const ov: any = await call('ads.overview', await owner(), period);
+  const card = ov.groups.find((x: any) => x.slug === 'bebe');
+  assert.ok(card, 'the demo group sold by its ad');
+  assert.ok(card.spendUsd > 0 && card.count >= 2);
+  const through = num0((await db.query(
+    `SELECT count(*) AS n FROM sales WHERE utm->>'g' = 'bebe' AND created_at >= $1 AND created_at < $2 AND conf_status <> 'duplicate'`,
+    [new Date(Date.parse(period.from + 'T00:00:00Z') - 3_600_000).toISOString(), new Date(Date.parse(day(-1) + 'T00:00:00Z') - 3_600_000).toISOString()],
+  ))[0].n);
+  assert.ok(through > 0);
+  assert.equal(card.money.n, through, 'its orders: the ones through its page');
+  assert.equal(card.sold.reduce((s: number, x: any) => s + x.n, 0), through);
+  // each order counted once: the products' cards and the groups' cards make the totals
+  const sum = (k: string) => [...ov.products, ...ov.groups].reduce((s: number, p: any) => s + p.money[k], 0);
+  assert.equal(ov.totals.n, sum('n'));
+  assert.equal(ov.totals.d, sum('d'));
+  // the group's ad set is judged on the group's numbers, and stays off one product's page
+  assert.ok(ov.adsets.some((a: any) => a.id === '120200010' && a.groupId === card.groupId));
+  const one: any = await call('ads.overview', await owner(), { ...period, productId: card.sold[0]?.productId ?? null });
+  assert.ok(!one.adsets.some((a: any) => a.groupId !== null));
+  assert.equal(one.groups.length, 0);
+});
+const num0 = (v: unknown) => Number(v ?? 0);
+
 test('audiences: nothing sent before the owner turns one on; the report by wilaya and hour', async () => {
   const a: any = await call('ads.aud.list', await mk(), {});
   // the customers' lists the owner chose, and Meta's own two lists (nothing uploaded for them: on from the start)

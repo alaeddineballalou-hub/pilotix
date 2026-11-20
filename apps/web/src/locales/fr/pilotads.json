@@ -86,7 +86,12 @@
     "noLimit": "pas encore de limite",
     "raise": "Augmenter de 20 %",
     "pauseAll": "Mettre en pause ({{n}})",
-    "da": "DA"
+    "da": "DA",
+    "group_one": "Groupe · {{count}} produit",
+    "group_other": "Groupe · {{count}} produits",
+    "sold": "Vendu par la page du groupe",
+    "soldN": "{{n}} commandes · {{d}} livrées",
+    "soldNone": "Pas encore de commande par sa page."
   },
   "say": {
     "scale": "Ça marche : une commande livrée coûte bien moins que votre limite. Vous pouvez monter le budget doucement (+20 %).",
@@ -176,19 +181,26 @@
     "sending": "Envoi chez Meta…",
     "keep": "Garder en brouillon",
     "saved": "Brouillon gardé",
-    "removed": "Supprimé"
+    "removed": "Supprimé",
+    "pickItem": "Choisissez un produit ou un groupe",
+    "products": "Produits",
+    "groups": "Groupes (le client choisit sur la page)",
+    "searchItem": "Chercher un produit ou un groupe",
+    "openGroups": "Ouvrir les groupes"
   },
   "step": {
     "product": "Produit",
     "goal": "But",
     "ad": "La pub",
-    "budget": "Budget"
+    "budget": "Budget",
+    "productOrGroup": "Produit ou groupe"
   },
   "ask": {
     "product": "Quel produit voulez-vous vendre ?",
     "goal": "Que voulez-vous que les gens fassent ?",
     "ad": "Les photos ou vidéos, et le texte",
-    "budget": "Combien par jour ?"
+    "budget": "Combien par jour ?",
+    "group": "Ou un groupe : une pub, plusieurs produits"
   },
   "limit": {
     "line": "Une livrée peut coûter jusqu’à {{max}}",
@@ -265,7 +277,12 @@
     "noText": "Écrivez le texte de la pub",
     "post": "Publication choisie",
     "noPost": "Choisissez la publication à booster",
-    "budget": "Budget : {{v}} par jour"
+    "budget": "Budget : {{v}} par jour",
+    "group_one": "Groupe : {{name}} ({{count}} produit)",
+    "group_other": "Groupe : {{name}} ({{count}} produits)",
+    "noItem": "Choisissez un produit ou un groupe",
+    "groupPage": "Page du groupe en ligne",
+    "noGroupPage": "Ce groupe est hors ligne : mettez-le en ligne (Landing pages › Groupes)"
   },
   "msg": {
     "where": "Où les clients vous écrivent",
@@ -407,7 +424,8 @@
   },
   "launches": {
     "title": "Mes lancements",
-    "open": "Ouvrir"
+    "open": "Ouvrir",
+    "group": "Groupe {{name}}"
   },
   "lst": {
     "draft": "Brouillon",
@@ -568,5 +586,20 @@
   "domain": {
     "platform": "Votre pub affichera « {{host}} » comme adresse.",
     "set": "Mettre votre propre domaine"
+  },
+  "group": {
+    "help": "La pub ouvre la page du groupe (Landing pages › Groupes) : le client y choisit son produit.",
+    "count_one": "{{count}} produit",
+    "count_other": "{{count}} produits",
+    "from_one": "{{count}} produit · {{price}}",
+    "from_other": "{{count}} produits · dès {{price}}",
+    "has_one": "{{count}} produit : {{names}}",
+    "has_other": "{{count}} produits : {{names}}",
+    "lowest": "la plus basse du groupe : {{name}}",
+    "none": "« {{name}} » ne laisse pas de marge : revoyez son prix ou retirez-le du groupe.",
+    "many": "Ce groupe a {{n}} produits. Au-delà de {{max}}, trop de choix : la pub vend moins. Vous pouvez quand même lancer.",
+    "manyShort": "Plus de {{max}} produits : trop de choix",
+    "goals": "Un groupe se lance pour les ventes sur la page, les visites ou pour se faire connaître.",
+    "explain": "La limite du groupe est celle de son produit le plus juste, « {{name}} » ({{delivered}} livrées, {{share}} % des colis arrivent) : quel que soit le produit choisi, une commande livrée reste sous la limite."
   }
 }

@@ -169,6 +169,23 @@
 .pa-prod-txt > span { font-size: 13px; color: var(--c-muted); }
 .pa-limit { font-size: 12px; color: var(--c-ok-ink); }
 .pa-limit em { font-style: normal; color: var(--c-muted); }
+/* Lancer une pub › a group (Landing pages › Groupes): its cards under the products', its count on its photo */
+.pa-groups { margin-top: 22px; padding-top: 18px; border-top: 1px dashed var(--line); }
+.pa-groups .pa-q { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.pa-groups > .note { margin: 0 0 12px; }
+.pa-prod-group .pa-prod-pic { position: relative; }
+.pa-gcount { position: absolute; inset-block-end: 4px; inset-inline-end: 4px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; background: var(--c-accent); box-shadow: 0 0 0 2px var(--surface); }
+.pa-gmany { font-size: 12px; color: var(--c-warn-ink, #b45309); }
+.pa-gnote { display: flex; flex-direction: column; gap: 8px; margin: -4px 0 12px; }
+.pa-gnote .note { margin: 0; display: flex; gap: 6px; align-items: flex-start; line-height: 1.45; overflow-wrap: anywhere; }
+.pa-gnote .note .bji { flex: none; margin-top: 2px; }
+/* « Mes pubs »: a group's card says it is a group, and what sold through its page */
+.pa-gtag { margin: -6px 0 0; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--c-muted); }
+.pa-sold { display: flex; flex-direction: column; gap: 6px; }
+.pa-sold ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pa-sold li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 13.5px; }
+.pa-sold li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pa-sold li b { flex: none; font-weight: 600; }
 .pa-goals { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 10px; }
 .pa-goals.compact { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); margin-top: 12px; }
 .pa-goal { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px; border-radius: var(--sk-r-ctl, 12px); border: 1.5px solid var(--line); background: var(--surface); font: inherit; color: inherit; text-align: start; cursor: pointer; }

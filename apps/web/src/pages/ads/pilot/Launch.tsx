@@ -19,6 +19,15 @@ import { clientId, usd } from './Hub';
 
 type Opt = Out<'ads.launch.options'>;
 type P = Opt['products'][number];
+/** a group of Landing pages › Groupes: the ad opens its page, the customer picks the product there; its numbers are
+ *  those of its product with the lowest limit, so it is used wherever a product is */
+type G = Opt['groups'][number];
+const isGroup = (p: P | G | null | undefined): p is G => !!p && 'group' in p;
+/** what the launch sells: its product, or its group */
+const itemOf = (o: Opt, d: { productId: number | null; groupId: number | null }): P | G | null =>
+  d.groupId ? (o.groups.find((g) => g.id === d.groupId) ?? null) : (o.products.find((p) => p.id === d.productId) ?? null);
+/** the goals a group's ad may have (its page sells: no messages, calls or form) */
+const groupGoal = (o: Opt, g: Goal) => (o.groupGoals as string[]).includes(g);
 type Media = Out<'ads.media.list'>[number];
 type Goal = 'sales' | 'messages' | 'calls' | 'form' | 'awareness' | 'traffic' | 'engagement';
 type Channel = 'messenger' | 'instagram' | 'whatsapp';
@@ -33,6 +42,8 @@ interface Draft {
   clientId: string;
   goal: Goal;
   productId: number | null;
+  /** …or a group (never both) */
+  groupId: number | null;
   name: string;
   mediaIds: number[];
   text: { primary: string; headline: string };
@@ -64,6 +75,7 @@ const fresh = (): Draft => ({
   clientId: clientId(),
   goal: 'sales',
   productId: null,
+  groupId: null,
   name: '',
   mediaIds: [],
   text: { primary: '', headline: '' },
@@ -93,7 +105,8 @@ const fresh = (): Draft => ({
 const BOOST_GOALS: Record<'INSTAGRAM' | 'FACEBOOK', Goal[]> = { INSTAGRAM: ['sales', 'traffic', 'awareness'], FACEBOOK: ['awareness'] };
 const specOf = (d: Draft) => ({
   goal: d.goal,
-  productId: d.productId,
+  productId: d.groupId ? null : d.productId,
+  groupId: d.groupId,
   name: d.name.trim() || 'Pub',
   mediaIds: d.mediaIds,
   text: d.text,
@@ -136,7 +149,7 @@ export function Launch({ base, rest }: { base: string; rest?: string[] }) {
   const [done, setDone] = useState<Out<'ads.launch.go'> | null>(null);
   const set = (p: Partial<Draft>) => setD((o) => ({ ...o, ...p }));
   const o = q.data;
-  const product = o?.products.find((p) => p.id === d.productId) ?? null;
+  const product = o ? itemOf(o, d) : null;
   // a creator's post to boost: its creator, and a goal it may be boosted for
   const boost = d.partnerContentId && o?.boost?.id === d.partnerContentId ? o.boost : null;
   useEffect(() => {
@@ -153,7 +166,7 @@ export function Launch({ base, rest }: { base: string; rest?: string[] }) {
     set({ partnerContentId: null });
     location.hash = `${base}/lancer`;
   };
-  const goalsOf = (all: Goal[]) => (boost ? all.filter((g) => BOOST_GOALS[boost.platform].includes(g)) : all);
+  const goalsOf = (all: Goal[]) => (boost ? all.filter((g) => BOOST_GOALS[boost.platform].includes(g)) : all).filter((g) => !o || !d.groupId || groupGoal(o, g));
   const chooseMode = (m: 'simple' | 'pro') => {
     setMode(m);
     store.set('ads-launch-mode', m);
@@ -279,15 +292,20 @@ export function Launch({ base, rest }: { base: string; rest?: string[] }) {
   );
 }
 
-const stepOk = (step: number, d: Draft, p: P | null, boosting = false) =>
+const stepOk = (step: number, d: Draft, p: P | G | null, boosting = false) =>
   step === 0 ? !!p : step === 1 ? true : step === 2 ? boosting || (!!d.text.primary.trim() && (d.mediaIds.length > 0 || d.goal === 'engagement')) : true;
 
 /** What is still missing before « Lancer » (the server checks it again). */
-function readiness(t: (k: string, o?: any) => string, o: Opt, d: Draft, p: P | null, lib: Media[]): { ok: boolean; text: string }[] {
+function readiness(t: (k: string, o?: any) => string, o: Opt, d: Draft, p: P | G | null, lib: Media[]): { ok: boolean; text: string }[] {
   const out: { ok: boolean; text: string }[] = [];
-  out.push({ ok: !!p, text: p ? t('pilotads.check.product', { name: p.name }) : t('pilotads.check.noProduct') });
+  out.push({
+    ok: !!p,
+    text: isGroup(p) ? t('pilotads.check.group', { name: p.name, count: p.group.count }) : p ? t('pilotads.check.product', { name: p.name }) : o.groups.length ? t('pilotads.check.noItem') : t('pilotads.check.noProduct'),
+  });
+  if (isGroup(p) && !groupGoal(o, d.goal)) out.push({ ok: false, text: t('pilotads.group.goals') });
   out.push({ ok: !!o.page, text: o.page ? t('pilotads.check.page', { name: o.page.name }) : t('pilotads.check.noPage') });
-  if (d.goal === 'sales' || d.goal === 'traffic') out.push({ ok: !!p?.landing, text: p?.landing ? t('pilotads.check.landing') : t('pilotads.check.noLanding') });
+  if (d.goal === 'sales' || d.goal === 'traffic')
+    out.push({ ok: !!p?.landing, text: p?.landing ? (isGroup(p) ? t('pilotads.check.groupPage') : t('pilotads.check.landing')) : isGroup(p) ? t('pilotads.check.noGroupPage') : t('pilotads.check.noLanding') });
   if (d.goal === 'sales') out.push({ ok: !!(d.pixelId || p?.landing?.pixelId || o.pixels.length), text: o.pixels.length || p?.landing?.pixelId ? t('pilotads.check.pixel') : t('pilotads.check.noPixel') });
   if (d.goal === 'calls') out.push({ ok: phoneOk(d.phone), text: phoneOk(d.phone) ? t('pilotads.check.phone', { v: d.phone }) : t('pilotads.check.noPhone') });
   if (d.goal === 'messages') out.push({ ok: d.channels.length > 0, text: d.channels.length ? t('pilotads.check.channels', { v: d.channels.map((c) => t(`pilotads.ch.${c}`)).join(' + ') }) : t('pilotads.check.noChannels') });
@@ -306,38 +324,77 @@ function readiness(t: (k: string, o?: any) => string, o: Opt, d: Draft, p: P | n
   return out;
 }
 
-// ---------------------------------------------------------------- step 1: the product
+// ---------------------------------------------------------------- step 1: the product (or a group)
 function StepProduct({ o, d, set, compact, onNext }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; compact?: boolean; onNext?: () => void }) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
-  const list = o.products.filter((p) => !q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase()));
-  const choose = (p: P) => {
-    set({ productId: p.id, name: d.name || `${p.name} — ${t(`pilotads.goal.${d.goal}.short`)}`, pixelId: d.pixelId ?? p.landing?.pixelId ?? null });
+  const match = (name: string) => !q.trim() || name.toLowerCase().includes(q.trim().toLowerCase());
+  const list = o.products.filter((p) => match(p.name));
+  const groups = o.groups.filter((g) => match(g.name));
+  const cur = itemOf(o, d);
+  const autoName = (x: P | G, goal: Goal) => `${x.name} — ${t(`pilotads.goal.${goal}.short`)}`;
+  const choose = (x: P | G) => {
+    const group = isGroup(x);
+    // a group's ad opens its page: a goal it cannot have becomes « Ventes sur la page »
+    const goal: Goal = group && !groupGoal(o, d.goal) ? 'sales' : d.goal;
+    // the name Pilotix gave follows the new choice; a name the person wrote stays
+    const name = !d.name || (cur && d.name === autoName(cur, d.goal)) ? autoName(x, goal) : d.name;
+    set({ productId: group ? null : x.id, groupId: group ? x.id : null, goal, name, pixelId: d.pixelId ?? x.landing?.pixelId ?? null });
     if (!compact) onNext?.();
   };
   if (!o.products.length) return <Empty>{t('pilotads.launch.noProducts')}</Empty>;
+  const withGroups = o.groups.length > 0;
   if (compact)
     return (
-      <label className="field">
-        <span className="lab">{t('pilotads.step.product')}</span>
-        <select value={d.productId ?? ''} onChange={(e) => { const p = o.products.find((x) => x.id === Number(e.target.value)); if (p) choose(p); }}>
-          <option value="">{t('pilotads.launch.pickProduct')}</option>
-          {o.products.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} · {da(p.price)}
-            </option>
-          ))}
-        </select>
-        {d.productId && <LimitLine p={o.products.find((x) => x.id === d.productId)!} />}
-      </label>
+      <>
+        <label className="field">
+          <span className="lab">{t(withGroups ? 'pilotads.step.productOrGroup' : 'pilotads.step.product')}</span>
+          <select
+            value={d.groupId ? `g${d.groupId}` : d.productId ? `p${d.productId}` : ''}
+            onChange={(e) => {
+              const v = e.target.value;
+              const x = v.startsWith('g') ? o.groups.find((g) => g.id === Number(v.slice(1))) : o.products.find((p) => p.id === Number(v.slice(1)));
+              if (x) choose(x);
+            }}
+          >
+            <option value="">{t(withGroups ? 'pilotads.launch.pickItem' : 'pilotads.launch.pickProduct')}</option>
+            {withGroups ? (
+              <>
+                <optgroup label={t('pilotads.launch.products')}>
+                  {o.products.map((p) => (
+                    <option key={`p${p.id}`} value={`p${p.id}`}>
+                      {p.name} · {da(p.price)}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label={t('pilotads.launch.groups')}>
+                  {o.groups.map((g) => (
+                    <option key={`g${g.id}`} value={`g${g.id}`}>
+                      {g.name} · {t('pilotads.group.count', { count: g.group.count })}
+                    </option>
+                  ))}
+                </optgroup>
+              </>
+            ) : (
+              o.products.map((p) => (
+                <option key={`p${p.id}`} value={`p${p.id}`}>
+                  {p.name} · {da(p.price)}
+                </option>
+              ))
+            )}
+          </select>
+          {cur && <LimitLine p={cur} />}
+        </label>
+        {isGroup(cur) && <GroupNote o={o} g={cur} />}
+      </>
     );
   return (
     <div>
       <h3 className="pa-q">{t('pilotads.ask.product')}</h3>
-      {o.products.length > 6 && <input className="pa-search" type="search" placeholder={t('pilotads.launch.search')} value={q} onChange={(e) => setQ(e.target.value)} />}
+      {o.products.length + o.groups.length > 6 && <input className="pa-search" type="search" placeholder={t(withGroups ? 'pilotads.launch.searchItem' : 'pilotads.launch.search')} value={q} onChange={(e) => setQ(e.target.value)} />}
       <div className="pa-prods">
         {list.map((p) => (
-          <button key={p.id} type="button" className={`pa-prod ${d.productId === p.id ? 'on' : ''}`} onClick={() => choose(p)}>
+          <button key={p.id} type="button" className={`pa-prod ${!d.groupId && d.productId === p.id ? 'on' : ''}`} onClick={() => choose(p)}>
             <span className="pa-prod-pic">{p.photo ? <img src={p.photo} alt="" /> : <Icon name="package" />}</span>
             <span className="pa-prod-txt">
               <b>{p.name}</b>
@@ -347,23 +404,63 @@ function StepProduct({ o, d, set, compact, onNext }: { o: Opt; d: Draft; set: (p
           </button>
         ))}
       </div>
+      {withGroups && (
+        <div className="pa-groups">
+          <h3 className="pa-q">
+            <Icon name="layers" /> {t('pilotads.ask.group')}
+          </h3>
+          <p className="note">{t('pilotads.group.help')}</p>
+          <div className="pa-prods">
+            {groups.map((g) => (
+              <button key={`g${g.id}`} type="button" className={`pa-prod pa-prod-group ${d.groupId === g.id ? 'on' : ''}`} onClick={() => choose(g)}>
+                <span className="pa-prod-pic">
+                  {g.photo ? <img src={g.photo} alt="" /> : <Icon name="layers" />}
+                  <b className="pa-gcount ltr" aria-hidden>
+                    {g.group.count}
+                  </b>
+                </span>
+                <span className="pa-prod-txt">
+                  <b>{g.name}</b>
+                  <span>{t('pilotads.group.from', { count: g.group.count, price: da(g.price) })}</span>
+                  <LimitLine p={g} />
+                  {g.group.count > o.groupMany && <small className="pa-gmany">{t('pilotads.group.manyShort', { max: o.groupMany })}</small>}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function LimitLine({ p }: { p: P }) {
+/** A group chosen: its products, and a word when it has too many (the ad shows too many choices). */
+function GroupNote({ o, g }: { o: Opt; g: G }) {
   const { t } = useTranslation();
-  if (p.limit.maxDzd <= 0) return <small className="neg">{t('pilotads.limit.none')}</small>;
+  return (
+    <div className="pa-gnote">
+      <p className="note">
+        <Icon name="layers" /> {t('pilotads.group.has', { count: g.group.count, names: g.group.names.join(' · ') })}
+      </p>
+      {g.group.count > o.groupMany && <div className="warnbox">{t('pilotads.group.many', { n: g.group.count, max: o.groupMany })}</div>}
+    </div>
+  );
+}
+
+function LimitLine({ p }: { p: P | G }) {
+  const { t } = useTranslation();
+  if (p.limit.maxDzd <= 0) return <small className="neg">{isGroup(p) ? t('pilotads.group.none', { name: p.group.lowest }) : t('pilotads.limit.none')}</small>;
   return (
     <small className="pa-limit">
       {t('pilotads.limit.line', { max: da(p.limit.maxDzd) })}
+      {isGroup(p) && <em> · {t('pilotads.group.lowest', { name: p.group.lowest })}</em>}
       {p.estimated && <em> · {t('pilotads.limit.estimated')}</em>}
     </small>
   );
 }
 
 // ---------------------------------------------------------------- step 2: what you want
-function StepGoal({ o, d, set, product, goals, compact }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; product: P | null; goals: Goal[]; compact?: boolean }) {
+function StepGoal({ o, d, set, product, goals, compact }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; product: P | G | null; goals: Goal[]; compact?: boolean }) {
   const { t } = useTranslation();
   const choose = (g: Goal) => {
     const name = product ? `${product.name} — ${t(`pilotads.goal.${g}.short`)}` : d.name;
@@ -387,10 +484,14 @@ function StepGoal({ o, d, set, product, goals, compact }: { o: Opt; d: Draft; se
   );
 }
 
-function GoalFields({ o, d, set, product }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; product: P | null }) {
+function GoalFields({ o, d, set, product }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; product: P | G | null }) {
   const { t } = useTranslation();
   if (d.goal === 'sales' || d.goal === 'traffic')
-    return product && !product.landing ? (
+    return isGroup(product) && !product.landing ? (
+      <div className="warnbox">
+        {t('pilotads.check.noGroupPage')} <a href="#/landing/groupes">{t('pilotads.launch.openGroups')}</a>
+      </div>
+    ) : product && !product.landing ? (
       <div className="warnbox">
         {t('pilotads.check.noLanding')} <a href="#/landing">{t('pilotads.launch.makeLanding')}</a>
       </div>
@@ -510,7 +611,7 @@ function GoalFields({ o, d, set, product }: { o: Opt; d: Draft; set: (p: Partial
 }
 
 // ---------------------------------------------------------------- step 3: the ad (photos or videos, words)
-function StepAd({ o, d, set, product, lib, refetchLib, pro, cancelBoost }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; product: P | null; lib: Media[]; refetchLib: () => void; pro?: boolean; cancelBoost: () => void }) {
+function StepAd({ o, d, set, product, lib, refetchLib, pro, cancelBoost }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; product: P | G | null; lib: Media[]; refetchLib: () => void; pro?: boolean; cancelBoost: () => void }) {
   const { t } = useTranslation();
   const [variants, setVariants] = useState<{ primary: string; headline: string }[]>([]);
   const [by, setBy] = useState<'ai' | 'ready' | null>(null);
@@ -524,17 +625,20 @@ function StepAd({ o, d, set, product, lib, refetchLib, pro, cancelBoost }: { o: 
       if (d.goal === 'messages' && !d.welcome?.text) set({ welcome: r.welcome });
     },
   });
-  const ask = (lang = d.lang) => product && write.mutate({ productId: product.id, goal: d.goal, lang, idea });
-  // the first time this step opens with a product: three versions at once
+  // a group: words that sell the choice (its page), never one of its products
+  const ask = (lang = d.lang) =>
+    product && write.mutate(isGroup(product) ? { productId: null, groupId: product.id, goal: d.goal, lang, idea } : { productId: product.id, groupId: null, goal: d.goal, lang, idea });
+  // the first time this step opens with a product (or a group): three versions at once
   const asked = useRef<string>('');
+  const which = product ? `${isGroup(product) ? 'g' : 'p'}${product.id}` : '';
   useEffect(() => {
-    const k = `${product?.id}:${d.goal}:${d.lang}`;
+    const k = `${which}:${d.goal}:${d.lang}`;
     if (product && d.goal !== 'engagement' && !d.partnerContentId && asked.current !== k) {
       asked.current = k;
       ask();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product?.id, d.goal, d.lang]);
+  }, [which, d.goal, d.lang]);
   if (d.goal === 'engagement') return <p className="note">{t('pilotads.post.noAd')}</p>;
   if (d.partnerContentId)
     return (
@@ -653,7 +757,9 @@ function BoostCard({ o, d, onCancel }: { o: Opt; d: Draft; onCancel: () => void 
   );
 }
 
-function MediaPicker({ d, set, lib, refetchLib, product }: { d: Draft; set: (p: Partial<Draft>) => void; lib: Media[]; refetchLib: () => void; product: P | null }) {
+function MediaPicker({ d, set, lib, refetchLib, product: item }: { d: Draft; set: (p: Partial<Draft>) => void; lib: Media[]; refetchLib: () => void; product: P | G | null }) {
+  // « Photo du produit »: a product's own photo (a group has no one photo of its own)
+  const product = isGroup(item) ? null : item;
   const { t } = useTranslation();
   const file = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState('');
@@ -803,7 +909,7 @@ function hostOf(url: string): string {
 }
 
 // ---------------------------------------------------------------- step 4: the budget
-function StepBudget({ o, d, set, product, pro }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; product: P | null; pro?: boolean }) {
+function StepBudget({ o, d, set, product, pro }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; product: P | G | null; pro?: boolean }) {
   const { t } = useTranslation();
   const packs = product?.packs ?? [
     { key: 'test' as const, usd: 5, delivered: null },
@@ -823,7 +929,11 @@ function StepBudget({ o, d, set, product, pro }: { o: Opt; d: Draft; set: (p: Pa
             <span className="lab">{t('pilotads.limit.targetLabel')}</span>
             <b className="ltr">{da(product.limit.targetDzd)}</b>
           </div>
-          <p>{t('pilotads.limit.explain', { delivered: n(product.delivered), share: Math.round(product.share * 100) })}</p>
+          <p>
+            {isGroup(product)
+              ? t('pilotads.group.explain', { name: product.group.lowest, delivered: n(product.delivered), share: Math.round(product.share * 100) })
+              : t('pilotads.limit.explain', { delivered: n(product.delivered), share: Math.round(product.share * 100) })}
+          </p>
         </div>
       )}
       <div className="pa-packs" role="radiogroup" aria-label={t('pilotads.budget.perDay')}>
@@ -979,7 +1089,7 @@ function Targeting({ o, d, set }: { o: Opt; d: Draft; set: (p: Partial<Draft>) =
 }
 
 /** Pro: what a test costs and what it may bring, for each budget (3 days at least, Meta's learning). */
-function TestPlan({ d, product }: { d: Draft; product: P | null }) {
+function TestPlan({ d, product }: { d: Draft; product: P | G | null }) {
   const { t } = useTranslation();
   const packs = product?.packs ?? [];
   if (!packs.length) return null;
@@ -1022,7 +1132,8 @@ function Preview({ o, d, lib }: { o: Opt; d: Draft; lib: Media[] }) {
   const name = boost && partner ? partner : shop;
   const second = partner ? (boost ? shop : partner) : null;
   const text = boost ? boost.caption : d.text.primary;
-  const url = o.products.find((p) => p.id === d.productId)?.landing?.url ?? '';
+  const item = itemOf(o, d);
+  const url = item?.landing?.url ?? '';
   const host = (() => {
     try {
       return url ? new URL(url).host : '';
@@ -1053,7 +1164,7 @@ function Preview({ o, d, lib }: { o: Opt; d: Draft; lib: Media[] }) {
         <div className="pa-fb-foot">
           <span dir={d.text.headline ? (d.lang === 'fr' ? 'ltr' : 'rtl') : undefined}>
             <small>{d.goal === 'messages' ? t(`pilotads.ch.${d.channels[0] ?? 'messenger'}`) : d.goal === 'calls' ? d.phone : host || shop}</small>
-            <b>{boost ? (o.products.find((p) => p.id === d.productId)?.name ?? '') || t('pilotads.preview.headlinePh') : d.text.headline || t('pilotads.preview.headlinePh')}</b>
+            <b>{boost ? item?.name || t('pilotads.preview.headlinePh') : d.text.headline || t('pilotads.preview.headlinePh')}</b>
           </span>
           <span className="pa-fb-cta">{t(`pilotads.cta.${CTA[d.goal]}`)}</span>
         </div>
@@ -1113,7 +1224,7 @@ function GoButton({ o, d, problems, mode, onDone, onSaved }: { o: Opt; d: Draft;
       <button type="button" className="btn primary big" disabled={!ready || busy} onClick={go}>
         <Icon name="megaphone" /> {busy ? t('pilotads.launch.sending') : toOwner ? t('pilotads.launch.toOwner') : t('pilotads.launch.go', { v: usd(d.budgetUsd, 0) })}
       </button>
-      <button type="button" className="btn ghost" disabled={busy || !d.productId} onClick={keep}>
+      <button type="button" className="btn ghost" disabled={busy || (!d.productId && !d.groupId)} onClick={keep}>
         {t('pilotads.launch.keep')}
       </button>
     </div>
@@ -1168,6 +1279,7 @@ function Launches({ onOpen }: { onOpen: (l: L) => void }) {
             <div className="pa-l-what">
               <b>{l.name}</b>
               <span className="muted">
+                {l.groupId ? `${t('pilotads.launches.group', { name: l.groupName ?? '' })} · ` : ''}
                 {t(`pilotads.goal.${l.goal}.name`)} · {t('pilotads.perDay', { v: usd(l.budgetUsd, 0) })}
                 {l.partnerName ? ` · ${t('pilotads.partner.with', { name: l.partnerName })}` : ''} · {l.by ?? '—'} · {t('pilotads.ago', { d: since(l.createdAt) })}
               </span>

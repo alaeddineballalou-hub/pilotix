@@ -86,7 +86,12 @@
     "noLimit": "no limit yet",
     "raise": "Raise by 20 %",
     "pauseAll": "Pause ({{n}})",
-    "da": "DA"
+    "da": "DA",
+    "group_one": "Group · {{count}} product",
+    "group_other": "Group · {{count}} products",
+    "sold": "Sold through the group page",
+    "soldN": "{{n}} orders · {{d}} delivered",
+    "soldNone": "No order through its page yet."
   },
   "say": {
     "scale": "It works: a delivered order costs well under your limit. You can raise the budget slowly (+20 %).",
@@ -176,19 +181,26 @@
     "sending": "Sending to Meta…",
     "keep": "Keep as a draft",
     "saved": "Draft kept",
-    "removed": "Deleted"
+    "removed": "Deleted",
+    "pickItem": "Choose a product or a group",
+    "products": "Products",
+    "groups": "Groups (the client chooses on the page)",
+    "searchItem": "Search a product or a group",
+    "openGroups": "Open the groups"
   },
   "step": {
     "product": "Product",
     "goal": "Goal",
     "ad": "The ad",
-    "budget": "Budget"
+    "budget": "Budget",
+    "productOrGroup": "Product or group"
   },
   "ask": {
     "product": "Which product do you want to sell?",
     "goal": "What do you want people to do?",
     "ad": "The photos or videos, and the words",
-    "budget": "How much a day?"
+    "budget": "How much a day?",
+    "group": "Or a group: one ad, several products"
   },
   "limit": {
     "line": "A delivered order may cost up to {{max}}",
@@ -265,7 +277,12 @@
     "noText": "Write the ad text",
     "post": "Post chosen",
     "noPost": "Choose the post to boost",
-    "budget": "Budget: {{v}} a day"
+    "budget": "Budget: {{v}} a day",
+    "group_one": "Group: {{name}} ({{count}} product)",
+    "group_other": "Group: {{name}} ({{count}} products)",
+    "noItem": "Choose a product or a group",
+    "groupPage": "Group page online",
+    "noGroupPage": "This group is offline: put it online (Landing pages › Groups)"
   },
   "msg": {
     "where": "Where customers write to you",
@@ -407,7 +424,8 @@
   },
   "launches": {
     "title": "My launches",
-    "open": "Open"
+    "open": "Open",
+    "group": "Group {{name}}"
   },
   "lst": {
     "draft": "Draft",
@@ -568,5 +586,20 @@
   "domain": {
     "platform": "Your ad will show « {{host}} » as its address.",
     "set": "Use your own domain"
+  },
+  "group": {
+    "help": "The ad opens the group’s page (Landing pages › Groups): the client picks his product there.",
+    "count_one": "{{count}} product",
+    "count_other": "{{count}} products",
+    "from_one": "{{count}} product · {{price}}",
+    "from_other": "{{count}} products · from {{price}}",
+    "has_one": "{{count}} product: {{names}}",
+    "has_other": "{{count}} products: {{names}}",
+    "lowest": "the lowest of the group: {{name}}",
+    "none": "“{{name}}” leaves no margin: check its price or take it out of the group.",
+    "many": "This group has {{n}} products. Above {{max}}, too many choices: the ad sells less. You can still launch.",
+    "manyShort": "More than {{max}} products: too many choices",
+    "goals": "A group is launched for sales on the page, visits or getting known.",
+    "explain": "The group’s limit is the one of its tightest product, “{{name}}” ({{delivered}} delivered, {{share}} % of parcels arrive): whatever product the client picks, a delivered order stays under the limit."
   }
 }

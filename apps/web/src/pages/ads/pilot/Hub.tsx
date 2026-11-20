@@ -242,8 +242,11 @@ function SimplePubs({ ctl, base }: { ctl: Ctl | null; base: string }) {
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   if (!d) return <Loading />;
   const fxOk = !!d.fx.rate && !d.fx.missing;
-  const products = [...d.products].sort((a, b) => b.spendUsd - a.spendUsd);
-  const loose = d.adsets.filter((a) => !a.productIds.length && a.status === 'ACTIVE');
+  // one card per product, and one per group (Lancer une pub › a group), the ones that spend the most first
+  const cards = [...d.products.map((p) => ({ key: `p${p.productId}`, spend: p.spendUsd, p, g: null })), ...d.groups.map((g) => ({ key: `g${g.groupId}`, spend: g.spendUsd, p: null, g }))].sort(
+    (a, b) => b.spend - a.spend,
+  );
+  const loose = d.adsets.filter((a) => !a.productIds.length && a.groupId === null && a.status === 'ACTIVE');
   return (
     <div className="pa-simple">
       <div className="pa-simple-head">
@@ -260,7 +263,7 @@ function SimplePubs({ ctl, base }: { ctl: Ctl | null; base: string }) {
         </div>
       </div>
       {!fxOk && <div className="warnbox">{t('ads.fxMissing')}</div>}
-      {!products.length ? (
+      {!cards.length ? (
         <div className="card pa-empty">
           <Icon name="megaphone" />
           <h3>{t('pilotads.simple.noneTitle')}</h3>
@@ -271,9 +274,13 @@ function SimplePubs({ ctl, base }: { ctl: Ctl | null; base: string }) {
         </div>
       ) : (
         <div className="pa-cards">
-          {products.map((p) => (
-            <ProductCard key={p.productId} p={p} d={d} fxOk={fxOk} objs={objs} ctl={ctl} />
-          ))}
+          {cards.map((c) =>
+            c.g ? (
+              <PubCard key={c.key} row={c.g} sets={d.adsets.filter((a) => a.groupId === c.g!.groupId)} fxOk={fxOk} objs={objs} ctl={ctl} group={c.g} />
+            ) : (
+              <PubCard key={c.key} row={c.p!} sets={d.adsets.filter((a) => a.groupId === null && a.productIds.includes(c.p!.productId))} fxOk={fxOk} objs={objs} ctl={ctl} />
+            ),
+          )}
         </div>
       )}
       {!!loose.length && (
@@ -286,11 +293,16 @@ function SimplePubs({ ctl, base }: { ctl: Ctl | null; base: string }) {
 }
 
 type Prod = Ov['products'][number];
+type Grp = Ov['groups'][number];
+type Adset = Ov['adsets'][number];
 const VERDICT_TONE: Record<string, 'ok' | 'mid' | 'bad' | 'off'> = { scale: 'ok', keep: 'mid', price: 'mid', cutdel: 'bad', cut: 'bad', loss: 'bad', wait: 'off' };
 
-function ProductCard({ p, d, fxOk, objs, ctl }: { p: Prod; d: Ov; fxOk: boolean; objs: Map<string, Obj>; ctl: Ctl | null }) {
+/**
+ * One card of « Mes pubs » (Simple): a product, or a group (Lancer une pub › a group: its spend is its ad sets', its
+ * orders the ones through its page, and it says what sold).
+ */
+function PubCard({ row: p, sets, fxOk, objs, ctl, group }: { row: Pick<Prod, 'name' | 'spendUsd' | 'money' | 'advice'>; sets: Adset[]; fxOk: boolean; objs: Map<string, Obj>; ctl: Ctl | null; group?: Grp }) {
   const { t } = useTranslation();
-  const sets = d.adsets.filter((a) => a.productIds.includes(p.productId));
   const live = sets.filter((a) => a.status === 'ACTIVE');
   const m = p.money;
   // what a delivered order may cost before ads eat the profit, and what it costs now
@@ -309,6 +321,11 @@ function ProductCard({ p, d, fxOk, objs, ctl }: { p: Prod; d: Ov; fxOk: boolean;
         <h3>{p.name}</h3>
         <span className={`badge t-${tone}`}>{t(`ads.advice.${p.advice.k}`)}</span>
       </header>
+      {group && (
+        <p className="pa-gtag">
+          <Icon name="layers" /> {t('pilotads.simple.group', { count: group.count })}
+        </p>
+      )}
       <div className="pa-three">
         <div>
           <span className="lab">{t('pilotads.simple.spent')}</span>
@@ -336,6 +353,23 @@ function ProductCard({ p, d, fxOk, objs, ctl }: { p: Prod; d: Ov; fxOk: boolean;
         </div>
       )}
       <p className="pa-say">{t(`pilotads.say.${p.advice.k}`, { rise: p.advice.rise ? da(p.advice.rise) : '' })}</p>
+      {group && (
+        <div className="pa-sold">
+          <span className="lab">{t('pilotads.simple.sold')}</span>
+          {group.sold.length ? (
+            <ul>
+              {group.sold.slice(0, 6).map((x) => (
+                <li key={x.productId}>
+                  <span>{x.name}</span>
+                  <b className="ltr">{t('pilotads.simple.soldN', { n: x.n, d: x.d })}</b>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <small className="muted">{t('pilotads.simple.soldNone')}</small>
+          )}
+        </div>
+      )}
       <div className="pa-do">
         {p.advice.k === 'scale' && top && (
           <button type="button" className="btn primary" onClick={() => setBudget(top)}>

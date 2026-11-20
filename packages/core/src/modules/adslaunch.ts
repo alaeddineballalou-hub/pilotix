@@ -80,13 +80,25 @@ async function ownDomain(ctx: Ctx): Promise<string | null> {
   return r?.domain ? String(r.domain).toLowerCase() : null;
 }
 
+/**
+ * The public address of a landing page or a group (theirs are the same kind: site/<store>/<slug>), at the shop's own
+ * domain once it is ready. '' when there is no platform address (the browser preview).
+ */
+async function pageAddress(ctx: Ctx): Promise<{ url: (slug: string) => string; own: boolean }> {
+  const base = (ctx.server?.pagesUrl?.() || ctx.server?.publicUrl || (ctx.server ? '' : DEMO_BASE)).replace(/\/+$/, '');
+  const store = await landingStore(ctx.db);
+  const own = await ownDomain(ctx);
+  return { own: !!own, url: (slug) => (own ? `https://${own}/${slug}` : base ? `${base}/${store ? `${store}/` : ''}${slug}` : '') };
+}
+
 /** The products the launcher offers, with what an order may cost each (one read of the orders for all of them). */
-export async function productLimits(ctx: Ctx, onlyId?: number | null): Promise<ProductLimit[]> {
+export async function productLimits(ctx: Ctx, only?: number | number[] | null): Promise<ProductLimit[]> {
   const today = algDay(ctx.now());
   const rate = (await fxTable(ctx.db))(today.slice(0, 7));
   const given = givenOf(ctx);
+  const want = only === null || only === undefined ? null : new Set(Array.isArray(only) ? only : [only]);
   const rows = (await ctx.db.query(`SELECT id, name, price, cost, photo FROM products WHERE active AND NOT is_service AND archived_at IS NULL ORDER BY lower(name), id LIMIT 300`)).filter(
-    (p: any) => (!given || given.has(num(p.id))) && (!onlyId || num(p.id) === onlyId),
+    (p: any) => (!given || given.has(num(p.id))) && (!want || want.has(num(p.id))),
   );
   if (!rows.length) return [];
   const orders = await ordersOf(ctx.db, rows.map((p: any) => num(p.id)), addDays(today, -89), today);
@@ -104,9 +116,7 @@ export async function productLimits(ctx: Ctx, onlyId?: number | null): Promise<P
   const shopShare = num(avg?.d) + num(avg?.r) >= 20 ? num(avg.d) / (num(avg.d) + num(avg.r)) : 0.65;
   const plans = await getSetting(ctx.db, 'payPlans');
   const pages = await ctx.db.query(`SELECT id, slug, title, product_id, pixel_id FROM landing_pages WHERE active ORDER BY id DESC`).catch(() => []);
-  const base = (ctx.server?.pagesUrl?.() || ctx.server?.publicUrl || (ctx.server ? '' : DEMO_BASE)).replace(/\/+$/, '');
-  const store = await landingStore(ctx.db);
-  const own = await ownDomain(ctx);
+  const address = await pageAddress(ctx);
   const out: ProductLimit[] = [];
   for (const p of rows) {
     const id = num(p.id);
@@ -138,11 +148,70 @@ export async function productLimits(ctx: Ctx, onlyId?: number | null): Promise<P
             id: num(lp.id),
             slug: String(lp.slug),
             title: String(lp.title ?? lp.slug),
-            url: own ? `https://${own}/${lp.slug}` : base ? `${base}/${store ? `${store}/` : ''}${lp.slug}` : '',
-            own: !!own,
+            url: address.url(String(lp.slug)),
+            own: address.own,
             pixelId: lp.pixel_id ? String(lp.pixel_id) : null,
           }
         : null,
+    });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- a group of products (Landing pages › Groupes)
+/** Above this many products, a group's ad shows too many choices: the launcher says so (the owner's choice, 20 Nov 2026). */
+export const GROUP_MANY = 5;
+/** What a group's ad may be for: the ad opens the group's page (no messages, calls or form: they sell one product). */
+export const GROUP_GOALS: Goal[] = ['sales', 'traffic', 'awareness'];
+
+/**
+ * A group the launcher offers: the ad opens the group's page and the customer picks the product there. Its numbers are
+ * those of its product with the LOWEST limit (the safe one: an order of any of its products stays under it); `landing`
+ * is the group's own page (null while it is offline), `price` its cheapest product's.
+ */
+export interface GroupLimit extends ProductLimit {
+  group: { count: number; productIds: number[]; names: string[]; lowest: string; maxPrice: number };
+}
+
+/** A group's products, from its items (the landing pages it shows, in their order; a page deleted since has left it). */
+const groupPageIds = (items: unknown): number[] => {
+  const list = typeof items === 'string' ? (() => { try { return JSON.parse(items); } catch { return []; } })() : items;
+  return (Array.isArray(list) ? list : []).map((x: any) => Number(x?.pageId)).filter((n) => Number.isSafeInteger(n) && n > 0);
+};
+
+/**
+ * The groups of Landing pages › Groupes with at least one product on sale. A marketer partner's person: only the groups
+ * whose products the store all gave them. `products`: the products' numbers already read (the launcher's list).
+ */
+export async function groupLimits(ctx: Ctx, opts: { only?: number | null; products?: ProductLimit[] } = {}): Promise<GroupLimit[]> {
+  const rows = await ctx.db
+    .query(`SELECT id, slug, title, active, items, pixel_id FROM landing_groups ${opts.only ? 'WHERE id = $1' : ''} ORDER BY updated_at DESC, id DESC LIMIT 100`, opts.only ? [opts.only] : [])
+    .catch(() => []);
+  if (!rows.length) return [];
+  const pageIds = [...new Set(rows.flatMap((r: any) => groupPageIds(r.items)))];
+  const pages = pageIds.length ? await ctx.db.query(`SELECT id, product_id FROM landing_pages WHERE id = ANY($1) AND active`, [pageIds]) : [];
+  const productOf = new Map<number, number>(pages.filter((p: any) => p.product_id !== null).map((p: any) => [num(p.id), num(p.product_id)]));
+  const wanted = [...new Set([...productOf.values()])];
+  const products = opts.products ?? (wanted.length ? await productLimits(ctx, wanted) : []);
+  const P = new Map(products.map((p) => [p.id, p]));
+  const given = givenOf(ctx);
+  const address = await pageAddress(ctx);
+  const out: GroupLimit[] = [];
+  for (const r of rows) {
+    const pids = [...new Set(groupPageIds(r.items).map((id) => productOf.get(id)).filter((p): p is number => p !== undefined))];
+    if (given && pids.some((p) => !given.has(p))) continue;
+    const ps = pids.map((p) => P.get(p)).filter((p): p is ProductLimit => !!p);
+    if (!ps.length) continue;
+    const lowest = ps.reduce((a, b) => (b.limit.maxDzd < a.limit.maxDzd ? b : a));
+    const slug = String(r.slug);
+    out.push({
+      ...lowest,
+      id: num(r.id),
+      name: String(r.title || slug),
+      price: Math.min(...ps.map((p) => p.price)),
+      photo: ps.find((p) => p.photo)?.photo ?? null,
+      landing: r.active ? { id: num(r.id), slug, title: String(r.title || slug), url: address.url(slug), own: address.own, pixelId: r.pixel_id ? String(r.pixel_id) : null } : null,
+      group: { count: ps.length, productIds: ps.map((p) => p.id), names: ps.map((p) => p.name), lowest: lowest.name, maxPrice: Math.max(...ps.map((p) => p.price)) },
     });
   }
   return out;
@@ -193,6 +262,7 @@ async function options(ctx: Ctx, contentId: string | null = null) {
   const s = await pilotSettings(ctx.db);
   const last = await getRaw<{ privacyUrl?: string; phone?: string }>(ctx.db, LAST_KEY, {});
   const shop = await getSetting(ctx.db, 'shop');
+  const products = await productLimits(ctx);
   return {
     owner: isOwner(ctx),
     demo: !ctx.server,
@@ -209,7 +279,11 @@ async function options(ctx: Ctx, contentId: string | null = null) {
     goals: GOALS.map((g) => ({ goal: g, objective: GOAL_META[g].objective })),
     phone: last.phone ?? (normalizePhone(shop.savPhone ?? '') ? `+213${normalizePhone(shop.savPhone)!.slice(1)}` : ''),
     privacyUrl: last.privacyUrl ?? '',
-    products: await productLimits(ctx),
+    products,
+    /** Landing pages › Groupes: the ad opens the group's page, the customer picks the product there */
+    groups: await groupLimits(ctx, { products }),
+    groupGoals: GROUP_GOALS,
+    groupMany: GROUP_MANY,
     /** Marketing › Influenceurs: the creators an ad in two names may use, and the creator's post to boost when one is chosen
      *  (none while Influenceurs is off: out of the plan, or « Bientôt ») */
     partners: influencersOn(ctx) ? await partnerChoices(ctx.db) : [],
@@ -263,19 +337,65 @@ Règles :
 - Le titre : 40 caractères au plus.
 Réponds seulement avec ce JSON : {"variants":[{"primary":"…","headline":"…"},…],"welcome":{"text":"…","questions":["…","…","…"]}}`;
 
-async function writeCopy(ctx: Ctx, i: { productId: number; goal: Goal; lang: CopyLang; idea: string }) {
-  const p = (await ctx.db.query(`SELECT id, name, price FROM products WHERE id = $1`, [i.productId]))[0];
-  if (!p) throw notFound('Produit introuvable');
-  const given = givenOf(ctx);
-  if (given && !given.has(num(p.id))) throw forbidden();
-  const product = { name: String(p.name), price: num(p.price) };
-  const ready = demoCopy(i.lang, product, i.goal);
+/**
+ * Ready sentences for a group's ad (the customer picks on the group's page): the choice, the prices from the cheapest
+ * to the dearest, paid on delivery. Never one product's name or price alone: the ad sells the choice.
+ */
+export function groupCopy(lang: CopyLang, g: { name: string; count: number; price: number; maxPrice: number }): { variants: { primary: string; headline: string }[]; welcome: { text: string; questions: string[] } } {
+  const from = da(g.price);
+  const to = da(g.maxPrice);
+  const one = g.price === g.maxPrice;
+  const T = {
+    darija: [
+      { primary: `👶 ${g.name}\nعندنا ${g.count} موديلات، اختار اللي يعجبك\n💵 من ${from} دج\n✅ الخلاص عند الاستلام\n🚚 التوصيل لكل الولايات\n👇 شوف الموديلات و اطلب من الموقع`, headline: `${g.count} موديلات · من ${from} دج` },
+      { primary: `حاب تشري و ما عرفتش واش تختار؟ 🤔\n${g.count} موديلات في «${g.name}»، كل واحد بسومتو\n✅ تشوف السلعة قبل ما تخلص\n🚚 توصيل للدار ولا للمكتب\n👇 شوف الموديلات و اطلب من الموقع`, headline: 'الخلاص عند الاستلام' },
+      { primary: `${g.name} ✨\n${one ? `${from} دج` : `من ${from} حتى ${to} دج`}، كاين لكل ميزانية\n💵 الخلاص كي توصلك\n👇 شوف الموديلات و اطلب من الموقع`, headline: 'اختار الموديل تاعك' },
+    ],
+    fr: [
+      { primary: `👶 ${g.name}\n${g.count} modèles au choix\n💵 À partir de ${from} DA\n✅ Paiement à la livraison\n🚚 Livraison dans toute l’Algérie\n👇 Voyez les modèles et commandez sur le site`, headline: `${g.count} modèles · dès ${from} DA` },
+      { primary: `Vous hésitez ? 🤔\n${g.count} modèles dans « ${g.name} », un prix pour chacun\n✅ Vous vérifiez avant de payer\n🚚 À domicile ou au bureau\n👇 Voyez les modèles et commandez sur le site`, headline: 'Paiement à la livraison' },
+      { primary: `${g.name} ✨\n${one ? `${from} DA` : `De ${from} à ${to} DA`} : un modèle pour chaque budget\n💵 Payé à la réception\n👇 Voyez les modèles et commandez sur le site`, headline: 'Choisissez votre modèle' },
+    ],
+    ar: [
+      { primary: `👶 ${g.name}\n${g.count} موديلات للاختيار\n💵 ابتداءً من ${from} دج\n✅ الدفع عند الاستلام\n🚚 التوصيل إلى كل الولايات\n👇 شاهد الموديلات واطلب من الموقع`, headline: `${g.count} موديلات · من ${from} دج` },
+      { primary: `محتار؟ 🤔\n${g.count} موديلات في «${g.name}»، لكل واحد سعره\n✅ تتحقق من المنتج قبل الدفع\n🚚 إلى المنزل أو المكتب\n👇 شاهد الموديلات واطلب من الموقع`, headline: 'الدفع عند الاستلام' },
+      { primary: `${g.name} ✨\n${one ? `${from} دج` : `من ${from} إلى ${to} دج`}: موديل لكل ميزانية\n💵 تدفع عند الاستلام\n👇 شاهد الموديلات واطلب من الموقع`, headline: 'اختر الموديل المناسب لك' },
+    ],
+  };
+  const W = {
+    darija: { text: `مرحبا بيك 👋 حاب تعرف على ${g.name}؟`, questions: ['شحال السعر؟', 'كيفاش نطلب؟', 'كاين التوصيل لولايتي؟'] },
+    fr: { text: `Bonjour 👋 Vous voulez en savoir plus sur ${g.name} ?`, questions: ['Quels sont les prix ?', 'Comment commander ?', 'Vous livrez dans ma wilaya ?'] },
+    ar: { text: `مرحبا 👋 تريد معرفة المزيد عن ${g.name}؟`, questions: ['ما هي الأسعار؟', 'كيف أطلب؟', 'هل التوصيل متوفر في ولايتي؟'] },
+  };
+  return { variants: T[lang], welcome: W[lang] };
+}
+
+async function writeCopy(ctx: Ctx, i: { productId?: number | null; groupId?: number | null; goal: Goal; lang: CopyLang; idea: string }) {
+  const language = i.lang === 'darija' ? 'darija algérienne (lettres arabes)' : i.lang === 'fr' ? 'français' : 'arabe simple';
+  const idea = i.idea.trim() ? `\nIdée du vendeur : ${i.idea.trim().slice(0, 400)}` : '';
+  let ready: ReturnType<typeof demoCopy>;
+  let user: string;
+  if (i.groupId) {
+    // a group: its page shows several products and the customer picks one (its products all given to this person)
+    const g = (await groupLimits(ctx, { only: i.groupId }))[0];
+    if (!g) throw notFound('Groupe introuvable');
+    ready = groupCopy(i.lang, { name: g.name, count: g.group.count, price: g.price, maxPrice: g.group.maxPrice });
+    user = `Groupe de produits : ${g.name} (une page avec ${g.group.count} produits : le client choisit le sien sur la page ; la pub vend ce choix, pas un seul produit)\nProduits : ${g.group.names.join(', ')}\nPrix : ${g.price === g.group.maxPrice ? `${g.price} DA` : `de ${g.price} à ${g.group.maxPrice} DA`}\nObjectif de la pub : ${i.goal}\nLangue : ${language}${idea}`;
+  } else {
+    if (!i.productId) throw bad('Choisissez un produit ou un groupe.');
+    const p = (await ctx.db.query(`SELECT id, name, price FROM products WHERE id = $1`, [i.productId]))[0];
+    if (!p) throw notFound('Produit introuvable');
+    const given = givenOf(ctx);
+    if (given && !given.has(num(p.id))) throw forbidden();
+    const product = { name: String(p.name), price: num(p.price) };
+    ready = demoCopy(i.lang, product, i.goal);
+    user = `Produit : ${product.name}\nPrix : ${product.price} DA\nObjectif de la pub : ${i.goal}\nLangue : ${language}${idea}`;
+  }
   const inPage = !ctx.server?.dellal && ctx.dellalAi ? ctx.dellalAi : null;
   if (!inPage && !(await aiKeyed(ctx))) return { ...ready, by: 'ready' as const };
   try {
     const pilot = !inPage && (await pilotOn(ctx));
     const model = pilot ? PILOT_CHEAP_MODEL : (await dellalSettings(ctx.db)).model;
-    const user = `Produit : ${product.name}\nPrix : ${product.price} DA\nObjectif de la pub : ${i.goal}\nLangue : ${i.lang === 'darija' ? 'darija algérienne (lettres arabes)' : i.lang === 'fr' ? 'français' : 'arabe simple'}${i.idea.trim() ? `\nIdée du vendeur : ${i.idea.trim().slice(0, 400)}` : ''}`;
     const req = { model, system: COPY_SYSTEM, messages: [{ role: 'user' as const, content: user }], tools: [], max_tokens: 900 };
     const res = (inPage ? await inPage({ ...req, runTool: async () => ({ error: 'Pas d’outil ici' }) }) : await ctx.server!.dellal!('complete', { ...req, feature: 'other', pilot }, ctx)) as AiResponse;
     const text = res.content.map((b: any) => (b.type === 'text' ? b.text : '')).join('');
@@ -297,6 +417,8 @@ async function writeCopy(ctx: Ctx, i: { productId: number; goal: Goal; lang: Cop
 export const LaunchSpec = z.object({
   goal: z.enum(GOALS),
   productId: z.number().int().positive().nullable(),
+  /** …or a group of Landing pages › Groupes (never both): the ad opens the group's page */
+  groupId: z.number().int().positive().nullable().default(null),
   name: z.string().trim().min(1).max(200),
   mediaIds: z.array(z.number().int().positive()).max(10).default([]),
   text: z.object({ primary: z.string().max(2000), headline: z.string().max(255) }),
@@ -354,6 +476,9 @@ const view = (r: any) => ({
   goal: String(r.goal) as Goal,
   productId: numOrNull(r.product_id),
   productName: r.product_name ?? null,
+  /** a group of Landing pages › Groupes (its ad opens the group's page) */
+  groupId: numOrNull(r.spec?.groupId ?? null),
+  groupName: r.group_title ?? null,
   name: String(r.name),
   spec: r.spec as LaunchSpec,
   budgetUsd: Number(r.spec?.budgetUsd ?? 0),
@@ -374,6 +499,7 @@ const view = (r: any) => ({
 });
 /** a launch with its names, and its campaign and ad sets as Meta has them now */
 const LAUNCH_SQL = `SELECT l.*, p.name AS product_name, u.name AS by_name, a.name AS approved_name, pt.name AS partner_name,
+    (SELECT g.title FROM landing_groups g WHERE g.id::text = l.spec->>'groupId') AS group_title,
     c.status AS campaign_status, (SELECT array_agg(s.status) FROM adsets s WHERE s.id = ANY(l.adset_ids)) AS adset_statuses
   FROM ad_launches l LEFT JOIN products p ON p.id = l.product_id LEFT JOIN profiles u ON u.id = l.by_user
   LEFT JOIN profiles a ON a.id = l.approved_by LEFT JOIN ad_partners pt ON pt.id = l.partner_id LEFT JOIN ad_campaigns c ON c.id = l.campaign_id`;
@@ -408,18 +534,26 @@ function budgetCents(usd: number, currency: string, rate: number | null): number
 }
 
 /** The launch as Meta will get it, checked: the problems first (nothing goes to Meta while one is left). */
-async function inputOf(ctx: Ctx, r: any): Promise<{ input: LaunchInput; acct: { id: string; currency: string }; media: MediaRow[]; product: ProductLimit | null; excluded: number[]; boostVideo: boolean }> {
+async function inputOf(
+  ctx: Ctx,
+  r: any,
+): Promise<{ input: LaunchInput; acct: { id: string; currency: string }; media: MediaRow[]; product: ProductLimit | null; group: GroupLimit | null; excluded: number[]; boostVideo: boolean }> {
   const spec = LaunchSpec.parse(r.spec);
   const acct = await account(ctx);
   if (!acct) throw bad('Reliez le compte pub Meta de la boutique (Pilot AI › Comptes).');
   const page = await pageOf(ctx);
   const rate = (await fxTable(ctx.db))(algDay(ctx.now()).slice(0, 7));
+  if (spec.productId && spec.groupId) throw bad('Choisissez un produit ou un groupe, pas les deux.');
   const product = spec.productId ? ((await productLimits(ctx, spec.productId))[0] ?? null) : null;
   if (spec.productId && !product) throw forbidden('Ce produit ne vous est pas confié.');
+  const group = spec.groupId ? ((await groupLimits(ctx, { only: spec.groupId }))[0] ?? null) : null;
+  if (spec.groupId && !group) throw bad('Ce groupe n’existe plus, n’a plus de produit en vente, ou a un produit qui ne vous est pas confié.');
+  // what the ad opens: the product's page, or the group's
+  const target = product ?? group;
   const media = await mediaOf(ctx, spec.mediaIds);
   if (media.length !== spec.mediaIds.length) throw bad('Une photo ou une vidéo n’est plus dans la bibliothèque : choisissez-la à nouveau.');
   const lm: LaunchMedia[] = media.map((m, n) => ({ kind: m.kind, mediaId: m.id, url: m.kind === 'video' ? (videoAddress(ctx, m) ?? null) : null, name: `${m.kind === 'video' ? 'Vidéo' : 'Photo'} ${n + 1}` }));
-  const pixelId = spec.pixelId ?? product?.landing?.pixelId ?? (await pixelsOf(ctx))[0]?.id ?? null;
+  const pixelId = spec.pixelId ?? target?.landing?.pixelId ?? (await pixelsOf(ctx))[0]?.id ?? null;
   const phone = spec.phone ? (normalizePhone(spec.phone) ? `+213${normalizePhone(spec.phone)!.slice(1)}` : spec.phone) : null;
   const aud = spec.useAudiences ? await audienceIds(ctx.db) : { exclude: [], include: [] };
   const input: LaunchInput = {
@@ -428,7 +562,7 @@ async function inputOf(ctx: Ctx, r: any): Promise<{ input: LaunchInput; acct: { 
     pageId: page?.pageId ?? '',
     instagramId: page?.igId ?? null,
     pixelId,
-    link: product?.landing?.url || null,
+    link: target?.landing?.url || null,
     phone,
     formId: spec.formId,
     postId: spec.postId ? (spec.postId.includes('_') ? spec.postId : `${page?.pageId ?? ''}_${spec.postId}`) : null,
@@ -459,11 +593,16 @@ async function inputOf(ctx: Ctx, r: any): Promise<{ input: LaunchInput; acct: { 
   if (post && !post.boostable) extra.push(`Meta ne permet pas de booster cette publication${post.errors[0]?.message ? ` : ${post.errors[0].message}` : '.'}`);
   if (post) input.boost = { platform: post.platform, contentId: post.id, adCode: post.adCode };
   else if (partner && USABLE.includes(partner.status)) input.partner = { igId: partner.igId, pageId: partner.pageId };
+  // a group: its page sells the products (messages, calls and forms sell one product)
+  if (group && !GROUP_GOALS.includes(spec.goal)) extra.push('Un groupe se lance pour vendre sur la page, pour des visites ou pour être vu : choisissez un de ces objectifs.');
   // a new form is made at launch: until then the plan has its place
-  const problems = [...extra, ...launchProblems(spec.goal === 'form' && spec.newForm && !spec.formId ? { ...input, formId: 'new' } : input)];
+  const problems = [...extra, ...launchProblems(spec.goal === 'form' && spec.newForm && !spec.formId ? { ...input, formId: 'new' } : input)].map((p) =>
+    // a group without its page: it is offline (Landing pages › Groupes), not a product without a page
+    group && /^Ce produit n’a pas de page de vente/.test(p) ? 'Ce groupe est hors ligne : mettez-le en ligne (Landing pages › Groupes).' : p,
+  );
   if (spec.goal === 'form' && !spec.formId && !spec.newForm) problems.push('Choisissez un formulaire, ou faites-en un nouveau.');
   if (problems.length) throw bad(problems.join(' · '));
-  return { input, acct, media, product, excluded: spec.excludeWilayas, boostVideo: post?.mediaType === 'VIDEO' };
+  return { input, acct, media, product, group, excluded: spec.excludeWilayas, boostVideo: post?.mediaType === 'VIDEO' };
 }
 
 /** a video in the library: the public address Meta downloads it from (the server only) */
@@ -511,7 +650,7 @@ async function go(ctx: Ctx, id: number, approved = false) {
     if (r.status === 'refused') throw bad('Le propriétaire a refusé ce lancement : faites-en un autre.');
     const s = await pilotSettings(ctx.db);
     if (s.guard.stopped) throw bad('Tout est arrêté par le propriétaire : rien ne démarre avant « Tout relancer ».');
-    const { input, acct, media, product, excluded, boostVideo } = await inputOf(ctx, r);
+    const { input, acct, media, product, group, excluded, boostVideo } = await inputOf(ctx, r);
     const rate = (await fxTable(ctx.db))(algDay(ctx.now()).slice(0, 7));
     const usd = Number(r.spec.budgetUsd);
     // the shop's spend per day with this one: above the owner's limit, a marketer cannot; the owner is told
@@ -594,11 +733,27 @@ async function go(ctx: Ctx, id: number, approved = false) {
            ON CONFLICT (id) DO UPDATE SET status = 'ACTIVE', launch_id = EXCLUDED.launch_id, updated_at = now()`,
           [ids.campaign, acct.id, input.name, GOAL_META[input.goal].objective, input.budgetLevel === 'campaign' ? input.budgetCents : null, input.bid?.strategy ?? 'LOWEST_COST_WITHOUT_CAP', id],
         );
+        // a group's ad sets sell all its products (« Plus de stock » waits until none is left), and « Mes pubs » shows
+        // them as the group's one card
         for (const [n, a] of plan.adsets.entries())
           await tx.query(
-            `INSERT INTO adsets (id, name, campaign, campaign_id, account_id, daily_budget_cents, goal, product_ids, marketer_id, status, currency, launch_id, changed_at, updated_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'ACTIVE',$10,$11,now(),now()) ON CONFLICT (id) DO UPDATE SET goal = EXCLUDED.goal, launch_id = EXCLUDED.launch_id, product_ids = EXCLUDED.product_ids, status = 'ACTIVE', updated_at = now()`,
-            [adsetIds[n], String(a.body.name), input.name, ids.campaign, acct.id, input.budgetLevel === 'adset' ? input.budgetCents : null, input.goal, product ? [product.id] : [], marketer, acct.currency, id],
+            `INSERT INTO adsets (id, name, campaign, campaign_id, account_id, daily_budget_cents, goal, product_ids, group_id, marketer_id, status, currency, launch_id, changed_at, updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'ACTIVE',$11,$12,now(),now())
+             ON CONFLICT (id) DO UPDATE SET goal = EXCLUDED.goal, launch_id = EXCLUDED.launch_id, product_ids = EXCLUDED.product_ids, group_id = EXCLUDED.group_id, status = 'ACTIVE', updated_at = now()`,
+            [
+              adsetIds[n],
+              String(a.body.name),
+              input.name,
+              ids.campaign,
+              acct.id,
+              input.budgetLevel === 'adset' ? input.budgetCents : null,
+              input.goal,
+              product ? [product.id] : group ? group.group.productIds : [],
+              group ? group.id : null,
+              marketer,
+              acct.currency,
+              id,
+            ],
           );
         for (const [n, a] of plan.ads.entries())
           await tx.query(`INSERT INTO ads (id, adset_id, name, status, is_video, updated_at) VALUES ($1,$2,$3,'ACTIVE',$4,now()) ON CONFLICT (id) DO NOTHING`, [
@@ -644,6 +799,9 @@ async function saveLaunch(ctx: Ctx, i: { id?: number | null; clientId?: string |
   if (i.spec.partnerId && !(await partnerFor(ctx.db, i.spec.partnerId))) throw bad('Cet influenceur n’est plus dans la liste.');
   const given = givenOf(ctx);
   if (i.spec.productId && given && !given.has(i.spec.productId)) throw forbidden('Ce produit ne vous est pas confié.');
+  if (i.spec.productId && i.spec.groupId) throw bad('Choisissez un produit ou un groupe, pas les deux.');
+  // a group: there, with its products all given to this person
+  if (i.spec.groupId && !(await groupLimits(ctx, { only: i.spec.groupId })).length) throw forbidden('Ce groupe n’existe plus, ou un de ses produits ne vous est pas confié.');
   if (i.spec.mediaIds.length) {
     const found = await ctx.db.query(`SELECT id, created_by FROM cm_media WHERE id = ANY($1)`, [i.spec.mediaIds]);
     if (found.length !== new Set(i.spec.mediaIds).size) throw bad('Une photo ou une vidéo est introuvable.');
@@ -731,7 +889,7 @@ const Lang = z.enum(['darija', 'fr', 'ar']);
 export const adsLaunchProcs = {
   'ads.launch.options': proc(['marketer'], z.object({ contentId: z.string().max(80).nullable().default(null) }), (ctx, i) => options(ctx, i.contentId)),
   /** the ad's words: three versions and the welcome message (Pilot AI, or ready sentences) */
-  'ads.launch.copy': proc(['marketer'], z.object({ productId: Id, goal: z.enum(GOALS), lang: Lang, idea: z.string().max(400).default('') }), (ctx, i) => writeCopy(ctx, i)),
+  'ads.launch.copy': proc(['marketer'], z.object({ productId: Id.nullable().default(null), groupId: Id.nullable().default(null), goal: z.enum(GOALS), lang: Lang, idea: z.string().max(400).default('') }), (ctx, i) => writeCopy(ctx, i)),
   'ads.launch.save': proc(['marketer'], z.object({ id: Id.nullable().optional(), clientId: z.string().max(64).nullable().optional(), mode: z.enum(['simple', 'pro']), spec: LaunchSpec }), (ctx, i) => saveLaunch(ctx, i)),
   'ads.launch.list': proc(['marketer'], z.object({}), async (ctx) => {
     const rows = await ctx.db.query(`${LAUNCH_SQL} WHERE ($1::bigint IS NULL OR l.by_user = $1) ORDER BY l.id DESC LIMIT 60`, [isOwner(ctx) ? null : me(ctx)]);
