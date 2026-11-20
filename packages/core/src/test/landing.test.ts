@@ -50,7 +50,8 @@ test('the page is one small HTML file with the form, the colour and the descript
   assert.ok(r.html.includes('<li>خفيفة</li>'));
   assert.ok(r.html.includes('اطلب الآن'));
   // (with its product's HD photo and its sizes, as every product on sale has one: Produits › « Prêt »)
-  assert.ok(Buffer.byteLength(r.html) < 32_000, `page is ${Buffer.byteLength(r.html)} bytes`);
+  // 32 000 until 20 Nov 2026: the shade on the left edge (the owner's choice) adds about 230 bytes
+  assert.ok(Buffer.byteLength(r.html) < 32_500, `page is ${Buffer.byteLength(r.html)} bytes`);
   assert.ok(!/<script src=/.test(r.html), 'no external script');
 });
 

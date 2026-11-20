@@ -230,7 +230,7 @@ export const landingPrice = (v: number) => `${Math.round(v)}.00 دج`;
  * The shade lies under the buy bar (z-index 9) and lets every touch and click through. */
 const EDGE_CSS =
   'html{scrollbar-width:none}html::-webkit-scrollbar{display:none}' +
-  'body:after{content:"";position:fixed;z-index:8;top:0;bottom:0;left:0;width:18px;pointer-events:none;background:linear-gradient(90deg,rgba(17,24,39,.22),rgba(17,24,39,.08) 40%,rgba(17,24,39,0))}';
+  'body:after{content:"";position:fixed;z-index:8;top:0;bottom:0;left:0;width:18px;pointer-events:none;background:linear-gradient(90deg,#11182738,#11182714 40%,#0000)}';
 
 const CSS = (c: string) => `:root{--c:${c};--cd:${shade(c, -0.25)};--cl:${shade(c, 0.9)};--b:#e5e7eb;--t:#111827;--m:#6b7280}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;font:16px/1.55 system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;color:var(--t);background:#f6f7f9}
