@@ -87,6 +87,8 @@ function Board({ d }: { d: S }) {
   const [data, setData] = useState<'all' | DataGroup>('all');
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState<string | null>(null);
+  // the parts start folded (83 cases made the page about 37 phone screens long); a search or a filter opens them all
+  const [openParts, setOpenParts] = useState<Set<CheckPart>>(() => new Set());
   const rules = useMemo(() => new Map(d.rules.map((r) => [r.id, r])), [d.rules]);
   const ruleOf = (c: CheckDef) => rules.get(c.id)!;
   const lang = i18n.language;
@@ -103,6 +105,15 @@ function Board({ d }: { d: S }) {
   const countLevel = (lv: CheckLevel) => CHECKS.filter((c) => inPart(c) && rest(c) && ruleOf(c).level === lv).length;
   const group = (g: DataGroup) => CHECKS.filter((c) => GROUP_OF[c.data] === g).length;
   const filtered = part !== 'all' || !!level || data !== 'all' || !!q;
+  const partOpen = (p: CheckPart) => filtered || openParts.has(p);
+  const allOpen = CHECK_PARTS.every((p) => openParts.has(p));
+  const togglePart = (p: CheckPart) =>
+    setOpenParts((o) => {
+      const next = new Set(o);
+      if (next.has(p)) next.delete(p);
+      else next.add(p);
+      return next;
+    });
   const clear = () => {
     setPart('all');
     setLevel(null);
@@ -177,6 +188,12 @@ function Board({ d }: { d: S }) {
           {t('checks.dataSum', { ready: group('ready'), toAdd: group('toAdd'), unverified: group('unverified'), total: CHECKS.length })}
           {filtered && <> {t('checks.shownOf', { shown: shown.length, total: CHECKS.length })}.</>}
         </p>
+        {!filtered && (
+          <button type="button" className="btn small pc-all" aria-expanded={allOpen} onClick={() => setOpenParts(allOpen ? new Set() : new Set(CHECK_PARTS))}>
+            <Icon name="chevron" className="pc-chev" />
+            {allOpen ? t('checks.foldAll') : t('checks.unfoldAll')}
+          </button>
+        )}
       </div>
 
       {shown.length === 0 ? (
@@ -190,24 +207,38 @@ function Board({ d }: { d: S }) {
       ) : (
         CHECK_PARTS.filter((p) => shown.some((c) => c.part === p)).map((p) => {
           const list = shown.filter((c) => c.part === p);
+          const on = partOpen(p);
           return (
-            <section key={p} className="card pc-part">
+            <section key={p} className={`card pc-part${on ? '' : ' pc-part-folded'}`}>
               <div className="card-head">
-                <h2>{t(`checks.parts.${p}`)}</h2>
+                <h2>
+                  {filtered ? (
+                    t(`checks.parts.${p}`)
+                  ) : (
+                    <button type="button" className="pc-toggle" aria-expanded={on} onClick={() => togglePart(p)}>
+                      <Icon name="chevron" className="pc-chev" />
+                      <span>{t(`checks.parts.${p}`)}</span>
+                    </button>
+                  )}
+                </h2>
                 <span className="muted small">{t('checks.cases', { count: list.length })}</span>
               </div>
-              <div className="pc-head" aria-hidden="true">
-                <span />
-                <span>{t('checks.head.case')}</span>
-                <span>{t('checks.f.lines')}</span>
-                <span>{t('checks.f.do')}</span>
-                <span />
-              </div>
-              <ul className="pc-list">
-                {list.map((c) => (
-                  <Row key={c.id} c={c} rule={ruleOf(c)} vars={vars} log={d.log} open={open === c.id} onToggle={() => setOpen(open === c.id ? null : c.id)} onClose={() => setOpen(null)} />
-                ))}
-              </ul>
+              {on && (
+                <>
+                  <div className="pc-head" aria-hidden="true">
+                    <span />
+                    <span>{t('checks.head.case')}</span>
+                    <span>{t('checks.f.lines')}</span>
+                    <span>{t('checks.f.do')}</span>
+                    <span />
+                  </div>
+                  <ul className="pc-list">
+                    {list.map((c) => (
+                      <Row key={c.id} c={c} rule={ruleOf(c)} vars={vars} log={d.log} open={open === c.id} onToggle={() => setOpen(open === c.id ? null : c.id)} onClose={() => setOpen(null)} />
+                    ))}
+                  </ul>
+                </>
+              )}
             </section>
           );
         })

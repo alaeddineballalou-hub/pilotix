@@ -194,6 +194,10 @@ test('a new shop with nothing: no problem, nothing to judge, score 100', async (
   assert.equal(r.score, 100);
   assert.deepEqual(r.items.filter((i) => i.level === 'bad' || i.level === 'warn'), []);
   for (const id of ['confRate', 'returns', 'ordersDrop', 'weakAgents']) assert.equal(find(r, id)?.level, 'info', id);
+  // no order yet: Co-Pilot shows what to do first, not « 100 / 100, all good »
+  assert.equal(r.empty, true);
+  await s.order({ conf_status: 'new', created_at: ago(H) });
+  assert.equal((await s.doctor(s.admin)).empty, false, 'one order: the shop is no longer empty');
 });
 
 // ---------------------------------------------------------------- each problem

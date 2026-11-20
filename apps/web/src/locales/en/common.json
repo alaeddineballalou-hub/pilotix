@@ -1,4 +1,9 @@
 {
+  "cols": {
+    "more_one": "+{{count}} column",
+    "more_other": "+{{count}} columns",
+    "less": "Fewer columns"
+  },
   "loading": "Loading…",
   "error": "Something went wrong",
   "retry": "Retry",

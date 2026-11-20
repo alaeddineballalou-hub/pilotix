@@ -103,8 +103,10 @@ function Live({ at }: { at: string }) {
  * The top of a Doctor / Co-Pilot (the "cockpit"): the living face, one sentence, a bar of every check's colour, the
  * counts, the score. No "look again" button: the page keeps it up to date by itself.
  */
-export function DoctorHero({ title, sub, score, items, checkedAt, badge }: { title: string; sub?: string; score: number; items: DoctorItem[]; checkedAt: string; badge?: string }) {
+export function DoctorHero({ title, sub, score, items, checkedAt, badge, empty }: { title: string; sub?: string; score: number; items: DoctorItem[]; checkedAt: string; badge?: string; empty?: boolean }) {
   const { t } = useTranslation();
+  // a shop with no order yet: nothing to judge, so no score: what to do first instead
+  if (empty) return <DoctorEmpty title={title} checkedAt={checkedAt} />;
   const bad = items.filter((i) => i.level === 'bad').length;
   const warn = items.filter((i) => i.level === 'warn').length;
   // the same checks as the folded « all good » list below (what only informs is fine too)
@@ -140,6 +142,36 @@ export function DoctorHero({ title, sub, score, items, checkedAt, badge }: { tit
       </div>
       <div className="dr-cock-score">
         <b className="ltr">{score}</b>
+        <small>{t('doctor.outOf')}</small>
+      </div>
+    </section>
+  );
+}
+
+/** Co-Pilot before the first order: no « 100 / 100, all good », but the two steps that bring the first order. */
+function DoctorEmpty({ title, checkedAt }: { title: string; checkedAt: string }) {
+  const { t } = useTranslation();
+  return (
+    <section className="dr-cock dr-cock-empty">
+      <CopilotIcon mood={null} size={64} label={title} />
+      <div className="dr-cock-m">
+        <div className="dr-cock-top">
+          <h2 className="dr-cock-t">{title}</h2>
+          <Live at={checkedAt} />
+        </div>
+        <p className="dr-cock-say">{t('doctor.empty.say')}</p>
+        <p className="dr-cock-sub">{t('doctor.empty.sub')}</p>
+        <div className="row dr-empty-go">
+          <a className="btn small" href="#/produits/produits">
+            <Icon name="layers" /> {t('doctor.empty.product')}
+          </a>
+          <a className="btn small" href="#/landing">
+            <Icon name="globe" /> {t('doctor.empty.landing')}
+          </a>
+        </div>
+      </div>
+      <div className="dr-cock-score dr-cock-noscore" aria-label={t('doctor.empty.noScore')}>
+        <b>—</b>
         <small>{t('doctor.outOf')}</small>
       </div>
     </section>

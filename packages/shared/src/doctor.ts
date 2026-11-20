@@ -50,6 +50,8 @@ export interface ShopDoctorReport {
   items: DoctorItem[];
   /** whose work it looks at: the whole shop (admin / vendeur), or this person's own orders / parcels (an agent) */
   scope?: { whole: boolean; mine: boolean };
+  /** the shop has no order yet: nothing to judge, so no score (Co-Pilot says what to do first instead of « 100 ») */
+  empty?: boolean;
 }
 
 export interface DoctorJob {

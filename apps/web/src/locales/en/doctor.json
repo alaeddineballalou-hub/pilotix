@@ -2,6 +2,13 @@
   "shopTitle": "Co-Pilot",
   "mineTitle": "My Co-Pilot",
   "shopSub": "I check your shop every 5 minutes and warn you before a problem grows.",
+  "empty": {
+    "say": "No orders yet",
+    "sub": "I start watching with your first order. To get it: a product, then its landing page.",
+    "product": "Add a product",
+    "landing": "Create a landing page",
+    "noScore": "No score yet: no orders"
+  },
   "serverTitle": "Doctor",
   "serverSub": "The health of the Pilotix server: machine, database, automatic tasks, code errors and shops.",
   "onlyYou": "Only you can see this",

@@ -14,6 +14,7 @@ import { ErrorBox, Field, Help, Icon, Loading, Pager, RemovableChip, SortTh, Sta
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { colDrag, ColumnMenu, DensitySwitch, useDensity, useResizable, useTableColumns } from '../../ui/ColumnMenu';
+import { TabletColsButton, useTabletCols } from '../../ui/tabletCols';
 import { HistoryButton, PhoneCell } from './History';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import type { PageProps } from '../registry';
@@ -82,6 +83,9 @@ const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
   ...(sub === 'confirmees' || sub === 'livrees' ? [{ k: 'confirmed' as const, sort: 'confirmed_at' as const }] : [{ k: 'next' as const, sort: 'next_call_at' as const }]),
   { k: 'status' },
 ];
+
+/** The columns a confirmation agent works with, most useful first (a tablet shows the first 6 the table has). */
+const CONF_USEFUL = ['chrono', 'name', 'phone', 'product', 'wilaya', 'status', 'order', 'total'];
 
 function useList(sub: Sub, input: { q: string; f: Filters; sort: SortKey; dir: 'asc' | 'desc'; page: number; size: number }) {
   return useRpc(
@@ -203,7 +207,9 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   }, [list.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { order, setOrder } = tc;
-  const cols = order.map((k) => COLS.find((c) => c.k === k)!).filter((c) => c && visible.has(c.k));
+  // on a tablet: the 6 columns an agent calls with, « +N colonnes » shows the others (ui/tabletCols)
+  const tcols = useTabletCols(order.map((k) => COLS.find((c) => c.k === k)!).filter((c) => c && visible.has(c.k)), (c) => c.k, CONF_USEFUL);
+  const cols = tcols.cols;
   const drag = colDrag(order, setOrder);
   // column widths: each user's own
   const wkeys = ['_exp', '_ck', ...cols.map((c) => c.k), '_act'];
@@ -540,6 +546,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
               open={panel === 'c'}
               onToggle={() => setPanel(panel === 'c' ? null : 'c')}
             />
+            <TabletColsButton more={tcols.more} all={tcols.all} toggle={tcols.toggle} />
             {rightOn('act:orders.export') && (
               <button type="button" className="px-qb px-qb-dl" title={t('common.export')} aria-label={t('common.export')} onClick={doExport}>
                 <Icon name="download" />
@@ -588,7 +595,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                   <option value="">{t('confirmation.f.allT')}</option>
                   {meta.data?.teams.map((x) => (
                     <option key={x.id} value={x.id}>
-                      {x.name}
+                      {x.id === 'none' ? t('dashboard.tb.noManager') : x.name}
                     </option>
                   ))}
                 </select>

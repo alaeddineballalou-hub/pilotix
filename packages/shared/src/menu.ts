@@ -30,6 +30,9 @@ export const MENU_TABS = {
 export type MenuCond =
   /** Accueil: not for an agent who leads no one (the Dashboard is his home), unless the plan has no Dashboard */
   | 'home'
+  /** Dashboard in the menu: not for the owners and the agent managers. Their Accueil shows the teams' cards, which open
+   *  the Dashboard's boards, so their menu has one home page, not two. The agents and the livreurs keep it. */
+  | 'board'
   /** the livreurs only */
   | 'livreur'
   /** the « Point de vente » module is on (Management › Modules) */
@@ -112,6 +115,7 @@ export const STORE_MENU: MenuItem[] = [
     id: 'dashboard',
     icon: 'chart',
     roles: ['agent_manager', 'vendeur', 'confirmation', 'suivi', 'depot', 'livreur'],
+    cond: 'board',
     subs: MENU_TABS.dashboard,
     tabRoles: { overview: ['vendeur'], confirmation: BOARDS, depot: BOARDS, suivi: BOARDS, livreurs: BOARDS, sav: BOARDS },
     tabNames: { prefix: 'dashboard.areas' },

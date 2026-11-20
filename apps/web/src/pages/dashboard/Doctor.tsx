@@ -25,15 +25,15 @@ export function ShopDoctor({ card, fold }: { card?: boolean; fold?: boolean }) {
     <Loading />
   ) : (
     <div className="dr">
-      <DoctorHero title={t('doctor.shopTitle')} sub={sub} score={r.score} items={r.items} checkedAt={r.checkedAt} />
-      <DoctorList items={r.items} />
+      <DoctorHero title={t('doctor.shopTitle')} sub={sub} score={r.score} items={r.items} checkedAt={r.checkedAt} empty={r.empty} />
+      {!r.empty && <DoctorList items={r.items} />}
     </div>
   );
   if (fold) {
     const bad = r ? r.items.filter((i) => i.level === 'bad').length : 0;
     const warn = r ? r.items.filter((i) => i.level === 'warn').length : 0;
     const tone = !r ? '' : r.score >= 80 ? 'ok' : r.score >= 50 ? 'warn' : 'bad';
-    const say = !r ? '' : bad ? t('doctor.say.bad', { count: bad }) : warn ? t('doctor.say.warn', { count: warn }) : t('doctor.say.ok');
+    const say = !r ? '' : r.empty ? t('doctor.empty.say') : bad ? t('doctor.say.bad', { count: bad }) : warn ? t('doctor.say.warn', { count: warn }) : t('doctor.say.ok');
     return (
       <section className={`card dr-home dr-mine${open ? ' open' : ''}`}>
         <button type="button" className="dr-mine-row" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
@@ -44,8 +44,8 @@ export function ShopDoctor({ card, fold }: { card?: boolean; fold?: boolean }) {
             {!open && <small>{r ? say : sub}</small>}
           </span>
           {r && !open && (
-            <span className={`dr-mine-score dr-${tone}`}>
-              <b className="ltr">{r.score}</b>
+            <span className={`dr-mine-score dr-${r.empty ? '' : tone}`}>
+              <b className="ltr">{r.empty ? '—' : r.score}</b>
               <small>{t('doctor.outOf')}</small>
             </span>
           )}

@@ -1,4 +1,6 @@
 {
+  "unfoldAll": "Tout déplier",
+  "foldAll": "Tout replier",
   "title": "Pilot Checks",
   "lead": "Tous vos KPI pub, un par un : le chiffre, quand c’est bon, mauvais ou à arrêter, et quoi faire. Vous pouvez tout régler.",
   "step": {

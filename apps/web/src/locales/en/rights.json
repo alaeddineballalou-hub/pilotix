@@ -72,7 +72,7 @@
     "users": "Create accounts and change passwords, never an administrator's. Before: « Can create accounts and change passwords ».",
     "assign": "Depot › « To assign ». Before: « Can assign orders ».",
     "affect": "Management › Assignment. Before: « Can set the assignment ».",
-    "rules": "Pilot Automations › Auto Pilot Assign. Before: in Preferences."
+    "rules": "Pilot Automations › Courier choice. Before: in Preferences."
   },
   "act": {
     "orders": {

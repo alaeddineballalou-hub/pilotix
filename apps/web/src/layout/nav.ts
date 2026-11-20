@@ -74,6 +74,7 @@ export function isPlainAgent(roles: Role[], isAdmin: boolean): boolean {
 /** When a line is shown, beyond its roles (the store's menu says which: packages/shared/src/menu.ts). */
 const COND: Record<MenuCond, (roles: Role[], isAdmin: boolean) => boolean> = {
   home: (r, admin) => !isPlainAgent(r, admin) || !pageIsOn('dashboard'),
+  board: (r, admin) => !admin && !r.some((x) => x === 'vendeur' || x === 'agent_manager'),
   livreur: (r) => r.includes('livreur'),
   pos: () => moduleOn('pos'),
   notAdmin: (_r, admin) => !admin,

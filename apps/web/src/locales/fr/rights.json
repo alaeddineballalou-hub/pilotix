@@ -72,7 +72,7 @@
     "users": "Créer les comptes et changer les mots de passe, jamais d’un administrateur. Avant : « Peut créer des comptes et changer les mots de passe ».",
     "assign": "Dépôt › « À attribuer ». Avant : « Peut attribuer les commandes ».",
     "affect": "Management › Affectation. Avant : « Peut régler l’affectation ».",
-    "rules": "Pilot Automations › Auto Pilot Assign. Avant : dans Préférences."
+    "rules": "Pilot Automations › Choix de la société. Avant : dans Préférences."
   },
   "act": {
     "orders": {

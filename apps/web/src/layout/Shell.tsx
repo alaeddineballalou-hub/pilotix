@@ -114,6 +114,9 @@ function SoonLine({ icon, label, sub = false }: { icon: string; label: string; s
   );
 }
 
+/** A menu with more lines than this starts with its groups folded (Shell). */
+const BIG_MENU = 20;
+
 export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { page: string; sub?: string; children: ReactNode; nav?: NavItem[]; space?: 'store' | 'agency' | 'marketer' }) {
   const { t, i18n } = useTranslation();
   const { session, logout, has: hasRole } = useSession();
@@ -224,7 +227,24 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
   };
   // each group remembers whether it is open (Commandes keeps its old key)
   const grpKey = (id: string) => (id === 'commandes' ? 'cmdgrp' : `grp-${id}`);
-  const [grpOpen, setGrpOpen] = useState<Record<string, boolean>>(() => Object.fromEntries(nav.filter((n) => n.children).map((n) => [n.id, store.get(grpKey(n.id)) !== 'closed'])));
+  // a big menu (an owner's: 40 lines and more) starts with its groups folded, except the group of the page open, so a new
+  // seller first sees about 18 lines; a group the person opened or closed stays as they left it
+  const lines = items.reduce((sum, n) => sum + 1 + (n.children ? kidsOn(n).length : 0), 0);
+  const [grpOpen, setGrpOpen] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(
+      nav
+        .filter((n) => n.children)
+        .map((n) => {
+          const saved = store.get(grpKey(n.id));
+          return [n.id, saved === 'open' || (saved !== 'closed' && (lines <= BIG_MENU || !!n.pages?.includes(page)))];
+        }),
+    ),
+  );
+  // going to a page of a folded group opens it (not a group the person closed on purpose)
+  useEffect(() => {
+    const g = items.find((n) => n.children && n.pages?.includes(page));
+    if (g && grpOpen[g.id] === false && store.get(grpKey(g.id)) !== 'closed') setGrpOpen((o) => ({ ...o, [g.id]: true }));
+  }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggleGrp = (id: string) =>
     setGrpOpen((o) => {
       const next = !(o[id] ?? true);

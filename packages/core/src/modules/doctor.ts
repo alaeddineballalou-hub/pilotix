@@ -337,7 +337,9 @@ export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
   }
 
   const sorted = doctorSort(items);
-  return { checkedAt: new Date(now).toISOString(), score: doctorScore(sorted), items: sorted, scope: { whole: scope.whole, mine: scope.mineConf || scope.mineSuivi } };
+  // a shop with no order yet: every check is « fine » only because there is nothing to look at
+  const any = await one('SELECT EXISTS (SELECT 1 FROM sales) AS x');
+  return { checkedAt: new Date(now).toISOString(), score: doctorScore(sorted), items: sorted, scope: { whole: scope.whole, mine: scope.mineConf || scope.mineSuivi }, empty: !any.x };
 }
 
 /** One ad object Meta warned about (an ad account webhook): stored, or marked fixed when Meta says it runs again. */

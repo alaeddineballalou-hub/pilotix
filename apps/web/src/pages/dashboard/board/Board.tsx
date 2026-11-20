@@ -48,7 +48,7 @@ export function Board({ area, extra, range, compact }: { area: AreaKey; extra?: 
           <h2>
             <Icon name="users" />
             <span className="tb-chn">{t('dashboard.tb.myTeam')}</span>
-            {b && b.teams.length === 1 && b.teams[0].id !== 'me' && <small>· {b.teams[0].name}</small>}
+            {b && b.teams.length === 1 && b.teams[0].id !== 'me' && <small>· {b.teams[0].id === 'none' ? t('dashboard.tb.noManager') : b.teams[0].name}</small>}
           </h2>
           <a className="tb-open" href={`#/dashboard/${area}`}>
             {t('dashboard.tb.openBoard')} <Icon name="chevr" />

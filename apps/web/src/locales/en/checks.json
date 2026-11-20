@@ -1,4 +1,6 @@
 {
+  "unfoldAll": "Show all",
+  "foldAll": "Fold all",
   "title": "Pilot Checks",
   "lead": "All your ad KPIs, one by one: the number, when it is good, bad or to stop, and what to do. You can set everything.",
   "step": {

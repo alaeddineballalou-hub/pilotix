@@ -215,3 +215,13 @@
   .pc-stack .pc-num { grid-template-columns: minmax(0, 1fr) 96px auto; }
 }
 @media (prefers-reduced-motion: reduce) { .pc-keyb, .pc-level, .pc-view { transition: none; } }
+
+/* the parts fold (the page was about 37 phone screens long): the title opens and closes its cases */
+.pc-toggle { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; border-radius: 8px; }
+.pc-toggle:focus-visible { outline: 2px solid var(--accent, #f28c28); outline-offset: 3px; }
+.pc-chev { width: 18px; height: 18px; flex: none; transition: transform 0.2s ease; transform: rotate(-90deg); }
+[dir='rtl'] .pc-chev { transform: rotate(90deg); }
+[aria-expanded='true'] > .pc-chev { transform: none; }
+.pc-part-folded { padding-bottom: 14px; }
+.pc-part-folded .card-head { margin-bottom: 0; }
+.pc-all { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; }

@@ -18,6 +18,7 @@ import { Reclamation } from './Reclamation';
 import { SwapModal, SwapResult, SwapSheetModal } from './Swap';
 import './suivi.css';
 import { colDrag, ColumnMenu, DensitySwitch, useDensity, useResizable, useTableColumns } from '../../ui/ColumnMenu';
+import { TabletColsButton, useTabletCols } from '../../ui/tabletCols';
 import { HistoryButton, PhoneCell } from '../confirmation/History';
 import { RotateChip } from '../confirmation/Countdown';
 import { store } from '../../lib/store';
@@ -242,6 +243,8 @@ type SCol = 'order' | 'name' | 'phone' | 'wilaya' | 'product' | 'variant' | 'tra
 const SCOLS: SCol[] = ['order', 'name', 'phone', 'wilaya', 'product', 'variant', 'tracking', 'follow', 'agent', 'fagent', 'since', 'passed', 'status'];
 const SDEFAULT: SCol[] = ['order', 'name', 'phone', 'wilaya', 'product', 'variant', 'follow', 'agent', 'fagent', 'since', 'passed', 'status'];
 const SKEY = 'suivi-cols';
+/** The columns a suivi agent works with, most useful first (a tablet shows the first 6 the table has). */
+const SUIVI_USEFUL: SCol[] = ['name', 'phone', 'follow', 'since', 'wilaya', 'status', 'product', 'order'];
 
 /** The table shared by every Suivi list, with the column menu and the shared presets. */
 export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[]; actions?: (o: Order) => ReactNode; empty: string; extra?: Record<number, Extra> }) {
@@ -257,7 +260,9 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
     tracking: t('suivi.col.tracking'), follow: t('suivi.col.delivery'), agent: t('suivi.col.agent'), fagent: t('suivi.col.fagent'), since: t('suivi.col.since'), passed: t('confirmation.col.passed'), status: t('suivi.col.status'),
   };
   const { order, setOrder } = tc;
-  const cols = order.filter((k) => visible.has(k));
+  // on a tablet: the 6 columns a suivi agent works with, « +N colonnes » shows the others (ui/tabletCols)
+  const tcols = useTabletCols(order.filter((k) => visible.has(k)), (k) => k, SUIVI_USEFUL);
+  const cols = tcols.cols;
   const drag = colDrag(order, setOrder);
   // column widths: each user's own
   const wkeys: string[] = [...cols, ...(actions ? ['_act'] : [])];
@@ -355,6 +360,7 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
           open={menu}
           onToggle={() => setMenu((v) => !v)}
         />
+        <TabletColsButton more={tcols.more} all={tcols.all} toggle={tcols.toggle} />
       </div>
       {!rows.length ? (
         <Empty>{empty}</Empty>

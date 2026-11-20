@@ -311,3 +311,7 @@
 .dr-robot li.dr-ok .dr-robot-mark { color: var(--ok); }
 .dr-robot li.dr-warn .dr-robot-mark { color: #F28C1B; }
 .dr-robot li.dr-bad .dr-robot-mark { color: var(--coral); }
+
+/* Co-Pilot before the first order: the two steps that bring it, no score */
+.dr-cock-empty .dr-empty-go { margin-top: 10px; gap: 8px; flex-wrap: wrap; }
+.dr-cock-noscore b { opacity: 0.45; }

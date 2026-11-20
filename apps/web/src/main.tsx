@@ -14,7 +14,7 @@ import { readTryLink, type TryLink } from './lib/tryLink';
 import { DEMO_PASSWORD, menuRight, tabsOf } from '@pilotix/shared';
 import { firstSubOn, hasPlanSubs, pageIsOn } from './lib/features';
 import { rightOn, tabOn } from './lib/rights';
-import './lib/i18n';
+import { i18nReady } from './lib/i18n';
 import { ModalHost } from './lib/modals';
 import { addressShop, fixAddress, go, PATHS, useRoute } from './lib/route';
 import { startFreshness } from './lib/freshness';
@@ -346,6 +346,9 @@ function App() {
 
 // the browser watcher: errors, loops and slow actions to Control room › Doctor (only on a real server)
 startWatch(sendClientReport);
+
+// English and Arabic texts come in their own file (lib/i18n.ts): draw the app once the reader's language is there
+await i18nReady;
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
