@@ -41,6 +41,6 @@ From Meta's Brand Resource Center, after its box « I have read and accept the a
 - « Continuer avec Facebook » (Facebook Login): the white logo before the words, inside the blue button (#1877F2).
 - Instagram: only Meta's glyph files; the glyph never smaller than 29 × 29 px; free space of half its size on every
   side, with no text or other logo in it. So `BrandLogo` gives Instagram a 40 px tile with a 29 px glyph (30 px in the
-  46 px tile), and the places around it keep their distance. In Comptes, « Facebook et Instagram » links its two logos
-  on round 42 px tiles (`.cpt-logo-duo`): Facebook's logo 22 px, Instagram's glyph 29 px, the two logos 14.5 px apart. Where only a small
+  46 px tile), and the places around it keep their distance. In Comptes, « Facebook et Instagram » shows its two logos
+  alone, with no tile (`.cpt-logo-duo`, the owner's choice): Facebook's logo 28 px, Instagram's glyph 29 px, 16 px apart. Where only a small
   corner badge fits (the comment authors in Pilot Comments), the place shows the letters, not a logo.

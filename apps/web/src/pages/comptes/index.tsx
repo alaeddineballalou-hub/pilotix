@@ -264,7 +264,7 @@ export function Comptes({ sub }: PageProps) {
 
         {/* Facebook and Instagram: the boutique's one Page and its Instagram account (one login for all Meta: its ads too) */}
         <ServiceRow
-          // the two logos linked like the account's pictures (the owner, 20 Nov 2026): see .cpt-logo-duo
+          // the two logos alone, side by side, no tile (the owner's choice, 20 Nov 2026): see .cpt-logo-duo
           logos={
             <span className="cpt-logo-duo">
               <BrandLogo name="facebook" fallback={<span className="dl-ch dl-messenger" aria-hidden="true">FB</span>} />
