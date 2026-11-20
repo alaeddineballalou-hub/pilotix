@@ -489,8 +489,12 @@ export const ADS_STATE = 'ads.';
 /** The states of « Connecter Instagram », a login that no longer exists (one still open when Pilotix was updated is refused). */
 export const GONE_STATE = 'ig.';
 export const loginKindOf = (state: string): LoginKind => (state.startsWith(WA_STATE) ? 'whatsapp' : state.startsWith(ADS_STATE) ? 'ads' : 'account');
-/** Embedded Signup's own settings (Meta's « extras »): its usual flow, its version 3 */
-const WA_EXTRAS = { setup: {}, featureType: '', sessionInfoVersion: '3' };
+/**
+ * Embedded Signup's own settings (Meta's « extras »), its version 3 messages. « whatsapp_business_app_onboarding »
+ * (Meta's « coexistence », 20 Nov 2026, the owner's choice): a boutique may connect the number of the WhatsApp
+ * Business app it already uses, and that app keeps working on its phone; a new number still works as before.
+ */
+export const WA_EXTRAS = { setup: {}, featureType: 'whatsapp_business_app_onboarding', sessionInfoVersion: '3' };
 
 export interface StateRow {
   state: string;

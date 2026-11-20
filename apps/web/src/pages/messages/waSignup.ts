@@ -54,7 +54,7 @@ export function loadFacebookSdk(sdk: WaSdk): Promise<FbApi> {
 }
 
 /** Meta's window speaks only from facebook.com: what it says about the account and number chosen (or where it stopped). */
-function signupMessage(e: MessageEvent): { wabaId?: string; phoneId?: string; cancelled?: boolean } | null {
+function signupMessage(e: MessageEvent): { wabaId?: string; phoneId?: string; cancelled?: boolean; error?: string } | null {
   let host = '';
   try {
     host = new URL(e.origin).hostname;
@@ -71,8 +71,12 @@ function signupMessage(e: MessageEvent): { wabaId?: string; phoneId?: string; ca
     }
   }
   if (!d || d.type !== 'WA_EMBEDDED_SIGNUP') return null;
-  if (d.event === 'CANCEL') return { cancelled: true };
   const x = d.data ?? {};
+  // stopped: Meta's own reason when its window showed one (« … can't onboard customers », a refused number…)
+  if (d.event === 'CANCEL' || d.event === 'ERROR') {
+    const why = typeof x.error_message === 'string' ? x.error_message.trim().slice(0, 300) : '';
+    return why ? { cancelled: true, error: why } : { cancelled: true };
+  }
   const ok = (v: unknown) => (/^\d{1,30}$/.test(String(v ?? '')) ? String(v) : undefined);
   return { wabaId: ok(x.waba_id), phoneId: ok(x.phone_number_id) };
 }
@@ -83,10 +87,12 @@ function signupMessage(e: MessageEvent): { wabaId?: string; phoneId?: string; ca
  */
 export function openWaSignup(fb: FbApi, sdk: WaSdk): Promise<WaSignupResult> {
   return new Promise((resolve, reject) => {
-    const said: { wabaId?: string; phoneId?: string } = {};
+    const said: { wabaId?: string; phoneId?: string; error?: string } = {};
     const listen = (e: MessageEvent) => {
       const m = signupMessage(e);
-      if (m && !m.cancelled) Object.assign(said, m);
+      if (m?.cancelled) {
+        if (m.error) said.error = m.error;
+      } else if (m) Object.assign(said, m);
     };
     window.addEventListener('message', listen);
     // FB.login wants a plain function (not async)
@@ -97,7 +103,8 @@ export function openWaSignup(fb: FbApi, sdk: WaSdk): Promise<WaSignupResult> {
           window.removeEventListener('message', listen);
           const code = r?.authResponse?.code;
           if (code) resolve({ code, wabaId: said.wabaId ?? null, phoneId: said.phoneId ?? null });
-          else reject(new Error('cancelled'));
+          // Meta's reason, in Meta's words, rather than « you closed the window »
+          else reject(new Error(said.error ? `Meta : ${said.error}` : 'cancelled'));
         }, 800);
       },
       { config_id: sdk.configId, response_type: 'code', override_default_response_type: true, extras: sdk.extras },

@@ -126,6 +126,10 @@ before(async () => {
           },
         });
       if (wa.waba && path === `${wa.waba}/phone_numbers`) return answer({ data: wa.numbers });
+      // a number still used in the boutique's WhatsApp Business app (Meta's « coexistence ») says it on the number
+      const biz = wa.numbers.find((x) => x.id === path);
+      if (biz && String(u.searchParams.get('fields') ?? '').includes('is_on_biz_app')) return answer({ id: biz.id, is_on_biz_app: !!biz.bizApp, platform_type: 'CLOUD_API' });
+      if (/^\d+\/smb_app_data$/.test(path)) return answer({ success: true });
       if (/^\d+\/register$/.test(path))
         return wa.registerFail ? new Response(JSON.stringify({ error: { message: 'Two step verification PIN Mismatch', code: 133005 } }), { status: 400 }) : answer({ success: true });
       // Meta's Unified login: the Instagram accounts a key was given
@@ -574,7 +578,7 @@ test('« Connecter WhatsApp »: Meta’s Embedded Signup for one shop; its numbe
   assert.equal(u.searchParams.get('config_id'), '880011223344');
   assert.equal(u.searchParams.get('override_default_response_type'), 'true');
   assert.equal(u.searchParams.get('response_type'), 'code');
-  assert.deepEqual(JSON.parse(u.searchParams.get('extras')!), { setup: {}, featureType: '', sessionInfoVersion: '3' });
+  assert.deepEqual(JSON.parse(u.searchParams.get('extras')!), { setup: {}, featureType: 'whatsapp_business_app_onboarding', sessionInfoVersion: '3' });
   // for this boutique only
   assert.equal(Number((await t.platform.query(`SELECT shop_id FROM platform.social_states WHERE state = $1`, [s.state]))[0].shop_id), b.shop!.id);
 
@@ -687,7 +691,7 @@ test('« Connecter WhatsApp » in Meta’s own popup (JavaScript SDK): the code 
   await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '777000111', waConfigId: '880011223344', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
   // what the page needs before the click: Pilotix's app, its WhatsApp configuration, Meta's version and Embedded Signup's extras
   const sdk: any = await call('social.waSdk', b, {});
-  assert.deepEqual(sdk, { appId: APPS.meta.appId, configId: '880011223344', version: 'v25.0', extras: { setup: {}, featureType: '', sessionInfoVersion: '3' } });
+  assert.deepEqual(sdk, { appId: APPS.meta.appId, configId: '880011223344', version: 'v25.0', extras: { setup: {}, featureType: 'whatsapp_business_app_onboarding', sessionInfoVersion: '3' } });
   // two numbers: the one chosen in Meta's window is the one linked
   wa = {
     waba: '102030405070',
@@ -719,6 +723,24 @@ test('« Connecter WhatsApp » in Meta’s own popup (JavaScript SDK): the code 
   // the state of a Facebook account's login is not a WhatsApp one
   const s4: any = await call('social.start', b, { provider: 'meta', scope: 'here' });
   assert.match((await finishWhatsappPopup(t, b.shop!.id, { state: s4.state, code: 'SDK_CODE' })).message, /introuvable/);
+  await call('social.waRemove', b, {});
+  wa = { waba: '', numbers: [], registerFail: false };
+  await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '', waConfigId: '', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+});
+
+test('« Connecter WhatsApp » with the boutique’s WhatsApp Business app number (coexistence): linked, never registered again, its contacts and chats asked once', async () => {
+  await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '777000111', waConfigId: '880011223344', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+  wa = { waba: '102030405080', numbers: [{ id: '109988770009', display_phone_number: '+213 770 00 00 09', verified_name: 'Bébé Oran', bizApp: true }], registerFail: false };
+  const s: any = await call('social.start', b, { provider: 'meta', kind: 'whatsapp' });
+  calls.length = 0;
+  const r: any = await finishWhatsappPopup(t, b.shop!.id, { state: s.state, code: 'SDK_CODE', wabaId: '102030405080', phoneId: '109988770009' });
+  assert.deepEqual([r.ok, r.account, r.warn], [true, '+213 770 00 00 09', undefined]);
+  // registering it again would take it off the boutique's phone: never
+  assert.equal(calls.filter((c) => c.method === 'POST' && new URL(c.url).pathname.endsWith('/register')).length, 0);
+  // its contacts, then its chats, asked once each
+  const syncs = calls.filter((c) => c.method === 'POST' && new URL(c.url).pathname.endsWith('/109988770009/smb_app_data'));
+  assert.deepEqual(syncs.map((c) => new URLSearchParams(c.body).get('sync_type')), ['smb_app_state_sync', 'history']);
+  assert.equal((await setting(b, 'dellal')).whatsappPhoneId, '109988770009');
   await call('social.waRemove', b, {});
   wa = { waba: '', numbers: [], registerFail: false };
   await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '', waConfigId: '', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });

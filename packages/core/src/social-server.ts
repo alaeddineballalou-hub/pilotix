@@ -364,6 +364,24 @@ async function whatsappAccount(t: Tenancy, code: string, publicUrl: string | nul
 }
 
 /**
+ * The number still works in the boutique's WhatsApp Business app (Meta's « coexistence »): Meta says it on the number.
+ * Unknown (Meta did not answer): false, the usual registration then runs and says why if it fails.
+ */
+export async function onBusinessApp(phoneId: string, token: string): Promise<boolean> {
+  const n = await graph(phoneId, { fields: 'is_on_biz_app,platform_type', access_token: token }).catch(() => null);
+  return n?.is_on_biz_app === true;
+}
+
+/**
+ * A WhatsApp Business app number just connected: its contacts, then its chats (when the boutique accepted to share them
+ * in its app), come to Pilotix once. Meta allows each only once and within 24 hours; a refusal changes nothing else.
+ */
+export async function syncBusinessApp(phoneId: string, token: string): Promise<void> {
+  for (const sync_type of ['smb_app_state_sync', 'history'])
+    await graph(`${phoneId}/smb_app_data`, { messaging_product: 'whatsapp', sync_type, access_token: token }, 'POST').catch(() => null);
+}
+
+/**
  * « Oui, c'est ma boutique » for « Connecter WhatsApp »: the account's messages come to Pilotix's app, the number is
  * registered for the Cloud API (with a two-step PIN Pilotix keeps), and the key and the number go to the boutique's
  * Pilot Message (Dellal answers on it), its delivery messages and its campaigns' templates (the account's id).
@@ -376,14 +394,20 @@ async function linkWhatsapp(t: Tenancy, shopId: number | null, f: FoundAccount):
   const w = f.whatsapp;
   // without it no message comes: the link stops here, with Meta's reason
   await graph(`${w.wabaId}/subscribed_apps`, { access_token: f.token }, 'POST');
-  // a number already registered (or with another PIN) says why: the link goes on, and the tab says it
-  const pin = String(randomInt(0, 1_000_000)).padStart(6, '0');
   let warn = '';
-  try {
-    await graph(`${w.phoneId}/register`, { messaging_product: 'whatsapp', pin, access_token: f.token }, 'POST');
-    await setRaw(db, WA_PIN_KEY, pin);
-  } catch (e: any) {
-    warn = String(e?.message ?? e).slice(0, 240);
+  if (await onBusinessApp(w.phoneId, f.token)) {
+    // the boutique's WhatsApp Business app number (Meta's « coexistence »): already registered by Meta, never again
+    // (registering it would take it off the phone). Its contacts and its chats come over once, best effort.
+    await syncBusinessApp(w.phoneId, f.token);
+  } else {
+    // a number already registered (or with another PIN) says why: the link goes on, and the tab says it
+    const pin = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    try {
+      await graph(`${w.phoneId}/register`, { messaging_product: 'whatsapp', pin, access_token: f.token }, 'POST');
+      await setRaw(db, WA_PIN_KEY, pin);
+    } catch (e: any) {
+      warn = String(e?.message ?? e).slice(0, 240);
+    }
   }
   await setRaw(db, DELLAL_SECRETS.waToken, f.token);
   await setRaw(db, 'dellal', { ...(await dellalSettings(db)), whatsappPhoneId: w.phoneId, whatsappPhone: w.phone });
