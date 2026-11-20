@@ -1,0 +1,24 @@
+# Temporary, for Claude (20 Nov 2026): checks on the real site that babyjoydz.net's old links lead to the shop's home
+# (commit 5a3eb37). Runs once on this branch only; the branch is deleted after.
+name: Check babyjoydz.net old links (temporary, for Claude)
+on:
+  push:
+    branches: ['check/babyjoydz-old-links']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - run: |
+          for u in /product/28026 "/product/28026?fbclid=abc" /une-page-qui-nexiste-pas /cart/checkout /landau-gargour/ /landau-gargour / /favicon.ico /.well-known/security.txt; do
+            printf '%-30s ' "$u"
+            curl -s -o /tmp/body -m 25 -w '%{http_code} -> %{redirect_url} ' "https://babyjoydz.net$u"
+            grep -o '<title>[^<]*</title>' /tmp/body | head -1 || head -c 60 /tmp/body
+            echo
+          done
+          printf '%-30s ' "www /product/28026"
+          curl -s -o /dev/null -m 25 -w '%{http_code} -> %{redirect_url}\n' https://www.babyjoydz.net/product/28026
+          printf '%-30s ' "follow /product/28026"
+          curl -s -L -o /tmp/b2 -m 25 -w '%{http_code} at %{url_effective} ' https://babyjoydz.net/product/28026; grep -c '<li>' /tmp/b2 || true
