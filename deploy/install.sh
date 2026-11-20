@@ -15,7 +15,8 @@ command -v git >/dev/null || (apt-get update -qq && apt-get install -y -qq git)
 command -v docker >/dev/null || curl -fsSL https://get.docker.com | sh
 
 echo "==> Pilotix code"
-if [ -d "$DIR/.git" ]; then git -C "$DIR" pull -q --ff-only; else git clone -q --depth 50 "$REPO" "$DIR"; fi
+# run by update.sh (PILOTIX_KEEP_VERSION=1): the code is already the version the owner said yes to, never a later push
+if [ -d "$DIR/.git" ]; then [ "${PILOTIX_KEEP_VERSION:-}" = 1 ] || git -C "$DIR" pull -q --ff-only; else git clone -q --depth 50 "$REPO" "$DIR"; fi
 cd "$DIR"
 
 if [ ! -f deploy/.env ]; then
@@ -68,18 +69,42 @@ bantime = 1h
 JAIL
 systemctl enable --now fail2ban >/dev/null 2>&1 || true
 systemctl restart fail2ban || echo "    WARNING: fail2ban did not start (the site still works; the firewall is on)"
-# SSH by key only: ONLY when asked (SSH_KEY_ONLY=1). Never automatic: a key file put there by the hosting company
-# (not by the owner) turned off root password logins on Ubuntu 24.04 and locked the owner out of the server.
-if [ "${SSH_KEY_ONLY:-0}" = 1 ]; then
-  printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitRootLogin prohibit-password\n' > /etc/ssh/sshd_config.d/99-pilotix.conf
-  systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
-  echo "    SSH: key only (passwords refused)"
-else
-  # undo the old automatic key-only setting, so a server that was locked by it accepts the root password again
-  if [ -f /etc/ssh/sshd_config.d/99-pilotix.conf ]; then
-    rm -f /etc/ssh/sshd_config.d/99-pilotix.conf
-    systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
+# SSH by key only (the owner's choice, 21 Nov 2026): passwords refused, root only with a key. It can lock the owner out
+# (it did once, from a key the hosting company had put there while he logged in with the root password), so it is turned
+# on only when both are true:
+#  - a login key is there: a key in authorized_keys that opens a shell (the GitHub deploy key, which can run update.sh
+#    and nothing else, does not count);
+#  - nobody logged in with a password lately (the SSH log: 14 days of the journal, and the last two auth.log files).
+# Otherwise passwords stay accepted and the update's log says why. SSH_KEY_ONLY=0 turns it off
+# (sudo SSH_KEY_ONLY=0 /opt/pilotix/deploy/install.sh). The console of the Contabo panel works either way.
+# The file's name starts with 00-: sshd keeps the FIRST value it reads, and Ubuntu's 50-cloud-init.conf may say « yes ».
+SSHD_KEYS=/etc/ssh/sshd_config.d/00-pilotix.conf
+ssh_reload() { systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true; }
+# the old name (read after 50-cloud-init.conf, so it could lose)
+if [ -f /etc/ssh/sshd_config.d/99-pilotix.conf ]; then rm -f /etc/ssh/sshd_config.d/99-pilotix.conf; ssh_reload; fi
+LOGIN_KEYS=$(cat /root/.ssh/authorized_keys /home/*/.ssh/authorized_keys 2>/dev/null | grep -Ev '^[[:space:]]*(#|$)' | grep -vc 'command=' || true)
+PW_LOGINS=$({ journalctl -q --no-pager --since '14 days ago' -t sshd -t sshd-session 2>/dev/null || true; cat /var/log/auth.log /var/log/auth.log.1 2>/dev/null || true; } | grep -c 'Accepted password' || true)
+if [ "${SSH_KEY_ONLY:-1}" = 1 ] && [ "${LOGIN_KEYS:-0}" -gt 0 ] && [ "${PW_LOGINS:-0}" -eq 0 ]; then
+  printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitRootLogin prohibit-password\n' > "$SSHD_KEYS"
+  if sshd -t 2>/dev/null; then
+    ssh_reload
+    echo "    SSH: key only, passwords refused ($LOGIN_KEYS login key(s))"
+  else
+    rm -f "$SSHD_KEYS"; ssh_reload
+    echo "    WARNING: SSH key only NOT applied (sshd refused the setting): passwords are still accepted"
   fi
+else
+  if [ -f "$SSHD_KEYS" ]; then rm -f "$SSHD_KEYS"; ssh_reload; fi
+  echo "    SSH: passwords still accepted (asked: ${SSH_KEY_ONLY:-1}, login keys: ${LOGIN_KEYS:-0}, password logins lately: ${PW_LOGINS:-0})"
+fi
+echo "    SSH now: $(sshd -T 2>/dev/null | grep -E '^(passwordauthentication|permitrootlogin) ' | tr '\n' ' ' || true)"
+echo "    fail2ban: $( (fail2ban-client status sshd 2>/dev/null || echo 'not running') | grep -E 'Currently banned|Total banned|not running' | sed -E 's/^[[:space:]|`-]+//' | tr -s ' \t' ' ' | paste -sd ',' - || true)"
+# Only Cloudflare reaches the website (ports 80 and 443): OFF (the owner keeps the backup door direct.pilotix.online, which
+# reaches the server without Cloudflare). On only with WEB_CLOUDFLARE_ONLY=1 in deploy/.env: see deploy/web-cloudflare-only.sh
+if grep -q '^WEB_CLOUDFLARE_ONLY=1' deploy/.env; then
+  bash deploy/web-cloudflare-only.sh on || echo "    WARNING: « only Cloudflare » could not be set: the website stays open to all"
+else
+  bash deploy/web-cloudflare-only.sh off >/dev/null 2>&1 || true
 fi
 
 echo "==> Building and starting (the first time takes 5-10 minutes)"

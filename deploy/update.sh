@@ -45,6 +45,7 @@ else
 fi
 git log -1 --format='    %h %s'
 
-# the new version is built while the old one keeps running; the switch itself takes a few seconds
-exec bash deploy/install.sh "$DOMAIN" </dev/null
+# the new version is built while the old one keeps running; the switch itself takes a few seconds. install.sh keeps
+# this version (it never pulls a later push)
+PILOTIX_KEEP_VERSION=1 exec bash deploy/install.sh "$DOMAIN" </dev/null
 }
