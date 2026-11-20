@@ -182,7 +182,8 @@ export function PageLinks({ store }: { store: (label: string) => ReactNode }) {
               </table>
               <small>{t('landing.domain.howHelp')}</small>
               {d.proof && <small>{t('landing.domain.proofHelp')}</small>}
-              {found && <small className="ltr">{t('landing.domain.found', { ips: found.join(', ') || '—' })}</small>}
+              {/* the addresses stay left-to-right, in their order, inside an Arabic sentence (\u2066…\u2069 = <bdi dir="ltr">) */}
+              {found && <small>{t('landing.domain.found', { ips: `\u2066${found.join(', ') || '—'}\u2069` })}</small>}
               {viaCloudflare && <small>{t('landing.domain.proxied')}</small>}
               {proofSeen === false && <small>{t('landing.domain.proofMissing')}</small>}
               {reach && !reach.ok && reach.why && <small>{t(`landing.domain.https.${reach.why}`, { domain: d.domain })}</small>}
