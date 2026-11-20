@@ -1292,3 +1292,32 @@ test('follow-ups: up to 3 inside the 24 hours, 2 more in an ad’s 7 days, never
     await db.query(`DELETE FROM settings WHERE key = 'secret_dellal_ai_key'`);
   }
 });
+
+test('hard moments only (price fight, anger…): Claude thinks before it answers, with room; a calm message is answered without thinking first', async () => {
+  const admin = await as(EMAILS.admin);
+  const g: any = await call('dellal.settings.get', admin, {});
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, secrets: { ai: 'sk-ant-test-1234567890' } });
+  const asked: any[] = [];
+  const sent: any[] = [];
+  const server: ServerHooks = {
+    ...fakeServer([], sent),
+    dellal: async (action, args: any) => {
+      if (action === 'send') return sent.push(args), { ok: true };
+      if (action === 'complete') asked.push(args);
+      return { content: [{ type: 'text', text: 'مرحبا بيك' }], stop_reason: 'end_turn' };
+    },
+  };
+  const sys = await as(EMAILS.admin, server);
+  const r: any = await call('dellal.receive', sys, { channel: 'messenger', externalId: 'psid-think-1', accountId: 'page-1', text: 'Salam, 3andkoum poussette?', messageId: 'think_1' });
+  await call('dellal.answer', sys, { id: r.conversationId });
+  await call('dellal.receive', sys, { channel: 'messenger', externalId: 'psid-think-1', text: 'ghali bezzaf, dirli remise', messageId: 'think_2' });
+  await call('dellal.answer', sys, { id: r.conversationId });
+  // Dellal's answers (with its tools; the Darija check and the photo reading go without)
+  const [calm, fight] = asked.filter((a) => a.tools?.length);
+  assert.equal(calm.thinking, undefined, 'a calm message: the server sends it with no thinking first (noThinkingFirst)');
+  assert.equal(calm.max_tokens, 1024);
+  assert.deepEqual(fight.thinking, { type: 'adaptive' });
+  assert.equal(fight.max_tokens, 8000);
+  const metas = (await db.query(`SELECT meta FROM conv_messages WHERE conversation_id = $1 AND role = 'agent' ORDER BY id`, [r.conversationId])).map((m: any) => (typeof m.meta === 'string' ? JSON.parse(m.meta) : m.meta));
+  assert.deepEqual(metas.map((m: any) => !!m.thinking), [false, true], 'each answer says whether Claude thought first');
+});

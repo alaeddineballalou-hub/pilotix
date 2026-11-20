@@ -18,7 +18,7 @@ import { checkDarija, DARIJA_FIXER_SYSTEM, darijaRewritePrompt, DarijaIssue, fix
 import { darijaGuide } from './darijabook';
 import { markReply, noticeForConversation, ordersForDellal, sendInPreview } from './notify';
 import { addEvent, createOrder, customerFee, updateOrder } from './orders';
-import { anonymize, bookFor, BookRef, pickModel } from './pilotlearn';
+import { anonymize, bookFor, BookRef, hardMoments, pickModel } from './pilotlearn';
 import { asWords, checkLahjaWords, LAHJA_NO_CHANGE, LAHJA_PERSONAL, lahjaAvoid, lahjaBlocks, lahjaDiff, lahjaErr, lahjaFor, lahjaWith, LahjaWord } from './lahja';
 import { pilotConfig, pilotToday } from '../platform/pilotai';
 import { guidePics, guideText, HAS_GUIDE, readGuide, toFill } from './guide';
@@ -30,6 +30,8 @@ import { catalogueThumbs, guidePhotos, imageBlock, PHOTO_MODEL, PHOTO_SYSTEM, ph
 export const DELLAL_CHANNELS = ['whatsapp', 'messenger', 'instagram', 'tiktok', 'test'] as const;
 export type DellalChannel = (typeof DELLAL_CHANNELS)[number];
 export const DELLAL_MODELS = ['claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-opus-5-5'] as const;
+/** A hard moment's answer: Claude thinks first, and its thinking counts in max_tokens (the answer alone needs about 1,000). */
+export const HARD_ROOM = 8000;
 /** How Dellal sells: '001' the number first (the team calls; the order follows the customer's changes), 'full' the whole
  *  order in the chat (commune, home or bureau, recap, maybe straight to the depot). */
 export const DELLAL_VERSIONS = ['001', 'full'] as const;
@@ -1676,11 +1678,16 @@ export async function runAgent(
   // Haiku for the simple messages, Sonnet for the hard moments (price fight, trust, anger, big order, asking for a person)
   let book: BookRef | null = null;
   let model: string = s.model;
+  const said = await ctx.db.query(`SELECT body, count(*) OVER ()::int AS n FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' ORDER BY id DESC LIMIT 6`, [convId]);
+  const moment = { recent: said.map((r: any) => String(r.body)).reverse(), turns: num(said[0]?.n) };
   if (pilotAi) {
     book = opts.book !== undefined ? opts.book : await bookFor(ctx.t!.platform, { shopId: ctx.shop!.id, convId, now: new Date(ctx.now()) }).catch(() => null);
-    const said = await ctx.db.query(`SELECT body, count(*) OVER ()::int AS n FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' ORDER BY id DESC LIMIT 6`, [convId]);
-    model = pickModel({ recent: said.map((r: any) => String(r.body)).reverse(), turns: num(said[0]?.n) });
+    model = pickModel(moment);
   }
+  // the hard moments (price fight, trust fears, anger, big order, asking for a person, a long chat): Claude thinks before it
+  // answers, with room for it (the owner's choice, 20 Nov 2026); every other message is answered without thinking first
+  // (dellal-server › noThinkingFirst), so it is fast and never cut. On the server only: the preview's AI has no such setting.
+  const think = !inPage && useAi && hardMoments(moment).length > 0;
   // the control room's test chat on the version in test: its Darija lessons for every shop are there too
   const trial = opts.trial ?? null;
   const shopLahja = await lahjaFor(ctx.db, ctx.t?.platform ?? null, ctx.shop?.id ?? null);
@@ -1708,7 +1715,7 @@ export async function runAgent(
   const complete = (req: AiRequest): Promise<AiResponse> =>
     inPage ? (inPage({ ...req, runTool }) as Promise<AiResponse>) : useAi ? (ctx.server!.dellal!('complete', { ...req, feature: opts.lab ? 'pilot' : 'dellal', pilot: pilotAi }, ctx) as Promise<AiResponse>) : demoBrain(ctx, req, convId);
   for (let round = 0; round < 6; round++) {
-    const res = await complete({ model, system, systemBlocks: prompt.blocks, messages, tools: toolsFor(s), max_tokens: 1024 });
+    const res = await complete({ model, system, systemBlocks: prompt.blocks, messages, tools: toolsFor(s), ...(think ? { max_tokens: HARD_ROOM, thinking: { type: 'adaptive' as const } } : { max_tokens: 1024 }) });
     usage = { input_tokens: usage.input_tokens + num(res.usage?.input_tokens), output_tokens: usage.output_tokens + num(res.usage?.output_tokens) };
     const uses = res.content.filter((b): b is Extract<AiResponse['content'][number], { type: 'tool_use' }> => b.type === 'tool_use');
     for (const b of res.content) if (b.type === 'text' && b.text.trim()) texts.push(b.text.trim());
@@ -1771,7 +1778,7 @@ export async function runAgent(
         if (windowRefused(sendError)) await dropAdWindow(ctx.db, convId);
       }
     }
-    await addMessage(ctx.db, convId, { role: 'agent', body: reply, externalId: sentId, meta: { usage, demo: !useAi, model: inPage ? 'claude (page)' : useAi ? model : null, ...(darija ? { darija } : {}), ...pilotMeta }, sendError });
+    await addMessage(ctx.db, convId, { role: 'agent', body: reply, externalId: sentId, meta: { usage, demo: !useAi, model: inPage ? 'claude (page)' : useAi ? model : null, ...(think ? { thinking: true } : {}), ...(darija ? { darija } : {}), ...pilotMeta }, sendError });
   }
   if (opts.followUp) await ctx.db.query('UPDATE conversations SET followed_up = true, follow_ups = follow_ups + 1 WHERE id = $1', [convId]);
   ctx.emit({ type: 'chat', data: { dellal: convId } });
