@@ -585,6 +585,10 @@ html[data-skin][data-theme] .pa-hand .btn.small { min-height: 44px; height: auto
 .pa-tree-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .pa-tree-head .pa-h { margin: 0 0 2px; font-size: 17px; }
 .pa-tree-head p { margin: 0; font-size: 13.5px; }
+/* the one ad account shown (the one new ads go to) */
+.pa-tree-head p.pa-tree-acct { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 13px; color: var(--c-muted); min-width: 0; }
+.pa-tree-acct svg { width: 15px; height: 15px; flex: none; }
+.pa-tree-acct b { color: var(--ink); font-weight: 650; overflow-wrap: anywhere; }
 .pa-tree .pa-tree-q { width: min(280px, 100%); flex: 0 1 280px; min-height: 38px; }
 .pa-tree-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
 .pa-tree-tabs::-webkit-scrollbar { display: none; }

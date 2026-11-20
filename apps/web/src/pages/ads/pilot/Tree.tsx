@@ -226,6 +226,19 @@ function NewCampaign({ taken, onClose, onMade }: { taken: Set<string>; onClose: 
 }
 
 // ---------------------------------------------------------------- small pieces
+/** the one ad account the tree shows: the one new ads go to (Comptes › « Compte pour lancer »), never another one */
+function AccountLine({ tree }: { tree: Tree }) {
+  const { t } = useTranslation();
+  if (!tree.account) return null;
+  return (
+    <p className="pa-tree-acct">
+      <Icon name="megaphone" />
+      <span>
+        {t('pilotads.tree.account')} <b><bdi>{tree.account.name || tree.account.id}</bdi></b>
+      </span>
+    </p>
+  );
+}
 function More({ full, rest, onClick }: { full: boolean; rest: number; onClick: () => void }) {
   const { t } = useTranslation();
   return (
@@ -299,6 +312,7 @@ function DeskTree({ tree, base }: { tree: Tree; base: string }) {
         <div>
           <h3 className="pa-h">{t('pilotads.tree.title')}</h3>
           <p className="muted">{t('pilotads.tree.sub')}</p>
+          <AccountLine tree={tree} />
         </div>
         <input className="pa-tree-q" type="search" value={q} placeholder={t('pilotads.tree.search')} aria-label={t('pilotads.tree.search')} onChange={(e) => setQ(e.target.value)} />
       </div>
@@ -518,6 +532,7 @@ function PhoneTree({ tree, base }: { tree: Tree; base: string }) {
         <div>
           <h3 className="pa-h">{t('pilotads.tree.title')}</h3>
           <p className="muted">{t('pilotads.tree.subPhone')}</p>
+          <AccountLine tree={tree} />
         </div>
       </div>
       {c && (

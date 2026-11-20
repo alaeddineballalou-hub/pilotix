@@ -637,6 +637,7 @@
   "tree": {
     "title": "Your campaigns",
     "sub": "Like Facebook, simpler: turn on, turn off, add.",
+    "account": "Ad account:",
     "subPhone": "Tap to go in, the arrow to go back.",
     "search": "Search a name",
     "level": {

@@ -677,7 +677,11 @@ test('« Photo du produit »: the product’s HD photo as bytes (its 960 px copy
 });
 
 // ---------------------------------------------------------------- Campaign › Ad set › Ad (Lancer une pub, Mes pubs)
+/** the tree shows the ad account new ads go to: the demo's, where its campaigns are (a test above linked another one) */
+const demoAccount = async () => setSetting(db, 'meta', { ...(await getSetting(db, 'meta')), adAccountId: '120211887', adAccountIds: ['120211887'] });
+
 test('the tree: TEST and SCALE first; a marketer sees every campaign, but only his own ad sets', async () => {
+  await demoAccount();
   const st: any = await call('ads.tree.state', await owner(), {});
   const test = st.campaigns.find((c: any) => c.name === 'TEST');
   const scale = st.campaigns.find((c: any) => c.name === 'SCALE');
@@ -698,6 +702,7 @@ test('the tree: TEST and SCALE first; a marketer sees every campaign, but only h
 });
 
 test('« Campagne vide »: made on with nothing in it, one name one campaign, a double click is one', async () => {
+  await demoAccount();
   const c: any = await call('ads.tree.campaign', await owner(), { kind: 'other', name: 'Notoriété page', goal: 'awareness', clientId: 'camp-1' });
   const row = (await db.query(`SELECT status, objective, daily_budget_cents, kind FROM ad_campaigns WHERE id = $1`, [c.id]))[0];
   assert.deepEqual([row.status, row.objective, row.daily_budget_cents, row.kind], ['ACTIVE', 'OUTCOME_AWARENESS', null, null]);
@@ -710,6 +715,7 @@ test('« Campagne vide »: made on with nothing in it, one name one campaign, a 
 });
 
 test('« Où va la pub ? »: a new ad set in TEST, then more ads in it; the campaign stays as its owner left it', async () => {
+  await demoAccount();
   await call('ads.ctl.stopAll', await owner(), { on: false });
   const st: any = await call('ads.tree.state', await owner(), {});
   const testId = st.campaigns.find((c: any) => c.name === 'TEST').id;
@@ -745,6 +751,7 @@ test('« Où va la pub ? »: a new ad set in TEST, then more ads in it; the camp
 });
 
 test('one ad on and off by its marketer; « Supprimer »: the owner alone, with what is in it', async () => {
+  await demoAccount();
   const st: any = await call('ads.tree.state', await owner(), {});
   const ad = st.ads.find((a: any) => a.adsetId === '120200003');
   const off: any = await call('ads.ctl.act', await mk(), { objectId: ad.id, op: 'pause' });
@@ -766,4 +773,48 @@ test('one ad on and off by its marketer; « Supprimer »: the owner alone, with 
   assert.deepEqual(r, { deleted: 1, failed: [] });
   assert.deepEqual((await db.query(`SELECT DISTINCT status FROM ads WHERE adset_id = '120200005'`)).map((x: any) => x.status), ['DELETED']);
   assert.equal(Number((await db.query(`SELECT count(*) AS n FROM ad_actions WHERE op = 'delete'`))[0].n), 2);
+});
+
+test('one ad account only, the one new ads go to: another one’s campaigns stay out of the tree, are never deleted from it, never take a new ad', async () => {
+  await demoAccount();
+  // a campaign of another ad account (a client’s, or one unticked since: never read again), with its ad set and its ad
+  await db.query(`INSERT INTO ad_campaigns (id, account_id, name, objective, status) VALUES ('120399001','act_120299999','BILLEL VUE','OUTCOME_SALES','ACTIVE')`);
+  await db.query(`INSERT INTO adsets (id, name, campaign, campaign_id, account_id, status, currency) VALUES ('120299001','Vue — autre compte','BILLEL VUE','120399001','120299999','ACTIVE','USD')`);
+  await db.query(`INSERT INTO ads (id, adset_id, name, status, is_video) VALUES ('120299001001','120299001','Pub d’un autre compte','ACTIVE',true)`);
+  // an ad set Publicité read before Pilotix knew its ad account: out until the next read says
+  await db.query(`INSERT INTO adsets (id, name, campaign, status, currency) VALUES ('120299002','Ensemble sans compte','Ancienne','ACTIVE','USD')`);
+  for (const who of [await owner(), await mk()]) {
+    const st: any = await call('ads.tree.state', who, {});
+    assert.equal(st.account.id, '120211887');
+    assert.ok(!st.campaigns.some((c: any) => c.id === '120399001'), 'not its campaign');
+    assert.ok(!st.adsets.some((s: any) => ['120299001', '120299002'].includes(s.id)), 'nor its ad sets');
+    assert.ok(!st.ads.some((a: any) => a.id === '120299001001'), 'nor its ad');
+    assert.ok(st.campaigns.some((c: any) => c.name === 'TEST'), 'the shop’s own campaigns are all there');
+  }
+  assert.ok(((await call('ads.tree.state', await owner(), {})) as any).adsets.some((s: any) => s.id === '120200001'), 'and its ad sets');
+  // « Supprimer » leaves them alone, even asked by their numbers
+  const r: any = await call('ads.tree.delete', await owner(), { ids: ['120399001', '120299001001'] });
+  assert.equal(r.deleted, 0);
+  assert.deepEqual(r.failed.map((f: any) => f.id), ['120399001', '120299001001']);
+  assert.match(r.failed[0].why, /autre compte pub/);
+  assert.equal((await db.query(`SELECT status FROM ad_campaigns WHERE id = '120399001'`))[0].status, 'ACTIVE');
+  assert.equal((await db.query(`SELECT status FROM ads WHERE id = '120299001001'`))[0].status, 'ACTIVE');
+  // « Où va la pub ? »: new ads leave from the shop’s ad account, so that campaign cannot take one
+  const o: any = await call('ads.launch.options', await owner(), {});
+  const p = o.products.find((x: any) => x.landing);
+  const photo: any = await call('ads.media.photo', await owner(), { jpeg: JPEG, thumb: JPEG, w: 1080, h: 1350 });
+  const spec = { goal: 'sales', productId: p.id, name: p.name, mediaIds: [photo.id], text: { primary: 'Texte', headline: 'Titre' }, budgetUsd: 14, budgetLevel: 'adset', into: { campaignId: '120399001', adsetId: null }, bidLimitDzd: 680, pixelId: '1234567890123456' };
+  const d: any = await call('ads.launch.save', await owner(), { mode: 'simple', spec });
+  const chk: any = await call('ads.launch.check', await owner(), { id: d.id });
+  assert.equal(chk.ok, false);
+  assert.match(chk.problems.join(' '), /autre compte pub/);
+  await assert.rejects(call('ads.launch.go', await owner(), { id: d.id }), /autre compte pub/);
+  // a shop on the server with no ad account linked: nothing to show (Meta read, nothing there)
+  await setSetting(db, 'meta', { ...(await getSetting(db, 'meta')), adAccountId: '', adAccountIds: [] });
+  const empty = { accounts: [], campaigns: [], adsets: [], ads: [], complete: [] };
+  const live: Ctx['server'] = { courier: async () => ({}), hashPassword: async (x) => x, meta: async (action) => (action === 'structure' ? empty : {}) };
+  const none: any = await call('ads.tree.state', await as(EMAILS.vendeur, live), {});
+  assert.equal(none.account, null);
+  assert.equal(none.campaigns.length + none.adsets.length + none.ads.length, 0);
+  await demoAccount();
 });

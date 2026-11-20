@@ -450,11 +450,15 @@ export const BID_LIMITS_KEY = 'pilot_ads_bid_limits';
 /**
  * Where a launch goes when it is not a new campaign: a campaign of the shop (a new ad set in it), or one of that
  * campaign's ad sets (only the ads). Its goal must be the campaign's objective (a « Ventes » campaign takes sales ads).
- * A campaign with its own budget (Advantage+) keeps it: the new ad set has none.
+ * A campaign with its own budget (Advantage+) keeps it: the new ad set has none. New ads leave from the shop's ad
+ * account (Comptes › « Compte pour lancer »): a campaign of another ad account cannot take them.
  */
 export async function placeOf(ctx: Ctx, into: NonNullable<LaunchSpec['into']>, goal: Goal) {
-  const c = (await ctx.db.query(`SELECT id, name, objective, status, daily_budget_cents FROM ad_campaigns WHERE id = $1`, [into.campaignId]))[0];
+  const c = (await ctx.db.query(`SELECT id, name, objective, status, daily_budget_cents, account_id FROM ad_campaigns WHERE id = $1`, [into.campaignId]))[0];
   if (!c || isGone(c.status)) throw bad('Cette campagne n’est plus chez Meta : choisissez-en une autre.');
+  const acct = await account(ctx);
+  if (acct && String(c.account_id ?? '').replace(/^act_/, '') !== acct.id)
+    throw bad(`La campagne « ${c.name} » est dans un autre compte pub : choisissez une campagne de « ${acct.name || acct.id} », le compte de vos pubs.`);
   if (c.objective && c.objective !== GOAL_META[goal].objective) throw bad(`La campagne « ${c.name} » est faite pour un autre but : choisissez son but, ou une autre campagne.`);
   let adset: { id: string; name: string; productIds: number[]; on: boolean } | null = null;
   if (into.adsetId) {

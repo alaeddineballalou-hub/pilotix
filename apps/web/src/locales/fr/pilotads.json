@@ -637,6 +637,7 @@
   "tree": {
     "title": "Vos campagnes",
     "sub": "Comme sur Facebook, en plus simple : allumez, éteignez, ajoutez.",
+    "account": "Compte pub :",
     "subPhone": "Touchez pour entrer, la flèche pour revenir.",
     "search": "Chercher un nom",
     "level": {

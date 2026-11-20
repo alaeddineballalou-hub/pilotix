@@ -18,6 +18,14 @@ import { campaignKind, emptyCampaign, GOAL_META, GOALS, goalsOfObjective, isGone
 
 const algDay = (ms: number) => new Date(ms + 3_600_000).toISOString().slice(0, 10);
 const me = (ctx: Ctx) => ctx.session.profile.id || null;
+/**
+ * SQL: the ad account of an ad set `s` (its own, else its campaign `c`'s), written without « act_ ». The tree shows one
+ * ad account only, the one new ads go to (Comptes › « Compte pour lancer »): the shop's tables also keep the campaigns
+ * of its other ad accounts, and those of an ad account unticked since (never read again, so never cleaned).
+ */
+const SET_ACCOUNT = `regexp_replace(coalesce(nullif(s.account_id, ''), c.account_id, ''), '^act_', '')`;
+const notHere = (acct: { id: string; name: string } | null) =>
+  acct ? `Dans un autre compte pub que « ${acct.name || acct.id} » (celui de vos pubs) : Pilotix n’y touche pas d’ici.` : 'Reliez le compte pub Meta de la boutique (Pilot AI › Comptes).';
 /** an amount in the account's cents → dollars (a dinar account through the month's rate) */
 function usdOf(cents: number | null, currency: string, rate: number | null): number | null {
   if (cents === null) return null;
@@ -31,8 +39,9 @@ const fakeId = (ctx: Ctx) => `2387${String(Math.floor(ctx.now() % 1e10)).padStar
 
 /**
  * Everything the tree shows, fresh from Meta (at most every 10 minutes): the campaigns (a marketer sees them all, to
- * put his ads in), the ad sets he may see and their ads. What Meta deleted or archived is left out. `prefill`: what a
- * new ad set in TEST or SCALE starts from (the life ad circle, Pilot Checks, the bid limits typed before).
+ * put his ads in), the ad sets he may see and their ads, of the ad account new ads go to and of no other (an ad set
+ * whose ad account is not known yet waits for the next read). What Meta deleted or archived is left out. `prefill`:
+ * what a new ad set in TEST or SCALE starts from (the life ad circle, Pilot Checks, the bid limits typed before).
  */
 async function treeState(ctx: Ctx) {
   try {
@@ -44,6 +53,8 @@ async function treeState(ctx: Ctx) {
   const rate = (await fxTable(ctx.db))(algDay(ctx.now()).slice(0, 7));
   const acct = await account(ctx);
   const currency = acct?.currency ?? 'USD';
+  // no ad account linked: nothing to show
+  const acctId = acct?.id ?? '';
   const ids = (await visibleAdsets(ctx)).map((s) => s.id);
   const setRows = ids.length
     ? await ctx.db.query(
@@ -51,8 +62,8 @@ async function treeState(ctx: Ctx) {
                 m.name AS marketer_name, c.daily_budget_cents AS campaign_budget
            FROM adsets s LEFT JOIN products p ON p.id = s.product_ids[1] LEFT JOIN landing_groups g ON g.id = s.group_id LEFT JOIN profiles m ON m.id = s.marketer_id
                 LEFT JOIN ad_campaigns c ON c.id = s.campaign_id
-          WHERE s.id = ANY($1) ORDER BY lower(s.name), s.id`,
-        [ids],
+          WHERE s.id = ANY($1) AND $2 <> '' AND ${SET_ACCOUNT} = $2 ORDER BY lower(s.name), s.id`,
+        [ids, acctId],
       )
     : [];
   const adsets = setRows
@@ -87,7 +98,9 @@ async function treeState(ctx: Ctx) {
     `SELECT c.id, c.name, c.objective, c.status, c.daily_budget_cents, c.kind,
             (SELECT count(*) FROM adsets s WHERE s.campaign_id = c.id AND coalesce(s.status, '') NOT IN ('DELETED', 'ARCHIVED')) AS all_sets,
             (SELECT currency FROM adsets s WHERE s.campaign_id = c.id AND s.currency IS NOT NULL LIMIT 1) AS currency
-       FROM ad_campaigns c`,
+       FROM ad_campaigns c
+      WHERE $1 <> '' AND regexp_replace(c.account_id, '^act_', '') = $1`,
+    [acctId],
   );
   const campaigns = campRows
     .filter((r: any) => !isGone(r.status))
@@ -173,14 +186,16 @@ async function makeCampaign(ctx: Ctx, i: { kind: 'test' | 'scale' | 'other'; nam
   return { id, name, kind };
 }
 
-/** what a Meta id is in the shop's tables (an ad, an ad set or a campaign) */
-async function objectOf(ctx: Ctx, id: string): Promise<{ level: 'campaign' | 'adset' | 'ad'; name: string; status: string | null } | null> {
-  const ad = (await ctx.db.query(`SELECT name, status FROM ads WHERE id = $1`, [id]))[0];
-  if (ad) return { level: 'ad', name: String(ad.name), status: ad.status ?? null };
-  const set = (await ctx.db.query(`SELECT name, status FROM adsets WHERE id = $1`, [id]))[0];
-  if (set) return { level: 'adset', name: String(set.name), status: set.status ?? null };
-  const c = (await ctx.db.query(`SELECT name, status FROM ad_campaigns WHERE id = $1`, [id]))[0];
-  if (c) return { level: 'campaign', name: String(c.name), status: c.status ?? null };
+/** what a Meta id is in the shop's tables (an ad, an ad set or a campaign), and its ad account ('' not known) */
+async function objectOf(ctx: Ctx, id: string): Promise<{ level: 'campaign' | 'adset' | 'ad'; name: string; status: string | null; account: string } | null> {
+  const ad = (
+    await ctx.db.query(`SELECT d.name, d.status, ${SET_ACCOUNT} AS account FROM ads d LEFT JOIN adsets s ON s.id = d.adset_id LEFT JOIN ad_campaigns c ON c.id = s.campaign_id WHERE d.id = $1`, [id])
+  )[0];
+  if (ad) return { level: 'ad', name: String(ad.name), status: ad.status ?? null, account: String(ad.account ?? '') };
+  const set = (await ctx.db.query(`SELECT s.name, s.status, ${SET_ACCOUNT} AS account FROM adsets s LEFT JOIN ad_campaigns c ON c.id = s.campaign_id WHERE s.id = $1`, [id]))[0];
+  if (set) return { level: 'adset', name: String(set.name), status: set.status ?? null, account: String(set.account ?? '') };
+  const c = (await ctx.db.query(`SELECT name, status, regexp_replace(account_id, '^act_', '') AS account FROM ad_campaigns WHERE id = $1`, [id]))[0];
+  if (c) return { level: 'campaign', name: String(c.name), status: c.status ?? null, account: String(c.account ?? '') };
   return null;
 }
 const ORDER = { campaign: 0, adset: 1, ad: 2 } as const;
@@ -188,16 +203,19 @@ const ORDER = { campaign: 0, adset: 1, ad: 2 } as const;
 /**
  * « Supprimer », the owner alone (the page asks « Vous êtes sûr ? » first): deleted at Meta for good, with what is in
  * it (a campaign's ad sets and ads, an ad set's ads). The campaigns go first, so what they hold is not asked twice.
- * One that Meta refuses stays, and says why; the others still go.
+ * One that Meta refuses stays, and says why; the others still go. Only in the ad account the tree shows: one of
+ * another ad account is left alone, even asked by its number.
  */
 async function remove(ctx: Ctx, ids: string[]) {
   if (!isOwner(ctx)) throw forbidden('Seul le propriétaire supprime sur Meta : vous pouvez éteindre.');
+  const acct = await account(ctx);
   const found: { id: string; level: 'campaign' | 'adset' | 'ad'; name: string; status: string | null }[] = [];
   const failed: { id: string; why: string }[] = [];
   for (const id of [...new Set(ids)]) {
     const o = await objectOf(ctx, id);
-    if (o) found.push({ id, ...o });
-    else failed.push({ id, why: 'Introuvable' });
+    if (!o) failed.push({ id, why: 'Introuvable' });
+    else if (!acct || o.account !== acct.id) failed.push({ id, why: notHere(acct) });
+    else found.push({ id, level: o.level, name: o.name, status: o.status });
   }
   found.sort((a, b) => ORDER[a.level] - ORDER[b.level]);
   let deleted = 0;
