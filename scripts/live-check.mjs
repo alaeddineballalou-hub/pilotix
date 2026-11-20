@@ -98,10 +98,12 @@ check(r.status === 200 && typeof r.data?.available === 'boolean', 'the demo butt
 // the website: this version's app
 r = await get(`${SITE}/`);
 check(r.status === 200 && /<div id="root"/.test(r.text), 'the website answers', r.status);
-const scripts = [...new Set(r.text.match(/\/assets\/index-[A-Za-z0-9_-]+\.js/g) ?? [])];
-let found = false;
-for (const s of scripts) if (!found) found = (await get(`${SITE}${s}`)).text.includes('verify/send/ticket');
-check(found, 'the website is this version', scripts.join(' '));
+// every script the page loads first (its entry and the files it preloads): since the lighter first open (20 Nov 2026),
+// the app's server client (lib/backend.ts) sits in a preloaded file (kit-…js), no longer in index-…js
+const scripts = [...new Set(r.text.match(/\/assets\/[A-Za-z0-9_.-]+\.js/g) ?? [])];
+let found = null;
+for (const s of scripts) if (!found && (await get(`${SITE}${s}`)).text.includes('verify/send/ticket')) found = s;
+check(!!found, 'the website is this version', found ?? `${scripts.length} files, none of them this version's`);
 check(/data-skin="doux"/.test(r.text) && /family=Readex\+Pro/.test(r.text), 'the website shows the new look (Doux, Readex Pro)', r.text.match(/<html[^>]*>/)?.[0]);
 
 if (blocked && process.env.GITHUB_ACTIONS) console.log(`::warning title=Live check::${blocked} check(s) not done: Cloudflare asked the checker « Just a moment… » (bot protection)`);
