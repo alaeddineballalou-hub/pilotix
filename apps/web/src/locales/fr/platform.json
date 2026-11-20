@@ -1723,7 +1723,11 @@
       ],
       "waAlone": "WhatsApp",
       "waConfigId": "ID de configuration WhatsApp (Embedded Signup)",
-      "waAloneText": "Avec cet ID, chaque boutique a un bouton « Connecter WhatsApp » dans Pilot AI › Comptes : une connexion, et son numéro répond dans Pilotix. Configuration de type « WhatsApp Embedded Signup », même adresse de retour (ci-dessous)."
+      "waAloneText": "Avec cet ID, chaque boutique a un bouton « Connecter WhatsApp » dans Pilot AI › Comptes : une connexion, et son numéro répond dans Pilotix. Configuration de type « WhatsApp Embedded Signup », même adresse de retour (ci-dessous).",
+      "appTest": "Tester l’app Meta",
+      "appTestBtn": "Tester",
+      "appTesting": "Test en cours…",
+      "appTestText": "Ce que l’app Meta de Pilotix reçoit (messages et commentaires, formulaires, Instagram, problèmes des pubs) et si son adresse répond depuis Internet. Ce test n’est plus dans le « Tester » des boutiques : c’est le travail de l’équipe Pilotix."
     },
     "release": {
       "title": "Push : la prochaine version de Dellal",

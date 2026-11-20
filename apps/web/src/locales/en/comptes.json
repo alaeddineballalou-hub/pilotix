@@ -51,7 +51,7 @@
     "tiktok": {
       "name": "TikTok",
       "what": "Your TikTok ad accounts: your Catalog lists can go there, and their numbers come to Ads soon.",
-      "link": "Link a TikTok account",
+      "link": "Continue with TikTok",
       "notReady": "Soon: Pilotix is getting the TikTok link ready."
     },
     "metaContent": {
@@ -368,6 +368,9 @@
       "ok": "Last sign from WhatsApp that Pilotix got: {{when}}.",
       "warn": "Pilotix hasn’t got anything from WhatsApp for {{phone}} yet. Write to this number from another phone, then test again.",
       "lost": "WhatsApp sent something {{when}}, but no shop took it."
+    },
+    "appNone": {
+      "warn": "Pilotix’s Meta app is not ready: put its ID and its secret here, in Meta and TikTok accounts."
     }
   },
   "quoted": "“{{name}}”",
@@ -397,7 +400,9 @@
     "waitingHelp": "Finish in Meta’s window: choose the boutique’s WhatsApp number and accept.",
     "done": "WhatsApp connected: its messages reach Pilotix.",
     "removed": "WhatsApp removed.",
-    "removeAsk": "Remove this WhatsApp number? Your agents will no longer answer on it and your delivery messages will no longer go out by WhatsApp."
+    "removeAsk": "Remove this WhatsApp number? Your agents will no longer answer on it and your delivery messages will no longer go out by WhatsApp.",
+    "onShort": "Connected",
+    "againLead": "Another number:"
   },
   "testBad": "To fix: {{n}}",
   "testWhere": "Look here:",
@@ -426,5 +431,14 @@
     "save": "Check and keep",
     "saving": "Checking…",
     "saved": "Meta Ads key kept: its ad accounts are in the list."
-  }
+  },
+  "rows": {
+    "title": "Your connections"
+  },
+  "conn": {
+    "details": "Show or hide this account’s details",
+    "via": "account “{{name}}”",
+    "business": "Business portfolio: {{names}}"
+  },
+  "relinkLead": "Link this account again (a new Page, ad accounts up to date, a fresh key):"
 }

@@ -66,7 +66,7 @@ import { darijaBookFile, darijaBookLive, darijaDraft, darijaErr, darijaVersions,
 import { cmBoard, dellalBoard, dellalBooks, dellalBookText, dellalMore, spyBoard } from './aiboard';
 import { saveSpyPlatformConfig, SPY_PER_SHOP_MAX, SPY_TOOLS, spyPlatformConfig, spyPlatformKey, spySearchesToday, type SpyTool } from './spykey';
 import { spyTryKey } from '../modules/spy';
-import { appReady, saveSocialApps, socialApps, SocialAppsInput, socialCounts, socialUrls } from '../modules/social';
+import { appReady, saveSocialApps, socialApps, SocialAppsInput, socialCounts, SocialTest, socialUrls } from '../modules/social';
 
 export const STAFF_ROLES = ['owner', 'manager', 'support'] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
@@ -87,6 +87,8 @@ export interface PCtx {
   ai?: pilot.TeachAsk;
   /** the server's public address (PUBLIC_URL): the addresses Pilotix's Meta and TikTok apps are given */
   publicUrl?: string;
+  /** the server only: Pilotix's own Meta app tried (its webhook's fields, refused signatures, its address from the Internet) */
+  metaAppTest?: () => Promise<SocialTest>;
 }
 
 export interface PProcedure<S extends ZodTypeAny = ZodTypeAny, R = unknown> {
@@ -1659,6 +1661,14 @@ export const PLATFORM_REGISTRY = {
     await saveSocialApps(ctx.t, i);
     await audit(ctx, 'social.apps', null, { meta: i.meta.appId || null, tiktok: i.tiktok.appId || null, secretChanged: !!(i.meta.secret || i.tiktok.secret), secretRemoved: i.meta.secret === null || i.tiktok.secret === null });
     return socialAppsView(ctx);
+  }),
+  /**
+   * « Tester l’app Meta »: Pilotix's own Meta app, line by line (what its webhook gets, a refused signature, its address
+   * from the Internet). The Pilotix team's part of the test: the boutiques' « Tester » no longer shows it.
+   */
+  'p.social.appTest': pproc(ALL, z.object({}), async (ctx) => {
+    if (!ctx.metaAppTest) throw bad('Le test de l’app Meta se fait sur le serveur de Pilotix.');
+    return ctx.metaAppTest();
   }),
 
   // ---------------------------------------------------------------- Pilot AI › Test & lessons

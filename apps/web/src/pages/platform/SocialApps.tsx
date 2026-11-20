@@ -9,7 +9,9 @@ import { n } from '../../lib/format';
 import type { POut } from '../../lib/platform';
 import { CopyCode } from '../../ui/CopyCode';
 import { Card, Field, Icon, Loading } from '../../ui/kit';
-import { usePilotAction, usePilotRpc } from './pilotDemo';
+import { toast } from '../../ui/toast';
+import { TestLines } from '../comptes';
+import { usePilotAction, usePilotCall, usePilotRpc } from './pilotDemo';
 
 type Apps = POut<'p.social.apps'>;
 const K = 'platform.pilot.social.';
@@ -116,6 +118,7 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
           >
             <CopyCode code={urls.metaDeletion} small />
           </Field>
+          <MetaAppTest />
         </section>
         <section aria-labelledby="pl-sa-tt">
           <h3 id="pl-sa-tt">
@@ -183,5 +186,39 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
         </div>
       )}
     </Card>
+  );
+}
+
+/**
+ * « Tester l’app Meta »: Pilotix's own Meta app, line by line — what its webhook gets (the Pages' messages and comments,
+ * the lead forms, edited messages and reactions, Instagram, the ads' problems), a webhook refused these 2 days, and that
+ * its address answers from the Internet. The Pilotix team's part of the test (the boutiques' « Tester » no longer has it).
+ */
+function MetaAppTest() {
+  const { t } = useTranslation();
+  const call = usePilotCall();
+  const [r, setR] = useState<POut<'p.social.appTest'> | null>(null);
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    setBusy(true);
+    try {
+      setR(await call('p.social.appTest', {}));
+    } catch (e) {
+      toast((e as Error).message, 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="pl-sa-test" role="group" aria-labelledby="pl-sa-test-h">
+      <div className="pl-sa-test-h">
+        <h4 id="pl-sa-test-h">{t(K + 'appTest')}</h4>
+        <button type="button" className="btn small" disabled={busy} onClick={run}>
+          <Icon name="pulse" /> {busy ? t(K + 'appTesting') : t(K + 'appTestBtn')}
+        </button>
+      </div>
+      <p className="small muted">{t(K + 'appTestText')}</p>
+      {(r || busy) && <TestLines r={r} pending={busy} provider="meta" />}
+    </div>
   );
 }

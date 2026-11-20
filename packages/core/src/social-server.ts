@@ -125,6 +125,38 @@ async function subscribePage(pageId: string, token: string): Promise<{ leads: bo
   }
 }
 
+/** A https address Meta gave for a picture, or null (Meta changes these addresses now and then: « Tester » reads them again). */
+const httpsOrNull = (v: unknown): string | null => (typeof v === 'string' && /^https:\/\//.test(v) ? v.slice(0, 1000) : null);
+
+/** An Instagram account's profile picture (Pilot AI › Comptes shows it), or null when Meta does not give it. */
+async function igPicture(igId: string, token: string): Promise<string | null> {
+  if (!igId || !token) return null;
+  return httpsOrNull((await graph(igId, { fields: 'profile_picture_url', access_token: token }).catch(() => null))?.profile_picture_url);
+}
+
+/** The business portfolio an ad account belongs to: its name, and its picture when Meta gives it. */
+export interface AdBusiness {
+  id: string;
+  name: string;
+  picture: string | null;
+}
+/**
+ * The business portfolio of each ad account (by its number), read in one call for them all; Meta may refuse the picture
+ * (the key was not given the business permission): then the names alone, and nothing when it says nothing.
+ */
+async function adBusinesses(ids: string[], token: string): Promise<Map<string, AdBusiness>> {
+  const out = new Map<string, AdBusiness>();
+  const list = [...new Set(ids.filter((x) => /^\d+$/.test(x)))].slice(0, 25);
+  if (!list.length || !token) return out;
+  const read = (fields: string) => graph('', { ids: list.map((x) => `act_${x}`).join(','), fields, access_token: token }).catch(() => null);
+  const r = (await read('business{id,name,profile_picture_uri}')) ?? (await read('business{id,name}'));
+  for (const id of list) {
+    const b = r?.[`act_${id}`]?.business;
+    if (b?.id) out.set(id, { id: String(b.id), name: String(b.name ?? '').slice(0, 200), picture: httpsOrNull(b.profile_picture_uri) });
+  }
+  return out;
+}
+
 /** A key's ad accounts (each one's ad problems asked for Pilotix's webhook), as a login keeps them. */
 async function adAccountAssets(token: string, system: boolean): Promise<FoundAsset[]> {
   // without the ads permission there are no ad accounts: the Pages still work
@@ -141,6 +173,9 @@ async function adAccountAssets(token: string, system: boolean): Promise<FoundAss
     await graph(`act_${idOf}/subscribed_apps`, { access_token: token }, 'POST').catch(() => (hook = false));
     assets.push({ kind: 'ad_account', extId: idOf, name: String(a.name ?? idOf), extra: { currency: a.currency ?? null, status: a.account_status ?? null, hook } });
   }
+  // the business portfolio of each one (its name and picture show in Pilot AI › Comptes)
+  const biz = await adBusinesses(assets.map((x) => x.extId), token);
+  for (const x of assets) if (biz.has(x.extId)) x.extra = { ...(x.extra ?? {}), business: biz.get(x.extId) };
   return assets;
 }
 
@@ -164,11 +199,13 @@ async function settlePage(a: FoundAsset, accountToken: string): Promise<FoundAss
   let hook = true;
   await subscribePage(a.extId, String(a.token ?? '')).catch(() => (hook = false));
   const extra: Record<string, any> = { ...(a.extra ?? {}) };
-  const ig: { id: string; username: string; key?: boolean } | undefined = extra.ig?.id ? { id: String(extra.ig.id), username: String(extra.ig.username ?? '') } : undefined;
+  const ig: { id: string; username: string; key?: boolean; picture?: string | null } | undefined = extra.ig?.id ? { id: String(extra.ig.id), username: String(extra.ig.username ?? '') } : undefined;
   if (ig && (await igReach(accountToken, ig.id)).ok) {
     ig.key = true;
     await graph(`${IG_UNI}/${ig.id}/subscribed_apps`, { subscribed_fields: IG_FIELDS, access_token: accountToken }, 'POST').catch(() => null);
   }
+  // its profile picture (Pilot AI › Comptes shows the Page's and the Instagram account's side by side)
+  if (ig) ig.picture = await igPicture(ig.id, String(a.token ?? '') || accountToken);
   return { ...a, extra: { picture: extra.picture ?? null, ...(ig ? { ig } : {}), hook } };
 }
 
@@ -779,10 +816,11 @@ const readAdAccount = (id: string, token: string): Promise<any> =>
  *    pasted before that Publicité still runs on;
  *  - forms, catalog, pixels, content: the ads' forms, the catalogue and the pixels (read with the boutique's ads key),
  *    publishing;
- *  - wa: the boutique's WhatsApp number;
- *  - app: Pilotix's Meta app webhook (its address and fields), and that the address answers from the Internet.
+ *  - wa: the boutique's WhatsApp number.
  * Each part names the permission it misses (what the key was given comes from Meta's debug_token: the permissions, and
- * for which accounts). A key Facebook refuses turns the account red; a key that works again turns it green.
+ * for which accounts). A key Facebook refuses turns the account red; a key that works again turns it green. The test
+ * also reads the pictures again (the Page's, its Instagram account's, the business portfolio of the ad accounts).
+ * Pilotix's own Meta app (its webhook) is tried in the control room instead (testMetaApp).
  */
 export async function testLink(t: Tenancy, shopId: number, linkId: number, publicUrl: string): Promise<SocialTest> {
   const l = (await t.platform.query(`SELECT * FROM platform.social_links WHERE id = $1`, [linkId]))[0];
@@ -1155,9 +1193,50 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
     }
   }
 
-  // ------------------------------------------------------------ Pilotix's Meta app: where Meta sends everything
+  // the pictures Pilot AI › Comptes shows (the Page's, its Instagram account's, the business portfolio of the ad
+  // accounts): Meta changes their addresses now and then, so each test reads them again
+  if (keyOk) await refreshLooks(t, assets, token).catch(() => undefined);
+  return { at: new Date().toISOString(), checks };
+}
+
+/**
+ * The pictures of a linked account's Pages (and of their Instagram accounts) and the business portfolios of its ad
+ * accounts, read again from Meta (its picture addresses change now and then). Nothing changes where Meta says nothing.
+ */
+async function refreshLooks(t: Tenancy, assets: any[], token: string) {
+  for (const p of assets.filter((a: any) => a.kind === 'page').slice(0, 10)) {
+    const x = jsonOf(p.extra);
+    const key = String(p.token ?? '') || token;
+    const pic = httpsOrNull((await graph(String(p.ext_id), { fields: 'picture{url}', access_token: key }).catch(() => null))?.picture?.data?.url);
+    const igPic = x.ig?.id ? await igPicture(String(x.ig.id), key) : null;
+    const next = { ...x, ...(pic ? { picture: pic } : {}), ...(igPic ? { ig: { ...x.ig, picture: igPic } } : {}) };
+    if (JSON.stringify(next) !== JSON.stringify(x)) await t.platform.query(`UPDATE platform.social_assets SET extra = $2 WHERE id = $1`, [num(p.id), JSON.stringify(next)]);
+  }
+  const ads = assets.filter((a: any) => a.kind === 'ad_account');
+  const biz = await adBusinesses(ads.map((a: any) => String(a.ext_id)), token);
+  for (const a of ads) {
+    const b = biz.get(String(a.ext_id));
+    const x = jsonOf(a.extra);
+    if (b && JSON.stringify(x.business ?? null) !== JSON.stringify(b)) await t.platform.query(`UPDATE platform.social_assets SET extra = $2 WHERE id = $1`, [num(a.id), JSON.stringify({ ...x, business: b })]);
+  }
+}
+
+/**
+ * Pilotix's own Meta app, tried from the control room (Pilot AI › Réglages & coûts › Comptes Meta et TikTok, « Tester
+ * l’app Meta »): the fields its webhook gets (the Pages' messages and comments, the lead forms, edited messages and
+ * reactions, Instagram, the ad accounts' problems), a webhook Pilotix refused these 2 days, and that the webhook's
+ * address answers from the Internet. It was the last part of every boutique's « Tester »: it is the Pilotix team's
+ * work, never a boutique's (owner, 20 Nov 2026).
+ */
+export async function testMetaApp(t: Tenancy, publicUrl: string): Promise<SocialTest> {
+  const checks: SocialCheck[] = [];
+  const add = (group: CheckGroup, key: string, state: SocialCheck['state'], params?: SocialCheck['params'], detail?: string | null) =>
+    checks.push({ key, group, state, ...(params ? { params } : {}), detail: detail ?? null });
+  const apps = await socialApps(t);
+  const secret = await socialSecret(t, 'meta');
   const webhook = socialUrls(publicUrl).metaWebhook;
-  if (apps.meta.appId && secret) {
+  if (!apps.meta.appId || !secret) add('app', 'appNone', 'warn');
+  else {
     try {
       const subs = await graphAll(`${apps.meta.appId}/subscriptions`, { access_token: `${apps.meta.appId}|${secret}` });
       const one = (object: string, want: string[], key: string) => {
@@ -1180,9 +1259,6 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
       add('app', 'appHook', 'warn', { list: 'messages, feed' }, why(e));
     }
   }
-  // partnership ads (Partenaires › Influenceurs): Pilotix's Facebook login does not ask for their permission yet, so
-  // linking again cannot give it: said to the Pilotix team, never as the boutique's problem
-  if (keyOk && page) perm('app', 'partners', 'info');
   // a webhook Pilotix refused these 2 days: its signature matched no secret (Instagram's old login signs with its own)
   const badSig = await lastBadSignature(t).catch(() => null);
   if (badSig && Date.now() - Date.parse(badSig.at) < 2 * 24 * 3_600_000) add('app', 'badSig', 'warn', { at: badSig.at, count: badSig.n });

@@ -1008,6 +1008,19 @@ export function demoAnswer(name: string, input: any): unknown {
     // Pilotix's Meta and TikTok apps, not made yet (the preview shows what to do)
     case 'p.social.apps':
       return { meta: { appId: '', configId: '', adsConfigId: '', waConfigId: '', hasSecret: false, hasIgSecret: false }, tiktok: { appId: '', hasSecret: false }, verifyToken: 'pilotix-verify-3f9c2a71', ready: { meta: false, tiktok: false }, urls: null, counts: { meta: 1, tiktok: 0, shops: 2 } };
+    // « Tester l’app Meta »: what a working app answers (Instagram's webhook still to subscribe, as often at first)
+    case 'p.social.appTest':
+      return {
+        at: new Date().toISOString(),
+        checks: [
+          { key: 'appHook', group: 'app', state: 'ok', detail: null },
+          { key: 'appHookLeads', group: 'app', state: 'ok', detail: null },
+          { key: 'appHookEdits', group: 'app', state: 'ok', detail: null },
+          { key: 'appHookIg', group: 'app', state: 'warn', params: { list: 'messages, comments' }, detail: null },
+          { key: 'appHookAds', group: 'app', state: 'ok', detail: null },
+          { key: 'reach', group: 'app', state: 'ok', detail: null },
+        ],
+      };
     case 'p.pilot.try':
       return tryAnswer(input ?? {});
     case 'p.pilot.teach':

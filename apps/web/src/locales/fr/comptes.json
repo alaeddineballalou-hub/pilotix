@@ -51,7 +51,7 @@
     "tiktok": {
       "name": "TikTok",
       "what": "Vos comptes publicitaires TikTok : vos listes du Catalogue peuvent y partir, et leurs chiffres arrivent bientôt dans Publicité.",
-      "link": "Lier un compte TikTok",
+      "link": "Continuer avec TikTok",
       "notReady": "Bientôt : Pilotix prépare la connexion TikTok."
     },
     "metaContent": {
@@ -368,6 +368,9 @@
       "ok": "Dernier signe de WhatsApp reçu par Pilotix : {{when}}.",
       "warn": "Pilotix n’a encore rien reçu de WhatsApp pour {{phone}}. Écrivez à ce numéro depuis un autre téléphone, puis testez encore.",
       "lost": "WhatsApp a envoyé quelque chose {{when}}, mais aucune boutique ne l’a pris."
+    },
+    "appNone": {
+      "warn": "L’app Meta de Pilotix n’est pas prête : mettez son numéro et sa clé secrète ici, dans Comptes Meta et TikTok."
     }
   },
   "quoted": "« {{name}} »",
@@ -397,7 +400,9 @@
     "waitingHelp": "Terminez dans la fenêtre de Meta : choisissez le numéro WhatsApp de la boutique et acceptez.",
     "done": "WhatsApp connecté : ses messages arrivent dans Pilotix.",
     "removed": "WhatsApp retiré.",
-    "removeAsk": "Retirer ce numéro WhatsApp ? Vos agents n’y répondront plus et vos messages de livraison ne partiront plus par WhatsApp."
+    "removeAsk": "Retirer ce numéro WhatsApp ? Vos agents n’y répondront plus et vos messages de livraison ne partiront plus par WhatsApp.",
+    "onShort": "Connecté",
+    "againLead": "Un autre numéro :"
   },
   "testBad": "À corriger : {{n}}",
   "testWhere": "À regarder ici :",
@@ -426,5 +431,14 @@
     "save": "Vérifier et garder",
     "saving": "Vérification…",
     "saved": "Clé Meta Ads gardée : ses comptes pub sont dans la liste."
-  }
+  },
+  "rows": {
+    "title": "Vos connexions"
+  },
+  "conn": {
+    "details": "Voir ou cacher le détail de ce compte",
+    "via": "compte « {{name}} »",
+    "business": "Portefeuille business : {{names}}"
+  },
+  "relinkLead": "Relier ce compte (nouvelle page, comptes pub à jour, clé neuve) :"
 }

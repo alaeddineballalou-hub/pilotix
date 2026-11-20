@@ -1059,6 +1059,10 @@ export interface AssetView {
   name: string;
   picture: string | null;
   igUsername: string | null;
+  /** its Instagram account's profile picture (a Page) */
+  igPicture: string | null;
+  /** the business portfolio it belongs to (an ad account): its name and picture, when Meta gave them */
+  business: { name: string; picture: string | null } | null;
   currency: string | null;
   /** a Page Pilotix could not subscribe to its webhook (its messages do not come yet) */
   noHook: boolean;
@@ -1124,6 +1128,8 @@ const assetView = (a: any, shopId: number, users: { id: number; name: string }[]
     name: String(a.name ?? ''),
     picture: x.picture ? String(x.picture) : null,
     igUsername: x.ig?.username ? String(x.ig.username) : null,
+    igPicture: x.ig?.picture ? String(x.ig.picture) : null,
+    business: x.business?.name ? { name: String(x.business.name), picture: x.business.picture ? String(x.business.picture) : null } : null,
     currency: x.currency ? String(x.currency) : null,
     noHook: a.kind === 'page' && x.hook === false,
     usedHere: users.some((u) => u.id === shopId),
@@ -1489,9 +1495,22 @@ interface DemoLink {
   name: string;
   scope: 'here' | 'all';
   createdAt: string;
-  assets: { id: number; kind: AssetKind; extId: string; name: string; igUsername: string | null; currency: string | null; usedBy: number[] }[];
+  assets: { id: number; kind: AssetKind; extId: string; name: string; igUsername: string | null; currency: string | null; usedBy: number[]; picture?: string; igPicture?: string; business?: { name: string; picture: string | null } }[];
 }
 const DEMO_SISTER = { id: 902, name: 'Boutique Oran' };
+/** The preview's sample pictures (the real ones come from Meta): two letters on a colour, drawn in the page. */
+const demoPic = (letters: string, from: string, to: string) =>
+  `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs><rect width="64" height="64" fill="url(#g)"/><text x="32" y="40" font-family="Arial,sans-serif" font-size="22" font-weight="700" fill="#fff" text-anchor="middle">${letters}</text></svg>`,
+  )}`;
+const DEMO_LOOKS = {
+  page: demoPic('BC', '#FFB86B', '#F07AA0'),
+  ig: demoPic('BC', '#F58529', '#B62A84'),
+  pageAlger: demoPic('BA', '#7BC4A4', '#3D8C7A'),
+  igAlger: demoPic('BA', '#F58529', '#B62A84'),
+  business: { name: 'Bébé Confort SARL', picture: demoPic('BS', '#1B2A47', '#3E5C99') },
+  businessSara: { name: 'Sara Commerce', picture: demoPic('SC', '#1B2A47', '#6B4BB4') },
+};
 let demo: { links: DemoLink[]; next: number; states: Map<string, { at: number; provider: SocialProvider; scope: 'here' | 'all'; kind?: LoginKind; linkId: number | null }> } | null = null;
 const demoShop = (ctx: Ctx) => ctx.shop?.id ?? 1;
 function demoData(ctx: Ctx) {
@@ -1509,7 +1528,7 @@ function demoData(ctx: Ctx) {
         name: 'Alaeddine Benali',
         scope: 'here',
         createdAt: new Date(ctx.now() - 9 * 86_400_000).toISOString(),
-        assets: [{ id: 11, kind: 'page', extId: '104920331', name: 'Bébé Confort DZ', igUsername: 'bebeconfort.dz', currency: null, usedBy: [me] }],
+        assets: [{ id: 11, kind: 'page', extId: '104920331', name: 'Bébé Confort DZ', igUsername: 'bebeconfort.dz', currency: null, usedBy: [me], picture: DEMO_LOOKS.page, igPicture: DEMO_LOOKS.ig }],
       },
       // « Publicité Meta »: a connection of its own; an account often has several ad accounts (all counted)
       {
@@ -1520,10 +1539,10 @@ function demoData(ctx: Ctx) {
         scope: 'all',
         createdAt: new Date(ctx.now() - 9 * 86_400_000).toISOString(),
         assets: [
-          { id: 13, kind: 'ad_account', extId: '120211887', name: 'Bébé Confort — publicité', igUsername: null, currency: 'USD', usedBy: [me, DEMO_SISTER.id] },
-          { id: 22, kind: 'ad_account', extId: '120211888', name: 'Bébé Confort — tests', igUsername: null, currency: 'USD', usedBy: [me, DEMO_SISTER.id] },
-          { id: 23, kind: 'ad_account', extId: '120211889', name: 'Promo Ramadan', igUsername: null, currency: 'USD', usedBy: [me, DEMO_SISTER.id] },
-          { id: 24, kind: 'ad_account', extId: '120211890', name: 'Ancien compte (lecture seule)', igUsername: null, currency: 'USD', usedBy: [me, DEMO_SISTER.id] },
+          { id: 13, kind: 'ad_account', extId: '120211887', name: 'Bébé Confort — publicité', igUsername: null, currency: 'USD', usedBy: [me, DEMO_SISTER.id], business: DEMO_LOOKS.business },
+          { id: 22, kind: 'ad_account', extId: '120211888', name: 'Bébé Confort — tests', igUsername: null, currency: 'USD', usedBy: [me, DEMO_SISTER.id], business: DEMO_LOOKS.business },
+          { id: 23, kind: 'ad_account', extId: '120211889', name: 'Promo Ramadan', igUsername: null, currency: 'USD', usedBy: [me, DEMO_SISTER.id], business: DEMO_LOOKS.business },
+          { id: 24, kind: 'ad_account', extId: '120211890', name: 'Ancien compte (lecture seule)', igUsername: null, currency: 'USD', usedBy: [me, DEMO_SISTER.id], business: DEMO_LOOKS.business },
         ],
       },
     ],
@@ -1559,8 +1578,10 @@ async function demoList(ctx: Ctx): Promise<SocialListView> {
       kind: a.kind,
       extId: a.extId,
       name: a.name,
-      picture: null,
+      picture: a.picture ?? null,
       igUsername: a.igUsername,
+      igPicture: a.igPicture ?? null,
+      business: a.business ?? null,
       currency: a.currency,
       noHook: false,
       usedHere: a.usedBy.includes(me),
@@ -1619,8 +1640,8 @@ async function demoState(ctx: Ctx, state: string) {
       assets: tiktok
         ? [{ id: n * 10 + 1, kind: 'advertiser', extId: '7311021845', name: 'Bébé Confort TikTok', igUsername: null, currency: 'USD', usedBy: [] }]
         : ads
-          ? [{ id: n * 10 + 2, kind: 'ad_account', extId: `9930${n}`, name: 'Sara — publicité', igUsername: null, currency: 'USD', usedBy: [] }]
-          : [{ id: n * 10 + 1, kind: 'page', extId: `2049${n}`, name: 'Bébé Confort Alger', igUsername: 'bebeconfort.alger', currency: null, usedBy: [] }],
+          ? [{ id: n * 10 + 2, kind: 'ad_account', extId: `9930${n}`, name: 'Sara — publicité', igUsername: null, currency: 'USD', usedBy: [], business: DEMO_LOOKS.businessSara }]
+          : [{ id: n * 10 + 1, kind: 'page', extId: `2049${n}`, name: 'Bébé Confort Alger', igUsername: 'bebeconfort.alger', currency: null, usedBy: [], picture: DEMO_LOOKS.pageAlger, igPicture: DEMO_LOOKS.igAlger }],
     };
     d.links.push(link);
     s.linkId = n;
@@ -1649,7 +1670,7 @@ async function demoAdsKey(ctx: Ctx) {
     name: 'Clé Meta Ads (utilisateur système)',
     scope: 'here',
     createdAt: new Date(ctx.now()).toISOString(),
-    assets: [{ id: n * 10 + 2, kind: 'ad_account', extId: `8820${n}`, name: 'Compte publicitaire de la clé', igUsername: null, currency: 'USD', usedBy: [] }],
+    assets: [{ id: n * 10 + 2, kind: 'ad_account', extId: `8820${n}`, name: 'Compte publicitaire de la clé', igUsername: null, currency: 'USD', usedBy: [], business: DEMO_LOOKS.business }],
   });
   return { linkId: n, list: await demoList(ctx) };
 }
@@ -1694,8 +1715,8 @@ async function demoAds(ctx: Ctx, linkId: number, on: boolean) {
   return demoList(ctx);
 }
 /**
- * The preview's « Tester »: what a working account answers, part by part (Pilotix's Instagram webhook still to
- * subscribe, as often at first: the page shows where a problem is).
+ * The preview's « Tester »: what a working account answers, part by part (Pilotix's own Meta app is tried in the
+ * control room, not here).
  */
 async function demoTest(ctx: Ctx, linkId: number): Promise<SocialTest> {
   const me = demoShop(ctx);
@@ -1739,9 +1760,6 @@ async function demoTest(ctx: Ctx, linkId: number): Promise<SocialTest> {
     } else if (ads.length) add('ads', 'adsOff', 'warn', { count: ads.length });
     const wa = await whatsappOf(ctx.db);
     if (wa) add('wa', 'wa', 'ok', { phone: wa.phone || wa.phoneId });
-    add('app', 'appHook', 'ok');
-    add('app', 'appHookIg', 'warn', { list: 'messages, comments' });
-    add('app', 'reach', 'ok');
   } else if (adsHere) add('ads', 'ads', 'ok', { count: ads.length, bad: 0 });
   return { at: new Date(ctx.now()).toISOString(), checks };
 }

@@ -11,7 +11,7 @@ import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCal
 import { loadShop, passwordFromLink } from '../platform';
 import { CHECK_GROUPS, noteBadSignature, noteIgLogin, resetSocialDemo, routeMeta } from '../modules/social';
 import { setRaw } from '../modules/admin';
-import { confirmLogin, deletionPage, finishLogin, finishWhatsappPopup, loginPage, metaDeletion, parseSignedRequest, runSocial } from '../social-server';
+import { confirmLogin, deletionPage, finishLogin, finishWhatsappPopup, loginPage, metaDeletion, parseSignedRequest, runSocial, testMetaApp } from '../social-server';
 import { createHmac } from 'node:crypto';
 
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
@@ -46,7 +46,8 @@ const setting = async (ctx: Ctx, key: string) => (await ctx.db.query('SELECT val
 // ---------------------------------------------------------------- Facebook and TikTok, answered here
 const calls: { url: string; method: string; body: string }[] = [];
 // byId: Pages Facebook gives one by one (a business key whose own list is empty)
-let graph: { me: any; pages: any[]; ads: any[]; assigned?: any[]; byId?: Record<string, any> } = { me: {}, pages: [], ads: [] };
+// business: each ad account's business portfolio (Meta gives it for several ad accounts in one call, ?ids=…)
+let graph: { me: any; pages: any[]; ads: any[]; assigned?: any[]; byId?: Record<string, any>; business?: Record<string, any> } = { me: {}, pages: [], ads: [] };
 // the key Facebook gives for a login's code (each door of Meta gets its own)
 let codeToken = 'SHORT_USER_TOKEN';
 let tiktok: { token: string; ids: string[]; list: any[]; user: any } = { token: '', ids: [], list: [], user: {} };
@@ -79,6 +80,8 @@ let probe: {
   formsRefuse?: boolean;
   // « Coller une clé Meta Ads »: what Meta says of a pasted key (alive or not, whose app, a person's or a system user's)
   keyValid?: boolean;
+  // a key without the business permission: Meta refuses a business portfolio's picture
+  bizPicRefuse?: boolean;
   keyApp?: string;
   keyType?: string;
 } = { perms: ALL_PERMS, pageSubs: [], appSubs: [], unreadable: [], cloudflare: false, refuse: false };
@@ -91,7 +94,7 @@ before(async () => {
   await seedBase(t.shop('public'), { ...OWNER, name: 'Amine' });
   await migrateAll(t);
   const { staff } = await staffLogin(t, OWNER.email, OWNER.password);
-  pctx = { t, staff, now: () => Date.now(), publicUrl: URL0 };
+  pctx = { t, staff, now: () => Date.now(), publicUrl: URL0, metaAppTest: () => testMetaApp(t, URL0) };
   a = await as(await store('Bébé Confort', SELLER));
   b = await as(await store('Bébé Oran', SELLER));
   globalThis.fetch = (async (input: any, init?: any) => {
@@ -134,6 +137,17 @@ before(async () => {
         if (ins[2] === 'adsets') return answer({ data: [{ id: `S${n}`, name: `Set ${n}`, effective_status: 'ACTIVE', campaign: { name: 'C' } }] });
         if (ins[2] === 'ads') return answer({ data: [{ id: `A${n}`, adset_id: `S${n}`, name: `Ad ${n}`, effective_status: 'ACTIVE', creative: {} }] });
         return answer({ data: [{ date_start: '2026-11-01', adset_id: `S${n}`, ad_id: `A${n}`, spend: '2.00', impressions: '100', actions: [] }] });
+      }
+      // several nodes in one call (?ids=…): the ad accounts' business portfolio (Meta may refuse its picture)
+      if (path === '' && u.searchParams.get('ids')) {
+        const fields = String(u.searchParams.get('fields') ?? '');
+        const pic = /profile_picture_uri/.test(fields);
+        if (pic && probe.bizPicRefuse) return new Response(JSON.stringify({ error: { message: '(#100) Missing Permission', code: 100 } }), { status: 400 });
+        const one = (id: string) => {
+          const biz = graph.business?.[id];
+          return [id, { id, ...(biz ? { business: pic ? biz : { id: biz.id, name: biz.name } } : {}) }];
+        };
+        return answer(Object.fromEntries(String(u.searchParams.get('ids')).split(',').map(one)));
       }
       if (path === 'me/accounts') return answer({ data: graph.pages });
       if (path === 'me/adaccounts') return answer({ data: graph.ads });
@@ -811,7 +825,7 @@ const lines = (r: any): Record<string, string> =>
   Object.fromEntries(r.checks.map((c: any) => [`${c.group}.${c.key}${c.params?.fixed ? ':fixed' : c.params?.lost ? ':lost' : c.params?.why ? `:${c.params.why}` : ''}`, c.state]));
 const karimOf = async () => ((await call('social.list', a, {})) as any).links.find((x: any) => x.name === 'Karim Benali');
 
-test('« Tester », part by part: the key and what Facebook gave it, the Page (subscribed again), Instagram, the forms, Publicité, the app webhook, the address from the Internet', async () => {
+test('« Tester », part by part: the key and what Facebook gave it, the Page (subscribed again), Instagram, the forms, Publicité; Pilotix’s Meta app (its webhook, its address from the Internet) in the control room', async () => {
   const list: any = await call('social.list', a, {});
   const karim = list.links.find((x: any) => x.name === 'Karim Benali');
   assert.equal(list.here.page.name, 'Bébé Confort DZ');
@@ -858,29 +872,30 @@ test('« Tester », part by part: the key and what Facebook gave it, the Page (s
     'catalog.perm:catalog': 'warn',
     'catalog.catalogNone': 'info',
     'pixels.pixelNone': 'info',
+  });
+  // Pilotix's own Meta app: the Pilotix team's part, tried in the control room (never in a boutique's test)
+  const app: any = await p('p.social.appTest');
+  assert.deepEqual(lines(app), {
     'app.appHook': 'ok',
     'app.appHookLeads': 'warn',
     'app.appHookEdits': 'warn',
     'app.appHookIg': 'warn',
     'app.appHookAds': 'warn',
-    // partnership ads: Pilotix's login does not ask for them yet (said, never the boutique's problem)
-    'app.perm:partners': 'info',
     'app.reach': 'ok',
   });
   const find = (x: any, key: string, why?: string) => x.checks.find((c: any) => c.key === key && (why === undefined || c.params?.why === why));
   assert.equal(find(r, 'perm', 'igComments').params.list, 'instagram_manage_comments');
   assert.equal(find(r, 'perm', 'adsManage').params.list, 'ads_management, pages_manage_ads, business_management');
   assert.equal(find(r, 'perm', 'forms').params.list, 'leads_retrieval, pages_manage_ads');
-  assert.equal(find(r, 'perm', 'partners').params.list, 'instagram_branded_content_ads_brand, facebook_branded_content_ads_brand');
   // what Facebook gave at the last login, and how long the key lasts (a person's key: about 60 days)
   assert.deepEqual(find(r, 'given').params, { pages: 1, igs: 1, ads: 1 });
   assert.ok(Date.parse(find(r, 'keyLife').params.until) > Date.now() + 50 * 86_400_000);
   // Marketing › Formulaires: the Page subscribed to its ads' lead forms too; the app's webhook does not send them yet
   assert.ok(calls.some((c) => /9002\/subscribed_apps/.test(c.url) && c.method === 'POST' && /leadgen/.test(String(c.body ?? ''))), 'the lead forms asked');
-  assert.equal(find(r, 'appHookLeads').params.list, 'leadgen');
+  assert.equal(find(app, 'appHookLeads').params.list, 'leadgen');
   assert.equal(find(r, 'pageHook').params.fixed, 1);
   assert.ok(calls.some((c) => /9002\/subscribed_apps/.test(c.url) && c.method === 'POST'), 'subscribed again');
-  assert.equal(find(r, 'appHookIg').params.list, 'messages, comments');
+  assert.equal(find(app, 'appHookIg').params.list, 'messages, comments');
   // Publicité: the ad account's numbers were read as Publicité reads them, with the account's key
   assert.ok(calls.some((c) => /act_3004\/insights/.test(c.url) && /access_token=LONG_USER_TOKEN/.test(c.url)));
   assert.deepEqual([find(r, 'ads').params, find(r, 'adsRead').params], [{ count: 1, bad: 0 }, { name: 'Compte 3004' }]);
@@ -893,8 +908,8 @@ test('« Tester », part by part: the key and what Facebook gave it, the Page (s
   calls.length = 0;
   const full: any = await call('social.test', a, { linkId: karim.id });
   assert.ok(!calls.some((c) => /me\/permissions/.test(c.url)), 'debug_token said the permissions');
-  assert.equal(r.checks.filter((c: any) => c.key === 'perm').length, 6);
-  assert.deepEqual(full.checks.filter((c: any) => c.key === 'perm').map((c: any) => c.params.why), ['partners']);
+  assert.equal(r.checks.filter((c: any) => c.key === 'perm').length, 5);
+  assert.deepEqual(full.checks.filter((c: any) => c.key === 'perm').map((c: any) => c.params.why), []);
   assert.deepEqual([find(full, 'keyLife').params, find(full, 'pageHook').params, find(full, 'leadHook').params], [{ why: 'never' }, undefined, undefined]);
   assert.deepEqual([lines(full)['content.content'], lines(full)['ads.adsLaunch']], ['ok', 'ok']);
   // a key that ends within a week: to link again soon
@@ -913,14 +928,15 @@ test('« Tester », part by part: the key and what Facebook gave it, the Page (s
   assert.match(noForms.detail, /leads_retrieval/);
   probe.formsRefuse = false;
 
-  // a webhook Pilotix refused (its signature matched no secret): said for 2 days
+  // a webhook Pilotix refused (its signature matched no secret): said for 2 days, in the control room's test
   await noteBadSignature(t, 'instagram');
-  const sig: any = await call('social.test', a, { linkId: karim.id });
+  const sig: any = await p('p.social.appTest');
   assert.deepEqual([find(sig, 'badSig').state, find(sig, 'badSig').group, find(sig, 'badSig').params.count], ['warn', 'app', 1]);
+  assert.equal(find(await call('social.test', a, { linkId: karim.id }), 'badSig'), undefined, 'never in a boutique’s test');
   await t.platform.query(`DELETE FROM platform.settings WHERE key = 'meta_badsig'`);
   // Cloudflare stops the webhook's address
   probe.cloudflare = true;
-  const cf: any = await call('social.test', a, { linkId: karim.id });
+  const cf: any = await p('p.social.appTest');
   assert.deepEqual(find(cf, 'reach'), { key: 'reach', group: 'app', state: 'bad', params: { why: 'cloudflare' }, detail: null });
   probe.cloudflare = false;
   // a key Facebook refuses turns the account red; working again, green
@@ -1483,11 +1499,13 @@ test('the preview: « Tester » answers a sample for each connection, the ad acc
   assert.deepEqual([page.part, page.assets.length, ads.part, ads.assets.length], ['main', 1, 'ads', 4]);
   // part by part, as on the server: the page folds the parts that work and opens the one with a problem
   const r: any = await call('social.test', demo, { linkId: page.id });
-  assert.equal(r.checks.find((c: any) => c.key === 'appHookIg').state, 'warn');
-  assert.ok(r.checks.filter((c: any) => c.key !== 'appHookIg').every((c: any) => c.state === 'ok'));
-  assert.deepEqual([...new Set(r.checks.map((c: any) => c.group))], ['key', 'fb', 'ig', 'forms', 'content', 'app']);
+  assert.ok(r.checks.every((c: any) => c.state === 'ok'));
+  assert.deepEqual([...new Set(r.checks.map((c: any) => c.group))], ['key', 'fb', 'ig', 'forms', 'content']);
   const r2: any = await call('social.test', demo, { linkId: ads.id });
-  assert.deepEqual([...new Set(r2.checks.map((c: any) => c.group))], ['key', 'ads', 'catalog', 'pixels', 'app']);
+  assert.deepEqual([...new Set(r2.checks.map((c: any) => c.group))], ['key', 'ads', 'catalog', 'pixels']);
+  // the sample pictures: the Page's and its Instagram account's, the business portfolio of the ad accounts
+  assert.ok(page.assets[0].picture?.startsWith('data:image/svg+xml') && page.assets[0].igPicture?.startsWith('data:image/svg+xml'));
+  assert.deepEqual(ads.assets.map((x: any) => x.business?.name), Array(4).fill('Bébé Confort SARL'));
   assert.deepEqual([first.old, first.whatsapp, first.waReady], [{ ads: null, instagram: null }, null, true]);
   const off: any = await call('social.ads', demo, { linkId: ads.id, on: false });
   assert.equal(off.here.ad_account, null);
@@ -1560,4 +1578,47 @@ test('Meta’s data deletion request: signed with the app secret, the person’s
   // only the code is kept, never the person's id
   const row = (await t.platform.query(`SELECT * FROM platform.social_deletions WHERE code = $1`, [r.confirmation_code]))[0];
   assert.deepEqual(Object.keys(row).sort(), ['at', 'code', 'provider', 'removed']);
+});
+
+test('Pilot AI › Comptes shows the pictures: the Page’s and its Instagram account’s, the business portfolio of the ad accounts; « Tester » reads them again', async () => {
+  const c = await as(await store('Bébé Sétif', SELLER));
+  const s: any = await call('social.start', c, { provider: 'meta', scope: 'here' });
+  graph = {
+    me: { id: '5301', name: 'Nadia Sétif' },
+    pages: [{ id: '9301', name: 'Bébé Sétif', access_token: 'PAGE_TOKEN_31', picture: { data: { url: 'https://fb.test/page-1.jpg' } }, instagram_business_account: { id: '178301', username: 'bebe.setif' } }],
+    ads: [{ id: 'act_4301', account_id: '4301', name: 'Sétif pub', currency: 'USD', account_status: 1 }],
+    byId: { '178301': { id: '178301', profile_picture_url: 'https://ig.test/ig-1.jpg' } },
+    business: { act_4301: { id: '880', name: 'Wesh Vision', profile_picture_uri: 'https://fb.test/wv-1.jpg' } },
+  };
+  assert.equal((await linked(t, 'meta', { code: 'LOOKS', state: s.state }, URL0)).ok, true);
+  const mine = async () => ((await call('social.list', c, {})) as any).links.find((x: any) => x.name === 'Nadia Sétif');
+  const l = await mine();
+  const page = l.assets.find((x: any) => x.kind === 'page');
+  assert.deepEqual([page.picture, page.igUsername, page.igPicture], ['https://fb.test/page-1.jpg', 'bebe.setif', 'https://ig.test/ig-1.jpg']);
+  assert.deepEqual(l.assets.find((x: any) => x.kind === 'ad_account').business, { name: 'Wesh Vision', picture: 'https://fb.test/wv-1.jpg' });
+  // Meta changed the addresses, and refuses the business picture (no business permission): « Tester » keeps what it can
+  graph.byId = { '9301': { id: '9301', picture: { data: { url: 'https://fb.test/page-2.jpg' } } }, '178301': { id: '178301', profile_picture_url: 'https://ig.test/ig-2.jpg' } };
+  graph.business = { act_4301: { id: '880', name: 'Wesh Vision SARL', profile_picture_uri: 'https://fb.test/wv-2.jpg' } };
+  probe.bizPicRefuse = true;
+  try {
+    await call('social.test', c, { linkId: l.id });
+    const again = await mine();
+    const p2 = again.assets.find((x: any) => x.kind === 'page');
+    assert.deepEqual([p2.picture, p2.igPicture], ['https://fb.test/page-2.jpg', 'https://ig.test/ig-2.jpg']);
+    assert.deepEqual(again.assets.find((x: any) => x.kind === 'ad_account').business, { name: 'Wesh Vision SARL', picture: null });
+    // only a https address is kept as a picture
+    probe.bizPicRefuse = false;
+    graph.business = { act_4301: { id: '880', name: 'Wesh Vision', profile_picture_uri: 'javascript:alert(1)' } };
+    await call('social.test', c, { linkId: l.id });
+    assert.deepEqual((await mine()).assets.find((x: any) => x.kind === 'ad_account').business, { name: 'Wesh Vision', picture: null });
+    // Meta says nothing about the business portfolio: what was read before stays
+    graph.business = {};
+    await call('social.test', c, { linkId: l.id });
+    assert.equal((await mine()).assets.find((x: any) => x.kind === 'ad_account').business.name, 'Wesh Vision');
+    assert.ok(!/PAGE_TOKEN/.test(JSON.stringify(await mine())), 'no token reaches the page');
+  } finally {
+    probe.bizPicRefuse = undefined;
+    graph.business = undefined;
+    await call('social.remove', c, { linkId: l.id });
+  }
 });

@@ -1011,6 +1011,12 @@ mark.pl-dj-gone { padding: 0 2px; border-radius: 4px; background: none; color: i
 .pp-ok { color: var(--ok); }
 .pl-sa-ig { display: grid; gap: 6px; margin: 10px 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
 .pl-sa-ig h4 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; }
+/* « Tester l’app Meta »: Pilotix's own Meta app, tried here (the boutiques' « Tester » no longer shows it) */
+.pl-sa-test { display: grid; gap: 6px; margin: 12px 0 4px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.pl-sa-test-h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.pl-sa-test-h h4 { margin: 0; font-size: 14px; }
+.pl-sa-test > p { margin: 0; }
+.pl-sa-test .cpt-test { border-top: 0; padding-top: 4px; }
 
 /* ---------------------------------------------------------------- Pilot AI › Spy AI › Pilotix's search key (SpyKey.tsx)
    Two tools side by side (stacked on a phone): the main one outlined in amber, the other the backup. */

@@ -606,6 +606,12 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
       now: () => Date.now(),
       // the addresses Pilotix's Meta and TikTok apps are given (Pilot AI › Réglages & coûts)
       publicUrl: config.publicUrl || undefined,
+      // « Tester l’app Meta » (Pilot AI › Réglages & coûts › Comptes Meta et TikTok): Pilotix's own Meta app, tried here
+      metaAppTest: async () => {
+        const m = optional('@pilotix/core/dist/social-server');
+        if (!m?.testMetaApp) throw new core.AppError('bad_request', 'Comptes liés indisponibles sur ce serveur');
+        return m.testMetaApp(this.t, config.publicUrl || '');
+      },
       // Pilot AI › Test & lessons: Dellal answers in a shop as for a customer (the shop's system), and Pilot AI's own
       // questions go to Claude on Pilotix's key
       shop: (id) => this.platformShop(id),
