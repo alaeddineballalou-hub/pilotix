@@ -11,11 +11,12 @@ import { ActionLog, usd } from './Hub';
 
 type S = Out<'ads.pilot.state'>;
 type Sug = S['suggestions'][number];
-type RuleKey = 'stop' | 'scale' | 'trim' | 'confirm' | 'deliver' | 'tired' | 'cap';
+// « Plafond du jour » (cap) was removed on 21 Nov 2026 with the shop's daily maximum
+type RuleKey = 'stop' | 'scale' | 'trim' | 'confirm' | 'deliver' | 'tired';
 type Mode = 'off' | 'suggest' | 'auto';
-const RULES: RuleKey[] = ['stop', 'trim', 'deliver', 'confirm', 'tired', 'scale', 'cap'];
-const AUTO: RuleKey[] = ['stop', 'trim', 'cap', 'scale'];
-const RULE_ICON: Record<RuleKey, string> = { stop: 'cut', trim: 'trenddown', deliver: 'truck', confirm: 'phone', tired: 'film', scale: 'trend', cap: 'shield' };
+const RULES: RuleKey[] = ['stop', 'trim', 'deliver', 'confirm', 'tired', 'scale'];
+const AUTO: RuleKey[] = ['stop', 'trim', 'scale'];
+const RULE_ICON: Record<RuleKey, string> = { stop: 'cut', trim: 'trenddown', deliver: 'truck', confirm: 'phone', tired: 'film', scale: 'trend' };
 
 export function Pilote() {
   const { t } = useTranslation();
@@ -151,11 +152,11 @@ function Rules({ d }: { d: S }) {
 function Limits({ d }: { d: S }) {
   const { t } = useTranslation();
   const g = d.guard;
-  const [v, setV] = useState({ maxDailyUsd: g.maxDailyUsd === null ? '' : String(g.maxDailyUsd), maxRaisePct: String(g.maxRaisePct), yesAboveUsd: g.yesAboveUsd === null ? '' : String(g.yesAboveUsd), launchYes: g.launchYes });
-  useEffect(() => setV({ maxDailyUsd: g.maxDailyUsd === null ? '' : String(g.maxDailyUsd), maxRaisePct: String(g.maxRaisePct), yesAboveUsd: g.yesAboveUsd === null ? '' : String(g.yesAboveUsd), launchYes: g.launchYes }), [g.maxDailyUsd, g.maxRaisePct, g.yesAboveUsd, g.launchYes]);
+  const [v, setV] = useState({ maxRaisePct: String(g.maxRaisePct), yesAboveUsd: g.yesAboveUsd === null ? '' : String(g.yesAboveUsd), launchYes: g.launchYes });
+  useEffect(() => setV({ maxRaisePct: String(g.maxRaisePct), yesAboveUsd: g.yesAboveUsd === null ? '' : String(g.yesAboveUsd), launchYes: g.launchYes }), [g.maxRaisePct, g.yesAboveUsd, g.launchYes]);
   const save = useAction('ads.ctl.guard', { success: t('pilotads.guard.saved') });
   const num = (s: string) => (s.trim() === '' ? null : Math.max(1, Number(s)));
-  const changed = v.maxDailyUsd !== (g.maxDailyUsd === null ? '' : String(g.maxDailyUsd)) || v.maxRaisePct !== String(g.maxRaisePct) || v.yesAboveUsd !== (g.yesAboveUsd === null ? '' : String(g.yesAboveUsd)) || v.launchYes !== g.launchYes;
+  const changed = v.maxRaisePct !== String(g.maxRaisePct) || v.yesAboveUsd !== (g.yesAboveUsd === null ? '' : String(g.yesAboveUsd)) || v.launchYes !== g.launchYes;
   return (
     <section className="card pa-limits">
       <div className="card-head">
@@ -164,13 +165,6 @@ function Limits({ d }: { d: S }) {
         </h2>
       </div>
       <div className="pa-limit-fields">
-        <label className="field">
-          <span className="lab">{t('pilotads.guard.maxDaily')}</span>
-          <span className="pa-usd">
-            <input type="number" min={1} disabled={!d.owner} value={v.maxDailyUsd} placeholder="∞" onChange={(e) => setV({ ...v, maxDailyUsd: e.target.value })} />
-            <b>$</b>
-          </span>
-        </label>
         <label className="field">
           <span className="lab">{t('pilotads.guard.maxRaise')}</span>
           <span className="pa-usd">
@@ -195,7 +189,7 @@ function Limits({ d }: { d: S }) {
       </div>
       {d.owner && (
         <div className="pa-limit-btns">
-          <button type="button" className="btn primary" disabled={!changed || save.isPending} onClick={() => save.mutate({ maxDailyUsd: num(v.maxDailyUsd), maxRaisePct: Math.round(Number(v.maxRaisePct) || 30), yesAboveUsd: num(v.yesAboveUsd), launchYes: v.launchYes })}>
+          <button type="button" className="btn primary" disabled={!changed || save.isPending} onClick={() => save.mutate({ maxRaisePct: Math.round(Number(v.maxRaisePct) || 30), yesAboveUsd: num(v.yesAboveUsd), launchYes: v.launchYes })}>
             {t('common.save')}
           </button>
         </div>

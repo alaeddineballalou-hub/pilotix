@@ -13,7 +13,7 @@ import { bad, Ctx, forbidden, notFound, proc, publicApi, withActionLock } from '
 import { getSetting } from '../settings';
 import { getRaw, setRaw } from './admin';
 import { addDays, fxTable, isOwner, moneyOf, ordersOf, visibleAdsets } from './ads';
-import { audienceIds, ensureEventAudiences, pilotSettings, shopDailyUsd, wilayaRates, type AccountHealth } from './adsmgr';
+import { audienceIds, ensureEventAudiences, pilotSettings, wilayaRates, type AccountHealth } from './adsmgr';
 import { B64, mediaOf, mediaView, PLAN_LIMITS, VIDEO_CHUNK, VIDEO_TYPES, type MediaRow } from './cmplan';
 import { aiKeyed, dellalSettings, PILOT_CHEAP_MODEL, pilotOn, type AiResponse } from './dellal';
 import { fieldOf } from './leads';
@@ -682,14 +682,9 @@ async function go(ctx: Ctx, id: number, approved = false) {
       if (place.campaign.cbo) input.bid = null;
       if (place.adset) input.split = 'one';
     }
-    const rate = (await fxTable(ctx.db))(algDay(ctx.now()).slice(0, 7));
     // the money this launch adds per day: none when its ads go in an ad set, or a campaign, that has its own budget
     const usd = place && (place.adset || place.campaign.cbo) ? 0 : Number(r.spec.budgetUsd);
-    // the shop's spend per day with this one: above the owner's limit, a marketer cannot; the owner is told
-    const runningUsd = await shopDailyUsd(ctx.db, rate);
     const owner = isOwner(ctx) || approved;
-    if (s.guard.maxDailyUsd !== null && runningUsd + usd > s.guard.maxDailyUsd && !owner)
-      throw bad(`La boutique dépenserait ${Math.round(runningUsd + usd)} $ par jour : la limite du propriétaire est ${s.guard.maxDailyUsd} $.`);
     if (!owner && (s.guard.launchYes || (s.guard.yesAboveUsd !== null && usd > s.guard.yesAboveUsd))) {
       await ctx.db.query(`UPDATE ad_launches SET status = 'waiting_yes', error = NULL, updated_at = now() WHERE id = $1`, [id]);
       return view(await launchRow(ctx.db, id));

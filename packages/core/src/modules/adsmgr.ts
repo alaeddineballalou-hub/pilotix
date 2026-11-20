@@ -47,9 +47,13 @@ export interface PilotSettings {
 }
 export async function pilotSettings(db: Db): Promise<PilotSettings> {
   const s = await getRaw<Partial<PilotSettings>>(db, KEY, {});
+  const g = { ...DEFAULT_GUARD, ...(s.guard ?? {}) };
+  const r: Record<string, RuleMode> = { ...DEFAULT_RULES, ...(s.rules ?? {}) };
   return {
-    guard: { ...DEFAULT_GUARD, ...(s.guard ?? {}) },
-    rules: { ...DEFAULT_RULES, ...(s.rules ?? {}) },
+    // only the limits and rules that still exist: a shop saved before 21 Nov 2026 also kept a daily maximum and a
+    // « cap » rule (removed, see ./pilotads.ts › Guard)
+    guard: { maxRaisePct: g.maxRaisePct, yesAboveUsd: g.yesAboveUsd, launchYes: g.launchYes, stopped: g.stopped },
+    rules: Object.fromEntries(RULE_KEYS.map((k) => [k, r[k] ?? DEFAULT_RULES[k]])) as Record<RuleKey, RuleMode>,
     lastRun: s.lastRun ?? null,
     structureAt: s.structureAt ?? null,
     audiencesAt: s.audiencesAt ?? null,
@@ -169,20 +173,6 @@ async function targetOf(ctx: Ctx, objectId: string): Promise<Target> {
   return { level: 'campaign', id: String(c.id), name: String(c.name), status: c.status ?? null, budgetCents: c.daily_budget_cents === null ? null : num(c.daily_budget_cents), currency: String(c.currency ?? 'USD'), marketerId: null, campaignId: null };
 }
 
-/**
- * what all the shop's running ads may spend per day, in dollars (ad set budgets + campaign budgets). A campaign's
- * budget counts while one of its ad sets may still spend: every ad set paused or deleted, it spends nothing.
- */
-export async function shopDailyUsd(db: Db, rate: number | null): Promise<number> {
-  const sets = await db.query(`SELECT daily_budget_cents, currency FROM adsets WHERE status = 'ACTIVE' AND daily_budget_cents IS NOT NULL`);
-  const camps = await db.query(
-    `SELECT c.daily_budget_cents, (SELECT currency FROM adsets WHERE campaign_id = c.id LIMIT 1) AS currency FROM ad_campaigns c
-     WHERE c.status = 'ACTIVE' AND c.daily_budget_cents IS NOT NULL
-       AND (NOT EXISTS (SELECT 1 FROM adsets s WHERE s.campaign_id = c.id)
-            OR EXISTS (SELECT 1 FROM adsets s WHERE s.campaign_id = c.id AND coalesce(s.status, '') NOT IN ('PAUSED','CAMPAIGN_PAUSED','DELETED','ARCHIVED')))`,
-  );
-  return [...sets, ...camps].reduce((s: number, r: any) => s + (usdOf(num(r.daily_budget_cents), String(r.currency ?? 'USD'), rate) ?? 0), 0);
-}
 
 /** Meta (server) or the tables (demo): the change itself. Returns what the object is now. */
 async function applyChange(ctx: Ctx, t: Target, op: Op, valueCents: number | null): Promise<{ status: string | null; budgetCents: number | null; copyId?: string }> {
@@ -225,7 +215,8 @@ export interface ActInput {
   clientId?: string | null;
   /** auto: Pilot Automations (no stock left → paused, stock back → started again) */
   source?: 'person' | 'rule' | 'stop_all' | 'pilot' | 'launch' | 'auto';
-  rule?: RuleKey | null;
+  /** 'cap': only to start again what the removed « Plafond du jour » paused (see pilotRun) */
+  rule?: RuleKey | 'cap' | null;
   why?: string | null;
   /** Pilote auto acting alone: a change that would wait for the owner is not made at all */
   auto?: boolean;
@@ -254,7 +245,7 @@ export async function act(ctx: Ctx, i: ActInput): Promise<{ id: number; status: 
     const changes = num((await ctx.db.query(`SELECT count(*) AS n FROM ad_actions WHERE object_id = $1 AND op IN ('budget','undo') AND status = 'done' AND done_at > now() - interval '1 hour'`, [t.id]))[0]?.n);
     const owner = isOwner(ctx) && (i.source ?? 'person') !== 'rule';
     if (i.op === 'budget' && t.budgetCents === null) throw bad('Le budget de cette pub se règle dans Meta (budget à vie, ou pas encore lu) : changez-le dans le Gestionnaire de publicités.');
-    const v = checkChange(s.guard, { op: i.op, owner, fromUsd, toUsd, shopDailyUsd: await shopDailyUsd(ctx.db, rate), changesLastHour: changes });
+    const v = checkChange(s.guard, { op: i.op, owner, fromUsd, toUsd, changesLastHour: changes });
     if (!v.ok) throw bad(v.why);
     if (v.needsYes && i.auto) throw bad(v.why ?? 'Le propriétaire doit dire oui.');
     const before = { status: t.status, budgetCents: t.budgetCents };
@@ -300,7 +291,7 @@ async function undo(ctx: Ctx, id: number) {
   const rate = (await fxTable(ctx.db))(algDay(ctx.now()).slice(0, 7));
   const fromUsd = usdOf(t.budgetCents, t.currency, rate);
   const toUsd = op === 'budget' ? usdOf(before.budgetCents ?? null, t.currency, rate) : fromUsd;
-  const v = checkChange(s.guard, { op, owner: isOwner(ctx), fromUsd, toUsd, shopDailyUsd: await shopDailyUsd(ctx.db, rate), changesLastHour: 0 });
+  const v = checkChange(s.guard, { op, owner: isOwner(ctx), fromUsd, toUsd, changesLastHour: 0 });
   if (!v.ok) throw bad(v.why);
   if (v.needsYes) throw bad(`${v.why} Refaites le changement avec le bouton Budget : il ira au propriétaire.`);
   const row = (
@@ -391,7 +382,6 @@ async function controlState(ctx: Ctx) {
     demo: !ctx.server,
     guard: s.guard,
     rate,
-    shopDailyUsd: Math.round((await shopDailyUsd(ctx.db, rate)) * 100) / 100,
     accounts,
     objects,
     waiting: await actionsOf(ctx, 50, `WHERE a.status = 'waiting_yes'`),
@@ -550,22 +540,8 @@ export async function pilotRun(ctx: Ctx) {
   for (const r of await ctx.db.query(`SELECT id, rule_key, object_id FROM ad_suggestions WHERE status = 'open'`))
     if (!seen.has(`${r.rule_key}:${r.object_id}`)) await ctx.db.query(`UPDATE ad_suggestions SET status = 'expired', decided_at = now() WHERE id = $1`, [r.id]);
 
-  // the daily cap: today's spend against the owner's limit
-  let capped = 0;
-  if (s.rules.cap !== 'off' && s.guard.maxDailyUsd !== null) {
-    const spent = (await insights(ctx.db, stats.map((x) => x.id), today, today)).reduce((x, r) => x + r.spendCents / 100, 0);
-    if (spent >= s.guard.maxDailyUsd && s.rules.cap === 'auto')
-      for (const st of stats) {
-        try {
-          await act(sys, { objectId: st.id, op: 'pause', source: 'rule', rule: 'cap', why: 'cap', auto: true });
-          capped++;
-        } catch {
-          // left as it is
-        }
-      }
-  }
-  // the next morning: what the cap paused yesterday starts again
-  if (s.rules.cap === 'auto' && !s.guard.stopped) {
+  // « Plafond du jour » is gone (21 Nov 2026): what it paused before still starts again the next morning, as it said
+  if (!s.guard.stopped) {
     const rows = await ctx.db.query(`SELECT DISTINCT ON (object_id) object_id, rule_key, op, status, created_at FROM ad_actions WHERE status IN ('done','undone') ORDER BY object_id, id DESC`);
     for (const r of rows.filter((x: any) => x.rule_key === 'cap' && x.op === 'pause' && x.status === 'done' && algDay(new Date(x.created_at).getTime()) < today))
       try {
@@ -577,7 +553,7 @@ export async function pilotRun(ctx: Ctx) {
   await savePilot(ctx, { ...(await pilotSettings(ctx.db)), lastRun: stamp(ctx), auto: { day: today, n: auto } });
   // the audiences, once a day
   if (!s.audiencesAt || ctx.now() - Date.parse(s.audiencesAt) > 20 * 3_600_000) await syncAudiences(ctx).catch(() => null);
-  return { checked: stats.length, open: num((await ctx.db.query(`SELECT count(*) AS n FROM ad_suggestions WHERE status = 'open'`))[0]?.n), acted: acted.length, capped };
+  return { checked: stats.length, open: num((await ctx.db.query(`SELECT count(*) AS n FROM ad_suggestions WHERE status = 'open'`))[0]?.n), acted: acted.length };
 }
 
 async function pilotState(ctx: Ctx) {
@@ -1114,7 +1090,6 @@ async function tagView(ctx: Ctx) {
 const Obj = z.string().regex(/^\d{6,25}$/);
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const GuardInput = z.object({
-  maxDailyUsd: z.number().min(1).max(100_000).nullable(),
   maxRaisePct: z.number().int().min(5).max(200),
   yesAboveUsd: z.number().min(1).max(100_000).nullable(),
   launchYes: z.boolean(),
@@ -1150,10 +1125,11 @@ export const adsMgrProcs = {
   'ads.ctl.stopAll': proc(['vendeur'], z.object({ on: z.boolean() }), (ctx, i) => stopAll(ctx, i.on)),
 
   'ads.pilot.state': proc(['marketer'], z.object({}), (ctx) => pilotState(ctx)),
-  'ads.pilot.save': proc(['vendeur'], z.object({ rules: z.record(z.enum(RULE_KEYS), z.enum(['off', 'suggest', 'auto'])) }), async (ctx, i) => {
+  'ads.pilot.save': proc(['vendeur'], z.object({ rules: z.record(z.string().max(20), z.enum(['off', 'suggest', 'auto'])) }), async (ctx, i) => {
     const s = await pilotSettings(ctx.db);
     const rules = { ...s.rules };
-    for (const [k, m] of Object.entries(i.rules) as [RuleKey, RuleMode][]) rules[k] = m === 'auto' && !AUTO_RULES.includes(k) ? 'suggest' : m;
+    // a rule that no longer exists (« cap », sent by a page opened before 21 Nov 2026) is left out
+    for (const [k, m] of Object.entries(i.rules) as [RuleKey, RuleMode][]) if (RULE_KEYS.includes(k)) rules[k] = m === 'auto' && !AUTO_RULES.includes(k) ? 'suggest' : m;
     await savePilot(ctx, { ...s, rules });
     return { rules };
   }),

@@ -377,9 +377,9 @@ export function budgetPacks(targetUsd: number | null): { key: 'test' | 'best' | 
 }
 
 // ---------------------------------------------------------------- the owner's limits
+// The shop's « Dépense maximum par jour » and Pilote auto's « Plafond du jour » were removed on 21 Nov 2026, at the
+// owner's request: they added up the campaigns of every ad account Pilotix knew, other people's too.
 export interface Guard {
-  /** the most all the shop's ads may spend per day, in dollars (Pilotix refuses a raise above it) */
-  maxDailyUsd: number | null;
   /** a marketer's raise above this % at once waits for the owner's yes */
   maxRaisePct: number;
   /** a marketer's new budget above this (dollars per day) waits for the owner's yes */
@@ -389,7 +389,7 @@ export interface Guard {
   /** « Tout arrêter »: nothing starts again while it is on */
   stopped: boolean;
 }
-export const DEFAULT_GUARD: Guard = { maxDailyUsd: 100, maxRaisePct: 30, yesAboveUsd: 30, launchYes: false, stopped: false };
+export const DEFAULT_GUARD: Guard = { maxRaisePct: 30, yesAboveUsd: 30, launchYes: false, stopped: false };
 /** Meta lets an ad set's budget change 4 times an hour; Pilotix stays under it. */
 export const BUDGET_CHANGES_PER_HOUR = 4;
 
@@ -400,7 +400,7 @@ export type GuardVerdict = { ok: true; needsYes: boolean; why: string | null } |
  */
 export function checkChange(
   g: Guard,
-  c: { op: 'pause' | 'resume' | 'budget' | 'copy'; owner: boolean; fromUsd: number | null; toUsd: number | null; shopDailyUsd: number; changesLastHour: number },
+  c: { op: 'pause' | 'resume' | 'budget' | 'copy'; owner: boolean; fromUsd: number | null; toUsd: number | null; changesLastHour: number },
 ): GuardVerdict {
   if (c.op === 'pause') return { ok: true, needsYes: false, why: null };
   if (g.stopped && (c.op === 'resume' || c.op === 'copy' || (c.op === 'budget' && (c.toUsd ?? 0) > (c.fromUsd ?? 0)))) return { ok: false, why: 'Tout est arrêté par le propriétaire : il doit d’abord tout relancer.' };
@@ -408,9 +408,6 @@ export function checkChange(
     if (c.toUsd === null || c.toUsd <= 0) return { ok: false, why: 'Budget invalide.' };
     if (c.changesLastHour >= BUDGET_CHANGES_PER_HOUR) return { ok: false, why: 'Meta n’accepte que 4 changements de budget par heure sur un ad set : réessayez plus tard.' };
     const raise = c.fromUsd && c.toUsd > c.fromUsd ? (c.toUsd - c.fromUsd) / c.fromUsd : 0;
-    const total = c.shopDailyUsd - (c.fromUsd ?? 0) + c.toUsd;
-    if (g.maxDailyUsd !== null && total > g.maxDailyUsd && c.toUsd > (c.fromUsd ?? 0))
-      return c.owner ? { ok: true, needsYes: false, why: `Au-dessus de la limite du jour (${g.maxDailyUsd} $).` } : { ok: false, why: `La boutique dépenserait ${Math.round(total)} $ par jour : la limite est ${g.maxDailyUsd} $.` };
     if (c.owner) return { ok: true, needsYes: false, why: null };
     if (raise * 100 > g.maxRaisePct) return { ok: true, needsYes: true, why: `Hausse de ${Math.round(raise * 100)} % : au-dessus de ${g.maxRaisePct} %, le propriétaire dit oui.` };
     if (g.yesAboveUsd !== null && c.toUsd > g.yesAboveUsd) return { ok: true, needsYes: true, why: `Plus de ${g.yesAboveUsd} $ par jour : le propriétaire dit oui.` };
@@ -420,12 +417,12 @@ export function checkChange(
 }
 
 // ---------------------------------------------------------------- Pilote auto
-export const RULE_KEYS = ['stop', 'scale', 'trim', 'confirm', 'deliver', 'tired', 'cap'] as const;
+export const RULE_KEYS = ['stop', 'scale', 'trim', 'confirm', 'deliver', 'tired'] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 export type RuleMode = 'off' | 'suggest' | 'auto';
 /** the rules that may act alone (they only lower spending); the others always ask */
-export const AUTO_RULES: readonly RuleKey[] = ['stop', 'trim', 'cap', 'scale'];
-export const DEFAULT_RULES: Record<RuleKey, RuleMode> = { stop: 'suggest', scale: 'suggest', trim: 'suggest', confirm: 'suggest', deliver: 'suggest', tired: 'suggest', cap: 'auto' };
+export const AUTO_RULES: readonly RuleKey[] = ['stop', 'trim', 'scale'];
+export const DEFAULT_RULES: Record<RuleKey, RuleMode> = { stop: 'suggest', scale: 'suggest', trim: 'suggest', confirm: 'suggest', deliver: 'suggest', tired: 'suggest' };
 /** a budget Pilote auto changed is left alone this long (Meta learns again after a change) */
 export const RULE_COOLDOWN_H = 72;
 /** automatic changes per day for the whole shop */

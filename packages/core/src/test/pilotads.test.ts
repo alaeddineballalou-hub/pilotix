@@ -8,7 +8,7 @@ import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
 import { AppError } from '../rpc';
 import { getSetting, setSetting } from '../settings';
-import { setRaw } from '../modules/admin';
+import { getRaw, setRaw } from '../modules/admin';
 import { chatAdOf } from '../modules/dellal';
 import { demoCopy, launchNow, regionMatches } from '../modules/adslaunch';
 import { FAKE_EVENTS } from '../modules/landingquery';
@@ -133,14 +133,15 @@ test('« Mes lancements »: a live launch shows what Meta does with it now', () 
 });
 
 test('the owner’s limits: pausing always, a big raise waits for the owner, « Tout arrêter » holds', () => {
-  const c = (x: Partial<Parameters<typeof checkChange>[1]>, g = DEFAULT_GUARD) => checkChange(g, { op: 'budget', owner: false, fromUsd: 10, toUsd: 12, shopDailyUsd: 40, changesLastHour: 0, ...x });
-  assert.deepEqual(checkChange({ ...DEFAULT_GUARD, stopped: true }, { op: 'pause', owner: false, fromUsd: 10, toUsd: 10, shopDailyUsd: 40, changesLastHour: 9 }), { ok: true, needsYes: false, why: null });
+  const c = (x: Partial<Parameters<typeof checkChange>[1]>, g = DEFAULT_GUARD) => checkChange(g, { op: 'budget', owner: false, fromUsd: 10, toUsd: 12, changesLastHour: 0, ...x });
+  assert.deepEqual(checkChange({ ...DEFAULT_GUARD, stopped: true }, { op: 'pause', owner: false, fromUsd: 10, toUsd: 10, changesLastHour: 9 }), { ok: true, needsYes: false, why: null });
   assert.equal(c({}).ok && !(c({}) as any).needsYes, true, '+20 %: fine');
   assert.equal((c({ toUsd: 15 }) as any).needsYes, true, '+50 %: the owner says yes');
-  assert.equal(c({ toUsd: 70, shopDailyUsd: 95 }).ok, false, 'above the shop’s day: a marketer cannot');
-  assert.equal(c({ toUsd: 70, shopDailyUsd: 95, owner: true }).ok, true, 'the owner can (and is told)');
+  // no daily maximum for the shop any more (21 Nov 2026): a big budget goes, the owner’s own at once, a marketer’s after his yes
+  assert.deepEqual(c({ fromUsd: 400, toUsd: 500, owner: true }), { ok: true, needsYes: false, why: null });
+  assert.deepEqual([c({ fromUsd: 400, toUsd: 500 }).ok, (c({ fromUsd: 400, toUsd: 500 }) as any).needsYes], [true, true]);
   assert.equal(c({ changesLastHour: 4 }).ok, false, 'Meta: 4 budget changes an hour');
-  assert.equal(checkChange({ ...DEFAULT_GUARD, stopped: true }, { op: 'resume', owner: true, fromUsd: 10, toUsd: 10, shopDailyUsd: 0, changesLastHour: 0 }).ok, false);
+  assert.equal(checkChange({ ...DEFAULT_GUARD, stopped: true }, { op: 'resume', owner: true, fromUsd: 10, toUsd: 10, changesLastHour: 0 }).ok, false);
 });
 
 test('Pilote auto’s rules: stop the loss, delivery and confirmation first, then trim, tired créas, the raise', () => {
@@ -204,7 +205,10 @@ test('a big raise waits for the owner’s yes; the owner’s own change goes at 
   const r: any = await call('ads.ctl.approve', await owner(), { id: w.id, yes: true });
   assert.equal(r.status, 'done');
   assert.equal((await db.query(`SELECT daily_budget_cents FROM adsets WHERE id = '120200002'`))[0].daily_budget_cents, 2000);
-  await assert.rejects(call('ads.ctl.act', await mk(), { objectId: '120200001', op: 'budget', usd: 40 }), /limite est 100 \$/, 'the shop would spend more than the owner allows');
+  // no daily maximum for the shop any more (21 Nov 2026): a marketer’s big raise waits for the owner, it is not refused
+  const big: any = await call('ads.ctl.act', await mk(), { objectId: '120200001', op: 'budget', usd: 40 });
+  assert.equal(big.status, 'waiting_yes');
+  await call('ads.ctl.approve', await owner(), { id: big.id, yes: false });
   const mine: any = await call('ads.ctl.act', await mk(), { objectId: '120200001', op: 'budget', usd: 30 });
   assert.equal(mine.status, 'waiting_yes', '+36 %');
   const own: any = await call('ads.ctl.act', await owner(), { objectId: '120200005', op: 'budget', usd: 9 });
@@ -229,7 +233,7 @@ test('« Tout arrêter »: every running ad set paused, nothing starts again unt
 test('Pilote auto: its suggestions, applied or set aside, and its settings (owner only)', async () => {
   const p: any = await call('ads.pilot.state', await owner(), {});
   assert.ok(p.suggestions.length >= 1, 'the demo has suggestions');
-  assert.equal(p.rules.cap, 'auto');
+  assert.equal('cap' in p.rules, false, 'no « Plafond du jour » any more');
   const any = p.suggestions[0];
   await call('ads.pilot.decide', await owner(), { id: any.id, apply: false });
   assert.equal((await db.query(`SELECT status FROM ad_suggestions WHERE id = $1`, [any.id]))[0].status, 'ignored');
@@ -270,22 +274,18 @@ test('the launcher in the demo: products with what an order may cost, words, a l
   await assert.rejects(call('ads.launch.remove', await owner(), { id: d.id }), /pause/);
 });
 
-test('a launch paused since: « En pause » in Mes lancements, and its money no longer counted as running', async () => {
+test('a launch paused since: « En pause » in Mes lancements', async () => {
   const list = async (): Promise<any[]> => ((await call('ads.launch.list', await owner(), {})) as any).launches;
-  const running = async (): Promise<number> => ((await call('ads.ctl.state', await owner(), {})) as any).shopDailyUsd;
   const seeded = (await list()).find((l) => l.name === 'Poussette — avis mamans');
   assert.equal(seeded?.status, 'live');
   assert.equal(seeded?.now, 'paused', 'the demo: the marketer paused its ad set');
   const l = (await list()).find((x) => x.status === 'live' && x.name.endsWith(' — test'));
   assert.ok(l, 'the launch of the test above');
   assert.equal(l.now, 'live');
-  const before = await running();
   assert.equal((await call('ads.ctl.act', await owner(), { objectId: l.adsetIds[0], op: 'pause' }) as any).status, 'done');
   assert.equal((await list()).find((x) => x.id === l.id)?.now, 'paused', 'paused from Pilotix: at once');
-  assert.ok(Math.abs((await running()) - (before - 10)) < 0.01, 'its campaign holds the 10 $, and nothing in it can spend');
   assert.equal((await call('ads.ctl.act', await owner(), { objectId: l.adsetIds[0], op: 'resume' }) as any).status, 'done');
   assert.equal((await list()).find((x) => x.id === l.id)?.now, 'live');
-  assert.ok(Math.abs((await running()) - before) < 0.01);
   // deleted in Meta, read at the next sync
   await db.query(`UPDATE ad_campaigns SET status = 'DELETED' WHERE id = $1`, [l.campaignId]);
   assert.equal((await list()).find((x) => x.id === l.id)?.now, 'stopped');
@@ -293,7 +293,7 @@ test('a launch paused since: « En pause » in Mes lancements, and its money no 
 });
 
 test('a marketer’s launch waits for the owner when the owner wants it, then goes live', async () => {
-  await call('ads.ctl.guard', await owner(), { maxDailyUsd: 300, maxRaisePct: 30, yesAboveUsd: 30, launchYes: true });
+  await call('ads.ctl.guard', await owner(), { maxRaisePct: 30, yesAboveUsd: 30, launchYes: true });
   const o: any = await call('ads.launch.options', await mk(), {});
   const p = o.products.find((x: any) => x.landing);
   const photo: any = await call('ads.media.photo', await mk(), { jpeg: JPEG, thumb: JPEG, w: 1080, h: 1080 });
@@ -305,7 +305,7 @@ test('a marketer’s launch waits for the owner when the owner wants it, then go
   assert.equal(live.status, 'live');
   const set = (await db.query(`SELECT marketer_id FROM adsets WHERE id = $1`, [live.adsetIds[0]]))[0];
   assert.ok(set.marketer_id, 'the ad set is the marketer’s (his pay, his numbers)');
-  await call('ads.ctl.guard', await owner(), { maxDailyUsd: 100, maxRaisePct: 30, yesAboveUsd: 30, launchYes: false });
+  await call('ads.ctl.guard', await owner(), { maxRaisePct: 30, yesAboveUsd: 30, launchYes: false });
 });
 
 test('a sales ad needs its sales page; the problems come back before Meta', async () => {
@@ -817,4 +817,36 @@ test('one ad account only, the one new ads go to: another one’s campaigns stay
   assert.equal(none.account, null);
   assert.equal(none.campaigns.length + none.adsets.length + none.ads.length, 0);
   await demoAccount();
+});
+
+test('no daily maximum and no « Plafond du jour » any more: a shop saved before keeps its other limits and rules', async () => {
+  // as a shop saved them before 21 Nov 2026: a daily maximum, and the « cap » rule on « Automatique »
+  const was = await getRaw<any>(db, 'pilot_ads', {});
+  await setRaw(db, 'pilot_ads', { ...was, guard: { ...DEFAULT_GUARD, maxDailyUsd: 100, maxRaisePct: 40 }, rules: { ...(was.rules ?? {}), cap: 'auto', stop: 'auto' } });
+  const st: any = await call('ads.pilot.state', await owner(), {});
+  assert.deepEqual(st.guard, { ...DEFAULT_GUARD, maxRaisePct: 40 }, 'the daily maximum is gone, the rest kept');
+  assert.equal('cap' in st.rules, false);
+  assert.equal(st.rules.stop, 'auto');
+  const ctl: any = await call('ads.ctl.state', await owner(), {});
+  assert.equal('maxDailyUsd' in ctl.guard || 'shopDailyUsd' in ctl, false);
+  // a page opened before still sends them: refused nowhere, kept nowhere
+  const g: any = await call('ads.ctl.guard', await owner(), { maxDailyUsd: 50, maxRaisePct: 30, yesAboveUsd: 30, launchYes: false } as any);
+  assert.equal('maxDailyUsd' in g.guard, false);
+  const r: any = await call('ads.pilot.save', await owner(), { rules: { cap: 'auto', stop: 'suggest' } });
+  assert.equal('cap' in r.rules, false);
+  assert.equal(r.rules.stop, 'suggest');
+  // what the old cap paused before today starts again at the next check, as it said; a pause by someone else stays
+  const [a, b] = ['120200002', '120200004'];
+  await db.query(`UPDATE adsets SET status = 'PAUSED' WHERE id = ANY($1)`, [[a, b]]);
+  await db.query(
+    `INSERT INTO ad_actions (level, object_id, object_name, op, before, after, source, rule_key, status, created_at, done_at)
+     VALUES ('adset',$1,'x','pause','{"status":"ACTIVE"}','{"status":"PAUSED"}','rule','cap','done', now() - interval '1 day', now() - interval '1 day'),
+            ('adset',$2,'y','pause','{"status":"ACTIVE"}','{"status":"PAUSED"}','person',NULL,'done', now() - interval '1 day', now() - interval '1 day')`,
+    [a, b],
+  );
+  await call('ads.pilot.check', await owner(), {});
+  const status = async (id: string) => (await db.query(`SELECT status FROM adsets WHERE id = $1`, [id]))[0].status;
+  assert.deepEqual([await status(a), await status(b)], ['ACTIVE', 'PAUSED']);
+  assert.ok((await db.query(`SELECT 1 FROM ad_actions WHERE object_id = $1 AND rule_key = 'cap' AND op = 'resume' AND status = 'done'`, [a])).length);
+  await db.query(`UPDATE adsets SET status = 'ACTIVE' WHERE id = $1`, [b]);
 });

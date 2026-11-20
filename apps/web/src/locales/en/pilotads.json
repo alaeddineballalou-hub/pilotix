@@ -32,10 +32,8 @@
     "resumed": "{{n}} ad(s) restarted"
   },
   "guard": {
-    "limit": "Limit: {{max}} $ a day",
-    "now": "running: {{now}} $",
     "title": "The owner’s limits",
-    "maxDaily": "Most the shop may spend a day",
+    "stopHint": "A problem? One click pauses all your ads.",
     "maxRaise": "Raise allowed without your yes (marketer)",
     "yesAbove": "Your yes above (a day)",
     "launchYes": "Every launch by a marketer waits for my yes",
@@ -124,8 +122,6 @@
     "save": "Save",
     "ask": "Ask the owner",
     "campaign": "This is the budget of campaign « {{name}} » (Advantage+): it changes for all its ads.",
-    "over": "The shop would spend {{total}} $ a day: the owner’s limit is {{max}} $.",
-    "overOwner": "Above your daily limit ({{max}} $): you can still do it.",
     "needsYes": "Raise of more than {{pct}} %: the owner must say yes.",
     "note": "Meta learns again after a big change: raise 20 % at a time, 4 times an hour at most.",
     "own": "Or your amount"

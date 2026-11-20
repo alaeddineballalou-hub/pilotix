@@ -32,10 +32,8 @@
     "resumed": "{{n}} pub(s) relancée(s)"
   },
   "guard": {
-    "limit": "Limite : {{max}} $ par jour",
-    "now": "en cours : {{now}} $",
     "title": "Les limites du propriétaire",
-    "maxDaily": "Dépense maximum de la boutique par jour",
+    "stopHint": "Un problème ? Un clic met toutes vos pubs en pause.",
     "maxRaise": "Hausse permise sans votre oui (marketeur)",
     "yesAbove": "Votre oui au-dessus de (par jour)",
     "launchYes": "Chaque lancement d’un marketeur attend mon oui",
@@ -124,8 +122,6 @@
     "save": "Enregistrer",
     "ask": "Demander au propriétaire",
     "campaign": "C’est le budget de la campagne « {{name}} » (Advantage+) : il change pour toutes ses pubs.",
-    "over": "La boutique dépenserait {{total}} $ par jour : la limite du propriétaire est {{max}} $.",
-    "overOwner": "Au-dessus de votre limite du jour ({{max}} $) : vous pouvez quand même.",
     "needsYes": "Hausse de plus de {{pct}} % : le propriétaire doit dire oui.",
     "note": "Meta réapprend après un gros changement : montez de 20 % à la fois, 4 fois par heure au plus.",
     "own": "Ou votre montant"

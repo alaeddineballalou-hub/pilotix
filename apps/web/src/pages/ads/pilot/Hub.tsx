@@ -125,13 +125,9 @@ function TopAlerts({ s }: { s: Ctl }) {
           <div className="pa-guardbar">
             <span className="pa-guard-sum">
               <Icon name="shield" />
-              {/* one line on a computer; on a phone the limit and today's spend go on two lines */}
+              {/* the shop's daily maximum and today's total were here until 21 Nov 2026 (they added up other ad accounts too) */}
               <span className="pa-guard-txt">
-                <span>{t('pilotads.guard.limit', { max: s.guard.maxDailyUsd ?? '∞' })}</span>
-                <span className="pa-guard-dot" aria-hidden="true">
-                  {' · '}
-                </span>
-                <span>{t('pilotads.guard.now', { now: s.shopDailyUsd.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) })}</span>
+                <span>{t('pilotads.guard.stopHint')}</span>
               </span>
             </span>
             <button type="button" className="btn pa-danger-ghost" onClick={() => setAsk(true)}>
@@ -450,10 +446,8 @@ export function BudgetModal({ o, ctl, suggested, onClose }: { o: Obj; ctl: Ctl; 
   const act = useAction('ads.ctl.act', { success: (r) => (r.status === 'waiting_yes' ? t('pilotads.sentToOwner') : t('pilotads.doneToast')), onDone: onClose });
   const rise = from && to > from ? (to - from) / from : 0;
   const g = ctl.guard;
-  const total = ctl.shopDailyUsd - from + (isFinite(to) ? to : 0);
-  const overDay = g.maxDailyUsd !== null && total > g.maxDailyUsd && to > from;
   const needsYes = !ctl.owner && (rise * 100 > g.maxRaisePct || (g.yesAboveUsd !== null && to > g.yesAboveUsd));
-  const ok = isFinite(to) && to >= 1 && to !== from && !(overDay && !ctl.owner);
+  const ok = isFinite(to) && to >= 1 && to !== from;
   return (
     <Modal
       title={t('pilotads.budget.title', { name: o.name })}
@@ -489,8 +483,7 @@ export function BudgetModal({ o, ctl, suggested, onClose }: { o: Obj; ctl: Ctl; 
           {usd(from)} → <b>{isFinite(to) ? usd(to) : '—'}</b> {rise ? <span className={rise * 100 > g.maxRaisePct ? 'neg' : ''}>(+{Math.round(rise * 100)} %)</span> : null}
         </p>
         {o.budgetLevel === 'campaign' && <p className="note">{t('pilotads.budget.campaign', { name: o.campaignName ?? '' })}</p>}
-        {overDay && <div className={ctl.owner ? 'warnbox' : 'error'}>{t(ctl.owner ? 'pilotads.budget.overOwner' : 'pilotads.budget.over', { total: Math.round(total), max: g.maxDailyUsd })}</div>}
-        {needsYes && !overDay && <div className="warnbox">{t('pilotads.budget.needsYes', { pct: g.maxRaisePct })}</div>}
+        {needsYes && <div className="warnbox">{t('pilotads.budget.needsYes', { pct: g.maxRaisePct })}</div>}
         <p className="note">{t('pilotads.budget.note')}</p>
       </div>
     </Modal>
