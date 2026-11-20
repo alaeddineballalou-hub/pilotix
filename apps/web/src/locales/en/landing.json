@@ -451,21 +451,29 @@
     "saved": "Domain saved: point it to Pilotix",
     "removed": "Domain removed",
     "ready": "Your domain is ready",
-    "notYet": "The domain does not point to Pilotix yet (DNS can take a few hours)",
+    "notYet": "The domain does not answer from Pilotix yet (DNS can take a few hours)",
     "remove": "Remove",
     "removeAsk": "Remove this domain? Your pages stay on the Pilotix address.",
     "ok": "Ready",
-    "pending": "Waiting for DNS",
+    "pending": "Waiting",
     "wait": "Not yet: point the domain to Pilotix.",
     "how": "At your registrar, in the domain’s DNS zone:",
     "type": "Type",
     "name": "Name",
     "value": "Value",
-    "howHelp": "Delete the other A or AAAA records of this name. The change takes from a few minutes to a few hours.",
+    "howHelp": "Delete the other A or AAAA records of this name. With Cloudflare, the orange cloud and the grey cloud both work. The change takes from a few minutes to a few hours.",
     "found": "Address found now: {{ips}}",
     "check": "Check",
     "proofHelp": "The TXT line proves this domain is yours: every domain points to the same Pilotix server, only its owner can add this TXT.",
-    "proofMissing": "The TXT line is not found yet: add it at your registrar, then “Check” (a few minutes to a few hours)."
+    "proofMissing": "The TXT line is not found yet: add it at your registrar, then “Check” (a few minutes to a few hours).",
+    "https": {
+      "timeout": "https://{{domain}} does not answer (too slow). Check the A line, then try again in a few minutes.",
+      "tls": "https://{{domain}} has no valid certificate yet. It is made at the first visit: try again in a minute.",
+      "redirect": "https://{{domain}} sends visitors to another address. With Cloudflare, set SSL/TLS to “Full” or “Full (strict)”, not “Flexible”.",
+      "cloudflare": "Cloudflare does not reach Pilotix for https://{{domain}}. Check the A line, then Cloudflare’s SSL/TLS mode.",
+      "other-site": "https://{{domain}} answers, but not from Pilotix: the domain still points somewhere else.",
+      "error": "https://{{domain}} does not answer yet. Check the A line, then try again in a few minutes."
+    }
   },
   "links": {
     "help": "Where your landing pages live: your domain, the address your links use, and your store name.",
