@@ -19,7 +19,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   // the high chair's sales guide (seeds/catalog.ts): Dellal reads it before answering a question about the product
   const chair = num((await db.query(`SELECT id FROM products WHERE sku = 'PX-CHA'`))[0]?.id);
   const price = p ? p.price : 12900;
-  const convs: { channel: string; ext: string; name: string; phone?: string | null; mode: string; reason?: string; orderId?: number | null; source?: string; at: number; msgs: [string, string, number?, object?][] }[] = [
+  const convs: { channel: string; ext: string; name: string; phone?: string | null; mode: string; reason?: string; orderId?: number | null; source?: string; /** a chat that came from an ad: days Meta keeps it open */ adDays?: number; at: number; msgs: [string, string, number?, object?][] }[] = [
     {
       channel: 'whatsapp', ext: order ? '213' + String(order.phone).slice(1) : '213661234518', name: order?.customer_name ?? 'Karim', phone: order?.phone ?? null, mode: 'ai', orderId: order ? num(order.id) : null, source: 'pub « Bébé confort »', at: now - 25 * 60_000,
       msgs: [
