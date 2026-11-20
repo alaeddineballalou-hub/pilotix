@@ -47,9 +47,9 @@ export async function noMetaAds(db: Db) {
 }
 
 /**
- * Produits › « Prêt »: gives a product what it misses to be sold (an HD main photo, a purchase price, a description, a
- * live landing page, a sales guide) and puts it back on sale if Pilotix kept it off, as a shop would before selling a
- * new product. `photo: false` leaves its photos to the test (a test of the photos adds its own).
+ * Produits › « Prêt »: gives a product what it misses to be sold (an HD main photo, a purchase price, a live landing
+ * page, a sales guide — which is its description) and puts it back on sale if Pilotix kept it off, as a shop would
+ * before selling a new product. `photo: false` leaves its photos to the test (a test of the photos adds its own).
  */
 export async function makeReady(db: Db, productId: number, o: { photo?: boolean } = {}) {
   const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('JFIF-ready-'.padEnd(64, 'x'))]).toString('base64');
@@ -66,7 +66,6 @@ export async function makeReady(db: Db, productId: number, o: { photo?: boolean 
         AND NOT EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = p.id AND v.active AND COALESCE(v.cost, 0) > 0)`,
     [productId],
   );
-  await db.query(`UPDATE products SET description = name WHERE id = $1 AND length(btrim(COALESCE(description, ''))) = 0`, [productId]);
   await db.query(
     `INSERT INTO landing_pages (product_id, slug, title) SELECT p.id, 'pret-' || p.id, p.name FROM products p
       WHERE p.id = $1 AND NOT EXISTS (SELECT 1 FROM landing_pages l WHERE l.product_id = p.id AND l.active)`,

@@ -17,6 +17,7 @@ import { ask, giveBack, take } from './createur';
 import { AddInput, addHdPhoto } from './hdphotos';
 import { mimeOf } from './dellalphotos';
 import { WORKED_ON } from './readiness';
+import { productDescription } from './guide';
 
 const M = ['marketer'] as const;
 const Id = z.number().int().positive();
@@ -409,8 +410,10 @@ export const studioProcs = {
 
   /** The poster's words, suggested by the AI (the shop edits them; prices, phone and colours are never the AI's). */
   'createur.studioTexts': proc([...M], z.object({ productId: Id, lang: z.enum(['ar', 'darija', 'fr']).default('ar') }), async (ctx, i) => {
-    const pr = (await ctx.db.query(`SELECT name, description FROM products WHERE id = $1`, [i.productId]))[0];
+    const pr = (await ctx.db.query(`SELECT name FROM products WHERE id = $1`, [i.productId]))[0];
     if (!pr) throw notFound('Produit introuvable');
+    // its description is its sales guide (one text since 20 Nov 2026)
+    const about = await productDescription(ctx.db, i.productId);
     const example = {
       title: i.lang === 'fr' ? `${String(pr.name)} : la qualité au quotidien !` : 'أناقة ومتانة في كل يوم!',
       subtitle: '',
@@ -428,7 +431,7 @@ export const studioProcs = {
     ].join('\n');
     let raw: string | null = null;
     try {
-      raw = await ask(ctx, system, `Produit : ${String(pr.name)}${pr.description ? `\nDescription : ${String(pr.description).slice(0, 600)}` : ''}`, 400, got.tool.model);
+      raw = await ask(ctx, system, `Produit : ${String(pr.name)}${about ? `\nDescription : ${about.slice(0, 600)}` : ''}`, 400, got.tool.model);
     } catch {
       raw = null;
     }
@@ -453,8 +456,10 @@ export const studioProcs = {
 
   /** Texte pub: a post and 3 marketing angles (1 credit, as the other texts). The preview: an example. */
   'createur.studioCopy': proc([...M], z.object({ productId: Id, lang: z.enum(['ar', 'darija', 'fr']).default('darija') }), async (ctx, i) => {
-    const pr = (await ctx.db.query(`SELECT name, description FROM products WHERE id = $1`, [i.productId]))[0];
+    const pr = (await ctx.db.query(`SELECT name FROM products WHERE id = $1`, [i.productId]))[0];
     if (!pr) throw notFound('Produit introuvable');
+    // its description is its sales guide (one text since 20 Nov 2026)
+    const about = await productDescription(ctx.db, i.productId);
     const name = String(pr.name);
     const example = {
       post: i.lang === 'fr' ? `✨ ${name}\nLa qualité que vos enfants méritent 😍\n✅ Solide et confortable\n✅ Livraison 58 wilayas\n✅ Paiement à la livraison\nCommandez maintenant 👇` : `✨ ${name}\nالجودة اللي يستاهلها وليدك 😍\n✅ متين ومريح\n✅ توصيل 58 ولاية\n✅ الدفع عند الاستلام\nأطلب درك 👇`,
@@ -471,7 +476,7 @@ export const studioProcs = {
     const system = [(await rules(ctx)).copy.text, `Écris ${lang}.`, 'Réponds seulement en JSON : {"post": "…", "angles": [{"name": "…", "hook": "…"}, {"name": "…", "hook": "…"}, {"name": "…", "hook": "…"}]}'].join('\n');
     let raw: string | null = null;
     try {
-      raw = await ask(ctx, system, `Produit : ${name}${pr.description ? `\nDescription : ${String(pr.description).slice(0, 800)}` : ''}`, 900, got.tool.model);
+      raw = await ask(ctx, system, `Produit : ${name}${about ? `\nDescription : ${about.slice(0, 800)}` : ''}`, 900, got.tool.model);
     } catch {
       raw = null;
     }
@@ -485,8 +490,10 @@ export const studioProcs = {
 
   /** Image landing page: the long image's words (1 credit). The images and the drawing are the page's. */
   'createur.studioLanding': proc([...M], z.object({ productId: Id, lang: z.enum(['ar', 'darija', 'fr']).default('ar') }), async (ctx, i) => {
-    const pr = (await ctx.db.query(`SELECT name, description FROM products WHERE id = $1`, [i.productId]))[0];
+    const pr = (await ctx.db.query(`SELECT name FROM products WHERE id = $1`, [i.productId]))[0];
     if (!pr) throw notFound('Produit introuvable');
+    // its description is its sales guide (one text since 20 Nov 2026)
+    const about = await productDescription(ctx.db, i.productId);
     const fr = i.lang === 'fr';
     const example = {
       title: fr ? `${String(pr.name)}` : 'الجودة اللي يستاهلها وليدك',
@@ -505,7 +512,7 @@ export const studioProcs = {
     const system = [(await rules(ctx)).landing.text, `Écris ${lang}.`, 'Réponds seulement en JSON : {"title": "…", "subtitle": "…", "benefits": [{"title": "…", "text": "…"}, … 4 en tout]}'].join('\n');
     let raw: string | null = null;
     try {
-      raw = await ask(ctx, system, `Produit : ${String(pr.name)}${pr.description ? `\nDescription : ${String(pr.description).slice(0, 800)}` : ''}`, 900, got.tool.model);
+      raw = await ask(ctx, system, `Produit : ${String(pr.name)}${about ? `\nDescription : ${about.slice(0, 800)}` : ''}`, 900, got.tool.model);
     } catch {
       raw = null;
     }

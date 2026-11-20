@@ -1,7 +1,8 @@
 // Produits › « Prêt » / « À faire » (16 Nov 2026): Pilotix decides by itself whether a product may be sold. A product is
-// Ready when it has all five: an HD main photo, its prices, a description, a live landing page and a sales guide. Until
+// Ready when it has all four: an HD main photo, its prices, a live landing page and a sales guide — the guide IS the
+// product's description (20 Nov 2026, every shop: one text; the old « Description » is no longer asked). Until
 // then it is in « À faire » and NOT sold: it is switched off (active = false), marked as switched off by Pilotix
-// (ready_off), so nothing sells it (order form, landing pages, Dellal). The moment it has all five, it goes back on sale
+// (ready_off), so nothing sells it (order form, landing pages, Dellal). The moment it has all four, it goes back on sale
 // by itself. A product the seller switched off himself stays off (« Masqués »). Services are never checked.
 // Every shop, every product: checked after each change that can make a product ready or not, when the Products page
 // opens, and by the server every 10 minutes. Only what the shop can give is asked: no landing page when its plan has no
@@ -14,8 +15,8 @@ import { bad, type Ctx, proc } from '../rpc';
 import { HAS_GUIDE } from './guide';
 import { photoStore } from './hdphotos';
 
-/** The five things a product needs, in the order the screens show them. */
-export const READY_CHECKS = ['photo', 'prices', 'description', 'landing', 'guide'] as const;
+/** The four things a product needs, in the order the screens show them (its description is its guide). */
+export const READY_CHECKS = ['photo', 'prices', 'landing', 'guide'] as const;
 export type ReadyCheck = (typeof READY_CHECKS)[number];
 /** An HD main photo: at least this wide (a 4:5 product photo is 1080 × 1350). */
 export const HD_MIN_WIDTH = 1080;
@@ -27,7 +28,7 @@ export const HD_MIN_WIDTH = 1080;
  */
 export const WORKED_ON = (alias: string) => `(${alias}.active OR ${alias}.ready_off)`;
 
-/** What Pilotix asks of this shop's products: the checks the shop can meet (all five for most shops). */
+/** What Pilotix asks of this shop's products: the checks the shop can meet (all four for most shops). */
 export async function requiredChecks(ctx: Ctx): Promise<ReadyCheck[]> {
   const features = ctx.shop?.features;
   // no Produits & stock in its plan: nobody there could add what a product misses
@@ -43,7 +44,6 @@ export async function readinessOf(db: Db, ids?: number[], checks: readonly Ready
        COALESCE((SELECT ph.w FROM product_photos ph WHERE ph.product_id = p.id AND ph.kind = 'photo' ORDER BY ph.position, ph.id LIMIT 1), 0) AS main_w,
        (p.price > 0 AND (COALESCE(p.cost, 0) > 0
           OR EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = p.id AND v.active AND COALESCE(v.cost, 0) > 0))) AS priced,
-       (length(btrim(COALESCE(p.description, ''))) > 0) AS described,
        EXISTS (SELECT 1 FROM landing_pages l WHERE l.product_id = p.id AND l.active) AS paged,
        ${HAS_GUIDE('p')} AS guided
      FROM products p
@@ -52,7 +52,7 @@ export async function readinessOf(db: Db, ids?: number[], checks: readonly Ready
   );
   const out = new Map<number, ReadyCheck[]>();
   for (const r of rows as any[]) {
-    const has: Record<ReadyCheck, boolean> = { photo: num(r.main_w) >= HD_MIN_WIDTH, prices: !!r.priced, description: !!r.described, landing: !!r.paged, guide: !!r.guided };
+    const has: Record<ReadyCheck, boolean> = { photo: num(r.main_w) >= HD_MIN_WIDTH, prices: !!r.priced, landing: !!r.paged, guide: !!r.guided };
     out.set(num(r.id), checks.filter((c) => !has[c]));
   }
   return out;
@@ -99,7 +99,6 @@ export const READY_TOUCH = new Set([
 const LABEL: Record<ReadyCheck, string> = {
   photo: `photo HD (${HD_MIN_WIDTH} px de large au moins)`,
   prices: 'prix de vente et d’achat',
-  description: 'description',
   landing: 'landing page en ligne',
   guide: 'guide de vente',
 };

@@ -326,8 +326,9 @@ function StockTab() {
 
 // ---------------------------------------------------------------- Produits
 type ProdFilter = 'active' | 'todo' | 'hidden' | 'service' | 'all';
-/** Produits › « Prêt »: the five things a product needs to be sold, in the order the chips show them. */
-const READY_STEPS = ['photo', 'prices', 'description', 'landing', 'guide'] as const;
+/** Produits › « Prêt »: the four things a product needs to be sold, in the order the chips show them (its description is
+ *  its Guide de vente: one text since 20 Nov 2026). */
+const READY_STEPS = ['photo', 'prices', 'landing', 'guide'] as const;
 
 function ProductsTab() {
   const { t } = useTranslation();

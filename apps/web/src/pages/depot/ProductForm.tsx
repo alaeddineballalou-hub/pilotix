@@ -41,8 +41,9 @@ const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCa
  *  ProductPhotos), then SAV parts, packs and linked products. */
 /** onCreated: a NEW product was saved (Produits proposes its landing page). */
 /** tab: « guide » opens the product's Guide de vente (the product list's chip). focus: the part a « À faire » chip of the
- *  list opens (its HD photos, its prices, its description). */
-export type FormFocus = 'photo' | 'prices' | 'description';
+ *  list opens (its HD photos, its prices). There is no « Description » box: the Guide de vente IS the product's
+ *  description (20 Nov 2026, every shop). */
+export type FormFocus = 'photo' | 'prices';
 /** waiting: Pilotix keeps it off until it is Ready (« À faire »): its « Actif » box stays ticked (the seller wants it sold). */
 export function ProductForm({ id, onClose, onCreated, tab, focus, waiting }: { id: number | null; onClose: () => void; onCreated?: (p: { id: number; name: string; isService: boolean; active: boolean }) => void; tab?: 'product' | 'guide'; focus?: FormFocus; waiting?: boolean }) {
   const { t } = useTranslation();
@@ -76,7 +77,6 @@ function Form({ p, onClose, onCreated, t, tab: firstTab, focus, waiting }: { p: 
     externalId: p?.externalId ?? '',
     pageUrl: p?.pageUrl ?? '',
     sellerId: p?.sellerId ? String(p.sellerId) : '',
-    description: p?.description ?? '',
     alertQty: String(p?.alertQty ?? 0),
     defaultCompanyId: p?.defaultCompanyId ? String(p.defaultCompanyId) : '',
   });
@@ -113,7 +113,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab, focus, waiting }: { p: 
   // guide is saved with the product, then each one leaves for its answer.
   const photos = useRef<PhotosHandle>(null);
   const [sending, setSending] = useState<{ done: number; total: number } | null>(null);
-  // Produits › « À faire »: the chip « + Photo HD / Prix / Description » opens the form on that part
+  // Produits › « À faire »: the chip « + Photo HD / Prix » opens the form on that part (« + Guide de vente »: its tab)
   const formEl = useRef<HTMLFormElement>(null);
   useEffect(() => {
     if (!focus) return;
@@ -237,7 +237,6 @@ function Form({ p, onClose, onCreated, t, tab: firstTab, focus, waiting }: { p: 
       externalId: f.externalId.trim() || null,
       pageUrl: f.pageUrl.trim() || null,
       sellerId: f.sellerId ? Number(f.sellerId) : null,
-      description: f.description.trim() || null,
       alertQty: Math.max(0, Math.round(Number(f.alertQty) || 0)),
       defaultCompanyId: f.defaultCompanyId ? Number(f.defaultCompanyId) : null,
       variants,
@@ -258,7 +257,6 @@ function Form({ p, onClose, onCreated, t, tab: firstTab, focus, waiting }: { p: 
       productId: p?.id,
       name: f.name.trim(),
       brand: f.brand.trim() || undefined,
-      description: f.description.trim() || undefined,
       price: Math.round(Number(f.price) || 0) || undefined,
       variants: [...new Set((optMode ? combosOf(opts).map((c) => titleOf(c)) : vars.map((v) => v.title.trim())).filter(Boolean))].slice(0, 200),
       packs: packs.filter((x) => Number(x.qty) > 1 && Number(x.price) > 0).map((x) => ({ qty: Math.round(Number(x.qty)), price: Math.round(Number(x.price)) })),
@@ -342,9 +340,14 @@ function Form({ p, onClose, onCreated, t, tab: firstTab, focus, waiting }: { p: 
               </select>
             </Field>
           </div>
-          <Field label={t('produits.form.description')}>
-            <textarea rows={3} data-focus="description" value={f.description} onChange={(e) => set('description', e.target.value)} />
-          </Field>
+          {/* the product's description is its Guide de vente: one text, written in the other tab */}
+          <div className="pf-desc-guide">
+            <Icon name="book" />
+            <span>{t('produits.form.descriptionIsGuide')}</span>
+            <button type="button" className="btn small" onClick={() => setTab('guide')}>
+              {t('produits.form.openGuide')}
+            </button>
+          </div>
         </section>
 
         <div className="pf-two">

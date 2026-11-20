@@ -21,7 +21,7 @@
     "alertes": "Products to buy again: out of stock first, then under their alert level.",
     "achats": "Your purchases from suppliers: what came into stock, what is paid and what is left to pay.",
     "depots": "Your depots, what each one holds, and stock transfers between them.",
-    "guides": "Each product’s sales guide: what the agents read during the call, and what Dellal and CM AI use to answer customers.",
+    "guides": "Each product’s sales guide is also its description: what the agents read during the call, and what Dellal and CM AI use to answer customers.",
     "guidesAgent": "Your products’ sales guides: what to say, and the answers to customers’ questions and hesitations.",
     "prevision": "When each product will run out at its selling speed, and how many to buy now.",
     "lots": "What is left of each lot, the lot to send first, and lots past or near their date.",
@@ -492,7 +492,8 @@
     "pageUrl": "Page URL",
     "seller": "Seller",
     "sellerPh": "Pick a seller",
-    "description": "Description",
+    "descriptionIsGuide": "The product’s description is its sales guide: one text, written in the « Sales guide » tab.",
+    "openGuide": "Open the sales guide",
     "noCost": "Purchase price not set: orders with this product will have incorrect profit analytics.",
     "marginIs": "Margin {{m}} per piece ({{r}})",
     "logistics": "Inventory & logistics",
@@ -947,7 +948,6 @@
     "step": {
       "photo": "HD photo",
       "prices": "Prices",
-      "description": "Description",
       "landing": "Landing page",
       "guide": "Sales guide"
     }

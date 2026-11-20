@@ -432,8 +432,9 @@ const DEMO_HD_JPEG =
   '/9j/2wBDAA0JCgsKCA0LCgsODg0PEyAVExISEyccHhcgLikxMC4pLSwzOko+MzZGNywtQFdBRkxOUlNSMj5aYVpQYEpRUk//2wBDAQ4ODhMREyYVFSZPNS01T09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0//wAARCAAFAAQDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAgP/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwC+ATN//9k=';
 
 /**
- * Produits › « Prêt » (modules/readiness.ts): the demo's products get what they lack (a description, an HD main photo, a
- * live landing page, a sales guide), so they stay on sale. The full demo (the app's demo, the demo shop) adds two
+ * Produits › « Prêt » (modules/readiness.ts): the demo's products get what they lack (an HD main photo, a live landing
+ * page, a sales guide — the guide is the product's description; the old description text still fills the demo's pages),
+ * so they stay on sale. The full demo (the app's demo, the demo shop) adds two
  * products that are not Ready yet, in « À faire », to show the tab.
  */
 export async function seedReady(db: Db, now: number, withTodo: boolean) {
@@ -467,7 +468,7 @@ export async function seedReady(db: Db, now: number, withTodo: boolean) {
     [at],
   );
   if (!withTodo) return;
-  // two products still to finish: not sold until they have all five (the bath mat only lacks its HD photo and its page)
+  // two products still to finish: not sold until they have all four (the bath mat only lacks its HD photo and its page)
   const todo = [
     { name: 'Trottinette 3 roues', sku: 'PX-TRO', price: 6900, cost: 4200, kg: 2.5, qty: 40, description: null as string | null },
     { name: 'Tapis de bain antidérapant', sku: 'PX-TAB', price: 1900, cost: 900, kg: 0.6, qty: 75, description: 'Tapis de bain antidérapant pour bébé, ventouses sous le tapis.' },

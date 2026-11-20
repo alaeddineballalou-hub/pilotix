@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, makeSession, ServerHooks } from '../index';
 import { getSetting, setSetting } from '../settings';
-import { cleanGuide, cleanTr, EMPTY_FIT, guideSources, guideText, TO_FILL } from '../modules/guide';
+import { cleanGuide, cleanTr, EMPTY_FIT, guideDescription, guideSources, guideText, productDescription, TO_FILL } from '../modules/guide';
 import { draftSystem, fitFrom, readDraft, readLines, rulesDraft, translateSystem } from '../modules/guidedraft';
 import { EMAILS, setup } from './harness';
 
@@ -446,4 +446,23 @@ test('the demo guides: read in Arabic and English, the size guide included', asy
       assert.equal(g.trMissing, 0, `${r.name}: every line in ${lang}`);
     }
   }
+});
+
+test('the guide IS the product’s description (20 Nov 2026): its brief, sizes and strong points, never what only the sellers read', async () => {
+  const g = cleanGuide({ ...GUIDE, strengths: [...GUIDE.strengths, TO_FILL], sizes: [], fit: { age: '0 à 99 ans', weight: '', measures: '15 × 4 cm' } });
+  assert.equal(
+    guideDescription(g),
+    'Thermomètre sans contact, la température en une seconde.\nÂge : 0 à 99 ans\nMesures : 15 × 4 cm\n- Sans contact : bébé ne se réveille pas\n- Mesure en 1 seconde',
+  );
+  assert.doesNotMatch(guideDescription(g), /Ghali|médecin|piles|compléter/i, 'no hesitation, answer, « never » line nor answer still to write');
+  assert.equal(guideDescription(null), '');
+  // a product with sizes: each size with the age and the weight it fits
+  const bod = Number((await db.query(`SELECT id FROM products WHERE sku = 'PX-BOD'`))[0].id);
+  assert.match(await productDescription(db, bod), /Tailles :\n- Naissance : âge 0 à 1 mois, poids 2,5 à 4 kg/);
+  // the agencies' catalogue shows it as the product's description; a product without a guide has none
+  const rows: any[] = ((await call('catalog.assigned', admin, { pageSize: 3000 })) as any).rows;
+  assert.equal(rows.find((r) => r.id === chair).description, await productDescription(db, chair));
+  assert.ok((await productDescription(db, chair)).length > 0);
+  await db.query('DELETE FROM product_guides WHERE product_id = $1', [thermo]);
+  assert.equal(((await call('catalog.assigned', admin, { pageSize: 3000 })) as any).rows.find((r: any) => r.id === thermo).description, null);
 });

@@ -12,6 +12,10 @@
 // (migrations/072_product_guides.ts). Everyone reads it in the app's language (French, Arabic or English): Pilot AI
 // translates each line after a save, the team corrects the translations in the editor's tabs, and the original words
 // stay one click away (migrations/073_guide_translations.ts). The AI agents read the original.
+// The guide IS the product's description (20 Nov 2026, every shop): there is one text only. The product form has no
+// « Description » box any more, « Prêt » asks for the guide alone (readiness.ts), and every tool that read the old
+// description (Studio, Espace créateur, CM AI, the landing titles, the agencies' catalogue) reads guideDescription.
+// The old texts stay in products.description, read by nothing.
 import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { bad } from '../rpc';
@@ -423,6 +427,34 @@ export async function addTranslations(db: Db, productId: number, add: GuideTr): 
     await tx.query('UPDATE product_guides SET tr = $2 WHERE product_id = $1', [productId, JSON.stringify(cleanTr(merged, g))]);
   });
 }
+
+/**
+ * The product's description, now that the guide IS the description (20 Nov 2026): what it is (En bref), the sizes it
+ * fits (or its one size: age, weight, measures) and its strong points, in the guide's own words. Never its hesitations,
+ * its « vente en plus » nor what not to promise: those are for the people (and the AI agents) who sell. Empty: no guide
+ * yet, or none of these written.
+ */
+export function guideDescription(g: ProductGuide | null | undefined): string {
+  if (!g) return '';
+  const real = (x: string) => !!x.trim() && !toFill(x);
+  const sizes = g.sizes.map((x) => `- ${x.size} : ${[x.age && `âge ${x.age}`, x.weight && `poids ${x.weight}`].filter(Boolean).join(', ')}`);
+  const fit = g.sizes.length ? [] : [real(g.fit.age) ? `Âge : ${g.fit.age}` : '', real(g.fit.weight) ? `Poids : ${g.fit.weight}` : '', real(g.fit.measures) ? `Mesures : ${g.fit.measures}` : ''];
+  return [real(g.brief) ? g.brief : '', sizes.length ? `Tailles :\n${sizes.join('\n')}` : '', ...fit, ...g.strengths.filter(real).map((x) => `- ${x}`)].filter(Boolean).join('\n');
+}
+
+/** The description (guideDescription) of each of these products that has one. */
+export async function productDescriptions(db: Db, ids: number[]): Promise<Map<number, string>> {
+  const out = new Map<number, string>();
+  if (!ids.length) return out;
+  for (const r of await db.query('SELECT product_id, guide FROM product_guides WHERE product_id = ANY($1)', [ids])) {
+    const text = guideDescription(cleanGuide(json(r.guide)));
+    if (text) out.set(num(r.product_id), text);
+  }
+  return out;
+}
+
+/** One product's description (its guide's): '' when it has none yet. */
+export const productDescription = async (db: Db, id: number): Promise<string> => (await productDescriptions(db, [id])).get(id) ?? '';
 
 /** SQL: does this product (alias) have a guide. */
 export const HAS_GUIDE = (alias: string) => `EXISTS (SELECT 1 FROM product_guides g WHERE g.product_id = ${alias}.id)`;

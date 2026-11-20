@@ -1,6 +1,6 @@
 // « Écrire avec l'IA » next to « Titre affiché » (Landing pages › a page): Claude writes the page's title in Algerian
 // Darija (Arabic letters, 1 or 2 emojis), from what the shop knows of the product: its name and options, the page's
-// points and text as typed in the editor (even unsaved), the product sheet and its sales guide.
+// points and text as typed in the editor (even unsaved), and its sales guide (the product's description since 20 Nov 2026).
 // - One click shows one title. Claude writes 3 at once (3 angles, the best first): the editor keeps the other two for
 //   the next clicks, then asks again, telling Claude the titles already shown so it writes new ones.
 // - Pilotix pays (Pilot AI's key, or the shop's own key without it), like « Écrire avec l'IA » of the sales guide.
@@ -111,7 +111,7 @@ const da = (n: number) => `${n.toLocaleString('fr-FR').replace(/\s/g, ' ')} DA`;
 
 /** The facts Claude writes from (the product, the page as typed, the sales guide), and what the titles are checked against. */
 export async function titleFactsOf(ctx: Ctx, i: TitleIn): Promise<TitleFacts> {
-  const p = (await ctx.db.query('SELECT name, brand, description, price, options FROM products WHERE id = $1', [i.productId]))[0];
+  const p = (await ctx.db.query('SELECT name, brand, price, options FROM products WHERE id = $1', [i.productId]))[0];
   if (!p) throw notFound('Produit introuvable');
   const vars = (await ctx.db.query(`SELECT title FROM product_variants WHERE product_id = $1 AND active AND title <> '' ORDER BY id`, [i.productId])).map((r) => String(r.title));
   const opts = splitOptions(p.options, vars.map((title) => ({ title })));
@@ -120,7 +120,6 @@ export async function titleFactsOf(ctx: Ctx, i: TitleIn): Promise<TitleFacts> {
   const filled = (x: string) => !toFill(x);
   const name = cut(p.name, 200);
   const brand = cut(p.brand, 120);
-  const sheet = cut(p.description, 3000);
   const page = cut(landingDescriptionText(i.description ?? ''), 4000);
   const options = opts?.length
     ? opts.map((o) => `${o.name} (${o.values.length}) : ${o.values.join(', ')}`)
@@ -131,14 +130,13 @@ export async function titleFactsOf(ctx: Ctx, i: TitleIn): Promise<TitleFacts> {
   const never = (g?.never ?? []).filter(filled).slice(0, 8);
   const price = i.price ?? (p.price === null || p.price === undefined ? null : Number(p.price));
   // the words a title may build on: never the guide's « à ne jamais dire » lines (they name what must not be said)
-  const allow = [name, brand, ...options, i.title, page, sheet, g?.brief ?? '', ...strengths].join('\n');
+  const allow = [name, brand, ...options, i.title, page, g?.brief ?? '', ...strengths].join('\n');
   const text = [
     `Produit : ${name}${brand ? ` (marque ${brand})` : ''}`,
     ...options,
     price ? `Prix : ${da(price)} (pour le ton seulement : jamais dans le titre)` : '',
     `Titre actuel de la page : ${i.title.trim() || '(vide)'}`,
     `Points et texte de la page :\n${page || '(vide)'}`,
-    sheet && sheet !== page ? `Fiche du produit :\n${sheet}` : '',
     g?.brief?.trim() ? `Guide de vente, en bref : ${cut(g.brief, 600)}` : '',
     strengths.length ? `Guide de vente, points forts :\n${strengths.map((x) => `- ${cut(x, 300)}`).join('\n')}` : '',
     never.length ? `Guide de vente, à ne jamais dire :\n${never.map((x) => `- ${cut(x, 300)}`).join('\n')}` : '',

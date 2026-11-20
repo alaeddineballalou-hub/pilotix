@@ -14,7 +14,7 @@ import { atIn, confIn, dayIn, followIn, ScanLang, scanT } from './scantext';
 import { checkDispatch, dispatchOrders } from './dispatch';
 import { getPrefs } from './prefs';
 import { assignedProductIds } from './productscope';
-import { checkGuide, GuideInput, HAS_GUIDE, readGuide, saveGuide, TrFix, TrInput } from './guide';
+import { checkGuide, GuideInput, HAS_GUIDE, productDescriptions, readGuide, saveGuide, TrFix, TrInput } from './guide';
 import { photoStore, purgePhotos } from './hdphotos';
 import { assertReady } from './readiness';
 import { lessonsFromGuide } from './lahja';
@@ -62,7 +62,6 @@ export interface CatalogProduct {
   externalId: string | null;
   pageUrl: string | null;
   sellerId: number | null;
-  description: string | null;
   alertQty: number;
   defaultCompanyId: number | null;
   /** Taille, Couleur, Genre…: the options the variants are made from (empty: variants typed one by one) */
@@ -161,7 +160,6 @@ function toProduct(p: any, vars: any[]): CatalogProduct {
     externalId: p.external_id ?? null,
     pageUrl: p.page_url ?? null,
     sellerId: numOrNull(p.seller_id),
-    description: p.description ?? null,
     alertQty: num(p.alert_qty),
     defaultCompanyId: numOrNull(p.default_company_id),
     options: j(p.options),
@@ -557,6 +555,8 @@ export const ProductInput = z.object({
   externalId: z.string().trim().max(120).nullable().optional(),
   pageUrl: z.string().trim().max(1000).nullable().optional(),
   sellerId: id.nullable().optional(),
+  /** The old « Description » (20 Nov 2026: the Guide de vente IS the description): a page opened before still sends it;
+   *  it is accepted and never written. */
   description: z.string().trim().max(5000).nullable().optional(),
   /** given to every depot of the product (each depot can then be changed in Stock › Seuil d'alerte) */
   alertQty: z.number().int().min(0).max(1_000_000).optional(),
@@ -687,7 +687,7 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
     // opened before a photo was added, or an older app, sends the picture it knew: it is left out.
     const hdLines = cur ? await tx.query(`SELECT DISTINCT variant_id FROM product_photos WHERE product_id = $1 AND kind = 'photo'`, [i.id]) : [];
     const hdLine = new Set<number>(hdLines.filter((r: any) => r.variant_id != null).map((r: any) => num(r.variant_id)));
-    const extra = [keep(i.barcode, 'barcode'), keep(i.brand, 'brand'), keep(i.externalId, 'external_id'), keep(i.pageUrl, 'page_url'), keep(i.sellerId, 'seller_id'), keep(i.description, 'description'), i.alertQty ?? num(cur?.alert_qty), keep(i.defaultCompanyId, 'default_company_id')];
+    const extra = [keep(i.barcode, 'barcode'), keep(i.brand, 'brand'), keep(i.externalId, 'external_id'), keep(i.pageUrl, 'page_url'), keep(i.sellerId, 'seller_id'), cur?.description ?? null, i.alertQty ?? num(cur?.alert_qty), keep(i.defaultCompanyId, 'default_company_id')];
     const vals = [i.name, sku, i.price, i.cost, i.weightKg, hdLines.length ? (cur.photo ?? null) : i.photo || null, i.isService, i.active, i.fixedPrice, maxDiscount, JSON.stringify(i.packs.sort((a, b) => a.qty - b.qty)), linked, JSON.stringify(i.parts.map((p) => ({ name: p.name, max: p.max ?? null }))), i.feeGrid || null, ...extra];
     let productId: number;
     if (cur) {
@@ -1123,7 +1123,9 @@ export const catalogProcs = {
     if (i.q.trim()) w.add(`(p.name ILIKE '%' || ? || '%' OR p.sku ILIKE '%' || ? || '%' OR EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND (v.title ILIKE '%' || ? || '%' OR v.sku ILIKE '%' || ? || '%')))`, i.q.trim(), i.q.trim(), i.q.trim(), i.q.trim());
     const total = num((await ctx.db.query(`SELECT count(*)::int AS n FROM products p ${w.sql}`, w.params))[0]?.n);
     const limit = w.p(i.pageSize), offset = w.p((i.page - 1) * i.pageSize);
-    const products = await ctx.db.query(`SELECT p.id, p.name, p.sku, p.price, p.photo, p.description, p.active, p.is_service, ${HAS_GUIDE('p')} AS has_guide FROM products p ${w.sql} ORDER BY lower(p.name), p.id LIMIT ${limit} OFFSET ${offset}`, w.params);
+    const products = await ctx.db.query(`SELECT p.id, p.name, p.sku, p.price, p.photo, p.active, p.is_service, ${HAS_GUIDE('p')} AS has_guide FROM products p ${w.sql} ORDER BY lower(p.name), p.id LIMIT ${limit} OFFSET ${offset}`, w.params);
+    // each product's description: its sales guide's (the guide IS the description)
+    const described = await productDescriptions(ctx.db, products.map((p) => num(p.id)));
     const variants = products.length ? await ctx.db.query(
       `WITH r AS (${RESERVED}) SELECT v.id, v.product_id, v.title, v.sku, v.price, v.photo, v.active,
        GREATEST(0, COALESCE((SELECT sum(s.qty) FROM stock s JOIN warehouses wh ON wh.id=s.warehouse_id WHERE s.variant_id=v.id AND wh.active),0)
@@ -1132,7 +1134,7 @@ export const catalogProcs = {
     ) : [];
     return { total, page: i.page, pageSize: i.pageSize, rows: products.map((p) => ({
       id: num(p.id), name: String(p.name), sku: String(p.sku), price: num(p.price), photo: p.photo as string | null,
-      description: p.description as string | null, active: !!p.active, isService: !!p.is_service, hasGuide: !!p.has_guide,
+      description: described.get(num(p.id)) ?? null, active: !!p.active, isService: !!p.is_service, hasGuide: !!p.has_guide,
       seller: null as { id: number; name: string } | null,
       variants: variants.filter((v) => num(v.product_id) === num(p.id)).map((v) => ({
         id: num(v.id), title: String(v.title), sku: String(v.sku), price: numOrNull(v.price) ?? num(p.price),

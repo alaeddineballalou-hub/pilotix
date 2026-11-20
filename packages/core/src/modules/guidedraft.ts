@@ -122,7 +122,7 @@ function factsText(f: Facts): string {
     f.packs.length ? `Packs : ${f.packs.map((p) => `${p.qty} pour ${da(p.price)}`).join(', ')}` : '',
     f.linked.length ? `Produits qui vont avec : ${f.linked.join(', ')}` : '',
     f.services.length ? `Services en plus : ${f.services.map((s) => `${s.name} (${da(s.price)})`).join(', ')}` : '',
-    f.description ? `Description de la fiche produit :\n${f.description}` : 'Description de la fiche produit : (vide)',
+    f.description ? `Description du produit :\n${f.description}` : '',
     f.page ? `Page de vente (landing page) « ${f.page.title} » :\n${f.page.description || '(sans texte)'}` : '',
     f.notes ? `Informations de la boutique (garantie, échange, livraison…) :\n${f.notes}` : '',
   ]
@@ -472,7 +472,8 @@ export const guideProcs = {
    */
   'catalog.guideFacts': proc([...WRITERS], z.object({ id }), async (ctx, { id }) => {
     const allowed = await writerOf(ctx, id);
-    const p = (await ctx.db.query('SELECT id, name, brand, description, price, packs, linked, services, options FROM products WHERE id = $1', [id]))[0];
+    // not the old « Description »: the guide IS the description now (20 Nov 2026), its old texts are read by nothing
+    const p = (await ctx.db.query('SELECT id, name, brand, price, packs, linked, services, options FROM products WHERE id = $1', [id]))[0];
     if (!p) throw notFound('Produit introuvable');
     const j = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v ?? []);
     const linkedIds = ((p.linked ?? []) as unknown[]).map(num).filter((x) => x > 0 && x !== id && (!allowed || allowed.includes(x)));
@@ -482,7 +483,6 @@ export const guideProcs = {
       productId: id,
       name: String(p.name),
       brand: (p.brand as string | null) ?? undefined,
-      description: (p.description as string | null) ?? undefined,
       price: num(p.price) || undefined,
       variants: variants.slice(0, 200),
       packs: (j(p.packs) as any[]).map((x) => ({ qty: num(x.qty), price: num(x.price) })).filter((x) => x.qty > 1 && x.price > 0),

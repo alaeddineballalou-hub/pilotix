@@ -417,9 +417,10 @@ export function fixCaption(current: string, fix: readonly ScoreKey[], lang: Plan
 }
 
 async function writeCaption(ctx: Ctx, i: z.infer<typeof CaptionInput>): Promise<{ caption: string; by: 'ai' | 'demo' }> {
-  const pr = i.productId ? (await ctx.db.query(`SELECT id, name, price, description FROM products WHERE id = $1`, [i.productId]))[0] : null;
+  const pr = i.productId ? (await ctx.db.query(`SELECT id, name, price FROM products WHERE id = $1`, [i.productId]))[0] : null;
   if (i.productId && !pr) throw notFound('Produit introuvable');
-  const p = pr ? { id: num(pr.id), name: String(pr.name), price: num(pr.price), description: pr.description ? String(pr.description) : '' } : null;
+  // its description is its sales guide (read below): one text since 20 Nov 2026
+  const p = pr ? { id: num(pr.id), name: String(pr.name), price: num(pr.price) } : null;
   const inPage = !ctx.server?.dellal && ctx.dellalAi ? ctx.dellalAi : null;
   const fixing = i.fix.filter((k) => FIX_RULE[k]);
   if (!inPage && !(await aiKeyed(ctx))) return { caption: fixing.length && i.current.trim() ? fixCaption(i.current, fixing, i.lang, p) : demoCaption(i.lang, p, i.idea), by: 'demo' };
@@ -433,7 +434,6 @@ async function writeCaption(ctx: Ctx, i: z.infer<typeof CaptionInput>): Promise<
   const guide = p ? await readGuide(ctx.db, p.id).then((g) => (g ? guideText(g.guide, g.upsell) : '')).catch(() => '') : '';
   const user = [
     p ? `Produit : ${p.name} — ${money(p.price)} DA` : 'Pas de produit précis : une publication pour la boutique.',
-    p?.description ? `Description : ${p.description.slice(0, 600)}` : '',
     guide ? `Ce que le vendeur sait du produit :\n${guide.slice(0, 1500)}` : '',
     i.idea.trim() ? `Idée de la publication : ${i.idea.trim()}` : '',
     i.current.trim() ? `Légende déjà écrite (garde l’idée, rends-la meilleure) :\n${i.current.trim().slice(0, 2200)}` : '',

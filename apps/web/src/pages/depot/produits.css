@@ -601,6 +601,10 @@ a.chip.lp-nolp:hover { text-decoration: underline; }
 .pf-more > summary { cursor: pointer; font-weight: 700; font-size: 15px; }
 .pf-more[open] > summary { margin-bottom: 4px; }
 .pf-more > h3 { margin: 6px 0 0; font-size: 14px; }
+/* where the « Description » box was: the product's description is its Guide de vente (20 Nov 2026), a way to it */
+.pf-desc-guide { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.pf-desc-guide > .bji { flex: none; width: 18px; height: 18px; color: var(--ink); }
+.pf-desc-guide > span { flex: 1 1 200px; min-width: 0; }
 @media (max-width: 900px) { .pf-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pf-two { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 520px) { .pf-grid4 { grid-template-columns: minmax(0, 1fr); } .pf-sec { padding: 12px; } }
 

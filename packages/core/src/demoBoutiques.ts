@@ -117,7 +117,7 @@ async function seedBoutiqueData(db: Db, b: DemoBoutique, ownerId: number, passwo
     }
     catalog.push({ id: pid, name: p.name, price: p.price, cost: p.cost, variants: vs });
   }
-  // Produits › « Prêt »: its products have what a product needs to sell (a description, an HD photo, a page, a guide)
+  // Produits › « Prêt »: its products have what a product needs to sell (an HD photo, a page, a guide — its description)
   await seedReady(db, now, false);
   const N = 45;
   for (let i = 0; i < N; i++) {

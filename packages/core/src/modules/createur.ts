@@ -27,6 +27,7 @@ import {
 } from '../platform/credits';
 import { alertTeam, payingShop } from './billing';
 import { AiResponse, aiKeyed, PILOT_CHEAP_MODEL, pilotOn } from './dellal';
+import { productDescription } from './guide';
 import { getSetting } from '../settings';
 
 export const NOT_ENOUGH = 'Pas assez de crédits : achetez un pack pour continuer.';
@@ -255,8 +256,10 @@ export const createurProcs = {
     }),
     async (ctx, i) => {
       const cfg = ctx.t && ctx.shop ? await creditsConfig(ctx.t) : DEFAULT_CREDITS;
-      const pr = i.productId ? (await ctx.db.query(`SELECT name, price, description FROM products WHERE id = $1`, [i.productId]))[0] : null;
+      const pr = i.productId ? (await ctx.db.query(`SELECT name, price FROM products WHERE id = $1`, [i.productId]))[0] : null;
       const product = pr ? String(pr.name) : '';
+      // its description is its sales guide (one text since 20 Nov 2026)
+      const about = pr && i.productId ? await productDescription(ctx.db, i.productId) : '';
       const got = await take(ctx, cfg, TOOL_TEXT, i.items.length);
       const st = cfg.strategies.find((x) => x.key === i.strategy);
       const system = [
@@ -274,7 +277,7 @@ export const createurProcs = {
         .join('\n');
       const user = [
         product ? `Produit : ${product}${pr?.price ? ` (${money(num(pr.price))} DA)` : ''}` : 'Pas de produit précis.',
-        pr?.description ? `Description : ${String(pr.description).slice(0, 500)}` : '',
+        about ? `Description : ${about.slice(0, 500)}` : '',
         ...i.items.map((x, k) => `Vidéo ${k + 1} — hook : ${x.hook || '(pas de texte)'}${x.body ? ` — ce que dit le corps : ${x.body.slice(0, 300)}` : ''}`),
       ]
         .filter(Boolean)
@@ -314,8 +317,9 @@ export const createurProcs = {
   /** « Idées de hooks IA »: 10 short first sentences for the product's videos. */
   'createur.hooks': proc(['marketer'], z.object({ productId: z.number().int().positive(), lang: z.enum(['darija', 'fr', 'ar']).default('darija'), strategy: Strat, stage: Stage }), async (ctx, i) => {
     const cfg = ctx.t && ctx.shop ? await creditsConfig(ctx.t) : DEFAULT_CREDITS;
-    const pr = (await ctx.db.query(`SELECT name, description FROM products WHERE id = $1`, [i.productId]))[0];
+    const pr = (await ctx.db.query(`SELECT name FROM products WHERE id = $1`, [i.productId]))[0];
     if (!pr) throw bad('Produit introuvable');
+    const about = await productDescription(ctx.db, i.productId);
     const got = await take(ctx, cfg, TOOL_HOOKS, 1);
     const st = cfg.strategies.find((x) => x.key === i.strategy);
     const system = [
@@ -331,7 +335,7 @@ export const createurProcs = {
       .join('\n');
     let raw: string | null = null;
     try {
-      raw = await ask(ctx, system, `Produit : ${pr.name}${pr.description ? `\nDescription : ${String(pr.description).slice(0, 500)}` : ''}`, 900, got.tool.model);
+      raw = await ask(ctx, system, `Produit : ${pr.name}${about ? `\nDescription : ${about.slice(0, 500)}` : ''}`, 900, got.tool.model);
     } catch (e) {
       await giveBack(ctx, got);
       throw bad(`L’IA n’a pas pu écrire les idées : ${(e as Error)?.message ?? 'réessayez'}`);

@@ -21,7 +21,7 @@
     "alertes": "Les produits à racheter : en rupture d’abord, puis sous leur seuil d’alerte.",
     "achats": "Vos achats aux fournisseurs : ce qui est entré en stock, ce qui est payé et ce qui reste à payer.",
     "depots": "Vos dépôts, ce que chacun contient, et les transferts de stock de l’un à l’autre.",
-    "guides": "Le guide de vente de chaque produit : ce que les conseillers lisent pendant l’appel, et ce que Dellal et CM AI utilisent pour répondre aux clients.",
+    "guides": "Le guide de vente de chaque produit, c’est aussi sa description : ce que les conseillers lisent pendant l’appel, et ce que Dellal et CM AI utilisent pour répondre aux clients.",
     "guidesAgent": "Le guide de vente de vos produits : quoi dire, les réponses aux questions et aux hésitations des clients.",
     "prevision": "Quand chaque produit sera épuisé, au rythme de ses ventes, et combien en acheter maintenant.",
     "lots": "Ce qui reste de chaque lot, le lot à envoyer en premier, et les lots périmés ou bientôt périmés.",
@@ -492,7 +492,8 @@
     "pageUrl": "Lien de la page",
     "seller": "Vendeur",
     "sellerPh": "Choisir un vendeur",
-    "description": "Description",
+    "descriptionIsGuide": "La description du produit, c’est son guide de vente : un seul texte, écrit dans l’onglet « Guide de vente ».",
+    "openGuide": "Ouvrir le guide de vente",
     "noCost": "Prix d’achat non renseigné : les commandes de ce produit auront une analyse de profit incorrecte.",
     "marginIs": "Marge {{m}} par pièce ({{r}})",
     "logistics": "Stock & logistique",
@@ -947,7 +948,6 @@
     "step": {
       "photo": "Photo HD",
       "prices": "Prix",
-      "description": "Description",
       "landing": "Landing page",
       "guide": "Guide de vente"
     }
