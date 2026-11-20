@@ -56,7 +56,7 @@ const div = (a: number, b: number) => (b ? a / b : null);
 
 // ---------------------------------------------------------------- Meta sync (server only)
 /** Pulls daily results from Meta into the tables. Returns null when there is no server (demo) or no connection. */
-export async function syncMeta(ctx: Ctx, from: string, to: string, force = false): Promise<{ at: string; adsets: number; days: number } | null> {
+export async function syncMeta(ctx: Ctx, from: string, to: string, force = false): Promise<{ at: string; adsets: number; days: number; missing: number; why: string | null } | null> {
   if (!ctx.server) return null;
   const meta = await getSetting(ctx.db, 'meta');
   if (!meta.adAccountId || !meta.hasToken) return null;
@@ -67,7 +67,13 @@ export async function syncMeta(ctx: Ctx, from: string, to: string, force = false
     ads: { id: string; adsetId: string; name: string; status: string | null; isVideo: boolean }[];
     adsetDays: any[];
     adDays: any[];
+    failed?: string[];
+    failedWhy?: string | null;
   };
+  // an ad account Meta did not let Pilotix read this time keeps its saved days: only the ad sets of the accounts read
+  // are replaced (all of them when every account was read)
+  const partial = !!r.failed?.length;
+  const readSets = [...new Set([...r.adsets.map((s) => s.id), ...r.ads.map((a) => a.adsetId), ...r.adsetDays.map((d) => String(d.adsetId))])];
   await ctx.db.tx(async (tx) => {
     for (const s of r.adsets)
       await tx.query(
@@ -82,8 +88,13 @@ export async function syncMeta(ctx: Ctx, from: string, to: string, force = false
          ON CONFLICT (id) DO UPDATE SET adset_id = EXCLUDED.adset_id, name = EXCLUDED.name, status = EXCLUDED.status, is_video = EXCLUDED.is_video, updated_at = now()`,
         [a.id, a.adsetId, a.name, a.status, a.isVideo],
       );
-    await tx.query('DELETE FROM ad_insights WHERE day BETWEEN $1 AND $2', [from, to]);
-    await tx.query('DELETE FROM ad_daily WHERE day BETWEEN $1 AND $2', [from, to]);
+    if (partial) {
+      await tx.query('DELETE FROM ad_insights WHERE day BETWEEN $1 AND $2 AND adset_id = ANY($3)', [from, to, readSets]);
+      await tx.query('DELETE FROM ad_daily WHERE day BETWEEN $1 AND $2 AND adset_id = ANY($3)', [from, to, readSets]);
+    } else {
+      await tx.query('DELETE FROM ad_insights WHERE day BETWEEN $1 AND $2', [from, to]);
+      await tx.query('DELETE FROM ad_daily WHERE day BETWEEN $1 AND $2', [from, to]);
+    }
     for (const d of r.adsetDays)
       await tx.query(
         `INSERT INTO adsets (id, name, campaign, currency) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO UPDATE SET currency = coalesce(EXCLUDED.currency, adsets.currency)`,
@@ -107,7 +118,7 @@ export async function syncMeta(ctx: Ctx, from: string, to: string, force = false
   const at = new Date(ctx.now()).toISOString();
   const span = last ? { from: last.from < from ? last.from : from, to: last.to > to ? last.to : to } : { from, to };
   await setRaw(ctx.db, SYNC_KEY, { at, ...span });
-  return { at, adsets: r.adsets.length, days: r.adsetDays.length };
+  return { at, adsets: r.adsets.length, days: r.adsetDays.length, missing: r.failed?.length ?? 0, why: r.failedWhy ?? null };
 }
 
 // ---------------------------------------------------------------- data access
@@ -405,7 +416,10 @@ async function overview(ctx: Ctx, i: z.infer<typeof Period>) {
   if (Date.parse(i.to) - Date.parse(i.from) > 400 * 86_400_000) throw bad('Période trop longue (400 jours au plus)');
   let syncWarning: string | null = null;
   try {
-    await syncMeta(ctx, i.from, i.to);
+    const synced = await syncMeta(ctx, i.from, i.to);
+    // some ad accounts read, others not: their numbers are the ones saved before, and the page says so
+    if (synced?.missing)
+      syncWarning = `Meta n’a pas donné les chiffres de ${synced.missing} compte${synced.missing > 1 ? 's' : ''} pub cette fois${synced.why ? ` (${synced.why.replace(/[.\s]+$/, '')})` : ''} : leurs chiffres sont ceux d’avant.`;
   } catch (e: any) {
     syncWarning = e?.message ?? 'Meta indisponible';
   }

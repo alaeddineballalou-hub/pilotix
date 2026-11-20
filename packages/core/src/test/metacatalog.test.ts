@@ -292,6 +292,76 @@ test('server: the catalog is made once, only what changed goes, product sets, Me
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM meta_catalog_items WHERE product_id = $1 AND status <> 'deleted'`, [pid]))[0].n, 0);
 });
 
+test('server: a first send before Meta has read the products — no error, the product set comes with the next round', async () => {
+  const { db, as } = await setup(120);
+  const calls: string[] = [];
+  // Meta reads the lines of a batch a little later: until then it refuses a new product set (seen on 20 Nov 2026)
+  let read = false;
+  const server: any = {
+    publicUrl: 'https://pilotix.test',
+    publicApi: 'https://pilotix.test/api',
+    pagesUrl: () => 'https://go.pilotix.test',
+    courier: async () => null,
+    hashPassword: async (x: string) => x,
+    meta: async (action: string, args: any) => {
+      calls.push(action);
+      if (action === 'catalogSetup') return { catalogId: 'cat1', businessId: 'b1', businessName: 'Ma boutique', pixelsLinked: false };
+      if (action === 'catalogBatch') return { handle: 'h1', errors: [] };
+      if (action === 'catalogStatus') {
+        read = true;
+        return { done: true, errors: [] };
+      }
+      if (action === 'catalogSet') {
+        if (!read) throw new AppError('bad_request', 'Meta : We disallow the creation of empty product sets. Please add products to your catalogue and create a set that contains at least one product.');
+        return { setId: args.setId ?? 'set9' };
+      }
+      return {};
+    },
+  };
+  const mk = await as(EMAILS.marketer, server);
+  const admin = await as(EMAILS.admin, server);
+  await db.query(`DELETE FROM meta_catalog_lists`);
+  await db.query(`DELETE FROM meta_catalog_items`);
+  await db.query(`DELETE FROM settings WHERE key = 'metacatalog'`);
+  await setRaw(db, META_TOKEN_KEY, 'tok');
+  await setRaw(db, 'meta', { adAccountId: '123', hasToken: true });
+  const pid = Number((await db.query(`SELECT id FROM products WHERE sku = 'PX-ENS'`))[0].id);
+  const img = Number((await db.query(`INSERT INTO landing_images (w, h, t160, w480, w960) VALUES (900, 900, 'x', 'y', 'z') RETURNING id`))[0].id);
+  await db.query(`UPDATE landing_pages SET images = $2 WHERE product_id = $1`, [pid, JSON.stringify([{ id: img }])]);
+  await call('metacatalog.photo', mk, { imageId: img, jpeg: JPEG });
+  const list: any = await call('metacatalog.listSave', mk, { name: 'Bébé' });
+  await call('metacatalog.add', mk, { listId: list.id, productId: pid });
+  // the shop presses « Envoyer à Meta » once: no error on the page, the catalog and the lines are there, no set yet
+  const r: any = await call('metacatalog.send', mk, { id: list.id });
+  assert.equal(r.sent, 3);
+  assert.deepEqual(calls, ['catalogSetup', 'catalogBatch', 'catalogSet']);
+  const row = async () => (await db.query(`SELECT set_id, sent_at, changed_at FROM meta_catalog_lists WHERE id = $1`, [list.id]))[0];
+  assert.equal((await row()).set_id, null);
+  assert.ok((await row()).sent_at);
+  let board: any = await call('metacatalog.board', mk, {});
+  assert.equal(board.catalog.connected, true);
+  assert.equal(board.lists.find((l: any) => l.id === list.id).state, 'pending');
+  // a round before Meta's answer: nothing to ask yet (the lines are still « pending »)
+  calls.length = 0;
+  await call('metacatalog.run', admin, {});
+  assert.ok(!calls.includes('catalogSet'));
+  // a minute later Meta has read the lines: the same round makes the product set
+  await db.query(`UPDATE meta_catalog_batches SET sent_at = now() - interval '5 minutes'`);
+  calls.length = 0;
+  await call('metacatalog.run', admin, {});
+  assert.deepEqual(calls.filter((a) => a !== 'catalogBatch'), ['catalogStatus', 'catalogSet']);
+  assert.equal((await row()).set_id, 'set9');
+  board = await call('metacatalog.board', mk, {});
+  assert.equal(board.lists.find((l: any) => l.id === list.id).state, 'ok');
+  // any other refusal of a set is still shown to the shop
+  await db.query(`UPDATE meta_catalog_lists SET set_id = NULL WHERE id = $1`, [list.id]);
+  server.meta = async (action: string) => {
+    if (action === 'catalogSet') throw new AppError('bad_request', 'Meta : Invalid parameter');
+    return { handle: 'h2', errors: [] };
+  };
+  await assert.rejects(call('metacatalog.send', mk, { id: list.id }), /Invalid parameter/);
+});
+
 test('server: the same lists on TikTok — its catalog, products, sets, answers, refusals', async () => {
   const { db, as } = await setup(120);
   const calls: { action: string; args: any }[] = [];

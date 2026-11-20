@@ -182,6 +182,46 @@ test('ads: a dinar ad account counts in dinars, and in dollars with the month ra
   await noMetaAds(db);
 });
 
+test('ads: an ad account Meta does not let Pilotix read this time keeps its saved numbers, and the page says so', async () => {
+  await metaAds(db, 'act_1234567890', 'EAAG-test-token-' + 'x'.repeat(40));
+  const day = (adsetId: string, spendCents: number) => ({
+    day: `${YM}-03`, adsetId, adsetName: adsetId, campaign: 'C', spendCents, impressions: 1000, reach: 900, clicks: 10, lpv: 8, purchases: 1, video3s: 0, thruplays: 0, currency: 'USD',
+  });
+  let answer: any = {
+    adsets: [
+      { id: 'read-set', name: 'Lu', campaign: 'C', status: 'ACTIVE', currency: 'USD' },
+      { id: 'other-set', name: 'Autre compte', campaign: 'C', status: 'ACTIVE', currency: 'USD' },
+    ],
+    ads: [],
+    adsetDays: [day('read-set', 1_000), day('other-set', 4_000)],
+    adDays: [],
+  };
+  const server: Ctx['server'] = { courier: async () => ({}), hashPassword: async (p) => p, meta: async () => answer };
+  const owner = await as(EMAILS.vendeur, server);
+  const period = { from: `${YM}-01`, to: `${YM}-05` };
+  const spendOf = (ov: any, id: string) => ov.adsets.find((s: any) => s.id === id)?.spendUsd;
+  // (a test before may have read this period less than 30 minutes ago)
+  await db.query(`DELETE FROM settings WHERE key = 'ads_last_sync'`);
+  let ov: any = await call('ads.overview', owner, period);
+  assert.equal(spendOf(ov, 'other-set'), 40);
+  assert.equal(ov.syncWarning, null);
+  // half an hour later: Meta reads the first account, refuses the second (its limit): its 40 $ stay, the first is updated
+  answer = { adsets: [answer.adsets[0]], ads: [], adsetDays: [day('read-set', 2_500)], adDays: [], failed: ['2222222222'], failedWhy: 'Meta limite les demandes pour l’instant.' };
+  await db.query(`DELETE FROM settings WHERE key = 'ads_last_sync'`);
+  ov = await call('ads.overview', owner, period);
+  assert.equal(spendOf(ov, 'read-set'), 25);
+  assert.equal(spendOf(ov, 'other-set'), 40);
+  assert.match(ov.syncWarning, /1 compte pub .*limite les demandes.* ceux d’avant/);
+  // every account read again: the period is replaced as before (an ad set gone from Meta's answer has no days left)
+  answer = { adsets: [answer.adsets[0]], ads: [], adsetDays: [day('read-set', 3_000)], adDays: [] };
+  await db.query(`DELETE FROM settings WHERE key = 'ads_last_sync'`);
+  ov = await call('ads.overview', owner, period);
+  assert.equal(spendOf(ov, 'read-set'), 30);
+  assert.ok(!spendOf(ov, 'other-set'));
+  assert.equal(ov.syncWarning, null);
+  await noMetaAds(db);
+});
+
 test('ads rules: advice and diagnostics', () => {
   const m = (n: number, d: number, avant: number, pub: number) => ({ n, d, r: 0, enRoute: 0, qty: d, rev: 0, achat: 0, liv: 0, conf: 0, ret: 0, avant, pub, net: avant - pub });
   assert.equal(productAdvice(m(10, 3, 10000, 1000), 3000).k, 'wait');

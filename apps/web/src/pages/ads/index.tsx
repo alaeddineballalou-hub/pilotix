@@ -19,6 +19,7 @@ import { Strategies } from './Strategies';
 import { featureIsOn } from '../../lib/features';
 import { useIsPhone } from '../../lib/useMedia';
 import { AdsetButtons, PubHub, useControls } from './pilot/Hub';
+import { adStatusLabel } from './adStatus';
 import './ads.css';
 import { tabOn } from '../../lib/rights';
 
@@ -485,7 +486,7 @@ function AdsetsCard({ d, owner, onPick, onOpen }: { d: Overview; owner: boolean;
                     </small>
                   </td>
                   <td data-l={t('ads.colStatus')}>
-                    <span className={`badge t-${a.status === 'ACTIVE' ? 'ok' : 'off'}`}>{a.status ?? '—'}</span>
+                    <span className={`badge t-${a.status === 'ACTIVE' ? 'ok' : 'off'}`}>{adStatusLabel(a.status, t)}</span>
                   </td>
                   {!!byId.size && (
                     <td data-l={t('pilotads.btn.col')} onClick={(e) => e.stopPropagation()}>

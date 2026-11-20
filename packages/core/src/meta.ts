@@ -138,6 +138,10 @@ export interface MetaInsights {
   ads: { id: string; adsetId: string; name: string; status: string | null; isVideo: boolean }[];
   adsetDays: MetaDay[];
   adDays: MetaDay[];
+  /** the ad accounts Meta did not let Pilotix read this time (limit reached, no access): their saved days stay */
+  failed?: string[];
+  /** why the first of them failed, in Pilotix's words */
+  failedWhy?: string | null;
 }
 
 const PURCHASE = ['offsite_conversion.fb_pixel_purchase', 'purchase', 'omni_purchase', 'onsite_web_purchase'];
@@ -534,6 +538,7 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
     // all of them failing is an error
     let read = 0;
     let firstError: unknown = null;
+    const failed: string[] = [];
     for (const act of acts) {
       try {
         const [account, adsetRows, adRows, adsets, ads] = await Promise.all([
@@ -560,9 +565,14 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
         read++;
       } catch (e) {
         firstError ??= e;
+        failed.push(act.replace(/^act_/, ''));
       }
     }
     if (!read && firstError) throw firstError;
+    if (failed.length) {
+      out.failed = failed;
+      out.failedWhy = firstError instanceof Error ? firstError.message : null;
+    }
     return out;
   }
 

@@ -306,8 +306,9 @@ function Row({ l, form, onForm }: { l: Lead; form: Form | null; onForm: (f: Form
         </form>
       )}
 
-      {/* what the customer answered: to check a lead that waits for a person (an order already has it all) */}
-      {!['test', 'created'].includes(l.status) && l.answers.length > 0 && (
+      {/* what the customer answered: to check a lead that waits for a person (an order already has it all), and Meta's
+          test lead: its answers show that Pilotix read it from Meta */}
+      {l.status !== 'created' && l.answers.length > 0 && (
         <details className="lf-answers">
           <summary>{t('leads.answers', { count: l.answers.length })}</summary>
           <dl>

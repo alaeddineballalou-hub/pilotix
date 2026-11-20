@@ -18,6 +18,7 @@ import { Campagnes } from './Campagnes';
 import { Catalogue } from './Catalogue';
 import { featureIsOn } from '../../lib/features';
 import { PubHub } from './pilot/Hub';
+import { adStatusLabel } from './adStatus';
 import '../confirmation/phone.css';
 import '../suivi/phone.css';
 import '../sav/phone.css';
@@ -585,7 +586,7 @@ function AdsetList({ d, onOpen }: { d: Ov; onOpen: (a: Adset) => void }) {
               <span className="pxm-an">
                 <b>{a.name}</b>
                 <small>
-                  {a.status === 'ACTIVE' ? t(`ads.diag.${a.diag.k}`) : (a.status ?? '').toLowerCase()}
+                  {a.status === 'ACTIVE' ? t(`ads.diag.${a.diag.k}`) : adStatusLabel(a.status, t)}
                   {a.marketerName ? ` · ${a.marketerName}` : ''}
                 </small>
               </span>
@@ -687,7 +688,7 @@ function AdsetPage({ a, range, onClose }: { a: Adset; range: { from: string; to:
             {a.marketerName ? ` · ${a.marketerName}` : ''}
           </small>
         </div>
-        <span className={`pxm-adv ${a.status === 'ACTIVE' ? 'g' : 'm'}`}>{(a.status ?? '—').toLowerCase()}</span>
+        <span className={`pxm-adv ${a.status === 'ACTIVE' ? 'g' : 'm'}`}>{adStatusLabel(a.status, t)}</span>
       </header>
       <div className="pxp-ob pxm-ob">
         <section className={`pxs-sec pxm-advice ${tone}`}>

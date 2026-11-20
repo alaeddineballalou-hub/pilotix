@@ -426,11 +426,20 @@ async function syncSet(ctx: Ctx, listId: number) {
   let setId = l.set_id ? String(l.set_id) : null;
   if (simulated(ctx)) setId = setId ?? `demo-set-${listId}`;
   else if (ids.length || setId) {
-    const r: any = await ctx.server!.meta('catalogSet', { catalogId: s.catalogId, setId, name: String(l.name), ids: ids.length ? ids : ['none'] }, ctx);
-    setId = String(r.setId);
+    try {
+      const r: any = await ctx.server!.meta('catalogSet', { catalogId: s.catalogId, setId, name: String(l.name), ids: ids.length ? ids : ['none'] }, ctx);
+      setId = String(r.setId);
+    } catch (e) {
+      // a first send: Meta reads the products a minute after the batch and refuses a new set that is still empty. The
+      // list stays without its set; the next round (runCatalog) makes it once Meta has the products. Never on a page.
+      if (!setId && EMPTY_SET.test(String((e as Error)?.message ?? ''))) return;
+      throw e;
+    }
   }
   await db.query(`UPDATE meta_catalog_lists SET set_id = $2 WHERE id = $1`, [listId, setId]);
 }
+/** Meta's refusal of a product set none of whose products it has read yet (« We disallow the creation of empty product sets »). */
+const EMPTY_SET = /empty product sets?/i;
 
 /** Meta's answer about the batches sent a little while ago. */
 async function checkBatches(ctx: Ctx): Promise<number> {
@@ -709,7 +718,15 @@ export async function runCatalog(ctx: Ctx): Promise<{ sent: number; removed: num
     if (ttGo && !(await ttStep(() => ttSyncSet(ctx, num(l.id))))) await ttLate(db, num(l.id));
     await db.query(`UPDATE meta_catalog_lists SET sent_at = $2, changed_at = NULL WHERE id = $1`, [l.id, iso(new Date(ctx.now()))]);
   }
-  if (metaGo) out.checked = await checkBatches(ctx);
+  if (metaGo) {
+    out.checked = await checkBatches(ctx);
+    // a list sent before Meta had read its products has no product set yet: made now that one of them is there
+    const late = await db.query(
+      `SELECT l.id FROM meta_catalog_lists l WHERE l.sent_at IS NOT NULL AND l.set_id IS NULL
+         AND EXISTS (SELECT 1 FROM meta_catalog_list_products lp JOIN meta_catalog_items i ON i.product_id = lp.product_id WHERE lp.list_id = l.id AND i.status = 'ok')`,
+    );
+    for (const l of late) await syncSet(ctx, num(l.id)).catch(() => null);
+  }
   if (ttGo) {
     out.checked += (await ttStep(() => ttCheck(ctx))) ?? 0;
     if (ttError !== t.error) await ttPatch(db, { error: ttError });
