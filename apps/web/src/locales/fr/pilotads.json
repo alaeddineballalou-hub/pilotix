@@ -570,7 +570,7 @@
   },
   "hand": {
     "title": "Pubs faites à la main",
-    "sub": "Un ad set fait dans le Gestionnaire de publicités de Meta n’enlève pas ces listes tout seul. Pilotix les y met lui-même, quelques minutes après sa publication, pendant ses {{h}} premières heures : il est neuf, son apprentissage ne perd rien.",
+    "sub": "Pilotix met ces listes tout seul sur chaque nouvel ad set fait dans Meta, pendant ses {{h}} premières heures : son apprentissage ne perd rien.",
     "switch": "Mettre les listes toutes seules sur les ad sets faits à la main",
     "savedOn": "Pilotix met les listes sur les nouveaux ad sets faits à la main",
     "savedOff": "Arrêté : Pilotix ne touche plus aux ad sets faits à la main",
@@ -581,7 +581,7 @@
     "added_one": "+{{count}} liste",
     "added_other": "+{{count}} listes",
     "missingTitle": "Anciens ad sets sans toutes les listes",
-    "missingHint": "Pilotix ne les touche pas : ajouter une liste à un ad set qui tourne relance son apprentissage. À vous de voir : dans le Gestionnaire de publicités, ou un nouvel ad set.",
+    "missingHint": "Pilotix ne les touche pas : une liste ajoutée à un ad set qui tourne relance son apprentissage.",
     "lacks_one": "il manque {{count}} liste",
     "lacks_other": "il manque {{count}} listes",
     "refused": "Meta a refusé : {{why}}",

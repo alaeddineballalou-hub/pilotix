@@ -570,7 +570,7 @@
   },
   "hand": {
     "title": "Ads made by hand",
-    "sub": "An ad set made in Meta’s Ads Manager doesn’t leave these lists out by itself. Pilotix puts them in, a few minutes after it’s published, during its first {{h}} hours: it’s new, its learning loses nothing.",
+    "sub": "Pilotix puts these lists on every new ad set made in Meta by itself, during its first {{h}} hours: its learning loses nothing.",
     "switch": "Put the lists on ad sets made by hand automatically",
     "savedOn": "Pilotix puts the lists on new ad sets made by hand",
     "savedOff": "Off: Pilotix no longer touches ad sets made by hand",
@@ -581,7 +581,7 @@
     "added_one": "+{{count}} list",
     "added_other": "+{{count}} lists",
     "missingTitle": "Older ad sets without every list",
-    "missingHint": "Pilotix doesn’t touch them: adding a list to a running ad set restarts its learning. Your call: in the Ads Manager, or a new ad set.",
+    "missingHint": "Pilotix doesn’t touch them: a list added to a running ad set restarts its learning.",
     "lacks_one": "{{count}} list missing",
     "lacks_other": "{{count}} lists missing",
     "refused": "Meta refused: {{why}}",
