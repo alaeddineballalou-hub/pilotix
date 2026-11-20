@@ -604,7 +604,7 @@ await section('A store’s own domain for its landing pages', async () => {
   assert.equal(got.proof.name, `_pilotix.www.bijoux-${run}.com`);
   assert.match(got.proof.value, /^pilotix-verify=[0-9a-f]{32}$/);
   assert.equal((await fetch(`${API}/domain-check?domain=www.bijoux-${run}.com`)).status, 404);
-  ok('its TXT proof is shown; no certificate before its TXT proves it is this store’s');
+  ok('its TXT proof is shown; no certificate before the DNS points here');
   // typing a name first does not keep it: another store takes it (only the TXT proof makes it a store's)
   await must('/shop/domain', { domain: `www.bijoux-${run}.com` }, ctx.owner1.token);
   assert.equal((await must('/shop/domain/get', {}, ctx.signup1.token)).domain, null);

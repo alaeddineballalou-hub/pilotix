@@ -7,7 +7,7 @@ import * as http from 'node:http';
 import * as https from 'node:https';
 import { Pool, PoolClient } from 'pg';
 import { config } from './config';
-import { reachDomain } from './domainEcho';
+import { domainLookup } from './domainDns';
 import { mediaHooks } from './media';
 import { payAlert } from './payalert';
 import { mailConfigured, sendMail } from './mail';
@@ -395,33 +395,45 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
   /** failed checks in a row, per shop whose own domain is ready */
   private domainFails = new Map<number, number>();
   private domainTimer: NodeJS.Timeout | null = null;
+  /** looked up on public DNS services first, as « Vérifier » does (domainDns.ts) */
+  private readonly domainNames = domainLookup();
 
   /**
-   * A shop's own ready domain still answers in HTTPS from this server (straight or through Cloudflare): Pilotix's links
-   * use it (Réglages › « Liens des pages »), else the platform's pages address, by themselves. Off after 2 failed checks
-   * in a row (a short glitch changes nothing), on again at the first good one. Its pages stay served at the domain all
-   * along (its « Prêt » never changes here), so links already out keep working.
+   * A shop's own ready domain still points to this server: Pilotix's links use it (Réglages › « Liens des pages »), else
+   * the platform's pages address, by themselves. Off after 2 failed checks in a row (a short DNS glitch changes nothing),
+   * on again at the first good one. Its pages stay served at the domain all along (its « Prêt » never changes here), so
+   * links already out keep working.
    */
   shopDomainLive(shopId: number): boolean {
     return (this.domainFails.get(shopId) ?? 0) < 2;
   }
 
-  /**
-   * Every ready own domain: does it still answer in HTTPS from this server? (every 10 minutes; domainEcho.ts). Its
-   * addresses are not looked at: behind Cloudflare's orange cloud they are Cloudflare's. 4 domains at a time, 10 s each.
-   */
-  async checkShopDomains(reach: (domain: string) => Promise<{ ok: boolean; why?: string }> = (d) => reachDomain(d, 10_000)) {
+  /** The addresses a shop's domain must point to, as « Vérifier » (api.ts): PUBLIC_IP, else those of the platform's name. */
+  private async serverIps(): Promise<string[]> {
+    if (config.publicIps.length) return config.publicIps;
+    try {
+      return await dnsp.resolve4(new URL(config.publicUrl).hostname);
+    } catch {
+      return [];
+    }
+  }
+
+  /** Every ready own domain: does it still point here? (every 10 minutes) */
+  async checkShopDomains() {
     const rows = await this.t.platform.query<{ id: number; domain: string }>(`SELECT id, domain FROM platform.shops WHERE domain IS NOT NULL AND domain_status = 'ok' AND status = 'active'`).catch(() => [] as { id: number; domain: string }[]);
+    const ips = await this.serverIps();
+    // the server's own addresses unknown: nothing can be decided this time
+    if (!ips.length) return;
     const seen = new Set<number>();
-    const one = async (r: { id: number; domain: string }) => {
+    for (const r of rows) {
       const id = Number(r.id);
       seen.add(id);
-      const got = await reach(String(r.domain)).catch(() => ({ ok: false, why: 'error' }));
+      const found = await this.domainNames.resolve4(String(r.domain)).catch(() => [] as string[]);
+      const ok = found.length > 0 && found.every((a) => ips.includes(a));
       const was = this.shopDomainLive(id);
-      this.domainFails.set(id, got.ok ? 0 : (this.domainFails.get(id) ?? 0) + 1);
-      if (was !== this.shopDomainLive(id)) this.log.log(got.ok ? `Own domain ${r.domain} (shop ${id}) answers again: its links use it` : `Own domain ${r.domain} (shop ${id}) does not answer in HTTPS (${got.why ?? 'error'}): its links use the platform's address`);
-    };
-    for (let i = 0; i < rows.length; i += 4) await Promise.all(rows.slice(i, i + 4).map(one));
+      this.domainFails.set(id, ok ? 0 : (this.domainFails.get(id) ?? 0) + 1);
+      if (was !== this.shopDomainLive(id)) this.log.log(ok ? `Own domain ${r.domain} (shop ${id}) points here again: its links use it` : `Own domain ${r.domain} (shop ${id}) does not point here (${found.join(', ') || 'no address'}): its links use the platform's address`);
+    }
     for (const id of [...this.domainFails.keys()]) if (!seen.has(id)) this.domainFails.delete(id);
   }
 

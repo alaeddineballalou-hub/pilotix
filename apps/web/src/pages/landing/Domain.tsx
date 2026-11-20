@@ -2,7 +2,6 @@
 // pages live — the shop's own domain (it writes it, points it to the server at its registrar, Pilotix checks; HTTPS comes
 // by itself), the address its links use (its own domain by default once it is ready, or Pilotix's: core
 // modules/pagelinks.ts) and the store's part of Pilotix's address.
-import { isCloudflareIp } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { KeyboardEvent, ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,8 +27,6 @@ export function PageLinks({ store }: { store: (label: string) => ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [found, setFound] = useState<string[] | null>(null);
   const [proofSeen, setProofSeen] = useState<boolean | null>(null);
-  /** the HTTPS test of « Vérifier » (through the domain, Cloudflare or not): why it failed, to say what to fix */
-  const [reach, setReach] = useState<{ ok: boolean; why?: string } | null>(null);
   // the choice just clicked, shown at once while it saves
   const [picked, setPicked] = useState<Use | null>(null);
   useEffect(() => {
@@ -70,7 +67,6 @@ export function PageLinks({ store }: { store: (label: string) => ReactNode }) {
       setValue(r.domain ?? '');
       setFound(null);
       setProofSeen(null);
-      setReach(null);
       await refreshLinks();
       toast(r.status === 'ok' ? t('landing.domain.ready') : r.domain ? t('landing.domain.saved') : t('landing.domain.removed'), 'ok');
     });
@@ -79,7 +75,6 @@ export function PageLinks({ store }: { store: (label: string) => ReactNode }) {
       const r = await domainCheck();
       setFound(r.found);
       setProofSeen(r.proof ?? null);
-      setReach(r.https === undefined ? null : { ok: r.https, why: r.why });
       setD((x) => ({ ...x!, status: r.ok ? 'ok' : 'pending' }));
       await refreshLinks();
       toast(r.ok ? t('landing.domain.ready') : t('landing.domain.notYet'), r.ok ? 'ok' : 'bad');
@@ -108,8 +103,6 @@ export function PageLinks({ store }: { store: (label: string) => ReactNode }) {
         ? { cls: 'warn', icon: 'alert', text: t('landing.links.waiting', { domain, pilotix: pxBase }) }
         : { cls: 'warn', icon: 'alert', text: t('landing.links.down', { domain, pilotix: pxBase }) };
   const ips = d?.ips?.length ? d.ips : ['—'];
-  /** behind Cloudflare's orange cloud the domain shows Cloudflare's addresses: normal (in Cloudflare, the A line keeps the table's) */
-  const viaCloudflare = !!found?.length && found.every(isCloudflareIp);
   const enter = (e: KeyboardEvent<HTMLInputElement>) => {
     // inside the settings form: Enter saves the domain, never the whole form
     if (e.key !== 'Enter') return;
@@ -179,11 +172,8 @@ export function PageLinks({ store }: { store: (label: string) => ReactNode }) {
               </table>
               <small>{t('landing.domain.howHelp')}</small>
               {d.proof && <small>{t('landing.domain.proofHelp')}</small>}
-              {/* the addresses stay left-to-right, in their order, inside an Arabic sentence (\u2066…\u2069 = <bdi dir="ltr">) */}
-              {found && <small>{t('landing.domain.found', { ips: `\u2066${found.join(', ') || '—'}\u2069` })}</small>}
-              {viaCloudflare && <small>{t('landing.domain.proxied')}</small>}
+              {found && <small className="ltr">{t('landing.domain.found', { ips: found.join(', ') || '—' })}</small>}
               {proofSeen === false && <small>{t('landing.domain.proofMissing')}</small>}
-              {reach && !reach.ok && reach.why && <small>{t(`landing.domain.https.${reach.why}`, { domain: d.domain })}</small>}
               <button type="button" className="btn small" disabled={busy} onClick={check}>
                 <Icon name="refresh" /> {t('landing.domain.check')}
               </button>
