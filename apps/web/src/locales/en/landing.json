@@ -471,7 +471,7 @@
       "timeout": "https://{{domain}} does not answer (too slow). Check the A line, then try again in a few minutes.",
       "tls": "https://{{domain}} has no valid certificate yet. It is made at the first visit: try again in a minute.",
       "redirect": "https://{{domain}} sends visitors to another address. With Cloudflare, set SSL/TLS to “Full” or “Full (strict)”, not “Flexible”.",
-      "cloudflare": "Cloudflare does not reach Pilotix for https://{{domain}}. Check the A line, then Cloudflare’s SSL/TLS mode.",
+      "cloudflare": "Cloudflare does not reach Pilotix for https://{{domain}}. Check the A line, then Cloudflare’s SSL/TLS mode (“Full”). New domain: turn off “Always Use HTTPS” in Cloudflare until the first certificate is made (a few minutes), then turn it back on.",
       "other-site": "https://{{domain}} answers, but not from Pilotix: the domain still points somewhere else.",
       "error": "https://{{domain}} does not answer yet. Check the A line, then try again in a few minutes."
     }

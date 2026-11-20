@@ -498,7 +498,7 @@
       "timeout": "https://{{domain}} لا يجيب (بطيء جدًا). تحقّق من سطر A ثم أعد المحاولة بعد بضع دقائق.",
       "tls": "https://{{domain}} ليس له شهادة صالحة بعد. تُنشأ عند أول زيارة: أعد المحاولة بعد دقيقة.",
       "redirect": "https://{{domain}} يحوّل الزوار إلى عنوان آخر. مع Cloudflare اجعل SSL/TLS على «Full» أو «Full (strict)» وليس «Flexible».",
-      "cloudflare": "Cloudflare لا يصل إلى Pilotix من أجل https://{{domain}}. تحقّق من سطر A ثم من وضع SSL/TLS في Cloudflare.",
+      "cloudflare": "Cloudflare لا يصل إلى Pilotix من أجل https://{{domain}}. تحقّق من سطر A ثم من وضع SSL/TLS في Cloudflare («Full»). نطاق جديد: أوقف «Always Use HTTPS» في Cloudflare حتى تُنشأ أول شهادة (بضع دقائق)، ثم أعد تشغيله.",
       "other-site": "https://{{domain}} يجيب، لكن ليس من Pilotix: النطاق ما زال يشير إلى مكان آخر.",
       "error": "https://{{domain}} لا يجيب بعد. تحقّق من سطر A ثم أعد المحاولة بعد بضع دقائق."
     }
