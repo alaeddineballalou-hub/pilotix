@@ -4,6 +4,7 @@
 // modules/pagelinks.ts) and the store's part of Pilotix's address.
 // A page's (or a group's) editor › « Où vit cette page » (design 3 « Deux cartes sous l'adresse », chosen 20 Nov 2026):
 // PageAddress, below.
+import { isCloudflareIp } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { KeyboardEvent, ReactNode, useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -110,8 +111,8 @@ export function PageLinks({ store }: { store: (label: string) => ReactNode }) {
         ? { cls: 'warn', icon: 'alert', text: t('landing.links.waiting', { domain, pilotix: pxBase }) }
         : { cls: 'warn', icon: 'alert', text: t('landing.links.down', { domain, pilotix: pxBase }) };
   const ips = d?.ips?.length ? d.ips : ['—'];
-  /** Cloudflare's orange cloud: the domain shows Cloudflare's addresses, which is fine once Pilotix answered through it */
-  const proxied = !!found?.length && !!reach?.ok && !found.some((ip) => !!d?.ips?.includes(ip));
+  /** behind Cloudflare's orange cloud the domain shows Cloudflare's addresses: normal (in Cloudflare, the A line keeps the table's) */
+  const viaCloudflare = !!found?.length && found.every(isCloudflareIp);
   const enter = (e: KeyboardEvent<HTMLInputElement>) => {
     // inside the settings form: Enter saves the domain, never the whole form
     if (e.key !== 'Enter') return;
@@ -182,7 +183,7 @@ export function PageLinks({ store }: { store: (label: string) => ReactNode }) {
               <small>{t('landing.domain.howHelp')}</small>
               {d.proof && <small>{t('landing.domain.proofHelp')}</small>}
               {found && <small className="ltr">{t('landing.domain.found', { ips: found.join(', ') || '—' })}</small>}
-              {proxied && <small>{t('landing.domain.proxied')}</small>}
+              {viaCloudflare && <small>{t('landing.domain.proxied')}</small>}
               {proofSeen === false && <small>{t('landing.domain.proofMissing')}</small>}
               {reach && !reach.ok && reach.why && <small>{t(`landing.domain.https.${reach.why}`, { domain: d.domain })}</small>}
               <button type="button" className="btn small" disabled={busy} onClick={check}>
