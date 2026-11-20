@@ -39,6 +39,7 @@ import { PlatformController, PlatformGuard } from './platform';
 import { PUBLIC, Public } from './public';
 import { limitMail, resetMail } from './resetMail';
 import { promises as dns } from 'node:dns';
+import { domainLookup } from './domainDns';
 import { referralSignupMail, signupConfirmMail, signupExistsMail, verifyMail } from './mails';
 import { push as webPush, pushKeys as webPushKeys } from './push';
 import type { Mail } from './mail';
@@ -641,10 +642,12 @@ class ApiController {
   private serverIps(): Promise<string[]> {
     return config.publicIps.length ? Promise.resolve(config.publicIps) : dns.resolve4(this.platformHost()).catch(() => [] as string[]);
   }
+  /** Shop domains are looked up on public DNS services first: the hosting DNS can keep old addresses (domainDns.ts). */
+  private readonly domainDns = domainLookup();
   /** The DNS as the domain check sees it: the platform's name answers the server's addresses. */
-  private resolve = (h: string) => (h === this.platformHost() ? this.serverIps() : dns.resolve4(h));
+  private resolve = (h: string) => (h === this.platformHost() ? this.serverIps() : this.domainDns.resolve4(h));
   /** A name's TXT texts (the proof that a domain is the shop's: core.domainProof). */
-  private resolveTxt = async (h: string) => (await dns.resolveTxt(h)).map((parts) => parts.join(''));
+  private resolveTxt = async (h: string) => (await this.domainDns.resolveTxt(h)).map((parts) => parts.join(''));
 
   /** The shop's own domain: what it is, whether its DNS is ready, what to write at the domain's registrar. */
   @Post('shop/domain/get')
