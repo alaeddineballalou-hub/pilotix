@@ -24,6 +24,23 @@ const IG_GRAPH = 'https://graph.instagram.com/v23.0';
 const UNI_GRAPH = 'https://graph.facebook.com/v23.0';
 const ANTHROPIC = 'https://api.anthropic.com/v1/messages';
 
+/**
+ * No thinking before the answer, on every call to Claude (20 Nov 2026). Claude 5.5 thinks first by default, and its thinking
+ * counts in max_tokens and is billed: Pilotix's calls are sized for the answer alone (a title 500 tokens, Dellal 1024, the
+ * night lessons 200), so the thinking could take the whole room and leave no answer, or half of one (« Écrire avec l'IA »,
+ * 15 Nov). Sonnet 5.5: « between_tools », its lowest setting (« disabled » is refused); Haiku 5.5: « disabled »
+ * (« between_tools » is refused); Opus 5.5 always thinks: 4 × the room, at least 4,000 tokens more. A call that sets its
+ * own thinking keeps it; any other model is sent as it was.
+ */
+export function noThinkingFirst<T extends { model: string; max_tokens: number; thinking?: unknown }>(req: T): T {
+  if (req.thinking) return req;
+  const m = String(req.model ?? '');
+  if (/^claude-sonnet-5-5\b/.test(m)) return { ...req, thinking: { type: 'between_tools' } };
+  if (/^claude-haiku-5-5\b/.test(m)) return { ...req, thinking: { type: 'disabled' } };
+  if (/^claude-opus-5-5\b/.test(m)) return { ...req, max_tokens: Math.min(128_000, Math.max(req.max_tokens * 4, req.max_tokens + 4000)) };
+  return req;
+}
+
 /** `typed`: an address the shop typed (its SMS service): public internet only (publicfetch.ts). */
 async function postJson(url: string, body: unknown, headers: Record<string, string>, who: string, method: 'POST' | 'GET' | 'DELETE' = 'POST', timeoutMs = 30_000, typed = false): Promise<any> {
   let res: Response;
@@ -67,7 +84,7 @@ export function pilotBatch(key: string, o: { maxWaitMs?: number; everyMs?: numbe
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
   return async (reqs: PilotAiReq[]): Promise<(string | null)[]> => {
     if (!reqs.length) return [];
-    const requests = reqs.map((r, i) => ({ custom_id: `r${i}`, params: { model: r.model, max_tokens: r.maxTokens, system: r.system, messages: [{ role: 'user', content: r.user }] } }));
+    const requests = reqs.map((r, i) => ({ custom_id: `r${i}`, params: noThinkingFirst({ model: r.model, max_tokens: r.maxTokens, system: r.system, messages: [{ role: 'user', content: r.user }] }) }));
     let b = await postJson(`${ANTHROPIC}/batches`, { requests }, headers, who, 'POST', 120_000);
     const until = Date.now() + (o.maxWaitMs ?? 6 * 3_600_000);
     while (b?.processing_status !== 'ended') {
@@ -211,7 +228,7 @@ async function complete(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
   const { tools, systemBlocks, feature, pilot: _pilot, ...rest } = req;
   const blocks = (systemBlocks ?? []).filter((b) => b.trim()).slice(0, 4);
   const system = (blocks.length ? blocks : [req.system]).map((text) => ({ type: 'text', text, cache_control: { type: 'ephemeral' } }));
-  const body = { ...rest, ...(tools?.length ? { tools } : {}), system };
+  const body = { ...noThinkingFirst(rest), ...(tools?.length ? { tools } : {}), system };
   const data = await postJson(ANTHROPIC, body, { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, 'IA (Anthropic)', 'POST', 180_000);
   // what this answer cost, counted for the shop (control room › Pilot AI › AI cost per shop: Pilotix bills it)
   if (ctx.t && ctx.shop) await recordAiUsage(ctx.t, { shopId: ctx.shop.id, feature, model: String(req.model || data.model), payer: pilot ? 'pilotix' : 'shop', usage: data.usage });
@@ -225,7 +242,7 @@ async function complete(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
 export async function pilotComplete(t: Tenancy, req: { model: string; system: string; messages: { role: 'user' | 'assistant'; content: string }[]; max_tokens: number }): Promise<AiResponse> {
   const key = await pilotKey(t).catch(() => null);
   if (!key) throw new AppError('bad_request', 'Pilot AI est éteint ou sans clé (Pilot AI › Réglages & coûts).');
-  const body = { model: req.model, max_tokens: req.max_tokens, system: req.system, messages: req.messages };
+  const body = noThinkingFirst({ model: req.model, max_tokens: req.max_tokens, system: req.system, messages: req.messages });
   const data = await postJson(ANTHROPIC, body, { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, 'IA (Anthropic)', 'POST', 120_000);
   await recordAiUsage(t, { shopId: 0, feature: 'pilot', model: String(req.model || data.model), payer: 'pilotix', usage: data.usage });
   return { content: data.content ?? [], stop_reason: data.stop_reason ?? 'end_turn', usage: data.usage };

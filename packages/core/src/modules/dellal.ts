@@ -1466,8 +1466,9 @@ export interface AiRequest {
   messages: AiMsg[];
   tools: readonly { name: string; description: string; input_schema: unknown }[];
   max_tokens: number;
-  /** sent as it is to Anthropic: { type: 'between_tools' } = no thinking before the answer (Sonnet 5.5 thinks by default) */
-  thinking?: { type: 'adaptive' | 'between_tools' };
+  /** sent as it is to Anthropic. Not set: no thinking before the answer (dellal-server › noThinkingFirst: « between_tools »
+   *  for Sonnet 5.5, « disabled » for Haiku 5.5); { type: 'adaptive' }: let it think first (give it room in max_tokens) */
+  thinking?: { type: 'adaptive' | 'between_tools' | 'disabled' };
 }
 export interface AiResponse {
   content: ({ type: 'text'; text: string } | { type: 'tool_use'; id: string; name: string; input: any })[];
