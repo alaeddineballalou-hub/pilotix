@@ -226,6 +226,12 @@ export function landingDescriptionHtml(text: string, images?: Record<number, Lan
 
 export const landingPrice = (v: number) => `${Math.round(v)}.00 دج`;
 
+/** The page's left edge, product pages and groups (owner's choice, 20 Nov 2026): no scroll bar, a light shade in its place.
+ * The shade lies under the buy bar (z-index 9) and lets every touch and click through. */
+const EDGE_CSS =
+  'html{scrollbar-width:none}html::-webkit-scrollbar{display:none}' +
+  'body:after{content:"";position:fixed;z-index:8;top:0;bottom:0;left:0;width:18px;pointer-events:none;background:linear-gradient(90deg,rgba(17,24,39,.22),rgba(17,24,39,.08) 40%,rgba(17,24,39,0))}';
+
 const CSS = (c: string) => `:root{--c:${c};--cd:${shade(c, -0.25)};--cl:${shade(c, 0.9)};--b:#e5e7eb;--t:#111827;--m:#6b7280}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;font:16px/1.55 system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;color:var(--t);background:#f6f7f9}
 .top{background:var(--c);color:#fff;text-align:center;padding:8px 12px;font-weight:600;font-size:14px}
@@ -259,7 +265,8 @@ input:focus,select:focus{outline:2px solid var(--c);outline-offset:-1px;border-c
 .so{margin-top:12px;padding:18px;border-radius:12px;background:#f3f4f6;text-align:center}.so b{display:block;font-size:19px;color:#b91c1c}.so p{margin:6px 0 0;color:var(--m)}
 footer{text-align:center;color:var(--m);font-size:12px;padding:18px;display:flex;align-items:center;justify-content:center;gap:8px}footer img{border-radius:6px;object-fit:contain;background:#fff}.brand{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 12px 2px;color:var(--t);font-size:15px}.brand img{border-radius:10px;object-fit:contain;background:#fff;box-shadow:0 0 0 1px var(--b)}
 .wa{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;padding:13px;border-radius:12px;background:#25d366;color:#fff;font-weight:800;font-size:17px;text-decoration:none}.wa:active{background:#1da851}
-.bk{display:block;background:#fff;border-bottom:1px solid var(--b);padding:10px 14px;font-weight:700;color:var(--c);text-decoration:none;font-size:15px}`;
+.bk{display:block;background:#fff;border-bottom:1px solid var(--b);padding:10px 14px;font-weight:700;color:var(--c);text-decoration:none;font-size:15px}
+${EDGE_CSS}`;
 
 // The page's script, kept small and old-browser friendly (no build step on the page itself). Meta's pixel (~94 KB)
 // loads after the page: 2.5 s after it, or at the first touch — but never before the photos (a touch while they load
@@ -579,7 +586,8 @@ a.it:active{transform:scale(.985)}.it.out{opacity:.55}
 .tb{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px}.tb button{flex:0 0 auto;border:1px solid var(--b);background:#fff;border-radius:99px;padding:6px 14px;font:inherit;font-size:14px;font-weight:700;color:var(--t);cursor:pointer}
 .tb button.on{background:var(--c);color:#fff;border-color:var(--c)}.no{display:none!important}.em{text-align:center;color:var(--m);padding:20px}
 .trust{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;color:var(--m);font-size:13px;margin:14px 0 4px}
-footer{text-align:center;color:var(--m);font-size:12px;padding:18px;display:flex;align-items:center;justify-content:center;gap:8px}footer img{border-radius:6px;object-fit:contain;background:#fff}.brand{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 12px 2px;color:var(--t);font-size:15px}.brand img{border-radius:10px;object-fit:contain;background:#fff;box-shadow:0 0 0 1px var(--b)}`;
+footer{text-align:center;color:var(--m);font-size:12px;padding:18px;display:flex;align-items:center;justify-content:center;gap:8px}footer img{border-radius:6px;object-fit:contain;background:#fff}.brand{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 12px 2px;color:var(--t);font-size:15px}.brand img{border-radius:10px;object-fit:contain;background:#fff;box-shadow:0 0 0 1px var(--b)}
+${EDGE_CSS}`;
 
 const GROUP_JS = `(function(){var C=window.__LG,d=document,a=d.querySelectorAll('a.it[data-s]');
 var q=location.search.replace(/([?&])g=[^&]*&?/,'$1').replace(/^\\?$/,'').replace(/&$/,'');
