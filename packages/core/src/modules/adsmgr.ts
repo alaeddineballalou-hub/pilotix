@@ -74,13 +74,34 @@ export interface AccountHealth {
   minDaily: number | null;
 }
 
-/** Campaigns and ad sets as Meta has them now (budgets, states), and each ad account's health. Server only. */
+/**
+ * Campaigns, ad sets and ads as Meta has them now (budgets, states), and each ad account's health. Server only. An
+ * account read whole: what Meta no longer gives was deleted (in the Ads Manager, or here), and leaves the tree.
+ */
 export async function syncStructure(ctx: Ctx, force = false): Promise<boolean> {
   if (!ctx.server) return false;
   const s = await pilotSettings(ctx.db);
   if (!force && s.structureAt && ctx.now() - Date.parse(s.structureAt) < 10 * 60_000) return false;
-  const r = (await ctx.server.meta('structure', {}, ctx)) as { accounts: AccountHealth[]; campaigns: any[]; adsets: any[] };
+  const r = (await ctx.server.meta('structure', {}, ctx)) as { accounts: AccountHealth[]; campaigns: any[]; adsets: any[]; ads?: any[]; complete?: string[] };
   await ctx.db.tx(async (tx) => {
+    for (const x of r.ads ?? [])
+      await tx.query(
+        `INSERT INTO ads (id, adset_id, name, status, is_video, updated_at) VALUES ($1,$2,$3,$4,$5,now())
+         ON CONFLICT (id) DO UPDATE SET adset_id = EXCLUDED.adset_id, name = EXCLUDED.name, status = EXCLUDED.status, is_video = EXCLUDED.is_video, updated_at = now()`,
+        [x.id, x.adsetId, x.name, x.status, !!x.isVideo],
+      );
+    for (const acct of r.complete ?? []) {
+      const camps = r.campaigns.filter((c) => c.accountId === acct).map((c) => String(c.id));
+      const sets = r.adsets.filter((a) => a.accountId === acct).map((a) => String(a.id));
+      const inSets = new Set(sets);
+      const ads = (r.ads ?? []).filter((x) => inSets.has(String(x.adsetId))).map((x) => String(x.id));
+      await tx.query(`UPDATE ad_campaigns SET status = 'DELETED', updated_at = now() WHERE account_id = $1 AND NOT (id = ANY($2)) AND coalesce(status, '') NOT IN ('DELETED', 'ARCHIVED')`, [acct, camps]);
+      await tx.query(`UPDATE adsets SET status = 'DELETED', updated_at = now() WHERE account_id = $1 AND NOT (id = ANY($2)) AND coalesce(status, '') NOT IN ('DELETED', 'ARCHIVED')`, [acct, sets]);
+      await tx.query(
+        `UPDATE ads SET status = 'DELETED', updated_at = now() WHERE adset_id IN (SELECT id FROM adsets WHERE account_id = $1) AND NOT (id = ANY($2)) AND coalesce(status, '') NOT IN ('DELETED', 'ARCHIVED')`,
+        [acct, ads],
+      );
+    }
     for (const c of r.campaigns)
       await tx.query(
         `INSERT INTO ad_campaigns (id, account_id, name, objective, status, daily_budget_cents, bid_strategy, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,now())
@@ -104,7 +125,8 @@ export async function syncStructure(ctx: Ctx, force = false): Promise<boolean> {
 // ---------------------------------------------------------------- control
 export type Op = 'pause' | 'resume' | 'budget' | 'copy';
 interface Target {
-  level: 'adset' | 'campaign';
+  /** 'ad': one ad, turned on or off only (Lancer une pub › the tree) */
+  level: 'adset' | 'campaign' | 'ad';
   id: string;
   name: string;
   status: string | null;
@@ -130,7 +152,13 @@ async function targetOf(ctx: Ctx, objectId: string): Promise<Target> {
     if (!isOwner(ctx) && !(await visibleAdsets(ctx)).some((s) => s.id === objectId)) throw forbidden();
     return { level: 'adset', id: String(a.id), name: String(a.name), status: a.status ?? null, budgetCents: a.daily_budget_cents === null ? null : num(a.daily_budget_cents), currency: String(a.currency ?? 'USD'), marketerId: a.marketer_id === null ? null : num(a.marketer_id), campaignId: a.campaign_id ?? null };
   }
-  const c = (await ctx.db.query(`SELECT c.*, (SELECT currency FROM adsets WHERE campaign_id = c.id LIMIT 1) AS currency FROM ad_campaigns c WHERE c.id = $1`, [objectId]))[0];
+  // one ad: whoever may change its ad set may turn it on or off
+  const ad = (await ctx.db.query(`SELECT d.id, d.name, d.status, d.adset_id, s.currency, s.marketer_id FROM ads d LEFT JOIN adsets s ON s.id = d.adset_id WHERE d.id = $1`, [objectId]))[0];
+  if (ad) {
+    if (!isOwner(ctx) && !(await visibleAdsets(ctx)).some((s) => s.id === String(ad.adset_id))) throw forbidden();
+    return { level: 'ad', id: String(ad.id), name: String(ad.name), status: ad.status ?? null, budgetCents: null, currency: String(ad.currency ?? 'USD'), marketerId: ad.marketer_id === null ? null : num(ad.marketer_id), campaignId: null };
+  }
+  const c =(await ctx.db.query(`SELECT c.*, (SELECT currency FROM adsets WHERE campaign_id = c.id LIMIT 1) AS currency FROM ad_campaigns c WHERE c.id = $1`, [objectId]))[0];
   if (!c) throw notFound('Ad set ou campagne introuvable');
   if (!isOwner(ctx)) {
     const mine = new Set((await visibleAdsets(ctx)).map((s) => s.id));
@@ -157,6 +185,13 @@ export async function shopDailyUsd(db: Db, rate: number | null): Promise<number>
 
 /** Meta (server) or the tables (demo): the change itself. Returns what the object is now. */
 async function applyChange(ctx: Ctx, t: Target, op: Op, valueCents: number | null): Promise<{ status: string | null; budgetCents: number | null; copyId?: string }> {
+  if (t.level === 'ad') {
+    if (op !== 'pause' && op !== 'resume') throw bad('Une pub s’allume ou s’éteint : son budget est celui de son ensemble.');
+    let status: string | null = op === 'pause' ? 'PAUSED' : 'ACTIVE';
+    if (ctx.server) status = ((await ctx.server.meta('update', { id: t.id, status, level: 'ad' }, ctx)) as { status: string | null }).status ?? status;
+    await ctx.db.query(`UPDATE ads SET status = $2, changed_at = now(), updated_at = now() WHERE id = $1`, [t.id, status]);
+    return { status, budgetCents: null };
+  }
   const table = t.level === 'adset' ? 'adsets' : 'ad_campaigns';
   if (op === 'copy') {
     let id: string;
@@ -206,6 +241,7 @@ export async function act(ctx: Ctx, i: ActInput): Promise<{ id: number; status: 
   }
   return withActionLock(ctx.db, `ads:${i.objectId}`, me(ctx), 'Un autre changement est en cours sur cette pub.', async () => {
     let t = await targetOf(ctx, i.objectId);
+    if (t.level === 'ad' && i.op !== 'pause' && i.op !== 'resume') throw bad('Une pub s’allume ou s’éteint : son budget est celui de son ensemble.');
     // an ad set whose budget is its campaign's: the budget changes on the campaign
     if (i.op === 'budget' && t.level === 'adset' && t.budgetCents === null && t.campaignId) t = await targetOf(ctx, t.campaignId);
     const s = await pilotSettings(ctx.db);

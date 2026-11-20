@@ -322,6 +322,38 @@ export function metaPlan(i: LaunchInput): LaunchPlan {
   return { images, campaign, adsets, creatives, ads };
 }
 
+// ---------------------------------------------------------------- Campaign › Ad set › Ad (Lancer une pub, Mes pubs)
+/**
+ * A campaign made empty (« Campagne vide »): its goal's objective, the money on each ad set (where the life ad circle
+ * puts it, in TEST and in SCALE), and on at once: with nothing in it, it spends nothing; the ads added later run.
+ */
+export function emptyCampaign(name: string, goal: Goal): Record<string, unknown> {
+  return { name: clip(name.trim(), 200), objective: GOAL_META[goal].objective, status: 'ACTIVE', buying_type: 'AUCTION', special_ad_categories: [], is_adset_budget_sharing_enabled: false };
+}
+
+/** TEST or SCALE of the life ad circle: made so from Pilotix, else read from its name (« TEST », « Scale juin »…) */
+export function campaignKind(kind: string | null | undefined, name: string): 'test' | 'scale' | null {
+  if (kind === 'test' || kind === 'scale') return kind;
+  if (/(^|[^a-z0-9])test([^a-z0-9]|$)/i.test(name)) return 'test';
+  if (/(^|[^a-z0-9])scale([^a-z0-9]|$)/i.test(name)) return 'scale';
+  return null;
+}
+
+/** the goals a campaign already made can take: those of its objective (« Ventes » takes sales ads only) */
+export function goalsOfObjective(objective: string | null | undefined): Goal[] {
+  return GOALS.filter((g) => GOAL_META[g].objective === objective);
+}
+
+/**
+ * Its own switch, whatever its campaign or ad set do: off when paused (or gone). « Campagne en pause » is still on: it
+ * runs again as soon as its campaign does.
+ */
+export function isOn(status: string | null | undefined): boolean {
+  return !['PAUSED', 'DELETED', 'ARCHIVED'].includes(String(status ?? '').toUpperCase());
+}
+/** gone from Meta: never shown in the tree again */
+export const isGone = (status: string | null | undefined) => ['DELETED', 'ARCHIVED'].includes(String(status ?? '').toUpperCase());
+
 // ---------------------------------------------------------------- what a delivered order may cost
 /**
  * From the product's own numbers: what one delivered order leaves before ads (price − purchase − delivery − agent),

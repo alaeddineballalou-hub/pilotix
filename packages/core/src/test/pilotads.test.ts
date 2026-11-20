@@ -675,3 +675,95 @@ test('« Photo du produit »: the product’s HD photo as bytes (its 960 px copy
   // a confirmation agent has no ads
   await assert.rejects(call('ads.media.productPhoto', await as(EMAILS.conf), { productId: a }));
 });
+
+// ---------------------------------------------------------------- Campaign › Ad set › Ad (Lancer une pub, Mes pubs)
+test('the tree: TEST and SCALE first; a marketer sees every campaign, but only his own ad sets', async () => {
+  const st: any = await call('ads.tree.state', await owner(), {});
+  const test = st.campaigns.find((c: any) => c.name === 'TEST');
+  const scale = st.campaigns.find((c: any) => c.name === 'SCALE');
+  assert.deepEqual([test.kind, scale.kind], ['test', 'scale']);
+  const kinds = st.campaigns.map((c: any) => c.kind ?? 'other');
+  assert.ok(kinds.lastIndexOf('test') < kinds.indexOf('scale') && kinds.lastIndexOf('scale') < kinds.indexOf('other'), 'TEST, then SCALE, then the others');
+  assert.deepEqual([test.adsets, test.cbo, test.on, test.goals], [0, false, true, ['sales']]);
+  assert.equal(st.campaigns.find((c: any) => c.name === 'Puériculture').cbo, true, 'Advantage+: its own money');
+  assert.equal(st.adsets.find((s: any) => s.id === '120200001').ads, 3);
+  assert.deepEqual([st.prefill.testBuys, st.prefill.testDays, st.prefill.budgetBase], [50, 7, 15]);
+  const m: any = await call('ads.tree.state', await mk(), {});
+  assert.ok(m.campaigns.some((c: any) => c.name === 'TEST'), 'every campaign, to put his ads in');
+  assert.ok(!m.adsets.some((s: any) => s.id === '120200004'), 'the owner’s ad set is not his');
+  assert.equal(m.campaigns.find((c: any) => c.name === 'TEST').mine, false, 'an empty campaign: the owner switches it');
+  const shared = m.campaigns.find((c: any) => c.allSets > c.adsets);
+  assert.ok(shared, 'a campaign with other people’s ad sets knows them (it is not « empty » for the marketer)');
+  assert.equal(shared.mine, false);
+});
+
+test('« Campagne vide »: made on with nothing in it, one name one campaign, a double click is one', async () => {
+  const c: any = await call('ads.tree.campaign', await owner(), { kind: 'other', name: 'Notoriété page', goal: 'awareness', clientId: 'camp-1' });
+  const row = (await db.query(`SELECT status, objective, daily_budget_cents, kind FROM ad_campaigns WHERE id = $1`, [c.id]))[0];
+  assert.deepEqual([row.status, row.objective, row.daily_budget_cents, row.kind], ['ACTIVE', 'OUTCOME_AWARENESS', null, null]);
+  const again: any = await call('ads.tree.campaign', await owner(), { kind: 'other', name: 'Notoriété page', goal: 'awareness', clientId: 'camp-1' });
+  assert.equal(again.id, c.id);
+  await assert.rejects(call('ads.tree.campaign', await owner(), { kind: 'test', name: 'test' }), /déjà une campagne/);
+  assert.equal((await db.query(`SELECT count(*) AS n FROM ad_actions WHERE op = 'create' AND object_id = $1`, [c.id]))[0].n, 1);
+  const s: any = await call('ads.tree.campaign', await mk(), { kind: 'scale', name: 'SCALE juin' });
+  assert.equal((await db.query(`SELECT kind, objective FROM ad_campaigns WHERE id = $1`, [s.id]))[0].kind, 'scale');
+});
+
+test('« Où va la pub ? »: a new ad set in TEST, then more ads in it; the campaign stays as its owner left it', async () => {
+  await call('ads.ctl.stopAll', await owner(), { on: false });
+  const st: any = await call('ads.tree.state', await owner(), {});
+  const testId = st.campaigns.find((c: any) => c.name === 'TEST').id;
+  await db.query(`UPDATE ad_campaigns SET status = 'PAUSED' WHERE id = $1`, [testId]);
+  const o: any = await call('ads.launch.options', await owner(), {});
+  const p = o.products.find((x: any) => x.landing);
+  const photo: any = await call('ads.media.photo', await owner(), { jpeg: JPEG, thumb: JPEG, w: 1080, h: 1350 });
+  const spec = { goal: 'sales', productId: p.id, name: p.name, mediaIds: [photo.id], text: { primary: 'Texte', headline: 'Titre' }, budgetUsd: 14, budgetLevel: 'adset', into: { campaignId: testId, adsetId: null }, bidLimitDzd: 680, pixelId: '1234567890123456' };
+  const d: any = await call('ads.launch.save', await owner(), { mode: 'simple', spec });
+  const chk: any = await call('ads.launch.check', await owner(), { id: d.id });
+  assert.equal(chk.ok, true, chk.problems.join(' | '));
+  const live: any = await call('ads.launch.go', await owner(), { id: d.id });
+  assert.equal(live.status, 'live');
+  assert.equal(live.campaignId, testId, 'no new campaign');
+  const set = (await db.query(`SELECT campaign_id, daily_budget_cents, campaign FROM adsets WHERE id = $1`, [live.adsetIds[0]]))[0];
+  assert.deepEqual([set.campaign_id, set.daily_budget_cents, set.campaign], [testId, 1400, 'TEST']);
+  assert.equal((await db.query(`SELECT status FROM ad_campaigns WHERE id = $1`, [testId]))[0].status, 'PAUSED', 'left as its owner left it');
+  assert.equal(((await call('ads.tree.state', await owner(), {})) as any).prefill.bidLimits[String(p.id)], 680, 'the bid limit comes back next time');
+  // more ads in that ad set: no new ad set, no new money
+  const photo2: any = await call('ads.media.photo', await owner(), { jpeg: JPEG, thumb: JPEG, w: 1080, h: 1350 });
+  const more: any = await call('ads.launch.save', await owner(), { mode: 'simple', spec: { ...spec, mediaIds: [photo2.id], into: { campaignId: testId, adsetId: live.adsetIds[0] } } });
+  const live2: any = await call('ads.launch.go', await owner(), { id: more.id });
+  assert.deepEqual(live2.adsetIds, [live.adsetIds[0]]);
+  assert.equal(Number((await db.query(`SELECT count(*) AS n FROM ads WHERE adset_id = $1`, [live.adsetIds[0]]))[0].n), 2);
+  assert.ok((await db.query(`SELECT 1 FROM ad_actions WHERE op = 'launch' AND object_id = $1 AND object_name = $2`, [live.adsetIds[0], `TEST › ${p.name}`])).length);
+  // an ad set of another campaign, or a campaign of another goal: refused before Meta
+  const wrong: any = await call('ads.launch.save', await owner(), { mode: 'simple', spec: { ...spec, into: { campaignId: testId, adsetId: '120200001' } } });
+  await assert.rejects(call('ads.launch.go', await owner(), { id: wrong.id }), /pas dans cette campagne/);
+  const msg = st.campaigns.find((c: any) => c.objective === 'OUTCOME_ENGAGEMENT');
+  const other: any = await call('ads.launch.save', await owner(), { mode: 'simple', spec: { ...spec, into: { campaignId: msg.id, adsetId: null } } });
+  await assert.rejects(call('ads.launch.go', await owner(), { id: other.id }), /autre but/);
+  await db.query(`UPDATE ad_campaigns SET status = 'ACTIVE' WHERE id = $1`, [testId]);
+});
+
+test('one ad on and off by its marketer; « Supprimer »: the owner alone, with what is in it', async () => {
+  const st: any = await call('ads.tree.state', await owner(), {});
+  const ad = st.ads.find((a: any) => a.adsetId === '120200003');
+  const off: any = await call('ads.ctl.act', await mk(), { objectId: ad.id, op: 'pause' });
+  assert.equal(off.status, 'done');
+  assert.equal((await db.query(`SELECT status FROM ads WHERE id = $1`, [ad.id]))[0].status, 'PAUSED');
+  assert.equal(((await call('ads.tree.state', await mk(), {})) as any).ads.find((a: any) => a.id === ad.id).on, false);
+  await assert.rejects(call('ads.ctl.act', await mk(), { objectId: ad.id, op: 'budget', usd: 5 }), /s’allume ou s’éteint/);
+  await call('ads.ctl.undo', await mk(), { id: off.id });
+  assert.equal((await db.query(`SELECT status FROM ads WHERE id = $1`, [ad.id]))[0].status, 'ACTIVE');
+  const c: any = await call('ads.tree.campaign', await owner(), { kind: 'other', name: 'À effacer', goal: 'sales' });
+  await assert.rejects(call('ads.tree.delete', await mk(), { ids: [c.id] }), /Accès refusé/);
+  assert.deepEqual(await call('ads.tree.delete', await owner(), { ids: [c.id] }), { deleted: 1, failed: [] });
+  assert.equal((await db.query(`SELECT status FROM ad_campaigns WHERE id = $1`, [c.id]))[0].status, 'DELETED');
+  assert.ok(!((await call('ads.tree.state', await owner(), {})) as any).campaigns.some((x: any) => x.id === c.id), 'gone from the tree');
+  // an ad set and its ads chosen together: the ad set goes first and takes them
+  const kids = st.ads.filter((a: any) => a.adsetId === '120200005').map((a: any) => a.id);
+  assert.ok(kids.length >= 1);
+  const r: any = await call('ads.tree.delete', await owner(), { ids: [...kids, '120200005'] });
+  assert.deepEqual(r, { deleted: 1, failed: [] });
+  assert.deepEqual((await db.query(`SELECT DISTINCT status FROM ads WHERE adset_id = '120200005'`)).map((x: any) => x.status), ['DELETED']);
+  assert.equal(Number((await db.query(`SELECT count(*) AS n FROM ad_actions WHERE op = 'delete'`))[0].n), 2);
+});

@@ -245,6 +245,8 @@ export const PROC_RIGHTS: Record<string, Need> = {
   'ads.launch.go': 'act:ads.launch',
   'ads.launch.copy': 'act:ads.launch',
   'ads.launch.remove': 'act:ads.launch',
+  'ads.tree.campaign': 'act:ads.launch',
+  'ads.tree.delete': 'act:ads.owner',
   'ads.setMarketer': 'act:ads.owner',
   'ads.setFx': 'act:ads.owner',
   'ads.ctl.approve': 'act:ads.owner',

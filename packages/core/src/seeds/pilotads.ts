@@ -29,6 +29,14 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
      ON CONFLICT (id) DO NOTHING`,
     [acct, iso(9 * D), iso(11 * D)],
   );
+  // the life ad circle's two campaigns, made empty from « Lancer une pub » (nothing in them yet: they spend nothing)
+  await db.query(
+    `INSERT INTO ad_campaigns (id, account_id, name, objective, status, daily_budget_cents, bid_strategy, kind, changed_at) VALUES
+      ('120330016',$1,'TEST','OUTCOME_SALES','ACTIVE',NULL,NULL,'test',$2),
+      ('120330017',$1,'SCALE','OUTCOME_SALES','ACTIVE',NULL,NULL,'scale',$2)
+     ON CONFLICT (id) DO NOTHING`,
+    [acct, iso(2 * D)],
+  );
   const sets: [string, string, number | null, string, string | null][] = [
     ['120200001', '120330001', 2200, 'sales', iso(30 * H)],
     ['120200003', '120330001', 1500, 'sales', iso(52 * H)],

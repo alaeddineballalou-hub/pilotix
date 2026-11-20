@@ -1,9 +1,11 @@
-// « Lancer une pub ». Simple: four steps (the product, what you want, the ad, the budget). Pro: everything on one page
+// « Lancer une pub ». Simple: five steps (where the ad goes, the product, what you want, the ad, the budget). Pro: everything on one page
 // (who sees it, the wilayas left out, the budget's shape, a test of each photo or video, the bid), with the same
 // preview and checks. Everything goes to Meta PAUSED and is turned on in one go; the owner may want to say yes first.
 // The numbers (what a delivered order may cost, the budgets suggested) come from core (ads.launch.options).
 // Marketing › Influenceurs opens it with a creator (…/lancer/avec/<id>: an ad in the shop's name and the creator's) or
-// with one of the creator's posts (…/lancer/booster/<post id>: the post itself becomes the ad).
+// with one of the creator's posts (…/lancer/booster/<post id>: the post itself becomes the ad). The campaigns' tree (Tree.tsx)
+// opens it at one of its places (…/lancer/dans/<campaign>[/<ad set>]): a new ad set in that campaign, or new ads in that
+// ad set; a new ad set in TEST or SCALE starts from the life ad circle's rules (placeDraft, CircleBudget).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, backend, Out, rpc } from '../../../lib/backend';
@@ -16,6 +18,7 @@ import { toast } from '../../../ui/toast';
 import { toPlanPhoto } from '../../social/jpeg';
 import { readVideo, sendPieces, videoBody, VideoError } from '../../social/video';
 import { clientId, usd } from './Hub';
+import type { Tree } from './Tree';
 
 type Opt = Out<'ads.launch.options'>;
 type P = Opt['products'][number];
@@ -71,6 +74,10 @@ interface Draft {
   /** Marketing › Influenceurs: the creator whose name the ad carries too, or whose post is boosted */
   partnerId: number | null;
   partnerContentId: string | null;
+  /** « Où va la pub ? »: a campaign already made (a new ad set in it), or one of its ad sets; null: a new campaign */
+  into: { campaignId: string; adsetId: string | null } | null;
+  /** the product's bid limit (DA): a new ad set in TEST or SCALE starts from it */
+  bidLimitDzd: number | null;
 }
 const fresh = (): Draft => ({
   id: null,
@@ -102,6 +109,8 @@ const fresh = (): Draft => ({
   pixelId: null,
   partnerId: null,
   partnerContentId: null,
+  into: null,
+  bidLimitDzd: null,
 });
 /** the goals a creator's post may be boosted for (an Instagram post gets the shop's link and button) */
 const BOOST_GOALS: Record<'INSTAGRAM' | 'FACEBOOK', Goal[]> = { INSTAGRAM: ['sales', 'traffic', 'awareness'], FACEBOOK: ['awareness'] };
@@ -132,7 +141,41 @@ const specOf = (d: Draft) => ({
   pixelId: d.pixelId,
   partnerId: d.goal === 'engagement' ? null : d.partnerId,
   partnerContentId: d.goal === 'engagement' ? null : d.partnerContentId,
+  into: d.into,
+  bidLimitDzd: d.into ? d.bidLimitDzd : null,
 });
+
+/** the campaign and ad set a draft goes into (null: a new campaign) */
+function placeOf(tree: Tree | null, d: Draft) {
+  const c = d.into && tree ? (tree.campaigns.find((x) => x.id === d.into!.campaignId) ?? null) : null;
+  const s = c && d.into?.adsetId ? (tree!.adsets.find((x) => x.id === d.into!.adsetId && x.campaignId === c.id) ?? null) : null;
+  return { c, s };
+}
+
+/**
+ * « Où va la pub ? »: the draft at that place. The campaign's goal (a « Ventes » campaign takes sales ads); an ad set's
+ * product (its ads sell it); a new ad set in TEST or SCALE with the life ad circle's rules: one ad set, all of Algeria,
+ * every age, Advantage+ audience, the shop's lists left out, no bid cap in TEST (SCALE's cap: CircleBudget).
+ */
+function placeDraft(tree: Tree, o: Opt, d: Draft, into: Draft['into']): Partial<Draft> {
+  const c = into ? tree.campaigns.find((x) => x.id === into.campaignId) : null;
+  if (!into || !c) return { into: null };
+  const s = into.adsetId ? (tree.adsets.find((x) => x.id === into.adsetId && x.campaignId === c.id) ?? null) : null;
+  const out: Partial<Draft> = { into: { campaignId: c.id, adsetId: s?.id ?? null } };
+  if (c.goals.length && !c.goals.includes(d.goal)) out.goal = c.goals[0] as Goal;
+  if (s) {
+    out.split = 'one';
+    // what the ad set sells: its group's page, or its product
+    const g = s.groupId ? o.groups.find((x) => x.id === s.groupId) : null;
+    const p = g ? null : o.products.find((x) => s.productIds.includes(x.id));
+    const x = g ?? p;
+    if (x) Object.assign(out, { productId: g ? null : x.id, groupId: g ? g.id : null, name: x.name, pixelId: d.pixelId ?? x.landing?.pixelId ?? null });
+    return out;
+  }
+  out.budgetLevel = c.cbo ? 'campaign' : 'adset';
+  if (c.kind) Object.assign(out, { split: 'one', excludeWilayas: [], ageMin: 18, ageMax: 65, genders: [], advantageAudience: true, useAudiences: true, ...(c.kind === 'test' ? { bid: null } : {}) });
+  return out;
+}
 const phoneOk = (v: string) => /^\+213[5-7]\d{8}$/.test(v.replace(/\s/g, '')) || /^0[5-7]\d{8}$/.test(v.replace(/\s/g, ''));
 
 export function Launch({ base, rest }: { base: string; rest?: string[] }) {
@@ -143,8 +186,15 @@ export function Launch({ base, rest }: { base: string; rest?: string[] }) {
     const id = rest?.[2] ? decodeURIComponent(rest[2]) : '';
     return { partnerId: rest?.[1] === 'avec' && /^\d+$/.test(id) ? Number(id) : null, contentId: rest?.[1] === 'booster' && /^[\w.:-]{3,80}$/.test(id) ? id : null };
   }, [rest]);
+  // opened from the campaigns' tree: …/lancer/dans/<campaign>[/<ad set>]
+  const at = useMemo(
+    () => (rest?.[1] === 'dans' && /^\d{6,25}$/.test(rest?.[2] ?? '') ? { campaignId: rest![2], adsetId: /^\d{6,25}$/.test(rest?.[3] ?? '') ? rest![3] : null } : null),
+    [rest],
+  );
   const q = useRpc('ads.launch.options', { contentId: pre.contentId });
   const lib = useRpc('ads.media.list', {});
+  const treeQ = useRpc('ads.tree.state', {});
+  const tree = treeQ.data ?? null;
   const [mode, setMode] = useState<'simple' | 'pro'>(() => (store.get('ads-launch-mode') === 'pro' ? 'pro' : 'simple'));
   const [step, setStep] = useState(0);
   const [d, setD] = useState<Draft>(() => ({ ...fresh(), partnerId: pre.partnerId, partnerContentId: pre.contentId }));
@@ -164,11 +214,25 @@ export function Launch({ base, rest }: { base: string; rest?: string[] }) {
     if (pre.partnerId) setD((x) => ({ ...x, partnerId: pre.partnerId, partnerContentId: null }));
     else if (pre.contentId) setD((x) => ({ ...x, partnerContentId: pre.contentId }));
   }, [pre.partnerId, pre.contentId]);
+  // a place of the tree: the draft goes there (its campaign's goal, its ad set's product, the circle's rules)
+  const top = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!at || !tree || !o) return;
+    setD((x) => ({ ...x, ...placeDraft(tree, o, x, at) }));
+    setStep(0);
+    top.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [at?.campaignId, at?.adsetId, !!tree, !!o]); // eslint-disable-line react-hooks/exhaustive-deps
   const cancelBoost = () => {
     set({ partnerContentId: null });
     location.hash = `${base}/lancer`;
   };
-  const goalsOf = (all: Goal[]) => (boost ? all.filter((g) => BOOST_GOALS[boost.platform].includes(g)) : all).filter((g) => !o || !d.groupId || groupGoal(o, g));
+  const place = placeOf(tree, d);
+  // a campaign already made takes the goals of its objective only; a group, the goals its page can have
+  const goalsOf = (all: Goal[]) => {
+    const g = (boost ? all.filter((x) => BOOST_GOALS[boost.platform].includes(x)) : all).filter((x) => !d.groupId || groupGoal(o!, x));
+    const fit = place.c?.goals.length ? g.filter((x) => place.c!.goals.includes(x)) : g;
+    return fit.length ? fit : g;
+  };
   const chooseMode = (m: 'simple' | 'pro') => {
     setMode(m);
     store.set('ads-launch-mode', m);
@@ -184,13 +248,14 @@ export function Launch({ base, rest }: { base: string; rest?: string[] }) {
           setDone(null);
           setD(fresh());
           setStep(0);
+          if (at) location.hash = `${base}/lancer`;
         }}
       />
     );
-  const problems = readiness(t, o, d, product, lib.data ?? []);
-  const props = { o, d, set, product, lib: lib.data ?? [], refetchLib: () => lib.refetch(), cancelBoost };
+  const problems = readiness(t, o, d, product, lib.data ?? [], tree);
+  const props = { o, d, set, product, lib: lib.data ?? [], refetchLib: () => lib.refetch(), cancelBoost, tree, treeFailed: !!treeQ.error };
   return (
-    <div className="pa-launch">
+    <div className="pa-launch" ref={top}>
       <div className="pa-launch-head">
         <div>
           <h2>{t('pilotads.launch.title')}</h2>
@@ -219,7 +284,7 @@ export function Launch({ base, rest }: { base: string; rest?: string[] }) {
       {mode === 'simple' ? (
         <div className="pa-wizard">
           <ol className="pa-steps" aria-label={t('pilotads.launch.stepsLabel')}>
-            {(['product', 'goal', 'ad', 'budget'] as const).map((k, i) => (
+            {(['where', 'product', 'goal', 'ad', 'budget'] as const).map((k, i) => (
               <li key={k} className={i === step ? 'on' : i < step ? 'done' : ''}>
                 <button type="button" onClick={() => i <= step && setStep(i)} disabled={i > step} aria-current={i === step ? 'step' : undefined}>
                   <b className="ltr">{i < step ? <Icon name="check" /> : i + 1}</b>
@@ -230,17 +295,18 @@ export function Launch({ base, rest }: { base: string; rest?: string[] }) {
           </ol>
           <div className="pa-wizard-body">
             <div className="pa-wizard-main">
-              {step === 0 && <StepProduct {...props} onNext={() => setStep(1)} />}
-              {step === 1 && <StepGoal {...props} goals={goalsOf(SIMPLE_GOALS)} />}
-              {step === 2 && <StepAd {...props} />}
-              {step === 3 && <StepBudget {...props} />}
+              {step === 0 && <StepWhere {...props} />}
+              {step === 1 && <StepProduct {...props} onNext={() => setStep(2)} />}
+              {step === 2 && <StepGoal {...props} goals={goalsOf(SIMPLE_GOALS)} />}
+              {step === 3 && <StepAd {...props} />}
+              {step === 4 && <StepBudget {...props} />}
               <div className="pa-nav">
                 {step > 0 && (
                   <button type="button" className="btn" onClick={() => setStep(step - 1)}>
                     {t('common.back')}
                   </button>
                 )}
-                {step < 3 ? (
+                {step < 4 ? (
                   <button type="button" className="btn primary" disabled={!stepOk(step, d, product, !!boost)} onClick={() => setStep(step + 1)}>
                     {t('pilotads.launch.next')}
                   </button>
@@ -251,13 +317,17 @@ export function Launch({ base, rest }: { base: string; rest?: string[] }) {
             </div>
             <aside className="pa-wizard-side">
               <Preview o={o} d={d} lib={lib.data ?? []} />
-              {step === 3 && <Checks problems={problems} />}
+              {step === 4 && <Checks problems={problems} />}
             </aside>
           </div>
         </div>
       ) : (
         <div className="pa-pro">
           <div className="pa-pro-main">
+            <section className="card">
+              <h3 className="pa-h">{t('pilotads.into.q')}</h3>
+              <StepWhere {...props} compact />
+            </section>
             <section className="card">
               <h3 className="pa-h">{t('pilotads.pro.what')}</h3>
               <StepProduct {...props} compact />
@@ -269,17 +339,17 @@ export function Launch({ base, rest }: { base: string; rest?: string[] }) {
             </section>
             <section className="card">
               <h3 className="pa-h">{t('pilotads.pro.who')}</h3>
-              <Targeting {...props} />
+              {place.s ? <p className="note">{t('pilotads.into.keepWho', { name: place.s.name })}</p> : <Targeting {...props} />}
             </section>
             <section className="card">
               <h3 className="pa-h">{t('pilotads.pro.money')}</h3>
               <StepBudget {...props} pro />
-              <ProMoney {...props} />
+              {!place.s && <ProMoney {...props} cbo={!!place.c?.cbo} />}
             </section>
           </div>
           <aside className="pa-pro-side">
             <Preview o={o} d={d} lib={lib.data ?? []} />
-            <TestPlan d={d} product={product} />
+            {!d.into && <TestPlan d={d} product={product} />}
             <Checks problems={problems} />
             <GoButton o={o} d={d} problems={problems} mode="pro" onDone={setDone} onSaved={(id) => set({ id })} />
           </aside>
@@ -287,7 +357,7 @@ export function Launch({ base, rest }: { base: string; rest?: string[] }) {
       )}
       <Launches onOpen={(l) => {
         setD({ ...fresh(), ...(l.spec as any), id: l.id, clientId: clientId(), lang: d.lang, phone: l.spec.phone ?? '', mediaIds: l.spec.mediaIds ?? [], bid: l.spec.bid ?? null });
-        setStep(mode === 'simple' ? 3 : 0);
+        setStep(mode === 'simple' ? 4 : 0);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }} />
     </div>
@@ -295,11 +365,15 @@ export function Launch({ base, rest }: { base: string; rest?: string[] }) {
 }
 
 const stepOk = (step: number, d: Draft, p: P | G | null, boosting = false) =>
-  step === 0 ? !!p : step === 1 ? true : step === 2 ? boosting || (!!d.text.primary.trim() && (d.mediaIds.length > 0 || d.goal === 'engagement')) : true;
+  step === 1 ? !!p : step === 3 ? boosting || (!!d.text.primary.trim() && (d.mediaIds.length > 0 || d.goal === 'engagement')) : true;
 
 /** What is still missing before « Lancer » (the server checks it again). */
-function readiness(t: (k: string, o?: any) => string, o: Opt, d: Draft, p: P | G | null, lib: Media[]): { ok: boolean; text: string }[] {
+function readiness(t: (k: string, o?: any) => string, o: Opt, d: Draft, p: P | G | null, lib: Media[], tree: Tree | null): { ok: boolean; text: string }[] {
   const out: { ok: boolean; text: string }[] = [];
+  const at = placeOf(tree, d);
+  // a saved launch whose campaign (or ad set) is gone since: another place is needed
+  const gone = !!d.into && !!tree && (!at.c || (!!d.into.adsetId && !at.s));
+  out.push({ ok: !gone, text: gone ? t('pilotads.into.gone') : t('pilotads.into.check', { where: at.c ? `${at.c.name} › ${at.s ? at.s.name : t('pilotads.into.newAdsetShort')}` : t('pilotads.into.newWhere') }) });
   out.push({
     ok: !!p,
     text: isGroup(p) ? t('pilotads.check.group', { name: iso(p.name), count: p.group.count }) : p ? t('pilotads.check.product', { name: p.name }) : o.groups.length ? t('pilotads.check.noItem') : t('pilotads.check.noProduct'),
@@ -321,31 +395,105 @@ function readiness(t: (k: string, o?: any) => string, o: Opt, d: Draft, p: P | G
     out.push({ ok: !!d.text.primary.trim(), text: d.text.primary.trim() ? t('pilotads.check.text') : t('pilotads.check.noText') });
     if (partner) out.push({ ok: true, text: partner.status === 'pending' ? t('pilotads.partner.pending', { name: partner.name }) : t('pilotads.partner.check', { name: partner.name }) });
   } else out.push({ ok: !!d.postId, text: d.postId ? t('pilotads.check.post') : t('pilotads.check.noPost') });
-  out.push({ ok: d.budgetUsd >= 1, text: t('pilotads.check.budget', { v: usd(d.budgetUsd, 0) }) });
+  if (at.s || at.c?.cbo) out.push({ ok: true, text: t('pilotads.into.checkKeep') });
+  else {
+    // TEST and SCALE: the money comes from the bid limit
+    if (at.c?.kind) out.push({ ok: !!d.bidLimitDzd && !!o.rate, text: !o.rate ? t('pilotads.into.needRate') : d.bidLimitDzd ? t('pilotads.into.checkLimit', { v: da(d.bidLimitDzd) }) : t('pilotads.into.checkNoLimit') });
+    out.push({ ok: d.budgetUsd >= 1, text: t('pilotads.check.budget', { v: usd(d.budgetUsd, 0) }) });
+  }
   if (o.guard.stopped) out.push({ ok: false, text: t('pilotads.stop.isOn') });
   return out;
 }
 
+// ---------------------------------------------------------------- step 0: where the ad goes
+/**
+ * « Où va la pub ? »: a new campaign (as before), a campaign already made (a new ad set in it, filled with the life ad
+ * circle's rules in TEST and SCALE), or one of its ad sets (only the ads go in: its product, budget and people stay).
+ */
+function StepWhere({ o, d, set, tree, treeFailed, compact }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; tree: Tree | null; treeFailed?: boolean; compact?: boolean }) {
+  const { t } = useTranslation();
+  // the campaigns could not be read: the ad makes its own campaign, as before
+  if (!tree) return treeFailed ? <p className="note">{t('pilotads.into.noTree')}</p> : <Loading />;
+  const { c, s } = placeOf(tree, d);
+  const sets = c ? tree.adsets.filter((x) => x.campaignId === c.id) : [];
+  const choose = (into: Draft['into']) => set(placeDraft(tree, o, d, into));
+  const off = (x: { on: boolean }, k: 'offC' | 'offS') => (x.on ? '' : ` · ${t(`pilotads.into.${k}`)}`);
+  return (
+    <div className="pa-into">
+      {!compact && <h3 className="pa-q">{t('pilotads.into.q')}</h3>}
+      <div className="pa-into-row">
+        <label className="field">
+          <span className="lab">{t('pilotads.into.campaign')}</span>
+          <select value={c?.id ?? ''} onChange={(e) => choose(e.target.value ? { campaignId: e.target.value, adsetId: null } : null)}>
+            <option value="">{t('pilotads.into.newCampaign')}</option>
+            {tree.campaigns.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name}
+                {off(x, 'offC')}
+              </option>
+            ))}
+          </select>
+        </label>
+        {c && (
+          <label className="field">
+            <span className="lab">{t('pilotads.into.adset')}</span>
+            <select value={s?.id ?? ''} onChange={(e) => choose({ campaignId: c.id, adsetId: e.target.value || null })}>
+              <option value="">{t('pilotads.into.newAdset')}</option>
+              {sets.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                  {off(x, 'offS')}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+      {!c && <p className="note">{t('pilotads.into.newNote')}</p>}
+      {c && !c.on && <div className="warnbox">{t('pilotads.into.off', { name: c.name })}</div>}
+      {s && !s.on && <div className="warnbox">{t('pilotads.into.offSet', { name: s.name })}</div>}
+      {s && <p className="note">{t('pilotads.into.keep')}</p>}
+      {c && !s && c.cbo && <p className="note">{t('pilotads.into.cbo', { name: c.name })}</p>}
+      {c && !s && !c.cbo && c.kind && (
+        <div className="pa-circlenote">
+          <Icon name="sparkles" />
+          <span>{t(`pilotads.into.circle.${c.kind}`)}</span>
+        </div>
+      )}
+      {c && c.goals.length === 1 && <p className="note">{t('pilotads.into.goal', { goal: t(`pilotads.goal.${c.goals[0]}.name`) })}</p>}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- step 1: the product (or a group)
-function StepProduct({ o, d, set, compact, onNext }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; compact?: boolean; onNext?: () => void }) {
+function StepProduct({ o, d, set, compact, onNext, tree }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; compact?: boolean; onNext?: () => void; tree?: Tree | null }) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
+  // an ad set already made sells its own product (or its own group): only that one
+  const { s: inSet } = placeOf(tree ?? null, d);
+  const ownGroups = inSet?.groupId ? o.groups.filter((g) => g.id === inSet.groupId) : [];
+  const own = inSet && !ownGroups.length ? o.products.filter((p) => inSet.productIds.includes(p.id)) : [];
+  const locked = own.length + ownGroups.length > 0;
+  const prods = locked ? own : o.products;
   const match = (name: string) => !q.trim() || name.toLowerCase().includes(q.trim().toLowerCase());
-  const list = o.products.filter((p) => match(p.name));
-  const groups = o.groups.filter((g) => match(g.name));
+  const list = prods.filter((p) => match(p.name));
+  const groups = (locked ? ownGroups : o.groups).filter((g) => match(g.name));
   const cur = itemOf(o, d);
-  const autoName = (x: P | G, goal: Goal) => `${x.name} — ${t(`pilotads.goal.${goal}.short`)}`;
+  // a new ad set in a campaign already made is named after what it sells (« Poussette canne pliable »), as in TEST
+  const autoName = (x: P | G, goal: Goal) => (d.into ? x.name : `${x.name} — ${t(`pilotads.goal.${goal}.short`)}`);
   const choose = (x: P | G) => {
     const group = isGroup(x);
     // a group's ad opens its page: a goal it cannot have becomes « Ventes sur la page »
     const goal: Goal = group && !groupGoal(o, d.goal) ? 'sales' : d.goal;
     // the name Pilotix gave follows the new choice; a name the person wrote stays
     const name = !d.name || (cur && d.name === autoName(cur, d.goal)) ? autoName(x, goal) : d.name;
-    set({ productId: group ? null : x.id, groupId: group ? x.id : null, goal, name, pixelId: d.pixelId ?? x.landing?.pixelId ?? null });
+    // TEST and SCALE: the bid limit typed before for this product comes back
+    const limit = d.into && !inSet && !group ? { bidLimitDzd: tree?.prefill.bidLimits[String(x.id)] ?? d.bidLimitDzd } : {};
+    set({ productId: group ? null : x.id, groupId: group ? x.id : null, goal, name, pixelId: d.pixelId ?? x.landing?.pixelId ?? null, ...limit });
     if (!compact) onNext?.();
   };
   if (!o.products.length) return <Empty>{t('pilotads.launch.noProducts')}</Empty>;
-  const withGroups = o.groups.length > 0;
+  const withGroups = locked ? ownGroups.length > 0 : o.groups.length > 0;
   if (compact)
     return (
       <>
@@ -362,15 +510,17 @@ function StepProduct({ o, d, set, compact, onNext }: { o: Opt; d: Draft; set: (p
             <option value="">{t(withGroups ? 'pilotads.launch.pickItem' : 'pilotads.launch.pickProduct')}</option>
             {withGroups ? (
               <>
-                <optgroup label={t('pilotads.launch.products')}>
-                  {o.products.map((p) => (
-                    <option key={`p${p.id}`} value={`p${p.id}`}>
-                      {`${iso(p.name)} · ${da(p.price)}`}
-                    </option>
-                  ))}
-                </optgroup>
+                {prods.length > 0 && (
+                  <optgroup label={t('pilotads.launch.products')}>
+                    {prods.map((p) => (
+                      <option key={`p${p.id}`} value={`p${p.id}`}>
+                        {`${iso(p.name)} · ${da(p.price)}`}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
                 <optgroup label={t('pilotads.launch.groups')}>
-                  {o.groups.map((g) => (
+                  {(locked ? ownGroups : o.groups).map((g) => (
                     <option key={`g${g.id}`} value={`g${g.id}`}>
                       {`${iso(g.name)} · ${t('pilotads.group.count', { count: g.group.count })}`}
                     </option>
@@ -378,7 +528,7 @@ function StepProduct({ o, d, set, compact, onNext }: { o: Opt; d: Draft; set: (p
                 </optgroup>
               </>
             ) : (
-              o.products.map((p) => (
+              prods.map((p) => (
                 <option key={`p${p.id}`} value={`p${p.id}`}>
                   {`${iso(p.name)} · ${da(p.price)}`}
                 </option>
@@ -393,7 +543,8 @@ function StepProduct({ o, d, set, compact, onNext }: { o: Opt; d: Draft; set: (p
   return (
     <div>
       <h3 className="pa-q">{t('pilotads.ask.product')}</h3>
-      {o.products.length + o.groups.length > 6 && <input className="pa-search" type="search" placeholder={t(withGroups ? 'pilotads.launch.searchItem' : 'pilotads.launch.search')} value={q} onChange={(e) => setQ(e.target.value)} />}
+      {locked && <p className="note">{t('pilotads.into.ownProduct', { name: inSet!.name })}</p>}
+      {prods.length + groups.length > 6 && <input className="pa-search" type="search" placeholder={t(withGroups ? 'pilotads.launch.searchItem' : 'pilotads.launch.search')} value={q} onChange={(e) => setQ(e.target.value)} />}
       <div className="pa-prods">
         {list.map((p) => (
           <button key={p.id} type="button" className={`pa-prod ${!d.groupId && d.productId === p.id ? 'on' : ''}`} onClick={() => choose(p)}>
@@ -465,7 +616,8 @@ function LimitLine({ p }: { p: P | G }) {
 function StepGoal({ o, d, set, product, goals, compact }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; product: P | G | null; goals: Goal[]; compact?: boolean }) {
   const { t } = useTranslation();
   const choose = (g: Goal) => {
-    const name = product ? `${product.name} — ${t(`pilotads.goal.${g}.short`)}` : d.name;
+    // a new ad set in a campaign already made keeps the product's own name (« Poussette canne pliable »)
+    const name = product ? (d.into ? product.name : `${product.name} — ${t(`pilotads.goal.${g}.short`)}`) : d.name;
     set({ goal: g, name, ...(g === 'calls' && !d.phone ? { phone: o.phone } : {}), ...(g === 'form' && !d.formId && !d.newForm ? { newForm: o.forms.length ? null : { name: name.slice(0, 100), commune: true, variant: false, privacyUrl: o.privacyUrl, lang: 'fr' } } : {}) });
   };
   return (
@@ -911,8 +1063,23 @@ function hostOf(url: string): string {
 }
 
 // ---------------------------------------------------------------- step 4: the budget
-function StepBudget({ o, d, set, product, pro }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; product: P | G | null; pro?: boolean }) {
+function StepBudget({ o, d, set, product, pro, tree }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; product: P | G | null; pro?: boolean; tree?: Tree | null }) {
   const { t } = useTranslation();
+  const { c, s } = placeOf(tree ?? null, d);
+  // the ads go in an ad set (or a campaign) that has its own money: nothing to choose here
+  if (s || c?.cbo) {
+    const v = s ? (s.budgetLevel === 'campaign' ? c?.budgetUsd ?? null : s.budgetUsd) : (c?.budgetUsd ?? null);
+    return (
+      <div className="pa-money">
+        {!pro && <h3 className="pa-q">{t('pilotads.ask.budget')}</h3>}
+        <div className="pa-keepbox">
+          <Icon name="checkcircle" />
+          <span>{s && s.budgetLevel !== 'campaign' ? t('pilotads.into.keepBudget', { v: v !== null ? t('pilotads.perDay', { v: usd(v, 0) }) : '—' }) : t('pilotads.into.campaignBudget', { name: c!.name, v: v !== null ? t('pilotads.perDay', { v: usd(v, 0) }) : '—' })}</span>
+        </div>
+        <p className="note">{t('pilotads.launch.safety')}</p>
+      </div>
+    );
+  }
   const packs = product?.packs ?? [
     { key: 'test' as const, usd: 5, delivered: null },
     { key: 'best' as const, usd: 10, delivered: null },
@@ -921,7 +1088,8 @@ function StepBudget({ o, d, set, product, pro }: { o: Opt; d: Draft; set: (p: Pa
   return (
     <div className="pa-money">
       {!pro && <h3 className="pa-q">{t('pilotads.ask.budget')}</h3>}
-      {product && product.limit.maxDzd > 0 && (
+      {c?.kind && tree && <CircleBudget o={o} d={d} set={set} product={product} tree={tree} kind={c.kind} pro={pro} />}
+      {!c?.kind && product && product.limit.maxDzd > 0 && (
         <div className="pa-limitbox">
           <div>
             <span className="lab">{t('pilotads.limit.maxLabel')}</span>
@@ -938,7 +1106,7 @@ function StepBudget({ o, d, set, product, pro }: { o: Opt; d: Draft; set: (p: Pa
           </p>
         </div>
       )}
-      <div className="pa-packs" role="radiogroup" aria-label={t('pilotads.budget.perDay')}>
+      {!c?.kind && <div className="pa-packs" role="radiogroup" aria-label={t('pilotads.budget.perDay')}>
         {packs.map((p) => (
           <button key={p.key} type="button" role="radio" aria-checked={d.budgetUsd === p.usd} className={`pa-pack ${d.budgetUsd === p.usd ? 'on' : ''}`} onClick={() => set({ budgetUsd: p.usd })}>
             <small>{t(`pilotads.pack.${p.key}`)}</small>
@@ -947,7 +1115,7 @@ function StepBudget({ o, d, set, product, pro }: { o: Opt; d: Draft; set: (p: Pa
             <span>{p.delivered !== null ? t('pilotads.pack.delivered', { n: dec1(p.delivered * 7) }) : t('pilotads.pack.noData')}</span>
           </button>
         ))}
-      </div>
+      </div>}
       <label className="field pa-own">
         <span className="lab">{t('pilotads.budget.own')}</span>
         <span className="pa-usd">
@@ -961,33 +1129,88 @@ function StepBudget({ o, d, set, product, pro }: { o: Opt; d: Draft; set: (p: Pa
   );
 }
 
-function ProMoney({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }) {
+/**
+ * A new ad set in TEST or SCALE: its money comes from the product's bid limit (what a confirmed order may cost in ads,
+ * the owner's formula), typed once and kept for this product. TEST: the whole test is « purchases × bid limit » for its
+ * days, spent as a daily budget, no bid cap. SCALE: the bid cap is the bid limit, the start budget Pilot Checks' one.
+ */
+function CircleBudget({ o, d, set, product, tree, kind, pro }: { o: Opt; d: Draft; set: (p: Partial<Draft>) => void; product: P | G | null; tree: Tree; kind: 'test' | 'scale'; pro?: boolean }) {
+  const { t } = useTranslation();
+  // a product's bid limit is kept (a group's is typed each time)
+  const saved = product && !isGroup(product) ? (tree.prefill.bidLimits[String(product.id)] ?? null) : null;
+  // the bid limit typed before for this product comes back
+  useEffect(() => {
+    if (saved && d.bidLimitDzd === null) set({ bidLimitDzd: saved });
+  }, [product?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const rate = o.rate;
+  const lim = d.bidLimitDzd && rate ? d.bidLimitDzd / rate : null;
+  // whole dollars a day, as the owner counts them (5, 10, 17 $…)
+  const testUsd = lim ? Math.max(1, Math.round((tree.prefill.testBuys * lim) / tree.prefill.testDays)) : null;
+  const cap = lim ? Math.round(lim * 100) / 100 : null;
+  const base = tree.prefill.budgetBase === null ? null : tree.currency === 'DZD' ? (rate ? Math.max(1, Math.round((tree.prefill.budgetBase / rate) * 10) / 10) : null) : tree.prefill.budgetBase;
+  // the money follows the bid limit (typed again: worked out again; the budget can still be changed below)
+  useEffect(() => {
+    if (kind === 'test' && testUsd !== null && (d.budgetUsd !== testUsd || d.bid)) set({ budgetUsd: testUsd, bid: null });
+    if (kind === 'scale' && cap !== null && (d.bid?.strategy !== 'LOWEST_COST_WITH_BID_CAP' || d.bid.usd !== cap || (base !== null && d.budgetUsd !== base)))
+      set({ bid: { strategy: 'LOWEST_COST_WITH_BID_CAP', usd: cap }, ...(base !== null ? { budgetUsd: base } : {}) });
+  }, [d.bidLimitDzd, rate, kind]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className="pa-circlebox">
+      {/* in Pro « Où va la pub ? » shows it just above */}
+      {!pro && (
+        <div className="pa-circlenote">
+          <Icon name="sparkles" />
+          <span>{t(`pilotads.into.circle.${kind}`)}</span>
+        </div>
+      )}
+      <label className="field">
+        <span className="lab">{t('pilotads.into.bidLimit')}</span>
+        <span className="pa-usd">
+          <NumBox value={d.bidLimitDzd ?? 0} min={0} whole onChange={(v) => set({ bidLimitDzd: v > 0 ? Math.round(v) : null })} />
+          <b>DA</b>
+        </span>
+        <small className="muted">{t('pilotads.into.bidLimitTip')}</small>
+      </label>
+      {!rate ? (
+        <div className="warnbox">{t('pilotads.into.needRate')}</div>
+      ) : !d.bidLimitDzd ? (
+        <p className="note">{t('pilotads.into.typeLimit')}</p>
+      ) : kind === 'test' ? (
+        <p className="note">{t('pilotads.into.testBudget', { buys: tree.prefill.testBuys, limit: da(d.bidLimitDzd), days: tree.prefill.testDays, v: usd(testUsd, 0) })}</p>
+      ) : (
+        <p className="note">{t('pilotads.into.scaleCap', { cap: usd(cap, 2), limit: da(d.bidLimitDzd), base: base !== null ? usd(base, 0) : '—' })}</p>
+      )}
+    </div>
+  );
+}
+
+function ProMoney({ d, set, cbo }: { d: Draft; set: (p: Partial<Draft>) => void; cbo?: boolean }) {
   const { t } = useTranslation();
   return (
     <div className="pa-promoney">
       <label className="field">
         <span className="lab">{t('pilotads.pro.level')}</span>
-        <select value={d.budgetLevel} onChange={(e) => set({ budgetLevel: e.target.value as Draft['budgetLevel'] })}>
+        <select value={d.budgetLevel} disabled={!!d.into} onChange={(e) => set({ budgetLevel: e.target.value as Draft['budgetLevel'] })}>
           <option value="campaign">{t('pilotads.pro.levelCampaign')}</option>
           <option value="adset">{t('pilotads.pro.levelAdset')}</option>
         </select>
       </label>
       <label className="field">
         <span className="lab">{t('pilotads.pro.split')}</span>
-        <select value={d.split} onChange={(e) => set({ split: e.target.value as Draft['split'] })}>
+        <select value={d.split} disabled={!!d.into?.adsetId} onChange={(e) => set({ split: e.target.value as Draft['split'] })}>
           <option value="one">{t('pilotads.pro.splitOne')}</option>
           <option value="perMedia">{t('pilotads.pro.splitTest')}</option>
         </select>
       </label>
-      <label className="field">
+      {!cbo && <label className="field">
         <span className="lab">{t('pilotads.pro.bid')}</span>
         <select value={d.bid?.strategy ?? 'LOWEST_COST_WITHOUT_CAP'} onChange={(e) => set({ bid: e.target.value === 'LOWEST_COST_WITHOUT_CAP' ? null : { strategy: e.target.value as NonNullable<Draft['bid']>['strategy'], usd: d.bid?.usd ?? null } })}>
           <option value="LOWEST_COST_WITHOUT_CAP">{t('pilotads.pro.bidLowest')}</option>
           <option value="COST_CAP">{t('pilotads.pro.bidCost')}</option>
           <option value="LOWEST_COST_WITH_BID_CAP">{t('pilotads.pro.bidCap')}</option>
         </select>
-      </label>
-      {d.bid && (
+      </label>}
+      {!cbo && d.bid && (
         <label className="field">
           <span className="lab">{t('pilotads.pro.bidAmount')}</span>
           <span className="pa-usd">

@@ -577,20 +577,26 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
   }
 
   // ---- Pilot Ads (./modules/adsmgr.ts, ./modules/adslaunch.ts) ----
-  /** campaigns and ad sets with their budget and state, and each ad account's health (paid, limit, spent) */
+  /**
+   * campaigns, ad sets and ads with their budget and state, and each ad account's health (paid, limit, spent).
+   * `complete`: the accounts read whole (no list cut at the last page read): what Meta no longer gives there was deleted.
+   */
   if (action === 'structure') {
-    const out = { accounts: [] as any[], campaigns: [] as any[], adsets: [] as any[] };
+    const out = { accounts: [] as any[], campaigns: [] as any[], adsets: [] as any[], ads: [] as any[], complete: [] as string[] };
     for (const act of acts) {
       try {
-        const [account, campaigns, adsets] = await Promise.all([
+        const [account, campaigns, adsets, ads] = await Promise.all([
           graph(act, { fields: 'name,currency,account_status,disable_reason,spend_cap,amount_spent,balance,min_daily_budget' }, token),
           all(`${act}/campaigns`, { fields: 'id,name,objective,effective_status,daily_budget,bid_strategy', limit: '200' }, token, 10),
           all(`${act}/adsets`, { fields: 'id,name,campaign_id,effective_status,daily_budget', limit: '200' }, token, 20),
+          all(`${act}/ads`, { fields: 'id,name,adset_id,effective_status,creative{object_type,video_id}', limit: '200' }, token, 30),
         ]);
         const id = act.replace(/^act_/, '');
         out.accounts.push({ id, name: String(account?.name ?? ''), currency: String(account?.currency ?? 'USD').toUpperCase(), status: Number(account?.account_status ?? 0), disableReason: Number(account?.disable_reason ?? 0), spendCap: cents(account?.spend_cap), spent: cents(account?.amount_spent), balance: cents(account?.balance), minDaily: cents(account?.min_daily_budget) });
         out.campaigns.push(...campaigns.map((c: any) => ({ id: String(c.id), accountId: id, name: String(c.name ?? ''), objective: c.objective ?? null, status: c.effective_status ?? null, dailyBudgetCents: cents(c.daily_budget), bidStrategy: c.bid_strategy ?? null })));
         out.adsets.push(...adsets.map((x: any) => ({ id: String(x.id), accountId: id, campaignId: String(x.campaign_id ?? ''), name: String(x.name ?? ''), status: x.effective_status ?? null, dailyBudgetCents: cents(x.daily_budget) })));
+        out.ads.push(...ads.map((x: any) => ({ id: String(x.id), adsetId: String(x.adset_id ?? ''), name: String(x.name ?? ''), status: x.effective_status ?? null, isVideo: !!x.creative?.video_id || x.creative?.object_type === 'VIDEO' })));
+        if (campaigns.length < 10 * 200 && adsets.length < 20 * 200 && ads.length < 30 * 200) out.complete.push(id);
       } catch {
         // an account that cannot be read is left out (the others still count)
       }
@@ -598,17 +604,36 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
     return out;
   }
 
+  /** an empty campaign (Lancer une pub › « Campagne vide »): its body comes from ./modules/pilotads.ts › emptyCampaign */
+  if (action === 'create') {
+    const a = (args ?? {}) as { accountId?: string; body?: Record<string, unknown> };
+    const act = a.accountId ? actOf(a.accountId) : acts[0];
+    if (!acts.includes(act)) throw new AppError('bad_request', 'Ce compte pub n’est pas relié à la boutique.');
+    if (!a.body || typeof a.body.name !== 'string') throw new AppError('bad_request', 'Campagne invalide');
+    const r = await post(`${act}/campaigns`, a.body, token);
+    return { id: String(r.id) };
+  }
+
+  /** deleted on Meta for good (a campaign takes its ad sets and ads with it, an ad set its ads): the owner only, see ./modules/adstree.ts */
+  if (action === 'delete') {
+    const a = (args ?? {}) as { id?: string };
+    if (!a.id || !/^\d{6,25}$/.test(a.id)) throw new AppError('bad_request', 'Objet Meta invalide');
+    await post(a.id, { status: 'DELETED' }, token);
+    return { ok: true };
+  }
+
   /** pause, start again, or a new daily budget (cents, the account's money); Meta's answer is read back */
   if (action === 'update') {
-    const a = (args ?? {}) as { id?: string; status?: 'ACTIVE' | 'PAUSED'; dailyBudgetCents?: number };
+    // level 'ad': one ad turned on or off (an ad has no budget of its own to read back)
+    const a = (args ?? {}) as { id?: string; status?: 'ACTIVE' | 'PAUSED'; dailyBudgetCents?: number; level?: 'campaign' | 'adset' | 'ad' };
     if (!a.id || !/^\d{6,25}$/.test(a.id)) throw new AppError('bad_request', 'Objet Meta invalide');
     const body: Record<string, unknown> = {};
     if (a.status) body.status = a.status;
-    if (a.dailyBudgetCents) body.daily_budget = Math.round(a.dailyBudgetCents);
+    if (a.dailyBudgetCents && a.level !== 'ad') body.daily_budget = Math.round(a.dailyBudgetCents);
     if (!Object.keys(body).length) throw new AppError('bad_request', 'Rien à changer');
     await post(a.id, body, token);
-    const r = await graph(a.id, { fields: 'effective_status,daily_budget' }, token);
-    return { status: r.effective_status ?? null, dailyBudgetCents: cents(r.daily_budget) };
+    const r = await graph(a.id, { fields: a.level === 'ad' ? 'effective_status' : 'effective_status,daily_budget' }, token);
+    return { status: r.effective_status ?? null, dailyBudgetCents: a.level === 'ad' ? null : cents(r.daily_budget) };
   }
 
   /** a copy of an ad set or a campaign with all its ads, PAUSED (Meta's copies) */

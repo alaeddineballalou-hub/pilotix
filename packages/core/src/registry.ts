@@ -3,6 +3,7 @@ import { adminProcs } from './modules/admin';
 import { adsProcs } from './modules/ads';
 import { adsMgrProcs } from './modules/adsmgr';
 import { adsLaunchProcs } from './modules/adslaunch';
+import { adsTreeProcs } from './modules/adstree';
 import { agencyProcs } from './modules/agencies';
 import { managementPlanProcs } from './modules/managementplans';
 import { bonusProcs } from './modules/bonusrules';
@@ -140,6 +141,8 @@ export const REGISTRY = {
   ...adsProcs,
   ...adsMgrProcs,
   ...adsLaunchProcs,
+  // Lancer une pub and Mes pubs › Campaign › Ad set › Ad
+  ...adsTreeProcs,
   ...dellalProcs,
   ...cmProcs,
   ...cmPlanProcs,

@@ -14,6 +14,7 @@ import { Modal } from '../../../ui/modal';
 import { Audiences } from './Audiences';
 import { Launch } from './Launch';
 import { Pilote } from './Pilote';
+import { CampaignTree } from './Tree';
 import './pilot.css';
 
 export type PubTab = 'pubs' | 'lancer' | 'pilote' | 'audiences';
@@ -63,6 +64,7 @@ export function PubHub({ rest, pro, base = '#/marketing/publicite' }: { rest?: s
           <SimplePubs ctl={ctl.data ?? null} base={base} />
         ) : (
           <>
+            <CampaignTree base={base} />
             {pro}
             <div className="pa-pro-more">
               <WhereCard />
@@ -71,7 +73,10 @@ export function PubHub({ rest, pro, base = '#/marketing/publicite' }: { rest?: s
           </>
         )
       ) : tab === 'lancer' ? (
-        <Launch base={base} rest={rest} />
+        <>
+          <CampaignTree base={base} />
+          <Launch base={base} rest={rest} />
+        </>
       ) : tab === 'pilote' ? (
         <Pilote />
       ) : (
@@ -222,6 +227,7 @@ export function actLine(t: (k: string, o?: any) => string, a: Act): string {
   const name = a.objectName || a.objectId;
   if (a.op === 'budget' || (a.op === 'undo' && a.after?.budgetCents !== undefined && a.before?.budgetCents !== a.after?.budgetCents))
     return t('pilotads.act.budget', { name, from: usd(cents(a.before?.budgetCents), 0), to: usd(cents(a.after?.budgetCents), 0) });
+  if (a.op === 'launch' && a.after?.campaignId) return t('pilotads.act.launchInto', { name, count: Number(a.after?.ads) || 1 });
   if (a.op === 'launch') return t('pilotads.act.launch', { name, usd: a.after?.budgetUsd ?? '—' });
   if (a.op === 'undo') return t('pilotads.act.undo', { name });
   return t(`pilotads.act.${a.op}`, { name });

@@ -12,13 +12,13 @@ import { Db, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, notFound, proc, publicApi, withActionLock } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, setRaw } from './admin';
-import { addDays, fxTable, isOwner, moneyOf, ordersOf } from './ads';
+import { addDays, fxTable, isOwner, moneyOf, ordersOf, visibleAdsets } from './ads';
 import { audienceIds, ensureEventAudiences, pilotSettings, shopDailyUsd, wilayaRates, type AccountHealth } from './adsmgr';
 import { B64, mediaOf, mediaView, PLAN_LIMITS, VIDEO_CHUNK, VIDEO_TYPES, type MediaRow } from './cmplan';
 import { aiKeyed, dellalSettings, PILOT_CHEAP_MODEL, pilotOn, type AiResponse } from './dellal';
 import { landingStore } from './landingquery';
 import { fieldOf } from './leads';
-import { budgetPacks, CHANNELS, GOAL_META, GOALS, launchProblems, limitOf, metaPlan, type Goal, type LaunchInput, type LaunchMedia } from './pilotads';
+import { budgetPacks, CHANNELS, GOAL_META, GOALS, isGone, isOn, launchProblems, limitOf, metaPlan, type Goal, type LaunchInput, type LaunchMedia } from './pilotads';
 import { contentFor, partnerChoices, partnerFor, USABLE } from './partners';
 import { launchAccounts, linkedPage } from './social';
 
@@ -218,7 +218,8 @@ export async function groupLimits(ctx: Ctx, opts: { only?: number | null; produc
 }
 
 // ---------------------------------------------------------------- the launcher's choices
-async function account(ctx: Ctx): Promise<{ id: string; currency: string; name: string; status: number | null } | null> {
+/** the ad account new ads start from (Pilot AI › Comptes), with its money; the demo's: a dollar account */
+export async function account(ctx: Ctx): Promise<{ id: string; currency: string; name: string; status: number | null } | null> {
   const meta = await getSetting(ctx.db, 'meta');
   const id = String(meta.adAccountId ?? '').replace(/^act_/, '');
   const known = await getRaw<AccountHealth[]>(ctx.db, 'pilot_ads_accounts', []);
@@ -445,8 +446,37 @@ export const LaunchSpec = z.object({
   partnerId: z.number().int().positive().nullable().default(null),
   /** …or this post of the creator, boosted (Instagram media id, or a Facebook post's id) */
   partnerContentId: z.string().regex(/^[\w.:-]{3,80}$/).nullable().default(null),
+  /**
+   * « Où va la pub ? »: a campaign already made (a new ad set in it), or one of its ad sets (only the ads go in);
+   * null: a new campaign, as before
+   */
+  into: z.object({ campaignId: z.string().regex(/^\d{6,25}$/), adsetId: z.string().regex(/^\d{6,25}$/).nullable() }).nullable().default(null),
+  /** the product's bid limit (DA), typed for a new ad set in TEST or SCALE: kept for this product, next time */
+  bidLimitDzd: z.number().int().positive().max(1_000_000).nullable().default(null),
 });
 export type LaunchSpec = z.infer<typeof LaunchSpec>;
+/** the bid limit typed for each product (« Où va la pub ? » in TEST or SCALE), in DA: { [product id]: DA } */
+export const BID_LIMITS_KEY = 'pilot_ads_bid_limits';
+
+/**
+ * Where a launch goes when it is not a new campaign: a campaign of the shop (a new ad set in it), or one of that
+ * campaign's ad sets (only the ads). Its goal must be the campaign's objective (a « Ventes » campaign takes sales ads).
+ * A campaign with its own budget (Advantage+) keeps it: the new ad set has none.
+ */
+export async function placeOf(ctx: Ctx, into: NonNullable<LaunchSpec['into']>, goal: Goal) {
+  const c = (await ctx.db.query(`SELECT id, name, objective, status, daily_budget_cents FROM ad_campaigns WHERE id = $1`, [into.campaignId]))[0];
+  if (!c || isGone(c.status)) throw bad('Cette campagne n’est plus chez Meta : choisissez-en une autre.');
+  if (c.objective && c.objective !== GOAL_META[goal].objective) throw bad(`La campagne « ${c.name} » est faite pour un autre but : choisissez son but, ou une autre campagne.`);
+  let adset: { id: string; name: string; productIds: number[]; on: boolean } | null = null;
+  if (into.adsetId) {
+    const s = (await ctx.db.query(`SELECT id, name, status, campaign_id, product_ids FROM adsets WHERE id = $1`, [into.adsetId]))[0];
+    if (!s || isGone(s.status)) throw bad('Cet ensemble de pubs n’est plus chez Meta : choisissez-en un autre.');
+    if (String(s.campaign_id ?? '') !== String(c.id)) throw bad('Cet ensemble de pubs n’est pas dans cette campagne.');
+    if (!isOwner(ctx) && !(await visibleAdsets(ctx)).some((v) => v.id === String(s.id))) throw forbidden('Cet ensemble de pubs ne vous est pas confié.');
+    adset = { id: String(s.id), name: String(s.name), productIds: (s.product_ids ?? []).map(num), on: isOn(s.status) };
+  }
+  return { campaign: { id: String(c.id), name: String(c.name), cbo: c.daily_budget_cents !== null, on: isOn(c.status) }, adset };
+}
 
 type Status = 'draft' | 'waiting_yes' | 'launching' | 'live' | 'failed' | 'refused';
 
@@ -651,8 +681,17 @@ async function go(ctx: Ctx, id: number, approved = false) {
     const s = await pilotSettings(ctx.db);
     if (s.guard.stopped) throw bad('Tout est arrêté par le propriétaire : rien ne démarre avant « Tout relancer ».');
     const { input, acct, media, product, group, excluded, boostVideo } = await inputOf(ctx, r);
+    // « Où va la pub ? »: a campaign already made (its ad sets keep their own money), or a new one as before
+    const into = LaunchSpec.parse(r.spec).into;
+    const place = into ? await placeOf(ctx, into, input.goal) : null;
+    if (place) {
+      input.budgetLevel = place.campaign.cbo ? 'campaign' : 'adset';
+      if (place.campaign.cbo) input.bid = null;
+      if (place.adset) input.split = 'one';
+    }
     const rate = (await fxTable(ctx.db))(algDay(ctx.now()).slice(0, 7));
-    const usd = Number(r.spec.budgetUsd);
+    // the money this launch adds per day: none when its ads go in an ad set, or a campaign, that has its own budget
+    const usd = place && (place.adset || place.campaign.cbo) ? 0 : Number(r.spec.budgetUsd);
     // the shop's spend per day with this one: above the owner's limit, a marketer cannot; the owner is told
     const runningUsd = await shopDailyUsd(ctx.db, rate);
     const owner = isOwner(ctx) || approved;
@@ -664,6 +703,11 @@ async function go(ctx: Ctx, id: number, approved = false) {
     }
     await ctx.db.query(`UPDATE ad_launches SET status = 'launching', error = NULL, updated_at = now() WHERE id = $1`, [id]);
     const done: Record<string, string> = { ...(r.meta_ids ?? {}) };
+    // what is already at Meta is not made again: the campaign chosen, and its ad set when the ads go in one
+    if (place) {
+      done.campaign = place.campaign.id;
+      if (place.adset) done['adset:a0'] = place.adset.id;
+    }
     try {
       const spec = LaunchSpec.parse(r.spec);
       // the two lists Meta fills from the pages' events (fake orders, competitors): made now if they are not yet, so
@@ -724,37 +768,40 @@ async function go(ctx: Ctx, id: number, approved = false) {
       }
       const adsetIds = plan.adsets.map((a) => ids[`adset:${a.key}`]);
       const adIds = plan.ads.map((a) => ids[`ad:${a.key}`]);
-      if (ctx.server) await ctx.server.meta('activate', { ids: [ids.campaign, ...adsetIds, ...adIds] }, ctx);
+      // on: what this launch made, never the campaign or ad set it went into (they stay as their owner left them)
+      if (ctx.server) await ctx.server.meta('activate', { ids: [...(place ? [] : [ids.campaign]), ...(place?.adset ? [] : adsetIds), ...adIds] }, ctx);
       // Pilotix knows them now (the next sync completes them): « Mes pubs », the buttons, Pilote auto
       const marketer = isOwner(ctx) ? (r.by_user !== null && !(await ownsShop(ctx.db, num(r.by_user))) ? num(r.by_user) : null) : me(ctx);
       await ctx.db.tx(async (tx) => {
-        await tx.query(
-          `INSERT INTO ad_campaigns (id, account_id, name, objective, status, daily_budget_cents, bid_strategy, launch_id, changed_at, updated_at) VALUES ($1,$2,$3,$4,'ACTIVE',$5,$6,$7,now(),now())
-           ON CONFLICT (id) DO UPDATE SET status = 'ACTIVE', launch_id = EXCLUDED.launch_id, updated_at = now()`,
-          [ids.campaign, acct.id, input.name, GOAL_META[input.goal].objective, input.budgetLevel === 'campaign' ? input.budgetCents : null, input.bid?.strategy ?? 'LOWEST_COST_WITHOUT_CAP', id],
-        );
-        // a group's ad sets sell all its products (« Plus de stock » waits until none is left), and « Mes pubs » shows
-        // them as the group's one card
-        for (const [n, a] of plan.adsets.entries())
+        if (!place)
           await tx.query(
-            `INSERT INTO adsets (id, name, campaign, campaign_id, account_id, daily_budget_cents, goal, product_ids, group_id, marketer_id, status, currency, launch_id, changed_at, updated_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'ACTIVE',$11,$12,now(),now())
-             ON CONFLICT (id) DO UPDATE SET goal = EXCLUDED.goal, launch_id = EXCLUDED.launch_id, product_ids = EXCLUDED.product_ids, group_id = EXCLUDED.group_id, status = 'ACTIVE', updated_at = now()`,
-            [
-              adsetIds[n],
-              String(a.body.name),
-              input.name,
-              ids.campaign,
-              acct.id,
-              input.budgetLevel === 'adset' ? input.budgetCents : null,
-              input.goal,
-              product ? [product.id] : group ? group.group.productIds : [],
-              group ? group.id : null,
-              marketer,
-              acct.currency,
-              id,
-            ],
+            `INSERT INTO ad_campaigns (id, account_id, name, objective, status, daily_budget_cents, bid_strategy, launch_id, changed_at, updated_at) VALUES ($1,$2,$3,$4,'ACTIVE',$5,$6,$7,now(),now())
+             ON CONFLICT (id) DO UPDATE SET status = 'ACTIVE', launch_id = EXCLUDED.launch_id, updated_at = now()`,
+            [ids.campaign, acct.id, input.name, GOAL_META[input.goal].objective, input.budgetLevel === 'campaign' ? input.budgetCents : null, input.bid?.strategy ?? 'LOWEST_COST_WITHOUT_CAP', id],
           );
+        // a group's ad sets sell all its products (« Plus de stock » waits until none is left), and « Mes pubs » shows
+        // them as the group's one card. An ad set already made (« Où va la pub ? ») keeps its own.
+        if (!place?.adset)
+          for (const [n, a] of plan.adsets.entries())
+            await tx.query(
+              `INSERT INTO adsets (id, name, campaign, campaign_id, account_id, daily_budget_cents, goal, product_ids, group_id, marketer_id, status, currency, launch_id, changed_at, updated_at)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'ACTIVE',$11,$12,now(),now())
+               ON CONFLICT (id) DO UPDATE SET goal = EXCLUDED.goal, launch_id = EXCLUDED.launch_id, product_ids = EXCLUDED.product_ids, group_id = EXCLUDED.group_id, status = 'ACTIVE', updated_at = now()`,
+              [
+                adsetIds[n],
+                String(a.body.name),
+                place ? place.campaign.name : input.name,
+                ids.campaign,
+                acct.id,
+                input.budgetLevel === 'adset' ? input.budgetCents : null,
+                input.goal,
+                product ? [product.id] : group ? group.group.productIds : [],
+                group ? group.id : null,
+                marketer,
+                acct.currency,
+                id,
+              ],
+            );
         for (const [n, a] of plan.ads.entries())
           await tx.query(`INSERT INTO ads (id, adset_id, name, status, is_video, updated_at) VALUES ($1,$2,$3,'ACTIVE',$4,now()) ON CONFLICT (id) DO NOTHING`, [
             adIds[n],
@@ -767,9 +814,11 @@ async function go(ctx: Ctx, id: number, approved = false) {
           `UPDATE ad_launches SET status = 'live', step = 'done', campaign_id = $2, adset_ids = $3, ad_ids = $4, meta_ids = $5, approved_by = COALESCE(approved_by, $6), live_at = now(), updated_at = now() WHERE id = $1`,
           [id, ids.campaign, adsetIds, adIds, JSON.stringify(ids), approved ? me(ctx) : null],
         );
+        // the log: a new campaign, or what came into one already made (« TEST › Poussette »)
+        const where = place ? (place.adset ? { level: 'adset', id: place.adset.id, name: `${place.campaign.name} › ${place.adset.name}` } : { level: 'adset', id: adsetIds[0], name: `${place.campaign.name} › ${input.name}` }) : { level: 'campaign', id: ids.campaign, name: input.name };
         await tx.query(
-          `INSERT INTO ad_actions (level, object_id, object_name, op, before, after, source, status, why, by_user, approved_by, done_at) VALUES ('campaign',$1,$2,'launch',NULL,$3,'launch','done',$4,$5,$6,now())`,
-          [ids.campaign, input.name, JSON.stringify({ status: 'ACTIVE', budgetUsd: usd, goal: input.goal }), GOAL_META[input.goal].objective, numOrNull(r.by_user), approved ? me(ctx) : null],
+          `INSERT INTO ad_actions (level, object_id, object_name, op, before, after, source, status, why, by_user, approved_by, done_at) VALUES ($1,$2,$3,'launch',NULL,$4,'launch','done',$5,$6,$7,now())`,
+          [where.level, where.id, where.name, JSON.stringify({ status: 'ACTIVE', budgetUsd: usd, goal: input.goal, ...(place ? { campaignId: place.campaign.id, ads: adIds.length } : {}) }), GOAL_META[input.goal].objective, numOrNull(r.by_user), approved ? me(ctx) : null],
         );
       });
       if (input.phone) await setRaw(ctx.db, LAST_KEY, { ...(await getRaw(ctx.db, LAST_KEY, {})), phone: input.phone });
@@ -809,6 +858,11 @@ async function saveLaunch(ctx: Ctx, i: { id?: number | null; clientId?: string |
     if (partner(ctx) && found.some((m: any) => numOrNull(m.created_by) !== me(ctx))) throw forbidden('Choisissez vos propres photos et vidéos.');
   }
   const usdCents = Math.round(i.spec.budgetUsd * 100);
+  // the bid limit typed for this product comes back next time (TEST and SCALE start from it)
+  if (i.spec.bidLimitDzd && i.spec.productId) {
+    const limits = await getRaw<Record<string, number>>(ctx.db, BID_LIMITS_KEY, {});
+    if (limits[String(i.spec.productId)] !== i.spec.bidLimitDzd) await setRaw(ctx.db, BID_LIMITS_KEY, { ...limits, [String(i.spec.productId)]: i.spec.bidLimitDzd }, me(ctx) || undefined);
+  }
   if (i.id) {
     const r = await launchRow(ctx.db, i.id);
     mayOpen(ctx, r);
@@ -906,6 +960,8 @@ export const adsLaunchProcs = {
     mayOpen(ctx, r);
     try {
       const { input, acct } = await inputOf(ctx, r);
+      const into = LaunchSpec.parse(r.spec).into;
+      if (into) await placeOf(ctx, into, input.goal);
       return { ok: true as const, problems: [] as string[], currency: acct.currency, budgetCents: input.budgetCents, exclude: input.excludeAudiences.length };
     } catch (e: any) {
       return { ok: false as const, problems: String(e?.message ?? e).split(' · '), currency: null, budgetCents: null, exclude: 0 };
