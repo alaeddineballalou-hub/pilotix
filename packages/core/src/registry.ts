@@ -39,6 +39,7 @@ import { cmPlanProcs } from './modules/cmplan';
 import { cmSocialProcs } from './modules/cmsocial';
 import { confirmationProcs } from './modules/confirmation';
 import { customersProcs } from './modules/customers';
+import { welcomeProcs } from './modules/welcome';
 import { clientScoreProcs } from './modules/clientscore';
 import { deliveryProcs } from './modules/delivery';
 import { dellalProcs } from './modules/dellal';
@@ -107,6 +108,7 @@ export const REGISTRY = {
   ...parcelsProcs,
   ...stockProcs,
   ...customersProcs,
+  ...welcomeProcs,
   ...clientScoreProcs,
   ...suiviProcs,
   ...savProcs,

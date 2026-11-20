@@ -76,5 +76,39 @@
     "30d": "vs 30 j avant",
     "month": "vs mois dernier"
   },
-  "vsLong": "▲ ▼ {{vs}}"
+  "vsLong": "▲ ▼ {{vs}}",
+  "welcome": {
+    "title": "Venez avec vos données",
+    "lead": "Votre ancienne app vous suit : en 4 étapes, Pilotix connaît vos produits, vos clients, votre livraison et votre équipe.",
+    "progress": "{{done}}/{{total}} faites",
+    "hide": "Masquer",
+    "products": {
+      "title": "Vos produits",
+      "text": "Importez-les depuis un fichier Excel.",
+      "go": "Importer",
+      "done_one": "{{n}} produit",
+      "done_other": "{{n}} produits"
+    },
+    "clients": {
+      "title": "Vos clients et leur historique",
+      "text": "Le fichier des clients ou des commandes de votre ancienne app : chacun garde son niveau.",
+      "go": "Importer",
+      "done_one": "{{n}} client importé",
+      "done_other": "{{n}} clients importés"
+    },
+    "delivery": {
+      "title": "Votre livraison",
+      "text": "Connectez votre société de livraison pour envoyer les colis.",
+      "go": "Connecter",
+      "done_one": "{{n}} société de livraison",
+      "done_other": "{{n}} sociétés de livraison"
+    },
+    "team": {
+      "title": "Votre équipe",
+      "text": "Ajoutez vos agents de confirmation, de suivi et du dépôt.",
+      "go": "Ajouter",
+      "done_one": "{{n}} personne",
+      "done_other": "{{n}} personnes"
+    }
+  }
 }

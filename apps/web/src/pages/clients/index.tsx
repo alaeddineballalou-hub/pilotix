@@ -1,8 +1,9 @@
-// Clients: search, "Liste noire seulement", order history and blacklist — as in the original app.
+// Clients: search, "Liste noire seulement", order history and blacklist — as in the original app; « Importer des clients »
+// brings customers from another app with their history there (ImportClients.tsx), shown beside Pilotix's own orders.
 import { CONF_TONE, type ClientLevel } from '@pilotix/shared';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { da, n, when, wilayaName } from '../../lib/format';
+import { da, dateOnly, n, when, wilayaName } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
@@ -10,6 +11,8 @@ import { Card, Empty, ErrorBox, Field, Icon, Loading, Pager, StatusBadge } from 
 import { LevelPicker, ScoreCard, ScoreChip } from '../../ui/clientScore';
 import { Modal } from '../../ui/modal';
 import type { PageProps } from '../registry';
+import { ImportClients } from './ImportClients';
+import './import.css';
 
 function useDebounced<T>(v: T, ms = 350) {
   const [d, setD] = useState(v);
@@ -20,6 +23,15 @@ function useDebounced<T>(v: T, ms = 350) {
   return d;
 }
 
+type Imported = { orders: number; delivered: number; returned: number; lastOrderAt: string | null } | null;
+/** a customer's counts in the list: Pilotix's orders + the history imported from another app */
+const withImported = (c: { orders: number; delivered: number; returned: number; lastOrderAt: string | null; imported: Imported }) => ({
+  orders: c.orders + (c.imported?.orders ?? 0),
+  delivered: c.delivered + (c.imported?.delivered ?? 0),
+  returned: c.returned + (c.imported?.returned ?? 0),
+  last: [c.lastOrderAt, c.imported?.lastOrderAt].filter((x): x is string => !!x).sort().pop() ?? null,
+});
+
 export function Clients(_: PageProps) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
@@ -28,6 +40,9 @@ export function Clients(_: PageProps) {
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(60);
   const [open, setOpen] = useState<number | null>(null);
+  const [importing, setImporting] = useState(false);
+  const { session } = useSession();
+  const canImport = !!session?.isAdmin && !session.profile.agencyId;
   const dq = useDebounced(q);
   useEffect(() => setPage(1), [dq, black, level]);
   const list = useRpc('customers.list', { q: dq || undefined, blacklisted: black || undefined, level, page, pageSize: size });
@@ -40,10 +55,18 @@ export function Clients(_: PageProps) {
           <div className="grow">
             <input type="search" placeholder={t('clients.search')} aria-label={t('clients.search')} value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
-          <label className="check">
-            <input type="checkbox" checked={black} onChange={(e) => setBlack(e.target.checked)} />
-            {t('clients.onlyBlack')}
-          </label>
+          <div className="cl-head-act">
+            <label className="check">
+              <input type="checkbox" checked={black} onChange={(e) => setBlack(e.target.checked)} />
+              {t('clients.onlyBlack')}
+            </label>
+            {canImport && (
+              <button type="button" className="btn small" onClick={() => setImporting(true)}>
+                <Icon name="upload" />
+                {t('clients.import.open')}
+              </button>
+            )}
+          </div>
         </div>
         <LevelPicker value={level} onChange={setLevel} className="cl-levels" />
         <SharedNote />
@@ -70,11 +93,18 @@ export function Clients(_: PageProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((c) => (
+                  {rows.map((c) => {
+                    const all = withImported(c);
+                    return (
                     <tr key={c.id} className="clickable" onClick={() => setOpen(c.id)}>
                       <td data-l={t('clients.col.client')}>
                         <b>{c.name || '—'}</b>
                         {c.blacklisted && <span className="flag">{t('clients.black')}</span>}
+                        {c.imported && (
+                          <span className="cl-imp" title={t('clients.import.tag', { date: dateOnly(c.imported.at) })}>
+                            {t('clients.import.oldBase')}
+                          </span>
+                        )}
                       </td>
                       <td data-l={t('clients.score.col')}>
                         <ScoreChip s={c.score} showNew />
@@ -84,17 +114,18 @@ export function Clients(_: PageProps) {
                       </td>
                       <td data-l={t('clients.col.wilaya')}>{c.wilayaId ? wilayaName(c.wilayaId) : '—'}</td>
                       <td className="num" data-l={t('clients.col.orders')}>
-                        {n(c.orders)}
+                        {n(all.orders)}
                       </td>
                       <td className="num" data-l={t('clients.col.delivered')}>
-                        {n(c.delivered)}
+                        {n(all.delivered)}
                       </td>
                       <td className="num" data-l={t('clients.col.returned')}>
-                        <span className={c.returned ? 'stock-low' : undefined}>{n(c.returned)}</span>
+                        <span className={all.returned ? 'stock-low' : undefined}>{n(all.returned)}</span>
                       </td>
-                      <td data-l={t('clients.col.last')}>{c.lastOrderAt ? when(c.lastOrderAt).replace(/\s\d{2}:\d{2}$/, '') : '—'}</td>
+                      <td data-l={t('clients.col.last')}>{all.last ? when(all.last).replace(/\s\d{1,2}:\d{2}(\s?(?:[صم]|[AaPp]\.?[Mm]\.?))?$/, '') : '—'}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -113,6 +144,7 @@ export function Clients(_: PageProps) {
         )}
       </Card>
       {open !== null && <History id={open} onClose={() => setOpen(null)} />}
+      {importing && <ImportClients onClose={() => setImporting(false)} />}
     </>
   );
 }
@@ -204,14 +236,27 @@ function History({ id, onClose }: { id: number; onClose: () => void }) {
         <>
           {c!.blacklisted && <div className="badbox">{c!.blacklistReason ? t('clients.inBlackReason', { reason: c!.blacklistReason }) : t('clients.inBlack')}</div>}
           <ScoreCard s={c!.score} />
-          <p className="muted small">{t('clients.summary', { orders: c!.orders, delivered: c!.delivered, returned: c!.returned, cancelled: c!.cancelled })}</p>
+          <p className="muted small">{t(c!.imported ? 'clients.summaryHere' : 'clients.summary', { orders: c!.orders, delivered: c!.delivered, returned: c!.returned, cancelled: c!.cancelled })}</p>
+          {c!.imported && (
+            <p className="cl-imp-line">
+              <span className="cl-imp">{t('clients.import.oldBase')}</span>
+              {t('clients.import.history', {
+                date: dateOnly(c!.imported.at),
+                orders: c!.imported.orders,
+                delivered: c!.imported.delivered,
+                returned: c!.imported.returned,
+                fake: c!.imported.fake,
+                cancelled: c!.imported.cancelled,
+              })}
+            </p>
+          )}
           {asking && !c!.blacklisted && (
             <Field label={t('clients.reason')}>
               <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('clients.reasonPh')} />
             </Field>
           )}
           {h.data.orders.length === 0 ? (
-            <Empty>{t('clients.noOrders')}</Empty>
+            <Empty>{t(c!.imported ? 'clients.noOrdersHere' : 'clients.noOrders')}</Empty>
           ) : (
             <div className="tbl-wrap">
               <table className="tbl">

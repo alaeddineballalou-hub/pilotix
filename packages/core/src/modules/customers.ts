@@ -1,4 +1,4 @@
-import { CLIENT_LEVELS, CONF_DONE_BAD, normalizePhone } from '@pilotix/shared';
+import { CLIENT_LEVELS, CONF_DONE_BAD, normalizePhone, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { ownRowSql, rowScopeSql } from './agencyscope';
 import { iso, isoOrNull, num, numOrNull, Where } from '../db';
@@ -26,6 +26,23 @@ export interface CustomerRow {
   score: ClientScore;
   /** WhatsApp offers (Marketing › Campagnes): said yes, said « Stop », or never asked */
   waOffers: 'yes' | 'stop' | null;
+  /** the history brought from another app (Clients › « Importer des clients »), apart from Pilotix's own orders */
+  imported: ImportedHistory | null;
+}
+
+/** A customer's history in the shop's old database (another app, an Excel file…), imported with « Importer des clients ». */
+export interface ImportedHistory {
+  /** the file it came from (kept for the record; the page calls it « Ancienne base ») */
+  source: string;
+  orders: number;
+  delivered: number;
+  returned: number;
+  fake: number;
+  cancelled: number;
+  /** the last order there, when the file said it */
+  lastOrderAt: string | null;
+  /** when it was imported */
+  at: string;
 }
 
 // Counts come from the orders themselves (always right, even after edits / merges).
@@ -52,7 +69,42 @@ const toCustomer = (r: any, score: ClientScore): CustomerRow => ({
   createdAt: iso(r.created_at),
   score,
   waOffers: r.wa_optout_at ? 'stop' : r.wa_optin_at ? 'yes' : null,
+  imported: r.imp_source
+    ? {
+        source: String(r.imp_source),
+        orders: num(r.imp_orders),
+        delivered: num(r.imp_delivered),
+        returned: num(r.imp_returned),
+        fake: num(r.imp_fake),
+        cancelled: num(r.imp_cancelled),
+        lastOrderAt: isoOrNull(r.imp_last_at),
+        at: iso(r.imp_at ?? r.created_at),
+      }
+    : null,
 });
+
+// ---------------------------------------------------------------- « Importer des clients »
+const count = z.number().int().min(0).max(100_000).default(0);
+/** one line of the file, as the page read it (the page finds the columns; the server checks the numbers) */
+const importRow = z.object({
+  phone: z.string().max(60),
+  name: z.string().max(300).optional(),
+  wilayaId: z.number().int().min(1).max(WILAYAS.length).nullable().optional(),
+  orders: count,
+  delivered: count,
+  returned: count,
+  fake: count,
+  cancelled: count,
+  lastOrderAt: z.string().max(40).nullable().optional(),
+  blacklisted: z.boolean().optional(),
+});
+export type ImportCustomerRow = z.input<typeof importRow>;
+/** the most lines one call takes (the page sends a big file in parts) */
+export const IMPORT_CUSTOMERS_MAX = 1000;
+const isoDay = (s: string | null | undefined) => {
+  const t = s ? Date.parse(s) : NaN;
+  return Number.isFinite(t) ? new Date(t).toISOString() : null;
+};
 
 const WHO = ['confirmation', 'suivi'] as const;
 
@@ -94,7 +146,7 @@ export const customersProcs = {
       const total = num((await ctx.db.query(`SELECT count(*)::int AS n FROM customers c ${w.sql}`, w.params))[0]?.n);
       const lim = w.p(f.pageSize);
       const off = w.p((f.page - 1) * f.pageSize);
-      const rows = await ctx.db.query(`SELECT ${COLS} FROM customers c ${w.sql} ORDER BY c.last_order_at DESC NULLS LAST, c.id DESC LIMIT ${lim} OFFSET ${off}`, w.params);
+      const rows = await ctx.db.query(`SELECT ${COLS} FROM customers c ${w.sql} ORDER BY greatest(c.last_order_at, c.imp_last_at) DESC NULLS LAST, c.id DESC LIMIT ${lim} OFFSET ${off}`, w.params);
       const scores = await scoresOf(ctx, rows);
       return { rows: rows.map((r: any, k: number) => toCustomer(r, scores[k])), total, page: f.page, pageSize: f.pageSize };
     },
@@ -127,6 +179,76 @@ export const customersProcs = {
       })),
     };
   }),
+
+  /**
+   * Clients › « Importer des clients » (admin): customers from another app WITH their history there (orders, delivered,
+   * refused, fake, cancelled), so their score and level show from the first day. At most 1,000 lines a call (the page
+   * sends a big file in parts). A new number becomes a customer; a number already here keeps its name, wilaya and
+   * orders: only its imported history is written. Importing again REPLACES that history (it never adds up). A « liste
+   * noire » line blacklists the number (never takes one off), and the owner's other boutiques follow. Nothing is deleted.
+   */
+  'customers.import': proc(
+    [],
+    z.object({ source: z.string().trim().max(120).optional(), rows: z.array(importRow).min(1).max(IMPORT_CUSTOMERS_MAX) }),
+    async (ctx, i) => {
+      const at = new Date(ctx.now()).toISOString();
+      const byPhone = new Map<string, z.output<typeof importRow>>();
+      let invalid = 0;
+      for (const r of i.rows) {
+        const p = normalizePhone(r.phone);
+        if (p) byPhone.set(p, r); // the same number twice: its last line counts
+        else invalid++;
+      }
+      const phones = [...byPhone.keys()];
+      if (!phones.length) return { added: 0, updated: 0, invalid, blacklisted: 0, shared: [] as string[] };
+      const rows = [...byPhone.values()];
+      const source = i.source || 'import';
+      const reason = 'Ancienne base';
+      const res = await ctx.db.tx(async (tx) => {
+        const had = new Set((await tx.query('SELECT phone FROM customers WHERE phone = ANY($1::text[])', [phones])).map((x: any) => String(x.phone)));
+        await tx.query(
+          `INSERT INTO customers (phone, name, wilaya_id, imp_orders, imp_delivered, imp_returned, imp_fake, imp_cancelled, imp_last_at, imp_source, imp_at)
+           SELECT x.p, x.n, x.w, x.o, x.d, x.r, x.f, x.c, x.l, $10, $11
+             FROM unnest($1::text[], $2::text[], $3::smallint[], $4::int[], $5::int[], $6::int[], $7::int[], $8::int[], $9::timestamptz[]) AS x(p, n, w, o, d, r, f, c, l)
+           ON CONFLICT (phone) DO UPDATE SET
+             imp_orders = EXCLUDED.imp_orders, imp_delivered = EXCLUDED.imp_delivered, imp_returned = EXCLUDED.imp_returned,
+             imp_fake = EXCLUDED.imp_fake, imp_cancelled = EXCLUDED.imp_cancelled, imp_last_at = EXCLUDED.imp_last_at,
+             imp_source = EXCLUDED.imp_source, imp_at = EXCLUDED.imp_at,
+             name = CASE WHEN coalesce(customers.name, '') = '' THEN EXCLUDED.name ELSE customers.name END,
+             wilaya_id = coalesce(customers.wilaya_id, EXCLUDED.wilaya_id)`,
+          [
+            phones,
+            rows.map((r) => (r.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 120)),
+            rows.map((r) => r.wilayaId ?? null),
+            // a file without an « orders » column still counts the orders it tells about
+            rows.map((r) => Math.max(r.orders, r.delivered + r.returned + r.fake + r.cancelled)),
+            rows.map((r) => r.delivered),
+            rows.map((r) => r.returned),
+            rows.map((r) => r.fake),
+            rows.map((r) => r.cancelled),
+            rows.map((r) => isoDay(r.lastOrderAt)),
+            source,
+            at,
+          ],
+        );
+        const black = phones.filter((p) => byPhone.get(p)!.blacklisted);
+        const newly = black.length
+          ? await tx.query(
+              `UPDATE customers SET blacklisted = true, blacklist_reason = coalesce(blacklist_reason, $2), blacklist_auto = false, blacklist_shop = NULL
+                WHERE phone = ANY($1::text[]) AND NOT blacklisted RETURNING phone, name, wilaya_id`,
+              [black, reason],
+            )
+          : [];
+        return { added: phones.filter((p) => !had.has(p)).length, updated: phones.filter((p) => had.has(p)).length, newly };
+      });
+      // the owner's other boutiques follow (« Liste noire partagée »), as for a number blacklisted by hand
+      const shared = res.newly.length
+        ? await shareBlacklist(ctx, res.newly.map((r: any) => ({ phone: String(r.phone), name: String(r.name ?? ''), wilayaId: numOrNull(r.wilaya_id) })), true, reason)
+        : [];
+      ctx.emit({ type: 'orders' });
+      return { added: res.added, updated: res.updated, invalid, blacklisted: res.newly.length, shared };
+    },
+  ),
 
   /** Put a phone number on (or off) the blacklist. New orders from it then arrive as "À vérifier". */
   'customers.setBlacklist': proc(

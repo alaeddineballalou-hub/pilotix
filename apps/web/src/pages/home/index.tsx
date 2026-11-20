@@ -1,5 +1,5 @@
 // Accueil, by role, under one period:
-// - admin / vendeur: what is waiting now, Co-Pilot (what is going wrong, with what to do), the teams at a glance (who to help), the shop over the period, who is online;
+// - admin / vendeur: « Venez avec vos données » (a new shop's 4 steps, the owner's), what is waiting now, Co-Pilot (what is going wrong, with what to do), the teams at a glance (who to help), the shop over the period, who is online;
 // - agent manager: their team (what is late, its numbers against the targets, each member with what to work on), their
 //   other teams, the shop over the period, who is online;
 // - agent: their own Co-Pilot, what is waiting now, their own numbers next to their team's (their priority and how to improve it), the shop.
@@ -24,6 +24,7 @@ import '../dashboard/board/board.css';
 import { useAllMode } from '../../layout/AllBoutiques';
 import { NoPlanAlert } from '../caisse/NoPlanAlert';
 import { LivCard, Now } from './cards';
+import { Welcome } from './Welcome';
 
 type R = { from: string; to: string };
 
@@ -104,6 +105,7 @@ function HomeStats() {
     <div className="tb hm">
       {head}
       <NoPlanAlert admins={false} />
+      <Welcome />
       {meta.error ? (
         <ErrorBox error={meta.error} onRetry={() => meta.refetch()} />
       ) : !m ? (

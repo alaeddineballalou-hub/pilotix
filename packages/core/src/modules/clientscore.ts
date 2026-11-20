@@ -26,16 +26,19 @@ export async function scoreRules(db: Db): Promise<ScoreRules> {
 }
 
 /** The facts of a customer row, as SQL columns on `customers c` (its orders, its landing orders of the last 180 days,
- *  the marks on its devices). */
+ *  the marks on its devices), plus the history brought from another app (Clients › « Importer des clients »: imp_*). */
 export const CLIENT_FACT_COLS = `
-  (SELECT count(*)::int FROM sales o WHERE o.customer_id = c.id AND o.follow_status IN ('delivered','exchanged')) AS f_delivered,
-  (SELECT count(*)::int FROM sales o WHERE o.customer_id = c.id AND o.follow_status IN ('returning','returned')) AS f_returned,
-  (SELECT count(*)::int FROM sales o WHERE o.customer_id = c.id AND o.conf_status IN ('fake','wrong_number')) AS f_fake,
-  (SELECT count(*)::int FROM sales o WHERE o.customer_id = c.id AND o.conf_status = 'cancelled') AS f_cancelled,
+  ((SELECT count(*)::int FROM sales o WHERE o.customer_id = c.id AND o.follow_status IN ('delivered','exchanged')) + coalesce(c.imp_delivered, 0)) AS f_delivered,
+  ((SELECT count(*)::int FROM sales o WHERE o.customer_id = c.id AND o.follow_status IN ('returning','returned')) + coalesce(c.imp_returned, 0)) AS f_returned,
+  ((SELECT count(*)::int FROM sales o WHERE o.customer_id = c.id AND o.conf_status IN ('fake','wrong_number')) + coalesce(c.imp_fake, 0)) AS f_fake,
+  ((SELECT count(*)::int FROM sales o WHERE o.customer_id = c.id AND o.conf_status = 'cancelled') + coalesce(c.imp_cancelled, 0)) AS f_cancelled,
   (SELECT count(*)::int FROM landing_submits s WHERE s.phone = c.phone AND s.verdict = 'block' AND s.at > now() - interval '180 days') AS f_blocked,
   (SELECT count(*)::int FROM landing_submits s WHERE s.phone = c.phone AND s.verdict = 'review' AND NOT s.merged AND s.at > now() - interval '180 days') AS f_review,
   (SELECT count(*)::int FROM fraud_marks m WHERE m.phone = c.phone AND NOT m.lifted AND m.reason = 'fake') AS f_mark_fake,
   (SELECT count(*)::int FROM fraud_marks m WHERE m.phone = c.phone AND NOT m.lifted AND m.reason = 'competitor') AS f_mark_comp`;
+
+/** Pilotix's own count (a joined column) + the same count in the history imported from another app (`customers c`). */
+const IMP = (col: string, k: 'delivered' | 'returned' | 'fake' | 'cancelled') => `(coalesce(${col}, 0) + coalesce(c.imp_${k}, 0))`;
 
 /** The facts of many customers at once, counted once per table (not once per customer): joined on `customers c`
  *  (`cid`: the customer id column to join the orders on). Columns: so.d / so.r / so.fk / so.cc (delivered, returned,
@@ -55,10 +58,11 @@ const factsJoins = (cid: string) => `
     SELECT phone, count(*) FILTER (WHERE reason = 'fake')::int AS mf, count(*) FILTER (WHERE reason = 'competitor')::int AS mc
     FROM fraud_marks WHERE NOT lifted GROUP BY 1) fm ON fm.phone = c.phone`;
 
-/** The same facts for many customers at once (a filter by level over the whole store). `where` filters `customers c`. */
+/** The same facts for many customers at once (a filter by level over the whole store). `where` filters `customers c`.
+ *  The last order is the newest of Pilotix's and the imported history's. */
 const factsAllSql = (where: string) => `
-  SELECT c.id, c.phone, c.blacklisted, c.blacklist_auto, c.stopdesk_only, c.last_order_at,
-    coalesce(so.d, 0) AS f_delivered, coalesce(so.r, 0) AS f_returned, coalesce(so.fk, 0) AS f_fake, coalesce(so.cc, 0) AS f_cancelled,
+  SELECT c.id, c.phone, c.blacklisted, c.blacklist_auto, c.stopdesk_only, greatest(c.last_order_at, c.imp_last_at) AS last_order_at,
+    ${IMP('so.d', 'delivered')} AS f_delivered, ${IMP('so.r', 'returned')} AS f_returned, ${IMP('so.fk', 'fake')} AS f_fake, ${IMP('so.cc', 'cancelled')} AS f_cancelled,
     coalesce(ls.b, 0) AS f_blocked, coalesce(ls.rv, 0) AS f_review, coalesce(fm.mf, 0) AS f_mark_fake, coalesce(fm.mc, 0) AS f_mark_comp
   FROM customers c
   ${factsJoins('c.id')}
@@ -72,7 +76,9 @@ const factsAllSql = (where: string) => `
  */
 function rankSql(R: ScoreRules): string {
   const z = (x: string) => `coalesce(${x}, 0)`;
-  const [d, r, fk, cc, b, rv, mf, mc] = ['so.d', 'so.r', 'so.fk', 'so.cc', 'ls.b', 'ls.rv', 'fm.mf', 'fm.mc'].map(z);
+  // delivered / returned / fake / cancelled: Pilotix's orders + the imported history (as scoreClient's facts)
+  const [d, r, fk, cc] = [IMP('so.d', 'delivered'), IMP('so.r', 'returned'), IMP('so.fk', 'fake'), IMP('so.cc', 'cancelled')];
+  const [b, rv, mf, mc] = ['ls.b', 'ls.rv', 'fm.mf', 'fm.mc'].map(z);
   const i = (v: number) => String(Math.max(0, Math.min(100, Math.round(v))));
   const part = (x: string, k: ScoreRuleKey) => (R[k].max === null ? `(${x} * ${i(R[k].each)})` : `LEAST(${x} * ${i(R[k].each)}, ${i(R[k].max)})`);
   const netOn = `coalesce(nw.n >= 2 AND NOT (${d} >= 1 AND ${r} = 0 AND ${fk} = 0), false)`;

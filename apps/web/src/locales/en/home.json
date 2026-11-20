@@ -76,5 +76,39 @@
     "30d": "vs prior 30 d",
     "month": "vs last month"
   },
-  "vsLong": "▲ ▼ {{vs}}"
+  "vsLong": "▲ ▼ {{vs}}",
+  "welcome": {
+    "title": "Bring your data",
+    "lead": "Your old app comes with you: in 4 steps, Pilotix knows your products, your customers, your delivery and your team.",
+    "progress": "{{done}}/{{total}} done",
+    "hide": "Hide",
+    "products": {
+      "title": "Your products",
+      "text": "Import them from an Excel file.",
+      "go": "Import",
+      "done_one": "{{n}} product",
+      "done_other": "{{n}} products"
+    },
+    "clients": {
+      "title": "Your customers and their history",
+      "text": "The customers file or the orders file of your old app: each keeps their level.",
+      "go": "Import",
+      "done_one": "{{n}} customer imported",
+      "done_other": "{{n}} customers imported"
+    },
+    "delivery": {
+      "title": "Your delivery",
+      "text": "Connect your delivery company to send parcels.",
+      "go": "Connect",
+      "done_one": "{{n}} delivery company",
+      "done_other": "{{n}} delivery companies"
+    },
+    "team": {
+      "title": "Your team",
+      "text": "Add your confirmation, follow-up and depot agents.",
+      "go": "Add",
+      "done_one": "{{n}} person",
+      "done_other": "{{n}} people"
+    }
+  }
 }
