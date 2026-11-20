@@ -1388,3 +1388,67 @@ test('Pilot Content on Facebook: a photo Pilotix keeps goes to the Page as a fil
     await db.query(`DELETE FROM cm_media WHERE id = $1`, [id]);
   }
 });
+
+test('a Messenger or Instagram chat that came without a name gets the customer’s name from Meta, once, during its first 3 messages', async () => {
+  const asked: any[] = [];
+  let answer: { name: string | null } = { name: 'Amina Benali' };
+  const server = fakeServer([], []);
+  const ai = server.dellal;
+  server.dellal = async (action, args, c) => (action === 'profile' ? (asked.push(args), answer) : ai!(action, args, c));
+  const sys = await as(EMAILS.admin, server);
+  const r: any = await call('dellal.receive', sys, { channel: 'messenger', externalId: 'psid-name', accountId: 'page-1', text: 'Salam', messageId: 'nm_1' });
+  const name = async () => (await db.query(`SELECT customer_name FROM conversations WHERE id = $1`, [r.conversationId]))[0].customer_name;
+  assert.equal(await name(), null, 'Messenger brings no name');
+  assert.deepEqual(await call('dellal.metaName', sys, { id: r.conversationId }), { name: 'Amina Benali' });
+  assert.equal(await name(), 'Amina Benali');
+  assert.deepEqual(asked, [{ channel: 'messenger', externalId: 'psid-name' }]);
+  // it has a name now: Meta is not asked again
+  assert.deepEqual(await call('dellal.metaName', sys, { id: r.conversationId }), { name: null });
+  assert.equal(asked.length, 1);
+  // Meta gives none: the chat goes on without one, and after its first 3 customer messages Pilotix stops asking
+  answer = { name: null };
+  const s: any = await call('dellal.receive', sys, { channel: 'instagram', externalId: 'igsid-name', accountId: 'ig-1', text: 'ch7al ?', messageId: 'nm_2' });
+  assert.deepEqual(await call('dellal.metaName', sys, { id: s.conversationId }), { name: null });
+  for (const n of [3, 4, 5]) await call('dellal.receive', sys, { channel: 'instagram', externalId: 'igsid-name', text: `w ${n}`, messageId: `nm_${n}` });
+  asked.length = 0;
+  answer = { name: 'Late' };
+  assert.deepEqual(await call('dellal.metaName', sys, { id: s.conversationId }), { name: null });
+  assert.equal(asked.length, 0, '4 customer messages: no more asking');
+  // WhatsApp has the number and its own name: never asked
+  const w: any = await call('dellal.receive', sys, { channel: 'whatsapp', externalId: '213550123456', text: 'Salam', messageId: 'nm_w' });
+  assert.deepEqual(await call('dellal.metaName', sys, { id: w.conversationId }), { name: null });
+  assert.equal(asked.length, 0);
+});
+
+test('Meta’s user profile: Messenger’s first and last name with the Page’s key; Instagram’s name, else its @username', async () => {
+  const ctx = await as(EMAILS.admin);
+  await setRaw(db, 'secret_dellal_page_token', 'PAGE-NAME');
+  const asked: { url: string; auth: string | null }[] = [];
+  let ig: any = { name: '', username: 'amina.dz' };
+  const real = globalThis.fetch;
+  globalThis.fetch = (async (input: any, init?: any) => {
+    const u = String(input);
+    asked.push({ url: u.replace(/access_token=[^&]+/, 'access_token=K'), auth: init?.headers?.Authorization ?? null });
+    const body = u.includes('psid-9') ? { first_name: 'Amina', last_name: 'Benali', id: 'psid-9' } : u.includes('igsid-9') ? ig : { error: { message: 'no such user', code: 100 } };
+    return new Response(JSON.stringify(body), { status: body.error ? 400 : 200, headers: { 'Content-Type': 'application/json' } });
+  }) as typeof fetch;
+  try {
+    assert.deepEqual(await runDellal('profile', { channel: 'messenger', externalId: 'psid-9' }, ctx), { name: 'Amina Benali' });
+    assert.deepEqual(asked.map((x) => x.url), ['https://graph.facebook.com/v21.0/psid-9?fields=first_name,last_name&access_token=K']);
+    asked.length = 0;
+    assert.deepEqual(await runDellal('profile', { channel: 'instagram', externalId: 'igsid-9' }, ctx), { name: '@amina.dz' });
+    ig = { name: 'Amina B', username: 'amina.dz' };
+    assert.deepEqual(await runDellal('profile', { channel: 'instagram', externalId: 'igsid-9' }, ctx), { name: 'Amina B' });
+    // Meta refuses: no name, and why (the chat goes on)
+    const no: any = await runDellal('profile', { channel: 'messenger', externalId: 'psid-0' }, ctx);
+    assert.equal(no.name, null);
+    assert.match(no.error, /no such user/);
+    // WhatsApp, TikTok: nothing asked
+    asked.length = 0;
+    assert.deepEqual(await runDellal('profile', { channel: 'whatsapp', externalId: '213550123456' }, ctx), { name: null });
+    assert.equal(asked.length, 0);
+  } finally {
+    globalThis.fetch = real;
+    await db.query(`DELETE FROM settings WHERE key = 'secret_dellal_page_token'`);
+  }
+});

@@ -2765,6 +2765,27 @@ export const dellalProcs = {
     if (r) await promoOnMessage(ctx, r.conversationId, { text: i.text, source: i.source ?? null }).catch(() => null);
     return r;
   }),
+  /**
+   * Server, after a Messenger or Instagram message that came without the customer's name: Meta's user profile gives
+   * it (dellal-server › 'profile'). Asked while the chat has no name, during its first 3 customer messages only (Meta
+   * may refuse: then the chat goes on without one, and Pilotix stops asking).
+   */
+  'dellal.metaName': proc([], z.object({ id }), async (ctx, i) => {
+    const c = (
+      await ctx.db.query(
+        `SELECT c.channel, c.external_id, c.customer_name, (SELECT count(*)::int FROM conv_messages m WHERE m.conversation_id = c.id AND m.role = 'customer') AS said
+         FROM conversations c WHERE c.id = $1`,
+        [i.id],
+      )
+    )[0];
+    if (!c || c.customer_name || (c.channel !== 'messenger' && c.channel !== 'instagram') || num(c.said) > 3 || !ctx.server?.dellal) return { name: null };
+    const r = (await ctx.server.dellal('profile', { channel: c.channel, externalId: String(c.external_id) }, ctx).catch(() => null)) as { name?: string | null } | null;
+    const name = typeof r?.name === 'string' && r.name.trim() ? r.name.trim().slice(0, 120) : null;
+    if (!name) return { name: null };
+    await ctx.db.query(`UPDATE conversations SET customer_name = $2 WHERE id = $1 AND customer_name IS NULL`, [i.id, name]);
+    ctx.emit({ type: 'chat', data: { dellal: i.id } });
+    return { name };
+  }),
   /** Server: someone opened the chat again from an ad or an m.me ?ref= link, without a message (Meta's referral). */
   'dellal.referral': proc(
     [],
