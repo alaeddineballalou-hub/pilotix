@@ -1,0 +1,1 @@
+import{j as s}from"./kit-CWpwQz4S.js";import{b as a}from"./BrandLogo-BR5yrrGW.js";const e=new Map([["claude.ai",a("claude")],["claude.com",a("claude")],["chatgpt.com",a("chatgpt")]]);function m({host:c,size:o}){const t=e.get(c.toLowerCase());return t?s("img",{src:t,alt:"",className:`pxm-logo${o?` ${o}`:""}`}):null}export{m as A};
