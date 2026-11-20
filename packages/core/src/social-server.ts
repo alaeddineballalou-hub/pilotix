@@ -16,6 +16,7 @@ import { uniAccounts } from './dellal-server';
 import { getSetting } from './settings';
 import {
   adoptLinkIg,
+  adsUsedNow,
   CheckGroup,
   markIgKey,
   deletionStatus,
@@ -30,6 +31,7 @@ import {
   holdFound,
   lastBadSignature,
   LoginKind,
+  pickedOf,
   removeLink,
   saveLink,
   SOCIAL,
@@ -473,8 +475,17 @@ export interface LoginEnd {
     pages?: { id: string; name: string; ig: string | null; taken: string | null; current: boolean }[];
     /** the Page this boutique answers on today, when another one may take its place */
     was?: string | null;
+    /**
+     * Meta's ad accounts the login brought, for one boutique: the person ticks the ones it uses (on: used there today, or
+     * the only one); the boutique uses those alone. need: at least one (« Publicité Meta » is for them).
+     */
+    ads?: { id: string; name: string; currency: string | null; on: boolean }[];
+    adsNeed?: boolean;
   };
 }
+
+/** The ad accounts a login asks the person to tick: Meta's, for one boutique (an account for all boutiques: each ticks in Pilot AI › Comptes). */
+const adsToTick = (found: FoundAccount, shopId: number | null) => (found.provider === 'meta' && !found.pageOnly && !found.whatsapp && shopId ? found.assets.filter((a) => a.kind === 'ad_account') : []);
 
 /** The Page a boutique answers on today (its name), and the boutique another Page already answers for. */
 async function pageNow(t: Tenancy, shopId: number): Promise<{ extId: string; name: string } | null> {
@@ -534,6 +545,13 @@ export async function finishLogin(t: Tenancy, provider: SocialProvider, q: Recor
       if (!free.length) throw new AppError('conflict', pages.length === 1 ? `Cette page répond déjà pour « ${pages[0].taken} ». Retirez-la là-bas d’abord.` : 'Ces pages répondent déjà pour d’autres boutiques. Retirez-en une là-bas d’abord.');
       was = now && !(free.length === 1 && free[0].current) ? now.name : null;
     }
+    // Meta's ad accounts: ticked one by one in this tab (pre-ticked: the ones this boutique uses today, or the only one)
+    const tick = adsToTick(found, st.shopId);
+    let ads: NonNullable<LoginEnd['confirm']>['ads'];
+    if (tick.length && st.shopId) {
+      const usedNow = await adsUsedNow(t, st.shopId);
+      ads = tick.map((a) => ({ id: a.extId, name: a.name, currency: (a.extra as any)?.currency ? String((a.extra as any).currency) : null, on: usedNow ? usedNow.includes(a.extId) : tick.length === 1 }));
+    }
     const key = randomBytes(24).toString('base64url');
     await holdFound(t, st.state, found, sha256(key));
     const shop = st.shopId ? String((await t.platform.query('SELECT name FROM platform.shops WHERE id = $1', [st.shopId]))[0]?.name ?? '') : null;
@@ -543,7 +561,18 @@ export async function finishLogin(t: Tenancy, provider: SocialProvider, q: Recor
       account: found.name,
       confirm: found.whatsapp
         ? { state: st.state, key, provider, account: found.name, shop, by: st.by, assets: found.whatsapp.phone ? [{ kind: 'whatsapp', name: found.whatsapp.phone }] : [], net: 'WhatsApp Business' }
-        : { state: st.state, key, provider, account: found.name, shop, by: st.by, assets: pages ? [] : found.assets.slice(0, 8).map((a) => ({ kind: a.kind, name: a.name })), ...(pages ? { pages, was } : {}) },
+        : {
+            state: st.state,
+            key,
+            provider,
+            account: found.name,
+            shop,
+            by: st.by,
+            // the ad accounts to tick are not listed again above them
+            assets: pages ? [] : found.assets.filter((a) => !(ads && a.kind === 'ad_account')).slice(0, 8).map((a) => ({ kind: a.kind, name: a.name })),
+            ...(pages ? { pages, was } : {}),
+            ...(ads ? { ads, adsNeed: found.part === 'ads' } : {}),
+          },
     };
   } catch (e: any) {
     const m = String(e?.message ?? 'Erreur').slice(0, 300);
@@ -552,8 +581,11 @@ export async function finishLogin(t: Tenancy, provider: SocialProvider, q: Recor
   }
 }
 
-/** « Oui, c'est ma boutique » (or « Non ») in the login's tab: the account goes to the boutique, or nothing happens. */
-export async function confirmLogin(t: Tenancy, state: string, key: string, yes: boolean, pick = ''): Promise<LoginEnd> {
+/**
+ * « Oui, c'est ma boutique » (or « Non ») in the login's tab: the account goes to the boutique, or nothing happens.
+ * pick: the Page chosen there; ads: the ad accounts ticked there (the boutique uses those alone).
+ */
+export async function confirmLogin(t: Tenancy, state: string, key: string, yes: boolean, pick = '', ads: string[] = []): Promise<LoginEnd> {
   const st = await takeState(t, String(state ?? ''));
   if (!st || st.done || !st.found || !st.confirmHash) return { ok: false, message: 'Cette liaison est déjà faite ou n’existe plus. Fermez cet onglet.' };
   const want = Buffer.from(st.confirmHash, 'hex');
@@ -604,7 +636,16 @@ export async function confirmLogin(t: Tenancy, state: string, key: string, yes: 
       return { ok: false, message: m };
     }
   }
-  const linkId = await saveLink(t, st, st.found);
+  // Meta's ad accounts: the ones ticked in this tab, and those alone
+  const tick = adsToTick(st.found, st.shopId);
+  let adsPicked: string[] | undefined;
+  if (tick.length) {
+    const want = new Set(ads.map((x) => String(x).replace(/^act_/, '')));
+    adsPicked = tick.filter((a) => want.has(a.extId)).map((a) => a.extId);
+    // « Publicité Meta » is for them: one at least (nothing chosen: the question stays open, the tab's « back » shows it)
+    if (!adsPicked.length && st.found.part === 'ads') return { ok: false, message: 'Cochez au moins un compte publicitaire, puis « Oui, c’est ma boutique ». Revenez à la page précédente.' };
+  }
+  const linkId = await saveLink(t, st, adsPicked ? { ...st.found, adsPicked } : st.found);
   await endState(t, st.state, { linkId });
   return { ok: true, message: 'Compte lié', account: st.found.name };
 }
@@ -829,7 +870,7 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
   const add = (group: CheckGroup, key: string, state: SocialCheck['state'], params?: SocialCheck['params'], detail?: string | null) =>
     checks.push({ key, group, state, ...(params ? { params } : {}), detail: detail ?? null });
   const assets = await t.platform.query(`SELECT * FROM platform.social_assets WHERE link_id = $1 ORDER BY kind, name, id`, [linkId]);
-  const uses = await t.platform.query(`SELECT u.kind, u.asset_id FROM platform.social_uses u JOIN platform.social_assets a ON a.id = u.asset_id WHERE u.shop_id = $1 AND a.link_id = $2`, [shopId, linkId]);
+  const uses = await t.platform.query(`SELECT u.kind, u.asset_id, u.picked FROM platform.social_uses u JOIN platform.social_assets a ON a.id = u.asset_id WHERE u.shop_id = $1 AND a.link_id = $2`, [shopId, linkId]);
   const counts = (kind: string) => uses.some((u: any) => u.kind === kind);
   const token = String(l.token ?? '');
   const setStatus = (ok: boolean, error?: string) =>
@@ -902,6 +943,9 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
   };
   const pagesAll = assets.filter((a: any) => a.kind === 'page');
   const adsAll = assets.filter((a: any) => a.kind === 'ad_account');
+  // the ad accounts this boutique ticked: the ones tried below (the others are not used here)
+  const adsPicked = pickedOf(uses.find((u: any) => u.kind === 'ad_account')?.picked);
+  const adsUsed = adsPicked ? adsAll.filter((a: any) => adsPicked.includes(String(a.ext_id))) : adsAll;
   const igsAll = pagesAll.filter((a: any) => jsonOf(a.extra).ig?.id).length;
   // what Facebook gave Pilotix at the last login: a zero says what was not ticked in Facebook's window
   // (the two doors: a Facebook account is asked for its Page only, « Publicité Meta » for its ad accounts only)
@@ -1072,11 +1116,11 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
   if (adsMine) {
     perm('ads', 'adsRead', 'bad');
     perm('ads', 'adsManage', 'warn');
-    const launchId = String(shopMeta?.adAccountId ?? '').replace(/^act_/, '') || String(adsAll[0]?.ext_id ?? '').replace(/^act_/, '');
+    const launchId = String(shopMeta?.adAccountId ?? '').replace(/^act_/, '') || String(adsUsed[0]?.ext_id ?? '').replace(/^act_/, '');
     const unread: string[] = [];
     let unreadWhy: string | null = null;
     let launch: any = null;
-    for (const a of adsAll) {
+    for (const a of adsUsed) {
       const id = String(a.ext_id).replace(/^act_/, '');
       const aname = String(a.name ?? a.ext_id);
       if (!keyOk) {
@@ -1104,7 +1148,7 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
         unreadWhy ??= why(e);
       }
     }
-    add('ads', 'ads', !unread.length ? 'ok' : unread.length === adsAll.length ? 'bad' : 'warn', { count: adsAll.length, bad: unread.length }, unread.length ? [unread.join(', '), unreadWhy].filter(Boolean).join(' — ').slice(0, 300) : null);
+    add('ads', 'ads', !unread.length ? 'ok' : unread.length === adsUsed.length ? 'bad' : 'warn', { count: adsUsed.length, bad: unread.length }, unread.length ? [unread.join(', '), unreadWhy].filter(Boolean).join(' — ').slice(0, 300) : null);
     if (launch) {
       // its numbers, as Publicité reads them
       try {
@@ -1119,7 +1163,7 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
       else if (tasks && !tasks.some((x) => x === 'ADVERTISE' || x === 'MANAGE')) add('ads', 'adsLaunch', 'warn', { name: launch.name, why: 'task' });
       else add('ads', 'adsLaunch', 'ok', { name: launch.name });
     }
-    const money = [...new Set(adsAll.map((a: any) => jsonOf(a.extra).currency).filter(Boolean).map(String))];
+    const money = [...new Set(adsUsed.map((a: any) => jsonOf(a.extra).currency).filter(Boolean).map(String))];
     // Publicité counts a dinar account in dinars (and in dollars with the month's rate); any other money as dollars
     const other = money.filter((c) => c !== 'USD' && c !== 'DZD');
     if (other.length) add('ads', 'adsCurrency', 'warn', { list: other.join(', ') });
@@ -1324,6 +1368,20 @@ function confirmPage(c: NonNullable<LoginEnd['confirm']>): string {
     pages.length && c.was
       ? `<p class="note">Cette boutique répond aujourd’hui sur ${q(c.was)} : ${pages.length > 1 ? 'une autre page choisie ici prend sa place' : `${q(pages[0].name)} prend sa place`}.</p>`
       : '';
+  // Meta's ad accounts: the person ticks the ones this boutique uses, and Pilotix uses those alone
+  const ads = c.ads ?? [];
+  const tickAds = ads.length
+    ? `<fieldset><legend>Quels comptes publicitaires Pilotix utilise dans cette boutique ?</legend>${ads
+        .map(
+          (x) =>
+            `<label class="pg"><input type="checkbox" name="ad" value="${esc(x.id)}"${x.on ? ' checked' : ''}><span><b>${esc(x.name)}</b>${x.currency ? ` <span class="ig">${esc(x.currency)}</span>` : ''}${
+              x.name !== x.id ? `<small>N°&nbsp;${esc(x.id)}</small>` : ''
+            }</span></label>`,
+        )
+        .join('')}</fieldset><p class="note">Pilotix lit et utilise seulement les comptes cochés : leurs chiffres, leurs pixels, leur catalogue, et vos nouvelles pubs.${
+        c.adsNeed ? ' Cochez-en au moins un.' : ''
+      } Vous pourrez changer plus tard dans Pilotix (Comptes).</p>`
+    : '';
   return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lier ce compte ? · Pilotix</title>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f5f8;color:#16202e}
 main{max-width:460px;margin:24px;padding:28px;border-radius:16px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.08)}h1{margin:0 0 10px;font-size:22px}p{margin:0 0 12px;color:#374151}
@@ -1332,11 +1390,12 @@ ul{margin:0 0 14px;padding-left:20px;color:#374151}.who{padding:12px 14px;border
 button.yes{background:#1f6feb;border-color:#1f6feb;color:#fff}small{display:block;margin-top:14px;color:#6b7280}
 fieldset{margin:0 0 12px;padding:0;border:0;display:grid;gap:8px}legend{padding:0;margin-bottom:8px;font-weight:600;color:#16202e}
 .pg{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid #d1d5db;border-radius:10px;background:#fff;cursor:pointer}.pg.off{opacity:.55;cursor:not-allowed}
-.pg input{margin-top:4px;flex:none}.pg span{min-width:0;overflow-wrap:anywhere}.pg small{margin-top:2px}.ig{color:#6b7280;font-size:14px;white-space:nowrap}.note{font-size:14px;color:#6b7280}</style></head>
+.pg input{margin-top:4px;flex:none}.pg span{min-width:0;overflow-wrap:anywhere}.pg small{margin-top:2px}.ig{color:#6b7280;font-size:14px;white-space:nowrap}.note{font-size:14px;color:#6b7280}
+.pg:has(input:checked){border-color:#1f6feb;background:#f0f6ff}</style></head>
 <body><main><h1>Lier ce compte à Pilotix ?</h1>
 <form method="post" action="/api/oauth/confirm"><input type="hidden" name="state" value="${esc(c.state)}"><input type="hidden" name="key" value="${esc(c.key)}">
 <div class="who"><p>Le compte ${net} ${q(c.account)}</p>${list}${one}<p>va être lié à ${where}${c.by ? `, à la demande de ${q(c.by)}` : ''}.</p></div>
-${pick}${swap}<p class="q">Est-ce bien votre boutique ?</p>
+${pick}${swap}${tickAds}<p class="q">Est-ce bien votre boutique ?</p>
 <button class="yes" type="submit" name="choice" value="yes">Oui, c’est ma boutique</button><button type="submit" name="choice" value="no" formnovalidate>Non, ce n’est pas moi</button></form>
 <small>Si vous n’avez rien demandé à Pilotix, choisissez «&nbsp;Non&nbsp;» : rien ne sera lié.</small></main></body></html>`;
 }

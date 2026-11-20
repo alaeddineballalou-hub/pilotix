@@ -11,9 +11,11 @@
 // account replaces them, and « Tester » names them.
 //
 // Pilotix keeps the tokens on the server (never in a page) and finds what each account may use. An account goes to one
-// boutique (which uses its Page and its ad accounts at once) or to all the owner's boutiques (each boutique picks its
-// Page and counts the ad accounts or not, in one click; a Page answers for one boutique only). A boutique counts all the
-// ad accounts of a linked account together: Publicité adds them up. What a boutique uses is written where its agents
+// boutique (which uses its Page at once) or to all the owner's boutiques (each boutique picks its Page; a Page answers
+// for one boutique only). Meta's ad accounts are ticked one by one, by each boutique: in the login's tab (« Publicité
+// Meta »), or later in Pilot AI › Comptes › « Changer ». A boutique uses the ticked ones and those alone (Publicité adds
+// them up, the pixels and the catalogue come from them, new ads leave from one of them); an ad account Facebook brings
+// later comes unticked. TikTok's ad accounts still go all together. What a boutique uses is written where its agents
 // already read it: Pilot Message and Pilot Comments (the Page, its token, its Instagram account and the key that answers
 // every Instagram customer) and Publicité (the ad accounts and the account's token). « Tester » tries an account on the
 // server (social-server.ts) and says, part by part, what works and where a problem is.
@@ -33,8 +35,8 @@ export type SocialProvider = (typeof SOCIAL_PROVIDERS)[number];
 export const ASSET_KINDS = ['page', 'ad_account', 'advertiser'] as const;
 export type AssetKind = (typeof ASSET_KINDS)[number];
 /**
- * Ad accounts are used all together: a boutique that counts a linked account's ads counts every ad account of it (Publicité
- * adds them up). Its use points at one of them; the others follow (a new one after a new login too).
+ * A boutique's ad accounts come from one linked account. Meta's: the ones it ticked (social_uses.picked), its use
+ * pointing at one of them. TikTok's: all of the account's together (picked NULL), a new one after a new login too.
  */
 export const AD_KINDS: readonly AssetKind[] = ['ad_account', 'advertiser'];
 export const isAdKind = (k: string) => (AD_KINDS as readonly string[]).includes(k);
@@ -227,6 +229,24 @@ ALTER TABLE platform.social_states ADD COLUMN IF NOT EXISTS found jsonb;
 ALTER TABLE platform.social_states ADD COLUMN IF NOT EXISTS found_at timestamptz;
 ALTER TABLE platform.social_states ADD COLUMN IF NOT EXISTS confirm_hash text;
 `;
+
+/**
+ * The Meta ad accounts a boutique uses of a linked account (p044): the ones ticked in the login's tab or in Pilot AI ›
+ * Comptes › « Changer », and those alone (Publicité, the pixels, the catalogue, launching). NULL: all of them, the way
+ * TikTok's go. A boutique that counted all of an account's ad accounts before keeps exactly those, ticked: an ad account
+ * Facebook brings later comes unticked.
+ */
+export const SOCIAL_PICKED_SQL = `
+ALTER TABLE platform.social_uses ADD COLUMN IF NOT EXISTS picked text[];
+UPDATE platform.social_uses u
+   SET picked = coalesce(
+         (SELECT array_agg(a.ext_id ORDER BY a.id) FROM platform.social_assets a
+           WHERE a.kind = 'ad_account' AND a.link_id = (SELECT b.link_id FROM platform.social_assets b WHERE b.id = u.asset_id)),
+         ARRAY[u.ext_id])
+ WHERE u.kind = 'ad_account' AND u.picked IS NULL;
+`;
+/** The ad accounts (their numbers) a boutique ticked; null: all of the account's (TikTok). */
+export const pickedOf = (v: unknown): string[] | null => (Array.isArray(v) ? v.map((x) => String(x).replace(/^act_/, '')) : null);
 
 /** What Meta last sent Pilotix's webhook for each Page / Instagram account (routeMeta; « Tester » shows it). */
 export const SOCIAL_HOOKS_SQL = `
@@ -538,6 +558,8 @@ export interface FoundAccount {
    */
   pageOnly?: boolean;
   assets: FoundAsset[];
+  /** Meta's ad accounts ticked in the login's tab (their numbers): the boutique uses those alone ([]: none) */
+  adsPicked?: string[];
   /** « Connecter WhatsApp »: the WhatsApp Business account, its number's id, the number as Meta shows it, its name */
   whatsapp?: { wabaId: string; phoneId: string; phone: string; name: string };
 }
@@ -645,11 +667,18 @@ export async function saveLink(t: Tenancy, st: StateRow, f: FoundAccount): Promi
       for (const assetId of went) for (const u of await t.platform.query(`SELECT shop_id FROM platform.social_uses WHERE asset_id = $1`, [assetId])) await writeUse(t, num(u.shop_id), assetId);
       await removeLink(t, num(o.id));
     }
-  } else if (st.shopId) await autoUse(t, st.shopId, linkId, st.by);
+  } else if (st.shopId) {
+    // Meta's ad accounts: the ones ticked in the login's tab, and those alone
+    if (f.adsPicked) await pickAds(t, st.shopId, linkId, f.adsPicked, st.by);
+    await autoUse(t, st.shopId, linkId, st.by);
+  }
   return linkId;
 }
 
-/** An account linked to one boutique: its first free Page, ad account and TikTok ad account, used there (if none yet). */
+/**
+ * An account linked to one boutique: its first free Page and TikTok ad account, used there (if none yet). Never Meta's
+ * ad accounts: a boutique uses only the ones it ticks (the login's tab, Pilot AI › Comptes).
+ */
 export async function autoUse(t: Tenancy, shopId: number, linkId: number, by: string) {
   const used = new Set((await t.platform.query(`SELECT kind FROM platform.social_uses WHERE shop_id = $1`, [shopId])).map((r: any) => String(r.kind)));
   const assets = await t.platform.query(
@@ -659,15 +688,18 @@ export async function autoUse(t: Tenancy, shopId: number, linkId: number, by: st
     [linkId],
   );
   for (const kind of ASSET_KINDS) {
-    if (used.has(kind)) continue;
+    if (used.has(kind) || kind === 'ad_account') continue;
     // a Page with its Instagram account first: the agents answer on both
     const free = assets.filter((a: any) => a.kind === kind && !a.taken).sort((a: any, b: any) => Number(!!b.ig) - Number(!!a.ig));
     if (free[0]) await useAsset(t, shopId, num(free[0].id), by);
   }
 }
 
-/** This boutique uses this Page / ad account (a Page answers for one boutique only). */
-export async function useAsset(t: Tenancy, shopId: number, assetId: number, by: string) {
+/**
+ * This boutique uses this Page / ad account (a Page answers for one boutique only). Meta's ad accounts: `picked`, the
+ * ticked ones of the same linked account (this one among them); all of the account's when not given (one switch).
+ */
+export async function useAsset(t: Tenancy, shopId: number, assetId: number, by: string, picked?: string[]) {
   const a = (await t.platform.query(`SELECT a.*, l.shop_id AS link_shop, l.owner_id FROM platform.social_assets a JOIN platform.social_links l ON l.id = a.link_id WHERE a.id = $1`, [assetId]))[0];
   if (!a) throw new AppError('not_found', 'Introuvable');
   const owner = await ownerOf(t, shopId);
@@ -677,12 +709,43 @@ export async function useAsset(t: Tenancy, shopId: number, assetId: number, by: 
     if (other) throw new AppError('conflict', `Cette page répond déjà pour « ${other.name} ». Retirez-la là-bas d’abord.`);
   }
   const ig = a.kind === 'page' ? (json(a.extra)?.ig?.id ? String(json(a.extra).ig.id) : null) : null;
+  const ticked =
+    a.kind === 'ad_account'
+      ? (picked ?? (await t.platform.query(`SELECT ext_id FROM platform.social_assets WHERE link_id = $1 AND kind = 'ad_account' ORDER BY id`, [num(a.link_id)])).map((x: any) => String(x.ext_id))).slice(0, 200)
+      : null;
   await t.platform.query(
-    `INSERT INTO platform.social_uses (shop_id, kind, asset_id, ext_id, ig_id, by_name) VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (shop_id, kind) DO UPDATE SET asset_id = EXCLUDED.asset_id, ext_id = EXCLUDED.ext_id, ig_id = EXCLUDED.ig_id, by_name = EXCLUDED.by_name, created_at = now()`,
-    [shopId, a.kind, assetId, a.ext_id, ig, by.slice(0, 120)],
+    `INSERT INTO platform.social_uses (shop_id, kind, asset_id, ext_id, ig_id, by_name, picked) VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (shop_id, kind) DO UPDATE SET asset_id = EXCLUDED.asset_id, ext_id = EXCLUDED.ext_id, ig_id = EXCLUDED.ig_id, by_name = EXCLUDED.by_name, picked = EXCLUDED.picked, created_at = now()`,
+    [shopId, a.kind, assetId, a.ext_id, ig, by.slice(0, 120), ticked],
   );
   await writeUse(t, shopId, assetId);
+}
+
+/**
+ * This boutique uses these ad accounts of this linked account, and those alone (ticked in the login's tab, or in Pilot
+ * AI › Comptes › « Changer »). None: it stops using this account's ad accounts. New ads keep leaving from the ad account
+ * chosen before while it stays ticked (else from the first ticked one).
+ */
+export async function pickAds(t: Tenancy, shopId: number, linkId: number, ids: string[], by: string): Promise<void> {
+  const l = (await t.platform.query(`SELECT provider FROM platform.social_links WHERE id = $1`, [linkId]))[0];
+  if (!l) throw new AppError('not_found', 'Compte introuvable');
+  const kind = adKindOf(l.provider);
+  const want = new Set(ids.map((x) => String(x).replace(/^act_/, '')));
+  const ticked = (await t.platform.query(`SELECT id, ext_id FROM platform.social_assets WHERE link_id = $1 AND kind = $2 ORDER BY id`, [linkId, kind])).filter((a: any) => want.has(String(a.ext_id)));
+  if (!ticked.length) {
+    // none ticked: this account's ad accounts stop here (another account's, if this boutique uses those, stay)
+    const mine = (await t.platform.query(`SELECT 1 FROM platform.social_uses u JOIN platform.social_assets a ON a.id = u.asset_id WHERE u.shop_id = $1 AND u.kind = $2 AND a.link_id = $3`, [shopId, kind, linkId]))[0];
+    if (mine) await stopUse(t, shopId, kind);
+    return;
+  }
+  await useAsset(t, shopId, num(ticked[0].id), by, kind === 'ad_account' ? ticked.map((a: any) => String(a.ext_id)) : undefined);
+}
+
+/** The Meta ad accounts (their numbers) this boutique uses today, whichever account they come from; none: null. */
+export async function adsUsedNow(t: Tenancy, shopId: number): Promise<string[] | null> {
+  const u = (await t.platform.query(`SELECT u.picked, a.link_id FROM platform.social_uses u JOIN platform.social_assets a ON a.id = u.asset_id WHERE u.shop_id = $1 AND u.kind = 'ad_account'`, [shopId]))[0];
+  if (!u) return null;
+  return pickedOf(u.picked) ?? (await t.platform.query(`SELECT ext_id FROM platform.social_assets WHERE link_id = $1 AND kind = 'ad_account' ORDER BY id`, [num(u.link_id)])).map((x: any) => String(x.ext_id));
 }
 
 /** This boutique stops using its Page / ad account: its agents no longer have it. */
@@ -721,14 +784,22 @@ async function writeUse(t: Tenancy, shopId: number, assetId: number) {
     const ig = json(a.extra)?.ig?.id ? String(json(a.extra).ig.id) : null;
     await t.platform.query(`UPDATE platform.social_uses SET ig_id = $3::text WHERE shop_id = $1 AND kind = 'page' AND asset_id = $2 AND ig_id IS DISTINCT FROM $3::text`, [shopId, assetId, ig]);
   }
-  // ad accounts: all of the account's, in the order they came
+  // ad accounts: the ticked ones of the account (Meta), or all of them (TikTok), in the order they came
+  const picked = isAdKind(a.kind) ? pickedOf((await t.platform.query(`SELECT picked FROM platform.social_uses WHERE shop_id = $1 AND kind = $2`, [shopId, a.kind]))[0]?.picked) : null;
   const accounts = isAdKind(a.kind)
-    ? (await t.platform.query(`SELECT ext_id, name, extra FROM platform.social_assets WHERE link_id = $1 AND kind = $2 ORDER BY id`, [num(a.link_id), a.kind])).map((x: any) => ({
-        extId: String(x.ext_id),
-        name: String(x.name ?? ''),
-        currency: json(x.extra)?.currency ? String(json(x.extra).currency) : null,
-      }))
+    ? (await t.platform.query(`SELECT ext_id, name, extra FROM platform.social_assets WHERE link_id = $1 AND kind = $2 ORDER BY id`, [num(a.link_id), a.kind]))
+        .filter((x: any) => !picked || picked.includes(String(x.ext_id)))
+        .map((x: any) => ({
+          extId: String(x.ext_id),
+          name: String(x.name ?? ''),
+          currency: json(x.extra)?.currency ? String(json(x.extra).currency) : null,
+        }))
     : undefined;
+  // every ticked one is gone (no longer shared with Pilotix): nothing is left to use here
+  if (accounts && !accounts.length) {
+    await stopUse(t, shopId, a.kind);
+    return;
+  }
   const r = await applyShop(t.shop(schema), {
     kind: a.kind,
     linkId: num(a.link_id),
@@ -831,11 +902,14 @@ async function applyShop(db: Db, a: Applied): Promise<{ ig: { id: string; userna
     // first; without a choice, the one the boutique launched from until now (a new login, or the account's key taking
     // over from a key pasted before, never moves the ads to another ad account by itself)
     const cur = await getSetting(db, 'meta');
-    const chosen = [String((await raw(db, LAUNCH_KEY)) ?? ''), String(cur.adAccountId ?? '').replace(/^act_/, '')].find((id) => id && all.some((x) => x.adAccountId === id)) ?? '';
+    const was = String(cur.adAccountId ?? '').replace(/^act_/, '');
+    const chosen = [String((await raw(db, LAUNCH_KEY)) ?? ''), was].find((id) => id && all.some((x) => x.adAccountId === id)) ?? '';
     const list = launchFirst(all, chosen);
     await put(db, SOCIAL_KEYS.adsToken, a.token);
     await setSetting(db, 'meta', { ...cur, adAccountId: list[0].adAccountId, adAccountIds: list.map((x) => x.adAccountId), hasToken: true });
     await put(db, SOCIAL_KEYS.ads, { linkId: a.linkId, assetId: a.assetId, adAccountId: list[0].adAccountId, name: list[0].name, currency: list[0].currency, accounts: list, account: a.account, at });
+    // the ad account new ads leave from was unticked: the customer lists Pilotix made there are made again in the new one
+    if (was && was !== list[0].adAccountId) await db.query(`UPDATE ad_audiences SET meta_id = NULL, status = 'off', error = NULL, synced_at = NULL WHERE meta_id IS NOT NULL`).catch(() => null);
   } else {
     const list = (a.accounts?.length ? a.accounts : [{ extId: a.extId, name: a.name, currency: null }]).map((x) => ({ advertiserId: x.extId, name: x.name }));
     await put(db, SOCIAL_KEYS.tiktokAdsToken, a.token);
@@ -1002,13 +1076,13 @@ export async function routeMeta(t: Tenancy, body: any): Promise<{ shopId: number
     }
     return [...byShop].map(([shopId, entry]) => ({ shopId, body: { object: obj, entry } }));
   }
-  // an ad account's webhook (ad rejected, problem…): the boutique that uses this ad account (Co-Pilot warns there)
+  // an ad account's webhook (ad rejected, problem…): the boutiques that use this ad account, ticked (Co-Pilot warns there)
   if (obj === 'ad_account') {
     const byShop = new Map<number, any[]>();
     for (const entry of Array.isArray(body?.entry) ? body.entry : []) {
       const id = String(entry?.id ?? '').replace(/^act_/, '');
       if (!/^\d{1,30}$/.test(id)) continue;
-      for (const r of await t.platform.query(`SELECT shop_id FROM platform.social_uses WHERE kind = 'ad_account' AND ext_id = $1`, [id])) {
+      for (const r of await t.platform.query(`SELECT shop_id FROM platform.social_uses WHERE kind = 'ad_account' AND (CASE WHEN picked IS NULL THEN ext_id = $1 ELSE $1 = ANY(picked) END)`, [id])) {
         const s = num(r.shop_id);
         byShop.set(s, [...(byShop.get(s) ?? []), entry]);
       }
@@ -1157,14 +1231,17 @@ async function listFor(ctx: Ctx): Promise<SocialListView> {
   const ids = links.map((l: any) => num(l.id));
   const assets = ids.length ? await w.t.platform.query(`SELECT * FROM platform.social_assets WHERE link_id = ANY($1) ORDER BY kind, name, id`, [ids]) : [];
   const uses = assets.length
-    ? await w.t.platform.query(`SELECT u.asset_id, u.shop_id, s.name FROM platform.social_uses u JOIN platform.shops s ON s.id = u.shop_id WHERE u.asset_id = ANY($1) ORDER BY s.id`, [assets.map((a: any) => num(a.id))])
+    ? await w.t.platform.query(`SELECT u.asset_id, u.shop_id, u.picked, s.name FROM platform.social_uses u JOIN platform.shops s ON s.id = u.shop_id WHERE u.asset_id = ANY($1) ORDER BY s.id`, [assets.map((a: any) => num(a.id))])
     : [];
   const usersOf = (id: number) => uses.filter((u: any) => num(u.asset_id) === id).map((u: any) => ({ id: num(u.shop_id), name: String(u.name) }));
-  // ad accounts go together: a boutique counting one of an account's ad accounts counts them all
-  const usersOfAds = (linkId: number, kind: string) => {
+  // an ad account is used by the boutiques that ticked it (Meta), or by every boutique using its account (TikTok)
+  const usersOfAd = (linkId: number, kind: string, extId: string) => {
     const ids = new Set(assets.filter((a: any) => num(a.link_id) === linkId && a.kind === kind).map((a: any) => num(a.id)));
     const byShop = new Map<number, { id: number; name: string }>();
-    for (const u of uses) if (ids.has(num(u.asset_id))) byShop.set(num(u.shop_id), { id: num(u.shop_id), name: String(u.name) });
+    for (const u of uses) {
+      const picked = pickedOf(u.picked);
+      if (ids.has(num(u.asset_id)) && (!picked || picked.includes(extId))) byShop.set(num(u.shop_id), { id: num(u.shop_id), name: String(u.name) });
+    }
     return [...byShop.values()];
   };
   const now = ctx.now();
@@ -1182,17 +1259,18 @@ async function listFor(ctx: Ctx): Promise<SocialListView> {
     by: String(l.by_name ?? ''),
     createdAt: iso(l.created_at),
     updatedAt: iso(l.updated_at),
-    assets: assets.filter((a: any) => num(a.link_id) === num(l.id)).map((a: any) => assetView(a, w.shopId, isAdKind(a.kind) ? usersOfAds(num(l.id), a.kind) : usersOf(num(a.id)))),
+    assets: assets.filter((a: any) => num(a.link_id) === num(l.id)).map((a: any) => assetView(a, w.shopId, isAdKind(a.kind) ? usersOfAd(num(l.id), a.kind, String(a.ext_id)) : usersOf(num(a.id)))),
   }));
-  // A boutique that counted one ad account before they all went together: written again with all of its account's (once,
-  // when this page opens), so Publicité adds them up as the page says.
+  // A boutique whose written ad accounts are not the ones it uses (written before the ticks, or before they all went
+  // together): written again (once, when this page opens), so Publicité adds up what the page says.
   for (const kind of AD_KINDS) {
     const mine = uses.find((u: any) => num(u.shop_id) === w.shopId && assets.find((a: any) => num(a.id) === num(u.asset_id))?.kind === kind);
     if (!mine) continue;
     const linkId = num(assets.find((a: any) => num(a.id) === num(mine.asset_id)).link_id);
-    const all = assets.filter((a: any) => num(a.link_id) === linkId && a.kind === kind).length;
+    const picked = pickedOf(mine.picked);
+    const want = assets.filter((a: any) => num(a.link_id) === linkId && a.kind === kind && (!picked || picked.includes(String(a.ext_id)))).length;
     const written = kind === 'ad_account' ? ((await getSetting(ctx.db, 'meta')).adAccountIds?.length ?? 0) : (((await raw(ctx.db, SOCIAL_KEYS.tiktokAds)) as any)?.advertisers?.length ?? 0);
-    if (written !== all) await writeUse(w.t, w.shopId, num(mine.asset_id));
+    if (written !== want) await writeUse(w.t, w.shopId, num(mine.asset_id));
   }
   const name = String((await w.t.platform.query(`SELECT name FROM platform.shops WHERE id = $1`, [w.shopId]))[0]?.name ?? '');
   // an Instagram key connected before may go once the key of the account behind the boutique's Page reaches the inbox
@@ -1415,7 +1493,20 @@ export const socialProcs = {
     return listFor(ctx);
   }),
 
-  /** This boutique counts every ad account of this linked account (Publicité adds them up), or stops counting them. */
+  /**
+   * This boutique uses these ad accounts of this linked account, and those alone (Pilot AI › Comptes › « Changer »):
+   * Publicité adds them up, the pixels and the catalogue come from them, new ads leave from one of them. None: it stops.
+   */
+  'social.adsPick': proc([], z.object({ linkId: id, ids: z.array(z.string().trim().regex(/^(act_)?\d{1,25}$/)).max(200) }), async (ctx, i) => {
+    if (!live(ctx)) return demoPick(ctx, i.linkId, i.ids);
+    const w = await who(ctx);
+    await visibleLink(w, i.linkId);
+    await pickAds(w.t, w.shopId, i.linkId, i.ids, w.by);
+    ctx.emit({ type: 'settings' });
+    return listFor(ctx);
+  }),
+
+  /** This boutique counts every ad account of this linked account (TikTok: Publicité adds them up), or stops counting them. */
   'social.ads': proc([], z.object({ linkId: id, on: z.boolean() }), async (ctx, i) => {
     if (!live(ctx)) return demoAds(ctx, i.linkId, i.on);
     const w = await who(ctx);
@@ -1538,7 +1629,7 @@ function demoData(ctx: Ctx) {
         createdAt: new Date(ctx.now() - 9 * 86_400_000).toISOString(),
         assets: [{ id: 11, kind: 'page', extId: '104920331', name: 'Bébé Confort DZ', igUsername: 'bebeconfort.dz', currency: null, usedBy: [me], picture: DEMO_LOOKS.page, igPicture: DEMO_LOOKS.ig }],
       },
-      // « Publicité Meta »: a connection of its own; an account often has several ad accounts (all counted)
+      // « Publicité Meta »: a connection of its own; an account often has several ad accounts (each boutique ticks its own)
       {
         id: 2,
         provider: 'meta',
@@ -1549,8 +1640,9 @@ function demoData(ctx: Ctx) {
         assets: [
           { id: 13, kind: 'ad_account', extId: '120211887', name: 'Bébé Confort — publicité', igUsername: null, currency: 'USD', usedBy: [me, DEMO_SISTER.id], business: DEMO_LOOKS.business },
           { id: 22, kind: 'ad_account', extId: '120211888', name: 'Bébé Confort — tests', igUsername: null, currency: 'USD', usedBy: [me, DEMO_SISTER.id], business: DEMO_LOOKS.business },
-          { id: 23, kind: 'ad_account', extId: '120211889', name: 'Promo Ramadan', igUsername: null, currency: 'USD', usedBy: [me, DEMO_SISTER.id], business: DEMO_LOOKS.business },
-          { id: 24, kind: 'ad_account', extId: '120211890', name: 'Ancien compte (lecture seule)', igUsername: null, currency: 'USD', usedBy: [me, DEMO_SISTER.id], business: DEMO_LOOKS.business },
+          { id: 23, kind: 'ad_account', extId: '120211889', name: 'Promo Ramadan', igUsername: null, currency: 'USD', usedBy: [DEMO_SISTER.id], business: DEMO_LOOKS.business },
+          { id: 24, kind: 'ad_account', extId: '120211890', name: 'Ancien compte (lecture seule)', igUsername: null, currency: 'USD', usedBy: [], business: DEMO_LOOKS.business },
+          { id: 25, kind: 'ad_account', extId: '120211891', name: 'Compte en dinars', igUsername: null, currency: 'DZD', usedBy: [], business: DEMO_LOOKS.business },
         ],
       },
     ],
@@ -1648,7 +1740,12 @@ async function demoState(ctx: Ctx, state: string) {
       assets: tiktok
         ? [{ id: n * 10 + 1, kind: 'advertiser', extId: '7311021845', name: 'Bébé Confort TikTok', igUsername: null, currency: 'USD', usedBy: [] }]
         : ads
-          ? [{ id: n * 10 + 2, kind: 'ad_account', extId: `9930${n}`, name: 'Sara — publicité', igUsername: null, currency: 'USD', usedBy: [], business: DEMO_LOOKS.businessSara }]
+          ? // several ad accounts, none ticked yet: the page asks which ones this boutique uses (the login's tab, live)
+            [
+              { id: n * 10 + 2, kind: 'ad_account', extId: `9930${n}1`, name: 'Sara — publicité', igUsername: null, currency: 'USD', usedBy: [], business: DEMO_LOOKS.businessSara },
+              { id: n * 10 + 3, kind: 'ad_account', extId: `9930${n}2`, name: 'Sara — tests', igUsername: null, currency: 'USD', usedBy: [], business: DEMO_LOOKS.businessSara },
+              { id: n * 10 + 4, kind: 'ad_account', extId: `9930${n}3`, name: 'Sara — compte perso', igUsername: null, currency: 'DZD', usedBy: [], business: DEMO_LOOKS.businessSara },
+            ]
           : [{ id: n * 10 + 1, kind: 'page', extId: `2049${n}`, name: 'Bébé Confort Alger', igUsername: 'bebeconfort.alger', currency: null, usedBy: [], picture: DEMO_LOOKS.pageAlger, igPicture: DEMO_LOOKS.igAlger }],
     };
     d.links.push(link);
@@ -1658,8 +1755,10 @@ async function demoState(ctx: Ctx, state: string) {
       await demoUseOne(ctx, d, me, link.assets[0].id);
       d.links = d.links.filter((l) => l.id === n || !(l.provider === 'meta' && l.part === 'main' && l.scope === 'here'));
     } else if (link.scope === 'here')
-      // one boutique: what it can use, used at once (the first free of each kind)
+      // one boutique: what it can use, used at once (the first free of each kind), but never Meta's ad accounts: the
+      // boutique ticks them
       for (const kind of ASSET_KINDS) {
+        if (kind === 'ad_account') continue;
         const usedAlready = d.links.some((l) => l.assets.some((a) => a.kind === kind && a.usedBy.includes(me)));
         const free = link.assets.find((a) => a.kind === kind);
         if (!usedAlready && free) await demoUseOne(ctx, d, me, free.id);
@@ -1705,6 +1804,39 @@ async function demoUseOne(ctx: Ctx, d: NonNullable<typeof demo>, me: number, ass
     linkToken: 'preview',
     accounts: isAdKind(a.kind) ? together.map((x) => ({ extId: x.extId, name: x.name, currency: x.currency })) : undefined,
   });
+}
+/** In the preview: this boutique uses these ad accounts of a sample account, and those alone (none: it stops). */
+async function demoPick(ctx: Ctx, linkId: number, ids: string[]) {
+  const d = demoData(ctx);
+  const me = demoShop(ctx);
+  const l = d.links.find((x) => x.id === linkId);
+  if (!l) throw new AppError('not_found', 'Compte introuvable');
+  const kind = adKindOf(l.provider);
+  const want = new Set(ids.map((x) => x.replace(/^act_/, '')));
+  const ticked = l.assets.filter((a) => a.kind === kind && want.has(a.extId));
+  if (!ticked.length) {
+    if (l.assets.some((a) => a.kind === kind && a.usedBy.includes(me))) {
+      for (const a of l.assets) if (a.kind === kind) a.usedBy = a.usedBy.filter((x) => x !== me);
+      await clearShop(ctx.db, kind);
+    }
+    return demoList(ctx);
+  }
+  // a boutique's ad accounts come from one account: the ones ticked here, and those alone
+  for (const ll of d.links) for (const a of ll.assets) if (a.kind === kind) a.usedBy = a.usedBy.filter((x) => x !== me);
+  for (const a of ticked) a.usedBy.push(me);
+  const first = ticked[0];
+  await applyShop(ctx.db, {
+    kind,
+    linkId: l.id,
+    assetId: first.id,
+    extId: first.extId,
+    name: first.name,
+    extra: first.currency ? { currency: first.currency } : {},
+    account: l.name,
+    token: 'preview',
+    accounts: ticked.map((x) => ({ extId: x.extId, name: x.name, currency: x.currency })),
+  });
+  return demoList(ctx);
 }
 async function demoAds(ctx: Ctx, linkId: number, on: boolean) {
   const d = demoData(ctx);
@@ -1760,7 +1892,7 @@ async function demoTest(ctx: Ctx, linkId: number): Promise<SocialTest> {
     } else if (pages.length) add('fb', 'pageNone', 'warn');
     if (adsHere) {
       const launch = (await launchAccounts(ctx.db))?.accounts[0]?.name || ads[0].name;
-      add('ads', 'ads', 'ok', { count: ads.length, bad: 0 });
+      add('ads', 'ads', 'ok', { count: ads.filter((a) => a.usedBy.includes(me)).length, bad: 0 });
       add('ads', 'adsRead', 'ok', { name: launch });
       add('ads', 'adsLaunch', 'ok', { name: launch });
       add('catalog', 'catalog', 'ok', { name: 'Catalogue Pilotix', count: 36 });

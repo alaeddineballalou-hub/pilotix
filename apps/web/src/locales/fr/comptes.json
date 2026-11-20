@@ -136,6 +136,7 @@
   "testTodo": "À regarder : {{n}}",
   "sumPage": "Page « {{name}} »",
   "sumAds": "Comptes pub : {{n}}",
+  "sumAdsOf": "Comptes pub : {{used}} sur {{n}}",
   "sumNone": "Rien d’utilisé dans cette boutique",
   "pageLabel": "Page Facebook",
   "pageHint": "Vos agents répondent aux messages et aux commentaires de cette page dans « {{name}} ».",
@@ -150,7 +151,7 @@
   },
   "adsHint": "Publicité additionne les chiffres de tous ces comptes.",
   "launchLabel": "Compte pour lancer",
-  "launchHint": "Les nouvelles pubs lancées depuis Pilotix partent de ce compte. Les chiffres de tous les comptes restent comptés.",
+  "launchHint": "Les nouvelles pubs lancées depuis Pilotix partent de ce compte. Les chiffres de tous les comptes cochés restent comptés.",
   "launchOption": "{{name}} · {{money}}",
   "launchSaved": "Les nouvelles pubs partent maintenant de « {{name}} ».",
   "adsUse": "Les compter dans « {{name}} »",
@@ -158,6 +159,31 @@
   "adsAlso": "Aussi comptés dans {{names}}.",
   "adsMixed": "En {{list}} : Publicité compte ces comptes comme des dollars.",
   "adsDzd": "Les comptes en dinars (DZD) comptent en dinars dans Publicité.",
+  "pick": {
+    "hint": "Pilotix lit et utilise seulement les comptes cochés : leurs chiffres dans Publicité, leurs pixels et leur catalogue, et les nouvelles pubs.",
+    "count": "{{used}} sur {{n}} utilisés dans « {{name}} »",
+    "zero": "Aucun utilisé dans « {{name}} » pour l’instant",
+    "change": "Changer",
+    "choose": "Choisir",
+    "on": "utilisé ici",
+    "off": "pas utilisé ici",
+    "title": "Comptes pub de « {{name}} »",
+    "lead": "Cochez les comptes publicitaires que cette boutique utilise. Pilotix lit et utilise seulement ceux-là : leurs chiffres dans Publicité, leurs pixels et leur catalogue, et vos nouvelles pubs. Les autres ne sont pas touchés.",
+    "ticked": "{{used}} sur {{n}} cochés",
+    "all": "Tous",
+    "none": "Aucun",
+    "also": "Aussi dans {{names}}",
+    "launch": "Nouvelles pubs",
+    "launchMoves": "Les nouvelles pubs partent aujourd’hui de « {{name}} ». Décoché, elles partent d’un autre compte coché (vous choisissez lequel sur la carte).",
+    "noneWarn": "Rien de coché : « {{name}} » n’utilise plus ces comptes pub (Publicité, pixels, catalogue, nouvelles pubs).",
+    "save_one": "Enregistrer · 1 compte",
+    "save_other": "Enregistrer · {{count}} comptes",
+    "saveNone": "Enregistrer · aucun",
+    "saving": "Enregistrement…",
+    "saved_one": "C’est fait : « {{name}} » utilise 1 compte pub.",
+    "saved_other": "C’est fait : « {{name}} » utilise {{count}} comptes pub.",
+    "stopped": "C’est fait : « {{name}} » n’utilise plus ces comptes pub."
+  },
   "check": {
     "token": {
       "ok": "Clé Facebook : elle marche (« {{name}} »).",
@@ -327,9 +353,9 @@
       "warn": "Compte pub « {{name}} » : Co-Pilot ne sera pas prévenu de ses pubs refusées (il faut être administrateur de ce compte pub)."
     },
     "adsOld": {
-      "switch": "Publicité marche avec une ancienne clé collée dans Réglages › Meta Ads (compte « {{name}} »). Pour tout mettre sur ce compte Facebook : activez « Les compter » plus haut.",
+      "switch": "Publicité marche avec une ancienne clé collée dans Réglages › Meta Ads (compte « {{name}} »). Pour tout mettre sur ce compte Facebook : cochez ses comptes pub plus haut (« Choisir »).",
       "relink": "Publicité marche avec une ancienne clé collée dans Réglages › Meta Ads (compte « {{name}} »). Pour tout mettre ici : cliquez sur « Relier » et cochez votre compte pub.",
-      "switchBad": "Publicité : l’ancienne clé collée ne marche plus (compte {{name}}). Activez « Les compter » plus haut : ce compte Facebook prend sa place.",
+      "switchBad": "Publicité : l’ancienne clé collée ne marche plus (compte {{name}}). Cochez les comptes pub de ce compte Facebook plus haut (« Choisir ») : il prend sa place.",
       "relinkBad": "Publicité : l’ancienne clé collée ne marche plus (compte {{name}}). Cliquez sur « Relier » et cochez votre compte pub."
     },
     "adsRight": {
@@ -339,7 +365,7 @@
       "info": "Publicité de cette boutique compte les comptes pub d’un autre compte lié (« {{account}} »)."
     },
     "adsOff": {
-      "warn": "Ce compte a des comptes pub ({{n}}), mais cette boutique ne les compte pas. Activez « Les compter » plus haut."
+      "warn": "Ce compte a des comptes pub ({{n}}), mais aucun n’est coché dans cette boutique. Cochez ceux qu’elle utilise plus haut (« Choisir »)."
     },
     "adsNone": {
       "warn": "Aucun compte pub donné à Pilotix. Cliquez sur « Relier » et cochez votre compte pub dans la fenêtre de Facebook."
@@ -378,7 +404,7 @@
     "title": "Anciennes connexions",
     "text": "Elles ont été faites ailleurs, avant, et Pilotix s’en sert encore (« Tester » dit si elles marchent). Pour tout avoir au même endroit : cliquez sur « Relier » sur votre compte Facebook et cochez tout.",
     "ads": "Publicité : clé collée dans Réglages › Meta Ads (compte pub {{id}})",
-    "adsHint": "Elle part toute seule quand vous comptez ici les comptes pub de votre compte Facebook.",
+    "adsHint": "Elle part toute seule quand vous cochez ici les comptes pub de votre compte Facebook.",
     "ig": "Instagram : clé connectée dans Pilot Message (@{{user}})",
     "igHint": "La clé de votre compte Facebook peut répondre à sa place : retirez l’ancienne quand vous voulez.",
     "ask": {

@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, ServerHooks, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
 import { loadShop, passwordFromLink } from '../platform';
-import { CHECK_GROUPS, noteBadSignature, noteIgLogin, resetSocialDemo, routeMeta } from '../modules/social';
+import { CHECK_GROUPS, noteBadSignature, noteIgLogin, resetSocialDemo, routeMeta, SOCIAL_PICKED_SQL } from '../modules/social';
 import { setRaw } from '../modules/admin';
 import { confirmLogin, deletionPage, finishLogin, finishWhatsappPopup, loginPage, metaDeletion, parseSignedRequest, runSocial, testMetaApp } from '../social-server';
 import { createHmac } from 'node:crypto';
@@ -19,9 +19,10 @@ const SELLER = 'karim@bebe.dz';
 const PW = 'Vendeur-Password-1';
 const URL0 = 'https://pilotix.test';
 /** The login tab comes back and the person says « Oui, c'est ma boutique » in it: the account linked (most tests). */
-async function linked(t: Tenancy, provider: 'meta' | 'tiktok', q: Record<string, unknown>, url: string) {
+/** A login whose tab says yes, every ad account it shows ticked (unless `ads` says which ones). */
+async function linked(t: Tenancy, provider: 'meta' | 'tiktok', q: Record<string, unknown>, url: string, ads?: string[]) {
   const end = await finishLogin(t, provider, q, url);
-  return end.confirm ? confirmLogin(t, end.confirm.state, end.confirm.key, true) : end;
+  return end.confirm ? confirmLogin(t, end.confirm.state, end.confirm.key, true, '', ads ?? (end.confirm.ads ?? []).map((x) => x.id)) : end;
 }
 let t: Tenancy;
 let pctx: PCtx;
@@ -241,13 +242,15 @@ test('one boutique: the login tab comes back, the account is kept, its first Pag
   const back = await finishLogin(t, 'meta', { code: 'THE_CODE', state: s.state }, URL0);
   // the tab asks « Oui, c'est ma boutique ? »: nothing is linked before, and only that tab's key says yes
   assert.equal(back.ok, true);
-  assert.deepEqual([back.confirm!.account, back.confirm!.provider, back.confirm!.assets.length], ['Karim Benali', 'meta', 3]);
-  assert.match(loginPage(back), /Karim Benali.*Oui, c’est ma boutique.*Non, ce n’est pas moi/s);
+  // the two Pages are listed; the ad account is a box to tick (ticked: it is the only one)
+  assert.deepEqual([back.confirm!.account, back.confirm!.provider, back.confirm!.assets.length], ['Karim Benali', 'meta', 2]);
+  assert.deepEqual(back.confirm!.ads, [{ id: '3003', name: 'Bébé pub', currency: 'USD', on: true }]);
+  assert.match(loginPage(back), /Karim Benali.*Quels comptes publicitaires.*name="ad" value="3003" checked.*Oui, c’est ma boutique.*Non, ce n’est pas moi/s);
   assert.ok(!/TOKEN/.test(loginPage(back)), 'no token in the page');
   assert.equal((await call('social.state', a, { state: s.state })).status, 'confirm');
   assert.equal(((await call('social.list', a, {})) as any).links.length, 0);
   assert.equal((await confirmLogin(t, s.state, 'not-the-key-of-this-tab', true)).ok, false);
-  const end = await confirmLogin(t, back.confirm!.state, back.confirm!.key, true);
+  const end = await confirmLogin(t, back.confirm!.state, back.confirm!.key, true, '', ['3003']);
   assert.deepEqual(end, { ok: true, message: 'Compte lié', account: 'Karim Benali' });
   assert.match(loginPage(end), /Karim Benali.*fermer cet onglet/s);
   assert.equal((await confirmLogin(t, back.confirm!.state, back.confirm!.key, true)).ok, false, 'a yes serves once');
@@ -478,8 +481,11 @@ test('the preview: the boutique’s one Page and its ads connection; a « login 
   const first: any = await call('social.list', demo, {});
   assert.equal(first.preview, true);
   // Meta's two doors: a Facebook account with the boutique's one Page; the ads, a connection of their own
-  assert.deepEqual(first.links.map((x: any) => [x.part, x.scope, x.assets.map((y: any) => y.kind).join()]), [['main', 'here', 'page'], ['ads', 'all', 'ad_account,ad_account,ad_account,ad_account']]);
+  assert.deepEqual(first.links.map((x: any) => [x.part, x.scope, x.assets.map((y: any) => y.kind).join()]), [['main', 'here', 'page'], ['ads', 'all', 'ad_account,ad_account,ad_account,ad_account,ad_account']]);
   assert.equal(first.here.page.name, 'Bébé Confort DZ');
+  // the boutique uses the ad accounts it ticked (2 of 5); its sister ticked others
+  assert.deepEqual(first.links[1].assets.map((y: any) => `${y.name}:${y.usedHere}:${y.usedBy.length}`), ['Bébé Confort — publicité:true:1', 'Bébé Confort — tests:true:1', 'Promo Ramadan:false:1', 'Ancien compte (lecture seule):false:0', 'Compte en dinars:false:0']);
+  assert.equal(first.here.ad_account.count, 2);
   const s: any = await call('social.start', demo, { provider: 'tiktok', scope: 'here' });
   assert.equal(s.url, null);
   assert.equal((await call('social.state', demo, { state: s.state })).status, 'waiting');
@@ -497,7 +503,7 @@ test('the preview: the boutique’s one Page and its ads connection; a « login 
   const pages = again.links.filter((x: any) => x.provider === 'meta' && x.part === 'main');
   assert.deepEqual(pages.map((x: any) => [x.id, x.scope, x.assets.map((y: any) => `${y.name}:${y.usedHere}`).join()]), [[done.linkId, 'here', 'Bébé Confort Alger:true']]);
   assert.equal(again.here.page.name, 'Bébé Confort Alger');
-  assert.equal(again.here.ad_account.count, 4, 'the ads keep their own connection');
+  assert.equal(again.here.ad_account.count, 2, 'the ads keep their own connection, and the ticks');
   // a Page's account stays with its boutique
   await assert.rejects(() => call('social.scope', demo, { linkId: done.linkId, scope: 'all' }), /une seule boutique/);
   resetSocialDemo();
@@ -1455,12 +1461,16 @@ test('« Coller une clé Meta Ads »: Meta is asked about the key; its ad accoun
     await assert.rejects(() => call('social.adsKey', b, { token: key }), /aucun compte publicitaire/);
     await assert.rejects(() => call('social.adsKey', b, { token: 'trop court' }));
     assert.equal(((await call('social.list', b, {})) as any).links.length, before);
-    // the right key: its account in the list, its ad account counted at once, the key kept on the server only
+    // the right key: its account in the list, the key kept on the server only; its ad account is used once ticked (the
+    // page opens « Changer » by itself)
     graph = { ...graph, assigned: [{ id: 'act_4100', account_id: '4100', name: 'Clé pub', currency: 'USD', account_status: 1 }] };
     const r: any = await call('social.adsKey', b, { token: key });
     const l = r.list.links.find((x: any) => x.id === r.linkId);
     assert.equal(l.name, 'pilotix');
-    assert.deepEqual(l.assets.map((x: any) => [x.kind, x.name, x.usedHere]), [['ad_account', 'Clé pub', true]]);
+    assert.deepEqual(l.assets.map((x: any) => [x.kind, x.name, x.usedHere]), [['ad_account', 'Clé pub', false]]);
+    assert.notEqual(await setting(b, 'secret_meta_token'), key, 'nothing used before it is ticked');
+    const ticked: any = await call('social.adsPick', b, { linkId: r.linkId, ids: ['4100'] });
+    assert.deepEqual(ticked.links.find((x: any) => x.id === r.linkId).assets.map((x: any) => [x.kind, x.name, x.usedHere]), [['ad_account', 'Clé pub', true]]);
     assert.equal(await setting(b, 'secret_meta_token'), key);
     assert.ok(!JSON.stringify(r).includes(key), 'the key never comes back to a page');
     const row = (await t.platform.query(`SELECT token_kind, expires_at, shop_id FROM platform.social_links WHERE id = $1`, [r.linkId]))[0];
@@ -1483,7 +1493,17 @@ test('the preview: « Publicité Meta » links a sample ad account, a pasted key
   const done: any = await call('social.state', demo, { state: s.state });
   assert.equal(done.status, 'done');
   const withAds: any = await call('social.list', demo, {});
-  assert.deepEqual(withAds.links.find((x: any) => x.id === done.linkId).assets.map((x: any) => x.kind), ['ad_account']);
+  // several sample ad accounts, none ticked yet: the page opens « Changer » by itself (live, the login's tab asks it)
+  const sara = withAds.links.find((x: any) => x.id === done.linkId);
+  assert.deepEqual(sara.assets.map((x: any) => `${x.kind}:${x.usedHere}`), ['ad_account:false', 'ad_account:false', 'ad_account:false']);
+  const two = sara.assets.slice(0, 2).map((x: any) => x.extId);
+  const picked: any = await call('social.adsPick', demo, { linkId: done.linkId, ids: two });
+  assert.deepEqual(picked.links.find((x: any) => x.id === done.linkId).assets.map((x: any) => x.usedHere), [true, true, false]);
+  assert.deepEqual([picked.here.ad_account.count, picked.launch.accounts.map((x: any) => x.id)], [2, two]);
+  // the other account's ad accounts stop here: a boutique's come from one account
+  assert.ok(picked.links.filter((x: any) => x.id !== done.linkId).every((x: any) => x.assets.every((y: any) => y.kind !== 'ad_account' || !y.usedHere)));
+  const none: any = await call('social.adsPick', demo, { linkId: done.linkId, ids: [] });
+  assert.equal(none.here.ad_account, null);
   const k: any = await call('social.adsKey', demo, { token: `EAAG${'y'.repeat(40)}` });
   assert.equal(k.list.links.length, withAds.links.length + 1);
   assert.deepEqual(k.list.links.find((x: any) => x.id === k.linkId).assets.map((x: any) => x.kind), ['ad_account']);
@@ -1494,9 +1514,9 @@ test('the preview: « Tester » answers a sample for each connection, the ad acc
   resetSocialDemo();
   const demo: Ctx = { ...a, t: undefined, server: undefined };
   const first: any = await call('social.list', demo, {});
-  assert.deepEqual(first.here.ad_account, { name: 'Bébé Confort — publicité', account: 'Alaeddine Benali', count: 4 });
+  assert.deepEqual(first.here.ad_account, { name: 'Bébé Confort — publicité', account: 'Alaeddine Benali', count: 2 });
   const [page, ads] = first.links;
-  assert.deepEqual([page.part, page.assets.length, ads.part, ads.assets.length], ['main', 1, 'ads', 4]);
+  assert.deepEqual([page.part, page.assets.length, ads.part, ads.assets.length], ['main', 1, 'ads', 5]);
   // part by part, as on the server: the page folds the parts that work and opens the one with a problem
   const r: any = await call('social.test', demo, { linkId: page.id });
   assert.ok(r.checks.every((c: any) => c.state === 'ok'));
@@ -1505,12 +1525,14 @@ test('the preview: « Tester » answers a sample for each connection, the ad acc
   assert.deepEqual([...new Set(r2.checks.map((c: any) => c.group))], ['key', 'ads', 'catalog', 'pixels']);
   // the sample pictures: the Page's and its Instagram account's, the business portfolio of the ad accounts
   assert.ok(page.assets[0].picture?.startsWith('data:image/svg+xml') && page.assets[0].igPicture?.startsWith('data:image/svg+xml'));
-  assert.deepEqual(ads.assets.map((x: any) => x.business?.name), Array(4).fill('Bébé Confort SARL'));
+  assert.deepEqual(ads.assets.map((x: any) => x.business?.name), Array(5).fill('Bébé Confort SARL'));
   assert.deepEqual([first.old, first.whatsapp, first.waReady], [{ ads: null, instagram: null }, null, true]);
+  // « Tester » tries the ticked ones
+  assert.equal(r2.checks.find((c: any) => c.key === 'ads').params.count, 2);
   const off: any = await call('social.ads', demo, { linkId: ads.id, on: false });
   assert.equal(off.here.ad_account, null);
   const on: any = await call('social.ads', demo, { linkId: ads.id, on: true });
-  assert.equal(on.here.ad_account.count, 4);
+  assert.equal(on.here.ad_account.count, 5);
   resetSocialDemo();
 });
 
@@ -1620,5 +1642,82 @@ test('Pilot AI › Comptes shows the pictures: the Page’s and its Instagram ac
     probe.bizPicRefuse = undefined;
     graph.business = undefined;
     await call('social.remove', c, { linkId: l.id });
+  }
+});
+
+test('« Publicité Meta »: the login’s tab asks which ad accounts the boutique uses, and only the ticked ones are used; one Facebook brings later comes unticked; « Changer » ticks others', async () => {
+  await twoDoorsOn();
+  const acct = (id: string, name: string, currency = 'USD') => ({ id: `act_${id}`, account_id: id, name, currency, account_status: 1 });
+  let linkId = 0;
+  try {
+    graph = { me: { id: '5800', name: 'Ala Ads' }, pages: [], ads: [acct('3301', 'babyjoydz velo'), acct('3302', 'Mighty prod'), acct('3303', 'baby product', 'DZD')] };
+    const s: any = await call('social.start', a, { provider: 'meta', scope: 'here', kind: 'ads' });
+    const back = await finishLogin(t, 'meta', { code: 'ADS_PICK', state: s.state }, URL0);
+    assert.equal(back.ok, true);
+    // the tab: one box per ad account, none ticked (the boutique uses none of them today); not listed twice
+    assert.deepEqual(back.confirm!.assets, []);
+    assert.deepEqual(back.confirm!.ads!.map((x) => [x.id, x.name, x.currency, x.on]), [['3301', 'babyjoydz velo', 'USD', false], ['3302', 'Mighty prod', 'USD', false], ['3303', 'baby product', 'DZD', false]]);
+    const html = loginPage(back);
+    assert.match(html, /Quels comptes publicitaires Pilotix utilise dans cette boutique/);
+    assert.match(html, /name="ad" value="3302"/);
+    assert.doesNotMatch(html, / checked/);
+    assert.match(html, /Cochez-en au moins un/);
+    assert.ok(!/TOKEN/.test(html), 'no token in the page');
+    // nothing ticked: the question stays open (the tab's « back » shows it again)
+    assert.match((await confirmLogin(t, back.confirm!.state, back.confirm!.key, true)).message, /Cochez au moins un compte publicitaire/);
+    assert.equal((await call('social.state', a, { state: s.state })).status, 'confirm');
+    // two ticked (a number the login did not bring is left out)
+    const end = await confirmLogin(t, back.confirm!.state, back.confirm!.key, true, '', ['3301', 'act_3303', '9999']);
+    assert.equal(end.ok, true);
+    const l1: any = await call('social.list', a, {});
+    const link = l1.links.find((x: any) => x.name === 'Ala Ads');
+    linkId = link.id;
+    assert.deepEqual(Object.fromEntries(link.assets.map((x: any) => [x.name, x.usedHere])), { 'babyjoydz velo': true, 'Mighty prod': false, 'baby product': true });
+    assert.equal(l1.here.ad_account.count, 2);
+    // Publicité, the pixels and the catalogue read these two alone; new ads leave from the first ticked one
+    assert.deepEqual((await setting(a, 'meta')).adAccountIds, ['3301', '3303']);
+    assert.deepEqual([l1.launch.id, l1.launch.accounts.map((x: any) => x.id)], ['3301', ['3301', '3303']]);
+    assert.equal(await setting(a, 'secret_meta_token'), 'LONG_USER_TOKEN');
+    // an ad account's webhook (an ad rejected…) reaches the boutiques that ticked it
+    assert.deepEqual((await routeMeta(t, { object: 'ad_account', entry: [{ id: 'act_3303', changes: [] }] })).map((r) => r.shopId), [a.shop!.id]);
+    assert.deepEqual(await routeMeta(t, { object: 'ad_account', entry: [{ id: 'act_3302', changes: [] }] }), []);
+    // « Tester » tries the ticked ones
+    const tested: any = await call('social.test', a, { linkId });
+    assert.equal(tested.checks.find((c: any) => c.key === 'ads').params.count, 2);
+
+    // linked again: Facebook brings a new ad account; the tab ticks what the boutique uses, the new one comes unticked
+    graph = { ...graph, ads: [...graph.ads, acct('3304', 'SERVICE AD ACCOUNT')] };
+    const s2: any = await call('social.start', a, { provider: 'meta', scope: 'here', kind: 'ads' });
+    const back2 = await finishLogin(t, 'meta', { code: 'ADS_PICK_2', state: s2.state }, URL0);
+    assert.deepEqual(back2.confirm!.ads!.map((x) => `${x.id}:${x.on}`), ['3301:true', '3302:false', '3303:true', '3304:false']);
+    assert.match(loginPage(back2), /name="ad" value="3301" checked/);
+    assert.equal((await confirmLogin(t, back2.confirm!.state, back2.confirm!.key, true, '', ['3301', '3303'])).ok, true);
+    const l2: any = await call('social.list', a, {});
+    assert.deepEqual(l2.links.find((x: any) => x.id === linkId).assets.filter((x: any) => x.usedHere).map((x: any) => x.extId).sort(), ['3301', '3303']);
+    assert.deepEqual((await setting(a, 'meta')).adAccountIds, ['3301', '3303']);
+
+    // « Changer »: new ads leave from « baby product »; unticked, they leave from the one still ticked, and the customer
+    // lists Pilotix made in the former account are made again in the new one
+    await call('social.launchAccount', a, { adAccountId: '3303' });
+    await a.db.query(`INSERT INTO ad_audiences (kind, meta_id, status) VALUES ('pick-test', 'AUD_1', 'on') ON CONFLICT (kind) DO UPDATE SET meta_id = 'AUD_1', status = 'on'`);
+    const changed: any = await call('social.adsPick', a, { linkId, ids: ['3302'] });
+    assert.deepEqual(changed.links.find((x: any) => x.id === linkId).assets.filter((x: any) => x.usedHere).map((x: any) => x.name), ['Mighty prod']);
+    assert.deepEqual([changed.launch.id, (await setting(a, 'meta')).adAccountIds], ['3302', ['3302']]);
+    assert.deepEqual((await a.db.query(`SELECT meta_id, status FROM ad_audiences WHERE kind = 'pick-test'`))[0], { meta_id: null, status: 'off' });
+    // a number of another account, or none at all
+    await assert.rejects(() => call('social.adsPick', a, { linkId, ids: ['nope'] }));
+    const none: any = await call('social.adsPick', a, { linkId, ids: [] });
+    assert.equal(none.here.ad_account, null);
+    assert.deepEqual([(await setting(a, 'meta')).adAccountIds, await setting(a, 'secret_meta_token')], [[], null]);
+
+    // p044: a boutique that counted all of an account's ad accounts keeps exactly those, ticked
+    const any3301 = (await t.platform.query(`SELECT id FROM platform.social_assets WHERE link_id = $1 AND ext_id = '3301'`, [linkId]))[0];
+    await t.platform.query(`INSERT INTO platform.social_uses (shop_id, kind, asset_id, ext_id, by_name) VALUES ($1, 'ad_account', $2, '3301', 'avant')`, [a.shop!.id, any3301.id]);
+    // (its UPDATE: the column itself came with the platform's migrations)
+    for (const sql of SOCIAL_PICKED_SQL.split(';').map((x) => x.trim()).filter((x) => x.startsWith('UPDATE'))) await t.platform.query(sql);
+    assert.deepEqual((await t.platform.query(`SELECT picked FROM platform.social_uses WHERE shop_id = $1 AND kind = 'ad_account'`, [a.shop!.id]))[0].picked, ['3301', '3302', '3303', '3304']);
+  } finally {
+    if (linkId) await call('social.remove', a, { linkId }).catch(() => null);
+    await twoDoorsOff();
   }
 });

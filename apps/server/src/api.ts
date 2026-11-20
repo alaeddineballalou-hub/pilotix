@@ -1904,8 +1904,16 @@ class ApiController {
     checkLogin(ipKey, 20);
     failedLogin(ipKey);
     const m = optionalSocial();
+    // the ad accounts ticked in the tab (one box: a word; several: a list)
+    const ads = ([] as unknown[])
+      .concat(body?.ad ?? [])
+      .map((x) => String(x).trim())
+      .filter((x) => /^(act_)?\d{1,25}$/.test(x))
+      .slice(0, 200);
     const r = m?.confirmLogin
-      ? await m.confirmLogin(this.core.t, String(body?.state ?? '').slice(0, 100), String(body?.key ?? '').slice(0, 100), body?.choice === 'yes', String(body?.page ?? '').slice(0, 40)).catch((e: any) => ({ ok: false, message: String(e?.message ?? 'Erreur') }))
+      ? await m
+          .confirmLogin(this.core.t, String(body?.state ?? '').slice(0, 100), String(body?.key ?? '').slice(0, 100), body?.choice === 'yes', String(body?.page ?? '').slice(0, 40), ads)
+          .catch((e: any) => ({ ok: false, message: String(e?.message ?? 'Erreur') }))
       : { ok: false, message: 'Indisponible sur ce serveur.' };
     if (!r.ok) new Logger('Comptes').warn(`link not confirmed: ${r.message}`);
     const html = m?.loginPage ? m.loginPage(r) : `<!DOCTYPE html><meta charset="utf-8"><p>${r.ok ? 'OK' : 'Erreur'}</p>`;

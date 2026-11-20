@@ -136,6 +136,7 @@
   "testTodo": "To check: {{n}}",
   "sumPage": "Page “{{name}}”",
   "sumAds": "Ad accounts: {{n}}",
+  "sumAdsOf": "Ad accounts: {{used}} of {{n}}",
   "sumNone": "Nothing used in this store",
   "pageLabel": "Facebook Page",
   "pageHint": "Your agents answer this Page’s messages and comments in “{{name}}”.",
@@ -150,7 +151,7 @@
   },
   "adsHint": "Publicité adds up the numbers of all these accounts.",
   "launchLabel": "Account to launch from",
-  "launchHint": "New ads launched from Pilotix go out from this account. The numbers of all accounts are still counted.",
+  "launchHint": "New ads launched from Pilotix go out from this account. The numbers of every ticked account are still counted.",
   "launchOption": "{{name}} · {{money}}",
   "launchSaved": "New ads now go out from “{{name}}”.",
   "adsUse": "Count them in “{{name}}”",
@@ -158,6 +159,31 @@
   "adsAlso": "Also counted in {{names}}.",
   "adsMixed": "In {{list}}: Publicité counts these accounts as dollars.",
   "adsDzd": "Accounts in dinars (DZD) count in dinars in Publicité.",
+  "pick": {
+    "hint": "Pilotix reads and uses only the ticked ones: their numbers in Publicité, their pixels and catalogue, and new ads.",
+    "count": "{{used}} of {{n}} used in “{{name}}”",
+    "zero": "None used in “{{name}}” yet",
+    "change": "Change",
+    "choose": "Choose",
+    "on": "used here",
+    "off": "not used here",
+    "title": "Ad accounts for “{{name}}”",
+    "lead": "Tick the ad accounts this boutique uses. Pilotix reads and uses only these: their numbers in Publicité, their pixels and catalogue, and your new ads. The others are left alone.",
+    "ticked": "{{used}} of {{n}} ticked",
+    "all": "All",
+    "none": "None",
+    "also": "Also in {{names}}",
+    "launch": "New ads",
+    "launchMoves": "New ads go out from “{{name}}” today. Unticked, they will go out from another ticked account (you choose which one on the card).",
+    "noneWarn": "Nothing ticked: “{{name}}” stops using these ad accounts (Publicité, pixels, catalogue, new ads).",
+    "save_one": "Save · 1 account",
+    "save_other": "Save · {{count}} accounts",
+    "saveNone": "Save · none",
+    "saving": "Saving…",
+    "saved_one": "Done: “{{name}}” uses 1 ad account.",
+    "saved_other": "Done: “{{name}}” uses {{count}} ad accounts.",
+    "stopped": "Done: “{{name}}” no longer uses these ad accounts."
+  },
   "check": {
     "token": {
       "ok": "Facebook key: it works (“{{name}}”).",
@@ -327,9 +353,9 @@
       "warn": "Ad account “{{name}}”: Co-Pilot will not be told about its rejected ads (you must be an admin of this ad account)."
     },
     "adsOld": {
-      "switch": "Ads work with an old key pasted in Settings › Meta Ads (account “{{name}}”). To put everything on this Facebook account: turn on “Count them” above.",
+      "switch": "Ads work with an old key pasted in Settings › Meta Ads (account “{{name}}”). To put everything on this Facebook account: tick its ad accounts above (“Choose”).",
       "relink": "Ads work with an old key pasted in Settings › Meta Ads (account “{{name}}”). To put everything here: click “Link again” and tick your ad account.",
-      "switchBad": "Ads: the old pasted key no longer works (account {{name}}). Turn on “Count them” above: this Facebook account takes its place.",
+      "switchBad": "Ads: the old pasted key no longer works (account {{name}}). Tick this Facebook account’s ad accounts above (“Choose”): it takes its place.",
       "relinkBad": "Ads: the old pasted key no longer works (account {{name}}). Click “Link again” and tick your ad account."
     },
     "adsRight": {
@@ -339,7 +365,7 @@
       "info": "This boutique’s ads count the ad accounts of another linked account (“{{account}}”)."
     },
     "adsOff": {
-      "warn": "This account has ad accounts ({{n}}), but this boutique does not count them. Turn on “Count them” above."
+      "warn": "This account has ad accounts ({{n}}), but none is ticked in this boutique. Tick the ones it uses above (“Choose”)."
     },
     "adsNone": {
       "warn": "No ad account given to Pilotix. Click “Link again” and tick your ad account in Facebook’s window."
@@ -378,7 +404,7 @@
     "title": "Old connections",
     "text": "They were made somewhere else, before, and Pilotix still uses them (“Test” says whether they work). To have everything in one place: click “Link again” on your Facebook account and tick everything.",
     "ads": "Ads: key pasted in Settings › Meta Ads (ad account {{id}})",
-    "adsHint": "It goes by itself when you count your Facebook account’s ad accounts here.",
+    "adsHint": "It goes by itself when you tick your Facebook account’s ad accounts here.",
     "ig": "Instagram: key connected in Pilot Message (@{{user}})",
     "igHint": "Your Facebook account’s key can answer instead: remove the old one whenever you want.",
     "ask": {

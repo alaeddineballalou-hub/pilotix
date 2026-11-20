@@ -129,7 +129,29 @@ html[data-theme='dark'] .btn.tt-btn:focus-visible { outline-color: #fff; }
 .cpt-chips li span { color: var(--muted); font-size: 11.5px; font-weight: 700; }
 .cpt-launch { display: grid; gap: 6px; margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--line); }
 .cpt-launch .cpt-row-note { margin: 0; }
-.cpt-chips.on li { border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); background: color-mix(in srgb, var(--ok-soft) 65%, transparent); color: var(--ink); }
+.cpt-chips li.on { border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); background: color-mix(in srgb, var(--ok-soft) 65%, transparent); color: var(--ink); }
+.cpt-chips li .bji { align-self: center; width: 13px; height: 13px; color: var(--ok); }
+.cpt-chips li .bji svg { width: 100%; height: 100%; stroke-width: 3; }
+
+/* Meta's ad accounts: how many are ticked here, and « Changer » (its window: one line per ad account, a box to tick) */
+.cpt-adpick-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; color: var(--ink); font-size: 14px; font-weight: 650; }
+.cpt-adpick-row .btn { gap: 6px; }
+.cpt-adpick-lead { margin: 0 0 12px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.cpt-adpick-all { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-bottom: 8px; color: var(--ink); font-size: 13.5px; }
+.cpt-adpick-all b { font-weight: 750; }
+.cpt-adpick-all > span { color: var(--muted); }
+.cpt-txt-btn { padding: 4px 2px; border: 0; background: none; color: var(--navy); font: inherit; font-weight: 700; cursor: pointer; }
+.cpt-txt-btn:hover { text-decoration: underline; }
+.cpt-adpick-list { display: grid; gap: 8px; margin: 0 0 4px; padding: 0; list-style: none; }
+.cpt-adpick-list label { display: flex; align-items: flex-start; gap: 12px; min-height: 48px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); cursor: pointer; transition: border-color .2s, background-color .2s; }
+.cpt-adpick-list label:hover { border-color: color-mix(in srgb, var(--navy) 35%, var(--line)); }
+.cpt-adpick-list label.on { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); background: color-mix(in srgb, var(--ok-soft) 60%, var(--surface)); }
+.cpt-adpick-list input[type='checkbox'] { flex: none; width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--ok); cursor: pointer; }
+.cpt-adpick-name { display: grid; flex: 1; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.cpt-adpick-name b { color: var(--ink); font-size: 14px; font-weight: 700; }
+.cpt-adpick-name small { display: flex; flex-wrap: wrap; gap: 2px 10px; color: var(--muted); font-size: 12px; }
+.cpt-adpick-tag { flex: none; align-self: center; padding: 2px 8px; border-radius: 999px; background: var(--sky-soft); color: var(--navy); font-size: 11.5px; font-weight: 750; white-space: nowrap; }
+.cpt-adpick .cpt-warn { margin-top: 10px; }
 .cpt-link-body > footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12.5px; }
 
 /* « Tester »: where the problems are, then part by part (a part that works is folded), one line per thing tried */
@@ -201,8 +223,9 @@ html[data-theme='dark'] .btn.tt-btn:focus-visible { outline-color: #fff; }
   .cpt select.cpt-pick { max-width: none; }
   .cpt-key-form { grid-template-columns: 1fr; }
   .cpt-key-form .btn { min-height: 44px; }
+  .cpt-adpick-row .btn { width: 100%; min-height: 44px; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) {
   .cpt-spin { animation-duration: 2.4s; }
-  .cpt-svc, .cpt-conn-who, .cpt-chev, .cpt-chips li, .cpt-test { transition: none; }
+  .cpt-svc, .cpt-conn-who, .cpt-chev, .cpt-chips li, .cpt-test, .cpt-adpick-list label { transition: none; }
 }

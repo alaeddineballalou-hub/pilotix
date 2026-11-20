@@ -18,6 +18,7 @@ import { backend, Out, rpc } from '../../lib/backend';
 import { clock, dateOnly, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { Card, ErrorBox, Icon, Loading } from '../../ui/kit';
+import { Modal } from '../../ui/modal';
 import { BrandLogo, brandFile } from '../../ui/BrandLogo';
 import { toast } from '../../ui/toast';
 import { ConfirmButton, Switch } from '../admin/bits';
@@ -149,6 +150,22 @@ export function Comptes({ sub }: PageProps) {
   // which accounts are open below their line (none at first: each line already shows what is connected)
   const [openIds, setOpenIds] = useState<Set<number>>(new Set());
   const closedTicks = useRef(0);
+  // « Changer »: the window that ticks the ad accounts of one linked account (Meta). It opens by itself for an account
+  // that just came with ad accounts none of which is ticked here (a pasted key, an account for all boutiques, the
+  // preview: the login's tab asks it otherwise)
+  const [pickFor, setPickFor] = useState<number | null>(null);
+  const askPick = useRef<number | null>(null);
+  useEffect(() => {
+    const id = askPick.current;
+    const l = id === null ? null : q.data?.links.find((x) => x.id === id);
+    if (!l) return;
+    askPick.current = null;
+    const ads = l.assets.filter((a) => a.kind === 'ad_account');
+    if (l.provider === 'meta' && ads.length && !ads.some((a) => a.usedHere)) {
+      setOpenIds((prev) => new Set([...prev, l.id]));
+      setPickFor(l.id);
+    }
+  }, [q.data]);
 
   // the login's tab: asked every two seconds; done → green, failed → said, tab closed before the end → stopped
   useEffect(() => {
@@ -162,6 +179,7 @@ export function Comptes({ sub }: PageProps) {
         if (r.status === 'done') {
           setPending(null);
           setDone({ provider: pending.provider, ads: pending.ads, linkId: r.linkId });
+          askPick.current = r.linkId;
           await q.refetch();
           return;
         }
@@ -235,7 +253,21 @@ export function Comptes({ sub }: PageProps) {
   const ttLinks = d.links.filter((l) => l.provider === 'tiktok');
   const doneName = (provider: Provider, ads: boolean) => (done?.provider === provider && !!done.ads === ads ? (d.links.find((l) => l.id === done.linkId)?.name ?? '') : null);
   const links = (list: Link[]) =>
-    list.map((l) => <LinkCard key={l.id} l={l} d={d} fresh={done?.linkId === l.id} open={openIds.has(l.id)} onToggle={() => toggle(l.id)} onOpen={() => openOne(l.id)} onRelink={() => start(l.provider, adsOnly(l) && d.adsReady)} busy={!!pending} />);
+    list.map((l) => (
+      <LinkCard
+        key={l.id}
+        l={l}
+        d={d}
+        fresh={done?.linkId === l.id}
+        open={openIds.has(l.id)}
+        onToggle={() => toggle(l.id)}
+        onOpen={() => openOne(l.id)}
+        onRelink={() => start(l.provider, adsOnly(l) && d.adsReady)}
+        onPick={() => setPickFor(l.id)}
+        busy={!!pending}
+      />
+    ));
+  const picking = pickFor === null ? null : (d.links.find((l) => l.id === pickFor) ?? null);
   const contentBase = K + (d.adsReady ? 'p.metaContent' : 'p.meta');
 
   return (
@@ -301,7 +333,14 @@ export function Comptes({ sub }: PageProps) {
           // one login for all Meta: the first button brings the ads too
           button={!d.adsReady || adsLinks.length ? null : <FbButton disabled={!d.apps.meta || !!pending} onClick={() => start('meta', true)} />}
           note={!d.adsReady ? t(K + 'p.metaAds.viaFirst') : !d.apps.meta ? t(K + 'p.metaAds.notReady') : null}
-          after={<AdsKeyBox onSaved={openOne} />}
+          after={
+            <AdsKeyBox
+              onSaved={(id) => {
+                openOne(id);
+                askPick.current = id;
+              }}
+            />
+          }
         >
           {links(adsLinks)}
         </ServiceRow>
@@ -326,6 +365,7 @@ export function Comptes({ sub }: PageProps) {
         </ServiceRow>
       </Card>
       <OldKeys d={d} />
+      {picking && <AdsPicker key={picking.id} l={picking} d={d} onClose={() => setPickFor(null)} />}
     </div>
   );
 }
@@ -668,6 +708,85 @@ function WhatsappRow({ d, busy }: { d: List; busy: boolean }) {
   );
 }
 
+/**
+ * « Changer »: which ad accounts of a linked account this boutique uses (Meta). Pilotix reads and uses the ticked ones
+ * alone: their numbers in Publicité, their pixels and catalogue, and new ads leave from one of them. None ticked: they
+ * all stop here. On a phone it rises from the bottom, its buttons at the thumb.
+ */
+function AdsPicker({ l, d, onClose }: { l: Link; d: List; onClose: () => void }) {
+  const { t } = useTranslation();
+  const list = l.assets.filter((a) => a.kind === 'ad_account');
+  const [on, setOn] = useState<Set<string>>(() => new Set(list.filter((a) => a.usedHere).map((a) => a.extId)));
+  const save = useAction('social.adsPick', {
+    success: () => (on.size ? t(K + 'pick.saved', { count: on.size, name: d.shop.name }) : t(K + 'pick.stopped', { name: d.shop.name })),
+    onDone: onClose,
+  });
+  const flip = (id: string) =>
+    setOn((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const same = list.every((a) => a.usedHere === on.has(a.extId));
+  // new ads leave from this one today: unticked, they leave from another ticked one
+  const launch = d.launch ? list.find((a) => a.extId === d.launch?.id && a.usedHere) : undefined;
+  return (
+    <Modal
+      sheet
+      title={t(K + 'pick.title', { name: d.shop.name })}
+      onClose={onClose}
+      className="cpt-adpick"
+      footer={
+        <>
+          <button type="button" className="btn ghost" onClick={onClose}>
+            {t(K + 'cancel')}
+          </button>
+          <button type="button" className="btn primary" disabled={save.isPending} onClick={() => (same ? onClose() : save.mutate({ linkId: l.id, ids: [...on] }))}>
+            {save.isPending ? t(K + 'pick.saving') : on.size ? t(K + 'pick.save', { count: on.size }) : t(K + 'pick.saveNone')}
+          </button>
+        </>
+      }
+    >
+      <p className="cpt-adpick-lead">{t(K + 'pick.lead')}</p>
+      <div className="cpt-adpick-all">
+        <b>{t(K + 'pick.ticked', { used: on.size, n: list.length })}</b>
+        <span>
+          <button type="button" className="cpt-txt-btn" onClick={() => setOn(new Set(list.map((a) => a.extId)))}>
+            {t(K + 'pick.all')}
+          </button>
+          <span aria-hidden="true"> · </span>
+          <button type="button" className="cpt-txt-btn" onClick={() => setOn(new Set())}>
+            {t(K + 'pick.none')}
+          </button>
+        </span>
+      </div>
+      <ul className="cpt-adpick-list">
+        {list.map((a) => (
+          <li key={a.id}>
+            <label className={on.has(a.extId) ? 'on' : ''}>
+              <input type="checkbox" checked={on.has(a.extId)} onChange={() => flip(a.extId)} />
+              <span className="cpt-adpick-name">
+                <b>
+                  <bdi>{a.name}</bdi>
+                </b>
+                <small>
+                  {a.currency && <span className="ltr">{a.currency}</span>}
+                  {a.name !== a.extId && <span className="ltr">N° {a.extId}</span>}
+                  {a.usedBy.length > 0 && <span>{t(K + 'pick.also', { names: a.usedBy.map((x) => x.name).join(', ') })}</span>}
+                </small>
+              </span>
+              {launch?.extId === a.extId && on.has(a.extId) && <span className="cpt-adpick-tag">{t(K + 'pick.launch')}</span>}
+            </label>
+          </li>
+        ))}
+      </ul>
+      {launch && !on.has(launch.extId) && on.size > 0 && <p className="cpt-warn">{t(K + 'pick.launchMoves', { name: launch.name })}</p>}
+      {on.size === 0 && list.some((a) => a.usedHere) && <p className="cpt-warn">{t(K + 'pick.noneWarn', { name: d.shop.name })}</p>}
+    </Modal>
+  );
+}
+
 /** What a linked account looks like on its line: its pictures, its name, and under it what it brings here. */
 function lookOf(l: Link, d: List, t: ReturnType<typeof useTranslation>['t']) {
   const adList = l.assets.filter((a) => a.kind === AD_KIND[l.provider]);
@@ -679,14 +798,15 @@ function lookOf(l: Link, d: List, t: ReturnType<typeof useTranslation>['t']) {
     return {
       pics: biz ? <Avatar src={biz.picture} name={biz.name} shape="square" /> : <ProviderBadge p="meta" part="ads" />,
       main: biz?.name || l.name || t(K + 'p.metaAds.name'),
-      sub: [t(K + 'sumAds', { n: adList.length }), biz && l.name && l.name !== biz.name ? t(K + 'conn.via', { name: l.name }) : null].filter(Boolean).join(' · '),
+      // how many are ticked here, out of all of them
+      sub: [t(K + 'sumAdsOf', { used: adList.filter((a) => a.usedHere).length, n: adList.length }), biz && l.name && l.name !== biz.name ? t(K + 'conn.via', { name: l.name }) : null].filter(Boolean).join(' · '),
     };
   }
   // a Facebook account: the Page this boutique answers on, and its Instagram account
   const pages = l.assets.filter((a) => a.kind === 'page');
   const page = pages.find((a) => a.usedHere) ?? (pages.length === 1 ? pages[0] : null);
   const adsHere = adList.some((a) => a.usedHere);
-  const ads = adsHere ? t(K + 'sumAds', { n: adList.length }) : null;
+  const ads = adsHere ? t(K + 'sumAdsOf', { used: adList.filter((a) => a.usedHere).length, n: adList.length }) : null;
   if (!page) return { pics: <ProviderBadge p="meta" />, main: l.name || t(K + 'p.meta.name'), sub: [pages.length ? t(K + 'pageNone') : t(K + 'kind.pageNone'), ads].filter(Boolean).join(' · ') };
   return {
     pics: (
@@ -702,10 +822,11 @@ function lookOf(l: Link, d: List, t: ReturnType<typeof useTranslation>['t']) {
 
 /**
  * A linked account on its line. Closed: its pictures and name, its state, « Tester ». Open (below the line): the Page
- * this boutique answers on (picked in a list: one account often has dozens of Pages), its ad accounts (all counted
- * here, or none), what the last test found, then « Continuer avec Facebook » to link it again, and « Retirer ».
+ * this boutique answers on (picked in a list: one account often has dozens of Pages), its ad accounts (Meta's: the
+ * ticked ones in green, « Changer » to tick others; TikTok's: all counted here, or none), what the last test found,
+ * then « Continuer avec Facebook » to link it again, and « Retirer ».
  */
-function LinkCard({ l, d, fresh, open, onToggle, onOpen, onRelink, busy }: { l: Link; d: List; fresh: boolean; open: boolean; onToggle: () => void; onOpen: () => void; onRelink: () => void; busy: boolean }) {
+function LinkCard({ l, d, fresh, open, onToggle, onOpen, onRelink, onPick, busy }: { l: Link; d: List; fresh: boolean; open: boolean; onToggle: () => void; onOpen: () => void; onRelink: () => void; onPick: () => void; busy: boolean }) {
   const { t, i18n } = useTranslation();
   const scope = useAction('social.scope', { success: t(K + 'scopeSaved') });
   const remove = useAction('social.remove', { success: t(K + 'removed') });
@@ -730,10 +851,13 @@ function LinkCard({ l, d, fresh, open, onToggle, onOpen, onRelink, busy }: { l: 
   const adKind = AD_KIND[l.provider];
   const adList = l.assets.filter((a) => a.kind === adKind);
   const adsHere = adList.some((a) => a.usedHere);
-  const adsAlso = adList[0]?.usedBy ?? [];
+  const usedCount = adList.filter((a) => a.usedHere).length;
+  // the other boutiques that use some of these ad accounts
+  const adsAlso = [...new Map(adList.flatMap((a) => a.usedBy).map((s) => [s.id, s])).values()];
   // this boutique counts another account's ad accounts: switching these on replaces them
   const adsOther = !adsHere ? d.here[adKind === 'ad_account' ? 'ad_account' : 'advertiser'] : null;
-  const money = [...new Set(adList.map((a) => a.currency).filter((c): c is string => !!c))];
+  // the money of the ad accounts used here (of all of them while none is)
+  const money = [...new Set((adsHere ? adList.filter((a) => a.usedHere) : adList).map((a) => a.currency).filter((c): c is string => !!c))];
   // dinars count in dinars in Publicité; any other money is taken as dollars
   const otherMoney = money.filter((c) => c !== 'USD' && c !== 'DZD');
   const mainTwo = pageDoor(l, d);
@@ -806,22 +930,36 @@ function LinkCard({ l, d, fresh, open, onToggle, onOpen, onRelink, busy }: { l: 
             <div className="cpt-row">
               <div className="cpt-row-l">
                 <span className="cpt-row-t">{t(K + `adsLabel.${l.provider}`, { n: adList.length })}</span>
-                <p>{t(K + 'adsHint')}</p>
+                <p>{t(K + (l.provider === 'meta' ? 'pick.hint' : 'adsHint'))}</p>
               </div>
               <div className="cpt-row-r">
                 {adList.length ? (
                   <>
-                    <div className="cpt-switch-row">
-                      <Switch checked={adsHere} disabled={ads.isPending} onChange={(v) => ads.mutate({ linkId: l.id, on: v })} label={t(K + 'adsUse', { name: d.shop.name })} />
-                      <span>
-                        <bdi>{t(K + 'adsUse', { name: d.shop.name })}</bdi>
-                      </span>
-                    </div>
-                    <ul className={`cpt-chips ${adsHere ? 'on' : ''}`}>
+                    {l.provider === 'meta' ? (
+                      // Meta: the ticked ones alone are used here; « Changer » ticks others
+                      <div className="cpt-adpick-row">
+                        <span className={adsHere ? '' : 'cpt-muted'}>
+                          <bdi>{adsHere ? t(K + 'pick.count', { used: usedCount, n: adList.length, name: d.shop.name }) : t(K + 'pick.zero', { name: d.shop.name })}</bdi>
+                        </span>
+                        <button type="button" className={`btn small${adsHere ? '' : ' primary'}`} onClick={onPick}>
+                          <Icon name="pencil" /> {adsHere ? t(K + 'pick.change') : t(K + 'pick.choose')}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="cpt-switch-row">
+                        <Switch checked={adsHere} disabled={ads.isPending} onChange={(v) => ads.mutate({ linkId: l.id, on: v })} label={t(K + 'adsUse', { name: d.shop.name })} />
+                        <span>
+                          <bdi>{t(K + 'adsUse', { name: d.shop.name })}</bdi>
+                        </span>
+                      </div>
+                    )}
+                    <ul className="cpt-chips">
                       {adList.map((a) => (
-                        <li key={a.id}>
+                        <li key={a.id} className={a.usedHere ? 'on' : ''}>
+                          {l.provider === 'meta' && a.usedHere && <Icon name="check" />}
                           <bdi>{a.name}</bdi>
                           {a.currency && <span className="ltr">{a.currency}</span>}
+                          {l.provider === 'meta' && <span className="sr-only">{t(K + (a.usedHere ? 'pick.on' : 'pick.off'))}</span>}
                         </li>
                       ))}
                     </ul>

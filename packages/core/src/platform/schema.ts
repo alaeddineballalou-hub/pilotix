@@ -11,7 +11,7 @@ import { SPY_SEARCHES_SQL } from './spykey';
 import { LAHJA_PLATFORM_SQL } from '../modules/lahja';
 import { DARIJA_BOOK_SQL, DARIJA_DRAFT_SQL } from '../modules/darijabook';
 import { VOCAB_COPIES_SQL, VOCAB_PLATFORM_SQL } from '../modules/vocab';
-import { SOCIAL_CONFIRM_SQL, SOCIAL_DELETIONS_SQL, SOCIAL_HOOKS_SQL, SOCIAL_PART_SQL, SOCIAL_PLATFORM_SQL } from '../modules/social';
+import { SOCIAL_CONFIRM_SQL, SOCIAL_DELETIONS_SQL, SOCIAL_HOOKS_SQL, SOCIAL_PART_SQL, SOCIAL_PICKED_SQL, SOCIAL_PLATFORM_SQL } from '../modules/social';
 
 const P001 = `
 CREATE SCHEMA IF NOT EXISTS platform;
@@ -813,6 +813,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p042_mcp_uploads', MCP_UPLOADS_SQL],
   // Meta's two doors (Pilot AI › Comptes): a linked account's part ('ads': « Publicité Meta », a connection of its own)
   ['p043_social_part', SOCIAL_PART_SQL],
+  // Meta's ad accounts: a boutique uses the ones it ticked (the login's tab, Pilot AI › Comptes), and those alone
+  ['p044_social_ads_picked', SOCIAL_PICKED_SQL],
 ];
 
 /** Creates or updates the platform's tables. */
