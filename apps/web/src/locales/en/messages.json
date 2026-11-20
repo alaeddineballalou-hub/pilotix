@@ -41,7 +41,7 @@
     "takeOver": "Take over",
     "giveBack": "Give back to {{name}}",
     "window24": "More than 24 hours since the customer’s last message: Meta no longer lets the shop answer here. You can answer as soon as the customer writes again.",
-    "windowAd": "This customer came from an ad: Meta lets the shop answer here until {{when}}.",
+    "windowAd": "This customer came from an ad: Meta lets the shop answer here until {{when}}",
     "windowHuman": "More than 24 hours since their last message: your answer goes with Meta’s « human agent » label (a real person, 7 days). {{name}} no longer answers here.",
     "answered": "{{name}} answered the customer",
     "modeSaved": "Saved",

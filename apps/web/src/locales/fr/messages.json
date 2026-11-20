@@ -41,7 +41,7 @@
     "takeOver": "Reprendre la main",
     "giveBack": "Rendre à {{name}}",
     "window24": "Plus de 24 heures depuis le dernier message du client : Meta ne permet plus de lui répondre ici. Vous pourrez répondre dès qu’il écrira à nouveau.",
-    "windowAd": "Ce client vient d’une publicité : Meta laisse répondre ici jusqu’au {{when}}.",
+    "windowAd": "Ce client vient d’une publicité : Meta laisse répondre ici jusqu’au {{when}}",
     "windowHuman": "Plus de 24 heures depuis son dernier message : votre réponse part avec la mention « agent humain » de Meta (une vraie personne, 7 jours). {{name}} ne répond plus ici.",
     "answered": "{{name}} a répondu au client",
     "modeSaved": "Enregistré",
