@@ -107,6 +107,8 @@ export function PageLinks({ store }: { store: (label: string) => ReactNode }) {
         ? { cls: 'warn', icon: 'alert', text: t('landing.links.waiting', { domain, pilotix: pxBase }) }
         : { cls: 'warn', icon: 'alert', text: t('landing.links.down', { domain, pilotix: pxBase }) };
   const ips = d?.ips?.length ? d.ips : ['—'];
+  /** Cloudflare's orange cloud: the domain shows Cloudflare's addresses, which is fine once Pilotix answered through it */
+  const proxied = !!found?.length && !!reach?.ok && !found.some((ip) => !!d?.ips?.includes(ip));
   const enter = (e: KeyboardEvent<HTMLInputElement>) => {
     // inside the settings form: Enter saves the domain, never the whole form
     if (e.key !== 'Enter') return;
@@ -177,6 +179,7 @@ export function PageLinks({ store }: { store: (label: string) => ReactNode }) {
               <small>{t('landing.domain.howHelp')}</small>
               {d.proof && <small>{t('landing.domain.proofHelp')}</small>}
               {found && <small className="ltr">{t('landing.domain.found', { ips: found.join(', ') || '—' })}</small>}
+              {proxied && <small>{t('landing.domain.proxied')}</small>}
               {proofSeen === false && <small>{t('landing.domain.proofMissing')}</small>}
               {reach && !reach.ok && reach.why && <small>{t(`landing.domain.https.${reach.why}`, { domain: d.domain })}</small>}
               <button type="button" className="btn small" disabled={busy} onClick={check}>
