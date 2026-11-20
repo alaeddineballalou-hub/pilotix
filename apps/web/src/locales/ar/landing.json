@@ -914,5 +914,22 @@
     "testsNone": "لا توجد تجارب حتى الآن.",
     "testsOff": "الفريق معطّل: فعّله في صفحات الهبوط › الإعدادات ليتمكن فريقك من التجربة.",
     "fromAd": "من الإعلان"
+  },
+  "fold": {
+    "pixels_zero": "لا يوجد بيكسل",
+    "pixels_one": "بيكسل واحد",
+    "pixels_two": "بيكسلان",
+    "pixels_few": "{{count}} بيكسلات",
+    "pixels_many": "{{count}} بيكسل",
+    "pixels_other": "{{count}} بيكسل",
+    "pixelsNone": "لا يوجد بيكسل",
+    "tokenAds": "رمز الإعلانات",
+    "lists": "الفريق: {{team}} · الموردون: {{sup}}",
+    "whyOn": "الصورة مضافة",
+    "whyOff": "لا توجد صورة",
+    "after": "بعد {{min}} دقيقة",
+    "domainOk": "جاهز",
+    "domainWait": "في الانتظار",
+    "domainNone": "لا يوجد"
   }
 }

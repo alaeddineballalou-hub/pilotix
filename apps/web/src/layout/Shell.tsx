@@ -15,6 +15,7 @@ import { PxMenuFace } from './PxMenuFace';
 import { chime, unlockAudio } from '../lib/sound';
 import { store } from '../lib/store';
 import { toast } from '../ui/toast';
+import { setFoldOwner } from '../ui/cardFold';
 import { Field, Icon, StageBar, TicketTag } from '../ui/kit';
 import { Modal } from '../ui/modal';
 import { canSee, canSeeChild, isSoonItem, isSoonLine, menuView, NAV, NavChild, NavItem, SpaceId } from './nav';
@@ -120,6 +121,8 @@ const BIG_MENU = 20;
 export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { page: string; sub?: string; children: ReactNode; nav?: NavItem[]; space?: 'store' | 'agency' | 'marketer' }) {
   const { t, i18n } = useTranslation();
   const { session, logout, has: hasRole } = useSession();
+  // the cards each person folded are their own (ui/cardFold): set while drawing, so the page's cards read it at once
+  setFoldOwner(session ? `${session.shop?.id ?? 0}:${session.profile.id}` : '');
   const canRules = useCanRules();
   const agency = space === 'agency';
   // a partner's space (agency, marketer): no store-wide search nor « new order »; the seller picker instead

@@ -50,6 +50,9 @@ export function OwnDomain() {
     <section className="card">
       <h2>
         <Icon name="link" /> {t('landing.domain.title')}
+        <span className={`chip fold-sum ${d.domain ? (d.status === 'ok' ? 'lp-on' : 'lp-warn') : ''}`}>
+          {d.domain ? (d.status === 'ok' ? t('landing.fold.domainOk') : t('landing.fold.domainWait')) : t('landing.fold.domainNone')}
+        </span>
       </h2>
       <p className="pd-note">{t('landing.domain.help')}</p>
       <Field label={t('landing.domain.label')} hint={t('landing.domain.hint')}>

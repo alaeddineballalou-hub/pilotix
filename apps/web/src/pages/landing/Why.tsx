@@ -37,6 +37,7 @@ export function Why() {
     <section className="card lp-why">
       <h2>
         <Icon name="image" /> {t('landing.why.title')}
+        <span className={`chip fold-sum ${d.image ? 'lp-on' : ''}`}>{d.image ? t('landing.fold.whyOn') : t('landing.fold.whyOff')}</span>
       </h2>
       <p className="muted">{t('landing.why.sub', { count: d.pages })}</p>
       <div className="lp-why-row">

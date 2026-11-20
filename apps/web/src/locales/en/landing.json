@@ -835,5 +835,18 @@
     "testsNone": "No test yet.",
     "testsOff": "Team is off: turn it on in Landing pages › Settings so your team can test.",
     "fromAd": "from the ad"
+  },
+  "fold": {
+    "pixels_one": "{{count}} pixel",
+    "pixels_other": "{{count}} pixels",
+    "pixelsNone": "No pixel",
+    "tokenAds": "Ads token",
+    "lists": "Team: {{team}} · Suppliers: {{sup}}",
+    "whyOn": "Picture added",
+    "whyOff": "No picture",
+    "after": "After {{min}} min",
+    "domainOk": "Ready",
+    "domainWait": "Waiting",
+    "domainNone": "None"
   }
 }

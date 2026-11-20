@@ -32,6 +32,7 @@ import { Toasts } from './ui/toast';
 import { installEdgeScroll } from './ui/edgeScroll';
 import { installEdgeFade } from './ui/edgeFade';
 import { installMotion } from './ui/motion';
+import { installCardFold } from './ui/cardFold';
 import { SelectPicker } from './ui/SelectPicker';
 import { PageGuard } from './ui/PageGuard';
 import { startWatch } from './lib/watch';
@@ -45,6 +46,7 @@ import './styles/app.css';
 // lists to choose from and date fields in the Doux look (last: over the older rules)
 import './styles/fields.css';
 import './styles/motion.css';
+import './styles/fold.css';
 
 applyTheme(store.get('theme') as 'light' | 'dark' | null);
 // the Pilotix look (styles/skins.css); also set in index.html so the first paint already has it
@@ -55,6 +57,8 @@ installEdgeScroll();
 // rows that slide sideways on a phone fade out where more is hidden (ui/edgeFade)
 installEdgeFade();
 installMotion();
+// every card with a title folds on a click on that title (ui/cardFold)
+installCardFold();
 
 const qc = new QueryClient({
   defaultOptions: {

@@ -55,6 +55,8 @@ export function PixelsCard() {
     <section className="card">
       <h2>
         <Icon name="megaphone" /> {t('landing.px.title')}
+        {/* its state when folded (ui/cardFold) */}
+        {q.data && <span className={`chip fold-sum ${q.data.length ? '' : 'lp-warn'}`}>{q.data.length ? t('landing.fold.pixels', { count: q.data.length }) : t('landing.fold.pixelsNone')}</span>}
       </h2>
       <p className="pd-note">{t('landing.px.help')}</p>
       <p className="lp-px-sync">

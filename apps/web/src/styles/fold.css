@@ -1,0 +1,29 @@
+/* Folding cards (ui/cardFold.ts): a click on a card's title line folds it to that line. */
+.card[data-fold] > [data-fold-head] { position: relative; padding-inline-end: 30px; cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+.card[data-fold] > [data-fold-head]::after {
+  content: ''; position: absolute; inset-inline-end: 6px; top: 50%; width: 8px; height: 8px; margin-top: -7px;
+  border-right: 2px solid var(--c-muted, #8a8f98); border-bottom: 2px solid var(--c-muted, #8a8f98);
+  transform: rotate(45deg); transition: transform 0.22s ease, margin-top 0.22s ease;
+}
+.card[data-fold="shut"] > [data-fold-head]::after { transform: rotate(-45deg); margin-top: -4px; }
+[dir="rtl"] .card[data-fold="shut"] > [data-fold-head]::after { transform: rotate(135deg); }
+/* a phone: a title line with buttons wraps, the arrow stays beside the title (not beside the buttons) */
+@media (max-width: 640px) { .card[data-fold] > :not(h2)[data-fold-head]::after { top: 16px; } }
+.card[data-fold] > [data-fold-head]:hover::after { border-color: var(--c-accent, #f97316); }
+.card[data-fold] [data-fold-title]:focus-visible { outline: 2px solid var(--c-accent, #f97316); outline-offset: 3px; border-radius: 6px; }
+
+/* folded: only the title line stays */
+.card[data-fold="shut"] { gap: 0; }
+.card[data-fold="shut"] > :not([data-fold-head]) { display: none !important; }
+
+/* the short state on the title line of a settings card (design 4 « Résumé ») */
+.card .fold-sum { margin-inline-start: 8px; vertical-align: middle; font-size: 12px; white-space: nowrap; flex: none; }
+
+/* opened again: what was under the title slides in */
+@media (prefers-reduced-motion: no-preference) {
+  .card[data-fold-in] > :not([data-fold-head]) { animation: fold-in 0.24s ease-out; }
+}
+@keyframes fold-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}

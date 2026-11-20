@@ -25,6 +25,7 @@ export function TeamLists() {
     <section className="card lp-tm">
       <h2>
         <Icon name="users" /> {t('landing.tm.title')}
+        <span className="chip fold-sum">{t('landing.fold.lists', { team: t(d.team.on ? 'landing.tm.on' : 'landing.tm.off'), sup: t(d.suppliers.on ? 'landing.tm.on' : 'landing.tm.off') })}</span>
       </h2>
       <p className="muted">{t('landing.tm.sub')}</p>
       <List kind="team" d={d} onChange={() => q.refetch()} />

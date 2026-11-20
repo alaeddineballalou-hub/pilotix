@@ -835,5 +835,18 @@
     "testsNone": "Aucun test pour le moment.",
     "testsOff": "Team est désactivé : activez-le dans Landing pages › Réglages pour que votre équipe puisse tester.",
     "fromAd": "vient de la pub"
+  },
+  "fold": {
+    "pixels_one": "{{count}} pixel",
+    "pixels_other": "{{count}} pixels",
+    "pixelsNone": "Aucun pixel",
+    "tokenAds": "Jeton des pubs",
+    "lists": "Team : {{team}} · Fournisseurs : {{sup}}",
+    "whyOn": "Image ajoutée",
+    "whyOff": "Pas d’image",
+    "after": "Après {{min}} min",
+    "domainOk": "Prêt",
+    "domainWait": "En attente",
+    "domainNone": "Aucun"
   }
 }

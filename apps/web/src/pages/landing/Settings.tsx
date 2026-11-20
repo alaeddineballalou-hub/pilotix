@@ -82,6 +82,8 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
       <section className="card">
         <h2>
           <Icon name="megaphone" /> {t('landing.set.meta')}
+          {/* each card's state when folded (ui/cardFold): what is saved, not what is being typed */}
+          <span className={`chip fold-sum ${capiOk ? 'lp-on' : 'lp-warn'}`}>{data.capi.own ? t('landing.set.tokenOwn') : data.capi.ads ? t('landing.fold.tokenAds') : t('landing.set.tokenNone')}</span>
         </h2>
         <p className="pd-note">{t('landing.set.metaHelp')}</p>
         <Field label={t('landing.set.testCode')} hint={t('landing.set.testCodeHint')}>
@@ -143,6 +145,7 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
       <section className="card">
         <h2>
           <Icon name="whatsapp" /> {t('landing.wa.title')}
+          <span className={`chip fold-sum ${data.settings.whatsapp.on ? 'lp-on' : ''}`}>{data.settings.whatsapp.on ? t('landing.tm.on') : t('landing.tm.off')}</span>
         </h2>
         <p className="pd-note">{t('landing.wa.help')}</p>
         <label className="lp-switch">
@@ -182,6 +185,7 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
       <section className="card">
         <h2>
           <Icon name="cart" /> {t('landing.set.abandoned')}
+          <span className="chip fold-sum">{t('landing.fold.after', { min: data.settings.abandonAfterMin })}</span>
         </h2>
         <p className="pd-note">{t('landing.set.abandonedHelp')}</p>
         <Field label={t('landing.set.after')} hint={t('landing.set.afterHint')}>
@@ -195,6 +199,7 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
       <section className="card">
         <h2>
           <Icon name="globe" /> {t('landing.set.link')}
+          <span className="chip fold-sum ltr">{data.store}</span>
         </h2>
         <p className="pd-note">{t('landing.set.linkHelp')}</p>
         <Field label={t('landing.set.storeSlug')} hint={data.storeFixed ? t('landing.set.storeFixed', { name: data.store }) : t('landing.set.storeSlugHint', { name: data.store })}>
@@ -214,6 +219,7 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
       <section className="card">
         <h2>
           <Icon name="sparkles" /> {t('landing.set.auto')}
+          <span className={`chip fold-sum ${data.settings.autoCreate ? 'lp-on' : ''}`}>{data.settings.autoCreate ? t('landing.tm.on') : t('landing.tm.off')}</span>
         </h2>
         <label className="lp-switch">
           <input type="checkbox" checked={f.autoCreate} onChange={(e) => set('autoCreate', e.target.checked)} />
