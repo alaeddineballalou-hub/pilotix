@@ -344,7 +344,16 @@ function Form({ p, onClose, onCreated, t, tab: firstTab, focus, waiting }: { p: 
           <div className="pf-desc-guide">
             <Icon name="book" />
             <span>{t('produits.form.descriptionIsGuide')}</span>
-            <button type="button" className="btn small" onClick={() => setTab('guide')}>
+            <button
+              type="button"
+              className="btn small"
+              onClick={(e) => {
+                // the guide opens at its top (« En bref »), not as far down as this line was
+                const box = e.currentTarget.closest<HTMLElement>('.modal-body, .pxk-body');
+                setTab('guide');
+                box?.scrollTo({ top: 0 });
+              }}
+            >
               {t('produits.form.openGuide')}
             </button>
           </div>
