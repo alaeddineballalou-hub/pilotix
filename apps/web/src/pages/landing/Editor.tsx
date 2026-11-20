@@ -309,7 +309,9 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
             </Field>
             <Field label={t('landing.ed.slug')} hint={t('landing.ed.slugHint')}>
               <div className="lp-slug">
-                <span className="ltr">{shownPrefix}</span>
+                <span className="ltr" title={shownPrefix}>
+                  <span className="lp-pre">{shownPrefix}</span>
+                </span>
                 <input
                   className="ltr"
                   value={d.slug}
