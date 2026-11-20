@@ -7,6 +7,7 @@ import * as http from 'node:http';
 import * as https from 'node:https';
 import { Pool, PoolClient } from 'pg';
 import { config } from './config';
+import { domainLookup } from './domainDns';
 import { mediaHooks } from './media';
 import { payAlert } from './payalert';
 import { mailConfigured, sendMail } from './mail';
@@ -290,6 +291,8 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
     publicUrl: config.publicUrl,
     // the landing pages' address in use (their own once it answers, else the site's)
     pagesUrl: () => this.landingBase(),
+    // a shop's own domain still reaches this server: its page links may use it (core modules/pagelinks.ts)
+    shopDomainLive: (id) => this.shopDomainLive(id),
   };
 
   // ---------------------------------------------------------------- the landing pages' own address (go.<domain>)
@@ -388,8 +391,66 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
     this.landingTimer.unref?.();
   }
 
+  // ---------------------------------------------------------------- the shops' own domains (Landing pages › Réglages)
+  /** failed checks in a row, per shop whose own domain is ready */
+  private domainFails = new Map<number, number>();
+  private domainTimer: NodeJS.Timeout | null = null;
+  /** looked up on public DNS services first, as « Vérifier » does (domainDns.ts) */
+  private readonly domainNames = domainLookup();
+
+  /**
+   * A shop's own ready domain still points to this server: Pilotix's links use it (Réglages › « Liens des pages »), else
+   * the platform's pages address, by themselves. Off after 2 failed checks in a row (a short DNS glitch changes nothing),
+   * on again at the first good one. Its pages stay served at the domain all along (its « Prêt » never changes here), so
+   * links already out keep working.
+   */
+  shopDomainLive(shopId: number): boolean {
+    return (this.domainFails.get(shopId) ?? 0) < 2;
+  }
+
+  /** The addresses a shop's domain must point to, as « Vérifier » (api.ts): PUBLIC_IP, else those of the platform's name. */
+  private async serverIps(): Promise<string[]> {
+    if (config.publicIps.length) return config.publicIps;
+    try {
+      return await dnsp.resolve4(new URL(config.publicUrl).hostname);
+    } catch {
+      return [];
+    }
+  }
+
+  /** Every ready own domain: does it still point here? (every 10 minutes) */
+  async checkShopDomains() {
+    const rows = await this.t.platform.query<{ id: number; domain: string }>(`SELECT id, domain FROM platform.shops WHERE domain IS NOT NULL AND domain_status = 'ok' AND status = 'active'`).catch(() => [] as { id: number; domain: string }[]);
+    const ips = await this.serverIps();
+    // the server's own addresses unknown: nothing can be decided this time
+    if (!ips.length) return;
+    const seen = new Set<number>();
+    for (const r of rows) {
+      const id = Number(r.id);
+      seen.add(id);
+      const found = await this.domainNames.resolve4(String(r.domain)).catch(() => [] as string[]);
+      const ok = found.length > 0 && found.every((a) => ips.includes(a));
+      const was = this.shopDomainLive(id);
+      this.domainFails.set(id, ok ? 0 : (this.domainFails.get(id) ?? 0) + 1);
+      if (was !== this.shopDomainLive(id)) this.log.log(ok ? `Own domain ${r.domain} (shop ${id}) points here again: its links use it` : `Own domain ${r.domain} (shop ${id}) does not point here (${found.join(', ') || 'no address'}): its links use the platform's address`);
+    }
+    for (const id of [...this.domainFails.keys()]) if (!seen.has(id)) this.domainFails.delete(id);
+  }
+
+  private nextDomainCheck(ms: number) {
+    if (this.domainTimer) clearTimeout(this.domainTimer);
+    if (this.landingStopped) return;
+    this.domainTimer = setTimeout(() => {
+      void this.checkShopDomains()
+        .catch((e) => this.log.warn(`own domains check failed: ${(e as Error).message}`))
+        .finally(() => this.nextDomainCheck(10 * 60_000));
+    }, ms);
+    this.domainTimer.unref?.();
+  }
+
   onModuleInit() {
     if (config.landingUrl) this.nextLandingCheck(2_000);
+    this.nextDomainCheck(60_000);
   }
 
   // ---------------------------------------------------------------- shops
@@ -650,6 +711,8 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
     this.landingStopped = true;
     if (this.landingTimer) clearTimeout(this.landingTimer);
     this.landingTimer = null;
+    if (this.domainTimer) clearTimeout(this.domainTimer);
+    this.domainTimer = null;
     await this.pool.end();
     await this.publicPool?.end();
   }

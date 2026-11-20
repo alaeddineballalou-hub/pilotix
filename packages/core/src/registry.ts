@@ -46,6 +46,7 @@ import { deliveryProcs } from './modules/delivery';
 import { dellalProcs } from './modules/dellal';
 import { landingProcs } from './modules/landing';
 import { landingListsProcs } from './modules/landinglists';
+import { pageLinksProcs } from './modules/pagelinks';
 import { landingTitleProcs } from './modules/landingtitle';
 import { landingGroupProcs } from './modules/landinggroups';
 import { pixelProcs } from './modules/pixels';
@@ -152,6 +153,7 @@ export const REGISTRY = {
   ...marketersProcs,
   ...landingProcs,
   ...landingListsProcs,
+  ...pageLinksProcs,
   ...landingTitleProcs,
   ...landingGroupProcs,
   ...pixelProcs,

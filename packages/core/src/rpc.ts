@@ -127,6 +127,8 @@ export interface ServerHooks {
   publicUrl?: string;
   /** the landing pages' address in use (https://go.<domain> once it answers, else publicUrl) */
   pagesUrl?: () => string;
+  /** a shop's own ready domain still reaches this server (checked every 10 minutes): its page links may use it (modules/pagelinks.ts) */
+  shopDomainLive?: (shopId: number) => boolean;
   /** the shop's public API address: PUBLIC_URL/api, or PUBLIC_URL/api/s/<shop> for a shop other than the first */
   publicApi?: string;
   /** another shop of the platform already has this name (the first part of its links) */

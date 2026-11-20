@@ -51,6 +51,7 @@ import { BOT_UA, FraudLevel, FraudReason, scoreOrder, verdictOf } from './fraud'
 import { lookAlikeOf, trustOf } from './trust';
 import { groupHtml, groupOf } from './landinggroups';
 import { listOf, recordTest } from './landinglists';
+import { pageLinks } from './pagelinks';
 import { runAttackTest } from './attacktest';
 import { checkPixels, listPixels, PixelList, pixelsJson, pixelsOf, pixelTestCode, pixelToken, readPixels } from './pixels';
 import { campaignSettings, giveConsent } from './campaigns';
@@ -2420,9 +2421,16 @@ export const landingProcs = {
   ),
 
   'landing.llms': proc([], z.object({ site: z.string().max(500), pagesBase: z.string().max(500).optional() }), async (ctx, i) => ({ text: await landingLlms(ctx.db, i.site, i.pagesBase) })),
-  /** the store's part of the pages' address (site/<store>/<page>): for the links shown in Pilotix, and the server's check */
-  // the store's part of the pages' address, and the address they live at (go.<domain> once it answers; '' in the demo)
-  'landing.store': proc(null, z.object({}), async (ctx) => ({ store: await landingStore(ctx.db), pagesUrl: ctx.server?.pagesUrl?.() ?? '' })),
+  /**
+   * The links shown in Pilotix: the store's part of the pages' address (site/<store>/<page>), the address they live at
+   * (go.<domain> once it answers; '' in the demo) and `prefix`, what every page link starts with now: the boutique's own
+   * domain or <pagesUrl>/<store>/ (Réglages › « Liens des pages »: modules/pagelinks.ts). `sample`: a page, for examples.
+   */
+  'landing.store': proc(null, z.object({}), async (ctx) => {
+    const l = await pageLinks(ctx);
+    const sample = (await ctx.db.query(`SELECT slug FROM landing_pages WHERE active ORDER BY id DESC LIMIT 1`).catch(() => [] as any[]))[0]?.slug;
+    return { store: l.store, pagesUrl: ctx.server?.pagesUrl?.() ?? '', prefix: l.prefix, choice: l.choice, own: l.own, usesOwn: l.usesOwn, sample: sample ? String(sample) : null };
+  }),
 
   /**
    * An HD photo's light copy for the pages (/lp/hd/<id>/<width>-<tag>.webp): made once by the server (WebP, at most that

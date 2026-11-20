@@ -12,8 +12,8 @@ import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
 import { dellalSecret, dellalSettings } from './dellal';
-import { landingStore } from './landingquery';
 import { firstName, NOTIFY_LANGS, NotifyLang, notifySettings, render, sendTime, simulatedHasWhatsApp, TEMPLATE_LANG, templateBody, templateParams } from './notify';
+import { pageLinks } from './pagelinks';
 
 export const CAMPAIGN_STATUSES = ['draft', 'pending', 'rejected', 'ready', 'sending', 'paused', 'done', 'canceled'] as const;
 export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
@@ -439,11 +439,11 @@ export const campaignsProcs = {
   'campaigns.options': proc([...ROLES], z.object({}), async (ctx) => {
     const products = await ctx.db.query(`SELECT id, name FROM products WHERE active AND NOT is_service AND archived_at IS NULL ORDER BY lower(name), id LIMIT 500`);
     const pages = await ctx.db.query(`SELECT slug, title, product_id FROM landing_pages WHERE active ORDER BY id DESC LIMIT 200`).catch(() => []);
-    const base = ctx.server?.pagesUrl?.() ?? ctx.server?.publicUrl ?? '';
-    const store = await landingStore(ctx.db);
+    // at the shop's own domain by default once it is ready (Réglages › « Liens des pages »: modules/pagelinks.ts)
+    const { prefix } = await pageLinks(ctx);
     return {
       products: products.map((p: any) => ({ id: num(p.id), name: String(p.name) })),
-      pages: pages.map((p: any) => ({ slug: String(p.slug), title: String(p.title ?? p.slug), productId: numOrNull(p.product_id), url: base ? `${base.replace(/\/+$/, '')}/${store ? `${store}/` : ''}${p.slug}` : '' })),
+      pages: pages.map((p: any) => ({ slug: String(p.slug), title: String(p.title ?? p.slug), productId: numOrNull(p.product_id), url: prefix ? `${prefix}${p.slug}` : '' })),
       wilayas: WILAYAS.map((name, k) => ({ id: k + 1, name })),
     };
   }),

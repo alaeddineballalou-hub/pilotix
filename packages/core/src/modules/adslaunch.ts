@@ -16,8 +16,8 @@ import { addDays, fxTable, isOwner, moneyOf, ordersOf, visibleAdsets } from './a
 import { audienceIds, ensureEventAudiences, pilotSettings, shopDailyUsd, wilayaRates, type AccountHealth } from './adsmgr';
 import { B64, mediaOf, mediaView, PLAN_LIMITS, VIDEO_CHUNK, VIDEO_TYPES, type MediaRow } from './cmplan';
 import { aiKeyed, dellalSettings, PILOT_CHEAP_MODEL, pilotOn, type AiResponse } from './dellal';
-import { landingStore } from './landingquery';
 import { fieldOf } from './leads';
+import { pageLinks } from './pagelinks';
 import { budgetPacks, CHANNELS, GOAL_META, GOALS, isGone, isOn, launchProblems, limitOf, metaPlan, type Goal, type LaunchInput, type LaunchMedia } from './pilotads';
 import { contentFor, partnerChoices, partnerFor, USABLE } from './partners';
 import { launchAccounts, linkedPage } from './social';
@@ -70,25 +70,14 @@ export interface ProductLimit {
 }
 
 /**
- * The shop's own domain for its pages, once ready (Landing pages › Réglages › « Votre propre domaine »: its DNS points
- * here and carries its proof): the ads link there (https://<domain>/<page>), so they show the shop's name and not
- * PILOTIX.ONLINE (seen on a real ad, 17 Nov 2026). null: none, or not ready, or no platform (the browser preview).
- */
-async function ownDomain(ctx: Ctx): Promise<string | null> {
-  if (!ctx.server || !ctx.t || !ctx.shop || ctx.shop.demo) return null;
-  const r = (await ctx.t.platform.query(`SELECT domain FROM platform.shops WHERE id = $1 AND domain IS NOT NULL AND domain_status = 'ok'`, [ctx.shop.id]).catch(() => []))[0];
-  return r?.domain ? String(r.domain).toLowerCase() : null;
-}
-
-/**
- * The public address of a landing page or a group (theirs are the same kind: site/<store>/<slug>), at the shop's own
- * domain once it is ready. '' when there is no platform address (the browser preview).
+ * The public address of a landing page or a group (theirs are the same kind: site/<store>/<slug>): at the shop's own
+ * domain by default once it is ready, so the ads show the shop's name and not PILOTIX.ONLINE (seen on a real ad,
+ * 17 Nov 2026), unless the shop chose the platform's address (Réglages › « Liens des pages »: modules/pagelinks.ts).
+ * '' when there is no platform address (the browser preview has DEMO_BASE).
  */
 async function pageAddress(ctx: Ctx): Promise<{ url: (slug: string) => string; own: boolean }> {
-  const base = (ctx.server?.pagesUrl?.() || ctx.server?.publicUrl || (ctx.server ? '' : DEMO_BASE)).replace(/\/+$/, '');
-  const store = await landingStore(ctx.db);
-  const own = await ownDomain(ctx);
-  return { own: !!own, url: (slug) => (own ? `https://${own}/${slug}` : base ? `${base}/${store ? `${store}/` : ''}${slug}` : '') };
+  const l = await pageLinks(ctx, ctx.server ? '' : DEMO_BASE);
+  return { own: l.usesOwn, url: (slug) => (l.prefix ? `${l.prefix}${slug}` : '') };
 }
 
 /** The products the launcher offers, with what an order may cost each (one read of the orders for all of them). */

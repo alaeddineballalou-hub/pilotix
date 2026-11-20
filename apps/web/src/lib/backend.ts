@@ -643,9 +643,20 @@ const onServer = () => {
   if (backend !== remote) throw new ApiError(400, 'Pas dans la démo');
   return remote;
 };
-export const domainGet = () => onServer().request<DomainState>('/shop/domain/get');
-export const domainSet = (domain: string | null) => onServer().request<DomainState>('/shop/domain', { domain });
-export const domainCheck = () => onServer().request<{ ok: boolean; found: string[]; expected: string[]; proof?: boolean }>('/shop/domain/check');
+/** the demo: a sample domain, ready, kept in this browser only (nothing is checked or sent) */
+const DEMO_IP = '203.0.113.10';
+const demoProof = (d: string) => ({ name: `_pilotix.${d}`, value: 'pilotix-demo-0000' });
+let demoDomain: DomainState = { domain: 'ma-boutique.dz', status: 'ok', ips: [DEMO_IP], proof: demoProof('ma-boutique.dz'), host: 'pilotix.online' };
+export const domainGet = (): Promise<DomainState> => (backend === remote ? remote.request<DomainState>('/shop/domain/get') : Promise.resolve({ ...demoDomain }));
+export const domainSet = (domain: string | null): Promise<DomainState> => {
+  if (backend === remote) return remote.request<DomainState>('/shop/domain', { domain });
+  demoDomain = domain ? { ...demoDomain, domain, status: domain === demoDomain.domain ? demoDomain.status : 'pending', proof: demoProof(domain) } : { ...demoDomain, domain: null, status: 'none', proof: null };
+  return Promise.resolve({ ...demoDomain });
+};
+export const domainCheck = () =>
+  backend === remote
+    ? remote.request<{ ok: boolean; found: string[]; expected: string[]; proof?: boolean }>('/shop/domain/check')
+    : Promise.resolve({ ok: demoDomain.status === 'ok', found: [] as string[], expected: [DEMO_IP], proof: demoDomain.status === 'ok' });
 
 /**
  * Call an action on the current backend (server or demo). `seller` (a confirmation agency's space): the seller whose

@@ -135,6 +135,11 @@ export interface SettingsMap {
     team?: boolean;
     suppliers?: boolean;
   };
+  /**
+   * Landing pages › Réglages › « Liens des pages » (modules/pagelinks.ts): the address in every link Pilotix shows or
+   * sends — the shop's own domain once it is ready ('own', the default), or the platform's pages address ('pilotix')
+   */
+  pagelinks: { use: 'own' | 'pilotix' };
   /** Dashboard goals (admin): delivered revenue per month */
   goals: { monthlyRevenue: number };
   /** Caisse: the bank can be removed by a shop that does not use one */
@@ -255,6 +260,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   cron: { key: '' },
   meta: { adAccountId: '', hasToken: false },
   landing: { pixelId: '', testEventCode: '', purchaseAt: 'confirmed', abandonAfterMin: 20, autoCreate: false, ignored: [] },
+  pagelinks: { use: 'own' },
   goals: { monthlyRevenue: 3_000_000 },
   caisses: { bankHidden: false },
   depotAlerts: { to: [] },

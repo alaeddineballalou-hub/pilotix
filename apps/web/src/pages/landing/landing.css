@@ -260,6 +260,33 @@
 .lp-dom-table th, .lp-dom-table td { text-align: start; padding: 6px 8px; border-bottom: 1px solid var(--line); }
 .lp-dom-table td { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; }
 
+/* Réglages › « Liens des pages » (design 5): the domain, the address of the links, the store's part of Pilotix's address */
+.lp-links-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lp-links-h .chip { margin: 0; font-weight: 700; }
+.lp-dom-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.lp-dom-box { flex: 1 1 240px; min-width: 0; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: var(--sk-r-ctl, 10px); background: var(--field); padding-inline-end: 8px; }
+.lp-dom-box:focus-within { outline: 2px solid var(--navy); outline-offset: 1px; }
+.lp-dom-box input { flex: 1 1 auto; min-width: 0; border: 0 !important; background: transparent !important; box-shadow: none !important; outline: none !important; }
+.lp-dom-box .chip { flex: none; margin: 0; }
+.lp-addr { display: flex; flex-direction: column; gap: 10px; }
+.lp-addr-h { font-size: 13.5px; font-weight: 700; }
+.lp-addr-list { display: flex; flex-direction: column; gap: 8px; }
+.lp-level.lp-addr-opt { position: relative; flex-direction: row; align-items: center; gap: 12px; padding: 12px 14px; transition: border-color .2s ease, background-color .2s ease; }
+.lp-addr-opt:focus-within { outline: 2px solid var(--navy); outline-offset: 2px; }
+.lp-addr-opt.ro { cursor: default; }
+.lp-radio { flex: none; width: 18px; height: 18px; box-sizing: border-box; border-radius: 999px; border: 2px solid var(--muted); display: inline-flex; align-items: center; justify-content: center; transition: border-color .2s ease; }
+.lp-addr-opt.on .lp-radio { border-color: var(--navy); }
+.lp-addr-opt.on .lp-radio::after { content: ''; width: 8px; height: 8px; border-radius: 999px; background: var(--navy); }
+.lp-addr-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.lp-addr-txt small { font-size: 13px; overflow-wrap: anywhere; }
+.chip.lp-reco { background: var(--c-accent-tint, #FFF3E6); color: var(--c-accent-ink, #A4480A); }
+.lp-addr-state { margin: 0; display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: 12px; font-size: 13.5px; font-weight: 600; line-height: 1.45; background: var(--sky-soft); color: var(--ink); }
+.lp-addr-state.ok { background: var(--ok-soft); color: var(--ok); }
+.lp-addr-state.warn { background: var(--warn-soft); color: var(--warn); }
+.lp-addr-state .bji, .lp-addr-note .bji { flex: none; margin-top: 2px; }
+.lp-addr-note { margin: 0; display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .lp-level.lp-addr-opt, .lp-radio { transition: none; } }
+
 /* ---------------------------------------------------------------- Protection: what the fake-order check did */
 .lp-pr-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
 .lp-pr-top .pd-note { margin: 0; flex: 1 1 320px; }

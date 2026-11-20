@@ -27,6 +27,9 @@ import {
 } from '../index';
 import { landingStore } from '../modules/landingquery';
 import { productLimits } from '../modules/adslaunch';
+import { campaignsProcs } from '../modules/campaigns';
+import { landingProcs } from '../modules/landing';
+import { pageLinksProcs } from '../modules/pagelinks';
 import { PLATFORM_MIGRATIONS } from '../platform/schema';
 import {
   accountByEmail,
@@ -619,6 +622,72 @@ test('ads link to the shop’s own domain once it is ready, not to PILOTIX.ONLIN
   l = await linkNow();
   assert.equal(l.url, 'https://www.domaine.dz/poussette');
   assert.equal(l.own, true);
+});
+
+test('page links: the own domain by default, Pilotix’s address when chosen or while the domain does not reach the server', async () => {
+  const { t, p } = await server();
+  const plan = (await p<any[]>('p.plans.list')).find((x) => x.code === 'pro');
+  const made = await invite(t, p, { name: 'Liens', ownerName: 'Lina', ownerEmail: 'l@liens.dz', planId: plan.id, trialDays: 14 }, 'Liens-Password-1');
+  const schema = `shop_${made.id}`;
+  const db = t.shop(schema);
+  const prod = (await db.query(`INSERT INTO products (name, sku, price, active) VALUES ('Tricycle', 'TRI', 11200, true) RETURNING id`))[0].id;
+  await db.query(`INSERT INTO landing_pages (product_id, slug, title) VALUES ($1, 'tricycle', 'Tricycle')`, [prod]);
+  // the server's check of the domain (CoreService.shopDomainLive)
+  let live = true;
+  const ctxNow = async (): Promise<Ctx> => {
+    const s = (await loadShop(t, { id: made.id }))!;
+    const c = await shopUserCtx(t, schema, 'l@liens.dz', 'Liens-Password-1', shopCtx(s, shopStatus(s, Date.now(), 3)));
+    return { ...c, t, server: { publicUrl: 'https://pilotix.online', pagesUrl: () => 'https://go.pilotix.online', shopDomainLive: () => live } as any };
+  };
+  const store = (await loadShop(t, { id: made.id }))!.slug;
+  const pilotix = `https://go.pilotix.online/${store}/`;
+  const links = async (): Promise<any> => landingProcs['landing.store'].run(await ctxNow(), {});
+  const adLink = async () => (await productLimits(await ctxNow())).find((x) => x.id === Number(prod))!.landing!;
+  const campaignLink = async () => ((await campaignsProcs['campaigns.options'].run(await ctxNow(), {})) as any).pages.find((x: any) => x.slug === 'tricycle').url;
+  const choose = async (use: 'own' | 'pilotix'): Promise<any> => pageLinksProcs['landing.links.set'].run(await ctxNow(), { use });
+
+  // no domain: Pilotix's address
+  let l = await links();
+  assert.equal(l.prefix, pilotix);
+  assert.equal(l.choice, 'own');
+  assert.equal(l.usesOwn, false);
+  assert.equal(l.own, null);
+  assert.equal(l.sample, 'tricycle');
+  // typed, not ready yet (its DNS, its proof): still Pilotix's address
+  await t.platform.query(`UPDATE platform.shops SET domain = 'boutique-liens.dz', domain_status = 'pending' WHERE id = $1`, [made.id]);
+  l = await links();
+  assert.deepEqual(l.own, { domain: 'boutique-liens.dz', status: 'pending', live: true });
+  assert.equal(l.prefix, pilotix);
+  // ready: every link uses it by default (the pages' list, the ads, the WhatsApp campaigns)
+  await t.platform.query(`UPDATE platform.shops SET domain_status = 'ok' WHERE id = $1`, [made.id]);
+  l = await links();
+  assert.equal(l.prefix, 'https://boutique-liens.dz/');
+  assert.equal(l.usesOwn, true);
+  const ad = await adLink();
+  assert.equal(ad.url, 'https://boutique-liens.dz/tricycle');
+  assert.equal(ad.own, true);
+  assert.equal(await campaignLink(), 'https://boutique-liens.dz/tricycle');
+  // it stops reaching the server: back to Pilotix's address by itself, and to the domain once it answers again
+  live = false;
+  assert.equal((await links()).prefix, pilotix);
+  assert.equal((await adLink()).url, `${pilotix}tricycle`);
+  live = true;
+  assert.equal((await adLink()).url, 'https://boutique-liens.dz/tricycle');
+  // the shop chooses Pilotix's address: every link follows, whatever its domain
+  assert.equal((await choose('pilotix')).usesOwn, false);
+  l = await links();
+  assert.equal(l.choice, 'pilotix');
+  assert.equal(l.prefix, pilotix);
+  assert.equal(await campaignLink(), `${pilotix}tricycle`);
+  assert.equal((await adLink()).own, false);
+  // and back
+  assert.equal((await choose('own')).prefix, 'https://boutique-liens.dz/');
+  // only the administrator chooses
+  const agent: any = await call('users.create', await ctxNow(), { phone: tph(), name: 'Agent', password: 'agent-pass-1', roles: ['confirmation'], language: 'fr', email: 'm@liens.dz' });
+  assert.ok(agent.id);
+  const s = (await loadShop(t, { id: made.id }))!;
+  const m = await shopUserCtx(t, schema, 'm@liens.dz', 'agent-pass-1', shopCtx(s, shopStatus(s, Date.now(), 3)));
+  await assert.rejects(pageLinksProcs['landing.links.set'].run({ ...m, t, server: { pagesUrl: () => 'https://go.pilotix.online' } as any }, { use: 'pilotix' }), /administrateur/);
 });
 
 test('the plan limits active accounts', async () => {

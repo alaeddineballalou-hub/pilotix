@@ -13,7 +13,7 @@ import { algiersDayStart, landingDescriptionText } from '@pilotix/shared';
 import { bad, Ctx, notFound, proc, publicApi } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, META_TOKEN_KEY } from './admin';
-import { landingStore } from './landingquery';
+import { pageLinks } from './pagelinks';
 import { SOCIAL_KEYS } from './social';
 import { RESERVED } from './stockquery';
 
@@ -164,6 +164,8 @@ export function plainText(s: string): string {
 interface Where {
   pages: string;
   store: string;
+  /** what a page's link starts with (the shop's own domain or <pages>/<store>/: modules/pagelinks.ts); missing: <pages>/<store>/ */
+  prefix?: string;
   api: string;
   brand: string;
   /** the browser preview: nothing goes to Meta */
@@ -174,7 +176,9 @@ interface Where {
 async function whereOf(ctx: Ctx): Promise<Where> {
   const shop = String((await getSetting(ctx.db, 'shop')).name ?? '') || 'Boutique';
   const pages = String(ctx.server?.pagesUrl?.() ?? ctx.server?.publicUrl ?? 'https://pilotix.online').replace(/\/+$/, '');
-  return { pages, store: await landingStore(ctx.db), api: ctx.server ? publicApi(ctx) : 'https://pilotix.online/api', brand: shop, demo: simulated(ctx), guard: await guardOf(ctx.db) };
+  // the products' links: at the shop's own domain by default once it is ready (Réglages › « Liens des pages »)
+  const l = await pageLinks(ctx, 'https://pilotix.online');
+  return { pages, store: l.store, prefix: l.prefix, api: ctx.server ? publicApi(ctx) : 'https://pilotix.online/api', brand: shop, demo: simulated(ctx), guard: await guardOf(ctx.db) };
 }
 
 // ---------------------------------------------------------------- « stock bas »: a colour / size with little left leaves the ads
@@ -229,7 +233,7 @@ export interface Line {
 export function linesOf(p: Prod, w: Where): Line[] {
   if (problemOf(p, w.demo) || !p.page) return [];
   const page = p.page;
-  const link = `${w.pages}/${w.store ? `${w.store}/` : ''}${page.slug}`;
+  const link = w.prefix ? `${w.prefix}${page.slug}` : `${w.pages}/${w.store ? `${w.store}/` : ''}${page.slug}`;
   const urlOf = (x: Pic) => (x.id ? `${w.api}/lp/img/${x.id}/meta.jpg` : String(x.url));
   const good = page.pics.filter((x) => usable(x, w.demo));
   const text = plainText(landingDescriptionText(page.description)).slice(0, 5000) || page.title;
@@ -830,7 +834,7 @@ async function board(ctx: Ctx) {
     };
   });
   return {
-    catalog: { connected: !!s.catalogId, businessName: s.businessName, pixelsLinked: s.pixelsLinked, live: !simulated(ctx), ready: metaOk, base: `${w.pages}/${w.store}` },
+    catalog: { connected: !!s.catalogId, businessName: s.businessName, pixelsLinked: s.pixelsLinked, live: !simulated(ctx), ready: metaOk, base: w.prefix ? w.prefix.replace(/\/+$/, '') : `${w.pages}/${w.store}` },
     tiktok: {
       /** the TikTok Ads account is linked (Pilot AI › Comptes) */
       linked: await ttLinked(ctx),

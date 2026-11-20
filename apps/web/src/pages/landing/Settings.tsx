@@ -3,8 +3,8 @@
 import { Why } from './Why';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { backend, serverUrl, type Out } from '../../lib/backend';
-import { OwnDomain } from './Domain';
+import { serverUrl, type Out } from '../../lib/backend';
+import { PageLinks } from './Domain';
 import { PixelsCard } from './Pixels';
 import { TeamLists } from './TeamLists';
 import { WHATSAPP_DEFAULT, WHATSAPP_VARS } from '@pilotix/shared';
@@ -25,8 +25,6 @@ type PurchaseAt = 'order' | 'confirmed' | 'delivered';
 export function Settings() {
   const { t } = useTranslation();
   const { session } = useSession();
-  // a shop of a multi-shop server, its administrator: its own domain name for its pages
-  const ownDomain = backend.kind === 'remote' && !!session?.isAdmin && !!session.shop && !session.shop.demo;
   const q = useRpc('landing.settings.get', {}, { refetchOnWindowFocus: false });
   if (q.isLoading) return <Loading />;
   if (q.error || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
@@ -36,7 +34,6 @@ export function Settings() {
       {/* the team's test numbers and the suppliers' blocked ones: the owner decides */}
       {!!session?.isAdmin && <TeamLists />}
       <Form key={JSON.stringify(q.data.settings)} data={q.data} />
-      {ownDomain && <OwnDomain />}
       <Events />
       <p className="pd-note">{t('landing.set.footer')}</p>
     </>
@@ -235,24 +232,23 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
         </Field>
       </section>
 
-      <section className="card">
-        <h2>
-          <Icon name="globe" /> {t('landing.set.link')}
-        </h2>
-        <p className="pd-note">{t('landing.set.linkHelp')}</p>
-        <Field label={t('landing.set.storeSlug')} hint={data.storeFixed ? t('landing.set.storeFixed', { name: data.store }) : t('landing.set.storeSlugHint', { name: data.store })}>
-          <div className="lp-slug">
-            <span className="ltr">{`${data.pagesUrl || serverUrl() || location.host}/`.replace(/^https?:\/\//, '')}</span>
-            {data.storeFixed ? (
-              // a shop of Pilotix's platform: its link name, chosen once (all its Pilotix addresses use it too)
-              <input className="ltr" value={data.store} readOnly />
-            ) : (
-              <input className="ltr" value={f.storeSlug} maxLength={40} placeholder={data.store} onChange={(e) => set('storeSlug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} />
-            )}
-            <span className="ltr">/…</span>
-          </div>
-        </Field>
-      </section>
+      {/* « Liens des pages »: the shop's own domain, the address its links use, the store's part of Pilotix's address */}
+      <PageLinks
+        store={(label) => (
+          <Field label={label} hint={data.storeFixed ? t('landing.set.storeFixed', { name: data.store }) : t('landing.set.storeSlugHint', { name: data.store })}>
+            <div className="lp-slug">
+              <span className="ltr">{`${data.pagesUrl || serverUrl() || location.host}/`.replace(/^https?:\/\//, '')}</span>
+              {data.storeFixed ? (
+                // a shop of Pilotix's platform: its link name, chosen once (all its Pilotix addresses use it too)
+                <input className="ltr" value={data.store} readOnly />
+              ) : (
+                <input className="ltr" value={f.storeSlug} maxLength={40} placeholder={data.store} onChange={(e) => set('storeSlug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} />
+              )}
+              <span className="ltr">/…</span>
+            </div>
+          </Field>
+        )}
+      />
 
       <section className="card">
         <h2>

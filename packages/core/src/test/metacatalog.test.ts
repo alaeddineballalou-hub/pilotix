@@ -54,6 +54,8 @@ test('plain text, the lines of a product and the fingerprint', () => {
   assert.equal(gris.size, undefined);
   // the link says it is a catalog ad (its visits and orders are counted)
   assert.equal(gris.link, 'https://go.test/bebe/poussette?px_cat=meta');
+  // at the shop's own domain (Réglages › « Liens des pages »): no store in the link
+  assert.equal((itemsOf(p, { ...w, prefix: 'https://bebe-confort.dz/' })[0].data as any).link, 'https://bebe-confort.dz/poussette?px_cat=meta');
   assert.equal(gris.brand, 'Bébé Confort');
   assert.equal(gris.description, 'Légère\n• 6 kg');
   // the small picture never goes; the pink one comes first for « Rose »

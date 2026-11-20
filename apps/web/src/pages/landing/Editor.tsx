@@ -13,7 +13,7 @@ import { SaveBar } from '../ai/agent';
 import { useDebounced } from '../depot/OrderList';
 import { DescImages, DescImg } from './DescImages';
 import { useLandingFrame } from './frame';
-import { publicUrl, usePagesBase, useStore } from './index';
+import { publicUrl, usePagesPrefix } from './index';
 import { Img, Photos } from './Photos';
 import { PixelSelects } from './Pixels';
 type Page = Out<'landing.get'>;
@@ -55,8 +55,7 @@ const keyOf = (d: Draft) => JSON.stringify({ ...d, images: d.images.map((i) => [
 
 function Form({ p, productId }: { p: Page | null; productId?: number }) {
   const { t } = useTranslation();
-  const store = useStore();
-  const base = usePagesBase();
+  const prefix = usePagesPrefix();
   const [d, setD] = useState<Draft>(() => draftOf(p, productId));
   const [saved, setSaved] = useState(() => keyOf(draftOf(p, productId)));
   const [slugTouched, setSlugTouched] = useState(!!p);
@@ -277,7 +276,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
         </a>
         <h1 dir="auto">{p ? d.title || p.productName : t('landing.ed.newTitle')}</h1>
         {p && (
-          <a className="btn small" href={publicUrl(p.slug, store, base)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer">
+          <a className="btn small" href={publicUrl(p.slug, prefix)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer">
             <Icon name="external" /> {t('landing.list.open')}
           </a>
         )}
@@ -304,7 +303,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
             </Field>
             <Field label={t('landing.ed.slug')} hint={t('landing.ed.slugHint')}>
               <div className="lp-slug">
-                <span className="ltr">{backend.kind === 'demo' ? '…/lp/' : (store ? `${base || ''}/${store}/` : `${shopApi(serverUrl() || '')}/lp/`).replace(/^https?:\/\//, '')}</span>
+                <span className="ltr">{backend.kind === 'demo' ? '…/lp/' : (prefix || `${shopApi(serverUrl() || '')}/lp/`).replace(/^https?:\/\//, '')}</span>
                 <input
                   className="ltr"
                   value={d.slug}

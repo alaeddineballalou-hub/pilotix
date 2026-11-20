@@ -467,6 +467,21 @@
     "proofHelp": "Le TXT prouve que ce domaine est à vous : tout domaine pointe vers le même serveur Pilotix, seul son propriétaire peut ajouter ce TXT.",
     "proofMissing": "La ligne TXT n’est pas encore trouvée : ajoutez-la chez votre registraire, puis « Vérifier » (quelques minutes à quelques heures)."
   },
+  "links": {
+    "help": "Où vivent vos landing pages : votre domaine, l’adresse de vos liens et le nom de votre boutique.",
+    "domain": "Votre domaine",
+    "address": "Adresse dans vos liens",
+    "own": "Votre domaine",
+    "pilotix": "Adresse Pilotix",
+    "page": "ma-page",
+    "nowOwn": "Vos liens utilisent {{domain}} : liste des pages, bouton Copier, pubs, catalogue et campagnes WhatsApp.",
+    "nowPilotix": "Vos liens utilisent {{pilotix}} : liste des pages, bouton Copier, pubs, catalogue et campagnes WhatsApp.",
+    "waiting": "{{domain}} n’est pas encore prêt. Vos liens utilisent {{pilotix}} en attendant.",
+    "down": "{{domain}} n’arrive plus à Pilotix pour le moment. Vos liens utilisent {{pilotix}} jusqu’à ce qu’il remarche.",
+    "fallback": "Si {{domain}} ne marche plus, vos liens repassent sur {{pilotix}} tout seuls. Les anciens liens marchent toujours.",
+    "storeOnly": "Nom de la boutique (seulement dans les liens {{pilotix}})",
+    "saved": "Enregistré : vos liens utilisent {{address}}"
+  },
   "pr": {
     "kQuality": "Qualité des commandes",
     "kQualitySub": "{{real}} vraies sur {{total}} reçues",

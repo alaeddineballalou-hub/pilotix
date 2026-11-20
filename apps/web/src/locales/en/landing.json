@@ -467,6 +467,21 @@
     "proofHelp": "The TXT line proves this domain is yours: every domain points to the same Pilotix server, only its owner can add this TXT.",
     "proofMissing": "The TXT line is not found yet: add it at your registrar, then “Check” (a few minutes to a few hours)."
   },
+  "links": {
+    "help": "Where your landing pages live: your domain, the address your links use, and your store name.",
+    "domain": "Your domain",
+    "address": "Address in your links",
+    "own": "Your domain",
+    "pilotix": "Pilotix address",
+    "page": "my-page",
+    "nowOwn": "Your links use {{domain}} now: page list, copy button, ads, catalogue and WhatsApp campaigns.",
+    "nowPilotix": "Your links use {{pilotix}} now: page list, copy button, ads, catalogue and WhatsApp campaigns.",
+    "waiting": "{{domain}} is not ready yet. Your links use {{pilotix}} until it is.",
+    "down": "{{domain}} does not reach Pilotix right now. Your links use {{pilotix}} until it works again.",
+    "fallback": "If {{domain}} stops working, your links go back to {{pilotix}} by themselves. Old links always keep working.",
+    "storeOnly": "Store name (only in {{pilotix}} links)",
+    "saved": "Saved: your links use {{address}}"
+  },
   "pr": {
     "kQuality": "Order quality",
     "kQualitySub": "{{real}} real out of {{total}} received",
