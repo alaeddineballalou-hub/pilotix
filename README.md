@@ -212,7 +212,10 @@ off-site backup keeps it with the database, under the backup's passphrase (`depl
 **Updates from GitHub, without logging in to the server:** once, on the server, run
 `sudo bash /opt/pilotix/deploy/setup-github-deploy.sh` and put the two secrets it prints in GitHub (Settings › Secrets and
 variables › Actions). Then **Actions › Deploy to the server › Run workflow** backs up the database and updates the server
-(the site pauses a few seconds). The key it uses can run only `deploy/update.sh`. By hand: `sudo /opt/pilotix/deploy/update.sh`.
+(the site pauses a few seconds). The key it uses can run only `deploy/update.sh`. The workflow sends the exact version its
+check approved (`update <sha>`): the server puts that one live, never a later push, and the run fails if the server took
+another one. By hand: `sudo /opt/pilotix/deploy/update.sh` (the latest main) or `sudo /opt/pilotix/deploy/update.sh <sha>`
+(a version of main).
 
 
 1. Host PostgreSQL + Redis + the server (Docker image: `apps/server/Dockerfile`; it migrates on start). Put Cloudflare in front.

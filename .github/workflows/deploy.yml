@@ -40,6 +40,8 @@ jobs:
     timeout-minutes: 5
     outputs:
       go: ${{ steps.what.outputs.go }}
+      # the exact version that goes live: the one checked here (the server takes it, not « the latest main » later)
+      sha: ${{ steps.what.outputs.sha }}
     steps:
       - name: Something new to put live, checked by CI?
         id: what
@@ -49,12 +51,13 @@ jobs:
           SOURCE: ${{ inputs.source }}
           YES_SHA: ${{ inputs.sha }}
         run: |
+          MAIN=$(gh api "repos/$REPO/commits/main" --jq .sha)
           if [ "$SOURCE" = urgent ]; then
-            echo "Urgent deploy (asked by the owner): the latest main goes live."
+            echo "Urgent deploy (asked by the owner): the latest main goes live (${MAIN:0:8})."
+            echo "sha=$MAIN" >> "$GITHUB_OUTPUT"
             echo "go=yes" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          MAIN=$(gh api "repos/$REPO/commits/main" --jq .sha)
           if [ -z "$YES_SHA" ] || [ "$MAIN" != "$YES_SHA" ]; then
             echo "::warning title=Not updated::main (${MAIN:0:8}) is not the version the owner said yes to (${YES_SHA:0:8}). Nothing goes live."
             echo "go=no" >> "$GITHUB_OUTPUT"
@@ -78,6 +81,7 @@ jobs:
             echo "::warning title=Not updated tonight::Pilotix CI has not passed on the latest main (${MAIN:0:8}: ${CI:-no run}). It goes live the night after its fix, or with « Run workflow » if the owner asks."
             echo "go=no" >> "$GITHUB_OUTPUT"
           else
+            echo "sha=$MAIN" >> "$GITHUB_OUTPUT"
             echo "go=yes" >> "$GITHUB_OUTPUT"
           fi
 
@@ -94,9 +98,15 @@ jobs:
           # the server's own SSH key (the « Host key: » line of an update, saved as the secret DEPLOY_KNOWN_HOSTS: its
           # type and key, the server's address is added here): with it, a machine pretending to be the server is refused
           KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          # the version the check approved: the server puts exactly this one live (deploy/update.sh)
+          SHA: ${{ needs.check.outputs.sha }}
         run: |
           if [ -z "$KEY" ] || [ -z "$HOST" ]; then
             echo "Missing the secrets DEPLOY_HOST / DEPLOY_SSH_KEY: run deploy/setup-github-deploy.sh on the server first."
+            exit 1
+          fi
+          if ! [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error title=No version::The check gave no version to put live (« $SHA »). Nothing was changed."
             exit 1
           fi
           install -m 700 -d ~/.ssh
@@ -112,7 +122,7 @@ jobs:
           fi
           set -o pipefail
           # (e-mail addresses are hidden in the run's log: anyone can read it while the code is public)
-          ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=$CHECK -o ServerAliveInterval=30 "root@$HOST" update 2>&1 | sed -u -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/***@***/g' | tee update.log
+          ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=$CHECK -o ServerAliveInterval=30 "root@$HOST" "update $SHA" 2>&1 | sed -u -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/***@***/g' | tee update.log
 
       # the server could log in to its e-mail server (red here, but the deploy itself is done: see the line it wrote)
       - name: E-mails work on the server
@@ -153,3 +163,16 @@ jobs:
             echo "Checking $DOM on the server itself (not through Cloudflare)"
           fi
           node scripts/live-check.mjs
+
+      # the version now on the server is exactly the one the check approved (before 20 Nov 2026 the server took « the
+      # latest main » a few seconds after the check: a push landing in between went live without the owner's yes)
+      - name: The server took the version that was checked
+        env:
+          SHA: ${{ needs.check.outputs.sha }}
+        run: |
+          got=$(awk '/^==> (Latest code|Code)$/ { getline; print $1; exit }' update.log)
+          echo "checked: ${SHA:0:8} · on the server: ${got:-?}"
+          if [ -z "$got" ] || [ -z "$SHA" ] || [ "${SHA:0:${#got}}" != "$got" ]; then
+            echo "::error title=Another version went live::The server took ${got:-an unknown version}, not the version the check approved (${SHA:0:8})."
+            exit 1
+          fi
