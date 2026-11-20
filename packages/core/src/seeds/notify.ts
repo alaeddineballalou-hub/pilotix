@@ -27,7 +27,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   };
   await db.query(`INSERT INTO settings (key, value) VALUES ('notify', $1) ON CONFLICT (key) DO NOTHING`, [JSON.stringify(settings)]);
   const quiet = { quietFrom: 22, quietTo: 8 };
-  const on: Record<NotifyKind, boolean> = { created: true, confirmed: true, shipped: true, out_for_delivery: true, stopdesk: true, failed: true, returning: true, delivered: false };
+  const on: Record<NotifyKind, boolean> = { created: true, no_answer: false, confirmed: true, shipped: true, out_for_delivery: true, stopdesk: true, failed: true, returning: true, delivered: false };
   const since = now - 3 * 86_400_000;
   const shop = (await getSetting(db, 'shop')).name;
 

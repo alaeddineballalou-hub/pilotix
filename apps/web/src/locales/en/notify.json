@@ -209,6 +209,7 @@
   "offLink": "Start it in Settings",
   "kind": {
     "created": "Order received",
+    "no_answer": "Calls not answered",
     "confirmed": "Order confirmed",
     "shipped": "Shipped",
     "out_for_delivery": "With the courier",
@@ -219,6 +220,7 @@
   },
   "when": {
     "created": "When an order comes in (website, page, form). The customer knows a call is coming and answers more often.",
+    "no_answer": "After several calls nobody picked up (3 by default, you choose): “we tried to call you”, the customer answers if they still want it. Off at first.",
     "confirmed": "When the team confirms the order: the product and the total, delivery included.",
     "shipped": "When the parcel leaves with the delivery company: delay and tracking number.",
     "out_for_delivery": "The day the courier has it (home delivery): keep the phone on.",
@@ -403,6 +405,10 @@
     "langHint": "Darija in Latin letters reads like your chats and costs 2 to 3 times less by SMS.",
     "quiet": "No message at night",
     "quietHint": "A night message leaves at the end of this range (Algeria time). Same hour on both sides: any hour.",
+    "noAnswerAfter": "“Calls not answered” message after",
+    "noAnswerAfterHint": "The message leaves once per order, when this number of unanswered calls is reached. If the order cancels itself at the same number of calls (Confirmation), it does not leave: put a smaller number here.",
+    "noAnswerCalls_one": "{{count}} unanswered call",
+    "noAnswerCalls_other": "{{count}} unanswered calls",
     "quietFrom": "From",
     "quietTo": "To",
     "waHelp": "WhatsApp only allows a business’s first message with an approved text (“Utility” template). Pilotix sends your texts to WhatsApp for approval; it often takes minutes, sometimes 24 h.",

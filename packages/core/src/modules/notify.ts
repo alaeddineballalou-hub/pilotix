@@ -14,7 +14,7 @@ import { getSetting } from '../settings';
 import { ownRowSql } from './agencyscope';
 
 // ---------------------------------------------------------------- the cases and their texts
-export const NOTIFY_KINDS = ['created', 'confirmed', 'shipped', 'out_for_delivery', 'stopdesk', 'failed', 'returning', 'delivered'] as const;
+export const NOTIFY_KINDS = ['created', 'no_answer', 'confirmed', 'shipped', 'out_for_delivery', 'stopdesk', 'failed', 'returning', 'delivered'] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 export const NOTIFY_LANGS = ['dz', 'fr', 'ar'] as const;
 export type NotifyLang = (typeof NOTIFY_LANGS)[number];
@@ -34,6 +34,12 @@ export const DEFAULT_TEXTS: Record<NotifyKind, Record<NotifyLang, string>> = {
     dz: 'Salam {nom}, m3akom {boutique}. La commande ta3kom {ref} wslatna : {produits}, {total} DA. Ra7 n3ayetoulkom bach nconfirmiw m3akom, khalliw le téléphone ma7loul.',
     fr: 'Bonjour {nom}, ici {boutique}. Votre commande {ref} est bien enregistrée : {produits}, {total} DA. Nous allons vous appeler pour la confirmer, gardez votre téléphone allumé.',
     ar: 'السلام عليكم {nom}، معاكم {boutique}. الكوموند تاعكم {ref} وصلاتنا: {produits}، {total} دج. راح نعيطولكم باش نأكدو معاكم، خليو التيليفون محلول.',
+  },
+  // the team called several times and nobody picked up (off by default: the shop turns it on)
+  no_answer: {
+    dz: 'Salam {nom}, m3akom {boutique}. 3ayatnalkom 3la la commande ta3kom {ref} ({produits}) w ma jawebtouch. Mazal t7abouha ? Jawbouna 3la had le message w n3awdou n3aytoulkom.',
+    fr: "Bonjour {nom}, ici {boutique}. Nous avons essayé de vous appeler pour votre commande {ref} ({produits}), sans réponse. Vous la voulez toujours ? Répondez à ce message et nous vous rappelons.",
+    ar: 'السلام عليكم {nom}، معاكم {boutique}. عيطنالكم على الكوموند تاعكم {ref} ({produits}) وما جاوبتوش. مازال تحبوها؟ جاوبونا على هاد الميساج ونعاودو نعيطولكم.',
   },
   confirmed: {
     dz: 'Salam {nom}, m3akom {boutique}. La commande ta3kom {ref} tconfirmat : {produits}, {total} DA m3a la livraison. Ra7 nwajdouha w nab3touhalkom f a9rab wa9t.',
@@ -79,7 +85,7 @@ const NAME_FALLBACK: Record<NotifyLang, string> = { dz: '3likom', fr: 'Madame, M
 /** Order confirmation calls not made yet. */
 const WAITING_CALL = ['new', 'no_answer', 'busy', 'callback', 'postponed'];
 /** Sent once per order; the other cases (with the livreur, at the desk, failed attempt) at most once a day. */
-const ONCE: NotifyKind[] = ['created', 'confirmed', 'shipped', 'returning', 'delivered'];
+const ONCE: NotifyKind[] = ['created', 'no_answer', 'confirmed', 'shipped', 'returning', 'delivered'];
 const CONF_KINDS: NotifyKind[] = ['created', 'confirmed'];
 
 // ---------------------------------------------------------------- settings
@@ -111,6 +117,8 @@ export interface NotifySettings {
   /** no message between these hours (Algeria): they leave at the end of the night */
   quietFrom: number;
   quietTo: number;
+  /** « no_answer »: the message leaves after this many calls nobody picked up (once per order) */
+  noAnswerAfter: number;
   /** WhatsApp Business Account id (to send the texts to Meta for approval) */
   wabaId: string;
   templates: Record<string, NotifyTemplate>;
@@ -121,7 +129,7 @@ export interface NotifySettings {
 export const DEFAULT_NOTIFY: NotifySettings = {
   enabled: false,
   lang: 'dz',
-  cases: { created: true, confirmed: true, shipped: true, out_for_delivery: true, stopdesk: true, failed: true, returning: true, delivered: false },
+  cases: { created: true, no_answer: false, confirmed: true, shipped: true, out_for_delivery: true, stopdesk: true, failed: true, returning: true, delivered: false },
   texts: {},
   whatsapp: true,
   sms: 'manual',
@@ -130,6 +138,7 @@ export const DEFAULT_NOTIFY: NotifySettings = {
   smsUser: '',
   quietFrom: 22,
   quietTo: 8,
+  noAnswerAfter: 3,
   wabaId: '',
   templates: {},
   hookKey: '',
@@ -279,6 +288,8 @@ export function kindFor(row: { is_stopdesk?: boolean; conf_status?: string | nul
 /** Whether a message still fits the order now: it may have moved on while the message waited (the night). */
 export function stillFits(kind: NotifyKind, row: { conf_status?: string | null; follow_status?: string | null; is_stopdesk?: boolean }): boolean {
   if (kind === 'created') return WAITING_CALL.includes(String(row.conf_status)) && !row.follow_status;
+  // « we called, no answer »: only while the order still waits for its call (confirmed or cancelled since: no message)
+  if (kind === 'no_answer') return ['no_answer', 'busy'].includes(String(row.conf_status)) && !row.follow_status;
   if (kind === 'confirmed') return row.conf_status === 'confirmed' && (!row.follow_status || row.follow_status === 'to_prepare' || row.follow_status === 'prepared');
   return kindFor(row, row.follow_status ?? null) === kind;
 }
@@ -339,7 +350,7 @@ const CHAT_SKIP = 'Commande prise dans la conversation WhatsApp : le client a d�
 async function queue(db: Db, nc: NotifyCtx, row: any, kind: NotifyKind, now: number): Promise<void> {
   const { s } = nc;
   if (!s.enabled || !s.cases[kind]) return;
-  if (row.is_exchange && CONF_KINDS.includes(kind)) return; // SAV exchanges: the SAV team talks to the customer
+  if (row.is_exchange && (CONF_KINDS.includes(kind) || kind === 'no_answer')) return; // SAV exchanges: the SAV team talks to the customer
   await guarded(db, async () => {
     const before = (
       await db.query(`SELECT 1 FROM notifications WHERE order_id = $1 AND kind = $2 AND ($3 OR created_at > to_timestamp($4 / 1000.0) - interval '20 hours') LIMIT 1`, [row.id, kind, ONCE.includes(kind), now])
@@ -381,9 +392,13 @@ export async function onOrderCreated(db: Db, row: { id: number; phone: string; c
   else if (row.conf_status === 'new') await queue(db, nc, row, 'created', now);
 }
 
-/** setConf: the order is confirmed. */
-export async function onConfChange(db: Db, nc: NotifyCtx, row: any, from: string | null, to: string, now: number) {
+/**
+ * setConf: the order is confirmed; or a call nobody picked up, the Nth one of this order (the shop's number, 3 by default):
+ * « we tried to call you », once per order. `attempts`: the order's failed calls, this one counted.
+ */
+export async function onConfChange(db: Db, nc: NotifyCtx, row: any, from: string | null, to: string, now: number, attempts = 0) {
   if (to === 'confirmed' && from !== 'confirmed') await queue(db, nc, row, 'confirmed', now);
+  else if (to === 'no_answer' && attempts >= Math.max(1, Math.round(Number(nc.s.noAnswerAfter) || 3))) await queue(db, nc, row, 'no_answer', now);
 }
 
 /**
@@ -710,6 +725,7 @@ const FOLLOW_WORDS: Record<string, string> = {
 
 export const KIND_FR: Record<NotifyKind, string> = {
   created: 'Commande reçue',
+  no_answer: 'Appels sans réponse',
   confirmed: 'Commande confirmée',
   shipped: 'Expédiée',
   out_for_delivery: 'Avec le livreur',
@@ -886,7 +902,8 @@ const me = (ctx: Ctx) => ctx.session.profile.id;
 const SettingsInput = z.object({
   enabled: z.boolean(),
   lang: z.enum(NOTIFY_LANGS),
-  cases: z.object(Object.fromEntries(NOTIFY_KINDS.map((k) => [k, z.boolean()])) as Record<NotifyKind, z.ZodBoolean>),
+  // « no_answer » came later (20 Nov 2026): a page opened before it still saves (missing = off)
+  cases: z.object({ ...(Object.fromEntries(NOTIFY_KINDS.map((k) => [k, z.boolean()])) as Record<NotifyKind, z.ZodBoolean>), no_answer: z.boolean().default(false) }),
   texts: z.record(z.enum(NOTIFY_KINDS), z.record(z.enum(NOTIFY_LANGS), z.string().max(700))).default({}),
   whatsapp: z.boolean(),
   sms: z.enum(['gateway', 'manual', 'off']),
@@ -895,6 +912,7 @@ const SettingsInput = z.object({
   smsUser: z.string().trim().max(120),
   quietFrom: z.number().int().min(0).max(23),
   quietTo: z.number().int().min(0).max(23),
+  noAnswerAfter: z.number().int().min(1).max(10).default(3),
   wabaId: z.string().trim().max(40).regex(/^\d*$/, 'ID du compte WhatsApp Business : des chiffres'),
   /** the SMS gateway's password or token: a value replaces, '' keeps, null removes */
   smsSecret: z.string().max(500).nullable().default(''),

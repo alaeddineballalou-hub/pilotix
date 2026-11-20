@@ -49,8 +49,8 @@ type Kind = Row['kind'];
 type Case = Out<'notify.cases'>['cases'][number];
 type FeedTab = 'all' | 'todo' | 'waiting' | 'whatsapp' | 'sms' | 'replies' | 'problems';
 type Lang = 'dz' | 'fr' | 'ar';
-const KINDS: Kind[] = ['created', 'confirmed', 'shipped', 'out_for_delivery', 'stopdesk', 'failed', 'returning', 'delivered'];
-const KIND_ICON: Record<Kind, string> = { created: 'receipt', confirmed: 'checkcircle', shipped: 'package', out_for_delivery: 'truck', stopdesk: 'building', failed: 'alert', returning: 'undo', delivered: 'gift' };
+const KINDS: Kind[] = ['created', 'no_answer', 'confirmed', 'shipped', 'out_for_delivery', 'stopdesk', 'failed', 'returning', 'delivered'];
+const KIND_ICON: Record<Kind, string> = { created: 'receipt', no_answer: 'phone', confirmed: 'checkcircle', shipped: 'package', out_for_delivery: 'truck', stopdesk: 'building', failed: 'alert', returning: 'undo', delivered: 'gift' };
 const intl = (p: string) => '213' + p.replace(/^0/, '');
 
 /** "demain 08:00" for a message held during the night, otherwise like everywhere else. */
@@ -777,6 +777,15 @@ function SettingsForm({ data }: { data: Out<'notify.settings.get'> }) {
               {(['dz', 'fr', 'ar'] as Lang[]).map((l) => (
                 <option key={l} value={l}>
                   {t(`notify.lang.${l}`)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label={t('notify.settings.noAnswerAfter')} hint={t('notify.settings.noAnswerAfterHint')}>
+            <select value={f.noAnswerAfter ?? 3} onChange={(e) => set('noAnswerAfter', Number(e.target.value))}>
+              {[1, 2, 3, 4, 5, 6].map((k) => (
+                <option key={k} value={k}>
+                  {t('notify.settings.noAnswerCalls', { count: k })}
                 </option>
               ))}
             </select>

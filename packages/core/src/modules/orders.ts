@@ -1389,7 +1389,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
       if (!undo && ((CONF_TODO as string[]).includes(status) || status === 'no_stock') && ['to_prepare', 'prepared'].includes(cur.follow_status))
         await addEvent(tx, oid, me, 'follow_status', cur.follow_status, null);
       if (!undo) {
-        await onConfChange(tx, notify, cur, cur.conf_status, status, ctx.now());
+        await onConfChange(tx, notify, cur, cur.conf_status, status, ctx.now(), attempts);
         // Meta: an order from a landing page, confirmed by a person, is a real sale (never a blocked or fake one)
         await onLandingConf(tx, landing, cur, cur.conf_status, status, ctx.now(), input.reason ?? null, me);
       } else {

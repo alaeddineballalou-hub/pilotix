@@ -209,6 +209,7 @@
   "offLink": "Le démarrer dans Réglages",
   "kind": {
     "created": "Commande reçue",
+    "no_answer": "Appels sans réponse",
     "confirmed": "Commande confirmée",
     "shipped": "Expédiée",
     "out_for_delivery": "Avec le livreur",
@@ -219,6 +220,7 @@
   },
   "when": {
     "created": "Quand une commande arrive (site, page, formulaire). Le client sait qu’on va l’appeler et répond plus souvent.",
+    "no_answer": "Après plusieurs appels sans réponse (3 par défaut, réglable) : « on a essayé de vous appeler », le client répond s’il la veut toujours. Éteint au départ.",
     "confirmed": "Quand l’équipe confirme la commande : le produit et le total livraison comprise.",
     "shipped": "Quand le colis part avec la société de livraison : délai et numéro de suivi.",
     "out_for_delivery": "Le jour où le livreur l’a (livraison à domicile) : garder le téléphone allumé.",
@@ -403,6 +405,10 @@
     "langHint": "La darija en lettres latines se lit comme vos discussions et coûte 2 à 3 fois moins en SMS.",
     "quiet": "Pas de message la nuit",
     "quietHint": "Un message de la nuit part à la fin de cette plage (heure d’Algérie). Même heure des deux côtés : à toute heure.",
+    "noAnswerAfter": "Message « appels sans réponse » après",
+    "noAnswerAfterHint": "Le message part une seule fois par commande, quand ce nombre d’appels sans réponse est atteint. Si la commande s’annule toute seule au même nombre d’appels (Confirmation), il ne part pas : mettez un nombre plus petit ici.",
+    "noAnswerCalls_one": "{{count}} appel sans réponse",
+    "noAnswerCalls_other": "{{count}} appels sans réponse",
     "quietFrom": "De",
     "quietTo": "À",
     "waHelp": "WhatsApp n’autorise le premier message d’une entreprise qu’avec un texte validé (modèle « Utilitaire »). Pilotix envoie vos textes à WhatsApp pour validation ; c’est souvent fait en quelques minutes, parfois en 24 h.",

@@ -724,3 +724,43 @@ test('review: no sales follow-up to a customer who answered a delivery message',
   await db.query(`UPDATE settings SET value = value || '{"enabled":false}'::jsonb WHERE key = 'dellal'`);
   await db.query(`DELETE FROM settings WHERE key = 'secret_dellal_ai_key'`);
 });
+
+test('« appels sans réponse »: one message after the shop’s number of unanswered calls, once per order, off by default', async () => {
+  const conf = await as(EMAILS.conf);
+  const call3 = async (id: number, n: number) => {
+    for (let i = 0; i < n; i++) await call('orders.setConf', conf, { ids: [id], status: 'no_answer' });
+  };
+  const count = async (id: number) => (await notes(id)).filter((n: any) => n.kind === 'no_answer').length;
+  // off by default: nothing, however many calls
+  const g: any = await call('notify.settings.get', await as(EMAILS.admin), {});
+  assert.equal(g.settings.cases.no_answer, false);
+  assert.equal(g.settings.noAnswerAfter, 3);
+  const quiet = await newOrder(conf);
+  await call3(quiet.id, 3);
+  assert.equal(await count(quiet.id), 0);
+  // on: nothing after 2 calls, one message at the 3rd, no second one at the 4th
+  await save({ cases: { ...g.settings.cases, no_answer: true } });
+  try {
+    const o = await newOrder(conf);
+    await call3(o.id, 2);
+    assert.equal(await count(o.id), 0);
+    await call3(o.id, 1);
+    const sent = (await notes(o.id)).filter((n: any) => n.kind === 'no_answer');
+    assert.equal(sent.length, 1);
+    assert.ok(['queued', 'whatsapp', 'sms', 'manual'].includes(sent[0].status), sent[0].status);
+    assert.match(sent[0].body, new RegExp(`3ayatnalkom 3la la commande ta3kom ${o.ref}`));
+    await call3(o.id, 1);
+    assert.equal(await count(o.id), 1);
+    // the shop chose 1 call
+    await save({ noAnswerAfter: 1 });
+    const one = await newOrder(conf);
+    await call3(one.id, 1);
+    assert.equal(await count(one.id), 1);
+    // « busy » is a call too, but the message is for calls nobody picked up: the status must be « no_answer »
+    const busy = await newOrder(conf);
+    await call('orders.setConf', conf, { ids: [busy.id], status: 'busy' });
+    assert.equal(await count(busy.id), 0);
+  } finally {
+    await save({ cases: { ...g.settings.cases, no_answer: false }, noAnswerAfter: 3 });
+  }
+});
