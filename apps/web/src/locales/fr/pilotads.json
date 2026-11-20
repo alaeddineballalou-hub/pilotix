@@ -520,7 +520,7 @@
     "people": "personnes",
     "byMeta": "Meta la remplit tout seul",
     "syncedAt": "mis à jour {{when}}",
-    "where": "Une pub lancée depuis Pilotix enlève ces listes toute seule. Pour une pub faite dans Meta, choisissez-les vous-même dans les exclusions : leur nom commence par « Pilotix ». Pilotix met une liste sur un ad set au moment où il le crée, jamais sur un ad set qui tourne : Meta relancerait son apprentissage. Les personnes dans la liste, elles, peuvent changer chaque jour sans rien relancer.",
+    "where": "Une pub lancée depuis Pilotix enlève ces listes toute seule, et Pilotix les met aussi sur un ad set fait dans Meta pendant ses premières heures (« Pubs faites à la main »). Il ne les met jamais sur un ad set plus ancien qui tourne : Meta relancerait son apprentissage. Pour un ancien, choisissez-les vous-même dans les exclusions : leur nom commence par « Pilotix ». Les personnes dans la liste, elles, peuvent changer chaque jour sans rien relancer.",
     "privacy": "Seulement les clients de votre boutique. Les numéros sont chiffrés (SHA-256) sur le serveur avant d’aller chez Meta, jamais en clair.",
     "add": {
       "open": "Ajouter des numéros",
@@ -567,6 +567,33 @@
       "nopixel": "Pas de pixel",
       "nometa": "Meta non relié"
     }
+  },
+  "hand": {
+    "title": "Pubs faites à la main",
+    "sub": "Un ad set fait dans le Gestionnaire de publicités de Meta n’enlève pas ces listes tout seul. Pilotix les y met lui-même, quelques minutes après sa publication, pendant ses {{h}} premières heures : il est neuf, son apprentissage ne perd rien.",
+    "switch": "Mettre les listes toutes seules sur les ad sets faits à la main",
+    "savedOn": "Pilotix met les listes sur les nouveaux ad sets faits à la main",
+    "savedOff": "Arrêté : Pilotix ne touche plus aux ad sets faits à la main",
+    "off": "Arrêté : Pilotix ne touche à aucun ad set fait à la main. Mettez les listes vous-même dans les exclusions.",
+    "noLists": "Aucune liste n’est prête : allumez une liste plus haut, Pilotix la mettra ensuite sur les nouveaux ad sets.",
+    "allGood": "Tous vos ad sets ont les listes.",
+    "fixedTitle": "Listes mises par Pilotix",
+    "added_one": "+{{count}} liste",
+    "added_other": "+{{count}} listes",
+    "missingTitle": "Anciens ad sets sans toutes les listes",
+    "missingHint": "Pilotix ne les touche pas : ajouter une liste à un ad set qui tourne relance son apprentissage. À vous de voir : dans le Gestionnaire de publicités, ou un nouvel ad set.",
+    "lacks_one": "il manque {{count}} liste",
+    "lacks_other": "il manque {{count}} listes",
+    "refused": "Meta a refusé : {{why}}",
+    "runError": "Dernière vérification incomplète : {{why}}",
+    "checkedAt": "Vérifié {{when}}",
+    "never": "Pas encore vérifié : la première vérification arrive dans 15 minutes au plus.",
+    "check": "Vérifier maintenant",
+    "checking": "Vérification…",
+    "checkedNow": "Vérifié",
+    "more": "Voir les {{n}} autres",
+    "less": "Voir moins",
+    "demo": "Démo : un exemple. Dans votre boutique, Pilotix lit vos vrais ad sets chez Meta toutes les 15 minutes."
   },
   "ago": "il y a {{d}}",
   "partner": {

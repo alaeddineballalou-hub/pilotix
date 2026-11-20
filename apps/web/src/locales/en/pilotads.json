@@ -520,7 +520,7 @@
     "people": "people",
     "byMeta": "Filled by Meta",
     "syncedAt": "updated {{when}}",
-    "where": "An ad launched from Pilotix leaves these lists out by itself. For an ad made in Meta, pick them yourself in the exclusions: their name starts with “Pilotix”. Pilotix puts a list on an ad set when it creates it, never on a running one: Meta would restart its learning. The people inside the list can change every day without restarting anything.",
+    "where": "An ad launched from Pilotix leaves these lists out by itself, and Pilotix also puts them on an ad set made in Meta during its first hours (“Ads made by hand”). It never puts them on an older running ad set: Meta would restart its learning. For an older one, pick them yourself in the exclusions: their name starts with “Pilotix”. The people inside the list can change every day without restarting anything.",
     "privacy": "Only your shop’s customers. Numbers are hashed (SHA-256) on the server before going to Meta, never in clear.",
     "add": {
       "open": "Add numbers",
@@ -567,6 +567,33 @@
       "nopixel": "No pixel",
       "nometa": "Meta not linked"
     }
+  },
+  "hand": {
+    "title": "Ads made by hand",
+    "sub": "An ad set made in Meta’s Ads Manager doesn’t leave these lists out by itself. Pilotix puts them in, a few minutes after it’s published, during its first {{h}} hours: it’s new, its learning loses nothing.",
+    "switch": "Put the lists on ad sets made by hand automatically",
+    "savedOn": "Pilotix puts the lists on new ad sets made by hand",
+    "savedOff": "Off: Pilotix no longer touches ad sets made by hand",
+    "off": "Off: Pilotix touches no ad set made by hand. Put the lists in the exclusions yourself.",
+    "noLists": "No list is ready: turn one on above, and Pilotix will put it on new ad sets.",
+    "allGood": "All your ad sets have the lists.",
+    "fixedTitle": "Lists put in by Pilotix",
+    "added_one": "+{{count}} list",
+    "added_other": "+{{count}} lists",
+    "missingTitle": "Older ad sets without every list",
+    "missingHint": "Pilotix doesn’t touch them: adding a list to a running ad set restarts its learning. Your call: in the Ads Manager, or a new ad set.",
+    "lacks_one": "{{count}} list missing",
+    "lacks_other": "{{count}} lists missing",
+    "refused": "Meta refused: {{why}}",
+    "runError": "The last check didn’t finish: {{why}}",
+    "checkedAt": "Checked {{when}}",
+    "never": "Not checked yet: the first check comes within 15 minutes.",
+    "check": "Check now",
+    "checking": "Checking…",
+    "checkedNow": "Checked",
+    "more": "See the {{n}} others",
+    "less": "See less",
+    "demo": "Demo: an example. In your shop, Pilotix reads your real ad sets at Meta every 15 minutes."
   },
   "ago": "{{d}} ago",
   "partner": {

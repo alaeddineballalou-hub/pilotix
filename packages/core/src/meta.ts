@@ -604,6 +604,53 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
     return out;
   }
 
+  // ---- « Pubs faites à la main » (./modules/adsmgr.ts › handRun): the Pilotix lists on ad sets made in Meta ----
+  /** the ad account the Pilotix lists are made in (eventAudience below): the only one whose ad sets can use them */
+  const listAct = acts.includes(actOf(String(meta.adAccountId))) ? actOf(String(meta.adAccountId)) : acts[0];
+  const idsOf = (v: unknown): string[] => (Array.isArray(v) ? v.map((x: any) => String(x?.id ?? '')).filter(Boolean) : []);
+  /**
+   * Every ad set of that ad account still in use (archived and deleted ones are left out): when Meta made it, its
+   * state, and the custom audiences it leaves out and those it targets (a list is never both).
+   */
+  if (action === 'handAdsets') {
+    const rows = await all(`${listAct}/adsets`, { fields: 'id,name,campaign{name},created_time,effective_status,targeting', limit: '100' }, token, 20);
+    return {
+      account: listAct.replace(/^act_/, ''),
+      adsets: rows
+        .filter((x: any) => !['DELETED', 'ARCHIVED'].includes(String(x?.effective_status ?? '')))
+        .map((x: any) => ({
+          id: String(x.id),
+          name: String(x.name ?? ''),
+          campaign: String(x.campaign?.name ?? ''),
+          status: x.effective_status ? String(x.effective_status) : null,
+          // Meta writes « 2026-11-20T18:30:00+0100 »: the colon makes it a time every reader takes
+          created: x.created_time ? String(x.created_time).replace(/([+-]\d{2})(\d{2})$/, '$1:$2') : null,
+          excluded: idsOf(x.targeting?.excluded_custom_audiences),
+          included: idsOf(x.targeting?.custom_audiences),
+        })),
+    };
+  }
+  /**
+   * The lists one ad set misses, put into its exclusions. Meta takes a targeting whole: the one it has now is read and
+   * sent back with the lists added, nothing else changed. A list the ad set targets is not left out. Only an ad set of
+   * the lists' ad account (a list cannot be used in another one).
+   */
+  if (action === 'handAdd') {
+    const a = (args ?? {}) as { id?: string; audiences?: string[] };
+    if (!a.id || !/^\d{6,25}$/.test(a.id)) throw new AppError('bad_request', 'Ad set invalide');
+    const want = [...new Set((a.audiences ?? []).map(String))].filter((x) => /^\d{5,25}$/.test(x));
+    if (!want.length) return { added: 0 };
+    const r = await graph(a.id, { fields: 'account_id,targeting' }, token);
+    if (actOf(String(r?.account_id ?? '')) !== listAct) throw new AppError('bad_request', 'Cet ad set n’est pas dans le compte pub des listes Pilotix.');
+    const targeting = (r?.targeting ?? {}) as Record<string, unknown>;
+    const had = idsOf(targeting.excluded_custom_audiences);
+    const targeted = new Set(idsOf(targeting.custom_audiences));
+    const add = want.filter((x) => !had.includes(x) && !targeted.has(x));
+    if (!add.length) return { added: 0 };
+    await post(a.id, { targeting: { ...targeting, excluded_custom_audiences: [...had, ...add].map((id) => ({ id })) } }, token);
+    return { added: add.length };
+  }
+
   /** an empty campaign (Lancer une pub › « Campagne vide »): its body comes from ./modules/pilotads.ts › emptyCampaign */
   if (action === 'create') {
     const a = (args ?? {}) as { accountId?: string; body?: Record<string, unknown> };

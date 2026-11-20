@@ -1,6 +1,7 @@
 import type { Db } from '../db';
 import { num } from '../db';
 import { makeSession } from '../rpc';
+import { setRaw } from '../modules/admin';
 import { pilotRun } from '../modules/adsmgr';
 import { toProfile } from '../modules/users';
 
@@ -198,6 +199,25 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
      ON CONFLICT (kind) DO NOTHING`,
     [await count(`follow_status IN ('returned','lost')`), await count(`conf_status IN ('fake','wrong_number')`), await count(`follow_status IN ('delivered','exchanged')`), iso(5 * H)],
   );
+
+  // « Pubs faites à la main »: two new ad sets made in Meta's Ads Manager that Pilotix gave the lists to, and two
+  // older ones without them, only listed (a list added to an ad set that runs restarts its learning)
+  const M = 60_000;
+  await setRaw(db, 'pilot_ads_hand', {
+    on: true,
+    checkedAt: iso(4 * M),
+    error: null,
+    lists: 4,
+    fixed: [
+      { id: '120200011', name: 'Bureau pliable — test vidéo', campaign: 'TEST', added: 4, at: iso(12 * M) },
+      { id: '120200012', name: 'Vélo 16 pouces — test vidéo', campaign: 'TEST', added: 4, at: iso(3 * H) },
+    ],
+    missing: [
+      { id: '120200005', name: 'Test vidéo tapis d’éveil', campaign: 'Nouveautés', status: 'ACTIVE', created: iso(20 * D), lacks: 2, error: null },
+      { id: '120200006', name: 'Poussette — avis mamans', campaign: 'Bébé confort', status: 'PAUSED', created: iso(4 * D), lacks: 4, error: null },
+    ],
+    tries: {},
+  });
 
   // Pilote auto's suggestions: its own rules on these numbers, as the job does every 15 minutes
   const admin = (await db.query('SELECT * FROM profiles WHERE id = $1', [users.admin]))[0];

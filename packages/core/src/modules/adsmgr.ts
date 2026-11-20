@@ -500,6 +500,8 @@ export async function pilotRun(ctx: Ctx) {
     } catch {
       // Meta unreachable: the rules read the last numbers
     }
+    // « Pubs faites à la main »: the Pilotix lists on the new ad sets made in Meta (a check already running: skipped)
+    await handRun(ctx).catch(() => null);
   }
   const sys = { ...ctx, session: { ...ctx.session, isAdmin: true } } as Ctx;
   const stats = await statsOf(ctx);
@@ -835,6 +837,145 @@ export async function audienceIds(db: Db): Promise<{ exclude: string[]; include:
   };
 }
 
+// ---------------------------------------------------------------- the lists on ad sets made by hand
+/**
+ * « Pubs faites à la main » (Audiences): an ad set made in Meta's Ads Manager does not leave the Pilotix lists out by
+ * itself, and Meta has no setting that does it for a whole ad account (its « protect its brand » takes no list). So
+ * every Pilote auto run (15 min, and « Vérifier maintenant ») reads the ad sets of the ad account the lists live in:
+ * one made less than HAND_FIX_H hours ago that misses a list gets it from Pilotix — it is new, its learning loses
+ * nothing. An older one is never touched (a list added to an ad set that runs restarts its learning): it is only listed
+ * for the owner. The people inside a list change every night without restarting anything (Meta's « replace »).
+ * The lists are those a launch from Pilotix leaves out (audienceIds). Ad sets Pilotix launched with « Utiliser les
+ * audiences » unticked are the owner's choice: left alone. On unless the owner turns it off.
+ */
+const HAND_KEY = 'pilot_ads_hand';
+export const HAND_FIX_H = 24;
+/** Meta's refusal is tried again on the next runs, this many times in all, then the ad set is listed with it */
+export const HAND_TRIES = 3;
+export interface HandFixed {
+  id: string;
+  name: string;
+  campaign: string;
+  added: number;
+  at: string;
+}
+export interface HandMissing {
+  id: string;
+  name: string;
+  campaign: string;
+  status: string | null;
+  created: string | null;
+  /** how many of the lists it does not leave out */
+  lacks: number;
+  /** Meta's last refusal, when Pilotix tried */
+  error: string | null;
+}
+export interface HandState {
+  on: boolean;
+  checkedAt: string | null;
+  /** the last run could not finish (Meta out of reach, the key over…): said as it is */
+  error: string | null;
+  /** how many lists an ad set should leave out now */
+  lists: number;
+  /** the ad sets Pilotix gave the lists to, newest first */
+  fixed: HandFixed[];
+  /** the older ad sets without every list, running first */
+  missing: HandMissing[];
+  /** ad set → Meta's refusals so far (young ones only) */
+  tries: Record<string, { n: number; error: string }>;
+}
+export async function handState(db: Db): Promise<HandState> {
+  const s = await getRaw<Partial<HandState>>(db, HAND_KEY, {});
+  return { on: s.on ?? true, checkedAt: s.checkedAt ?? null, error: s.error ?? null, lists: s.lists ?? 0, fixed: s.fixed ?? [], missing: s.missing ?? [], tries: s.tries ?? {} };
+}
+/** the ad sets Pilotix launched with « Utiliser les audiences » unticked */
+async function launchedWithoutLists(db: Db): Promise<Set<string>> {
+  const out = new Set<string>();
+  for (const r of await db.query(`SELECT adset_ids, meta_ids FROM ad_launches WHERE spec->>'useAudiences' = 'false'`)) {
+    for (const id of (r as any).adset_ids ?? []) out.add(String(id));
+    for (const [k, v] of Object.entries((r as any).meta_ids ?? {})) if (k.startsWith('adset:')) out.add(String(v));
+  }
+  return out;
+}
+interface MetaHandAdset {
+  id: string;
+  name: string;
+  campaign: string;
+  status: string | null;
+  created: string | null;
+  excluded: string[];
+  included: string[];
+}
+/** Meta's answer says « later », not « no »: out of reach, too many requests, the key over */
+const metaLater = (e: any) => e?.code === 'conflict' || /injoignable|jeton Meta/i.test(String(e?.message ?? ''));
+
+/** One check (server): the young ad sets get the lists, the older ones without them are listed. The demo shows its own. */
+export async function handRun(ctx: Ctx): Promise<HandState> {
+  if (!ctx.server) return handState(ctx.db);
+  return withActionLock(ctx.db, 'ads:hand', me(ctx), 'Pilotix vérifie déjà les pubs faites à la main : réessayez dans un instant.', () => handRunNow(ctx));
+}
+async function handRunNow(ctx: Ctx): Promise<HandState> {
+  const s = await handState(ctx.db);
+  // ads not linked to Meta: no ad set to read (not an error)
+  if (!s.on || !ctx.server || !(await metaLinked(ctx.db))) return s;
+  const save = async (next: HandState) => {
+    await setRaw(ctx.db, HAND_KEY, next);
+    return next;
+  };
+  const exclude = (await audienceIds(ctx.db)).exclude;
+  if (!exclude.length) return save({ ...s, checkedAt: stamp(ctx), error: null, lists: 0, missing: [], tries: {} });
+  let adsets: MetaHandAdset[];
+  try {
+    adsets = ((await ctx.server.meta('handAdsets', {}, ctx)) as { adsets: MetaHandAdset[] }).adsets ?? [];
+  } catch (e: any) {
+    // nothing read: what was found last time stays on the page
+    return save({ ...s, checkedAt: stamp(ctx), error: String(e?.message ?? e).slice(0, 300) });
+  }
+  const skip = await launchedWithoutLists(ctx.db);
+  const now = ctx.now();
+  const fixed = [...s.fixed];
+  const tries: HandState['tries'] = {};
+  const missing: HandMissing[] = [];
+  let later: string | null = null;
+  for (const a of adsets) {
+    if (skip.has(a.id)) continue;
+    const lacks = exclude.filter((id) => !a.excluded.includes(id) && !a.included.includes(id));
+    if (!lacks.length) continue;
+    const born = a.created ? Date.parse(a.created) : NaN;
+    const young = Number.isFinite(born) && now - born <= HAND_FIX_H * 3_600_000;
+    let t = s.tries[a.id];
+    if (young && (t?.n ?? 0) < HAND_TRIES) {
+      // Meta said « later » for one: the others wait for the next run too
+      if (!later)
+        try {
+          const r = (await ctx.server.meta('handAdd', { id: a.id, audiences: lacks }, ctx)) as { added: number };
+          // 0: it had them by now (put in the Ads Manager meanwhile)
+          if (Number(r?.added) > 0) fixed.unshift({ id: a.id, name: a.name, campaign: a.campaign, added: Number(r.added), at: stamp(ctx) });
+          continue;
+        } catch (e: any) {
+          const why = String(e?.message ?? e).slice(0, 300);
+          if (metaLater(e)) later = why;
+          else t = { n: (t?.n ?? 0) + 1, error: why };
+        }
+      if (t) tries[a.id] = t;
+      // tries left: the next run tries again, it is not « without the lists » yet
+      if ((t?.n ?? 0) < HAND_TRIES) continue;
+    } else if (t) tries[a.id] = t; // its last refusal stays said
+    missing.push({ id: a.id, name: a.name, campaign: a.campaign, status: a.status, created: a.created, lacks: lacks.length, error: t?.error ?? null });
+  }
+  const running = (m: HandMissing) => (m.status === 'ACTIVE' ? 0 : 1);
+  missing.sort((x, y) => running(x) - running(y) || String(y.created ?? '').localeCompare(String(x.created ?? '')));
+  return save({ on: true, checkedAt: stamp(ctx), error: later, lists: exclude.length, fixed: fixed.slice(0, 30), missing, tries });
+}
+
+/** What the card shows: a marketer sees only his own ad sets (as everywhere in Publicité). */
+async function handView(ctx: Ctx) {
+  const s = await handState(ctx.db);
+  const mine = isOwner(ctx) ? null : new Set((await visibleAdsets(ctx)).map((x) => String(x.id)));
+  const keep = <T extends { id: string }>(xs: T[]) => (mine ? xs.filter((x) => mine.has(x.id)) : xs);
+  return { owner: isOwner(ctx), demo: !ctx.server, fixH: HAND_FIX_H, on: s.on, checkedAt: s.checkedAt, error: s.error, lists: s.lists, fixed: keep(s.fixed), missing: keep(s.missing) };
+}
+
 // ---------------------------------------------------------------- procs
 const Obj = z.string().regex(/^\d{6,25}$/);
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -932,5 +1073,18 @@ export const adsMgrProcs = {
   'ads.aud.sync': proc(['vendeur'], z.object({}), async (ctx) => {
     await syncAudiences(ctx);
     return { list: await audienceRows(ctx.db) };
+  }),
+
+  /** « Pubs faites à la main »: the lists Pilotix put on new ad sets made in Meta, and the older ones without them */
+  'ads.hand.state': proc(['marketer'], z.object({}), (ctx) => handView(ctx)),
+  /** on or off (on by default): off, Pilotix touches no ad set made by hand */
+  'ads.hand.save': proc(['vendeur'], z.object({ on: z.boolean() }), async (ctx, i) => {
+    await setRaw(ctx.db, HAND_KEY, { ...(await handState(ctx.db)), on: i.on, tries: {} }, me(ctx) || undefined);
+    return handView(ctx);
+  }),
+  /** « Vérifier maintenant »: right after publishing an ad set in Meta, no need to wait for the next run */
+  'ads.hand.check': proc(['vendeur'], z.object({}), async (ctx) => {
+    await handRun(ctx);
+    return handView(ctx);
   }),
 };

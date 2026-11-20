@@ -388,6 +388,38 @@
 .pa-switch input:checked + i::after { inset-inline-start: 23px; }
 .pa-switch input:focus-visible + i { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 .pa-switch input:disabled + i { opacity: .55; }
+/* « Pubs faites à la main »: the lists Pilotix put on new ad sets made in Meta, the older ones without them */
+.pa-hand { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1.5px solid var(--line); }
+.pa-hand.on { border-color: color-mix(in srgb, var(--c-ok-line) 55%, var(--line)); }
+.pa-hand > header { display: flex; align-items: flex-start; gap: 10px; }
+.pa-hand > header > div { flex: 1; min-width: 0; }
+.pa-hand h3 { font-size: 15px; margin: 0; }
+.pa-hand > header p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--c-muted); }
+.pa-hand-off { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--c-muted); }
+.pa-hand-ok { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13.5px; font-weight: 600; color: var(--c-ok-ink); }
+.pa-hand-block { border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.pa-hand-block h4 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 14px; }
+.pa-hand-block h4 .bji { color: var(--c-ok-ink); }
+.pa-hand-block h4 b { padding: 0 8px; border-radius: 999px; background: var(--c-ok-tint); color: var(--c-ok-ink); font-size: 12px; }
+.pa-hand-block.warn h4 .bji { color: var(--c-warn-ink); }
+.pa-hand-block.warn h4 b { background: var(--c-warn-tint); color: var(--c-warn-ink); }
+.pa-hand-hint { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--c-muted); }
+.pa-hand-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.pa-hand-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 0; border-top: 1px dashed var(--line); }
+.pa-hand-list li:first-child { border-top: 0; }
+.pa-hand-name { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; }
+.pa-hand-name b { font-size: 13.5px; overflow-wrap: anywhere; }
+.pa-hand-name small { font-size: 12px; color: var(--c-muted); overflow-wrap: anywhere; }
+.pa-hand-tag { padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--sky-soft, var(--raise)); color: var(--c-muted); white-space: nowrap; }
+.pa-hand-tag.ok { background: var(--c-ok-tint); color: var(--c-ok-ink); }
+.pa-hand-tag.run { background: var(--c-warn-tint); color: var(--c-warn-ink); }
+.pa-hand-when { font-size: 12px; color: var(--c-muted); white-space: nowrap; }
+.pa-hand-why { flex-basis: 100%; }
+.pa-hand-more,
+html[data-skin][data-theme] .pa-hand .btn.small { min-height: 44px; height: auto; display: inline-flex; align-items: center; gap: 6px; }
+.pa-hand-more { align-self: flex-start; }
+.pa-hand > footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--line); }
+.pa-hand-demo { margin: 0; font-size: 12px; }
 .pa-privacy { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: var(--c-muted); }
 .pa-privacy + .pa-privacy { margin-top: -6px; }
 .pa-privacy svg { width: 15px; height: 15px; flex: none; margin-top: 2px; }

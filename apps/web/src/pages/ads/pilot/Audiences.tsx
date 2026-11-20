@@ -3,11 +3,13 @@
 // No customer goes to Meta before the owner turns one on; the phones are hashed on the server (SHA-256) before they
 // leave. Two more lists are Meta's own (« events »): the browsers behind fake orders and competitors, which Meta fills
 // from the landing pages' events. Nothing is uploaded for them, so they are on unless the owner turns them off.
+// « Pubs faites à la main »: an ad set made in Meta's Ads Manager gets the lists from Pilotix while it is new.
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { n, since } from '../../../lib/format';
 import { useAction, useRpc } from '../../../lib/query';
 import { ErrorBox, Icon, Loading } from '../../../ui/kit';
+import { adStatusLabel } from '../adStatus';
 
 const ICON: Record<string, string> = { returners: 'undo', fake: 'ban', fakeorder: 'shield', competitor: 'eye', buyers: 'checkcircle', lookalike: 'users' };
 
@@ -66,6 +68,7 @@ export function Audiences() {
           </article>
         ))}
       </div>
+      <HandCard />
       <p className="note pa-privacy">
         <Icon name="info" /> {t('pilotads.aud.where')}
       </p>
@@ -73,6 +76,121 @@ export function Audiences() {
         <Icon name="lock" /> {t('pilotads.aud.privacy')}
       </p>
     </div>
+  );
+}
+
+/** how many rows a list shows before « Voir tout » */
+const HAND_SHOWN = 4;
+
+/**
+ * « Pubs faites à la main »: Pilotix puts the lists on every new ad set made in Meta's Ads Manager (its first hours:
+ * its learning loses nothing), and only shows the older ones that miss them (a list added to an ad set that runs
+ * restarts its learning). The owner turns it off or checks now; everything else is core's (ads.hand.*).
+ */
+function HandCard() {
+  const { t } = useTranslation();
+  const q = useRpc('ads.hand.state', {}, { refetchInterval: 120_000 });
+  const save = useAction('ads.hand.save', { success: (r) => (r.on ? t('pilotads.hand.savedOn') : t('pilotads.hand.savedOff')) });
+  const check = useAction('ads.hand.check', { success: t('pilotads.hand.checkedNow') });
+  const [allFixed, setAllFixed] = useState(false);
+  const [allMissing, setAllMissing] = useState(false);
+  const d = q.data;
+  // the lists above stay usable whatever happens to this card
+  if (!d) return null;
+  const fixed = allFixed ? d.fixed : d.fixed.slice(0, HAND_SHOWN);
+  const missing = allMissing ? d.missing : d.missing.slice(0, HAND_SHOWN);
+  return (
+    <section className={`card pa-hand ${d.on ? 'on' : ''}`} aria-labelledby="pa-hand-title">
+      <header>
+        <span className="pa-aud-ico">
+          <Icon name="shield" />
+        </span>
+        <div>
+          <h3 id="pa-hand-title">{t('pilotads.hand.title')}</h3>
+          <p>{t('pilotads.hand.sub', { h: d.fixH })}</p>
+        </div>
+        <label className="pa-switch" title={d.owner ? '' : t('pilotads.pilot.ownerOnly')}>
+          <input type="checkbox" role="switch" checked={d.on} disabled={!d.owner || save.isPending} onChange={(e) => save.mutate({ on: e.target.checked })} aria-label={t('pilotads.hand.switch')} />
+          <i aria-hidden />
+        </label>
+      </header>
+
+      {!d.on ? (
+        <p className="pa-hand-off">{t('pilotads.hand.off')}</p>
+      ) : (
+        <>
+          {d.error && <p className="pa-err">{t('pilotads.hand.runError', { why: d.error })}</p>}
+          {d.checkedAt && d.lists === 0 && <p className="pa-hand-off">{t('pilotads.hand.noLists')}</p>}
+          {d.lists > 0 && !d.fixed.length && !d.missing.length && (
+            <p className="pa-hand-ok">
+              <Icon name="checkcircle" /> {t('pilotads.hand.allGood')}
+            </p>
+          )}
+
+          {d.fixed.length > 0 && (
+            <div className="pa-hand-block">
+              <h4>
+                <Icon name="checkcircle" /> {t('pilotads.hand.fixedTitle')} <b className="ltr">{n(d.fixed.length)}</b>
+              </h4>
+              <ul className="pa-hand-list">
+                {fixed.map((f) => (
+                  <li key={`${f.id}-${f.at}`}>
+                    <span className="pa-hand-name">
+                      <b>{f.name}</b>
+                      <small>{f.campaign}</small>
+                    </span>
+                    <span className="pa-hand-tag ok">{t('pilotads.hand.added', { count: f.added })}</span>
+                    <small className="pa-hand-when">{t('pilotads.ago', { d: since(f.at) })}</small>
+                  </li>
+                ))}
+              </ul>
+              {d.fixed.length > HAND_SHOWN && (
+                <button type="button" className="btn small ghost pa-hand-more" onClick={() => setAllFixed(!allFixed)}>
+                  {allFixed ? t('pilotads.hand.less') : t('pilotads.hand.more', { n: n(d.fixed.length - HAND_SHOWN) })}
+                </button>
+              )}
+            </div>
+          )}
+
+          {d.missing.length > 0 && (
+            <div className="pa-hand-block warn">
+              <h4>
+                <Icon name="alert" /> {t('pilotads.hand.missingTitle')} <b className="ltr">{n(d.missing.length)}</b>
+              </h4>
+              <p className="pa-hand-hint">{t('pilotads.hand.missingHint')}</p>
+              <ul className="pa-hand-list">
+                {missing.map((m) => (
+                  <li key={m.id}>
+                    <span className="pa-hand-name">
+                      <b>{m.name}</b>
+                      <small>{m.campaign}</small>
+                    </span>
+                    <span className={`pa-hand-tag ${m.status === 'ACTIVE' ? 'run' : ''}`}>{adStatusLabel(m.status, t)}</span>
+                    <small className="pa-hand-when">{t('pilotads.hand.lacks', { count: m.lacks })}</small>
+                    {m.error && <small className="pa-err pa-hand-why">{t('pilotads.hand.refused', { why: m.error })}</small>}
+                  </li>
+                ))}
+              </ul>
+              {d.missing.length > HAND_SHOWN && (
+                <button type="button" className="btn small ghost pa-hand-more" onClick={() => setAllMissing(!allMissing)}>
+                  {allMissing ? t('pilotads.hand.less') : t('pilotads.hand.more', { n: n(d.missing.length - HAND_SHOWN) })}
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      <footer>
+        <small className="muted">{d.checkedAt ? t('pilotads.hand.checkedAt', { when: t('pilotads.ago', { d: since(d.checkedAt) }) }) : t('pilotads.hand.never')}</small>
+        {d.owner && d.on && (
+          <button type="button" className="btn small ghost" disabled={check.isPending} onClick={() => check.mutate({})}>
+            <Icon name="refresh" /> {check.isPending ? t('pilotads.hand.checking') : t('pilotads.hand.check')}
+          </button>
+        )}
+      </footer>
+      {d.demo && <p className="pa-hand-demo muted">{t('pilotads.hand.demo')}</p>}
+    </section>
   );
 }
 
