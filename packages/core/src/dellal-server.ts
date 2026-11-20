@@ -2,14 +2,15 @@
 // Calls the AI (Anthropic Messages API) and sends messages to WhatsApp (Cloud API), Messenger and Instagram (Graph API);
 // for Pilot Automations, WhatsApp templates and SMS (SMS Gateway for Android, or any HTTP SMS service).
 // Keys are read from the settings table (written by dellal.settings.save / notify.settings.save) and never leave the server.
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { AppError, Ctx, publicApi } from './rpc';
 import { publicFetch } from './publicfetch';
 import { presign, readStore } from './photostore';
 import { AiRequest, AiResponse, DellalChannel, dellalSecret, dellalSettings } from './modules/dellal';
 import { NOTIFY_SMS_SECRET, notifySettings } from './modules/notify';
 import type { MetaForm, MetaLead } from './modules/leads';
-import { linkedPage } from './modules/social';
+import { linkedPage, socialApps } from './modules/social';
+import { getRaw, META_TOKEN_KEY } from './modules/admin';
 
 import { googleKey, openaiKey, pilotKey, pilotLiveKey, voiceKey } from './platform/pilotai';
 import { recordAiUsage } from './platform/aiusage';
@@ -319,30 +320,95 @@ async function graphPages(url: string, max: number): Promise<any[]> {
   return out;
 }
 
+// ---------------------------------------------------------------- which key reads the ads' lead forms
+// « Publicité Meta » asks Facebook for the forms' rights (leads_retrieval, pages_manage_ads); « Facebook et Instagram »
+// asks only for the Page's content (messages, comments, posts). So the forms and their leads are read with a Page key
+// made from the shop's ads key first, then with the Page's own key (a Page linked before the two doors had them all).
+const LEAD_KEY_MS = 30 * 60_000;
+const leadKeyCache = new Map<string, { token: string; at: number }>();
+/** The Page's key made from the shop's ads key (a person's, or a system user's given this Page): null when it cannot. */
+async function pageKeyFromAds(adsKey: string, pageId: string): Promise<string | null> {
+  const k = `${createHash('sha256').update(adsKey).digest('hex').slice(0, 16)}:${pageId}`;
+  const hit = leadKeyCache.get(k);
+  if (hit && Date.now() - hit.at < LEAD_KEY_MS) return hit.token;
+  const r: any = await postJson(`${GRAPH}/${enc(pageId)}?fields=access_token&access_token=${enc(adsKey)}`, null, {}, 'Facebook', 'GET').catch(() => null);
+  const token = typeof r?.access_token === 'string' && r.access_token ? String(r.access_token) : null;
+  if (token) leadKeyCache.set(k, { token, at: Date.now() });
+  return token;
+}
+/** The keys that may read the shop's lead forms, in order: the one made from the ads key, then the Page's own. */
+async function leadKeys(ctx: Ctx, pageId?: string | null): Promise<{ token: string; via: 'ads' | 'page' }[]> {
+  const out: { token: string; via: 'ads' | 'page' }[] = [];
+  const ads = (await getRaw<string>(ctx.db, META_TOKEN_KEY, '')) || '';
+  if (ads) {
+    const id = await leadPageId(ctx, pageId).catch(() => null);
+    const k = id ? await pageKeyFromAds(ads, id) : null;
+    if (k) out.push({ token: k, via: 'ads' });
+  }
+  const page = await dellalSecret(ctx.db, 'pageToken');
+  if (page && !out.some((x) => x.token === page)) out.push({ token: page, via: 'page' });
+  if (!out.length) throw new AppError('bad_request', 'La page Facebook n’est pas connectée : liez votre compte Facebook dans Pilot AI › Comptes.');
+  return out;
+}
+/** `fn` with each key in turn: the first answer wins; refused by all of them, the first refusal is said. */
+async function withLeadKey<T>(ctx: Ctx, pageId: string | null | undefined, fn: (token: string) => Promise<T>): Promise<T> {
+  let first: unknown = null;
+  for (const k of await leadKeys(ctx, pageId)) {
+    try {
+      return await fn(k.token);
+    } catch (e) {
+      first ??= e;
+    }
+  }
+  throw first;
+}
+
 /** One lead (the webhook gives only its number): its answers and the ad it came from. */
 async function readLead(ctx: Ctx, a: { leadgenId: string }): Promise<MetaLead> {
-  const token = await pageToken(ctx);
-  const get = (fields: string) => postJson(`${GRAPH}/${enc(String(a.leadgenId))}?fields=${fields}&access_token=${enc(token)}`, null, {}, 'Facebook', 'GET');
-  const r = await get(LEAD_FIELDS).catch(() => get(LEAD_FIELDS_MIN));
-  return toMetaLead(r);
+  return withLeadKey(ctx, null, async (token) => {
+    const get = (fields: string) => postJson(`${GRAPH}/${enc(String(a.leadgenId))}?fields=${fields}&access_token=${enc(token)}`, null, {}, 'Facebook', 'GET');
+    return toMetaLead(await get(LEAD_FIELDS).catch(() => get(LEAD_FIELDS_MIN)));
+  });
 }
 /** The Page's lead forms, with their questions. */
 async function leadForms(ctx: Ctx, a: { pageId?: string | null }): Promise<MetaForm[]> {
-  const token = await pageToken(ctx);
   const pageId = await leadPageId(ctx, a?.pageId);
-  return (await graphPages(`${GRAPH}/${enc(pageId)}/leadgen_forms?fields=${FORM_FIELDS}&limit=100&access_token=${enc(token)}`, 5)).map(toMetaForm);
+  return withLeadKey(ctx, pageId, async (token) => (await graphPages(`${GRAPH}/${enc(pageId)}/leadgen_forms?fields=${FORM_FIELDS}&limit=100&access_token=${enc(token)}`, 5)).map(toMetaForm));
 }
 async function leadForm(ctx: Ctx, a: { formId: string }): Promise<MetaForm> {
-  const token = await pageToken(ctx);
-  return toMetaForm(await postJson(`${GRAPH}/${enc(String(a.formId))}?fields=${FORM_FIELDS}&access_token=${enc(token)}`, null, {}, 'Facebook', 'GET'));
+  return withLeadKey(ctx, null, async (token) => toMetaForm(await postJson(`${GRAPH}/${enc(String(a.formId))}?fields=${FORM_FIELDS}&access_token=${enc(token)}`, null, {}, 'Facebook', 'GET')));
 }
 /** A form's leads since a moment (unix seconds): the safety net. */
 async function formLeads(ctx: Ctx, a: { formId: string; since: number }): Promise<MetaLead[]> {
-  const token = await pageToken(ctx);
   const filtering = enc(JSON.stringify([{ field: 'time_created', operator: 'GREATER_THAN', value: Math.floor(Number(a.since) || 0) }]));
-  const url = (fields: string) => `${GRAPH}/${enc(String(a.formId))}/leads?fields=${fields}&limit=100&filtering=${filtering}&access_token=${enc(token)}`;
-  const rows = await graphPages(url(LEAD_FIELDS), 3).catch(() => graphPages(url(LEAD_FIELDS_MIN), 3));
-  return rows.map(toMetaLead);
+  return withLeadKey(ctx, null, async (token) => {
+    const url = (fields: string) => `${GRAPH}/${enc(String(a.formId))}/leads?fields=${fields}&limit=100&filtering=${filtering}&access_token=${enc(token)}`;
+    const rows = await graphPages(url(LEAD_FIELDS), 3).catch(() => graphPages(url(LEAD_FIELDS_MIN), 3));
+    return rows.map(toMetaLead);
+  });
+}
+/**
+ * The Page sends its new leads to Pilotix (its « leadgen » webhook field), asked with the key that has the forms' rights
+ * (the ads one first). What the Page already sends Pilotix stays: the field is added to the ones there, never instead.
+ */
+async function leadHook(ctx: Ctx, a: { appId?: string | null }): Promise<{ on: boolean; fixed: boolean; via: 'ads' | 'page' | null; error: string | null }> {
+  const appId = String(a?.appId || (ctx.t ? (await socialApps(ctx.t)).meta.appId : '') || '');
+  if (!appId) return { on: false, fixed: false, via: null, error: 'App Meta de Pilotix inconnue' };
+  const pageId = await leadPageId(ctx);
+  let error: string | null = null;
+  for (const k of await leadKeys(ctx, pageId)) {
+    try {
+      const subs = await graphPages(`${GRAPH}/${enc(pageId)}/subscribed_apps?access_token=${enc(k.token)}`, 2);
+      const have = ((subs.find((x) => String(x?.id) === appId)?.subscribed_fields ?? []) as unknown[]).map(String);
+      if (have.includes('leadgen')) return { on: true, fixed: false, via: k.via, error: null };
+      const fields = [...new Set([...have, 'leadgen'])].join(',');
+      await postJson(`${GRAPH}/${enc(pageId)}/subscribed_apps`, { subscribed_fields: fields, access_token: k.token }, {}, 'Facebook');
+      return { on: true, fixed: true, via: k.via, error: null };
+    } catch (e: any) {
+      error ??= String(e?.message ?? e);
+    }
+  }
+  return { on: false, fixed: false, via: null, error };
 }
 
 // ---------------------------------------------------------------- Pilot Comments › Planner: posts on the Page and Instagram
@@ -725,7 +791,8 @@ async function smsHooks(ctx: Ctx, a: { url: string }) {
  *  - 'send'     → { channel, externalId, accountId, text, humanAgent? }: sends a message to the customer
  *  - 'ping'     → checks the AI key
  *  - 'cmReply' / 'cmPrivate' / 'cmHide' / 'cmPost' → Pilot Comments's actions on comments
- *  - 'lead' / 'leadForms' / 'leadForm' / 'formLeads' → Marketing › Formulaires (the ads' lead forms)
+ *  - 'lead' / 'leadForms' / 'leadForm' / 'formLeads' → Marketing › Formulaires (the ads' lead forms), read with the ads key first
+ *  - 'leadHook' → the Page sends its new leads to Pilotix (its « leadgen » field added with the ads key first)
  *  - 'planPublish' / 'planCheck' / 'planDelete' / 'planEdit' / 'planComment' / 'planStats' → Pilot Content: its
  *    posts and stories on the Page and Instagram, their first comment, their numbers and the followers
  *  - 'waTemplate' / 'waTemplates' / 'waCreateTemplate' / 'sms' / 'smsHooks' → Pilot Automations
@@ -749,6 +816,7 @@ export async function runDellal(action: string, args: unknown, ctx: Ctx): Promis
   if (action === 'leadForms') return leadForms(ctx, (args ?? {}) as { pageId?: string | null });
   if (action === 'leadForm') return leadForm(ctx, args as { formId: string });
   if (action === 'formLeads') return formLeads(ctx, args as { formId: string; since: number });
+  if (action === 'leadHook') return leadHook(ctx, (args ?? {}) as { appId?: string | null });
   if (action === 'planPublish') return planPublish(ctx, args as PlanArgs);
   if (action === 'planDelete') return planDelete(ctx, args as PlanArgs);
   if (action === 'planEdit') return planEdit(ctx, args as PlanArgs);

@@ -291,6 +291,8 @@ export async function syncForms(ctx: Ctx): Promise<{ forms: number; demo?: boole
   if (!ctx.server?.dellal) return { forms: num((await ctx.db.query(`SELECT count(*)::int AS n FROM lead_forms`))[0]?.n), demo: true };
   const pageId = await pageIdOf(ctx.db);
   if (!pageId) throw bad('Aucune page Facebook liée : reliez-la dans Pilot AI › Comptes.');
+  // the Page sends its new leads to Pilotix: asked again here with the ads key (it has the forms' rights), when missing
+  await ctx.server.dellal('leadHook', {}, ctx).catch(() => null);
   const list = (await ctx.server.dellal('leadForms', { pageId }, ctx)) as MetaForm[];
   for (const f of list) await saveForm(ctx.db, f, pageId);
   await noteSync(ctx, { forms: list.length });

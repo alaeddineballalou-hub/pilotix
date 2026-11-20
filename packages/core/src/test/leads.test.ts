@@ -4,7 +4,8 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, ServerHooks } from '../index';
-import { parseMetaLeads } from '../dellal-server';
+import { parseMetaLeads, runDellal } from '../dellal-server';
+import { getRaw, setRaw, META_TOKEN_KEY } from '../modules/admin';
 import { fieldOf, MetaLead, metaTime, placeOf, readAnswers, variantOf, wilayaCandidates } from '../modules/leads';
 import { EMAILS, setup } from './harness';
 
@@ -285,4 +286,78 @@ test('who sees Formulaires: marketing, not the confirmation agents', async () =>
   const d = await feed();
   assert.ok(d.today.leads >= d.today.orders);
   assert.equal(d.live, false, 'the preview: nothing to read from Meta');
+});
+
+test('server: the leads are read with a Page key made from the ads key first (« Publicité Meta » has the forms’ rights), then the Page’s own', async () => {
+  const ctx = await as(EMAILS.admin);
+  const dellal = await getRaw<any>(db, 'dellal', {});
+  await setRaw(db, 'dellal', { ...dellal, messengerPageId: '5550001' });
+  await setRaw(db, 'secret_dellal_page_token', 'PAGE-OWN');
+  await setRaw(db, META_TOKEN_KEY, 'ADS-PERSON');
+  const asked: { path: string; token: string | null; method: string; body: any }[] = [];
+  let ownRefused = true;
+  let adsRefused = false;
+  let subs: any[] = [{ id: '42424242', subscribed_fields: ['messages', 'feed'] }];
+  const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
+  const real = globalThis.fetch;
+  globalThis.fetch = (async (input: any, init?: any) => {
+    const u = new URL(String(input));
+    const path = u.pathname.replace(/^\/v[\d.]+\//, '');
+    const body = init?.body ? JSON.parse(init.body) : null;
+    const token = u.searchParams.get('access_token') ?? body?.access_token ?? null;
+    asked.push({ path, token, method: init?.method ?? 'GET', body });
+    // the ads key gives the Page's key (a person who manages the Page, or a system user given it)
+    if (path === '5550001' && u.searchParams.get('fields') === 'access_token') return token === 'ADS-PERSON' ? reply({ id: '5550001', access_token: 'PAGE-FROM-ADS' }) : reply({ error: { message: 'no', code: 200 } }, 400);
+    if (path === '5550001/subscribed_apps') {
+      if (init?.method === 'POST') {
+        subs = [{ id: '42424242', subscribed_fields: String(body.subscribed_fields).split(',') }];
+        return reply({ success: true });
+      }
+      return reply({ data: subs });
+    }
+    if (path === 'lead-1') {
+      if (token === 'PAGE-OWN' && ownRefused) return reply({ error: { message: '(#3) Apps in dev mode should only access leads submitted from App special roles', code: 3 } }, 400);
+      if (token === 'PAGE-FROM-ADS' && adsRefused) return reply({ error: { message: '(#200) Requires leads_retrieval permission', code: 200 } }, 400);
+      return reply({ id: 'lead-1', created_time: '2026-11-20T10:32:00+0000', form_id: 'form-1', field_data: [{ name: 'full_name', values: ['Lamia Kaci'] }] });
+    }
+    return reply({ error: { message: `unexpected ${path}` } }, 400);
+  }) as typeof fetch;
+  try {
+    // the Page's own key (content only) is refused, the one made from the ads key reads it: asked first, the only call
+    const l: any = await runDellal('lead', { leadgenId: 'lead-1' }, ctx);
+    assert.equal(l.id, 'lead-1');
+    assert.deepEqual(asked.filter((a) => a.path === 'lead-1').map((a) => a.token), ['PAGE-FROM-ADS']);
+    // the ads key cannot read it (a key pasted before, without the forms): the Page's own key still does
+    adsRefused = true;
+    ownRefused = false;
+    asked.length = 0;
+    assert.equal(((await runDellal('lead', { leadgenId: 'lead-1' }, ctx)) as any).id, 'lead-1');
+    // (each key is tried with all the fields, then with the few every key may read)
+    assert.deepEqual(asked.filter((a) => a.path === 'lead-1').map((a) => a.token), ['PAGE-FROM-ADS', 'PAGE-FROM-ADS', 'PAGE-OWN']);
+    // both refused: the first refusal is said (the ads key's)
+    ownRefused = true;
+    await assert.rejects(runDellal('lead', { leadgenId: 'lead-1' }, ctx), /leads_retrieval/);
+    // the Page sends its leads: « leadgen » added to what is there (messages, feed stay), with the key made from the ads key
+    asked.length = 0;
+    const h: any = await runDellal('leadHook', { appId: '42424242' }, ctx);
+    assert.deepEqual([h.on, h.fixed, h.via], [true, true, 'ads']);
+    const post = asked.find((a) => a.method === 'POST');
+    assert.equal(post?.token, 'PAGE-FROM-ADS');
+    assert.deepEqual(String(post?.body.subscribed_fields).split(','), ['messages', 'feed', 'leadgen']);
+    // already there: nothing asked again
+    asked.length = 0;
+    const again: any = await runDellal('leadHook', { appId: '42424242' }, ctx);
+    assert.deepEqual([again.on, again.fixed], [true, false]);
+    assert.ok(!asked.some((a) => a.method === 'POST'));
+    // no ads link: the Page's own key, as before
+    await db.query(`DELETE FROM settings WHERE key = $1`, [META_TOKEN_KEY]);
+    ownRefused = false;
+    asked.length = 0;
+    assert.equal(((await runDellal('lead', { leadgenId: 'lead-1' }, ctx)) as any).id, 'lead-1');
+    assert.deepEqual(asked.map((a) => a.token), ['PAGE-OWN']);
+  } finally {
+    globalThis.fetch = real;
+    await db.query(`DELETE FROM settings WHERE key IN ('secret_dellal_page_token', $1)`, [META_TOKEN_KEY]);
+    await setRaw(db, 'dellal', dellal);
+  }
 });
