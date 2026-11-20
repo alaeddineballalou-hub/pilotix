@@ -160,11 +160,14 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
         vals,
       );
     }
+    // a group page's order is one of its products (the page the customer picked), its upsells after: its first line
     await db.query(
       `UPDATE orders o SET utm = COALESCE(o.utm, '{}'::jsonb) || jsonb_build_object('g', $1::text, 'adset_id', '120200010', 'ad_id', '120210000100', 'utm_campaign', 'Puériculture')
-       WHERE o.id IN (SELECT o2.id FROM orders o2 JOIN order_items i ON i.order_id = o2.id AND i.product_id = ANY($2)
-                      WHERE o2.created_at >= $3 AND o2.channel = 'landing' AND NOT o2.is_exchange ORDER BY o2.created_at DESC LIMIT 30)`,
-      [String(grp.slug), grpProducts, iso(9 * D)],
+       WHERE o.id IN (SELECT f.order_id FROM (SELECT DISTINCT ON (i.order_id) i.order_id, i.product_id FROM order_items i ORDER BY i.order_id, i.is_upsell, i.id) f
+                        JOIN orders o2 ON o2.id = f.order_id
+                      WHERE f.product_id = ANY($2) AND o2.created_at >= $3 AND o2.created_at < $4 AND o2.channel = 'landing' AND NOT o2.is_exchange
+                      ORDER BY o2.created_at DESC LIMIT 24)`,
+      [String(grp.slug), grpProducts, iso(9 * D), iso(2 * D)],
     );
     const gl = await db.query(
       `INSERT INTO ad_launches (mode, goal, product_id, name, spec, budget_cents, status, step, campaign_id, adset_ids, by_user, created_at, updated_at, live_at)

@@ -28,6 +28,8 @@ const itemOf = (o: Opt, d: { productId: number | null; groupId: number | null })
   d.groupId ? (o.groups.find((g) => g.id === d.groupId) ?? null) : (o.products.find((p) => p.id === d.productId) ?? null);
 /** the goals a group's ad may have (its page sells: no messages, calls or form) */
 const groupGoal = (o: Opt, g: Goal) => (o.groupGoals as string[]).includes(g);
+/** a name kept whole inside a sentence or a list: an Arabic name next to Latin text and numbers stays in its order */
+const iso = (s: string) => `\u2068${s}\u2069`;
 type Media = Out<'ads.media.list'>[number];
 type Goal = 'sales' | 'messages' | 'calls' | 'form' | 'awareness' | 'traffic' | 'engagement';
 type Channel = 'messenger' | 'instagram' | 'whatsapp';
@@ -300,7 +302,7 @@ function readiness(t: (k: string, o?: any) => string, o: Opt, d: Draft, p: P | G
   const out: { ok: boolean; text: string }[] = [];
   out.push({
     ok: !!p,
-    text: isGroup(p) ? t('pilotads.check.group', { name: p.name, count: p.group.count }) : p ? t('pilotads.check.product', { name: p.name }) : o.groups.length ? t('pilotads.check.noItem') : t('pilotads.check.noProduct'),
+    text: isGroup(p) ? t('pilotads.check.group', { name: iso(p.name), count: p.group.count }) : p ? t('pilotads.check.product', { name: p.name }) : o.groups.length ? t('pilotads.check.noItem') : t('pilotads.check.noProduct'),
   });
   if (isGroup(p) && !groupGoal(o, d.goal)) out.push({ ok: false, text: t('pilotads.group.goals') });
   out.push({ ok: !!o.page, text: o.page ? t('pilotads.check.page', { name: o.page.name }) : t('pilotads.check.noPage') });
@@ -363,14 +365,14 @@ function StepProduct({ o, d, set, compact, onNext }: { o: Opt; d: Draft; set: (p
                 <optgroup label={t('pilotads.launch.products')}>
                   {o.products.map((p) => (
                     <option key={`p${p.id}`} value={`p${p.id}`}>
-                      {p.name} · {da(p.price)}
+                      {`${iso(p.name)} · ${da(p.price)}`}
                     </option>
                   ))}
                 </optgroup>
                 <optgroup label={t('pilotads.launch.groups')}>
                   {o.groups.map((g) => (
                     <option key={`g${g.id}`} value={`g${g.id}`}>
-                      {g.name} · {t('pilotads.group.count', { count: g.group.count })}
+                      {`${iso(g.name)} · ${t('pilotads.group.count', { count: g.group.count })}`}
                     </option>
                   ))}
                 </optgroup>
@@ -378,7 +380,7 @@ function StepProduct({ o, d, set, compact, onNext }: { o: Opt; d: Draft; set: (p
             ) : (
               o.products.map((p) => (
                 <option key={`p${p.id}`} value={`p${p.id}`}>
-                  {p.name} · {da(p.price)}
+                  {`${iso(p.name)} · ${da(p.price)}`}
                 </option>
               ))
             )}
@@ -440,7 +442,7 @@ function GroupNote({ o, g }: { o: Opt; g: G }) {
   return (
     <div className="pa-gnote">
       <p className="note">
-        <Icon name="layers" /> {t('pilotads.group.has', { count: g.group.count, names: g.group.names.join(' · ') })}
+        <Icon name="layers" /> {t('pilotads.group.has', { count: g.group.count, names: g.group.names.map(iso).join(' · ') })}
       </p>
       {g.group.count > o.groupMany && <div className="warnbox">{t('pilotads.group.many', { n: g.group.count, max: o.groupMany })}</div>}
     </div>
@@ -449,11 +451,11 @@ function GroupNote({ o, g }: { o: Opt; g: G }) {
 
 function LimitLine({ p }: { p: P | G }) {
   const { t } = useTranslation();
-  if (p.limit.maxDzd <= 0) return <small className="neg">{isGroup(p) ? t('pilotads.group.none', { name: p.group.lowest }) : t('pilotads.limit.none')}</small>;
+  if (p.limit.maxDzd <= 0) return <small className="neg">{isGroup(p) ? t('pilotads.group.none', { name: iso(p.group.lowest) }) : t('pilotads.limit.none')}</small>;
   return (
     <small className="pa-limit">
       {t('pilotads.limit.line', { max: da(p.limit.maxDzd) })}
-      {isGroup(p) && <em> · {t('pilotads.group.lowest', { name: p.group.lowest })}</em>}
+      {isGroup(p) && <em> · {t('pilotads.group.lowest', { name: iso(p.group.lowest) })}</em>}
       {p.estimated && <em> · {t('pilotads.limit.estimated')}</em>}
     </small>
   );
@@ -931,7 +933,7 @@ function StepBudget({ o, d, set, product, pro }: { o: Opt; d: Draft; set: (p: Pa
           </div>
           <p>
             {isGroup(product)
-              ? t('pilotads.group.explain', { name: product.group.lowest, delivered: n(product.delivered), share: Math.round(product.share * 100) })
+              ? t('pilotads.group.explain', { name: iso(product.group.lowest), delivered: n(product.delivered), share: Math.round(product.share * 100) })
               : t('pilotads.limit.explain', { delivered: n(product.delivered), share: Math.round(product.share * 100) })}
           </p>
         </div>
@@ -1279,7 +1281,7 @@ function Launches({ onOpen }: { onOpen: (l: L) => void }) {
             <div className="pa-l-what">
               <b>{l.name}</b>
               <span className="muted">
-                {l.groupId ? `${t('pilotads.launches.group', { name: l.groupName ?? '' })} · ` : ''}
+                {l.groupId ? `${t('pilotads.launches.group', { name: iso(l.groupName ?? '') })} · ` : ''}
                 {t(`pilotads.goal.${l.goal}.name`)} · {t('pilotads.perDay', { v: usd(l.budgetUsd, 0) })}
                 {l.partnerName ? ` · ${t('pilotads.partner.with', { name: l.partnerName })}` : ''} · {l.by ?? '—'} · {t('pilotads.ago', { d: since(l.createdAt) })}
               </span>

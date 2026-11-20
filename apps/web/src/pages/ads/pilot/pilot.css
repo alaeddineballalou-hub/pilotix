@@ -63,7 +63,7 @@
 .pa-three > div { padding: 10px 11px; border-radius: var(--sk-r-ctl, 12px); background: var(--raise); border: 1px solid var(--line); min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .pa-three b { font-size: 20px; font-weight: 700; letter-spacing: -.01em; overflow-wrap: anywhere; line-height: 1.15; }
 .pa-three small { font-size: 12px; color: var(--c-muted); line-height: 1.3; }
-.pa-unit { font-style: normal; font-size: 12px; font-weight: 600; color: var(--c-muted); margin-inline-start: 3px; }
+.pa-unit { font-style: normal; font-size: 12px; font-weight: 600; color: var(--c-muted); margin-inline-start: 3px; display: inline-block; white-space: nowrap; }
 .pa-meter { position: relative; height: 8px; border-radius: 4px; background: var(--sky-soft, var(--raise)); }
 .pa-meter i { position: absolute; inset-block: 0; inset-inline-start: 0; border-radius: 4px; background: var(--c-ok-line); }
 .pa-meter i.mid { background: var(--c-warn-line); }
