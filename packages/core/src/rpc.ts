@@ -111,8 +111,6 @@ export interface ServerHooks {
   media?: (action: 'finish' | 'remove', args: { id: number; key: string; ext: string; size?: number }) => Promise<unknown>;
   /** AI Spy: 'search' (ScrapeCreators / SearchAPI.io), 'media' (a competitor's picture), 'site' (a competitor's page). */
   spy?: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
-  /** Cloudflare Turnstile: is this page token real (true / false), null when Cloudflare cannot be reached. */
-  turnstile?: (secret: string, token: string, ip: string) => Promise<boolean | null>;
   /** Turnstile managed by the platform for every shop: the site key for a page on this host (null: none) */
   turnstileSite?: (host: string) => Promise<string | null>;
   /** and the check of a page's token with the secret of that site key's widget (null: cannot tell) */

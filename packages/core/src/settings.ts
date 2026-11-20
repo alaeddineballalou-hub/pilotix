@@ -122,8 +122,6 @@ export interface SettingsMap {
     ignored: number[];
     /** the store's part of the pages' address (site/<store>/<page>); '' = made from the shop's name */
     storeSlug?: string;
-    /** Cloudflare Turnstile's site key (invisible robot check on the pages); '' = off. Its secret key is a secret of its own. */
-    turnstileSiteKey?: string;
     /** the « contact us on WhatsApp » button of the thank-you screen */
     whatsapp?: { on: boolean; number: string; label: string; message: string };
     /** « Pourquoi nous » : one picture shown on every landing page of the shop, before or after the product's description */

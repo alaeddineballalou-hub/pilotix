@@ -10,7 +10,6 @@ import { Db, num } from '../db';
 import { bad, Ctx, proc } from '../rpc';
 import { FraudLevel, scoreOrder } from './fraud';
 import { campaignCounts, deviceMarks, handCounts, phoneHistory, recentCounts } from './landing';
-import { landingSettings } from './landingquery';
 
 const H = 3600_000;
 const DAY = 24 * H;
@@ -96,8 +95,8 @@ export async function runAttackTest(ctx: Ctx, slug: string | null, level: FraudL
   const productId = num(page.product_id);
   const variantId = Number((await ctx.db.query(`SELECT id FROM product_variants WHERE product_id = $1 AND title <> '' AND active ORDER BY id LIMIT 1`, [productId]))[0]?.id ?? 0) || null;
   const fraudLevel = level ?? (['relaxed', 'normal', 'strict'].includes(page.fraud_level) ? page.fraud_level : 'normal');
-  // Cloudflare is on when the shop set its own key, or when Pilotix placed one for the page's address
-  const configured = !!String((await landingSettings(ctx.db)).turnstileSiteKey ?? '').trim() || !!ctx.server?.turnstile;
+  // Cloudflare is on when the server checks the pages with the widget Pilotix keeps for every shop
+  const configured = !!ctx.server?.turnstileCheck;
   const turnstileOn = turnstile === 'on' ? true : turnstile === 'off' ? false : configured;
 
   const rows: AttackRow[] = [];

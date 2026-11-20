@@ -143,11 +143,6 @@ export const LANDING_POW_BITS = 13;
 const CHALLENGE_TTL = 6 * 3600_000;
 /** the Conversions API token (Events Manager › the pixel › Settings); the ads token is used when it is empty */
 export const LANDING_CAPI_SECRET = 'secret_landing_capi_token';
-/** Cloudflare Turnstile's secret key (the site key is in the landing settings): it never leaves the server */
-/** The landing pages' address in use on this server (their own once it answers, else the site's). */
-const pagesUrlOf = (ctx: Ctx) => ctx.server?.pagesUrl?.() || ctx.server?.publicUrl || '';
-
-export const LANDING_TURNSTILE_SECRET = 'secret_landing_turnstile';
 /** the browser preview and the tests have no server: Meta events are only simulated */
 const simulated = (ctx: Ctx) => !ctx.server;
 
@@ -597,8 +592,8 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     tiktokId: o.mode === 'live' && !o.team ? px.tiktok.join(',') : '',
     whatsapp: whatsappOf(readJson<{ on: boolean; number?: string; label?: string; message?: string }>(l.whatsapp), s.whatsapp),
     productId: num(l.product_id),
-    // the shop's own Cloudflare keys, else the widget Pilotix keeps for the address the page is served at
-    turnstileKey: o.mode === 'live' ? String(s.turnstileSiteKey ?? '').trim() || ((await ctx.server?.turnstileSite?.(hostOf(pageUrl || o.post))) ?? '') : '',
+    // the Cloudflare widget Pilotix keeps for the address the page is served at (shops never bring their own keys)
+    turnstileKey: o.mode === 'live' ? ((await ctx.server?.turnstileSite?.(hostOf(pageUrl || o.post))) ?? '') : '',
     // Marketing › Campagnes: the customer may ask for the shop's offers on WhatsApp
     waOptin: (await campaignSettings(ctx.db)).formOptin,
     // Referral › Code promo: the optional code field
@@ -889,21 +884,12 @@ const hostOf = (u: string) => {
 };
 
 /**
- * Cloudflare Turnstile: 'off' when there is nothing to check with (no keys, the server cannot ask Cloudflare, the page
- * could not load Cloudflare's script on a slow line), else what Cloudflare says. The shop's own keys first; otherwise
- * the widget Pilotix keeps for every shop (the page says which site key it used).
+ * Cloudflare Turnstile: 'off' when there is nothing to check with (no widget, the server cannot ask Cloudflare, the page
+ * could not load Cloudflare's script on a slow line), else what Cloudflare says. Always the widget Pilotix keeps for
+ * every shop (the page says which site key it used): shops never bring their own keys (removed 20 Nov 2026).
  */
 async function turnstileOf(ctx: Ctx, token: string, siteKey: string, ip: string): Promise<'ok' | 'fail' | 'off'> {
   if (!token) return 'off';
-  const s = await landingSettings(ctx.db);
-  const own = String(s.turnstileSiteKey ?? '').trim();
-  if (own && (!siteKey || siteKey === own)) {
-    const verify = ctx.server?.turnstile;
-    const key = String((await ctx.db.query(`SELECT value FROM settings WHERE key = $1`, [LANDING_TURNSTILE_SECRET]))[0]?.value ?? '');
-    if (!verify || !key) return 'off';
-    const ok = await verify(key, token, ip).catch(() => null);
-    return ok === null ? 'off' : ok ? 'ok' : 'fail';
-  }
   const check = ctx.server?.turnstileCheck;
   if (!siteKey || !check) return 'off';
   const ok = await check(siteKey, token, ip).catch(() => null);
@@ -1150,7 +1136,7 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
       // the visitor's network is a data-center / VPN (server-seen ASN, cannot be faked by the page)
       hosting: isHostingAsn(i.meta.asn),
       // Pilotix manages Turnstile for every shop: if the robot check did not run here, that is itself a small warning
-      turnstileExpected: !!ctx.server?.turnstile,
+      turnstileExpected: !!ctx.server?.turnstileCheck,
       // le réseau Pilotix: how many OTHER sellers ended badly with this number or this device (2 needed to count)
       shared: await sharedReputation(ctx, { phone, fphash }),
       // this ad set's recent orders, as the agents found them
@@ -1973,9 +1959,6 @@ const SettingsInput = z.object({
     .default(''),
   /** the Conversions API token: a value replaces, '' keeps, null removes (admins only) */
   capiToken: z.string().max(600).nullable().default(''),
-  /** Cloudflare Turnstile: the site key (public, on the pages) and the secret key (a value replaces, '' keeps, null removes; admins only) */
-  turnstileSiteKey: z.string().trim().max(100).regex(/^([0-9A-Za-z_-]{10,100})?$/, 'Clé de site Cloudflare invalide').default(''),
-  turnstileSecret: z.string().max(200).nullable().default(''),
   /** the WhatsApp button of the thank-you screen ({nom}, {produit}, {quantite}, {total}, {telephone}, {wilaya}, {commune}) */
   whatsapp: z
     .object({
@@ -2209,13 +2192,9 @@ export const landingProcs = {
     const ads = !!String((await ctx.db.query(`SELECT value FROM settings WHERE key = 'secret_meta_token'`))[0]?.value ?? '');
     return {
       settings: {
-        pixelId: s.pixelId, testEventCode: s.testEventCode, purchaseAt: s.purchaseAt, abandonAfterMin: s.abandonAfterMin, autoCreate: s.autoCreate, storeSlug: s.storeSlug ?? '', turnstileSiteKey: s.turnstileSiteKey ?? '',
+        pixelId: s.pixelId, testEventCode: s.testEventCode, purchaseAt: s.purchaseAt, abandonAfterMin: s.abandonAfterMin, autoCreate: s.autoCreate, storeSlug: s.storeSlug ?? '',
         whatsapp: s.whatsapp ?? { on: false, number: '', label: WHATSAPP_DEFAULT.label, message: WHATSAPP_DEFAULT.message },
       },
-      /** Cloudflare Turnstile's secret key is saved (it never leaves the server either) */
-      turnstile: !!String((await ctx.db.query(`SELECT value FROM settings WHERE key = $1`, [LANDING_TURNSTILE_SECRET]))[0]?.value ?? ''),
-      /** Pilotix keeps a Cloudflare widget for the pages' address: protected with nothing to do */
-      turnstileAuto: !!(pagesUrlOf(ctx) && (await ctx.server?.turnstileSite?.(hostOf(pagesUrlOf(ctx))))),
       /** the store's part of the address in use (the chosen one, else made from the shop's name) */
       store: await landingStore(ctx.db, s),
       /** where the pages are: their own address (https://go.<domain>), or the site's ('' : the app's own server) */
@@ -2251,9 +2230,8 @@ export const landingProcs = {
   }),
 
   'landing.settings.save': proc([...WHO], SettingsInput, async (ctx, i) => {
-    const { capiToken, turnstileSecret, ...rest } = i;
+    const { capiToken, ...rest } = i;
     if (capiToken !== '' && !ctx.session.isAdmin) throw forbidden('Seul l’administrateur modifie le jeton Meta');
-    if (turnstileSecret !== '' && !ctx.session.isAdmin) throw forbidden('Seul l’administrateur modifie la clé secrète Cloudflare');
     const cur = await landingSettings(ctx.db);
     // the store's part of the links: on the platform, the shop's name there, chosen once and never changed (shop #1's
     // too); a server with a single shop chooses its own
@@ -2261,12 +2239,6 @@ export const landingProcs = {
     else if (rest.storeSlug && rest.storeSlug !== cur.storeSlug && (await ctx.server?.storeTaken?.(rest.storeSlug)))
       throw bad('Ce nom est déjà pris par une autre boutique Pilotix, choisissez-en un autre');
     await setSetting(ctx.db, 'landing', { ...cur, ...rest }, ctx.session.profile.id);
-    if (turnstileSecret === null) await ctx.db.query(`DELETE FROM settings WHERE key = $1`, [LANDING_TURNSTILE_SECRET]);
-    else if (turnstileSecret.trim())
-      await ctx.db.query(
-        `INSERT INTO settings (key, value, updated_by) VALUES ($1,$2,$3) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by`,
-        [LANDING_TURNSTILE_SECRET, JSON.stringify(sealString(turnstileSecret.trim())), ctx.session.profile.id],
-      );
     if (capiToken === null) await ctx.db.query(`DELETE FROM settings WHERE key = $1`, [LANDING_CAPI_SECRET]);
     else if (capiToken.trim()) {
       await ctx.db.query(
