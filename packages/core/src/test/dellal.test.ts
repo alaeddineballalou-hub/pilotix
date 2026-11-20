@@ -651,7 +651,9 @@ test('darija checker: other dialects and wrong phrases are caught; clean Algeria
   assert.deepEqual(ids('3andna barcha couleurs', { customer: 'kayen barcha couleurs ?' }), [], 'the customer said it: mirroring is fine');
   assert.deepEqual(ids('Chine, chinois, machine, Michel'), [], 'no false match inside other words');
   // Algerian words that look like other dialects must never be flagged (research: dialect_markers.md)
-  assert.deepEqual(ids('kifek kifi, rebbi y3aychek, bghit nchouf, fin rak, qaddach, ghadi, yezzi, wesh, bach, bessah'), []);
+  assert.deepEqual(ids('kifek kifi, bghit nchouf, fin rak, qaddach, ghadi, yezzi, wesh, bach, bessah'), []);
+  // since 20 Nov 2026 Dellal's book follows DarijaDZ, which counts « y3aychek » (يعيشك) as Tunisian
+  assert.deepEqual(ids('rebbi y3aychek'), ['3aychek']);
   assert.deepEqual(ids('واشنو تحب؟ هكدا مليح، إيه كاين'), [], 'واشنو contains شنو and هكدا contains كدا: whole words only');
   assert.deepEqual(ids('Achmen couleur ?').map((x) => x), ['achmen']);
   assert.equal(checkDarija('Achmen couleur ?')[0].dialect, 'regional', 'used in some Algerian regions: rewritten, but not called foreign');
@@ -660,7 +662,7 @@ test('darija checker: other dialects and wrong phrases are caught; clean Algeria
   assert.deepEqual(avoid, [{ term: 'khoya', use: 'khouya' }, { term: 'chira', use: undefined }]);
   assert.deepEqual(ids('Saha khoya', { avoid }), ['boutique:khoya']);
   const t = 'Saha khoya, daba nab3atlek';
-  assert.equal(fixDarija(t, checkDarija(t, { avoid }), avoid), 'Saha khouya, dorka nab3atlek');
+  assert.equal(fixDarija(t, checkDarija(t, { avoid }), avoid), 'Saha khouya, drok nab3atlek');
   assert.equal(fixDarija('Smahli, ma3andek 7a9 tghdab', checkDarija('Smahli, ma3andek 7a9 tghdab')), 'Smahli, 3andek l7a9 tghdab');
   // one spelling per message: q → 9 and 5 → kh, fixed without changing anything else
   const sp = 'Tqdri tchoufi le colis qoddam le livreur 9bel ma tkhallsi, yd5ol f budget.';
@@ -669,6 +671,47 @@ test('darija checker: other dialects and wrong phrases are caught; clean Algeria
   assert.deepEqual(ids('qbel ma tkhalles', { customer: 'qbel ma nkhalles ?' }), [], 'the customer wrote it that way: mirroring is fine');
   assert.deepEqual(ids('Question : la qualité, quand ?'), [], 'French words with q are not touched');
   assert.deepEqual(ids('le beige ma kaynch'), ['makaynch']);
+});
+
+test('darija checker follows the DarijaDZ book: فصحى and more neighbour words in Arabic letters are caught; Algerian words, places, names and mirroring pass', () => {
+  const ids = (t: string, o?: any) => checkDarija(t, o).map((i) => i.id);
+  // Modern Standard Arabic (the book's « Ne jamais écrire »)
+  assert.deepEqual(ids('سوف نرسل لك الطلب الآن'), ['sawfa', 'alan']);
+  assert.deepEqual(ids('وسوف نبعثولك'), ['sawfa'], 'with و in front');
+  assert.deepEqual(ids('هل تريد اللون الأسود؟'), ['hal', 'urid']);
+  assert.deepEqual(ids('لماذا لا يوجد التوصيل؟'), ['limadha', 'yujad']);
+  assert.equal(checkDarija('غالية جداً')[0].dialect, 'fusha');
+  assert.match(checkDarija('غالية جداً')[0].use, /بزاف/);
+  // neighbour dialects in Arabic letters
+  assert.deepEqual(ids('فين ساكن؟ هادي زوين بزاف'), ['fin', 'zwin']);
+  assert.deepEqual(ids('هاد الكرسي بتاعك مش غالي أوي'), ['mech', 'bta3', 'awi']);
+  assert.deepEqual(ids('ربي يعيشك'), ['3aychek']);
+  assert.deepEqual(ids('دابا كنحب نشوف'), ['daba', 'kan-verbe']);
+  // never caught: a place, first names, Algerian words that look alike, a product name
+  assert.deepEqual(ids('التوصيل لوادي سوف 900 دج، ولواد سوف تاني'), [], '« سوف » in « وادي سوف » is El Oued');
+  assert.deepEqual(ids('مرحبا حسنا، مرحبا باهية، مرحبا زوينة'), [], 'first names');
+  assert.deepEqual(ids('واحد كيفك، ونعم بالله، كي يقول الليفرور، كيقول الليفرور، فما بقاش'), [], 'Algerian');
+  assert.deepEqual(ids('سيارة كهربائية للأطفال'), [], 'a product name');
+  assert.deepEqual(ids('Saha khouya 🙏 dorka nab3atlek la photo'), [], '« dorka » (Algiers) stays allowed');
+  // the book's own example replies stay clean
+  for (const t of [
+    'وعليكم السلام، مرحبا بيكم 🌸 السومة 3900 دج، والخلاص كي توصلكم. واش من ولاية باش نقولكم شحال التوصيل؟',
+    'نفهمك خويا، بصح السومة ثابتة والكواليتي تستاهل. ما تخلص والو قبل، الخلاص كي توصلك.',
+    'سمحلنا بزاف خويا، عندك الحق. ابعثلي رقم الكوموند ولا النيميرو اللي كوموندا بيه، ونشوفو مع شركة التوصيل ونرجعولك.',
+    'بلا مزية، وربي يحفظك حتى نتا 🙏 الكوموند تاعك تسجلت ✅',
+    'Wa 3likoum salam, mar7ba bikom 🌸 La poussette b 12 900 DA, w el khlas ki twesslkom. Wach men wilaya bach n9olkom ch7al la livraison ?',
+  ])
+    assert.deepEqual(ids(t), [], t);
+  // the customer wrote it: mirroring is fine
+  assert.deepEqual(ids('إيه، فين ساكن بالضبط؟', { customer: 'فين تبعثوها؟' }), []);
+  assert.deepEqual(ids('dorka nchouf, توّا نشوف', { customer: 'توّا تبعثوها؟' }), []);
+  // the safe replacement keeps the reply's letters
+  assert.equal(fixDarija('دابا نبعثلك', checkDarija('دابا نبعثلك')), 'دروك نبعثلك');
+  assert.equal(fixDarija('ودابا نبعثلك', checkDarija('ودابا نبعثلك')), 'ودروك نبعثلك');
+  assert.equal(fixDarija('daba nab3atlek', checkDarija('daba nab3atlek')), 'drok nab3atlek');
+  assert.equal(fixDarija('غالية جداً، ولكن تستاهل', checkDarija('غالية جداً، ولكن تستاهل')), 'غالية بزاف، وبصح تستاهل');
+  assert.equal(fixDarija('ماكاينش البيج', checkDarija('ماكاينش البيج')), 'ما كانش البيج');
+  assert.equal(fixDarija('le beige ma kaynch', checkDarija('le beige ma kaynch')), 'le beige makanch');
 });
 
 test('a reply in another dialect is rewritten in Algerian Darija before it is sent; the shop list is in the instructions', async () => {
@@ -708,7 +751,7 @@ test('a reply in another dialect is rewritten in Algerian Darija before it is se
   );
   const r2: any = await call('dellal.receive', sys2, { channel: 'whatsapp', externalId: '213661909091', text: 'wach sra ?', messageId: 'wamid.darija2' });
   const out2: any = await call('dellal.answer', sys2, { id: r2.conversationId });
-  assert.equal(out2.reply, 'Smahli, 3andek l7a9, dorka nchouf.');
+  assert.equal(out2.reply, 'Smahli, 3andek l7a9, drok nchouf.');
 
   // in the Pilotix preview opened in Claude, the page's Claude answers: no key, it runs the same tools, the Darija check applies
   const reqs: any[] = [];

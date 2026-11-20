@@ -1,9 +1,13 @@
 // Algerian Darija checker. Every reply Dellal writes is checked before it is sent: words that betray another dialect
-// (Moroccan, Tunisian, Libyan, Egyptian, Gulf/Levantine), phrases that are wrong or rude in Algerian Darija, and the shop's
-// own "never write" list. A word the customer used himself is allowed (Dellal may mirror the customer).
-// The lists are conservative: a word shared with any Algerian region is NOT here (bezzaf, bghit, kifach, mlih, saha…).
+// (Moroccan, Tunisian, Libyan, Egyptian, Gulf/Levantine), Modern Standard Arabic (فصحى) words, phrases that are wrong or
+// rude in Algerian Darija, and the shop's own "never write" list. A word the customer used himself is allowed (Dellal may
+// mirror the customer).
+// Since 20 Nov 2026 the lists follow Dellal's Darija book rebuilt on DarijaDZ (its chapter « Ne jamais écrire »): drok
+// (دروك) for « now », ma kanch (ما كانش), haka (هكا), mli7 (مليح). They stay conservative: a word shared with any
+// Algerian region is NOT here (bezzaf, bghit, kifach, mli7, saha, dorka…), nor a word that is also a common first name
+// (باهية، زوينة), an Algerian word (كيفك = « like you », نعم in « ونعم بالله ») or a product name (السيارة).
 
-export type Dialect = 'maroc' | 'tunisie' | 'libye' | 'egypte' | 'golfe-levant' | 'regional' | 'faux' | 'orthographe' | 'boutique';
+export type Dialect = 'maroc' | 'tunisie' | 'libye' | 'egypte' | 'golfe-levant' | 'fusha' | 'regional' | 'faux' | 'orthographe' | 'boutique';
 
 export interface DarijaRule {
   id: string;
@@ -14,6 +18,10 @@ export interface DarijaRule {
   use: string;
   /** safe to replace mechanically when the rewrite did not fix it */
   replace?: string;
+  /** the same for a word found in Arabic letters, so an Arabic reply stays in Arabic letters */
+  replaceAr?: string;
+  /** not caught right after these words: « سوف » in « وادي سوف » is the El Oued region */
+  notAfter?: string[];
 }
 
 export interface DarijaIssue {
@@ -26,63 +34,118 @@ export interface DarijaIssue {
 /**
  * Markers checked in Dellal's replies (research notes "Algerian Darija for selling / dialect_markers.md").
  *  - maroc / tunisie / libye / egypte / golfe-levant: not used in Algeria (sourced, or certain);
+ *  - fusha: Modern Standard Arabic, never in a chat (Dellal's book, chapter « Ne jamais écrire »);
  *  - regional: used only in some Algerian regions or uncertain → rewritten to the form understood everywhere in Algeria;
  *  - faux: wrong, rude or too intimate for a seller.
- * Whole words only: Algerian واشنو contains شنو, هكدا contains كدا, "y3aychek" contains 3aychek — none of them match.
+ * Whole words only: Algerian واشنو contains شنو, هكدا contains كدا — none of them match. The order is the order of the
+ * issues (tests read it): new rules go at the end of their group or of the list.
  */
 export const DARIJA_RULES: DarijaRule[] = [
   // Moroccan (Oujda next to Algeria also says "durk" and has no ka- prefix)
-  { id: 'daba', words: ['daba', 'دابا'], dialect: 'maroc', use: 'dorka / drk (دركا)', replace: 'dorka' },
-  { id: 'kan-verbe', words: ['kanbghi', 'kan3ref', 'kanchouf', 'kandir', 'kan9oul', 'kanqoul', 'kansift', 'kankhalles', 'kaydir', 'kaybghi', 'kaykhdem', 'tanbghi', 'كنبغي', 'كنعرف', 'كنشوف', 'كندير', 'كنقول', 'كيدير'], dialect: 'maroc', use: 'forme algérienne sans ka-/ta- : n7ab, na3ref, nchouf, ndir, n9oul' },
-  { id: 'wakha', words: ['wakha', 'wakhkha', 'واخا'], dialect: 'maroc', use: 'mlih / d’accord / saha (مليح)', replace: 'd’accord' },
-  { id: '3afak', words: ['3afak', '3afek', 'عافاك'], dialect: 'maroc', use: 'allah ykhalik / stp (الله يخليك)' },
+  { id: 'daba', words: ['daba', 'دابا'], dialect: 'maroc', use: 'drok (دروك)', replace: 'drok', replaceAr: 'دروك' },
+  // in Arabic letters only the كن- and كت- forms: كي + verb glued (كيقول = « when he says ») is Algerian
+  { id: 'kan-verbe', words: ['kanbghi', 'kan3ref', 'kanchouf', 'kandir', 'kan9oul', 'kanqoul', 'kansift', 'kankhalles', 'kaydir', 'kaybghi', 'kaykhdem', 'tanbghi', 'كنبغي', 'كنعرف', 'كنشوف', 'كندير', 'كنقول', 'كيدير', 'كنحب', 'كنمشي', 'كنتمنى', 'كتدير', 'كتقول', 'كتعرف'], dialect: 'maroc', use: 'forme algérienne sans ka-/ta- : n7ab, na3ref, nchouf, ndir, n9oul (نحب، نعرف، نشوف، ندير، نقول)' },
+  { id: 'wakha', words: ['wakha', 'wakhkha', 'واخا'], dialect: 'maroc', use: 'd’accord / صح', replace: 'd’accord', replaceAr: 'صح' },
+  { id: '3afak', words: ['3afak', '3afek', 'عافاك'], dialect: 'maroc', use: 'allah ykhallik (الله يخليك)' },
   // also without the a- (« Chno men produit ? », seen in a reply on 20 Nov 2026); Latin only: Algerian chats write
   // وشنو (wachnou) without the alef, and و + شنو would match it
   { id: 'achnou', words: ['achnou', 'achno', 'achnu', 'chnou', 'chno', 'chnu', 'اشنو', 'آشنو'], dialect: 'maroc', use: 'wach (واش)' },
   // Tunisian (El Tarf and El Oued speak close to Tunisian: a customer from there may write these, which is allowed)
-  { id: 'barcha', words: ['barcha', 'barsha', 'برشا', 'برشة'], dialect: 'tunisie', use: 'bezzaf (بزاف)', replace: 'bezzaf' },
-  { id: 'famma', words: ['famma', 'famme'], dialect: 'tunisie', use: 'kayen (كاين)', replace: 'kayen' },
-  { id: 'mafamach', words: ['mafamach', 'mafamech', 'mafammech', 'مافماش'], dialect: 'tunisie', use: 'makach (ماكاش)', replace: 'makach' },
-  { id: 'chnowa', words: ['chnowa', 'chnoua', 'شنوة'], dialect: 'tunisie', use: 'wach (واش)' },
+  { id: 'barcha', words: ['barcha', 'barsha', 'برشا', 'برشة'], dialect: 'tunisie', use: 'bezzaf (بزاف)', replace: 'bezzaf', replaceAr: 'بزاف' },
+  { id: 'famma', words: ['famma', 'famme', 'فمّا'], dialect: 'tunisie', use: 'kayen (كاين)', replace: 'kayen', replaceAr: 'كاين' },
+  { id: 'mafamach', words: ['mafamach', 'mafamech', 'mafammech', 'مافماش'], dialect: 'tunisie', use: 'makanch (ما كانش)', replace: 'makanch', replaceAr: 'ما كانش' },
+  { id: 'chnowa', words: ['chnowa', 'chnoua', 'شنوة', 'شنية'], dialect: 'tunisie', use: 'wach (واش)' },
   { id: 'mouch', words: ['mouch', 'موش'], dialect: 'tunisie', use: 'machi (ماشي)' },
   { id: 'dakourdo', words: ['dakourdo', 'dakordo', 'دكوردو'], dialect: 'tunisie', use: 'd’accord / wah (واه)' },
   { id: 'aslema', words: ['aslema', 'asslema', 'عسلامة'], dialect: 'tunisie', use: 'salam / salam 3likoum (السلام عليكم)' },
-  { id: '3aychek', words: ['3aychek', '3aichek'], dialect: 'tunisie', use: 'saha / ya3tik saha (يعطيك الصحة)' },
+  // DarijaDZ (the book's source) counts يعيشك / y3aychek as Tunisian too, so it is caught since 20 Nov 2026
+  { id: '3aychek', words: ['3aychek', '3aichek', 'y3aychek', 'y3aichek', 'يعيشك', 'يعيشكم'], dialect: 'tunisie', use: 'ya3tik saha (يعطيك الصحة)' },
   // Libyan
-  { id: 'hlba', words: ['hlba', 'hlbah', 'هلبا', 'هلبة'], dialect: 'libye', use: 'bezzaf (بزاف)', replace: 'bezzaf' },
+  { id: 'hlba', words: ['hlba', 'hlbah', 'هلبا', 'هلبة'], dialect: 'libye', use: 'bezzaf (بزاف)', replace: 'bezzaf', replaceAr: 'بزاف' },
   // Egyptian
-  { id: 'keda', words: ['keda', 'kida', 'كده', 'كدا'], dialect: 'egypte', use: 'hakka / haka (هكا)', replace: 'hakka' },
-  { id: 'aywa', words: ['aywa', 'aiwa', 'أيوه', 'ايوه', 'أيوة'], dialect: 'egypte', use: 'wah / ih (واه / إيه)', replace: 'wah' },
-  { id: '3ayez', words: ['3ayez', '3ayza', '3awez', '3awza', 'aayez', 'عايز', 'عايزة', 'عاوز'], dialect: 'egypte', use: 't7ab (تحب)' },
-  { id: 'delwa2ti', words: ['delwa2ti', 'dilwa2ti', 'delwa2t', 'دلوقتي'], dialect: 'egypte', use: 'dorka (دركا)', replace: 'dorka' },
+  { id: 'keda', words: ['keda', 'kida', 'كده', 'كدا'], dialect: 'egypte', use: 'haka (هكا)', replace: 'haka', replaceAr: 'هكا' },
+  { id: 'aywa', words: ['aywa', 'aiwa', 'أيوه', 'ايوه', 'أيوة'], dialect: 'egypte', use: 'ih / wah (إيه / واه)', replace: 'wah', replaceAr: 'إيه' },
+  { id: '3ayez', words: ['3ayez', '3ayza', '3awez', '3awza', 'aayez', 'عايز', 'عايزة', 'عاوز'], dialect: 'egypte', use: 't7ab / 7ab (تحب، حاب)' },
+  { id: 'delwa2ti', words: ['delwa2ti', 'dilwa2ti', 'delwa2t', 'دلوقتي'], dialect: 'egypte', use: 'drok (دروك)', replace: 'drok', replaceAr: 'دروك' },
   { id: 'izzayak', words: ['izzayak', 'izzayek', 'ezzayak', 'ezayak', 'ازيك', 'إزيك'], dialect: 'egypte', use: 'wach rak / raki ? (واش راك)' },
-  { id: 'kwayes', words: ['kwayes', 'kwayyes', 'kwayesa', 'كويس', 'كويسة'], dialect: 'egypte', use: 'mlih (مليح)', replace: 'mlih' },
+  { id: 'kwayes', words: ['kwayes', 'kwayyes', 'kwayesa', 'كويس', 'كويسة'], dialect: 'egypte', use: 'mli7 (مليح)', replace: 'mli7', replaceAr: 'مليح' },
   { id: '3amel-eh', words: ['3amel eh', '3amla eh', 'عامل ايه', 'عامل إيه'], dialect: 'egypte', use: 'wach rak / raki ? (واش راك)' },
+  { id: 'mech', words: ['مش'], dialect: 'egypte', use: 'machi / ma…ch (ماشي، ما…ش)' },
+  { id: 'bta3', words: ['بتاع', 'بتاعي', 'بتاعك', 'بتاعه', 'بتاعها'], dialect: 'egypte', use: 'ta3 (تاع، تاعي، تاعك)' },
+  { id: 'awi', words: ['أوي', 'اوي'], dialect: 'egypte', use: 'bezzaf (بزاف)', replace: 'بزاف' },
   // Gulf / Iraq / Levant
   { id: 'shlonak', words: ['shlonak', 'chlonak', 'shlonek', 'شلونك'], dialect: 'golfe-levant', use: 'wach rak / raki ? (واش راك)' },
   { id: 'shakhbarak', words: ['shakhbarak', 'chakhbarak', 'شخبارك'], dialect: 'golfe-levant', use: 'wach rak / raki ? (واش راك)' },
   { id: 'abshir', words: ['abshir', 'abchir', 'أبشر', 'ابشر'], dialect: 'golfe-levant', use: 'mar7ba / ma kayen mouchkil (ما كاين مشكل)' },
-  { id: 'wayed', words: ['wayed', 'wayid', 'وايد'], dialect: 'golfe-levant', use: 'bezzaf (بزاف)', replace: 'bezzaf' },
+  { id: 'wayed', words: ['wayed', 'wayid', 'وايد'], dialect: 'golfe-levant', use: 'bezzaf (بزاف)', replace: 'bezzaf', replaceAr: 'بزاف' },
   { id: 'abgha', words: ['abgha', 'abga', 'أبغى', 'ابغى'], dialect: 'golfe-levant', use: 'n7ab (نحب)' },
   { id: 'baddi', words: ['baddi', 'biddi', 'بدي'], dialect: 'golfe-levant', use: 'n7ab (نحب)' },
-  { id: 'halla2', words: ['halla2', 'hala2', 'هلأ'], dialect: 'golfe-levant', use: 'dorka (دركا)', replace: 'dorka' },
+  { id: 'halla2', words: ['halla2', 'hala2', 'هلأ', 'هلق', 'هلّق'], dialect: 'golfe-levant', use: 'drok (دروك)', replace: 'drok', replaceAr: 'دروك' },
   { id: 'kifak', words: ['kifak'], dialect: 'golfe-levant', use: 'wach rak / raki ? (واش راك)' },
-  { id: 'hek', words: ['hek', 'heik', 'هيك'], dialect: 'golfe-levant', use: 'hakka / haka (هكا)', replace: 'hakka' },
+  { id: 'hek', words: ['hek', 'heik', 'هيك'], dialect: 'golfe-levant', use: 'haka (هكا)', replace: 'haka', replaceAr: 'هكا' },
+  { id: 'mnih', words: ['منيح', 'منيحة'], dialect: 'golfe-levant', use: 'mli7 / mli7a (مليح، مليحة)' },
   // Used in some Algerian regions only, or uncertain: rewritten to the form understood everywhere in Algeria
   { id: 'dyal', words: ['dyal', 'dial', 'dyali', 'dyalek', 'dyalk', 'ديال', 'ديالي', 'ديالك'], dialect: 'regional', use: 'ta3 (تاع) : ta3i, ta3ek' },
-  { id: 'achmen', words: ['achmen', 'achmn', 'ach men', 'آش من', 'اشمن'], dialect: 'regional', use: 'wach men (واش من)', replace: 'wach men' },
+  { id: 'achmen', words: ['achmen', 'achmn', 'ach men', 'آش من', 'اشمن'], dialect: 'regional', use: 'wach men (واش من)', replace: 'wach men', replaceAr: 'واش من' },
   { id: 'achkoun', words: ['achkoun', 'achkon'], dialect: 'regional', use: 'chkoun (شكون) pour « qui », wach men pour « lequel »' },
-  { id: 'makaynch', words: ['makaynch', 'makaynche', 'ma kaynch', 'ma kaynech', 'ماكاينش', 'ما كاينش'], dialect: 'regional', use: 'makach (ماكاش)', replace: 'makach' },
-  { id: 'ktir', words: ['ktir', 'kteer', 'kthir', 'كتير'], dialect: 'regional', use: 'bezzaf (بزاف)', replace: 'bezzaf' },
-  { id: 'mezyan', words: ['mzyan', 'mezyan', 'mziane', 'mezian', 'مزيان'], dialect: 'regional', use: 'mlih (مليح)', replace: 'mlih' },
-  { id: 'tawa', words: ['tawa', 'taw'], dialect: 'regional', use: 'dorka (دركا)', replace: 'dorka' },
-  { id: 'brabbi', words: ['brabbi', 'brabi', 'بربي'], dialect: 'regional', use: 'allah ykhalik / stp (الله يخليك)' },
+  { id: 'makaynch', words: ['makaynch', 'makaynche', 'ma kaynch', 'ma kaynech', 'ماكاينش', 'ما كاينش'], dialect: 'regional', use: 'makanch (ما كانش)', replace: 'makanch', replaceAr: 'ما كانش' },
+  { id: 'ktir', words: ['ktir', 'kteer', 'kthir', 'كتير'], dialect: 'regional', use: 'bezzaf (بزاف)', replace: 'bezzaf', replaceAr: 'بزاف' },
+  { id: 'mezyan', words: ['mzyan', 'mezyan', 'mziane', 'mezian', 'مزيان'], dialect: 'regional', use: 'mli7 (مليح)', replace: 'mli7', replaceAr: 'مليح' },
+  // توّا is said near Tunisia: allowed when the customer writes it (mirroring), never offered first
+  { id: 'tawa', words: ['tawa', 'taw', 'توا', 'توّا'], dialect: 'regional', use: 'drok (دروك)', replace: 'drok', replaceAr: 'دروك' },
+  { id: 'brabbi', words: ['brabbi', 'brabi', 'بربي'], dialect: 'regional', use: 'allah ykhallik (الله يخليك)' },
   // Wrong, rude or inappropriate for a seller
-  { id: 'ma3andek-7a9', words: ['ma3andek 7a9', 'ma3andek l7a9', 'ma 3andek 7a9', 'ma 3andek l7a9', 'ma3ndek 7a9', 'ما عندكش الحق', 'ماعندكش الحق'], dialect: 'faux', use: '3andek l7a9 (= tu as raison)', replace: '3andek l7a9' },
+  { id: 'ma3andek-7a9', words: ['ma3andek 7a9', 'ma3andek l7a9', 'ma 3andek 7a9', 'ma 3andek l7a9', 'ma3ndek 7a9', 'ما عندكش الحق', 'ماعندكش الحق'], dialect: 'faux', use: '3andek l7a9 (= tu as raison)', replace: '3andek l7a9', replaceAr: 'عندك الحق' },
   { id: 'mrid', words: ['mrid', 'مريض'], dialect: 'faux', use: '(« mrid » = malade : ne pas l’utiliser pour parler au client)' },
   { id: 'familier', words: ['habibti', '3omri', '3mri', 'ya ghzala', 'zella', 'louza', 'bomba', 'حبيبتي', 'عمري'], dialect: 'faux', use: 'khti / madame (trop intime ou déplacé pour un vendeur)' },
   { id: 'calque', words: ['nrecommandilek', 'nrecommandilkom', 'nrecommandilk', 'nrassurik', 'nrassurek', 'nwasslek m3a', 'ghaliban', 'يتصل بيك', 'يتصلو بيك', 'نتصل بيك', 'عزيزي العميل', 'عميلنا العزيز', 'نشكركم على ثقتكم', 'غالبا'], dialect: 'faux', use: 'tournure traduite : nanse7ek b… / ida 7abit tsa9si 3la kach 7aja, rani hna / nkhalli wa7ed men l’équipe y3ayetlek / normalement / يعيطلك' },
   { id: 'politique', words: ['yetnahaw ga3', 'hogra', 'harraga', 'zawali', 'يتنحاو ڨاع', 'يتنحاو قاع', 'حقرة', 'حراڨة', 'زوالي'], dialect: 'faux', use: '(pas de politique ni de misère dans une conversation de vente)' },
+  // Added 20 Nov 2026 with Dellal's Darija book rebuilt on DarijaDZ (chapter « Ne jamais écrire »)
+  // Moroccan in Arabic letters (Latin « fin » is also French and Algerian, so only فين)
+  { id: 'fin', words: ['فين'], dialect: 'maroc', use: 'win (وين)', replace: 'وين' },
+  { id: 'zwin', words: ['zwin', 'زوين', 'زوينين'], dialect: 'maroc', use: 'chbab / chaba (شاب، شابة)' },
+  // Tunisian, said near Tunisia: allowed when the customer writes it
+  { id: 'bahi', words: ['باهي'], dialect: 'tunisie', use: 'mli7 / d’accord (مليح)' },
+  // not wrong, but not the Algerian word
+  { id: 'flous', words: ['الفلوس', 'فلوس'], dialect: 'regional', use: 'drahem (الدراهم)' },
+  // Modern Standard Arabic (فصحى)
+  { id: 'sawfa', words: ['سوف'], notAfter: ['وادي', 'واد'], dialect: 'fusha', use: 'ra7 + verbe (راح نبعثلك)' },
+  { id: 'lan', words: ['لن'], dialect: 'fusha', use: 'ma…ch (ما نروحش)' },
+  { id: 'laqad', words: ['لقد'], dialect: 'fusha', use: 'à enlever (درت، شفت…)' },
+  { id: 'laysa', words: ['ليس', 'ليست', 'لست', 'لسنا'], dialect: 'fusha', use: 'machi (ماشي)' },
+  { id: 'limadha', words: ['لماذا'], dialect: 'fusha', use: '3lach (علاش)', replace: 'علاش' },
+  { id: 'madha', words: ['ماذا'], dialect: 'fusha', use: 'wach (واش)', replace: 'واش' },
+  { id: 'mata', words: ['متى'], dialect: 'fusha', use: 'wa9tach (وقتاش)', replace: 'وقتاش' },
+  { id: 'ayna', words: ['أين', 'اين'], dialect: 'fusha', use: 'win (وين)', replace: 'وين' },
+  { id: 'hal', words: ['هل'], dialect: 'fusha', use: 'à enlever, ou wach (واش)' },
+  { id: 'alladhi', words: ['الذي', 'التي', 'الذين', 'اللذين', 'اللتين', 'اللواتي'], dialect: 'fusha', use: 'elli (اللي)', replace: 'اللي' },
+  { id: 'yajib', words: ['يجب', 'ينبغي'], dialect: 'fusha', use: 'lazem (لازم)' },
+  { id: 'urid', words: ['أريد', 'اريد', 'تريد', 'يريد', 'نريد', 'تريدين', 'تريدون'], dialect: 'fusha', use: 'n7ab / t7ab / 7ab (نحب، تحب، حاب)' },
+  { id: 'astatii', words: ['أستطيع', 'استطيع', 'تستطيع', 'يستطيع', 'نستطيع', 'تستطيعين', 'تستطيعون'], dialect: 'fusha', use: 'n9der / t9der (نقدر، تقدر)' },
+  { id: 'alan', words: ['الآن', 'الان'], dialect: 'fusha', use: 'drok (دروك)', replace: 'دروك' },
+  { id: 'jiddan', words: ['جداً', 'جدًا', 'جدا'], dialect: 'fusha', use: 'bezzaf (بزاف)', replace: 'بزاف' },
+  { id: 'aydan', words: ['أيضاً', 'أيضًا', 'أيضا', 'ايضا'], dialect: 'fusha', use: 'tani / 7atta (تاني، حتى)' },
+  // only with its tanwin: حسنا without it is also the first name Hasna
+  { id: 'hasanan', words: ['حسناً', 'حسنًا'], dialect: 'fusha', use: 'mli7 / d’accord (مليح)' },
+  { id: 'rubbama', words: ['ربما'], dialect: 'fusha', use: 'balak (بالاك)', replace: 'بالاك' },
+  { id: 'faqat', words: ['فقط'], dialect: 'fusha', use: 'ghir / berk (غير، برك)' },
+  { id: 'indama', words: ['عندما'], dialect: 'fusha', use: 'ki (كي)', replace: 'كي' },
+  { id: 'liana', words: ['لأن', 'لأنه', 'لأنها', 'لأني', 'لأنني', 'لأننا'], dialect: 'fusha', use: '3la khater (على خاطر)' },
+  { id: 'lakin', words: ['لكن', 'لكنّ'], dialect: 'fusha', use: 'bessah (بصح)', replace: 'بصح' },
+  { id: 'nahnu', words: ['نحن'], dialect: 'fusha', use: '7na (حنا)', replace: 'حنا' },
+  { id: 'antum', words: ['أنتم', 'انتم'], dialect: 'fusha', use: 'ntouma (نتوما)', replace: 'نتوما' },
+  { id: 'ladayya', words: ['لدي', 'لديك', 'لديه', 'لديها', 'لدينا', 'لديكم', 'لديهم'], dialect: 'fusha', use: '3andi / 3andek… (عندي، عندك)' },
+  { id: 'yujad', words: ['يوجد', 'توجد'], dialect: 'fusha', use: 'kayen / kayna (كاين، كاينة)' },
+  { id: 'mundhu', words: ['منذ'], dialect: 'fusha', use: 'men / hadi (من، هادي)' },
+  { id: 'daiman', words: ['دائماً', 'دائما'], dialect: 'fusha', use: 'dima (ديما)', replace: 'ديما' },
+  { id: 'qalilan', words: ['قليلاً', 'قليلا'], dialect: 'fusha', use: 'chwiya (شوية)', replace: 'شوية' },
+  { id: 'kathiran', words: ['كثيراً', 'كثيرا'], dialect: 'fusha', use: 'bezzaf (بزاف)', replace: 'بزاف' },
+  { id: 'ams', words: ['أمس'], dialect: 'fusha', use: 'lbare7 (البارح)', replace: 'البارح' },
+  { id: 'lidhalik', words: ['لذلك', 'لذا'], dialect: 'fusha', use: '3la hadi (على هادي)' },
+  { id: 'kayfa-haluk', words: ['كيف حالك', 'كيف حالكم'], dialect: 'fusha', use: 'wach rak / raki / rakom (واش راك)' },
+  { id: 'la-a3rif', words: ['لا أعرف', 'لا اعرف'], dialect: 'fusha', use: 'ma na3refch (ما نعرفش)', replace: 'ما نعرفش' },
+  { id: 'natadhir', words: ['نعتذر', 'أعتذر', 'اعتذر'], dialect: 'fusha', use: 'sme7li / sme7lna (سمحلي، سمحلنا)' },
+  { id: 'chukran-jazilan', words: ['شكراً جزيلاً', 'شكرا جزيلا'], dialect: 'fusha', use: 'ya3tik saha / sa7it bezzaf (يعطيك الصحة)' },
 ];
 
 const DIALECT_NAME: Record<Dialect, string> = {
@@ -91,6 +154,7 @@ const DIALECT_NAME: Record<Dialect, string> = {
   libye: 'libyen',
   egypte: 'égyptien',
   'golfe-levant': 'Golfe / Levant',
+  fusha: 'arabe classique (فصحى)',
   regional: 'pas la forme la plus algérienne',
   faux: 'faux ou déplacé',
   orthographe: 'orthographe : 9 pour ق, kh pour خ',
@@ -115,11 +179,13 @@ const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+
  * Whole-word match that works for Latin with digits (ch7al) and Arabic script. An Arabic word may carry the conjunction
  * "و" in front (ودابا), except words starting with alef: و + اشنو is the Algerian واشنو ("what"), not Moroccan اشنو.
  */
-const wordRe = (words: string[]) => {
+const wordRe = (words: string[], notAfter: string[] = []) => {
   const alt = words.map((w) => (/^[\u0600-\u06FF]/.test(w) && !/^[اآأإ]/.test(w) ? `(?:و)?${esc(w)}` : esc(w)));
-  return new RegExp(`(?<![\\p{L}\\p{N}])(?:${alt.join('|')})(?![\\p{L}\\p{N}])`, 'giu');
+  const not = notAfter.length ? `(?<!(?:${notAfter.map(esc).join('|')})\\s*)` : '';
+  return new RegExp(`${not}(?<![\\p{L}\\p{N}])(?:${alt.join('|')})(?![\\p{L}\\p{N}])`, 'giu');
 };
-const RULE_RE = new Map(DARIJA_RULES.map((r) => [r.id, wordRe(r.words)]));
+const ARABIC = /[\u0600-\u06FF]/;
+const RULE_RE = new Map(DARIJA_RULES.map((r) => [r.id, wordRe(r.words, r.notAfter)]));
 const SPELLING_RE = wordRe(Object.keys(SPELLING));
 
 /** The shop's "never write" list: one per line, "word" or "word → replacement" (also =>, ->, =). */
@@ -175,10 +241,14 @@ export function fixDarija(text: string, issues: DarijaIssue[], avoid: { term: st
     }
     const rule = DARIJA_RULES.find((r) => r.id === i.id);
     const shop = i.dialect === 'boutique' ? avoid.find((a) => `boutique:${a.term.toLowerCase()}` === i.id) : undefined;
-    const rep = rule?.replace ?? shop?.use;
+    const rep = rule?.replace ?? rule?.replaceAr ?? shop?.use;
     if (!rep) continue;
     const re = rule ? RULE_RE.get(rule.id)! : wordRe([shop!.term]);
-    out = out.replace(new RegExp(re.source, 'giu'), (m) => (m.startsWith('و') && !rep.startsWith('و') && /[؀-ۿ]/.test(rep) ? 'و' + rep : rep));
+    out = out.replace(new RegExp(re.source, 'giu'), (m) => {
+      // a word found in Arabic letters is replaced in Arabic letters when the rule has that form
+      const r = rule?.replaceAr && ARABIC.test(m) ? rule.replaceAr : rep;
+      return m.startsWith('و') && !r.startsWith('و') && ARABIC.test(r) ? 'و' + r : r;
+    });
   }
   return out;
 }
