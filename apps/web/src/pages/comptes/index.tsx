@@ -263,11 +263,12 @@ export function Comptes({ sub }: PageProps) {
 
         {/* Facebook and Instagram: the boutique's one Page and its Instagram account (one login for all Meta: its ads too) */}
         <ServiceRow
+          // the two logos linked like the account's pictures (the owner, 20 Nov 2026): see .cpt-logo-duo
           logos={
-            <>
+            <span className="cpt-logo-duo">
               <BrandLogo name="facebook" size="sm" fallback={<span className="dl-ch dl-messenger" aria-hidden="true">FB</span>} />
               <BrandLogo name="instagram" size="sm" fallback={<span className="dl-ch dl-instagram" aria-hidden="true">IG</span>} />
-            </>
+            </span>
           }
           title={t(contentBase + '.name')}
           what={t(contentBase + '.what')}
