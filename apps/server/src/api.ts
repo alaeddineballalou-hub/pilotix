@@ -278,6 +278,12 @@ function storeIndexHtml(llms: string): string {
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escHtml(name)}</title><meta name="description" content="${escHtml(name)} — التوصيل لجميع الولايات والدفع عند الاستلام"><style>body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;background:#f6f7f9;color:#14213d}main{max-width:720px;margin:0 auto;padding:20px 16px}h1{font-size:24px;margin:8px 0 4px}p{color:#5b6577;margin:0 0 18px}ul{list-style:none;padding:0;margin:0;display:grid;gap:10px}a{display:flex;justify-content:space-between;gap:12px;padding:14px 16px;background:#fff;border:1px solid #e3e8f0;border-radius:12px;color:inherit;text-decoration:none}a span{color:#0f766e;font-weight:700;white-space:nowrap}</style></head><body><main><h1>${escHtml(name)}</h1><p>🚚 التوصيل لجميع الولايات · الدفع عند الاستلام</p><ul>${items || '<li>—</li>'}</ul></main></body></html>`;
 }
 
+/**
+ * A shop's own domain sends the customer to another of its addresses (its home, a page: core.domainFallback). 302,
+ * never 301: browsers keep a 301 forever, and an old link may later lead to its own product.
+ */
+const toOwnPage = (res: any, to: string) => res.status(302).header('Location', to).header('Cache-Control', 'no-store').send();
+
 /** Dellal: newest message per conversation and the answer running for it (per shop). */
 const latest = new Map<string, number>();
 const running = new Map<string, Promise<unknown>>();
@@ -756,6 +762,22 @@ class ApiController {
       return sendText(req, res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'public, max-age=300'), storeIndexHtml(r.text));
     }
     return this.sendLanding(shop, page, req, res, { api: `${site}/api${ref.shop.primary ? '' : `/s/${ref.shop.slug}`}`, url: `${site}/${page}` });
+  }
+
+  /**
+   * A deeper address on a shop's own domain (https://myshop.com/product/28026: an old link from the site the domain came
+   * from, in old posts and chats): the customer lands on the shop's home, never on an error; a file stays « not found »
+   * (core.domainFallback). Caddy sends every path of the domain to /api/domain…; one part is domainPage's.
+   */
+  @Public()
+  @Get('domain/*')
+  async domainDeep(@Req() req: { url?: string; headers: Record<string, string | undefined> }, @Res() res: any) {
+    const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim().toLowerCase();
+    const id = await core.shopIdByDomain(this.core.t, host);
+    const ref = id ? await this.core.shop({ id }) : null;
+    const to = ref && ref.shop.status === 'active' ? core.domainFallback(String(req.url ?? '').replace(/^\/api\/domain(?=\/)/, '')) : null;
+    if (!to) return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
+    return toOwnPage(res, to);
   }
 
   /** /api/s/<store>/llms.txt: a shop's pages for AI assistants (the platform's /llms.txt links to every shop's). */
@@ -1414,7 +1436,11 @@ class ApiController {
   // ---------------------------------------------------------------- landing pages (public, no login)
   /** The page of one product: a single small HTML file (no app bundle), never cached (it carries a fresh challenge). */
   private async sendLanding(ref: ShopRef, slug: string, req: { url?: string; headers: Record<string, string | undefined> }, res: any, own?: { api: string; url: string }) {
-    const missing = () => res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
+    // on the shop's own domain (own), a page that is not there (an old link, a page taken offline) leads to its home
+    const missing = () => {
+      const to = own ? core.domainFallback(`/${slug}`) : null;
+      return to ? toOwnPage(res, to) : res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
+    };
     if (!/^[a-z0-9-]{2,60}$/.test(slug)) return missing();
     try {
       // a page calls the address it was opened at: the shop's own domain (Caddy forwards /api), the pages' own address

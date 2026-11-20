@@ -89,3 +89,20 @@ export async function shopIdByDomain(t: Tenancy, host: string): Promise<number |
   const r = (await t.platform.query(`SELECT id FROM platform.shops WHERE domain = $1 AND domain_status = 'ok' AND status = 'active'`, [d]))[0];
   return r ? num(r.id) : null;
 }
+
+/**
+ * Where a shop's own domain sends an address that is none of its pages: an old link from the site the domain came from
+ * (babyjoydz.net/product/28026, moved from JustSell on 20 Nov 2026), a page taken offline, a typo. The customer lands on
+ * the shop's home (« / », its pages), never on an error. A page's address with a « / » at its end goes to that page.
+ * A file (a dot in its last part: /favicon.ico, /sitemap.xml; an old site's /x.html is a page) and the hidden
+ * addresses (/.well-known/…, /.env) stay « not found »: a browser or a robot asked for a file, not a customer for a
+ * page. null = not found (the home itself too, so it never sends anyone in a circle).
+ */
+export function domainFallback(path: string): string | null {
+  const p = String(path ?? '').replace(/[?#].*$/, '');
+  const parts = p.split('/').filter(Boolean);
+  const last = parts[parts.length - 1];
+  if (!last || parts[0].startsWith('.') || (last.includes('.') && !/\.(?:html?|php)$/i.test(last))) return null;
+  const page = /^\/([a-z0-9-]{2,60})\/+$/.exec(p);
+  return page ? `/${page[1]}` : '/';
+}

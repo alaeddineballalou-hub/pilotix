@@ -2,7 +2,7 @@
 // once its DNS points to this server.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { checkShopDomain, cleanDomain, domainProof, loadShop, migrate, migrateAll, pgliteTenancy, provisionShop, seedBase, setShopDomain, shopIdByDomain } from '../index';
+import { checkShopDomain, cleanDomain, domainFallback, domainProof, loadShop, migrate, migrateAll, pgliteTenancy, provisionShop, seedBase, setShopDomain, shopIdByDomain } from '../index';
 
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
 
@@ -53,4 +53,25 @@ test('own domain: cleaned, never the platform or another shop, ready once its DN
   await setShopDomain(t, two.id, null, 'pilotix.online');
   assert.equal((await loadShop(t, { id: two.id }))!.domainStatus, 'none');
   await setShopDomain(t, three.id, 'www.bijoux-setif.com', 'pilotix.online');
+});
+
+test('own domain: an address that is none of its pages leads to the shop home, a file stays not found', () => {
+  // old links from the site the domain came from (JustSell: /product/28026), a page taken offline, a typo
+  assert.equal(domainFallback('/product/28026'), '/');
+  assert.equal(domainFallback('/product/28026?fbclid=IwAR0abc'), '/');
+  assert.equal(domainFallback('/old-page'), '/');
+  assert.equal(domainFallback('/Landau-Gargour'), '/');
+  assert.equal(domainFallback('/cart/checkout/'), '/');
+  assert.equal(domainFallback('/product/28026.html'), '/');
+  // a page's address with a slash at its end: that page
+  assert.equal(domainFallback('/landau-gargour/'), '/landau-gargour');
+  // files and hidden addresses: not found
+  assert.equal(domainFallback('/favicon.ico'), null);
+  assert.equal(domainFallback('/sitemap.xml'), null);
+  assert.equal(domainFallback('/.well-known/security.txt'), null);
+  assert.equal(domainFallback('/.env'), null);
+  // the home itself never sends anyone anywhere (no circle)
+  assert.equal(domainFallback('/'), null);
+  assert.equal(domainFallback(''), null);
+  assert.equal(domainFallback('/?x=1'), null);
 });
