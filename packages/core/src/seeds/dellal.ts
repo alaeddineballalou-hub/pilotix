@@ -111,7 +111,8 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     for (const [k, [role, body, uid, meta]] of c.msgs.entries())
       await db.query('INSERT INTO conv_messages (conversation_id, role, body, user_id, meta, created_at) VALUES ($1,$2,$3,$4,$5,$6)', [cid, role, body, uid ?? null, meta ? JSON.stringify(meta) : null, iso(c.at - (c.msgs.length - k) * 45_000)]);
     if (c.orderId) await db.query('UPDATE orders SET conversation_id = $2 WHERE id = $1', [c.orderId, cid]);
-    if (c.adDays) await db.query('UPDATE conversations SET ad_window_until = $2, follow_ups = 2, followed_up = true WHERE id = $1', [cid, iso(c.at + c.adDays * 86_400_000)]);
+    // follow_ups = 5: every follow-up of this demo chat is counted as sent, so the follow-up job never writes to it
+    if (c.adDays) await db.query('UPDATE conversations SET ad_window_until = $2, follow_ups = 5, followed_up = true WHERE id = $1', [cid, iso(c.at + c.adDays * 86_400_000)]);
   }
 }
 
