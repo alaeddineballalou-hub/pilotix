@@ -24,16 +24,28 @@ export interface PixelRow {
   testCode: string;
   isDefault: boolean;
   hasToken: boolean;
-  /** pages and groups that chose it */
+  /** pages and groups that send to it: the ones that ticked it and, for the default one, those left on « Par défaut » */
   pages: number;
   createdAt: string;
 }
 
 export async function listPixels(db: Db): Promise<PixelRow[]> {
+  // The same rule as pixelsOf below: a page or group sends to the pixels it ticked; with nothing ticked (« Par défaut »)
+  // to the platform's default — except, for Meta, one that still has an ID typed before pixels had names: it sends there.
   const rows = await db.query(
     `SELECT p.*, EXISTS (SELECT 1 FROM settings s WHERE s.key = 'secret_pixel_' || p.id) AS has_token,
-       (SELECT count(*)::int FROM landing_pages l WHERE CASE p.platform WHEN 'meta' THEN l.meta_pixels ELSE l.tiktok_pixels END @> to_jsonb(p.id))
-       + (SELECT count(*)::int FROM landing_groups g WHERE CASE p.platform WHEN 'meta' THEN g.meta_pixels ELSE g.tiktok_pixels END @> to_jsonb(p.id)) AS n_pages
+       (SELECT count(*)::int FROM (
+          SELECT meta_pixels, tiktok_pixels, btrim(coalesce(pixel_id, '')) AS typed FROM landing_pages
+          UNION ALL
+          SELECT meta_pixels, tiktok_pixels, btrim(coalesce(pixel_id, '')) FROM landing_groups
+        ) x
+        WHERE CASE
+          WHEN p.platform = 'meta' AND jsonb_typeof(x.meta_pixels) = 'array' THEN x.meta_pixels @> to_jsonb(p.id)
+          WHEN p.platform = 'meta' AND x.typed <> '' THEN x.typed = p.pixel_id
+          WHEN p.platform = 'meta' THEN p.is_default
+          WHEN jsonb_typeof(x.tiktok_pixels) = 'array' THEN x.tiktok_pixels @> to_jsonb(p.id)
+          ELSE p.is_default
+        END) AS n_pages
      FROM tracking_pixels p ORDER BY p.platform, p.is_default DESC, lower(p.name), p.id`,
   );
   return rows.map((r: any) => ({

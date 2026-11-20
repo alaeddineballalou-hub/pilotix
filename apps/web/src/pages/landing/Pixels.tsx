@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Out, rpc } from '../../lib/backend';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
+import { BrandLogo } from '../../ui/BrandLogo';
 import { Field, Icon, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 
@@ -70,9 +71,8 @@ export function PixelsCard() {
           return (
             <div key={pf} className="lp-px-col">
               <h3>
-                <span className={`lp-px-logo ${pf}`} aria-hidden="true">
-                  {pf === 'meta' ? 'f' : '♪'}
-                </span>
+                {/* the company's own logo file (ui/BrandLogo: Meta's for Meta's pixels, never Facebook's « f »), nothing until it is there */}
+                <BrandLogo name={pf} size="sm" />
                 {t(`landing.px.${pf}`)}
               </h3>
               {!list.length && <p className="muted small">{t('landing.px.none')}</p>}

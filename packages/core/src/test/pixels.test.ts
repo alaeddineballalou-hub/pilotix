@@ -94,6 +94,37 @@ test('pixels: a real order reaches the page’s Meta pixel and TikTok pixel from
   assert.equal(ev.properties.currency, 'DZD');
 });
 
+test('pixels: « N pages » counts every page that sends to the pixel — those left on « Par défaut » too', async () => {
+  const count = async (pixelId: string) => ((await call('landing.pixels', marketer, {})) as any[]).find((p) => p.pixelId === pixelId).pages as number;
+  const onDefault = async (col: 'meta_pixels' | 'tiktok_pixels', typedToo: boolean) =>
+    Number(
+      (
+        await db.query(
+          `SELECT (SELECT count(*) FROM landing_pages WHERE jsonb_typeof(${col}) IS DISTINCT FROM 'array'${typedToo ? ` AND btrim(coalesce(pixel_id, '')) = ''` : ''})
+                + (SELECT count(*) FROM landing_groups WHERE jsonb_typeof(${col}) IS DISTINCT FROM 'array'${typedToo ? ` AND btrim(coalesce(pixel_id, '')) = ''` : ''}) AS n`,
+        )
+      )[0].n,
+    );
+  // page 1 ticked Pixel B and the TikTok pixel; page 2 is on the default Meta pixel and has no TikTok pixel
+  const metaDefault = await onDefault('meta_pixels', true);
+  assert.ok(metaDefault >= 1, 'page 2 is on « Par défaut »');
+  assert.equal(await count(META_A), metaDefault, 'the default Meta pixel: every page and group left on « Par défaut »');
+  assert.equal(await count(META_B), 1, 'Pixel B: the page that ticked it');
+  assert.equal(await count(TT), (await onDefault('tiktok_pixels', false)) + 1, 'the default TikTok pixel: the pages on « Par défaut » and page 1');
+  // page 2 turns Meta off: one page less for the default pixel
+  const p2: any = await call('landing.get', marketer, { id: pages[1].id });
+  await call('landing.save', marketer, { ...p2, id: p2.id, images: [], metaPixels: [], pixelId: '' });
+  assert.equal(await count(META_A), metaDefault - 1);
+  // a page that still has a Meta ID typed before pixels had names sends there, not to the default
+  await db.query(`UPDATE landing_pages SET meta_pixels = NULL, pixel_id = $2 WHERE id = $1`, [pages[1].id, META_B]);
+  assert.equal(await count(META_B), 2);
+  assert.equal(await count(META_A), metaDefault - 1);
+  // page 2 back on the default Meta pixel, for the tests below
+  await db.query(`UPDATE landing_pages SET meta_pixels = NULL, pixel_id = '' WHERE id = $1`, [pages[1].id]);
+  assert.equal(await count(META_A), metaDefault);
+  assert.equal(await count(META_B), 1);
+});
+
 test('pixels: a deleted pixel — its pages take the default again', async () => {
   const list: any[] = (await call('landing.pixels', marketer, {})) as any;
   const b = list.find((p) => p.pixelId === META_B);
