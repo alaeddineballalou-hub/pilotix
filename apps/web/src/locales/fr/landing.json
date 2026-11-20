@@ -324,7 +324,7 @@
     "never": "Jamais de Purchase pour une commande bloquée, ni pour une commande marquée fausse, doublon, faux numéro ou annulée avant l’envoi.",
     "chats": "Les commandes prises dans Pilot Message (Messenger, Instagram) suivent le même choix : Meta apprend quelle conversation est devenue un vrai acheteur.",
     "urlParams": "Paramètres d’URL pour vos publicités",
-    "urlParamsHelp": "Collez-les dans la publicité (Meta › Publicité › Paramètres d’URL) : chaque commande garde sa campagne, son ensemble de publicités et sa publicité.",
+    "urlParamsHelp": "Chaque commande garde sa campagne, son ensemble de publicités et sa publicité. Pilotix les met tout seul (voir plus bas) ; sinon, collez-les dans la pub : Meta › Publicité › Suivi › Paramètres d’URL.",
     "copy": "Copier",
     "abandoned": "Commandes abandonnées",
     "abandonedHelp": "Dès qu’un client tape un numéro valide, Pilotix le garde. S’il ne valide pas, sa commande va toute seule dans Commandes › Nouvelle, sans aucun message au client : vos agents l’appellent.",
@@ -861,5 +861,35 @@
     "testsNone": "Aucun test pour le moment.",
     "testsOff": "Team est désactivé : activez-le dans Landing pages › Réglages pour que votre équipe puisse tester.",
     "fromAd": "vient de la pub"
+  },
+  "tags": {
+    "title": "Automatique sur vos pubs",
+    "sub": "Pubs lancées depuis Pilotix : toujours. Pubs faites dans Meta : Pilotix les ajoute tout seul pendant leurs {{h}} premières heures (Meta revoit la pub une fois).",
+    "switch": "Ajouter les paramètres tout seul aux nouvelles pubs faites dans Meta",
+    "savedOn": "Pilotix ajoute les paramètres aux nouvelles pubs faites dans Meta",
+    "savedOff": "Arrêté : Pilotix ne touche plus aux pubs faites dans Meta",
+    "off": "Arrêté : Pilotix ne touche à aucune pub faite dans Meta. Collez la ligne ci-dessus dans chaque pub vous-même.",
+    "allGood": "Toutes vos pubs vers vos pages ont les paramètres.",
+    "fixedTitle": "Ajoutés par Pilotix",
+    "fixedTag": "+ paramètres",
+    "missingTitle": "Pubs sans les paramètres",
+    "missingHint": "Leurs commandes ne savent pas de quelle pub elles viennent. Collez la ligne ci-dessus dans Meta : la pub › Suivi › Paramètres d’URL.",
+    "why": {
+      "old": "Faite il y a plus de {{h}} h : à faire dans Meta",
+      "feed": "Plusieurs textes, vidéos ou formats : à faire dans Meta",
+      "catalog": "Pub catalogue : à faire dans Meta",
+      "other": "Ce type de pub : à faire dans Meta",
+      "post": "Publication existante : Meta n’a pas pris les paramètres, à faire dans Meta",
+      "refused": "Meta a refusé : {{why}}"
+    },
+    "runError": "Dernière vérification incomplète : {{why}}",
+    "checkedAt": "Vérifié {{when}}",
+    "never": "Pas encore vérifié : la première vérification arrive dans 15 minutes au plus.",
+    "check": "Vérifier maintenant",
+    "checking": "Vérification…",
+    "checkedNow": "Vérifié",
+    "more": "Voir les {{n}} autres",
+    "less": "Voir moins",
+    "demo": "Démo : un exemple. Dans votre boutique, Pilotix lit vos vraies pubs chez Meta toutes les 15 minutes."
   }
 }

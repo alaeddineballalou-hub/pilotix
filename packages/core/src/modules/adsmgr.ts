@@ -32,6 +32,7 @@ import {
   type Guard,
   type RuleKey,
   type RuleMode,
+  type TagKind,
 } from './pilotads';
 
 const KEY = 'pilot_ads';
@@ -502,6 +503,8 @@ export async function pilotRun(ctx: Ctx) {
     }
     // « Pubs faites à la main »: the Pilotix lists on the new ad sets made in Meta (a check already running: skipped)
     await handRun(ctx).catch(() => null);
+    // and the URL parameters on the new ads made in Meta, so each of their orders knows its ad
+    await tagRun(ctx).catch(() => null);
   }
   const sys = { ...ctx, session: { ...ctx.session, isAdmin: true } } as Ctx;
   const stats = await statsOf(ctx);
@@ -976,6 +979,137 @@ async function handView(ctx: Ctx) {
   return { owner: isOwner(ctx), demo: !ctx.server, fixH: HAND_FIX_H, on: s.on, checkedAt: s.checkedAt, error: s.error, lists: s.lists, fixed: keep(s.fixed), missing: keep(s.missing) };
 }
 
+// ---------------------------------------------------------------- the URL parameters on ads made by hand
+/**
+ * « Paramètres d’URL » (Landing pages › Réglages): an ad launched from Pilotix carries them from the start; an ad made
+ * in Meta's Ads Manager has only what the owner pasted. Without the ids, its orders do not know their ad and Pilot
+ * Checks cannot judge it. So every Pilote auto run (15 min, and « Vérifier maintenant ») reads the shop's ads: a new
+ * one (its first TAG_FIX_H hours) that sends people to a website without the ids gets them from Pilotix — a copy of
+ * its créa with the parameters, on the same ad; Meta checks the ad again. An older one is never touched (it runs: a
+ * new créa sends it back to Meta's check), and a kind Pilotix does not copy (several texts or formats, catalogue…) is
+ * not either: both are only listed, with the line to paste. On unless the owner turns it off.
+ */
+const TAG_KEY = 'pilot_ads_tags';
+export const TAG_FIX_H = 24;
+/** Meta's refusal is tried again on the next runs, this many times in all, then the ad is listed with it */
+export const TAG_TRIES = 3;
+/** why an ad is listed: too old to touch, a kind Pilotix does not copy, Meta kept the post's créa, or Meta said no */
+export type TagWhy = 'old' | Exclude<TagKind, 'spec'> | 'refused';
+export interface TagFixed {
+  id: string;
+  name: string;
+  campaign: string;
+  adsetId: string;
+  at: string;
+}
+export interface TagMissing {
+  id: string;
+  name: string;
+  campaign: string;
+  adsetId: string;
+  status: string | null;
+  created: string | null;
+  why: TagWhy;
+  /** Meta's last refusal, when Pilotix tried */
+  error: string | null;
+}
+export interface TagState {
+  on: boolean;
+  checkedAt: string | null;
+  /** the last run could not finish (Meta out of reach, the key over…): said as it is */
+  error: string | null;
+  /** the ads Pilotix gave the parameters to, newest first */
+  fixed: TagFixed[];
+  /** the ads still without them, running first */
+  missing: TagMissing[];
+  /** ad → Meta's refusals so far, or why Pilotix stopped trying (young ones only) */
+  tries: Record<string, { n: number; error: string; why?: TagWhy }>;
+}
+export async function tagState(db: Db): Promise<TagState> {
+  const s = await getRaw<Partial<TagState>>(db, TAG_KEY, {});
+  return { on: s.on ?? true, checkedAt: s.checkedAt ?? null, error: s.error ?? null, fixed: s.fixed ?? [], missing: s.missing ?? [], tries: s.tries ?? {} };
+}
+interface MetaTagAd {
+  id: string;
+  name: string;
+  campaign: string;
+  adsetId: string;
+  status: string | null;
+  created: string | null;
+  needs: boolean;
+  kind: TagKind;
+}
+
+/** One check (server): the young ads get the parameters, the others without them are listed. The demo shows its own. */
+export async function tagRun(ctx: Ctx): Promise<TagState> {
+  if (!ctx.server) return tagState(ctx.db);
+  return withActionLock(ctx.db, 'ads:tags', me(ctx), 'Pilotix vérifie déjà les paramètres d’URL des pubs : réessayez dans un instant.', () => tagRunNow(ctx));
+}
+async function tagRunNow(ctx: Ctx): Promise<TagState> {
+  const s = await tagState(ctx.db);
+  // ads not linked to Meta: no ad to read (not an error)
+  if (!s.on || !ctx.server || !(await metaLinked(ctx.db))) return s;
+  const save = async (next: TagState) => {
+    await setRaw(ctx.db, TAG_KEY, next);
+    return next;
+  };
+  let ads: MetaTagAd[];
+  try {
+    ads = ((await ctx.server.meta('tagAds', {}, ctx)) as { ads: MetaTagAd[] }).ads ?? [];
+  } catch (e: any) {
+    // nothing read: what was found last time stays on the page
+    return save({ ...s, checkedAt: stamp(ctx), error: String(e?.message ?? e).slice(0, 300) });
+  }
+  const now = ctx.now();
+  const fixed = [...s.fixed];
+  const tries: TagState['tries'] = {};
+  const missing: TagMissing[] = [];
+  let later: string | null = null;
+  for (const a of ads) {
+    if (!a.needs) continue;
+    const born = a.created ? Date.parse(a.created) : NaN;
+    const young = Number.isFinite(born) && now - born <= TAG_FIX_H * 3_600_000;
+    const copyable = a.kind === 'spec' || a.kind === 'post';
+    let t = s.tries[a.id];
+    let why: TagWhy = young ? (copyable ? 'refused' : (a.kind as TagWhy)) : 'old';
+    if (young && copyable && !t?.why && (t?.n ?? 0) < TAG_TRIES) {
+      // Meta said « later » for one: the others wait for the next run too
+      if (!later)
+        try {
+          const r = (await ctx.server.meta('tagAd', { id: a.id }, ctx)) as { done: boolean; why?: string };
+          if (r?.done) {
+            fixed.unshift({ id: a.id, name: a.name, campaign: a.campaign, adsetId: a.adsetId, at: stamp(ctx) });
+            continue;
+          }
+          // it has them by now (pasted in the Ads Manager meanwhile)
+          if (r?.why === 'tagged') continue;
+          // a kind Pilotix does not copy, or Meta kept the post's créa: not tried again
+          t = { n: TAG_TRIES, error: '', why: (r?.why as TagWhy) || 'other' };
+        } catch (e: any) {
+          const msg = String(e?.message ?? e).slice(0, 300);
+          if (metaLater(e)) later = msg;
+          else t = { n: (t?.n ?? 0) + 1, error: msg };
+        }
+      if (t) tries[a.id] = t;
+      // tries left: the next run tries again, it is not « without the parameters » yet
+      if (!t?.why && (t?.n ?? 0) < TAG_TRIES) continue;
+    } else if (t && young) tries[a.id] = t; // its last refusal stays said while it is young
+    if (young && t?.why) why = t.why;
+    missing.push({ id: a.id, name: a.name, campaign: a.campaign, adsetId: a.adsetId, status: a.status, created: a.created, why, error: why === 'refused' ? t?.error || null : null });
+  }
+  const running = (m: TagMissing) => (m.status === 'ACTIVE' ? 0 : 1);
+  missing.sort((x, y) => running(x) - running(y) || String(y.created ?? '').localeCompare(String(x.created ?? '')));
+  return save({ on: true, checkedAt: stamp(ctx), error: later, fixed: fixed.slice(0, 30), missing, tries });
+}
+
+/** What the card shows: a marketer sees only the ads of his own ad sets (as everywhere in Publicité). */
+async function tagView(ctx: Ctx) {
+  const s = await tagState(ctx.db);
+  const mine = isOwner(ctx) ? null : new Set((await visibleAdsets(ctx)).map((x) => String(x.id)));
+  const keep = <T extends { adsetId: string }>(xs: T[]) => (mine ? xs.filter((x) => mine.has(x.adsetId)) : xs);
+  return { owner: isOwner(ctx), demo: !ctx.server, fixH: TAG_FIX_H, on: s.on, checkedAt: s.checkedAt, error: s.error, fixed: keep(s.fixed), missing: keep(s.missing) };
+}
+
 // ---------------------------------------------------------------- procs
 const Obj = z.string().regex(/^\d{6,25}$/);
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -1086,5 +1220,18 @@ export const adsMgrProcs = {
   'ads.hand.check': proc(['vendeur'], z.object({}), async (ctx) => {
     await handRun(ctx);
     return handView(ctx);
+  }),
+
+  /** « Paramètres d’URL »: the ads Pilotix gave them to, and those still without them */
+  'ads.tags.state': proc(['marketer'], z.object({}), (ctx) => tagView(ctx)),
+  /** on or off (on by default): off, Pilotix touches no ad made by hand */
+  'ads.tags.save': proc(['vendeur'], z.object({ on: z.boolean() }), async (ctx, i) => {
+    await setRaw(ctx.db, TAG_KEY, { ...(await tagState(ctx.db)), on: i.on, tries: {} }, me(ctx) || undefined);
+    return tagView(ctx);
+  }),
+  /** « Vérifier maintenant »: right after publishing an ad in Meta, no need to wait for the next run */
+  'ads.tags.check': proc(['vendeur'], z.object({}), async (ctx) => {
+    await tagRun(ctx);
+    return tagView(ctx);
   }),
 };

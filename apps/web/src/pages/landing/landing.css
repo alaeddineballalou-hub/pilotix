@@ -194,6 +194,11 @@
 .lp-never .bji { flex: none; width: 16px; height: 16px; }
 .lp-copy { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .lp-copy code { flex: 1; min-width: 0; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--raise); font-size: 12px; overflow-wrap: anywhere; }
+/* « Automatique sur vos pubs » (AdTags.tsx): the ads card's look (../ads/pilot/pilot.css), inside the Meta pixel card */
+.lp-tags { border-radius: 14px; background: var(--surface); }
+.lp-set .lp-tags h3 { margin: 0; font-size: 15px; }
+.lp-tags .pa-hand-why { flex-basis: 100%; font-size: 12px; line-height: 1.4; color: var(--c-muted); white-space: normal; }
+.lp-tags .pa-hand-why.pa-err { color: var(--c-bad-ink); }
 .lp-min { display: flex; align-items: center; gap: 8px; }
 .lp-min input { width: 110px; }
 .lp-switch { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; cursor: pointer; }

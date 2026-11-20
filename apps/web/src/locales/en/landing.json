@@ -324,7 +324,7 @@
     "never": "Never a Purchase for a blocked order, nor for one marked fake, duplicate, wrong number or cancelled before sending.",
     "chats": "Orders taken in Pilot Message (Messenger, Instagram) follow the same choice: Meta learns which chat became a real buyer.",
     "urlParams": "URL parameters for your ads",
-    "urlParamsHelp": "Paste them in the ad (Meta › Ad › URL parameters): each order keeps its campaign, ad set and ad.",
+    "urlParamsHelp": "Each order keeps its campaign, ad set and ad. Pilotix adds them by itself (see below); otherwise, paste them in the ad: Meta › Ad › Tracking › URL parameters.",
     "copy": "Copy",
     "abandoned": "Abandoned orders",
     "abandonedHelp": "As soon as a customer types a valid number, Pilotix keeps it. If they do not order, their order goes to Commandes › New by itself, with no message to the customer: your agents call them.",
@@ -861,5 +861,35 @@
     "testsNone": "No test yet.",
     "testsOff": "Team is off: turn it on in Landing pages › Settings so your team can test.",
     "fromAd": "from the ad"
+  },
+  "tags": {
+    "title": "Automatic on your ads",
+    "sub": "Ads launched from Pilotix: always. Ads made in Meta: Pilotix adds them by itself during their first {{h}} hours (Meta reviews the ad once more).",
+    "switch": "Add the parameters to new ads made in Meta automatically",
+    "savedOn": "Pilotix adds the parameters to new ads made in Meta",
+    "savedOff": "Off: Pilotix no longer touches ads made in Meta",
+    "off": "Off: Pilotix touches no ad made in Meta. Paste the line above in each ad yourself.",
+    "allGood": "All your ads to your pages have the parameters.",
+    "fixedTitle": "Added by Pilotix",
+    "fixedTag": "+ parameters",
+    "missingTitle": "Ads without the parameters",
+    "missingHint": "Their orders don’t know which ad they came from. Paste the line above in Meta: the ad › Tracking › URL parameters.",
+    "why": {
+      "old": "Made more than {{h}} h ago: add them in Meta",
+      "feed": "Several texts, videos or formats: add them in Meta",
+      "catalog": "Catalogue ad: add them in Meta",
+      "other": "This kind of ad: add them in Meta",
+      "post": "Existing post: Meta didn’t take the parameters, add them in Meta",
+      "refused": "Meta refused: {{why}}"
+    },
+    "runError": "The last check didn’t finish: {{why}}",
+    "checkedAt": "Checked {{when}}",
+    "never": "Not checked yet: the first check comes within 15 minutes.",
+    "check": "Check now",
+    "checking": "Checking…",
+    "checkedNow": "Checked",
+    "more": "See the {{n}} others",
+    "less": "See less",
+    "demo": "Demo: an example. In your shop, Pilotix reads your real ads at Meta every 15 minutes."
   }
 }

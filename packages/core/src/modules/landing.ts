@@ -63,6 +63,7 @@ import { ipPrefix } from '../net';
 import { sharedReputation } from '../platform/reputation';
 import { RESERVED } from './stockquery';
 import { WORKED_ON } from './readiness';
+import { HAND_URL_TAGS } from './pilotads';
 
 const id = z.number().int().positive();
 export const WHO = ['marketer'] as const;
@@ -2228,8 +2229,8 @@ export const landingProcs = {
       /** products set aside (« Pas de page »): they can get their alert back */
       ignored: (await ctx.db.query(`SELECT id, name FROM products WHERE id = ANY($1::bigint[]) ORDER BY lower(name)`, [s.ignored ?? []])).map((r: any) => ({ id: num(r.id), name: String(r.name) })),
       demo: simulated(ctx),
-      /** what to paste in the ad's « URL parameters » (Meta fills the {{…}}) */
-      urlParams: 'utm_source=facebook&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}',
+      /** what to paste in the ad's « URL parameters » (Meta fills the {{…}}): the same Pilotix adds to a new ad made by hand */
+      urlParams: HAND_URL_TAGS,
       /** the same for TikTok (its « URL parameters » / tracking: TikTok fills the __…__; an ad group is « adset », an ad « ad ») */
       tiktokUrlParams: 'utm_source=tiktok&utm_medium=paid&utm_campaign=__CAMPAIGN_NAME__&utm_content=__CID_NAME__&campaign_id=__CAMPAIGN_ID__&adset_id=__AID__&ad_id=__CID__&placement=__PLACEMENT__',
     };

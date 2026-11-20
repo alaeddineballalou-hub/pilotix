@@ -4,7 +4,7 @@
 import { createHash } from 'node:crypto';
 import { getSetting } from './settings';
 import { getRaw, META_TOKEN_KEY } from './modules/admin';
-import type { LaunchPlan } from './modules/pilotads';
+import { needsTags, tagKindOf, taggedCopy, tagsLack, type LaunchPlan } from './modules/pilotads';
 import { AppError, Ctx } from './rpc';
 
 /** Meta's current Marketing API (v21.0 ended for ads on 9 Sep 2025; v26.0 came out on 29 Jul 2026). */
@@ -649,6 +649,74 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
     if (!add.length) return { added: 0 };
     await post(a.id, { targeting: { ...targeting, excluded_custom_audiences: [...had, ...add].map((id) => ({ id })) } }, token);
     return { added: add.length };
+  }
+
+  // ---- URL parameters on ads made by hand (./modules/adsmgr.ts › tagRun) ----
+  /**
+   * Every ad of the shop's ad accounts still in use (archived and deleted ones are left out): when Meta made it, its
+   * state, whether its orders would not know it (a website link without the ids) and the kind of its créa. An account
+   * that cannot be read is left out; all of them failing is an error.
+   */
+  if (action === 'tagAds') {
+    const out: { id: string; name: string; campaign: string; adsetId: string; status: string | null; created: string | null; needs: boolean; kind: string }[] = [];
+    let read = 0;
+    let firstError: unknown = null;
+    for (const act of acts) {
+      try {
+        const rows = await all(
+          `${act}/ads`,
+          { fields: 'id,name,adset_id,created_time,effective_status,campaign{name},adset{destination_type},creative{url_tags,object_story_spec,object_story_id,asset_feed_spec,product_set_id,template_url_spec,source_instagram_media_id}', limit: '50' },
+          token,
+          40,
+        );
+        for (const x of rows) {
+          if (['DELETED', 'ARCHIVED'].includes(String(x?.effective_status ?? ''))) continue;
+          out.push({
+            id: String(x.id),
+            name: String(x.name ?? ''),
+            campaign: String(x.campaign?.name ?? ''),
+            adsetId: String(x.adset_id ?? ''),
+            status: x.effective_status ? String(x.effective_status) : null,
+            created: x.created_time ? String(x.created_time).replace(/([+-]\d{2})(\d{2})$/, '$1:$2') : null,
+            needs: needsTags(x.creative, x.adset?.destination_type),
+            kind: tagKindOf(x.creative),
+          });
+        }
+        read++;
+      } catch (e) {
+        firstError ??= e;
+      }
+    }
+    if (!read && firstError) throw firstError;
+    return { ads: out };
+  }
+  /**
+   * One ad gets the URL parameters. Meta keeps a créa as it was made, so Pilotix makes a copy of it with the parameters
+   * (./modules/pilotads.ts › taggedCopy) and puts it on the same ad: same ad, same ad set, Meta checks the ad again.
+   * Not done (nothing changed on Meta): `why` says the kind Pilotix does not copy, 'tagged' (it has them by now), or
+   * 'post' (an existing post: Meta answered with a créa that still has no parameters).
+   */
+  if (action === 'tagAd') {
+    const a = (args ?? {}) as { id?: string };
+    if (!a.id || !/^\d{6,25}$/.test(a.id)) throw new AppError('bad_request', 'Pub invalide');
+    const ad = await graph(
+      a.id,
+      { fields: 'account_id,name,creative{id,name,url_tags,object_story_spec,object_story_id,asset_feed_spec,product_set_id,template_url_spec,source_instagram_media_id,degrees_of_freedom_spec,contextual_multi_ads,instagram_user_id}' },
+      token,
+    );
+    const act = actOf(String(ad?.account_id ?? ''));
+    if (!acts.includes(act)) throw new AppError('bad_request', 'Cette pub n’est pas dans un compte pub relié à la boutique.');
+    const c = ad?.creative ?? {};
+    if (!tagsLack(c.url_tags).length) return { done: false, why: 'tagged' };
+    const body = taggedCopy(c, `${String(c.name || ad?.name || 'Pub')} · paramètres d’URL`);
+    if (!body) return { done: false, why: tagKindOf(c) };
+    const made = String((await post(`${act}/adcreatives`, body, token))?.id ?? '');
+    // an existing post: Meta may answer with the créa the post already has, still without the parameters
+    if (!made || made === String(c.id ?? '')) return { done: false, why: 'post' };
+    const back = await graph(made, { fields: 'url_tags' }, token);
+    if (tagsLack(back?.url_tags).length) return { done: false, why: 'post' };
+    await post(a.id, { creative: { creative_id: made } }, token);
+    return { done: true, creativeId: made };
   }
 
   /** an empty campaign (Lancer une pub › « Campagne vide »): its body comes from ./modules/pilotads.ts › emptyCampaign */

@@ -4,6 +4,7 @@ import { Why } from './Why';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, serverUrl, type Out } from '../../lib/backend';
+import { AdTagsCard } from './AdTags';
 import { PageLinks } from './Domain';
 import { PixelsCard } from './Pixels';
 import { TeamLists } from './TeamLists';
@@ -134,6 +135,8 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
             <Icon name="copy" /> {t('landing.set.copy')}
           </button>
         </div>
+        {/* are they on the shop's ads by themselves: Pilotix's own, and the new ones made in Meta */}
+        <AdTagsCard />
         <h3>{t('landing.set.ttParams')}</h3>
         <p className="pd-note">{t('landing.set.ttParamsHelp')}</p>
         <div className="lp-copy">

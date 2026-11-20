@@ -521,3 +521,122 @@ export type EventAudienceKind = keyof typeof EVENT_AUDIENCES;
 export const isEventAudience = (kind: string): kind is EventAudienceKind => Object.prototype.hasOwnProperty.call(EVENT_AUDIENCES, kind);
 /** Meta keeps a browser in such an audience this long after its last event (the longest a website audience allows). */
 export const EVENT_AUDIENCE_DAYS = 180;
+
+// ---------------------------------------------------------------- URL parameters on ads made by hand
+/**
+ * What the shop pastes in an ad made in Meta (Landing pages › Réglages shows it), and what Pilotix adds by itself to
+ * a new one (./adsmgr.ts › tagRun): the ids tell each order its campaign, ad set and ad (./landing.ts keeps them on
+ * the order), the names make the link readable. An ad launched from Pilotix carries URL_TAGS from the start.
+ */
+export const HAND_URL_TAGS = 'utm_source=facebook&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}';
+/** the three ids an order needs to find its ad */
+export const TAG_ID_KEYS = ['campaign_id', 'adset_id', 'ad_id'] as const;
+
+const tagPairs = (tags: string | null | undefined): [string, string][] =>
+  String(tags ?? '')
+    .replace(/^[\s?&]+/, '')
+    .split('&')
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p): [string, string] => {
+      const k = p.indexOf('=');
+      return k < 0 ? [p, ''] : [p.slice(0, k), p.slice(k + 1)];
+    });
+
+/** the ids an ad's URL parameters miss (none: each of its orders finds its ad) */
+export function tagsLack(tags: string | null | undefined): string[] {
+  const have = new Map(tagPairs(tags).map(([k, v]) => [k.trim().toLowerCase(), v.trim()]));
+  return TAG_ID_KEYS.filter((k) => !have.get(k));
+}
+
+/** the owner's own parameters kept as he wrote them, Pilotix's added after them (only those he does not have) */
+export function withTags(tags: string | null | undefined): string {
+  const ours = new Map(tagPairs(HAND_URL_TAGS));
+  const mine = tagPairs(tags).map(([k, v]): [string, string] => [k, v.trim() ? v : ours.get(k.trim().toLowerCase()) ?? v]);
+  const have = new Set(mine.map(([k]) => k.trim().toLowerCase()));
+  return [...mine, ...[...ours].filter(([k]) => !have.has(k))].map(([k, v]) => (v ? `${k}=${v}` : k)).join('&');
+}
+
+/** where the ad sends people (its link, or the first website of several), as Meta has it on the créa */
+export function creativeLink(c: any): string | null {
+  const s = c?.object_story_spec ?? {};
+  const link = s.link_data?.link ?? s.video_data?.call_to_action?.value?.link ?? s.template_data?.link ?? null;
+  const feed = Array.isArray(c?.asset_feed_spec?.link_urls) ? (c.asset_feed_spec.link_urls.find((x: any) => x?.website_url)?.website_url ?? null) : null;
+  return link || feed ? String(link || feed) : null;
+}
+/** Facebook, Instagram, Messenger, WhatsApp: the ad keeps people on Meta, no landing page reads parameters there */
+const ON_META = /(^|\.)(facebook\.com|fb\.com|fb\.me|m\.me|messenger\.com|instagram\.com|whatsapp\.com|wa\.me)$/i;
+export function isWebLink(u: string | null | undefined): boolean {
+  try {
+    const x = new URL(String(u ?? ''));
+    return /^https?:$/.test(x.protocol) && !ON_META.test(x.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The kinds of créa: one photo, video or carousel made in Meta ('spec') and an existing post ('post') are those Pilotix
+ * copies with the parameters added. Several texts, videos or formats in one ad ('feed'), a catalogue ad ('catalog'),
+ * an Instagram post or anything else ('other'): the owner adds them in Meta himself.
+ */
+export type TagKind = 'spec' | 'post' | 'feed' | 'catalog' | 'other';
+export function tagKindOf(c: any): TagKind {
+  if (!c || typeof c !== 'object') return 'other';
+  if (c.asset_feed_spec) return 'feed';
+  if (c.product_set_id || c.template_url_spec || c.object_story_spec?.template_data) return 'catalog';
+  if (c.source_instagram_media_id) return 'other';
+  if (c.object_story_spec?.link_data || c.object_story_spec?.video_data) return 'spec';
+  if (c.object_story_id && !c.object_story_spec) return 'post';
+  return 'other';
+}
+
+/**
+ * An ad whose orders would not know their ad: it sends people to a website and its parameters miss an id. An existing
+ * post shows no link on its créa: its ad set says (« Site web »).
+ */
+export function needsTags(c: any, destination?: string | null): boolean {
+  if (!tagsLack(c?.url_tags).length) return false;
+  const link = creativeLink(c);
+  if (link) return isWebLink(link);
+  return String(destination ?? '').toUpperCase() === 'WEBSITE';
+}
+
+/** Meta answers with the photo twice (its hash and its address) but takes only one back: the hash, it is Meta's own */
+function oneImage(x: any) {
+  if (!x || typeof x !== 'object') return;
+  if (x.image_hash) {
+    delete x.image_url;
+    delete x.picture;
+  }
+}
+
+/**
+ * The copy Pilotix makes of a créa made by hand: the same post as Meta has it (text, photo or video, link, button), the
+ * owner's own Advantage+ choices kept, and the URL parameters added (his own kept). null: a kind Pilotix does not copy.
+ * Meta's old « standard enhancements » bundle is left out: Meta no longer takes it on a new créa, its parts are listed
+ * one by one beside it.
+ */
+export function taggedCopy(c: any, name: string): Record<string, unknown> | null {
+  const kind = tagKindOf(c);
+  if (kind !== 'spec' && kind !== 'post') return null;
+  const body: Record<string, unknown> = { name: clip(name, 200), url_tags: withTags(c.url_tags) };
+  if (kind === 'spec') {
+    const spec = JSON.parse(JSON.stringify(c.object_story_spec));
+    oneImage(spec.video_data);
+    oneImage(spec.link_data);
+    for (const child of Array.isArray(spec.link_data?.child_attachments) ? spec.link_data.child_attachments : []) oneImage(child);
+    body.object_story_spec = spec;
+  } else {
+    body.object_story_id = String(c.object_story_id);
+    if (c.instagram_user_id) body.instagram_user_id = String(c.instagram_user_id);
+  }
+  if (c.degrees_of_freedom_spec && typeof c.degrees_of_freedom_spec === 'object') {
+    const dof = JSON.parse(JSON.stringify(c.degrees_of_freedom_spec));
+    if (dof.creative_features_spec) delete dof.creative_features_spec.standard_enhancements;
+    if (dof.creative_features_spec && !Object.keys(dof.creative_features_spec).length) delete dof.creative_features_spec;
+    if (Object.keys(dof).length) body.degrees_of_freedom_spec = dof;
+  }
+  if (c.contextual_multi_ads) body.contextual_multi_ads = c.contextual_multi_ads;
+  return body;
+}

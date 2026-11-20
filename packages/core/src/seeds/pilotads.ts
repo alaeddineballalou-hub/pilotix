@@ -219,6 +219,24 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     tries: {},
   });
 
+  // « Paramètres d’URL »: two new ads made in Meta that Pilotix gave the parameters to, and three still without them:
+  // an older one that runs (never touched), one with several texts (a kind Pilotix does not copy), a catalogue ad
+  await setRaw(db, 'pilot_ads_tags', {
+    on: true,
+    checkedAt: iso(4 * M),
+    error: null,
+    fixed: [
+      { id: '120200021', name: 'Poussette pliable — vidéo POV', campaign: 'TEST', adsetId: '120200011', at: iso(25 * M) },
+      { id: '120200022', name: 'Vélo 16 pouces — avis client', campaign: 'TEST', adsetId: '120200012', at: iso(4 * H) },
+    ],
+    missing: [
+      { id: '120200015', name: 'Chaise haute — la publication gagnante', campaign: 'SCALE', adsetId: '120200005', status: 'ACTIVE', created: iso(6 * D), why: 'old', error: null },
+      { id: '120200016', name: 'Tapis d’éveil — 3 textes', campaign: 'TEST', adsetId: '120200006', status: 'PENDING_REVIEW', created: iso(2 * H), why: 'feed', error: null },
+      { id: '120200017', name: 'Catalogue — tous les produits', campaign: 'Catalogue', adsetId: '120200006', status: 'PAUSED', created: iso(9 * D), why: 'old', error: null },
+    ],
+    tries: {},
+  });
+
   // Pilote auto's suggestions: its own rules on these numbers, as the job does every 15 minutes
   const admin = (await db.query('SELECT * FROM profiles WHERE id = $1', [users.admin]))[0];
   if (admin) await pilotRun({ db, session: makeSession(toProfile(admin)), now: () => now, emit: () => undefined });
