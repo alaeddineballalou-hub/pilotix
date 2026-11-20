@@ -744,7 +744,8 @@ class ApiController {
     const missing = () => res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
     if (!ref || ref.shop.status !== 'active') return missing();
     const site = `https://${host.replace(/:\d+$/, '')}`;
-    if (page === 'robots.txt') return res.status(200).header('Content-Type', 'text/plain; charset=utf-8').send('User-agent: *\nAllow: /\nAllow: /api/lp/pic/\nAllow: /api/lp/vid/\nDisallow: /api/\n');
+    // every public file of the pages (photos, videos, the catalogue's pictures, Dellal's photos): Meta downloads them
+    if (page === 'robots.txt') return res.status(200).header('Content-Type', 'text/plain; charset=utf-8').send('User-agent: *\nAllow: /\nAllow: /api/lp/\nAllow: /api/s/*/lp/\nDisallow: /api/\n');
     const shop = intake(ref);
     if (!page || page === 'llms.txt') {
       const r: any = await this.core.call(shop, 'landing.llms', await this.core.systemSession(shop), { site, pagesBase: `${site}/` });
