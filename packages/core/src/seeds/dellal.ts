@@ -89,6 +89,16 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
       channel: 'tiktok', ext: 'tt-demo-1', name: 'yacine_dz', mode: 'ai', at: now - 5 * 60_000,
       msgs: [['customer', 'chhal livraison l Oran ?']],
     },
+    {
+      // she came from a « send message » ad 30 hours ago: Meta keeps the chat open 7 days, Dellal followed up twice
+      channel: 'messenger', ext: 'psid-demo-ad', name: 'Amel K.', mode: 'ai', at: now - 30 * 3_600_000, source: 'pub 120210000090', adDays: 7,
+      msgs: [
+        ['customer', 'Salam, ch7al la poussette ?'],
+        ['agent', 'Wa alikoum salam 👋 La poussette est disponible ✅ Tu es de quelle wilaya ?'],
+        ['agent', 'Salam Amel 👋 Mazal t7ebbi la poussette ? Nsajjelhalek ?'],
+        ['agent', 'Bonsoir Amel, elle est toujours disponible 😊 Tu la veux en gris ou en noir ?'],
+      ],
+    },
   ];
   for (const c of convs) {
     const last = c.msgs.filter((m) => m[0] !== 'tool').pop()!;
@@ -101,6 +111,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     for (const [k, [role, body, uid, meta]] of c.msgs.entries())
       await db.query('INSERT INTO conv_messages (conversation_id, role, body, user_id, meta, created_at) VALUES ($1,$2,$3,$4,$5,$6)', [cid, role, body, uid ?? null, meta ? JSON.stringify(meta) : null, iso(c.at - (c.msgs.length - k) * 45_000)]);
     if (c.orderId) await db.query('UPDATE orders SET conversation_id = $2 WHERE id = $1', [c.orderId, cid]);
+    if (c.adDays) await db.query('UPDATE conversations SET ad_window_until = $2, follow_ups = 2, followed_up = true WHERE id = $1', [cid, iso(c.at + c.adDays * 86_400_000)]);
   }
 }
 

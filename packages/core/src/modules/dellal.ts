@@ -7,7 +7,7 @@
 // number; and a customer who gave his number then went quiet (20 min) gets his order all the same, with that number and
 // the product he asked about, for the team to call (runAutoOrders). The same rules run on the server (Claude through ctx.server.dellal) and in
 // the browser preview (a small rule-based "demo brain" with the same tools, so the demo shows the whole flow).
-import { COMMUNES, CONF_TODO, normalizePhone, replyWindow, SalesChannel, WILAYAS } from '@pilotix/shared';
+import { COMMUNES, CONF_TODO, META_AD_WINDOW_DAYS, normalizePhone, replyWindow, SalesChannel, staffWindow, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { checkPromo, onlyAsksCode, promoForConversation, promoOnMessage, promoPromptLine, PROMO_REASON } from './promo';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
@@ -23,7 +23,7 @@ import { asWords, checkLahjaWords, LAHJA_NO_CHANGE, LAHJA_PERSONAL, lahjaAvoid, 
 import { pilotConfig, pilotToday } from '../platform/pilotai';
 import { guidePics, guideText, HAS_GUIDE, readGuide, toFill } from './guide';
 import { vocabBlock, vocabFor } from './vocab';
-import { linkedPage } from './social';
+import { linkedPage, socialApps } from './social';
 import { catalogueThumbs, guidePhotos, imageBlock, PHOTO_MODEL, PHOTO_SYSTEM, photoBody, PhotoReading, photoRequest, PhotoSrc, productPhotos, productsWithPhotos, productsWithSizeChart, readPhotoAnswer } from './dellalphotos';
 
 // ---------------------------------------------------------------- settings and secrets
@@ -48,8 +48,12 @@ export interface DellalSettings {
   model: (typeof DELLAL_MODELS)[number];
   /** may Dellal give a discount (never above the product's max discount) */
   allowDiscount: boolean;
-  /** one follow-up when the customer goes quiet, after N hours (0 = off) */
+  /** the first follow-up when the customer goes quiet, after N hours (0 = no follow-up at all) */
   followUpHours: number;
+  /** how many follow-ups inside Meta's window (1 to 3): the 1st after followUpHours, the 2nd about 9 hours after the
+   *  customer's last message, the 3rd just before the 24 hours end. A chat that came from a « send message » ad (7 days)
+   *  gets 2 more, on day 3 and day 6. */
+  followUps: number;
   /** the customer gave his number, then went quiet for N minutes without an order: the order goes in by itself with his
    *  number and the product he asked about, the team calls him (0 = off; both versions) */
   autoOrderMinutes: number;
@@ -96,6 +100,7 @@ export const DEFAULT_DELLAL: DellalSettings = {
   model: 'claude-sonnet-5-5',
   allowDiscount: false,
   followUpHours: 3,
+  followUps: 3,
   autoOrderMinutes: 20,
   nightReplies: true,
   photos: true,
@@ -168,6 +173,10 @@ export interface Conversation {
   source: string | null;
   lastMessageAt: string;
   lastCustomerAt: string | null;
+  /** a chat that came from a « send message » ad: Meta's window stays open until then (up to 7 days), else null */
+  adWindowUntil: string | null;
+  /** follow-ups Dellal sent since the customer's last message */
+  followUps: number;
   lastPreview: string | null;
   unread: number;
 }
@@ -200,9 +209,17 @@ const toConv = (r: any): Conversation => ({
   source: r.source,
   lastMessageAt: iso(r.last_message_at),
   lastCustomerAt: isoOrNull(r.last_customer_at),
+  adWindowUntil: isoOrNull(r.ad_window_until),
+  followUps: num(r.follow_ups),
   lastPreview: r.last_preview,
   unread: num(r.unread),
 });
+
+/** Did Meta give Pilotix's app the « human agent » permission (the control room's switch)? Never in the preview. */
+async function humanAgentOn(ctx: Ctx): Promise<boolean> {
+  if (!ctx.t) return false;
+  return (await socialApps(ctx.t).catch(() => null))?.meta.humanAgent === true;
+}
 
 async function getConv(db: Db, id: number): Promise<Conversation> {
   const r = (await db.query(`SELECT ${CONV_COLS} ${CONV_FROM} WHERE c.id = $1`, [id]))[0];
@@ -238,12 +255,22 @@ export async function addMessage(
       `UPDATE conversations SET last_message_at = now(), last_preview = $2,
          last_customer_at = CASE WHEN $3 = 'customer' THEN now() ELSE last_customer_at END,
          unread = CASE WHEN $3 = 'customer' THEN unread + 1 ELSE unread END,
-         followed_up = CASE WHEN $3 = 'customer' THEN false ELSE followed_up END
+         followed_up = CASE WHEN $3 = 'customer' THEN false ELSE followed_up END,
+         follow_ups = CASE WHEN $3 = 'customer' THEN 0 ELSE follow_ups END
        WHERE id = $1`,
       [convId, m.body.slice(0, 140), m.role],
     );
   }
   return num(r[0].id);
+}
+
+/** « pub <ad id> »: the chat came from an ad (dellal-server › refSource). */
+const isAdSource = (source: string | null | undefined) => /^pub \d/.test(String(source ?? ''));
+/** Meta's refusal of a message sent outside its window (error 10, subcode 2018278; its words name the window). */
+const windowRefused = (msg: unknown) => /2018278|outside (of )?(the )?allowed window|allowed window|en dehors de la (fenêtre|période) autorisée/i.test(String(msg ?? ''));
+/** Meta refused: this chat has no ad window after all (Meta gives « up to » 7 days). Pilotix stops counting on it. */
+async function dropAdWindow(db: Db, convId: number) {
+  await db.query(`UPDATE conversations SET ad_window_until = NULL WHERE id = $1 AND ad_window_until IS NOT NULL`, [convId]);
 }
 
 // ---------------------------------------------------------------- receiving
@@ -269,20 +296,29 @@ export const IncomingInput = z.object({
  */
 export async function receiveMessage(ctx: Ctx, m: z.infer<typeof IncomingInput> & { at?: string | null }): Promise<{ conversationId: number; messageId: number } | null> {
   const phone = m.channel === 'whatsapp' ? normalizePhone(m.externalId) : null;
+  const metaChat = m.channel === 'messenger' || m.channel === 'instagram';
+  const adUntil = new Date((m.at ? Date.parse(m.at) : ctx.now()) + META_AD_WINDOW_DAYS * 86_400_000).toISOString();
   const out = await ctx.db.tx(async (tx) => {
     const cust = phone ? (await tx.query('SELECT id FROM customers WHERE phone = $1', [phone]))[0] : null;
     const c = (
       await tx.query(
-        `INSERT INTO conversations (channel, external_id, account_id, customer_name, phone, customer_id, source)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)
+        `INSERT INTO conversations (channel, external_id, account_id, customer_name, phone, customer_id, source, ad_window_until)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::timestamptz)
          ON CONFLICT (channel, external_id) DO UPDATE SET
            customer_name = COALESCE(conversations.customer_name, EXCLUDED.customer_name),
            phone = COALESCE(conversations.phone, EXCLUDED.phone),
            customer_id = COALESCE(conversations.customer_id, EXCLUDED.customer_id),
            account_id = COALESCE(EXCLUDED.account_id, conversations.account_id),
-           source = COALESCE(EXCLUDED.source, conversations.source)
+           source = COALESCE(EXCLUDED.source, conversations.source),
+           ad_window_until = CASE
+             WHEN EXCLUDED.ad_window_until IS NOT NULL THEN GREATEST(EXCLUDED.ad_window_until, COALESCE(conversations.ad_window_until, EXCLUDED.ad_window_until))
+             WHEN conversations.ad_click_at IS NOT NULL AND $9::boolean THEN GREATEST($10::timestamptz, COALESCE(conversations.ad_window_until, $10::timestamptz))
+             ELSE conversations.ad_window_until END,
+           ad_click_at = NULL
          RETURNING id`,
-        [m.channel, m.externalId, m.accountId ?? null, m.name ?? null, phone, cust?.id ?? null, m.source ?? null],
+        // Meta: a chat that starts from a « send message » ad stays open up to 7 days after the first message that follows
+        // the click (this message carries the ad: « pub <id> »; or the click came alone just before: ad_click_at)
+        [m.channel, m.externalId, m.accountId ?? null, m.name ?? null, phone, cust?.id ?? null, m.source ?? null, metaChat && isAdSource(m.source) ? adUntil : null, metaChat, adUntil],
       )
     )[0];
     const id = num(c.id);
@@ -1173,7 +1209,7 @@ async function systemPrompt(
     `Tu réponds aux clients sur ${conv.channel === 'test' ? 'une conversation de test' : conv.channel}. Date : ${today}.`,
     cust ? `Client connu : ${cust.name}, ${cust.orders} commande(s), ${cust.delivered} livrée(s), ${cust.returned} retour(s)${cust.blacklisted ? ', SUR LISTE NOIRE : ne prends pas de commande, passe la main' : ''}.` : '',
     orders,
-    followUp ? `Le client ne répond plus depuis un moment : envoie UNE relance courte et aimable, sans insister.` : '',
+    followUp ? `Le client ne répond plus depuis un moment : envoie UNE relance courte et aimable, sans insister, différente de tes relances d’avant. Termine par une question simple, à laquelle il peut répondre en un mot.` : '',
     conv.channel === 'messenger' || conv.channel === 'instagram' ? promoPromptLine(await promoForConversation(ctx.db, conv.id, ctx.now())) : '',
     vocab,
   ];
@@ -1601,7 +1637,7 @@ async function promoAnsweredAll(db: Db, convId: number): Promise<boolean> {
 export async function runAgent(
   ctx: Ctx,
   convId: number,
-  opts: { followUp?: boolean; book?: BookRef | null; lab?: string; trial?: Trial | null } = {},
+  opts: { followUp?: boolean; /** the last follow-up before Meta's window closes */ lastFollowUp?: boolean; book?: BookRef | null; lab?: string; trial?: Trial | null } = {},
 ): Promise<{ reply: string | null; handoff: boolean; orderRef: string | null; demo: boolean; skipped?: string }> {
   const check = await shouldAnswer(ctx, convId);
   if (!check.ok) return { reply: null, handoff: false, orderRef: null, demo: false, skipped: check.why };
@@ -1627,7 +1663,13 @@ export async function runAgent(
       : null;
   await seePhotos(ctx, convId, look, eyes ? { model: 'claude (page)', svg: true } : {}).catch(() => 0);
   const messages = await history(ctx.db, convId);
-  if (opts.followUp) messages.push({ role: 'user', content: '(Note système : le client n’a pas répondu. Envoie une seule relance courte.)' });
+  if (opts.followUp)
+    messages.push({
+      role: 'user',
+      content: opts.lastFollowUp
+        ? '(Note système : le client n’a toujours pas répondu. Envoie une dernière relance courte : dis-lui que tu restes disponible et pose une question simple. Ne répète pas tes relances d’avant.)'
+        : '(Note système : le client n’a pas répondu. Envoie une seule relance courte, différente de tes relances d’avant, qui finit par une question simple.)',
+    });
   if (!messages.length) return { reply: null, handoff: false, orderRef: null, demo: false, skipped: 'Aucun message' };
   // Pilot AI: the lesson book this chat uses (the same all chat long, recorded so its sales are measured), and the model:
   // Haiku for the simple messages, Sonnet for the hard moments (price fight, trust, anger, big order, asking for a person)
@@ -1725,11 +1767,12 @@ export async function runAgent(
         sentId = sentMid(await ctx.server.dellal('send', { conversationId: convId, channel: conv.channel, externalId: conv.externalId, accountId: (await rawConv(ctx.db, convId)).account_id, text: reply }, ctx));
       } catch (e: any) {
         sendError = e?.message ?? 'Envoi impossible';
+        if (windowRefused(sendError)) await dropAdWindow(ctx.db, convId);
       }
     }
     await addMessage(ctx.db, convId, { role: 'agent', body: reply, externalId: sentId, meta: { usage, demo: !useAi, model: inPage ? 'claude (page)' : useAi ? model : null, ...(darija ? { darija } : {}), ...pilotMeta }, sendError });
   }
-  if (opts.followUp) await ctx.db.query('UPDATE conversations SET followed_up = true WHERE id = $1', [convId]);
+  if (opts.followUp) await ctx.db.query('UPDATE conversations SET followed_up = true, follow_ups = follow_ups + 1 WHERE id = $1', [convId]);
   ctx.emit({ type: 'chat', data: { dellal: convId } });
   return { reply, handoff, orderRef, demo: !useAi };
 }
@@ -2057,24 +2100,48 @@ async function demoBrain(ctx: Ctx, req: AiRequest, convId?: number): Promise<AiR
 }
 
 // ---------------------------------------------------------------- follow-ups
-/** One short follow-up for conversations where Dellal spoke last and the customer went quiet (inside the 24 h window). */
+/** Hours after the customer's last message before the 2nd, 3rd (inside the 24 hours), 4th and 5th (an ad's 7 days) follow-up. */
+export const FOLLOW_UP_AFTER_H = [9, 21, 72, 144];
+/** Never two follow-ups closer than this, and none this close to the end of Meta's window. */
+const FOLLOW_UP_GAP_H = 2;
+const FOLLOW_UP_BEFORE_END_MIN = 60;
+
+/**
+ * Follow-ups for conversations where Dellal spoke last and the customer went quiet, always inside Meta's window: the 1st
+ * after the shop's hours of silence, the 2nd about 9 hours after the customer's last message, the 3rd just before the
+ * 24 hours end (the shop chooses 1 to 3). A chat that came from a « send message » ad stays open 7 days: 2 more, on day 3
+ * and day 6. They stop at the customer's answer, an order, or a person taking the chat. WhatsApp keeps its 24 hours.
+ */
 export async function runFollowUps(ctx: Ctx): Promise<{ sent: number }> {
   const s = await dellalSettings(ctx.db);
   if (!s.enabled || !s.followUpHours) return { sent: 0 };
+  const max = Math.min(3, Math.max(1, Math.round(Number(s.followUps) || 1)));
   const rows = await ctx.db.query(
-    `SELECT c.id FROM conversations c
-     WHERE c.mode = 'ai' AND c.channel <> 'test' AND NOT c.followed_up AND c.order_id IS NULL
-       AND c.last_customer_at > now() - interval '23 hours'
-       AND c.last_message_at < now() - make_interval(hours => $1)
+    `SELECT c.id, c.follow_ups, c.last_customer_at, c.ad_window_until, c.channel FROM conversations c
+     WHERE c.mode = 'ai' AND c.channel <> 'test' AND c.order_id IS NULL AND c.last_customer_at IS NOT NULL
+       -- inside the window, with an hour to spare: 24 hours after the last message, or the ad's 7 days (Messenger / Instagram)
+       AND now() < GREATEST(c.last_customer_at + interval '24 hours',
+             CASE WHEN c.channel IN ('messenger', 'instagram') THEN COALESCE(c.ad_window_until, c.last_customer_at) ELSE c.last_customer_at END) - make_interval(mins => $4)
+       AND c.follow_ups < $2 + CASE WHEN c.channel IN ('messenger', 'instagram') AND c.ad_window_until > c.last_customer_at + interval '24 hours' THEN 2 ELSE 0 END
+       AND CASE c.follow_ups
+             WHEN 0 THEN c.last_message_at < now() - make_interval(hours => $1)
+             WHEN 1 THEN c.last_customer_at < now() - make_interval(hours => $5)
+             WHEN 2 THEN c.last_customer_at < now() - make_interval(hours => $6)
+             WHEN 3 THEN c.last_customer_at < now() - make_interval(hours => $7)
+             ELSE c.last_customer_at < now() - make_interval(hours => $8) END
+       AND (c.follow_ups = 0 OR c.last_message_at < now() - make_interval(hours => $3))
        AND (SELECT role FROM conv_messages m WHERE m.conversation_id = c.id AND m.role <> 'tool' ORDER BY id DESC LIMIT 1) = 'agent'
        -- a customer answering a delivery message (Pilot Automations) already ordered: no sales follow-up
        AND NOT EXISTS (SELECT 1 FROM conv_messages m WHERE m.conversation_id = c.id AND m.meta ? 'notify')
      LIMIT 50`,
-    [s.followUpHours],
+    [s.followUpHours, max, FOLLOW_UP_GAP_H, FOLLOW_UP_BEFORE_END_MIN, ...FOLLOW_UP_AFTER_H],
   );
   let sent = 0;
   for (const r of rows) {
-    const out = await runAgent(ctx, num(r.id), { followUp: true }).catch(() => null);
+    // the last one this chat will get: the shop's last inside 24 hours, or the 5th of an ad chat
+    const ad = (r.channel === 'messenger' || r.channel === 'instagram') && r.ad_window_until && Date.parse(iso(r.ad_window_until)) > Date.parse(iso(r.last_customer_at)) + 24 * 3_600_000;
+    const last = num(r.follow_ups) + 1 >= max + (ad ? 2 : 0);
+    const out = await runAgent(ctx, num(r.id), { followUp: true, lastFollowUp: last }).catch(() => null);
     if (out?.reply) sent++;
   }
   return { sent };
@@ -2361,6 +2428,7 @@ const SettingsInput = z.object({
   model: z.enum(DELLAL_MODELS),
   allowDiscount: z.boolean(),
   followUpHours: z.number().int().min(0).max(22),
+  followUps: z.number().int().min(1).max(3).default(3),
   autoOrderMinutes: z.number().int().min(0).max(240).default(20),
   nightReplies: z.boolean(),
   photos: z.boolean().default(true),
@@ -2455,6 +2523,8 @@ export const dellalProcs = {
         : [];
     return {
       conversation: { ...conv, unread: 0 },
+      /** may a person of the team answer after the window with Meta's « human agent » label (7 days)? */
+      humanAgent: await humanAgentOn(ctx),
       messages: await messagesOf(ctx.db, id),
       customer: await customerSummary(ctx.db, conv.phone),
       orders: orders.map((o: any) => ({ id: num(o.id), ref: o.ref, total: num(o.total), confStatus: o.conf_status, followStatus: o.follow_status, at: iso(o.created_at) })),
@@ -2462,20 +2532,30 @@ export const dellalProcs = {
   }),
 
   /**
-   * A person writes to the customer: Dellal pauses on this conversation. On Messenger and Instagram nobody can answer
-   * more than 24 hours after the customer's last message, until the customer writes again.
+   * A person writes to the customer: Dellal pauses on this conversation. On Messenger and Instagram the window is 24
+   * hours after the customer's last message (7 days for a chat that came from a « send message » ad). After it, a person
+   * can still answer for 7 days with Meta's « human agent » label, once Meta gave Pilotix's app that permission (the
+   * control room's switch); otherwise nobody can, until the customer writes again.
    */
   'dellal.reply': proc([...SELLERS], z.object({ id, body: z.string().trim().min(1).max(2000) }), async (ctx, i) => {
     const conv = await getConv(ctx.db, i.id);
-    const win = replyWindow(conv.channel, conv.lastCustomerAt, ctx.now());
+    const win = staffWindow(conv.channel, conv.lastCustomerAt, ctx.now(), conv.adWindowUntil, await humanAgentOn(ctx));
     if (win === 'closed') throw new AppError('bad_request', 'Plus de 24 heures depuis le dernier message du client : Meta ne permet plus de lui répondre ici. Vous pourrez répondre dès qu’il écrira à nouveau.');
     let sendError: string | null = null;
     let sentId: string | null = null;
     if (conv.channel !== 'test' && ctx.server?.dellal) {
       try {
-        sentId = sentMid(await ctx.server.dellal('send', { conversationId: conv.id, channel: conv.channel, externalId: conv.externalId, accountId: (await rawConv(ctx.db, conv.id)).account_id, text: i.body }, ctx));
+        // typed by a person after the window: Meta's « human agent » label (never on a message of Dellal's)
+        sentId = sentMid(
+          await ctx.server.dellal(
+            'send',
+            { conversationId: conv.id, channel: conv.channel, externalId: conv.externalId, accountId: (await rawConv(ctx.db, conv.id)).account_id, text: i.body, ...(win === 'human' ? { humanAgent: true } : {}) },
+            ctx,
+          ),
+        );
       } catch (e: any) {
         sendError = e?.message ?? 'Envoi impossible';
+        if (win === 'open' && windowRefused(sendError)) await dropAdWindow(ctx.db, conv.id);
       }
     }
     await addMessage(ctx.db, conv.id, { role: 'staff', body: i.body, userId: me(ctx), externalId: sentId, sendError });
@@ -2493,7 +2573,7 @@ export const dellalProcs = {
       const lastRole = (await ctx.db.query(`SELECT role FROM conv_messages WHERE conversation_id = $1 AND role <> 'tool' ORDER BY id DESC LIMIT 1`, [i.id]))[0]?.role;
       // more than 24 hours after the customer's last message, Meta takes no answer from Dellal: it waits for the next one
       const conv = await getConv(ctx.db, i.id);
-      if (lastRole === 'customer' && replyWindow(conv.channel, conv.lastCustomerAt, ctx.now()) === 'open') answered = !!(await runAgent(ctx, i.id)).reply;
+      if (lastRole === 'customer' && replyWindow(conv.channel, conv.lastCustomerAt, ctx.now(), conv.adWindowUntil) === 'open') answered = !!(await runAgent(ctx, i.id)).reply;
     }
     ctx.emit({ type: 'chat', data: { dellal: i.id } });
     return { ok: true, answered };
@@ -2685,10 +2765,12 @@ export const dellalProcs = {
       if (!i.source) return { ok: true, promo: null };
       const c = (
         await ctx.db.query(
-          `INSERT INTO conversations (channel, external_id, account_id, source) VALUES ($1,$2,$3,$4)
-           ON CONFLICT (channel, external_id) DO UPDATE SET source = EXCLUDED.source, account_id = COALESCE(EXCLUDED.account_id, conversations.account_id)
+          `INSERT INTO conversations (channel, external_id, account_id, source, ad_click_at) VALUES ($1,$2,$3,$4,$5::timestamptz)
+           ON CONFLICT (channel, external_id) DO UPDATE SET source = EXCLUDED.source, account_id = COALESCE(EXCLUDED.account_id, conversations.account_id),
+             ad_click_at = COALESCE(EXCLUDED.ad_click_at, conversations.ad_click_at)
            RETURNING id`,
-          [i.channel, i.externalId, i.accountId ?? null, i.source],
+          // a click on an ad, no words yet: the next message starts the ad's 7 days (receiveMessage)
+          [i.channel, i.externalId, i.accountId ?? null, i.source, isAdSource(i.source) ? new Date(ctx.now()).toISOString() : null],
         )
       )[0];
       const promo = await promoOnMessage(ctx, num(c.id), { text: '', source: i.source }).catch(() => null);

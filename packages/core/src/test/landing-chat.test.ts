@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
+import { queueChatEvent } from '../modules/landingquery';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -164,4 +165,40 @@ test('the server asks the dataset of the Page once, then sends the events to it 
   } finally {
     globalThis.fetch = real;
   }
+});
+
+test('a chat order tells Meta the same things a page’s order does: Lead when it is taken, Delivered when the parcel arrives (Meta’s names for a chat)', async () => {
+  const o = await chatOrder('messenger', PAGE);
+  // the order is taken in the chat (orders.create does it for an order Dellal or an agent makes from a conversation)
+  await queueChatEvent(db, o.id, 'Lead', Date.now());
+  await queueChatEvent(db, o.id, 'Lead', Date.now());
+  let q = await events(o.id);
+  assert.deepEqual(q.map((e: any) => [e.event_name, e.event_id, e.platform]), [['Lead', `chat-lead-${o.ref}`, 'chat']]);
+  await confirm([o.id]);
+  await db.query(`UPDATE orders SET follow_status = 'with_livreur', shipped_at = now() WHERE id = $1`, [o.id]);
+  await call('orders.setFollow', await as(EMAILS.suivi), { ids: [o.id], status: 'delivered' });
+  q = await events(o.id);
+  assert.deepEqual(q.map((e: any) => e.event_name).sort(), ['Delivered', 'Lead', 'Purchase']);
+  const sent: any[] = [];
+  const server: Ctx['server'] = { courier: async () => ({}), hashPassword: async (p) => p, meta: async (action: string, args: any) => (sent.push({ action, args }), { received: args.events.length }) };
+  await db.query(`UPDATE meta_events SET status = 'sent' WHERE status = 'queued' AND order_id <> $1`, [o.id]);
+  await call('landing.run', await as(EMAILS.admin, server), {});
+  const names = sent.flatMap((x) => x.args.events).map((e: any) => [e.event_name, e.action_source, e.event_id]);
+  assert.deepEqual(
+    names.sort((a: any, b: any) => String(a[0]).localeCompare(String(b[0]))),
+    [
+      ['LeadSubmitted', 'business_messaging', `chat-lead-${o.ref}`],
+      ['OrderDelivered', 'business_messaging', `chat-delivered-${o.ref}`],
+      ['Purchase', 'business_messaging', `chat-purchase-${o.ref}`],
+    ],
+  );
+  // a fake order's Lead never leaves; WhatsApp has no such event
+  const fake = await chatOrder('messenger', PAGE);
+  await queueChatEvent(db, fake.id, 'Lead', Date.now());
+  await db.query(`UPDATE orders SET conf_status = 'fake' WHERE id = $1`, [fake.id]);
+  await call('landing.run', await as(EMAILS.admin, server), {});
+  assert.equal((await events(fake.id))[0].status, 'skipped');
+  const wa = await chatOrder('whatsapp', '1234567890');
+  await queueChatEvent(db, wa.id, 'Lead', Date.now());
+  assert.equal((await events(wa.id)).length, 0);
 });

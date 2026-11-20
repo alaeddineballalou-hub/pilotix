@@ -272,6 +272,10 @@ export interface SocialApps {
     configId: string;
     adsConfigId: string;
     waConfigId: string;
+    /** Meta gave the app the « human agent » permission (App Review): a person of the team may answer a Messenger /
+     * Instagram chat for 7 days after the customer's last message, with Meta's label. Off until Meta says yes: with it
+     * off nothing changes (24 hours for everyone). Never used for a message of the AI. */
+    humanAgent: boolean;
     hasSecret: boolean;
     hasIgSecret: boolean;
   };
@@ -310,6 +314,7 @@ export async function socialApps(t: Tenancy): Promise<SocialApps> {
       configId: clean(a.meta?.configId, 40),
       adsConfigId: clean(a.meta?.adsConfigId, 40),
       waConfigId: clean(a.meta?.waConfigId, 40),
+      humanAgent: a.meta?.humanAgent === true,
       hasSecret: !!clean(s.meta),
       hasIgSecret: !!clean(s.metaIg),
     },
@@ -391,6 +396,8 @@ export const SocialAppsInput = z.object({
     adsConfigId: z.string().trim().max(40).regex(/^\d*$/, 'ID de configuration Publicité (chiffres)').default(''),
     /** the WhatsApp Embedded Signup configuration (« Connecter WhatsApp ») */
     waConfigId: z.string().trim().max(40).regex(/^\d*$/, 'ID de configuration WhatsApp (chiffres)').default(''),
+    /** Meta approved the « human agent » permission for the app (kept as it is when not sent) */
+    humanAgent: z.boolean().optional(),
     /** a value replaces, '' keeps, null removes */
     secret: z.string().trim().max(300).nullable().default(''),
     /** the old Instagram login's secret (accounts connected with it before): the same (a value replaces, '' keeps, null removes) */
@@ -409,6 +416,7 @@ export async function saveSocialApps(t: Tenancy, i: z.output<typeof SocialAppsIn
       configId: i.meta.configId,
       adsConfigId: i.meta.adsConfigId,
       waConfigId: i.meta.waConfigId,
+      humanAgent: i.meta.humanAgent ?? cur.meta?.humanAgent === true,
     },
     tiktok: { appId: i.tiktok.appId },
     verifyToken: clean(cur.verifyToken, 100) || randomToken(),

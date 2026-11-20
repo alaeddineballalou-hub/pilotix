@@ -43,7 +43,7 @@ const ALL_KEYS = [...new Set(Object.values(PART_KEYS).flat())];
 const PREFS_COURIERS = ['manualDefault', 'changeCompany', 'strictLock', 'rulesBy', 'privateBackup', 'livreurAlerts'] as const;
 const PREFS_WORK = ['noStockDays', 'suiviClock', 'suiviTries', 'suiviStuck'] as const;
 /** Pilot Message: how it talks and works (not whether it is on, nor the Page / Instagram / WhatsApp it answers on). */
-const DELLAL_FIELDS = ['version', 'name', 'tone', 'languages', 'ordersTo', 'model', 'allowDiscount', 'followUpHours', 'nightReplies', 'notes', 'handoffTopics', 'servicePhone', 'darijaPrefer', 'darijaAvoid'];
+const DELLAL_FIELDS = ['version', 'name', 'tone', 'languages', 'ordersTo', 'model', 'allowDiscount', 'followUpHours', 'followUps', 'nightReplies', 'notes', 'handoffTopics', 'servicePhone', 'darijaPrefer', 'darijaAvoid'];
 /** Messages to customers: the texts and when they leave (not the WhatsApp account, its approved templates, the SMS phone). */
 const NOTIFY_FIELDS = ['enabled', 'lang', 'cases', 'texts', 'whatsapp', 'sms', 'quietFrom', 'quietTo'];
 /** Landing pages: how they work (not their link, pixel, robot check or the products left without a page). */

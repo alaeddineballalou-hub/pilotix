@@ -110,8 +110,15 @@ export function chunks(text: string, max: number): string[] {
   return out;
 }
 
-/** An answer within Meta's 24 hours (Messenger and Instagram): never with a message tag. */
-async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; accountId?: string | null; text: string }) {
+/** Meta's « human agent » label (Messenger and Instagram): a real person of the team answering after the window. */
+const HUMAN_TAG = { messaging_type: 'MESSAGE_TAG', tag: 'HUMAN_AGENT' } as const;
+
+/**
+ * An answer within Meta's window (Messenger and Instagram) goes with no message tag. `humanAgent`: a person of the team
+ * typed it after the window (modules/dellal › dellal.reply decides): it carries Meta's « human agent » label. Dellal's
+ * own answers never do.
+ */
+async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; accountId?: string | null; text: string; humanAgent?: boolean }) {
   if (a.channel === 'whatsapp') {
     const token = await dellalSecret(ctx.db, 'waToken');
     const phoneId = a.accountId || (await ctx.db.query(`SELECT value->>'whatsappPhoneId' AS v FROM settings WHERE key = 'dellal'`))[0]?.v;
@@ -128,7 +135,8 @@ async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; a
         const s = await dellalSettings(ctx.db);
         const url = s.igLoginKind === 'unified' && s.instagramLoginId ? `${UNI_GRAPH}/${enc(s.instagramLoginId)}/messages` : `${IG_GRAPH}/me/messages`;
         let mid: string | null = null;
-        for (const t of chunks(a.text, 1000)) mid = midOf(await postJson(url, { recipient: { id: a.externalId }, message: { text: t } }, { Authorization: `Bearer ${ig}` }, 'Instagram')) ?? mid;
+        for (const t of chunks(a.text, 1000))
+          mid = midOf(await postJson(url, { recipient: { id: a.externalId }, ...(a.humanAgent ? HUMAN_TAG : {}), message: { text: t } }, { Authorization: `Bearer ${ig}` }, 'Instagram')) ?? mid;
         return { ok: true, via: s.igLoginKind === 'unified' ? 'unified' : 'instagram', messageId: mid };
       } catch (e) {
         // the Page can still answer someone with a role on the app; otherwise the Instagram login's reason is the one that counts
@@ -147,13 +155,13 @@ async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; a
 }
 
 /** Messenger, and Instagram through the Facebook Page (Meta lets it answer only people with a role on the app until App Review). */
-async function sendPage(ctx: Ctx, a: { channel: DellalChannel; externalId: string; text: string; tag?: string }) {
+async function sendPage(ctx: Ctx, a: { channel: DellalChannel; externalId: string; text: string; humanAgent?: boolean }) {
   const token = await dellalSecret(ctx.db, 'pageToken');
   if (!token) throw new AppError('bad_request', 'La page Facebook n’est pas connectée (jeton de page manquant).');
   // the last piece's message id: the customer's reaction (❤️ 👍) to it finds it again
   let mid: string | null = null;
   for (const t of chunks(a.text, 1900))
-    mid = midOf(await postJson(`${GRAPH}/me/messages?access_token=${encodeURIComponent(token)}`, { recipient: { id: a.externalId }, messaging_type: 'RESPONSE', message: { text: t } }, {}, a.channel === 'instagram' ? 'Instagram' : 'Messenger')) ?? mid;
+    mid = midOf(await postJson(`${GRAPH}/me/messages?access_token=${encodeURIComponent(token)}`, { recipient: { id: a.externalId }, ...(a.humanAgent ? HUMAN_TAG : { messaging_type: 'RESPONSE' }), message: { text: t } }, {}, a.channel === 'instagram' ? 'Instagram' : 'Messenger')) ?? mid;
   return { ok: true, messageId: mid };
 }
 /**
@@ -714,7 +722,7 @@ async function smsHooks(ctx: Ctx, a: { url: string }) {
 
 /**
  *  - 'complete' → AiRequest: one call to the AI
- *  - 'send'     → { channel, externalId, accountId, text }: sends a message to the customer
+ *  - 'send'     → { channel, externalId, accountId, text, humanAgent? }: sends a message to the customer
  *  - 'ping'     → checks the AI key
  *  - 'cmReply' / 'cmPrivate' / 'cmHide' / 'cmPost' → Pilot Comments's actions on comments
  *  - 'lead' / 'leadForms' / 'leadForm' / 'formLeads' → Marketing › Formulaires (the ads' lead forms)

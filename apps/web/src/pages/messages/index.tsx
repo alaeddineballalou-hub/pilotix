@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMenuCounts } from '../../layout/Shell';
 import { backend, serverUrl, shopApi } from '../../lib/backend';
-import { replyWindow } from '@pilotix/shared';
+import { inAdWindow, staffWindow } from '@pilotix/shared';
 import { da, n, shortWhen } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
@@ -233,8 +233,10 @@ function Thread({ id, name, info, onInfo, onBack }: { id: number; name: string; 
     );
   const { conversation: c, messages, customer, orders } = q.data;
   const who = c.customerName || c.phone || t('messages.unknown');
-  // Meta's window: after 24 hours nobody answers until the customer writes again
-  const win = replyWindow(c.channel, c.lastCustomerAt, Date.now());
+  // Meta's window: 24 hours after the customer's last message, 7 days for a chat that came from a « send message » ad;
+  // after it, a person can still answer with Meta's « human agent » label when the app has that permission
+  const win = staffWindow(c.channel, c.lastCustomerAt, Date.now(), c.adWindowUntil, q.data.humanAgent === true);
+  const adOpen = win === 'open' && inAdWindow(c.channel, c.lastCustomerAt, Date.now(), c.adWindowUntil);
   const submit = () => win !== 'closed' && body.trim() && !reply.isPending && reply.mutate({ id, body: body.trim() });
   return (
     <>
@@ -292,6 +294,18 @@ function Thread({ id, name, info, onInfo, onBack }: { id: number; name: string; 
             <p className="ai-window closed" role="note">
               <Icon name="xcircle" />
               <span>{t('messages.thread.window24')}</span>
+            </p>
+          )}
+          {win === 'human' && (
+            <p className="ai-window" role="note">
+              <Icon name="user" />
+              <span>{t('messages.thread.windowHuman', { name })}</span>
+            </p>
+          )}
+          {adOpen && c.adWindowUntil && (
+            <p className="ai-window" role="note">
+              <Icon name="clock" />
+              <span>{t('messages.thread.windowAd', { when: shortWhen(c.adWindowUntil) })}</span>
             </p>
           )}
         </Composer>
@@ -582,6 +596,17 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
               ))}
             </select>
           </Field>
+          {f.followUpHours > 0 && (
+            <Field label={t('messages.settings.followUps')} hint={t('messages.settings.followUpsHint')}>
+              <select value={f.followUps ?? 3} onChange={(e) => set('followUps', Number(e.target.value))}>
+                {[1, 2, 3].map((k) => (
+                  <option key={k} value={k}>
+                    {t(`messages.settings.followUps${k}`)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           <Field label={t('messages.settings.autoOrder')} hint={t('messages.settings.autoOrderHint', { name: f.name })}>
             <select value={f.autoOrderMinutes} onChange={(e) => set('autoOrderMinutes', Number(e.target.value))}>
               <option value={0}>{t('messages.settings.never')}</option>

@@ -1570,12 +1570,15 @@ async function buildChatEvent(db: Db, e: any, nowS: number): Promise<{ event?: R
     await db.query(`SELECT o.ref, o.total, o.conf_status, c.channel, c.external_id FROM orders o LEFT JOIN conversations c ON c.id = o.conversation_id WHERE o.id = $1`, [e.order_id])
   )[0];
   if (!o) return { skip: 'Commande supprimée' };
-  if ((CONF_DONE_BAD as string[]).includes(o.conf_status)) return { skip: 'Commande annulée ou fausse : pas de Purchase' };
+  // a chat's Lead: any order of a real person (a cancelled one was still a lead); its Purchase and Delivered: a kept order
+  const lead = e.event_name === 'Lead';
+  if (lead ? NOT_A_LEAD.includes(o.conf_status) : (CONF_DONE_BAD as string[]).includes(o.conf_status)) return { skip: lead ? 'Commande fausse ou en double : pas de Lead' : `Commande annulée ou fausse : pas de ${e.event_name}` };
   const [channel, accountId] = String(e.pixel_id).split(':');
   if (!o.external_id || o.channel !== channel) return { skip: 'Conversation introuvable' };
   return {
     event: {
-      event_name: 'Purchase',
+      // Meta's names for a chat (its fixed list): LeadSubmitted, Purchase, OrderDelivered
+      event_name: lead ? 'LeadSubmitted' : e.event_name === 'Delivered' ? 'OrderDelivered' : 'Purchase',
       event_time: nowS,
       event_id: e.event_id,
       action_source: 'business_messaging',

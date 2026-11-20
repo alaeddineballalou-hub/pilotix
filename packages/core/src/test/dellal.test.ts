@@ -1134,3 +1134,161 @@ test('ad account webhooks: a rejected ad warns in Co-Pilot until Meta says it ru
   it = d.items.find((x: any) => x.id === 'adIssues');
   assert.equal(it.level, 'ok');
 });
+
+test('a chat that came from a « send message » ad stays open 7 days (Meta); a click without words opens it at the next message; Meta’s refusal ends it', async () => {
+  const sent: any[] = [];
+  const server = fakeServer([], sent);
+  const admin = await as(EMAILS.admin, server);
+  const row = async (ext: string) => (await db.query(`SELECT id, ad_window_until, ad_click_at FROM conversations WHERE external_id = $1`, [ext]))[0];
+  // the first message carries the ad
+  await call('dellal.receive', admin, { channel: 'messenger', externalId: 'psid-ad', name: 'Lina', text: 'Salam, ch7al?', source: 'pub 120210000090' });
+  const ad = await row('psid-ad');
+  const days = (Date.parse(new Date(ad.ad_window_until).toISOString()) - Date.now()) / 86_400_000;
+  assert.ok(days > 6.9 && days < 7.1, `7 days, got ${days}`);
+  // 2 days later: a normal answer still goes, with no label
+  await db.query(`UPDATE conversations SET last_customer_at = now() - interval '2 days' WHERE id = $1`, [ad.id]);
+  sent.length = 0;
+  await call('dellal.reply', admin, { id: Number(ad.id), body: 'Mazal disponible 👍' });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].humanAgent, undefined);
+  const view: any = await call('dellal.conversation', admin, { id: Number(ad.id) });
+  assert.ok(view.conversation.adWindowUntil);
+  assert.equal(view.humanAgent, false);
+  // a chat that did not come from an ad: 24 hours, as before
+  await call('dellal.receive', admin, { channel: 'messenger', externalId: 'psid-plain', text: 'Salam' });
+  const plain = await row('psid-plain');
+  assert.equal(plain.ad_window_until, null);
+  // someone already in a conversation clicks an ad, no words yet: the 7 days start with their next message
+  await call('dellal.referral', admin, { channel: 'messenger', externalId: 'psid-plain', source: 'pub 120210000091' });
+  assert.ok((await row('psid-plain')).ad_click_at);
+  assert.equal((await row('psid-plain')).ad_window_until, null);
+  await call('dellal.receive', admin, { channel: 'messenger', externalId: 'psid-plain', text: 'Hadi ch7al?' });
+  const clicked = await row('psid-plain');
+  assert.ok(clicked.ad_window_until);
+  assert.equal(clicked.ad_click_at, null);
+  // WhatsApp has its own rule: an ad there opens nothing here
+  await call('dellal.receive', admin, { channel: 'whatsapp', externalId: '213550998877', text: 'Salam', source: 'pub 120210000092' });
+  assert.equal((await row('213550998877')).ad_window_until, null);
+  // Meta gives « up to » 7 days: when it refuses the message, Pilotix stops counting on the ad's window
+  server.dellal = async (action) => {
+    if (action === 'send') throw new Error('Messenger : (#10) This message is sent outside of allowed window. Learn more about the new policy here');
+    return { ok: true };
+  };
+  const refusing = await as(EMAILS.admin, server);
+  const r: any = await call('dellal.reply', refusing, { id: Number(ad.id), body: 'Salam ?' });
+  assert.equal(r.ok, false);
+  assert.equal((await row('psid-ad')).ad_window_until, null);
+  await assert.rejects(call('dellal.reply', refusing, { id: Number(ad.id), body: 'Salam ?' }), /24 heures/);
+});
+
+test('« human agent »: a person of the team answers for 7 days once Meta gave the permission (the control room’s switch); Dellal never', async () => {
+  const sent: any[] = [];
+  const admin = await as(EMAILS.admin, fakeServer([], sent));
+  await call('dellal.receive', admin, { channel: 'instagram', externalId: 'igsid-human', text: 'Salam' });
+  const id = Number((await db.query(`SELECT id FROM conversations WHERE external_id = 'igsid-human'`))[0].id);
+  const ago = (when: string) => db.query(`UPDATE conversations SET last_customer_at = now() - $2::interval WHERE id = $1`, [id, when]);
+  // the control room says Meta approved it
+  const on: Ctx = { ...admin, t: { platform: { query: async (_sql: string, p?: unknown[]) => (p?.[0] === 'social_apps' ? [{ value: { meta: { humanAgent: true } } }] : []) } } as any };
+  await ago('2 days');
+  // off: 24 hours for everyone
+  await assert.rejects(call('dellal.reply', admin, { id, body: 'Salam' }), /24 heures/);
+  // on: the person's message goes with the label
+  sent.length = 0;
+  await call('dellal.reply', on, { id, body: 'Salam, mazal t7ebi ?' });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].humanAgent, true);
+  assert.equal(((await call('dellal.conversation', on, { id })) as any).humanAgent, true);
+  // inside 24 hours a person's answer is a plain one, permission or not
+  await ago('1 hour');
+  await call('dellal.reply', on, { id, body: 'Wakha' });
+  assert.equal(sent.at(-1).humanAgent, undefined);
+  // Dellal never uses it: given back 2 days after the customer's last message, it waits
+  await db.query(`INSERT INTO conv_messages (conversation_id, role, body) VALUES ($1, 'customer', 'mazal?')`, [id]);
+  await ago('2 days');
+  const before = sent.length;
+  const back: any = await call('dellal.setMode', on, { id, mode: 'ai' });
+  assert.equal(back.answered, false);
+  assert.equal(sent.length, before);
+  // after 7 days: nobody
+  await ago('8 days');
+  await assert.rejects(call('dellal.reply', on, { id, body: 'Salam' }), /24 heures/);
+
+  // what reaches Meta: its « human agent » label, on Messenger and on Instagram
+  const ctx = await as(EMAILS.admin);
+  await setRaw(db, 'secret_dellal_page_token', 'PAGE-SEND');
+  const asked: any[] = [];
+  const real = globalThis.fetch;
+  globalThis.fetch = (async (input: any, init?: any) => {
+    asked.push({ host: new URL(String(input)).host, body: init?.body ? JSON.parse(init.body) : null });
+    return new Response(JSON.stringify({ recipient_id: 'x', message_id: 'm' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }) as typeof fetch;
+  try {
+    await runDellal('send', { channel: 'messenger', externalId: 'psid-1', text: 'Salam', humanAgent: true }, ctx);
+    assert.deepEqual(asked.at(-1).body, { recipient: { id: 'psid-1' }, messaging_type: 'MESSAGE_TAG', tag: 'HUMAN_AGENT', message: { text: 'Salam' } });
+    await setRaw(db, 'secret_dellal_ig_token', 'IGAA-SEND');
+    await runDellal('send', { channel: 'instagram', externalId: 'igsid-1', text: 'Wakha', humanAgent: true }, ctx);
+    assert.deepEqual(asked.at(-1).body, { recipient: { id: 'igsid-1' }, messaging_type: 'MESSAGE_TAG', tag: 'HUMAN_AGENT', message: { text: 'Wakha' } });
+  } finally {
+    globalThis.fetch = real;
+    await db.query(`DELETE FROM settings WHERE key IN ('secret_dellal_ig_token', 'secret_dellal_page_token')`);
+  }
+});
+
+test('follow-ups: up to 3 inside the 24 hours, 2 more in an ad’s 7 days, never after the window, none once the customer answers', async () => {
+  const sent: any[] = [];
+  const admin = await as(EMAILS.admin, fakeServer([], sent));
+  const g: any = await call('dellal.settings.get', admin, {});
+  assert.equal(g.settings.followUps, 3, '3 follow-ups by default');
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, followUpHours: 3, followUps: 3, secrets: { ai: 'sk-ant-test-followups' } });
+  try {
+    const r: any = await call('dellal.receive', admin, { channel: 'messenger', externalId: 'psid-fu', text: 'Salam, ch7al la poussette ?' });
+    const id = Number(r.conversationId);
+    await call('dellal.answer', admin, { id });
+    const at = (customer: string, last: string) =>
+      db.query(`UPDATE conversations SET last_customer_at = now() - $2::interval, last_message_at = now() - $3::interval WHERE id = $1`, [id, customer, last]);
+    const count = async () => Number((await db.query(`SELECT follow_ups FROM conversations WHERE id = $1`, [id]))[0].follow_ups);
+    const run = async () => (await call('dellal.followUps', admin, {}), count());
+    // 1 hour of silence: too early
+    await at('1 hour', '1 hour');
+    assert.equal(await run(), 0);
+    // the 1st after the shop's 3 hours
+    await at('4 hours', '4 hours');
+    assert.equal(await run(), 1);
+    // not again right away
+    assert.equal(await run(), 1);
+    // the 2nd about 9 hours after the customer's last message
+    await at('10 hours', '6 hours');
+    assert.equal(await run(), 2);
+    // the 3rd before the 24 hours end
+    await at('22 hours', '12 hours');
+    assert.equal(await run(), 3);
+    // no 4th in a chat that did not come from an ad, and nothing once the 24 hours are over
+    await at('22 hours 30 minutes', '3 hours');
+    assert.equal(await run(), 3);
+    await db.query(`UPDATE conversations SET follow_ups = 0 WHERE id = $1`, [id]);
+    await at('25 hours', '25 hours');
+    assert.equal(await run(), 0);
+    // a chat that came from an ad: the 4th on day 3, the 5th on day 6, then no more
+    await db.query(`UPDATE conversations SET follow_ups = 3, ad_window_until = now() + interval '6 days' WHERE id = $1`, [id]);
+    await at('25 hours', '3 hours');
+    assert.equal(await run(), 3, 'day 2: not yet');
+    await at('73 hours', '50 hours');
+    assert.equal(await run(), 4);
+    await db.query(`UPDATE conversations SET ad_window_until = now() + interval '20 hours' WHERE id = $1`, [id]);
+    await at('145 hours', '70 hours');
+    assert.equal(await run(), 5);
+    await at('146 hours', '3 hours');
+    assert.equal(await run(), 5);
+    // the shop chose 1 follow-up: one only
+    await call('dellal.settings.save', admin, { ...g.settings, enabled: true, followUpHours: 3, followUps: 1, secrets: {} });
+    await db.query(`UPDATE conversations SET follow_ups = 1, ad_window_until = NULL WHERE id = $1`, [id]);
+    await at('10 hours', '6 hours');
+    assert.equal(await run(), 1);
+    // the customer answers: the count starts again
+    await call('dellal.receive', admin, { channel: 'messenger', externalId: 'psid-fu', text: 'wah mazal' });
+    assert.equal(await count(), 0);
+  } finally {
+    await db.query(`UPDATE settings SET value = value || '{"enabled":false,"followUps":3}'::jsonb WHERE key = 'dellal'`);
+    await db.query(`DELETE FROM settings WHERE key = 'secret_dellal_ai_key'`);
+  }
+});

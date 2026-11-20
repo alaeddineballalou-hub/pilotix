@@ -36,7 +36,7 @@ import { getPrefs } from './prefs';
 import { channelGuard, guardNote, type GuardMode } from './guard';
 import { assignNow, getAssign } from './assign';
 import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPreview } from './notify';
-import { landingCounts, landingSettings, onLandingConf, onLandingFollow, queueChatPurchase } from './landingquery';
+import { landingCounts, landingSettings, onLandingConf, onLandingFollow, queueChatEvent, queueChatPurchase } from './landingquery';
 import { lowStockCount } from './stockquery';
 import { agencyOf, agencyRowSql, andSql, ownRowSql, queueSql, rowScopeSql } from './agencyscope';
 import { settleTickets } from './tickets';
@@ -813,6 +813,8 @@ export async function createOrder(
     if (opts.conversationId && !input.isExchange) {
       const at = (await landingSettings(tx)).purchaseAt;
       if (at === 'order' || (at === 'confirmed' && confirmed)) await queueChatPurchase(tx, oid, ctx.now());
+      // « Lead »: the customer gave his number in the chat and the order is in (what a page's sent form is)
+      await queueChatEvent(tx, oid, 'Lead', ctx.now());
     }
     // Pilot Automations: "we received your order" (or "confirmed")
     if (!opts.silent) await onOrderCreated(tx, { id: oid, phone, conf_status: conf, is_exchange: input.isExchange }, ctx.now());

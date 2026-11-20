@@ -172,6 +172,36 @@ export async function queueChatPurchase(db: Db, orderId: number, now: number): P
   });
 }
 
+/**
+ * The other events of an order taken in a Messenger or Instagram chat, the same a landing page's order sends: « Lead »
+ * when the order is taken (the customer gave his number: a page's form sent), « Delivered » when the parcel reached
+ * him. Kept under the page's names here; Meta's names for a chat (LeadSubmitted, OrderDelivered: Conversions API for
+ * Business Messaging takes a fixed list) are put when it is sent (landing › buildChatEvent). Once per order. A fake
+ * order has no event of its own in a chat: Meta's list has none, and its Lead / Purchase are simply never sent.
+ */
+export async function queueChatEvent(db: Db, orderId: number, name: 'Lead' | 'Delivered', now: number): Promise<void> {
+  await guarded(db, async (db) => {
+    const o = (
+      await db.query(
+        `SELECT o.id, o.ref, o.total, o.conf_status, o.is_exchange, o.landing_id, c.channel, c.external_id, c.account_id
+         FROM orders o JOIN conversations c ON c.id = o.conversation_id WHERE o.id = $1`,
+        [orderId],
+      )
+    )[0];
+    if (!o || o.landing_id || o.is_exchange) return;
+    if ((name === 'Lead' ? NOT_A_LEAD : (CONF_DONE_BAD as string[])).includes(o.conf_status)) return;
+    if (!['messenger', 'instagram'].includes(o.channel) || !o.external_id) return;
+    const target = await chatTarget(db, o.channel, o.account_id);
+    if (!target) return;
+    const at = new Date(now).toISOString();
+    await db.query(
+      `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, value, at, send_after, platform) VALUES ($1,$2,$3,$4,$5,$6,$6,'chat')
+       ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
+      [target, name, `chat-${name === 'Lead' ? 'lead' : 'delivered'}-${o.ref}`, o.id, num(o.total), at],
+    );
+  });
+}
+
 /** The Page or the Instagram account a chat came to: the conversation's own, else the one linked in Pilot Message. */
 async function chatTarget(db: Db, channel: string, accountId: unknown): Promise<string | null> {
   const own = String(accountId ?? '').trim();
@@ -379,6 +409,8 @@ export async function onLandingFollow(db: Db, s: LandingSettings, row: { id: num
   if (row.is_exchange || !(DELIVERED.includes(to) && !DELIVERED.includes(String(from)))) return;
   if (s.purchaseAt !== 'delivered') {
     if (row.landing_id) await queueDelivered(db, s, num(row.id), now);
+    // an order taken in a Messenger / Instagram chat: the same « Delivered » (Meta's OrderDelivered)
+    else if (row.conversation_id) await queueChatEvent(db, num(row.id), 'Delivered', now);
     return;
   }
   if (row.landing_id) await queuePurchase(db, s, num(row.id), now);
