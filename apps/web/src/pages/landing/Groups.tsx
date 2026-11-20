@@ -551,8 +551,8 @@ function Form({ g }: { g: Group | null }) {
 
           <div className="lp-ed-foot">
             {g && (
-              <button type="button" className="btn ghost danger" onClick={remove}>
-                <Icon name="trash" /> {t('landing.gr.remove')}
+              <button type="button" className="btn ghost danger lp-ed-del" onClick={remove} aria-label={t('landing.gr.remove')} title={t('landing.gr.remove')}>
+                <Icon name="trash" /> <span className="lp-ed-del-t">{t('landing.gr.remove')}</span>
               </button>
             )}
             <SaveBar dirty={dirty || !g} busy={save.isPending} disabled={!d.items.length || !d.title.trim()} onSave={submit} label={t('common.save')} />
