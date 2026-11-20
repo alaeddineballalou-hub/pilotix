@@ -151,3 +151,23 @@ test('every title refused: Claude is told why and writes 3 more (twice at most);
   assert.equal(titleProblem('كرسي السيارة لولادك 🚗 أمان مضمون', facts('كرسي')), 'garantie');
   assert.equal(titleProblem('كرسي السيارة لولادك 🚗 أمان وراحة البال', facts('كرسي')), null);
 });
+
+test('on the server: the title is asked without thinking first (Sonnet 5.5 spent its 500 tokens thinking, 15 Nov 2026)', async () => {
+  const admin = await as(EMAILS.admin);
+  const g: any = await call('dellal.settings.get', admin, {});
+  await call('dellal.settings.save', admin, { ...g.settings, secrets: { ai: 'sk-ant-test-title' } });
+  const reqs: any[] = [];
+  const server = {
+    dellal: async (action: string, req: any) => {
+      reqs.push({ action, req });
+      return { content: [{ type: 'text', text: '{"titles": ["عربة البيبي تتطوى في ثانيتين 👶 وتهزها بيد وحدة"]}' }], stop_reason: 'end_turn', usage: {} };
+    },
+  } as any;
+  const mk = { ...(await as(EMAILS.marketer)), server } as Ctx;
+  const r: any = await call('landing.aiTitle', mk, { productId, title: 'عربة أطفال', description: POINTS });
+  assert.equal(r.by, 'ai');
+  assert.deepEqual(r.titles, ['عربة البيبي تتطوى في ثانيتين 👶 وتهزها بيد وحدة']);
+  assert.equal(reqs[0].action, 'complete');
+  assert.deepEqual(reqs[0].req.thinking, { type: 'between_tools' });
+  assert.equal(reqs[0].req.max_tokens, 500);
+});

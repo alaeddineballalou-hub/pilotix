@@ -113,3 +113,43 @@ test('groups: the designs (tabs and search, sold out at the end, the editor prev
   assert.match(draft.html, /Brouillon/);
   assert.match(draft.html, /noindex/);
 });
+
+test('a page or a pixel deleted since leaves the group: its save never fails on it', async () => {
+  const meta = (await db.query(`INSERT INTO tracking_pixels (platform, name, pixel_id) VALUES ('meta', 'Vieux pixel', '9988776655443322') RETURNING id`))[0].id;
+  // a page of its own to delete (the three of the demo stay)
+  const extra = (await db.query(`INSERT INTO landing_pages (product_id, slug, title) SELECT product_id, 'page-a-effacer', 'À effacer' FROM landing_pages WHERE id = $1 RETURNING id`, [pages[0].id]))[0].id;
+  const g: any = await call('landing.groupSave', marketer, {
+    slug: 'groupe-efface',
+    title: 'Groupe',
+    theme: 'best',
+    bestPageId: Number(extra),
+    items: [{ pageId: Number(extra) }, { pageId: pages[0].id }, { pageId: pages[1].id }],
+    metaPixels: [Number(meta)],
+  });
+  assert.equal(g.items.length, 3);
+  await db.query('DELETE FROM landing_pages WHERE id = $1', [extra]);
+  await db.query('DELETE FROM tracking_pixels WHERE id = $1', [meta]);
+  // the editor no longer shows it
+  const shown: any = ((await call('landing.groups', marketer, {})) as any[]).find((x) => x.id === g.id);
+  assert.deepEqual(shown.items.map((x: any) => x.pageId), [pages[0].id, pages[1].id]);
+  assert.equal(shown.bestPageId, null);
+  // an editor opened before still sends them: saved without them (no « Landing page introuvable », no « Pixel introuvable »)
+  const again: any = await call('landing.groupSave', marketer, {
+    id: g.id,
+    slug: 'groupe-efface',
+    title: 'Groupe',
+    theme: 'best',
+    bestPageId: Number(extra),
+    items: [{ pageId: Number(extra) }, { pageId: pages[0].id }, { pageId: pages[1].id }],
+    metaPixels: [Number(meta)],
+  });
+  assert.deepEqual(again.items.map((x: any) => x.pageId), [pages[0].id, pages[1].id]);
+  assert.equal(again.bestPageId, null);
+  assert.equal(again.metaPixels, null, 'its chosen pixels all gone: the default ones again');
+  const row = (await db.query('SELECT items, meta_pixels FROM landing_groups WHERE id = $1', [g.id]))[0];
+  assert.equal((typeof row.items === 'string' ? JSON.parse(row.items) : row.items).length, 2);
+  // still checked: a page that never existed in an editor's new line, two times the same product
+  await assert.rejects(call('landing.groupSave', marketer, { title: 'X', slug: 'groupe-x', items: [{ pageId: pages[0].id }, { pageId: pages[0].id }] }), /deux fois/);
+  // every page gone: said plainly
+  await assert.rejects(call('landing.groupSave', marketer, { title: 'X', slug: 'groupe-y', items: [{ pageId: 99999999 }] }), /supprimées/);
+});

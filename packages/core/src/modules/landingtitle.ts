@@ -373,7 +373,9 @@ export async function aiTitles(ctx: Ctx, i: TitleIn): Promise<{ titles: string[]
       if (pilot === undefined) pilot = !inPage && (await pilotOn(ctx));
       const res: any = inPage
         ? await inPage({ model: TITLE_MODEL, system, messages, tools: [], max_tokens: 500, runTool: async () => ({ error: 'Pas d’outil ici' }) })
-        : await ctx.server!.dellal!('complete', { model: TITLE_MODEL, system, systemBlocks: blocks, messages, tools: [], max_tokens: 500, feature: 'cm', pilot }, ctx);
+        : // no thinking first: Sonnet 5.5 thinks by default, its thinking counts in max_tokens, and it used the 500 for it,
+          // leaving no title (« sa réponse était illisible », 15 Nov 2026). « between_tools »: none without tools
+          await ctx.server!.dellal!('complete', { model: TITLE_MODEL, system, systemBlocks: blocks, messages, tools: [], max_tokens: 500, thinking: { type: 'between_tools' }, feature: 'cm', pilot }, ctx);
       if (res?.demo) throw new Error(NO_AI);
       return (res?.content ?? []).map((b: any) => (b?.type === 'text' ? String(b.text) : '')).join('');
     } catch (e) {

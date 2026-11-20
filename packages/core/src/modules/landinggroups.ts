@@ -188,7 +188,8 @@ async function listGroups(db: Db, ids?: number[]) {
   );
   return rows.map((r: any) => {
     const gid = num(r.id);
-    const items = readItems(r.items).map((x) => {
+    // a page deleted since (Landing pages › Pages) has left the group: not shown, not sent back by the editor
+    const items = readItems(r.items).filter((x) => P.has(x.pageId)).map((x) => {
       const p = P.get(x.pageId);
       return {
         ...x,
@@ -208,7 +209,7 @@ async function listGroups(db: Db, ids?: number[]) {
       subtitle: String(r.subtitle),
       color: String(r.color),
       theme: ((GROUP_THEMES as readonly string[]).includes(r.theme) ? r.theme : 'grid') as GroupTheme,
-      bestPageId: numOrNull(r.best_page_id),
+      bestPageId: P.has(num(r.best_page_id)) ? numOrNull(r.best_page_id) : null,
       pixelId: String(r.pixel_id ?? ''),
       metaPixels: readPixels(r.meta_pixels),
       tiktokPixels: readPixels(r.tiktok_pixels),
@@ -254,6 +255,36 @@ const rowOf = (i: GroupIn): GroupRowIn => ({
   tiktok_pixels: i.tiktokPixels,
 });
 
+/**
+ * A group as it is saved: the pages and the pixels it names that were deleted since (Landing pages › Pages, Réglages ›
+ * Pixels) leave it, so saving never fails on them (« Landing page introuvable », « Pixel introuvable »: the likely cause
+ * of the save error seen at Baby Joy, whose pages were deleted). Its chosen pixels all gone: it follows the default ones
+ * again. No page left: said plainly.
+ */
+async function withoutGone(db: Db, i: GroupIn): Promise<GroupIn> {
+  const ids = [...new Set(i.items.map((x) => x.pageId))];
+  const have = new Set<number>(ids.length ? (await db.query('SELECT id FROM landing_pages WHERE id = ANY($1)', [ids])).map((r: any) => num(r.id)) : []);
+  const items = i.items.filter((x) => have.has(x.pageId));
+  if (i.items.length && !items.length) throw bad('Les pages de ce groupe ont été supprimées : ajoutez au moins un produit.');
+  const pixels = async (platform: 'meta' | 'tiktok', list: number[] | null): Promise<number[] | null> => {
+    if (!list?.length) return list;
+    const ok = new Set<number>(
+      (await db.query('SELECT id FROM tracking_pixels WHERE id = ANY($1) AND platform = $2', [[...new Set(list)], platform])).map((r: any) => num(r.id)),
+    );
+    const kept = list.filter((x) => ok.has(x));
+    return kept.length ? kept : null;
+  };
+  return {
+    ...i,
+    items,
+    // the best seller was one of those pages: none until one is picked again (the first product shows big); a best seller
+    // that is not a product of the group is still refused (checkInput)
+    bestPageId: i.bestPageId !== null && ids.includes(i.bestPageId) && !have.has(i.bestPageId) ? null : i.bestPageId,
+    metaPixels: await pixels('meta', i.metaPixels),
+    tiktokPixels: await pixels('tiktok', i.tiktokPixels),
+  };
+}
+
 /** a free address for a group, from its title: free, or this group's own (now or before); never a page's or another group's, even a former one */
 async function freeGroupSlug(db: Db, title: string, selfId?: number): Promise<string> {
   const base =
@@ -276,7 +307,8 @@ async function freeGroupSlug(db: Db, title: string, selfId?: number): Promise<st
 export const landingGroupProcs = {
   'landing.groups': proc([...WHO], z.object({}), (ctx) => listGroups(ctx.db)),
 
-  'landing.groupSave': proc([...WHO], GroupInput, async (ctx, i) => {
+  'landing.groupSave': proc([...WHO], GroupInput, async (ctx, input) => {
+    const i = await withoutGone(ctx.db, input);
     await checkInput(ctx.db, i);
     await checkPixels(ctx.db, 'meta', i.metaPixels);
     await checkPixels(ctx.db, 'tiktok', i.tiktokPixels);
