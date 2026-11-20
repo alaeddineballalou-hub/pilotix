@@ -41,10 +41,10 @@ const GROUPS: Check['group'][] = ['key', 'fb', 'ig', 'ads', 'forms', 'catalog', 
 /** each provider's ad accounts (a boutique counts all of a linked account's together) */
 const AD_KIND: Record<Provider, Kind> = { meta: 'ad_account', tiktok: 'advertiser' };
 const K = 'comptes.';
-/** Meta's own « f » logo for « Continuer avec Facebook »: the file from Meta's brand centre, dropped as it is in
- * assets/brand/ (facebook-f-logo, else facebook-logo) — never redrawn or recoloured (Meta's rule). Until it is there,
- * the button shows its words only. */
-const FB_LOGO = brandFile('facebook-f') ?? brandFile('facebook');
+/** Meta's white logo for « Continuer avec Facebook » (Facebook Login): the file from Meta's brand centre, dropped as it
+ * is in assets/brand/ (facebook-f-logo) — never redrawn or recoloured (Meta's rule). Never the blue facebook-logo: blue on
+ * the button's blue breaks Meta's rule, so until the white file is there, the button shows its words only. */
+const FB_LOGO = brandFile('facebook-f');
 /** TikTok's own logo in « Continuer avec TikTok » (assets/brand/tiktok-logo), as TikTok gives it. */
 const TT_LOGO = brandFile('tiktok');
 
@@ -67,12 +67,13 @@ const adsOnly = (l: Link) => l.provider === 'meta' && (l.part === 'ads' || (!l.a
 const pageDoor = (l: Link, d: List) => l.provider === 'meta' && d.adsReady && !adsOnly(l);
 
 /** A provider's tile: its official logo once its file is in assets/brand/ (ui/BrandLogo), else its two letters as before.
- * Meta's ads line is Meta's own (the ad accounts are Meta's, not Facebook's). */
-export function ProviderBadge({ p, part }: { p: Provider; part?: 'ads' | 'content' }) {
+ * Meta's ads line is Meta's own (the ad accounts are Meta's, not Facebook's). `row`: a service line's 40 px tile, beside
+ * the Instagram one (Instagram's glyph is never under 29 px); else a linked account's 32 px one. */
+export function ProviderBadge({ p, part, row }: { p: Provider; part?: 'ads' | 'content'; row?: boolean }) {
   return (
     <BrandLogo
       name={p === 'tiktok' ? 'tiktok' : part === 'ads' ? 'meta' : 'facebook'}
-      size="sm"
+      size={row ? undefined : 'sm'}
       fallback={
         <span className={`dl-ch ${p === 'meta' ? 'dl-messenger' : 'dl-tiktok'}`} aria-hidden="true">
           {p === 'meta' ? 'FB' : 'TT'}
@@ -266,8 +267,8 @@ export function Comptes({ sub }: PageProps) {
           // the two logos linked like the account's pictures (the owner, 20 Nov 2026): see .cpt-logo-duo
           logos={
             <span className="cpt-logo-duo">
-              <BrandLogo name="facebook" size="sm" fallback={<span className="dl-ch dl-messenger" aria-hidden="true">FB</span>} />
-              <BrandLogo name="instagram" size="sm" fallback={<span className="dl-ch dl-instagram" aria-hidden="true">IG</span>} />
+              <BrandLogo name="facebook" fallback={<span className="dl-ch dl-messenger" aria-hidden="true">FB</span>} />
+              <BrandLogo name="instagram" fallback={<span className="dl-ch dl-instagram" aria-hidden="true">IG</span>} />
             </span>
           }
           title={t(contentBase + '.name')}
@@ -288,7 +289,7 @@ export function Comptes({ sub }: PageProps) {
         <ServiceRow
           id="cpt-ads"
           spot={spot}
-          logos={<BrandLogo name="meta" size="sm" fallback={<span className="dl-ch dl-messenger" aria-hidden="true">M</span>} />}
+          logos={<BrandLogo name="meta" fallback={<span className="dl-ch dl-messenger" aria-hidden="true">M</span>} />}
           title={t(K + 'p.metaAds.name')}
           what={t(K + 'p.metaAds.what')}
           help={d.adsReady && !adsLinks.length && d.apps.meta ? t(K + 'p.metaAds.allow') : null}
@@ -310,7 +311,7 @@ export function Comptes({ sub }: PageProps) {
 
         {/* TikTok: the TikTok ad accounts (Catalogue lists, Publicité) */}
         <ServiceRow
-          logos={<ProviderBadge p="tiktok" />}
+          logos={<ProviderBadge p="tiktok" row />}
           title={t(K + 'p.tiktok.name')}
           what={t(K + 'p.tiktok.what')}
           pending={pending?.provider === 'tiktok' ? pending : null}
@@ -599,7 +600,6 @@ function WhatsappRow({ d, busy }: { d: List; busy: boolean }) {
       <div className="cpt-svc-logos">
         <BrandLogo
           name="whatsapp"
-          size="sm"
           fallback={
             <span className="dl-ch dl-whatsapp" aria-hidden="true">
               WA

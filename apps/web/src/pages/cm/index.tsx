@@ -26,21 +26,17 @@ type Comment = Out<'cm.feed'>['rows'][number];
 const CH_SHORT: Record<Channel, string> = { facebook: 'FB', instagram: 'IG', tiktok: 'TT' };
 const CH_CLASS: Record<Channel, string> = { facebook: 'dl-messenger', instagram: 'dl-instagram', tiktok: 'dl-tiktok' };
 
-function CmBadge({ ch }: { ch: Channel }) {
+/** `corner`: the small badge on an author's initials, too small for a logo by the networks' own rules (Instagram's
+ * glyph is never under 29 px, with free space around it): there, the network's two letters. */
+function CmBadge({ ch, corner }: { ch: Channel; corner?: boolean }) {
   const { t } = useTranslation();
-  // the network's official logo once its file is in assets/brand/ (ui/BrandLogo), else its two letters as before
-  return (
-    <BrandLogo
-      name={ch}
-      size="sm"
-      title={t(`cm.ch.${ch}`)}
-      fallback={
-        <span className={`dl-ch ${CH_CLASS[ch]}`} title={t(`cm.ch.${ch}`)}>
-          {CH_SHORT[ch]}
-        </span>
-      }
-    />
+  const letters = (
+    <span className={`dl-ch ${CH_CLASS[ch]}`} title={t(`cm.ch.${ch}`)}>
+      {CH_SHORT[ch]}
+    </span>
   );
+  // the network's official logo once its file is in assets/brand/ (ui/BrandLogo), else its two letters as before
+  return corner ? letters : <BrandLogo name={ch} title={t(`cm.ch.${ch}`)} fallback={letters} />;
 }
 
 const STATUS_TONE: Record<string, string> = { new: 'cm-new', answered: 'cm-ok', hidden: 'cm-mute', handoff: 'cm-warn', ignored: 'cm-mute', error: 'cm-bad' };
@@ -51,7 +47,7 @@ function Author({ name, ch }: { name: string; ch: Channel }) {
   return (
     <span className="ai-av sm">
       <span aria-hidden="true">{initials(name)}</span>
-      <CmBadge ch={ch} />
+      <CmBadge ch={ch} corner />
     </span>
   );
 }
@@ -399,13 +395,14 @@ function Posts() {
                     </a>
                   )}
                 </small>
+                {/* under the post, not a fourth part of the row: the row is the network, the post, the product */}
+                {p.channel !== 'tiktok' && (
+                  <label className={`cm-aware${p.awareness ? ' on' : ''}`} title={t('cm.posts.awareHelp')}>
+                    <input type="checkbox" checked={!!p.awareness} disabled={aware.isPending} onChange={(e) => aware.mutate({ id: p.id, on: e.target.checked })} />
+                    <span>{t('cm.posts.aware')}</span>
+                  </label>
+                )}
               </div>
-              {p.channel !== 'tiktok' && (
-                <label className={`cm-aware${p.awareness ? ' on' : ''}`} title={t('cm.posts.awareHelp')}>
-                  <input type="checkbox" checked={!!p.awareness} disabled={aware.isPending} onChange={(e) => aware.mutate({ id: p.id, on: e.target.checked })} />
-                  <span>{t('cm.posts.aware')}</span>
-                </label>
-              )}
               <Field label={t('cm.posts.product')}>
                 <select value={p.productId ?? ''} disabled={link.isPending} onChange={(e) => link.mutate({ id: p.id, productId: e.target.value ? Number(e.target.value) : null })}>
                   <option value="">{t('cm.posts.none')}</option>

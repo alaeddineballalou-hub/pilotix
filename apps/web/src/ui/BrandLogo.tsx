@@ -19,9 +19,11 @@ export function brandFile(name: string): string | undefined {
 /**
  * A brand's logo on a white tile (the file as it is, whole, never cropped), or `fallback` while its file is missing.
  * Beside the brand's name, which says it: the picture adds no words.
+ * The tile keeps each brand's own smallest size (brandLogo.css, `px-brand-<name>`): Instagram's glyph is never under
+ * 29 px, so its tile is 40 px even where `sm` is asked. A spot too small for that (a corner badge) shows its letters.
  */
 export function BrandLogo({ name, size, title, fallback = null }: { name: Brand; size?: 'sm' | 'big'; title?: string; fallback?: ReactNode }) {
   const src = brandFile(name);
   // `title`: where the brand's name is not written beside the tile (a list of comments), the tile still says it
-  return src ? <img src={src} alt={title ?? ''} title={title} className={`px-brand${size ? ` ${size}` : ''}`} /> : <>{fallback}</>;
+  return src ? <img src={src} alt={title ?? ''} title={title} className={`px-brand px-brand-${name}${size ? ` ${size}` : ''}`} /> : <>{fallback}</>;
 }

@@ -54,13 +54,15 @@
 .cpt-duo { display: inline-flex; align-items: center; }
 .cpt-duo .cpt-av + .cpt-av { margin-inline-start: -6px; }
 /* « Facebook et Instagram »: its two logos linked like the account's pictures (the owner, 20 Nov 2026), on round white
-   tiles, the second a little over the first. Only the tiles' white edges meet: each logo (18 px) keeps Meta's space all
-   around it (a quarter of its width; the tile over it stops 5 px away) and the two logos stay 15 px apart (Meta: half a
-   logo at least). No ring around a logo's tile: it would cross that space. The two letters (no file yet) get one. */
+   tiles of 42 px, the second a little over the first (2 px). Only the tiles' white edges meet. Facebook's logo (22 px)
+   keeps Meta's space around it (a quarter of its width): the tile over it stops 8 px away. Instagram's glyph is never
+   under 29 px, with half of it free around it (Instagram's rule): 29 px in its tile (its rounded corners stay inside the
+   circle), and the two logos stay 14.5 px apart. No ring around a logo's tile: it would cross that space. The two letters (no file yet) get one. */
 .cpt-logo-duo { display: inline-flex; align-items: center; }
-.cpt-logo-duo > .px-brand.sm { width: 38px; height: 38px; padding: 9px; border-radius: 50%; }
-.cpt-logo-duo > .dl-ch { width: 38px; height: 38px; border-radius: 50%; font-size: 11px; box-shadow: 0 0 0 2px var(--surface); }
-.cpt-logo-duo > * + * { margin-inline-start: -5px; }
+.cpt-logo-duo > .px-brand { width: 42px; height: 42px; padding: 9px; border-radius: 50%; }
+.cpt-logo-duo > .px-brand.px-brand-instagram { width: 42px; height: 42px; padding: 5.5px; border-radius: 50%; }
+.cpt-logo-duo > .dl-ch { width: 42px; height: 42px; border-radius: 50%; font-size: 11px; box-shadow: 0 0 0 2px var(--surface); }
+.cpt-logo-duo > * + * { margin-inline-start: -2px; }
 .cpt-st { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; }
 .cpt-st::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .cpt-st.ok { color: var(--ok); }

@@ -103,6 +103,9 @@
 .cm-chans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 20px; }
 @media (max-width: 760px) { .cm-chans { grid-template-columns: minmax(0, 1fr); } }
 .cm-chans b .dl-ch { display: inline-grid; place-items: center; width: 24px; height: 24px; font-size: 11px; }
+/* a network's logo tile (40 px): Instagram asks for free space of half its glyph (29 px) around it, so the name beside it
+   and the hint under it keep away */
+.cm-chans .dl-switch b { gap: 12px; margin-bottom: 6px; }
 .cm-soon { opacity: .6; cursor: default; }
 .cm-conn { max-width: 520px; margin: 8px 0 14px; }
 .cm-okc { color: var(--ok); font-weight: 700; }
@@ -116,3 +119,4 @@
 .cm-aware { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px dashed var(--line, #d0d7e2); border-radius: 999px; font-size: 13px; cursor: pointer; white-space: nowrap; align-self: center; }
 .cm-aware.on { border-style: solid; border-color: #f59e0b; background: #fff7e6; color: #92400e; font-weight: 600; }
 .cm-aware input { margin: 0; }
+.cm-post-main .cm-aware { align-self: flex-start; }

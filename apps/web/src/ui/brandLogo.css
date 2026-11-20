@@ -3,3 +3,8 @@
 .px-brand { flex: none; box-sizing: border-box; width: 40px; height: 40px; padding: 7px; border-radius: 12px; border: 1px solid var(--line); background: #fff; object-fit: contain; }
 .px-brand.sm { width: 32px; height: 32px; padding: 6px; border-radius: 10px; }
 .px-brand.big { width: 46px; height: 46px; padding: 8px; border-radius: 12px; }
+/* Instagram's own rule (meta.com/brand/resources/instagram): its glyph never smaller than 29 × 29 px, with free space of
+   half its size around it. Its tile is 40 px with a 29 px glyph whatever the size asked (46 px with 30 px when big); the
+   places around it keep the rest of that space free (assets/brand/README.md). */
+.px-brand.px-brand-instagram, .px-brand.sm.px-brand-instagram { width: 40px; height: 40px; padding: 4.5px; border-radius: 12px; }
+.px-brand.big.px-brand-instagram { width: 46px; height: 46px; padding: 7px; }
