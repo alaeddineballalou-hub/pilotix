@@ -292,6 +292,12 @@
 .lp-addr-state .bji, .lp-addr-note .bji { flex: none; margin-top: 2px; }
 .lp-addr-note { margin: 0; display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .lp-level.lp-addr-opt, .lp-radio { transition: none; } }
+/* a page's (a group's) editor › « Où vit cette page » (design 3 « Deux cartes sous l'adresse », 20 Nov 2026) */
+.lp-where { margin: 2px 0 14px; }
+.chip.lp-def { background: var(--ok-soft); color: var(--ok); }
+.lp-where-back { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 2px; border: 0; background: none; font: inherit; font-size: 13px; font-weight: 700; color: var(--c-accent-ink, #A4480A); cursor: pointer; }
+.lp-where-back:hover { text-decoration: underline; }
+.lp-where-back:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; border-radius: 6px; }
 
 /* ---------------------------------------------------------------- Protection: what the fake-order check did */
 .lp-pr-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }

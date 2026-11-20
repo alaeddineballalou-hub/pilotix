@@ -51,7 +51,7 @@ import { BOT_UA, FraudLevel, FraudReason, scoreOrder, verdictOf } from './fraud'
 import { lookAlikeOf, trustOf } from './trust';
 import { groupHtml, groupOf } from './landinggroups';
 import { listOf, recordTest } from './landinglists';
-import { pageLinks } from './pagelinks';
+import { LINK_USE, LinkUse, linkUseDb, pageLinks, readLinkUse } from './pagelinks';
 import { runAttackTest } from './attacktest';
 import { checkPixels, listPixels, PixelList, pixelsJson, pixelsOf, pixelTestCode, pixelToken, readPixels } from './pixels';
 import { campaignSettings, giveConsent } from './campaigns';
@@ -172,6 +172,8 @@ export interface LandingRow {
   /** null: the WhatsApp button of Réglages; { on: false }: none; else this page's own */
   whatsapp: { on: boolean; number?: string; label?: string; message?: string } | null;
   stockMode: 'off' | 'hide';
+  /** the address its links use: 'default' = as the boutique chose (Réglages › « Liens des pages »), else its own choice */
+  linkUse: LinkUse;
   views: number;
   orders: number;
   unique: number;
@@ -266,6 +268,7 @@ async function listPages(db: Db, now: number, ids?: number[]): Promise<LandingRo
       tiktokPixels: readPixels(r.tiktok_pixels),
       whatsapp: readJson<{ on: boolean; number?: string; label?: string; message?: string }>(r.whatsapp),
       stockMode: r.stock_mode === 'hide' ? 'hide' : 'off',
+      linkUse: readLinkUse(r.link_use),
       views: num(r.views),
       orders: num(r.n_orders),
       /** unique visitors (a browser once a day) since uniqueSince; conversion = convOrders ÷ unique (null: none yet) */
@@ -1955,6 +1958,8 @@ export const PageInput = z.object({
     .nullable()
     .default(null),
   stockMode: z.enum(['off', 'hide']).default('off'),
+  /** the address its links use (« Où vit cette page »): 'default' = as the boutique chose */
+  linkUse: z.enum(LINK_USE).default('default'),
   images: z.array(ImgInput).max(12).default([]),
 });
 
@@ -2050,12 +2055,12 @@ export const landingProcs = {
     if (landingDescriptionImageIds(i.description).length > LANDING_DESC_IMAGES_MAX) throw bad(`${LANDING_DESC_IMAGES_MAX} images au plus dans la description`);
     await checkPixels(ctx.db, 'meta', i.metaPixels);
     await checkPixels(ctx.db, 'tiktok', i.tiktokPixels);
-    const vals = [i.productId, i.slug, i.active, i.title, i.color.toLowerCase(), i.price, i.oldPrice, i.description, i.variantLabel || 'اللون', i.fraudLevel, JSON.stringify(i.images), i.pixelId, i.stockMode, pixelsJson(i.metaPixels), pixelsJson(i.tiktokPixels), i.whatsapp ? JSON.stringify(i.whatsapp) : null];
+    const vals = [i.productId, i.slug, i.active, i.title, i.color.toLowerCase(), i.price, i.oldPrice, i.description, i.variantLabel || 'اللون', i.fraudLevel, JSON.stringify(i.images), i.pixelId, i.stockMode, pixelsJson(i.metaPixels), pixelsJson(i.tiktokPixels), i.whatsapp ? JSON.stringify(i.whatsapp) : null, linkUseDb(i.linkUse)];
     let pid: number;
     if (i.id) {
       const r = await ctx.db.query(
         `UPDATE landing_pages SET product_id=$2, slug=$3, active=$4, title=$5, color=$6, price=$7, old_price=$8, description=$9, variant_label=$10, fraud_level=$11, images=$12,
-           pixel_id=$13, stock_mode=$14, meta_pixels=$15, tiktok_pixels=$16, whatsapp=$17, updated_at=now() WHERE id=$1 RETURNING id`,
+           pixel_id=$13, stock_mode=$14, meta_pixels=$15, tiktok_pixels=$16, whatsapp=$17, link_use=$18, updated_at=now() WHERE id=$1 RETURNING id`,
         [i.id, ...vals],
       );
       if (!r.length) throw notFound('Page introuvable');
@@ -2066,8 +2071,8 @@ export const landingProcs = {
       pid = num(
         (
           await ctx.db.query(
-            `INSERT INTO landing_pages (product_id, slug, active, title, color, price, old_price, description, variant_label, fraud_level, images, pixel_id, stock_mode, meta_pixels, tiktok_pixels, whatsapp, created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
+            `INSERT INTO landing_pages (product_id, slug, active, title, color, price, old_price, description, variant_label, fraud_level, images, pixel_id, stock_mode, meta_pixels, tiktok_pixels, whatsapp, link_use, created_by)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,
             [...vals, ctx.session.profile.id],
           )
         )[0].id,
@@ -2084,8 +2089,8 @@ export const landingProcs = {
     const slug = await freeLandingSlug(ctx.db, String(src.slug));
     const title = `${String(src.title ?? '').slice(0, 180)} (copie)`.trim();
     const r = await ctx.db.query(
-      `INSERT INTO landing_pages (product_id, slug, active, title, color, price, old_price, description, variant_label, fraud_level, images, pixel_id, stock_mode, meta_pixels, tiktok_pixels, whatsapp, meta_pixel_ref, tiktok_pixel_ref, created_by)
-       SELECT product_id, $2, false, $3, color, price, old_price, description, variant_label, fraud_level, images, pixel_id, stock_mode, meta_pixels, tiktok_pixels, whatsapp, meta_pixel_ref, tiktok_pixel_ref, $4
+      `INSERT INTO landing_pages (product_id, slug, active, title, color, price, old_price, description, variant_label, fraud_level, images, pixel_id, stock_mode, meta_pixels, tiktok_pixels, whatsapp, meta_pixel_ref, tiktok_pixel_ref, link_use, created_by)
+       SELECT product_id, $2, false, $3, color, price, old_price, description, variant_label, fraud_level, images, pixel_id, stock_mode, meta_pixels, tiktok_pixels, whatsapp, meta_pixel_ref, tiktok_pixel_ref, link_use, $4
          FROM landing_pages WHERE id = $1 RETURNING id`,
       [id, slug, title, ctx.session.profile.id],
     );
@@ -2426,11 +2431,16 @@ export const landingProcs = {
    * The links shown in Pilotix: the store's part of the pages' address (site/<store>/<page>), the address they live at
    * (go.<domain> once it answers; '' in the demo) and `prefix`, what every page link starts with now: the boutique's own
    * domain or <pagesUrl>/<store>/ (Réglages › « Liens des pages »: modules/pagelinks.ts). `sample`: a page, for examples.
+   * `ownPrefix` / `pilotixPrefix`: each address's start, for a page or a group with its own choice (`ownPrefix`: '' while
+   * the domain is not ready or does not reach the server; its links then use `pilotixPrefix`, as prefixFor does).
    */
   'landing.store': proc(null, z.object({}), async (ctx) => {
     const l = await pageLinks(ctx);
     const sample = (await ctx.db.query(`SELECT slug FROM landing_pages WHERE active ORDER BY id DESC LIMIT 1`).catch(() => [] as any[]))[0]?.slug;
-    return { store: l.store, pagesUrl: ctx.server?.pagesUrl?.() ?? '', prefix: l.prefix, choice: l.choice, own: l.own, usesOwn: l.usesOwn, sample: sample ? String(sample) : null };
+    return {
+      store: l.store, pagesUrl: ctx.server?.pagesUrl?.() ?? '', prefix: l.prefix, choice: l.choice, own: l.own, usesOwn: l.usesOwn,
+      ownPrefix: l.ownPrefix, pilotixPrefix: l.pilotixPrefix, sample: sample ? String(sample) : null,
+    };
   }),
 
   /**

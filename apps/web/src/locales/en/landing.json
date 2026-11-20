@@ -482,6 +482,13 @@
     "storeOnly": "Store name (only in {{pilotix}} links)",
     "saved": "Saved: your links use {{address}}"
   },
+  "where": {
+    "title": "Where this page lives",
+    "default": "default",
+    "back": "Back to the default address",
+    "down": "{{domain}} does not reach Pilotix right now: this page’s link uses {{pilotix}} until it works again.",
+    "note": "The default address is chosen in {{where}}. A page on « default » follows it if you change it."
+  },
   "pr": {
     "kQuality": "Order quality",
     "kQualitySub": "{{real}} real out of {{total}} received",

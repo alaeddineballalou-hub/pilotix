@@ -13,7 +13,7 @@ import { algiersDayStart, landingDescriptionText } from '@pilotix/shared';
 import { bad, Ctx, notFound, proc, publicApi } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, META_TOKEN_KEY } from './admin';
-import { pageLinks } from './pagelinks';
+import { LinkUse, pageLinks, prefixFor, readLinkUse } from './pagelinks';
 import { SOCIAL_KEYS } from './social';
 import { RESERVED } from './stockquery';
 
@@ -61,7 +61,8 @@ interface Prod {
   name: string;
   brand: string | null;
   price: number;
-  page: { slug: string; title: string; price: number | null; oldPrice: number | null; description: string; variantLabel: string; pics: Pic[] } | null;
+  /** linkUse: the address its links use (« Où vit cette page »; missing: as the boutique chose) */
+  page: { slug: string; title: string; price: number | null; oldPrice: number | null; description: string; variantLabel: string; pics: Pic[]; linkUse?: LinkUse } | null;
   /** left: what is in the depots less what confirmed orders already promised (as Produits › Stock counts it) */
   variants: { id: number; title: string; price: number | null; left: number }[];
   /** the shop counts this product's stock (it has stock lines): else it always goes as in stock */
@@ -76,7 +77,7 @@ async function loadProducts(db: Db, ids?: number[]): Promise<Prod[]> {
        s AS (SELECT s.variant_id, sum(s.qty)::int AS qty FROM stock s JOIN warehouses wh ON wh.id = s.warehouse_id AND wh.active GROUP BY 1)
      SELECT p.id, p.name, p.brand, p.price, g.min_left,
        EXISTS (SELECT 1 FROM stock t JOIN product_variants tv ON tv.id = t.variant_id WHERE tv.product_id = p.id) AS tracked,
-       l.slug, l.title, l.price AS l_price, l.old_price, l.description, l.variant_label, l.images,
+       l.slug, l.title, l.price AS l_price, l.old_price, l.description, l.variant_label, l.images, l.link_use,
        (SELECT COALESCE(json_agg(json_build_object('id', v.id, 'title', v.title, 'price', v.price,
           'left', COALESCE(s.qty, 0) - COALESCE(r.n, 0)) ORDER BY v.id), '[]'::json)
         FROM product_variants v LEFT JOIN s ON s.variant_id = v.id LEFT JOIN r ON r.variant_id = v.id
@@ -116,6 +117,7 @@ async function loadProducts(db: Db, ids?: number[]): Promise<Prod[]> {
               return e?.url ? { id: null, url: String(e.url), w: num(e.w), h: num(e.h), jpg: false, v: numOrNull(e.v) } : null;
             })
             .filter((x: Pic | null): x is Pic => !!x),
+          linkUse: readLinkUse(r.link_use),
         }
       : null,
     variants: arr(r.variants).map((v: any) => ({ id: num(v.id), title: String(v.title ?? ''), price: numOrNull(v.price), left: num(v.left) })),
@@ -166,6 +168,8 @@ interface Where {
   store: string;
   /** what a page's link starts with (the shop's own domain or <pages>/<store>/: modules/pagelinks.ts); missing: <pages>/<store>/ */
   prefix?: string;
+  /** the same for a page with its own choice (« Où vit cette page »); missing: `prefix` */
+  prefixOf?: (use?: LinkUse) => string;
   api: string;
   brand: string;
   /** the browser preview: nothing goes to Meta */
@@ -178,7 +182,7 @@ async function whereOf(ctx: Ctx): Promise<Where> {
   const pages = String(ctx.server?.pagesUrl?.() ?? ctx.server?.publicUrl ?? 'https://pilotix.online').replace(/\/+$/, '');
   // the products' links: at the shop's own domain by default once it is ready (Réglages › « Liens des pages »)
   const l = await pageLinks(ctx, 'https://pilotix.online');
-  return { pages, store: l.store, prefix: l.prefix, api: ctx.server ? publicApi(ctx) : 'https://pilotix.online/api', brand: shop, demo: simulated(ctx), guard: await guardOf(ctx.db) };
+  return { pages, store: l.store, prefix: l.prefix, prefixOf: (use) => prefixFor(l, use), api: ctx.server ? publicApi(ctx) : 'https://pilotix.online/api', brand: shop, demo: simulated(ctx), guard: await guardOf(ctx.db) };
 }
 
 // ---------------------------------------------------------------- « stock bas »: a colour / size with little left leaves the ads
@@ -233,7 +237,8 @@ export interface Line {
 export function linesOf(p: Prod, w: Where): Line[] {
   if (problemOf(p, w.demo) || !p.page) return [];
   const page = p.page;
-  const link = w.prefix ? `${w.prefix}${page.slug}` : `${w.pages}/${w.store ? `${w.store}/` : ''}${page.slug}`;
+  const pre = w.prefixOf ? w.prefixOf(page.linkUse) : w.prefix;
+  const link = pre ? `${pre}${page.slug}` : `${w.pages}/${w.store ? `${w.store}/` : ''}${page.slug}`;
   const urlOf = (x: Pic) => (x.id ? `${w.api}/lp/img/${x.id}/meta.jpg` : String(x.url));
   const good = page.pics.filter((x) => usable(x, w.demo));
   const text = plainText(landingDescriptionText(page.description)).slice(0, 5000) || page.title;

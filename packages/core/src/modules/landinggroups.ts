@@ -12,6 +12,7 @@ import { b64, followedRefs, HtmlOpts, imageRows, ImgRef, landingIconUrl, product
 
 const WHO = ['marketer'] as const;
 import { addressOwner, addressTaken, APP_WORD, groupRowAt, keepFormerAddress, landingSettings, landingStore } from './landingquery';
+import { LINK_USE, linkUseDb, readLinkUse } from './pagelinks';
 import { checkPixels, PixelList, pixelsJson, pixelsOf, readPixels } from './pixels';
 
 const id = z.number().int().positive();
@@ -54,6 +55,8 @@ export const GroupInput = z.object({
   /** Réglages › Pixels: null = the default one, 0 = none */
   metaPixels: PixelList,
   tiktokPixels: PixelList,
+  /** the address its links use (« Où vit cette page »): 'default' = as the boutique chose (Réglages › « Liens des pages ») */
+  linkUse: z.enum(LINK_USE).default('default'),
 });
 type GroupIn = z.infer<typeof GroupInput>;
 
@@ -215,6 +218,7 @@ async function listGroups(db: Db, ids?: number[]) {
       pixelId: String(r.pixel_id ?? ''),
       metaPixels: readPixels(r.meta_pixels),
       tiktokPixels: readPixels(r.tiktok_pixels),
+      linkUse: readLinkUse(r.link_use),
       views: num(r.views),
       clicks: items.reduce((n, x) => n + x.clicks, 0),
       orders: orders.filter((o: any) => slugsOf.get(gid)!.has(String(o.g))).reduce((n: number, o: any) => n + num(o.n), 0),
@@ -315,12 +319,12 @@ export const landingGroupProcs = {
     await checkPixels(ctx.db, 'meta', i.metaPixels);
     await checkPixels(ctx.db, 'tiktok', i.tiktokPixels);
     const r = rowOf(i);
-    const vals = [r.slug, r.active, r.title, r.subtitle, r.color, r.theme, r.best_page_id, JSON.stringify(r.items), r.pixel_id || null, pixelsJson(i.metaPixels), pixelsJson(i.tiktokPixels)];
+    const vals = [r.slug, r.active, r.title, r.subtitle, r.color, r.theme, r.best_page_id, JSON.stringify(r.items), r.pixel_id || null, pixelsJson(i.metaPixels), pixelsJson(i.tiktokPixels), linkUseDb(i.linkUse)];
     let gid: number;
     if (i.id) {
       const before = (await ctx.db.query('SELECT slug FROM landing_groups WHERE id = $1', [i.id]))[0]?.slug as string | undefined;
       const u = await ctx.db.query(
-        `UPDATE landing_groups SET slug=$2, active=$3, title=$4, subtitle=$5, color=$6, theme=$7, best_page_id=$8, items=$9, pixel_id=$10, meta_pixels=$11, tiktok_pixels=$12, updated_at=now() WHERE id=$1 RETURNING id`,
+        `UPDATE landing_groups SET slug=$2, active=$3, title=$4, subtitle=$5, color=$6, theme=$7, best_page_id=$8, items=$9, pixel_id=$10, meta_pixels=$11, tiktok_pixels=$12, link_use=$13, updated_at=now() WHERE id=$1 RETURNING id`,
         [i.id, ...vals],
       );
       if (!u.length) throw notFound('Groupe introuvable');
@@ -331,7 +335,7 @@ export const landingGroupProcs = {
       gid = num(
         (
           await ctx.db.query(
-            `INSERT INTO landing_groups (slug, active, title, subtitle, color, theme, best_page_id, items, pixel_id, meta_pixels, tiktok_pixels, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+            `INSERT INTO landing_groups (slug, active, title, subtitle, color, theme, best_page_id, items, pixel_id, meta_pixels, tiktok_pixels, link_use, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
             [...vals, ctx.session.profile.id],
           )
         )[0].id,
@@ -347,8 +351,8 @@ export const landingGroupProcs = {
     const slug = await freeGroupSlug(ctx.db, String(src.slug));
     const title = `${String(src.title ?? '').slice(0, 180)} (copie)`.trim();
     const r = await ctx.db.query(
-      `INSERT INTO landing_groups (slug, active, title, subtitle, color, theme, best_page_id, items, pixel_id, meta_pixels, tiktok_pixels, meta_pixel_ref, tiktok_pixel_ref, created_by)
-       SELECT $2, false, $3, subtitle, color, theme, best_page_id, items, pixel_id, meta_pixels, tiktok_pixels, meta_pixel_ref, tiktok_pixel_ref, $4 FROM landing_groups WHERE id = $1 RETURNING id`,
+      `INSERT INTO landing_groups (slug, active, title, subtitle, color, theme, best_page_id, items, pixel_id, meta_pixels, tiktok_pixels, meta_pixel_ref, tiktok_pixel_ref, link_use, created_by)
+       SELECT $2, false, $3, subtitle, color, theme, best_page_id, items, pixel_id, meta_pixels, tiktok_pixels, meta_pixel_ref, tiktok_pixel_ref, link_use, $4 FROM landing_groups WHERE id = $1 RETURNING id`,
       [gid, slug, title, ctx.session.profile.id],
     );
     return (await listGroups(ctx.db, [num(r[0].id)]))[0];

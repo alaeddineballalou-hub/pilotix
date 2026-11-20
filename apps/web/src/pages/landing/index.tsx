@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { backend, rpc, serverUrl, shopApi } from '../../lib/backend';
 import { da, n, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
-import { usePagesPrefix } from '../../lib/pages';
+import { LinkUse, usePrefixOf } from '../../lib/pages';
 import { useSession } from '../../lib/session';
 import { copyText, Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { store } from '../../lib/store';
@@ -34,11 +34,11 @@ const AGENT_TABS: Tab[] = ['protection', 'abandons', 'bloquees'];
 
 /** the store's part of the pages' address (Réglages); undefined while it loads */
 export const useStore = () => useRpc('landing.store', {}, { staleTime: 60_000 }).data?.store;
-export { usePagesBase, usePagesPrefix } from '../../lib/pages';
+export { usePagesBase, usePagesPrefix, usePrefixOf } from '../../lib/pages';
 
 /**
  * The address customers open: <prefix><page> in real use (the boutique's own domain, or <pages' address>/<store>/:
- * usePagesPrefix), the in-app view in the demo.
+ * usePrefixOf, with the page's own choice), the in-app view in the demo.
  */
 export function publicUrl(slug: string, prefix: string): string {
   return backend.kind === 'demo' ? `#/landing/voir/${slug}` : prefix ? `${prefix}${slug}` : `${shopApi(serverUrl())}/lp/${slug}`;
@@ -80,9 +80,11 @@ export function Landing({ sub, rest }: PageProps) {
 function Pages() {
   const { t } = useTranslation();
   const list = useRpc('landing.list', {});
-  const prefix = usePagesPrefix();
-  const copy = async (slug: string) => {
-    if (await copyText(backend.kind === 'demo' ? `${location.origin}${location.pathname}${publicUrl(slug, prefix)}` : publicUrl(slug, prefix))) toast(t('landing.copied'), 'ok');
+  const prefixOf = usePrefixOf();
+  // each page's own address (« Où vit cette page »), else the boutique's
+  const copy = async (p: { slug: string; linkUse: LinkUse }) => {
+    const url = publicUrl(p.slug, prefixOf(p.linkUse));
+    if (await copyText(backend.kind === 'demo' ? `${location.origin}${location.pathname}${url}` : url)) toast(t('landing.copied'), 'ok');
   };
   const rows = list.data ?? [];
   const [sel, setSel] = useState<Set<number>>(new Set());
@@ -237,10 +239,10 @@ function Pages() {
                         <a className="btn small lp-edit" title={t('landing.list.edit')} href={`#/landing/pages/${p.id}`}>
                           <Icon name="pencil" /> <span className="lp-edit-t">{t('landing.list.edit')}</span>
                         </a>
-                        <a className="btn small icon lp-sec" href={publicUrl(p.slug, prefix)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer" aria-label={t('landing.list.open')} title={t('landing.list.open')}>
+                        <a className="btn small icon lp-sec" href={publicUrl(p.slug, prefixOf(p.linkUse))} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer" aria-label={t('landing.list.open')} title={t('landing.list.open')}>
                           <Icon name="external" />
                         </a>
-                        <button type="button" className="btn small icon lp-sec" onClick={() => copy(p.slug)} aria-label={t('landing.list.copy')} title={t('landing.list.copy')}>
+                        <button type="button" className="btn small icon lp-sec" onClick={() => copy(p)} aria-label={t('landing.list.copy')} title={t('landing.list.copy')}>
                           <Icon name="link" />
                         </button>
                         <button type="button" className="btn small icon" disabled={busy} onClick={() => duplicate([p.id])} aria-label={t('landing.list.duplicate')} title={t('landing.list.duplicate')}>

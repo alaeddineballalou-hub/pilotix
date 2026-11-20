@@ -56,6 +56,10 @@ test('plain text, the lines of a product and the fingerprint', () => {
   assert.equal(gris.link, 'https://go.test/bebe/poussette?px_cat=meta');
   // at the shop's own domain (Réglages › « Liens des pages »): no store in the link
   assert.equal((itemsOf(p, { ...w, prefix: 'https://bebe-confort.dz/' })[0].data as any).link, 'https://bebe-confort.dz/poussette?px_cat=meta');
+  // a page with its own choice (« Où vit cette page »): its address, not the shop's
+  const both = { ...w, prefix: 'https://bebe-confort.dz/', prefixOf: (u?: string) => (u === 'pilotix' ? 'https://go.test/bebe/' : 'https://bebe-confort.dz/') };
+  assert.equal((itemsOf({ ...p, page: { ...p.page, linkUse: 'pilotix' } }, both)[0].data as any).link, 'https://go.test/bebe/poussette?px_cat=meta');
+  assert.equal((itemsOf({ ...p, page: { ...p.page, linkUse: 'default' } }, both)[0].data as any).link, 'https://bebe-confort.dz/poussette?px_cat=meta');
   assert.equal(gris.brand, 'Bébé Confort');
   assert.equal(gris.description, 'Légère\n• 6 kg');
   // the small picture never goes; the pink one comes first for « Rose »

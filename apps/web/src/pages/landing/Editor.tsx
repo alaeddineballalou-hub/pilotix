@@ -4,7 +4,7 @@ import { LandingPreview } from './Preview';
 import { followProduct, isProductCopy, LANDING_COLORS, LANDING_DEFAULT_COLOR, landingDescriptionImageIds, landingDescriptionImageLine, LandingView, ProductPhotoSet, renderLanding, WHATSAPP_DEFAULT, WHATSAPP_VARS } from '@pilotix/shared';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { backend, Out, rpc, serverUrl, shopApi } from '../../lib/backend';
+import { backend, Out, rpc } from '../../lib/backend';
 import { da } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { ErrorBox, Field, Icon, Loading } from '../../ui/kit';
@@ -13,7 +13,9 @@ import { SaveBar } from '../ai/agent';
 import { useDebounced } from '../depot/OrderList';
 import { DescImages, DescImg } from './DescImages';
 import { useLandingFrame } from './frame';
-import { publicUrl, usePagesPrefix } from './index';
+import { LinkUse, usePrefixOf, useShownPrefix } from '../../lib/pages';
+import { PageAddress } from './Domain';
+import { publicUrl } from './index';
 import { Img, Photos } from './Photos';
 import { PixelSelects } from './Pixels';
 type Page = Out<'landing.get'>;
@@ -48,6 +50,8 @@ const draftOf = (p: Page | null, productId?: number) => ({
   waLabel: p?.whatsapp?.label ?? '',
   waMessage: p?.whatsapp?.message ?? '',
   stockMode: (p?.stockMode ?? 'off') as 'off' | 'hide',
+  /** « Où vit cette page »: 'default' = as the boutique chose (Réglages › « Lien des pages ») */
+  linkUse: (p?.linkUse ?? 'default') as LinkUse,
   images: (p?.images ?? []) as Img[],
 });
 type Draft = ReturnType<typeof draftOf>;
@@ -55,8 +59,9 @@ const keyOf = (d: Draft) => JSON.stringify({ ...d, images: d.images.map((i) => [
 
 function Form({ p, productId }: { p: Page | null; productId?: number }) {
   const { t } = useTranslation();
-  const prefix = usePagesPrefix();
+  const prefixOf = usePrefixOf();
   const [d, setD] = useState<Draft>(() => draftOf(p, productId));
+  const shownPrefix = useShownPrefix(d.linkUse);
   const [saved, setSaved] = useState(() => keyOf(draftOf(p, productId)));
   const [slugTouched, setSlugTouched] = useState(!!p);
   const [device, setDevice] = useState<'phone' | 'desktop'>('phone');
@@ -194,6 +199,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
       tiktokPixels: d.tiktokPixels,
       whatsapp: d.waMode === 'shop' ? null : d.waMode === 'off' ? { on: false, number: '', label: '', message: '' } : { on: true, number: d.waNumber.trim(), label: d.waLabel.trim(), message: d.waMessage.trim() },
       stockMode: d.stockMode,
+      linkUse: d.linkUse,
       images: d.images.map((i) => (i.id ? { id: i.id, v: i.v ?? null } : { url: i.url!, w: i.w, h: i.h, v: i.v ?? null })),
     });
   };
@@ -276,7 +282,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
         </a>
         <h1 dir="auto">{p ? d.title || p.productName : t('landing.ed.newTitle')}</h1>
         {p && (
-          <a className="btn small" href={publicUrl(p.slug, prefix)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer">
+          <a className="btn small" href={publicUrl(p.slug, prefixOf(p.linkUse))} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer">
             <Icon name="external" /> {t('landing.list.open')}
           </a>
         )}
@@ -303,7 +309,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
             </Field>
             <Field label={t('landing.ed.slug')} hint={t('landing.ed.slugHint')}>
               <div className="lp-slug">
-                <span className="ltr">{backend.kind === 'demo' ? '…/lp/' : (prefix || `${shopApi(serverUrl() || '')}/lp/`).replace(/^https?:\/\//, '')}</span>
+                <span className="ltr">{shownPrefix}</span>
                 <input
                   className="ltr"
                   value={d.slug}
@@ -314,6 +320,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
                 />
               </div>
             </Field>
+            <PageAddress value={d.linkUse} slug={d.slug} onChange={(u) => set('linkUse', u)} />
             <label className="check">
               <input type="checkbox" checked={d.active} onChange={(e) => set('active', e.target.checked)} />
               {t('landing.ed.active')}

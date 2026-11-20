@@ -2,10 +2,13 @@
 // pages live — the shop's own domain (it writes it, points it to the server at its registrar, Pilotix checks; HTTPS comes
 // by itself), the address its links use (its own domain by default once it is ready, or Pilotix's: core
 // modules/pagelinks.ts) and the store's part of Pilotix's address.
+// A page's (or a group's) editor › « Où vit cette page » (design 3 « Deux cartes sous l'adresse », chosen 20 Nov 2026):
+// PageAddress, below.
 import { useQueryClient } from '@tanstack/react-query';
-import { KeyboardEvent, ReactNode, useEffect, useState } from 'react';
+import { KeyboardEvent, ReactNode, useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, domainCheck, domainGet, domainSet, DomainState, rpc, serverUrl } from '../../lib/backend';
+import { LinkUse, useOwnDomain, usePilotixHost } from '../../lib/pages';
 import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { Field, Icon } from '../../ui/kit';
@@ -213,5 +216,62 @@ export function PageLinks({ store }: { store: (label: string) => ReactNode }) {
 
       {store(domain ? t('landing.links.storeOnly', { pilotix: pxBase }) : t('landing.set.storeSlug'))}
     </section>
+  );
+}
+
+/**
+ * A page's (or a group's) editor › « Où vit cette page »: the address its links use (the pages' list and its « Copier »,
+ * the ads, the catalogue, the WhatsApp campaigns), the boutique's own domain or Pilotix's. The card marked « par défaut »
+ * is the boutique's choice (Réglages › « Lien des pages »): a page on it follows that choice, also when it changes later.
+ * Shown once the boutique's own domain is ready (before, every link uses Pilotix's address). Saved with the page.
+ */
+export function PageAddress({ value, slug, onChange }: { value: LinkUse; slug: string; onChange: (u: LinkUse) => void }) {
+  const { t } = useTranslation();
+  const l = useRpc('landing.store', {}, { staleTime: 60_000 }).data;
+  const own = useOwnDomain();
+  const host = usePilotixHost();
+  const id = useId();
+  if (!l || !own) return null;
+  const shop: Use = l.choice === 'pilotix' ? 'pilotix' : 'own';
+  // what this page uses now; its own domain falls back to Pilotix's while it does not reach the server (said below)
+  const eff: Use = value === 'default' ? shop : value;
+  const page = slug || t('landing.links.page');
+  const shown: Record<Use, string> = { own: `${own.domain}/${page}`, pilotix: `${host}/${l.store || '…'}/${page}` };
+  // the boutique's choice is « par défaut »: picking it follows the boutique, not a copy of its choice of today
+  const pick = (k: Use) => onChange(k === shop ? 'default' : k);
+  return (
+    <div className="lp-addr lp-where">
+      <span className="lp-addr-h" id={`${id}-h`}>
+        {t('landing.where.title')}
+      </span>
+      <div className="lp-addr-list" role="radiogroup" aria-labelledby={`${id}-h`}>
+        {(['own', 'pilotix'] as Use[]).map((k) => (
+          <label key={k} className={`lp-level lp-addr-opt ${eff === k ? 'on' : ''}`}>
+            <input type="radio" name={`${id}-use`} checked={eff === k} onChange={() => pick(k)} />
+            <span className="lp-radio" aria-hidden="true" />
+            <span className="lp-addr-txt">
+              <b>
+                {k === 'own' ? t('landing.links.own') : t('landing.links.pilotix')}
+                {k === shop && <span className="chip lp-def">{t('landing.where.default')}</span>}
+              </b>
+              <small className="ltr">{shown[k]}</small>
+            </span>
+          </label>
+        ))}
+      </div>
+      {eff === 'own' && !own.live && (
+        <p className="lp-addr-state warn" role="status">
+          <Icon name="alert" /> <span>{t('landing.where.down', { domain: own.domain, pilotix: host })}</span>
+        </p>
+      )}
+      {eff !== shop && (
+        <button type="button" className="lp-where-back" onClick={() => onChange('default')}>
+          <Icon name="refresh" /> {t('landing.where.back')}
+        </button>
+      )}
+      <p className="lp-addr-note">
+        <span>{t('landing.where.note', { where: `${t('landing.tabs.reglages')} › ${t('landing.set.link')}` })}</span>
+      </p>
+    </div>
   );
 }

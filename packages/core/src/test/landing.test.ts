@@ -82,7 +82,7 @@ test('page address: site/<store>/<page>, the store from the shop name or chosen 
   // the pages' own address comes from the server (go.<domain> once it answers), and the shop's own domain from the
   // platform (Réglages › « Liens des pages »): none here
   const now: any = await call('landing.store', admin, {});
-  assert.deepEqual({ ...now, sample: null }, { store: 'ma-boutique', pagesUrl: '', prefix: '', choice: 'own', own: null, usesOwn: false, sample: null });
+  assert.deepEqual({ ...now, sample: null }, { store: 'ma-boutique', pagesUrl: '', prefix: '', choice: 'own', own: null, usesOwn: false, ownPrefix: '', pilotixPrefix: '', sample: null });
   const r: any = await call('landing.html', admin, { slug: SLUG, mode: 'live', post: '/o', geo: '/g/', imgBase: null, site: 'https://shop.example' });
   assert.ok(r.html.includes(`<link rel="canonical" href="https://shop.example/ma-boutique/${SLUG}">`));
   await assert.rejects(call('landing.settings.save', mk, { ...base, storeSlug: 'api' }), /réservé/);

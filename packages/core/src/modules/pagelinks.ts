@@ -5,6 +5,8 @@
 // - Its own domain (https://<domain>/<page>) by default, once it is ready (its DNS points to the server, with its proof:
 //   platform/domains.ts) and still reaches the server (the server checks it every 10 minutes: CoreService.shopDomainLive).
 // - Else, or when the boutique chooses it, the platform's pages address (https://go.<domain>/<store>/<page>).
+// - One page or group can choose the other one (its editor › « Où vit cette page », 21 Nov 2026); « default » follows
+//   the boutique's choice, also when it changes. Its own domain still only while it works.
 // Both addresses always serve every page, whatever is chosen: links already out (ads, messages) keep working.
 //
 // Imports no other module of ./modules but landingquery: no import cycle.
@@ -14,6 +16,12 @@ import { getSetting, setSetting } from '../settings';
 import { landingStore } from './landingquery';
 
 export type LinkChoice = 'own' | 'pilotix';
+/** a page's (or a group's) own choice: 'default' = as the boutique chose (its column link_use: NULL) */
+export const LINK_USE = ['default', 'own', 'pilotix'] as const;
+export type LinkUse = (typeof LINK_USE)[number];
+export const readLinkUse = (v: unknown): LinkUse => (v === 'own' || v === 'pilotix' ? v : 'default');
+/** what the column link_use holds for a choice */
+export const linkUseDb = (u: LinkUse): LinkChoice | null => (u === 'default' ? null : u);
 
 export interface OwnDomain {
   domain: string;
@@ -36,6 +44,10 @@ export interface PageLinks {
   usesOwn: boolean;
   /** what a page's (or a group's) link starts with, ending with « / »: https://<domain>/ or <base>/<store>/; '' with no address */
   prefix: string;
+  /** https://<domain>/ while its own domain is ready and reaches the server, else '' (whatever is chosen) */
+  ownPrefix: string;
+  /** <base>/<store>/ ('' with no address) */
+  pilotixPrefix: string;
 }
 
 /** The boutique's own domain on the platform, as Pilotix knows it now. */
@@ -56,9 +68,20 @@ export async function pageLinks(ctx: Ctx, fallbackBase = ''): Promise<PageLinks>
   const choice: LinkChoice = (await getSetting(ctx.db, 'pagelinks')).use === 'pilotix' ? 'pilotix' : 'own';
   const own = await ownDomainOf(ctx);
   const base = String(ctx.server?.pagesUrl?.() || ctx.server?.publicUrl || fallbackBase).replace(/\/+$/, '');
-  const usesOwn = !!own && own.status === 'ok' && own.live && choice === 'own';
-  const prefix = usesOwn ? `https://${own!.domain}/` : base ? `${base}/${store ? `${store}/` : ''}` : '';
-  return { store, base, choice, own, usesOwn, prefix };
+  const ownPrefix = own && own.status === 'ok' && own.live ? `https://${own.domain}/` : '';
+  const pilotixPrefix = base ? `${base}/${store ? `${store}/` : ''}` : '';
+  const usesOwn = !!ownPrefix && choice === 'own';
+  return { store, base, choice, own, usesOwn, prefix: usesOwn ? ownPrefix : pilotixPrefix, ownPrefix, pilotixPrefix };
+}
+
+/**
+ * What one page's (or group's) link starts with: its own choice (`use`: its link_use), else the boutique's; its own domain
+ * only while it is ready and reaches the server, else the platform's address.
+ */
+export function prefixFor(l: PageLinks, use?: unknown): string {
+  const u = readLinkUse(use);
+  const want: LinkChoice = u === 'default' ? l.choice : u;
+  return want === 'own' && l.ownPrefix ? l.ownPrefix : l.pilotixPrefix;
 }
 
 export const pageLinksProcs = {

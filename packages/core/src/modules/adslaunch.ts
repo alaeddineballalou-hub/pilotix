@@ -17,7 +17,7 @@ import { audienceIds, ensureEventAudiences, pilotSettings, wilayaRates, type Acc
 import { B64, mediaOf, mediaView, PLAN_LIMITS, VIDEO_CHUNK, VIDEO_TYPES, type MediaRow } from './cmplan';
 import { aiKeyed, dellalSettings, PILOT_CHEAP_MODEL, pilotOn, type AiResponse } from './dellal';
 import { fieldOf } from './leads';
-import { pageLinks } from './pagelinks';
+import { pageLinks, prefixFor } from './pagelinks';
 import { budgetPacks, CHANNELS, GOAL_META, GOALS, isGone, isOn, launchProblems, limitOf, metaPlan, type Goal, type LaunchInput, type LaunchMedia } from './pilotads';
 import { contentFor, partnerChoices, partnerFor, USABLE } from './partners';
 import { launchAccounts, linkedPage } from './social';
@@ -72,12 +72,19 @@ export interface ProductLimit {
 /**
  * The public address of a landing page or a group (theirs are the same kind: site/<store>/<slug>): at the shop's own
  * domain by default once it is ready, so the ads show the shop's name and not PILOTIX.ONLINE (seen on a real ad,
- * 17 Nov 2026), unless the shop chose the platform's address (Réglages › « Liens des pages »: modules/pagelinks.ts).
- * '' when there is no platform address (the browser preview has DEMO_BASE).
+ * 17 Nov 2026), unless the shop chose the platform's address (Réglages › « Liens des pages »: modules/pagelinks.ts)
+ * or the page (the group) chose its own (`use`: its link_use). '' when there is no platform address (the browser
+ * preview has DEMO_BASE).
  */
-async function pageAddress(ctx: Ctx): Promise<{ url: (slug: string) => string; own: boolean }> {
+async function pageAddress(ctx: Ctx): Promise<{ url: (slug: string, use?: unknown) => string; own: (use?: unknown) => boolean }> {
   const l = await pageLinks(ctx, ctx.server ? '' : DEMO_BASE);
-  return { own: l.usesOwn, url: (slug) => (l.prefix ? `${l.prefix}${slug}` : '') };
+  return {
+    url: (slug, use) => {
+      const p = prefixFor(l, use);
+      return p ? `${p}${slug}` : '';
+    },
+    own: (use) => !!l.ownPrefix && prefixFor(l, use) === l.ownPrefix,
+  };
 }
 
 /** The products the launcher offers, with what an order may cost each (one read of the orders for all of them). */
@@ -104,7 +111,7 @@ export async function productLimits(ctx: Ctx, only?: number | number[] | null): 
   )[0];
   const shopShare = num(avg?.d) + num(avg?.r) >= 20 ? num(avg.d) / (num(avg.d) + num(avg.r)) : 0.65;
   const plans = await getSetting(ctx.db, 'payPlans');
-  const pages = await ctx.db.query(`SELECT id, slug, title, product_id, pixel_id FROM landing_pages WHERE active ORDER BY id DESC`).catch(() => []);
+  const pages = await ctx.db.query(`SELECT id, slug, title, product_id, pixel_id, link_use FROM landing_pages WHERE active ORDER BY id DESC`).catch(() => []);
   const address = await pageAddress(ctx);
   const out: ProductLimit[] = [];
   for (const p of rows) {
@@ -137,8 +144,8 @@ export async function productLimits(ctx: Ctx, only?: number | number[] | null): 
             id: num(lp.id),
             slug: String(lp.slug),
             title: String(lp.title ?? lp.slug),
-            url: address.url(String(lp.slug)),
-            own: address.own,
+            url: address.url(String(lp.slug), lp.link_use),
+            own: address.own(lp.link_use),
             pixelId: lp.pixel_id ? String(lp.pixel_id) : null,
           }
         : null,
@@ -174,7 +181,7 @@ const groupPageIds = (items: unknown): number[] => {
  */
 export async function groupLimits(ctx: Ctx, opts: { only?: number | null; products?: ProductLimit[] } = {}): Promise<GroupLimit[]> {
   const rows = await ctx.db
-    .query(`SELECT id, slug, title, active, items, pixel_id FROM landing_groups ${opts.only ? 'WHERE id = $1' : ''} ORDER BY updated_at DESC, id DESC LIMIT 100`, opts.only ? [opts.only] : [])
+    .query(`SELECT id, slug, title, active, items, pixel_id, link_use FROM landing_groups ${opts.only ? 'WHERE id = $1' : ''} ORDER BY updated_at DESC, id DESC LIMIT 100`, opts.only ? [opts.only] : [])
     .catch(() => []);
   if (!rows.length) return [];
   const pageIds = [...new Set(rows.flatMap((r: any) => groupPageIds(r.items)))];
@@ -199,7 +206,7 @@ export async function groupLimits(ctx: Ctx, opts: { only?: number | null; produc
       name: String(r.title || slug),
       price: Math.min(...ps.map((p) => p.price)),
       photo: ps.find((p) => p.photo)?.photo ?? null,
-      landing: r.active ? { id: num(r.id), slug, title: String(r.title || slug), url: address.url(slug), own: address.own, pixelId: r.pixel_id ? String(r.pixel_id) : null } : null,
+      landing: r.active ? { id: num(r.id), slug, title: String(r.title || slug), url: address.url(slug, r.link_use), own: address.own(r.link_use), pixelId: r.pixel_id ? String(r.pixel_id) : null } : null,
       group: { count: ps.length, productIds: ps.map((p) => p.id), names: ps.map((p) => p.name), lowest: lowest.name, maxPrice: Math.max(...ps.map((p) => p.price)) },
     });
   }

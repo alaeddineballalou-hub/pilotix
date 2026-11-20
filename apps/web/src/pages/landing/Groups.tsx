@@ -4,7 +4,7 @@ import { LandingPreview } from './Preview';
 import { GROUP_BADGES, GROUP_THEMES, GroupBadge, GroupTheme, LANDING_COLORS, LANDING_DEFAULT_COLOR } from '@pilotix/shared';
 import { ReactElement, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { backend, Out, rpc, serverUrl, shopApi } from '../../lib/backend';
+import { backend, Out, rpc } from '../../lib/backend';
 import { n } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { copyText, Empty, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
@@ -12,7 +12,9 @@ import { toast } from '../../ui/toast';
 import { SaveBar } from '../ai/agent';
 import { useDebounced } from '../depot/OrderList';
 import { useLandingFrame } from './frame';
-import { publicUrl, usePagesPrefix } from './index';
+import { LinkUse, usePrefixOf, useShownPrefix } from '../../lib/pages';
+import { PageAddress } from './Domain';
+import { publicUrl } from './index';
 import { PixelSelects } from './Pixels';
 
 type Group = Out<'landing.groups'>[number];
@@ -42,7 +44,7 @@ export function Groups({ edit }: { edit?: string }) {
 function GroupList() {
   const { t } = useTranslation();
   const list = useRpc('landing.groups', {});
-  const prefix = usePagesPrefix();
+  const prefixOf = usePrefixOf();
   const rows = list.data ?? [];
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -58,8 +60,10 @@ function GroupList() {
     else s.add(gid);
     setSel(s);
   };
-  const copy = async (slug: string) => {
-    if (await copyText(backend.kind === 'demo' ? `${location.origin}${location.pathname}${publicUrl(slug, prefix)}` : publicUrl(slug, prefix))) toast(t('landing.copied'), 'ok');
+  // each group's own address (« Où vit cette page »), else the boutique's
+  const copy = async (g: { slug: string; linkUse: LinkUse }) => {
+    const url = publicUrl(g.slug, prefixOf(g.linkUse));
+    if (await copyText(backend.kind === 'demo' ? `${location.origin}${location.pathname}${url}` : url)) toast(t('landing.copied'), 'ok');
   };
   // one group: its copy opens in the editor (offline) to be changed before going online; several: they stay in the list
   const duplicate = async (ids: number[]) => {
@@ -204,10 +208,10 @@ function GroupList() {
                       <a className="btn small lp-edit" title={t('landing.list.edit')} href={`#/landing/groupes/${g.id}`}>
                         <Icon name="pencil" /> <span className="lp-edit-t">{t('landing.list.edit')}</span>
                       </a>
-                      <a className="btn small icon lp-sec" href={publicUrl(g.slug, prefix)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer" aria-label={t('landing.list.open')} title={t('landing.list.open')}>
+                      <a className="btn small icon lp-sec" href={publicUrl(g.slug, prefixOf(g.linkUse))} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer" aria-label={t('landing.list.open')} title={t('landing.list.open')}>
                         <Icon name="external" />
                       </a>
-                      <button type="button" className="btn small icon lp-sec" onClick={() => copy(g.slug)} aria-label={t('landing.list.copy')} title={t('landing.list.copy')}>
+                      <button type="button" className="btn small icon lp-sec" onClick={() => copy(g)} aria-label={t('landing.list.copy')} title={t('landing.list.copy')}>
                         <Icon name="link" />
                       </button>
                       <button type="button" className="btn small icon" disabled={busy} onClick={() => duplicate([g.id])} aria-label={t('landing.list.duplicate')} title={t('landing.list.duplicate')}>
@@ -312,14 +316,17 @@ const draftOf = (g: Group | null) => ({
   pixelId: g?.pixelId ?? '',
   metaPixels: (g?.metaPixels ?? null) as number[] | null,
   tiktokPixels: (g?.tiktokPixels ?? null) as number[] | null,
+  /** « Où vit cette page »: 'default' = as the boutique chose (Réglages › « Lien des pages ») */
+  linkUse: (g?.linkUse ?? 'default') as LinkUse,
 });
 type Draft = ReturnType<typeof draftOf>;
 
 function Form({ g }: { g: Group | null }) {
   const { t } = useTranslation();
-  const prefix = usePagesPrefix();
+  const prefixOf = usePrefixOf();
   const pages = useRpc('landing.list', {});
   const [d, setD] = useState<Draft>(() => draftOf(g));
+  const shownPrefix = useShownPrefix(d.linkUse);
   const [saved, setSaved] = useState(() => JSON.stringify(draftOf(g)));
   const [slugTouched, setSlugTouched] = useState(!!g);
   const [add, setAdd] = useState('');
@@ -392,7 +399,7 @@ function Form({ g }: { g: Group | null }) {
         </a>
         <h1 dir="auto">{g ? d.title || g.title : t('landing.gr.newTitle')}</h1>
         {g && (
-          <a className="btn small" href={publicUrl(g.slug, prefix)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer">
+          <a className="btn small" href={publicUrl(g.slug, prefixOf(g.linkUse))} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer">
             <Icon name="external" /> {t('landing.list.open')}
           </a>
         )}
@@ -415,7 +422,7 @@ function Form({ g }: { g: Group | null }) {
             </Field>
             <Field label={t('landing.ed.slug')} hint={t('landing.gr.slugHint')}>
               <div className="lp-slug">
-                <span className="ltr">{backend.kind === 'demo' ? '…/lp/' : (prefix || `${shopApi(serverUrl() || '')}/lp/`).replace(/^https?:\/\//, '')}</span>
+                <span className="ltr">{shownPrefix}</span>
                 <input
                   className="ltr"
                   value={d.slug}
@@ -426,6 +433,7 @@ function Form({ g }: { g: Group | null }) {
                 />
               </div>
             </Field>
+            <PageAddress value={d.linkUse} slug={d.slug} onChange={(u) => set('linkUse', u)} />
             <label className="check">
               <input type="checkbox" checked={d.active} onChange={(e) => set('active', e.target.checked)} />
               {t('landing.gr.active')}

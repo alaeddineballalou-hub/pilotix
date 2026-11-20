@@ -26,7 +26,7 @@ import {
   Tenancy,
 } from '../index';
 import { landingStore } from '../modules/landingquery';
-import { productLimits } from '../modules/adslaunch';
+import { groupLimits, productLimits } from '../modules/adslaunch';
 import { campaignsProcs } from '../modules/campaigns';
 import { landingProcs } from '../modules/landing';
 import { pageLinksProcs } from '../modules/pagelinks';
@@ -688,6 +688,73 @@ test('page links: the own domain by default, Pilotix’s address when chosen or 
   const s = (await loadShop(t, { id: made.id }))!;
   const m = await shopUserCtx(t, schema, 'm@liens.dz', 'agent-pass-1', shopCtx(s, shopStatus(s, Date.now(), 3)));
   await assert.rejects(pageLinksProcs['landing.links.set'].run({ ...m, t, server: { pagesUrl: () => 'https://go.pilotix.online' } as any }, { use: 'pilotix' }), /administrateur/);
+});
+
+test('page links: one page or group chooses its own address, « default » follows the shop’s choice', async () => {
+  const { t, p } = await server();
+  const plan = (await p<any[]>('p.plans.list')).find((x) => x.code === 'pro');
+  const made = await invite(t, p, { name: 'Adresses', ownerName: 'Amel', ownerEmail: 'a@adresses.dz', planId: plan.id, trialDays: 14 }, 'Adresses-Password-1');
+  const schema = `shop_${made.id}`;
+  const db = t.shop(schema);
+  const prod = Number((await db.query(`INSERT INTO products (name, sku, price, active) VALUES ('Trottinette', 'TRO', 8900, true) RETURNING id`))[0].id);
+  const prod2 = Number((await db.query(`INSERT INTO products (name, sku, price, active) VALUES ('Casque', 'CAS', 2500, true) RETURNING id`))[0].id);
+  let live = true;
+  const ctxNow = async (): Promise<Ctx> => {
+    const s = (await loadShop(t, { id: made.id }))!;
+    const c = await shopUserCtx(t, schema, 'a@adresses.dz', 'Adresses-Password-1', shopCtx(s, shopStatus(s, Date.now(), 3)));
+    return { ...c, t, server: { publicUrl: 'https://pilotix.online', pagesUrl: () => 'https://go.pilotix.online', shopDomainLive: () => live } as any };
+  };
+  const store = (await loadShop(t, { id: made.id }))!.slug;
+  const pilotix = `https://go.pilotix.online/${store}/`;
+  const own = 'https://boutique-adresses.dz/';
+  await t.platform.query(`UPDATE platform.shops SET domain = 'boutique-adresses.dz', domain_status = 'ok' WHERE id = $1`, [made.id]);
+  // two pages: one follows the shop (« default »: NULL), one chose Pilotix's address; a group that chose it too
+  const a = Number((await db.query(`INSERT INTO landing_pages (product_id, slug, title) VALUES ($1, 'trottinette', 'Trottinette') RETURNING id`, [prod]))[0].id);
+  const b = Number((await db.query(`INSERT INTO landing_pages (product_id, slug, title, link_use) VALUES ($1, 'casque', 'Casque', 'pilotix') RETURNING id`, [prod2]))[0].id);
+  const g = Number((await db.query(`INSERT INTO landing_groups (slug, title, items, link_use) VALUES ('sport', 'Sport', $1, 'pilotix') RETURNING id`, [JSON.stringify([{ pageId: a }, { pageId: b }])]))[0].id);
+  const use = (id: number, u: string | null) => db.query(`UPDATE landing_pages SET link_use = $2 WHERE id = $1`, [id, u]);
+  const ad = async (id: number) => (await productLimits(await ctxNow())).find((x) => x.id === id)!.landing!;
+  const groupAd = async () => (await groupLimits(await ctxNow())).find((x) => x.id === g)!.landing!;
+  const campaign = async (slug: string) => ((await campaignsProcs['campaigns.options'].run(await ctxNow(), {})) as any).pages.find((x: any) => x.slug === slug).url;
+  const links = async (): Promise<any> => landingProcs['landing.store'].run(await ctxNow(), {});
+  // each address's start, for the screens that build a page's link themselves
+  let l = await links();
+  assert.equal(l.ownPrefix, own);
+  assert.equal(l.pilotixPrefix, pilotix);
+  // the ads, the WhatsApp campaigns: each page's own address
+  assert.equal((await ad(prod)).url, `${own}trottinette`);
+  assert.equal((await ad(prod)).own, true);
+  assert.equal((await ad(prod2)).url, `${pilotix}casque`);
+  assert.equal((await ad(prod2)).own, false);
+  assert.equal(await campaign('trottinette'), `${own}trottinette`);
+  assert.equal(await campaign('casque'), `${pilotix}casque`);
+  assert.equal((await groupAd()).url, `${pilotix}sport`);
+  // the shop chooses Pilotix's address: « default » follows, a page that chose its own domain keeps it
+  await use(b, 'own');
+  await pageLinksProcs['landing.links.set'].run(await ctxNow(), { use: 'pilotix' });
+  assert.equal((await ad(prod)).url, `${pilotix}trottinette`);
+  assert.equal((await ad(prod2)).url, `${own}casque`);
+  assert.equal(await campaign('casque'), `${own}casque`);
+  // its domain stops reaching the server: Pilotix's address for it too, until it answers again
+  live = false;
+  l = await links();
+  assert.equal(l.ownPrefix, '');
+  assert.equal((await ad(prod2)).url, `${pilotix}casque`);
+  assert.equal((await ad(prod2)).own, false);
+  live = true;
+  assert.equal((await ad(prod2)).url, `${own}casque`);
+  // what the editors save, list and copy (a save checks the product again: Produits › « Prêt », not the links)
+  const saved: any = await call('landing.save', await ctxNow(), { id: b, productId: prod2, slug: 'casque', title: 'Casque', linkUse: 'default' });
+  assert.equal(saved.linkUse, 'default');
+  assert.equal((await db.query(`SELECT link_use FROM landing_pages WHERE id = $1`, [b]))[0].link_use, null);
+  assert.equal(((await call('landing.save', await ctxNow(), { id: a, productId: prod, slug: 'trottinette', title: 'Trottinette', linkUse: 'own' })) as any).linkUse, 'own');
+  assert.equal(((await call('landing.list', await ctxNow(), {})) as any[]).find((x) => x.id === a).linkUse, 'own');
+  assert.equal(((await call('landing.duplicate', await ctxNow(), { id: a })) as any).linkUse, 'own');
+  assert.equal(((await call('landing.duplicate', await ctxNow(), { id: b })) as any).linkUse, 'default');
+  const gs: any = await call('landing.groupSave', await ctxNow(), { id: g, slug: 'sport', title: 'Sport', items: [{ pageId: a }, { pageId: b }], linkUse: 'own' });
+  assert.equal(gs.linkUse, 'own');
+  assert.equal(((await call('landing.groupDuplicate', await ctxNow(), { id: g })) as any).linkUse, 'own');
+  await assert.rejects(call('landing.save', await ctxNow(), { productId: prod2, slug: 'casque-2', title: 'Casque', linkUse: 'ailleurs' }));
 });
 
 test('the plan limits active accounts', async () => {

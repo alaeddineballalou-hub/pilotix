@@ -482,6 +482,13 @@
     "storeOnly": "Nom de la boutique (seulement dans les liens {{pilotix}})",
     "saved": "Enregistré : vos liens utilisent {{address}}"
   },
+  "where": {
+    "title": "Où vit cette page",
+    "default": "par défaut",
+    "back": "Revenir à l’adresse par défaut",
+    "down": "{{domain}} n’arrive plus à Pilotix pour le moment : le lien de cette page utilise {{pilotix}} jusqu’à ce qu’il remarche.",
+    "note": "L’adresse par défaut se choisit dans {{where}}. Une page sur « par défaut » la suit si vous la changez."
+  },
   "pr": {
     "kQuality": "Qualité des commandes",
     "kQualitySub": "{{real}} vraies sur {{total}} reçues",
