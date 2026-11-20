@@ -77,14 +77,15 @@ export const agencyAssignProcs = {
   'agency.assign.run': proc([], z.object({}), async (ctx) => {
     needAgency(ctx);
     const t = ctx.t!;
-    const grace = (await platformSettings(t)).trial.graceDays;
+    const set = await platformSettings(t);
+    const grace = set.trial.graceDays;
     const out = { conf: { assigned: 0, back: 0, moved: 0, waiting: 0 }, follow: { assigned: 0, back: 0, moved: 0, waiting: 0 } };
     for (const s of await stores(ctx)) {
       const shop = await loadShop(t, { id: s.id });
       if (!shop) continue;
       const st = shopStatus(shop, ctx.now(), grace);
       if (st.locked) continue;
-      const sctx: Ctx = { db: t.shop(s.schema), session: ctx.session, shop: shopCtx(shop, st), now: ctx.now, emit: ctx.emit, t };
+      const sctx: Ctx = { db: t.shop(s.schema), session: ctx.session, shop: shopCtx(shop, st, set.soon.features), now: ctx.now, emit: ctx.emit, t };
       for (const area of ['conf', 'follow'] as const) {
         const r = await runArea(sctx, area, undefined, undefined, { agency: ctx.shop!.id }).catch(() => null);
         if (r) for (const k of ['assigned', 'back', 'moved', 'waiting'] as const) out[area][k] += r[k];

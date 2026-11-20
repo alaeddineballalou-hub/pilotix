@@ -17,7 +17,7 @@ import { store } from '../lib/store';
 import { toast } from '../ui/toast';
 import { Field, Icon, StageBar, TicketTag } from '../ui/kit';
 import { Modal } from '../ui/modal';
-import { canSee, canSeeChild, menuView, NAV, NavItem, SpaceId } from './nav';
+import { canSee, canSeeChild, isSoonItem, isSoonLine, menuView, NAV, NavChild, NavItem, SpaceId } from './nav';
 import { useCanRules } from '../lib/pilot';
 import { AccountMenu } from './AccountMenu';
 import { BoutiqueSwitch, useBoutiques } from './Boutiques';
@@ -98,6 +98,18 @@ function Count({ v, tone }: { v: number; tone: string }) {
   return (
     <span className={`nav-count ${tone} ${v === 0 ? 'zero' : ''}`} title={String(v)}>
       {compact(v)}
+    </span>
+  );
+}
+
+/** « Bientôt » (control room › Réglages): a menu line Pilotix keeps closed for now, greyed with its tag; it opens nothing. */
+function SoonLine({ icon, label, sub = false }: { icon: string; label: string; sub?: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <span className={`nav-item${sub ? ' nav-sub-item' : ''} px-soon`} aria-disabled="true" title={`${label} · ${t('nav.soon')}`}>
+      <Icon name={icon} className={sub ? 'ic px-sub-ic' : 'ic'} />
+      <span className="nav-l">{label}</span>
+      <span className="px-soon-tag">{t('nav.soon')}</span>
     </span>
   );
 }
@@ -187,11 +199,14 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
     setScrPicked(id);
   };
   // the lines this user sees (a group's: an agency's, the work its sellers give it), on the screen picked (nav.ts)
+  const soonItem = (n: NavItem) => isSoonItem(n, roles, isAdmin, !!session!.canManageUsers, canRules, !!session!.profile.canAffect);
+  const soonLine = (c: NavChild) => isSoonLine(c, roles, isAdmin, canRules);
   const view = menuView(
     nav,
     {
-      item: (n) => canSee(n, roles, isAdmin, !!session!.canManageUsers, canRules, !!session!.profile.canAffect),
-      line: (c) => canSeeChild(c, roles, isAdmin, canRules) && (!agency || !work.loaded || (c.id === 'confirmation' ? work.tasks.has('confirmation') : c.id === 'alertes' ? work.tasks.has('suivi') : ['suivi', 'enlivraison', 'livrees', 'annulees'].includes(c.id) ? work.tasks.has('suivi') || work.tasks.has('confirmation') : true)),
+      // « Bientôt » (control room › Réglages): shown greyed to the people who would see it, opens nothing
+      item: (n) => canSee(n, roles, isAdmin, !!session!.canManageUsers, canRules, !!session!.profile.canAffect) || soonItem(n),
+      line: (c) => soonLine(c) || canSeeChild(c, roles, isAdmin, canRules) && (!agency || !work.loaded || (c.id === 'confirmation' ? work.tasks.has('confirmation') : c.id === 'alertes' ? work.tasks.has('suivi') : ['suivi', 'enlivraison', 'livrees', 'annulees'].includes(c.id) ? work.tasks.has('suivi') || work.tasks.has('confirmation') : true)),
     },
     scrPicked,
     space === 'store',
@@ -266,7 +281,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
           n.children ? (
             <div key={n.id} className={`nav-group open bjcn ${n.pages?.includes(page) ? 'bjcn-on in' : ''}`} data-grp={n.id}>
               <a
-                href={n.href ?? kidsOn(n)[0]?.href ?? '#/'}
+                href={n.href ?? kidsOn(n).find((c) => !soonLine(c))?.href ?? '#/'}
                 className="nav-item nav-group-head"
                 title={t(`nav.${n.id}`)}
                 aria-current={page === n.id && (!sub || sub === 'tout') ? 'page' : undefined}
@@ -287,6 +302,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
               </a>
               <div className={`nav-sub${grpOpen[n.id] !== false ? '' : ' px-sub-closed'}`} style={{ display: 'flex' }}>
                 {kidsOn(n).map((c) => {
+                  if (soonLine(c)) return <SoonLine key={c.id} icon={c.icon ?? 'list'} label={t(`nav.sub.${c.id}`)} sub />;
                   const on = childOn(n, c.id);
                   const v = c.count ? counts[c.count] : undefined;
                   return (
@@ -299,6 +315,8 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
                 })}
               </div>
             </div>
+          ) : soonItem(n) ? (
+            <SoonLine key={n.id} icon={n.icon} label={label(n.id)} />
           ) : (
             <a key={n.id} href={`#/${n.id}`} className={`nav-item ${page === n.id ? 'on' : ''}`} data-page={n.id} aria-current={page === n.id ? 'page' : undefined} title={`${label(n.id)}${ITEM_COUNT[n.id] && counts[ITEM_COUNT[n.id][0]] !== undefined ? ` · ${counts[ITEM_COUNT[n.id][0]]}` : ''}`}>
               <Icon name={n.icon} className="ic" />
@@ -420,7 +438,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
               <StageBar
                 flow={false}
                 current={kids(curGrp).find((c) => childOn(curGrp, c.id))?.id ?? ''}
-                items={kids(curGrp).map((c) => ({ key: c.id, label: t(`nav.sub.${c.id}`), href: c.href, count: c.count ? counts[c.count] : undefined }))}
+                items={kids(curGrp).filter((c) => !soonLine(c)).map((c) => ({ key: c.id, label: t(`nav.sub.${c.id}`), href: c.href, count: c.count ? counts[c.count] : undefined }))}
               />
             </div>
           )}

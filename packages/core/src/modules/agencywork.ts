@@ -58,12 +58,13 @@ async function storeCtx(ctx: Ctx, w: Work): Promise<Ctx> {
   const t = ctx.t!;
   const s = await loadShop(t, { id: w.L.info.store.id });
   if (!s) throw bad('Vendeur introuvable');
-  const st = shopStatus(s, ctx.now(), (await platformSettings(t)).trial.graceDays);
+  const set = await platformSettings(t);
+  const st = shopStatus(s, ctx.now(), set.trial.graceDays);
   if (st.locked) throw locked();
   const db = t.shop(s.schema);
   const p = await profileById(db, w.profileId);
   if (!p?.active) throw forbidden('Vous ne travaillez plus pour ce vendeur');
-  return { db, session: makeSession(p), shop: shopCtx(s, st), now: ctx.now, emit: () => {}, t };
+  return { db, session: makeSession(p), shop: shopCtx(s, st, set.soon.features), now: ctx.now, emit: () => {}, t };
 }
 
 /** The procedures of the seller picker's « Tous les vendeurs » (the others need one seller). */

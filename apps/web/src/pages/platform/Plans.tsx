@@ -6,7 +6,7 @@ import { da, n } from '../../lib/format';
 import { POut, Staff, usePAction, usePRpc } from '../../lib/platform';
 import { ErrorBox, Field, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
-import { featureLabel, FeatureTree } from './FeatureTree';
+import { featureLabel, FeatureTree, useSoon } from './FeatureTree';
 
 type Plan = POut<'p.plans.list'>[number];
 
@@ -97,6 +97,7 @@ export function Plans({ staff }: { staff: Staff }) {
 
 function PlanForm({ plan, onClose }: { plan: Plan | null; onClose: () => void }) {
   const { t } = useTranslation();
+  const soon = useSoon();
   const [f, setF] = useState({
     name: plan?.name ?? '',
     priceMonth: plan?.priceMonth ?? 0,
@@ -199,7 +200,7 @@ function PlanForm({ plan, onClose }: { plan: Plan | null; onClose: () => void })
           </div>
         )}
         <h3>{t('platform.menus.title')}</h3>
-        {plan?.system ? <p className="muted">{t('platform.plan.systemMenus')}</p> : <FeatureTree isOn={(k) => on.has(k) && (k.includes('/') ? on.has(k.split('/')[0]) : true)} onToggle={toggle} />}
+        {plan?.system ? <p className="muted">{t('platform.plan.systemMenus')}</p> : <FeatureTree isOn={(k) => on.has(k) && (k.includes('/') ? on.has(k.split('/')[0]) : true)} soon={soon} onToggle={toggle} />}
       </div>
     </Modal>
   );

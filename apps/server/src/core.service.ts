@@ -462,7 +462,7 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
       if (!s) return null;
       const set = await this.settings();
       const status = core.shopStatus(s, Date.now(), set.trial.graceDays);
-      return { shop: s, status, db: this.t.shop(s.schema), rules: core.shopCtx(s, status), hooks: this.hooksFor(s) };
+      return { shop: s, status, db: this.t.shop(s.schema), rules: core.shopCtx(s, status, set.soon.features), hooks: this.hooksFor(s) };
     })();
     this.cache.set(key, { at: Date.now(), p });
     p.catch(() => this.cache.delete(key));

@@ -1,6 +1,7 @@
 // The menus and sub-menus of Pilotix, ticked or not: what a plan includes, or what one shop has on top of its plan.
-import { FEATURES } from '@pilotix/shared';
+import { FEATURES, soonHas } from '@pilotix/shared';
 import { useTranslation } from 'react-i18next';
+import { usePRpc } from '../../lib/platform';
 
 /** The app's own name of each sub-menu (the same words as in its pages). */
 const SUB_LABEL: Record<string, string> = {
@@ -54,10 +55,17 @@ const SUB_LABEL: Record<string, string> = {
   'management/archive': 'admin.subs.archive',
 };
 
+/** The features Pilotix keeps « Bientôt » (Réglages): closed in every boutique, whatever a plan or a shop ticks. */
+export function useSoon(): (key: string) => boolean {
+  const q = usePRpc('p.settings.get', {});
+  return (key) => soonHas(q.data?.soon?.features, key);
+}
+
 export const featureLabel = (t: (k: string) => string, key: string) => (key.includes('/') ? t(SUB_LABEL[key] ?? key) : t(`nav.${key}`));
 
-/** `changed`: the keys this shop has on or off on its own (marked, so the plan's own choice stays visible). */
-export function FeatureTree({ isOn, changed = () => false, onToggle, disabled }: { isOn: (key: string) => boolean; changed?: (key: string) => boolean; onToggle: (key: string, on: boolean) => void; disabled?: boolean }) {
+/** `changed`: the keys this shop has on or off on its own (marked, so the plan's own choice stays visible). `soon`: the
+ *  keys Pilotix keeps « Bientôt » (Réglages): closed in every boutique whatever is ticked here. */
+export function FeatureTree({ isOn, changed = () => false, soon = () => false, onToggle, disabled }: { isOn: (key: string) => boolean; changed?: (key: string) => boolean; soon?: (key: string) => boolean; onToggle: (key: string, on: boolean) => void; disabled?: boolean }) {
   const { t } = useTranslation();
   return (
     <div className="pp-ft">
@@ -70,6 +78,7 @@ export function FeatureTree({ isOn, changed = () => false, onToggle, disabled }:
               <b>{featureLabel(t, f.key)}</b>
               {f.always && <small className="muted">{t('platform.ft.always')}</small>}
               {changed(f.key) && <small className="pp-ft-dot">{t('platform.ft.changed')}</small>}
+              {soon(f.key) && <small className="pp-ft-soon">{t('platform.ft.soon')}</small>}
             </label>
             {!!f.subs?.length && (
               <div className="pp-ft-subs">
@@ -79,6 +88,7 @@ export function FeatureTree({ isOn, changed = () => false, onToggle, disabled }:
                     <label key={k} className={`pp-ft-sub ${changed(k) ? 'changed' : ''}`}>
                       <input type="checkbox" checked={on && isOn(k)} disabled={disabled || !on} onChange={(e) => onToggle(k, e.target.checked)} />
                       <span>{featureLabel(t, k)}</span>
+                      {soon(k) && !soon(f.key) && <small className="pp-ft-soon">{t('platform.ft.soon')}</small>}
                     </label>
                   );
                 })}

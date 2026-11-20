@@ -276,7 +276,8 @@
   },
   "ft": {
     "always": "always included",
-    "changed": "changed"
+    "changed": "changed",
+    "soon": "Soon"
   },
   "admins": {
     "title": "Administrators",
@@ -456,7 +457,15 @@
     "alertLang": "Template language",
     "alertMeta": "In Meta (WhatsApp Manager › Templates), create this template, category “Utility”, and wait until it is approved:",
     "alertMetaHeader": "Header: IMAGE (the receipt photo)\nBody:",
-    "alertMetaNote": "Pilotix fills the 5 blanks (1 to 5): the store, the plan, how long, the amount, who sent it."
+    "alertMetaNote": "Pilotix fills the 5 blanks (1 to 5): the store, the plan, how long, the amount, who sent it.",
+    "soonTitle": "Soon",
+    "soonHelp": "Features still being built. Every shop sees them in its menu, greyed with « Soon », and nobody can open them. Remove one to open it (as each shop’s plan says).",
+    "soonNone": "None: everything is open.",
+    "soonAdd": "Mark « Soon »",
+    "soonPick": "Pick a feature…",
+    "soonWhole": "{{name}} (the whole menu)",
+    "soonOpen": "Open to the shops",
+    "soonSave": "Then press « Save » at the top of the page."
   },
   "demo": {
     "none": "No demo shop yet",

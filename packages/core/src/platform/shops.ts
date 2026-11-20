@@ -1,6 +1,6 @@
 // Shops of a multi-shop server: reading them, their subscription state, creating one (its own schema), the demo shop,
 // and the first start (the server owner's shop becomes shop #1, its first admin the platform owner).
-import { AgencyPrices, APP_PAGES, CODE_PREFIX, effectiveFeatures, isFeatureKey, isPartnerKind, PartnerKind, pricesOfKind, PUBLIC_ROOTS, ShopInfo, ShopKind, ShopState } from '@pilotix/shared';
+import { AgencyPrices, APP_PAGES, cleanSoon, CODE_PREFIX, effectiveFeatures, featureOn, isFeatureKey, isPartnerKind, PartnerKind, pricesOfKind, PUBLIC_ROOTS, ShopInfo, ShopKind, ShopState } from '@pilotix/shared';
 import { Db, isoOrNull, migrate, num, numOrNull, TENANTIZE_SQL } from '../db';
 import type { ShopCtx } from '../rpc';
 import { sealPlatformSetting } from '../secretbox';
@@ -263,6 +263,11 @@ export interface PlatformSettings {
   pro: { on: boolean; price: number };
   /** The phone app: an app older than this build must update before anything else (control room › App Android › « Mise à jour obligatoire »; 0 = none) */
   app: { minBuild: number };
+  /**
+   * « Bientôt » (control room › Réglages): the menu items and sub-menus Pilotix is still finishing. Off in every
+   * boutique (whatever its plan or its own changes), shown greyed with « Bientôt » in the menu, their actions refused.
+   */
+  soon: { features: string[] };
 }
 
 /** « Prévenir sur WhatsApp quand une boutique paie »: the team's numbers (normalised), the Meta template and its language. */
@@ -298,6 +303,8 @@ export const PLATFORM_DEFAULTS: PlatformSettings = {
   social: { googleClientId: '', facebookAppId: '' },
   pro: { on: true, price: 2000 },
   app: { minBuild: 0 },
+  // Influenceurs is not finished: « Bientôt » until the control room takes it off the list (20 Nov 2026)
+  soon: { features: ['marketing/influenceurs'] },
 };
 
 export async function platformSettings(t: Tenancy): Promise<PlatformSettings> {
@@ -309,6 +316,7 @@ export async function platformSettings(t: Tenancy): Promise<PlatformSettings> {
   if (su && !('maxStores' in (json(su.value) ?? {})) && Number(out.signup.maxShopsPerEmail) > 0) out.signup.maxStores = Number(out.signup.maxShopsPerEmail);
   // the WhatsApp alert of « J'ai payé » came later: payment settings saved before have none (or only some pieces)
   out.payment.alert = cleanPayAlert(out.payment.alert);
+  out.soon = { features: cleanSoon(out.soon.features) };
   delete out.signup.maxShopsPerEmail;
   delete out.signup.perIpPerDay;
   return out as PlatformSettings;
@@ -351,16 +359,39 @@ export function shopStatus(s: Pick<Shop, 'status' | 'trialEndsAt' | 'paidUntil' 
 /** The shop's features after its own changes (null = everything). */
 // a partner (confirmation agency, marketer) has no plan: its own screens are all there (what it may do is limited by
 // agencyscope.ts)
-export const shopFeatures = (s: Shop): string[] | null =>
-  s.primary || s.plan?.system || s.kind !== 'store' ? effectiveFeatures(['*'], s.featuresOn, s.featuresOff) : effectiveFeatures(s.plan?.features ?? [], s.featuresOn, s.featuresOff);
+// `soon`: the platform's « Bientôt » list (PlatformSettings.soon): off in every store, after its plan and its own changes
+export const shopFeatures = (s: Shop, soon: readonly string[] = []): string[] | null => {
+  const off = soon.length && s.kind === 'store' ? [...s.featuresOff, ...soon] : s.featuresOff;
+  return s.primary || s.plan?.system || s.kind !== 'store' ? effectiveFeatures(['*'], s.featuresOn, off) : effectiveFeatures(s.plan?.features ?? [], s.featuresOn, off);
+};
+
+/** What the « Bientôt » list closes in this store: the keys its plan (and its own changes) would have opened. */
+export const shopSoon = (s: Shop, soon: readonly string[] = []): string[] => {
+  if (!soon.length || s.kind !== 'store') return [];
+  const f = shopFeatures(s);
+  return soon.filter((k) => featureOn(f, k));
+};
 
 export const shopMaxUsers = (s: Shop): number | null => (s.primary ? null : s.maxUsers ?? s.plan?.maxUsers ?? null);
 export const shopMaxDrivers = (s: Shop): number | null => (s.primary ? null : s.maxDrivers ?? s.plan?.maxDrivers ?? null);
 export const shopMaxOrders = (s: Shop): number | null => (s.primary ? null : s.plan?.maxOrdersMonth ?? null);
 
-/** What a request of this shop carries (rules checked by the core). */
-export function shopCtx(s: Shop, st: ShopStatus): ShopCtx {
-  return { id: s.id, slug: s.slug, primary: s.primary, features: shopFeatures(s), locked: st.locked, demo: s.demo, maxUsers: shopMaxUsers(s), maxDrivers: shopMaxDrivers(s), kind: s.kind, code: s.publicCode };
+/** What a request of this shop carries (rules checked by the core). `soon`: the platform's « Bientôt » list. */
+export function shopCtx(s: Shop, st: ShopStatus, soon: readonly string[] = []): ShopCtx {
+  const closed = shopSoon(s, soon);
+  return {
+    id: s.id,
+    slug: s.slug,
+    primary: s.primary,
+    features: shopFeatures(s, soon),
+    ...(closed.length ? { soon: closed } : {}),
+    locked: st.locked,
+    demo: s.demo,
+    maxUsers: shopMaxUsers(s),
+    maxDrivers: shopMaxDrivers(s),
+    kind: s.kind,
+    code: s.publicCode,
+  };
 }
 
 /** What the app shows of the shop: its plan, its state, how to pay, Pilotix's message. */
@@ -404,7 +435,8 @@ export function shopInfo(s: Shop, st: ShopStatus, settings: PlatformSettings, no
     paidUntil: s.paidUntil,
     daysLeft: st.daysLeft,
     locked: st.locked,
-    features: shopFeatures(s),
+    features: shopFeatures(s, settings.soon.features),
+    soon: shopSoon(s, settings.soon.features),
     maxUsers: shopMaxUsers(s),
     maxDrivers: shopMaxDrivers(s),
     maxOrdersMonth: shopMaxOrders(s),

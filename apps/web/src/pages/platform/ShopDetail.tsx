@@ -9,7 +9,7 @@ import { POut, Staff, usePAction, usePRpc } from '../../lib/platform';
 import { Card, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { auditText, can, Empty, StateBadge } from './bits';
-import { FeatureTree } from './FeatureTree';
+import { FeatureTree, useSoon } from './FeatureTree';
 import { PaymentModal } from './Shops';
 
 type Detail = POut<'p.shops.get'>;
@@ -232,6 +232,7 @@ function Usage({ s }: { s: Detail }) {
 
 function Menus({ s, manager }: { s: Detail; manager: boolean }) {
   const { t } = useTranslation();
+  const soon = useSoon();
   const [on, setOn] = useState<Set<string>>(new Set(s.featuresOn));
   const [off, setOff] = useState<Set<string>>(new Set(s.featuresOff));
   useEffect(() => {
@@ -274,7 +275,7 @@ function Menus({ s, manager }: { s: Detail; manager: boolean }) {
       }
     >
       <p className="small muted">{s.primary ? t('platform.menus.own') : t('platform.menus.sub', { plan: s.plan?.name ?? '—', count: on.size + off.size })}</p>
-      <FeatureTree isOn={(k) => featureOn(eff, k)} changed={(k) => on.has(k) || off.has(k)} onToggle={toggle} disabled={!manager} />
+      <FeatureTree isOn={(k) => featureOn(eff, k)} changed={(k) => on.has(k) || off.has(k)} soon={soon} onToggle={toggle} disabled={!manager} />
     </Card>
   );
 }

@@ -149,7 +149,15 @@ export const PROC_FEATURES: readonly (readonly [prefix: string, feature: string]
   ['leads.', 'marketing/formulaires'],
   ['campaigns.', 'marketing/campagnes'],
   ['metacatalog.', 'marketing/catalogue'],
-  ['partners.', 'marketing/influenceurs'],
+  // Influenceurs' own actions, by their full names: the other « partners.… » ones are the Agences', the Marketers' and
+  // « Trouver un marketer Pro », which do not belong to Influenceurs
+  ['partners.board', 'marketing/influenceurs'],
+  ['partners.refresh', 'marketing/influenceurs'],
+  ['partners.add', 'marketing/influenceurs'],
+  ['partners.lookup', 'marketing/influenceurs'],
+  ['partners.note', 'marketing/influenceurs'],
+  ['partners.ask', 'marketing/influenceurs'],
+  ['partners.revoke', 'marketing/influenceurs'],
   ['ads.', 'marketing/publicite'],
   ['mk.', 'marketing/marketer'],
   ['landing.', 'landing'],
@@ -157,10 +165,25 @@ export const PROC_FEATURES: readonly (readonly [prefix: string, feature: string]
   ['archive.', 'management/archive'],
 ];
 
+/** (an entry ending with « . » covers every action that starts with it; any other entry, that one action only) */
 export function procFeature(name: string): string | null {
-  for (const [p, f] of PROC_FEATURES) if (name.startsWith(p)) return f;
+  for (const [p, f] of PROC_FEATURES) if (p.endsWith('.') ? name.startsWith(p) : name === p) return f;
   return null;
 }
+
+/**
+ * « Bientôt » (Control Room › Réglages): a menu item or sub-menu Pilotix is still finishing. Every boutique's menu
+ * shows it greyed with « Bientôt », nobody can open it, and the server refuses its actions. Known keys only, never one
+ * a shop cannot work without.
+ */
+export function cleanSoon(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const ok = (k: unknown): k is string => typeof k === 'string' && isFeatureKey(k) && !ALWAYS.has(k.split('/')[0]);
+  return [...new Set(v.filter(ok))];
+}
+
+/** Is this feature ('marketing/influenceurs'), or the menu item it is under, in the « Bientôt » list? */
+export const soonHas = (soon: readonly string[] | null | undefined, key: string) => !!soon?.length && (soon.includes(key) || soon.includes(key.split('/')[0]));
 
 // ---------------------------------------------------------------- the shop, as the app shows it
 export type ShopState = 'trial' | 'active' | 'grace' | 'expired' | 'suspended' | 'archived' | 'deleted';
@@ -187,6 +210,11 @@ export interface ShopInfo {
   locked: boolean;
   /** null = everything */
   features: string[] | null;
+  /**
+   * « Bientôt » (Control Room › Réglages): what this shop's plan includes but Pilotix keeps closed for now (off in
+   * `features`); the menu shows it greyed with « Bientôt ». Missing: none.
+   */
+  soon?: string[];
   maxUsers: number | null;
   /** livreurs the plan allows (null = no limit) */
   maxDrivers: number | null;

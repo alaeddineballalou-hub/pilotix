@@ -6,7 +6,7 @@
 // A launch is sent to Meta all PAUSED (campaign, ad sets, créas, ads), then turned on in one go. A retry after a
 // failure goes on where it stopped (the ids Meta gave are kept) and creates nothing twice. In the demo (no server)
 // nothing leaves Pilotix: the launch gets made-up ids and appears in « Mes pubs » at once.
-import { normalizePhone, WILAYAS } from '@pilotix/shared';
+import { featureOn, normalizePhone, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, notFound, proc, publicApi, withActionLock } from '../rpc';
@@ -32,6 +32,11 @@ export function audienceRefusal(error: string, input: Pick<LaunchInput, 'exclude
   if (!/custom[ _]?audience|audiences? personnalisée|publics? personnalisé/i.test(error)) return error;
   return `${error} · Meta refuse une de vos audiences : éteignez-la dans Publicité › Audiences (ou décochez « Utiliser mes audiences »), puis relancez.`;
 }
+/**
+ * Partenaires › Influenceurs is open in this shop (its plan has it, and Pilotix has not put it « Bientôt »). Closed: no
+ * creator to pick, and a launch saved with one before goes out in the Page's name alone.
+ */
+const influencersOn = (ctx: Ctx) => featureOn(ctx.shop?.features, 'marketing/influenceurs');
 const me = (ctx: Ctx) => ctx.session.profile.id || null;
 const stamp = (ctx: Ctx) => new Date(ctx.now()).toISOString();
 const extOf = (mime: string | null | undefined) => (mime === 'video/quicktime' ? 'mov' : 'mp4');
@@ -183,9 +188,10 @@ async function options(ctx: Ctx, contentId: string | null = null) {
     phone: last.phone ?? (normalizePhone(shop.savPhone ?? '') ? `+213${normalizePhone(shop.savPhone)!.slice(1)}` : ''),
     privacyUrl: last.privacyUrl ?? '',
     products: await productLimits(ctx),
-    /** Marketing › Influenceurs: the creators an ad in two names may use, and the creator's post to boost when one is chosen */
-    partners: await partnerChoices(ctx.db),
-    boost: contentId ? await contentFor(ctx.db, contentId).then((c) => (c ? { ...c, adCode: undefined, hasCode: !!c.adCode } : null)) : null,
+    /** Marketing › Influenceurs: the creators an ad in two names may use, and the creator's post to boost when one is chosen
+     *  (none while Influenceurs is off: out of the plan, or « Bientôt ») */
+    partners: influencersOn(ctx) ? await partnerChoices(ctx.db) : [],
+    boost: contentId && influencersOn(ctx) ? await contentFor(ctx.db, contentId).then((c) => (c ? { ...c, adCode: undefined, hasCode: !!c.adCode } : null)) : null,
   };
 }
 
@@ -423,11 +429,11 @@ async function inputOf(ctx: Ctx, r: any): Promise<{ input: LaunchInput; acct: { 
   };
   // Marketing › Influenceurs: an ad in two names, or a creator's post boosted
   const extra: string[] = [];
-  const partner = spec.partnerId ? await partnerFor(ctx.db, spec.partnerId) : null;
-  if (spec.partnerId && !partner) extra.push('Cet influenceur n’est plus dans la liste : choisissez-en un autre.');
+  const partner = spec.partnerId && influencersOn(ctx) ? await partnerFor(ctx.db, spec.partnerId) : null;
+  if (spec.partnerId && influencersOn(ctx) && !partner) extra.push('Cet influenceur n’est plus dans la liste : choisissez-en un autre.');
   if (partner && !USABLE.includes(partner.status)) extra.push(`${partner.name} a retiré son accord (ou l’a refusé) : demandez-le à nouveau dans Influenceurs.`);
-  const post = spec.partnerContentId ? await contentFor(ctx.db, spec.partnerContentId) : null;
-  if (spec.partnerContentId && !post) extra.push('Cette publication n’est plus dans la liste : actualisez la page Influenceurs.');
+  const post = spec.partnerContentId && influencersOn(ctx) ? await contentFor(ctx.db, spec.partnerContentId) : null;
+  if (spec.partnerContentId && influencersOn(ctx) && !post) extra.push('Cette publication n’est plus dans la liste : actualisez la page Influenceurs.');
   if (post && !post.boostable) extra.push(`Meta ne permet pas de booster cette publication${post.errors[0]?.message ? ` : ${post.errors[0].message}` : '.'}`);
   if (post) input.boost = { platform: post.platform, contentId: post.id, adCode: post.adCode };
   else if (partner && USABLE.includes(partner.status)) input.partner = { igId: partner.igId, pageId: partner.pageId };
@@ -606,6 +612,7 @@ async function ownsShop(db: Db, id: number): Promise<boolean> {
 }
 
 async function saveLaunch(ctx: Ctx, i: { id?: number | null; clientId?: string | null; mode: 'simple' | 'pro'; spec: LaunchSpec }) {
+  if ((i.spec.partnerId || i.spec.partnerContentId) && !influencersOn(ctx)) i = { ...i, spec: { ...i.spec, partnerId: null, partnerContentId: null } };
   // a creator's post: its creator is the launch's creator (their numbers count its orders)
   if (i.spec.partnerContentId) {
     const post = await contentFor(ctx.db, i.spec.partnerContentId);

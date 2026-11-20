@@ -1,7 +1,7 @@
 // The control room's actions (Pilotix staff only): shops, trials, payments, plans and their menus, staff, settings,
 // the journal, sign-ups, messages from stores and the demo shop. Same shape as the shops' actions (input checked, roles
 // checked), own registry. Pilotix never sees what is inside a store: only its numbers (accounts, livreurs, orders).
-import { DEMO_ACCOUNTS, FEATURE_KEYS, normalizeAccountPhone, passwordProblem } from '@pilotix/shared';
+import { cleanSoon, DEMO_ACCOUNTS, FEATURE_KEYS, normalizeAccountPhone, passwordProblem } from '@pilotix/shared';
 import bcrypt from 'bcryptjs';
 import { z, ZodTypeAny } from 'zod';
 import { Db, isoOrNull, num, numOrNull } from '../db';
@@ -1168,8 +1168,11 @@ export const PLATFORM_REGISTRY = {
         })
         .optional(),
       pro: z.object({ on: z.boolean(), price: z.number().int().min(0).max(1_000_000) }).optional(),
+      // « Bientôt »: menu items and sub-menus closed in every boutique for now (unknown keys and the always-on ones are dropped)
+      soon: z.object({ features: z.array(z.string().max(60)).max(80) }).optional(),
     }),
     async (ctx, i) => {
+      if (i.soon) i.soon = { features: cleanSoon(i.soon.features) };
       if (i.payment) {
         const before = (await platformSettings(ctx.t)).payment.alert;
         const a = i.payment.alert;
@@ -1182,7 +1185,7 @@ export const PLATFORM_REGISTRY = {
         }
         i.payment = { ...i.payment, alert: cleanPayAlert({ numbers, template: a?.template ?? before.template, lang: a?.lang ?? before.lang }) };
       }
-      for (const k of ['trial', 'payment', 'notice', 'demo', 'signup', 'reminders', 'referral', 'security', 'company', 'legal', 'login', 'social', 'pro'] as const) if (i[k]) await setPlatformSetting(ctx.t, k, i[k] as any);
+      for (const k of ['trial', 'payment', 'notice', 'demo', 'signup', 'reminders', 'referral', 'security', 'company', 'legal', 'login', 'social', 'pro', 'soon'] as const) if (i[k]) await setPlatformSetting(ctx.t, k, i[k] as any);
       await audit(ctx, 'settings.save', null, { keys: Object.keys(i) });
       return platformSettings(ctx.t);
     },

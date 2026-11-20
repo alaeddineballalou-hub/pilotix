@@ -1,6 +1,6 @@
 import { type MenuCond, menuRight, onSpace, type Role, SPACE_ALWAYS, SPACES, type SpaceId, STORE_MENU } from '@pilotix/shared';
 import { backend } from '../lib/backend';
-import { currentShop, pageIsOn } from '../lib/features';
+import { currentShop, pageIsOn, pageIsSoon } from '../lib/features';
 import { moduleOn } from '../lib/modules';
 import { rightOn } from '../lib/rights';
 
@@ -95,10 +95,16 @@ export const NAV: NavItem[] = STORE_MENU.map(({ cond, children, ...n }) => ({
  * A group's child: its own roles (or the people who write the Pilot rules), or everyone who sees the group — left to
  * their role in Utilisateurs › Rôles — and in the shop's plan.
  */
-export const canSeeChild = (c: NavChild, roles: Role[], isAdmin: boolean, canRules = false, has: (right: string | null) => boolean = rightOn) =>
+export const canSeeChild = (c: NavChild, roles: Role[], isAdmin: boolean, canRules = false, has: (right: string | null) => boolean = rightOn, isOn: (page: string, sub?: string) => boolean = pageIsOn) =>
   ((isAdmin || ((!c.roles || c.roles.some((r) => roles.includes(r))) && has(menuRight(c.id)))) || (!!c.rules && canRules)) &&
-  (c.plan ? pageIsOn(...c.plan) : pageIsOn(c.id)) &&
+  (c.plan ? isOn(...c.plan) : isOn(c.id)) &&
   (!c.onlyIf || c.onlyIf(roles, isAdmin));
+
+/**
+ * « Bientôt » (control room › Réglages): a group's line the person would see, closed for now by Pilotix. The menu shows
+ * it greyed with « Bientôt »; it opens nothing.
+ */
+export const isSoonLine = (c: NavChild, roles: Role[], isAdmin: boolean, canRules = false) => canSeeChild(c, roles, isAdmin, canRules, rightOn, pageIsSoon);
 
 /**
  * The store's pages opened by a group's lines (Pilot Automations' tabs, Referral's, Partenaires'): the line's own right
@@ -107,9 +113,9 @@ export const canSeeChild = (c: NavChild, roles: Role[], isAdmin: boolean, canRul
 const BY_LINES = new Set(NAV.flatMap((n) => n.children ?? []).map((c) => c.match?.page).filter((p): p is string => !!p));
 
 /** (`has`: the person's rights, theirs by default; Utilisateurs › Rôles passes a role's to show its menu) */
-export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManageUsers = false, canRules = false, canAffect = false, has: (right: string | null) => boolean = rightOn): boolean {
+export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManageUsers = false, canRules = false, canAffect = false, has: (right: string | null) => boolean = rightOn, isOn: (page: string) => boolean = pageIsOn): boolean {
   // a menu the shop's plan does not include is not shown to anyone, administrators included
-  if (!pageIsOn(item.id)) return false;
+  if (!isOn(item.id)) return false;
   if (item.onlyIf && !item.onlyIf(roles, isAdmin)) return false;
   if (item.manageUsers && canManageUsers) return true;
   if (item.rules && canRules) return true;
@@ -120,6 +126,10 @@ export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManage
   // Utilisateurs › Rôles: a page taken from the role (a group shows while one of its lines does)
   return !!item.children || BY_LINES.has(item.id) || has(menuRight(item.id));
 }
+
+/** « Bientôt »: a page of the menu (not a group) the person would see, closed for now by Pilotix (greyed, opens nothing). */
+export const isSoonItem = (item: NavItem, roles: Role[], isAdmin: boolean, canManageUsers = false, canRules = false, canAffect = false) =>
+  !item.children && canSee(item, roles, isAdmin, canManageUsers, canRules, canAffect, rightOn, pageIsSoon);
 
 /**
  * What a menu shows a person: its lines (a group: the lines it shows), and in a store the team screens (Écrans) they have,

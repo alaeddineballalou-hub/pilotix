@@ -276,7 +276,8 @@
   },
   "ft": {
     "always": "toujours inclus",
-    "changed": "modifié"
+    "changed": "modifié",
+    "soon": "Bientôt"
   },
   "admins": {
     "title": "Administrateurs",
@@ -456,7 +457,15 @@
     "alertLang": "Langue du modèle",
     "alertMeta": "Dans Meta (WhatsApp Manager › Modèles), créez ce modèle, catégorie « Utilitaire », et attendez qu’il soit approuvé :",
     "alertMetaHeader": "En-tête : IMAGE (la photo du reçu)\nCorps :",
-    "alertMetaNote": "Les 5 trous (de 1 à 5) sont remplis par Pilotix : la boutique, le plan, la durée, le montant, qui a envoyé."
+    "alertMetaNote": "Les 5 trous (de 1 à 5) sont remplis par Pilotix : la boutique, le plan, la durée, le montant, qui a envoyé.",
+    "soonTitle": "Bientôt",
+    "soonHelp": "Les fonctions encore en travaux. Chaque boutique les voit dans son menu, en gris avec « Bientôt », et personne ne peut les ouvrir. Retirez-en une pour l’ouvrir (selon la formule de chaque boutique).",
+    "soonNone": "Aucune : tout est ouvert.",
+    "soonAdd": "Mettre « Bientôt »",
+    "soonPick": "Choisir une fonction…",
+    "soonWhole": "{{name}} (tout le menu)",
+    "soonOpen": "Ouvrir aux boutiques",
+    "soonSave": "Puis appuyez sur « Enregistrer » en haut de la page."
   },
   "demo": {
     "none": "Pas encore de boutique démo",

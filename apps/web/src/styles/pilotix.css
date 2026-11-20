@@ -1938,3 +1938,10 @@ html[data-theme="dark"] .topbar .px-lang-sel option { background: #16202B; color
 .px-scr option { background: #fff; color: #1B2A47; }
 .px-folded .px-scr { display: none; }
 .qd6-mtno { background: color-mix(in srgb, #dc2626 12%, transparent); color: #b91c1c; font-weight: 600; }
+
+/* « Bientôt » (control room › Réglages): a menu line Pilotix keeps closed for now — greyed, its tag, opens nothing */
+.side .nav-item.px-soon { cursor: default; }
+.side .nav-item.px-soon .ic, .side .nav-item.px-soon .nav-l { opacity: .5; }
+.side .nav-item.px-soon.px-soon.px-soon:hover { background: transparent !important; }
+.px-soon-tag { margin-inline-start: auto; flex: none; padding: 2px 8px; border-radius: 999px; background: rgba(127, 127, 127, .2); font-size: 11px; font-weight: 800; line-height: 1.4; white-space: nowrap; opacity: .9; }
+@media (min-width: 901px) { .px-folded .px-soon-tag { display: none; } }

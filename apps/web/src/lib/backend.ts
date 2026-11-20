@@ -4,7 +4,7 @@ import { withRobotCheck } from './robot';
 import type { Session, AppInfo } from '@pilotix/shared';
 import type { z } from 'zod';
 import { pageAi } from './dellal-page-ai';
-import { currentShop } from './features';
+import { currentShop, setSoonAll } from './features';
 import { ambientSeller, Seller } from './seller';
 import { store } from './store';
 
@@ -464,7 +464,8 @@ class DemoBackend implements Backend {
         this.progress('Création de l’agence et du marketer d’exemple…');
         await core.seedDemoPartners(t);
         const s = (await core.loadShop(t, { primary: true }))!;
-        this.storeShop = core.shopCtx(s, core.shopStatus(s, Date.now(), (await core.platformSettings(t)).trial.graceDays));
+        const set = await core.platformSettings(t);
+        this.storeShop = core.shopCtx(s, core.shopStatus(s, Date.now(), set.trial.graceDays), set.soon.features);
       })();
     return this.partners;
   }
@@ -475,7 +476,8 @@ class DemoBackend implements Backend {
         const { core, t } = await this.boot();
         await core.seedDemoBoutiques(t);
         const s = (await core.loadShop(t, { primary: true }))!;
-        this.storeShop = core.shopCtx(s, core.shopStatus(s, Date.now(), (await core.platformSettings(t)).trial.graceDays));
+        const set = await core.platformSettings(t);
+        this.storeShop = core.shopCtx(s, core.shopStatus(s, Date.now(), set.trial.graceDays), set.soon.features);
         setTimeout(() => this.listeners.forEach((l) => l({ type: 'settings' })), 0);
       })();
     return this.boutiques;
@@ -493,12 +495,13 @@ class DemoBackend implements Backend {
       if (s.primary) {
         this.session = await core.login(db, email, DEMO_PASSWORD);
         this.space = null;
+        setSoonAll((await core.platformSettings(t)).soon.features);
       } else {
         const set = await core.platformSettings(t);
         const st = core.shopStatus(s, Date.now(), set.trial.graceDays);
         const session = await core.login(t.shop(s.schema), email, DEMO_PASSWORD);
         this.session = { ...session, shop: core.shopInfo(s, st, set, Date.now()) };
-        this.space = { schema: s.schema, shop: core.shopCtx(s, st) };
+        this.space = { schema: s.schema, shop: core.shopCtx(s, st, set.soon.features) };
       }
     } catch (e: any) {
       throw new ApiError(403, e?.message ?? 'Vous n’avez pas de compte dans cette boutique');
@@ -528,10 +531,12 @@ class DemoBackend implements Backend {
         const st = core.shopStatus(s, Date.now(), set.trial.graceDays);
         const session = await core.login(t.shop(s.schema), email, password);
         this.session = { ...session, shop: core.shopInfo(s, st, set, Date.now()) };
-        this.space = { schema: s.schema, shop: core.shopCtx(s, st) };
+        this.space = { schema: s.schema, shop: core.shopCtx(s, st, set.soon.features) };
       } else {
         this.session = await core.login(db, email, password);
         this.space = null;
+        // the demo's own store carries no shop info: the menu takes the platform's « Bientôt » list from here
+        setSoonAll((await core.platformSettings(t)).soon.features);
       }
     } catch (e: any) {
       throw new ApiError(401, e.message);

@@ -1,4 +1,4 @@
-import { expandRoles, featureOn, procFeature, Role, Session } from '@pilotix/shared';
+import { expandRoles, featureOn, procFeature, Role, Session, soonHas } from '@pilotix/shared';
 import { z, ZodTypeAny } from 'zod';
 import type { Db } from './db';
 import type { Tenancy } from './platform/tenancy';
@@ -33,6 +33,8 @@ export interface ShopCtx {
   primary: boolean;
   /** null = every feature */
   features: string[] | null;
+  /** « Bientôt » (control room › Réglages): what its plan includes but Pilotix keeps closed for now (off in `features`) */
+  soon?: string[];
   /** unpaid or suspended: only the user's own account answers (the app shows the lock screen) */
   locked: boolean;
   /** the demo shop (fake data, nothing leaves the server) */
@@ -168,6 +170,7 @@ export function makeSession(profile: Session['profile']): Session {
 /** What an unpaid (locked) shop may still do: read and change the user's own account. */
 const WHEN_LOCKED = new Set(['me.get', 'me.language', 'me.ui', 'me.setUi', 'me.seen', 'me.password', 'me.update', 'boutiques.list', 'billing.claims', 'billing.claim']);
 export const FEATURE_OFF = 'Cette fonction n’est pas incluse dans votre formule Pilotix';
+export const FEATURE_SOON = 'Bientôt dans Pilotix : cette fonction n’est pas encore ouverte';
 export const SHOP_LOCKED = 'Votre abonnement Pilotix n’est pas actif';
 
 /** Can this shop run this action (its plan includes the feature, the subscription is active)? */
@@ -175,7 +178,7 @@ export function shopAllows(shop: ShopCtx | undefined, name: string): { ok: true 
   if (!shop) return { ok: true };
   if (shop.locked && !WHEN_LOCKED.has(name)) return { ok: false, error: new AppError('payment_required', SHOP_LOCKED) };
   const f = procFeature(name);
-  if (f && !featureOn(shop.features, f)) return { ok: false, error: new AppError('forbidden', FEATURE_OFF) };
+  if (f && !featureOn(shop.features, f)) return { ok: false, error: new AppError('forbidden', soonHas(shop.soon, f) ? FEATURE_SOON : FEATURE_OFF) };
   return { ok: true };
 }
 

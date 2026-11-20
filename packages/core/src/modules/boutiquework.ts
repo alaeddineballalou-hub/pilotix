@@ -50,12 +50,13 @@ async function boutiqueCtx(ctx: Ctx, b: MyBoutique): Promise<Ctx> {
   const t = ctx.t!;
   const s = await loadShop(t, { id: b.id });
   if (!s) throw notFound('Boutique introuvable');
-  const st = shopStatus(s, ctx.now(), (await platformSettings(t)).trial.graceDays);
+  const set = await platformSettings(t);
+  const st = shopStatus(s, ctx.now(), set.trial.graceDays);
   if (st.locked) throw locked();
   const db = t.shop(s.schema);
   const p = await profileById(db, b.profileId);
   if (!p?.active) throw forbidden(`Votre compte n’est plus actif dans « ${b.name} »`);
-  return { db, session: makeSession(p), shop: shopCtx(s, st), now: ctx.now, emit: () => {}, t };
+  return { db, session: makeSession(p), shop: shopCtx(s, st, set.soon.features), now: ctx.now, emit: () => {}, t };
 }
 
 /**

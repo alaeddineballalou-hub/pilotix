@@ -2,11 +2,12 @@
 // by plan, the control room's rules, the demo shop.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { effectiveFeatures, featureOn, procFeature, routeAllowed } from '@pilotix/shared';
+import { cleanSoon, effectiveFeatures, featureOn, procFeature, routeAllowed, soonHas } from '@pilotix/shared';
 import {
   call,
   Ctx,
   FEATURE_OFF,
+  FEATURE_SOON,
   loadShop,
   login,
   migrate,
@@ -16,8 +17,10 @@ import {
   pgliteTenancy,
   platformCall,
   seedBase,
+  shopAllows,
   shopCtx,
   shopIdOfEmail,
+  shopInfo,
   shopStatus,
   staffLogin,
   Tenancy,
@@ -525,6 +528,69 @@ test('menus by plan, own changes per shop, enforced by the server', async () => 
   assert.equal(c.shop!.locked, true);
   await assert.rejects(call('orders.list', c, {}), (e: any) => e.code === 'payment_required');
   await call('me.get', c, {});
+});
+
+test('« Bientôt »: closed in every boutique, its actions refused, the agencies’ and marketers’ still open', async () => {
+  // the list: known keys only, never one a shop cannot work without
+  assert.deepEqual(cleanSoon(['marketing/influenceurs', 'nope', 'reglages', 'accueil/x', 'marketing/influenceurs', 'landing', 7]), ['marketing/influenceurs', 'landing']);
+  assert.deepEqual(cleanSoon('marketing'), []);
+  assert.ok(soonHas(['marketing'], 'marketing/influenceurs') && soonHas(['marketing/influenceurs'], 'marketing/influenceurs') && !soonHas(['marketing/influenceurs'], 'marketing'));
+  // Influenceurs' own actions: the Agences', the Marketers', their bonuses and « Trouver un marketer Pro » are not its
+  assert.deepEqual(
+    ['partners.board', 'partners.refresh', 'partners.add', 'partners.lookup', 'partners.note', 'partners.ask', 'partners.revoke'].map(procFeature),
+    Array(7).fill('marketing/influenceurs'),
+  );
+  assert.deepEqual(['partners.home', 'partners.find', 'partners.request', 'partners.link', 'partners.requestBonus', 'partners.pro.search', 'partners.askAgain'].map(procFeature), Array(7).fill(null));
+
+  const { t, p } = await server();
+  // Influenceurs is « Bientôt » until the control room opens it
+  assert.deepEqual((await platformSettings(t)).soon.features, ['marketing/influenceurs']);
+  const plan = (await p<any[]>('p.plans.list')).find((x) => x.code === 'pro');
+  const made = await invite(t, p, { name: 'Bientot', ownerName: 'Lina', ownerEmail: 'l@bientot.dz', planId: plan.id, trialDays: 14 }, 'Bientot-Password-1');
+  // even turned on for this shop on its own
+  await p('p.shops.features', { id: made.id, on: ['marketing/influenceurs'], off: [] });
+  const look = async () => {
+    const s = (await loadShop(t, { id: made.id }))!;
+    const set = await platformSettings(t);
+    const st = shopStatus(s, Date.now(), set.trial.graceDays);
+    return { ctx: shopCtx(s, st, set.soon.features), info: shopInfo(s, st, set, Date.now()) };
+  };
+  let { ctx, info } = await look();
+  assert.deepEqual(ctx.soon, ['marketing/influenceurs']);
+  assert.ok(!featureOn(ctx.features, 'marketing/influenceurs') && featureOn(ctx.features, 'marketing/publicite') && featureOn(ctx.features, 'landing'));
+  assert.deepEqual(info.soon, ['marketing/influenceurs']);
+  assert.ok(!routeAllowed(info.features, 'influenceurs') && routeAllowed(info.features, 'marketing', 'publicite'));
+  const c = await shopUserCtx(t, `shop_${made.id}`, 'l@bientot.dz', 'Bientot-Password-1', ctx);
+  await assert.rejects(call('partners.board', c, { days: 30 }), (e: any) => e.code === 'forbidden' && e.message === FEATURE_SOON);
+  await assert.rejects(call('partners.add', c, { ig: '@nour.kids' }), (e: any) => e.message === FEATURE_SOON);
+  assert.ok(shopAllows(ctx, 'partners.home').ok && shopAllows(ctx, 'partners.request').ok && shopAllows(ctx, 'partners.pro.search').ok);
+  // a plan without Marketing: nothing to show « Bientôt » (its menu has no Influenceurs anyway)
+  const ess = (await p<any[]>('p.plans.list')).find((x) => x.code === 'essentiel');
+  const small = await invite(t, p, { name: 'Petite', ownerName: 'Omar', ownerEmail: 'o@petite.dz', planId: ess.id, trialDays: 14 }, 'Petite-Password-1');
+  const s2 = (await loadShop(t, { id: small.id }))!;
+  assert.equal(shopCtx(s2, shopStatus(s2, Date.now(), 3), ['marketing/influenceurs']).soon, undefined);
+  assert.deepEqual(shopInfo(s2, shopStatus(s2, Date.now(), 3), await platformSettings(t), Date.now()).soon, []);
+  // the owner's own shop too
+  const own = (await loadShop(t, { primary: true }))!;
+  const ownCtx = shopCtx(own, shopStatus(own, Date.now(), 3), ['marketing/influenceurs']);
+  assert.ok(!featureOn(ownCtx.features, 'marketing/influenceurs') && featureOn(ownCtx.features, 'pilotai/messages'));
+  assert.equal(shopCtx(own, shopStatus(own, Date.now(), 3)).features, null);
+
+  // the control room: unknown keys and the always-on ones are dropped; an empty list opens everything again
+  const saved = await p('p.settings.save', { soon: { features: ['marketing/influenceurs', 'accueil', 'nope', 'landing', 'landing'] } });
+  assert.deepEqual(saved.soon.features, ['marketing/influenceurs', 'landing']);
+  ({ ctx } = await look());
+  assert.deepEqual(ctx.soon, ['marketing/influenceurs', 'landing']);
+  assert.ok(!shopAllows(ctx, 'landing.list').ok);
+  await p('p.settings.save', { soon: { features: [] } });
+  ({ ctx, info } = await look());
+  assert.equal(ctx.soon, undefined);
+  assert.deepEqual(info.soon, []);
+  assert.ok(featureOn(ctx.features, 'marketing/influenceurs') && shopAllows(ctx, 'partners.board').ok);
+  // a save without « soon » keeps the list as it is
+  await p('p.settings.save', { pro: { on: true, price: 2000 } });
+  assert.deepEqual((await platformSettings(t)).soon.features, []);
+  await assert.rejects(p('p.settings.save', { soon: { features: ['x'.repeat(61)] } }));
 });
 
 test('the plan limits active accounts', async () => {

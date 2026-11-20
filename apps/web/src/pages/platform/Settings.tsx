@@ -1,4 +1,4 @@
-// The platform's settings: free trial and grace days, sign-ups (open, stores per person), reminders e-mailed before the
+// The platform's settings: free trial and grace days, « Bientôt » (features closed for now), sign-ups (open, stores per person), reminders e-mailed before the
 // end, the referral reward, the control room's two-step login, how shops pay you (and the receipts' header), a message to
 // every shop, the terms of use and privacy page, the demo button.
 import type { ShopInfo } from '@pilotix/shared';
@@ -10,6 +10,7 @@ import { Card, ErrorBox, Field, Loading } from '../../ui/kit';
 import { AppBox } from './AppBox';
 import { CloudflareBox } from './CloudflareBox';
 import { OtpBox } from './OtpBox';
+import { SoonBox } from './SoonBox';
 
 type S = POut<'p.settings.get'>;
 
@@ -93,6 +94,7 @@ export function Settings({ staff }: { staff: Staff }) {
             </Field>
           </div>
         </Card>
+        <SoonBox owner={owner} list={f.soon?.features ?? []} onChange={(features) => setF({ ...f, soon: { features } })} />
         <Card title={t('platform.set.signupTitle')} help={t('platform.set.signupHelp')}>
           <label className="check">
             <input disabled={!owner} type="checkbox" checked={f.signup.open} onChange={(e) => setF({ ...f, signup: { ...f.signup, open: e.target.checked } })} /> {t('platform.set.signupOpen')}

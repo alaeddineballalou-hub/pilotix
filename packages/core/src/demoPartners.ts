@@ -21,8 +21,9 @@ async function as(t: Tenancy, shop: Shop, email: string, now: number): Promise<C
   const id = (await db.query('SELECT id FROM profiles WHERE lower(email) = $1', [email.toLowerCase()]))[0]?.id;
   const p = id === undefined ? null : await profileById(db, num(id));
   if (!p) throw new Error(`demo: no ${email} in ${shop.name}`);
-  const st = shopStatus(shop, now, (await platformSettings(t)).trial.graceDays);
-  return { db, session: makeSession(p), now: () => now, emit: () => {}, t, shop: shopCtx(shop, st) };
+  const set = await platformSettings(t);
+  const st = shopStatus(shop, now, set.trial.graceDays);
+  return { db, session: makeSession(p), now: () => now, emit: () => {}, t, shop: shopCtx(shop, st, set.soon.features) };
 }
 
 const AGENCY_TEAM = [
