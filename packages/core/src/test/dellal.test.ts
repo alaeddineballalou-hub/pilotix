@@ -1325,3 +1325,66 @@ test('hard moments only (price fight, anger…): Claude thinks before it answers
   const metas = (await db.query(`SELECT meta FROM conv_messages WHERE conversation_id = $1 AND role = 'agent' ORDER BY id`, [r.conversationId])).map((m: any) => (typeof m.meta === 'string' ? JSON.parse(m.meta) : m.meta));
   assert.deepEqual(metas.map((m: any) => !!m.thinking), [false, true], 'each answer says whether Claude thought first');
 });
+
+test('Pilot Content on Facebook: a photo Pilotix keeps goes to the Page as a file (Facebook downloads nothing); another address goes as before', async () => {
+  // 20 Nov 2026: Facebook's downloader, stopped by the site's challenge outside Algeria, could not take the photo (« 324 »)
+  const ctx = await as(EMAILS.admin);
+  await setRaw(db, 'secret_dellal_page_token', 'PAGE-POST');
+  const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('the-stroller-photo')]);
+  const key = 'a'.repeat(24);
+  const id = Number((await db.query(`INSERT INTO cm_media (key, w, h, jpeg) VALUES ($1, 1080, 1080, $2) RETURNING id`, [key, jpeg.toString('base64')]))[0].id);
+  const own = `https://pilotix.online/api/s/meta-review/lp/pic/${id}/${key}.jpg`;
+  const asked: { path: string; form: FormData | null; json: any; type: string | null }[] = [];
+  const real = globalThis.fetch;
+  globalThis.fetch = (async (input: any, init?: any) => {
+    const path = new URL(String(input)).pathname.replace(/^\/v[\d.]+\//, '');
+    const form = init?.body instanceof FormData ? (init.body as FormData) : null;
+    asked.push({ path, form, json: !form && init?.body ? JSON.parse(init.body) : null, type: init?.headers?.['Content-Type'] ?? null });
+    const body = path.endsWith('/photos')
+      ? { id: `ph-${asked.length}`, post_id: 'page-1_post-1' }
+      : path.endsWith('/feed')
+        ? { id: 'page-1_post-2' }
+        : path.endsWith('/photo_stories')
+          ? { post_id: 'page-1_story-1' }
+          : { permalink_url: 'https://www.facebook.com/p/1' };
+    return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }) as typeof fetch;
+  try {
+    // one photo: the file itself, with the words, published; no address for Facebook to download
+    const r: any = await runDellal('planPublish', { channel: 'facebook', pageId: 'page-1', images: [own], caption: 'Salam' }, ctx);
+    assert.equal(r.id, 'page-1_post-1');
+    assert.equal(asked[0].path, 'page-1/photos');
+    const form = asked[0].form;
+    assert.ok(form, 'sent as a form');
+    const file = form.get('source') as File;
+    assert.deepEqual(Buffer.from(await file.arrayBuffer()), jpeg);
+    assert.equal(file.type, 'image/jpeg');
+    assert.deepEqual([form.get('message'), form.get('published'), form.get('url')], ['Salam', 'true', null]);
+    assert.equal(asked[0].type, null, 'fetch writes the form’s own Content-Type (with its boundary)');
+    // several: each photo a file, unpublished, then one post that holds them
+    asked.length = 0;
+    await runDellal('planPublish', { channel: 'facebook', pageId: 'page-1', images: [own, own], caption: 'Deux' }, ctx);
+    assert.deepEqual(asked.map((x) => [x.path, !!x.form]), [['page-1/photos', true], ['page-1/photos', true], ['page-1/feed', false], ['page-1_post-2', false]]);
+    assert.deepEqual(asked.slice(0, 2).map((x) => [x.form!.get('published'), x.form!.get('message')]), [['false', null], ['false', null]]);
+    assert.deepEqual(asked[2].json, { message: 'Deux', attached_media: [{ media_fbid: 'ph-1' }, { media_fbid: 'ph-2' }] });
+    // a story's photo too
+    asked.length = 0;
+    const s: any = await runDellal('planPublish', { channel: 'facebook', pageId: 'page-1', images: [own], caption: '', story: true }, ctx);
+    assert.equal(s.id, 'page-1_story-1');
+    assert.deepEqual(asked.map((x) => [x.path, !!x.form]), [['page-1/photos', true], ['page-1/photo_stories', false]]);
+    // not Pilotix's photo (another key, another address): Facebook downloads it from its address, as before
+    asked.length = 0;
+    const other = `https://pilotix.online/api/lp/pic/${id}/${'b'.repeat(24)}.jpg`;
+    await runDellal('planPublish', { channel: 'facebook', pageId: 'page-1', images: [other], caption: 'X' }, ctx);
+    assert.equal(asked[0].form, null);
+    assert.deepEqual(asked[0].json, { url: other, message: 'X', published: true });
+    assert.equal(asked[0].type, 'application/json');
+    asked.length = 0;
+    await runDellal('planPublish', { channel: 'facebook', pageId: 'page-1', images: ['https://cdn.example.com/p.jpg'], caption: 'Y' }, ctx);
+    assert.deepEqual(asked[0].json, { url: 'https://cdn.example.com/p.jpg', message: 'Y', published: true });
+  } finally {
+    globalThis.fetch = real;
+    await db.query(`DELETE FROM settings WHERE key = 'secret_dellal_page_token'`);
+    await db.query(`DELETE FROM cm_media WHERE id = $1`, [id]);
+  }
+});

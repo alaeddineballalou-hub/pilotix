@@ -52,8 +52,10 @@ async function postJson(url: string, body: unknown, headers: Record<string, stri
       : method === 'DELETE'
         ? { method, headers: { Accept: 'application/json', ...headers } }
         : { method, headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...headers }, body: JSON.stringify(body) };
+  // a form (a file sent to Meta, never to a typed address): fetch writes its own Content-Type, with the form's boundary
+  const sent: RequestInit = body instanceof FormData && method === 'POST' ? { method, headers: { Accept: 'application/json', ...headers }, body } : init;
   try {
-    res = typed ? await publicFetch(url, { ...init, timeoutMs }, who) : await fetch(url, { ...init, signal });
+    res = typed ? await publicFetch(url, { ...init, timeoutMs }, who) : await fetch(url, { ...sent, signal });
   } catch (e: any) {
     if (e instanceof AppError) throw e;
     // waited too long is not the same as could not reach it (the « Tester » shows which one)
@@ -476,6 +478,31 @@ async function igPublish(igId: string, creation: string, tk: string): Promise<{ 
 }
 
 /**
+ * A post's photo that Pilotix keeps itself (/lp/pic/<id>/<key>.jpg, Pilot Content's own copy) as a file for Facebook:
+ * the Page's /photos then gets the photo in the request, and Facebook downloads nothing from the site. Its downloader
+ * (« facebookplatform ») is no « known bot » for Cloudflare: coming from outside Algeria (Ireland, Denmark), the site's
+ * challenge stopped it and Facebook refused the post (20 Nov 2026, « meta-review »). Any other address: null.
+ */
+async function ownPhoto(ctx: Ctx, url: string): Promise<Blob | null> {
+  const m = /\/lp\/pic\/(\d{1,15})\/([a-f0-9]{24})\.jpg$/.exec(url);
+  if (!m) return null;
+  const r = (await ctx.db.query(`SELECT key, jpeg FROM cm_media WHERE id = $1`, [Number(m[1])]).catch(() => []))[0];
+  if (!r || r.key !== m[2] || !r.jpeg) return null;
+  return new Blob([Buffer.from(String(r.jpeg), 'base64')], { type: 'image/jpeg' });
+}
+
+/** One photo to the Page (/photos): sent as a file when Pilotix has it, else Facebook downloads it from its address. */
+async function fbPhoto(ctx: Ctx, page: string, tk: string, url: string, fields: { message?: string; published: boolean }): Promise<any> {
+  const file = await ownPhoto(ctx, url);
+  if (!file) return postJson(`${PLAN_GRAPH}/${page}/photos?${tk}`, { url, ...fields }, {}, 'Facebook', 'POST', 90_000);
+  const form = new FormData();
+  if (fields.message) form.append('message', fields.message);
+  form.append('published', String(fields.published));
+  form.append('source', file, 'photo.jpg');
+  return postJson(`${PLAN_GRAPH}/${page}/photos?${tk}`, form, {}, 'Facebook', 'POST', 90_000);
+}
+
+/**
  * One post goes out. Facebook: one photo (/photos), several (each photo unpublished, then one /feed post that holds them),
  * a video (/videos, the original file) or text only (/feed). Instagram: a container per photo (a carousel holds up to
  * 10), or a Reel for a video, Meta downloads them, then media_publish. Returns the post's id on that network and its
@@ -501,11 +528,11 @@ async function planPublish(ctx: Ctx, a: PlanArgs): Promise<{ id: string; url: st
     }
     let postId: string;
     if (images.length === 1) {
-      const r = await postJson(`${PLAN_GRAPH}/${page}/photos?${tk}`, { url: images[0], message: caption, published: true }, {}, 'Facebook', 'POST', 90_000);
+      const r = await fbPhoto(ctx, page, tk, images[0], { message: caption, published: true });
       postId = String(r?.post_id ?? r?.id ?? '');
     } else if (images.length > 1) {
       const ids: string[] = [];
-      for (const url of images) ids.push(String((await postJson(`${PLAN_GRAPH}/${page}/photos?${tk}`, { url, published: false }, {}, 'Facebook', 'POST', 90_000))?.id ?? ''));
+      for (const url of images) ids.push(String((await fbPhoto(ctx, page, tk, url, { published: false }))?.id ?? ''));
       const r = await postJson(`${PLAN_GRAPH}/${page}/feed?${tk}`, { message: caption, attached_media: ids.filter(Boolean).map((media_fbid) => ({ media_fbid })) }, {}, 'Facebook', 'POST', 60_000);
       postId = String(r?.id ?? '');
     } else {
@@ -590,7 +617,7 @@ async function planStory(ctx: Ctx, a: PlanArgs): Promise<{ id: string; url: stri
       return { id, url: null };
     }
     if (!image) throw new AppError('bad_request', 'Facebook : une story a une photo ou une vidéo.');
-    const photo = String((await postJson(`${PLAN_GRAPH}/${page}/photos?${tk}`, { url: image, published: false }, {}, 'Facebook', 'POST', 90_000))?.id ?? '');
+    const photo = String((await fbPhoto(ctx, page, tk, image, { published: false }))?.id ?? '');
     if (!photo) throw new AppError('bad_request', 'Facebook n’a pas pris la photo.');
     const r = await postJson(`${PLAN_GRAPH}/${page}/photo_stories?${tk}`, { photo_id: photo }, {}, 'Facebook', 'POST', 60_000);
     const id = String(r?.post_id ?? '');
