@@ -40,6 +40,7 @@ import { PUBLIC, Public } from './public';
 import { limitMail, resetMail } from './resetMail';
 import { promises as dns } from 'node:dns';
 import { domainLookup } from './domainDns';
+import { domainEcho, echoNonceOk, reachDomain } from './domainEcho';
 import { referralSignupMail, signupConfirmMail, signupExistsMail, verifyMail } from './mails';
 import { push as webPush, pushKeys as webPushKeys } from './push';
 import type { Mail } from './mail';
@@ -650,10 +651,18 @@ class ApiController {
   }
   /** Shop domains are looked up on public DNS services first: the hosting DNS can keep old addresses (domainDns.ts). */
   private readonly domainDns = domainLookup();
-  /** The DNS as the domain check sees it: the platform's name answers the server's addresses. */
-  private resolve = (h: string) => (h === this.platformHost() ? this.serverIps() : this.domainDns.resolve4(h));
   /** A name's TXT texts (the proof that a domain is the shop's: core.domainProof). */
   private resolveTxt = async (h: string) => (await this.domainDns.resolveTxt(h)).map((parts) => parts.join(''));
+  /**
+   * What the domain check asks: the TXT proof, then the site opened in HTTPS through the domain (domainEcho.ts), which
+   * works straight to this server or through Cloudflare. 20 s: the first visit makes the certificate. The addresses
+   * found are only shown to the owner.
+   */
+  private domainLook = (): core.DomainLookups => ({
+    resolveTxt: this.resolveTxt,
+    reaches: (d) => reachDomain(d, 20_000),
+    resolve: (h) => this.domainDns.resolve4(h),
+  });
 
   /** The shop's own domain: what it is, whether its DNS is ready, what to write at the domain's registrar. */
   @Post('shop/domain/get')
@@ -685,7 +694,7 @@ class ApiController {
       if (e instanceof core.DomainError) throw new core.AppError('bad_request', e.message);
       throw e;
     }
-    if (want) await core.checkShopDomain(this.core.t, req.shop.shop.id, this.platformHost(), this.resolve, this.resolveTxt);
+    if (want) await core.checkShopDomain(this.core.t, req.shop.shop.id, this.domainLook());
     this.core.invalidate();
     // its landing pages get Cloudflare's robot check on the new domain (or the old one is taken out), in the background
     void syncTurnstile(this.core).catch(() => null);
@@ -720,13 +729,16 @@ class ApiController {
     const key = `domain:${req.shop.shop.id}`;
     checkLogin(key, 30);
     failedLogin(key);
-    const r = await core.checkShopDomain(this.core.t, req.shop.shop.id, this.platformHost(), this.resolve, this.resolveTxt);
+    const r = await core.checkShopDomain(this.core.t, req.shop.shop.id, this.domainLook());
     this.core.invalidate();
     if (r.ok) void syncTurnstile(this.core).catch(() => null);
     return r;
   }
 
-  /** Caddy asks before getting an HTTPS certificate for a name: only a ready domain of an active shop. */
+  /**
+   * Caddy asks before getting an HTTPS certificate for a name: a ready domain of an active shop, or one still pending
+   * whose TXT record already proves it is the shop's (the HTTPS test of « Vérifier » needs the certificate first).
+   */
   @Public()
   @Get('domain-check')
   async domainAllowed(@Query('domain') domain: string, @Res() res: any) {
@@ -736,8 +748,21 @@ class ApiController {
     if (host && asked === `direct.${host}`) return res.status(200).send('ok');
     // the landing pages' own address (go.<platform>, LANDING_URL): its certificate made at its first visit too
     if (asked && asked === this.core.landingHost()) return res.status(200).send('ok');
-    const id = await core.shopIdByDomain(this.core.t, String(domain ?? ''));
+    const id = await core.shopIdForCertificate(this.core.t, String(domain ?? ''), this.resolveTxt);
     return res.status(id ? 200 : 404).send(id ? 'ok' : 'unknown');
+  }
+
+  /**
+   * The HTTPS test of a shop's own domain (domainEcho.ts): the server opens https://<domain>/api/domain-echo?n=<random>
+   * through the domain and expects this answer, which only it can compute. On every name: the test reaches it before
+   * the domain is ready. Never kept by a cache (Cloudflare or the browser).
+   */
+  @Public()
+  @Get('domain-echo')
+  domainEchoAnswer(@Query('n') n: string, @Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
+    if (!echoNonceOk(n)) return res.status(400).header('Cache-Control', 'no-store').send('bad');
+    const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0];
+    return res.status(200).header('Content-Type', 'text/plain; charset=utf-8').header('Cache-Control', 'no-store').send(domainEcho(host, n));
   }
 
   /**

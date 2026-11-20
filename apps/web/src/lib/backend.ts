@@ -653,10 +653,11 @@ export const domainSet = (domain: string | null): Promise<DomainState> => {
   demoDomain = domain ? { ...demoDomain, domain, status: domain === demoDomain.domain ? demoDomain.status : 'pending', proof: demoProof(domain) } : { ...demoDomain, domain: null, status: 'none', proof: null };
   return Promise.resolve({ ...demoDomain });
 };
+/** « Vérifier »: the TXT proof, then the site opened in HTTPS through the domain (Cloudflare or not); `why` = what failed */
 export const domainCheck = () =>
   backend === remote
-    ? remote.request<{ ok: boolean; found: string[]; expected: string[]; proof?: boolean }>('/shop/domain/check')
-    : Promise.resolve({ ok: demoDomain.status === 'ok', found: [] as string[], expected: [DEMO_IP], proof: demoDomain.status === 'ok' });
+    ? remote.request<{ ok: boolean; found: string[]; proof?: boolean; https?: boolean; why?: string }>('/shop/domain/check')
+    : Promise.resolve({ ok: demoDomain.status === 'ok', found: [] as string[], proof: demoDomain.status === 'ok', https: demoDomain.status === 'ok', why: undefined as string | undefined });
 
 /**
  * Call an action on the current backend (server or demo). `seller` (a confirmation agency's space): the seller whose
