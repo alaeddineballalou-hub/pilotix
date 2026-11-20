@@ -268,11 +268,12 @@
 .lp-dom-box:focus-within { outline: 2px solid var(--navy); outline-offset: 1px; }
 .lp-dom-box input { flex: 1 1 auto; min-width: 0; border: 0 !important; background: transparent !important; box-shadow: none !important; outline: none !important; }
 .lp-dom-box .chip { flex: none; margin: 0; }
+.lp-links .lp-dom-row > .btn { height: auto !important; min-height: var(--sk-ctl-h, 40px) !important; }
 .lp-addr { display: flex; flex-direction: column; gap: 10px; }
 .lp-addr-h { font-size: 13.5px; font-weight: 700; }
 .lp-addr-list { display: flex; flex-direction: column; gap: 8px; }
 .lp-level.lp-addr-opt { position: relative; flex-direction: row; align-items: center; gap: 12px; padding: 12px 14px; transition: border-color .2s ease, background-color .2s ease; }
-.lp-addr-opt:focus-within { outline: 2px solid var(--navy); outline-offset: 2px; }
+.lp-addr-opt:has(input:focus-visible) { outline: 2px solid var(--navy); outline-offset: 2px; }
 .lp-addr-opt.ro { cursor: default; }
 .lp-radio { flex: none; width: 18px; height: 18px; box-sizing: border-box; border-radius: 999px; border: 2px solid var(--muted); display: inline-flex; align-items: center; justify-content: center; transition: border-color .2s ease; }
 .lp-addr-opt.on .lp-radio { border-color: var(--navy); }

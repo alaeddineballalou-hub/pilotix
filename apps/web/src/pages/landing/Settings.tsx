@@ -3,7 +3,7 @@
 import { Why } from './Why';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { serverUrl, type Out } from '../../lib/backend';
+import { backend, serverUrl, type Out } from '../../lib/backend';
 import { PageLinks } from './Domain';
 import { PixelsCard } from './Pixels';
 import { TeamLists } from './TeamLists';
@@ -237,7 +237,7 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
         store={(label) => (
           <Field label={label} hint={data.storeFixed ? t('landing.set.storeFixed', { name: data.store }) : t('landing.set.storeSlugHint', { name: data.store })}>
             <div className="lp-slug">
-              <span className="ltr">{`${data.pagesUrl || serverUrl() || location.host}/`.replace(/^https?:\/\//, '')}</span>
+              <span className="ltr">{`${data.pagesUrl || serverUrl() || (backend.kind === 'demo' ? 'go.pilotix.online' : location.host)}/`.replace(/^https?:\/\//, '')}</span>
               {data.storeFixed ? (
                 // a shop of Pilotix's platform: its link name, chosen once (all its Pilotix addresses use it too)
                 <input className="ltr" value={data.store} readOnly />
