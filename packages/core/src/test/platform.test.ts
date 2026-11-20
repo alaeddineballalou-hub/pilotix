@@ -26,6 +26,7 @@ import {
   Tenancy,
 } from '../index';
 import { landingStore } from '../modules/landingquery';
+import { productLimits } from '../modules/adslaunch';
 import { PLATFORM_MIGRATIONS } from '../platform/schema';
 import {
   accountByEmail,
@@ -591,6 +592,33 @@ test('« Bientôt »: closed in every boutique, its actions refused, the agencie
   await p('p.settings.save', { pro: { on: true, price: 2000 } });
   assert.deepEqual((await platformSettings(t)).soon.features, []);
   await assert.rejects(p('p.settings.save', { soon: { features: ['x'.repeat(61)] } }));
+});
+
+test('ads link to the shop’s own domain once it is ready, not to PILOTIX.ONLINE', async () => {
+  const { t, p } = await server();
+  const plan = (await p<any[]>('p.plans.list')).find((x) => x.code === 'pro');
+  const made = await invite(t, p, { name: 'Domaine', ownerName: 'Sami', ownerEmail: 's@domaine.dz', planId: plan.id, trialDays: 14 }, 'Domaine-Password-1');
+  const schema = `shop_${made.id}`;
+  const db = t.shop(schema);
+  const prod = (await db.query(`INSERT INTO products (name, sku, price, active) VALUES ('Poussette', 'POU', 8900, true) RETURNING id`))[0].id;
+  await db.query(`INSERT INTO landing_pages (product_id, slug, title) VALUES ($1, 'poussette', 'Poussette')`, [prod]);
+  const linkNow = async () => {
+    const s = (await loadShop(t, { id: made.id }))!;
+    const c = await shopUserCtx(t, schema, 's@domaine.dz', 'Domaine-Password-1', shopCtx(s, shopStatus(s, Date.now(), 3)));
+    const list = await productLimits({ ...c, t, server: { publicUrl: 'https://pilotix.online', pagesUrl: () => '' } as any });
+    return list.find((x) => x.id === Number(prod))!.landing!;
+  };
+  const store = (await loadShop(t, { id: made.id }))!.slug;
+  let l = await linkNow();
+  assert.equal(l.url, `https://pilotix.online/${store}/poussette`);
+  assert.equal(l.own, false);
+  // typed, not ready yet (its DNS, its proof): still the platform's address
+  await t.platform.query(`UPDATE platform.shops SET domain = 'www.domaine.dz', domain_status = 'pending' WHERE id = $1`, [made.id]);
+  assert.equal((await linkNow()).own, false);
+  await t.platform.query(`UPDATE platform.shops SET domain_status = 'ok' WHERE id = $1`, [made.id]);
+  l = await linkNow();
+  assert.equal(l.url, 'https://www.domaine.dz/poussette');
+  assert.equal(l.own, true);
 });
 
 test('the plan limits active accounts', async () => {

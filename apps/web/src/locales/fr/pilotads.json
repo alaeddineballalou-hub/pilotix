@@ -564,5 +564,9 @@
     "and": "{{a}} et {{b}}",
     "paid": "Sponsorisé · Partenariat rémunéré",
     "with": "avec {{name}}"
+  },
+  "domain": {
+    "platform": "Votre pub affichera « {{host}} » comme adresse.",
+    "set": "Mettre votre propre domaine"
   }
 }

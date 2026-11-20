@@ -580,3 +580,27 @@ test('a shop with no Meta pixel: no list to make (« Pas de pixel »)', async ()
   await noMetaAds(db);
 });
 
+
+test('« Photo du produit »: the product’s HD photo as bytes (its 960 px copy, made once), else its small picture', async () => {
+  const [a, b, c] = (await db.query(`SELECT id FROM products WHERE NOT is_service ORDER BY id LIMIT 3`)).map((r: any) => Number(r.id));
+  await db.query(`DELETE FROM product_photos WHERE product_id = ANY($1)`, [[a, b, c]]);
+  await db.query(`DELETE FROM landing_hd`);
+  // the browser preview keeps the photo itself (store 'local'): sent as it is
+  await db.query(`INSERT INTO product_photos (product_id, kind, store, data, w, h, thumb, position) VALUES ($1, 'photo', 'local', '/9j/LOCAL', 1200, 1500, 'data:image/jpeg;base64,/9j/T', 0)`, [a]);
+  assert.deepEqual(await call('ads.media.productPhoto', await mk(), { productId: a }), { type: 'image/jpeg', base64: '/9j/LOCAL' });
+  // a server's photo is in the bucket: its 960 px copy, made by the server the first time and kept (landing_hd)
+  await db.query(`INSERT INTO product_photos (product_id, kind, store, key, w, h, thumb, position) VALUES ($1, 'photo', 'r2', 'shop/abc.jpg', 2048, 2048, 'data:image/jpeg;base64,/9j/T', 0)`, [b]);
+  let made = 0;
+  const server = { dellal: async (action: string, args: any) => (action === 'landingHd' && args.key === 'shop/abc.jpg' && args.width === 960 ? (made++, { base64: 'UklGRWEBP' }) : null) } as any;
+  assert.deepEqual(await call('ads.media.productPhoto', await as(EMAILS.marketer, server), { productId: b }), { type: 'image/webp', base64: 'UklGRWEBP' });
+  assert.deepEqual(await call('ads.media.productPhoto', await as(EMAILS.marketer, server), { productId: b }), { type: 'image/webp', base64: 'UklGRWEBP' });
+  assert.equal(made, 1, 'the copy is made once, then read back');
+  // no HD photo: its small picture (a data: address, never fetched by the page)
+  await db.query(`UPDATE products SET photo = 'data:image/png;base64,iVBORw0KGgo=' WHERE id = $1`, [c]);
+  assert.deepEqual(await call('ads.media.productPhoto', await mk(), { productId: c }), { type: 'image/png', base64: 'iVBORw0KGgo=' });
+  await db.query(`UPDATE products SET photo = NULL WHERE id = $1`, [c]);
+  assert.equal(await call('ads.media.productPhoto', await mk(), { productId: c }), null);
+  await assert.rejects(call('ads.media.productPhoto', await mk(), { productId: 999999 }), /introuvable/);
+  // a confirmation agent has no ads
+  await assert.rejects(call('ads.media.productPhoto', await as(EMAILS.conf), { productId: a }));
+});

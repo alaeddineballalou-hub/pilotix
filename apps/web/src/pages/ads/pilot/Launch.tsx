@@ -6,7 +6,7 @@
 // with one of the creator's posts (…/lancer/booster/<post id>: the post itself becomes the ad).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { backend, Out, rpc } from '../../../lib/backend';
+import { ApiError, backend, Out, rpc } from '../../../lib/backend';
 import { da, dec1, n, since, wilayaName } from '../../../lib/format';
 import { useAction, useRpc } from '../../../lib/query';
 import { store } from '../../../lib/store';
@@ -395,9 +395,17 @@ function GoalFields({ o, d, set, product }: { o: Opt; d: Draft; set: (p: Partial
         {t('pilotads.check.noLanding')} <a href="#/landing">{t('pilotads.launch.makeLanding')}</a>
       </div>
     ) : product?.landing ? (
-      <p className="note ltr pa-url">
-        <Icon name="link" /> {product.landing.url}
-      </p>
+      <>
+        <p className="note ltr pa-url">
+          <Icon name="link" /> {product.landing.url}
+        </p>
+        {/* the page on the platform's address: the ad shows it (PILOTIX.ONLINE) until the shop's own domain is ready */}
+        {!product.landing.own && backend.kind === 'remote' && (
+          <p className="note pa-domain">
+            {t('pilotads.domain.platform', { host: hostOf(product.landing.url) })} <a href="#/landing/reglages">{t('pilotads.domain.set')}</a>
+          </p>
+        )}
+      </>
     ) : null;
   if (d.goal === 'messages') {
     const toggle = (c: Channel) => set({ channels: d.channels.includes(c) ? d.channels.filter((x) => x !== c) : [...d.channels, c] });
@@ -692,18 +700,21 @@ function MediaPicker({ d, set, lib, refetchLib, product }: { d: Draft; set: (p: 
     setPct(0);
     refetchLib();
   };
-  // the product's own photo, made an ad photo in one tap
+  // the product's own photo, made an ad photo in one tap: its bytes come from the server (its HD photo from Produits ›
+  // Photos when it has one, else its small picture). Never a fetch of its data: address: the site's security refuses it.
   const useProductPhoto = async () => {
     if (!product?.photo) return;
     try {
       setBusy('photo');
-      const blob = await (await fetch(product.photo)).blob();
-      const ph = await toPlanPhoto(blob);
+      const src = await rpc('ads.media.productPhoto', { productId: product.id });
+      if (!src) throw new Error('no photo');
+      const bytes = Uint8Array.from(atob(src.base64), (c) => c.charCodeAt(0));
+      const ph = await toPlanPhoto(new Blob([bytes], { type: src.type }));
       const r = await rpc('ads.media.photo', { jpeg: ph.jpeg, thumb: ph.thumb, w: ph.w, h: ph.h });
       set({ mediaIds: [...d.mediaIds, r.id] });
       refetchLib();
-    } catch {
-      toast(t('pilotads.media.photoBad'), 'bad');
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : t('pilotads.media.photoBad'), 'bad');
     } finally {
       setBusy('');
     }
@@ -739,6 +750,56 @@ function MediaPicker({ d, set, lib, refetchLib, product }: { d: Draft; set: (p: 
       <input ref={file} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple hidden onChange={(e) => void addFiles(e.target.files)} />
     </div>
   );
+}
+
+/**
+ * A number the person types (a budget in dollars, an age). The box may stay empty while they type, and a tap selects
+ * what is in it, so a new number replaces it: « 2 » typed in a box showing 10 no longer gives 102 (seen 17 Nov 2026).
+ * A number out of its limits goes back to the last good one when they leave the box. « , » or « . » for decimals.
+ */
+function NumBox({ value, min, max = Infinity, whole = false, onChange }: { value: number; min: number; max?: number; whole?: boolean; onChange: (v: number) => void }) {
+  const [txt, setTxt] = useState(String(value));
+  // the tap that put the cursor in the box: its release would undo the selection
+  const fresh = useRef(false);
+  const num = (v: string) => Number(v.replace(',', '.'));
+  useEffect(() => {
+    if (num(txt) !== value) setTxt(String(value));
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ok = (v: string) => !!v && num(v) >= min && num(v) <= max;
+  return (
+    <input
+      type="text"
+      inputMode={whole ? 'numeric' : 'decimal'}
+      className="ltr"
+      value={txt}
+      onFocus={(e) => {
+        fresh.current = true;
+        e.currentTarget.setSelectionRange(0, e.currentTarget.value.length);
+      }}
+      onMouseUp={(e) => {
+        if (fresh.current) e.preventDefault();
+        fresh.current = false;
+      }}
+      onChange={(e) => {
+        const v = e.target.value.replace(whole ? /\D/g : /[^\d.,]/g, '');
+        setTxt(v);
+        if (ok(v)) onChange(num(v));
+      }}
+      onBlur={() => {
+        fresh.current = false;
+        if (!ok(txt)) setTxt(String(value));
+      }}
+    />
+  );
+}
+
+/** « https://pilotix.online/boutique/page » → « pilotix.online » ('' when it is not an address) */
+function hostOf(url: string): string {
+  try {
+    return url ? new URL(url).host : '';
+  } catch {
+    return '';
+  }
 }
 
 // ---------------------------------------------------------------- step 4: the budget
@@ -778,7 +839,7 @@ function StepBudget({ o, d, set, product, pro }: { o: Opt; d: Draft; set: (p: Pa
       <label className="field pa-own">
         <span className="lab">{t('pilotads.budget.own')}</span>
         <span className="pa-usd">
-          <input type="number" min={1} step={1} inputMode="decimal" value={d.budgetUsd} onChange={(e) => set({ budgetUsd: Math.max(1, Number(e.target.value) || 1) })} />
+          <NumBox value={d.budgetUsd} min={1} onChange={(v) => set({ budgetUsd: v })} />
           <b>$</b>
         </span>
       </label>
@@ -872,9 +933,9 @@ function Targeting({ o, d, set }: { o: Opt; d: Draft; set: (p: Partial<Draft>) =
         <label className="field">
           <span className="lab">{t('pilotads.who.age')}</span>
           <span className="pa-age">
-            <input type="number" min={18} max={65} value={d.ageMin} onChange={(e) => set({ ageMin: Math.min(65, Math.max(18, Number(e.target.value) || 18)) })} />
+            <NumBox value={d.ageMin} min={18} max={65} whole onChange={(v) => set({ ageMin: v })} />
             <span>–</span>
-            <input type="number" min={18} max={65} value={d.ageMax} onChange={(e) => set({ ageMax: Math.min(65, Math.max(18, Number(e.target.value) || 65)) })} />
+            <NumBox value={d.ageMax} min={18} max={65} whole onChange={(v) => set({ ageMax: v })} />
           </span>
         </label>
         <label className="field">

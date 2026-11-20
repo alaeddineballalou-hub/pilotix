@@ -65,7 +65,19 @@ export interface ProductLimit {
   estimated: boolean;
   limit: ReturnType<typeof limitOf>;
   packs: ReturnType<typeof budgetPacks>;
-  landing: { id: number; slug: string; title: string; url: string; pixelId: string | null } | null;
+  /** its page; `own`: at the shop's own domain (Landing pages › Réglages), so the ad shows that name, not the platform's */
+  landing: { id: number; slug: string; title: string; url: string; own: boolean; pixelId: string | null } | null;
+}
+
+/**
+ * The shop's own domain for its pages, once ready (Landing pages › Réglages › « Votre propre domaine »: its DNS points
+ * here and carries its proof): the ads link there (https://<domain>/<page>), so they show the shop's name and not
+ * PILOTIX.ONLINE (seen on a real ad, 17 Nov 2026). null: none, or not ready, or no platform (the browser preview).
+ */
+async function ownDomain(ctx: Ctx): Promise<string | null> {
+  if (!ctx.server || !ctx.t || !ctx.shop || ctx.shop.demo) return null;
+  const r = (await ctx.t.platform.query(`SELECT domain FROM platform.shops WHERE id = $1 AND domain IS NOT NULL AND domain_status = 'ok'`, [ctx.shop.id]).catch(() => []))[0];
+  return r?.domain ? String(r.domain).toLowerCase() : null;
 }
 
 /** The products the launcher offers, with what an order may cost each (one read of the orders for all of them). */
@@ -94,6 +106,7 @@ export async function productLimits(ctx: Ctx, onlyId?: number | null): Promise<P
   const pages = await ctx.db.query(`SELECT id, slug, title, product_id, pixel_id FROM landing_pages WHERE active ORDER BY id DESC`).catch(() => []);
   const base = (ctx.server?.pagesUrl?.() || ctx.server?.publicUrl || (ctx.server ? '' : DEMO_BASE)).replace(/\/+$/, '');
   const store = await landingStore(ctx.db);
+  const own = await ownDomain(ctx);
   const out: ProductLimit[] = [];
   for (const p of rows) {
     const id = num(p.id);
@@ -120,7 +133,16 @@ export async function productLimits(ctx: Ctx, onlyId?: number | null): Promise<P
       estimated,
       limit,
       packs: budgetPacks(limit.targetUsd),
-      landing: lp ? { id: num(lp.id), slug: String(lp.slug), title: String(lp.title ?? lp.slug), url: base ? `${base}/${store ? `${store}/` : ''}${lp.slug}` : '', pixelId: lp.pixel_id ? String(lp.pixel_id) : null } : null,
+      landing: lp
+        ? {
+            id: num(lp.id),
+            slug: String(lp.slug),
+            title: String(lp.title ?? lp.slug),
+            url: own ? `https://${own}/${lp.slug}` : base ? `${base}/${store ? `${store}/` : ''}${lp.slug}` : '',
+            own: !!own,
+            pixelId: lp.pixel_id ? String(lp.pixel_id) : null,
+          }
+        : null,
     });
   }
   return out;
@@ -672,6 +694,37 @@ async function library(ctx: Ctx) {
   return media.map((m) => mediaView(ctx, m));
 }
 
+/**
+ * « Photo du produit » (Lancer une pub): the product's main photo as bytes, for the page to make an ad photo of
+ * (social/jpeg.ts › toPlanPhoto) — its HD photo (Produits › Photos) in its 960 px copy (the one its pages use), else its
+ * small picture. Bytes, never an address: the site's security refuses a fetch of a data: address (17 Nov 2026), and the
+ * bucket's are on another site. null: the product has no photo.
+ */
+async function productAdPhoto(ctx: Ctx, productId: number): Promise<{ type: string; base64: string } | null> {
+  const given = givenOf(ctx);
+  if (given && !given.has(productId)) throw forbidden('Ce produit ne vous est pas confié.');
+  const p = (await ctx.db.query('SELECT photo FROM products WHERE id = $1', [productId]))[0];
+  if (!p) throw notFound('Produit introuvable');
+  const hd = (
+    await ctx.db
+      .query(`SELECT id, store, key, data FROM product_photos WHERE product_id = $1 AND kind = 'photo' ORDER BY (variant_id IS NOT NULL), position, id LIMIT 1`, [productId])
+      .catch(() => [])
+  )[0];
+  if (hd) {
+    // the browser preview (and the demo shop) keep the photo itself: a JPEG of 2048 px at most
+    if (hd.store === 'local' && hd.data) return { type: 'image/jpeg', base64: String(hd.data) };
+    const have = (await ctx.db.query('SELECT webp FROM landing_hd WHERE photo_id = $1 AND width = 960', [hd.id]).catch(() => []))[0];
+    if (have) return { type: 'image/webp', base64: String(have.webp) };
+    const made: any = ctx.server?.dellal && hd.store === 'r2' ? await ctx.server.dellal('landingHd', { key: hd.key, data: null, width: 960 }, ctx).catch(() => null) : null;
+    if (made?.base64) {
+      await ctx.db.query('INSERT INTO landing_hd (photo_id, width, webp) VALUES ($1, 960, $2) ON CONFLICT (photo_id, width) DO NOTHING', [hd.id, made.base64]).catch(() => undefined);
+      return { type: 'image/webp', base64: String(made.base64) };
+    }
+  }
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(p.photo ?? ''));
+  return m ? { type: m[1], base64: m[2] } : null;
+}
+
 const Id = z.number().int().positive();
 const Lang = z.enum(['darija', 'fr', 'ar']);
 
@@ -722,6 +775,7 @@ export const adsLaunchProcs = {
 
   // the photos and videos of the ads (the shop's library, shared with the Planner; kept while the ads use them)
   'ads.media.list': proc(['marketer'], z.object({}), (ctx) => library(ctx)),
+  'ads.media.productPhoto': proc(['marketer'], z.object({ productId: Id }), (ctx, i) => productAdPhoto(ctx, i.productId)),
   'ads.media.photo': proc(
     ['marketer'],
     z.object({ jpeg: B64(4_850_000), thumb: B64(200_000), w: z.number().int().min(320).max(1440), h: z.number().int().min(160).max(2560) }),

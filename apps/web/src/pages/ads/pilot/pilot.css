@@ -195,6 +195,9 @@
 .pa-check small { color: var(--c-muted); font-size: 12.5px; }
 .pa-url { display: flex; align-items: center; gap: 6px; word-break: break-all; margin-top: 10px; }
 .pa-url svg { width: 14px; height: 14px; flex: none; }
+/* the page on the platform's address: the ad shows it until the shop's own domain is ready */
+.pa-domain { margin-top: 4px; }
+.pa-domain a { font-weight: 700; white-space: nowrap; }
 .pa-ad { display: flex; flex-direction: column; gap: 18px; }
 .pa-media-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .pa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }

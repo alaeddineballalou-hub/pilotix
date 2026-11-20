@@ -29,7 +29,19 @@
 .lp-ed-form h2 { margin: 0; font-size: 15.5px; display: flex; align-items: baseline; gap: 8px; }
 .lp-ed-form textarea { min-height: 180px; resize: vertical; line-height: 1.55; }
 .lp-ed-foot { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 10px; padding: 10px 0; background: linear-gradient(transparent, var(--bg) 30%); }
-.lp-ed-foot > .ai-save { flex: 1; }
+.lp-ed-foot > .ai-save { flex: 1; min-width: 0; }
+/* a phone: « Supprimer la page » keeps its bin only, so « Enregistrer » stays whole on the screen (it was cut at the
+   edge in French) */
+@media (max-width: 560px) {
+  .lp-ed-foot .lp-ed-del { flex: none; padding-inline: 12px; }
+  .lp-ed-foot .lp-ed-del-t { display: none; }
+}
+/* the smallest phones (320 px): « Modifications » keeps its room beside the button */
+@media (max-width: 360px) {
+  .lp-ed-foot > .ai-save { gap: 8px; padding-inline: 12px 6px; }
+  .lp-ed-foot > .ai-save .btn { padding: 0 12px; }
+  .lp-ed-foot .ai-save-t { font-size: 12px; }
+}
 .btn.danger { color: var(--coral); }
 
 .lp-slug { display: flex; align-items: stretch; min-width: 0; border: 1.5px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--field); }

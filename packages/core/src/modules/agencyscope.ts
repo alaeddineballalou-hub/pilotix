@@ -389,6 +389,8 @@ export const MARKETER_AGENT_PROCS: Record<string, Gate> = {
   'ads.launch.remove': free,
   'ads.media.list': free,
   'ads.media.photo': free,
+  // « Photo du produit »: a product they are given only (adslaunch.ts checks it)
+  'ads.media.productPhoto': free,
   'ads.media.videoStart': free,
   'ads.media.videoDone': free,
   'mk.overview': free,

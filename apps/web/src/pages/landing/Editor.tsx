@@ -470,8 +470,8 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
 
           <div className="lp-ed-foot">
             {p && (
-              <button type="button" className="btn ghost danger" onClick={remove}>
-                <Icon name="trash" /> {t('landing.ed.remove')}
+              <button type="button" className="btn ghost danger lp-ed-del" onClick={remove} aria-label={t('landing.ed.remove')} title={t('landing.ed.remove')}>
+                <Icon name="trash" /> <span className="lp-ed-del-t">{t('landing.ed.remove')}</span>
               </button>
             )}
             <SaveBar dirty={dirty || !p} busy={save.isPending} disabled={!d.productId || busy > 0} onSave={submit} label={t('common.save')} />
