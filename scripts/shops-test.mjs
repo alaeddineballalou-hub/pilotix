@@ -762,6 +762,10 @@ await section('Confirmation agencies: « Créer mon agence », Pilotix’s check
   assert.equal(o1.confAgencyId, agencyId);
   assert.equal(o2.confAgencyId, null);
   const S = ctx.signup1.shopId;
+  // a plain agent of the agency sees only the orders given to her: nothing until the chief gives her o1
+  assert.deepEqual((await rpcSeller(N, S, 'orders.list', { pageSize: 50 })).rows.map((r) => r.id), []);
+  const noraHere = (await rpc(ctx.signup1.token, 'users.list', { agencies: true })).find((u) => u.email === em('nora'))?.id;
+  await rpcSeller(A, S, 'orders.assignAgent', { ids: [o1.id], agentId: noraHere });
   const seen = await rpcSeller(N, S, 'orders.list', { pageSize: 50 });
   assert.deepEqual(seen.rows.map((r) => r.id), [o1.id]);
   await fails(rpcSeller(N, S, 'orders.get', { id: o2.id }), 403);
@@ -769,7 +773,7 @@ await section('Confirmation agencies: « Créer mon agence », Pilotix’s check
   const all = await rpcSeller(N, 'all', 'confirmation.list', { sub: 'nouvelles' });
   assert.deepEqual(all.rows.map((r) => [r.id, r.seller.id]), [[o1.id, S]]);
   await rpcSeller(N, S, 'orders.setConf', { ids: [o1.id], status: 'confirmed' });
-  ok('from her agency: one seller or all of them; only the agency’s orders; nothing else of the store opens');
+  ok('from her agency: one seller or all of them; only the orders the chief gave her; nothing else of the store opens');
   // the store never edits the agent's account
   const team = await rpc(ctx.signup1.token, 'users.list', { agencies: true });
   const nid = team.find((u) => u.email === em('nora'))?.id;
