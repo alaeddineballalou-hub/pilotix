@@ -288,7 +288,7 @@ function AllQueue({ sub, scope }: { sub: Sub; scope?: AllScope }) {
         </>
       ) : (
         <div className="tbl-wrap">
-          <table className="tbl qtbl agx-all-tbl">
+          <table className={`tbl qtbl agx-all-tbl${gives ? ' agx-gives' : ''}`}>
             <thead>
               <tr>
                 <th className="ck">

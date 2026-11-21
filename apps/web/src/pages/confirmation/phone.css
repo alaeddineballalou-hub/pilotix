@@ -39,7 +39,7 @@
 .pxp-wa .bji { width: 20px; height: 20px; }
 .pxp-ob { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px 12px 120px; overscroll-behavior: contain; }
 /* « Attribuer » at the top of the opened order (managers, the owner, an agency's chiefs): the agent, one tap to change */
-.pxp-give { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding: 8px 8px 8px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: 0 1px 2px rgba(27, 42, 71, .04); }
+.pxp-give { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding-block: 8px; padding-inline: 12px 8px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: 0 1px 2px rgba(27, 42, 71, .04); }
 .pxp-give > .bji { flex: none; width: 18px; height: 18px; color: var(--muted); }
 .pxp-give > span { flex: none; font-size: 13px; font-weight: 700; color: var(--muted); }
 .pxp-give select { flex: 1; min-width: 0; height: 42px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit; font-size: 15px; font-weight: 700; }

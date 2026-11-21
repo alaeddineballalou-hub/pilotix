@@ -141,6 +141,8 @@ html body .topbar .px-seller select { flex: 1; min-width: 0; min-height: 0; heig
 .agx-pcard { width: 100%; text-align: start; display: grid; gap: 4px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; cursor: pointer; }
 .agx-pcard-top, .agx-pcard-bot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .agx-all-tbl td.px-cw .px-clamp { max-width: 220px; }
+/* « Attribuer » adds the ticks: the product gives them its room (the agent's column stays on screen) */
+.agx-all-tbl.agx-gives td.px-cw .px-clamp { max-width: 176px; }
 .agx-prod { border: 1px solid var(--line); }
 .agx-prod.on { border-color: var(--c-accent); }
 .agx-all-tbl td .agx-tel { display: block; font-size: 13px; color: var(--c-muted, var(--muted)); }
