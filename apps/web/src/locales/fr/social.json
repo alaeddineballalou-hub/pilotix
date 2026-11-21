@@ -355,7 +355,7 @@
     "sortOrders": "Le plus de commandes",
     "sortViews": "Le plus de vues",
     "post": "Post",
-    "updated": "Chiffres de Meta du {{when}}"
+    "updated": "Chiffres de Meta : {{when}}"
   },
   "set": {
     "slots": "Heures fixes de publication",
