@@ -168,6 +168,14 @@ function One({ card, id, days, platform }: { card: Card | null; id: number; days
           </div>
           <Numbers c={card} />
           <div className="lp-evs-more">
+            <span title={t('landing.evs.visitsSentHelp')}>
+              {t('landing.evs.visitsSent')} <b className="ltr">{n(card.visitsSent)}</b>
+            </span>
+            {card.visitsLost > 0 && (
+              <span className="bad">
+                {t('landing.evs.visitsLost')} <b className="ltr">{n(card.visitsLost)}</b>
+              </span>
+            )}
             <span>
               {t('landing.evs.k.fake')} <b className="ltr">{n(card.fake)}</b>
             </span>

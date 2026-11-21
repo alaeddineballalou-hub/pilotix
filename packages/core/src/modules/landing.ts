@@ -55,7 +55,7 @@ import { LINK_USE, LinkUse, linkUseDb, pageLinks, readLinkUse } from './pagelink
 import { runAttackTest } from './attacktest';
 import { checkPixels, listPixels, PixelList, pixelsJson, pixelsOf, pixelTestCode, pixelToken, readPixels } from './pixels';
 import { campaignSettings, giveConsent } from './campaigns';
-import { ABANDONED, abandonCutoff, addressTaken, APP_WORD, BLOCKED_FAKE_AFTER_MS, FAKE_EVENTS, freeLandingSlug, keepFormerAddress, landingCounts, landingSettings, LandingSettings, landingStore, NOT_A_LEAD, pageRowAt, queueLead, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
+import { ABANDONED, abandonCutoff, addressTaken, APP_WORD, BLOCKED_FAKE_AFTER_MS, FAKE_EVENTS, freeLandingSlug, groupRowAt, keepFormerAddress, landingCounts, landingSettings, LandingSettings, landingStore, NOT_A_LEAD, pageRowAt, queueLead, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
 import { sendInPreview } from './notify';
 import { addEvent, createOrder, noOrderAccess } from './orders';
 import { shareBlacklist } from './sharedblacklist';
@@ -131,6 +131,9 @@ const eventCard = (id: number, pg: any, series: { day: string; visits: number; p
   skipped: 0,
   failed: 0,
   waiting: 0,
+  /** its visits the server sent to Meta (PageView), and the ones that could not leave: apart from the events above */
+  visitsSent: 0,
+  visitsLost: 0,
   series,
 });
 const WATCH = ['marketer', 'confirmation'] as const;
@@ -432,10 +435,12 @@ export interface HtmlOpts {
   url?: string;
   /** opened from this group page (?g=<slug>): the « back to all the products » bar */
   group?: string;
-  /** opened from a catalog ad (Marketing › Catalogue: its link carries ?px_cat=meta|tiktok): a visit counted for « Résultats » */
-  catalog?: 'meta' | 'tiktok';
-  /** the browser's anonymous visitor code (the server's cookie; none for robots): a unique visitor for the day */
-  visitor?: string;
+  /**
+   * where the page says it is in front of a person (live mode: « …/lp/<page>/seen »). Serving the page counts nothing:
+   * the visit is counted when the page says so (pageSeen), so Facebook's pages loaded before the tap, robots and link
+   * previews are no visits.
+   */
+  seen?: string;
   /** a team browser (Réglages › « Team et fournisseurs »: it sent a test; the server's cookie): no pixel, not counted */
   team?: boolean;
 }
@@ -538,7 +543,8 @@ export async function descriptionImages(db: Db, text: string, imgBase: string | 
   return out;
 }
 
-const randomId = () => Array.from(globalThis.crypto.getRandomValues(new Uint8Array(9)), (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 14);
+/** a page view's id (14 letters and digits): its pixel events and the server's carry it */
+export const randomId = () => Array.from(globalThis.crypto.getRandomValues(new Uint8Array(9)), (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 14);
 
 /** the page's own WhatsApp button, else the one of Réglages (null: no button) */
 function whatsappOf(own: { on: boolean; number?: string; label?: string; message?: string } | null, shop: LandingSettings['whatsapp']) {
@@ -609,19 +615,9 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     // Referral › Code promo: the optional code field
     promo: (await promoSettings(ctx.db)).enabled,
   };
-  // a team browser's visit counts nowhere (views, unique visitors, catalog results)
-  const counted = o.mode === 'live' && !o.team;
-  if (counted) await ctx.db.query('UPDATE landing_pages SET views = views + 1 WHERE id = $1', [l.id]);
-  // a unique visitor: this browser once per page per day (in Algeria), for the conversion rate
-  if (counted && o.visitor && /^[a-z0-9]{12,40}$/.test(o.visitor))
-    await ctx.db.query('INSERT INTO landing_visits (landing_id, day, visitor) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [l.id, new Date(ctx.now() + 3_600_000).toISOString().slice(0, 10), o.visitor]);
-  // a visit from a catalog ad, by day (in Algeria), product and network (Marketing › Catalogue › Résultats)
-  if (counted && o.catalog)
-    await ctx.db.query(
-      `INSERT INTO catalog_visits (day, product_id, net, n) VALUES ($1, $2, $3, 1) ON CONFLICT (day, product_id, net) DO UPDATE SET n = catalog_visits.n + 1`,
-      [new Date(ctx.now() + 3_600_000).toISOString().slice(0, 10), num(l.product_id), o.catalog],
-    );
-  const group = o.group ? await groupOf(ctx.db, o.group, num(l.id), o.mode === 'live') : null;
+  // serving the page counts nothing (views, unique visitors, catalog results, the group's click): the page says when it
+  // is in front of a person (pageSeen); a team browser gets no address to say it
+  const group = o.group ? await groupOf(ctx.db, o.group, num(l.id), o.mode === 'live', false) : null;
   const html = renderLanding(view, {
     mode: o.mode,
     post: o.post,
@@ -633,6 +629,7 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     url: pageUrl || undefined,
     group: group ?? undefined,
     icon: await landingIconUrl(ctx.db, o.imgBase),
+    seen: o.mode === 'live' && !o.team ? o.seen : undefined,
   });
   return { html, link: o.imgBase ? landingPreloadLink(view) : null };
 }
@@ -827,6 +824,78 @@ export const SubmitInput = z.object({
 
 /** What the page sends while the customer fills the form (a valid phone typed): the abandoned order, if no order follows. */
 export const CaptureInput = SubmitInput.pick({ slug: true, name: true, phone: true, wilaya: true, commune: true, variant: true, qty: true, hp: true, ch: true, fp: true, did: true, vid: true, utm: true, fbp: true, fbc: true, ttp: true, url: true, meta: true });
+
+/** What a page says when it is in front of a person (« …/lp/<page>/seen »). Lenient: a strange value counts nothing, never an error. */
+export const SeenInput = z.object({
+  slug: z.string().max(80),
+  /** the page view's id (randomId): the server's PageView / ViewContent carry the browser pixel's ids */
+  vid: str(40),
+  /** a product page's challenge: proof that this server sent the page, less than 6 hours ago */
+  ch: str(120),
+  /** the page's address as the browser shows it (the ad link's fbclid, px_cat, the group it came from) */
+  url: str(600),
+  fbp: str(200),
+  fbc: str(600),
+  /** the browser's anonymous code (the server's cookie, none for robots): a unique visitor for the day */
+  visitor: str(40),
+  /** a team browser (Réglages › « Team et fournisseurs »; the server's cookie): counted nowhere */
+  team: z.boolean().optional(),
+  meta: Meta,
+});
+/** what the server knows of robots that run a page (BOT_UA) and Meta's own (they check an ad's page) */
+const ROBOT_UA = /facebookexternalhit|facebot|meta-externalagent|bytespider/i;
+/** the parameters of the page's address that a visit needs: the ad's click, a catalog ad's network, the group */
+function seenParams(url: string): { fbclid: string | null; cat: 'meta' | 'tiktok' | null; group: string | null } {
+  let p: URLSearchParams;
+  try {
+    p = new URL(url).searchParams;
+  } catch {
+    return { fbclid: null, cat: null, group: null };
+  }
+  const cat = p.get('px_cat');
+  const g = p.get('g') ?? '';
+  return { fbclid: (p.get('fbclid') ?? '').trim().slice(0, 500) || null, cat: cat === 'meta' || cat === 'tiktok' ? cat : null, group: /^[a-z0-9-]{2,60}$/.test(g) ? g : null };
+}
+
+/**
+ * A page in front of a person: the page's script says it (live mode) when it shows, not hidden and not loaded in advance
+ * (Facebook loads an ad's page before the tap; robots and link previews ask for pages too, and run no script). Then,
+ * and only then: its views, its unique visitor of the day (conversion), a catalog ad's visit, a group's click, and the
+ * visit sent to Meta by the server too (queueVisit). A team browser, a robot, a page offline or a product page whose
+ * challenge this server did not make counts nothing.
+ */
+export async function pageSeen(ctx: Ctx, i: z.infer<typeof SeenInput>): Promise<{ counted: boolean; events: number }> {
+  const none = { counted: false, events: 0 };
+  const ua = i.meta.ua ?? '';
+  if (i.team || !/^[0-9a-z]{8,20}$/.test(i.vid) || !ua || BOT_UA.test(ua) || ROBOT_UA.test(ua)) return none;
+  const db = ctx.db;
+  const now = ctx.now();
+  const day = new Date(now + 3_600_000).toISOString().slice(0, 10);
+  const q = seenParams(i.url);
+  const visit = { vid: i.vid, url: i.url, ip: i.meta.ip ?? '', ua, fbp: i.meta.fbp || i.fbp, fbcCookie: i.meta.fbc ?? '', fbcSent: i.fbc, fbclid: q.fbclid };
+  const l = await pageRowAt(db, i.slug);
+  if (!l) {
+    // a group page at that address (it has no form, so no challenge)
+    const g = await groupRowAt(db, i.slug);
+    if (!g || !g.active) return none;
+    await db.query('UPDATE landing_groups SET views = views + 1 WHERE id = $1', [g.id]);
+    return { counted: true, events: await queueVisit(ctx, g, { ...visit, slug: i.slug, landingId: null }) };
+  }
+  if (!l.active || (await checkChallenge(db, i.ch, i.slug, now)) === null) return none;
+  await db.query('UPDATE landing_pages SET views = views + 1 WHERE id = $1', [l.id]);
+  // a unique visitor: this browser once per page per day (in Algeria), for the conversion rate
+  if (/^[a-z0-9]{12,40}$/.test(i.visitor)) await db.query('INSERT INTO landing_visits (landing_id, day, visitor) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [l.id, day, i.visitor]);
+  // from a catalog ad (its link carries ?px_cat=meta|tiktok): by day, product and network (Marketing › Catalogue › Résultats)
+  if (q.cat)
+    await db.query(
+      `INSERT INTO catalog_visits (day, product_id, net, n) VALUES ($1, $2, $3, 1) ON CONFLICT (day, product_id, net) DO UPDATE SET n = catalog_visits.n + 1`,
+      [day, num(l.product_id), q.cat],
+    );
+  // opened from a group (?g=<group>): a click of that group on this product
+  if (q.group) await groupOf(db, q.group, num(l.id), true, true);
+  const price = numOrNull(l.price) ?? num((await db.query('SELECT price FROM products WHERE id = $1', [l.product_id]))[0]?.price);
+  return { counted: true, events: await queueVisit(ctx, l, { ...visit, slug: i.slug, landingId: num(l.id), productId: num(l.product_id), price }) };
+}
 
 const arDigits = (s: string) => s.replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x660)).replace(/[۰-۹]/g, (c) => String(c.charCodeAt(0) - 0x6f0));
 const plain = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\b(province|wilaya|of)\b/g, '').replace(/[^a-z]/g, '');
@@ -1660,11 +1729,93 @@ function userData(r: { phone: string; name: string; commune?: string | null; wil
 /** Meta keeps events of the last 7 days only. */
 const META_MAX_AGE = 7 * 86_400;
 
-/** The event Meta receives, or why it is not sent anymore. */
-async function buildEvent(db: Db, e: any, api: string, publicUrl: string, now: number): Promise<{ event?: Record<string, unknown>; skip?: string }> {
+/** The event Meta receives (and the ones that go with it: a visit's ViewContent), or why it is not sent anymore. */
+async function buildEvent(db: Db, e: any, api: string, publicUrl: string, now: number): Promise<{ event?: Record<string, unknown>; more?: Record<string, unknown>[]; skip?: string }> {
   const b = await buildMetaEvent(db, e, api, publicUrl, now);
   if (e.platform !== 'tiktok' || !b.event) return b;
   return b.tt ? { event: b.tt } : { skip: 'TikTok : pas d’événement de ce type' };
+}
+
+/** What the server keeps of a visit until it is sent (meta_events.payload): then it is wiped. */
+interface VisitPayload {
+  ip: string;
+  ua: string;
+  fbp: string;
+  fbc: string;
+  /** the page's address in the browser, or '' (then the page's own) */
+  url: string;
+  slug: string;
+  /** a product page: its product and price (its ViewContent) */
+  pid?: number;
+  price?: number;
+}
+
+/** The shop's Conversions API token (Landing pages › Réglages), else its Meta ads key; '' for none. */
+async function capiShopToken(db: Db): Promise<string> {
+  const v = async (key: string) => String((await db.query(`SELECT value FROM settings WHERE key = $1`, [key]))[0]?.value ?? '');
+  return (await v(LANDING_CAPI_SECRET)) || (await v('secret_meta_token'));
+}
+
+/**
+ * A page in front of a person Meta can recognise (its Meta cookie, or the click on one of its ads): « PageView » — and
+ * « ViewContent » on a product's page — from the server too, with the browser pixel's ids (pv-/vc-<view>): Meta counts
+ * each once, and gets the visit even when the person leaves before the pixel loads (it waits for the photos). A browser
+ * Meta cannot recognise is not sent (an IP alone is shared by a whole neighbourhood: the pixel tells it if it loads);
+ * nor to a pixel the shop has no token for (nothing would leave). One outbox row per pixel; it holds the browser's
+ * data until it is sent.
+ */
+async function queueVisit(
+  ctx: Ctx,
+  row: { pixel_id?: unknown; meta_pixels?: unknown; tiktok_pixels?: unknown },
+  v: { vid: string; slug: string; landingId: number | null; url: string; ip: string; ua: string; fbp: string; fbcCookie: string; fbcSent: string; fbclid: string | null; productId?: number; price?: number },
+): Promise<number> {
+  const db = ctx.db;
+  const now = ctx.now();
+  const fbc = fbcOf(v.fbcCookie, v.fbcSent, v.fbclid ? { fbclid: v.fbclid } : null, now).slice(0, 600);
+  const fbp = v.fbp.slice(0, 200);
+  if (!v.ua || (!fbp && !fbc)) return 0;
+  const pixels = (await pixelsOf(db, row, (await landingSettings(db)).pixelId)).meta;
+  if (!pixels.length) return 0;
+  const shopToken = await capiShopToken(db);
+  const payload: VisitPayload = {
+    ip: v.ip.slice(0, 64),
+    ua: v.ua.slice(0, 500),
+    fbp,
+    fbc,
+    url: /^https?:\/\/[^\s"<>]+$/.test(v.url) ? v.url.slice(0, 600) : '',
+    slug: v.slug,
+    ...(v.productId ? { pid: v.productId, price: Math.max(0, Math.round(v.price ?? 0)) } : {}),
+  };
+  let n = 0;
+  for (const pixel of pixels) {
+    if (!shopToken && !(await pixelToken(db, 'meta', pixel))) continue;
+    const r = await db.query(
+      `INSERT INTO meta_events (pixel_id, event_name, event_id, landing_id, value, at, send_after, platform, payload) VALUES ($1,'PageView',$2,$3,$4,$5,$5,'meta',$6)
+       ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING RETURNING id`,
+      [pixel, `pv-${v.vid}`, v.landingId, payload.price ?? null, isoAt(now), JSON.stringify(payload)],
+    );
+    n += r.length;
+  }
+  return n;
+}
+
+/** A visit as Meta receives it: its PageView, and its ViewContent on a product's page (the browser pixel's ids and data). */
+function buildVisitEvent(e: any, sourceUrl: (slug: string | null, url: string | null) => string, nowS: number): { event?: Record<string, unknown>; more?: Record<string, unknown>[]; skip?: string } {
+  const p = readJson<VisitPayload>(e.payload);
+  if (!p?.ua) return { skip: 'Navigateur inconnu' };
+  const t = Math.floor(Date.parse(iso(e.at)) / 1000);
+  if (nowS - t > META_MAX_AGE - 3600) return { skip: 'Plus de 7 jours : Meta ne l’accepte plus' };
+  const common = {
+    event_time: Math.min(t, nowS),
+    action_source: 'website',
+    event_source_url: sourceUrl(p.slug || null, p.url || null),
+    user_data: { client_user_agent: p.ua, ...(p.ip ? { client_ip_address: p.ip } : {}), ...(p.fbp ? { fbp: p.fbp } : {}), ...(p.fbc ? { fbc: p.fbc } : {}) },
+  };
+  const vid = String(e.event_id).replace(/^pv-/, '');
+  return {
+    event: { event_name: 'PageView', event_id: e.event_id, ...common },
+    more: p.pid ? [{ event_name: 'ViewContent', event_id: `vc-${vid}`, ...common, custom_data: { content_ids: [String(p.pid)], content_type: 'product_group', value: num(p.price), currency: 'DZD' } }] : [],
+  };
 }
 
 /** TikTok's names for the events (Events API 2.0) */
@@ -1730,10 +1881,11 @@ async function buildChatEvent(db: Db, e: any, nowS: number): Promise<{ event?: R
   };
 }
 
-async function buildMetaEvent(db: Db, e: any, api: string, publicUrl: string, now: number): Promise<{ event?: Record<string, unknown>; tt?: Record<string, unknown>; skip?: string }> {
+async function buildMetaEvent(db: Db, e: any, api: string, publicUrl: string, now: number): Promise<{ event?: Record<string, unknown>; more?: Record<string, unknown>[]; tt?: Record<string, unknown>; skip?: string }> {
   const sourceUrl = (slug: string | null, url: string | null) => url || (slug && api ? `${api}/lp/${slug}` : publicUrl || 'https://pilotix.app');
   const nowS = Math.floor(now / 1000);
   if (e.platform === 'chat') return buildChatEvent(db, e, nowS);
+  if (e.event_name === 'PageView') return buildVisitEvent(e, sourceUrl, nowS);
   if ((FAKE_EVENTS as readonly string[]).includes(e.event_name)) return buildFakeEvent(db, e, sourceUrl, nowS);
   if (e.event_name === 'Purchase' || e.event_name === 'Confirmed' || e.event_name === 'Lead' || e.event_name === 'Delivered') {
     // the browser's data comes from the customer's submit, or from what they typed (an abandoned order)
@@ -1908,48 +2060,50 @@ const metaWait = (msg: string) => /jeton|token|limite|injoignable|réessayez/i.t
  * Sends the Meta events that are due (the server's job every minute; sales first). In the preview they are only marked
  * « simulé ». Nothing is lost: without a token, with a token refused, or while Meta limits or is unreachable, events
  * wait (sent once a token is saved, see landing.settings.save). An error about the events themselves is isolated (a
- * batch Meta refuses is sent again one event at a time), tried again later, and failed only after 6 tries.
+ * batch Meta refuses is sent again one event at a time), tried again later, and failed only after 6 tries. The pages'
+ * visits (PageView, with its ViewContent) go after every other event, and the browser's data they hold is wiped once
+ * they are sent or skipped.
  */
-export async function sendMetaEvents(ctx: Ctx, limit = 100): Promise<{ sent: number; failed: number; skipped: number; waiting: number }> {
+export async function sendMetaEvents(ctx: Ctx, limit = 300): Promise<{ sent: number; failed: number; skipped: number; waiting: number }> {
   const db = ctx.db;
   const now = ctx.now();
   await db.query(`UPDATE meta_events SET status = 'queued', claimed_at = NULL WHERE status = 'sending' AND claimed_at < $1`, [isoAt(now - 10 * 60_000)]);
   const claimed = await db.query(
     `UPDATE meta_events SET status = 'sending', claimed_at = $1 WHERE status = 'queued' AND id IN (
-       SELECT id FROM meta_events WHERE status = 'queued' AND send_after <= $1 ORDER BY (event_name = 'Purchase') DESC, send_after, id LIMIT $2 FOR UPDATE SKIP LOCKED)
+       SELECT id FROM meta_events WHERE status = 'queued' AND send_after <= $1 ORDER BY (event_name = 'Purchase') DESC, (event_name = 'PageView'), send_after, id LIMIT $2 FOR UPDATE SKIP LOCKED)
      RETURNING *`,
     [isoAt(now), limit],
   );
   const out = { sent: 0, failed: 0, skipped: 0, waiting: 0 };
   if (!claimed.length) return out;
   const s = await landingSettings(db);
-  const shopToken = String((await db.query(`SELECT value FROM settings WHERE key = $1`, [LANDING_CAPI_SECRET]))[0]?.value ?? '') || String((await db.query(`SELECT value FROM settings WHERE key = 'secret_meta_token'`))[0]?.value ?? '');
-  // by platform and pixel: « meta|123… », « tiktok|CQ… »
-  const byPixel = new Map<string, { row: any; event: Record<string, unknown> }[]>();
+  const shopToken = await capiShopToken(db);
+  // by platform and pixel: « meta|123… », « tiktok|CQ… »; a row may carry two events (a visit: PageView + ViewContent)
+  const byPixel = new Map<string, { row: any; events: Record<string, unknown>[] }[]>();
   for (const e of claimed) {
     const b = await buildEvent(db, e, publicApi(ctx), ctx.server?.publicUrl ?? '', now);
     if (!b.event) {
-      await db.query(`UPDATE meta_events SET status = 'skipped', error = $2, claimed_at = NULL WHERE id = $1`, [e.id, b.skip]);
+      await db.query(`UPDATE meta_events SET status = 'skipped', error = $2, claimed_at = NULL, payload = NULL WHERE id = $1`, [e.id, b.skip]);
       out.skipped++;
       continue;
     }
     const k = `${e.platform === 'tiktok' || e.platform === 'chat' ? e.platform : 'meta'}|${e.pixel_id}`;
     if (!byPixel.has(k)) byPixel.set(k, []);
-    byPixel.get(k)!.push({ row: e, event: b.event });
+    byPixel.get(k)!.push({ row: e, events: [b.event, ...(b.more ?? [])] });
   }
   const wait = async (ids: number[], why: string, minutes: number) => {
     await db.query(`UPDATE meta_events SET status = 'queued', error = $2, claimed_at = NULL, send_after = $3 WHERE id = ANY($1)`, [ids, why, isoAt(now + minutes * 60_000)]);
     out.waiting += ids.length;
   };
-  const send = async (key: string, token: string, list: { row: any; event: Record<string, unknown> }[]): Promise<void> => {
+  const send = async (key: string, token: string, list: { row: any; events: Record<string, unknown>[] }[]): Promise<void> => {
     const ids = list.map((x) => num(x.row.id));
+    const events = list.flatMap((x) => x.events);
     const [platform, pixelId] = key.split('|');
     try {
-      if (platform === 'chat') await ctx.server!.meta('chatCapi', { target: pixelId, token, events: list.map((x) => x.event) }, ctx);
-      else if (platform === 'tiktok')
-        await ctx.server!.meta('tiktok', { pixelCode: pixelId, token, events: list.map((x) => x.event), testEventCode: (await pixelTestCode(db, 'tiktok', pixelId)) || undefined }, ctx);
-      else await ctx.server!.meta('capi', { pixelId, token, events: list.map((x) => x.event), testEventCode: s.testEventCode || undefined }, ctx);
-      await db.query(`UPDATE meta_events SET status = 'sent', sent_at = now(), error = NULL, claimed_at = NULL WHERE id = ANY($1)`, [ids]);
+      if (platform === 'chat') await ctx.server!.meta('chatCapi', { target: pixelId, token, events }, ctx);
+      else if (platform === 'tiktok') await ctx.server!.meta('tiktok', { pixelCode: pixelId, token, events, testEventCode: (await pixelTestCode(db, 'tiktok', pixelId)) || undefined }, ctx);
+      else await ctx.server!.meta('capi', { pixelId, token, events, testEventCode: s.testEventCode || undefined }, ctx);
+      await db.query(`UPDATE meta_events SET status = 'sent', sent_at = now(), error = NULL, claimed_at = NULL, payload = NULL WHERE id = ANY($1)`, [ids]);
       out.sent += ids.length;
     } catch (err: any) {
       const msg = String(err?.message ?? err ?? 'Erreur Meta').slice(0, 300);
@@ -1971,7 +2125,7 @@ export async function sendMetaEvents(ctx: Ctx, limit = 100): Promise<{ sent: num
     const ids = list.map((x) => num(x.row.id));
     const [platform, pixelId] = key.split('|');
     if (simulated(ctx)) {
-      await db.query(`UPDATE meta_events SET status = 'simulated', sent_at = now(), error = NULL, claimed_at = NULL WHERE id = ANY($1)`, [ids]);
+      await db.query(`UPDATE meta_events SET status = 'simulated', sent_at = now(), error = NULL, claimed_at = NULL, payload = NULL WHERE id = ANY($1)`, [ids]);
       out.sent += ids.length;
       continue;
     }
@@ -2007,11 +2161,26 @@ async function requeueMetaEvents(db: Db, now: number) {
   return r.length;
 }
 
+/** How long the pages' visits sent to Meta stay counted in Landing pages › Événements (the 30 days it shows, and a margin). */
+export const VISIT_EVENTS_KEPT_DAYS = 35;
+
+/**
+ * The pages' visits in the outbox (one per visit and pixel: many) are not kept forever: the browser's data of one that
+ * could not leave goes after 8 days (Meta takes 7), the row itself after VISIT_EVENTS_KEPT_DAYS. A little each run.
+ */
+async function pruneVisitEvents(db: Db, now: number) {
+  await db.query(`UPDATE meta_events SET payload = NULL WHERE id IN (SELECT id FROM meta_events WHERE event_name = 'PageView' AND payload IS NOT NULL AND at < $1 LIMIT 2000)`, [
+    isoAt(now - 8 * 86_400_000),
+  ]);
+  await db.query(`DELETE FROM meta_events WHERE id IN (SELECT id FROM meta_events WHERE event_name = 'PageView' AND at < $1 LIMIT 2000)`, [isoAt(now - VISIT_EVENTS_KEPT_DAYS * 86_400_000)]);
+}
+
 /** The landing pages' background work: abandoned orders, blocked orders nobody restored (fake for Meta), then Meta events. */
 export async function landingRun(ctx: Ctx) {
   const abandoned = await sweepAbandoned(ctx);
   const fakes = await sweepBlockedFakes(ctx).catch(() => 0);
   const meta = await sendMetaEvents(ctx);
+  await pruneVisitEvents(ctx.db, ctx.now()).catch(() => null);
   return { abandoned, fakes, meta };
 }
 
@@ -2400,11 +2569,12 @@ export const landingProcs = {
       `SELECT e.*, o.ref, o.customer_name AS o_name, a.customer_name AS a_name, a.phone AS a_phone, k.customer_name AS k_name, l.slug
        FROM meta_events e LEFT JOIN orders o ON o.id = e.order_id LEFT JOIN landing_leads a ON a.id = e.lead_id LEFT JOIN landing_blocked k ON k.id = e.blocked_id
          LEFT JOIN landing_pages l ON l.id = e.landing_id
-       WHERE ${w.sql}
+       WHERE ${w.sql} AND e.event_name <> 'PageView'
        ORDER BY e.at DESC, e.id DESC LIMIT ${i.limit}`,
       w.args,
     );
-    const k = (await ctx.db.query(`SELECT status, count(*)::int AS n FROM meta_events WHERE at > now() - interval '30 days' GROUP BY 1`)).reduce(
+    // the pages' visits (PageView, one per visit) are counted on the page cards, not listed one by one
+    const k = (await ctx.db.query(`SELECT status, count(*)::int AS n FROM meta_events WHERE at > now() - interval '30 days' AND event_name <> 'PageView' GROUP BY 1`)).reduce(
       (m: Record<string, number>, r: any) => ({ ...m, [r.status]: num(r.n) }),
       {},
     );
@@ -2468,6 +2638,16 @@ export const landingProcs = {
       if (s) s.visits += num(v.n);
     }
     for (const r of rows as any[]) {
+      // the visits the server sent (one per visit: many): counted apart, so « % sent » and the warnings stay about the
+      // orders' events; a group page's (no page card) are not shown
+      if (r.event_name === 'PageView') {
+        if (!num(r.lid)) continue;
+        const c = cardOf(num(r.lid));
+        c.meta = true;
+        if (r.status === 'sent' || r.status === 'simulated') c.visitsSent += num(r.n);
+        else if (r.status === 'failed' || r.status === 'skipped') c.visitsLost += num(r.n);
+        continue;
+      }
       const c = cardOf(num(r.lid));
       const n = num(r.n);
       const kind = EVENT_KIND[r.event_name as string];
@@ -2519,9 +2699,11 @@ export const landingProcs = {
   // ---------------------------------------------------------------- public side (the server calls these as the system)
   'landing.html': proc(
     [],
-    z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null), site: z.string().max(500).optional(), url: z.string().max(600).optional(), group: z.string().max(80).optional(), catalog: z.enum(['meta', 'tiktok']).optional(), visitor: z.string().max(40).optional(), team: z.boolean().optional() }),
+    z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null), site: z.string().max(500).optional(), url: z.string().max(600).optional(), group: z.string().max(80).optional(), seen: z.string().max(600).optional(), team: z.boolean().optional() }),
     async (ctx, i) => landingPage(ctx, i.slug, i),
   ),
+  /** A page (or a group page) in front of a person (« …/lp/<page>/seen »): the visit is counted, and told to Meta. */
+  'landing.seen': proc([], SeenInput, (ctx, i) => pageSeen(ctx, i)),
 
   'landing.llms': proc([], z.object({ site: z.string().max(500), pagesBase: z.string().max(500).optional() }), async (ctx, i) => ({ text: await landingLlms(ctx.db, i.site, i.pagesBase) })),
   /**

@@ -786,6 +786,9 @@
     "failedWarn_one": "{{count}} failed send",
     "failedWarn_other": "{{count}} failed sends",
     "visitsChart": "Visitors per day",
+    "visitsSent": "Visits sent by the server",
+    "visitsSentHelp": "Visits Pilotix’s server also sent to Meta (people Meta can recognise: an ad click or its cookie), with the same id as the pixel: Meta counts each once, even if the person leaves before the pixel loads.",
+    "visitsLost": "Visits not sent",
     "q": {
       "title": "Match quality (Meta)",
       "help": "The score Meta gives each event of your pixels, out of 10: the higher, the better Meta recognises your customers. Read from Meta on {{at}}.",
@@ -810,7 +813,7 @@
       "view": {
         "name": "Page visit",
         "why": "Meta knows who looks at your products. Used for “saw the page” audiences.",
-        "when": "when the customer opens the page (their browser sends it)."
+        "when": "when the page is in front of the customer: their browser sends it, and Pilotix’s server too when Meta can recognise them (an ad click or its cookie). Meta counts it once."
       },
       "checkout": {
         "name": "Order started",

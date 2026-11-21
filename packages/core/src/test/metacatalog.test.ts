@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { call } from '../index';
 import { setRaw, META_TOKEN_KEY } from '../modules/admin';
+import { makeChallenge } from '../modules/landing';
 import { GUARD_DEFAULTS, hashOf, hiddenWhy, itemsOf, levelOf, noEmoji, plainText, problemOf, ttItemsOf } from '../modules/metacatalog';
 import { AppError } from '../rpc';
 import { ttCatalogError, ttLogOf, TT_NO_REGION } from '../social-server';
@@ -544,9 +545,15 @@ test('résultats: visits and orders from the catalog ads, « stock bas » (the s
   await db.query(`DELETE FROM catalog_visits`);
   await db.query(`UPDATE orders SET utm = utm - 'px_cat' WHERE utm ? 'px_cat'`);
   const slug = String((await db.query(`SELECT slug FROM landing_pages WHERE product_id = $1 AND active ORDER BY id LIMIT 1`, [pou]))[0].slug);
-  for (const catalog of ['meta', 'meta', 'tiktok']) await call('landing.html', admin, { slug, mode: 'live', catalog });
-  await call('landing.html', admin, { slug, mode: 'live' });
-  await call('landing.html', admin, { slug, mode: 'preview', catalog: 'meta' });
+  // a visit counts when the page is in front of the person (its ad link carries ?px_cat=meta|tiktok); serving it never
+  const ch = await makeChallenge(db, slug, Date.now());
+  const ua = 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36';
+  const seen = (q: string) => call('landing.seen', admin, { slug, vid: `c${Math.random().toString(36).slice(2, 12)}`, ch, url: `https://shop.test/${slug}${q}`, meta: { ua } });
+  for (const net of ['meta', 'meta', 'tiktok']) await seen(`?px_cat=${net}&fbclid=x1`);
+  await seen('');
+  await seen('?px_cat=other');
+  await call('landing.html', admin, { slug, mode: 'live', post: '/o', geo: '/g/', seen: '/s' });
+  await call('landing.html', admin, { slug, mode: 'preview' });
   // three orders: one delivered (2 strollers at 9 950), one waiting, one duplicate (not counted)
   const ords = (
     await db.query(`SELECT DISTINCT o.id FROM orders o JOIN order_items i ON i.order_id = o.id AND NOT i.is_upsell WHERE i.product_id = $1 AND (SELECT count(*) FROM order_items x WHERE x.order_id = o.id) = 1 ORDER BY o.id LIMIT 3`, [pou])

@@ -184,6 +184,13 @@ export class AuthGuard implements CanActivate {
  */
 const TEAM_COOKIE = 'pxtm=1; Max-Age=31536000; Path=/; SameSite=Lax; Secure; HttpOnly';
 const teamBrowser = (req: { headers: Record<string, string | undefined> }) => /(?:^|;\s*)pxtm=1(?:;|$)/.test(String(req.headers.cookie ?? ''));
+/** robots that ask for pages (search engines, Meta's and TikTok's checks of an ad's page, scripts): never a visitor */
+const isRobot = (req: { headers: Record<string, string | undefined> }) =>
+  /facebookexternalhit|facebot|meta-externalagent|bytespider|bot\b|crawler|spider|headless/i.test(String(req.headers['user-agent'] ?? ''));
+/** a landing page visitor's anonymous code (the pxv cookie the page's address gave the browser), if it has one */
+const visitorCode = (req: { headers: Record<string, string | undefined> }) => /(?:^|;\s*)pxv=([a-z0-9]{12,40})(?:;|$)/.exec(String(req.headers.cookie ?? ''))?.[1];
+/** the visitor cookie: a year, on the page's own address, nothing but a random code */
+const visitorCookie = (code: string) => `pxv=${code}; Max-Age=31536000; Path=/; SameSite=Lax; Secure; HttpOnly`;
 
 /** What the server knows of a landing page's visitor: address, browser, Meta cookies, and the host's geolocation (a soft signal). */
 function visitorMeta(req: { ip?: string; headers: Record<string, string | undefined> }) {
@@ -1474,24 +1481,21 @@ class ApiController {
       const base = `${own?.api ?? apiOf(ref, atPages ? config.landingUrl : config.publicUrl)}/lp/`;
       // opened from a group page (?g=<group>): the product page shows « back to all the products »
       const g = /[?&]g=([a-z0-9-]{2,60})(?:&|$)/.exec(String(req.url ?? ''))?.[1];
-      // opened from a catalog ad (?px_cat=meta|tiktok, Marketing › Catalogue): a visit for its « Résultats »; Meta's and
-      // TikTok's robots that check an ad's page are no visits
-      const cat = /[?&]px_cat=(meta|tiktok)(?:&|$)/.exec(String(req.url ?? ''))?.[1];
-      const robot = /facebookexternalhit|facebot|meta-externalagent|bytespider|bot\b|crawler|spider|headless/i.test(String(req.headers['user-agent'] ?? ''));
+      // serving the page counts nothing (Facebook loads an ad's page before the tap; robots and link previews ask for
+      // pages too): the page itself says when it is in front of a person (« …/seen », landingSeen below)
+      const robot = isRobot(req);
       // a unique visitor (Landing pages › conversion): the browser's anonymous code, kept a year in a cookie of the
       // page's own address (no name, no number, nothing else in it); robots get none and are not counted
-      const had = /(?:^|;\s*)pxv=([a-z0-9]{12,40})(?:;|$)/.exec(String(req.headers.cookie ?? ''))?.[1];
+      const had = visitorCode(req);
       const visitor = robot ? undefined : (had ?? randomBytes(10).toString('hex'));
       // a team browser (it sent a test: Réglages › « Team et fournisseurs »): no pixel, its visit counts nowhere
       const team = teamBrowser(req);
       const r: any = await this.core.call(ref, 'landing.html', await this.core.systemSession(ref), {
-        slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, geo: `${base}geo/`, imgBase: `${base}img/`, site: atPages ? config.landingUrl : this.core.landingBase(), ...(own ? { url: own.url } : {}), ...(g ? { group: g } : {}),
-        ...(cat && !robot ? { catalog: cat } : {}),
-        ...(visitor ? { visitor } : {}),
+        slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, seen: `${base}${slug}/seen`, geo: `${base}geo/`, imgBase: `${base}img/`, site: atPages ? config.landingUrl : this.core.landingBase(), ...(own ? { url: own.url } : {}), ...(g ? { group: g } : {}),
         ...(team ? { team: true } : {}),
       });
       res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store');
-      if (visitor && !had) res.header('Set-Cookie', `pxv=${visitor}; Max-Age=31536000; Path=/; SameSite=Lax; Secure; HttpOnly`);
+      if (visitor && !had) res.header('Set-Cookie', visitorCookie(visitor));
       // the main photo asked for as soon as these headers arrive, before the page itself
       if (r.link) res.header('Link', r.link);
       return sendText(req, res, r.html);
@@ -1850,6 +1854,49 @@ class ApiController {
     if (!ref || ref.shop.status !== 'active') return { ok: true };
     const r = intake(ref);
     await this.core.call(r, 'landing.capture', await this.core.systemSession(r), { ...(b && typeof b === 'object' ? b : {}), slug, meta: visitorMeta(req) }).catch(() => null);
+    return { ok: true };
+  }
+
+  /**
+   * A page (or a group page) says it is in front of a person: its script, when it shows (not hidden, not loaded in
+   * advance by Facebook before the tap). The visit is counted then — views, the unique visitor of the day, a catalog
+   * ad's visit, a group's click — and the server sends it to Meta too (landing.seen). Same answer whatever happens.
+   * Many people can share one address (mobile networks): a generous limit, only against floods.
+   */
+  @Public()
+  @Post(['lp/:slug/seen', 's/:shop/lp/:slug/seen'])
+  async landingSeen(
+    @Param('shop') shop: string | undefined,
+    @Param('slug') slug: string,
+    @Body() body: any,
+    @Req() req: { ip?: string; headers: Record<string, string | undefined> },
+    @Res({ passthrough: true }) res: any,
+  ) {
+    if (!/^[a-z0-9-]{2,60}$/.test(slug)) return { ok: true };
+    // sendBeacon posts text/plain: the body may arrive as a string
+    let b = body;
+    if (typeof b === 'string') {
+      try {
+        b = JSON.parse(b);
+      } catch {
+        b = {};
+      }
+    }
+    // another site, a flood from one address, a robot or a team browser (Réglages › « Team et fournisseurs »): nothing
+    if (crossSite(req) || limitLanding(req.ip || 'unknown', 'seen', 600) || isRobot(req) || teamBrowser(req)) return { ok: true };
+    const ref = await this.core.fromParam(shop).then((r) => r && this.core.forPublic(r)).catch(() => null);
+    if (!ref || ref.shop.status !== 'active') return { ok: true };
+    // the browser's anonymous code: the one the page gave it, else a new one (a browser that did not keep it then)
+    let visitor = visitorCode(req);
+    if (!visitor) {
+      visitor = randomBytes(10).toString('hex');
+      res.header('Set-Cookie', visitorCookie(visitor));
+    }
+    const x = b && typeof b === 'object' ? b : {};
+    const r = intake(ref);
+    await this.core
+      .call(r, 'landing.seen', await this.core.systemSession(r), { slug, vid: x.vid, ch: x.ch, url: x.url, fbp: x.fbp, fbc: x.fbc, visitor, meta: visitorMeta(req) })
+      .catch(() => null);
     return { ok: true };
   }
 

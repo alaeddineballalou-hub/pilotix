@@ -313,6 +313,15 @@ export async function seedVisits(db: Db, now: number) {
       const c = Math.round((total / 30) * (0.7 + ((d * 13 + k) % 7) / 10));
       if (c > 0)
         await db.query(`INSERT INTO landing_visits (landing_id, day, visitor) SELECT $1::bigint, $2::date, 'demo' || $1::text || 'd' || $3::text || 'v' || g FROM generate_series(1, $4::int) g ON CONFLICT DO NOTHING`, [r.id, day, d, c]);
+      // the visits the server sent to Meta too (Landing pages › Événements): those Meta recognises, about 7 in 10
+      const sent = Math.round(c * 0.7);
+      if (sent > 0)
+        await db.query(
+          `INSERT INTO meta_events (pixel_id, event_name, event_id, landing_id, at, send_after, status, sent_at)
+           SELECT '1234567890123456', 'PageView', 'pv-demo' || $1::text || 'd' || $3::text || 'v' || g, $1::bigint, t, t, 'simulated', t
+           FROM generate_series(1, $4::int) g, LATERAL (SELECT $2::timestamptz + make_interval(mins => g * 2) AS t) x ON CONFLICT DO NOTHING`,
+          [r.id, `${day}T00:30:00Z`, d, sent],
+        );
     }
   }
 }

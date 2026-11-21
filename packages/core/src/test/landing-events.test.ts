@@ -5,7 +5,7 @@ import { sha256Hex, zeroBits } from '@pilotix/shared';
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
-import { LANDING_POW_BITS, makeChallenge } from '../modules/landing';
+import { LANDING_POW_BITS, makeChallenge, sendMetaEvents } from '../modules/landing';
 import { BLOCKED_FAKE_AFTER_MS, FAKE_EVENT_DELAY_MS } from '../modules/landingquery';
 import { EMAILS, setup } from './harness';
 
@@ -382,4 +382,101 @@ test('TikTok too: the form (SubmitForm) and the delivered parcel (a custom « De
   assert.equal(bt[0].user.ttp, TTP);
   assert.ok(!JSON.stringify(bt[0]).includes(withTt.phone));
   await db.query(`DELETE FROM tracking_pixels WHERE pixel_id = 'CTESTPIXEL0000000001'`);
+});
+
+// ---------------------------------------------------------------- the visit, sent by the server too (21 Nov 2026)
+/** the page in front of a person: what its script tells the server (a fresh view id each time unless given) */
+async function seenOf(over: Record<string, unknown> = {}, ms = Date.now()) {
+  const vid = (over.vid as string) ?? `v${Math.random().toString(36).slice(2, 13)}`;
+  const r: any = await call('landing.seen', at(admin, ms), { slug: SLUG, vid, ch: await makeChallenge(db, SLUG, ms - 2_000), url: `https://babyjoy.test/${SLUG}?fbclid=IwAR0click${vid}`, visitor: 'visitorcode000001', meta: { ip: '10.9.0.7', ua: UA }, ...over });
+  return { vid, ...r };
+}
+
+test('visit: a page in front of a person Meta can recognise is sent by the server too — PageView and ViewContent with the pixel’s own ids, once; its data wiped once sent', async () => {
+  // the page's pixel and the server use the same ids: pv-/vc-<view>
+  const page: any = await call('landing.html', admin, { slug: SLUG, mode: 'live', post: '/o', geo: '/g/', seen: `/api/lp/${SLUG}/seen` });
+  assert.ok(page.html.includes(`fbq('track','PageView',{},{eventID:'pv-'+C.vid})`));
+  assert.ok(page.html.includes(`{eventID:'vc-'+C.vid}`));
+  const t0 = Date.now();
+  const v = await seenOf({}, t0);
+  assert.deepEqual([v.counted, v.events], [true, 1]);
+  // the same view said twice (the page shown again from the phone's memory): one event
+  assert.equal((await seenOf({ vid: v.vid }, t0 + 1000)).events, 0);
+  const [row] = await events(`event_id = $1`, [`pv-${v.vid}`]);
+  assert.deepEqual([row.event_name, row.pixel_id, row.platform, row.status, Number(row.value)], ['PageView', PIXEL, 'meta', 'queued', 9950]);
+  const kept = typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload;
+  assert.equal(kept.fbc, `fb.1.${t0}.IwAR0click${v.vid}`, 'the ad click, as the pixel writes it');
+  assert.deepEqual([kept.ip, kept.ua, kept.pid], ['10.9.0.7', UA, productId]);
+  sent.length = 0;
+  await run(t0 + MIN);
+  const got = received().filter((e: any) => [`pv-${v.vid}`, `vc-${v.vid}`].includes(e.event_id));
+  assert.deepEqual(got.map((e: any) => e.event_name), ['PageView', 'ViewContent']);
+  for (const e of got) {
+    assert.equal(e.action_source, 'website');
+    assert.equal(e.event_source_url, `https://babyjoy.test/${SLUG}?fbclid=IwAR0click${v.vid}`);
+    assert.equal(e.event_time, Math.floor(t0 / 1000));
+    assert.deepEqual(e.user_data, { client_user_agent: UA, client_ip_address: '10.9.0.7', fbc: kept.fbc });
+  }
+  assert.deepEqual(got[1].custom_data, { content_ids: [String(productId)], content_type: 'product_group', value: 9950, currency: 'DZD' });
+  assert.equal(sent.filter((x) => x.args.events.some((e: any) => e.event_id === `pv-${v.vid}`))[0].args.pixelId, PIXEL);
+  const [after] = await events(`event_id = $1`, [`pv-${v.vid}`]);
+  assert.deepEqual([after.status, after.payload], ['sent', null], 'the browser’s data is not kept once sent');
+});
+
+test('visit: never for a browser Meta cannot recognise, a team browser, a robot, a page without token; its cookie alone is enough', async () => {
+  const t0 = Date.now();
+  // no Meta cookie and no ad click: the visit counts, nothing for Meta (an IP alone is a whole neighbourhood)
+  const none = await seenOf({ url: `https://babyjoy.test/${SLUG}` }, t0);
+  assert.deepEqual([none.counted, none.events], [true, 0]);
+  // its Meta cookie alone (the pixel ran on an earlier visit)
+  assert.equal((await seenOf({ url: '', meta: { ip: '10.9.0.8', ua: UA, fbp: FBP } }, t0)).events, 1);
+  assert.equal((await seenOf({ url: '', fbp: FBP }, t0)).events, 1, 'or as the page read it');
+  for (const over of [{ team: true }, { meta: { ip: '10.9.0.9', ua: 'Mozilla/5.0 (compatible; bingbot/2.0)' } }, { ch: 'nope' }])
+    assert.deepEqual(await seenOf(over, t0).then((r) => [r.counted, r.events]), [false, 0]);
+  // no token for the pixel nor the shop: nothing queued that could never leave
+  const keys = await db.query(`SELECT key, value FROM settings WHERE key IN ('secret_landing_capi_token', 'secret_meta_token')`);
+  await db.query(`DELETE FROM settings WHERE key IN ('secret_landing_capi_token', 'secret_meta_token')`);
+  try {
+    assert.deepEqual(await seenOf({}, t0).then((r) => [r.counted, r.events]), [true, 0]);
+  } finally {
+    for (const k of keys) await db.query(`INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [k.key, JSON.stringify(k.value)]);
+  }
+  assert.equal((await seenOf({}, t0)).events, 1, 'the token back: sent again');
+});
+
+test('visit: the sales go first, the visits after every other event; counted apart in Événements and not listed; old ones forgotten', async () => {
+  const t0 = Date.now() + 2 * 3600_000;
+  await run(t0); // nothing else waiting
+  // a visit queued first, then a form: one event at a time, the form leaves first
+  const v = await seenOf({}, t0 + 1000);
+  const f = await human({}, rndPhone(), t0 + 1000);
+  // (as on the server: without it, the preview sends everything at once after a change)
+  await call('landing.submit', at(await as(EMAILS.admin, server), t0 + 1000), f);
+  const o = await orderOf(f.phone);
+  const r1 = await sendMetaEvents(at(await as(EMAILS.admin, server), t0 + 2000), 1);
+  assert.equal(r1.sent, 1);
+  assert.equal((await events(`order_id = $1 AND event_name = 'Lead'`, [o.id]))[0].status, 'sent');
+  assert.equal((await events(`event_id = $1`, [`pv-${v.vid}`]))[0].status, 'queued');
+  await run(t0 + MIN);
+  // Événements: the visits sent are counted on the page's card, apart from « % sent » and the list of events
+  const pid = Number((await db.query(`SELECT id FROM landing_pages WHERE slug = $1`, [SLUG]))[0].id);
+  const card = ((await call('landing.eventStats', admin, { days: 1, platform: 'all' })) as any).cards.find((c: any) => c.id === pid);
+  // the day as Événements counts it (Algiers): from its midnight
+  const today = new Date(Date.parse(new Date(Date.now() + 3600_000).toISOString().slice(0, 10) + 'T00:00:00Z') - 3600_000);
+  const pv = Number((await db.query(`SELECT count(*)::int AS n FROM meta_events WHERE landing_id = $1 AND event_name = 'PageView' AND status IN ('sent','simulated') AND at >= $2`, [pid, today]))[0].n);
+  assert.ok(card.visitsSent >= 1);
+  assert.equal(card.visitsSent, pv);
+  const others = Number((await db.query(`SELECT count(*)::int AS n FROM meta_events WHERE landing_id = $1 AND event_name <> 'PageView' AND status IN ('sent','simulated') AND at >= $2`, [pid, today]))[0].n);
+  assert.equal(card.sent, others, '« % sent » is about the orders’ events');
+  const list: any = await call('landing.events', admin, { limit: 100, landingId: pid, days: 1, platform: 'all' });
+  assert.ok(list.rows.every((e: any) => e.name !== 'PageView'));
+  // one that could not leave keeps the browser's data 8 days, the row goes after 35 (Événements shows 30)
+  const old = await seenOf({}, t0);
+  await db.query(`UPDATE meta_events SET status = 'failed', at = now() - interval '9 days' WHERE event_id = $1`, [`pv-${old.vid}`]);
+  const older = await seenOf({}, t0);
+  await db.query(`UPDATE meta_events SET at = now() - interval '36 days' WHERE event_id = $1`, [`pv-${older.vid}`]);
+  await call('landing.run', await as(EMAILS.admin, server), {});
+  const [o9] = await events(`event_id = $1`, [`pv-${old.vid}`]);
+  assert.deepEqual([o9.status, o9.payload], ['failed', null]);
+  assert.equal((await events(`event_id = $1`, [`pv-${older.vid}`])).length, 0);
 });

@@ -8,7 +8,7 @@ import { Db, iso, num, numOrNull } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
 import { autoSettings, getSetting } from '../settings';
 // (landing.ts imports this file too: only functions from it here, used once both are loaded)
-import { b64, followedRefs, HtmlOpts, imageRows, ImgRef, landingIconUrl, productContext, productPhotoSets, readImgs, viewImages } from './landing';
+import { b64, followedRefs, HtmlOpts, imageRows, ImgRef, landingIconUrl, productContext, productPhotoSets, randomId, readImgs, viewImages } from './landing';
 
 const WHO = ['marketer'] as const;
 import { addressOwner, addressTaken, APP_WORD, groupRowAt, keepFormerAddress, landingSettings, landingStore } from './landingquery';
@@ -86,12 +86,12 @@ export async function groupHtml(ctx: Ctx, slug: string, o: HtmlOpts): Promise<st
   // the group that has this address, or had it before (its old links keep working)
   const g = await groupRowAt(ctx.db, slug);
   if (!g || (!g.active && o.mode === 'live')) throw notFound('Page introuvable');
-  // a team browser (Réglages › « Team et fournisseurs »: it sent a test) is not a visit
-  if (o.mode === 'live' && !o.team) await ctx.db.query('UPDATE landing_groups SET views = views + 1 WHERE id = $1', [g.id]);
+  // serving it counts nothing: the page says when it is in front of a person (pageSeen); a team browser
+  // (Réglages › « Team et fournisseurs »: it sent a test) gets no address to say it
   return renderRow(ctx, g, o);
 }
 
-async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'imgBase' | 'site' | 'url' | 'team'>): Promise<string> {
+async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'imgBase' | 'site' | 'url' | 'team' | 'seen'>): Promise<string> {
   const list = readItems(g.items);
   const pages = list.length ? await ctx.db.query('SELECT * FROM landing_pages WHERE id = ANY($1)', [list.map((x) => x.pageId)]) : [];
   const P = new Map(pages.map((p: any) => [num(p.id), p]));
@@ -145,19 +145,19 @@ async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'im
       pixelId: o.mode === 'live' && !o.team ? px.meta.join(',') : '',
       tiktokId: o.mode === 'live' && !o.team ? px.tiktok.join(',') : '',
     },
-    { mode: o.mode, url: url || undefined, icon: await landingIconUrl(ctx.db, o.imgBase) },
+    { mode: o.mode, url: url || undefined, icon: await landingIconUrl(ctx.db, o.imgBase), viewId: randomId(), seen: o.mode === 'live' && !o.team ? o.seen : undefined },
   );
 }
 
 /**
  * A product page opened from a group (?g=<slug>): the group's « back » bar, when that group is online and has this
- * product. On the real page the visit is counted as a click of the group on this product.
+ * product. `count`: the page is in front of a person (pageSeen), a click of the group on this product.
  */
-export async function groupOf(db: Db, slug: string, pageId: number, live: boolean): Promise<{ slug: string; title: string } | null> {
+export async function groupOf(db: Db, slug: string, pageId: number, live: boolean, count = live): Promise<{ slug: string; title: string } | null> {
   if (!/^[a-z0-9-]{2,60}$/.test(slug)) return null;
   const g = await groupRowAt(db, slug);
   if (!g || (live && !g.active) || !readItems(g.items).some((x) => x.pageId === pageId)) return null;
-  if (live)
+  if (live && count)
     await db.query(
       `INSERT INTO landing_group_clicks (group_id, page_id, clicks) VALUES ($1,$2,1) ON CONFLICT (group_id, page_id) DO UPDATE SET clicks = landing_group_clicks.clicks + 1`,
       [g.id, pageId],

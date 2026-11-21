@@ -94,11 +94,18 @@ test('Team on: a team number is a test — no order, not blocked, nothing for Me
 test('a team browser fires no pixel and is not counted', async () => {
   await db.query(`UPDATE landing_pages SET pixel_id = '876540001122', meta_pixels = NULL WHERE slug = $1`, [SLUG]);
   const v0 = Number((await db.query('SELECT views FROM landing_pages WHERE slug = $1', [SLUG]))[0].views);
-  const open = (team: boolean) => call('landing.html', admin, { slug: SLUG, mode: 'live', post: '/api/lp/x/order', geo: '/g/', imgBase: '/api/lp/img/', visitor: `team${team ? 1 : 0}visitor0001`, ...(team ? { team: true } : {}) }) as Promise<any>;
-  const seen = await open(false);
-  assert.ok(seen.html.includes('876540001122'), 'a customer gets the pixel');
+  const open = (team: boolean) => call('landing.html', admin, { slug: SLUG, mode: 'live', post: '/api/lp/x/order', geo: '/g/', imgBase: '/api/lp/img/', seen: '/api/lp/x/seen', ...(team ? { team: true } : {}) }) as Promise<any>;
+  const page = await open(false);
+  assert.ok(page.html.includes('876540001122'), 'a customer gets the pixel');
+  assert.ok(page.html.includes('"sn":"/api/lp/x/seen"'), 'and says when the page is in front of them');
   const mate = await open(true);
   assert.ok(!mate.html.includes('876540001122'), 'a team browser gets no pixel');
+  assert.ok(mate.html.includes('"sn":""'), 'nor anywhere to say it is seen');
+  // the page in front of each (the server says which browser is the team's: its cookie)
+  const ch = await makeChallenge(db, SLUG, Date.now());
+  const ua = 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36';
+  for (const team of [false, true])
+    await call('landing.seen', admin, { slug: SLUG, vid: `vw${team ? 1 : 0}${Date.now().toString(36)}`, ch, url: '', visitor: `team${team ? 1 : 0}visitor0001`, meta: { ua }, ...(team ? { team: true } : {}) });
   assert.equal(Number((await db.query('SELECT views FROM landing_pages WHERE slug = $1', [SLUG]))[0].views), v0 + 1, 'only the customer counted');
   assert.equal(await count(`SELECT count(*)::int AS n FROM landing_visits WHERE visitor = 'team1visitor0001'`, []), 0);
 });

@@ -5,7 +5,10 @@ import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { renderGroup } from '@pilotix/shared';
 import { call, Ctx, Db } from '../index';
+import { makeChallenge } from '../modules/landing';
 import { EMAILS, setup } from './harness';
+
+const UA = 'Mozilla/5.0 (Linux; Android 13; SM-A145F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36';
 
 let db: Db;
 let marketer: Ctx;
@@ -256,21 +259,36 @@ test('colour names in Arabic on the page: translated by themselves, or the Arabi
   assert.match(h, /\.th:before,\.th:after\{content:'';margin:auto\}/);
 });
 
-test('conversion: a browser counts once a day; robots, previews and no cookie do not; orders since that day ÷ visitors', async () => {
+test('conversion: a browser counts once a day when the page is in front of it; serving the page, robots, a team or a made-up page view do not; orders since that day ÷ visitors', async () => {
   const c: any = await call('landing.duplicate', marketer, { id: pages[0].id });
   await db.query('UPDATE landing_pages SET active = true WHERE id = $1', [c.id]);
   const row = async () => ((await call('landing.list', marketer, {})) as any[]).find((r) => r.id === c.id);
   assert.equal((await row()).unique, 0);
   assert.equal((await row()).conversion, null);
-  const open = (visitor?: string, mode: 'live' | 'preview' = 'live') =>
-    call('landing.html', admin, { slug: c.slug, mode, post: '/o', geo: '/g/', lead: '/l', imgBase: '/i/', ...(visitor ? { visitor } : {}) });
-  await open('aaaaaaaaaaaa11');
-  await open('aaaaaaaaaaaa11'); // the same browser again the same day
-  await open('bbbbbbbbbbbb22');
-  await open(); // a robot (the server gives it no code)
-  await open('NOT-A-CODE!'); // not a code the server makes
-  await open('cccccccccccc33', 'preview'); // Pilotix itself, not a customer
+  // serving the page counts nothing (Facebook loads an ad's page before the tap): it gives the page where to say it is seen
+  const served: any = await call('landing.html', admin, { slug: c.slug, mode: 'live', post: '/o', geo: '/g/', lead: '/l', imgBase: '/i/', seen: `/api/lp/${c.slug}/seen` });
+  assert.ok(served.html.includes(`"sn":"/api/lp/${c.slug}/seen"`));
+  const preview: any = await call('landing.html', admin, { slug: c.slug, mode: 'preview', post: '/o', geo: '/g/', seen: `/api/lp/${c.slug}/seen` });
+  assert.ok(preview.html.includes('"sn":""'), 'Pilotix itself is no customer: its preview never says it');
+  assert.equal((await row()).views, 0);
+  const ch = await makeChallenge(db, c.slug, Date.now());
+  const seen = (visitor: string, over: Record<string, unknown> = {}) =>
+    call('landing.seen', admin, { slug: c.slug, vid: `v${Math.random().toString(36).slice(2, 12)}`, ch, url: `https://shop.test/${c.slug}`, visitor, meta: { ua: UA, ip: '10.4.0.1' }, ...over }) as Promise<any>;
+  assert.equal((await seen('aaaaaaaaaaaa11')).counted, true);
+  await seen('aaaaaaaaaaaa11'); // the same browser again the same day: a view, not a new visitor
+  await seen('bbbbbbbbbbbb22');
+  await seen(''); // a browser that keeps no cookie: a view only
+  await seen('NOT-A-CODE!'); // not a code the server makes: a view only
+  for (const [why, over] of [
+    ['a robot that runs pages', { meta: { ua: 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 HeadlessChrome/120.0 Safari/537.36' } }],
+    ['Meta checking the ad', { meta: { ua: 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)' } }],
+    ['a page this server never sent', { ch: 'lzzz.abc.0123456789abcdef0123456789abcdef' }],
+    ['a made-up page view', { vid: 'x' }],
+    ['a team browser', { team: true }],
+  ] as const)
+    assert.equal((await seen('dddddddddddd44', over)).counted, false, why);
   let r = await row();
+  assert.equal(r.views, 5);
   assert.equal(r.unique, 2);
   assert.equal(r.convOrders, 0);
   assert.equal(r.conversion, 0);

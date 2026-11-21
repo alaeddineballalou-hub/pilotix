@@ -4,7 +4,10 @@ import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { renderGroup } from '@pilotix/shared';
 import { call, Ctx, Db } from '../index';
+import { makeChallenge } from '../modules/landing';
 import { EMAILS, setup } from './harness';
+
+const UA = 'Mozilla/5.0 (Linux; Android 13; SM-A145F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36';
 
 let db: Db;
 let marketer: Ctx;
@@ -39,12 +42,21 @@ test('groups: saved, shown at their address, each product opens its own landing 
   const h = await html('mes-produits');
   for (const p of pages) assert.ok(h.includes(`href="${p.slug}?g=mes-produits"`), p.slug);
   assert.match(h, /كل ما يحتاجه طفلك/);
-  assert.equal(Number((await db.query(`SELECT views FROM landing_groups WHERE slug = 'mes-produits'`))[0].views), 1);
+  // serving it counts nothing; the page says when it is in front of a person (a group page has no form: no challenge)
+  const views = async () => Number((await db.query(`SELECT views FROM landing_groups WHERE slug = 'mes-produits'`))[0].views);
+  assert.equal(await views(), 0);
+  assert.match(await html('mes-produits', { seen: '/api/lp/mes-produits/seen' }), /"sn":"\/api\/lp\/mes-produits\/seen"/);
+  const seen = async (slug: string, url: string) =>
+    call('landing.seen', admin, { slug, vid: `g${Math.random().toString(36).slice(2, 12)}`, ch: await makeChallenge(db, slug, Date.now()), url, visitor: 'groupvisitor0001', meta: { ua: UA } }) as Promise<any>;
+  assert.equal((await seen('mes-produits', 'https://shop.test/mes-produits')).counted, true);
+  assert.equal(await views(), 1);
 
-  // the product page opened from the group: the « back » bar, and a click counted
+  // the product page opened from the group: the « back » bar, and a click counted once it is in front of the person
   const prod = await html(pages[1].slug, { group: 'mes-produits' });
   assert.match(prod, /id="bk" href="mes-produits"/);
   assert.match(prod, /رجوع إلى كل المنتجات/);
+  assert.equal(((await call('landing.groups', marketer, {})) as any[]).find((x) => x.slug === 'mes-produits').clicks, 0);
+  await seen(pages[1].slug, `https://shop.test/${pages[1].slug}?g=mes-produits&fbclid=abc`);
   // opened straight from an ad (or from a group that does not have it): as before, no bar
   assert.doesNotMatch(await html(pages[1].slug), /id="bk"/);
   assert.doesNotMatch(await html(pages[1].slug, { group: 'nope-group' }), /id="bk"/);

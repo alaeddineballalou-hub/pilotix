@@ -786,6 +786,9 @@
     "failedWarn_one": "{{count}} envoi échoué",
     "failedWarn_other": "{{count}} envois échoués",
     "visitsChart": "Visiteurs par jour",
+    "visitsSent": "Visites envoyées par le serveur",
+    "visitsSentHelp": "Les visites que le serveur de Pilotix a aussi envoyées à Meta (les personnes que Meta reconnaît : un clic sur une pub ou son cookie), avec le même numéro que le pixel : Meta compte chacune une fois, même si la personne part avant que le pixel charge.",
+    "visitsLost": "Visites non envoyées",
     "q": {
       "title": "Qualité de correspondance (Meta)",
       "help": "La note que Meta donne à chaque événement de vos pixels, sur 10 : plus elle est haute, mieux Meta reconnaît vos clients. Lue chez Meta le {{at}}.",
@@ -810,7 +813,7 @@
       "view": {
         "name": "Visite de la page",
         "why": "Meta sait qui regarde vos produits. Sert aux audiences « a vu la page ».",
-        "when": "quand le client ouvre la page (c’est son navigateur qui l’envoie)."
+        "when": "quand la page est devant le client : son navigateur l’envoie, et le serveur de Pilotix aussi quand Meta peut le reconnaître (un clic sur une pub ou son cookie). Meta la compte une fois."
       },
       "checkout": {
         "name": "Commande commencée",
