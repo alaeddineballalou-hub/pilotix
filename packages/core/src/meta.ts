@@ -4,7 +4,7 @@
 import { createHash } from 'node:crypto';
 import { getSetting } from './settings';
 import { getRaw, META_TOKEN_KEY } from './modules/admin';
-import { needsTags, tagKindOf, taggedCopy, tagsLack, type LaunchPlan } from './modules/pilotads';
+import { adTagsLack, feedKey, groupsKey, needsTags, tagKindOf, taggedCopy, tagsLack, type LaunchPlan } from './modules/pilotads';
 import { AppError, Ctx } from './rpc';
 
 /** Meta's current Marketing API (v21.0 ended for ads on 9 Sep 2025; v26.0 came out on 29 Jul 2026). */
@@ -693,8 +693,10 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
   /**
    * One ad gets the URL parameters. Meta keeps a créa as it was made, so Pilotix makes a copy of it with the parameters
    * (./modules/pilotads.ts › taggedCopy) and puts it on the same ad: same ad, same ad set, Meta checks the ad again.
-   * Not done (nothing changed on Meta): `why` says the kind Pilotix does not copy, 'tagged' (it has them by now), or
-   * 'post' (an existing post: Meta answered with a créa that still has no parameters).
+   * Several texts, videos or formats ('feed') go on the ad only when Meta's copy shows exactly the same pieces. A flexible
+   * ad keeps its groups on the ad itself: they are read before and after, and if they changed, the old créa is put back.
+   * Not done: `why` says the kind Pilotix does not copy (for a 'feed': not copied safely, the ad is as it was), 'tagged'
+   * (it has them by now), or 'post' (an existing post: Meta answered with a créa that still has no parameters).
    */
   if (action === 'tagAd') {
     const a = (args ?? {}) as { id?: string };
@@ -707,15 +709,37 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
     const act = actOf(String(ad?.account_id ?? ''));
     if (!acts.includes(act)) throw new AppError('bad_request', 'Cette pub n’est pas dans un compte pub relié à la boutique.');
     const c = ad?.creative ?? {};
-    if (!tagsLack(c.url_tags).length) return { done: false, why: 'tagged' };
+    if (!adTagsLack(c).length) return { done: false, why: 'tagged' };
+    const kind = tagKindOf(c);
     const body = taggedCopy(c, `${String(c.name || ad?.name || 'Pub')} · paramètres d’URL`);
-    if (!body) return { done: false, why: tagKindOf(c) };
+    if (!body) return { done: false, why: kind };
+    // the ad's flexible groups, read apart ('' : none; null : Meta did not say — a 'feed' is then left as it is)
+    const groupsOf = async (): Promise<string | null> => {
+      try {
+        return groupsKey((await graph(a.id!, { fields: 'creative_asset_groups_spec' }, token))?.creative_asset_groups_spec);
+      } catch (e) {
+        if ((e as AppError)?.code === 'conflict') throw e;
+        return null;
+      }
+    };
+    const groups = await groupsOf();
+    if (kind === 'feed' && groups === null) return { done: false, why: 'feed' };
     const made = String((await post(`${act}/adcreatives`, body, token))?.id ?? '');
     // an existing post: Meta may answer with the créa the post already has, still without the parameters
-    if (!made || made === String(c.id ?? '')) return { done: false, why: 'post' };
-    const back = await graph(made, { fields: 'url_tags' }, token);
-    if (tagsLack(back?.url_tags).length) return { done: false, why: 'post' };
+    if (!made || made === String(c.id ?? '')) return { done: false, why: kind === 'feed' ? 'feed' : 'post' };
+    const back = await graph(made, { fields: kind === 'feed' ? 'url_tags,asset_feed_spec' : 'url_tags' }, token);
+    if (kind === 'feed') {
+      if (adTagsLack(back).length || feedKey(back?.asset_feed_spec) !== feedKey(c.asset_feed_spec)) return { done: false, why: 'feed' };
+    } else if (tagsLack(back?.url_tags).length) return { done: false, why: 'post' };
     await post(a.id, { creative: { creative_id: made } }, token);
+    if (groups) {
+      const after = await groupsOf();
+      if (after !== groups) {
+        // the groups changed: the ad gets its old créa back, as it was
+        await post(a.id, { creative: { creative_id: String(c.id) } }, token);
+        return { done: false, why: 'feed' };
+      }
+    }
     return { done: true, creativeId: made };
   }
 

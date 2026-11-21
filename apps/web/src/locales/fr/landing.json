@@ -892,7 +892,7 @@
     "missingHint": "Leurs commandes ne savent pas de quelle pub elles viennent. Collez la ligne ci-dessus dans Meta : la pub › Suivi › Paramètres d’URL.",
     "why": {
       "old": "Faite il y a plus de {{h}} h : à faire dans Meta",
-      "feed": "Plusieurs textes, vidéos ou formats : à faire dans Meta",
+      "feed": "Plusieurs textes, vidéos ou formats que Pilotix n’a pas pu copier sans risque : à faire dans Meta",
       "catalog": "Pub catalogue : à faire dans Meta",
       "other": "Ce type de pub : à faire dans Meta",
       "post": "Publication existante : Meta n’a pas pris les paramètres, à faire dans Meta",

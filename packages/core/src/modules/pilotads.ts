@@ -546,6 +546,17 @@ export function tagsLack(tags: string | null | undefined): string[] {
   return TAG_ID_KEYS.filter((k) => !have.get(k));
 }
 
+/**
+ * The ids the clicks of an ad miss. An ad with several texts, videos or formats may keep the parameters pasted in Meta
+ * on each of its links instead of the créa itself: an id is there when the créa has it, or when every link has it.
+ */
+export function adTagsLack(c: any): string[] {
+  const own = tagsLack(c?.url_tags);
+  const links = Array.isArray(c?.asset_feed_spec?.link_urls) ? c.asset_feed_spec.link_urls.filter((l: any) => l?.website_url) : [];
+  if (!own.length || !links.length) return own;
+  return own.filter((k) => links.some((l: any) => tagsLack(l?.url_tags).includes(k)));
+}
+
 /** the owner's own parameters kept as he wrote them, Pilotix's added after them (only those he does not have) */
 export function withTags(tags: string | null | undefined): string {
   const ours = new Map(tagPairs(HAND_URL_TAGS));
@@ -573,15 +584,17 @@ export function isWebLink(u: string | null | undefined): boolean {
 }
 
 /**
- * The kinds of créa: one photo, video or carousel made in Meta ('spec') and an existing post ('post') are those Pilotix
- * copies with the parameters added. Several texts, videos or formats in one ad ('feed'), a catalogue ad ('catalog'),
- * an Instagram post or anything else ('other'): the owner adds them in Meta himself.
+ * The kinds of créa: one photo, video or carousel made in Meta ('spec'), an existing post ('post') and several texts,
+ * videos or formats in one ad ('feed') are those Pilotix copies with the parameters added — a 'feed' only when the copy
+ * is sure to be the same (./meta.ts › tagAd checks it). A catalogue ad ('catalog'), an Instagram post or anything else
+ * ('other'): the owner adds them in Meta himself.
  */
 export type TagKind = 'spec' | 'post' | 'feed' | 'catalog' | 'other';
 export function tagKindOf(c: any): TagKind {
   if (!c || typeof c !== 'object') return 'other';
-  if (c.asset_feed_spec) return 'feed';
+  // a catalogue ad with several formats is a catalogue ad
   if (c.product_set_id || c.template_url_spec || c.object_story_spec?.template_data) return 'catalog';
+  if (c.asset_feed_spec) return 'feed';
   if (c.source_instagram_media_id) return 'other';
   if (c.object_story_spec?.link_data || c.object_story_spec?.video_data) return 'spec';
   if (c.object_story_id && !c.object_story_spec) return 'post';
@@ -593,7 +606,7 @@ export function tagKindOf(c: any): TagKind {
  * post shows no link on its créa: its ad set says (« Site web »).
  */
 export function needsTags(c: any, destination?: string | null): boolean {
-  if (!tagsLack(c?.url_tags).length) return false;
+  if (!adTagsLack(c).length) return false;
   const link = creativeLink(c);
   if (link) return isWebLink(link);
   return String(destination ?? '').toUpperCase() === 'WEBSITE';
@@ -608,22 +621,78 @@ function oneImage(x: any) {
   }
 }
 
+/** the same for the pieces of several texts, videos or formats: each photo by its hash, each video's picture by its hash */
+function feedCopy(f: any): Record<string, unknown> {
+  const x = JSON.parse(JSON.stringify(f));
+  for (const img of Array.isArray(x.images) ? x.images : [])
+    if (img?.hash) {
+      delete img.url;
+      delete img.image_url;
+    }
+  for (const v of Array.isArray(x.videos) ? x.videos : []) if (v?.thumbnail_hash) delete v.thumbnail_url;
+  return x;
+}
+
 /**
- * The copy Pilotix makes of a créa made by hand: the same post as Meta has it (text, photo or video, link, button), the
- * owner's own Advantage+ choices kept, and the URL parameters added (his own kept). null: a kind Pilotix does not copy.
+ * What several texts, videos or formats show, as one line: Meta's copy must give the same line as the ad it replaces
+ * (same photos, videos, texts, links, buttons, formats and groups), or the ad is not touched.
+ */
+export function feedKey(f: any): string {
+  const list = (k: string, pick: (x: any) => unknown) => (Array.isArray(f?.[k]) ? f[k].map((x: any) => String(pick(x) ?? '')).sort() : []);
+  return JSON.stringify({
+    images: list('images', (x) => x?.hash),
+    videos: list('videos', (x) => x?.video_id),
+    bodies: list('bodies', (x) => x?.text),
+    titles: list('titles', (x) => x?.text),
+    descriptions: list('descriptions', (x) => x?.text),
+    links: list('link_urls', (x) => x?.website_url),
+    buttons: list('call_to_action_types', (x) => x),
+    formats: list('ad_formats', (x) => x),
+    groups: Array.isArray(f?.groups) ? f.groups.length : 0,
+    type: String(f?.optimization_type ?? ''),
+  });
+}
+
+/**
+ * The groups of a flexible ad (Meta's « format flexible »: groups of photos, videos and texts kept on the ad itself) as
+ * one line, to tell they are the same after the créa changed. '' : the ad has none.
+ */
+export function groupsKey(g: any): string {
+  const groups = Array.isArray(g?.groups) ? g.groups : [];
+  if (!groups.length) return '';
+  const ids = (xs: unknown, pick: (x: any) => unknown) => (Array.isArray(xs) ? xs.map((x) => String(pick(x) ?? '')).sort() : []);
+  return JSON.stringify(
+    groups
+      .map((x: any) =>
+        JSON.stringify({
+          images: ids(x?.images, (i) => i?.hash),
+          videos: ids(x?.videos, (v) => v?.video_id),
+          texts: ids(x?.texts, (t) => `${t?.text_type ?? ''}:${t?.text ?? ''}`),
+        }),
+      )
+      .sort(),
+  );
+}
+
+/**
+ * The copy Pilotix makes of a créa made by hand: the same post as Meta has it (text, photo or video, link, button; or
+ * its several texts, videos and formats), the owner's own Advantage+ choices kept, and the URL parameters added (his own
+ * kept). null: a kind Pilotix does not copy — several texts, videos or formats need their page and no existing post.
  * Meta's old « standard enhancements » bundle is left out: Meta no longer takes it on a new créa, its parts are listed
  * one by one beside it.
  */
 export function taggedCopy(c: any, name: string): Record<string, unknown> | null {
   const kind = tagKindOf(c);
-  if (kind !== 'spec' && kind !== 'post') return null;
+  if (kind !== 'spec' && kind !== 'post' && kind !== 'feed') return null;
+  if (kind === 'feed' && (!c.object_story_spec?.page_id || c.object_story_id)) return null;
   const body: Record<string, unknown> = { name: clip(name, 200), url_tags: withTags(c.url_tags) };
-  if (kind === 'spec') {
+  if (kind === 'spec' || kind === 'feed') {
     const spec = JSON.parse(JSON.stringify(c.object_story_spec));
     oneImage(spec.video_data);
     oneImage(spec.link_data);
     for (const child of Array.isArray(spec.link_data?.child_attachments) ? spec.link_data.child_attachments : []) oneImage(child);
     body.object_story_spec = spec;
+    if (kind === 'feed') body.asset_feed_spec = feedCopy(c.asset_feed_spec);
   } else {
     body.object_story_id = String(c.object_story_id);
     if (c.instagram_user_id) body.instagram_user_id = String(c.instagram_user_id);

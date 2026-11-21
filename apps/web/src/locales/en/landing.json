@@ -892,7 +892,7 @@
     "missingHint": "Their orders don’t know which ad they came from. Paste the line above in Meta: the ad › Tracking › URL parameters.",
     "why": {
       "old": "Made more than {{h}} h ago: add them in Meta",
-      "feed": "Several texts, videos or formats: add them in Meta",
+      "feed": "Several texts, videos or formats Pilotix couldn’t copy safely: add them in Meta",
       "catalog": "Catalogue ad: add them in Meta",
       "other": "This kind of ad: add them in Meta",
       "post": "Existing post: Meta didn’t take the parameters, add them in Meta",

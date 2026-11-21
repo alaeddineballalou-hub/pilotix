@@ -220,7 +220,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   });
 
   // « Paramètres d’URL »: two new ads made in Meta that Pilotix gave the parameters to, and three still without them:
-  // an older one that runs (never touched), one with several texts (a kind Pilotix does not copy), a catalogue ad
+  // an older one that runs (never touched), one with several texts Pilotix could not copy safely, a catalogue ad
   await setRaw(db, 'pilot_ads_tags', {
     on: true,
     checkedAt: iso(4 * M),

@@ -961,9 +961,10 @@ async function handView(ctx: Ctx) {
  * in Meta's Ads Manager has only what the owner pasted. Without the ids, its orders do not know their ad and Pilot
  * Checks cannot judge it. So every Pilote auto run (15 min, and « Vérifier maintenant ») reads the shop's ads: a new
  * one (its first TAG_FIX_H hours) that sends people to a website without the ids gets them from Pilotix — a copy of
- * its créa with the parameters, on the same ad; Meta checks the ad again. An older one is never touched (it runs: a
- * new créa sends it back to Meta's check), and a kind Pilotix does not copy (several texts or formats, catalogue…) is
- * not either: both are only listed, with the line to paste. On unless the owner turns it off.
+ * its créa with the parameters, on the same ad; Meta checks the ad again. Several texts, videos or formats too, when
+ * Meta's copy shows exactly the same pieces (./meta.ts › tagAd), else the ad stays as it was. An older one is never
+ * touched (it runs: a new créa sends it back to Meta's check), and a kind Pilotix does not copy (catalogue…) is not
+ * either: both are only listed, with the line to paste. On unless the owner turns it off.
  */
 const TAG_KEY = 'pilot_ads_tags';
 export const TAG_FIX_H = 24;
@@ -1045,7 +1046,7 @@ async function tagRunNow(ctx: Ctx): Promise<TagState> {
     if (!a.needs) continue;
     const born = a.created ? Date.parse(a.created) : NaN;
     const young = Number.isFinite(born) && now - born <= TAG_FIX_H * 3_600_000;
-    const copyable = a.kind === 'spec' || a.kind === 'post';
+    const copyable = a.kind === 'spec' || a.kind === 'post' || a.kind === 'feed';
     let t = s.tries[a.id];
     let why: TagWhy = young ? (copyable ? 'refused' : (a.kind as TagWhy)) : 'old';
     if (young && copyable && !t?.why && (t?.n ?? 0) < TAG_TRIES) {
