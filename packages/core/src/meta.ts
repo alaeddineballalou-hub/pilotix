@@ -718,7 +718,8 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
       try {
         return groupsKey((await graph(a.id!, { fields: 'creative_asset_groups_spec' }, token))?.creative_asset_groups_spec);
       } catch (e) {
-        if ((e as AppError)?.code === 'conflict') throw e;
+        // Meta busy, out of reach or the key over: said as such (the next run tries again), never « not copied »
+        if ((e as AppError)?.code === 'conflict' || /injoignable|jeton Meta/i.test(String((e as Error)?.message ?? ''))) throw e;
         return null;
       }
     };

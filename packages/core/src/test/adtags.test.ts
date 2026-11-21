@@ -470,6 +470,14 @@ test('Meta: when Meta does not say a flexible ad’s groups, several texts are l
   assert.equal(steps(one).at(-1), 'POST 120200888');
 });
 
+test('Meta: out of reach while reading the groups is no « not copied »: said as it is, so the next run tries again', async () => {
+  globalThis.fetch = (async (u: any) => {
+    if (new URL(String(u)).searchParams.get('fields') === 'creative_asset_groups_spec') throw new TypeError('fetch failed');
+    return new Response(JSON.stringify({ account_id: '123', creative: FEED }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }) as typeof fetch;
+  await assert.rejects(runMeta('tagAd', { id: '120200893' }, await owner()), /injoignable/);
+});
+
 test('Meta: the ads read, deleted ones left out, each with whether it needs the parameters', async () => {
   fakeMeta(() => ({
     data: [
