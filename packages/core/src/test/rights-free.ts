@@ -6,7 +6,7 @@
 // roles are truly enough: menu.test.ts fails (Pilotix CI turns red) until one of them says so.
 export const FREE_ACTIONS: readonly string[] = [
   'admin.companies', 'admin.roles', 'admin.statuses.get', 'admin.users.resetPassword',
-  'agency.analytics', 'agency.dash', 'agency.home', 'agency.products', 'agency.sellerChoices', 'agency.sellers',
+  'agency.analytics', 'agency.dash', 'agency.givePeople', 'agency.home', 'agency.products', 'agency.sellerChoices', 'agency.sellers',
   'assign.get', 'assign.run', 'assign.set',
   'auto.alertMine', 'auto.pushTest',
   'boutiques.copy', 'boutiques.copyPreview', 'boutiques.list', 'boutiques.save',
