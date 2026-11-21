@@ -1,0 +1,16 @@
+# Search engines may read the product landing pages and their photos; the app and its API are private.
+# Each boutique's own files are under /api/s/<boutique>/lp/ (the main boutique's under /api/lp/).
+User-agent: *
+Allow: /api/lp/
+Allow: /api/s/*/lp/
+Disallow: /api/
+Disallow: /live
+
+# Meta downloads the photos and videos a boutique posts (Pilot Content), sends in messages (Pilot Message) or puts
+# in its catalogue (Marketing › Catalogue). Its robots read this group only: every boutique's files, by plain prefix.
+User-agent: facebookexternalhit
+User-agent: facebookcatalog
+Allow: /api/lp/
+Allow: /api/s/
+Disallow: /api/
+Disallow: /live
