@@ -202,3 +202,31 @@ test('a chat order tells Meta the same things a page’s order does: Lead when i
   await queueChatEvent(db, wa.id, 'Lead', Date.now());
   assert.equal((await events(wa.id)).length, 0);
 });
+
+test('a chat’s Purchase is dated when the agent confirmed it, even when it leaves the next day; stuck more than 7 days, it is not sent (Meta refuses it)', async () => {
+  const conf = await as(EMAILS.conf);
+  const sent: any[] = [];
+  const server: Ctx['server'] = { courier: async () => ({}), hashPassword: async (p) => p, meta: async (action: string, args: any) => (sent.push({ action, args }), { received: args.events.length }) };
+  const job = await as(EMAILS.admin, server);
+  const o = await chatOrder('messenger', PAGE);
+  await db.query('UPDATE orders SET agent_id = $2 WHERE id = $1', [o.id, conf.session.profile.id]);
+  const tc = Date.now() + 5 * 60_000;
+  await call('orders.setConf', { ...conf, now: () => tc }, { ids: [o.id], status: 'confirmed' });
+  await db.query(`UPDATE meta_events SET status = 'sent' WHERE status = 'queued' AND order_id <> $1`, [o.id]);
+  // the job only runs a day later (the server or Meta down): the sale keeps the day it was confirmed
+  await call('landing.run', { ...job, now: () => tc + 26 * 3600_000 }, {});
+  const e = sent.flatMap((x) => x.args.events).find((x: any) => x.event_id === `chat-purchase-${o.ref}`);
+  assert.ok(e, 'it left');
+  assert.equal(e.event_time, Math.floor(tc / 1000), 'the moment the agent confirmed it');
+  // confirmed, then stuck more than 7 days: Meta would refuse the whole batch, so it is not sent
+  const o2 = await chatOrder('messenger', PAGE);
+  await db.query('UPDATE orders SET agent_id = $2 WHERE id = $1', [o2.id, conf.session.profile.id]);
+  const tb = tc + 27 * 3600_000;
+  await call('orders.setConf', { ...conf, now: () => tb }, { ids: [o2.id], status: 'confirmed' });
+  sent.length = 0;
+  await call('landing.run', { ...job, now: () => tb + 7 * 24 * 3600_000 }, {});
+  assert.ok(!sent.flatMap((x) => x.args.events).some((x: any) => x.event_id === `chat-purchase-${o2.ref}`));
+  const [late] = (await events(o2.id)).filter((x: any) => x.event_name === 'Purchase');
+  assert.equal(late.status, 'skipped');
+  assert.match(late.error, /7 jours/);
+});

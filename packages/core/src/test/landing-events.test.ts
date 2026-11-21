@@ -330,6 +330,8 @@ test('TikTok too: the form (SubmitForm) and the delivered parcel (a custom « De
   assert.deepEqual(names, ['CompletePayment', 'Delivered', 'SubmitForm']);
   const lead = sent.filter((x) => x.action === 'tiktok').flatMap((x) => x.args.events).find((e: any) => e.event === 'SubmitForm');
   assert.equal(lead.event_id, `lead-${o.ref}`);
+  const [ttLead] = await events(`order_id = $1 AND platform = 'tiktok' AND event_name = 'Lead'`, [o.id]);
+  assert.equal(lead.event_time, Math.floor(new Date(ttLead.at).getTime() / 1000), 'dated when the form arrived, not when it left');
   assert.ok(lead.user?.phone && !JSON.stringify(lead).includes(f.phone), 'the phone hashed, never in clear');
   // marked fake: TikTok is told the browser too (its own cookie), never the number typed; a browser it cannot recognise is not sent
   const TTP = 'ttp-cookie-0123456789';
@@ -487,4 +489,35 @@ test('visit: the sales go first, the visits after every other event; counted apa
   const [o9] = await events(`event_id = $1`, [`pv-${old.vid}`]);
   assert.deepEqual([o9.status, o9.payload], ['failed', null]);
   assert.equal((await events(`event_id = $1`, [`pv-${older.vid}`])).length, 0);
+});
+
+// ---------------------------------------------------------------- the day Meta counts a sale (21 Nov 2026)
+test('Purchase: dated when the agent confirmed it, not when it left — sent the next day, it still counts on the day of the confirmation; stuck more than 7 days, it is not sent (Meta refuses it)', async () => {
+  const f = await human();
+  await call('landing.submit', admin, f);
+  const o = await orderOf(f.phone);
+  await mine(o.id);
+  const tc = Date.now() + 5 * MIN;
+  await call('orders.setConf', at(conf, tc), { ids: [Number(o.id)], status: 'confirmed' });
+  const [lead] = await events(`order_id = $1 AND event_name = 'Lead' AND platform = 'meta'`, [o.id]);
+  // the job only runs a day later (the server or Meta down, a key missing): each event keeps its own day
+  sent.length = 0;
+  await run(tc + 26 * 3600_000);
+  const purchase = received().find((e: any) => e.event_id === `purchase-${o.ref}`);
+  assert.ok(purchase, 'it left');
+  assert.equal(purchase.event_time, Math.floor(tc / 1000), 'the moment the agent confirmed it');
+  assert.equal(received().find((e: any) => e.event_id === `lead-${o.ref}`)?.event_time, Math.floor(new Date(lead.at).getTime() / 1000), 'the Lead: the moment the form arrived');
+  // confirmed, then stuck more than 7 days: Meta would refuse the whole batch, so it is not sent
+  const g = await human();
+  await call('landing.submit', admin, g);
+  const o2 = await orderOf(g.phone);
+  await mine(o2.id);
+  const tb = tc + 27 * 3600_000;
+  await call('orders.setConf', at(conf, tb), { ids: [Number(o2.id)], status: 'confirmed' });
+  sent.length = 0;
+  await run(tb + 7 * 24 * 3600_000);
+  assert.ok(!received().some((e: any) => e.event_id === `purchase-${o2.ref}`));
+  const [late] = await events(`order_id = $1 AND event_name = 'Purchase' AND platform = 'meta'`, [o2.id]);
+  assert.equal(late.status, 'skipped');
+  assert.match(late.error, /7 jours/);
 });

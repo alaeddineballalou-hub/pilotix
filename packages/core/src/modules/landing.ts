@@ -1729,6 +1729,16 @@ function userData(r: { phone: string; name: string; commune?: string | null; wil
 /** Meta keeps events of the last 7 days only. */
 const META_MAX_AGE = 7 * 86_400;
 
+/**
+ * When an order's event happened (the confirmation, the form, the delivery: its outbox row's « at »), in Unix seconds,
+ * never after `nowS`. Meta and TikTok count an event on the day of its event_time, not the day it reaches them: one
+ * that leaves late (the server or Meta down, a key missing, a retry) still counts on the day it happened.
+ */
+const happenedS = (e: { at: unknown }, nowS: number): number => {
+  const t = Math.floor(Date.parse(iso(e.at)) / 1000);
+  return Number.isFinite(t) ? Math.min(t, nowS) : nowS;
+};
+
 /** The event Meta receives (and the ones that go with it: a visit's ViewContent), or why it is not sent anymore. */
 async function buildEvent(db: Db, e: any, api: string, publicUrl: string, now: number): Promise<{ event?: Record<string, unknown>; more?: Record<string, unknown>[]; skip?: string }> {
   const b = await buildMetaEvent(db, e, api, publicUrl, now);
@@ -1875,11 +1885,14 @@ async function buildChatEvent(db: Db, e: any, nowS: number): Promise<{ event?: R
   if (lead ? NOT_A_LEAD.includes(o.conf_status) : (CONF_DONE_BAD as string[]).includes(o.conf_status)) return { skip: lead ? 'Commande fausse ou en double : pas de Lead' : `Commande annulée ou fausse : pas de ${e.event_name}` };
   const [channel, accountId] = String(e.pixel_id).split(':');
   if (!o.external_id || o.channel !== channel) return { skip: 'Conversation introuvable' };
+  // dated when it happened, not when it leaves
+  const t = happenedS(e, nowS);
+  if (nowS - t > META_MAX_AGE - 3600) return { skip: 'Plus de 7 jours : Meta ne l’accepte plus' };
   return {
     event: {
       // Meta's names for a chat (its fixed list): LeadSubmitted, Purchase, OrderDelivered
       event_name: lead ? 'LeadSubmitted' : e.event_name === 'Delivered' ? 'OrderDelivered' : 'Purchase',
-      event_time: nowS,
+      event_time: t,
       event_id: e.event_id,
       action_source: 'business_messaging',
       messaging_channel: channel,
@@ -1915,13 +1928,16 @@ async function buildMetaEvent(db: Db, e: any, api: string, publicUrl: string, no
     if (e.event_name === 'Lead') {
       if (NOT_A_LEAD.includes(o.conf_status)) return { skip: 'Commande fausse, en double ou mauvais numéro : pas de Lead' };
     } else if ((CONF_DONE_BAD as string[]).includes(o.conf_status)) return { skip: 'Commande annulée ou fausse : pas de Purchase' };
+    // dated when it happened (the confirmation, the form, the delivery), not when it leaves
+    const t = happenedS(e, nowS);
+    if (nowS - t > META_MAX_AGE - 3600) return { skip: 'Plus de 7 jours : Meta ne l’accepte plus' };
     const items = (readJson<any[]>(o.items) ?? []).map((x) => ({ id: String(x.id), quantity: num(x.quantity), item_price: num(x.item_price) }));
     // a website event needs the browser; without it (an old order) the sale is reported as confirmed by Pilotix itself
     const web = !!o.v_ua;
     return {
       event: {
         event_name: e.event_name,
-        event_time: nowS,
+        event_time: t,
         event_id: e.event_id,
         action_source: web ? 'website' : 'system_generated',
         ...(web ? { event_source_url: sourceUrl(o.slug, o.v_url) } : {}),
@@ -1929,7 +1945,7 @@ async function buildMetaEvent(db: Db, e: any, api: string, publicUrl: string, no
         custom_data: { currency: 'DZD', value: num(o.total), order_id: o.ref, content_type: 'product_group', content_ids: items.map((x) => x.id), contents: items, num_items: items.reduce((n, x) => n + x.quantity, 0) },
       },
       tt: tiktokEvent(e.event_name, {
-        time: nowS, eventId: e.event_id, phone: o.phone, customerId: num(o.customer_id), ip: o.v_ip, ua: o.v_ua, ttp: o.v_ttp, ttclid: readJson<Record<string, string>>(o.utm)?.ttclid ?? null,
+        time: t, eventId: e.event_id, phone: o.phone, customerId: num(o.customer_id), ip: o.v_ip, ua: o.v_ua, ttp: o.v_ttp, ttclid: readJson<Record<string, string>>(o.utm)?.ttclid ?? null,
         url: sourceUrl(o.slug, o.v_url), value: num(o.total), orderId: o.ref, contents: items,
       }),
     };
