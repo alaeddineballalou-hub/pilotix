@@ -1750,6 +1750,14 @@ interface VisitPayload {
   price?: number;
 }
 
+/**
+ * A visit leaves the server 10 minutes after it happened (its event_time stays the visit's). Meta keeps the first copy
+ * of an event it gets, and favours the browser's when both arrive within 5 minutes of each other (Conversions API ›
+ * Server Event Parameters, event_id): the pixel's copy — the one Meta counts in « landing page views » — then wins
+ * whenever it leaves within about a quarter of an hour; the server's only fills in a visit the pixel never sent.
+ */
+export const VISIT_SEND_DELAY_MS = 10 * 60_000;
+
 /** The shop's Conversions API token (Landing pages › Réglages), else its Meta ads key; '' for none. */
 async function capiShopToken(db: Db): Promise<string> {
   const v = async (key: string) => String((await db.query(`SELECT value FROM settings WHERE key = $1`, [key]))[0]?.value ?? '');
@@ -1761,8 +1769,8 @@ async function capiShopToken(db: Db): Promise<string> {
  * « ViewContent » on a product's page — from the server too, with the browser pixel's ids (pv-/vc-<view>): Meta counts
  * each once, and gets the visit even when the person leaves before the pixel loads (it waits for the photos). A browser
  * Meta cannot recognise is not sent (an IP alone is shared by a whole neighbourhood: the pixel tells it if it loads);
- * nor to a pixel the shop has no token for (nothing would leave). One outbox row per pixel; it holds the browser's
- * data until it is sent.
+ * nor to a pixel the shop has no token for (nothing would leave). One outbox row per pixel, leaving VISIT_SEND_DELAY_MS
+ * after the visit; it holds the browser's data until it is sent.
  */
 async function queueVisit(
   ctx: Ctx,
@@ -1790,9 +1798,9 @@ async function queueVisit(
   for (const pixel of pixels) {
     if (!shopToken && !(await pixelToken(db, 'meta', pixel))) continue;
     const r = await db.query(
-      `INSERT INTO meta_events (pixel_id, event_name, event_id, landing_id, value, at, send_after, platform, payload) VALUES ($1,'PageView',$2,$3,$4,$5,$5,'meta',$6)
+      `INSERT INTO meta_events (pixel_id, event_name, event_id, landing_id, value, at, send_after, platform, payload) VALUES ($1,'PageView',$2,$3,$4,$5,$6,'meta',$7)
        ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING RETURNING id`,
-      [pixel, `pv-${v.vid}`, v.landingId, payload.price ?? null, isoAt(now), JSON.stringify(payload)],
+      [pixel, `pv-${v.vid}`, v.landingId, payload.price ?? null, isoAt(now), isoAt(now + VISIT_SEND_DELAY_MS), JSON.stringify(payload)],
     );
     n += r.length;
   }

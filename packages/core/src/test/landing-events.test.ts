@@ -5,7 +5,7 @@ import { sha256Hex, zeroBits } from '@pilotix/shared';
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
-import { LANDING_POW_BITS, makeChallenge, sendMetaEvents } from '../modules/landing';
+import { LANDING_POW_BITS, makeChallenge, sendMetaEvents, VISIT_SEND_DELAY_MS } from '../modules/landing';
 import { BLOCKED_FAKE_AFTER_MS, FAKE_EVENT_DELAY_MS } from '../modules/landingquery';
 import { EMAILS, setup } from './harness';
 
@@ -407,8 +407,14 @@ test('visit: a page in front of a person Meta can recognise is sent by the serve
   const kept = typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload;
   assert.equal(kept.fbc, `fb.1.${t0}.IwAR0click${v.vid}`, 'the ad click, as the pixel writes it');
   assert.deepEqual([kept.ip, kept.ua, kept.pid], ['10.9.0.7', UA, productId]);
+  // it leaves 10 minutes after the visit: the pixel's own copy, if it fires, reaches Meta first and is the one kept
+  assert.equal(new Date(row.send_after).getTime() - new Date(row.at).getTime(), VISIT_SEND_DELAY_MS);
+  assert.equal(new Date(row.at).getTime(), t0, 'its time stays the visit’s');
   sent.length = 0;
   await run(t0 + MIN);
+  assert.equal((await events(`event_id = $1`, [`pv-${v.vid}`]))[0].status, 'queued', 'not before 10 minutes');
+  assert.ok(!received().some((e: any) => e.event_id === `pv-${v.vid}`));
+  await run(t0 + VISIT_SEND_DELAY_MS + MIN);
   const got = received().filter((e: any) => [`pv-${v.vid}`, `vc-${v.vid}`].includes(e.event_id));
   assert.deepEqual(got.map((e: any) => e.event_name), ['PageView', 'ViewContent']);
   for (const e of got) {
@@ -453,11 +459,13 @@ test('visit: the sales go first, the visits after every other event; counted apa
   // (as on the server: without it, the preview sends everything at once after a change)
   await call('landing.submit', at(await as(EMAILS.admin, server), t0 + 1000), f);
   const o = await orderOf(f.phone);
-  const r1 = await sendMetaEvents(at(await as(EMAILS.admin, server), t0 + 2000), 1);
+  // both due (the visit after its 10 minutes): one event at a time, the form first though the visit came first
+  const r1 = await sendMetaEvents(at(await as(EMAILS.admin, server), t0 + VISIT_SEND_DELAY_MS + 2000), 1);
   assert.equal(r1.sent, 1);
   assert.equal((await events(`order_id = $1 AND event_name = 'Lead'`, [o.id]))[0].status, 'sent');
   assert.equal((await events(`event_id = $1`, [`pv-${v.vid}`]))[0].status, 'queued');
-  await run(t0 + MIN);
+  await run(t0 + VISIT_SEND_DELAY_MS + MIN);
+  assert.equal((await events(`event_id = $1`, [`pv-${v.vid}`]))[0].status, 'sent');
   // Événements: the visits sent are counted on the page's card, apart from « % sent » and the list of events
   const pid = Number((await db.query(`SELECT id FROM landing_pages WHERE slug = $1`, [SLUG]))[0].id);
   const card = ((await call('landing.eventStats', admin, { days: 1, platform: 'all' })) as any).cards.find((c: any) => c.id === pid);
