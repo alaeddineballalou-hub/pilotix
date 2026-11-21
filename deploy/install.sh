@@ -74,7 +74,8 @@ systemctl restart fail2ban || echo "    WARNING: fail2ban did not start (the sit
 # on only when both are true:
 #  - a login key is there: a key in authorized_keys that opens a shell (the GitHub deploy key, which can run update.sh
 #    and nothing else, does not count);
-#  - nobody logged in with a password lately (the SSH log: 14 days of the journal, and the last two auth.log files).
+#  - the last time a person logged in over SSH (the deploy key left out), it was with a key: that proves the key works.
+#    A password login after it turns it off again at the next update.
 # Otherwise passwords stay accepted and the update's log says why. SSH_KEY_ONLY=0 turns it off
 # (sudo SSH_KEY_ONLY=0 /opt/pilotix/deploy/install.sh). The console of the Contabo panel works either way.
 # The file's name starts with 00-: sshd keeps the FIRST value it reads, and Ubuntu's 50-cloud-init.conf may say « yes ».
@@ -83,19 +84,26 @@ ssh_reload() { systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/
 # the old name (read after 50-cloud-init.conf, so it could lose)
 if [ -f /etc/ssh/sshd_config.d/99-pilotix.conf ]; then rm -f /etc/ssh/sshd_config.d/99-pilotix.conf; ssh_reload; fi
 LOGIN_KEYS=$(cat /root/.ssh/authorized_keys /home/*/.ssh/authorized_keys 2>/dev/null | grep -Ev '^[[:space:]]*(#|$)' | grep -vc 'command=' || true)
-PW_LOGINS=$({ journalctl -q --no-pager --since '14 days ago' -t sshd -t sshd-session 2>/dev/null || true; cat /var/log/auth.log /var/log/auth.log.1 2>/dev/null || true; } | grep -c 'Accepted password' || true)
-if [ "${SSH_KEY_ONLY:-1}" = 1 ] && [ "${LOGIN_KEYS:-0}" -gt 0 ] && [ "${PW_LOGINS:-0}" -eq 0 ]; then
+# the deploy key's fingerprints (its line has command=), as sshd writes them: SHA256:…
+DEPLOY_FPS=$(grep -h 'command=' /root/.ssh/authorized_keys 2>/dev/null | grep -oE '(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp[0-9]+|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com) [A-Za-z0-9+/=]+' | while read -r k; do printf '%s\n' "$k" | ssh-keygen -lf /dev/stdin 2>/dev/null | awk '{print $2}'; done || true)
+# the SSH logins, oldest first: 30 days of the journal, else the last two auth.log files
+LOGINS=$(journalctl -q --no-pager --since '30 days ago' -t sshd -t sshd-session 2>/dev/null | grep -E 'Accepted (password|publickey|keyboard-interactive)' || true)
+[ -n "$LOGINS" ] || LOGINS=$(cat /var/log/auth.log.1 /var/log/auth.log 2>/dev/null | grep -E 'Accepted (password|publickey|keyboard-interactive)' || true)
+for fp in $DEPLOY_FPS; do LOGINS=$(printf '%s\n' "$LOGINS" | grep -vF -- "$fp" || true); done
+LAST_LOGIN=$(printf '%s\n' "$LOGINS" | grep . | tail -n 1 | grep -oE 'Accepted (password|publickey|keyboard-interactive)' | awk '{print $2}' || true)
+case "$LAST_LOGIN" in publickey) LAST_SAID="a key" ;; '') LAST_SAID="none in 30 days" ;; *) LAST_SAID="a password" ;; esac
+if [ "${SSH_KEY_ONLY:-1}" = 1 ] && [ "${LOGIN_KEYS:-0}" -gt 0 ] && [ "$LAST_LOGIN" = publickey ]; then
   printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitRootLogin prohibit-password\n' > "$SSHD_KEYS"
   if sshd -t 2>/dev/null; then
     ssh_reload
-    echo "    SSH: key only, passwords refused ($LOGIN_KEYS login key(s))"
+    echo "    SSH: key only, passwords refused ($LOGIN_KEYS login key(s); the last login used a key)"
   else
     rm -f "$SSHD_KEYS"; ssh_reload
     echo "    WARNING: SSH key only NOT applied (sshd refused the setting): passwords are still accepted"
   fi
 else
   if [ -f "$SSHD_KEYS" ]; then rm -f "$SSHD_KEYS"; ssh_reload; fi
-  echo "    SSH: passwords still accepted (asked: ${SSH_KEY_ONLY:-1}, login keys: ${LOGIN_KEYS:-0}, password logins lately: ${PW_LOGINS:-0})"
+  echo "    SSH: passwords still accepted (asked: ${SSH_KEY_ONLY:-1}, login keys: ${LOGIN_KEYS:-0}, last login: $LAST_SAID)"
 fi
 echo "    SSH now: $(sshd -T 2>/dev/null | grep -E '^(passwordauthentication|permitrootlogin) ' | tr '\n' ' ' || true)"
 echo "    fail2ban: $( (fail2ban-client status sshd 2>/dev/null || echo 'not running') | grep -E 'Currently banned|Total banned|not running' | sed -E 's/^[[:space:]|`-]+//' | tr -s ' \t' ' ' | paste -sd ',' - || true)"

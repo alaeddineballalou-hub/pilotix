@@ -92,6 +92,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Update pilotix.online
+        # the update's log lives in RUNNER_TEMP: actions/checkout (before « Check the live site ») empties the workspace,
+        # which made the last check fail on a missing update.log after a good update (21 Nov 2026, 02:10)
         env:
           KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           HOST: ${{ secrets.DEPLOY_HOST }}
@@ -122,7 +124,7 @@ jobs:
           fi
           set -o pipefail
           # (e-mail addresses are hidden in the run's log: anyone can read it while the code is public)
-          ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=$CHECK -o ServerAliveInterval=30 "root@$HOST" "update $SHA" 2>&1 | sed -u -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/***@***/g' | tee update.log
+          ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=$CHECK -o ServerAliveInterval=30 "root@$HOST" "update $SHA" 2>&1 | sed -u -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/***@***/g' | tee "$RUNNER_TEMP/update.log"
 
       # the server could log in to its e-mail server (red here, but the deploy itself is done: see the line it wrote)
       - name: E-mails work on the server
@@ -130,17 +132,17 @@ jobs:
         run: |
           # the e-mail line first, as its own note (GitHub shows only 10 notes per step: the last lines were cut off)
           # (the e-mail account's address is hidden: the run's notes can be seen by anyone while the code is public)
-          line=$(grep -h -A1 '^E-mail:' update.log | tr '\n' ' ' | sed -E 's/  +/ /g; s/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/***@***/g')
-          if grep -q '^E-mail: OK' update.log; then echo "::notice title=E-mail::$line"; else echo "::warning title=E-mail::${line:-no « E-mail: » line in the update}"; fi
-          grep -v '^E-mail:' update.log | tail -n 8 | sed -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/***@***/g; s/^/::notice title=Server update::/'
-          grep -q '^E-mail: OK' update.log
+          line=$(grep -h -A1 '^E-mail:' "$RUNNER_TEMP/update.log" | tr '\n' ' ' | sed -E 's/  +/ /g; s/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/***@***/g')
+          if grep -q '^E-mail: OK' "$RUNNER_TEMP/update.log"; then echo "::notice title=E-mail::$line"; else echo "::warning title=E-mail::${line:-no « E-mail: » line in the update}"; fi
+          grep -v '^E-mail:' "$RUNNER_TEMP/update.log" | tail -n 8 | sed -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/***@***/g; s/^/::notice title=Server update::/'
+          grep -q '^E-mail: OK' "$RUNNER_TEMP/update.log"
 
       # the server checked itself during the update (on the server, before Cloudflare): the proof the new version runs,
       # even when Cloudflare's bot protection does not let the outside check below in
       - name: The new version answers on the server
         run: |
-          grep -h '^Server:' update.log || echo "No « Server: » line in the update (an older install.sh)"
-          grep -q '^Server: OK' update.log
+          grep -h '^Server:' "$RUNNER_TEMP/update.log" || echo "No « Server: » line in the update (an older install.sh)"
+          grep -q '^Server: OK' "$RUNNER_TEMP/update.log"
 
       # the real site, from outside, without changing anything in it: the server and the website are this version,
       # and each public door answers as it should (scripts/live-check.mjs)
@@ -170,7 +172,7 @@ jobs:
         env:
           SHA: ${{ needs.check.outputs.sha }}
         run: |
-          got=$(awk '/^==> (Latest code|Code)$/ { getline; print $1; exit }' update.log)
+          got=$(awk '/^==> (Latest code|Code)$/ { getline; print $1; exit }' "$RUNNER_TEMP/update.log")
           echo "checked: ${SHA:0:8} · on the server: ${got:-?}"
           if [ -z "$got" ] || [ -z "$SHA" ] || [ "${SHA:0:${#got}}" != "$got" ]; then
             echo "::error title=Another version went live::The server took ${got:-an unknown version}, not the version the check approved (${SHA:0:8})."
