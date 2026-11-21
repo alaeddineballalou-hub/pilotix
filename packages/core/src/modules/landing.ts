@@ -668,8 +668,38 @@ export const landingCommunes = (wilayaId: number): [string, string][] => commune
 // ---------------------------------------------------------------- what a page sends
 const str = (n: number) => z.any().transform((v) => (v === null || v === undefined || typeof v === 'object' ? '' : String(v)).slice(0, n));
 const int = (d: number | null) => z.any().transform((v) => (v === null || v === undefined || v === '' || !isFinite(Number(v)) ? d : Math.trunc(Number(v))));
-/** the ad link's parameters (utm_*, fbclid, ad / ad set / campaign ids, a catalog ad's network): 13 keys at most, short strings only */
-const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'ttclid', 'gclid', 'ad_id', 'adset_id', 'campaign_id', 'placement', 'px_cat'];
+/**
+ * the ad link's parameters (utm_*, fbclid, ad / ad set / campaign ids, a catalog ad's network): 14 keys at most, short
+ * strings only, plus up to MAX_LOOSE numbers that look like Meta's ids under a name Pilotix does not know (Meta's own,
+ * added to the link when the ad has no URL parameters of its own: withAdIds finds what they are)
+ */
+const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id', 'fbclid', 'ttclid', 'gclid', 'ad_id', 'adset_id', 'campaign_id', 'placement', 'px_cat'];
+/** a Meta campaign, ad set or ad id: a long number (today 18 digits, 120…) */
+export const META_ID = /^\d{12,20}$/;
+const MAX_LOOSE = 6;
+const LOOSE_KEY = /^[A-Za-z][A-Za-z0-9_.-]{0,39}$/;
+/**
+ * Meta's own numbers when the ad has none of Pilotix's ids: Meta adds them to the link of an ad without URL parameters
+ * (utm_campaign = the campaign, utm_term = the ad set, utm_content = the ad, as advertisers saw them; Meta AI, 21 Nov
+ * 2026, could not say their names). Only numbers count, never a name; Pilotix's own ids always come first. The order
+ * says it (px_ids 'meta'), so the shop sees Meta's numbers really arrive (Réglages › « Automatique sur vos pubs »).
+ */
+export function metaIdsOf(u: Record<string, string> | null): Record<string, string> | null {
+  if (!u) return u;
+  const out = { ...u };
+  let got = false;
+  const fill = (key: 'ad_id' | 'adset_id' | 'campaign_id', from: string) => {
+    // an id of Pilotix's already there (a number) stays; an empty one or one Meta did not fill (« {{ad.id}} ») does not
+    if (/^\d+$/.test(out[key] ?? '') || !META_ID.test(out[from] ?? '')) return;
+    out[key] = out[from];
+    got = true;
+  };
+  fill('ad_id', 'utm_content');
+  fill('adset_id', 'utm_term');
+  fill('campaign_id', 'utm_campaign');
+  if (got) out.px_ids = 'meta';
+  return out;
+}
 const utmOf = z.any().transform((v): Record<string, string> | null => {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
   const out: Record<string, string> = {};
@@ -677,8 +707,71 @@ const utmOf = z.any().transform((v): Record<string, string> | null => {
     const x = (v as Record<string, unknown>)[k];
     if (typeof x === 'string' && x.trim()) out[k] = x.trim().slice(0, k === 'fbclid' || k === 'gclid' || k === 'ttclid' ? 500 : 200);
   }
-  return Object.keys(out).length ? out : null;
+  let loose = 0;
+  for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+    if (loose >= MAX_LOOSE) break;
+    if (UTM_KEYS.includes(k) || k === 'px_ids' || !LOOSE_KEY.test(k) || typeof x !== 'string' || !META_ID.test(x.trim())) continue;
+    out[k] = x.trim();
+    loose++;
+  }
+  return Object.keys(out).length ? metaIdsOf(out) : null;
 });
+
+/** the keys whose numbers are already understood (the others may be Meta's own ids under a name Pilotix does not know) */
+const UNDERSTOOD = new Set(['ad_id', 'adset_id', 'campaign_id', 'utm_content', 'utm_term', 'utm_campaign', 'fbclid', 'gclid', 'ttclid', 'px_ids']);
+
+/**
+ * The ad an order came from, completed from what Pilotix knows of the shop's ads (read from Meta every 15 minutes):
+ * a number under a name Pilotix does not know that is one of the shop's ads, ad sets or campaigns; an ad's ad set; an
+ * ad set's campaign. So an order finds its ad with any one of the three ids. Marked px_ids 'found' when it helped.
+ */
+export async function withAdIds(db: Db, u: Record<string, string> | null): Promise<Record<string, string> | null> {
+  if (!u) return u;
+  const out = { ...u };
+  const ok = (v: string | undefined) => !!v && META_ID.test(v);
+  // an id the link already carries (a number) is never replaced
+  const has = (v: string | undefined) => !!v && /^\d+$/.test(v);
+  let found = false;
+  const first = async (sql: string, ids: string[]) => (ids.length ? ((await db.query(sql, [ids]))[0] ?? null) : null);
+  const loose = [...new Set(Object.entries(out).filter(([k, v]) => !UNDERSTOOD.has(k) && ok(v)).map(([, v]) => v))];
+  if (loose.length && !has(out.ad_id)) {
+    const r = await first(`SELECT id FROM ads WHERE id = ANY($1::text[]) LIMIT 1`, loose);
+    if (r) {
+      out.ad_id = String(r.id);
+      found = true;
+    }
+  }
+  if (loose.length && !has(out.adset_id)) {
+    const r = await first(`SELECT id FROM adsets WHERE id = ANY($1::text[]) LIMIT 1`, loose);
+    if (r) {
+      out.adset_id = String(r.id);
+      found = true;
+    }
+  }
+  if (loose.length && !has(out.campaign_id)) {
+    const r = await first(`SELECT id FROM ad_campaigns WHERE id = ANY($1::text[]) LIMIT 1`, loose);
+    if (r) {
+      out.campaign_id = String(r.id);
+      found = true;
+    }
+  }
+  if (has(out.ad_id) && !has(out.adset_id)) {
+    const r = await first(`SELECT adset_id FROM ads WHERE id = ANY($1::text[]) LIMIT 1`, [out.ad_id]);
+    if (has(r?.adset_id ? String(r.adset_id) : '')) {
+      out.adset_id = String(r.adset_id);
+      found = true;
+    }
+  }
+  if (has(out.adset_id) && !has(out.campaign_id)) {
+    const r = await first(`SELECT campaign_id FROM adsets WHERE id = ANY($1::text[]) LIMIT 1`, [out.adset_id]);
+    if (has(r?.campaign_id ? String(r.campaign_id) : '')) {
+      out.campaign_id = String(r.campaign_id);
+      found = true;
+    }
+  }
+  if (found && !out.px_ids) out.px_ids = 'found';
+  return out;
+}
 /** what the server knows of the visitor (never from the page itself) */
 const Meta = z
   .object({ ip: str(64), ua: str(500), country: str(4), city: str(80), region: str(80), asn: str(16), fbp: str(200), fbc: str(600), url: str(500) })
@@ -916,7 +1009,8 @@ async function turnstileOf(ctx: Ctx, token: string, siteKey: string, ip: string)
 }
 
 /** they came from an ad: Meta's click id or the ad link's parameters */
-const fromAdOf = (utm: Record<string, string> | null, fbc: string) => !!(fbc || utm?.fbclid || utm?.ad_id || utm?.adset_id || utm?.gclid || utm?.ttclid || /^(facebook|fb|ig|instagram|meta|tiktok)$/i.test(utm?.utm_source ?? ''));
+const fromAdOf = (utm: Record<string, string> | null, fbc: string) =>
+  !!(fbc || utm?.fbclid || utm?.ad_id || utm?.adset_id || utm?.gclid || utm?.ttclid || /^(facebook|fb|ig|instagram|msg|messenger|an|th|threads|meta|tiktok)$/i.test(utm?.utm_source ?? ''));
 
 // Known data-center / hosting / VPN networks (ASN). A real COD customer orders from a phone carrier or home ISP, never
 // from these. Cloudflare must pass the visitor's ASN in the header X-Visitor-ASN (a free Transform Rule: set it to
@@ -1061,6 +1155,8 @@ async function linkSameCustomer(db: Db, phone: string, orderId: number, ref: str
 
 export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Promise<{ ok: true; team?: true }> {
   const db = ctx.db;
+  // the ad it came from, its three ids whichever ones the link carried
+  i.utm = await withAdIds(db, i.utm);
   // a page opened before its address changed still sends its order (its former address leads to it)
   const l = await pageRowAt(db, i.slug, true);
   if (!l) throw notFound('Page introuvable');
@@ -1314,6 +1410,7 @@ const recentlyBlocked = async (db: Db, phone: string, now: number) =>
  */
 export async function captureLead(ctx: Ctx, i: z.infer<typeof CaptureInput>): Promise<{ ok: true }> {
   const db = ctx.db;
+  i.utm = await withAdIds(db, i.utm);
   const phone = mobileOf(i.phone);
   const ua = i.meta.ua ?? '';
   // robots are not customers: no abandoned order, no Meta event (and the answer is the same: nothing to learn)

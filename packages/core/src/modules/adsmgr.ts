@@ -962,16 +962,18 @@ async function handView(ctx: Ctx) {
  * Checks cannot judge it. So every Pilote auto run (15 min, and « Vérifier maintenant ») reads the shop's ads: a new
  * one (its first TAG_FIX_H hours) that sends people to a website without the ids gets them from Pilotix — a copy of
  * its créa with the parameters, on the same ad; Meta checks the ad again. Several texts, videos or formats too, when
- * Meta's copy shows exactly the same pieces (./meta.ts › tagAd), else the ad stays as it was. An older one is never
- * touched (it runs: a new créa sends it back to Meta's check), and a kind Pilotix does not copy (catalogue…) is not
- * either: both are only listed, with the line to paste. On unless the owner turns it off.
+ * Meta's copy shows exactly the same pieces (./meta.ts › tagAd), else the ad stays as it was. Only while Meta has not
+ * shown the ad yet: once shown, a new créa sends it back to Meta's check and starts its learning again (Meta AI,
+ * 21 Nov 2026). An older or already shown one is never touched, and a kind Pilotix does not copy (catalogue…) is not
+ * either: they are only listed, with the line to paste. An ad with nothing in its URL parameters still finds its
+ * orders: Meta adds its own numbers to the link then (./landing.ts › metaIdsOf). On unless the owner turns it off.
  */
 const TAG_KEY = 'pilot_ads_tags';
 export const TAG_FIX_H = 24;
 /** Meta's refusal is tried again on the next runs, this many times in all, then the ad is listed with it */
 export const TAG_TRIES = 3;
-/** why an ad is listed: too old to touch, a kind Pilotix does not copy, Meta kept the post's créa, or Meta said no */
-export type TagWhy = 'old' | Exclude<TagKind, 'spec'> | 'refused';
+/** why an ad is listed: too old to touch, already shown by Meta, a kind Pilotix does not copy, Meta kept the post's créa, or Meta said no */
+export type TagWhy = 'old' | 'running' | Exclude<TagKind, 'spec'> | 'refused';
 export interface TagFixed {
   id: string;
   name: string;
@@ -989,6 +991,8 @@ export interface TagMissing {
   why: TagWhy;
   /** Meta's last refusal, when Pilotix tried */
   error: string | null;
+  /** nothing in its URL parameters: Meta's own numbers on the link still tell its orders their ad */
+  empty?: boolean;
 }
 export interface TagState {
   on: boolean;
@@ -1015,6 +1019,7 @@ interface MetaTagAd {
   created: string | null;
   needs: boolean;
   kind: TagKind;
+  empty?: boolean;
 }
 
 /** One check (server): the young ads get the parameters, the others without them are listed. The demo shows its own. */
@@ -1060,7 +1065,7 @@ async function tagRunNow(ctx: Ctx): Promise<TagState> {
           }
           // it has them by now (pasted in the Ads Manager meanwhile)
           if (r?.why === 'tagged') continue;
-          // a kind Pilotix does not copy, or Meta kept the post's créa: not tried again
+          // a kind Pilotix does not copy, already shown by Meta, or Meta kept the post's créa: not tried again
           t = { n: TAG_TRIES, error: '', why: (r?.why as TagWhy) || 'other' };
         } catch (e: any) {
           const msg = String(e?.message ?? e).slice(0, 300);
@@ -1072,11 +1077,20 @@ async function tagRunNow(ctx: Ctx): Promise<TagState> {
       if (!t?.why && (t?.n ?? 0) < TAG_TRIES) continue;
     } else if (t && young) tries[a.id] = t; // its last refusal stays said while it is young
     if (young && t?.why) why = t.why;
-    missing.push({ id: a.id, name: a.name, campaign: a.campaign, adsetId: a.adsetId, status: a.status, created: a.created, why, error: why === 'refused' ? t?.error || null : null });
+    missing.push({ id: a.id, name: a.name, campaign: a.campaign, adsetId: a.adsetId, status: a.status, created: a.created, why, error: why === 'refused' ? t?.error || null : null, empty: !!a.empty });
   }
   const running = (m: TagMissing) => (m.status === 'ACTIVE' ? 0 : 1);
   missing.sort((x, y) => running(x) - running(y) || String(y.created ?? '').localeCompare(String(x.created ?? '')));
   return save({ on: true, checkedAt: stamp(ctx), error: later, fixed: fixed.slice(0, 30), missing, tries });
+}
+
+/**
+ * The orders of the last 30 days that found their ad through Meta's own numbers on the link (their ad had nothing in
+ * its URL parameters: ./landing.ts › metaIdsOf), at most 999 counted: the proof that Meta adds them.
+ */
+async function metaIdOrders(db: Db, now: number): Promise<number> {
+  const r = await db.query(`SELECT count(*)::int AS n FROM (SELECT 1 FROM orders WHERE created_at > $1 AND utm->>'px_ids' = 'meta' LIMIT 999) x`, [new Date(now - 30 * 86_400_000).toISOString()]);
+  return Number(r[0]?.n ?? 0);
 }
 
 /** What the card shows: a marketer sees only the ads of his own ad sets (as everywhere in Publicité). */
@@ -1084,7 +1098,17 @@ async function tagView(ctx: Ctx) {
   const s = await tagState(ctx.db);
   const mine = isOwner(ctx) ? null : new Set((await visibleAdsets(ctx)).map((x) => String(x.id)));
   const keep = <T extends { adsetId: string }>(xs: T[]) => (mine ? xs.filter((x) => mine.has(x.adsetId)) : xs);
-  return { owner: isOwner(ctx), demo: !ctx.server, fixH: TAG_FIX_H, on: s.on, checkedAt: s.checkedAt, error: s.error, fixed: keep(s.fixed), missing: keep(s.missing) };
+  return {
+    owner: isOwner(ctx),
+    demo: !ctx.server,
+    fixH: TAG_FIX_H,
+    on: s.on,
+    checkedAt: s.checkedAt,
+    error: s.error,
+    fixed: keep(s.fixed),
+    missing: keep(s.missing),
+    metaIdOrders: await metaIdOrders(ctx.db, ctx.now()),
+  };
 }
 
 // ---------------------------------------------------------------- procs

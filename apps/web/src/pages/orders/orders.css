@@ -75,7 +75,14 @@
 /* which ad brought the order */
 .ad-chip { display: inline-flex; align-items: center; gap: 3px; max-width: 150px; font-size: 11px; margin-top: 3px; white-space: nowrap; overflow: hidden; }
 .ad-chip span { overflow: hidden; text-overflow: ellipsis; }
-.ad-v { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; word-break: break-all; }
+.ad-v { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; word-break: normal; overflow-wrap: anywhere; }
+/* a word breaks only when it cannot fit on its own line (« Facebook » whole on a phone, a long id still fits) */
+.ad-v > span { min-width: 0; }
+/* a phone: each name above its value, so an 18-digit Meta id fits on one line */
+@media (max-width: 480px) {
+  .ad-kv { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .ad-kv dd { margin-bottom: 8px; }
+}
 .ad-copy { width: 28px; height: 28px; }
 
 /* the order card › Livraison › Paiement: the step, then when and which payment */

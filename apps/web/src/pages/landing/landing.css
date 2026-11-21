@@ -201,6 +201,9 @@
 .lp-set .lp-tags h3 { margin: 0; font-size: 15px; }
 .lp-tags .pa-hand-why { flex-basis: 100%; font-size: 12px; line-height: 1.4; color: var(--c-muted); white-space: normal; }
 .lp-tags .pa-hand-why.pa-err { color: var(--c-bad-ink); }
+.lp-tags-meta { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--c-muted); }
+.lp-tags-meta .bji { flex: none; margin-top: 1px; }
+.lp-tags-meta.ok { color: var(--c-ok-ink); }
 .lp-min { display: flex; align-items: center; gap: 8px; }
 .lp-min input { width: 110px; }
 .lp-switch { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; cursor: pointer; }

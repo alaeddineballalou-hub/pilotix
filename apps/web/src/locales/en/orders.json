@@ -540,6 +540,8 @@
     "copied": "Copied",
     "noIdAd": "Came from an ad, but with no ID: add the « URL parameters » to each Meta ad (Landing pages › Settings).",
     "noAd": "No ad recognised (direct visit, or an ad without « URL parameters »).",
+    "fromMeta": "Ad found with the numbers Meta adds to the link by itself.",
+    "found": "Ad found by Pilotix among your ads (from one of its numbers).",
     "searchHint": "Tip: type the ad ID in the orders search to see all its orders."
   },
   "pay": {

@@ -11,7 +11,7 @@ import { AppError, call, Ctx, Db } from '../index';
 import { runMeta } from '../meta';
 import { META_TOKEN_KEY, setRaw } from '../modules/admin';
 import { TAG_FIX_H, TAG_TRIES, tagRun } from '../modules/adsmgr';
-import { adTagsLack, feedKey, groupsKey, HAND_URL_TAGS, needsTags, tagKindOf, taggedCopy, tagsLack, withTags } from '../modules/pilotads';
+import { adTagsLack, creaEmpty, feedKey, groupsKey, HAND_URL_TAGS, needsTags, tagKindOf, taggedCopy, tagsLack, URL_TAGS, withTags } from '../modules/pilotads';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -28,7 +28,7 @@ beforeEach(async () => {
 
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 const H = 3_600_000;
-type Ad = { id: string; name: string; campaign: string; adsetId: string; status: string | null; created: string | null; needs: boolean; kind: string };
+type Ad = { id: string; name: string; campaign: string; adsetId: string; status: string | null; created: string | null; needs: boolean; kind: string; empty?: boolean };
 const ad = (id: string, created: string, o: Partial<Ad> = {}): Ad => ({ id, name: `Pub ${id}`, campaign: 'TEST', adsetId: '777', status: 'ACTIVE', created, needs: true, kind: 'spec', ...o });
 
 /** the server as these tests see it: Meta's ads, and every « tag » asked */
@@ -61,6 +61,21 @@ test('the ids an ad misses; the owner’s own parameters are kept, only the miss
     'utm_source=fb&adset_id={{adset.id}}&promo=ete&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&campaign_id={{campaign.id}}&ad_id={{ad.id}}',
   );
   assert.equal(withTags(HAND_URL_TAGS), HAND_URL_TAGS, 'nothing twice');
+});
+
+test('the line: Facebook and Instagram apart (Meta’s {{site_source_name}}), the three ids, on Pilotix’s ads and on the line to paste', () => {
+  for (const line of [URL_TAGS, HAND_URL_TAGS]) {
+    assert.match(line, /^utm_source=\{\{site_source_name\}\}&utm_medium=paid&/);
+    assert.deepEqual(tagsLack(line), []);
+  }
+});
+
+test('nothing at all in an ad’s URL parameters (nor on its links): Meta’s own numbers then find its orders', () => {
+  assert.equal(creaEmpty({ url_tags: '', object_story_spec: { link_data: { link: 'https://x.dz' } } }), true);
+  assert.equal(creaEmpty({}), true);
+  assert.equal(creaEmpty({ url_tags: 'utm_source=fb' }), false);
+  assert.equal(creaEmpty({ asset_feed_spec: { link_urls: [{ website_url: 'https://x.dz', url_tags: '' }] } }), true);
+  assert.equal(creaEmpty({ asset_feed_spec: { link_urls: [{ website_url: 'https://x.dz', url_tags: 'promo=ete' }] } }), false);
 });
 
 test('an ad needs them when it sends people to a website without the ids; Messenger, WhatsApp or a tagged ad does not', () => {
@@ -240,6 +255,22 @@ test('several texts, videos or formats: a new one is given the parameters; one M
   assert.ok(again.missing.some((m) => m.id === '926' && m.why === 'feed'), 'and stays said');
 });
 
+test('a new ad Meta has already shown is left as it is (its learning would start again): listed once, never asked again', async () => {
+  const { server, tags } = fakeServer([ad('925', ago(2 * H), { empty: true }), ad('926', ago(2 * H), { empty: false })], () => ({ done: false, why: 'running' }));
+  const ctx = await owner(server);
+  const s = await tagRun(ctx);
+  assert.deepEqual(
+    s.missing.map((m) => [m.id, m.why, m.empty]).sort(),
+    [
+      ['925', 'running', true],
+      ['926', 'running', false],
+    ],
+    'with whether Meta’s own numbers still find its orders (nothing in its URL parameters)',
+  );
+  await tagRun(ctx);
+  assert.deepEqual(tags, ['925', '926'], 'asked once each');
+});
+
 test('an existing post Meta keeps without the parameters: listed, never tried again; one tagged meanwhile is left alone', async () => {
   const { server, tags } = fakeServer([ad('931', ago(H), { kind: 'post' }), ad('932', ago(H))], (id) => (id === '931' ? { done: false, why: 'post' } : { done: false, why: 'tagged' }));
   const ctx = await owner(server);
@@ -359,15 +390,29 @@ test('Meta: the créa is copied with the parameters, then put on the same ad', a
   assert.deepEqual(r, { done: true, creativeId: '555' });
   assert.deepEqual(
     calls.map((c) => `${c.method} ${c.path}`),
-    ['GET 120200888', 'GET 120200888', 'POST act_123/adcreatives', 'GET 555', 'POST 120200888'],
+    ['GET 120200888', 'GET 120200888/insights', 'GET 120200888', 'POST act_123/adcreatives', 'GET 555', 'POST 120200888'],
   );
-  assert.equal(calls[1].body.fields, 'creative_asset_groups_spec', 'its flexible groups read apart: none here');
-  const made = calls[2].body;
+  assert.equal(calls[1].body.date_preset, 'maximum', 'shown or not, over its whole life');
+  assert.equal(calls[2].body.fields, 'creative_asset_groups_spec', 'its flexible groups read apart: none here');
+  const made = calls[3].body;
   assert.equal(made.url_tags, HAND_URL_TAGS);
   assert.equal(made.object_story_spec.link_data.link, 'https://babyjoydz.net/p');
   assert.equal(made.object_story_spec.link_data.picture, undefined);
-  assert.deepEqual(calls[4].body.creative, { creative_id: '555' });
-  assert.equal(calls[4].body.access_token, 'tok', 'the key in the body, never in the address');
+  assert.deepEqual(calls[5].body.creative, { creative_id: '555' });
+  assert.equal(calls[5].body.access_token, 'tok', 'the key in the body, never in the address');
+});
+
+test('Meta: an ad Meta has shown already (even a little) is not changed: no copy made', async () => {
+  const calls = fakeMeta((c) => {
+    if (c.path === '120200895') return { account_id: '123', name: 'Pub', creative: CREA };
+    if (c.path === '120200895/insights') return { data: [{ impressions: '37' }] };
+    return { id: '999' };
+  });
+  assert.deepEqual(await runMeta('tagAd', { id: '120200895' }, await owner()), { done: false, why: 'running' });
+  assert.deepEqual(
+    calls.map((c) => `${c.method} ${c.path}`),
+    ['GET 120200895', 'GET 120200895/insights'],
+  );
 });
 
 test('Meta: an existing post Meta answers with its old créa is not changed; a tagged ad, another account, a kind not copied neither', async () => {
@@ -375,7 +420,7 @@ test('Meta: an existing post Meta answers with its old créa is not changed; a t
   assert.deepEqual(await runMeta('tagAd', { id: '120200889' }, await owner()), { done: false, why: 'post' });
   assert.deepEqual(
     calls.map((c) => `${c.method} ${c.path}`),
-    ['GET 120200889', 'GET 120200889', 'POST act_123/adcreatives'],
+    ['GET 120200889', 'GET 120200889/insights', 'GET 120200889', 'POST act_123/adcreatives'],
     'the ad itself is never touched',
   );
   calls = fakeMeta(() => ({ account_id: '123', creative: { ...CREA, url_tags: HAND_URL_TAGS } }));
@@ -424,13 +469,13 @@ const onAd = (calls: MetaCall[]) => calls.filter((c) => c.method === 'POST' && c
 test('Meta: several texts, videos or formats are copied with the parameters, then put on the same ad — the copy has the same pieces', async () => {
   const calls = feedMeta();
   assert.deepEqual(await runMeta('tagAd', { id: '120200893' }, await owner()), { done: true, creativeId: '556' });
-  assert.deepEqual(steps(calls), ['GET 120200893', 'GET 120200893', 'POST act_123/adcreatives', 'GET 556', 'POST 120200893']);
-  const made = calls[2].body;
+  assert.deepEqual(steps(calls), ['GET 120200893', 'GET 120200893/insights', 'GET 120200893', 'POST act_123/adcreatives', 'GET 556', 'POST 120200893']);
+  const made = calls[3].body;
   assert.equal(made.url_tags, HAND_URL_TAGS);
   assert.deepEqual(made.object_story_spec, { page_id: '1' });
   assert.deepEqual(made.asset_feed_spec.videos, [{ video_id: '91', thumbnail_hash: 'h1' }]);
   assert.deepEqual(made.asset_feed_spec.bodies, FEED.asset_feed_spec.bodies);
-  assert.equal(calls[3].body.fields, 'url_tags,asset_feed_spec', 'the copy read back whole');
+  assert.equal(calls[4].body.fields, 'url_tags,asset_feed_spec', 'the copy read back whole');
   assert.deepEqual(onAd(calls), ['556']);
 });
 
@@ -450,7 +495,7 @@ test('Meta: a copy that lost a piece, or without the parameters, is never put on
 test('Meta: a flexible ad keeps its groups; if they changed, its old créa is put back at once', async () => {
   let calls = feedMeta({ groups: GROUPS });
   assert.deepEqual(await runMeta('tagAd', { id: '120200893' }, await owner()), { done: true, creativeId: '556' });
-  assert.deepEqual(steps(calls), ['GET 120200893', 'GET 120200893', 'POST act_123/adcreatives', 'GET 556', 'POST 120200893', 'GET 120200893'], 'the groups read again after: the same');
+  assert.deepEqual(steps(calls), ['GET 120200893', 'GET 120200893/insights', 'GET 120200893', 'POST act_123/adcreatives', 'GET 556', 'POST 120200893', 'GET 120200893'], 'the groups read again after: the same');
   calls = feedMeta({ groups: GROUPS, groupsAfter: { groups: [] } });
   assert.deepEqual(await runMeta('tagAd', { id: '120200893' }, await owner()), { done: false, why: 'feed' });
   assert.deepEqual(onAd(calls), ['556', '445'], 'the copy, then the old créa back');
@@ -459,7 +504,7 @@ test('Meta: a flexible ad keeps its groups; if they changed, its old créa is pu
 test('Meta: when Meta does not say a flexible ad’s groups, several texts are left as they are; one photo or video is done as before', async () => {
   const calls = feedMeta({ groupsError: true });
   assert.deepEqual(await runMeta('tagAd', { id: '120200893' }, await owner()), { done: false, why: 'feed' });
-  assert.deepEqual(steps(calls), ['GET 120200893', 'GET 120200893'], 'nothing made, nothing changed');
+  assert.deepEqual(steps(calls), ['GET 120200893', 'GET 120200893/insights', 'GET 120200893'], 'nothing made, nothing changed');
   const one = fakeMeta((c) => {
     if (c.method === 'GET' && c.path === '120200888') return c.body.fields === 'creative_asset_groups_spec' ? { error: { message: 'nonexisting field', code: 100 } } : { account_id: '123', creative: CREA };
     if (c.method === 'POST' && c.path === 'act_123/adcreatives') return { id: '555' };
@@ -496,6 +541,11 @@ test('Meta: the ads read, deleted ones left out, each with whether it needs the 
       ['3', false, 'post', '', '8'],
       ['4', false, 'feed', '', '9'],
     ],
+  );
+  assert.deepEqual(
+    r.ads.map((x: any) => x.empty),
+    [true, true, false],
+    'nothing in its URL parameters: Meta adds its own numbers',
   );
   assert.equal(r.ads[0].created, '2026-11-20T18:30:00+01:00');
 });

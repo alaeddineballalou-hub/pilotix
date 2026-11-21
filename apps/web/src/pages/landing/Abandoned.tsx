@@ -11,7 +11,7 @@ import { Empty, ErrorBox, Field, Icon, Kpi, Kpis, Loading, Pager } from '../../u
 import { Modal } from '../../ui/modal';
 import { Filters, SearchBox } from '../ai/agent';
 import { useDebounced } from '../depot/OrderList';
-import { UtmAdChip } from '../orders/AdSource';
+import { sourceName, UtmAdChip } from '../orders/AdSource';
 
 type Status = 'abandoned' | 'converted' | 'dismissed' | 'all';
 
@@ -105,7 +105,7 @@ export function Abandoned() {
                         {r.variantTitle && <span>{r.variantTitle}</span>}
                         <span className="ltr">{da(total)}</span>
                         {r.slug && <span className="ltr">/{r.slug}</span>}
-                        {r.utm?.utm_source && <span className="chip">{r.utm.utm_source}</span>}
+                        {r.utm?.utm_source && <span className="chip">{sourceName(r.utm.utm_source)}</span>}
                         <UtmAdChip utm={r.utm} />
                       </small>
                     </span>

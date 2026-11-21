@@ -4,7 +4,7 @@
 import { createHash } from 'node:crypto';
 import { getSetting } from './settings';
 import { getRaw, META_TOKEN_KEY } from './modules/admin';
-import { adTagsLack, feedKey, groupsKey, needsTags, tagKindOf, taggedCopy, tagsLack, type LaunchPlan } from './modules/pilotads';
+import { adTagsLack, creaEmpty, feedKey, groupsKey, needsTags, tagKindOf, taggedCopy, tagsLack, type LaunchPlan } from './modules/pilotads';
 import { AppError, Ctx } from './rpc';
 
 /** Meta's current Marketing API (v21.0 ended for ads on 9 Sep 2025; v26.0 came out on 29 Jul 2026). */
@@ -658,7 +658,7 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
    * that cannot be read is left out; all of them failing is an error.
    */
   if (action === 'tagAds') {
-    const out: { id: string; name: string; campaign: string; adsetId: string; status: string | null; created: string | null; needs: boolean; kind: string }[] = [];
+    const out: { id: string; name: string; campaign: string; adsetId: string; status: string | null; created: string | null; needs: boolean; kind: string; empty: boolean }[] = [];
     let read = 0;
     let firstError: unknown = null;
     for (const act of acts) {
@@ -680,6 +680,8 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
             created: x.created_time ? String(x.created_time).replace(/([+-]\d{2})(\d{2})$/, '$1:$2') : null,
             needs: needsTags(x.creative, x.adset?.destination_type),
             kind: tagKindOf(x.creative),
+            // nothing in its URL parameters: Meta adds its own numbers to the link (./modules/landing.ts › metaIdsOf reads them)
+            empty: creaEmpty(x.creative),
           });
         }
         read++;
@@ -695,8 +697,11 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
    * (./modules/pilotads.ts › taggedCopy) and puts it on the same ad: same ad, same ad set, Meta checks the ad again.
    * Several texts, videos or formats ('feed') go on the ad only when Meta's copy shows exactly the same pieces. A flexible
    * ad keeps its groups on the ad itself: they are read before and after, and if they changed, the old créa is put back.
+   * Only an ad Meta has not shown yet: once shown, a new créa sends it back to Meta's check and starts its learning
+   * again (Meta AI, 21 Nov 2026), so it is left as it is ('running').
    * Not done: `why` says the kind Pilotix does not copy (for a 'feed': not copied safely, the ad is as it was), 'tagged'
-   * (it has them by now), or 'post' (an existing post: Meta answered with a créa that still has no parameters).
+   * (it has them by now), 'running' (Meta has shown it already), or 'post' (an existing post: Meta answered with a créa
+   * that still has no parameters).
    */
   if (action === 'tagAd') {
     const a = (args ?? {}) as { id?: string };
@@ -713,6 +718,9 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
     const kind = tagKindOf(c);
     const body = taggedCopy(c, `${String(c.name || ad?.name || 'Pub')} · paramètres d’URL`);
     if (!body) return { done: false, why: kind };
+    // already shown (even once): left as it is, its learning is worth more than the parameters
+    const seen = await graph(`${a.id}/insights`, { fields: 'impressions', date_preset: 'maximum' }, token);
+    if ((Array.isArray(seen?.data) ? seen.data : []).some((r: any) => Number(r?.impressions) > 0)) return { done: false, why: 'running' };
     // the ad's flexible groups, read apart ('' : none; null : Meta did not say — a 'feed' is then left as it is)
     const groupsOf = async (): Promise<string | null> => {
       try {

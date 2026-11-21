@@ -31,6 +31,7 @@ import { CopyCode } from '../../ui/CopyCode';
 import { ScoreChip } from '../../ui/clientScore';
 import { useAllMode } from '../../layout/AllBoutiques';
 import { rightOn, tabOn } from '../../lib/rights';
+import { sourceName } from '../orders/AdSource';
 
 type Row = NonNullable<ReturnType<typeof useList>['data']>['rows'][number];
 type SortKey = 'created_at' | 'confirmed_at' | 'next_call_at' | 'total' | 'customer_name' | 'deadline' | 'score';
@@ -287,7 +288,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
           </>
         );
       case 'source':
-        return <span className="chip">{(r.utm && (r.utm.utm_source || r.utm.source)) || r.source || t('confirmation.direct')}</span>;
+        return <span className="chip">{(r.utm && (sourceName(r.utm.utm_source) || r.utm.source)) || r.source || t('confirmation.direct')}</span>;
       case 'tracking':
         return <CopyCode code={trackOf(r)} />;
       case 'creator':

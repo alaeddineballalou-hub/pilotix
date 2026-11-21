@@ -540,6 +540,8 @@
     "copied": "Copié",
     "noIdAd": "Vient d’une pub, mais sans ID : ajoutez les « Paramètres d’URL » dans chaque pub Meta (Landing pages › Réglages).",
     "noAd": "Pas de pub reconnue (visite directe, ou pub sans « Paramètres d’URL »).",
+    "fromMeta": "Pub retrouvée grâce aux numéros que Meta ajoute lui-même au lien.",
+    "found": "Pub retrouvée par Pilotix parmi vos pubs (avec un seul des numéros).",
     "searchHint": "Astuce : tapez l’ID de la pub dans la recherche des commandes pour voir toutes ses commandes."
   },
   "pay": {

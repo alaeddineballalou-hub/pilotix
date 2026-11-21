@@ -880,7 +880,7 @@
   },
   "tags": {
     "title": "Automatic on your ads",
-    "sub": "Ads launched from Pilotix: always. Ads made in Meta: Pilotix adds them by itself during their first {{h}} hours (Meta reviews the ad once more).",
+    "sub": "Ads launched from Pilotix: always. Ads made in Meta (Flexible too): Pilotix adds them by itself before they start running, during their first {{h}} hours (Meta reviews the ad once more).",
     "switch": "Add the parameters to new ads made in Meta automatically",
     "savedOn": "Pilotix adds the parameters to new ads made in Meta",
     "savedOff": "Off: Pilotix no longer touches ads made in Meta",
@@ -889,9 +889,10 @@
     "fixedTitle": "Added by Pilotix",
     "fixedTag": "+ parameters",
     "missingTitle": "Ads without the parameters",
-    "missingHint": "Their orders don’t know which ad they came from. Paste the line above in Meta: the ad › Tracking › URL parameters.",
+    "missingHint": "Without the parameters, their orders may not know which ad they came from. Paste the line above in Meta: the ad › Tracking › URL parameters.",
     "why": {
       "old": "Made more than {{h}} h ago: add them in Meta",
+      "running": "Already shown: Pilotix leaves it alone (it would restart its learning)",
       "feed": "Several texts, videos or formats Pilotix couldn’t copy safely: add them in Meta",
       "catalog": "Catalogue ad: add them in Meta",
       "other": "This kind of ad: add them in Meta",
@@ -906,6 +907,9 @@
     "checkedNow": "Checked",
     "more": "See the {{n}} others",
     "less": "See less",
-    "demo": "Demo: an example. In your shop, Pilotix reads your real ads at Meta every 15 minutes."
+    "demo": "Demo: an example. In your shop, Pilotix reads your real ads at Meta every 15 minutes.",
+    "emptyField": "empty field: its orders find it with Meta’s own numbers",
+    "metaSeen": "Numbers Meta adds by itself: seen on {{n}} order(s) in the last 30 days.",
+    "metaNotSeen": "Numbers Meta adds by itself: not seen on an order yet. They count when an ad has nothing in its URL parameters."
   }
 }

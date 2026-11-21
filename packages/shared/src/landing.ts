@@ -268,7 +268,9 @@ footer{text-align:center;color:var(--m);font-size:12px;padding:18px;display:flex
 .bk{display:block;background:#fff;border-bottom:1px solid var(--b);padding:10px 14px;font-weight:700;color:var(--c);text-decoration:none;font-size:15px}
 ${EDGE_CSS}`;
 
-// The page's script, kept small and old-browser friendly (no build step on the page itself). Meta's pixel (~94 KB)
+// The page's script, kept small and old-browser friendly (no build step on the page itself). The ad link's parameters
+// are kept for the order (utm_*, click ids, Pilotix's ad ids), and up to 6 long numbers under other names: Meta's own
+// ids, added to the link of an ad without URL parameters (the server finds what they are: core › landing › withAdIds). Meta's pixel (~94 KB)
 // loads after the page: 2.5 s after it, or at the first touch — but never before the photos (a touch while they load
 // waits for them: on 2G / 3G the pixel would otherwise share the line with the main photo).
 // The pixel sends only the events named here (PageView, ViewContent, InitiateCheckout): what it would report by itself
@@ -277,7 +279,7 @@ const JS = `(function(){var C=window.__LP,d=document,$=function(i){return d.getE
 function ar2(s){return String(s||'').replace(/[\\u0660-\\u0669]/g,function(c){return c.charCodeAt(0)-1632}).replace(/[\\u06f0-\\u06f9]/g,function(c){return c.charCodeAt(0)-1776})}
 function nph(v){var p=ar2(v).replace(/[^\\d+]/g,'').replace(/^(\\+|00)213/,'0');return /^[567]\\d{8}$/.test(p)?'0'+p:p}
 var utm={};try{utm=JSON.parse(sessionStorage.getItem('pxu')||'{}')}catch(e){}
-location.search.slice(1).split('&').forEach(function(kv){var p=kv.split('='),k=p.shift(),v=p.join('=').replace(/\\+/g,' ');if(!/^(utm_\\w+|fbclid|ttclid|gclid|ad_id|adset_id|campaign_id|placement|g|px_cat)$/.test(k)||!v)return;try{v=decodeURIComponent(v)}catch(e){}utm[k]=v.slice(0,500)});try{sessionStorage.setItem('pxu',JSON.stringify(utm))}catch(e){}
+var xn=0;location.search.slice(1).split('&').forEach(function(kv){var p=kv.split('='),k=p.shift(),v=p.join('=').replace(/\\+/g,' ');if(!v)return;if(!/^(utm_\\w+|fbclid|ttclid|gclid|ad_id|adset_id|campaign_id|placement|g|px_cat)$/.test(k)&&(!/^\\d{12,20}$/.test(v)||!/^[\\w.-]{1,40}$/.test(k)||xn++>5))return;try{v=decodeURIComponent(v)}catch(e){}utm[k]=v.slice(0,500)});try{sessionStorage.setItem('pxu',JSON.stringify(utm))}catch(e){}
 function ck(n){try{var m=d.cookie.match(new RegExp('(?:^|; )'+n+'=([^;]*)'));return m?m[1]:''}catch(e){return''}}
 var px=C.px,ic=0;if(px){var n=window.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!window._fbq)window._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];
 (C.pxs&&C.pxs.length?C.pxs:[px]).forEach(function(i){fbq('set','autoConfig',false,i);fbq('init',i)});fbq('track','PageView');fbq('track','ViewContent',{content_ids:[String(C.pid)],content_type:'product_group',value:C.price,currency:'DZD'},{eventID:'vc-'+C.vid});

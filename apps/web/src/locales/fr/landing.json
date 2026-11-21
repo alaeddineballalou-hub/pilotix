@@ -880,7 +880,7 @@
   },
   "tags": {
     "title": "Automatique sur vos pubs",
-    "sub": "Pubs lancées depuis Pilotix : toujours. Pubs faites dans Meta : Pilotix les ajoute tout seul pendant leurs {{h}} premières heures (Meta revoit la pub une fois).",
+    "sub": "Pubs lancées depuis Pilotix : toujours. Pubs faites dans Meta (Flexible aussi) : Pilotix les ajoute tout seul avant qu’elles commencent à tourner, pendant leurs {{h}} premières heures (Meta revoit la pub une fois).",
     "switch": "Ajouter les paramètres tout seul aux nouvelles pubs faites dans Meta",
     "savedOn": "Pilotix ajoute les paramètres aux nouvelles pubs faites dans Meta",
     "savedOff": "Arrêté : Pilotix ne touche plus aux pubs faites dans Meta",
@@ -889,9 +889,10 @@
     "fixedTitle": "Ajoutés par Pilotix",
     "fixedTag": "+ paramètres",
     "missingTitle": "Pubs sans les paramètres",
-    "missingHint": "Leurs commandes ne savent pas de quelle pub elles viennent. Collez la ligne ci-dessus dans Meta : la pub › Suivi › Paramètres d’URL.",
+    "missingHint": "Sans les paramètres, leurs commandes risquent de ne pas savoir de quelle pub elles viennent. Collez la ligne ci-dessus dans Meta : la pub › Suivi › Paramètres d’URL.",
     "why": {
       "old": "Faite il y a plus de {{h}} h : à faire dans Meta",
+      "running": "Déjà diffusée : Pilotix n’y touche pas (ça relancerait son apprentissage)",
       "feed": "Plusieurs textes, vidéos ou formats que Pilotix n’a pas pu copier sans risque : à faire dans Meta",
       "catalog": "Pub catalogue : à faire dans Meta",
       "other": "Ce type de pub : à faire dans Meta",
@@ -906,6 +907,9 @@
     "checkedNow": "Vérifié",
     "more": "Voir les {{n}} autres",
     "less": "Voir moins",
-    "demo": "Démo : un exemple. Dans votre boutique, Pilotix lit vos vraies pubs chez Meta toutes les 15 minutes."
+    "demo": "Démo : un exemple. Dans votre boutique, Pilotix lit vos vraies pubs chez Meta toutes les 15 minutes.",
+    "emptyField": "champ vide : ses commandes la trouvent avec les numéros de Meta",
+    "metaSeen": "Numéros ajoutés par Meta lui-même : vus sur {{n}} commande(s) ces 30 derniers jours.",
+    "metaNotSeen": "Numéros ajoutés par Meta lui-même : pas encore vus sur une commande. Ils servent quand une pub n’a rien dans ses paramètres d’URL."
   }
 }

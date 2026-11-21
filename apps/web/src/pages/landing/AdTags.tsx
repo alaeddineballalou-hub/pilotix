@@ -1,7 +1,9 @@
 // Landing pages › Réglages › « Paramètres d’URL »: are they on the shop's ads by themselves? An ad launched from Pilotix
-// has them from the start; a new ad made in Meta's Ads Manager gets them from Pilotix in its first hours (a copy of its
-// créa with them, on the same ad: Meta checks the ad again). The others are listed with the reason, so the owner pastes
-// the line above himself. The owner turns it off or checks now; everything else is core's (ads.tags.*).
+// has them from the start; a new ad made in Meta's Ads Manager (a Flexible one too) gets them from Pilotix before Meta
+// shows it (a copy of its créa with them, on the same ad: Meta checks the ad again). The others are listed with the
+// reason, so the owner pastes the line above himself; one with nothing in its URL parameters still finds its orders
+// with the numbers Meta adds by itself, and the card says when those numbers were really seen on orders.
+// The owner turns it off or checks now; everything else is core's (ads.tags.*).
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { n, since } from '../../lib/format';
@@ -91,7 +93,10 @@ export function AdTagsCard() {
                       <small>{m.campaign}</small>
                     </span>
                     <span className={`pa-hand-tag ${m.status === 'ACTIVE' ? 'run' : ''}`}>{adStatusLabel(m.status, t)}</span>
-                    <small className={`pa-hand-why ${m.why === 'refused' ? 'pa-err' : ''}`}>{t(`landing.tags.why.${m.why}`, { h: d.fixH, why: m.error ?? '' })}</small>
+                    <small className={`pa-hand-why ${m.why === 'refused' ? 'pa-err' : ''}`}>
+                      {t(`landing.tags.why.${m.why}`, { h: d.fixH, why: m.error ?? '' })}
+                      {m.empty ? ` · ${t('landing.tags.emptyField')}` : ''}
+                    </small>
                   </li>
                 ))}
               </ul>
@@ -102,6 +107,12 @@ export function AdTagsCard() {
               )}
             </div>
           )}
+
+          {/* the proof that Meta adds its own numbers: orders that found their ad with them (last 30 days) */}
+          <p className={`lp-tags-meta ${d.metaIdOrders ? 'ok' : ''}`}>
+            <Icon name={d.metaIdOrders ? 'checkcircle' : 'info'} />
+            <span>{d.metaIdOrders ? t('landing.tags.metaSeen', { n: n(d.metaIdOrders) }) : t('landing.tags.metaNotSeen')}</span>
+          </p>
         </>
       )}
 

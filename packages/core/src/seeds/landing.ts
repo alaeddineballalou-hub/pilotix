@@ -277,6 +277,12 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
      FROM (SELECT id, adset_id, name, row_number() OVER (ORDER BY id) - 1 AS k, count(*) OVER () AS n FROM ads) a
      WHERE o.channel = 'landing' AND a.k = o.id % a.n`,
   );
+  // one landing order in seven came from an ad with nothing in its URL parameters: Meta's own numbers on the link
+  // (utm_campaign / utm_term / utm_content), the ids found from them (Réglages › « Automatique sur vos pubs » counts them)
+  await db.query(
+    `UPDATE orders o SET utm = o.utm || jsonb_build_object('utm_source', 'fb', 'utm_campaign', o.utm->>'campaign_id', 'utm_term', o.utm->>'adset_id', 'utm_content', o.utm->>'ad_id', 'px_ids', 'meta')
+     WHERE o.channel = 'landing' AND o.id % 7 = 3 AND o.utm ? 'ad_id'`,
+  );
   // the shop's pixels (Réglages › Pixels), none by default (the pages keep the pixel of Réglages)
   await db.query(
     `INSERT INTO tracking_pixels (platform, name, pixel_id, is_default) VALUES ('meta', 'Pixel principal', '1234567890123456', false), ('meta', 'Pixel bébé (2e compte)', '6543210987654321', false), ('tiktok', 'TikTok bébé', 'CQDEMO1ABC2DEF3GHI4J', false)

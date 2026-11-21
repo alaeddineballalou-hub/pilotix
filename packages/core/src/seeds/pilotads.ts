@@ -219,20 +219,22 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     tries: {},
   });
 
-  // « Paramètres d’URL »: two new ads made in Meta that Pilotix gave the parameters to, and three still without them:
-  // an older one that runs (never touched), one with several texts Pilotix could not copy safely, a catalogue ad
+  // « Paramètres d’URL »: three new ads made in Meta that Pilotix gave the parameters to (a Flexible one too), and three
+  // still without them: an older one that runs, a new one Meta had already shown (never touched: its learning would
+  // start again; nothing in its URL parameters, so Meta's own numbers find its orders), a catalogue ad
   await setRaw(db, 'pilot_ads_tags', {
     on: true,
     checkedAt: iso(4 * M),
     error: null,
     fixed: [
       { id: '120200021', name: 'Poussette pliable — vidéo POV', campaign: 'TEST', adsetId: '120200011', at: iso(25 * M) },
+      { id: '120200016', name: 'Tapis d’éveil — Flexible, 3 accroches', campaign: 'TEST', adsetId: '120200006', at: iso(2 * H) },
       { id: '120200022', name: 'Vélo 16 pouces — avis client', campaign: 'TEST', adsetId: '120200012', at: iso(4 * H) },
     ],
     missing: [
-      { id: '120200015', name: 'Chaise haute — la publication gagnante', campaign: 'SCALE', adsetId: '120200005', status: 'ACTIVE', created: iso(6 * D), why: 'old', error: null },
-      { id: '120200016', name: 'Tapis d’éveil — 3 textes', campaign: 'TEST', adsetId: '120200006', status: 'PENDING_REVIEW', created: iso(2 * H), why: 'feed', error: null },
-      { id: '120200017', name: 'Catalogue — tous les produits', campaign: 'Catalogue', adsetId: '120200006', status: 'PAUSED', created: iso(9 * D), why: 'old', error: null },
+      { id: '120200015', name: 'Chaise haute — la publication gagnante', campaign: 'SCALE', adsetId: '120200005', status: 'ACTIVE', created: iso(6 * D), why: 'old', error: null, empty: false },
+      { id: '120200018', name: 'Bavoirs — vidéo POV', campaign: 'TEST', adsetId: '120200006', status: 'ACTIVE', created: iso(5 * H), why: 'running', error: null, empty: true },
+      { id: '120200017', name: 'Catalogue — tous les produits', campaign: 'Catalogue', adsetId: '120200006', status: 'PAUSED', created: iso(9 * D), why: 'old', error: null, empty: false },
     ],
     tries: {},
   });

@@ -23,8 +23,11 @@ export const GOAL_META: Record<Goal, { objective: string; destination: string | 
   engagement: { objective: 'OUTCOME_ENGAGEMENT', destination: 'ON_POST', optimization: 'POST_ENGAGEMENT', cta: 'LEARN_MORE' },
 };
 
-/** The ad's link carries its ids: the landing page keeps them on the order, so each order knows its ad (and marketer). */
-export const URL_TAGS = 'utm_source=facebook&utm_medium=paid&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}';
+/**
+ * The ad's link carries its ids: the landing page keeps them on the order, so each order knows its ad (and marketer).
+ * utm_source is where the click came from as Meta says it (fb, ig, msg, an, th): Facebook and Instagram apart.
+ */
+export const URL_TAGS = 'utm_source={{site_source_name}}&utm_medium=paid&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}';
 
 /**
  * Meta's automatic changes to the ad: only those that keep the shop's own words and prices (lighting, cropping to each
@@ -525,7 +528,7 @@ export const EVENT_AUDIENCE_DAYS = 180;
  * a new one (./adsmgr.ts › tagRun): the ids tell each order its campaign, ad set and ad (./landing.ts keeps them on
  * the order), the names make the link readable. An ad launched from Pilotix carries URL_TAGS from the start.
  */
-export const HAND_URL_TAGS = 'utm_source=facebook&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}';
+export const HAND_URL_TAGS = 'utm_source={{site_source_name}}&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}';
 /** the three ids an order needs to find its ad */
 export const TAG_ID_KEYS = ['campaign_id', 'adset_id', 'ad_id'] as const;
 
@@ -555,6 +558,15 @@ export function adTagsLack(c: any): string[] {
   const links = Array.isArray(c?.asset_feed_spec?.link_urls) ? c.asset_feed_spec.link_urls.filter((l: any) => l?.website_url) : [];
   if (!own.length || !links.length) return own;
   return own.filter((k) => links.some((l: any) => tagsLack(l?.url_tags).includes(k)));
+}
+
+/**
+ * Nothing at all in the ad's URL parameters (nor on any of its links): Meta adds its own numbers to the link then, and
+ * the order still finds its ad (./landing.ts › metaIdsOf). Said on the card beside an ad Pilotix does not touch.
+ */
+export function creaEmpty(c: any): boolean {
+  const links = Array.isArray(c?.asset_feed_spec?.link_urls) ? c.asset_feed_spec.link_urls : [];
+  return !String(c?.url_tags ?? '').trim() && !links.some((l: any) => String(l?.url_tags ?? '').trim());
 }
 
 /** the owner's own parameters kept as he wrote them, Pilotix's added after them (only those he does not have) */
