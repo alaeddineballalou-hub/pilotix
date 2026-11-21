@@ -19,5 +19,25 @@
   "account": "Compte de {{name}}",
   "newLandingOrder": "🛒 Nouvelle commande {{ref}} (landing page)",
   "newOrder": "🛒 Nouvelle commande {{ref}}",
-  "newOrderIn": "🛒 Nouvelle commande {{ref}} · {{name}}"
+  "newOrderIn": "🛒 Nouvelle commande {{ref}} · {{name}}",
+  "door": {
+    "chip": "Porte de secours",
+    "chipTitle": "Vous êtes sur la porte de secours : cliquez pour en savoir plus",
+    "title": "Porte de secours",
+    "text": "La route habituelle ({{site}}) ne répondait pas, alors Pilotix vous a fait passer par sa porte de secours. C’est le même Pilotix, avec les mêmes données : travaillez normalement.",
+    "stateCut": "{{site}} ne répond toujours pas. On vérifie toutes les 30 secondes.",
+    "stateBack": "{{site}} répond de nouveau : vous y revenez tout seul au prochain changement de page.",
+    "back": "Revenir sur {{site}}",
+    "note": "Rien n’est perdu : vos commandes et vos réglages sont les mêmes des deux côtés.",
+    "msgTitle": "Porte de secours ouverte",
+    "msgSw": "{{site}} ne répondait pas. Pilotix marche normalement ici.",
+    "msgApp": "La route vers {{site}} s’est coupée. Vous continuez ici, sans rien perdre.",
+    "offerTitle": "La route vers {{site}} est coupée",
+    "offerAuto": "Passage par la porte de secours dans {{n}} s…",
+    "offerAsk": "Enregistrez ou copiez ce que vous écrivez, puis passez par la porte de secours.",
+    "offerGoing": "Ouverture de la porte de secours…",
+    "offerGo": "Passer maintenant",
+    "offerStay": "Rester ici",
+    "backToast": "De retour sur {{site}}"
+  }
 }

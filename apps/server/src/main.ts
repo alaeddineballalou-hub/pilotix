@@ -88,7 +88,15 @@ async function bootstrap() {
     .getInstance()
     .addContentTypeParser(['image/jpeg', 'image/png', 'image/webp'], { parseAs: 'buffer' }, (_req: unknown, body: Buffer, done: (e: Error | null, b?: Buffer) => void) => done(null, body));
   app.setGlobalPrefix('api');
-  app.enableCors({ origin: config.corsOrigins, credentials: true });
+  // the backup door (direct.<platform>) asks the main address whether it answers again (web lib/door.ts): one more origin
+  const origins = [...config.corsOrigins];
+  try {
+    const host = new URL(config.publicUrl).hostname;
+    if (host && origins.includes(`https://${host}`) && !origins.includes(`https://direct.${host}`)) origins.push(`https://direct.${host}`);
+  } catch {
+    /* no public address (development): as configured */
+  }
+  app.enableCors({ origin: origins, credentials: true });
   app.enableShutdownHooks();
   // the failed logins counted before an update still count after it
   await keepLimits(config.redisUrl);

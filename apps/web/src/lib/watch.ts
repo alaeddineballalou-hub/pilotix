@@ -8,9 +8,10 @@
  * - a cut (« coupure »): the server could not be reached from this screen for 10 s or more — when it started and
  *   ended, and whether the device itself had lost internet or had internet but could not reach Pilotix (owner's ask,
  *   14 Nov 2026: cuts seen in Algeria while the server and Cloudflare were fine).
+ * - the backup door (« porte de secours », lib/door): each move to it and back, with why.
  * The same problem is told once per 10 minutes per screen; at most 10 a send, every 20 s; nothing in the demo.
  */
-type Kind = 'error' | 'loop' | 'slow' | 'cut';
+type Kind = 'error' | 'loop' | 'slow' | 'cut' | 'door';
 export interface ClientReport {
   kind: Kind;
   page: string;
@@ -110,6 +111,8 @@ async function flush() {
 }
 
 // ---------------------------------------------------------------- coupures (cuts)
+/** Fired on window at every request that got no answer (lib/door listens). */
+export const NET_FAIL = 'px:netfail';
 /** A cut shorter than this is not told (one lost request on a moving phone is not a cut). */
 export const CUT_MIN_MS = 10_000;
 const PROBE_MS = 15_000;
@@ -130,6 +133,8 @@ function connection(): string {
  * `probe`: an address of the server to test every 15 s until it answers again.
  */
 export function noteNetFail(why: string, probe: string) {
+  // the backup door checks the roads (lib/door: the main address cut while the backup door answers)
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(NET_FAIL));
   if (typeof navigator !== 'undefined' && navigator.onLine === false && cut) cut.offline = true;
   if (cut) return;
   cut = { start: Date.now(), why, offline: typeof navigator !== 'undefined' && navigator.onLine === false, probe, timer: null };

@@ -124,6 +124,19 @@ Caddy makes its certificate at the first visit (the server allows that one name,
 to that same address (`BACKUP_DOOR` in `apps/web/src/lib/backend.ts`); Google sign-in is hidden there (e-mail and password).
 The record shows the server's address publicly, as a shop's own domain already does.
 
+**Automatic** (Control room › Réglages › « Porte de secours automatique », on by default): nobody has to know the
+address. On the main address, every browser that opened Pilotix gets a door keeper (`apps/web/public/sw.js`, told by
+`apps/web/src/lib/door.ts`): when a page gives no answer for 5 s (or Cloudflare cannot reach the server, 520–526), it
+shows a small door page that checks both roads and opens the same page at the backup door. A page already open moves
+too when its requests fail while the backup door answers: by itself after 5 s, or with a button when something is being
+typed. People stay logged in: the session is carried by a ticket in the address (`#porte=…`, 2 minutes, once, never the
+session itself: `/api/auth/door/ticket` → `/api/auth/door`). On the backup door a chip in the top bar says so; once the
+main address answers again (twice, 30 s apart), the person goes back at the next change of page (or after 2 minutes
+untouched, never with something typed). Every move is in Control room › Doctor (« Navigateur · porte de secours »).
+The keeper never keeps a copy of the app: pages always come from the server. Test: `node scripts/door-test.mjs`
+(the keeper and the door page; with `API=…`, the tickets too). Not in the phone app, which has its own door
+(`mobile/www/door.js`).
+
 ### Landing pages' own address (go.pilotix.online)
 
 The landing pages (the links in the ads) live at `https://go.<domain>/<store>/<page>`, apart from the app: that address

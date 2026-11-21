@@ -363,6 +363,37 @@ class RemoteBackend implements Backend {
   support<T>(path: string, body?: unknown) {
     return this.req<T>(`/support${path}`, body);
   }
+  /**
+   * The backup door (lib/door): a ticket that carries this session to the other address of the same server (its
+   * `base`: pilotix.online ↔ direct.pilotix.online keep their logins apart). 2 minutes, once; null: none (not logged in,
+   * no answer).
+   */
+  async doorTicket(base: string): Promise<string | null> {
+    if (!this.token || !base) return null;
+    try {
+      const res = await fetch(`${base}/api/auth/door/ticket`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.token}` },
+        body: '{}',
+        cache: 'no-store',
+        credentials: 'omit',
+      });
+      const j = res.ok ? ((await res.json().catch(() => null)) as { ticket?: unknown } | null) : null;
+      return typeof j?.ticket === 'string' ? j.ticket : null;
+    } catch {
+      return null;
+    }
+  }
+  /** The other side of the backup door: the ticket gives this address its own session (the app then resumes it). */
+  async enterThroughDoor(ticket: string): Promise<boolean> {
+    try {
+      const r = await this.req<{ token: string; session: Session }>('/auth/door', { ticket });
+      this.keep(r.token);
+      return true;
+    } catch {
+      return false;
+    }
+  }
   /** Opens the server's demo shop as one of its accounts. */
   async demo(key: string) {
     const r = await this.req<{ token: string; session: Session }>('/auth/demo', { key });

@@ -1,6 +1,6 @@
 // The platform's settings: free trial and grace days, « Bientôt » (features closed for now), sign-ups (open, stores per person), reminders e-mailed before the
-// end, the referral reward, the control room's two-step login, how shops pay you (and the receipts' header), a message to
-// every shop, the terms of use and privacy page, the demo button.
+// end, the referral reward, the control room's two-step login, the automatic backup door, how shops pay you (and the
+// receipts' header), a message to every shop, the terms of use and privacy page, the demo button.
 import type { ShopInfo } from '@pilotix/shared';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -140,6 +140,12 @@ export function Settings({ staff }: { staff: Staff }) {
         <Card title={t('platform.set.secTitle')} help={t('platform.set.secHelp')}>
           <label className="check">
             <input disabled={!owner} type="checkbox" checked={f.security.twoStep} onChange={(e) => setF({ ...f, security: { twoStep: e.target.checked } })} /> {t('platform.set.secTwoStep')}
+          </label>
+        </Card>
+        {/* the backup door (web lib/door): browsers move to direct.<site> by themselves when the site does not answer */}
+        <Card title={t('platform.set.doorTitle')} help={t('platform.set.doorHelp', { site: location.host, direct: `direct.${location.host.replace(/^www\./, '')}` })}>
+          <label className="check">
+            <input disabled={!owner} type="checkbox" checked={f.door?.on ?? true} onChange={(e) => setF({ ...f, door: { on: e.target.checked } })} /> {t('platform.set.doorOn')}
           </label>
         </Card>
         <Card title={t('platform.set.socialTitle')} help={t('platform.set.socialHelp')}>

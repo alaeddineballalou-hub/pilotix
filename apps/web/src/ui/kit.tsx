@@ -115,6 +115,8 @@ EXTRA.zoomin = '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3M11 8v6M8 
 EXTRA.zoomout = '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3M8 11h6"/>';
 // a picture to add (the guide's answers)
 EXTRA.imageplus = '<path d="M16 5h6"/><path d="M19 2v6"/><path d="M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/><circle cx="9" cy="9" r="2"/>';
+// the backup door (ui/DoorChip, public/sw.js draws the same)
+EXTRA.door = '<path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z"/>';
 const ALL = { ...(icons as Record<string, string>), ...EXTRA };
 export type IconName = keyof typeof ALL | string;
 

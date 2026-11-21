@@ -1170,6 +1170,8 @@ export const PLATFORM_REGISTRY = {
       pro: z.object({ on: z.boolean(), price: z.number().int().min(0).max(1_000_000) }).optional(),
       // « Bientôt »: menu items and sub-menus closed in every boutique for now (unknown keys and the always-on ones are dropped)
       soon: z.object({ features: z.array(z.string().max(60)).max(80) }).optional(),
+      // « Porte de secours automatique »: browsers move to the backup door by themselves when the main address is cut
+      door: z.object({ on: z.boolean() }).optional(),
     }),
     async (ctx, i) => {
       if (i.soon) i.soon = { features: cleanSoon(i.soon.features) };
@@ -1185,7 +1187,7 @@ export const PLATFORM_REGISTRY = {
         }
         i.payment = { ...i.payment, alert: cleanPayAlert({ numbers, template: a?.template ?? before.template, lang: a?.lang ?? before.lang }) };
       }
-      for (const k of ['trial', 'payment', 'notice', 'demo', 'signup', 'reminders', 'referral', 'security', 'company', 'legal', 'login', 'social', 'pro', 'soon'] as const) if (i[k]) await setPlatformSetting(ctx.t, k, i[k] as any);
+      for (const k of ['trial', 'payment', 'notice', 'demo', 'signup', 'reminders', 'referral', 'security', 'company', 'legal', 'login', 'social', 'pro', 'soon', 'door'] as const) if (i[k]) await setPlatformSetting(ctx.t, k, i[k] as any);
       await audit(ctx, 'settings.save', null, { keys: Object.keys(i) });
       return platformSettings(ctx.t);
     },

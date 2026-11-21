@@ -111,7 +111,7 @@ const ClientReports = z.object({
   items: z
     .array(
       z.object({
-        kind: z.enum(['error', 'loop', 'slow', 'cut']),
+        kind: z.enum(['error', 'loop', 'slow', 'cut', 'door']),
         page: z.string().max(40),
         message: z.string().min(1).max(300),
         device: z.enum(['phone', 'computer']),
@@ -122,6 +122,10 @@ const ClientReports = z.object({
 });
 /** The store picker's ticket (after the password, before a store is chosen) is signed with its own key. */
 const pickSecret = () => `${config.jwtSecret}:pick`;
+/** The backup door's ticket (a session carried from one address of the server to the other) has its own key too. */
+const doorSecret = () => `${config.jwtSecret}:door`;
+/** How long a door ticket lives: the time to open the other address, no more (it is in that address for a moment). */
+const DOOR_TICKET_LIFE = '2m';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -637,6 +641,65 @@ class ApiController {
     return this.enter(shop, req.session.profile.email);
   }
 
+  // ---------------------------------------------------------------- the backup door (direct.<platform>)
+  /**
+   * Is the automatic backup door on (control room › Réglages)? Asked by the site at its main address: on, the browser's
+   * door keeper (web public/sw.js, lib/door.ts) moves the person to the backup door when the main address gives no answer.
+   */
+  @Public()
+  @Get('door')
+  async doorState() {
+    return { on: (await this.core.settings()).door.on };
+  }
+
+  /**
+   * The backup door's ticket: this session, carried to the other address of the same server (pilotix.online ↔
+   * direct.pilotix.online keep their logins apart, each address its own). It lives 2 minutes and opens once; it carries
+   * no password and no token, and it stops working when the session it came from ends (« Se déconnecter », a new password).
+   */
+  @Post('auth/door/ticket')
+  async doorTicket(@Req() req: ShopRequest) {
+    const h = String(this.httpRequest.headers.authorization || '');
+    const from = await this.jwt.verifyAsync<{ jti?: string; tv?: number }>(h.startsWith('Bearer ') ? h.slice(7) : '').catch(() => null);
+    if (!from) throw new core.AppError('unauthorized', 'Session expirée, reconnectez-vous');
+    const ticket = await this.jwt.signAsync(
+      { typ: 'door', sub: req.session.profile.id, shop: req.shop.shop.id, tv: Number(from.tv ?? 0), from: from.jti ?? null, jti: randomUUID() },
+      { secret: doorSecret(), expiresIn: DOOR_TICKET_LIFE },
+    );
+    return { ticket };
+  }
+
+  /** The other side of the backup door: the ticket gives this address its own session for the same person and store. */
+  @Public()
+  @Post('auth/door')
+  async doorEnter(@Body() body: any, @Req() req: { ip?: string }) {
+    const ipKey = `door:${ipOf(req)}`;
+    checkLogin(ipKey, 30);
+    const refused = () => {
+      failedLogin(ipKey);
+      return new core.AppError('unauthorized', 'Session expirée, reconnectez-vous');
+    };
+    const ticket = typeof body?.ticket === 'string' ? body.ticket : '';
+    if (!ticket || ticket.length > 2000) throw refused();
+    let c: { typ?: string; sub?: number; shop?: number; tv?: number; from?: string | null; jti?: string; exp?: number };
+    try {
+      c = await this.jwt.verifyAsync(ticket, { secret: doorSecret() });
+    } catch {
+      throw refused();
+    }
+    if (c.typ !== 'door' || !c.sub || !c.shop || !c.jti || !c.exp) throw refused();
+    // once: a ticket already used (or the session it came from, ended since) opens nothing
+    if ((await this.core.isRevoked(c.jti)) || (c.from && (await this.core.isRevoked(c.from)))) throw refused();
+    // what the session itself still needs (as AuthGuard checks it): its store open, its account on, its password the same
+    const ref = await this.core.shop({ id: Number(c.shop) });
+    if (!ref || ref.shop.status === 'archived' || ref.shop.status === 'deleted') throw refused();
+    const p = await core.profileById(ref.db, Number(c.sub));
+    if (!p?.active || p.agencyId || (await tokenVersion(ref.db, p.id)) !== Number(c.tv ?? 0)) throw refused();
+    await this.core.revoke(c.jti, new Date(c.exp * 1000));
+    await ref.db.query("UPDATE profiles SET last_seen_at = now(), presence = 'online' WHERE id = $1", [p.id]);
+    return { token: await this.signShop(ref, p.id), session: await this.core.withShop(core.makeSession(p), ref) };
+  }
+
   /** The person's stores (the account menu). */
   @Get('auth/stores')
   async myStores(@Req() req: ShopRequest) {
@@ -724,8 +787,9 @@ class ApiController {
     if (!items.success) throw new core.AppError('bad_request', 'Rapport illisible');
     const role = (req.session.roles ?? []).join('+') || '—';
     for (const r of items.data.items) {
-      const what = r.kind === 'loop' ? 'Boucle' : r.kind === 'slow' ? 'Lent' : r.kind === 'cut' ? 'Coupure' : 'Erreur';
-      doctorState.record(r.kind === 'slow' || r.kind === 'cut' ? 'warn' : 'error', r.kind === 'cut' ? 'Navigateur · coupures' : `Navigateur · ${r.page}`, `[${req.shop.shop.slug}] ${what} : ${r.message} (${role}, ${r.device === 'phone' ? 'téléphone' : 'ordinateur'})`);
+      const what = r.kind === 'loop' ? 'Boucle' : r.kind === 'slow' ? 'Lent' : r.kind === 'cut' ? 'Coupure' : r.kind === 'door' ? 'Porte de secours' : 'Erreur';
+      const source = r.kind === 'cut' ? 'Navigateur · coupures' : r.kind === 'door' ? 'Navigateur · porte de secours' : `Navigateur · ${r.page}`;
+      doctorState.record(r.kind === 'error' || r.kind === 'loop' ? 'error' : 'warn', source, `[${req.shop.shop.slug}] ${what} : ${r.message} (${role}, ${r.device === 'phone' ? 'téléphone' : 'ordinateur'})`);
     }
     return { ok: true };
   }

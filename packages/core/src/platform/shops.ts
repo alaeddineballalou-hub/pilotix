@@ -268,6 +268,12 @@ export interface PlatformSettings {
    * boutique (whatever its plan or its own changes), shown greyed with « Bientôt » in the menu, their actions refused.
    */
   soon: { features: string[] };
+  /**
+   * The backup door (direct.<platform>, without Cloudflare): when the platform's address gives no answer, browsers that
+   * opened Pilotix before move there by themselves, still logged in, and come back once it answers (control room ›
+   * Réglages › « Porte de secours automatique »). Off: nobody is moved; the backup door itself stays open.
+   */
+  door: { on: boolean };
 }
 
 /** « Prévenir sur WhatsApp quand une boutique paie »: the team's numbers (normalised), the Meta template and its language. */
@@ -305,6 +311,7 @@ export const PLATFORM_DEFAULTS: PlatformSettings = {
   app: { minBuild: 0 },
   // Influenceurs is not finished: « Bientôt » until the control room takes it off the list (20 Nov 2026)
   soon: { features: ['marketing/influenceurs'] },
+  door: { on: true },
 };
 
 export async function platformSettings(t: Tenancy): Promise<PlatformSettings> {

@@ -35,6 +35,7 @@ import { installMotion } from './ui/motion';
 import { SelectPicker } from './ui/SelectPicker';
 import { PageGuard } from './ui/PageGuard';
 import { startWatch } from './lib/watch';
+import { arriveThroughDoor, demoDoor, startDoor } from './lib/door';
 import './styles/tokens.css';
 import './styles/legacy.css';
 import './styles/pilotix.css';
@@ -157,6 +158,8 @@ function useTryLink(ready: boolean): boolean {
       .catch(() => {})
       .finally(() => {
         if (gone) return;
+        // « …-porte »: the backup door's look-alike (its chip and message), nothing moves
+        if (link.door) demoDoor();
         go(link.route ? `#/${link.route}` : '#/accueil', { replace: true });
         setLink(null);
       });
@@ -344,6 +347,9 @@ function App() {
   );
 }
 
+// arrived through the backup door with a ticket (#porte=…): this address's own session first (lib/door)
+await arriveThroughDoor();
+
 // the browser watcher: errors, loops and slow actions to Control room › Doctor (only on a real server)
 startWatch(sendClientReport);
 
@@ -369,6 +375,8 @@ createRoot(document.getElementById('root')!).render(
 // the site on its own server moves to each new version by itself (lib/freshness); the preview in Claude has none
 if (PATHS && import.meta.env.PROD) {
   startFreshness();
+  // the backup door: the door keeper told on the main address, the way back on the backup door (lib/door)
+  startDoor();
   // inside the phone app: a newer app offered (or required), lib/appUpdate
   startAppUpdates();
 }

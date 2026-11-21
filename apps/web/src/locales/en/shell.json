@@ -19,5 +19,25 @@
   "account": "{{name}}’s account",
   "newLandingOrder": "🛒 New order {{ref}} (landing page)",
   "newOrder": "🛒 New order {{ref}}",
-  "newOrderIn": "🛒 New order {{ref}} · {{name}}"
+  "newOrderIn": "🛒 New order {{ref}} · {{name}}",
+  "door": {
+    "chip": "Backup door",
+    "chipTitle": "You are on the backup door: click to learn more",
+    "title": "Backup door",
+    "text": "The usual road ({{site}}) was not answering, so Pilotix took you through its backup door. It is the same Pilotix with the same data: keep working as usual.",
+    "stateCut": "{{site}} is still not answering. Checking every 30 seconds.",
+    "stateBack": "{{site}} is answering again: you go back by yourself at the next change of page.",
+    "back": "Go back to {{site}}",
+    "note": "Nothing is lost: your orders and settings are the same on both sides.",
+    "msgTitle": "Backup door open",
+    "msgSw": "{{site}} was not answering. Pilotix works normally here.",
+    "msgApp": "The road to {{site}} was cut. You carry on here without losing anything.",
+    "offerTitle": "The road to {{site}} is cut",
+    "offerAuto": "Going through the backup door in {{n}} s…",
+    "offerAsk": "Save or copy what you are typing, then go through the backup door.",
+    "offerGoing": "Opening the backup door…",
+    "offerGo": "Go now",
+    "offerStay": "Stay here",
+    "backToast": "Back on {{site}}"
+  }
 }

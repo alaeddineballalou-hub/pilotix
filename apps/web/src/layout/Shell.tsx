@@ -22,6 +22,7 @@ import { useCanRules } from '../lib/pilot';
 import { AccountMenu } from './AccountMenu';
 import { BoutiqueSwitch, useBoutiques } from './Boutiques';
 import { ShopBanner } from './ShopBanner';
+import { DoorChip } from '../ui/DoorChip';
 import { PubFooter } from './PubFooter';
 import { AllBanner, useAllMode } from './AllBoutiques';
 import { rightOn, tabOn } from '../lib/rights';
@@ -361,6 +362,8 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
           <span id="page-title" className="page-title">
             {partner ? label(page) : page === 'livraison' && sub === 'livreurs' ? t('nav.sub.livreurs') : t(`nav.${page}`, { defaultValue: '' })}
           </span>
+          {/* the backup door: a chip while Pilotix is opened through it (lib/door) */}
+          <DoorChip />
           {partner && SELLER_PAGES[space].has(page) && <SellerSwitch />}
           {calls && page === 'confirmation' && (!sub || sub === 'nouvelles' || sub === 'attente') && (
             <button type="button" className="btn primary pxs-new pxs-next" title={t('confirmation.next').replace(/\s*[→←]\s*$/, '')} onClick={() => window.dispatchEvent(new Event('px:next-order'))}>
