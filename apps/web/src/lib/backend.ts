@@ -590,6 +590,9 @@ class DemoBackend implements Backend {
     try {
       const out = (await core.call(name as string, ctx as import('@pilotix/core').Ctx, input)) as Out<N>;
       if (DEMO_KEEP.has(name as string) && !this.space) await core.demoSnapshot(db).then((k) => store.set('demo-keep', JSON.stringify(k))).catch(() => {});
+      // as the server does (api.ts: withShop): the session asked again keeps its shop — an agency's or a marketer's own
+      // space stays theirs (without it, the app opened them as a store)
+      if (name === 'me.get' && s.shop) return { ...(out as Session), shop: s.shop } as Out<N>;
       return out;
     } catch (e: any) {
       const status = { forbidden: 403, not_found: 404, bad_request: 400, conflict: 409, unauthorized: 401, payment_required: 402 }[e?.code as string] ?? 500;
