@@ -11,84 +11,63 @@ const SW = readFileSync(new URL('../apps/web/public/sw.js', import.meta.url), 'u
 const fast = (fn, ms = 0, ...a) => setTimeout(fn, Math.max(0, ms / 100), ...a);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** A worker on pilotix.online, with a network that answers as `net(request)` says. */
-function worker(net) {
+/** The site's worker, installed as `script` (« /sw.js?door=1 »: the backup door on), with a network that answers as `net(request)` says. */
+function worker(net, script = 'https://pilotix.online/sw.js?door=1') {
   const handlers = {};
-  const store = new Map();
-  const caches = {
-    open: async () => ({
-      match: async (k) => (store.has(k) ? new Response(store.get(k)) : undefined),
-      put: async (k, r) => void store.set(k, await r.text()),
-    }),
-  };
   const self = {
-    location: new URL('https://pilotix.online/sw.js'),
-    registration: { scope: 'https://pilotix.online/', showNotification: async () => {} },
+    location: new URL(script),
+    registration: { scope: new URL('/', script).href, showNotification: async () => {} },
     clients: { claim: async () => {}, matchAll: async () => [], openWindow: async () => {} },
     crypto: globalThis.crypto,
     skipWaiting: () => {},
     addEventListener: (type, fn) => (handlers[type] = fn),
   };
-  const ctx = vm.createContext({ self, caches, fetch: (req) => net(req), Response, Request, URL, Promise, JSON, Date, Array, Uint8Array, setTimeout: fast, clearTimeout });
+  const ctx = vm.createContext({ self, fetch: (req) => net(req), Response, Request, URL, Promise, JSON, Date, Array, Uint8Array, setTimeout: fast, clearTimeout });
   vm.runInContext(SW, ctx);
-  /** a navigation: what the worker answered (undefined: it let the browser do it) */
+  /** a navigation: what the worker answered (undefined: it let the browser do it, as without a worker) */
   const open = async (url, init = {}) => {
     let answer;
-    const waits = [];
-    handlers.fetch({ request: { url, mode: init.mode ?? 'navigate', method: init.method ?? 'GET' }, respondWith: (p) => (answer = p), waitUntil: (p) => waits.push(p) });
+    handlers.fetch({ request: { url, mode: init.mode ?? 'navigate', method: init.method ?? 'GET' }, respondWith: (p) => (answer = p) });
     return answer === undefined ? undefined : await answer;
   };
-  const tell = async (data) => {
-    const waits = [];
-    handlers.message({ data, waitUntil: (p) => waits.push(p) });
-    await Promise.all(waits);
-  };
+  const tell = (data) => handlers.message({ data });
   return { open, tell };
 }
 const page = (status = 200) => new Response('<html>Pilotix</html>', { status, headers: { 'Content-Type': 'text/html' } });
 const isDoor = async (r) => r && (await r.clone().text()).includes('id="t"') && /nonce-/.test(r.headers.get('Content-Security-Policy') || '');
-const CONF = { type: 'px-door', on: true, main: 'pilotix.online', direct: 'direct.pilotix.online' };
+const slowNet = () => new Promise((r) => fast(() => r(page()), 20_000));
 const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
 
-test('nothing told yet: every page comes from the network, as before', async () => {
-  const w = worker(() => new Promise((r) => fast(() => r(page()), 20_000)));
-  const r = await w.open('https://pilotix.online/maison/commandes');
-  assert.equal(await r.text(), '<html>Pilotix</html>');
+test('the plain worker (switch off, or only for notifications): never touches a page, exactly as before', async () => {
+  for (const script of ['https://pilotix.online/sw.js', 'https://pilotix.online/sw.js?door=0']) {
+    const w = worker(slowNet, script);
+    assert.equal(await w.open('https://pilotix.online/maison/commandes'), undefined, script);
+  }
 });
 test('on, the main road answers: its page', async () => {
   const w = worker(async () => page());
-  await w.tell(CONF);
   const r = await w.open('https://pilotix.online/maison/commandes');
   assert.equal(await r.text(), '<html>Pilotix</html>');
 });
 test('on, 5 s of silence: the door page', async () => {
-  const w = worker(() => new Promise((r) => fast(() => r(page()), 20_000)));
-  await w.tell(CONF);
+  const w = worker(slowNet);
   assert.ok(await isDoor(await w.open('https://pilotix.online/maison/commandes')));
 });
 test('on, the road fails at once: the door page', async () => {
   const w = worker(async () => {
     throw new TypeError('Failed to fetch');
   });
-  await w.tell(CONF);
   assert.ok(await isDoor(await w.open('https://pilotix.online/')));
 });
 test('on, Cloudflare cannot reach the server (522): the door page; a 404 or 500 of the server: its page', async () => {
   const w = worker(async (req) => page(req.url.endsWith('/a') ? 522 : req.url.endsWith('/b') ? 404 : 500));
-  await w.tell(CONF);
   assert.ok(await isDoor(await w.open('https://pilotix.online/a')));
   assert.equal((await w.open('https://pilotix.online/b')).status, 404);
   assert.equal((await w.open('https://pilotix.online/c')).status, 500);
 });
-test('off (control room): every page from the network, however slow', async () => {
-  const w = worker(() => new Promise((r) => fast(() => r(page()), 8_000)));
-  await w.tell({ ...CONF, on: false });
-  assert.equal(await (await w.open('https://pilotix.online/')).text(), '<html>Pilotix</html>');
-});
 test('the server’s own addresses, other names and other methods are never touched', async () => {
   const w = worker(async () => page());
-  await w.tell(CONF);
   for (const u of ['https://pilotix.online/api/oauth/meta/callback?code=x', 'https://pilotix.online/live', 'https://pilotix.online/mcp', 'https://pilotix.online/.well-known/oauth-authorization-server', 'https://pilotix.online/llms.txt'])
     assert.equal(await w.open(u), undefined, u);
   assert.equal(await w.open('https://pilotix.online/', { method: 'POST' }), undefined);
@@ -97,22 +76,21 @@ test('the server’s own addresses, other names and other methods are never touc
   assert.equal(await w.open('https://www.pilotix.online/'), undefined);
   assert.equal(await w.open('https://babyjoydz.net/x'), undefined);
 });
-test('« the main road answers again »: the next pages wait for it as long as it takes', async () => {
-  const w = worker(() => new Promise((r) => fast(() => r(page()), 8_000)));
-  await w.tell(CONF);
-  await w.tell({ type: 'px-door-bypass' });
-  assert.equal(await (await w.open('https://pilotix.online/')).text(), '<html>Pilotix</html>');
+test('the backup door’s own worker never shows a door (even installed with door=1)', async () => {
+  const w = worker(slowNet, 'https://direct.pilotix.online/sw.js?door=1');
+  assert.equal(await w.open('https://direct.pilotix.online/maison/commandes'), undefined);
 });
-test('a wrong message is ignored (no door on someone else’s address)', async () => {
-  const w = worker(() => new Promise((r) => fast(() => r(page()), 8_000)));
-  for (const bad of [{ ...CONF, direct: 'evil.example/x' }, { ...CONF, main: '' }, { ...CONF, on: 'yes' }, { type: 'px-door' }]) await w.tell(bad);
-  assert.equal(await (await w.open('https://pilotix.online/')).text(), '<html>Pilotix</html>');
+test('« the main road answers again »: the next pages go to the network as without a worker, for a minute', async () => {
+  const w = worker(slowNet);
+  w.tell({ type: 'px-door-bypass' });
+  assert.equal(await w.open('https://pilotix.online/'), undefined);
+  w.tell({ type: 'something else' });
+  w.tell(null);
 });
 test('the door page: its own strict rules, one script with the same nonce, the addresses written safely', async () => {
   const w = worker(async () => {
     throw new TypeError('x');
   });
-  await w.tell(CONF);
   const r = await w.open('https://pilotix.online/');
   const csp = r.headers.get('Content-Security-Policy');
   const nonce = /'nonce-([0-9a-f]{32})'/.exec(csp)[1];
@@ -130,7 +108,6 @@ async function doorPage() {
   const w = worker(async () => {
     throw new TypeError('x');
   });
-  await w.tell(CONF);
   const html = await (await w.open('https://pilotix.online/maison/commandes?x=1')).text();
   return /<script nonce="[0-9a-f]+">([\s\S]*?)<\/script>/.exec(html)[1];
 }

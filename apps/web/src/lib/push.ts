@@ -11,6 +11,9 @@ const b64 = (s: string) => {
 };
 
 async function registration() {
+  // the site's worker already there (lib/door installs it as « sw.js?door=1 » with the backup door on): the same one
+  const had = await navigator.serviceWorker.getRegistration();
+  if (had) return had;
   // next to the site's index.html (/sw.js on the site, whatever page's address is open: /<boutique>/commandes/…)
   return navigator.serviceWorker.register(new URL(`${import.meta.env.BASE_URL}sw.js`, document.baseURI).href);
 }

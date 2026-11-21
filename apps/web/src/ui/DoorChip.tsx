@@ -17,17 +17,29 @@ export function DoorChip() {
   const { t } = useTranslation();
   const v = useSyncExternalStore(onDoorView, doorView);
   const [open, setOpen] = useState(false);
+  /** the details open toward the end of the line when there is no room toward its start (the chip at the right of a tablet's bar) */
+  const [toEnd, setToEnd] = useState(false);
   const [msg, setMsg] = useState(false);
   const box = useRef<HTMLSpanElement>(null);
   const site = siteName();
 
   // just arrived: the message for 5 seconds, then the chip alone
   useEffect(() => {
+    setMsg(!!v.arrived);
     if (!v.arrived) return;
-    setMsg(true);
     const id = setTimeout(() => setMsg(false), 5000);
     return () => clearTimeout(id);
   }, [v.arrived]);
+
+  const toggle = () => {
+    if (!open && box.current) {
+      const r = box.current.getBoundingClientRect();
+      const rtl = getComputedStyle(box.current).direction === 'rtl';
+      setToEnd((rtl ? r.right : window.innerWidth - r.left) < 356);
+    }
+    setMsg(false);
+    setOpen(!open);
+  };
 
   // a click outside or Escape closes the details
   useEffect(() => {
@@ -56,14 +68,14 @@ export function DoorChip() {
             aria-expanded={open}
             aria-haspopup="dialog"
             title={t('shell.door.chipTitle')}
-            onClick={() => setOpen(!open)}
+            onClick={toggle}
           >
             <Icon name="door" />
             <span className="px-door-l">{t('shell.door.chip')}</span>
             <span className="px-door-dot" aria-hidden="true" />
           </button>
           {open && (
-            <div className="px-door-pop" role="dialog" aria-label={t('shell.door.title')}>
+            <div className={`px-door-pop${toEnd ? ' to-end' : ''}`} role="dialog" aria-label={t('shell.door.title')}>
               <div className="px-door-pop-h">
                 <span className="px-door-ic">
                   <Icon name="door" />

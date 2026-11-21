@@ -22,6 +22,8 @@
   padding: 16px; border-radius: 16px; background: var(--surface); color: var(--ink); border: 1px solid var(--line);
   box-shadow: 0 14px 40px rgba(16, 24, 40, .18); font-size: 14px; line-height: 1.5; white-space: normal;
 }
+/* no room toward the start of the line (the chip at the far side of a tablet's top bar): the details open the other way */
+.px-door-pop.to-end { inset-inline-start: auto; inset-inline-end: 0; }
 .px-door-pop p { margin: 8px 0 0; }
 .px-door-pop-h { display: flex; align-items: center; gap: 10px; font-size: 15px; }
 .px-door-ic { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px; display: inline-grid; place-items: center; background: var(--c-accent-tint); color: var(--c-accent-ink); }

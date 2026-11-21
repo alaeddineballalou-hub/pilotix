@@ -43,56 +43,27 @@ self.addEventListener('notificationclick', (e) => {
 });
 
 // ---------------------------------------------------------------- the door keeper
+// On only when the site registered this worker as « sw.js?door=1 » (lib/door.ts, the control room's switch on), and
+// only at the site's main address: otherwise this worker never touches a page, exactly as before.
+const DOOR = new URL(self.location.href).searchParams.get('door') === '1' && !self.location.hostname.startsWith('direct.');
+const MAIN = self.location.hostname;
+const DIRECT = 'direct.' + MAIN.replace(/^www\./, '');
 /** The main address's silence after which the door page is shown (the page then checks both roads itself). */
 const DOOR_WAIT_MS = 5000;
-/** The door's settings, as the site last told them (lib/door.ts): { on, main, direct }. Nothing told: the keeper sleeps. */
-const DOOR_CACHE = 'px-door';
-const DOOR_KEY = '/__px-door.json';
-let door = null;
 /** « The main road answers again »: the door page asks the next page loads to wait for it as long as it takes. */
 let bypassUntil = 0;
 
-const HOST = /^[a-z0-9.-]{1,253}$/;
-function cleanDoor(d) {
-  if (!d || typeof d !== 'object' || typeof d.on !== 'boolean' || !HOST.test(String(d.main)) || !HOST.test(String(d.direct))) return null;
-  return { on: d.on, main: String(d.main), direct: String(d.direct) };
-}
-
-async function doorConfig() {
-  if (door) return door;
-  try {
-    const c = await caches.open(DOOR_CACHE);
-    const r = await c.match(DOOR_KEY);
-    door = (r && cleanDoor(await r.json())) || { on: false, main: '', direct: '' };
-  } catch (_) {
-    door = { on: false, main: '', direct: '' };
-  }
-  return door;
-}
-
 self.addEventListener('message', (e) => {
-  const d = e.data || {};
-  if (d.type === 'px-door') {
-    const conf = cleanDoor(d);
-    if (!conf) return;
-    door = conf;
-    e.waitUntil(
-      caches
-        .open(DOOR_CACHE)
-        .then((c) => c.put(DOOR_KEY, new Response(JSON.stringify(conf), { headers: { 'Content-Type': 'application/json' } })))
-        .catch(() => {}),
-    );
-  } else if (d.type === 'px-door-bypass') {
-    bypassUntil = Date.now() + 60_000;
-  }
+  if (e.data && e.data.type === 'px-door-bypass') bypassUntil = Date.now() + 60_000;
 });
 
 /** Addresses that are not pages of the app (the server's own: logins with Google or Meta come back there): never touched. */
 const NOT_A_PAGE = /^\/(api|live|mcp|\.well-known)(\/|$)|^\/llms\.txt$/;
 
 self.addEventListener('fetch', (e) => {
+  if (!DOOR) return;
   const req = e.request;
-  if (req.mode !== 'navigate' || req.method !== 'GET') return;
+  if (req.mode !== 'navigate' || req.method !== 'GET' || Date.now() < bypassUntil) return;
   let url;
   try {
     url = new URL(req.url);
@@ -100,18 +71,11 @@ self.addEventListener('fetch', (e) => {
     return;
   }
   if (url.origin !== self.location.origin || NOT_A_PAGE.test(url.pathname)) return;
-  e.respondWith(openPage(req, url));
+  e.respondWith(openPage(req));
 });
 
-async function openPage(req, url) {
-  let conf = null;
-  try {
-    conf = await doorConfig();
-  } catch (_) {
-    conf = null;
-  }
-  if (!conf || !conf.on || conf.main !== url.hostname || Date.now() < bypassUntil) return fetch(req);
-  // the main road: its answer, or the door page after 5 s of silence, a failure, or Cloudflare not reaching the server
+/** The main road: its answer, or the door page after 5 s of silence, a failure, or Cloudflare not reaching the server. */
+async function openPage(req) {
   const net = fetch(req);
   let timer = null;
   const late = new Promise((resolve) => {
@@ -122,20 +86,20 @@ async function openPage(req, url) {
     if (timer) clearTimeout(timer);
     if (!r) {
       net.catch(() => {});
-      return doorPage(conf, 'sw');
+      return doorPage('sw');
     }
-    if (r.status >= 520 && r.status <= 526) return doorPage(conf, 'sw');
+    if (r.status >= 520 && r.status <= 526) return doorPage('sw');
     return r;
   } catch (_) {
     if (timer) clearTimeout(timer);
-    return doorPage(conf, 'sw');
+    return doorPage('sw');
   }
 }
 
 /** The door page: drawn here (no file to load: the road may be cut), its script runs once, with its own strict rules. */
-function doorPage(conf, why) {
+function doorPage(why) {
   const nonce = Array.from(self.crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
-  const json = JSON.stringify({ main: conf.main, direct: conf.direct, why }).replace(/</g, '\\u003c');
+  const json = JSON.stringify({ main: MAIN, direct: DIRECT, why }).replace(/</g, '\\u003c');
   const html = DOOR_HTML.replace(/__NONCE__/g, () => nonce).replace('__CONF__', () => json);
   return new Response(html, {
     status: 200,
@@ -186,9 +150,11 @@ button{margin-top:18px;border:0;border-radius:12px;padding:12px 20px;font:inheri
     ar: { t: 'الباب الاحتياطي', checking: 'الطريق إلى Pilotix لا يستجيب. نجرّب الباب الاحتياطي…', opening: 'وجدنا الباب الاحتياطي. جارٍ فتح Pilotix…', none: 'Pilotix لا يستجيب حاليًا', noneSub: 'تحقّق من الإنترنت. محاولة جديدة تلقائيًا بعد ثوانٍ.', retry: 'أعد المحاولة', note: 'نفس Pilotix ونفس البيانات: لا شيء يضيع.' }
   };
   var get = function (k) { try { return localStorage.getItem('px.' + k); } catch (_) { return null; } };
-  var lang = (get('lang') || navigator.language || 'fr').slice(0, 2);
-  var T = TX[lang] || TX.fr;
-  document.documentElement.lang = TX[lang] ? lang : 'fr';
+  // the app's own language (French unless the person chose English or Arabic, as lib/i18n)
+  var lang = get('lang');
+  if (lang !== 'en' && lang !== 'ar') lang = 'fr';
+  var T = TX[lang];
+  document.documentElement.lang = lang;
   document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
   var $ = function (id) { return document.getElementById(id); };
   $('t').textContent = T.t; $('r').textContent = T.retry; $('n').textContent = T.note;

@@ -1,7 +1,7 @@
 // The backup door (« porte de secours », owner's ask, 21 Nov 2026). Cloudflare's road from a country, or from one
 // internet company, is sometimes cut while the server is fine (the cuts of Nov. 2026 in Algeria). The same app and
 // server also answer at direct.<site>, without Cloudflare (README › Backup door). Pilotix uses it by itself:
-// - on the main address: the browser's door keeper (public/sw.js) is told whether it is on (Control room › Réglages ›
+// - on the main address: the browser's door keeper (public/sw.js) is installed while it is on (Control room › Réglages ›
 //   « Porte de secours automatique »). When a page of Pilotix gives no answer for 5 s, the keeper shows a door page that
 //   opens the same page at the backup door. And when Pilotix is already open and the road gets cut while the backup door
 //   answers, the person is moved there: by itself after 5 s (ui/DoorChip), or with a button when something is being typed;
@@ -159,14 +159,15 @@ async function keepDoor() {
   if (on) window.addEventListener(NET_FAIL, () => void roadFailed());
 }
 
-/** The door keeper (public/sw.js) learns the choice and the two addresses; off: it lets every page through as before. */
+/**
+ * The door keeper (public/sw.js) is the browser's worker of the site, installed as « sw.js?door=1 » while the switch is
+ * on; off, the plain « sw.js » (kept only where it already was, for the notifications) never touches a page.
+ */
 async function tellKeeper(on: boolean) {
-  if (!('serviceWorker' in navigator) || !mainHost()) return;
+  if (!('serviceWorker' in navigator)) return;
   try {
-    const reg = on ? await navigator.serviceWorker.register('/sw.js') : await navigator.serviceWorker.getRegistration('/');
-    if (!reg) return;
-    const ready = await navigator.serviceWorker.ready;
-    ready.active?.postMessage({ type: 'px-door', on, main: mainHost(), direct: `direct.${mainHost()}` });
+    if (on) await navigator.serviceWorker.register('/sw.js?door=1');
+    else if (await navigator.serviceWorker.getRegistration('/')) await navigator.serviceWorker.register('/sw.js');
   } catch {
     /* no worker here (private mode, an old browser): the move inside the app still works */
   }
@@ -256,3 +257,10 @@ export async function goBack() {
 export function demoDoor() {
   set({ here: true, arrived: 'sw', mainBack: false, offer: null, demo: true });
 }
+
+// the preview only, from the console (pictures of each state): pxDoor('here' | 'back' | 'offer' | 'ask')
+if (DEMO_ONLY && typeof window !== 'undefined')
+  (window as unknown as { pxDoor?: (k: string) => void }).pxDoor = (k) => {
+    if (k === 'offer' || k === 'ask') set({ here: false, arrived: null, mainBack: false, offer: k === 'offer' ? 'auto' : 'ask', demo: true });
+    else set({ here: true, arrived: k === 'back' ? null : 'sw', mainBack: k === 'back', offer: null, demo: true });
+  };
