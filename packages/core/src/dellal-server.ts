@@ -1637,7 +1637,8 @@ export function parseMetaWebhook(body: any): Incoming[] {
             });
           continue;
         }
-        if (!m || m.is_echo || !ev?.sender?.id) continue;
+        // is_deleted: the customer took a message back (parseMetaUnsends), never a new message
+        if (!m || m.is_echo || m.is_deleted || !ev?.sender?.id) continue;
         const atts: any[] = Array.isArray(m.attachments) ? m.attachments : [];
         const att = atts[0] ?? null;
         // Messenger's stickers (the thumbs up) come as an image with a sticker id: a sticker, not a photo
@@ -1743,6 +1744,23 @@ export function parseMetaEdits(body: any): { channel: 'messenger' | 'instagram';
       const text = String(e?.text ?? '').trim();
       if (!e?.mid || !text || !ev?.sender?.id) continue;
       out.push({ channel: obj === 'page' ? 'messenger' : 'instagram', externalId: String(ev.sender.id), messageId: String(e.mid).slice(0, 200), text: text.slice(0, 4000) });
+    }
+  return out;
+}
+
+/**
+ * A customer took a message back (Instagram's « unsend »: a « messages » event whose message is only { mid, is_deleted }).
+ * Pilotix wipes its words, photo and voice note (dellal › unsentMessage), as Meta asks of an inbox.
+ */
+export function parseMetaUnsends(body: any): { channel: 'messenger' | 'instagram'; externalId: string; messageId: string }[] {
+  const obj = body?.object;
+  if (obj !== 'page' && obj !== 'instagram') return [];
+  const out: ReturnType<typeof parseMetaUnsends> = [];
+  for (const entry of Array.isArray(body?.entry) ? body.entry : [])
+    for (const ev of Array.isArray(entry?.messaging) ? entry.messaging : []) {
+      const m = ev?.message;
+      if (!m?.is_deleted || !m?.mid || m.is_echo || !ev?.sender?.id) continue;
+      out.push({ channel: obj === 'page' ? 'messenger' : 'instagram', externalId: String(ev.sender.id), messageId: String(m.mid).slice(0, 200) });
     }
   return out;
 }

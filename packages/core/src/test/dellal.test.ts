@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, ServerHooks } from '../index';
-import { catchUpMeta, chunks, missedMessages, parseMetaAdIssues, parseMetaEdits, parseMetaReactions, parseMetaWebhook, runDellal, uniAccounts } from '../dellal-server';
+import { UNSENT_BODY } from '@pilotix/shared';
+import { catchUpMeta, chunks, missedMessages, parseMetaAdIssues, parseMetaEdits, parseMetaReactions, parseMetaUnsends, parseMetaWebhook, runDellal, uniAccounts } from '../dellal-server';
 import { getRaw, setRaw } from '../modules/admin';
 import { findPlace, playbookFor } from '../modules/dellal';
 import { checkDarija, fixDarija, parseAvoid } from '../modules/darija';
@@ -1160,6 +1161,56 @@ test('Messenger: an edited message takes its new text (the first one kept), a re
   assert.equal((await db.query(`SELECT meta FROM conv_messages WHERE external_id = 'm_out_1'`))[0].meta?.reaction, undefined);
   // an edit of a message nobody knows: nothing
   assert.equal(await call('dellal.edited', sys, { ...edits[0], messageId: 'nope' }), null);
+});
+
+test('Instagram: a message the customer unsends loses its words, photos and preview; Dellal answers none of it', async () => {
+  const admin = await as(EMAILS.admin);
+  const g: any = await call('dellal.settings.get', admin, {});
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, nightReplies: true, secrets: { ai: 'sk-ant-test-1234567890' } });
+  const asked: any[] = [];
+  const sent: any[] = [];
+  const server = fakeServer([], sent);
+  server.dellal = async (action, args) =>
+    action === 'send' ? (sent.push(args), { ok: true, messageId: `ig_out_${sent.length}` }) : action === 'complete' ? (asked.push(args), { content: [{ type: 'text', text: 'Mrahba bik 👋' }], stop_reason: 'end_turn' }) : { ok: false, error: 'media' };
+  const sys = await as(EMAILS.admin, server);
+  const who = { channel: 'instagram' as const, externalId: 'igsid-unsend', accountId: 'ig-acc' };
+  const r: any = await call('dellal.receive', sys, { ...who, text: 'Karim, Blida, la poussette rouge', messageId: 'ig_in_1' });
+  // two photos sent together: one message for Meta (ids mid, mid#2 here)
+  for (const [id, url] of [['ig_in_2', 'https://scontent.cdninstagram.com/a.jpg'], ['ig_in_2#2', 'https://scontent.cdninstagram.com/b.jpg']])
+    await call('dellal.receive', sys, { ...who, text: '[photo envoyée]', messageId: id, media: { kind: 'image', url } });
+  // the webhook's shape: an unsend is never taken as a new message
+  const hook = (mid: string) => ({ object: 'instagram', entry: [{ id: 'ig-acc', time: 1, messaging: [{ sender: { id: 'igsid-unsend' }, recipient: { id: 'ig-acc' }, timestamp: 1, message: { mid, is_deleted: true } }] }] });
+  assert.deepEqual(parseMetaWebhook(hook('ig_in_1')), []);
+  assert.deepEqual(parseMetaUnsends(hook('ig_in_1')), [{ channel: 'instagram', externalId: 'igsid-unsend', messageId: 'ig_in_1' }]);
+  assert.deepEqual(parseMetaUnsends({ object: 'instagram', entry: [{ messaging: [{ sender: { id: 'x' }, message: { mid: 'm', text: 'salam' } }] }] }), [], 'a plain message is no unsend');
+  // the photos go together; the list stops showing them
+  const u: any = await call('dellal.unsent', sys, parseMetaUnsends(hook('ig_in_2'))[0]);
+  assert.equal(u.conversationId, r.conversationId);
+  assert.equal(u.messageIds.length, 2);
+  assert.equal((await db.query('SELECT last_preview FROM conversations WHERE id = $1', [r.conversationId]))[0].last_preview, UNSENT_BODY);
+  await call('dellal.unsent', sys, parseMetaUnsends(hook('ig_in_1'))[0]);
+  const rows = await db.query(`SELECT body, meta FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' ORDER BY id`, [r.conversationId]);
+  assert.equal(rows.length, 3, 'the rows stay: a late copy of the same message is not taken again');
+  for (const x of rows) {
+    assert.equal(x.body, UNSENT_BODY);
+    assert.deepEqual(Object.keys(x.meta), ['unsent'], 'no photo, voice note, first text or reaction left');
+  }
+  const all = JSON.stringify(await db.query('SELECT * FROM conv_messages WHERE conversation_id = $1', [r.conversationId]));
+  assert.ok(!all.includes('poussette rouge') && !all.includes('cdninstagram'), 'their words and photos are gone');
+  assert.equal(await call('dellal.receive', sys, { ...who, text: 'Karim, Blida, la poussette rouge', messageId: 'ig_in_1' }), null, 'Meta sends it again: not taken again');
+  // nothing left to answer: Dellal stays quiet
+  const out: any = await call('dellal.answer', sys, { id: r.conversationId });
+  assert.deepEqual([out.reply, out.skipped, asked.length, sent.length], [null, 'Le client a retiré son message', 0, 0]);
+  // twice, or a message nobody knows: nothing
+  assert.equal(await call('dellal.unsent', sys, parseMetaUnsends(hook('ig_in_1'))[0]), null);
+  assert.equal(await call('dellal.unsent', sys, { ...parseMetaUnsends(hook('ig_in_1'))[0], messageId: 'nope' }), null);
+  // the customer writes again: Dellal answers, and reads that messages were taken back, never their words
+  await call('dellal.receive', sys, { ...who, text: 'salam', messageId: 'ig_in_3' });
+  await call('dellal.answer', sys, { id: r.conversationId });
+  const read = asked.map((a) => JSON.stringify(a.messages ?? '')).find((s) => s.includes('salam')) ?? '';
+  assert.match(read, /le client a retiré ce message/);
+  assert.doesNotMatch(read, /poussette rouge|cdninstagram/);
+  await call('dellal.settings.save', admin, { ...g.settings, secrets: {} });
 });
 
 test('ad account webhooks: a rejected ad warns in Co-Pilot until Meta says it runs again', async () => {

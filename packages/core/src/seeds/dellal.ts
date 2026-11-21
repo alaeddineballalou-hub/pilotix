@@ -1,3 +1,4 @@
+import { UNSENT_BODY } from '@pilotix/shared';
 import type { Db } from '../db';
 import { num } from '../db';
 
@@ -83,6 +84,15 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
         ['customer', 'ghalia chwiya 8900'],
         ['tool', `product_guide #${chair} → guide de vente lu`],
         ['agent', 'Nfahmek 🙏 Bessah hiya tkhdem fi blasset 3 : chaise haute, korsi sghir w tabla. W tkhalsi ghir ki testalmi. Nsajjelhalek ?'],
+      ],
+    },
+    // she took her last message back (Instagram « unsend »): its words are gone, the screens say so; Dellal does not answer it
+    {
+      channel: 'instagram', ext: 'ig-demo-2', name: '@sara.dz', mode: 'ai', at: now - 6 * 60_000,
+      msgs: [
+        ['customer', 'Salam, la poussette kayna f l gris ?'],
+        ['agent', 'Wa alikoum salam 😊 Ih, kayna f gris ✅ Mnin nti ?'],
+        ['customer', UNSENT_BODY, undefined, { unsent: { at: iso(now - 6 * 60_000) } }],
       ],
     },
     {

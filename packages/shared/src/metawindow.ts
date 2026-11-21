@@ -45,3 +45,10 @@ export function staffWindow(channel: string, lastCustomerAt: string | null | und
   if (replyWindow(channel, lastCustomerAt, now, adWindowUntil) === 'open') return 'open';
   return humanAgent && now - ms(lastCustomerAt) <= META_HUMAN_DAYS * 24 * HOUR ? 'human' : 'closed';
 }
+
+/**
+ * A message the customer took back (Instagram's « unsend »: Meta's webhook says is_deleted). Its words, photo and voice note
+ * are wiped; this stands in their place in the conversation and in the list, and the screens show « removed by the
+ * customer ».
+ */
+export const UNSENT_BODY = '[message retiré]';

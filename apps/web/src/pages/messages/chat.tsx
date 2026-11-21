@@ -126,9 +126,16 @@ export function Bubbles({
           {/* a photo: Pilot AI looked at it (what it shows, the product) before Dellal read it */}
           {m.role === 'customer' && m.meta?.photo && <PhotoLine p={m.meta.photo} />}
           {m.role === 'agent' && Array.isArray(m.meta?.photos) && <SentPhotos photos={m.meta.photos} />}
-          <span className="ai-txt" dir="auto">
-            {m.role === 'customer' && m.meta?.photo ? String(m.body).replace(/^\[photo(?: envoyée)?\]\s*/, '') : m.role === 'agent' && Array.isArray(m.meta?.photos) ? String(m.body).replace(/^📷\s*/, '').replace(/\s*\(\d+\)$/, '') : m.body}
-          </span>
+          {/* the customer took this message back (Instagram « unsend »): its words are gone, only this stays */}
+          {m.role === 'customer' && m.meta?.unsent ? (
+            <span className="ai-txt ai-unsent">
+              <Icon name="ban" /> {t('messages.thread.unsent')}
+            </span>
+          ) : (
+            <span className="ai-txt" dir="auto">
+              {m.role === 'customer' && m.meta?.photo ? String(m.body).replace(/^\[photo(?: envoyée)?\]\s*/, '') : m.role === 'agent' && Array.isArray(m.meta?.photos) ? String(m.body).replace(/^📷\s*/, '').replace(/\s*\(\d+\)$/, '') : m.body}
+            </span>
+          )}
           {/* the customer changed this message (Messenger): the first text stays readable for the team */}
           {m.meta?.edited && (
             <span className="ai-edited">

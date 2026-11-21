@@ -1972,11 +1972,14 @@ class ApiController {
     const statuses: any[] = m?.parseWhatsAppStatuses ? m.parseWhatsAppStatuses(body) : [];
     // the ads' lead forms of a Page linked by hand (its own Meta app)
     const leads: any[] = !linked && m?.parseMetaLeads ? m.parseMetaLeads(body) : [];
+    // Instagram: a customer took a message back (« unsend »): its words go from Pilotix too
+    const unsends: any[] = !linked && m?.parseMetaUnsends ? m.parseMetaUnsends(body) : [];
     void this.handleIncoming(ref, list);
     void this.handleComments(ref, comments);
     void this.handleStatuses(ref, statuses);
     void this.handleLeads(ref, leads);
-    return { ok: true, received: list.length + comments.length + statuses.length + leads.length };
+    void this.handleEdits(ref, [], [], unsends);
+    return { ok: true, received: list.length + comments.length + statuses.length + leads.length + unsends.length };
   }
 
   // ---------------------------------------------------------------- linked accounts (Pilot AI › Comptes)
@@ -2069,16 +2072,18 @@ class ApiController {
       // a customer changed a message, or reacted to one (❤️ 👍); an ad account's ad was rejected or has a problem
       const edits: any[] = m?.parseMetaEdits ? m.parseMetaEdits(r.body) : [];
       const reactions: any[] = m?.parseMetaReactions ? m.parseMetaReactions(r.body) : [];
+      // Instagram: a customer took a message back (« unsend »): its words go from Pilotix too
+      const unsends: any[] = m?.parseMetaUnsends ? m.parseMetaUnsends(r.body) : [];
       const adIssues: any[] = m?.parseMetaAdIssues ? m.parseMetaAdIssues(r.body) : [];
       // « Connecter WhatsApp »: what became of the boutique's WhatsApp messages (delivered, read, failed → SMS)
       const statuses: any[] = m?.parseWhatsAppStatuses ? m.parseWhatsAppStatuses(r.body) : [];
       void this.handleIncoming(ref, list);
       void this.handleComments(ref, comments);
       void this.handleLeads(ref, leads);
-      void this.handleEdits(ref, edits, reactions);
+      void this.handleEdits(ref, edits, reactions, unsends);
       void this.handleAdIssues(ref, adIssues);
       void this.handleStatuses(ref, statuses);
-      received += list.length + comments.length + leads.length + edits.length + reactions.length + adIssues.length + statuses.length;
+      received += list.length + comments.length + leads.length + edits.length + reactions.length + unsends.length + adIssues.length + statuses.length;
     }
     return { ok: true, received };
   }
@@ -2217,14 +2222,16 @@ class ApiController {
 
   /**
    * Edited messages and reactions: the conversation shows them. An edited message nobody answered yet is answered with its
-   * new text (the waiting answer reads it); one already answered changes what Dellal reads next time.
+   * new text (the waiting answer reads it); one already answered changes what Dellal reads next time. A message the
+   * customer took back (unsend) loses its words, photo and voice note; a waiting answer to it does not go.
    */
-  private async handleEdits(ref: ShopRef, edits: any[], reactions: any[]) {
-    if (!edits.length && !reactions.length) return;
+  private async handleEdits(ref: ShopRef, edits: any[], reactions: any[], unsends: any[] = []) {
+    if (!edits.length && !reactions.length && !unsends.length) return;
     const log = new Logger('Dellal');
     const session = await this.core.systemSession(ref);
     for (const e of edits) await this.core.call(ref, 'dellal.edited', session, e).catch((x: any) => log.warn(`[${ref.shop.slug}] edited message: ${x?.message ?? x}`));
     for (const r of reactions) await this.core.call(ref, 'dellal.reacted', session, r).catch((x: any) => log.warn(`[${ref.shop.slug}] reaction: ${x?.message ?? x}`));
+    for (const u of unsends) await this.core.call(ref, 'dellal.unsent', session, u).catch((x: any) => log.warn(`[${ref.shop.slug}] unsent message: ${x?.message ?? x}`));
   }
 
   /** Co-Pilot › Publicités: what Meta said about the boutique's ads (rejected, a problem, fine again). */

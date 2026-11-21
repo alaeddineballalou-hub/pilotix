@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMenuCounts } from '../../layout/Shell';
 import { backend, serverUrl, shopApi } from '../../lib/backend';
-import { inAdWindow, staffWindow } from '@pilotix/shared';
+import { inAdWindow, staffWindow, UNSENT_BODY } from '@pilotix/shared';
 import { da, n, shortWhen } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
@@ -174,8 +174,9 @@ function ConvRow({ c, on, name, onClick }: { c: Conv; on: boolean; name: string;
             <time dateTime={c.lastMessageAt}>{shortWhen(c.lastMessageAt)}</time>
           </span>
           <span className="ai-conv-l2">
-            <span className="ai-prev" dir="auto">
-              {c.lastPreview}
+            <span className={`ai-prev${c.lastPreview === UNSENT_BODY ? ' ai-unsent' : ''}`} dir="auto">
+              {/* the customer took their last message back (Instagram « unsend »): its words are gone */}
+              {c.lastPreview === UNSENT_BODY ? t('messages.thread.unsent') : c.lastPreview}
             </span>
             {c.mode === 'handoff' ? (
               <span className="dl-pill dl-handoff">{t('messages.mode.handoff')}</span>

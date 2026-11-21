@@ -56,7 +56,8 @@
     "modeAiHint": "Si vous écrivez, il se met en pause.",
     "edited": "modifié",
     "editedBefore": "Avant : {{text}}",
-    "reaction": "Le client a réagi {{emoji}}"
+    "reaction": "Le client a réagi {{emoji}}",
+    "unsent": "Message retiré par le client"
   },
   "side": {
     "customer": "Client",

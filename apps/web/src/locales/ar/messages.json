@@ -56,7 +56,8 @@
     "modeAiHint": "إذا كتبتَ، يتوقف.",
     "edited": "معدّلة",
     "editedBefore": "قبل: {{text}}",
-    "reaction": "تفاعل الزبون {{emoji}}"
+    "reaction": "تفاعل الزبون {{emoji}}",
+    "unsent": "رسالة حذفها الزبون"
   },
   "side": {
     "customer": "الزبون",

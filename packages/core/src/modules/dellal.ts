@@ -7,7 +7,7 @@
 // number; and a customer who gave his number then went quiet (20 min) gets his order all the same, with that number and
 // the product he asked about, for the team to call (runAutoOrders). The same rules run on the server (Claude through ctx.server.dellal) and in
 // the browser preview (a small rule-based "demo brain" with the same tools, so the demo shows the whole flow).
-import { COMMUNES, CONF_TODO, META_AD_WINDOW_DAYS, normalizePhone, replyWindow, SalesChannel, staffWindow, WILAYAS } from '@pilotix/shared';
+import { COMMUNES, CONF_TODO, META_AD_WINDOW_DAYS, normalizePhone, replyWindow, SalesChannel, staffWindow, UNSENT_BODY, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { checkPromo, onlyAsksCode, promoForConversation, promoOnMessage, promoPromptLine, PROMO_REASON } from './promo';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
@@ -358,7 +358,7 @@ export async function editedMessage(ctx: Ctx, m: z.infer<typeof EditedInput>): P
       [m.channel, m.externalId, m.messageId],
     )
   )[0];
-  if (!row || row.body === m.text) return null;
+  if (!row || row.body === m.text || row.meta?.unsent) return null;
   const was = row.meta?.edited;
   const edited = { before: was?.before ?? row.body, count: num(was?.count) + 1, at: new Date(ctx.now()).toISOString() };
   await ctx.db.query(`UPDATE conv_messages SET body = $2, meta = COALESCE(meta, '{}'::jsonb) || $3::jsonb WHERE id = $1`, [row.id, m.text, JSON.stringify({ edited })]);
@@ -385,6 +385,33 @@ export async function reactedMessage(ctx: Ctx, m: z.infer<typeof ReactedInput>):
   const convId = num(row.conversation_id);
   ctx.emit({ type: 'chat', data: { dellal: convId } });
   return { conversationId: convId };
+}
+
+export const UnsentInput = z.object({ channel: z.enum(['messenger', 'instagram']), externalId: z.string().min(1).max(120), messageId: z.string().min(1).max(200) });
+/**
+ * The customer took a message back (Instagram's « unsend »). Meta asks an inbox to remove it: its words, photo, voice note,
+ * first text (edited) and reaction are wiped, UNSENT_BODY stands in their place (the row stays, so a late copy of the
+ * same message from Meta is not taken again), and the list stops showing its words. Up to 3 photos sent together are one
+ * message for Meta (ids mid, mid#2, mid#3 here): all go. Dellal reads « the customer removed a message » from then on.
+ */
+export async function unsentMessage(ctx: Ctx, m: z.infer<typeof UnsentInput>): Promise<{ conversationId: number; messageIds: number[] } | null> {
+  const mid = m.messageId;
+  const ids = [mid, `${mid.slice(0, 190)}#2`, `${mid.slice(0, 190)}#3`];
+  const rows = await ctx.db.query(
+    `SELECT m.id, m.conversation_id FROM conv_messages m JOIN conversations c ON c.id = m.conversation_id
+      WHERE c.channel = $1 AND c.external_id = $2 AND m.external_id = ANY($3::text[]) AND m.role = 'customer'
+        AND NOT (COALESCE(m.meta, '{}'::jsonb) ? 'unsent')`,
+    [m.channel, m.externalId, ids],
+  );
+  if (!rows.length) return null;
+  const convId = num(rows[0].conversation_id);
+  const gone = rows.map((r: any) => num(r.id));
+  await ctx.db.query(`UPDATE conv_messages SET body = $2, meta = $3::jsonb WHERE id = ANY($1::bigint[])`, [gone, UNSENT_BODY, JSON.stringify({ unsent: { at: new Date(ctx.now()).toISOString() } })]);
+  // the list showed its words when it was the conversation's last message
+  const last = (await ctx.db.query(`SELECT id FROM conv_messages WHERE conversation_id = $1 AND role <> 'tool' ORDER BY id DESC LIMIT 1`, [convId]))[0];
+  if (last && gone.includes(num(last.id))) await ctx.db.query(`UPDATE conversations SET last_preview = $2 WHERE id = $1`, [convId, UNSENT_BODY]);
+  ctx.emit({ type: 'chat', data: { dellal: convId } });
+  return { conversationId: convId, messageIds: gone };
 }
 
 /**
@@ -1423,7 +1450,9 @@ async function history(db: Db, convId: number): Promise<AiMsg[]> {
     const photo = r.role === 'customer' ? r.meta?.photo : null;
     const sent = r.role === 'agent' && Array.isArray(r.meta?.photos) ? (r.meta.photos as any[]) : null;
     const text =
-      r.role === 'staff'
+      r.role === 'customer' && r.meta?.unsent
+        ? '[le client a retiré ce message]'
+        : r.role === 'staff'
         ? `[équipe] ${r.body}`
         : photo
           ? photoLine(photo, String(r.body))
@@ -1514,11 +1543,11 @@ export async function hearVoices(ctx: Ctx, convId: number, ids?: number[]): Prom
     if (out?.ok && String(out.text ?? '').trim()) {
       const next: VoiceMeta = { ...v, status: 'done', seconds: out.seconds ?? null, lang: out.lang ?? null, model: out.model ?? null, at };
       delete next.error;
-      await ctx.db.query(`UPDATE conv_messages SET body = $2, meta = jsonb_set(COALESCE(meta, '{}'::jsonb), '{voice}', $3::jsonb) WHERE id = $1`, [r.id, String(out.text).trim().slice(0, 4000), JSON.stringify(next)]);
+      await ctx.db.query(`UPDATE conv_messages SET body = $2, meta = jsonb_set(COALESCE(meta, '{}'::jsonb), '{voice}', $3::jsonb) WHERE id = $1 AND NOT (COALESCE(meta, '{}'::jsonb) ? 'unsent')`, [r.id, String(out.text).trim().slice(0, 4000), JSON.stringify(next)]);
       heard++;
     } else {
       const off = out?.error === 'off' || out?.error === 'no_platform';
-      await ctx.db.query(`UPDATE conv_messages SET meta = jsonb_set(COALESCE(meta, '{}'::jsonb), '{voice}', $2::jsonb) WHERE id = $1`, [r.id, JSON.stringify({ ...v, status: off ? 'off' : 'failed', error: String(out?.error ?? 'error').slice(0, 200), at })]);
+      await ctx.db.query(`UPDATE conv_messages SET meta = jsonb_set(COALESCE(meta, '{}'::jsonb), '{voice}', $2::jsonb) WHERE id = $1 AND NOT (COALESCE(meta, '{}'::jsonb) ? 'unsent')`, [r.id, JSON.stringify({ ...v, status: off ? 'off' : 'failed', error: String(out?.error ?? 'error').slice(0, 200), at })]);
     }
   }
   ctx.emit({ type: 'chat', data: { dellal: convId } });
@@ -1606,11 +1635,11 @@ export async function seePhotos(ctx: Ctx, convId: number, ask: PhotoAsk | null, 
     if (reading) {
       const next: PhotoMeta = { ...keep, status: 'done', what: reading.what, productId: reading.productId, productName: reading.productId ? names.get(reading.productId) ?? null : null, sure: reading.sure, variant: reading.variant, kind: reading.kind, thumb, model, at };
       delete next.error;
-      await ctx.db.query(`UPDATE conv_messages SET body = $2, meta = jsonb_set(COALESCE(meta, '{}'::jsonb), '{photo}', $3::jsonb) WHERE id = $1`, [r.id, photoBody(reading, caption), JSON.stringify(next)]);
+      await ctx.db.query(`UPDATE conv_messages SET body = $2, meta = jsonb_set(COALESCE(meta, '{}'::jsonb), '{photo}', $3::jsonb) WHERE id = $1 AND NOT (COALESCE(meta, '{}'::jsonb) ? 'unsent')`, [r.id, photoBody(reading, caption), JSON.stringify(next)]);
       seen++;
     } else {
       const off = error === 'off' || error === 'no_platform';
-      await ctx.db.query(`UPDATE conv_messages SET meta = jsonb_set(COALESCE(meta, '{}'::jsonb), '{photo}', $2::jsonb) WHERE id = $1`, [r.id, JSON.stringify({ ...keep, status: off ? 'off' : 'failed', error: String(error ?? 'error').slice(0, 200), thumb, at })]);
+      await ctx.db.query(`UPDATE conv_messages SET meta = jsonb_set(COALESCE(meta, '{}'::jsonb), '{photo}', $2::jsonb) WHERE id = $1 AND NOT (COALESCE(meta, '{}'::jsonb) ? 'unsent')`, [r.id, JSON.stringify({ ...keep, status: off ? 'off' : 'failed', error: String(error ?? 'error').slice(0, 200), thumb, at })]);
     }
   }
   ctx.emit({ type: 'chat', data: { dellal: convId } });
@@ -1637,6 +1666,18 @@ async function promoAnsweredAll(db: Db, convId: number): Promise<boolean> {
   return !said.length || said.every((x) => onlyAsksCode(x, 'CODE', true));
 }
 
+/** Every message the customer wrote since the last answer was taken back (unsentMessage): Dellal has nothing to answer. */
+async function unsentAll(db: Db, convId: number): Promise<boolean> {
+  const rows = await db.query(`SELECT role, meta FROM conv_messages WHERE conversation_id = $1 AND role <> 'tool' ORDER BY id DESC LIMIT 20`, [convId]);
+  let seen = 0;
+  for (const r of rows) {
+    if (r.role !== 'customer') break;
+    if (!r.meta?.unsent) return false;
+    seen++;
+  }
+  return seen > 0;
+}
+
 export async function runAgent(
   ctx: Ctx,
   convId: number,
@@ -1646,6 +1687,8 @@ export async function runAgent(
   if (!check.ok) return { reply: null, handoff: false, orderRef: null, demo: false, skipped: check.why };
   // the welcome code's fixed message already answered a customer who only asked for it (Referral › Code promo)
   if (!opts.followUp && (await promoAnsweredAll(ctx.db, convId))) return { reply: null, handoff: false, orderRef: null, demo: false, skipped: 'Code de bienvenue envoyé' };
+  // the customer took back everything they wrote since the last answer (Instagram's « unsend »): nothing to answer
+  if (!opts.followUp && (await unsentAll(ctx.db, convId))) return { reply: null, handoff: false, orderRef: null, demo: false, skipped: 'Le client a retiré son message' };
   const s = await dellalSettings(ctx.db);
   // the customer's voice notes, written as text first (Gemini, on the server), so Dellal reads what they said
   if (ctx.server?.dellal) await hearVoices(ctx, convId).catch(() => undefined);
@@ -2808,6 +2851,8 @@ export const dellalProcs = {
   ),
   'dellal.edited': proc([], EditedInput, (ctx, i) => editedMessage(ctx, i)),
   'dellal.reacted': proc([], ReactedInput, (ctx, i) => reactedMessage(ctx, i)),
+  /** Server: Instagram's « unsend » (dellal-server › parseMetaUnsends): the message's words go. */
+  'dellal.unsent': proc([], UnsentInput, (ctx, i) => unsentMessage(ctx, i)),
   /** Server: let Dellal answer a conversation now. */
   'dellal.answer': proc([], z.object({ id }), (ctx, { id }) => runAgent(ctx, id)),
   /** Server (every 15 min): one follow-up for quiet customers. */

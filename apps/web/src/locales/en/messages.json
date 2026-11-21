@@ -56,7 +56,8 @@
     "modeAiHint": "If you write, it pauses.",
     "edited": "edited",
     "editedBefore": "Before: {{text}}",
-    "reaction": "The customer reacted {{emoji}}"
+    "reaction": "The customer reacted {{emoji}}",
+    "unsent": "Message removed by the customer"
   },
   "side": {
     "customer": "Customer",
