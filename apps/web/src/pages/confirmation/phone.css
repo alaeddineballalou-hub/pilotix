@@ -2,7 +2,7 @@
    with the totals and the Statut / Confirmer bar at the bottom (B). ===== */
 
 /* ---- the list ---- */
-.pxp-sum { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px; }
+.pxp-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 10px; }
 .pxp-list { list-style: none; margin: 0; padding: 0 0 84px; display: flex; flex-direction: column; gap: 10px; }
 .pxp-empty { padding: 28px 8px; text-align: center; }
 .pxp-card { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); cursor: pointer; -webkit-tap-highlight-color: transparent; }
@@ -101,3 +101,32 @@
 .qd6.qd6-ph .qd6-ddb:has(.qd6-pend) .qd6-ddt-s { display: none; }
 .qd6.qd6-ph .qd6-cur { min-width: 0; flex: 1; justify-content: space-between; }
 .qd6.qd6-ph .qd6-cur .qd6-pend { max-width: none; flex: 0 1 auto; min-width: 0; }
+
+/* ---- « Assigner » several orders at once (managers, the owner, an agency's chiefs): « Sélectionner », ticks, the bar ---- */
+.pxp-selbtn { margin-inline-start: auto; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.pxp-selbtn .bji { width: 16px; height: 16px; }
+.pxp-selbtn.ghost { background: none; }
+.pxp-selon { display: inline-flex; gap: 6px; margin-inline-start: auto; }
+.pxp-selon .pxp-selbtn { margin-inline-start: 0; }
+.pxp-tick { flex: none; width: 24px; height: 24px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--line); background: var(--surface); display: grid; place-items: center; }
+.is-on > .pxp-tick { background: #F28B1E; border-color: #F28B1E; }
+.is-on > .pxp-tick::after { content: ''; width: 6px; height: 11px; margin-top: -3px; border: solid #fff; border-width: 0 2.5px 2.5px 0; transform: rotate(45deg); }
+.pxp-card.is-on, .agx-pcard.is-on { border-color: #F7A823; background: #FFF8F0; }
+.agx-pcards.is-pick { padding-bottom: 84px; }
+.agx-pcard.is-pick { position: relative; padding-inline-start: 50px; }
+.agx-pcard > .pxp-tick { position: absolute; inset-inline-start: 14px; top: 50%; transform: translateY(-50%); }
+/* who has the order, on its card */
+.pxp-ag { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 55%; font-size: 12px; font-weight: 600; color: var(--ink); }
+.pxp-ag > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pxp-ag .bji { flex: none; width: 13px; height: 13px; color: var(--muted); }
+.pxp-ag.free { color: var(--muted); font-weight: 500; }
+/* the bar at the bottom while ticking: how many, « Assigner » (the agents' list), take the agent back */
+.pxp-pickbar { position: fixed; z-index: 30; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 10px 28px rgba(15, 26, 46, .22); }
+.pxp-pb-n { flex: 1; min-width: 0; padding-inline-start: 6px; font-size: 13px; font-weight: 700; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pxp-pb-give { position: relative; flex: none; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px; border-radius: 12px; background: var(--c-accent-grad); color: var(--c-on-accent); font-size: 15px; font-weight: 800; }
+.pxp-pb-give .bji { width: 18px; height: 18px; }
+.pxp-pb-give select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.pxp-pb-give.is-dis { opacity: .45; }
+.pxp-pb-rm { flex: none; width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--c-bad-ink); display: grid; place-items: center; cursor: pointer; }
+.pxp-pb-rm:disabled { opacity: .4; cursor: default; }
+.pxp-pb-rm .bji { width: 20px; height: 20px; }

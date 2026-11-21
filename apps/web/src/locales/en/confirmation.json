@@ -605,7 +605,13 @@
     "empty": "No orders here.",
     "status": "Status",
     "agent": "Agent",
-    "nobody": "Nobody (free)"
+    "nobody": "Nobody (free)",
+    "select": "Select",
+    "all": "All",
+    "none": "None",
+    "pickHint": "Tap the orders",
+    "free": "Free",
+    "give": "Assign"
   },
   "cs": {
     "title": "Confirmed statistics",

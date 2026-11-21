@@ -23,7 +23,7 @@ import { Detail } from './Detail';
 import { Focus } from './Focus';
 import { HeldChip } from './hold';
 import { useIsPhone } from '../../lib/useMedia';
-import { PhoneCards, PhoneOrder } from './PhoneList';
+import { PhoneCards, PhoneOrder, PickBar, PickToggle } from './PhoneList';
 import { BULK_CHOICES, choiceAllowed, choiceLabel, currentLabel, ROW_CHOICES, StatusChoice, Sub, SUB_STATUSES, SUB_TONE, SUBS, telHref, toneOf, useCanGive, waHref } from './shared';
 import { ConfirmedStatsPage, StatsSection } from './Stats';
 import { useStatusChange } from './StatusDialog';
@@ -191,6 +191,8 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(() => Number(store.get('conf-size')) || 50);
   const [sel, setSel] = useState<Set<number>>(new Set());
+  // phones: « Sélectionner » is on (a tap ticks an order instead of opening it)
+  const [picking, setPicking] = useState(false);
   const [open, setOpen] = useState<Set<number>>(new Set());
   const [focus, setFocus] = useState<number | null | 'ask'>(focusId ?? null);
   const [blockAsk, setBlockAsk] = useState<Row[] | null>(null);
@@ -685,15 +687,41 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                     <div className="pxp-sum">
                       {late > 0 && <span className="badge t-bad">{t('confirmation.ph.late', { n: late })}</span>}
                       <span className="badge t-warn">{t('confirmation.ph.queue', { n: list.data.total })}</span>
+                      {/* « Assigner » several orders at once (the managers, the owner, an agency's chiefs) */}
+                      {manager && (picking || rows.length > 0) && (
+                        <PickToggle
+                          on={picking}
+                          allOn={allOn}
+                          onToggle={() => {
+                            setPicking((v) => !v);
+                            setSel(new Set());
+                          }}
+                          onAll={() => setSel(allOn ? new Set() : new Set(rows.map((r) => r.id)))}
+                        />
+                      )}
                     </div>
                   );
                 })()}
-                <PhoneCards rows={rows} empty={canNext && !seesAll ? t('confirmation.mineEmpty') : t('confirmation.ph.empty')} onOpen={(id) => setOpen(new Set([id]))} />
-                {canNext && (
+                <PhoneCards
+                  rows={rows}
+                  empty={canNext && !seesAll ? t('confirmation.mineEmpty') : t('confirmation.ph.empty')}
+                  onOpen={(id) => setOpen(new Set([id]))}
+                  pick={picking ? { picked: sel, toggle: (id) => setSel((s) => (s.has(id) ? (s.delete(id), new Set(s)) : new Set(s).add(id))) } : undefined}
+                  showAgent={manager}
+                />
+                {canNext && !picking && (
                   <button type="button" className="pxp-next" onClick={() => goNext([...open].pop())}>
                     {t('confirmation.ph.next')}
                     <Icon name="chevr" />
                   </button>
+                )}
+                {picking && (
+                  <PickBar
+                    n={selected.length}
+                    options={(meta.data?.agents ?? []).map((a) => ({ value: String(a.id), label: a.name }))}
+                    anyAgent={selected.some((r) => r.agentId)}
+                    onGive={(v) => assign(selected, v ? Number(v) : null)}
+                  />
                 )}
                 {(() => {
                   const cur = rows.find((r) => open.has(r.id));

@@ -605,7 +605,13 @@
     "empty": "Aucune commande ici.",
     "status": "Statut",
     "agent": "Agent",
-    "nobody": "Personne (libre)"
+    "nobody": "Personne (libre)",
+    "select": "Sélectionner",
+    "all": "Tout",
+    "none": "Aucune",
+    "pickHint": "Touchez les commandes",
+    "free": "Libre",
+    "give": "Assigner"
   },
   "cs": {
     "title": "Statistiques des confirmées",

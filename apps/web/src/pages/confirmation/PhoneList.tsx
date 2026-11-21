@@ -48,16 +48,30 @@ function MsgButton({ o }: { o: Order }) {
   );
 }
 
-export function PhoneCards({ rows, empty, onOpen }: { rows: PRow[]; empty: string; onOpen: (id: number) => void }) {
+/**
+ * The queue on phones. `pick`: « Sélectionner » is on (managers, the owner, an agency's chiefs): a tap ticks the order
+ * instead of opening it. `showAgent`: each card says who has the order (or « Libre »).
+ */
+export function PhoneCards({ rows, empty, onOpen, pick, showAgent }: { rows: PRow[]; empty: string; onOpen: (id: number) => void; pick?: { picked: Set<number>; toggle: (id: number) => void }; showAgent?: boolean }) {
   const { t } = useTranslation();
   if (!rows.length) return <p className="pxp-empty muted">{empty}</p>;
   return (
     <ul className="pxp-list">
       {rows.map((o) => {
         const vt = variantsLine(o);
+        const on = !!pick?.picked.has(o.id);
+        const tap = () => (pick ? pick.toggle(o.id) : onOpen(o.id));
         return (
           <li key={o.id}>
-            <div className="pxp-card" role="button" tabIndex={0} onClick={() => onOpen(o.id)} onKeyDown={(e) => e.key === 'Enter' && onOpen(o.id)}>
+            <div
+              className={`pxp-card${pick ? ' is-pick' : ''}${on ? ' is-on' : ''}`}
+              role={pick ? 'checkbox' : 'button'}
+              aria-checked={pick ? on : undefined}
+              tabIndex={0}
+              onClick={tap}
+              onKeyDown={(e) => (e.key === 'Enter' || (pick && e.key === ' ')) && (e.preventDefault(), tap())}
+            >
+              {pick && <span className="pxp-tick" aria-hidden="true" />}
               <div className="pxp-main">
                 <div className="pxp-top">
                   <b className="pxp-name">{o.customerName}</b>
@@ -78,14 +92,87 @@ export function PhoneCards({ rows, empty, onOpen }: { rows: PRow[]; empty: strin
                   {o.confStatus === 'confirmed' && o.followStatus && <StatusBadge kind="follow" status={o.followStatus} />}
                   {o.attempts > 0 && <small>{t('confirmation.focus.calls', { n: o.attempts })}</small>}
                   <RotateChip at={o.rotateAt} />
+                  {showAgent && <AgentTag name={o.agentName} />}
                 </div>
               </div>
-              <CallButton o={o} />
+              {/* ticking: no call by mistake */}
+              {!pick && <CallButton o={o} />}
             </div>
           </li>
         );
       })}
     </ul>
+  );
+}
+
+/** Who has the order, on a phone card (managers, the owner, an agency's chiefs): his name, or « Libre ». */
+export function AgentTag({ name }: { name?: string | null }) {
+  const { t } = useTranslation();
+  return (
+    <span className={`pxp-ag${name ? '' : ' free'}`}>
+      <Icon name="user" />
+      <span>{name || t('confirmation.ph.free')}</span>
+    </span>
+  );
+}
+
+/** « Sélectionner » above the phone list; while ticking: « Tout » (or « Aucune ») and « Annuler ». */
+export function PickToggle(p: { on: boolean; allOn: boolean; onToggle: () => void; onAll: () => void }) {
+  const { t } = useTranslation();
+  if (!p.on)
+    return (
+      <button type="button" className="pxp-selbtn" onClick={p.onToggle}>
+        <Icon name="userplus" /> {t('confirmation.ph.select')}
+      </button>
+    );
+  return (
+    <span className="pxp-selon">
+      <button type="button" className="pxp-selbtn ghost" onClick={p.onAll}>
+        {t(p.allOn ? 'confirmation.ph.none' : 'confirmation.ph.all')}
+      </button>
+      <button type="button" className="pxp-selbtn" onClick={p.onToggle}>
+        {t('common.cancel')}
+      </button>
+    </span>
+  );
+}
+
+/**
+ * « Assigner » on phones, several orders at once: the ticked orders to one agent (the phone's own list of names), or
+ * back to nobody. Fixed at the bottom of the screen while ticking.
+ */
+export function PickBar(p: { n: number; options: { value: string; label: string }[]; anyAgent: boolean; onGive: (value: string | null) => Promise<unknown> | void }) {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  const run = async (v: string | null) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await p.onGive(v);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const none = p.n === 0;
+  return (
+    <div className="pxp-pickbar" role="toolbar" aria-label={t('confirmation.tb.label')}>
+      <span className="pxp-pb-n">{none ? t('confirmation.ph.pickHint') : t('confirmation.tb.selected', { count: p.n })}</span>
+      <label className={`pxp-pb-give${none || busy ? ' is-dis' : ''}`}>
+        <Icon name="userplus" />
+        <span>{t('confirmation.ph.give')}</span>
+        <select value="" disabled={none || busy} aria-label={t('confirmation.tb.assign')} onChange={(e) => e.target.value && void run(e.target.value)}>
+          <option value="">{t('confirmation.tb.assign')}</option>
+          {p.options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button type="button" className="pxp-pb-rm" disabled={none || !p.anyAgent || busy} aria-label={t('confirmation.tb.removeAgent')} title={t('confirmation.tb.removeAgent')} onClick={() => void run(null)}>
+        <Icon name="userminus" />
+      </button>
+    </div>
   );
 }
 

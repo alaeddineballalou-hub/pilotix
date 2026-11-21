@@ -21,7 +21,7 @@ import { Confirmation } from '../confirmation';
 import { Countdown } from '../confirmation/Countdown';
 import { Detail } from '../confirmation/Detail';
 import { Focus } from '../confirmation/Focus';
-import { PhoneOrder } from '../confirmation/PhoneList';
+import { AgentTag, PhoneOrder, PickBar, PickToggle } from '../confirmation/PhoneList';
 import { currentLabel, SUB_TONE, telHref } from '../confirmation/shared';
 import type { PageProps } from '../registry';
 import { Suivi, TreatModal } from '../suivi';
@@ -154,6 +154,8 @@ function AllQueue({ sub, scope }: { sub: Sub; scope?: AllScope }) {
   const gives = !scope && !!session?.profile.agencyLead;
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [giving, setGiving] = useState(false);
+  // phones: « Sélectionner » is on (a tap ticks an order instead of opening it)
+  const [picking, setPicking] = useState(false);
   const people = useRpcFor(null, 'agency.givePeople', {}, { enabled: gives, staleTime: 60_000 });
   useEffect(() => {
     const id = setTimeout(() => (setQd(q.trim()), setPage(1)), 350);
@@ -258,11 +260,34 @@ function AllQueue({ sub, scope }: { sub: Sub; scope?: AllScope }) {
         <Loading />
       ) : phone ? (
         <>
-          <ul className="agx-pcards">
+          {gives && (picking || rows.length > 0) && (
+            <div className="pxp-sum">
+              <PickToggle
+                on={picking}
+                allOn={allOn}
+                onToggle={() => {
+                  setPicking((v) => !v);
+                  setSel(new Set());
+                }}
+                onAll={() => setSel(allOn ? new Set() : new Set(rows.map(keyOf)))}
+              />
+            </div>
+          )}
+          <ul className={`agx-pcards${picking ? ' is-pick' : ''}`}>
             {!rows.length && <li className="empty-box">{t(`confirmation.empty.${sub}`)}</li>}
-            {rows.map((r) => (
-              <li key={keyOf(r)}>
-                <button type="button" className="agx-pcard" onClick={() => setOpen(keyOf(r))}>
+            {rows.map((r) => {
+              const k = keyOf(r);
+              const on = sel.has(k);
+              return (
+              <li key={k}>
+                <button
+                  type="button"
+                  className={`agx-pcard${picking ? ' is-pick' : ''}${on ? ' is-on' : ''}`}
+                  role={picking ? 'checkbox' : undefined}
+                  aria-checked={picking ? on : undefined}
+                  onClick={() => (picking ? setSel((s) => (s.has(k) ? (s.delete(k), new Set(s)) : new Set(s).add(k))) : setOpen(k))}
+                >
+                  {picking && <span className="pxp-tick" aria-hidden="true" />}
                   <span className="agx-pcard-top">
                     {scope && r.seller ? scope.tag(r.seller) : <span className="chip agx-seller-chip">{r.seller?.name}</span>}
                     {r.deadline ? <Countdown d={r.deadline} short /> : <small className="muted">{when(r.createdAt)}</small>}
@@ -274,12 +299,26 @@ function AllQueue({ sub, scope }: { sub: Sub; scope?: AllScope }) {
                   </span>
                   <span className="agx-pcard-bot">
                     <span className="badge">{currentLabel(t, r.confStatus, r.attempts)}</span>
+                    {gives && <AgentTag name={r.agentName} />}
                     <span className="muted small">{wilayaName(r.wilayaId)}</span>
                   </span>
                 </button>
               </li>
-            ))}
+              );
+            })}
           </ul>
+          {picking && (
+            <PickBar
+              n={chosen.length}
+              options={(people.data ?? []).map((x) => ({ value: x.key, label: x.name }))}
+              anyAgent={chosen.some((r) => r.agentId)}
+              onGive={async (v) => {
+                if (v === null) return give(null);
+                const to = (people.data ?? []).find((x) => x.key === v);
+                if (to) await give(to);
+              }}
+            />
+          )}
           {cur && cur.seller && (
             <SellerScope seller={cur.seller.id}>
               <PhoneOrder order={cur} onClose={() => setOpen(null)} onDone={() => goNext(keyOf(cur))} />
