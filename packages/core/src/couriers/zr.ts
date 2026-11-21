@@ -13,7 +13,7 @@
 // BEST GUESS (check with real keys): the "state.name" values in STATUSES below come from ZR's dashboard wording;
 // unknown ones are shown as-is and can be mapped by hand with the "Statuts" button.
 import { cacheKeyOf } from './types';
-import type { BagAdded, BagInfo, ChangeInput, ChangeState, ClaimCategory, ClaimState, CourierAdapter, CourierBags, CourierCompany, Desk, Helpers, Parcel, ParcelInfo, TrackItem } from './types';
+import type { BagAdded, BagInfo, ChangeInput, ChangeState, ClaimCategory, ClaimState, CourierAdapter, CourierBags, CourierCompany, Desk, FeeRow, Helpers, Parcel, ParcelInfo, TrackItem } from './types';
 import { baseUrl, bestMatch, CourierError, cut, http, intl, needKeys, sleep, timeUp } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
@@ -70,6 +70,72 @@ async function hubs(c: CourierCompany) {
   }
   cache.set(key, out);
   return out;
+}
+
+/** One of a price line's prices (home, pickup-point, return): ZR's price with VAT, else the discounted or plain one. */
+function rateOf(rate: any, type: string): number | null {
+  const x = (rate?.deliveryPrices ?? []).find((d: any) => d?.deliveryType === type);
+  return x ? Number(x.priceTtc ?? x.discountedPrice ?? x.price) || null : null;
+}
+/** The price most lines have (a tie: the higher one). */
+function mostCommon(prices: (number | null)[]): number | null {
+  const n = new Map<number, number>();
+  for (const p of prices) if (p && p > 0) n.set(p, (n.get(p) ?? 0) + 1);
+  return [...n].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0]?.[0] ?? null;
+}
+/** A wilaya's prices from its price lines: its own line, or its communes' lines (the price most of them have). */
+const feeOf = (wilayaId: number, rates: any[]): FeeRow => ({
+  wilayaId,
+  home: mostCommon(rates.map((x) => rateOf(x, 'home'))),
+  desk: mostCommon(rates.map((x) => rateOf(x, 'pickup-point'))),
+  returnFee: mostCommon(rates.map((x) => rateOf(x, 'return'))),
+});
+
+/**
+ * ZR's « tarifs locaux »: the shop's own wilaya (Alger: its 57 communes) has one price line per commune, no line of
+ * its own — so it stayed empty and Pilotix said « ZR ne livre pas à Alger ». Each commune line goes to its wilaya
+ * (ZR's communes say which), and the wilaya takes the price most of its communes have (today they all have the same).
+ * The shop's own wilaya still without a price is asked to ZR directly: the wilaya, else its communes one by one.
+ */
+async function communeFees(c: CourierCompany, rows: Map<number, FeeRow>, local: any[]) {
+  const priced = (w: number) => {
+    const x = rows.get(w);
+    return !!x && (x.home !== null || x.desk !== null);
+  };
+  const home = Number(c.shop?.fromWilayaId) || null;
+  if (!local.length && (!home || priced(home))) return;
+  const [ws, cs] = await Promise.all([territories(c, 'wilaya'), territories(c, 'commune')]);
+  const code = new Map<string, number>(ws.map((w: any) => [String(w.id), Number(w.code)]));
+  const wilayaOf = new Map<string, number>();
+  for (const x of cs) {
+    const w = code.get(String(x.parentId));
+    if (!(w && w >= 1 && w <= 69)) continue;
+    wilayaOf.set(`id:${x.id}`, w);
+    if (x.code != null && x.code !== '') wilayaOf.set(`code:${x.code}`, w);
+  }
+  // the wilaya's own prices first: its communes only fill what it lacks
+  const fill = (w: number, from: FeeRow) => {
+    const x = rows.get(w);
+    rows.set(w, { wilayaId: w, home: x?.home ?? from.home, desk: x?.desk ?? from.desk, returnFee: x?.returnFee ?? from.returnFee });
+  };
+  const per = new Map<number, any[]>();
+  for (const rate of local) {
+    const w = wilayaOf.get(`id:${rate.toTerritoryId}`) ?? wilayaOf.get(`code:${rate.toTerritoryCode}`);
+    if (w) per.set(w, [...(per.get(w) ?? []), rate]);
+  }
+  for (const [w, list] of per) fill(w, feeOf(w, list));
+  if (!home || priced(home)) return;
+  const one = (id: unknown) => http(c.name, url(c, `/delivery-pricing/rates/${encodeURIComponent(String(id))}`), { headers: h(c) }).catch(() => null);
+  const t = ws.find((w: any) => Number(w.code) === home);
+  if (!t) return;
+  fill(home, feeOf(home, [await one(t.id)]));
+  if (priced(home)) return;
+  const answers: any[] = [];
+  for (const x of cs.filter((x: any) => String(x.parentId) === String(t.id))) {
+    if (timeUp()) break;
+    answers.push(await one(x.id));
+  }
+  fill(home, feeOf(home, answers));
 }
 
 /** Words of our reasons that should find ZR's category (when the user did not choose one). */
@@ -668,18 +734,19 @@ export const zr: CourierAdapter = {
   async fees(c) {
     needKeys(c, 'api_key', 'tenant');
     const r = await http(c.name, url(c, '/delivery-pricing/rates'), { headers: h(c) });
-    const out = [];
-    for (const rate of r.rates ?? []) {
-      if (rate.toTerritoryLevel && rate.toTerritoryLevel !== 'wilaya') continue;
+    const rows = new Map<number, FeeRow>();
+    const local: any[] = [];
+    for (const rate of r?.rates ?? []) {
       const w = Number(rate.toTerritoryCode);
-      if (!(w >= 1 && w <= 69)) continue;
-      const price = (type: string) => {
-        const x = (rate.deliveryPrices ?? []).find((d: any) => d.deliveryType === type);
-        return x ? Number(x.priceTtc ?? x.discountedPrice ?? x.price) || null : null;
-      };
-      out.push({ wilayaId: w, home: price('home'), desk: price('pickup-point'), returnFee: price('return') });
+      if ((!rate.toTerritoryLevel || rate.toTerritoryLevel === 'wilaya') && w >= 1 && w <= 69) rows.set(w, feeOf(w, [rate]));
+      else local.push(rate);
     }
-    return out;
+    try {
+      await communeFees(c, rows, local);
+    } catch {
+      // the other wilayas keep the prices ZR gave: only a wilaya priced by commune stays without one, as before
+    }
+    return [...rows.values()].sort((a, b) => a.wilayaId - b.wilayaId);
   },
   async claimCategories(c) {
     needKeys(c, 'api_key', 'tenant');
