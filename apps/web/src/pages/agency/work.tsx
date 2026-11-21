@@ -9,7 +9,7 @@ import { Out, rpc } from '../../lib/backend';
 import { da, n, when, wilayaName } from '../../lib/format';
 import { namesOf, trackOf } from '../../lib/items';
 import { openOrder } from '../../lib/modals';
-import { useRpc } from '../../lib/query';
+import { useRpc, useRpcFor } from '../../lib/query';
 import { SellerScope, setSeller, useSeller } from '../../lib/seller';
 import { useSellers } from '../../lib/sellers';
 import { AgentView, useSession } from '../../lib/session';
@@ -142,7 +142,7 @@ export function AllConfirmation({ sub: raw, scope }: PageProps & { scope?: AllSc
 function AllQueue({ sub, scope }: { sub: Sub; scope?: AllScope }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const { has } = useSession();
+  const { has, session } = useSession();
   const phone = useIsPhone();
   const [q, setQ] = useState('');
   const [qd, setQd] = useState('');
@@ -150,6 +150,11 @@ function AllQueue({ sub, scope }: { sub: Sub; scope?: AllScope }) {
   const [size, setSize] = useState(50);
   const [open, setOpen] = useState<string | null>(null);
   const [focus, setFocus] = useState(false);
+  // « Attribuer » (an agency's chief and its chefs d'équipe): ticked orders of every seller, to one of its agents
+  const gives = !scope && !!session?.profile.agencyLead;
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [giving, setGiving] = useState(false);
+  const people = useRpcFor(null, 'agency.givePeople', {}, { enabled: gives, staleTime: 60_000 });
   useEffect(() => {
     const id = setTimeout(() => (setQd(q.trim()), setPage(1)), 350);
     return () => clearTimeout(id);
@@ -159,6 +164,43 @@ function AllQueue({ sub, scope }: { sub: Sub; scope?: AllScope }) {
   const list = useRpc('confirmation.list', { sub, q: qd || undefined, page, pageSize: size, ...(scope?.input ?? {}) }, { refetchInterval: 60_000 });
   const rows = (list.data?.rows ?? []) as ConfRow[];
   const canNext = sub !== 'confirmees' && has('confirmation');
+  // ticks of orders that left the list go
+  useEffect(() => {
+    const here = new Set(rows.map(keyOf));
+    setSel((s) => ([...s].every((k) => here.has(k)) ? s : new Set([...s].filter((k) => here.has(k)))));
+  }, [list.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const chosen = rows.filter((r) => sel.has(keyOf(r)));
+  const allOn = rows.length > 0 && rows.every((r) => sel.has(keyOf(r)));
+  /** each seller's ticked orders, inside that seller's store, to the person's account there (null: back to nobody) */
+  const give = async (to: GivePerson | null) => {
+    if (giving) return;
+    setGiving(true);
+    const bySeller = new Map<number, ConfRow[]>();
+    for (const r of chosen) if (r.seller) bySeller.set(r.seller.id, [...(bySeller.get(r.seller.id) ?? []), r]);
+    let done = 0;
+    const away: string[] = [];
+    try {
+      for (const [seller, rs] of bySeller) {
+        const agentId = to ? to.at[seller] : null;
+        if (to && !agentId) {
+          away.push(rs[0].seller!.name);
+          continue;
+        }
+        try {
+          await rpc('orders.assignAgent', { ids: rs.map((r) => r.id), agentId: agentId ?? null }, seller);
+          done += rs.length;
+        } catch (e: any) {
+          toast(`${rs[0].seller!.name} : ${e?.message ?? t('common.error')}`, 'bad', 6000);
+        }
+      }
+      if (done) toast(to ? t('confirmation.assigned', { n: done, name: to.name }) : t('confirmation.unassigned', { n: done }), 'ok');
+      if (to && away.length) toast(t('agency.work.giveNotThere', { name: to.name, sellers: away.join(', ') }), 'bad', 6000);
+      setSel(new Set());
+      qc.invalidateQueries();
+    } finally {
+      setGiving(false);
+    }
+  };
   // « Commande suivante » of the top header: one order after the other, every seller
   useEffect(() => {
     if (!canNext) return;
@@ -197,6 +239,7 @@ function AllQueue({ sub, scope }: { sub: Sub; scope?: AllScope }) {
         </div>
       </div>
       {scope?.bar}
+      {gives && !phone && <GiveBar n={chosen.length} people={people.data ?? []} anyAgent={chosen.some((r) => r.agentId)} busy={giving} onClear={() => setSel(new Set())} onGive={give} />}
       <div className="px-qtools">
         <label className="px-qsearch">
           <Icon name="search" />
@@ -251,6 +294,11 @@ function AllQueue({ sub, scope }: { sub: Sub; scope?: AllScope }) {
                 <th className="ck">
                   <span className="sr-only">{t('confirmation.detail')}</span>
                 </th>
+                {gives && (
+                  <th className="ck">
+                    <input type="checkbox" aria-label={t('confirmation.selectAll')} checked={allOn} onChange={(e) => setSel(e.target.checked ? new Set(rows.map(keyOf)) : new Set())} />
+                  </th>
+                )}
                 <th>{scope?.label ?? t('agency.seller')}</th>
                 <th>{t('confirmation.col.order')}</th>
                 <th>{t('confirmation.col.name')}</th>
@@ -265,7 +313,7 @@ function AllQueue({ sub, scope }: { sub: Sub; scope?: AllScope }) {
             <tbody>
               {!rows.length && (
                 <tr>
-                  <td colSpan={10} className="empty">
+                  <td colSpan={gives ? 11 : 10} className="empty">
                     {t(`confirmation.empty.${sub}`)}
                   </td>
                 </tr>
@@ -275,12 +323,17 @@ function AllQueue({ sub, scope }: { sub: Sub; scope?: AllScope }) {
                 const op = open === k;
                 return (
                   <Fragment key={k}>
-                    <tr className={`clickable ${op ? 'qsel' : ''}`} onClick={(e) => !(e.target as HTMLElement).closest('a,button') && setOpen(op ? null : k)}>
+                    <tr className={`clickable ${op || sel.has(k) ? 'qsel' : ''}`} onClick={(e) => !(e.target as HTMLElement).closest('a,button,input,label') && setOpen(op ? null : k)}>
                       <td className="ck qexp">
                         <button type="button" className="icon-btn qic" aria-expanded={op} aria-label={t(op ? 'confirmation.hideDetail' : 'confirmation.showDetail', { ref: r.ref })} onClick={() => setOpen(op ? null : k)}>
                           <Icon name="chevron" />
                         </button>
                       </td>
+                      {gives && (
+                        <td className="ck">
+                          <input type="checkbox" aria-label={t('confirmation.select', { ref: r.ref })} checked={sel.has(k)} onChange={(e) => setSel((s) => (e.target.checked ? new Set(s).add(k) : (s.delete(k), new Set(s))))} />
+                        </td>
+                      )}
                       <td data-l={scope?.label ?? t('agency.seller')}>{scope && r.seller ? scope.tag(r.seller) : <span className="chip agx-seller-chip">{r.seller?.name}</span>}</td>
                       <td data-l={t('confirmation.col.order')}>
                         <b className="ltr">{r.ref}</b>
@@ -308,7 +361,7 @@ function AllQueue({ sub, scope }: { sub: Sub; scope?: AllScope }) {
                     </tr>
                     {op && r.seller && (
                       <tr className="qdetail">
-                        <td colSpan={10} className="wide">
+                        <td colSpan={gives ? 11 : 10} className="wide">
                           {/* the order works inside its store */}
                           <SellerScope seller={r.seller.id}>
                             <Detail order={r} onDone={() => goNext(k)} />
@@ -324,6 +377,61 @@ function AllQueue({ sub, scope }: { sub: Sub; scope?: AllScope }) {
         </div>
       )}
       {list.data && <Pager page={page} pageSize={size} total={total} onPage={setPage} onSize={(s) => (setSize(s), setPage(1))} />}
+    </div>
+  );
+}
+
+type GivePerson = Out<'agency.givePeople'>[number];
+
+/**
+ * « Attribuer » over every seller (an agency's chief and its chefs d'équipe): the ticked orders to one of the agency's
+ * agents — each inside its seller's store, to the person's account there — or back to nobody. The store's own bar, in
+ * short (Confirmation: Toolbar).
+ */
+function GiveBar(p: { n: number; people: GivePerson[]; anyAgent: boolean; busy: boolean; onClear: () => void; onGive: (to: GivePerson | null) => void }) {
+  const { t } = useTranslation();
+  const none = p.n === 0;
+  const tip = t('confirmation.tb.tipNone');
+  return (
+    <div className="qacts" role="toolbar" aria-label={t('confirmation.tb.label')}>
+      <span className={`qa-info ${p.n ? 'on' : ''}`}>
+        {p.n ? t('confirmation.tb.selected', { count: p.n }) : t('confirmation.tb.none')}
+        {p.n > 0 && (
+          <button type="button" className="linkish" onClick={p.onClear}>
+            {t('common.unselect')}
+          </button>
+        )}
+      </span>
+      <span className="qa-grp">
+        <label className={`btn small qa-btn qa-wrap ${none ? 'is-dis' : ''}`} title={none ? tip : t('confirmation.tb.assign')}>
+          <span className="qa-ic">
+            <Icon name="userplus" />
+          </span>
+          <select
+            className="qa-sel"
+            aria-label={t('confirmation.tb.assign')}
+            disabled={none || p.busy}
+            value=""
+            onChange={(e) => {
+              const to = p.people.find((x) => x.key === e.target.value);
+              if (to) p.onGive(to);
+            }}
+          >
+            <option value="">{t('confirmation.tb.assign')}</option>
+            {p.people.map((x) => (
+              <option key={x.key} value={x.key}>
+                {x.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="button" className="btn small qa-btn qa-danger" aria-label={t('confirmation.tb.removeAgent')} disabled={none || !p.anyAgent || p.busy} title={none ? tip : t('confirmation.tb.removeAgent')} onClick={() => p.onGive(null)}>
+          <span className="qa-ic">
+            <Icon name="userminus" />
+          </span>
+          <span className="qa-tx">{t('confirmation.tb.removeAgent')}</span>
+        </button>
+      </span>
     </div>
   );
 }

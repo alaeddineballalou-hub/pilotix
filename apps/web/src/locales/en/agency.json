@@ -507,7 +507,8 @@
       "confirmation": "None of your sellers gives you the confirmation.",
       "suivi": "None of your sellers gives you the follow-up."
     },
-    "pickSeller": "{{what}}: choose a seller at the top of the page (each seller has its own parcels and companies)."
+    "pickSeller": "{{what}}: choose a seller at the top of the page (each seller has its own parcels and companies).",
+    "giveNotThere": "{{name}} doesn’t work for {{sellers}}: those orders were not given to them"
   },
   "mnav": {
     "accueil": "Home",

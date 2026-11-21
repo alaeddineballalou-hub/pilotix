@@ -16,6 +16,7 @@ import { z } from 'zod';
 import type { Db } from '../db';
 import { num, numOrNull } from '../db';
 import { type Ctx, forbidden, proc } from '../rpc';
+import { agencyLead } from './agencyscope';
 import { getPrefs } from './prefs';
 
 /** Rights are a store's: a confirmation agency's or a marketer's own space keeps its roles and its people's ticks. */
@@ -139,7 +140,9 @@ export const PROC_RIGHTS: Record<string, Need> = {
   'orders.create': 'act:orders.create',
   'orders.duplicate': 'act:orders.create',
   'orders.setConf': (i) => (BAD_CONF.has(i.status) ? 'act:orders.cancel' : null),
-  'orders.assignAgent': (i, ctx) => (i.agentId !== ctx.session.profile.id ? 'act:orders.give' : null),
+  // a confirmation agency's chief and its chefs d'équipe give the agency's orders to its own agents: the agency decides
+  // that, not the store's « Rôles » (agencyscope.ts checks who and to whom)
+  'orders.assignAgent': (i, ctx) => (i.agentId !== ctx.session.profile.id && !agencyLead(ctx) ? 'act:orders.give' : null),
   'customers.setBlacklist': 'act:orders.blacklist',
   'delivery.send': 'act:orders.send',
   'delivery.cancel': 'act:orders.parcelCancel',

@@ -3,6 +3,16 @@ import type { TFunction } from 'i18next';
 import { store } from '../../lib/store';
 import { toLocalInput } from '../../lib/format';
 import { rightOn } from '../../lib/rights';
+import { useSession } from '../../lib/session';
+
+/**
+ * « Attribuer »: may this person give orders to agents? A store's owner, administrators and agent managers; a
+ * confirmation agency's chief and its chefs d'équipe, in its sellers' stores (the agency's orders, to its own agents).
+ */
+export function useCanGive(): boolean {
+  const { has, session } = useSession();
+  return has('agent_manager', 'vendeur') || !!session?.profile.agencyLead;
+}
 
 export type Sub = 'nouvelles' | 'attente' | 'confirmees' | 'livrees' | 'terminees';
 /** the page's tabs: the menu's list (packages/shared/src/menu.ts), shared with Utilisateurs › Rôles (no Livrées tab in

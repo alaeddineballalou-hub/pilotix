@@ -165,7 +165,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 /**
  * A partner's space, working for its sellers: the store's screens as one of the partner's people sees them there — an
  * agency's chief and supervisors do the confirmation and the suivi, its agents their own task; a marketer's people the
- * ads of their ad sets. Nobody is the store's administrator (no store settings, no new orders).
+ * ads of their ad sets. Nobody is the store's administrator (no store settings, no new orders). An agency's chief and
+ * its chefs d'équipe lead its people (`profile.agencyLead`): they give the agency's orders to its agents (« Attribuer »).
  */
 export function AgentView({ children, tasks }: { children: ReactNode; tasks?: readonly string[] }) {
   const s = useContext(Ctx);
@@ -182,7 +183,8 @@ export function AgentView({ children, tasks }: { children: ReactNode; tasks?: re
           ? ['confirmation', 'suivi']
           : own.filter((r) => r === 'confirmation' || r === 'suivi')
     ).filter((r) => !tasks || tasks.includes(r)) as Role[];
-    const session: Session = { ...s.session, isAdmin: false, canManageUsers: false, roles, profile: { ...s.session.profile, agencyId: s.session.shop?.id ?? -1 } };
+    const agencyLead = s.session.shop?.kind === 'agency' && lead;
+    const session: Session = { ...s.session, isAdmin: false, canManageUsers: false, roles, profile: { ...s.session.profile, agencyId: s.session.shop?.id ?? -1, agencyLead } };
     return { ...s, session, has: (...want: Role[]) => want.some((r) => roles.includes(r)) };
   }, [s, tasks]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

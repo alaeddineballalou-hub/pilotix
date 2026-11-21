@@ -7,7 +7,7 @@
 import type { AgencySeller } from '@pilotix/shared';
 import { z } from 'zod';
 import { num } from '../db';
-import { bad, Ctx, forbidden, makeSession, proc } from '../rpc';
+import { bad, Ctx, forbidden, hasRole, makeSession, proc } from '../rpc';
 import { loadShop, platformSettings, shopCtx, shopStatus } from '../platform/shops';
 import { LINK_SQL, Link, toLink } from './agencies';
 import { FANOUT, fanOut, nextAcross, Runner } from './fanout';
@@ -47,8 +47,18 @@ export async function sellersOf(ctx: Ctx): Promise<AgencySeller[]> {
   return (await sellerWork(ctx)).map((w) => sellerOf(w.L));
 }
 
-/** The person's ctx inside one of their stores (the server's own, else made here). A store Pilotix locked waits. */
+/**
+ * The person's ctx inside one of their stores (the server's own, else made here). A store Pilotix locked waits. A
+ * confirmation agency's chief and its chefs d'équipe lead its people there (agencyscope.ts: agencyLead): read from
+ * their roles in the agency, as they are now.
+ */
 async function storeCtx(ctx: Ctx, w: Work): Promise<Ctx> {
+  const c = await storeCtxOf(ctx, w);
+  if (ctx.shop?.kind !== 'agency') return c;
+  return { ...c, session: { ...c.session, profile: { ...c.session.profile, agencyLead: hasRole(ctx.session, 'agent_manager') } } };
+}
+
+async function storeCtxOf(ctx: Ctx, w: Work): Promise<Ctx> {
   const locked = () => bad(`${w.L.info.store.name} est bloquée par Pilotix pour le moment`);
   if (ctx.otherShop) {
     const c = await ctx.otherShop(w.L.info.store.id, w.profileId);
@@ -89,7 +99,40 @@ export async function sellerCall(name: string, ctx: Ctx, input: unknown, run: Ru
   return fanOut(name, fan, input, targets, run);
 }
 
+/** One of the agency's confirmation agents, and their account in each seller's store (« Attribuer », every seller). */
+export interface GivePerson {
+  /** the person in the agency (their id there; the e-mail when the store does not know it yet) */
+  key: string;
+  name: string;
+  /** seller (store) id → their account there */
+  at: Record<number, number>;
+}
+
 export const agencyWorkProcs = {
   /** The sellers this person works for now (the picker at the top of the agency's space). */
   'agency.sellers': proc(null, z.object({}), (ctx) => sellersOf(ctx)),
+
+  /**
+   * « Attribuer » in « Tous les vendeurs » (the agency's chief and its chefs d'équipe): the agency's confirmation
+   * agents, each with their account in every seller's store the chief works for — an order goes to that store's one.
+   */
+  'agency.givePeople': proc(['agent_manager'], z.object({}), async (ctx) => {
+    if (ctx.shop?.kind !== 'agency') throw forbidden('Réservé aux agences de confirmation');
+    // one person, one e-mail: the agency keeps it the same in every store (agencies.ts: syncLink)
+    const people = new Map<string, GivePerson>();
+    for (const w of await sellerWork(ctx)) {
+      if (!w.L.info.tasks.includes('confirmation')) continue;
+      const rows = await ctx.t!.shop(w.L.storeSchema).query(
+        `SELECT id, name, agency_profile_id, lower(email) AS email FROM profiles WHERE active AND agency_id = $1 AND 'confirmation' = ANY(roles) ORDER BY name, id`,
+        [ctx.shop.id],
+      );
+      for (const r of rows as any[]) {
+        const email = String(r.email);
+        const p = people.get(email) ?? { key: r.agency_profile_id ? String(num(r.agency_profile_id)) : email, name: String(r.name), at: {} };
+        p.at[w.L.info.store.id] = num(r.id);
+        people.set(email, p);
+      }
+    }
+    return [...people.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }),
 };

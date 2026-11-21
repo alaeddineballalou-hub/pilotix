@@ -151,6 +151,9 @@ test('an agency agent never opens another customer of the store with the phone o
   assert.equal(o1.confAgencyId, ag.id);
   assert.equal(o2.confAgencyId, null);
   const n: Ctx = { ...(await as(t, ag.id, 'nora@agence.dz', PW)), seller: shop.id };
+  // a plain agent of the agency works on the orders given to her (the chief gives o1 to Nora)
+  const noraHere = Number((await sdb.query(`SELECT id FROM profiles WHERE email = 'nora@agence.dz'`))[0].id);
+  await call('orders.assignAgent', { ...chief, seller: shop.id }, { ids: [o1.id], agentId: noraHere });
   const notOurs = /pas un client de votre agence/;
   await assert.rejects(call('customers.history', n, { phone: '0661000002' }), notOurs);
   await assert.rejects(call('customers.history', n, { id: o2.customerId }), notOurs);

@@ -603,7 +603,9 @@
     "queue": "{{n}} to handle",
     "next": "Next order",
     "empty": "No orders here.",
-    "status": "Status"
+    "status": "Status",
+    "agent": "Agent",
+    "nobody": "Nobody (free)"
   },
   "cs": {
     "title": "Confirmed statistics",

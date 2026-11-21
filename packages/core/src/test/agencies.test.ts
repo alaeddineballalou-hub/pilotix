@@ -136,8 +136,14 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   assert.equal(o1.confAgencyId, ag.id);
   assert.equal(o2.confAgencyId, null);
 
-  // Nora from her agency's space, the store chosen at the top: only the agency's orders, only the confirmation work
+  // Nora from her agency's space, the store chosen at the top: only the agency's orders, only the confirmation work —
+  // and, a plain agent, only those given to her: nothing until the chief gives her one
   const n: Ctx = { ...noraAgency, seller: shop.id };
+  assert.deepEqual(((await call('confirmation.list', n, { sub: 'nouvelles' })) as any).rows.map((o: any) => o.id), []);
+  assert.equal(((await call('orders.next', n, {})) as any).id, null);
+  await assert.rejects(call('orders.get', n, { id: o1.id }), /ne vous est pas donnée/);
+  const noraHere = Number((await shop.db.query(`SELECT id FROM profiles WHERE email = 'nora@agence.dz'`))[0].id);
+  await call('orders.assignAgent', { ...chief, seller: shop.id }, { ids: [o1.id], agentId: noraHere });
   assert.deepEqual(((await call('orders.list', n, {})) as any).rows.map((o: any) => o.id), [o1.id]);
   assert.deepEqual(((await call('confirmation.list', n, { sub: 'nouvelles' })) as any).rows.map((o: any) => o.id), [o1.id]);
   assert.equal(((await call('confirmation.counts', n, {})) as any).nouvelles, 1);
@@ -344,17 +350,28 @@ test('an agency works on several sellers: one at a time or all together, its peo
 
   const ctxOf = async (email: string, seller?: number | 'all'): Promise<Ctx> => ({ ...(await as(t, ag.id, email, PW)), ...(seller !== undefined ? { seller } : {}) });
   const ids = async (c: Ctx) => ((await call('confirmation.list', c, { sub: 'nouvelles', sort: 'created_at', dir: 'asc' })) as any).rows.map((o: any) => `${o.seller?.name ?? ''}#${o.ref}`);
+  // a plain agent sees only the orders given to him: the chief gives the Vélo of A to Nora, the others to Ali
+  const giveIn = async (s: { id: number; db: any }, orders: number[], email: string) => {
+    const to = Number((await s.db.query('SELECT id FROM profiles WHERE email = $1', [email]))[0].id);
+    await call('orders.assignAgent', { ...chief, seller: s.id }, { ids: orders, agentId: to });
+  };
+  await giveIn(a, [va.id], 'nora@centre.dz');
+  await giveIn(a, [pa.id], 'ali@centre.dz');
+  await giveIn(b, [cb.id, vb.id], 'ali@centre.dz');
   // Nora: seller A, the Vélo only (the Poussette is not hers); her picker has one seller
   assert.deepEqual(((await call('agency.sellers', await ctxOf('nora@centre.dz'), {})) as any[]).map((x) => x.name), ['Bébé Shop']);
   assert.deepEqual(((await call('confirmation.list', await ctxOf('nora@centre.dz', a.id), { sub: 'nouvelles' })) as any).rows.map((o: any) => o.id), [va.id]);
   await assert.rejects(call('orders.get', await ctxOf('nora@centre.dz', a.id), { id: pa.id }), /pas confiée à votre agence/);
   await assert.rejects(call('orders.list', await ctxOf('nora@centre.dz', b.id), {}), /ne travaillez pas pour ce vendeur/);
-  // Ali: both sellers; « Tous les vendeurs » puts their orders together, oldest first, each with its seller
-  assert.deepEqual(await ids(await ctxOf('ali@centre.dz', 'all')), [`Bébé Shop#${va.ref}`, `Bébé Shop#${pa.ref}`, `Sport Shop#${cb.ref}`, `Sport Shop#${vb.ref}`]);
-  const two: any = await call('confirmation.list', await ctxOf('ali@centre.dz', 'all'), { sub: 'nouvelles', sort: 'created_at', dir: 'asc', page: 2, pageSize: 2 });
+  // Ali: both sellers, his own orders; the chief: « Tous les vendeurs » puts every order of the agency together, oldest
+  // first, each with its seller
+  assert.deepEqual(await ids(await ctxOf('ali@centre.dz', 'all')), [`Bébé Shop#${pa.ref}`, `Sport Shop#${cb.ref}`, `Sport Shop#${vb.ref}`]);
+  assert.deepEqual(await ids(await ctxOf('samir@centre.dz', 'all')), [`Bébé Shop#${va.ref}`, `Bébé Shop#${pa.ref}`, `Sport Shop#${cb.ref}`, `Sport Shop#${vb.ref}`]);
+  const two: any = await call('confirmation.list', await ctxOf('samir@centre.dz', 'all'), { sub: 'nouvelles', sort: 'created_at', dir: 'asc', page: 2, pageSize: 2 });
   assert.deepEqual([two.total, two.rows.map((o: any) => o.id)], [4, [cb.id, vb.id]]);
-  assert.equal(((await call('confirmation.counts', await ctxOf('ali@centre.dz', 'all'), {})) as any).nouvelles, 4);
-  assert.equal(((await call('orders.counts', await ctxOf('ali@centre.dz', 'all'), {})) as any).all, 4);
+  assert.equal(((await call('confirmation.counts', await ctxOf('samir@centre.dz', 'all'), {})) as any).nouvelles, 4);
+  assert.equal(((await call('orders.counts', await ctxOf('samir@centre.dz', 'all'), {})) as any).all, 4);
+  assert.equal(((await call('confirmation.counts', await ctxOf('ali@centre.dz', 'all'), {})) as any).nouvelles, 3);
   // The working catalog follows each person's products and sellers, even when ids repeat across tenants.
   const noraCatalog: any = await call('catalog.assigned', await ctxOf('nora@centre.dz', 'all'), {});
   assert.deepEqual(noraCatalog.rows.map((r: any) => [r.seller.id, r.id]), [[a.id, a.products.VELO]]);
@@ -392,17 +409,19 @@ test('an agency works on several sellers: one at a time or all together, its peo
   await a.db.query('DELETE FROM claims WHERE id = ANY($1)', [[cOwn.id, cOther.id]]);
   await assert.rejects(call('suivi.act', await ctxOf('nora@centre.dz', a.id), { id: va.id, action: 'realert' }), /Accès refusé/);
   await a.db.query('UPDATE orders SET follow_status=NULL, shipped_at=NULL WHERE id=$1', [va.id]);
-  // « Commande suivante » over every seller: the customer who waits the most first, then the next one elsewhere
+  // « Commande suivante » over every seller (his own orders): the customer who waits the most first, then the next one
+  // elsewhere
   const ali = await ctxOf('ali@centre.dz', 'all');
   const n1: any = await call('orders.next', ali, {});
-  assert.deepEqual(n1, { id: va.id, seller: a.id });
-  const n2: any = await call('orders.next', ali, { skipAll: [{ s: a.id, id: va.id }] });
-  assert.deepEqual(n2, { id: pa.id, seller: a.id });
-  const n3: any = await call('orders.next', ali, { skipAll: [{ s: a.id, id: va.id }, { s: a.id, id: pa.id }] });
-  assert.deepEqual(n3, { id: cb.id, seller: b.id });
-  // taken: another agent of the agency does not get the same customers meanwhile
+  assert.deepEqual(n1, { id: pa.id, seller: a.id });
+  const n2: any = await call('orders.next', ali, { skipAll: [{ s: a.id, id: pa.id }] });
+  assert.deepEqual(n2, { id: cb.id, seller: b.id });
+  const n3: any = await call('orders.next', ali, { skipAll: [{ s: a.id, id: pa.id }, { s: b.id, id: cb.id }] });
+  assert.deepEqual(n3, { id: vb.id, seller: b.id });
+  // another agent of the agency gets only hers, never Ali's
   const nora1: any = await call('orders.next', await ctxOf('nora@centre.dz', 'all'), {});
-  assert.equal(nora1.id, null);
+  assert.deepEqual(nora1, { id: va.id, seller: a.id });
+  await call('confirmation.release', await ctxOf('nora@centre.dz', a.id), { id: va.id });
 
   // one seller less for Ali (the chief, from the seller's side): his « every seller » becomes « seller B »
   const sellerA = home.links.find((l: any) => l.store.id === a.id);
@@ -412,9 +431,11 @@ test('an agency works on several sellers: one at a time or all together, its peo
   assert.deepEqual(((await call('agency.team', chief, {})) as any[]).find((x) => x.name === 'Ali').sellers, [{ store: b.id, products: null }]);
   assert.equal((await a.db.query(`SELECT active FROM profiles WHERE email = 'ali@centre.dz'`))[0].active, false);
   // his unfinished Bébé Shop orders are free again
-  assert.equal((await a.db.query('SELECT locked_by FROM orders WHERE id = $1', [va.id]))[0].locked_by, null);
+  const paNow = (await a.db.query('SELECT agent_id, locked_by FROM orders WHERE id = $1', [pa.id]))[0];
+  assert.deepEqual([paNow.agent_id, paNow.locked_by], [null, null]);
   assert.deepEqual(((await call('agency.sellers', await ctxOf('ali@centre.dz'), {})) as any[]).map((x) => x.name), ['Sport Shop']);
-  // Lina's products at seller B: the Casque only now
+  // Lina's products at seller B: the Casque only now (the Vélo given to her goes back to nobody)
+  await giveIn(b, [cb.id, vb.id], 'lina@centre.dz');
   await call('users.update', chief, { id: lina.id, sellers: [{ store: b.id, products: [b.products.CASQ] }] });
   assert.deepEqual(((await call('confirmation.list', await ctxOf('lina@centre.dz', b.id), { sub: 'nouvelles' })) as any).rows.map((o: any) => o.id), [cb.id]);
   assert.deepEqual((await b.db.query(`SELECT agency_products FROM profiles WHERE email = 'lina@centre.dz'`))[0].agency_products.map(Number), [b.products.CASQ]);

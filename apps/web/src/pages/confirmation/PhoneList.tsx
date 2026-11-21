@@ -1,7 +1,8 @@
 // Phones: the queue as compact cards (name, chrono, product, status, call button);
 // a tap opens the whole order full screen, where every part of it can be changed (Detail in phone mode).
 import type { Order } from '@pilotix/shared';
-import { useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { HeldChip } from './hold';
 import { da, when, wilayaName } from '../../lib/format';
@@ -9,9 +10,11 @@ import { namesOf } from '../../lib/items';
 import { Icon, StatusBadge } from '../../ui/kit';
 import { Countdown, Deadline, RotateChip } from './Countdown';
 import { Detail } from './Detail';
-import { currentLabel } from './shared';
+import { currentLabel, useCanGive } from './shared';
 import { AskCall, AskMsg } from './History';
 import { rpc } from '../../lib/backend';
+import { useRpc } from '../../lib/query';
+import { toast } from '../../ui/toast';
 import { CONF_TONE } from '@pilotix/shared';
 import './phone.css';
 import { ScoreChip } from '../../ui/clientScore';
@@ -133,8 +136,57 @@ export function PhoneOrder({ order, onClose, onDone }: { order: Order; onClose: 
         <MsgButton o={order} />
       </header>
       <div className="pxp-ob" ref={body}>
+        <GiveLine order={order} />
         <Detail order={order} onDone={onDone} phone />
       </div>
     </div>
+  );
+}
+
+/**
+ * « Attribuer » on phones (the list has no ticks there): the order's agent, changed here one order at a time — for the
+ * store's managers and owner, and a confirmation agency's chief and chefs d'équipe (its own agents only: the server's
+ * list). Nothing for an agent.
+ */
+function GiveLine({ order }: { order: Order }) {
+  const gives = useCanGive();
+  return gives ? <GivePick order={order} /> : null;
+}
+
+function GivePick({ order }: { order: Order }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const meta = useRpc('confirmation.meta', {}, { staleTime: 5 * 60_000 });
+  const [busy, setBusy] = useState(false);
+  const agents = meta.data?.agents ?? [];
+  const cur = order.agentId ?? null;
+  const give = async (to: number | null) => {
+    if (to === cur || busy) return;
+    setBusy(true);
+    try {
+      await rpc('orders.assignAgent', { ids: [order.id], agentId: to });
+      const name = agents.find((a) => a.id === to)?.name;
+      toast(to ? t('confirmation.assigned', { n: 1, name }) : t('confirmation.unassigned', { n: 1 }), 'ok');
+      qc.invalidateQueries();
+    } catch (e: any) {
+      toast(e?.message ?? t('common.error'), 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <label className="pxp-give">
+      <Icon name="userplus" />
+      <span>{t('confirmation.ph.agent')}</span>
+      <select value={cur ?? ''} disabled={busy || !meta.data} aria-label={t('confirmation.tb.assign')} onChange={(e) => void give(e.target.value ? Number(e.target.value) : null)}>
+        <option value="">{t('confirmation.ph.nobody')}</option>
+        {cur !== null && !agents.some((a) => a.id === cur) && <option value={cur}>{order.agentName ?? '—'}</option>}
+        {agents.map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

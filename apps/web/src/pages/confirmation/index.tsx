@@ -24,7 +24,7 @@ import { Focus } from './Focus';
 import { HeldChip } from './hold';
 import { useIsPhone } from '../../lib/useMedia';
 import { PhoneCards, PhoneOrder } from './PhoneList';
-import { BULK_CHOICES, choiceAllowed, choiceLabel, currentLabel, ROW_CHOICES, StatusChoice, Sub, SUB_STATUSES, SUB_TONE, SUBS, telHref, toneOf, waHref } from './shared';
+import { BULK_CHOICES, choiceAllowed, choiceLabel, currentLabel, ROW_CHOICES, StatusChoice, Sub, SUB_STATUSES, SUB_TONE, SUBS, telHref, toneOf, useCanGive, waHref } from './shared';
 import { ConfirmedStatsPage, StatsSection } from './Stats';
 import { useStatusChange } from './StatusDialog';
 import { CopyCode } from '../../ui/CopyCode';
@@ -163,7 +163,8 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   const { t } = useTranslation();
   const { has } = useSession();
   const qc = useQueryClient();
-  const manager = has('agent_manager', 'vendeur');
+  // « Attribuer »: the store's managers and owner — and a confirmation agency's chief and chefs d'équipe
+  const manager = useCanGive();
   const meta = useRpc('confirmation.meta', {}, { staleTime: 5 * 60_000 });
   const catalog = useRpc('confirmation.catalog', {}, { staleTime: 5 * 60_000 });
   const COLS = useMemo(() => columnsOf(sub), [sub]);
@@ -448,8 +449,8 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   const toggleOpen = (id: number) => setOpen((s) => (s.has(id) ? (s.delete(id), new Set(s)) : new Set(s).add(id)));
   const allOn = rows.length > 0 && rows.every((r) => sel.has(r.id));
   const canNext = (sub === 'nouvelles' || sub === 'attente') && has('confirmation');
-  /** an agent sees only the orders given to him; managers and the owner see more */
-  const seesAll = has('agent_manager', 'vendeur');
+  /** an agent sees only the orders given to him; managers and the owner see more (an agency's chiefs: all of its own) */
+  const seesAll = manager;
   // "Commande suivante" lives in the top header (Shell): it asks this list to open the next order
   useEffect(() => {
     if (!canNext) return;

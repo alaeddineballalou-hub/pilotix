@@ -603,7 +603,9 @@
     "queue": "{{n}} à traiter",
     "next": "Commande suivante",
     "empty": "Aucune commande ici.",
-    "status": "Statut"
+    "status": "Statut",
+    "agent": "Agent",
+    "nobody": "Personne (libre)"
   },
   "cs": {
     "title": "Statistiques des confirmées",

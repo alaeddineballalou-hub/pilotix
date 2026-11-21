@@ -507,7 +507,8 @@
       "confirmation": "Aucun de vos vendeurs ne vous donne la confirmation.",
       "suivi": "Aucun de vos vendeurs ne vous donne le suivi."
     },
-    "pickSeller": "{{what}} : choisissez un vendeur en haut de la page (chaque vendeur a ses propres colis et sociétés)."
+    "pickSeller": "{{what}} : choisissez un vendeur en haut de la page (chaque vendeur a ses propres colis et sociétés).",
+    "giveNotThere": "{{name}} ne travaille pas pour {{sellers}} : ces commandes ne lui sont pas données"
   },
   "mnav": {
     "accueil": "Accueil",

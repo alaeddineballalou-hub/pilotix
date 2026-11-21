@@ -39,13 +39,37 @@ const COL = { conf: 'conf_agency_id', follow: 'follow_agency_id' } as const;
 const ROLE = { conf: 'confirmation', follow: 'suivi' } as const;
 
 /**
+ * The chief of a confirmation agency (its administrator) or one of its chefs d'équipe, working in a store: for the
+ * agency's orders there, like a store's agent manager — sees every one (the free ones too) and gives them to the
+ * agency's agents (« Attribuer »). Who leads comes from the person's roles in the agency (agencywork.ts: storeCtx).
+ */
+export function agencyLead(ctx: Ctx): boolean {
+  return agencyOf(ctx) !== null && !!ctx.session.profile.agencyLead && !ctx.session.roles.includes('marketer');
+}
+
+/**
+ * A plain agent of an agency (not its chief, not a chef d'équipe), in Confirmation: only the orders given to him — by
+ * a chief of the agency or the agency's Répartition. Like a store's own agent, he never takes a free one.
+ */
+function agencyMineSql(ctx: Ctx, alias: string): string {
+  if (agencyLead(ctx)) return '';
+  const me = Number(ctx.session.profile.id);
+  // built into SQL: only a whole positive number goes there
+  if (!Number.isSafeInteger(me) || me <= 0) throw forbidden();
+  return ` AND ${alias}.agent_id = ${me}`;
+}
+
+/**
  * SQL on an orders row (alias `o`) of the orders an agency's agent may open: its confirmation agents the orders the
- * agency confirms, its suivi agents the ones it follows. '' for everyone else (no limit from agencies).
+ * agency confirms (a plain agent: those given to him), its suivi agents the ones it follows. '' for everyone else
+ * (no limit from agencies).
  */
 export function agencyRowSql(ctx: Ctx, alias = 'o'): string {
   const a = agencyOf(ctx);
   if (a === null) return '';
-  const parts = (['conf', 'follow'] as const).filter((k) => ctx.session.roles.includes(ROLE[k])).map((k) => `${alias}.${COL[k]} = ${a}`);
+  const parts = (['conf', 'follow'] as const)
+    .filter((k) => ctx.session.roles.includes(ROLE[k]))
+    .map((k) => (k === 'conf' ? `(${alias}.${COL[k]} = ${a}${agencyMineSql(ctx, alias)})` : `${alias}.${COL[k]} = ${a}`));
   return parts.length ? `(${parts.join(' OR ')})${productSql(ctx, alias)}` : 'false';
 }
 
@@ -59,13 +83,14 @@ function productSql(ctx: Ctx, alias: string): string {
 }
 
 /**
- * SQL of one work queue (confirmation or suivi): an agency's agent gets its agency's orders, the store's own agents
- * the orders no agency handles, managers and administrators every order ('').
+ * SQL of one work queue (confirmation or suivi): an agency's people get its agency's orders (in Confirmation, a plain
+ * agent those given to him), the store's own agents the orders no agency handles, managers and administrators every
+ * order ('').
  */
 export function queueSql(ctx: Ctx, task: 'conf' | 'follow', alias = 'o', opts: { free?: boolean } = {}): string {
   const a = agencyOf(ctx);
-  // an agency's people: the agency shares its orders out itself (step « Agences »)
-  if (a !== null) return ctx.session.roles.includes(ROLE[task]) ? `${alias}.${COL[task]} = ${a}${productSql(ctx, alias)}` : 'false';
+  // an agency's people: the agency shares its orders out itself (its chiefs by hand, or its Répartition)
+  if (a !== null) return ctx.session.roles.includes(ROLE[task]) ? `${alias}.${COL[task]} = ${a}${task === 'conf' ? agencyMineSql(ctx, alias) : ''}${productSql(ctx, alias)}` : 'false';
   const who = task === 'conf' ? confSeeSql(ctx, alias, !!opts.free) : '';
   const join = (x: string) => [x, who].filter(Boolean).join(' AND ');
   if (ctx.session.isAdmin || hasRole(ctx.session, 'agent_manager', 'vendeur')) return who;
@@ -129,7 +154,9 @@ const nums = (v: unknown): number[] => (Array.isArray(v) ? v : [v]).filter((x): 
 
 const NOT_AGENCY = 'Cette commande n’est pas confiée à votre agence';
 const NOT_MINE = 'Cette commande est donnée à un autre agent';
-const notOursText = (ctx: Ctx) => (agencyOf(ctx) !== null ? NOT_AGENCY : NOT_MINE);
+/** a plain confirmation agent of an agency: the order is another agent's, nobody's yet, or not the agency's */
+const NOT_GIVEN = 'Cette commande ne vous est pas donnée, ou elle n’est pas confiée à votre agence';
+const notOursText = (ctx: Ctx) => (agencyOf(ctx) === null ? NOT_MINE : !agencyLead(ctx) && ctx.session.roles.includes('confirmation') ? NOT_GIVEN : NOT_AGENCY);
 
 /** These orders must all be the agency's, or the store's confirmation agent's own (an unknown id counts as not theirs). */
 async function ownOrders(ctx: Ctx, ids: number[]) {
@@ -188,6 +215,23 @@ const message =
 const swapPair: Gate = (ctx, i) => ownOrders(ctx, [...nums(i?.fromId), ...nums(i?.toId)]);
 
 /**
+ * « Attribuer »: the agency's chief and its chefs d'équipe give the agency's orders to one of its own confirmation
+ * agents here (one given the products of those orders), or take them back (nobody's). Never to the store's team.
+ */
+const give: Gate = async (ctx, i) => {
+  if (!agencyLead(ctx)) throw forbidden('Seul le chef de l’agence ou un chef d’équipe donne les commandes');
+  const ids = [...new Set(nums(i?.ids))];
+  await ownOrders(ctx, ids);
+  if (i?.agentId === null || i?.agentId === undefined) return;
+  const p = (await ctx.db.query(`SELECT name, agency_products FROM profiles WHERE id = $1 AND active AND agency_id = $2 AND 'confirmation' = ANY(roles)`, [i.agentId, agencyOf(ctx)]))[0];
+  if (!p) throw forbidden('Cette personne n’est pas un agent de confirmation de votre agence chez ce vendeur');
+  const products = idsOrNull(p.agency_products);
+  if (!products) return;
+  const out = (await ctx.db.query('SELECT ref FROM orders WHERE id = ANY($1) AND (route_product_id IS NULL OR NOT (route_product_id = ANY($2))) LIMIT 1', [ids, products]))[0];
+  if (out) throw bad(`${p.name} ne travaille pas sur le produit de ${out.ref}`);
+};
+
+/**
  * A customer the agency calls (one of its orders), or one of the store's confirmation agent's own customers. The id and
  * the phone are each checked: the action reads the id first, so a phone of one's own never opens another customer.
  */
@@ -230,6 +274,8 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'orders.setSub': order('id'),
   'orders.setConf': order('ids'),
   'orders.setFollow': order('ids'),
+  // « Attribuer »: the agency's chiefs give its orders to its agents
+  'orders.assignAgent': give,
   // « ↶ Annuler »: the last change of one of the agency's orders
   'orders.lastChange': order('id'),
   'orders.undo': order('id'),

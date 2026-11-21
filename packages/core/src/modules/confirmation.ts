@@ -6,7 +6,7 @@ import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, hasRole, proc } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { ConfInput, dueNowSql, getOrder, highestGridFee, holdOrder, lineGrids, ListInput, listOrders, setConf, teamMembers, triedSince, withClientScores } from './orders';
-import { andSql, queueSql } from './agencyscope';
+import { agencyLead, agencyOf, andSql, queueSql } from './agencyscope';
 import { HAS_GUIDE } from './guide';
 import { assignedProductIds } from './productscope';
 import { readMontage } from './montage';
@@ -257,7 +257,7 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
     follow: i.sub === 'livrees' ? ['delivered'] : i.sub === 'confirmees' ? [...NOT_SENT] : undefined,
     q: i.q,
     wilayaId: i.wilayaId,
-    agentId: i.sub === 'livrees' && !ctx.session.isAdmin && !isManager(ctx) ? ctx.session.profile.id : i.agentId,
+    agentId: i.sub === 'livrees' && !ctx.session.isAdmin && !isManager(ctx) && !agencyLead(ctx) ? ctx.session.profile.id : i.agentId,
     agentIds: i.teamId ? await teamAgents(ctx, i.teamId) : undefined,
     productId: i.productId,
     variantId: i.variantId,
@@ -654,10 +654,14 @@ async function banner(ctx: Ctx) {
 export const confirmationProcs = {
   /** Shop name, WhatsApp template, call rules and the agents for the pickers. */
   'confirmation.meta': proc(['confirmation'], z.object({}), async (ctx) => {
+    const agency = agencyOf(ctx);
     const [shop, calls, agents] = await Promise.all([
       getSetting(ctx.db, 'shop'),
       getSetting(ctx.db, 'calls'),
-      ctx.db.query(`SELECT id, name FROM profiles WHERE active AND roles && '{confirmation,agent_manager,vendeur,admin}'::text[] ORDER BY name`),
+      agency === null
+        ? ctx.db.query(`SELECT id, name FROM profiles WHERE active AND roles && '{confirmation,agent_manager,vendeur,admin}'::text[] ORDER BY name`)
+        : // an agency's people: its own confirmation agents here, never the store's team (its chiefs give them its orders)
+          ctx.db.query(`SELECT id, name FROM profiles WHERE active AND agency_id = $1 AND 'confirmation' = ANY(roles) ORDER BY name`, [agency]),
     ]);
     return {
       shopName: shop.name,
@@ -665,7 +669,7 @@ export const confirmationProcs = {
       calls,
       agents: agents.map((a: any) => ({ id: num(a.id), name: a.name as string })),
       teams: (await getSetting(ctx.db, 'teams')).map((t) => ({ id: t.id, name: t.name })),
-      manager: isManager(ctx),
+      manager: isManager(ctx) || agencyLead(ctx),
     };
   }),
 
@@ -713,7 +717,7 @@ export const confirmationProcs = {
     const rows = await ctx.db.query(`SELECT conf_status AS k, count(*)::int AS n FROM sales o WHERE true${q} GROUP BY 1`);
     const by = Object.fromEntries(rows.map((r: any) => [r.k, num(r.n)]));
     const sum = (s: readonly string[]) => s.reduce((t, k) => t + (by[k] ?? 0), 0);
-    const all = ctx.session.isAdmin || isManager(ctx);
+    const all = ctx.session.isAdmin || isManager(ctx) || agencyLead(ctx);
     const dl = (await ctx.db.query(`SELECT count(*)::int AS n FROM sales o WHERE conf_status = 'confirmed' AND follow_status = 'delivered'${all ? '' : ' AND agent_id = $1'}${q}`, all ? [] : [ctx.session.profile.id]))[0];
     const cf = (await ctx.db.query(`SELECT count(*)::int AS n FROM sales o WHERE conf_status = ANY($1) AND ${NOT_SENT_SQL}${q}`, [[...CONF_SUBS.confirmees]]))[0];
     return { nouvelles: sum(CONF_SUBS.nouvelles), attente: sum(CONF_SUBS.attente), confirmees: num(cf?.n), terminees: sum(CONF_SUBS.terminees), livrees: num(dl?.n) };

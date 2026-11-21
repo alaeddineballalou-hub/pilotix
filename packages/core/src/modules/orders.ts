@@ -38,7 +38,7 @@ import { assignNow, getAssign } from './assign';
 import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPreview } from './notify';
 import { landingCounts, landingSettings, onLandingConf, onLandingFollow, queueChatEvent, queueChatPurchase } from './landingquery';
 import { lowStockCount } from './stockquery';
-import { agencyOf, agencyRowSql, andSql, ownRowSql, queueSql, rowScopeSql } from './agencyscope';
+import { agencyLead, agencyOf, agencyRowSql, andSql, ownRowSql, queueSql, rowScopeSql } from './agencyscope';
 import { settleTickets } from './tickets';
 import { addDepotAlert, alertsDepot, DepotChange, itemsText } from './depotalerts';
 import { blockerText, checkLines, checkOrder, deliverCheck } from './confirmcheck';
@@ -179,9 +179,10 @@ export const dueNowSql = (n: number) =>
 export const triedSince = async (ctx: Ctx) => new Date(slotStartOf(ctx.now(), await getSetting(ctx.db, 'calls'))).toISOString();
 
 /** The orders an agent may take now with « Commande suivante », the most urgent first ($1 to-do statuses, $2 the agent,
- *  $3 skipped, $4 the start of the current call slot): an agent only his own orders (his manager gives them); a manager,
- *  the owner or an admin also one nobody has yet — and a confirmation agency's agent, his agency sharing out its orders. */
-const nextFrom = (ctx: Ctx) => `FROM orders o WHERE conf_status = ANY($1) AND (${mayOverrideHold(ctx) || ctx.session.profile.agencyId != null ? 'agent_id IS NULL OR ' : ''}agent_id = $2) AND NOT (id = ANY($3))
+ *  $3 skipped, $4 the start of the current call slot): an agent only his own orders (his manager gives them — an
+ *  agency's agent: his agency's chiefs or its Répartition); a manager, the owner or an admin also one nobody has yet —
+ *  and so do a confirmation agency's chief and its chefs d'équipe. */
+const nextFrom = (ctx: Ctx) => `FROM orders o WHERE conf_status = ANY($1) AND (${mayOverrideHold(ctx) || agencyLead(ctx) ? 'agent_id IS NULL OR ' : ''}agent_id = $2) AND NOT (id = ANY($3))
   AND ${dueNowSql(4)} AND (locked_until IS NULL OR locked_until < now() OR locked_by = $2)${andSql(queueSql(ctx, 'conf', 'o', { free: true }))}
   ORDER BY (next_call_at IS NOT NULL) DESC, next_call_at ASC, created_at ASC`;
 
@@ -1244,9 +1245,9 @@ export async function holdOrder(ctx: Ctx, id: number): Promise<{ ok: boolean; by
       )
     )[0];
     if (r?.taken) return { ok: false, by: (r.name as string | null) ?? '', until: isoOrNull(r.until) };
-    // nobody has it and it is not given to this agent: only his manager gives it (an agency's agent: his agency does)
+    // nobody has it and it is not given to this agent: only his manager gives it (an agency's agent: his agency's chiefs)
     const free = (await tx.query(`SELECT 1 FROM orders WHERE id = $1 AND agent_id IS NULL AND conf_status = ANY($2)`, [id, CONF_TODO]))[0];
-    if (free && !mayOverrideHold(ctx) && ctx.session.profile.agencyId == null) return { ok: false, by: '', until: null };
+    if (free && !mayOverrideHold(ctx) && !agencyLead(ctx)) return { ok: false, by: '', until: null };
     return { ok: true, by: null, until: null };
   });
 }
@@ -1301,14 +1302,15 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
       if (!cur) continue;
       // another agent has this order open (« Commande suivante » or opened from a list, 10 minutes): only he changes it
       // (an admin or a manager can still act on it)
-      // an agent changes only his own orders — his manager gives them (an agent manager, the owner: any he sees)
-      if (!mayOverrideHold(ctx) && ctx.session.profile.agencyId == null && (cur.agent_id == null || num(cur.agent_id) !== me)) {
+      // an agent changes only his own orders — his manager gives them (an agent manager, the owner: any he sees; an
+      // agency's agent: those its chief or a chef d'équipe gave him)
+      if (!mayOverrideHold(ctx) && !agencyLead(ctx) && (cur.agent_id == null || num(cur.agent_id) !== me)) {
         const why = cur.agent_id == null ? `${cur.ref} : cette commande ne vous est pas donnée — votre manager vous la donne` : `${cur.ref} : cette commande est donnée à un autre agent`;
         if (input.ids.length === 1) throw bad(why);
         blocked.push({ id: oid, ref: cur.ref, reason: why });
         continue;
       }
-      if (cur.held_by != null && !mayOverrideHold(ctx)) {
+      if (cur.held_by != null && !mayOverrideHold(ctx) && !agencyLead(ctx)) {
         const why = `${cur.ref} : ${cur.held_by || 'un autre agent'} est sur cette commande`;
         if (input.ids.length === 1) throw bad(why);
         blocked.push({ id: oid, ref: cur.ref, reason: why });
@@ -2084,15 +2086,16 @@ export const ordersProcs = {
   'orders.setFollow': proc(['suivi', 'depot', 'livreur'], FollowInput, (ctx, i) => setFollow(ctx, i)),
 
   'orders.assignAgent': proc(['agent_manager', 'vendeur', 'confirmation'], z.object({ ids, agentId: id.nullable() }), async (ctx, { ids, agentId }) => {
-    const manager = hasRole(ctx.session, 'agent_manager', 'vendeur');
+    // a confirmation agency's chief and its chefs d'équipe: the managers of the agency's orders (agencyscope.ts: give)
+    const manager = hasRole(ctx.session, 'agent_manager', 'vendeur') || agencyLead(ctx);
     if (!manager && agentId !== ctx.session.profile.id) throw forbidden('Seul un manager peut assigner à quelqu’un d’autre');
     await ctx.db.tx(async (tx) => {
       for (const oid of ids) {
         const cur = (await tx.query('SELECT ref, agent_id, shipped_at FROM orders WHERE id=$1', [oid]))[0];
         if (!cur) continue;
         if (!manager && cur.agent_id && num(cur.agent_id) !== ctx.session.profile.id) throw forbidden();
-        // an agent never takes an order nobody has: his manager gives it (an agency's agent: his agency shares them out)
-        if (!manager && !cur.agent_id && ctx.session.profile.agencyId == null) throw forbidden('Votre manager vous donne les commandes');
+        // an agent never takes an order nobody has: his manager gives it (an agency's agent: his agency's chiefs)
+        if (!manager && !cur.agent_id) throw forbidden('Votre manager vous donne les commandes');
         // the agent of an order that left is the one paid for it: only the administrator changes it then
         if (cur.shipped_at && !ctx.session.isAdmin) throw bad(`${cur.ref} est déjà partie : seul l’administrateur change son agent`);
         await tx.query('UPDATE orders SET agent_id=$2, assigned_at = CASE WHEN $2::bigint IS NULL THEN NULL ELSE now() END, updated_at=now() WHERE id=$1', [oid, agentId]);
