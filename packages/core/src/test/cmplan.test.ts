@@ -532,7 +532,7 @@ test('on the server: the first comment, a story, and Meta’s numbers once an ho
   const s: any = await call('cm.plan.get', mk, { id: story.id });
   assert.equal(s.status, 'published');
   assert.equal(s.firstComment, null);
-  // Meta's numbers: asked for the new posts, stored, not asked again before an hour
+  // Meta's numbers: asked for the new posts, stored, not asked again before 10 minutes (a post of the last 6 hours)
   const asked = log.filter((l) => l.action === 'planStats');
   assert.ok(asked.length >= 1);
   const fbId = String((await db.query(`SELECT fb_id FROM cm_planned WHERE id = $1`, [post.id]))[0].fb_id);
@@ -542,6 +542,24 @@ test('on the server: the first comment, a story, and Meta’s numbers once an ho
   await call('cm.plan.run', { ...job, now: () => Date.now() + 40 * 60_000 }, {});
   const again = log.filter((l) => l.action === 'planStats').slice(before);
   assert.ok(again.every((l) => !l.args.items.some((it: any) => it.id === row?.external_id)));
+  // a post open on the screen: its numbers come from Meta at once (not twice within 15 seconds), both networks added up
+  const t0 = new Date((await db.query(`SELECT fetched_at FROM cm_post_stats WHERE channel = 'facebook' AND external_id = $1`, [fbId]))[0].fetched_at).getTime();
+  const quick: any = await call('cm.plan.fresh', { ...mk, now: () => t0 + 5_000 }, { ids: [post.id] });
+  assert.equal(quick.asked, 0);
+  assert.equal(quick.posts[0].id, post.id);
+  assert.deepEqual([quick.posts[0].results.likes, quick.posts[0].results.comments], [14, 4]);
+  assert.ok(quick.posts[0].fetchedAt);
+  const n0 = log.filter((l) => l.action === 'planStats').length;
+  const open: any = await call('cm.plan.fresh', { ...mk, now: () => t0 + 20_000 }, { ids: [post.id] });
+  assert.equal(open.asked, 2);
+  assert.deepEqual(log.filter((l) => l.action === 'planStats').slice(n0).flatMap((l) => l.args.items.map((it: any) => it.channel)).sort(), ['facebook', 'instagram']);
+  // Results: the posts of the last 2 days are asked again (a story: Instagram only, Facebook gives none)
+  const n1 = log.filter((l) => l.action === 'planStats').length;
+  const recent: any = await call('cm.plan.fresh', { ...mk, now: () => t0 + 90_000 }, {});
+  assert.ok(recent.posts.some((p: any) => p.id === post.id) && recent.posts.some((p: any) => p.id === story.id));
+  assert.ok(recent.asked >= 3 && log.filter((l) => l.action === 'planStats').length > n1);
+  const kept = await db.query(`SELECT channel FROM cm_post_stats WHERE planned_id = $1 ORDER BY channel`, [story.id]);
+  assert.deepEqual(kept.map((r: any) => r.channel), ['instagram']);
   // a story is deleted in Pilotix only (it leaves Meta by itself after 24 hours)
   const n = log.filter((l) => l.action === 'planDelete').length;
   await call('cm.plan.delete', mk, { id: story.id });

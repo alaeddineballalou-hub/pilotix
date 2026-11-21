@@ -1,8 +1,9 @@
 // Pilot Content › Results: what the posts did. Meta's numbers (views, reach, likes, comments, shares, saves) and
 // Pilotix's own (the comments Pilot Comments answered, the conversations they opened, the orders and the money they
 // brought); this week against the one before with what to do next; the best posts (« Post again »); the best hours,
-// days and kinds; the followers; every post. The numbers come from cm.plan.stats (modules/cmsocial.ts).
-import { useMemo, useState } from 'react';
+// days and kinds; the followers; every post. The numbers come from cm.plan.stats (modules/cmsocial.ts); the posts of the
+// last 2 days are asked from Meta again as the page opens and every minute while it stays open (cm.plan.fresh).
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Out, rpc } from '../../lib/backend';
 import { da, n, when } from '../../lib/format';
@@ -27,6 +28,21 @@ export function Results({ admin }: { admin: boolean }) {
   const [days, setDays] = useState<Days>(30);
   const q = useRpc('cm.plan.stats', { days });
   const s = q.data;
+  useEffect(() => {
+    let on = true;
+    const ask = () =>
+      rpc('cm.plan.fresh', {})
+        .then((r) => {
+          if (on && r.asked) void q.refetch();
+        })
+        .catch(() => null);
+    void ask();
+    const k = window.setInterval(() => void ask(), 60_000);
+    return () => {
+      on = false;
+      window.clearInterval(k);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [sort, setSort] = useState<'new' | 'orders' | 'views'>('new');
   const rows = useMemo(() => {
     const all = [...(s?.posts ?? [])];

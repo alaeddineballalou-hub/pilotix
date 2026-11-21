@@ -706,10 +706,12 @@ const metric = (r: any, name: string): number | null => {
 const count = (v: unknown): number | null => (typeof v === 'number' ? v : typeof v === 'string' && /^\d+$/.test(v) ? Number(v) : null);
 
 /**
- * Each post's numbers, and the followers. Instagram: views, reach, likes, comments, shares, saves (a story: views,
- * reach, shares, 24 hours only), instagram_manage_insights. Facebook: views (post_media_view) and reach
- * (post_total_media_view_unique), read_insights; reactions, comments and shares from the post itself. Without the
- * insights permission the likes and comments still come (insights: false).
+ * Each post's numbers, and the followers: the very numbers Meta shows on the post. Instagram: views, reach, shares,
+ * saves (a story: views, reach, shares, 24 hours only), instagram_manage_insights; its likes and comments from the post
+ * itself (like_count, comments_count: what the Instagram app shows at once, replies included). Facebook: views
+ * (post_media_view) and reach (post_total_media_view_unique), read_insights; reactions, shares and every comment
+ * (replies and the Page's own included: the number under the post) from the post itself. Without the insights
+ * permission the likes and comments still come (insights: false).
  */
 async function planStats(ctx: Ctx, a: { pageId?: string; igId?: string; items?: StatItem[]; followers?: boolean }): Promise<{ items: StatOut[]; followers: { facebook?: number | null; instagram?: number | null } }> {
   const tk = `access_token=${enc(await pageToken(ctx))}`;
@@ -728,16 +730,20 @@ async function planStats(ctx: Ctx, a: { pageId?: string; igId?: string; items?: 
           if (/not enough viewers/i.test(String(e?.message))) row.insights = true;
           else row.error = String(e?.message ?? e).slice(0, 200);
         }
-        if (!row.insights && !story) {
+        if (!story) {
+          // the post's own counts: what the Instagram app shows right now (insights come a little later)
           const f = await postJson(`${PLAN_GRAPH}/${enc(it.id)}?fields=like_count,comments_count&${tk}`, null, {}, who, 'GET').catch(() => null);
-          row.likes = count(f?.like_count);
-          row.comments = count(f?.comments_count);
+          row.likes = count(f?.like_count) ?? row.likes;
+          row.comments = count(f?.comments_count) ?? row.comments;
         }
       } else {
         const f = await postJson(`${PLAN_GRAPH}/${enc(it.id)}?fields=shares,reactions.summary(total_count).limit(0),comments.summary(total_count).limit(0)&${tk}`, null, {}, who, 'GET').catch(() => null);
         row.likes = count(f?.reactions?.summary?.total_count);
         row.comments = count(f?.comments?.summary?.total_count);
         row.shares = count(f?.shares?.count) ?? (f ? 0 : null);
+        // every comment, replies and the Page's own included: the number Facebook shows under the post
+        const all = await postJson(`${PLAN_GRAPH}/${enc(it.id)}/comments?filter=stream&summary=total_count&limit=0&${tk}`, null, {}, who, 'GET').catch(() => null);
+        row.comments = count(all?.summary?.total_count) ?? row.comments;
         try {
           const r = await postJson(`${PLAN_GRAPH}/${enc(it.id)}/insights?metric=post_media_view,post_total_media_view_unique&${tk}`, null, {}, who, 'GET');
           row.views = metric(r, 'post_media_view');

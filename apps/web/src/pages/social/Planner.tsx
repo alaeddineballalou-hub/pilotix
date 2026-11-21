@@ -679,6 +679,26 @@ function useEditor(start: Draft, data: ListOut, onDone: () => void, onOpen: (p: 
   }, [sure]);
   const set = (patch: Partial<Draft>) => setD((o) => ({ ...o, ...patch }));
   const post = d.post;
+  // what a post that went out did: Meta's numbers asked again as it opens, then every 20 seconds while it stays open
+  const outId = post && (post.facebook?.done || post.instagram?.done) ? post.id : null;
+  const [live, setLive] = useState<Out<'cm.plan.fresh'>['posts'][number] | null>(null);
+  useEffect(() => {
+    if (!outId) return;
+    let on = true;
+    const ask = () =>
+      rpc('cm.plan.fresh', { ids: [outId] })
+        .then((r) => {
+          const p = r.posts.find((x) => x.id === outId);
+          if (on && p) setLive(p);
+        })
+        .catch(() => null);
+    void ask();
+    const k = window.setInterval(() => void ask(), 20_000);
+    return () => {
+      on = false;
+      window.clearInterval(k);
+    };
+  }, [outId]);
   const status = post?.status ?? null;
   const out = status === 'published';
   const going = status === 'publishing';
@@ -961,7 +981,7 @@ function useEditor(start: Draft, data: ListOut, onDone: () => void, onOpen: (p: 
   const acc = data.accounts;
   const nets = post ? CHANNELS.filter((c) => d.channels.includes(c) && (c === 'facebook' ? post.facebook : post.instagram)) : [];
 
-  const res = post?.results ?? null;
+  const res = live?.results ?? post?.results ?? null;
   const scorePanel = (
     <div className={`pl-sec pl-score s${sc.score >= 8 ? 'ok' : sc.score >= 5 ? 'mid' : 'low'}`}>
       <div className="pl-score-top">
@@ -1032,6 +1052,7 @@ function useEditor(start: Draft, data: ListOut, onDone: () => void, onOpen: (p: 
           </div>
           {res.revenue > 0 && <p className="pl-hint">{t('social.plan.ed.revenue', { amount: da(res.revenue) })}</p>}
           {!res.insights && <p className="pl-hint">{t('social.res.noInsights')}</p>}
+          {live?.fetchedAt && <p className="pl-hint">{t('social.res.updated', { when: when(live.fetchedAt) })}</p>}
         </div>
       )}
       {!locked && (

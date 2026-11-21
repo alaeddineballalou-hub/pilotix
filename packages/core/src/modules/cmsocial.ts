@@ -7,8 +7,10 @@
 //    sellers, new ones, ones not posted lately) and the Algerian calendar's days coming; the person checks and plans them
 //  - « Post again » (cm.plan.again), moving a post on the calendar (cm.plan.move), the administrator's yes
 //    (cm.plan.review), planning several drafts at once (cm.plan.planMany), the settings (cm.plan.settings)
-//  - the job (cm.plan.run, every minute): the posts whose time has come go out; the numbers come again (a new post every
-//    hour, older ones less often, a story only in its 24 hours) and the followers once a day
+//  - the job (cm.plan.run, every minute): the posts whose time has come go out; the numbers come again (a post of the
+//    last 6 hours every 10 minutes, of the last 2 days every hour, older ones less often, a story only in its 24 hours)
+//    and the followers once a day
+//  - a post open on the screen (cm.plan.fresh): its numbers asked from Meta at once, and again while it stays open
 import { DzEventKey, dzEvents, nextSlot } from '@pilotix/shared';
 import { z } from 'zod';
 import { iso, num, numOrNull } from '../db';
@@ -115,51 +117,21 @@ async function productMedia(ctx: Ctx, productId: number): Promise<number[]> {
   return [];
 }
 
-// ---------------------------------------------------------------- Meta's numbers (the job)
-/**
- * Asks Meta again for the numbers of the posts that went out in the last 60 days (a post of the last 2 days every hour,
- * of the last week every 6 hours, older ones once a day; a story only in its 24 hours), 15 at a time, and the followers
- * once a day. Nothing in the preview (its numbers are the demo's).
- */
-export async function refreshStats(ctx: Ctx): Promise<number> {
-  if (!ctx.server?.dellal) return 0;
-  const now = ctx.now();
-  const rows = await ctx.db.query(
-    `SELECT p.id, p.kind, p.fb_id, p.ig_id, coalesce(p.published_at, p.publish_at) AS at,
-       (SELECT fetched_at FROM cm_post_stats s WHERE s.channel = 'facebook' AND s.external_id = p.fb_id) AS fb_at,
-       (SELECT fetched_at FROM cm_post_stats s WHERE s.channel = 'instagram' AND s.external_id = p.ig_id) AS ig_at
-     FROM cm_planned p WHERE (p.fb_id IS NOT NULL OR p.ig_id IS NOT NULL) AND coalesce(p.published_at, p.publish_at) > $1
-     ORDER BY coalesce(p.published_at, p.publish_at) DESC LIMIT 300`,
-    [new Date(now - 60 * DAY).toISOString()],
-  );
-  const due = (at: unknown, fetched: unknown, story: boolean) => {
-    const age = now - Date.parse(iso(at));
-    if (story && age > DAY) return false;
-    const every = age < 2 * DAY ? HOUR : age < 7 * DAY ? 6 * HOUR : DAY;
-    return !fetched || now - Date.parse(iso(fetched)) >= every;
-  };
-  const items: { channel: 'facebook' | 'instagram'; id: string; kind: 'post' | 'story'; planned: number }[] = [];
-  for (const r of rows) {
-    const story = r.kind === 'story';
-    // Facebook gives no numbers for a Page's story
-    if (r.fb_id && !story && due(r.at, r.fb_at, story)) items.push({ channel: 'facebook', id: String(r.fb_id), kind: 'post', planned: num(r.id) });
-    if (r.ig_id && due(r.at, r.ig_at, story)) items.push({ channel: 'instagram', id: String(r.ig_id), kind: story ? 'story' : 'post', planned: num(r.id) });
-  }
-  const batch = items.slice(0, 15);
+// ---------------------------------------------------------------- Meta's numbers (the job, and a post open on the screen)
+type StatAsk = { channel: 'facebook' | 'instagram'; id: string; kind: 'post' | 'story'; planned: number };
+type StatRow = { channel: string; id: string; views: number | null; reach: number | null; likes: number | null; comments: number | null; shares: number | null; saves: number | null; insights: boolean; error: string | null };
+
+/** Asks Meta for these posts' numbers (and the followers when asked) and keeps them; a passing error keeps the numbers already there. */
+async function askMeta(ctx: Ctx, items: StatAsk[], needFollowers: boolean): Promise<void> {
   const acc = await planAccounts(ctx);
-  const today = ymd(now);
-  const have = (await ctx.db.query(`SELECT channel FROM cm_follow_days WHERE day = $1`, [today])).map((r: any) => String(r.channel));
-  const needFollowers = (!!acc.facebook && !have.includes('facebook')) || (!!acc.instagram && !have.includes('instagram'));
-  if (!batch.length && !needFollowers) return 0;
-  const out = (await ctx.server.dellal('planStats', { pageId: acc.facebook?.id, igId: acc.instagram?.id, items: batch.map(({ channel, id: ext, kind }) => ({ channel, id: ext, kind })), followers: needFollowers }, ctx)) as {
-    items?: { channel: string; id: string; views: number | null; reach: number | null; likes: number | null; comments: number | null; shares: number | null; saves: number | null; insights: boolean; error: string | null }[];
+  const out = (await ctx.server!.dellal!('planStats', { pageId: acc.facebook?.id, igId: acc.instagram?.id, items: items.map(({ channel, id: ext, kind }) => ({ channel, id: ext, kind })), followers: needFollowers }, ctx)) as {
+    items?: StatRow[];
     followers?: { facebook?: number | null; instagram?: number | null };
   };
-  const at = new Date(now).toISOString();
+  const at = new Date(ctx.now()).toISOString();
   for (const s of out?.items ?? []) {
-    const it = batch.find((b) => b.channel === s.channel && b.id === String(s.id));
+    const it = items.find((b) => b.channel === s.channel && b.id === String(s.id));
     if (!it) continue;
-    // a passing error keeps the numbers already there
     await ctx.db.query(
       `INSERT INTO cm_post_stats (channel, external_id, planned_id, views, reach, likes, comments, shares, saves, insights, error, fetched_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        ON CONFLICT (channel, external_id) DO UPDATE SET planned_id = EXCLUDED.planned_id, views = coalesce(EXCLUDED.views, cm_post_stats.views), reach = coalesce(EXCLUDED.reach, cm_post_stats.reach),
@@ -168,11 +140,79 @@ export async function refreshStats(ctx: Ctx): Promise<number> {
       [it.channel, it.id, it.planned, s.views, s.reach, s.likes, s.comments, s.shares, s.saves, !!s.insights, s.error ? String(s.error).slice(0, 300) : null, at],
     );
   }
+  if (!needFollowers) return;
+  const today = ymd(ctx.now());
   for (const ch of PLAN_CHANNELS) {
     const n = out?.followers?.[ch];
     if (typeof n === 'number' && n >= 0) await ctx.db.query(`INSERT INTO cm_follow_days (day, channel, followers) VALUES ($1,$2,$3) ON CONFLICT (day, channel) DO UPDATE SET followers = EXCLUDED.followers`, [today, ch, n]);
   }
+}
+
+/** The posts that went out with when Meta's numbers last came for each network. */
+const STAT_ROWS = `SELECT p.id, p.kind, p.fb_id, p.ig_id, coalesce(p.published_at, p.publish_at) AS at,
+       (SELECT fetched_at FROM cm_post_stats s WHERE s.channel = 'facebook' AND s.external_id = p.fb_id) AS fb_at,
+       (SELECT fetched_at FROM cm_post_stats s WHERE s.channel = 'instagram' AND s.external_id = p.ig_id) AS ig_at
+     FROM cm_planned p WHERE (p.fb_id IS NOT NULL OR p.ig_id IS NOT NULL)`;
+
+/** Each network of these posts whose numbers are older than `due` says (Facebook gives none for a Page's story). */
+function statAsks(rows: any[], due: (at: unknown, fetched: unknown, story: boolean) => boolean): StatAsk[] {
+  const items: StatAsk[] = [];
+  for (const r of rows) {
+    const story = r.kind === 'story';
+    if (r.fb_id && !story && due(r.at, r.fb_at, story)) items.push({ channel: 'facebook', id: String(r.fb_id), kind: 'post', planned: num(r.id) });
+    if (r.ig_id && due(r.at, r.ig_at, story)) items.push({ channel: 'instagram', id: String(r.ig_id), kind: story ? 'story' : 'post', planned: num(r.id) });
+  }
+  return items;
+}
+
+/**
+ * Asks Meta again for the numbers of the posts that went out in the last 60 days (a post of the last 6 hours every
+ * 10 minutes, of the last 2 days every hour, of the last week every 6 hours, older ones once a day; a story only in its
+ * 24 hours), 15 at a time, and the followers once a day. Nothing in the preview (its numbers are the demo's).
+ */
+export async function refreshStats(ctx: Ctx): Promise<number> {
+  if (!ctx.server?.dellal) return 0;
+  const now = ctx.now();
+  const rows = await ctx.db.query(`${STAT_ROWS} AND coalesce(p.published_at, p.publish_at) > $1 ORDER BY coalesce(p.published_at, p.publish_at) DESC LIMIT 300`, [new Date(now - 60 * DAY).toISOString()]);
+  const batch = statAsks(rows, (at, fetched, story) => {
+    const age = now - Date.parse(iso(at));
+    if (story && age > DAY) return false;
+    const every = age < 6 * HOUR ? 10 * 60_000 : age < 2 * DAY ? HOUR : age < 7 * DAY ? 6 * HOUR : DAY;
+    return !fetched || now - Date.parse(iso(fetched)) >= every;
+  }).slice(0, 15);
+  const acc = await planAccounts(ctx);
+  const have = (await ctx.db.query(`SELECT channel FROM cm_follow_days WHERE day = $1`, [ymd(now)])).map((r: any) => String(r.channel));
+  const needFollowers = (!!acc.facebook && !have.includes('facebook')) || (!!acc.instagram && !have.includes('instagram'));
+  if (!batch.length && !needFollowers) return 0;
+  await askMeta(ctx, batch, needFollowers);
   return batch.length;
+}
+
+/**
+ * The numbers of posts open on the screen, asked from Meta at once: the given posts (one open in the calendar, asked
+ * again every 20 seconds while it stays open), or the posts of the last 2 days (Results). A network asked less than
+ * 15 seconds ago (60 for Results) is not asked again, so several screens open do not flood Meta.
+ */
+export async function freshStats(ctx: Ctx, ids: number[] | null): Promise<{ asked: number; posts: { id: number; results: PostResult | null; fetchedAt: string | null }[] }> {
+  const now = ctx.now();
+  const rows = ids
+    ? await ctx.db.query(`${STAT_ROWS} AND p.id = ANY($1)`, [ids])
+    : await ctx.db.query(`${STAT_ROWS} AND coalesce(p.published_at, p.publish_at) > $1 AND coalesce(p.published_at, p.publish_at) <= $2 ORDER BY coalesce(p.published_at, p.publish_at) DESC LIMIT 10`, [
+        new Date(now - 2 * DAY).toISOString(),
+        new Date(now).toISOString(),
+      ]);
+  const wait = ids ? 15_000 : 60_000;
+  const asks = ctx.server?.dellal
+    ? statAsks(rows, (at, fetched, story) => !(story && now - Date.parse(iso(at)) > DAY) && (!fetched || now - Date.parse(iso(fetched)) >= wait)).slice(0, 10)
+    : [];
+  if (asks.length) await askMeta(ctx, asks, false).catch(() => undefined);
+  const pids = rows.map((r: any) => num(r.id));
+  const res = await postResults(ctx.db, pids);
+  const when = pids.length
+    ? await ctx.db.query(`SELECT planned_id AS id, max(fetched_at) AS at FROM cm_post_stats WHERE planned_id = ANY($1) GROUP BY planned_id`, [pids])
+    : [];
+  const at = new Map(when.map((r: any) => [num(r.id), r.at ? iso(r.at) : null]));
+  return { asked: asks.length, posts: pids.map((pid) => ({ id: pid, results: res.get(pid) ?? null, fetchedAt: at.get(pid) ?? null })) };
 }
 
 // ---------------------------------------------------------------- the results page
@@ -479,6 +519,12 @@ export const cmSocialProcs = {
       updatedAt: updated ? iso(updated) : null,
     };
   }),
+
+  /**
+   * The numbers of posts open on the screen, asked from Meta now: `ids` (a post open in the calendar), or the posts of
+   * the last 2 days (Results). Each answer is the post's results and when Meta's numbers came.
+   */
+  'cm.plan.fresh': proc([...PLAN_ROLES], z.object({ ids: z.array(id).min(1).max(10).optional() }), (ctx, i) => freshStats(ctx, i.ids ?? null)),
 
   /** The job (every minute): the posts whose time has come go out, then Meta's numbers come again when they are due. */
   'cm.plan.run': proc([], z.object({}), async (ctx) => {

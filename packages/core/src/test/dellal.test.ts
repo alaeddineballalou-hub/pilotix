@@ -1495,3 +1495,38 @@ test('Meta’s user profile: Messenger’s first and last name with the Page’s
     await db.query(`DELETE FROM settings WHERE key = 'secret_dellal_page_token'`);
   }
 });
+
+test('Pilot Content’s numbers: the ones Meta shows on the post (Facebook: every comment, replies too; Instagram: its own like and comment counts)', async () => {
+  const ctx = await as(EMAILS.admin);
+  await setRaw(db, 'secret_dellal_page_token', 'PAGE-STATS');
+  const asked: string[] = [];
+  let igFields: any = { like_count: 9, comments_count: 4 };
+  const real = globalThis.fetch;
+  globalThis.fetch = (async (input: any) => {
+    const u = String(input).replace(/access_token=[^&]+/, 'access_token=K');
+    asked.push(u);
+    const ok = (body: any) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (u.includes('/fb-post-1/comments?filter=stream')) return ok({ data: [], summary: { total_count: 3 } });
+    if (u.includes('/fb-post-1?fields=')) return ok({ shares: { count: 2 }, reactions: { data: [], summary: { total_count: 1 } }, comments: { data: [], summary: { total_count: 2 } } });
+    if (u.includes('/fb-post-1/insights')) return ok({ data: [{ name: 'post_media_view', values: [{ value: 41 }] }, { name: 'post_total_media_view_unique', values: [{ value: 30 }] }] });
+    if (u.includes('/ig-post-1/insights')) return ok({ data: ['views', 'reach', 'likes', 'comments', 'shares', 'saved'].map((name, k) => ({ name, values: [{ value: k + 1 }] })) });
+    if (u.includes('/ig-post-1?fields=like_count,comments_count')) return ok(igFields);
+    return new Response(JSON.stringify({ error: { message: 'unknown', code: 100 } }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+  }) as typeof fetch;
+  try {
+    const r: any = await runDellal('planStats', { items: [{ channel: 'facebook', id: 'fb-post-1', kind: 'post' }, { channel: 'instagram', id: 'ig-post-1', kind: 'post' }] }, ctx);
+    const [fb, ig] = r.items;
+    // Facebook: 1 reaction, 3 comments (the number under the post: replies and the Page's own too), views and reach
+    assert.deepEqual([fb.likes, fb.comments, fb.shares, fb.views, fb.reach, fb.insights], [1, 3, 2, 41, 30, true]);
+    assert.ok(asked.some((u) => u === 'https://graph.facebook.com/v25.0/fb-post-1/comments?filter=stream&summary=total_count&limit=0&access_token=K'));
+    // Instagram: likes and comments as the app shows them now (insights' come later), the rest from insights
+    assert.deepEqual([ig.likes, ig.comments, ig.views, ig.reach, ig.shares, ig.saves, ig.insights], [9, 4, 1, 2, 5, 6, true]);
+    // a like count the owner hides: the insights' number stays
+    igFields = { comments_count: 4 };
+    const h: any = await runDellal('planStats', { items: [{ channel: 'instagram', id: 'ig-post-1', kind: 'post' }] }, ctx);
+    assert.equal(h.items[0].likes, 3);
+  } finally {
+    globalThis.fetch = real;
+    await db.query(`DELETE FROM settings WHERE key = 'secret_dellal_page_token'`);
+  }
+});
