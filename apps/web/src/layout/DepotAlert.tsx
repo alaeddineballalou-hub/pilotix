@@ -160,6 +160,8 @@ function Steps({ a }: { a: Alert }) {
   const [cam, setCam] = useState(false);
   const [printed, setPrinted] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** sent to its company from here: the step stays on screen, ticked */
+  const [sentHere, setSentHere] = useState(false);
   const [err, setErr] = useState('');
   const input = useRef<HTMLInputElement>(null);
   const toCompany = useSendToCompany();
@@ -243,7 +245,7 @@ function Steps({ a }: { a: Alert }) {
   const rows: { key: string; on: boolean; ok: boolean; title: string; sub?: string | null }[] = [];
   if (!a.noOld) rows.push({ key: 'old', on: step === 'old', ok: a.found, title: cancel ? t('depot.alert.s.findCancel') : two ? t('depot.alert.s.findOld') : t('depot.alert.s.findOne'), sub: a.oldCode });
   if (noScan) rows.push({ key: 'out', on: true, ok: false, title: t('depot.alert.s.takeOut') });
-  if (a.send) rows.push({ key: 'send', on: step === 'send', ok: false, title: t('depot.alert.s.send', { co }) });
+  if (a.send || sentHere) rows.push({ key: 'send', on: step === 'send', ok: !a.send, title: t('depot.alert.s.send', { co }) });
   if (two) {
     rows.push({ key: 'print', on: step === 'print', ok: printed, title: a.api ? t('depot.alert.s.printCo', { co }) : t('depot.alert.s.print'), sub: a.newCode });
     rows.push({ key: 'scan', on: step === 'scan', ok: false, title: a.api ? t('depot.alert.s.scanCo', { co }) : t('depot.alert.s.scanNew'), sub: a.newCode });
@@ -262,7 +264,15 @@ function Steps({ a }: { a: Alert }) {
         ))}
       </ol>
       {step === 'send' && (
-        <button type="button" className="pxda-print on" disabled={toCompany.busy} onClick={() => toCompany.send([a.orderId])}>
+        <button
+          type="button"
+          className="pxda-print on"
+          disabled={toCompany.busy}
+          onClick={() => {
+            setSentHere(true);
+            void toCompany.send([a.orderId]);
+          }}
+        >
           <Icon name="truck" /> {t('depot.alert.sendTo', { co })}
         </button>
       )}
