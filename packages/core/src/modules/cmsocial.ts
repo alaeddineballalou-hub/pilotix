@@ -209,7 +209,14 @@ export async function freshStats(ctx: Ctx, ids: number[] | null): Promise<{ aske
   const pids = rows.map((r: any) => num(r.id));
   const res = await postResults(ctx.db, pids);
   const when = pids.length
-    ? await ctx.db.query(`SELECT planned_id AS id, max(fetched_at) AS at FROM cm_post_stats WHERE planned_id = ANY($1) GROUP BY planned_id`, [pids])
+    ? await ctx.db.query(
+        `SELECT p.id, max(s.fetched_at) AS at
+         FROM cm_planned p JOIN cm_post_stats s
+           ON (s.channel = 'facebook' AND s.external_id = p.fb_id)
+           OR (s.channel = 'instagram' AND s.external_id = p.ig_id)
+         WHERE p.id = ANY($1) GROUP BY p.id`,
+        [pids],
+      )
     : [];
   const at = new Map(when.map((r: any) => [num(r.id), r.at ? iso(r.at) : null]));
   return { asked: asks.length, posts: pids.map((pid) => ({ id: pid, results: res.get(pid) ?? null, fetchedAt: at.get(pid) ?? null })) };
