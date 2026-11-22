@@ -338,6 +338,8 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
               ? { tone: 'bad', text: t('confirmation.chk.wilaya'), fix: () => setGeoPick('wil') }
               : C.deliver.why === 'desk'
                 ? { tone: 'bad', text: t('confirmation.chk.desk'), fix: () => setPicker(true) }
+                : C.deliver.why === 'deskGone'
+                ? { tone: 'bad', text: t('confirmation.chk.deskGone', { co: C.deliver.companyName ?? '', d: C.deliver.deskName ?? '' }), fix: () => setPicker(true) }
                 : C.deliver.why === 'courierCommune'
                 ? {
                     tone: 'bad',
