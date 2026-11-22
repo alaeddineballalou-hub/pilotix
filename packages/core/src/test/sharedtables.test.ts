@@ -4,9 +4,38 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { login, migrate, migrateAll, pgliteTenancy, seedBase, Tenancy } from '../index';
 import { dropShopData, loadShop, provisionShop } from '../platform/shops';
-import { MIGRATIONS } from '../db';
+import { MIGRATIONS, TENANTIZE_SQL } from '../db';
 
 const OWNER = { email: 'karim@bebe.dz', password: 'Karim-Password-1' };
+
+test('startup upgrades a shared database from before the notification inbox', async () => {
+  const { PGlite } = await import('@electric-sql/pglite');
+  const pg = new PGlite();
+  try {
+    const t = pgliteTenancy(pg);
+    const db = t.shop('public');
+    await t.exec('public', 'CREATE TABLE schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+    for (const [name, sql] of MIGRATIONS) {
+      if (name === '123_inbox') break;
+      await t.exec('public', sql);
+      await db.query('INSERT INTO schema_migrations (name) VALUES ($1)', [name]);
+    }
+    await t.exec('public', TENANTIZE_SQL);
+    await seedBase(db, { ...OWNER, name: 'Karim' });
+
+    assert.ok((await migrateAll(t)).public.includes('123_inbox'));
+    assert.deepEqual((await migrateAll(t)).public, []);
+    const { rows } = await pg.query<{ definition: string }>(`
+      SELECT pg_get_constraintdef(oid) AS definition
+      FROM pg_constraint WHERE conrelid = 'public.inbox'::regclass AND contype = 'f'
+    `);
+    assert.deepEqual(rows, [{
+      definition: 'FOREIGN KEY (shop_id, profile_id) REFERENCES profiles(shop_id, id) ON DELETE CASCADE',
+    }]);
+  } finally {
+    await pg.close();
+  }
+});
 
 async function server() {
   const { PGlite } = await import('@electric-sql/pglite');

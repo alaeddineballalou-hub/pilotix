@@ -7,7 +7,7 @@
 export default `
 CREATE TABLE IF NOT EXISTS inbox (
   id          bigserial   PRIMARY KEY,
-  profile_id  bigint      NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  profile_id  bigint      NOT NULL,
   kind        text        NOT NULL,              -- order | callback | delivered | returned | cancelled | taken | alert | depot | message | info
   tag         text,
   title       text        NOT NULL,
@@ -19,6 +19,27 @@ CREATE TABLE IF NOT EXISTS inbox (
   created_at  timestamptz NOT NULL DEFAULT now(),
   read_at     timestamptz
 );
+-- On an upgrade, profiles already has a shop-scoped key. Fresh and legacy schemas
+-- still use the original key, which tenantization converts along with this foreign key.
+DO $inbox$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'inbox'::regclass AND conname = 'inbox_profile_id_fkey'
+  ) THEN
+    IF EXISTS (
+      SELECT 1 FROM pg_attribute
+      WHERE attrelid = 'profiles'::regclass AND attname = 'shop_id' AND NOT attisdropped
+    ) THEN
+      ALTER TABLE inbox ADD COLUMN IF NOT EXISTS shop_id integer NOT NULL DEFAULT public.px_shop_id();
+      ALTER TABLE inbox ADD CONSTRAINT inbox_profile_id_fkey
+        FOREIGN KEY (shop_id, profile_id) REFERENCES profiles(shop_id, id) ON DELETE CASCADE;
+    ELSE
+      ALTER TABLE inbox ADD CONSTRAINT inbox_profile_id_fkey
+        FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE;
+    END IF;
+  END IF;
+END $inbox$;
 CREATE INDEX IF NOT EXISTS inbox_person ON inbox (profile_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS inbox_open_tag ON inbox (profile_id, tag) WHERE read_at IS NULL AND tag IS NOT NULL;
 CREATE INDEX IF NOT EXISTS inbox_tag ON inbox (tag) WHERE tag IS NOT NULL;
