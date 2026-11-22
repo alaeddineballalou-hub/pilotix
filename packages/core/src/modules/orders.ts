@@ -40,7 +40,7 @@ import { landingCounts, landingSettings, onLandingConf, onLandingFollow, queueCh
 import { lowStockCount } from './stockquery';
 import { agencyLead, agencyOf, agencyRowSql, andSql, ownRowSql, queueSql, rowScopeSql } from './agencyscope';
 import { settleTickets } from './tickets';
-import { addDepotAlert, alertsDepot, DepotChange, itemsText } from './depotalerts';
+import { addDepotAlert, alertsDepot, DepotChange, itemsText, mayHaveLabel } from './depotalerts';
 import { blockerText, checkLines, checkOrder, deliverCheck } from './confirmcheck';
 import { releaseNoStock } from './nostock';
 import { checkPromo, normCode, PROMO_REASON, takePromo } from './promo';
@@ -762,7 +762,7 @@ export async function createOrder(
     let confNoStock = false;
     if (input.confirm) {
       const lc = await checkLines(tx, lines.map((l) => ({ productId: l.productId, variantId: l.variantId ?? null, qty: l.qty })), null);
-      const dc = await deliverCheck(tx, { wilayaId: input.wilayaId ?? null, commune: input.commune ?? null, isStopdesk: !!input.isStopdesk, stopdeskId: input.stopdeskId ?? null, companyId: pick.companyId });
+      const dc = await deliverCheck(tx, { wilayaId: input.wilayaId ?? null, commune: input.commune ?? null, isStopdesk: !!input.isStopdesk, stopdeskId: input.stopdeskId ?? null, companyId: pick.companyId }, ctx);
       confWhy = blockerText('', lc, dc);
       confNoStock = lc.some((l) => l.state === 'empty');
     }
@@ -1132,7 +1132,8 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
       add('company', before.company, nowCompany);
       add('total', `${num(cur.total)} DA`, `${after.total} DA`);
       add('note', cur.delivery_note, after.deliveryNote);
-      await addDepotAlert(tx, ctx, input.id, cur.follow_status, 'edit', ch, cancelled);
+      // (the label the parcel could carry before this change: a company with an API and no tracking number yet = none)
+      await addDepotAlert(tx, ctx, input.id, cur.follow_status, 'edit', ch, cancelled, !!cancelled || (await mayHaveLabel(tx, cur.company_id, cur.tracking)));
     }
     return after;
   });
@@ -1332,7 +1333,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
       // the screen). Blocked: refused (one order) or left as it is (several: the others go on). A product with nothing
       // left: confirmed « sans stock », it waits.
       if ((status === 'confirmed' || status === 'no_stock') && cur.conf_status !== status) {
-        const chk = await checkOrder(tx, oid);
+        const chk = await checkOrder(tx, oid, ctx);
         let why = chk.blocker;
         // refused 2 parcels: only at the desk (lifted once they receive and pay one)
         if (!why && !cur.is_stopdesk && !cur.is_exchange && (await tx.query('SELECT stopdesk_only FROM customers WHERE id = $1', [cur.customer_id]))[0]?.stopdesk_only)

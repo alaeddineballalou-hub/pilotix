@@ -261,6 +261,19 @@ export function bestMatch(name: string, list: string[]): string | null {
   return null;
 }
 
+/** The names of `list` closest to `name` (fewest letters to change, at most a third of it): « did you mean ». */
+export function nearest(name: string, list: string[], n = 2): string[] {
+  const a = squash(name);
+  if (!a) return [];
+  const most = Math.max(2, Math.ceil(a.length / 3));
+  return list
+    .map((x) => ({ x, d: lev(squash(x), a) }))
+    .filter((r) => r.d <= most)
+    .sort((p, q) => p.d - q.d)
+    .slice(0, n)
+    .map((r) => r.x);
+}
+
 /**
  * The weight a company found for a parcel, in its tracking answer (kg): the real / billed weight first, else the parcel's
  * weight (it writes the one it weighed there). null when the answer has none. Grams (« 6500 ») are read as kilos.

@@ -1,17 +1,19 @@
 // The depot's red alert: an order it still holds was changed (or cancelled) by someone else. It covers the whole app,
 // beeps every few seconds and vibrates the phone, until the parcel is fixed — proven by scanning: a cancelled parcel's
 // label once; a changed parcel's old label, then (after printing it) its new label. A parcel at a courier: one scan.
+// A company with an API (ZR…) always gets its own label here, never a Pilotix one; a parcel that never had a label has
+// no « old label » step (22 Nov 2026).
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { rpc } from '../lib/backend';
+import { backend, rpc } from '../lib/backend';
 import { when } from '../lib/format';
 import { useAction, useRpc } from '../lib/query';
 import { alarm } from '../lib/sound';
 import { enablePush } from '../lib/push';
 import { Icon } from '../ui/kit';
 import { toast } from '../ui/toast';
-import { printLabelItems } from '../pages/depot/labelPrint';
-import { useCouriers } from '../pages/depot/Labels';
+import { labelHref, printLabelItems } from '../pages/depot/labelPrint';
+import { byOf, useCouriers, useSendToCompany } from '../pages/depot/Labels';
 import { ring, startCamera } from '../pages/depot/scan';
 import './depotAlert.css';
 
@@ -133,7 +135,7 @@ export function DepotAlert() {
             <span className="ltr">{t('depot.alert.toCollect', { v: a.total.toLocaleString('fr-DZ') })}</span>
           </div>
         )}
-        <Steps a={a} />
+        <Steps key={a.id} a={a} />
       </div>
       {list.length > 1 && (
         <div className="pxda-bar">
@@ -146,15 +148,23 @@ export function DepotAlert() {
   );
 }
 
-/** The scans that close the alert: the label on the parcel, then — a changed parcel with a new code — print and scan the new one. */
+/**
+ * What closes the alert: the label on the parcel (when it ever had one), then — a changed parcel with a new label — its
+ * new label printed, stuck on and scanned. A company with an API (ZR…): always its own label, sent to it first when the
+ * parcel has no tracking number yet, never a Pilotix one. A cancelled parcel that never had a label: « Colis retiré ».
+ */
 function Steps({ a }: { a: Alert }) {
   const { t } = useTranslation();
   const c = useCouriers();
   const [code, setCode] = useState('');
   const [cam, setCam] = useState(false);
   const [printed, setPrinted] = useState(false);
+  const [busy, setBusy] = useState(false);
+  /** sent to its company from here: the step stays on screen, ticked */
+  const [sentHere, setSentHere] = useState(false);
   const [err, setErr] = useState('');
   const input = useRef<HTMLInputElement>(null);
+  const toCompany = useSendToCompany();
   const scan = useAction('depot.alertScan', {
     silent: true,
     onDone: (r) => {
@@ -164,8 +174,21 @@ function Steps({ a }: { a: Alert }) {
       if (r.step === 'done') toast(t('depot.alert.fixedOk'), 'ok');
     },
   });
-  const two = !!a.newCode;
-  const step = !a.found ? 1 : printed ? 3 : 2;
+  const takenOut = useAction('depot.alertNoLabel', {
+    onDone: () => {
+      ring('ok');
+      toast(t('depot.alert.fixedOk'), 'ok');
+    },
+  });
+  const cancel = a.kind === 'cancel';
+  const co = a.companyName || t('depot.alert.theCompany');
+  /** a new label goes on the parcel (known, or the company's, once it is sent there) */
+  const two = !!a.newCode || a.send;
+  /** a cancelled parcel that never had a label: nothing to scan */
+  const noScan = cancel && a.noOld;
+  const step: 'old' | 'send' | 'print' | 'scan' | 'out' = !a.found ? 'old' : noScan ? 'out' : a.send ? 'send' : two && !printed ? 'print' : 'scan';
+  // the order, ready before « Imprimer »: a company's label opens in a new tab at the tap itself (not blocked)
+  const order = useRpc('orders.get', { id: a.orderId }, { enabled: !!a.newCode, staleTime: 0 });
   const send = (v: string) => {
     const x = v.trim();
     if (!x || scan.isPending) return;
@@ -184,33 +207,83 @@ function Steps({ a }: { a: Alert }) {
     input.current?.focus({ preventScroll: true });
   }, [a.id, a.found, printed]);
   const print = async () => {
+    const o = order.data;
+    if (!c || !o || !a.newCode || busy) return;
+    setErr('');
+    // the company prints its own label (ZR…): that one, asked from it — never a Pilotix label in its name
+    const theirs = a.api && byOf(o, c) === 'company';
+    if (theirs && backend.kind !== 'demo') {
+      const w = window.open('', '_blank');
+      setBusy(true);
+      try {
+        const href = labelHref(await rpc('delivery.label', { orderId: o.id }));
+        if (href) {
+          if (w) w.location.href = href;
+          else window.open(href, '_blank');
+        } else {
+          w?.close();
+          await printLabelItems(t, [{ o, code: a.newCode }], c.shop); // the company gives no label of its own
+        }
+        setPrinted(true);
+      } catch (e: any) {
+        w?.close();
+        setErr(e.message);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    // own livreurs, companies without an API or without labels: the Pilotix label (in the preview, the company's is
+    // simulated: a stand-in, marked so)
     try {
-      const o = await rpc('orders.get', { id: a.orderId });
-      await printLabelItems(t, [{ o, code: a.newCode! }], c?.shop ?? { name: '', sav: '' });
+      await printLabelItems(t, [{ o, code: a.newCode, demo: theirs }], c.shop);
       setPrinted(true);
     } catch (e: any) {
-      toast(e.message, 'bad');
+      setErr(e.message);
     }
   };
-  const row = (n: number, on: boolean, ok: boolean, title: string, sub?: string | null) => (
-    <li className={`${on ? 'on' : ''}${ok ? ' ok' : ''}`}>
-      <span className="pxda-sn">{ok ? <Icon name="check" /> : n}</span>
-      <span>
-        <b>{title}</b>
-        {sub && <small className="ltr">{sub}</small>}
-      </span>
-    </li>
-  );
+  const rows: { key: string; on: boolean; ok: boolean; title: string; sub?: string | null }[] = [];
+  if (!a.noOld) rows.push({ key: 'old', on: step === 'old', ok: a.found, title: cancel ? t('depot.alert.s.findCancel') : two ? t('depot.alert.s.findOld') : t('depot.alert.s.findOne'), sub: a.oldCode });
+  if (noScan) rows.push({ key: 'out', on: true, ok: false, title: t('depot.alert.s.takeOut') });
+  if (a.send || sentHere) rows.push({ key: 'send', on: step === 'send', ok: !a.send, title: t('depot.alert.s.send', { co }) });
+  if (two) {
+    rows.push({ key: 'print', on: step === 'print', ok: printed, title: a.api ? t('depot.alert.s.printCo', { co }) : t('depot.alert.s.print'), sub: a.newCode });
+    rows.push({ key: 'scan', on: step === 'scan', ok: false, title: a.api ? t('depot.alert.s.scanCo', { co }) : t('depot.alert.s.scanNew'), sub: a.newCode });
+  }
   return (
     <div className="pxda-steps">
       <ol>
-        {row(1, step === 1, a.found, a.kind === 'cancel' ? t('depot.alert.s.findCancel') : two ? t('depot.alert.s.findOld') : t('depot.alert.s.findOne'), a.oldCode)}
-        {two && row(2, step === 2, printed || false, t('depot.alert.s.print'), a.newCode)}
-        {two && row(3, step === 3, false, t('depot.alert.s.scanNew'), a.newCode)}
+        {rows.map((r, n) => (
+          <li key={r.key} className={`${r.on ? 'on' : ''}${r.ok ? ' ok' : ''}`}>
+            <span className="pxda-sn">{r.ok ? <Icon name="check" /> : n + 1}</span>
+            <span>
+              <b>{r.title}</b>
+              {r.sub && <small className="ltr">{r.sub}</small>}
+            </span>
+          </li>
+        ))}
       </ol>
-      {two && step >= 2 && (
-        <button type="button" className={`pxda-print${step === 2 ? ' on' : ''}`} onClick={print}>
-          <Icon name="printer" /> {printed ? t('depot.alert.reprint') : t('depot.alert.printNew')}
+      {step === 'send' && (
+        <button
+          type="button"
+          className="pxda-print on"
+          disabled={toCompany.busy}
+          onClick={() => {
+            setSentHere(true);
+            void toCompany.send([a.orderId]);
+          }}
+        >
+          <Icon name="truck" /> {t('depot.alert.sendTo', { co })}
+        </button>
+      )}
+      {(step === 'print' || step === 'scan') && two && (
+        <button type="button" className={`pxda-print${step === 'print' ? ' on' : ''}`} disabled={busy || !order.data} onClick={print}>
+          <Icon name="printer" /> {printed ? t('depot.alert.reprint') : a.api ? t('depot.alert.printCo', { co }) : t('depot.alert.printNew')}
+        </button>
+      )}
+      {step === 'out' && (
+        <button type="button" className="pxda-print on" disabled={takenOut.isPending} onClick={() => takenOut.mutate({ id: a.id })}>
+          <Icon name="check" /> {t('depot.alert.takenOut')}
         </button>
       )}
       {err && (
@@ -218,7 +291,7 @@ function Steps({ a }: { a: Alert }) {
           <Icon name="xcircle" /> {err}
         </p>
       )}
-      {(step !== 2 || !two) && (
+      {(step === 'old' || step === 'scan') && (
         <form
           className="pxda-scan"
           onSubmit={(e) => {
@@ -230,7 +303,7 @@ function Steps({ a }: { a: Alert }) {
             ref={input}
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            placeholder={step === 3 ? t('depot.alert.scanNewPh') : t('depot.alert.scanPh')}
+            placeholder={step === 'scan' && two ? (a.api ? t('depot.alert.scanCoPh', { co }) : t('depot.alert.scanNewPh')) : t('depot.alert.scanPh')}
             aria-label={t('depot.alert.scanPh')}
             autoComplete="off"
             autoCapitalize="characters"
@@ -241,7 +314,7 @@ function Steps({ a }: { a: Alert }) {
           </button>
         </form>
       )}
-      {cam && (step !== 2 || !two) && <Camera onCode={send} onClose={() => setCam(false)} />}
+      {cam && (step === 'old' || step === 'scan') && <Camera onCode={send} onClose={() => setCam(false)} />}
     </div>
   );
 }

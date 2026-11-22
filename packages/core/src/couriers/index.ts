@@ -51,6 +51,8 @@ export function courierApi(c: CourierCompany): CourierApi {
 
 type Args = {
   companyId: number;
+  /** communes: the wilaya whose communes are asked */
+  wilayaId?: number;
   date?: string;
   ids?: number[];
   items?: TrackItem[];
@@ -116,6 +118,11 @@ export async function runCourier(action: string, args: unknown, ctx: Ctx): Promi
       return api.fees();
     case 'stopdesks':
       return api.stopdesks();
+    case 'communes': {
+      // its names only: the confirmation matches the order's commune with them
+      const ad = ADAPTERS[c.kind];
+      return ad.communes ? (await ad.communes(c, Number(a.wilayaId) || 0)).map((x) => x.name) : [];
+    }
     case 'test':
       return api.test();
     case 'claim': {

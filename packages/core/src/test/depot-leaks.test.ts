@@ -39,12 +39,14 @@ test('leak 1: the company changes on the order form — the old parcel is cancel
   assert.match(now.tracking, /^ZR-/, 'made at the new company');
   const ev = await db.query(`SELECT note FROM order_events WHERE order_id = $1 AND note LIKE 'Colis annulé%'`, [a]);
   assert.ok(ev.some((e: any) => e.note.includes(old)), 'cancelled at the old company');
-  // the depot's alert: one scan of the old label (the right parcel, its old label taken off) closes it
+  // the depot's alert: the old label (the right parcel), then the new company's own label stuck on (scanned)
   const al = (await db.query('SELECT id, old_code, new_code FROM depot_alerts WHERE order_id = $1 AND resolved_at IS NULL', [a]))[0];
   assert.equal(al.old_code, old);
-  assert.equal(al.new_code, null);
+  const shown = ((await call('depot.alerts', await as(EMAILS.depot), {})) as any[]).find((x) => x.id === Number(al.id));
+  assert.equal(shown.newCode, now.tracking, 'the new company’s label, never a Pilotix one');
   const scanned: any = await call('depot.alertScan', await as(EMAILS.depot), { id: Number(al.id), code: old });
-  assert.equal(scanned.step, 'done');
+  assert.equal(scanned.step, 'found');
+  assert.equal(((await call('depot.alertScan', await as(EMAILS.depot), { id: Number(al.id), code: now.tracking })) as any).step, 'done');
   // the old label is no longer this order's: the scanner refuses it
   const depot = await as(EMAILS.depot);
   const scan: any = await call('depot.scan', depot, { code: old, mode: 'dispatch' });
@@ -157,7 +159,8 @@ test('leak 6: the address or the price of a parcel at the company changes throug
   await assert.rejects(call('orders.update', suivi, { id: a, discount: 100 }), /Modifier le colis/);
 });
 
-/** a parcel at the company changes (products or phone): deleted and made again, the scan refuses it until the alert is fixed */
+/** a parcel at the company changes (products or phone): deleted and made again, the scan refuses it until the alert is fixed
+ *  (the old label, then the company's new label: 22 Nov 2026, always the company's own label) */
 async function remade(change: (a: number) => Promise<Record<string, unknown>>) {
   const [a] = await atCompany('yalidine');
   const old = (await row(a)).tracking as string;
@@ -168,14 +171,17 @@ async function remade(change: (a: number) => Promise<Record<string, unknown>>) {
   assert.ok(await cancelledAtCompany(a, old), 'the old parcel deleted at the company');
   const al = (await db.query('SELECT id, old_code, new_code FROM depot_alerts WHERE order_id = $1 AND resolved_at IS NULL', [a]))[0];
   assert.equal(al.old_code, old);
-  assert.equal(al.new_code, null, 'one scan of the old label');
   const depot = await as(EMAILS.depot);
+  const shown = ((await call('depot.alerts', depot, {})) as any[]).find((x) => x.id === Number(al.id));
+  assert.equal(shown.newCode, now.tracking, 'the company’s new label is asked for');
   const r: any = await call('depot.scan', depot, { code: now.tracking, mode: 'dispatch' });
   assert.equal(r.kind, 'bad');
   assert.match(r.why, /alerte rouge/);
   assert.equal((await row(a)).follow_status, 'prepared');
-  // fixed: one scan of the old label, then the new label sends it
-  await call('depot.alertScan', depot, { id: Number(al.id), code: old });
+  // fixed: the old label scanned (still held), then the company's new label scanned on the red screen sends it
+  assert.equal(((await call('depot.alertScan', depot, { id: Number(al.id), code: old })) as any).step, 'found');
+  assert.equal(((await call('depot.scan', depot, { code: now.tracking, mode: 'dispatch' })) as any).kind, 'bad', 'held until the new label is scanned');
+  assert.equal(((await call('depot.alertScan', depot, { id: Number(al.id), code: now.tracking })) as any).step, 'done');
   const ok: any = await call('depot.scan', depot, { code: now.tracking, mode: 'dispatch' });
   assert.equal(ok.kind, 'ok', ok.why);
 }
