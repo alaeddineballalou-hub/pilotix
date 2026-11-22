@@ -542,11 +542,13 @@ function ConfirmedCard({ kf, setKf, bare }: { kf: Kf; setKf: (k: Kf) => void; ba
  * them, when they come in and how fast they are called, each agent, each product, what became of the confirmed ones.
  * Qualité des leads is judged with Pilot Checks « Qualité des leads » (Q2), the shop's own limits. */
 type Ov = NonNullable<ReturnType<typeof useOverview>['data']>;
-type Verdict = 'bon' | 'moyen' | 'mauvais' | 'stop' | 'tot';
-const verdictOf = (p: number | null, real: number, L: Ov['limits']): Verdict =>
-  p === null || real < L.wait ? 'tot' : p >= L.good ? 'bon' : p >= L.alert ? 'moyen' : p >= L.stop ? 'mauvais' : 'stop';
-const V_CLASS: Record<Verdict, string> = { bon: 'ok', moyen: 'warn', mauvais: 'bad', stop: 'bad px-ov-stop', tot: 'off' };
-const V_TONE: Record<Verdict, Tone | undefined> = { bon: 'ok', moyen: 'warn', mauvais: 'bad', stop: 'bad', tot: undefined };
+type Verdict = 'bon' | 'moyen' | 'mauvais' | 'stop' | 'none';
+/** Judged at once with the Pilot Checks limits (good, alert, stop), however few the real leads: no « Trop tôt » on this
+ * page (the owner's ask, 22 Nov 2026; the ads keep their wait). No real lead yet: no judgement. */
+const verdictOf = (p: number | null, L: Ov['limits']): Verdict =>
+  p === null ? 'none' : p >= L.good ? 'bon' : p >= L.alert ? 'moyen' : p >= L.stop ? 'mauvais' : 'stop';
+const V_CLASS: Record<Verdict, string> = { bon: 'ok', moyen: 'warn', mauvais: 'bad', stop: 'bad px-ov-stop', none: 'off' };
+const V_TONE: Record<Verdict, Tone | undefined> = { bon: 'ok', moyen: 'warn', mauvais: 'bad', stop: 'bad', none: undefined };
 const pp = (p: number | null) => (p === null ? '—' : `${p} %`);
 const mn = (m: number | null) => (m === null ? '—' : dur(m * 60_000));
 /** A duration with its words (« 1 h 05 », « 1 سا 05 »), written in the page's direction: in Arabic it never reads « 100 ». */
@@ -559,7 +561,7 @@ const useOverview = (kf: Kf) => useRpc('confirmation.overview', kfInput(kf), { r
 
 function VerdictPill({ v }: { v: Verdict }) {
   const { t } = useTranslation();
-  return <span className={`badge t-${V_CLASS[v]} px-ov-v`}>{t(`confirmation.ov.v.${v}`)}</span>;
+  return v === 'none' ? null : <span className={`badge t-${V_CLASS[v]} px-ov-v`}>{t(`confirmation.ov.v.${v}`)}</span>;
 }
 function Bar({ v, max, cls = '' }: { v: number; max: number; cls?: string }) {
   return (
@@ -778,8 +780,8 @@ function OvAgents({ O }: { O: Ov }) {
     [a.fake ? t('confirmation.ov.pFake', { n: a.fake }) : '', a.wrong ? t('confirmation.ov.pWrong', { n: a.wrong }) : '', a.noAnswer ? t('confirmation.ov.pNoAnswer', { n: a.noAnswer }) : '', a.duplicates ? t('confirmation.ov.pDup', { n: a.duplicates }) : '']
       .filter(Boolean)
       .join(' · ');
-  const lqCell = (p: number | null, real: number) => {
-    const v = verdictOf(p, real, L);
+  const lqCell = (p: number | null) => {
+    const v = verdictOf(p, L);
     return (
       <span className="px-ov-lq">
         <b className="ltr">{pp(p)}</b> <VerdictPill v={v} />
@@ -828,7 +830,7 @@ function OvAgents({ O }: { O: Ov }) {
                     <span className="ltr">{n(a.toCall)}</span>
                     {a.toCallNight > 0 && <small className="px-ov-sub">{t('confirmation.ov.nightOf', { n: a.toCallNight })}</small>}
                   </td>
-                  <td className="num" data-l={head('lq')}>{lqCell(a.leadsQuality, a.confirmed + a.refused)}</td>
+                  <td className="num" data-l={head('lq')}>{lqCell(a.leadsQuality)}</td>
                   <td className="num ltr muted" data-l={head('cOld')}>{pp(a.oldRate)}</td>
                   <td className="num ltr" data-l={head('cUp')}>{n(a.upsell)}</td>
                   <td className="num ltr" data-l={head('upRate')}>{pp(a.upsellRate)}</td>
@@ -854,7 +856,7 @@ function OvAgents({ O }: { O: Ov }) {
                 <td className="num ltr" data-l={head('cRefused')}>{n(O.refused.n)}</td>
                 <td className="num ltr" data-l={head('cAttacks')}>{n(O.attacks.n)}</td>
                 <td className="num ltr" data-l={head('cToCall')}>{n(O.night.noAnswerAll)}</td>
-                <td className="num" data-l={head('lq')}>{lqCell(O.leadsQuality, O.real)}</td>
+                <td className="num" data-l={head('lq')}>{lqCell(O.leadsQuality)}</td>
                 <td className="num ltr muted" data-l={head('cOld')}>{pp(O.oldRate)}</td>
                 <td className="num ltr" data-l={head('cUp')}>{n(O.upsell.orders)}</td>
                 <td className="num ltr" data-l={head('upRate')}>{pp(O.upsell.rate)}</td>
@@ -883,7 +885,6 @@ function OvProducts({ O }: { O: Ov }) {
     <div className="card px-ov-card">
       <div className="card-head">
         <h2>{t('confirmation.ov.byProduct')}</h2>
-        <span className="muted">{t('confirmation.ov.byProductMeta', { w: L.wait })}</span>
       </div>
       <div className="tbl-wrap">
         <table className="tbl px-ov-tbl">
@@ -900,7 +901,7 @@ function OvProducts({ O }: { O: Ov }) {
           <tbody>
             {top.length ? (
               top.map((p) => {
-                const v = verdictOf(p.leadsQuality, p.real, L);
+                const v = verdictOf(p.leadsQuality, L);
                 return (
                   <tr key={p.productId}>
                     <td data-l={t('confirmation.ov.cProduct')}>
@@ -919,7 +920,7 @@ function OvProducts({ O }: { O: Ov }) {
                     </td>
                     <td className="num" data-l={head('lq')}>
                       <span className="px-ov-lq">
-                        {v === 'tot' ? <small className="muted">{t('confirmation.ov.realN', { count: p.real })}</small> : <b className="ltr">{pp(p.leadsQuality)}</b>} <VerdictPill v={v} />
+                        <b className="ltr">{pp(p.leadsQuality)}</b> <VerdictPill v={v} />
                       </span>
                     </td>
                   </tr>
@@ -940,7 +941,7 @@ function OvProducts({ O }: { O: Ov }) {
   );
 }
 
-function OvWords({ wait }: { wait: number }) {
+function OvWords() {
   const { t } = useTranslation();
   const W: [string, string][] = [
     ['wReal', 'wRealD'],
@@ -948,7 +949,6 @@ function OvWords({ wait }: { wait: number }) {
     ['lq', 'wLqD'],
     ['wUp', 'wUpD'],
     ['wWait', 'wWaitD'],
-    ['wEarly', 'wEarlyD'],
   ];
   return (
     <div className="card px-ov-card">
@@ -959,7 +959,7 @@ function OvWords({ wait }: { wait: number }) {
         {W.map(([w, d]) => (
           <div key={w}>
             <dt>{t(`confirmation.ov.${w}`)}</dt>
-            <dd>{t(`confirmation.ov.${d}`, { w: wait })}</dd>
+            <dd>{t(`confirmation.ov.${d}`)}</dd>
           </div>
         ))}
       </dl>
@@ -978,7 +978,7 @@ export function ConfirmedStatsPage() {
   };
   const q = useOverview(kf);
   const O = q.data;
-  const lqV = O ? verdictOf(O.leadsQuality, O.real, O.limits) : 'tot';
+  const lqV = O ? verdictOf(O.leadsQuality, O.limits) : 'none';
   return (
     <div className="px-cs px-ov">
       <div className="card bjkfc px-cs-top">
@@ -999,8 +999,8 @@ export function ConfirmedStatsPage() {
             <p className="px-ov-find">
               {O.received === 0
                 ? t('confirmation.ov.findEmpty')
-                : lqV === 'tot'
-                  ? t('confirmation.ov.findEarly', { n: n(O.real), w: O.limits.wait })
+                : O.leadsQuality === null
+                  ? t('confirmation.ov.findNoReal')
                   : t('confirmation.ov.findLq', { p: pp(O.leadsQuality) })}{' '}
               {O.attacks.n > 0 && t('confirmation.ov.findAttacks', { a: n(O.attacks.n), f: n(O.finished - O.duplicates.n) })}
             </p>
@@ -1043,7 +1043,7 @@ export function ConfirmedStatsPage() {
             <Head title={t('confirmation.cs.after')} help={t('confirmation.cs.afterHelp')} />
             <DelivBody kf={kf} on="confirmed" bare />
           </div>
-          <OvWords wait={O.limits.wait} />
+          <OvWords />
         </>
       )}
     </div>

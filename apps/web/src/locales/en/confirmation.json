@@ -629,14 +629,13 @@
     "call_other": "Call the {{count}} waiting",
     "findLq": "The team confirms {{p}} of the real leads.",
     "findAttacks": "Attacks: {{a}} of {{f}} finished leads (fakes, wrong numbers, no answer), never counted against the team.",
-    "findEarly": "Too early to judge: {{n}} real leads, Pilot Checks judges from {{w}}.",
     "findEmpty": "No lead in this period.",
+    "findNoReal": "No real lead with a final answer yet.",
     "v": {
       "bon": "Good",
       "moyen": "Average",
       "mauvais": "Bad",
-      "stop": "Stop",
-      "tot": "Too early"
+      "stop": "Stop"
     },
     "received": "Leads received",
     "receivedSub": "{{f}} with a final answer · {{p}} waiting",
@@ -725,10 +724,7 @@
     "pDup": "+ {{n}} duplicate",
     "agentNote_one": "{{name}} got {{a}} attack. Their confirmation rate is {{old}}; on their real leads they are at {{lq}}.",
     "agentNote_other": "{{name}} got {{a}} attacks. Their confirmation rate is {{old}}; on their real leads they are at {{lq}}.",
-    "realN_one": "{{count}} real lead",
-    "realN_other": "{{count}} real leads",
     "byProduct": "By product",
-    "byProductMeta": "Pilot Checks judges from {{w}} real leads",
     "cProduct": "Product",
     "cLeads": "Leads",
     "cPending": "Waiting",
@@ -742,9 +738,7 @@
     "wUp": "Upsell",
     "wUpD": "The client takes more than the first order (the assembly alone doesn't count).",
     "wWait": "Waiting",
-    "wWaitD": "No final answer yet. They don't count in the %.",
-    "wEarly": "Too early",
-    "wEarlyD": "Fewer than {{w}} real leads: not judged yet (Pilot Checks rule)."
+    "wWaitD": "No final answer yet. They don't count in the %."
   },
   "chk": {
     "off": "Unavailable",

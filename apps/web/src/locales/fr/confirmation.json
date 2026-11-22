@@ -629,14 +629,13 @@
     "call_other": "Appeler les {{count}} en attente",
     "findLq": "L’équipe confirme {{p}} des vrais leads.",
     "findAttacks": "Attaques : {{a}} sur {{f}} leads finis (faux, faux numéros, pas de réponse), jamais comptées contre l’équipe.",
-    "findEarly": "Trop tôt pour juger : {{n}} vrais leads, Pilot Checks juge à partir de {{w}}.",
     "findEmpty": "Aucun lead sur cette période.",
+    "findNoReal": "Pas encore de vrai lead avec une réponse finale.",
     "v": {
       "bon": "Bon",
       "moyen": "Moyen",
       "mauvais": "Mauvais",
-      "stop": "Stop",
-      "tot": "Trop tôt"
+      "stop": "Stop"
     },
     "received": "Leads reçus",
     "receivedSub": "{{f}} avec une réponse finale · {{p}} en attente",
@@ -725,10 +724,7 @@
     "pDup": "+ {{n}} doublon",
     "agentNote_one": "{{name}} a reçu {{a}} attaque. Son taux de confirmation est à {{old}} ; sur ses vrais leads il est à {{lq}}.",
     "agentNote_other": "{{name}} a reçu {{a}} attaques. Son taux de confirmation est à {{old}} ; sur ses vrais leads il est à {{lq}}.",
-    "realN_one": "{{count}} vrai lead",
-    "realN_other": "{{count}} vrais leads",
     "byProduct": "Par produit",
-    "byProductMeta": "Pilot Checks juge à partir de {{w}} vrais leads",
     "cProduct": "Produit",
     "cLeads": "Leads",
     "cPending": "En attente",
@@ -742,9 +738,7 @@
     "wUp": "Upsell",
     "wUpD": "Le client prend plus que sa commande de départ (le montage seul ne compte pas).",
     "wWait": "En attente",
-    "wWaitD": "Pas encore de réponse finale. On ne les compte pas dans les %.",
-    "wEarly": "Trop tôt",
-    "wEarlyD": "Moins de {{w}} vrais leads : on ne juge pas encore (règle Pilot Checks)."
+    "wWaitD": "Pas encore de réponse finale. On ne les compte pas dans les %."
   },
   "chk": {
     "off": "Indisponible",
