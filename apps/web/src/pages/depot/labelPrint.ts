@@ -12,6 +12,7 @@ import type { Order } from '@pilotix/shared';
 import { API_COURIER_KINDS, LABEL_COURIER_KINDS } from '@pilotix/shared';
 import type { TFunction } from 'i18next';
 import i18n from '../../lib/i18n';
+import { rpc } from '../../lib/backend';
 import { escapeHtml, printHtml } from '../../lib/files';
 import { da, dateOnly, wilayaName } from '../../lib/format';
 
@@ -218,6 +219,9 @@ export async function printLabelItems(t: TFunction, items: LabelItem[], shop: La
   const sorted = [...items].sort((a, b) => (a.o.companyName ?? '').localeCompare(b.o.companyName ?? '') || a.o.ref.localeCompare(b.o.ref, undefined, { numeric: true }));
   const pages = sorted.flatMap((it) => [labelHtml(t, z, it, shop), ...(isExchange(it.o) ? [returnLabelHtml(t, z, it, shop)] : [])]);
   printHtml(t('depot.labels.docTitle', { n: pages.length }), `<style>${LABEL_CSS}</style>${pages.join('')}`);
+  // each order keeps the code printed on its parcel: a change later asks the depot for that label, and only when one
+  // was printed (the red screen never asks for a label that does not exist)
+  rpc('depot.labelsPrinted', { items: items.map((it) => ({ id: it.o.id, code: it.code })) }).catch(() => {});
 }
 
 // ---------------------------------------------------------------- pickup bag (A4), the preview's stand-in for the courier's

@@ -67,6 +67,8 @@ const FEATURE: Record<string, string | null> = {
   // the bell: callbacks whose time came, the depot's orders to prepare
   'inbox-run': null,
   'coverage-refresh': null,
+  // the bureaus (stop desks) of the delivery companies, every hour: a closed one is hidden, a new one offered
+  'desks-refresh': null,
   'spy-scan': 'marketing/spy',
   'leads-catchup': 'marketing/formulaires',
   'campaigns-run': 'marketing/campagnes',
@@ -135,6 +137,12 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     if (name === 'assign-run') return call('assign.run');
     if (name === 'inbox-run') return call('inbox.run');
     if (name === 'coverage-refresh') return call('coverage.refresh');
+    if (name === 'desks-refresh') {
+      const r: any = await call('coverage.refreshDesks');
+      const bad = (r?.results ?? []).filter((x: any) => !x.ok).map((x: any) => `${x.name}: ${x.error}`);
+      if (bad.length) new Logger('Bureaus').warn(`${tag} ${bad.join(' | ')}`);
+      return r;
+    }
     if (name === 'spy-scan') return call('spy.scan');
     if (name === 'campaigns-run') return call('campaigns.run');
     if (name === 'catalog-run') return call('metacatalog.run');
@@ -281,6 +289,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     // Confirmation › « Bloquer jusqu'à l'appel »: a new order waiting rings the agent's devices (then every 5 minutes)
     await this.queue.add('conf-push', {}, { repeat: { every: 30_000 }, jobId: 'conf-push', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('coverage-refresh', {}, { repeat: { pattern: '20 2 * * *', tz: 'Africa/Algiers' }, jobId: 'coverage-refresh', removeOnComplete: 20, removeOnFail: 50 });
+    await this.queue.add('desks-refresh', {}, { repeat: { pattern: '13 * * * *' }, jobId: 'desks-refresh', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('pilot-run', {}, { repeat: { every: 5 * 60_000 }, jobId: 'pilot-run', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('assign-run', {}, { repeat: { every: 60_000 }, jobId: 'assign-run', removeOnComplete: 20, removeOnFail: 50 });
     // the bell (top of every page): a callback whose time came, the depot's new orders to prepare (every 15 min at most)

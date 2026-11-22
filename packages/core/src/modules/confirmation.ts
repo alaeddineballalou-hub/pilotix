@@ -779,7 +779,7 @@ export const confirmationProcs = {
       return { id: num(c.id), name: c.name as string, kind: c.kind as string, home: free || num(c.home) > 0, desk: free || num(c.desk) > 0 };
     });
     const C = new Map(companies.map((c) => [c.id, c]));
-    const desks = (await ctx.db.query('SELECT id, company_id, commune, name, address FROM stopdesks WHERE wilaya_id = $1 ORDER BY name', [wilayaId]))
+    const desks = (await ctx.db.query('SELECT id, company_id, commune, name, address FROM stopdesks WHERE wilaya_id = $1 AND gone_at IS NULL ORDER BY name', [wilayaId]))
       .filter((d: any) => C.has(num(d.company_id)))
       .map((d: any) => ({ id: num(d.id), companyId: num(d.company_id), companyName: C.get(num(d.company_id))!.name, name: d.name as string, commune: d.commune as string, address: d.address as string, served: C.get(num(d.company_id))!.desk }));
     return { companies, desks };

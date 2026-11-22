@@ -930,7 +930,7 @@ export const deliveryProcs = {
 
   'delivery.stopdesks': proc(null, z.object({ companyId: id, wilayaId: z.number().int().min(1).max(69).optional() }), async (ctx, i) => {
     const rows = await ctx.db.query(
-      `SELECT * FROM stopdesks WHERE company_id=$1 ${i.wilayaId ? 'AND wilaya_id=$2' : ''} ORDER BY wilaya_id, commune, name`,
+      `SELECT * FROM stopdesks WHERE company_id=$1 AND gone_at IS NULL ${i.wilayaId ? 'AND wilaya_id=$2' : ''} ORDER BY wilaya_id, commune, name`,
       i.wilayaId ? [i.companyId, i.wilayaId] : [i.companyId],
     );
     return rows.map((r: any) => ({ id: num(r.id), companyId: num(r.company_id), wilayaId: num(r.wilaya_id), commune: r.commune, name: r.name, address: r.address, extId: r.ext_id as string | null }));
@@ -945,15 +945,25 @@ export const deliveryProcs = {
       const cities: [number, string][] = [[16, 'Bab Ezzouar'], [16, 'Hydra'], [31, 'Oran'], [25, 'Constantine'], [9, 'Blida'], [19, 'Sétif'], [23, 'Annaba'], [6, 'Béjaïa'], [15, 'Tizi Ouzou'], [30, 'Ouargla']];
       desks = cities.map(([w, com], k) => ({ extId: `${w}${String(k + 1).padStart(2, '0')}`, name: `${c.name} ${com}`, wilayaId: w, commune: com, address: 'Centre-ville' }));
     } else desks = (await courierOf(ctx)('stopdesks', { companyId }, ctx)) as Desk[];
+    let closed = 0;
     await ctx.db.tx(async (tx) => {
       for (const d of desks) {
         if (!d.wilayaId) continue;
         const cur = (await tx.query('SELECT id FROM stopdesks WHERE company_id=$1 AND ext_id=$2', [companyId, d.extId]))[0];
-        if (cur) await tx.query('UPDATE stopdesks SET wilaya_id=$2, commune=$3, name=$4, address=$5 WHERE id=$1', [cur.id, d.wilayaId, d.commune ?? '', d.name, d.address ?? '']);
+        if (cur) await tx.query('UPDATE stopdesks SET wilaya_id=$2, commune=$3, name=$4, address=$5, gone_at=NULL WHERE id=$1', [cur.id, d.wilayaId, d.commune ?? '', d.name, d.address ?? '']);
         else await tx.query('INSERT INTO stopdesks (company_id, wilaya_id, commune, name, address, ext_id) VALUES ($1,$2,$3,$4,$5,$6)', [companyId, d.wilayaId, d.commune ?? '', d.name, d.address ?? '', d.extId]);
       }
+      // a bureau the company no longer gives is closed (hidden from the choices, still named on its orders); an empty
+      // answer closes nothing, and bureaus typed by hand (no company number) are never closed
+      if (desks.length)
+        closed = (
+          await tx.query(
+            `UPDATE stopdesks SET gone_at = $3 WHERE company_id = $1 AND gone_at IS NULL AND ext_id IS NOT NULL AND ext_id <> ALL($2::text[]) RETURNING id`,
+            [companyId, desks.map((d) => String(d.extId)), new Date(ctx.now()).toISOString()],
+          )
+        ).length;
     });
-    return { imported: desks.length };
+    return { imported: desks.length, closed };
   }),
 
   'delivery.saveStopdesk': proc([], z.object({ companyId: id, id: id.optional(), wilayaId: z.number().int().min(1).max(69), commune: z.string().max(120).default(''), name: z.string().trim().min(1).max(160), address: z.string().max(300).default(''), extId: z.string().max(60).nullable().optional() }), async (ctx, i) => {

@@ -1134,7 +1134,7 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
       add('total', `${num(cur.total)} DA`, `${after.total} DA`);
       add('note', cur.delivery_note, after.deliveryNote);
       // (the label the parcel could carry before this change: a company with an API and no tracking number yet = none)
-      await addDepotAlert(tx, ctx, input.id, cur.follow_status, 'edit', ch, cancelled, !!cancelled || (await mayHaveLabel(tx, cur.company_id, cur.tracking)));
+      await addDepotAlert(tx, ctx, input.id, cur.follow_status, 'edit', ch, cancelled, !!cancelled || (await mayHaveLabel(tx, cur)));
     }
     return after;
   });
@@ -1805,7 +1805,7 @@ function orderExtraProcs() {
         variants: (byP.get(num(p.id)) ?? []) as { id: number; title: string; sku: string; price: number | null; active: boolean; stock: number }[],
       }));
       const companies = (await ctx.db.query('SELECT id, name, kind, active FROM delivery_companies ORDER BY name')).map((c: any) => ({ id: num(c.id), name: c.name, kind: c.kind, active: !!c.active }));
-      const stopdesks = (await ctx.db.query('SELECT id, company_id, wilaya_id, commune, name, address FROM stopdesks ORDER BY name')).map((d: any) => ({
+      const stopdesks = (await ctx.db.query('SELECT id, company_id, wilaya_id, commune, name, address FROM stopdesks WHERE gone_at IS NULL ORDER BY name')).map((d: any) => ({
         id: num(d.id), companyId: num(d.company_id), wilayaId: num(d.wilaya_id), commune: d.commune, name: d.name, address: d.address,
       }));
       const shop = await getSetting(ctx.db, 'shop');

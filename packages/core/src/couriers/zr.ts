@@ -63,16 +63,18 @@ async function territories(c: CourierCompany, level: 'wilaya' | 'commune', fresh
   kept.set(key, { at: listClock.now(), list });
   return list;
 }
+/** ZR's hubs (its bureaus), kept an hour: a bureau ZR opens or closes is seen by the next import (every hour) */
 async function hubs(c: CourierCompany) {
   const key = `${cacheKeyOf(c)}:hubs`;
-  if (cache.has(key)) return cache.get(key)!;
+  const had = kept.get(key);
+  if (had && listClock.now() - had.at < LIST_KEPT_MS) return had.list;
   const out: any[] = [];
   for (let n = 1; n < 10; n++) {
     const r = await http(c.name, url(c, '/hubs/search'), { method: 'POST', headers: h(c), json: { pageNumber: n, pageSize: 200 } });
     out.push(...(r.items ?? []));
     if (!r.hasNext || !(r.items ?? []).length) break;
   }
-  cache.set(key, out);
+  kept.set(key, { at: listClock.now(), list: out });
   return out;
 }
 
