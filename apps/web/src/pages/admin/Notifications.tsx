@@ -3,7 +3,7 @@
 // words, the others (the team's manager, the owners, the depot, chosen people) in the third person — and when the phones
 // ring with Pilotix closed. The sounds are Pilotix's own: they are listened to here, never changed. « Écran bloqué » (the
 // agent's new order) is set in Confirmation › « Bloquer jusqu'à l'appel » and only shown here.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Out } from '../../lib/backend';
 import { useAction, useRpc } from '../../lib/query';
@@ -31,13 +31,19 @@ export function NotificationsCfg() {
   const { t } = useTranslation();
   const q = useRpc('notify.get', {});
   const save = useAction('notify.set', { success: t('notifs.saved') });
-  const narrow = useMedia('(max-width: 760px)');
+  // a phone or a tablet: the list, then the chosen one (with a way back)
+  const narrow = useMedia('(max-width: 1000px)');
+  const grid = useRef<HTMLDivElement>(null);
   const [sel, setSel] = useState<Kind | 'info'>('order');
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Partial<Record<Kind, Rule>>>({});
   const data = q.data;
   const rules = useMemo(() => (data ? ({ ...data.rules, ...draft } as Data['rules']) : null), [data, draft]);
   const changed = useMemo(() => (data ? (Object.keys(draft) as Kind[]).filter((k) => !same(draft[k]!, data.rules[k])) : []), [data, draft]);
+  // on a phone, the list and the chosen one take turns: each starts at its top
+  useEffect(() => {
+    if (narrow && grid.current && grid.current.getBoundingClientRect().top < 0) grid.current.scrollIntoView({ block: 'start' });
+  }, [open, sel, narrow]);
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   if (!data || !rules) return <Loading />;
 
@@ -107,7 +113,7 @@ export function NotificationsCfg() {
         </div>
       </div>
 
-      <div className="px-nt-grid">
+      <div className="px-nt-grid" ref={grid}>
         {showList && (
           <div className="px-nt-list" role="list">
             <small className="px-nt-group">{t('notifs.groupPilotix')}</small>
@@ -150,6 +156,17 @@ export function NotificationsCfg() {
             />
           ))}
       </div>
+      {narrow && changed.length > 0 && (
+        <div className="px-nt-savebar">
+          <span className="px-nt-unsaved">{t('notifs.unsaved', { count: changed.length })}</span>
+          <button type="button" className="btn" disabled={save.isPending} onClick={() => setDraft({})}>
+            {t('notifs.cancel')}
+          </button>
+          <button type="button" className="btn primary" disabled={save.isPending} onClick={doSave}>
+            {t('notifs.save')}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -333,7 +350,7 @@ function Detail(p: {
           {t('notifs.reset')}
         </button>
       )}
-      {p.changed && <p className="px-nt-unsaved">{t('notifs.unsavedHere')}</p>}
+      {p.changed && !p.onBack && <p className="px-nt-unsaved">{t('notifs.unsavedHere')}</p>}
     </div>
   );
 }

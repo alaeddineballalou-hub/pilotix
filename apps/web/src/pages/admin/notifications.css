@@ -26,7 +26,7 @@
 .px-nt-chip:hover { filter: brightness(.97); }
 
 /* the list and the chosen one */
-.px-nt-grid { display: grid; grid-template-columns: minmax(280px, 400px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.px-nt-grid { display: grid; grid-template-columns: minmax(280px, 400px) minmax(0, 1fr); gap: 18px; align-items: start; scroll-margin-top: 140px; }
 @media (max-width: 1000px) { .px-nt-grid { grid-template-columns: minmax(0, 1fr); } }
 .px-nt-list {
   display: flex; flex-direction: column; gap: 2px; padding: 8px; min-width: 0;
@@ -89,7 +89,8 @@
 .px-nt-how.block { background: var(--navy); color: #fff; }
 .px-nt-how .bji, .px-nt-how .bji svg, .px-nt-note .bji, .px-nt-note .bji svg { width: 14px; height: 14px; }
 .px-nt-not { font-size: 13px; color: var(--muted); }
-.px-nt-note { margin: 4px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.px-nt-note { margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.px-nt-note .bji { display: inline-flex; vertical-align: -2px; margin-inline-end: 4px; }
 .px-nt-note a { font-weight: 700; }
 
 /* chosen people */
@@ -146,6 +147,14 @@
 .px-nt-reset { align-self: flex-start; min-height: 44px; padding: 0; border: 0; background: none; color: var(--c-info-ink); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
 .px-nt-links { display: flex; flex-wrap: wrap; gap: 10px; }
 .px-nt-links .btn { min-height: 44px; display: inline-flex; align-items: center; }
+
+/* a phone or a tablet: Save stays at the bottom of the screen while something is not saved */
+.px-nt-savebar {
+  position: sticky; bottom: 10px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px;
+  padding: 10px 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(15, 26, 46, .18);
+}
+.px-nt-savebar .px-nt-unsaved { margin-inline-end: auto; }
+.px-nt-savebar .btn { min-height: 44px; }
 
 @media (max-width: 760px) {
   .px-nt-detail { padding: 14px; }
