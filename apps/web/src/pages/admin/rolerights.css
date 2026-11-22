@@ -127,7 +127,7 @@
 .rr-namel { display: block; }
 .rr-name {
   font: inherit; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; width: 100%; max-width: 520px; min-height: 44px;
-  border: 1px solid transparent; border-radius: 12px; padding: 4px 10px; margin-inline-start: -10px; background: transparent; color: var(--ink);
+  border: 1px solid transparent; border-radius: 12px; padding: 4px 10px; background: transparent; color: var(--ink);
 }
 .rr-name:hover { border-color: var(--line); }
 .rr-name:focus { border-color: var(--c-accent); outline: none; background: var(--surface); }
