@@ -866,7 +866,7 @@ function OvAgents({ O }: { O: Ov }) {
       </div>
       {hurt && (
         <p className="px-ov-note">
-          <Icon name="flag" /> {t('confirmation.ov.agentNote', { name: hurt.name ?? t('confirmation.noAgent'), a: n(hurt.attacks), old: pp(hurt.oldRate), lq: pp(hurt.leadsQuality) })}
+          <Icon name="flag" /> {t('confirmation.ov.agentNote', { count: hurt.attacks, name: hurt.name ?? t('confirmation.noAgent'), a: n(hurt.attacks), old: pp(hurt.oldRate), lq: pp(hurt.leadsQuality) })}
         </p>
       )}
     </div>
