@@ -12,6 +12,7 @@ import { assignedProductIds } from './productscope';
 import { readMontage } from './montage';
 import { rotateTimes } from './assign';
 import { reasonCode } from './pilotlearn';
+import { checkRules } from './pilotchecks';
 import { blackNumbers, shareBlacklist } from './sharedblacklist';
 
 // ---------------------------------------------------------------- sub-pages
@@ -668,8 +669,11 @@ async function overview(ctx: Ctx, i: KfInput) {
   const touch = new Map<number, number>();
   const given = new Map<number, number>();
   const prods = new Map<number, { id: number; name: string }[]>();
+  /** orders Pilotix added from a form the client left without validating (« abandonnée ») */
+  const abandoned = new Set<number>();
   for (let k = 0; k < ids.length; k += 1000) {
     const part = ids.slice(k, k + 1000);
+    for (const r of await ctx.db.query(`SELECT DISTINCT order_id FROM landing_leads WHERE auto_order AND order_id = ANY($1)`, [part])) abandoned.add(num(r.order_id));
     // who settled the lead, and the reason written with it (« Changé d'avis — … »)
     for (const e of await ctx.db.query(
       `SELECT DISTINCT ON (order_id) order_id, user_id, note FROM order_events WHERE kind = 'conf_status' AND order_id = ANY($1) ORDER BY order_id, at DESC, id DESC`,
@@ -823,13 +827,26 @@ async function overview(ctx: Ctx, i: KfInput) {
     .map((p) => ({ ...p, real: p.confirmed + p.refused, leadsQuality: pc(p.confirmed, p.confirmed + p.refused) }))
     .sort((x, y) => y.n - x.n || x.name.localeCompare(y.name));
   const finished = conf + refused + attacks + dups;
+  // the judge is Pilot Checks « Leads quality » (Q2), with the owner's own limits: good, alert, stop, and how many real
+  // leads before judging at all
+  const q2 = (await checkRules(ctx.db)).find((r) => r.id === 'Q2');
   return {
+    limits: { good: q2?.g ?? 65, alert: q2?.v ?? 60, stop: q2?.s ?? 55, wait: q2?.wait ?? 30 },
     received: L.length,
     value: sum(() => true),
     pending: { n: pending, value: sum(is('pending')), fresh: count((o) => o.status === 'new' || o.status === 'to_check'), noAnswer: count((o) => o.status === 'no_answer' || o.status === 'busy'), later: count((o) => o.status === 'callback' || o.status === 'postponed') },
     confirmed: { n: conf, value: confValue, basket: conf ? Math.round(confValue / conf) : null },
-    refused: { n: refused, value: sum(is('refused')), reasons: [...RS.values()].sort((x, y) => y.n - x.n || y.value - x.value) },
-    attacks: { n: attacks, value: sum(is('attack')), fake: count((o) => o.attack === 'fake'), wrong: count((o) => o.attack === 'wrong'), noAnswer: count((o) => o.attack === 'noAnswer') },
+    refused: { n: refused, value: sum(is('refused')), reasons: [...RS.values()].sort((x, y) => y.n - x.n || y.value - x.value), abandoned: count((o) => o.lead === 'refused' && abandoned.has(o.id)) },
+    attacks: {
+      n: attacks,
+      value: sum(is('attack')),
+      fake: count((o) => o.attack === 'fake'),
+      wrong: count((o) => o.attack === 'wrong'),
+      noAnswer: count((o) => o.attack === 'noAnswer'),
+      fakeValue: sum((o) => o.attack === 'fake'),
+      wrongValue: sum((o) => o.attack === 'wrong'),
+      noAnswerValue: sum((o) => o.attack === 'noAnswer'),
+    },
     duplicates: { n: dups, value: sum(is('duplicate')) },
     finished,
     real: conf + refused,
@@ -839,6 +856,8 @@ async function overview(ctx: Ctx, i: KfInput) {
     hours,
     slots: calls.slots.map((s: any) => ({ from: s.from, to: s.to })),
     night: { n: count((o) => o.night), noAnswer: count((o) => o.night && (o.status === 'no_answer' || o.status === 'busy')), noAnswerAll: count((o) => o.status === 'no_answer' || o.status === 'busy') },
+    /** « Annuler automatiquement après N appels sans réponse » (0: off) */
+    cancelAfter: calls.cancelAfterNoAnswer,
     speed: {
       firstMinutes: calls.firstMinutes,
       dayCalled: dayFirst.length,

@@ -137,6 +137,8 @@ test('statistics overview: managers only, every lead counted once, Leads quality
   assert.equal(ov.finished, ov.received - ov.pending.n);
   assert.equal(ov.real, ov.confirmed.n + ov.refused.n);
   assert.equal(ov.attacks.fake + ov.attacks.wrong + ov.attacks.noAnswer, ov.attacks.n);
+  assert.equal(ov.attacks.fakeValue + ov.attacks.wrongValue + ov.attacks.noAnswerValue, ov.attacks.value);
+  assert.ok(ov.refused.abandoned <= ov.refused.n);
   assert.equal(ov.pending.fresh + ov.pending.noAnswer + ov.pending.later, ov.pending.n);
   assert.equal(ov.refused.reasons.reduce((s: number, r: any) => s + r.n, 0), ov.refused.n);
   assert.equal(ov.refused.reasons.reduce((s: number, r: any) => s + r.value, 0), ov.refused.value);
@@ -157,6 +159,8 @@ test('statistics overview: managers only, every lead counted once, Leads quality
   assert.ok(ov.night.noAnswer <= ov.night.n && ov.night.noAnswer <= ov.night.noAnswerAll);
   assert.ok(ov.speed.onTime <= ov.speed.dayCalled);
   assert.equal(typeof ov.speed.firstMinutes, 'number');
+  // judged with Pilot Checks « Leads quality » (Q2) as the shop has it
+  assert.deepEqual(ov.limits, { good: 65, alert: 60, stop: 55, wait: 30 });
 });
 
 test('statistics overview: a refusal is counted with its reason; « annulée automatiquement » is an attack', async () => {

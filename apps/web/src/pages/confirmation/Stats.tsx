@@ -7,7 +7,7 @@ import i18n from 'i18next';
 import { useRpc } from '../../lib/query';
 import { store } from '../../lib/store';
 import { da, dur, n } from '../../lib/format';
-import { ErrorBox, Help, Kpi, Loading } from '../../ui/kit';
+import { ErrorBox, Help, Icon, Kpi, Loading } from '../../ui/kit';
 import { kfInput, Kf, loadKf, saveKf, Sub } from './shared';
 import { useNow } from './Countdown';
 import { DateRange, periodLabel } from './DateRange';
@@ -537,9 +537,437 @@ function ConfirmedCard({ kf, setKf, bare }: { kf: Kf; setKf: (k: Kf) => void; ba
   );
 }
 
-// ---------------------------------------------------------------- « Confirmées »: statistics only
-/** One date bar, then L'essentiel (6 numbers), confirmation in detail (upsell, by agent), and what became of the
- * confirmed orders (dépôt, en route, livrées, retours). Same procedures as the foldable blocks. */
+// ---------------------------------------------------------------- Confirmation › Statistiques: one page
+/** Everything about the leads of the period (confirmation.overview): the key numbers, where the leads go, why we lose
+ * them, when they come in and how fast they are called, each agent, each product, what became of the confirmed ones.
+ * Qualité des leads is judged with Pilot Checks « Qualité des leads » (Q2), the shop's own limits. */
+type Ov = NonNullable<ReturnType<typeof useOverview>['data']>;
+type Verdict = 'bon' | 'moyen' | 'mauvais' | 'stop' | 'tot';
+const verdictOf = (p: number | null, real: number, L: Ov['limits']): Verdict =>
+  p === null || real < L.wait ? 'tot' : p >= L.good ? 'bon' : p >= L.alert ? 'moyen' : p >= L.stop ? 'mauvais' : 'stop';
+const V_CLASS: Record<Verdict, string> = { bon: 'ok', moyen: 'warn', mauvais: 'bad', stop: 'bad px-ov-stop', tot: 'off' };
+const V_TONE: Record<Verdict, Tone | undefined> = { bon: 'ok', moyen: 'warn', mauvais: 'bad', stop: 'bad', tot: undefined };
+const pp = (p: number | null) => (p === null ? '—' : `${p} %`);
+const mn = (m: number | null) => (m === null ? '—' : dur(m * 60_000));
+/** A duration with its words (« 1 h 05 », « 1 سا 05 »), written in the page's direction: in Arabic it never reads « 100 ». */
+function Dur({ m }: { m: number | null }) {
+  const { i18n } = useTranslation();
+  return <span dir={i18n.dir()}>{mn(m)}</span>;
+}
+const pcOf = (a: number, b: number) => (b > 0 ? Math.round((a * 100) / b) : null);
+const useOverview = (kf: Kf) => useRpc('confirmation.overview', kfInput(kf), { refetchInterval: 60_000 });
+
+function VerdictPill({ v }: { v: Verdict }) {
+  const { t } = useTranslation();
+  return <span className={`badge t-${V_CLASS[v]} px-ov-v`}>{t(`confirmation.ov.v.${v}`)}</span>;
+}
+function Bar({ v, max, cls = '' }: { v: number; max: number; cls?: string }) {
+  return (
+    <span className="px-ov-track" aria-hidden="true">
+      <i className={cls} style={{ width: `${max > 0 ? Math.round((v / max) * 1000) / 10 : 0}%` }} />
+    </span>
+  );
+}
+const callHref = (O: Ov) => `#/confirmation/${O.pending.noAnswer + O.pending.later > 0 ? 'attente' : 'nouvelles'}`;
+
+function OvFunnel({ O, kf }: { O: Ov; kf: Kf }) {
+  const { t } = useTranslation();
+  const dq = useRpc('confirmation.delivery', { ...kfInput(kf), on: 'confirmed' }, { refetchInterval: 60_000 });
+  const D = dq.data;
+  const toCall = O.pending.noAnswer + O.pending.later;
+  // only what was really taken out: « Retirés : 3 doublons », red only when there were attacks
+  const removed = [
+    O.attacks.n ? t('confirmation.ov.rmA', { count: O.attacks.n }) : '',
+    O.duplicates.n ? t('confirmation.ov.rmD', { count: O.duplicates.n }) : '',
+  ].filter(Boolean);
+  const steps:{ label: string; v: number; note: string | null; bad?: boolean; hi?: boolean; wait?: boolean }[] = [
+    { label: t('confirmation.ov.received'), v: O.received, note: O.pending.fresh ? t('confirmation.ov.nNotCalled', { count: O.pending.fresh }) : null },
+    { label: t('confirmation.ov.fCalled'), v: O.received - O.pending.fresh, note: toCall ? t('confirmation.ov.nToCall', { count: toCall }) : null },
+    { label: t('confirmation.ov.fFinished'), v: O.finished, note: removed.length ? t('confirmation.ov.nRemoved', { list: removed.join(' · ') }) : null, bad: O.attacks.n > 0 },
+    { label: t('confirmation.ov.fReal'), v: O.real, note: O.refused.n ? t('confirmation.ov.nRefused', { count: O.refused.n }) : null },
+    { label: t('confirmation.ov.confirmed'), v: O.confirmed.n, hi: true, note: D ? t('confirmation.ov.nDepot', { d: n(D.depot), r: n(D.route) }) : null },
+    { label: t('confirmation.ov.fDelivered'), v: D?.delivered ?? 0, note: D && !D.delivered ? t('confirmation.ov.nNoDelivery') : null, wait: true },
+  ];
+  return (
+    <div className="card px-ov-card px-ov-funnel">
+      <div className="card-head">
+        <h2>{t('confirmation.ov.funnel', { n: n(O.received) })}</h2>
+      </div>
+      <div className="px-ov-steps">
+        {steps.map((s) => (
+          <div className="px-ov-step" key={s.label}>
+            <span className="px-ov-step-l">{s.label}</span>
+            <Bar v={s.v} max={O.received} cls={s.hi ? 'hi' : ''} />
+            <b className="ltr">{n(s.v)}</b>
+            {s.note && (
+              <span className={`px-ov-step-n${s.bad ? ' bad' : ''}`}>
+                <Icon name={s.wait ? 'hourglass' : 'trenddown'} /> {s.note}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      {O.pending.n > 0 && (
+        <div className="px-ov-wait">
+          <div className="grow">
+            <b>{t('confirmation.ov.waiting', { n: n(O.pending.n), v: da(O.pending.value) })}</b>
+            <small>{t('confirmation.ov.waitingSub', { a: n(O.pending.noAnswer + O.pending.later), f: n(O.pending.fresh) })}</small>
+          </div>
+          <a className="btn primary" href={callHref(O)}>
+            <Icon name="phone" /> {t('confirmation.ov.callBtn')}
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OvLosses({ O }: { O: Ov }) {
+  const { t } = useTranslation();
+  const A = O.attacks;
+  const max = Math.max(1, ...O.refused.reasons.map((r) => r.n), A.fake, A.wrong, A.noAnswer, O.duplicates.n);
+  const row = (label: string, k: number, money: string, cls: string, sub?: string) => (
+    <div className="px-ov-loss" key={label}>
+      <span className="px-ov-loss-l">
+        {label}
+        {sub && <small>{sub}</small>}
+      </span>
+      <b className="ltr">{n(k)}</b>
+      <span className="px-ov-loss-m ltr">{money}</span>
+      <Bar v={k} max={max} cls={cls} />
+    </div>
+  );
+  const lost = O.refused.n + A.n + O.duplicates.n;
+  return (
+    <div className="card px-ov-card px-ov-losses">
+      <div className="card-head">
+        <h2>{t('confirmation.ov.lost')}</h2>
+        <span className="muted">{t('confirmation.ov.lostMeta', { n: n(lost) })}</span>
+      </div>
+      <p className="px-ov-g">{t('confirmation.ov.gClient')}</p>
+      {O.refused.reasons.length ? (
+        O.refused.reasons.map((r) => row(r.code === 'none' ? t('confirmation.ov.reasonNone') : t(`status.cancelReason.${r.code}`, { defaultValue: r.code }), r.n, da(r.value), ''))
+      ) : (
+        <p className="px-ov-none">—</p>
+      )}
+      <p className="px-ov-g">{t('confirmation.ov.gAttacks')}</p>
+      {row(t('confirmation.ov.aFake'), A.fake, da(A.fakeValue), 'bad')}
+      {row(t('confirmation.ov.aWrong'), A.wrong, da(A.wrongValue), 'bad')}
+      {row(
+        t('confirmation.ov.aNoAnswer'),
+        A.noAnswer,
+        A.noAnswer ? da(A.noAnswerValue) : '—',
+        'bad',
+        O.cancelAfter > 0 ? t('confirmation.ov.aNoAnswerSub', { n: O.cancelAfter, w: n(O.night.noAnswerAll) }) : t('confirmation.ov.aNoAnswerOff', { w: n(O.night.noAnswerAll) }),
+      )}
+      <p className="px-ov-g">{t('confirmation.ov.gOther')}</p>
+      {row(t('confirmation.ov.dup'), O.duplicates.n, da(O.duplicates.value), 'off')}
+      <div className="px-ov-total">
+        <span className="grow">
+          <b>{t('confirmation.ov.totalLost')}</b>
+          <small>{t('confirmation.ov.totalLostSub', { n: n(O.refused.n), v: da(O.refused.value) })}</small>
+        </span>
+        <b className="ltr">{n(lost)}</b>
+      </div>
+      {O.refused.abandoned > 0 && (
+        <p className="px-ov-note">
+          <Icon name="flag" /> {t('confirmation.ov.abandoned', { a: n(O.refused.abandoned), n: n(O.refused.n) })}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function OvHours({ O }: { O: Ov }) {
+  const { t, i18n } = useTranslation();
+  const top = Math.max(4, Math.ceil(Math.max(...O.hours) / 4) * 4);
+  const work = (h: number) => O.slots.some((s) => h >= s.from && h < s.to);
+  return (
+    <div className="card px-ov-card px-ov-hours">
+      <div className="card-head">
+        <h2>{t('confirmation.ov.hours')}</h2>
+        <span className="muted">{t('confirmation.ov.hoursMeta', { n: n(O.received) })}</span>
+      </div>
+      <div className="px-ov-legend">
+        <span>
+          <i className="w" /> {t('confirmation.ov.work')}
+        </span>
+        <span>
+          <i className="off" /> {t('confirmation.ov.off')}
+        </span>
+      </div>
+      <div className="px-ov-chart ltr">
+        <div className="px-ov-y">
+          {[top, top / 2, 0].map((v) => (
+            <span key={v}>{v}</span>
+          ))}
+        </div>
+        <div className="px-ov-plot">
+          {O.hours.map((c, h) => (
+            <div key={h} className={`px-ov-hr${work(h) ? ' w' : ''}`} title={t('confirmation.ov.hourTip', { h, n: c })}>
+              {c > 0 && <i className={work(h) ? '' : 'off'} style={{ height: `${Math.max(4, (c / top) * 100)}%` }} />}
+            </div>
+          ))}
+        </div>
+        <div className="px-ov-x">
+          {O.hours.map((_, h) => (
+            <span key={h} dir={i18n.dir()}>
+              {h % 3 === 0 ? t('confirmation.ov.h', { h }) : ''}
+            </span>
+          ))}
+        </div>
+      </div>
+      {O.night.n > 0 && (
+        <p className="px-ov-note">
+          <Icon name="moon" /> {t('confirmation.ov.nightNote', { n: n(O.night.n), p: pp(pcOf(O.night.n, O.received)), a: n(O.night.noAnswer), b: n(O.night.noAnswerAll) })}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function OvSpeed({ O }: { O: Ov }) {
+  const { t } = useTranslation();
+  const S = O.speed;
+  const slow = S.givenMedianMin !== null && S.dayMedianMin !== null && S.dayMedianMin > S.firstMinutes && S.givenMedianMin * 2 >= S.dayMedianMin;
+  return (
+    <div className="card px-ov-card px-ov-speed">
+      <div className="card-head">
+        <h2>{t('confirmation.ov.speed')}</h2>
+      </div>
+      <div className="px-ov-boxes">
+        <div className="px-ov-box">
+          <span className="px-ov-box-l">
+            <Icon name="sun" /> {t('confirmation.ov.day')}
+          </span>
+          <b>
+            <Dur m={S.dayMedianMin} />
+          </b>
+          <small>{S.givenMedianMin === null ? t('confirmation.ov.daySubPlain') : t('confirmation.ov.daySub', { g: mn(S.givenMedianMin) })}</small>
+        </div>
+        <div className="px-ov-box">
+          <span className="px-ov-box-l">
+            <Icon name="moon" /> {t('confirmation.ov.night')}
+          </span>
+          <b>
+            <Dur m={S.nightMedianMin} />
+          </b>
+          {S.nightAfterOpenMedianMin !== null && <small>{t('confirmation.ov.nightSub', { o: mn(S.nightAfterOpenMedianMin) })}</small>}
+        </div>
+      </div>
+      <div className="px-ov-ontime">
+        <span>
+          <b>{t('confirmation.ov.onTime')}</b> <small>{t('confirmation.ov.onTimeSub', { m: S.firstMinutes })}</small>
+        </span>
+        <b>{t('confirmation.ov.onTimeOf', { a: n(S.onTime), b: n(S.dayCalled) })}</b>
+        <Bar v={S.onTime} max={S.dayCalled} cls="ok" />
+      </div>
+      {slow && (
+        <p className="px-ov-note">
+          <Icon name="alert" /> {t('confirmation.ov.givenNote')}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function OvAgents({ O }: { O: Ov }) {
+  const { t } = useTranslation();
+  const L = O.limits;
+  const parts = (a: Ov['byAgent'][number]) =>
+    [a.fake ? t('confirmation.ov.pFake', { n: a.fake }) : '', a.wrong ? t('confirmation.ov.pWrong', { n: a.wrong }) : '', a.noAnswer ? t('confirmation.ov.pNoAnswer', { n: a.noAnswer }) : '', a.duplicates ? t('confirmation.ov.pDup', { n: a.duplicates }) : '']
+      .filter(Boolean)
+      .join(' · ');
+  const lqCell = (p: number | null, real: number) => {
+    const v = verdictOf(p, real, L);
+    return (
+      <span className="px-ov-lq">
+        <b className="ltr">{pp(p)}</b> <VerdictPill v={v} />
+      </span>
+    );
+  };
+  // the agent the old formula hurts most (attacks counted against him)
+  const hurt = O.byAgent
+    .filter((a) => a.attacks > 0 && a.leadsQuality !== null && a.oldRate !== null && a.leadsQuality - a.oldRate >= 10)
+    .sort((a, b) => b.leadsQuality! - b.oldRate! - (a.leadsQuality! - a.oldRate!))[0];
+  const cols = ['cTreated', 'confirmed', 'cRefused', 'cAttacks', 'cToCall', 'lq', 'cOld', 'cUp', 'upRate', 'cDelivered'] as const;
+  const head = (k: (typeof cols)[number]) => t(`confirmation.ov.${k}`);
+  return (
+    <div className="card px-ov-card">
+      <div className="card-head">
+        <h2>{t('confirmation.ov.byAgent')}</h2>
+        <span className="muted">{t('confirmation.ov.byAgentMeta')}</span>
+      </div>
+      <div className="tbl-wrap">
+        <table className="tbl px-ov-tbl">
+          <thead>
+            <tr>
+              <th>{t('confirmation.col.agent')}</th>
+              {cols.map((k) => (
+                <th key={k} className="num">
+                  {head(k)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {O.byAgent.length ? (
+              O.byAgent.map((a) => (
+                <tr key={a.agentId ?? 0}>
+                  <td data-l={t('confirmation.col.agent')}>
+                    <b>{a.name ?? t('confirmation.noAgent')}</b>
+                  </td>
+                  <td className="num ltr" data-l={head('cTreated')}>{n(a.treated)}</td>
+                  <td className="num ltr" data-l={head('confirmed')}>{n(a.confirmed)}</td>
+                  <td className="num ltr" data-l={head('cRefused')}>{n(a.refused)}</td>
+                  <td className="num" data-l={head('cAttacks')}>
+                    <span className="ltr">{n(a.attacks)}</span>
+                    {parts(a) && <small className="px-ov-sub">{parts(a)}</small>}
+                  </td>
+                  <td className="num" data-l={head('cToCall')}>
+                    <span className="ltr">{n(a.toCall)}</span>
+                    {a.toCallNight > 0 && <small className="px-ov-sub">{t('confirmation.ov.nightOf', { n: a.toCallNight })}</small>}
+                  </td>
+                  <td className="num" data-l={head('lq')}>{lqCell(a.leadsQuality, a.confirmed + a.refused)}</td>
+                  <td className="num ltr muted" data-l={head('cOld')}>{pp(a.oldRate)}</td>
+                  <td className="num ltr" data-l={head('cUp')}>{n(a.upsell)}</td>
+                  <td className="num ltr" data-l={head('upRate')}>{pp(a.upsellRate)}</td>
+                  <td className="num ltr" data-l={head('cDelivered')}>{a.delivered + a.returned ? `${n(a.delivered)} · ${pp(a.deliveryRate)}` : '—'}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={cols.length + 1} className="empty">
+                  {t('confirmation.ov.findEmpty')}
+                </td>
+              </tr>
+            )}
+          </tbody>
+          {O.byAgent.length > 1 && (
+            <tfoot>
+              <tr>
+                <td data-l={t('confirmation.col.agent')}>
+                  <b>{t('confirmation.ov.team')}</b>
+                </td>
+                <td className="num ltr" data-l={head('cTreated')}>{n(O.byAgent.reduce((s, a) => s + a.treated, 0))}</td>
+                <td className="num ltr" data-l={head('confirmed')}>{n(O.confirmed.n)}</td>
+                <td className="num ltr" data-l={head('cRefused')}>{n(O.refused.n)}</td>
+                <td className="num ltr" data-l={head('cAttacks')}>{n(O.attacks.n)}</td>
+                <td className="num ltr" data-l={head('cToCall')}>{n(O.night.noAnswerAll)}</td>
+                <td className="num" data-l={head('lq')}>{lqCell(O.leadsQuality, O.real)}</td>
+                <td className="num ltr muted" data-l={head('cOld')}>{pp(O.oldRate)}</td>
+                <td className="num ltr" data-l={head('cUp')}>{n(O.upsell.orders)}</td>
+                <td className="num ltr" data-l={head('upRate')}>{pp(O.upsell.rate)}</td>
+                <td className="num ltr" data-l={head('cDelivered')}>—</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+      {hurt && (
+        <p className="px-ov-note">
+          <Icon name="flag" /> {t('confirmation.ov.agentNote', { name: hurt.name ?? t('confirmation.noAgent'), a: n(hurt.attacks), old: pp(hurt.oldRate), lq: pp(hurt.leadsQuality) })}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function OvProducts({ O }: { O: Ov }) {
+  const { t } = useTranslation();
+  const L = O.limits;
+  const top = O.byProduct.slice(0, 10);
+  const cols = ['cLeads', 'confirmed', 'cRefused', 'cAttacks', 'cPending', 'lq'] as const;
+  const head = (k: (typeof cols)[number]) => t(`confirmation.ov.${k}`);
+  return (
+    <div className="card px-ov-card">
+      <div className="card-head">
+        <h2>{t('confirmation.ov.byProduct')}</h2>
+        <span className="muted">{t('confirmation.ov.byProductMeta', { w: L.wait })}</span>
+      </div>
+      <div className="tbl-wrap">
+        <table className="tbl px-ov-tbl">
+          <thead>
+            <tr>
+              <th>{t('confirmation.ov.cProduct')}</th>
+              {cols.map((k) => (
+                <th key={k} className="num">
+                  {head(k)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {top.length ? (
+              top.map((p) => {
+                const v = verdictOf(p.leadsQuality, p.real, L);
+                return (
+                  <tr key={p.productId}>
+                    <td data-l={t('confirmation.ov.cProduct')}>
+                      <b>{p.name}</b>
+                    </td>
+                    <td className="num ltr" data-l={head('cLeads')}>{n(p.n)}</td>
+                    <td className="num ltr" data-l={head('confirmed')}>{n(p.confirmed)}</td>
+                    <td className="num ltr" data-l={head('cRefused')}>{n(p.refused)}</td>
+                    <td className="num" data-l={head('cAttacks')}>
+                      <span className="ltr">{n(p.attacks)}</span>
+                      {p.attacks > 0 && <small className="px-ov-sub ltr">{da(p.attackValue)}</small>}
+                    </td>
+                    <td className="num" data-l={head('cPending')}>
+                      <span className="ltr">{n(p.pending)}</span>
+                      {p.duplicates > 0 && <small className="px-ov-sub">{t('confirmation.ov.pDup', { n: p.duplicates })}</small>}
+                    </td>
+                    <td className="num" data-l={head('lq')}>
+                      <span className="px-ov-lq">
+                        {v === 'tot' ? <small className="muted">{t('confirmation.ov.realN', { count: p.real })}</small> : <b className="ltr">{pp(p.leadsQuality)}</b>} <VerdictPill v={v} />
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan={cols.length + 1} className="empty">
+                  {t('confirmation.ov.findEmpty')}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {O.byProduct.length > top.length && <p className="px-ov-note">{t('confirmation.ov.more', { n: O.byProduct.length - top.length })}</p>}
+    </div>
+  );
+}
+
+function OvWords({ wait }: { wait: number }) {
+  const { t } = useTranslation();
+  const W: [string, string][] = [
+    ['wReal', 'wRealD'],
+    ['wAttack', 'wAttackD'],
+    ['lq', 'wLqD'],
+    ['wUp', 'wUpD'],
+    ['wWait', 'wWaitD'],
+    ['wEarly', 'wEarlyD'],
+  ];
+  return (
+    <div className="card px-ov-card">
+      <div className="card-head">
+        <h2>{t('confirmation.ov.words')}</h2>
+      </div>
+      <dl className="px-ov-words">
+        {W.map(([w, d]) => (
+          <div key={w}>
+            <dt>{t(`confirmation.ov.${w}`)}</dt>
+            <dd>{t(`confirmation.ov.${d}`, { w: wait })}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+/** Confirmation › Statistiques (managers): the page the « Statistiques » switch of Confirmées opens. */
 export function ConfirmedStatsPage() {
   const { t } = useTranslation();
   const [kf0, setKfState] = useState<Kf>(loadKf);
@@ -548,40 +976,75 @@ export function ConfirmedStatsPage() {
     setKfState(k);
     saveKf(k);
   };
-  const cq = useRpc('confirmation.confirmed', kfInput(kf), { refetchInterval: 60_000 });
-  const dq = useRpc('confirmation.delivery', { ...kfInput(kf), on: 'confirmed' }, { refetchInterval: 60_000 });
-  const C = cq.data;
-  const D = dq.data;
+  const q = useOverview(kf);
+  const O = q.data;
+  const lqV = O ? verdictOf(O.leadsQuality, O.real, O.limits) : 'tot';
   return (
-    <div className="px-cs">
+    <div className="px-cs px-ov">
       <div className="card bjkfc px-cs-top">
-        <Head title={t('confirmation.cs.title')} help={t('confirmation.cs.help')}>
+        <Head title={t('confirmation.ov.title')} help={t('confirmation.ov.help')}>
           <KfBar kf={kf} setKf={setKf} noView />
+          {O && O.pending.n > 0 && (
+            <a className="btn primary px-ov-call" href={callHref(O)}>
+              <Icon name="phone" /> {t('confirmation.ov.call', { count: O.pending.n })}
+            </a>
+          )}
         </Head>
-        <div className="bjec-sec">
-          {t('confirmation.cs.key')} · {perLabel(t, kf)}
-        </div>
-        {cq.error ? (
-          <ErrorBox error={cq.error} onRetry={() => cq.refetch()} />
-        ) : !C ? (
+        {q.error ? (
+          <ErrorBox error={q.error} onRetry={() => q.refetch()} />
+        ) : !O ? (
           <Loading />
         ) : (
-          <div className="kpis px-cs-key">
-            <Kpi tone="ok" label={t('confirmation.cf.confirmed')} value={n(C.confirmed)} sub={t('confirmation.ec.value', { v: da(C.value) })} />
-            <Kpi tone={tone3(C.rate, 60, 40)} label={t('confirmation.np.rate')} value={pctTxt(C.rate)} sub={t('confirmation.cf.rateSub', { n: C.cancelled })} />
-            <Kpi tone="ok" label={t('confirmation.dv.delivered')} value={D ? n(D.delivered) : '…'} sub={D ? t('confirmation.dv.deliveredSub', { v: da(D.deliveredValue) }) : ' '} />
-            <Kpi tone={D ? tone3(D.rate, 75, 60) : undefined} label={t('confirmation.dv.rate')} value={D ? pctTxt(D.rate) : '…'} sub={t('confirmation.dv.rateSub')} />
-            <Kpi label={t('confirmation.cf.basket')} value={C.basket === null ? '—' : da(C.basket)} sub={C.itemsPerOrder === null ? ' ' : t('confirmation.cf.basketSub', { n: String(Math.round(C.itemsPerOrder * 10) / 10).replace('.', ',') })} />
-            <Kpi tone="ok" label={t('confirmation.cf.upValue')} value={da(C.upsellValue)} sub={t('confirmation.cs.upSub', { p: pctTxt(C.upsellRate), n: C.upsellOrders })} />
-          </div>
+          <>
+            <p className="px-ov-find">
+              {O.received === 0
+                ? t('confirmation.ov.findEmpty')
+                : lqV === 'tot'
+                  ? t('confirmation.ov.findEarly', { n: n(O.real), w: O.limits.wait })
+                  : t('confirmation.ov.findLq', { p: pp(O.leadsQuality) })}{' '}
+              {O.attacks.n > 0 && t('confirmation.ov.findAttacks', { a: n(O.attacks.n), f: n(O.finished - O.duplicates.n) })}
+            </p>
+            <div className="kpis px-ov-kpis">
+              <Kpi label={t('confirmation.ov.received')} value={n(O.received)} sub={t('confirmation.ov.receivedSub', { f: n(O.finished), p: n(O.pending.n) })} />
+              <Kpi label={t('confirmation.ov.confirmed')} value={n(O.confirmed.n)} sub={t('confirmation.ov.confirmedSub', { v: da(O.confirmed.value), b: da(O.confirmed.basket) })} />
+              <Kpi
+                tone={V_TONE[lqV]}
+                label={t('confirmation.ov.lq')}
+                help={t('confirmation.ov.lqHelp')}
+                value={pp(O.leadsQuality)}
+                trend={<VerdictPill v={lqV} />}
+                sub={t('confirmation.ov.lqSub', { c: n(O.confirmed.n), r: n(O.real) })}
+              />
+              <Kpi label={t('confirmation.ov.upRate')} help={t('confirmation.ov.upHelp')} value={pp(O.upsell.rate)} sub={t('confirmation.ov.upRateSub')} />
+              <Kpi label={t('confirmation.ov.upOrders')} value={n(O.upsell.orders)} sub={t('confirmation.ov.upOrdersSub', { c: n(O.confirmed.n), v: da(O.upsell.value) })} />
+              <Kpi
+                label={t('confirmation.ov.first')}
+                value={<Dur m={O.speed.dayMedianMin} />}
+                sub={O.speed.nightMedianMin === null ? t('confirmation.ov.firstSubDay') : t('confirmation.ov.firstSub', { n: mn(O.speed.nightMedianMin) })}
+              />
+            </div>
+          </>
         )}
       </div>
-      <ConfirmedCard kf={kf} setKf={setKf} bare />
-      <div className="card bjkfc">
-        <Head title={t('confirmation.cs.after')} help={t('confirmation.cs.afterHelp')} />
-        <DelivBody kf={kf} on="confirmed" bare />
-      </div>
+      {O && (
+        <>
+          <div className="px-ov-row">
+            <OvFunnel O={O} kf={kf} />
+            <OvLosses O={O} />
+          </div>
+          <div className="px-ov-row">
+            <OvHours O={O} />
+            <OvSpeed O={O} />
+          </div>
+          <OvAgents O={O} />
+          <OvProducts O={O} />
+          <div className="card bjkfc">
+            <Head title={t('confirmation.cs.after')} help={t('confirmation.cs.afterHelp')} />
+            <DelivBody kf={kf} on="confirmed" bare />
+          </div>
+          <OvWords wait={O.limits.wait} />
+        </>
+      )}
     </div>
   );
 }
-
