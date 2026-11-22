@@ -82,9 +82,7 @@ html:not([data-theme="dark"]) .px-dr-pop { background: #FFFFFF; }
 /* ---------------------------------------------------------------- Confirmation › Statistiques (one page, .px-ov) */
 .px-ov-find { margin: 0; font-size: 15px; line-height: 1.55; max-width: 78ch; }
 .px-ov-find + .kpis { margin-top: 4px; }
-/* 7 boxes, laid out by the app's rule for 7 (one row from 1600px, else 4 + 3, then 2 by 2): the last box fills the end
-   of its row instead of leaving a hole */
-@media (max-width: 1599px) { .px-cs .kpis.px-ov-kpis > :last-child { grid-column: span 2; } }
+/* 8 boxes: the app's rule for 8 lays them 4 + 4, then 2 by 2 on tablets and phones */
 .px-ov-call { margin-inline-start: auto; }
 .px-ov-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
 @media (max-width: 1000px) { .px-ov-row { grid-template-columns: minmax(0, 1fr); } }

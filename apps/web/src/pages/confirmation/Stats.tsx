@@ -978,6 +978,9 @@ export function ConfirmedStatsPage() {
   };
   const q = useOverview(kf);
   const O = q.data;
+  // the same numbers as « Après la confirmation » (Livrées sur confirmées), asked once for both
+  const dq = useRpc('confirmation.delivery', { ...kfInput(kf), on: 'confirmed' }, { refetchInterval: 60_000 });
+  const D = dq.data;
   const lqV = O ? verdictOf(O.leadsQuality, O.limits) : 'none';
   return (
     <div className="px-cs px-ov">
@@ -1015,6 +1018,12 @@ export function ConfirmedStatsPage() {
                 value={pp(O.leadsQuality)}
                 trend={<VerdictPill v={lqV} />}
                 sub={t('confirmation.ov.lqSub', { c: n(O.confirmed.n), r: n(O.real) })}
+              />
+              <Kpi
+                label={t('confirmation.ov.finalRate')}
+                help={t('confirmation.ov.finalRateHelp')}
+                value={D ? pctTxt(D.overall) : '…'}
+                sub={D ? t('confirmation.ov.finalRateSub', { d: n(D.delivered), c: n(D.confirmed) }) : ' '}
               />
               <Kpi label={t('confirmation.ov.upRate')} help={t('confirmation.ov.upHelp')} value={pp(O.upsell.rate)} sub={t('confirmation.ov.upRateSub')} />
               <Kpi label={t('confirmation.ov.upOrders')} value={n(O.upsell.orders)} sub={t('confirmation.ov.upOrdersSub', { c: n(O.confirmed.n), v: da(O.upsell.value) })} />
