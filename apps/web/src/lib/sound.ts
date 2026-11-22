@@ -72,32 +72,39 @@ export function alarm() {
 export const audioReady = () => !!audio && audio.state === 'running';
 
 /**
- * A phone ringing, loud (« Bloquer jusqu'à l'appel »: a new order to call): two trills, « drrr-drrr ». Call it again every
- * few seconds while it should ring.
+ * Pilotix's one phone ring, « drrr-drrr »: two trills. The same everywhere, as the owner asked: « Bloquer jusqu'à
+ * l'appel » (ring()) and the bell's new order and callback. `soft`, `bright`: the two voices' loudness.
  */
-export function ring() {
-  if (!audio || audio.state !== 'running') return;
-  const t = audio.currentTime;
-  const master = audio.createGain();
-  master.gain.value = 0.7;
-  master.connect(audio.destination);
+function phoneRing(a: BaseAudioContext, dst: AudioNode, t: number, soft: number, bright: number) {
   for (const start of [0, 0.5]) {
     const s = t + start;
     // a bell's trill: the tone jumps between two notes 25 times a second, a soft voice and a bright one
-    for (const [type, level] of [['triangle', 0.7], ['square', 0.22]] as const) {
-      const o = audio.createOscillator();
-      const g = audio.createGain();
+    for (const [type, level] of [['triangle', soft], ['square', bright]] as const) {
+      const o = a.createOscillator();
+      const g = a.createGain();
       o.type = type;
       for (let i = 0; i < 10; i++) o.frequency.setValueAtTime(i % 2 ? 1480 : 1180, s + i * 0.04);
       g.gain.setValueAtTime(0.0001, s);
       g.gain.exponentialRampToValueAtTime(level, s + 0.015);
       g.gain.setValueAtTime(level, s + 0.36);
       g.gain.exponentialRampToValueAtTime(0.0001, s + 0.4);
-      o.connect(g).connect(master);
+      o.connect(g).connect(dst);
       o.start(s);
       o.stop(s + 0.42);
     }
   }
+}
+
+/**
+ * A phone ringing, loud (« Bloquer jusqu'à l'appel »: a new order to call): two trills, « drrr-drrr ». Call it again every
+ * few seconds while it should ring.
+ */
+export function ring() {
+  if (!audio || audio.state !== 'running') return;
+  const master = audio.createGain();
+  master.gain.value = 0.7;
+  master.connect(audio.destination);
+  phoneRing(audio, master, audio.currentTime, 0.7, 0.22);
 }
 
 // ---------------------------------------------------------------- the bell (layout/Bell): one sound for each kind
@@ -152,33 +159,10 @@ function hiss(a: AudioContext, dst: AudioNode, at: number, dur: number, freq: nu
 }
 
 const SOUNDS: Record<BellSound, (a: AudioContext, o: GainNode, t: number) => void> = {
-  // a new order: three bright notes, twice — loud
-  order: (a, o, t) => {
-    for (const k of [0, 0.62])
-      [1319, 1568, 2093].forEach((f, i) => {
-        note(a, o, f, t + k + i * 0.12, 0.32, 'triangle', 0.7);
-        note(a, o, f * 2, t + k + i * 0.12, 0.18, 'sine', 0.18);
-      });
-  },
-  // time to call back: a phone ringing, twice (« trrring, trrring ») — loud
-  callback: (a, o, t) => {
-    for (const k of [0, 0.62])
-      for (const [type, vol] of [['triangle', 0.8], ['square', 0.3]] as const) {
-        const s = t + k;
-        const osc = a.createOscillator();
-        const g = a.createGain();
-        osc.type = type;
-        // the bell's trill: two notes, 30 times a second
-        for (let i = 0; i < 15; i++) osc.frequency.setValueAtTime(i % 2 ? 1700 : 1320, s + i * 0.03);
-        g.gain.setValueAtTime(0.0001, s);
-        g.gain.exponentialRampToValueAtTime(vol, s + 0.012);
-        g.gain.setValueAtTime(vol, s + 0.4);
-        g.gain.exponentialRampToValueAtTime(0.0001, s + 0.46);
-        osc.connect(g).connect(o);
-        osc.start(s);
-        osc.stop(s + 0.48);
-      }
-  },
+  // a new order and time to call back: the same phone ring (the owner's rule), the one « Bloquer jusqu'à l'appel » rings
+  // — a little louder here
+  order: (a, o, t) => phoneRing(a, o, t, 0.8, 0.3),
+  callback: (a, o, t) => phoneRing(a, o, t, 0.8, 0.3),
   // delivered: the owner's cash register recording (lib/bellFiles.ts); this drawn one only when it cannot load
   delivered: (a, o, t) => {
     hiss(a, o, t, 0.07, 2600, 0.9);
