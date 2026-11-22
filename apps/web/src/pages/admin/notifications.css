@@ -155,6 +155,7 @@
 }
 .px-nt-savebar .px-nt-unsaved { margin-inline-end: auto; }
 .px-nt-savebar .btn { min-height: 44px; }
+@media (max-width: 480px) { .px-nt-savebar .px-nt-unsaved { flex-basis: 100%; } .px-nt-savebar .btn { flex: 1; } }
 
 @media (max-width: 760px) {
   .px-nt-detail { padding: 14px; }
