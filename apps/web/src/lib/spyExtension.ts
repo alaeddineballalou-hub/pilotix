@@ -7,6 +7,10 @@
 //                     { source: 'pilotix-spy-ext', id, type: 'progress', step }        (step: 'open' | 'read' | 'pictures')
 //                     { source: 'pilotix-spy-ext', id, type: 'result', count, ads }    (ads: RawAd[], pictures included)
 //                     { source: 'pilotix-spy-ext', id, type: 'error', message }
+//                     { source: 'pilotix-spy-ext', id, type: 'site-price', url, price, oldPrice, title }
+//                         a competitor's price the user's Chrome read on the page they had open (the popup's « Lire le prix
+//                         de cette page »); this page saves it and answers
+//   page → extension  { source: 'pilotix-spy-page', id, type: 'site-price-done', ok, saved, message }
 // The search runs in the user's own Chrome: it opens Facebook's public Ad Library in a background tab, reads the ads and
 // closes it (Facebook refuses these pages to a server, never to a browser).
 import type { RawAd } from '@pilotix/core';
@@ -86,6 +90,41 @@ export function extensionSearch(query: string, opts: { country?: string; max?: n
     opts.signal?.addEventListener('abort', abort);
     window.postMessage({ source: PAGE, id, type: 'search', query, country: opts.country ?? 'DZ', max: opts.max ?? 30 }, window.location.origin);
   });
+}
+
+/** The extension's newest version (apps/extension/manifest.json): « Lire le prix de cette page » came with 1.1.0. */
+export const SPY_EXT_VERSION = '1.1.0';
+
+/** A competitor's price read by the user's own Chrome on the page they had open (the extension's popup). */
+export interface ExtSitePrice {
+  url: string;
+  price: number;
+  oldPrice: number | null;
+  title: string | null;
+}
+
+/**
+ * Takes the prices the extension's popup reads (« Lire le prix de cette page ») while this page is open: `save` keeps
+ * one and says on how many ads; the answer goes back to the popup. Returns the function that stops listening.
+ */
+export function onSitePrice(save: (p: ExtSitePrice) => Promise<{ saved: number }>): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const on = async (e: MessageEvent) => {
+    const d = e.data;
+    if (e.source !== window || d?.source !== EXT || d.type !== 'site-price' || typeof d.id !== 'string') return;
+    const price = Math.round(Number(d.price));
+    const old = d.oldPrice === null || d.oldPrice === undefined ? null : Math.round(Number(d.oldPrice));
+    const reply = (r: { ok: boolean; saved?: number; message?: string }) => window.postMessage({ source: PAGE, id: d.id, type: 'site-price-done', ...r }, window.location.origin);
+    if (!Number.isFinite(price) || price < 100 || typeof d.url !== 'string') return reply({ ok: false, message: 'Prix illisible' });
+    try {
+      const r = await save({ url: d.url.slice(0, 2000), price, oldPrice: old !== null && Number.isFinite(old) && old > price ? old : null, title: typeof d.title === 'string' ? d.title.slice(0, 200) : null });
+      reply({ ok: true, saved: r.saved });
+    } catch (err) {
+      reply({ ok: false, message: err instanceof Error ? err.message : String(err) });
+    }
+  };
+  window.addEventListener('message', on);
+  return () => window.removeEventListener('message', on);
 }
 
 /** Facebook's own Ad Library search for a keyword (Algeria, active ads), to open in a new tab. */

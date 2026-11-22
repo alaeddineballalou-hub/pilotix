@@ -50,7 +50,9 @@ interface DemoAd {
   same: boolean;
   colors: [string, string];
   ai: { hook: string; angle: string; offer: string; keep: string; weak: string };
-  site?: { price: number | null; oldPrice: number | null; wilayas: number | null; stopdesk: boolean; whatsapp: boolean };
+  site?: { price: number | null; oldPrice: number | null; wilayas: number | null; stopdesk: boolean; whatsapp: boolean; blocked?: 'robots' | 'wall' };
+  /** a price a person gave (the server could not read the site): typed by hand, or read by their Chrome, `days` ago */
+  manual?: { price: number; oldPrice: number | null; via: 'hand' | 'chrome'; days: number };
 }
 
 const ADS: DemoAd[] = [
@@ -62,11 +64,11 @@ const ADS: DemoAd[] = [
   { sku: 'PX-POU', glyph: 'pou', page: 'Kids Store 213', pageId: '900000000000102', days: 45, copies: 3, platforms: ['FACEBOOK', 'INSTAGRAM', 'MESSENGER'], video: true, price: 12900, head: 'خفيفة وتطلع بيها في الطرامواي',
     body: 'Poussette t9der t’tla3 biha f tobis w tramway 🚋\nخفيفة 6 كيلو برك، livraison 58 wilaya', link: 'https://kidsstore213.mylightfunnels.com/poussette', linkType: 'site', platform: 'LightFunnels', cta: 'Acheter', same: true, colors: ['#3B3B98', '#1B1464'],
     ai: { hook: 'Montée dans le tramway avec la poussette', angle: 'Légère pour les transports', offer: '12 900 DA', keep: 'Une situation de vie réelle (bus, tramway)', weak: 'Le prix n’apparaît pas dans la vidéo' },
-    site: { price: 12900, oldPrice: null, wilayas: 58, stopdesk: false, whatsapp: false } },
+    site: { price: null, oldPrice: null, wilayas: null, stopdesk: false, whatsapp: false, blocked: 'wall' }, manual: { price: 12900, oldPrice: null, via: 'chrome', days: 1 } },
   { sku: 'PX-POU', glyph: 'pou', page: 'Maison Bébé Algérie', pageId: '900000000000103', days: 38, copies: 2, platforms: ['FACEBOOK', 'INSTAGRAM'], video: false, price: 13900, head: 'Poussette canne 6,2 kg',
     body: 'Poussette canne ultra-légère 6,2 kg, pliage compact ✅\n13 900 DA, livraison 58 wilayas, paiement à la livraison', link: 'https://maisonbebe-dz.myshopify.com/products/poussette-canne', linkType: 'site', platform: 'Shopify', cta: 'Voir l’offre', same: true, colors: ['#C05C7E', '#7A2E4C'],
     ai: { hook: 'Le poids précis (6,2 kg) en titre', angle: 'Légèreté en ville', offer: '13 900 DA', keep: 'Un chiffre précis rassure plus que « légère »', weak: 'Texte seulement en français' },
-    site: { price: 13900, oldPrice: null, wilayas: 58, stopdesk: true, whatsapp: false } },
+    site: { price: null, oldPrice: null, wilayas: null, stopdesk: false, whatsapp: false, blocked: 'robots' } },
   { sku: 'PX-POU', glyph: 'pou', page: 'Prix Choc Bébé', pageId: '900000000000104', days: 6, copies: 7, platforms: ['FACEBOOK', 'INSTAGRAM', 'MESSENGER'], video: false, price: 10900, old: 14900, head: 'تخفيض كبير 🔥',
     body: 'تخفيض كبير 🔥 عربة أطفال 10900 دج بدل 14900 دج\nالكمية محدودة، التوصيل لجميع الولايات', link: 'https://prixchoc.foorweb.store/poussette', linkType: 'site', platform: 'Foorweb', cta: 'Commander', same: true, colors: ['#2E7D6B', '#174F45'],
     ai: { hook: 'Grosse réduction en titre', angle: 'Le prix le plus bas', offer: '10 900 DA au lieu de 14 900', keep: 'Le prix barré bien visible', weak: 'Guerre des prix : marge très faible' },
@@ -185,11 +187,13 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     n++;
     const adId = `9${String(100000000000000 + n * 7919)}`;
     const adIds = Array.from({ length: Math.min(a.copies, 12) }, (_, k) => `9${String(100000000000000 + n * 7919 + k * 13)}`);
-    const site = a.site ? { checkedAt: day(1), ok: true, platform: a.platform ?? null, title: null, ...a.site } : null;
+    // a site the server read yesterday, or one that turned it away (its « no robots » rule, a protection wall)
+    const site = a.site ? { checkedAt: day(1), ok: !a.site.blocked, readAt: a.site.blocked ? null : day(1), platform: a.platform ?? null, title: null, ...a.site, blocked: a.site.blocked ?? null } : null;
+    const manual = a.manual ? { price: a.manual.price, oldPrice: a.manual.oldPrice, via: a.manual.via, at: day(a.manual.days) } : null;
     await db.query(
       `INSERT INTO spy_ads (product_id, gkey, ad_id, ad_ids, source, page_id, page_name, body, link_url, link_type, platform, cta, platforms, is_video, media,
-                            copies, started_at, first_seen, last_seen, active, own, keyword, price, old_price, relevant, same, ai, site)
-       VALUES ($1,$2,$3,$4,'demo',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,true,$19,$20,$21,$22,true,$23,$24,$25) ON CONFLICT DO NOTHING`,
+                            copies, started_at, first_seen, last_seen, active, own, keyword, price, old_price, relevant, same, ai, site, manual)
+       VALUES ($1,$2,$3,$4,'demo',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,true,$19,$20,$21,$22,true,$23,$24,$25,$26) ON CONFLICT DO NOTHING`,
       [
         productId,
         `${a.pageId}#demo${n}`,
@@ -216,6 +220,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
         a.same,
         JSON.stringify(a.ai),
         site ? JSON.stringify(site) : null,
+        manual ? JSON.stringify(manual) : null,
       ],
     );
   }

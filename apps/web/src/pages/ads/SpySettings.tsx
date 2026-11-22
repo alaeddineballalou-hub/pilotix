@@ -10,7 +10,7 @@ import type { Out } from '../../lib/backend';
 import { dateOnly, n } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
-import { detectExtension, type ExtStatus } from '../../lib/spyExtension';
+import { detectExtension, SPY_EXT_VERSION, type ExtStatus } from '../../lib/spyExtension';
 import { copyText, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { SaveBar } from '../ai/agent';
@@ -261,6 +261,14 @@ function TestResult({ r }: { r: Out<'spy.settings.test'> }) {
   );
 }
 
+/** « 1.0.0 » older than « 1.1.0 » (numbers compared part by part). */
+const olderThan = (v: string, than: string) => {
+  const a = v.split('.').map((x) => Number(x) || 0);
+  const b = than.split('.').map((x) => Number(x) || 0);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) < (b[i] ?? 0);
+  return false;
+};
+
 /** Is the extension on this page, and how to install it (shown in the settings and when a search needs it). */
 export function ExtensionCard({ onClose }: { onClose?: () => void }) {
   const { t } = useTranslation();
@@ -271,6 +279,8 @@ export function ExtensionCard({ onClose }: { onClose?: () => void }) {
   };
   useEffect(check, []);
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  // an older copy works, without « Lire le prix de cette page » (1.1.0): its new folder replaces the old one
+  const old = !!st?.installed && olderThan(st.version ?? '1', SPY_EXT_VERSION);
   return (
     <section className="card spy-ext" aria-labelledby="spy-ext-h">
       <div className="card-head">
@@ -278,8 +288,8 @@ export function ExtensionCard({ onClose }: { onClose?: () => void }) {
           <Icon name="puzzle" /> {t('spy.ext.title')}
         </h2>
         <div className="row">
-          <span className={`badge ${!st ? 't-off' : st.installed ? 't-ok' : 't-bad'}`} role="status">
-            {!st ? t('spy.ext.checking') : st.installed ? t('spy.ext.on', { v: st.version ?? '1' }) : t('spy.ext.off')}
+          <span className={`badge ${!st ? 't-off' : st.installed ? (old ? 't-warn' : 't-ok') : 't-bad'}`} role="status">
+            {!st ? t('spy.ext.checking') : st.installed ? t(old ? 'spy.ext.old' : 'spy.ext.on', { v: st.version ?? '1' }) : t('spy.ext.off')}
           </span>
           {onClose && (
             <button type="button" className="btn small ghost" onClick={onClose} aria-label={t('spy.close')}>
@@ -289,6 +299,7 @@ export function ExtensionCard({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
       <p className="note">{t('spy.ext.help')}</p>
+      {old && <p className="note spy-ext-old">{t('spy.ext.update', { v: SPY_EXT_VERSION })}</p>}
       <ol className="spy-steps">
         <li>
           {t('spy.ext.s1')}{' '}

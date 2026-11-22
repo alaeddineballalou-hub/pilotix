@@ -4,10 +4,12 @@
 //    SearchAPI.io (both mirror Facebook's own library data); the key goes in a header, never in a URL
 //  - 'media'  → { url }: a competitor's picture as a data URL (Facebook's picture links expire after a few days)
 //  - 'site'   → { url }: a competitor's page read once: shop builder, price, crossed price, order form (58 or 69 wilayas)
+//    never forced: the site's « no robots » rule (robots.txt) is followed, and a protection wall against robots (Cloudflare's
+//    check, DDoS-Guard…) is taken as a no: one try, nothing to get round it, the reason kept (SpySite.blocked)
 // Addresses come from ads (other people's data): only public http(s) hosts are fetched, never the server's own network.
 import { AppError, Ctx } from './rpc';
 import { publicFetch } from './publicfetch';
-import { builderOf, fromLibrary, pricesIn, RawAd, SpySearchResult, SpySite } from './modules/spy';
+import { builderOf, fromLibrary, pricesIn, RawAd, SpySearchResult, SpySite, SpySiteBlock } from './modules/spy';
 
 const UA = 'Mozilla/5.0 (Linux; Android 13; SM-A536B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36';
 const LABEL = { scrapecreators: 'ScrapeCreators', searchapi: 'SearchAPI.io' } as const;
@@ -142,13 +144,143 @@ export function readSite(html: string, url: string, now: number): SpySite {
   };
 }
 
-async function site(a: { url: string }, ctx: Ctx): Promise<SpySite> {
+// ---------------------------------------------------------------- a site's « no robots » rule and its protection wall
+/** Pilotix's robot in a site's robots.txt: its own rules when the site names « PilotixSpy », else the ones for every robot (*). */
+export const ROBOT_NAME = 'PilotixSpy';
+
+const decode = (s: string) => {
   try {
-    const { body, url } = await fetchPublic(a.url, 'text/html,application/xhtml+xml', 1_500_000);
-    return readSite(new TextDecoder('utf-8', { fatal: false }).decode(body), url.toString(), ctx.now());
+    return decodeURI(s);
   } catch {
-    return { checkedAt: new Date(ctx.now()).toISOString(), ok: false, platform: builderOf(a.url), title: null, price: null, oldPrice: null, whatsapp: false, wilayas: null, stopdesk: false };
+    return s;
   }
+};
+const escRe = (s: string) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * May the robot `agent` read `path` (its query included) under these robots.txt rules? (RFC 9309: the groups that name
+ * the robot, else the « * » ones; the longest matching rule decides, Allow wins a tie; « * » is anything, a final « $ »
+ * the end of the address; « Disallow: » with nothing after forbids nothing.)
+ */
+export function robotsAllow(txt: string, path: string, agent = ROBOT_NAME): boolean {
+  type Group = { agents: string[]; rules: { allow: boolean; pat: string }[] };
+  const groups: Group[] = [];
+  let cur: Group | null = null;
+  let agentLine = false;
+  for (const raw of txt.split(/\r\n|\r|\n/)) {
+    const m = /^\s*([A-Za-z-]+)\s*:\s*(.*?)\s*$/.exec(raw.replace(/#.*$/, ''));
+    if (!m) continue;
+    const field = m[1].toLowerCase();
+    if (field === 'user-agent') {
+      if (!cur || !agentLine) groups.push((cur = { agents: [], rules: [] }));
+      cur.agents.push(m[2].toLowerCase());
+      agentLine = true;
+      continue;
+    }
+    agentLine = false;
+    if (!cur || (field !== 'allow' && field !== 'disallow')) continue;
+    if (field === 'disallow' && m[2] === '') continue;
+    cur.rules.push({ allow: field === 'allow', pat: m[2] });
+  }
+  const name = agent.toLowerCase();
+  const own = groups.filter((g) => g.agents.includes(name));
+  const rules = (own.length ? own : groups.filter((g) => g.agents.includes('*'))).flatMap((g) => g.rules);
+  const p = decode(path || '/');
+  let best: { allow: boolean; len: number } | null = null;
+  for (const r of rules) {
+    const pat = decode(r.pat);
+    const end = pat.endsWith('$');
+    const body = end ? pat.slice(0, -1) : pat;
+    if (!new RegExp(`^${body.split('*').map(escRe).join('.*')}${end ? '$' : ''}`).test(p)) continue;
+    if (!best || pat.length > best.len || (pat.length === best.len && r.allow)) best = { allow: r.allow, len: pat.length };
+  }
+  return !best || best.allow;
+}
+
+/**
+ * A protection wall against robots instead of the page: Cloudflare's check (« Just a moment… », cf-mitigated), a
+ * « too many visits » answer, DDoS-Guard, Sucuri, a captcha page.
+ */
+export function wallIn(status: number, headers: { get(name: string): string | null }, html: string): boolean {
+  if ((headers.get('cf-mitigated') ?? '').toLowerCase() === 'challenge' || status === 429) return true;
+  const head = html.slice(0, 30_000);
+  const marks = /challenge-platform|cf-chl-|cf_chl_|__cf_chl|Just a moment\.\.\.|Attention Required! \| Cloudflare|cf-browser-verification|ddos-guard|Sucuri WebSite Firewall|captcha-delivery|px-captcha|hcaptcha\.com\/1\/api|g-recaptcha/i;
+  if (status === 403) return marks.test(head) || /cloudflare|ddos-guard|sucuri/i.test(headers.get('server') ?? '');
+  if (status === 503) return marks.test(head);
+  // a « 200 » that is only the check page
+  return status >= 200 && status < 300 && /<title>\s*(Just a moment\.\.\.|Attention Required! \| Cloudflare|DDoS-Guard|One moment, please\.\.\.)/i.test(head);
+}
+
+const ROBOTS_TTL = 6 * 3_600_000;
+const robotsCache = new Map<string, { at: number; txt: string | null; down: boolean }>();
+
+/** A site's robots.txt, read at most once every 6 hours (null: none, nothing forbidden; down: no answer, wait). */
+async function robotsOf(origin: string, now: number): Promise<{ txt: string | null; down: boolean }> {
+  const known = robotsCache.get(origin);
+  if (known && now - known.at < ROBOTS_TTL) return known;
+  let out: { txt: string | null; down: boolean };
+  try {
+    const res = await publicFetch(`${origin}/robots.txt`, { headers: { 'User-Agent': UA, Accept: 'text/plain,*/*;q=0.5' }, timeoutMs: 10_000, maxBytes: 500_000, maxRedirects: 4, truncate: true });
+    if (res.ok) out = { txt: new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(await res.arrayBuffer()).slice(0, 500_000)), down: false };
+    // no file (or a file the site keeps to itself): nothing forbidden; the site's trouble or « too many »: not now
+    else if (res.status >= 400 && res.status < 500 && res.status !== 429) out = { txt: null, down: false };
+    else out = { txt: null, down: true };
+  } catch {
+    out = { txt: null, down: true };
+  }
+  if (robotsCache.size >= 1000) robotsCache.clear();
+  robotsCache.set(origin, { at: now, ...out });
+  return out;
+}
+
+async function site(a: { url: string }, ctx: Ctx): Promise<SpySite> {
+  const now = ctx.now();
+  const no = (blocked: SpySiteBlock): SpySite => ({
+    checkedAt: new Date(now).toISOString(),
+    ok: false,
+    blocked,
+    platform: builderOf(a.url),
+    title: null,
+    price: null,
+    oldPrice: null,
+    whatsapp: false,
+    wilayas: null,
+    stopdesk: false,
+  });
+  let url: URL;
+  try {
+    url = new URL(a.url);
+  } catch {
+    return no('down');
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return no('down');
+  // the site's « no robots » rule first: a page it keeps from robots is never asked for
+  const robots = await robotsOf(url.origin, now);
+  if (robots.down) return no('down');
+  if (robots.txt !== null && !robotsAllow(robots.txt, url.pathname + url.search)) return no('robots');
+  let res: Response;
+  let html: string;
+  try {
+    res = await publicFetch(a.url, { headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml', 'Accept-Language': 'fr-DZ,fr;q=0.9,ar;q=0.8' }, timeoutMs: 15_000, maxBytes: 1_500_000, maxRedirects: 4, truncate: true });
+    html = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(await res.arrayBuffer()).slice(0, 1_500_000));
+  } catch {
+    return no('down');
+  }
+  // one try: a wall against robots is a no, never got round
+  if (wallIn(res.status, res.headers, html)) return no('wall');
+  if (!res.ok) return no('down');
+  // sent on to another site: that site's rule counts too
+  let final = url;
+  try {
+    if (res.url) final = new URL(res.url);
+  } catch {
+    /* the address asked for */
+  }
+  if (final.origin !== url.origin) {
+    const theirs = await robotsOf(final.origin, now);
+    if (theirs.txt !== null && !robotsAllow(theirs.txt, final.pathname + final.search)) return no('robots');
+  }
+  return readSite(html, final.toString(), now);
 }
 
 export async function runSpy(action: string, args: unknown, ctx: Ctx): Promise<unknown> {

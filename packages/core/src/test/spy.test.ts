@@ -4,9 +4,9 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, fromLibrary } from '../index';
-import { builderOf, groupKey, jsonIn, linkTypeOf, pricesIn, RawAd, spyScore } from '../modules/spy';
+import { builderOf, groupKey, jsonIn, linkTypeOf, pricesIn, RawAd, sitePageKey, SpySite, spyScore } from '../modules/spy';
 import type { REGISTRY } from '../registry';
-import { libraryItems, readSite } from '../spy-server';
+import { libraryItems, readSite, robotsAllow, runSpy, wallIn } from '../spy-server';
 import { EMAILS, setup } from './harness';
 import type { z } from 'zod';
 
@@ -281,4 +281,147 @@ test("a competitor's page: builder, price, crossed price, the order form", () =>
   const plain = readSite('<html><body>Livraison 58 wilayas — 4950 دج</body></html>', 'https://babyjoydz.net/product/1', 0);
   assert.equal(plain.wilayas, 58);
   assert.equal(plain.price, 4950);
+});
+
+test('a site’s « no robots » rule (robots.txt) and the protection walls against robots are read right', () => {
+  const txt = ['User-agent: *', 'Disallow: /checkout', 'Disallow: /*?variant=', 'Allow: /products/', 'Disallow: /products/private$', '', '# others', 'User-agent: GPTBot', 'Disallow: /'].join('\n');
+  assert.equal(robotsAllow(txt, '/products/chaise'), true);
+  assert.equal(robotsAllow(txt, '/checkout/123'), false);
+  assert.equal(robotsAllow(txt, '/products/chaise?variant=2'), false, 'the longest rule decides');
+  assert.equal(robotsAllow(txt, '/products/private'), false);
+  assert.equal(robotsAllow(txt, '/products/private-sale'), true, '« $ » is the end of the address');
+  assert.equal(robotsAllow('User-agent: *\nDisallow: /', '/x'), false);
+  assert.equal(robotsAllow('User-agent: *\nDisallow:', '/x'), true, '« Disallow: » alone forbids nothing');
+  assert.equal(robotsAllow('User-agent: GPTBot\nDisallow: /', '/x'), true, 'another robot’s rule is not Pilotix’s');
+  assert.equal(robotsAllow('User-agent: PilotixSpy\nDisallow: /\n\nUser-agent: *\nAllow: /', '/x'), false, 'a rule naming Pilotix comes first');
+  assert.equal(robotsAllow('User-agent: Googlebot\nUser-agent: *\nDisallow: /shop/', '/shop/a'), false, 'two robots, one group');
+  assert.equal(robotsAllow('User-agent: *\nDisallow: /shop/\nAllow: /shop/', '/shop/a'), true, 'Allow wins a tie');
+  assert.equal(robotsAllow('<html><body>Page introuvable</body></html>', '/x'), true, 'a page instead of the file: no rule');
+  const h = (o: Record<string, string> = {}) => new Headers(o);
+  assert.equal(wallIn(403, h({ server: 'cloudflare' }), '<html>Sorry, you have been blocked</html>'), true);
+  assert.equal(wallIn(403, h(), '<title>Attention Required! | Cloudflare</title>'), true);
+  assert.equal(wallIn(503, h(), '<title>Just a moment...</title><script src="/cdn-cgi/challenge-platform/h/b/orchestrate/jsch/v1"></script>'), true);
+  assert.equal(wallIn(200, h({ 'cf-mitigated': 'challenge' }), ''), true);
+  assert.equal(wallIn(200, h(), '<html><head><title>Just a moment...</title></head></html>'), true);
+  assert.equal(wallIn(429, h(), ''), true, '« too many visits » is a no too');
+  assert.equal(wallIn(404, h(), '<title>Page introuvable</title>'), false);
+  assert.equal(wallIn(503, h(), '<title>Maintenance</title>'), false, 'a site in trouble is not a wall');
+  assert.equal(wallIn(200, h(), '<title>Chaise haute</title><form><div class="g-recaptcha"></div></form>'), false, 'a shop page with a captcha on its form is read');
+  assert.equal(sitePageKey('https://www.Shop.dz/products/chaise/?fbclid=1#top'), 'shop.dz/products/chaise');
+  assert.equal(sitePageKey('https://shop.dz/'), 'shop.dz');
+  assert.equal(sitePageKey('wa.me/213'), null);
+});
+
+test('the server reads a site once: never a page its rule forbids, never past a wall, the reason kept', async () => {
+  const real = globalThis.fetch;
+  const asked: string[] = [];
+  const page = '<html><head><title>Lit parapluie</title></head><body><h1>Lit</h1><span>14 500 دج</span> <s>18 000 دج</s></body></html>';
+  const html = (body: string, status = 200, headers: Record<string, string> = {}) => new Response(body, { status, headers: { 'content-type': 'text/html', ...headers } });
+  globalThis.fetch = (async (input: any) => {
+    const u = String(input);
+    asked.push(u);
+    if (u === 'https://norobots.spy-test.dz/robots.txt') return new Response('User-agent: *\nDisallow: /products/\nAllow: /products/ok', { status: 200 });
+    if (u === 'https://walled.spy-test.dz/robots.txt') return new Response('', { status: 404 });
+    if (u.startsWith('https://walled.spy-test.dz/'))
+      return html('<html><head><title>Just a moment...</title></head><body><script src="/cdn-cgi/challenge-platform/h/b/orchestrate/jsch/v1"></script></body></html>', 403, { server: 'cloudflare', 'cf-mitigated': 'challenge' });
+    if (u === 'https://open.spy-test.dz/robots.txt') return new Response('User-agent: GPTBot\nDisallow: /', { status: 200 });
+    if (u.startsWith('https://open.spy-test.dz/') || u === 'https://norobots.spy-test.dz/products/ok') return html(page);
+    return new Response('', { status: 500 });
+  }) as typeof fetch;
+  try {
+    const ctx = { now: () => Date.now() } as Ctx;
+    const site = (url: string) => runSpy('site', { url }, ctx) as Promise<SpySite>;
+    const no = await site('https://norobots.spy-test.dz/products/lit?ref=fb');
+    assert.deepEqual([no.ok, no.blocked, no.price], [false, 'robots', null]);
+    assert.ok(!asked.some((u) => u.includes('/products/lit')), 'a page the rule forbids is never asked for');
+    const ok = await site('https://norobots.spy-test.dz/products/ok');
+    assert.deepEqual([ok.ok, ok.price, ok.oldPrice], [true, 14500, 18000]);
+    assert.equal(asked.filter((u) => u === 'https://norobots.spy-test.dz/robots.txt').length, 1, 'the rule is read once for the site');
+    const wall = await site('https://walled.spy-test.dz/lit');
+    assert.deepEqual([wall.ok, wall.blocked], [false, 'wall']);
+    assert.equal(asked.filter((u) => u === 'https://walled.spy-test.dz/lit').length, 1, 'one try, nothing to get round it');
+    const open = await site('https://open.spy-test.dz/lit');
+    assert.deepEqual([open.ok, open.price, open.title], [true, 14500, 'Lit parapluie']);
+    const down = await site('https://gone.spy-test.dz/lit');
+    assert.deepEqual([down.ok, down.blocked], [false, 'down']);
+    assert.ok(!asked.includes('https://gone.spy-test.dz/lit'), 'no answer about the rule: the page waits');
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test('sites in a round: a wall is asked once, an earlier reading stays; a price given by a person goes on its page and stays', async () => {
+  const cha = Number((await db.query(`SELECT id FROM products WHERE sku = 'PX-CHA'`))[0].id);
+  const asked: string[] = [];
+  let mode: 'good' | 'robots' = 'good';
+  const no = (blocked: 'robots' | 'wall'): SpySite => ({ checkedAt: new Date().toISOString(), ok: false, blocked, platform: null, title: null, price: null, oldPrice: null, whatsapp: false, wilayas: null, stopdesk: false });
+  const server: Ctx['server'] = {
+    courier: async () => null,
+    meta: async () => null,
+    hashPassword: async (p) => p,
+    spy: async (action, args: any) => {
+      if (action === 'media') return null;
+      if (action !== 'site') throw new Error(action);
+      asked.push(args.url);
+      if (String(args.url).includes('walled.')) return no('wall');
+      if (mode === 'robots') return no('robots');
+      return { checkedAt: new Date().toISOString(), ok: true, platform: 'YouCan', title: 'Chaise', price: 8200, oldPrice: 9900, whatsapp: false, wilayas: 58, stopdesk: true };
+    },
+  };
+  const m = await as(EMAILS.marketer, server);
+  const ad = (id: string, page: string, link: string, text: string) => fromLibrary(item(id, page, text, { snapshot: { page_name: page, body: { text }, link_url: link, cards: [] } })) as RawAd;
+  const ads = [
+    ad('810000001', 'Wall Shop', 'https://walled.shop-test.dz/chaise-a', 'Chaise haute A'),
+    ad('810000002', 'Wall Shop', 'https://walled.shop-test.dz/chaise-b', 'Chaise haute B'),
+    ad('810000003', 'Open Shop', 'https://www.open.shop-test.dz/products/chaise/?fbclid=1', 'Chaise haute évolutive'),
+  ];
+  const since = new Date().toISOString();
+  await c('spy.ingest', m, { productId: cha, keyword: 'chaise haute', count: 3, ads });
+  await c('spy.finish', m, { productId: cha, since });
+  assert.equal(asked.filter((u) => u.includes('walled.')).length, 1, 'a walled site is asked once per round');
+  let v = await c('spy.view', m, { productId: cha });
+  const walled = v.ads.filter((a) => a.pageName === 'Wall Shop');
+  assert.equal(walled.length, 2);
+  assert.ok(walled.every((a) => a.site?.ok === false && a.site.blocked === 'wall' && a.price === null));
+  const open = v.ads.find((a) => a.pageName === 'Open Shop')!;
+  assert.deepEqual([open.site?.ok, open.site?.price, open.site?.blocked], [true, 8200, null]);
+  assert.ok(open.site?.readAt);
+
+  // a week later the shop forbids robots: last week's reading stays, with its date
+  mode = 'robots';
+  const week = 8 * 86_400_000;
+  const later: Ctx = { ...m, now: () => Date.now() + week };
+  const since2 = new Date(Date.now() + week - 1000).toISOString();
+  await c('spy.ingest', later, { productId: cha, keyword: 'chaise haute', count: 3, ads });
+  await c('spy.finish', later, { productId: cha, since: since2 });
+  v = await c('spy.view', later, { productId: cha });
+  const open2 = v.ads.find((a) => a.pageName === 'Open Shop')!;
+  assert.deepEqual([open2.site?.ok, open2.site?.blocked, open2.site?.price, open2.site?.readAt], [false, 'robots', 8200, open.site?.readAt]);
+
+  // a price typed by hand goes on its page's ads (not on the shop's other page); it is the ad's price when it shows none
+  const a = walled.find((x) => x.adId === '810000001')!;
+  assert.equal((await c('spy.sitePrice', m, { via: 'hand', productId: cha, gkey: a.gkey, price: 7500, oldPrice: 9000 })).saved, 1);
+  v = await c('spy.view', m, { productId: cha });
+  let a1 = v.ads.find((x) => x.gkey === a.gkey)!;
+  assert.deepEqual([a1.manual?.price, a1.manual?.oldPrice, a1.manual?.via, a1.price, a1.oldPrice], [7500, 9000, 'hand', 7500, 9000]);
+  // Chrome: found by the page's address (www, a query, a last « / » or a # change nothing)
+  const b = walled.find((x) => x.adId === '810000002')!;
+  assert.equal((await c('spy.sitePrice', m, { via: 'chrome', url: 'https://www.walled.shop-test.dz/chaise-b/?utm_source=fb#top', price: 7600 })).saved, 1);
+  v = await c('spy.view', m, { productId: cha });
+  assert.deepEqual([v.ads.find((x) => x.gkey === b.gkey)!.manual?.via, v.ads.find((x) => x.gkey === b.gkey)!.price], ['chrome', 7600]);
+  // another address of the same shop (a redirect): the ad on screen; another shop: nothing
+  assert.equal((await c('spy.sitePrice', m, { via: 'chrome', url: 'https://walled.shop-test.dz/p/12345', price: 7700, productId: cha, gkey: a.gkey })).saved, 1);
+  assert.equal((await c('spy.sitePrice', m, { via: 'chrome', url: 'https://nowhere-test.dz/chaise', price: 7000, productId: cha, gkey: a.gkey })).saved, 0);
+  await assert.rejects(c('spy.sitePrice', m, { via: 'chrome', url: 'pas une adresse', price: 7000 }));
+
+  // the server's next round never overwrites it; taken back by hand
+  const later2: Ctx = { ...m, now: () => Date.now() + 2 * week };
+  await c('spy.ingest', later2, { productId: cha, keyword: 'chaise haute', count: 3, ads });
+  await c('spy.finish', later2, { productId: cha, since: new Date(Date.now() + 2 * week - 1000).toISOString() });
+  v = await c('spy.view', later2, { productId: cha });
+  a1 = v.ads.find((x) => x.gkey === a.gkey)!;
+  assert.deepEqual([a1.manual?.price, a1.manual?.via, a1.site?.blocked], [7700, 'chrome', 'wall']);
+  await c('spy.sitePrice', m, { via: 'hand', productId: cha, gkey: a.gkey, price: null });
+  v = await c('spy.view', m, { productId: cha });
+  assert.equal(v.ads.find((x) => x.gkey === a.gkey)!.manual, null);
 });

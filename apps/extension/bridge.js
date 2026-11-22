@@ -3,6 +3,10 @@
 //   page → bridge   window message { source: 'pilotix-spy-page', id, type: 'ping' | 'search', query, country, max }
 //   bridge → page   window message { source: 'pilotix-spy-ext', type: 'ready' | 'pong' | 'progress' | 'result' | 'error', id… }
 //   bridge ↔ worker one port named 'pilotix-search' per search.
+//   worker → bridge chrome message { type: 'site-price', url, price, oldPrice, title }: a price the popup read on the
+//                   user's open page; the bridge posts { source: 'pilotix-spy-ext', id, type: 'site-price', … } to the
+//                   page and answers the worker with the page's { source: 'pilotix-spy-page', id, type: 'site-price-done',
+//                   ok, saved, message } (or { ok: false } after 8 s: no AI Spy page here).
 // Only messages the page posts to itself are read (event.source === window, same origin, source 'pilotix-spy-page').
 (() => {
   const PAGE = 'pilotix-spy-page';
@@ -74,4 +78,28 @@
     else if (d.type === 'search') search(id, d);
   }
   window.addEventListener('message', onMessage);
+
+  // a price the popup read on the user's open page: to this Pilotix page, whose AI Spy saves it
+  chrome.runtime.onMessage.addListener((msg, sender, answer) => {
+    if (!alive() || sender.id !== chrome.runtime.id || !msg || msg.type !== 'site-price') return false;
+    const id = `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    let done = false;
+    const finish = (r) => {
+      if (done) return;
+      done = true;
+      window.removeEventListener('message', onDone);
+      clearTimeout(timer);
+      answer(r);
+    };
+    function onDone(e) {
+      if (e.source !== window || e.origin !== window.location.origin) return;
+      const d = e.data;
+      if (!d || typeof d !== 'object' || d.source !== PAGE || d.type !== 'site-price-done' || d.id !== id) return;
+      finish({ ok: !!d.ok, saved: Number(d.saved) || 0, message: d.message ? String(d.message).slice(0, 200) : '' });
+    }
+    const timer = setTimeout(() => finish({ ok: false, message: '' }), 8000);
+    window.addEventListener('message', onDone);
+    post({ id, type: 'site-price', url: String(msg.url ?? ''), price: Number(msg.price), oldPrice: msg.oldPrice === null || msg.oldPrice === undefined ? null : Number(msg.oldPrice), title: msg.title ? String(msg.title) : null });
+    return true; // the answer comes later
+  });
 })();

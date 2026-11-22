@@ -16,6 +16,15 @@
       <span id="status" class="pill">…</span>
     </header>
 
+    <section id="pageSec" hidden>
+      <h2>Prix de cette page</h2>
+      <p class="hint">Le site d’un concurrent que Pilotix n’a pas pu lire ? Votre Chrome lit le prix affiché ici et l’envoie à AI Spy.</p>
+      <div class="row">
+        <button id="readPrice" type="button" class="primary">Lire le prix de cette page</button>
+      </div>
+      <p id="priceMsg" class="msg" role="status"></p>
+    </section>
+
     <section>
       <h2><label for="site">Adresse de votre Pilotix</label></h2>
       <form id="add" autocomplete="off">
@@ -44,6 +53,10 @@
         dans un onglet en arrière-plan, lit les pubs publiques, ferme l’onglet et les donne à votre page Pilotix.
       </p>
       <p>Elle ne publie, n’aime et ne clique jamais rien. Si Facebook demande une connexion ou une vérification, ouvrez une fois facebook.com/ads/library dans Chrome.</p>
+      <p>
+        <b>Prix de cette page</b> : quand le site d’un concurrent refuse les robots, ouvrez-le, cliquez sur l’icône Pilotix Spy puis sur
+        <b>Lire le prix de cette page</b>. Gardez AI Spy ouvert dans Pilotix : le prix arrive sur les pubs de cette page.
+      </p>
     </section>
 
     <script type="module" src="popup.js"></script>

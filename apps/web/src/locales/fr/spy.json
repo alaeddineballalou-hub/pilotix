@@ -235,8 +235,32 @@
       "none": "La pub n’a pas de lien"
     },
     "notChecked": "Site pas encore vérifié (le serveur le lit après la recherche)",
-    "down": "Site injoignable lors de la vérification",
-    "checked": "Vérifié {{when}}"
+    "why": {
+      "robots": "Ce site interdit les robots (sa règle robots.txt) : Pilotix ne le lit pas.",
+      "wall": "Protection anti-robots sur ce site : Pilotix ne force pas.",
+      "down": "Site injoignable lors de la vérification"
+    },
+    "checked": "Vérifié {{when}}",
+    "blocked": "Site bloqué",
+    "from": {
+      "site": "Lu sur le site {{when}}",
+      "hand": "Tapé à la main {{when}}",
+      "chrome": "Lu par votre Chrome {{when}}",
+      "ad": "Prix vu dans la pub"
+    },
+    "type": "Taper le prix",
+    "change": "Changer le prix",
+    "priceLabel": "Prix sur le site (DA)",
+    "oldLabel": "Ancien prix barré (DA, facultatif)",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "clear": "Effacer",
+    "savedOk": "Prix enregistré",
+    "clearedOk": "Prix effacé",
+    "chromeHint": "Ou ouvrez le site, puis cliquez sur l’icône Pilotix Spy › « Lire le prix de cette page » : votre Chrome lit le prix comme vous.",
+    "chromeOk_one": "Prix reçu de Chrome : {{price}} ({{count}} pub)",
+    "chromeOk_other": "Prix reçu de Chrome : {{price}} ({{count}} pubs)",
+    "chromeNone": "Prix lu par Chrome ({{price}}), mais aucune pub de cette page dans AI Spy."
   },
   "brief": {
     "title": "Comment battre la concurrence",
@@ -383,6 +407,8 @@
     "title": "Extension Chrome Pilotix",
     "checking": "Vérification…",
     "on": "Détectée (v{{v}})",
+    "old": "Ancienne version (v{{v}})",
+    "update": "Nouvelle version {{v}} : elle lit le prix d’un site bloqué (« Lire le prix de cette page »). Téléchargez-la (étape 1), remplacez l’ancien dossier « pilotix-spy », puis cliquez sur ⟳ (Recharger) dans chrome://extensions.",
     "off": "Non détectée",
     "help": "Gratuite. Elle ouvre la bibliothèque de pubs de Facebook dans un onglet de votre Chrome, lit les pubs et les envoie à Pilotix. Rien n’est installé sur le serveur.",
     "s1": "Téléchargez l’extension :",

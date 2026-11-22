@@ -1,6 +1,8 @@
-// Pilotix Spy popup: the Pilotix addresses (add / remove) and a test search.
+// Pilotix Spy popup: the price of the page the user has open, the Pilotix addresses (add / remove) and a test search.
 // Address changes go to the service worker (chrome.runtime.sendMessage); the test search uses the same port
-// ('pilotix-search') as the Pilotix page's bridge.
+// ('pilotix-search') as the Pilotix page's bridge. « Lire le prix de cette page » reads the open tab (Chrome's
+// activeTab: given by this click on the extension, for that tab only) and hands the price to the open Pilotix page.
+import { pageData, priceOf, readablePage } from './price.js';
 import { originPattern, pilotixOrigin } from './sites.js';
 
 const $ = (id) => document.getElementById(id);
@@ -157,4 +159,47 @@ $('test').addEventListener('click', () => {
   port.postMessage({ type: 'search', query: 'poussette', country: 'DZ', max: 30 });
 });
 
+// ---------------------------------------------------------------- « Lire le prix de cette page »
+const da = (n) => `${Math.round(n).toLocaleString('fr-FR').replace(/\u202f|\u00a0/g, ' ')} DA`;
+let pageTab = null;
+
+async function findPage() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const sites = (await call({ type: 'sites' }).catch(() => ({ sites: [] }))).sites ?? [];
+    if (!tab?.id || !readablePage(tab.url, sites)) return;
+    pageTab = tab;
+    $('pageSec').hidden = false;
+  } catch {
+    // no page to read here
+  }
+}
+
+$('readPrice').addEventListener('click', async () => {
+  const button = $('readPrice');
+  const out = $('priceMsg');
+  if (!pageTab) return;
+  button.disabled = true;
+  say(out, 'Lecture de la page…');
+  try {
+    const [res] = await chrome.scripting.executeScript({ target: { tabId: pageTab.id }, func: pageData });
+    const found = priceOf(res?.result);
+    if (!found) {
+      say(out, 'Aucun prix en DA sur cette page. Ouvrez la page du produit, puis réessayez.', 'bad');
+      return;
+    }
+    const shown = found.oldPrice ? `${da(found.price)} (avant ${da(found.oldPrice)})` : da(found.price);
+    say(out, `${shown} · envoi à Pilotix…`);
+    const r = await chrome.runtime.sendMessage({ type: 'sitePrice', url: res.result.url, price: found.price, oldPrice: found.oldPrice, title: res.result.title });
+    if (!r?.ok) say(out, `${shown} lu. ${r?.message || 'L’extension ne répond pas.'}`, 'bad');
+    else if (r.saved > 0) say(out, `${shown} · envoyé à AI Spy (${r.saved === 1 ? '1 pub' : `${r.saved} pubs`}).`, 'ok');
+    else say(out, `${shown} lu, mais aucune pub de cette page dans AI Spy.`, 'bad');
+  } catch (e) {
+    say(out, `Chrome n’a pas laissé lire cette page : ${String(e?.message ?? e).slice(0, 160)}`, 'bad');
+  } finally {
+    button.disabled = false;
+  }
+});
+
+findPage();
 refresh();

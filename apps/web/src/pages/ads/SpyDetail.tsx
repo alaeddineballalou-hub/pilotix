@@ -1,8 +1,11 @@
 // AI Spy › one ad: the creative next to where it sends the customer (site: price, builder, order form; or a
 // conversation), its text, Claude's reading, why it has its score, and what to do with it (open it on Facebook, open
-// the site, follow the page, mark it « pas pertinente »).
+// the site, follow the page, mark it « pas pertinente »). A site the server could not read (its « no robots » rule, a
+// protection wall: Pilotix never forces it) says so; its price can then be typed by hand, or read by the person's own
+// Chrome on the page they open (the Pilotix Spy extension's « Lire le prix de cette page »).
 import { webHref } from '../../lib/safeHref';
 import type { SpyAd } from '@pilotix/core';
+import { useId, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, dateOnly, when } from '../../lib/format';
 import { adUrl } from '../../lib/spyExtension';
@@ -97,7 +100,7 @@ export function SpyDetail({ ad, v }: { ad: SpyAd | null; v: View }) {
               </a>
             )}
           </div>
-          <SiteCard ad={ad} />
+          <SiteCard ad={ad} productId={productId} />
         </div>
       </div>
 
@@ -186,14 +189,27 @@ export function SpyDetail({ ad, v }: { ad: SpyAd | null; v: View }) {
   );
 }
 
-/** Where the customer lands: the site as Pilotix read it, or the conversation the ad opens. */
-function SiteCard({ ad }: { ad: SpyAd }) {
+/** Where the customer lands: the site as Pilotix read it (or why it could not), its price and who gave it, or the conversation the ad opens. */
+function SiteCard({ ad, productId }: { ad: SpyAd; productId: number }) {
   const { t } = useTranslation();
+  const [typing, setTyping] = useState(false);
   const s = ad.site;
-  const price = s?.price ?? ad.price;
-  const old = s?.oldPrice ?? ad.oldPrice;
-  const platform = s?.platform ?? ad.platform;
   const isSite = ad.linkType === 'site';
+  // the server's last good reading of the page, the price a person gave, else the price written in the ad
+  const readAt = s?.readAt ?? (s?.ok ? s.checkedAt : null);
+  const robot = s?.price && readAt ? { price: s.price, old: s.oldPrice, at: readAt } : null;
+  const man = ad.manual;
+  const shown =
+    man && (!robot || Date.parse(man.at) >= Date.parse(robot.at))
+      ? { price: man.price, old: man.oldPrice, from: man.via, at: man.at }
+      : robot
+        ? { price: robot.price, old: robot.old, from: 'site' as const, at: robot.at }
+        : ad.price
+          ? { price: ad.price, old: ad.oldPrice, from: 'ad' as const, at: null }
+          : null;
+  const platform = s?.platform ?? ad.platform;
+  const walled = !!s && !s.ok && (s.blocked === 'robots' || s.blocked === 'wall');
+  const competitor = isSite && !ad.own;
   return (
     <div className="spy-site">
       <div className="spy-site-bar">
@@ -201,10 +217,20 @@ function SiteCard({ ad }: { ad: SpyAd }) {
         {isSite ? <span className="ltr">{shortUrl(ad.linkUrl)}</span> : <span>{t(`spy.link.${ad.linkType}`)}</span>}
       </div>
       <div className="spy-site-body">
-        {price ? (
-          <div className="spy-site-price">
-            <b className="ltr">{da(price)}</b>
-            {old ? <s className="ltr">{da(old)}</s> : null}
+        {walled && (
+          <div>
+            <span className="badge t-bad">
+              <Icon name="lock" /> {t('spy.site.blocked')}
+            </span>
+          </div>
+        )}
+        {shown ? (
+          <div className="spy-site-pricebox">
+            <div className="spy-site-price">
+              <b className="ltr">{da(shown.price)}</b>
+              {shown.old ? <s className="ltr">{da(shown.old)}</s> : null}
+            </div>
+            <small className="muted">{shown.at ? t(`spy.site.from.${shown.from}`, { when: when(shown.at) }) : t('spy.site.from.ad')}</small>
           </div>
         ) : (
           <div>
@@ -224,10 +250,66 @@ function SiteCard({ ad }: { ad: SpyAd }) {
           {ad.cta && <li>{t('spy.site.cta', { cta: ad.cta })}</li>}
           {!isSite && <li>{t(`spy.site.chat.${ad.linkType}`)}</li>}
           {isSite && !s && <li className="muted">{t('spy.site.notChecked')}</li>}
-          {s && !s.ok && <li className="spy-bad">{t('spy.site.down')}</li>}
+          {s && !s.ok && <li className="spy-bad">{t(`spy.site.why.${s.blocked ?? 'down'}`)}</li>}
         </ul>
         {s && <small className="muted">{t('spy.site.checked', { when: when(s.checkedAt) })}</small>}
+        {competitor &&
+          (typing ? (
+            <PriceForm ad={ad} productId={productId} onDone={() => setTyping(false)} />
+          ) : (
+            <div className="spy-site-acts">
+              <button type="button" className="btn small" onClick={() => setTyping(true)}>
+                <Icon name="pencil" /> {man ? t('spy.site.change') : t('spy.site.type')}
+              </button>
+            </div>
+          ))}
+        {competitor && !typing && (!s?.ok || !robot) && <p className="note spy-site-hint">{t('spy.site.chromeHint')}</p>}
       </div>
     </div>
+  );
+}
+
+/** « Taper le prix »: the competitor's price as the person sees it on the site (and its crossed price), or taken back. */
+function PriceForm({ ad, productId, onDone }: { ad: SpyAd; productId: number; onDone: () => void }) {
+  const { t } = useTranslation();
+  const uid = useId();
+  const [price, setPrice] = useState(ad.manual ? String(ad.manual.price) : '');
+  const [old, setOld] = useState(ad.manual?.oldPrice ? String(ad.manual.oldPrice) : '');
+  const save = useAction('spy.sitePrice', { onDone });
+  const p = Math.round(Number(price.replace(/[\s.,]/g, '')));
+  const o = Math.round(Number(old.replace(/[\s.,]/g, '')));
+  const valid = Number.isFinite(p) && p >= 100 && p <= 10_000_000;
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!valid || save.isPending) return;
+    save.mutate(
+      { via: 'hand', productId, gkey: ad.gkey, price: p, oldPrice: old.trim() && Number.isFinite(o) && o > p && o <= 10_000_000 ? o : null },
+      { onSuccess: () => toast(t('spy.site.savedOk'), 'ok') },
+    );
+  };
+  return (
+    <form className="spy-priceform" onSubmit={submit}>
+      <div className="spy-priceform-row">
+        <label htmlFor={`${uid}-p`}>{t('spy.site.priceLabel')}</label>
+        <input id={`${uid}-p`} className="ltr" type="text" inputMode="numeric" autoComplete="off" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="12 900" autoFocus />
+      </div>
+      <div className="spy-priceform-row">
+        <label htmlFor={`${uid}-o`}>{t('spy.site.oldLabel')}</label>
+        <input id={`${uid}-o`} className="ltr" type="text" inputMode="numeric" autoComplete="off" value={old} onChange={(e) => setOld(e.target.value)} placeholder="15 000" />
+      </div>
+      <div className="spy-site-acts">
+        <button type="submit" className="btn small primary" disabled={!valid || save.isPending}>
+          <Icon name="check" /> {t('spy.site.save')}
+        </button>
+        <button type="button" className="btn small ghost" onClick={onDone}>
+          {t('spy.site.cancel')}
+        </button>
+        {ad.manual && (
+          <button type="button" className="btn small ghost danger" disabled={save.isPending} onClick={() => save.mutate({ via: 'hand', productId, gkey: ad.gkey, price: null }, { onSuccess: () => toast(t('spy.site.clearedOk'), 'ok') })}>
+            <Icon name="trash" /> {t('spy.site.clear')}
+          </button>
+        )}
+      </div>
+    </form>
   );
 }

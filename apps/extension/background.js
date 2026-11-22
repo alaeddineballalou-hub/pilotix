@@ -5,6 +5,8 @@
 //    { type: 'progress', step } messages ('open' | 'read' | 'pictures'), then { type: 'result', count, ads } or
 //    { type: 'error', message }.
 //  - Pilotix addresses: the popup adds and removes them; each one gets bridge.js registered as a content script.
+//  - A competitor's price read by the popup on the page the user has open (« Lire le prix de cette page »): handed to
+//    the open Pilotix tabs (bridge.js), where the AI Spy page saves it and answers how many ads it went on.
 import { checkSearch, fromLibrary, libraryUrl, readAdLibrary } from './parse.js';
 import { addPictures } from './pictures.js';
 import { SITES_KEY, originPattern, pilotixOrigin, scriptId } from './sites.js';
@@ -339,6 +341,30 @@ chrome.permissions.onRemoved.addListener(({ origins = [] }) => {
   for (const o of origins.map(originOfPattern).filter(Boolean)) forgetSite(o).catch(() => {});
 });
 
+// ---------------------------------------------------------------- a price read on the user's open page
+/**
+ * Hands a price the popup read to the Pilotix tabs open in this Chrome: the first AI Spy page that saves it answers
+ * { saved } (the number of ads of that page). No Pilotix tab, or none with AI Spy open: a message saying what to do.
+ */
+async function sendSitePrice(msg) {
+  const price = Math.round(Number(msg?.price));
+  if (!Number.isFinite(price) || price < 100) throw new Error('Prix illisible.');
+  const oldPrice = msg?.oldPrice === null || msg?.oldPrice === undefined ? null : Math.round(Number(msg.oldPrice));
+  const sites = await storedSites();
+  if (!sites.length) throw new Error('Ajoutez d’abord l’adresse de votre Pilotix (plus bas).');
+  const tabs = (await chrome.tabs.query({ url: sites.map(originPattern) })).filter((t) => t.id !== undefined);
+  let refused = '';
+  for (const t of tabs) {
+    const r = await chrome.tabs
+      .sendMessage(t.id, { type: 'site-price', url: String(msg?.url ?? '').slice(0, 2000), price, oldPrice: Number.isFinite(oldPrice) ? oldPrice : null, title: msg?.title ? String(msg.title).slice(0, 200) : null })
+      .catch(() => null);
+    if (r?.ok) return { saved: Number(r.saved) || 0 };
+    if (r?.message) refused = r.message;
+  }
+  if (refused) throw new Error(`Pilotix a refusé le prix : ${refused}`);
+  throw new Error('Ouvrez AI Spy dans Pilotix (dans ce Chrome), puis cliquez encore.');
+}
+
 // Messages from the popup only (a Pilotix page cannot add or remove addresses).
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (sender.id !== chrome.runtime.id || !isExtensionPage(sender.url)) return false;
@@ -346,11 +372,12 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     sites: () => locked(syncRegistrations),
     add: () => addSite(msg.origin),
     remove: () => removeSite(msg.origin),
+    sitePrice: () => sendSitePrice(msg),
   };
   const act = actions[msg?.type];
   if (!act) return false;
   act().then(
-    (sites) => reply({ ok: true, sites, busy: pending }),
+    (out) => reply({ ok: true, ...(Array.isArray(out) ? { sites: out } : out), busy: pending }),
     (e) => reply({ ok: false, message: String(e?.message ?? e) }),
   );
   return true; // the reply comes later

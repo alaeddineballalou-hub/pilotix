@@ -235,8 +235,32 @@
       "none": "The ad has no link"
     },
     "notChecked": "Site not checked yet (the server reads it after the search)",
-    "down": "Site unreachable when checked",
-    "checked": "Checked {{when}}"
+    "why": {
+      "robots": "This site forbids robots (its robots.txt rule): Pilotix does not read it.",
+      "wall": "Anti-robot protection on this site: Pilotix does not force it.",
+      "down": "Site unreachable when checked"
+    },
+    "checked": "Checked {{when}}",
+    "blocked": "Site blocked",
+    "from": {
+      "site": "Read on the site {{when}}",
+      "hand": "Typed by hand {{when}}",
+      "chrome": "Read by your Chrome {{when}}",
+      "ad": "Price seen in the ad"
+    },
+    "type": "Type the price",
+    "change": "Change the price",
+    "priceLabel": "Price on the site (DA)",
+    "oldLabel": "Old crossed-out price (DA, optional)",
+    "save": "Save",
+    "cancel": "Cancel",
+    "clear": "Remove",
+    "savedOk": "Price saved",
+    "clearedOk": "Price removed",
+    "chromeHint": "Or open the site, then click the Pilotix Spy icon › “Lire le prix de cette page”: your Chrome reads the price like you do.",
+    "chromeOk_one": "Price received from Chrome: {{price}} ({{count}} ad)",
+    "chromeOk_other": "Price received from Chrome: {{price}} ({{count}} ads)",
+    "chromeNone": "Price read by Chrome ({{price}}), but no ad of this page in AI Spy."
   },
   "brief": {
     "title": "How to beat the competition",
@@ -383,6 +407,8 @@
     "title": "Pilotix Chrome extension",
     "checking": "Checking…",
     "on": "Detected (v{{v}})",
+    "old": "Old version (v{{v}})",
+    "update": "New version {{v}}: it reads the price of a blocked site (“Lire le prix de cette page”). Download it (step 1), replace the old “pilotix-spy” folder, then click ⟳ (Reload) in chrome://extensions.",
     "off": "Not detected",
     "help": "Free. It opens Facebook’s Ad Library in a tab of your Chrome, reads the ads and sends them to Pilotix. Nothing is installed on the server.",
     "s1": "Download the extension:",

@@ -261,9 +261,18 @@ export interface SpyAi {
   keep: string;
   weak: string;
 }
+/**
+ * Why Pilotix's server could not read a competitor's page: its « no robots » rule (robots.txt), a protection wall
+ * against robots (Cloudflare's check, DDoS-Guard…), or the site did not answer. Pilotix never forces its way in.
+ */
+export type SpySiteBlock = 'robots' | 'wall' | 'down';
 export interface SpySite {
   checkedAt: string;
   ok: boolean;
+  /** why the last try failed (ok: false); the price and details of an earlier good reading stay */
+  blocked?: SpySiteBlock | null;
+  /** when the server last read the page itself (its price is from then) */
+  readAt?: string | null;
   platform: string | null;
   title: string | null;
   price: number | null;
@@ -272,6 +281,13 @@ export interface SpySite {
   /** number of wilayas in the order form (58 or 69), when the page has one */
   wilayas: number | null;
   stopdesk: boolean;
+}
+/** A competitor's price given by a person: typed by hand, or read by their own Chrome on the page they had open. */
+export interface SpyManualPrice {
+  price: number;
+  oldPrice: number | null;
+  at: string;
+  via: 'hand' | 'chrome';
 }
 export interface SpyAd {
   gkey: string;
@@ -304,6 +320,8 @@ export interface SpyAd {
   same: boolean | null;
   ai: SpyAi | null;
   site: SpySite | null;
+  /** the price a person gave for its site (AI Spy › the ad › « Taper le prix », or the extension) */
+  manual: SpyManualPrice | null;
   followed: boolean;
   score: number;
   scoreParts: ScorePart[];
@@ -351,6 +369,9 @@ function rowToAd(r: any, now: number, followed: Set<string>, others: number): Sp
   const copies = Math.max(1, num(r.copies));
   const pageKey = pageKeyOf(r);
   const sc = spyScore({ days, copies, active, isVideo, placements: Math.max(1, platforms.length) }, others);
+  // the ad's own price (its text, Claude's reading, or the site read by the server); else the one a person gave
+  const manual = (r.manual as SpyManualPrice | null) ?? null;
+  const adPrice = numOrNull(r.price);
   return {
     gkey: str(r.gkey),
     adId: str(r.ad_id),
@@ -376,12 +397,13 @@ function rowToAd(r: any, now: number, followed: Set<string>, others: number): Sp
     active,
     own: !!r.own,
     keyword: r.keyword ?? null,
-    price: numOrNull(r.price),
-    oldPrice: numOrNull(r.old_price),
+    price: adPrice ?? manual?.price ?? null,
+    oldPrice: adPrice !== null ? numOrNull(r.old_price) : manual?.oldPrice ?? numOrNull(r.old_price),
     relevant: r.relevant === null || r.relevant === undefined ? null : !!r.relevant,
     same: r.same === null || r.same === undefined ? null : !!r.same,
     ai: (r.ai as SpyAi | null) ?? null,
     site: (r.site as SpySite | null) ?? null,
+    manual,
     followed: followed.has(pageKey),
     score: sc.total,
     scoreParts: sc.parts,
@@ -773,18 +795,90 @@ async function enrich(ctx: Ctx, productId: number): Promise<void> {
     `SELECT gkey, link_url FROM spy_ads WHERE product_id = $1 AND link_type = 'site' AND active AND (site IS NULL OR (site->>'checkedAt')::timestamptz < $2) ORDER BY copies DESC LIMIT 15`,
     [productId, new Date(ctx.now() - 7 * DAY).toISOString()],
   );
+  // one try per site and per round: a site whose protection wall turned the server away is not asked again for the
+  // other ads of this round (and again only a week later, like every site): Pilotix never forces its way in
+  const walled = new Map<string, SpySite>();
   for (const r of sites) {
-    const site = await spy('site', { url: str(r.link_url) }, ctx).catch(() => null);
+    const h = host(str(r.link_url));
+    const known = h ? walled.get(h) : undefined;
+    const site = known ? { ...known, checkedAt: new Date(ctx.now()).toISOString() } : await spy('site', { url: str(r.link_url) }, ctx).catch(() => null);
     if (!site) continue;
-    await ctx.db.query(`UPDATE spy_ads SET site = $3, platform = COALESCE($4, platform), price = COALESCE(price, $5), old_price = COALESCE(old_price, $6) WHERE product_id = $1 AND gkey = $2`, [
-      productId,
-      str(r.gkey),
-      JSON.stringify(site),
-      site.platform,
-      site.price,
-      site.oldPrice,
-    ]);
+    if (h && !site.ok && site.blocked === 'wall') walled.set(h, site);
+    if (site.ok) {
+      await ctx.db.query(`UPDATE spy_ads SET site = $3, platform = COALESCE($4, platform), price = COALESCE(price, $5), old_price = COALESCE(old_price, $6) WHERE product_id = $1 AND gkey = $2`, [
+        productId,
+        str(r.gkey),
+        JSON.stringify({ ...site, blocked: null, readAt: site.checkedAt }),
+        site.platform,
+        site.price,
+        site.oldPrice,
+      ]);
+      continue;
+    }
+    // not read this time: why and when; an earlier good reading (its price, its order form) stays, with its date
+    await ctx.db.query(
+      `UPDATE spy_ads SET site = CASE
+         WHEN site IS NOT NULL AND (site->>'readAt' IS NOT NULL OR COALESCE((site->>'ok')::boolean, false))
+           THEN site || jsonb_build_object('checkedAt', $4::text, 'ok', false, 'blocked', $5::text, 'readAt', COALESCE(site->>'readAt', site->>'checkedAt'))
+         ELSE $3::jsonb END
+       WHERE product_id = $1 AND gkey = $2`,
+      [productId, str(r.gkey), JSON.stringify({ ...site, readAt: null }), site.checkedAt, site.blocked ?? 'down'],
+    );
   }
+}
+
+/** A shop page as one key: its host without « www. » and its path without the last « / » (no query, no #). */
+export function sitePageKey(u: string | null | undefined): string | null {
+  if (!u) return null;
+  try {
+    const x = new URL(u);
+    if (x.protocol !== 'https:' && x.protocol !== 'http:') return null;
+    const h = x.hostname.replace(/^www\./, '').toLowerCase();
+    return h ? `${h}${x.pathname.replace(/\/+$/, '')}` : null;
+  } catch {
+    return null;
+  }
+}
+
+const PriceInput = z.number().int().min(100).max(10_000_000);
+const SitePriceInput = z.object({
+  via: z.enum(['hand', 'chrome']),
+  // the ad on screen: the one to change (by hand), or the one to use when the page's address matches no ad (Chrome)
+  productId: z.number().int().positive().optional(),
+  gkey: z.string().min(1).max(200).optional(),
+  // Chrome: the address of the page the person had open
+  url: z.string().max(2000).optional(),
+  // null: the price typed by hand is taken back
+  price: PriceInput.nullable(),
+  oldPrice: PriceInput.nullable().default(null),
+});
+
+/**
+ * A competitor's price given by a person (the server could not read the site, or the person checked it): typed by
+ * hand on an ad, or read by their own Chrome on the page they had open. It goes on every ad that sends to the same
+ * page (other creatives, other products), and the server's later readings never overwrite it.
+ */
+async function sitePrice(ctx: Ctx, i: z.output<typeof SitePriceInput>): Promise<{ saved: number }> {
+  const chosen =
+    i.productId && i.gkey ? ((await ctx.db.query(`SELECT product_id, gkey, link_url FROM spy_ads WHERE product_id = $1 AND gkey = $2`, [i.productId, i.gkey]))[0] ?? null) : null;
+  if (i.via === 'hand' && !chosen) throw notFound('Pub introuvable');
+  const key = i.via === 'hand' ? sitePageKey(chosen.link_url) : sitePageKey(i.url);
+  if (i.via === 'chrome' && !key) throw bad('Adresse de la page invalide');
+  if (i.via === 'chrome' && i.price === null) throw bad('Prix manquant');
+  let match: { product_id: unknown; gkey: unknown }[] = [];
+  if (key) {
+    const siteHost = key.split('/')[0];
+    const rows = await ctx.db.query(`SELECT product_id, gkey, link_url FROM spy_ads WHERE link_type = 'site' AND NOT own AND link_url ILIKE $1`, [`%${siteHost}%`]);
+    match = rows.filter((r: any) => sitePageKey(r.link_url) === key);
+    // Chrome on another address of the same shop (a redirect, a short link): the ad on screen, when it is that shop's
+    const chosenKey = sitePageKey(chosen?.link_url);
+    if (!match.length && i.via === 'chrome' && chosenKey && chosenKey.split('/')[0] === siteHost) match = rows.filter((r: any) => sitePageKey(r.link_url) === chosenKey);
+  }
+  if (!match.length && i.via === 'hand') match = [chosen];
+  const manual: SpyManualPrice | null =
+    i.price === null ? null : { price: i.price, oldPrice: i.oldPrice !== null && i.oldPrice > i.price ? i.oldPrice : null, at: new Date(ctx.now()).toISOString(), via: i.via };
+  for (const m of match) await ctx.db.query(`UPDATE spy_ads SET manual = $3 WHERE product_id = $1 AND gkey = $2`, [m.product_id, m.gkey, manual ? JSON.stringify(manual) : null]);
+  return { saved: match.length };
 }
 
 /** One keyword with the first tool that answers: Pilotix's backup takes over when its main tool fails. */
@@ -1050,6 +1144,9 @@ export const spyProcs = {
   }),
 
   /** Follow a competitor's page: alerts for its new ads, stopped ads and price changes. */
+  // a competitor's price given by a person: typed by hand on an ad, or read by their Chrome (the extension's popup)
+  'spy.sitePrice': proc(['marketer'], SitePriceInput, (ctx, i) => sitePrice(ctx, i)),
+
   'spy.follow': proc(['marketer'], z.object({ pageKey: z.string().min(1).max(200), pageName: z.string().max(200), productId: id.nullable(), on: z.boolean() }), async (ctx, i) => {
     if (i.on)
       await ctx.db.query(

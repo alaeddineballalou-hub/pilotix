@@ -24,7 +24,9 @@ Une seule recherche à la fois, avec une courte pause entre deux recherches.
 - Elle envoie les pubs **seulement à votre propre page Pilotix** (les adresses que vous avez ajoutées). Rien n’est
   envoyé ailleurs, aucun serveur tiers.
 - Elle ne publie, n’aime, ne commente et ne clique jamais rien, et ne lit rien d’autre (ni vos messages, ni votre
-  fil, ni vos autres onglets).
+  fil, ni vos autres onglets). Seule exception, à votre demande : **Lire le prix de cette page** lit l’onglet ouvert
+  quand vous cliquez (permission « activeTab » de Chrome : cet onglet, à ce moment-là) et n’envoie que le prix trouvé
+  à votre Pilotix.
 - Aucun code distant, aucune dépendance.
 
 ### Installation
@@ -44,6 +46,15 @@ Le bouton **Tester** cherche « poussette » en Algérie et affiche le nombre de
 Si Facebook demande une connexion ou une vérification, l’extension répond : « Facebook n’a pas montré la bibliothèque
 de pubs… ». Ouvrez alors une fois `facebook.com/ads/library` dans Chrome, puis réessayez.
 
+### Lire le prix d’un site bloqué (version 1.1.0)
+
+Le serveur de Pilotix lit lui-même le site de chaque pub, mais il respecte la règle « pas de robots » d’un site
+(robots.txt) et ne force jamais une protection anti-robots : ces sites sont marqués **Site bloqué** dans AI Spy.
+Pour leur prix : ouvrez le site dans Chrome (bouton **Ouvrir** de la pub), cliquez sur l’icône Pilotix Spy puis sur
+**Lire le prix de cette page**. Votre Chrome lit le prix affiché, comme vous, et l’envoie à AI Spy (gardez AI Spy
+ouvert dans Pilotix) : il arrive sur toutes les pubs de cette page, avec « Lu par votre Chrome ». Ou tapez-le dans la
+pub (**Taper le prix**).
+
 ### Pour les développeurs
 
 - Pas d’étape de build : JavaScript simple (ES2022), Manifest V3.
@@ -54,7 +65,7 @@ de pubs… ». Ouvrez alors une fois `facebook.com/ads/library` dans Chrome, pui
 - `sites.js` : adresses Pilotix (origine, motif, identifiant du script).
 - `bridge.js` : script de contenu sur la page Pilotix ; protocole décrit dans `apps/web/src/lib/spyExtension.ts`.
 - `popup.html`, `popup.js`, `popup.css` : la fenêtre de l’extension.
-- Tests : `node apps/extension/test/parse.test.mjs` (compare aussi avec `packages/core` quand il est compilé).
+- Tests : `npm test` dans `apps/extension` (parse, qui compare aussi avec `packages/core` quand il est compilé, et price).
 
 ---
 
@@ -80,7 +91,8 @@ One search at a time, with a short pause between two searches.
 - It sends the ads **only to your own Pilotix page** (the addresses you added). Nothing goes anywhere else; no
   third-party server.
 - It never posts, likes, comments or clicks anything, and never reads anything else (not your messages, your feed or
-  your other tabs).
+  your other tabs). The one exception, when you ask: **Lire le prix de cette page** reads the open tab when you click
+  (Chrome’s “activeTab” permission: that tab, at that moment) and sends only the price found to your Pilotix.
 - No remote code, no dependencies.
 
 ### Install
@@ -99,6 +111,14 @@ The **Tester** button searches “poussette” in Algeria and shows how many ads
 
 If Facebook asks to log in or for a check, the extension answers “Facebook n’a pas montré la bibliothèque de pubs…”.
 Open `facebook.com/ads/library` once in Chrome, then try again.
+
+### Reading the price of a blocked site (version 1.1.0)
+
+Pilotix’s server reads each ad’s site itself, but it follows a site’s “no robots” rule (robots.txt) and never forces an
+anti-robot protection: those sites show **Site bloqué** in AI Spy. For their price: open the site in Chrome (the ad’s
+**Ouvrir** button), click the Pilotix Spy icon, then **Lire le prix de cette page**. Your Chrome reads the price shown,
+like you, and sends it to AI Spy (keep AI Spy open in Pilotix): it lands on every ad of that page, marked “Lu par votre
+Chrome”. Or type it on the ad (**Taper le prix**).
 
 ### How the pieces talk
 
@@ -121,7 +141,7 @@ background.js (service worker, one search at a time, 75 s at most)
 ### For developers
 
 - No build step: plain JavaScript (ES2022), Manifest V3.
-- Tests: `node apps/extension/test/parse.test.mjs`. Syntax check: `npm run check` in `apps/extension`.
+- Tests: `npm test` in `apps/extension` (parse and price). Syntax check: `npm run check` in `apps/extension`.
 - The website's build zips this folder (without `test/` and `package.json`) into `apps/web/public/pilotix-spy.zip`
   (`node scripts/extension-zips.mjs`), the download of AI Spy › Réglages. Change `version` in `manifest.json` with
   every change.

@@ -12,7 +12,7 @@ import { rpc, type Out } from '../../lib/backend';
 import { da, n, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { store } from '../../lib/store';
-import { adLibraryUrl, detectExtension, extensionSearch, type ExtStatus, type ExtStep } from '../../lib/spyExtension';
+import { adLibraryUrl, detectExtension, extensionSearch, onSitePrice, type ExtStatus, type ExtStep } from '../../lib/spyExtension';
 import { copyText, Empty, ErrorBox, Icon, KpiBody, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import type { PageProps } from '../registry';
@@ -257,6 +257,23 @@ function SpyMain() {
     return [...keep].sort(by[sort]);
   }, [v, f, sort]);
   const cur = shown.find((a) => a.gkey === sel) ?? shown[0] ?? null;
+
+  // a competitor's price read by the user's Chrome (the extension's « Lire le prix de cette page »): saved on the ads of
+  // that page; the ad on screen is used when the page's address matches none (a redirect, a short link)
+  const sitePrice = useAction('spy.sitePrice', { silent: true });
+  const onScreen = useRef<{ productId: number; gkey: string } | null>(null);
+  onScreen.current = cur && productId !== null ? { productId, gkey: cur.gkey } : null;
+  const saveSitePrice = useRef(sitePrice.mutateAsync);
+  saveSitePrice.current = sitePrice.mutateAsync;
+  useEffect(
+    () =>
+      onSitePrice(async (p) => {
+        const r = await saveSitePrice.current({ via: 'chrome', url: p.url, price: p.price, oldPrice: p.oldPrice, ...(onScreen.current ?? {}) });
+        toast(r.saved ? t('spy.site.chromeOk', { price: da(p.price), count: r.saved }) : t('spy.site.chromeNone', { price: da(p.price) }), r.saved ? 'ok' : 'info');
+        return r;
+      }),
+    [t],
+  );
 
   const select = (gkey: string) => {
     setSel(gkey);
