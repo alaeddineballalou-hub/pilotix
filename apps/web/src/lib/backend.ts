@@ -474,7 +474,10 @@ class DemoBackend implements Backend {
         const db = t.shop('public');
         await core.migrate(db, (sql) => t.exec('public', sql));
         this.progress('Création des commandes d’exemple…');
-        await core.seedDemo(db, { orders: Number(import.meta.env.VITE_DEMO_ORDERS) || 2400, expanded: true });
+        // (the bell's demo lines in the viewer's language; the demo team reads Pilotix in it too)
+        const lang = (['fr', 'en', 'ar'] as const).find((l) => l === store.get('lang')) ?? 'fr';
+        await core.seedDemo(db, { orders: Number(import.meta.env.VITE_DEMO_ORDERS) || 2400, expanded: true, lang });
+        if (lang !== 'fr') await db.query('UPDATE profiles SET language = $1', [lang]);
         await core.seedPilotDemo(db);
         // Pilot AI › Comptes: the sample linked account's Page and ad account, used by this boutique
         await core.seedSocialPreview(db);

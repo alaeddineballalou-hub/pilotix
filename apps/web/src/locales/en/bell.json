@@ -1,0 +1,86 @@
+{
+  "open": "Notifications",
+  "title": "Notifications",
+  "unread_one": "{{count}} unread",
+  "unread_other": "{{count}} unread",
+  "readAll": "Read all",
+  "readAllLong": "Mark all as read",
+  "empty": "Nothing new",
+  "emptyHint": "Your new orders, callbacks, deliveries and your customers’ messages show here.",
+  "today": "Today",
+  "yesterday": "Yesterday",
+  "earlier": "Earlier",
+  "now": "Just now",
+  "min": "{{n}} min",
+  "openIt": "Open",
+  "close": "Close",
+  "sound": "Sound",
+  "soundWork": "Always on during work hours · {{hours}}",
+  "soundOn": "On",
+  "soundOff": "Off",
+  "soundToggle": "Turn the sound off or on",
+  "soundTap": "Tap the screen once: the browser plays sounds after that.",
+  "sounds": "Listen to the sounds",
+  "phone": "This phone",
+  "phoneOn": "Gets notifications, even with Pilotix closed",
+  "phoneAsk": "Get them on this phone",
+  "phoneAskHint": "It will ring even with Pilotix closed and the screen locked.",
+  "phoneDenied": "Blocked by the browser: allow notifications in its settings.",
+  "phoneNo": "This browser does not get notifications while Pilotix is closed.",
+  "phonePreview": "Demo: on the real site, this phone will ring even with Pilotix closed.",
+  "kind": {
+    "order": "New order",
+    "callback": "Callback",
+    "delivered": "Delivered",
+    "returned": "Coming back",
+    "cancelled": "Cancelled",
+    "taken": "No longer yours",
+    "alert": "Parcel alert",
+    "depot": "Depot",
+    "message": "Customer message",
+    "info": "Info"
+  },
+  "sample": {
+    "order": {
+      "t": "New order for you",
+      "b": "PX1234 · Amina B. · 4,500 DA"
+    },
+    "callback": {
+      "t": "📞 Call Amina back now",
+      "b": "PX1234 · callback set for 14:30"
+    },
+    "delivered": {
+      "t": "💰 PX1234 delivered",
+      "b": "Amina B. · 4,500 DA"
+    },
+    "returned": {
+      "t": "↩️ PX1234 is coming back",
+      "b": "Amina B. · 4,500 DA"
+    },
+    "cancelled": {
+      "t": "❌ PX1234 cancelled",
+      "b": "Amina B. · after your confirmation"
+    },
+    "taken": {
+      "t": "PX1234 is no longer yours",
+      "b": "Not handled in time: given to Rania"
+    },
+    "alert": {
+      "t": "⚠️ Alert on PX1234",
+      "b": "Amina B. · Delivery failed"
+    },
+    "depot": {
+      "t": "📦 6 new orders to prepare",
+      "b": "18 to prepare in all"
+    },
+    "message": {
+      "t": "💬 Amina B.",
+      "b": "PX1234 · Hello, is the stroller available in grey?"
+    },
+    "info": {
+      "t": "5 orders waiting for a call",
+      "b": "The oldest for 34 min"
+    }
+  },
+  "soundsHint": "Tap a sound: it plays, and its pop-up shows."
+}

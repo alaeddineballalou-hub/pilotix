@@ -14,6 +14,7 @@ import { bad, Ctx, forbidden, proc } from '../rpc';
 import { can } from './rights';
 import { AssignAgent, AssignArea, AssignRotation, DEFAULT_SETTINGS, getSetting, setSetting, SettingsMap } from '../settings';
 import { addEvent } from './orders';
+import { tellGiven, tellTaken } from './inbox';
 import { loadShop } from '../platform/shops';
 
 export type Area = 'conf' | 'follow';
@@ -354,6 +355,8 @@ async function giveItems(ctx: Ctx, area: Area, items: Item[], list: Agent[], cfg
   const score = a.mode === 'smart' ? await smartScorer(ctx.db, area) : undefined;
   const forWomen = new Set(cfg.womenProducts);
   let assigned = 0;
+  // the bell: each agent is told of what they got (Suivi: of the parcels on alert only)
+  const given = new Map<number, number[]>();
   for (const it of items) {
     // « Sur alerte »: a parcel with no alert waits for one
     if (area === 'follow' && a.when !== 'shipped' && !it.alert) continue;
@@ -365,8 +368,10 @@ async function giveItems(ctx: Ctx, area: Area, items: Item[], list: Agent[], cfg
       pick.agent.load++;
       pick.agent.lastAt = now;
       assigned++;
+      if (area === 'conf' || it.alert) given.set(pick.agent.id, [...(given.get(pick.agent.id) ?? []), it.id]);
     }
   }
+  if (given.size) await tellGiven(ctx, area, given).catch(() => {});
   return assigned;
 }
 
@@ -572,6 +577,8 @@ async function rotate(ctx: Ctx, area: Area, list: Agent[], cfg: Assign, turns: S
   const score = cfg[area].mode === 'smart' ? await smartScorer(ctx.db, area) : undefined;
   const forWomen = new Set(cfg.womenProducts);
   const setStatus = area === 'conf' && rot.setStatus && (CONF_TODO as string[]).includes(rot.setStatus) ? rot.setStatus : '';
+  const given = new Map<number, number[]>();
+  const taken = new Map<number, { id: number; to: number | null }[]>();
   for (const it of late) {
     it.woman = isWomanName(it.name) || it.productIds.some((p) => forWomen.has(p));
     const hist = await ctx.db.query(`SELECT from_value, to_value, data FROM order_events WHERE order_id = $1 AND kind = 'rotate' AND data->>'area' = $2`, [it.id, area]);
@@ -628,7 +635,12 @@ async function rotate(ctx: Ctx, area: Area, list: Agent[], cfg: Assign, turns: S
       dest.lastAt = now;
     }
     moved++;
+    given.set(to, [...(given.get(to) ?? []), it.id]);
+    taken.set(it.cur, [...(taken.get(it.cur) ?? []), { id: it.id, to }]);
   }
+  // the bell: the new agent has it, the old one is told it went to someone else
+  if (given.size) await tellGiven(ctx, area, given, { rotation: true }).catch(() => {});
+  if (taken.size) await tellTaken(ctx, taken, { rotation: true, area }).catch(() => {});
   return moved;
 }
 

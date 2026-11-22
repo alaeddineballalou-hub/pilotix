@@ -5,6 +5,7 @@ import { Db, num } from '../db';
 import { membershipsOf } from '../platform/accounts';
 import { bad, Ctx, proc, ServerHooks } from '../rpc';
 import { getSetting } from '../settings';
+import { kindOfTag, ringBell } from './bell';
 
 /** A shop's key pair (made once, when the server can). */
 async function keysOf(db: Db, server: ServerHooks | undefined) {
@@ -56,8 +57,23 @@ async function pushElsewhere(ctx: Ctx, profileIds: number[], payload: Record<str
   return sent;
 }
 
-/** Sends a notification to every device of these people; forgets the devices that unsubscribed. Returns how many got it. */
+/**
+ * Sends a notification to every device of these people and writes it in their bell (the evening report, the slow queue,
+ * the depot's red alerts… are also at the top of their pages). Returns how many devices got it.
+ */
 export async function sendPush(ctx: Ctx, profileIds: number[], payload: Record<string, unknown>) {
+  const text = (v: unknown) => (typeof v === 'string' ? v : '');
+  await ringBell(
+    ctx,
+    profileIds,
+    () => ({ kind: kindOfTag(payload.tag), title: text(payload.title) || 'Pilotix', body: text(payload.body), url: text(payload.url) || null, important: !!payload.alarm }),
+    { tag: text(payload.tag) || null },
+  ).catch(() => []);
+  return pushOnly(ctx, profileIds, payload);
+}
+
+/** The phones only (the bell's own notifications write their line themselves: inbox.ts). Forgets the devices that unsubscribed. */
+export async function pushOnly(ctx: Ctx, profileIds: number[], payload: Record<string, unknown>) {
   if (!profileIds.length || !ctx.server?.push) return 0;
   const seen = new Set<string>();
   let sent = 0;

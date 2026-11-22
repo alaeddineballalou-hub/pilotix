@@ -35,6 +35,7 @@ import { clientFee, getSetting } from '../settings';
 import { getPrefs } from './prefs';
 import { channelGuard, guardNote, type GuardMode } from './guard';
 import { assignNow, getAssign } from './assign';
+import { type FollowMove, tellFollow, tellGiven, tellTaken } from './inbox';
 import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPreview } from './notify';
 import { landingCounts, landingSettings, onLandingConf, onLandingFollow, queueChatEvent, queueChatPurchase } from './landingquery';
 import { lowStockCount } from './stockquery';
@@ -1531,6 +1532,7 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
     if (!l || !l.active || !(l.roles ?? []).includes('livreur')) throw bad('Ce livreur est introuvable');
   }
   const changed: number[] = [];
+  const moves: FollowMove[] = [];
   let livreurAlerts: string[] | null = null;
   await ctx.db.tx(async (tx) => {
     if (await alreadyApplied(tx, input.clientId, me)) return;
@@ -1636,8 +1638,11 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
       await onFollowChange(tx, notify, cur, from, to, ctx.now());
       await onLandingFollow(tx, landing, cur, from, to, ctx.now());
       changed.push(oid);
+      moves.push({ id: oid, from, to });
     }
   });
+  // the bell: delivered, back, cancelled → the agent who confirmed it; an alert, a failed attempt → its Suivi agent
+  await tellFollow(ctx, moves, opts.system ? null : me).catch(() => {});
   // SAV ticket parcels: delivered → ticket Livré, returned (scanned at the depot) → ticket Annulé
   if (['delivered', 'exchanged', 'returned'].includes(input.status) && (await settleTickets(ctx.db, me))) ctx.emit({ type: 'sav' });
   // cancelled with its parcel at a courier: cancelled there too (or put on « À annuler à la main »)
@@ -2090,6 +2095,9 @@ export const ordersProcs = {
     // a confirmation agency's chief and its chefs d'équipe: the managers of the agency's orders (agencyscope.ts: give)
     const manager = hasRole(ctx.session, 'agent_manager', 'vendeur') || agencyLead(ctx);
     if (!manager && agentId !== ctx.session.profile.id) throw forbidden('Seul un manager peut assigner à quelqu’un d’autre');
+    // the bell: the new agent is told, and the one it was taken from (never the person who did it: inbox.ts)
+    const given = new Map<number, number[]>();
+    const taken = new Map<number, { id: number; to: number | null }[]>();
     await ctx.db.tx(async (tx) => {
       for (const oid of ids) {
         const cur = (await tx.query('SELECT ref, agent_id, shipped_at FROM orders WHERE id=$1', [oid]))[0];
@@ -2101,9 +2109,16 @@ export const ordersProcs = {
         if (cur.shipped_at && !ctx.session.isAdmin) throw bad(`${cur.ref} est déjà partie : seul l’administrateur change son agent`);
         await tx.query('UPDATE orders SET agent_id=$2, assigned_at = CASE WHEN $2::bigint IS NULL THEN NULL ELSE now() END, updated_at=now() WHERE id=$1', [oid, agentId]);
         await addEvent(tx, oid, ctx.session.profile.id, 'assign', cur.agent_id ? String(cur.agent_id) : null, agentId ? String(agentId) : null);
+        const was = numOrNull(cur.agent_id);
+        if (was === agentId) continue;
+        if (agentId) given.set(agentId, [...(given.get(agentId) ?? []), oid]);
+        if (was) taken.set(was, [...(taken.get(was) ?? []), { id: oid, to: agentId }]);
       }
     });
     ctx.emit({ type: 'orders' });
+    const by = ctx.session.profile.id;
+    if (given.size) await tellGiven(ctx, 'conf', given, { by }).catch(() => {});
+    if (taken.size) await tellTaken(ctx, taken, { by }).catch(() => {});
     return { ok: true };
   }),
 

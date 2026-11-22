@@ -42,6 +42,7 @@ import { runWatch } from './watchers';
  *  - Affectation automatique: waiting orders and alerts get an agent on line, absent agents give back what they never touched, every minute
  *  - Confirmation › « Bloquer jusqu'à l'appel »: a new order waiting rings its agent's devices while he is away from
  *    Pilotix (then every 5 minutes, 6 times at most), every 30 seconds
+ *  - the bell: a callback whose time came is told to its agent, the depot its new orders to prepare, every minute
  *  - Couverture: the tariffs and bureaus of the companies with an API imported again, every night
  *  - the demo shop starts again from fresh demo data every night
  *  - Pilot AI: every night, the chats of the shops that share them (personal data removed) teach Dellal (one Message Batch)
@@ -63,6 +64,8 @@ const FEATURE: Record<string, string | null> = {
   'conf-push': null,
   'pilot-run': null,
   'assign-run': null,
+  // the bell: callbacks whose time came, the depot's orders to prepare
+  'inbox-run': null,
   'coverage-refresh': null,
   'spy-scan': 'marketing/spy',
   'leads-catchup': 'marketing/formulaires',
@@ -130,6 +133,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     if (name === 'pay-plan-alert') return call('pay.noPlanPush');
     if (name === 'pilot-run') return call('pilot.run');
     if (name === 'assign-run') return call('assign.run');
+    if (name === 'inbox-run') return call('inbox.run');
     if (name === 'coverage-refresh') return call('coverage.refresh');
     if (name === 'spy-scan') return call('spy.scan');
     if (name === 'campaigns-run') return call('campaigns.run');
@@ -279,6 +283,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('coverage-refresh', {}, { repeat: { pattern: '20 2 * * *', tz: 'Africa/Algiers' }, jobId: 'coverage-refresh', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('pilot-run', {}, { repeat: { every: 5 * 60_000 }, jobId: 'pilot-run', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('assign-run', {}, { repeat: { every: 60_000 }, jobId: 'assign-run', removeOnComplete: 20, removeOnFail: 50 });
+    // the bell (top of every page): a callback whose time came, the depot's new orders to prepare (every 15 min at most)
+    await this.queue.add('inbox-run', {}, { repeat: { every: 60_000 }, jobId: 'inbox-run', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('landing-run', {}, { repeat: { every: 60_000 }, jobId: 'landing-run', removeOnComplete: 20, removeOnFail: 50 });
     // Google Sheets every 2 minutes. Redis keeps repeat timers: one left from another interval (it was 10 minutes) is removed
     const SHEETS_EVERY = 2 * 60_000;

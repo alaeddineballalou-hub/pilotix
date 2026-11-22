@@ -173,6 +173,8 @@ export const NOT_REFS: readonly string[] = [
   'landing_tests.product_id',
   'landing_tests.variant_id',
   'password_resets.profile_id',
+  // the bell's lines go with the account (what it was told, not what it did)
+  'inbox.profile_id',
   'action_locks.user_id',
   'settings.updated_by',
   // Pilot Checks: who last changed a rule (the change list keeps the history: pilot_check_log)

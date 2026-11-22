@@ -26,17 +26,23 @@ self.addEventListener('push', (e) => {
       vibrate: alarm ? [800, 200, 800, 200, 800, 200, 1200] : [200],
       icon: 'icon.svg',
       badge: 'icon.svg',
-      data: { url: d.url || '' },
+      data: { url: d.url || '', order: d.order || null },
     }),
   );
 });
 
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const url = new URL(e.notification.data && e.notification.data.url ? e.notification.data.url : '', self.registration.scope).href;
+  const data = e.notification.data || {};
+  const url = new URL(data.url || '', self.registration.scope).href;
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-      for (const c of list) if ('focus' in c) return c.focus();
+      // Pilotix already open: it shows the order (or the page) of the notification (layout/Bell)
+      for (const c of list)
+        if ('focus' in c) {
+          c.postMessage({ type: 'px-open', url: data.url || '', order: data.order || null });
+          return c.focus();
+        }
       return self.clients.openWindow(url);
     }),
   );

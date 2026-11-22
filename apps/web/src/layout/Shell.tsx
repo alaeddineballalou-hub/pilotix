@@ -20,6 +20,7 @@ import { Modal } from '../ui/modal';
 import { canSee, canSeeChild, isSoonItem, isSoonLine, menuView, NAV, NavChild, NavItem, SpaceId } from './nav';
 import { useCanRules } from '../lib/pilot';
 import { AccountMenu } from './AccountMenu';
+import { Bell } from './Bell';
 import { BoutiqueSwitch, useBoutiques } from './Boutiques';
 import { ShopBanner } from './ShopBanner';
 import { DoorChip } from '../ui/DoorChip';
@@ -423,6 +424,8 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
           >
             <Icon name="moon" />
           </button>
+          {/* the bell: what is new for this person (a new order, a callback, a delivery…) */}
+          {!partner && <Bell />}
           <AccountMenu
             session={session!}
             onLogout={logout}

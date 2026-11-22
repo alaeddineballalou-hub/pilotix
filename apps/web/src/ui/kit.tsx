@@ -90,6 +90,10 @@ const EXTRA: Record<string, string> = {
   // AI Spy: follow a page, the Chrome extension
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   puzzle: '<path d="M19.4 15.4a1 1 0 0 0-.3.9l.5 2.6a2 2 0 0 1-2 2.4h-2.2a1 1 0 0 1-1-1.2 2 2 0 1 0-3.8 0 1 1 0 0 1-1 1.2H7.4a2 2 0 0 1-2-2v-2.2a1 1 0 0 1 1.2-1 2 2 0 1 0 0-3.8 1 1 0 0 1-1.2-1V6.4a2 2 0 0 1 2-2h2.2a1 1 0 0 0 1-1.2 2 2 0 1 1 3.8 0 1 1 0 0 0 1 1.2h2.2a2 2 0 0 1 2 2v2.2a1 1 0 0 0 1.2 1 2 2 0 1 1 0 3.8 1 1 0 0 0-.9.3z"/>',
+  // the bell's sound (layout/Bell)
+  volume: '<path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.4 18.4a9 9 0 0 0 0-12.8"/>',
+  volumeoff: '<path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/>',
+  smartphone: '<rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/>',
 };
 // confirmation agencies working with stores
 EXTRA.handshake = '<path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/>';

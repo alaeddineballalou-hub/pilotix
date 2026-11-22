@@ -18,6 +18,7 @@ import { checkDarija, DARIJA_FIXER_SYSTEM, darijaRewritePrompt, DarijaIssue, fix
 import { darijaGuide } from './darijabook';
 import { markReply, noticeForConversation, ordersForDellal, sendInPreview } from './notify';
 import { addEvent, createOrder, customerFee, updateOrder } from './orders';
+import { tellMessage } from './inbox';
 import { anonymize, bookFor, BookRef, hardMoments, pickModel } from './pilotlearn';
 import { asWords, checkLahjaWords, LAHJA_NO_CHANGE, LAHJA_PERSONAL, lahjaAvoid, lahjaBlocks, lahjaDiff, lahjaErr, lahjaFor, lahjaWith, LahjaWord } from './lahja';
 import { pilotConfig, pilotToday } from '../platform/pilotai';
@@ -317,7 +318,7 @@ export async function receiveMessage(ctx: Ctx, m: z.infer<typeof IncomingInput> 
              WHEN conversations.ad_click_at IS NOT NULL AND $9::boolean THEN GREATEST($10::timestamptz, COALESCE(conversations.ad_window_until, $10::timestamptz))
              ELSE conversations.ad_window_until END,
            ad_click_at = NULL
-         RETURNING id`,
+         RETURNING id, phone, customer_id`,
         // Meta: a chat that starts from a « send message » ad stays open up to 7 days after the first message that follows
         // the click (this message carries the ad: « pub <id> »; or the click came alone just before: ad_click_at)
         [m.channel, m.externalId, m.accountId ?? null, m.name ?? null, phone, cust?.id ?? null, m.source ?? null, metaChat && isAdSource(m.source) ? adUntil : null, metaChat, adUntil],
@@ -333,10 +334,14 @@ export async function receiveMessage(ctx: Ctx, m: z.infer<typeof IncomingInput> 
     const mid = await addMessage(tx, id, { role: 'customer', body: m.text, externalId: m.messageId ?? null, at: m.at ?? null, ...(media ? { meta: media } : {}) });
     // their first words after the message are their answer to it (later ones belong to the conversation)
     if (mid && phone && notice) await markReply(tx, phone, m.text, 'whatsapp');
-    return mid ? { conversationId: id, messageId: mid } : null;
+    // (a Messenger chat knows the customer once they gave their number)
+    return mid ? { conversationId: id, messageId: mid, phone: (c.phone as string | null) ?? phone, customerId: numOrNull(c.customer_id ?? cust?.id) } : null;
   });
-  if (out) ctx.emit({ type: 'chat', data: { dellal: out.conversationId } });
-  return out;
+  if (!out) return null;
+  ctx.emit({ type: 'chat', data: { dellal: out.conversationId } });
+  // the bell: the agent who has the customer's order now hears of their message (inbox.ts)
+  await tellMessage(ctx, { conversationId: out.conversationId, phone: out.phone, customerId: out.customerId, name: m.name?.trim() || '', text: m.text }).catch(() => {});
+  return { conversationId: out.conversationId, messageId: out.messageId };
 }
 
 /** The message id a send gave back (Messenger / Instagram), kept so the customer's reaction to it finds it. */

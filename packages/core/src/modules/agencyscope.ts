@@ -256,6 +256,10 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'me.setUi': free,
   'me.update': free,
   'me.seen': free,
+  // the bell at the top of the page: the person's own lines only
+  'inbox.list': free,
+  'inbox.read': free,
+  'inbox.readAll': free,
   'users.list': free,
   // the lists of the filter bars (the agency's own people and products only)
   'filters.options': free,
@@ -410,6 +414,9 @@ export const MARKETER_AGENT_PROCS: Record<string, Gate> = {
   'me.setUi': free,
   'me.update': free,
   'me.seen': free,
+  'inbox.list': free,
+  'inbox.read': free,
+  'inbox.readAll': free,
   'ads.overview': free,
   'ads.months': free,
   'ads.closeMonth': free,

@@ -1,5 +1,5 @@
 // Base data (every install) and demo data (preview only). All demo people, phones and orders are invented.
-import { CONF_TODO, ConfStatus, FollowStatus } from '@pilotix/shared';
+import { CONF_TODO, ConfStatus, FollowStatus, type Language } from '@pilotix/shared';
 import { fakeTracking } from './couriers/demo';
 import { Db, num } from './db';
 import { UPSELL_BACKFILL } from './migrations/020_upsell';
@@ -33,6 +33,7 @@ import { seed as seed_spy } from './seeds/spy';
 import { seed as seed_pilotads } from './seeds/pilotads';
 import { seed as seed_partners } from './seeds/partners';
 import { seed as seed_automations } from './seeds/automations';
+import { seed as seed_inbox } from './seeds/inbox';
 import { seed as seed_promo } from './seeds/promo';
 
 /** First admin + one warehouse. Used by the real server on first start. */
@@ -113,7 +114,7 @@ async function bulkInsert(db: Db, table: string, cols: string[], rows: unknown[]
 const iso = (t: number) => new Date(t).toISOString();
 
 /** Fills an empty database with a realistic shop: team, catalog, couriers, ~1,500 orders over 60 days. */
-export async function seedDemo(db: Db, opts: { orders?: number; now?: number; expanded?: boolean } = {}) {
+export async function seedDemo(db: Db, opts: { orders?: number; now?: number; expanded?: boolean; lang?: Language } = {}) {
   const now = opts.now ?? Date.now();
   const N = opts.orders ?? 1500;
   const expanded = opts.expanded === true;
@@ -425,6 +426,8 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
   await montageProductId(db);
   // Produits › « Prêt » last: every demo product has its five (it keeps selling), and the full demo shows « À faire »
   await seedReady(db, now, expanded);
+  // the bell (top of every page): what the team was told this morning and yesterday (the full demo; the viewer's language)
+  if (expanded) await seed_inbox(db, users, now, opts.lang ?? 'fr');
 
   return { users, orders: N, todo: CONF_TODO.length };
 }

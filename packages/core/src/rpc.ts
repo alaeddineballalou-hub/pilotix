@@ -17,7 +17,8 @@ export const forbidden = (m = 'Accès refusé') => new AppError('forbidden', m);
 export const notFound = (m = 'Introuvable') => new AppError('not_found', m);
 
 export interface LiveEvent {
-  type: 'order' | 'orders' | 'presence' | 'chat' | 'sav' | 'stock' | 'settings';
+  /** inbox: a line in some people's bell (data: { to: told now, quiet: their line changed, no sound }) */
+  type: 'order' | 'orders' | 'presence' | 'chat' | 'sav' | 'stock' | 'settings' | 'inbox';
   id?: number;
   data?: unknown;
   /** the boutique it happened in (set by the server: a person with several boutiques hears of all of them) */

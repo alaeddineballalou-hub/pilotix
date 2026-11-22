@@ -1,0 +1,86 @@
+{
+  "open": "Notifications",
+  "title": "Notifications",
+  "unread_one": "{{count}} non lue",
+  "unread_other": "{{count}} non lues",
+  "readAll": "Tout lire",
+  "readAllLong": "Tout marquer comme lu",
+  "empty": "Rien de nouveau",
+  "emptyHint": "Vos nouvelles commandes, vos rappels, vos livraisons et les messages de vos clients s’affichent ici.",
+  "today": "Aujourd’hui",
+  "yesterday": "Hier",
+  "earlier": "Plus tôt",
+  "now": "À l’instant",
+  "min": "{{n}} min",
+  "openIt": "Ouvrir",
+  "close": "Fermer",
+  "sound": "Son",
+  "soundWork": "Toujours actif pendant le travail · {{hours}}",
+  "soundOn": "Activé",
+  "soundOff": "Coupé",
+  "soundToggle": "Couper ou remettre le son",
+  "soundTap": "Touchez l’écran une fois : le navigateur joue le son ensuite.",
+  "sounds": "Écouter les sons",
+  "phone": "Ce téléphone",
+  "phoneOn": "Reçoit les notifications, même Pilotix fermé",
+  "phoneAsk": "Recevoir sur ce téléphone",
+  "phoneAskHint": "Il sonnera même Pilotix fermé, écran verrouillé.",
+  "phoneDenied": "Bloquées par le navigateur : autorisez les notifications dans ses réglages.",
+  "phoneNo": "Ce navigateur ne reçoit pas les notifications quand Pilotix est fermé.",
+  "phonePreview": "Démo : sur le vrai site, ce téléphone sonnera même Pilotix fermé.",
+  "kind": {
+    "order": "Nouvelle commande",
+    "callback": "Rappel",
+    "delivered": "Livrée",
+    "returned": "En retour",
+    "cancelled": "Annulée",
+    "taken": "Plus à vous",
+    "alert": "Alerte colis",
+    "depot": "Dépôt",
+    "message": "Message client",
+    "info": "Info"
+  },
+  "sample": {
+    "order": {
+      "t": "Nouvelle commande pour vous",
+      "b": "PX1234 · Amina B. · 4 500 DA"
+    },
+    "callback": {
+      "t": "📞 Rappeler Amina maintenant",
+      "b": "PX1234 · rappel prévu à 14:30"
+    },
+    "delivered": {
+      "t": "💰 PX1234 livrée",
+      "b": "Amina B. · 4 500 DA"
+    },
+    "returned": {
+      "t": "↩️ PX1234 en retour",
+      "b": "Amina B. · 4 500 DA"
+    },
+    "cancelled": {
+      "t": "❌ PX1234 annulée",
+      "b": "Amina B. · après votre confirmation"
+    },
+    "taken": {
+      "t": "PX1234 n’est plus à vous",
+      "b": "Pas traitée à temps : donnée à Rania"
+    },
+    "alert": {
+      "t": "⚠️ Alerte sur PX1234",
+      "b": "Amina B. · Échec de livraison"
+    },
+    "depot": {
+      "t": "📦 6 nouvelles commandes à préparer",
+      "b": "18 à préparer en tout"
+    },
+    "message": {
+      "t": "💬 Amina B.",
+      "b": "PX1234 · Salam, la poussette existe en gris ?"
+    },
+    "info": {
+      "t": "5 commandes attendent un appel",
+      "b": "La plus ancienne depuis 34 min"
+    }
+  },
+  "soundsHint": "Touchez un son : il joue, et sa fenêtre s’affiche."
+}

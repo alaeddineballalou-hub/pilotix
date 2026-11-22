@@ -28,6 +28,7 @@ import { agencyStatsProcs } from './modules/agencystats';
 import { undoProcs } from './modules/undo';
 import { coverageProcs } from './modules/coverage';
 import { pushProcs } from './modules/push';
+import { inboxProcs } from './modules/inbox';
 import { promoProcs } from './modules/promo';
 import { rightsProcs } from './modules/rights';
 import { catalogProcs } from './modules/catalog';
@@ -138,6 +139,8 @@ export const REGISTRY = {
   ...photoShareProcs,
   ...coverageProcs,
   ...pushProcs,
+  // the bell at the top of every page
+  ...inboxProcs,
   ...promoProcs,
   // Utilisateurs › Rôles: what each role of the boutique sees and does
   ...rightsProcs,

@@ -100,6 +100,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     let t: number | undefined;
     const here = session.shop?.id;
     const off = backend.onEvent((e) => {
+      // a line in someone's bell: only the bell reads it again (layout/Bell)
+      if (e.type === 'inbox') return;
       // another of the person's boutiques: its changes show only with « Toutes les boutiques »
       if (e.shop !== undefined && here !== undefined && e.shop !== here && !allOnRaw()) return;
       // the administrator changed what the roles see and do: this screen follows at once

@@ -59,6 +59,7 @@ export const FREE_ACTIONS: readonly string[] = [
   'promo.check', 'promo.codes',
   'purchases.get', 'purchases.list',
   'push.key', 'push.subscribe', 'push.unsubscribe',
+  'inbox.list', 'inbox.read', 'inbox.readAll',
   'roles.custom.delete', 'roles.custom.list', 'roles.custom.save',
   'stats.agents', 'stats.board', 'stats.dashMeta', 'stats.doctor', 'stats.livreurs', 'stats.me', 'stats.myLivreur',
   'stats.now', 'stats.overview', 'stats.presence', 'stats.saveTeams', 'stats.teams',
