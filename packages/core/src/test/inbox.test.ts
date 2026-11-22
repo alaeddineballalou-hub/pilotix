@@ -256,7 +256,10 @@ test('Management › Notifications: each kind on or off, to the manager, the own
   assert.match(ad.body, / · Samira$/);
 
   // a callback: to the agent and her manager, told once
-  await call('notify.set', admin, { rules: { callback: { on: true, who: ['agent', 'manager'], people: [], phone: 'always' } } });
+  await call('notify.set', admin, { rules: {
+    callback: { on: true, who: ['agent', 'manager'], people: [], phone: 'always' },
+    depot: { on: false, who: ['depot'], people: [], phone: 'work' },
+  } });
   const c = news[4];
   await db.query(`UPDATE orders SET conf_status = 'callback', next_call_at = now() - interval '1 minute' WHERE id = $1`, [c.id]);
   assert.equal((await inboxRun(admin)).calls, 2);

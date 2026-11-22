@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { login, migrate, migrateAll, pgliteTenancy, seedBase, Tenancy } from '../index';
 import { dropShopData, loadShop, provisionShop } from '../platform/shops';
-import { MIGRATIONS } from '../db';
+import { MIGRATIONS, TENANTIZE_SQL } from '../db';
 
 const OWNER = { email: 'karim@bebe.dz', password: 'Karim-Password-1' };
 
@@ -33,6 +33,33 @@ async function order(db: any, name: string) {
     [name, c.id],
   );
 }
+
+test('an existing shared database upgrades through the inbox migration and isolates notifications by shop', async () => {
+  const { PGlite } = await import('@electric-sql/pglite');
+  const pg = new PGlite();
+  const legacy = pgliteTenancy(pg as any);
+  const primary = legacy.shop('public');
+  await legacy.exec('public', 'CREATE TABLE schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+  for (const [name, sql] of MIGRATIONS) {
+    if (name.startsWith('122_')) break;
+    await legacy.exec('public', sql);
+    await primary.query('INSERT INTO schema_migrations (name) VALUES ($1)', [name]);
+  }
+  await seedBase(primary, { ...OWNER, name: 'Karim' });
+  await legacy.exec('public', TENANTIZE_SQL);
+
+  const upgraded = pgliteTenancy(pg as any);
+  assert.ok((await migrateAll(upgraded)).public.includes('123_inbox'));
+  const { A, B } = await twoShops(upgraded);
+  const [person] = await A.query('SELECT id FROM profiles WHERE email = $1', ['amel@a.dz']);
+  const insert = (db: typeof A) => db.query(
+    "INSERT INTO inbox (profile_id, kind, title) VALUES ($1, 'info', 'Test')",
+    [person.id],
+  );
+  await insert(A);
+  assert.deepEqual(await B.query('SELECT id FROM inbox'), []);
+  await assert.rejects(insert(B), /foreign key/i);
+});
 
 test('a shop never sees, changes or deletes another shop’s rows', async () => {
   const { t } = await server();
