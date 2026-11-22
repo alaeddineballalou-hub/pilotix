@@ -33,6 +33,19 @@ const ICON: Record<BellSound, string> = {
   info: 'bell',
 };
 const KINDS = Object.keys(ICON) as BellSound[];
+/** where each kind's « Ouvrir » goes (the demo's examples: pxBell) */
+const SAMPLE_PAGE: Record<BellSound, string | null> = {
+  order: '#/confirmation/nouvelles',
+  callback: '#/confirmation/attente',
+  delivered: '#/commandes/tout',
+  returned: '#/commandes/tout',
+  cancelled: '#/commandes/tout',
+  taken: '#/confirmation/nouvelles',
+  alert: '#/suivi/alertes',
+  depot: '#/depot/preparer',
+  message: '#/commandes/tout',
+  info: '#/confirmation/nouvelles',
+};
 const LOUD = new Set<BellSound>(['order', 'callback', 'alert']);
 /** a pop-up that is not important goes after this */
 const POP_MS = 7000;
@@ -179,12 +192,22 @@ export function Bell() {
   };
   const readAll = () => void rpc('inbox.readAll', {}).then(() => refetch.current()).catch(() => {});
   /** « Écouter les sons »: the sound of a kind and its pop-up, with an example (never sent to anyone) */
-  const sample = (k: BellSound) => {
+  const sample = (k: BellSound, url: string | null = null) => {
     unlockAudio();
     window.setTimeout(() => bellSound(k, LOUD.has(k)), 30);
-    const x: Line = { id: -Date.now(), kind: k, title: t(`bell.sample.${k}.t`), body: t(`bell.sample.${k}.b`), url: null, orderId: null, important: LOUD.has(k), n: 1, at: new Date().toISOString(), read: true };
+    const x: Line = { id: -Date.now(), kind: k, title: t(`bell.sample.${k}.t`), body: t(`bell.sample.${k}.b`), url, orderId: null, important: LOUD.has(k), n: 1, at: new Date().toISOString(), read: true };
     setPops((p) => [x, ...p].slice(0, 3));
   };
+  const sampleRef = useRef(sample);
+  sampleRef.current = sample;
+  // the browser demo only: a pop-up of each kind from the console (« pxBell('delivered') »), to see and hear it where it
+  // shows (the top of the page), with « Ouvrir » to its page. Never on a real server.
+  useEffect(() => {
+    if (backend.kind !== 'demo') return;
+    const w = window as unknown as { pxBell?: (k: BellSound) => void };
+    w.pxBell = (k) => sampleRef.current(k, SAMPLE_PAGE[k]);
+    return () => void delete w.pxBell;
+  }, []);
   const toggleMute = () => {
     store.set('bell-sound', mute ? null : 'off');
     setMute(!mute);

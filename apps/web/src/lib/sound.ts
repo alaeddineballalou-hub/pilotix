@@ -158,9 +158,24 @@ const SOUNDS: Record<BellSound, (a: AudioContext, o: GainNode, t: number) => voi
         note(a, o, f * 2, t + k + i * 0.12, 0.18, 'sine', 0.18);
       });
   },
-  // time to call back: a phone ringing, twice
+  // time to call back: a phone ringing, twice (« trrring, trrring ») — loud
   callback: (a, o, t) => {
-    for (const k of [0, 0.75]) for (let i = 0; i < 16; i++) note(a, o, i % 2 ? 1700 : 1320, t + k + i * 0.028, 0.034, 'square', 0.32);
+    for (const k of [0, 0.62])
+      for (const [type, vol] of [['triangle', 0.8], ['square', 0.3]] as const) {
+        const s = t + k;
+        const osc = a.createOscillator();
+        const g = a.createGain();
+        osc.type = type;
+        // the bell's trill: two notes, 30 times a second
+        for (let i = 0; i < 15; i++) osc.frequency.setValueAtTime(i % 2 ? 1700 : 1320, s + i * 0.03);
+        g.gain.setValueAtTime(0.0001, s);
+        g.gain.exponentialRampToValueAtTime(vol, s + 0.012);
+        g.gain.setValueAtTime(vol, s + 0.4);
+        g.gain.exponentialRampToValueAtTime(0.0001, s + 0.46);
+        osc.connect(g).connect(o);
+        osc.start(s);
+        osc.stop(s + 0.48);
+      }
   },
   // delivered: the till drawer, then « ka-ching » and a few coins
   delivered: (a, o, t) => {
@@ -173,9 +188,9 @@ const SOUNDS: Record<BellSound, (a: AudioContext, o: GainNode, t: number) => voi
   },
   // back to the depot: three notes going down (« a fault »)
   returned: (a, o, t) => {
-    note(a, o, 523, t, 0.2, 'sawtooth', 0.28);
-    note(a, o, 440, t + 0.2, 0.2, 'sawtooth', 0.28);
-    note(a, o, 349, t + 0.4, 0.5, 'sawtooth', 0.3, 300);
+    note(a, o, 523, t, 0.2, 'sawtooth', 0.5);
+    note(a, o, 440, t + 0.2, 0.2, 'sawtooth', 0.5);
+    note(a, o, 349, t + 0.4, 0.55, 'sawtooth', 0.55, 300);
   },
   // cancelled: a low error buzz, twice
   cancelled: (a, o, t) => {
@@ -186,8 +201,8 @@ const SOUNDS: Record<BellSound, (a: AudioContext, o: GainNode, t: number) => voi
   },
   // taken from me: a « whoosh » going down
   taken: (a, o, t) => {
-    note(a, o, 1100, t, 0.42, 'sine', 0.45, 260);
-    hiss(a, o, t, 0.42, 3000, 0.35, 400);
+    note(a, o, 1100, t, 0.42, 'sine', 0.7, 260);
+    hiss(a, o, t, 0.42, 3000, 0.45, 400);
   },
   // an alert on a parcel: an urgent two-tone, loud
   alert: (a, o, t) => {
@@ -208,8 +223,8 @@ const SOUNDS: Record<BellSound, (a: AudioContext, o: GainNode, t: number) => voi
   },
   // the rest: a soft chime
   info: (a, o, t) => {
-    note(a, o, 660, t, 0.3, 'sine', 0.35);
-    note(a, o, 880, t + 0.16, 0.36, 'sine', 0.35);
+    note(a, o, 660, t, 0.3, 'sine', 0.6);
+    note(a, o, 880, t + 0.16, 0.36, 'sine', 0.6);
   },
 };
 
