@@ -51,39 +51,23 @@ jobs:
           SOURCE: ${{ inputs.source }}
           YES_SHA: ${{ inputs.sha }}
         run: |
-          MAIN=$(gh api "repos/$REPO/commits/main" --jq .sha)
-          if [ "$SOURCE" = urgent ]; then
-            echo "Urgent deploy (asked by the owner): the latest main goes live (${MAIN:0:8})."
-            echo "sha=$MAIN" >> "$GITHUB_OUTPUT"
-            echo "go=yes" >> "$GITHUB_OUTPUT"
-            exit 0
+          GOOD=2441928a6386d5855a161d59b5a39df074fe1829
+          if [ "$SOURCE" != page ] || [ "$YES_SHA" != "$GOOD" ]; then
+            echo "::error::This recovery run is restricted to the last verified production commit."
+            exit 1
           fi
-          if [ -z "$YES_SHA" ] || [ "$MAIN" != "$YES_SHA" ]; then
-            echo "::warning title=Not updated::main (${MAIN:0:8}) is not the version the owner said yes to (${YES_SHA:0:8}). Nothing goes live."
-            echo "go=no" >> "$GITHUB_OUTPUT"
-            exit 0
+          relation=$(gh api "repos/$REPO/compare/$GOOD...main" --jq .status)
+          if [ "$relation" != ahead ] && [ "$relation" != identical ]; then
+            echo "::error::The recovery commit is not on main."
+            exit 1
           fi
-          # the version live: the last run whose « deploy » job really ran and passed (a night with nothing to do, or a
-          # red main, also ends green, with that job skipped: it does not count)
-          LIVE=""
-          for id in $(gh run list -R "$REPO" --workflow deploy.yml --status success --limit 30 --json databaseId --jq '.[].databaseId'); do
-            if [ "$(gh run view "$id" -R "$REPO" --json jobs --jq '[.jobs[] | select(.name == "deploy" and .conclusion == "success")] | length')" != 0 ]; then
-              LIVE=$(gh run view "$id" -R "$REPO" --json headSha --jq .headSha)
-              break
-            fi
-          done
-          CI=$(gh run list -R "$REPO" --workflow build.yml --branch main --commit "$MAIN" --event push --limit 1 --json status,conclusion --jq '.[0] | "\(.status) \(.conclusion)"')
-          echo "main: ${MAIN:0:8} · live: ${LIVE:0:8} · CI on main: ${CI:-none}"
-          if [ "$MAIN" = "$LIVE" ]; then
-            echo "Nothing new tonight: the live version is the latest main."
-            echo "go=no" >> "$GITHUB_OUTPUT"
-          elif [ "$CI" != "completed success" ]; then
-            echo "::warning title=Not updated tonight::Pilotix CI has not passed on the latest main (${MAIN:0:8}: ${CI:-no run}). It goes live the night after its fix, or with « Run workflow » if the owner asks."
-            echo "go=no" >> "$GITHUB_OUTPUT"
-          else
-            echo "sha=$MAIN" >> "$GITHUB_OUTPUT"
-            echo "go=yes" >> "$GITHUB_OUTPUT"
+          ci=$(gh run list -R "$REPO" --workflow build.yml --branch main --commit "$GOOD" --event push --limit 1 --json conclusion --jq '.[0].conclusion')
+          if [ "$ci" != success ]; then
+            echo "::error::The verified recovery commit must have successful Pilotix CI."
+            exit 1
           fi
+          echo "sha=$GOOD" >> "$GITHUB_OUTPUT"
+          echo "go=yes" >> "$GITHUB_OUTPUT"
 
   deploy:
     needs: check
