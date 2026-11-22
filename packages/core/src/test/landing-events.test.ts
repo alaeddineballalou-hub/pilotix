@@ -50,11 +50,17 @@ const custName = () => `Amina ${SURNAMES[nameSeq++ % SURNAMES.length]}`;
 const solve = (ch: string) => {
   for (let n = 0; ; n++) if (zeroBits(sha256Hex(`${ch}:${n}`)) >= LANDING_POW_BITS) return String(n);
 };
-const rndPhone = () => `066${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`;
+let phoneSeq = 0;
+const testPhone = () => {
+  const suffix = String(++phoneSeq).padStart(3, '0');
+  return `0667${suffix}${suffix}`;
+};
+let browserSeq = 0;
 /** a person's form, from a browser Meta knows (its cookie); `t0`: when it is sent */
-async function human(over: Record<string, unknown> = {}, phone = rndPhone(), t0 = Date.now()) {
+async function human(over: Record<string, unknown> = {}, phone = testPhone(), t0 = Date.now()) {
   const ch = await makeChallenge(db, SLUG, t0 - 25_000);
-  return { slug: SLUG, name: custName(), phone, wilaya: 16, commune: 'Hydra', variant: variantId, qty: 1, hp: '', ch, pw: solve(ch), t: 25_000, ki: 40, wd: false, fp: `fp${Math.random().toString(36).slice(2, 14)}`, did: `d${Math.random()}`, vid: `v${Math.random().toString(36).slice(2, 8)}`, fbp: FBP, meta: { ip: `10.2.0.${Math.floor(Math.random() * 250)}`, ua: UA }, ...over };
+  const browser = String(++browserSeq).padStart(12, '0');
+  return { slug: SLUG, name: custName(), phone, wilaya: 16, commune: 'Hydra', variant: variantId, qty: 1, hp: '', ch, pw: solve(ch), t: 25_000, ki: 40, wd: false, fp: `fp${browser}`, did: `d${browser}`, vid: `v${browser}`, fbp: FBP, meta: { ip: `10.2.0.${browserSeq}`, ua: UA }, ...over };
 }
 const orderOf = async (phone: string) => (await db.query(`SELECT * FROM orders WHERE phone = $1 ORDER BY id DESC`, [phone]))[0];
 const events = async (where: string, params: unknown[]) => db.query(`SELECT * FROM meta_events WHERE ${where} ORDER BY id`, params);
@@ -62,7 +68,7 @@ const mine = async (id: unknown) => db.query('UPDATE orders SET agent_id = $2 WH
 const run = async (ms: number) => call('landing.run', at(await as(EMAILS.admin, server), ms), {});
 /** a form sent from a real browser less than 3 seconds after its page was served: blocked (too fast for a person) */
 async function hasty(t0: number, over: Record<string, unknown> = {}) {
-  const f = await human(over, rndPhone(), t0);
+  const f = await human(over, testPhone(), t0);
   const ch = await makeChallenge(db, SLUG, t0 - 500);
   return { ...f, ch, pw: solve(ch), t: 400 };
 }
@@ -88,7 +94,7 @@ test('Lead: the form of a clean order, at once and once; never an abandoned orde
 
   // a number typed, the form never sent: Pilotix adds the order, an agent confirms it: a Purchase, never a Lead
   const t0 = Date.now();
-  const a = await human({}, rndPhone(), t0);
+  const a = await human({}, testPhone(), t0);
   await call('landing.capture', at(admin, t0), a);
   await call('landing.run', at(admin, t0 + 30 * MIN), {});
   const ab = await orderOf(a.phone);
@@ -104,6 +110,7 @@ test('Lead: a borderline order waits for the agent who confirms it; a blocked on
   await db.query(`INSERT INTO customers (phone, name, blacklisted, blacklist_reason) VALUES ($1, 'R', true, 'test') ON CONFLICT (phone) DO UPDATE SET blacklisted = true`, [refuser]);
   await call('landing.submit', admin, await human({}, refuser));
   const o = await orderOf(refuser);
+  assert.ok(o, 'a blacklisted customer creates an order for manual review');
   assert.match(o.internal_note, /score anti-fraude/);
   assert.equal((await events(`order_id = $1`, [o.id])).length, 0, 'nothing while nobody accepted it');
   await mine(o.id);
@@ -135,7 +142,7 @@ test('Lead: a borderline order waits for the agent who confirms it; a blocked on
 
 test('Lead of a borderline order: it leaves once the agent confirms it, dated when its form came in (the day Meta counts it)', async () => {
   // a number on the blacklist (« À vérifier »), not near the other tests' numbers (that alone blocks the form)
-  const refuser = rndPhone();
+  const refuser = testPhone();
   await db.query(`INSERT INTO customers (phone, name, blacklisted, blacklist_reason) VALUES ($1, 'R', true, 'test') ON CONFLICT (phone) DO UPDATE SET blacklisted = true`, [refuser]);
   await call('landing.submit', admin, await human({}, refuser));
   const o = await orderOf(refuser);
@@ -178,7 +185,7 @@ test('Lead: Meta gets the customer hashed, like a Purchase; fake before it left,
 test('FakeOrder: an agent marks the order fake; Meta is told the browser, never the number typed, a few minutes later', async () => {
   sent.length = 0;
   const t0 = Date.now() + 2 * MIN;
-  const f = await human({ fbc: 'fb.1.1731000000000.IwAR-click' }, rndPhone(), t0);
+  const f = await human({ fbc: 'fb.1.1731000000000.IwAR-click' }, testPhone(), t0);
   await call('landing.submit', at(admin, t0), f);
   const o = await orderOf(f.phone);
   await mine(o.id);
@@ -207,7 +214,7 @@ test('FakeOrder: an agent marks the order fake; Meta is told the browser, never 
 test('FakeOrder: a wrong click put right in time never reaches Meta; marked again, it is queued again', async () => {
   sent.length = 0;
   const t0 = Date.now() + 40 * MIN;
-  const f = await human({}, rndPhone(), t0);
+  const f = await human({}, testPhone(), t0);
   await call('landing.submit', at(admin, t0), f);
   const o = await orderOf(f.phone);
   await mine(o.id);
@@ -229,9 +236,9 @@ test('FakeOrder: a wrong click put right in time never reaches Meta; marked agai
 test('Competitor: the reason « concurrent » names it; a browser Meta cannot recognise is not sent', async () => {
   sent.length = 0;
   const t0 = Date.now() + 3 * 3600_000;
-  const f = await human({}, rndPhone(), t0);
+  const f = await human({}, testPhone(), t0);
   // no Meta cookie and no ad click: a pixel that never ran
-  const blind = await human({ fbp: '' }, rndPhone(), t0);
+  const blind = await human({ fbp: '' }, testPhone(), t0);
   for (const x of [f, blind]) await call('landing.submit', at(admin, t0), x);
   const [o, ob] = [await orderOf(f.phone), await orderOf(blind.phone)];
   await mine(o.id);
@@ -253,15 +260,15 @@ test('a blocked order nobody restored in a day: FakeOrder for its browser, once;
   const t0 = Date.now() + 6 * 3600_000;
   // a person's browser, sent too fast (blocked); and a script
   const odd = await hasty(t0 + MIN);
-  const bot = { ...(await human({ fbp: '' }, rndPhone(), t0)), hp: 'spam', pw: '', meta: { ip: '1.2.3.4', ua: 'curl/8.0' } };
+  const bot = { ...(await human({ fbp: '' }, testPhone(), t0)), hp: 'spam', pw: '', meta: { ip: '1.2.3.4', ua: 'curl/8.0' } };
   // the device an agent marked « concurrent »: its next order is blocked as such
   const did = `cmp${Math.random()}`;
-  const first = await human({ did }, rndPhone(), t0);
+  const first = await human({ did }, testPhone(), t0);
   await call('landing.submit', at(admin, t0), first);
   const fo = await orderOf(first.phone);
   await mine(fo.id);
   await call('orders.setConf', at(conf, t0), { ids: [Number(fo.id)], status: 'fake', reason: '🕵️ Concurrent' });
-  const again = await human({ did }, rndPhone(), t0);
+  const again = await human({ did }, testPhone(), t0);
   for (const x of [odd, bot, again]) await call('landing.submit', at(admin, t0 + MIN), x);
   const blocked = async (phone: string) => (await db.query(`SELECT * FROM landing_blocked WHERE phone = $1`, [phone]))[0];
   const [bo, bb, ba] = [await blocked(odd.phone), await blocked(bot.phone), await blocked(again.phone)];
@@ -472,7 +479,7 @@ test('visit: the sales go first, the visits after every other event; counted apa
   await run(t0); // nothing else waiting
   // a visit queued first, then a form: one event at a time, the form leaves first
   const v = await seenOf({}, t0 + 1000);
-  const f = await human({}, rndPhone(), t0 + 1000);
+  const f = await human({}, testPhone(), t0 + 1000);
   // (as on the server: without it, the preview sends everything at once after a change)
   await call('landing.submit', at(await as(EMAILS.admin, server), t0 + 1000), f);
   const o = await orderOf(f.phone);
