@@ -125,14 +125,12 @@ export async function refreshCoverage(ctx: Ctx) {
 }
 
 /**
- * The bureaus (stop desks) of every active company with an API, imported again: a bureau a company closed is hidden
- * from the choices, a new one is offered (every hour: an agent never confirms an order to a bureau closed since morning).
+ * Refresh ZR's pickup points hourly. Other providers still use the normal coverage refresh.
  */
 export async function refreshDesks(ctx: Ctx) {
-  const cos = await ctx.db.query('SELECT id, name, kind FROM delivery_companies WHERE active ORDER BY id');
+  const cos = await ctx.db.query("SELECT id, name FROM delivery_companies WHERE active AND kind = 'zr' ORDER BY id");
   const results: { companyId: number; name: string; ok: boolean; closed: number; error: string | null }[] = [];
   for (const c of cos) {
-    if (!KINDS[c.kind as keyof typeof KINDS]?.desks) continue;
     const cid = num(c.id);
     try {
       const r = (await deliveryProcs['delivery.importStopdesks'].run(ctx, { companyId: cid })) as { closed?: number };

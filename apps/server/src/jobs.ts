@@ -67,7 +67,7 @@ const FEATURE: Record<string, string | null> = {
   // the bell: callbacks whose time came, the depot's orders to prepare
   'inbox-run': null,
   'coverage-refresh': null,
-  // the bureaus (stop desks) of the delivery companies, every hour: a closed one is hidden, a new one offered
+  // ZR pickup points, checked hourly.
   'desks-refresh': null,
   'spy-scan': 'marketing/spy',
   'leads-catchup': 'marketing/formulaires',

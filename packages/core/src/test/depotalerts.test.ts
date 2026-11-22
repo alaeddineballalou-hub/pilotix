@@ -14,9 +14,8 @@ before(async () => {
 
 const mine = async (ctx: Ctx, orderId: number) => ((await call('depot.alerts', ctx, {})) as any[]).filter((a) => a.orderId === orderId);
 
-/** A prepared order no alert has used yet (packed now), going with a company of this kind (`code`: its courier code, if
- *  any). Own livreurs: its Pilotix label printed in « En dispatch » (`printed` false: not printed yet). */
-async function take(kind: 'own' | 'zr', code: string | null = null, printed = true) {
+/** A prepared order no alert has used yet (packed now), going with a company of this kind (`code`: its courier code, if any). */
+async function take(kind: 'own' | 'zr', code: string | null = null) {
   const o = (
     await db.query(
       `SELECT id FROM orders o WHERE follow_status IN ('prepared', 'to_prepare') AND conf_status = 'confirmed' AND tracking IS NULL
@@ -26,12 +25,7 @@ async function take(kind: 'own' | 'zr', code: string | null = null, printed = tr
   )[0];
   assert.ok(o, 'a confirmed order still at the depot');
   const company = (await db.query(`SELECT id, name FROM delivery_companies WHERE kind = $1 ORDER BY id LIMIT 1`, [kind]))[0];
-  const r = (
-    await db.query(
-      `UPDATE orders SET follow_status = 'prepared', company_id = $2, tracking = $3, label_code = CASE WHEN $4 THEN own_tracking END WHERE id = $1 RETURNING id, own_tracking`,
-      [o.id, company.id, code, kind === 'own' && printed],
-    )
-  )[0];
+  const r = (await db.query(`UPDATE orders SET follow_status = 'prepared', company_id = $2, tracking = $3 WHERE id = $1 RETURNING id, own_tracking`, [o.id, company.id, code]))[0];
   return { id: Number(r.id), ownTracking: r.own_tracking as string, company: company.name as string };
 }
 
@@ -199,32 +193,4 @@ test('a cancelled parcel that never had a label: nothing to scan, « Colis retir
   const b = (await mine(karim, u.id))[0];
   await assert.rejects(call('depot.alertNoLabel', karim, { id: b.id }), /en scannant/);
   assert.equal(((await call('depot.alertScan', karim, { id: b.id, code: u.ownTracking })) as any).step, 'done');
-});
-
-test('own livreurs, a change before the Pilotix label was printed: no « old label » to scan, the new label closes it', async () => {
-  const admin = await as(EMAILS.admin);
-  const karim = await as(EMAILS.depot);
-  const t = await take('own', null, false);
-  await call('orders.update', admin, { id: t.id, address: 'Cité 500 logements, bâtiment 3' });
-  const a = (await mine(karim, t.id))[0];
-  assert.ok(a);
-  assert.equal(a.noOld, true, 'never printed: nothing to find by its label');
-  assert.equal(a.oldCode, null);
-  assert.ok(a.newCode, 'its new Pilotix label');
-  await assert.rejects(call('depot.alertScan', karim, { id: a.id, code: t.ownTracking }), /./);
-  assert.equal(((await call('depot.alertScan', karim, { id: a.id, code: a.newCode })) as any).step, 'done');
-  // the depot prints its label: a change later asks for that one
-  assert.equal(((await call('depot.labelsPrinted', karim, { items: [{ id: t.id, code: a.newCode }] })) as any).recorded, 1);
-  assert.equal(((await call('depot.labelsPrinted', karim, { items: [{ id: t.id, code: 'PXT99999999' }] })) as any).recorded, 0, 'not this order’s code: ignored');
-  await call('orders.update', admin, { id: t.id, address: 'Cité 500 logements, bâtiment 4' });
-  const b = (await mine(karim, t.id))[0];
-  assert.equal(b.noOld, false);
-  assert.equal(b.oldCode, a.newCode, 'the label printed on the parcel');
-  // an order from before the record (label_known false): its label may be there, asked as before
-  const u = await take('own', null, false);
-  await db.query('UPDATE orders SET label_known = false WHERE id = $1', [u.id]);
-  await call('orders.update', admin, { id: u.id, address: 'Rue 1' });
-  const c = (await mine(karim, u.id))[0];
-  assert.equal(c.noOld, false);
-  assert.equal(c.oldCode, u.ownTracking);
 });

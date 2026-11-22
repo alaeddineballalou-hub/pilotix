@@ -1139,7 +1139,7 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
       add('total', `${num(cur.total)} DA`, `${after.total} DA`);
       add('note', cur.delivery_note, after.deliveryNote);
       // (the label the parcel could carry before this change: a company with an API and no tracking number yet = none)
-      await addDepotAlert(tx, ctx, input.id, cur.follow_status, 'edit', ch, cancelled, !!cancelled || (await mayHaveLabel(tx, cur)));
+      await addDepotAlert(tx, ctx, input.id, cur.follow_status, 'edit', ch, cancelled, !!cancelled || (await mayHaveLabel(tx, cur.company_id, cur.tracking)));
     }
     return after;
   });

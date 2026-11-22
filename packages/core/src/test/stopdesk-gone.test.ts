@@ -86,15 +86,18 @@ test('a closed bureau is not offered, and an order sent there cannot be confirme
 
 test('ZR’s bureaus are read again every hour (a bureau it opens or closes is seen by the next import)', async () => {
   let calls = 0;
+  let truncated = false;
   globalThis.fetch = (async (u: string, o: any) => {
     const path = String(u).replace(/^.*\/api\/v1/, '');
     if (path.startsWith('/hubs')) calls++;
+    const page = JSON.parse(o.body)?.pageNumber;
     const items = path.startsWith('/hubs')
-      ? [{ id: 'h1', name: 'ZR Tizi', isPickupPoint: true, address: { cityTerritoryId: 'w15', district: 'Tizi Ouzou' } }]
+      ? truncated && page > 1 ? [] : [{ id: 'h1', name: 'ZR Tizi', isPickupPoint: true, address: { cityTerritoryId: 'w15', district: 'Tizi Ouzou' } }]
       : JSON.parse(o.body)?.advancedFilter
         ? [{ id: 'w15', code: '15', name: 'Tizi Ouzou', level: 'wilaya' }]
         : [];
-    return new Response(JSON.stringify({ items, hasNext: false }), { status: 200, headers: { 'content-type': 'application/json' } });
+    const hasNext = truncated && path.startsWith('/hubs') && page === 1;
+    return new Response(JSON.stringify({ items, hasNext }), { status: 200, headers: { 'content-type': 'application/json' } });
   }) as typeof fetch;
   const c = { id: 9151, name: 'ZR', kind: 'zr', secret: { api_key: 'k2', tenant: 't2' }, settings: {}, statusMap: {}, shop: { name: 'S', fromWilayaId: 16, fromWilaya: 'Alger' } } as unknown as CourierCompany;
   assert.equal((await zr.stopdesks!(c))[0]?.wilayaId, 15);
@@ -104,4 +107,9 @@ test('ZR’s bureaus are read again every hour (a bureau it opens or closes is s
   listClock.now = () => t;
   await zr.stopdesks!(c);
   assert.equal(calls, 2, 'read again after an hour');
+  truncated = true;
+  listClock.now = () => t + 3600_000 + 1000;
+  await assert.rejects(zr.stopdesks!(c), /liste des bureaux incomplète/);
+  truncated = false;
+  assert.equal((await zr.stopdesks!(c))[0]?.wilayaId, 15, 'retry a complete list after a partial response');
 });

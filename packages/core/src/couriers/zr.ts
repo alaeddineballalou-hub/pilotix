@@ -67,15 +67,29 @@ async function territories(c: CourierCompany, level: 'wilaya' | 'commune', fresh
 async function hubs(c: CourierCompany) {
   const key = `${cacheKeyOf(c)}:hubs`;
   const had = kept.get(key);
-  if (had && listClock.now() - had.at < LIST_KEPT_MS) return had.list;
+  if (had && listClock.now() - had.at < LIST_KEPT_MS) return { list: had.list, complete: true };
   const out: any[] = [];
+  const seen = new Set<string>();
   for (let n = 1; n < 10; n++) {
     const r = await http(c.name, url(c, '/hubs/search'), { method: 'POST', headers: h(c), json: { pageNumber: n, pageSize: 200 } });
-    out.push(...(r.items ?? []));
-    if (!r.hasNext || !(r.items ?? []).length) break;
+    if (!Array.isArray(r?.items)) break;
+    let valid = true;
+    for (const item of r.items) {
+      if (!item?.id || seen.has(String(item.id))) {
+        valid = false;
+        continue;
+      }
+      seen.add(String(item.id));
+      out.push(item);
+    }
+    if (!valid || (!r.items.length && (r.hasNext || n > 1))) break;
+    if (r.hasNext === false) {
+      kept.set(key, { at: listClock.now(), list: out });
+      return { list: out, complete: true };
+    }
+    if (r.hasNext !== true) break;
   }
-  kept.set(key, { at: listClock.now(), list: out });
-  return out;
+  return { list: out, complete: false };
 }
 
 /** One of a price line's prices (home, pickup-point, return): ZR's price with VAT, else the discounted or plain one. */
@@ -271,7 +285,7 @@ const RESOLVED = /(r[ée]solu|r[ée]gl|cl[ôo]tur|ferm[ée]|closed|resolved|term
 async function zrAddress(c: CourierCompany, p: Parcel, helpers: Helpers) {
   if (p.is_stopdesk) {
     if (!p.stopdesk_ext_id) throw new CourierError('Choisissez le bureau ZR (stop desk) de la commande');
-    const hub = (await hubs(c)).find((x) => String(x.id) === String(p.stopdesk_ext_id));
+    const hub = (await hubs(c)).list.find((x) => String(x.id) === String(p.stopdesk_ext_id));
     if (!hub) throw new CourierError(`Bureau ZR introuvable : réimportez les stop desks de ${c.name}`);
     return { hubId: String(hub.id), address: { cityTerritoryId: hub.address?.cityTerritoryId, districtTerritoryId: hub.address?.districtTerritoryId, street: cut(p.address || hub.name, 200) } };
   }
@@ -828,7 +842,8 @@ export const zr: CourierAdapter = {
   },
   async stopdesks(c) {
     needKeys(c, 'api_key', 'tenant');
-    const [hs, ws] = await Promise.all([hubs(c), territories(c, 'wilaya')]);
+    const [{ list: hs, complete }, ws] = await Promise.all([hubs(c), territories(c, 'wilaya')]);
+    if (!complete) throw new CourierError('ZR : liste des bureaux incomplète');
     const code = new Map(ws.map((w: any) => [w.id, Number(w.code)]));
     return hs
       .filter((x: any) => x.isPickupPoint && x.isVisible !== false)

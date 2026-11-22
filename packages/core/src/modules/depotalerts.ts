@@ -34,20 +34,15 @@ export const itemsText = (rows: { name: string; variant_title?: string; variantT
 const norm = (c: string) => String(c || '').trim().replace(/\s+/g, '').toUpperCase();
 
 /**
- * Could the parcel carry a label (the order as it was)? Yes when its company gave it a tracking number (its own label,
- * or a Pilotix one with that number), or when the depot printed a Pilotix label (label_code: the printing writes it).
- * A company with an API prints only its own label, with its tracking number: none yet = nothing was ever printed
- * (PX1226). Own livreurs and companies without an API: only a printed Pilotix label (they print it in « En dispatch »: an
- * order changed before that had none); an order from before that record (label_known false) may carry one.
+ * Could the parcel carry a label? A company with an API prints only its own label, with its tracking number: none yet
+ * (refused by the courier, or not sent) = nothing was ever printed. Own livreurs and companies without an API: the
+ * Pilotix label may be on it.
  */
-export async function mayHaveLabel(db: Db, o: { company_id?: unknown; tracking?: unknown; label_code?: unknown; label_known?: unknown } | null | undefined): Promise<boolean> {
-  if (!o) return true;
-  if (o.tracking || o.label_code) return true;
-  if (o.company_id) {
-    const kind = (await db.query('SELECT kind FROM delivery_companies WHERE id = $1', [o.company_id]))[0]?.kind;
-    if (API_COURIER_KINDS.includes(String(kind ?? ''))) return false;
-  }
-  return o.label_known !== true;
+export async function mayHaveLabel(db: Db, companyId: unknown, tracking: unknown): Promise<boolean> {
+  if (tracking) return true;
+  if (!companyId) return true;
+  const kind = (await db.query('SELECT kind FROM delivery_companies WHERE id = $1', [companyId]))[0]?.kind;
+  return !API_COURIER_KINDS.includes(String(kind ?? ''));
 }
 
 /**
@@ -89,13 +84,13 @@ async function closeAlert(ctx: Ctx, a: any, note: string) {
  */
 export async function addDepotAlert(db: Db, ctx: Ctx, orderId: number, stage: string, kind: 'edit' | 'cancel', changes: DepotChange[], cancelledCode?: string | null, labelled?: boolean) {
   if (kind === 'edit' && !changes.length) return;
-  const o = (await db.query('SELECT tracking, own_tracking, company_id, label_code, label_known FROM orders WHERE id = $1', [orderId]))[0];
+  const o = (await db.query('SELECT tracking, own_tracking, company_id FROM orders WHERE id = $1', [orderId]))[0];
   const open = (await db.query('SELECT id, kind, changes, old_code FROM depot_alerts WHERE order_id = $1 AND resolved_at IS NULL ORDER BY id DESC LIMIT 1', [orderId]))[0];
   // a parcel just cancelled at its company still carries that company's label
-  const hadLabel = !!cancelledCode || (labelled ?? (await mayHaveLabel(db, o)));
+  const hadLabel = !!cancelledCode || (labelled ?? (await mayHaveLabel(db, o?.company_id, o?.tracking)));
   // the code printed on the parcel now (an open alert already knows it: the parcel has not been relabelled yet)
   // (a parcel just cancelled at its old company still carries that company's label)
-  const onParcel = (open?.old_code as string | null) ?? (cancelledCode || o?.tracking || o?.label_code || o?.own_tracking || null);
+  const onParcel = (open?.old_code as string | null) ?? (cancelledCode || o?.tracking || o?.own_tracking || null);
   let newCode: string | null = null;
   // (a parcel moved to another company: one scan of the old label is enough — the new company's label is then stuck on)
   if (kind === 'edit' && !o?.tracking && !cancelledCode) {
@@ -216,22 +211,6 @@ export const depotAlertProcs = {
   }),
 
   /** A cancelled parcel that never had a label (its company had not given one yet): nothing to scan, the depot says it took it out. */
-  /**
-   * The depot printed these Pilotix labels: each order keeps the code it printed (a change later asks for that label,
-   * and only when one was printed). A code that is not the order's own (tracking, Pilotix code, reference) is ignored.
-   */
-  'depot.labelsPrinted': proc(['depot'], z.object({ items: z.array(z.object({ id, code: z.string().trim().min(1).max(80) })).min(1).max(500) }), async (ctx, i) => {
-    let n = 0;
-    for (const it of i.items)
-      n += (
-        await ctx.db.query(
-          `UPDATE orders SET label_code = $2 WHERE id = $1 AND upper($2) IN (upper(coalesce(tracking, '')), upper(coalesce(own_tracking, '')), upper(ref)) RETURNING id`,
-          [it.id, it.code],
-        )
-      ).length;
-    return { recorded: n };
-  }),
-
   'depot.alertNoLabel': proc(['depot'], z.object({ id }), async (ctx, i) => {
     if (!(await isRecipient(ctx))) throw bad('Ces alertes sont réglées par le responsable du dépôt');
     const a = (await ctx.db.query(ALERT_SQL, [i.id]))[0];

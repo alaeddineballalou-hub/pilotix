@@ -961,15 +961,16 @@ export const deliveryProcs = {
     } else desks = (await courierOf(ctx)('stopdesks', { companyId }, ctx)) as Desk[];
     let closed = 0;
     await ctx.db.tx(async (tx) => {
+      await tx.query('SELECT id FROM delivery_companies WHERE id = $1 FOR UPDATE', [companyId]);
       for (const d of desks) {
         if (!d.wilayaId) continue;
         const cur = (await tx.query('SELECT id FROM stopdesks WHERE company_id=$1 AND ext_id=$2', [companyId, d.extId]))[0];
         if (cur) await tx.query('UPDATE stopdesks SET wilaya_id=$2, commune=$3, name=$4, address=$5, gone_at=NULL WHERE id=$1', [cur.id, d.wilayaId, d.commune ?? '', d.name, d.address ?? '']);
         else await tx.query('INSERT INTO stopdesks (company_id, wilaya_id, commune, name, address, ext_id) VALUES ($1,$2,$3,$4,$5,$6)', [companyId, d.wilayaId, d.commune ?? '', d.name, d.address ?? '', d.extId]);
       }
-      // a bureau the company no longer gives is closed (hidden from the choices, still named on its orders); an empty
-      // answer closes nothing, and bureaus typed by hand (no company number) are never closed
-      if (desks.length)
+      // Only ZR's adapter verifies that its paginated snapshot is complete. Never infer closures from
+      // an empty or unmappable snapshot, or hide desks that were entered without a carrier ID.
+      if (c.kind === 'zr' && desks.length && desks.every((d) => d.wilayaId && d.extId))
         closed = (
           await tx.query(
             `UPDATE stopdesks SET gone_at = $3 WHERE company_id = $1 AND gone_at IS NULL AND ext_id IS NOT NULL AND ext_id <> ALL($2::text[]) RETURNING id`,
