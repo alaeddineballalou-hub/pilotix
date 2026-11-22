@@ -116,16 +116,32 @@ async function guarded(db: Db, fn: (db: Db) => Promise<unknown>) {
   });
 }
 
+/** Meta refuses a whole request when one of its events is older than this (7 days, its rule): see orderAt. */
+const META_KEEPS_MS = 7 * 86_400_000;
+
+/**
+ * When Meta counts an order's Purchase (and a Lead that waited for a person): the moment the order came in, so a sale
+ * falls on the day of its order (the day its ad was paid, the day the shop counts it), not on the day an agent
+ * confirmed it (the owner's choice, 22 Nov 2026). It still leaves only once confirmed. An order more than 6 days old
+ * is dated now: Meta takes 7 days, and the last one is kept for a late send or a retry. TikTok keeps the moment the
+ * event is queued (its rule for past times was not checked).
+ */
+export function orderAt(createdAt: unknown, now: number): string {
+  const t = createdAt == null ? NaN : new Date(createdAt as string).getTime();
+  return new Date(Number.isFinite(t) && t <= now && now - t < META_KEEPS_MS - 86_400_000 ? t : now).toISOString();
+}
+
 /**
  * Queues the Meta « Purchase » of an order that came from a landing page (sent by the server's job through the
  * Conversions API). Never for an exchange or an order already marked fake / duplicate / wrong number / cancelled; once
- * per order (its event id is the order's reference, the same Meta would see from any other source).
+ * per order (its event id is the order's reference, the same Meta would see from any other source). Meta's is dated
+ * when the order came in (orderAt); it leaves now.
  */
 export async function queuePurchase(db: Db, s: LandingSettings, orderId: number, now: number): Promise<void> {
   await guarded(db, async (db) => {
     const o = (
       await db.query(
-        `SELECT o.id, o.ref, o.total, o.landing_id, o.conf_status, o.is_exchange, l.pixel_id, l.meta_pixels, l.tiktok_pixels
+        `SELECT o.id, o.ref, o.total, o.landing_id, o.conf_status, o.is_exchange, o.created_at, l.pixel_id, l.meta_pixels, l.tiktok_pixels
          FROM orders o LEFT JOIN landing_pages l ON l.id = o.landing_id WHERE o.id = $1`,
         [orderId],
       )
@@ -133,13 +149,14 @@ export async function queuePurchase(db: Db, s: LandingSettings, orderId: number,
     if (!o || !o.landing_id || o.is_exchange || (CONF_DONE_BAD as string[]).includes(o.conf_status)) return;
     // the page's Meta pixel and TikTok pixel (TikTok's « CompletePayment »)
     const px = await pixelsOf(db, o, s.pixelId);
-    const at = new Date(now).toISOString();
+    const sendAt = new Date(now).toISOString();
+    const metaAt = orderAt(o.created_at, now);
     for (const [platform, pixel] of [...px.meta.map((x) => ['meta', x] as const), ...px.tiktok.map((x) => ['tiktok', x] as const)])
       if (pixel)
         await db.query(
-          `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, value, at, send_after, platform) VALUES ($1,'Purchase',$2,$3,$4,$5,$6,$6,$7)
+          `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, value, at, send_after, platform) VALUES ($1,'Purchase',$2,$3,$4,$5,$6,$7,$8)
            ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
-          [pixel, `purchase-${o.ref}`, o.id, o.landing_id, num(o.total), at, platform],
+          [pixel, `purchase-${o.ref}`, o.id, o.landing_id, num(o.total), platform === 'meta' ? metaAt : sendAt, sendAt, platform],
         );
   });
 }
@@ -149,12 +166,13 @@ export async function queuePurchase(db: Db, s: LandingSettings, orderId: number,
  * Messaging: the chat's dataset, the customer's PSID / IGSID). Same rules as a landing page's: never for an exchange or an
  * order marked fake / duplicate / wrong number / cancelled; once per order (Meta does not deduplicate chat events).
  * Its « pixel » is the Page (messenger:<page id>) or the Instagram account (instagram:<ig id>) that took the chat.
+ * Dated when the order came in (orderAt); it leaves now.
  */
 export async function queueChatPurchase(db: Db, orderId: number, now: number): Promise<void> {
   await guarded(db, async (db) => {
     const o = (
       await db.query(
-        `SELECT o.id, o.ref, o.total, o.conf_status, o.is_exchange, o.landing_id, c.channel, c.external_id, c.account_id
+        `SELECT o.id, o.ref, o.total, o.conf_status, o.is_exchange, o.landing_id, o.created_at, c.channel, c.external_id, c.account_id
          FROM orders o JOIN conversations c ON c.id = o.conversation_id WHERE o.id = $1`,
         [orderId],
       )
@@ -163,11 +181,10 @@ export async function queueChatPurchase(db: Db, orderId: number, now: number): P
     if (!['messenger', 'instagram'].includes(o.channel) || !o.external_id) return;
     const target = await chatTarget(db, o.channel, o.account_id);
     if (!target) return;
-    const at = new Date(now).toISOString();
     await db.query(
-      `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, value, at, send_after, platform) VALUES ($1,'Purchase',$2,$3,$4,$5,$5,'chat')
+      `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, value, at, send_after, platform) VALUES ($1,'Purchase',$2,$3,$4,$5,$6,'chat')
        ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
-      [target, `chat-purchase-${o.ref}`, o.id, num(o.total), at],
+      [target, `chat-purchase-${o.ref}`, o.id, num(o.total), orderAt(o.created_at, now), new Date(now).toISOString()],
     );
   });
 }
@@ -227,22 +244,24 @@ export async function queueLead(db: Db, s: LandingSettings, orderId: number, now
   await guarded(db, async (db) => {
     const o = (
       await db.query(
-        `SELECT o.id, o.ref, o.total, o.landing_id, o.conf_status, o.is_exchange, l.pixel_id, l.meta_pixels, l.tiktok_pixels,
+        `SELECT o.id, o.ref, o.total, o.landing_id, o.conf_status, o.is_exchange, o.created_at, l.pixel_id, l.meta_pixels, l.tiktok_pixels,
            EXISTS (SELECT 1 FROM landing_submits x WHERE x.order_id = o.id) AS sent
          FROM orders o LEFT JOIN landing_pages l ON l.id = o.landing_id WHERE o.id = $1`,
         [orderId],
       )
     )[0];
     if (!o || !o.landing_id || !o.sent || o.is_exchange || NOT_A_LEAD.includes(o.conf_status)) return;
-    const at = new Date(now).toISOString();
+    // Meta's: when the form came in (orderAt), also for a borderline one that waited for the agent's confirmation
+    const sendAt = new Date(now).toISOString();
+    const metaAt = orderAt(o.created_at, now);
     // the page's Meta pixels and TikTok pixels (TikTok's « SubmitForm »)
     const px = await pixelsOf(db, o, s.pixelId);
     for (const [platform, pixel] of [...px.meta.map((x) => ['meta', x] as const), ...px.tiktok.map((x) => ['tiktok', x] as const)])
       if (pixel)
         await db.query(
-          `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, value, at, send_after, platform) VALUES ($1,'Lead',$2,$3,$4,$5,$6,$6,$7)
+          `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, value, at, send_after, platform) VALUES ($1,'Lead',$2,$3,$4,$5,$6,$7,$8)
            ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
-          [pixel, `lead-${o.ref}`, o.id, o.landing_id, num(o.total), at, platform],
+          [pixel, `lead-${o.ref}`, o.id, o.landing_id, num(o.total), platform === 'meta' ? metaAt : sendAt, sendAt, platform],
         );
   });
 }

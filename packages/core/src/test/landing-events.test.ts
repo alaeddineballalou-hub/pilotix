@@ -133,6 +133,21 @@ test('Lead: a borderline order waits for the agent who confirms it; a blocked on
   assert.equal((await events(`blocked_id = $1`, [b.id])).length, 0, 'restored: never fake for Meta');
 });
 
+test('Lead of a borderline order: it leaves once the agent confirms it, dated when its form came in (the day Meta counts it)', async () => {
+  // a number on the blacklist (« À vérifier »), not near the other tests' numbers (that alone blocks the form)
+  const refuser = rndPhone();
+  await db.query(`INSERT INTO customers (phone, name, blacklisted, blacklist_reason) VALUES ($1, 'R', true, 'test') ON CONFLICT (phone) DO UPDATE SET blacklisted = true`, [refuser]);
+  await call('landing.submit', admin, await human({}, refuser));
+  const o = await orderOf(refuser);
+  assert.equal((await events(`order_id = $1`, [o.id])).length, 0, 'nothing while nobody accepted it');
+  await mine(o.id);
+  const tc = Date.now() + 10 * 3600_000;
+  await call('orders.setConf', at(conf, tc), { ids: [Number(o.id)], status: 'confirmed' });
+  const [lead] = await events(`order_id = $1 AND event_name = 'Lead' AND platform = 'meta'`, [o.id]);
+  assert.equal(new Date(lead.at).getTime(), new Date(o.created_at).getTime(), 'when the form came in');
+  assert.equal(new Date(lead.send_after).getTime(), tc, 'it leaves once confirmed');
+});
+
 test('Lead: Meta gets the customer hashed, like a Purchase; fake before it left, it is skipped; cancelled, it stays a Lead', async () => {
   sent.length = 0;
   // on the server (in the preview an event is only marked « simulé », at once)
@@ -491,22 +506,35 @@ test('visit: the sales go first, the visits after every other event; counted apa
   assert.equal((await events(`event_id = $1`, [`pv-${older.vid}`])).length, 0);
 });
 
-// ---------------------------------------------------------------- the day Meta counts a sale (21 Nov 2026)
-test('Purchase: dated when the agent confirmed it, not when it left — sent the next day, it still counts on the day of the confirmation; stuck more than 7 days, it is not sent (Meta refuses it)', async () => {
+// ---------------------------------------------------------------- the day Meta counts a sale (21 and 22 Nov 2026)
+test('Purchase: dated when the order came in, not when the agent confirmed it nor when it left — confirmed 10 hours later and sent a day after that, it counts on the day of the order; more than 6 days old, on the day of the confirmation; stuck more than 7 days, it is not sent (Meta refuses it)', async () => {
   const f = await human();
   await call('landing.submit', admin, f);
   const o = await orderOf(f.phone);
   await mine(o.id);
-  const tc = Date.now() + 5 * MIN;
+  const tc = Date.now() + 10 * 3600_000;
   await call('orders.setConf', at(conf, tc), { ids: [Number(o.id)], status: 'confirmed' });
   const [lead] = await events(`order_id = $1 AND event_name = 'Lead' AND platform = 'meta'`, [o.id]);
+  const [queued] = await events(`order_id = $1 AND event_name = 'Purchase' AND platform = 'meta'`, [o.id]);
+  assert.equal(new Date(queued.send_after).getTime(), tc, 'it leaves once confirmed, not before');
   // the job only runs a day later (the server or Meta down, a key missing): each event keeps its own day
   sent.length = 0;
   await run(tc + 26 * 3600_000);
   const purchase = received().find((e: any) => e.event_id === `purchase-${o.ref}`);
   assert.ok(purchase, 'it left');
-  assert.equal(purchase.event_time, Math.floor(tc / 1000), 'the moment the agent confirmed it');
+  assert.equal(purchase.event_time, Math.floor(new Date(o.created_at).getTime() / 1000), 'the moment the order came in');
+  assert.ok(purchase.event_time < Math.floor(tc / 1000) - 9 * 3600, 'not the moment the agent confirmed it');
   assert.equal(received().find((e: any) => e.event_id === `lead-${o.ref}`)?.event_time, Math.floor(new Date(lead.at).getTime() / 1000), 'the Lead: the moment the form arrived');
+  // confirmed more than 6 days after it came in: Meta would soon refuse that day, so it counts on the day of the confirmation
+  const h = await human();
+  await call('landing.submit', admin, h);
+  const o3 = await orderOf(h.phone);
+  await mine(o3.id);
+  const tl = Date.now() + 6 * 24 * 3600_000 + 3600_000;
+  await call('orders.setConf', at(conf, tl), { ids: [Number(o3.id)], status: 'confirmed' });
+  sent.length = 0;
+  await run(tl + MIN);
+  assert.equal(received().find((e: any) => e.event_id === `purchase-${o3.ref}`)?.event_time, Math.floor(tl / 1000), 'the moment the agent confirmed it');
   // confirmed, then stuck more than 7 days: Meta would refuse the whole batch, so it is not sent
   const g = await human();
   await call('landing.submit', admin, g);

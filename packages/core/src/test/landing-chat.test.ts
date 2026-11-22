@@ -203,21 +203,23 @@ test('a chat order tells Meta the same things a page’s order does: Lead when i
   assert.equal((await events(wa.id)).length, 0);
 });
 
-test('a chat’s Purchase is dated when the agent confirmed it, even when it leaves the next day; stuck more than 7 days, it is not sent (Meta refuses it)', async () => {
+test('a chat’s Purchase is dated when the order was taken, not when the agent confirmed it nor when it left; stuck more than 7 days, it is not sent (Meta refuses it)', async () => {
   const conf = await as(EMAILS.conf);
   const sent: any[] = [];
   const server: Ctx['server'] = { courier: async () => ({}), hashPassword: async (p) => p, meta: async (action: string, args: any) => (sent.push({ action, args }), { received: args.events.length }) };
   const job = await as(EMAILS.admin, server);
   const o = await chatOrder('messenger', PAGE);
   await db.query('UPDATE orders SET agent_id = $2 WHERE id = $1', [o.id, conf.session.profile.id]);
-  const tc = Date.now() + 5 * 60_000;
+  const tc = Date.now() + 10 * 3600_000;
   await call('orders.setConf', { ...conf, now: () => tc }, { ids: [o.id], status: 'confirmed' });
   await db.query(`UPDATE meta_events SET status = 'sent' WHERE status = 'queued' AND order_id <> $1`, [o.id]);
-  // the job only runs a day later (the server or Meta down): the sale keeps the day it was confirmed
+  // the job only runs a day later (the server or Meta down): the sale keeps the day of its order
   await call('landing.run', { ...job, now: () => tc + 26 * 3600_000 }, {});
   const e = sent.flatMap((x) => x.args.events).find((x: any) => x.event_id === `chat-purchase-${o.ref}`);
   assert.ok(e, 'it left');
-  assert.equal(e.event_time, Math.floor(tc / 1000), 'the moment the agent confirmed it');
+  const [row] = await db.query('SELECT created_at FROM orders WHERE id = $1', [o.id]);
+  assert.equal(e.event_time, Math.floor(new Date(row.created_at).getTime() / 1000), 'the moment the order was taken');
+  assert.ok(e.event_time < Math.floor(tc / 1000) - 9 * 3600, 'not the moment the agent confirmed it');
   // confirmed, then stuck more than 7 days: Meta would refuse the whole batch, so it is not sent
   const o2 = await chatOrder('messenger', PAGE);
   await db.query('UPDATE orders SET agent_id = $2 WHERE id = $1', [o2.id, conf.session.profile.id]);
