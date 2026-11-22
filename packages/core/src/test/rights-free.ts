@@ -32,7 +32,7 @@ export const FREE_ACTIONS: readonly string[] = [
   'delivery.sync', 'delivery.tournee',
   'dellal.conversation', 'dellal.inbox', 'dellal.lahja.add', 'dellal.lahja.list', 'dellal.lahja.remove',
   'dellal.stats', 'dellal.test', 'dellal.voice.read',
-  'depot.alertMine', 'depot.alertScan', 'depot.alerts', 'depot.assign', 'depot.assignCancel', 'depot.cancelDone',
+  'depot.alertMine', 'depot.alertNoLabel', 'depot.alertScan', 'depot.alerts', 'depot.assign', 'depot.assignCancel', 'depot.cancelDone',
   'depot.companies', 'depot.counts', 'depot.dispatchAlerts', 'depot.find', 'depot.noStock', 'depot.pickList',
   'depot.resetTestParcels', 'depot.scan', 'depot.testParcels', 'depot.toAssign', 'depot.unassign',
   'filters.options',
