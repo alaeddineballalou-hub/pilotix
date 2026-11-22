@@ -124,6 +124,24 @@ export async function refreshCoverage(ctx: Ctx) {
   return { at, results };
 }
 
+/**
+ * Refresh ZR's pickup points hourly. Other providers still use the normal coverage refresh.
+ */
+export async function refreshDesks(ctx: Ctx) {
+  const cos = await ctx.db.query("SELECT id, name FROM delivery_companies WHERE active AND kind = 'zr' ORDER BY id");
+  const results: { companyId: number; name: string; ok: boolean; closed: number; error: string | null }[] = [];
+  for (const c of cos) {
+    const cid = num(c.id);
+    try {
+      const r = (await deliveryProcs['delivery.importStopdesks'].run(ctx, { companyId: cid })) as { closed?: number };
+      results.push({ companyId: cid, name: String(c.name), ok: true, closed: r?.closed ?? 0, error: null });
+    } catch (e) {
+      results.push({ companyId: cid, name: String(c.name), ok: false, closed: 0, error: ((e as Error)?.message || 'Erreur').slice(0, 300) });
+    }
+  }
+  return { results };
+}
+
 const canFix = async (ctx: Ctx) => {
   if (!(await canRules(ctx))) throw forbidden('Seuls les admins et les personnes choisies dans Utilisateurs › Rôles mettent à jour les tarifs');
 };
@@ -133,5 +151,7 @@ export const coverageProcs = {
 
   /** « Mettre à jour maintenant » (and every night): tariffs and bureaus from the companies' APIs. */
   'coverage.refresh': proc(null, z.object({}), async (ctx) => (await canFix(ctx), refreshCoverage(ctx))),
+  /** the bureaus alone (the server, every hour) */
+  'coverage.refreshDesks': proc(null, z.object({}), async (ctx) => (await canFix(ctx), refreshDesks(ctx))),
 };
 

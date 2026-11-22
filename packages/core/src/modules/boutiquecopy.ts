@@ -184,7 +184,7 @@ export async function copyBoutique(from: Db, to: Db, parts: readonly CopyPart[],
   };
   const companies = want.has('couriers') ? ((await from.query('SELECT id, name, kind, active, phone, credentials, config FROM delivery_companies ORDER BY id')) as any[]) : [];
   const fees = companies.length ? ((await from.query('SELECT company_id, wilaya_id, home, desk, return_fee FROM delivery_fees')) as any[]) : [];
-  const desks = companies.length ? ((await from.query('SELECT company_id, wilaya_id, commune, name, address, ext_id FROM stopdesks ORDER BY id')) as any[]) : [];
+  const desks = companies.length ? ((await from.query('SELECT company_id, wilaya_id, commune, name, address, ext_id FROM stopdesks WHERE gone_at IS NULL ORDER BY id')) as any[]) : [];
   const people = want.has('work') ? await peopleMap(from, to) : new Map<number, number>();
   const products = want.has('couriers') || want.has('work') ? await productMap(from, to) : new Map<number, number>();
   const by = opts.by ?? undefined;

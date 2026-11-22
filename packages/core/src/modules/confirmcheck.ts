@@ -36,7 +36,7 @@ export interface LineCheck {
   /** what is left for this order (null: a service, no stock) */
   available: number | null;
 }
-export type DeliverWhy = 'wilaya' | 'guess' | 'commune' | 'courierCommune' | 'desk' | 'company' | 'nobody';
+export type DeliverWhy = 'wilaya' | 'guess' | 'commune' | 'courierCommune' | 'desk' | 'deskGone' | 'company' | 'nobody';
 export interface DeliverCheck {
   ok: boolean;
   why: DeliverWhy | null;
@@ -44,6 +44,8 @@ export interface DeliverCheck {
   companyName: string | null;
   wilayaId: number | null;
   desk: boolean;
+  /** deskGone: the bureau the company closed */
+  deskName?: string | null;
   /** courierCommune: the order's commune, and the company's closest names to it */
   commune?: string | null;
   near?: string[];
@@ -117,7 +119,7 @@ async function deskMissing(db: Db, o: { wilayaId: number | null; isStopdesk: boo
   if (!o.isStopdesk || o.stopdeskId || !o.wilayaId) return false;
   const there = await db.query(
     `SELECT 1 FROM stopdesks s JOIN delivery_companies c ON c.id = s.company_id AND c.active
-      WHERE s.wilaya_id = $1 AND ($2::bigint IS NULL OR s.company_id = $2) LIMIT 1`,
+      WHERE s.wilaya_id = $1 AND s.gone_at IS NULL AND ($2::bigint IS NULL OR s.company_id = $2) LIMIT 1`,
     [o.wilayaId, o.companyId],
   );
   return !!there[0];
@@ -193,9 +195,11 @@ export async function deliverCheck(
   let companyId = o.companyId;
   // a bureau chosen: its company (a bureau not chosen yet: the order's company must have bureaus there)
   if (o.isStopdesk && o.stopdeskId) {
-    const d = (await db.query('SELECT company_id FROM stopdesks WHERE id = $1', [o.stopdeskId]))[0];
+    const d = (await db.query('SELECT s.company_id, s.name, s.gone_at, c.name AS company_name FROM stopdesks s LEFT JOIN delivery_companies c ON c.id = s.company_id WHERE s.id = $1', [o.stopdeskId]))[0];
     if (!d) return { ...base, ok: false, why: 'desk' };
     companyId = num(d.company_id);
+    // the company closed this bureau (its list no longer has it): the depot's sending would be refused
+    if (d.gone_at) return { ...base, companyId, companyName: (d.company_name as string) ?? null, ok: false, why: 'deskGone', deskName: d.name as string };
   }
   companyId = companyId ?? (await getSetting(db, 'shop')).defaultCompanyId ?? null;
   if (companyId) {
@@ -239,6 +243,8 @@ export function blockerText(ref: string, lines: LineCheck[], d: DeliverCheck): s
     }
     case 'desk':
       return `${pre}choisissez le bureau (stop-desk) avant de confirmer.`;
+    case 'deskGone':
+      return `${pre}${d.companyName ?? 'la société'} a fermé le bureau « ${d.deskName ?? ''} ». Choisissez un autre bureau, ou la livraison à domicile.`;
     case 'company':
       return `${pre}${d.companyName ?? 'la société'} ne livre pas ${mode} à ${wilayaName(d.wilayaId)}. Changez la société ou le mode de livraison.`;
     default:
