@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { call, num, setSetting } from '../index';
-import { inboxRun } from '../modules/inbox';
+import { inboxRun, tellGiven } from '../modules/inbox';
 import { setFollow } from '../modules/orders';
 import { sendPush } from '../modules/push';
 import { EMAILS, setup } from './harness';
@@ -162,4 +162,116 @@ test('the bell: new order, taken, delivered, back, alert, callback, depot — ea
   const ev: any = events.find((e: any) => e.type === 'inbox');
   assert.ok(ev && ev.data.quiet.includes(S) && !ev.data.to.includes(S), 'no pop-up, no sound');
   assert.equal(sent.length, 0, 'no phone: the block rings it');
+});
+
+// Management › Notifications (owner's ask, 22 Nov 2026): each kind on or off, to whom — the order's own person, the
+// team's manager, the owners, the depot, chosen people — and when the phones ring. The others' line speaks of someone
+// else's order and grows while it is not read (« 2 nouvelles commandes »).
+test('Management › Notifications: each kind on or off, to the manager, the owners and chosen people, the phones as set', async () => {
+  const { db, as } = await setup(120);
+  const sent: any[] = [];
+  const server = {
+    pushKeys: () => ({ publicKey: 'BPUBLIC', privateKey: 'PRIVATE' }),
+    push: async (_k: any, subs: any[], payload: any) => {
+      sent.push({ subs, payload });
+      return subs.map((s) => ({ endpoint: s.endpoint, ok: true, gone: false }));
+    },
+  } as any;
+  const admin = await (as as any)(EMAILS.admin, server);
+  const yacine = await (as as any)(EMAILS.manager, server);
+  const samira = await (as as any)(EMAILS.conf, server);
+  const rania = await (as as any)(EMAILS.conf2, server);
+  const nadia = await (as as any)(EMAILS.suivi, server);
+  const karim = await (as as any)(EMAILS.depot, server);
+  const S = samira.session.profile.id;
+  const R = rania.session.profile.id;
+  const N = nadia.session.profile.id;
+  const Y = yacine.session.profile.id;
+  await call('push.key', samira, {});
+  await call('push.subscribe', samira, { endpoint: 'https://fcm.googleapis.com/fcm/send/samira-2', p256dh: 'BKEY-1234567890', auth: 'AUTH-1234' });
+  await hours(db, DAY);
+  // Yacine leads Samira's team (Management › Équipes)
+  await setSetting(db, 'teams', [{ id: 't1', name: 'Équipe Yacine', managerId: Y, agentIds: [S] }]);
+  const mine = async (ctx: any) => (await call('inbox.list', ctx, {})) as any;
+  const news = (await db.query(`SELECT id, ref, customer_name FROM orders WHERE conf_status = 'new' ORDER BY id LIMIT 5`)).map((x: any) => ({ id: num(x.id), ref: String(x.ref), name: String(x.customer_name ?? '').trim() }));
+  assert.equal(news.length, 5);
+  await db.query('UPDATE orders SET agent_id = $2 WHERE id = ANY($1)', [news.map((x) => x.id), S]);
+
+  // by default a new order goes to its agent, her team's manager and the owners: theirs in the third person
+  await tellGiven(admin, 'conf', new Map([[S, [news[0].id]]]));
+  assert.equal((await mine(samira)).items[0].title, 'Nouvelle commande pour vous');
+  for (const who of [yacine, admin]) {
+    const l = (await mine(who)).items[0];
+    assert.equal(l.kind, 'order');
+    assert.equal(l.title, 'Nouvelle commande');
+    assert.match(l.body, new RegExp(`^${news[0].ref} · .* · pour Samira$`));
+    assert.equal(l.orderId, news[0].id);
+    assert.equal(l.important, false);
+  }
+  // another one: their line grows (still one unread line), and opens the list
+  const a1 = await mine(admin);
+  await tellGiven(admin, 'conf', new Map([[S, [news[1].id]]]));
+  const a2 = await mine(admin);
+  assert.equal(a2.items[0].title, '2 nouvelles commandes');
+  assert.equal(a2.items[0].n, 2);
+  assert.equal(a2.items[0].orderId, null);
+  assert.equal(a2.unread, a1.unread);
+
+  // the page: each kind's rule, who it can go to, the people to choose from — administrators only
+  const g: any = await call('notify.get', admin, {});
+  assert.deepEqual(g.rules.order, { on: true, who: ['agent', 'manager', 'owner'], people: [], phone: 'work' });
+  assert.deepEqual(g.rules.callback.phone, 'always');
+  assert.deepEqual(g.can.depot, ['depot', 'owner']);
+  assert.ok(g.people.some((p: any) => p.id === R));
+  await assert.rejects(call('notify.get', yacine, {}));
+  await assert.rejects(call('notify.set', samira, { rules: { order: { on: false, who: [], people: [], phone: 'work' } } }));
+
+  // new orders to the agent and to Rania (chosen), no more to the manager and the owners; no phone at all
+  await call('notify.set', admin, { rules: { order: { on: true, who: ['agent'], people: [R], phone: 'never' } } });
+  sent.length = 0;
+  const yBefore = (await mine(yacine)).items.length;
+  await tellGiven(admin, 'conf', new Map([[S, [news[2].id]]]));
+  assert.equal((await mine(samira)).items[0].orderId, news[2].id);
+  assert.equal(sent.length, 0, 'the phones: never');
+  const r1 = (await mine(rania)).items[0];
+  assert.equal(r1.kind, 'order');
+  assert.match(r1.body, /pour Samira$/);
+  assert.equal((await mine(yacine)).items.length, yBefore, 'not the manager any more');
+  // the kind off: nobody hears of it
+  await call('notify.set', admin, { rules: { order: { on: false, who: ['agent'], people: [], phone: 'work' } } });
+  const sBefore = (await mine(samira)).items.length;
+  await tellGiven(admin, 'conf', new Map([[S, [news[3].id]]]));
+  assert.equal((await mine(samira)).items.length, sBefore);
+
+  // delivered: to the owners, not the agent — « PX… livrée », and whose order it was
+  await call('notify.set', admin, { rules: { delivered: { on: true, who: ['owner'], people: [], phone: 'work' } } });
+  const dv = (await db.query(`SELECT id, ref FROM orders WHERE conf_status = 'confirmed' AND follow_status = 'to_prepare' ORDER BY id LIMIT 1`))[0];
+  await db.query(`UPDATE orders SET agent_id = $2, follow_agent_id = $3, follow_status = 'shipped', shipped_at = now() WHERE id = $1`, [num(dv.id), S, N]);
+  const sd = (await mine(samira)).items.filter((x: any) => x.kind === 'delivered').length;
+  await setFollow(admin, { ids: [num(dv.id)], status: 'delivered' }, { system: true, courier: true });
+  assert.equal((await mine(samira)).items.filter((x: any) => x.kind === 'delivered').length, sd, 'not the agent');
+  const ad = (await mine(admin)).items[0];
+  assert.equal(ad.kind, 'delivered');
+  assert.equal(ad.title, `💰 ${dv.ref} livrée`);
+  assert.match(ad.body, / · Samira$/);
+
+  // a callback: to the agent and her manager, told once
+  await call('notify.set', admin, { rules: { callback: { on: true, who: ['agent', 'manager'], people: [], phone: 'always' } } });
+  const c = news[4];
+  await db.query(`UPDATE orders SET conf_status = 'callback', next_call_at = now() - interval '1 minute' WHERE id = $1`, [c.id]);
+  assert.equal((await inboxRun(admin)).calls, 2);
+  assert.equal((await inboxRun(admin)).calls, 0, 'told once');
+  const yc = (await mine(yacine)).items[0];
+  assert.equal(yc.kind, 'callback');
+  assert.equal(yc.title, `📞 Samira doit rappeler ${c.name || c.ref}`);
+
+  // the depot's orders to prepare: to the owners instead of the depot (a « who » the kind cannot have is dropped)
+  await call('notify.set', admin, { rules: { depot: { on: true, who: ['owner', 'agent'] as any, people: [], phone: 'work' } } });
+  assert.deepEqual(((await call('notify.get', admin, {})) as any).rules.depot.who, ['owner']);
+  const prep = (await db.query(`SELECT id FROM orders WHERE conf_status = 'confirmed' AND id <> $1 ORDER BY id DESC LIMIT 2`, [num(dv.id)])).map((x: any) => num(x.id));
+  await db.query(`UPDATE orders SET follow_status = 'to_prepare', shipped_at = NULL, confirmed_at = now() WHERE id = ANY($1)`, [prep]);
+  const kb = (await mine(karim)).items.length;
+  assert.ok((await inboxRun(admin)).depot >= 1);
+  assert.equal((await mine(karim)).items.length, kb, 'not the depot');
+  assert.equal((await mine(admin)).items[0].kind, 'depot');
 });

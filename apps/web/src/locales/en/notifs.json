@@ -1,0 +1,161 @@
+{
+  "title": "Notifications",
+  "help": "Who gets each notification, and when the phone rings. Pilotix’s sounds do not change.",
+  "save": "Save",
+  "cancel": "Cancel",
+  "saved": "Notifications saved",
+  "unsaved_one": "1 change not saved",
+  "unsaved_other": "{{count}} changes not saved",
+  "unsavedHere": "Not saved yet: press « Save » at the top.",
+  "hours": "Working hours",
+  "hoursText": "{{hours}} · the sound cannot be turned off",
+  "hoursNone": "No call hours set",
+  "hoursEdit": "Change",
+  "sounds": "Pilotix’s sounds",
+  "soundsText": "One fixed sound for each notification",
+  "groupPilotix": "From Pilotix · fixed sound",
+  "back": "All notifications",
+  "off": "Off",
+  "offNote": "Off: nobody gets it.",
+  "nobody": "Nobody",
+  "shortBlock": "Agent (blocked screen)",
+  "short": {
+    "agent": "Agent",
+    "suivi": "Follow-up",
+    "manager": "Manager",
+    "owner": "Owners",
+    "depot": "Depot"
+  },
+  "peopleN_one": "1 person",
+  "peopleN_other": "{{count}} people",
+  "turnOn": "Turn on « {{what}} »",
+  "kind": {
+    "order": "New order",
+    "callback": "Callback",
+    "delivered": "Delivered",
+    "returned": "Coming back",
+    "cancelled": "Cancelled",
+    "taken": "No longer yours",
+    "alert": "Parcel alert",
+    "depot": "To prepare",
+    "message": "Customer message",
+    "info": "Team alerts"
+  },
+  "desc": {
+    "order": "An order arrives and goes to an agent.",
+    "callback": "It is time to call a customer back.",
+    "delivered": "A confirmed order is delivered.",
+    "returned": "The customer refused: the parcel comes back.",
+    "cancelled": "A confirmed order is cancelled.",
+    "taken": "An order goes to another agent.",
+    "alert": "A parcel is on alert or its delivery failed.",
+    "depot": "The new orders to prepare, grouped: once every 15 minutes at most, during working hours.",
+    "message": "The customer writes on WhatsApp, Messenger or Instagram.",
+    "info": "Evening report, waiting queue, pay, couriers…"
+  },
+  "infoShort": "Set in their own page",
+  "infoText": "These notifications come from Pilotix’s other pages: Pilot Automations, pay, couriers, the depot’s red alerts… They are turned on, and who gets them is chosen, in their own page.",
+  "infoAuto": "Open Pilot Automations",
+  "infoDepot": "Open Depot alerts",
+  "who": "Who gets it, and how",
+  "role": {
+    "agent": "The order’s agent",
+    "suivi": "The follow-up agent",
+    "manager": "Their manager",
+    "owner": "The owners",
+    "depot": "The depot"
+  },
+  "roleDesc": {
+    "agent": "The one who confirmed the order",
+    "agent_order": "The one who has to call",
+    "agent_callback": "The one who has to call back",
+    "agent_taken": "The one who loses the order",
+    "agent_message": "While it is being confirmed",
+    "suivi": "The one who follows the parcel",
+    "suivi_message": "Once the order is on the road",
+    "manager": "Their team’s manager",
+    "owner": "The shop’s administrators",
+    "depot": "The depot team"
+  },
+  "how": {
+    "notif": "Notification",
+    "block": "Blocked screen"
+  },
+  "notGet": "Does not get it",
+  "blockHint": "The agent’s blocked screen is set in Confirmation (« Block until the call »).",
+  "blockOpen": "Open Confirmation",
+  "depotNote": "The depot’s red alerts (an order changed or cancelled at the depot) are set in Management › Depot alerts.",
+  "addPerson": "Add a person",
+  "removePerson": "Remove {{who}}",
+  "sound": "Sound",
+  "listenTo": "Listen to « {{what}} »",
+  "soundName": {
+    "order": "Ring",
+    "callback": "Ring",
+    "delivered": "Cash register",
+    "returned": "Going down",
+    "cancelled": "Error",
+    "taken": "Whoosh",
+    "alert": "Alarm",
+    "depot": "Knock knock",
+    "message": "Bubbles",
+    "info": "Chime"
+  },
+  "sameRing": "The same ring as « Callback » and the blocked screen. It does not change.",
+  "sameRingCb": "The same ring as « New order ». It does not change.",
+  "fixed": "A Pilotix sound: it does not change.",
+  "phone": "Phone, Pilotix closed",
+  "phoneMode": {
+    "work": "During work",
+    "always": "Always",
+    "never": "Never"
+  },
+  "phoneHint": {
+    "work": "The phone rings during working hours. After that, the notification waits in the bell.",
+    "always": "The phone rings at any hour.",
+    "never": "Never on the phone: only in the bell, when Pilotix is open."
+  },
+  "preview": "Preview",
+  "pvOthers": "The others (manager, owners, depot…)",
+  "blockPvT": "New order to call",
+  "blockPvB": "Amina B. · Stroller · Algiers",
+  "team": {
+    "order": {
+      "t": "New order",
+      "b": "PX1234 · Amina B. · 4 500 DA · for Samira"
+    },
+    "callback": {
+      "t": "📞 Samira has to call Amina back",
+      "b": "PX1234 · callback set for 14:30"
+    },
+    "delivered": {
+      "t": "💰 PX1234 delivered",
+      "b": "Amina B. · 4 500 DA · Samira"
+    },
+    "returned": {
+      "t": "↩️ PX1234 is coming back",
+      "b": "Amina B. · 4 500 DA · Samira"
+    },
+    "cancelled": {
+      "t": "❌ PX1234 cancelled",
+      "b": "Amina B. · 4 500 DA · Samira"
+    },
+    "taken": {
+      "t": "PX1234 is no longer Samira’s",
+      "b": "Not handled in time: given to Rania"
+    },
+    "alert": {
+      "t": "⚠️ Alert on PX1234",
+      "b": "Amina B. · Delivery failed · Nadia"
+    },
+    "depot": {
+      "t": "📦 6 new orders to prepare",
+      "b": "18 to prepare in all"
+    },
+    "message": {
+      "t": "💬 Amina B.",
+      "b": "PX1234 · Hello, does the stroller come in grey? · for Samira"
+    }
+  },
+  "reset": "Back to Pilotix’s setting"
+}

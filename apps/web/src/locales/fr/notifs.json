@@ -1,0 +1,161 @@
+{
+  "title": "Notifications",
+  "help": "Qui reçoit chaque notification, et quand le téléphone sonne. Les sons de Pilotix ne changent pas.",
+  "save": "Enregistrer",
+  "cancel": "Annuler",
+  "saved": "Notifications enregistrées",
+  "unsaved_one": "1 changement pas enregistré",
+  "unsaved_other": "{{count}} changements pas enregistrés",
+  "unsavedHere": "Pas encore enregistré : appuyez sur « Enregistrer » en haut.",
+  "hours": "Heures de travail",
+  "hoursText": "{{hours}} · le son ne se coupe pas",
+  "hoursNone": "Aucune heure d’appel réglée",
+  "hoursEdit": "Modifier",
+  "sounds": "Les sons de Pilotix",
+  "soundsText": "Un son fixe pour chaque notification",
+  "groupPilotix": "De Pilotix · son fixe",
+  "back": "Toutes les notifications",
+  "off": "Éteinte",
+  "offNote": "Éteinte : personne ne la reçoit.",
+  "nobody": "Personne",
+  "shortBlock": "Agent (écran bloqué)",
+  "short": {
+    "agent": "Agent",
+    "suivi": "Suivi",
+    "manager": "Manager",
+    "owner": "Propriétaires",
+    "depot": "Dépôt"
+  },
+  "peopleN_one": "1 personne",
+  "peopleN_other": "{{count}} personnes",
+  "turnOn": "Activer « {{what}} »",
+  "kind": {
+    "order": "Nouvelle commande",
+    "callback": "Rappel",
+    "delivered": "Livrée",
+    "returned": "En retour",
+    "cancelled": "Annulée",
+    "taken": "Plus à vous",
+    "alert": "Alerte colis",
+    "depot": "À préparer",
+    "message": "Message client",
+    "info": "Alertes de l’équipe"
+  },
+  "desc": {
+    "order": "Une commande arrive et va à un agent.",
+    "callback": "L’heure de rappeler un client est arrivée.",
+    "delivered": "Une commande confirmée est livrée.",
+    "returned": "Le client a refusé : le colis revient.",
+    "cancelled": "Une commande confirmée est annulée.",
+    "taken": "Une commande part chez un autre agent.",
+    "alert": "Un colis est en alerte ou en échec de livraison.",
+    "depot": "Les nouvelles commandes à préparer, groupées : une fois toutes les 15 minutes au plus, pendant le travail.",
+    "message": "Le client écrit sur WhatsApp, Messenger ou Instagram.",
+    "info": "Rapport du soir, file d’attente, paie, livreurs…"
+  },
+  "infoShort": "Se règlent dans leur page",
+  "infoText": "Ces notifications viennent des autres pages de Pilotix : Pilot Automations, la paie, les livreurs, les alertes rouges du dépôt… On les allume, et on choisit qui les reçoit, dans leur page.",
+  "infoAuto": "Ouvrir Pilot Automations",
+  "infoDepot": "Ouvrir Alertes dépôt",
+  "who": "Qui la reçoit, et comment",
+  "role": {
+    "agent": "L’agent de la commande",
+    "suivi": "L’agent du suivi",
+    "manager": "Son manager",
+    "owner": "Les propriétaires",
+    "depot": "Le dépôt"
+  },
+  "roleDesc": {
+    "agent": "Celui qui a confirmé la commande",
+    "agent_order": "Celui qui doit l’appeler",
+    "agent_callback": "Celui qui doit rappeler",
+    "agent_taken": "Celui qui perd la commande",
+    "agent_message": "Pendant la confirmation",
+    "suivi": "Celui qui suit le colis",
+    "suivi_message": "Une fois la commande en route",
+    "manager": "Le manager de son équipe",
+    "owner": "Les administrateurs de la boutique",
+    "depot": "L’équipe du dépôt"
+  },
+  "how": {
+    "notif": "Notification",
+    "block": "Écran bloqué"
+  },
+  "notGet": "Ne la reçoit pas",
+  "blockHint": "L’écran bloqué de l’agent se règle dans Confirmation (« Bloquer jusqu’à l’appel »).",
+  "blockOpen": "Ouvrir Confirmation",
+  "depotNote": "Les alertes rouges du dépôt (une commande changée ou annulée au dépôt) se règlent dans Management › Alertes dépôt.",
+  "addPerson": "Ajouter une personne",
+  "removePerson": "Enlever {{who}}",
+  "sound": "Son",
+  "listenTo": "Écouter le son « {{what}} »",
+  "soundName": {
+    "order": "Sonnerie",
+    "callback": "Sonnerie",
+    "delivered": "Caisse",
+    "returned": "Descente",
+    "cancelled": "Erreur",
+    "taken": "Whoosh",
+    "alert": "Alarme",
+    "depot": "Toc-toc",
+    "message": "Bulles",
+    "info": "Carillon"
+  },
+  "sameRing": "La même sonnerie que « Rappel » et que l’écran bloqué. Elle ne change pas.",
+  "sameRingCb": "La même sonnerie que « Nouvelle commande ». Elle ne change pas.",
+  "fixed": "Un son de Pilotix : il ne change pas.",
+  "phone": "Téléphone, Pilotix fermé",
+  "phoneMode": {
+    "work": "Pendant le travail",
+    "always": "Toujours",
+    "never": "Jamais"
+  },
+  "phoneHint": {
+    "work": "Le téléphone sonne pendant les heures de travail. Après, la notification attend dans la cloche.",
+    "always": "Le téléphone sonne à toute heure.",
+    "never": "Jamais sur le téléphone : seulement dans la cloche, quand Pilotix est ouvert."
+  },
+  "preview": "Aperçu",
+  "pvOthers": "Les autres (manager, propriétaires, dépôt…)",
+  "blockPvT": "Nouvelle commande à appeler",
+  "blockPvB": "Amina B. · Poussette · Alger",
+  "team": {
+    "order": {
+      "t": "Nouvelle commande",
+      "b": "PX1234 · Amina B. · 4 500 DA · pour Samira"
+    },
+    "callback": {
+      "t": "📞 Samira doit rappeler Amina",
+      "b": "PX1234 · rappel prévu à 14:30"
+    },
+    "delivered": {
+      "t": "💰 PX1234 livrée",
+      "b": "Amina B. · 4 500 DA · Samira"
+    },
+    "returned": {
+      "t": "↩️ PX1234 en retour",
+      "b": "Amina B. · 4 500 DA · Samira"
+    },
+    "cancelled": {
+      "t": "❌ PX1234 annulée",
+      "b": "Amina B. · 4 500 DA · Samira"
+    },
+    "taken": {
+      "t": "PX1234 n’est plus à Samira",
+      "b": "Pas traitée à temps : donnée à Rania"
+    },
+    "alert": {
+      "t": "⚠️ Alerte sur PX1234",
+      "b": "Amina B. · Échec de livraison · Nadia"
+    },
+    "depot": {
+      "t": "📦 6 nouvelles commandes à préparer",
+      "b": "18 à préparer en tout"
+    },
+    "message": {
+      "t": "💬 Amina B.",
+      "b": "PX1234 · Salam, la poussette existe en gris ? · pour Samira"
+    }
+  },
+  "reset": "Revenir au réglage de Pilotix"
+}
