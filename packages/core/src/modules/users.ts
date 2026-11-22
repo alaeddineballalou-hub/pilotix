@@ -1,9 +1,9 @@
-import { CONF_TODO, expandRoles, LANGUAGES, normalizeAccountPhone, passwordProblem, Profile, ROLES, type Role } from '@pilotix/shared';
+import { CONF_TODO, CUSTOM_ID, expandRoles, LANGUAGES, normalizeAccountPhone, passwordProblem, Profile, ROLES, type Role } from '@pilotix/shared';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { Db, isoOrNull, num, numOrNull } from '../db';
 import { AppError, bad, Ctx, forbidden, makeSession, notFound, proc } from '../rpc';
-import { can, personHas, sessionWithRights, setPersonTicks } from './rights';
+import { can, giveCustomRole, personHas, rightsApply, ROLE_FR, sessionWithRights, setPersonTicks } from './rights';
 import { idsOrNull, sellersOrNull } from './agencyscope';
 
 export const toProfile = (r: any): Profile => ({
@@ -43,10 +43,19 @@ async function needCanEdit(ctx: Ctx, id: number) {
   if (!t) throw notFound();
   if ((t.roles as string[]).includes('admin') || (await personHas(ctx, toProfile(t), 'x:users'))) throw forbidden('Seul l’administrateur peut modifier ce compte');
 }
-function needGrantable(ctx: Ctx, b: { roles?: string[]; canManageUsers?: boolean; canAssign?: boolean; canAffect?: boolean }) {
+/**
+ * What someone who is not an administrator may give. In a boutique, never a role with more than they have (the owner's
+ * rule, 22 Nov 2026): a role they do not have themselves is refused — `had`: the roles the person already has (they keep
+ * them).
+ */
+function needGrantable(ctx: Ctx, b: { roles?: string[]; canManageUsers?: boolean; canAssign?: boolean; canAffect?: boolean }, had: readonly string[] = []) {
   if (ctx.session.isAdmin) return;
   if (b.roles?.includes('admin')) throw forbidden('Seul l’administrateur peut donner le rôle Administrateur');
   if (b.canManageUsers !== undefined || b.canAssign !== undefined || b.canAffect !== undefined) throw forbidden('Seul l’administrateur peut donner ce droit');
+  if (!rightsApply(ctx)) return;
+  const mine = expandRoles(ctx.session.profile.roles);
+  const more = (b.roles ?? []).filter((r) => !had.includes(r) && !mine.includes(r as Role));
+  if (more.length) throw forbidden(`Vous ne pouvez donner que les rôles que vous avez vous-même : pas « ${more.map((r) => ROLE_FR[r] ?? r).join(', ')} »`);
 }
 
 /**
@@ -180,6 +189,8 @@ const NewUser = z.object({
     .array(z.object({ task: z.enum(['confirmation', 'suivi', 'superviseur', 'depot']), planId: z.number().int().positive() }))
     .max(4)
     .optional(),
+  /** in a boutique: a role made in Utilisateurs › Rôles ('c3'), null: none, left out: as it is */
+  customRole: z.string().regex(CUSTOM_ID).nullable().optional(),
 });
 
 /**
@@ -460,6 +471,8 @@ export const usersProcs = {
       await payPlansOnSave(ctx, { personId: num(r.id), roles: b.roles, active: true, plans: b.plans, write: true });
       // a store: the ticks are the person's own « en plus » of Utilisateurs › Rôles
       if (!b.roles.includes('admin')) await setPersonTicks(ctx, num(r.id), { canManageUsers: b.canManageUsers, canAssign: b.canAssign, canAffect: b.canAffect });
+      // a role made in Utilisateurs › Rôles (an administrator has everything: none)
+      if (b.customRole && !b.roles.includes('admin')) await giveCustomRole(ctx, num(r.id), b.customRole, b.roles);
       return toProfile(r);
     } catch (e: any) {
       if (String(e?.code) === '23505' || /unique|duplicate/i.test(e?.message)) throw bad('Cet email est déjà utilisé');
@@ -472,7 +485,7 @@ export const usersProcs = {
     if (weak) throw bad(weak);
     if ((await ctx.db.query('SELECT 1 FROM profiles WHERE id = $1 AND agency_id IS NOT NULL', [b.id])).length)
       throw forbidden('Ce compte appartient à une agence de confirmation (ou à un marketer) : seule elle le gère');
-    needGrantable(ctx, b);
+    needGrantable(ctx, b, ((await ctx.db.query('SELECT roles FROM profiles WHERE id = $1', [b.id]))[0]?.roles ?? []) as string[]);
     const sellers = await agencyFields(ctx, b);
     if (b.id === ctx.session.profile.id && (b.active === false || (b.roles && !b.roles.includes('admin')))) throw forbidden('Vous ne pouvez pas retirer votre propre accès administrateur');
     // an account closed earlier and opened again takes a place of the plan; so does a new livreur
@@ -528,6 +541,11 @@ export const usersProcs = {
     if (b.sellers !== undefined) r = (await ctx.db.query('UPDATE profiles SET agency_sellers = $2 WHERE id = $1 RETURNING *', [b.id, sellers ? JSON.stringify(sellers) : null]))[0];
     if (payCheck) await payPlansOnSave(ctx, { personId: b.id, roles: (r.roles ?? []) as string[], active: !!r.active, plans: b.plans, write: true });
     if (!((r.roles ?? []) as string[]).includes('admin')) await setPersonTicks(ctx, b.id, { canManageUsers: b.canManageUsers, canAssign: b.canAssign, canAffect: b.canAffect });
+    // a role made in Utilisateurs › Rôles: given, taken back, or gone with the role it starts from (an administrator: none)
+    if (b.customRole !== undefined || b.roles !== undefined) {
+      const now = (r.roles ?? []) as string[];
+      await giveCustomRole(ctx, b.id, now.includes('admin') ? null : b.customRole, now.includes('admin') ? [] : now);
+    }
     // no longer working here (closed, or without the role): his work still to do goes back to the team
     if (before?.active) await releaseWork(ctx, b.id, !!r.active, (r.roles ?? []) as Role[], (before.roles ?? []) as Role[]);
     return toProfile(r);

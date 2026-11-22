@@ -44,7 +44,7 @@ import './rolerights.css';
 type Person = { id: number; name: string; roles: Profile['roles']; agencyId: number | null; active: boolean };
 
 /** One line of the role's menu: a page (with its tabs and buttons), or the orders' buttons (no page of their own). */
-interface Line {
+export interface Line {
   key: string;
   icon: string;
   page: RightDef | null;
@@ -58,8 +58,8 @@ interface Line {
 }
 
 /** A part of the role's menu: one team screen, what is on every screen, or what is on none (« Ancien menu » only). */
-type PartId = SpaceId | 'always' | 'none';
-interface Part {
+export type PartId = SpaceId | 'always' | 'none';
+export interface Part {
   id: PartId;
   icon: string;
   lines: Line[];
@@ -69,7 +69,7 @@ interface Part {
  * A right's name where it stands alone (the list of what a role can never have, a person's changes, the changes bar):
  * a group's line with its group (« Pilot Automations › Réglages » is not « Réglages »), a tab with its page.
  */
-function fullName(t: TFunction, d: RightDef): string {
+export function fullName(t: TFunction, d: RightDef): string {
   if (d.kind === 'tab' && d.in) {
     const p = rightDef(`page:${d.in}`);
     return p ? `${fullName(t, p)} › ${t(d.label)}` : t(d.label);
@@ -99,65 +99,12 @@ function toggled(rr: RoleRights, r: RightsRole, d: RightDef, on: boolean): RoleR
   return { ...rr, roles: { ...rr.roles, [r]: { ...(off.length ? { off } : {}), ...(more.length ? { on: more } : {}) } } };
 }
 
-/** What changed between two saved states: one line per right, per role or per person. */
-function changesOf(a: RoleRights, b: RoleRights) {
-  const out: { who: string; id: string; on: boolean }[] = [];
-  for (const r of RIGHTS_ROLES) {
-    const x = a.roles[r] ?? {};
-    const y = b.roles[r] ?? {};
-    for (const id of new Set([...(x.off ?? []), ...(y.off ?? [])])) if ((x.off ?? []).includes(id) !== (y.off ?? []).includes(id)) out.push({ who: r, id, on: !(y.off ?? []).includes(id) });
-    for (const id of new Set([...(x.on ?? []), ...(y.on ?? [])])) if ((x.on ?? []).includes(id) !== (y.on ?? []).includes(id)) out.push({ who: r, id, on: (y.on ?? []).includes(id) });
-  }
-  for (const k of new Set([...Object.keys(a.people), ...Object.keys(b.people)])) {
-    const x = a.people[k] ?? {};
-    const y = b.people[k] ?? {};
-    if (!sameSet(x.off, y.off) || !sameSet(x.on, y.on)) out.push({ who: `p${k}`, id: '', on: true });
-  }
-  return out;
-}
-
-export function RoleRightsPage({ role: asked }: { role?: string }) {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
-  const q = useRpc('rights.get', {});
-  const counts = useRpc('admin.roles', {});
-  const [draft, setDraft] = useState<RoleRights | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
-  const [person, setPerson] = useState<{ id: number | null } | null>(null);
-  const [busy, setBusy] = useState(false);
-  // the screen picked in the preview's dropdown (« Ancien menu » first, as in the app)
-  const [pv, setPv] = useState<SpaceId>('all');
-  const saved = q.data?.rights ?? null;
-  useEffect(() => {
-    if (saved && !draft) setDraft(saved);
-  }, [saved, draft]);
-  const role: RightsRole = (RIGHTS_ROLES as readonly string[]).includes(asked ?? '') ? (asked as RightsRole) : 'confirmation';
-  const people: Person[] = (q.data?.people ?? []) as Person[];
-  const changes = useMemo(() => (saved && draft ? changesOf(saved, draft) : []), [saved, draft]);
-  // leaving the page with changes not saved: the browser asks first
-  useEffect(() => {
-    if (!changes.length) return;
-    const stay = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener('beforeunload', stay);
-    return () => window.removeEventListener('beforeunload', stay);
-  }, [changes.length]);
-
-  if (q.isLoading || !draft) return q.error ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : <Loading />;
-  if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
-
-  const roleName = (r: RightsRole) => (r === 'agence' ? t('rights.agence') : t(`roles.${r}`));
+/**
+ * A role's menu as the editors show it (a role of Pilotix, or one made in the boutique from it): its pages by default, in
+ * the shop's plan, each with its tabs and buttons, then the orders' buttons; sorted by team screen.
+ */
+export function roleMenu(role: RightsRole, t: TFunction) {
   const name = (d: RightDef) => t(d.label);
-  const ofRole = (r: RightsRole) => people.filter((p) => p.active && rightsRolesOf(p).includes(r));
-  const countOf = (r: RightsRole) => (r === 'agence' ? ofRole('agence').length : (counts.data?.[r as keyof typeof counts.data] as { active?: number } | undefined)?.active ?? ofRole(r).length);
-  const agencyShown = ofRole('agence').length > 0 || !!draft.roles.agence;
-  const pills = RIGHTS_ROLES.filter((r) => r !== 'agence' || agencyShown);
-
-  const has = (d: RightDef) => roleHas(role, d, draft);
-  const changed = (d: RightDef) => roleHas(role, d, draft) !== byDefault(role, d);
-  const flip = (d: RightDef, on: boolean) => setDraft(toggled(draft, role, d, on));
-  const set = roleRightsSet(role, draft);
-
-  // the role's menu: its pages (by default, in the shop's plan), each with its tabs and buttons
   const asRoles = expandRoles([role === 'agence' ? 'confirmation' : (role as Role)]);
   const lines: Line[] = [];
   for (const p of MENU_PAGES) {
@@ -196,11 +143,14 @@ export function RoleRightsPage({ role: asked }: { role?: string }) {
     .map((p) => ({ ...p, lines: lines.filter((l) => home(l) === p.id) }))
     .filter((p) => p.lines.length > 0);
   const partName = (id: PartId) => (id === 'always' ? t('rights.partAlways') : id === 'none' ? t('rights.partNone') : t(`nav.screens.${id}`));
-  const extras = RIGHTS.filter((d) => extraOk(role, d));
-  const never = [...new Set(RIGHTS.filter((d) => d.kind === 'page' && !byDefault(role, d) && !extraOk(role, d) && !d.locked).map((d) => fullName(t, d)))];
-  const firstPerson = ofRole(role)[0];
-  const opened = lines.find((l) => l.key === open && l.page) ?? null;
-  // the menu the person will see: the app's own menu function, with the role's rights (its screens dropdown too)
+  return { asRoles, lines, parts, partName, also };
+}
+
+/** The menu the person will see, as a small phone (the app's own menu function, with these rights; its screens dropdown). */
+export function MenuPreview({ caption, asRoles, set, opened }: { caption: string; asRoles: Role[]; set: ReadonlySet<string>; opened: Line | null }) {
+  const { t } = useTranslation();
+  // the screen picked in the preview's dropdown (« Ancien menu » first, as in the app)
+  const [pv, setPv] = useState<SpaceId>('all');
   const hasR = (id: string | null) => !id || set.has(id);
   const view = menuView(
     NAV,
@@ -212,6 +162,132 @@ export function RoleRightsPage({ role: asked }: { role?: string }) {
     true,
   );
   const lit = (id: string) => opened?.key === `page:${id}`;
+  return (
+    <aside className="rr-r" aria-label={caption}>
+      <div className="rr-cap">
+        <b>{caption}</b>
+        <small>{t('rights.previewSub')}</small>
+      </div>
+      <div className="rr-phone">
+        <div className="rr-scr">
+          {view.screens.length > 1 && (
+            <label className="rr-pscr">
+              <span>{t('nav.screens.title')}</span>
+              <select value={view.screen} onChange={(e) => setPv(e.target.value as SpaceId)}>
+                <option value="all">{t('nav.screens.all')}</option>
+                {view.screens.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {t(`nav.screens.${s.id}`)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <div className="rr-menu">
+            {view.items.map((n) =>
+              n.children ? (
+                <div key={n.id} className="rr-mg">
+                  <div className={`rr-mi rr-mh${lit(n.id) ? ' on' : ''}`}>
+                    <Icon name={n.icon} />
+                    <span>{t(`nav.${n.id}`)}</span>
+                  </div>
+                  {view.kidsOn(n).map((c) => (
+                    <div key={c.id} className={`rr-mi rr-ms${lit(c.id) ? ' on' : ''}`}>
+                      <Icon name={c.icon ?? n.icon} />
+                      <span>{t(`nav.sub.${c.id}`)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div key={n.id} className={`rr-mi${lit(n.id) ? ' on' : ''}`}>
+                  <Icon name={n.icon} />
+                  <span>{t(`nav.${n.id}`)}</span>
+                </div>
+              ),
+            )}
+          </div>
+          {opened && opened.tabs.length > 0 && opened.page && set.has(opened.page.id) && (
+            <div className="rr-ptabs">
+              <small>{t('rights.previewTabs', { page: opened.label })}</small>
+              <div>
+                {opened.tabs
+                  .filter((x) => set.has(x.id))
+                  .map((x) => (
+                    <span key={x.id} className="rr-ptab">
+                      {t(x.label)}
+                    </span>
+                  ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+/** What changed between two saved states: one line per right, per role or per person. */
+function changesOf(a: RoleRights, b: RoleRights) {
+  const out: { who: string; id: string; on: boolean }[] = [];
+  for (const r of RIGHTS_ROLES) {
+    const x = a.roles[r] ?? {};
+    const y = b.roles[r] ?? {};
+    for (const id of new Set([...(x.off ?? []), ...(y.off ?? [])])) if ((x.off ?? []).includes(id) !== (y.off ?? []).includes(id)) out.push({ who: r, id, on: !(y.off ?? []).includes(id) });
+    for (const id of new Set([...(x.on ?? []), ...(y.on ?? [])])) if ((x.on ?? []).includes(id) !== (y.on ?? []).includes(id)) out.push({ who: r, id, on: (y.on ?? []).includes(id) });
+  }
+  for (const k of new Set([...Object.keys(a.people), ...Object.keys(b.people)])) {
+    const x = a.people[k] ?? {};
+    const y = b.people[k] ?? {};
+    if (!sameSet(x.off, y.off) || !sameSet(x.on, y.on)) out.push({ who: `p${k}`, id: '', on: true });
+  }
+  return out;
+}
+
+export function RoleRightsPage({ role: asked }: { role?: string }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const q = useRpc('rights.get', {});
+  const counts = useRpc('admin.roles', {});
+  const [draft, setDraft] = useState<RoleRights | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [person, setPerson] = useState<{ id: number | null } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const saved = q.data?.rights ?? null;
+  useEffect(() => {
+    if (saved && !draft) setDraft(saved);
+  }, [saved, draft]);
+  const role: RightsRole = (RIGHTS_ROLES as readonly string[]).includes(asked ?? '') ? (asked as RightsRole) : 'confirmation';
+  const people: Person[] = (q.data?.people ?? []) as Person[];
+  const changes = useMemo(() => (saved && draft ? changesOf(saved, draft) : []), [saved, draft]);
+  // leaving the page with changes not saved: the browser asks first
+  useEffect(() => {
+    if (!changes.length) return;
+    const stay = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', stay);
+    return () => window.removeEventListener('beforeunload', stay);
+  }, [changes.length]);
+
+  if (q.isLoading || !draft) return q.error ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : <Loading />;
+  if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
+
+  const roleName = (r: RightsRole) => (r === 'agence' ? t('rights.agence') : t(`roles.${r}`));
+  const name = (d: RightDef) => t(d.label);
+  const ofRole = (r: RightsRole) => people.filter((p) => p.active && rightsRolesOf(p).includes(r));
+  const countOf = (r: RightsRole) => (r === 'agence' ? ofRole('agence').length : (counts.data?.[r as keyof typeof counts.data] as { active?: number } | undefined)?.active ?? ofRole(r).length);
+  const agencyShown = ofRole('agence').length > 0 || !!draft.roles.agence;
+  const pills = RIGHTS_ROLES.filter((r) => r !== 'agence' || agencyShown);
+
+  const has = (d: RightDef) => roleHas(role, d, draft);
+  const changed = (d: RightDef) => roleHas(role, d, draft) !== byDefault(role, d);
+  const flip = (d: RightDef, on: boolean) => setDraft(toggled(draft, role, d, on));
+  const set = roleRightsSet(role, draft);
+
+  // the role's menu: its pages (by default, in the shop's plan), each with its tabs and buttons, by screen
+  const { asRoles, lines, parts, partName, also } = roleMenu(role, t);
+  const extras = RIGHTS.filter((d) => extraOk(role, d));
+  const never = [...new Set(RIGHTS.filter((d) => d.kind === 'page' && !byDefault(role, d) && !extraOk(role, d) && !d.locked).map((d) => fullName(t, d)))];
+  const firstPerson = ofRole(role)[0];
+  const opened = lines.find((l) => l.key === open && l.page) ?? null;
 
   const save = async () => {
     setBusy(true);
@@ -406,66 +482,7 @@ export function RoleRightsPage({ role: asked }: { role?: string }) {
           </section>
         </div>
 
-        <aside className="rr-r" aria-label={firstPerson ? t('rights.preview', { name: firstPerson.name }) : t('rights.previewRole', { role: roleName(role) })}>
-          <div className="rr-cap">
-            <b>{firstPerson ? t('rights.preview', { name: firstPerson.name }) : t('rights.previewRole', { role: roleName(role) })}</b>
-            <small>{t('rights.previewSub')}</small>
-          </div>
-          <div className="rr-phone">
-            <div className="rr-scr">
-              {view.screens.length > 1 && (
-                <label className="rr-pscr">
-                  <span>{t('nav.screens.title')}</span>
-                  <select value={view.screen} onChange={(e) => setPv(e.target.value as SpaceId)}>
-                    <option value="all">{t('nav.screens.all')}</option>
-                    {view.screens.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {t(`nav.screens.${s.id}`)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              <div className="rr-menu">
-                {view.items.map((n) =>
-                  n.children ? (
-                    <div key={n.id} className="rr-mg">
-                      <div className={`rr-mi rr-mh${lit(n.id) ? ' on' : ''}`}>
-                        <Icon name={n.icon} />
-                        <span>{t(`nav.${n.id}`)}</span>
-                      </div>
-                      {view.kidsOn(n).map((c) => (
-                        <div key={c.id} className={`rr-mi rr-ms${lit(c.id) ? ' on' : ''}`}>
-                          <Icon name={c.icon ?? n.icon} />
-                          <span>{t(`nav.sub.${c.id}`)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div key={n.id} className={`rr-mi${lit(n.id) ? ' on' : ''}`}>
-                      <Icon name={n.icon} />
-                      <span>{t(`nav.${n.id}`)}</span>
-                    </div>
-                  ),
-                )}
-              </div>
-              {opened && opened.tabs.length > 0 && opened.page && set.has(opened.page.id) && (
-                <div className="rr-ptabs">
-                  <small>{t('rights.previewTabs', { page: opened.label })}</small>
-                  <div>
-                    {opened.tabs
-                      .filter((x) => set.has(x.id))
-                      .map((x) => (
-                        <span key={x.id} className="rr-ptab">
-                          {name(x)}
-                        </span>
-                      ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </aside>
+        <MenuPreview caption={firstPerson ? t('rights.preview', { name: firstPerson.name }) : t('rights.previewRole', { role: roleName(role) })} asRoles={asRoles} set={set} opened={opened} />
       </div>
 
       {changes.length > 0 && (
@@ -486,18 +503,39 @@ export function RoleRightsPage({ role: asked }: { role?: string }) {
   );
 }
 
-function ActRow({ d, on, changed, extra, onChange, label }: { d: RightDef; on: boolean; changed: boolean; extra?: boolean; onChange: (v: boolean) => void; label?: string }) {
+export function ActRow({
+  d,
+  on,
+  changed,
+  extra,
+  onChange,
+  label,
+  disabled,
+  note,
+}: {
+  d: RightDef;
+  on: boolean;
+  changed: boolean;
+  extra?: boolean;
+  onChange: (v: boolean) => void;
+  label?: string;
+  /** cannot be switched here (a role made here: its maker does not have it) */
+  disabled?: boolean;
+  /** why, under its name */
+  note?: string;
+}) {
   const { t } = useTranslation();
   const help = d.kind === 'x' ? t(`rights.xHelp.${d.id.slice(2)}`) : d.kind === 'act' ? t(`rights.actHelp.${d.id.slice(4)}`, { defaultValue: '' }) : '';
   return (
-    <div className="rr-row">
+    <div className={`rr-row${disabled ? ' rr-dis' : ''}`}>
       <div className="rr-t">
         <b>{label ?? t(d.label)}</b>
         {help && <small>{help}</small>}
+        {note && <small className="rr-capnote">{note}</small>}
       </div>
       {extra && on && <span className="rr-plus-pill">{t('rights.extraPill')}</span>}
       {changed && !extra && <span className="rr-mod">{t('rights.modified')}</span>}
-      <Switch checked={on} label={label ?? t(d.label)} onChange={onChange} />
+      <Switch checked={on} label={label ?? t(d.label)} onChange={onChange} disabled={disabled} />
     </div>
   );
 }

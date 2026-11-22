@@ -119,9 +119,41 @@
 .rr-sum { font-variant-numeric: tabular-nums; }
 .rr-sum + .btn { margin-top: 6px; }
 
+/* a role made in the boutique (« + Nouveau rôle »): its name in place of the title, never more than its maker */
+.rr-backl { display: inline-flex; align-items: center; gap: 4px; color: var(--c-muted); font-size: 13px; text-decoration: none; margin-bottom: 2px; }
+.rr-backl:hover { color: var(--ink); }
+.rr-backl .bji { transform: scaleX(-1); }
+[dir='rtl'] .rr-backl .bji { transform: none; }
+.rr-namel { display: block; }
+.rr-name {
+  font: inherit; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; width: 100%; max-width: 520px; min-height: 44px;
+  border: 1px solid transparent; border-radius: 12px; padding: 4px 10px; margin-inline-start: -10px; background: transparent; color: var(--ink);
+}
+.rr-name:hover { border-color: var(--line); }
+.rr-name:focus { border-color: var(--c-accent); outline: none; background: var(--surface); }
+.rr-name[aria-invalid='true'] { border-color: var(--c-bad-line); }
+.rr-capbox { display: flex; gap: 10px; align-items: flex-start; margin: 0; padding: 12px 14px; border-radius: 14px; background: var(--c-accent-tint); color: var(--c-accent-ink); font-size: 13.5px; line-height: 1.45; }
+.rr-capbox .bji { flex: none; margin-top: 2px; }
+.rr-who { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; color: var(--c-muted); font-size: 13.5px; }
+.rr-who small { flex-basis: 100%; font-size: 12.5px; }
+.rr-t small.rr-capnote { color: var(--c-warn-ink); }
+.rr-row.rr-dis .rr-t b { color: var(--c-muted); }
+.rr-bases { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+.rr-base { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; cursor: pointer; background: var(--surface); }
+.rr-base:hover { border-color: var(--c-muted); }
+.rr-base.on { border-color: var(--c-accent); background: var(--c-accent-tint); }
+.rr-base input { margin-top: 3px; flex: none; accent-color: var(--c-accent); }
+.rr-base b { display: block; font-weight: 600; }
+.rr-base small { display: block; color: var(--c-muted); font-size: 12.5px; line-height: 1.35; margin-top: 2px; }
+.pxk-modal .rr-capbox, form .rr-capbox { margin-top: 12px; }
+/* the Rôles table: a role made here, under the roles of Pilotix */
+.rr-custom-h td { background: var(--bg); color: var(--c-muted); font-size: 12.5px; font-weight: 600; padding-block: 8px; }
+.rr-by { display: block; color: var(--c-muted); font-size: 12.5px; }
+
 @media (max-width: 820px) {
   .rr-r { position: static; }
   .rr-scr { min-height: 0; }
   .rr-in { margin-inline-start: 10px; }
   .rr-line.g > .rr-in { margin-inline-start: 24px; }
 }
+.chip.px-chip-custom { background: var(--c-accent-tint); color: var(--c-accent-ink); border-color: transparent; }

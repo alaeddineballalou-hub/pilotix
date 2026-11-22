@@ -1,5 +1,5 @@
 // Utilisateurs: the Rôles table and one list per role, with the create / edit form (users.create / users.update).
-import { AgencySellerWork, expandRoles, LANGUAGES, payTasksIn, Profile, RIGHTS, RIGHTS_ROLES, type RightsRole, Role, type RoleRights, roleRightsSet, ROLES, roleSummary, type PayTask } from '@pilotix/shared';
+import { AgencySellerWork, CUSTOM_ID, expandRoles, LANGUAGES, payTasksIn, Profile, RIGHTS, RIGHTS_ROLES, type RightsRole, Role, type RoleRights, roleRightsSet, ROLES, roleSummary, type PayTask } from '@pilotix/shared';
 import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { canSee, NAV } from '../../layout/nav';
@@ -14,6 +14,7 @@ import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { ConfirmButton } from './bits';
 import { RoleRightsPage } from './RoleRights';
+import { CustomRolePage, NewRoleModal } from './CustomRole';
 import './rolerights.css';
 import { usePartnerKind, useTp } from '../agency/parts';
 import { useAllMode } from '../../layout/AllBoutiques';
@@ -109,10 +110,20 @@ export function UsersPage({ sub, rest, agency }: { sub?: string; rest?: string[]
   const subs = USER_SUBS.filter((k) => session?.isAdmin || k !== 'admins');
   // Utilisateurs › Rôles › <role>: what the role sees and does (the boutique's administrators)
   const editing = sub === 'roles' && session?.isAdmin && (RIGHTS_ROLES as readonly string[]).includes(rest?.[0] ?? '') ? rest![0] : null;
+  // Utilisateurs › Rôles › a role made in the boutique (its maker, or an administrator)
+  const custom = sub === 'roles' && (session?.isAdmin || session?.canManageUsers) && CUSTOM_ID.test(rest?.[0] ?? '') ? rest![0] : null;
   return (
     <>
       <StageBar flow={false} current={cur.sub} items={subs.map((k) => ({ key: k, label: t(`admin.subs.${k}`), href: `#/utilisateurs/${k}` }))} />
-      {editing ? <RoleRightsPage role={editing} /> : cur.role ? <RoleList role={cur.role} onNew={() => setForm({ user: null, role: cur.role })} onEdit={(u) => setForm({ user: u, role: cur.role })} /> : <RolesTable onNew={() => setForm({ user: null, role: null })} />}
+      {custom ? (
+        <CustomRolePage id={custom} />
+      ) : editing ? (
+        <RoleRightsPage role={editing} />
+      ) : cur.role ? (
+        <RoleList role={cur.role} onNew={() => setForm({ user: null, role: cur.role })} onEdit={(u) => setForm({ user: u, role: cur.role })} />
+      ) : (
+        <RolesTable onNew={() => setForm({ user: null, role: null })} />
+      )}
       {form && <UserForm user={form.user} role={form.role} onClose={() => setForm(null)} />}
     </>
   );
@@ -132,17 +143,31 @@ function RolesTable({ onNew }: { onNew: () => void }) {
   // the boutique's rights (its administrators): each role's « Ce qu'il fait » and its pages come from them
   const rq = useRpc('rights.get', {}, { enabled: !!session?.isAdmin });
   const rr = rq.data?.rights as RoleRights | undefined;
+  // the roles made in the boutique (« + Nouveau rôle »): an administrator sees them all, a maker the ones they made
+  const maker = !!session?.isAdmin || !!session?.canManageUsers;
+  const cq = useRpc('roles.custom.list', {}, { enabled: maker });
+  const custom = cq.data?.roles ?? [];
+  const bases = cq.data?.bases ?? [];
+  const [newRole, setNewRole] = useState(false);
   return (
     <>
       <Card
         title={t('admin.users.rolesTitle')}
         help={t('admin.users.rolesHelp')}
         actions={
-          <button className="btn primary" onClick={onNew}>
-            {t('admin.users.newUser')}
-          </button>
+          <>
+            {maker && bases.length > 0 && (
+              <button className="btn primary" onClick={() => setNewRole(true)}>
+                {t('rights.custom.newBtn')}
+              </button>
+            )}
+            <button className={`btn${maker && bases.length > 0 ? '' : ' primary'}`} onClick={onNew}>
+              {t('admin.users.newUser')}
+            </button>
+          </>
         }
       />
+      {newRole && <NewRoleModal bases={bases} onClose={() => setNewRole(false)} />}
       <div className="card">
         {q.isLoading ? (
           <Loading />
@@ -214,6 +239,51 @@ function RolesTable({ onNew }: { onNew: () => void }) {
                     </tr>
                   );
                 })}
+                {custom.length > 0 && (
+                  <tr className="rr-custom-h">
+                    <td colSpan={5}>{session?.isAdmin ? t('rights.custom.tableAll') : t('rights.custom.tableMine')}</td>
+                  </tr>
+                )}
+                {custom.map((c) => {
+                  const has = new Set(c.rights);
+                  const pages = RIGHTS.filter((d) => d.kind === 'page' && has.has(d.id) && !d.locked).map((d) => t(d.label));
+                  const on = c.people.filter((p) => p.active);
+                  const names = on.slice(0, 4).map((p) => p.name).join(', ') + (on.length > 4 ? '…' : '');
+                  return (
+                    <tr key={c.id}>
+                      <td data-l={t('admin.users.colRole')}>
+                        <b>{c.name}</b>
+                        <small>{t('rights.custom.from', { base: t(`roles.${c.base}`) })}</small>
+                      </td>
+                      <td className="wide px-cw" data-l={t('admin.users.colWhat')}>
+                        <div className="px-clamp">{t('rights.custom.like', { base: t(`roles.${c.base}`) })}</div>
+                        <small className="rr-sum muted">
+                          {[t('rights.custom.less', { count: c.off.length }), t('rights.custom.more', { count: c.on.length })].join(' · ')}
+                        </small>
+                        <small className="rr-by">{c.mine ? t('rights.custom.byYou') : t('rights.custom.by', { name: c.byName ?? '—' })}</small>
+                        <a className="btn small" href={`#/utilisateurs/roles/${c.id}`}>
+                          {t('rights.editRole')}
+                        </a>
+                      </td>
+                      <td className="wide px-cw" data-l={t('admin.users.colPages')} title={pages.join(' · ')}>
+                        <div className="px-clamp">
+                          <div>
+                            {pages.map((p) => (
+                              <span key={p} className="chip">
+                                {p}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </td>
+                      <td data-l={t('admin.users.colUsers')}>
+                        <b>{t('admin.users.active', { count: on.length })}</b>
+                        <small>{names}</small>
+                      </td>
+                      <td data-l="" />
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -246,6 +316,8 @@ function RoleList({ role, onNew, onEdit, agency }: { role: Role | null; onNew: (
   const payOf = new Map((payQ.data ?? []).map((x) => [x.id, x]));
   const where = useRpc('users.boutiques', {}, { enabled: showWhere, staleTime: 60_000 }).data as Record<string, number[]> | undefined;
   const archives = !agency && !!session?.isAdmin && pageIsOn('management', 'archive');
+  // each person's role made in the boutique (« + Nouveau rôle »), by name
+  const customOf = useRpc('roles.custom.list', {}, { enabled: !agency && (!!session?.isAdmin || !!session?.canManageUsers) }).data?.of;
   // users.list matches own roles; vendeurs also count as agents etc. only through their own roles (as in the original)
   return (
     <>
@@ -315,6 +387,11 @@ function RoleList({ role, onNew, onEdit, agency }: { role: Role | null; onNew: (
                           {roleName(r)}
                         </span>
                       ))}
+                      {customOf?.[String(u.id)] && (
+                        <span className="chip px-chip-custom" title={t('rights.custom.chipHint')}>
+                          ★ {customOf[String(u.id)].name}
+                        </span>
+                      )}
                       {u.canManageUsers && (
                         <span className="chip" title={t('admin.users.manageUsersHint')}>
                           🔑 {t('admin.users.manageChip')}
@@ -409,6 +486,17 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
   const { me, session } = useSession();
   const isAdmin = !!session?.isAdmin;
   const roleName = useRoleName(agency);
+  // in a boutique, someone who is not an administrator gives only the roles they have themselves (the server says so too)
+  const mineRoles = expandRoles(session?.profile.roles ?? []);
+  const giveable = (r: Role) => isAdmin || !!agency || mineRoles.includes(r) || !!user?.roles.includes(r);
+  // a role made in the boutique (« + Nouveau rôle »): an administrator gives any, a maker the ones they made
+  const maker = !agency && (isAdmin || !!session?.canManageUsers);
+  const cq = useRpc('roles.custom.list', {}, { enabled: maker });
+  const customNow = user ? (cq.data?.of[String(user.id)] ?? null) : null;
+  const [customPick, setCustomPick] = useState<string | null | undefined>(undefined);
+  const customVal = customPick !== undefined ? customPick : (customNow?.id ?? null);
+  // someone else's role on this person: only its maker or an administrator changes it
+  const customLocked = !!customNow && !customNow.mine;
   /** an agency's person: the sellers they work for and, for each, the products (null: every seller) */
   const [sellers, setSellers] = useState<AgencySellerWork[] | null>(user ? (user.agencySellers ?? null) : null);
   const [manage, setManage] = useState(!!user?.canManageUsers);
@@ -420,7 +508,11 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
   const phoneBad = usePhoneProblem(phone, (p) => rpc('users.phoneCheck', { phone: p, id: user?.id ?? null, email: email.trim() }));
   const [email, setEmail] = useState(user?.email ?? '');
   const [password, setPassword] = useState('');
-  const [roles, setRoles] = useState<Role[]>(user?.roles ?? (role ? [role] : [agency && mk ? 'marketer' : 'confirmation']));
+  const [roles, setRoles] = useState<Role[]>(() => {
+    if (user) return user.roles;
+    const first: Role = role ?? (agency && mk ? 'marketer' : 'confirmation');
+    return giveable(first) ? [first] : [];
+  });
   const [language, setLanguage] = useState(user?.language ?? 'fr');
   const [company, setCompany] = useState<number | null>(user?.livreurCompanyId ?? null);
   const [err, setErr] = useState('');
@@ -474,10 +566,12 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
       ...(agency ? { sellers } : {}),
       ...(payHere && payPlans.length ? { plans: payPlans } : {}),
     };
-    if (user) update.mutate({ id: user.id, ...base, ...(password ? { password } : {}) });
+    // this boutique's own role made here (never sent to the other boutiques: it does not exist there)
+    const customPart = maker && customPick !== undefined && !roles.includes('admin') ? { customRole: customPick } : {};
+    if (user) update.mutate({ id: user.id, ...base, ...customPart, ...(password ? { password } : {}) });
     else
       void create
-        .mutateAsync({ ...base, password })
+        .mutateAsync({ ...base, ...customPart, password })
         .then(async () => {
           if (!multi || !others.length) return;
           const r = await rpc('users.addToBoutiques', { shops: others, user: { ...base, password } });
@@ -523,7 +617,7 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
         <Field label={t('admin.users.roles')} hint={t('admin.users.rolesHint')}>
           <div className="row" style={{ flexWrap: 'wrap', gap: '6px 14px' }}>
             {(agency ? (mk ? MARKETER_ROLES : AGENCY_ROLES) : ROLE_ORDER)
-              .filter((r) => (isAdmin || r !== 'admin') && (!!agency || !NO_NEW.includes(r) || !!user?.roles.includes(r)))
+              .filter((r) => (isAdmin || r !== 'admin') && (!!agency || !NO_NEW.includes(r) || !!user?.roles.includes(r)) && giveable(r))
               .map((r) => (
                 <label key={r} className="row nowrap" style={{ gap: 6 }}>
                   <input type="checkbox" checked={roles.includes(r)} onChange={() => flip(r)} disabled={user?.id === me && r === 'admin'} />
@@ -532,6 +626,29 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
               ))}
           </div>
         </Field>
+        {maker && !roles.includes('admin') && ((cq.data?.roles.length ?? 0) > 0 || !!customNow) && (
+          <Field label={t('rights.custom.field')} hint={customLocked ? t('rights.custom.fieldLocked', { name: customNow?.name ?? '' }) : t('rights.custom.fieldHint')}>
+            <select
+              value={customVal ?? ''}
+              disabled={customLocked}
+              onChange={(e) => {
+                const v = e.target.value || null;
+                setCustomPick(v);
+                // the role it starts from comes with it
+                const c = cq.data?.roles.find((x) => x.id === v);
+                if (c && !roles.includes(c.base)) setRoles((cur) => [...cur, c.base]);
+              }}
+            >
+              <option value="">{t('rights.custom.none')}</option>
+              {customNow && !cq.data?.roles.some((x) => x.id === customNow.id) && <option value={customNow.id}>{customNow.name}</option>}
+              {(cq.data?.roles ?? []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} · {t('rights.custom.from', { base: t(`roles.${c.base}`) })}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         {payJobs.length > 0 && (
           <Field label={t('admin.users.payPlans')} hint={t(roles.includes('admin') ? 'admin.users.payPlansHintAdmin' : 'admin.users.payPlansHint')}>
             <div className="px-payplans">

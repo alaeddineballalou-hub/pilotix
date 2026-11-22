@@ -164,8 +164,46 @@ export interface RoleRights {
   roles: Partial<Record<RightsRole, RightsEdit>>;
   /** one person's own changes (« Une personne à part »), by profile id */
   people: Record<string, RightsEdit>;
+  /** the roles made in the boutique (« + Nouveau rôle »): saved apart (settings 'customRoles'), joined when read */
+  custom?: CustomRoles;
 }
 export const NO_ROLE_RIGHTS: RoleRights = { roles: {}, people: {} };
+
+// ---------------------------------------------------------------- roles made in the boutique (« + Nouveau rôle »)
+/**
+ * The roles a role made in the boutique can start from (the owner's choice, 22 Nov 2026). Its server rules come from that
+ * role (an agent sees only his orders…), so it never starts from nothing. A seller and a marketer are never given to
+ * anyone new, and the agency agents follow their own agency.
+ */
+export const CUSTOM_BASES = ['agent_manager', 'confirmation', 'suivi', 'depot', 'livreur'] as const;
+export type CustomBase = (typeof CUSTOM_BASES)[number];
+export const isCustomBase = (r: string): r is CustomBase => (CUSTOM_BASES as readonly string[]).includes(r);
+
+/**
+ * A role made in the boutique: a name, the role it starts from, and its own changes on top of that role (like « Une
+ * personne à part », for everyone who has it). Made by an administrator, or by someone who manages the team's accounts:
+ * then it never has more than its maker has now — when the maker loses a right, the role loses it too.
+ */
+export interface CustomRole extends RightsEdit {
+  /** 'c1', 'c2'… */
+  id: string;
+  name: string;
+  base: CustomBase;
+  /** who made it (null: not known) */
+  by: number | null;
+  /** when it was made (ISO) */
+  at: string;
+}
+export interface CustomRoles {
+  roles: Record<string, CustomRole>;
+  /** who has which role made here: profile id → role id */
+  people: Record<string, string>;
+  /** filled when read, never saved: each maker's roles as they are now (what caps the roles they made) */
+  makers?: Record<string, { roles: readonly Role[]; agencyId?: number | null }>;
+}
+export const NO_CUSTOM: CustomRoles = { roles: {}, people: {} };
+/** A role made here: its id ('c' + a number). */
+export const CUSTOM_ID = /^c\d{1,6}$/;
 
 /** The rights roles of a person: their own roles, a confirmation agency's agent on the agency line. */
 export function rightsRolesOf(p: { roles: readonly Role[]; agencyId?: number | null }): RightsRole[] {
@@ -204,16 +242,19 @@ function needsPage(d: RightDef): string | null {
 }
 
 /**
- * Every right one person has in the boutique: what one of their roles has, their own changes on top; a tab only with
- * its page. An administrator: every right.
+ * Every right one person has in the boutique: what one of their roles has (a role made here stands in for the role it
+ * starts from), their own changes on top; a tab only with its page. An administrator: every right.
+ * `seen`: the roles made here already being worked out (a maker's own role made by someone else, never in a loop).
  */
-export function rightsOf(p: { id: number; roles: readonly Role[]; agencyId?: number | null }, rr: RoleRights): Set<string> {
+export function rightsOf(p: { id: number; roles: readonly Role[]; agencyId?: number | null }, rr: RoleRights, seen: ReadonlySet<string> = new Set()): Set<string> {
   if (p.roles.includes('admin')) return new Set(RIGHTS.map((r) => r.id));
   const roles = rightsRolesOf(p);
   const mine = rr.people[String(p.id)];
+  const c = customRoleOf(p, rr);
+  const cs = c ? customRoleSet(c, rr, seen) : null;
   const out = new Set<string>();
   for (const d of RIGHTS) {
-    let on = roles.some((r) => roleHas(r, d, rr));
+    let on = roles.some((r) => (c && r === c.base ? cs!.has(d.id) : roleHas(r, d, rr)));
     if (!d.locked && mine?.off?.includes(d.id)) on = false;
     else if (!on && mine?.on?.includes(d.id) && personExtraOk(roles, d, rr)) on = true;
     if (on) out.add(d.id);
@@ -232,6 +273,86 @@ export function rightsOf(p: { id: number; roles: readonly Role[]; agencyId?: num
 export function personExtraOk(roles: readonly RightsRole[], d: RightDef, rr: RoleRights): boolean {
   if (d.locked || roles.some((r) => roleHas(r, d, rr))) return false;
   return !!d.person || roles.some((r) => byDefault(r, d) || !!d.extraFor?.includes(r));
+}
+
+/** A person's role made in the boutique, while they still have the role it starts from. */
+export function customRoleOf(p: { id: number; roles: readonly Role[]; agencyId?: number | null }, rr: RoleRights): CustomRole | null {
+  const id = rr.custom?.people[String(p.id)];
+  const c = id ? rr.custom?.roles[id] : undefined;
+  return c && rightsRolesOf(p).includes(c.base) ? c : null;
+}
+
+/**
+ * A role made here, from its parts (also the editor's draft): what its starting role has in the boutique (`base`), its
+ * own changes (`off` taken away, `on` given among `canOn`), never beyond `cap` (its maker's rights now; null: made by an
+ * administrator). « Gérer les comptes » never comes from a role a non-administrator made (no chain of role makers).
+ */
+export function customSetFrom(base: ReadonlySet<string>, e: RightsEdit, canOn: ReadonlySet<string>, cap: ReadonlySet<string> | null): Set<string> {
+  const out = new Set<string>();
+  for (const d of RIGHTS) {
+    let on = base.has(d.id);
+    if (!d.locked && e.off?.includes(d.id)) on = false;
+    else if (!on && e.on?.includes(d.id) && canOn.has(d.id)) on = true;
+    if (on && cap && !d.locked && (!cap.has(d.id) || d.id === 'x:users')) on = false;
+    if (on) out.add(d.id);
+  }
+  for (const id of [...out]) {
+    const need = needsPage(BY_ID.get(id)!);
+    if (need && !out.has(need)) out.delete(id);
+  }
+  return out;
+}
+
+/** What a role starting from `base` may get on top of it (as one person may), for a maker who is (or not) an administrator. */
+export function customCanOn(base: CustomBase, rr: RoleRights, byAdmin: boolean): Set<string> {
+  return new Set(RIGHTS.filter((d) => (byAdmin || d.id !== 'x:users') && personExtraOk([base], d, rr)).map((d) => d.id));
+}
+
+/** What its starting role has in the boutique, before any change (tabs not yet tied to their page). */
+export function customBaseSet(base: CustomBase, rr: RoleRights): Set<string> {
+  return new Set(RIGHTS.filter((d) => roleHas(base, d, rr)).map((d) => d.id));
+}
+
+/**
+ * What a role made here can never go beyond: its maker's rights now. null: an administrator made it (no limit). A maker
+ * whose account is gone, or a loop of roles made by each other: what its starting role has in the boutique.
+ */
+export function makerCap(c: CustomRole, rr: RoleRights, seen: ReadonlySet<string> = new Set()): Set<string> | null {
+  const m = c.by == null ? undefined : rr.custom?.makers?.[String(c.by)];
+  if (m?.roles.includes('admin')) return null;
+  if (!m || seen.has(c.id)) return roleRightsSet(c.base, rr);
+  return rightsOf({ id: c.by!, roles: m.roles, agencyId: m.agencyId ?? null }, rr, new Set([...seen, c.id]));
+}
+
+/** Every right of a role made in the boutique, as its people get it today. */
+export function customRoleSet(c: CustomRole, rr: RoleRights, seen: ReadonlySet<string> = new Set()): Set<string> {
+  const cap = makerCap(c, rr, seen);
+  return customSetFrom(customBaseSet(c.base, rr), c, customCanOn(c.base, rr, cap === null), cap);
+}
+
+/**
+ * The boutique's roles made here, cleaned: a known starting role and a name, known rights only (`off`: never a locked one;
+ * `on`: only what one person of that role may ever be given), a person only with a role that exists. What its maker may
+ * give is checked when it is saved, and its cap each time it is used.
+ */
+export function cleanCustomRoles(v: unknown): CustomRoles {
+  const src = (v && typeof v === 'object' ? v : {}) as Partial<CustomRoles>;
+  const out: CustomRoles = { roles: {}, people: {} };
+  const list = (x: unknown) => [...new Set((Array.isArray(x) ? x : []).filter((i): i is string => typeof i === 'string' && BY_ID.has(i)))];
+  for (const [id, c] of Object.entries(src.roles ?? {})) {
+    if (!CUSTOM_ID.test(id) || !c || typeof c !== 'object' || !isCustomBase(String(c.base))) continue;
+    const name = String(c.name ?? '').trim().slice(0, 40);
+    if (name.length < 2) continue;
+    const base = c.base as CustomBase;
+    const off = list(c.off).filter((i) => !BY_ID.get(i)!.locked);
+    const on = list(c.on).filter((i) => {
+      const d = BY_ID.get(i)!;
+      return !d.locked && !off.includes(i) && (!!d.person || byDefault(base, d) || !!d.extraFor?.includes(base));
+    });
+    out.roles[id] = { id, name, base, ...(off.length ? { off } : {}), ...(on.length ? { on } : {}), by: typeof c.by === 'number' ? c.by : null, at: typeof c.at === 'string' ? c.at : '' };
+  }
+  for (const [k, id] of Object.entries(src.people ?? {})) if (/^\d+$/.test(k) && typeof id === 'string' && out.roles[id]) out.people[k] = id;
+  return out;
 }
 
 /** The rights a role has in the boutique (for the editor and « Ce qu'il fait »). */
