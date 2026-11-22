@@ -153,6 +153,8 @@ export interface SettingsMap {
   confBlock: { on: boolean; by: string | null; at: string | null };
   /** The notifications already sent for the new orders still waiting (order id → its agent, when, how many): kept only while they wait */
   confRings: Record<string, { a: number; at: number; n: number }>;
+  /** « Bloquer jusqu'à l'appel »: each agent's shift (profile id → minutes after midnight, Algiers), typed by the managers */
+  confShifts: Record<string, { from: number; to: number }>;
   /** Management › Stock: « Lots et dates d'expiration » (off: no lot anywhere), and how many days before its date a lot is « bientôt périmé » */
   stockBatches: { on: boolean; warnDays: number };
   /** Management › Stock: « Fabrication » (recipes and makings in Produits & stock), off by default */
@@ -273,6 +275,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   depotAlerts: { to: [] },
   confBlock: { on: false, by: null, at: null },
   confRings: {},
+  confShifts: {},
   stockBatches: { on: false, warnDays: 30 },
   stockMaking: { on: false },
   colPresets: [],

@@ -35,3 +35,60 @@ export async function enablePush(ask: boolean): Promise<'on' | 'denied' | 'off' 
   await rpc('push.subscribe', { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, ua: navigator.userAgent.slice(0, 300) });
   return 'on';
 }
+
+/**
+ * A phone or a tablet (Android, iPhone, iPad…): « Bloquer jusqu'à l'appel » rings and blocks there, never on a computer.
+ * The same test as the server's push.ts › phoneSql (on the user agent this device saves with its notifications).
+ */
+export const phoneDevice = () => typeof navigator !== 'undefined' && /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
+
+// The Claude demo (no server to send notifications): this phone « rings » unless the demo was told otherwise
+// (localStorage px-demo-push = off | denied | unsupported), so the page that asks for them can be seen too.
+const DEMO = import.meta.env.VITE_DEMO_ONLY === '1';
+type Here = Awaited<ReturnType<typeof enablePush>>;
+function demoHere(): Here {
+  try {
+    const v = localStorage.getItem('px-demo-push');
+    return v === 'off' || v === 'denied' || v === 'unsupported' ? v : 'on';
+  } catch {
+    return 'on';
+  }
+}
+
+/** Can this device ring (without asking)? 'on' also tells the server again that it can (its user agent with it). */
+export async function pushHere(): Promise<Here> {
+  return DEMO ? demoHere() : enablePush(false);
+}
+
+/** « Activer les notifications » (from a tap): asks the permission, then the same as pushHere. */
+export async function pushTurnOn(): Promise<Here> {
+  if (DEMO) {
+    try {
+      if (localStorage.getItem('px-demo-push') === 'off') localStorage.removeItem('px-demo-push');
+    } catch {
+      /* private mode */
+    }
+    return demoHere();
+  }
+  return enablePush(true);
+}
+
+/** This device's notification address (how the server knows this phone); null: none. The demo: a made-up one, kept here. */
+export async function myEndpoint(): Promise<string | null> {
+  if (DEMO) {
+    try {
+      let v = localStorage.getItem('px-demo-endpoint');
+      if (!v) {
+        v = `https://fcm.googleapis.com/fcm/send/demo-${Math.random().toString(36).slice(2, 12)}`;
+        localStorage.setItem('px-demo-endpoint', v);
+      }
+      return v;
+    } catch {
+      return 'https://fcm.googleapis.com/fcm/send/demo-here';
+    }
+  }
+  if (!pushSupported()) return null;
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = reg ? await reg.pushManager.getSubscription() : null;
+  return sub?.endpoint ?? null;
+}

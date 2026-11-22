@@ -765,17 +765,93 @@
     "gate": "Call the customer first: the result opens here after the call.",
     "sound": "Tap here to hear the ring",
     "tabTitle": "📞 New order to call",
-    "push": {
-      "ask": "Turn on notifications: this device will ring for every new order, even with Pilotix closed.",
-      "denied": "Notifications are blocked on this device: allow them in the browser settings to hear about new orders.",
-      "on": "Turn on",
-      "later": "Later"
+    "shift": "Your shift: {{from}} – {{to}}",
+    "shiftCalls": "Your shift: the shop’s call hours",
+    "setup": {
+      "progress": "Step {{n}} of 3",
+      "s1": "Notifications",
+      "s2": "Test ring",
+      "s3": "Volume",
+      "failed": "That didn’t work. Try again.",
+      "noEndpoint": "This phone has not turned on Pilotix notifications yet.",
+      "pc": "Until this is done, Pilotix is locked here and on your computer.",
+      "notif": {
+        "title": "Turn on notifications",
+        "why": "During your shift, Pilotix must be able to ring this phone for every new order, even when closed.",
+        "on": "Turn on notifications",
+        "denied": "Pilotix notifications are blocked on this phone. To allow them:",
+        "step1": "Long-press the Pilotix icon, then « App info » (or Chrome › ⋮ › Settings › Notifications).",
+        "step2": "Notifications: Allow. Pick a loud sound if you like.",
+        "step3": "Come back here and tap the button below.",
+        "again": "Done",
+        "unsupported": "This browser cannot ring. Open Pilotix in Chrome, then ⋮ › « Install app » (iPhone: Share › « Add to Home Screen »)."
+      },
+      "test": {
+        "title": "Test ring",
+        "why": "Pilotix will ring this phone to check it gets new orders.",
+        "silentTitle": "Your phone stopped answering",
+        "silent": "A ring did not reach this phone (off, no internet or notifications turned off). Do the test ring again.",
+        "ring": "Ring the phone",
+        "waiting": "Ring sent… it arrives in a few seconds.",
+        "again": "Ring again",
+        "tip1": "Check the phone has internet.",
+        "tip2": "Settings › Battery: let Chrome (and Pilotix) work in the background.",
+        "tip3": "Check Pilotix notifications are allowed."
+      },
+      "heard": {
+        "title": "Volume at maximum",
+        "why": "Turn the ringer volume all the way up and turn off silent mode. Did you hear the ring?",
+        "yes": "I heard it",
+        "no": "I heard nothing",
+        "tip1": "Turn the ring and notification volume all the way up.",
+        "tip2": "Turn off silent mode and « Do not disturb ».",
+        "tip3": "Settings › Notifications › Pilotix › Sound: pick a loud ringtone."
+      }
+    },
+    "pcgate": {
+      "title": "Connect your phone to work",
+      "why": {
+        "none": "Pilotix has no phone to ring you yet.",
+        "test": "The test ring of your shift is not done yet.",
+        "heard": "Your phone rang: confirm on the phone that you heard it.",
+        "silent": "Your phone stopped answering (off, no internet, or notifications turned off)."
+      },
+      "step1": "Open Pilotix on your phone (the app installed from Chrome).",
+      "step2": "Turn on notifications, then do the test ring.",
+      "step3": "Turn the volume all the way up and tap « I heard it ».",
+      "auto": "This computer unlocks by itself as soon as your phone is ready."
+    },
+    "ag": {
+      "title": "Agents: shifts and phones",
+      "sum": "Ready: {{n}} of {{of}} on shift",
+      "agent": "Agent",
+      "shift": "Shift",
+      "phone": "Phone",
+      "from": "Start of {{name}}’s shift",
+      "to": "End of {{name}}’s shift",
+      "clear": "Clear the shift (call hours)",
+      "calls": "Call hours",
+      "saved": "{{name}}’s shift saved",
+      "note": "At the start of each shift, the agent does a test ring on his phone. No shift: the shop’s call hours.",
+      "st": {
+        "ok": "Ready",
+        "test": "Test ring to do",
+        "heard": "Must confirm the sound",
+        "silent": "Not answering",
+        "none": "No phone",
+        "off": "Off shift"
+      }
+    },
+    "line": {
+      "ringing": "waits for your call — your phone is ringing · received {{d}} ago",
+      "called": "Call started: save the result on your phone",
+      "open": "Open here"
     },
     "sw": {
       "title": "Lock the agent until the call",
       "on": "On",
       "off": "Off",
-      "help": "A new order covers the agent’s whole Pilotix and rings until he calls and picks a result. One at a time, never at night.",
+      "help": "A new order rings on the agent’s phone and locks it until he calls and picks a result. During his shift nothing works until his phone is ready to ring. Never at night.",
       "by": "Changed by {{name}}, {{when}}.",
       "savedOn": "Lock on: agents must call every new order.",
       "savedOff": "Lock off."

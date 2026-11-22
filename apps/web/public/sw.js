@@ -15,7 +15,7 @@ self.addEventListener('push', (e) => {
     d = { title: 'Pilotix', body: e.data ? e.data.text() : '' };
   }
   const alarm = !!d.alarm;
-  e.waitUntil(
+  const show = () =>
     self.registration.showNotification(d.title || 'Pilotix', {
       body: d.body || '',
       tag: d.tag || 'pilotix',
@@ -27,8 +27,25 @@ self.addEventListener('push', (e) => {
       icon: 'icon.svg',
       badge: 'icon.svg',
       data: { url: d.url || '', order: d.order || null },
-    }),
-  );
+    });
+  // « Bloquer jusqu'à l'appel »: the server asks this phone to say it got the ring (`ack`: its one-time address, no
+  // session) — an agent's phone that does not answer is blocked until it rings again
+  const answer = () => (d.ack ? fetch(d.ack, { method: 'POST', mode: 'no-cors', credentials: 'omit', cache: 'no-store', keepalive: true }).catch(() => {}) : undefined);
+  // a new order to call: Pilotix open on this phone's screen shows it and rings itself — it is told to look now, no
+  // notification on top; otherwise (closed, in the pocket, screen off) the notification rings
+  if (d.conf) {
+    e.waitUntil(
+      self.clients
+        .matchAll({ type: 'window', includeUncontrolled: true })
+        .then((list) => {
+          list.forEach((c) => c.postMessage({ type: 'px-conf' }));
+          return list.some((c) => c.visibilityState === 'visible' && c.focused) ? undefined : show();
+        })
+        .then(answer),
+    );
+    return;
+  }
+  e.waitUntil(show().then(answer));
 });
 
 self.addEventListener('notificationclick', (e) => {

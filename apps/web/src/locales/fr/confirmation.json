@@ -765,17 +765,93 @@
     "gate": "Appelez d’abord le client : le résultat s’ouvre ici après l’appel.",
     "sound": "Touchez ici pour entendre la sonnerie",
     "tabTitle": "📞 Nouvelle commande à appeler",
-    "push": {
-      "ask": "Activez les notifications : cet appareil sonnera pour chaque nouvelle commande, même Pilotix fermé.",
-      "denied": "Les notifications sont bloquées sur cet appareil : autorisez-les dans les réglages du navigateur pour être prévenu des nouvelles commandes.",
-      "on": "Activer",
-      "later": "Plus tard"
+    "shift": "Votre service : {{from}} – {{to}}",
+    "shiftCalls": "Votre service : les heures d’appel de la boutique",
+    "setup": {
+      "progress": "Étape {{n}} sur 3",
+      "s1": "Notifications",
+      "s2": "Sonnerie test",
+      "s3": "Volume",
+      "failed": "Ça n’a pas marché. Réessayez.",
+      "noEndpoint": "Ce téléphone n’a pas encore activé les notifications de Pilotix.",
+      "pc": "Tant que ce n’est pas fait, Pilotix est bloqué ici et sur votre ordinateur.",
+      "notif": {
+        "title": "Activez les notifications",
+        "why": "Pendant votre service, Pilotix doit pouvoir sonner sur ce téléphone pour chaque nouvelle commande, même fermé.",
+        "on": "Activer les notifications",
+        "denied": "Les notifications de Pilotix sont bloquées sur ce téléphone. Pour les autoriser :",
+        "step1": "Appui long sur l’icône Pilotix, puis « Infos sur l’appli » (ou Chrome › ⋮ › Paramètres › Notifications).",
+        "step2": "Notifications : Autoriser. Choisissez un son fort si vous voulez.",
+        "step3": "Revenez ici et touchez le bouton ci-dessous.",
+        "again": "C’est fait",
+        "unsupported": "Ce navigateur ne peut pas sonner. Ouvrez Pilotix dans Chrome puis ⋮ › « Installer l’application » (iPhone : Partager › « Sur l’écran d’accueil »)."
+      },
+      "test": {
+        "title": "Sonnerie test",
+        "why": "Pilotix va faire sonner ce téléphone pour vérifier qu’il reçoit bien les nouvelles commandes.",
+        "silentTitle": "Votre téléphone ne répond plus",
+        "silent": "Une sonnerie n’est pas arrivée sur ce téléphone (éteint, sans internet ou notifications coupées). Refaites la sonnerie test.",
+        "ring": "Faire sonner le téléphone",
+        "waiting": "Sonnerie envoyée… elle arrive dans quelques secondes.",
+        "again": "Refaire sonner",
+        "tip1": "Vérifiez que le téléphone a internet.",
+        "tip2": "Réglages › Batterie : laissez Chrome (et Pilotix) travailler en arrière-plan.",
+        "tip3": "Vérifiez que les notifications de Pilotix sont autorisées."
+      },
+      "heard": {
+        "title": "Volume au maximum",
+        "why": "Montez le volume de la sonnerie au maximum et enlevez le mode silencieux. Vous avez bien entendu la sonnerie ?",
+        "yes": "Je l’ai entendu",
+        "no": "Je n’ai rien entendu",
+        "tip1": "Montez le volume de la sonnerie et des notifications au maximum.",
+        "tip2": "Enlevez le mode silencieux et « Ne pas déranger ».",
+        "tip3": "Réglages › Notifications › Pilotix › Son : choisissez une sonnerie forte."
+      }
+    },
+    "pcgate": {
+      "title": "Connectez votre téléphone pour travailler",
+      "why": {
+        "none": "Pilotix n’a pas encore de téléphone pour vous faire sonner.",
+        "test": "La sonnerie test de votre service n’est pas encore faite.",
+        "heard": "Votre téléphone a sonné : confirmez sur le téléphone que vous l’avez entendu.",
+        "silent": "Votre téléphone ne répond plus (éteint, sans internet, ou notifications coupées)."
+      },
+      "step1": "Ouvrez Pilotix sur votre téléphone (l’application installée depuis Chrome).",
+      "step2": "Activez les notifications, puis faites la sonnerie test.",
+      "step3": "Montez le volume au maximum et touchez « Je l’ai entendu ».",
+      "auto": "Cet ordinateur se débloque tout seul dès que votre téléphone est prêt."
+    },
+    "ag": {
+      "title": "Agents : horaires et téléphones",
+      "sum": "Prêts : {{n}} sur {{of}} en service",
+      "agent": "Agent",
+      "shift": "Service",
+      "phone": "Téléphone",
+      "from": "Début du service de {{name}}",
+      "to": "Fin du service de {{name}}",
+      "clear": "Effacer l’horaire (heures d’appel)",
+      "calls": "Heures d’appel",
+      "saved": "Horaire de {{name}} enregistré",
+      "note": "Au début de chaque service, l’agent fait une sonnerie test sur son téléphone. Sans horaire : les heures d’appel de la boutique.",
+      "st": {
+        "ok": "Prêt",
+        "test": "Sonnerie test à faire",
+        "heard": "Doit confirmer le son",
+        "silent": "Ne répond plus",
+        "none": "Pas de téléphone",
+        "off": "Hors service"
+      }
+    },
+    "line": {
+      "ringing": "attend votre appel — votre téléphone sonne · reçue il y a {{d}}",
+      "called": "Appel lancé : mettez le résultat sur votre téléphone",
+      "open": "Ouvrir ici"
     },
     "sw": {
       "title": "Bloquer l’agent jusqu’à l’appel",
       "on": "Activé",
       "off": "Désactivé",
-      "help": "Une nouvelle commande couvre tout Pilotix chez l’agent et sonne jusqu’à ce qu’il appelle et choisisse un résultat. Une à la fois, jamais la nuit.",
+      "help": "Une nouvelle commande sonne sur le téléphone de l’agent et le bloque jusqu’à ce qu’il appelle et choisisse un résultat. Pendant son service, rien ne marche tant que son téléphone n’est pas prêt à sonner. Jamais la nuit.",
       "by": "Changé par {{name}}, {{when}}.",
       "savedOn": "Blocage activé : les agents doivent appeler chaque nouvelle commande.",
       "savedOff": "Blocage désactivé."

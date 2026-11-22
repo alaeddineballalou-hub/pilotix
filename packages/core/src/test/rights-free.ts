@@ -20,7 +20,7 @@ export const FREE_ACTIONS: readonly string[] = [
   'clientscore.rules',
   'cm.feed', 'cm.lahja.add', 'cm.lahja.test', 'cm.linkPost', 'cm.posts', 'cm.stats', 'cm.test',
   'confirmation.addColPreset', 'confirmation.banner', 'confirmation.block', 'confirmation.blockGet', 'confirmation.blocking',
-  'confirmation.blockSet', 'confirmation.catalog',
+  'confirmation.blockSet', 'confirmation.catalog', 'confirmation.phoneHeard', 'confirmation.phoneTest', 'confirmation.shiftSet',
   'confirmation.colActive', 'confirmation.colPresets', 'confirmation.counts', 'confirmation.deleteColPreset',
   'confirmation.deskOptions', 'confirmation.gridFee', 'confirmation.hold', 'confirmation.meta', 'confirmation.mine',
   'confirmation.photoThumbs', 'confirmation.release', 'confirmation.setColActive', 'confirmation.setTry',

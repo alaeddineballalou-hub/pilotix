@@ -1965,6 +1965,22 @@ class ApiController {
   }
 
   /**
+   * A phone says a notification reached it (Confirmation › « Bloquer jusqu'à l'appel »): its worker (sw.js) posts back
+   * the one-time code the server put in it (push.ts › ringPhones), so the agent's phone counts as ringing. No session:
+   * the code is the proof. Same answer whatever happens.
+   */
+  @Public()
+  @Post(['push/ack/:code', 's/:shop/push/ack/:code'])
+  async pushAck(@Param('shop') shop: string | undefined, @Param('code') code: string, @Req() req: { ip?: string }) {
+    if (!/^[a-f0-9]{32}$/.test(code) || limitLanding(req.ip || 'unknown', 'ack', 120)) return { ok: true };
+    const ref = await this.core.fromParam(shop).then((r) => r && this.core.forPublic(r)).catch(() => null);
+    if (!ref || ref.shop.status !== 'active') return { ok: true };
+    const r = intake(ref);
+    await this.core.call(r, 'push.ack', await this.core.systemSession(r), { code }).catch(() => null);
+    return { ok: true };
+  }
+
+  /**
    * A courier says a parcel's status changed (ZR webhook, registered from Pilotix with its key in ?key= and the
    * X-Pilotix-Key header). The parcel numbers are picked from the body, whatever its shape; their state is then read
    * again from the courier itself, so the body is only a hint.

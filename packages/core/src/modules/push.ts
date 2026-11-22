@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { Db, num } from '../db';
 import { membershipsOf } from '../platform/accounts';
-import { bad, Ctx, proc, ServerHooks } from '../rpc';
+import { bad, Ctx, proc, publicApi, ServerHooks } from '../rpc';
 import { getSetting } from '../settings';
 import { kindOfTag, ringBell } from './bell';
 
@@ -38,7 +38,7 @@ async function deliver(db: Db, server: ServerHooks, k: { publicKey: string; priv
  * The same people's devices turned on in their other boutiques (a device signs up in one boutique, with its keys):
  * told too, the name of the boutique first — someone working in two boutiques misses nothing of either.
  */
-async function pushElsewhere(ctx: Ctx, profileIds: number[], payload: Record<string, unknown>, seen: Set<string>) {
+async function pushElsewhere(ctx: Ctx, profileIds: number[], payload: Record<string, unknown>, seen: Set<string>, o: { phones?: boolean } = {}) {
   const t = ctx.t!;
   const mails = [...new Set((await ctx.db.query('SELECT lower(email) AS e FROM profiles WHERE id = ANY($1) AND active', [profileIds])).map((r: any) => String(r.e ?? '')).filter(Boolean))];
   if (!mails.length) return 0;
@@ -51,7 +51,7 @@ async function pushElsewhere(ctx: Ctx, profileIds: number[], payload: Record<str
       const db = t.shop(m.schema);
       const k = await keysOf(db, ctx.server);
       if (!k) continue;
-      const subs = await db.query('SELECT endpoint, p256dh, auth FROM push_subs WHERE profile_id = $1', [m.profileId]);
+      const subs = await db.query(`SELECT endpoint, p256dh, auth FROM push_subs WHERE profile_id = $1${o.phones ? ` AND ${phoneSql()}` : ''}`, [m.profileId]);
       sent += await deliver(db, ctx.server!, k, subs as Sub[], tagged, seen);
     }
   return sent;
@@ -72,18 +72,54 @@ export async function sendPush(ctx: Ctx, profileIds: number[], payload: Record<s
   return pushOnly(ctx, profileIds, payload);
 }
 
-/** The phones only (the bell's own notifications write their line themselves: inbox.ts). Forgets the devices that unsubscribed. */
-export async function pushOnly(ctx: Ctx, profileIds: number[], payload: Record<string, unknown>) {
+/**
+ * Without a line in the bell (the bell's own notifications write their line themselves: inbox.ts). `phones`: only the
+ * person's phones and tablets (« Bloquer jusqu'à l'appel » rings the phone, never the computer). Forgets the devices that
+ * unsubscribed.
+ */
+export async function pushOnly(ctx: Ctx, profileIds: number[], payload: Record<string, unknown>, o: { phones?: boolean } = {}) {
   if (!profileIds.length || !ctx.server?.push) return 0;
   const seen = new Set<string>();
   let sent = 0;
   const k = await keys(ctx);
   if (k) {
-    const subs = await ctx.db.query('SELECT endpoint, p256dh, auth FROM push_subs WHERE profile_id = ANY($1)', [profileIds]);
+    const subs = await ctx.db.query(`SELECT endpoint, p256dh, auth FROM push_subs WHERE profile_id = ANY($1)${o.phones ? ` AND ${phoneSql()}` : ''}`, [profileIds]);
     sent += await deliver(ctx.db, ctx.server, k, subs as Sub[], payload, seen);
   }
   // a store on a server with several shops: the same people in their other boutiques
-  if (ctx.t && ctx.shop && (ctx.shop.kind ?? 'store') === 'store') sent += await pushElsewhere(ctx, profileIds, payload, seen).catch(() => 0);
+  if (ctx.t && ctx.shop && (ctx.shop.kind ?? 'store') === 'store') sent += await pushElsewhere(ctx, profileIds, payload, seen, o).catch(() => 0);
+  return sent;
+}
+
+/**
+ * A phone or a tablet: the browser that turned notifications on said so in its user agent (push_subs.ua, saved by
+ * « Activer les notifications »: Android, iPhone, iPad…). The same test as the web app's lib/push.ts › phoneDevice.
+ */
+export const phoneSql = (col = 'ua') => `${col} ~* '(android|iphone|ipad|ipod|mobile)'`;
+
+/** A one-time code (32 hex): the phone's worker sends it back when the notification arrives. */
+const ackCode = () => Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+
+/**
+ * « Bloquer jusqu'à l'appel »: rings these phones (push_subs rows of phones), each notification with the address its
+ * worker (sw.js) calls back on arrival — /api[/s/<shop>]/push/ack/<code>. While one is not answered, its code stays the
+ * same and `asked_at` keeps the time of the first one: unanswered for minutes, the phone does not ring (off, no internet,
+ * notifications turned off). Returns how many phones got it from their push service.
+ */
+export async function ringPhones(ctx: Ctx, subs: { id: unknown; endpoint: string; p256dh: string; auth: string; ack_code: string | null }[], payload: Record<string, unknown>) {
+  if (!subs.length || !ctx.server?.push) return 0;
+  const k = await keys(ctx);
+  if (!k) return 0;
+  const base = publicApi(ctx);
+  let sent = 0;
+  for (const x of subs) {
+    let code = x.ack_code;
+    if (!code) {
+      code = ackCode();
+      await ctx.db.query('UPDATE push_subs SET ack_code = $2, asked_at = now() WHERE id = $1', [x.id, code]);
+    }
+    sent += await deliver(ctx.db, ctx.server, k, [x], base ? { ...payload, ack: `${base}/push/ack/${code}` } : payload, new Set());
+  }
   return sent;
 }
 
@@ -113,7 +149,8 @@ export const pushProcs = {
       if (!pushServiceUrl(i.endpoint)) throw bad('Adresse de notification refusée');
       await ctx.db.query(
         `INSERT INTO push_subs (profile_id, endpoint, p256dh, auth, ua) VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (endpoint) DO UPDATE SET profile_id = $1, p256dh = $3, auth = $4, ua = $5`,
+         ON CONFLICT (endpoint) DO UPDATE SET profile_id = $1, p256dh = $3, auth = $4, ua = $5,
+           ack_at = CASE WHEN push_subs.profile_id = $1 THEN push_subs.ack_at END, heard_at = CASE WHEN push_subs.profile_id = $1 THEN push_subs.heard_at END`,
         [ctx.session.profile.id, i.endpoint, i.p256dh, i.auth, i.ua ?? null],
       );
       return { ok: true };
@@ -122,6 +159,11 @@ export const pushProcs = {
   'push.unsubscribe': proc(null, z.object({ endpoint: z.string().max(1000) }), async (ctx, i) => {
     await ctx.db.query('DELETE FROM push_subs WHERE endpoint = $1 AND profile_id = $2', [i.endpoint, ctx.session.profile.id]);
     return { ok: true };
+  }),
+  /** A phone's worker says a notification arrived (the server's public /push/ack/<code>, sw.js): this phone rings. */
+  'push.ack': proc([], z.object({ code: z.string().regex(/^[a-f0-9]{32}$/) }), async (ctx, i) => {
+    const r = await ctx.db.query('UPDATE push_subs SET ack_at = now(), asked_at = NULL, ack_code = NULL WHERE ack_code = $1 RETURNING profile_id', [i.code]);
+    return { ok: r.length > 0 };
   }),
 };
 
