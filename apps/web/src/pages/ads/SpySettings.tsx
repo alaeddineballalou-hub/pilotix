@@ -21,7 +21,8 @@ type Paid = 'scrapecreators' | 'searchapi';
 const isOwn = (s: SpySource): s is Paid => s === 'scrapecreators' || s === 'searchapi';
 /** Pilotix's server (and its preview): the extension or « Recherche Pilotix »; a single shop: the extension or its own key */
 const sourcesOf = (platform: boolean): SpySource[] => (platform ? ['extension', 'pilotix'] : ['extension', 'scrapecreators', 'searchapi']);
-const REPO = 'https://github.com/alaeddineballalou-hub/pilotix/tree/main/apps/extension';
+/** The extension's download from this website (apps/extension, zipped by the website's build: scripts/extension-zips.mjs). */
+const EXT_ZIP = '/pilotix-spy.zip';
 
 export function SpySettingsView() {
   const { t } = useTranslation();
@@ -291,10 +292,11 @@ export function ExtensionCard({ onClose }: { onClose?: () => void }) {
       <ol className="spy-steps">
         <li>
           {t('spy.ext.s1')}{' '}
-          <a href={REPO} target="_blank" rel="noopener noreferrer" className="ltr">
-            github.com/…/pilotix/apps/extension
+          <a className="btn small primary spy-dl" href={EXT_ZIP} download>
+            <Icon name="download" /> {t('spy.ext.s1Btn')}
           </a>
         </li>
+        <li>{t('spy.ext.unzip')}</li>
         <li>
           {t('spy.ext.s2a')} <code className="ltr">chrome://extensions</code> {t('spy.ext.s2b')}
         </li>

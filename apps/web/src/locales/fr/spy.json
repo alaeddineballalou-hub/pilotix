@@ -385,9 +385,11 @@
     "on": "Détectée (v{{v}})",
     "off": "Non détectée",
     "help": "Gratuite. Elle ouvre la bibliothèque de pubs de Facebook dans un onglet de votre Chrome, lit les pubs et les envoie à Pilotix. Rien n’est installé sur le serveur.",
-    "s1": "Téléchargez le dossier apps/extension :",
+    "s1": "Téléchargez l’extension :",
+    "s1Btn": "Télécharger",
+    "unzip": "Décompressez le fichier (clic droit › Extraire tout) : un dossier « pilotix-spy » apparaît.",
     "s2a": "Dans Chrome, ouvrez",
-    "s2b": "→ activez « Mode développeur » → « Charger l’extension non empaquetée » → choisissez le dossier.",
+    "s2b": "→ activez « Mode développeur » → « Charger l’extension non empaquetée » → choisissez le dossier « pilotix-spy ».",
     "s3": "Dans l’extension, ajoutez votre adresse Pilotix :",
     "copyOrigin": "Copier l’adresse",
     "recheck": "Vérifier à nouveau"

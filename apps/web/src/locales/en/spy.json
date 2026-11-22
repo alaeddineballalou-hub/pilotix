@@ -385,9 +385,11 @@
     "on": "Detected (v{{v}})",
     "off": "Not detected",
     "help": "Free. It opens Facebook’s Ad Library in a tab of your Chrome, reads the ads and sends them to Pilotix. Nothing is installed on the server.",
-    "s1": "Download the apps/extension folder:",
+    "s1": "Download the extension:",
+    "s1Btn": "Download",
+    "unzip": "Unzip the file (right-click › Extract all): a “pilotix-spy” folder appears.",
     "s2a": "In Chrome, open",
-    "s2b": "→ turn on “Developer mode” → “Load unpacked” → choose the folder.",
+    "s2b": "→ turn on “Developer mode” → “Load unpacked” → choose the “pilotix-spy” folder.",
     "s3": "In the extension, add your Pilotix address:",
     "copyOrigin": "Copy the address",
     "recheck": "Check again"

@@ -50,5 +50,5 @@ never sends a message itself.
 - `background.js` — downloads the photos from Pilotix, opens or reuses the WhatsApp Web tab on the customer’s chat.
 - `whatsapp.js` — on WhatsApp Web: waits for the chat, pastes the photos, puts the message as their caption.
 
-`node scripts/wa-extension-zip.mjs` rebuilds `apps/web/public/pilotix-whatsapp.zip` from this folder (the website
+`node scripts/extension-zips.mjs` rebuilds `apps/web/public/pilotix-whatsapp.zip` from this folder (the website
 serves it). Change `version` in `manifest.json` with every change.

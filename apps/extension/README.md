@@ -29,9 +29,11 @@ Une seule recherche à la fois, avec une courte pause entre deux recherches.
 
 ### Installation
 
-1. Ouvrez `chrome://extensions` dans Chrome.
-2. Activez le **Mode développeur** (en haut à droite).
-3. Cliquez sur **Charger l’extension non empaquetée** et choisissez le dossier `apps/extension` de Pilotix.
+1. Téléchargez `pilotix-spy.zip` depuis votre Pilotix (AI Spy › Réglages › bouton **Télécharger**, ou
+   `https://pilotix.online/pilotix-spy.zip`) et décompressez-le (clic droit › **Extraire tout**) : un dossier
+   `pilotix-spy` apparaît.
+2. Ouvrez `chrome://extensions` dans Chrome et activez le **Mode développeur** (en haut à droite).
+3. Cliquez sur **Charger l’extension non empaquetée** et choisissez le dossier `pilotix-spy`.
 4. Épinglez l’extension (icône puzzle) et ouvrez-la.
 5. Dans **Adresse de votre Pilotix**, tapez l’adresse de votre Pilotix (ex. `https://app.maboutique.dz`), cliquez sur
    **Ajouter** et acceptez la demande de Chrome. Pour le développement, `http://localhost:5173` est aussi accepté.
@@ -83,9 +85,11 @@ One search at a time, with a short pause between two searches.
 
 ### Install
 
-1. Open `chrome://extensions` in Chrome.
-2. Turn on **Developer mode** (top right).
-3. Click **Load unpacked** and choose the `apps/extension` folder of Pilotix.
+1. Download `pilotix-spy.zip` from your Pilotix (AI Spy › Réglages › **Télécharger** button, or
+   `https://pilotix.online/pilotix-spy.zip`) and unzip it (right-click › **Extract all**): a `pilotix-spy` folder
+   appears.
+2. Open `chrome://extensions` in Chrome and turn on **Developer mode** (top right).
+3. Click **Load unpacked** and choose the `pilotix-spy` folder.
 4. Pin the extension (puzzle icon) and open it.
 5. In **Adresse de votre Pilotix**, type your Pilotix address (e.g. `https://app.maboutique.dz`), click **Ajouter** and
    accept Chrome’s prompt. For development, `http://localhost:5173` is accepted too.
@@ -118,5 +122,8 @@ background.js (service worker, one search at a time, 75 s at most)
 
 - No build step: plain JavaScript (ES2022), Manifest V3.
 - Tests: `node apps/extension/test/parse.test.mjs`. Syntax check: `npm run check` in `apps/extension`.
+- The website's build zips this folder (without `test/` and `package.json`) into `apps/web/public/pilotix-spy.zip`
+  (`node scripts/extension-zips.mjs`), the download of AI Spy › Réglages. Change `version` in `manifest.json` with
+  every change.
 - `fromLibrary` in `parse.js` is a port of the one in `packages/core/src/modules/spy.ts`: change both together (the test
   compares them when `packages/core` is built).
