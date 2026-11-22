@@ -25,7 +25,7 @@ export const FREE_ACTIONS: readonly string[] = [
   'confirmation.deskOptions', 'confirmation.gridFee', 'confirmation.hold', 'confirmation.meta', 'confirmation.mine',
   'confirmation.photoThumbs', 'confirmation.release', 'confirmation.setColActive', 'confirmation.setTry',
   'confirmation.thumbs',
-  'coverage.refresh', 'coverage.toFix',
+  'coverage.refresh', 'coverage.refreshDesks', 'coverage.toFix',
   'customers.history', 'customers.list', 'customers.ping', 'customers.shareInfo',
   'delivery.companies', 'delivery.demoScenario', 'delivery.fees', 'delivery.feesInfo', 'delivery.label',
   'delivery.labels', 'delivery.livreurs', 'delivery.overweight', 'delivery.routeSheet', 'delivery.stopdesks',

@@ -763,7 +763,8 @@
     "confirmNoStock": "Confirmer sans stock",
     "doneNoStock": "{{ref}} confirmée sans stock",
     "fix": "Choisir",
-    "bulkDone": "{{ok}} enregistrées · {{sans}} sans stock · {{bl}} bloquées"
+    "bulkDone": "{{ok}} enregistrées · {{sans}} sans stock · {{bl}} bloquées",
+    "deskGone": "{{co}} a fermé le bureau « {{d}} ». Choisissez un autre bureau, ou la livraison à domicile."
   },
   "bestFirst": "Meilleurs clients d’abord",
   "bestFirstHelp": "Les clients au meilleur score en premier : très fiables, fiables, puis les nouveaux, puis ceux à surveiller. Cliquez encore pour revenir au chrono.",

@@ -1810,7 +1810,7 @@ function orderExtraProcs() {
         variants: (byP.get(num(p.id)) ?? []) as { id: number; title: string; sku: string; price: number | null; active: boolean; stock: number }[],
       }));
       const companies = (await ctx.db.query('SELECT id, name, kind, active FROM delivery_companies ORDER BY name')).map((c: any) => ({ id: num(c.id), name: c.name, kind: c.kind, active: !!c.active }));
-      const stopdesks = (await ctx.db.query('SELECT id, company_id, wilaya_id, commune, name, address FROM stopdesks ORDER BY name')).map((d: any) => ({
+      const stopdesks = (await ctx.db.query('SELECT id, company_id, wilaya_id, commune, name, address FROM stopdesks WHERE gone_at IS NULL ORDER BY name')).map((d: any) => ({
         id: num(d.id), companyId: num(d.company_id), wilayaId: num(d.wilaya_id), commune: d.commune, name: d.name, address: d.address,
       }));
       const shop = await getSetting(ctx.db, 'shop');
@@ -2186,12 +2186,17 @@ export const ordersProcs = {
   'orders.delete': proc([], z.object({ ids: z.array(id).min(1).max(500) }), async (ctx, { ids }) => {
     if (!ctx.session.isAdmin) throw forbidden('Seul un administrateur peut supprimer une commande');
     await ctx.db.tx(async (tx) => {
-      const rows = await tx.query('SELECT id, ref, follow_status, is_exchange, tracking FROM orders WHERE id = ANY($1) FOR UPDATE', [ids]);
+      if (new Set(ids).size !== ids.length) throw bad('Une commande est sélectionnée plusieurs fois');
+      const rows = await tx.query('SELECT id, ref, follow_status, is_exchange, tracking, taken_at, shipped_at, delivered_at, returned_at, cashed, handover_id FROM orders WHERE id = ANY($1) FOR UPDATE', [ids]);
+      if (rows.length !== ids.length) throw bad('Une ou plusieurs commandes sont introuvables');
       for (const r of rows) {
         if (r.is_exchange) throw bad(`${r.ref} est un colis de ticket SAV : annulez le ticket`);
-        // still at the depot, never given to a company (« À préparer », « À attribuer »): can go too
-        if (r.follow_status === 'to_prepare' && !r.tracking) continue;
-        if (r.follow_status && r.follow_status !== 'cancelled') throw bad(`${r.ref} est déjà au dépôt ou en livraison : elle ne peut plus être supprimée`);
+        // own_tracking is assigned to every order at creation: it does NOT mean the parcel was sent.
+        // Once a courier tracking exists or the parcel was sent, delivered, returned or cashed, preserve audit history.
+        if (r.tracking || r.taken_at || r.shipped_at || r.delivered_at || r.returned_at || r.cashed || r.handover_id)
+          throw bad(`${r.ref} a un historique de livraison ou de paiement : archivez-la au lieu de la supprimer`);
+        if (r.follow_status && !['to_prepare', 'cancelled'].includes(r.follow_status))
+          throw bad(`${r.ref} est déjà au dépôt ou en livraison : elle ne peut plus être supprimée`);
       }
       const linked = (await tx.query('SELECT o.ref FROM orders o WHERE o.id = ANY($1) AND (EXISTS (SELECT 1 FROM complaints c WHERE c.order_id = o.id) OR EXISTS (SELECT 1 FROM claims c WHERE c.order_id = o.id) OR EXISTS (SELECT 1 FROM orders x WHERE x.original_order_id = o.id)) LIMIT 1', [ids]))[0];
       if (linked) throw bad(`${linked.ref} a un ticket, une réclamation ou un échange : elle ne peut pas être supprimée`);
