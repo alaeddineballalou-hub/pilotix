@@ -4,7 +4,12 @@
 //  - cancelled: scan the parcel's label once (it was found and taken out);
 //  - changed: scan the old label (the parcel was found), print the new label (a new Pilotix code: the old one no longer
 //    exists), scan it (the new label is on the parcel). A parcel already at a courier keeps the courier's code: one scan.
+// A parcel going with a company that has an API (ZR…) always gets that company's own label, never a Pilotix one (the
+// owner's rule, 22 Nov 2026): sent to the company first when it has no tracking number yet, then its label printed and
+// scanned. A parcel that never had a label (its company had not given one: refused by the courier, or not sent) has no
+// « old label » step — a cancelled one is just taken out.
 // Edits made by the depot itself don't alert.
+import { API_COURIER_KINDS } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
@@ -29,13 +34,60 @@ export const itemsText = (rows: { name: string; variant_title?: string; variantT
 const norm = (c: string) => String(c || '').trim().replace(/\s+/g, '').toUpperCase();
 
 /**
+ * Could the parcel carry a label? A company with an API prints only its own label, with its tracking number: none yet
+ * (refused by the courier, or not sent) = nothing was ever printed. Own livreurs and companies without an API: the
+ * Pilotix label may be on it.
+ */
+export async function mayHaveLabel(db: Db, companyId: unknown, tracking: unknown): Promise<boolean> {
+  if (tracking) return true;
+  if (!companyId) return true;
+  const kind = (await db.query('SELECT kind FROM delivery_companies WHERE id = $1', [companyId]))[0]?.kind;
+  return !API_COURIER_KINDS.includes(String(kind ?? ''));
+}
+
+/**
+ * What closes an alert now (`r`: the alert with its order's tracking, own_tracking and company kind). First the label on
+ * the parcel (oldCode), when it ever had one. Then, for a changed order: a company with an API → always that company's
+ * own label (`send` while it has no tracking number yet; one scan when the parcel already carries it), never a Pilotix
+ * one; own livreurs and companies without an API → the new Pilotix label (new_code).
+ */
+function stepsOf(r: any) {
+  const noOld = !!r.no_label;
+  const oldCode = noOld ? null : ((r.old_code ?? r.tracking ?? r.own_tracking ?? null) as string | null);
+  const api = !!r.company_kind && API_COURIER_KINDS.includes(String(r.company_kind));
+  let newCode: string | null = null;
+  let send = false;
+  if (r.kind !== 'cancel') {
+    if (!api) newCode = (r.new_code ?? null) as string | null;
+    else if (!r.tracking) send = true;
+    else if (!oldCode || norm(oldCode) !== norm(r.tracking)) newCode = r.tracking as string;
+  }
+  return { noOld, oldCode, api, newCode, send, found: noOld || !!r.old_scanned_at };
+}
+
+/** An alert with what its steps need: its order's codes and company. */
+const ALERT_SQL = `SELECT a.*, o.tracking, o.own_tracking, o.company_id, c.kind AS company_kind, c.name AS company_name
+  FROM depot_alerts a JOIN orders o ON o.id = a.order_id LEFT JOIN delivery_companies c ON c.id = o.company_id WHERE a.id = $1`;
+
+async function closeAlert(ctx: Ctx, a: any, note: string) {
+  await ctx.db.query('UPDATE depot_alerts SET resolved_at = now(), resolved_by = $2, old_scanned_at = COALESCE(old_scanned_at, now()) WHERE id = $1', [a.id, ctx.session.profile.id]);
+  const { addEvent } = await import('./orders');
+  await addEvent(ctx.db, num(a.order_id), ctx.session.profile.id, 'note', null, null, note);
+  ctx.emit({ type: 'orders' });
+  return { step: 'done' as const };
+}
+
+/**
  * One open alert per order: new changes are added to it (an older change to the same thing keeps its first « avant »).
  * A changed order without a courier's code gets a new Pilotix code (its new label); the code on the parcel is kept.
+ * `labelled`: could the parcel carry a label before this change (the caller knows the order as it was; default: as it is)
  */
-export async function addDepotAlert(db: Db, ctx: Ctx, orderId: number, stage: string, kind: 'edit' | 'cancel', changes: DepotChange[], cancelledCode?: string | null) {
+export async function addDepotAlert(db: Db, ctx: Ctx, orderId: number, stage: string, kind: 'edit' | 'cancel', changes: DepotChange[], cancelledCode?: string | null, labelled?: boolean) {
   if (kind === 'edit' && !changes.length) return;
-  const o = (await db.query('SELECT tracking, own_tracking FROM orders WHERE id = $1', [orderId]))[0];
+  const o = (await db.query('SELECT tracking, own_tracking, company_id FROM orders WHERE id = $1', [orderId]))[0];
   const open = (await db.query('SELECT id, kind, changes, old_code FROM depot_alerts WHERE order_id = $1 AND resolved_at IS NULL ORDER BY id DESC LIMIT 1', [orderId]))[0];
+  // a parcel just cancelled at its company still carries that company's label
+  const hadLabel = !!cancelledCode || (labelled ?? (await mayHaveLabel(db, o?.company_id, o?.tracking)));
   // the code printed on the parcel now (an open alert already knows it: the parcel has not been relabelled yet)
   // (a parcel just cancelled at its old company still carries that company's label)
   const onParcel = (open?.old_code as string | null) ?? (cancelledCode || o?.tracking || o?.own_tracking || null);
@@ -62,14 +114,15 @@ export async function addDepotAlert(db: Db, ctx: Ctx, orderId: number, stage: st
       cancel ? null : newCode,
     ]);
   } else {
-    await db.query('INSERT INTO depot_alerts (order_id, kind, stage, changes, created_by, old_code, new_code) VALUES ($1,$2,$3,$4,$5,$6,$7)', [
+    await db.query('INSERT INTO depot_alerts (order_id, kind, stage, changes, created_by, old_code, new_code, no_label) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [
       orderId,
       kind,
       stage,
       JSON.stringify(changes),
       ctx.session.profile.id,
-      onParcel,
+      hadLabel ? onParcel : null,
       newCode,
+      !hadLabel,
     ]);
   }
 }
@@ -95,59 +148,76 @@ export const depotAlertProcs = {
   'depot.alerts': proc(['depot'], z.object({}), async (ctx) => {
     if (!(await isRecipient(ctx))) return [];
     const rows = await ctx.db.query(
-      `SELECT a.*, o.ref, o.customer_name, o.phone, o.follow_status, o.total, o.tracking, o.own_tracking, p.name AS by_name,
+      `SELECT a.*, o.ref, o.customer_name, o.phone, o.follow_status, o.total, o.tracking, o.own_tracking, o.company_id,
+              c.kind AS company_kind, c.name AS company_name, p.name AS by_name,
               (SELECT string_agg(CASE WHEN i.qty > 1 THEN i.qty || ' × ' ELSE '' END || i.name || CASE WHEN i.variant_title <> '' THEN ' (' || i.variant_title || ')' ELSE '' END, ' + ' ORDER BY i.id) FROM order_items i WHERE i.order_id = o.id) AS items
-       FROM depot_alerts a JOIN orders o ON o.id = a.order_id LEFT JOIN profiles p ON p.id = a.created_by
+       FROM depot_alerts a JOIN orders o ON o.id = a.order_id LEFT JOIN delivery_companies c ON c.id = o.company_id LEFT JOIN profiles p ON p.id = a.created_by
        WHERE a.resolved_at IS NULL ORDER BY a.created_at`,
     );
-    return rows.map((r: any) => ({
-      id: num(r.id),
-      orderId: num(r.order_id),
-      ref: r.ref as string,
-      kind: r.kind as 'edit' | 'cancel',
-      stage: (r.stage ?? null) as string | null,
-      status: (r.follow_status ?? null) as string | null,
-      customer: r.customer_name as string,
-      phone: r.phone as string,
-      items: (r.items ?? '') as string,
-      total: num(r.total),
-      /** the code on the parcel now (to scan first) */
-      oldCode: (r.old_code ?? r.tracking ?? r.own_tracking ?? null) as string | null,
-      /** the new label's code (changed order); null: one scan is enough */
-      newCode: (r.new_code ?? null) as string | null,
-      /** the parcel was found (old label scanned): the new label is next */
-      found: !!r.old_scanned_at,
-      changes: (typeof r.changes === 'string' ? JSON.parse(r.changes) : r.changes ?? []) as DepotChange[],
-      byName: (r.by_name ?? null) as string | null,
-      at: iso(r.created_at),
-    }));
+    return rows.map((r: any) => {
+      const s = stepsOf(r);
+      return {
+        id: num(r.id),
+        orderId: num(r.order_id),
+        ref: r.ref as string,
+        kind: r.kind as 'edit' | 'cancel',
+        stage: (r.stage ?? null) as string | null,
+        status: (r.follow_status ?? null) as string | null,
+        customer: r.customer_name as string,
+        phone: r.phone as string,
+        items: (r.items ?? '') as string,
+        total: num(r.total),
+        /** the code on the parcel now (to scan first); null: the parcel never had a label (`noOld`) */
+        oldCode: s.oldCode,
+        noOld: s.noOld,
+        /** the new label's code (changed order); null: one scan is enough (or, with `send`, not known yet) */
+        newCode: s.newCode,
+        /** the parcel must first be sent to its company: it has no tracking number (so no label) yet */
+        send: s.send,
+        /** its company prints its own label (ZR…): that label, never a Pilotix one */
+        api: s.api,
+        companyName: (r.company_name ?? null) as string | null,
+        /** the parcel was found (old label scanned, or it never had one): the new label is next */
+        found: s.found,
+        changes: (typeof r.changes === 'string' ? JSON.parse(r.changes) : r.changes ?? []) as DepotChange[],
+        byName: (r.by_name ?? null) as string | null,
+        at: iso(r.created_at),
+      };
+    });
   }),
 
   /** A scan on the alert: the old label (parcel found), then the new label (changed order) — the alert closes. */
   'depot.alertScan': proc(['depot'], z.object({ id, code: z.string().trim().min(1).max(120) }), async (ctx, i) => {
     if (!(await isRecipient(ctx))) throw bad('Ces alertes sont réglées par le responsable du dépôt');
-    const a = (await ctx.db.query('SELECT a.*, o.tracking, o.own_tracking FROM depot_alerts a JOIN orders o ON o.id = a.order_id WHERE a.id = $1', [i.id]))[0];
+    const a = (await ctx.db.query(ALERT_SQL, [i.id]))[0];
     if (!a) throw notFound('Alerte introuvable');
     if (a.resolved_at) return { step: 'done' as const };
+    const s = stepsOf(a);
     const code = norm(i.code);
-    const oldCode = norm(a.old_code ?? a.tracking ?? a.own_tracking ?? '');
-    const newCode = a.new_code ? norm(a.new_code) : null;
-    const close = async (note: string) => {
-      await ctx.db.query('UPDATE depot_alerts SET resolved_at = now(), resolved_by = $2, old_scanned_at = COALESCE(old_scanned_at, now()) WHERE id = $1', [i.id, ctx.session.profile.id]);
-      const { addEvent } = await import('./orders');
-      await addEvent(ctx.db, num(a.order_id), ctx.session.profile.id, 'note', null, null, note);
-      ctx.emit({ type: 'orders' });
-      return { step: 'done' as const };
-    };
-    if (!a.old_scanned_at) {
+    const oldCode = s.oldCode ? norm(s.oldCode) : null;
+    const newCode = s.newCode ? norm(s.newCode) : null;
+    const co = (a.company_name as string | null) || 'la société';
+    if (!s.found) {
       if (code !== oldCode) throw bad(newCode && code === newCode ? 'Scannez d’abord l’ancienne étiquette (celle qui est sur le colis)' : 'Ce n’est pas ce colis : scannez l’étiquette de la commande en alerte');
-      if (!newCode) return close(a.kind === 'cancel' ? 'Dépôt : colis annulé retiré (scanné)' : 'Dépôt : changement pris en compte (colis scanné)');
+      if (!newCode && !s.send) return closeAlert(ctx, a, a.kind === 'cancel' ? 'Dépôt : colis annulé retiré (scanné)' : 'Dépôt : changement pris en compte (colis scanné)');
       await ctx.db.query('UPDATE depot_alerts SET old_scanned_at = now() WHERE id = $1', [i.id]);
       return { step: 'found' as const };
     }
-    if (code === oldCode) throw bad('C’est encore l’ancienne étiquette : collez la nouvelle sur le colis, puis scannez-la');
-    if (code !== newCode) throw bad('Ce n’est pas la nouvelle étiquette de cette commande');
-    return close('Dépôt : colis corrigé, nouvelle étiquette collée (scannée)');
+    if (s.send) throw bad(`Ce colis n’a pas encore son étiquette ${co} : appuyez sur « Envoyer à ${co} », puis imprimez-la`);
+    if (!newCode) throw bad('Ce colis n’a jamais eu d’étiquette : rien à scanner. Appuyez sur « Colis retiré »');
+    if (oldCode && code === oldCode) throw bad('C’est encore l’ancienne étiquette : collez la nouvelle sur le colis, puis scannez-la');
+    if (code !== newCode) throw bad(s.api ? `Ce n’est pas l’étiquette ${co} de cette commande : imprimez-la ici, collez-la, puis scannez-la` : 'Ce n’est pas la nouvelle étiquette de cette commande');
+    return closeAlert(ctx, a, s.api ? `Dépôt : colis corrigé, étiquette ${co} collée (scannée)` : 'Dépôt : colis corrigé, nouvelle étiquette collée (scannée)');
+  }),
+
+  /** A cancelled parcel that never had a label (its company had not given one yet): nothing to scan, the depot says it took it out. */
+  'depot.alertNoLabel': proc(['depot'], z.object({ id }), async (ctx, i) => {
+    if (!(await isRecipient(ctx))) throw bad('Ces alertes sont réglées par le responsable du dépôt');
+    const a = (await ctx.db.query(ALERT_SQL, [i.id]))[0];
+    if (!a) throw notFound('Alerte introuvable');
+    if (a.resolved_at) return { step: 'done' as const };
+    if (a.kind !== 'cancel' || !a.no_label) throw bad('Cette alerte se règle en scannant le colis');
+    return closeAlert(ctx, a, 'Dépôt : colis annulé retiré (il n’avait pas d’étiquette)');
   }),
 
   /**

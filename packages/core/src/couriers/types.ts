@@ -330,6 +330,8 @@ export interface CourierAdapter {
   cancel?(c: CourierCompany, p: TrackItem): Promise<void>;
   fees?(c: CourierCompany): Promise<FeeRow[]>;
   stopdesks?(c: CourierCompany): Promise<Desk[]>;
+  /** The courier's own communes of one wilaya (its names), to check an order's commune before it is confirmed. */
+  communes?(c: CourierCompany, wilayaId: number): Promise<{ id: string; name: string }[]>;
   /** Réclamations through the courier API (create, its categories, read back their state). */
   claimCategories?(c: CourierCompany): Promise<ClaimCategory[]>;
   claim?(c: CourierCompany, i: ClaimInput): Promise<ClaimSent>;

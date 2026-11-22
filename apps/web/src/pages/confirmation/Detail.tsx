@@ -327,6 +327,15 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
               ? { tone: 'bad', text: t('confirmation.chk.wilaya'), fix: () => setGeoPick('wil') }
               : C.deliver.why === 'desk'
                 ? { tone: 'bad', text: t('confirmation.chk.desk'), fix: () => setPicker(true) }
+                : C.deliver.why === 'courierCommune'
+                ? {
+                    tone: 'bad',
+                    text: [
+                      t('confirmation.chk.courierCommune', { co: C.deliver.companyName ?? '', c: C.deliver.commune ?? '' }),
+                      C.deliver.near?.length ? t('confirmation.chk.courierNear', { co: C.deliver.companyName ?? '', near: C.deliver.near.join(', ') }) : '',
+                    ].filter(Boolean).join(' '),
+                    fix: () => setGeoPick('com'),
+                  }
                 : C.deliver.why === 'company'
                   ? { tone: 'bad', text: t(C.deliver.desk ? 'confirmation.chk.companyDesk' : 'confirmation.chk.companyHome', { co: C.deliver.companyName ?? '', w: wName(C.deliver.wilayaId) }) }
                   : { tone: 'bad', text: t(C.deliver.desk ? 'confirmation.chk.nobodyDesk' : 'confirmation.chk.nobodyHome', { w: wName(C.deliver.wilayaId) }) }

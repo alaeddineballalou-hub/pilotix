@@ -827,4 +827,12 @@ export const zr: CourierAdapter = {
       .filter((x: any) => x.isPickupPoint && x.isVisible !== false)
       .map((x: any): Desk => ({ extId: String(x.id), name: x.name, wilayaId: code.get(x.address?.cityTerritoryId) ?? null, commune: x.address?.district || x.address?.city || null, address: [x.address?.street, x.address?.district, x.address?.city].filter(Boolean).join(', ') || null }));
   },
+  /** ZR's own communes of one wilaya (kept in memory, like for sending): the confirmation checks the order's commune
+   *  is one of them, so a commune ZR does not know is fixed with the customer, not found at the depot. */
+  async communes(c, wilayaId) {
+    needKeys(c, 'api_key', 'tenant');
+    const w = (await territories(c, 'wilaya')).find((t) => Number(t.code) === Number(wilayaId));
+    if (!w) return [];
+    return (await territories(c, 'commune')).filter((t) => t.parentId === w.id).map((t) => ({ id: String(t.id), name: String(t.name ?? '') }));
+  },
 };
