@@ -11,8 +11,10 @@
 //    cannot see the phone's volume nor turn it up: the agent says he heard it (the Android app will check it);
 //  - his work time: the shift the managers typed for him (Confirmation, under their switch), else the shop's calling
 //    hours (Réglages › Appels); never at night;
-//  - one order at a time, the oldest first, never in the middle of another order (while he has another order open,
-//    kept for him, hold.tsx, it waits);
+//  - one order at a time, the newest first (owner's rule « last in, first out », 22 Nov 2026) — but the new order on his
+//    screen (kept for him, hold.tsx) or the one he called and has not saved a result for stays his until its result is
+//    saved; then the newest of the others rings at once. Never in the middle of another order (while he has another,
+//    not new, order open, it waits);
 //  - the phone rings with a notification (Web Push) as soon as the order is his, then again every 2 minutes until he
 //    calls, whether he is in Pilotix on his computer or not; Pilotix open on the phone rings there itself;
 //  - the managers (agent managers, the owner, the administrators) switch it on or off for the whole shop; off in a new
@@ -81,6 +83,19 @@ export function gateOf(rows: PhoneRow[], since: number, now: number): Gate | nul
   if (rows.some((r) => !silent(r) && ms(r.ack_at) >= since && ms(r.heard_at) >= since)) return null;
   if (rows.some((r) => !silent(r) && ms(r.ack_at) >= since)) return 'heard';
   return rows.some(silent) ? 'silent' : 'test';
+}
+
+/**
+ * His order now, among his new orders (newest first): the new order he has open (kept for him: on his phone's card, or
+ * opened from the list), else the one he called and has not saved a result for, else the newest. null: another of his
+ * orders (not a new one) is open — it waits until he has finished that one.
+ */
+export function pickOrder<T extends { id: unknown; called?: unknown }>(mine: T[], held: Set<number>): T | null {
+  const open = mine.find((r) => held.has(num(r.id)));
+  if (open) return open;
+  const ids = new Set(mine.map((r) => num(r.id)));
+  if ([...held].some((id) => !ids.has(id))) return null;
+  return mine.find((r) => !!r.called) ?? mine[0] ?? null;
 }
 
 /** What the notification says (French, like the other notifications of the server). */
@@ -181,21 +196,23 @@ export const confBlockProcs = {
     // outside his work time: nothing (never at night)
     if (!w.open) return on;
     const at = { ...on, work: true, gate: gateOf(await phonesOf(ctx.db, [me]), w.start, now) };
+    // newest first (« last in, first out »); called: he tapped « Appeler » on it already
     const rows = await ctx.db.query(
-      `SELECT o.id FROM sales o
+      `SELECT o.id, EXISTS (SELECT 1 FROM order_events e WHERE e.order_id = o.id AND e.user_id = $1 AND e.kind = 'call') AS called
+         FROM sales o
         WHERE o.conf_status = 'new' AND o.agent_id = $1${andSql(queueSql(ctx, 'conf'))}
           AND (o.locked_by IS NULL OR o.locked_by = $1 OR o.locked_until < now())
-        ORDER BY o.created_at, o.id LIMIT 100`,
+        ORDER BY o.created_at DESC, o.id DESC LIMIT 100`,
       [me],
     );
     if (!rows.length) return at;
-    const first = num(rows[0].id);
-    // in the middle of another order (open on his screen, kept for him): it waits until he has finished that one
-    const busy = await ctx.db.query('SELECT 1 FROM orders WHERE locked_by = $1 AND locked_until > now() AND id <> $2 AND conf_status = ANY($3) LIMIT 1', [me, first, CONF_TODO]);
-    if (busy.length) return { ...at, queue: rows.length, wait: true };
-    const order = (await withClientScores(ctx, [await getOrder(ctx, first)]))[0];
-    const called = (await ctx.db.query(`SELECT 1 FROM order_events WHERE order_id = $1 AND user_id = $2 AND kind = 'call' LIMIT 1`, [first, me])).length > 0;
-    return { ...at, order, called, queue: rows.length - 1 };
+    // the orders open on his screens (kept for him)
+    const held = new Set((await ctx.db.query('SELECT id FROM orders WHERE locked_by = $1 AND locked_until > now() AND conf_status = ANY($2)', [me, CONF_TODO])).map((r: any) => num(r.id)));
+    const first = pickOrder(rows, held);
+    // in the middle of another order: it waits until he has finished that one
+    if (!first) return { ...at, queue: rows.length, wait: true };
+    const order = (await withClientScores(ctx, [await getOrder(ctx, num(first.id))]))[0];
+    return { ...at, order, called: !!first.called, queue: rows.length - 1 };
   }),
 
   /**
@@ -235,7 +252,7 @@ export const confBlockProcs = {
   }),
 
   /**
-   * Every 30 seconds (scheduled job): in each plain agent's work time, his oldest new order rings his phones — at once,
+   * Every 30 seconds (scheduled job): in each plain agent's work time, his order now (pickOrder: newest first) rings his phones — at once,
    * then every 2 minutes until he taps « Appeler » — whether he works in Pilotix on his computer or not. Never while he
    * is busy with another order. Each ring asks the phone to answer (ringPhones): a phone that does not answer blocks him.
    */
@@ -259,33 +276,36 @@ export const confBlockProcs = {
          FROM sales o JOIN profiles p ON p.id = o.agent_id
         WHERE o.conf_status = 'new' AND o.conf_agency_id IS NULL AND ${PLAIN_SQL}
           AND (o.locked_by IS NULL OR o.locked_by = o.agent_id OR o.locked_until < now())
-        ORDER BY o.created_at, o.id`,
+        ORDER BY o.created_at DESC, o.id DESC`,
     );
-    // one order per agent: his oldest, the one his phone shows
-    const first = new Map<number, any>();
-    const count = new Map<number, number>();
+    // each agent's new orders, newest first
+    const mine = new Map<number, any[]>();
     for (const r of rows) {
       const a = num(r.agent_id);
-      count.set(a, (count.get(a) ?? 0) + 1);
-      if (!first.has(a)) first.set(a, r);
+      mine.set(a, [...(mine.get(a) ?? []), r]);
     }
-    const agents = [...first.keys()];
-    // busy: another of his orders open on his screen, kept for him — it waits until he has finished that one
+    const agents = [...mine.keys()];
+    // the orders open on their screens (kept for them)
     const held = agents.length ? await ctx.db.query('SELECT id, locked_by FROM orders WHERE locked_by = ANY($1) AND locked_until > now() AND conf_status = ANY($2)', [agents, CONF_TODO]) : [];
-    const busy = new Set(held.filter((h: any) => num(h.id) !== num(first.get(num(h.locked_by))?.id)).map((h: any) => num(h.locked_by)));
     const phones = await phonesOf(ctx.db, agents);
     const next: SettingsMap['confRings'] = {};
     let sent = 0;
-    for (const [agent, r] of first) {
+    for (const [agent, list] of mine) {
+      const r = pickOrder(list, new Set(held.filter((h: any) => num(h.locked_by) === agent).map((h: any) => num(h.id))));
+      // in the middle of another order: nothing rings, what waits keeps its count
+      if (!r) {
+        for (const x of list) if (rings[String(x.id)]?.a === agent) next[String(x.id)] = rings[String(x.id)];
+        continue;
+      }
       const key = String(r.id);
       // given to someone else since: his count starts again
       const prev = rings[key] && rings[key].a === agent ? rings[key] : null;
       // outside his work time (his shift, else the calling hours): nothing rings, what waits keeps its count
       const work = workAt(now, calls, shifts[String(agent)]).open;
-      const due = work && !r.called && !busy.has(agent) && (!prev || now - prev.at >= RING_AGAIN_MS);
+      const due = work && !r.called && (!prev || now - prev.at >= RING_AGAIN_MS);
       const his = phones.filter((x) => num(x.profile_id) === agent);
       if (due && his.length) {
-        sent += await ringPhones(ctx, his, ringText(r, prev?.n ?? 0, (count.get(agent) ?? 1) - 1)).catch(() => 0);
+        sent += await ringPhones(ctx, his, ringText(r, prev?.n ?? 0, list.length - 1)).catch(() => 0);
         next[key] = { a: agent, at: now, n: (prev?.n ?? 0) + 1 };
       } else if (prev) next[key] = prev;
     }

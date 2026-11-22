@@ -1,8 +1,9 @@
 // Confirmation › « Bloquer jusqu'à l'appel »: in his work time (his shift, else the calling hours) a plain agent works
 // only once his phone is ready — notifications on, a test ring that reached it (its worker answers), « je l'ai entendu »
 // — at the start of each shift; a ring his phone does not answer blocks him again. A new order rings his phone (the
-// oldest first) at once, then every 2 minutes until « Appeler », never his computer; it waits while he works on another
-// order, never outside his work time. Only the managers switch it and type the shifts.
+// newest first, « last in, first out », but the one on his screen or already called stays his until its result) at
+// once, then every 2 minutes until « Appeler », never his computer; it waits while he works on another order, never
+// outside his work time. Only the managers switch it and type the shifts.
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { algiersHour, DEFAULT_CALL_SETTINGS } from '@pilotix/shared';
@@ -13,7 +14,7 @@ import { EMAILS, setup } from './harness';
 let db: Db;
 let as: (email: string, server?: Ctx['server']) => Promise<Ctx>;
 let samiraId = 0;
-/** Samira's two new orders (the older one first) */
+/** Samira's two new orders (the older one first: her phone shows the newer one first) */
 let mine: number[] = [];
 
 /** the shop calls its customers all day long (the tests run at any hour) */
@@ -73,28 +74,37 @@ test('off by default; only the managers switch it on or off and type the shifts'
   assert.equal((await getSetting(db, 'confBlock')).on, true);
 });
 
-test('no phone: she cannot work; the oldest order is hers to call; « Appeler » is counted; a result moves on; never the managers', async () => {
+test('no phone: she cannot work; the newest order is hers to call; the one on her screen or called stays hers; a result moves on', async () => {
   const samira = await as(EMAILS.conf);
   const b = await blocking(EMAILS.conf);
   assert.equal(b.on, true);
   assert.equal(b.work, true, 'her work time (the calling hours: no shift typed)');
   assert.equal(b.gate, 'none', 'no phone ready: her computer and her phone are blocked');
-  assert.equal(b.order?.id, mine[0], 'the oldest first');
+  assert.equal(b.order?.id, mine[1], 'the newest first (last in, first out)');
   assert.equal(b.called, false);
   assert.equal(b.queue, 1, 'one more after it');
+  // the older one is open on her screen (kept for her): it stays hers, the newer one waits behind it
+  await db.query(`UPDATE orders SET locked_by = $1, locked_until = now() + interval '5 minutes' WHERE id = $2`, [samiraId, mine[0]]);
+  assert.equal((await blocking(EMAILS.conf)).order?.id, mine[0], 'the order on her screen is not taken away');
+  // she called it and left Pilotix for the call (no longer kept): still hers until its result is saved
   await call('orders.logCall', samira, { id: mine[0] });
-  assert.equal((await blocking(EMAILS.conf)).called, true, 'the tap on « Appeler » is counted');
+  await db.query('UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE id = $1', [mine[0]]);
+  const c = await blocking(EMAILS.conf);
+  assert.equal(c.order?.id, mine[0], 'the called order stays hers');
+  assert.equal(c.called, true, 'the tap on « Appeler » is counted');
+  // the result saved: the next one (the newest left) comes at once
   await call('confirmation.setTry', samira, { ids: [mine[0]], n: 1 });
   const next = await blocking(EMAILS.conf);
   assert.equal(next.order?.id, mine[1]);
-  assert.equal(next.called, false, 'a new order: not called yet');
+  assert.equal(next.called, false, 'not called yet');
+  assert.equal(next.queue, 0);
   // the managers and the administrators are never blocked
   for (const e of [EMAILS.manager, EMAILS.admin]) {
     const m = await blocking(e);
     assert.equal(m.order, null);
     assert.equal(m.gate, null);
   }
-  // in the middle of another order (open on her screen, kept for her): the new one waits
+  // in the middle of another order (not a new one, open on her screen): the new one waits
   await db.query(`UPDATE orders SET locked_by = $1, locked_until = now() + interval '5 minutes' WHERE id = $2`, [samiraId, mine[0]]);
   const w = await blocking(EMAILS.conf);
   assert.equal(w.order, null);
@@ -159,16 +169,16 @@ test('a new order rings her phone at once, then every 2 minutes until « Appeler
   const samira = await as(EMAILS.conf, server);
   const yacine = await as(EMAILS.manager);
   const run = async () => ((await call('confirmation.pushRun', admin, {})) as any).sent as number;
-  // a third new order of hers, newer: it waits behind the oldest (one ring per agent: the order her phone shows)
+  // a third new order of hers, the newest: it rings first (one ring per agent: the order her phone shows)
   const third = Number((await db.query(`SELECT id FROM orders WHERE conf_status = 'new' AND agent_id IS NULL AND conf_agency_id IS NULL AND NOT is_exchange ORDER BY created_at DESC, id DESC LIMIT 1`))[0].id);
   await db.query('UPDATE orders SET agent_id = $2, assigned_at = now(), created_at = now(), locked_by = NULL, locked_until = NULL WHERE id = $1', [third, samiraId]);
   // she works in Pilotix on her computer right now: her phone rings all the same
   await db.query(`UPDATE profiles SET last_seen_at = now(), presence = 'online' WHERE id = $1`, [samiraId]);
   sent.length = 0;
   assert.equal(await run(), 1);
-  assert.equal(sent.length, 1, 'one ring for her: the oldest order, not the one behind it');
+  assert.equal(sent.length, 1, 'one ring for her: the newest order, not the one behind it');
   assert.deepEqual(sent[0].subs.map((x: any) => x.endpoint), [PHONE], 'her phone, never her computer');
-  assert.equal(sent[0].payload.tag, `conf-new-${mine[1]}`);
+  assert.equal(sent[0].payload.tag, `conf-new-${third}`);
   assert.match(sent[0].payload.title, /Nouvelle commande/);
   assert.match(sent[0].payload.body, /\+1 après/, 'how many come after it');
   assert.equal(sent[0].payload.alarm, true);
@@ -186,23 +196,23 @@ test('a new order rings her phone at once, then every 2 minutes until « Appeler
   }
   assert.match(sent[sent.length - 1].payload.title, /attend toujours/);
   assert.equal(sent.length, 9, 'no limit while it waits for her call');
-  // busy with another order (open on her screen, kept for her): it waits
-  await db.query(`UPDATE orders SET locked_by = $1, locked_until = now() + interval '5 minutes' WHERE id = $2`, [samiraId, third]);
+  // busy with another order (not a new one, open on her screen, kept for her): it waits
+  await db.query(`UPDATE orders SET locked_by = $1, locked_until = now() + interval '5 minutes' WHERE id = $2`, [samiraId, mine[0]]);
   await back();
   assert.equal(await run(), 0, 'not while she works on another order');
-  await db.query('UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE id = $1', [third]);
+  await db.query('UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE id = $1', [mine[0]]);
   // outside her shift: nothing rings
   await call('confirmation.shiftSet', yacine, { agentId: samiraId, ...later() });
   await back();
   assert.equal(await run(), 0, 'not outside her shift');
   await call('confirmation.shiftSet', yacine, { agentId: samiraId, from: null, to: null });
   // she tapped « Appeler »: the phone stops ringing (the result is what lets her go)
-  await call('orders.logCall', samira, { id: mine[1] });
+  await call('orders.logCall', samira, { id: third });
   await back();
   assert.equal(await run(), 0, 'called: no more ringing');
-  await call('confirmation.setTry', samira, { ids: [mine[1]], n: 1 });
-  assert.equal(await run(), 1, 'the next one rings at once');
-  assert.equal(sent[sent.length - 1].payload.tag, `conf-new-${third}`);
+  await call('confirmation.setTry', samira, { ids: [third], n: 1 });
+  assert.equal(await run(), 1, 'the result saved: the next one rings at once');
+  assert.equal(sent[sent.length - 1].payload.tag, `conf-new-${mine[1]}`);
   // switched off: nothing waits to ring any more
   await call('confirmation.blockSet', yacine, { on: false });
   assert.deepEqual(await getSetting(db, 'confRings'), {});
