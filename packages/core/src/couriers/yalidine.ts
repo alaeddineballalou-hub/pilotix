@@ -165,6 +165,11 @@ async function changeDirect(c: CourierCompany, i: ChangeInput, helpers: Helpers,
 
 export const yalidine: CourierAdapter = {
   statuses: STATUSES,
+  /** Yalidine's communes of one wilaya (the confirmation checks the order's commune is one of them) */
+  async communes(c, w) {
+    needKeys(c, 'api_id', 'api_token');
+    return (await all(c, `communes/?wilaya_id=${yw(w)}`)).map((x) => ({ id: String(x.id), name: String(x.name ?? '') })).filter((x) => x.name);
+  },
   async test(c) {
     needKeys(c, 'api_id', 'api_token');
     const r = await api(c, 'wilayas/?page_size=1');

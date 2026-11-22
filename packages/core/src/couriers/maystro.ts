@@ -16,7 +16,7 @@
 // the shape of the history and hook lists; which statuses can still be changed (4–15); delivery_type 1 = home, 2 = stop desk.
 import { cacheKeyOf } from './types';
 import type { ChangeInput, CourierAdapter, CourierCompany, Helpers, Parcel, ParcelInfo, TrackItem, TrackResult } from './types';
-import { baseUrl, bestMatch, CourierError, cut, http, HttpOpts, needKeys, query, sleep, timeUp } from './util';
+import { ASK_AGAIN_MS, baseUrl, bestMatch, CourierError, cut, http, HttpOpts, LIST_KEPT_MS, listClock, needKeys, query, sleep, timeUp } from './util';
 
 const LABELS: Record<string, string> = {
   '4': 'Créé', '5': 'Ramassage demandé', '6': 'En traitement', '8': 'En attente de transit', '9': 'En transit pour expédition',
@@ -58,31 +58,34 @@ async function api(c: CourierCompany, path: string, o: HttpOpts & { q?: Record<s
 const oid = (it: TrackItem) => encodeURIComponent(it.extId || it.tracking);
 
 // ---------------------------------------------------------------- wilayas, communes
-const cache = new Map<string, any[]>();
-async function communes(c: CourierCompany, wilayaId: number | null): Promise<{ name: string; id: number; wilaya: number }[]> {
+const cache = new Map<string, { at: number; list: any[] }>();
+/** a wilaya's communes, kept an hour; `fresh`: read again at once (a commune not on the list), at most once a minute */
+async function communes(c: CourierCompany, wilayaId: number | null, fresh = false): Promise<{ name: string; id: number; wilaya: number }[]> {
   const key = `${cacheKeyOf(c)}:c${wilayaId ?? 'all'}`;
-  if (cache.has(key)) return cache.get(key)!;
+  const had = cache.get(key);
+  if (had && listClock.now() - had.at < (fresh ? ASK_AGAIN_MS : LIST_KEPT_MS)) return had.list;
   // the wilaya's own page lists its communes (no communes address exists at Maystro)
   const r = wilayaId ? await api(c, `base/wilayas/${wilayaId}/`, { q: { country: 1, language: 'fr' } }) : null;
   const raw: any[] = Array.isArray(r) ? r : Array.isArray(r?.communes) ? r.communes : Array.isArray(r?.data?.communes) ? r.data.communes : listOf(r);
   const list = raw
     .filter((x: any) => x && x.id != null && (!wilayaId || x.wilaya == null || Number(x.wilaya) === wilayaId))
     .map((x: any) => ({ name: String(x.name ?? ''), id: Number(x.id), wilaya: Number(x.wilaya ?? wilayaId) }));
-  cache.set(key, list);
+  cache.set(key, { at: listClock.now(), list });
   return list;
 }
 async function wilayas(c: CourierCompany) {
   const key = `${cacheKeyOf(c)}:w`;
-  if (cache.has(key)) return cache.get(key)!;
+  const had = cache.get(key);
+  if (had && listClock.now() - had.at < LIST_KEPT_MS) return had.list;
   const r = await api(c, 'base/wilayas/', { q: { country: 1, language: 'fr' } });
   const list = listOf(r)
     .map((x) => (Array.isArray(x) ? { id: Number(x[0]), name: String(x[1] ?? '') } : { id: Number(x?.id), name: String(x?.name ?? '') }))
     .filter((x) => x.id >= 1);
-  cache.set(key, list);
+  cache.set(key, { at: listClock.now(), list });
   return list;
 }
 async function communeOf(c: CourierCompany, p: Parcel, h: Helpers) {
-  const com = await h.communeName(p, (w) => communes(c, w), `maystro:${cacheKeyOf(c)}`);
+  const com = await h.communeName(p, (w, fresh) => communes(c, w, fresh), `maystro:${cacheKeyOf(c)}`);
   if (!com) throw new CourierError(`Commune « ${p.commune || p.stopdesk_commune || '?'} » introuvable chez ${c.name} : corrigez la commune`);
   return com;
 }
@@ -188,6 +191,8 @@ const webhook: NonNullable<CourierAdapter['webhook']> = {
 
 export const maystro: CourierAdapter = {
   statuses: STATUSES,
+  /** Maystro's communes of one wilaya (the confirmation checks the order's commune is one of them) */
+  communes: async (c, w, fresh) => (await communes(c, w, fresh)).map((x) => ({ id: String(x.id), name: x.name })).filter((x) => x.name),
   parcel: parcelInfo,
   change,
   webhook,

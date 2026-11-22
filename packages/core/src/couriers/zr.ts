@@ -14,7 +14,7 @@
 // unknown ones are shown as-is and can be mapped by hand with the "Statuts" button.
 import { cacheKeyOf } from './types';
 import type { BagAdded, BagInfo, ChangeInput, ChangeState, ClaimCategory, ClaimState, CourierAdapter, CourierBags, CourierCompany, Desk, FeeRow, Helpers, Parcel, ParcelInfo, TrackItem } from './types';
-import { baseUrl, bestMatch, CourierError, cut, http, intl, needKeys, sleep, timeUp } from './util';
+import { ASK_AGAIN_MS, baseUrl, bestMatch, CourierError, cut, http, intl, LIST_KEPT_MS, listClock, needKeys, sleep, timeUp } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
   commande_recue: null, en_traitement: null, appel_confirmation: null, commande_confirmee: null, en_preparation: null, pret_a_expedier: null,
@@ -31,9 +31,13 @@ const url = (c: CourierCompany, path: string) => baseUrl(c, 'https://api.zrexpre
 const labelFormat = (c: CourierCompany) => (/^a4$/i.test(String(c.settings.label_format ?? '').trim()) ? 'a4' : 'a6');
 
 const cache = new Map<string, any[]>();
-async function territories(c: CourierCompany, level: 'wilaya' | 'commune') {
+const kept = new Map<string, { at: number; list: any[] }>();
+/** ZR's wilayas or communes, kept an hour; `fresh`: read again at once (a commune not on the list: ZR may have just added
+ *  it), at most once a minute. */
+async function territories(c: CourierCompany, level: 'wilaya' | 'commune', fresh = false) {
   const key = `${cacheKeyOf(c)}:${level}`;
-  if (cache.has(key)) return cache.get(key)!;
+  const had = kept.get(key);
+  if (had && listClock.now() - had.at < (fresh ? ASK_AGAIN_MS : LIST_KEPT_MS)) return had.list;
   const out: any[] = [];
   let filtered = true;
   const page = (n: number, f: boolean) =>
@@ -56,7 +60,7 @@ async function territories(c: CourierCompany, level: 'wilaya' | 'commune') {
     if (!r.hasNext) break;
   }
   const list = out.filter((t) => t.level === level);
-  cache.set(key, list);
+  kept.set(key, { at: listClock.now(), list });
   return list;
 }
 async function hubs(c: CourierCompany) {
@@ -271,7 +275,8 @@ async function zrAddress(c: CourierCompany, p: Parcel, helpers: Helpers) {
   }
   const w = (await territories(c, 'wilaya')).find((t) => Number(t.code) === Number(p.wilaya_id));
   if (!w) throw new CourierError(`ZR ne livre pas la wilaya ${p.wilaya_id}`);
-  const com = await helpers.communeName(p, async () => (await territories(c, 'commune')).filter((t) => t.parentId === w.id).map((t) => ({ id: t.id, name: t.name })), `zr:${cacheKeyOf(c)}:${w.id}`);
+  // ZR gives each commune's Arabic name too: « Beni Zmenzer » (أيت زمنزر) is found as ZR's « Ait Zmenzer »
+  const com = await helpers.communeName(p, async (_w, fresh) => (await territories(c, 'commune', fresh)).filter((t) => t.parentId === w.id).map((t) => ({ id: t.id, name: t.name, ar: t.nameArabic ?? null })), `zr:${cacheKeyOf(c)}:${w.id}`);
   if (!com) throw new CourierError(`Commune « ${p.commune} » introuvable chez ZR : corrigez la commune`);
   return { hubId: undefined, address: { cityTerritoryId: w.id, districtTerritoryId: com.id, street: cut(p.address || p.commune, 200) } };
 }
@@ -829,10 +834,10 @@ export const zr: CourierAdapter = {
   },
   /** ZR's own communes of one wilaya (kept in memory, like for sending): the confirmation checks the order's commune
    *  is one of them, so a commune ZR does not know is fixed with the customer, not found at the depot. */
-  async communes(c, wilayaId) {
+  async communes(c, wilayaId, fresh) {
     needKeys(c, 'api_key', 'tenant');
     const w = (await territories(c, 'wilaya')).find((t) => Number(t.code) === Number(wilayaId));
     if (!w) return [];
-    return (await territories(c, 'commune')).filter((t) => t.parentId === w.id).map((t) => ({ id: String(t.id), name: String(t.name ?? '') }));
+    return (await territories(c, 'commune', fresh)).filter((t) => t.parentId === w.id).map((t) => ({ id: String(t.id), name: String(t.name ?? ''), ar: t.nameArabic ? String(t.nameArabic) : null }));
   },
 };

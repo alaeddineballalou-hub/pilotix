@@ -7,14 +7,16 @@
 //     delivery men, manual companies and companies without a tariff always do). No company yet: one of them must.
 //     An order whose customer never said his wilaya (Pilot Message, « Commande avec le numéro seul »: the shop's own
 //     wilaya put in for now, orders.wilaya_guess) waits until someone asks him: another wilaya, or a commune / bureau.
-//     At home with a company that keeps its own list of communes (ZR…), that list must know the order's commune
-//     (22 Nov 2026: PX1226, « Azzefoun » unknown at ZR, was confirmed and refused only at the depot).
+//     At home with a company that keeps its own list of communes (ZR, Yalidine, Ecotrack…), that list must know the
+//     order's commune (22 Nov 2026: PX1226, « Azzefoun » unknown at ZR, was confirmed and refused only at the depot).
+//     Pilotix finds the company's name by itself (same name, sound or Arabic name: couriers/util matchCommune): nobody
+//     links a commune by hand (the owner, 22 Nov 2026).
 // The order card asks the same question (orders.confirmCheck) before the agent presses « Confirmer ».
-import { communesOf, WILAYAS } from '@pilotix/shared';
+import { WILAYAS } from '@pilotix/shared';
 import type { CourierKind } from '@pilotix/shared';
 import { z } from 'zod';
 import { ADAPTERS } from '../couriers/adapters';
-import { bestMatch, nearest } from '../couriers/util';
+import { type CommuneName, matchCommune, nearest, ourCommunes } from '../couriers/util';
 import { Db, num, numOrNull } from '../db';
 import { Ctx, proc } from '../rpc';
 import { getSetting } from '../settings';
@@ -125,38 +127,56 @@ async function deskMissing(db: Db, o: { wilayaId: number | null; isStopdesk: boo
 const COURIER_WAIT_MS = 6000;
 
 /**
- * Does the company's own list of communes (ZR…) know this commune? Asked from the courier on the server (kept in memory
- * there after the first time), matched as the sending will match it. null: it cannot say (no list by API, demo keys,
- * no answer in time) — the order goes on, and the depot's sending tells if the courier refuses it.
+ * The browser preview's stand-ins (its couriers are simulated): every company that keeps its own list of communes knows
+ * Pilotix's list, except « Ait Chaffaa » (so a commune a company does not know can be tried there). ZR writes two its
+ * own way: « Azeffoun » (found by its sound) and « Ait Zmenzer » for « Beni Zmenzer » (found by its Arabic name, أيت زمنزر).
+ */
+const DEMO_ZR_NAMES: Record<string, string> = { Azzefoun: 'Azeffoun', 'Beni Zmenzer': 'Ait Zmenzer' };
+const DEMO_UNKNOWN = 'Ait Chaffaa';
+
+/**
+ * Does the company's own list of communes know this commune? Every company Pilotix can read that list from (ZR,
+ * Yalidine, Ecotrack, Maystro…), asked on the server (kept an hour there; a commune not on it: asked again at once, the
+ * company may have just added it), matched as the sending matches it (the same name, sound or Arabic name, never another
+ * commune's). null: it cannot say (no list by API, missing keys, no answer in time) — the order goes on, and the depot's
+ * sending tells if the courier refuses it.
  */
 export async function courierCommune(db: Db, ctx: Ctx, companyId: number, wilayaId: number, commune: string): Promise<{ ok: boolean; near: string[] } | null> {
   if (!commune.trim()) return null;
   const c = (await db.query('SELECT kind FROM delivery_companies WHERE id = $1', [companyId]))[0];
   if (!c || !ADAPTERS[c.kind as CourierKind]?.communes) return null;
-  const answer = (list: string[]) => (bestMatch(commune, list) ? { ok: true, near: [] } : { ok: false, near: nearest(commune, list) });
+  const answer = (list: CommuneName[]) =>
+    matchCommune(commune, list, wilayaId) ? { ok: true, near: [] } : { ok: false, near: nearest(commune, list.map((x) => x.name), 3) };
   const run = ctx.server?.courier;
-  // the browser preview: its couriers are simulated — the demo's ZR writes one commune its own way (« Azeffoun » for
-  // Pilotix's « Azzefoun »), so the check can be tried there; a name outside Pilotix's list: it can't say
   if (!run) {
-    const own = communesOf(wilayaId).map((x) => x[1]);
-    if (c.kind !== 'zr' || !bestMatch(commune, own)) return null;
-    return answer(own.map((x) => (x === 'Azzefoun' ? 'Azeffoun' : x)));
+    const own = ourCommunes(wilayaId);
+    // a name outside Pilotix's list (typed by hand): the stand-in can't say
+    if (!matchCommune(commune, own, wilayaId)) return null;
+    return answer(own.filter((x) => x.name !== DEMO_UNKNOWN).map((x) => (c.kind === 'zr' && DEMO_ZR_NAMES[x.name] ? { ...x, name: DEMO_ZR_NAMES[x.name] } : x)));
   }
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    const names = await Promise.race([
-      run('communes', { companyId, wilayaId }, ctx),
-      new Promise<null>((ok) => {
-        timer = setTimeout(() => ok(null), COURIER_WAIT_MS);
-      }),
-    ]);
-    if (!Array.isArray(names) || !names.length) return null;
-    return answer(names.map(String));
-  } catch {
-    return null;
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
+  /** the company's list (the one kept in memory, or read again at once: `fresh`); null: no answer in time */
+  const ask = async (fresh: boolean): Promise<CommuneName[] | null> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const list = await Promise.race([
+        run('communes', { companyId, wilayaId, ...(fresh ? { fresh: true } : {}) }, ctx),
+        new Promise<null>((ok) => {
+          timer = setTimeout(() => ok(null), COURIER_WAIT_MS);
+        }),
+      ]);
+      if (!Array.isArray(list) || !list.length) return null;
+      return list.map((x: any): CommuneName => (typeof x === 'string' ? { name: x } : { name: String(x?.name ?? ''), ar: x?.ar ? String(x.ar) : null })).filter((x) => x.name);
+    } catch {
+      return null;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
+  const kept = await ask(false);
+  if (!kept) return null;
+  if (matchCommune(commune, kept, wilayaId)) return { ok: true, near: [] };
+  // not on it: the company may have just added it — asked again at once (the server asks at most once a minute)
+  return answer((await ask(true)) ?? kept);
 }
 
 /** Can this order be delivered where it says? `ctx` (on the server): also asks a courier with its own list of communes. */

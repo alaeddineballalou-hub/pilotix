@@ -310,8 +310,10 @@ export interface ExchangeResult extends SendResult {
 
 /** Helpers the framework gives to adapters. */
 export interface Helpers {
-  /** Finds the courier's commune matching ours (fuzzy). `load` lists the courier's communes of the wilaya. */
-  communeName<T extends { name: string }>(p: Parcel, load: (wilayaId: number) => Promise<T[]>, cacheKey?: string): Promise<T | null>;
+  /** Finds the courier's commune for ours: the same name, sound or Arabic name (util matchCommune). `load` lists the
+   *  courier's communes of the wilaya (with their Arabic names when it gives them); `fresh`: read again from the company
+   *  (the commune was not on the list kept in memory). */
+  communeName<T extends { name: string; ar?: string | null }>(p: Parcel, load: (wilayaId: number, fresh?: boolean) => Promise<T[]>, cacheKey?: string): Promise<T | null>;
 }
 
 /**
@@ -330,8 +332,9 @@ export interface CourierAdapter {
   cancel?(c: CourierCompany, p: TrackItem): Promise<void>;
   fees?(c: CourierCompany): Promise<FeeRow[]>;
   stopdesks?(c: CourierCompany): Promise<Desk[]>;
-  /** The courier's own communes of one wilaya (its names), to check an order's commune before it is confirmed. */
-  communes?(c: CourierCompany, wilayaId: number): Promise<{ id: string; name: string }[]>;
+  /** The courier's own communes of one wilaya (its names, and Arabic names when it gives them), to check an order's
+   *  commune before it is confirmed. */
+  communes?(c: CourierCompany, wilayaId: number, fresh?: boolean): Promise<{ id: string; name: string; ar?: string | null }[]>;
   /** Réclamations through the courier API (create, its categories, read back their state). */
   claimCategories?(c: CourierCompany): Promise<ClaimCategory[]>;
   claim?(c: CourierCompany, i: ClaimInput): Promise<ClaimSent>;

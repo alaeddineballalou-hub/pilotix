@@ -120,7 +120,7 @@ async function changeDirect(c: CourierCompany, i: ChangeInput, helpers: Helpers,
     const next: Parcel = { ...p, is_stopdesk: toDesk, wilaya_id: i.wilayaId ?? p.wilaya_id, commune: i.commune ?? p.commune, address: i.address ?? p.address };
     const com = await helpers.communeName(
       next,
-      async (w) => Object.values((await api(c, '/get/communes', { wilaya_id: w })) ?? {}).map((x: any) => ({ name: x.nom as string, id: x.code_postal, desk: Number(x.has_stop_desk) === 1 })),
+      (w) => ecoCommunes(c, w),
       `eco:${cacheKeyOf(c)}`,
     );
     if (!com) throw new CourierError(`Commune « ${next.commune} » introuvable chez ${c.name} : corrigez la commune`);
@@ -143,8 +143,18 @@ async function changeDirect(c: CourierCompany, i: ChangeInput, helpers: Helpers,
   return { extId: i.item.tracking, approved: true, direct: true };
 }
 
+/** The company's communes of one wilaya (its name, postal code, and whether it has a stop desk there). */
+async function ecoCommunes(c: CourierCompany, w: number): Promise<{ name: string; id: unknown; desk: boolean }[]> {
+  return Object.values((await api(c, '/get/communes', { wilaya_id: w })) ?? {}).map((x: any) => ({ name: x.nom as string, id: x.code_postal, desk: Number(x.has_stop_desk) === 1 }));
+}
+
 export const ecotrack: CourierAdapter = {
   statuses: STATUSES,
+  /** the company's communes of one wilaya (the confirmation checks the order's commune is one of them) */
+  async communes(c, w) {
+    needKeys(c, 'token');
+    return (await ecoCommunes(c, w)).map((x) => ({ id: String(x.id ?? x.name), name: x.name })).filter((x) => x.name);
+  },
   async test(c) {
     needKeys(c, 'token');
     const r = await api(c, '/validate/token', { api_token: String(c.secret.token).trim() });
@@ -158,7 +168,7 @@ export const ecotrack: CourierAdapter = {
     needKeys(c, 'token');
     const com = await helpers.communeName(
       p,
-      async (w) => Object.values((await api(c, '/get/communes', { wilaya_id: w })) ?? {}).map((x: any) => ({ name: x.nom as string, id: x.code_postal, desk: Number(x.has_stop_desk) === 1 })),
+      (w) => ecoCommunes(c, w),
       `eco:${cacheKeyOf(c)}`,
     );
     if (!com && !p.is_stopdesk) throw new CourierError(`Commune « ${p.commune} » introuvable chez ${c.name} : corrigez la commune`);

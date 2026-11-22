@@ -88,6 +88,8 @@ const keysRefused = (e: any) => String(e?.message).includes('refuse les clés');
 
 export const ecom: CourierAdapter = {
   statuses: STATUSES,
+  /** the company's communes of one wilaya (the confirmation checks the order's commune is one of them) */
+  communes: async (c, w) => (await communes(c, w)).map((x) => ({ id: x.name, name: x.name })),
   async test(c) {
     needKeys(c, 'token', 'key');
     const r = await api(c, 'Api_v1/Test');

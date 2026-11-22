@@ -1,4 +1,5 @@
 // HTTP and text helpers for the courier adapters (server only: global fetch).
+import { communesOf } from '@pilotix/shared';
 import { AppError } from '../rpc';
 import { assertPublicAddress, publicFetch } from '../publicfetch';
 
@@ -259,6 +260,108 @@ export function bestMatch(name: string, list: string[]): string | null {
     if (d[0] && d[0].d <= (a.length >= 9 ? 2 : 1) && (!d[1] || d[1].d > d[0].d)) return d[0].x;
   }
   return null;
+}
+
+/**
+ * A commune's name as it sounds: doubled letters as one, a mute « e » at the end, and the few ways Algerian names are
+ * written in French letters (« dj » / « j », « ou » / « u », « q » / « k », « y » / « i », « sh » / « ch »). « Azzefoun »,
+ * « Azeffoun » and « azefoune » sound the same. Inside one wilaya no two communes of Pilotix's list share one (all 1,541
+ * checked on 22 Nov 2026).
+ */
+export function soundKey(s: unknown): string {
+  return squash(s)
+    .replace(/([a-z])\1+/g, '$1')
+    .replace(/dj/g, 'j')
+    .replace(/ou/g, 'u')
+    .replace(/q/g, 'k')
+    .replace(/y/g, 'i')
+    .replace(/sh/g, 'ch')
+    .replace(/([a-z])\1+/g, '$1')
+    .replace(/([^aeiou])e$/, '$1');
+}
+
+/** Arabic written one way: its letters only (NFKC for the old « presentation » letters), one alef, one ya, ه for ة, no
+ *  hamza seat, short vowels, tatweel or spaces; ڨ / ڤ as ق / ف. */
+export function arKey(s: unknown): string {
+  return String(s ?? '')
+    .normalize('NFKC')
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/[ءؤئ]/g, '')
+    .replace(/ڨ/g, 'ق')
+    .replace(/ڤ/g, 'ف')
+    .replace(/[^\u0621-\u064A]/g, '');
+}
+const isArabic = (s: string) => /[\u0600-\u06FF]/.test(s);
+
+/** A company's list of communes is read again after an hour (a commune it removed is seen then)... */
+export const LIST_KEPT_MS = 3600_000;
+/** ...and at once when the order's commune is not on it (a commune it just added is found), at most once a minute. */
+export const ASK_AGAIN_MS = 60_000;
+/** The clock of those lists (tests move it forward). */
+export const listClock = { now: () => Date.now() };
+
+/** A commune's name, and its Arabic name when known. */
+export interface CommuneName {
+  name: string;
+  ar?: string | null;
+}
+
+/** Pilotix's own communes of a wilaya (French and Arabic names: the landing page shows the Arabic one). */
+export const ourCommunes = (wilayaId: number): CommuneName[] => communesOf(wilayaId).map(([, name, ar]) => ({ name, ar }));
+
+/** Pilotix's commune for a name (the same name, or the same sound; an Arabic name: the same Arabic name). */
+function ourOne(name: string, ours: CommuneName[]): CommuneName | undefined {
+  if (isArabic(name)) return ours.find((o) => o.ar && arKey(o.ar) === arKey(name));
+  const a = squash(name);
+  if (!a) return undefined;
+  return ours.find((o) => squash(o.name) === a) ?? ours.find((o) => soundKey(o.name) === soundKey(name));
+}
+
+/**
+ * The delivery company's commune for ours, found by Pilotix alone, for every company (22 Nov 2026, the owner: nobody
+ * fixes a commune by hand). `list`: the company's communes of the wilaya; `wilayaId`: where (Pilotix's own list).
+ *  1. the same name (« BAB-EZZOUAR » = « Bab Ezzouar »);
+ *  2. the same sound (« Azzefoun » = « Azeffoun » = « azefoune »);
+ *  3. the same Arabic name — the one the customer picks on the landing page, when the company gives Arabic names (ZR:
+ *     « Beni Zmenzer » is أيت زمنزر in Arabic, ZR writes it « Ait Zmenzer »);
+ *  4. close enough (the start of the name, a letter or two: bestMatch).
+ * Never a name the company has for ANOTHER commune of Pilotix's list (« Ait Yahia » is not « Ait Yahia Moussa »): a
+ * parcel sent to the wrong town is worse than one stopped before « Confirmer ». Two names that fit: none.
+ */
+export function matchCommune<T extends CommuneName>(name: string, list: T[], wilayaId: number | null): T | null {
+  const want = String(name ?? '').trim();
+  if (!want || !list.length) return null;
+  const ours = wilayaId ? ourCommunes(wilayaId) : [];
+  const self = ourOne(want, ours);
+  const others = ours.filter((o) => o !== self);
+  const ar = isArabic(want) ? want : (self?.ar ?? '');
+  /** this company name is another commune of ours */
+  const other = (x: T) =>
+    others.some((o) => squash(o.name) === squash(x.name) || soundKey(o.name) === soundKey(x.name) || (!!o.ar && !!x.ar && arKey(o.ar) === arKey(x.ar)));
+  const one = (c: T[]) => {
+    const u = [...new Set(c)];
+    return u.length === 1 && !other(u[0]) ? u[0] : null;
+  };
+  if (!isArabic(want)) {
+    const a = squash(want);
+    const same = list.find((x) => squash(x.name) === a);
+    if (same) return same;
+    const k = soundKey(want);
+    const s = k.length >= 3 ? one(list.filter((x) => soundKey(x.name) === k)) : null;
+    if (s) return s;
+  }
+  const k = arKey(ar);
+  if (k.length >= 2) {
+    const r = one(list.filter((x) => !!x.ar && arKey(x.ar) === k));
+    if (r) return r;
+  }
+  if (isArabic(want)) return null;
+  const close = bestMatch(want, list.map((x) => x.name));
+  const hit = close ? list.find((x) => x.name === close) : undefined;
+  return hit && !other(hit) ? hit : null;
 }
 
 /** The names of `list` closest to `name` (fewest letters to change, at most a third of it): « did you mean ». */

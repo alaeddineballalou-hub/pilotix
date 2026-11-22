@@ -11,7 +11,7 @@
 // the order fields read back (client, destination.cityName/stateName, isStopDesk, stopDesk, deliveryPrice).
 import { cacheKeyOf } from './types';
 import type { CourierAdapter, CourierCompany, Desk, ParcelInfo, TrackItem } from './types';
-import { baseUrl, chunks, CourierError, cut, errText, flag, http, HttpOpts, humanize, needKeys, query, sleep, splitName, timeUp, weighed } from './util';
+import { ASK_AGAIN_MS, baseUrl, chunks, CourierError, cut, errText, flag, http, HttpOpts, humanize, LIST_KEPT_MS, listClock, needKeys, query, sleep, splitName, timeUp, weighed } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
   pending: null, confirmed: null, shipped: 'shipped', delivered: 'delivered', cancelled: null, returned: 'returned', expired: null, archived: null,
@@ -55,11 +55,11 @@ const listOf = (r: any): any[] => (Array.isArray(r) ? r : Array.isArray(r?.list)
 
 // ---------------------------------------------------------------- places (country id, cities), cached per company
 const cache = new Map<string, { at: number; v: any }>();
-async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
+async function cached<T>(key: string, load: () => Promise<T>, keep = 6 * 3600_000): Promise<T> {
   const x = cache.get(key);
-  if (x && Date.now() - x.at < 6 * 3600_000) return x.v;
+  if (x && listClock.now() - x.at < keep) return x.v;
   const v = await load();
-  cache.set(key, { at: Date.now(), v });
+  cache.set(key, { at: listClock.now(), v });
   return v;
 }
 const countryId = (c: CourierCompany) =>
@@ -76,14 +76,15 @@ const wilayaOf = (v: unknown) => {
   const n = parseInt(String(v ?? '').replace(/\D/g, ''), 10);
   return n >= 1 && n <= 69 ? n : null;
 };
-async function cities(c: CourierCompany, w: number): Promise<{ id: string; name: string }[]> {
+/** a wilaya's cities (communes), kept an hour; `fresh`: read again at once (a commune not on the list), at most once a minute */
+async function cities(c: CourierCompany, w: number, fresh = false): Promise<{ id: string; name: string }[]> {
   const country = await countryId(c);
   return cached(`mdm:${cacheKeyOf(c)}:cities:${w}`, async () => {
     const r = listOf(await api(c, '/api/geo/cities', { q: { countryId: [country], stateId: [stateKey(country, w)], perPage: 1000 } }));
     return r
       .filter((x: any) => x?.id != null && x?.name && (!x.stateId || wilayaOf(x.stateCode ?? x.stateId) === w))
       .map((x: any) => ({ id: String(x.id), name: String(x.name) }));
-  });
+  }, fresh ? ASK_AGAIN_MS : LIST_KEPT_MS);
 }
 
 async function order(c: CourierCompany, it: TrackItem) {
@@ -103,6 +104,8 @@ async function slips(c: CourierCompany, trackings: string[]) {
 
 export const mdm: CourierAdapter = {
   statuses: STATUSES,
+  /** the company's cities (communes) of one wilaya (the confirmation checks the order's commune is one of them) */
+  communes: async (c, w, fresh) => cities(c, w, fresh),
   async test(c) {
     keys(c);
     const r = await api(c, '/api/auth/me');
@@ -112,7 +115,7 @@ export const mdm: CourierAdapter = {
   async create(c, p, helpers) {
     keys(c);
     if (p.is_stopdesk && !p.stopdesk_ext_id) throw new CourierError(`Choisissez le bureau ${c.name} (stop desk) de la commande`);
-    const city = await helpers.communeName(p, (w) => cities(c, w), `mdm:${cacheKeyOf(c)}`);
+    const city = await helpers.communeName(p, (w, fresh) => cities(c, w, fresh), `mdm:${cacheKeyOf(c)}`);
     if (!city) throw new CourierError(`Commune « ${p.commune} » introuvable chez ${c.name} : corrigez la commune`);
     const { first, last } = splitName(p.customer_name || 'Client');
     const products = p.items.length

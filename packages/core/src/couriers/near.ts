@@ -18,7 +18,7 @@
 // is_return with return_center_id; the fees answer shape (one wilaya per call, recipient_wilaya filter); status code values.
 import { cacheKeyOf } from './types';
 import type { CourierAdapter, CourierCompany, Desk, FeeRow, Parcel, ParcelInfo, TrackItem } from './types';
-import { baseUrl, CourierError, cut, errText, http, HttpOpts, humanize, needKeys, query, sleep, timeUp, weighed } from './util';
+import { ASK_AGAIN_MS, baseUrl, CourierError, cut, errText, http, HttpOpts, humanize, LIST_KEPT_MS, listClock, needKeys, query, sleep, timeUp, weighed } from './util';
 
 // status code (current_status_value) and names (vargo's NearDeliveryParcelStatus)
 type Follow = CourierAdapter['statuses'][string];
@@ -91,12 +91,14 @@ const listOf = (r: any): any[] => {
 
 // ---------------------------------------------------------------- wilayas and communes (cached per company)
 const cache = new Map<string, { at: number; v: any }>();
-async function wilayas(c: CourierCompany): Promise<any[]> {
+/** the company's wilayas with their communes, kept an hour; `fresh`: read again at once (a commune not on the list), at
+ *  most once a minute */
+async function wilayas(c: CourierCompany, fresh = false): Promise<any[]> {
   const key = `near:${cacheKeyOf(c)}:wilayas`;
   const x = cache.get(key);
-  if (x && Date.now() - x.at < 6 * 3600_000) return x.v;
+  if (x && listClock.now() - x.at < (fresh ? ASK_AGAIN_MS : LIST_KEPT_MS)) return x.v;
   const v = listOf(await api(c, 'sender/wilayas'));
-  cache.set(key, { at: Date.now(), v });
+  cache.set(key, { at: listClock.now(), v });
   return v;
 }
 const wcode = (w: number) => String(w).padStart(2, '0');
@@ -104,8 +106,8 @@ const wilayaOf = (v: unknown) => {
   const n = parseInt(String(v ?? '').replace(/\D/g, ''), 10);
   return n >= 1 && n <= 69 ? n : null;
 };
-async function communes(c: CourierCompany, w: number) {
-  const wl = (await wilayas(c)).find((x: any) => wilayaOf(x?.code ?? x?.id) === w);
+async function communes(c: CourierCompany, w: number, fresh = false) {
+  const wl = (await wilayas(c, fresh)).find((x: any) => wilayaOf(x?.code ?? x?.id) === w);
   return ((wl?.communes ?? []) as any[]).filter((x) => x?.name).map((x) => ({ name: String(x.name), id: String(x.id ?? x.code ?? '') }));
 }
 
@@ -150,6 +152,8 @@ const early = (x: any) => {
 
 export const near: CourierAdapter = {
   statuses: STATUSES,
+  /** the company's communes of one wilaya (the confirmation checks the order's commune is one of them) */
+  communes: async (c, w, fresh) => (await communes(c, w, fresh)).map((x) => ({ id: x.id || x.name, name: x.name })),
   async test(c) {
     keys(c);
     const n = (await wilayas(c)).length;
@@ -161,7 +165,7 @@ export const near: CourierAdapter = {
     const buralist = numInt(p.stopdesk_ext_id);
     if (!buralist) throw new CourierError(`Choisissez le point de retrait ${c.name} (stop desk) de la commande`);
     const w = p.stopdesk_wilaya_id || p.wilaya_id;
-    const com = await helpers.communeName({ ...p, wilaya_id: w, commune: p.stopdesk_commune || p.commune }, (x) => communes(c, x), `near:${cacheKeyOf(c)}`);
+    const com = await helpers.communeName({ ...p, wilaya_id: w, commune: p.stopdesk_commune || p.commune }, (x, fresh) => communes(c, x, fresh), `near:${cacheKeyOf(c)}`);
     if (!com) throw new CourierError(`Commune « ${p.stopdesk_commune || p.commune} » introuvable chez ${c.name} : corrigez la commune`);
     const byAddress = String(c.settings.pickup_type || 'center') === 'address';
     const senderCenter = numInt(c.settings.sender_center_id);
@@ -281,7 +285,7 @@ export const near: CourierAdapter = {
     } else if (i.kind === 'address') {
       if (i.address) body.recipient_address = cut(i.address, 500);
       if (i.wilayaId && p) {
-        const com = await helpers.communeName({ ...p, wilaya_id: i.wilayaId, commune: i.commune || p.commune }, (x) => communes(c, x), `near:${cacheKeyOf(c)}`);
+        const com = await helpers.communeName({ ...p, wilaya_id: i.wilayaId, commune: i.commune || p.commune }, (x, fresh) => communes(c, x, fresh), `near:${cacheKeyOf(c)}`);
         if (!com) throw new CourierError(`Commune « ${i.commune || p.commune} » introuvable chez ${c.name}`);
         body.recipient_wilaya = wcode(i.wilayaId);
         body.recipient_commune = com.name;
@@ -295,7 +299,7 @@ export const near: CourierAdapter = {
       if (i.wilayaId) {
         body.recipient_wilaya = wcode(i.wilayaId);
         if (p) {
-          const com = await helpers.communeName({ ...p, wilaya_id: i.wilayaId, commune: i.commune || p.stopdesk_commune || p.commune }, (x) => communes(c, x), `near:${cacheKeyOf(c)}`);
+          const com = await helpers.communeName({ ...p, wilaya_id: i.wilayaId, commune: i.commune || p.stopdesk_commune || p.commune }, (x, fresh) => communes(c, x, fresh), `near:${cacheKeyOf(c)}`);
           if (com) body.recipient_commune = com.name;
         }
       }

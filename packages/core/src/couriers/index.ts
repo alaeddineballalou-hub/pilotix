@@ -4,8 +4,8 @@
 import type { Ctx } from '../rpc';
 import { ADAPTERS } from './adapters';
 import { helpers, loadCompany, loadParcels } from './load';
-import type { ChangeInput, ClaimInput, CourierApi, CourierCompany, TrackItem } from './types';
-import { CourierError, setDeadline } from './util';
+import { cacheKeyOf, type ChangeInput, type ClaimInput, type CourierApi, type CourierCompany, type TrackItem } from './types';
+import { ASK_AGAIN_MS, CourierError, LIST_KEPT_MS, listClock, setDeadline } from './util';
 
 export * from './types';
 export { ADAPTERS } from './adapters';
@@ -51,8 +51,9 @@ export function courierApi(c: CourierCompany): CourierApi {
 
 type Args = {
   companyId: number;
-  /** communes: the wilaya whose communes are asked */
+  /** communes: the wilaya whose communes are asked; `fresh`: read again from the company (the commune was not on the list) */
   wilayaId?: number;
+  fresh?: boolean;
   date?: string;
   ids?: number[];
   items?: TrackItem[];
@@ -84,6 +85,9 @@ type Args = {
  * webhookOn {companyId, url, key} · webhookOff / webhookGet {companyId, extId} ·
  * askReturn / retry / note {companyId, item, text}.
  */
+/** Each company's communes of a wilaya, kept a few hours (the confirmation asks for them on every order card). */
+const COMMUNES_KEPT = new Map<string, { at: number; list: { name: string; ar: string | null }[] }>();
+
 export async function runCourier(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
   if (ctx.shop?.demo) throw new CourierError('Boutique démo : aucune action réelle chez un transporteur');
   const a = args as Args;
@@ -119,9 +123,18 @@ export async function runCourier(action: string, args: unknown, ctx: Ctx): Promi
     case 'stopdesks':
       return api.stopdesks();
     case 'communes': {
-      // its names only: the confirmation matches the order's commune with them
+      // its names (and Arabic names): the confirmation matches the order's commune with them. Kept an hour, so an order
+      // card opened again and again does not ask the company each time (Yalidine counts every call); `fresh` (the
+      // commune was not on it: the company may have just added it): asked again at once, at most once a minute.
       const ad = ADAPTERS[c.kind];
-      return ad.communes ? (await ad.communes(c, Number(a.wilayaId) || 0)).map((x) => x.name) : [];
+      if (!ad.communes) return [];
+      const w = Number(a.wilayaId) || 0;
+      const key = `${cacheKeyOf(c)}:${c.kind}:${w}`;
+      const had = COMMUNES_KEPT.get(key);
+      if (had && listClock.now() - had.at < (a.fresh ? ASK_AGAIN_MS : LIST_KEPT_MS)) return had.list;
+      const list = (await ad.communes(c, w, !!a.fresh)).filter((x) => x.name).map((x) => ({ name: String(x.name), ar: x.ar ? String(x.ar) : null }));
+      if (list.length) COMMUNES_KEPT.set(key, { at: listClock.now(), list });
+      return list;
     }
     case 'test':
       return api.test();

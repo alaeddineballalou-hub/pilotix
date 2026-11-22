@@ -77,8 +77,18 @@ async function order(c: CourierCompany, tracking: string) {
   return list.find((x) => String(x?.Tracking ?? x?.tracking ?? '') === tracking) ?? list[0] ?? (r && !Array.isArray(r) && (r.Tracking || r.tracking) ? r : null);
 }
 
+/** Elogistia's communes of one wilaya (« municipalities »). */
+async function elogCommunes(c: CourierCompany, w: number): Promise<{ name: string }[]> {
+  return body(await api(c, 'getMunicipalities', { wilaya: w })).map((x: any) => ({ name: String(x.commune_name ?? x.name ?? '') })).filter((x: { name: string }) => x.name);
+}
+
 export const elogistia: CourierAdapter = {
   statuses: STATUSES,
+  /** Elogistia's communes of one wilaya (the confirmation checks the order's commune is one of them) */
+  async communes(c, w) {
+    needKeys(c, 'api_key');
+    return (await elogCommunes(c, w)).map((x) => ({ id: x.name, name: x.name }));
+  },
   async test(c) {
     needKeys(c, 'api_key');
     // getMunicipalities checks the key (401 « apiKey pas valide »); getWilayas answers 404 to a wrong key (checked Oct 2026)
@@ -90,7 +100,7 @@ export const elogistia: CourierAdapter = {
     needKeys(c, 'api_key');
     const com = await helpers.communeName(
       p,
-      async (w) => body(await api(c, 'getMunicipalities', { wilaya: w })).map((x: any) => ({ name: String(x.commune_name ?? x.name ?? '') })).filter((x) => x.name),
+      (w) => elogCommunes(c, w),
       `elogistia:${cacheKeyOf(c)}`,
     );
     const commune = com?.name || (p.is_stopdesk ? p.stopdesk_commune : null) || p.commune;

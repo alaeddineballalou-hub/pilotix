@@ -7,7 +7,7 @@ import { notFound } from '../rpc';
 import { getSetting } from '../settings';
 import { requiredKeys } from './kinds';
 import type { CourierCompany, Parcel, TrackResult } from './types';
-import { bestMatch } from './util';
+import { ASK_AGAIN_MS, bestMatch, LIST_KEPT_MS, listClock, matchCommune } from './util';
 
 export async function loadCompany(db: Db, id: number): Promise<CourierCompany> {
   const r = (await db.query('SELECT * FROM delivery_companies WHERE id = $1', [id]))[0];
@@ -92,19 +92,25 @@ export async function loadParcels(db: Db, ids: number[]): Promise<Parcel[]> {
   });
 }
 
-/** Commune matching with a per-process cache (same commune list asked once per wilaya). */
-const communeCache = new Map<string, unknown[]>();
+/** Commune matching with a per-process cache: each company's list of a wilaya kept an hour, read again at once when the
+ *  commune is not on it (the company may have just added it), at most once a minute. */
+const communeCache = new Map<string, { at: number; list: unknown[] }>();
 export const helpers = {
-  async communeName<T extends { name: string }>(p: Parcel, load: (w: number) => Promise<T[]>, cacheKey = ''): Promise<T | null> {
+  async communeName<T extends { name: string; ar?: string | null }>(p: Parcel, load: (w: number, fresh?: boolean) => Promise<T[]>, cacheKey = ''): Promise<T | null> {
     const key = `${cacheKey}:${p.wilaya_id}`;
-    let list = communeCache.get(key) as T[] | undefined;
-    if (!list) {
-      list = await load(p.wilaya_id);
-      if (cacheKey) communeCache.set(key, list);
+    let had = cacheKey ? communeCache.get(key) : undefined;
+    if (!had || listClock.now() - had.at >= LIST_KEPT_MS) {
+      had = { at: listClock.now(), list: await load(p.wilaya_id) };
+      if (cacheKey) communeCache.set(key, had);
     }
+    // the same name, sound or Arabic name; never another commune's (couriers/util matchCommune)
     const want = p.is_stopdesk && p.stopdesk_commune ? p.stopdesk_commune : p.commune;
-    const hit = bestMatch(want, list.map((x) => x.name));
-    return hit ? list.find((x) => x.name === hit) ?? null : null;
+    const hit = matchCommune(want, had.list as T[], p.wilaya_id);
+    if (hit || listClock.now() - had.at < ASK_AGAIN_MS) return hit;
+    // not on the list kept in memory: the company may have just added it — read it again at once
+    const fresh = { at: listClock.now(), list: await load(p.wilaya_id, true) };
+    if (cacheKey) communeCache.set(key, fresh);
+    return matchCommune(want, fresh.list as T[], p.wilaya_id);
   },
 };
 

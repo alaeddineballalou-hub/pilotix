@@ -13,7 +13,7 @@
 // changed (only 1 « Nouveau »).
 import { cacheKeyOf } from './types';
 import type { ChangeInput, CourierAdapter, CourierCompany, Desk, Helpers, Parcel, ParcelInfo, TrackItem, TrackResult } from './types';
-import { baseUrl, chunks, CourierError, cut, errText, http, HttpOpts, needKeys, query, sleep, splitName, timeUp, weighed } from './util';
+import { ASK_AGAIN_MS, baseUrl, chunks, CourierError, cut, errText, http, HttpOpts, LIST_KEPT_MS, listClock, needKeys, query, sleep, splitName, timeUp, weighed } from './util';
 
 const LABELS: Record<string, string> = {
   '1': 'Nouveau', '2': 'Expédié', '3': 'Livré', '4': 'Retourné', '5': 'Annulé', '6': 'En cours de livraison', '7': 'Centre de tri', '8': 'Échoué',
@@ -42,18 +42,23 @@ async function api(c: CourierCompany, path: string, o: HttpOpts & { q?: Record<s
 }
 
 // ---------------------------------------------------------------- wilayas, communes, offices
-const cache = new Map<string, any[]>();
-async function cached(c: CourierCompany, what: string, load: () => Promise<any[]>) {
+const cache = new Map<string, { at: number; list: any[] }>();
+/** kept an hour; `fresh`: read again at once (a commune not on the list: the company may have just added it), at most
+ *  once a minute */
+async function cached(c: CourierCompany, what: string, load: () => Promise<any[]>, fresh = false) {
   const key = `${cacheKeyOf(c)}:${what}`;
-  if (!cache.has(key)) cache.set(key, await load());
-  return cache.get(key)!;
+  const had = cache.get(key);
+  if (had && listClock.now() - had.at < (fresh ? ASK_AGAIN_MS : LIST_KEPT_MS)) return had.list;
+  const list = await load();
+  cache.set(key, { at: listClock.now(), list });
+  return list;
 }
 const wilayas = (c: CourierCompany) => cached(c, 'w', async () => listOf(await api(c, '/v3/helpers/wilayas')).map((x) => ({ id: Number(x.id), name: String(x.name ?? '') })));
-const communes = (c: CourierCompany) =>
-  cached(c, 'c', async () => listOf(await api(c, '/v3/helpers/communes')).map((x) => ({ id: Number(x.id), name: String(x.name ?? ''), wilaya: Number(x.wilaya_id) })));
+const communes = (c: CourierCompany, fresh = false) =>
+  cached(c, 'c', async () => listOf(await api(c, '/v3/helpers/communes')).map((x) => ({ id: Number(x.id), name: String(x.name ?? ''), wilaya: Number(x.wilaya_id) })), fresh);
 
 async function place(c: CourierCompany, p: Parcel, h: Helpers) {
-  const com = await h.communeName(p, async (w) => (await communes(c)).filter((x) => x.wilaya === w), `zimou:${cacheKeyOf(c)}`);
+  const com = await h.communeName(p, async (w, fresh) => (await communes(c, fresh)).filter((x) => x.wilaya === w), `zimou:${cacheKeyOf(c)}`);
   if (!com) throw new CourierError(`Commune « ${p.commune || p.stopdesk_commune || '?'} » introuvable chez ${c.name} : corrigez la commune`);
   const w = (await wilayas(c)).find((x) => x.id === p.wilaya_id);
   return { commune: com, wilaya: w?.name || p.wilaya };
@@ -181,6 +186,8 @@ async function labelOf(c: CourierCompany, trackings: string[], ids: (string | nu
 
 export const zimou: CourierAdapter = {
   statuses: STATUSES,
+  /** Zimou's communes of one wilaya (the confirmation checks the order's commune is one of them) */
+  communes: async (c, w, fresh) => (await communes(c, fresh)).filter((x) => x.wilaya === w && x.name).map((x) => ({ id: String(x.id), name: x.name })),
   parcel: parcelInfo,
   change,
   async test(c) {
