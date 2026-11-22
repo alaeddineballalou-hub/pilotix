@@ -38,7 +38,7 @@ const LANGS: readonly string[] = ['fr', 'en', 'ar'];
  * grows (`n` given to `make`: the things it says now, with the ones of the line it replaces). The screens of the people
  * told hear of it at once. Returns what each person got.
  */
-export async function ringBell(ctx: Ctx, people: readonly number[], make: (lang: Language, n: number) => BellLine, o: { tag?: string | null; count?: number } = {}): Promise<Rung[]> {
+export async function ringBell(ctx: Ctx, people: readonly number[], make: (lang: Language, n: number) => BellLine, o: { tag?: string | null; count?: number; silent?: boolean } = {}): Promise<Rung[]> {
   const ids = [...new Set(people.filter((x) => Number.isSafeInteger(x) && x > 0))];
   if (!ids.length) return [];
   const who = await ctx.db.query('SELECT id, language FROM profiles WHERE id = ANY($1) AND active', [ids]);
@@ -55,10 +55,10 @@ export async function ringBell(ctx: Ctx, people: readonly number[], make: (lang:
     if (prev) {
       await ctx.db.query('UPDATE inbox SET kind = $2, title = $3, body = $4, url = $5, order_id = $6, important = $7, n = $8, created_at = now() WHERE id = $1', [prev.id, ...vals]);
       const was = new Date(prev.created_at).getTime();
-      out.push({ id, lang, line, quiet: Number.isFinite(was) && ctx.now() - was < QUIET_MS });
+      out.push({ id, lang, line, quiet: !!o.silent || (Number.isFinite(was) && ctx.now() - was < QUIET_MS) });
     } else {
       await ctx.db.query('INSERT INTO inbox (profile_id, kind, title, body, url, order_id, important, n, tag) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)', [id, ...vals, tag]);
-      out.push({ id, lang, line, quiet: false });
+      out.push({ id, lang, line, quiet: !!o.silent });
     }
   }
   if (out.length) ctx.emit({ type: 'inbox', data: { to: out.filter((x) => !x.quiet).map((x) => x.id), quiet: out.filter((x) => x.quiet).map((x) => x.id) } });
@@ -69,6 +69,7 @@ export async function ringBell(ctx: Ctx, people: readonly number[], make: (lang:
 export function kindOfTag(tag: unknown): BellKind {
   const t = typeof tag === 'string' ? tag : '';
   if (t.startsWith('depot-') || t === 'private-backup') return 'depot';
-  if (t.startsWith('assigned-')) return 'order';
+  // a livreur's new parcels (livreur.ts), a new order to call (« Bloquer jusqu'à l'appel »: confblock.ts)
+  if (t.startsWith('assigned-') || t.startsWith('conf-new-')) return 'order';
   return 'info';
 }

@@ -151,4 +151,15 @@ test('the bell: new order, taken, delivered, back, alert, callback, depot — ea
   await call('inbox.readAll', samira, {});
   assert.equal((await mine(samira)).unread, 0);
   assert.ok((await mine(rania)).unread > 0);
+
+  // « Bloquer jusqu'à l'appel » on: the new order already covers Samira's screen and rings — her line stays quiet
+  await setSetting(db, 'confBlock', { on: true, by: 'Yacine', at: new Date().toISOString() });
+  sent.length = 0;
+  events.length = 0;
+  const o4 = (await db.query(`SELECT id FROM orders WHERE conf_status = 'new' AND agent_id IS NULL ORDER BY id LIMIT 1`))[0];
+  await call('orders.assignAgent', yacine, { ids: [num(o4.id)], agentId: S });
+  assert.equal((await mine(samira)).items[0].kind, 'order', 'in the bell');
+  const ev: any = events.find((e: any) => e.type === 'inbox');
+  assert.ok(ev && ev.data.quiet.includes(S) && !ev.data.to.includes(S), 'no pop-up, no sound');
+  assert.equal(sent.length, 0, 'no phone: the block rings it');
 });

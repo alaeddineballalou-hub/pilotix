@@ -97,6 +97,8 @@ export interface Tell {
   phone?: 'work' | 'always' | 'never';
   /** who did it: never told of their own work (null: Pilotix itself) */
   by?: number | null;
+  /** in the bell only: no pop-up, no sound, no phone (something else rings it already) */
+  silent?: boolean;
 }
 
 /** In the shop's call hours now (Réglages › Appels): the team is at work. */
@@ -110,8 +112,8 @@ export async function tell(ctx: Ctx, to: readonly (number | null | undefined)[],
     const people = [...new Set(to.filter((x): x is number => typeof x === 'number' && x > 0 && x !== t.by))];
     if (!people.length) return [];
     const important = t.important ?? IMPORTANT.has(t.kind);
-    const rung = await ringBell(ctx, people, (lang, n) => ({ kind: t.kind, ...t.text(lang, n), url: t.url ?? null, orderId: t.orderId ?? null, important }), { tag: t.tag, count: t.count });
-    const phone = t.phone ?? 'work';
+    const rung = await ringBell(ctx, people, (lang, n) => ({ kind: t.kind, ...t.text(lang, n), url: t.url ?? null, orderId: t.orderId ?? null, important }), { tag: t.tag, count: t.count, silent: t.silent });
+    const phone = t.silent ? 'never' : t.phone ?? 'work';
     const fresh = rung.filter((r) => !r.quiet);
     if (fresh.length && phone !== 'never' && ctx.server?.push && (phone === 'always' || (await workNow(ctx))))
       for (const r of fresh)
@@ -126,6 +128,9 @@ export async function tell(ctx: Ctx, to: readonly (number | null | undefined)[],
 export async function tellGiven(ctx: Ctx, area: 'conf' | 'follow', given: Map<number, number[]>, o: { by?: number | null; rotation?: boolean } = {}) {
   const bits = await orderBits(ctx.db, [...given.values()].flat());
   const by = o.by ? (await namesOf(ctx.db, [o.by])).get(o.by) ?? '' : '';
+  // Confirmation › « Bloquer jusqu'à l'appel » on: the new order already covers a plain agent's screen and rings
+  // (confblock.ts): his line stays quiet in the bell
+  const blocked = area === 'conf' ? await blockedAgents(ctx, [...given.keys()]) : new Set<number>();
   for (const [agent, ids] of given) {
     const list = ids.map((i) => bits.get(i)).filter((x): x is Bits => !!x);
     if (!list.length) continue;
@@ -133,6 +138,7 @@ export async function tellGiven(ctx: Ctx, area: 'conf' | 'follow', given: Map<nu
     const why = (lang: Language) => (o.rotation ? `${say('rotation', lang)} · ` : by ? `${say('fromManager', lang, { who: by })} · ` : '');
     await tell(ctx, [agent], {
       kind: area === 'conf' ? 'order' : 'alert',
+      silent: blocked.has(agent),
       count: list.length,
       orderId: one?.id ?? null,
       url: area === 'conf' ? '#/confirmation/nouvelles' : '#/suivi/alertes',
@@ -143,6 +149,17 @@ export async function tellGiven(ctx: Ctx, area: 'conf' | 'follow', given: Map<nu
           : { title: n === 1 ? say('given', lang) : say('alertN', lang, { n }), body: why(lang) + (one ? oneLine(one) : refList(list)) },
     });
   }
+}
+
+/** The store's plain confirmation agents among these, when « Bloquer jusqu'à l'appel » is on (confblock.ts › plainAgent). */
+async function blockedAgents(ctx: Ctx, ids: number[]): Promise<Set<number>> {
+  if (!ids.length || !(await getSetting(ctx.db, 'confBlock')).on) return new Set();
+  const rows = await ctx.db.query(
+    `SELECT id FROM profiles WHERE id = ANY($1) AND 'confirmation' = ANY(roles) AND agency_id IS NULL
+        AND NOT ('admin' = ANY(roles) OR 'agent_manager' = ANY(roles) OR 'vendeur' = ANY(roles))`,
+    [ids],
+  );
+  return new Set(rows.map((r: any) => num(r.id)));
 }
 
 /** Orders taken from their agent (a rotation, a manager): one line per person. `to`: who has each order now. */
