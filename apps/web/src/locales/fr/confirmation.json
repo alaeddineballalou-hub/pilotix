@@ -754,5 +754,31 @@
     "label": "Affichage",
     "list": "Liste",
     "stats": "Statistiques"
+  },
+  "nob": {
+    "title": "Nouvelle commande",
+    "since": "Reçue il y a {{d}}",
+    "locked": "Pilotix est bloqué jusqu’au résultat de l’appel",
+    "calledLine": "Appel lancé : choisissez le résultat pour débloquer Pilotix",
+    "next": "Ensuite : {{n}} de plus",
+    "recall": "Rappeler",
+    "gate": "Appelez d’abord le client : le résultat s’ouvre ici après l’appel.",
+    "sound": "Touchez ici pour entendre la sonnerie",
+    "tabTitle": "📞 Nouvelle commande à appeler",
+    "push": {
+      "ask": "Activez les notifications : cet appareil sonnera pour chaque nouvelle commande, même Pilotix fermé.",
+      "denied": "Les notifications sont bloquées sur cet appareil : autorisez-les dans les réglages du navigateur pour être prévenu des nouvelles commandes.",
+      "on": "Activer",
+      "later": "Plus tard"
+    },
+    "sw": {
+      "title": "Bloquer l’agent jusqu’à l’appel",
+      "on": "Activé",
+      "off": "Désactivé",
+      "help": "Une nouvelle commande couvre tout Pilotix chez l’agent et sonne jusqu’à ce qu’il appelle et choisisse un résultat. Une à la fois, jamais la nuit.",
+      "by": "Changé par {{name}}, {{when}}.",
+      "savedOn": "Blocage activé : les agents doivent appeler chaque nouvelle commande.",
+      "savedOff": "Blocage désactivé."
+    }
   }
 }

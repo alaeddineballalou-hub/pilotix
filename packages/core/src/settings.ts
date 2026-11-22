@@ -146,6 +146,13 @@ export interface SettingsMap {
   caisses: { bankHidden: boolean };
   /** Dépôt alerts (an order still in the depot was changed or cancelled): who gets them; [] = every depot agent */
   depotAlerts: { to: number[] };
+  /**
+   * Confirmation › « Bloquer jusqu'à l'appel » (modules/confblock.ts): a new order given to a plain agent covers his whole
+   * Pilotix and rings until he calls and saves a result. Switched on or off by the managers only; off in a new shop.
+   */
+  confBlock: { on: boolean; by: string | null; at: string | null };
+  /** The notifications already sent for the new orders still waiting (order id → its agent, when, how many): kept only while they wait */
+  confRings: Record<string, { a: number; at: number; n: number }>;
   /** Management › Stock: « Lots et dates d'expiration » (off: no lot anywhere), and how many days before its date a lot is « bientôt périmé » */
   stockBatches: { on: boolean; warnDays: number };
   /** Management › Stock: « Fabrication » (recipes and makings in Produits & stock), off by default */
@@ -264,6 +271,8 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   goals: { monthlyRevenue: 3_000_000 },
   caisses: { bankHidden: false },
   depotAlerts: { to: [] },
+  confBlock: { on: false, by: null, at: null },
+  confRings: {},
   stockBatches: { on: false, warnDays: 30 },
   stockMaking: { on: false },
   colPresets: [],

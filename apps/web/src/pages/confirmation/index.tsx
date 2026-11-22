@@ -26,6 +26,7 @@ import { useIsPhone } from '../../lib/useMedia';
 import { PhoneCards, PhoneOrder, PickBar, PickToggle } from './PhoneList';
 import { BULK_CHOICES, choiceAllowed, choiceLabel, currentLabel, ROW_CHOICES, StatusChoice, Sub, SUB_STATUSES, SUB_TONE, SUBS, telHref, toneOf, useCanGive, waHref } from './shared';
 import { ConfirmedStatsPage, StatsSection } from './Stats';
+import { BlockSwitch } from './BlockSwitch';
 import { useStatusChange } from './StatusDialog';
 import { CopyCode } from '../../ui/CopyCode';
 import { ScoreChip } from '../../ui/clientScore';
@@ -142,6 +143,8 @@ function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
   return (
     <>
       <StageBar items={items} current={sub} />
+      {/* « Bloquer l'agent jusqu'à l'appel »: the managers switch it on or off (they alone see it) */}
+      {manager && <BlockSwitch />}
       {sub === 'confirmees' && manager ? (
         // managers: « Confirmées » is the list (as for the agents) or its statistics, the choice kept on this device
         <>

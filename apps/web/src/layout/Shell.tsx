@@ -30,6 +30,8 @@ const DepotAlert = lazy(() => import('./DepotAlert').then((m) => ({ default: m.D
 const AutoPushAsk = lazy(() => import('./AutoPushAsk').then((m) => ({ default: m.AutoPushAsk })));
 
 const AgentBanner = lazy(() => import('../pages/confirmation/AgentBanner').then((m) => ({ default: m.AgentBanner })));
+// « Bloquer jusqu'à l'appel »: a new order covers a plain agent's Pilotix until he calls and saves a result
+const NewOrderGate = lazy(() => import('../pages/confirmation/NewOrderBlock').then((m) => ({ default: m.NewOrderGate })));
 
 type Theme = 'light' | 'dark' | null;
 const darkQuery = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
@@ -442,6 +444,12 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
         {has('confirmation') && !isAdmin && (
           <Suspense fallback={null}>
             <AgentBanner />
+          </Suspense>
+        )}
+        {/* a store's plain confirmation agent (never a manager, the owner nor an administrator): the server says when */}
+        {!partner && !isAdmin && roles.includes('confirmation') && !roles.includes('agent_manager') && !roles.includes('vendeur') && (
+          <Suspense fallback={null}>
+            <NewOrderGate />
           </Suspense>
         )}
         {!partner && !isAdmin && roles.includes('depot') && (

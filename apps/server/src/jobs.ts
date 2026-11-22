@@ -40,6 +40,8 @@ import { runWatch } from './watchers';
  *  - Pilotix: « Changements API », what changed at each delivery company's API (daily, 07:20; an e-mail when something did)
  *  - Pilot Auto Assign: « Livraison privée » orders waiting too long in « À attribuer » go to the backup company, every 5 minutes
  *  - Affectation automatique: waiting orders and alerts get an agent on line, absent agents give back what they never touched, every minute
+ *  - Confirmation › « Bloquer jusqu'à l'appel »: a new order waiting rings its agent's devices while he is away from
+ *    Pilotix (then every 5 minutes, 6 times at most), every 30 seconds
  *  - Couverture: the tariffs and bureaus of the companies with an API imported again, every night
  *  - the demo shop starts again from fresh demo data every night
  *  - Pilot AI: every night, the chats of the shops that share them (personal data removed) teach Dellal (one Message Batch)
@@ -57,6 +59,8 @@ const FEATURE: Record<string, string | null> = {
   'notify-run': 'pilotai/notify',
   'auto-run': 'pilotai/notify',
   'depot-push': null,
+  // Confirmation › « Bloquer jusqu'à l'appel »: the agents away from Pilotix with a new order waiting get a notification
+  'conf-push': null,
   'pilot-run': null,
   'assign-run': null,
   'coverage-refresh': null,
@@ -122,6 +126,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       return r;
     }
     if (name === 'depot-push') return call('depot.pushRun');
+    if (name === 'conf-push') return call('confirmation.pushRun');
     if (name === 'pay-plan-alert') return call('pay.noPlanPush');
     if (name === 'pilot-run') return call('pilot.run');
     if (name === 'assign-run') return call('assign.run');
@@ -269,6 +274,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('auto-run', {}, { repeat: { every: 60_000 }, jobId: 'auto-run', removeOnComplete: 20, removeOnFail: 50 });
     // dépôt alerts: the phones of the people who get them ring again until they open the app
     await this.queue.add('depot-push', {}, { repeat: { every: 30_000 }, jobId: 'depot-push', removeOnComplete: 20, removeOnFail: 50 });
+    // Confirmation › « Bloquer jusqu'à l'appel »: a new order waiting rings the agent's devices (then every 5 minutes)
+    await this.queue.add('conf-push', {}, { repeat: { every: 30_000 }, jobId: 'conf-push', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('coverage-refresh', {}, { repeat: { pattern: '20 2 * * *', tz: 'Africa/Algiers' }, jobId: 'coverage-refresh', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('pilot-run', {}, { repeat: { every: 5 * 60_000 }, jobId: 'pilot-run', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('assign-run', {}, { repeat: { every: 60_000 }, jobId: 'assign-run', removeOnComplete: 20, removeOnFail: 50 });

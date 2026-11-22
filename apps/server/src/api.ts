@@ -2340,6 +2340,7 @@ class ApiController {
     bg('dellal.autoOrders'); // Message AI agent: quiet chats with the customer's number become orders (in the background)
     bg('dellal.catchUp'); // Message AI agent: the safety net, messages Meta did not send (in the background)
     bg('depot.pushRun'); // dépôt alerts: ring the phones again (in the background)
+    bg('confirmation.pushRun'); // « Bloquer jusqu'à l'appel »: a new order waiting rings its agent's devices (in the background)
     bg('pilot.run'); // Pilot Auto Assign: private orders waiting too long go to the backup company (in the background)
     bg('assign.run'); // Affectation automatique: the waiting orders and alerts get their agent (in the background)
     bg('spy.scan'); // AI Spy: the daily scan of competitors' ads, once a day (in the background)

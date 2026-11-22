@@ -1,0 +1,109 @@
+/* Confirmation › « Bloquer jusqu'à l'appel » (NewOrderBlock.tsx): a new order covers the agent's Pilotix until he calls and
+   saves a result. It sits above the page (48), under the windows the order card opens (50 and more), its menus and its
+   phone result bar (61). */
+.nob { position: fixed; inset: 0; z-index: 48; display: grid; place-items: center; padding: 20px; background: rgb(27 42 71 / .55); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); animation: nob-veil .2s ease backwards; }
+@keyframes nob-veil { from { opacity: 0; } }
+.nob-card { width: min(1280px, 100%); max-height: 100%; display: flex; flex-direction: column; background: var(--bg); color: var(--ink); border-radius: var(--sk-r, 22px); box-shadow: 0 24px 64px rgb(16 24 40 / .32); overflow: hidden; outline: none; animation: nob-in .32s cubic-bezier(.16, 1, .3, 1) backwards; }
+@keyframes nob-in { from { opacity: 0; transform: translateY(10px) scale(.98); } }
+
+/* the top: what it is, since when, why Pilotix is shut, how many come after it */
+.nob-head { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; padding: 16px 22px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.nob-head h2 { margin: 0; font-family: var(--f-display); font-size: 22px; font-weight: 800; letter-spacing: -.01em; }
+.nob-ref { font-size: 14px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--sky-soft, #F3EFEA); }
+.nob-since { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--c-warn-tint); color: var(--c-warn-ink); font-variant-numeric: tabular-nums; }
+.nob-since .bji { width: 15px; height: 15px; }
+.nob-sp { flex: 1; }
+.nob-state { margin: 0; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; padding: 6px 8px 6px 12px; border-radius: 999px; background: var(--px-navy, #1B2A47); color: #fff; }
+.nob-state.ok { background: var(--c-ok-tint); color: var(--c-ok-ink); }
+.nob-state .bji { flex: none; width: 16px; height: 16px; }
+.nob-q { font-weight: 800; padding: 2px 9px; border-radius: 999px; background: var(--c-accent, #F7A823); color: var(--c-on-accent, #1B2A47); white-space: nowrap; }
+
+/* the browser plays no sound before a touch on the page: one tap here */
+.nob-sound { flex: none; align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; margin: 12px 22px 0; padding: 9px 16px; border: 0; border-radius: 999px; background: var(--c-accent-grad); color: var(--c-on-accent); font: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer; animation: nob-pulse 1.4s ease-in-out infinite; }
+.nob-sound .bji { width: 18px; height: 18px; }
+@keyframes nob-pulse { 50% { box-shadow: 0 0 0 6px rgb(247 168 35 / .3); } }
+
+/* the customer and the call (left), the order card (right) */
+.nob-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 340px minmax(0, 1fr); }
+.nob-side { min-height: 0; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; background: var(--surface); border-inline-end: 1px solid var(--line); }
+.nob-who { display: flex; align-items: center; gap: 12px; }
+.nob-av { flex: none; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--c-accent-tint); color: var(--c-accent-ink); font-family: var(--f-display); font-size: 19px; font-weight: 800; }
+.nob-who > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.nob-who b { font-size: 18px; line-height: 1.25; overflow-wrap: anywhere; }
+.nob-tel { font-size: 24px; font-weight: 700; letter-spacing: .01em; font-variant-numeric: tabular-nums; }
+.nob-who small { font-size: 14px; color: var(--muted); }
+.nob-place { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 14.5px; color: var(--muted); }
+.nob-place .bji { flex: none; width: 17px; height: 17px; }
+.nob-flags { display: flex; flex-wrap: wrap; gap: 6px; }
+.nob-flags:empty { display: none; }
+.nob-acts { display: flex; flex-direction: column; gap: 10px; }
+.nob-call, .nob-msg, .nob-gcall { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 56px; padding: 0 20px; border: 0; border-radius: 16px; font: inherit; font-size: 17px; font-weight: 800; cursor: pointer; text-decoration: none; }
+.nob-call, .nob-gcall { background: var(--c-accent-grad); color: var(--c-on-accent); box-shadow: 0 8px 22px rgb(242 139 30 / .3); }
+.nob-call .bji, .nob-gcall .bji { width: 22px; height: 22px; }
+.nob-call.done { min-height: 46px; font-size: 15px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); box-shadow: none; }
+.nob-msg { min-height: 46px; font-size: 15px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.nob-msg .bji { width: 20px; height: 20px; color: #1FAF54; }
+.nob-call:focus-visible, .nob-msg:focus-visible, .nob-gcall:focus-visible, .nob-sound:focus-visible { outline: 2px solid var(--c-info-ink); outline-offset: 2px; }
+.nob-call.on, .nob-msg.on, .nob-gcall.on { box-shadow: 0 0 0 3px var(--q-accent, #F7A823); }
+.nob-hist { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 14px; background: var(--c-ok-tint); color: var(--c-ok-ink); font-size: 13.5px; }
+.nob-hist.bad { background: var(--c-bad-tint); color: var(--c-bad-ink); }
+.nob-hist ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.nob-hist li { display: flex; justify-content: space-between; gap: 8px; color: var(--ink); }
+.nob-main { min-height: 0; overflow-y: auto; padding: 18px 20px 0; display: flex; flex-direction: column; }
+/* the result bar (Changer le statut, Confirmer) stays in view at the bottom */
+.nob-main .qd6-bar { position: sticky; bottom: 14px; z-index: 3; margin-bottom: 14px; }
+
+/* the call rings: two soft rings leave the button again and again */
+.nob-ringing { position: relative; isolation: isolate; }
+.nob-ringing::before, .nob-ringing::after { content: ""; position: absolute; inset: 0; border-radius: inherit; border: 2px solid var(--c-accent, #F7A823); z-index: -1; pointer-events: none; animation: nob-ring 1.8s cubic-bezier(.16, 1, .3, 1) infinite; }
+.nob-ringing::after { animation-delay: .9s; }
+@keyframes nob-ring { from { transform: scale(1); opacity: .7; } to { transform: scale(1.1, 1.5); opacity: 0; } }
+.pxp-call.nob-ringing::before, .pxp-call.nob-ringing::after { border-color: var(--c-ok-line, #1F9D57); animation-name: nob-ring-sq; }
+@keyframes nob-ring-sq { from { transform: scale(1); opacity: .7; } to { transform: scale(1.6); opacity: 0; } }
+
+/* until « Appeler »: the result bar is shut, this strip stands in its place */
+.nob.locked .qd6-bar { display: none !important; }
+.nob-gate { position: sticky; bottom: 14px; z-index: 3; display: flex; align-items: center; gap: 12px; margin: 16px 0 14px; padding: 12px 12px 12px 16px; border-radius: 16px; background: var(--px-navy, #1B2A47); color: #fff; box-shadow: 0 10px 28px rgb(27 42 71 / .22); }
+.nob-gate > .bji { flex: none; width: 20px; height: 20px; }
+.nob-gate > span { flex: 1; min-width: 0; font-size: 14.5px; font-weight: 700; line-height: 1.35; }
+.nob-gcall { flex: none; min-height: 48px; font-size: 16px; }
+
+/* tablets: the customer on top in one band, the card under it, all in one scroll */
+@media (max-width: 1100px) {
+  .nob { padding: 12px; }
+  .nob-head { padding: 14px 16px; }
+  .nob-body { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
+  .nob-side { overflow: visible; border-inline-end: 0; border-bottom: 1px solid var(--line); padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 16px; }
+  .nob-side > * { grid-column: 1 / -1; }
+  .nob-side > .nob-who { grid-column: 1; grid-row: 1; }
+  .nob-side > .nob-acts { grid-column: 2; grid-row: 1; flex-direction: row; }
+  .nob-acts .nob-call, .nob-acts .nob-msg { min-height: 50px; font-size: 15px; }
+  .nob-main { overflow: visible; padding: 16px 16px 0; }
+  .nob-sound { margin: 10px 16px 0; }
+}
+
+/* phones: the whole screen, like the order opened from the list; the call buttons in the top bar */
+.nob.ph { display: flex; flex-direction: column; place-items: stretch; padding: 0; background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; outline: none; }
+.nob.ph .nob-state { align-self: flex-start; margin: 8px 12px 0; padding: 6px 8px 6px 10px; border-radius: 12px; font-size: 13px; }
+.nob.ph .nob-sound { margin: 8px 12px 0; }
+.nob-ph-b { padding-bottom: 150px; }
+.nob.ph .nob-gate { position: fixed; z-index: 61; left: 0; right: 0; bottom: 0; margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 10px; border-radius: 0; padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -8px 24px rgb(27 42 71 / .22); }
+.nob.ph .nob-gcall { grid-column: 1 / -1; min-height: 54px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nob, .nob-card, .nob-sound { animation: none; }
+  .nob-ringing::before, .nob-ringing::after { animation: none; opacity: 0; }
+}
+
+/* the managers' switch, at the top of Confirmation (BlockSwitch.tsx) */
+.nob-sw { display: flex; align-items: center; gap: 14px; margin: 0 0 14px; padding: 12px 16px; border-radius: var(--sk-r, 22px); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--sk-shadow, none); }
+.nob-sw.on { border-color: color-mix(in srgb, var(--c-accent, #F7A823) 55%, var(--line)); }
+.nob-sw-ic { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--sky-soft, #F3EFEA); color: var(--muted); }
+.nob-sw.on .nob-sw-ic { background: var(--c-accent-tint); color: var(--c-accent-ink); }
+.nob-sw-ic .bji { width: 20px; height: 20px; }
+.nob-sw-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.nob-sw-t b { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 15.5px; }
+.nob-sw-t small { font-size: 13px; line-height: 1.4; color: var(--muted); }
+.nob-sw-chip { font-size: 12px; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: var(--sky-soft, #F3EFEA); color: var(--muted); }
+.nob-sw-chip.on { background: var(--c-ok-tint); color: var(--c-ok-ink); }
+@media (max-width: 760px) { .nob-sw { padding: 12px; gap: 10px; } .nob-sw-ic { display: none; } }

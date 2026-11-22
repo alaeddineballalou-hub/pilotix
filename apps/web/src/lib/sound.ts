@@ -57,3 +57,35 @@ export function alarm() {
     }
   }
 }
+
+/** Can the page make a sound now? (false until the person touched the page once: the browser's rule) */
+export const audioReady = () => !!audio && audio.state === 'running';
+
+/**
+ * A phone ringing, loud (« Bloquer jusqu'à l'appel »: a new order to call): two trills, « drrr-drrr ». Call it again every
+ * few seconds while it should ring.
+ */
+export function ring() {
+  if (!audio || audio.state !== 'running') return;
+  const t = audio.currentTime;
+  const master = audio.createGain();
+  master.gain.value = 0.7;
+  master.connect(audio.destination);
+  for (const start of [0, 0.5]) {
+    const s = t + start;
+    // a bell's trill: the tone jumps between two notes 25 times a second, a soft voice and a bright one
+    for (const [type, level] of [['triangle', 0.7], ['square', 0.22]] as const) {
+      const o = audio.createOscillator();
+      const g = audio.createGain();
+      o.type = type;
+      for (let i = 0; i < 10; i++) o.frequency.setValueAtTime(i % 2 ? 1480 : 1180, s + i * 0.04);
+      g.gain.setValueAtTime(0.0001, s);
+      g.gain.exponentialRampToValueAtTime(level, s + 0.015);
+      g.gain.setValueAtTime(level, s + 0.36);
+      g.gain.exponentialRampToValueAtTime(0.0001, s + 0.4);
+      o.connect(g).connect(master);
+      o.start(s);
+      o.stop(s + 0.42);
+    }
+  }
+}

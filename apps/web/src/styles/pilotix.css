@@ -1246,7 +1246,7 @@ html body .qd6-ntext:focus { outline: none; border-color: #F7A823 !important; bo
 html body .qd6-grid { grid-template-columns: minmax(0, 1fr) 390px; grid-template-areas: "left right"; grid-template-rows: auto; align-items: start; }
 html body .qd6-grid > .qd6-left { display: flex; flex-direction: column; gap: 16px; min-width: 0; grid-area: left; }
 .qd6-right { grid-area: right; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-html body .qd6-right > .qd6-deliv { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px 16px 16px; }
+html body .qd6-right > .qd6-deliv { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 12px; padding: 14px 16px 16px; }
 html body .qd6-right .qd6-deliv .qd5-seg { width: 100%; }
 html body .qd6-right .qd6-desk { min-width: 0; flex: none; }
 html body .qd6-right .qd6-fee { flex: none; }

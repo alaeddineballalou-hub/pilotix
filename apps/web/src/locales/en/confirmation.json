@@ -754,5 +754,31 @@
     "label": "View",
     "list": "List",
     "stats": "Statistics"
+  },
+  "nob": {
+    "title": "New order",
+    "since": "Received {{d}} ago",
+    "locked": "Pilotix is locked until the call’s result",
+    "calledLine": "Call started: pick the result to unlock Pilotix",
+    "next": "Next: {{n}} more",
+    "recall": "Call again",
+    "gate": "Call the customer first: the result opens here after the call.",
+    "sound": "Tap here to hear the ring",
+    "tabTitle": "📞 New order to call",
+    "push": {
+      "ask": "Turn on notifications: this device will ring for every new order, even with Pilotix closed.",
+      "denied": "Notifications are blocked on this device: allow them in the browser settings to hear about new orders.",
+      "on": "Turn on",
+      "later": "Later"
+    },
+    "sw": {
+      "title": "Lock the agent until the call",
+      "on": "On",
+      "off": "Off",
+      "help": "A new order covers the agent’s whole Pilotix and rings until he calls and picks a result. One at a time, never at night.",
+      "by": "Changed by {{name}}, {{when}}.",
+      "savedOn": "Lock on: agents must call every new order.",
+      "savedOff": "Lock off."
+    }
   }
 }

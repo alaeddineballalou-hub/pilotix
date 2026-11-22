@@ -481,6 +481,8 @@ class DemoBackend implements Backend {
         // the preview opened in Claude: its counter turned on, with a day of sales (Point de vente; off in a shop until an
         // administrator turns it on)
         if (import.meta.env.VITE_DEMO_ONLY === '1') await core.seedPos(db);
+        // the preview opened in Claude: « Bloquer jusqu'à l'appel » on, Rania has two new orders to call (her « Essayer » link)
+        if (import.meta.env.VITE_DEMO_ONLY === '1') await core.seedBlockDemo(db);
         // the demo database is rebuilt on every reload: put back the column presets and screen choices kept in this browser
         await core.demoRestore(db, store.json<import('@pilotix/core').DemoKeep | null>('demo-keep', null)).catch(() => {});
         return { core, db, t };
