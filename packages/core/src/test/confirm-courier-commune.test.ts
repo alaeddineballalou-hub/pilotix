@@ -1,6 +1,7 @@
 // Confirmation: at home with a company that keeps its own list of communes (ZR…), the order's commune must be on it
 // (22 Nov 2026: PX1226, « Azzefoun » unknown at ZR, was confirmed, then refused by ZR at the depot — and the red screen
-// asked for a label that never existed). The courier is asked on the server; it can't say (preview, no answer): go on.
+// asked for a label that never existed). The courier is asked on the server; it can't say (no answer): go on. The
+// browser preview's simulated ZR writes « Azeffoun », so the check can be tried in the demo.
 import assert from 'node:assert/strict';
 import { afterEach, before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
@@ -88,10 +89,19 @@ test('the order card: a commune ZR does not know cannot be confirmed with ZR at 
   assert.equal(f.calls.length, n, 'not asked for a stop desk');
 });
 
-test('ZR does not answer, or the browser preview: the order is not blocked (the depot’s sending still tells)', async () => {
+test('ZR does not answer: the order is not blocked (the depot’s sending still tells)', async () => {
   assert.equal((await check(await as(EMAILS.conf, server('fail').server), 'Azzefoun')).canConfirm, true);
   assert.equal((await check(await as(EMAILS.conf, server([]).server), 'Azzefoun')).canConfirm, true, 'an empty list says nothing');
-  assert.equal((await check(await as(EMAILS.conf), 'Azzefoun')).canConfirm, true, 'no server: the preview');
+});
+
+test('the browser preview (no server): its stand-in ZR writes « Azeffoun », so the check can be tried there', async () => {
+  const samira = await as(EMAILS.conf);
+  const r = await check(samira, 'Azzefoun');
+  assert.equal(r.deliver.why, 'courierCommune');
+  assert.deepEqual(r.deliver.near, ['Azeffoun']);
+  assert.equal((await check(samira, 'Tizi Ouzou')).canConfirm, true);
+  assert.equal((await check(samira, 'Tigzirt')).canConfirm, true);
+  assert.equal((await check(samira, 'Ali Mendjeli')).canConfirm, true, 'a name outside Pilotix’s list: the stand-in can’t say');
 });
 
 test('« Confirmer » on a saved order: refused with the reason in the agent’s words', async () => {

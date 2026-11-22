@@ -10,7 +10,7 @@
 //     At home with a company that keeps its own list of communes (ZR…), that list must know the order's commune
 //     (22 Nov 2026: PX1226, « Azzefoun » unknown at ZR, was confirmed and refused only at the depot).
 // The order card asks the same question (orders.confirmCheck) before the agent presses « Confirmer ».
-import { WILAYAS } from '@pilotix/shared';
+import { communesOf, WILAYAS } from '@pilotix/shared';
 import type { CourierKind } from '@pilotix/shared';
 import { z } from 'zod';
 import { ADAPTERS } from '../couriers/adapters';
@@ -126,14 +126,22 @@ const COURIER_WAIT_MS = 6000;
 
 /**
  * Does the company's own list of communes (ZR…) know this commune? Asked from the courier on the server (kept in memory
- * there after the first time), matched as the sending will match it. null: it cannot say (no list by API, the browser
- * preview, demo keys, no answer in time) — the order goes on, and the depot's sending tells if the courier refuses it.
+ * there after the first time), matched as the sending will match it. null: it cannot say (no list by API, demo keys,
+ * no answer in time) — the order goes on, and the depot's sending tells if the courier refuses it.
  */
 export async function courierCommune(db: Db, ctx: Ctx, companyId: number, wilayaId: number, commune: string): Promise<{ ok: boolean; near: string[] } | null> {
-  const run = ctx.server?.courier;
-  if (!run || !commune.trim()) return null;
+  if (!commune.trim()) return null;
   const c = (await db.query('SELECT kind FROM delivery_companies WHERE id = $1', [companyId]))[0];
   if (!c || !ADAPTERS[c.kind as CourierKind]?.communes) return null;
+  const answer = (list: string[]) => (bestMatch(commune, list) ? { ok: true, near: [] } : { ok: false, near: nearest(commune, list) });
+  const run = ctx.server?.courier;
+  // the browser preview: its couriers are simulated — the demo's ZR writes one commune its own way (« Azeffoun » for
+  // Pilotix's « Azzefoun »), so the check can be tried there; a name outside Pilotix's list: it can't say
+  if (!run) {
+    const own = communesOf(wilayaId).map((x) => x[1]);
+    if (c.kind !== 'zr' || !bestMatch(commune, own)) return null;
+    return answer(own.map((x) => (x === 'Azzefoun' ? 'Azeffoun' : x)));
+  }
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const names = await Promise.race([
@@ -143,8 +151,7 @@ export async function courierCommune(db: Db, ctx: Ctx, companyId: number, wilaya
       }),
     ]);
     if (!Array.isArray(names) || !names.length) return null;
-    const list = names.map(String);
-    return bestMatch(commune, list) ? { ok: true, near: [] } : { ok: false, near: nearest(commune, list) };
+    return answer(names.map(String));
   } catch {
     return null;
   } finally {
