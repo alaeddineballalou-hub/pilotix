@@ -8,11 +8,14 @@
 // - managers and the owner: every phone notification they already got goes in their bell too (push.ts › sendPush).
 // The person who did the thing is never told of it. The phones ring in the shop's call hours (Réglages › Appels), except a
 // callback, whose time the agent chose; outside them the line waits in the bell, without a sound.
+// Management › Notifications (owner's ask, 22 Nov 2026) sets each kind: on or off, who gets it — the order's own person
+// in their words, the others (the manager, the owners, the depot, chosen people) in the third person, one line per kind
+// that grows while it is not read — and when the phones ring (notifyRules). The sounds stay Pilotix's own.
 import { algiersDayStart, CONF_TODO, Language, slotAt } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, num, numOrNull } from '../db';
 import { Ctx, proc } from '../rpc';
-import { getSetting } from '../settings';
+import { getSetting, setSetting } from '../settings';
 import { BellKind, ringBell } from './bell';
 import { pushOnly } from './push';
 
@@ -45,6 +48,13 @@ const W = {
   depotN: { fr: '📦 {n} nouvelles commandes à préparer', en: '📦 {n} new orders to prepare', ar: '📦 طلبات جديدة للتحضير: {n}' },
   depotAll: { fr: '{total} à préparer en tout', en: '{total} to prepare in all', ar: 'المجموع للتحضير: {total}' },
   messages: { fr: '{n} messages', en: '{n} messages', ar: 'رسائل: {n}' },
+  // the others' lines (a manager, the owners, the depot, chosen people): about someone else's order
+  teamOrder1: { fr: 'Nouvelle commande', en: 'New order', ar: 'طلب جديد' },
+  teamOrderN: { fr: '{n} nouvelles commandes', en: '{n} new orders', ar: 'طلبات جديدة: {n}' },
+  forWho: { fr: 'pour {who}', en: 'for {who}', ar: 'لـ{who}' },
+  teamCallback: { fr: '📞 {who} doit rappeler {name}', en: '📞 {who} has to call {name} back', ar: '📞 على {who} أن يعيد الاتصال بـ{name}' },
+  teamTaken1: { fr: '{ref} n’est plus à {who}', en: '{ref} is no longer {who}’s', ar: '{ref} لم يعد لـ{who}' },
+  teamTakenN: { fr: '{n} commandes ont changé d’agent', en: '{n} orders changed agent', ar: 'طلبات غيّرت وكيلها: {n}' },
 } satisfies Record<string, Words>;
 
 /** A sentence of W in this language, its {words} filled. */
@@ -80,6 +90,106 @@ async function namesOf(db: Db, ids: number[]): Promise<Map<number, string>> {
   return new Map(rows.map((r: any) => [num(r.id), String(r.name ?? '').trim()]));
 }
 
+// ---------------------------------------------------------------- Management › Notifications: who gets what
+/** The kinds the bell writes itself (« info »: the other pages' own notifications — paie, rapport du soir… — set there). */
+export const NOTIFY_KINDS = ['order', 'callback', 'delivered', 'returned', 'cancelled', 'taken', 'alert', 'depot', 'message'] as const;
+export type NotifyKind = (typeof NOTIFY_KINDS)[number];
+/** A rule's people: the order's agent, its Suivi agent, the team manager of the person it is about, the owners (the
+ *  administrators), the depot team. */
+export const NOTIFY_WHO = ['agent', 'suivi', 'manager', 'owner', 'depot'] as const;
+export type NotifyWho = (typeof NOTIFY_WHO)[number];
+export const NOTIFY_PHONE = ['work', 'always', 'never'] as const;
+export interface NotifyRule {
+  on: boolean;
+  who: NotifyWho[];
+  /** chosen people, told whatever their role */
+  people: number[];
+  /** the phones: in the shop's call hours, always, never */
+  phone: (typeof NOTIFY_PHONE)[number];
+}
+/** Who each kind can go to (the page offers these). */
+export const NOTIFY_CAN: Record<NotifyKind, readonly NotifyWho[]> = {
+  order: ['agent', 'manager', 'owner'],
+  callback: ['agent', 'manager', 'owner'],
+  delivered: ['agent', 'suivi', 'manager', 'owner', 'depot'],
+  returned: ['agent', 'suivi', 'manager', 'owner', 'depot'],
+  cancelled: ['agent', 'suivi', 'manager', 'owner', 'depot'],
+  taken: ['agent', 'manager', 'owner'],
+  alert: ['suivi', 'agent', 'manager', 'owner'],
+  depot: ['depot', 'owner'],
+  // the agent while the order is being confirmed, the Suivi agent once it is on the road
+  message: ['agent', 'suivi', 'manager', 'owner'],
+};
+/** Before the page, as it was — and the owner's ask: a new order goes to the agent's manager and the owners too. */
+export const DEFAULT_NOTIFY: Record<NotifyKind, NotifyRule> = {
+  order: { on: true, who: ['agent', 'manager', 'owner'], people: [], phone: 'work' },
+  callback: { on: true, who: ['agent'], people: [], phone: 'always' },
+  delivered: { on: true, who: ['agent'], people: [], phone: 'work' },
+  returned: { on: true, who: ['agent'], people: [], phone: 'work' },
+  cancelled: { on: true, who: ['agent'], people: [], phone: 'work' },
+  taken: { on: true, who: ['agent'], people: [], phone: 'work' },
+  alert: { on: true, who: ['suivi'], people: [], phone: 'work' },
+  depot: { on: true, who: ['depot'], people: [], phone: 'work' },
+  message: { on: true, who: ['agent', 'suivi'], people: [], phone: 'work' },
+};
+
+/** A kind's rule from what was saved: each part checked, the rest its default. */
+export function cleanRule(kind: NotifyKind, v: unknown): NotifyRule {
+  const d = DEFAULT_NOTIFY[kind];
+  const s = (v && typeof v === 'object' ? v : {}) as Partial<Record<keyof NotifyRule, unknown>>;
+  const who = Array.isArray(s.who) ? s.who : null;
+  return {
+    on: typeof s.on === 'boolean' ? s.on : d.on,
+    who: who ? NOTIFY_CAN[kind].filter((w) => who.includes(w)) : [...d.who],
+    people: Array.isArray(s.people) ? [...new Set(s.people.filter((x): x is number => Number.isSafeInteger(x) && (x as number) > 0))].slice(0, 50) : [...d.people],
+    phone: (NOTIFY_PHONE as readonly unknown[]).includes(s.phone) ? (s.phone as NotifyRule['phone']) : d.phone,
+  };
+}
+
+/** Every kind's rule (Management › Notifications), each one checked over its default. */
+export async function notifyRules(db: Db): Promise<Record<NotifyKind, NotifyRule>> {
+  const saved = (await getSetting(db, 'notify')) ?? {};
+  return Object.fromEntries(NOTIFY_KINDS.map((k) => [k, cleanRule(k, saved[k])])) as Record<NotifyKind, NotifyRule>;
+}
+
+/** The people around the orders, read once for one telling: the owners, the depot team, the teams' managers. */
+function around(ctx: Ctx) {
+  let owners: Promise<number[]> | null = null;
+  let depot: Promise<number[]> | null = null;
+  let teams: Promise<{ managerId: number | null; agentIds: number[] }[]> | null = null;
+  const ids = (rows: any[]) => rows.map((x) => num(x.id));
+  return {
+    owners: () => (owners ??= ctx.db.query(`SELECT id FROM profiles WHERE active AND 'admin' = ANY(roles) AND agency_id IS NULL`).then(ids)),
+    depot: () => (depot ??= ctx.db.query(`SELECT id FROM profiles WHERE active AND 'depot' = ANY(roles) AND NOT ('admin' = ANY(roles)) AND agency_id IS NULL`).then(ids)),
+    /** the manager of each team this person is in (Management › Équipes) */
+    managersOf: async (who: readonly number[]) => {
+      const list = await (teams ??= getSetting(ctx.db, 'teams').then((t) => (Array.isArray(t) ? t : [])));
+      return list.filter((t) => t.managerId && who.some((p) => t.agentIds?.includes(p))).map((t) => t.managerId as number);
+    },
+  };
+}
+type Around = ReturnType<typeof around>;
+
+/**
+ * The people a rule tells beside the one a thing is about (`self`, told in their own words when their role `selfRole`
+ * is ticked): the order's other person ticked (`agents`, `suivis`), the team manager of `self`, the owners, the depot,
+ * the chosen people. `self` is left out when they get their own line.
+ */
+async function othersOf(a: Around, rule: NotifyRule, o: { self: readonly number[]; selfRole: NotifyWho | null; agents?: readonly (number | null)[]; suivis?: readonly (number | null)[] }): Promise<number[]> {
+  if (!rule.on) return [];
+  const has = (w: NotifyWho) => rule.who.includes(w);
+  const ids: number[] = [...rule.people];
+  if (has('agent') && o.selfRole !== 'agent') ids.push(...(o.agents ?? []).filter((x): x is number => !!x));
+  if (has('suivi') && o.selfRole !== 'suivi') ids.push(...(o.suivis ?? []).filter((x): x is number => !!x));
+  if (has('manager')) ids.push(...(await a.managersOf(o.self)));
+  if (has('owner')) ids.push(...(await a.owners()));
+  if (has('depot')) ids.push(...(await a.depot()));
+  const selfTold = !!o.selfRole && has(o.selfRole);
+  return [...new Set(ids)].filter((x) => !(selfTold && o.self.includes(x)));
+}
+/** Does the person a thing is about get their own line? */
+const selfOn = (rule: NotifyRule, role: NotifyWho) => rule.on && rule.who.includes(role);
+
 // ---------------------------------------------------------------- telling
 /** Loud, and kept on screen until seen. */
 const IMPORTANT = new Set<BellKind>(['order', 'callback', 'alert']);
@@ -101,6 +211,8 @@ export interface Tell {
   by?: number | null;
   /** in the bell only: no pop-up, no sound, no phone (something else rings it already) */
   silent?: boolean;
+  /** a line that grows (its tag) about several orders opens its page, not one order */
+  listWhenMany?: boolean;
 }
 
 /** In the shop's call hours now (Réglages › Appels): the team is at work. */
@@ -114,7 +226,7 @@ export async function tell(ctx: Ctx, to: readonly (number | null | undefined)[],
     const people = [...new Set(to.filter((x): x is number => typeof x === 'number' && x > 0 && x !== t.by))];
     if (!people.length) return [];
     const important = t.important ?? IMPORTANT.has(t.kind);
-    const rung = await ringBell(ctx, people, (lang, n) => ({ kind: t.kind, ...t.text(lang, n), url: t.url ?? null, orderId: t.orderId ?? null, important }), { tag: t.tag, count: t.count, silent: t.silent });
+    const rung = await ringBell(ctx, people, (lang, n) => ({ kind: t.kind, ...t.text(lang, n), url: t.url ?? null, orderId: t.listWhenMany && n > 1 ? null : t.orderId ?? null, important }), { tag: t.tag, count: t.count, silent: t.silent });
     const phone = t.silent ? 'never' : t.phone ?? 'work';
     const fresh = rung.filter((r) => !r.quiet);
     if (fresh.length && phone !== 'never' && ctx.server?.push && (phone === 'always' || (await workNow(ctx))))
@@ -128,27 +240,54 @@ export async function tell(ctx: Ctx, to: readonly (number | null | undefined)[],
 
 /** Orders given to agents (Confirmation) or parcels on alert given to Suivi: one line per person, all their orders in it. */
 export async function tellGiven(ctx: Ctx, area: 'conf' | 'follow', given: Map<number, number[]>, o: { by?: number | null; rotation?: boolean } = {}) {
+  const kind: NotifyKind = area === 'conf' ? 'order' : 'alert';
+  const rule = (await notifyRules(ctx.db))[kind];
+  if (!rule.on) return;
+  const selfRole: NotifyWho = area === 'conf' ? 'agent' : 'suivi';
+  const a = around(ctx);
   const bits = await orderBits(ctx.db, [...given.values()].flat());
-  const by = o.by ? (await namesOf(ctx.db, [o.by])).get(o.by) ?? '' : '';
+  const names = await namesOf(ctx.db, [...given.keys(), ...(o.by ? [o.by] : [])]);
+  const by = o.by ? names.get(o.by) ?? '' : '';
   // Confirmation › « Bloquer jusqu'à l'appel » on: the new order already covers a plain agent's screen and rings
   // (confblock.ts): his line stays quiet in the bell
   const blocked = area === 'conf' ? await blockedAgents(ctx, [...given.keys()]) : new Set<number>();
+  const url = area === 'conf' ? '#/confirmation/nouvelles' : '#/suivi/alertes';
   for (const [agent, ids] of given) {
     const list = ids.map((i) => bits.get(i)).filter((x): x is Bits => !!x);
     if (!list.length) continue;
     const one = list.length === 1 ? list[0] : null;
     const why = (lang: Language) => (o.rotation ? `${say('rotation', lang)} · ` : by ? `${say('fromManager', lang, { who: by })} · ` : '');
-    await tell(ctx, [agent], {
-      kind: area === 'conf' ? 'order' : 'alert',
-      silent: blocked.has(agent),
+    if (selfOn(rule, selfRole))
+      await tell(ctx, [agent], {
+        kind,
+        silent: blocked.has(agent),
+        count: list.length,
+        orderId: one?.id ?? null,
+        url,
+        by: o.by ?? null,
+        phone: rule.phone,
+        text: (lang, n) =>
+          area === 'conf'
+            ? { title: n === 1 ? say('order1', lang) : say('orderN', lang, { n }), body: why(lang) + (one ? oneLine(one, lang) : refList(list)) }
+            : { title: n === 1 ? say('given', lang) : say('alertN', lang, { n }), body: why(lang) + (one ? oneLine(one, lang) : refList(list)) },
+      });
+    // the others ticked (the manager, the owners…): one line that grows, « 5 nouvelles commandes », the last ones in it
+    const others = await othersOf(a, rule, { self: [agent], selfRole, agents: list.map((x) => x.agent), suivis: list.map((x) => x.follow) });
+    const who = names.get(agent) ?? '';
+    await tell(ctx, others, {
+      kind,
+      tag: `team-${kind}`,
       count: list.length,
       orderId: one?.id ?? null,
-      url: area === 'conf' ? '#/confirmation/nouvelles' : '#/suivi/alertes',
+      listWhenMany: true,
+      url,
       by: o.by ?? null,
-      text: (lang, n) =>
-        area === 'conf'
-          ? { title: n === 1 ? say('order1', lang) : say('orderN', lang, { n }), body: why(lang) + (one ? oneLine(one, lang) : refList(list)) }
-          : { title: n === 1 ? say('given', lang) : say('alertN', lang, { n }), body: why(lang) + (one ? oneLine(one, lang) : refList(list)) },
+      phone: rule.phone,
+      important: false,
+      text: (lang, n) => ({
+        title: area === 'conf' ? (n === 1 ? say('teamOrder1', lang) : say('teamOrderN', lang, { n })) : n === 1 && one ? say('alert1', lang, { ref: one.ref }) : say('alertN', lang, { n }),
+        body: [one ? oneLine(one, lang) : refList(list), who ? say('forWho', lang, { who }) : ''].filter(Boolean).join(' · '),
+      }),
     });
   }
 }
@@ -166,23 +305,38 @@ async function blockedAgents(ctx: Ctx, ids: number[]): Promise<Set<number>> {
 
 /** Orders taken from their agent (a rotation, a manager): one line per person. `to`: who has each order now. */
 export async function tellTaken(ctx: Ctx, taken: Map<number, { id: number; to: number | null }[]>, o: { by?: number | null; rotation?: boolean; area?: 'conf' | 'follow' } = {}) {
+  const rule = (await notifyRules(ctx.db)).taken;
+  if (!rule.on) return;
+  const a = around(ctx);
   const all = [...taken.values()].flat();
   const bits = await orderBits(ctx.db, all.map((x) => x.id));
-  const names = await namesOf(ctx.db, all.map((x) => x.to).filter((x): x is number => !!x));
+  const names = await namesOf(ctx.db, [...all.map((x) => x.to).filter((x): x is number => !!x), ...taken.keys()]);
+  const url = o.area === 'follow' ? '#/suivi/alertes' : '#/confirmation/nouvelles';
   for (const [agent, list0] of taken) {
     const list = list0.filter((x) => bits.has(x.id));
     if (!list.length) continue;
     const one = list.length === 1 ? list[0] : null;
     const who = one?.to ? names.get(one.to) ?? '' : '';
-    await tell(ctx, [agent], {
+    const body = (lang: Language) => (one ? (who ? say(o.rotation ? 'late' : 'givenTo', lang, { who }) : bits.get(one.id)!.name) : refList(list.map((x) => bits.get(x.id)!)));
+    if (selfOn(rule, 'agent'))
+      await tell(ctx, [agent], {
+        kind: 'taken',
+        count: list.length,
+        url,
+        by: o.by ?? null,
+        phone: rule.phone,
+        text: (lang, n) => ({ title: n === 1 && one ? say('taken1', lang, { ref: bits.get(one.id)!.ref }) : say('takenN', lang, { n }), body: body(lang) }),
+      });
+    const others = (await othersOf(a, rule, { self: [agent], selfRole: 'agent' })).filter((x) => !list.some((l) => l.to === x));
+    const lost = names.get(agent) ?? '';
+    await tell(ctx, others, {
       kind: 'taken',
+      tag: 'team-taken',
       count: list.length,
-      url: o.area === 'follow' ? '#/suivi/alertes' : '#/confirmation/nouvelles',
+      url,
       by: o.by ?? null,
-      text: (lang, n) => ({
-        title: n === 1 && one ? say('taken1', lang, { ref: bits.get(one.id)!.ref }) : say('takenN', lang, { n }),
-        body: one ? (who ? say(o.rotation ? 'late' : 'givenTo', lang, { who }) : bits.get(one.id)!.name) : refList(list.map((x) => bits.get(x.id)!)),
-      }),
+      phone: rule.phone,
+      text: (lang, n) => ({ title: n === 1 && one ? say('teamTaken1', lang, { ref: bits.get(one.id)!.ref, who: lost }) : say('teamTakenN', lang, { n }), body: body(lang) }),
     });
   }
 }
@@ -195,12 +349,16 @@ export interface FollowMove {
 }
 export async function tellFollow(ctx: Ctx, moves: FollowMove[], by: number | null) {
   if (!moves.length) return;
+  const rules = await notifyRules(ctx.db);
+  const a = around(ctx);
   const bits = await orderBits(ctx.db, moves.map((m) => m.id));
   const back = new Set(['returning', 'returned']);
-  /** person → kind → their orders */
-  const out = new Map<number, Map<'delivered' | 'returned' | 'cancelled' | 'alert', { o: Bits; to: string }[]>>();
-  const add = (who: number | null, kind: 'delivered' | 'returned' | 'cancelled' | 'alert', o: Bits, to: string) => {
-    if (!who || who === by) return;
+  type K = 'delivered' | 'returned' | 'cancelled' | 'alert';
+  /** person → kind → their orders: their own lines, and the others' (`team`, in the third person) */
+  const own = new Map<number, Map<K, { o: Bits; to: string }[]>>();
+  const team = new Map<number, Map<K, { o: Bits; to: string }[]>>();
+  const add = (out: typeof own, who: number, kind: K, o: Bits, to: string) => {
+    if (who === by) return;
     const m = out.get(who) ?? new Map();
     m.set(kind, [...(m.get(kind) ?? []), { o, to }]);
     out.set(who, m);
@@ -208,29 +366,44 @@ export async function tellFollow(ctx: Ctx, moves: FollowMove[], by: number | nul
   for (const m of moves) {
     const o = bits.get(m.id);
     if (!o || m.from === m.to) continue;
-    if (m.to === 'delivered') add(o.agent, 'delivered', o, m.to);
-    else if (back.has(m.to) && !back.has(m.from ?? '')) add(o.agent, 'returned', o, m.to);
-    else if (m.to === 'cancelled') add(o.agent, 'cancelled', o, m.to);
-    else if (m.to === 'alert' || m.to === 'failed') add(o.follow, 'alert', o, m.to);
+    const kind: K | null =
+      m.to === 'delivered' ? 'delivered' : back.has(m.to) && !back.has(m.from ?? '') ? 'returned' : m.to === 'cancelled' ? 'cancelled' : m.to === 'alert' || m.to === 'failed' ? 'alert' : null;
+    if (!kind) continue;
+    const rule = rules[kind];
+    if (!rule.on) continue;
+    // the person it is about: the agent who confirmed it, or the Suivi agent of a parcel on alert
+    const selfRole: NotifyWho = kind === 'alert' ? 'suivi' : 'agent';
+    const self = kind === 'alert' ? o.follow : o.agent;
+    if (self && selfOn(rule, selfRole)) add(own, self, kind, o, m.to);
+    for (const p of await othersOf(a, rule, { self: self ? [self] : [], selfRole, agents: [o.agent], suivis: [o.follow] })) add(team, p, kind, o, m.to);
   }
-  for (const [who, kinds] of out)
-    for (const [kind, list] of kinds) {
-      const one = list.length === 1 ? list[0] : null;
-      const word = { delivered: ['delivered1', 'deliveredN'], returned: ['returned1', 'returnedN'], cancelled: ['cancelled1', 'cancelledN'], alert: ['alert1', 'alertN'] }[kind] as [keyof typeof W, keyof typeof W];
-      await tell(ctx, [who], {
-        kind,
-        count: list.length,
-        orderId: one?.o.id ?? null,
-        url: kind === 'alert' ? '#/suivi/alertes' : '#/commandes/tout',
-        by,
-        text: (lang) => ({
-          title: one ? say(word[0], lang, { ref: one.o.ref }) : say(word[1], lang, { n: list.length }),
-          body: one
-            ? [one.o.name, kind === 'alert' ? say(one.to === 'failed' ? 'failed' : 'onAlert', lang) : kind === 'cancelled' ? say('afterYou', lang) : one.o.total > 0 ? da(one.o.total, lang) : ''].filter(Boolean).join(' · ')
-            : refList(list.map((x) => x.o)),
-        }),
-      });
-    }
+  const names = await namesOf(ctx.db, [...bits.values()].flatMap((o) => [o.agent, o.follow]).filter((x): x is number => !!x));
+  const word = { delivered: ['delivered1', 'deliveredN'], returned: ['returned1', 'returnedN'], cancelled: ['cancelled1', 'cancelledN'], alert: ['alert1', 'alertN'] } as const;
+  const what = (kind: K, x: { o: Bits; to: string }, lang: Language, mine: boolean) =>
+    kind === 'alert' ? say(x.to === 'failed' ? 'failed' : 'onAlert', lang) : kind === 'cancelled' && mine ? say('afterYou', lang) : x.o.total > 0 ? da(x.o.total, lang) : '';
+  for (const [out, mine] of [[own, true], [team, false]] as const)
+    for (const [who, kinds] of out)
+      for (const [kind, list] of kinds) {
+        const one = list.length === 1 ? list[0] : null;
+        // the others' line names the order's person: the agent who confirmed it (the Suivi agent for an alert)
+        const of = one ? names.get((kind === 'alert' ? one.o.follow : one.o.agent) ?? 0) ?? '' : '';
+        await tell(ctx, [who], {
+          kind,
+          count: list.length,
+          orderId: one?.o.id ?? null,
+          url: kind === 'alert' ? '#/suivi/alertes' : '#/commandes/tout',
+          by,
+          phone: rules[kind].phone,
+          ...(mine ? {} : { tag: `team-${kind}`, listWhenMany: true, important: false }),
+          text: (lang, n) => {
+            const many = mine ? list.length : n;
+            return {
+              title: many === 1 && one ? say(word[kind][0], lang, { ref: one.o.ref }) : say(word[kind][1], lang, { n: many }),
+              body: one ? [one.o.name, what(kind, one, lang, mine), mine ? '' : of].filter(Boolean).join(' · ') : refList(list.map((x) => x.o)),
+            };
+          },
+        });
+      }
 }
 
 /** A customer wrote (WhatsApp, Messenger, Instagram): the agent who has their order now (Confirmation, else Suivi). */
@@ -245,17 +418,36 @@ export async function tellMessage(ctx: Ctx, m: { conversationId: number; phone: 
     )
   )[0];
   if (!o) return;
+  const rule = (await notifyRules(ctx.db)).message;
+  if (!rule.on) return;
   const confirming = (CONF_TODO as string[]).includes(String(o.conf_status));
   const onRoad = ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange'].includes(String(o.follow_status ?? ''));
-  const who = confirming ? numOrNull(o.agent_id) : onRoad ? numOrNull(o.follow_agent_id) ?? numOrNull(o.agent_id) : null;
-  if (!who) return;
+  // the person who has the order now: its agent while it is being confirmed, its Suivi agent once on the road
+  const follow = numOrNull(o.follow_agent_id);
+  const who = confirming ? numOrNull(o.agent_id) : onRoad ? follow ?? numOrNull(o.agent_id) : null;
+  const role: NotifyWho = !confirming && onRoad && follow ? 'suivi' : 'agent';
   const text = m.text.replace(/\s+/g, ' ').trim();
-  await tell(ctx, [who], {
+  const title = (lang: Language, n: number) => `💬 ${m.name || String(o.ref)}${n > 1 ? ` · ${say('messages', lang, { n })}` : ''}`;
+  if (who && selfOn(rule, role))
+    await tell(ctx, [who], {
+      kind: 'message',
+      tag: `chat-${m.conversationId}`,
+      orderId: num(o.id),
+      url: '#/commandes/tout',
+      phone: rule.phone,
+      text: (lang, n) => ({ title: title(lang, n), body: `${o.ref} · ${text.slice(0, 160)}` }),
+    });
+  // the others ticked (a manager, the owners…): the same message, and whose customer it is
+  const others = await othersOf(around(ctx), { ...rule, who: rule.who.filter((w) => w !== 'agent' && w !== 'suivi') }, { self: who ? [who] : [], selfRole: who ? role : null });
+  const name = who ? (await namesOf(ctx.db, [who])).get(who) ?? '' : '';
+  await tell(ctx, others.filter((x) => x !== who || !selfOn(rule, role)), {
     kind: 'message',
-    tag: `chat-${m.conversationId}`,
+    tag: `team-chat-${m.conversationId}`,
     orderId: num(o.id),
     url: '#/commandes/tout',
-    text: (lang, n) => ({ title: `💬 ${m.name || String(o.ref)}${n > 1 ? ` · ${say('messages', lang, { n })}` : ''}`, body: `${o.ref} · ${text.slice(0, 160)}` }),
+    phone: rule.phone,
+    important: false,
+    text: (lang, n) => ({ title: title(lang, n), body: [`${o.ref} · ${text.slice(0, 160)}`, name ? say('forWho', lang, { who: name }) : ''].filter(Boolean).join(' · ') }),
   });
 }
 
@@ -273,17 +465,21 @@ export async function inboxRun(ctx: Ctx) {
       ORDER BY o.next_call_at LIMIT 200`,
     [new Date(now).toISOString()],
   );
-  for (const r of due as any[]) {
+  const rule = (await notifyRules(ctx.db)).callback;
+  const a = around(ctx);
+  const agents = await namesOf(ctx.db, (due as any[]).map((r) => num(r.agent_id)));
+  for (const r of rule.on ? (due as any[]) : []) {
     const at = new Date(r.next_call_at).getTime();
-    const told = await tell(ctx, [num(r.agent_id)], {
-      kind: 'callback',
-      tag: `call-${num(r.id)}-${Math.floor(at / 1000)}`,
-      orderId: num(r.id),
-      url: '#/confirmation/attente',
-      phone: 'always',
-      text: (lang) => ({ title: say('callback', lang, { name: String(r.customer_name ?? '').trim() || String(r.ref) }), body: say('callbackAt', lang, { ref: String(r.ref), time: clock(at) }) }),
-    });
-    calls += told.length;
+    const agent = num(r.agent_id);
+    const name = String(r.customer_name ?? '').trim() || String(r.ref);
+    // each callback its own tag, the agent's line and the others': told once (the query above skips a tag already there)
+    const base = { kind: 'callback' as const, tag: `call-${num(r.id)}-${Math.floor(at / 1000)}`, orderId: num(r.id), url: '#/confirmation/attente', phone: rule.phone };
+    if (selfOn(rule, 'agent'))
+      calls += (await tell(ctx, [agent], { ...base, text: (lang) => ({ title: say('callback', lang, { name }), body: say('callbackAt', lang, { ref: String(r.ref), time: clock(at) }) }) })).length;
+    const others = await othersOf(a, rule, { self: [agent], selfRole: 'agent' });
+    calls += (
+      await tell(ctx, others, { ...base, important: false, text: (lang) => ({ title: say('teamCallback', lang, { who: agents.get(agent) ?? '', name }), body: say('callbackAt', lang, { ref: String(r.ref), time: clock(at) }) }) })
+    ).length;
   }
   const depot = await depotRun(ctx, now);
   // the lines older than 30 days go, once an hour
@@ -294,7 +490,8 @@ export async function inboxRun(ctx: Ctx) {
 
 /** Every 15 minutes at most, in the call hours: the depot is told how many new orders wait to be prepared. */
 async function depotRun(ctx: Ctx, now: number): Promise<number> {
-  if (!(await workNow(ctx))) return 0;
+  const rule = (await notifyRules(ctx.db)).depot;
+  if (!rule.on || !(await workNow(ctx))) return 0;
   const last = (await ctx.db.query(`SELECT max(created_at) AS at FROM inbox WHERE tag = 'depot-prepare'`))[0]?.at;
   const lastAt = last ? new Date(last).getTime() : 0;
   if (now - lastAt < 15 * 60_000) return 0;
@@ -310,12 +507,14 @@ async function depotRun(ctx: Ctx, now: number): Promise<number> {
   const fresh = num(r?.fresh);
   const total = num(r?.total);
   if (!fresh) return 0;
-  const team = (await ctx.db.query(`SELECT id FROM profiles WHERE active AND 'depot' = ANY(roles) AND NOT ('admin' = ANY(roles)) AND agency_id IS NULL`)).map((x: any) => num(x.id));
+  // the depot team, the owners, the chosen people (Management › Notifications)
+  const team = await othersOf(around(ctx), rule, { self: [], selfRole: null });
   const told = await tell(ctx, team, {
     kind: 'depot',
     tag: 'depot-prepare',
     count: fresh,
     url: '#/depot/preparer',
+    phone: rule.phone,
     text: (lang, n) => ({ title: n === 1 ? say('depot1', lang) : say('depotN', lang, { n }), body: say('depotAll', lang, { total }) }),
   });
   return told.length;
@@ -362,4 +561,38 @@ export const inboxProcs = {
   }),
   /** Every minute (jobs.ts): callbacks due, the depot's orders to prepare, old lines gone. */
   'inbox.run': proc([], z.object({}), (ctx) => inboxRun(ctx)),
+  /**
+   * Management › Notifications (administrators): each kind's rule, who it can go to, Pilotix's defaults, the people who
+   * can be chosen, and « Bloquer jusqu'à l'appel » (the agent's new order on a blocked screen: set in Confirmation).
+   */
+  'notify.get': proc([], z.object({}), async (ctx) => {
+    const people = await ctx.db.query(`SELECT id, name, roles FROM profiles WHERE active AND agency_id IS NULL ORDER BY name`);
+    const calls = await getSetting(ctx.db, 'calls');
+    return {
+      rules: await notifyRules(ctx.db),
+      can: NOTIFY_CAN,
+      defaults: DEFAULT_NOTIFY,
+      people: people.map((p: any) => ({ id: num(p.id), name: String(p.name ?? '').trim(), roles: (p.roles ?? []) as string[] })),
+      block: !!(await getSetting(ctx.db, 'confBlock')).on,
+      slots: calls.slots.map((s) => ({ from: s.from, to: s.to })),
+    };
+  }),
+  /** Saves the rules sent (the others stay as they are). */
+  'notify.set': proc(
+    [],
+    z.object({
+      rules: z
+        .record(
+          z.enum(NOTIFY_KINDS),
+          z.object({ on: z.boolean(), who: z.array(z.enum(NOTIFY_WHO)).max(NOTIFY_WHO.length), people: z.array(id).max(50), phone: z.enum(NOTIFY_PHONE) }),
+        )
+        .refine((r) => Object.keys(r).length > 0),
+    }),
+    async (ctx, i) => {
+      const saved = { ...((await getSetting(ctx.db, 'notify')) ?? {}) };
+      for (const [k, v] of Object.entries(i.rules) as [NotifyKind, NotifyRule][]) saved[k] = cleanRule(k, v);
+      await setSetting(ctx.db, 'notify', saved, ctx.session.profile.id);
+      return { rules: await notifyRules(ctx.db) };
+    },
+  ),
 };

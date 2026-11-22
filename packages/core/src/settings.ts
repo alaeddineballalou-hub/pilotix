@@ -155,6 +155,12 @@ export interface SettingsMap {
   confRings: Record<string, { a: number; at: number; n: number }>;
   /** « Bloquer jusqu'à l'appel »: each agent's shift (profile id → minutes after midnight, Algiers), typed by the managers */
   confShifts: Record<string, { from: number; to: number }>;
+  /**
+   * Management › Notifications (modules/inbox.ts › notifyRules): Pilotix's own notifications in the bell — each kind
+   * on or off, who gets it (the order's people by their role, the managers, the owners, the depot, chosen people) and
+   * when the phones ring. A kind not saved here keeps its default (inbox.ts › DEFAULT_NOTIFY).
+   */
+  notify: Record<string, { on?: boolean; who?: string[]; people?: number[]; phone?: 'work' | 'always' | 'never' }>;
   /** Management › Stock: « Lots et dates d'expiration » (off: no lot anywhere), and how many days before its date a lot is « bientôt périmé » */
   stockBatches: { on: boolean; warnDays: number };
   /** Management › Stock: « Fabrication » (recipes and makings in Produits & stock), off by default */
@@ -276,6 +282,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   confBlock: { on: false, by: null, at: null },
   confRings: {},
   confShifts: {},
+  notify: {},
   stockBatches: { on: false, warnDays: 30 },
   stockMaking: { on: false },
   colPresets: [],
