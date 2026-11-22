@@ -202,7 +202,18 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
       : pilotLine(t, { by: order.pilotBy, rule: order.pilotRule, why: order.pilotWhy }, pg.data?.rules ?? []);
   const canCo = mayChangeCompany(session, prefs.data?.prefs, order);
   // can it be delivered? Bureau: the chosen bureau's company serves it. Domicile: the order's company (or any active one) delivers here.
-  const served: boolean | null = !opts.data ? null : desk ? (chosen ? chosen.served : null) : company ? company.home : opts.data.companies.some((c) => c.home);
+  const served: boolean | null = !opts.data
+    ? null
+    : desk
+      ? chosen
+        ? chosen.served
+        : null
+      : // the company's own list of communes (ZR…) does not have this one: not deliverable here (the note under says why)
+        chk.data?.deliver.why === 'courierCommune' && (!company || chk.data.deliver.companyId === company.id)
+        ? false
+        : company
+          ? company.home
+          : opts.data.companies.some((c) => c.home);
   const stockOf = (l: Line) => {
     const p = P.get(l.productId);
     if (!p || p.isService) return null;
