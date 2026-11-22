@@ -68,7 +68,7 @@ async function boutiqueCtx(ctx: Ctx, b: MyBoutique): Promise<Ctx> {
 export const OTHER_BOUTIQUE = new Set(
   [
     'catalog: assigned guide guideFacts guides search',
-    'confirmation: addColPreset banner block catalog colActive colPresets confirmed counts deleteColPreset delivery deskOptions enCours firstCall gridFee hold list meta mine period release riskStats setColActive setTry',
+    'confirmation: addColPreset banner block catalog colActive colPresets confirmed counts deleteColPreset delivery deskOptions enCours firstCall gridFee hold list meta mine overview period release riskStats setColActive setTry',
     'customers: history list ping setBlacklist shareInfo',
     'delivery: cancel companies fees feesInfo kinds label labels live livreurs overweight preview routeSheet send stopdesks sync tournee',
     'depot: cancelDone companies find pick receiveReturn resend unassign',

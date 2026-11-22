@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { communesOf, DEFAULT_CALL_SETTINGS } from '@pilotix/shared';
 import { call, clientFee, Ctx, Db } from '../index';
-import { computeDue, kfRange } from '../modules/confirmation';
+import { cancelReason, computeDue, kfRange, leadOf } from '../modules/confirmation';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -101,6 +101,84 @@ test('statistics: managers only, numbers add up', async () => {
   assert.ok(cf.upsellOrders <= cf.confirmed);
   const dl: any = await call('confirmation.delivery', mgr, { per: '30' });
   assert.ok(dl.delivered <= dl.confirmed);
+});
+
+test('a lead: confirmed, refused by a real client, attack or duplicate; the reason the agent wrote', () => {
+  assert.equal(leadOf('confirmed', null), 'confirmed');
+  assert.equal(leadOf('no_stock', null), 'confirmed', 'confirmed « sans stock » is confirmed');
+  assert.equal(leadOf('cancelled', 'Changé d’avis'), 'refused');
+  assert.equal(leadOf('cancelled', 'Annulée automatiquement après 3 appels sans réponse'), 'attack', 'no answer after N calls is never the team');
+  assert.equal(leadOf('fake', null), 'attack');
+  assert.equal(leadOf('wrong_number', null), 'attack');
+  assert.equal(leadOf('duplicate', null), 'duplicate');
+  for (const s of ['new', 'to_check', 'no_answer', 'busy', 'callback', 'postponed']) assert.equal(leadOf(s, null), 'pending');
+  assert.equal(cancelReason('Frais de livraison trop chers'), 'fee');
+  assert.equal(cancelReason('Prix trop cher'), 'price');
+  assert.equal(cancelReason("Changé d'avis — c'est pas lui qui a fait la commande"), 'changed_mind');
+  assert.equal(cancelReason('Changé d’avis'), 'changed_mind', 'curly apostrophe');
+  assert.equal(cancelReason('A commandé ailleurs'), 'elsewhere');
+  assert.equal(cancelReason('Délai trop long'), 'too_long');
+  assert.equal(cancelReason('Autre — il rappellera'), 'other');
+  assert.equal(cancelReason(null), 'none');
+});
+
+test('statistics overview: managers only, every lead counted once, Leads quality = confirmed ÷ (confirmed + real refusals)', async () => {
+  const agent = await as(EMAILS.conf);
+  await assert.rejects(call('confirmation.overview', agent, {}), /Accès refusé/);
+  const mgr = await as(EMAILS.manager);
+  const ov: any = await call('confirmation.overview', mgr, { per: '30' });
+  assert.ok(ov.received > 0);
+  assert.equal(ov.confirmed.n + ov.refused.n + ov.attacks.n + ov.duplicates.n + ov.pending.n, ov.received);
+  assert.equal(ov.finished, ov.received - ov.pending.n);
+  assert.equal(ov.real, ov.confirmed.n + ov.refused.n);
+  assert.equal(ov.attacks.fake + ov.attacks.wrong + ov.attacks.noAnswer, ov.attacks.n);
+  assert.equal(ov.pending.fresh + ov.pending.noAnswer + ov.pending.later, ov.pending.n);
+  assert.equal(ov.refused.reasons.reduce((s: number, r: any) => s + r.n, 0), ov.refused.n);
+  assert.equal(ov.refused.reasons.reduce((s: number, r: any) => s + r.value, 0), ov.refused.value);
+  assert.equal(ov.hours.length, 24);
+  assert.equal(ov.hours.reduce((a: number, b: number) => a + b, 0), ov.received);
+  assert.equal(ov.leadsQuality, ov.real ? Math.round((ov.confirmed.n * 100) / ov.real) : null);
+  assert.equal(ov.oldRate, ov.finished ? Math.round((ov.confirmed.n * 100) / ov.finished) : null);
+  for (const [k, total] of [['confirmed', ov.confirmed.n], ['refused', ov.refused.n], ['attacks', ov.attacks.n], ['duplicates', ov.duplicates.n]] as const)
+    assert.equal(ov.byAgent.reduce((s: number, a: any) => s + a[k], 0), total, `byAgent ${k}`);
+  for (const a of ov.byAgent) {
+    assert.equal(a.fake + a.wrong + a.noAnswer, a.attacks);
+    assert.equal(a.leadsQuality, a.confirmed + a.refused ? Math.round((a.confirmed * 100) / (a.confirmed + a.refused)) : null);
+    assert.ok(a.upsell <= a.confirmed && a.toCallNight <= a.toCall);
+  }
+  assert.equal(ov.byAgent.reduce((s: number, a: any) => s + a.toCall, 0) <= ov.pending.n, true);
+  for (const p of ov.byProduct) assert.equal(p.confirmed + p.refused + p.attacks + p.duplicates + p.pending, p.n);
+  assert.ok(ov.upsell.orders <= ov.confirmed.n);
+  assert.ok(ov.night.noAnswer <= ov.night.n && ov.night.noAnswer <= ov.night.noAnswerAll);
+  assert.ok(ov.speed.onTime <= ov.speed.dayCalled);
+  assert.equal(typeof ov.speed.firstMinutes, 'number');
+});
+
+test('statistics overview: a refusal is counted with its reason; « annulée automatiquement » is an attack', async () => {
+  const admin = await as(EMAILS.admin);
+  const mgr = await as(EMAILS.manager);
+  const two = await db.query(`SELECT id, created_at FROM orders WHERE conf_status = 'new' AND agent_id IS NULL AND follow_status IS NULL AND NOT is_exchange ORDER BY id DESC LIMIT 2`);
+  assert.equal(two.length, 2);
+  const day = (t: unknown) => new Date(Date.parse(String(t instanceof Date ? t.toISOString() : t)) + 3_600_000).toISOString().slice(0, 10);
+  const days = two.map((r: any) => day(r.created_at)).sort();
+  const range = { per: 'custom', from: days[0], to: day(new Date()) } as const;
+  const before: any = await call('confirmation.overview', mgr, range);
+  const fee0 = before.refused.reasons.find((r: any) => r.code === 'fee')?.n ?? 0;
+  // a real client: « Frais de livraison trop chers »
+  await call('orders.setConf', admin, { ids: [Number(two[0].id)], status: 'cancelled', reason: 'Frais de livraison trop chers' });
+  // no answer twice with « Annuler après 2 appels sans réponse »: cancelled by itself = an attack
+  await db.query(`INSERT INTO settings (key, value) VALUES ('calls', $1::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify({ ...DEFAULT_CALL_SETTINGS, cancelAfterNoAnswer: 2 })]);
+  for (let k = 0; k < 2; k++) await call('orders.setConf', admin, { ids: [Number(two[1].id)], status: 'no_answer' });
+  assert.equal((await db.query('SELECT conf_status FROM orders WHERE id = $1', [two[1].id]))[0].conf_status, 'cancelled');
+  await db.query(`DELETE FROM settings WHERE key = 'calls'`);
+  const after: any = await call('confirmation.overview', mgr, range);
+  assert.equal(after.refused.n, before.refused.n + 1);
+  assert.equal(after.refused.reasons.find((r: any) => r.code === 'fee')?.n, fee0 + 1);
+  assert.equal(after.attacks.noAnswer, before.attacks.noAnswer + 1);
+  assert.equal(after.attacks.n, before.attacks.n + 1);
+  assert.equal(after.pending.n, before.pending.n - 2);
+  assert.equal(after.confirmed.n, before.confirmed.n);
+  assert.equal(after.leadsQuality, Math.round((after.confirmed.n * 100) / (after.confirmed.n + after.refused.n)));
 });
 
 test('Tentative 02 sets no_answer with two attempts; block blacklists the customer', async () => {

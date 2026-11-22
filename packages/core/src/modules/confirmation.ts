@@ -11,6 +11,7 @@ import { HAS_GUIDE } from './guide';
 import { assignedProductIds } from './productscope';
 import { readMontage } from './montage';
 import { rotateTimes } from './assign';
+import { reasonCode } from './pilotlearn';
 import { blackNumbers, shareBlacklist } from './sharedblacklist';
 
 // ---------------------------------------------------------------- sub-pages
@@ -616,6 +617,231 @@ async function confirmedKpis(ctx: Ctx, i: KfInput) {
   };
 }
 
+// ---------------------------------------------------------------- Confirmation › Statistiques (one page)
+/** written by setConf (orders.ts) when the shop cancels after N calls with no answer: the same French words everywhere */
+const AUTO_NO_ANSWER = /Annulée automatiquement après \d+ appels sans réponse/;
+const CONFIRMED_LIKE = ['confirmed', 'no_stock'];
+/** pilotlearn's reason codes → the cancel reasons agents pick (CANCEL_REASONS); none → 'none' (no reason written) */
+const REASON_OF: Record<string, string> = { price: 'price', fee: 'fee', elsewhere: 'elsewhere', not_ordered: 'not_ordered', slow: 'too_long', mind: 'changed_mind' };
+export function cancelReason(note: string | null | undefined): string {
+  const code = reasonCode(note);
+  return code === null ? 'none' : REASON_OF[code] ?? 'other';
+}
+type Lead = 'pending' | 'confirmed' | 'refused' | 'attack' | 'duplicate';
+/** What became of a lead. An attack (fake, wrong number, cancelled after N calls with no answer) is never the team's fault. */
+export function leadOf(status: string, note: string | null | undefined): Lead {
+  if (CONFIRMED_LIKE.includes(status)) return 'confirmed';
+  if (status === 'duplicate') return 'duplicate';
+  if (status === 'fake' || status === 'wrong_number') return 'attack';
+  if (status === 'cancelled') return AUTO_NO_ANSWER.test(note ?? '') ? 'attack' : 'refused';
+  return 'pending';
+}
+
+/**
+ * Confirmation › Statistiques: everything about the leads of the period on one page.
+ * Leads quality = confirmed ÷ (confirmed + cancelled by a real client): attacks, duplicates and the leads still to call
+ * never count. « Ancienne formule » = confirmed ÷ every finished lead, kept so the two can be compared.
+ */
+async function overview(ctx: Ctx, i: KfInput) {
+  const now = ctx.now();
+  const R = kfRange(now, i);
+  const calls = await getSetting(ctx.db, 'calls');
+  const col = i.basis === 'updated' ? 'updated_at' : 'created_at';
+  const O = await ctx.db.query(
+    `SELECT id, conf_status, follow_status, agent_id, created_at, total, has_upsell, upsell_value FROM sales WHERE ${col} >= $1 AND ${col} < $2`,
+    [isoT(R.a), isoT(R.b)],
+  );
+  const ids = O.map((o: any) => num(o.id));
+  const last = new Map<number, { by: number | null; note: string | null }>();
+  const touch = new Map<number, number>();
+  const given = new Map<number, number>();
+  const prods = new Map<number, { id: number; name: string }[]>();
+  for (let k = 0; k < ids.length; k += 1000) {
+    const part = ids.slice(k, k + 1000);
+    // who settled the lead, and the reason written with it (« Changé d'avis — … »)
+    for (const e of await ctx.db.query(
+      `SELECT DISTINCT ON (order_id) order_id, user_id, note FROM order_events WHERE kind = 'conf_status' AND order_id = ANY($1) ORDER BY order_id, at DESC, id DESC`,
+      [part],
+    ))
+      last.set(num(e.order_id), { by: numOrNull(e.user_id), note: e.note ?? null });
+    // first time a person called or changed it, first time it was given to an agent
+    for (const e of await ctx.db.query(
+      `SELECT order_id, min(at) AS at FROM order_events WHERE kind IN ('call', 'conf_status') AND user_id IS NOT NULL AND order_id = ANY($1) GROUP BY order_id`,
+      [part],
+    ))
+      touch.set(num(e.order_id), Date.parse(iso(e.at)));
+    for (const e of await ctx.db.query(`SELECT order_id, min(at) AS at FROM order_events WHERE kind = 'assign' AND order_id = ANY($1) GROUP BY order_id`, [part]))
+      given.set(num(e.order_id), Date.parse(iso(e.at)));
+    for (const r of await ctx.db.query(
+      `SELECT DISTINCT i.order_id, p.id, p.name FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = ANY($1) ORDER BY i.order_id, p.id`,
+      [part],
+    )) {
+      const k2 = num(r.order_id);
+      if (!prods.has(k2)) prods.set(k2, []);
+      prods.get(k2)!.push({ id: num(r.id), name: r.name as string });
+    }
+  }
+  const who = await names(ctx.db);
+  const L = O.map((o: any) => {
+    const id = num(o.id);
+    const e = last.get(id);
+    const status = o.conf_status as string;
+    const lead = leadOf(status, e?.note);
+    const created = Date.parse(iso(o.created_at));
+    return {
+      id,
+      status,
+      lead,
+      reason: lead === 'refused' ? cancelReason(e?.note) : null,
+      attack: lead === 'attack' ? (status === 'fake' ? 'fake' : status === 'wrong_number' ? 'wrong' : 'noAnswer') : null,
+      by: e?.by ?? null,
+      agentId: numOrNull(o.agent_id),
+      follow: o.follow_status as string | null,
+      total: num(o.total),
+      up: lead === 'confirmed' && !!o.has_upsell,
+      upV: lead === 'confirmed' ? num(o.upsell_value) : 0,
+      created,
+      night: workStart(created, calls) > created,
+    };
+  });
+  type Row = (typeof L)[number];
+  const count = (f: (o: Row) => boolean) => L.filter(f).length;
+  const sum = (f: (o: Row) => boolean) => L.filter(f).reduce((s: number, o: Row) => s + o.total, 0);
+  const is = (k: Lead) => (o: Row) => o.lead === k;
+  const conf = count(is('confirmed'));
+  const refused = count(is('refused'));
+  const attacks = count(is('attack'));
+  const dups = count(is('duplicate'));
+  const pending = count(is('pending'));
+  const confValue = sum(is('confirmed'));
+  const ups = count((o) => o.up);
+  // why real clients said no
+  const RS = new Map<string, { code: string; n: number; value: number }>();
+  for (const o of L.filter(is('refused'))) {
+    if (!RS.has(o.reason!)) RS.set(o.reason!, { code: o.reason!, n: 0, value: 0 });
+    const r = RS.get(o.reason!)!;
+    r.n++;
+    r.value += o.total;
+  }
+  // when the leads came in (Algiers time) and how fast the first call came
+  const hours = Array.from({ length: 24 }, () => 0);
+  for (const o of L) hours[new Date(o.created + 3_600_000).getUTCHours()]++;
+  const dayFirst: number[] = [];
+  const dayGiven: number[] = [];
+  const nightWait: number[] = [];
+  const nightOpen: number[] = [];
+  let onTime = 0;
+  for (const o of L) {
+    const f = touch.get(o.id);
+    if (f === undefined || f < o.created) continue;
+    if (o.night) {
+      nightWait.push((f - o.created) / MIN);
+      nightOpen.push(Math.max(0, (f - workStart(o.created, calls)) / MIN));
+      continue;
+    }
+    const d = (f - o.created) / MIN;
+    dayFirst.push(d);
+    if (d <= calls.firstMinutes) onTime++;
+    const g = given.get(o.id);
+    if (g !== undefined && g >= o.created && g <= f) dayGiven.push((g - o.created) / MIN);
+  }
+  const mins = (xs: number[]) => {
+    const m = median(xs);
+    return m === null ? null : Math.round(m);
+  };
+  // per agent: who settled the lead (an admin who confirms counts too); « à rappeler »: the orders given to them
+  type A = { agentId: number | null; name: string | null; treated: number; confirmed: number; refused: number; attacks: number; fake: number; wrong: number; noAnswer: number; duplicates: number; toCall: number; toCallNight: number; upsell: number; delivered: number; returned: number };
+  const AG = new Map<string, A>();
+  const ag = (id: number | null): A => {
+    const k = String(id ?? '');
+    if (!AG.has(k)) AG.set(k, { agentId: id, name: id ? who.get(id) ?? '—' : null, treated: 0, confirmed: 0, refused: 0, attacks: 0, fake: 0, wrong: 0, noAnswer: 0, duplicates: 0, toCall: 0, toCallNight: 0, upsell: 0, delivered: 0, returned: 0 });
+    return AG.get(k)!;
+  };
+  for (const o of L) {
+    if (o.lead === 'pending') {
+      if (o.agentId) {
+        const a = ag(o.agentId);
+        a.toCall++;
+        if (o.night) a.toCallNight++;
+      }
+      if (o.by) ag(o.by).treated++;
+      continue;
+    }
+    const a = ag(o.by);
+    a.treated++;
+    if (o.lead === 'confirmed') {
+      a.confirmed++;
+      if (o.up) a.upsell++;
+      if (o.follow && OK.includes(o.follow)) a.delivered++;
+      if (o.follow && BACK.includes(o.follow)) a.returned++;
+    } else if (o.lead === 'refused') a.refused++;
+    else if (o.lead === 'duplicate') a.duplicates++;
+    else {
+      a.attacks++;
+      a[o.attack as 'fake' | 'wrong' | 'noAnswer']++;
+    }
+  }
+  const byAgent = [...AG.values()]
+    .map((a) => ({
+      ...a,
+      leadsQuality: pc(a.confirmed, a.confirmed + a.refused),
+      oldRate: pc(a.confirmed, a.confirmed + a.refused + a.attacks + a.duplicates),
+      upsellRate: pc(a.upsell, a.confirmed),
+      deliveryRate: pc(a.delivered, a.delivered + a.returned),
+    }))
+    .sort((x, y) => y.confirmed - x.confirmed || y.treated - x.treated || (x.name ?? '').localeCompare(y.name ?? ''));
+  // per product (an order with two products counts for both)
+  type P = { productId: number; name: string; n: number; confirmed: number; refused: number; attacks: number; duplicates: number; pending: number; attackValue: number };
+  const PR = new Map<number, P>();
+  for (const o of L)
+    for (const p of prods.get(o.id) ?? []) {
+      if (!PR.has(p.id)) PR.set(p.id, { productId: p.id, name: p.name, n: 0, confirmed: 0, refused: 0, attacks: 0, duplicates: 0, pending: 0, attackValue: 0 });
+      const v = PR.get(p.id)!;
+      v.n++;
+      if (o.lead === 'confirmed') v.confirmed++;
+      else if (o.lead === 'refused') v.refused++;
+      else if (o.lead === 'duplicate') v.duplicates++;
+      else if (o.lead === 'pending') v.pending++;
+      else {
+        v.attacks++;
+        v.attackValue += o.total;
+      }
+    }
+  const byProduct = [...PR.values()]
+    .map((p) => ({ ...p, real: p.confirmed + p.refused, leadsQuality: pc(p.confirmed, p.confirmed + p.refused) }))
+    .sort((x, y) => y.n - x.n || x.name.localeCompare(y.name));
+  const finished = conf + refused + attacks + dups;
+  return {
+    received: L.length,
+    value: sum(() => true),
+    pending: { n: pending, value: sum(is('pending')), fresh: count((o) => o.status === 'new' || o.status === 'to_check'), noAnswer: count((o) => o.status === 'no_answer' || o.status === 'busy'), later: count((o) => o.status === 'callback' || o.status === 'postponed') },
+    confirmed: { n: conf, value: confValue, basket: conf ? Math.round(confValue / conf) : null },
+    refused: { n: refused, value: sum(is('refused')), reasons: [...RS.values()].sort((x, y) => y.n - x.n || y.value - x.value) },
+    attacks: { n: attacks, value: sum(is('attack')), fake: count((o) => o.attack === 'fake'), wrong: count((o) => o.attack === 'wrong'), noAnswer: count((o) => o.attack === 'noAnswer') },
+    duplicates: { n: dups, value: sum(is('duplicate')) },
+    finished,
+    real: conf + refused,
+    leadsQuality: pc(conf, conf + refused),
+    oldRate: pc(conf, finished),
+    upsell: { orders: ups, rate: pc(ups, conf), value: L.reduce((s: number, o: Row) => s + o.upV, 0) },
+    hours,
+    slots: calls.slots.map((s: any) => ({ from: s.from, to: s.to })),
+    night: { n: count((o) => o.night), noAnswer: count((o) => o.night && (o.status === 'no_answer' || o.status === 'busy')), noAnswerAll: count((o) => o.status === 'no_answer' || o.status === 'busy') },
+    speed: {
+      firstMinutes: calls.firstMinutes,
+      dayCalled: dayFirst.length,
+      dayMedianMin: mins(dayFirst),
+      onTime,
+      givenMedianMin: mins(dayGiven),
+      nightCalled: nightWait.length,
+      nightMedianMin: mins(nightWait),
+      nightAfterOpenMedianMin: mins(nightOpen),
+    },
+    byAgent,
+    byProduct,
+  };
+}
+
 // ---------------------------------------------------------------- the agent banner
 async function banner(ctx: Ctx) {
   const now = ctx.now();
@@ -843,5 +1069,7 @@ export const confirmationProcs = {
   'confirmation.delivery': proc([...MGR], KfInput.extend({ on: z.enum(['created', 'confirmed']).default('created') }), (ctx, i) => deliveryPerf(ctx, i)),
   'confirmation.enCours': proc([...MGR], KfInput, (ctx, i) => enCours(ctx, i)),
   'confirmation.confirmed': proc([...MGR], KfInput, (ctx, i) => confirmedKpis(ctx, i)),
+  /** Confirmation › Statistiques: leads, Leads quality, why we lose them, upsell, speed, agents and products. */
+  'confirmation.overview': proc([...MGR], KfInput, (ctx, i) => overview(ctx, i)),
 };
 

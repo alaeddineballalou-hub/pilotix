@@ -419,6 +419,7 @@ export const PROC_RIGHTS: Record<string, Need> = {
   'confirmation.delivery': 'tab:dashboard/confirmation',
   'confirmation.enCours': 'tab:dashboard/confirmation',
   'confirmation.confirmed': 'tab:dashboard/confirmation',
+  'confirmation.overview': 'tab:dashboard/confirmation',
   'confirmation.riskStats': 'tab:dashboard/confirmation',
 };
 
