@@ -1007,6 +1007,7 @@ export function ConfirmedStatsPage() {
             <div className="kpis px-ov-kpis">
               <Kpi label={t('confirmation.ov.received')} value={n(O.received)} sub={t('confirmation.ov.receivedSub', { f: n(O.finished), p: n(O.pending.n) })} />
               <Kpi label={t('confirmation.ov.confirmed')} value={n(O.confirmed.n)} sub={t('confirmation.ov.confirmedSub', { v: da(O.confirmed.value), b: da(O.confirmed.basket) })} />
+              <Kpi label={t('confirmation.ov.confRate')} help={t('confirmation.ov.confRateHelp')} value={pp(O.oldRate)} sub={t('confirmation.ov.confRateSub', { c: n(O.confirmed.n), f: n(O.finished) })} />
               <Kpi
                 tone={V_TONE[lqV]}
                 label={t('confirmation.ov.lq')}
