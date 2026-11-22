@@ -2,7 +2,7 @@
 // a new order, a callback whose time came, deliveries (the cash line), a return, a customer's message, an order that
 // went to someone else, an alert on a parcel, the depot's orders to prepare, the slow queue. Real demo orders: a line
 // opens its order. In the viewer's language (the preview passes it).
-import type { Language } from '@pilotix/shared';
+import { algiersDayStart, type Language } from '@pilotix/shared';
 import type { Db } from '../db';
 import { num } from '../db';
 import { say } from '../modules/inbox';
@@ -18,7 +18,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number, l
       name: String(r.customer_name ?? '').trim(),
       total: num(r.total),
     }));
-  const money = (n: number) => `${String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} DA`;
+  const money = (n: number) => `${String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} ${lang === 'ar' ? 'د.ج' : 'DA'}`;
   const add = (who: number | undefined, kind: string, ago: number, title: string, body: string, o: { order?: number | null; url?: string; important?: boolean; read?: boolean; tag?: string; n?: number } = {}) =>
     who
       ? db.query(
@@ -62,6 +62,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number, l
   const team = [users.admin, users.manager1].filter(Boolean);
   for (const who of team) {
     await add(who, 'info', 12 * M, lang === 'ar' ? 'طلبات تنتظر مكالمة: 5' : lang === 'en' ? '5 orders waiting for a call' : '5 commandes attendent un appel', lang === 'ar' ? 'أقدمها منذ 34 د' : lang === 'en' ? 'The oldest for 34 min' : 'La plus ancienne depuis 34 min', { url: '#/confirmation/nouvelles', tag: 'auto-wait' });
-    await add(who, 'info', 15 * H, lang === 'ar' ? 'تقرير المساء' : lang === 'en' ? 'Evening report' : 'Rapport du soir', lang === 'ar' ? '42 طلبًا · 31 مؤكدًا · 18 تم توصيلها' : lang === 'en' ? '42 orders · 31 confirmed · 18 delivered' : '42 commandes · 31 confirmées · 18 livrées', { url: '#/notify/auto', read: true, tag: 'auto-evening' });
+    // yesterday at 21:05 (Algiers)
+    await add(who, 'info', now - (algiersDayStart(now) - 3 * H + 5 * M), lang === 'ar' ? 'تقرير المساء' : lang === 'en' ? 'Evening report' : 'Rapport du soir', lang === 'ar' ? '42 طلبًا · 31 مؤكدًا · 18 تم توصيلها' : lang === 'en' ? '42 orders · 31 confirmed · 18 delivered' : '42 commandes · 31 confirmées · 18 livrées', { url: '#/notify/auto', read: true, tag: 'auto-evening' });
   }
 }

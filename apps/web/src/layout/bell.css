@@ -30,7 +30,8 @@ html[data-theme="dark"] .k-message { --k-bg: #17392F; --k-fg: #7FD9C6; }
 }
 .px-bell-ic .bji, .px-bell-ic .bji svg { width: 18px; height: 18px; }
 
-/* ---- the list */
+/* ---- the list (open: the top bar goes over the page's floating buttons, under the « Bloquer » screen) */
+body.px-bell-open .topbar { z-index: 40; }
 .px-bell-panel {
   position: absolute; inset-inline-end: 0; top: calc(100% + 10px); z-index: 60; width: 392px; max-width: calc(100vw - 24px);
   max-height: calc(100vh - 84px); max-height: calc(100dvh - 84px);

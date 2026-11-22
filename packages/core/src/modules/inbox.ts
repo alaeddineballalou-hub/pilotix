@@ -53,6 +53,8 @@ export function say(key: keyof typeof W, lang: Language, v: Record<string, strin
 }
 /** 4500 → « 4 500 » */
 const money = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+/** 4500 → « 4 500 DA » (« 4 500 د.ج » in Arabic) */
+const da = (n: number, lang: Language) => `${money(n)} ${lang === 'ar' ? 'د.ج' : 'DA'}`;
 /** HH:MM, Algiers time */
 const clock = (t: number) => new Date(t + 3_600_000).toISOString().slice(11, 16);
 
@@ -70,7 +72,7 @@ async function orderBits(db: Db, ids: number[]): Promise<Map<number, Bits>> {
   const rows = await db.query('SELECT id, ref, customer_name, total, agent_id, follow_agent_id FROM orders WHERE id = ANY($1)', [[...new Set(ids)]]);
   return new Map(rows.map((r: any) => [num(r.id), { id: num(r.id), ref: String(r.ref), name: String(r.customer_name ?? '').trim(), total: num(r.total), agent: numOrNull(r.agent_id), follow: numOrNull(r.follow_agent_id) }]));
 }
-const oneLine = (o: Bits) => [o.ref, o.name, o.total > 0 ? `${money(o.total)} DA` : ''].filter(Boolean).join(' · ');
+const oneLine = (o: Bits, lang: Language) => [o.ref, o.name, o.total > 0 ? da(o.total, lang) : ''].filter(Boolean).join(' · ');
 const refList = (list: Bits[]) => list.slice(0, 4).map((o) => o.ref).join(', ') + (list.length > 4 ? ` +${list.length - 4}` : '');
 async function namesOf(db: Db, ids: number[]): Promise<Map<number, string>> {
   if (!ids.length) return new Map();
@@ -145,8 +147,8 @@ export async function tellGiven(ctx: Ctx, area: 'conf' | 'follow', given: Map<nu
       by: o.by ?? null,
       text: (lang, n) =>
         area === 'conf'
-          ? { title: n === 1 ? say('order1', lang) : say('orderN', lang, { n }), body: why(lang) + (one ? oneLine(one) : refList(list)) }
-          : { title: n === 1 ? say('given', lang) : say('alertN', lang, { n }), body: why(lang) + (one ? oneLine(one) : refList(list)) },
+          ? { title: n === 1 ? say('order1', lang) : say('orderN', lang, { n }), body: why(lang) + (one ? oneLine(one, lang) : refList(list)) }
+          : { title: n === 1 ? say('given', lang) : say('alertN', lang, { n }), body: why(lang) + (one ? oneLine(one, lang) : refList(list)) },
     });
   }
 }
@@ -224,7 +226,7 @@ export async function tellFollow(ctx: Ctx, moves: FollowMove[], by: number | nul
         text: (lang) => ({
           title: one ? say(word[0], lang, { ref: one.o.ref }) : say(word[1], lang, { n: list.length }),
           body: one
-            ? [one.o.name, kind === 'alert' ? say(one.to === 'failed' ? 'failed' : 'onAlert', lang) : kind === 'cancelled' ? say('afterYou', lang) : one.o.total > 0 ? `${money(one.o.total)} DA` : ''].filter(Boolean).join(' · ')
+            ? [one.o.name, kind === 'alert' ? say(one.to === 'failed' ? 'failed' : 'onAlert', lang) : kind === 'cancelled' ? say('afterYou', lang) : one.o.total > 0 ? da(one.o.total, lang) : ''].filter(Boolean).join(' · ')
             : refList(list.map((x) => x.o)),
         }),
       });

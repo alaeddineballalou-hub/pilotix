@@ -145,6 +145,8 @@ export function Bell() {
 
   // the panel: closes on a tap outside, Escape, another page; asks this phone's state
   useEffect(() => {
+    // (over the page's floating buttons: « Commande suivante » on a phone)
+    document.body.classList.toggle('px-bell-open', open);
     if (!open) return;
     const down = (e: PointerEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
     const k = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
@@ -155,7 +157,7 @@ export function Bell() {
     enablePush(false)
       .then(setPush)
       .catch(() => setPush('unsupported'));
-    return () => (document.removeEventListener('pointerdown', down), document.removeEventListener('keydown', k), window.removeEventListener('hashchange', away));
+    return () => (document.body.classList.remove('px-bell-open'), document.removeEventListener('pointerdown', down), document.removeEventListener('keydown', k), window.removeEventListener('hashchange', away));
   }, [open]);
 
   useLayoutEffect(() => {
