@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { communesOf, DEFAULT_CALL_SETTINGS } from '@pilotix/shared';
 import { call, clientFee, Ctx, Db } from '../index';
-import { cancelReason, computeDue, kfRange, leadOf } from '../modules/confirmation';
+import { attackOf, cancelReason, computeDue, kfRange, leadOf } from '../modules/confirmation';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -109,6 +109,11 @@ test('a lead: confirmed, refused by a real client, attack or duplicate; the reas
   assert.equal(leadOf('cancelled', 'Changé d’avis'), 'refused');
   assert.equal(leadOf('cancelled', 'Annulée automatiquement après 3 appels sans réponse'), 'attack', 'no answer after N calls is never the team');
   assert.equal(leadOf('fake', null), 'attack');
+  assert.equal(leadOf('cancelled', "N'a pas commandé"), 'attack', 'the client never ordered: a fake');
+  assert.equal(attackOf('cancelled', "N'a pas commandé — ce n'est pas lui"), 'fake');
+  assert.equal(attackOf('cancelled', 'Annulée automatiquement après 5 appels sans réponse'), 'noAnswer');
+  assert.equal(attackOf('wrong_number', null), 'wrong');
+  assert.equal(attackOf('cancelled', 'Changé d’avis'), null);
   assert.equal(leadOf('wrong_number', null), 'attack');
   assert.equal(leadOf('duplicate', null), 'duplicate');
   for (const s of ['new', 'to_check', 'no_answer', 'busy', 'callback', 'postponed']) assert.equal(leadOf(s, null), 'pending');
@@ -157,8 +162,8 @@ test('statistics overview: managers only, every lead counted once, Leads quality
 test('statistics overview: a refusal is counted with its reason; « annulée automatiquement » is an attack', async () => {
   const admin = await as(EMAILS.admin);
   const mgr = await as(EMAILS.manager);
-  const two = await db.query(`SELECT id, created_at FROM orders WHERE conf_status = 'new' AND agent_id IS NULL AND follow_status IS NULL AND NOT is_exchange ORDER BY id DESC LIMIT 2`);
-  assert.equal(two.length, 2);
+  const two = await db.query(`SELECT id, created_at FROM orders WHERE conf_status = 'new' AND agent_id IS NULL AND follow_status IS NULL AND NOT is_exchange ORDER BY id DESC LIMIT 3`);
+  assert.equal(two.length, 3);
   const day = (t: unknown) => new Date(Date.parse(String(t instanceof Date ? t.toISOString() : t)) + 3_600_000).toISOString().slice(0, 10);
   const days = two.map((r: any) => day(r.created_at)).sort();
   const range = { per: 'custom', from: days[0], to: day(new Date()) } as const;
@@ -169,14 +174,17 @@ test('statistics overview: a refusal is counted with its reason; « annulée aut
   // no answer twice with « Annuler après 2 appels sans réponse »: cancelled by itself = an attack
   await db.query(`INSERT INTO settings (key, value) VALUES ('calls', $1::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify({ ...DEFAULT_CALL_SETTINGS, cancelAfterNoAnswer: 2 })]);
   for (let k = 0; k < 2; k++) await call('orders.setConf', admin, { ids: [Number(two[1].id)], status: 'no_answer' });
+  // « N'a pas commandé »: the client never ordered = a fake
+  await call('orders.setConf', admin, { ids: [Number(two[2].id)], status: 'cancelled', reason: "N'a pas commandé" });
   assert.equal((await db.query('SELECT conf_status FROM orders WHERE id = $1', [two[1].id]))[0].conf_status, 'cancelled');
   await db.query(`DELETE FROM settings WHERE key = 'calls'`);
   const after: any = await call('confirmation.overview', mgr, range);
   assert.equal(after.refused.n, before.refused.n + 1);
   assert.equal(after.refused.reasons.find((r: any) => r.code === 'fee')?.n, fee0 + 1);
   assert.equal(after.attacks.noAnswer, before.attacks.noAnswer + 1);
-  assert.equal(after.attacks.n, before.attacks.n + 1);
-  assert.equal(after.pending.n, before.pending.n - 2);
+  assert.equal(after.attacks.fake, before.attacks.fake + 1);
+  assert.equal(after.attacks.n, before.attacks.n + 2);
+  assert.equal(after.pending.n, before.pending.n - 3);
   assert.equal(after.confirmed.n, before.confirmed.n);
   assert.equal(after.leadsQuality, Math.round((after.confirmed.n * 100) / (after.confirmed.n + after.refused.n)));
 });

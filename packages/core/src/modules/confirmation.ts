@@ -628,12 +628,24 @@ export function cancelReason(note: string | null | undefined): string {
   return code === null ? 'none' : REASON_OF[code] ?? 'other';
 }
 type Lead = 'pending' | 'confirmed' | 'refused' | 'attack' | 'duplicate';
-/** What became of a lead. An attack (fake, wrong number, cancelled after N calls with no answer) is never the team's fault. */
+/**
+ * The kind of attack, or null. An attack is never the team's fault: a fake (also a cancel where the client says he never
+ * ordered, or a competitor), a wrong number, or an order cancelled after N calls with no answer.
+ */
+export function attackOf(status: string, note: string | null | undefined): 'fake' | 'wrong' | 'noAnswer' | null {
+  if (status === 'fake') return 'fake';
+  if (status === 'wrong_number') return 'wrong';
+  if (status !== 'cancelled') return null;
+  if (AUTO_NO_ANSWER.test(note ?? '')) return 'noAnswer';
+  const code = reasonCode(note);
+  return code === 'not_ordered' || code === 'competitor' ? 'fake' : null;
+}
+/** What became of a lead. */
 export function leadOf(status: string, note: string | null | undefined): Lead {
   if (CONFIRMED_LIKE.includes(status)) return 'confirmed';
   if (status === 'duplicate') return 'duplicate';
-  if (status === 'fake' || status === 'wrong_number') return 'attack';
-  if (status === 'cancelled') return AUTO_NO_ANSWER.test(note ?? '') ? 'attack' : 'refused';
+  if (attackOf(status, note)) return 'attack';
+  if (status === 'cancelled') return 'refused';
   return 'pending';
 }
 
@@ -693,7 +705,7 @@ async function overview(ctx: Ctx, i: KfInput) {
       status,
       lead,
       reason: lead === 'refused' ? cancelReason(e?.note) : null,
-      attack: lead === 'attack' ? (status === 'fake' ? 'fake' : status === 'wrong_number' ? 'wrong' : 'noAnswer') : null,
+      attack: attackOf(status, e?.note),
       by: e?.by ?? null,
       agentId: numOrNull(o.agent_id),
       follow: o.follow_status as string | null,
