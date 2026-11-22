@@ -44,6 +44,10 @@
 .pxda-steps li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; color: #8A8173; }
 .pxda-steps li.on { background: #FFF3E2; color: #1B2A47; box-shadow: inset 0 0 0 1.5px #F28B1E; }
 .pxda-steps li.ok { color: #127A43; }
+/* a step done: one short line, so the step to do and its scan stay in view on phones */
+.pxda-steps li.ok { padding-block: 3px; }
+.pxda-steps li.ok b { font-size: 13px; font-weight: 700; }
+.pxda-steps li.ok small { display: none; }
 .pxda-steps li > span:last-child { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .pxda-steps li b { font-size: 14px; }
 .pxda-steps li small { font: 800 12.5px/1.2 "Courier New", monospace; letter-spacing: .04em; }
