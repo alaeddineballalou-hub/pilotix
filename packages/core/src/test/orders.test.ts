@@ -202,5 +202,7 @@ test('order deletion rejects missing IDs, duplicate IDs, and cancelled parcels w
   assert.equal((await db.query('SELECT count(*)::int AS n FROM orders WHERE id=$1', [o.id]))[0].n, 1);
   await db.query("UPDATE orders SET follow_status='cancelled', tracking='ZR-TEST-HIST', shipped_at=now() WHERE id=$1", [o.id]);
   await assert.rejects(call('orders.delete', admin, { ids: [o.id] }), /historique de livraison/);
+  await db.query('UPDATE orders SET tracking=NULL, shipped_at=NULL, taken_at=now() WHERE id=$1', [o.id]);
+  await assert.rejects(call('orders.delete', admin, { ids: [o.id] }), /historique de livraison/);
   assert.equal((await db.query('SELECT count(*)::int AS n FROM orders WHERE id=$1', [o.id]))[0].n, 1);
 });

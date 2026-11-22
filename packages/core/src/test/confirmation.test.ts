@@ -232,7 +232,7 @@ test('list rows carry stock availability and statuses passed; admin can delete o
   const fresh: any = await call('confirmation.list', admin, { sub: 'nouvelles', pageSize: 1 });
   const id = fresh.rows[0].id;
   const pilotixCode = (await db.query('SELECT own_tracking FROM orders WHERE id = $1', [id]))[0]?.own_tracking;
-  assert.match(pilotixCode, /^PXT\\d{8}$/, 'a new order already has a Pilotix tracking number, not a shipping record');
+  assert.match(pilotixCode, /^PXT\d{8}$/, 'a new order already has a Pilotix tracking number, not a shipping record');
   await assert.rejects(call('orders.delete', await as(EMAILS.conf), { ids: [id] }), /refusé/);
   const r: any = await call('orders.delete', admin, { ids: [id] });
   assert.equal(r.deleted, 1);

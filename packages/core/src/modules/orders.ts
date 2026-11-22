@@ -2187,13 +2187,13 @@ export const ordersProcs = {
     if (!ctx.session.isAdmin) throw forbidden('Seul un administrateur peut supprimer une commande');
     await ctx.db.tx(async (tx) => {
       if (new Set(ids).size !== ids.length) throw bad('Une commande est sélectionnée plusieurs fois');
-      const rows = await tx.query('SELECT id, ref, follow_status, is_exchange, tracking, own_tracking, shipped_at, delivered_at, returned_at, cashed, handover_id FROM orders WHERE id = ANY($1) FOR UPDATE', [ids]);
+      const rows = await tx.query('SELECT id, ref, follow_status, is_exchange, tracking, taken_at, shipped_at, delivered_at, returned_at, cashed, handover_id FROM orders WHERE id = ANY($1) FOR UPDATE', [ids]);
       if (rows.length !== ids.length) throw bad('Une ou plusieurs commandes sont introuvables');
       for (const r of rows) {
         if (r.is_exchange) throw bad(`${r.ref} est un colis de ticket SAV : annulez le ticket`);
         // own_tracking is assigned to every order at creation: it does NOT mean the parcel was sent.
         // Once a courier tracking exists or the parcel was sent, delivered, returned or cashed, preserve audit history.
-        if (r.tracking || r.shipped_at || r.delivered_at || r.returned_at || r.cashed || r.handover_id)
+        if (r.tracking || r.taken_at || r.shipped_at || r.delivered_at || r.returned_at || r.cashed || r.handover_id)
           throw bad(`${r.ref} a un historique de livraison ou de paiement : archivez-la au lieu de la supprimer`);
         if (r.follow_status && !['to_prepare', 'cancelled'].includes(r.follow_status))
           throw bad(`${r.ref} est déjà au dépôt ou en livraison : elle ne peut plus être supprimée`);
