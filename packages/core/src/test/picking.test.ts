@@ -34,6 +34,23 @@ test('the pick list shows only products and how many to take', async () => {
   }
 });
 
+test('each card shows its colour’s own photo, else the product’s', async () => {
+  const depot = await as(EMAILS.depot);
+  const r = ((await call('depot.pickList', depot, {})) as any[]).find((x) => x.variantId != null);
+  assert.ok(r, 'the demo has a colour to take');
+  const was = (await db.query('SELECT p.photo AS main, v.photo AS own FROM products p JOIN product_variants v ON v.product_id = p.id WHERE v.id = $1', [r.variantId]))[0];
+  const card = async () => ((await call('depot.pickList', depot, {})) as any[]).find((x) => x.productId === r.productId && x.variantId === r.variantId);
+  await db.query('UPDATE products SET photo = $2 WHERE id = $1', [r.productId, 'data:image/png;base64,UFJPRFVJVA==']);
+  await db.query('UPDATE product_variants SET photo = $2 WHERE id = $1', [r.variantId, 'data:image/png;base64,Q09VTEVVUg==']);
+  assert.equal((await card())?.photo, 'data:image/png;base64,Q09VTEVVUg==', 'the colour’s own photo');
+  await db.query(`UPDATE product_variants SET photo = '' WHERE id = $1`, [r.variantId]);
+  assert.equal((await card())?.photo, 'data:image/png;base64,UFJPRFVJVA==', 'no photo of its own: the product’s');
+  await db.query('UPDATE product_variants SET photo = NULL WHERE id = $1', [r.variantId]);
+  assert.equal((await card())?.photo, 'data:image/png;base64,UFJPRFVJVA==');
+  await db.query('UPDATE products SET photo = $2 WHERE id = $1', [r.productId, was.main]);
+  await db.query('UPDATE product_variants SET photo = $2 WHERE id = $1', [r.variantId, was.own]);
+});
+
 test('taking fewer than needed serves whole lines, oldest first; rupture keeps the rest to bring', async () => {
   const depot = await as(EMAILS.depot);
   const list = (await call('depot.pickList', depot, {})) as any[];

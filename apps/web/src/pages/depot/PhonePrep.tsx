@@ -6,8 +6,8 @@
 //   by itself. An order picked whole that has a company goes there by itself, without this tab.
 // « Sans stock »: the orders confirmed while a product had nothing left, oldest first, with how long each waits (late
 //   after the shop's number of days). When stock comes back the oldest go to « À préparer » by themselves.
-// The cards are one per variant: the product photo, the product name, then the variant in a pill of its colour (the
-// card's edge has that colour too) — the picker takes by colour.
+// The cards are one per variant: the variant's own photo (else the product's), the product name, then the variant in a
+// pill of its colour (the card's edge has that colour too) — the picker takes by colour.
 import type { Order } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { CSSProperties, useEffect, useRef, useState } from 'react';
