@@ -3,7 +3,8 @@
 // fault for a return or a cancel, a phone ring for a callback… The sound stays on in the shop's call hours (« pendant le
 // travail »): it is turned off only outside them. Tapping a line opens its order (or its page) and marks it read.
 import { algiersHour } from '@pilotix/shared';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { CSSProperties, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { backend, Out, rpc } from '../lib/backend';
 import { clock, dayLabel, sameDay } from '../lib/format';
@@ -36,6 +37,8 @@ const LOUD = new Set<BellSound>(['order', 'callback', 'alert']);
 /** a pop-up that is not important goes after this */
 const POP_MS = 7000;
 const key = (x: Line) => `${x.id}@${x.at}`;
+/** The phone's notification starts with an emoji (💰, 📞…); on screen the kind's own icon says it: not twice. */
+const plain = (s: string) => s.replace(/^\p{Extended_Pictographic}\uFE0F?\s*/u, '');
 
 /** In the shop's call hours now (Algiers time). */
 const inWork = (slots: { from: number; to: number }[], now: number) => {
@@ -67,6 +70,8 @@ export function Bell() {
   const [push, setPush] = useState<PushState | null>(null);
   const [ready, setReady] = useState(audioReady());
   const box = useRef<HTMLDivElement>(null);
+  /** the list open on a computer: the pop-ups go beside it (« Écouter les sons ») */
+  const [beside, setBeside] = useState<CSSProperties | undefined>();
   /** the lines already shown (the first list, the pop-ups): never popped again */
   const seen = useRef<Set<string> | null>(null);
   /** a new line was announced: the next list pops what is new in it */
@@ -153,6 +158,13 @@ export function Bell() {
     return () => (document.removeEventListener('pointerdown', down), document.removeEventListener('keydown', k), window.removeEventListener('hashchange', away));
   }, [open]);
 
+  useLayoutEffect(() => {
+    const r = box.current?.getBoundingClientRect();
+    if (!open || !r || window.innerWidth <= 900) return setBeside(undefined);
+    const rtl = document.documentElement.dir === 'rtl';
+    setBeside(rtl ? { top: r.bottom + 10, left: r.left + 404, right: 'auto' } : { top: r.bottom + 10, right: window.innerWidth - r.right + 404, left: 'auto' });
+  }, [open]);
+
   const read = useCallback((ids: number[]) => {
     if (ids.length) void rpc('inbox.read', { ids }).then(() => refetch.current()).catch(() => {});
   }, []);
@@ -236,7 +248,7 @@ export function Bell() {
                     <Icon name={ICON[x.kind] ?? 'bell'} />
                   </span>
                   <span className="px-bell-txt">
-                    <b>{x.title}</b>
+                    <b>{plain(x.title)}</b>
                     {x.body && <small>{x.body}</small>}
                   </span>
                   <span className="px-bell-when">
@@ -314,32 +326,34 @@ export function Bell() {
         </div>
       )}
 
-      {pops.length > 0 && (
-        <div className={`px-bell-pops${open ? ' beside' : ''}`} role="status" aria-live="polite">
-          {pops.map((x) => (
-            <div key={key(x)} className={`px-bell-pop k-${x.kind}${x.important ? ' imp' : ''}`}>
-              <span className="px-bell-ic">
-                <Icon name={ICON[x.kind] ?? 'bell'} />
-              </span>
-              <span className="px-bell-txt">
-                <small className="px-bell-kind">{t(`bell.kind.${x.kind}`)}</small>
-                <b>{x.title}</b>
-                {x.body && <small>{x.body}</small>}
-              </span>
-              <span className="px-bell-pop-act">
-                {(x.orderId || x.url) && (
-                  <button type="button" className="btn primary" onClick={() => go(x)}>
-                    {t('bell.openIt')}
-                  </button>
-                )}
+      {pops.length > 0 &&
+        createPortal(
+          <div className={`px-bell-pops${open ? ' beside' : ''}`} style={beside} role="status" aria-live="polite">
+            {pops.map((x) => (
+              <div key={key(x)} className={`px-bell-pop k-${x.kind}${x.important ? ' imp' : ''}`}>
+                <span className="px-bell-ic">
+                  <Icon name={ICON[x.kind] ?? 'bell'} />
+                </span>
+                <span className="px-bell-txt">
+                  <small className="px-bell-kind">{t(`bell.kind.${x.kind}`)}</small>
+                  <b>{plain(x.title)}</b>
+                  {x.body && <small>{x.body}</small>}
+                </span>
                 <button type="button" className="px-bell-x" aria-label={t('bell.close')} onClick={() => setPops((p) => p.filter((y) => y.id !== x.id))}>
                   <Icon name="x" />
                 </button>
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+                {(x.orderId || x.url) && (
+                  <span className="px-bell-pop-act">
+                    <button type="button" className="btn primary" onClick={() => go(x)}>
+                      {t('bell.openIt')}
+                    </button>
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
