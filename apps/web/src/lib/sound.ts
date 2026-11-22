@@ -14,6 +14,8 @@ export function unlockAudio() {
   try {
     audio ??= new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     if (audio.state === 'suspended') void audio.resume();
+    // the bell's recordings, ready before the first one is needed
+    preloadBellSounds();
   } catch {
     /* no sound on this browser */
   }
@@ -177,7 +179,7 @@ const SOUNDS: Record<BellSound, (a: AudioContext, o: GainNode, t: number) => voi
         osc.stop(s + 0.48);
       }
   },
-  // delivered: the till drawer, then « ka-ching » and a few coins
+  // delivered: the owner's cash register recording (lib/bellFiles.ts); this drawn one only when it cannot load
   delivered: (a, o, t) => {
     hiss(a, o, t, 0.07, 2600, 0.9);
     note(a, o, 1760, t + 0.03, 0.22, 'triangle', 0.35);
@@ -228,6 +230,27 @@ const SOUNDS: Record<BellSound, (a: AudioContext, o: GainNode, t: number) => voi
   },
 };
 
+// the recorded ones (lib/bellFiles.ts): decoded once, the first time
+type Recorded = keyof typeof import('./bellFiles').BELL_FILES;
+const RECORDED = new Set<BellSound>(['delivered']);
+const decoded = new Map<BellSound, Promise<AudioBuffer | null>>();
+function recorded(a: AudioContext, kind: BellSound): Promise<AudioBuffer | null> {
+  let p = decoded.get(kind);
+  if (!p) {
+    p = import('./bellFiles')
+      .then((m) => fetch(m.BELL_FILES[kind as Recorded]))
+      .then((r) => r.arrayBuffer())
+      .then((b) => a.decodeAudioData(b))
+      .catch(() => null);
+    decoded.set(kind, p);
+  }
+  return p;
+}
+/** Loads the recorded sounds ahead (once the page was touched): the first « Livrée » plays at once. */
+export function preloadBellSounds() {
+  if (audio) for (const k of RECORDED) void recorded(audio, k);
+}
+
 let lastSound = 0;
 /**
  * The bell's sound for a kind (`loud`: the important ones). Several lines at once play one sound. With `vibrate`, the
@@ -237,10 +260,22 @@ export function bellSound(kind: BellSound, loud = false, vibrate = false) {
   const now = Date.now();
   if (now - lastSound < (loud ? 400 : 800)) return false;
   if (vibrate) navigator.vibrate?.(loud ? [300, 120, 300, 120, 500] : [160]);
-  if (!audio || audio.state !== 'running') return false;
+  const a = audio;
+  if (!a || a.state !== 'running') return false;
   lastSound = now;
   try {
-    SOUNDS[kind](audio, out(audio, loud ? 1 : 0.7), audio.currentTime + 0.02);
+    if (RECORDED.has(kind)) {
+      // a recording: played as it is (the drawn sound if it could not be loaded)
+      void recorded(a, kind).then((buf) => {
+        if (!buf) return SOUNDS[kind](a, out(a, loud ? 1 : 0.7), a.currentTime + 0.02);
+        const src = a.createBufferSource();
+        src.buffer = buf;
+        src.connect(out(a, 0.9));
+        src.start(a.currentTime + 0.01);
+      });
+      return true;
+    }
+    SOUNDS[kind](a, out(a, loud ? 1 : 0.7), a.currentTime + 0.02);
     return true;
   } catch {
     return false;
