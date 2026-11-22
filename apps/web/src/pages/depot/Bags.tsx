@@ -192,6 +192,8 @@ function CompanyBags({ c, phone }: { c: Company; phone?: boolean }) {
       <div className="pxb-head">
         <Icon name="package" />
         <b>{t('depot.bags.title', { name: c.name })}</b>
+        {/* a bag is never required: a parcel leaves Dispatchées as soon as the company has it (the owner's rule, 22 Nov 2026) */}
+        <span className="badge t-off">{t('depot.bags.optional')}</span>
         <Help text={t('depot.bags.help', { name: c.name })} label={t('depot.bags.title', { name: c.name })} />
         <button type="button" className="icon-btn pxb-sync" disabled={busy} onClick={sync} aria-label={t('depot.bags.sync')} title={t('depot.bags.sync')}>
           <Icon name="refresh" />
@@ -200,7 +202,7 @@ function CompanyBags({ c, phone }: { c: Company; phone?: boolean }) {
       {c.waiting > 0 ? (
         <div className="pxb-wait">
           <span className="pxb-wt">
-            <Icon name="clock" /> {t('depot.bags.waitingN', { count: c.waiting })}
+            <Icon name="package" /> {t('depot.bags.waitingN', { count: c.waiting })}
           </span>
           <div className="pxb-btns">
             <button type="button" className="btn primary" disabled={busy} onClick={() => make(null)}>

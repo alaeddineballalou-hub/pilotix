@@ -71,10 +71,13 @@ export function DepotOrderList({
   compact = false,
   labels = false,
   top,
+  taken,
 }: {
   title: string;
   help?: string;
   follow: FollowStatus[];
+  /** false: only the parcels their company has not taken yet (Dispatchées) */
+  taken?: boolean;
   confirmedOnly?: boolean;
   sort: 'confirmed_at' | 'shipped_at' | 'updated_at' | 'created_at';
   extra?: ExtraCol[];
@@ -106,6 +109,7 @@ export function DepotOrderList({
   const pageSize = 50;
   const list = useRpc('orders.list', {
     follow,
+    taken,
     conf: confirmedOnly ? ['confirmed'] : undefined,
     q: dq || undefined,
     ...df.input,

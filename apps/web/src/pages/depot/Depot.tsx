@@ -252,6 +252,7 @@ function Dispatchees() {
         title={t('depot.lists.dispatchees')}
         help={t('depot.help.dispatchees')}
         follow={['shipped']}
+        taken={false}
         sort="shipped_at"
         hide={['conf', 'follow']}
         compact

@@ -819,15 +819,17 @@ export async function depotCounts(db: Db, now = Date.now()) {
     )
   )[0];
   const r = await db.query(
-    `SELECT follow_status AS k, count(*)::int AS n FROM orders
+    `SELECT follow_status AS k, count(*)::int AS n, count(*) FILTER (WHERE taken_at IS NULL)::int AS untaken FROM orders
      WHERE (conf_status = 'confirmed' AND follow_status IN ('to_prepare','prepared','shipped','out_for_delivery')) OR follow_status IN ('returning','in_exchange')
      GROUP BY 1`,
   );
   const c = Object.fromEntries(r.map((x: any) => [x.k, num(x.n)]));
+  const untaken = Object.fromEntries(r.map((x: any) => [x.k, num(x.untaken)]));
   return {
     preparer: c.to_prepare ?? 0,
     prepares: c.prepared ?? 0,
-    dispatchees: c.shipped ?? 0,
+    // handed over and not taken yet by its company: it leaves as soon as the company has it (the owner's rule, 22 Nov 2026)
+    dispatchees: untaken.shipped ?? 0,
     enlivraison: c.out_for_delivery ?? 0,
     retours: (c.returning ?? 0) + (c.in_exchange ?? 0),
     noStock: num(ns?.n),

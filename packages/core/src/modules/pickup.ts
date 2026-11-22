@@ -15,10 +15,12 @@ const isDemo = (ctx: Ctx) => !ctx.server;
 const courier = (ctx: Ctx, action: string, args: Record<string, unknown>) => ctx.server!.courier(action, args, ctx);
 const parseJson = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v ?? {});
 
-/** A parcel can go in a bag once it is handed over (Dispatchées) and the courier has not taken it in yet. */
+/** A parcel can go in a bag once it is handed over (Dispatchées) and the courier has not taken it in yet — the same rule
+ *  as the list: nothing after « Prêt à expédier » (taken_at). The bag is optional: the parcel leaves Dispatchées as soon as
+ *  the company has it, with or without one. */
 const WAITING = `o.follow_status = 'shipped' AND o.tracking IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM pickup_bag_parcels bp JOIN pickup_bags b ON b.id = bp.bag_id WHERE bp.order_id = o.id AND b.deleted_at IS NULL)
-  AND (o.ext_status_at IS NULL OR o.shipped_at IS NULL OR o.ext_status_at <= o.shipped_at + interval '1 minute')`;
+  AND o.taken_at IS NULL`;
 
 export interface Bag {
   id: number;

@@ -281,6 +281,9 @@ export const REASON_SQL = { conf: reasonOf('conf_status', 'o.conf_status'), back
 export const ListInput = z.object({
   conf: z.array(z.enum(CONF_STATUSES)).max(50).optional(),
   follow: z.array(z.enum([...FOLLOW_STATUSES, 'none'] as const)).max(50).optional(),
+  /** has its delivery company said it has the parcel (« Confirmé au bureau », « Vers wilaya »… anything after « Prêt à
+   *  expédier »)? false: Dépôt › Dispatchées, handed over and not taken yet (the owner's rule, 22 Nov 2026) */
+  taken: z.boolean().optional(),
   q: z.string().max(100).optional(),
   wilayaId: z.number().int().min(1).max(69).optional(),
   agentId: z.union([id, z.literal('none')]).optional(),
@@ -346,6 +349,8 @@ export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' 
     else if (real.length) w.add('o.follow_status = ANY(?)', real);
     else w.add('o.follow_status IS NULL');
   }
+  if (f.taken === false) w.add('o.taken_at IS NULL');
+  else if (f.taken === true) w.add('o.taken_at IS NOT NULL');
   if (f.wilayaId) w.add('o.wilaya_id = ?', f.wilayaId);
   if (f.agentId === 'none') w.add('o.agent_id IS NULL');
   else if (f.agentId) w.add('o.agent_id = ?', f.agentId);

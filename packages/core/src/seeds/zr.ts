@@ -15,8 +15,14 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   const waiting = shipped.slice(0, 4); // handed over just now: no bag yet
   const today = shipped.slice(4, 9); // today's bag, ZR is processing it
   const older = shipped.slice(9);
-  // still at the depot side for ZR: « Prêt à expédier »
-  await db.query(`UPDATE orders SET ext_status = 'Pret a expedier' WHERE id = ANY($1)`, [waiting.map((r: any) => num(r.id))]);
+  // one handed over more than a day ago that ZR never took (no bag either: it is optional): orange in Dispatchées
+  // (older is newest first: the first one past 26 h)
+  const late = older.find((r: any) => now - new Date(r.shipped_at).getTime() >= 26 * 3_600_000);
+  if (late) older.splice(older.indexOf(late), 1);
+  // still at the depot side for ZR: « Prêt à expédier » — in Dispatchées until ZR has them (the newest, the ones of today's
+  // bag ZR has not processed yet, the late one); the others left it when ZR took them (seeds/delivery)
+  const notTaken = [...waiting, ...today.slice(0, Math.min(2, today.length)), ...(late ? [late] : [])];
+  await db.query(`UPDATE orders SET ext_status = 'Pret a expedier', taken_at = NULL WHERE id = ANY($1)`, [notTaken.map((r: any) => num(r.id))]);
   let n = 0;
   const bag = async (rows: any[], createdAt: number, unprocessed: number, state: string) => {
     n++;

@@ -63,6 +63,14 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     const s = r.follow_status === 'returned' ? 'returning' : r.follow_status === 'exchanged' ? 'delivered' : r.follow_status;
     await db.query('UPDATE orders SET ext_status = $2, ext_status_at = updated_at WHERE id = $1', [r.id, word(r.kind, s)]);
   }
+  // the company has every parcel whose word comes after « handed over » (they left Dépôt › Dispatchées a few hours after
+  // the scan); ZR's newest ones still wait for it (seeds/zr)
+  await db.query(
+    `UPDATE orders o SET taken_at = LEAST(COALESCE(o.shipped_at, o.updated_at) + interval '3 hours', $1::timestamptz) FROM delivery_companies c
+     WHERE c.id = o.company_id AND c.kind IN ('yalidine','zr','noest','ecotrack','custom') AND o.tracking IS NOT NULL AND o.shipped_at IS NOT NULL
+       AND o.follow_status IN ('shipped','out_for_delivery','failed','alert','in_exchange','delivered','returning','returned','exchanged','lost')`,
+    [new Date(now).toISOString()],
+  );
 
   // livreurs: where their round ends; Lamine has parcels to pick up at the depot and some out today
   if (users.livreur3) await db.query('INSERT INTO livreur_routes (profile_id, end_wilaya_id, end_commune) VALUES ($1, 16, $2), ($3, 16, $4), ($5, 31, $6)', [users.livreur, 'Bab Ezzouar', users.livreur2, 'Kouba', users.livreur3, 'Oran']);

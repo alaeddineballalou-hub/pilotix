@@ -35,7 +35,7 @@ type Road = 'dispatchees' | 'enlivraison';
 type Level = 'ok' | 'warn' | 'bad';
 
 /** The parcels of a stage, the first 100 then 100 more at a time. */
-function useStage(follow: FollowStatus[], confirmedOnly: boolean, sort: 'shipped_at' | 'updated_at', q: string, filters: Partial<ReturnType<typeof useDepotFilters>['input']> = {}) {
+function useStage(follow: FollowStatus[], confirmedOnly: boolean, sort: 'shipped_at' | 'updated_at', q: string, filters: Partial<ReturnType<typeof useDepotFilters>['input']> & { taken?: boolean } = {}) {
   const [limit, setLimit] = useState(100);
   const dq = useDebounced(q.trim());
   const list = useRpc('orders.list', { follow, conf: confirmedOnly ? ['confirmed'] : undefined, q: dq || undefined, ...filters, sort, dir: 'asc', page: 1, pageSize: limit, tickets: 'include' });
@@ -197,7 +197,8 @@ export function PhoneRoad({ stage }: { stage: Road }) {
   const [q, setQ] = useState('');
   const [f, setF] = useState<'all' | Level>('all');
   const df = useDepotFilters();
-  const s = useStage([stage === 'dispatchees' ? 'shipped' : 'out_for_delivery'], true, 'shipped_at', q, df.input);
+  // Dispatchées: until the company has them (anything after « Prêt à expédier »), bag or no bag
+  const s = useStage([stage === 'dispatchees' ? 'shipped' : 'out_for_delivery'], true, 'shipped_at', q, stage === 'dispatchees' ? { ...df.input, taken: false } : df.input);
   const lv = (o: Order) => levelOf(stage, o.shippedAt);
   const late = s.rows.filter((o) => lv(o) !== 'ok');
   const veryLate = s.rows.filter((o) => lv(o) === 'bad');

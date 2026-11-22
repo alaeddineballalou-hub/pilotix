@@ -30,7 +30,7 @@
     "exchange": "Échanges en cours chez le client (l’ancien produit va revenir)"
   },
   "help": {
-    "dispatchees": "Colis scannés et remis. Ils quittent cette liste dès que la société ou le livreur change leur statut (pris en charge, en livraison, livré…). Ceux qui restent sont à vérifier : orange = plus de 24 h, rouge = plus de 48 h sans nouvelle.",
+    "dispatchees": "Colis scannés et remis. Ils quittent cette liste dès que la société dit qu’elle les a (ZR : « Confirmé au bureau », « Vers wilaya »… tout ce qui vient après « Prêt à expédier »), avec ou sans sac, ou dès que le livreur change leur statut. Ceux qui restent sont à vérifier : orange = plus de 24 h, rouge = plus de 48 h sans nouvelle.",
     "enlivraison": "Colis pris en charge par la société ou le livreur, en route vers le client. Ils quittent cette liste quand ils sont livrés, en alerte ou en retour. Orange = 4 jours, rouge = 7 jours ou plus."
   },
   "filters": {
@@ -263,9 +263,10 @@
   },
   "bags": {
     "title": "Sacs de ramassage · {{name}}",
-    "help": "Les colis remis au livreur de {{name}} vont dans un sac fait ici. Imprimez l’étiquette du sac et collez-la dessus : {{name}} scanne le sac et traite ses colis. Tout se fait depuis Pilotix.",
-    "waitingN_one": "{{count}} colis dispatché attend un sac",
-    "waitingN_other": "{{count}} colis dispatchés attendent un sac",
+    "help": "Les colis remis au livreur de {{name}} vont dans un sac fait ici. Imprimez l’étiquette du sac et collez-la dessus : {{name}} scanne le sac et traite ses colis. Tout se fait depuis Pilotix. Le sac est optionnel : un colis quitte Dispatchées dès que {{name}} l’a, avec ou sans sac.",
+    "optional": "Optionnel",
+    "waitingN_one": "{{count}} colis sans sac",
+    "waitingN_other": "{{count}} colis sans sac",
     "noneWaiting": "Tous les colis dispatchés sont dans un sac.",
     "create": "Nouveau sac ({{n}})",
     "addTo": "Ajouter au sac {{bag}}",

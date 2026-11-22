@@ -324,13 +324,13 @@ export async function swapParcel(ctx: Ctx, fromId: number, toId: number, note?: 
     if (B.follow_status === 'to_prepare') await releasePicked(tx, num(B.id));
     // The parcel (and its stock, already out of the depot) goes to B: no new stock out for B, no return for A.
     await tx.query(
-      `UPDATE orders SET company_id=$2, delivery_cost=$3, tracking=$4, ext_id=$5, label_url=$6, ext_status=NULL, ext_status_at=NULL,
+      `UPDATE orders SET company_id=$2, delivery_cost=$3, tracking=$4, ext_id=$5, label_url=$6, ext_status=NULL, ext_status_at=NULL, taken_at=NULL,
          warehouse_id=COALESCE($7, warehouse_id), livreur_id=$8, follow_status='out_for_delivery', sub_status='livraison_swappe',
          prepared_at=COALESCE(prepared_at, $9::timestamptz), shipped_at=$9::timestamptz, updated_at=now(), version=version+1 WHERE id=$1`,
       [B.id, A.company_id, (num(A.delivery_cost) || num(B.delivery_cost)) + swapFee, A.tracking, A.ext_id, A.label_url, A.warehouse_id, A.livreur_id, nowIso],
     );
     await tx.query(
-      `UPDATE orders SET follow_status='cancelled', sub_status='annule_swappe', tracking=NULL, ext_id=NULL, label_url=NULL, ext_status=NULL, ext_status_at=NULL,
+      `UPDATE orders SET follow_status='cancelled', sub_status='annule_swappe', tracking=NULL, ext_id=NULL, label_url=NULL, ext_status=NULL, ext_status_at=NULL, taken_at=NULL,
          updated_at=now(), version=version+1 WHERE id=$1`,
       [A.id],
     );

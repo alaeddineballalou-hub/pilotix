@@ -888,7 +888,7 @@ export function BoutiquesDepot({ sub }: PageProps) {
         </>
       )}
       {stage === 'prepares' && <AllOrderList key="prepares" id="depot-prepares" title={t('depot.lists.prepares')} base={{ conf: ['confirmed'], follow: ['prepared'] }} show={show} defaultSort="updated_at" defaultDir="asc" />}
-      {stage === 'dispatchees' && <AllOrderList key="dispatchees" id="depot-dispatchees" title={t('depot.lists.dispatchees')} base={{ conf: ['confirmed'], follow: ['shipped'] }} show={show} defaultSort="shipped_at" defaultDir="asc" />}
+      {stage === 'dispatchees' && <AllOrderList key="dispatchees" id="depot-dispatchees" title={t('depot.lists.dispatchees')} base={{ conf: ['confirmed'], follow: ['shipped'], taken: false }} show={show} defaultSort="shipped_at" defaultDir="asc" />}
       {stage === 'retours' && (
         <>
           <AllReceive />

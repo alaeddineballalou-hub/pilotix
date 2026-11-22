@@ -280,7 +280,7 @@ async function sendOrdersLocked(ctx: Ctx, orderIds: number[], forceCompanyId?: n
       const cost = s.costs?.delivery ?? (f ? num(r.is_stopdesk ? f.desk : f.home) : null);
       const status = word(kind, 'prepared');
       await ctx.db.query(
-        `UPDATE orders SET company_id=$2, tracking=$3, ext_id=$4, label_url=$5, ext_status=$6, ext_status_at=now(),
+        `UPDATE orders SET company_id=$2, tracking=$3, ext_id=$4, label_url=$5, ext_status=$6, ext_status_at=now(), taken_at=NULL,
            delivery_cost = COALESCE($7, delivery_cost), send_error = NULL, send_error_at = NULL, updated_at=now(), version=version+1 WHERE id=$1`,
         [s.id, companyId, s.tracking, s.extId, s.labelUrl, status, cost],
       );
@@ -313,7 +313,7 @@ export async function cancelParcel(ctx: Ctx, orderId: number) {
   } else if (KINDS[c.kind].cancel) {
     await courierOf(ctx)('cancel', { companyId: c.id, item: { id: num(o.id), tracking: o.tracking, extId: o.ext_id } }, ctx);
   } else if (KINDS[c.kind].api) throw bad(`${c.name} : annulez le colis depuis l’espace de la société, puis réessayez`);
-  await ctx.db.query('UPDATE orders SET tracking=NULL, ext_id=NULL, label_url=NULL, ext_status=NULL, ext_status_at=NULL, updated_at=now(), version=version+1 WHERE id=$1', [orderId]);
+  await ctx.db.query('UPDATE orders SET tracking=NULL, ext_id=NULL, label_url=NULL, ext_status=NULL, ext_status_at=NULL, taken_at=NULL, updated_at=now(), version=version+1 WHERE id=$1', [orderId]);
   await ctx.db.query('DELETE FROM parcel_returns WHERE order_id=$1', [orderId]);
   await ctx.db.query('DELETE FROM pickup_bag_parcels WHERE order_id=$1', [orderId]);
   await addEvent(ctx.db, orderId, ctx.session.profile.id, 'company', String(c.id), String(c.id), `Colis annulé chez ${c.name} (${o.tracking})`);
@@ -402,7 +402,7 @@ async function demoCosts(ctx: Ctx, companyId: number, ids: number[], weighed: bo
 async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario?: FollowStatus) {
   if (scenario && (ctx.server || (ctx.shop && !ctx.shop.demo))) throw forbidden('Simulation réservée à la démo');
   const parcels = await ctx.db.query(
-    `SELECT id, ref, tracking, ext_id, follow_status, sub_status, ext_status FROM orders
+    `SELECT id, ref, tracking, ext_id, follow_status, sub_status, ext_status, taken_at FROM orders
      WHERE company_id = $1 AND tracking IS NOT NULL AND follow_status = ANY($2) ${onlyIds ? 'AND id = ANY($3)' : ''} ORDER BY ext_status_at NULLS FIRST LIMIT 2000`,
     onlyIds ? [c.id, SYNCABLE, onlyIds] : [c.id, SYNCABLE],
   );
@@ -475,6 +475,14 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
       await ctx.db.query('UPDATE orders SET ext_status=$2, ext_status_at=COALESCE($3::timestamptz, now()), updated_at=now() WHERE id=$1', [a.id, a.status.slice(0, 200), safeDate(a.at)]);
       changed++;
     }
+    // The company has the parcel as soon as it says anything after « handed over » (ZR: « Confirmé au bureau »,
+    // « Dispatch », « Vers wilaya »… anything after « Prêt à expédier »): it leaves Dépôt › Dispatchées, with or without
+    // a pickup bag (the owner's rule, 22 Nov 2026). Kept once, the first time; a parcel the company took before the
+    // depot's scan skips Dispatchées after the scan.
+    if (!p.taken_at && companyHasIt(a, to)) {
+      await ctx.db.query('UPDATE orders SET taken_at = COALESCE($2::timestamptz, now()) WHERE id = $1 AND taken_at IS NULL', [a.id, safeDate(a.at)]);
+      changed++;
+    }
     // The depot hands a parcel over by scanning it (« Dispatchées »): until then the company's « on the road » statuses
     // do not take it out of « En dispatch » (the owner's rule, 9 Nov 2026). It waits there marked « … l’a déjà pris :
     // scannez-le »; the scan clears the mark and the next sync moves it on. An end (livré, retour, perdu…) still moves it.
@@ -524,6 +532,12 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
     }).catch(() => 0);
   }
   return { company: c.name, checked: parcels.length, changed, fees: feesChanged, failed: errors.length, errors: errors.slice(0, 20) };
+}
+/** Does the company's answer say it has the parcel? Any word but its « before pickup » ones — those that change nothing
+ *  (ZR: « Commande reçue » … « Prêt à expédier », its own « Annulé »), « À préparer », « Préparé » or « Annulé » — and
+ *  never an empty one. A word Pilotix does not know yet counts: the company said something new about the parcel. */
+export function companyHasIt(a: Pick<TrackResult, 'status'>, to: FollowStatus | null | undefined): boolean {
+  return !!a.status?.trim() && to !== null && to !== 'to_prepare' && to !== 'prepared' && to !== 'cancelled';
 }
 /** How long a parcel the company took waits in « En dispatch » for the depot's scan before it moves on by itself. */
 export const TAKEN_WAIT_MS = 24 * 3600_000;

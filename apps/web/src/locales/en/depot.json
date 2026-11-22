@@ -30,7 +30,7 @@
     "exchange": "Exchanges in progress at the customer (the old product will come back)"
   },
   "help": {
-    "dispatchees": "Parcels scanned and handed over. They leave this list as soon as the courier or the driver changes their status (picked up, out for delivery, delivered…). Those that stay must be checked: orange = more than 24 h, red = more than 48 h without news.",
+    "dispatchees": "Parcels scanned and handed over. They leave this list as soon as the company says it has them (ZR: « Confirmé au bureau », « Vers wilaya »… anything after « Prêt à expédier »), with or without a bag, or as soon as the driver changes their status. Those that stay must be checked: orange = more than 24 h, red = more than 48 h without news.",
     "enlivraison": "Parcels picked up by the courier or the driver, on the way to the customer. They leave this list when delivered, in alert or returning. Orange = 4 days, red = 7 days or more."
   },
   "filters": {
@@ -263,9 +263,10 @@
   },
   "bags": {
     "title": "Pickup bags · {{name}}",
-    "help": "Parcels handed to {{name}}’s driver go in a bag made here. Print the bag’s label and stick it on: {{name}} scans the bag and processes its parcels. Everything is done from Pilotix.",
-    "waitingN_one": "{{count}} dispatched parcel is waiting for a bag",
-    "waitingN_other": "{{count}} dispatched parcels are waiting for a bag",
+    "help": "Parcels handed to {{name}}’s driver go in a bag made here. Print the bag’s label and stick it on: {{name}} scans the bag and processes its parcels. Everything is done from Pilotix. The bag is optional: a parcel leaves Dispatched as soon as {{name}} has it, with or without a bag.",
+    "optional": "Optional",
+    "waitingN_one": "{{count}} parcel without a bag",
+    "waitingN_other": "{{count}} parcels without a bag",
     "noneWaiting": "Every dispatched parcel is in a bag.",
     "create": "New bag ({{n}})",
     "addTo": "Add to bag {{bag}}",
