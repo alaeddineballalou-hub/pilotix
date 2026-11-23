@@ -77,7 +77,7 @@ export function NewRoleModal({ bases, onClose }: { bases: readonly CustomBase[];
                 <input type="radio" name="px-role-base" checked={base === b} onChange={() => setBase(b)} />
                 <span>
                   <b>{t(`roles.${b}`)}</b>
-                  <small>{t(`admin.users.desc.${b}`)}</small>
+                  <small>{b === 'admin' ? t('rights.adminAll') : t(`admin.users.desc.${b}`)}</small>
                 </span>
               </label>
             ))}
@@ -139,8 +139,10 @@ export function CustomRolePage({ id }: { id: string }) {
   const flip = (d: RightDef, v: boolean) => setDraft(toggled(draft, d, v, baseHas));
   const maker = role.mine ? t('rights.custom.you') : (role.byName ?? '—');
   const capNote = role.mine ? t('rights.custom.notYours') : t('rights.custom.notMaker', { name: role.byName ?? '—' });
-  const { asRoles, lines, parts, partName, also } = roleMenu(base, t);
-  const extras = RIGHTS.filter((d) => !byDefault(base, d) && canOn.has(d.id));
+  const { asRoles, lines, parts, partName, also } = base === 'admin'
+    ? { asRoles: [], lines: [], parts: [], partName: () => '', also: () => [] }
+    : roleMenu(base, t);
+  const extras = RIGHTS.filter((d) => base !== 'admin' && !byDefault(base, d) && canOn.has(d.id));
   const opened = lines.find((l) => l.key === open && l.page) ?? null;
   const name = draft.name.trim().replace(/\s+/g, ' ');
 
@@ -189,7 +191,7 @@ export function CustomRolePage({ id }: { id: string }) {
 
       <p className="rr-capbox">
         <Icon name="info" />
-        <span>{!cap ? t('rights.custom.noCap') : role.mine ? t('rights.custom.capYou') : t('rights.custom.capOf', { name: role.byName ?? '—' })}</span>
+        <span>{base === 'admin' ? t('rights.adminAll') : !cap ? t('rights.custom.noCap') : role.mine ? t('rights.custom.capYou') : t('rights.custom.capOf', { name: role.byName ?? '—' })}</span>
       </p>
 
       <div className="rr-who">
@@ -208,7 +210,7 @@ export function CustomRolePage({ id }: { id: string }) {
         )}
       </div>
 
-      <div className="rr-cols">
+      <div className="rr-cols" style={base === 'admin' ? { display: 'none' } : undefined}>
         <div className="rr-l">
           <section className="rr-tree" aria-label={t('rights.menuOf', { role: name || role.name })}>
             <h2>{t('rights.menuOf', { role: name || role.name })}</h2>

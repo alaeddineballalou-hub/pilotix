@@ -45,13 +45,16 @@ test('a role made here: from a role its maker has, never more than its maker, se
   await assert.rejects(call('roles.custom.save', yacine, { name: 'agent  JUNIOR', base: 'confirmation' }), /déjà ce nom/);
   await assert.rejects(call('roles.custom.save', yacine, { id: junior, name: 'Agent junior', base: 'agent_manager' }), /ne change pas/);
 
+  await assert.rejects(call('roles.custom.save', yacine, { name: 'Fake admin', base: 'admin' }), /Accès refusé/);
+  await assert.rejects(call('roles.custom.save', admin, { name: 'Limited admin', base: 'admin', off: ['act:orders.cancel'] }), /tous les droits/);
+
   // each maker sees only theirs; the administrator sees them all, with their maker
   assert.equal((await call('roles.custom.list', amel, {})).roles.length, 0);
   await assert.rejects(call('roles.custom.save', amel, { id: junior, name: 'Agent junior', base: 'confirmation' }), /Seuls celui/);
   await assert.rejects(call('roles.custom.delete', amel, { id: junior }), /Seuls celui/);
   const all = await call('roles.custom.list', admin, {});
   assert.equal(all.roles.find((x: any) => x.id === junior)?.byName, 'Yacine');
-  assert.deepEqual(all.bases, ['agent_manager', 'confirmation', 'suivi', 'depot', 'livreur']);
+  assert.deepEqual(all.bases, ['agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'admin']);
 
   // given by its maker only; the person needs the role it starts from
   await assert.rejects(call('users.update', amel, { id: S, customRole: junior }), /que vous avez faits/);
@@ -74,6 +77,15 @@ test('a role made here: from a role its maker has, never more than its maker, se
   assert.ok(!rightsOf({ id: S, roles: ['confirmation'] }, rr).has('act:orders.items'), 'gone with its maker');
   assert.ok(rightsOf({ id: R, roles: ['confirmation'] }, rr).has('act:orders.items'), 'Rania: plain Confirmation');
   await call('rights.save', admin, { roles: {}, people: managers });
+
+  const { id: supervisorAdmin } = await call('roles.custom.save', admin, { name: 'Store administrator', base: 'admin' });
+  await assert.rejects(giveCustomRole(admin, R, supervisorAdmin, ['confirmation']), /Administrateur/);
+  await call('users.update', admin, { id: R, roles: ['admin'], customRole: supervisorAdmin });
+  const administrator = (await call('roles.custom.list', admin, {})).roles.find((role: any) => role.id === supervisorAdmin)!;
+  assert.ok(administrator.rights.includes('x:users'));
+  assert.ok(administrator.rights.includes('act:ads.owner'));
+  assert.equal((await call('roles.custom.list', admin, {})).of[String(R)]?.id, supervisorAdmin);
+  await call('users.update', admin, { id: R, roles: ['confirmation'], customRole: null });
 
   // a role the administrator makes has no cap, « gérer les comptes » included
   const { id: plus } = await call('roles.custom.save', admin, { name: 'Agent plus', base: 'confirmation', on: ['x:users', 'x:affect'] });

@@ -164,6 +164,7 @@ export async function giveCustomRole(ctx: Ctx, personId: number, roleId: string 
     const want = roleId === undefined ? (had && roles.includes(had.base) ? had.id : null) : roleId;
     if ((had?.id ?? null) === want) return;
     if (had && roleId !== undefined && !admin && had.by !== me) throw forbidden(`Le rôle « ${had.name} » a été fait par quelqu’un d’autre : seuls lui et l’administrateur le changent`);
+    if (!admin && (had?.base === 'admin' || (want && c.roles[want]?.base === 'admin'))) throw forbidden();
     if (want) {
       const x = c.roles[want];
       if (!x) throw bad('Ce rôle n’existe plus');
@@ -588,6 +589,8 @@ export const rightsProcs = {
         const old = i.id ? c.roles[i.id] : undefined;
         if (i.id && !old) throw notFound('Ce rôle n’existe plus');
         if (old && !me.admin && old.by !== myId) throw forbidden('Seuls celui qui a fait ce rôle et l’administrateur le changent');
+        if (i.base === 'admin' && !me.admin) throw forbidden();
+        if (i.base === 'admin' && (i.off.length || i.on.length)) throw bad('Un administrateur a tous les droits');
         if (old && old.base !== i.base) throw bad('Le rôle de départ ne change pas : faites un nouveau rôle');
         if (!old && !me.bases.includes(i.base)) throw forbidden(`Vous ne pouvez partir que d’un rôle que vous avez vous-même (pas « ${ROLE_FR[i.base]} »)`);
         if (!old && Object.keys(c.roles).length >= MAX_CUSTOM) throw bad(`${MAX_CUSTOM} rôles au plus dans une boutique`);

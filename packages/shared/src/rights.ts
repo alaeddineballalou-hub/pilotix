@@ -173,9 +173,9 @@ export const NO_ROLE_RIGHTS: RoleRights = { roles: {}, people: {} };
 /**
  * The roles a role made in the boutique can start from (the owner's choice, 22 Nov 2026). Its server rules come from that
  * role (an agent sees only his orders…), so it never starts from nothing. A seller and a marketer are never given to
- * anyone new, and the agency agents follow their own agency.
+ * anyone new, and the agency agents follow their own agency. Administrator templates always grant full access.
  */
-export const CUSTOM_BASES = ['agent_manager', 'confirmation', 'suivi', 'depot', 'livreur'] as const;
+export const CUSTOM_BASES = ['agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'admin'] as const;
 export type CustomBase = (typeof CUSTOM_BASES)[number];
 export const isCustomBase = (r: string): r is CustomBase => (CUSTOM_BASES as readonly string[]).includes(r);
 
@@ -279,7 +279,7 @@ export function personExtraOk(roles: readonly RightsRole[], d: RightDef, rr: Rol
 export function customRoleOf(p: { id: number; roles: readonly Role[]; agencyId?: number | null }, rr: RoleRights): CustomRole | null {
   const id = rr.custom?.people[String(p.id)];
   const c = id ? rr.custom?.roles[id] : undefined;
-  return c && rightsRolesOf(p).includes(c.base) ? c : null;
+  return c && (c.base === 'admin' ? p.roles.includes('admin') : rightsRolesOf(p).includes(c.base)) ? c : null;
 }
 
 /**
@@ -305,12 +305,12 @@ export function customSetFrom(base: ReadonlySet<string>, e: RightsEdit, canOn: R
 
 /** What a role starting from `base` may get on top of it (as one person may), for a maker who is (or not) an administrator. */
 export function customCanOn(base: CustomBase, rr: RoleRights, byAdmin: boolean): Set<string> {
-  return new Set(RIGHTS.filter((d) => (byAdmin || d.id !== 'x:users') && personExtraOk([base], d, rr)).map((d) => d.id));
+  return new Set(RIGHTS.filter((d) => (byAdmin || d.id !== 'x:users') && base !== 'admin' && personExtraOk([base], d, rr)).map((d) => d.id));
 }
 
 /** What its starting role has in the boutique, before any change (tabs not yet tied to their page). */
 export function customBaseSet(base: CustomBase, rr: RoleRights): Set<string> {
-  return new Set(RIGHTS.filter((d) => roleHas(base, d, rr)).map((d) => d.id));
+  return new Set(RIGHTS.filter((d) => base === 'admin' || roleHas(base, d, rr)).map((d) => d.id));
 }
 
 /**
@@ -320,12 +320,13 @@ export function customBaseSet(base: CustomBase, rr: RoleRights): Set<string> {
 export function makerCap(c: CustomRole, rr: RoleRights, seen: ReadonlySet<string> = new Set()): Set<string> | null {
   const m = c.by == null ? undefined : rr.custom?.makers?.[String(c.by)];
   if (m?.roles.includes('admin')) return null;
-  if (!m || seen.has(c.id)) return roleRightsSet(c.base, rr);
+  if (!m || seen.has(c.id)) return c.base === 'admin' ? new Set() : roleRightsSet(c.base, rr);
   return rightsOf({ id: c.by!, roles: m.roles, agencyId: m.agencyId ?? null }, rr, new Set([...seen, c.id]));
 }
 
 /** Every right of a role made in the boutique, as its people get it today. */
 export function customRoleSet(c: CustomRole, rr: RoleRights, seen: ReadonlySet<string> = new Set()): Set<string> {
+  if (c.base === 'admin') return customBaseSet(c.base, rr);
   const cap = makerCap(c, rr, seen);
   return customSetFrom(customBaseSet(c.base, rr), c, customCanOn(c.base, rr, cap === null), cap);
 }
@@ -344,10 +345,10 @@ export function cleanCustomRoles(v: unknown): CustomRoles {
     const name = String(c.name ?? '').trim().slice(0, 40);
     if (name.length < 2) continue;
     const base = c.base as CustomBase;
-    const off = list(c.off).filter((i) => !BY_ID.get(i)!.locked);
-    const on = list(c.on).filter((i) => {
+    const off = (base === 'admin' ? [] : list(c.off)).filter((i) => !BY_ID.get(i)!.locked);
+    const on = (base === 'admin' ? [] : list(c.on)).filter((i) => {
       const d = BY_ID.get(i)!;
-      return !d.locked && !off.includes(i) && (!!d.person || byDefault(base, d) || !!d.extraFor?.includes(base));
+      return base !== 'admin' && !d.locked && !off.includes(i) && (!!d.person || byDefault(base, d) || !!d.extraFor?.includes(base));
     });
     out.roles[id] = { id, name, base, ...(off.length ? { off } : {}), ...(on.length ? { on } : {}), by: typeof c.by === 'number' ? c.by : null, at: typeof c.at === 'string' ? c.at : '' };
   }

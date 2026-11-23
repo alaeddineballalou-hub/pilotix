@@ -567,7 +567,7 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
       ...(payHere && payPlans.length ? { plans: payPlans } : {}),
     };
     // this boutique's own role made here (never sent to the other boutiques: it does not exist there)
-    const customPart = maker && customPick !== undefined && !roles.includes('admin') ? { customRole: customPick } : {};
+    const customPart = maker && customPick !== undefined ? { customRole: customPick } : {};
     if (user) update.mutate({ id: user.id, ...base, ...customPart, ...(password ? { password } : {}) });
     else
       void create
@@ -626,7 +626,7 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
               ))}
           </div>
         </Field>
-        {maker && !roles.includes('admin') && ((cq.data?.roles.length ?? 0) > 0 || !!customNow) && (
+        {maker && ((cq.data?.roles.length ?? 0) > 0 || !!customNow) && (
           <Field label={t('rights.custom.field')} hint={customLocked ? t('rights.custom.fieldLocked', { name: customNow?.name ?? '' }) : t('rights.custom.fieldHint')}>
             <select
               value={customVal ?? ''}

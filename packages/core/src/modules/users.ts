@@ -471,8 +471,8 @@ export const usersProcs = {
       await payPlansOnSave(ctx, { personId: num(r.id), roles: b.roles, active: true, plans: b.plans, write: true });
       // a store: the ticks are the person's own « en plus » of Utilisateurs › Rôles
       if (!b.roles.includes('admin')) await setPersonTicks(ctx, num(r.id), { canManageUsers: b.canManageUsers, canAssign: b.canAssign, canAffect: b.canAffect });
-      // a role made in Utilisateurs › Rôles (an administrator has everything: none)
-      if (b.customRole && !b.roles.includes('admin')) await giveCustomRole(ctx, num(r.id), b.customRole, b.roles);
+      // An Administrator template records the role name while the administrator keeps full access.
+      if (b.customRole) await giveCustomRole(ctx, num(r.id), b.customRole, b.roles);
       return toProfile(r);
     } catch (e: any) {
       if (String(e?.code) === '23505' || /unique|duplicate/i.test(e?.message)) throw bad('Cet email est déjà utilisé');
@@ -541,10 +541,10 @@ export const usersProcs = {
     if (b.sellers !== undefined) r = (await ctx.db.query('UPDATE profiles SET agency_sellers = $2 WHERE id = $1 RETURNING *', [b.id, sellers ? JSON.stringify(sellers) : null]))[0];
     if (payCheck) await payPlansOnSave(ctx, { personId: b.id, roles: (r.roles ?? []) as string[], active: !!r.active, plans: b.plans, write: true });
     if (!((r.roles ?? []) as string[]).includes('admin')) await setPersonTicks(ctx, b.id, { canManageUsers: b.canManageUsers, canAssign: b.canAssign, canAffect: b.canAffect });
-    // a role made in Utilisateurs › Rôles: given, taken back, or gone with the role it starts from (an administrator: none)
+    // a role made in Utilisateurs › Rôles: given, taken back, or gone with the role it starts from
     if (b.customRole !== undefined || b.roles !== undefined) {
       const now = (r.roles ?? []) as string[];
-      await giveCustomRole(ctx, b.id, now.includes('admin') ? null : b.customRole, now.includes('admin') ? [] : now);
+      await giveCustomRole(ctx, b.id, b.customRole, now);
     }
     // no longer working here (closed, or without the role): his work still to do goes back to the team
     if (before?.active) await releaseWork(ctx, b.id, !!r.active, (r.roles ?? []) as Role[], (before.roles ?? []) as Role[]);
