@@ -11,7 +11,7 @@
 }
 @keyframes pxbell-ring { 0%, 60%, 100% { transform: rotate(0); } 10%, 30% { transform: rotate(14deg); } 20%, 40% { transform: rotate(-14deg); } 50% { transform: rotate(6deg); } }
 
-/* the kinds: a colour each (the same in the list, the pop-ups and « Écouter les sons ») */
+/* the kinds: a colour each (the same in the list and the pop-ups) */
 .k-order { --k-bg: var(--c-accent-tint); --k-fg: var(--c-accent-ink); }
 .k-callback { --k-bg: var(--c-info-tint); --k-fg: var(--c-info-ink); }
 .k-delivered { --k-bg: var(--c-ok-tint); --k-fg: var(--c-ok-ink); }
@@ -88,22 +88,6 @@ body.px-bell-open .topbar { z-index: 40; }
 .px-bell-switch.on { background: var(--c-ok-fill); }
 .px-bell-switch.on i { inset-inline-start: 21px; }
 .px-bell-hint { margin: 0 0 4px; padding: 7px 10px; border-radius: 9px; background: var(--c-warn-tint); color: var(--c-warn-ink); font-size: 12px; font-weight: 600; line-height: 1.35; }
-.px-bell-more {
-  display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 4px; border: 0; background: none; color: var(--c-info-ink);
-  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; text-align: start;
-}
-.px-bell-more .bji, .px-bell-more .bji svg { width: 16px; height: 16px; }
-.px-bell-ch { margin-inline-start: auto; transition: transform .15s; }
-.px-bell-ch.up { transform: rotate(180deg); }
-.px-bell-sounds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 2px 0 6px; }
-.px-bell-snd {
-  display: flex; align-items: center; gap: 8px; min-width: 0; padding: 5px 8px 5px 5px; border-radius: 11px; border: 1px solid var(--line);
-  background: var(--surface); color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; text-align: start;
-}
-[dir="rtl"] .px-bell-snd { padding: 5px 5px 5px 8px; }
-.px-bell-snd:hover { border-color: var(--k-fg); }
-.px-bell-snd .px-bell-ic { width: 28px; height: 28px; border-radius: 8px; }
-.px-bell-snd .px-bell-ic .bji, .px-bell-snd .px-bell-ic .bji svg { width: 15px; height: 15px; }
 .px-bell-push { width: 100%; justify-content: center; gap: 8px; margin-top: 2px; }
 
 /* ---- the pop-ups (top of the screen, the newest first) */
@@ -133,9 +117,8 @@ body.px-bell-open .topbar { z-index: 40; }
 [dir="rtl"] .px-bell-x { margin: -2px 0 0 -2px; }
 .px-bell-x:hover { background: var(--sky-soft); color: var(--ink); }
 .px-bell-x .bji, .px-bell-x .bji svg { width: 15px; height: 15px; }
-/* the list is open (« Écouter les sons »): the pop-ups beside it on a computer, at the bottom on a phone */
+/* the list is open: the pop-ups beside it on a computer, at the bottom on a phone */
 @media (max-width: 900px) { .px-bell-pops.beside { top: auto; bottom: 14px; inset-inline-end: 12px; } }
-.px-bell-hint.soft { background: var(--sky-soft); color: var(--c-muted); font-weight: 600; }
 @keyframes pxbell-pop { from { opacity: 0; transform: translateY(-14px) scale(.97); } to { opacity: 1; transform: none; } }
 @keyframes pxbell-shake { 0%, 100% { transform: none; } 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
 

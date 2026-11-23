@@ -16,5 +16,9 @@
   "disabled": "Notifications disabled",
   "namedRecipients": "Named recipients",
   "unsupported": "This browser cannot receive system notifications. On iPhone, open Pilotix from the Home Screen.",
-  "registrationFailed": "Pilotix could not register this device for system notifications. Try activating it again."
+  "registrationFailed": "Pilotix could not register this device for system notifications. Try activating it again.",
+  "sendTest": "Send test notification",
+  "testTitle": "Pilotix test notification",
+  "testBody": "System notifications are working on this device.",
+  "demoTest": "The demo sends a system test on this device."
 }

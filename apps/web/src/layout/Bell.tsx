@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { backend, Out, rpc } from '../lib/backend';
 import { clock, dayLabel, sameDay } from '../lib/format';
 import { openOrder } from '../lib/modals';
-import { disableDevicePush, enablePush, testDevicePush } from '../lib/push';
+import { disableDevicePush, enablePush, enablePushSubscription, testDevicePush } from '../lib/push';
 import { useRpcFor } from '../lib/query';
 import { setSeller, useScope } from '../lib/seller';
 import { useSession } from '../lib/session';
@@ -35,21 +35,6 @@ const ICON: Record<BellSound, string> = {
   message: 'message',
   info: 'bell',
 };
-const KINDS = Object.keys(ICON) as BellSound[];
-/** where each kind's « Ouvrir » goes (the demo's examples: pxBell) */
-const SAMPLE_PAGE: Record<BellSound, string | null> = {
-  order: '#/confirmation/nouvelles',
-  callback: '#/confirmation/attente',
-  delivered: '#/commandes/tout',
-  returned: '#/commandes/tout',
-  cancelled: '#/commandes/tout',
-  taken: '#/confirmation/nouvelles',
-  alert: '#/suivi/alertes',
-  depot: '#/depot/preparer',
-  message: '#/commandes/tout',
-  info: '#/confirmation/nouvelles',
-};
-const LOUD = new Set<BellSound>(['order', 'callback', 'alert']);
 /** a pop-up that is not important goes after this */
 const POP_MS = 7000;
 const key = (x: Line) => `${x.id}@${x.at}`;
@@ -76,6 +61,7 @@ export function Bell() {
   const me = session!.profile.id;
   const here = session!.shop?.id;
   const agency = session!.shop?.kind === 'agency';
+  const demo = backend.kind === 'demo' || !!session?.shop?.demo;
   const scope = useScope();
   const q = useRpcFor(agency ? null : scope, 'inbox.list', {}, { staleTime: 60_000, refetchInterval: 5 * 60_000 });
   const data = q.data;
@@ -85,9 +71,9 @@ export function Bell() {
   const [pops, setPops] = useState<Line[]>([]);
   const [now, setNow] = useState(() => Date.now());
   const [mute, setMute] = useState(() => store.get('bell-sound') === 'off');
-  const [sounds, setSounds] = useState(false);
   const [push, setPush] = useState<PushState | null>(null);
   const [deviceBusy, setDeviceBusy] = useState(false);
+  const [testStatus, setTestStatus] = useState('');
   const [ready, setReady] = useState(audioReady());
   const box = useRef<HTMLDivElement>(null);
   /** the list open on a computer: the pop-ups go beside it (« Écouter les sons ») */
@@ -175,9 +161,10 @@ export function Bell() {
     document.addEventListener('pointerdown', down);
     document.addEventListener('keydown', k);
     window.addEventListener('hashchange', away);
-    enablePush(false).then(setPush).catch(() => setPush('unsupported'));
+    setTestStatus('');
+    if (!demo) enablePush(false).then(setPush).catch(() => setPush('unsupported'));
     return () => (document.body.classList.remove('px-bell-open'), document.removeEventListener('pointerdown', down), document.removeEventListener('keydown', k), window.removeEventListener('hashchange', away));
-  }, [open]);
+  }, [open, demo]);
 
   useLayoutEffect(() => {
     if (!open || !box.current) return;
@@ -221,26 +208,28 @@ export function Bell() {
     }
   };
   const readAll = () => void rpc('inbox.readAll', {}, agency ? null : undefined).then(() => refetch.current()).catch(() => {});
-  /** « Écouter les sons »: the sound of a kind and its pop-up, with an example (never sent to anyone) */
-  const sample = (k: BellSound, url: string | null = null) => {
-    unlockAudio();
-    window.setTimeout(() => bellSound(k, LOUD.has(k)), 30);
-    const x: Line = { id: -Date.now(), kind: k, title: t(`bell.sample.${k}.t`), body: t(`bell.sample.${k}.b`), url, orderId: null, important: LOUD.has(k), n: 1, at: new Date().toISOString(), read: true };
-    setPops((p) => [x, ...p].slice(0, 3));
-  };
-  const sampleRef = useRef(sample);
-  sampleRef.current = sample;
-  // the browser demo only: a pop-up of each kind from the console (« pxBell('delivered') »), to see and hear it where it
-  // shows (the top of the page), with « Ouvrir » to its page. Never on a real server.
-  useEffect(() => {
-    if (agency || backend.kind !== 'demo') return;
-    const w = window as unknown as { pxBell?: (k: BellSound) => void };
-    w.pxBell = (k) => sampleRef.current(k, SAMPLE_PAGE[k]);
-    return () => void delete w.pxBell;
-  }, [agency]);
   const toggleMute = () => {
     store.set('bell-sound', mute ? null : 'off');
     setMute(!mute);
+  };
+  const sendTest = async () => {
+    setDeviceBusy(true);
+    setTestStatus('');
+    try {
+      if (demo) {
+        const sent = await testDevicePush({ title: t('devices.testTitle'), body: t('devices.testBody') });
+        setTestStatus(t(sent ? 'agency.alerts.testSent' : 'agency.alerts.deviceFailed'));
+        return;
+      }
+      const connection = await enablePushSubscription(push !== 'on');
+      setPush(connection.state);
+      const sent = connection.state === 'on' && await testDevicePush({ endpoint: connection.endpoint });
+      setTestStatus(t(sent ? 'agency.alerts.testSent' : 'agency.alerts.deviceFailed'));
+    } catch {
+      setTestStatus(t('agency.alerts.deviceFailed'));
+    } finally {
+      setDeviceBusy(false);
+    }
   };
   const ago = (at: string) => {
     const d = now - Date.parse(at);
@@ -337,24 +326,6 @@ export function Bell() {
                   )}
                 </div>
                 {!ready && soundOn && <p className="px-bell-hint">{t('bell.soundTap')}</p>}
-                <button type="button" className="px-bell-more" aria-expanded={sounds} onClick={() => (unlockAudio(), setSounds((v) => !v))}>
-                  <Icon name="play" />
-                  {t('bell.sounds')}
-                  <Icon name="chevron" className={`px-bell-ch${sounds ? ' up' : ''}`} />
-                </button>
-                {sounds && <p className="px-bell-hint soft">{t('bell.soundsHint')}</p>}
-                {sounds && (
-                  <div className="px-bell-sounds">
-                    {KINDS.map((k) => (
-                      <button key={k} type="button" className={`px-bell-snd k-${k}`} onClick={() => sample(k)}>
-                        <span className="px-bell-ic">
-                          <Icon name={ICON[k]} />
-                        </span>
-                        {t(`bell.kind.${k}`)}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </>
             )}
             <div className="px-bell-row">
@@ -362,12 +333,12 @@ export function Bell() {
               <span className="px-bell-row-t">
                 <b>{t('devices.current')}</b>
                 <small>
-                  {push === 'on'
+                  {demo ? t('devices.demoTest') : push === 'on'
                     ? t('bell.phoneOn')
                     : push === 'denied'
                       ? t('bell.phoneDenied')
                       : push === 'unsupported'
-                        ? t(backend.kind === 'demo' ? 'bell.phonePreview' : ios ? 'agency.alerts.installPush' : 'bell.phoneNo')
+                        ? t(ios ? 'agency.alerts.installPush' : 'bell.phoneNo')
                         : t('bell.phoneAskHint')}
                 </small>
               </span>
@@ -377,33 +348,21 @@ export function Bell() {
                 </span>
               )}
             </div>
-            {push === 'off' && (
-              <button type="button" className="btn primary px-bell-push" disabled={deviceBusy} onClick={() => {
-                setDeviceBusy(true);
-                void enablePush(true).then(setPush).catch(() => toast(t('agency.alerts.deviceFailed'), 'bad')).finally(() => setDeviceBusy(false));
-              }}>
-                <Icon name="bell" />
-                {t('devices.activate')}
-              </button>
-            )}
+            <button type="button" className="btn primary px-bell-push" disabled={deviceBusy} onClick={() => void sendTest()}>
+              <Icon name="bell" /> {t('devices.sendTest')}
+            </button>
+            {testStatus && <small role="status">{testStatus}</small>}
             {backend.kind !== 'demo' && !session?.shop?.demo && !isNativePilotix() && (
               <button type="button" className="btn small" onClick={() => {
                 setOpen(false);
                 window.dispatchEvent(new Event(SHOW_NOTIFICATION_DEVICES));
               }}>{t('devices.title')}</button>
             )}
-            {push === 'on' && (
-              <div className="row">
+            {agency && push === 'on' && (
                 <button type="button" className="btn small" disabled={deviceBusy} onClick={() => {
                   setDeviceBusy(true);
-                  void testDevicePush().then((sent) => toast(t(sent ? 'agency.alerts.testSent' : 'agency.alerts.deviceFailed'), sent ? 'ok' : 'bad'))
-                    .catch(() => toast(t('agency.alerts.deviceFailed'), 'bad')).finally(() => setDeviceBusy(false));
-                }}>{t('agency.alerts.testDevice')}</button>
-                {agency && <button type="button" className="btn small" disabled={deviceBusy} onClick={() => {
-                  setDeviceBusy(true);
                   void disableDevicePush().then(() => setPush('off')).catch(() => toast(t('agency.alerts.deviceFailed'), 'bad')).finally(() => setDeviceBusy(false));
-                }}>{t('agency.alerts.disableDevice')}</button>}
-              </div>
+                }}>{t('agency.alerts.disableDevice')}</button>
             )}
           </div>
         </div>

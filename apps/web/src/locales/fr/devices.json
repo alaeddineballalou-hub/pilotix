@@ -16,5 +16,9 @@
   "disabled": "Notifications désactivées",
   "namedRecipients": "Destinataires nominatifs",
   "unsupported": "Ce navigateur ne peut pas recevoir les notifications système. Sur iPhone, ouvrez Pilotix depuis l’écran d’accueil.",
-  "registrationFailed": "Pilotix n’a pas pu enregistrer cet appareil pour les notifications système. Réessayez de les activer."
+  "registrationFailed": "Pilotix n’a pas pu enregistrer cet appareil pour les notifications système. Réessayez de les activer.",
+  "sendTest": "Envoyer une notification de test",
+  "testTitle": "Notification de test Pilotix",
+  "testBody": "Les notifications système fonctionnent sur cet appareil.",
+  "demoTest": "La démo envoie un test système sur cet appareil."
 }

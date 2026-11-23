@@ -151,7 +151,7 @@ export function NotificationDevices({ children, logout }: { children: ReactNode;
           {state === 'ready' && <button type="button" className="btn" onClick={() => {
             void testDevicePush().then((sent) => setMessage(t(sent ? 'agency.alerts.testSent' : 'agency.alerts.deviceFailed')))
               .catch(() => setMessage(t('agency.alerts.deviceFailed')));
-          }}>{t('agency.alerts.testDevice')}</button>}
+          }}>{t('devices.sendTest')}</button>}
         </div>
         {message && <p role="status">{message}</p>}
         <ul>

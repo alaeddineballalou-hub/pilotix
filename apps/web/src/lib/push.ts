@@ -53,21 +53,7 @@ export async function enablePushSubscription(ask: boolean): Promise<PushConnecti
   const { key } = await rpc('push.key', {}, null);
   if (!key) return { state: 'unsupported' };
   const reg = await registration();
-  const worker = reg.installing ?? reg.waiting;
-  if (!reg.active && worker && worker.state !== 'activated') {
-    await new Promise<void>((resolve, reject) => {
-      const timer = window.setTimeout(() => reject(new Error('Notification worker did not activate')), 10_000);
-      const changed = () => {
-        if (worker.state !== 'activated' && worker.state !== 'redundant') return;
-        window.clearTimeout(timer);
-        worker.removeEventListener('statechange', changed);
-        if (worker.state === 'activated') resolve();
-        else reject(new Error('Notification worker could not activate'));
-      };
-      worker.addEventListener('statechange', changed);
-      changed();
-    });
-  }
+  await waitForWorker(reg);
   let sub = await reg.pushManager.getSubscription();
   if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) });
   if (currentShop()?.id !== shopId) return { state: 'off' };
@@ -88,6 +74,24 @@ export async function enablePush(ask: boolean): Promise<PushState> {
   return (await enablePushSubscription(ask)).state;
 }
 
+async function waitForWorker(reg: ServiceWorkerRegistration) {
+  const worker = reg.installing ?? reg.waiting;
+  if (!reg.active && worker && worker.state !== 'activated') {
+    await new Promise<void>((resolve, reject) => {
+      const timer = window.setTimeout(() => reject(new Error('Notification worker did not activate')), 10_000);
+      const changed = () => {
+        if (worker.state !== 'activated' && worker.state !== 'redundant') return;
+        window.clearTimeout(timer);
+        worker.removeEventListener('statechange', changed);
+        if (worker.state === 'activated') resolve();
+        else reject(new Error('Notification worker could not activate'));
+      };
+      worker.addEventListener('statechange', changed);
+      changed();
+    });
+  }
+}
+
 /**
  * A phone or a tablet (Android, iPhone, iPad…): « Bloquer jusqu'à l'appel » rings and blocks there, never on a computer.
  * The same test as the server's push.ts › phoneSql (on the user agent this device saves with its notifications).
@@ -97,8 +101,18 @@ export async function disableDevicePush(): Promise<void> {
   if (endpoint) await rpc('push.unsubscribe', { endpoint }, null);
 }
 
-export async function testDevicePush(): Promise<boolean> {
-  const endpoint = await myEndpoint();
+export async function testDevicePush(target?: { title: string; body: string } | { endpoint: string }): Promise<boolean> {
+  if (target && 'title' in target) {
+    // The demo has no push sender. Ask the browser to publish the test to the OS on this device.
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) return false;
+    const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
+    if (permission !== 'granted') return false;
+    const reg = await registration();
+    await waitForWorker(reg);
+    await reg.showNotification(target.title, { body: target.body, icon: new URL(`${import.meta.env.BASE_URL}pilotix-icon.png`, document.baseURI).href, tag: 'device-test' });
+    return true;
+  }
+  const endpoint = target?.endpoint ?? await myEndpoint();
   return endpoint ? (await rpc('push.test', { endpoint }, null)).sent : false;
 }
 
