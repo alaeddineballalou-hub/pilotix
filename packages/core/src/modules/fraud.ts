@@ -51,7 +51,7 @@ export interface FraudBehavior {
 }
 
 export interface FraudFacts {
-  name: string;
+  name: string | null;
   /** as typed (after Arabic digits → 0-9); the normalized form or null when it is not an Algerian mobile */
   phoneRaw: string;
   phone: string | null;
@@ -189,7 +189,7 @@ export function scoreOrder(f: FraudFacts, level: FraudLevel = 'normal'): FraudRe
   if (f.honeypot.trim()) add('honeypot', 100);
   if (!f.phone) add('phone_invalid', 100); // the page checks the format first: only a script sends a wrong one
   else r.push(...phoneSignals(f.phone));
-  r.push(...nameSignals(f.name, f.history.orders === 0));
+  if (f.name !== null) r.push(...nameSignals(f.name, f.history.orders === 0));
 
   // 2. time and proof that the page really ran
   if (f.servedMs === null) add('no_challenge', 35);

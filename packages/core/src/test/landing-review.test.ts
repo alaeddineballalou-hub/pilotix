@@ -86,6 +86,47 @@ test('a lead needs the page’s challenge; a number blocked as fake is not kept;
   assert.ok(b, 'in « Commandes bloquées »');
 });
 
+test('the sweep clears old abandoned leads and puts borderline leads in Nouvelles with their review note', async () => {
+  const t0 = Date.now();
+  const old = await form({ name: '', phone: '0667284139', wilaya: 0, commune: '', variant: null, utm: { utm_source: 'facebook', utm_campaign: 'backlog' } }, SLUG, t0);
+  const borderline = await form({ name: 'Alex1', phone: '0675429076', variant: null }, SLUG, t0);
+  await call('landing.capture', at(admin, t0), old);
+  await call('landing.capture', at(admin, t0), borderline);
+  await db.query(`UPDATE landing_pages SET fraud_level = 'strict' WHERE slug = $1`, [SLUG]);
+  await db.query(
+    `UPDATE landing_leads SET status = 'abandoned', abandoned_at = last_at, note = 'Choisissez la variante' WHERE phone = $1`,
+    [old.phone],
+  );
+  await db.query(
+    `INSERT INTO landing_leads (landing_id, product_id, phone, status, auto_order, handled_at)
+     SELECT id, product_id, 'unused-' || n, 'converted', true, now()
+     FROM landing_pages CROSS JOIN generate_series(1,40) n WHERE slug = $1`,
+    [SLUG],
+  );
+  try {
+    await call('landing.run', at(admin, t0 + 25 * MIN), {});
+    await call('landing.run', at(admin, t0 + 26 * MIN), {});
+    const recovered = await orders(old.phone);
+    const reviewed = await orders(borderline.phone);
+    assert.equal(recovered.length, 1);
+    assert.equal(reviewed.length, 1);
+    assert.equal(recovered[0].conf_status, 'new');
+    assert.equal(reviewed[0].conf_status, 'new');
+    assert.equal(recovered[0].wilaya_id, null);
+    assert.equal(recovered[0].utm.utm_campaign, 'backlog');
+    assert.match(reviewed[0].internal_note, /score anti-fraude/);
+    const [item] = await db.query(`SELECT i.product_id, v.product_id AS variant_product_id
+      FROM order_items i JOIN product_variants v ON v.id = i.variant_id WHERE i.order_id = $1`, [recovered[0].id]);
+    assert.equal(Number(item.product_id), productId);
+    assert.equal(Number(item.variant_product_id), productId);
+    const pending: any = await call('landing.leads', at(admin, t0 + 26 * MIN), { status: 'abandoned' });
+    assert.equal(pending.total, 0);
+  } finally {
+    await db.query(`UPDATE landing_pages SET fraud_level = 'normal' WHERE slug = $1`, [SLUG]);
+    await db.query(`DELETE FROM landing_leads WHERE phone LIKE 'unused-%'`);
+  }
+});
+
 test('an abandoned order of a product without variants keeps its stock variant (reserved and shipped like the others)', async () => {
   const t0 = Date.now();
   const f = await form({}, PLAIN, t0);

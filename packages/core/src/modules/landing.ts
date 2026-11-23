@@ -1563,7 +1563,8 @@ async function leadVerdict(db: Db, a: any, now: number) {
   const phone = String(a.phone);
   const r = scoreOrder(
     {
-      name: String(a.customer_name ?? ''),
+      // On a partial checkout the customer can leave before typing a name.
+      name: String(a.customer_name ?? '').trim() || null,
       phoneRaw: phone,
       phone,
       qty: Math.max(1, num(a.qty)),
@@ -1665,9 +1666,16 @@ export async function sweepAbandoned(ctx: Ctx): Promise<{ abandoned: number; ord
     [cut],
   );
   const out = { abandoned: 0, ordered: 0, blocked: 0 };
+  const retryBefore = isoAt(now - 5 * 60_000);
   for (let k = 0; k < 200; k++) {
     const r = await db.tx(async (tx) => {
-      const a = (await tx.query(`SELECT * FROM landing_leads WHERE status = 'open' AND last_at < $1 ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED`, [cut]))[0];
+      const a = (await tx.query(
+        `SELECT * FROM landing_leads
+         WHERE (status = 'open' AND last_at < $1)
+            OR (status = 'abandoned' AND (handled_at IS NULL OR handled_at <= $2))
+         ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED`,
+        [cut, retryBefore],
+      ))[0];
       if (!a) return null;
       const v = await leadVerdict(tx, a, now);
       if (v.verdict === 'block') {
@@ -1680,23 +1688,16 @@ export async function sweepAbandoned(ctx: Ctx): Promise<{ abandoned: number; ord
         await tx.query(`UPDATE meta_events SET status = 'skipped', error = 'Commande abandonnée bloquée (fausse)' WHERE lead_id = $1 AND status = 'queued'`, [a.id]);
         return 'blocked';
       }
-      // a lead carries no proof of work nor typing evidence: a doubtful one, or a sudden wave on one page (a script), waits
-      // in « Abandonnées » for a person instead of becoming an order by itself
-      const wave = num((await tx.query(`SELECT count(*)::int AS n FROM landing_leads WHERE landing_id = $1 AND auto_order AND handled_at > $2`, [a.landing_id, isoAt(now - 3600_000)]))[0]?.n);
-      if (v.verdict === 'review' || wave >= 40) {
-        const why = v.verdict === 'review' ? `Douteuse (score ${v.score}/100) — ${reasonsText(v.reasons)}` : 'Beaucoup de commandes abandonnées en une heure sur cette page : à vérifier';
-        await tx.query(`UPDATE landing_leads SET status = 'abandoned', abandoned_at = $2, note = $3 WHERE id = $1`, [a.id, isoAt(now), why.slice(0, 300)]);
-        return 'abandoned';
-      }
+      const warn = v.verdict === 'review' ? reviewNote(v) : null;
       await tx.query('SAVEPOINT px_lead');
       try {
-        const order = await convertLead(ctx, tx, a, true, null);
+        const order = await convertLead(ctx, tx, a, true, warn);
         await tx.query('RELEASE SAVEPOINT px_lead');
         return order.created ? 'ordered' : 'linked';
       } catch (e: any) {
-        // a product removed meanwhile…: it waits in « Abandonnées » with the reason, for a person
+        // Keep the reason visible and retry later, so a failed row cannot monopolize the batch.
         await tx.query('ROLLBACK TO SAVEPOINT px_lead');
-        await tx.query(`UPDATE landing_leads SET status = 'abandoned', abandoned_at = $2, note = $3 WHERE id = $1`, [a.id, isoAt(now), String(e?.message ?? e).slice(0, 300)]);
+        await tx.query(`UPDATE landing_leads SET status = 'abandoned', abandoned_at = COALESCE(abandoned_at, $2), handled_at = $2, note = $3 WHERE id = $1`, [a.id, isoAt(now), String(e?.message ?? e).slice(0, 300)]);
         return 'abandoned';
       }
     });
