@@ -30,6 +30,7 @@ export function ConfirmButton({ children, question, onConfirm, className = 'btn 
       <button
         type="button"
         className="btn small danger"
+        disabled={disabled}
         onClick={() => {
           setAsk(false);
           onConfirm();

@@ -3,7 +3,7 @@
 // server rules, an agent sees only his orders…), and what it sees and does on top of it — never more than its maker
 // has: what the maker does not have stays off here, and goes off by itself the day the maker loses it. A maker sees only
 // the roles they made; an administrator sees them all. Saved with roles.custom.save, given from a person's card.
-import { byDefault, type CustomBase, customSetFrom, type RightDef, RIGHTS } from '@pilotix/shared';
+import { byDefault, type CustomBase, customSetFrom, type RightDef, type Profile, RIGHTS } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -93,8 +93,37 @@ export function NewRoleModal({ bases, onClose }: { bases: readonly CustomBase[];
   );
 }
 
+export function DeleteRoleButton({ role, disabled, className, onDeleted }: {
+  role: { id: string; name: string; people: readonly unknown[] };
+  disabled?: boolean;
+  className?: string;
+  onDeleted?: () => void;
+}) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await rpc('roles.custom.delete', { id: role.id });
+      await qc.invalidateQueries();
+      toast(t('rights.custom.deleted', { name: role.name }), 'ok');
+      onDeleted?.();
+    } catch (e: any) {
+      toast(String(e?.message ?? e), 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <ConfirmButton className={className} disabled={role.people.length > 0 || disabled || busy} question={t('rights.custom.deleteQ', { name: role.name })} onConfirm={remove}>
+      <Icon name="trash" /> {t('rights.custom.delete')}
+    </ConfirmButton>
+  );
+}
+
 /** Utilisateurs › Rôles › a role made here: its name, its switches (never beyond its maker), who has it. */
-export function CustomRolePage({ id }: { id: string }) {
+export function CustomRolePage({ id, onEditPerson }: { id: string; onEditPerson: (user: Profile) => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const q = useRpc('roles.custom.list', {});
@@ -131,18 +160,17 @@ export function CustomRolePage({ id }: { id: string }) {
   const baseHas = new Set(role.baseHas);
   const canOn = new Set(role.canOn);
   const cap = role.cap ? new Set(role.cap) : null;
-  const set = customSetFrom(baseHas, draft, canOn, cap);
+  const admin = base === 'admin';
+  const set = admin ? baseHas : customSetFrom(baseHas, draft, canOn, cap);
   /** its maker does not have it: it stays off */
-  const blocked = (d: RightDef) => !!cap && !d.locked && !cap.has(d.id);
-  const can = (d: RightDef) => !d.locked && !blocked(d) && (baseHas.has(d.id) || canOn.has(d.id));
+  const blocked = (d: RightDef) => !admin && !!cap && !d.locked && !cap.has(d.id);
+  const can = (d: RightDef) => !admin && !d.locked && !blocked(d) && (baseHas.has(d.id) || canOn.has(d.id));
   const changed = (d: RightDef) => draft.off.includes(d.id) || draft.on.includes(d.id);
   const flip = (d: RightDef, v: boolean) => setDraft(toggled(draft, d, v, baseHas));
   const maker = role.mine ? t('rights.custom.you') : (role.byName ?? '—');
   const capNote = role.mine ? t('rights.custom.notYours') : t('rights.custom.notMaker', { name: role.byName ?? '—' });
-  const { asRoles, lines, parts, partName, also } = base === 'admin'
-    ? { asRoles: [], lines: [], parts: [], partName: () => '', also: () => [] }
-    : roleMenu(base, t);
-  const extras = RIGHTS.filter((d) => base !== 'admin' && !byDefault(base, d) && canOn.has(d.id));
+  const { asRoles, lines, parts, partName, also } = roleMenu(base, t);
+  const extras = RIGHTS.filter((d) => base === 'admin' ? d.kind === 'x' : !byDefault(base, d) && canOn.has(d.id));
   const opened = lines.find((l) => l.key === open && l.page) ?? null;
   const name = draft.name.trim().replace(/\s+/g, ' ');
 
@@ -160,12 +188,11 @@ export function CustomRolePage({ id }: { id: string }) {
       setBusy(false);
     }
   };
-  const remove = async () => {
+  const editPerson = async (personId: number) => {
     try {
-      await rpc('roles.custom.delete', { id: role.id });
-      await qc.invalidateQueries();
-      toast(t('rights.custom.deleted', { name: role.name }), 'ok');
-      location.hash = '#/utilisateurs/roles';
+      const person = (await rpc('users.list', {})).find((user) => user.id === personId);
+      if (person) onEditPerson(person);
+      else await q.refetch();
     } catch (e: any) {
       toast(String(e?.message ?? e), 'bad');
     }
@@ -184,9 +211,7 @@ export function CustomRolePage({ id }: { id: string }) {
           </label>
           <p>{t('rights.custom.sub', { base: t(`roles.${base}`), who: maker })}</p>
         </div>
-        <ConfirmButton className="btn ghost" disabled={role.people.length > 0 || busy} question={t('rights.custom.deleteQ', { name: role.name })} onConfirm={remove}>
-          <Icon name="trash" /> {t('rights.custom.delete')}
-        </ConfirmButton>
+        <DeleteRoleButton role={role} disabled={busy} className="btn ghost" onDeleted={() => { location.hash = '#/utilisateurs/roles'; }} />
       </div>
 
       <p className="rr-capbox">
@@ -199,9 +224,9 @@ export function CustomRolePage({ id }: { id: string }) {
           <>
             <span>{t('rights.custom.givenTo')}</span>
             {role.people.map((p) => (
-              <span key={p.id} className={`chip${p.active ? '' : ' dim'}`}>
+              <button key={p.id} type="button" className={`btn small${p.active ? '' : ' dim'}`} onClick={() => void editPerson(p.id)}>
                 {p.name}
-              </span>
+              </button>
             ))}
             <small>{t('rights.custom.deleteFirst')}</small>
           </>
@@ -210,7 +235,7 @@ export function CustomRolePage({ id }: { id: string }) {
         )}
       </div>
 
-      <div className="rr-cols" style={base === 'admin' ? { display: 'none' } : undefined}>
+      <div className="rr-cols">
         <div className="rr-l">
           <section className="rr-tree" aria-label={t('rights.menuOf', { role: name || role.name })}>
             <h2>{t('rights.menuOf', { role: name || role.name })}</h2>
@@ -253,7 +278,7 @@ export function CustomRolePage({ id }: { id: string }) {
                             <Icon name={isOpen ? 'chevron' : 'chevr'} />
                           </button>
                         )}
-                        {l.page?.locked ? (
+                        {l.page && (admin || l.page.locked) ? (
                           <span className="rr-lock">
                             <Icon name="lock" />
                             {t('rights.always')}
@@ -300,7 +325,7 @@ export function CustomRolePage({ id }: { id: string }) {
               <>
                 <div className="rr-sep" />
                 <h2>{t('rights.extra')}</h2>
-                <p className="rr-hint">{t('rights.custom.extraSub')}</p>
+                {!admin && <p className="rr-hint">{t('rights.custom.extraSub')}</p>}
                 {extras.map((x) => (
                   <ActRow key={x.id} d={x} on={set.has(x.id)} changed={false} extra disabled={!can(x)} note={blocked(x) ? capNote : undefined} onChange={(v) => flip(x, v)} />
                 ))}

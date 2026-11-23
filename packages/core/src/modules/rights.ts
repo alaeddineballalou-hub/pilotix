@@ -530,10 +530,10 @@ export const rightsProcs = {
     const rr = await boutiqueRights(ctx.db);
     const c = rr.custom ?? NO_CUSTOM;
     const myId = ctx.session.profile.id;
-    const team = await ctx.db.query('SELECT id, name, active FROM profiles WHERE archived_at IS NULL');
+    const team = await ctx.db.query('SELECT id, name, active AND archived_at IS NULL AS active FROM profiles');
     const person = new Map(team.map((r: any) => [num(r.id), { name: String(r.name ?? ''), active: !!r.active }]));
     const roles = Object.values(c.roles)
-      .filter((x) => me.admin || x.by === myId)
+      .filter((x) => me.admin || (x.base !== 'admin' && x.by === myId))
       .sort((a, b) => a.name.localeCompare(b.name, 'fr'))
       .map((x) => {
         const cap = makerCap(x, rr);
@@ -624,12 +624,12 @@ export const rightsProcs = {
       const c = await savedCustom(tx, true);
       const x = c.roles[i.id];
       if (!x) return;
-      if (!me.admin && x.by !== ctx.session.profile.id) throw forbidden('Seuls celui qui a fait ce rôle et l’administrateur le suppriment');
+      if (!me.admin && (x.base === 'admin' || x.by !== ctx.session.profile.id)) throw forbidden('Seuls celui qui a fait ce rôle et l’administrateur le suppriment');
       const holders = Object.entries(c.people)
         .filter(([, id]) => id === i.id)
         .map(([k]) => Number(k));
-      const live = holders.length ? await tx.query('SELECT name FROM profiles WHERE id = ANY($1) AND archived_at IS NULL ORDER BY name', [holders]) : [];
-      if (live.length) throw bad(`Ce rôle est encore donné à ${live.map((r: any) => r.name).join(', ')} : donnez-leur d’abord un autre rôle`);
+      const assigned = holders.length ? await tx.query('SELECT name FROM profiles WHERE id = ANY($1) ORDER BY name', [holders]) : [];
+      if (assigned.length) throw bad(`Ce rôle est encore donné à ${assigned.map((r: any) => r.name).join(', ')} : donnez-leur d’abord un autre rôle`);
       for (const k of holders) delete c.people[String(k)];
       delete c.roles[i.id];
       await writeCustom(tx, c, ctx.session.profile.id);

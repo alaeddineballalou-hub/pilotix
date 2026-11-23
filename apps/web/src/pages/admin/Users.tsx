@@ -14,7 +14,7 @@ import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { ConfirmButton } from './bits';
 import { RoleRightsPage } from './RoleRights';
-import { CustomRolePage, NewRoleModal } from './CustomRole';
+import { CustomRolePage, DeleteRoleButton, NewRoleModal } from './CustomRole';
 import './rolerights.css';
 import { usePartnerKind, useTp } from '../agency/parts';
 import { useAllMode } from '../../layout/AllBoutiques';
@@ -116,7 +116,7 @@ export function UsersPage({ sub, rest, agency }: { sub?: string; rest?: string[]
     <>
       <StageBar flow={false} current={cur.sub} items={subs.map((k) => ({ key: k, label: t(`admin.subs.${k}`), href: `#/utilisateurs/${k}` }))} />
       {custom ? (
-        <CustomRolePage id={custom} />
+        <CustomRolePage id={custom} onEditPerson={(user) => setForm({ user, role: null })} />
       ) : editing ? (
         <RoleRightsPage role={editing} />
       ) : cur.role ? (
@@ -280,7 +280,10 @@ function RolesTable({ onNew }: { onNew: () => void }) {
                         <b>{t('admin.users.active', { count: on.length })}</b>
                         <small>{names}</small>
                       </td>
-                      <td data-l="" />
+                      <td data-l="">
+                        <DeleteRoleButton role={c} />
+                        {c.people.length > 0 && <small>{t('rights.custom.deleteFirst')}</small>}
+                      </td>
                     </tr>
                   );
                 })}

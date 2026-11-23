@@ -80,10 +80,11 @@ export function fullName(t: TFunction, d: RightDef): string {
 
 /** Is this page of the menu in the shop's plan (and its module on) for these roles? */
 function inPlan(id: string, roles: Role[]): boolean {
+  const isAdmin = roles.includes('admin');
   const item = NAV.find((n) => n.id === id);
-  if (item) return pageIsOn(item.id) && (!item.onlyIf || item.onlyIf(roles, false));
+  if (item) return pageIsOn(item.id) && (!item.onlyIf || item.onlyIf(roles, isAdmin));
   const child = NAV.flatMap((n) => n.children ?? []).find((c) => c.id === id);
-  if (child) return (child.plan ? pageIsOn(...child.plan) : pageIsOn(child.id)) && (!child.onlyIf || child.onlyIf(roles, false));
+  if (child) return (child.plan ? pageIsOn(...child.plan) : pageIsOn(child.id)) && (!child.onlyIf || child.onlyIf(roles, isAdmin));
   return true;
 }
 
@@ -103,26 +104,27 @@ function toggled(rr: RoleRights, r: RightsRole, d: RightDef, on: boolean): RoleR
  * A role's menu as the editors show it (a role of Pilotix, or one made in the boutique from it): its pages by default, in
  * the shop's plan, each with its tabs and buttons, then the orders' buttons; sorted by team screen.
  */
-export function roleMenu(role: RightsRole, t: TFunction) {
+export function roleMenu(role: RightsRole | 'admin', t: TFunction) {
   const name = (d: RightDef) => t(d.label);
+  const included = (d: RightDef) => role === 'admin' || byDefault(role, d);
   const asRoles = expandRoles([role === 'agence' ? 'confirmation' : (role as Role)]);
   const lines: Line[] = [];
   for (const p of MENU_PAGES) {
     const d = rightDef(`page:${p.id}`)!;
-    if (!byDefault(role, d) || !inPlan(p.id, asRoles)) continue;
+    if (!included(d) || !inPlan(p.id, asRoles)) continue;
     lines.push({
       key: d.id,
       icon: p.icon,
       page: d,
       label: name(d),
-      tabs: tabsOf(p.id).filter((x) => byDefault(role, x)),
-      acts: actsOf(p.id).filter((x) => byDefault(role, x)),
+      tabs: tabsOf(p.id).filter(included),
+      acts: actsOf(p.id).filter(included),
       group: p.group,
       screens: p.screens,
     });
   }
   // the orders' buttons (and what is everywhere), right after the Commandes group's pages, on their screen
-  const orderActs = [...actsOf('orders'), ...actsOf('general')].filter((x) => byDefault(role, x));
+  const orderActs = [...actsOf('orders'), ...actsOf('general')].filter(included);
   if (orderActs.length) {
     const after = lines.map((l) => l.group).lastIndexOf('commandes');
     const cmd = lines.find((l) => l.key === 'page:commandes') ?? lines[after];
@@ -151,12 +153,13 @@ export function MenuPreview({ caption, asRoles, set, opened }: { caption: string
   const { t } = useTranslation();
   // the screen picked in the preview's dropdown (« Ancien menu » first, as in the app)
   const [pv, setPv] = useState<SpaceId>('all');
+  const isAdmin = asRoles.includes('admin');
   const hasR = (id: string | null) => !id || set.has(id);
   const view = menuView(
     NAV,
     {
-      item: (n) => canSee(n, asRoles, false, set.has('x:users'), set.has('x:rules'), set.has('x:affect'), hasR),
-      line: (c) => canSeeChild(c, asRoles, false, set.has('x:rules'), hasR),
+      item: (n) => canSee(n, asRoles, isAdmin, set.has('x:users'), set.has('x:rules'), set.has('x:affect'), hasR),
+      line: (c) => canSeeChild(c, asRoles, isAdmin, set.has('x:rules'), hasR),
     },
     pv,
     true,

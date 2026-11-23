@@ -108,10 +108,17 @@ test('a role made here: from a role its maker has, never more than its maker, se
   // taken back by its maker or the administrator only (it may have taken rights away); deleted once nobody has it
   await assert.rejects(call('roles.custom.delete', yacine, { id: junior }), /encore donné à/);
   await assert.rejects(call('users.update', amel, { id: S, customRole: null }), /quelqu’un d’autre/);
-  await call('users.update', admin, { id: S, customRole: null });
+  await db.query('UPDATE profiles SET archived_at = now(), active = false WHERE id = $1', [S]);
+  const archived = (await call('roles.custom.list', admin, {})).roles.find((x: any) => x.id === junior);
+  assert.equal(archived?.people.find((p: any) => p.id === S)?.active, false);
+  await assert.rejects(call('roles.custom.delete', admin, { id: junior }), /encore donné à/);
+  await call('users.update', admin, { id: S, customRole: plus });
+  await db.query('UPDATE profiles SET archived_at = NULL, active = true WHERE id = $1', [S]);
   await call('roles.custom.delete', yacine, { id: junior });
-  assert.equal((await call('roles.custom.list', admin, {})).roles.some((x: any) => x.id === junior), false);
-  assert.ok((await call('me.get', await as(EMAILS.conf), {})).rights?.includes('act:orders.cancel'), 'Samira is plain Confirmation again');
+  const afterDelete = await call('roles.custom.list', admin, {});
+  assert.equal(afterDelete.roles.some((x: any) => x.id === junior), false);
+  assert.equal(afterDelete.of[String(S)]?.id, plus);
+  assert.ok((await call('me.get', await as(EMAILS.conf), {})).rights?.includes('act:orders.cancel'), 'Samira has the replacement role permissions');
 });
 
 test('roles made by each other never go round in a loop: then the starting role caps them', () => {
