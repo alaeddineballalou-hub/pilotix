@@ -100,6 +100,7 @@ test('Lead: the form of a clean order, at once and once; never an abandoned orde
   const ab = await orderOf(a.phone);
   assert.match(ab.source, /abandonnée/);
   await mine(ab.id);
+  await call('orders.update', conf, { id: Number(ab.id), address: '12 rue des Lilas' });
   await call('orders.setConf', conf, { ids: [Number(ab.id)], status: 'confirmed' });
   assert.deepEqual((await events(`order_id = $1`, [ab.id])).map((e: any) => e.event_name), ['Purchase']);
 });

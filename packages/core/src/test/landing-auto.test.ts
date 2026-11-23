@@ -193,7 +193,7 @@ test('abandoned: a number typed without ordering becomes a « Nouvelle » order 
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM orders WHERE phone = $1`, [phone]))[0].n, 1);
 });
 
-test('abandoned: a customer who orders is not added twice; one without wilaya waits in the list; a bot is never kept', async () => {
+test('abandoned: a customer who orders is not added twice; one without wilaya becomes a new order; a bot is never kept', async () => {
   const t0 = Date.now();
   const phone = rndPhone();
   const lead = await human({}, phone);
@@ -206,9 +206,9 @@ test('abandoned: a customer who orders is not added twice; one without wilaya wa
   const noWilaya = rndPhone();
   await call('landing.capture', at(admin, t0), { ...(await human({}, noWilaya)), wilaya: 0, commune: '' });
   await call('landing.run', at(admin, t0 + 60 * 60_000), {});
-  assert.equal(await orderOf(noWilaya), undefined);
-  const list: any = await call('landing.leads', at(await as(EMAILS.conf), t0 + 60 * 60_000), { status: 'abandoned' });
-  assert.ok(list.rows.some((r: any) => r.phone === noWilaya));
+  const draft = await orderOf(noWilaya);
+  assert.equal(draft.conf_status, 'new');
+  assert.equal(draft.wilaya_id, null);
 
   const bot = rndPhone();
   await call('landing.capture', admin, { ...(await human({}, bot)), meta: { ip: '9.9.9.9', ua: 'python-requests/2.31' } });

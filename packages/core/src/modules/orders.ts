@@ -8,6 +8,7 @@ import {
   CONF_STATUSES,
   CONF_TODO,
   ConfStatus,
+  isAbandonedCheckout,
   FOLLOW_FINAL,
   FOLLOW_LOCKED,
   FOLLOW_STATUSES,
@@ -450,7 +451,7 @@ export const OrderInput = z.object({
 export type OrderInput = z.infer<typeof OrderInput>;
 
 /** `kept`: unit prices this order already had (product:variant → price), accepted as they are when the order is edited. */
-async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice = false, kept: Map<string, number> = new Map(), strictVariant = true) {
+async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice = false, kept: Map<string, number> = new Map(), variantMode: 'strict' | 'optional' | 'abandoned' = 'strict') {
   const pids = [...new Set(items.map((i) => i.productId))];
   const mountFor = [...new Set(items.map((i) => (i as { forProductId?: number | null }).forProductId).filter((x): x is number => !!x))];
   const prods = await db.query('SELECT id, name, price, cost, fixed_price, max_discount, active, fee_grid, weight_kg, packs, is_service, sku, montage FROM products WHERE id = ANY($1)', [[...new Set([...pids, ...mountFor])]]);
@@ -458,7 +459,17 @@ async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice 
   // its plain variant; one with them needs the customer's choice
   if (items.some((i) => !i.variantId)) {
     const all = await db.query('SELECT id, product_id, title, active FROM product_variants WHERE product_id = ANY($1) ORDER BY id', [pids]);
-    items = items.map((i) => {
+    if (variantMode === 'abandoned') {
+      const candidates = all.filter((v: any) => v.active).map((v: any) => ({ productId: num(v.product_id), variantId: num(v.id), qty: 1 }));
+      const checked = await checkLines(db, candidates, null);
+      items = items.map((i) => {
+        if (i.variantId) return i;
+        const sameProduct = checked.filter((v) => v.productId === i.productId);
+        const first = sameProduct.find((v) => v.state === 'ok' && (v.available === null || v.available >= i.qty))
+          ?? sameProduct.find((v) => v.state !== 'off');
+        return { ...i, variantId: first?.variantId ?? null };
+      });
+    } else items = items.map((i) => {
       if (i.variantId) return i;
       // the parts of an SAV « pièces » exchange: no piece of the article leaves (its stock never moves)
       if ((i as { part?: boolean }).part) return i;
@@ -467,7 +478,7 @@ async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice 
       const named = mine.filter((v: any) => v.title !== '' && v.active);
       if (named.length === 1) return { ...i, variantId: num(named[0].id) };
       if (!named.length && plain) return { ...i, variantId: num(plain.id) };
-      if (strictVariant && named.length > 1) throw bad('Choisissez la variante (couleur, taille…) de chaque produit');
+      if (variantMode === 'strict' && named.length > 1) throw bad('Choisissez la variante (couleur, taille…) de chaque produit');
       return i;
     });
   }
@@ -674,7 +685,7 @@ async function insertItems(db: Db, orderId: number, lines: OrderItem[]) {
 
 export async function createOrder(
   ctx: Ctx,
-  input: OrderInput,
+  input: Omit<OrderInput, 'wilayaId'> & { wilayaId: number | null },
   db: Db = ctx.db,
   opts: {
     /** taken in this Pilot Message conversation */
@@ -686,6 +697,7 @@ export async function createOrder(
     adsetId?: string | null;
     /** no « we received your order » message (an abandoned order added by Pilotix: the customer did not send it) */
     silent?: boolean;
+    abandoned?: boolean;
     /** the landing page's device key: a new number on a refuser's device is a look-alike */
     device?: string | null;
     /** the anti-fraud check of the other channels (guard.ts): « note » writes the reasons; « check » also puts what a
@@ -724,13 +736,14 @@ export async function createOrder(
         })
       : null;
   const order = await db.tx(async (tx) => {
-    const priced = await priceItems(tx, input.items, input.isExchange);
-    await checkMontageLines(tx, priced.lines, input.wilayaId, WILAYAS[input.wilayaId - 1] ?? '');
-    // New orders cannot contain disabled products or variants. Stock shortages are
-    // intentionally different: enabled items are allowed into "confirmed without stock".
-    const availability = await checkLines(tx, priced.lines.map((l) => ({ productId: l.productId, variantId: l.variantId, qty: l.qty })), null);
-    const off = availability.find((l) => l.state === 'off');
-    if (off) throw bad(`« ${off.name} » est indisponible. Choisissez un autre produit ou annulez la commande.`);
+    const priced = await priceItems(tx, input.items, input.isExchange, undefined, opts.abandoned ? 'abandoned' : 'strict');
+    if (input.wilayaId) await checkMontageLines(tx, priced.lines, input.wilayaId, WILAYAS[input.wilayaId - 1] ?? '');
+    // Recovered drafts can wait for a replacement if the customer's variant was switched off.
+    if (!opts.abandoned) {
+      const availability = await checkLines(tx, priced.lines.map((l) => ({ productId: l.productId, variantId: l.variantId, qty: l.qty })), null);
+      const off = availability.find((l) => l.state === 'off');
+      if (off) throw bad(`« ${off.name} » est indisponible. Choisissez un autre produit ou annulez la commande.`);
+    }
     if (input.discount > priced.maxDiscount) throw bad(`Remise trop élevée (maximum ${priced.maxDiscount} DA)`);
     // a lower unit price typed by an employee is a discount: together they stay within the products' maximum
     // (prices worked out by Pilotix itself — a landing page, the AI seller — are already the shop's own prices)
@@ -747,7 +760,7 @@ export async function createOrder(
       else throw bad(`${PROMO_REASON[ck.reason]}${ck.reason === 'small' ? ` (au moins ${ck.minOrder} DA de produits)` : ''}`);
     }
     const allDiscount = promo ? Math.min(priced.subtotal, input.discount + promo.discount) : input.discount;
-    const fee = input.deliveryFee ?? (await deliveryFeeFor(tx, input.wilayaId, input.isStopdesk, priced.grids, priced.weight));
+    const fee = input.deliveryFee ?? (input.wilayaId ? await deliveryFeeFor(tx, input.wilayaId, input.isStopdesk, priced.grids, priced.weight) : 0);
     const total = priced.subtotal - allDiscount + fee;
     // what the customer orders is kept: the upsell is counted against it (lines marked upsell while typing a call are sold in addition)
     const orig = origOf(priced.lines);
@@ -876,14 +889,14 @@ export async function guardHands(ctx: Ctx, ids: number[], holderMay = false) {
   for (const h of await inHands(ctx.db, ids)) if (!(holderMay && h.livreurId === ctx.session.profile.id)) throw bad(handsText(h));
 }
 
-export const UpdateInput = OrderInput.partial().omit({ confirm: true }).extend({ id, version: z.number().int().min(1).optional() });
+export const UpdateInput = OrderInput.partial().omit({ confirm: true }).extend({ id, version: z.number().int().min(1).optional(), customerName: z.string().trim().max(120).optional() });
 
 /**
  * The products and the remise of a change: the new lines, the subtotal, the remise — refused when the price cuts and
  * the remise go over what the products allow. A cut is counted from what the customer first ordered (or the
  * catalogue), never from a price an agent already lowered: saving again and again does not go lower.
  */
-async function priceChange(db: Db, cur: any, input: z.infer<typeof UpdateInput>, isAdmin: boolean) {
+async function priceChange(db: Db, cur: any, input: z.infer<typeof UpdateInput>, isAdmin: boolean, abandoned: boolean) {
   let subtotal = num(cur.subtotal);
   let maxDiscount = Infinity;
   let priceCut = 0;
@@ -894,7 +907,7 @@ async function priceChange(db: Db, cur: any, input: z.infer<typeof UpdateInput>,
   const first = new Map((readOrig(cur.orig_items) ?? origOf(old)).map((l) => [`${l.productId}:${l.variantId ?? ''}`, l.unitPrice]));
   let lines: OrderItem[] | null = null;
   if (input.items) {
-    const priced = await priceItems(db, input.items, !!cur.is_exchange, first);
+    const priced = await priceItems(db, input.items, !!cur.is_exchange, first, abandoned ? 'abandoned' : 'strict');
     const wid = input.wilayaId ?? num(cur.wilaya_id);
     await checkMontageLines(db, priced.lines, wid, WILAYAS[wid - 1] ?? '');
     lines = priced.lines;
@@ -903,7 +916,7 @@ async function priceChange(db: Db, cur: any, input: z.infer<typeof UpdateInput>,
     priceCut = priced.priceCut;
   } else if (input.discount !== undefined && old.length) {
     // only the discount changes: still capped by the products, the cuts already on their prices counted
-    const priced = await priceItems(db, old, !!cur.is_exchange, first, false);
+    const priced = await priceItems(db, old, !!cur.is_exchange, first, 'optional');
     maxDiscount = priced.maxDiscount;
     priceCut = priced.priceCut;
   }
@@ -938,8 +951,10 @@ async function precheckUpdate(ctx: Ctx, input: z.infer<typeof UpdateInput>) {
   const cur = (await ctx.db.query('SELECT * FROM orders WHERE id = $1', [input.id]))[0];
   if (!cur) throw notFound('Commande introuvable');
   if (input.version && num(cur.version) !== input.version) throw bad('Cette commande a été modifiée par quelqu’un d’autre. Rechargez-la.');
-  if (input.isStopdesk === true && !(input.stopdeskId ?? (input.stopdeskId === undefined ? cur.stopdesk_id : null))) throw bad('Livraison au bureau : choisissez le bureau.');
-  await priceChange(ctx.db, cur, input, ctx.session.isAdmin);
+  const abandoned = isAbandonedCheckout(cur.source) && CONF_TODO.includes(cur.conf_status);
+  if (!abandoned && input.customerName !== undefined && input.customerName.length < 2) throw bad('Indiquez le nom du client');
+  if (!abandoned && input.isStopdesk === true && !(input.stopdeskId ?? (input.stopdeskId === undefined ? cur.stopdesk_id : null))) throw bad('Livraison au bureau : choisissez le bureau.');
+  await priceChange(ctx.db, cur, input, ctx.session.isAdmin, abandoned);
 }
 
 /**
@@ -1027,11 +1042,13 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
       ? { items: itemsText(await tx.query('SELECT name, variant_title, qty FROM order_items WHERE order_id = $1 ORDER BY id', [input.id])), company: cur.company_id ? ((await tx.query('SELECT name FROM delivery_companies WHERE id = $1', [cur.company_id]))[0]?.name ?? '') : '' }
       : null;
     // a bureau delivery needs its bureau (stop desk); going back home forgets it
-    if (input.isStopdesk === true && !(input.stopdeskId ?? (input.stopdeskId === undefined ? cur.stopdesk_id : null))) throw bad('Livraison au bureau : choisissez le bureau.');
+    const abandoned = isAbandonedCheckout(cur.source) && CONF_TODO.includes(cur.conf_status);
+    if (!abandoned && input.customerName !== undefined && input.customerName.length < 2) throw bad('Indiquez le nom du client');
+    if (!abandoned && input.isStopdesk === true && !(input.stopdeskId ?? (input.stopdeskId === undefined ? cur.stopdesk_id : null))) throw bad('Livraison au bureau : choisissez le bureau.');
     if (input.isStopdesk === false && input.stopdeskId === undefined) input = { ...input, stopdeskId: null };
 
     const recount = !!input.items || input.discount !== undefined || input.promoCode !== undefined;
-    const { old, lines, subtotal, discount, promo, dropCode } = await priceChange(tx, cur, input, ctx.session.isAdmin);
+    const { old, lines, subtotal, discount, promo, dropCode } = await priceChange(tx, cur, input, ctx.session.isAdmin, abandoned);
     // the welcome code: the one taken off goes back to its person (unused), the new one is taken by this order
     if (dropCode) await tx.query(`UPDATE promo_codes SET status = 'sent', order_id = NULL, used_at = NULL, discount = NULL WHERE code = $1 AND order_id = $2`, [dropCode, input.id]);
     if (promo) await takePromo(tx, promo.code, input.id, promo.discount);

@@ -134,25 +134,61 @@ test('two clicks on « Ajouter aux commandes » (or a click racing the job) make
   assert.equal((await orders(f.phone as string)).length, 1);
 });
 
-test('« Compléter »: a lead without wilaya becomes a silent order once the agent gives it', async () => {
-  const t0 = Date.now() - 30 * MIN;
-  const f = await form({ wilaya: 0, commune: '' }, SLUG, t0);
+test('two lead records for one checkout converge and a late submit replaces the manually added draft', async () => {
+  const t0 = Date.now();
+  const f = await form({}, SLUG, t0);
   await call('landing.capture', at(admin, t0), f);
-  await call('landing.run', admin, {});
-  const lead = (await db.query(`SELECT id, status, note FROM landing_leads WHERE phone = $1`, [f.phone]))[0];
-  assert.equal(lead.status, 'abandoned');
-  assert.match(lead.note, /Wilaya/);
-  const before = (await call('landing.leads', admin, { status: 'all', page: 1, pageSize: 10 })) as any;
-  const r: any = await call('landing.convertLead', await as(EMAILS.conf), { id: Number(lead.id), wilayaId: 31, commune: 'Oran' });
-  // added by an agent: not a customer who came back
-  const after = (await call('landing.leads', admin, { status: 'all', page: 1, pageSize: 10 })) as any;
-  assert.equal(after.stats.recovered, before.stats.recovered);
-  assert.equal(after.stats.converted, before.stats.converted + 1);
-  const o = (await db.query(`SELECT * FROM orders WHERE id = $1`, [r.orderId]))[0];
-  assert.equal(Number(o.wilaya_id), 31);
+  await db.query(`INSERT INTO landing_leads (landing_id, product_id, variant_id, phone, qty, unit_price, status)
+    SELECT landing_id, product_id, variant_id, phone, qty, unit_price, 'abandoned' FROM landing_leads WHERE phone = $1`, [f.phone]);
+  const leads = await db.query('SELECT id FROM landing_leads WHERE phone = $1', [f.phone]);
+  const agent = await as(EMAILS.conf);
+  const recovered: any[] = await Promise.all(leads.map((l) => call('landing.convertLead', agent, { id: Number(l.id) })));
+  assert.equal(recovered[0].orderId, recovered[1].orderId);
+  assert.equal((await orders(f.phone as string)).length, 1);
+  await call('landing.submit', at(admin, t0 + MIN), f);
+  const rows = await orders(f.phone as string);
+  assert.deepEqual(rows.map((o) => o.conf_status), ['duplicate', 'new']);
+});
+
+test('Add to orders accepts phone and source product, then confirmation requires complete details', async () => {
+  const t0 = Date.now();
+  const f = await form({ name: '', wilaya: 0, commune: '', variant: null, utm: { utm_source: 'facebook', utm_campaign: 'recovery' } }, SLUG, t0);
+  await call('landing.capture', at(admin, t0), f);
+  const lead = (await db.query('SELECT id FROM landing_leads WHERE phone = $1', [f.phone]))[0];
+  const agent = await as(EMAILS.conf);
+  const r: any = await call('landing.convertLead', agent, { id: Number(lead.id) });
+  const again: any = await call('landing.convertLead', agent, { id: Number(lead.id) });
+  assert.equal(r.orderId, again.orderId);
+  const o = (await orders(f.phone as string))[0];
+  assert.equal(o.customer_name, '');
+  assert.equal(o.wilaya_id, null);
   assert.equal(o.channel, 'landing');
+  assert.match(o.source, /review-test/);
+  assert.equal(o.utm.utm_campaign, 'recovery');
   assert.ok(o.landing_id);
-  assert.equal((await db.query(`SELECT count(*)::int AS n FROM notifications WHERE order_id = $1`, [o.id]))[0].n, 0, 'no message');
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM notifications WHERE order_id = $1', [o.id]))[0].n, 0, 'no message');
+  const item = (await db.query('SELECT product_id, variant_id FROM order_items WHERE order_id = $1', [o.id]))[0];
+  assert.equal(Number(item.product_id), productId);
+  const variants = await db.query(
+    `SELECT v.id, COALESCE(sum(s.qty) FILTER (WHERE w.active), 0) AS stock
+      FROM product_variants v LEFT JOIN stock s ON s.variant_id = v.id LEFT JOIN warehouses w ON w.id = s.warehouse_id
+      WHERE v.product_id = $1 AND v.active GROUP BY v.id ORDER BY v.id`, [productId],
+  );
+  assert.ok(variants.length > 1);
+  assert.equal(Number(item.variant_id), Number(variants.find((v) => Number(v.stock) > 0)?.id ?? variants[0].id));
+  await giveTo(agent, [o.id]);
+  const next = (status: string) => call('orders.setConf', agent, { ids: [r.orderId], status });
+  await next('busy');
+  await call('orders.update', agent, { id: r.orderId, customerName: '', internalNote: 'À rappeler' });
+  await assert.rejects(next('confirmed'), /wilaya/i);
+  await call('orders.update', agent, { id: r.orderId, customerName: 'Amina Benali', wilayaId: 16, commune: 'Hydra' });
+  await assert.rejects(next('confirmed'), /adresse/i);
+  await call('orders.update', agent, { id: r.orderId, address: '12 rue des Lilas' });
+  await db.query('UPDATE order_items SET variant_id = NULL WHERE order_id = $1', [o.id]);
+  await assert.rejects(next('confirmed'), /variante/i);
+  await db.query('UPDATE order_items SET variant_id = $2 WHERE order_id = $1', [o.id, item.variant_id]);
+  await next('confirmed');
+  assert.equal((await orders(f.phone as string)).length, 1);
 });
 
 test('Meta: the Purchase of an abandoned order carries the browser it came from; without a token events wait, then leave', async () => {
@@ -167,6 +203,7 @@ test('Meta: the Purchase of an abandoned order carries the browser it came from;
   const o = (await orders(f.phone as string))[0];
   const agent = await as(EMAILS.conf);
   await giveTo(agent, [o.id]);
+  await call('orders.update', agent, { id: Number(o.id), address: '12 rue des Lilas' });
   await call('orders.setConf', agent, { ids: [Number(o.id)], status: 'confirmed' });
   const sys = await as(EMAILS.admin, server);
   await call('landing.run', sys, {});

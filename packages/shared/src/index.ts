@@ -53,6 +53,8 @@ export const CONF_TONE: Record<ConfStatus, Tone> = {
   no_stock: 'warn', confirmed: 'ok', cancelled: 'bad', duplicate: 'off', wrong_number: 'bad', fake: 'bad',
 };
 /** Statuses still waiting in the call queue. */
+export const isAbandonedCheckout = (source?: string | null) => source?.endsWith(' · abandonnée') ?? false;
+
 export const CONF_TODO: ConfStatus[] = ['to_check', 'new', 'no_answer', 'busy', 'callback', 'postponed'];
 export const CONF_DONE_BAD: ConfStatus[] = ['cancelled', 'duplicate', 'wrong_number', 'fake'];
 /** Statuses that need a date for the next call. */

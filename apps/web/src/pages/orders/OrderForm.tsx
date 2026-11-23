@@ -1,5 +1,5 @@
 // "Nouvelle commande" / "Modifier la commande X" / "Échange pour X" — the .pxo order form of the original app.
-import { communesOf, FOLLOW_LOCKED, normalizePhone, Order, origOf, SALES_CHANNELS, upsellOf, WILAYAS } from '@pilotix/shared';
+import { CONF_TODO, isAbandonedCheckout, communesOf, FOLLOW_LOCKED, normalizePhone, Order, origOf, SALES_CHANNELS, upsellOf, WILAYAS } from '@pilotix/shared';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PromoField, usePromoCheck } from './PromoField';
@@ -151,12 +151,15 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
   const locked = shippedLock || noItems;
   const canConf = has('confirmation') && !(order && (order.confStatus === 'confirmed' || order.followStatus));
 
+  const abandoned = !!order && isAbandonedCheckout(order.source);
+  const pendingAbandoned = !!order && abandoned && CONF_TODO.includes(order.confStatus);
+
   // ---- state
-  const [name, setName] = useState<string>(base.customerName ?? '');
+  const [name, setName] = useState<string>(pendingAbandoned && base.customerName === 'Client' ? '' : (base.customerName ?? ''));
   const [phone, setPhone] = useState<string>(base.phone ?? '');
   const [phone2, setPhone2] = useState<string>(base.phone2 ?? '');
   const [show2, setShow2] = useState<boolean>(!!base.phone2);
-  const [wil, setWil] = useState<number | ''>(base.wilayaId ?? '');
+  const [wil, setWil] = useState<number | ''>(base.wilayaId || '');
   const [commune, setCommune] = useState<string>(base.commune ?? '');
   const [address, setAddress] = useState<string>(base.address ?? '');
   const [desk, setDesk] = useState<boolean>(!!base.isStopdesk);
@@ -172,7 +175,7 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
     return items.map((i) => ({ key: lineKey++, productId: i.productId ?? null, variantId: i.variantId ?? null, qty: Number(i.qty) || 1, unitPrice: isExchange ? 0 : i.unitPrice ?? null, isUpsell: !!i.isUpsell, name: i.name, forProductId: i.forProductId ?? null }));
   });
   const [fee, setFee] = useState<string>(isEdit || base.deliveryFee !== undefined ? String(base.deliveryFee ?? '') : '');
-  const [feeAuto, setFeeAuto] = useState<boolean>(!isEdit && base.deliveryFee === undefined);
+  const [feeAuto, setFeeAuto] = useState<boolean>((pendingAbandoned && !base.wilayaId) || (!isEdit && base.deliveryFee === undefined));
   // the remise besides the welcome code (Referral › Code promo: its own field, its discount added)
   const [discount, setDiscount] = useState<string>(String(Math.max(0, (base.discount ?? 0) - (base.promoDiscount ?? 0))));
   const [promoCode, setPromoCode] = useState<string>(String(base.promoCode ?? ''));
@@ -320,17 +323,18 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
 
   // ---- validate and save
   const validate = (strict: boolean): string | null => {
-    if (!name.trim()) return t('orders.form.eName');
+    if ((strict || !pendingAbandoned) && (name.trim().length < 2 || (abandoned && name.trim() === 'Client'))) return t('orders.form.eName');
     if (!normalizePhone(phone)) return t('orders.form.ePhone');
     if (show2 && phone2.trim() && !normalizePhone(phone2)) return t('orders.form.ePhone');
-    if (wil === '') return t('orders.form.eWilaya');
-    if (!lines.some((x) => x.variantId)) return t('orders.form.eNoProduct');
-    if (lines.some((x) => !x.variantId)) return t('orders.form.eEmptyLine');
+    if ((strict || !pendingAbandoned) && wil === '') return t('orders.form.eWilaya');
+    if (!lines.some((x) => x.productId)) return t('orders.form.eNoProduct');
+    if (lines.some((x) => !x.productId || (!x.variantId && (strict || !pendingAbandoned)))) return t('orders.form.eEmptyLine');
     const seen = new Set<number>();
     for (const x of lines) {
+      if (!x.variantId) continue;
       if (x.forProductId) {
         const pr = P.get(x.forProductId);
-        if (pr && !montageHere(pr, wil)) return t('produits.montage.notHere', { w: wName }) + ` — ${pr.name}`;
+        if (pr && wil !== '' && !montageHere(pr, wil)) return t('produits.montage.notHere', { w: wName }) + ` — ${pr.name}`;
         continue;
       }
       if (seen.has(x.variantId!)) return t('orders.form.eDupVariant');
@@ -341,7 +345,8 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
     if (strict) {
       if (!desk && !commune) return t('orders.form.eCommune');
       if (ship.hard.length) return t('orders.form.eNotDeliverable', { msg: ship.hard[0] });
-      if (desk && desksHere.length && deskId === '') return t('orders.form.eDesk');
+      if (abandoned && !desk && !address.trim()) return t('orders.form.eAddress');
+      if (desk && (abandoned || desksHere.length) && deskId === '') return t('orders.form.eDesk');
     }
     return null;
   };
@@ -375,11 +380,17 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
       deliveryNote: noteL.trim() || null,
       internalNote: (isExchange ? [noteT.trim(), `Échange de ${original!.ref}`].filter(Boolean).join(' · ') : noteT.trim()) || null,
     };
-    const items = lines.filter((x) => x.variantId).map((x) => ({ productId: x.productId!, variantId: x.variantId!, qty: x.qty, unitPrice: x.unitPrice ?? undefined, ...(x.forProductId ? { forProductId: x.forProductId } : {}) }));
+    const items = lines.filter((x) => x.productId).map((x) => ({ productId: x.productId!, variantId: x.variantId, qty: x.qty, unitPrice: x.unitPrice ?? undefined, ...(x.forProductId ? { forProductId: x.forProductId } : {}) }));
     try {
       let saved: Order;
       if (isEdit) {
-        saved = await rpc('orders.update', { id: order!.id, version: order!.version, ...payload, ...(locked ? {} : { items }) });
+        saved = await rpc('orders.update', {
+          id: order!.id,
+          version: order!.version,
+          ...payload,
+          ...(pendingAbandoned && wil === '' ? { wilayaId: undefined } : {}),
+          ...(locked ? {} : { items }),
+        });
         if (confirm) {
           try {
             await rpc('orders.setConf', { ids: [saved.id], status: 'confirmed' });
@@ -484,7 +495,7 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
             <fieldset className="pxo-fs" disabled={noCustomer}>
             <div className="pxo-g2">
               <Field label={t('orders.form.name')}>
-                <input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} placeholder={t('orders.form.namePh')} autoComplete="off" required />
+                <input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} placeholder={t('orders.form.namePh')} autoComplete="off" required={!pendingAbandoned} />
               </Field>
               <div className="pxo-ph">
                 <Field label={t('orders.form.phone')}>

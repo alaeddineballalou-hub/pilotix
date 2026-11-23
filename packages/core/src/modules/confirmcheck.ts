@@ -12,7 +12,7 @@
 //     Pilotix finds the company's name by itself (same name, sound or Arabic name: couriers/util matchCommune): nobody
 //     links a commune by hand (the owner, 22 Nov 2026).
 // The order card asks the same question (orders.confirmCheck) before the agent presses « Confirmer ».
-import { WILAYAS } from '@pilotix/shared';
+import { isAbandonedCheckout, normalizePhone, WILAYAS } from '@pilotix/shared';
 import type { CourierKind } from '@pilotix/shared';
 import { z } from 'zod';
 import { ADAPTERS } from '../couriers/adapters';
@@ -20,6 +20,7 @@ import { type CommuneName, matchCommune, nearest, ourCommunes } from '../courier
 import { Db, num, numOrNull } from '../db';
 import { Ctx, proc } from '../rpc';
 import { getSetting } from '../settings';
+import { officialCommune } from './coverage';
 import { type Pick, pilotMayRun, pilotPick } from './pilot';
 
 export type LineState = 'ok' | 'empty' | 'off';
@@ -90,7 +91,7 @@ export async function checkLines(db: Db, lines: CheckLine[], orderId: number | n
     const base = { productId: l.productId, variantId: l.variantId, name };
     // a service line (Montage…) never runs out, even one switched off since (the old « Montage — X » lines)
     if (p?.is_service) return { ...base, state: 'ok' as const, available: null };
-    if (!p || !p.active || (l.variantId && (!v || !v.active))) return { ...base, state: 'off' as const, available: null };
+    if (!p || !p.active || (l.variantId && (!v || v.productId !== l.productId || !v.active))) return { ...base, state: 'off' as const, available: null };
     const ids = l.variantId ? [l.variantId] : V.filter((x) => x.productId === l.productId && x.active).map((x) => x.id);
     const avail = ids.reduce((n, i) => n + (left.get(i) ?? 0), 0);
     return { ...base, state: avail >= (need.get(keyOf(l)) ?? l.qty) ? ('ok' as const) : ('empty' as const), available: Math.max(0, avail) };
@@ -254,7 +255,7 @@ export function blockerText(ref: string, lines: LineCheck[], d: DeliverCheck): s
 
 /** The checks of a saved order (setConf runs them on each order it confirms). */
 export async function checkOrder(db: Db, orderId: number, ctx?: Ctx) {
-  const o = (await db.query('SELECT ref, wilaya_id, commune, is_stopdesk, stopdesk_id, company_id, wilaya_guess FROM orders WHERE id = $1', [orderId]))[0];
+  const o = (await db.query('SELECT ref, source, customer_name, phone, address, wilaya_id, commune, is_stopdesk, stopdesk_id, company_id, wilaya_guess FROM orders WHERE id = $1', [orderId]))[0];
   const items = await db.query('SELECT product_id, variant_id, qty FROM order_items WHERE order_id = $1 ORDER BY id', [orderId]);
   const lines = await checkLines(
     db,
@@ -269,7 +270,19 @@ export async function checkOrder(db: Db, orderId: number, ctx?: Ctx) {
     companyId: o?.company_id ? num(o.company_id) : null,
     guess: o?.wilaya_guess ? num(o.wilaya_guess) : null,
   }, ctx);
-  return { lines, deliver, blocker: blockerText(o?.ref ?? `#${orderId}`, lines, deliver), noStock: lines.some((l) => l.state === 'empty') };
+  let blocker = blockerText(o?.ref ?? `#${orderId}`, lines, deliver);
+  if (o && isAbandonedCheckout(o.source)) {
+    const name = String(o.customer_name ?? '').trim();
+    if (!blocker && (!normalizePhone(o.phone) || name.length < 2 || name === 'Client'))
+      blocker = `${o.ref} : indiquez le nom et le numéro du client avant de confirmer.`;
+    if (!blocker && items.some((i) => !i.product_id || !i.variant_id))
+      blocker = `${o.ref} : choisissez une variante valide pour chaque produit avant de confirmer.`;
+    if (!blocker && !o.is_stopdesk && (!officialCommune(num(o.wilaya_id), o.commune) || !String(o.address ?? '').trim()))
+      blocker = `${o.ref} : indiquez la commune et l’adresse de livraison avant de confirmer.`;
+    if (!blocker && o.is_stopdesk && !(await db.query('SELECT 1 FROM stopdesks WHERE id = $1 AND wilaya_id = $2 AND gone_at IS NULL', [o.stopdesk_id, o.wilaya_id]))[0])
+      blocker = `${o.ref} : choisissez un bureau de livraison dans cette wilaya avant de confirmer.`;
+  }
+  return { lines, deliver, blocker, noStock: lines.some((l) => l.state === 'empty') };
 }
 
 const id = z.number().int().positive();

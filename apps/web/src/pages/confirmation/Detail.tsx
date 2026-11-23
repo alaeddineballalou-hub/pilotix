@@ -1,6 +1,6 @@
 // The open row of the queue (".qdetail"): notes, products (variant / qty / price), add a product,
 // delivery price and total, packs and linked products, save bar. Saved with orders.update (version check).
-import { CANCEL_REASONS, communesOf, FOLLOW_LOCKED, Order, origOf, upsellOf, WILAYAS, WILAYAS_AR } from '@pilotix/shared';
+import { CANCEL_REASONS, communesOf, CONF_TODO, isAbandonedCheckout, normalizePhone, FOLLOW_LOCKED, Order, origOf, upsellOf, WILAYAS, WILAYAS_AR } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { rpc } from '../../lib/backend';
 import { defaultNext } from './shared';
@@ -107,7 +107,10 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
   const [nLivreur, setNLivreur] = useState(order.deliveryNote ?? '');
   const [nTeam, setNTeam] = useState(order.internalNote ?? '');
   /** the customer (phone mode): name, phones, address */
-  const [cName, setCName] = useState(order.customerName);
+  const abandoned = isAbandonedCheckout(order.source);
+  const pendingAbandoned = abandoned && CONF_TODO.includes(order.confStatus);
+  const customerName = pendingAbandoned && order.customerName === 'Client' ? '' : order.customerName;
+  const [cName, setCName] = useState(customerName);
   const [cPhone, setCPhone] = useState(order.phone);
   const [cPhone2, setCPhone2] = useState(order.phone2 ?? '');
   const [cAddr, setCAddr] = useState(order.address ?? '');
@@ -125,13 +128,13 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
     setNTeam(order.internalNote ?? '');
   }, [order.discount, order.promoDiscount, order.promoCode, order.customerNote, order.deliveryNote, order.internalNote]);
   useEffect(() => {
-    setCName(order.customerName);
+    setCName(customerName);
     setCPhone(order.phone);
     setCPhone2(order.phone2 ?? '');
     setCAddr(order.address ?? '');
-  }, [order.customerName, order.phone, order.phone2, order.address]);
+  }, [customerName, order.phone, order.phone2, order.address]);
   const [modeTouched, setModeTouched] = useState(false);
-  const opts = useRpc('confirmation.deskOptions', { wilayaId: wil }, { staleTime: 5 * 60_000 });
+  const opts = useRpc('confirmation.deskOptions', { wilayaId: wil }, { staleTime: 5 * 60_000, enabled: !!wil });
   const modeFee = useRpc('confirmation.gridFee', { id: order.id, isStopdesk: desk, ...(wil !== order.wilayaId ? { wilayaId: wil } : {}) }, { staleTime: 60_000 });
   // the two checks before « Confirmer » (the server runs the same ones): each product's state, and whether we deliver
   // there — for the cart and the place as they are on screen, saved or not
@@ -141,7 +144,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
     {
       id: order.id,
       items: L.map((l) => ({ productId: l.productId, variantId: l.variantId ?? null, qty: l.qty })),
-      wilayaId: wil ?? null,
+      wilayaId: wil || null,
       commune: desk ? null : com || null,
       isStopdesk: desk,
       stopdeskId: desk ? deskId : null,
@@ -175,7 +178,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
   // prices are not typed in here: products keep their catalog / pack price and delivery its grid price; only the remise changes
   const notesChanged = nOrigin !== (order.customerNote ?? '') || nLivreur !== (order.deliveryNote ?? '') || nTeam !== (order.internalNote ?? '');
   const geoChanged = wil !== order.wilayaId || com !== (order.commune ?? '');
-  const clientChanged = cName.trim() !== order.customerName || cPhone.trim() !== order.phone || cPhone2.trim() !== (order.phone2 ?? '') || cAddr.trim() !== (order.address ?? '');
+  const clientChanged = cName.trim() !== customerName || cPhone.trim() !== order.phone || cPhone2.trim() !== (order.phone2 ?? '') || cAddr.trim() !== (order.address ?? '');
   const coChanged = !desk && co !== order.companyId;
   const codeChanged = code.trim() !== (order.promoCode ?? '');
   const dirty = key(L) !== key(initial) || fee !== order.deliveryFee || disc !== Math.max(0, order.discount - (order.promoDiscount ?? 0)) || codeChanged || notesChanged || geoChanged || clientChanged || desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId) || coChanged;
@@ -321,6 +324,14 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
   const lineLeft = (i: number) => lineOf(i)?.available;
   const wName = (w: number | null) => (w ? `${String(w).padStart(2, '0')} ${wilayaName(w)}` : '');
   /** why « Confirmer » is off, or what « Confirmer sans stock » means — one short line under the totals */
+  const missingDetails = abandoned && (
+    cName.trim().length < 2 || cName.trim() === 'Client' ? t('orders.form.eName')
+      : !normalizePhone(cPhone) ? t('orders.form.ePhone')
+      : L.some((l) => !l.variantId) ? t('orders.form.eEmptyLine')
+      : desk && !deskId ? t('orders.form.eDesk')
+      : !desk && !cAddr.trim() ? t('orders.form.eAddress')
+      : null
+  );
   const chkNote: { tone: 'bad' | 'warn'; text: string; fix?: () => void } | null = !C
     ? out.length
       ? { tone: 'warn', text: t('confirmation.d6.warn', { names: out.map((l) => l.name).join(', ') }) }
@@ -352,18 +363,20 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
                 : C.deliver.why === 'company'
                   ? { tone: 'bad', text: t(C.deliver.desk ? 'confirmation.chk.companyDesk' : 'confirmation.chk.companyHome', { co: C.deliver.companyName ?? '', w: wName(C.deliver.wilayaId) }) }
                   : { tone: 'bad', text: t(C.deliver.desk ? 'confirmation.chk.nobodyDesk' : 'confirmation.chk.nobodyHome', { w: wName(C.deliver.wilayaId) }) }
-          : C.noStock
+          : missingDetails
+            ? { tone: 'bad', text: missingDetails }
+            : C.noStock
             ? { tone: 'warn', text: t(order.confStatus === 'no_stock' ? 'confirmation.chk.stillNote' : 'confirmation.chk.noStockNote', { names: C.lines.filter((x) => x.state === 'empty').map((x) => x.name).join(', ') }) }
             : null;
-  const blockedNow = !!C && (!C.canConfirm || !L.length);
-  const sansStock = !!C && C.canConfirm && C.noStock;
+  const blockedNow = !!missingDetails || (!!C && (!C.canConfirm || !L.length));
+  const sansStock = !blockedNow && !!C && C.canConfirm && C.noStock;
   const stillNoStock = sansStock && order.confStatus === 'no_stock';
   const cartBody = L.map((l) => ({ productId: l.productId, variantId: l.variantId, qty: l.qty, unitPrice: l.unitPrice, isUpsell: l.isUpsell, ...(l.forProductId ? { forProductId: l.forProductId } : {}) }));
   /** Saves the cart and the delivery when they changed (before any status change). Returns false when it could not. */
   const saveFirst = async (): Promise<boolean> => {
     if (!L.length) return setErr(t('confirmation.d.keepOne')), false;
-    if (desk && !deskId) return setErr(t('confirmation.dl.needDesk')), setPicker(true), false;
-    if (geoChanged && !desk && !com) return setErr(t('confirmation.dl.needCommune')), setGeoPick('com'), false;
+    if (!pendingAbandoned && desk && !deskId) return setErr(t('confirmation.dl.needDesk')), setPicker(true), false;
+    if (!pendingAbandoned && geoChanged && !desk && !com) return setErr(t('confirmation.dl.needCommune')), setGeoPick('com'), false;
     if (!dirty) return true;
     const mode = desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId) ? { isStopdesk: desk, stopdeskId: desk ? deskId : null, ...(desk && chosen ? { companyId: chosen.companyId } : {}) } : {};
     try {

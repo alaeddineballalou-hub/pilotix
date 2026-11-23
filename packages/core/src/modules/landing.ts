@@ -1171,14 +1171,14 @@ async function closeLeads(db: Db, k: { phone: string; landingId: number; viewId:
 }
 
 /**
- * The customer validated the page themselves after Pilotix had already added their abandoned order (they kept the
- * page open): that order, still untouched in « Nouvelle », is cancelled as a duplicate of the customer's own one.
+ * The customer validated the page after an abandoned order was added. While the draft is still in confirmation,
+ * mark it as a duplicate and attach its lead to the customer's completed order.
  */
-async function replaceAutoOrder(db: Db, phone: string, productId: number, newOrderId: number, newRef: string, now: number) {
+async function replaceAbandonedOrder(db: Db, phone: string, productId: number, newOrderId: number, newRef: string, now: number) {
   const old = await db.query(
     // (still waiting to be called — new, or called without an answer yet — never one confirmed or cancelled)
-    `SELECT o.id, o.conf_status FROM orders o JOIN landing_leads a ON a.order_id = o.id AND a.auto_order
-     WHERE o.phone = $1 AND o.conf_status IN ('new', 'to_check', 'no_answer', 'busy', 'callback', 'postponed') AND o.follow_status IS NULL AND o.id <> $3 AND o.created_at > $4
+    `SELECT o.id, o.conf_status FROM orders o
+     WHERE o.phone = $1 AND o.conf_status IN ('new', 'to_check', 'no_answer', 'busy', 'callback', 'postponed') AND o.follow_status IS NULL AND o.id <> $3 AND o.created_at > $4 AND o.source LIKE '% · abandonnée'
        AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.product_id = $2)`,
     [phone, productId, newOrderId, isoAt(now - 86_400_000)],
   );
@@ -1289,7 +1289,7 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
         await db.query(
           `SELECT o.id, o.ref, i.qty, i.variant_id FROM orders o JOIN order_items i ON i.order_id = o.id AND i.product_id = $2
            WHERE o.phone = $1 AND o.created_at > $3 AND o.conf_status = ANY($4) AND o.follow_status IS NULL AND NOT o.is_exchange
-             AND NOT EXISTS (SELECT 1 FROM landing_leads x WHERE x.order_id = o.id AND x.auto_order)
+             AND COALESCE(o.source, '') NOT LIKE '% · abandonnée'
            ORDER BY o.id DESC LIMIT 1`,
           [phone, productId, isoAt(now - 48 * 3600_000), CONF_TODO],
         )
@@ -1421,7 +1421,7 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
     ref = o.ref;
     agency = o.confAgencyId ?? null;
     await closeLeads(db, keys, 'converted', o.id, abandonCutoff(s, now));
-    await replaceAutoOrder(db, phone!, productId, o.id, o.ref, now);
+    await replaceAbandonedOrder(db, phone!, productId, o.id, o.ref, now);
     await linkSameCustomer(db, phone!, o.id, o.ref, now);
   }
   await db.query(
@@ -1500,7 +1500,7 @@ export async function captureLead(ctx: Ctx, i: z.infer<typeof CaptureInput>): Pr
   const named = vars.filter((v: any) => v.active && v.title !== '');
   const variant = named.find((v: any) => num(v.id) === i.variant) ?? null;
   // a product without variants keeps its stock on its plain variant (as a submitted order does)
-  const variantId = variant ? num(variant.id) : named.length ? null : numOrNull(vars.find((v: any) => v.title === '')?.id);
+  const variantId = variant ? num(variant.id) : named.length ? null : numOrNull(vars.find((v: any) => v.active && v.title === '')?.id);
   const unitPrice = numOrNull(l.price) ?? numOrNull(variant?.price) ?? num(l.p_price);
   const name = i.name.trim().replace(/\s+/g, ' ').slice(0, 120);
   const wilayaId = i.wilaya && i.wilaya >= 1 && i.wilaya <= 69 ? i.wilaya : null;
@@ -1517,7 +1517,7 @@ export async function captureLead(ctx: Ctx, i: z.infer<typeof CaptureInput>): Pr
     // the page sends the whole form each time: what it shows now replaces what was there (wilaya changed → its commune too)
     await db.query(
       `UPDATE landing_leads SET last_at = $2, status = 'open', phone = $3, customer_name = $4, wilaya_id = $5, commune = $6, variant_id = $7, qty = $8, unit_price = $9,
-         fbp = COALESCE(NULLIF($10, ''), fbp), fbc = COALESCE(NULLIF($11, ''), fbc), utm = COALESCE($12, utm) WHERE id = $1`,
+         fbp = COALESCE(NULLIF($10, ''), fbp), fbc = COALESCE(NULLIF($11, ''), fbc), utm = COALESCE($12, utm) WHERE id = $1 AND status IN ('open','abandoned')`,
       [had.id, isoAt(now), phone, name, wilayaId, i.commune.trim(), variantId, qty, unitPrice, fbp, fbc, i.utm ? JSON.stringify(i.utm) : null],
     );
     return { ok: true };
@@ -1598,22 +1598,36 @@ async function leadVerdict(db: Db, a: any, now: number) {
 async function convertLead(ctx: Ctx, db: Db, a: any, auto: boolean, warn: string | null = null) {
   const phone = normalizePhone(a.phone);
   if (!phone) throw bad('Numéro de téléphone algérien invalide');
-  if (!a.wilaya_id) throw bad('Choisissez la wilaya du client');
+  const productId = num(a.product_id);
+  if (!productId) throw bad('Produit de la landing page introuvable');
+  // Serialize conversions for the same phone and product, even when captured on different landing pages.
+  await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`landing-lead:${phone}:${productId}`]);
+  const existing = (await db.query(
+    `SELECT o.id, o.ref FROM orders o WHERE o.phone = $1 AND o.created_at >= $3::timestamptz - interval '24 hours'
+       AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.product_id = $2)
+       ORDER BY o.id DESC LIMIT 1`,
+    [phone, productId, a.at],
+  ))[0];
+  if (existing) {
+    await db.query(`UPDATE landing_leads SET status = 'converted', order_id = $2, handled_at = now(), note = NULL WHERE id = $1`, [a.id, existing.id]);
+    return { id: num(existing.id), ref: String(existing.ref), created: false };
+  }
   const slug = a.landing_id ? (await db.query('SELECT slug FROM landing_pages WHERE id = $1', [a.landing_id]))[0]?.slug : null;
   const utm = readJson<Record<string, string>>(a.utm);
+  const chosen = a.variant_id ? (await db.query('SELECT id FROM product_variants WHERE id = $1 AND product_id = $2', [a.variant_id, productId]))[0] : null;
   const o = await createOrder(
     ctx,
     {
-      customerName: String(a.customer_name).length >= 2 ? a.customer_name : 'Client',
+      customerName: String(a.customer_name ?? '').trim(),
       phone,
-      wilayaId: num(a.wilaya_id),
+      wilayaId: numOrNull(a.wilaya_id),
       commune: a.commune ?? '',
       address: '',
       isStopdesk: false,
       channel: 'landing',
-      source: `${slug ? `Landing · ${slug}` : 'Landing'} · abandonnée`.slice(0, 120),
+      source: `${slug ? `Landing · ${slug}` : 'Landing'} · abandonnée`,
       utm,
-      items: [{ productId: num(a.product_id), variantId: numOrNull(a.variant_id), qty: Math.max(1, num(a.qty)), unitPrice: num(a.unit_price) }],
+      items: [{ productId, variantId: numOrNull(chosen?.id), qty: Math.max(1, num(a.qty)), unitPrice: num(a.unit_price) }],
       discount: 0,
       confirm: false,
       isExchange: false,
@@ -1621,13 +1635,13 @@ async function convertLead(ctx: Ctx, db: Db, a: any, auto: boolean, warn: string
     },
     db,
     // no « we received your order » message: the customer did not send it, the agents call
-    { landingId: numOrNull(a.landing_id), adsetId: adsetOf(utm), silent: true, device: a.device ? String(a.device) : null },
+    { landingId: numOrNull(a.landing_id), adsetId: adsetOf(utm), silent: true, abandoned: true, device: a.device ? String(a.device) : null },
   );
   await db.query(
     `UPDATE landing_leads SET status = 'converted', order_id = $2, auto_order = $3, handled_by = $4, handled_at = now(), abandoned_at = COALESCE(abandoned_at, last_at), note = NULL WHERE id = $1`,
     [a.id, o.id, auto, auto ? null : ctx.session.profile.id],
   );
-  return o;
+  return { id: o.id, ref: o.ref, created: true };
 }
 
 /**
@@ -1635,7 +1649,7 @@ async function convertLead(ctx: Ctx, db: Db, a: any, auto: boolean, warn: string
  * (any channel, in the day before or after) is closed. Then, one at a time and each in its own transaction (two runs
  * never take the same lead; a failure never leaves a lead half done), a lead with no news for the chosen time is
  * checked like an order: fake → « Commandes bloquées »; otherwise an order in Commandes › Nouvelle (borderline: with
- * the reasons in its note); no wilaya → it waits in « Abandonnées » for a person.
+ * the reasons in its note).
  */
 export async function sweepAbandoned(ctx: Ctx): Promise<{ abandoned: number; ordered: number; blocked: number }> {
   const db = ctx.db;
@@ -1666,10 +1680,6 @@ export async function sweepAbandoned(ctx: Ctx): Promise<{ abandoned: number; ord
         await tx.query(`UPDATE meta_events SET status = 'skipped', error = 'Commande abandonnée bloquée (fausse)' WHERE lead_id = $1 AND status = 'queued'`, [a.id]);
         return 'blocked';
       }
-      if (!a.wilaya_id) {
-        await tx.query(`UPDATE landing_leads SET status = 'abandoned', abandoned_at = $2, note = 'Wilaya non choisie' WHERE id = $1`, [a.id, isoAt(now)]);
-        return 'abandoned';
-      }
       // a lead carries no proof of work nor typing evidence: a doubtful one, or a sudden wave on one page (a script), waits
       // in « Abandonnées » for a person instead of becoming an order by itself
       const wave = num((await tx.query(`SELECT count(*)::int AS n FROM landing_leads WHERE landing_id = $1 AND auto_order AND handled_at > $2`, [a.landing_id, isoAt(now - 3600_000)]))[0]?.n);
@@ -1680,9 +1690,9 @@ export async function sweepAbandoned(ctx: Ctx): Promise<{ abandoned: number; ord
       }
       await tx.query('SAVEPOINT px_lead');
       try {
-        await convertLead(ctx, tx, a, true, null);
+        const order = await convertLead(ctx, tx, a, true, null);
         await tx.query('RELEASE SAVEPOINT px_lead');
-        return 'ordered';
+        return order.created ? 'ordered' : 'linked';
       } catch (e: any) {
         // a product removed meanwhile…: it waits in « Abandonnées » with the reason, for a person
         await tx.query('ROLLBACK TO SAVEPOINT px_lead');
@@ -1691,7 +1701,7 @@ export async function sweepAbandoned(ctx: Ctx): Promise<{ abandoned: number; ord
       }
     });
     if (!r) break;
-    out[r]++;
+    if (r !== 'linked') out[r]++;
   }
   if (out.abandoned + out.ordered + out.blocked) ctx.emit({ type: 'orders' });
   return out;
@@ -3217,9 +3227,7 @@ export const landingProcs = {
   ),
 
   /**
-   * The customer said yes on the phone: their abandoned order becomes a real one (« Nouvelle »), with no message to
-   * them. The wilaya / commune can be given here when they had not chosen them. Taken in one transaction: two clicks,
-   * two agents or the minute job never make two orders.
+   * Add a draft to « Nouvelle » without messaging the customer. The agent can supply delivery details later.
    */
   'landing.convertLead': proc(
     [...WATCH],
@@ -3229,6 +3237,10 @@ export const landingProcs = {
       const o = await ctx.db.tx(async (tx) => {
         const a = (await tx.query(`SELECT * FROM landing_leads WHERE id = $1 FOR UPDATE`, [i.id]))[0];
         if (!a) throw notFound('Commande abandonnée introuvable');
+        if (a.status === 'converted' && a.order_id) {
+          const order = (await tx.query('SELECT id, ref FROM orders WHERE id = $1', [a.order_id]))[0];
+          if (order) return { id: num(order.id), ref: String(order.ref) };
+        }
         if (!['open', 'abandoned', 'dismissed'].includes(a.status)) throw bad(a.status === 'converted' ? 'Déjà dans les commandes' : 'Commande abandonnée bloquée comme fausse');
         if (i.wilayaId) Object.assign(a, { wilaya_id: i.wilayaId, commune: i.commune ?? '' });
         return convertLead(ctx, tx, a, false);
