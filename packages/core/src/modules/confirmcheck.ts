@@ -255,7 +255,7 @@ export function blockerText(ref: string, lines: LineCheck[], d: DeliverCheck): s
 
 /** The checks of a saved order (setConf runs them on each order it confirms). */
 export async function checkOrder(db: Db, orderId: number, ctx?: Ctx) {
-  const o = (await db.query('SELECT ref, source, customer_name, phone, address, wilaya_id, commune, is_stopdesk, stopdesk_id, company_id, wilaya_guess FROM orders WHERE id = $1', [orderId]))[0];
+  const o = (await db.query('SELECT ref, source, customer_name, phone, wilaya_id, commune, is_stopdesk, stopdesk_id, company_id, wilaya_guess FROM orders WHERE id = $1', [orderId]))[0];
   const items = await db.query('SELECT product_id, variant_id, qty FROM order_items WHERE order_id = $1 ORDER BY id', [orderId]);
   const lines = await checkLines(
     db,
@@ -277,8 +277,8 @@ export async function checkOrder(db: Db, orderId: number, ctx?: Ctx) {
       blocker = `${o.ref} : indiquez le nom et le numéro du client avant de confirmer.`;
     if (!blocker && items.some((i) => !i.product_id || !i.variant_id))
       blocker = `${o.ref} : choisissez une variante valide pour chaque produit avant de confirmer.`;
-    if (!blocker && !o.is_stopdesk && (!officialCommune(num(o.wilaya_id), o.commune) || !String(o.address ?? '').trim()))
-      blocker = `${o.ref} : indiquez la commune et l’adresse de livraison avant de confirmer.`;
+    if (!blocker && !o.is_stopdesk && !officialCommune(num(o.wilaya_id), o.commune))
+      blocker = `${o.ref} : choisissez une commune de cette wilaya avant de confirmer.`;
     if (!blocker && o.is_stopdesk && !(await db.query('SELECT 1 FROM stopdesks WHERE id = $1 AND wilaya_id = $2 AND gone_at IS NULL', [o.stopdesk_id, o.wilaya_id]))[0])
       blocker = `${o.ref} : choisissez un bureau de livraison dans cette wilaya avant de confirmer.`;
   }

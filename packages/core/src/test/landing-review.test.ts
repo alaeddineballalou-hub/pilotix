@@ -222,14 +222,19 @@ test('Add to orders accepts phone and source product, then confirmation requires
   await next('busy');
   await call('orders.update', agent, { id: r.orderId, customerName: '', internalNote: 'À rappeler' });
   await assert.rejects(next('confirmed'), /wilaya/i);
-  await call('orders.update', agent, { id: r.orderId, customerName: 'Amina Benali', wilayaId: 16, commune: 'Hydra' });
-  await assert.rejects(next('confirmed'), /adresse/i);
-  await call('orders.update', agent, { id: r.orderId, address: '12 rue des Lilas' });
+  await call('orders.update', agent, { id: r.orderId, customerName: 'Amina Benali', wilayaId: 16 });
+  await assert.rejects(next('confirmed'), /commune/i);
+  await call('orders.update', agent, { id: r.orderId, commune: 'Commune introuvable' });
+  await assert.rejects(next('confirmed'), /commune/i);
+  await call('orders.update', agent, { id: r.orderId, commune: 'Hydra' });
   await db.query('UPDATE order_items SET variant_id = NULL WHERE order_id = $1', [o.id]);
   await assert.rejects(next('confirmed'), /variante/i);
   await db.query('UPDATE order_items SET variant_id = $2 WHERE order_id = $1', [o.id, item.variant_id]);
   await next('confirmed');
-  assert.equal((await orders(f.phone as string)).length, 1);
+  const confirmed = await orders(f.phone as string);
+  assert.equal(confirmed.length, 1);
+  assert.equal(confirmed[0].conf_status, 'confirmed');
+  assert.equal(confirmed[0].address, '');
 });
 
 test('Meta: the Purchase of an abandoned order carries the browser it came from; without a token events wait, then leave', async () => {
@@ -244,7 +249,6 @@ test('Meta: the Purchase of an abandoned order carries the browser it came from;
   const o = (await orders(f.phone as string))[0];
   const agent = await as(EMAILS.conf);
   await giveTo(agent, [o.id]);
-  await call('orders.update', agent, { id: Number(o.id), address: '12 rue des Lilas' });
   await call('orders.setConf', agent, { ids: [Number(o.id)], status: 'confirmed' });
   const sys = await as(EMAILS.admin, server);
   await call('landing.run', sys, {});

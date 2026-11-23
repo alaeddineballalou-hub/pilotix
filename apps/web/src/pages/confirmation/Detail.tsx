@@ -329,7 +329,6 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
       : !normalizePhone(cPhone) ? t('orders.form.ePhone')
       : L.some((l) => !l.variantId) ? t('orders.form.eEmptyLine')
       : desk && !deskId ? t('orders.form.eDesk')
-      : !desk && !cAddr.trim() ? t('orders.form.eAddress')
       : null
   );
   const chkNote: { tone: 'bad' | 'warn'; text: string; fix?: () => void } | null = !C

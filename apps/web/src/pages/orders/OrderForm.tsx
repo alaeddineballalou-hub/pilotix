@@ -345,7 +345,6 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
     if (strict) {
       if (!desk && !commune) return t('orders.form.eCommune');
       if (ship.hard.length) return t('orders.form.eNotDeliverable', { msg: ship.hard[0] });
-      if (abandoned && !desk && !address.trim()) return t('orders.form.eAddress');
       if (desk && (abandoned || desksHere.length) && deskId === '') return t('orders.form.eDesk');
     }
     return null;

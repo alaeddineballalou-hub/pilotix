@@ -301,7 +301,6 @@
     "eDupVariant": "La même variante est en double : augmentez plutôt la quantité",
     "eDiscount": "Remise trop élevée : maximum {{v}} pour ces produits (réglable dans Produits & stock)",
     "eWilaya": "Choisissez la wilaya",
-    "eAddress": "Indiquez l’adresse de livraison",
     "eCommune": "Choisissez la commune",
     "eDesk": "Choisissez le bureau stop desk",
     "eNotDeliverable": "Non livrable : {{msg}}",
