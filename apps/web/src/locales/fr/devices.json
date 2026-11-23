@@ -2,7 +2,7 @@
   "title": "Mes appareils",
   "remove": "Retirer l’appareil",
   "checking": "Vérification de l’appareil…",
-  "required": "Activez les notifications système pour travailler sur cet appareil. Sur iPhone, ouvrez Pilotix depuis l’écran d’accueil.",
+  "setupHint": "Activez les notifications système pour recevoir des alertes sur cet appareil. Sur iPhone, ouvrez Pilotix depuis l’écran d’accueil.",
   "name": "Nom de l’appareil",
   "kind": "Type d’appareil",
   "phone": "Téléphone",

@@ -2,7 +2,7 @@
   "title": "My devices",
   "remove": "Remove device",
   "checking": "Checking device…",
-  "required": "Enable system notifications before working on this device. On iPhone, install Pilotix from the Home Screen first.",
+  "setupHint": "Enable system notifications to receive alerts on this device. On iPhone, open Pilotix from the Home Screen.",
   "name": "Device name",
   "kind": "Device type",
   "phone": "Phone",

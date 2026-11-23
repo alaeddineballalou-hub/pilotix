@@ -22,9 +22,9 @@ function deviceId() {
   return id;
 }
 
-export function NotificationDevices({ children, logout }: { children: ReactNode; logout: () => void }) {
+export function NotificationDevices({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
-  const [state, setState] = useState<'checking' | 'blocked' | 'ready'>('checking');
+  const [state, setState] = useState<'checking' | 'inactive' | 'ready'>('checking');
   const [devices, setDevices] = useState<Devices>([]);
   const [here, setHere] = useState('');
   const [open, setOpen] = useState(false);
@@ -47,9 +47,9 @@ export function NotificationDevices({ children, logout }: { children: ReactNode;
     const ready = result.registered && result.enabled;
     if (request === check.current) {
       setHere(id);
-      setState(ready ? 'ready' : 'blocked');
+      setState(ready ? 'ready' : 'inactive');
     }
-    // A failed device-list request should not block a device that already checked in.
+    // Device-list availability is independent of notification activation.
     void rpc('push.devices', {}, null).then((list) => {
       if (request !== check.current) return;
       setDevices(list);
@@ -69,8 +69,7 @@ export function NotificationDevices({ children, logout }: { children: ReactNode;
     const checkDevice = () => {
       if (document.visibilityState !== 'visible' || activating.current || pendingCheck.current) return;
       pendingCheck.current = refresh().then(() => {}, () => {
-        // A temporary connectivity error should not lock someone out after a successful check-in.
-        if (!activating.current) setState((previous) => previous === 'ready' ? previous : 'blocked');
+        if (!activating.current) setState((previous) => previous === 'ready' ? previous : 'inactive');
       }).finally(() => { pendingCheck.current = null; });
     };
     checkDevice();
@@ -84,8 +83,8 @@ export function NotificationDevices({ children, logout }: { children: ReactNode;
     };
   }, [refresh]);
   useEffect(() => {
-    setActions(state === 'ready' ? document.getElementById('notification-device-actions') : null);
-  }, [state]);
+    setActions(document.getElementById('notification-device-actions'));
+  }, []);
   useEffect(() => {
     if (!actions) return;
     const show = () => {
@@ -135,19 +134,18 @@ export function NotificationDevices({ children, logout }: { children: ReactNode;
   };
 
   const controls = <>
-    {state === 'ready' && <button type="button" className="btn" onClick={() => setOpen(!open)}>
+    <button type="button" className="btn" aria-expanded={open} onClick={() => setOpen(!open)}>
       <Icon name="bell" /> {t('devices.title')}
-    </button>}
-    {(open || state !== 'ready') && <Card title={t('devices.title')}>
+    </button>
+    {open && <Card title={t('devices.title')}>
       {state === 'checking' ? <p role="status">{t('devices.checking')}</p> : <>
-        {state === 'blocked' && <p>{t('devices.required')}</p>}
+        {state === 'inactive' && <p>{t('devices.setupHint')}</p>}
         <div className="row" style={{ flexWrap: 'wrap' }}>
           <label>{t('devices.name')} <input className="in" maxLength={80} required autoComplete="off" value={name} onChange={(event) => setName(event.target.value)} /></label>
           <label>{t('devices.kind')} <select className="in" value={kind} onChange={(event) => setKind(event.target.value === 'phone' ? 'phone' : 'pc')}>
             <option value="phone">{t('devices.phone')}</option><option value="pc">{t('devices.pc')}</option>
           </select></label>
           <button type="button" className="btn primary" disabled={busy || !name.trim()} onClick={() => void activate()}>{t('devices.activate')}</button>
-          {state === 'blocked' && <button type="button" className="btn" onClick={logout}>{t('shell.logout')}</button>}
           {state === 'ready' && <button type="button" className="btn" onClick={() => {
             void testDevicePush().then((sent) => setMessage(t(sent ? 'agency.alerts.testSent' : 'agency.alerts.deviceFailed')))
               .catch(() => setMessage(t('agency.alerts.deviceFailed')));
@@ -169,6 +167,5 @@ export function NotificationDevices({ children, logout }: { children: ReactNode;
       </>}
     </Card>}
   </>;
-  if (state !== 'ready') return <main className="page" style={{ maxWidth: 680, marginInline: 'auto' }}>{controls}</main>;
   return <>{children}{actions && createPortal(controls, actions)}</>;
 }

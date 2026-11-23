@@ -125,10 +125,10 @@ const BIG_MENU = 20;
 type ShellProps = { page: string; sub?: string; children: ReactNode; nav?: NavItem[]; space?: 'store' | 'agency' | 'marketer' };
 
 export function Shell(props: ShellProps) {
-  const { session, logout } = useSession();
+  const { session } = useSession();
   const nativeApp = isNativePilotix();
   if (backend.kind === 'demo' || session?.shop?.demo || nativeApp) return <WorkspaceShell {...props} />;
-  return <NotificationDevices key={`${session?.shop?.id}:${session?.profile.id}`} logout={logout}>
+  return <NotificationDevices key={`${session?.shop?.id}:${session?.profile.id}`}>
     <WorkspaceShell {...props} />
   </NotificationDevices>;
 }
