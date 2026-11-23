@@ -663,7 +663,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
             <button type="button" ref={wilRef} className={`qd6-pick${geoPick === 'wil' ? ' on' : ''}`} disabled={!editable} aria-haspopup="listbox" aria-expanded={geoPick === 'wil'} onClick={() => setGeoPick(geoPick === 'wil' ? null : 'wil')}>
               <small>{t('confirmation.dl.wilaya')}</small>
               <b className="ltr-n">
-                {String(wil).padStart(2, '0')} · {wilayaName(wil)}
+                {wil ? `${String(wil).padStart(2, '0')} · ${wilayaName(wil)}` : t('orders.form.eWilaya')}
               </b>
               {editable && <Icon name="chevron" />}
             </button>
