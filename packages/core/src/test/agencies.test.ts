@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { cleanCode } from '@pilotix/shared';
-import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
+import { call, Ctx, LiveEvent, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
 import { confirmSignup, loadShop, membershipsOf, passwordFromLink, startSignup, storeChoices } from '../platform';
 import { computePayroll } from '../modules/admin';
 
@@ -59,6 +59,72 @@ const PRICES = { perConfirmed: 0, perDelivered: 150, perUpsell: 50, monthly: 0, 
 const order = (ctx: Ctx, productId: number, phone: string) =>
   call('orders.create', ctx, { customerName: 'Client', phone, wilayaId: 31, commune: 'Oran', items: [{ productId, variantId: null, qty: 1 }] }) as Promise<any>;
 
+test('delegated SAV separates seller routing from agency assignment, role notifications and KPI alerts', async () => {
+  const { t, p } = await server();
+  const shop = await store(t, p, 'Boutique SAV', 'seller-sav@example.dz');
+  const ag = await agency(t, 'Agence SAV', 'agency-sav@example.dz');
+  await p('p.agencies.verify', { id: ag.id, verified: true });
+  const chief = await as(t, ag.id, 'agency-sav@example.dz', PW);
+  const seller = await as(t, shop.id, 'seller-sav@example.dz', PW);
+  const chiefAtSeller = { ...chief, seller: shop.id };
+  const inbox = (ctx: Ctx) => call('inbox.list', ctx, {}) as Promise<{ items: { title: string }[] }>;
+  const kpis = { sav: { threshold: 1, roles: ['sav'] } };
+  const settings = () => call('agency.notifications.get', chief, {}) as Promise<{ kpis: { metric: string }[] }>;
+  assert.equal((await settings()).kpis.some((row) => row.metric === 'sav'), false);
+  await assert.rejects(call('agency.notifications.set', chief, { rules: {}, kpis }), /pas confié/);
+  await call('agency.prices', chief, { prices: { ...PRICES, monthly: 10000 } });
+  const link = await call('partners.request', seller, { agencyId: ag.id, tasks: ['sav'], products: [shop.products.VELO] }) as { id: number };
+  await call('partners.setWork', seller, { id: link.id, tasks: ['sav'], products: [shop.products.VELO], agencyAlerts: ['sav'] });
+  await call('agency.answer', chief, { id: link.id, accept: true });
+  await call('users.create', chief, { phone: tph(), name: 'SAV agent', email: 'agent-sav@example.dz', password: PW, roles: ['sav'] });
+  await call('agency.notifications.set', chief, { rules: { delegatedSav: ['sav'] }, kpis });
+  const agent = await as(t, ag.id, 'agent-sav@example.dz', PW);
+  const agentAtSeller = { ...agent, seller: shop.id };
+  const mapped = Number((await shop.db.query('SELECT id FROM profiles WHERE agency_id = $1 AND agency_profile_id = $2', [ag.id, agent.session.profile.id]))[0].id);
+  const delegated = await order(seller, shop.products.VELO, '0661800001');
+  const own = await order(seller, shop.products.POUS, '0661800002');
+  const makeTicket = (ctx: Ctx, orderId: number) => call('sav.create', ctx, { orderId, type: 'defect', details: 'Test SAV' }) as Promise<{ id: number }>;
+  const ticket = await makeTicket(seller, delegated.id);
+  const ownTicket = await makeTicket(seller, own.id);
+  assert.equal(Number((await shop.db.query('SELECT sav_agency_id FROM complaints WHERE id=$1', [ticket.id]))[0].sav_agency_id), ag.id);
+  assert.ok((await inbox(agent)).items.some((row) => row.title === 'Nouveau ticket SAV confié à votre agence'));
+  assert.equal((await inbox(chief)).items.some((row) => row.title === 'Nouveau ticket SAV confié à votre agence'), false);
+  assert.deepEqual((await call('sav.list', agentAtSeller, {}) as { rows: { id: number }[] }).rows.map((row) => row.id), [ticket.id]);
+  await call('sav.get', agentAtSeller, { id: ticket.id });
+  await assert.rejects(call('sav.get', agentAtSeller, { id: ownTicket.id }), /introuvable/);
+  await assert.rejects(makeTicket(agentAtSeller, own.id), /pas confiée/);
+  await assert.rejects(call('sav.update', seller, { id: ticket.id, assignedTo: mapped }), /équipe SAV/);
+  await assert.rejects(call('sav.update', agentAtSeller, { id: ticket.id, assignedTo: mapped }), /affectation du ticket/);
+  await call('sav.update', chiefAtSeller, { id: ticket.id, assignedTo: mapped });
+  assert.ok((await inbox(agent)).items.some((row) => row.title === 'Ticket SAV qui vous est affecté'));
+  await call('inbox.run', chief, {});
+  await call('inbox.run', chief, {});
+  assert.equal((await inbox(agent)).items.filter((row) => row.title === 'Tickets SAV ouverts').length, 1);
+  assert.equal((await inbox(chief)).items.some((row) => row.title === 'Tickets SAV ouverts'), false);
+  await call('sav.update', chiefAtSeller, { id: ticket.id, status: 'resolved' });
+  await call('inbox.run', chief, {});
+  await call('sav.update', chiefAtSeller, { id: ticket.id, status: 'open' });
+  await call('inbox.run', chief, {});
+  assert.equal((await inbox(agent)).items.filter((row) => row.title === 'Tickets SAV ouverts').length, 2);
+  await call('partners.setWork', seller, { id: link.id, tasks: ['sav'], products: [shop.products.VELO], agencyAlerts: [] });
+  await makeTicket(seller, delegated.id);
+  assert.equal((await inbox(agent)).items.filter((row) => row.title === 'Nouveau ticket SAV confié à votre agence').length, 1);
+  const move = (ctx: Ctx, task: 'sav' | 'confirmation', agencyId: number | null) => call('partners.routeOrder', ctx, { orderId: own.id, task, agencyId });
+  await assert.rejects(move(chief, 'sav', ag.id), /espace d’une agence/);
+  await assert.rejects(move(seller, 'confirmation', ag.id), /n’assure pas ce service/);
+  await move(seller, 'sav', ag.id);
+  await call('sav.get', agentAtSeller, { id: ownTicket.id });
+  const routing = await call('partners.orderRouting', seller, { orderId: own.id }) as { tasks: { task: string; agencyId: number | null }[] };
+  assert.equal(routing.tasks.find((item) => item.task === 'sav')?.agencyId, ag.id);
+  await move(seller, 'sav', null);
+  await assert.rejects(call('sav.get', agentAtSeller, { id: ownTicket.id }), /introuvable/);
+  await call('sav.update', seller, { id: ownTicket.id, note: 'Équipe boutique' });
+  await call('partners.setWork', seller, { id: link.id, tasks: ['confirmation'], products: [shop.products.VELO] });
+  await assert.rejects(call('agency.notifications.set', chief, { rules: {}, kpis }), /pas confié/);
+  await assert.rejects(call('sav.get', agentAtSeller, { id: ticket.id }));
+  await call('sav.update', seller, { id: ticket.id, note: 'Repris par le vendeur' });
+});
+
 test('an agency: signs up, checked by Pilotix, works for a store on the products it is given', async () => {
   const { t, p } = await server();
   const shop = await store(t, p, 'Boutique Oran', 'karim@oran.dz');
@@ -103,11 +169,23 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   assert.equal(f.agency.prices.perDelivered, 150);
   assert.equal(f.link, null);
   // it asks for the confirmation of one product
+  const events: LiveEvent[] = [];
+  admin.emit = (event) => events.push(event);
   const { id: linkId } = (await call('partners.request', admin, { agencyId: ag.id, tasks: ['confirmation'], products: [shop.products.VELO] })) as any;
   await assert.rejects(call('partners.request', admin, { agencyId: ag.id, tasks: ['confirmation'], products: null }), /existe déjà/);
+  const inbox = (ctx: Ctx) => call('inbox.list', ctx, {}) as Promise<{ unread: number; items: { id: number; title: string; kind: string; orderId: number | null; read: boolean }[] }>;
+  const invitation = (await inbox(chief)).items[0];
+  assert.equal(invitation.title, 'Nouvelle invitation vendeur');
+  assert.equal((await inbox(chief)).unread, 1);
+  assert.ok(events.some((e) => e.type === 'inbox' && e.shop === ag.id && e.privateInbox && (e.data as { to: number[] }).to.includes(chief.session.profile.id)));
+  assert.equal((await inbox(admin)).unread, 0, 'the seller account has a separate inbox');
   // only the agency answers a store's request
   await assert.rejects(call('partners.answer', admin, { id: linkId, accept: true }), /n’attend plus/);
+  await call('users.create', chief, { phone: tph(), name: 'Second administrator', email: 'admin2@agence.dz', password: PW, roles: ['admin'] });
+  const secondAdmin = await as(t, ag.id, 'admin2@agence.dz', PW);
   const ans: any = await call('agency.answer', chief, { id: linkId, accept: true });
+  assert.ok((await inbox(secondAdmin)).items.some((x) => x.title === 'Invitation du vendeur acceptée'));
+  assert.equal((await inbox(chief)).items.some((x) => x.title === 'Invitation du vendeur acceptée'), false);
   assert.deepEqual(ans.problems, []);
 
   // the agency's team, added in Utilisateurs like any account: a confirmation agent, a suivi agent (every seller)
@@ -126,6 +204,14 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   const noraAgency = await as(t, ag.id, 'nora@agence.dz', PW);
   assert.deepEqual(((await call('agency.sellers', noraAgency, {})) as any[]).map((x) => [x.id, x.name, x.tasks]), [[shop.id, 'Boutique Oran', ['confirmation']]]);
   assert.deepEqual(((await call('agency.sellers', await as(t, ag.id, 'ali@agence.dz', PW), {})) as any[]).length, 0);
+  assert.equal((await inbox(noraAgency)).items.some((x) => x.title === 'Équipe de l’agence mise à jour'), false);
+  assert.ok((await inbox(chief)).items.some((x) => x.title === 'Équipe de l’agence mise à jour'));
+  await assert.rejects(call('agency.notifications.set', noraAgency, { rules: { order: [] } }));
+  await assert.rejects(call('agency.notifications.set', admin, { rules: { order: [] } }));
+  assert.deepEqual(await call('inbox.read', noraAgency, { ids: [invitation.id] }), { read: 0 });
+  await call('inbox.readAll', noraAgency, {});
+  assert.equal((await inbox(noraAgency)).unread, 0);
+  assert.equal((await inbox(chief)).items.find((x) => x.id === invitation.id)?.read, false);
   // her home has no prices, no money
   const nh: any = await call('agency.home', noraAgency, {});
   assert.deepEqual([nh.lead, nh.links.length, nh.agency.prices], [false, 0, null]);
@@ -135,6 +221,10 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   const o2 = await order(admin, shop.products.POUS, '0661000002');
   assert.equal(o1.confAgencyId, ag.id);
   assert.equal(o2.confAgencyId, null);
+  await call('partners.routeOrder', admin, { orderId: o2.id, task: 'confirmation', agencyId: ag.id });
+  assert.equal((await call('orders.get', admin, { id: o2.id }) as { confAgencyId: number | null }).confAgencyId, ag.id);
+  await call('partners.routeOrder', admin, { orderId: o2.id, task: 'confirmation', agencyId: null });
+  assert.equal((await call('orders.get', admin, { id: o2.id }) as { confAgencyId: number | null }).confAgencyId, null);
 
   // Nora from her agency's space, the store chosen at the top: only the agency's orders, only the confirmation work —
   // and, a plain agent, only those given to her: nothing until the chief gives her one
@@ -143,7 +233,22 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   assert.equal(((await call('orders.next', n, {})) as any).id, null);
   await assert.rejects(call('orders.get', n, { id: o1.id }), /ne vous est pas donnée/);
   const noraHere = Number((await shop.db.query(`SELECT id FROM profiles WHERE email = 'nora@agence.dz'`))[0].id);
+  await assert.rejects(call('orders.assignAgent', admin, { ids: [o1.id], agentId: noraHere }), /équipe qui gère la confirmation/);
+  await assert.rejects(call('orders.assignAgent', admin, { ids: [o1.id], agentId: null }), /équipe qui gère la confirmation/);
+  const sellerRules = await call('notify.get', admin, {}) as { rules: Record<string, object> };
+  await call('notify.set', admin, { rules: { order: { ...sellerRules.rules.order, on: false } } });
   await call('orders.assignAgent', { ...chief, seller: shop.id }, { ids: [o1.id], agentId: noraHere });
+  const assigned = await inbox(n);
+  assert.equal(assigned.unread, 1);
+  assert.equal(assigned.items[0].kind, 'order');
+  assert.equal(assigned.items[0].orderId, null, 'seller order IDs are local to the seller');
+  assert.equal((await inbox(chief)).items.some((x) => x.kind === 'order'), false);
+  assert.deepEqual(await call('inbox.read', n, { ids: [assigned.items[0].id] }), { read: 1 });
+  assert.equal((await inbox(noraAgency)).unread, 0);
+  await call('agency.notifications.set', chief, { rules: { order: [] } });
+  await call('orders.assignAgent', { ...chief, seller: shop.id }, { ids: [o1.id], agentId: null });
+  await call('orders.assignAgent', { ...chief, seller: shop.id }, { ids: [o1.id], agentId: noraHere });
+  assert.equal((await inbox(noraAgency)).unread, 0);
   assert.deepEqual(((await call('orders.list', n, {})) as any).rows.map((o: any) => o.id), [o1.id]);
   assert.deepEqual(((await call('confirmation.list', n, { sub: 'nouvelles' })) as any).rows.map((o: any) => o.id), [o1.id]);
   assert.equal(((await call('confirmation.counts', n, {})) as any).nouvelles, 1);
@@ -162,7 +267,7 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   assert.equal(((await call('confirmation.counts', all, {})) as any).nouvelles, 1);
   await assert.rejects(call('orders.get', all, { id: o1.id }), /Choisissez un vendeur/);
   // the agency's own people working here (the chief works for every seller)
-  assert.deepEqual(((await call('users.list', n, {})) as any[]).map((u) => u.name), ['Nora', 'Samir']);
+  assert.deepEqual(((await call('users.list', n, {})) as any[]).map((u) => u.name), ['Nora', 'Samir', 'Second administrator']);
   assert.equal(((await call('orders.next', n, {})) as any).id, o1.id);
   await call('confirmation.release', n, { id: o1.id });
   assert.deepEqual(await call('orders.next', all, {}), { id: o1.id, seller: shop.id });
@@ -203,7 +308,13 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   const sd: any = await call('partners.link', admin, { id: linkId });
   assert.deepEqual(sd.bills.map((b: any) => [b.amount, b.status]), [[220, 'requested']]);
   await call('partners.billPaid', admin, { billId: sd.bills[0].id });
+  await call('partners.billPaid', admin, { billId: sd.bills[0].id });
   await call('agency.billReceived', chief, { billId: sd.bills[0].id });
+  await call('agency.billReceived', chief, { billId: sd.bills[0].id });
+  for (const title of ['Facture marquée payée par le vendeur', 'Réception du paiement vendeur confirmée']) {
+    assert.equal((await inbox(chief)).items.filter((x) => x.title === title).length, 1);
+    assert.equal((await inbox(noraAgency)).items.some((x) => x.title === title), false);
+  }
   await assert.rejects(call('agency.billRequest', chief, { id: linkId, month: d.month }), /déjà payé/);
 
   // only the agency changes its prices; the old ones stay until the store says yes
@@ -217,6 +328,8 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   const ag2 = await agency(t, 'Call Center Sétif', 'lina@setif.dz');
   await p('p.agencies.verify', { id: ag2.id, verified: true });
   const chief2 = await as(t, ag2.id, 'lina@setif.dz', PW);
+  assert.equal((await inbox(chief2)).unread, 0);
+  assert.deepEqual(await call('inbox.read', chief2, { ids: [invitation.id] }), { read: 0 });
   await call('agency.prices', chief2, { prices: { ...PRICES, perConfirmed: 40, perDelivered: 0 } });
   const req2: any = await call('agency.request', chief2, { storeId: shop.id, tasks: ['confirmation', 'suivi'] });
   await assert.rejects(call('partners.answer', admin, { id: req2.id, accept: true, products: [shop.products.VELO] }), /Déjà confié à Agence Rapide pour la confirmation : Vélo/);
@@ -277,6 +390,12 @@ test('an agency asks a store: its prices for that store; the store chooses what 
   const r2: any = await call('agency.request', chief, { storeId: shop.id, tasks: ['confirmation'], prices: { ...PRICES, monthly: 25000 } });
   await call('agency.linkPrices', chief, { id: r2.id, prices: { ...PRICES, monthly: 20000 } }); // not answered yet: changed at once
   await call('partners.answer', admin, { id: r2.id, accept: true, products: [shop.products.VELO, shop.products.CASQ] });
+  const notices = await call('inbox.list', chief, {}) as { unread: number; items: { title: string; body: string }[] };
+  assert.equal(notices.unread, 2);
+  assert.deepEqual(notices.items.map(({ title, body }) => ({ title, body })), [
+    { title: 'Demande de collaboration acceptée', body: 'Boutique Alger' },
+    { title: 'Demande de collaboration refusée', body: 'Boutique Alger' },
+  ]);
   const d: any = await call('partners.link', admin, { id: r2.id });
   assert.deepEqual([d.link.status, d.link.prices.monthly, d.link.products], ['active', 20000, [shop.products.VELO, shop.products.CASQ]]);
   // the fixed amount counts in the month it works

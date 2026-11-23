@@ -15,6 +15,7 @@ import { can } from './rights';
 import { AssignAgent, AssignArea, AssignRotation, DEFAULT_SETTINGS, getSetting, setSetting, SettingsMap } from '../settings';
 import { addEvent } from './orders';
 import { tellGiven, tellTaken } from './inbox';
+import { tellAgencyAssignments } from './agencybell';
 import { loadShop } from '../platform/shops';
 
 export type Area = 'conf' | 'follow';
@@ -357,6 +358,7 @@ async function giveItems(ctx: Ctx, area: Area, items: Item[], list: Agent[], cfg
   let assigned = 0;
   // the bell: each agent is told of what they got (Suivi: of the parcels on alert only)
   const given = new Map<number, number[]>();
+  const parcels = new Map<number, number[]>();
   for (const it of items) {
     // « Sur alerte »: a parcel with no alert waits for one
     if (area === 'follow' && a.when !== 'shipped' && !it.alert) continue;
@@ -369,9 +371,11 @@ async function giveItems(ctx: Ctx, area: Area, items: Item[], list: Agent[], cfg
       pick.agent.lastAt = now;
       assigned++;
       if (area === 'conf' || it.alert) given.set(pick.agent.id, [...(given.get(pick.agent.id) ?? []), it.id]);
+      else if (it.agencyId !== null) parcels.set(pick.agent.id, [...(parcels.get(pick.agent.id) ?? []), it.id]);
     }
   }
   if (given.size) await tellGiven(ctx, area, given).catch(() => {});
+  if (parcels.size) await tellAgencyAssignments(ctx, area, parcels).catch(() => {});
   return assigned;
 }
 

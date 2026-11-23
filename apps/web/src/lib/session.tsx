@@ -182,8 +182,8 @@ export function AgentView({ children, tasks }: { children: ReactNode; tasks?: re
           ? ['marketer']
           : []
         : lead
-          ? ['confirmation', 'suivi']
-          : own.filter((r) => r === 'confirmation' || r === 'suivi')
+          ? ['confirmation', 'suivi', 'sav']
+          : own.filter((r) => r === 'confirmation' || r === 'suivi' || r === 'sav')
     ).filter((r) => !tasks || tasks.includes(r)) as Role[];
     const agencyLead = s.session.shop?.kind === 'agency' && lead;
     const session: Session = { ...s.session, isAdmin: false, canManageUsers: false, roles, profile: { ...s.session.profile, agencyId: s.session.shop?.id ?? -1, agencyLead } };

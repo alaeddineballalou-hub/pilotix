@@ -10,7 +10,8 @@ import { backend, Out, rpc } from '../lib/backend';
 import { clock, dayLabel, sameDay } from '../lib/format';
 import { openOrder } from '../lib/modals';
 import { enablePush } from '../lib/push';
-import { useRpc } from '../lib/query';
+import { useRpcFor } from '../lib/query';
+import { setSeller, useScope } from '../lib/seller';
 import { useSession } from '../lib/session';
 import { audioReady, bellSound, BellSound, unlockAudio } from '../lib/sound';
 import { store } from '../lib/store';
@@ -71,7 +72,9 @@ export function Bell() {
   const { session } = useSession();
   const me = session!.profile.id;
   const here = session!.shop?.id;
-  const q = useRpc('inbox.list', {}, { staleTime: 60_000, refetchInterval: 5 * 60_000 });
+  const agency = session!.shop?.kind === 'agency';
+  const scope = useScope();
+  const q = useRpcFor(agency ? null : scope, 'inbox.list', {}, { staleTime: 60_000, refetchInterval: 5 * 60_000 });
   const data = q.data;
   const refetch = useRef(q.refetch);
   refetch.current = q.refetch;
@@ -167,11 +170,9 @@ export function Bell() {
     document.addEventListener('pointerdown', down);
     document.addEventListener('keydown', k);
     window.addEventListener('hashchange', away);
-    enablePush(false)
-      .then(setPush)
-      .catch(() => setPush('unsupported'));
+    if (!agency) enablePush(false).then(setPush).catch(() => setPush('unsupported'));
     return () => (document.body.classList.remove('px-bell-open'), document.removeEventListener('pointerdown', down), document.removeEventListener('keydown', k), window.removeEventListener('hashchange', away));
-  }, [open]);
+  }, [agency, open]);
 
   useLayoutEffect(() => {
     const r = box.current?.getBoundingClientRect();
@@ -181,16 +182,19 @@ export function Bell() {
   }, [open]);
 
   const read = useCallback((ids: number[]) => {
-    if (ids.length) void rpc('inbox.read', { ids }).then(() => refetch.current()).catch(() => {});
-  }, []);
+    if (ids.length) void rpc('inbox.read', { ids }, agency ? null : undefined).then(() => refetch.current()).catch(() => {});
+  }, [agency]);
   const go = (x: Line) => {
     setOpen(false);
     setPops((p) => p.filter((y) => y.id !== x.id));
     if (!x.read) read([x.id]);
     if (x.orderId) openOrder(x.orderId);
-    else if (x.url) location.hash = x.url;
+    else if (x.url) {
+      if (agency && (x.url.startsWith('#/confirmation/') || x.url.startsWith('#/suivi/'))) setSeller('all');
+      location.hash = x.url;
+    }
   };
-  const readAll = () => void rpc('inbox.readAll', {}).then(() => refetch.current()).catch(() => {});
+  const readAll = () => void rpc('inbox.readAll', {}, agency ? null : undefined).then(() => refetch.current()).catch(() => {});
   /** « Écouter les sons »: the sound of a kind and its pop-up, with an example (never sent to anyone) */
   const sample = (k: BellSound, url: string | null = null) => {
     unlockAudio();
@@ -321,31 +325,35 @@ export function Bell() {
                 ))}
               </div>
             )}
-            <div className="px-bell-row">
-              <Icon name="smartphone" />
-              <span className="px-bell-row-t">
-                <b>{t('bell.phone')}</b>
-                <small>
-                  {push === 'on'
-                    ? t('bell.phoneOn')
-                    : push === 'denied'
-                      ? t('bell.phoneDenied')
-                      : push === 'unsupported'
-                        ? t(backend.kind === 'demo' ? 'bell.phonePreview' : 'bell.phoneNo')
-                        : t('bell.phoneAskHint')}
-                </small>
-              </span>
-              {push === 'on' && (
-                <span className="px-bell-ok">
-                  <Icon name="check" />
-                </span>
-              )}
-            </div>
-            {push === 'off' && (
-              <button type="button" className="btn primary px-bell-push" onClick={() => enablePush(true).then(setPush).catch(() => setPush('unsupported'))}>
-                <Icon name="bell" />
-                {t('bell.phoneAsk')}
-              </button>
+            {!agency && (
+              <>
+                <div className="px-bell-row">
+                  <Icon name="smartphone" />
+                  <span className="px-bell-row-t">
+                    <b>{t('bell.phone')}</b>
+                    <small>
+                      {push === 'on'
+                        ? t('bell.phoneOn')
+                        : push === 'denied'
+                          ? t('bell.phoneDenied')
+                          : push === 'unsupported'
+                            ? t(backend.kind === 'demo' ? 'bell.phonePreview' : 'bell.phoneNo')
+                            : t('bell.phoneAskHint')}
+                    </small>
+                  </span>
+                  {push === 'on' && (
+                    <span className="px-bell-ok">
+                      <Icon name="check" />
+                    </span>
+                  )}
+                </div>
+                {push === 'off' && (
+                  <button type="button" className="btn primary px-bell-push" onClick={() => enablePush(true).then(setPush).catch(() => setPush('unsupported'))}>
+                    <Icon name="bell" />
+                    {t('bell.phoneAsk')}
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>

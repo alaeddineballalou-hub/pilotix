@@ -20,7 +20,7 @@ import type { OrigLine } from './upsell';
 import type { AgencySellerWork } from './agency';
 
 // ---------------------------------------------------------------- roles
-export const ROLES = ['admin', 'vendeur', 'agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'marketer'] as const;
+export const ROLES = ['admin', 'vendeur', 'agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'marketer', 'sav'] as const;
 export type Role = (typeof ROLES)[number];
 
 /** Roles that bring other roles with them. */

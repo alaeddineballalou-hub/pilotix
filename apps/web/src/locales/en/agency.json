@@ -50,12 +50,45 @@
   "alreadyActive": "You already work for this store.",
   "alreadyPending": "A request is already waiting for an answer.",
   "tasks": "The work",
+  "routing": {
+    "title": "Team responsible for this order",
+    "saved": "Responsible team updated",
+    "store": "Store team",
+    "none": "No active agency contracts."
+  },
+  "alerts": {
+    "help": "Choose notification recipients by role. KPI alerts fire when the count reaches your threshold.",
+    "kpis": "KPI alerts",
+    "enabled": "Enabled",
+    "threshold": "Alert at",
+    "toAgency": "Agency-wide alerts",
+    "pickSav": "Choose a seller that has delegated after-sales service.",
+    "groups": {
+      "seller": "Seller invitations and responses",
+      "order": "Confirmation assignments",
+      "follow": "Delivery follow-up assignments",
+      "sav": "After-sales assignments",
+      "team": "Team updates",
+      "access": "Seller access changes",
+      "payment": "Invoice payments",
+      "delegatedConfirmation": "Orders sent for confirmation",
+      "delegatedFollow": "Orders sent for delivery follow-up",
+      "delegatedSav": "After-sales tickets sent to the agency"
+    },
+    "metrics": {
+      "order": "Confirmation backlog",
+      "follow": "Open delivery alerts",
+      "sav": "Open after-sales tickets"
+    }
+  },
   "task": {
+    "sav": "After-sales service",
     "confirmation": "Confirmation",
     "suivi": "Follow-up",
     "marketing": "Ads"
   },
   "taskHelp": {
+    "sav": "Handle after-sales tickets and exchanges for delegated products.",
     "confirmation": "Call the customers and confirm the orders",
     "suivi": "Follow the parcels until they are delivered",
     "marketing": "Run the ads of the products given"

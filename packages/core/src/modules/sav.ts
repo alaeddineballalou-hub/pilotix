@@ -5,14 +5,57 @@ import { EXCHANGE_KINDS, SAV_STATUSES, SAV_TYPES, SAV_WISHES } from '@pilotix/sh
 import type { Order, Page } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
-import { bad, Ctx, notFound, proc, withActionLock } from '../rpc';
+import { bad, Ctx, forbidden, notFound, proc, withActionLock } from '../rpc';
 import { addEvent, createOrder, deliveredReport, getOrder } from './orders';
-import { ownRowSql, ownTicketSql } from './agencyscope';
+import { agencyLead, agencyOf, ownRowSql, ownTicketSql } from './agencyscope';
 import { savFee } from '../settings';
+import { tellAgency, tellDelegated } from './agencybell';
 import { settleTickets } from './tickets';
 
 const id = z.number().int().positive();
-const SAV_ROLES = ['confirmation', 'suivi', 'depot'] as const;
+const SAV_ROLES = ['confirmation', 'suivi', 'depot', 'sav'] as const;
+
+const originalProduct = (order: string) => `(SELECT product_id FROM order_items WHERE order_id = ${order} ORDER BY id LIMIT 1)`;
+const savRouteFor = (product: string) => `(SELECT agency_id FROM agency_routes WHERE task = 'sav'
+  AND (product_id = ${product} OR product_id IS NULL)
+  ORDER BY product_id NULLS LAST LIMIT 1)`;
+export const routedSav = (order: string) => `(SELECT CASE
+  WHEN sav_order.sav_agency_override = 0 THEN NULL
+  WHEN EXISTS (SELECT 1 FROM agency_routes r WHERE r.task = 'sav' AND r.agency_id = sav_order.sav_agency_override) THEN sav_order.sav_agency_override
+  ELSE ${savRouteFor(originalProduct('sav_order.id'))}
+  END FROM orders sav_order WHERE sav_order.id = ${order})`;
+
+function savProductScope(ctx: Ctx, order: string) {
+  const ids = ctx.session.profile.agencyProducts?.filter((id) => Number.isSafeInteger(id) && id > 0);
+  return ids ? (ids.length ? ` AND ${originalProduct(order)} IN (${ids.join(',')})` : ' AND false') : '';
+}
+
+function savTicketScope(ctx: Ctx) {
+  const agency = agencyOf(ctx);
+  if (agency === null) return ownTicketSql(ctx);
+  return ctx.session.roles.includes('sav')
+    ? `c.sav_agency_id = ${agency} AND ${routedSav('c.order_id')} = ${agency}${savProductScope(ctx, 'c.order_id')}`
+    : 'false';
+}
+
+async function ticketAgency(ctx: Ctx, id: number, mutate = false, db = ctx.db) {
+  const scope = savTicketScope(ctx);
+  const row = (await db.query(`SELECT sav_agency_id FROM complaints c WHERE c.id = $1${scope ? ` AND ${scope}` : ''}${db === ctx.db ? '' : ' FOR UPDATE OF c'}`, [id]))[0];
+  if (!row) throw notFound('Ticket introuvable');
+  const agency = numOrNull(row.sav_agency_id);
+  if (mutate && agency !== agencyOf(ctx)) throw forbidden('Le ticket est géré par son équipe SAV');
+  return agency;
+}
+
+async function savAssignee(db: Db, person: number, agency: number | null, order: number | null) {
+  const row = (await db.query(
+    `SELECT name FROM profiles p WHERE id = $1 AND active AND agency_id IS NOT DISTINCT FROM $2
+      AND ($2::integer IS NULL OR ('sav' = ANY(roles) AND (agency_products IS NULL OR ${originalProduct('$3')} = ANY(agency_products))))`,
+    [person, agency, order],
+  ))[0];
+  if (!row) throw bad('Responsable introuvable dans cette équipe SAV');
+  return row.name as string;
+}
 
 export const SAV_VIEWS = ['todo', 'all', 'attente', 'depot', 'livraison', 'livres', 'annules', 'satisfaction', 'termines'] as const;
 /** How the customer felt: 1 Pas content · 2 Moyen · 3 Content · 4 Très content (1 and 2 come with the reason). */
@@ -163,7 +206,7 @@ const ListInput = z.object({
 });
 
 async function listTickets(ctx: Ctx, f: z.infer<typeof ListInput>): Promise<Page<SavTicket> & { counts: { todo: number; all: number; mine: number; nobody: number; view: number } }> {
-  await settleDelivered(ctx.db, ctx.session.profile.id);
+  if (agencyOf(ctx) === null) await settleDelivered(ctx.db, ctx.session.profile.id);
   const me = ctx.session.profile.id;
   const w = new Where();
   viewWhere(w, f.view);
@@ -179,7 +222,7 @@ async function listTickets(ctx: Ctx, f: z.infer<typeof ListInput>): Promise<Page
   if (f.from) w.add('c.created_at >= ?', f.from);
   if (f.to) w.add('c.created_at < ?', f.to);
   // the store's own confirmation agent: the tickets of his orders, given to him or made by him
-  const mineOnly = ownTicketSql(ctx);
+  const mineOnly = savTicketScope(ctx);
   if (mineOnly) w.add(mineOnly);
   const from = `FROM complaints c LEFT JOIN orders o ON o.id = c.order_id LEFT JOIN orders ex ON ex.id = c.exchange_order_id`;
   // Moi / Personne / Tous, counted on the same view and search
@@ -208,7 +251,7 @@ export async function getTicket(db: Db, tid: number): Promise<SavTicket> {
 }
 
 export async function savKpis(ctx: Ctx) {
-  await settleDelivered(ctx.db, ctx.session.profile.id);
+  if (agencyOf(ctx) === null) await settleDelivered(ctx.db, ctx.session.profile.id);
   const r = (
     await ctx.db.query(
       `SELECT
@@ -225,7 +268,7 @@ export async function savKpis(ctx: Ctx) {
          count(*) FILTER (WHERE c.status = 'resolved')::int AS livres,
          count(*) FILTER (WHERE ${SAT_WAIT})::int AS satisfaction,
          count(*) FILTER (WHERE ${DONE})::int AS termines
-       FROM complaints c LEFT JOIN orders ex ON ex.id = c.exchange_order_id`,
+       FROM complaints c LEFT JOIN orders ex ON ex.id = c.exchange_order_id${savTicketScope(ctx) ? ` WHERE ${savTicketScope(ctx)}` : ''}`,
     )
   )[0];
   return {
@@ -263,6 +306,7 @@ const CreateInput = z.object({
   wish: z.enum(SAV_WISHES).nullable().optional(),
   details: z.string().max(2000).default(''),
   assignedTo: id.nullable().optional(),
+  takeWhenOwned: z.boolean().optional(),
   /** settled during the call: no parcel, the ticket is born finished */
   settle: z
     .object({ reason: z.enum(SAV_SETTLE), note: z.string().trim().max(1000).default(''), satisfaction: z.number().int().min(1).max(4), satisfactionNote: z.string().trim().max(1000).default('') })
@@ -326,11 +370,12 @@ export async function createExchange(ctx: Ctx, input: z.infer<typeof ExchangeInp
 }
 
 async function createExchangeLocked(ctx: Ctx, input: z.infer<typeof ExchangeInput>) {
+  await ticketAgency(ctx, input.id, true);
   const t = await getTicket(ctx.db, input.id);
   if (!t.orderId) throw bad('Ce ticket n’est lié à aucune commande');
   if (t.status === 'resolved' || t.status === 'closed') throw bad('Ticket déjà clôturé');
   if (t.exchangeOrderId && t.exchangeFollow !== 'cancelled') throw bad(`Un échange existe déjà : ${t.exchangeRef}`);
-  const o: Order = await getOrder(ctx, t.orderId);
+  const o: Order = await getOrder(ctx, t.orderId, ctx.db, 'sav');
   // the customer has the article: delivered (or already exchanged once) — a parcel on the road, refused or returned is
   // not exchanged (a claim or a new order instead)
   if (!['delivered', 'exchanged'].includes(o.followStatus ?? '')) throw bad(`${o.ref} n’est pas livrée : un échange se fait sur une commande que le client a reçue.`);
@@ -356,6 +401,11 @@ async function createExchangeLocked(ctx: Ctx, input: z.infer<typeof ExchangeInpu
         pid = num(v.product_id);
       }
       if (!pid) throw bad('Choisissez le nouveau produit');
+      const agency = agencyOf(ctx);
+      const allowed = ctx.session.profile.agencyProducts;
+      if (agency !== null && pid !== it.productId && ((allowed && !allowed.includes(pid)) ||
+        numOrNull((await ctx.db.query(`SELECT ${savRouteFor('$1::bigint')} AS agency`, [pid]))[0]?.agency) !== agency))
+        throw forbidden('Ce produit n’est pas confié à votre agence pour le SAV');
       if (input.kind === 'variant' && (!vid || vid === it.variantId)) throw bad('Choisissez une autre couleur / taille');
       const p = (await ctx.db.query('SELECT p.price, v.price AS vprice FROM products p LEFT JOIN product_variants v ON v.id = $2 WHERE p.id = $1', [pid, vid]))[0];
       if (!p) throw bad('Produit inconnu');
@@ -375,6 +425,7 @@ async function createExchangeLocked(ctx: Ctx, input: z.infer<typeof ExchangeInpu
   const nowIso = new Date(ctx.now()).toISOString();
 
   const res = await ctx.db.tx(async (tx) => {
+    await ticketAgency(ctx, t.id, true, tx);
     const lockd = (await tx.query('SELECT c.exchange_order_id, o.follow_status FROM complaints c LEFT JOIN orders o ON o.id = c.exchange_order_id WHERE c.id = $1 FOR UPDATE OF c', [t.id]))[0];
     if (lockd?.exchange_order_id && lockd.follow_status !== 'cancelled') throw bad('Un échange existe déjà pour ce ticket');
     const ex = await createOrder(
@@ -402,6 +453,7 @@ async function createExchangeLocked(ctx: Ctx, input: z.infer<typeof ExchangeInpu
         originalOrderId: o.id,
       },
       tx,
+      { savAccess: 'sav' },
     );
     // the parts line says which parts leave (the depot packs them, not the article)
     if (input.kind === 'parts') await tx.query(`UPDATE order_items SET variant_id = NULL, variant_title = $2 WHERE order_id = $1`, [ex.id, `Pièces : ${partsText}`.slice(0, 200)]);
@@ -420,11 +472,11 @@ async function createExchangeLocked(ctx: Ctx, input: z.infer<typeof ExchangeInpu
   });
   ctx.emit({ type: 'sav', id: t.id });
   ctx.emit({ type: 'orders' });
-  return { ticket: await getTicket(ctx.db, t.id), order: await getOrder(ctx, res) };
+  return { ticket: await getTicket(ctx.db, t.id), order: await getOrder(ctx, res, ctx.db, 'sav') };
 }
 
 /** Orders by partial ref (PX12…), partial phone, tracking or name — newest first. */
-export async function findOrders(ctx: Ctx, q: string, limit = 8, extra?: (w: Where) => void, orderBy = 'o.created_at DESC'): Promise<Order[]> {
+export async function findOrders(ctx: Ctx, q: string, limit = 8, extra?: (w: Where) => void, orderBy = 'o.created_at DESC', access?: 'sav'): Promise<Order[]> {
   const w = new Where();
   const digits = q.replace(/\D/g, '');
   if (digits.length >= 4 && digits.length === q.replace(/[\s+.-]/g, '').length) w.add(`(o.phone LIKE '%' || ? || '%' OR o.phone2 LIKE '%' || ? || '%' OR o.tracking ILIKE '%' || ? || '%')`, digits.slice(-9), digits.slice(-9), digits);
@@ -435,7 +487,7 @@ export async function findOrders(ctx: Ctx, q: string, limit = 8, extra?: (w: Whe
   if (own) w.add(own);
   const rows = await ctx.db.query(`SELECT o.id FROM sales o ${w.sql} ORDER BY ${orderBy} LIMIT ${w.p(limit)}`, w.params);
   const out: Order[] = [];
-  for (const r of rows) out.push(await getOrder(ctx, num(r.id)));
+  for (const r of rows) out.push(await getOrder(ctx, num(r.id), ctx.db, access));
   return out;
 }
 
@@ -444,7 +496,7 @@ const dateStr = z.string().min(10).max(40);
 
 /** SAV statistics, apart from orders: tickets (created, delivered, cancelled), their parcels (delivery rate, returns) and their money. */
 export async function savStats(ctx: Ctx, from: string, to: string) {
-  await settleDelivered(ctx.db, ctx.session.profile.id);
+  if (agencyOf(ctx) === null) await settleDelivered(ctx.db, ctx.session.profile.id);
   const t = (
     await ctx.db.query(
       `SELECT count(*) FILTER (WHERE c.created_at >= $1 AND c.created_at < $2)::int AS created,
@@ -559,9 +611,10 @@ export const savProcs = {
   'sav.stats': proc([...SAV_ROLES, 'agent_manager', 'vendeur'], z.object({ from: dateStr, to: dateStr }), (ctx, i) => savStats(ctx, i.from, i.to)),
 
   'sav.get': proc([...SAV_ROLES], z.object({ id }), async (ctx, { id }) => {
+    await ticketAgency(ctx, id);
     const t = await getTicket(ctx.db, id);
-    const order = t.orderId ? await getOrder(ctx, t.orderId) : null;
-    const exchange = t.exchangeOrderId ? await getOrder(ctx, t.exchangeOrderId) : null;
+    const order = t.orderId ? await getOrder(ctx, t.orderId, ctx.db, 'sav') : null;
+    const exchange = t.exchangeOrderId ? await getOrder(ctx, t.exchangeOrderId, ctx.db, 'sav') : null;
     // what the exchange form needs: variants of the products in the order, product parts
     const pids = order ? [...new Set(order.items.map((i) => i.productId))] : [];
     const parts = pids.length ? await ctx.db.query('SELECT id, parts FROM products WHERE id = ANY($1)', [pids]) : [];
@@ -577,9 +630,13 @@ export const savProcs = {
 
   /** Products and variants to pick a replacement from. */
   'sav.catalog': proc([...SAV_ROLES], z.object({}), async (ctx) => {
+    const agency = agencyOf(ctx);
+    const products = ctx.session.profile.agencyProducts ?? null;
+    const scope = agency === null ? '' : ` AND ${savRouteFor('p.id')} = $1 AND ($2::bigint[] IS NULL OR p.id = ANY($2))`;
     const rows = await ctx.db.query(
       `SELECT v.id AS variant_id, v.title, p.id AS product_id, p.name, COALESCE(v.price, p.price) AS price FROM product_variants v JOIN products p ON p.id = v.product_id
-       WHERE p.active AND v.active AND NOT p.is_service ORDER BY p.name, v.id`,
+       WHERE p.active AND v.active AND NOT p.is_service${scope} ORDER BY p.name, v.id`,
+      agency === null ? [] : [agency, products],
     );
     return rows.map((r: any) => ({ variantId: num(r.variant_id), productId: num(r.product_id), name: r.name as string, title: r.title as string, price: num(r.price) }));
   }),
@@ -588,36 +645,47 @@ export const savProcs = {
     const me = ctx.session.profile.id;
     let name = i.customerName ?? null;
     let phone = i.phone ?? null;
-    if (i.orderId) {
-      const o = await getOrder(ctx, i.orderId);
-      name = o.customerName;
-      phone = o.phone;
-    } else if (!name && !phone) throw bad('Choisissez la commande, ou indiquez le nom ou le téléphone du client');
+    if (!i.orderId && !name && !phone) throw bad('Choisissez la commande, ou indiquez le nom ou le téléphone du client');
     if (i.settle) checkSat(i.settle);
     const nowIso = new Date(ctx.now()).toISOString();
     const notes: SavNote[] = [{ at: nowIso, userId: me, text: i.details.trim() ? `Ticket créé : ${i.details.trim()}` : 'Ticket créé', status: 'open' }];
-    if (i.assignedTo) {
-      const a = (await ctx.db.query('SELECT name FROM profiles WHERE id=$1', [i.assignedTo]))[0];
-      if (!a) throw bad('Responsable introuvable');
-      notes.push({ at: nowIso, userId: me, text: `Confié à ${a.name}` });
-    }
-    const tid = await ctx.db.tx(async (tx) => {
+    const actorAgency = agencyOf(ctx);
+    const created = await ctx.db.tx(async (tx) => {
+      const order = i.orderId ? (await tx.query(`SELECT ${routedSav('o.id')} AS agency FROM orders o WHERE o.id = $1${savProductScope(ctx, 'o.id')}`, [i.orderId]))[0] : null;
+      const agency = numOrNull(order?.agency);
+      if (actorAgency !== null && (agency !== actorAgency || !ctx.session.roles.includes('sav'))) throw forbidden('Cette commande n’est pas confiée à votre agence pour le SAV');
+      if (i.orderId) {
+        const o = await getOrder(ctx, i.orderId, tx, 'sav');
+        name = o.customerName;
+        phone = o.phone;
+      }
+      const assignedTo = i.assignedTo ?? (i.takeWhenOwned && agency === null && actorAgency === null ? me : null);
+      if (assignedTo || i.settle) {
+        if (agency !== actorAgency) throw forbidden('Le ticket est géré par son équipe SAV');
+        if (assignedTo) {
+          if (agency !== null && !agencyLead(ctx)) throw forbidden('Votre agence décide de l’affectation du ticket');
+          const name = await savAssignee(tx, assignedTo, agency, i.orderId ?? null);
+          notes.push({ at: nowIso, userId: me, text: `Confié à ${name}` });
+        }
+      }
       const r = (
         await tx.query(
-          `INSERT INTO complaints (ref, order_id, customer_name, phone, type, wish, details, status, assigned_to, created_by, notes, created_at, updated_at)
-           VALUES ('SAV-' || lpad(nextval('complaint_ref_seq')::text, 4, '0'),$1,$2,$3,$4,$5,$6,'open',$7,$8,$9,$10,$10) RETURNING id, ref`,
-          [i.orderId ?? null, name, phone, i.type, i.wish ?? null, i.details, i.assignedTo ?? null, me, JSON.stringify(notes), nowIso],
+          `INSERT INTO complaints (ref, order_id, customer_name, phone, type, wish, details, status, assigned_to, created_by, notes, created_at, updated_at, sav_agency_id)
+           VALUES ('SAV-' || lpad(nextval('complaint_ref_seq')::text, 4, '0'),$1,$2,$3,$4,$5,$6,'open',$7,$8,$9,$10,$10,$11) RETURNING id, ref`,
+          [i.orderId ?? null, name, phone, i.type, i.wish ?? null, i.details, assignedTo, me, JSON.stringify(notes), nowIso, agency],
         )
       )[0];
       if (i.orderId) await addEvent(tx, i.orderId, me, 'note', null, 'event', `Ticket SAV ${r.ref} : ${i.details}`.slice(0, 200));
       if (i.settle) await settleTicket(ctx, tx, num(r.id), i.settle);
-      return num(r.id);
+      return { id: num(r.id), agency };
     });
-    ctx.emit({ type: 'sav', id: tid });
-    return getTicket(ctx.db, tid);
+    ctx.emit({ type: 'sav', id: created.id });
+    if (created.agency && i.orderId) await tellDelegated(ctx, created.agency, 'sav', i.orderId).catch(() => {});
+    return getTicket(ctx.db, created.id);
   }),
 
   'sav.update': proc([...SAV_ROLES], UpdateInput, async (ctx, i) => {
+    const agency = await ticketAgency(ctx, i.id, true);
     const t = await getTicket(ctx.db, i.id);
     const me = ctx.session.profile.id;
     // closed by hand (« Livré », « Annulé ») while its exchange parcel still goes: the parcel would leave anyway (stock,
@@ -627,14 +695,15 @@ export const savProcs = {
     const parts: string[] = [];
     if (i.status && i.status !== t.status) parts.push(`Statut : ${SAV_STATUS_FR[i.status]}`);
     if (i.assignedTo !== undefined && (i.assignedTo ?? null) !== t.assignedTo) {
-      const a = i.assignedTo ? (await ctx.db.query('SELECT name FROM profiles WHERE id=$1', [i.assignedTo]))[0] : null;
-      if (i.assignedTo && !a) throw bad('Responsable introuvable');
-      parts.push(`Confié à ${a ? a.name : 'personne'}`);
+      if (agency !== null && !agencyLead(ctx)) throw forbidden('Votre agence décide de l’affectation du ticket');
+      const name = i.assignedTo ? await savAssignee(ctx.db, i.assignedTo, agency, t.orderId) : 'personne';
+      parts.push(`Confié à ${name}`);
     }
     if (i.wish !== undefined && (i.wish ?? null) !== t.wish) parts.push('Souhait du client modifié');
     if (i.note?.trim()) parts.push(i.note.trim());
     if (!parts.length) return t;
     await ctx.db.tx(async (tx) => {
+      await ticketAgency(ctx, i.id, true, tx);
       await tx.query(
         `UPDATE complaints SET status=$2, assigned_to=$3, wish=$4,
            resolved_at = CASE WHEN $2 IN ('resolved','closed') THEN COALESCE(resolved_at, now()) ELSE NULL END, updated_at=now() WHERE id=$1`,
@@ -643,6 +712,10 @@ export const savProcs = {
       await pushNote(tx, i.id, { at: new Date(ctx.now()).toISOString(), userId: me, text: parts.join(' · '), status: i.status ?? null });
     });
     ctx.emit({ type: 'sav', id: i.id });
+    if (agency !== null && i.assignedTo && i.assignedTo !== t.assignedTo && i.assignedTo !== me) {
+      const recipient = (await ctx.db.query('SELECT agency_profile_id FROM profiles WHERE id = $1 AND agency_id = $2', [i.assignedTo, agency]))[0];
+      if (recipient?.agency_profile_id) await tellAgency(ctx, agency, 'savAssigned', '#/sav/tickets', { people: [num(recipient.agency_profile_id)] });
+    }
     return getTicket(ctx.db, i.id);
   }),
 
@@ -654,10 +727,14 @@ export const savProcs = {
     z.object({ id, reason: z.enum(SAV_SETTLE), note: z.string().trim().max(1000).default('') }).merge(SatInput),
     async (ctx, i) => {
       checkSat(i);
+      await ticketAgency(ctx, i.id, true);
       const t = await getTicket(ctx.db, i.id);
       if (t.status === 'resolved' || t.status === 'closed') throw bad('Ticket déjà clôturé');
       if (t.exchangeOrderId && t.exchangeFollow !== 'cancelled') throw bad(`Un échange est en cours : ${t.exchangeRef}`);
-      await ctx.db.tx((tx) => settleTicket(ctx, tx, i.id, i));
+      await ctx.db.tx(async (tx) => {
+        await ticketAgency(ctx, i.id, true, tx);
+        await settleTicket(ctx, tx, i.id, i);
+      });
       ctx.emit({ type: 'sav', id: i.id });
       return getTicket(ctx.db, i.id);
     },
@@ -674,11 +751,13 @@ export const savProcs = {
       reopen: z.boolean().default(false),
     }),
     async (ctx, i) => {
+      await ticketAgency(ctx, i.id, true);
       const t = await getTicket(ctx.db, i.id);
       const me = ctx.session.profile.id;
       const nowIso = new Date(ctx.now()).toISOString();
       if (t.status !== 'resolved') throw bad('Le ticket n’est pas terminé');
       await ctx.db.tx(async (tx) => {
+        await ticketAgency(ctx, i.id, true, tx);
         if (i.noAnswer) {
           const n = t.satTries + 1;
           await tx.query('UPDATE complaints SET sat_tries = $2, updated_at = now() WHERE id = $1', [i.id, n]);
@@ -713,8 +792,10 @@ export const savProcs = {
   ),
 
   /** Find the order of a new ticket (any status). */
-  'sav.findOrder': proc([...SAV_ROLES], z.object({ q: z.string().min(2).max(100), deliveredFirst: z.boolean().default(false) }), (ctx, { q, deliveredFirst }) =>
-    // the call: what the customer received comes first (SAV is after delivery), newest first
-    deliveredFirst ? findOrders(ctx, q, 12, undefined, `COALESCE(o.follow_status IN ('delivered','exchanged'), false) DESC, (o.shipped_at IS NOT NULL) DESC, o.created_at DESC`) : findOrders(ctx, q),
+  'sav.findOrder': proc([...SAV_ROLES], z.object({ q: z.string().min(2).max(100), deliveredFirst: z.boolean().default(false) }), (ctx, { q, deliveredFirst }) => {
+    const agency = agencyOf(ctx);
+    const scope = agency === null ? undefined : (w: Where) => w.add(`${routedSav('o.id')} = ?${savProductScope(ctx, 'o.id')}`, agency);
+    return deliveredFirst ? findOrders(ctx, q, 12, scope, `COALESCE(o.follow_status IN ('delivered','exchanged'), false) DESC, (o.shipped_at IS NOT NULL) DESC, o.created_at DESC`, 'sav') : findOrders(ctx, q, 8, scope, undefined, 'sav');
+  },
   ),
 };

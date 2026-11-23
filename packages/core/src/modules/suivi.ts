@@ -2,7 +2,7 @@
 import type { Order, Page } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
-import { bad, Ctx, hasRole, notFound, proc, withActionLock } from '../rpc';
+import { bad, Ctx, forbidden, hasRole, notFound, proc, withActionLock } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { addWorkMinutes, workMinutes } from '@pilotix/shared';
 import { getPrefs } from './prefs';
@@ -928,7 +928,7 @@ export const suiviProcs = {
     const WHAT = { relance: 'Relancé', claim: 'Réclamation ouverte', client: 'Client rappelé' } as const;
     await addEvent(ctx.db, i.id, me, 'suivi_stuck', String(s.days), i.action, [`Bloqué ${s.days} j : ${WHAT[i.action]}`, i.note?.trim()].filter(Boolean).join(' — '));
     // the agent who handled it follows the parcel
-    await ctx.db.query('UPDATE orders SET follow_agent_id = COALESCE(follow_agent_id, $2), locked_by = NULL, locked_until = NULL WHERE id = $1', [i.id, me]);
+    await ctx.db.query('UPDATE orders SET follow_agent_id = CASE WHEN follow_agency_id IS NOT DISTINCT FROM $3 THEN COALESCE(follow_agent_id, $2) ELSE follow_agent_id END, locked_by = CASE WHEN locked_by = $2 THEN NULL ELSE locked_by END, locked_until = CASE WHEN locked_by = $2 THEN NULL ELSE locked_until END WHERE id = $1', [i.id, me, agencyOf(ctx)]);
     ctx.emit({ type: 'order', id: i.id });
     return { order: await getOrder(ctx, i.id), claim, claimError };
   }),
@@ -1037,7 +1037,7 @@ export const suiviProcs = {
           SELECT o.id FROM orders o LEFT JOIN profiles fa ON fa.id = o.follow_agent_id
            WHERE o.follow_status = 'alert' AND NOT (o.id = ANY($2))
              AND (o.locked_until IS NULL OR o.locked_until < now() OR o.locked_by = $1)
-             AND (o.follow_agent_id IS NULL OR o.follow_agent_id = $1 OR fa.last_seen_at IS NULL OR fa.last_seen_at < now() - interval '8 hours')${andSql(queueSql(ctx, 'follow'))}
+             AND (o.follow_agent_id IS NULL OR o.follow_agent_id = $1 OR fa.last_seen_at IS NULL OR fa.last_seen_at < now() - interval '8 hours')${andSql(queueSql(ctx, 'follow'))} AND o.follow_agency_id IS NOT DISTINCT FROM ${agencyOf(ctx) ?? 'NULL'}
            ORDER BY (o.follow_agent_id = $1) DESC NULLS LAST,
              (SELECT max(e.at) FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert') ASC NULLS FIRST, o.id
            LIMIT 1 FOR UPDATE OF o SKIP LOCKED)
@@ -1055,7 +1055,7 @@ export const suiviProcs = {
         `UPDATE orders o SET locked_by = $1, locked_until = now() + interval '15 minutes'
            FROM (SELECT o2.id FROM orders o2 LEFT JOIN profiles fa ON fa.id = o2.follow_agent_id
                   WHERE o2.id = $2 AND (o2.locked_until IS NULL OR o2.locked_until < now() OR o2.locked_by = $1)
-                    AND (o2.follow_agent_id IS NULL OR o2.follow_agent_id = $1 OR fa.last_seen_at IS NULL OR fa.last_seen_at < now() - interval '8 hours')
+                    AND o2.follow_agency_id IS NOT DISTINCT FROM ${agencyOf(ctx) ?? 'NULL'} AND (o2.follow_agent_id IS NULL OR o2.follow_agent_id = $1 OR fa.last_seen_at IS NULL OR fa.last_seen_at < now() - interval '8 hours')
                   FOR UPDATE OF o2 SKIP LOCKED) f
           WHERE o.id = f.id RETURNING o.id`,
         [me, oid],
@@ -1070,15 +1070,17 @@ export const suiviProcs = {
 
   /** Leaves the parcel taken with « Alerte suivante » (closed without acting): another agent may take it. */
   'suivi.release': proc(['suivi'], z.object({ id }), async (ctx, i) => {
-    await ctx.db.query('UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE id = $1 AND (locked_by = $2 OR $3)', [i.id, ctx.session.profile.id, ctx.session.isAdmin]);
+    await ctx.db.query('UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE id = $1 AND follow_agency_id IS NOT DISTINCT FROM $4::integer AND (locked_by = $2 OR $3)', [i.id, ctx.session.profile.id, ctx.session.isAdmin, agencyOf(ctx)]);
     return { ok: true };
   }),
 
   'suivi.unassign': proc(['suivi'], z.object({ id }), async (ctx, { id: oid }) => {
-    const cur = (await ctx.db.query('SELECT follow_agent_id FROM orders WHERE id = $1', [oid]))[0];
-    if (!cur) throw notFound('Commande introuvable');
-    if (cur.follow_agent_id !== null) {
-      await ctx.db.query('UPDATE orders SET follow_agent_id = NULL, updated_at = now() WHERE id = $1', [oid]);
+    const changed = await ctx.db.query('UPDATE orders SET follow_agent_id = NULL, updated_at = now() WHERE id = $1 AND follow_agency_id IS NOT DISTINCT FROM $2 AND follow_agent_id IS NOT NULL RETURNING id', [oid, agencyOf(ctx)]);
+    if (!changed.length) {
+      const cur = (await ctx.db.query('SELECT follow_agency_id FROM orders WHERE id = $1', [oid]))[0];
+      if (!cur) throw notFound('Commande introuvable');
+      if (numOrNull(cur.follow_agency_id) !== agencyOf(ctx)) throw forbidden('L’affectation est réservée à l’équipe qui gère le suivi');
+    } else {
       await addEvent(ctx.db, oid, ctx.session.profile.id, 'note', null, null, 'Agent suivi retiré');
       ctx.emit({ type: 'orders' });
     }

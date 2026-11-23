@@ -559,7 +559,11 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
       session,
       shop: ref.rules,
       now: () => Date.now(),
-      emit: (e) => this.emitLive(ref.shop.id, e),
+      emit: (e) => {
+        if (e.type === 'inbox' && (e.privateInbox || ref.shop.kind === 'agency')) {
+          this.emitLive(e.privateInbox ? e.shop ?? ref.shop.id : ref.shop.id, { ...e, privateInbox: true });
+        } else this.emitLive(ref.shop.id, e);
+      },
       server: ref.hooks,
       t: this.t,
       // a store: « Toutes les boutiques » of someone with several boutiques, or an order of another of their boutiques
@@ -625,12 +629,11 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Shops whose scheduled work runs: not archived, not suspended (and not locked unless `evenLocked`). */
-  async jobShops(evenLocked = false): Promise<ShopRef[]> {
+  async jobShops(evenLocked = false, includeAgencies = false): Promise<ShopRef[]> {
     const out: ShopRef[] = [];
     for (const s of await core.loadShops(this.t)) {
       if (s.status === 'archived') continue;
-      // a partner (agency, marketer) has no orders, couriers or messages of its own: nothing to run
-      if (s.kind !== 'store') continue;
+      if (s.kind !== 'store' && !(includeAgencies && s.kind === 'agency')) continue;
       const ref = await this.shop({ id: s.id });
       if (!ref) continue;
       if (!evenLocked && ref.status.locked) continue;

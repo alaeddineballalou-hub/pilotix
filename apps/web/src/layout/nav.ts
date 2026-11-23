@@ -208,6 +208,7 @@ export const AGENCY_NAV: NavItem[] = [
   },
   { id: 'confirmation', icon: 'phone', roles: ['confirmation', 'agent_manager'], subs: ['nouvelles', 'attente', 'confirmees'], flow: true, hidden: true },
   { id: 'suivi', icon: 'route', roles: ['suivi', 'confirmation', 'agent_manager'], subs: ['enlivraison', 'alertes', 'traites', 'bloques', 'livres', 'annules'], hidden: true },
+  { id: 'sav', icon: 'headset', roles: ['sav', 'agent_manager'], subs: ['tickets', 'attente', 'depot', 'livraison', 'livres', 'annules', 'satisfaction', 'termines'] },
   { id: 'produits', icon: 'layers', roles: ['confirmation', 'suivi', 'agent_manager'], subs: ['produits', 'stock'] },
   // « Mes gains »: what the agency owes me (my orders in every seller's store), my plans, my acomptes
   { id: 'gains', icon: 'wallet', roles: ['confirmation', 'suivi', 'agent_manager'], onlyIf: (_r, admin) => !admin },

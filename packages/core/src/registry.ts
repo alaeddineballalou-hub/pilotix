@@ -23,6 +23,7 @@ import { dispatchProcs } from './modules/dispatch';
 import { livreurProcs } from './modules/livreur';
 import { pilotProcs } from './modules/pilot';
 import { assignProcs } from './modules/assign';
+import { agencyBellProcs } from './modules/agencybell';
 import { agencyAssignProcs } from './modules/agencyassign';
 import { agencyStatsProcs } from './modules/agencystats';
 import { undoProcs } from './modules/undo';
@@ -134,6 +135,7 @@ export const REGISTRY = {
   ...pilotProcs,
   ...assignProcs,
   ...agencyAssignProcs,
+  ...agencyBellProcs,
   ...agencyStatsProcs,
   ...undoProcs,
   ...photoShareProcs,

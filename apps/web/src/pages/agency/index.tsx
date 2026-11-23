@@ -24,6 +24,7 @@ import { KpiBox } from '../dashboard/util';
 import type { PageProps } from '../registry';
 import { BillLines, billOf, BillsList, CountsLine, CountsRow, EndModal, Lead, LinkStatus, monthLabel, MonthPicker, PriceEditor, PriceList, TaskChips, TaskPicker, usePartnerKind, useTp } from './parts';
 import './agency.css';
+import { AgencyNotifications } from './Notifications';
 import { NoPlanAlert } from '../caisse/NoPlanAlert';
 
 /** Facturation › Paie: the agents' pay (the same board as a store's Caisse › Paie, without caisses). */
@@ -1089,6 +1090,7 @@ export function AgencySettings(_: PageProps) {
           <Icon name="plus" /> {t('agency.addSeller')}
         </a>
       </section>
+      {kind === 'agency' && <AgencyNotifications />}
       <div className="agx-grid-2">
         <Card title={t('agency.tarifs.title')}><p><a href="#/facturation">{t('agency.mnav.facturation')}</a></p></Card>
         <Card title={t('agency.tarifs.example')} help={t('agency.tarifs.exampleHelp')}>

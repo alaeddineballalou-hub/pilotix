@@ -3,6 +3,7 @@ import { Ctx, dispatch, Procedure } from './rpc';
 import { REGISTRY } from './registry';
 import { agencyGate, sellerProcsOf } from './modules/agencyscope';
 import { syncAgency } from './modules/agencies';
+import { tellAgency } from './modules/agencybell';
 import { sellerCall } from './modules/agencywork';
 import { boutiqueCall } from './modules/boutiquework';
 import { stopAgentPlan } from './modules/planledger';
@@ -88,6 +89,9 @@ export async function call(name: string, ctx: Ctx, input: unknown) {
   const out = await run(ctx, name, input);
   if(partner && kind==='agency' && (name==='users.update'||name==='me.delete')) await stopAgentPlan(ctx,name==='me.delete'?ctx.session.profile.id:(input as {id:number}).id);
   if (partner && ctx.t && AGENCY_TEAM.has(name)) await syncAgency(ctx.t, ctx.shop!.id);
+  if (kind === 'agency' && (name === 'users.create' || name === 'users.update' || name === 'me.delete')) {
+    await tellAgency(ctx, ctx.shop!.id, 'team', '#/dashboard', {});
+  }
   return out;
 }
 

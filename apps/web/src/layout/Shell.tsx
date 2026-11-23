@@ -425,7 +425,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
             <Icon name="moon" />
           </button>
           {/* the bell: what is new for this person (a new order, a callback, a delivery…) */}
-          {!partner && <Bell />}
+          {space !== 'marketer' && <Bell key={session?.shop?.id} />}
           <AccountMenu
             session={session!}
             onLogout={logout}
@@ -492,7 +492,7 @@ const ALL_PAGES = new Set(['accueil', 'dashboard', 'commandes', 'confirmation', 
 /** A partner's pages that show one seller or all of them (the picker shows there). */
 const SELLER_PAGES: Record<'store' | 'agency' | 'marketer', Set<string>> = {
   store: new Set(),
-  agency: new Set(['accueil', 'analyse', 'dashboard', 'confirmation', 'suivi', 'produits', 'facturation']),
+  agency: new Set(['accueil', 'analyse', 'dashboard', 'confirmation', 'suivi', 'sav', 'produits', 'facturation']),
   marketer: new Set(['accueil', 'marketing', 'facturation']),
 };
 

@@ -23,7 +23,15 @@ export class LiveGateway implements OnGatewayConnection, OnModuleInit, OnModuleD
 
   onModuleInit() {
     // each event says its boutique: a screen also listening to the person's other boutiques tells them apart
-    this.core.onLive((shopId, e) => this.server?.to(`shop:${shopId}`).emit('event', { ...e, shop: shopId }));
+    this.core.onLive((shopId, e) => {
+      if (e.type === 'inbox' && e.privateInbox) {
+        const { to, quiet } = e.data as { to: number[]; quiet: number[] };
+        for (const id of new Set([...to, ...quiet])) {
+          const data = to.includes(id) ? { to: [id], quiet: [] } : { to: [], quiet: [id] };
+          this.server?.to(`shop:${shopId}:profile:${id}`).emit('event', { ...e, shop: shopId, data });
+        }
+      } else this.server?.to(`shop:${shopId}`).emit('event', { ...e, shop: shopId });
+    });
     // every minute, each open screen is checked again like a request: an account switched off, a password changed or a
     // session ended (« Se déconnecter ») stops receiving at once
     this.recheck = setInterval(() => void this.checkAll(), 60_000);
@@ -67,7 +75,8 @@ export class LiveGateway implements OnGatewayConnection, OnModuleInit, OnModuleD
       socket.data.shopId = ref.shop.id;
       socket.data.tv = Number(c.tv ?? 0);
       socket.data.jti = c.jti;
-      socket.join(`shop:${ref.shop.id}`);
+      await socket.join(`shop:${ref.shop.id}`);
+      if (ref.shop.kind === 'agency') await socket.join(`shop:${ref.shop.id}:profile:${Number(c.sub)}`);
       // a store: the person's other boutiques too (their own active account there), so a new order or a change in any
       // of them reaches this screen (« Toutes les boutiques », the new-order toast with its boutique's name)
       if (ref.shop.kind === 'store' && !ref.shop.demo) {

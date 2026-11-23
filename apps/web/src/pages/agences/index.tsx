@@ -287,6 +287,8 @@ function WorkModal({ l, products, links, accept, onClose }: { l: AgencyLinkInfo;
   const tp = useTp(l.kind);
   const [tasks, setTasks] = useState<AgencyTask[]>(l.tasks);
   const [chosen, setChosen] = useState<number[] | null>(l.products);
+  const [alerts, setAlerts] = useState<AgencyTask[]>(l.agencyAlerts ?? []);
+  const agencyAlerts = alerts.filter((task) => tasks.includes(task));
   const done = (r: { problems: string[] }) => {
     r.problems.forEach((p) => toast(p, 'bad', 7000));
     onClose();
@@ -309,7 +311,7 @@ function WorkModal({ l, products, links, accept, onClose }: { l: AgencyLinkInfo;
             type="button"
             className="btn primary"
             disabled={!ok || busy}
-            onClick={() => (accept ? answer.mutate({ id: l.id, accept: true, tasks, products: chosen }) : work.mutate({ id: l.id, tasks, products: chosen }))}
+            onClick={() => (accept ? answer.mutate({ id: l.id, accept: true, tasks, products: chosen, agencyAlerts }) : work.mutate({ id: l.id, tasks, products: chosen, agencyAlerts }))}
           >
             {accept ? t('agency.accept') : t('common.save')}
           </button>
@@ -330,6 +332,13 @@ function WorkModal({ l, products, links, accept, onClose }: { l: AgencyLinkInfo;
       <Field label={t('agency.store.productsGiven')}>
         <ProductPicker products={products} value={chosen} onChange={setChosen} taken={takenBy(links, l.id, tasks, l.kind)} kind={l.kind} />
       </Field>
+      {l.kind === 'agency' && <fieldset className="agx-sub">
+        <legend>{t('agency.alerts.toAgency')}</legend>
+        {tasks.map((task) => <label key={task} className="row">
+          <input type="checkbox" checked={alerts.includes(task)} onChange={() => setAlerts((old) => old.includes(task) ? old.filter((item) => item !== task) : [...old, task])} />
+          {t(`agency.task.${task}`)}
+        </label>)}
+      </fieldset>}
       {!accept && <p className="small muted">{tp('store.workRule')}</p>}
     </Modal>
   );

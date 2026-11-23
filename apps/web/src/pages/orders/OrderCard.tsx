@@ -23,6 +23,7 @@ import { useLabelPrinter } from '../depot/Labels';
 import { CourierPanel } from '../suivi/CourierPanel';
 import { useIsPhone } from '../../lib/useMedia';
 import { TrustFlags } from './TrustFlags';
+import { AgencyRouting } from './AgencyRouting';
 import { AdSection } from './AdSource';
 import { rightOn } from '../../lib/rights';
 
@@ -341,6 +342,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
   return (
     <>
       <UndoBar o={o} refresh={refresh} />
+      {session?.isAdmin && (session.shop?.kind ?? 'store') === 'store' && !o.isExchange && <AgencyRouting key={o.id} orderId={o.id} />}
       <div className="statusbar oc-acts">
         {actions}
         {deletable && (

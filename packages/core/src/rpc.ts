@@ -23,6 +23,8 @@ export interface LiveEvent {
   data?: unknown;
   /** the boutique it happened in (set by the server: a person with several boutiques hears of all of them) */
   shop?: number;
+  /** Agency inbox events go only to the named profiles in the destination shop. */
+  privateInbox?: boolean;
 }
 
 /** The shop a request works for, on a server that hosts several shops (missing = a single-shop install or the preview). */

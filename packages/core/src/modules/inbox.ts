@@ -17,6 +17,7 @@ import { Db, num, numOrNull } from '../db';
 import { Ctx, proc } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { BellKind, ringBell } from './bell';
+import { runAgencyKpis, tellAgencyAssignments } from './agencybell';
 import { pushOnly } from './push';
 
 // ---------------------------------------------------------------- the words (the person's language)
@@ -240,6 +241,7 @@ export async function tell(ctx: Ctx, to: readonly (number | null | undefined)[],
 
 /** Orders given to agents (Confirmation) or parcels on alert given to Suivi: one line per person, all their orders in it. */
 export async function tellGiven(ctx: Ctx, area: 'conf' | 'follow', given: Map<number, number[]>, o: { by?: number | null; rotation?: boolean } = {}) {
+  await tellAgencyAssignments(ctx, area, given, o.by).catch(() => {});
   const kind: NotifyKind = area === 'conf' ? 'order' : 'alert';
   const rule = (await notifyRules(ctx.db))[kind];
   if (!rule.on) return;
@@ -455,6 +457,10 @@ export async function tellMessage(ctx: Ctx, m: { conversationId: number; phone: 
 /** A callback whose time came, the depot's orders to prepare, and the lines older than 30 days. */
 export async function inboxRun(ctx: Ctx) {
   const now = ctx.now();
+  if (ctx.shop?.kind === 'agency') {
+    await runAgencyKpis(ctx);
+    return { calls: 0, depot: 0, gone: await pruneInbox(ctx, now) };
+  }
   let calls = 0;
   // the callbacks the agents set (« À rappeler », « Reporté »): told once when their time comes (up to 20 minutes late)
   const due = await ctx.db.query(
@@ -482,10 +488,13 @@ export async function inboxRun(ctx: Ctx) {
     ).length;
   }
   const depot = await depotRun(ctx, now);
-  // the lines older than 30 days go, once an hour
-  let gone = 0;
-  if (new Date(now).getUTCMinutes() === 7) gone = (await ctx.db.query(`DELETE FROM inbox WHERE created_at < now() - interval '30 days' RETURNING id`)).length;
-  return { calls, depot, gone };
+  return { calls, depot, gone: await pruneInbox(ctx, now) };
+}
+
+/** Expire old lines once an hour. */
+async function pruneInbox(ctx: Ctx, now: number): Promise<number> {
+  if (new Date(now).getUTCMinutes() !== 7) return 0;
+  return (await ctx.db.query(`DELETE FROM inbox WHERE created_at < now() - interval '30 days' RETURNING id`)).length;
 }
 
 /** Every 15 minutes at most, in the call hours: the depot is told how many new orders wait to be prepared. */

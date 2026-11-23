@@ -236,7 +236,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
         this.running.add(job.name);
         try {
           const f = FEATURE[job.name];
-          const shops = (await this.core.jobShops()).filter(
+          const shops = (await this.core.jobShops(false, job.name === 'inbox-run')).filter(
             // the demo shop only simulates: nothing to run in the background
             (ref) => !ref.shop.demo && f !== undefined && (!f || featureOn(ref.rules.features, f)),
           );
@@ -245,7 +245,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
           let failed = 0;
           // several shops at once (JOB_SHOPS_PARALLEL); a sleeping shop (nobody, no order for weeks) is skipped
           await eachLimited(shops, config.jobShopsParallel, async (ref) => {
-            if (!(await this.awake(ref))) return void asleep++;
+            // An agency's KPI work lives in its sellers' orders, so its own activity cannot determine whether it is asleep.
+            if (ref.shop.kind !== 'agency' && !(await this.awake(ref))) return void asleep++;
             try {
               await this.runFor(ref, job.name);
               done++;

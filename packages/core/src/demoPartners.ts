@@ -31,6 +31,7 @@ const AGENCY_TEAM = [
   { name: 'Yasmine Kaci', email: 'yasmine.agence@demo.pilotix.dz', roles: ['confirmation'] },
   { name: 'Ali Mansouri', email: 'ali.agence@demo.pilotix.dz', roles: ['suivi'] },
   { name: 'Riad Bouzid', email: 'riad.agence@demo.pilotix.dz', roles: ['agent_manager'] },
+  { name: 'Leïla Mansouri', email: 'leila.agence@demo.pilotix.dz', roles: ['sav'] },
 ];
 const MARKETER_TEAM = [
   { name: 'Nadir Ferhat', email: 'nadir.mk@demo.pilotix.dz', roles: ['marketer'] },
@@ -87,7 +88,7 @@ export async function seedDemoPartners(t: Tenancy, opts: { now?: number } = {}):
     await t.platform.query('UPDATE platform.agency_links SET created_at = $2, answered_at = $3, started_at = $3 WHERE id = $1', [id, new Date(now - 47 * DAY).toISOString(), new Date(now - 46 * DAY).toISOString()]);
     return num(id);
   };
-  const agencyLink = await linkOf(agency, chiefA, ['confirmation', 'suivi'], forAgency);
+  const agencyLink = await linkOf(agency, chiefA, ['confirmation', 'suivi', 'sav'], forAgency);
   const marketerLink = await linkOf(marketer, chiefM, ['marketing'], forMarketer);
 
   // the agency's orders: those of its products since the contract, confirmed by its agents, followed by its suivi

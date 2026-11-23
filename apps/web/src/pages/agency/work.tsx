@@ -24,6 +24,7 @@ import { Focus } from '../confirmation/Focus';
 import { AgentTag, PhoneOrder, PickBar, PickToggle } from '../confirmation/PhoneList';
 import { currentLabel, SUB_TONE, telHref } from '../confirmation/shared';
 import type { PageProps } from '../registry';
+import { Sav } from '../sav';
 import { Suivi, TreatModal } from '../suivi';
 import { ScoreChip } from '../../ui/clientScore';
 
@@ -52,6 +53,20 @@ export function AgencySuivi(props: PageProps) {
       </AgentView>
     </SellerScope>
   );
+}
+
+export function AgencySav(props: PageProps) {
+  const { t } = useTranslation();
+  const seller = useSeller();
+  const work = useSellers();
+  if (!work.loaded) return <Loading />;
+  if (seller === 'all' || !work.tasks.has('sav')) {
+    const eligible = work.list.filter((item) => item.tasks.includes('sav'));
+    return <Empty>{t('agency.alerts.pickSav')}
+      {eligible.map((item) => <button key={item.id} type="button" className="btn" onClick={() => setSeller(item.id)}>{item.name}</button>)}
+    </Empty>;
+  }
+  return <SellerScope seller={seller}><AgentView tasks={['sav']}><Sav key={seller} {...props} sub={props.sub === 'stats' ? 'tickets' : props.sub} /></AgentView></SellerScope>;
 }
 
 /** Réclamations and Swap are done in one seller's store at a time: choose it at the top. */

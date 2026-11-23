@@ -125,6 +125,7 @@ const satReady = (sat: number | null, why: string) => sat !== null && (sat >= 3 
 // ---------------------------------------------------------------- the list
 export function PhoneSav({ sub }: { sub?: string }) {
   const { t } = useTranslation();
+  const { session } = useSession();
   const [stage, setStage] = useState<Stage>(() => (STAGES as string[]).includes(store.get('px-savp-stage') ?? '') ? (store.get('px-savp-stage') as Stage) : 'todo');
   const [owner, setOwner] = useState<Owner>(() => (['me', 'none', 'all'].includes(store.get('px-savp-owner') ?? '') ? (store.get('px-savp-owner') as Owner) : 'all'));
   const [q, setQ] = useState('');
@@ -162,7 +163,7 @@ export function PhoneSav({ sub }: { sub?: string }) {
             {count[s] !== undefined && <b className="ltr">{count[s]}</b>}
           </button>
         ))}
-        {tabOn('sav', 'stats') && (
+        {session?.shop?.kind !== 'agency' && tabOn('sav', 'stats') && (
           <a className="pxv-stlink" href="#/sav/stats">
             <Icon name="chart" /> {t('sav.views.stats')}
           </a>
@@ -332,7 +333,6 @@ function WhySheet({ x, sat: sat0, onClose }: { x: Ticket; sat: number; onClose: 
 // ---------------------------------------------------------------- « Nouvel appel »
 function CallFlow({ onClose, onOpen }: { onClose: () => void; onOpen: (id: number) => void }) {
   const { t } = useTranslation();
-  const { me } = useSession();
   useFullScreen(onClose);
   const [q, setQ] = useState('');
   const [deb, setDeb] = useState('');
@@ -374,7 +374,7 @@ function CallFlow({ onClose, onOpen }: { onClose: () => void; onOpen: (id: numbe
     phone: order ? null : phone.trim() || null,
     type: type as (typeof NEW_TYPES)[number],
     details: details.trim(),
-    assignedTo: me || null,
+    takeWhenOwned: true,
   });
   const create = async (extra: Record<string, unknown> = {}) => {
     setBusy(true);

@@ -42,7 +42,7 @@ const noNewKey = (r: Role | null) => (r === 'marketer' ? 'admin.users.noNewMarke
 const AGENCY_SUBS = ['equipe', 'agents', 'suivi', 'managers', 'admins'] as const;
 const AGENCY_SUB_ROLE: Record<string, Role> = { agents: 'confirmation', suivi: 'suivi', managers: 'agent_manager', admins: 'admin' };
 /** The roles of an agency's people: its chief, its supervisors, its agents. */
-const AGENCY_ROLES: Role[] = ['admin', 'agent_manager', 'confirmation', 'suivi'];
+const AGENCY_ROLES: Role[] = ['admin', 'agent_manager', 'confirmation', 'suivi', 'sav'];
 /** A marketer's Utilisateurs: everyone, its marketers (media buyers), its administrators. */
 const MARKETER_SUBS = ['equipe', 'marketeurs', 'admins'] as const;
 const MARKETER_SUB_ROLE: Record<string, Role> = { marketeurs: 'marketer', admins: 'admin' };
@@ -133,7 +133,7 @@ export function UsersPage({ sub, rest, agency }: { sub?: string; rest?: string[]
 function useRoleName(agency?: boolean) {
   const { t } = useTranslation();
   const tp = useTp();
-  return (r: Role) => (agency ? tp(`team.r.${r}`, { defaultValue: t(`roles.${r}`) }) : t(`roles.${r}`));
+  return (r: Role) => r === 'sav' ? t('agency.task.sav') : agency ? tp(`team.r.${r}`, { defaultValue: t(`roles.${r}`) }) : t(`roles.${r}`);
 }
 
 function RolesTable({ onNew }: { onNew: () => void }) {

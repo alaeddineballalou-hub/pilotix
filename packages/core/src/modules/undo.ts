@@ -240,12 +240,12 @@ async function undoFollow(ctx: Ctx, o: any, act: Action) {
          returning_at = CASE WHEN returning_at = $3::timestamptz THEN NULL ELSE returning_at END,
          delivery_attempts = GREATEST(0, delivery_attempts - CASE WHEN $4 = 'failed' THEN 1 ELSE 0 END),
          sub_status = CASE WHEN $5 THEN $6 ELSE sub_status END,
-         follow_agent_id = CASE WHEN $5 THEN $7 ELSE follow_agent_id END,
+         follow_agent_id = CASE WHEN $5 AND follow_agency_id IS NOT DISTINCT FROM $10::integer THEN $7 ELSE follow_agent_id END,
          livreur_id = CASE WHEN $5 THEN $8 ELSE livreur_id END,
          cancel_by_hand = CASE WHEN $5 THEN $9 WHEN $4 = 'cancelled' THEN false ELSE cancel_by_hand END,
          updated_at = now(), version = version + 1
        WHERE id = $1`,
-      [o.id, back, at, was, !!p, p?.sub ?? null, p?.fa ?? null, p?.lv ?? null, !!p?.cbh],
+      [o.id, back, at, was, !!p, p?.sub ?? null, p?.fa ?? null, p?.lv ?? null, !!p?.cbh, ctx.session.profile.agencyId ?? null],
     );
     // a return the depot then put in the broken stock (« Cassé »): out of the broken stock first, as it came
     for (const m of await tx.query(`SELECT id, variant_id, warehouse_id, delta, broken_delta FROM stock_movements WHERE order_id = $1 AND reason = 'broken_return' AND created_at >= $2::timestamptz`, [o.id, at])) {

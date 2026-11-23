@@ -35,7 +35,11 @@ import {
   partnerBill,
 } from '@pilotix/shared';
 import { z } from 'zod';
-import { Db, iso, isoOrNull, num } from '../db';
+import { addEvent } from './orders';
+import { assignNow } from './assign';
+import { tellAgency, tellDelegated } from './agencybell';
+import { routedSav } from './sav';
+import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { can } from './rights';
 import { cleanPrices } from '../platform/shops';
@@ -47,10 +51,12 @@ import { SCHEMA_RE, type Tenancy } from '../platform/tenancy';
 
 const HOUR = 3_600_000;
 /** Every task a link can carry (an agency: confirmation, suivi; a marketer: its ads). */
-const ALL_TASKS = ['confirmation', 'suivi', 'marketing'] as const;
+const RouteTask = z.enum(['confirmation', 'suivi', 'sav']);
+type RouteTask = z.infer<typeof RouteTask>;
+const ALL_TASKS = ['confirmation', 'suivi', 'sav', 'marketing'] as const;
 const NO_SERVER = 'Les agences de confirmation et les marketers fonctionnent sur le serveur Pilotix (pas dans cet aperçu)';
 const notVerified = (kind: PartnerKind) => (kind === 'marketer' ? 'Votre espace marketer doit d’abord être vérifié par Pilotix' : 'Votre agence doit d’abord être vérifiée par Pilotix');
-const TASK_FR: Record<AgencyTask, string> = { confirmation: 'confirmation', suivi: 'suivi', marketing: 'publicité' };
+const TASK_FR: Record<AgencyTask, string> = { confirmation: 'confirmation', suivi: 'suivi', sav: 'SAV', marketing: 'publicité' };
 /** A partner's name in a sentence: « l’agence X », « le marketer X ». */
 const partnerFr = (kind: PartnerKind) => (kind === 'marketer' ? 'ce marketer' : 'cette agence');
 
@@ -147,6 +153,7 @@ export function toLink(r: any): Link {
       kind,
       status: r.status,
       requestedBy: r.requested_by,
+      agencyAlerts: tasksOf(r.agency_alerts).filter((task) => task !== 'marketing'),
       agency: { id: num(r.agency_id), name: r.a_name, code: r.a_code ?? null, verified: !!r.a_verified, suspended: r.a_status !== 'active' },
       // the seller: their boutiques go together on the partner's side (one link per boutique)
       store: { id: num(r.store_id), name: r.s_name, code: r.s_code ?? null, owner: r.s_owner ? { id: num(r.s_owner), name: String(r.s_owner_name ?? '') } : null },
@@ -306,7 +313,9 @@ export async function checkSellers(ctx: Ctx, v: AgencySellerWork[] | null): Prom
 /** The orders of a task the agency no longer does go back to the store's own team (those not finished). */
 async function releaseOrders(db: Db, agencyId: number, task: AgencyTask) {
   const theirs = '(SELECT id FROM profiles WHERE agency_id = $1)';
-  if (task === 'confirmation')
+  if (task === 'sav') {
+    await db.query(`UPDATE complaints SET sav_agency_id = NULL, assigned_to = NULL WHERE sav_agency_id = $1`, [agencyId]);
+  } else if (task === 'confirmation')
     await db.query(
       `UPDATE orders SET conf_agency_id = NULL,
          agent_id = CASE WHEN agent_id IN ${theirs} THEN NULL ELSE agent_id END,
@@ -354,6 +363,13 @@ async function syncAgencyLink(db: Db, L: Link, people: AgencyPerson[], on: boole
   await db.query('DELETE FROM agency_routes WHERE agency_id = $1', [A]);
   for (const task of tasks)
     for (const pid of L.info.products ?? [null]) await db.query('INSERT INTO agency_routes (agency_id, task, product_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [A, task, pid]);
+  if (tasks.includes('sav')) {
+    await db.query(`UPDATE complaints c SET sav_agency_id = target.agency, assigned_to = NULL
+      FROM (
+        SELECT ticket.id, ${routedSav('ticket.order_id')} AS agency
+        FROM complaints ticket WHERE ticket.order_id IS NOT NULL AND ticket.status NOT IN ('closed', 'resolved')
+      ) target WHERE c.id = target.id AND (c.sav_agency_id = $1 OR target.agency = $1) AND c.sav_agency_id IS DISTINCT FROM target.agency`, [A]);
+  }
   // its people who work for this seller: an account in the store with the tasks they can do (the chief and its
   // managers: every task the seller gives) and, when the chief chose, their products there
   const want = new Map<string, { name: string; hash: string; language: string; profileId:number; roles: AgencyTask[]; products: number[] | null }>();
@@ -583,6 +599,27 @@ async function endLink(t: Tenancy, L: Link, by: 'agency' | 'store' | 'pilotix') 
 const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const requesterOf = (ctx: Ctx) => `${ctx.session.profile.name} <${ctx.session.profile.email}>`.slice(0, 200);
 
+async function routingOrder(db: Db, id: number, lock = false) {
+  const row = (await db.query(
+    `SELECT o.is_exchange, o.conf_status, o.follow_status, o.conf_agency_id, o.follow_agency_id,
+      o.sav_agency_override, ${routedSav('o.id')} AS sav_agency_id
+     FROM orders o WHERE o.id = $1${lock ? ' FOR UPDATE OF o' : ''}`, [id],
+  ))[0];
+  if (!row) throw notFound('Commande introuvable');
+  return row;
+}
+
+function mayRoute(order: Awaited<ReturnType<typeof routingOrder>>, task: RouteTask) {
+  if (order.is_exchange) return false;
+  if (task === 'confirmation') return CONF_TODO.includes(order.conf_status);
+  if (task === 'suivi') return !FOLLOW_FINAL.includes(order.follow_status);
+  return true;
+}
+
+function routeAgency(order: Awaited<ReturnType<typeof routingOrder>>, task: RouteTask) {
+  return numOrNull(task === 'confirmation' ? order.conf_agency_id : task === 'suivi' ? order.follow_agency_id : order.sav_agency_id);
+}
+
 export const agencyProcs = {
   // ---------------------------------------------------------------- the agency's side (its space)
   /**
@@ -667,14 +704,17 @@ export const agencyProcs = {
     const { t, id } = asAgency(ctx);
     const L = await agencyLink(t, id, i.id);
     if (L.info.status !== 'pending' || L.info.requestedBy !== 'store') throw bad('Cette demande n’attend plus votre réponse');
+    const audience = { body: L.info.store.name, except: ctx.session.profile.id };
     if (!i.accept) {
-      await setStatus(t, L.info.id, 'pending', 'refused');
+      if (!(await setStatus(t, L.info.id, 'pending', 'refused'))) throw bad('Cette demande n’attend plus votre réponse');
+      await tellAgency(ctx, id, 'invitationRefused', '#/vendeurs/liste', audience);
       return { ok: true, problems: [] as string[] };
     }
     if (!L.agencyOk) throw bad(notVerified(L.info.kind));
     const why = await clash(t, t.shop(L.storeSchema), L.info.store.id, L.info.id, L.info.tasks, L.info.products, L.info.kind);
     if (why) throw bad(why);
     if (!(await setStatus(t, L.info.id, 'pending', 'active', ', started_at = now()'))) throw bad('Cette demande n’attend plus votre réponse');
+    await tellAgency(ctx, id, 'invitationAccepted', '#/vendeurs/liste', audience);
     return { ok: true, problems: await syncLink(t, L.info.id) };
   }),
 
@@ -752,6 +792,7 @@ export const agencyProcs = {
       const cur: AgencySellerWork[] = p.sellers ?? open.map((s) => ({ store: s, products: null }));
       const next = want.has(p.id) ? [...cur.filter((w) => w.store !== store), { store, products: null }] : cur.filter((w) => w.store !== store);
       await ctx.db.query('UPDATE profiles SET agency_sellers = $2 WHERE id = $1', [p.id, JSON.stringify(next)]);
+      await tellAgency(ctx, id, 'access', '#/dashboard', { people: [p.id] });
     }
     return { ok: true, problems: await syncLink(t, L.info.id) };
   }),
@@ -791,11 +832,50 @@ export const agencyProcs = {
     const { t, id } = asAgency(ctx);
     const b = (await t.platform.query('SELECT b.id FROM platform.agency_bills b JOIN platform.agency_links l ON l.id = b.link_id WHERE b.id = $1 AND l.agency_id = $2', [i.billId, id]))[0];
     if (!b) throw notFound('Demande de paiement introuvable');
-    await t.platform.query(`UPDATE platform.agency_bills SET status = 'received', received_at = now(), paid_at = COALESCE(paid_at, now()) WHERE id = $1 AND status <> 'received'`, [i.billId]);
+    const changed = await t.platform.query(`UPDATE platform.agency_bills SET status = 'received', received_at = now(), paid_at = COALESCE(paid_at, now()) WHERE id = $1 AND status <> 'received' RETURNING id`, [i.billId]);
+    if (changed.length) await tellAgency(ctx, id, 'received', '#/facturation/vendeurs', {});
     return { ok: true };
   }),
 
   // ---------------------------------------------------------------- the store's side (« Partenaires »: agencies, marketers)
+  'partners.orderRouting': proc([], z.object({ orderId: Id }), async (ctx, { orderId }) => {
+    const { t, id } = asStore(ctx);
+    const order = await routingOrder(ctx.db, orderId);
+    const agencies = (await t.platform.query(`${LINK_SQL} WHERE l.store_id = $1 AND l.status = 'active' AND a.kind = 'agency' ORDER BY a.name`, [id]))
+      .map(toLink).filter((link) => link.agencyOk).map((link) => ({ id: link.info.agency.id, name: link.info.agency.name, tasks: link.info.tasks }));
+    return { agencies, tasks: RouteTask.options.map((task) => ({ task, editable: mayRoute(order, task), agencyId: routeAgency(order, task) })) };
+  }),
+
+  'partners.routeOrder': proc([], z.object({ orderId: Id, task: RouteTask, agencyId: Id.nullable() }), async (ctx, i) => {
+    const { id } = asStore(ctx);
+    const changed = await ctx.db.tx(async (db) => {
+      const order = await routingOrder(db, i.orderId, true);
+      if (!mayRoute(order, i.task)) throw bad('Ce service n’est plus modifiable pour cette commande');
+      if (i.agencyId !== null) {
+        const link = (await db.query(`${LINK_SQL} WHERE l.store_id = $1 AND l.agency_id = $2 AND l.status = 'active' AND a.kind = 'agency' FOR SHARE OF l, a`, [id, i.agencyId]))[0];
+        if (!link || !toLink(link).agencyOk || !tasksOf(link.tasks).includes(i.task)) throw forbidden('Cette agence n’assure pas ce service pour votre boutique');
+      }
+      const previous = routeAgency(order, i.task);
+      if (i.task === 'sav') {
+        if (numOrNull(order.sav_agency_override) === (i.agencyId ?? 0)) return false;
+        await db.query('UPDATE orders SET sav_agency_override = $2, updated_at = now(), version = version + 1 WHERE id = $1', [i.orderId, i.agencyId ?? 0]);
+        await db.query(`UPDATE complaints SET sav_agency_id = $2, assigned_to = NULL WHERE order_id = $1 AND status NOT IN ('closed', 'resolved') AND sav_agency_id IS DISTINCT FROM $2`, [i.orderId, i.agencyId]);
+      } else {
+        if (previous === i.agencyId) return false;
+        const fields = i.task === 'confirmation' ? 'conf_agency_id = $2, agent_id = NULL, assigned_at = NULL' : 'follow_agency_id = $2, follow_agent_id = NULL';
+        await db.query(`UPDATE orders SET ${fields}, route_product_id = COALESCE(route_product_id, (SELECT product_id FROM order_items WHERE order_id = $1 ORDER BY id LIMIT 1)),
+          locked_by = NULL, locked_until = NULL, updated_at = now(), version = version + 1 WHERE id = $1`, [i.orderId, i.agencyId]);
+      }
+      await addEvent(db, i.orderId, ctx.session.profile.id, 'note', previous?.toString() ?? null, i.agencyId?.toString() ?? null, `Équipe responsable : ${TASK_FR[i.task]}`);
+      return true;
+    });
+    if (changed) {
+      ctx.emit({ type: 'order', id: i.orderId });
+      if (i.agencyId !== null) await tellDelegated(ctx, i.agencyId, i.task, i.orderId).catch(() => {});
+      if (i.task !== 'sav') await assignNow(ctx, i.task === 'confirmation' ? 'conf' : 'follow', i.orderId);
+    }
+    return { ok: true };
+  }),
   /** The store's code (to give to a partner), its partners (requests, contracts), this month's numbers, its products. */
   'partners.home': proc([], z.object({}), async (ctx) => {
     const { t, id } = asStore(ctx);
@@ -841,10 +921,12 @@ export const agencyProcs = {
     try {
       const r = (
         await t.platform.query(
-          `INSERT INTO platform.agency_links (agency_id, store_id, requested_by, requester, tasks, prices, products) VALUES ($1, $2, 'store', $3, $4, $5, $6) RETURNING id`,
+          `INSERT INTO platform.agency_links (agency_id, store_id, requested_by, requester, tasks, prices, products) VALUES ($1, $2, 'store', $3, $4, $5, $6)
+           RETURNING id, (SELECT name FROM platform.shops WHERE id = $2) AS store_name`,
           [i.agencyId, id, requesterOf(ctx), JSON.stringify(tasks), JSON.stringify(ag.prices), products === null ? null : JSON.stringify(products)],
         )
       )[0];
+      if (ag.kind === 'agency') await tellAgency(ctx, i.agencyId, 'invitation', '#/vendeurs/liste', { body: String(r.store_name ?? '') });
       return { id: num(r.id) };
     } catch (e: any) {
       if (String(e?.code) === '23505' || /unique|duplicate/i.test(String(e?.message))) throw bad(`Une demande ou un contrat existe déjà avec ${partnerFr(ag.kind)}`);
@@ -853,12 +935,13 @@ export const agencyProcs = {
   }),
 
   /** Yes (with the tasks and products the store gives) or no to an agency's request. */
-  'partners.answer': proc([], z.object({ id: Id, accept: z.boolean(), tasks: Tasks.optional(), products: Products.optional() }), async (ctx, i) => {
+  'partners.answer': proc([], z.object({ id: Id, accept: z.boolean(), tasks: Tasks.optional(), products: Products.optional(), agencyAlerts: z.array(z.enum(ALL_TASKS)).max(3).optional() }), async (ctx, i) => {
     const { t, id } = asStore(ctx);
     const L = await storeLink(t, id, i.id);
     if (L.info.status !== 'pending' || L.info.requestedBy !== 'agency') throw bad('Cette demande n’attend plus votre réponse');
     if (!i.accept) {
-      await setStatus(t, L.info.id, 'pending', 'refused');
+      if (!(await setStatus(t, L.info.id, 'pending', 'refused'))) throw bad('Cette demande n’attend plus votre réponse');
+      if (L.info.kind === 'agency') await tellAgency(ctx, L.info.agency.id, 'refused', '#/vendeurs/liste', { body: L.info.store.name });
       return { ok: true, problems: [] as string[] };
     }
     if (!L.agencyOk) throw bad(L.info.kind === 'marketer' ? 'Ce marketer ne peut pas travailler pour le moment' : 'Cette agence ne peut pas travailler pour le moment');
@@ -867,11 +950,12 @@ export const agencyProcs = {
     const why = await clash(t, ctx.db, id, L.info.id, tasks, products, L.info.kind);
     if (why) throw bad(why);
     await t.shop(L.agencySchema).tx(async db=>{
-      const changed=await db.query(`UPDATE platform.agency_links SET tasks=$2,products=$3,status='active',started_at=$4,answered_at=$4 WHERE id=$1 AND status='pending' RETURNING id`,[L.info.id,JSON.stringify(tasks),products===null?null:JSON.stringify(products),new Date(ctx.now()).toISOString()]);
+      const changed=await db.query(`UPDATE platform.agency_links SET tasks=$2,products=$3,status='active',started_at=$4,answered_at=$4,agency_alerts=$5 WHERE id=$1 AND status='pending' RETURNING id`,[L.info.id,JSON.stringify(tasks),products===null?null:JSON.stringify(products),new Date(ctx.now()).toISOString(),JSON.stringify(tasks.filter((task) => task !== 'marketing' && i.agencyAlerts?.includes(task)))]);
       if(!changed.length)throw bad('Cette demande n’attend plus votre réponse');
       // The seller has reviewed the invitation's saved plan before accepting the contract.
       await db.query(`UPDATE management_billing_terms SET status='accepted',effective_at=$2 WHERE link_id=$1 AND status='pending'`,[L.info.id,new Date(ctx.now()).toISOString()]);
     });
+    if (L.info.kind === 'agency') await tellAgency(ctx, L.info.agency.id, 'accepted', '#/vendeurs/liste', { body: L.info.store.name });
     return { ok: true, problems: await syncLink(t, L.info.id) };
   }),
 
@@ -884,7 +968,7 @@ export const agencyProcs = {
   }),
 
   /** What the store gives the agency (tasks, products): new orders follow at once. */
-  'partners.setWork': proc([], z.object({ id: Id, tasks: Tasks, products: Products }), async (ctx, i) => {
+  'partners.setWork': proc([], z.object({ id: Id, tasks: Tasks, products: Products, agencyAlerts: z.array(z.enum(ALL_TASKS)).max(3).optional() }), async (ctx, i) => {
     const { t, id } = asStore(ctx);
     const L = await storeLink(t, id, i.id);
     const editable = L.info.status === 'active' || (L.info.status === 'pending' && L.info.requestedBy === 'store');
@@ -893,7 +977,7 @@ export const agencyProcs = {
     const products = await checkProducts(ctx.db, i.products);
     const why = await clash(t, ctx.db, id, L.info.id, tasks, products, L.info.kind);
     if (why) throw bad(why);
-    await t.platform.query('UPDATE platform.agency_links SET tasks = $2, products = $3 WHERE id = $1', [L.info.id, JSON.stringify(tasks), products === null ? null : JSON.stringify(products)]);
+    await t.platform.query('UPDATE platform.agency_links SET tasks = $2, products = $3, agency_alerts = $4 WHERE id = $1', [L.info.id, JSON.stringify(tasks), products === null ? null : JSON.stringify(products), JSON.stringify(tasks.filter((task) => task !== 'marketing' && (i.agencyAlerts ?? L.info.agencyAlerts)?.includes(task)))]);
     return { ok: true, problems: L.info.status === 'active' ? await syncLink(t, L.info.id) : [] };
   }),
 
@@ -928,10 +1012,11 @@ export const agencyProcs = {
   /** « Payé »: the store paid the agency (outside Pilotix). */
   'partners.billPaid': proc([], z.object({ billId: Id }), async (ctx, i) => {
     const { t, id } = asStore(ctx);
-    const b = (await t.platform.query('SELECT b.id, b.status FROM platform.agency_bills b JOIN platform.agency_links l ON l.id = b.link_id WHERE b.id = $1 AND l.store_id = $2', [i.billId, id]))[0];
+    const b = (await t.platform.query('SELECT b.id, b.status, l.agency_id FROM platform.agency_bills b JOIN platform.agency_links l ON l.id = b.link_id WHERE b.id = $1 AND l.store_id = $2', [i.billId, id]))[0];
     if (!b) throw notFound('Demande de paiement introuvable');
     if (b.status !== 'requested') return { ok: true };
-    await t.platform.query(`UPDATE platform.agency_bills SET status = 'paid', paid_at = now() WHERE id = $1 AND status = 'requested'`, [i.billId]);
+    const changed = await t.platform.query(`UPDATE platform.agency_bills SET status = 'paid', paid_at = now() WHERE id = $1 AND status = 'requested' RETURNING id`, [i.billId]);
+    if (changed.length) await tellAgency(ctx, num(b.agency_id), 'paid', '#/facturation/vendeurs', {});
     return { ok: true };
   }),
 };

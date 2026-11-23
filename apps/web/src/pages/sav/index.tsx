@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { dur, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
+import { useSession } from '../../lib/session';
 import { Empty, ErrorBox, Help, Icon, KpiBody, Loading, StageBar, StatusBadge } from '../../ui/kit';
 import type { PageProps } from '../registry';
 import { NewTicketModal } from './NewTicket';
@@ -56,6 +57,8 @@ function SavWide({ sub }: PageProps) {
 
 function SavDesktop({ sub }: PageProps) {
   const { t } = useTranslation();
+  const { session } = useSession();
+  const agency = session?.shop?.kind === 'agency';
   const view: View = (VIEWS as readonly string[]).includes(sub ?? '') ? (sub as View) : 'tickets';
   const [tab, setTab] = useState<'todo' | 'all'>(() => {
     try {
@@ -99,7 +102,7 @@ function SavDesktop({ sub }: PageProps) {
 
   return (
     <>
-      <StageBar flow={false} current={view} items={VIEWS.filter((v) => tabOn('sav', v)).map((v) => ({ key: v, label: t(menuTabName('sav', v)), href: `#/sav/${v}`, count: stageCount(v) }))} />
+      <StageBar flow={false} current={view} items={VIEWS.filter((v) => (!agency || v !== 'stats') && tabOn('sav', v)).map((v) => ({ key: v, label: t(menuTabName('sav', v)), href: `#/sav/${v}`, count: stageCount(v) }))} />
       <div className="bjt">
         <div className="card">
           <div className="card-head">

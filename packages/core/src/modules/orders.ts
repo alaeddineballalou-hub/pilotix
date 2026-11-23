@@ -35,6 +35,7 @@ import { clientFee, getSetting } from '../settings';
 import { getPrefs } from './prefs';
 import { channelGuard, guardNote, type GuardMode } from './guard';
 import { assignNow, getAssign } from './assign';
+import { tellDelegated } from './agencybell';
 import { type FollowMove, tellFollow, tellGiven, tellTaken } from './inbox';
 import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPreview } from './notify';
 import { landingCounts, landingSettings, onLandingConf, onLandingFollow, queueChatEvent, queueChatPurchase } from './landingquery';
@@ -183,7 +184,7 @@ export const triedSince = async (ctx: Ctx) => new Date(slotStartOf(ctx.now(), aw
  *  $3 skipped, $4 the start of the current call slot): an agent only his own orders (his manager gives them — an
  *  agency's agent: his agency's chiefs or its Répartition); a manager, the owner or an admin also one nobody has yet —
  *  and so do a confirmation agency's chief and its chefs d'équipe. */
-const nextFrom = (ctx: Ctx) => `FROM orders o WHERE conf_status = ANY($1) AND (${mayOverrideHold(ctx) || agencyLead(ctx) ? 'agent_id IS NULL OR ' : ''}agent_id = $2) AND NOT (id = ANY($3))
+const nextFrom = (ctx: Ctx) => `FROM orders o WHERE conf_status = ANY($1) AND o.conf_agency_id IS NOT DISTINCT FROM ${agencyOf(ctx) ?? 'NULL'} AND (${mayOverrideHold(ctx) || agencyLead(ctx) ? 'agent_id IS NULL OR ' : ''}agent_id = $2) AND NOT (id = ANY($3))
   AND ${dueNowSql(4)} AND (locked_until IS NULL OR locked_until < now() OR locked_by = $2)${andSql(queueSql(ctx, 'conf', 'o', { free: true }))}
   ORDER BY (next_call_at IS NOT NULL) DESC, next_call_at ASC, created_at ASC`;
 
@@ -233,8 +234,9 @@ export async function payOf(db: Db, o: Order): Promise<OrderPay | null> {
   return { step: 'waiting', at: null, ref: null };
 }
 
-export async function getOrder(ctx: Ctx, id: number, db: Db = ctx.db): Promise<Order> {
-  if (noOrderAccess(ctx)) throw forbidden();
+export async function getOrder(ctx: Ctx, id: number, db: Db = ctx.db, access?: 'sav'): Promise<Order> {
+  const sav = access === 'sav' && agencyOf(ctx) !== null && ctx.session.roles.includes('sav');
+  if (!sav && noOrderAccess(ctx)) throw forbidden();
   const r = (await db.query(`SELECT ${ORDER_COLS} ${ORDER_FROM} WHERE o.id = $1`, [id]))[0];
   if (!r) throw notFound('Commande introuvable');
   const o = toOrder(r);
@@ -244,7 +246,7 @@ export async function getOrder(ctx: Ctx, id: number, db: Db = ctx.db): Promise<O
   if (own && !(await db.query(`SELECT 1 FROM orders o WHERE o.id = $1 AND ${own}`, [id])).length) throw forbidden('Cette commande est donnée à un autre agent');
   // a confirmation agency's agent: only the orders the store gives the agency, for their tasks
   const ag = agencyOf(ctx);
-  if (ag !== null) {
+  if (ag !== null && !sav) {
     const roles = ctx.session.roles;
     if (!((roles.includes('confirmation') && o.confAgencyId === ag) || (roles.includes('suivi') && o.followAgencyId === ag))) throw forbidden('Cette commande n’est pas confiée à votre agence');
     // given some products only (in the agency): the orders that came for them
@@ -615,7 +617,12 @@ async function routeToAgencies(db: Db, orderId: number, productId: number | unde
   };
   const conf = confirmed ? null : pick('confirmation');
   const follow = pick('suivi');
-  if (conf !== null || follow !== null) await db.query('UPDATE orders SET conf_agency_id = $2, follow_agency_id = $3, route_product_id = $4 WHERE id = $1', [orderId, conf, follow, productId]);
+  if (conf !== null || follow !== null) await db.query(
+    `UPDATE orders SET conf_agency_id = $2, follow_agency_id = $3, route_product_id = $4,
+      agent_id = CASE WHEN $2::integer IS NULL THEN agent_id ELSE NULL END,
+      assigned_at = CASE WHEN $2::integer IS NULL THEN assigned_at ELSE NULL END WHERE id = $1`,
+    [orderId, conf, follow, productId],
+  );
 }
 
 /** Units the depot already took for an order that no longer needs them go back to the depot by themselves: the
@@ -686,6 +693,7 @@ export async function createOrder(
     guard?: GuardMode;
     /** a welcome code that does not work does not stop the order (a landing page, Dellal): it is left out, with a note */
     promoSoft?: boolean;
+    savAccess?: 'sav';
   } = {},
 ): Promise<Order> {
   const phone = normalizePhone(input.phone);
@@ -825,7 +833,7 @@ export async function createOrder(
     }
     // Pilot Automations: "we received your order" (or "confirmed")
     if (!opts.silent) await onOrderCreated(tx, { id: oid, phone, conf_status: conf, is_exchange: input.isExchange }, ctx.now());
-    return getOrder(ctx, oid, tx);
+    return getOrder(ctx, oid, tx, opts.savAccess);
   });
   // made already confirmed (by an agent): a « Risqué » customer is kept like « Confirmer quand même »
   if (!order.isExchange && (order.confStatus === 'confirmed' || order.confStatus === 'no_stock')) await recordRiskConfirms(ctx, [order.id], me, db);
@@ -835,6 +843,10 @@ export async function createOrder(
   ctx.emit({ type: 'orders', ...(came ? { id: order.id, data: { created: { ref: order.ref, channel: order.channel, agency: order.confAgencyId ?? null } } } : {}) });
   // Affectation automatique: an order to call gets its agent at once (when the shop turned it on) — not inside the
   // caller's own transaction (a page left open, a restored order): the job every minute gives that one
+  if (db === ctx.db && !input.isExchange) {
+    if (order.confAgencyId) await tellDelegated(ctx, order.confAgencyId, 'confirmation', order.id).catch(() => {});
+    if (order.followAgencyId) await tellDelegated(ctx, order.followAgencyId, 'suivi', order.id).catch(() => {});
+  }
   if (db === ctx.db && !input.isExchange && !order.agentId && (CONF_TODO as string[]).includes(order.confStatus)) {
     const r = await assignNow(ctx, 'conf', order.id);
     if (r?.assigned) return getOrder(ctx, order.id);
@@ -1233,9 +1245,10 @@ export async function holdOrder(ctx: Ctx, id: number): Promise<{ ok: boolean; by
   return ctx.db.tx(async (tx) => {
     const got = await tx.query(
       `UPDATE orders SET locked_by = $2, locked_until = now() + interval '10 minutes'
-        WHERE id = $1 AND conf_status = ANY($3) AND (locked_until IS NULL OR locked_until < now() OR locked_by = $2)${andSql(queueSql(ctx, 'conf', 'orders', { free: true }))}
+        WHERE id = $1 AND conf_agency_id IS NOT DISTINCT FROM $4::integer AND conf_status = ANY($3)
+          AND (locked_until IS NULL OR locked_until < now() OR locked_by = $2)${andSql(queueSql(ctx, 'conf', 'orders', { free: true }))}
        RETURNING id`,
-      [id, me, CONF_TODO],
+      [id, me, CONF_TODO, agencyOf(ctx)],
     );
     if (got[0]) {
       await tx.query(`UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE locked_by = $1 AND id <> $2 AND conf_status = ANY($3)`, [me, id, CONF_TODO]);
@@ -1244,13 +1257,14 @@ export async function holdOrder(ctx: Ctx, id: number): Promise<{ ok: boolean; by
     // not taken: another agent has it open, or it is given to another agent (an order no longer to call: nothing to keep)
     const r = (
       await tx.query(
-        `SELECT CASE WHEN o.locked_until > now() AND o.locked_by <> $2 THEN o.locked_until END AS until,
+        `SELECT o.conf_agency_id, CASE WHEN o.locked_until > now() AND o.locked_by <> $2 THEN o.locked_until END AS until,
                 CASE WHEN o.locked_until > now() AND o.locked_by <> $2 THEN lp.name ELSE ap.name END AS name,
                 (o.locked_until > now() AND o.locked_by <> $2) OR (o.agent_id IS NOT NULL AND o.agent_id <> $2) AS taken
            FROM orders o LEFT JOIN profiles lp ON lp.id = o.locked_by LEFT JOIN profiles ap ON ap.id = o.agent_id WHERE o.id = $1`,
         [id, me],
       )
     )[0];
+    if (r && numOrNull(r.conf_agency_id) !== agencyOf(ctx)) return { ok: false, by: null, until: null };
     if (r?.taken) return { ok: false, by: (r.name as string | null) ?? '', until: isoOrNull(r.until) };
     // nobody has it and it is not given to this agent: only his manager gives it (an agency's agent: his agency's chiefs)
     const free = (await tx.query(`SELECT 1 FROM orders WHERE id = $1 AND agent_id IS NULL AND conf_status = ANY($2)`, [id, CONF_TODO]))[0];
@@ -1303,7 +1317,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
     const notify = await notifyContext(tx);
     const landing = await landingSettings(tx);
     for (const oid of input.ids) {
-      const cur = (await tx.query(`SELECT id, ref, customer_id, conf_status, follow_status, shipped_at, tracking, attempts, next_call_at, agent_id, phone, is_exchange, landing_id, conversation_id, commune, is_stopdesk, stopdesk_id,
+      const cur = (await tx.query(`SELECT id, ref, customer_id, conf_status, follow_status, shipped_at, tracking, attempts, next_call_at, agent_id, conf_agency_id, phone, is_exchange, landing_id, conversation_id, commune, is_stopdesk, stopdesk_id,
          CASE WHEN locked_until > now() AND locked_by <> $2 THEN (SELECT p.name FROM profiles p WHERE p.id = locked_by) END AS held_by
          FROM orders WHERE id = $1 FOR UPDATE`, [oid, me]))[0];
       if (!cur) continue;
@@ -1364,7 +1378,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
         `UPDATE orders SET conf_status=$2, attempts=$3,
            last_call_at = CASE WHEN $4 THEN $5::timestamptz ELSE last_call_at END,
            next_call_at = $6,
-           agent_id = COALESCE(agent_id, $7), assigned_at = COALESCE(assigned_at, $5::timestamptz),
+           agent_id = COALESCE(agent_id, $7), assigned_at = CASE WHEN $7::bigint IS NOT NULL THEN COALESCE(assigned_at, $5::timestamptz) ELSE assigned_at END,
            confirmed_at = CASE WHEN $9 THEN COALESCE(confirmed_at, $5::timestamptz) WHEN $11 THEN NULL ELSE confirmed_at END,
            follow_status = CASE WHEN $8 AND (follow_status IS NULL OR (follow_status = 'cancelled' AND shipped_at IS NULL)) THEN 'to_prepare'
                                 WHEN $2 IN ('cancelled','duplicate','wrong_number','fake') AND follow_status IN ('to_prepare','prepared') THEN 'cancelled'
@@ -1378,7 +1392,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
           oid, status, attempts, !undo && (isCallFail || stamped || CONF_NEEDS_DATE.includes(status)), nowIso,
           // (undone back to « à rappeler » / « reportée »: to call now)
           CONF_NEEDS_DATE.includes(status) ? (input.nextCallAt ?? (undo ? nowIso : null)) : null,
-          me, confirmed, stamped, CONF_TODO, !!undo?.clearConfirmedAt,
+          numOrNull(cur.conf_agency_id) === agencyOf(ctx) ? me : null, confirmed, stamped, CONF_TODO, !!undo?.clearConfirmedAt,
         ],
       );
       // (what « ↶ Annuler » puts back: the calls counted and the next call's time before this change)
@@ -1600,7 +1614,7 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
            sub_status = CASE WHEN $8 THEN sub_status ELSE $5 END, follow_agent_id = CASE WHEN $6 AND ($2 IS DISTINCT FROM follow_status OR follow_agent_id IS NULL) THEN $7 ELSE follow_agent_id END,
            delivery_attempts = delivery_attempts + CASE WHEN $2 = 'failed' THEN 1 ELSE 0 END,
            updated_at=now(), version=version+1 WHERE id=$1`,
-        [oid, to, input.tracking ?? null, livreurId, input.subStatus ?? null, !opts.system && ctx.session.roles.includes('suivi'), me,
+        [oid, to, input.tracking ?? null, livreurId, input.subStatus ?? null, !opts.system && ctx.session.roles.includes('suivi') && numOrNull(cur.follow_agency_id) === agencyOf(ctx), me,
           !!opts.system && input.subStatus === undefined, leaves],
       );
       if ((leaves || back) && cur.warehouse_id) {
@@ -2103,10 +2117,16 @@ export const ordersProcs = {
     // the bell: the new agent is told, and the one it was taken from (never the person who did it: inbox.ts)
     const given = new Map<number, number[]>();
     const taken = new Map<number, { id: number; to: number | null }[]>();
+    const agency = agencyOf(ctx);
     await ctx.db.tx(async (tx) => {
+      if (agentId !== null) {
+        const target = (await tx.query('SELECT agency_id FROM profiles WHERE id = $1 AND active', [agentId]))[0];
+        if (!target || numOrNull(target.agency_id) !== agency) throw forbidden('L’affectation est réservée à l’équipe qui gère la confirmation');
+      }
       for (const oid of ids) {
-        const cur = (await tx.query('SELECT ref, agent_id, shipped_at FROM orders WHERE id=$1', [oid]))[0];
+        const cur = (await tx.query('SELECT ref, agent_id, shipped_at, conf_agency_id FROM orders WHERE id=$1 FOR UPDATE', [oid]))[0];
         if (!cur) continue;
+        if (numOrNull(cur.conf_agency_id) !== agency) throw forbidden('L’affectation est réservée à l’équipe qui gère la confirmation');
         if (!manager && cur.agent_id && num(cur.agent_id) !== ctx.session.profile.id) throw forbidden();
         // an agent never takes an order nobody has: his manager gives it (an agency's agent: his agency's chiefs)
         if (!manager && !cur.agent_id) throw forbidden('Votre manager vous donne les commandes');

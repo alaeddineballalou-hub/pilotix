@@ -50,12 +50,45 @@
   "alreadyActive": "Vous travaillez déjà pour cette boutique.",
   "alreadyPending": "Une demande attend déjà une réponse.",
   "tasks": "Le travail",
+  "routing": {
+    "title": "Équipe responsable de cette commande",
+    "saved": "Équipe responsable modifiée",
+    "store": "Équipe de la boutique",
+    "none": "Aucun contrat d’agence actif."
+  },
+  "alerts": {
+    "help": "Choisissez les destinataires par rôle. Les alertes KPI se déclenchent quand le seuil est atteint.",
+    "kpis": "Alertes KPI",
+    "enabled": "Activée",
+    "threshold": "Seuil d’alerte",
+    "toAgency": "Alertes envoyées à l’agence",
+    "pickSav": "Choisissez un vendeur qui confie son SAV à votre agence.",
+    "groups": {
+      "seller": "Invitations et réponses des vendeurs",
+      "order": "Affectations de confirmation",
+      "follow": "Affectations de suivi",
+      "sav": "Affectations SAV",
+      "team": "Mises à jour de l’équipe",
+      "access": "Accès aux vendeurs",
+      "payment": "Paiements des factures",
+      "delegatedConfirmation": "Commandes confiées pour confirmation",
+      "delegatedFollow": "Commandes confiées pour le suivi",
+      "delegatedSav": "Tickets SAV confiés à l’agence"
+    },
+    "metrics": {
+      "order": "Commandes en attente de confirmation",
+      "follow": "Alertes de suivi ouvertes",
+      "sav": "Tickets SAV ouverts"
+    }
+  },
   "task": {
+    "sav": "SAV",
     "confirmation": "Confirmation",
     "suivi": "Suivi",
     "marketing": "Publicité"
   },
   "taskHelp": {
+    "sav": "Traiter les tickets SAV et les échanges des produits confiés.",
     "confirmation": "Appeler les clients et confirmer les commandes",
     "suivi": "Suivre les colis jusqu’à la livraison",
     "marketing": "Lancer les publicités des produits donnés"

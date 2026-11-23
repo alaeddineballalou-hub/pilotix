@@ -41,7 +41,7 @@ const LANGS: readonly string[] = ['fr', 'en', 'ar'];
 export async function ringBell(ctx: Ctx, people: readonly number[], make: (lang: Language, n: number) => BellLine, o: { tag?: string | null; count?: number; silent?: boolean } = {}): Promise<Rung[]> {
   const ids = [...new Set(people.filter((x) => Number.isSafeInteger(x) && x > 0))];
   if (!ids.length) return [];
-  const who = await ctx.db.query('SELECT id, language FROM profiles WHERE id = ANY($1) AND active', [ids]);
+  const who = await ctx.db.query('SELECT id, language FROM profiles WHERE id = ANY($1) AND active AND agency_id IS NULL', [ids]);
   const add = Math.max(1, Math.round(o.count ?? 1));
   const tag = o.tag ? clip(o.tag, 120) : null;
   const out: Rung[] = [];

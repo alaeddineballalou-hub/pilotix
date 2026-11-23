@@ -9,7 +9,7 @@ import { useSession } from '../../lib/session';
 import { Icon } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 
-export const TASKS: AgencyTask[] = ['confirmation', 'suivi'];
+export const TASKS: AgencyTask[] = ['confirmation', 'suivi', 'sav'];
 
 /** The kind of partner whose space is open (a store's own app: an agency, for the old texts). */
 export function usePartnerKind(): PartnerKind {
@@ -58,7 +58,7 @@ export function MonthPicker({ value, max, onChange }: { value: string; max: stri
   );
 }
 
-const TASK_ICON: Record<AgencyTask, string> = { confirmation: 'phone', suivi: 'route', marketing: 'megaphone' };
+const TASK_ICON: Record<AgencyTask, string> = { confirmation: 'phone', suivi: 'route', sav: 'headset', marketing: 'megaphone' };
 
 export function TaskChips({ tasks }: { tasks: AgencyTask[] }) {
   const { t } = useTranslation();

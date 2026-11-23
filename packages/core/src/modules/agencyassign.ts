@@ -85,7 +85,7 @@ export const agencyAssignProcs = {
       if (!shop) continue;
       const st = shopStatus(shop, ctx.now(), grace);
       if (st.locked) continue;
-      const sctx: Ctx = { db: t.shop(s.schema), session: ctx.session, shop: shopCtx(shop, st, set.soon.features), now: ctx.now, emit: ctx.emit, t };
+      const sctx: Ctx = { db: t.shop(s.schema), session: ctx.session, shop: shopCtx(shop, st, set.soon.features), now: ctx.now, emit: (e) => { if (e.type !== 'inbox' || e.privateInbox) ctx.emit(e); }, t };
       for (const area of ['conf', 'follow'] as const) {
         const r = await runArea(sctx, area, undefined, undefined, { agency: ctx.shop!.id }).catch(() => null);
         if (r) for (const k of ['assigned', 'back', 'moved', 'waiting'] as const) out[area][k] += r[k];

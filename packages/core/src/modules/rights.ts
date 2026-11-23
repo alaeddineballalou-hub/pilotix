@@ -189,7 +189,7 @@ const memo = new WeakMap<object, { gen: number; p: Promise<Set<string>> }>();
  * database (a single-connection database, the in-browser demo, would wait for itself).
  */
 export async function rightsOfCtx(ctx: Ctx): Promise<Set<string> | null> {
-  if (ctx.session.isAdmin || !rightsApply(ctx)) return null;
+  if (ctx.session.isAdmin || (ctx.session.profile.agencyId != null && !ctx.session.roles.includes('marketer')) || !rightsApply(ctx)) return null;
   const key = ctx.session.profile as object;
   const hit = memo.get(key);
   if (hit && hit.gen === generation) return hit.p;
@@ -468,7 +468,7 @@ export function rightsNeeded(name: string, input: unknown, ctx: Ctx): (readonly 
 
 /** Refuses a call the person's rights do not allow (before it runs). Administrators and partners' spaces: as before. */
 export async function rightsGate(name: string, ctx: Ctx, input: unknown) {
-  if (ctx.session.isAdmin || !rightsApply(ctx)) return;
+  if (ctx.session.isAdmin || (ctx.session.profile.agencyId != null && !ctx.session.roles.includes('marketer')) || !rightsApply(ctx)) return;
   // always read first: the action's own checks then find them at hand
   const set = await rightsOfCtx(ctx);
   const need = rightsNeeded(name, input, ctx);

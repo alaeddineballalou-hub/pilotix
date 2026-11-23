@@ -71,6 +71,7 @@ export const AGENCY_PAGES: Record<string, ComponentType<PageProps>> = {
   dashboard: P(() => import('./agency/stats'), 'AgencyDashboard'),
   confirmation: P(() => import('./agency/work'), 'AgencyConfirmation'),
   suivi: P(() => import('./agency/work'), 'AgencySuivi'),
+  sav: P(() => import('./agency/work'), 'AgencySav'),
   produits: P(() => import('./depot/AssignedCatalog'), 'AgencyProducts'),
   gains: P(() => import('./caisse'), 'MesGains'),
   equipe: P(() => import('./agency'), 'AgencyTeam'),

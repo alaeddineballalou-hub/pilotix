@@ -101,6 +101,13 @@ test('the agency own Affectation: its orders in a store go to its own agents (on
   // Lina out of the split, Nora too: it waits
   await call('agency.assign.set', chief, { ...g.cfg, conf: { ...g.cfg.conf, mode: 'turn', max: 0 }, agents: { [nora.id]: { out: true, weight: 1, channels: [], products: [], from: null, to: null, langs: [], senior: false, shops: [], woman: false } } });
   assert.equal((await order(admin, shop.products.VELO, '0661000103')).agentId, null);
+  const orderLines = async (email: string) => {
+    const ctx = await as(t, ag.id, email, PW);
+    const inbox = await call('inbox.list', ctx, {}) as { items: { kind: string }[] };
+    return inbox.items.filter((item) => item.kind === 'order').length;
+  };
+  assert.equal(await orderLines('nora@agence.dz'), 2);
+  assert.equal(await orderLines('lina@agence.dz'), 0);
   void linaS;
 });
 

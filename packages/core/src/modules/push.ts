@@ -79,15 +79,17 @@ export async function sendPush(ctx: Ctx, profileIds: number[], payload: Record<s
  */
 export async function pushOnly(ctx: Ctx, profileIds: number[], payload: Record<string, unknown>, o: { phones?: boolean } = {}) {
   if (!profileIds.length || !ctx.server?.push) return 0;
+  const people = (await ctx.db.query('SELECT id FROM profiles WHERE active AND agency_id IS NULL AND id = ANY($1)', [profileIds])).map((p) => num(p.id));
+  if (!people.length) return 0;
   const seen = new Set<string>();
   let sent = 0;
   const k = await keys(ctx);
   if (k) {
-    const subs = await ctx.db.query(`SELECT endpoint, p256dh, auth FROM push_subs WHERE profile_id = ANY($1)${o.phones ? ` AND ${phoneSql()}` : ''}`, [profileIds]);
+    const subs = await ctx.db.query(`SELECT endpoint, p256dh, auth FROM push_subs WHERE profile_id = ANY($1)${o.phones ? ` AND ${phoneSql()}` : ''}`, [people]);
     sent += await deliver(ctx.db, ctx.server, k, subs as Sub[], payload, seen);
   }
   // a store on a server with several shops: the same people in their other boutiques
-  if (ctx.t && ctx.shop && (ctx.shop.kind ?? 'store') === 'store') sent += await pushElsewhere(ctx, profileIds, payload, seen, o).catch(() => 0);
+  if (ctx.t && ctx.shop && (ctx.shop.kind ?? 'store') === 'store') sent += await pushElsewhere(ctx, people, payload, seen, o).catch(() => 0);
   return sent;
 }
 

@@ -248,6 +248,10 @@ const customer: Gate = async (ctx, i) => {
 };
 
 /** The confirmation and suivi work, and the agent's own account. */
+const savRole: Gate = async (ctx) => {
+  if (!ctx.session.roles.includes('sav')) throw forbidden('Le SAV n’est pas confié à votre rôle');
+};
+
 export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'me.get': free,
   'me.language': free,
@@ -256,10 +260,6 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'me.setUi': free,
   'me.update': free,
   'me.seen': free,
-  // the bell at the top of the page: the person's own lines only
-  'inbox.list': free,
-  'inbox.read': free,
-  'inbox.readAll': free,
   'users.list': free,
   // the lists of the filter bars (the agency's own people and products only)
   'filters.options': free,
@@ -321,6 +321,16 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'customers.history': customer,
   'customers.setBlacklist': customer,
   'delivery.stopdesks': free,
+  'sav.list': savRole,
+  'sav.kpis': savRole,
+  'sav.get': savRole,
+  'sav.catalog': savRole,
+  'sav.create': savRole,
+  'sav.update': savRole,
+  'sav.exchange': savRole,
+  'sav.settle': savRole,
+  'sav.rate': savRole,
+  'sav.findOrder': savRole,
   'suivi.counts': free,
   'suivi.list': free,
   'suivi.treat': order('id'),
@@ -456,6 +466,7 @@ export const sellerProcsOf = (kind: 'agency' | 'marketer') => (kind === 'markete
 
 const MANAGEMENT_PROCS = new Set(['management.plans', 'management.planSave', 'management.planClone', 'management.planAssign', 'management.planArchive', 'management.planDelete', 'management.bonuses', 'management.bonusSave', 'management.bonusClone', 'management.bonusDelete', 'management.bonusAssign', 'management.bonusRespond', 'management.bonusOfferAgent', 'management.billingTargets', 'management.billingPropose', 'management.payroll', 'management.payrollClose', 'management.agentScores']);
 
+const AGENCY_INBOX = new Set(['inbox.list', 'inbox.read', 'inbox.readAll', 'inbox.run']);
 /** What a partner's own space answers (its own team and account; the rest are the agency.* actions). */
 const AGENCY_SPACE = new Set(['me.get', 'me.language', 'me.password', 'me.ui', 'me.setUi', 'me.update', 'me.seen', 'me.delete', 'management.myBonuses', 'users.list', 'users.create', 'users.update', 'users.phoneCheck', 'admin.users.resetPassword', 'boutiques.list', 'boutiques.slugCheck', 'boutiques.save']);
 
@@ -467,6 +478,7 @@ const AGENCY_SPACE = new Set(['me.get', 'me.language', 'me.password', 'me.ui', '
 export async function agencyGate(name: string, ctx: Ctx, input: unknown): Promise<void> {
   const kind = ctx.shop?.kind;
   if (kind === 'agency' || kind === 'marketer') {
+    if (kind === 'agency' && AGENCY_INBOX.has(name)) return;
     if (name.startsWith('agency.') || AGENCY_SPACE.has(name)) return;
     // Only these plan actions belong to the agency itself; role checks still run before this gate.
     if (kind === 'agency' && MANAGEMENT_PROCS.has(name)) return;

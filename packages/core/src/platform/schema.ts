@@ -408,6 +408,7 @@ CREATE TABLE IF NOT EXISTS platform.agency_links (
   ended_at       timestamptz,
   ended_by       text
 );
+ALTER TABLE platform.agency_links ADD COLUMN IF NOT EXISTS agency_alerts jsonb NOT NULL DEFAULT '[]';
 CREATE UNIQUE INDEX IF NOT EXISTS agency_links_open ON platform.agency_links (agency_id, store_id) WHERE status IN ('pending', 'active');
 CREATE INDEX IF NOT EXISTS agency_links_store ON platform.agency_links (store_id, status);
 CREATE INDEX IF NOT EXISTS agency_links_agency ON platform.agency_links (agency_id, status);

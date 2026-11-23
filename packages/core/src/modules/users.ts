@@ -215,7 +215,7 @@ function noNewMarketer(ctx: Ctx, roles: readonly string[] | undefined, had: read
 }
 
 /** The roles of a partner's people: an agency's chief, supervisors and agents; a marketer's chief and media buyers. */
-export const PARTNER_ROLES: Record<'agency' | 'marketer', string[]> = { agency: ['admin', 'agent_manager', 'confirmation', 'suivi'], marketer: ['admin', 'marketer'] };
+export const PARTNER_ROLES: Record<'agency' | 'marketer', string[]> = { agency: ['admin', 'agent_manager', 'confirmation', 'suivi', 'sav'], marketer: ['admin', 'marketer'] };
 /** In a partner's space: only its own roles, and the sellers the person works for (checked against its contracts). */
 async function agencyFields(ctx: Ctx, b: { roles?: string[]; sellers?: z.infer<typeof NewUser>['sellers'] }) {
   const kind = ctx.shop?.kind;

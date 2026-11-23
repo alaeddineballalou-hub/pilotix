@@ -35,8 +35,8 @@ export interface AgencyPrices {
 export const NO_AGENCY_PRICES: AgencyPrices = { perConfirmed: 0, perDelivered: 0, perUpsell: 0, monthly: 0, bonusRate: { min: 0, amount: 0 }, bonusVolume: { above: 0, amount: 0 }, perSuccess: 0, profitRate: 0 };
 
 /** What a partner does for a store: an agency confirms and / or follows its orders, a marketer runs its ads. */
-export type AgencyTask = 'confirmation' | 'suivi' | 'marketing';
-export const AGENCY_TASKS: AgencyTask[] = ['confirmation', 'suivi'];
+export type AgencyTask = 'confirmation' | 'suivi' | 'sav' | 'marketing';
+export const AGENCY_TASKS: AgencyTask[] = ['confirmation', 'suivi', 'sav'];
 export const MARKETER_TASKS: AgencyTask[] = ['marketing'];
 /** The tasks a partner of this kind can do. */
 export const tasksOfKind = (k: PartnerKind): AgencyTask[] => (k === 'marketer' ? MARKETER_TASKS : AGENCY_TASKS);
@@ -139,6 +139,7 @@ export interface AgencyLinkInfo {
   status: AgencyLinkStatus;
   /** who asked first (the other side accepts or refuses) */
   requestedBy: 'agency' | 'store';
+  agencyAlerts?: AgencyTask[];
   agency: { id: number; name: string; code: string | null; verified: boolean; suspended: boolean };
   /** owner: the seller (their Pilotix account) — a seller with several boutiques has one link per boutique */
   store: { id: number; name: string; code: string | null; owner?: { id: number; name: string } | null };

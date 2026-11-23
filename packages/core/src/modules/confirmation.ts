@@ -1064,7 +1064,7 @@ export const confirmationProcs = {
 
   /** Gives back the order taken with orders.next (another agent can take it). */
   'confirmation.release': proc(['confirmation'], z.object({ id }), async (ctx, { id }) => {
-    await ctx.db.query('UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE id = $1 AND (locked_by = $2 OR $3)', [id, ctx.session.profile.id, ctx.session.isAdmin]);
+    await ctx.db.query('UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE id = $1 AND conf_agency_id IS NOT DISTINCT FROM $4::integer AND (locked_by = $2 OR $3)', [id, ctx.session.profile.id, ctx.session.isAdmin, agencyOf(ctx)]);
     return { ok: true };
   }),
 
