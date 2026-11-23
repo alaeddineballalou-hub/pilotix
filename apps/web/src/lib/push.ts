@@ -31,23 +31,27 @@ async function registration() {
   return navigator.serviceWorker.register(workerUrl());
 }
 
-/** Subscribes this device (asks the permission when `ask`, which must come from a tap). Returns the state after. */
-export async function enablePush(ask: boolean): Promise<'on' | 'denied' | 'off' | 'unsupported'> {
-  if (!pushSupported()) return 'unsupported';
+type PushState = 'on' | 'denied' | 'off' | 'unsupported';
+type PushConnection = { state: 'on'; endpoint: string } | { state: Exclude<PushState, 'on'> };
+
+/** Connects notifications and returns the exact subscription the server accepted. */
+export async function enablePushSubscription(ask: boolean): Promise<PushConnection> {
+  if (!pushSupported()) return { state: 'unsupported' };
   const shopId = currentShop()?.id;
   let perm = Notification.permission;
   if (perm === 'default' && ask) perm = await Notification.requestPermission();
-  if (perm === 'denied') return 'denied';
-  if (perm !== 'granted' || currentShop()?.id !== shopId) return 'off';
+  if (perm === 'denied') return { state: 'denied' };
+  if (perm !== 'granted' || currentShop()?.id !== shopId) return { state: 'off' };
   const scope = workspaceScope();
   if (scope && !ask) {
     const reg = await navigator.serviceWorker.getRegistration(scope);
     const sub = reg?.scope === new URL(scope, location.origin).href ? await reg.pushManager.getSubscription() : null;
-    if (!sub) return 'off';
-    return (await rpc('push.key', { endpoint: sub.endpoint }, null)).subscribed ? 'on' : 'off';
+    if (!sub) return { state: 'off' };
+    const { subscribed } = await rpc('push.key', { endpoint: sub.endpoint }, null);
+    return subscribed ? { state: 'on', endpoint: sub.endpoint } : { state: 'off' };
   }
   const { key } = await rpc('push.key', {}, null);
-  if (!key) return 'unsupported';
+  if (!key) return { state: 'unsupported' };
   const reg = await registration();
   const worker = reg.installing ?? reg.waiting;
   if (!reg.active && worker && worker.state !== 'activated') {
@@ -66,7 +70,7 @@ export async function enablePush(ask: boolean): Promise<'on' | 'denied' | 'off' 
   }
   let sub = await reg.pushManager.getSubscription();
   if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) });
-  if (currentShop()?.id !== shopId) return 'off';
+  if (currentShop()?.id !== shopId) return { state: 'off' };
   const j = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
   await rpc('push.subscribe', { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, ua: navigator.userAgent.slice(0, 300) }, null);
   if (scope && currentShop()?.kind !== 'agency') {
@@ -76,7 +80,12 @@ export async function enablePush(ask: boolean): Promise<'on' | 'denied' | 'off' 
       .catch(() => null);
     if (old && old.endpoint !== j.endpoint) await rpc('push.unsubscribe', { endpoint: old.endpoint }, null).catch(() => {});
   }
-  return 'on';
+  return currentShop()?.id === shopId ? { state: 'on', endpoint: j.endpoint } : { state: 'off' };
+}
+
+/** Asks permission only when called from a user action with ask enabled. */
+export async function enablePush(ask: boolean): Promise<PushState> {
+  return (await enablePushSubscription(ask)).state;
 }
 
 /**

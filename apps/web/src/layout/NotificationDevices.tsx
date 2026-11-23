@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { rpc, type Out } from '../lib/backend';
-import { myEndpoint, phoneDevice, pushSupported, pushTurnOn, testDevicePush } from '../lib/push';
+import { enablePushSubscription, myEndpoint, phoneDevice, pushSupported, testDevicePush } from '../lib/push';
 import { Card, Icon } from '../ui/kit';
 
 const DEVICE_KEY = 'pilotix-notification-device';
@@ -38,10 +38,11 @@ export function NotificationDevices({ children, logout }: { children: ReactNode;
   const pendingCheck = useRef<Promise<void> | null>(null);
   const check = useRef(0);
 
-  const refresh = useCallback(async (setup?: { name: string; kind: Kind }) => {
+  const refresh = useCallback(async (activation?: { name: string; kind: Kind; endpoint: string }) => {
     const request = ++check.current;
     const id = deviceId();
-    const endpoint = pushSupported() && Notification.permission === 'granted' ? await myEndpoint() : null;
+    const endpoint = activation?.endpoint ?? (pushSupported() && Notification.permission === 'granted' ? await myEndpoint() : null);
+    const setup = activation && { name: activation.name, kind: activation.kind };
     const result = await rpc('push.device.checkIn', { id, endpoint, setup }, null);
     const ready = result.registered && result.enabled;
     if (request === check.current) {
@@ -96,21 +97,22 @@ export function NotificationDevices({ children, logout }: { children: ReactNode;
   }, [actions]);
 
   const activate = async () => {
-    if (activating.current) return;
+    const deviceName = name.trim();
+    if (activating.current || !deviceName) return;
     activating.current = true;
     ++check.current;
     setBusy(true);
     setMessage('');
     try {
-      const permission = await pushTurnOn();
-      if (permission !== 'on') {
-        setMessage(t(permission === 'unsupported' ? 'devices.unsupported' : 'devices.permission'));
+      const connection = await enablePushSubscription(true);
+      if (connection.state !== 'on') {
+        setMessage(t(connection.state === 'unsupported' ? 'devices.unsupported' : 'devices.permission'));
         return;
       }
       // Finish any check started before Chrome opened the permission prompt.
       await pendingCheck.current;
       initialized.current = true;
-      const ready = await refresh({ name: name.trim() || t(`devices.${kind}`), kind });
+      const ready = await refresh({ name: deviceName, kind, endpoint: connection.endpoint });
       if (!ready) setMessage(t('devices.registrationFailed'));
     } catch {
       setMessage(t('devices.registrationFailed'));
@@ -140,11 +142,11 @@ export function NotificationDevices({ children, logout }: { children: ReactNode;
       {state === 'checking' ? <p role="status">{t('devices.checking')}</p> : <>
         {state === 'blocked' && <p>{t('devices.required')}</p>}
         <div className="row" style={{ flexWrap: 'wrap' }}>
-          <label>{t('devices.name')} <input className="in" maxLength={80} value={name} onChange={(event) => setName(event.target.value)} /></label>
+          <label>{t('devices.name')} <input className="in" maxLength={80} required autoComplete="off" value={name} onChange={(event) => setName(event.target.value)} /></label>
           <label>{t('devices.kind')} <select className="in" value={kind} onChange={(event) => setKind(event.target.value === 'phone' ? 'phone' : 'pc')}>
             <option value="phone">{t('devices.phone')}</option><option value="pc">{t('devices.pc')}</option>
           </select></label>
-          <button type="button" className="btn primary" disabled={busy} onClick={() => void activate()}>{t('devices.activate')}</button>
+          <button type="button" className="btn primary" disabled={busy || !name.trim()} onClick={() => void activate()}>{t('devices.activate')}</button>
           {state === 'blocked' && <button type="button" className="btn" onClick={logout}>{t('shell.logout')}</button>}
           {state === 'ready' && <button type="button" className="btn" onClick={() => {
             void testDevicePush().then((sent) => setMessage(t(sent ? 'agency.alerts.testSent' : 'agency.alerts.deviceFailed')))
