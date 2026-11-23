@@ -1,20 +1,20 @@
 {
-  "devices": {
-    "title": "My devices",
-    "remove": "Remove device",
-    "checking": "Checking device…",
-    "required": "Enable system notifications before working on this device. On iPhone, install Pilotix from the Home Screen first.",
-    "name": "Device name",
-    "kind": "Device type",
-    "phone": "Phone",
-    "pc": "PC",
-    "activate": "Save and enable system notifications",
-    "permission": "Allow notifications in your device settings, then try again.",
-    "current": "This device",
-    "live": "Live",
-    "offline": "Offline",
-    "enabled": "Notifications enabled",
-    "disabled": "Notifications disabled",
-    "namedRecipients": "Named recipients"
-  }
+  "title": "My devices",
+  "remove": "Remove device",
+  "checking": "Checking device…",
+  "required": "Enable system notifications before working on this device. On iPhone, install Pilotix from the Home Screen first.",
+  "name": "Device name",
+  "kind": "Device type",
+  "phone": "Phone",
+  "pc": "PC",
+  "activate": "Save and enable system notifications",
+  "permission": "Allow notifications in your device settings, then try again.",
+  "current": "This device",
+  "live": "Live",
+  "offline": "Offline",
+  "enabled": "Notifications enabled",
+  "disabled": "Notifications disabled",
+  "namedRecipients": "Named recipients",
+  "unsupported": "This browser cannot receive system notifications. On iPhone, open Pilotix from the Home Screen.",
+  "registrationFailed": "Pilotix could not register this device for system notifications. Try activating it again."
 }

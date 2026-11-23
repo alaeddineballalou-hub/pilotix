@@ -34,42 +34,52 @@ export function NotificationDevices({ children, logout }: { children: ReactNode;
   const [name, setName] = useState('');
   const [actions, setActions] = useState<HTMLElement | null>(null);
   const initialized = useRef(false);
+  const activating = useRef(false);
+  const pendingCheck = useRef<Promise<void> | null>(null);
   const check = useRef(0);
+
   const refresh = useCallback(async (setup?: { name: string; kind: Kind }) => {
     const request = ++check.current;
-    try {
-      const id = deviceId();
-      const endpoint = pushSupported() && Notification.permission === 'granted' ? await myEndpoint() : null;
-      const result = await rpc('push.device.checkIn', { id, endpoint, setup }, null);
-      const list = await rpc('push.devices', {}, null);
-      if (request !== check.current) return;
+    const id = deviceId();
+    const endpoint = pushSupported() && Notification.permission === 'granted' ? await myEndpoint() : null;
+    const result = await rpc('push.device.checkIn', { id, endpoint, setup }, null);
+    const ready = result.registered && result.enabled;
+    if (request === check.current) {
       setHere(id);
+      setState(ready ? 'ready' : 'blocked');
+    }
+    // A failed device-list request should not block a device that already checked in.
+    void rpc('push.devices', {}, null).then((list) => {
+      if (request !== check.current) return;
       setDevices(list);
       if (!initialized.current) {
-        initialized.current = true;
         const current = list.find((device) => device.id === id);
         if (current) {
+          initialized.current = true;
           setName(current.name);
           setKind(current.kind === 'phone' ? 'phone' : 'pc');
         }
       }
-      if (setup) setMessage('');
-      setState(result.registered && result.enabled ? 'ready' : 'blocked');
-    } catch {
-      if (request === check.current) setState('blocked');
-    }
+    }).catch(() => {});
+    return ready;
   }, []);
 
   useEffect(() => {
-    const check = () => { if (document.visibilityState === 'visible') void refresh(); };
-    check();
-    const timer = window.setInterval(check, 30_000);
-    document.addEventListener('visibilitychange', check);
-    window.addEventListener('focus', check);
+    const checkDevice = () => {
+      if (document.visibilityState !== 'visible' || activating.current || pendingCheck.current) return;
+      pendingCheck.current = refresh().then(() => {}, () => {
+        // A temporary connectivity error should not lock someone out after a successful check-in.
+        if (!activating.current) setState((previous) => previous === 'ready' ? previous : 'blocked');
+      }).finally(() => { pendingCheck.current = null; });
+    };
+    checkDevice();
+    const timer = window.setInterval(checkDevice, 30_000);
+    document.addEventListener('visibilitychange', checkDevice);
+    window.addEventListener('focus', checkDevice);
     return () => {
       window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', check);
-      window.removeEventListener('focus', check);
+      document.removeEventListener('visibilitychange', checkDevice);
+      window.removeEventListener('focus', checkDevice);
     };
   }, [refresh]);
   useEffect(() => {
@@ -86,15 +96,26 @@ export function NotificationDevices({ children, logout }: { children: ReactNode;
   }, [actions]);
 
   const activate = async () => {
+    if (activating.current) return;
+    activating.current = true;
+    ++check.current;
     setBusy(true);
     setMessage('');
     try {
       const permission = await pushTurnOn();
-      await refresh({ name: name.trim() || t(`devices.${kind}`), kind });
-      if (permission !== 'on') setMessage(t('devices.permission'));
+      if (permission !== 'on') {
+        setMessage(t(permission === 'unsupported' ? 'devices.unsupported' : 'devices.permission'));
+        return;
+      }
+      // Finish any check started before Chrome opened the permission prompt.
+      await pendingCheck.current;
+      initialized.current = true;
+      const ready = await refresh({ name: name.trim() || t(`devices.${kind}`), kind });
+      if (!ready) setMessage(t('devices.registrationFailed'));
     } catch {
-      setMessage(t('devices.permission'));
+      setMessage(t('devices.registrationFailed'));
     } finally {
+      activating.current = false;
       setBusy(false);
     }
   };
