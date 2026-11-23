@@ -5,9 +5,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { cleanCode } from '@pilotix/shared';
 import { call, Ctx, LiveEvent, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
-import { confirmSignup, loadShop, membershipsOf, passwordFromLink, startSignup, storeChoices } from '../platform';
+import { attachProfile, confirmSignup, loadShop, membershipsOf, passwordFromLink, startSignup, storeChoices } from '../platform';
 import { computePayroll } from '../modules/admin';
 import { tellFollow } from '../modules/inbox';
+import { pushOnly } from '../modules/push';
 
 /** a new team member's phone (required, one per person) */
 let phoneN = 0;
@@ -80,6 +81,14 @@ test('delegated SAV separates seller routing from agency assignment, role notifi
   await call('users.create', chief, { phone: tph(), name: 'SAV agent', email: 'agent-sav@example.dz', password: PW, roles: ['sav'] });
   await call('agency.notifications.set', chief, { rules: { delegatedSav: ['sav'] }, kpis });
   const agent = await as(t, ag.id, 'agent-sav@example.dz', PW);
+  const agentId = agent.session.profile.id;
+  await attachProfile(t, ag.schema, agentId);
+  await assert.rejects(call('agency.notifications.set', agent, { rules: {} }));
+  await assert.rejects(call('agency.notifications.set', chief, { rules: {}, people: { delegatedSav: [999999] } }), /Destinataire incompatible/);
+  await call('agency.notifications.set', chief, {
+    rules: { delegatedSav: [] }, people: { delegatedSav: [agentId] },
+    kpis: { sav: { threshold: 1, roles: [], people: [agentId] } },
+  });
   const endpoint = 'https://fcm.googleapis.com/fcm/send/agency-sav-test';
   const sent: { endpoint: string; key: string; payload: Record<string, unknown> }[] = [];
   const hooks: NonNullable<Ctx['server']> = {
@@ -98,6 +107,19 @@ test('delegated SAV separates seller routing from agency assignment, role notifi
   assert.equal((await call('push.key', chief, { endpoint }) as { subscribed: boolean }).subscribed, false);
   assert.deepEqual(await call('push.test', chief, { endpoint }), { sent: false });
   assert.deepEqual(await call('push.test', seller, { endpoint }), { sent: false });
+  const device = { id: '35410d12-ac52-48ac-9456-70cad87becfd', endpoint, setup: { name: 'SAV iPhone', kind: 'phone' } };
+  assert.deepEqual(await call('push.device.checkIn', agent, device), { registered: true, enabled: true });
+  assert.deepEqual(await call('push.devices', chief, {}), []);
+  assert.deepEqual(await call('push.devices', seller, {}), []);
+  const otherShop = await store(t, p, 'Autre boutique SAV', 'other-sav@example.dz');
+  const otherOwner = await as(t, otherShop.id, 'other-sav@example.dz', PW);
+  const otherProfile = await call('users.create', otherOwner, { phone: tph(), name: 'SAV agent', email: 'agent-sav@example.dz', password: PW, roles: ['sav'] }) as { id: number };
+  await attachProfile(t, otherShop.schema, otherProfile.id);
+  const sameAccount = await as(t, otherShop.id, 'agent-sav@example.dz', PW);
+  assert.equal((await call('push.devices', sameAccount, {}) as { name: string }[])[0].name, 'SAV iPhone');
+  await call('push.device.remove', chief, { id: device.id });
+  assert.equal((await call('push.devices', agent, {}) as { name: string }[])[0].name, 'SAV iPhone');
+  assert.deepEqual(await call('push.device.checkIn', agent, { id: device.id, endpoint: null }), { registered: true, enabled: false });
   assert.deepEqual(await call('push.test', agent, { endpoint }), { sent: true });
   assert.equal(sent[0].payload.workspace, agent.shop!.slug);
   assert.equal(sent[0].payload.icon, undefined, 'the service worker supplies the same Pilotix icon for every workspace');
@@ -148,8 +170,17 @@ test('delegated SAV separates seller routing from agency assignment, role notifi
   await assert.rejects(call('agency.notifications.set', chief, { rules: {}, kpis }), /pas confié/);
   await assert.rejects(call('sav.get', agentAtSeller, { id: ticket.id }));
   await call('sav.update', seller, { id: ticket.id, note: 'Repris par le vendeur' });
-  await call('push.unsubscribe', agent, { endpoint });
+  const secondEndpoint = 'https://fcm.googleapis.com/fcm/send/other-workspace';
+  sameAccount.server = hooks;
+  await call('push.subscribe', sameAccount, { endpoint: secondEndpoint, p256dh: 'fake-public-device-key', auth: 'fake-device-auth' });
+  await call('push.device.checkIn', sameAccount, { id: device.id, endpoint: secondEndpoint });
+  const beforeFanout = sent.length;
+  await pushOnly(sameAccount, [sameAccount.session.profile.id], { title: 'One alert on one device' });
+  assert.equal(sent.length, beforeFanout + 1, 'the same device subscribed in two workspaces receives one system alert');
+  await call('push.device.remove', sameAccount, { id: device.id });
+  assert.deepEqual(await call('push.devices', agent, {}), []);
   assert.deepEqual(await call('push.test', agent, { endpoint }), { sent: false });
+  assert.deepEqual(await call('push.test', sameAccount, { endpoint: secondEndpoint }), { sent: false });
 });
 
 test('an agency: signs up, checked by Pilotix, works for a store on the products it is given', async () => {

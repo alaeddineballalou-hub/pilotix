@@ -17,6 +17,7 @@ import { audioReady, bellSound, BellSound, unlockAudio } from '../lib/sound';
 import { store } from '../lib/store';
 import { Icon } from '../ui/kit';
 import { toast } from '../ui/toast';
+import { isNativePilotix, SHOW_NOTIFICATION_DEVICES } from './NotificationDevices';
 import './bell.css';
 
 type Line = Out<'inbox.list'>['items'][number];
@@ -91,6 +92,7 @@ export function Bell() {
   const box = useRef<HTMLDivElement>(null);
   /** the list open on a computer: the pop-ups go beside it (« Écouter les sons ») */
   const [beside, setBeside] = useState<CSSProperties | undefined>();
+  const [panelPosition, setPanelPosition] = useState<CSSProperties>();
   /** the lines already shown (the first list, the pop-ups): never popped again */
   const seen = useRef<Set<string> | null>(null);
   /** a new line was announced: the next list pops what is new in it */
@@ -178,10 +180,31 @@ export function Bell() {
   }, [open]);
 
   useLayoutEffect(() => {
-    const r = box.current?.getBoundingClientRect();
-    if (!open || !r || window.innerWidth <= 900) return setBeside(undefined);
-    const rtl = document.documentElement.dir === 'rtl';
-    setBeside(rtl ? { top: r.bottom + 10, left: r.left + 404, right: 'auto' } : { top: r.bottom + 10, right: window.innerWidth - r.right + 404, left: 'auto' });
+    if (!open || !box.current) return;
+    const anchor = box.current;
+    const position = () => {
+      const r = anchor.getBoundingClientRect();
+      const viewport = document.documentElement.clientWidth;
+      const rtl = document.documentElement.dir === 'rtl';
+      const bar = anchor.closest('.topbar')?.getBoundingClientRect();
+      const mobile = viewport <= 560;
+      const width = Math.min(mobile ? viewport - 16 : 392, viewport - 16);
+      const min = mobile || rtl ? 8 : Math.min((bar?.left ?? 0) + 8, viewport - width - 8);
+      const max = mobile || !rtl ? viewport - width - 8 : Math.max(8, (bar?.right ?? viewport) - width - 8);
+      const left = Math.max(min, Math.min(max, rtl ? r.left : r.right - width));
+      const top = r.bottom + 10;
+      setPanelPosition({ position: 'fixed', insetInline: 'auto', top, left, width, maxHeight: `calc(100dvh - ${top + 8}px)` });
+      const start = left - 392;
+      const end = left + width + 12;
+      if (!mobile && end + 380 <= (bar?.right ?? viewport) - 8) setBeside({ top, bottom: 'auto', insetInline: 'auto', left: end });
+      else if (!mobile && start >= (bar?.left ?? 0) + 8) setBeside({ top, bottom: 'auto', insetInline: 'auto', left: start });
+      else setBeside({ top: 'auto', bottom: 14, insetInlineEnd: 8 });
+    };
+    position();
+    window.addEventListener('resize', position);
+    const resize = new ResizeObserver(position);
+    resize.observe(anchor.closest('.topbar') ?? anchor);
+    return () => { window.removeEventListener('resize', position); resize.disconnect(); };
   }, [open]);
 
   const read = useCallback((ids: number[]) => {
@@ -250,8 +273,9 @@ export function Bell() {
       </button>
 
       {open && (
-        <div className="px-bell-panel" role="dialog" aria-label={t('bell.title')}>
+        <div className="px-bell-panel" style={panelPosition} role="dialog" aria-label={t('bell.title')}>
           <div className="px-bell-head">
+            <img className="px-bell-brand" src={`${import.meta.env.BASE_URL}pilotix-icon.png`} alt="Pilotix" width="28" height="28" />
             <b>{t('bell.title')}</b>
             {agency && session!.isAdmin && <a className="px-bell-all" href="#/reglages/notifications" onClick={() => setOpen(false)} aria-label={t('agency.alerts.manage')} title={t('agency.alerts.manage')}><Icon name="settings" /></a>}
             {unread > 0 && <span className="px-bell-chip">{t('bell.unread', { count: unread })}</span>}
@@ -334,9 +358,9 @@ export function Bell() {
               </>
             )}
             <div className="px-bell-row">
-              <Icon name="smartphone" />
+              <Icon name="bell" />
               <span className="px-bell-row-t">
-                <b>{t('bell.phone')}</b>
+                <b>{t('devices.current')}</b>
                 <small>
                   {push === 'on'
                     ? t('bell.phoneOn')
@@ -359,8 +383,14 @@ export function Bell() {
                 void enablePush(true).then(setPush).catch(() => toast(t('agency.alerts.deviceFailed'), 'bad')).finally(() => setDeviceBusy(false));
               }}>
                 <Icon name="bell" />
-                {t('bell.phoneAsk')}
+                {t('devices.activate')}
               </button>
+            )}
+            {backend.kind !== 'demo' && !session?.shop?.demo && !isNativePilotix() && (
+              <button type="button" className="btn small" onClick={() => {
+                setOpen(false);
+                window.dispatchEvent(new Event(SHOW_NOTIFICATION_DEVICES));
+              }}>{t('devices.title')}</button>
             )}
             {push === 'on' && (
               <div className="row">
@@ -381,7 +411,7 @@ export function Bell() {
 
       {!agency && pops.length > 0 &&
         createPortal(
-          <div className={`px-bell-pops${open ? ' beside' : ''}`} style={beside} role="status" aria-live="polite">
+          <div className={`px-bell-pops${open ? ' beside' : ''}`} style={open ? beside : undefined} role="status" aria-live="polite">
             {pops.map((x) => (
               <div key={key(x)} className={`px-bell-pop k-${x.kind}${x.important ? ' imp' : ''}`}>
                 <span className="px-bell-ic">

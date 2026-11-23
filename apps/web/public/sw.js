@@ -15,8 +15,9 @@ self.addEventListener('push', (e) => {
     d = { title: 'Pilotix', body: e.data ? e.data.text() : '' };
   }
   const alarm = !!d.alarm;
+  const title = d.title && d.title !== 'Pilotix' ? `Pilotix · ${d.title}` : 'Pilotix';
   const show = () =>
-    self.registration.showNotification(d.title || 'Pilotix', {
+    self.registration.showNotification(title, {
       body: d.body || '',
       tag: d.tag || 'pilotix',
       // same tag again: it rings and vibrates again instead of staying silent
@@ -24,7 +25,7 @@ self.addEventListener('push', (e) => {
       requireInteraction: alarm,
       silent: false,
       vibrate: alarm ? [800, 200, 800, 200, 800, 200, 1200] : [200],
-      icon: '/icon.svg',
+      icon: '/pilotix-icon.png',
       data: { url: d.url || '', order: d.order || null, workspace: d.workspace || '' },
     });
   // « Bloquer jusqu'à l'appel »: the server asks this phone to say it got the ring (`ack`: its one-time address, no

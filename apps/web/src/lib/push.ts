@@ -13,15 +13,15 @@ const b64 = (s: string) => {
 
 const workerUrl = () => new URL(`${import.meta.env.BASE_URL}sw.js`, document.baseURI).href;
 
-const agencyScope = () => {
+const workspaceScope = () => {
   const shop = currentShop();
-  return shop?.kind === 'agency' ? `/__pilotix_push/${shop.id}/` : undefined;
+  return shop ? `/__pilotix_push/${shop.id}/` : undefined;
 };
 
 async function registration() {
-  const scope = agencyScope();
+  const scope = workspaceScope();
   if (scope) {
-    // A different VAPID key and subscription for each agency, without replacing the site's worker.
+    // Each workspace signs with its own key and needs an independent subscription.
     return navigator.serviceWorker.register(workerUrl(), { scope });
   }
   // the site's worker already there (lib/door installs it as « sw.js?door=1 » with the backup door on): the same one
@@ -39,7 +39,7 @@ export async function enablePush(ask: boolean): Promise<'on' | 'denied' | 'off' 
   if (perm === 'default' && ask) perm = await Notification.requestPermission();
   if (perm === 'denied') return 'denied';
   if (perm !== 'granted' || currentShop()?.id !== shopId) return 'off';
-  const scope = agencyScope();
+  const scope = workspaceScope();
   if (scope && !ask) {
     const reg = await navigator.serviceWorker.getRegistration(scope);
     const sub = reg?.scope === new URL(scope, location.origin).href ? await reg.pushManager.getSubscription() : null;
@@ -69,6 +69,13 @@ export async function enablePush(ask: boolean): Promise<'on' | 'denied' | 'off' 
   if (currentShop()?.id !== shopId) return 'off';
   const j = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
   await rpc('push.subscribe', { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, ua: navigator.userAgent.slice(0, 300) }, null);
+  if (scope && currentShop()?.kind !== 'agency') {
+    // Retire an older shared subscription in this workspace while leaving other workspaces' subscriptions intact.
+    const old = await navigator.serviceWorker.getRegistration(location.origin + '/')
+      .then((root) => root && root.scope !== reg.scope ? root.pushManager.getSubscription() : null)
+      .catch(() => null);
+    if (old && old.endpoint !== j.endpoint) await rpc('push.unsubscribe', { endpoint: old.endpoint }, null).catch(() => {});
+  }
   return 'on';
 }
 
@@ -134,7 +141,7 @@ export async function myEndpoint(): Promise<string | null> {
     }
   }
   if (!pushSupported()) return null;
-  const scope = agencyScope();
+  const scope = workspaceScope();
   const reg = await navigator.serviceWorker.getRegistration(scope);
   const sub = reg && (!scope || reg.scope === new URL(scope, location.origin).href) ? await reg.pushManager.getSubscription() : null;
   return sub?.endpoint ?? null;

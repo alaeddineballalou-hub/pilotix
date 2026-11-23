@@ -35,14 +35,15 @@ type AgencyRole = (typeof ROLES)[number];
 const GROUPS = ['seller', 'order', 'follow', 'sav', 'team', 'access', 'payment', 'orderUpdates', 'delegatedConfirmation', 'delegatedFollow', 'delegatedSav'] as const;
 type Group = (typeof GROUPS)[number];
 const ALLOWED: Record<Group, readonly AgencyRole[]> = {
-  seller: ['admin'], order: ['confirmation', 'admin', 'agent_manager'],
+  seller: ['admin', 'agent_manager'], order: ['confirmation', 'admin', 'agent_manager'],
   follow: ['suivi', 'admin', 'agent_manager'], sav: ['sav'], team: ['admin', 'agent_manager'],
-  access: ['confirmation', 'suivi', 'sav'], payment: ['admin'], orderUpdates: ['confirmation', 'suivi'],
+  access: ['confirmation', 'suivi', 'sav'], payment: ['admin', 'agent_manager'], orderUpdates: ['confirmation', 'suivi'],
   delegatedConfirmation: ['admin', 'agent_manager', 'confirmation'],
   delegatedFollow: ['admin', 'agent_manager', 'suivi'], delegatedSav: ['admin', 'agent_manager', 'sav'],
 };
 const DEFAULTS: Record<Group, readonly AgencyRole[]> = {
-  ...ALLOWED, order: ['confirmation'], follow: ['suivi'], delegatedConfirmation: ['admin'], delegatedFollow: ['admin'], delegatedSav: ['admin'],
+  ...ALLOWED, seller: ['admin'], payment: ['admin'], order: ['confirmation'], follow: ['suivi'],
+  delegatedConfirmation: ['admin'], delegatedFollow: ['admin'], delegatedSav: ['admin'],
 };
 const GROUP: Record<keyof typeof TITLES, Group> = {
   invitation: 'seller', invitationAccepted: 'seller', invitationRefused: 'seller', accepted: 'seller', refused: 'seller',
@@ -59,7 +60,9 @@ const SERVICE: Partial<Record<Group, AgencyTask>> = {
 };
 const METRICS = ['order', 'follow', 'sav'] as const;
 type Metric = (typeof METRICS)[number];
-const RULE = z.object({ threshold: z.number().int().min(1).max(100000), roles: z.array(z.enum(ROLES)).min(1).max(ROLES.length) });
+const PEOPLE = z.array(z.number().int().positive()).max(100);
+const RULE = z.object({ threshold: z.number().int().min(1).max(100000), roles: z.array(z.enum(ROLES)).max(ROLES.length), people: PEOPLE.optional() })
+  .refine((rule) => rule.roles.length > 0 || !!rule.people?.length);
 const kpiRoles = (metric: Metric): AgencyRole[] => ['admin', 'agent_manager', metric === 'order' ? 'confirmation' : metric === 'follow' ? 'suivi' : 'sav'];
 
 async function agencyLinks(ctx: Ctx) {
@@ -75,41 +78,64 @@ async function agencyLinks(ctx: Ctx) {
 const hasService = (links: Awaited<ReturnType<typeof agencyLinks>>, task: AgencyTask) =>
   links.some((link) => Array.isArray(link.tasks) && link.tasks.includes(task));
 
+async function agencyPeople(ctx: Ctx) {
+  const rows = await ctx.db.query('SELECT id, name, roles FROM profiles WHERE active AND agency_id IS NULL ORDER BY name, id');
+  return rows.map((row) => ({ id: num(row.id), name: String(row.name), roles: row.roles as AgencyRole[] }));
+}
+
 export const agencyBellProcs = {
   'agency.notifications.get': proc([], z.object({}), async (ctx) => {
     if (ctx.shop?.kind !== 'agency') throw forbidden();
     const saved = await getSetting(ctx.db, 'agencyNotify');
     const links = await agencyLinks(ctx);
     const kpis = await getSetting(ctx.db, 'agencyKpis');
+    const people = await agencyPeople(ctx);
+    const named = await getSetting(ctx.db, 'agencyNotifyPeople');
     return {
       groups: GROUPS.filter((group) => !SERVICE[group] || hasService(links, SERVICE[group]!))
-        .map((group) => ({ group, allowed: ALLOWED[group], roles: cleanRoles(group, saved[group] ?? DEFAULTS[group]) })),
+        .map((group) => ({ group, allowed: ALLOWED[group], roles: cleanRoles(group, saved[group] ?? DEFAULTS[group]), people: named[group] ?? [] })),
       kpis: METRICS.filter((metric) => hasService(links, SERVICE[metric]!))
         .map((metric) => ({ metric, allowed: kpiRoles(metric), rule: kpis[metric] ?? null })),
+      people,
     };
   }),
   'agency.notifications.set': proc([], z.object({
     rules: z.record(z.enum(GROUPS), z.array(z.enum(ROLES)).max(ROLES.length)),
+    people: z.record(z.enum(GROUPS), PEOPLE).optional(),
     kpis: z.record(z.enum(METRICS), RULE.nullable()).optional(),
-  }), async (ctx, { rules, kpis }) => {
+  }), async (ctx, { rules, kpis, people }) => {
     if (ctx.shop?.kind !== 'agency') throw forbidden();
     const saved = { ...await getSetting(ctx.db, 'agencyNotify') };
     const alerts = { ...await getSetting(ctx.db, 'agencyKpis') };
+    const named = { ...await getSetting(ctx.db, 'agencyNotifyPeople') };
     const links = await agencyLinks(ctx);
+    const team = await agencyPeople(ctx);
+    const validatePeople = (ids: number[], allowed: readonly AgencyRole[]) => {
+      if (ids.some((id) => !team.some((person) => person.id === id && person.roles.some((role) => allowed.includes(role))))) {
+        throw bad('Destinataire incompatible avec ce service');
+      }
+      return [...new Set(ids)];
+    };
     for (const group of GROUPS) if (rules[group]) {
       if (rules[group]!.length && SERVICE[group] && !hasService(links, SERVICE[group]!)) throw bad('Ce service n’est pas confié à votre agence');
       saved[group] = cleanRoles(group, rules[group]!);
+    }
+    for (const group of GROUPS) if (people?.[group]) {
+      const ids = people[group]!;
+      if (ids.length && SERVICE[group] && !hasService(links, SERVICE[group]!)) throw bad('Ce service n’est pas confié à votre agence');
+      named[group] = validatePeople(ids, ALLOWED[group]);
     }
     for (const metric of METRICS) if (kpis && Object.prototype.hasOwnProperty.call(kpis, metric)) {
       const rule = kpis[metric];
       if (rule) {
         if (!hasService(links, SERVICE[metric]!)) throw bad('Ce service n’est pas confié à votre agence');
         if (rule.roles.some((role) => !kpiRoles(metric).includes(role))) throw bad('Rôle incompatible avec ce service');
-        alerts[metric] = { threshold: rule.threshold, roles: [...new Set(rule.roles)] };
+        alerts[metric] = { threshold: rule.threshold, roles: [...new Set(rule.roles)], people: validatePeople(rule.people ?? [], kpiRoles(metric)) };
       } else delete alerts[metric];
     }
     await ctx.db.tx(async (db) => {
       await setSetting(db, 'agencyNotify', saved, ctx.session.profile.id);
+      if (people) await setSetting(db, 'agencyNotifyPeople', named, ctx.session.profile.id);
       if (kpis) await setSetting(db, 'agencyKpis', alerts, ctx.session.profile.id);
     });
     return { ok: true };
@@ -135,11 +161,14 @@ export async function tellAgency(ctx: Ctx, agencyId: number, event: keyof typeof
     const group = GROUP[event];
     const saved = await getSetting(db, 'agencyNotify');
     const roles = cleanRoles(group, saved[group] ?? DEFAULTS[group]).filter((role) => !options.roles || options.roles.includes(role));
-    if (!roles.length) return;
+    const named = (await getSetting(db, 'agencyNotifyPeople'))[group] ?? [];
+    const eligible = ALLOWED[group].filter((role) => !options.roles || options.roles.includes(role));
+    if (!roles.length && !named.length) return;
     const rows = await db.query(
-      `SELECT id FROM profiles WHERE active AND agency_id IS NULL AND roles && $1::text[]
+      `SELECT id FROM profiles WHERE active AND agency_id IS NULL
+        AND (roles && $1::text[] OR (id = ANY($3::bigint[]) AND roles && $4::text[]))
         AND ($2::bigint[] IS NULL OR id = ANY($2))`,
-      [roles, options.people ?? null],
+      [roles, options.people ?? null, named, eligible],
     );
     const kind: BellKind = event === 'follow' || event === 'parcelAlert' ? 'alert'
       : event === 'order' || event === 'delivered' || event === 'returned' || event === 'cancelled' ? event : 'info';
@@ -281,7 +310,8 @@ export async function runAgencyKpis(ctx: Ctx) {
       );
       for (const profile of profiles) {
         const id = num(profile.id);
-        if (!rule.roles.some((role) => kpiRoles(metric).includes(role as AgencyRole) && profile.roles.includes(role))) continue;
+        const eligible = kpiRoles(metric);
+        if (!eligible.some((role) => profile.roles.includes(role) && (rule.roles.includes(role) || rule.people?.includes(id)))) continue;
         const local = mapped.find((row) => num(row.agency_profile_id) === id);
         if (!local) continue;
         const lead = profile.roles.includes('admin') || profile.roles.includes('agent_manager');

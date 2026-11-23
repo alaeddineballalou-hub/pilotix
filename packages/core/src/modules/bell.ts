@@ -38,7 +38,7 @@ const LANGS: readonly string[] = ['fr', 'en', 'ar'];
  * grows (`n` given to `make`: the things it says now, with the ones of the line it replaces). The screens of the people
  * told hear of it at once. Returns what each person got.
  */
-export async function ringBell(ctx: Ctx, people: readonly number[], make: (lang: Language, n: number) => BellLine, o: { tag?: string | null; count?: number; silent?: boolean } = {}): Promise<Rung[]> {
+export async function ringBell(ctx: Ctx, people: readonly number[], make: (lang: Language, n: number) => BellLine, o: { tag?: string | null; count?: number; silent?: boolean; groupForMs?: number } = {}): Promise<Rung[]> {
   const ids = [...new Set(people.filter((x) => Number.isSafeInteger(x) && x > 0))];
   if (!ids.length) return [];
   const who = await ctx.db.query('SELECT id, language FROM profiles WHERE id = ANY($1) AND active AND agency_id IS NULL', [ids]);
@@ -48,7 +48,11 @@ export async function ringBell(ctx: Ctx, people: readonly number[], make: (lang:
   for (const p of who as any[]) {
     const id = num(p.id);
     const lang = (LANGS.includes(p.language) ? p.language : 'fr') as Language;
-    const prev = tag ? (await ctx.db.query('SELECT id, n, created_at FROM inbox WHERE profile_id = $1 AND tag = $2 AND read_at IS NULL ORDER BY id DESC LIMIT 1', [id, tag]))[0] : null;
+    const prev = tag ? (await ctx.db.query(
+      `SELECT id, n, created_at FROM inbox WHERE profile_id = $1 AND tag = $2 AND read_at IS NULL
+       AND ($3::int IS NULL OR created_at >= now() - $3::int * interval '1 millisecond') ORDER BY id DESC LIMIT 1`,
+      [id, tag, o.groupForMs ?? null],
+    ))[0] : null;
     const n = (prev ? num(prev.n) : 0) + add;
     const line = make(lang, n);
     const vals = [line.kind, clip(line.title, 200), clip(line.body, 600), line.url ?? null, line.orderId ?? null, !!line.important, n];

@@ -466,7 +466,7 @@ export const sellerProcsOf = (kind: 'agency' | 'marketer') => (kind === 'markete
 
 const MANAGEMENT_PROCS = new Set(['management.plans', 'management.planSave', 'management.planClone', 'management.planAssign', 'management.planArchive', 'management.planDelete', 'management.bonuses', 'management.bonusSave', 'management.bonusClone', 'management.bonusDelete', 'management.bonusAssign', 'management.bonusRespond', 'management.bonusOfferAgent', 'management.billingTargets', 'management.billingPropose', 'management.payroll', 'management.payrollClose', 'management.agentScores']);
 
-const AGENCY_INBOX = new Set(['inbox.list', 'inbox.read', 'inbox.readAll', 'inbox.run', 'push.key', 'push.subscribe', 'push.unsubscribe', 'push.test']);
+const AGENCY_INBOX = new Set(['inbox.list', 'inbox.read', 'inbox.readAll', 'inbox.run', 'push.key', 'push.subscribe', 'push.unsubscribe', 'push.test', 'push.devices', 'push.device.checkIn', 'push.device.remove']);
 /** What a partner's own space answers (its own team and account; the rest are the agency.* actions). */
 const AGENCY_SPACE = new Set(['me.get', 'me.language', 'me.password', 'me.ui', 'me.setUi', 'me.update', 'me.seen', 'me.delete', 'management.myBonuses', 'users.list', 'users.create', 'users.update', 'users.phoneCheck', 'admin.users.resetPassword', 'boutiques.list', 'boutiques.slugCheck', 'boutiques.save']);
 

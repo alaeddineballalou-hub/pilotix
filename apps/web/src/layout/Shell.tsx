@@ -21,6 +21,7 @@ import { canSee, canSeeChild, isSoonItem, isSoonLine, menuView, NAV, NavChild, N
 import { useCanRules } from '../lib/pilot';
 import { AccountMenu } from './AccountMenu';
 import { Bell } from './Bell';
+import { isNativePilotix, NotificationDevices } from './NotificationDevices';
 import { BoutiqueSwitch, useBoutiques } from './Boutiques';
 import { ShopBanner } from './ShopBanner';
 import { DoorChip } from '../ui/DoorChip';
@@ -121,7 +122,18 @@ function SoonLine({ icon, label, sub = false }: { icon: string; label: string; s
 /** A menu with more lines than this starts with its groups folded (Shell). */
 const BIG_MENU = 20;
 
-export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { page: string; sub?: string; children: ReactNode; nav?: NavItem[]; space?: 'store' | 'agency' | 'marketer' }) {
+type ShellProps = { page: string; sub?: string; children: ReactNode; nav?: NavItem[]; space?: 'store' | 'agency' | 'marketer' };
+
+export function Shell(props: ShellProps) {
+  const { session, logout } = useSession();
+  const nativeApp = isNativePilotix();
+  if (backend.kind === 'demo' || session?.shop?.demo || nativeApp) return <WorkspaceShell {...props} />;
+  return <NotificationDevices key={`${session?.shop?.id}:${session?.profile.id}`} logout={logout}>
+    <WorkspaceShell {...props} />
+  </NotificationDevices>;
+}
+
+function WorkspaceShell({ page, sub, children, nav = NAV, space = 'store' }: ShellProps) {
   const { t, i18n } = useTranslation();
   const { session, logout, has: hasRole } = useSession();
   const canRules = useCanRules();
@@ -477,6 +489,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
             </div>
           )}
           {all.on && !ALL_PAGES.has(page) && <AllBanner />}
+          <div id="notification-device-actions" />
           {children}
           <PubFooter />
         </main>

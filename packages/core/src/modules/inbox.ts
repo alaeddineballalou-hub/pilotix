@@ -50,8 +50,8 @@ const W = {
   depotAll: { fr: '{total} à préparer en tout', en: '{total} to prepare in all', ar: 'المجموع للتحضير: {total}' },
   messages: { fr: '{n} messages', en: '{n} messages', ar: 'رسائل: {n}' },
   // the others' lines (a manager, the owners, the depot, chosen people): about someone else's order
-  teamOrder1: { fr: 'Nouvelle commande', en: 'New order', ar: 'طلب جديد' },
-  teamOrderN: { fr: '{n} nouvelles commandes', en: '{n} new orders', ar: 'طلبات جديدة: {n}' },
+  teamOrder1: { fr: 'Commande affectée', en: 'Order assigned', ar: 'تم إسناد طلب' },
+  teamOrderN: { fr: '{n} commandes affectées', en: '{n} orders assigned', ar: 'تم إسناد {n} طلبات' },
   forWho: { fr: 'pour {who}', en: 'for {who}', ar: 'لـ{who}' },
   teamCallback: { fr: '📞 {who} doit rappeler {name}', en: '📞 {who} has to call {name} back', ar: '📞 على {who} أن يعيد الاتصال بـ{name}' },
   teamTaken1: { fr: '{ref} n’est plus à {who}', en: '{ref} is no longer {who}’s', ar: '{ref} لم يعد لـ{who}' },
@@ -201,6 +201,7 @@ export interface Tell {
   text: (lang: Language, n: number) => { title: string; body: string };
   /** how many things this time (several orders at once: one line « 3 nouvelles commandes ») */
   count?: number;
+  groupForMs?: number;
   url?: string | null;
   orderId?: number | null;
   /** replaces the person's unread line with the same tag */
@@ -227,7 +228,7 @@ export async function tell(ctx: Ctx, to: readonly (number | null | undefined)[],
     const people = [...new Set(to.filter((x): x is number => typeof x === 'number' && x > 0 && x !== t.by))];
     if (!people.length) return [];
     const important = t.important ?? IMPORTANT.has(t.kind);
-    const rung = await ringBell(ctx, people, (lang, n) => ({ kind: t.kind, ...t.text(lang, n), url: t.url ?? null, orderId: t.listWhenMany && n > 1 ? null : t.orderId ?? null, important }), { tag: t.tag, count: t.count, silent: t.silent });
+    const rung = await ringBell(ctx, people, (lang, n) => ({ kind: t.kind, ...t.text(lang, n), url: t.url ?? null, orderId: t.listWhenMany && n > 1 ? null : t.orderId ?? null, important }), { tag: t.tag, count: t.count, silent: t.silent, groupForMs: t.groupForMs });
     const phone = t.silent ? 'never' : t.phone ?? 'work';
     const fresh = rung.filter((r) => !r.quiet);
     if (fresh.length && phone !== 'never' && ctx.server?.push && (phone === 'always' || (await workNow(ctx))))
@@ -273,12 +274,13 @@ export async function tellGiven(ctx: Ctx, area: 'conf' | 'follow', given: Map<nu
             ? { title: n === 1 ? say('order1', lang) : say('orderN', lang, { n }), body: why(lang) + (one ? oneLine(one, lang) : refList(list)) }
             : { title: n === 1 ? say('given', lang) : say('alertN', lang, { n }), body: why(lang) + (one ? oneLine(one, lang) : refList(list)) },
       });
-    // the others ticked (the manager, the owners…): one line that grows, « 5 nouvelles commandes », the last ones in it
+    // Group assignment bursts for the manager and owners without bringing an old unread batch back to the top.
     const others = await othersOf(a, rule, { self: [agent], selfRole, agents: list.map((x) => x.agent), suivis: list.map((x) => x.follow) });
     const who = names.get(agent) ?? '';
     await tell(ctx, others, {
       kind,
       tag: `team-${kind}`,
+      groupForMs: area === 'conf' ? 90_000 : undefined,
       count: list.length,
       orderId: one?.id ?? null,
       listWhenMany: true,

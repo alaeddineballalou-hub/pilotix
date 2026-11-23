@@ -166,7 +166,7 @@ test('the bell: new order, taken, delivered, back, alert, callback, depot — ea
 
 // Management › Notifications (owner's ask, 22 Nov 2026): each kind on or off, to whom — the order's own person, the
 // team's manager, the owners, the depot, chosen people — and when the phones ring. The others' line speaks of someone
-// else's order and grows while it is not read (« 2 nouvelles commandes »).
+// else's assignment and groups recent unread assignments (« 2 commandes affectées »).
 test('Management › Notifications: each kind on or off, to the manager, the owners and chosen people, the phones as set', async () => {
   const { db, as } = await setup(120);
   const sent: any[] = [];
@@ -203,7 +203,7 @@ test('Management › Notifications: each kind on or off, to the manager, the own
   for (const who of [yacine, admin]) {
     const l = (await mine(who)).items[0];
     assert.equal(l.kind, 'order');
-    assert.equal(l.title, 'Nouvelle commande');
+    assert.equal(l.title, 'Commande affectée');
     assert.match(l.body, new RegExp(`^${news[0].ref} · .* · pour Samira$`));
     assert.equal(l.orderId, news[0].id);
     assert.equal(l.important, false);
@@ -212,10 +212,15 @@ test('Management › Notifications: each kind on or off, to the manager, the own
   const a1 = await mine(admin);
   await tellGiven(admin, 'conf', new Map([[S, [news[1].id]]]));
   const a2 = await mine(admin);
-  assert.equal(a2.items[0].title, '2 nouvelles commandes');
+  assert.equal(a2.items[0].title, '2 commandes affectées');
   assert.equal(a2.items[0].n, 2);
   assert.equal(a2.items[0].orderId, null);
   assert.equal(a2.unread, a1.unread);
+  await db.query("UPDATE inbox SET created_at = now() - interval '1 day' WHERE tag = 'team-order'");
+  await tellGiven(admin, 'conf', new Map([[S, [news[2].id]]]));
+  const recent = (await mine(admin)).items.find((line: { kind: string }) => line.kind === 'order');
+  assert.equal(recent.title, 'Commande affectée');
+  assert.equal(recent.n, 1);
 
   // the page: each kind's rule, who it can go to, the people to choose from — administrators only
   const g: any = await call('notify.get', admin, {});

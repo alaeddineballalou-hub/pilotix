@@ -161,7 +161,8 @@ export interface SettingsMap {
    * when the phones ring. A kind not saved here keeps its default (inbox.ts › DEFAULT_NOTIFY).
    */
   agencyNotify: Record<string, string[]>;
-  agencyKpis: Record<string, { threshold: number; roles: string[] }>;
+  agencyNotifyPeople: Record<string, number[]>;
+  agencyKpis: Record<string, { threshold: number; roles: string[]; people?: number[] }>;
   agencyKpiState: Record<string, boolean>;
   notify: Record<string, { on?: boolean; who?: string[]; people?: number[]; phone?: 'work' | 'always' | 'never' }>;
   /** Management › Stock: « Lots et dates d'expiration » (off: no lot anywhere), and how many days before its date a lot is « bientôt périmé » */
@@ -286,6 +287,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   confRings: {},
   confShifts: {},
   agencyNotify: {},
+  agencyNotifyPeople: {},
   agencyKpis: {},
   agencyKpiState: {},
   notify: {},

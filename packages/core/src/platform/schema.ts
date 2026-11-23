@@ -259,6 +259,25 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+CREATE TABLE IF NOT EXISTS platform.notification_devices (
+  owner_key text NOT NULL,
+  id uuid NOT NULL,
+  name text NOT NULL,
+  kind text NOT NULL CHECK (kind IN ('phone', 'pc')),
+  enabled boolean NOT NULL DEFAULT false,
+  last_seen_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (owner_key, id)
+);
+CREATE TABLE IF NOT EXISTS platform.notification_device_subscriptions (
+  owner_key text NOT NULL,
+  device_id uuid NOT NULL,
+  shop_id integer NOT NULL REFERENCES platform.shops(id) ON DELETE CASCADE,
+  endpoint text NOT NULL,
+  PRIMARY KEY (owner_key, device_id, shop_id),
+  FOREIGN KEY (owner_key, device_id) REFERENCES platform.notification_devices(owner_key, id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS notification_device_endpoint ON platform.notification_device_subscriptions(shop_id, endpoint);
+
 -- one-time links of an account: new password, invitation (choose a password), e-mail check
 CREATE TABLE IF NOT EXISTS platform.account_tokens (
   token_hash   text PRIMARY KEY,

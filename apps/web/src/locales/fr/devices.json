@@ -1,0 +1,20 @@
+{
+  "devices": {
+    "title": "Mes appareils",
+    "remove": "Retirer l’appareil",
+    "checking": "Vérification de l’appareil…",
+    "required": "Activez les notifications système pour travailler sur cet appareil. Sur iPhone, ouvrez Pilotix depuis l’écran d’accueil.",
+    "name": "Nom de l’appareil",
+    "kind": "Type d’appareil",
+    "phone": "Téléphone",
+    "pc": "Ordinateur",
+    "activate": "Enregistrer et activer les notifications",
+    "permission": "Autorisez les notifications dans les réglages de votre appareil, puis réessayez.",
+    "current": "Cet appareil",
+    "live": "En ligne",
+    "offline": "Hors ligne",
+    "enabled": "Notifications activées",
+    "disabled": "Notifications désactivées",
+    "namedRecipients": "Destinataires nominatifs"
+  }
+}
