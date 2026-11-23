@@ -57,6 +57,13 @@
     "none": "No active agency contracts."
   },
   "alerts": {
+    "historyHint": "Agency alerts sent to you appear here.",
+    "testDevice": "Send a test to this device",
+    "testSent": "Test sent to this device.",
+    "deviceFailed": "Could not complete the device notification action.",
+    "disableDevice": "Disable on this device",
+    "manage": "Manage agency notifications",
+    "installPush": "Open Pilotix as a web app from your Home Screen, then enable notifications here.",
     "help": "Choose notification recipients by role. KPI alerts fire when the count reaches your threshold.",
     "kpis": "KPI alerts",
     "enabled": "Enabled",
@@ -64,6 +71,7 @@
     "toAgency": "Agency-wide alerts",
     "pickSav": "Choose a seller that has delegated after-sales service.",
     "groups": {
+      "orderUpdates": "Order updates (delivered, returned, cancelled or alerted)",
       "seller": "Seller invitations and responses",
       "order": "Confirmation assignments",
       "follow": "Delivery follow-up assignments",

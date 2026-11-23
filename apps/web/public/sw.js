@@ -24,9 +24,8 @@ self.addEventListener('push', (e) => {
       requireInteraction: alarm,
       silent: false,
       vibrate: alarm ? [800, 200, 800, 200, 800, 200, 1200] : [200],
-      icon: 'icon.svg',
-      badge: 'icon.svg',
-      data: { url: d.url || '', order: d.order || null },
+      icon: '/icon.svg',
+      data: { url: d.url || '', order: d.order || null, workspace: d.workspace || '' },
     });
   // « Bloquer jusqu'à l'appel »: the server asks this phone to say it got the ring (`ack`: its one-time address, no
   // session) — an agent's phone that does not answer is blocked until it rings again
@@ -51,13 +50,16 @@ self.addEventListener('push', (e) => {
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   const data = e.notification.data || {};
-  const url = new URL(data.url || '', self.registration.scope).href;
+  const workspace = typeof data.workspace === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(data.workspace) ? data.workspace : '';
+  const route = typeof data.url === 'string' && data.url.startsWith('#/') ? data.url : '#/accueil';
+  const home = new URL(workspace ? `/${workspace}/` : '/', self.location.origin);
+  const url = new URL(route, home).href;
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       // Pilotix already open: it shows the order (or the page) of the notification (layout/Bell)
       for (const c of list)
-        if ('focus' in c) {
-          c.postMessage({ type: 'px-open', url: data.url || '', order: data.order || null });
+        if ('focus' in c && (!workspace || new URL(c.url).pathname.split('/')[1] === workspace)) {
+          c.postMessage({ type: 'px-open', url: route, order: data.order || null });
           return c.focus();
         }
       return self.clients.openWindow(url);

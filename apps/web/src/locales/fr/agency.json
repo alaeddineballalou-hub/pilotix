@@ -57,6 +57,13 @@
     "none": "Aucun contrat d’agence actif."
   },
   "alerts": {
+    "historyHint": "Les alertes de l’agence qui vous sont destinées apparaissent ici.",
+    "testDevice": "Envoyer un test à cet appareil",
+    "testSent": "Test envoyé à cet appareil.",
+    "deviceFailed": "L’action de notification n’a pas abouti sur cet appareil.",
+    "disableDevice": "Désactiver sur cet appareil",
+    "manage": "Gérer les notifications de l’agence",
+    "installPush": "Ouvrez Pilotix comme app web depuis l’écran d’accueil, puis activez les notifications ici.",
     "help": "Choisissez les destinataires par rôle. Les alertes KPI se déclenchent quand le seuil est atteint.",
     "kpis": "Alertes KPI",
     "enabled": "Activée",
@@ -64,6 +71,7 @@
     "toAgency": "Alertes envoyées à l’agence",
     "pickSav": "Choisissez un vendeur qui confie son SAV à votre agence.",
     "groups": {
+      "orderUpdates": "Suivi des commandes (livrée, en retour, annulée ou en alerte)",
       "seller": "Invitations et réponses des vendeurs",
       "order": "Affectations de confirmation",
       "follow": "Affectations de suivi",

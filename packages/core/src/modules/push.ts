@@ -1,11 +1,17 @@
 // Phone / computer notifications (Web Push). A person accepts them on a device (« Activer les notifications »): the
 // device is kept; the server sends a notification there even when the app is closed or the phone is locked.
 import { z } from 'zod';
+import type { Language } from '@pilotix/shared';
 import { Db, num } from '../db';
 import { membershipsOf } from '../platform/accounts';
 import { bad, Ctx, proc, publicApi, ServerHooks } from '../rpc';
 import { getSetting } from '../settings';
 import { kindOfTag, ringBell } from './bell';
+
+function notificationBrand(slug: string | undefined, payload: Record<string, unknown>) {
+  if (!slug || !/^[a-z0-9][a-z0-9-]*$/.test(slug)) return payload;
+  return { ...payload, workspace: slug };
+}
 
 /** A shop's key pair (made once, when the server can). */
 async function keysOf(db: Db, server: ServerHooks | undefined) {
@@ -52,7 +58,7 @@ async function pushElsewhere(ctx: Ctx, profileIds: number[], payload: Record<str
       const k = await keysOf(db, ctx.server);
       if (!k) continue;
       const subs = await db.query(`SELECT endpoint, p256dh, auth FROM push_subs WHERE profile_id = $1${o.phones ? ` AND ${phoneSql()}` : ''}`, [m.profileId]);
-      sent += await deliver(db, ctx.server!, k, subs as Sub[], tagged, seen);
+      sent += await deliver(db, ctx.server!, k, subs as Sub[], notificationBrand(ctx.shop?.slug, tagged), seen);
     }
   return sent;
 }
@@ -86,7 +92,7 @@ export async function pushOnly(ctx: Ctx, profileIds: number[], payload: Record<s
   const k = await keys(ctx);
   if (k) {
     const subs = await ctx.db.query(`SELECT endpoint, p256dh, auth FROM push_subs WHERE profile_id = ANY($1)${o.phones ? ` AND ${phoneSql()}` : ''}`, [people]);
-    sent += await deliver(ctx.db, ctx.server, k, subs as Sub[], payload, seen);
+    sent += await deliver(ctx.db, ctx.server, k, subs as Sub[], notificationBrand(ctx.shop?.slug, payload), seen);
   }
   // a store on a server with several shops: the same people in their other boutiques
   if (ctx.t && ctx.shop && (ctx.shop.kind ?? 'store') === 'store') sent += await pushElsewhere(ctx, people, payload, seen, o).catch(() => 0);
@@ -120,7 +126,7 @@ export async function ringPhones(ctx: Ctx, subs: { id: unknown; endpoint: string
       code = ackCode();
       await ctx.db.query('UPDATE push_subs SET ack_code = $2, asked_at = now() WHERE id = $1', [x.id, code]);
     }
-    sent += await deliver(ctx.db, ctx.server, k, [x], base ? { ...payload, ack: `${base}/push/ack/${code}` } : payload, new Set());
+    sent += await deliver(ctx.db, ctx.server, k, [x], notificationBrand(ctx.shop?.slug, base ? { ...payload, ack: `${base}/push/ack/${code}` } : payload), new Set());
   }
   return sent;
 }
@@ -138,10 +144,11 @@ export function pushServiceUrl(raw: string): boolean {
 
 export const pushProcs = {
   /** The shop's public key (null: no notifications here — the browser preview). And whether this account has a device. */
-  'push.key': proc(null, z.object({}), async (ctx) => {
+  'push.key': proc(null, z.object({ endpoint: z.string().max(1000).optional() }), async (ctx, i) => {
     const k = await keys(ctx);
     const n = num((await ctx.db.query('SELECT count(*) AS n FROM push_subs WHERE profile_id = $1', [ctx.session.profile.id]))[0].n);
-    return { key: k?.publicKey ?? null, devices: n };
+    const subscribed = !!i.endpoint && !!(await ctx.db.query('SELECT 1 FROM push_subs WHERE profile_id = $1 AND endpoint = $2', [ctx.session.profile.id, i.endpoint]))[0];
+    return { key: k?.publicKey ?? null, devices: n, subscribed };
   }),
   'push.subscribe': proc(
     null,
@@ -158,6 +165,20 @@ export const pushProcs = {
       return { ok: true };
     },
   ),
+  'push.test': proc(null, z.object({ endpoint: z.string().max(1000) }), async (ctx, { endpoint }) => {
+    if (!ctx.server?.push) return { sent: false };
+    const sub = (await ctx.db.query('SELECT endpoint, p256dh, auth FROM push_subs WHERE profile_id = $1 AND endpoint = $2', [ctx.session.profile.id, endpoint]))[0];
+    if (!sub) return { sent: false };
+    const keys = await keysOf(ctx.db, ctx.server);
+    if (!keys) return { sent: false };
+    const words: Record<Language, { title: string; body: string }> = {
+      en: { title: 'Test notification', body: 'This device can receive your notifications.' },
+      fr: { title: 'Notification de test', body: 'Cet appareil peut recevoir vos notifications.' },
+      ar: { title: 'إشعار تجريبي', body: 'يمكن لهذا الجهاز استقبال إشعاراتك.' },
+    };
+    const payload = notificationBrand(ctx.shop?.slug, { ...words[ctx.session.profile.language ?? 'fr'], tag: 'device-test' });
+    return { sent: (await deliver(ctx.db, ctx.server, keys, [sub as Sub], payload, new Set())) > 0 };
+  }),
   'push.unsubscribe': proc(null, z.object({ endpoint: z.string().max(1000) }), async (ctx, i) => {
     await ctx.db.query('DELETE FROM push_subs WHERE endpoint = $1 AND profile_id = $2', [i.endpoint, ctx.session.profile.id]);
     return { ok: true };
@@ -176,13 +197,13 @@ export const pushProcs = {
 export async function pushShopAdmins(t: import('../platform/tenancy').Tenancy, server: Pick<ServerHooks, 'push' | 'pushKeys'>, shopId: number, payload: Record<string, unknown>): Promise<number> {
   try {
     if (!server.push) return 0;
-    const s = (await t.platform.query('SELECT schema_name FROM platform.shops WHERE id = $1', [shopId]))[0];
+    const s = (await t.platform.query('SELECT schema_name, slug FROM platform.shops WHERE id = $1', [shopId]))[0];
     if (!s?.schema_name) return 0;
     const db = t.shop(String(s.schema_name));
     const k = await keysOf(db, server as ServerHooks);
     if (!k) return 0;
     const subs = await db.query(`SELECT s.endpoint, s.p256dh, s.auth FROM push_subs s JOIN profiles p ON p.id = s.profile_id WHERE p.active AND 'admin' = ANY(p.roles)`);
-    return await deliver(db, server as ServerHooks, k, subs as Sub[], payload, new Set());
+    return await deliver(db, server as ServerHooks, k, subs as Sub[], notificationBrand(String(s.slug ?? ''), payload), new Set());
   } catch {
     return 0;
   }

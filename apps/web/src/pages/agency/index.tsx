@@ -1064,7 +1064,7 @@ const EXAMPLE: AgencyCounts = { ...NO_COUNTS, received: 300, confirmed: 210, del
 const MK_EXAMPLE: AgencyCounts = { ...NO_COUNTS, adsets: 12, spend: 420_000, orders: 380, delivered: 240, returned: 70, net: 310_000, successes: 4 };
 
 /** The partner's code (sellers add it with it) and its usual prices. */
-export function AgencySettings(_: PageProps) {
+export function AgencySettings({ sub }: PageProps) {
   const { t } = useTranslation();
   const tp = useTp();
   const kind = usePartnerKind();
@@ -1073,6 +1073,7 @@ export function AgencySettings(_: PageProps) {
   useEffect(() => {
     if (q.data && p === null) setP(q.data.agency.prices ?? NO_AGENCY_PRICES);
   }, [q.data, p]);
+  if (kind === 'agency' && sub === 'notifications') return <div className="agx-page"><AgencyNotifications /></div>;
   if (q.isLoading || (!p && !q.error)) return <Loading />;
   if (q.error || !p) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const sample = kind === 'marketer' ? MK_EXAMPLE : EXAMPLE;
@@ -1090,7 +1091,9 @@ export function AgencySettings(_: PageProps) {
           <Icon name="plus" /> {t('agency.addSeller')}
         </a>
       </section>
-      {kind === 'agency' && <AgencyNotifications />}
+      {kind === 'agency' && <Card title={t('notifs.title')}>
+        <a className="btn" href="#/reglages/notifications"><Icon name="bell" /> {t('agency.alerts.manage')}</a>
+      </Card>}
       <div className="agx-grid-2">
         <Card title={t('agency.tarifs.title')}><p><a href="#/facturation">{t('agency.mnav.facturation')}</a></p></Card>
         <Card title={t('agency.tarifs.example')} help={t('agency.tarifs.exampleHelp')}>

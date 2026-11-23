@@ -1,6 +1,7 @@
 // Phone / computer notifications (Web Push): this device asks once (« Activer »), then the server can ring it even when
 // Pilotix is closed or the phone is locked. Nothing in the browser preview (no server to send them).
 import { rpc } from './backend';
+import { currentShop } from './features';
 
 export const pushSupported = () => typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 
@@ -10,29 +11,64 @@ const b64 = (s: string) => {
   return Uint8Array.from(raw, (c) => c.charCodeAt(0));
 };
 
+const workerUrl = () => new URL(`${import.meta.env.BASE_URL}sw.js`, document.baseURI).href;
+
+const agencyScope = () => {
+  const shop = currentShop();
+  return shop?.kind === 'agency' ? `/__pilotix_push/${shop.id}/` : undefined;
+};
+
 async function registration() {
+  const scope = agencyScope();
+  if (scope) {
+    // A different VAPID key and subscription for each agency, without replacing the site's worker.
+    return navigator.serviceWorker.register(workerUrl(), { scope });
+  }
   // the site's worker already there (lib/door installs it as « sw.js?door=1 » with the backup door on): the same one
   const had = await navigator.serviceWorker.getRegistration();
   if (had) return had;
   // next to the site's index.html (/sw.js on the site, whatever page's address is open: /<boutique>/commandes/…)
-  return navigator.serviceWorker.register(new URL(`${import.meta.env.BASE_URL}sw.js`, document.baseURI).href);
+  return navigator.serviceWorker.register(workerUrl());
 }
 
 /** Subscribes this device (asks the permission when `ask`, which must come from a tap). Returns the state after. */
 export async function enablePush(ask: boolean): Promise<'on' | 'denied' | 'off' | 'unsupported'> {
   if (!pushSupported()) return 'unsupported';
-  const { key } = await rpc('push.key', {});
-  if (!key) return 'unsupported';
+  const shopId = currentShop()?.id;
   let perm = Notification.permission;
   if (perm === 'default' && ask) perm = await Notification.requestPermission();
   if (perm === 'denied') return 'denied';
-  if (perm !== 'granted') return 'off';
+  if (perm !== 'granted' || currentShop()?.id !== shopId) return 'off';
+  const scope = agencyScope();
+  if (scope && !ask) {
+    const reg = await navigator.serviceWorker.getRegistration(scope);
+    const sub = reg?.scope === new URL(scope, location.origin).href ? await reg.pushManager.getSubscription() : null;
+    if (!sub) return 'off';
+    return (await rpc('push.key', { endpoint: sub.endpoint }, null)).subscribed ? 'on' : 'off';
+  }
+  const { key } = await rpc('push.key', {}, null);
+  if (!key) return 'unsupported';
   const reg = await registration();
-  await navigator.serviceWorker.ready;
+  const worker = reg.installing ?? reg.waiting;
+  if (!reg.active && worker && worker.state !== 'activated') {
+    await new Promise<void>((resolve, reject) => {
+      const timer = window.setTimeout(() => reject(new Error('Notification worker did not activate')), 10_000);
+      const changed = () => {
+        if (worker.state !== 'activated' && worker.state !== 'redundant') return;
+        window.clearTimeout(timer);
+        worker.removeEventListener('statechange', changed);
+        if (worker.state === 'activated') resolve();
+        else reject(new Error('Notification worker could not activate'));
+      };
+      worker.addEventListener('statechange', changed);
+      changed();
+    });
+  }
   let sub = await reg.pushManager.getSubscription();
   if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) });
+  if (currentShop()?.id !== shopId) return 'off';
   const j = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
-  await rpc('push.subscribe', { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, ua: navigator.userAgent.slice(0, 300) });
+  await rpc('push.subscribe', { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, ua: navigator.userAgent.slice(0, 300) }, null);
   return 'on';
 }
 
@@ -40,6 +76,16 @@ export async function enablePush(ask: boolean): Promise<'on' | 'denied' | 'off' 
  * A phone or a tablet (Android, iPhone, iPad…): « Bloquer jusqu'à l'appel » rings and blocks there, never on a computer.
  * The same test as the server's push.ts › phoneSql (on the user agent this device saves with its notifications).
  */
+export async function disableDevicePush(): Promise<void> {
+  const endpoint = await myEndpoint();
+  if (endpoint) await rpc('push.unsubscribe', { endpoint }, null);
+}
+
+export async function testDevicePush(): Promise<boolean> {
+  const endpoint = await myEndpoint();
+  return endpoint ? (await rpc('push.test', { endpoint }, null)).sent : false;
+}
+
 export const phoneDevice = () => typeof navigator !== 'undefined' && /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
 
 // The Claude demo (no server to send notifications): this phone « rings » unless the demo was told otherwise
@@ -88,7 +134,8 @@ export async function myEndpoint(): Promise<string | null> {
     }
   }
   if (!pushSupported()) return null;
-  const reg = await navigator.serviceWorker.getRegistration();
-  const sub = reg ? await reg.pushManager.getSubscription() : null;
+  const scope = agencyScope();
+  const reg = await navigator.serviceWorker.getRegistration(scope);
+  const sub = reg && (!scope || reg.scope === new URL(scope, location.origin).href) ? await reg.pushManager.getSubscription() : null;
   return sub?.endpoint ?? null;
 }

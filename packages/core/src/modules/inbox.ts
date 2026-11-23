@@ -17,7 +17,7 @@ import { Db, num, numOrNull } from '../db';
 import { Ctx, proc } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { BellKind, ringBell } from './bell';
-import { runAgencyKpis, tellAgencyAssignments } from './agencybell';
+import { runAgencyKpis, tellAgencyAssignments, tellAgencyOrderStatus } from './agencybell';
 import { pushOnly } from './push';
 
 // ---------------------------------------------------------------- the words (the person's language)
@@ -371,6 +371,7 @@ export async function tellFollow(ctx: Ctx, moves: FollowMove[], by: number | nul
     const kind: K | null =
       m.to === 'delivered' ? 'delivered' : back.has(m.to) && !back.has(m.from ?? '') ? 'returned' : m.to === 'cancelled' ? 'cancelled' : m.to === 'alert' || m.to === 'failed' ? 'alert' : null;
     if (!kind) continue;
+    await tellAgencyOrderStatus(ctx, m.id, kind === 'alert' ? 'parcelAlert' : kind, by).catch(() => {});
     const rule = rules[kind];
     if (!rule.on) continue;
     // the person it is about: the agent who confirmed it, or the Suivi agent of a parcel on alert

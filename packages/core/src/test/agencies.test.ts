@@ -7,6 +7,7 @@ import { cleanCode } from '@pilotix/shared';
 import { call, Ctx, LiveEvent, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
 import { confirmSignup, loadShop, membershipsOf, passwordFromLink, startSignup, storeChoices } from '../platform';
 import { computePayroll } from '../modules/admin';
+import { tellFollow } from '../modules/inbox';
 
 /** a new team member's phone (required, one per person) */
 let phoneN = 0;
@@ -79,6 +80,28 @@ test('delegated SAV separates seller routing from agency assignment, role notifi
   await call('users.create', chief, { phone: tph(), name: 'SAV agent', email: 'agent-sav@example.dz', password: PW, roles: ['sav'] });
   await call('agency.notifications.set', chief, { rules: { delegatedSav: ['sav'] }, kpis });
   const agent = await as(t, ag.id, 'agent-sav@example.dz', PW);
+  const endpoint = 'https://fcm.googleapis.com/fcm/send/agency-sav-test';
+  const sent: { endpoint: string; key: string; payload: Record<string, unknown> }[] = [];
+  const hooks: NonNullable<Ctx['server']> = {
+    courier: async () => null, meta: async () => null, hashPassword: async () => 'test',
+    pushKeys: () => ({ publicKey: 'agency-public-key', privateKey: 'agency-private' }),
+    push: async ({ publicKey }, subs, payload) => subs.map(({ endpoint }) => {
+      sent.push({ endpoint, key: publicKey, payload });
+      return { endpoint, ok: true, gone: false };
+    }),
+  };
+  agent.server = hooks;
+  chief.server = hooks;
+  seller.server = hooks;
+  await call('push.subscribe', { ...agent, seller: shop.id }, { endpoint, p256dh: 'fake-public-device-key', auth: 'fake-device-auth' });
+  assert.equal((await call('push.key', agent, { endpoint }) as { subscribed: boolean }).subscribed, true);
+  assert.equal((await call('push.key', chief, { endpoint }) as { subscribed: boolean }).subscribed, false);
+  assert.deepEqual(await call('push.test', chief, { endpoint }), { sent: false });
+  assert.deepEqual(await call('push.test', seller, { endpoint }), { sent: false });
+  assert.deepEqual(await call('push.test', agent, { endpoint }), { sent: true });
+  assert.equal(sent[0].payload.workspace, agent.shop!.slug);
+  assert.equal(sent[0].payload.icon, undefined, 'the service worker supplies the same Pilotix icon for every workspace');
+  assert.equal((await inbox(agent)).items.length, 0, 'the device test does not add a demo notification to the inbox');
   const agentAtSeller = { ...agent, seller: shop.id };
   const mapped = Number((await shop.db.query('SELECT id FROM profiles WHERE agency_id = $1 AND agency_profile_id = $2', [ag.id, agent.session.profile.id]))[0].id);
   const delegated = await order(seller, shop.products.VELO, '0661800001');
@@ -86,6 +109,8 @@ test('delegated SAV separates seller routing from agency assignment, role notifi
   const makeTicket = (ctx: Ctx, orderId: number) => call('sav.create', ctx, { orderId, type: 'defect', details: 'Test SAV' }) as Promise<{ id: number }>;
   const ticket = await makeTicket(seller, delegated.id);
   const ownTicket = await makeTicket(seller, own.id);
+  assert.equal(sent.length, 2);
+  assert.deepEqual(sent[1], { endpoint, key: 'agency-public-key', payload: { ...sent[1].payload, title: 'Nouveau ticket SAV confié à votre agence', workspace: agent.shop!.slug } });
   assert.equal(Number((await shop.db.query('SELECT sav_agency_id FROM complaints WHERE id=$1', [ticket.id]))[0].sav_agency_id), ag.id);
   assert.ok((await inbox(agent)).items.some((row) => row.title === 'Nouveau ticket SAV confié à votre agence'));
   assert.equal((await inbox(chief)).items.some((row) => row.title === 'Nouveau ticket SAV confié à votre agence'), false);
@@ -123,6 +148,8 @@ test('delegated SAV separates seller routing from agency assignment, role notifi
   await assert.rejects(call('agency.notifications.set', chief, { rules: {}, kpis }), /pas confié/);
   await assert.rejects(call('sav.get', agentAtSeller, { id: ticket.id }));
   await call('sav.update', seller, { id: ticket.id, note: 'Repris par le vendeur' });
+  await call('push.unsubscribe', agent, { endpoint });
+  assert.deepEqual(await call('push.test', agent, { endpoint }), { sent: false });
 });
 
 test('an agency: signs up, checked by Pilotix, works for a store on the products it is given', async () => {
@@ -297,6 +324,9 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
 
   // the numbers: o1 delivered → the agency's bill (per delivered + the rate bonus: 100 % ≥ 70 %)
   await shop.db.query(`UPDATE orders SET follow_status = 'delivered', delivered_at = now(), has_upsell = true WHERE id = $1`, [o1.id]);
+  await call('notify.set', admin, { rules: { delivered: { ...sellerRules.rules.delivered, on: false } } });
+  await tellFollow(admin, [{ id: o1.id, from: 'out_for_delivery', to: 'delivered' }], null);
+  assert.ok((await inbox(noraAgency)).items.some((item) => item.title === 'Commande livrée'));
   const d: any = await call('agency.link', chief, { id: linkId });
   assert.deepEqual([d.counts.received, d.counts.confirmed, d.counts.delivered, d.counts.upsells], [2, 1, 1, 1]);
   assert.equal(d.bill.total, 150 + 50 + 20);

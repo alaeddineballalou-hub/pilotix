@@ -36,7 +36,7 @@ import { clientFee, getSetting } from '../settings';
 import { getPrefs } from './prefs';
 import { channelGuard, guardNote, type GuardMode } from './guard';
 import { assignNow, getAssign } from './assign';
-import { tellDelegated } from './agencybell';
+import { tellAgencyOrderStatus, tellDelegated } from './agencybell';
 import { type FollowMove, tellFollow, tellGiven, tellTaken } from './inbox';
 import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPreview } from './notify';
 import { landingCounts, landingSettings, onLandingConf, onLandingFollow, queueChatEvent, queueChatPurchase } from './landingquery';
@@ -1325,6 +1325,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
   const freed: number[] = [];
   /** cancelled with a parcel already created at a courier: cancelled there too, after this is saved */
   const ghosts: number[] = [];
+  const cancelledForAgency: number[] = [];
   /** confirmed now (they were not): a « Risqué » customer among them is kept (« Confirmer quand même ») */
   const fresh: number[] = [];
   /** cancelled by themselves: « Annuler automatiquement après N appels sans réponse » (Réglages › Boutique) */
@@ -1446,6 +1447,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
       }
       if (cur.conf_status === 'confirmed' && !confirmed && !cur.shipped_at) freed.push(oid);
       if (leavesDepot && ['to_prepare', 'prepared'].includes(cur.follow_status) && cur.tracking) ghosts.push(oid);
+      if (!undo && status === 'cancelled' && cur.conf_status !== 'cancelled') cancelledForAgency.push(oid);
       changed.push(oid);
     }
     if (freed.length)
@@ -1453,6 +1455,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
   });
   // a cancelled order's parcel at a courier: cancelled there by itself (or put on « À annuler à la main »)
   if (ghosts.length) await (await import('./dispatch')).cancelGhosts(ctx, ghosts);
+  for (const id of cancelledForAgency) await tellAgencyOrderStatus(ctx, id, 'cancelled', me).catch(() => {});
   if (!undo) await recordRiskConfirms(ctx, fresh.filter((x) => changed.includes(x)), me);
   await sendInPreview(ctx);
   ctx.emit({ type: 'orders' });

@@ -161,7 +161,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
     () =>
       backend.onEvent((e) => {
         const c = (e.data as { created?: { ref: string; channel: string; agency?: number | null } } | undefined)?.created;
-        if (e.type !== 'orders' || !c || !(isAdmin || roles.includes('confirmation')) || store.get('lp-sound') === 'off') return;
+        if (space === 'agency' || e.type !== 'orders' || !c || !(isAdmin || roles.includes('confirmation')) || store.get('lp-sound') === 'off') return;
         const other = e.shop !== undefined && session!.shop?.id !== undefined && e.shop !== session!.shop.id;
         // a confirmation agency's agent hears only of its agency's orders; the store's own agents of theirs
         const agency = session!.profile.agencyId ?? null;
@@ -171,7 +171,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
         toast(name ? t('shell.newOrderIn', { ref: c.ref, name }) : t(c.channel === 'landing' ? 'shell.newLandingOrder' : 'shell.newOrder', { ref: c.ref }), 'ok', 6000);
         chime();
       }),
-    [isAdmin, roles, t, session, boutiques],
+    [space, isAdmin, roles, t, session, boutiques],
   );
 
   // Presence heartbeat, every minute (online / idle after 5 min without activity).

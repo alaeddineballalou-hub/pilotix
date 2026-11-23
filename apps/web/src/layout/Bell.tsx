@@ -9,13 +9,14 @@ import { useTranslation } from 'react-i18next';
 import { backend, Out, rpc } from '../lib/backend';
 import { clock, dayLabel, sameDay } from '../lib/format';
 import { openOrder } from '../lib/modals';
-import { enablePush } from '../lib/push';
+import { disableDevicePush, enablePush, testDevicePush } from '../lib/push';
 import { useRpcFor } from '../lib/query';
 import { setSeller, useScope } from '../lib/seller';
 import { useSession } from '../lib/session';
 import { audioReady, bellSound, BellSound, unlockAudio } from '../lib/sound';
 import { store } from '../lib/store';
 import { Icon } from '../ui/kit';
+import { toast } from '../ui/toast';
 import './bell.css';
 
 type Line = Out<'inbox.list'>['items'][number];
@@ -69,6 +70,7 @@ const hoursText = (slots: { from: number; to: number }[]) => {
 
 export function Bell() {
   const { t } = useTranslation();
+  const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const { session } = useSession();
   const me = session!.profile.id;
   const here = session!.shop?.id;
@@ -84,6 +86,7 @@ export function Bell() {
   const [mute, setMute] = useState(() => store.get('bell-sound') === 'off');
   const [sounds, setSounds] = useState(false);
   const [push, setPush] = useState<PushState | null>(null);
+  const [deviceBusy, setDeviceBusy] = useState(false);
   const [ready, setReady] = useState(audioReady());
   const box = useRef<HTMLDivElement>(null);
   /** the list open on a computer: the pop-ups go beside it (« Écouter les sons ») */
@@ -112,14 +115,14 @@ export function Bell() {
         const d = e.data as { to?: number[]; quiet?: number[] } | undefined;
         const mine = !!d?.to?.includes(me);
         if (!mine && !d?.quiet?.includes(me)) return;
-        if (mine) fresh.current = true;
+        if (mine && !agency) fresh.current = true;
         void refetch.current();
       }),
-    [me, here],
+    [agency, me, here],
   );
 
   useEffect(() => {
-    if (!data) return;
+    if (agency || !data) return;
     if (!seen.current) {
       // what is already there when the page opens: in the list, never as a pop-up
       seen.current = new Set(data.items.map(key));
@@ -136,7 +139,7 @@ export function Bell() {
     setPops((p) => [...show, ...p.filter((x) => !show.some((y) => y.id === x.id))].slice(0, 3));
     const top = show.find((x) => x.important) ?? show[0];
     if (soundRef.current) bellSound(top.kind, top.important, true);
-  }, [data]);
+  }, [agency, data]);
 
   // a pop-up that is not important goes by itself
   useEffect(() => {
@@ -170,9 +173,9 @@ export function Bell() {
     document.addEventListener('pointerdown', down);
     document.addEventListener('keydown', k);
     window.addEventListener('hashchange', away);
-    if (!agency) enablePush(false).then(setPush).catch(() => setPush('unsupported'));
+    enablePush(false).then(setPush).catch(() => setPush('unsupported'));
     return () => (document.body.classList.remove('px-bell-open'), document.removeEventListener('pointerdown', down), document.removeEventListener('keydown', k), window.removeEventListener('hashchange', away));
-  }, [agency, open]);
+  }, [open]);
 
   useLayoutEffect(() => {
     const r = box.current?.getBoundingClientRect();
@@ -207,11 +210,11 @@ export function Bell() {
   // the browser demo only: a pop-up of each kind from the console (« pxBell('delivered') »), to see and hear it where it
   // shows (the top of the page), with « Ouvrir » to its page. Never on a real server.
   useEffect(() => {
-    if (backend.kind !== 'demo') return;
+    if (agency || backend.kind !== 'demo') return;
     const w = window as unknown as { pxBell?: (k: BellSound) => void };
     w.pxBell = (k) => sampleRef.current(k, SAMPLE_PAGE[k]);
     return () => void delete w.pxBell;
-  }, []);
+  }, [agency]);
   const toggleMute = () => {
     store.set('bell-sound', mute ? null : 'off');
     setMute(!mute);
@@ -236,7 +239,7 @@ export function Bell() {
         aria-expanded={open}
         aria-label={unread ? `${t('bell.open')} · ${t('bell.unread', { count: unread })}` : t('bell.open')}
         title={t('bell.open')}
-        onClick={() => (unlockAudio(), setOpen((v) => !v))}
+        onClick={() => { if (!agency) unlockAudio(); setOpen((v) => !v); }}
       >
         <Icon name="bell" />
         {unread > 0 && (
@@ -250,6 +253,7 @@ export function Bell() {
         <div className="px-bell-panel" role="dialog" aria-label={t('bell.title')}>
           <div className="px-bell-head">
             <b>{t('bell.title')}</b>
+            {agency && session!.isAdmin && <a className="px-bell-all" href="#/reglages/notifications" onClick={() => setOpen(false)} aria-label={t('agency.alerts.manage')} title={t('agency.alerts.manage')}><Icon name="settings" /></a>}
             {unread > 0 && <span className="px-bell-chip">{t('bell.unread', { count: unread })}</span>}
             {unread > 0 && (
               <button type="button" className="px-bell-all" title={t('bell.readAllLong')} onClick={readAll}>
@@ -266,7 +270,7 @@ export function Bell() {
                   <Icon name="bell" />
                 </span>
                 <b>{t('bell.empty')}</b>
-                <small>{t('bell.emptyHint')}</small>
+                <small>{t(agency ? 'agency.alerts.historyHint' : 'bell.emptyHint')}</small>
               </div>
             )}
             {items.map((x, i) => (
@@ -290,76 +294,92 @@ export function Bell() {
           </div>
 
           <div className="px-bell-foot">
-            <div className="px-bell-row">
-              <Icon name={soundOn ? 'volume' : 'volumeoff'} />
-              <span className="px-bell-row-t">
-                <b>{t('bell.sound')}</b>
-                <small>{work ? t('bell.soundWork', { hours: hoursText(data?.slots ?? []) }) : soundOn ? t('bell.soundOn') : t('bell.soundOff')}</small>
-              </span>
-              {work ? (
-                <span className="px-bell-lock" title={t('bell.soundWork', { hours: hoursText(data?.slots ?? []) })}>
-                  <Icon name="lock" />
-                </span>
-              ) : (
-                <button type="button" role="switch" aria-checked={!mute} aria-label={t('bell.soundToggle')} className={`px-bell-switch${mute ? '' : ' on'}`} onClick={toggleMute}>
-                  <i />
-                </button>
-              )}
-            </div>
-            {!ready && soundOn && <p className="px-bell-hint">{t('bell.soundTap')}</p>}
-            <button type="button" className="px-bell-more" aria-expanded={sounds} onClick={() => (unlockAudio(), setSounds((v) => !v))}>
-              <Icon name="play" />
-              {t('bell.sounds')}
-              <Icon name="chevron" className={`px-bell-ch${sounds ? ' up' : ''}`} />
-            </button>
-            {sounds && <p className="px-bell-hint soft">{t('bell.soundsHint')}</p>}
-            {sounds && (
-              <div className="px-bell-sounds">
-                {KINDS.map((k) => (
-                  <button key={k} type="button" className={`px-bell-snd k-${k}`} onClick={() => sample(k)}>
-                    <span className="px-bell-ic">
-                      <Icon name={ICON[k]} />
-                    </span>
-                    {t(`bell.kind.${k}`)}
-                  </button>
-                ))}
-              </div>
-            )}
             {!agency && (
               <>
                 <div className="px-bell-row">
-                  <Icon name="smartphone" />
+                  <Icon name={soundOn ? 'volume' : 'volumeoff'} />
                   <span className="px-bell-row-t">
-                    <b>{t('bell.phone')}</b>
-                    <small>
-                      {push === 'on'
-                        ? t('bell.phoneOn')
-                        : push === 'denied'
-                          ? t('bell.phoneDenied')
-                          : push === 'unsupported'
-                            ? t(backend.kind === 'demo' ? 'bell.phonePreview' : 'bell.phoneNo')
-                            : t('bell.phoneAskHint')}
-                    </small>
+                    <b>{t('bell.sound')}</b>
+                    <small>{work ? t('bell.soundWork', { hours: hoursText(data?.slots ?? []) }) : soundOn ? t('bell.soundOn') : t('bell.soundOff')}</small>
                   </span>
-                  {push === 'on' && (
-                    <span className="px-bell-ok">
-                      <Icon name="check" />
+                  {work ? (
+                    <span className="px-bell-lock" title={t('bell.soundWork', { hours: hoursText(data?.slots ?? []) })}>
+                      <Icon name="lock" />
                     </span>
+                  ) : (
+                    <button type="button" role="switch" aria-checked={!mute} aria-label={t('bell.soundToggle')} className={`px-bell-switch${mute ? '' : ' on'}`} onClick={toggleMute}>
+                      <i />
+                    </button>
                   )}
                 </div>
-                {push === 'off' && (
-                  <button type="button" className="btn primary px-bell-push" onClick={() => enablePush(true).then(setPush).catch(() => setPush('unsupported'))}>
-                    <Icon name="bell" />
-                    {t('bell.phoneAsk')}
-                  </button>
+                {!ready && soundOn && <p className="px-bell-hint">{t('bell.soundTap')}</p>}
+                <button type="button" className="px-bell-more" aria-expanded={sounds} onClick={() => (unlockAudio(), setSounds((v) => !v))}>
+                  <Icon name="play" />
+                  {t('bell.sounds')}
+                  <Icon name="chevron" className={`px-bell-ch${sounds ? ' up' : ''}`} />
+                </button>
+                {sounds && <p className="px-bell-hint soft">{t('bell.soundsHint')}</p>}
+                {sounds && (
+                  <div className="px-bell-sounds">
+                    {KINDS.map((k) => (
+                      <button key={k} type="button" className={`px-bell-snd k-${k}`} onClick={() => sample(k)}>
+                        <span className="px-bell-ic">
+                          <Icon name={ICON[k]} />
+                        </span>
+                        {t(`bell.kind.${k}`)}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </>
+            )}
+            <div className="px-bell-row">
+              <Icon name="smartphone" />
+              <span className="px-bell-row-t">
+                <b>{t('bell.phone')}</b>
+                <small>
+                  {push === 'on'
+                    ? t('bell.phoneOn')
+                    : push === 'denied'
+                      ? t('bell.phoneDenied')
+                      : push === 'unsupported'
+                        ? t(backend.kind === 'demo' ? 'bell.phonePreview' : ios ? 'agency.alerts.installPush' : 'bell.phoneNo')
+                        : t('bell.phoneAskHint')}
+                </small>
+              </span>
+              {push === 'on' && (
+                <span className="px-bell-ok">
+                  <Icon name="check" />
+                </span>
+              )}
+            </div>
+            {push === 'off' && (
+              <button type="button" className="btn primary px-bell-push" disabled={deviceBusy} onClick={() => {
+                setDeviceBusy(true);
+                void enablePush(true).then(setPush).catch(() => toast(t('agency.alerts.deviceFailed'), 'bad')).finally(() => setDeviceBusy(false));
+              }}>
+                <Icon name="bell" />
+                {t('bell.phoneAsk')}
+              </button>
+            )}
+            {push === 'on' && (
+              <div className="row">
+                <button type="button" className="btn small" disabled={deviceBusy} onClick={() => {
+                  setDeviceBusy(true);
+                  void testDevicePush().then((sent) => toast(t(sent ? 'agency.alerts.testSent' : 'agency.alerts.deviceFailed'), sent ? 'ok' : 'bad'))
+                    .catch(() => toast(t('agency.alerts.deviceFailed'), 'bad')).finally(() => setDeviceBusy(false));
+                }}>{t('agency.alerts.testDevice')}</button>
+                {agency && <button type="button" className="btn small" disabled={deviceBusy} onClick={() => {
+                  setDeviceBusy(true);
+                  void disableDevicePush().then(() => setPush('off')).catch(() => toast(t('agency.alerts.deviceFailed'), 'bad')).finally(() => setDeviceBusy(false));
+                }}>{t('agency.alerts.disableDevice')}</button>}
+              </div>
             )}
           </div>
         </div>
       )}
 
-      {pops.length > 0 &&
+      {!agency && pops.length > 0 &&
         createPortal(
           <div className={`px-bell-pops${open ? ' beside' : ''}`} style={beside} role="status" aria-live="polite">
             {pops.map((x) => (
