@@ -301,7 +301,6 @@
     "eDupVariant": "The same variant appears twice: increase the quantity instead",
     "eDiscount": "Discount too high: maximum {{v}} for these products (set in Products & stock)",
     "eWilaya": "Choose the wilaya",
-    "eAddress": "Enter the delivery address",
     "eCommune": "Choose the commune",
     "eDesk": "Choose the stop desk office",
     "eNotDeliverable": "Not deliverable: {{msg}}",
