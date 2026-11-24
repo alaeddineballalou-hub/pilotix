@@ -15,10 +15,17 @@ rule, 24 Nov 2026. One `<logo>.png` per company, named like its logo (`apps/web/
 | mdm | MDM Express | mdm.express | its icon (SVG) |
 | near | Near Delivery | neardelivery.app | favicon, 32×32 (small: a little soft) |
 | conexlog | Conexlog | conexlog-dz.com | its icon, 300×300 |
+| areex | Areex Delivery | areex-delivery.com (the same picture as its Facebook page, facebook.com/areexdeliveryservice) | its website icon, 256×256 |
+| yalitec | Yalitec | facebook.com/Yalitec | its Facebook picture (taken logged out) |
+| zimou | Zimou Express | zimouexpress.com | its website icon, 64×64 (its three red stripes) |
+| ecom | E-COM Delivery | ecom-dz.com (the same mark as its Facebook page, facebook.com/ecomdelivery.dz) | its website icon, 192×192 |
+| world-express | World Express | facebook.com/worldexpressdz16 (World Express Alger) | its Facebook picture (taken logged out) |
+
+Taken on 25 Nov 2026 for the five above: Facebook pictures through Facebook's public picture address, logged out;
+website icons through the site itself or Google's copy of it.
 
 ## Still without their own icon (they show their letters)
 
-- The EcoTrack companies (48HR, Swift, World Express, Areex…): their EcoTrack page shows EcoTrack's icon, not theirs.
-  Their own website or Facebook page is needed.
-- Yalitec (yalitec.me: no icon), E-COM Delivery (ecom-dz.net: no icon), Guepex (guepex.app: a robot check, not
-  opened), Zimou Express (zimou.express: an arrow that is not its brand: to check).
+- Guepex (guepex.dz has no icon, its Facebook picture is hidden when logged out) and Swift Express (no official page
+  found). The other, smaller companies were not looked at yet: the owner chose the big ones first (25 Nov 2026).
+  Pages found for many of them are in the work notes of that day.
