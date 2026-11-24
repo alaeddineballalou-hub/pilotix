@@ -145,6 +145,7 @@ const DONE: [string, string][] = [
   ['127_stopdesk_gone', '7f212f31dc25'],
   ['128_agency_sav', 'b9bf442095d8'],
   ['129_abandoned_checkout', '7bad7559c022'],
+  ['130_order_came', '69b9a3a8d36f'],
 ];
 
 test('the old shop steps never change: a change to the shops’ tables is a new step at the end', () => {
