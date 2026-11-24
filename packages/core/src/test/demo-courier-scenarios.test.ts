@@ -58,6 +58,7 @@ test('fake tracking creates an alert and a claim, cancellation keeps its parcel 
 test('fake delivery uses normal tracking rules and refuses to change a finished parcel again', async () => {
   const ctx = await as(EMAILS.suivi);
   const orderId = await parcel();
+  await db.query('UPDATE orders SET follow_agent_id=$2 WHERE id=$1', [orderId, ctx.session.profile.id]);
   await call('delivery.demoScenario', ctx, { orderId, status: 'delivered' });
   assert.equal((await call('orders.get', ctx, { id: orderId }) as any).followStatus, 'delivered');
   await assert.rejects(call('delivery.demoScenario', ctx, { orderId, status: 'alert' }));

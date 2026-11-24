@@ -3,6 +3,7 @@ import { CONF_TODO, isAbandonedCheckout, communesOf, FOLLOW_LOCKED, normalizePho
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PromoField, usePromoCheck } from './PromoField';
+import { OrderNotes } from './OrderNotes';
 import { Out, rpc } from '../../lib/backend';
 import { da, n, when } from '../../lib/format';
 import type { OrderFormOpts } from '../../lib/modals';
@@ -375,9 +376,6 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
       deliveryFee: fee === '' ? undefined : feeN,
       discount: disN,
       promoCode: promoCode.trim() || null,
-      customerNote: noteC.trim() || null,
-      deliveryNote: noteL.trim() || null,
-      internalNote: (isExchange ? [noteT.trim(), `Échange de ${original!.ref}`].filter(Boolean).join(' · ') : noteT.trim()) || null,
     };
     const items = lines.filter((x) => x.productId).map((x) => ({ productId: x.productId!, variantId: x.variantId, qty: x.qty, unitPrice: x.unitPrice ?? undefined, ...(x.forProductId ? { forProductId: x.forProductId } : {}) }));
     try {
@@ -399,7 +397,12 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
           }
         } else toast(t('orders.form.saved', { ref: saved.ref }), 'ok');
       } else {
-        saved = await rpc('orders.create', { ...payload, items, confirm, isExchange, originalOrderId: isExchange ? original!.id : null, source: (pre.source as string) ?? null });
+        const notes = {
+          customerNote: noteC.trim() || null,
+          deliveryNote: noteL.trim() || null,
+          internalNote: (isExchange ? [noteT.trim(), `Échange de ${original!.ref}`].filter(Boolean).join(' · ') : noteT.trim()) || null,
+        };
+        saved = await rpc('orders.create', { ...payload, ...notes, items, confirm, isExchange, originalOrderId: isExchange ? original!.id : null, source: (pre.source as string) ?? null });
         toast(confirm ? t('orders.form.savedConfirmed', { ref: saved.ref }) : t('orders.form.created', { ref: saved.ref }), 'ok');
       }
       qc.invalidateQueries();
@@ -473,7 +476,7 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
                 )}
               </div>
             </div>
-            <div className="pxo-notes">
+            {order ? <OrderNotes key={order.id} order={order} /> : <div className="pxo-notes">
               <label className="pxo-note c">
                 <span>{t('orders.form.noteClient')}</span>
                 <textarea rows={2} value={noteC} onChange={(e) => setNoteC(e.target.value)} placeholder={t('orders.form.noteClientPh')} />
@@ -486,7 +489,7 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
                 <span>{t('orders.form.noteTeam')}</span>
                 <textarea rows={2} value={noteT} onChange={(e) => setNoteT(e.target.value)} placeholder={t('orders.form.noteTeamPh')} />
               </label>
-            </div>
+            </div>}
           </Sec>
 
           <Sec ic="user" title={t('orders.form.client')}>

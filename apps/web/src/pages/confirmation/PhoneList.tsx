@@ -2,7 +2,7 @@
 // a tap opens the whole order full screen, where every part of it can be changed (Detail in phone mode).
 import type { Order } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { HeldChip } from './hold';
 import { da, when, wilayaName } from '../../lib/format';
@@ -14,13 +14,14 @@ import { currentLabel, useCanGive } from './shared';
 import { AskCall, AskMsg } from './History';
 import { rpc } from '../../lib/backend';
 import { useRpc } from '../../lib/query';
+import { SellerScope, useScope } from '../../lib/seller';
 import { toast } from '../../ui/toast';
 import { CONF_TONE } from '@pilotix/shared';
 import './phone.css';
 import { ScoreChip } from '../../ui/clientScore';
 
 /** a queue row: the order with its call countdown */
-type PRow = Order & { deadline?: Deadline | null; rotateAt?: number | null };
+type PRow = Order & { deadline?: Deadline | null; rotateAt?: number | null; seller?: { id: number; name: string } };
 
 const variantsLine = (o: Order) =>
   o.items
@@ -31,8 +32,9 @@ const variantsLine = (o: Order) =>
 /** "Appeler": asks first, a normal phone call or WhatsApp (like the message button on computers); the call is counted. */
 function CallButton({ o, big }: { o: Order; big?: boolean }) {
   const { t } = useTranslation();
+  const seller = useScope();
   return (
-    <AskCall phone={o.phone} className={`pxp-call${big ? ' big' : ''}`} label={`${t('confirmation.call')} ${o.customerName} ${o.phone}`} onCall={() => rpc('orders.logCall', { id: o.id }).catch(() => {})}>
+    <AskCall phone={o.phone} className={`pxp-call${big ? ' big' : ''}`} label={`${t('confirmation.call')} ${o.customerName} ${o.phone}`} onCall={() => rpc('orders.logCall', { id: o.id }, seller).catch(() => {})}>
       <Icon name="phone" />
     </AskCall>
   );
@@ -52,17 +54,18 @@ function MsgButton({ o }: { o: Order }) {
  * The queue on phones. `pick`: « Sélectionner » is on (managers, the owner, an agency's chiefs): a tap ticks the order
  * instead of opening it. `showAgent`: each card says who has the order (or « Libre »).
  */
-export function PhoneCards({ rows, empty, onOpen, pick, showAgent }: { rows: PRow[]; empty: string; onOpen: (id: number) => void; pick?: { picked: Set<number>; toggle: (id: number) => void }; showAgent?: boolean }) {
+export function PhoneCards({ rows, empty, onOpen, pick, showAgent, rowKey }: { rows: PRow[]; empty: string; onOpen: (id: string) => void; pick?: { picked: Set<string>; toggle: (id: string) => void }; showAgent?: boolean; rowKey: (row: PRow) => string }) {
   const { t } = useTranslation();
   if (!rows.length) return <p className="pxp-empty muted">{empty}</p>;
   return (
     <ul className="pxp-list">
       {rows.map((o) => {
         const vt = variantsLine(o);
-        const on = !!pick?.picked.has(o.id);
-        const tap = () => (pick ? pick.toggle(o.id) : onOpen(o.id));
+        const key = rowKey(o);
+        const on = !!pick?.picked.has(key);
+        const tap = () => (pick ? pick.toggle(key) : onOpen(key));
         return (
-          <li key={o.id}>
+          <li key={key}>
             <div
               className={`pxp-card${pick ? ' is-pick' : ''}${on ? ' is-on' : ''}`}
               role={pick ? 'checkbox' : 'button'}
@@ -80,7 +83,7 @@ export function PhoneCards({ rows, empty, onOpen, pick, showAgent }: { rows: PRo
                   {o.deadline && <Countdown d={o.deadline} short />}
                 </div>
                 <div className="pxp-meta">
-                  <span className="ltr">{o.ref}</span> · {wilayaName(o.wilayaId)} · <b className="ltr">{da(o.total)}</b>
+                  <span className="ltr">{o.ref}</span> · {o.seller && <>{o.seller.name} · </>}{wilayaName(o.wilayaId)} · <b className="ltr">{da(o.total)}</b>
                 </div>
                 <div className="pxp-prod">
                   {namesOf(o.items)}
@@ -96,7 +99,7 @@ export function PhoneCards({ rows, empty, onOpen, pick, showAgent }: { rows: PRo
                 </div>
               </div>
               {/* ticking: no call by mistake */}
-              {!pick && <CallButton o={o} />}
+              {!pick && (o.seller ? <SellerScope seller={o.seller.id} ambient={false}><CallButton o={o} /></SellerScope> : <CallButton o={o} />)}
             </div>
           </li>
         );
@@ -183,21 +186,28 @@ export function PhoneOrder({ order, onClose, onDone }: { order: Order; onClose: 
   // once per opening (the next order replaces this one in place, without touching the history)
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const entry = useId();
+  const mounted = useRef(false);
   useEffect(() => {
+    mounted.current = true;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const key = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('.pxk-sheet') && closeRef.current();
-    const back = (e: PopStateEvent) => !e.state?.pxpOrder && closeRef.current();
-    history.pushState({ pxpOrder: 1 }, '');
+    const back = (e: PopStateEvent) => e.state?.pxpOrder !== entry && closeRef.current();
+    if (history.state?.pxpOrder !== entry) history.pushState({ ...history.state, pxpOrder: entry }, '');
     window.addEventListener('keydown', key);
     window.addEventListener('popstate', back);
     return () => {
+      mounted.current = false;
       document.body.style.overflow = prev;
       window.removeEventListener('keydown', key);
       window.removeEventListener('popstate', back);
-      if (history.state?.pxpOrder) history.back();
+      // React can run setup again immediately. Keep the card's history entry in that case.
+      queueMicrotask(() => {
+        if (!mounted.current && history.state?.pxpOrder === entry) history.back();
+      });
     };
-  }, []);
+  }, [entry]);
   // a new order: back to the top of the page
   const body = useRef<HTMLDivElement>(null);
   // a block, not an arrow that returns: new browsers' scrollTo returns a Promise, and React would call it as the clean-up

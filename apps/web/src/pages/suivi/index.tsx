@@ -7,6 +7,7 @@ import { when, wilayaName, syncProblems } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
+import { SellerScope } from '../../lib/seller';
 import { Empty, ErrorBox, Icon, Loading, Pager, RemovableChip, StatusBadge } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
@@ -246,10 +247,18 @@ const SKEY = 'suivi-cols';
 /** The columns a suivi agent works with, most useful first (a tablet shows the first 6 the table has). */
 const SUIVI_USEFUL: SCol[] = ['name', 'phone', 'follow', 'since', 'wilaya', 'status', 'product', 'order'];
 
+export type ParcelRow = Order & { seller?: { id: number; name: string }; extra?: Extra | null };
+export const parcelKey = (o: ParcelRow) => `${o.seller?.id ?? 0}:${o.id}`;
+const extraOf = (o: ParcelRow, extra: Record<number, Extra>) => o.seller ? o.extra ?? undefined : extra[o.id];
+function ParcelScope({ order, children, ambient = true }: { order: ParcelRow; children: ReactNode; ambient?: boolean }) {
+  return order.seller ? <SellerScope seller={order.seller.id} ambient={ambient}>{children}</SellerScope> : <>{children}</>;
+}
+
 /** The table shared by every Suivi list, with the column menu and the shared presets. */
-export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[]; actions?: (o: Order) => ReactNode; empty: string; extra?: Record<number, Extra> }) {
+export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: ParcelRow[]; actions?: (o: ParcelRow) => ReactNode; empty: string; extra?: Record<number, Extra> }) {
   const { t } = useTranslation();
   const { has } = useSession();
+  const qc = useQueryClient();
   const unFollow = useAction('suivi.unassign', { success: (o) => t('suivi.agentRemoved', { ref: o.ref }) });
   // columns saved with the account; a chosen preset is used by every list until the columns are changed by hand
   const tc = useTableColumns<SCol>('suivi', SCOLS, { defaults: SDEFAULT, legacy: () => ({ cols: store.json<SCol[] | null>(SKEY, null), order: store.json<SCol[] | null>('suivi-order', null) }) });
@@ -268,13 +277,14 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
   const wkeys: string[] = [...cols, ...(actions ? ['_act'] : [])];
   const [dens, setDens] = useDensity();
   const rs = useResizable(tc.widths, tc.setWidths, t('common.resizeCol'), wkeys, dens);
-  const cell = (o: Order, k: SCol): ReactNode => {
+  const cell = (o: ParcelRow, k: SCol): ReactNode => {
     switch (k) {
       case 'order':
         return (
           <>
             <b className="ltr">{o.ref}</b>
             <small>{when(o.createdAt)}</small>
+            {o.seller && <small>{o.seller.name}</small>}
           </>
         );
       case 'name':
@@ -305,23 +315,26 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
             {o.companyName || o.livreurName || '—'}
             <small>
               {trackOf(o) && <CopyCode code={trackOf(o)} />}
-              {reasonOf(o, extra[o.id]) ? ` · ${reasonOf(o, extra[o.id])}` : ''}
+              {reasonOf(o, extraOf(o, extra)) ? ` · ${reasonOf(o, extraOf(o, extra))}` : ''}
             </small>
           </>
         );
       case 'agent':
         return <RemovableChip name={o.agentName} />;
       case 'fagent':
-        return <RemovableChip name={o.followAgentName} removeLabel={t('suivi.removeAgent')} disabled={unFollow.isPending} onRemove={has('suivi') ? () => unFollow.mutate({ id: o.id }) : undefined} />;
+        return <RemovableChip name={o.followAgentName} removeLabel={t('suivi.removeAgent')} disabled={unFollow.isPending} onRemove={has('suivi') ? () => {
+          if (o.seller) void rpc('suivi.unassign', { id: o.id }, o.seller.id).then(() => qc.invalidateQueries(), (e) => toast(e.message, 'bad'));
+          else unFollow.mutate({ id: o.id });
+        } : undefined} />;
       case 'since': {
         const d = daysSince(o.shippedAt);
         return (
           <>
             {d === null ? '—' : <span className={`badge ${d >= 10 ? 't-bad' : d >= 5 ? 't-warn' : 't-info'} ltr`}>{t('suivi.days', { n: d })}</span>}
-            {extra[o.id]?.clock && <ClockChip c={extra[o.id]!.clock} />}
-            {extra[o.id]?.tries && <TriesChip tr={extra[o.id]!.tries} />}
-            {o.followStatus === 'alert' && <RotateChip at={extra[o.id]?.rotateAt} />}
-            {extra[o.id]?.stuck && <StuckChips s={extra[o.id]!.stuck} />}
+            {extraOf(o, extra)?.clock && <ClockChip c={extraOf(o, extra)!.clock} />}
+            {extraOf(o, extra)?.tries && <TriesChip tr={extraOf(o, extra)!.tries} />}
+            {o.followStatus === 'alert' && <RotateChip at={extraOf(o, extra)?.rotateAt} />}
+            {extraOf(o, extra)?.stuck && <StuckChips s={extraOf(o, extra)!.stuck} />}
           </>
         );
       }
@@ -336,7 +349,7 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
         return (
           <>
             <StatusBadge kind="follow" status={o.followStatus} />
-            {extra[o.id]?.motif && <MotifChip m={extra[o.id]!.motif} />}
+            {extraOf(o, extra)?.motif && <MotifChip m={extraOf(o, extra)!.motif} />}
           </>
         );
     }
@@ -381,7 +394,7 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
             </thead>
             <tbody>
               {rows.map((o) => (
-                <tr key={o.id} className="clickable" onClick={() => openOrder(o.id)}>
+                <ParcelScope key={parcelKey(o)} order={o} ambient={false}><tr className="clickable" onClick={() => openOrder(o.id, o.seller?.id)}>
                   {cols.map((k) => (
                     <td key={k} data-l={label[k]} className={`px-c-${k}${k === 'product' ? ' wide px-cw' : k === 'since' ? ' num' : ''}`}>
                       {cell(o, k)}
@@ -392,7 +405,7 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
                       {actions(o)}
                     </td>
                   )}
-                </tr>
+                </tr></ParcelScope>
               ))}
             </tbody>
           </table>
@@ -403,11 +416,11 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
 }
 
 type Dialog =
-  | { kind: 'treat'; o: Order }
+  | { kind: 'treat'; o: ParcelRow }
   | { kind: 'cancel'; o: Order }
-  | { kind: 'swap'; o: Order }
-  | { kind: 'claim'; o: Order; toLivreur: boolean }
-  | { kind: 'sheet'; data: SwapResult & { fresh?: boolean } }
+  | { kind: 'swap'; o: ParcelRow }
+  | { kind: 'claim'; o: ParcelRow; toLivreur: boolean }
+  | { kind: 'sheet'; data: SwapResult & { fresh?: boolean }; seller?: ParcelRow['seller'] }
   | { kind: 'stuck'; o: Order }
   | null;
 
@@ -441,7 +454,7 @@ function suiviInput(f: SuiviF, q: string): Partial<In<'suivi.list'>> {
 }
 
 /** Recherche, Agent suivi (for the managers), Produit, Société, Livreur, Wilaya, Du / Au. */
-function SuiviFilters({ f, set }: { f: SuiviF; set: (patch: Partial<SuiviF>) => void }) {
+function SuiviFilters({ f, set, combined }: { f: SuiviF; set: (patch: Partial<SuiviF>) => void; combined?: boolean }) {
   const { t } = useTranslation();
   const { session, has } = useSession();
   const [open, setOpen] = useState(false);
@@ -457,10 +470,12 @@ function SuiviFilters({ f, set }: { f: SuiviF; set: (patch: Partial<SuiviF>) => 
         {t('filters.toggle')}
         {on > 0 && <b className="ltr"> · {on}</b>}
       </button>
-      {boss && <AgentFilter kind="follow" value={f.fagent} onChange={(v) => set({ fagent: v })} />}
-      <ProductFilter product={f.product} variant={f.variant} onChange={(v) => set(v)} />
-      <CompanyFilter value={f.company} onChange={(v) => set({ company: v })} />
-      <LivreurFilter value={f.livreur} onChange={(v) => set({ livreur: v })} />
+      {!combined && boss && <AgentFilter kind="follow" value={f.fagent} onChange={(v) => set({ fagent: v })} />}
+      {!combined && <>
+        <ProductFilter product={f.product} variant={f.variant} onChange={(v) => set(v)} />
+        <CompanyFilter value={f.company} onChange={(v) => set({ company: v })} />
+        <LivreurFilter value={f.livreur} onChange={(v) => set({ livreur: v })} />
+      </>}
       <WilayaFilter value={f.wilaya} onChange={(v) => set({ wilaya: v })} />
       <DateFilters from={f.from} to={f.to} onChange={(v) => set(v)} />
       <ClearFilters on={on > 0} onClear={() => set({ ...NO_SF, q: f.q })} />
@@ -468,11 +483,14 @@ function SuiviFilters({ f, set }: { f: SuiviF; set: (patch: Partial<SuiviF>) => 
   );
 }
 
-function List({ tab }: { tab: ListTab }) {
+export type CombinedSuivi = { input?: Record<string, unknown>; bar?: ReactNode; chip: ReactNode; canWork?: (sellerId: number) => boolean };
+export function List({ tab, combined }: { tab: ListTab; combined?: CombinedSuivi }) {
   const { t } = useTranslation();
   const agency = useInAgency();
   const { has } = useSession();
   const canFollow = has('suivi');
+  const qc = useQueryClient();
+  const canTreat = (o: ParcelRow) => canFollow && (!o.seller || !combined?.canWork || combined.canWork(o.seller.id));
   const canHandle = canFollow || has('confirmation');
   // Utilisateurs › Rôles: « Traiter les alertes » (treat, back to alert, stuck parcels)
   const treats = rightOn('act:suivi.treat');
@@ -488,7 +506,10 @@ function List({ tab }: { tab: ListTab }) {
     setPage(1);
   };
   const dq = useDebounced(f.q);
-  const q = useRpc('suivi.list', { tab, page, pageSize: 100, ...suiviInput(f, dq) });
+  const scopeKey = JSON.stringify(combined?.input ?? {});
+  useEffect(() => setPage(1), [scopeKey]);
+  const agencyFilters = combined ? { ...NO_SF, q: f.q, wilaya: f.wilaya, from: f.from, to: f.to } : f;
+  const q = useRpc('suivi.list', { tab, page, pageSize: 100, ...suiviInput(agencyFilters, dq), ...combined?.input });
   const [dlg, setDlg] = useState<Dialog>(null);
   const act = useAction('suivi.act');
   // phones: journey cards; a tap opens the parcel full screen. Computers: the same cards, the parcel in a side panel
@@ -496,7 +517,7 @@ function List({ tab }: { tab: ListTab }) {
   const phone = useIsPhone();
   const [mode, setMode] = useViewMode('suivi');
   const cards = phone || mode === 'cards';
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [openId, setOpenId] = useState<ParcelRow | null>(null);
   // « Alerte suivante »: the most urgent alert, taken (15 minutes) by this agent; when it leaves the alerts, the next one
   const [focus, setFocus] = useState<{ id: number; x: Extra | null; kind: 'alert' | 'stuck' } | null>(null);
   const [nexting, setNexting] = useState(false);
@@ -523,15 +544,19 @@ function List({ tab }: { tab: ListTab }) {
     setFocus(null);
     skip.current = [];
   };
-  const run = (o: Order, action: 'cancel' | 'delivered' | 'realert') =>
-    act.mutate({ id: o.id, action }, { onSuccess: () => toast(t(`suivi.msg.${action === 'cancel' ? 'cancelled' : action}`, { ref: o.ref }), 'ok') });
+  const run = (o: ParcelRow, action: 'cancel' | 'delivered' | 'realert', details?: { by?: 'client' | 'early'; note?: string | null }) => {
+    const input = { id: o.id, action, ...details };
+    const done = () => toast(t(`suivi.msg.${action === 'cancel' ? 'cancelled' : action}`, { ref: o.ref }), 'ok');
+    if (o.seller) void rpc('suivi.act', input, o.seller.id).then(() => { done(); void qc.invalidateQueries(); }, (e) => toast(e.message, 'bad'));
+    else act.mutate(input, { onSuccess: done });
+  };
 
   const extra = (q.data?.extra ?? {}) as Record<number, Extra>;
-  let actions: ((o: Order) => ReactNode) | undefined;
+  let actions: ((o: ParcelRow) => ReactNode) | undefined;
   if (isAlertTab(tab))
     actions = (o) => (
       <div className="row nowrap px-sv-acts">
-        {!agency && <AlertClaim o={o} x={extra[o.id]} onClaim={(toLivreur) => setDlg({ kind: 'claim', o, toLivreur })} />}
+        {!agency && <AlertClaim o={o} x={extraOf(o, extra)} onClaim={(toLivreur) => setDlg({ kind: 'claim', o, toLivreur })} />}
         {treats && (
           <button type="button" className="btn small primary" onClick={() => setDlg({ kind: 'treat', o })}>
             {t('suivi.act.treat')}
@@ -577,9 +602,9 @@ function List({ tab }: { tab: ListTab }) {
   // Annulés: a parcel the customer cancelled, on its way back, can always be swapped from here too
   if (tab === 'annules') actions = (o) => <SwapButton o={o} onSwap={() => setDlg({ kind: 'swap', o })} />;
   // the same buttons on the cards (Réclamation on each alert, Swap on a parcel coming back), without opening them
-  const cardAct = (o: Order): ReactNode => {
+  const cardAct = (o: ParcelRow): ReactNode => {
     if (!canHandle) return null;
-    if (isAlertTab(tab)) return agency ? null : <AlertClaim o={o} x={extra[o.id]} onClaim={(toLivreur) => setDlg({ kind: 'claim', o, toLivreur })} />;
+    if (isAlertTab(tab)) return agency ? null : <AlertClaim o={o} x={extraOf(o, extra)} onClaim={(toLivreur) => setDlg({ kind: 'claim', o, toLivreur })} />;
     if (tab === 'annules') return o.followStatus === 'returning' ? <SwapButton o={o} onSwap={() => setDlg({ kind: 'swap', o })} /> : null;
     return null;
   };
@@ -588,32 +613,35 @@ function List({ tab }: { tab: ListTab }) {
     <div className={`card${cards && !phone ? ' px-wide' : ''}`}>
       <div className="card-head">
         <h2>{tab === 'swap' ? t('suivi.toSwap') : t(`suivi.tabs.${tab}`)}</h2>
+        {combined?.chip}
         <span className="muted small">{q.data ? t('suivi.parcels', { count: q.data.rows.length }) : ''}</span>
-        {canFollow && (isAlertTab(tab) || tab === 'bloques') && !cards && !!q.data?.rows.length && (
+        {!combined && canFollow && (isAlertTab(tab) || tab === 'bloques') && !cards && !!q.data?.rows.length && (
           <button type="button" className="btn primary sv-next" disabled={nexting} onClick={nextAlert}>
             {tab === 'bloques' ? t('suivi.stuck.next') : t('suivi.ph.next')} <Icon name="chevr" />
           </button>
         )}
         {!phone && <ViewSwitch mode={mode} onChange={setMode} />}
       </div>
-      <SuiviFilters f={f} set={setFilter} />
-      {!agency && <DemoCourier rows={q.data?.rows ?? []} />}
+      {combined?.bar}
+      <SuiviFilters f={agencyFilters} set={setFilter} combined={!!combined} />
+      {!agency && !combined && <DemoCourier rows={q.data?.rows ?? []} />}
       {q.isLoading ? (
         <Loading />
       ) : q.error ? (
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
       ) : cards ? (
         (() => {
-          const rows = q.data?.rows ?? [];
-          const cur = rows.find((r) => r.id === openId) ?? null;
-          const phoneActions = (o: Order): ParcelAction[] => {
+          const rows: ParcelRow[] = q.data?.rows ?? [];
+          const cur = rows.find((r) => openId && parcelKey(r) === parcelKey(openId)) ?? null;
+          const phoneActions = (o: ParcelRow): ParcelAction[] => {
+            if (combined?.canWork && o.seller && !combined.canWork(o.seller.id)) return [];
             if (!canFollow) {
               if (!canHandle) return [];
-              if (isAlertTab(tab) && !agency && rightOn('act:suivi.claim')) return [{ key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: extra[o.id]?.companyKind === 'own' }) }];
+              if (isAlertTab(tab) && !agency && rightOn('act:suivi.claim')) return [{ key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: extraOf(o, extra)?.companyKind === 'own' }) }];
               if ((tab === 'annules' || tab === 'swap') && o.followStatus === 'returning' && rightOn('act:suivi.swap')) return [{ key: 'swap', label: t('suivi.act.swap'), run: () => setDlg({ kind: 'swap', o }) }];
               return [];
             }
-            const claim: ParcelAction = { key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: extra[o.id]?.companyKind === 'own' }) };
+            const claim: ParcelAction = { key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: extraOf(o, extra)?.companyKind === 'own' }) };
             if (!treats) return isAlertTab(tab) && !agency && rightOn('act:suivi.claim') ? [claim] : [];
             if (tab === 'enlivraison') return [o.followStatus === 'alert'
               ? { key: 'treat', label: t('suivi.act.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) }
@@ -633,27 +661,27 @@ function List({ tab }: { tab: ListTab }) {
           return (
             <>
               <ParcelCards rows={rows} extra={extra} reasonOf={reasonOf} empty={t(`suivi.empty.${tab}`)} onOpen={setOpenId} act={cardAct} />
-              {canFollow && (isAlertTab(tab) || tab === 'bloques') && rows.length > 0 && (
+              {!combined && canFollow && (isAlertTab(tab) || tab === 'bloques') && rows.length > 0 && (
                 <button type="button" className="pxp-next" disabled={nexting} onClick={nextAlert}>
                   {tab === 'bloques' ? t('suivi.stuck.next') : t('suivi.ph.next')}
                   <Icon name="chevr" />
                 </button>
               )}
               {cur && (
-                <ParcelPage
+                <ParcelScope order={cur}><ParcelPage
                   o={cur}
-                  x={extra[cur.id]}
-                  reason={reasonOf(cur, extra[cur.id])}
+                  x={extraOf(cur, extra)}
+                  reason={reasonOf(cur, extraOf(cur, extra))}
                   actions={phoneActions(cur)}
-                  onClaim={agency || !canHandle || !isAlertTab(tab) ? undefined : () => setDlg({ kind: 'claim', o: cur, toLivreur: extra[cur.id]?.companyKind === 'own' })}
+                  onClaim={agency || !canHandle || !isAlertTab(tab) ? undefined : () => setDlg({ kind: 'claim', o: cur, toLivreur: extraOf(cur, extra)?.companyKind === 'own' })}
                   onClose={() => setOpenId(null)}
-                />
+                /></ParcelScope>
               )}
             </>
           );
         })()
       ) : (
-        <ParcelTable rows={q.data?.rows ?? []} extra={extra} actions={canFollow ? actions : canHandle && tab === 'swap' ? actions : canHandle ? cardAct : undefined} empty={t(`suivi.empty.${tab}`)} />
+        <ParcelTable rows={q.data?.rows ?? []} extra={extra} actions={actions && canFollow ? (o) => canTreat(o) ? actions(o) : null : canHandle && tab === 'swap' ? actions : canHandle ? cardAct : undefined} empty={t(`suivi.empty.${tab}`)} />
       )}
       {q.data && <Pager page={page} pageSize={100} total={q.data.total} onPage={setPage} />}
       {focus && (
@@ -673,38 +701,38 @@ function List({ tab }: { tab: ListTab }) {
         />
       )}
       {dlg?.kind === 'stuck' && (
-        <StuckDialog
+        <ParcelScope order={dlg.o}><StuckDialog
           o={dlg.o}
-          s={extra[dlg.o.id]?.stuck ?? (focus?.id === dlg.o.id ? focus.x?.stuck : null)}
-          own={(extra[dlg.o.id] ?? (focus?.id === dlg.o.id ? focus.x : null))?.companyKind === 'own'}
+          s={extraOf(dlg.o, extra)?.stuck ?? (focus?.id === dlg.o.id ? focus.x?.stuck : null)}
+          own={(extraOf(dlg.o, extra) ?? (focus?.id === dlg.o.id ? focus.x : null))?.companyKind === 'own'}
           onClose={() => setDlg(null)}
           onDone={() => (focus?.id === dlg.o.id ? void nextAlert() : undefined)}
-        />
+        /></ParcelScope>
       )}
       {dlg?.kind === 'treat' && (
-        <Traiter
+        <ParcelScope order={dlg.o}><Traiter
           o={dlg.o}
-          reason={reasonOf(dlg.o, extra[dlg.o.id] ?? (focus?.id === dlg.o.id ? focus.x ?? undefined : undefined))}
-          tries={extra[dlg.o.id]?.tries ?? (focus?.id === dlg.o.id ? focus.x?.tries : null)}
-          own={(extra[dlg.o.id] ?? (focus?.id === dlg.o.id ? focus.x : null))?.companyKind === 'own'}
+          reason={reasonOf(dlg.o, extraOf(dlg.o, extra) ?? (focus?.id === dlg.o.id ? focus.x ?? undefined : undefined))}
+          tries={extraOf(dlg.o, extra)?.tries ?? (focus?.id === dlg.o.id ? focus.x?.tries : null)}
+          own={(extraOf(dlg.o, extra) ?? (focus?.id === dlg.o.id ? focus.x : null))?.companyKind === 'own'}
           onClose={() => setDlg(null)}
-        />
+        /></ParcelScope>
       )}
       {dlg?.kind === 'cancel' && (
-        <CancelSheet
+        <ParcelScope order={dlg.o}><CancelSheet
           o={dlg.o}
-          tries={dlg.o.followStatus === 'alert' ? extra[dlg.o.id]?.tries ?? (focus?.id === dlg.o.id ? focus.x?.tries : null) : null}
+          tries={dlg.o.followStatus === 'alert' ? extraOf(dlg.o, extra)?.tries ?? (focus?.id === dlg.o.id ? focus.x?.tries : null) : null}
           busy={act.isPending}
           onClose={() => setDlg(null)}
           onOk={(by, note) => {
-            act.mutate({ id: dlg.o.id, action: 'cancel', by, note: note ?? null }, { onSuccess: () => toast(t('suivi.msg.cancelled', { ref: dlg.o.ref }), 'ok') });
+            run(dlg.o, 'cancel', { by, note: note ?? null });
             setDlg(null);
           }}
-        />
+        /></ParcelScope>
       )}
-      {dlg?.kind === 'swap' && <SwapModal o={dlg.o} onClose={() => setDlg(null)} onDone={(data) => setDlg({ kind: 'sheet', data: { ...data, fresh: true } })} />}
-      {dlg?.kind === 'sheet' && <SwapSheetModal {...dlg.data} onClose={() => setDlg(null)} />}
-      {dlg?.kind === 'claim' && <NewClaimModal pre={dlg.o} toLivreur={dlg.toLivreur} reason="relivrer" details={reasonOf(dlg.o, extra[dlg.o.id]) ? t('suivi.rec.alertDetails', { v: reasonOf(dlg.o, extra[dlg.o.id]) }) : ''} onClose={() => setDlg(null)} />}
+      {dlg?.kind === 'swap' && <ParcelScope order={dlg.o}><SwapModal o={dlg.o} onClose={() => setDlg(null)} onDone={(data) => setDlg({ kind: 'sheet', data: { ...data, fresh: true }, seller: dlg.o.seller })} /></ParcelScope>}
+      {dlg?.kind === 'sheet' && (dlg.seller ? <SellerScope seller={dlg.seller.id}><SwapSheetModal {...dlg.data} onClose={() => setDlg(null)} /></SellerScope> : <SwapSheetModal {...dlg.data} onClose={() => setDlg(null)} />)}
+      {dlg?.kind === 'claim' && <NewClaimModal pre={dlg.o} toLivreur={dlg.toLivreur} reason="relivrer" details={reasonOf(dlg.o, extraOf(dlg.o, extra)) ? t('suivi.rec.alertDetails', { v: reasonOf(dlg.o, extraOf(dlg.o, extra)) }) : ''} onClose={() => setDlg(null)} />}
     </div>
   );
 }

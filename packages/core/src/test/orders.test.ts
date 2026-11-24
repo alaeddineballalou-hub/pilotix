@@ -87,7 +87,7 @@ test('customers: list, search, history and blacklist (role checked)', async () =
 });
 
 test('orders.deliveredReport and companyFees add up', async () => {
-  const ctx = await as(EMAILS.suivi);
+  const ctx = await as(EMAILS.admin);
   const from = new Date(Date.now() - 90 * 86_400_000).toISOString();
   const to = new Date(Date.now() + 86_400_000).toISOString();
   const r: any = await call('orders.deliveredReport', ctx, { from, to });
@@ -100,11 +100,16 @@ test('orders.deliveredReport and companyFees add up', async () => {
   const fees: any = await call('orders.companyFees', ctx, { ids });
   assert.equal(Object.keys(fees).length, ids.length);
   assert.ok(Object.values(fees).every((f: any) => f.fee > 0));
+  const agent = await as(EMAILS.suivi);
+  const myReport = await call('orders.deliveredReport', agent, { from, to });
+  const myOrders = await call('orders.list', agent, { from, to, follow: ['delivered'], dateField: 'delivered_at', pageSize: 1 });
+  assert.equal(myReport.total.n, myOrders.total);
+  assert.ok(myReport.total.n < r.total.n);
   await assert.rejects(call('orders.deliveredReport', await as(EMAILS.conf), { from, to }), /Accès refusé/);
 });
 
 test('orders.cancelReport: cancellations by status, reason and agent; returns by company with their rate and cost', async () => {
-  const ctx = await as(EMAILS.suivi);
+  const ctx = await as(EMAILS.admin);
   const from = new Date(Date.now() - 120 * 86_400_000).toISOString();
   const to = new Date(Date.now() + 86_400_000).toISOString();
   const r: any = await call('orders.cancelReport', ctx, { from, to });

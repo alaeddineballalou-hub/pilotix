@@ -136,13 +136,22 @@ test('delegated SAV separates seller routing from agency assignment, role notifi
   assert.equal(Number((await shop.db.query('SELECT sav_agency_id FROM complaints WHERE id=$1', [ticket.id]))[0].sav_agency_id), ag.id);
   assert.ok((await inbox(agent)).items.some((row) => row.title === 'Nouveau ticket SAV confié à votre agence'));
   assert.equal((await inbox(chief)).items.some((row) => row.title === 'Nouveau ticket SAV confié à votre agence'), false);
-  assert.deepEqual((await call('sav.list', agentAtSeller, {}) as { rows: { id: number }[] }).rows.map((row) => row.id), [ticket.id]);
-  await call('sav.get', agentAtSeller, { id: ticket.id });
+  assert.deepEqual((await call('sav.list', agentAtSeller, {})).rows, []);
+  await assert.rejects(call('sav.get', agentAtSeller, { id: ticket.id }), /introuvable/);
   await assert.rejects(call('sav.get', agentAtSeller, { id: ownTicket.id }), /introuvable/);
   await assert.rejects(makeTicket(agentAtSeller, own.id), /pas confiée/);
   await assert.rejects(call('sav.update', seller, { id: ticket.id, assignedTo: mapped }), /équipe SAV/);
-  await assert.rejects(call('sav.update', agentAtSeller, { id: ticket.id, assignedTo: mapped }), /affectation du ticket/);
+  await assert.rejects(call('sav.update', agentAtSeller, { id: ticket.id, assignedTo: mapped }), /introuvable/);
   await call('sav.update', chiefAtSeller, { id: ticket.id, assignedTo: mapped });
+  const aggregate = await call('sav.list', { ...agent, seller: 'all' }, {});
+  assert.deepEqual(aggregate.rows.map((row: { id: number }) => row.id), [ticket.id]);
+  const oldNote = (await call('orders.get', seller, { id: delegated.id })).internalNote;
+  await call('sav.orderNote', agentAtSeller, { id: ticket.id, orderId: delegated.id, field: 'internal', note: 'Rappeler demain', previous: oldNote });
+  assert.equal((await call('orders.get', seller, { id: delegated.id })).internalNote, 'Rappeler demain');
+  await assert.rejects(call('orders.note', seller, { id: delegated.id, field: 'internal', note: 'Version ancienne', previous: null }), /note a changé/);
+  await assert.rejects(call('sav.orderNote', agentAtSeller, { id: ticket.id, orderId: own.id, field: 'internal', note: 'Autre ticket' }));
+  await call('orders.note', seller, { id: delegated.id, field: 'internal', note: null, previous: 'Rappeler demain' });
+  assert.equal((await call('sav.get', agentAtSeller, { id: ticket.id })).order?.internalNote, null);
   assert.ok((await inbox(agent)).items.some((row) => row.title === 'Ticket SAV qui vous est affecté'));
   await call('inbox.run', chief, {});
   await call('inbox.run', chief, {});
@@ -160,7 +169,8 @@ test('delegated SAV separates seller routing from agency assignment, role notifi
   await assert.rejects(move(chief, 'sav', ag.id), /espace d’une agence/);
   await assert.rejects(move(seller, 'confirmation', ag.id), /n’assure pas ce service/);
   await move(seller, 'sav', ag.id);
-  await call('sav.get', agentAtSeller, { id: ownTicket.id });
+  await call('sav.get', chiefAtSeller, { id: ownTicket.id });
+  await assert.rejects(call('sav.get', agentAtSeller, { id: ownTicket.id }), /introuvable/);
   const routing = await call('partners.orderRouting', seller, { orderId: own.id }) as { tasks: { task: string; agencyId: number | null }[] };
   assert.equal(routing.tasks.find((item) => item.task === 'sav')?.agencyId, ag.id);
   await move(seller, 'sav', null);
@@ -568,6 +578,9 @@ test('an agency works on several sellers: one at a time or all together, its peo
   // Lina does suivi: an alert leaves her « En livraison » for her « Alertes »
   await b.db.query("UPDATE orders SET follow_status='alert', shipped_at=now() WHERE id=$1", [cb.id]);
   const lb1 = await ctxOf('lina@centre.dz', b.id);
+  const [linaProfile] = await b.db.query('SELECT id FROM profiles WHERE email=$1', ['lina@centre.dz']);
+  assert.ok(!((await call('suivi.list', lb1, { tab: 'alertes' })).rows.some((r: { id: number }) => r.id === cb.id)));
+  await b.db.query('UPDATE orders SET follow_agent_id=$2 WHERE id=$1', [cb.id, linaProfile.id]);
   assert.ok(!((await call('suivi.list', lb1, { tab: 'enlivraison' })) as any).rows.some((r: any) => r.id === cb.id));
   assert.ok(((await call('suivi.list', lb1, { tab: 'alertes' })) as any).rows.some((r: any) => r.id === cb.id));
   await b.db.query('UPDATE orders SET follow_status=NULL, shipped_at=NULL WHERE id=$1', [cb.id]);

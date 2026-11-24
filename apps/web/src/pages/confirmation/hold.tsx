@@ -5,6 +5,7 @@ import { CONF_TODO, Order } from '@pilotix/shared';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
+import { useScope } from '../../lib/seller';
 import { useSession } from '../../lib/session';
 
 const RENEW_MS = 4 * 60_000;
@@ -12,6 +13,7 @@ const RENEW_MS = 4 * 60_000;
 /** The name of the agent who has this order, when it is not me (null: it is mine, or nobody holds it). */
 export function useHold(order: Order): string | null {
   const { has, me } = useSession();
+  const seller = useScope();
   const can = has('confirmation') && CONF_TODO.includes(order.confStatus);
   // what the list already knew (shown at once, before the answer)
   const known = order.lockedBy && order.lockedBy.id !== me ? order.lockedBy.name : null;
@@ -21,10 +23,10 @@ export function useHold(order: Order): string | null {
     let mine = false;
     let gone = false;
     const take = () =>
-      rpc('confirmation.hold', { id: order.id })
+      rpc('confirmation.hold', { id: order.id }, seller)
         .then((r) => {
           if (gone) {
-            if (r.ok) rpc('confirmation.release', { id: order.id }).catch(() => {});
+            if (r.ok) rpc('confirmation.release', { id: order.id }, seller).catch(() => {});
             return;
           }
           mine = r.ok;
@@ -36,9 +38,9 @@ export function useHold(order: Order): string | null {
     return () => {
       gone = true;
       clearInterval(tm);
-      if (mine) rpc('confirmation.release', { id: order.id }).catch(() => {});
+      if (mine) rpc('confirmation.release', { id: order.id }, seller).catch(() => {});
     };
-  }, [order.id, can]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [order.id, can, seller]);
   return can ? by : null;
 }
 

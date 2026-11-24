@@ -10,6 +10,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { PromoField, usePromoCheck } from '../orders/PromoField';
 import { openOrder } from '../../lib/modals';
+import { OrderNotes } from '../orders/OrderNotes';
 import { useAction, useRpc } from '../../lib/query';
 import { da, fromLocalInput, wilayaName } from '../../lib/format';
 import i18n from '../../lib/i18n';
@@ -106,9 +107,6 @@ export function Detail({ order, onDone, onMessageDone, phone }: {
   // the remise besides the welcome code (Referral › Code promo: its own field)
   const [disc, setDisc] = useState(Math.max(0, order.discount - (order.promoDiscount ?? 0)));
   const [code, setCode] = useState(order.promoCode ?? '');
-  const [nOrigin, setNOrigin] = useState(order.customerNote ?? '');
-  const [nLivreur, setNLivreur] = useState(order.deliveryNote ?? '');
-  const [nTeam, setNTeam] = useState(order.internalNote ?? '');
   /** the customer (phone mode): name, phones, address */
   const abandoned = isAbandonedCheckout(order.source);
   const pendingAbandoned = abandoned && CONF_TODO.includes(order.confStatus);
@@ -117,7 +115,6 @@ export function Detail({ order, onDone, onMessageDone, phone }: {
   const [cPhone, setCPhone] = useState(order.phone);
   const [cPhone2, setCPhone2] = useState(order.phone2 ?? '');
   const [cAddr, setCAddr] = useState(order.address ?? '');
-  const [noteTab, setNoteTab] = useState<'origin' | 'livreur' | 'team'>('origin');
   /** the status picked in "Changer le statut": applied only with Enregistrer */
   const [pend, setPend] = useState<Pend | null>(null);
   /** Enregistrer needs a new status: a status picked in the menu that differs from the current one (another call attempt always counts) */
@@ -126,10 +123,10 @@ export function Detail({ order, onDone, onMessageDone, phone }: {
   useEffect(() => {
     setDisc(Math.max(0, order.discount - (order.promoDiscount ?? 0)));
     setCode(order.promoCode ?? '');
-    setNOrigin(order.customerNote ?? '');
-    setNLivreur(order.deliveryNote ?? '');
-    setNTeam(order.internalNote ?? '');
-  }, [order.discount, order.promoDiscount, order.promoCode, order.customerNote, order.deliveryNote, order.internalNote]);
+
+
+
+  }, [order.discount, order.promoDiscount, order.promoCode]);
   useEffect(() => {
     setCName(customerName);
     setCPhone(order.phone);
@@ -179,12 +176,11 @@ export function Detail({ order, onDone, onMessageDone, phone }: {
   const P = new Map(cat.data.map((p) => [p.id, p]));
   const editable = !(order.followStatus && FOLLOW_LOCKED.includes(order.followStatus)) && !order.shippedAt;
   // prices are not typed in here: products keep their catalog / pack price and delivery its grid price; only the remise changes
-  const notesChanged = nOrigin !== (order.customerNote ?? '') || nLivreur !== (order.deliveryNote ?? '') || nTeam !== (order.internalNote ?? '');
   const geoChanged = wil !== order.wilayaId || com !== (order.commune ?? '');
   const clientChanged = cName.trim() !== customerName || cPhone.trim() !== order.phone || cPhone2.trim() !== (order.phone2 ?? '') || cAddr.trim() !== (order.address ?? '');
   const coChanged = !desk && co !== order.companyId;
   const codeChanged = code.trim() !== (order.promoCode ?? '');
-  const dirty = key(L) !== key(initial) || fee !== order.deliveryFee || disc !== Math.max(0, order.discount - (order.promoDiscount ?? 0)) || codeChanged || notesChanged || geoChanged || clientChanged || desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId) || coChanged;
+  const dirty = key(L) !== key(initial) || fee !== order.deliveryFee || disc !== Math.max(0, order.discount - (order.promoDiscount ?? 0)) || codeChanged || geoChanged || clientChanged || desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId) || coChanged;
   /** another wilaya: pick its commune, forget a bureau of the old one, and take that wilaya's price from the grid */
   const pickWilaya = (w: number) => {
     setGeoPick(null);
@@ -383,10 +379,9 @@ export function Detail({ order, onDone, onMessageDone, phone }: {
     const mode = desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId) ? { isStopdesk: desk, stopdeskId: desk ? deskId : null, ...(desk && chosen ? { companyId: chosen.companyId } : {}) } : {};
     try {
       if (disc > maxDisc) return setErr(t('confirmation.d6.discTooBig', { v: da(maxDisc) })), false;
-      const notes = notesChanged ? { customerNote: nOrigin.trim() || null, deliveryNote: nLivreur.trim() || null, internalNote: nTeam.trim() || null } : {};
       const geo = geoChanged ? { wilayaId: wil, commune: com } : {};
       const client = clientChanged ? { customerName: cName.trim(), phone: cPhone.trim(), phone2: cPhone2.trim() || null, address: cAddr.trim() } : {};
-      await rpc('orders.update', { id: order.id, version: order.version, deliveryFee: fee, discount: disc, ...(codeChanged ? { promoCode: code.trim() || null } : {}), ...notes, ...geo, ...client, ...mode, ...(coChanged ? { companyId: co } : {}), ...(key(L) !== key(initial) ? { items: cartBody } : {}) });
+      await rpc('orders.update', { id: order.id, version: order.version, deliveryFee: fee, discount: disc, ...(codeChanged ? { promoCode: code.trim() || null } : {}), ...geo, ...client, ...mode, ...(coChanged ? { companyId: co } : {}), ...(key(L) !== key(initial) ? { items: cartBody } : {}) });
       return true;
     } catch (e: any) {
       setErr(e.message);
@@ -449,43 +444,7 @@ export function Detail({ order, onDone, onMessageDone, phone }: {
         </section>
       )}
       <div className="qd6-left">
-        <section className="qd6-card qd6-notes" aria-label={t('confirmation.d6.notes')}>
-          {(() => {
-            const notes = [
-              ['origin', 'message', nOrigin, setNOrigin],
-              ['livreur', 'truck', nLivreur, setNLivreur],
-              ['team', 'users', nTeam, setNTeam],
-            ] as const;
-            const cur = notes.find((x) => x[0] === noteTab) ?? notes[0];
-            return (
-              <>
-                <div className="qd6-nrow">
-                <div className="qd6-ntabs" role="tablist">
-                  {notes.map(([k, icon, v]) => (
-                    <button key={k} type="button" role="tab" id={`qd6-nt-${order.id}-${k}`} aria-selected={k === cur[0]} className={k === cur[0] ? 'on' : ''} onClick={() => setNoteTab(k)}>
-                      <Icon name={icon} />
-                      {t(`confirmation.d6.note.${k}`)}
-                      {v.trim() && <span className="qd6-ndot" aria-label="•" />}
-                    </button>
-                  ))}
-                </div>
-                <Clocks since={order.createdAt} />
-                </div>
-                <textarea
-                  key={cur[0]}
-                  className="qd6-ntext"
-                  role="tabpanel"
-                  aria-labelledby={`qd6-nt-${order.id}-${cur[0]}`}
-                  rows={3}
-                  value={cur[2]}
-                  maxLength={1000}
-                  placeholder={t(`confirmation.d6.notePh.${cur[0]}`)}
-                  onChange={(e) => cur[3](e.target.value)}
-                />
-              </>
-            );
-          })()}
-        </section>
+        <OrderNotes key={order.id} order={order} header={<Clocks since={order.createdAt} />} />
         <section className="qd6-card">
           <div className="qd6-h qd6-cart-h">
             <span className="qd6-ht">
@@ -826,9 +785,9 @@ export function Detail({ order, onDone, onMessageDone, phone }: {
                 setCom(order.commune ?? '');
                 setDisc(Math.max(0, order.discount - (order.promoDiscount ?? 0)));
                 setCode(order.promoCode ?? '');
-                setNOrigin(order.customerNote ?? '');
-                setNLivreur(order.deliveryNote ?? '');
-                setNTeam(order.internalNote ?? '');
+
+
+
                 setCName(order.customerName);
                 setCPhone(order.phone);
                 setCPhone2(order.phone2 ?? '');

@@ -756,7 +756,7 @@ export interface StuckInfo {
 }
 
 /** The stuck parcels (no new status for the Préférences' days), with how long and what the agent did. */
-export async function stuckParcels(ctx: Ctx, ids?: number[]): Promise<Map<number, StuckInfo>> {
+export async function stuckParcels(ctx: Ctx, ids?: number[], free = false): Promise<Map<number, StuckInfo>> {
   const { days } = (await getPrefs(ctx.db)).suiviStuck;
   const rows = await ctx.db.query(
     `SELECT o.id, ${LAST_MOVE} AS since, co.kind,
@@ -765,7 +765,7 @@ export async function stuckParcels(ctx: Ctx, ids?: number[]): Promise<Map<number
        EXISTS (SELECT 1 FROM claims c WHERE c.order_id = o.id AND c.reason = 'late' AND c.created_at >= ${LAST_MOVE}) AS late_claimed
        FROM orders o LEFT JOIN delivery_companies co ON co.id = o.company_id
       WHERE o.follow_status = ANY($1) AND o.shipped_at IS NOT NULL AND ${LAST_MOVE} < now() - make_interval(days => $2)
-        ${ids ? 'AND o.id = ANY($3)' : ''}${andSql(queueSql(ctx, readQueue(ctx)))}`,
+        ${ids ? 'AND o.id = ANY($3)' : ''}${andSql(queueSql(ctx, readQueue(ctx), 'o', { free }))}`,
     ids ? [ROAD, days, ids] : [ROAD, days],
   );
   const out = new Map<number, StuckInfo>();
@@ -1037,7 +1037,7 @@ export const suiviProcs = {
           SELECT o.id FROM orders o LEFT JOIN profiles fa ON fa.id = o.follow_agent_id
            WHERE o.follow_status = 'alert' AND NOT (o.id = ANY($2))
              AND (o.locked_until IS NULL OR o.locked_until < now() OR o.locked_by = $1)
-             AND (o.follow_agent_id IS NULL OR o.follow_agent_id = $1 OR fa.last_seen_at IS NULL OR fa.last_seen_at < now() - interval '8 hours')${andSql(queueSql(ctx, 'follow'))} AND o.follow_agency_id IS NOT DISTINCT FROM ${agencyOf(ctx) ?? 'NULL'}
+             AND (o.follow_agent_id IS NULL OR o.follow_agent_id = $1 OR fa.last_seen_at IS NULL OR fa.last_seen_at < now() - interval '8 hours')${andSql(queueSql(ctx, 'follow', 'o', { free: true }))} AND o.follow_agency_id IS NOT DISTINCT FROM ${agencyOf(ctx) ?? 'NULL'}
            ORDER BY (o.follow_agent_id = $1) DESC NULLS LAST,
              (SELECT max(e.at) FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert') ASC NULLS FIRST, o.id
            LIMIT 1 FOR UPDATE OF o SKIP LOCKED)
@@ -1049,13 +1049,13 @@ export const suiviProcs = {
       return { id: order.id, kind: 'alert' as const, order, extra: (await extras(ctx, [order], ctx.now()))[order.id] ?? null };
     }
     // no alert left: the Bloqués nobody handled yet, the longest without news first
-    const stuck = [...(await stuckParcels(ctx)).entries()].filter(([oid, x]) => !x.handled && !i.skip.includes(oid)).sort((a, b) => b[1].days - a[1].days);
+    const stuck = [...(await stuckParcels(ctx, undefined, true)).entries()].filter(([oid, x]) => !x.handled && !i.skip.includes(oid)).sort((a, b) => b[1].days - a[1].days);
     for (const [oid, x] of stuck) {
       const got = await ctx.db.query(
         `UPDATE orders o SET locked_by = $1, locked_until = now() + interval '15 minutes'
            FROM (SELECT o2.id FROM orders o2 LEFT JOIN profiles fa ON fa.id = o2.follow_agent_id
                   WHERE o2.id = $2 AND (o2.locked_until IS NULL OR o2.locked_until < now() OR o2.locked_by = $1)
-                    AND o2.follow_agency_id IS NOT DISTINCT FROM ${agencyOf(ctx) ?? 'NULL'} AND (o2.follow_agent_id IS NULL OR o2.follow_agent_id = $1 OR fa.last_seen_at IS NULL OR fa.last_seen_at < now() - interval '8 hours')
+                    AND o2.follow_agency_id IS NOT DISTINCT FROM ${agencyOf(ctx) ?? 'NULL'} AND (o2.follow_agent_id IS NULL OR o2.follow_agent_id = $1 OR fa.last_seen_at IS NULL OR fa.last_seen_at < now() - interval '8 hours')${andSql(queueSql(ctx, 'follow', 'o2', { free: true }))}
                   FOR UPDATE OF o2 SKIP LOCKED) f
           WHERE o.id = f.id RETURNING o.id`,
         [me, oid],
@@ -1075,6 +1075,7 @@ export const suiviProcs = {
   }),
 
   'suivi.unassign': proc(['suivi'], z.object({ id }), async (ctx, { id: oid }) => {
+    const order = await getOrder(ctx, oid);
     const changed = await ctx.db.query('UPDATE orders SET follow_agent_id = NULL, updated_at = now() WHERE id = $1 AND follow_agency_id IS NOT DISTINCT FROM $2 AND follow_agent_id IS NOT NULL RETURNING id', [oid, agencyOf(ctx)]);
     if (!changed.length) {
       const cur = (await ctx.db.query('SELECT follow_agency_id FROM orders WHERE id = $1', [oid]))[0];
@@ -1084,7 +1085,7 @@ export const suiviProcs = {
       await addEvent(ctx.db, oid, ctx.session.profile.id, 'note', null, null, 'Agent suivi retiré');
       ctx.emit({ type: 'orders' });
     }
-    return getOrder(ctx, oid);
+    return { ...order, followAgentId: null, followAgentName: null };
   }),
 
   /** Client annule / Livré / Nouvelle alerte from the Suivi lists. */

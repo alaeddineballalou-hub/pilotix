@@ -7,6 +7,7 @@ import { hasMouse } from '../../lib/useMedia';
 import { useBackLayer } from '../../lib/backLayer';
 import { rpc } from '../../lib/backend';
 import { useRpc } from '../../lib/query';
+import { useScope } from '../../lib/seller';
 import { telHref, waHref } from './shared';
 import { copyText, Icon } from '../../ui/kit';
 import { toast } from '../../ui/toast';
@@ -100,13 +101,14 @@ export function HistoryButton({ orderId, refLabel, className, children, title }:
 /** The phone number with two small icons beside it: call (logged on the order) and message (asks SMS or WhatsApp). */
 export function PhoneCell({ order }: { order: { id: number; ref: string; phone: string; customerName: string } }) {
   const { t } = useTranslation();
+  const seller = useScope();
   const [btn, setBtn] = useState<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
   return (
     <span className="px-ph" onClick={(e) => e.stopPropagation()}>
       <span className="qph ltr">{order.phone}</span>
       <span className="px-ph-acts">
-        <a className="px-ph-i" href={telHref(order.phone)} aria-label={t('confirmation.callNum', { p: order.phone })} title={t('confirmation.call')} onClick={() => rpc('orders.logCall', { id: order.id }).catch(() => {})}>
+        <a className="px-ph-i" href={telHref(order.phone)} aria-label={t('confirmation.callNum', { p: order.phone })} title={t('confirmation.call')} onClick={() => rpc('orders.logCall', { id: order.id }, seller).catch(() => {})}>
           <Icon name="phone" />
         </a>
         <button type="button" ref={setBtn} className={`px-ph-i ${open ? 'on' : ''}`} aria-haspopup="menu" aria-expanded={open} aria-label={t('confirmation.msgNum', { p: order.phone })} title={t('confirmation.message')} onClick={() => setOpen((v) => !v)}>

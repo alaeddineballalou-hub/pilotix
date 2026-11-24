@@ -32,7 +32,7 @@ const set = (o: Open) => {
  */
 export const openOrder = (id: number, seller?: Seller) => set({ kind: 'card', id, seller: seller ?? one(ambientSeller()) });
 /** Opens the order form: new order, edit (orderId) or exchange (exchangeOf). */
-export const openOrderForm = (opts: OrderFormOpts = {}) => set({ kind: 'form', opts, seller: one(ambientSeller()) });
+export const openOrderForm = (opts: OrderFormOpts = {}, seller?: Seller) => set({ kind: 'form', opts, seller: seller ?? one(ambientSeller()) });
 export const closeModal = () => set(null);
 
 const OrderCard = lazy(() => import('../pages/orders/OrderCard'));

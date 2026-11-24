@@ -6,7 +6,7 @@ import type { Order, Page } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, forbidden, notFound, proc, withActionLock } from '../rpc';
-import { addEvent, createOrder, deliveredReport, getOrder } from './orders';
+import { addEvent, createOrder, deliveredReport, getOrder, OrderNoteInput, saveOrderNote } from './orders';
 import { agencyLead, agencyOf, ownRowSql, ownTicketSql } from './agencyscope';
 import { savFee } from '../settings';
 import { tellAgency, tellDelegated } from './agencybell';
@@ -33,8 +33,10 @@ function savProductScope(ctx: Ctx, order: string) {
 function savTicketScope(ctx: Ctx) {
   const agency = agencyOf(ctx);
   if (agency === null) return ownTicketSql(ctx);
+  const me = Number(ctx.session.profile.id);
+  const own = agencyLead(ctx) ? '' : ` AND (c.assigned_to = ${me} OR (c.assigned_to IS NULL AND c.created_by = ${me}))`;
   return ctx.session.roles.includes('sav')
-    ? `c.sav_agency_id = ${agency} AND ${routedSav('c.order_id')} = ${agency}${savProductScope(ctx, 'c.order_id')}`
+    ? `c.sav_agency_id = ${agency} AND ${routedSav('c.order_id')} = ${agency}${savProductScope(ctx, 'c.order_id')}${own}`
     : 'false';
 }
 
@@ -629,6 +631,13 @@ export const savProcs = {
   }),
 
   /** Products and variants to pick a replacement from. */
+  'sav.orderNote': proc([...SAV_ROLES], OrderNoteInput.extend({ id, orderId: id }), async (ctx, { id: ticketId, orderId, ...note }) => {
+    await ticketAgency(ctx, ticketId);
+    const ticket = await getTicket(ctx.db, ticketId);
+    if (ticket.orderId !== orderId) throw notFound('Commande introuvable');
+    return saveOrderNote(ctx, orderId, note, 'sav');
+  }),
+
   'sav.catalog': proc([...SAV_ROLES], z.object({}), async (ctx) => {
     const agency = agencyOf(ctx);
     const products = ctx.session.profile.agencyProducts ?? null;

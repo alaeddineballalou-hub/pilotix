@@ -562,7 +562,14 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
       emit: (e) => {
         if (e.type === 'inbox' && (e.privateInbox || ref.shop.kind === 'agency')) {
           this.emitLive(e.privateInbox ? e.shop ?? ref.shop.id : ref.shop.id, { ...e, privateInbox: true });
-        } else this.emitLive(ref.shop.id, e);
+        } else {
+          const { orderIds, ...event } = e;
+          this.emitLive(ref.shop.id, event);
+          const affected = orderIds ?? (e.id !== undefined && (e.type === 'order' || e.type === 'orderNote') ? [e.id] : []);
+          if (affected.length && ref.shop.kind === 'store') {
+            void this.refreshAgencyOrders(ref, affected).catch(() => {});
+          }
+        }
       },
       server: ref.hooks,
       t: this.t,
@@ -573,6 +580,24 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
           ? { boutique: seller, otherShop: (id: number, profileId: number) => this.otherShop(id, profileId) }
           : {}),
     };
+  }
+
+  private async refreshAgencyOrders(ref: ShopRef, orderIds: number[]) {
+    const delegated = await ref.db.query(
+      `SELECT conf_agency_id AS agency FROM orders WHERE id = ANY($1)
+       UNION SELECT follow_agency_id FROM orders WHERE id = ANY($1)
+       UNION SELECT sav_agency_id FROM complaints WHERE order_id = ANY($1)`,
+      [orderIds],
+    );
+    const candidates = delegated.map((row) => Number(row.agency)).filter((id) => id > 0);
+    if (!candidates.length) return;
+    const agencies = await this.t.platform.query(
+      `SELECT DISTINCT l.agency_id FROM platform.agency_links l JOIN platform.shops a ON a.id = l.agency_id
+       WHERE l.store_id = $1 AND l.status = 'active' AND l.agency_id = ANY($2::int[])
+         AND a.kind = 'agency' AND a.status = 'active' AND a.agency_verified_at IS NOT NULL`,
+      [ref.shop.id, candidates],
+    );
+    for (const { agency_id } of agencies) this.emitLive(Number(agency_id), { type: 'orders' });
   }
 
   /**

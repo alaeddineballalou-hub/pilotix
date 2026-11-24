@@ -99,6 +99,7 @@ test('ticket flow: En attente → Au dépôt → En livraison → Livré, and a 
   const fresh = async (orderId: number) => (await call('sav.create', suivi, { orderId, type: 'defect', details: 'test flux' })) as any;
   const delivered = (await db.query(`SELECT o.id FROM orders o JOIN order_items i ON i.order_id = o.id WHERE NOT o.is_exchange AND o.follow_status = 'delivered' AND i.variant_id IS NOT NULL ORDER BY o.id LIMIT 2`)).map((r: any) => Number(r.id));
   for (const [k, orderId] of delivered.entries()) {
+    await db.query('UPDATE orders SET follow_agent_id=$2 WHERE id=$1', [orderId, suivi.session.profile.id]);
     const t = await fresh(orderId);
     assert.ok(await inView('attente', t.id));
     const g: any = await call('sav.get', suivi, { id: t.id });

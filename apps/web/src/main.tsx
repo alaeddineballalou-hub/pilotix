@@ -291,17 +291,21 @@ function App() {
     go(first.href, { replace: true });
     [page, sub] = first.href.replace(/^#\/?/, '').split('/');
   }
-  const item = nav.find((n) => n.id === page);
+  let item = nav.find((n) => n.id === page);
   const extra = space === 'store' && ['livrees', 'retournees'].includes(page ?? '') && pageIsOn(page ?? '');
   const allowed = (item && canSee(item, session.roles, session.isAdmin, !!session.canManageUsers, canRules, !!session.profile.canAffect)) || (extra && (session.isAdmin || session.roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r))));
   if (!page || !allowed || !pages[page]) {
     const home = homeOf();
     go(`#/${home}`, { replace: true });
     page = home;
+    item = nav.find((n) => n.id === home);
     sub = undefined;
     rest = [];
   }
-  if (!sub && item?.subs?.length) sub = item.subs[0];
+  if (!sub && item?.subs?.length) {
+    const pageId = item.id;
+    sub = item.subs.find((candidate) => space !== 'store' || session.isAdmin || tabOn(pageId, candidate));
+  }
   // Utilisateurs › Rôles (a store): a page, a group's line or a tab taken from the person's role opens what is left
   if (space === 'store' && !session.isAdmin && page) {
     const seen = (c: NavChild) => canSeeChild(c, session.roles, session.isAdmin, canRules);

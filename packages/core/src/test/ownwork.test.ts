@@ -55,8 +55,8 @@ async function store() {
   return { t, shopId, boss, pid, A, B, M, S, order };
 }
 
-test('a store confirmation agent opens only his own orders and his own customers; managers and the suivi see all', async () => {
-  const { A, B, M, S, order } = await store();
+test('store agents open their own orders; managers supervise the store', async () => {
+  const { boss, A, B, M, S, order } = await store();
   const oA = await order(A.id);
   const oB = await order(B.id);
   const b = B.ctx;
@@ -80,11 +80,14 @@ test('a store confirmation agent opens only his own orders and his own customers
   // the search of the SAV and of the claims finds his own orders only
   assert.deepEqual(((await call('sav.findOrder', b, { q: oA.phone })) as any[]).length, 0);
   assert.deepEqual(((await call('sav.findOrder', b, { q: oB.phone })) as any[]).map((o) => o.id), [oB.id]);
-  // the manager and the suivi see every order
+  // Managers supervise the store. Suivi sees orders assigned to that agent.
   assert.equal(((await call('orders.get', M.ctx, { id: oA.id })) as any).id, oA.id);
   assert.equal(((await call('orders.list', M.ctx, {})) as any).rows.length, 2);
   assert.equal(((await call('customers.list', M.ctx, {})) as any).rows.length, 2);
-  assert.equal(((await call('orders.get', S.ctx, { id: oA.id })) as any).id, oA.id);
+  await assert.rejects(call('orders.get', S.ctx, { id: oA.id }), /donnée à un autre agent/);
+  await boss.db.query('UPDATE orders SET follow_agent_id=$2 WHERE id=$1', [oA.id, S.id]);
+  assert.equal((await call('orders.get', S.ctx, { id: oA.id })).id, oA.id);
+  await assert.rejects(call('orders.note', S.ctx, { id: oB.id, field: 'internal', note: 'Private' }), mine);
 });
 
 test('« Commande suivante », an order he typed and a SAV ticket given to him stay the agent\'s own; a free order only once his manager gives it', async () => {

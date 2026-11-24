@@ -108,7 +108,7 @@ test('« Alerte suivante »: the oldest alert, locked 15 minutes to the agent; h
   const two = await as(confEmail);
   const r2 = (await call('suivi.next', two, {})) as any;
   assert.equal(r2.id, a, 'never the same parcel');
-  await assert.rejects(call('suivi.act', two, { id: b, action: 'cancel' }), /s’en occupe/);
+  await assert.rejects(call('suivi.act', two, { id: b, action: 'cancel' }), /s’en occupe|donnée à un autre agent/);
   await call('suivi.release', two, { id: a });
   // « Alerte suivante » again with nothing done on b: b is released and skipped, a comes
   const r3 = (await call('suivi.next', suivi, { skip: [b], release: b })) as any;
@@ -121,11 +121,11 @@ test('« Alerte suivante »: the oldest alert, locked 15 minutes to the agent; h
   const r4 = (await call('suivi.next', two, {})) as any;
   assert.equal(r4.id, a, 'his parcel stays his');
   await call('suivi.release', two, { id: a });
-  // not seen for 8 hours (off today): his parcels go back to everyone
+  // An assigned parcel stays with its agent until it is returned to the queue.
   await db.query(`UPDATE profiles SET last_seen_at = now() - interval '9 hours' WHERE id = $1`, [me]);
   const r5 = (await call('suivi.next', two, { skip: [a] })) as any;
-  assert.equal(r5.id, b);
-  await call('suivi.release', two, { id: b });
+  assert.notEqual(r5.id, b);
+  if (r5.id) await call('suivi.release', two, { id: r5.id });
   // his own first
   const r6 = (await call('suivi.next', suivi, {})) as any;
   assert.equal(r6.id, b, 'his own parcel first');
@@ -173,7 +173,7 @@ test('« Client annule » on an alert: after the seller\'s calls (far enough apa
   const suivi = await as(EMAILS.suivi);
   const mk = async () => {
     const id = await onRoad();
-    await db.query(`UPDATE orders SET follow_status = 'alert', locked_by = NULL, locked_until = NULL WHERE id = $1`, [id]);
+    await db.query(`UPDATE orders SET follow_status = 'alert', locked_by = NULL, locked_until = NULL, follow_agent_id = $2 WHERE id = $1`, [id, suivi.session.profile.id]);
     await db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, at) VALUES ($1, NULL, 'follow_status', 'out_for_delivery', 'alert', now() - interval '1 day')`, [id]);
     return id;
   };
@@ -297,8 +297,8 @@ test('Bloqués: no new status for 3 days; the agent says what he did; 2 days lat
     await db.query(`DELETE FROM order_events WHERE order_id = $1 AND kind IN ('follow_status', 'suivi_stuck')`, [id]);
     await db.query(`DELETE FROM claims WHERE order_id = $1`, [id]);
     await db.query(
-      `UPDATE orders SET shipped_at = now() - make_interval(days => $2), ext_status_at = now() - make_interval(days => $2), tracking = COALESCE(tracking, 'TRK' || id), company_id = COALESCE($3, company_id), locked_by = NULL, locked_until = NULL, follow_agent_id = NULL WHERE id = $1`,
-      [id, daysAgo, company ?? null],
+      `UPDATE orders SET shipped_at = now() - make_interval(days => $2), ext_status_at = now() - make_interval(days => $2), tracking = COALESCE(tracking, 'TRK' || id), company_id = COALESCE($3, company_id), locked_by = NULL, locked_until = NULL, follow_agent_id = $4 WHERE id = $1`,
+      [id, daysAgo, company ?? null, suivi.session.profile.id],
     );
     return id;
   };

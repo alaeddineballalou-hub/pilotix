@@ -1,3 +1,5 @@
+import { parcelKey, type ParcelRow } from './index';
+import { OrderNotes } from '../orders/OrderNotes';
 // Suivi on phones: each parcel as a card with its journey (Expédiée › En route › the alert › Livrée);
 // a tap opens the parcel full screen: the alert and what to do, call / message, the open réclamation,
 // the order, the journey with the notes — and at the bottom the actions and a note field that is always there.
@@ -89,18 +91,18 @@ const dayTone = (d: number | null) => (d === null ? '' : d >= 10 ? 'bad' : d >= 
 
 /** The parcels as cards; a tap opens one. `act`: the buttons on a card itself (Réclamation on an alert, Swap on a parcel
  *  coming back), usable without opening it. */
-export function ParcelCards({ rows, extra, reasonOf, empty, onOpen, act }: { rows: Order[]; extra: Record<number, PExtra>; reasonOf: (o: Order, x?: PExtra) => string | null; empty: string; onOpen: (id: number) => void; act?: (o: Order) => ReactNode }) {
+export function ParcelCards({ rows, extra, reasonOf, empty, onOpen, act }: { rows: ParcelRow[]; extra: Record<number, PExtra>; reasonOf: (o: Order, x?: PExtra) => string | null; empty: string; onOpen: (order: ParcelRow) => void; act?: (o: ParcelRow) => ReactNode }) {
   const { t } = useTranslation();
   if (!rows.length) return <p className="pxp-empty muted">{empty}</p>;
   return (
     <ul className="pxp-list pxs-list">
       {rows.map((o) => {
-        const x = extra[o.id];
+        const x = o.seller ? o.extra ?? undefined : extra[o.id];
         const d = daysSince(o.shippedAt);
         const buttons = act?.(o);
         return (
-          <li key={o.id}>
-            <div className="pxs-card" role="button" tabIndex={0} onClick={() => onOpen(o.id)} onKeyDown={(e) => e.key === 'Enter' && onOpen(o.id)}>
+          <li key={parcelKey(o)}>
+            <div className="pxs-card" role="button" tabIndex={0} onClick={() => onOpen(o)} onKeyDown={(e) => e.key === 'Enter' && onOpen(o)}>
               <div className="pxs-top">
                 <b className="pxp-name">{o.customerName}</b>
                 {o.clientScore && <ScoreChip s={o.clientScore} short />}
@@ -109,7 +111,7 @@ export function ParcelCards({ rows, extra, reasonOf, empty, onOpen, act }: { row
               <Journey o={o} label={reasonOf(o, x)} />
               <div className="pxs-bot">
                 <span>
-                  <span className="ltr">{o.tracking || o.ref}</span> · {o.items.map((i) => i.name).join(' + ')} · <b className="ltr">{da(o.total)}</b>
+                  <span className="ltr">{o.tracking || o.ref}</span> · {o.seller && <>{o.seller.name} · </>}{o.items.map((i) => i.name).join(' + ')} · <b className="ltr">{da(o.total)}</b>
                 </span>
                 {d !== null && <span className={`pxs-days t-${dayTone(d)}`}>{t('suivi.days', { n: d })}</span>}
               </div>
@@ -437,6 +439,7 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: 
           </>,
         )}
 
+        <OrderNotes key={o.id} order={o} />
         {/* the journey and the notes, newest first */}
         {section(
           <>

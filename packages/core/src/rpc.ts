@@ -18,13 +18,15 @@ export const notFound = (m = 'Introuvable') => new AppError('not_found', m);
 
 export interface LiveEvent {
   /** inbox: a line in some people's bell (data: { to: told now, quiet: their line changed, no sound }) */
-  type: 'order' | 'orders' | 'presence' | 'chat' | 'sav' | 'stock' | 'settings' | 'inbox';
+  type: 'order' | 'orderNote' | 'orders' | 'presence' | 'chat' | 'sav' | 'stock' | 'settings' | 'inbox';
   id?: number;
   data?: unknown;
   /** the boutique it happened in (set by the server: a person with several boutiques hears of all of them) */
   shop?: number;
   /** Agency inbox events go only to the named profiles in the destination shop. */
   privateInbox?: boolean;
+  /** Order IDs used by the server to notify the agencies that work on them. */
+  orderIds?: number[];
 }
 
 /** The shop a request works for, on a server that hosts several shops (missing = a single-shop install or the preview). */

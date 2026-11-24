@@ -663,7 +663,9 @@ test('review: a run that died — not handed over goes back to the queue, handed
   assert.equal(nb.status, 'failed');
   assert.match(nb.error, /Envoi interrompu/);
   // a person decides: "Réessayer" works from Problems
-  const r: any = await call('notify.sendNow', await as(EMAILS.suivi, fakeServer(log)), { id: Number(nb.id) });
+  const suivi = await as(EMAILS.suivi, fakeServer(log));
+  await db.query('UPDATE orders SET follow_agent_id=$2 WHERE id=$1', [b.id, suivi.session.profile.id]);
+  const r: any = await call('notify.sendNow', suivi, { id: Number(nb.id) });
   assert.ok(['whatsapp', 'sms'].includes(r.status), r.status);
 });
 

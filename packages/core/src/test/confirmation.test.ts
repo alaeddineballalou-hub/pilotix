@@ -203,7 +203,7 @@ test('successive unanswered calls advance one attempt each; block blacklists the
   await db.query('UPDATE orders SET agent_id = $2, assigned_at = now() WHERE id = $1', [give, ctx.session.profile.id]);
   const o: any = await call('orders.next', ctx, {});
   await call('confirmation.setTry', ctx, { ids: [o.id], n: 1 });
-  await call('confirmation.setTry', ctx, { ids: [o.id], n: 2 });
+  await call('confirmation.setTry', ctx, { ids: [o.id], n: 6 });
   const cur: any = await call('orders.get', ctx, { id: o.id });
   assert.equal(cur.confStatus, 'no_answer');
   assert.equal(cur.attempts, 2);

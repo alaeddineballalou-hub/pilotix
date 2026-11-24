@@ -1,3 +1,4 @@
+import { OrderNotes } from '../orders/OrderNotes';
 import { EXCHANGE_KINDS, SAV_STATUSES, SAV_WISHES } from '@pilotix/shared';
 import type { Order } from '@pilotix/shared';
 import { useMemo, useState } from 'react';
@@ -91,6 +92,7 @@ export function TicketModal({ id, onClose }: { id: number; onClose: () => void }
         ) : openT ? (
           <p className="muted small">{t('sav.t.noOrder')}</p>
         ) : null}
+        {order && <OrderNotes key={order.id} order={order} ticketId={x.id} />}
         {x.satisfaction ? (
           <div className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
             <b className="small">{t('sav.ph.satTitle')}</b>

@@ -51,12 +51,11 @@ export function agencyLead(ctx: Ctx): boolean {
  * A plain agent of an agency (not its chief, not a chef d'équipe), in Confirmation: only the orders given to him — by
  * a chief of the agency or the agency's Répartition. Like a store's own agent, he never takes a free one.
  */
-function agencyMineSql(ctx: Ctx, alias: string): string {
+function agencyMineSql(ctx: Ctx, alias: string, task: 'conf' | 'follow', free = false): string {
   if (agencyLead(ctx)) return '';
   const me = Number(ctx.session.profile.id);
-  // built into SQL: only a whole positive number goes there
   if (!Number.isSafeInteger(me) || me <= 0) throw forbidden();
-  return ` AND ${alias}.agent_id = ${me}`;
+  return ` AND ${task === 'conf' ? `${alias}.agent_id = ${me}` : followMineSql(ctx, alias, free)}`;
 }
 
 /**
@@ -69,7 +68,7 @@ export function agencyRowSql(ctx: Ctx, alias = 'o'): string {
   if (a === null) return '';
   const parts = (['conf', 'follow'] as const)
     .filter((k) => ctx.session.roles.includes(ROLE[k]))
-    .map((k) => (k === 'conf' ? `(${alias}.${COL[k]} = ${a}${agencyMineSql(ctx, alias)})` : `${alias}.${COL[k]} = ${a}`));
+    .map((k) => `(${alias}.${COL[k]} = ${a}${agencyMineSql(ctx, alias, k)})`);
   return parts.length ? `(${parts.join(' OR ')})${productSql(ctx, alias)}` : 'false';
 }
 
@@ -90,8 +89,8 @@ function productSql(ctx: Ctx, alias: string): string {
 export function queueSql(ctx: Ctx, task: 'conf' | 'follow', alias = 'o', opts: { free?: boolean } = {}): string {
   const a = agencyOf(ctx);
   // an agency's people: the agency shares its orders out itself (its chiefs by hand, or its Répartition)
-  if (a !== null) return ctx.session.roles.includes(ROLE[task]) ? `${alias}.${COL[task]} = ${a}${task === 'conf' ? agencyMineSql(ctx, alias) : ''}${productSql(ctx, alias)}` : 'false';
-  const who = task === 'conf' ? confSeeSql(ctx, alias, !!opts.free) : '';
+  if (a !== null) return ctx.session.roles.includes(ROLE[task]) ? `${alias}.${COL[task]} = ${a}${agencyMineSql(ctx, alias, task, !!opts.free)}${productSql(ctx, alias)}` : 'false';
+  const who = task === 'conf' ? confSeeSql(ctx, alias, !!opts.free) : followMineSql(ctx, alias, !!opts.free);
   const join = (x: string) => [x, who].filter(Boolean).join(' AND ');
   if (ctx.session.isAdmin || hasRole(ctx.session, 'agent_manager', 'vendeur')) return who;
   return join(`${alias}.${COL[task]} IS NULL`);
@@ -115,16 +114,25 @@ export function confSeeSql(ctx: Ctx, alias = 'o', free = false): string {
   return `${alias}.agent_id = ${me}`;
 }
 
-/** Order work that needs every order of the store: the suivi, the depot, the livreurs, the managers and the owner. */
-const WIDE_WORK = ['suivi', 'depot', 'livreur', 'agent_manager', 'vendeur'];
+function followMineSql(ctx: Ctx, alias: string, free = false): string {
+  if (ctx.session.isAdmin || ctx.session.roles.includes('vendeur')) return '';
+  const me = Number(ctx.session.profile.id);
+  if (!Number.isSafeInteger(me) || me <= 0) throw forbidden();
+  const assigned = `${alias}.follow_agent_id`;
+  if (ctx.session.roles.includes('agent_manager'))
+    return `(${assigned} IS NULL OR ${assigned} = ${me} OR ${assigned} IN (SELECT a.v::bigint FROM settings s,
+      jsonb_array_elements(CASE WHEN jsonb_typeof(s.value) = 'array' THEN s.value ELSE '[]'::jsonb END) t,
+      jsonb_array_elements_text(COALESCE(t->'agentIds', '[]'::jsonb)) a(v) WHERE s.key = 'teams' AND (t->>'managerId') = '${me}'))`;
+  return `(${assigned} = ${me}${free ? ` OR ${assigned} IS NULL` : ''} OR (${alias}.locked_by = ${me} AND ${alias}.locked_until > now()))`;
+}
 
-/**
- * A store's own confirmation agent (Utilisateurs: « Confirmation », not in an agency, no other order work): he opens
- * only his own orders and the customers of those orders. The managers and the administrators see every order.
- */
-export function confAgentOnly(ctx: Ctx): boolean {
+/** Roles that need to open orders across the store. */
+const WIDE_WORK = ['depot', 'livreur', 'agent_manager', 'vendeur'];
+
+function storeAgentOnly(ctx: Ctx): boolean {
   const s = ctx.session;
-  return !s.isAdmin && agencyOf(ctx) === null && s.roles.includes('confirmation') && !s.roles.some((r) => WIDE_WORK.includes(r));
+  return !s.isAdmin && agencyOf(ctx) === null && !s.roles.some((r) => WIDE_WORK.includes(r))
+    && s.roles.some((r) => r === 'confirmation' || r === 'suivi' || r === 'sav');
 }
 
 /**
@@ -133,11 +141,12 @@ export function confAgentOnly(ctx: Ctx): boolean {
  * tickets given to him or made by him. '' for everyone else (no limit).
  */
 export function ownRowSql(ctx: Ctx, alias = 'o'): string {
-  if (!confAgentOnly(ctx)) return '';
+  const s = ctx.session;
+  if (!storeAgentOnly(ctx)) return '';
   const me = Number(ctx.session.profile.id);
   // built into SQL: only a whole positive number goes there
   if (!Number.isSafeInteger(me) || me <= 0) throw forbidden();
-  return `(${alias}.agent_id = ${me} OR ${alias}.created_by = ${me} OR (${alias}.agent_id IS NULL AND ${alias}.locked_by = ${me} AND ${alias}.locked_until > now()) OR ${alias}.id IN (SELECT c.order_id FROM complaints c WHERE (c.assigned_to = ${me} OR c.created_by = ${me}) AND c.order_id IS NOT NULL))`;
+  return `(${alias}.agent_id = ${me} OR ${alias}.follow_agent_id = ${me} OR ${alias}.created_by = ${me} OR ((${alias}.agent_id IS NULL OR ${s.roles.includes('suivi')}) AND ${alias}.locked_by = ${me} AND ${alias}.locked_until > now()) OR ${alias}.id IN (SELECT c.order_id FROM complaints c WHERE (c.assigned_to = ${me} OR c.created_by = ${me}) AND c.order_id IS NOT NULL))`;
 }
 
 /** The orders an agency's agent or a store's confirmation agent may open ('' for everyone else). */
@@ -325,6 +334,7 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'sav.list': savRole,
   'sav.kpis': savRole,
   'sav.get': savRole,
+  'sav.orderNote': savRole,
   'sav.catalog': savRole,
   'sav.create': savRole,
   'sav.update': savRole,
@@ -391,6 +401,11 @@ const OWN_AGENT_GATES: Record<string, Gate> = {
   'customers.setBlacklist': customer,
   'parcel.info': order('orderId'),
   'parcel.changeSync': order('orderId'),
+  'suivi.act': order('id'),
+  'suivi.treat': order('id'),
+  'suivi.unassign': order('id'),
+  'suivi.resolve': order('id'),
+  'suivi.stuckDone': order('id'),
   'suivi.claimCreate': order('orderId'),
   'suivi.claimPush': claim('id'),
   'suivi.claimRemind': claim('id'),
@@ -491,7 +506,7 @@ export async function agencyGate(name: string, ctx: Ctx, input: unknown): Promis
   if (name.startsWith('agency.')) throw forbidden('Réservé aux agences de confirmation et aux marketers');
   if (agencyOf(ctx) === null) {
     // the store's own confirmation agent: only his orders, customers, tickets and messages
-    if (confAgentOnly(ctx)) await OWN_AGENT_GATES[name]?.(ctx, input);
+    if (storeAgentOnly(ctx)) await OWN_AGENT_GATES[name]?.(ctx, input);
     return;
   }
   // a marketer partner's person has the marketer role only (an agency's agents never have it)

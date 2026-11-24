@@ -374,6 +374,7 @@ test('an SAV exchange puts back only the exchanged item, and only once', async (
       AND (SELECT count(*) FROM order_items i WHERE i.order_id = o.id AND i.variant_id IS NOT NULL) >= 2
       AND NOT EXISTS (SELECT 1 FROM complaints c WHERE c.order_id = o.id) LIMIT 1`);
   assert.ok(o, 'a delivered order with two products');
+  await db.query('UPDATE orders SET follow_agent_id=$2 WHERE id=$1', [o.id, suivi.session.profile.id]);
   const t: any = await call('sav.create', suivi, { orderId: Number(o.id), type: 'defect', details: 'un seul article' });
   const g: any = await call('sav.get', suivi, { id: t.id });
   const line = g.order.items.find((i: any) => i.variantId);

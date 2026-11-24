@@ -48,6 +48,8 @@ test('suivi: swap moves the tracking and the company to the new order', async ()
   const ctx = await as(EMAILS.suivi);
   const fromId = await shippedParcel('returning');
   const toId = await waitingOrder();
+  const otherId = await waitingOrder([toId]);
+  await db.query('UPDATE orders SET follow_agent_id=$1 WHERE id = ANY($2)', [ctx.session.profile.id, [fromId, toId, otherId]]);
   const before = (await db.query('SELECT tracking, company_id FROM orders WHERE id=$1', [fromId]))[0];
   const cands: any = await call('suivi.swapCandidates', ctx, { fromId });
   assert.ok(Array.isArray(cands.rows));
@@ -67,7 +69,7 @@ test('suivi: swap moves the tracking and the company to the new order', async ()
   assert.equal(tgt.to.id, toId);
   assert.equal(tgt.oldTracking, before.tracking);
   // the same parcel cannot be swapped twice, an unconfirmed order cannot receive one
-  await assert.rejects(call('suivi.swap', ctx, { fromId, toId: await waitingOrder([toId]) }), /pas chez la société/);
+  await assert.rejects(call('suivi.swap', ctx, { fromId, toId: otherId }), /pas chez la société/);
 });
 
 test('suivi: swap refused for the depot role', async () => {

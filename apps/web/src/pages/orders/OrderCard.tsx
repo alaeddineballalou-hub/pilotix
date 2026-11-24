@@ -1,3 +1,4 @@
+import { OrderNotes } from './OrderNotes';
 // The order card of the original app: a drawer on the right with Client, Produits, Livraison, Historique and every action.
 import { API_COURIER_KINDS, canSetFollow, CANCEL_REASONS, CONF_DONE_BAD, CONF_TONE, FAKE_REASONS, CONF_NEEDS_DATE, CONF_NEEDS_REASON, ConfStatus, FAIL_REASONS, FOLLOW_FINAL, FOLLOW_STATUSES, FollowStatus, Order, OrderEvent, RETURN_REASONS } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
@@ -539,29 +540,10 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
               <dd>{o.deliveryAttempts}</dd>
             </>
           )}
-          {o.deliveryNote && (
-            <>
-              <dt>{t('orders.card.noteLivreur')}</dt>
-              <dd>
-                <b>{o.deliveryNote}</b>
-              </dd>
-            </>
-          )}
-          {o.customerNote && (
-            <>
-              <dt>{t('orders.card.noteClient')}</dt>
-              <dd>{o.customerNote}</dd>
-            </>
-          )}
-          {o.internalNote && (
-            <>
-              <dt>{t('orders.card.noteTeam')}</dt>
-              <dd>{o.internalNote}</dd>
-            </>
-          )}
         </dl>
       </section>
 
+      <OrderNotes key={o.id} order={o} />
       {sent && <CourierPanel o={o} phone={isPhone} />}
 
       <section className="card">

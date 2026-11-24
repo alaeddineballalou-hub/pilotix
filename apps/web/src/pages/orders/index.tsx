@@ -23,7 +23,8 @@ import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
 import { AgentFilter, CashedFilter, ClearFilters, DateFilters, LivreurFilter, ProductFilter, ReasonFilter, TeamFilter } from '../../ui/filters';
 import { PhoneAnnule, PhoneLivre } from './PhoneDone';
 import { useAllMode } from '../../layout/AllBoutiques';
-import { rightOn } from '../../lib/rights';
+import { rightOn, tabOn } from '../../lib/rights';
+import { Suivi } from '../suivi';
 
 export { OrderTable } from './OrderTable';
 export type { OrderColumn, ExtraColumn, OrderTableProps } from './OrderTable';
@@ -527,11 +528,28 @@ function useDeliveredExtra() {
 /** « Commandes »: this boutique's, or every boutique's with « Toutes les boutiques ». */
 export function Commandes(p: PageProps) {
   const all = useAllMode();
-  if (!all.on) return <CommandesOne {...p} />;
+  const { t } = useTranslation();
+  const { has } = useSession();
+  const sharedLivrees = p.sub === 'livrees' && has('confirmation', 'suivi') && rightOn('page:suivi') && tabOn('suivi', 'livres');
+  if (sharedLivrees && p.rest?.[0] !== 'bilan') {
+    return (
+      <>
+        <div className="px-vsw-row">
+          <a className="btn small" href="#/commandes/livrees/bilan"><Icon name="chart" /> {t('orders.bilan.title')}</a>
+        </div>
+        <Suivi sub="livres" />
+      </>
+    );
+  }
   return (
-    <Suspense fallback={<Loading />}>
-      <AllOrdersPage {...p} />
-    </Suspense>
+    <>
+      {sharedLivrees && (
+        <div className="px-vsw-row">
+          <a className="btn small" href="#/commandes/livrees"><Icon name="chevl" /> {t('orders.delivered')}</a>
+        </div>
+      )}
+      {all.on ? <Suspense fallback={<Loading />}><AllOrdersPage {...p} /></Suspense> : <CommandesOne {...p} />}
+    </>
   );
 }
 const AllOrdersPage = lazy(() => import('../boutiques/all').then((m) => ({ default: m.BoutiquesOrders })));

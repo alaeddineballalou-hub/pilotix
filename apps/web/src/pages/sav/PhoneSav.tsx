@@ -1,3 +1,6 @@
+import { useScope } from '../../lib/seller';
+import { ChooseSavSeller, TicketScope, ticketKey, type TicketRowScope } from './scope';
+import { OrderNotes } from '../orders/OrderNotes';
 // SAV on phones, built around the call. The customer calls → « Nouvel appel »: find the order by the number,
 // what the problem is, then it ends one of two ways:
 //   « Réglé au téléphone » — solved by talking, the ticket is born finished, with the customer's satisfaction;
@@ -19,7 +22,7 @@ import { useAction, useRpc } from '../../lib/query';
 import { useFullScreen } from '../../lib/fullScreen';
 import { ZrExchange } from '../suivi/CourierPanel';
 import { useSession } from '../../lib/session';
-import { ErrorBox, Icon, Loading, StatusBadge } from '../../ui/kit';
+import { ErrorBox, Icon, Pager, Loading, StatusBadge } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { NEW_TYPES, takePendingOrder } from './NewTicket';
 import { useStaff } from './staff';
@@ -126,11 +129,13 @@ const satReady = (sat: number | null, why: string) => sat !== null && (sat >= 3 
 export function PhoneSav({ sub }: { sub?: string }) {
   const { t } = useTranslation();
   const { session } = useSession();
+  const combined = useScope() === 'all';
+  const [page, setPage] = useState(1);
   const [stage, setStage] = useState<Stage>(() => (STAGES as string[]).includes(store.get('px-savp-stage') ?? '') ? (store.get('px-savp-stage') as Stage) : 'todo');
   const [owner, setOwner] = useState<Owner>(() => (['me', 'none', 'all'].includes(store.get('px-savp-owner') ?? '') ? (store.get('px-savp-owner') as Owner) : 'all'));
   const [q, setQ] = useState('');
   const [deb, setDeb] = useState('');
-  const [open, setOpen] = useState<number | null>(null);
+  const [open, setOpen] = useState<{ id: number; seller?: TicketRowScope['seller'] } | null>(null);
   const [calling, setCalling] = useState(sub === 'nouveau');
   useEffect(() => {
     const h = setTimeout(() => setDeb(q.trim()), 300);
@@ -141,13 +146,15 @@ export function PhoneSav({ sub }: { sub?: string }) {
   }, [sub]);
   const kp = useRpc('sav.kpis', {}, { refetchInterval: 60_000 });
   const sfl = useSavFilters();
-  const list = useRpc('sav.list', { view: VIEW[stage], q: deb || undefined, owner, pageSize: 200, ...sfl.input });
+  const filterKey = JSON.stringify(sfl.input);
+  useEffect(() => setPage(1), [stage, deb, filterKey, owner]);
+  const list = useRpc('sav.list', { view: VIEW[stage], q: deb || undefined, owner, page, ...(combined ? {} : sfl.input) });
   const k = kp.data;
   const count: Record<Stage, number | undefined> = { todo: k?.attente, depot: k?.depot, livraison: k?.livraison, satisfaction: k?.satisfaction, termines: k?.termines };
   const pick = (s: Stage) => (setStage(s), store.set('px-savp-stage', s));
   const pickOwner = (o: Owner) => (setOwner(o), store.set('px-savp-owner', o));
   const active = stage === 'todo' || stage === 'depot' || stage === 'livraison';
-  const rows = list.data?.rows ?? [];
+  const rows: TicketRowScope[] = list.data?.rows ?? [];
   const c = list.data?.counts;
   const closeCall = () => {
     setCalling(false);
@@ -170,7 +177,7 @@ export function PhoneSav({ sub }: { sub?: string }) {
         )}
       </div>
       <input className="pxv-search" type="search" value={q} placeholder={t('sav.ph.searchPh')} aria-label={t('sav.search')} enterKeyHint="search" onChange={(e) => setQ(e.target.value)} />
-      <FiltersPanel on={sfl.on}>{sfl.fields}</FiltersPanel>
+      {!combined && <FiltersPanel on={sfl.on}>{sfl.fields}</FiltersPanel>}
       {active && (
         <div className="pxv-own" role="tablist">
           {(['me', 'none', 'all'] as const).map((o) => (
@@ -194,7 +201,7 @@ export function PhoneSav({ sub }: { sub?: string }) {
       ) : stage === 'satisfaction' ? (
         <ul className="pxv-list">
           {rows.map((x) => (
-            <SatCard key={x.id} x={x} onOpen={() => setOpen(x.id)} />
+            <SatCard key={ticketKey(x)} x={x} onOpen={() => setOpen(x)} />
           ))}
         </ul>
       ) : (
@@ -202,7 +209,7 @@ export function PhoneSav({ sub }: { sub?: string }) {
           {[...rows]
             .sort((a, b) => (active ? Number(Date.now() - Date.parse(b.createdAt) > LATE_MS) - Number(Date.now() - Date.parse(a.createdAt) > LATE_MS) : 0))
             .map((x) => (
-              <TicketRow key={x.id} x={x} stage={stage} onOpen={() => setOpen(x.id)} />
+              <TicketRow key={ticketKey(x)} x={x} stage={stage} onOpen={() => setOpen(x)} />
             ))}
         </ul>
       )}
@@ -210,23 +217,23 @@ export function PhoneSav({ sub }: { sub?: string }) {
       <button type="button" className="pxp-next pxv-call" onClick={() => setCalling(true)}>
         <Icon name="phone" /> {t('sav.ph.newCall')}
       </button>
-      {calling && (
-        <CallFlow
+      {list.data && <Pager page={page} pageSize={list.data.pageSize} total={list.data.total} onPage={setPage} />}
+      {calling && (combined ? <ChooseSavSeller /> : <CallFlow
           onClose={closeCall}
           onOpen={(id) => {
             closeCall();
-            setOpen(id);
+            setOpen({ id });
           }}
         />
       )}
-      {open && <TicketPage id={open} onClose={() => setOpen(null)} onOpen={setOpen} />}
+      {open && <TicketScope seller={open.seller}><TicketPage id={open.id} onClose={() => setOpen(null)} onOpen={(id) => setOpen({ id, seller: open.seller })} /></TicketScope>}
     </div>
   );
 }
 
 type Ticket = Out<'sav.list'>['rows'][number];
 
-function TicketRow({ x, stage, onOpen }: { x: Ticket; stage: Stage; onOpen: () => void }) {
+function TicketRow({ x, stage, onOpen }: { x: TicketRowScope; stage: Stage; onOpen: () => void }) {
   const { t } = useTranslation();
   const activeT = x.status === 'open' || x.status === 'progress';
   const age = (x.resolvedAt ? Date.parse(x.resolvedAt) : Date.now()) - Date.parse(x.createdAt);
@@ -265,7 +272,7 @@ function TicketRow({ x, stage, onOpen }: { x: Ticket; stage: Stage; onOpen: () =
 }
 
 /** Satisfaction call after a delivered exchange: call, then one tap (with the reason when not satisfied). */
-function SatCard({ x, onOpen }: { x: Ticket; onOpen: () => void }) {
+function SatCard({ x, onOpen }: { x: TicketRowScope; onOpen: () => void }) {
   const { t } = useTranslation();
   const [ask, setAsk] = useState<number | null>(null);
   const rate = useAction('sav.rate', { success: t('sav.ph.satSaved') });
@@ -275,7 +282,7 @@ function SatCard({ x, onOpen }: { x: Ticket; onOpen: () => void }) {
     <li className="pxv-sc">
       <div className="pxv-sch">
         <button type="button" className="pxv-scn" onClick={onOpen}>
-          <b>{x.customerName || '—'}</b>
+          <b>{x.customerName || '—'}</b>{x.seller && <small>{x.seller.name}</small>}
           <small>
             <span className="ltr">{x.exchangeRef}</span> · {x.exchangeKind ? t(`sav.kind.${x.exchangeKind}`) : t(`sav.type.${x.type}`)} · {t('sav.ph.deliveredOn', { d: when(x.resolvedAt) })}
             {x.satTries ? ` · ${t('sav.ph.tries', { count: x.satTries })}` : ''}
@@ -766,6 +773,7 @@ function TicketPage({ id, onClose, onOpen }: { id: number; onClose: () => void; 
             <Icon name={TYPE_ICON[x.type] ?? 'help'} /> {t(`sav.type.${x.type}`)}
           </h4>
           <blockquote className="pxv-quote">{x.details || '—'}</blockquote>
+          {order && <OrderNotes key={order.id} order={order} ticketId={x.id} />}
         </section>
 
         {/* the customer: call / message */}

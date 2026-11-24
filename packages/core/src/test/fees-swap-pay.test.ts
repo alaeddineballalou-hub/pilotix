@@ -63,6 +63,7 @@ test('a swapped parcel: the swap fee is on the cost of the order that gets it', 
   const zr = await companyId('zr');
   const a = (await db.query(`SELECT id, wilaya_id FROM orders WHERE follow_status = 'returning' AND shipped_at IS NOT NULL AND tracking IS NOT NULL ORDER BY id LIMIT 1`))[0];
   const b = (await db.query(`SELECT id, wilaya_id FROM orders WHERE conf_status = 'confirmed' AND follow_status = 'to_prepare' AND shipped_at IS NULL AND wilaya_id <> $1 ORDER BY id LIMIT 1`, [a.wilaya_id]))[0];
+  await db.query('UPDATE orders SET follow_agent_id=$2 WHERE id = ANY($1)', [[a.id, b.id], suivi.session.profile.id]);
   await db.query('UPDATE orders SET company_id = $2, delivery_cost = 400 WHERE id = $1', [a.id, zr]);
   const r: any = await call('suivi.swap', suivi, { fromId: Number(a.id), toId: Number(b.id) });
   assert.equal(r.to.deliveryCost, 400 + 100, 'another wilaya: 100 DA more');

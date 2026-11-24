@@ -17,6 +17,11 @@ const row = async (id: number) => (await db.query('SELECT * FROM orders WHERE id
 const fresh = async (n: number) =>
   (await db.query(`SELECT id FROM orders WHERE conf_status = 'confirmed' AND follow_status = 'to_prepare' AND tracking IS NULL AND NOT is_exchange ORDER BY id LIMIT $1`, [n])).map((r: any) => Number(r.id));
 const pickAll = (ids: number[]) => db.query('UPDATE order_items SET picked_qty = qty WHERE order_id = ANY($1)', [ids]);
+async function asFollowing(id: number) {
+  const agent = await as(EMAILS.suivi);
+  await db.query('UPDATE orders SET follow_agent_id = $2 WHERE id = $1', [id, agent.session.profile.id]);
+  return agent;
+}
 /** picked whole and sent to a company by an admin: in « En dispatch » with the company's number */
 async function atCompany(kind: string, n = 1) {
   const ids = await fresh(n);
@@ -32,7 +37,7 @@ test('leak 1: the company changes on the order form — the old parcel is cancel
   const old = (await row(a)).tracking as string;
   assert.match(old, /^yal-/);
   const zr = await companyId('zr');
-  const suivi = await as(EMAILS.suivi);
+  const suivi = await asFollowing(a);
   const o: any = await call('orders.update', suivi, { id: a, companyId: zr });
   assert.equal(o.companyId, zr);
   const now = await row(a);
@@ -57,7 +62,7 @@ test('leak 1: a parcel that already left the depot keeps its company', async () 
   const [a] = await atCompany('yalidine');
   await db.query(`UPDATE orders SET follow_status = 'shipped', shipped_at = now() WHERE id = $1`, [a]);
   const before = (await row(a)).tracking;
-  await assert.rejects(call('orders.update', await as(EMAILS.suivi), { id: a, companyId: await companyId('zr') }), /déjà parti du dépôt/);
+  await assert.rejects(call('orders.update', await asFollowing(a), { id: a, companyId: await companyId('zr') }), /déjà parti du dépôt/);
   assert.equal((await row(a)).tracking, before);
 });
 
@@ -154,7 +159,7 @@ test('leak 5: the old product scanned back makes the first order « Échangée �
 // ---------------------------------------------------------------- 6. a parcel under an open red alert
 test('leak 6: the address or the price of a parcel at the company changes through « Modifier le colis » (the form refuses)', async () => {
   const [a] = await atCompany('yalidine');
-  const suivi = await as(EMAILS.suivi);
+  const suivi = await asFollowing(a);
   await assert.rejects(call('orders.update', suivi, { id: a, address: 'Nouvelle adresse, bâtiment 7' }), /Modifier le colis/);
   await assert.rejects(call('orders.update', suivi, { id: a, discount: 100 }), /Modifier le colis/);
 });
@@ -164,7 +169,7 @@ test('leak 6: the address or the price of a parcel at the company changes throug
 async function remade(change: (a: number) => Promise<Record<string, unknown>>) {
   const [a] = await atCompany('yalidine');
   const old = (await row(a)).tracking as string;
-  await call('orders.update', await as(EMAILS.suivi), { id: a, ...(await change(a)) });
+  await call('orders.update', await asFollowing(a), { id: a, ...(await change(a)) });
   const now = await row(a);
   assert.match(now.tracking, /^yal-/);
   assert.notEqual(now.tracking, old, 'new tracking, new label');
@@ -203,7 +208,7 @@ test('leak 6: a livreur cannot take a parcel whose red alert is open', async () 
   const lamine = Number((await db.query(`SELECT id FROM profiles WHERE email = $1`, [EMAILS.livreur]))[0].id);
   const [a] = await fresh(1);
   await db.query(`UPDATE orders SET company_id = $2, livreur_id = $3, follow_status = 'prepared' WHERE id = $1`, [a, own, lamine]);
-  await call('orders.update', await as(EMAILS.suivi), { id: a, deliveryNote: 'Changé après préparation' });
+  await call('orders.update', await asFollowing(a), { id: a, deliveryNote: 'Changé après préparation' });
   assert.ok((await db.query('SELECT 1 FROM depot_alerts WHERE order_id = $1 AND resolved_at IS NULL', [a]))[0]);
   await assert.rejects(call('tournee.take', await as(EMAILS.livreur), { code: (await row(a)).ref }), /alerte rouge/);
   assert.equal((await row(a)).follow_status, 'prepared');
@@ -290,7 +295,7 @@ test('leak 9: products changed while being picked — the same product stays tak
   const [a] = await fresh(1);
   const items = (await db.query('SELECT product_id, variant_id, qty FROM order_items WHERE order_id = $1 ORDER BY id', [a])).map((r: any) => ({ productId: Number(r.product_id), variantId: r.variant_id === null ? null : Number(r.variant_id), qty: Number(r.qty) }));
   await db.query('UPDATE order_items SET picked_qty = qty WHERE order_id = $1', [a]);
-  const suivi = await as(EMAILS.suivi);
+  const suivi = await asFollowing(a);
   // the same products (the form always sends them): still taken
   await call('orders.update', suivi, { id: a, items });
   assert.ok((await db.query('SELECT qty, picked_qty FROM order_items WHERE order_id = $1', [a])).every((r: any) => Number(r.picked_qty) === Number(r.qty)));

@@ -7,7 +7,9 @@ import { dur, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
-import { Empty, ErrorBox, Help, Icon, KpiBody, Loading, StageBar, StatusBadge } from '../../ui/kit';
+import { useScope } from '../../lib/seller';
+import { ChooseSavSeller, TicketScope, ticketKey, type TicketRowScope } from './scope';
+import { Empty, ErrorBox, Help, Icon, KpiBody, Loading, Pager, StageBar, StatusBadge } from '../../ui/kit';
 import type { PageProps } from '../registry';
 import { NewTicketModal } from './NewTicket';
 import { PhoneSav } from './PhoneSav';
@@ -59,6 +61,8 @@ function SavDesktop({ sub }: PageProps) {
   const { t } = useTranslation();
   const { session } = useSession();
   const agency = session?.shop?.kind === 'agency';
+  const combined = useScope() === 'all';
+  const [page, setPage] = useState(1);
   const view: View = (VIEWS as readonly string[]).includes(sub ?? '') ? (sub as View) : 'tickets';
   const [tab, setTab] = useState<'todo' | 'all'>(() => {
     try {
@@ -72,7 +76,7 @@ function SavDesktop({ sub }: PageProps) {
   // Responsable, Produit, Du / Au (kept in this browser)
   const sfl = useSavFilters();
   const [fOpen, setFOpen] = useState(false);
-  const [open, setOpen] = useState<number | null>(null);
+  const [open, setOpen] = useState<{ id: number; seller?: TicketRowScope['seller'] } | null>(null);
   const [creating, setCreating] = useState(view === 'nouveau');
   useEffect(() => {
     setCreating(view === 'nouveau');
@@ -92,7 +96,10 @@ function SavDesktop({ sub }: PageProps) {
   };
   const apiView = view === 'tickets' || view === 'nouveau' || view === 'stats' ? tab : view;
   const kp = useRpc('sav.kpis', {}, { refetchInterval: 60_000 });
-  const list = useRpc('sav.list', { view: apiView, q: deb || undefined, ...sfl.input });
+  const filterKey = JSON.stringify(sfl.input);
+  useEffect(() => setPage(1), [apiView, deb, filterKey]);
+  const list = useRpc('sav.list', { view: apiView, q: deb || undefined, page, ...(combined ? {} : sfl.input) });
+  const rows: TicketRowScope[] = list.data?.rows ?? [];
   const k = kp.data;
   const stageCount = (v: View): number | undefined => (k && (v === 'attente' || v === 'depot' || v === 'livraison' || v === 'livres' || v === 'annules' || v === 'satisfaction') ? k[v] : undefined);
   const closeNew = () => {
@@ -161,7 +168,7 @@ function SavDesktop({ sub }: PageProps) {
               {t('filters.toggle')}
               {sfl.on > 0 && <b className="ltr"> · {sfl.on}</b>}
             </button>
-            {sfl.fields}
+            {!combined && sfl.fields}
             <div className="field more-f px-f-clear">
               <button type="button" className="btn" onClick={() => (list.refetch(), kp.refetch())}>
                 <Icon name="refresh" /> {t('sav.refresh')}
@@ -190,13 +197,13 @@ function SavDesktop({ sub }: PageProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {list.data.rows.map((x) => {
+                  {rows.map((x) => {
                     const active = x.status === 'open' || x.status === 'progress';
                     const age = (x.resolvedAt ? Date.parse(x.resolvedAt) : Date.now()) - Date.parse(x.createdAt);
                     return (
-                      <tr key={x.id} className="clickable" onClick={() => setOpen(x.id)}>
+                      <tr key={ticketKey(x)} className="clickable" onClick={() => setOpen(x)}>
                         <td data-l={t('sav.col.no')}>
-                          <b className="ltr">{x.ref}</b>
+                          <b className="ltr">{x.ref}</b>{x.seller && <small>{x.seller.name}</small>}
                           <small>{when(x.createdAt)}</small>
                         </td>
                         <td data-l={t('sav.col.order')}>
@@ -239,8 +246,9 @@ function SavDesktop({ sub }: PageProps) {
         </div>
         )}
       </div>
-      {creating && <NewTicketModal onClose={closeNew} onCreated={(id) => (closeNew(), setOpen(id))} />}
-      {open && <TicketModal id={open} onClose={() => setOpen(null)} />}
+      {view !== 'stats' && list.data && <Pager page={page} pageSize={list.data.pageSize} total={list.data.total} onPage={setPage} />}
+      {creating && (combined ? <ChooseSavSeller /> : <NewTicketModal onClose={closeNew} onCreated={(id) => (closeNew(), setOpen({ id }))} />)}
+      {open && <TicketScope seller={open.seller}><TicketModal id={open.id} onClose={() => setOpen(null)} /></TicketScope>}
     </>
   );
 }

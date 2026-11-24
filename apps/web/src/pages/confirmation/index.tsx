@@ -7,10 +7,11 @@ import { rpc } from '../../lib/backend';
 import { downloadCsv } from '../../lib/files';
 import { da, dateTime, n, when, wilaya, wilayaName } from '../../lib/format';
 import { openOrderForm } from '../../lib/modals';
-import { useRpc } from '../../lib/query';
+import { useRpc, useRpcFor } from '../../lib/query';
+import { SellerScope } from '../../lib/seller';
 import { useSession } from '../../lib/session';
 import { store } from '../../lib/store';
-import { ErrorBox, Field, Help, Icon, Loading, Pager, RemovableChip, SortTh, StageBar, StatusBadge, StatusSelect } from '../../ui/kit';
+import { ErrorBox, Field, Help, Icon, Loading, Pager, RemovableChip, SortTh, StageBar, StatusBadge } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { colDrag, ColumnMenu, DensitySwitch, useDensity, useResizable, useTableColumns } from '../../ui/ColumnMenu';
@@ -24,17 +25,26 @@ import { Focus } from './Focus';
 import { HeldChip } from './hold';
 import { useIsPhone } from '../../lib/useMedia';
 import { PhoneCards, PhoneOrder, PickBar, PickToggle } from './PhoneList';
-import { BULK_CHOICES, choiceAllowed, choiceLabel, currentLabel, ROW_CHOICES, StatusChoice, Sub, SUB_STATUSES, SUB_TONE, SUBS, telHref, toneOf, useCanGive, waHref } from './shared';
+import { currentLabel, StatusChoice, Sub, SUB_STATUSES, SUB_TONE, SUBS, telHref, toneOf, useCanGive, waHref } from './shared';
 import { ConfirmedStatsPage, StatsSection } from './Stats';
 import { BlockSwitch } from './BlockSwitch';
-import { useStatusChange } from './StatusDialog';
 import { CopyCode } from '../../ui/CopyCode';
 import { ScoreChip } from '../../ui/clientScore';
 import { useAllMode } from '../../layout/AllBoutiques';
 import { rightOn, tabOn } from '../../lib/rights';
 import { sourceName } from '../orders/AdSource';
 
-type Row = NonNullable<ReturnType<typeof useList>['data']>['rows'][number];
+type Source = { id: number; name: string };
+type Row = NonNullable<ReturnType<typeof useList>['data']>['rows'][number] & { seller?: Source };
+const rowKey = (r: { id: number; seller?: Source }) => `${r.seller?.id ?? 0}:${r.id}`;
+export type CombinedConfirmation = {
+  input?: Record<string, unknown>;
+  chip: ReactNode;
+  bar?: ReactNode;
+  source?: (s: Source) => ReactNode;
+  next: (onClose: () => void) => ReactNode;
+  agency: boolean;
+};
 type SortKey = 'created_at' | 'confirmed_at' | 'next_call_at' | 'total' | 'customer_name' | 'deadline' | 'score';
 type ColKey = 'order' | 'source' | 'tracking' | 'creator' | 'channel' | 'product' | 'variant' | 'sku' | 'chrono' | 'name' | 'phone' | 'wilaya' | 'commune' | 'agent' | 'fagent' | 'total' | 'time' | 'created' | 'stock' | 'desk' | 'passed' | 'confirmed' | 'follow' | 'next' | 'status';
 interface Filters {
@@ -89,10 +99,10 @@ const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
 /** The columns a confirmation agent works with, most useful first (a tablet shows the first 6 the table has). */
 const CONF_USEFUL = ['chrono', 'name', 'phone', 'product', 'wilaya', 'status', 'order', 'total'];
 
-function useList(sub: Sub, input: { q: string; f: Filters; sort: SortKey; dir: 'asc' | 'desc'; page: number; size: number }) {
+function useList(sub: Sub, input: { q: string; f: Filters; sort: SortKey; dir: 'asc' | 'desc'; page: number; size: number }, scope?: Record<string, unknown>) {
   return useRpc(
     'confirmation.list',
-    { sub, q: input.q || undefined, ...input.f, status: (input.f.status as any) || undefined, sort: input.sort, dir: input.dir, page: input.page, pageSize: input.size },
+    { sub, q: input.q || undefined, ...input.f, status: (input.f.status as any) || undefined, sort: input.sort, dir: input.dir, page: input.page, pageSize: input.size, ...scope },
     { refetchInterval: 60_000 },
   );
 }
@@ -161,15 +171,18 @@ function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
   );
 }
 
-function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
+export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | null; combined?: CombinedConfirmation }) {
   const phone = useIsPhone();
   const { t } = useTranslation();
   const { has } = useSession();
   const qc = useQueryClient();
   // « Attribuer »: the store's managers and owner — and a confirmation agency's chief and chefs d'équipe
-  const manager = useCanGive();
-  const meta = useRpc('confirmation.meta', {}, { staleTime: 5 * 60_000 });
-  const catalog = useRpc('confirmation.catalog', {}, { staleTime: 5 * 60_000 });
+  const canGive = useCanGive();
+  const manager = canGive && (!combined || combined.agency);
+  const meta = useRpc('confirmation.meta', {}, { enabled: !combined, staleTime: 5 * 60_000 });
+  const catalog = useRpc('confirmation.catalog', {}, { enabled: !combined, staleTime: 5 * 60_000 });
+  const agencyPeople = useRpcFor(null, 'agency.givePeople', {}, { enabled: !!combined?.agency && manager });
+  const options = combined ? (agencyPeople.data ?? []).map((p, i) => ({ id: i + 1, name: p.name })) : meta.data?.agents ?? [];
   const COLS = useMemo(() => columnsOf(sub), [sub]);
   const colsKey = `conf-cols3-${sub}`;
   // columns saved with the account; a chosen preset is used by every list until the columns are changed by hand
@@ -193,23 +206,25 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   const [{ sort, dir }, setSort] = useState(DEFAULT_SORT[sub]);
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(() => Number(store.get('conf-size')) || 50);
-  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [sel, setSel] = useState<Set<string>>(new Set());
   // phones: « Sélectionner » is on (a tap ticks an order instead of opening it)
   const [picking, setPicking] = useState(false);
-  const [open, setOpen] = useState<Set<number>>(new Set());
+  const [open, setOpen] = useState<Set<string>>(new Set());
   const [focus, setFocus] = useState<number | null | 'ask'>(focusId ?? null);
+  const [showCombinedFocus, setShowCombinedFocus] = useState(false);
   const [blockAsk, setBlockAsk] = useState<Row[] | null>(null);
   const [delAsk, setDelAsk] = useState<Row[] | null>(null);
   const { session } = useSession();
-  const { change, dialog } = useStatusChange();
   useEffect(() => {
     const id = setTimeout(() => (setQd(q.trim()), setPage(1)), 350);
     return () => clearTimeout(id);
   }, [q]);
-  const list = useList(sub, { q: qd, f, sort, dir, page, size });
-  const rows = list.data?.rows ?? [];
+  const scopeKey = JSON.stringify(combined?.input ?? {});
+  useEffect(() => setPage(1), [scopeKey]);
+  const list = useList(sub, { q: qd, f, sort, dir, page, size }, combined?.input);
+  const rows: Row[] = list.data?.rows ?? [];
   useEffect(() => {
-    const ids = new Set(rows.map((r) => r.id));
+    const ids = new Set(rows.map(rowKey));
     setSel((s) => new Set([...s].filter((x) => ids.has(x))));
   }, [list.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -222,11 +237,11 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   const wkeys = ['_exp', '_ck', ...cols.map((c) => c.k), '_act'];
   const [dens, setDens] = useDensity();
   const rs = useResizable(tc.widths, tc.setWidths, t('common.resizeCol'), wkeys, dens);
-  const selected = rows.filter((r) => sel.has(r.id));
+  const selected = rows.filter((r) => sel.has(rowKey(r)));
   const nFilters = Object.values(f).filter((v) => v !== undefined && v !== '').length;
   const shop = meta.data?.shopName ?? 'Pilotix';
   const tpl = meta.data?.whatsappTemplate ?? 'Bonjour {nom}, ici {boutique} à propos de votre commande {ref}.';
-  const wa = (r: Row) => waHref(r.phone, tpl, { nom: r.customerName, boutique: shop, ref: r.ref });
+  const wa = (r: Row) => waHref(r.phone, tpl, { nom: r.customerName, boutique: r.seller?.name ?? shop, ref: r.ref });
   const setFilter = (p: Partial<Filters>) => {
     setF((cur) => ({ ...cur, ...p }));
     setPage(1);
@@ -237,8 +252,18 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   };
   const assign = async (rs: Row[], agentId: number | null) => {
     try {
-      await rpc('orders.assignAgent', { ids: rs.map((r) => r.id), agentId });
-      const name = meta.data?.agents.find((a) => a.id === agentId)?.name;
+      if (combined) {
+        const person = agentId === null ? null : agencyPeople.data?.[agentId - 1];
+        const shops = [...new Set(rs.flatMap((r) => r.seller ? [r.seller.id] : []))];
+        for (const seller of shops) {
+          if (agentId !== null && !person?.at[seller]) {
+            toast(t('agency.work.giveNotThere', { name: person?.name, sellers: rs.find((r) => r.seller?.id === seller)?.seller?.name }), 'bad');
+            continue;
+          }
+          await rpc('orders.assignAgent', { ids: rs.filter((r) => r.seller?.id === seller).map((r) => r.id), agentId: person?.at[seller] ?? null }, seller);
+        }
+      } else await rpc('orders.assignAgent', { ids: rs.map((r) => r.id), agentId });
+      const name = options.find((a) => a.id === agentId)?.name;
       toast(agentId ? t('confirmation.assigned', { n: rs.length, name }) : t('confirmation.unassigned', { n: rs.length }), 'ok');
       setSel(new Set());
       qc.invalidateQueries();
@@ -248,7 +273,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   };
   const doExport = async () => {
     try {
-      const all = await rpc('confirmation.list', { sub, q: qd || undefined, ...f, status: (f.status as any) || undefined, sort, dir, page: 1, pageSize: 3000 });
+      const all = await rpc('confirmation.list', { sub, q: qd || undefined, ...f, status: (f.status as any) || undefined, sort, dir, page: 1, pageSize: 3000, ...combined?.input });
       const H = ['ref', 'created', 'client', 'phone', 'phone2', 'wilaya', 'commune', 'address', 'desk', 'products', 'pieces', 'productsDa', 'feeDa', 'discount', 'totalDa', 'conf', 'follow', 'company', 'tracking', 'agent', 'deliveryNote'];
       downloadCsv(`confirmation-${sub}-${new Date().toISOString().slice(0, 10)}`, [
         H.map((h) => t(`confirmation.csv.${h}`)),
@@ -291,6 +316,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
           <>
             <b className="ltr">{r.ref}</b>
             <small>{when(r.createdAt)}</small>
+            {r.seller && (combined?.source?.(r.seller) ?? <small>{r.seller.name}</small>)}
           </>
         );
       case 'source':
@@ -395,28 +421,13 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
         );
       case 'status': {
         const cur: StatusChoice = r.confStatus === 'no_answer' ? (`try${Math.min(30, Math.max(1, r.attempts))}` as StatusChoice) : r.confStatus;
-        // « Tentative 0N »: always this order's next call (its count never goes back)
-        const nextTry = `try${Math.min(30, r.attempts + 1)}` as StatusChoice;
-        const choices = ROW_CHOICES.filter(choiceAllowed).map((x) => (x === 'try1' ? nextTry : x)).filter((x) => x !== cur);
-        const opts = [{ value: cur, label: currentLabel(t, r.confStatus, r.attempts) }, ...choices.map((x) => ({ value: x, label: choiceLabel(t, x, true) }))];
-        return (
-          <StatusSelect
-            value={cur}
-            tone={toneOf(cur)}
-            label={t('confirmation.statusOf', { ref: r.ref })}
-            options={opts}
-            disabled={!has('confirmation')}
-            onChange={(v) => {
-              if (v !== cur) change([r], v);
-            }}
-          />
-        );
+        return <span className={`badge t-${toneOf(cur)}`}>{currentLabel(t, r.confStatus, r.attempts)}</span>;
       }
     }
   };
 
   /** Opens one order in the table and brings it under the header; the others close. */
-  const openOnly = (id: number | null) => {
+  const openOnly = (id: string | null) => {
     setOpen(id === null ? new Set() : new Set([id]));
     if (id === null) return;
     setTimeout(() => {
@@ -428,7 +439,9 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
    *  two agents never get the same customer; it opens in the table when it is on this page, else on its own. */
   const nextSkip = useRef<number[]>([]);
   const nextBusy = useRef(false);
-  const goNext = async (fromId?: number) => {
+  const goNext = async (fromKey?: string) => {
+    if (combined) { openOnly(null); setShowCombinedFocus(true); return; }
+    const fromId = rows.find((r) => rowKey(r) === fromKey)?.id;
     if (nextBusy.current) return;
     nextBusy.current = true;
     try {
@@ -440,7 +453,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
         return;
       }
       nextSkip.current.push(r.id);
-      if (rows.some((x) => x.id === r.id)) openOnly(r.id);
+      if (rows.some((x) => x.id === r.id)) openOnly(rowKey({ id: r.id }));
       else {
         openOnly(null);
         setFocus(r.id);
@@ -451,8 +464,8 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
       nextBusy.current = false;
     }
   };
-  const toggleOpen = (id: number) => setOpen((s) => (s.has(id) ? (s.delete(id), new Set(s)) : new Set(s).add(id)));
-  const allOn = rows.length > 0 && rows.every((r) => sel.has(r.id));
+  const toggleOpen = (id: string) => setOpen((s) => s.has(id) ? new Set() : new Set([id]));
+  const allOn = rows.length > 0 && rows.every((r) => sel.has(rowKey(r)));
   const canNext = (sub === 'nouvelles' || sub === 'attente') && has('confirmation');
   /** an agent sees only the orders given to him; managers and the owner see more (an agency's chiefs: all of its own) */
   const seesAll = manager;
@@ -466,6 +479,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
 
   return (
     <>
+      {showCombinedFocus && combined?.next(() => setShowCombinedFocus(false))}
       {focus !== null && <Focus initialId={focus === 'ask' ? null : focus} onClose={() => setFocus(null)} />}
       <div className={`card qcard px-d-${dens}`}>
         <div className="card-head px-qhead">
@@ -474,7 +488,8 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
             <Help text={t(`confirmation.help.${sub}`)} label={title} />
           </h2>
           <div className="row">
-            {has('confirmation') && !session?.profile.agencyId && rightOn('act:orders.create') && (
+            {combined?.chip}
+            {!combined && has('confirmation') && !session?.profile.agencyId && rightOn('act:orders.create') && (
               <button type="button" className={`btn ${canNext ? 'px-qnew' : 'primary'}`} onClick={() => openOrderForm({ onSaved: () => qc.invalidateQueries() })}>
                 + {t('confirmation.newOrder')}
               </button>
@@ -488,20 +503,18 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
             )}
           </div>
         </div>
+        {combined?.bar}
         <Toolbar
           rows={selected}
           manager={manager}
-          agents={meta.data?.agents ?? []}
+          agents={options}
           waHref={wa}
           onClear={() => setSel(new Set())}
           onAssign={assign}
-          onStatus={async (c) => {
-            if (await change(selected, c)) setSel(new Set());
-          }}
-          onBlock={() => setBlockAsk(selected)}
-          onDelete={session?.isAdmin ? () => setDelAsk(selected) : undefined}
+          onBlock={combined ? undefined : () => setBlockAsk(selected)}
+          onDelete={!combined && session?.isAdmin ? () => setDelAsk(selected) : undefined}
           // a confirmation agency's agent does not make orders in the store
-          onDuplicate={session?.profile.agencyId ? undefined : async () => {
+          onDuplicate={combined || session?.profile.agencyId ? undefined : async () => {
             try {
               const r = await rpc('orders.duplicate', { ids: [selected[0].id] });
               toast(t('confirmation.duplicated', { ref: selected[0].ref }), 'ok');
@@ -699,7 +712,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                             setPicking((v) => !v);
                             setSel(new Set());
                           }}
-                          onAll={() => setSel(allOn ? new Set() : new Set(rows.map((r) => r.id)))}
+                          onAll={() => setSel(allOn ? new Set() : new Set(rows.map(rowKey)))}
                         />
                       )}
                     </div>
@@ -711,6 +724,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                   onOpen={(id) => setOpen(new Set([id]))}
                   pick={picking ? { picked: sel, toggle: (id) => setSel((s) => (s.has(id) ? (s.delete(id), new Set(s)) : new Set(s).add(id))) } : undefined}
                   showAgent={manager}
+                  rowKey={rowKey}
                 />
                 {canNext && !picking && (
                   <button type="button" className="pxp-next" onClick={() => goNext([...open].pop())}>
@@ -721,14 +735,16 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                 {picking && (
                   <PickBar
                     n={selected.length}
-                    options={(meta.data?.agents ?? []).map((a) => ({ value: String(a.id), label: a.name }))}
+                    options={options.map((a) => ({ value: String(a.id), label: a.name }))}
                     anyAgent={selected.some((r) => r.agentId)}
                     onGive={(v) => assign(selected, v ? Number(v) : null)}
                   />
                 )}
                 {(() => {
-                  const cur = rows.find((r) => open.has(r.id));
-                  return cur ? <PhoneOrder order={cur} onClose={() => setOpen(new Set())} onDone={goNext} /> : null;
+                  const cur = rows.find((r) => open.has(rowKey(r)));
+                  if (!cur) return null;
+                  const card = <PhoneOrder order={cur} onClose={() => setOpen(new Set())} onDone={() => void goNext(rowKey(cur))} />;
+                  return cur.seller ? <SellerScope seller={cur.seller.id}>{card}</SellerScope> : card;
                 })()}
               </>
             ) : (
@@ -741,7 +757,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                       <span className="sr-only">{t('confirmation.detail')}</span>
                     </th>
                     <th className="ck" data-col="_ck">
-                      <input type="checkbox" aria-label={t('confirmation.selectAll')} checked={allOn} onChange={(e) => setSel(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())} />
+                      <input type="checkbox" aria-label={t('confirmation.selectAll')} checked={allOn} onChange={(e) => setSel(e.target.checked ? new Set(rows.map(rowKey)) : new Set())} />
                     </th>
                     {cols.map((c) =>
                       c.sort ? (
@@ -767,19 +783,19 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                     </tr>
                   )}
                   {rows.map((r) => {
-                    const op = open.has(r.id);
+                    const op = open.has(rowKey(r));
                     return (
-                      <Fragment key={r.id}>
+                      <Fragment key={rowKey(r)}>
                         <tr
-                          className={`clickable ${sel.has(r.id) ? 'qsel' : ''}`}
-                          data-oid={r.id}
+                          className={`clickable ${sel.has(rowKey(r)) ? 'qsel' : ''}`}
+                          data-oid={rowKey(r)}
                           onClick={(e) => {
                             if ((e.target as HTMLElement).closest('a,button,input,select,label')) return;
-                            toggleOpen(r.id);
+                            toggleOpen(rowKey(r));
                           }}
                         >
                           <td className="ck qexp">
-                            <button type="button" className="icon-btn qic" aria-expanded={op} aria-label={t(op ? 'confirmation.hideDetail' : 'confirmation.showDetail', { ref: r.ref })} onClick={() => toggleOpen(r.id)}>
+                            <button type="button" className="icon-btn qic" aria-expanded={op} aria-label={t(op ? 'confirmation.hideDetail' : 'confirmation.showDetail', { ref: r.ref })} onClick={() => toggleOpen(rowKey(r))}>
                               <Icon name="chevron" />
                             </button>
                           </td>
@@ -787,21 +803,21 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                             <input
                               type="checkbox"
                               aria-label={t('confirmation.select', { ref: r.ref })}
-                              checked={sel.has(r.id)}
-                              onChange={(e) => setSel((s) => (e.target.checked ? new Set(s).add(r.id) : (s.delete(r.id), new Set(s))))}
+                              checked={sel.has(rowKey(r))}
+                              onChange={(e) => setSel((s) => (e.target.checked ? new Set(s).add(rowKey(r)) : (s.delete(rowKey(r)), new Set(s))))}
                             />
                           </td>
                           {cols.map((c) => (
                             <td key={c.k} data-l={colLabel(c.k)} className={`px-c-${c.k} ${c.k === 'total' ? 'num' : c.k === 'product' ? 'wide px-cw' : ''}`}>
-                              {cell(r, c.k)}
+                              {r.seller ? <SellerScope seller={r.seller.id} ambient={false}>{cell(r, c.k)}</SellerScope> : cell(r, c.k)}
                             </td>
                           ))}
                           <td className="qact" data-l="">
                             <div className="qrowacts">
-                              <HistoryButton orderId={r.id} refLabel={r.ref} className="qo qo-hist" title={t('confirmation.hist.open', { ref: r.ref })}>
+                              <ScopedRow seller={r.seller}><HistoryButton orderId={r.id} refLabel={r.ref} className="qo qo-hist" title={t('confirmation.hist.open', { ref: r.ref })}>
                                 <Icon name="history" />
-                              </HistoryButton>
-                              <button type="button" className="qo qo-edit" aria-label={t('confirmation.editRef', { ref: r.ref })} title={t('confirmation.edit')} onClick={() => openOrderForm({ orderId: r.id, onSaved: () => qc.invalidateQueries() })}>
+                              </HistoryButton></ScopedRow>
+                              <button type="button" className="qo qo-edit" aria-label={t('confirmation.editRef', { ref: r.ref })} title={t('confirmation.edit')} onClick={() => openOrderForm({ orderId: r.id, onSaved: () => qc.invalidateQueries() }, r.seller?.id)}>
                                 <Icon name="pencil" />
                               </button>
                             </div>
@@ -810,7 +826,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                         {op && (
                           <tr className="qdetail">
                             <td colSpan={cols.length + 3} className="wide">
-                              <Detail order={r} onDone={goNext} onMessageDone={() => openOnly(null)} />
+                              <ScopedRow seller={r.seller} active><Detail order={r} onDone={() => void goNext(rowKey(r))} onMessageDone={() => openOnly(null)} /></ScopedRow>
                             </td>
                           </tr>
                         )}
@@ -835,7 +851,6 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
           </>
         )}
       </div>
-      {dialog}
       {delAsk && (
         <Modal
           title={t('confirmation.del.title', { count: delAsk.length })}
@@ -906,6 +921,10 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   );
 }
 
+function ScopedRow({ seller, active = false, children }: { seller?: Source; active?: boolean; children: ReactNode }) {
+  return seller ? <SellerScope seller={seller.id} ambient={active}>{children}</SellerScope> : <>{children}</>;
+}
+
 /** "Temps passé" badge (warn after 24 h), refreshed every minute. */
 function Spent({ iso }: { iso: string }) {
   const now = useNow();
@@ -923,8 +942,7 @@ function Toolbar(p: {
   waHref: (r: Row) => string;
   onClear: () => void;
   onAssign: (rows: Row[], id: number | null) => void;
-  onStatus: (c: StatusChoice) => void;
-  onBlock: () => void;
+  onBlock?: () => void;
   onDelete?: () => void;
   onDuplicate?: () => void;
 }) {
@@ -993,27 +1011,6 @@ function Toolbar(p: {
             <span className="qa-tx">{t('confirmation.tb.removeAgent')}</span>
           </button>
         )}
-        <label className={`btn small qa-btn qa-wrap ${none ? 'is-dis' : ''}`} title={none ? tip : t('confirmation.tb.status')}>
-          <span className="qa-ic">
-            <Icon name="checkcircle" />
-          </span>
-          <select
-            className="qa-sel"
-            aria-label={t('confirmation.tb.status')}
-            disabled={none}
-            value=""
-            onChange={(e) => {
-              if (e.target.value) p.onStatus(e.target.value as StatusChoice);
-            }}
-          >
-            <option value="">{t('confirmation.tb.status')}</option>
-            {BULK_CHOICES.filter(choiceAllowed).map((c) => (
-              <option key={c} value={c}>
-                {choiceLabel(t, c)}
-              </option>
-            ))}
-          </select>
-        </label>
       </span>
       <span className="qa-grp">
         {p.onDuplicate && <button type="button" className="btn small qa-btn" aria-label={t('confirmation.tb.duplicate')} disabled={!one} title={one ? t('confirmation.tb.duplicate') : tipOne} onClick={p.onDuplicate}>
@@ -1037,12 +1034,12 @@ function Toolbar(p: {
             <span className="qa-tx">{t('confirmation.tb.send')}</span>
           </button>
         )}
-        <button type="button" className="btn small qa-btn" aria-label={t('confirmation.tb.block')} disabled={none} title={none ? tip : t('confirmation.tb.block')} onClick={p.onBlock}>
+        {p.onBlock && <button type="button" className="btn small qa-btn" aria-label={t('confirmation.tb.block')} disabled={none} title={none ? tip : t('confirmation.tb.block')} onClick={p.onBlock}>
           <span className="qa-ic">
             <Icon name="ban" />
           </span>
           <span className="qa-tx">{t('confirmation.tb.block')}</span>
-        </button>
+        </button>}
       </span>
       {p.onDelete && (
         <span className="qa-grp qa-end">

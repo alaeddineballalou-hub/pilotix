@@ -242,17 +242,15 @@ export async function getOrder(ctx: Ctx, id: number, db: Db = ctx.db, access?: '
   if (!r) throw notFound('Commande introuvable');
   const o = toOrder(r);
   if (onlyOwnDeliveries(ctx) && o.livreurId !== ctx.session.profile.id) throw forbidden();
-  // the store's own confirmation agent: only his own orders (given to him, handled or typed by him, held now)
+  // A store agent can open orders assigned to them, held by them or linked to their SAV work.
   const own = ownRowSql(ctx);
   if (own && !(await db.query(`SELECT 1 FROM orders o WHERE o.id = $1 AND ${own}`, [id])).length) throw forbidden('Cette commande est donnée à un autre agent');
   // a confirmation agency's agent: only the orders the store gives the agency, for their tasks
   const ag = agencyOf(ctx);
   if (ag !== null && !sav) {
-    const roles = ctx.session.roles;
-    if (!((roles.includes('confirmation') && o.confAgencyId === ag) || (roles.includes('suivi') && o.followAgencyId === ag))) throw forbidden('Cette commande n’est pas confiée à votre agence');
-    // given some products only (in the agency): the orders that came for them
-    const only = ctx.session.profile.agencyProducts;
-    if (only && !only.includes(num((await db.query('SELECT route_product_id FROM orders WHERE id = $1', [id]))[0]?.route_product_id))) throw forbidden('Cette commande n’est pas pour vos produits');
+    const scope = agencyRowSql(ctx);
+    if (!(await db.query(`SELECT 1 FROM orders o WHERE o.id = $1 AND ${scope}`, [id])).length)
+      throw forbidden('Cette commande ne vous est pas donnée ou n’est pas confiée à votre agence');
   }
   return onlyOwnDeliveries(ctx) ? hideCustomer(o) : o;
 }
@@ -1509,7 +1507,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
   for (const id of cancelledForAgency) await tellAgencyOrderStatus(ctx, id, 'cancelled', me).catch(() => {});
   if (!undo) await recordRiskConfirms(ctx, fresh.filter((x) => changed.includes(x)), me);
   await sendInPreview(ctx);
-  ctx.emit({ type: 'orders' });
+  ctx.emit({ type: 'orders', orderIds: changed });
   return { changed, noStock, blocked, autoCancelled };
 }
 
@@ -1738,7 +1736,7 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
   // cancelled with its parcel at a courier: cancelled there too (or put on « À annuler à la main »)
   if (input.status === 'cancelled' && changed.length) await (await import('./dispatch')).cancelGhosts(ctx, changed);
   await sendInPreview(ctx);
-  ctx.emit({ type: 'orders' });
+  ctx.emit({ type: 'orders', orderIds: changed });
   return { changed };
 }
 
@@ -1975,9 +1973,10 @@ function orderExtraProcs() {
 export async function deliveredReport(ctx: Ctx, i: { from: string; to: string }, view: 'sales' | 'ticket_parcels' = 'sales') {
   const R = await companyRules(ctx.db);
   const base = `FROM ${view} o LEFT JOIN delivery_companies co ON co.id = o.company_id`;
-  const D = await ctx.db.query(`SELECT ${FEE_COLS} ${base} WHERE o.follow_status = 'delivered' AND o.delivered_at >= $1 AND o.delivered_at < $2`, [i.from, i.to]);
+  const scope = andSql(rowScopeSql(ctx));
+  const D = await ctx.db.query(`SELECT ${FEE_COLS} ${base} WHERE o.follow_status = 'delivered' AND o.delivered_at >= $1 AND o.delivered_at < $2${scope}`, [i.from, i.to]);
   const B = await ctx.db.query(
-    `SELECT ${FEE_COLS} ${base} WHERE o.follow_status IN ('returning','returned') AND coalesce(o.returned_at, o.returning_at, o.updated_at) >= $1 AND coalesce(o.returned_at, o.returning_at, o.updated_at) < $2`,
+    `SELECT ${FEE_COLS} ${base} WHERE o.follow_status IN ('returning','returned') AND coalesce(o.returned_at, o.returning_at, o.updated_at) >= $1 AND coalesce(o.returned_at, o.returning_at, o.updated_at) < $2${scope}`,
     [i.from, i.to],
   );
   type Agg = { companyId: number | null; name: string; kind: string | null; n: number; amount: number; cashed: number; cashedN: number; uncashed: number; uncashedN: number; fees: number; overweight: number; returns: number; returnFees: number; returnOverweight: number; netToReceive: number; noTariff: number };
@@ -2039,15 +2038,16 @@ function topReasons(rows: { reason: string | null }[]) {
  *  out of every order decided) and parcels coming back (why, from which company, what that costs, out of the parcels
  *  that arrived). A cancelled order counts on its last change, a return on its return (or its last change). */
 export async function cancelReport(ctx: Ctx, i: { from: string; to: string }) {
+  const scope = andSql(rowScopeSql(ctx));
   const C = await ctx.db.query(
     `SELECT o.conf_status AS s, o.total, o.agent_id, p.name AS agent, ${REASON_SQL.conf} AS reason
      FROM sales o LEFT JOIN profiles p ON p.id = o.agent_id
-     WHERE o.conf_status = ANY($1) AND o.updated_at >= $2 AND o.updated_at < $3`,
+     WHERE o.conf_status = ANY($1) AND o.updated_at >= $2 AND o.updated_at < $3${scope}`,
     [CONF_DONE_BAD, i.from, i.to],
   );
   const OK = await ctx.db.query<{ agent_id: unknown; agent: string | null; n: number }>(
     `SELECT o.agent_id, p.name AS agent, count(*)::int AS n FROM sales o LEFT JOIN profiles p ON p.id = o.agent_id
-     WHERE o.confirmed_at >= $1 AND o.confirmed_at < $2 AND NOT (o.conf_status = ANY($3)) GROUP BY 1, 2`,
+     WHERE o.confirmed_at >= $1 AND o.confirmed_at < $2 AND NOT (o.conf_status = ANY($3))${scope} GROUP BY 1, 2`,
     [i.from, i.to, CONF_DONE_BAD],
   );
   const byStatus = Object.fromEntries(CONF_DONE_BAD.map((s) => [s, 0])) as Record<ConfStatus, number>;
@@ -2078,7 +2078,7 @@ export async function cancelReport(ctx: Ctx, i: { from: string; to: string }) {
   // the parcels coming back, their reason, and per company out of what it delivered (with what the returns cost)
   const B = await ctx.db.query(
     `SELECT o.follow_status AS s, o.total, ${REASON_SQL.back} AS reason
-     FROM sales o WHERE o.follow_status IN ('returning','returned') AND coalesce(o.returned_at, o.returning_at, o.updated_at) >= $1 AND coalesce(o.returned_at, o.returning_at, o.updated_at) < $2`,
+     FROM sales o WHERE o.follow_status IN ('returning','returned') AND coalesce(o.returned_at, o.returning_at, o.updated_at) >= $1 AND coalesce(o.returned_at, o.returning_at, o.updated_at) < $2${scope}`,
     [i.from, i.to],
   );
   const d = await deliveredReport(ctx, i);
@@ -2103,6 +2103,32 @@ export async function cancelReport(ctx: Ctx, i: { from: string; to: string }) {
 }
 
 // ---------------------------------------------------------------- the procedures
+export const OrderNoteInput = z.object({
+  note: z.string().max(1000).nullable(),
+  field: z.enum(['event', 'internal', 'delivery', 'customer']).default('event'),
+  previous: z.string().nullable().optional(),
+});
+
+/** Saves one note independently from cart, delivery, and status changes. */
+export async function saveOrderNote(ctx: Ctx, orderId: number, input: z.infer<typeof OrderNoteInput>, access?: 'sav') {
+  await getOrder(ctx, orderId, ctx.db, access);
+  const col = { internal: 'internal_note', delivery: 'delivery_note', customer: 'customer_note', event: null }[input.field];
+  const note = input.note?.trim() || null;
+  if (!col && !note) throw bad('Écrivez une note');
+  if (col && col !== 'internal_note') await guardHands(ctx, [orderId], true);
+  await ctx.db.tx(async (tx) => {
+    if (col) {
+      const values = input.previous === undefined ? [orderId, note] : [orderId, note, input.previous];
+      const check = input.previous === undefined ? '' : ` AND ${col} IS NOT DISTINCT FROM $3`;
+      const rows = await tx.query(`UPDATE orders SET ${col} = $2, updated_at = now(), version = version + 1 WHERE id = $1${check} RETURNING id`, values);
+      if (!rows.length) throw bad('Cette note a changé. Actualisez la commande avant de réessayer.');
+    }
+    await addEvent(tx, orderId, ctx.session.profile.id, 'note', null, input.field, note);
+  });
+  ctx.emit({ type: 'orderNote', id: orderId });
+  return { ok: true };
+}
+
 export const ordersProcs = {
   ...orderExtraProcs(),
   'orders.list': proc(null, ListInput, async (ctx, f) => {
@@ -2225,16 +2251,7 @@ export const ordersProcs = {
 
   'orders.assignCompany': proc(['depot', 'suivi', 'confirmation'], z.object({ ids, companyId: id.nullable(), livreurId: id.nullable().optional() }), (ctx, i) => assignCompanies(ctx, i)),
 
-  'orders.note': proc(null, z.object({ id, note: z.string().min(1).max(1000), field: z.enum(['event', 'internal', 'delivery', 'customer']).default('event') }), async (ctx, i) => {
-    await getOrder(ctx, i.id);
-    const col = { internal: 'internal_note', delivery: 'delivery_note', customer: 'customer_note', event: null }[i.field];
-    // a note in the history is always fine; the order's own notes do not change in a livreur's hands
-    if (col && col !== 'internal_note') await guardHands(ctx, [i.id], true);
-    if (col) await ctx.db.query(`UPDATE orders SET ${col} = $2, updated_at = now() WHERE id = $1`, [i.id, i.note]);
-    await addEvent(ctx.db, i.id, ctx.session.profile.id, 'note', null, i.field, i.note);
-    ctx.emit({ type: 'order', id: i.id });
-    return { ok: true };
-  }),
+  'orders.note': proc(null, OrderNoteInput.extend({ id }), (ctx, i) => saveOrderNote(ctx, i.id, i)),
 
   'orders.logCall': proc(['confirmation', 'suivi', 'livreur'], z.object({ id }), async (ctx, { id }) => {
     await getOrder(ctx, id); // a livreur logs calls on his own parcels only

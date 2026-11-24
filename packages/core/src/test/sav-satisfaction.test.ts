@@ -42,6 +42,7 @@ test('réglé au téléphone: the ticket is born finished, with the satisfaction
 test('after a delivered exchange: asked by a call; no answer is counted; unhappy reopens', async () => {
   const ctx = await as(EMAILS.suivi);
   const orderId = await deliveredOrder(1);
+  await db.query('UPDATE orders SET follow_agent_id=$2 WHERE id=$1', [orderId, ctx.session.profile.id]);
   const t: any = await call('sav.create', ctx, { orderId, type: 'defect', details: 'Roue voilée' });
   const full: any = await call('sav.get', ctx, { id: t.id });
   const item = full.order.items[0];

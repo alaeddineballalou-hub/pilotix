@@ -2,6 +2,7 @@
 // boutiques » (boutiquework.ts). Each shop answers as the person's own account there; counts add up, lists are merged
 // in their order and the page asked is cut, the next order to call is taken from the shop whose customer waits the most.
 import { z } from 'zod';
+import { LEVEL_RANK, type Order } from '@pilotix/shared';
 import { num } from '../db';
 import { bad, Ctx } from '../rpc';
 import { DEFAULT_SORT } from './confirmation';
@@ -61,6 +62,7 @@ const CONF_KEY: Record<string, Key> = {
   confirmed_at: (r) => r.confirmedAt ?? null,
   next_call_at: (r) => r.nextCallAt ?? null,
   total: (r) => r.total ?? null,
+  score: (r: Order) => LEVEL_RANK[r.clientScore?.level ?? 'new'] * 1000 + (r.clientScore?.score ?? 60),
   customer_name: (r) => (r.customerName ? String(r.customerName).toLowerCase() : null),
 };
 const SUIVI_SORT: Record<string, { key: Key; dir: 'asc' | 'desc' }> = {
@@ -133,15 +135,32 @@ export const FANOUT: Record<string, Fan> = {
   'confirmation.counts': sum,
   'confirmation.mine': sum,
   'suivi.counts': sum,
+  'sav.kpis': {
+    merge: (parts) => ({ ...sumDeep(parts.map((p) => p.out)), avgMs: null }),
+  },
+  'sav.list': {
+    paged: { defaultSize: 100, max: 500 },
+    input: (i) => ({ ...i, page: 1, pageSize: Math.min(500, (i?.page ?? 1) * (i?.pageSize ?? 100)) }),
+    merge: (parts, i) => {
+      const finished = ['livres', 'annules', 'termines'].includes(i?.view);
+      const satisfaction = i?.view === 'satisfaction';
+      const key: Key = (r) => satisfaction ? r.resolvedAt : finished ? r.updatedAt : r.createdAt;
+      return {
+        ...mergeRows(parts, key, satisfaction ? 'asc' : 'desc', i?.page ?? 1, i?.pageSize ?? 100),
+        counts: sumDeep(parts.map((p) => p.out.counts)) ?? { todo: 0, all: 0, mine: 0, nobody: 0, view: 0 },
+      };
+    },
+  },
   'mk.overview': mkAll,
   'confirmation.list': {
+    paged: { defaultSize: 50, max: 3000 },
     input: (i) => ({ ...i, page: 1, pageSize: Math.min(3000, (i?.page ?? 1) * (i?.pageSize ?? 50)) }),
     merge: (parts, i) => {
       const sub = (i?.sub ?? 'nouvelles') as keyof typeof DEFAULT_SORT;
       const def = DEFAULT_SORT[sub] ?? DEFAULT_SORT.nouvelles;
       let sort: string = i?.sort ?? def.sort;
       if (sort === 'deadline' && sub !== 'nouvelles' && sub !== 'attente') sort = 'created_at';
-      const dir = i?.dir ?? (i?.sort ? (i.sort === 'total' ? 'desc' : 'asc') : def.dir);
+      const dir = i?.dir ?? (i?.sort ? (i.sort === 'total' || i.sort === 'score' ? 'desc' : 'asc') : def.dir);
       return mergeRows(parts, CONF_KEY[sort] ?? CONF_KEY.created_at, dir, i?.page ?? 1, i?.pageSize ?? 50);
     },
   },
