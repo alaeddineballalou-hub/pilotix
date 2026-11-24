@@ -25,7 +25,7 @@ import { toastUndo } from '../../lib/undo';
 import './check.css';
 import './photos.css';
 import { askRisk } from '../../ui/clientScore';
-import { useHold } from './hold';
+import { useHold, useMayOverrideHold } from './hold';
 import { rightOn } from '../../lib/rights';
 
 interface Line {
@@ -77,9 +77,8 @@ export function Detail({ order, onDone, onMessageDone, phone }: {
   const grid = useRpc('confirmation.gridFee', { id: order.id }, { staleTime: 60_000 });
   /** another agent has this order open: he works on it, this card only shows it */
   const heldBy = useHold(order);
-  const { has: hasRole } = useSession();
-  /** a manager or the owner may still act on it (to unblock it) */
-  const mgrHold = hasRole('agent_manager', 'vendeur');
+  /** whoever is above the agents may still act on it (to unblock it): a store's managers and owner, an agency's chiefs */
+  const mgrHold = useMayOverrideHold();
   const initial = useMemo<Line[]>(() => order.items.map((i) => ({ productId: i.productId, variantId: i.variantId, name: i.name, variantTitle: i.variantTitle, qty: i.qty, unitPrice: i.unitPrice, isUpsell: i.isUpsell, forProductId: i.forProductId ?? null })), [order]);
   const [L, setL] = useState<Line[]>(initial);
   /** the pictures of the cart's products */

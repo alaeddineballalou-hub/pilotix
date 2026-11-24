@@ -1,6 +1,7 @@
 // One order = one agent: an order opened in Confirmation (a list's row, the phone card, « Commande suivante ») is kept
 // for this agent 10 minutes (confirmation.hold), renewed while it stays open, given back when it closes.
-// Another agent has it: the name comes back, the card says so, and the server refuses his clicks (setConf).
+// Another agent has it: the name comes back, the card says so, and the server refuses his clicks (setConf). Whoever is
+// above the agents (useMayOverrideHold) is told the name too, and may still change it.
 import { CONF_TODO, Order } from '@pilotix/shared';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -44,14 +45,25 @@ export function useHold(order: Order): string | null {
   return can ? by : null;
 }
 
+/**
+ * May I still change an order another agent has open (to unblock it)? Whoever is above the agents: a store's owner,
+ * administrators and agent managers; in an agency's space (AgentView) its chief and its chefs d'équipe. The same rule
+ * as the server's (orders.ts: mayOverrideHold; agencyscope.ts: agencyLead). Only a plain agent just looks at it.
+ */
+export function useMayOverrideHold(): boolean {
+  const { session, has } = useSession();
+  return has('agent_manager', 'vendeur') || !!session?.profile.agencyLead;
+}
+
 /** In a list: « 🔒 Samira » next to the customer, when another agent has the order open. */
 export function HeldChip({ o }: { o: Pick<Order, 'lockedBy'> }) {
   const { me } = useSession();
+  const mgr = useMayOverrideHold();
   const { t } = useTranslation();
   if (!o.lockedBy || o.lockedBy.id === me) return null;
   const name = o.lockedBy.name || '?';
   return (
-    <span className="badge t-warn px-held" title={t('confirmation.hold.by', { name })}>
+    <span className="badge t-warn px-held" title={t(mgr ? 'confirmation.hold.mgr' : 'confirmation.hold.by', { name })}>
       {t('confirmation.hold.chip', { name })}
     </span>
   );

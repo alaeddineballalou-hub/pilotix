@@ -144,3 +144,53 @@ test('an agency: its chief and chefs d’équipe give its orders to its agents; 
   await assert.rejects(call('orders.assignAgent', hakim2, { ids: [o2.id], agentId: hakimHere }), /chef de l’agence ou un chef d’équipe/);
   assert.deepEqual(ids(await call('confirmation.list', hakim2, { sub: 'nouvelles' })), [o1.id]);
 });
+
+test('an order one of the agency’s agents has open: its chief and its chefs d’équipe still change it (24 Nov 2026)', async () => {
+  // the owner's rule: whoever is above an agent may do anything the agent does, on the agent's orders too; the 🔒 card
+  // tells them « … est sur cette commande en ce moment. Vous pouvez quand même la changer. » (web: useMayOverrideHold)
+  const { t, p } = await server();
+  const shop = await store(t, p, 'Boutique Sétif', 'karim@setif.dz');
+  const ag = await agency(t, 'The Closer', 'samir@closer.dz');
+  await p('p.agencies.verify', { id: ag.id, verified: true });
+  const chief = await as(t, ag.id, 'samir@closer.dz', PW);
+  await call('agency.prices', chief, { prices: PRICES });
+  const admin = await as(t, shop.id, 'karim@setif.dz', PW);
+  const { id: linkId } = (await call('partners.request', admin, { agencyId: ag.id, tasks: ['confirmation'], products: null })) as any;
+  await call('agency.answer', chief, { id: linkId, accept: true });
+  await call('users.create', chief, { phone: tph(), name: 'Hakim', email: 'hakim@closer.dz', password: PW, roles: ['agent_manager'] });
+  await call('users.create', chief, { phone: tph(), name: 'Moh', email: 'moh@closer.dz', password: PW, roles: ['confirmation'] });
+  await call('users.create', chief, { phone: tph(), name: 'Nora', email: 'nora@closer.dz', password: PW, roles: ['confirmation'] });
+  const moh = Number((await shop.db.query('SELECT id FROM profiles WHERE email = $1', ['moh@closer.dz']))[0].id);
+  const at = (c: Ctx): Ctx => ({ ...c, seller: shop.id });
+  const hakim = at(await as(t, ag.id, 'hakim@closer.dz', PW));
+  const mohC = at(await as(t, ag.id, 'moh@closer.dz', PW));
+  const noraC = at(await as(t, ag.id, 'nora@closer.dz', PW));
+  const status = async (id: number) => {
+    const r = (await shop.db.query('SELECT conf_status, attempts FROM orders WHERE id = $1', [id]))[0];
+    return `${r.conf_status} · ${Number(r.attempts)}`;
+  };
+
+  const o1 = await order(admin, shop.products.VELO, '0661000201');
+  const o2 = await order(admin, shop.products.VELO, '0661000202');
+  await call('orders.assignAgent', hakim, { ids: [o1.id, o2.id], agentId: moh });
+
+  // Moh presses « Commande suivante »: the order is his for 10 minutes; the chef d'équipe's list says « 🔒 Moh », and he
+  // still changes it
+  const first = Number(((await call('orders.next', mohC, {})) as any).id);
+  const [mine, other] = first === o1.id ? [o1, o2] : [o2, o1];
+  const row = (await call('confirmation.list', hakim, { sub: 'nouvelles' }) as any).rows.find((r: any) => r.id === mine.id);
+  assert.equal(row?.lockedBy?.name, 'Moh');
+  await call('orders.setConf', hakim, { ids: [mine.id], status: 'no_answer' });
+  assert.equal(await status(mine.id), 'no_answer · 1');
+
+  // Moh takes the next one: the chief of the agency (its administrator) changes it too
+  assert.equal(Number(((await call('orders.next', mohC, { skip: [mine.id] })) as any).id), other.id);
+  const row2 = (await call('confirmation.list', at(chief), { sub: 'nouvelles' }) as any).rows.find((r: any) => r.id === other.id);
+  assert.equal(row2?.lockedBy?.name, 'Moh');
+  await call('orders.setConf', at(chief), { ids: [other.id], status: 'no_answer' });
+  assert.equal(await status(other.id), 'no_answer · 1');
+
+  // a plain agent never touches another agent's order: it is not given to her
+  await assert.rejects(call('orders.setConf', noraC, { ids: [other.id], status: 'no_answer' }), /ne vous est pas donnée/);
+  assert.equal(await status(other.id), 'no_answer · 1', 'no call counted');
+});
