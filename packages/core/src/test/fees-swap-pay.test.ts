@@ -61,10 +61,18 @@ test('swap fees: ZR by its API (locked), others 50 / 100 DA or typed, none for o
 test('a swapped parcel: the swap fee is on the cost of the order that gets it', async () => {
   const suivi = await as(EMAILS.suivi);
   const zr = await companyId('zr');
-  const a = (await db.query(`SELECT id, wilaya_id FROM orders WHERE follow_status = 'returning' AND shipped_at IS NOT NULL AND tracking IS NOT NULL ORDER BY id LIMIT 1`))[0];
-  const b = (await db.query(`SELECT id, wilaya_id FROM orders WHERE conf_status = 'confirmed' AND follow_status = 'to_prepare' AND shipped_at IS NULL AND wilaya_id <> $1 ORDER BY id LIMIT 1`, [a.wilaya_id]))[0];
+  // (not one of ZR's southern wilayas: those swap only inside the wilaya; a home delivery: no bureau of another company)
+  const a = (await db.query(`SELECT id, wilaya_id FROM orders WHERE follow_status = 'returning' AND shipped_at IS NOT NULL AND tracking IS NOT NULL AND NOT (wilaya_id = ANY('{1,8,11,30,32,45,49,52,53,54,58}'::int[])) ORDER BY id LIMIT 1`))[0];
+  const b = (await db.query(`SELECT id, wilaya_id FROM orders WHERE conf_status = 'confirmed' AND follow_status = 'to_prepare' AND shipped_at IS NULL AND NOT is_stopdesk AND wilaya_id <> $1 ORDER BY id LIMIT 1`, [a.wilaya_id]))[0];
   await db.query('UPDATE orders SET follow_agent_id=$2 WHERE id = ANY($1)', [[a.id, b.id], suivi.session.profile.id]);
   await db.query('UPDATE orders SET company_id = $2, delivery_cost = 400 WHERE id = $1', [a.id, zr]);
+  // b asks for exactly the parcel's products (the only orders a swap gives a parcel to)
+  await db.query('DELETE FROM order_items WHERE order_id = $1', [b.id]);
+  await db.query(
+    `INSERT INTO order_items (order_id, product_id, variant_id, name, variant_title, qty, unit_price, purchase_price, is_upsell, for_product_id)
+     SELECT $2, product_id, variant_id, name, variant_title, qty, unit_price, purchase_price, is_upsell, for_product_id FROM order_items WHERE order_id = $1`,
+    [a.id, b.id],
+  );
   const r: any = await call('suivi.swap', suivi, { fromId: Number(a.id), toId: Number(b.id) });
   assert.equal(r.to.deliveryCost, 400 + 100, 'another wilaya: 100 DA more');
   const ev = (await db.query(`SELECT note FROM order_events WHERE order_id = $1 AND kind = 'follow_status' ORDER BY id DESC LIMIT 1`, [b.id]))[0];

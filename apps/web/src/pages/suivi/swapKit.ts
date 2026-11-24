@@ -1,5 +1,6 @@
-// Swap: what the computer dialogs and the phone sheets share — choosing the order that receives a cancelled parcel,
-// then copying, field by field, what its courier must change.
+// Swap: what the computer dialogs and the phone sheets share — choosing the order that receives a cancelled parcel (only
+// one asking for exactly the same products), then either ZR swaps it itself through its API, or each field its courier
+// must change is copied by hand (another company, our own livreurs).
 import type { Order } from '@pilotix/shared';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,8 +9,11 @@ import { useAction, useRpc } from '../../lib/query';
 import { copyText } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 
-export type Cand = Order & { sameWilaya: boolean; sameVariant: boolean; sameProduct: boolean };
-export type SwapResult = { from: Order; to: Order; oldTracking: string | null; oldTotal: number; wasPrepared?: boolean; companyKind: string | null };
+export type Cand = Order & { sameWilaya: boolean; sameCommune?: boolean; swapFee?: number | null };
+/** `viaApi`: made at the company itself (ZR) — nothing to copy, nothing to tell it */
+export type SwapResult = { from: Order; to: Order; oldTracking: string | null; oldTotal: number; wasPrepared?: boolean; companyKind: string | null; viaApi?: boolean; swapFee?: number };
+/** ZR itself when the window opens: does it still take a swap of this parcel, how many were made (2 at most), its prices */
+export type SwapCourier = { eligible: boolean; count: number; same: number | null; other: number | null };
 
 /** The suggested orders (same product, not shipped yet), a search for another one, the choice and the swap. */
 export function useSwapPick(o: Order, onDone: (r: SwapResult) => void) {
@@ -23,6 +27,7 @@ export function useSwapPick(o: Order, onDone: (r: SwapResult) => void) {
     return () => clearTimeout(h);
   }, [q]);
   const sug = useRpc('suivi.swapCandidates', { fromId: o.id });
+  const meta = (sug.data ?? null) as { viaApi?: boolean; company?: string | null; sameWilayaOnly?: boolean; courier?: SwapCourier | null } | null;
   const found = useRpc('suivi.swapCandidates', { fromId: o.id, q: deb }, { enabled: deb.length >= 2 });
   const swap = useAction('suivi.swap', { onDone: (r) => onDone(r as SwapResult) });
   return {
@@ -37,6 +42,13 @@ export function useSwapPick(o: Order, onDone: (r: SwapResult) => void) {
     found,
     foundRows: (found.data?.rows ?? []) as Cand[],
     swap,
+    /** made by the company's API (ZR): one click, at once */
+    viaApi: !!meta?.viaApi,
+    company: meta?.company ?? o.companyName ?? null,
+    sameWilayaOnly: !!meta?.sameWilayaOnly,
+    courier: meta?.courier ?? null,
+    /** ZR said it does not take a swap of this parcel any more */
+    closed: !!meta?.courier && !meta.courier.eligible,
     submit: () => (pick ? swap.mutate({ fromId: o.id, toId: pick.id }) : setErr(t('suivi.swapM.pick'))),
   };
 }

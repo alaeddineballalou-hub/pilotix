@@ -1,6 +1,6 @@
 // Swap on a phone: give a cancelled parcel to another customer whose order waits at the depot — the parcel at the
-// top, the customers as big cards (same wilaya, same product, ZR's swap price), « Donner le colis à … » at the thumb;
-// then each line ZR must change, copied with one tap.
+// top, the customers as big cards (only exactly the same products; same wilaya first; ZR's swap price), « Donner le
+// colis à … » at the thumb; ZR swaps it itself through its API, else each line its courier must change is copied.
 import type { Order } from '@pilotix/shared';
 import { useTranslation } from 'react-i18next';
 import { da, wilayaName } from '../../lib/format';
@@ -11,6 +11,7 @@ import { toast } from '../../ui/toast';
 import { productsText, swapText } from './common';
 import { useParcelInfo } from './CourierPanel';
 import { Cand, SwapResult, useCopyFields, useSwapPick } from './swapKit';
+import { UnswapButton } from './Unswap';
 
 export function SwapPickSheet({ o, onClose, onDone }: { o: Order; onClose: () => void; onDone: (r: SwapResult) => void }) {
   const { t } = useTranslation();
@@ -38,8 +39,7 @@ export function SwapPickSheet({ o, onClose, onDone }: { o: Order; onClose: () =>
           </small>
           <small>{productsText(x)}</small>
           <span className="pxw-tags">
-            {x.sameWilaya && <span className="ok">{t('suivi.swapM.ph.tagWilaya')}</span>}
-            {x.sameVariant ? <span className="info">{t('suivi.swapM.ph.tagVariant')}</span> : x.sameProduct ? <span className="mid">{t('suivi.swapM.ph.tagProduct')}</span> : <span className="warn">{t('suivi.swapM.ph.tagOther')}</span>}
+            {x.sameWilaya ? <span className="ok">{t('suivi.swapM.ph.tagWilaya')}</span> : <span className="mid">{t('suivi.swapM.ph.tagOtherWilaya')}</span>}
             {x.followStatus === 'prepared' ? <span className="warn">{t('suivi.swapM.ph.tagPrepared')}</span> : <span>{t('suivi.swapM.ph.tagToPrepare')}</span>}
             {p != null && <span className="zr">{t('suivi.swapM.ph.zrCost', { v: da(p) })}</span>}
           </span>
@@ -60,11 +60,10 @@ export function SwapPickSheet({ o, onClose, onDone }: { o: Order; onClose: () =>
       onClose={onClose}
       foot={
         <>
-          {f.pick && !f.pick.sameVariant && <p className="pxk-warn">{t('suivi.swapM.mismatch', { a: productsText(o), ref: f.pick.ref, b: productsText(f.pick) })}</p>}
-          <button type="button" className="pxk-go" disabled={!f.pick || f.swap.isPending || (!!sw && !sw.eligible)} onClick={f.submit}>
-            <Icon name="swap" /> {f.pick ? t('suivi.swapM.ph.give', { name: f.pick.customerName }) : t('suivi.swapM.ph.pickFirst')}
+          <button type="button" className="pxk-go" disabled={!f.pick || f.swap.isPending || f.closed || (!!sw && !sw.eligible)} onClick={f.submit}>
+            <Icon name="swap" /> {f.swap.isPending && f.viaApi ? t('suivi.swapM.sending', { company: f.company ?? '' }) : f.pick ? t('suivi.swapM.ph.give', { name: f.pick.customerName }) : t('suivi.swapM.ph.pickFirst')}
           </button>
-          <p className="pxk-fnote">{t('suivi.swapM.ph.foot')}</p>
+          <p className="pxk-fnote">{f.viaApi ? t('suivi.swapM.ph.footApi', { company: f.company ?? '' }) : t('suivi.swapM.ph.foot')}</p>
         </>
       }
     >
@@ -80,6 +79,7 @@ export function SwapPickSheet({ o, onClose, onDone }: { o: Order; onClose: () =>
         </span>
         <b className="ltr">{da(o.total)}</b>
       </div>
+      {f.sameWilayaOnly && <p className="pxk-warn">{t('suivi.swapM.southOnly', { company: f.company ?? '' })}</p>}
       {sw &&
         (sw.eligible ? (
           <p className="pxk-info">
@@ -128,7 +128,49 @@ export function SwapPickSheet({ o, onClose, onDone }: { o: Order; onClose: () =>
   );
 }
 
+/** Made at the company itself (ZR, by API): what happened, nothing to copy. */
+function SwapDoneSheet({ from, to, wasPrepared, swapFee, onClose }: SwapResult & { onClose: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <Sheet
+      title={t('suivi.sheet.title')}
+      sub={
+        <>
+          <span className="ltr">{from.ref}</span> → <span className="ltr">{to.ref}</span> · {to.customerName}
+        </>
+      }
+      onClose={onClose}
+      foot={
+        <button type="button" className="pxk-go ok" onClick={onClose}>
+          <Icon name="check" /> {t('suivi.sheet.ph.done')}
+        </button>
+      }
+    >
+      <p className="pxk-okb">{t('suivi.sheet.ok', { a: from.ref, b: to.ref })}</p>
+      <fieldset className="pxk-q">
+        <legend>{t('suivi.sheet.apiDone', { company: to.companyName ?? '' })}</legend>
+        <ul className="bjsv-done">
+          <li>{t('suivi.sheet.apiTo', { name: to.customerName, phone: to.phone })}</li>
+          <li>{t('suivi.sheet.apiWhere', { place: [wilayaName(to.wilayaId), to.commune].filter(Boolean).join(' · ') })}</li>
+          <li>{t('suivi.sheet.apiTotal', { v: da(to.total) })}</li>
+          {!!swapFee && <li>{t('suivi.sheet.apiFee', { company: to.companyName ?? '', v: da(swapFee) })}</li>}
+        </ul>
+      </fieldset>
+      {wasPrepared !== undefined && (
+        <p className={wasPrepared ? 'pxk-bad' : 'pxk-warn'}>
+          <b>{t('suivi.sheet.depot')}</b>
+          {wasPrepared ? t('suivi.sheet.wasPrepared', { ref: to.ref }) : t('suivi.sheet.wasToPrepare', { ref: to.ref, from: from.ref })}
+        </p>
+      )}
+    </Sheet>
+  );
+}
+
 export function SwapCopySheet(p: SwapResult & { fresh?: boolean; onClose: () => void }) {
+  if (p.viaApi) return <SwapDoneSheet {...p} />;
+  return <SwapCopyLines {...p} />;
+}
+function SwapCopyLines(p: SwapResult & { fresh?: boolean; onClose: () => void }) {
   const { t } = useTranslation();
   const { from, to, oldTracking, oldTotal, wasPrepared, fresh, onClose } = p;
   const c = useCopyFields(p, true);
@@ -198,6 +240,7 @@ export function SwapCopySheet(p: SwapResult & { fresh?: boolean; onClose: () => 
         </button>
       )}
       {c.own ? <p className="pxk-info">{t('suivi.sheet.ownInfo', { tracking: oldTracking || '—' })}</p> : <p className="pxk-warn">{t('suivi.sheet.companyWarn', { company: to.companyName })}</p>}
+      <UnswapButton id={from.id} from={from.ref} to={to.ref} small={false} onDone={onClose} />
     </Sheet>
   );
 }

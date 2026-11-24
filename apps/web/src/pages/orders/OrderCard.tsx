@@ -16,6 +16,7 @@ import { askRisk, ScoreCard } from '../../ui/clientScore';
 import { dropActions, toast } from '../../ui/toast';
 import { Modal } from '../../ui/modal';
 import { toastUndo } from '../../lib/undo';
+import { UnswapButton } from '../suivi/Unswap';
 import { AttemptMessageLock, finalAttempt, messageAttempt } from '../confirmation/AttemptMessage';
 import { confLabel, printOrder, telHref, waHref } from './shared';
 import './orders.css';
@@ -633,7 +634,8 @@ function UndoBar({ o, refresh }: { o: Order; refresh: () => void }) {
   const c = q.data;
   if (!c || !c.to) return null;
   const recent = Date.now() - Date.parse(c.at) < 24 * 3_600_000;
-  if (c.why && (!recent || c.why === 'nothing' || c.why === 'moved')) return null;
+  // a swap made in Pilotix alone: « Annuler le swap » stays offered (a wrong swap can be seen days later)
+  if (c.why && !c.swapUndo && (!recent || c.why === 'nothing' || c.why === 'moved')) return null;
   const lab = (s: string | null) => (s ? t(`status.${c.area === 'follow' ? 'follow' : 'conf'}.${s}`, { defaultValue: s }) : '—');
   const what = lab(c.to);
   const fx = (e: (typeof c.effects)[number]) =>
@@ -653,15 +655,17 @@ function UndoBar({ o, refresh }: { o: Order; refresh: () => void }) {
     }
   };
   return (
-    <div className={`oc-undo${c.why ? ' off' : ''}`}>
+    <div className={`oc-undo${c.why && !c.swapUndo ? ' off' : ''}`}>
       <Icon name="undo" />
       <span className="oc-undo-t">
         <b>{t('orders.undo.last', { what })}</b>
         <small>
           {c.by ?? t('orders.undo.system')} · {when(c.at)}
         </small>
-        {c.why && <small className="oc-undo-why">{t(`orders.undo.why.${c.why}`, { by: c.by ?? t('orders.undo.system'), holder: c.holder ?? '' })}</small>}
+        {c.why && !c.swapUndo && <small className="oc-undo-why">{t(`orders.undo.why.${c.why}`, { by: c.by ?? t('orders.undo.system'), holder: c.holder ?? '' })}</small>}
+        {c.swapUndo && <small className="oc-undo-why">{t('suivi.unswap.why')}</small>}
       </span>
+      {c.swapUndo && <UnswapButton id={o.id} onDone={refresh} />}
       {!c.why && (
         <button type="button" className="btn small" disabled={busy} onClick={() => setAsk(true)}>
           ↶ {t('orders.undo.do')}

@@ -1318,6 +1318,8 @@ pre.code { background: var(--raise); border: 1px solid var(--line); border-radiu
 .bjsv-kpis .kpi.bjsv-on { border: 2px solid var(--navy); background: var(--sky-soft); }
 .bjsv-swap { display: flex; flex-direction: column; gap: 10px; }
 .bjsv-swap h3 { margin: 6px 0 0; }
+/* a swap made at the company by API: what it changed there */
+.bjsv-done { margin: 4px 0 12px; padding-inline-start: 20px; display: grid; gap: 4px; }
 .bjsv-cands { display: flex; flex-direction: column; gap: 6px; max-height: 38vh; overflow-y: auto; }
 .bjsv-cand { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface); cursor: pointer; }
 .bjsv-cand:has(input:checked) { border-color: var(--navy); background: var(--sky-soft); }

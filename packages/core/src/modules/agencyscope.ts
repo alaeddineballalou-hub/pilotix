@@ -386,6 +386,7 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'suivi.swapCandidates': order('fromId'),
   'suivi.swap': swapPair,
   'suivi.swapTarget': order('id'),
+  'suivi.unswap': order('id'),
   // Réclamations with the delivery companies, on the agency's orders
   'suivi.contacts': free,
   'suivi.findOrders': free,

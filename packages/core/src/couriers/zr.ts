@@ -13,7 +13,7 @@
 // BEST GUESS (check with real keys): the "state.name" values in STATUSES below come from ZR's dashboard wording;
 // unknown ones are shown as-is and can be mapped by hand with the "Statuts" button.
 import { cacheKeyOf } from './types';
-import type { BagAdded, BagInfo, ChangeInput, ChangeState, ClaimCategory, ClaimState, CourierAdapter, CourierBags, CourierCompany, CourierStep, Desk, FeeRow, Helpers, Parcel, ParcelInfo, TrackItem } from './types';
+import type { BagAdded, BagInfo, ChangeInput, ChangeState, ClaimCategory, ClaimState, CourierAdapter, CourierBags, CourierCompany, CourierStep, Desk, FeeRow, Helpers, Parcel, ParcelInfo, SwapInput, SwapSent, TrackItem } from './types';
 import { ASK_AGAIN_MS, baseUrl, bestMatch, CourierError, cut, http, intl, LIST_KEPT_MS, listClock, needKeys, sleep, timeUp } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
@@ -686,8 +686,75 @@ async function parcelOfOrder(c: CourierCompany, ref: string) {
   return x?.id ? { tracking: String(x.trackingNumber || x.id), extId: String(x.id), labelUrl: null } : null;
 }
 
+// ---------------------------------------------------------------- swap (ZR's « Swaps »)
+/** ZR's swap address: not in its public documentation, in the list its own app uses (« Internal V1 » of
+ *  https://api.zrexpress.app/swagger, read 24 Nov 2026: « Creates and applies a parcel swap modification request »). */
+const SWAP_PATH = '/parcel-modification-requests/swap';
+
+/**
+ * Gives a parcel its customer did not take to another customer, straight from ZR: ZR changes its customer (name, phones),
+ * its address (home or one of its bureaus) and the amount to collect at once, and it cannot be undone there. ZR is asked
+ * first whether it allows it (« Ne répond pas 3 » or « Commande annulée », before the return, 2 swaps at most), so its
+ * refusal is said in plain words.
+ */
+async function swapParcel(c: CourierCompany, i: SwapInput, helpers: Helpers): Promise<SwapSent> {
+  needKeys(c, 'api_key', 'tenant');
+  const cur = await http(c.name, url(c, `/parcels/${encodeURIComponent(i.item.extId || i.item.tracking)}`), { headers: h(c) });
+  if (!cur?.id) throw new CourierError(`Colis ${i.item.tracking} introuvable chez ZR`);
+  if (cur.swap && cur.swap.isEligibleForSwap === false) {
+    if (numOf(cur.swap.count) >= 2) throw new CourierError('ZR refuse : ce colis a déjà été swappé 2 fois (le maximum)');
+    const now = [word(cur.state), word(cur.situation)].filter(Boolean).join(' · ');
+    throw new CourierError(`ZR refuse le swap de ce colis maintenant${now ? ` (${now})` : ''} : seulement en « Ne répond pas 3 » ou « Commande annulée », avant son retour`);
+  }
+  const p = i.to;
+  const phone = { number1: intl(p.phone), ...(p.phone2 ? { number2: intl(p.phone2) } : {}) };
+  if (!phone.number1) throw new CourierError('Le téléphone du nouveau client manque');
+  const { hubId, address } = await zrAddress(c, p, helpers);
+  const body: Record<string, unknown> = {
+    parcelId: String(cur.id),
+    newCustomerName: cut(p.customer_name || 'Client', 100),
+    phone,
+    deliveryType: p.is_stopdesk ? 'pickup-point' : 'home',
+    deliveryAddress: address,
+    amount: Math.round(p.total),
+  };
+  if (hubId) body.hubId = hubId;
+  let r: any;
+  try {
+    r = await http(c.name, url(c, SWAP_PATH), { method: 'POST', headers: h(c), json: body });
+  } catch (e: any) {
+    // the keys work for everything else: say that ZR refuses this one action with them (the swap is then done in ZR's space)
+    if (String(e?.message).includes('refuse les clés')) throw new CourierError('ZR refuse le swap par API avec cette clé : faites ce swap dans l’espace ZR (menu « Swaps »)');
+    throw e;
+  }
+  const id = r?.id || (typeof r === 'string' ? r : null);
+  // made: its tracking number read back (ZR may give the parcel a new one), the old one kept if ZR does not answer
+  const after = await http(c.name, url(c, `/parcels/${encodeURIComponent(String(cur.id))}`), { headers: h(c) }).catch(() => null);
+  return { extId: id ? String(id) : null, parcelExtId: String(cur.id), tracking: String(after?.trackingNumber || cur.trackingNumber || i.item.tracking) };
+}
+
+/** « Tester »: whether ZR takes the swap from Pilotix with these keys — asked for a parcel that does not exist, so nothing
+ *  is ever swapped: ZR looking for it means it accepts the keys for swaps. */
+async function swapReady(c: CourierCompany): Promise<string> {
+  const none = '00000000-0000-0000-0000-000000000000';
+  try {
+    await http(c.name, url(c, SWAP_PATH), { method: 'POST', headers: h(c), json: { parcelId: none, phone: { number1: '+213550000000' }, deliveryType: 'home', deliveryAddress: { cityTerritoryId: none, districtTerritoryId: none, street: '-' }, amount: 0 } });
+    return 'Swap par API : prêt.';
+  } catch (e: any) {
+    const m = String(e?.message ?? '');
+    if (m.includes('refuse les clés')) return 'Swap par API : ZR le refuse avec cette clé (faites les swaps dans l’espace ZR).';
+    if (/erreur 404$|erreur 405$/.test(m)) return 'Swap par API : adresse inconnue chez ZR (faites les swaps dans l’espace ZR).';
+    if (/trop de demandes|erreur 5\d\d$/.test(m)) return 'Swap par API : ZR ne répond pas maintenant, réessayez.';
+    return 'Swap par API : prêt.';
+  }
+}
+
 export const zr: CourierAdapter = {
   statuses: STATUSES,
+  // « Commande annulée » or « Ne répond pas 3 » under any status (« Sortie en livraison », « Confirmé au bureau »…): the
+  // customer cancelled or never answered — an alert, never left « En livraison » (24 Nov 2026), and ZR's swap is open
+  situations: { 'Commande annulée': 'alert', 'Ne répond pas 3': 'alert' },
+  swap: swapParcel,
   payments,
   bags,
   webhook,
@@ -701,7 +768,7 @@ export const zr: CourierAdapter = {
   async test(c) {
     needKeys(c, 'api_key', 'tenant');
     await http(c.name, url(c, '/territories/search'), { method: 'POST', headers: h(c), json: { keyword: 'alger', pageSize: 1, pageNumber: 1 } });
-    return { ok: true, message: `Connexion réussie à ${c.name} (ZR Express).` };
+    return { ok: true, message: `Connexion réussie à ${c.name} (ZR Express). ${await swapReady(c)}` };
   },
   async create(c, p, helpers) {
     needKeys(c, 'api_key', 'tenant');

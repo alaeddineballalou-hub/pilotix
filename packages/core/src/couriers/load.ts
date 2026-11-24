@@ -7,7 +7,7 @@ import { notFound } from '../rpc';
 import { getSetting } from '../settings';
 import { requiredKeys } from './kinds';
 import type { CourierCompany, Parcel, TrackResult } from './types';
-import { ASK_AGAIN_MS, bestMatch, LIST_KEPT_MS, listClock, matchCommune } from './util';
+import { ASK_AGAIN_MS, bestMatch, LIST_KEPT_MS, listClock, matchCommune, sameName } from './util';
 
 export async function loadCompany(db: Db, id: number): Promise<CourierCompany> {
   const r = (await db.query('SELECT * FROM delivery_companies WHERE id = $1', [id]))[0];
@@ -114,19 +114,40 @@ export const helpers = {
   },
 };
 
-/**
- * Courier status → our follow status. Order: the company's own mapping (exact, then fuzzy), then the adapter's decision,
- * then the adapter defaults (key, then words, then fuzzy). undefined = unknown (no change); null = known but no change.
- */
-export function resolveStatus(defaults: Record<string, FollowStatus | null>, own: Record<string, string>, r: Pick<TrackResult, 'key' | 'status' | 'mapped'>): FollowStatus | null | undefined {
-  const valid = (v: unknown): FollowStatus | null => (v && (FOLLOW_STATUSES as readonly string[]).includes(v as string) ? (v as FollowStatus) : null);
-  for (const k of [r.status, r.key]) if (k && Object.prototype.hasOwnProperty.call(own, k)) return valid(own[k]);
-  const fuzzyOwn = r.status ? bestMatch(r.status, Object.keys(own)) : null;
-  if (fuzzyOwn) return valid(own[fuzzyOwn]);
-  if (r.mapped !== undefined) return r.mapped;
+/** A courier status's own meaning from the adapter's defaults (key, then words, then fuzzy); undefined = unknown. */
+function byDefaults(defaults: Record<string, FollowStatus | null>, r: Pick<TrackResult, 'key' | 'status'>): FollowStatus | null | undefined {
   for (const k of [r.key, r.status]) if (k && Object.prototype.hasOwnProperty.call(defaults, k)) return defaults[k];
   const base = r.status?.split(' · ')[0];
   if (base && Object.prototype.hasOwnProperty.call(defaults, base)) return defaults[base];
   const fuzzy = base ? bestMatch(base, Object.keys(defaults)) : null;
   return fuzzy ? defaults[fuzzy] : undefined;
+}
+/** Our statuses while the parcel is still on its way to the customer (a situation can turn them into an alert). */
+const ON_THE_WAY: (FollowStatus | null | undefined)[] = [undefined, 'shipped', 'out_for_delivery', 'failed'];
+
+/**
+ * Courier status → our follow status. Order: the company's own mapping for this exact status, then the adapter's
+ * `situations` (ZR's « Commande annulée » under any status, while the parcel is still on its way), then the company's own
+ * mapping matched loosely, then the adapter's decision, then the adapter defaults (key, then words, then fuzzy).
+ * undefined = unknown (no change); null = known but no change.
+ */
+export function resolveStatus(
+  defaults: Record<string, FollowStatus | null>,
+  own: Record<string, string>,
+  r: Pick<TrackResult, 'key' | 'status' | 'mapped'>,
+  situations?: Record<string, FollowStatus | null>,
+): FollowStatus | null | undefined {
+  const valid = (v: unknown): FollowStatus | null => (v && (FOLLOW_STATUSES as readonly string[]).includes(v as string) ? (v as FollowStatus) : null);
+  for (const k of [r.status, r.key]) if (k && Object.prototype.hasOwnProperty.call(own, k)) return valid(own[k]);
+  // « Sortie en livraison · Commande annulée » was taken for the seller's « Sortie en livraison » (or for no choice at
+  // all) and stayed « En livraison » while ZR said the customer cancelled (PX1254, PX1276 on 24 Nov 2026)
+  const sit = r.status?.split(' · ').slice(1).join(' · ');
+  if (situations && sit && r.mapped === undefined) {
+    const hit = Object.keys(situations).find((k) => sameName(k, sit));
+    if (hit && ON_THE_WAY.includes(byDefaults(defaults, r))) return situations[hit];
+  }
+  const fuzzyOwn = r.status ? bestMatch(r.status, Object.keys(own)) : null;
+  if (fuzzyOwn) return valid(own[fuzzyOwn]);
+  if (r.mapped !== undefined) return r.mapped;
+  return byDefaults(defaults, r);
 }

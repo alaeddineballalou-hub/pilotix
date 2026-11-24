@@ -20,6 +20,15 @@ async function waitingOrder(exclude: number[] = []) {
   const r = (await db.query(`SELECT id FROM orders WHERE conf_status='confirmed' AND follow_status='to_prepare' AND shipped_at IS NULL AND NOT (id = ANY($1)) ORDER BY id LIMIT 1`, [exclude]))[0];
   return Number(r.id);
 }
+/** `to` asks for exactly the products of `from`'s parcel: a swap only gives a parcel to such an order (24 Nov 2026). */
+async function sameItems(from: number, to: number) {
+  await db.query('DELETE FROM order_items WHERE order_id = $1', [to]);
+  await db.query(
+    `INSERT INTO order_items (order_id, product_id, variant_id, name, variant_title, qty, unit_price, purchase_price, is_upsell, for_product_id)
+     SELECT $2, product_id, variant_id, name, variant_title, qty, unit_price, purchase_price, is_upsell, for_product_id FROM order_items WHERE order_id = $1`,
+    [from, to],
+  );
+}
 
 test('confirmation agent can claim an alert and swap a parcel once it is returning', async () => {
   const ctx = await as(EMAILS.conf);
@@ -30,6 +39,7 @@ test('confirmation agent can claim an alert and swap a parcel once it is returni
   assert.ok(claim.id);
   await assert.rejects(call('suivi.swap', ctx, { fromId, toId }), /en retour/);
   await db.query("UPDATE orders SET follow_status='returning' WHERE id=$1", [fromId]);
+  await sameItems(fromId, toId);
   await call('suivi.swapCandidates', ctx, { fromId });
   const result: any = await call('suivi.swap', ctx, { fromId, toId });
   assert.equal(result.from.subStatus, 'annule_swappe');
@@ -50,6 +60,8 @@ test('suivi: swap moves the tracking and the company to the new order', async ()
   const toId = await waitingOrder();
   const otherId = await waitingOrder([toId]);
   await db.query('UPDATE orders SET follow_agent_id=$1 WHERE id = ANY($2)', [ctx.session.profile.id, [fromId, toId, otherId]]);
+  await sameItems(fromId, toId);
+  await sameItems(fromId, otherId);
   const before = (await db.query('SELECT tracking, company_id FROM orders WHERE id=$1', [fromId]))[0];
   const cands: any = await call('suivi.swapCandidates', ctx, { fromId });
   assert.ok(Array.isArray(cands.rows));

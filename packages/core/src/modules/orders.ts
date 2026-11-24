@@ -27,6 +27,7 @@ import {
   Page,
   SALES_CHANNELS,
   slotStartOf,
+  swapWayOf,
   WILAYAS,
 } from '@pilotix/shared';
 import { officialCommune } from './coverage';
@@ -64,7 +65,7 @@ const ORDER_COLS = `o.*,
   (SELECT coalesce(json_agg(json_build_object('id', i.id, 'productId', i.product_id, 'variantId', i.variant_id, 'name', i.name,
      'variantTitle', i.variant_title, 'qty', i.qty, 'unitPrice', i.unit_price, 'purchasePrice', i.purchase_price, 'isUpsell', i.is_upsell, 'forProductId', i.for_product_id) ORDER BY i.id), '[]')
    FROM order_items i WHERE i.order_id = o.id) AS items_json,
-  ag.name AS agent_name, fa.name AS follow_agent_name, co.name AS company_name, lv.name AS livreur_name, cr.name AS creator_name,
+  ag.name AS agent_name, fa.name AS follow_agent_name, co.name AS company_name, co.kind AS company_kind, lv.name AS livreur_name, cr.name AS creator_name,
   CASE WHEN o.is_exchange THEN (SELECT k.ref FROM complaints k WHERE k.exchange_order_id = o.id ORDER BY k.id DESC LIMIT 1) END AS sav_ref,
   c.blacklisted AS c_blacklisted, c.delivered AS c_delivered, c.returned AS c_returned, c.stopdesk_only AS c_stopdesk, c.refusals AS c_refusals,
   (SELECT lk.phone FROM customers lk WHERE lk.id = o.looks_like_customer_id) AS looks_like_phone,
@@ -158,6 +159,8 @@ export function toOrder(r: any): Order {
     companyName: r.company_name ?? null,
     livreurName: r.livreur_name ?? null,
     subStatus: r.sub_status ?? null,
+    // « Swap »: through the company's API while it allows it (ZR), else by hand on a parcel coming back
+    swapWay: r.company_kind === undefined ? undefined : swapWayOf({ followStatus: r.follow_status, extStatus: r.ext_status, shippedAt: isoOrNull(r.shipped_at) }, r.company_kind),
     lastCallAt: isoOrNull(r.last_call_at),
     version: num(r.version),
     confAgencyId: numOrNull(r.conf_agency_id),

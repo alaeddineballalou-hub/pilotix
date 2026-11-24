@@ -82,6 +82,7 @@ type Args = {
  * bagCreate {companyId, items} · bagAdd {companyId, bag, items} · bagRemove {companyId, bag, item} · bags {companyId} ·
  * bagLabel {companyId, bag: its number} · bagDrop {companyId, bag} · parcel {companyId, item} · steps {companyId, item} ·
  * change {companyId, orderId, change} · changeStates {companyId, extIds} · changeCancel {companyId, extId} · states / services {companyId} ·
+ * swap {companyId, item: the parcel, orderId: the order whose customer receives it} ·
  * webhookOn {companyId, url, key} · webhookOff / webhookGet {companyId, extId} ·
  * askReturn / retry / note {companyId, item, text}.
  */
@@ -212,6 +213,13 @@ export async function runCourier(action: string, args: unknown, ctx: Ctx): Promi
       if (action === 'bagRemove') await b.remove(c, a.bag!, a.item!);
       else await b.drop(c, a.bag!);
       return { ok: true };
+    }
+    case 'swap': {
+      const ad = ADAPTERS[c.kind];
+      if (!ad.swap) throw new CourierError(`${c.name} : pas de swap par API`);
+      const p = (await loadParcels(ctx.db, [a.orderId!]))[0];
+      if (!p) throw new CourierError('Commande introuvable');
+      return ad.swap(c, { item: a.item!, to: p }, helpers);
     }
     case 'parcel': {
       const ad = ADAPTERS[c.kind];

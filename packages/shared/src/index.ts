@@ -17,6 +17,7 @@ export * from './metawindow';
 export * from './mp4';
 export * from './social';
 export * from './customerMessages';
+export * from './swap';
 import type { ShopInfo } from './features';
 import type { OrigLine } from './upsell';
 import type { AgencySellerWork } from './agency';
@@ -374,6 +375,9 @@ export interface Order {
   companyName?: string | null;
   livreurName?: string | null;
   subStatus?: string | null;
+  /** « Swap » on this parcel: 'api' = its company swaps it through its API (ZR, while it allows it), 'manual' = a parcel
+   *  coming back that Pilotix gives to another order (the company or the livreur is told by hand); null = no swap */
+  swapWay?: import('./swap').SwapWay;
   /** the courier refused the parcel: why (« En dispatch » shows it with « Renvoyer » / « Autre société ») */
   sendError?: string | null;
   /** cancelled while its parcel was at a courier that could not cancel it: to cancel in the courier's space */

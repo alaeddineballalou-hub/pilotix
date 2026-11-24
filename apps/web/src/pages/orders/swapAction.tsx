@@ -1,5 +1,7 @@
-// « Swap » on a parcel the customer cancelled, on its way back: always there (Suivi's rule, 9 Nov 2026), in Annulé too —
-// the same Annulé everywhere (owner's choice, 24 Nov 2026). It gives the parcel to another confirmed order.
+// « Swap » on a parcel the customer cancelled: in Annulé too — the same Annulé everywhere (owner's choice, 24 Nov 2026).
+// It gives the parcel to another confirmed order asking for exactly the same products. With ZR it shows while ZR takes a
+// swap (« Commande annulée » or « Ne répond pas 3 », before the parcel leaves for its return) and ZR makes it by API in
+// one click; with the other companies and our livreurs, on a parcel coming back.
 import type { Order } from '@pilotix/shared';
 import { ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,7 +25,7 @@ export function useSwap() {
   const [done, setDone] = useState<{ r: SwapResult; seller?: number } | null>(null);
   const scoped = (seller: number | undefined, node: ReactNode) => (seller ? <SellerScope seller={seller}>{node}</SellerScope> : node);
   const button = (o: Order): ReactNode =>
-    can && o.followStatus === 'returning' ? (
+    can && o.swapWay ? (
       <button
         type="button"
         className="btn small primary nowrap"

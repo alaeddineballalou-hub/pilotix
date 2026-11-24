@@ -339,6 +339,7 @@ export const WATCH_ADDRESSES: Record<string, WatchAddresses> = {
       'POST /webhooks/endpoints',
       'POST /workflows/search',
       'POST /parcel-modification-requests/phone',
+      'POST /parcel-modification-requests/swap',
     ],
   },
   maystro: {

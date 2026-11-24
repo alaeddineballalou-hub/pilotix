@@ -459,7 +459,7 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
       continue;
     }
     // The scenario picker supplies an already mapped status; ordinary sync still honors the shop's courier mapping.
-    const to = scenario ?? resolveStatus(defaults, c.statusMap, a);
+    const to = scenario ?? resolveStatus(defaults, c.statusMap, a, ADAPTERS[c.kind]?.situations);
     // what the company charges for it (its prices, the weight it counted): counted instead of the price list
     // (a company without its prices by API only says the weight it found: its « Surpoids » counts on that weight)
     // its own prices for the parcel (delivery, return — 0 for a free return) come first, like ZR's; with only a weight,
@@ -637,7 +637,7 @@ export async function fillOldCourierNotes(ctx: Ctx, list: CompanyRow[], max = 30
       old,
     ]);
     const defaults = ADAPTERS[c.kind]?.statuses ?? {};
-    const leadsTo = (words: string, key: string | null) => resolveStatus(defaults, c.statusMap, { key: key ?? undefined, status: words });
+    const leadsTo = (words: string, key: string | null) => resolveStatus(defaults, c.statusMap, { key: key ?? undefined, status: words }, ADAPTERS[c.kind]?.situations);
     for (const o of orders) {
       const mine = lines.filter((l: any) => num(l.order_id) === num(o.order_id));
       let steps: CourierStep[] = [];
@@ -797,7 +797,7 @@ async function companyStatuses(ctx: Ctx, companyId: number) {
     label: label.get(s) ?? null,
     parcels: num(seen.find((r: any) => r.s === s)?.n),
     own: Object.prototype.hasOwnProperty.call(c.statusMap, s) ? c.statusMap[s] : undefined,
-    auto: resolveStatus(defaults, {}, { status: label.get(s) ?? s, key: s }) ?? null,
+    auto: resolveStatus(defaults, {}, { status: label.get(s) ?? s, key: s }, ADAPTERS[c.kind]?.situations) ?? null,
   }));
 }
 

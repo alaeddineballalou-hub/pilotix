@@ -45,7 +45,7 @@
     "traites": "Alerts already handled: the parcel is back on the road. It leaves this list once delivered or cancelled.",
     "livres": "Parcels delivered in the last 30 days.",
     "annules": "Parcels cancelled by the customer, still with the courier or the livreur, on their way back to the depot. To give one directly to another customer: Suivi → Swap.",
-    "swap": "Give a cancelled parcel directly to another customer instead of bringing it back to the depot. Below: parcels already swapped, with « Copy for ZR ».",
+    "swap": "The parcels a swap can take now. ZR: while it accepts it (« Commande annulée » or « Ne répond pas 3 », before the return), ZR makes it through its API in one click. Other companies and our livreurs: the parcels coming back. Below: the parcels already swapped.",
     "bloques": "Parcels with no new status for several days (Preferences). Call the company, the livreur or the customer, then say what you did. Still no news 2 days later: a claim goes by itself (companies with an API)."
   },
   "empty": {
@@ -94,7 +94,8 @@
     "write": "Write to {{name}}",
     "claimSent": "Claim sent",
     "remind": "Remind",
-    "toAlert": "Alert"
+    "toAlert": "Alert",
+    "seeSwap": "See the swap"
   },
   "zr": "ZR",
   "theLivreur": "the livreur",
@@ -143,19 +144,15 @@
     "intro3": ", cancelled by {{name}}.",
     "theCompany": "the courier",
     "theClient": "the customer",
-    "cands": "Confirmed orders with the same product",
-    "candsHelp": "A confirmed order is being prepared at the depot: the one you choose leaves preparation and goes with this parcel. Same wilaya first, then those still « To prepare » (not packed) before « In dispatch » (already packed), then same variant, then the oldest.",
-    "noCands": "No confirmed order (being prepared) with the same product. Search another customer below.",
+    "cands": "Confirmed orders with exactly the same products",
+    "candsHelp": "Only an order asking for exactly what is in the parcel: same products, same variants, same quantities (the parcel is never opened). Same wilaya first, then the other wilayas; « To prepare » (not packed) before « In dispatch » (already packed), then the oldest.",
+    "noCands": "No confirmed order with exactly the same products: the parcel comes back to the depot.",
     "other": "Or another customer",
     "searchPh": "Ref. PX…, phone or customer name",
     "noFound": "No confirmed, not yet shipped order matches. Create the new customer's order first, then come back here.",
     "tagPrepared": "In dispatch: already packed",
     "tagToPrepare": "To prepare: not packed yet",
     "tagWilaya": "same wilaya",
-    "tagVariant": "same product",
-    "tagProduct": "same product, other variant",
-    "tagOther": "other product",
-    "mismatch": "The parcel contains « {{a}} », order {{ref}} asks for « {{b}} ». Check with the customer before swapping.",
     "pick": "Choose the order that receives the parcel.",
     "submit": "Swap the parcel",
     "choose": "Choose {{ref}}",
@@ -164,8 +161,8 @@
       "cancelledBy": "Cancelled by {{name}}",
       "zrPrice": "Swap at {{name}}: {{same}} in the same wilaya, {{other}} elsewhere.",
       "zrNo": "{{name}} no longer accepts a swap for this parcel.",
-      "cands": "Same products, not shipped yet",
-      "candsHelp": "Same wilaya first, then not packed yet, then same variant.",
+      "cands": "Exactly the same products, not shipped yet",
+      "candsHelp": "Same wilaya first, then the other wilayas.",
       "found": "Results",
       "give": "Give the parcel to {{name}}",
       "pickFirst": "Choose the customer",
@@ -174,10 +171,17 @@
       "tagPrepared": "Already packed",
       "tagToPrepare": "Not packed yet",
       "tagWilaya": "Same wilaya",
-      "tagVariant": "Same product",
-      "tagProduct": "Other variant",
-      "tagOther": "Other product"
-    }
+      "tagOtherWilaya": "Other wilaya",
+      "footApi": "{{company}} changes the parcel’s customer, address and amount at once. Their order leaves preparation."
+    },
+    "tagOtherWilaya": "other wilaya",
+    "tagFee": "{{company}} swap {{v}}",
+    "api": "{{company}} makes the swap at once through its API: new name, phone, address and amount. It cannot be undone at {{company}}.",
+    "apiCount": "Swaps already made on this parcel: {{n}}/2 · {{same}} in the same wilaya, {{other}} to another.",
+    "apiNo": "{{company}} no longer takes a swap for this parcel: only in « Ne répond pas 3 » or « Commande annulée », before its return, twice at most.",
+    "southOnly": "Parcel in a southern wilaya: {{company}} swaps it only inside the same wilaya.",
+    "submitApi": "Swap at {{company}}",
+    "sending": "Sending to {{company}}…"
   },
   "sheet": {
     "title": "Parcel swapped",
@@ -220,7 +224,12 @@
       "done": "Done",
       "copy": "Copy",
       "copied": "Copied"
-    }
+    },
+    "apiDone": "Swap made at {{company}}: nothing to copy, nothing to tell them.",
+    "apiTo": "New customer: {{name}} · {{phone}}",
+    "apiWhere": "Address: {{place}}",
+    "apiTotal": "To collect: {{v}}",
+    "apiFee": "{{company}} swap fee: {{v}}"
   },
   "rec": {
     "tabs": {
@@ -725,5 +734,18 @@
       "t": "Statuses",
       "d": "The parcels’ statuses and the « Traiter » reasons"
     }
+  },
+  "unswap": {
+    "btn": "Undo the swap",
+    "askT": "Undo this swap?",
+    "fxFrom": "The parcel and its tracking number go back to {{ref}} (coming back to the depot).",
+    "fxFrom0": "The parcel and its tracking number go back to the order it came from.",
+    "fxTo": "{{ref}} goes back to « To prepare » and will leave with its own parcel.",
+    "fxTo0": "The order that had received it goes back to « To prepare » with its own parcel.",
+    "note": "Only a swap made in Pilotix alone. A swap made at ZR through its API cannot be undone.",
+    "yes": "Undo the swap",
+    "no": "Keep it",
+    "done": "Swap undone",
+    "why": "Swap made in Pilotix alone (not at the company): it can be undone."
   }
 }

@@ -232,6 +232,8 @@ const norm = (s: unknown) =>
     .replace(/[^a-z0-9؀-ۿ]+/g, ' ')
     .trim();
 const squash = (s: unknown) => norm(s).replace(/\b(el|al|ell|e|d|de|des|du|la|le|les)\b/g, '').replace(/\s+/g, '');
+/** The same name once accents, case, spaces and little words are left aside (« Ne répond pas 3 » = « ne repond pas 3 »). */
+export const sameName = (a: unknown, b: unknown) => !!squash(a) && squash(a) === squash(b);
 
 function lev(a: string, b: string) {
   if (!a.length || !b.length) return a.length || b.length;

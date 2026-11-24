@@ -325,6 +325,8 @@ export const undoProcs = {
       by: ev.name,
       mine: ev.userId === ctx.session.profile.id,
       why,
+      // a swap made in Pilotix alone can be undone (« Annuler le swap »); one made at the company by API never
+      swapUndo: why === 'swap' && !act.all.some((e) => e.data?.via_api),
       holder: why === 'held' ? await holderName(ctx.db, o) : null,
       effects: why ? [] : await effectsOf(ctx.db, o, act),
     };

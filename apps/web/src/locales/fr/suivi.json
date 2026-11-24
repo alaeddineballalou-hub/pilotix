@@ -45,7 +45,7 @@
     "traites": "Alertes déjà traitées : le colis est reparti. Il sort d’ici quand il est livré ou annulé.",
     "livres": "Colis livrés ces 30 derniers jours.",
     "annules": "Colis annulés par le client, encore chez ZR ou le livreur, en route vers le dépôt. Pour en donner un directement à un autre client : menu Suivi → Swap.",
-    "swap": "Donnez un colis annulé directement à un autre client au lieu de le faire revenir au dépôt. En dessous : les colis déjà swappés, avec « Copier pour ZR ».",
+    "swap": "Les colis qu’un swap peut prendre maintenant. ZR : tant qu’il l’accepte (« Commande annulée » ou « Ne répond pas 3 », avant le retour), ZR le fait par API en un clic. Autres sociétés et nos livreurs : les colis en retour. En dessous : les colis déjà swappés.",
     "bloques": "Colis sans nouveau statut depuis plusieurs jours (Préférences). Appelez la société, le livreur ou le client, puis dites ce que vous avez fait. Sans nouvelles 2 jours plus tard : une réclamation part toute seule (sociétés avec API)."
   },
   "empty": {
@@ -94,7 +94,8 @@
     "write": "Écrire à {{name}}",
     "claimSent": "Réclamation envoyée",
     "remind": "Relancer",
-    "toAlert": "Alerter"
+    "toAlert": "Alerter",
+    "seeSwap": "Voir le swap"
   },
   "zr": "ZR",
   "theLivreur": "le livreur",
@@ -143,19 +144,15 @@
     "intro3": ", annulé par {{name}}.",
     "theCompany": "la société",
     "theClient": "le client",
-    "cands": "Commandes confirmées avec le même produit",
-    "candsHelp": "Une commande confirmée est en préparation au dépôt : celle que vous choisissez sort de la préparation et part avec ce colis. Même wilaya en premier, puis celles encore « En préparation » (pas emballées) avant celles « En dispatch » (déjà emballées), puis même variante, puis la plus ancienne.",
-    "noCands": "Aucune commande confirmée (en préparation) avec le même produit. Cherchez un autre client ci-dessous.",
+    "cands": "Commandes confirmées avec exactement les mêmes produits",
+    "candsHelp": "Seulement une commande qui demande exactement ce qu’il y a dans le colis : mêmes produits, mêmes variantes, mêmes quantités (le colis n’est jamais ouvert). Même wilaya en premier, puis les autres wilayas ; « En préparation » (pas emballées) avant « En dispatch » (déjà emballées), puis la plus ancienne.",
+    "noCands": "Aucune commande confirmée avec exactement les mêmes produits : le colis revient au dépôt.",
     "other": "Ou un autre client",
     "searchPh": "Réf. PX…, téléphone ou nom du client",
     "noFound": "Aucune commande confirmée et pas encore expédiée ne correspond. Créez d’abord la commande du nouveau client, puis revenez ici.",
     "tagPrepared": "En dispatch : déjà emballée",
     "tagToPrepare": "En préparation : pas encore emballée",
     "tagWilaya": "même wilaya",
-    "tagVariant": "même produit",
-    "tagProduct": "même produit, autre variante",
-    "tagOther": "autre produit",
-    "mismatch": "Le colis contient « {{a}} », la commande {{ref}} demande « {{b}} ». Vérifiez avec le client avant de swapper.",
     "pick": "Choisissez la commande qui reçoit le colis.",
     "submit": "Swapper le colis",
     "choose": "Choisir {{ref}}",
@@ -164,8 +161,8 @@
       "cancelledBy": "Annulé par {{name}}",
       "zrPrice": "Swap chez {{name}} : {{same}} dans la même wilaya, {{other}} ailleurs.",
       "zrNo": "{{name}} n’accepte plus de swap pour ce colis.",
-      "cands": "Mêmes produits, pas encore expédiées",
-      "candsHelp": "Même wilaya d’abord, puis pas encore emballées, puis même variante.",
+      "cands": "Exactement les mêmes produits, pas encore expédiées",
+      "candsHelp": "Même wilaya d’abord, puis les autres wilayas.",
       "found": "Résultats",
       "give": "Donner le colis à {{name}}",
       "pickFirst": "Choisissez le client",
@@ -174,10 +171,17 @@
       "tagPrepared": "Déjà emballée",
       "tagToPrepare": "Pas encore emballée",
       "tagWilaya": "Même wilaya",
-      "tagVariant": "Même produit",
-      "tagProduct": "Autre variante",
-      "tagOther": "Autre produit"
-    }
+      "tagOtherWilaya": "Autre wilaya",
+      "footApi": "{{company}} change le client, l’adresse et le montant du colis tout de suite. Sa commande sort de la préparation."
+    },
+    "tagOtherWilaya": "autre wilaya",
+    "tagFee": "swap {{company}} {{v}}",
+    "api": "{{company}} fait le swap tout de suite par son API : nouveau nom, téléphone, adresse et montant. Il ne s’annule pas chez {{company}}.",
+    "apiCount": "Swaps déjà faits sur ce colis : {{n}}/2 · {{same}} dans la même wilaya, {{other}} vers une autre.",
+    "apiNo": "{{company}} n’accepte plus de swap pour ce colis : seulement en « Ne répond pas 3 » ou « Commande annulée », avant son retour, 2 fois au plus.",
+    "southOnly": "Colis dans une wilaya du Sud : {{company}} le swappe seulement dans la même wilaya.",
+    "submitApi": "Swapper chez {{company}}",
+    "sending": "Envoi à {{company}}…"
   },
   "sheet": {
     "title": "Colis swappé",
@@ -220,7 +224,12 @@
       "done": "Terminé",
       "copy": "Copier",
       "copied": "Copié"
-    }
+    },
+    "apiDone": "Swap fait chez {{company}} : rien à copier, rien à leur dire.",
+    "apiTo": "Nouveau client : {{name}} · {{phone}}",
+    "apiWhere": "Adresse : {{place}}",
+    "apiTotal": "À encaisser : {{v}}",
+    "apiFee": "Frais de swap {{company}} : {{v}}"
   },
   "rec": {
     "tabs": {
@@ -725,5 +734,18 @@
       "t": "Statuts",
       "d": "Les statuts des colis et les motifs de « Traiter »"
     }
+  },
+  "unswap": {
+    "btn": "Annuler le swap",
+    "askT": "Annuler ce swap ?",
+    "fxFrom": "Le colis et son n° de suivi reviennent à {{ref}} (en retour vers le dépôt).",
+    "fxFrom0": "Le colis et son n° de suivi reviennent à la commande d’où il venait.",
+    "fxTo": "{{ref}} revient « À préparer » et partira avec son propre colis.",
+    "fxTo0": "La commande qui l’avait reçu revient « À préparer » avec son propre colis.",
+    "note": "Seulement un swap fait dans Pilotix seul. Un swap fait chez ZR par son API ne s’annule pas.",
+    "yes": "Annuler le swap",
+    "no": "Garder",
+    "done": "Swap annulé",
+    "why": "Swap fait dans Pilotix seul (pas chez la société) : il peut être annulé."
   }
 }

@@ -9,6 +9,7 @@ import { productsText, swapText } from './common';
 import { trackOf } from '../../lib/items';
 import { SwapCopySheet, SwapPickSheet } from './PhoneSwap';
 import { Cand, SwapResult, useCopyFields, useSwapPick } from './swapKit';
+import { UnswapButton } from './Unswap';
 
 export type { SwapResult } from './swapKit';
 
@@ -49,14 +50,8 @@ function SwapDesk({ o, onClose, onDone }: PickProps) {
           ) : (
             <span className="badge t-off">{t('suivi.swapM.tagToPrepare')}</span>
           )}
-          {x.sameWilaya && <span className="badge t-ok">{t('suivi.swapM.tagWilaya')}</span>}
-          {x.sameVariant ? (
-            <span className="badge t-info">{t('suivi.swapM.tagVariant')}</span>
-          ) : x.sameProduct ? (
-            <span className="badge t-mid">{t('suivi.swapM.tagProduct')}</span>
-          ) : (
-            <span className="badge t-warn">{t('suivi.swapM.tagOther')}</span>
-          )}
+          {x.sameWilaya ? <span className="badge t-ok">{t('suivi.swapM.tagWilaya')}</span> : <span className="badge t-mid">{t('suivi.swapM.tagOtherWilaya')}</span>}
+          {f.viaApi && x.swapFee != null && <span className="badge t-off">{t('suivi.swapM.tagFee', { company: f.company ?? '', v: da(x.swapFee) })}</span>}
         </div>
       </div>
       <b className="bjsv-amt ltr">{da(x.total)}</b>
@@ -72,8 +67,8 @@ function SwapDesk({ o, onClose, onDone }: PickProps) {
           <button className="btn" onClick={onClose}>
             {t('common.cancel')}
           </button>
-          <button className="btn primary" disabled={f.swap.isPending} onClick={f.submit}>
-            {t('suivi.swapM.submit')}
+          <button className="btn primary" disabled={f.swap.isPending || f.closed} onClick={f.submit}>
+            {f.swap.isPending && f.viaApi ? t('suivi.swapM.sending', { company: f.company ?? '' }) : f.viaApi ? t('suivi.swapM.submitApi', { company: f.company ?? '' }) : t('suivi.swapM.submit')}
           </button>
         </>
       }
@@ -86,21 +81,68 @@ function SwapDesk({ o, onClose, onDone }: PickProps) {
           <b>{productsText(o)}</b>
           {t('suivi.swapM.intro3', { name: o.customerName || t('suivi.swapM.theClient') })}
         </p>
+        {f.viaApi &&
+          (f.closed ? (
+            <p className="badbox">{t('suivi.swapM.apiNo', { company: f.company ?? '' })}</p>
+          ) : (
+            <p className="okbox">
+              {t('suivi.swapM.api', { company: f.company ?? '' })}
+              {f.courier && ` ${t('suivi.swapM.apiCount', { n: f.courier.count, same: da(f.courier.same), other: da(f.courier.other) })}`}
+            </p>
+          ))}
+        {f.sameWilayaOnly && <p className="warnbox">{t('suivi.swapM.southOnly', { company: f.company ?? '' })}</p>}
         <h3>{t('suivi.swapM.cands')}</h3>
         <p className="muted small">{t('suivi.swapM.candsHelp')}</p>
         <div className="bjsv-cands">{f.sug.isLoading ? <Loading /> : f.sug.error ? <p className="badbox">{f.sug.error.message}</p> : f.sugRows.length ? f.sugRows.map(opt) : <p className="muted small">{t('suivi.swapM.noCands')}</p>}</div>
         <h3>{t('suivi.swapM.other')}</h3>
         <input type="search" aria-label={t('suivi.swapM.searchPh')} value={f.q} placeholder={t('suivi.swapM.searchPh')} autoComplete="off" onChange={(e) => f.setQ(e.target.value)} />
         {f.deb.length >= 2 && <div className="bjsv-cands">{f.found.isFetching && !f.found.data ? <Loading /> : f.foundRows.length ? f.foundRows.map(opt) : <p className="muted small">{t('suivi.swapM.noFound')}</p>}</div>}
-        {f.pick && !f.pick.sameVariant && <p className="warnbox">{t('suivi.swapM.mismatch', { a: productsText(o), ref: f.pick.ref, b: productsText(f.pick) })}</p>}
         {f.err && <p className="form-err">{f.err}</p>}
       </div>
     </Modal>
   );
 }
 
+/** Made at the company itself (ZR, by API): what happened, nothing to copy. */
+function SwapDoneDesk({ from, to, wasPrepared, swapFee, onClose }: CopyProps) {
+  const { t } = useTranslation();
+  return (
+    <Modal
+      wide
+      title={t('suivi.sheet.title')}
+      onClose={onClose}
+      footer={
+        <button className="btn primary" onClick={onClose}>
+          {t('suivi.sheet.done')}
+        </button>
+      }
+    >
+      <p className="okbox">{t('suivi.sheet.ok', { a: from.ref, b: to.ref })}</p>
+      <p>
+        <b>{t('suivi.sheet.apiDone', { company: to.companyName ?? '' })}</b>
+      </p>
+      <ul className="bjsv-done">
+        <li>{t('suivi.sheet.apiTo', { name: to.customerName, phone: to.phone })}</li>
+        <li>{t('suivi.sheet.apiWhere', { place: [wilayaName(to.wilayaId), to.commune].filter(Boolean).join(' · ') })}</li>
+        <li>{t('suivi.sheet.apiTotal', { v: da(to.total) })}</li>
+        {!!swapFee && <li>{t('suivi.sheet.apiFee', { company: to.companyName ?? '', v: da(swapFee) })}</li>}
+      </ul>
+      {wasPrepared !== undefined && (
+        <p className={wasPrepared ? 'badbox' : 'warnbox'}>
+          <b>{t('suivi.sheet.depot')}</b>
+          {wasPrepared ? t('suivi.sheet.wasPrepared', { ref: to.ref }) : t('suivi.sheet.wasToPrepare', { ref: to.ref, from: from.ref })}
+        </p>
+      )}
+    </Modal>
+  );
+}
+
 /** "Copier pour ZR": every field copied one by one, the window closes once everything required is copied. */
 function SwapCopyDesk(p: CopyProps) {
+  if (p.viaApi) return <SwapDoneDesk {...p} />;
+  return <SwapCopyFields {...p} />;
+}
+function SwapCopyFields(p: CopyProps) {
   const { from, to, oldTracking, oldTotal, wasPrepared, fresh, onClose } = p;
   const { t } = useTranslation();
   const c = useCopyFields(p);
@@ -113,9 +155,12 @@ function SwapCopyDesk(p: CopyProps) {
       title={t('suivi.sheet.title')}
       onClose={close}
       footer={
-        <button className="btn primary" disabled={fresh && !c.all} onClick={onClose}>
-          {t('suivi.sheet.done')}
-        </button>
+        <>
+          <UnswapButton id={from.id} from={from.ref} to={to.ref} onDone={onClose} />
+          <button className="btn primary" disabled={fresh && !c.all} onClick={onClose}>
+            {t('suivi.sheet.done')}
+          </button>
+        </>
       }
     >
       <p className="okbox">{t('suivi.sheet.ok', { a: from.ref, b: to.ref })}</p>

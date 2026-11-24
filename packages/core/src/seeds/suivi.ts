@@ -57,22 +57,65 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   }
 }
 
-/** Completed examples use the real swap rules, including stock, fees and tracking transfer. */
+/** Completed examples use the real swap rules, including stock, fees and tracking transfer; then two ZR parcels whose
+ *  customer cancelled (or never answered) that ZR still lets swap, each with an order asking for exactly its products. */
 export async function seedSwaps(db: Db, now: number): Promise<void> {
   const { swapParcel } = await import('../modules/suivi');
   const session = await login(db, 'admin@demo.pilotix.dz', DEMO_PASSWORD);
-  for (let k = 0; k < 4; k++) {
-    const pair = (await db.query(`SELECT a.id AS src, b.id AS dst FROM orders a
+  // one product line each, the same variant and quantity, a home delivery (ZR swaps to its own bureaus only), and never
+  // out of one of ZR's southern wilayas to another wilaya (ZR refuses those)
+  // the completed ones: made in Pilotix alone (another company, our livreurs — « Annuler le swap » can be tried); ZR's
+  // own swaps are the two below, made by its API from the Suivi
+  const pairs = (status: string, kind: 'other' | 'zr') =>
+    db.query(`SELECT a.id AS src, b.id AS dst FROM orders a
       JOIN order_items ai ON ai.order_id = a.id
       JOIN order_items bi ON bi.variant_id = ai.variant_id AND bi.qty = ai.qty
       JOIN orders b ON b.id = bi.order_id
-      WHERE a.follow_status = 'returning' AND a.shipped_at IS NOT NULL AND a.tracking IS NOT NULL
-        AND b.conf_status = 'confirmed' AND b.shipped_at IS NULL AND b.tracking IS NULL
+      LEFT JOIN delivery_companies c ON c.id = a.company_id
+      WHERE a.follow_status = '${status}' AND a.shipped_at IS NOT NULL AND a.tracking IS NOT NULL AND NOT a.is_exchange
+        AND b.conf_status = 'confirmed' AND b.shipped_at IS NULL AND b.tracking IS NULL AND NOT b.is_exchange AND NOT b.is_stopdesk
         AND b.follow_status IN ('to_prepare','prepared')
         AND (SELECT count(*) FROM order_items WHERE order_id = a.id) = 1
         AND (SELECT count(*) FROM order_items WHERE order_id = b.id) = 1
-      ORDER BY (a.wilaya_id = b.wilaya_id) DESC, a.id, b.id LIMIT 1`))[0];
-    if (!pair) break;
-    await swapParcel({ db, session, now: () => now - k * 3_600_000, emit: () => {} }, num(pair.src), num(pair.dst), 'Démo : client annule, colis réaffecté à une commande du même produit');
+        AND (a.wilaya_id = b.wilaya_id OR NOT (a.wilaya_id = ANY('{1,8,11,30,32,45,49,52,53,54,58}'::int[])))
+        ${kind === 'zr' ? `AND c.kind = 'zr'` : `AND c.kind IS DISTINCT FROM 'zr'`}
+      ORDER BY (a.wilaya_id = b.wilaya_id) DESC, a.id, b.id LIMIT 40`);
+  const taken = new Set<number>();
+  let made = 0;
+  for (const p of await pairs('returning', 'other')) {
+    if (made >= 4) break;
+    if (taken.has(num(p.src)) || taken.has(num(p.dst))) continue;
+    try {
+      await swapParcel({ db, session, now: () => now - made * 3_600_000, emit: () => {} }, num(p.src), num(p.dst), 'Démo : client annule, colis réaffecté à une commande du même produit');
+      made++;
+    } catch {
+      // refused by the swap's rules: another pair
+    }
+    taken.add(num(p.src));
+    taken.add(num(p.dst));
+  }
+  // ZR's own words on two of its parcels: « Commande annulée », « Ne répond pas 3 » — alerts of the demo's suivi agent,
+  // where « Swap » shows (ZR swaps them by API); each with an order asking for exactly its products
+  const words = ['Sortie en livraison · Commande annulée', 'Confirmé au bureau · Ne répond pas 3'];
+  const suivi = (await db.query(`SELECT id FROM profiles WHERE email = 'nadia@demo.pilotix.dz'`))[0]?.id ?? null;
+  const open = new Set<number>();
+  for (const p of [...(await pairs('alert', 'zr')), ...(await pairs('out_for_delivery', 'zr'))]) {
+    if (open.size >= words.length) break;
+    if (open.has(num(p.src)) || taken.has(num(p.dst))) continue;
+    const w = words[open.size];
+    open.add(num(p.src));
+    taken.add(num(p.dst));
+    const at = new Date(now - (open.size + 1) * 3_600_000).toISOString();
+    const was = (await db.query(`SELECT follow_status FROM orders WHERE id = $1`, [p.src]))[0]?.follow_status;
+    await db.query(`UPDATE orders SET follow_status = 'alert', sub_status = NULL, ext_status = $2, ext_status_at = $3, follow_agent_id = COALESCE($4, follow_agent_id), updated_at = $3 WHERE id = $1`, [p.src, w, at, suivi]);
+    if (was === 'alert') await db.query(`UPDATE order_events SET note = $2 WHERE order_id = $1 AND kind = 'follow_status' AND to_value = 'alert'`, [p.src, `ZR : ${w}`]);
+    else
+      await db.query(`INSERT INTO order_events (order_id, at, user_id, kind, from_value, to_value, note, data) VALUES ($1,$2,NULL,'follow_status',$3,'alert',$4,$5)`, [
+        p.src,
+        at,
+        was,
+        `ZR : ${w}`,
+        JSON.stringify({ courier: true }),
+      ]);
   }
 }

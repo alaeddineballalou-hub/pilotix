@@ -311,6 +311,19 @@ export interface ChangeState {
   at: string | null;
 }
 
+/** A swap at the courier: the parcel `item` (its customer did not take it) goes to the customer of the order `to`. */
+export interface SwapInput {
+  item: TrackItem;
+  to: Parcel;
+}
+/** The swap made: the courier's number for it (when it gives one), the parcel's id there and its tracking number after
+ *  the swap (a courier may give the parcel a new one). */
+export interface SwapSent {
+  extId: string | null;
+  parcelExtId: string | null;
+  tracking: string;
+}
+
 /** An exchange sent to the courier: the new parcel, and the courier's return parcel bringing the old product back. */
 export interface ExchangeResult extends SendResult {
   returnTracking: string | null;
@@ -332,6 +345,9 @@ export interface Helpers {
 export interface CourierAdapter {
   /** courier status (key or words) → our follow status; null = no change */
   statuses: Record<string, FollowStatus | null>;
+  /** a situation the courier adds to its status (ZR: « Commande annulée ») → our follow status, whatever the status, while
+   *  the parcel is still on its way to the customer (the seller's own choice for that exact status still comes first) */
+  situations?: Record<string, FollowStatus | null>;
   test(c: CourierCompany): Promise<{ ok: boolean; message: string }>;
   create(c: CourierCompany, p: Parcel, h: Helpers): Promise<SendResult>;
   track(c: CourierCompany, items: TrackItem[]): Promise<TrackResult[]>;
@@ -363,6 +379,8 @@ export interface CourierAdapter {
   changeStates?(c: CourierCompany, extIds: string[]): Promise<ChangeState[]>;
   /** withdraws a modification request the courier has not answered yet */
   changeCancel?(c: CourierCompany, extId: string): Promise<void>;
+  /** Gives a parcel its customer did not take to another customer, at the courier itself (ZR: applied at once). */
+  swap?(c: CourierCompany, i: SwapInput, h: Helpers): Promise<SwapSent>;
   /** Sends an exchange: a new parcel to the customer and the courier's return parcel for the old product. */
   exchange?(c: CourierCompany, p: Parcel, original: TrackItem, h: Helpers): Promise<ExchangeResult>;
   /** Asks the courier to send the parcel back to the shop (a return), from Pilotix. */

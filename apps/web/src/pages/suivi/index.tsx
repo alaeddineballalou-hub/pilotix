@@ -619,6 +619,7 @@ export function List({ tab, combined }: { tab: ListTab; combined?: CombinedSuivi
             {t('suivi.act.treat')}
           </button>
         )}
+        <SwapButton o={o} onSwap={() => setDlg({ kind: 'swap', o })} />
       </div>
     );
   if (tab === 'enlivraison')
@@ -626,6 +627,7 @@ export function List({ tab, combined }: { tab: ListTab; combined?: CombinedSuivi
       <div className="row nowrap px-sv-acts">
         {!treats ? null : o.followStatus === 'alert' ? <button type="button" className="btn small primary" onClick={() => setDlg({ kind: 'treat', o })}>{t('suivi.act.treat')}</button> :
           <button type="button" className="btn small" disabled={act.isPending} onClick={() => run(o, 'realert')}><Icon name="alert" /> {t('suivi.act.toAlert')}</button>}
+        <SwapButton o={o} onSwap={() => setDlg({ kind: 'swap', o })} />
       </div>
     );
   if (tab === 'bloques' && treats)
@@ -650,19 +652,19 @@ export function List({ tab, combined }: { tab: ListTab; combined?: CombinedSuivi
         </button>
       </div>
     );
-  if (tab === 'swap')
-    actions = (o) => (
-      <button type="button" className="btn small primary nowrap" style={{ whiteSpace: 'nowrap' }} onClick={() => setDlg({ kind: 'swap', o })}>
-        {t('suivi.act.swap')}
-      </button>
-    );
-  // Annulés: a parcel the customer cancelled, on its way back, can always be swapped from here too
-  if (tab === 'annules') actions = (o) => <SwapButton o={o} onSwap={() => setDlg({ kind: 'swap', o })} />;
+  // Swap: every parcel a swap can take now; Annulés: a parcel the customer cancelled can be swapped from here too
+  if (tab === 'swap' || tab === 'annules') actions = (o) => <SwapButton o={o} onSwap={() => setDlg({ kind: 'swap', o })} />;
   // the same buttons on the cards (Réclamation on each alert, Swap on a parcel coming back), without opening them
   const cardAct = (o: ParcelRow): ReactNode => {
     if (!canHandle) return null;
-    if (isAlertTab(tab)) return agency ? null : <AlertClaim o={o} x={extraOf(o, extra)} onClaim={(toLivreur) => setDlg({ kind: 'claim', o, toLivreur })} />;
-    if (tab === 'annules') return o.followStatus === 'returning' ? <SwapButton o={o} onSwap={() => setDlg({ kind: 'swap', o })} /> : null;
+    if (isAlertTab(tab))
+      return (
+        <>
+          {!agency && <AlertClaim o={o} x={extraOf(o, extra)} onClaim={(toLivreur) => setDlg({ kind: 'claim', o, toLivreur })} />}
+          <SwapButton o={o} onSwap={() => setDlg({ kind: 'swap', o })} />
+        </>
+      );
+    if (tab === 'annules' || tab === 'swap') return <SwapButton o={o} onSwap={() => setDlg({ kind: 'swap', o })} />;
     return null;
   };
 
@@ -694,8 +696,9 @@ export function List({ tab, combined }: { tab: ListTab; combined?: CombinedSuivi
             if (combined?.canWork && o.seller && !combined.canWork(o.seller.id)) return [];
             if (!canFollow) {
               if (!canHandle) return [];
-              if (isAlertTab(tab) && !agency && rightOn('act:suivi.claim')) return [{ key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: extraOf(o, extra)?.companyKind === 'own' }) }];
-              if ((tab === 'annules' || tab === 'swap') && o.followStatus === 'returning' && rightOn('act:suivi.swap')) return [{ key: 'swap', label: t('suivi.act.swap'), run: () => setDlg({ kind: 'swap', o }) }];
+              const swapNow: ParcelAction[] = o.swapWay && rightOn('act:suivi.swap') ? [{ key: 'swap', label: t('suivi.act.swap'), run: () => setDlg({ kind: 'swap', o }) }] : [];
+              if (isAlertTab(tab) && !agency && rightOn('act:suivi.claim')) return [{ key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: extraOf(o, extra)?.companyKind === 'own' }) }, ...swapNow];
+              if (isAlertTab(tab) || tab === 'annules' || tab === 'swap') return swapNow;
               return [];
             }
             const claim: ParcelAction = { key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: extraOf(o, extra)?.companyKind === 'own' }) };
@@ -703,8 +706,10 @@ export function List({ tab, combined }: { tab: ListTab; combined?: CombinedSuivi
             if (tab === 'enlivraison') return [o.followStatus === 'alert'
               ? { key: 'treat', label: t('suivi.act.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) }
               : { key: 'realert', label: t('suivi.act.toAlert'), run: () => run(o, 'realert') }];
+            // ZR still takes a swap of it (the customer cancelled): « Swap » next to « Traiter »
+            const swapIt: ParcelAction[] = o.swapWay && rightOn('act:suivi.swap') ? [{ key: 'swap', label: t('suivi.act.swap'), run: () => setDlg({ kind: 'swap', o }) }] : [];
             if (isAlertTab(tab))
-              return [{ key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) }, ...(!agency && rightOn('act:suivi.claim') ? [claim] : [])];
+              return [{ key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) }, ...(!agency && rightOn('act:suivi.claim') ? [claim] : []), ...swapIt];
             if (tab === 'traites')
               return [
                 { key: 'deliv', label: t('suivi.ph.deliv'), tone: 'ok', run: () => run(o, 'delivered') },
@@ -712,7 +717,7 @@ export function List({ tab, combined }: { tab: ListTab; combined?: CombinedSuivi
                 { key: 'cancelled', label: t('suivi.ph.cancelled'), tone: 'bad', run: () => run(o, 'cancel') },
               ];
             if (tab === 'bloques') return [{ key: 'stuck', label: t('suivi.stuck.btn'), tone: 'main', run: () => setDlg({ kind: 'stuck', o }) }];
-            if (tab === 'swap' || (tab === 'annules' && o.followStatus === 'returning')) return [{ key: 'swap', label: t('suivi.act.swap'), tone: 'main', run: () => setDlg({ kind: 'swap', o }) }];
+            if ((tab === 'swap' || tab === 'annules') && o.swapWay && rightOn('act:suivi.swap')) return [{ key: 'swap', label: t('suivi.act.swap'), tone: 'main', run: () => setDlg({ kind: 'swap', o }) }];
             return [];
           };
           return (
@@ -845,11 +850,11 @@ function AlertClaim({ o, x, onClaim }: { o: Order; x?: Extra; onClaim: (toLivreu
   );
 }
 
-/** On a parcel the customer cancelled, on its way back: « Swap », always (to another customer; through the delivery
- *  company's API when it has one, the swap window says what is possible). */
+/** « Swap » on a parcel the customer cancelled: with ZR while ZR takes a swap (« Commande annulée » or « Ne répond pas 3 »,
+ *  before its return — ZR makes it by API in one click), with the others on a parcel coming back. */
 function SwapButton({ o, onSwap }: { o: Order; onSwap: () => void }) {
   const { t } = useTranslation();
-  if (o.followStatus !== 'returning' || !rightOn('act:suivi.swap')) return null;
+  if (!o.swapWay || !rightOn('act:suivi.swap')) return null;
   return (
     <button type="button" className="btn small primary nowrap" style={{ whiteSpace: 'nowrap' }} onClick={onSwap}>
       {t('suivi.act.swap')}
@@ -888,7 +893,7 @@ function SwappedList() {
         empty=""
         actions={(o) => (
           <button type="button" className="btn small" onClick={() => open(o)}>
-            {t('suivi.act.copyFor', { who: extra[o.id]?.companyKind === 'own' ? t('suivi.theLivreur') : t('suivi.zr') })}
+            {extra[o.id]?.companyKind === 'zr' ? t('suivi.act.seeSwap') : t('suivi.act.copyFor', { who: extra[o.id]?.companyKind === 'own' ? t('suivi.theLivreur') : o.companyName || t('suivi.zr') })}
           </button>
         )}
       />

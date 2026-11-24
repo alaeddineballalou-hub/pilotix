@@ -274,6 +274,7 @@ export const PROC_RIGHTS: Record<string, Need> = {
   'suivi.claimUpdate': 'act:suivi.claim',
   'suivi.claimSync': 'act:suivi.claim',
   'suivi.swap': 'act:suivi.swap',
+  'suivi.unswap': 'act:suivi.swap',
   'parcel.change': 'act:suivi.parcel',
   'parcel.changeCancel': 'act:suivi.parcel',
   'parcel.action': 'act:suivi.parcel',
