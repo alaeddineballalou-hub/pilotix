@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import type { Language } from '@pilotix/shared';
 import { Db, num } from '../db';
-import { accountByEmail, membershipsOf } from '../platform/accounts';
+import { membershipsOf } from '../platform/accounts';
 import { bad, Ctx, proc, publicApi, ServerHooks } from '../rpc';
 import { getSetting } from '../settings';
 import { kindOfTag, ringBell } from './bell';
@@ -27,21 +27,6 @@ const keys = (ctx: Ctx) => keysOf(ctx.db, ctx.server);
 
 type Sub = { endpoint: string; p256dh: string; auth: string };
 
-async function uniqueDevices(ctx: Ctx, shop: number, subs: Sub[], seen: Set<string>) {
-  if (!ctx.t || !subs.length) return subs;
-  const registered = await ctx.t.platform.query(
-    'SELECT owner_key, device_id, endpoint FROM platform.notification_device_subscriptions WHERE shop_id = $1 AND endpoint = ANY($2)',
-    [shop, subs.map((sub) => sub.endpoint)],
-  );
-  const keys = new Map(registered.map((row) => [String(row.endpoint), `${row.owner_key}:${row.device_id}`]));
-  return subs.filter((sub) => {
-    const device = keys.get(sub.endpoint);
-    if (!device) return true;
-    if (seen.has(device)) return false;
-    seen.add(device);
-    return true;
-  });
-}
 /** Sends to these devices of one shop (signed with its keys); forgets the ones that unsubscribed. `seen`: sent already. */
 async function deliver(db: Db, server: ServerHooks, k: { publicKey: string; privateKey: string }, subs: Sub[], payload: Record<string, unknown>, seen: Set<string>) {
   // only a browser's push service (a device saved before that rule with another address is skipped)
@@ -60,7 +45,7 @@ async function deliver(db: Db, server: ServerHooks, k: { publicKey: string; priv
  * The same people's devices turned on in their other boutiques (a device signs up in one boutique, with its keys):
  * told too, the name of the boutique first — someone working in two boutiques misses nothing of either.
  */
-async function pushElsewhere(ctx: Ctx, profileIds: number[], payload: Record<string, unknown>, seen: Set<string>, devices: Set<string>, o: { phones?: boolean } = {}) {
+async function pushElsewhere(ctx: Ctx, profileIds: number[], payload: Record<string, unknown>, seen: Set<string>, o: { phones?: boolean } = {}) {
   const t = ctx.t!;
   const mails = [...new Set((await ctx.db.query('SELECT lower(email) AS e FROM profiles WHERE id = ANY($1) AND active', [profileIds])).map((r: any) => String(r.e ?? '')).filter(Boolean))];
   if (!mails.length) return 0;
@@ -74,7 +59,7 @@ async function pushElsewhere(ctx: Ctx, profileIds: number[], payload: Record<str
       const k = await keysOf(db, ctx.server);
       if (!k) continue;
       const subs = await db.query(`SELECT endpoint, p256dh, auth FROM push_subs WHERE profile_id = $1${o.phones ? ` AND ${phoneSql()}` : ''}`, [m.profileId]);
-      sent += await deliver(db, ctx.server!, k, await uniqueDevices(ctx, m.shopId, subs as Sub[], devices), notificationBrand(ctx.shop?.slug, tagged), seen);
+      sent += await deliver(db, ctx.server!, k, subs as Sub[], notificationBrand(ctx.shop?.slug, tagged), seen);
     }
   return sent;
 }
@@ -104,17 +89,15 @@ export async function pushOnly(ctx: Ctx, profileIds: number[], payload: Record<s
   const people = (await ctx.db.query('SELECT id FROM profiles WHERE active AND agency_id IS NULL AND id = ANY($1)', [profileIds])).map((p) => num(p.id));
   if (!people.length) return 0;
   const seen = new Set<string>();
-  const devices = new Set<string>();
   const store = ctx.t && ctx.shop && (ctx.shop.kind ?? 'store') === 'store' ? ctx.shop : null;
   let sent = 0;
   const k = await keys(ctx);
   if (k) {
     const subs = await ctx.db.query(`SELECT endpoint, p256dh, auth FROM push_subs WHERE profile_id = ANY($1)${o.phones ? ` AND ${phoneSql()}` : ''}`, [people]);
-    const targets = store ? await uniqueDevices(ctx, store.id, subs as Sub[], devices) : subs as Sub[];
-    sent += await deliver(ctx.db, ctx.server, k, targets, notificationBrand(ctx.shop?.slug, payload), seen);
+    sent += await deliver(ctx.db, ctx.server, k, subs as Sub[], notificationBrand(ctx.shop?.slug, payload), seen);
   }
   // a store on a server with several shops: the same people in their other boutiques
-  if (store) sent += await pushElsewhere(ctx, people, payload, seen, devices, o).catch(() => 0);
+  if (store) sent += await pushElsewhere(ctx, people, payload, seen, o).catch(() => 0);
   return sent;
 }
 
@@ -161,73 +144,7 @@ export function pushServiceUrl(raw: string): boolean {
   }
 }
 
-async function deviceOwner(ctx: Ctx) {
-  if (!ctx.t || !ctx.shop) return null;
-  const account = await accountByEmail(ctx.t, ctx.session.profile.email);
-  return { account, key: account ? `account:${account.id}` : `profile:${ctx.shop.id}:${ctx.session.profile.id}` };
-}
-
 export const pushProcs = {
-  'push.devices': proc(null, z.object({}), async (ctx) => {
-    const owner = await deviceOwner(ctx);
-    if (!ctx.t || !owner) return [];
-    const rows = await ctx.t.platform.query(
-      'SELECT id, name, kind, enabled, last_seen_at FROM platform.notification_devices WHERE owner_key = $1 ORDER BY last_seen_at DESC',
-      [owner.key],
-    );
-    return rows.map((row) => ({
-      id: String(row.id), name: String(row.name), kind: String(row.kind), enabled: !!row.enabled,
-      lastSeenAt: new Date(row.last_seen_at).toISOString(),
-    }));
-  }),
-  'push.device.checkIn': proc(null, z.object({
-    id: z.string().uuid(),
-    endpoint: z.string().max(1000).nullable(),
-    setup: z.object({ name: z.string().trim().min(1).max(80), kind: z.enum(['phone', 'pc']) }).optional(),
-  }), async (ctx, { id, endpoint, setup }) => {
-    const owner = await deviceOwner(ctx);
-    if (!ctx.t || !owner) return { registered: false, enabled: false };
-    const enabled = !!endpoint && !!(await ctx.db.query(
-      'SELECT 1 FROM push_subs WHERE profile_id = $1 AND endpoint = $2',
-      [ctx.session.profile.id, endpoint],
-    ))[0];
-    const rows = setup ? await ctx.t.platform.query(
-      `INSERT INTO platform.notification_devices (owner_key, id, name, kind, enabled) VALUES ($1,$2,$3,$4,$5)
-       ON CONFLICT (owner_key, id) DO UPDATE SET name = EXCLUDED.name, kind = EXCLUDED.kind,
-         enabled = EXCLUDED.enabled, last_seen_at = now() RETURNING id`,
-      [owner.key, id, setup.name, setup.kind, enabled],
-    ) : await ctx.t.platform.query(
-      'UPDATE platform.notification_devices SET last_seen_at = now(), enabled = $3 WHERE owner_key = $1 AND id = $2 RETURNING id',
-      [owner.key, id, enabled],
-    );
-    if (rows.length && enabled && ctx.shop) await ctx.t.platform.query(
-      `INSERT INTO platform.notification_device_subscriptions (owner_key, device_id, shop_id, endpoint)
-       VALUES ($1,$2,$3,$4) ON CONFLICT (owner_key, device_id, shop_id) DO UPDATE SET endpoint = EXCLUDED.endpoint`,
-      [owner.key, id, ctx.shop.id, endpoint],
-    );
-    return { registered: !!rows.length, enabled };
-  }),
-  'push.device.remove': proc(null, z.object({ id: z.string().uuid() }), async (ctx, { id }) => {
-    const owner = await deviceOwner(ctx);
-    if (!ctx.t || !owner) return { ok: true };
-    const endpoints = await ctx.t.platform.query(
-      'SELECT shop_id, endpoint FROM platform.notification_device_subscriptions WHERE owner_key = $1 AND device_id = $2',
-      [owner.key, id],
-    );
-    if (endpoints.length) {
-      const memberships = owner.account ? await membershipsOf(ctx.t, owner.account.email) : [];
-      for (const row of endpoints) {
-        const membership = memberships.find((item) => item.shopId === num(row.shop_id));
-        const current = ctx.shop?.id === num(row.shop_id);
-        const db = current ? ctx.db : membership ? ctx.t.shop(membership.schema) : null;
-        if (db) await db.query(
-          'DELETE FROM push_subs WHERE profile_id = $1 AND endpoint = $2', [current ? ctx.session.profile.id : membership!.profileId, row.endpoint],
-        );
-      }
-    }
-    await ctx.t.platform.query('DELETE FROM platform.notification_devices WHERE owner_key = $1 AND id = $2', [owner.key, id]);
-    return { ok: true };
-  }),
   /** The shop's public key (null: no notifications here — the browser preview). And whether this account has a device. */
   'push.key': proc(null, z.object({ endpoint: z.string().max(1000).optional() }), async (ctx, i) => {
     const k = await keys(ctx);

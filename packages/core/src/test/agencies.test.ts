@@ -107,19 +107,11 @@ test('delegated SAV separates seller routing from agency assignment, role notifi
   assert.equal((await call('push.key', chief, { endpoint }) as { subscribed: boolean }).subscribed, false);
   assert.deepEqual(await call('push.test', chief, { endpoint }), { sent: false });
   assert.deepEqual(await call('push.test', seller, { endpoint }), { sent: false });
-  const device = { id: '35410d12-ac52-48ac-9456-70cad87becfd', endpoint, setup: { name: 'SAV iPhone', kind: 'phone' } };
-  assert.deepEqual(await call('push.device.checkIn', agent, device), { registered: true, enabled: true });
-  assert.deepEqual(await call('push.devices', chief, {}), []);
-  assert.deepEqual(await call('push.devices', seller, {}), []);
   const otherShop = await store(t, p, 'Autre boutique SAV', 'other-sav@example.dz');
   const otherOwner = await as(t, otherShop.id, 'other-sav@example.dz', PW);
   const otherProfile = await call('users.create', otherOwner, { phone: tph(), name: 'SAV agent', email: 'agent-sav@example.dz', password: PW, roles: ['sav'] }) as { id: number };
   await attachProfile(t, otherShop.schema, otherProfile.id);
   const sameAccount = await as(t, otherShop.id, 'agent-sav@example.dz', PW);
-  assert.equal((await call('push.devices', sameAccount, {}) as { name: string }[])[0].name, 'SAV iPhone');
-  await call('push.device.remove', chief, { id: device.id });
-  assert.equal((await call('push.devices', agent, {}) as { name: string }[])[0].name, 'SAV iPhone');
-  assert.deepEqual(await call('push.device.checkIn', agent, { id: device.id, endpoint: null }), { registered: true, enabled: false });
   assert.deepEqual(await call('push.test', agent, { endpoint }), { sent: true });
   assert.equal(sent[0].payload.workspace, agent.shop!.slug);
   assert.equal(sent[0].payload.icon, undefined, 'the service worker supplies the same Pilotix icon for every workspace');
@@ -183,13 +175,11 @@ test('delegated SAV separates seller routing from agency assignment, role notifi
   const secondEndpoint = 'https://fcm.googleapis.com/fcm/send/other-workspace';
   sameAccount.server = hooks;
   await call('push.subscribe', sameAccount, { endpoint: secondEndpoint, p256dh: 'fake-public-device-key', auth: 'fake-device-auth' });
-  await call('push.device.checkIn', sameAccount, { id: device.id, endpoint: secondEndpoint });
   const beforeFanout = sent.length;
-  await pushOnly(sameAccount, [sameAccount.session.profile.id], { title: 'One alert on one device' });
-  assert.equal(sent.length, beforeFanout + 1, 'the same device subscribed in two workspaces receives one system alert');
-  await call('push.device.remove', sameAccount, { id: device.id });
-  assert.deepEqual(await call('push.devices', agent, {}), []);
-  assert.deepEqual(await call('push.test', agent, { endpoint }), { sent: false });
+  await pushOnly(sameAccount, [sameAccount.session.profile.id], { title: 'One alert' });
+  // the device subscribed in this store, and the same person's subscription in the boutique they also work in
+  assert.deepEqual(sent.slice(beforeFanout).map((x) => x.endpoint).sort(), [endpoint, secondEndpoint].sort());
+  await call('push.unsubscribe', sameAccount, { endpoint: secondEndpoint });
   assert.deepEqual(await call('push.test', sameAccount, { endpoint: secondEndpoint }), { sent: false });
 });
 

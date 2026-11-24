@@ -21,7 +21,6 @@ import { canSee, canSeeChild, isSoonItem, isSoonLine, menuView, NAV, NavChild, N
 import { useCanRules } from '../lib/pilot';
 import { AccountMenu } from './AccountMenu';
 import { Bell } from './Bell';
-import { isNativePilotix, NotificationDevices } from './NotificationDevices';
 import { BoutiqueSwitch, useBoutiques } from './Boutiques';
 import { ShopBanner } from './ShopBanner';
 import { DoorChip } from '../ui/DoorChip';
@@ -125,12 +124,7 @@ const BIG_MENU = 20;
 type ShellProps = { page: string; sub?: string; children: ReactNode; nav?: NavItem[]; space?: 'store' | 'agency' | 'marketer' };
 
 export function Shell(props: ShellProps) {
-  const { session } = useSession();
-  const nativeApp = isNativePilotix();
-  if (backend.kind === 'demo' || session?.shop?.demo || nativeApp) return <WorkspaceShell {...props} />;
-  return <NotificationDevices key={`${session?.shop?.id}:${session?.profile.id}`}>
-    <WorkspaceShell {...props} />
-  </NotificationDevices>;
+  return <WorkspaceShell {...props} />;
 }
 
 function WorkspaceShell({ page, sub, children, nav = NAV, space = 'store' }: ShellProps) {
@@ -489,7 +483,6 @@ function WorkspaceShell({ page, sub, children, nav = NAV, space = 'store' }: She
             </div>
           )}
           {all.on && !ALL_PAGES.has(page) && <AllBanner />}
-          <div id="notification-device-actions" />
           {children}
           <PubFooter />
         </main>

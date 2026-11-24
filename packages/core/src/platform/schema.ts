@@ -408,7 +408,6 @@ CREATE TABLE IF NOT EXISTS platform.agency_links (
   ended_at       timestamptz,
   ended_by       text
 );
-ALTER TABLE platform.agency_links ADD COLUMN IF NOT EXISTS agency_alerts jsonb NOT NULL DEFAULT '[]';
 CREATE UNIQUE INDEX IF NOT EXISTS agency_links_open ON platform.agency_links (agency_id, store_id) WHERE status IN ('pending', 'active');
 CREATE INDEX IF NOT EXISTS agency_links_store ON platform.agency_links (store_id, status);
 CREATE INDEX IF NOT EXISTS agency_links_agency ON platform.agency_links (agency_id, status);
@@ -723,9 +722,10 @@ CREATE INDEX IF NOT EXISTS mcp_uploads_at ON platform.mcp_uploads (at);
 `;
 
 /**
- * « Mes appareils »: each person's phones and computers, and the boutiques each one is turned on in (modules/push.ts).
- * Its own step: written into p003 on 23 Nov 2026, it never reached the servers that had run p003 long before
- * (« Mes appareils » and every notification of a store answered « Erreur du serveur », the depot's scanner too).
+ * « Mes appareils »: each person's phones and computers, and the boutiques each one is turned on in. Its own step:
+ * written into p003 on 23 Nov 2026, it never reached the servers that had run p003 long before (« Mes appareils » and
+ * every notification of a store answered « Erreur du serveur », the depot's scanner too). « Mes appareils » was taken
+ * out of Pilotix on 24 Nov 2026 (owner's ask): nothing reads or writes these two tables any more; they stay empty.
  */
 const NOTIFICATION_DEVICES_SQL = `
 CREATE TABLE IF NOT EXISTS platform.notification_devices (
@@ -746,6 +746,15 @@ CREATE TABLE IF NOT EXISTS platform.notification_device_subscriptions (
   FOREIGN KEY (owner_key, device_id) REFERENCES platform.notification_devices(owner_key, id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS notification_device_endpoint ON platform.notification_device_subscriptions(shop_id, endpoint);
+`;
+
+/**
+ * The alerts a store lets its agency send (Partenaires › the agency's tasks; modules/agencies.ts, agencybell.ts). Its own
+ * step: written into p005 on 23 Nov 2026, it never reached the servers that had run p005 long before. A change to the
+ * platform's tables is always a new step at the end, never an edit of an old one (test/platformsteps.test.ts).
+ */
+const AGENCY_ALERTS_SQL = `
+ALTER TABLE platform.agency_links ADD COLUMN IF NOT EXISTS agency_alerts jsonb NOT NULL DEFAULT '[]';
 `;
 
 export const PLATFORM_MIGRATIONS: [string, string][] = [
@@ -844,6 +853,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p044_social_ads_picked', SOCIAL_PICKED_SQL],
   // « Mes appareils » (modules/push.ts): its two tables, never made on the servers that had already run p003
   ['p045_notification_devices', NOTIFICATION_DEVICES_SQL],
+  // the alerts a store lets its agency send: their column, never made on the servers that had already run p005
+  ['p046_agency_alerts', AGENCY_ALERTS_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

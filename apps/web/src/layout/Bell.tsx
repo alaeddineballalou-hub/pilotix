@@ -17,7 +17,6 @@ import { audioReady, bellSound, BellSound, unlockAudio } from '../lib/sound';
 import { store } from '../lib/store';
 import { Icon } from '../ui/kit';
 import { toast } from '../ui/toast';
-import { isNativePilotix, SHOW_NOTIFICATION_DEVICES } from './NotificationDevices';
 import './bell.css';
 
 type Line = Out<'inbox.list'>['items'][number];
@@ -352,12 +351,6 @@ export function Bell() {
               <Icon name="bell" /> {t('devices.sendTest')}
             </button>
             {testStatus && <small role="status">{testStatus}</small>}
-            {backend.kind !== 'demo' && !session?.shop?.demo && !isNativePilotix() && (
-              <button type="button" className="btn small" onClick={() => {
-                setOpen(false);
-                window.dispatchEvent(new Event(SHOW_NOTIFICATION_DEVICES));
-              }}>{t('devices.title')}</button>
-            )}
             {agency && push === 'on' && (
                 <button type="button" className="btn small" disabled={deviceBusy} onClick={() => {
                   setDeviceBusy(true);
