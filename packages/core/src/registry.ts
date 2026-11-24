@@ -41,6 +41,7 @@ import { cmProcs } from './modules/cm';
 import { cmPlanProcs } from './modules/cmplan';
 import { cmSocialProcs } from './modules/cmsocial';
 import { confirmationProcs } from './modules/confirmation';
+import { noAnswerProcs } from './modules/noanswer';
 import { confBlockProcs } from './modules/confblock';
 import { customersProcs } from './modules/customers';
 import { welcomeProcs } from './modules/welcome';
@@ -101,6 +102,7 @@ export const REGISTRY = {
   ...usersProcs,
   ...sheetsProcs,
   ...confirmationProcs,
+  ...noAnswerProcs,
   // Confirmation › « Bloquer jusqu'à l'appel »: a new order covers the plain agent's screen and rings until he calls
   ...confBlockProcs,
   ...statsProcs,

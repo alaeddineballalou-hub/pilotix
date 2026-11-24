@@ -3,7 +3,7 @@
   "cancellationMessageRequired": "Send the cancellation message to the client",
   "cancelReorderText": "Your order has been cancelled. Use the link below whenever you want to reactivate it.",
   "cancelReorderLink": "The Reactivate my order link is added automatically.",
-  "attemptMessageRequired": "Send the client a message for attempt 3",
+  "attemptMessageRequired": "Send the client a message for attempt {{n}}",
   "attemptMessageOneOrder": "Open one order at a time to send its message.",
   "sub": {
     "nouvelles": "New",

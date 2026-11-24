@@ -40,6 +40,8 @@ import { runWatch } from './watchers';
  *  - Pilotix: « Changements API », what changed at each delivery company's API (daily, 07:20; an e-mail when something did)
  *  - Pilot Auto Assign: « Livraison privée » orders waiting too long in « À attribuer » go to the backup company, every 5 minutes
  *  - Affectation automatique: waiting orders and alerts get an agent on line, absent agents give back what they never touched, every minute
+ *  - Confirmation: orders at the shop's « Annuler après N appels sans réponse » or more, cancelled with no message
+ *    (old orders, or the limit lowered), every 10 minutes
  *  - Confirmation › « Bloquer jusqu'à l'appel »: a new order waiting rings its agent's devices while he is away from
  *    Pilotix (then every 5 minutes, 6 times at most), every 30 seconds
  *  - the bell: a callback whose time came is told to its agent, the depot its new orders to prepare, every minute
@@ -80,6 +82,8 @@ const FEATURE: Record<string, string | null> = {
   // agent pay: the people still without a pay plan, told to the admins and to whoever added them (a store with
   // Caisse › Paie, an agency; the proc answers « nothing » elsewhere)
   'pay-plan-alert': null,
+  // Confirmation: the orders at the shop's « Annuler après N appels sans réponse » or more, cancelled with no message
+  'noanswer-sweep': null,
 };
 
 @Injectable()
@@ -135,6 +139,11 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     }
     if (name === 'depot-push') return call('depot.pushRun');
     if (name === 'conf-push') return call('confirmation.pushRun');
+    if (name === 'noanswer-sweep') {
+      const r: any = await call('confirmation.noAnswerSweep');
+      if (r?.cancelled) new Logger('No answer').log(`${tag} ${r.cancelled} order(s) over the shop's limit cancelled: ${r.refs.slice(0, 20).join(', ')}`);
+      return r;
+    }
     if (name === 'pay-plan-alert') return call('pay.noPlanPush');
     if (name === 'pilot-run') return call('pilot.run');
     if (name === 'assign-run') return call('assign.run');
@@ -296,6 +305,9 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('desks-refresh', {}, { repeat: { pattern: '13 * * * *' }, jobId: 'desks-refresh', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('pilot-run', {}, { repeat: { every: 5 * 60_000 }, jobId: 'pilot-run', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('assign-run', {}, { repeat: { every: 60_000 }, jobId: 'assign-run', removeOnComplete: 20, removeOnFail: 50 });
+    // Confirmation: an order at the shop's limit of unanswered calls or above (an old one, or the limit lowered) is
+    // cancelled with no message; an order an agent had open waits for the next round
+    await this.queue.add('noanswer-sweep', {}, { repeat: { every: 10 * 60_000 }, jobId: 'noanswer-sweep', removeOnComplete: 20, removeOnFail: 50 });
     // the bell (top of every page): a callback whose time came, the depot's new orders to prepare (every 15 min at most)
     await this.queue.add('inbox-run', {}, { repeat: { every: 60_000 }, jobId: 'inbox-run', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('landing-run', {}, { repeat: { every: 60_000 }, jobId: 'landing-run', removeOnComplete: 20, removeOnFail: 50 });

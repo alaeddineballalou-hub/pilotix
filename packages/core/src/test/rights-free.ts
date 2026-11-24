@@ -45,7 +45,7 @@ export const FREE_ACTIONS: readonly string[] = [
   'me.update',
   'modules.get',
   'notify.cases', 'notify.feed', 'notify.preview', 'notify.stats',
-  'orders.assignCompany', 'orders.cancelReport', 'orders.companyFees', 'orders.confirmCheck', 'orders.counts',
+  'orders.assignCompany', 'orders.cancelReport', 'orders.companyFees', 'orders.confirmCheck', 'orders.counts', 'orders.customerMessage',
   'orders.deliveredReport', 'orders.events', 'orders.formData', 'orders.get', 'orders.lastChange', 'orders.list',
   'orders.logCall', 'orders.lookups', 'orders.next', 'orders.note', 'orders.quote', 'orders.reasons', 'orders.reorderLink',
   'orders.setFollow', 'orders.setSub', 'orders.setTracking', 'orders.sync', 'orders.uiMeta', 'orders.undo',

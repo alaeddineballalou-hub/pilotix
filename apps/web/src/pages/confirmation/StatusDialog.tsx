@@ -13,7 +13,7 @@ import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { toastUndo } from '../../lib/undo';
 import { choiceLabel, defaultNext, StatusChoice } from './shared';
-import { AttemptMessageLock, finalAttempt, type MessageChannel } from './AttemptMessage';
+import { AttemptMessageLock, finalAttempt, messageAttempt, type MessageChannel } from './AttemptMessage';
 import { useRpc } from '../../lib/query';
 import './confirmation.css';
 
@@ -28,10 +28,12 @@ interface Ask {
   choice: StatusChoice;
   resolve: (ok: boolean) => void;
   cancelling: boolean;
+  /** this call is the try of the shop's first message (or the cancel one): it opens the message to send */
+  message: boolean;
 }
 
-const needsAttemptMessage = (rows: Target[], choice: StatusChoice) =>
-  (choice === 'no_answer' || choice.startsWith('try')) && rows.some(({ attempts }) => attempts === 2);
+const needsAttemptMessage = (rows: Target[], choice: StatusChoice, at: number) =>
+  (choice === 'no_answer' || choice.startsWith('try')) && rows.some(({ attempts }) => attempts !== undefined && messageAttempt(attempts, at));
 type ChangeDetails = { nextCallAt?: string; note?: string | null; reason?: string | null; messageSentVia?: MessageChannel | null; reorderToken?: string };
 
 /** Returns `change(rows, choice)` (resolves true when saved) and the dialog element to render. */
@@ -101,7 +103,7 @@ export function useStatusChange() {
     }
     const cancelling = (choice === 'no_answer' || choice.startsWith('try')) && rows.some(({ attempts }) =>
       attempts !== undefined && finalAttempt(attempts, limits.data?.cancelAfterNoAnswer ?? 0));
-    const requiresMessage = needsAttemptMessage(rows, choice) || cancelling;
+    const requiresMessage = needsAttemptMessage(rows, choice, limits.data?.messageAtTry ?? 3) || cancelling;
     if (requiresMessage && (rows.length !== 1 || !rows[0].phone)) {
       toast(t('confirmation.attemptMessageOneOrder'), 'bad');
       return Promise.resolve(false);
@@ -112,7 +114,7 @@ export function useStatusChange() {
           opts.onMessageDone();
           resolve(false);
         } else resolve(ok);
-      }, cancelling }));
+      }, cancelling, message: requiresMessage }));
     return apply(rows, choice);
   };
 
@@ -139,7 +141,7 @@ export function useStatusChange() {
 function AskDialog({ ask, onClose, onSubmit }: { ask: Ask; onClose: () => void; onSubmit: (x: ChangeDetails) => Promise<boolean> }) {
   const { t } = useTranslation();
   const isDate = ask.choice === 'callback' || ask.choice === 'postponed';
-  const attemptMessage = needsAttemptMessage(ask.rows, ask.choice) || ask.cancelling;
+  const attemptMessage = ask.message;
   const [when, setWhen] = useState(isDate ? defaultNext(ask.choice as 'callback' | 'postponed') : '');
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');

@@ -3,7 +3,7 @@
   "cancellationMessageRequired": "أرسل رسالة الإلغاء إلى العميل",
   "cancelReorderText": "تم إلغاء طلبك. استخدم الرابط أدناه متى أردت إعادة تفعيله.",
   "cancelReorderLink": "يُضاف رابط إعادة تفعيل الطلب تلقائيًا.",
-  "attemptMessageRequired": "أرسل رسالة إلى العميل للمحاولة الثالثة",
+  "attemptMessageRequired": "أرسل رسالة إلى العميل في المحاولة {{n}}",
   "attemptMessageOneOrder": "افتح طلبًا واحدًا في كل مرة لإرسال رسالته.",
   "sub": {
     "nouvelles": "جديدة",

@@ -3,7 +3,7 @@
   "cancellationMessageRequired": "Envoyez le message d’annulation au client",
   "cancelReorderText": "Votre commande a été annulée. Utilisez le lien ci-dessous quand vous souhaitez la réactiver.",
   "cancelReorderLink": "Le lien Réactiver ma commande est ajouté automatiquement.",
-  "attemptMessageRequired": "Envoyez un message au client pour la tentative 3",
+  "attemptMessageRequired": "Envoyez un message au client pour la tentative {{n}}",
   "attemptMessageOneOrder": "Ouvrez une commande à la fois pour envoyer son message.",
   "sub": {
     "nouvelles": "Nouvelles",

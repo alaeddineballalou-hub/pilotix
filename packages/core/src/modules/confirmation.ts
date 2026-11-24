@@ -1,6 +1,6 @@
 // Confirmation queue: lists with call deadlines, the agent banner, and the KPI blocks of
 // Nouvelles / En cours / Confirmées. Order changes go through modules/orders.ts.
-import { algiersDayStart, CallSettings, CLIENT_LEVELS, CONF_STATUSES, CONF_TODO, ConfStatus, LEVEL_RANK, nextDue, Order, slotAt } from '@pilotix/shared';
+import { algiersDayStart, CallSettings, CLIENT_LEVELS, CONF_STATUSES, CONF_TODO, ConfStatus, LEVEL_RANK, messageTry, nextDue, Order, slotAt } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, hasRole, proc } from '../rpc';
@@ -969,6 +969,8 @@ export const confirmationProcs = {
       shopName: shop.name,
       whatsappTemplate: shop.whatsappTemplate,
       cancelAfterNoAnswer: calls.cancelAfterNoAnswer,
+      /** the try at which the agent sends the shop's first message (Management › Statuts › « Messages client ») */
+      messageAtTry: messageTry(calls),
       names: Object.fromEntries([...people.map((p: any) => [String(p.id), p.name as string]), ...companies.map((c: any) => [`c${c.id}`, c.name as string])]) as Record<string, string>,
     };
   }),

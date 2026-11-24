@@ -12,6 +12,7 @@ import { createOrder } from './orders';
 import { usersProcs } from './users';
 import { readSheet } from './sheets';
 import { linkedAds } from './social';
+import { cancelOverLimit } from './noanswer';
 
 // ---------------------------------------------------------------- small helpers
 /** A random key (webhooks, cron). Works in Node 22 and browsers. */
@@ -251,6 +252,8 @@ const CallsInput = z.object({
   firstMinutes: z.number().int().min(1).max(1440),
   paceMinutes: z.number().int().min(0).max(600),
   cancelAfterNoAnswer: z.number().int().min(0).max(30),
+  /** the try of the shop's first message to the customer (an older screen does not send it: kept as it was) */
+  messageAtTry: z.number().int().min(1).max(30).optional(),
 });
 const FeeRow = z.object({ home: z.number().int().min(0).max(100_000), desk: z.number().int().min(0).max(100_000) });
 const GridName = z.string().trim().min(1).max(60);
@@ -394,9 +397,12 @@ export const adminProcs = {
   }),
   'admin.calls.save': proc([], CallsInput, async (ctx, i) => {
     for (const s of i.slots) if (s.to <= s.from) throw bad('Un créneau doit finir après son début');
-    await setSetting(ctx.db, 'calls', i, me(ctx));
+    const cur = await getSetting(ctx.db, 'calls');
+    await setSetting(ctx.db, 'calls', { ...DEFAULT_CALL_SETTINGS, ...cur, ...i, messageAtTry: i.messageAtTry ?? cur.messageAtTry }, me(ctx));
     ctx.emit({ type: 'settings' });
-    return { ok: true };
+    // the rule holds for every order at once: those already at the new limit or above are cancelled now (no message)
+    const over = await cancelOverLimit(ctx);
+    return { ok: true, cancelled: over.cancelled };
   }),
   'admin.payroll': proc([], z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }), async (ctx, i) => computePayroll(ctx.db, i.month)),
 
@@ -593,7 +599,8 @@ export const adminProcs = {
       const calls = await getSetting(ctx.db, 'calls');
       await setSetting(ctx.db, 'calls', { ...DEFAULT_CALL_SETTINGS, ...calls, cancelAfterNoAnswer: i.cancelAfterNoAnswer }, me(ctx));
       ctx.emit({ type: 'settings' });
-      return { ok: true };
+      const over = await cancelOverLimit(ctx);
+      return { ok: true, cancelled: over.cancelled };
     },
   ),
   'admin.warehouses.list': proc([], z.object({}), async (ctx) => (await ctx.db.query('SELECT * FROM warehouses WHERE archived_at IS NULL ORDER BY is_default DESC, name')).map(toWarehouse)),

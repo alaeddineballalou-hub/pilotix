@@ -1,4 +1,4 @@
-import { CallSettings, DEFAULT_CALL_SETTINGS, DEFAULT_SCORE_RULES, PILOT_DEFAULT, type ConfStatus, type PilotConfig, type ScoreRules } from '@pilotix/shared';
+import { CallSettings, CustomerMessages, DEFAULT_CALL_SETTINGS, DEFAULT_CUSTOMER_MESSAGES, DEFAULT_SCORE_RULES, PILOT_DEFAULT, type ConfStatus, type PilotConfig, type ScoreRules } from '@pilotix/shared';
 import type { Db } from './db';
 
 export interface SuiviMotif {
@@ -83,6 +83,8 @@ export interface SettingsMap {
   /** the boutique's logo (« Mes boutiques »): a small picture as a data URL, shown in the menu, the top bar, the printed papers and the landing pages */
   logo: { url: string | null; updatedAt: string | null };
   calls: CallSettings;
+  /** Confirmation › the shop's texts for the customer who does not answer (Management › Statuts › « Messages client ») */
+  customerMessages: CustomerMessages;
   /** Client delivery price grids: name → wilaya → { home, desk } */
   clientFees: Record<string, Record<string, { home: number; desk: number }>>;
   defaultFeeGrid: string;
@@ -260,6 +262,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   shop: { name: 'Pilotix', fromWilayaId: 16, defaultCompanyId: null, whatsappTemplate: 'Bonjour {nom}, ici {boutique} à propos de votre commande {ref}.', savPhone: '' },
   logo: { url: null, updatedAt: null },
   calls: DEFAULT_CALL_SETTINGS,
+  customerMessages: DEFAULT_CUSTOMER_MESSAGES,
   clientFees: {},
   defaultFeeGrid: 'Standard',
   savFees: {},

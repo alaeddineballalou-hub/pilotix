@@ -206,8 +206,10 @@
     "help": "The 1st call is due X minutes after assignment, + Y minutes per more recent order to call first (last in, first called). Tries happen within the slots.",
     "first": "1st call: minutes after assignment",
     "pace": "+ minutes per more recent order",
+    "message": "Message to the client at try",
+    "messageHelp": "At this unanswered try, the agent sends the 1st message of « Client messages » (below) before saving. An order already further on does not get it.",
     "cancel": "Cancel after how many unanswered calls",
-    "cancelHelp": "0 = never",
+    "cancelHelp": "0 = never. At this number, the agent sends the cancellation message with the link, then the order is cancelled. Orders already at this number or more are cancelled at once, with no message.",
     "tries": "Tries per order",
     "slot": "{{name}} slot (hours)",
     "slots": {
@@ -219,7 +221,8 @@
     "start": "{{name}} start",
     "end": "{{name}} end",
     "save": "Save delays",
-    "saved": "Delays saved"
+    "saved": "Delays saved",
+    "savedCancelled": "Delays saved · orders already over it cancelled (no message): {{count}}"
   },
   "pay": {
     "intro": "Pay is computed from the orders: confirmed then delivered for agents, delivered team orders for managers, delivered for tracking, prepared for the warehouse, delivered (light / heavy) for riders.",
@@ -473,7 +476,7 @@
     "defaultCompanyHelp": "When the order has no courier yet, the delivery cost (what you pay) comes from its tariffs.",
     "none": "— none —",
     "autoCancel": "Cancel automatically after how many unanswered calls",
-    "autoCancelHelp": "0 = never. Counts unanswered tries.",
+    "autoCancelHelp": "0 = never. Counts unanswered tries. Orders already at this number or more are cancelled at once, with no message.",
     "whatsapp": "WhatsApp message template",
     "whatsappHelp": "{nom} = customer name, {boutique} = shop name, {ref} = order reference.",
     "save": "Save",
@@ -917,5 +920,30 @@
       "name": "Point of sale",
       "text": "Sell at your shop’s counter: products as photos, 80 mm ticket, today’s sales and till closing. Stock leaves the chosen depot, money goes into “Shop till”."
     }
+  },
+  "cmsg": {
+    "title": "Client messages",
+    "help": "The two messages the agent sends from his WhatsApp or by SMS when the client does not answer: at try {{n}}, then before the cancellation, with the link that lets the client reactivate the order. The buttons put the order’s values in the text.",
+    "vars": "Order values",
+    "var": {
+      "name": "First name",
+      "shop": "Shop",
+      "ref": "Order number",
+      "products": "Products and variants",
+      "qty": "Quantities",
+      "delivery": "Delivery",
+      "total": "Total",
+      "link": "Reactivation link"
+    },
+    "attempt": "Message at try {{n}}",
+    "cancel": "Message before cancellation",
+    "chars": "{{n}} / {{max}}",
+    "default": "Starting text",
+    "when": "Try {{n}} unanswered: the agent sends the 1st message. Try {{x}}: the cancellation message with the link, then the order is cancelled (« No answer », counted as an attack, never against the team). The link goes at the end when the text does not have it.",
+    "whenOff": "Try {{n}} unanswered: the agent sends the 1st message. Automatic cancellation is off (« Cancel after how many unanswered calls » = 0): the cancellation message is not sent.",
+    "save": "Save",
+    "saved": "Messages saved",
+    "preview": "Client preview · SMS / WhatsApp",
+    "linkText": "إعادة تفعيل الطلب"
   }
 }

@@ -206,8 +206,10 @@
     "help": "Le 1er appel est dû X minutes après l’assignation, + Y minutes par commande plus récente à appeler avant (dernière arrivée, première appelée). Les tentatives se font dans les créneaux.",
     "first": "1er appel : minutes après l’assignation",
     "pace": "+ minutes par commande plus récente",
+    "message": "Message au client à la tentative",
+    "messageHelp": "À cette tentative sans réponse, l’agent envoie le 1er message de « Messages client » (plus bas) avant d’enregistrer. Une commande déjà plus loin ne le reçoit pas.",
     "cancel": "Annuler après combien d’appels sans réponse",
-    "cancelHelp": "0 = jamais",
+    "cancelHelp": "0 = jamais. À ce nombre, l’agent envoie le message d’annulation avec le lien, puis la commande est annulée. Les commandes déjà à ce nombre ou plus sont annulées tout de suite, sans message.",
     "tries": "Tentatives par commande",
     "slot": "Créneau {{name}} (heures)",
     "slots": {
@@ -219,7 +221,8 @@
     "start": "{{name}} début",
     "end": "{{name}} fin",
     "save": "Enregistrer les délais",
-    "saved": "Délais enregistrés"
+    "saved": "Délais enregistrés",
+    "savedCancelled": "Délais enregistrés · commandes déjà au-dessus annulées (sans message) : {{count}}"
   },
   "pay": {
     "intro": "La paie se calcule toute seule avec les commandes : confirmées puis livrées pour les agents, livrées de l’équipe pour les managers, livrées pour le suivi, préparées pour le dépôt, livrées (léger / lourd) pour les livreurs.",
@@ -473,7 +476,7 @@
     "defaultCompanyHelp": "Quand la commande n’a pas encore de société, le coût de livraison (ce que vous payez) vient de ses tarifs.",
     "none": "— aucune —",
     "autoCancel": "Annuler automatiquement après combien d’appels sans réponse",
-    "autoCancelHelp": "0 = jamais. Compte les tentatives sans réponse.",
+    "autoCancelHelp": "0 = jamais. Compte les tentatives sans réponse. Les commandes déjà à ce nombre ou plus sont annulées tout de suite, sans message.",
     "whatsapp": "Modèle du message WhatsApp",
     "whatsappHelp": "{nom} = nom du client, {boutique} = nom de la boutique, {ref} = référence de la commande.",
     "save": "Enregistrer",
@@ -917,5 +920,30 @@
       "name": "Point de vente",
       "text": "Vendre au comptoir de votre boutique : produits en photos, ticket 80 mm, ventes du jour et clôture de caisse. Le stock sort du dépôt choisi, l’argent va dans « Caisse boutique »."
     }
+  },
+  "cmsg": {
+    "title": "Messages client",
+    "help": "Les deux messages que l’agent envoie depuis son WhatsApp ou par SMS quand le client ne répond pas : à la tentative {{n}}, puis avant l’annulation, avec le lien qui permet au client de réactiver sa commande. Les boutons mettent les valeurs de la commande dans le texte.",
+    "vars": "Valeurs de la commande",
+    "var": {
+      "name": "Prénom",
+      "shop": "Boutique",
+      "ref": "N° de commande",
+      "products": "Produits et variantes",
+      "qty": "Quantités",
+      "delivery": "Livraison",
+      "total": "Total",
+      "link": "Lien de réactivation"
+    },
+    "attempt": "Message à la tentative {{n}}",
+    "cancel": "Message avant annulation",
+    "chars": "{{n}} / {{max}}",
+    "default": "Texte de départ",
+    "when": "Tentative {{n}} sans réponse : l’agent envoie le 1er message. Tentative {{x}} : le message d’annulation avec le lien, puis la commande est annulée (« Pas de réponse », comptée comme une attaque, jamais contre l’équipe). Le lien va à la fin s’il n’est pas dans le texte.",
+    "whenOff": "Tentative {{n}} sans réponse : l’agent envoie le 1er message. L’annulation automatique est éteinte (« Annuler après combien d’appels sans réponse » = 0) : le message d’annulation ne part pas.",
+    "save": "Enregistrer",
+    "saved": "Messages enregistrés",
+    "preview": "Aperçu client · SMS / WhatsApp",
+    "linkText": "إعادة تفعيل الطلب"
   }
 }

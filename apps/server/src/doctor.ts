@@ -47,6 +47,7 @@ export const JOB_EVERY: Record<string, number> = {
   'pilot-ai-night': D,
   'pay-plan-alert': D,
   'doctor-watch': 10 * MIN,
+  'noanswer-sweep': 10 * MIN,
 };
 
 interface Seen {

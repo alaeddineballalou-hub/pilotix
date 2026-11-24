@@ -15,6 +15,7 @@ export * from './passwords';
 export * from './metawindow';
 export * from './mp4';
 export * from './social';
+export * from './customerMessages';
 import type { ShopInfo } from './features';
 import type { OrigLine } from './upsell';
 import type { AgencySellerWork } from './agency';

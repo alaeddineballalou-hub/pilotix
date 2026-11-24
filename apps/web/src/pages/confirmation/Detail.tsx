@@ -4,7 +4,7 @@ import { CANCEL_REASONS, communesOf, CONF_TODO, isAbandonedCheckout, normalizePh
 import { useQueryClient } from '@tanstack/react-query';
 import { rpc } from '../../lib/backend';
 import { defaultNext } from './shared';
-import { AttemptMessageLock, finalAttempt, type OpenedMessage } from './AttemptMessage';
+import { AttemptMessageLock, finalAttempt, messageAttempt, type OpenedMessage } from './AttemptMessage';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -890,7 +890,7 @@ function StatusMenu({ order, busy, error, pending, onPick, onConfirmAttempt }: {
   const [note, setNote] = useState('');
   const limits = useRpc('orders.uiMeta', {}, { staleTime: 60_000 });
   const cancelling = finalAttempt(order.attempts, limits.data?.cancelAfterNoAnswer ?? 0);
-  const needsMessage = order.attempts === 2 || cancelling;
+  const needsMessage = messageAttempt(order.attempts, limits.data?.messageAtTry ?? 3) || cancelling;
   const [when, setWhen] = useState('');
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {

@@ -8,6 +8,9 @@ export interface CallSettings {
   firstMinutes: number; // first call due N minutes after assignment
   paceMinutes: number; // + N minutes per more-recent order ahead in the agent's list
   cancelAfterNoAnswer: number; // 0 = never
+  /** the try at which the agent must first send the customer a message (Management › Statuts › « Messages client »);
+   *  a shop that never chose: 3 (messageTry) */
+  messageAtTry?: number;
 }
 
 export const DEFAULT_CALL_SETTINGS: CallSettings = {
@@ -20,6 +23,7 @@ export const DEFAULT_CALL_SETTINGS: CallSettings = {
   firstMinutes: 15,
   paceMinutes: 5,
   cancelAfterNoAnswer: 0,
+  messageAtTry: 3,
 };
 
 /** Algiers is UTC+1 all year (no daylight saving). */

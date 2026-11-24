@@ -126,7 +126,7 @@ function ShopCard({ s }: { s: S }) {
   const { t } = useTranslation();
   const companies = useRpc('admin.companies', {});
   const [v, setV] = useState({ name: s.shop.name, sav: s.shop.savPhone ?? '', from: s.shop.fromWilayaId, company: s.shop.defaultCompanyId, tpl: s.shop.whatsappTemplate, cancel: String(s.calls.cancelAfterNoAnswer) });
-  const save = useAction('admin.shop.save', { success: t('admin.settings.saved') });
+  const save = useAction('admin.shop.save', { success: (r) => (r.cancelled ? t('admin.calls.savedCancelled', { count: r.cancelled }) : t('admin.settings.saved')) });
   return (
     <div className="card">
       <h2>{t('admin.settings.shop')}</h2>

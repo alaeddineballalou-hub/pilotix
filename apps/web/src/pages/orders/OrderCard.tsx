@@ -16,7 +16,7 @@ import { askRisk, ScoreCard } from '../../ui/clientScore';
 import { dropActions, toast } from '../../ui/toast';
 import { Modal } from '../../ui/modal';
 import { toastUndo } from '../../lib/undo';
-import { AttemptMessageLock, finalAttempt } from '../confirmation/AttemptMessage';
+import { AttemptMessageLock, finalAttempt, messageAttempt } from '../confirmation/AttemptMessage';
 import { confLabel, printOrder, telHref, waHref } from './shared';
 import './orders.css';
 import { trackOf } from '../../lib/items';
@@ -226,7 +226,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
             toast(t('orders.card.needAddress'), 'bad');
             return;
           }
-          if (CONF_NEEDS_DATE.includes(s) || CONF_NEEDS_REASON.includes(s) || (s === 'no_answer' && (o.attempts === 2 || finalAttempt(o.attempts, limits.data?.cancelAfterNoAnswer ?? 0)))) setPanel({ kind: 'conf', status: s });
+          if (CONF_NEEDS_DATE.includes(s) || CONF_NEEDS_REASON.includes(s) || (s === 'no_answer' && (messageAttempt(o.attempts, limits.data?.messageAtTry ?? 3) || finalAttempt(o.attempts, limits.data?.cancelAfterNoAnswer ?? 0)))) setPanel({ kind: 'conf', status: s });
           else if (s === 'confirmed' || s === 'no_stock') askRisk(o).then((ok) => {
               if (ok) run(() => rpc('orders.setConf', { ids: [o.id], status: s }), t(`status.conf.${s}`), true);
             });
@@ -720,7 +720,7 @@ function ActionPanel({ o, panel, busy, companies, onCancel, run, onSendAfter }: 
     title = `${t(`status.conf.${panel.status}`)} — ${o.ref}`;
     const needsDate = CONF_NEEDS_DATE.includes(panel.status);
     const cancelling = panel.status === 'no_answer' && finalAttempt(o.attempts, limits.data?.cancelAfterNoAnswer ?? 0);
-    const needsMessage = panel.status === 'no_answer' && (o.attempts === 2 || cancelling);
+    const needsMessage = panel.status === 'no_answer' && (messageAttempt(o.attempts, limits.data?.messageAtTry ?? 3) || cancelling);
     if (needsMessage && o.phone) return <AttemptMessageLock
       phone={o.phone} orderId={o.id} message={note} onMessage={setNote} cancelling={cancelling} busy={busy} error={messageError}
       onFinish={({ text, channel, reorderToken }) => {

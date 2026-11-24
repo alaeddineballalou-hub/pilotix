@@ -1,4 +1,4 @@
-import { phoneWa } from '@pilotix/shared';
+import { phoneWa, withReactivationLink } from '@pilotix/shared';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRpc } from '../../lib/query';
@@ -9,6 +9,9 @@ import './attempt-message.css';
 export type MessageChannel = 'whatsapp' | 'sms';
 export type OpenedMessage = { channel: MessageChannel; text: string; reorderToken?: string };
 export const finalAttempt = (attempts: number, limit: number) => limit > 0 && attempts + 1 >= limit;
+/** This call is the try of the shop's first message (Management › Statuts › « Messages client », 3 at the start). An order
+ *  already past it (from before the rule) is not asked again. */
+export const messageAttempt = (attempts: number, at: number) => attempts + 1 === at;
 
 export function AttemptMessage({ phone, orderId, message, onMessage, onOpen, cancelling }: {
   phone?: string;
@@ -20,24 +23,28 @@ export function AttemptMessage({ phone, orderId, message, onMessage, onOpen, can
 }) {
   const { t } = useTranslation();
   const [draft] = useState(() => globalThis.crypto.randomUUID());
-  const link = useRpc('orders.reorderLink', { id: orderId ?? 0, draft }, { enabled: !!cancelling && !!orderId && !!phone, staleTime: Infinity });
-  const defaultText = cancelling ? t('confirmation.cancelReorderText') : '';
+  const meta = useRpc('orders.uiMeta', {}, { staleTime: 60_000 });
+  // the shop's text with this order's values (« Messages client »); before a cancel, with a new one-time link
+  const tpl = useRpc('orders.customerMessage', { id: orderId ?? 0, kind: cancelling ? 'cancel' : 'attempt', draft }, { enabled: !!orderId && !!phone, staleTime: Infinity });
+  const url = cancelling && tpl.data?.path ? new URL(tpl.data.path, window.location.origin).href : '';
+  const defaultText = tpl.data ? (cancelling ? (url ? withReactivationLink(tpl.data.text, url) : '') : tpl.data.text) : '';
   const text = message.trim() || defaultText;
-  const payload = cancelling && link.data ? `${text}\n${new URL(link.data.path, window.location.origin).href}` : text;
+  // the agent may change the words: the link always goes (on a line of its own at the end when he took it out)
+  const payload = cancelling && url ? withReactivationLink(text, url) : text;
   const body = encodeURIComponent(payload);
-  const canOpen = !!body && (!cancelling || !!link.data);
-  const open = (channel: MessageChannel) => onOpen({ channel, text: payload, reorderToken: cancelling ? link.data?.token : undefined });
+  const canOpen = !!body && (!cancelling || !!url);
+  const open = (channel: MessageChannel) => onOpen({ channel, text: payload, reorderToken: cancelling ? tpl.data?.token ?? undefined : undefined });
   return <>
     <label className="qd6-lab">
-      {t(cancelling ? 'confirmation.cancellationMessageRequired' : 'confirmation.attemptMessageRequired')}
-      <textarea className="qd6-in" maxLength={cancelling ? 700 : 1000} value={message || defaultText} onChange={(event) => {
+      {t(cancelling ? 'confirmation.cancellationMessageRequired' : 'confirmation.attemptMessageRequired', { n: meta.data?.messageAtTry ?? 3 })}
+      <textarea className="qd6-in" dir="auto" rows={6} maxLength={cancelling ? 900 : 1000} value={message || defaultText} onChange={(event) => {
         onMessage(event.target.value);
         onOpen(null);
       }} />
     </label>
     {phone ? <>
       {cancelling && <small>{t('confirmation.cancelReorderLink')}</small>}
-      {cancelling && link.error && <button type="button" className="btn small" onClick={() => void link.refetch()}>{t('common.retry')}</button>}
+      {tpl.error && <button type="button" className="btn small" onClick={() => void tpl.refetch()}>{t('common.retry')}</button>}
       <div className="attempt-message-channels">
         {canOpen ? <a className="btn" href={`sms:${phone}?body=${body}`} aria-label="SMS"
           onClick={() => open('sms')}><Icon name="message" /></a> : <button type="button" className="btn" disabled aria-label="SMS"><Icon name="message" /></button>}
@@ -55,6 +62,7 @@ export function AttemptMessageLock({ busy, error, onFinish, ...props }: Omit<Par
   onFinish: (message: OpenedMessage) => void;
 }) {
   const { t } = useTranslation();
+  const meta = useRpc('orders.uiMeta', {}, { staleTime: 60_000 });
   const dialog = useRef<HTMLDialogElement>(null);
   const opened = useRef<OpenedMessage | null>(null);
   const left = useRef(false);
@@ -77,7 +85,7 @@ export function AttemptMessageLock({ busy, error, onFinish, ...props }: Omit<Par
       document.removeEventListener('visibilitychange', visibility);
     };
   }, []);
-  return <dialog ref={dialog} className="attempt-message-lock" aria-label={t(props.cancelling ? 'confirmation.cancellationMessageRequired' : 'confirmation.attemptMessageRequired')}
+  return <dialog ref={dialog} className="attempt-message-lock" aria-label={t(props.cancelling ? 'confirmation.cancellationMessageRequired' : 'confirmation.attemptMessageRequired', { n: meta.data?.messageAtTry ?? 3 })}
     onCancel={(event) => event.preventDefault()} onKeyDown={(event) => {
       if (event.key === 'Escape') event.stopPropagation();
     }}>

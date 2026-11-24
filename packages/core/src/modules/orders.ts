@@ -13,6 +13,7 @@ import {
   FOLLOW_LOCKED,
   FOLLOW_STATUSES,
   FollowStatus,
+  messageTry,
   normalizePhone,
   Order,
   OrderEvent,
@@ -1391,6 +1392,8 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
   if (!undo && CONF_NEEDS_REASON.includes(input.status) && !input.reason) throw bad('Indiquez la raison');
   const me = ctx.session.profile.id;
   const calls = await getSetting(ctx.db, 'calls');
+  /** the try at which the agent sends the customer the shop's first message (Management › Statuts, 3 at the start) */
+  const messageAt = messageTry(calls);
   const changed: number[] = [];
   /** confirmed « sans stock » (nothing left for one of their products) */
   const noStock: number[] = [];
@@ -1445,11 +1448,12 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
       let note = input.note?.trim() || null;
       let reopenHash: string | undefined;
       const autoCancel = isCallFail && calls.cancelAfterNoAnswer > 0 && attempts >= calls.cancelAfterNoAnswer;
-      if (isCallFail && (attempts === 3 || autoCancel)) {
+      // (exactly that try: an order already past it, from before the rule, is not asked again)
+      if (isCallFail && (attempts === messageAt || autoCancel)) {
         if (input.ids.length !== 1 || !note || !input.messageSentVia)
           throw bad(autoCancel
             ? 'Envoyez le message d’annulation au client et confirmez l’envoi avant d’annuler.'
-            : 'Envoyez le message au client et confirmez l’envoi pour enregistrer la tentative 3.');
+            : `Envoyez le message au client et confirmez l’envoi pour enregistrer la tentative ${messageAt}.`);
         await addEvent(tx, oid, me, 'chat', `manual_${input.messageSentVia}`, 'no_answer', note);
         await tx.query(`UPDATE notifications SET status = 'skipped', error = 'Message envoyé par l’agent'
           WHERE order_id = $1 AND kind = 'no_answer' AND status IN ('queued', 'manual', 'failed')`, [oid]);

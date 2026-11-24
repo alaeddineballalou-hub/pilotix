@@ -7,6 +7,7 @@ import { Card, ErrorBox, Field, Help, Icon, Loading, Tabs } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { ConfirmButton, IconBtn, intOf, Switch } from './bits';
 import { SuiviMotifsCard } from './SuiviMotifs';
+import { CustomerMessagesCard } from './CustomerMessages';
 import './motifs.css';
 
 type Group = 'confirmation' | 'depot' | 'suivi' | 'livraison' | 'sav';
@@ -177,6 +178,7 @@ export function Statuts() {
       </div>
       {group === 'suivi' && <SuiviMotifsCard />}
       <CallsCard />
+      {group === 'confirmation' && <CustomerMessagesCard />}
       {edit && q.data && (
         <StatusForm
           group={group}
@@ -263,11 +265,12 @@ function StatusForm({ group, row, baseOptions, track, onClose }: { group: Group;
 function CallsCard() {
   const { t } = useTranslation();
   const q = useRpc('admin.pay.get', {});
-  const save = useAction('admin.calls.save', { success: t('admin.calls.saved') });
-  const [v, setV] = useState<{ first: string; pace: string; cancel: string; tries: string; slots: { key: string; from: string; to: string }[] } | null>(null);
+  // the limit holds for every order at once: those already at it or above are cancelled when it is saved (no message)
+  const save = useAction('admin.calls.save', { success: (r) => (r.cancelled ? t('admin.calls.savedCancelled', { count: r.cancelled }) : t('admin.calls.saved')) });
+  const [v, setV] = useState<{ first: string; pace: string; cancel: string; message: string; tries: string; slots: { key: string; from: string; to: string }[] } | null>(null);
   useEffect(() => {
     const c = q.data?.calls;
-    if (c && !v) setV({ first: String(c.firstMinutes), pace: String(c.paceMinutes), cancel: String(c.cancelAfterNoAnswer), tries: String(c.tries), slots: c.slots.map((s) => ({ key: s.key, from: String(s.from), to: String(s.to) })) });
+    if (c && !v) setV({ first: String(c.firstMinutes), pace: String(c.paceMinutes), cancel: String(c.cancelAfterNoAnswer), message: String(c.messageAtTry ?? 3), tries: String(c.tries), slots: c.slots.map((s) => ({ key: s.key, from: String(s.from), to: String(s.to) })) });
   }, [q.data, v]);
   if (q.error) return <ErrorBox error={q.error} />;
   if (!v) return <Loading />;
@@ -285,6 +288,7 @@ function CallsCard() {
       <div className="bjp-grid">
         {num(t('admin.calls.first'), v.first, (s) => setV({ ...v, first: s }), { min: 1 })}
         {num(t('admin.calls.pace'), v.pace, (s) => setV({ ...v, pace: s }))}
+        {num(t('admin.calls.message'), v.message, (s) => setV({ ...v, message: s }), { min: 1, max: 30, help: t('admin.calls.messageHelp') })}
         {num(t('admin.calls.cancel'), v.cancel, (s) => setV({ ...v, cancel: s }), { max: 30, help: t('admin.calls.cancelHelp') })}
         {num(t('admin.calls.tries'), v.tries, (s) => setV({ ...v, tries: s }), { min: 1, max: 10 })}
       </div>
@@ -313,6 +317,7 @@ function CallsCard() {
               firstMinutes: Math.max(1, intOf(v.first)),
               paceMinutes: intOf(v.pace),
               cancelAfterNoAnswer: Math.min(30, intOf(v.cancel)),
+              messageAtTry: Math.min(30, Math.max(1, intOf(v.message))),
               tries: Math.min(10, Math.max(1, intOf(v.tries))),
               slots: v.slots.map((s) => ({ key: s.key, from: Math.min(24, intOf(s.from)), to: Math.min(24, intOf(s.to)) })),
             })

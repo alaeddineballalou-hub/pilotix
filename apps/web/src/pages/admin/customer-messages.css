@@ -1,0 +1,18 @@
+/* Management › Statuts › « Messages client » and « Aperçu client » */
+.cmx .cmx-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 14px; }
+.cmx .cmx-chip { border: 1.5px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-weight: 700; font-size: 15px; padding: 8px 16px; min-height: 40px; cursor: pointer; }
+.cmx .cmx-chip:hover, .cmx .cmx-chip:focus-visible { border-color: var(--px-orange, #F7A823); outline: none; }
+.cmx .cmx-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.cmx .cmx-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cmx .cmx-lab { font-size: 14px; font-weight: 700; color: var(--muted); }
+.cmx .cmx-field textarea { width: 100%; min-height: 160px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; font: inherit; font-size: 16px; line-height: 1.7; background: var(--field, #fff); color: var(--ink); resize: vertical; }
+.cmx .cmx-under { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 22px; }
+.cmx .cmx-note { margin: 12px 0 0; }
+.cmx .cmx-pv { min-width: 0; }
+.cmx .cmx-pv h3 { margin: 0 0 10px; font-size: 17px; }
+.cmx .cmx-msg { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.9; }
+.cmx .cmx-link { text-underline-offset: 3px; }
+@media (max-width: 760px) {
+  .cmx .cmx-cols { grid-template-columns: 1fr; }
+  .cmx .cmx-chip { font-size: 14px; padding: 7px 13px; }
+}
