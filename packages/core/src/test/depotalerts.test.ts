@@ -117,6 +117,33 @@ test('an open alert rings on the phones of the people away from the app, not mor
   assert.equal(((await call('depot.pushRun', admin, {})) as any).sent, 0);
 });
 
+test('a parcel in red alert scanned to leave: the scanner still says why when the phones cannot be told', async () => {
+  // the phones' notifications fail (24 Nov 2026: a missing platform table) — the scan answered « Erreur du serveur »
+  const server = {
+    pushKeys: () => ({ publicKey: 'BPUBLIC', privateKey: 'PRIVATE' }),
+    push: async () => {
+      throw new Error('relation "platform.notification_device_subscriptions" does not exist');
+    },
+  } as any;
+  const admin = await (as as any)(EMAILS.admin, server);
+  const karim = await (as as any)(EMAILS.depot, server);
+  await call('push.subscribe', karim, { endpoint: 'https://fcm.googleapis.com/fcm/send/scan-fails', p256dh: 'BKEY-1234567890', auth: 'AUTH-1234' });
+  const t = await take('zr', '16-SCAN0001-ZR');
+  await call('orders.update', admin, { id: t.id, deliveryNote: 'Appeler avant de passer' });
+  assert.equal((await mine(karim, t.id)).length, 1, 'a red alert');
+  const r: any = await call('depot.scan', admin, { code: '16-SCAN0001-ZR', mode: 'dispatch' });
+  assert.equal(r.kind, 'bad');
+  assert.match(r.why, /alerte rouge/);
+  assert.equal((await db.query('SELECT follow_status FROM orders WHERE id = $1', [t.id]))[0].follow_status, 'prepared', 'the parcel stays');
+  // the minute ring goes on for the others
+  await db.query(`UPDATE profiles SET last_seen_at = NULL WHERE email = $1`, [EMAILS.depot]);
+  await db.query(`UPDATE depot_alerts SET pushed_at = NULL`);
+  const ring: any = await call('depot.pushRun', admin, {});
+  assert.ok(ring.alerts >= 1);
+  assert.equal(ring.sent, 0);
+  await db.query(`DELETE FROM push_subs WHERE endpoint = 'https://fcm.googleapis.com/fcm/send/scan-fails'`);
+});
+
 test('ZR refused the parcel (no label was ever printed): no « old label » step; sent to ZR, then only its ZR label closes it', async () => {
   const admin = await as(EMAILS.admin);
   const karim = await as(EMAILS.depot);

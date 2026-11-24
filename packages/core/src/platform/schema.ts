@@ -259,25 +259,6 @@ DO $$ BEGIN
   END IF;
 END $$;
 
-CREATE TABLE IF NOT EXISTS platform.notification_devices (
-  owner_key text NOT NULL,
-  id uuid NOT NULL,
-  name text NOT NULL,
-  kind text NOT NULL CHECK (kind IN ('phone', 'pc')),
-  enabled boolean NOT NULL DEFAULT false,
-  last_seen_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (owner_key, id)
-);
-CREATE TABLE IF NOT EXISTS platform.notification_device_subscriptions (
-  owner_key text NOT NULL,
-  device_id uuid NOT NULL,
-  shop_id integer NOT NULL REFERENCES platform.shops(id) ON DELETE CASCADE,
-  endpoint text NOT NULL,
-  PRIMARY KEY (owner_key, device_id, shop_id),
-  FOREIGN KEY (owner_key, device_id) REFERENCES platform.notification_devices(owner_key, id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS notification_device_endpoint ON platform.notification_device_subscriptions(shop_id, endpoint);
-
 -- one-time links of an account: new password, invitation (choose a password), e-mail check
 CREATE TABLE IF NOT EXISTS platform.account_tokens (
   token_hash   text PRIMARY KEY,
@@ -741,6 +722,32 @@ CREATE TABLE IF NOT EXISTS platform.mcp_uploads (
 CREATE INDEX IF NOT EXISTS mcp_uploads_at ON platform.mcp_uploads (at);
 `;
 
+/**
+ * « Mes appareils »: each person's phones and computers, and the boutiques each one is turned on in (modules/push.ts).
+ * Its own step: written into p003 on 23 Nov 2026, it never reached the servers that had run p003 long before
+ * (« Mes appareils » and every notification of a store answered « Erreur du serveur », the depot's scanner too).
+ */
+const NOTIFICATION_DEVICES_SQL = `
+CREATE TABLE IF NOT EXISTS platform.notification_devices (
+  owner_key text NOT NULL,
+  id uuid NOT NULL,
+  name text NOT NULL,
+  kind text NOT NULL CHECK (kind IN ('phone', 'pc')),
+  enabled boolean NOT NULL DEFAULT false,
+  last_seen_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (owner_key, id)
+);
+CREATE TABLE IF NOT EXISTS platform.notification_device_subscriptions (
+  owner_key text NOT NULL,
+  device_id uuid NOT NULL,
+  shop_id integer NOT NULL REFERENCES platform.shops(id) ON DELETE CASCADE,
+  endpoint text NOT NULL,
+  PRIMARY KEY (owner_key, device_id, shop_id),
+  FOREIGN KEY (owner_key, device_id) REFERENCES platform.notification_devices(owner_key, id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS notification_device_endpoint ON platform.notification_device_subscriptions(shop_id, endpoint);
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
@@ -835,6 +842,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p043_social_part', SOCIAL_PART_SQL],
   // Meta's ad accounts: a boutique uses the ones it ticked (the login's tab, Pilot AI › Comptes), and those alone
   ['p044_social_ads_picked', SOCIAL_PICKED_SQL],
+  // « Mes appareils » (modules/push.ts): its two tables, never made on the servers that had already run p003
+  ['p045_notification_devices', NOTIFICATION_DEVICES_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

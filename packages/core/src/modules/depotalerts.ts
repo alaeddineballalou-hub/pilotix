@@ -237,13 +237,14 @@ export const depotAlertProcs = {
     let sent = 0;
     for (const a of open) {
       const cancel = a.kind === 'cancel';
+      // (one notification that fails never stops the others: each alert keeps ringing every minute)
       sent += await sendPush(ctx, away, {
         title: cancel ? `🚨 ${a.ref} ANNULÉE — ne l’envoyez pas` : `🚨 ${a.ref} MODIFIÉE — corrigez le colis`,
         body: `${a.customer_name} · ouvrez Pilotix et scannez le colis`,
         tag: `depot-alert-${a.id}`,
         url: '#/accueil',
         alarm: true,
-      });
+      }).catch(() => 0);
       await ctx.db.query('UPDATE depot_alerts SET pushed_at = now(), pushes = pushes + 1 WHERE id = $1', [a.id]);
     }
     return { sent, alerts: open.length };
@@ -273,12 +274,13 @@ export async function blockedByAlert(ctx: Ctx, orderId: number, ref: string, how
   if (!a) return null;
   const who = ctx.session.profile.name;
   const to = (await recipients(ctx.db)).filter((x) => x !== ctx.session.profile.id);
+  // (a notification that fails never hides the red alert: the scanner always says why the parcel stays)
   await sendPush(ctx, to, {
     title: `🚨 ${ref} : ${who} a essayé de ${how === 'livreur' ? 'le prendre' : 'l’expédier'}`,
     body: a.kind === 'cancel' ? 'Commande annulée : retirez le colis et scannez son étiquette.' : 'Commande modifiée : réglez l’alerte rouge avant qu’il parte.',
     tag: `depot-alert-try-${orderId}`,
     url: '#/accueil',
     alarm: true,
-  });
+  }).catch(() => 0);
   return scanT(lang, a.kind === 'cancel' ? 'alertCancel' : 'alertEdit', { ref });
 }
