@@ -1,6 +1,6 @@
-// Phones: the queue as compact cards (name, chrono, product, status, call button);
+// Phones: the queue as compact cards (name, chrono, product, status, call button — in Confirmées ✏️ and ✕ instead);
 // a tap opens the whole order full screen, where every part of it can be changed (Detail in phone mode).
-import type { Order } from '@pilotix/shared';
+import { CANCEL_REASONS, type Order } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +16,9 @@ import { rpc } from '../../lib/backend';
 import { useRpc } from '../../lib/query';
 import { SellerScope, useScope } from '../../lib/seller';
 import { toast } from '../../ui/toast';
+import { Modal } from '../../ui/modal';
+import { toastUndo } from '../../lib/undo';
+import { rightOn } from '../../lib/rights';
 import { CONF_TONE } from '@pilotix/shared';
 import './phone.css';
 import { ScoreChip } from '../../ui/clientScore';
@@ -51,63 +54,166 @@ function MsgButton({ o }: { o: Order }) {
   );
 }
 
+/** Not sent to the delivery company yet: the order can still be cancelled from Confirmation (the server checks it too). */
+const notShipped = (o: Order) => !o.followStatus || o.followStatus === 'to_prepare' || o.followStatus === 'prepared';
+
+/**
+ * Confirmées (the call is done, the owner's choice of 24 Nov 2026): ✏️ opens the order to change it, ✕ cancels it after
+ * asking why. ✕ only with « Annuler une commande » (Utilisateurs › Rôles) and before the parcel leaves.
+ */
+function EditCancel({ o, onEdit, onCancel }: { o: Order; onEdit: () => void; onCancel: () => void }) {
+  const { t } = useTranslation();
+  return (
+    // a tap on these buttons never opens the card behind them
+    <span className="pxp-acts" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+      <button type="button" className="pxp-act" aria-label={`${t('confirmation.ph.edit')} ${o.ref}`} title={t('confirmation.ph.edit')} onClick={onEdit}>
+        <Icon name="pencil" />
+      </button>
+      {rightOn('act:orders.cancel') && notShipped(o) && (
+        <button type="button" className="pxp-act bad" aria-label={`${t('confirmation.ph.cancelOrder')} ${o.ref}`} title={t('confirmation.ph.cancelOrder')} onClick={onCancel}>
+          <Icon name="x" />
+        </button>
+      )}
+    </span>
+  );
+}
+
+/** « Pourquoi annuler PX… ? »: the reason first (the same list as in the opened order), a detail if needed, then cancel. */
+function CancelAsk({ o, onClose }: { o: PRow; onClose: () => void }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const seller = useScope();
+  const [reason, setReason] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const submit = async () => {
+    if (busy) return;
+    if (!reason) return setErr(t('confirmation.ask.needReason'));
+    setBusy(true);
+    setErr('');
+    try {
+      const r = await rpc('orders.setConf', { ids: [o.id], status: 'cancelled', reason: t(`status.cancelReason.${reason}`), note: note.trim() || null }, seller);
+      const refresh = () => void qc.invalidateQueries();
+      const said = `${o.ref} → ${t('status.conf.cancelled')}`;
+      // « ↶ Annuler » goes to the store's own orders only (an order of another seller: no undo here)
+      if (o.seller) toast(said, 'bad');
+      else toastUndo(said, r.changed, refresh, 'bad');
+      refresh();
+      onClose();
+    } catch (e: any) {
+      setErr(e?.message ?? t('common.error'));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      sheet
+      title={t('confirmation.ph.cancelTitle', { ref: o.ref })}
+      className="conf-modal"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn" onClick={onClose}>
+            {t('confirmation.ask.back')}
+          </button>
+          <button type="button" className="btn danger" disabled={busy || !reason} onClick={() => void submit()}>
+            {t('confirmation.d6.ask.cancelled')}
+          </button>
+        </>
+      }
+    >
+      <form
+        className="pxp-cx"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+      >
+        <span className="qd6-lab">{t('confirmation.d6.reasonReq')}</span>
+        <div className="qd6-reasons" role="group" aria-label={t('confirmation.d6.reasonReq')}>
+          {CANCEL_REASONS.map((r) => (
+            <button key={r} type="button" className={reason === r ? 'on' : ''} aria-pressed={reason === r} onClick={() => (setReason(r), setErr(''))}>
+              {t(`status.cancelReason.${r}`)}
+            </button>
+          ))}
+        </div>
+        <input className="qd6-in" value={note} maxLength={300} placeholder={t('confirmation.d6.detail')} aria-label={t('common.note')} onChange={(e) => setNote(e.target.value)} />
+        {err && <p className="form-err">{err}</p>}
+        <button type="submit" hidden />
+      </form>
+    </Modal>
+  );
+}
+
 /**
  * The queue on phones. `pick`: « Sélectionner » is on (managers, the owner, an agency's chiefs): a tap ticks the order
- * instead of opening it. `showAgent`: each card says who has the order (or « Libre »).
+ * instead of opening it. `showAgent`: each card says who has the order (or « Libre »). `edit` (Confirmées): ✏️ and ✕ in
+ * place of the call button.
  */
-export function PhoneCards({ rows, empty, onOpen, pick, showAgent, rowKey }: { rows: PRow[]; empty: string; onOpen: (id: string) => void; pick?: { picked: Set<string>; toggle: (id: string) => void }; showAgent?: boolean; rowKey: (row: PRow) => string }) {
+export function PhoneCards({ rows, empty, onOpen, pick, showAgent, rowKey, edit }: { rows: PRow[]; empty: string; onOpen: (id: string) => void; pick?: { picked: Set<string>; toggle: (id: string) => void }; showAgent?: boolean; rowKey: (row: PRow) => string; edit?: boolean }) {
   const { t } = useTranslation();
+  // the order whose ✕ was pressed: its question opens over the list (outside the card, so nothing in it opens the card)
+  const [cancelling, setCancelling] = useState<PRow | null>(null);
   if (!rows.length) return <p className="pxp-empty muted">{empty}</p>;
+  const ask = cancelling && <CancelAsk o={cancelling} onClose={() => setCancelling(null)} />;
   return (
-    <ul className="pxp-list">
-      {rows.map((o) => {
-        const vt = variantsLine(o);
-        const key = rowKey(o);
-        const on = !!pick?.picked.has(key);
-        const tap = () => (pick ? pick.toggle(key) : onOpen(key));
-        return (
-          <li key={key}>
-            <div
-              className={`pxp-card${pick ? ' is-pick' : ''}${on ? ' is-on' : ''}`}
-              role={pick ? 'checkbox' : 'button'}
-              aria-checked={pick ? on : undefined}
-              tabIndex={0}
-              onClick={tap}
-              onKeyDown={(e) => (e.key === 'Enter' || (pick && e.key === ' ')) && (e.preventDefault(), tap())}
-            >
-              {pick && <span className="pxp-tick" aria-hidden="true" />}
-              <div className="pxp-main">
-                <div className="pxp-top">
-                  <b className="pxp-name">{o.customerName}</b>
-                  <HeldChip o={o} />
-                  {o.clientScore && <ScoreChip s={o.clientScore} short />}
-                  {o.deadline && <Countdown d={o.deadline} short />}
+    <>
+      {ask && (cancelling?.seller ? <SellerScope seller={cancelling.seller.id} ambient={false}>{ask}</SellerScope> : ask)}
+      <ul className="pxp-list">
+        {rows.map((o) => {
+          const vt = variantsLine(o);
+          const key = rowKey(o);
+          const on = !!pick?.picked.has(key);
+          const tap = () => (pick ? pick.toggle(key) : onOpen(key));
+          return (
+            <li key={key}>
+              <div
+                className={`pxp-card${pick ? ' is-pick' : ''}${on ? ' is-on' : ''}`}
+                role={pick ? 'checkbox' : 'button'}
+                aria-checked={pick ? on : undefined}
+                tabIndex={0}
+                onClick={tap}
+                onKeyDown={(e) => (e.key === 'Enter' || (pick && e.key === ' ')) && (e.preventDefault(), tap())}
+              >
+                {pick && <span className="pxp-tick" aria-hidden="true" />}
+                <div className="pxp-main">
+                  <div className="pxp-top">
+                    <b className="pxp-name">{o.customerName}</b>
+                    <HeldChip o={o} />
+                    {o.clientScore && <ScoreChip s={o.clientScore} short />}
+                    {o.deadline && <Countdown d={o.deadline} short />}
+                  </div>
+                  <div className="pxp-meta">
+                    <span className="ltr">{o.ref}</span> · {o.seller && <>{o.seller.name} · </>}{wilayaName(o.wilayaId)} · <b className="ltr">{da(o.total)}</b>
+                  </div>
+                  <div className="pxp-prod">
+                    {namesOf(o.items)}
+                    {vt ? ` · ${vt}` : ''}
+                  </div>
+                  {/* where it came from and who made it (the same chip as every list) */}
+                  <OriginChip o={o} />
+                  <div className="pxp-st">
+                    <span className={`badge t-${o.confStatus === 'no_answer' ? 'mid' : CONF_TONE[o.confStatus] ?? 'off'}`}>{currentLabel(t, o.confStatus, o.attempts)}</span>
+                    {/* a confirmed order: where its parcel is (À préparer, Préparée), as in the list's « Livraison » column */}
+                    {o.confStatus === 'confirmed' && o.followStatus && <StatusBadge kind="follow" status={o.followStatus} />}
+                    {o.attempts > 0 && <small>{t('confirmation.focus.calls', { n: o.attempts })}</small>}
+                    <RotateChip at={o.rotateAt} />
+                    {showAgent && <AgentTag name={o.agentName} />}
+                  </div>
                 </div>
-                <div className="pxp-meta">
-                  <span className="ltr">{o.ref}</span> · {o.seller && <>{o.seller.name} · </>}{wilayaName(o.wilayaId)} · <b className="ltr">{da(o.total)}</b>
-                </div>
-                <div className="pxp-prod">
-                  {namesOf(o.items)}
-                  {vt ? ` · ${vt}` : ''}
-                </div>
-                {/* where it came from and who made it (the same chip as every list) */}
-                <OriginChip o={o} />
-                <div className="pxp-st">
-                  <span className={`badge t-${o.confStatus === 'no_answer' ? 'mid' : CONF_TONE[o.confStatus] ?? 'off'}`}>{currentLabel(t, o.confStatus, o.attempts)}</span>
-                  {/* a confirmed order: where its parcel is (À préparer, Préparée), as in the list's « Livraison » column */}
-                  {o.confStatus === 'confirmed' && o.followStatus && <StatusBadge kind="follow" status={o.followStatus} />}
-                  {o.attempts > 0 && <small>{t('confirmation.focus.calls', { n: o.attempts })}</small>}
-                  <RotateChip at={o.rotateAt} />
-                  {showAgent && <AgentTag name={o.agentName} />}
-                </div>
+                {/* ticking: no call (or ✕) by mistake */}
+                {!pick && (() => {
+                  const act = edit ? <EditCancel o={o} onEdit={() => onOpen(key)} onCancel={() => setCancelling(o)} /> : <CallButton o={o} />;
+                  return o.seller ? <SellerScope seller={o.seller.id} ambient={false}>{act}</SellerScope> : act;
+                })()}
               </div>
-              {/* ticking: no call by mistake */}
-              {!pick && (o.seller ? <SellerScope seller={o.seller.id} ambient={false}><CallButton o={o} /></SellerScope> : <CallButton o={o} />)}
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }
 

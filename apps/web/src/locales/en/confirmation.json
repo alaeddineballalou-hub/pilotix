@@ -618,7 +618,10 @@
     "none": "None",
     "pickHint": "Tap the orders",
     "free": "Free",
-    "give": "Assign"
+    "give": "Assign",
+    "edit": "Edit the order",
+    "cancelOrder": "Cancel the order",
+    "cancelTitle": "Why cancel {{ref}}?"
   },
   "cs": {
     "title": "Confirmed statistics",

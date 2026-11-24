@@ -618,7 +618,10 @@
     "none": "Aucune",
     "pickHint": "Touchez les commandes",
     "free": "Libre",
-    "give": "Assigner"
+    "give": "Assigner",
+    "edit": "Modifier la commande",
+    "cancelOrder": "Annuler la commande",
+    "cancelTitle": "Pourquoi annuler {{ref}} ?"
   },
   "cs": {
     "title": "Statistiques des confirmées",

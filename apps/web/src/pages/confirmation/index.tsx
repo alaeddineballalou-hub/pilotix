@@ -739,6 +739,7 @@ export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | 
                   pick={picking ? { picked: sel, toggle: (id) => setSel((s) => (s.has(id) ? (s.delete(id), new Set(s)) : new Set(s).add(id))) } : undefined}
                   showAgent={manager}
                   rowKey={rowKey}
+                  edit={sub === 'confirmees'}
                 />
                 {canNext && !picking && (
                   <button type="button" className="pxp-next" onClick={() => goNext([...open].pop())}>

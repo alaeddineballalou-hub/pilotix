@@ -19,6 +19,18 @@
 .pxp-call { flex: none; width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--c-ok-fill); color: #fff !important; text-decoration: none; border: 0; padding: 0; cursor: pointer; font: inherit; }
 .pxp-call .bji, .pxp-call svg { width: 20px; height: 20px; }
 .pxp-call:active { filter: brightness(.92); }
+/* Confirmées: ✏️ « Modifier » and ✕ « Annuler » in place of the call button (the call is done) */
+.pxp-acts { flex: none; display: flex; gap: 8px; }
+.pxp-act { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 0; cursor: pointer; font: inherit; -webkit-tap-highlight-color: transparent; }
+.pxp-act .bji, .pxp-act svg { width: 19px; height: 19px; }
+.pxp-act:active { filter: brightness(.94); }
+.pxp-act:focus-visible { outline: 2px solid #F7A823; outline-offset: 2px; }
+.pxp-act.bad { border-color: var(--c-bad-line); background: var(--c-bad-tint); color: var(--c-bad-ink); }
+/* « Pourquoi annuler … ? »: reasons big enough for a thumb, a 16 px field (the iPhone does not zoom in) */
+.pxp-cx { display: flex; flex-direction: column; gap: 10px; }
+.pxp-cx .qd6-reasons { gap: 8px; }
+.pxp-cx .qd6-reasons button { min-height: 40px; padding: 8px 14px; font-size: 14px; }
+.pxp-cx .qd6-in { height: 46px !important; font-size: 16px !important; }
 .pxp-next { position: fixed; z-index: 30; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); height: 54px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--c-accent-grad); color: var(--c-on-accent); font: inherit; font-size: 16px; font-weight: 800; box-shadow: 0 10px 24px rgba(242, 139, 30, .4); cursor: pointer; }
 .pxp-next .bji { width: 18px; height: 18px; }
 /* the table's tools (columns, row size, selection) are for big screens */
