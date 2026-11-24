@@ -96,8 +96,11 @@ const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
   { k: 'status' },
 ];
 
-/** The columns a confirmation agent works with, most useful first (a tablet shows the first 6 the table has). */
-const CONF_USEFUL = ['chrono', 'name', 'phone', 'product', 'wilaya', 'status', 'order', 'total'];
+/**
+ * The columns a confirmation agent works with, most useful first (a tablet shows the first 6 the table has). « D'où
+ * vient » took Wilaya's place (the owner's choice, 24 Nov 2026): Wilaya is one tap away, behind « +N colonnes ».
+ */
+const CONF_USEFUL = ['chrono', 'name', 'phone', 'product', 'source', 'status', 'wilaya', 'order', 'total'];
 
 function useList(sub: Sub, input: { q: string; f: Filters; sort: SortKey; dir: 'asc' | 'desc'; page: number; size: number }, scope?: Record<string, unknown>) {
   return useRpc(
