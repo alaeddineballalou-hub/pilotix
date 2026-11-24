@@ -76,11 +76,19 @@ export function OrderNotes({ order, ticketId, header }: {
           setDrafts((current) => ({ ...current, [active.field]: { previous: draft ? draft.previous : order[active.key], text } }));
           setError('');
         }}
+        onKeyDown={(e) => {
+          // Ctrl + Entrée (⌘ + Entrée on a Mac) saves, like the button
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void save(); }
+        }}
       />
-      {changed && <div className="row" style={{ marginTop: 8 }}>
-        <button className="btn primary small" type="button" disabled={saving} onClick={() => void save()}>{t('common.save')}</button>
-        {error && <button className="btn small" type="button" onClick={() => { clear(active.field); setError(''); void qc.invalidateQueries(); }}>{t('common.cancel')}</button>}
-      </div>}
+      {/* « Enregistrer » is always in the card, on every screen: grey until the note changes, then orange */}
+      <div className="qd6-nfoot">
+        {changed && <span className="qd6-nstate">{t('confirmation.d6.noteUnsaved')}</span>}
+        <div className="qd6-nact">
+          {changed && <button className="btn small" type="button" disabled={saving} onClick={() => { clear(active.field); setError(''); if (error) void qc.invalidateQueries(); }}>{t('common.cancel')}</button>}
+          <button className="btn primary small" type="button" disabled={saving || !changed} onClick={() => void save()}>{t('common.save')}</button>
+        </div>
+      </div>
       {error && <p className="form-err" role="alert">{error}</p>}
     </section>
   );

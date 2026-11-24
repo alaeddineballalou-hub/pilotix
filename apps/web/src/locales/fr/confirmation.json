@@ -536,6 +536,7 @@
       "livreur": "Pour le livreur : étage, repère, heure…",
       "team": "Pour l’équipe seulement…"
     },
+    "noteUnsaved": "Pas encore enregistrée",
     "fee": "Prix de livraison",
     "maxDisc": "max {{v}}",
     "discTooBig": "Remise trop élevée : maximum {{v}}.",

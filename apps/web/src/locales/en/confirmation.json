@@ -536,6 +536,7 @@
       "livreur": "For the courier: floor, landmark, time…",
       "team": "For the team only…"
     },
+    "noteUnsaved": "Not saved yet",
     "fee": "Delivery price",
     "maxDisc": "max {{v}}",
     "discTooBig": "Discount too high: maximum {{v}}.",
