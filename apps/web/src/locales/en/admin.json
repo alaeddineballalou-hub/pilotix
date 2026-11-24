@@ -548,7 +548,9 @@
     "movedConf": "Auto-cancel and the agents’ WhatsApp text are now in",
     "movedConfLink": "Confirmation › Settings",
     "movedSav": "The after-sales number is now in",
-    "movedSavLink": "After-sales › Settings"
+    "movedSavLink": "After-sales › Settings",
+    "movedWeb": "It is now in",
+    "movedWebLink": "Management › Sales channels"
   },
   "confirmYes": "Yes",
   "cancel": "Cancel",

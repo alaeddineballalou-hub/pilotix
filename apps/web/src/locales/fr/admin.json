@@ -548,7 +548,9 @@
     "movedConf": "L’annulation automatique et le texte WhatsApp des agents sont maintenant dans",
     "movedConfLink": "Confirmation › Réglages",
     "movedSav": "Le numéro SAV est maintenant dans",
-    "movedSavLink": "SAV › Réglages"
+    "movedSavLink": "SAV › Réglages",
+    "movedWeb": "Elle est maintenant dans",
+    "movedWebLink": "Management › Canaux de vente"
   },
   "confirmYes": "Oui",
   "cancel": "Annuler",

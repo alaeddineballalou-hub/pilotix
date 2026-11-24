@@ -1,6 +1,6 @@
 // Management → Canaux de vente: channel tiles, the channels table (search, switches, edit, delete, pager),
 // and each channel's webhook URL (server address + /api/hooks/orders/<id>?key=<webhook_key>) with a sample JSON.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, serverUrl, shopApi } from '../../lib/backend';
 import { when } from '../../lib/format';
@@ -246,6 +246,7 @@ export function Canaux() {
         </div>
         {backend.kind === 'demo' && <div className="warnbox">{t('admin.channels.demoWarn')}</div>}
       </div>
+      <SiteCard />
       {form && (
         <ChannelForm
           kind={form.kind}
@@ -260,6 +261,71 @@ export function Canaux() {
       )}
       {syncing && <SheetSync channel={syncing} onClose={() => setSyncing(null)} />}
     </>
+  );
+}
+
+/** « Commandes du site web » (it was in Réglages; owner's choice of 24 Nov 2026: it stays with the sales channels in
+ *  Management): the shop's own address for orders from its website, its key, a test order and a sample. */
+function SiteCard() {
+  const q = useRpc('admin.settings.get', {});
+  if (q.error) return <ErrorBox error={q.error} />;
+  if (!q.data) return <Loading />;
+  return <WebCard webKey={q.data.webhook.key} />;
+}
+
+function WebCard({ webKey }: { webKey: string }) {
+  const { t } = useTranslation();
+  const [show, setShow] = useState(false);
+  const [key, setKey] = useState(webKey);
+  useEffect(() => setKey(webKey), [webKey]);
+  const rotate = useAction('admin.webhook.rotate', { success: t('admin.settings.rotated'), onDone: (r) => setKey(r.key) });
+  const sim = useAction('admin.webhook.simulate', { success: (r) => t('admin.settings.simulated', { ref: r.ref }) });
+  const url = `${shopApi(publicBase())}/hooks/orders/site`;
+  const copy = async (s: string) => {
+    await copyText(s);
+    toast(t('admin.settings.copied'), 'ok');
+  };
+  return (
+    <div className="card">
+      <h2>{t('admin.settings.web')}</h2>
+      <button className="btn primary" disabled={sim.isPending} onClick={() => sim.mutate({})}>
+        {t('admin.settings.simulate')}
+      </button>
+      <p className="muted small">{t('admin.settings.webHelp')}</p>
+      <div className="field">
+        <span className="lab">{t('admin.settings.address_')}</span>
+        <div className="secret-box">
+          <code className="ltr">{url}</code>
+          <button className="btn small" onClick={() => copy(url)}>
+            {t('admin.settings.copy')}
+          </button>
+        </div>
+      </div>
+      <div className="field">
+        <span className="lab">{t('admin.settings.key')}</span>
+        <div className="secret-box">
+          {key ? <code className="ltr">{show ? key : `${key.slice(0, 4)}••••••••••••`}</code> : <span className="muted small">{t('admin.settings.noKey')}</span>}
+          {key && (
+            <>
+              <button className="btn small" onClick={() => setShow(!show)}>
+                {show ? t('admin.settings.hideKey') : t('admin.settings.showKey')}
+              </button>
+              <button className="btn small" onClick={() => copy(`${url}?key=${encodeURIComponent(key)}`)}>
+                {t('admin.settings.copyFull')}
+              </button>
+            </>
+          )}
+          <ConfirmButton className="btn small danger" question={t('admin.settings.rotateConfirm')} onConfirm={() => rotate.mutate({})}>
+            {t('admin.settings.rotate')}
+          </ConfirmButton>
+        </div>
+      </div>
+      <details>
+        <summary>{t('admin.settings.sample')}</summary>
+        <pre className="code ltr">{JSON.stringify(SAMPLE_ORDER, null, 2)}</pre>
+        <p className="muted small">{t('admin.settings.sampleNote')}</p>
+      </details>
+    </div>
   );
 }
 

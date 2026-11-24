@@ -12,7 +12,7 @@ import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { ConfirmButton, intOf, WilayaOptions } from './bits';
 import { DepotForm, Wh } from './DepotForm';
-import { publicBase, SAMPLE_ORDER } from './Canaux';
+import { publicBase } from './Canaux';
 import { ScoreRulesCard } from './ScoreRules';
 
 export function ReglagesPage() {
@@ -25,7 +25,8 @@ export function ReglagesPage() {
       <ShopCard s={s} />
       <StoreCodeCard />
       <DepotsCard />
-      <WebCard webKey={s.webhook.key} />
+      {/* « Commandes du site web » is in Management › Canaux de vente now (owner's choice, 24 Nov 2026) */}
+      <MovedWebCard />
       <CronCard cronKey={s.cron.key} last={s.lastSync} />
       <MetaCard meta={s.meta} />
       <ScoreRulesCard />
@@ -224,59 +225,15 @@ function DepotsCard() {
   );
 }
 
-function WebCard({ webKey }: { webKey: string }) {
+/** « Commandes du site web »: moved to Management › Canaux de vente (it is one more sales channel). */
+function MovedWebCard() {
   const { t } = useTranslation();
-  const [show, setShow] = useState(false);
-  const [key, setKey] = useState(webKey);
-  useEffect(() => setKey(webKey), [webKey]);
-  const rotate = useAction('admin.webhook.rotate', { success: t('admin.settings.rotated'), onDone: (r) => setKey(r.key) });
-  const sim = useAction('admin.webhook.simulate', { success: (r) => t('admin.settings.simulated', { ref: r.ref }) });
-  const url = `${shopApi(publicBase())}/hooks/orders/site`;
-  const copy = async (s: string) => {
-    await copyText(s);
-    toast(t('admin.settings.copied'), 'ok');
-  };
   return (
-    <div className="card">
-      <h2>{t('admin.settings.web')}</h2>
-      <button className="btn primary" disabled={sim.isPending} onClick={() => sim.mutate({})}>
-        {t('admin.settings.simulate')}
-      </button>
-      <p className="muted small">{t('admin.settings.webHelp')}</p>
-      <div className="field">
-        <span className="lab">{t('admin.settings.address_')}</span>
-        <div className="secret-box">
-          <code className="ltr">{url}</code>
-          <button className="btn small" onClick={() => copy(url)}>
-            {t('admin.settings.copy')}
-          </button>
-        </div>
-      </div>
-      <div className="field">
-        <span className="lab">{t('admin.settings.key')}</span>
-        <div className="secret-box">
-          {key ? <code className="ltr">{show ? key : `${key.slice(0, 4)}••••••••••••`}</code> : <span className="muted small">{t('admin.settings.noKey')}</span>}
-          {key && (
-            <>
-              <button className="btn small" onClick={() => setShow(!show)}>
-                {show ? t('admin.settings.hideKey') : t('admin.settings.showKey')}
-              </button>
-              <button className="btn small" onClick={() => copy(`${url}?key=${encodeURIComponent(key)}`)}>
-                {t('admin.settings.copyFull')}
-              </button>
-            </>
-          )}
-          <ConfirmButton className="btn small danger" question={t('admin.settings.rotateConfirm')} onConfirm={() => rotate.mutate({})}>
-            {t('admin.settings.rotate')}
-          </ConfirmButton>
-        </div>
-      </div>
-      <details>
-        <summary>{t('admin.settings.sample')}</summary>
-        <pre className="code ltr">{JSON.stringify(SAMPLE_ORDER, null, 2)}</pre>
-        <p className="muted small">{t('admin.settings.sampleNote')}</p>
-      </details>
-    </div>
+    <Card title={t('admin.settings.web')}>
+      <p className="muted small">
+        {t('admin.settings.movedWeb')} <a href="#/management/canaux">{t('admin.settings.movedWebLink')}</a>
+      </p>
+    </Card>
   );
 }
 
