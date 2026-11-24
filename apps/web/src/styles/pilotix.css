@@ -988,6 +988,9 @@ html body .qtbl td.px-c-passed .px-passed { flex-wrap: nowrap; }
 html body .qtbl td.px-c-status { padding-inline: 8px !important; }
 html body .qtbl td.px-c-status .qst-pill { min-width: 150px; width: 100%; justify-content: space-between; text-align: start; }
 html body .qtbl td.qact .qo { width: 42px; }
+/* Confirmées (« Marine & orange », the owner's choice, 24 Nov 2026): ✏️ navy and ✕ orange tint, like on a phone */
+html body .qrowacts .qo.qo-ink { background: var(--ink); color: var(--surface); }
+html body .qrowacts .qo.qo-x { background: var(--c-accent-tint); color: var(--c-accent-ink); border: 1px solid color-mix(in srgb, var(--c-accent) 45%, transparent); }
 /* the "Statut" title sits centred above its status button */
 html body .qtbl > thead > tr > th[data-col="status"] { text-align: center !important; padding-inline: 8px !important; }
 html body .qtbl td.px-c-status { text-align: center !important; }

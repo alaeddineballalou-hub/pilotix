@@ -55,7 +55,7 @@ function MsgButton({ o }: { o: Order }) {
 }
 
 /** Not sent to the delivery company yet: the order can still be cancelled from Confirmation (the server checks it too). */
-const notShipped = (o: Order) => !o.followStatus || o.followStatus === 'to_prepare' || o.followStatus === 'prepared';
+export const notShipped = (o: Order) => !o.followStatus || o.followStatus === 'to_prepare' || o.followStatus === 'prepared';
 
 /**
  * Confirmées (the call is done, the owner's choice of 24 Nov 2026): ✏️ opens the order to change it, ✕ cancels it after
@@ -76,6 +76,15 @@ function EditCancel({ o, onEdit, onCancel }: { o: Order; onEdit: () => void; onC
       )}
     </span>
   );
+}
+
+/**
+ * ✕ on a phone card or a table row (Confirmées): the « why? » question for that order, in that order's shop when the list
+ * shows several shops (an agency). Rendered outside the card or the row, so nothing in it opens them.
+ */
+export function CancelAskFor({ o, onClose }: { o: PRow; onClose: () => void }) {
+  const ask = <CancelAsk o={o} onClose={onClose} />;
+  return o.seller ? <SellerScope seller={o.seller.id} ambient={false}>{ask}</SellerScope> : ask;
 }
 
 /** « Pourquoi annuler PX… ? »: the reason first (the same list as in the opened order), a detail if needed, then cancel. */
@@ -157,10 +166,9 @@ export function PhoneCards({ rows, empty, onOpen, pick, showAgent, rowKey, edit 
   // the order whose ✕ was pressed: its question opens over the list (outside the card, so nothing in it opens the card)
   const [cancelling, setCancelling] = useState<PRow | null>(null);
   if (!rows.length) return <p className="pxp-empty muted">{empty}</p>;
-  const ask = cancelling && <CancelAsk o={cancelling} onClose={() => setCancelling(null)} />;
   return (
     <>
-      {ask && (cancelling?.seller ? <SellerScope seller={cancelling.seller.id} ambient={false}>{ask}</SellerScope> : ask)}
+      {cancelling && <CancelAskFor o={cancelling} onClose={() => setCancelling(null)} />}
       <ul className="pxp-list">
         {rows.map((o) => {
           const vt = variantsLine(o);

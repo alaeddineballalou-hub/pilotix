@@ -39,10 +39,12 @@
 /* « Retour » as wide as its word, « Annuler la commande » on one line */
 .pxp-cxm .pxk-foot { flex-wrap: nowrap; }
 .pxp-cxm .pxk-foot .btn:first-child { flex: 0 0 auto; padding-inline: 18px; }
-/* the chosen reason navy; « Annuler la commande » orange like « + Nouvelle commande » (it stays off until a reason
-   is chosen, and the order comes back with « ↶ » in the message shown right after) */
+/* the chosen reason navy; « Annuler la commande » orange like « + Nouvelle commande », on a phone (sheet) and on a
+   tablet or a computer (window); it stays off until a reason is chosen, and the order comes back with « ↶ » in the
+   message shown right after */
 .pxp-cx .qd6-reasons button.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
-.pxp-cxm .pxk-foot .btn.danger { flex: 1 1 auto; white-space: nowrap; background: var(--c-accent-grad); color: var(--c-on-accent); border-color: transparent; }
+.pxp-cxm .pxk-foot .btn.danger { flex: 1 1 auto; white-space: nowrap; }
+.pxp-cxm .pxk-foot .btn.danger, .pxp-cxm .modal-foot .btn.danger { background: var(--c-accent-grad); color: var(--c-on-accent); border-color: transparent; }
 .pxp-next { position: fixed; z-index: 30; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); height: 54px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--c-accent-grad); color: var(--c-on-accent); font: inherit; font-size: 16px; font-weight: 800; box-shadow: 0 10px 24px rgba(242, 139, 30, .4); cursor: pointer; }
 .pxp-next .bji { width: 18px; height: 18px; }
 /* the table's tools (columns, row size, selection) are for big screens */

@@ -24,7 +24,7 @@ import { Detail } from './Detail';
 import { Focus } from './Focus';
 import { HeldChip } from './hold';
 import { useIsPhone } from '../../lib/useMedia';
-import { PhoneCards, PhoneOrder, PickBar, PickToggle } from './PhoneList';
+import { CancelAskFor, notShipped, PhoneCards, PhoneOrder, PickBar, PickToggle } from './PhoneList';
 import { currentLabel, StatusChoice, Sub, SUB_STATUSES, SUB_TONE, SUBS, telHref, toneOf, useCanGive, waHref } from './shared';
 import { ConfirmedStatsPage, StatsSection } from './Stats';
 import { ConfSettings } from './Settings';
@@ -223,6 +223,8 @@ export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | 
   // phones: « Sélectionner » is on (a tap ticks an order instead of opening it)
   const [picking, setPicking] = useState(false);
   const [open, setOpen] = useState<Set<string>>(new Set());
+  // Confirmées on a tablet or a computer: the order whose ✕ was pressed (its « why? » opens over the table)
+  const [cancelling, setCancelling] = useState<Row | null>(null);
   const [focus, setFocus] = useState<number | null | 'ask'>(focusId ?? null);
   const [showCombinedFocus, setShowCombinedFocus] = useState(false);
   const [blockAsk, setBlockAsk] = useState<Row[] | null>(null);
@@ -832,9 +834,15 @@ export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | 
                               <ScopedRow seller={r.seller}><HistoryButton orderId={r.id} refLabel={r.ref} className="qo qo-hist" title={t('confirmation.hist.open', { ref: r.ref })}>
                                 <Icon name="history" />
                               </HistoryButton></ScopedRow>
-                              <button type="button" className="qo qo-edit" aria-label={t('confirmation.editRef', { ref: r.ref })} title={t('confirmation.edit')} onClick={() => openOrderForm({ orderId: r.id, onSaved: () => qc.invalidateQueries() }, r.seller?.id)}>
+                              <button type="button" className={`qo qo-edit${sub === 'confirmees' ? ' qo-ink' : ''}`} aria-label={t('confirmation.editRef', { ref: r.ref })} title={t('confirmation.edit')} onClick={() => openOrderForm({ orderId: r.id, onSaved: () => qc.invalidateQueries() }, r.seller?.id)}>
                                 <Icon name="pencil" />
                               </button>
+                              {/* Confirmées: ✕ cancels after asking why, like on a phone (« Annuler une commande », before the parcel leaves) */}
+                              {sub === 'confirmees' && rightOn('act:orders.cancel') && notShipped(r) && (
+                                <button type="button" className="qo qo-x" aria-label={`${t('confirmation.ph.cancelOrder')} ${r.ref}`} title={t('confirmation.ph.cancelOrder')} onClick={() => setCancelling(r)}>
+                                  <Icon name="x" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -866,6 +874,8 @@ export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | 
           </>
         )}
       </div>
+      {/* next to the other questions of this page (outside the card), like « Supprimer » */}
+      {cancelling && <CancelAskFor o={cancelling} onClose={() => setCancelling(null)} />}
       {delAsk && (
         <Modal
           title={t('confirmation.del.title', { count: delAsk.length })}
