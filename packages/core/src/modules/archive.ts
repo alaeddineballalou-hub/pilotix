@@ -114,6 +114,8 @@ export const USER_REFS: readonly Ref[] = [
   ['profiles', 'created_by', 'history'],
   // Pilot Checks: the change list of the owner's rules says who changed what
   ['pilot_check_log', 'user_id', 'history'],
+  // Rendez-vous: the last person who called, confirmed or changed a booking
+  ['rdv_bookings', 'agent_id', 'orders'],
 ];
 
 /** Columns that point to a product (products.id). */
