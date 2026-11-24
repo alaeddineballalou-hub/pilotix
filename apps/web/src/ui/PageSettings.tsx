@@ -3,7 +3,7 @@
 // card folded on its state (« Résumé », his rule of 20 Nov 2026 for settings pages), opened from its title row; an opened
 // part takes the whole width. Nothing is copied: each part is the same form as before, saved where the server keeps it,
 // and keeps who may change it (the server checks it too).
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Empty, Icon, type IconName } from './kit';
 import './pageSettings.css';
@@ -27,12 +27,28 @@ export function SettingsPage({ title, children }: { title: string; children: Rea
   );
 }
 
-/** One part: folded on its state, opened from its title row. */
+/** Opens one part of the page and brings it into view: a « Modifier » or « Ouvrir » inside another part of the same page. */
+export function openFold(id: string) {
+  window.dispatchEvent(new CustomEvent<string>('cfs:open', { detail: id }));
+}
+
+/** One part: folded on its state, opened from its title row (or by openFold). */
 export function Fold({ id, icon, title, desc, state, children }: { id: string; icon: IconName; title: string; desc: string; state?: ReactNode; children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const box = useRef<HTMLElement>(null);
   const body = `cfs-${id}`;
+  useEffect(() => {
+    const on = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== id) return;
+      setOpen(true);
+      // once open, its title row comes to the top of the screen
+      window.requestAnimationFrame(() => box.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    };
+    window.addEventListener('cfs:open', on);
+    return () => window.removeEventListener('cfs:open', on);
+  }, [id]);
   return (
-    <section className={`card cfs-fold${open ? ' open' : ''}`}>
+    <section ref={box} className={`card cfs-fold${open ? ' open' : ''}`}>
       <button type="button" className="cfs-head" aria-expanded={open} aria-controls={body} onClick={() => setOpen(!open)}>
         <span className="cfs-ic">
           <Icon name={icon} />

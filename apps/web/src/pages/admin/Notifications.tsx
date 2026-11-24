@@ -10,6 +10,7 @@ import { useAction, useRpc } from '../../lib/query';
 import { bellSound, BellSound, unlockAudio } from '../../lib/sound';
 import { useMedia } from '../../lib/useMedia';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
+import { openFold } from '../../ui/PageSettings';
 import './notifications.css';
 
 type Data = Out<'notify.get'>;
@@ -103,10 +104,16 @@ export function NotificationsCfg({ kinds, embedded = false }: { kinds?: readonly
             <b>{t('notifs.hours')}</b>
             <small>{hours ? t('notifs.hoursText', { hours }) : t('notifs.hoursNone')}</small>
           </span>
-          {/* the call slots are in Confirmation › Réglages › Appels */}
-          <a className="px-nt-chip" href="#/confirmation/reglages">
-            {t('notifs.hoursEdit')}
-          </a>
+          {/* the call slots are in Confirmation › Réglages › Appels: inside that page, the chip opens « Appels » there */}
+          {embedded ? (
+            <button type="button" className="px-nt-chip" onClick={() => openFold('appels')}>
+              {t('notifs.hoursEdit')}
+            </button>
+          ) : (
+            <a className="px-nt-chip" href="#/confirmation/reglages">
+              {t('notifs.hoursEdit')}
+            </a>
+          )}
         </div>
         <div className="px-nt-card">
           <span className="px-nt-cic">
@@ -157,6 +164,7 @@ export function NotificationsCfg({ kinds, embedded = false }: { kinds?: readonly
               people={data.people}
               names={names}
               changed={changed.includes(sel)}
+              embedded={embedded}
               onBack={narrow ? () => setOpen(false) : undefined}
               onEdit={(f) => edit(sel, f)}
             />
@@ -206,6 +214,7 @@ function Detail(p: {
   people: Data['people'];
   names: Map<number, string>;
   changed: boolean;
+  embedded?: boolean;
   onBack?: () => void;
   onEdit: (f: (r: Rule) => Rule) => void;
 }) {
@@ -269,8 +278,14 @@ function Detail(p: {
         })}
         {blocked && r.who.includes('agent') && (
           <p className="px-nt-note">
-            <Icon name="lock" /> {t('notifs.blockHint')}{' '}
-            <a href="#/confirmation/nouvelles">{t('notifs.blockOpen')}</a>
+            <Icon name="lock" /> {t(p.embedded ? 'notifs.blockHintHere' : 'notifs.blockHint')}{' '}
+            {p.embedded ? (
+              <button type="button" className="px-nt-link" onClick={() => openFold('appels')}>
+                {t('notifs.blockOpenHere')}
+              </button>
+            ) : (
+              <a href="#/confirmation/reglages">{t('notifs.blockOpen')}</a>
+            )}
           </p>
         )}
         {k === 'depot' && <p className="px-nt-note">{t('notifs.depotNote')}</p>}

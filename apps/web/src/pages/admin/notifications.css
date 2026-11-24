@@ -22,6 +22,7 @@
 .px-nt-chip {
   flex: none; display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px;
   background: var(--sky-soft); color: var(--ink); font-size: 13px; font-weight: 700; text-decoration: none;
+  border: 0; font-family: inherit; cursor: pointer;
 }
 .px-nt-chip:hover { filter: brightness(.97); }
 
@@ -92,6 +93,7 @@
 .px-nt-note { margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
 .px-nt-note .bji { display: inline-flex; vertical-align: -2px; margin-inline-end: 4px; }
 .px-nt-note a { font-weight: 700; }
+.px-nt-note .px-nt-link { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
 
 /* chosen people */
 .px-nt-people { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); }

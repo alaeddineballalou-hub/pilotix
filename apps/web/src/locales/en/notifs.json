@@ -84,6 +84,8 @@
   "notGet": "Does not get it",
   "blockHint": "The agent’s blocked screen is set in Confirmation (« Block until the call »).",
   "blockOpen": "Open Confirmation",
+  "blockHintHere": "The agent’s blocked screen is set in « Calls » (« Block until the call »).",
+  "blockOpenHere": "Open « Calls »",
   "depotNote": "The depot’s red alerts (an order changed or cancelled at the depot) are set in Depot › Settings.",
   "addPerson": "Add a person",
   "removePerson": "Remove {{who}}",
