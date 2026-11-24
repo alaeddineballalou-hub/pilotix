@@ -87,6 +87,8 @@
   "blockHintHere": "The agent’s blocked screen is set in « Calls » (« Block until the call »).",
   "blockOpenHere": "Open « Calls »",
   "depotNote": "The depot’s red alerts (an order changed or cancelled at the depot) are set in Depot › Settings.",
+  "depotNoteHere": "The depot’s red alerts (an order changed or cancelled at the depot) are set in « Depot alerts ».",
+  "depotOpenHere": "Open « Depot alerts »",
   "addPerson": "Add a person",
   "removePerson": "Remove {{who}}",
   "sound": "Sound",

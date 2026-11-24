@@ -441,6 +441,11 @@
     "title": "Réglages du Dépôt",
     "dispatch": "Une commande prête part seule « En dispatch » avec sa société",
     "alerts": "Qui reçoit l’alerte rouge quand une commande préparée change",
+    "notifs": {
+      "d": "« À préparer » : qui la reçoit, et quand le téléphone sonne",
+      "on": "Allumée",
+      "off": "Éteinte"
+    },
     "statuts": "Les statuts des colis au dépôt",
     "on": "Allumé",
     "off": "Éteint",

@@ -441,6 +441,11 @@
     "title": "Depot settings",
     "dispatch": "A ready order goes to “In dispatch” with its company by itself",
     "alerts": "Who gets the red alert when a prepared order changes",
+    "notifs": {
+      "d": "« To prepare »: who gets it, and when the phone rings",
+      "on": "On",
+      "off": "Off"
+    },
     "statuts": "The parcels’ statuses at the depot",
     "on": "On",
     "off": "Off",

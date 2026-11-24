@@ -30,9 +30,12 @@ const hh = (h: number) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Ma
 
 /**
  * `kinds`: only these (a page's own, in its « Réglages »: Confirmation › its four, owner's ask of 24 Nov 2026, the same
- * « Liste + détail » look); `embedded`: inside a page's card, whose title says what it is.
+ * « Liste + détail » look; Dépôt › « À préparer » alone: one notification shows its detail at once, no list of one line);
+ * `embedded`: inside a page's card, whose title says what it is; `folds`: the cards of the same page that a « Modifier »
+ * or an « Ouvrir » here opens in place (« appels »: the work hours and the blocked screen; « alertes »: the depot's red
+ * alerts) — elsewhere they are links to the page that has them.
  */
-export function NotificationsCfg({ kinds, embedded = false }: { kinds?: readonly Kind[]; embedded?: boolean } = {}) {
+export function NotificationsCfg({ kinds, embedded = false, folds = [] }: { kinds?: readonly Kind[]; embedded?: boolean; folds?: readonly string[] } = {}) {
   const { t } = useTranslation();
   const q = useRpc('notify.get', {});
   const save = useAction('notify.set', { success: t('notifs.saved') });
@@ -72,8 +75,9 @@ export function NotificationsCfg({ kinds, embedded = false }: { kinds?: readonly
     for (const k of changed) out[k] = draft[k]!;
     save.mutate({ rules: out }, { onSuccess: () => setDraft({}) });
   };
-  const showList = !narrow || !open;
-  const showDetail = !narrow || open;
+  const single = list.length === 1;
+  const showList = !single && (!narrow || !open);
+  const showDetail = single || !narrow || open;
 
   return (
     <div className="px-nt">
@@ -105,7 +109,7 @@ export function NotificationsCfg({ kinds, embedded = false }: { kinds?: readonly
             <small>{hours ? t('notifs.hoursText', { hours }) : t('notifs.hoursNone')}</small>
           </span>
           {/* the call slots are in Confirmation › Réglages › Appels: inside that page, the chip opens « Appels » there */}
-          {embedded ? (
+          {folds.includes('appels') ? (
             <button type="button" className="px-nt-chip" onClick={() => openFold('appels')}>
               {t('notifs.hoursEdit')}
             </button>
@@ -126,7 +130,7 @@ export function NotificationsCfg({ kinds, embedded = false }: { kinds?: readonly
         </div>
       </div>
 
-      <div className="px-nt-grid" ref={grid}>
+      <div className={`px-nt-grid${single ? ' single' : ''}`} ref={grid}>
         {showList && (
           <div className="px-nt-list" role="list">
             <small className="px-nt-group">{t('notifs.groupPilotix')}</small>
@@ -164,8 +168,8 @@ export function NotificationsCfg({ kinds, embedded = false }: { kinds?: readonly
               people={data.people}
               names={names}
               changed={changed.includes(sel)}
-              embedded={embedded}
-              onBack={narrow ? () => setOpen(false) : undefined}
+              folds={folds}
+              onBack={narrow && !single ? () => setOpen(false) : undefined}
               onEdit={(f) => edit(sel, f)}
             />
           ))}
@@ -214,7 +218,7 @@ function Detail(p: {
   people: Data['people'];
   names: Map<number, string>;
   changed: boolean;
-  embedded?: boolean;
+  folds: readonly string[];
   onBack?: () => void;
   onEdit: (f: (r: Rule) => Rule) => void;
 }) {
@@ -278,8 +282,8 @@ function Detail(p: {
         })}
         {blocked && r.who.includes('agent') && (
           <p className="px-nt-note">
-            <Icon name="lock" /> {t(p.embedded ? 'notifs.blockHintHere' : 'notifs.blockHint')}{' '}
-            {p.embedded ? (
+            <Icon name="lock" /> {t(p.folds.includes('appels') ? 'notifs.blockHintHere' : 'notifs.blockHint')}{' '}
+            {p.folds.includes('appels') ? (
               <button type="button" className="px-nt-link" onClick={() => openFold('appels')}>
                 {t('notifs.blockOpenHere')}
               </button>
@@ -288,7 +292,17 @@ function Detail(p: {
             )}
           </p>
         )}
-        {k === 'depot' && <p className="px-nt-note">{t('notifs.depotNote')}</p>}
+        {k === 'depot' &&
+          (p.folds.includes('alertes') ? (
+            <p className="px-nt-note">
+              {t('notifs.depotNoteHere')}{' '}
+              <button type="button" className="px-nt-link" onClick={() => openFold('alertes')}>
+                {t('notifs.depotOpenHere')}
+              </button>
+            </p>
+          ) : (
+            <p className="px-nt-note">{t('notifs.depotNote')}</p>
+          ))}
         <div className="px-nt-people">
           {r.people.map((id) => (
             <button key={id} type="button" className="px-nt-person" disabled={!r.on} onClick={() => p.onEdit((x) => ({ ...x, people: x.people.filter((y) => y !== id) }))} aria-label={t('notifs.removePerson', { who: p.names.get(id) ?? `#${id}` })}>

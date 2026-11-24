@@ -87,6 +87,8 @@
   "blockHintHere": "L’écran bloqué de l’agent se règle dans « Appels » (« Bloquer jusqu’à l’appel »).",
   "blockOpenHere": "Ouvrir « Appels »",
   "depotNote": "Les alertes rouges du dépôt (une commande changée ou annulée au dépôt) se règlent dans Dépôt › Réglages.",
+  "depotNoteHere": "Les alertes rouges du dépôt (une commande changée ou annulée au dépôt) se règlent dans « Alertes dépôt ».",
+  "depotOpenHere": "Ouvrir « Alertes dépôt »",
   "addPerson": "Ajouter une personne",
   "removePerson": "Enlever {{who}}",
   "sound": "Son",

@@ -74,7 +74,7 @@ export function ConfSettings() {
       )}
       {admin && (
         <Fold id="notifs" icon="bell" title={t('notifs.title')} desc={t('confirmation.cfg.notifs.d')} state={notifsOn === null ? null : t('confirmation.cfg.notifs.s', { on: notifsOn, all: CONF_NOTIFS.length })}>
-          <NotificationsCfg kinds={CONF_NOTIFS} embedded />
+          <NotificationsCfg kinds={CONF_NOTIFS} embedded folds={['appels']} />
         </Fold>
       )}
       {admin && (
