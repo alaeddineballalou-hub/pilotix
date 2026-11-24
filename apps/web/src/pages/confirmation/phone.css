@@ -14,8 +14,9 @@
 .pxp-meta { font-size: 12.5px; color: var(--muted); }
 .pxp-meta b { color: var(--ink); }
 .pxp-prod { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pxp-st { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
-.pxp-st small { color: var(--muted); font-size: 12px; }
+/* (wraps: « 1 appel(s) déjà » and the agent's name go to the next line whole instead of being squeezed) */
+.pxp-st { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 3px; }
+.pxp-st small { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .pxp-call { flex: none; width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--c-ok-fill); color: #fff !important; text-decoration: none; border: 0; padding: 0; cursor: pointer; font: inherit; }
 .pxp-call .bji, .pxp-call svg { width: 20px; height: 20px; }
 .pxp-call:active { filter: brightness(.92); }
