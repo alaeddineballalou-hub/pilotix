@@ -267,6 +267,40 @@ export async function addEvent(db: Db, orderId: number, userId: number | null, k
   ]);
 }
 
+// ---------------------------------------------------------------- who made it, when no person did
+// The server works with the shop's first administrator account (its courier sync, the landing pages, Dellal…): its name
+// must never show on what these did. The history shows where it came from instead (the owner's rule, 24 Nov 2026).
+const CHAT_NAMES: Record<string, string> = { messenger: 'Messenger', instagram: 'Instagram', whatsapp: 'WhatsApp', tiktok: 'TikTok', test: 'test' };
+/** Where an order came from when no person typed it — what its history shows in place of a name: its landing page
+ *  (« Page de vente « velo-star » »), the chat Dellal took it in, a Meta form, a Google Sheet, the shop's site, from
+ *  the order's source words. Null: a person made it (the order form, a duplicate, an SAV exchange). */
+export function autoSourceOf(o: { landing?: boolean; chat?: boolean; lead?: boolean; sheet?: boolean; site?: boolean; source?: string | null }): string | null {
+  const src = String(o.source ?? '').trim();
+  const parts = src.split(' · ').map((x) => x.trim()).filter(Boolean);
+  if (o.landing) {
+    // « Landing · velo-star » (« … · abandonnée »: a form the customer left, kept as an order by Pilotix)
+    const slug = parts[0] === 'Landing' && parts[1] && parts[1] !== 'abandonnée' ? parts[1] : null;
+    return `Page de vente${slug ? ` « ${slug} »` : ''}${parts.includes('abandonnée') ? ' (abandonnée)' : ''}`;
+  }
+  if (o.chat) {
+    // « Dellal · messenger · pub 123 », « Dellal · instagram · commande auto »
+    const chan = parts[1] ? (CHAT_NAMES[parts[1]] ?? parts[1]) : null;
+    return `${parts[0] || 'Dellal'}${chan ? ` · ${chan}` : ''}${parts.includes('commande auto') ? ' · commande auto' : ''}`;
+  }
+  if (o.lead) return src.startsWith('Formulaire') ? src.replace(/^Formulaire/, 'Formulaire Meta') : 'Formulaire Meta';
+  if (o.sheet) return `Google Sheets${src ? ` « ${src} »` : ''}`;
+  if (o.site) return src && src.toLowerCase() !== 'site' ? `Site « ${src} »` : 'Site web';
+  return null;
+}
+/** The delivery company that gave a delivery status (« ZR ») — its own line, or one written before the line said so
+ *  (« Statut ZR », « Payé par la société »). Null: a person changed it. */
+export function courierWho(kind: string, note: string | null, data: any, company: string | null): string | null {
+  if (kind !== 'follow_status') return null;
+  const old = /^Statut (.+)$/.exec(note ?? '');
+  if (!data?.courier && !old && !/^Payé par la société/.test(note ?? '')) return null;
+  return old?.[1]?.trim() || company || 'Société de livraison';
+}
+
 const id = z.number().int().positive();
 const ids = z.array(id).min(1).max(500);
 const dateStr = z.string().min(10).max(40);
@@ -704,6 +738,10 @@ export async function createOrder(
     /** a welcome code that does not work does not stop the order (a landing page, Dellal): it is left out, with a note */
     promoSoft?: boolean;
     savAccess?: 'sav';
+    /** a line of a Google Sheet */
+    sheet?: boolean;
+    /** what made it, as its history says it in place of a name (otherwise found from where it came: autoSourceOf) */
+    by?: string | null;
   } = {},
 ): Promise<Order> {
   const phone = normalizePhone(input.phone);
@@ -832,8 +870,21 @@ export async function createOrder(
     await insertItems(tx, oid, lines);
     // SAV exchange parcels stay with the store's team (they are not sales)
     if (!input.isExchange) await routeToAgencies(tx, oid, lines[0]?.productId, stamped);
-    await addEvent(tx, oid, me, 'created', null, conf, input.isExchange ? `Échange de la commande #${input.originalOrderId}` : null);
-    if (confirmed) await addEvent(tx, oid, me, 'follow_status', null, 'to_prepare');
+    // an order that came by itself says where from (« Page de vente « velo-star » », « Dellal · Messenger »), never the
+    // account the server works with
+    const made =
+      opts.by ??
+      autoSourceOf({
+        landing: opts.landingId != null || !!opts.abandoned,
+        chat: opts.conversationId != null,
+        lead: !!(input.utm as Record<string, unknown> | null | undefined)?.leadgen_id,
+        sheet: !!opts.sheet,
+        site: input.via === 'api',
+        source: input.source ?? null,
+      });
+    const by = made ? { by: made } : undefined;
+    await addEvent(tx, oid, me, 'created', null, conf, input.isExchange ? `Échange de la commande #${input.originalOrderId}` : null, by);
+    if (confirmed) await addEvent(tx, oid, me, 'follow_status', null, 'to_prepare', null, by);
     for (const n of trustNotes) await addEvent(tx, oid, null, 'note', null, 'event', n);
     // Meta (a Messenger / Instagram chat's order): « at order », or made already confirmed with « at confirmation »
     if (opts.conversationId && !input.isExchange) {
@@ -1609,7 +1660,12 @@ export async function assignCompanies(ctx: Ctx, i: { ids: number[]; companyId: n
   return { ok: true };
 }
 
-export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, opts: { system?: boolean; courier?: boolean; expect?: Map<number, string | null>; courierNotes?: ReadonlyMap<number, string> } = {}) {
+export async function setFollow(
+  ctx: Ctx,
+  input: z.infer<typeof FollowInput>,
+  /** courier: given by the delivery company `by` (« ZR »), its own words per parcel in `courierNotes` */
+  opts: { system?: boolean; courier?: boolean; by?: string | null; expect?: Map<number, string | null>; courierNotes?: ReadonlyMap<number, string> } = {},
+) {
   if (!canSetFollow(ctx.session.roles, input.status)) throw forbidden('Vous ne pouvez pas mettre ce statut de livraison');
   const me = ctx.session.profile.id;
   const own = onlyOwnDeliveries(ctx);
@@ -1712,7 +1768,7 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
       if (to === 'returned' && from !== 'returned' && !cur.returned_at) await tx.query('UPDATE customers SET returned = returned + 1 WHERE id = $1', [cur.customer_id]);
       // what the step replaces (« ↶ Annuler » puts it back) and whether the delivery company gave it (never undone here)
       const prev = { sub: cur.sub_status ?? null, fa: numOrNull(cur.follow_agent_id), lv: numOrNull(cur.livreur_id), tr: cur.tracking ?? null, cbh: !!cur.cancel_by_hand };
-      await addEvent(tx, oid, me, 'follow_status', from, to, [input.reason, opts.courierNotes?.get(oid) ?? input.note].filter(Boolean).join(' — ') || null, opts.courier ? { prev, courier: true } : { prev });
+      await addEvent(tx, oid, me, 'follow_status', from, to, [input.reason, opts.courierNotes?.get(oid) ?? input.note].filter(Boolean).join(' — ') || null, opts.courier ? { prev, courier: true, ...(opts.by ? { by: opts.by } : {}) } : { prev });
       if (to === 'cancelled' && from === 'to_prepare') await releasePicked(tx, oid);
       // cancelled while the depot holds it (packed, or a parcel already made at a courier): the depot's red alert
       if (to === 'cancelled' && from !== to && !opts.system && !cur.shipped_at && (from === 'prepared' || (from === 'to_prepare' && cur.tracking)) && alertsDepot(ctx, 'prepared'))
@@ -2184,11 +2240,33 @@ export const ordersProcs = {
         if (since && before) rows = rows.filter((r: any) => r.kind === 'created' || (r.kind === 'note' && r.user_id === null) || Date.parse(new Date(r.at).toISOString()) >= Date.parse(new Date(since).toISOString()));
       }
     }
+    // what no person did shows where it came from, never the account the server works with: the delivery company for
+    // its statuses (« ZR »), the landing page / Dellal / form / sheet / site for an order that came by itself — told by
+    // the line itself (since 24 Nov 2026), else found from the order (the older lines)
+    const src = (
+      await ctx.db.query(
+        `SELECT o.landing_id, o.conversation_id, o.source, o.utm, o.ext_order_id, c.name AS company,
+           EXISTS (SELECT 1 FROM sheet_rows s WHERE s.order_id = o.id) AS sheet
+         FROM orders o LEFT JOIN delivery_companies c ON c.id = o.company_id WHERE o.id = $1`,
+        [id],
+      )
+    )[0];
+    const utm = src && (typeof src.utm === 'string' ? JSON.parse(src.utm) : src.utm);
+    const made = src
+      ? autoSourceOf({ landing: src.landing_id != null, chat: src.conversation_id != null, lead: !!utm?.leadgen_id, sheet: !!src.sheet, site: src.ext_order_id != null, source: src.source })
+      : null;
+    const createdAt = rows.find((r: any) => r.kind === 'created')?.at;
     return rows.map(
       (r: any): OrderEvent => {
-        const d = r.kind === 'undo' ? (typeof r.data === 'string' ? JSON.parse(r.data) : r.data) : null;
+        const data = typeof r.data === 'string' ? JSON.parse(r.data) : r.data;
+        const d = r.kind === 'undo' ? data : null;
+        // (made with the order: confirmed at once by Dellal, its « À préparer »)
+        const withOrder = r.kind === 'created' || (r.kind === 'follow_status' && r.from_value === null && r.to_value === 'to_prepare' && createdAt && iso(r.at) === iso(createdAt));
+        // (« by » of a status line only: an « undo » line keeps there who had made the change it undid)
+        const own = (r.kind === 'created' || r.kind === 'follow_status') && data?.by ? String(data.by) : null;
+        const by = own ?? courierWho(r.kind, r.note, data, src?.company ?? null) ?? (withOrder ? made : null);
         return {
-          id: num(r.id), orderId: num(r.order_id), at: iso(r.at), userId: numOrNull(r.user_id), userName: r.user_name, kind: r.kind, fromValue: r.from_value, toValue: r.to_value, note: r.note,
+          id: num(r.id), orderId: num(r.order_id), at: iso(r.at), userId: by ? null : numOrNull(r.user_id), userName: by ?? r.user_name, kind: r.kind, fromValue: r.from_value, toValue: r.to_value, note: r.note,
           ...(d ? { undo: { area: d.area === 'follow' ? 'follow' : 'conf', by: d.by ?? null, at: d.at ? iso(d.at) : iso(r.at) } } : {}),
         };
       },

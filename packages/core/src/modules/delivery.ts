@@ -521,7 +521,7 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
   const expect = new Map<number, string | null>(parcels.map((p: any) => [num(p.id), p.follow_status ?? null]));
   for (const [status, list] of byStatus) {
     // a new alert from the company is a new one (« à traiter » again)
-    changed += (await setFollow(sys, { ids: list, status, note: courierNote(c.name, null), ...(status === 'alert' ? { subStatus: null } : {}) }, { system: true, courier: true, expect, courierNotes })).changed.length;
+    changed += (await setFollow(sys, { ids: list, status, note: courierNote(c.name, null), ...(status === 'alert' ? { subStatus: null } : {}) }, { system: true, courier: true, by: c.name, expect, courierNotes })).changed.length;
   }
   // the mark goes with the parcels that left « En dispatch » (24 h passed, or the company's end: livré, retour…)
   await ctx.db.query(`UPDATE orders SET sub_status = NULL WHERE company_id = $1 AND sub_status = $2 AND follow_status IS DISTINCT FROM 'prepared'`, [c.id, SUB_TAKEN_UNSCANNED]);
@@ -639,7 +639,13 @@ export async function fillOldCourierNotes(ctx: Ctx, list: CompanyRow[], max = 30
       }
       for (const l of mine) {
         const words = courierWordsAt(steps, new Date(l.at).getTime(), l.to_value ?? null, leadsTo);
-        await ctx.db.query('UPDATE order_events SET note = $2 WHERE id = $1 AND note = $3', [num(l.id), courierNote(c.name, words ?? COURIER_NOT_FOUND), old]);
+        // marked as the company's (no longer « Statut … »: « ↶ Annuler » and the history still know it is not a person's)
+        await ctx.db.query(`UPDATE order_events SET note = $2, data = coalesce(data, '{}'::jsonb) || jsonb_build_object('courier', true, 'by', $4::text) WHERE id = $1 AND note = $3`, [
+          num(l.id),
+          courierNote(c.name, words ?? COURIER_NOT_FOUND),
+          old,
+          c.name,
+        ]);
         if (words) out.filled++;
         else out.notFound++;
       }

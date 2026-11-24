@@ -3118,7 +3118,8 @@ export const landingProcs = {
           internalNote: `Restaurée depuis « Commandes bloquées » (score ${num(b.score)}/100)`,
         },
         tx,
-        { landingId: numOrNull(b.landing_id), adsetId: adsetOf(utm) },
+        // its page, and the person who let it through
+        { landingId: numOrNull(b.landing_id), adsetId: adsetOf(utm), by: `Page de vente${slug ? ` « ${slug} »` : ''} · restaurée par ${ctx.session.profile.name}` },
       );
       await tx.query(`UPDATE landing_blocked SET status = 'restored', order_id = $2, handled_by = $3, handled_at = now() WHERE id = $1`, [id, order.id, ctx.session.profile.id]);
       await tx.query('UPDATE landing_submits SET order_id = $2 WHERE blocked_id = $1', [id, order.id]);

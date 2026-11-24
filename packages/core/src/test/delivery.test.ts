@@ -7,6 +7,7 @@ import { resolveStatus } from '../couriers/load';
 import { ADAPTERS } from '../couriers/adapters';
 import { bestMatch } from '../couriers/util';
 import { courierWordsAt } from '../modules/delivery';
+import { autoSourceOf, courierWho, createOrder } from '../modules/orders';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -177,6 +178,9 @@ test('old « Statut ZR » history lines get the courier’s words of that moment
   assert.deepEqual(r.oldNotes, { filled: 4, notFound: 1, left: true });
   assert.deepEqual((await notes(a)).slice(-4), [`${name} : Vers wilaya`, `${name} : Sortie en livraison`, `${name} : Échec de livraison · Client injoignable`, 'Client injoignable']);
   assert.deepEqual(await notes(gone), [`${name} : statut non retrouvé`]);
+  // still the company's (« ↶ Annuler » refuses it, the history shows the company), the hand-written line untouched
+  const marks = await db.query(`SELECT note, data->>'courier' AS courier, data->>'by' AS by FROM order_events WHERE order_id = $1 AND kind = 'follow_status' ORDER BY at`, [a]);
+  assert.deepEqual(marks.slice(-4).map((m: any) => [m.courier, m.by]), [['true', name], ['true', name], ['true', name], [null, null]]);
   assert.deepEqual(await notes(onlyOne), [`${name} : Vers wilaya`]);
   // ZR did not answer for this one: asked again at the next run
   assert.deepEqual(await notes(later), [old]);
@@ -194,6 +198,78 @@ test('old « Statut ZR » history lines get the courier’s words of that moment
   const r4: any = await call('delivery.sync', admin, { fast: true, oldNotes: true });
   assert.deepEqual(r4.oldNotes, { filled: 0, notFound: 0, left: false });
   assert.equal(asked.length, before);
+});
+
+test('autoSourceOf / courierWho: the words shown in place of a name', () => {
+  assert.equal(autoSourceOf({ landing: true, source: 'Landing · velo-star' }), 'Page de vente « velo-star »');
+  assert.equal(autoSourceOf({ landing: true, source: 'Landing · velo-star · abandonnée' }), 'Page de vente « velo-star » (abandonnée)');
+  assert.equal(autoSourceOf({ landing: true, source: 'Landing · abandonnée' }), 'Page de vente (abandonnée)');
+  assert.equal(autoSourceOf({ chat: true, source: 'Dellal · messenger · pub 1234' }), 'Dellal · Messenger');
+  assert.equal(autoSourceOf({ chat: true, source: 'Dellal · instagram · commande auto' }), 'Dellal · Instagram · commande auto');
+  assert.equal(autoSourceOf({ lead: true, source: 'Formulaire « Vélo »' }), 'Formulaire Meta « Vélo »');
+  assert.equal(autoSourceOf({ sheet: true, source: 'Commandes site' }), 'Google Sheets « Commandes site »');
+  assert.equal(autoSourceOf({ site: true, source: 'site' }), 'Site web');
+  assert.equal(autoSourceOf({ site: true, source: 'Ma boutique Woo' }), 'Site « Ma boutique Woo »');
+  // typed by a person (the form, a duplicate, an SAV exchange): their name stays
+  assert.equal(autoSourceOf({ source: 'Landing · velo-star' }), null);
+  assert.equal(courierWho('follow_status', 'Statut ZR', null, 'ZR Express'), 'ZR');
+  assert.equal(courierWho('follow_status', 'ZR : En livraison', { courier: true }, 'ZR'), 'ZR');
+  assert.equal(courierWho('follow_status', 'Payé par la société (paiement P1)', null, 'ZR'), 'ZR');
+  assert.equal(courierWho('follow_status', 'Client injoignable', { prev: {} }, 'ZR'), null);
+  assert.equal(courierWho('note', 'Statut ZR', null, 'ZR'), null);
+});
+
+test('history: ZR’s statuses say « ZR », an order that came by itself says where from — never the server’s account', async () => {
+  const zrId = await companyId('zr');
+  const company = String((await db.query('SELECT name FROM delivery_companies WHERE id = $1', [zrId]))[0].name);
+  const admin = await as(EMAILS.admin);
+  const adminName = String((await db.query('SELECT name FROM profiles WHERE email = $1', [EMAILS.admin]))[0].name);
+  const lines = async (orderId: number) => (await call('orders.events', admin, { id: orderId })) as any[];
+  // a new status from ZR's sync
+  const [moved, old] = (await db.query(`SELECT id FROM orders WHERE conf_status = 'new' AND tracking IS NULL ORDER BY id DESC OFFSET 4 LIMIT 2`)).map((r: any) => Number(r.id));
+  await db.query(`UPDATE orders SET company_id = $1, conf_status = 'confirmed', follow_status = 'shipped', tracking = 'ZR-WHO-' || id, shipped_at = now(), sub_status = NULL WHERE id = ANY($2)`, [zrId, [moved, old]]);
+  const server = {
+    courier: async (action: string) => (action === 'track' ? [{ id: moved, status: 'Sortie en livraison', mapped: 'out_for_delivery', at: null }] : []),
+    meta: async () => null,
+    hashPassword: async (value: string) => value,
+  };
+  await call('delivery.sync', await as(EMAILS.suivi, server as any), { companyId: zrId });
+  const fromZr = (await lines(moved)).filter((e) => e.kind === 'follow_status').pop();
+  assert.equal(fromZr.note, `${company} : Sortie en livraison`);
+  assert.equal(fromZr.userName, company);
+  assert.equal(fromZr.userId, null);
+  // a line written before (« Statut ZR », under the server's account): ZR too
+  const adminId = Number((await db.query('SELECT id FROM profiles WHERE email = $1', [EMAILS.admin]))[0].id);
+  await db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, note) VALUES ($1, $2, 'follow_status', 'shipped', 'out_for_delivery', 'Statut ZR')`, [old, adminId]);
+  assert.equal((await lines(old)).filter((e) => e.kind === 'follow_status').pop().userName, 'ZR');
+  // a person's own change keeps his name
+  await call('orders.setFollow', admin, { ids: [old], status: 'alert', note: 'Client injoignable' });
+  const byHand = (await lines(old)).filter((e) => e.kind === 'follow_status').pop();
+  assert.equal(byHand.userName, adminName);
+  assert.equal(byHand.userId, adminId);
+
+  // an order from a landing page: « Page de vente « slug » », not the account the server works with
+  const p = (await db.query(`SELECT p.id, v.id AS vid FROM products p JOIN product_variants v ON v.product_id = p.id WHERE p.active AND v.active ORDER BY p.id LIMIT 1`))[0];
+  const page = (await db.query(`SELECT id, slug FROM landing_pages ORDER BY id LIMIT 1`))[0];
+  const item = { productId: Number(p.id), variantId: Number(p.vid), qty: 1 };
+  const base = { customerName: 'Client page', wilayaId: 16, commune: 'Kouba', address: '', isStopdesk: false, items: [item], discount: 0, confirm: false, isExchange: false };
+  const fromPage = await createOrder(admin, { ...base, phone: '0555 11 22 01', channel: 'landing', source: `Landing · ${page.slug}` } as any, db, { landingId: Number(page.id) });
+  const created = (await lines(fromPage.id)).find((e) => e.kind === 'created');
+  assert.equal(created.userName, `Page de vente « ${page.slug} »`);
+  assert.equal(created.userId, null);
+  // one made before the line said so (no « by » on it): found from the order itself
+  await db.query(`UPDATE order_events SET data = NULL WHERE order_id = $1 AND kind = 'created'`, [fromPage.id]);
+  assert.equal((await lines(fromPage.id)).find((e) => e.kind === 'created').userName, `Page de vente « ${page.slug} »`);
+  // a Google Sheet's line, the shop's site
+  const fromSheet = await createOrder(admin, { ...base, phone: '0555 11 22 02', channel: 'autre', source: 'Commandes site' } as any, db, { sheet: true });
+  assert.equal((await lines(fromSheet.id)).find((e) => e.kind === 'created').userName, 'Google Sheets « Commandes site »');
+  const fromSite = await createOrder(admin, { ...base, phone: '0555 11 22 03', channel: 'site', source: 'site', via: 'api' } as any, db);
+  assert.equal((await lines(fromSite.id)).find((e) => e.kind === 'created').userName, 'Site web');
+  // typed by a person: his name
+  const typed: any = await call('orders.create', admin, { customerName: 'Client tapé', phone: '0555 11 22 04', wilayaId: 16, commune: 'Kouba', items: [item] });
+  const mine = (await lines(typed.id)).find((e) => e.kind === 'created');
+  assert.equal(mine.userName, adminName);
+  assert.equal(mine.userId, adminId);
 });
 
 test('fees grid and status mapping', async () => {

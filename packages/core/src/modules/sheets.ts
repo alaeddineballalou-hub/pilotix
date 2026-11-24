@@ -277,7 +277,7 @@ async function orderFromLine(ctx: Ctx, ch: any, l: Line) {
     internalNote: twin ? `⚠️ Même numéro que ${twin.ref} (moins de 3 jours) : doublon possible` : null,
     confirm: false,
     isExchange: false,
-  }, ctx.db, { guard: 'check' });
+  }, ctx.db, { guard: 'check', sheet: true });
 }
 
 /**
@@ -434,7 +434,7 @@ export const sheetsProcs = {
           isExchange: false,
         },
         ctx.db,
-        { silent: true },
+        { silent: true, sheet: true },
       );
       made.push({ id: o.id, ref: o.ref });
     }
