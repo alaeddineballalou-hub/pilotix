@@ -15,13 +15,16 @@ import { NotificationsCfg } from './Notifications';
 import { Prix } from './Prix';
 import { ReglagesPage } from './Reglages';
 import { Affectation } from './Affectation';
+import { Automations } from '../notify/Automations';
 import { UsersPage } from './Users';
 
 export function Utilisateurs({ sub, rest }: PageProps) {
   return <UsersPage sub={sub} rest={rest} />;
 }
 
-const MGMT = ['plans', 'affectation', 'prix', 'canaux', 'notifications', 'livreur', 'modules', 'archive'] as const;
+// « Rapport du soir » (the day's numbers on the owners' phones, from Pilot Automations; owner's choice of 24 Nov 2026:
+// the owner's things go to Management) is there while the plan has the automations (Pilot Automations' switch)
+const MGMT = ['plans', 'rapport', 'affectation', 'prix', 'canaux', 'notifications', 'livreur', 'modules', 'archive'] as const;
 // in each page's « Réglages » now (owner's ask, 24 Nov 2026: each page keeps its own settings, Management only the big
 // things): the statuses (every group), the depot's alerts, the lots and manufacturing. An old link to them says where.
 const MOVED = ['statuts', 'alertes', 'stock'] as const;
@@ -30,7 +33,7 @@ export function Management({ sub, rest }: PageProps) {
   const { t } = useTranslation();
   const { session } = useSession();
   // not an administrator: let in for the Affectation only
-  const mine = session?.isAdmin ? MGMT : (['affectation'] as const);
+  const mine = (session?.isAdmin ? MGMT : (['affectation'] as const)).filter((k) => k !== 'rapport' || pageIsOn('notify'));
   const moved = !!session?.isAdmin && (MOVED as readonly string[]).includes(sub ?? '');
   const cur = (mine as readonly string[]).includes(sub ?? '') ? (sub as (typeof MGMT)[number]) : mine[0];
   // #/management/archive/<users|products|warehouses> opens that list
@@ -46,7 +49,7 @@ export function Management({ sub, rest }: PageProps) {
         <>
           {/* Confirmation's and Suivi's order sharing are in their Réglages now */}
           {cur === 'affectation' && <MovedNote />}
-          {cur === 'plans' ? <ManagementPlans /> : cur === 'affectation' ? <Affectation areas={[]} /> : cur === 'prix' ? <Prix /> : cur === 'canaux' ? <Canaux /> : cur === 'notifications' ? <NotificationsCfg /> : cur === 'livreur' ? <LivreurCfg /> : cur === 'modules' ? <Modules /> : <Archive key={kind ?? 'users'} initial={kind} />}
+          {cur === 'plans' ? <ManagementPlans /> : cur === 'rapport' ? <Automations view="evening" /> : cur === 'affectation' ? <Affectation areas={[]} /> : cur === 'prix' ? <Prix /> : cur === 'canaux' ? <Canaux /> : cur === 'notifications' ? <NotificationsCfg /> : cur === 'livreur' ? <LivreurCfg /> : cur === 'modules' ? <Modules /> : <Archive key={kind ?? 'users'} initial={kind} />}
         </>
       )}
     </>

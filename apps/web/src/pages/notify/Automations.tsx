@@ -25,7 +25,7 @@ const DAYS = [7, 14, 21, 30, 45, 60, 90];
 /** « Maximum en main par livreur » (0: no limit) */
 const MAX_HANDS = [0, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100];
 
-export type AutoView = 'auto' | 'assign' | 'affectation' | 'queue' | 'stock' | 'dispatch';
+export type AutoView = 'auto' | 'assign' | 'affectation' | 'queue' | 'stock' | 'dispatch' | 'evening';
 export function Automations({ view = 'auto' }: { view?: AutoView }) {
   const q = useRpc('auto.state', {}, { refetchInterval: 60_000 });
   if (q.isLoading) return <Loading />;
@@ -201,6 +201,32 @@ function Board({ d, view }: { d: S; view: AutoView }) {
       <Links items={[['#/depot/preparer', t('notify.auto.dispatch.link')]]} />
     </Rule>
   );
+  // « Rapport du soir »: the day's numbers on the owners' phones; its own place is Management › Rapport du soir (view
+  // 'evening', owner's choice of 24 Nov 2026), and it stays in this list until Pilot Automations leaves the menu
+  const eveningRow = (
+    <Rule
+      icon="moon"
+      name={name('evening')}
+      when={t('notify.auto.evening.when', { hour: s.evening.hour })}
+      then={t('notify.auto.evening.then')}
+      on={s.evening.on}
+      busy={save.isPending}
+      onToggle={(on) => {
+        const evening = { ...s.evening, on };
+        setS({ ...s, evening });
+        put({ evening }, { name: name('evening'), on });
+      }}
+      last={lastOf('evening')}
+    >
+      <Today r={d.today} />
+      {s.evening.on && (
+        <div className="au-fields">
+          <Pick label={t('notify.auto.evening.hour')} value={s.evening.hour} options={HOURS} show={(v) => `${String(v).padStart(2, '0')}:00`} onChange={(v) => { const evening = { ...s.evening, hour: v }; setS({ ...s, evening }); put({ evening }); }} />
+          <People ids={s.evening.to} all={d.people} fallback={t('notify.auto.peopleAdmins')} onChange={(to) => { const evening = { ...s.evening, to }; setS({ ...s, evening }); put({ evening }); }} />
+        </div>
+      )}
+    </Rule>
+  );
   // « File d'attente lente »: its own place is Confirmation › Réglages (view 'queue'), no longer the list of automations
   const queueRow = (
     <Rule
@@ -289,6 +315,14 @@ function Board({ d, view }: { d: S; view: AutoView }) {
         <ul className="au-list">{queueRow}</ul>
       </div>
     );
+  if (view === 'evening')
+    return (
+      <div className="au">
+        <section className="card au-group">
+          <ul className="au-list">{eveningRow}</ul>
+        </section>
+      </div>
+    );
   if (view === 'assign')
     return (
       <div className="au">
@@ -323,28 +357,7 @@ function Board({ d, view }: { d: S; view: AutoView }) {
 
       <Group title={t('notify.auto.groups.orders')}>
 
-        <Rule
-          icon="moon"
-          name={name('evening')}
-          when={t('notify.auto.evening.when', { hour: s.evening.hour })}
-          then={t('notify.auto.evening.then')}
-          on={s.evening.on}
-          busy={save.isPending}
-          onToggle={(on) => {
-            const evening = { ...s.evening, on };
-            setS({ ...s, evening });
-            put({ evening }, { name: name('evening'), on });
-          }}
-          last={lastOf('evening')}
-        >
-          <Today r={d.today} />
-          {s.evening.on && (
-            <div className="au-fields">
-              <Pick label={t('notify.auto.evening.hour')} value={s.evening.hour} options={HOURS} show={(v) => `${String(v).padStart(2, '0')}:00`} onChange={(v) => { const evening = { ...s.evening, hour: v }; setS({ ...s, evening }); put({ evening }); }} />
-              <People ids={s.evening.to} all={d.people} fallback={t('notify.auto.peopleAdmins')} onChange={(to) => { const evening = { ...s.evening, to }; setS({ ...s, evening }); put({ evening }); }} />
-            </div>
-          )}
-        </Rule>
+        {eveningRow}
       </Group>
 
       <Group title={t('notify.auto.groups.stock')}>

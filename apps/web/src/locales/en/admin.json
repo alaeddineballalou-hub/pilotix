@@ -17,7 +17,8 @@
     "alertes": "Depot alerts",
     "livreur": "Livreur",
     "stock": "Stock",
-    "modules": "Modules"
+    "modules": "Modules",
+    "rapport": "Evening report"
   },
   "users": {
     "rolesTitle": "Roles",

@@ -17,7 +17,8 @@
     "alertes": "تنبيهات المستودع",
     "livreur": "الموصّل",
     "stock": "المخزون",
-    "modules": "الوحدات"
+    "modules": "الوحدات",
+    "rapport": "تقرير المساء"
   },
   "users": {
     "rolesTitle": "الأدوار",
