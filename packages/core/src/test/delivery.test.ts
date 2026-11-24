@@ -124,13 +124,26 @@ test('courierWordsAt: the company’s words at a moment of its journey', () => {
   assert.equal(courierWordsAt(steps, at(30), 'returning', leadsTo), 'Vers wilaya');
   // the journey starts after the line: not this parcel's status
   assert.equal(courierWordsAt(steps, at(-30), 'shipped', leadsTo), null);
+  // the reason ZR gave under an earlier step and kept on the parcel (Préférences send it to the alerts)
+  const own = { 'Sortie en livraison · Appel téléphonique': 'alert', 'Sortie en livraison · Ne répond pas 2': 'alert' };
+  const kept = [
+    { at: m(0), key: 'en_livraison', status: 'En livraison', situations: [{ name: 'Appel téléphonique', at: m(30) }] },
+    { at: m(60), key: 'sortie_en_livraison', status: 'Sortie en livraison', situations: [] },
+    { at: m(120), key: 'dispatch', status: 'Dispatch dans une autre wilaya', situations: [] },
+  ];
+  const leadsOwn = (words: string, key: string | null) => resolveStatus(ADAPTERS.zr.statuses, own, { key: key ?? undefined, status: words });
+  assert.equal(courierWordsAt(kept, at(90), 'alert', leadsOwn), 'Sortie en livraison · Appel téléphonique');
+  // the step alone when that is what led there
+  assert.equal(courierWordsAt(kept, at(90), 'out_for_delivery', leadsOwn), 'Sortie en livraison');
+  // nothing tells (ZR's « retour » is told apart from its status): the status with the last reason ZR gave
+  assert.equal(courierWordsAt(kept, at(125), 'returning', leadsOwn), 'Dispatch dans une autre wilaya · Appel téléphonique');
 });
 
 test('old « Statut ZR » history lines get the courier’s words of that moment (server sync, a few each run)', async () => {
   const zrId = await companyId('zr');
   const name = String((await db.query('SELECT name FROM delivery_companies WHERE id = $1', [zrId]))[0].name);
   const old = `Statut ${name}`;
-  await db.query(`DELETE FROM settings WHERE key = 'courier_notes_filled'`);
+  await db.query(`DELETE FROM settings WHERE key LIKE 'courier_notes_filled%'`);
   const rows = await db.query(`SELECT id FROM orders WHERE conf_status = 'new' AND tracking IS NULL ORDER BY id DESC LIMIT 4`);
   assert.equal(rows.length, 4);
   const [a, gone, later, onlyOne] = rows.map((r: any) => Number(r.id));
@@ -198,6 +211,47 @@ test('old « Statut ZR » history lines get the courier’s words of that moment
   const r4: any = await call('delivery.sync', admin, { fast: true, oldNotes: true });
   assert.deepEqual(r4.oldNotes, { filled: 0, notFound: 0, left: false });
   assert.equal(asked.length, before);
+});
+
+test('lines filled before the reason kept from an earlier step was read are filled again, once', async () => {
+  const zrId = await companyId('zr');
+  const name = String((await db.query('SELECT name FROM delivery_companies WHERE id = $1', [zrId]))[0].name);
+  const cfg = (await db.query('SELECT config FROM delivery_companies WHERE id = $1', [zrId]))[0].config;
+  await db.query(`UPDATE delivery_companies SET config = $2 WHERE id = $1`, [zrId, JSON.stringify({ ...(typeof cfg === 'string' ? JSON.parse(cfg) : cfg ?? {}), statusMap: { 'Sortie en livraison · Appel téléphonique': 'alert' } })]);
+  await db.query(`DELETE FROM settings WHERE key LIKE 'courier_notes_filled%'`);
+  await db.query(`SELECT ensure_events_partition('2026-11-24'::date)`);
+  const id = Number((await db.query(`SELECT id FROM orders WHERE conf_status = 'new' AND tracking IS NULL ORDER BY id DESC OFFSET 8 LIMIT 1`))[0].id);
+  await db.query(`UPDATE orders SET company_id = $1, conf_status = 'confirmed', follow_status = 'alert', tracking = 'ZR-AGAIN-' || id, ext_id = 'uuid-again-' || id, shipped_at = now() WHERE id = $2`, [zrId, id]);
+  const line = async (at: string, from: string, to: string, note: string, data: object) =>
+    Number((await db.query(`INSERT INTO order_events (order_id, kind, from_value, to_value, note, data, at) VALUES ($1, 'follow_status', $2, $3, $4, $5, $6) RETURNING id`, [id, from, to, note, JSON.stringify(data), at]))[0].id);
+  // filled this afternoon by the first version: the reason is missing
+  const first = await line('2026-11-24T07:54:19Z', 'shipped', 'out_for_delivery', `${name} : En livraison`, { courier: true, by: name });
+  const alert = await line('2026-11-24T10:30:03Z', 'out_for_delivery', 'alert', `${name} : Sortie en livraison`, { courier: true, by: name });
+  // written live with ZR's own words since: never touched
+  const live = await line('2026-11-24T13:45:00Z', 'alert', 'returning', `${name} : Dispatch dans une autre wilaya · Commande annulée`, { courier: true });
+  const server = {
+    courier: async (action: string) => {
+      if (action === 'track') return [];
+      if (action !== 'steps') throw new Error('pas dans ce test');
+      return [
+        { at: '2026-11-24T07:50:00.000Z', key: 'en_livraison', status: 'En livraison', situations: [{ name: 'Appel téléphonique', at: '2026-11-24T09:10:00.000Z' }] },
+        { at: '2026-11-24T09:40:00.000Z', key: 'sortie_en_livraison', status: 'Sortie en livraison', situations: [] },
+      ];
+    },
+    meta: async () => null,
+    hashPassword: async (value: string) => value,
+  };
+  const admin = await as(EMAILS.admin, server as any);
+  await call('delivery.sync', admin, { fast: true, oldNotes: true });
+  const note = async (eid: number) => (await db.query('SELECT note, data FROM order_events WHERE id = $1', [eid]))[0];
+  assert.equal((await note(first)).note, `${name} : En livraison`);
+  assert.equal((await note(alert)).note, `${name} : Sortie en livraison · Appel téléphonique`);
+  assert.equal((await note(live)).note, `${name} : Dispatch dans une autre wilaya · Commande annulée`);
+  assert.equal((await note(alert)).data.noteFill, 2);
+  // done once: the next run asks ZR nothing more for it
+  const again: any = await call('delivery.sync', admin, { fast: true, oldNotes: true });
+  assert.equal(again.oldNotes.filled, 0);
+  await db.query(`UPDATE delivery_companies SET config = $2 WHERE id = $1`, [zrId, typeof cfg === 'string' ? cfg : JSON.stringify(cfg ?? {})]);
 });
 
 test('autoSourceOf / courierWho: the words shown in place of a name', () => {

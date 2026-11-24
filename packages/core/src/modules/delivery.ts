@@ -573,29 +573,42 @@ const COURIER_NO_WORDS = 'sans détail';
 const OLD_COURIER_NOTE = (company: string) => `Statut ${company}`;
 /** Said in place of the words when the company no longer knows the parcel (or its journey starts later). */
 const COURIER_NOT_FOUND = 'statut non retrouvé';
-/** Once no old line is left in the shop, this mark stops the search. */
-const OLD_NOTES_DONE = 'courier_notes_filled';
+/** Once no old line is left in the shop, this mark stops the search (« _v2 »: the lines filled on 24 Nov 2026 before
+ *  the reason ZR kept from an earlier step was read are done again, once). */
+const OLD_NOTES_DONE = 'courier_notes_filled_v2';
+/** The lines ZR's sync wrote before its words came with each line (24 Nov 2026, 13 h 42 in Algiers): the only ones
+ *  this fill writes. A line filled by its first version (marked « by », no « noteFill » 2) is filled again, once. */
+const WORDS_LIVE_SINCE = '2026-11-24T12:45:00Z';
+const FILL_VERSION = 2;
 /** the company's clock and the server's may differ a little */
 const CLOCK_MARGIN_MS = 60_000;
 /** a line is written once the whole sync has read the company (up to a few minutes after it read this parcel) */
 const READ_MARGIN_MS = 10 * 60_000;
 
 /** The company's words for a parcel at `t` (a time), as the sync would have written them then: its status at that
- *  moment — the last step of its journey (oldest first) at or before it — and the last situation added under that step
- *  by then (« Échec de livraison · Client injoignable »). When that status does not lead to `to` (the parcel's status the
- *  line wrote) but one a few minutes earlier does, that one is it (the company moved again while the sync was writing).
- *  Null: the journey starts after `t` (another parcel). */
+ *  moment — the last step of its journey (oldest first) at or before it — with the reason (situation) ZR gave by then:
+ *  the last one it gave on the parcel, even under an earlier step (ZR keeps it when the state changes: « Sortie en
+ *  livraison · Appel téléphonique », « Dispatch dans une autre wilaya · Commande annulée »), else the step's own. The words that lead to
+ *  `to` (the status the line wrote) are the ones the sync read; when the status does not lead there but one a few
+ *  minutes earlier does, that one is it (the company moved again while the sync was writing). When nothing tells:
+ *  the status with the last reason ZR gave. Null: the journey starts after `t` (another parcel). */
 export function courierWordsAt(steps: CourierStep[], t: number, to: string | null, leadsTo: (words: string, key: string | null) => string | null | undefined): string | null {
-  const before = steps.filter((s) => Date.parse(s.at) <= t + CLOCK_MARGIN_MS);
+  const by = t + CLOCK_MARGIN_MS;
+  const before = steps.filter((s) => Date.parse(s.at) <= by);
   if (!before.length) return null;
-  const wordsOf = (s: CourierStep) => {
-    const sit = s.situations.filter((x) => !x.at || Date.parse(x.at) <= t + CLOCK_MARGIN_MS).pop();
-    return sit ? `${s.status} · ${sit.name}` : s.status;
-  };
+  const known = (s: CourierStep) => s.situations.filter((x) => !x.at || Date.parse(x.at) <= by);
+  // the last reason ZR gave on the parcel by then, whatever step it was given under
+  const given = before
+    .flatMap((s) => known(s).map((x) => ({ name: x.name, at: Date.parse(x.at ?? s.at) })))
+    .sort((a, b) => a.at - b.at)
+    .pop()?.name ?? null;
+  const say = (s: CourierStep, sit: string | null | undefined) => (sit ? `${s.status} · ${sit}` : s.status);
+  // what ZR shows on the parcel first (its state with the last reason it gave), then the step's own reason
+  const options = (s: CourierStep) => [...new Set([say(s, given), say(s, known(s).pop()?.name)])];
+  const fits = (s: CourierStep) => (to ? options(s).find((w) => leadsTo(w, s.key) === to) : undefined);
   const last = before[before.length - 1];
-  if (!to || leadsTo(wordsOf(last), last.key) === to) return wordsOf(last);
-  const earlier = [...before].reverse().find((s) => Date.parse(s.at) >= t - READ_MARGIN_MS && leadsTo(wordsOf(s), s.key) === to);
-  return wordsOf(earlier ?? last);
+  const hit = fits(last) ?? [...before].reverse().filter((s) => s !== last && Date.parse(s.at) >= t - READ_MARGIN_MS).map(fits).find(Boolean);
+  return hit ?? say(last, given);
 }
 
 /** The history lines the sync wrote before 24 Nov 2026 said only « Statut ZR »: each gets the company's own words of
@@ -607,16 +620,19 @@ export async function fillOldCourierNotes(ctx: Ctx, list: CompanyRow[], max = 30
   if (isDemo(ctx) || ctx.shop?.demo || (await ctx.db.query('SELECT 1 FROM settings WHERE key = $1', [OLD_NOTES_DONE])).length) return out;
   for (const c of list.filter((x) => ADAPTERS[x.kind]?.steps)) {
     const old = OLD_COURIER_NOTE(c.name);
+    // « Statut ZR », or filled by the first version (before the reason kept from an earlier step was read)
+    const todo = `e.kind = 'follow_status' AND (e.note = $2 OR (e.at < '${WORDS_LIVE_SINCE}'::timestamptz AND e.data->>'courier' = 'true' AND e.data->>'by' IS NOT NULL
+      AND coalesce((e.data->>'noteFill')::int, 1) < ${FILL_VERSION}))`;
     const orders = await ctx.db.query(
       `SELECT e.order_id, max(o.tracking) AS tracking, max(o.ext_id) AS ext_id, max(coalesce((e.data->>'noteTries')::int, 0)) AS tries
        FROM order_events e JOIN orders o ON o.id = e.order_id
-       WHERE o.company_id = $1 AND o.tracking IS NOT NULL AND e.kind = 'follow_status' AND e.note = $2
+       WHERE o.company_id = $1 AND o.tracking IS NOT NULL AND ${todo}
        GROUP BY e.order_id ORDER BY 4, e.order_id DESC LIMIT $3`,
       [c.id, old, max],
     );
     if (!orders.length) continue;
     out.left = true;
-    const lines = await ctx.db.query(`SELECT id, order_id, at, to_value FROM order_events WHERE order_id = ANY($1) AND kind = 'follow_status' AND note = $2 ORDER BY at`, [
+    const lines = await ctx.db.query(`SELECT e.id, e.order_id, e.at, e.to_value FROM order_events e WHERE e.order_id = ANY($1) AND ${todo} ORDER BY e.at`, [
       orders.map((o: any) => num(o.order_id)),
       old,
     ]);
@@ -640,12 +656,11 @@ export async function fillOldCourierNotes(ctx: Ctx, list: CompanyRow[], max = 30
       for (const l of mine) {
         const words = courierWordsAt(steps, new Date(l.at).getTime(), l.to_value ?? null, leadsTo);
         // marked as the company's (no longer « Statut … »: « ↶ Annuler » and the history still know it is not a person's)
-        await ctx.db.query(`UPDATE order_events SET note = $2, data = coalesce(data, '{}'::jsonb) || jsonb_build_object('courier', true, 'by', $4::text) WHERE id = $1 AND note = $3`, [
-          num(l.id),
-          courierNote(c.name, words ?? COURIER_NOT_FOUND),
-          old,
-          c.name,
-        ]);
+        await ctx.db.query(
+          `UPDATE order_events SET note = $2, data = coalesce(data, '{}'::jsonb) || jsonb_build_object('courier', true, 'by', $4::text, 'noteFill', ${FILL_VERSION})
+           WHERE id = $1 AND (note = $3 OR coalesce((data->>'noteFill')::int, 1) < ${FILL_VERSION})`,
+          [num(l.id), courierNote(c.name, words ?? COURIER_NOT_FOUND), old, c.name],
+        );
         if (words) out.filled++;
         else out.notFound++;
       }
