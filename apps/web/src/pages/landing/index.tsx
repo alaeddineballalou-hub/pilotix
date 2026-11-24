@@ -1,7 +1,7 @@
 // Landing pages: one public page per product (its address, colour, pictures, text), the orders customers abandoned
 // (added to Commandes by themselves), the orders the fake-order check held back, and the settings (Meta pixel,
 // automations). #/landing/pages/new/<product> opens the editor on a product; #/landing/voir/<slug> shows a page as the
-// customer sees it.
+// customer sees it; #/landing/site is the boutique's own site (Website.tsx).
 import { LandingPreview } from './Preview';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,11 +24,12 @@ import { Groups } from './Groups';
 import { demoSubmit, useLandingFrame } from './frame';
 import { Protection } from './Protection';
 import { Settings } from './Settings';
+import { Website } from './Website';
 import './landing.css';
 
-const TABS = ['pages', 'groupes', 'protection', 'evenements', 'abandons', 'bloquees', 'reglages'] as const;
+const TABS = ['pages', 'groupes', 'site', 'protection', 'evenements', 'abandons', 'bloquees', 'reglages'] as const;
 type Tab = (typeof TABS)[number];
-const ICON: Record<Tab, string> = { pages: 'globe', groupes: 'grid', protection: 'shield', evenements: 'send', abandons: 'cart', bloquees: 'ban', reglages: 'settings' };
+const ICON: Record<Tab, string> = { pages: 'globe', groupes: 'grid', site: 'store', protection: 'shield', evenements: 'send', abandons: 'cart', bloquees: 'ban', reglages: 'settings' };
 /** what agents (confirmation) see: the orders to handle and the attacks, not the pages */
 const AGENT_TABS: Tab[] = ['protection', 'abandons', 'bloquees'];
 
@@ -54,6 +55,8 @@ export function Landing({ sub, rest }: PageProps) {
   if (sub === 'voir' && rest?.[0]) return <Viewer key={rest.join('/')} slug={decodeURIComponent(rest[0])} group={rest[1] ? decodeURIComponent(rest[1]) : undefined} />;
   const arg = rest?.[0];
   if (tab === 'groupes' && arg) return <Groups edit={arg} />;
+  // Site web: its editor over the whole screen, and its designs
+  if (tab === 'site' && (arg === 'edit' || arg === 'design')) return <Website key={arg} mode={arg} />;
   if (tab === 'pages' && arg) return <Editor id={arg === 'new' ? null : Number(arg)} productId={arg === 'new' && rest?.[1] ? Number(rest[1]) : undefined} />;
   const tabs = allowed.map((k) => ({
     key: k,
@@ -61,13 +64,14 @@ export function Landing({ sub, rest }: PageProps) {
     icon: ICON[k],
     href: `#/landing/${k}`,
     count: k === 'bloquees' ? counts.data?.blocked : k === 'abandons' ? counts.data?.abandoned : k === 'pages' ? counts.data?.noPage : undefined,
-    alert: k !== 'reglages' && k !== 'protection' && k !== 'groupes' && k !== 'evenements',
+    alert: k !== 'reglages' && k !== 'protection' && k !== 'groupes' && k !== 'evenements' && k !== 'site',
   }));
   return (
     <div className="pd lp">
       <SectionHeader icon="globe" title={t('landing.title')} help={t('landing.help')} about={t(`landing.about.${tab}`)} tabs={tabs} current={tab} aside={<AlertSwitch />} />
       {tab === 'pages' && <Pages />}
       {tab === 'groupes' && <Groups />}
+      {tab === 'site' && <Website mode="home" />}
       {tab === 'protection' && <Protection />}
       {tab === 'evenements' && <Events page={arg} />}
       {tab === 'abandons' && <Abandoned />}

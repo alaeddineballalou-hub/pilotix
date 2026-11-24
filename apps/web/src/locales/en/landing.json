@@ -8,7 +8,8 @@
     "reglages": "Meta pixel and Conversions API, abandoned orders, automations.",
     "protection": "What the fake-order protection did: orders passed, to check, blocked, and the attacks (one device sending many numbers, numbers in a row).",
     "groupes": "One page with several products: the customer picks one and lands on that product’s landing page.",
-    "evenements": "What the server sent to Meta and TikTok, page by page: purchases, forms, started orders, fake orders."
+    "evenements": "What the server sent to Meta and TikTok, page by page: purchases, forms, started orders, fake orders.",
+    "site": "Your shop’s website: a home page with your products, made on the phone. Each product opens its landing page."
   },
   "tabs": {
     "pages": "Pages",
@@ -17,7 +18,8 @@
     "abandons": "Abandoned",
     "reglages": "Settings",
     "groupes": "Groups",
-    "evenements": "Events"
+    "evenements": "Events",
+    "site": "Website"
   },
   "copied": "Address copied",
   "list": {

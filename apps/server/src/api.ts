@@ -879,6 +879,19 @@ class ApiController {
     // every public file of the pages (photos, videos, the catalogue's pictures, Dellal's photos): Meta downloads them
     if (page === 'robots.txt') return res.status(200).header('Content-Type', 'text/plain; charset=utf-8').send('User-agent: *\nAllow: /\nAllow: /api/lp/\nAllow: /api/s/*/lp/\nDisallow: /api/\n');
     const shop = intake(ref);
+    if (!page) {
+      // the boutique's website (Landing pages › Website) once it is published; else the simple list of its pages below.
+      // ?lang=fr / ?lang=en: the same page in another of the site's languages
+      const api = `${site}/api${ref.shop.primary ? '' : `/s/${ref.shop.slug}`}`;
+      const lang = /[?&]lang=(ar|fr|en)(?:&|$)/.exec(String(req.url ?? ''))?.[1];
+      const w: any = await this.core
+        .call(shop, 'site.html', await this.core.systemSession(shop), {
+          imgBase: `${api}/lp/img/`, base: '/', url: `${site}/${lang ? `?lang=${lang}` : ''}`, ...(lang ? { lang } : {}),
+          langHref: { ar: `${site}/?lang=ar`, fr: `${site}/?lang=fr`, en: `${site}/?lang=en` },
+        })
+        .catch(() => null);
+      if (w?.html) return sendText(req, res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'public, max-age=60'), w.html);
+    }
     if (!page || page === 'llms.txt') {
       const r: any = await this.core.call(shop, 'landing.llms', await this.core.systemSession(shop), { site, pagesBase: `${site}/` });
       if (page === 'llms.txt') return sendText(req, res.status(200).header('Content-Type', 'text/plain; charset=utf-8').header('Cache-Control', 'public, max-age=3600'), r.text);

@@ -49,6 +49,7 @@ import { clientScoreProcs } from './modules/clientscore';
 import { deliveryProcs } from './modules/delivery';
 import { dellalProcs } from './modules/dellal';
 import { landingProcs } from './modules/landing';
+import { siteProcs } from './modules/site';
 import { landingListsProcs } from './modules/landinglists';
 import { pageLinksProcs } from './modules/pagelinks';
 import { landingTitleProcs } from './modules/landingtitle';
@@ -162,6 +163,7 @@ export const REGISTRY = {
   ...socialProcs,
   ...marketersProcs,
   ...landingProcs,
+  ...siteProcs,
   ...landingListsProcs,
   ...pageLinksProcs,
   ...landingTitleProcs,

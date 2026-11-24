@@ -161,6 +161,8 @@ export const PROC_FEATURES: readonly (readonly [prefix: string, feature: string]
   ['ads.', 'marketing/publicite'],
   ['mk.', 'marketing/marketer'],
   ['landing.', 'landing'],
+  // the shop's website (Landing pages › Website) comes with the landing pages
+  ['site.', 'landing'],
   ['channels.sheet.', 'management/canaux'],
   ['archive.', 'management/archive'],
 ];

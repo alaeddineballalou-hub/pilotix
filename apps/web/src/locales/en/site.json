@@ -1,0 +1,212 @@
+{
+  "preview": "Site preview",
+  "cancel": "Cancel",
+  "lang": {
+    "ar": "العربية",
+    "fr": "Français",
+    "en": "English"
+  },
+  "langShort": {
+    "ar": "عربي",
+    "fr": "FR",
+    "en": "EN"
+  },
+  "niche": {
+    "baby": "Baby"
+  },
+  "home": {
+    "title": "Your shop’s website",
+    "live": "Online",
+    "waiting": "Changes to publish",
+    "notLive": "Not online yet",
+    "liveHelp": "Your customers see this site since {{when}}. Each product opens its landing page.",
+    "waitingHelp": "You changed the site, but customers still see the old one. Open it and press « Publish ».",
+    "notLiveHelp": "Nobody sees this site yet. Change what you want, then press « Publish ».",
+    "address": "Address",
+    "design": "Design",
+    "langs": "Languages",
+    "products": "Products",
+    "saved": "Saved",
+    "edit": "Edit the site",
+    "noAddress": "Not yet"
+  },
+  "pick": {
+    "title": "Pick a design for your site",
+    "titleAgain": "Change the design",
+    "help": "Pick the languages, then a design. You can change everything later.",
+    "helpAgain": "The new design replaces the site’s texts and order. Nothing changes for customers before « Publish ».",
+    "langs": "Site languages",
+    "main": "main",
+    "niche": "Niche",
+    "more": "More niches are coming soon.",
+    "use": "Use this design",
+    "replaceAsk": "What you changed on the site will be lost.",
+    "replaceYes": "Yes, replace",
+    "back": "Back"
+  },
+  "bar": {
+    "back": "Back",
+    "lang": "Site language",
+    "screen": "Screen size",
+    "phone": "Phone",
+    "computer": "Computer",
+    "undo": "Undo the last change",
+    "open": "Open the site",
+    "publish": "Publish",
+    "publishing": "Publishing…",
+    "isLive": "Online",
+    "published": "The site is online",
+    "publishedAt": "The site is online: {{url}}",
+    "saving": "Saving…",
+    "error": "Not saved",
+    "notLive": "Not online yet",
+    "waiting": "Changes to publish",
+    "live": "Online"
+  },
+  "rail": {
+    "label": "Site tools",
+    "add": "Add",
+    "sections": "Sections",
+    "theme": "Style",
+    "products": "Products",
+    "settings": "Settings"
+  },
+  "sections": {
+    "title": "Page sections",
+    "help": "Tap a section here, or on the page, to change it."
+  },
+  "add": {
+    "title": "Add a section",
+    "help": "It comes after the chosen section.",
+    "max": "{{n}} sections at most"
+  },
+  "block": {
+    "header": "Top bar",
+    "hero": "Banner",
+    "trust": "Trust points",
+    "best": "Best sellers",
+    "products": "All products",
+    "why": "Why us",
+    "faq": "Questions",
+    "whatsapp": "WhatsApp button",
+    "footer": "Footer"
+  },
+  "about": {
+    "header": "The logo, the shop’s name, the languages and the phone.",
+    "hero": "The big title at the top, with a photo and a button.",
+    "trust": "Short lines that reassure: cash on delivery, delivery…",
+    "best": "The products delivered the most in the last 90 days, by themselves.",
+    "products": "All your online products.",
+    "why": "The reasons to buy from you.",
+    "faq": "Customers’ questions, with your answers.",
+    "whatsapp": "A button to message you on WhatsApp.",
+    "footer": "The bottom of the page: your short note and contacts."
+  },
+  "theme": {
+    "title": "Style",
+    "colors": "Colors",
+    "font": "Writing",
+    "corners": "Corners",
+    "design": "Design",
+    "change": "Change the design",
+    "changeHint": "Another design replaces the texts and the order.",
+    "palette": {
+      "candy": "Candy",
+      "sky": "Sky",
+      "mint": "Mint",
+      "sand": "Sand",
+      "night": "Night"
+    },
+    "fonts": {
+      "system": "Plain",
+      "round": "Round",
+      "clean": "Clean",
+      "simple": "Clear"
+    },
+    "corner": {
+      "square": "Square",
+      "soft": "Soft",
+      "round": "Round"
+    }
+  },
+  "products": {
+    "title": "Site products",
+    "help": "Each product is one of your online landing pages. Its card opens its page, with its order form.",
+    "best": "Top {{n}}",
+    "add": "Add a product (a landing page)"
+  },
+  "set": {
+    "title": "Site settings",
+    "state": "The site now",
+    "since": "Published {{when}}",
+    "address": "Site address",
+    "addressNone": "No address yet: the site opens on your shop’s domain as soon as it is ready.",
+    "langs": "Languages",
+    "main": "Main",
+    "makeMain": "Put first",
+    "langsHint": "The main language opens first. Customers change the language at the top of the site.",
+    "missing": "Texts to translate",
+    "missingNone": "Everything is written in each language.",
+    "online": "Take the site down",
+    "offline": "Take the site off the internet",
+    "offlineAsk": "Customers will not see the site any more. Your landing pages stay online.",
+    "offlined": "The site is not online any more"
+  },
+  "hints": {
+    "noProducts": "No product yet: put a landing page online.",
+    "noWhatsapp": "Add your WhatsApp number in Landing pages › Settings.",
+    "hidden": "Hidden: customers don’t see it"
+  },
+  "ed": {
+    "tip": "Tap a part of the page to change it.",
+    "close": "Close",
+    "back": "All sections",
+    "up": "Move up",
+    "down": "Move down",
+    "duplicate": "Copy",
+    "inLang": "You are writing in {{lang}}",
+    "missingIn": "Some texts are missing in this language",
+    "empty": "empty in {{lang}}",
+    "phone": "Show the phone",
+    "noPhone": "No number (Settings › Shop)",
+    "layout": "Layout",
+    "side": "Photo beside",
+    "center": "Centered",
+    "title": "Title",
+    "text": "Text",
+    "button": "Button",
+    "opens": "The button opens",
+    "toProducts": "The products",
+    "toWhatsapp": "WhatsApp",
+    "picture": "Photo",
+    "auto": "The best seller (by itself)",
+    "icon": "Picture",
+    "addPoint": "Add a point",
+    "count": "How many products",
+    "bestNote": "They change by themselves with your delivered orders.",
+    "fewer": "Fewer",
+    "more": "More",
+    "oldPrice": "Show the old price",
+    "cardButton": "Cards’ button",
+    "productsNote": "Online products: {{n}}",
+    "point": "Point",
+    "addQuestion": "Add a question",
+    "question": "Question",
+    "answer": "Answer",
+    "waNote": "It opens WhatsApp to {{n}}.",
+    "show": "Show",
+    "hide": "Hide",
+    "remove": "Delete",
+    "sure": "Yes, delete",
+    "done": "Done",
+    "removeAsk": "Delete this section?"
+  },
+  "icons": {
+    "cash": "Money",
+    "truck": "Delivery",
+    "chat": "Message",
+    "check": "Checked",
+    "swap": "Exchange",
+    "clock": "Fast"
+  }
+}

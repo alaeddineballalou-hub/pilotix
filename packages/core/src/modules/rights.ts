@@ -400,6 +400,11 @@ export const PROC_RIGHTS: Record<string, Need> = {
   'landing.groupRemove': 'act:landing.edit',
   'landing.pixelSave': 'act:landing.edit',
   'landing.pixelRemove': 'act:landing.edit',
+  // Landing pages › Site web: the shop's own site
+  'site.start': 'act:landing.edit',
+  'site.save': 'act:landing.edit',
+  'site.publish': 'act:landing.edit',
+  'site.unpublish': 'act:landing.edit',
   'landing.markDevice': 'act:landing.protect',
   'landing.restore': 'act:landing.protect',
   'landing.dismiss': 'act:landing.protect',
@@ -449,6 +454,8 @@ const PAGE_PROCS: readonly (readonly [prefix: string, right: string | readonly s
   ['promo.stats', 'page:codepromo'],
   // a landing page made from Marketing › Catalogue
   ['landing.quickCreate', ['page:landing', 'tab:marketing/catalogue']],
+  // Landing pages › Site web
+  ['site.', 'page:landing'],
   [
     'landing.',
     'page:landing',

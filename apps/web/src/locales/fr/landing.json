@@ -8,7 +8,8 @@
     "reglages": "Pixel Meta et Conversions API, commandes abandonnées, automatisations.",
     "protection": "Ce que la protection anti-fausses commandes a fait : commandes passées, à vérifier, bloquées, et les attaques (un appareil qui envoie beaucoup de numéros, des numéros à la suite).",
     "groupes": "Une page avec plusieurs produits : le client choisit, et arrive sur la landing page du produit.",
-    "evenements": "Ce que le serveur a envoyé à Meta et à TikTok, page par page : achats, formulaires, commandes commencées, fausses commandes."
+    "evenements": "Ce que le serveur a envoyé à Meta et à TikTok, page par page : achats, formulaires, commandes commencées, fausses commandes.",
+    "site": "Le site de votre boutique : une page d’accueil avec vos produits, faite sur le téléphone. Chaque produit ouvre sa landing page."
   },
   "tabs": {
     "pages": "Pages",
@@ -17,7 +18,8 @@
     "abandons": "Abandonnées",
     "reglages": "Réglages",
     "groupes": "Groupes",
-    "evenements": "Événements"
+    "evenements": "Événements",
+    "site": "Site web"
   },
   "copied": "Adresse copiée",
   "list": {

@@ -1,0 +1,212 @@
+{
+  "preview": "Aperçu du site",
+  "cancel": "Annuler",
+  "lang": {
+    "ar": "العربية",
+    "fr": "Français",
+    "en": "English"
+  },
+  "langShort": {
+    "ar": "عربي",
+    "fr": "FR",
+    "en": "EN"
+  },
+  "niche": {
+    "baby": "Bébé"
+  },
+  "home": {
+    "title": "Le site de votre boutique",
+    "live": "En ligne",
+    "waiting": "Changements à publier",
+    "notLive": "Pas encore en ligne",
+    "liveHelp": "Vos clients voient ce site depuis {{when}}. Chaque produit ouvre sa landing page.",
+    "waitingHelp": "Vous avez changé le site, mais vos clients voient encore l’ancien. Ouvrez-le et appuyez sur « Publier ».",
+    "notLiveHelp": "Personne ne voit ce site pour l’instant. Changez ce que vous voulez, puis appuyez sur « Publier ».",
+    "address": "Adresse",
+    "design": "Design",
+    "langs": "Langues",
+    "products": "Produits",
+    "saved": "Enregistré",
+    "edit": "Modifier le site",
+    "noAddress": "Pas encore"
+  },
+  "pick": {
+    "title": "Choisissez un design pour votre site",
+    "titleAgain": "Changer de design",
+    "help": "Choisissez les langues, puis un design. Vous pourrez tout changer ensuite.",
+    "helpAgain": "Le nouveau design remplace les textes et l’ordre du site. Rien ne change pour les clients avant « Publier ».",
+    "langs": "Langues du site",
+    "main": "principale",
+    "niche": "Niche",
+    "more": "D’autres niches arrivent bientôt.",
+    "use": "Prendre ce design",
+    "replaceAsk": "Ce que vous avez changé sur le site sera perdu.",
+    "replaceYes": "Oui, remplacer",
+    "back": "Retour"
+  },
+  "bar": {
+    "back": "Retour",
+    "lang": "Langue du site",
+    "screen": "Taille d’écran",
+    "phone": "Téléphone",
+    "computer": "Ordinateur",
+    "undo": "Annuler le dernier changement",
+    "open": "Ouvrir le site",
+    "publish": "Publier",
+    "publishing": "Publication…",
+    "isLive": "En ligne",
+    "published": "Le site est en ligne",
+    "publishedAt": "Le site est en ligne : {{url}}",
+    "saving": "Enregistrement…",
+    "error": "Pas enregistré",
+    "notLive": "Pas encore en ligne",
+    "waiting": "Changements à publier",
+    "live": "En ligne"
+  },
+  "rail": {
+    "label": "Outils du site",
+    "add": "Ajouter",
+    "sections": "Sections",
+    "theme": "Style",
+    "products": "Produits",
+    "settings": "Réglages"
+  },
+  "sections": {
+    "title": "Sections de la page",
+    "help": "Touchez une section ici, ou sur la page, pour la changer."
+  },
+  "add": {
+    "title": "Ajouter une section",
+    "help": "Elle arrive après la section choisie.",
+    "max": "{{n}} sections au plus"
+  },
+  "block": {
+    "header": "Haut de page",
+    "hero": "Bannière",
+    "trust": "Points de confiance",
+    "best": "Meilleures ventes",
+    "products": "Tous les produits",
+    "why": "Pourquoi nous",
+    "faq": "Questions",
+    "whatsapp": "Bouton WhatsApp",
+    "footer": "Bas de page"
+  },
+  "about": {
+    "header": "Le logo, le nom de la boutique, les langues et le téléphone.",
+    "hero": "Le grand titre en haut, avec une photo et un bouton.",
+    "trust": "De courtes phrases qui rassurent : paiement à la livraison, livraison…",
+    "best": "Les produits les plus livrés ces 90 derniers jours, d’eux-mêmes.",
+    "products": "Tous vos produits en ligne.",
+    "why": "Les raisons d’acheter chez vous.",
+    "faq": "Les questions des clients, avec vos réponses.",
+    "whatsapp": "Un bouton pour vous écrire sur WhatsApp.",
+    "footer": "Le bas de la page : votre petit mot et vos contacts."
+  },
+  "theme": {
+    "title": "Style",
+    "colors": "Couleurs",
+    "font": "Écriture",
+    "corners": "Coins",
+    "design": "Design",
+    "change": "Changer de design",
+    "changeHint": "Un autre design remplace les textes et l’ordre.",
+    "palette": {
+      "candy": "Bonbon",
+      "sky": "Ciel",
+      "mint": "Menthe",
+      "sand": "Sable",
+      "night": "Nuit"
+    },
+    "fonts": {
+      "system": "Simple",
+      "round": "Ronde",
+      "clean": "Nette",
+      "simple": "Claire"
+    },
+    "corner": {
+      "square": "Droits",
+      "soft": "Doux",
+      "round": "Ronds"
+    }
+  },
+  "products": {
+    "title": "Produits du site",
+    "help": "Chaque produit est une de vos landing pages en ligne. Sa carte ouvre sa page, avec son formulaire de commande.",
+    "best": "Top {{n}}",
+    "add": "Ajouter un produit (une landing page)"
+  },
+  "set": {
+    "title": "Réglages du site",
+    "state": "Le site maintenant",
+    "since": "Publié {{when}}",
+    "address": "Adresse du site",
+    "addressNone": "Pas encore d’adresse : le site s’ouvre sur le domaine de votre boutique dès qu’il est prêt.",
+    "langs": "Langues",
+    "main": "Principale",
+    "makeMain": "Mettre en premier",
+    "langsHint": "La langue principale s’ouvre en premier. Le client change de langue en haut du site.",
+    "missing": "Textes à traduire",
+    "missingNone": "Tout est écrit dans chaque langue.",
+    "online": "Retirer le site",
+    "offline": "Retirer le site d’internet",
+    "offlineAsk": "Les clients ne verront plus le site. Vos landing pages restent en ligne.",
+    "offlined": "Le site n’est plus en ligne"
+  },
+  "hints": {
+    "noProducts": "Pas encore de produit : mettez une landing page en ligne.",
+    "noWhatsapp": "Ajoutez votre numéro WhatsApp dans Landing pages › Réglages.",
+    "hidden": "Cachée : les clients ne la voient pas"
+  },
+  "ed": {
+    "tip": "Touchez une partie de la page pour la changer.",
+    "close": "Fermer",
+    "back": "Toutes les sections",
+    "up": "Monter",
+    "down": "Descendre",
+    "duplicate": "Copier",
+    "inLang": "Vous écrivez en {{lang}}",
+    "missingIn": "Des textes manquent dans cette langue",
+    "empty": "vide en {{lang}}",
+    "phone": "Montrer le téléphone",
+    "noPhone": "Pas de numéro (Réglages › Boutique)",
+    "layout": "Disposition",
+    "side": "Photo à côté",
+    "center": "Au centre",
+    "title": "Titre",
+    "text": "Texte",
+    "button": "Bouton",
+    "opens": "Le bouton ouvre",
+    "toProducts": "Les produits",
+    "toWhatsapp": "WhatsApp",
+    "picture": "Photo",
+    "auto": "La meilleure vente (d’elle-même)",
+    "icon": "Image",
+    "addPoint": "Ajouter un point",
+    "count": "Combien de produits",
+    "bestNote": "Ils changent d’eux-mêmes avec vos commandes livrées.",
+    "fewer": "Moins",
+    "more": "Plus",
+    "oldPrice": "Montrer l’ancien prix",
+    "cardButton": "Bouton des cartes",
+    "productsNote": "Produits en ligne : {{n}}",
+    "point": "Point",
+    "addQuestion": "Ajouter une question",
+    "question": "Question",
+    "answer": "Réponse",
+    "waNote": "Il ouvre WhatsApp vers le {{n}}.",
+    "show": "Montrer",
+    "hide": "Cacher",
+    "remove": "Supprimer",
+    "sure": "Oui, supprimer",
+    "done": "Terminé",
+    "removeAsk": "Supprimer cette section ?"
+  },
+  "icons": {
+    "cash": "Argent",
+    "truck": "Livraison",
+    "chat": "Message",
+    "check": "Vérifié",
+    "swap": "Échange",
+    "clock": "Rapide"
+  }
+}
