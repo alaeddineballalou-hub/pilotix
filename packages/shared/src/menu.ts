@@ -12,7 +12,8 @@ import type { Role } from './index';
 export const MENU_TABS = {
   dashboard: ['overview', 'confirmation', 'depot', 'suivi', 'livreurs', 'sav'],
   commandes: ['tout', 'livrees', 'annulees'],
-  confirmation: ['nouvelles', 'attente', 'confirmees', 'terminees'],
+  // « Réglages » (owner's choice, 24 Nov 2026: each page keeps its own settings, design 1 « Onglet »): the last tab, apart
+  confirmation: ['nouvelles', 'attente', 'confirmees', 'terminees', 'reglages'],
   depot: ['preparer', 'prepares', 'dispatchees', 'retours'],
   suivi: ['enlivraison', 'alertes', 'traites', 'bloques', 'livres', 'annules', 'reclamation', 'swap'],
   sav: ['tickets', 'nouveau', 'attente', 'depot', 'livraison', 'livres', 'annules', 'satisfaction', 'stats'],
@@ -139,7 +140,8 @@ export const STORE_MENU: MenuItem[] = [
       { id: 'annulees', href: '#/commandes/annulees', count: 'cancelled', tone: '', icon: 'xcircle', tabOf: 'commandes' },
     ],
   },
-  { id: 'confirmation', icon: 'phone', roles: ['confirmation'], subs: MENU_TABS.confirmation, flow: true, hidden: true, tabNames: { prefix: 'confirmation.sub' } },
+  // its « Réglages » tab: the owners and the agent managers by default (each card inside keeps who may change it)
+  { id: 'confirmation', icon: 'phone', roles: ['confirmation'], subs: MENU_TABS.confirmation, flow: true, hidden: true, tabRoles: { reglages: BOARDS }, tabNames: { prefix: 'confirmation.sub' } },
   { id: 'depot', icon: 'package', roles: DEPOT, subs: MENU_TABS.depot, flow: true, hidden: true, tabNames: { prefix: 'depot.stage' } },
   { id: 'suivi', icon: 'route', roles: ['suivi', 'confirmation'], subs: MENU_TABS.suivi, hidden: true, tabNames: { prefix: 'suivi.tabs' }, tabAlias: { alertes_new: 'alertes', alertes_encours: 'alertes' } },
   { id: 'scanner', icon: 'scanbar', roles: DEPOT },

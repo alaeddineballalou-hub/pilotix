@@ -376,8 +376,13 @@ export function Tabs<T extends string>({ value, onChange, items }: { value: T; o
 }
 
 /** The stage bar under the top bar ("Nouvelles › En cours › Confirmées"). Sub-pages not in the shop's plan are left out. */
-export function StageBar({ items: all, current: shown, flow = true }: { items: { key: string; label: string; href: string; count?: number }[]; current: string; flow?: boolean }) {
+/**
+ * A page's tabs. `end`: the page's own settings (« Réglages », a gear), set apart at the end of the bar and kept in view
+ * when the bar scrolls (a phone).
+ */
+export function StageBar({ items: all, current: shown, flow = true, end }: { items: { key: string; label: string; href: string; count?: number }[]; current: string; flow?: boolean; end?: { key: string; label: string; href: string } | null }) {
   const items = all.filter((it) => hrefIsOn(it.href));
+  const cfg = end && hrefIsOn(end.href) ? end : null;
   const bar = useRef<HTMLElement>(null);
   // the clicked stage lights up straight away, even while its page is still being built
   const [picked, setPicked] = useState<string | null>(null);
@@ -406,6 +411,12 @@ export function StageBar({ items: all, current: shown, flow = true }: { items: {
           </a>
         </span>
       ))}
+      {cfg && (
+        <a className={`bjm-p bjm-cfg ${current === cfg.key ? 'on' : ''}`} href={cfg.href} aria-current={current === cfg.key ? 'page' : undefined} onClick={() => cfg.key !== shown && setPicked(cfg.key)}>
+          <Icon name="settings" />
+          <span className="bjm-l">{cfg.label}</span>
+        </a>
+      )}
     </nav>
   );
 }

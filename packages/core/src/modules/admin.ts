@@ -582,20 +582,32 @@ export const adminProcs = {
       name: z.string().trim().min(1).max(80),
       fromWilayaId: z.number().int().min(1).max(69),
       defaultCompanyId: id.nullable(),
-      whatsappTemplate: z.string().trim().max(500),
-      cancelAfterNoAnswer: z.number().int().min(0).max(30),
+      // Confirmation's two (Confirmation › Réglages since 24 Nov 2026): kept as they are when left out
+      whatsappTemplate: z.string().trim().max(500).optional(),
+      cancelAfterNoAnswer: z.number().int().min(0).max(30).optional(),
       savPhone: z.string().trim().max(40).optional(),
     }),
     async (ctx, i) => {
       if (i.defaultCompanyId && !(await ctx.db.query('SELECT 1 FROM delivery_companies WHERE id = $1', [i.defaultCompanyId])).length) throw notFound('Société introuvable');
-      const savPhone = i.savPhone ?? (await getSetting(ctx.db, 'shop')).savPhone;
-      await setSetting(ctx.db, 'shop', { name: i.name, fromWilayaId: i.fromWilayaId, defaultCompanyId: i.defaultCompanyId, whatsappTemplate: i.whatsappTemplate || DEFAULT_SETTINGS.shop.whatsappTemplate, savPhone }, me(ctx));
-      const calls = await getSetting(ctx.db, 'calls');
-      await setSetting(ctx.db, 'calls', { ...DEFAULT_CALL_SETTINGS, ...calls, cancelAfterNoAnswer: i.cancelAfterNoAnswer }, me(ctx));
+      const cur = await getSetting(ctx.db, 'shop');
+      const savPhone = i.savPhone ?? cur.savPhone;
+      const whatsappTemplate = i.whatsappTemplate === undefined ? cur.whatsappTemplate : i.whatsappTemplate || DEFAULT_SETTINGS.shop.whatsappTemplate;
+      await setSetting(ctx.db, 'shop', { name: i.name, fromWilayaId: i.fromWilayaId, defaultCompanyId: i.defaultCompanyId, whatsappTemplate, savPhone }, me(ctx));
+      if (i.cancelAfterNoAnswer !== undefined) {
+        const calls = await getSetting(ctx.db, 'calls');
+        await setSetting(ctx.db, 'calls', { ...DEFAULT_CALL_SETTINGS, ...calls, cancelAfterNoAnswer: i.cancelAfterNoAnswer }, me(ctx));
+      }
       ctx.emit({ type: 'settings' });
       return { ok: true };
     },
   ),
+  // Confirmation › Réglages › Messages: the WhatsApp text the agents send from an order (« Bonjour {nom}… »)
+  'admin.shop.waTemplate': proc([], z.object({ whatsappTemplate: z.string().trim().max(500) }), async (ctx, i) => {
+    const cur = await getSetting(ctx.db, 'shop');
+    await setSetting(ctx.db, 'shop', { ...cur, whatsappTemplate: i.whatsappTemplate || DEFAULT_SETTINGS.shop.whatsappTemplate }, me(ctx));
+    ctx.emit({ type: 'settings' });
+    return { ok: true };
+  }),
   'admin.warehouses.list': proc([], z.object({}), async (ctx) => (await ctx.db.query('SELECT * FROM warehouses WHERE archived_at IS NULL ORDER BY is_default DESC, name')).map(toWarehouse)),
   'admin.warehouses.save': proc(
     [],

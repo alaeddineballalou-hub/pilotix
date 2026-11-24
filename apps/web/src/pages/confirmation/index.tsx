@@ -27,7 +27,7 @@ import { useIsPhone } from '../../lib/useMedia';
 import { PhoneCards, PhoneOrder, PickBar, PickToggle } from './PhoneList';
 import { currentLabel, StatusChoice, Sub, SUB_STATUSES, SUB_TONE, SUBS, telHref, toneOf, useCanGive, waHref } from './shared';
 import { ConfirmedStatsPage, StatsSection } from './Stats';
-import { BlockSwitch } from './BlockSwitch';
+import { ConfSettings } from './Settings';
 import { CopyCode } from '../../ui/CopyCode';
 import { ScoreChip } from '../../ui/clientScore';
 import { useAllMode } from '../../layout/AllBoutiques';
@@ -140,8 +140,9 @@ function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
   const counts = useRpc('confirmation.counts', {}, { refetchInterval: 60_000 });
   const manager = has('agent_manager', 'vendeur');
   const c = counts.data;
-  // the menu's tabs; « Terminées » only while on it (reached from the numbers)
-  const items = MENU_TABS.confirmation.filter((k) => (k !== 'terminees' || sub === 'terminees') && tabOn('confirmation', k)).map((k) => ({ key: k, label: t(menuTabName('confirmation', k)), href: `#/confirmation/${k}`, count: c?.[k] }));
+  // the menu's tabs; « Terminées » only while on it (reached from the numbers); « Réglages » apart at the end, with a gear
+  const items = MENU_TABS.confirmation.filter((k) => k !== 'reglages' && (k !== 'terminees' || sub === 'terminees') && tabOn('confirmation', k)).map((k) => ({ key: k, label: t(menuTabName('confirmation', k)), href: `#/confirmation/${k}`, count: c?.[k as Sub] }));
+  const cfg = tabOn('confirmation', 'reglages') ? { key: 'reglages', label: t(menuTabName('confirmation', 'reglages')), href: '#/confirmation/reglages' } : null;
   const focusId = rest?.[0] ? Number(rest[0]) : null;
   // phones: the queue comes first; the big statistics stay on tablets and computers
   const phone = useIsPhone();
@@ -150,11 +151,17 @@ function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
     setCviewState(v);
     store.set('conf-confirmees-view', v === 'stats' ? v : null);
   };
+  // « Réglages »: every setting of Confirmation (« Bloquer l'agent jusqu'à l'appel » is there now, in « Appels »)
+  if (rawSub === 'reglages' && cfg)
+    return (
+      <>
+        <StageBar items={items} current="reglages" end={cfg} />
+        <ConfSettings />
+      </>
+    );
   return (
     <>
-      <StageBar items={items} current={sub} />
-      {/* « Bloquer l'agent jusqu'à l'appel »: the managers switch it on or off (they alone see it) */}
-      {manager && <BlockSwitch />}
+      <StageBar items={items} current={sub} end={cfg} />
       {sub === 'confirmees' && manager ? (
         // managers: « Confirmées » is the list (as for the agents) or its statistics, the choice kept on this device
         <>

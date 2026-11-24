@@ -25,7 +25,7 @@ const DAYS = [7, 14, 21, 30, 45, 60, 90];
 /** « Maximum en main par livreur » (0: no limit) */
 const MAX_HANDS = [0, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100];
 
-export type AutoView = 'auto' | 'assign' | 'affectation';
+export type AutoView = 'auto' | 'assign' | 'affectation' | 'queue';
 export function Automations({ view = 'auto' }: { view?: AutoView }) {
   const q = useRpc('auto.state', {}, { refetchInterval: 60_000 });
   if (q.isLoading) return <Loading />;
@@ -201,6 +201,40 @@ function Board({ d, view }: { d: S; view: AutoView }) {
       <Links items={[['#/depot/preparer', t('notify.auto.dispatch.link')]]} />
     </Rule>
   );
+  // « File d'attente lente »: its own place is Confirmation › Réglages (view 'queue'), no longer the list of automations
+  const queueRow = (
+    <Rule
+      icon="timer"
+      name={name('queue')}
+      when={t('notify.auto.queue.when')}
+      then={t('notify.auto.queue.then')}
+      on={s.queue.on}
+      busy={save.isPending}
+      onToggle={(on) => {
+        const queue = { ...s.queue, on };
+        setS({ ...s, queue });
+        put({ queue }, { name: name('queue'), on });
+      }}
+      last={lastOf('queue')}
+    >
+      <Now tone={d.queueNow.open && d.queueNow.n ? 'warn' : undefined}>
+        {!d.queueNow.open ? t('notify.auto.queue.closed') : d.queueNow.n ? t('notify.auto.queue.now', { count: d.queueNow.n, h: s.queue.waitHours }) : t('notify.auto.queue.nowNone')}
+      </Now>
+      {s.queue.on && (
+        <div className="au-fields">
+          <Pick label={t('notify.auto.queue.wait')} value={s.queue.waitHours} options={WAIT} show={(v) => t('notify.auto.hoursN', { count: v })} onChange={(v) => { const queue = { ...s.queue, waitHours: v }; setS({ ...s, queue }); put({ queue }); }} />
+          <Pick label={t('notify.auto.queue.idle')} value={s.queue.idleMin} options={IDLE} show={(v) => t('notify.auto.minN', { count: v })} onChange={(v) => { const queue = { ...s.queue, idleMin: v }; setS({ ...s, queue }); put({ queue }); }} />
+          <People ids={s.queue.to} all={d.people} fallback={t('notify.auto.peopleManagers')} onChange={(to) => { const queue = { ...s.queue, to }; setS({ ...s, queue }); put({ queue }); }} />
+        </div>
+      )}
+    </Rule>
+  );
+  if (view === 'queue')
+    return (
+      <div className="au au-in">
+        <ul className="au-list">{queueRow}</ul>
+      </div>
+    );
   if (view === 'assign')
     return (
       <div className="au">
@@ -228,36 +262,12 @@ function Board({ d, view }: { d: S; view: AutoView }) {
         items={[
           ['#/notify/assign', t('notify.auto.toAssign')],
           ['#/notify/affectation', t('notify.auto.toAffectation')],
+          ['#/confirmation/reglages', t('notify.auto.toConfSettings')],
         ]}
       />
       <ThisPhone />
 
       <Group title={t('notify.auto.groups.orders')}>
-        <Rule
-          icon="timer"
-          name={name('queue')}
-          when={t('notify.auto.queue.when')}
-          then={t('notify.auto.queue.then')}
-          on={s.queue.on}
-          busy={save.isPending}
-          onToggle={(on) => {
-            const queue = { ...s.queue, on };
-            setS({ ...s, queue });
-            put({ queue }, { name: name('queue'), on });
-          }}
-          last={lastOf('queue')}
-        >
-          <Now tone={d.queueNow.open && d.queueNow.n ? 'warn' : undefined}>
-            {!d.queueNow.open ? t('notify.auto.queue.closed') : d.queueNow.n ? t('notify.auto.queue.now', { count: d.queueNow.n, h: s.queue.waitHours }) : t('notify.auto.queue.nowNone')}
-          </Now>
-          {s.queue.on && (
-            <div className="au-fields">
-              <Pick label={t('notify.auto.queue.wait')} value={s.queue.waitHours} options={WAIT} show={(v) => t('notify.auto.hoursN', { count: v })} onChange={(v) => { const queue = { ...s.queue, waitHours: v }; setS({ ...s, queue }); put({ queue }); }} />
-              <Pick label={t('notify.auto.queue.idle')} value={s.queue.idleMin} options={IDLE} show={(v) => t('notify.auto.minN', { count: v })} onChange={(v) => { const queue = { ...s.queue, idleMin: v }; setS({ ...s, queue }); put({ queue }); }} />
-              <People ids={s.queue.to} all={d.people} fallback={t('notify.auto.peopleManagers')} onChange={(to) => { const queue = { ...s.queue, to }; setS({ ...s, queue }); put({ queue }); }} />
-            </div>
-          )}
-        </Rule>
 
         <Rule
           icon="moon"

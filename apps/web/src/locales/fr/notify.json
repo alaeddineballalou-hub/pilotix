@@ -202,7 +202,8 @@
       "release_other": "{{count}} commandes sans stock envoyées au dépôt",
       "livreur_one": "{{count}} commande donnée aux livreurs : {{who}}",
       "livreur_other": "{{count}} commandes données aux livreurs : {{who}}"
-    }
+    },
+    "toConfSettings": "File d’attente lente : Confirmation › Réglages"
   },
   "tomorrow": "demain",
   "off": "Les messages de livraison sont arrêtés : aucun message n’est envoyé aux clients.",

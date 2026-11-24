@@ -202,7 +202,8 @@
       "release_other": "{{count}} orders without stock sent to the depot",
       "livreur_one": "{{count}} order given to drivers: {{who}}",
       "livreur_other": "{{count}} orders given to drivers: {{who}}"
-    }
+    },
+    "toConfSettings": "Slow queue: Confirmation › Settings"
   },
   "tomorrow": "tomorrow",
   "off": "Delivery messages are stopped: no message is sent to customers.",

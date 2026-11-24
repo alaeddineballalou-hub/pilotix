@@ -540,7 +540,9 @@
     "metaChange": "Change",
     "metaLinkedMany": "{{count}} ad accounts of “{{account}}”, added up in Publicité (Pilot AI › Accounts).",
     "metaOld": "An old key pasted here still works (ad account {{id}}). To have everything in one place, link your Facebook account again in Pilot AI › Accounts and tick your ad account.",
-    "metaOpen": "Open Accounts"
+    "metaOpen": "Open Accounts",
+    "movedConf": "Auto-cancel and the agents’ WhatsApp text are now in",
+    "movedConfLink": "Confirmation › Settings"
   },
   "confirmYes": "Yes",
   "cancel": "Cancel",
@@ -917,5 +919,6 @@
       "name": "Point of sale",
       "text": "Sell at your shop’s counter: products as photos, 80 mm ticket, today’s sales and till closing. Stock leaves the chosen depot, money goes into “Shop till”."
     }
-  }
+  },
+  "movedConf": "This page’s Confirmation part is now in"
 }

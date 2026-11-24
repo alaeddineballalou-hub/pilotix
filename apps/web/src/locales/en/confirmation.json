@@ -10,7 +10,8 @@
     "attente": "In progress",
     "confirmees": "Confirmed",
     "terminees": "Closed",
-    "livrees": "Delivered"
+    "livrees": "Delivered",
+    "reglages": "Settings"
   },
   "title": {
     "nouvelles": "New orders",
@@ -983,6 +984,52 @@
       "by": "Changed by {{name}}, {{when}}.",
       "savedOn": "Lock on: agents must call every new order.",
       "savedOff": "Lock off."
+    }
+  },
+  "cfg": {
+    "title": "Confirmation settings",
+    "who": "Only admins and the roles you choose see this tab (Users › Roles).",
+    "nothing": "Nothing to set here for your role.",
+    "qui": {
+      "t": "Who gets the orders",
+      "d": "Automatic sharing between the agents"
+    },
+    "appels": {
+      "t": "Calls",
+      "d": "First call, call-backs, auto-cancel, blocking",
+      "s": "First call in {{first}} min · cancels after {{n}} calls",
+      "s0": "First call in {{first}} min · no auto-cancel",
+      "block": "Blocked until the call"
+    },
+    "msg": {
+      "t": "Messages to the customer",
+      "d": "Before the parcel ships, and the agents’ WhatsApp text",
+      "s_one": "{{count}} message on",
+      "s_other": "{{count}} messages on",
+      "s0": "No messages",
+      "auto": "Messages sent automatically",
+      "autoHint": "By WhatsApp, or by SMS when the number has no WhatsApp.",
+      "when": {
+        "created": "As soon as the order arrives",
+        "no_answer": "When the customer does not answer",
+        "confirmed": "When the order is confirmed"
+      },
+      "texts": "Change the texts (Pilot Automations › Messages)",
+      "saved": "Text saved",
+      "on": "“{{name}}” on",
+      "off": "“{{name}}” off"
+    },
+    "lente": {
+      "t": "Slow queue alert",
+      "d": "Warn the team lead when an order waits",
+      "on": "After {{h}} h",
+      "off": "Off"
+    },
+    "statuts": {
+      "t": "Statuses",
+      "d": "The call results the agents pick",
+      "s_one": "{{count}} status",
+      "s_other": "{{count}} statuses"
     }
   }
 }

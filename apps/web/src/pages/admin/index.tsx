@@ -35,8 +35,20 @@ export function Management({ sub, rest }: PageProps) {
   return (
     <>
       <StageBar flow={false} current={cur} items={mine.filter((k) => pageIsOn('management', k)).map((k) => ({ key: k, label: t(`admin.subs.${k}`), href: `#/management/${k}` }))} />
-      {cur === 'plans' ? <ManagementPlans /> : cur === 'statuts' ? <Statuts /> : cur === 'affectation' ? <Affectation /> : cur === 'prix' ? <Prix /> : cur === 'canaux' ? <Canaux /> : cur === 'notifications' ? <NotificationsCfg /> : cur === 'alertes' ? <DepotAlertsCfg /> : cur === 'stock' ? <StockCfg /> : cur === 'livreur' ? <LivreurCfg /> : cur === 'modules' ? <Modules /> : <Archive key={kind ?? 'users'} initial={kind} />}
+      {/* Confirmation's statuses, call timing and order sharing are in Confirmation › Réglages now (owner's ask, 24 Nov 2026) */}
+      {(cur === 'statuts' || cur === 'affectation') && <MovedToConf />}
+      {cur === 'plans' ? <ManagementPlans /> : cur === 'statuts' ? <Statuts skip={['confirmation']} calls={false} /> : cur === 'affectation' ? <Affectation areas={['follow']} /> : cur === 'prix' ? <Prix /> : cur === 'canaux' ? <Canaux /> : cur === 'notifications' ? <NotificationsCfg /> : cur === 'alertes' ? <DepotAlertsCfg /> : cur === 'stock' ? <StockCfg /> : cur === 'livreur' ? <LivreurCfg /> : cur === 'modules' ? <Modules /> : <Archive key={kind ?? 'users'} initial={kind} />}
     </>
+  );
+}
+
+/** A line that says where Confirmation's part of this page went. */
+function MovedToConf() {
+  const { t } = useTranslation();
+  return (
+    <p className="muted small" style={{ margin: '0 0 10px' }}>
+      {t('admin.movedConf')} <a href="#/confirmation/reglages">{t('admin.settings.movedConfLink')}</a>
+    </p>
   );
 }
 
