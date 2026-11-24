@@ -111,7 +111,7 @@ function CancelAsk({ o, onClose }: { o: PRow; onClose: () => void }) {
     <Modal
       sheet
       title={t('confirmation.ph.cancelTitle', { ref: o.ref })}
-      className="conf-modal"
+      className="conf-modal pxp-cxm"
       onClose={onClose}
       footer={
         <>
