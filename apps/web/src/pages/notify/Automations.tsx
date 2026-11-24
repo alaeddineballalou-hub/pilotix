@@ -13,6 +13,10 @@ import { enablePush } from '../../lib/push';
 import { useAction, useRpc } from '../../lib/query';
 import { ErrorBox, Icon, Loading, RemovableChip } from '../../ui/kit';
 import { toast } from '../../ui/toast';
+// the rows' switch and orange tint (ai.css) and the switch's layout (notify.css): loaded here too, because a row is also
+// shown outside Pilot Automations (Management › Rapport du soir, Confirmation › Réglages…), where they were not loaded
+import '../ai/ai.css';
+import './notify.css';
 import './auto.css';
 
 type S = Out<'auto.state'>;
