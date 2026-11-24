@@ -130,9 +130,31 @@ export const ORDERS_FAN: Fan = {
   merge: (parts, i) => mergeRows(parts, ORDER_KEY[i?.sort ?? 'created_at'] ?? ORDER_KEY.created_at, i?.dir ?? 'desc', i?.page ?? 1, i?.pageSize ?? 50),
 };
 
+/**
+ * Each company's logo name, for its small badge (delivery.icons): every shop's companies together. Two shops' ids are
+ * not the same company when their logos differ: that id is left out (its badge shows its letters, never a wrong icon).
+ */
+export const ICONS_FAN: Fan = {
+  merge: (parts) => {
+    const seen = new Map<number, string | null>();
+    const clash = new Set<number>();
+    const kinds: Record<string, string> = {};
+    for (const p of parts) {
+      for (const c of (p.out?.companies ?? []) as { id: number; logo: string | null }[]) {
+        if (seen.has(c.id) && seen.get(c.id) !== c.logo) clash.add(c.id);
+        seen.set(c.id, c.logo);
+      }
+      Object.assign(kinds, p.out?.kinds ?? {});
+    }
+    return { companies: [...seen].filter(([id]) => !clash.has(id)).map(([id, logo]) => ({ id, logo })), kinds };
+  },
+};
+
 export const FANOUT: Record<string, Fan> = {
   // Commandes › Toutes les commandes, Livré, Annulé of an agency's « Tous les vendeurs »: every seller's orders in one list
   'orders.list': ORDERS_FAN,
+  // the delivery companies' badges (their own icons) on « Tous les vendeurs »
+  'delivery.icons': ICONS_FAN,
   // Produits & stock › Guide de vente: every shop's products in one list, by name
   'catalog.guides': { merge: (parts) => mergeRows(parts, (r) => String(r.name).toLowerCase(), 'asc', 1, 3000) },
   'catalog.assigned': {

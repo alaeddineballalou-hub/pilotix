@@ -9,6 +9,7 @@ import { dateOnly, dayLabel, da, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
+import { CoChip } from '../../ui/CoIcon';
 import { Modal } from '../../ui/modal';
 import './caisse.css';
 import { CaisseSettings, kindIcon } from './CaisseSettings';
@@ -120,7 +121,9 @@ export function CaisseOverview({ onOpenDue, onOpenLivreurs }: { onOpenDue: (key:
               {d.companies.map((c) => (
                 <li key={c.key}>
                   <button type="button" onClick={() => onOpenDue(c.key)}>
-                    <span className={`pxs-co k-${c.kind ?? 'other'} pxc-co`}>{coShort(c.name)}</span>
+                    <CoChip companyId={c.companyId} kind={c.kind} className={`pxs-co k-${c.kind ?? 'other'} pxc-co`}>
+                      {coShort(c.name)}
+                    </CoChip>
                     <span className="pxc-rm">
                       <b>{c.name}</b>
                       <small>

@@ -357,6 +357,8 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'customers.waCard': free,
   'customers.setBlacklist': customer,
   'delivery.stopdesks': free,
+  // the logo name of each delivery company (its badge's own icon): no order, no customer, no key in it
+  'delivery.icons': free,
   'sav.list': savRole,
   'sav.kpis': savRole,
   'sav.get': savRole,

@@ -27,7 +27,7 @@ export const FREE_ACTIONS: readonly string[] = [
   'confirmation.thumbs',
   'coverage.refresh', 'coverage.refreshDesks', 'coverage.toFix',
   'customers.history', 'customers.list', 'customers.ping', 'customers.shareInfo', 'customers.waCard',
-  'delivery.companies', 'delivery.demoScenario', 'delivery.fees', 'delivery.feesInfo', 'delivery.label',
+  'delivery.companies', 'delivery.demoScenario', 'delivery.fees', 'delivery.feesInfo', 'delivery.icons', 'delivery.label',
   'delivery.labels', 'delivery.livreurs', 'delivery.overweight', 'delivery.routeSheet', 'delivery.stopdesks',
   'delivery.sync', 'delivery.tournee',
   'dellal.conversation', 'dellal.inbox', 'dellal.lahja.add', 'dellal.lahja.list', 'dellal.lahja.remove',

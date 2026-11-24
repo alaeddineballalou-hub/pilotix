@@ -18,6 +18,7 @@ import { useInAgency, useSession } from '../../lib/session';
 import { store } from '../../lib/store';
 import { useIsPhone } from '../../lib/useMedia';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
+import { CoChip } from '../../ui/CoIcon';
 import { ViewSwitch } from '../../ui/ViewSwitch';
 import { Seg, Sheet } from '../../ui/Sheet';
 import { useCounts } from './counts';
@@ -229,14 +230,14 @@ function DatesSheet({ per, onClose }: { per: Period; onClose: () => void }) {
   );
 }
 
-/** The delivery company's little badge: its first letters, in its colour. */
-function CoTag({ kind, name }: { kind: string | null | undefined; name: string | null | undefined }) {
+/** The delivery company's little badge: its own icon, else its first letters (ui/CoIcon.tsx). */
+function CoTag({ companyId, kind, name }: { companyId: number | null | undefined; kind: string | null | undefined; name: string | null | undefined }) {
   const nm = name || '';
   const short = kind === 'own' ? nm.slice(0, 2) : nm.replace(/express|livraison/gi, '').trim().slice(0, 3);
   return (
-    <span className={`pxn-co k-${kind || 'other'}`} role="img" aria-label={nm || '—'}>
+    <CoChip companyId={companyId} kind={kind} className={`pxn-co k-${kind || 'other'}`} role="img" aria-label={nm || '—'}>
       {short.toUpperCase() || '—'}
-    </span>
+    </CoChip>
   );
 }
 
@@ -413,7 +414,7 @@ function CompanyTable({ rep, label, f, show }: { rep: DRep; label: string | null
             onClick={() => setOpen(m)}
           >
             <span className="pxn-nm">
-              <CoTag kind={m.kind} name={m.name} />
+              <CoTag companyId={m.companyId} kind={m.kind} name={m.name} />
               <span>
                 <b>{name(m)}</b>
                 <i style={{ width: `${(m.amount / max) * 100}%` }} />
@@ -462,7 +463,7 @@ function CompanySheet({ m, name, label, onClose, onShow }: { m: Agg; name: strin
     <Sheet
       title={
         <span className="pxn-sht">
-          <CoTag kind={m.kind} name={m.name} /> {name}
+          <CoTag companyId={m.companyId} kind={m.kind} name={m.name} /> {name}
         </span>
       }
       sub={label ?? t('orders.ph.per.sinceStart')}
@@ -704,7 +705,7 @@ function BackStats({ r, label, f, show }: { r: CRep['returns']; label: string | 
                   onClick={() => show({ company: k })}
                 >
                   <span className="pxn-nm">
-                    <CoTag kind={c.kind} name={c.name} />
+                    <CoTag companyId={c.companyId} kind={c.kind} name={c.name} />
                     <b>{nm}</b>
                   </span>
                   <span className="ltr">{n(c.returns)}</span>
@@ -820,7 +821,7 @@ function OrderRow({ o, kind, coKind, fee, why, act }: { o: Order; kind: Kind; co
   return (
     // a card you tap to open the order; its own buttons (Swap) act without opening it
     <div className="pxn-o" role="button" tabIndex={0} onClick={open} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), open())}>
-      {kind === 'conf' ? <Who name={o.agentName} /> : <CoTag kind={coKind} name={o.companyName || o.livreurName} />}
+      {kind === 'conf' ? <Who name={o.agentName} /> : <CoTag companyId={o.companyId} kind={coKind} name={o.companyName || o.livreurName} />}
       <span className="pxn-om">
         <span className="pxn-o1">
           <b>{o.customerName}</b>

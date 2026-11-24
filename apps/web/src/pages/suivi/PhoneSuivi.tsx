@@ -11,6 +11,7 @@ import { rpc } from '../../lib/backend';
 import { da, when, wilayaName } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { Icon } from '../../ui/kit';
+import { CoChip } from '../../ui/CoIcon';
 import { Sheet, Tiles } from '../../ui/Sheet';
 import { Modal } from '../../ui/modal';
 import { StuckChips } from './Stuck';
@@ -50,15 +51,15 @@ function stageOf(o: Order): { at: number; stop: boolean } {
   }
 }
 
-/** The company's little badge: its first letters, in its colour. */
+/** The company's little badge: its own icon, else its first letters (ui/CoIcon.tsx). */
 export function CoBadge({ o, x }: { o: Order; x?: PExtra }) {
   const k = x?.companyKind ?? '';
   const name = o.companyName || o.livreurName || '';
   const short = k === 'own' ? name.slice(0, 2) : name.replace(/express|livraison/gi, '').trim().slice(0, 3);
   return (
-    <span className={`pxs-co k-${k || 'other'}`} title={name} aria-label={name}>
+    <CoChip companyId={o.companyId} kind={k} className={`pxs-co k-${k || 'other'}`} title={name} aria-label={name}>
       {short.toUpperCase() || '—'}
-    </span>
+    </CoChip>
   );
 }
 

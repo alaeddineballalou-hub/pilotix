@@ -12,6 +12,7 @@ import { trackOf } from '../../lib/items';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { Icon, Loading } from '../../ui/kit';
+import { CoChip } from '../../ui/CoIcon';
 import { Options, Seg, Sheet } from '../../ui/Sheet';
 import { toast } from '../../ui/toast';
 import { CLAIM_REASONS, ClaimFormProps, ClaimRow, REASON_ICON, SentClaim, Target, useClaimForm, useSendClaim } from './claimKit';
@@ -377,9 +378,9 @@ export function PhoneClaims({ target }: { target: 'company' | 'livreur' }) {
               <li key={c.id} className={`pxr-c${late(c) ? ' late' : ''}${c.stage === 'done' ? ' done' : ''}`}>
                 <button type="button" className="pxr-cm" onClick={() => c.orderId && openOrder(c.orderId)}>
                   <span className="pxr-h">
-                    <span className={`pxs-co k-${k}`} aria-hidden="true">
+                    <CoChip companyId={k === 'own' ? null : c.companyId} kind={k} className={`pxs-co k-${k}`} aria-hidden="true">
                       {(k === 'own' ? name.slice(0, 2) : name.replace(/express|livraison/gi, '').trim().slice(0, 3)).toUpperCase()}
-                    </span>
+                    </CoChip>
                     <b>
                       <span className="ltr">{c.ref}</span> · <span className="ltr">{c.orderRef ?? '—'}</span>
                     </b>

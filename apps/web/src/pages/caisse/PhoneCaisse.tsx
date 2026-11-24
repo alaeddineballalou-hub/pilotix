@@ -12,6 +12,7 @@ import { useAction, useRpc } from '../../lib/query';
 import { payOn } from '../../lib/features';
 import { useSession } from '../../lib/session';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
+import { CoChip } from '../../ui/CoIcon';
 import '../confirmation/phone.css';
 import '../suivi/phone.css';
 import '../sav/phone.css';
@@ -238,7 +239,9 @@ export function PhoneCaisse({ sub }: { sub?: string }) {
                     {d.companies.map((c) => (
                       <li key={c.key}>
                         <button type="button" onClick={() => setCompany(c.key)}>
-                          <span className={`pxs-co k-${c.kind ?? 'other'} pxk-co`}>{coShort(c.name)}</span>
+                          <CoChip companyId={c.companyId} kind={c.kind} className={`pxs-co k-${c.kind ?? 'other'} pxk-co`}>
+                            {coShort(c.name)}
+                          </CoChip>
                           <span className="pxk-rm">
                             <b>{c.name}</b>
                             <small>
@@ -742,7 +745,9 @@ function QuickPay({ companyId, kind, onOpen, full }: { companyId: number; kind: 
       <div className="pxk-qph">
         {onOpen ? (
           <button type="button" className="pxk-qpt" onClick={onOpen}>
-            <span className={`pxs-co k-${kind} pxk-co`}>{coShort(d.name)}</span>
+            <CoChip companyId={companyId} kind={kind} className={`pxs-co k-${kind} pxk-co`}>
+              {coShort(d.name)}
+            </CoChip>
             <span>
               <b>{d.name}</b>
               <small>{b ? t('caisse.qp.readAt', { d: when(b.at) }) : t('caisse.qp.atCourier')}</small>

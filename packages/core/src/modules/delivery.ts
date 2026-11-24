@@ -2,7 +2,7 @@
 // own livreurs and their round ("Ma tournée"). Courier APIs run on the server only (ctx.server.courier → couriers/index.ts);
 // in the browser preview every courier answer is simulated.
 import { sealDeep, sealString } from '../secretbox';
-import { COURIER_KINDS, CourierKind, FOLLOW_ON_ROAD, FollowStatus, Order, Session, SUB_TAKEN_UNSCANNED, WILAYAS } from '@pilotix/shared';
+import { COURIER_KINDS, CourierKind, courierCardOf, FOLLOW_ON_ROAD, FollowStatus, Order, Session, SUB_TAKEN_UNSCANNED, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { ADAPTERS } from '../couriers/adapters';
 import { DEFAULT_TEMPLATE, PLACEHOLDERS, checkTemplate, custom } from '../couriers/custom';
@@ -867,6 +867,25 @@ export const deliveryProcs = {
   'delivery.kinds': proc([], z.object({}), async (ctx) => {
     const removed = ctx.t ? await removedCouriers(ctx.t).catch(() => ({}) as Record<string, unknown>) : {};
     return { kinds: Object.values(KINDS), cards: CARDS.filter((c) => !c.company || !(c.company in removed)), placeholders: PLACEHOLDERS, defaultTemplate: DEFAULT_TEMPLATE };
+  }),
+
+  /**
+   * Each company's logo name (its card's), for its small badge that everyone sees (Suivi, Dépôt, Livré, Annulé, Caisse,
+   * Réclamations): the app shows the company's own icon (couriers/icon/<logo>.webp) when Pilotix has it, else its
+   * letters. `kinds`: the logo of a kind that is one company only (ZR, NOEST…), for an order whose company is not here.
+   */
+  'delivery.icons': proc(null, z.object({}), async (ctx) => {
+    const rows = await ctx.db.query(`SELECT id, kind, config FROM delivery_companies`);
+    const companies = rows.map((r: any) => {
+      const settings = (parseJson(r.config) as any)?.settings ?? {};
+      return { id: num(r.id), logo: r.kind === 'own' ? null : courierCardOf(CARDS, { kind: String(r.kind), settings })?.logo ?? null };
+    });
+    const kinds: Record<string, string> = {};
+    for (const k of new Set(CARDS.map((c) => c.kind))) {
+      const one = CARDS.filter((c) => c.kind === k);
+      if (one.length === 1 && one[0].logo) kinds[k] = one[0].logo;
+    }
+    return { companies: companies as { id: number; logo: string | null }[], kinds };
   }),
 
   /** Companies with counts. Never returns API keys: only hasKeys / keysSet. Everyone can read the names (order forms). */

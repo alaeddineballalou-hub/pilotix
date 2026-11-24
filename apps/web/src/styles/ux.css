@@ -43,6 +43,11 @@ html[dir="rtl"] .pxp-next .bji { transform: scaleX(-1); }
 .bj-cd.late { background: var(--c-bad-fill) !important; color: #fff !important; }
 html[data-theme="dark"] .bj-cd.soon { background: var(--c-bad-tint); color: var(--c-bad-ink); }
 .pxs-co.k-own, .pxn-co.k-own { color: var(--c-on-accent) !important; }
+/* a delivery company's badge with its own icon (ui/CoIcon.tsx): a small square tile, like an app icon, as tall as the
+   badge of its place (28 px, 36 px in Caisse…), a thin edge so a white icon still shows on a white card */
+.pxs-co.has-ic, .pxn-co.has-ic { aspect-ratio: 1 / 1; width: auto; min-width: 0 !important; padding: 0 !important; overflow: hidden; background: #fff !important; outline: 1px solid rgba(16, 24, 40, .1); outline-offset: -1px; }
+.pxs-co.has-ic > img, .pxn-co.has-ic > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+html[data-theme="dark"] .pxs-co.has-ic, html[data-theme="dark"] .pxn-co.has-ic { outline-color: rgba(255, 255, 255, .16); }
 .pxv-link { color: var(--c-accent-ink) !important; text-decoration: underline; text-underline-offset: 3px; }
 
 /* ---- dark mode: the order-list tools used the navy of the light frame as their text colour ---- */

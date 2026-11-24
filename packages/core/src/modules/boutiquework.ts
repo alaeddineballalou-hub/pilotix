@@ -96,6 +96,8 @@ const byBoutique = (parts: Part[]) => parts.map((p) => ({ id: p.seller.id, name:
 export const BOUTIQUE_FANOUT: Record<string, Fan> = {
   'orders.list': ORDERS_FAN,
   'orders.counts': FANOUT['orders.counts'],
+  // the delivery companies' badges (their own icons) on « Toutes les boutiques »
+  'delivery.icons': FANOUT['delivery.icons'],
   'confirmation.counts': FANOUT['confirmation.counts'],
   'confirmation.mine': FANOUT['confirmation.mine'],
   'confirmation.list': FANOUT['confirmation.list'],

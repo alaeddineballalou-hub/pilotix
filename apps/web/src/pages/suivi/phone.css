@@ -17,10 +17,7 @@
 
 /* company badge */
 .pxs-co { flex: none; display: inline-grid; place-items: center; min-width: 30px; height: 28px; padding: 0 5px; border-radius: 8px; font-size: 11px; font-weight: 900; color: #fff; background: #1B2A47; letter-spacing: .02em; }
-.pxs-co.k-yalidine { background: #E30613; }
-.pxs-co.k-zr, .pxs-co.k-zr_legacy { background: #0E7C3A; }
-.pxs-co.k-noest { background: #6A2C91; }
-.pxs-co.k-ecotrack { background: #0B6FB8; }
+/* no made-up company colours: a company shows its own icon (ui/CoIcon.tsx), else its letters on navy */
 .pxs-co.k-own { background: var(--c-accent-2); }
 
 /* the journey line: Expédiée › En route › (alert) › Livrée */
