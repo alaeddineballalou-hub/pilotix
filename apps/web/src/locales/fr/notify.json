@@ -202,7 +202,8 @@
       "release_other": "{{count}} commandes sans stock envoyées au dépôt",
       "livreur_one": "{{count}} commande donnée aux livreurs : {{who}}",
       "livreur_other": "{{count}} commandes données aux livreurs : {{who}}"
-    }
+    },
+    "toConfSettings": "File d’attente lente : Confirmation › Réglages"
   },
   "tomorrow": "demain",
   "off": "Les messages de livraison sont arrêtés : aucun message n’est envoyé aux clients.",
@@ -475,5 +476,16 @@
     "waNotValidated": "WhatsApp : texte pas encore validé par Meta",
     "waNotReceived": "WhatsApp pas reçu",
     "waNotReceived1h": "WhatsApp pas reçu après 1 h"
+  },
+  "cfgWhen": {
+    "created": "Dès que la commande arrive",
+    "no_answer": "Quand le client ne répond pas",
+    "confirmed": "Quand la commande est confirmée",
+    "shipped": "Quand le colis part",
+    "out_for_delivery": "Quand le livreur sort avec le colis",
+    "stopdesk": "Quand le colis arrive au bureau",
+    "failed": "Quand la livraison échoue",
+    "returning": "Quand le colis revient",
+    "delivered": "Quand le colis est livré"
   }
 }

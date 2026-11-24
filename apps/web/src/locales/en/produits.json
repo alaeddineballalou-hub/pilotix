@@ -11,7 +11,8 @@
     "depots": "Depots",
     "prevision": "Forecast",
     "lots": "Lots",
-    "fabrication": "Making"
+    "fabrication": "Making",
+    "reglages": "Settings"
   },
   "about": {
     "stock": "What each depot holds, what is already promised to orders, and what is left to sell. Products that came back broken are kept apart (“Broken”).",
@@ -25,7 +26,8 @@
     "guidesAgent": "Your products’ sales guides: what to say, and the answers to customers’ questions and hesitations.",
     "prevision": "When each product will run out at its selling speed, and how many to buy now.",
     "lots": "What is left of each lot, the lot to send first, and lots past or near their date.",
-    "fabrication": "Your products’ recipes and « Make »: the parts leave the stock, the finished products come in."
+    "fabrication": "Your products’ recipes and « Make »: the parts leave the stock, the finished products come in.",
+    "reglages": "What Pilotix does when a product runs out or comes back, and the lots and making."
   },
   "ui": {
     "allDepots": "All depots",
@@ -951,5 +953,12 @@
       "landing": "Landing page",
       "guide": "Sales guide"
     }
+  },
+  "cfg": {
+    "title": "Products & stock settings",
+    "rulesT": "When the stock changes",
+    "rules": "The ads, the pages and the no-stock orders, when a product runs out or comes back",
+    "lotsT": "Lots and making",
+    "lots": "Expiry dates and recipes"
   }
 }

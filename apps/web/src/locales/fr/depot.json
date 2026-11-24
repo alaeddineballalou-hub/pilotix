@@ -5,7 +5,8 @@
     "prepares": "En dispatch",
     "dispatchees": "Dispatchées",
     "enlivraison": "En livraison",
-    "retours": "Retours / Échanges"
+    "retours": "Retours / Échanges",
+    "reglages": "Réglages"
   },
   "picking": {
     "title": "Quantités à préparer",
@@ -435,5 +436,16 @@
     "since_other": "depuis {{count}} h",
     "show": "Voir",
     "hide": "Cacher"
+  },
+  "cfg": {
+    "title": "Réglages du Dépôt",
+    "dispatch": "Une commande prête part seule « En dispatch » avec sa société",
+    "alerts": "Qui reçoit l’alerte rouge quand une commande préparée change",
+    "statuts": "Les statuts des colis au dépôt",
+    "on": "Allumé",
+    "off": "Éteint",
+    "alertsAll": "Tous les agents du dépôt",
+    "alertsTo_one": "{{count}} personne",
+    "alertsTo_other": "{{count}} personnes"
   }
 }

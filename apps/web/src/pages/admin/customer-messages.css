@@ -1,4 +1,4 @@
-/* Management › Statuts › « Messages client » and « Aperçu client » */
+/* Confirmation › Réglages › « Messages au client »: « Messages client » and « Aperçu client » */
 .cmx .cmx-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 14px; }
 .cmx .cmx-chip { border: 1.5px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-weight: 700; font-size: 15px; padding: 8px 16px; min-height: 40px; cursor: pointer; }
 .cmx .cmx-chip:hover, .cmx .cmx-chip:focus-visible { border-color: var(--px-orange, #F7A823); outline: none; }
@@ -16,3 +16,5 @@
   .cmx .cmx-cols { grid-template-columns: 1fr; }
   .cmx .cmx-chip { font-size: 14px; padding: 7px 13px; }
 }
+/* inside Confirmation › Réglages › « Messages au client »: the preview's two names stay under the part's own title */
+.cfs-sub.cmx .cmx-pv h3 { font-size: 14px; color: var(--muted); }

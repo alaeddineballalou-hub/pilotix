@@ -3,10 +3,12 @@ import { MENU_TABS, menuTabName } from '@pilotix/shared';
 import { useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { tabOn } from '../../lib/rights';
+import { Icon } from '../../ui/kit';
 
 // « En livraison » moved to Suivi (the parcels on the road are the suivi's work); an old link goes there
 /** Dépôt's steps: the menu's tabs (packages/shared/src/menu.ts), shared with Utilisateurs › Rôles */
-export const DEPOT_STAGES = MENU_TABS.depot;
+/** the stages (« Réglages » is not one: ./Settings.tsx) */
+export const DEPOT_STAGES = MENU_TABS.depot.filter((k): k is Exclude<(typeof MENU_TABS.depot)[number], 'reglages'> => k !== 'reglages');
 export type DepotStage = (typeof DEPOT_STAGES)[number];
 
 /** The stage of the address (#/depot/<stage>): « En préparation » when none. */
@@ -21,7 +23,7 @@ export type DepotStageCounts = Partial<Record<DepotStage, number>> & { prepAlert
  * Each stage with what waits there (drawn here rather than with <StageBar>: it needs the ⟶ arrow and the red « end »
  * stage of the original). A phone shows two or three stages at a time: the current one is brought into view.
  */
-export function DepotStageBar({ stage, counts, phone }: { stage: DepotStage; counts?: DepotStageCounts; phone?: boolean }) {
+export function DepotStageBar({ stage, counts, phone, cfgOn = false }: { stage: DepotStage; counts?: DepotStageCounts; phone?: boolean; cfgOn?: boolean }) {
   const { t } = useTranslation();
   const bar = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
@@ -42,12 +44,19 @@ export function DepotStageBar({ stage, counts, phone }: { stage: DepotStage; cou
               {k === 'retours' ? '⟶' : '›'}
             </span>
           )}
-          <a className={`bjm-p ${stage === k ? 'on' : ''} ${k === 'retours' ? 'end' : ''}`} href={`#/depot/${k}`} aria-current={stage === k ? 'page' : undefined}>
+          <a className={`bjm-p ${stage === k && !cfgOn ? 'on' : ''} ${k === 'retours' ? 'end' : ''}`} href={`#/depot/${k}`} aria-current={stage === k && !cfgOn ? 'page' : undefined}>
             <span className="bjm-l">{phone && k === 'preparer' ? t('depot.ph.stage') : t(menuTabName('depot', k))}</span>
             {counts && <b className={`bjm-n ltr${k === 'prepares' && counts.prepAlerts ? ' bad' : ''}`}>{counts[k] ?? 0}</b>}
           </a>
         </span>
       ))}
+      {/* « Réglages »: apart at the end, with a gear (administrators by default; Utilisateurs › Rôles) */}
+      {tabOn('depot', 'reglages') && (
+        <a className={`bjm-p bjm-cfg ${cfgOn ? 'on' : ''}`} href="#/depot/reglages" aria-label={t(menuTabName('depot', 'reglages'))} title={t(menuTabName('depot', 'reglages'))} aria-current={cfgOn ? 'page' : undefined}>
+          <Icon name="settings" />
+          <span className="bjm-l">{t(menuTabName('depot', 'reglages'))}</span>
+        </a>
+      )}
     </nav>
   );
 }

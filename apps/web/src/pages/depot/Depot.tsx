@@ -21,6 +21,8 @@ import { PhoneDispatch, PhoneReturns, PhoneRoad } from './PhoneStages';
 import { LabelAction, LabelsBar, PrintSelected } from './Labels';
 import { BagBulk, BagsCard } from './Bags';
 import { depotStage, DepotStageBar } from './StageNav';
+import { DepotSettings } from './Settings';
+import { tabOn } from '../../lib/rights';
 import { useAllMode } from '../../layout/AllBoutiques';
 
 /** « Dépôt »: this boutique's, or every boutique's with « Toutes les boutiques ». */
@@ -43,6 +45,14 @@ function DepotOne({ sub }: PageProps) {
   // computers too: the phone's cards laid out wide (« Tableau » goes back to the big tables)
   const [mode, setMode] = useViewMode('depot');
   const cards = phone || mode === 'cards';
+  // « Réglages »: every setting of the depot
+  if (sub === 'reglages' && tabOn('depot', 'reglages'))
+    return (
+      <>
+        <DepotStageBar stage={stage} counts={counts.data} phone={phone} cfgOn />
+        <DepotSettings />
+      </>
+    );
   return (
     <>
       <DepotStageBar stage={stage} counts={counts.data} phone={phone} />
@@ -279,111 +289,12 @@ function Dispatchees() {
 }
 
 // ---------------------------------------------------------------- Retours / Échanges
-function Receive() {
-  const { t } = useTranslation();
-  const [code, setCode] = useState('');
-  const [found, setFound] = useState<Order[] | null>(null);
-  const [busy, setBusy] = useState(false);
-  const search = async () => {
-    const c = code.trim().replace(/[,()"*]/g, '');
-    if (!c) return;
-    setBusy(true);
-    try {
-      setFound(await rpc('depot.find', { code: c }));
-    } catch (e: any) {
-      toast(e.message, 'bad');
-    } finally {
-      setBusy(false);
-    }
-  };
-  const recv = useAction('depot.receiveReturn', {
-    success: (o) => t('depot.receive.done', { ref: o.ref }),
-    onDone: () => {
-      setFound(null);
-      setCode('');
-    },
-  });
-  return (
-    <Card title={t('depot.receive.title')}>
-      <p className="muted">{t('depot.receive.help')}</p>
-      <div className="row">
-        <div className="grow">
-          <input
-            type="search"
-            autoFocus
-            autoComplete="off"
-            placeholder={t('depot.receive.ph')}
-            aria-label={t('depot.receive.ph')}
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                search();
-              }
-            }}
-          />
-        </div>
-        <button className="btn primary" onClick={search} disabled={busy}>
-          {t('depot.receive.search')}
-        </button>
-      </div>
-      {found &&
-        (found.length ? (
-          <div className="tbl-wrap" style={{ marginTop: 10 }}>
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>{t('depot.cols.order')}</th>
-                  <th>{t('depot.cols.client')}</th>
-                  <th className="wide">{t('depot.cols.products')}</th>
-                  <th>{t('depot.cols.status')}</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {found.map((o) => (
-                  <tr key={o.id} className="clickable" onClick={() => openOrder(o.id)}>
-                    <td data-l={t('depot.cols.order')}>
-                      <b className="ltr">{o.ref}</b>
-                      {trackOf(o) && <CopyCode code={trackOf(o)} small />}
-                    </td>
-                    <td data-l={t('depot.cols.client')}>
-                      {o.customerName}
-                      <small className="ltr">{o.phone}</small>
-                    </td>
-                    <td className="wide" data-l={t('depot.cols.products')}>
-                      {itemsLine(o)} <span className="muted ltr">· {da(o.total)}</span>
-                    </td>
-                    <td data-l={t('depot.cols.status')}>{o.followStatus ? <StatusBadge kind="follow" status={o.followStatus} /> : <StatusBadge kind="conf" status={o.confStatus} />}</td>
-                    <td data-l="" onClick={(e) => e.stopPropagation()}>
-                      {o.followStatus === 'returned' ? (
-                        <span className="badge t-ok">{t('depot.receive.already')}</span>
-                      ) : (
-                        <button className="btn small ok" disabled={!o.shippedAt || recv.isPending} onClick={() => recv.mutate({ id: o.id })}>
-                          {t('depot.receive.button')}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="muted" style={{ marginTop: 10 }}>
-            {t('depot.receive.none')}
-          </p>
-        ))}
-    </Card>
-  );
-}
-
 function Retours() {
   const { t } = useTranslation();
   return (
     <>
-      <Receive />
+      {/* the return scan (it was Scanner › « Retour / Échange »): douchette, camera or the code typed */}
+      <ScanCard mode="back" />
       <DepotOrderList
         title={t('depot.lists.returning')}
         follow={['returning']}

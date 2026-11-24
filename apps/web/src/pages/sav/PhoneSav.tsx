@@ -163,16 +163,24 @@ export function PhoneSav({ sub }: { sub?: string }) {
 
   return (
     <div className="pxv">
-      <div className="pxv-road" role="tablist">
-        {STAGES.map((s) => (
-          <button key={s} type="button" role="tab" aria-selected={stage === s} className={`${stage === s ? 'on' : ''}${s === 'todo' && k?.attenteLate ? ' al' : ''}`} onClick={() => pick(s)}>
-            {t(`sav.ph.stage.${s}`)}
-            {count[s] !== undefined && <b className="ltr">{count[s]}</b>}
-          </button>
-        ))}
-        {session?.shop?.kind !== 'agency' && tabOn('sav', 'stats') && (
-          <a className="pxv-stlink" href="#/sav/stats">
-            <Icon name="chart" /> {t('sav.views.stats')}
+      <div className="pxv-roadrow">
+        <div className="pxv-road" role="tablist">
+          {STAGES.map((s) => (
+            <button key={s} type="button" role="tab" aria-selected={stage === s} className={`${stage === s ? 'on' : ''}${s === 'todo' && k?.attenteLate ? ' al' : ''}`} onClick={() => pick(s)}>
+              {t(`sav.ph.stage.${s}`)}
+              {count[s] !== undefined && <b className="ltr">{count[s]}</b>}
+            </button>
+          ))}
+          {session?.shop?.kind !== 'agency' && tabOn('sav', 'stats') && (
+            <a className="pxv-stlink" href="#/sav/stats">
+              <Icon name="chart" /> {t('sav.views.stats')}
+            </a>
+          )}
+        </div>
+        {/* SAV › Réglages: the gear after the road, outside the part that slides (it never scrolls away) */}
+        {tabOn('sav', 'reglages') && (
+          <a className="pxv-cfg" href="#/sav/reglages" aria-label={t('sav.views.reglages')} title={t('sav.views.reglages')}>
+            <Icon name="settings" />
           </a>
         )}
       </div>

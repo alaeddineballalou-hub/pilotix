@@ -207,7 +207,7 @@
     "first": "1er appel : minutes après l’assignation",
     "pace": "+ minutes par commande plus récente",
     "message": "Message au client à la tentative",
-    "messageHelp": "À cette tentative sans réponse, l’agent envoie le 1er message de « Messages client » (plus bas) avant d’enregistrer. Une commande déjà plus loin ne le reçoit pas.",
+    "messageHelp": "À cette tentative sans réponse, l’agent envoie le 1er message (Réglages › Messages au client) avant d’enregistrer. Une commande déjà plus loin ne le reçoit pas.",
     "cancel": "Annuler après combien d’appels sans réponse",
     "cancelHelp": "0 = jamais. À ce nombre, l’agent envoie le message d’annulation avec le lien, puis la commande est annulée. Les commandes déjà à ce nombre ou plus sont annulées tout de suite, sans message.",
     "tries": "Tentatives par commande",
@@ -543,7 +543,11 @@
     "metaChange": "Changer",
     "metaLinkedMany": "{{count}} comptes pub de « {{account}} », additionnés dans Publicité (Pilot AI › Comptes).",
     "metaOld": "Une ancienne clé collée ici marche encore (compte pub {{id}}). Pour tout avoir au même endroit, reliez votre compte Facebook dans Pilot AI › Comptes et cochez votre compte pub.",
-    "metaOpen": "Ouvrir Comptes"
+    "metaOpen": "Ouvrir Comptes",
+    "movedConf": "L’annulation automatique et le texte WhatsApp des agents sont maintenant dans",
+    "movedConfLink": "Confirmation › Réglages",
+    "movedSav": "Le numéro SAV est maintenant dans",
+    "movedSavLink": "SAV › Réglages"
   },
   "confirmYes": "Oui",
   "cancel": "Annuler",
@@ -946,5 +950,9 @@
     "saved": "Messages enregistrés",
     "preview": "Aperçu client · SMS / WhatsApp",
     "linkText": "إعادة تفعيل الطلب"
-  }
+  },
+  "movedPages": "Chaque page a maintenant ses propres Réglages :",
+  "movedSuiviLink": "Suivi › Réglages",
+  "movedDepotLink": "Dépôt › Réglages",
+  "movedProduitsLink": "Produits & stock › Réglages"
 }

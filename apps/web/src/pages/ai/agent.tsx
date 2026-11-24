@@ -56,11 +56,12 @@ const FACE: Record<AgentKind, string> = { messages: 'chat', cm: 'comments', soci
 /** A section of a page; `alert` draws its count in red (something waits). */
 export type AgentTab = { key: string; label: string; icon: string; href: string; count?: number; alert?: boolean };
 
-/** The sections of a page, as tabs along the bottom edge of its header. */
-function SectionTabs({ tabs, current, label }: { tabs: AgentTab[]; current: string; label: string }) {
+/** The sections of a page, as tabs along the bottom edge of its header; `end`: the page's « Réglages » (the gear), last,
+ *  set apart and outside the row that slides, so it never scrolls away (owner's ask, 24 Nov 2026: design 1 « Onglet »). */
+function SectionTabs({ tabs, current, label, end }: { tabs: AgentTab[]; current: string; label: string; end?: AgentTab | null }) {
   const nav = useEdges<HTMLElement>([tabs.length]);
   useLayoutEffect(() => centerOn(nav.current), [current, tabs.length]); // eslint-disable-line react-hooks/exhaustive-deps
-  return (
+  const row = (
     <nav className="ai-tabs" ref={nav} aria-label={label}>
       {tabs.map((x) => (
         <a key={x.key} href={x.href} className={`ai-tab ${current === x.key ? 'on' : ''}`} aria-current={current === x.key ? 'page' : undefined}>
@@ -71,10 +72,20 @@ function SectionTabs({ tabs, current, label }: { tabs: AgentTab[]; current: stri
       ))}
     </nav>
   );
+  if (!end) return row;
+  return (
+    <div className="ai-tabrow">
+      {row}
+      <a href={end.href} className={`ai-tab ai-cfg ${current === end.key ? 'on' : ''}`} aria-current={current === end.key ? 'page' : undefined} aria-label={end.label} title={end.label}>
+        <Icon name={end.icon} />
+        <span className="ai-cfg-l">{end.label}</span>
+      </a>
+    </div>
+  );
 }
 
 /** The top of a page that is not an agent (Produits & stock): its icon, its name, what it is for, and its sections. */
-export function SectionHeader({ icon, title, help, about, tabs, current, aside }: { icon: string; title: string; help?: string; about: string; tabs: AgentTab[]; current: string; aside?: ReactNode }) {
+export function SectionHeader({ icon, title, help, about, tabs, current, aside, end }: { icon: string; title: string; help?: string; about: string; tabs: AgentTab[]; current: string; aside?: ReactNode; end?: AgentTab | null }) {
   const { t } = useTranslation();
   return (
     <header className="ai-head ai-sec">
@@ -91,13 +102,13 @@ export function SectionHeader({ icon, title, help, about, tabs, current, aside }
         </div>
         {aside}
       </div>
-      <SectionTabs tabs={tabs} current={current} label={t('ai.sections', { name: title })} />
+      <SectionTabs tabs={tabs} current={current} label={t('ai.sections', { name: title })} end={end} />
     </header>
   );
 }
 
 /** The top of an agent's page: who it is, whether it works right now, and its sections. */
-export function AgentHeader({ agent, title, help, about, on, settings, tabs, current }: {
+export function AgentHeader({ agent, title, help, about, on, settings, tabs, current, end }: {
   agent: AgentKind;
   title: string;
   help: string;
@@ -109,6 +120,8 @@ export function AgentHeader({ agent, title, help, about, on, settings, tabs, cur
   settings?: string;
   tabs: AgentTab[];
   current: string;
+  /** the page's « Réglages » (the gear), last in its tabs */
+  end?: AgentTab | null;
 }) {
   const { t } = useTranslation();
   return (
@@ -135,7 +148,7 @@ export function AgentHeader({ agent, title, help, about, on, settings, tabs, cur
           ))}
       </div>
       {/* no tabs: the menu shows the page's parts (Pilot Automations › Auto Pilot Assign) */}
-      {tabs.length > 0 && <SectionTabs tabs={tabs} current={current} label={t('ai.sections', { name: title })} />}
+      {(tabs.length > 0 || !!end) && <SectionTabs tabs={tabs} current={current} label={t('ai.sections', { name: title })} end={end} />}
     </header>
   );
 }

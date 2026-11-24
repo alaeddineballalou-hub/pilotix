@@ -10,7 +10,8 @@
     "attente": "En cours",
     "confirmees": "Confirmées",
     "terminees": "Terminées",
-    "livrees": "Livrées"
+    "livrees": "Livrées",
+    "reglages": "Réglages"
   },
   "title": {
     "nouvelles": "Nouvelles commandes",
@@ -983,6 +984,46 @@
       "by": "Changé par {{name}}, {{when}}.",
       "savedOn": "Blocage activé : les agents doivent appeler chaque nouvelle commande.",
       "savedOff": "Blocage désactivé."
+    }
+  },
+  "cfg": {
+    "title": "Réglages de Confirmation",
+    "qui": {
+      "t": "Qui reçoit les commandes",
+      "d": "La répartition automatique entre les agents"
+    },
+    "appels": {
+      "t": "Appels",
+      "d": "Le 1er appel, les rappels, l’annulation, le blocage",
+      "s": "1er appel en {{first}} min · annule après {{n}} appels",
+      "s0": "1er appel en {{first}} min · pas d’annulation",
+      "block": "Bloqué jusqu’à l’appel"
+    },
+    "msg": {
+      "t": "Messages au client",
+      "d": "Les messages tout seuls, ceux du client qui ne répond pas, et le texte WhatsApp des agents",
+      "s_one": "{{count}} message actif",
+      "s_other": "{{count}} messages actifs",
+      "s0": "Aucun message",
+      "auto": "Messages envoyés tout seuls",
+      "autoHint": "Par WhatsApp, ou par SMS si le numéro n’a pas WhatsApp.",
+      "texts": "Changer les textes",
+      "saved": "Texte enregistré",
+      "on": "« {{name}} » allumé",
+      "off": "« {{name}} » éteint",
+      "textsWhere": "Leurs textes sont encore dans Pilot Automations › Messages, avec ceux du Suivi."
+    },
+    "lente": {
+      "t": "Alerte file lente",
+      "d": "Prévenir le chef quand une commande attend",
+      "on": "Après {{h}} h",
+      "off": "Éteinte"
+    },
+    "statuts": {
+      "t": "Statuts",
+      "d": "Les résultats d’appel que choisissent les agents",
+      "s_one": "{{count}} statut",
+      "s_other": "{{count}} statuts"
     }
   }
 }

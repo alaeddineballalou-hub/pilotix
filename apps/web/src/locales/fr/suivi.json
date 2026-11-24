@@ -1,5 +1,13 @@
 {
-  "demo": {"run":"Simuler la réponse","choose":"Choisir un colis de cette liste","help":"Ces réponses fictives modifient uniquement la boutique démo. Aucun appel à une société réelle. Testez une alerte, une réclamation, puis Annulés → Swap, ou la réception du retour au dépôt.","done":"Démo : {{n}} modification(s)","response":"Réponse simulée","error":"Erreur API 503 (sans modification)","title":"API transporteur simulée · Démo"},
+  "demo": {
+    "run": "Simuler la réponse",
+    "choose": "Choisir un colis de cette liste",
+    "help": "Ces réponses fictives modifient uniquement la boutique démo. Aucun appel à une société réelle. Testez une alerte, une réclamation, puis Annulés → Swap, ou la réception du retour au dépôt.",
+    "done": "Démo : {{n}} modification(s)",
+    "response": "Réponse simulée",
+    "error": "Erreur API 503 (sans modification)",
+    "title": "API transporteur simulée · Démo"
+  },
   "tabs": {
     "enlivraison": "En livraison",
     "alertes": "Alertes",
@@ -11,7 +19,8 @@
     "annules": "Annulés",
     "reclamation": "Réclamation",
     "swap": "Swap",
-    "bloques": "Bloqués"
+    "bloques": "Bloqués",
+    "reglages": "Réglages"
   },
   "title": "Suivi des livraisons",
   "sync": "Mettre à jour depuis les sociétés",
@@ -671,5 +680,25 @@
     "hint": "Sans nouveau statut de la société ou du livreur pendant ces jours : le colis va dans Suivi › Bloqués. 2 jours plus tard, une réclamation part toute seule.",
     "days": "jours",
     "sum": "Bloqué après {{n}} j"
+  },
+  "cfg": {
+    "title": "Réglages du Suivi",
+    "qui": {
+      "t": "Qui reçoit les alertes",
+      "d": "La répartition automatique entre les agents du suivi"
+    },
+    "alertes": {
+      "t": "Alertes",
+      "d": "Ce qui envoie un colis en Alertes, le temps de l’agent, les essais, Bloqués"
+    },
+    "msg": {
+      "t": "Messages au client",
+      "d": "Après l’envoi du colis, et comment ils partent",
+      "how": "Comment les messages partent"
+    },
+    "statuts": {
+      "t": "Statuts",
+      "d": "Les statuts des colis et les motifs de « Traiter »"
+    }
   }
 }

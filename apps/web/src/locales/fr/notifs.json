@@ -84,7 +84,7 @@
   "notGet": "Ne la reçoit pas",
   "blockHint": "L’écran bloqué de l’agent se règle dans Confirmation (« Bloquer jusqu’à l’appel »).",
   "blockOpen": "Ouvrir Confirmation",
-  "depotNote": "Les alertes rouges du dépôt (une commande changée ou annulée au dépôt) se règlent dans Management › Alertes dépôt.",
+  "depotNote": "Les alertes rouges du dépôt (une commande changée ou annulée au dépôt) se règlent dans Dépôt › Réglages.",
   "addPerson": "Ajouter une personne",
   "removePerson": "Enlever {{who}}",
   "sound": "Son",

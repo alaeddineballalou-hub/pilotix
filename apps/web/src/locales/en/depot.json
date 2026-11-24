@@ -5,7 +5,8 @@
     "prepares": "Dispatching",
     "dispatchees": "Dispatched",
     "enlivraison": "Out for delivery",
-    "retours": "Returns / Exchanges"
+    "retours": "Returns / Exchanges",
+    "reglages": "Settings"
   },
   "picking": {
     "title": "Quantities to prepare",
@@ -435,5 +436,16 @@
     "since_other": "for {{count}} h",
     "show": "Show",
     "hide": "Hide"
+  },
+  "cfg": {
+    "title": "Depot settings",
+    "dispatch": "A ready order goes to “In dispatch” with its company by itself",
+    "alerts": "Who gets the red alert when a prepared order changes",
+    "statuts": "The parcels’ statuses at the depot",
+    "on": "On",
+    "off": "Off",
+    "alertsAll": "Every depot agent",
+    "alertsTo_one": "{{count}} person",
+    "alertsTo_other": "{{count}} people"
   }
 }

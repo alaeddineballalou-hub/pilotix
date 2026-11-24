@@ -1,4 +1,5 @@
-// Management › Statuts › « Messages client »: the shop writes the two messages its agents send a customer who does not
+// Confirmation › Réglages › « Messages au client » (it was Management › Statuts › « Messages client » until each page got
+// its own Réglages, 24 Nov 2026): the shop writes the two messages its agents send a customer who does not
 // answer (the owner's rule, 24 Nov 2026): at the try chosen in « Appels de confirmation » (3 at the start), and before
 // the order is cancelled after the shop's number of unanswered calls, with the reactivation link. The buttons put the
 // order's values in the box being written ({الاسم}…); « Aperçu client » shows both on a pretend order, as the customer
@@ -6,10 +7,10 @@
 import {
   CUSTOMER_MESSAGE_MAX, CUSTOMER_MESSAGE_SAMPLE, type CustomerMessageVar, customerMessageValues, fillCustomerMessage, REACTIVATION_VAR,
 } from '@pilotix/shared';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAction, useRpc } from '../../lib/query';
-import { Card, ErrorBox, Loading } from '../../ui/kit';
+import { Card, ErrorBox, Help, Loading } from '../../ui/kit';
 import './customer-messages.css';
 
 type Box = 'attempt' | 'cancel';
@@ -26,7 +27,26 @@ const CHIPS: { v: CustomerMessageVar; key: string }[] = [
 ];
 const LINK_TAG = `{${REACTIVATION_VAR}}`;
 
-export function CustomerMessagesCard() {
+/** A card on its own, or (`embedded`) a part of the « Messages au client » card of Confirmation › Réglages. */
+function Part({ embedded, title, help, children }: { embedded: boolean; title: string; help?: string; children: ReactNode }) {
+  if (!embedded)
+    return (
+      <Card title={title} help={help} className="cmx">
+        {children}
+      </Card>
+    );
+  return (
+    <div className="cfs-sub cmx">
+      <h3>
+        {title}
+        {help && <Help text={help} label={title} />}
+      </h3>
+      {children}
+    </div>
+  );
+}
+
+export function CustomerMessagesCard({ embedded = false }: { embedded?: boolean } = {}) {
   const { t } = useTranslation();
   const q = useRpc('confirmation.messages.get', {});
   const save = useAction('confirmation.messages.save', { success: t('admin.cmsg.saved') });
@@ -91,7 +111,7 @@ export function CustomerMessagesCard() {
 
   return (
     <>
-      <Card title={t('admin.cmsg.title')} help={t('admin.cmsg.help', { n })} className="cmx">
+      <Part embedded={embedded} title={t('admin.cmsg.title')} help={t('admin.cmsg.help', { n })}>
         <div className="cmx-chips" role="group" aria-label={t('admin.cmsg.vars')}>
           {CHIPS.map((c) => (
             <button key={c.key} type="button" className="cmx-chip" title={`{${c.v}}`} onMouseDown={(e) => e.preventDefault()} onClick={() => insert(c.v)}>
@@ -113,13 +133,13 @@ export function CustomerMessagesCard() {
             {t('admin.cmsg.save')}
           </button>
         </div>
-      </Card>
-      <Card title={t('admin.cmsg.preview')} className="cmx">
+      </Part>
+      <Part embedded={embedded} title={t('admin.cmsg.preview')}>
         <div className="cmx-cols">
           <Preview title={t('admin.cmsg.attempt', { n })} text={v.attempt} shop={d.shopName} />
           <Preview title={t('admin.cmsg.cancel')} text={v.cancel} shop={d.shopName} link={t('admin.cmsg.linkText')} />
         </div>
-      </Card>
+      </Part>
     </>
   );
 }

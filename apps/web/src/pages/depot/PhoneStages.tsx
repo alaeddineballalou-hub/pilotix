@@ -11,14 +11,12 @@ import type { FollowStatus, Order } from '@pilotix/shared';
 import { SUB_TAKEN_UNSCANNED } from '@pilotix/shared';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { rpc } from '../../lib/backend';
 import { da, wilayaName } from '../../lib/format';
 import { trackOf } from '../../lib/items';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { CopyCode } from '../../ui/CopyCode';
 import { ErrorBox, Help, Icon, Loading } from '../../ui/kit';
-import { toast } from '../../ui/toast';
 import { Filters, SearchBox } from '../ai/agent';
 import { CoBadge } from '../suivi/PhoneSuivi';
 import { useDebounced } from './OrderList';
@@ -266,56 +264,6 @@ function ReceiveTap({ o }: { o: Order }) {
   );
 }
 
-/** Find a return by its reference, its tracking number or the customer's phone (a douchette types it and presses Enter). */
-function FindReturn() {
-  const { t } = useTranslation();
-  const [code, setCode] = useState('');
-  const [found, setFound] = useState<Order[] | null>(null);
-  const [busy, setBusy] = useState(false);
-  const search = async () => {
-    const c = code.trim().replace(/[,()"*]/g, '');
-    if (!c) return;
-    setBusy(true);
-    try {
-      setFound(await rpc('depot.find', { code: c }));
-    } catch (e: any) {
-      toast(e.message, 'bad');
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <section className="pxt-find">
-      <b>{t('depot.receive.title')}</b>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          search();
-        }}
-      >
-        <input type="search" autoComplete="off" enterKeyHint="search" placeholder={t('depot.receive.ph')} aria-label={t('depot.receive.ph')} value={code} onChange={(e) => setCode(e.target.value)} />
-        <button type="submit" className="pxt-go" disabled={busy || !code.trim()} aria-label={t('depot.receive.search')}>
-          <Icon name="search" />
-        </button>
-      </form>
-      {found &&
-        (found.length ? (
-          <ul className="pxt-list">
-            {found.map((o) => (
-              <li key={o.id}>
-                <Parcel o={o}>
-                  <ReceiveTap o={o} />
-                </Parcel>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="muted small">{t('depot.receive.none')}</p>
-        ))}
-    </section>
-  );
-}
-
 export function PhoneReturns() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<'returning' | 'exchange'>('returning');
@@ -327,7 +275,8 @@ export function PhoneReturns() {
   return (
     <div className="pxt">
       <div className="pxt-tools">
-        <FindReturn />
+        {/* the return scan (it was Scanner › « Retour / Échange »): the camera, or the code typed */}
+        <ScanCard mode="back" />
       </div>
       <div className="pxt-main">
       <div className="pxd-tabs" role="tablist">

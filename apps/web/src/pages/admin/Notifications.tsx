@@ -395,7 +395,7 @@ function InfoDetail({ onBack }: { onBack?: () => void }) {
         <a className="btn" href="#/notify/auto">
           {t('notifs.infoAuto')}
         </a>
-        <a className="btn" href="#/management/alertes">
+        <a className="btn" href="#/depot/reglages">
           {t('notifs.infoDepot')}
         </a>
       </div>

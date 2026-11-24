@@ -207,7 +207,7 @@
     "first": "1st call: minutes after assignment",
     "pace": "+ minutes per more recent order",
     "message": "Message to the client at try",
-    "messageHelp": "At this unanswered try, the agent sends the 1st message of « Client messages » (below) before saving. An order already further on does not get it.",
+    "messageHelp": "At this unanswered try, the agent sends the 1st message (Settings › Messages to the customer) before saving. An order already further on does not get it.",
     "cancel": "Cancel after how many unanswered calls",
     "cancelHelp": "0 = never. At this number, the agent sends the cancellation message with the link, then the order is cancelled. Orders already at this number or more are cancelled at once, with no message.",
     "tries": "Tries per order",
@@ -543,7 +543,11 @@
     "metaChange": "Change",
     "metaLinkedMany": "{{count}} ad accounts of “{{account}}”, added up in Publicité (Pilot AI › Accounts).",
     "metaOld": "An old key pasted here still works (ad account {{id}}). To have everything in one place, link your Facebook account again in Pilot AI › Accounts and tick your ad account.",
-    "metaOpen": "Open Accounts"
+    "metaOpen": "Open Accounts",
+    "movedConf": "Auto-cancel and the agents’ WhatsApp text are now in",
+    "movedConfLink": "Confirmation › Settings",
+    "movedSav": "The after-sales number is now in",
+    "movedSavLink": "After-sales › Settings"
   },
   "confirmYes": "Yes",
   "cancel": "Cancel",
@@ -946,5 +950,9 @@
     "saved": "Messages saved",
     "preview": "Client preview · SMS / WhatsApp",
     "linkText": "إعادة تفعيل الطلب"
-  }
+  },
+  "movedPages": "Each page now has its own Settings:",
+  "movedSuiviLink": "Suivi › Settings",
+  "movedDepotLink": "Depot › Settings",
+  "movedProduitsLink": "Products & stock › Settings"
 }

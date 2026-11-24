@@ -7,10 +7,9 @@ import { Card, ErrorBox, Field, Help, Icon, Loading, Tabs } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { ConfirmButton, IconBtn, intOf, Switch } from './bits';
 import { SuiviMotifsCard } from './SuiviMotifs';
-import { CustomerMessagesCard } from './CustomerMessages';
 import './motifs.css';
 
-type Group = 'confirmation' | 'depot' | 'suivi' | 'livraison' | 'sav';
+export type Group = 'confirmation' | 'depot' | 'suivi' | 'livraison' | 'sav';
 const GROUPS: Group[] = ['confirmation', 'depot', 'suivi', 'livraison', 'sav'];
 const TONES = ['info', 'ok', 'mid', 'warn', 'bad', 'off'] as const;
 type Tone = (typeof TONES)[number];
@@ -28,9 +27,14 @@ interface Row {
   like: string;
 }
 
-export function Statuts() {
+/**
+ * `only`: one group (Confirmation › Réglages: its own statuses); `skip`: groups shown elsewhere now; `embedded`: inside
+ * another card; `calls`: the « Appels de confirmation » card below (it moved to Confirmation › Réglages).
+ */
+export function Statuts({ only, skip = [], embedded = false, calls = true }: { only?: Group | readonly Group[]; skip?: readonly Group[]; embedded?: boolean; calls?: boolean } = {}) {
   const { t } = useTranslation();
-  const [group, setGroup] = useState<Group>('confirmation');
+  const groups = only ? (typeof only === 'string' ? [only] : [...only]) : GROUPS.filter((g) => !skip.includes(g));
+  const [group, setGroup] = useState<Group>(groups[0] ?? 'confirmation');
   const q = useRpc('admin.statuses.get', {});
   const [edit, setEdit] = useState<Row | 'new' | null>(null);
   const setLabel = useAction('admin.statuses.setLabel', { success: t('admin.status.saved') });
@@ -81,9 +85,9 @@ export function Statuts() {
 
   return (
     <>
-      <div className="card">
-        <div className="tabs bjp-tabs" role="tablist" aria-label="Service">
-          {GROUPS.map((g) => (
+      <div className={embedded ? 'bjp-in' : 'card'}>
+        <div className="tabs bjp-tabs" role="tablist" aria-label="Service" hidden={groups.length < 2}>
+          {groups.map((g) => (
             <button key={g} type="button" role="tab" className={`tab ${g === group ? 'on' : ''}`} aria-selected={g === group} onClick={() => setGroup(g)}>
               {t(`admin.status.groups.${g}`)}
             </button>
@@ -177,8 +181,7 @@ export function Statuts() {
         <p className="muted small">{t('admin.status.note')}</p>
       </div>
       {group === 'suivi' && <SuiviMotifsCard />}
-      <CallsCard />
-      {group === 'confirmation' && <CustomerMessagesCard />}
+      {calls && <CallsCard />}
       {edit && q.data && (
         <StatusForm
           group={group}
@@ -264,6 +267,16 @@ function StatusForm({ group, row, baseOptions, track, onClose }: { group: Group;
 
 function CallsCard() {
   const { t } = useTranslation();
+  return (
+    <Card title={t('admin.calls.title')} help={t('admin.calls.help')}>
+      <CallsForm />
+    </Card>
+  );
+}
+
+/** « Appels de confirmation »: when the first call, the next ones, how many tries, the call slots, the auto-cancel. */
+export function CallsForm() {
+  const { t } = useTranslation();
   const q = useRpc('admin.pay.get', {});
   // the limit holds for every order at once: those already at it or above are cancelled when it is saved (no message)
   const save = useAction('admin.calls.save', { success: (r) => (r.cancelled ? t('admin.calls.savedCancelled', { count: r.cancelled }) : t('admin.calls.saved')) });
@@ -284,7 +297,7 @@ function CallsCard() {
     </label>
   );
   return (
-    <Card title={t('admin.calls.title')} help={t('admin.calls.help')}>
+    <>
       <div className="bjp-grid">
         {num(t('admin.calls.first'), v.first, (s) => setV({ ...v, first: s }), { min: 1 })}
         {num(t('admin.calls.pace'), v.pace, (s) => setV({ ...v, pace: s }))}
@@ -326,6 +339,6 @@ function CallsCard() {
           {t('admin.calls.save')}
         </button>
       </div>
-    </Card>
+    </>
   );
 }

@@ -28,11 +28,12 @@ import './produits.css';
 import { AssignedCatalog } from './AssignedCatalog';
 import { Guides } from './Guides';
 import { tabOn } from '../../lib/rights';
+import { ProduitsSettings } from './ProduitsSettings';
 
 /** the page's tabs: the menu's list (packages/shared/src/menu.ts), shared with Utilisateurs › Rôles */
 const TABS = MENU_TABS.produits;
 type Tab = (typeof TABS)[number];
-const ICONS: Record<Tab, string> = { stock: 'package', inventaire: 'clipboard', produits: 'tag', guides: 'book', mouvements: 'swap', alertes: 'alert', prevision: 'chart', lots: 'calendar', fabrication: 'box', achats: 'receipt', depots: 'building' };
+const ICONS: Record<Tab, string> = { stock: 'package', inventaire: 'clipboard', produits: 'tag', guides: 'book', mouvements: 'swap', alertes: 'alert', prevision: 'chart', lots: 'calendar', fabrication: 'box', achats: 'receipt', depots: 'building', reglages: 'settings' };
 
 export function Produits(props: PageProps) {
   const { session, has } = useSession();
@@ -43,15 +44,18 @@ function DepotProduits({ sub, rest }: PageProps) {
   const { t } = useTranslation();
   // (the former « Prix » tab lives in Produits now: the menu's alias)
   const asked = menuTabOf('produits', sub ?? '');
-  const tab: Tab = (TABS as readonly string[]).includes(asked) ? (asked as Tab) : 'stock';
+  // « Réglages »: the gear, last and set apart (each page keeps its own settings, owner's ask of 24 Nov 2026)
+  const cfgOn = tabOn('produits', 'reglages');
+  const tab: Tab = (TABS as readonly string[]).includes(asked) && (asked !== 'reglages' || cfgOn) ? (asked as Tab) : 'stock';
   const alerts = useRpc('catalog.alerts', {});
   const lotsCfg = useRpc('stock.batchConfig', {});
   const makeCfg = useRpc('stock.makingConfig', {});
-  const tabs = TABS.filter((k) => pageIsOn('produits', k) && tabOn('produits', k) && (k !== 'lots' || !!lotsCfg.data?.on) && (k !== 'fabrication' || !!makeCfg.data?.on)).map((k) => ({ key: k, label: t(menuTabName('produits', k)), icon: ICONS[k], href: `#/produits/${k}`, count: k === 'alertes' ? alerts.data?.length : undefined, alert: k === 'alertes' }));
+  const tabs = TABS.filter((k) => k !== 'reglages' && pageIsOn('produits', k) && tabOn('produits', k) && (k !== 'lots' || !!lotsCfg.data?.on) && (k !== 'fabrication' || !!makeCfg.data?.on)).map((k) => ({ key: k, label: t(menuTabName('produits', k)), icon: ICONS[k], href: `#/produits/${k}`, count: k === 'alertes' ? alerts.data?.length : undefined, alert: k === 'alertes' }));
+  const cfg = cfgOn ? { key: 'reglages', label: t(menuTabName('produits', 'reglages')), icon: ICONS.reglages, href: '#/produits/reglages' } : null;
   const arg = rest?.[0] ? decodeURIComponent(rest[0]) : undefined;
   return (
     <div className="pd">
-      <SectionHeader icon="layers" title={t('produits.title')} about={t(`produits.about.${tab}`)} tabs={tabs} current={tab} />
+      <SectionHeader icon="layers" title={t('produits.title')} about={t(`produits.about.${tab}`)} tabs={tabs} current={tab} end={cfg} />
       {tab === 'stock' && <StockTab />}
       {tab === 'inventaire' && <Inventaire />}
       {tab === 'produits' && <ProductsTab />}
@@ -63,6 +67,7 @@ function DepotProduits({ sub, rest }: PageProps) {
       {tab === 'fabrication' && <Fabrication />}
       {tab === 'achats' && <Achats open={arg && /^\d+$/.test(arg) ? Number(arg) : undefined} />}
       {tab === 'depots' && <Depots />}
+      {tab === 'reglages' && <ProduitsSettings />}
     </div>
   );
 }

@@ -125,8 +125,8 @@ type S = NonNullable<ReturnType<typeof useRpc<'admin.settings.get'>>['data']>;
 function ShopCard({ s }: { s: S }) {
   const { t } = useTranslation();
   const companies = useRpc('admin.companies', {});
-  const [v, setV] = useState({ name: s.shop.name, sav: s.shop.savPhone ?? '', from: s.shop.fromWilayaId, company: s.shop.defaultCompanyId, tpl: s.shop.whatsappTemplate, cancel: String(s.calls.cancelAfterNoAnswer) });
-  const save = useAction('admin.shop.save', { success: (r) => (r.cancelled ? t('admin.calls.savedCancelled', { count: r.cancelled }) : t('admin.settings.saved')) });
+  const [v, setV] = useState({ name: s.shop.name, from: s.shop.fromWilayaId, company: s.shop.defaultCompanyId });
+  const save = useAction('admin.shop.save', { success: t('admin.settings.saved') });
   return (
     <div className="card">
       <h2>{t('admin.settings.shop')}</h2>
@@ -136,13 +136,6 @@ function ShopCard({ s }: { s: S }) {
           <Help text={t('admin.settings.shopNameHelp')} />
         </span>
         <input value={v.name} maxLength={80} onChange={(e) => setV({ ...v, name: e.target.value })} />
-      </label>
-      <label className="field">
-        <span className="lab">
-          {t('admin.settings.savPhone')}
-          <Help text={t('admin.settings.savPhoneHelp')} />
-        </span>
-        <input type="tel" inputMode="tel" autoComplete="off" maxLength={40} placeholder="0550 12 34 56" value={v.sav} onChange={(e) => setV({ ...v, sav: e.target.value })} />
       </label>
       <Field label={t('admin.settings.fromWilaya')}>
         <select value={v.from} onChange={(e) => setV({ ...v, from: Number(e.target.value) })}>
@@ -163,25 +156,15 @@ function ShopCard({ s }: { s: S }) {
           ))}
         </select>
       </label>
-      <label className="field">
-        <span className="lab">
-          {t('admin.settings.autoCancel')}
-          <Help text={t('admin.settings.autoCancelHelp')} />
-        </span>
-        <input type="number" min={0} max={30} step={1} value={v.cancel} onChange={(e) => setV({ ...v, cancel: e.target.value })} />
-      </label>
-      <label className="field">
-        <span className="lab">
-          {t('admin.settings.whatsapp')}
-          <Help text={t('admin.settings.whatsappHelp')} />
-        </span>
-        <textarea rows={2} maxLength={500} value={v.tpl} onChange={(e) => setV({ ...v, tpl: e.target.value })} />
-      </label>
+      {/* the auto-cancel and the agents' WhatsApp text are Confirmation's own settings now (Confirmation › Réglages) */}
+      <p className="muted small">
+        {t('admin.settings.movedConf')} <a href="#/confirmation/reglages">{t('admin.settings.movedConfLink')}</a> · {t('admin.settings.movedSav')} <a href="#/sav/reglages">{t('admin.settings.movedSavLink')}</a>
+      </p>
       <div className="row end">
         <button
           className="btn primary"
           disabled={save.isPending || !v.name.trim()}
-          onClick={() => save.mutate({ name: v.name.trim(), savPhone: v.sav.trim(), fromWilayaId: v.from, defaultCompanyId: v.company, whatsappTemplate: v.tpl.trim(), cancelAfterNoAnswer: Math.min(30, intOf(v.cancel)) })}
+          onClick={() => save.mutate({ name: v.name.trim(), fromWilayaId: v.from, defaultCompanyId: v.company })}
         >
           {t('admin.settings.save')}
         </button>

@@ -8,7 +8,8 @@
     "livres": "Delivered",
     "annules": "Cancelled",
     "stats": "Statistics",
-    "satisfaction": "Satisfaction"
+    "satisfaction": "Satisfaction",
+    "reglages": "Settings"
   },
   "title": "After-sales — customer tickets",
   "help": "The customer received the order and comes back with a problem. The ticket is « Waiting »; the manager settles it with an exchange (colour / size, other product or parts): the order goes straight to the Depot in « To prepare ». The ticket becomes « Delivered » by itself once the livreur hands it over.",
@@ -328,5 +329,11 @@
     "2": "So-so",
     "3": "Happy",
     "4": "Very happy"
+  },
+  "cfg": {
+    "title": "After-sales settings",
+    "phone": "The number printed on the parcels’ labels",
+    "none": "No number",
+    "statuts": "The after-sales tickets’ statuses"
   }
 }

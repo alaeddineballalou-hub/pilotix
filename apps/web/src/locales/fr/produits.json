@@ -11,7 +11,8 @@
     "depots": "Dépôts",
     "prevision": "Prévisions",
     "lots": "Lots",
-    "fabrication": "Fabrication"
+    "fabrication": "Fabrication",
+    "reglages": "Réglages"
   },
   "about": {
     "stock": "Ce qu’il y a dans chaque dépôt, ce qui est déjà promis aux commandes et ce qui reste à vendre. Les produits revenus cassés sont à part (« Cassé »).",
@@ -25,7 +26,8 @@
     "guidesAgent": "Le guide de vente de vos produits : quoi dire, les réponses aux questions et aux hésitations des clients.",
     "prevision": "Quand chaque produit sera épuisé, au rythme de ses ventes, et combien en acheter maintenant.",
     "lots": "Ce qui reste de chaque lot, le lot à envoyer en premier, et les lots périmés ou bientôt périmés.",
-    "fabrication": "Les recettes de vos produits et « Fabriquer » : les pièces sortent du stock, les produits finis entrent."
+    "fabrication": "Les recettes de vos produits et « Fabriquer » : les pièces sortent du stock, les produits finis entrent.",
+    "reglages": "Ce que Pilotix fait quand un produit manque ou revient, et les lots et la fabrication."
   },
   "ui": {
     "allDepots": "Tous les dépôts",
@@ -951,5 +953,12 @@
       "landing": "Landing page",
       "guide": "Guide de vente"
     }
+  },
+  "cfg": {
+    "title": "Réglages de Produits & stock",
+    "rulesT": "Quand le stock change",
+    "rules": "Les pubs, les pages et les commandes sans stock, quand un produit manque ou revient",
+    "lotsT": "Lots et fabrication",
+    "lots": "Les dates d’expiration et les recettes"
   }
 }

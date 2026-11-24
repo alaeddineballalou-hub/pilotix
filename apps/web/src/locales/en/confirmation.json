@@ -10,7 +10,8 @@
     "attente": "In progress",
     "confirmees": "Confirmed",
     "terminees": "Closed",
-    "livrees": "Delivered"
+    "livrees": "Delivered",
+    "reglages": "Settings"
   },
   "title": {
     "nouvelles": "New orders",
@@ -983,6 +984,46 @@
       "by": "Changed by {{name}}, {{when}}.",
       "savedOn": "Lock on: agents must call every new order.",
       "savedOff": "Lock off."
+    }
+  },
+  "cfg": {
+    "title": "Confirmation settings",
+    "qui": {
+      "t": "Who gets the orders",
+      "d": "Automatic sharing between the agents"
+    },
+    "appels": {
+      "t": "Calls",
+      "d": "First call, call-backs, auto-cancel, blocking",
+      "s": "First call in {{first}} min · cancels after {{n}} calls",
+      "s0": "First call in {{first}} min · no auto-cancel",
+      "block": "Blocked until the call"
+    },
+    "msg": {
+      "t": "Messages to the customer",
+      "d": "The automatic ones, the ones for a customer who does not answer, and the agents’ WhatsApp text",
+      "s_one": "{{count}} message on",
+      "s_other": "{{count}} messages on",
+      "s0": "No messages",
+      "auto": "Messages sent automatically",
+      "autoHint": "By WhatsApp, or by SMS when the number has no WhatsApp.",
+      "texts": "Change the texts",
+      "saved": "Text saved",
+      "on": "“{{name}}” on",
+      "off": "“{{name}}” off",
+      "textsWhere": "Their texts are still in Pilot Automations › Messages, with Suivi’s."
+    },
+    "lente": {
+      "t": "Slow queue alert",
+      "d": "Warn the team lead when an order waits",
+      "on": "After {{h}} h",
+      "off": "Off"
+    },
+    "statuts": {
+      "t": "Statuses",
+      "d": "The call results the agents pick",
+      "s_one": "{{count}} status",
+      "s_other": "{{count}} statuses"
     }
   }
 }

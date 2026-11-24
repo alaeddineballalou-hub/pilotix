@@ -1,0 +1,55 @@
+/* A page's « Réglages » tab (owner's ask, 24 Nov 2026: each page keeps its own settings; design 1 « Onglet ») */
+
+/* the page: a title, who sees it, then the parts folded in two columns; an opened part takes the whole width */
+.cfs { display: flex; flex-direction: column; gap: 14px; }
+.cfs-top { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; }
+.cfs-top h2 { margin: 0; font-size: 20px; }
+.cfs-who { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13.5px; }
+.cfs-who .bji { width: 15px; height: 15px; }
+.cfs-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+@media (max-width: 1100px) { .cfs-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.cfs-fold { padding: 0 !important; overflow: hidden; margin: 0 !important; }
+.cfs-fold.open { grid-column: 1 / -1; }
+.cfs-head { width: 100%; display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 0; background: transparent; color: inherit; text-align: start; cursor: pointer; font: inherit; border-radius: inherit; transition: background-color .2s ease; }
+.cfs-head:hover { background: color-mix(in srgb, var(--line) 35%, transparent); }
+.cfs-head:focus-visible { outline: 2px solid #2459D6; outline-offset: -2px; }
+.cfs-ic { width: 42px; height: 42px; flex: none; border-radius: 13px; display: grid; place-items: center; background: color-mix(in srgb, var(--line) 70%, transparent); color: var(--ink, #1F2633); transition: background-color .2s ease, color .2s ease; }
+.cfs-ic .bji { width: 20px; height: 20px; }
+.cfs-fold.open .cfs-ic { background: #FFE9CC; color: #A4480A; }
+.cfs-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.cfs-tl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
+.cfs-t b { font-size: 16px; }
+.cfs-t small { color: var(--muted); font-size: 13px; font-weight: 400; }
+.cfs-state { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 5px 12px; border-radius: 999px; background: color-mix(in srgb, var(--line) 70%, transparent); color: var(--ink, #1F2633); font-weight: 600; font-size: 13px; }
+.cfs-chev { flex: none; color: var(--muted); transition: transform .3s cubic-bezier(.16, 1, .3, 1); }
+.cfs-fold.open .cfs-chev { transform: rotate(180deg); }
+.cfs-body { padding: 16px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 16px; animation: cfs-in .3s cubic-bezier(.16, 1, .3, 1); }
+@keyframes cfs-in { from { opacity: 0; transform: translateY(-6px); } }
+
+/* inside a part */
+.cfs-sub { display: flex; flex-direction: column; gap: 10px; }
+.cfs-sub + .cfs-sub { padding-top: 16px; border-top: 1px solid var(--line); }
+.cfs-sub h3 { margin: 0; font-size: 15px; }
+.cfs-sub textarea { width: 100%; }
+/* a short field and its button on one line (SAV › the phone number) */
+.cfs-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.cfs-inline input { flex: 0 1 280px; min-width: 0; }
+.cfs-link { align-self: flex-start; }
+.cfs-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.cfs-list li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.cfs-list li:first-child { border-top: 0; }
+.cfs-list li > span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cfs-list small { color: var(--muted); font-size: 13px; }
+.cfs-body .aa-in, .cfs-body .bjp-in { margin: 0; }
+
+/* a phone: the state goes under the title */
+@media (max-width: 600px) {
+  .cfs-head { padding: 12px 14px; gap: 12px; }
+  .cfs-t small { display: none; }
+  .cfs-body { padding: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cfs-body { animation: none; }
+  .cfs-chev, .cfs-head, .cfs-ic { transition: none; }
+}

@@ -37,13 +37,17 @@ const AGENT0: AgentCfg = {
 };
 
 /** `agency`: a confirmation agency's own page (Facturation › Affectation): its orders in every store, its agents. */
-export function Affectation({ agency = false }: { agency?: boolean } = {}) {
+/**
+ * `areas`: the parts shown (Confirmation › Réglages: its own part and the agents; Management: the rest). `embedded`: inside
+ * another card (no card of its own, no title).
+ */
+export function Affectation({ agency = false, areas = ['conf', 'follow'], embedded = false }: { agency?: boolean; areas?: readonly ('conf' | 'follow')[]; embedded?: boolean } = {}) {
   const { t } = useTranslation();
   // the same page and the same answers; the agency's own actions in its space
   const P = (agency ? { get: 'agency.assign.get', set: 'agency.assign.set', run: 'agency.assign.run' } : { get: 'assign.get', set: 'assign.set', run: 'assign.run' }) as { get: 'assign.get'; set: 'assign.set'; run: 'assign.run' };
   const q = useRpc(P.get, {}, { refetchInterval: 30_000 });
   const products = (useRpc('catalog.search', { limit: 100 }, { enabled: !agency }).data ?? []).map((p) => ({ id: p.id, name: p.name }));
-  const [tab, setTab] = useState<Tab>('conf');
+  const [tab, setTab] = useState<Tab>(areas[0] ?? 'agents');
   const [draft, setDraft] = useState<Cfg | null>(null);
   const [pick, setPick] = useState<number | null>(null);
   const save = useAction(P.set, {
@@ -417,15 +421,17 @@ export function Affectation({ agency = false }: { agency?: boolean } = {}) {
   };
 
   return (
-    <div className="card pf aa">
-      <div className="pf-head">
-        <div className="pf-title">
-          <h2>{t('admin.aa.title')}</h2>
-          <p className="muted">{t(agency ? 'admin.aa.helpAgency' : 'admin.aa.help')}</p>
+    <div className={embedded ? 'pf aa aa-in' : 'card pf aa'}>
+      {!embedded && (
+        <div className="pf-head">
+          <div className="pf-title">
+            <h2>{t('admin.aa.title')}</h2>
+            <p className="muted">{t(agency ? 'admin.aa.helpAgency' : 'admin.aa.help')}</p>
+          </div>
         </div>
-      </div>
+      )}
       <div className="aa-tabs" role="tablist">
-        {(['conf', 'follow', 'agents'] as const).map((k) => (
+        {([...areas, 'agents'] as const).map((k) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
             <span className="aa-full">{t(`admin.aa.tab.${k}`)}</span>
             <span className="aa-short">{t(`admin.aa.role.${k === 'follow' ? 'follow' : k === 'conf' ? 'conf' : 'agents'}`)}</span>

@@ -17,6 +17,7 @@ import { SavStats } from './Stats';
 import { useSavFilters } from './filters';
 import { TicketModal } from './Ticket';
 import { tabOn } from '../../lib/rights';
+import { SavSettings } from './Settings';
 
 /** the page's tabs: the menu's list (packages/shared/src/menu.ts), shared with Utilisateurs › Rôles */
 const VIEWS = MENU_TABS.sav;
@@ -25,6 +26,21 @@ export function Sav({ sub }: PageProps) {
   const { t } = useTranslation();
   // phones: SAV is built around the call (Nouvel appel → réglé au téléphone or échange → dépôt)
   const phone = useIsPhone();
+  // SAV › Réglages (the gear, last in the bar): the SAV phone number and the SAV statuses
+  if (sub === 'reglages' && tabOn('sav', 'reglages'))
+    return phone ? (
+      <div className="pxv">
+        <a className="pxv-backl" href="#/sav/tickets">
+          <Icon name="chevl" /> {t('sav.title')}
+        </a>
+        <SavSettings />
+      </div>
+    ) : (
+      <>
+        <SavBar view="reglages" />
+        <SavSettings />
+      </>
+    );
   if (phone && sub === 'stats')
     return (
       <div className="pxv">
@@ -57,13 +73,21 @@ function SavWide({ sub }: PageProps) {
   );
 }
 
+/** the bar of the SAV page (its tabs with their counts), the gear « Réglages » last */
+function SavBar({ view }: { view: View }) {
+  const { t } = useTranslation();
+  const agency = useSession().session?.shop?.kind === 'agency';
+  const k = useRpc('sav.kpis', {}, { refetchInterval: 60_000 }).data;
+  const stageCount = (v: View): number | undefined => (k && (v === 'attente' || v === 'depot' || v === 'livraison' || v === 'livres' || v === 'annules' || v === 'satisfaction') ? k[v] : undefined);
+  const cfg = tabOn('sav', 'reglages') ? { key: 'reglages', label: t(menuTabName('sav', 'reglages')), href: '#/sav/reglages' } : null;
+  return <StageBar flow={false} current={view} items={VIEWS.filter((v) => v !== 'reglages' && (!agency || v !== 'stats') && tabOn('sav', v)).map((v) => ({ key: v, label: t(menuTabName('sav', v)), href: `#/sav/${v}`, count: stageCount(v) }))} end={cfg} />;
+}
+
 function SavDesktop({ sub }: PageProps) {
   const { t } = useTranslation();
-  const { session } = useSession();
-  const agency = session?.shop?.kind === 'agency';
   const combined = useScope() === 'all';
   const [page, setPage] = useState(1);
-  const view: View = (VIEWS as readonly string[]).includes(sub ?? '') ? (sub as View) : 'tickets';
+  const view: Exclude<View, 'reglages'> = sub !== 'reglages' && (VIEWS as readonly string[]).includes(sub ?? '') ? (sub as Exclude<View, 'reglages'>) : 'tickets';
   const [tab, setTab] = useState<'todo' | 'all'>(() => {
     try {
       return (localStorage.getItem('px-sav-tab') as 'todo' | 'all') || 'todo';
@@ -101,7 +125,6 @@ function SavDesktop({ sub }: PageProps) {
   const list = useRpc('sav.list', { view: apiView, q: deb || undefined, page, ...(combined ? {} : sfl.input) });
   const rows: TicketRowScope[] = list.data?.rows ?? [];
   const k = kp.data;
-  const stageCount = (v: View): number | undefined => (k && (v === 'attente' || v === 'depot' || v === 'livraison' || v === 'livres' || v === 'annules' || v === 'satisfaction') ? k[v] : undefined);
   const closeNew = () => {
     setCreating(false);
     if (view === 'nouveau') location.hash = '#/sav/tickets';
@@ -109,7 +132,7 @@ function SavDesktop({ sub }: PageProps) {
 
   return (
     <>
-      <StageBar flow={false} current={view} items={VIEWS.filter((v) => (!agency || v !== 'stats') && tabOn('sav', v)).map((v) => ({ key: v, label: t(menuTabName('sav', v)), href: `#/sav/${v}`, count: stageCount(v) }))} />
+      <SavBar view={view} />
       <div className="bjt">
         <div className="card">
           <div className="card-head">

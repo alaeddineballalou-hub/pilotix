@@ -105,5 +105,7 @@
     "retry": "Réessayer",
     "done": "App Pilotix à jour · version {{build}}"
   },
-  "pageCrashed": "Cette page a eu un problème. L’équipe Pilotix est prévenue automatiquement."
+  "pageCrashed": "Cette page a eu un problème. L’équipe Pilotix est prévenue automatiquement.",
+  "settingsWho": "Seuls les admins et les rôles choisis voient cet onglet (Utilisateurs › Rôles).",
+  "settingsNothing": "Rien à régler ici pour votre rôle."
 }

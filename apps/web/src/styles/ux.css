@@ -189,3 +189,13 @@ html body .pager select.qsz { min-width: 112px; }
 /* tables as cards on a phone: a cell that spans the columns (a group's title, « nothing here », a total) takes the
    card's whole width instead of half of it */
 @media (max-width: 760px) { .tbl td[colspan]:not([colspan="1"]) { grid-column: 1 / -1; } }
+
+/* A page's « Réglages » tab in its bar (StageBar's `end`, ui/kit.tsx): the gear tab: apart at the end of the bar, kept in view while the bar scrolls (a phone), navy when open */
+/* (above the bar's own edge fade; when tabs are hidden under it, they fade out just before it: « there is more, slide ») */
+.bjm-bar .bjm-p.bjm-cfg { margin-inline-start: auto; position: sticky; inset-inline-end: 0; z-index: 3; gap: 6px; border: 1px solid var(--line); background: var(--surface); }
+.bjm-bar[data-fade~="e"] .bjm-p.bjm-cfg::before { content: ''; position: absolute; top: -7px; bottom: -7px; inset-inline-end: calc(100% + 1px); width: 44px; pointer-events: none; background: linear-gradient(270deg, var(--surface) 25%, transparent); }
+[dir="rtl"] .bjm-bar[data-fade~="e"] .bjm-p.bjm-cfg::before { background: linear-gradient(90deg, var(--surface) 25%, transparent); }
+@media (max-width: 600px) { .bjm-bar .bjm-p.bjm-cfg .bjm-l { display: none; } .bjm-bar .bjm-p.bjm-cfg { padding-inline: 11px; } }
+.bjm-bar .bjm-p.bjm-cfg .bji { width: 17px; height: 17px; }
+.bjm-bar .bjm-p.bjm-cfg.on, html[data-skin][data-theme] .bjm-bar .bjm-p.bjm-cfg.on, html[data-theme] .bjm-bar .bjm-p.bjm-cfg.on { background: var(--navy, #1B2A47) !important; border-color: var(--navy, #1B2A47) !important; color: #FFFFFF !important; }
+

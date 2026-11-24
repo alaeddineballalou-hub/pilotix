@@ -107,7 +107,7 @@ export function Notify({ sub }: PageProps) {
       {current === 'cas' && <Cases admin={admin} />}
       {current === 'tester' && <Tester admin={admin} />}
       {current === 'resultats' && <Results />}
-      {current === 'reglages' && <Settings />}
+      {current === 'reglages' && <NotifySettings />}
     </>
   );
 }
@@ -740,7 +740,8 @@ function Results() {
 }
 
 // ---------------------------------------------------------------- settings (admin)
-function Settings() {
+/** « Réglages des messages » (admins): also Suivi › Réglages › Messages au client. */
+export function NotifySettings() {
   const q = useRpc('notify.settings.get', {});
   if (q.isLoading) return <Loading />;
   if (q.error || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;

@@ -8,7 +8,8 @@
     "livres": "Livrés",
     "annules": "Annulés",
     "stats": "Statistiques",
-    "satisfaction": "Satisfaction"
+    "satisfaction": "Satisfaction",
+    "reglages": "Réglages"
   },
   "title": "SAV — tickets clients",
   "help": "Le client a reçu sa commande et revient avec un problème. Le ticket est « En attente » ; le manager le traite par un échange (couleur / taille, autre produit ou pièces) : la commande part directement au Dépôt dans « À préparer ». Le ticket passe à « Livré » tout seul quand le livreur l’a remise.",
@@ -328,5 +329,11 @@
     "2": "Moyen",
     "3": "Content",
     "4": "Très content"
+  },
+  "cfg": {
+    "title": "Réglages du SAV",
+    "phone": "Le numéro imprimé sur les étiquettes des colis",
+    "none": "Pas de numéro",
+    "statuts": "Les statuts des tickets SAV"
   }
 }

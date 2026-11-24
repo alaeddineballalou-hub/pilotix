@@ -588,21 +588,38 @@ export const adminProcs = {
       name: z.string().trim().min(1).max(80),
       fromWilayaId: z.number().int().min(1).max(69),
       defaultCompanyId: id.nullable(),
-      whatsappTemplate: z.string().trim().max(500),
-      cancelAfterNoAnswer: z.number().int().min(0).max(30),
+      // Confirmation's two (Confirmation › Réglages since 24 Nov 2026): kept as they are when left out
+      whatsappTemplate: z.string().trim().max(500).optional(),
+      cancelAfterNoAnswer: z.number().int().min(0).max(30).optional(),
       savPhone: z.string().trim().max(40).optional(),
     }),
     async (ctx, i) => {
       if (i.defaultCompanyId && !(await ctx.db.query('SELECT 1 FROM delivery_companies WHERE id = $1', [i.defaultCompanyId])).length) throw notFound('Société introuvable');
-      const savPhone = i.savPhone ?? (await getSetting(ctx.db, 'shop')).savPhone;
-      await setSetting(ctx.db, 'shop', { name: i.name, fromWilayaId: i.fromWilayaId, defaultCompanyId: i.defaultCompanyId, whatsappTemplate: i.whatsappTemplate || DEFAULT_SETTINGS.shop.whatsappTemplate, savPhone }, me(ctx));
-      const calls = await getSetting(ctx.db, 'calls');
-      await setSetting(ctx.db, 'calls', { ...DEFAULT_CALL_SETTINGS, ...calls, cancelAfterNoAnswer: i.cancelAfterNoAnswer }, me(ctx));
+      const cur = await getSetting(ctx.db, 'shop');
+      const savPhone = i.savPhone ?? cur.savPhone;
+      const whatsappTemplate = i.whatsappTemplate === undefined ? cur.whatsappTemplate : i.whatsappTemplate || DEFAULT_SETTINGS.shop.whatsappTemplate;
+      await setSetting(ctx.db, 'shop', { name: i.name, fromWilayaId: i.fromWilayaId, defaultCompanyId: i.defaultCompanyId, whatsappTemplate, savPhone }, me(ctx));
+      if (i.cancelAfterNoAnswer !== undefined) {
+        const calls = await getSetting(ctx.db, 'calls');
+        await setSetting(ctx.db, 'calls', { ...DEFAULT_CALL_SETTINGS, ...calls, cancelAfterNoAnswer: i.cancelAfterNoAnswer }, me(ctx));
+      }
       ctx.emit({ type: 'settings' });
-      const over = await cancelOverLimit(ctx);
+      // a new limit: the orders already at it or above are cancelled now (no message); the name alone cancels nothing
+      const over = i.cancelAfterNoAnswer !== undefined ? await cancelOverLimit(ctx) : { cancelled: 0 };
       return { ok: true, cancelled: over.cancelled };
     },
   ),
+  // a page's « Réglages » changes one setting of the shop: Confirmation › the WhatsApp text the agents send from an order
+  // (« Bonjour {nom}… »), SAV › the SAV phone number; the others stay as they are
+  'admin.shop.patch': proc([], z.object({ whatsappTemplate: z.string().trim().max(500).optional(), savPhone: z.string().trim().max(40).optional() }), async (ctx, i) => {
+    const cur = await getSetting(ctx.db, 'shop');
+    const next = { ...cur };
+    if (i.whatsappTemplate !== undefined) next.whatsappTemplate = i.whatsappTemplate || DEFAULT_SETTINGS.shop.whatsappTemplate;
+    if (i.savPhone !== undefined) next.savPhone = i.savPhone;
+    await setSetting(ctx.db, 'shop', next, me(ctx));
+    ctx.emit({ type: 'settings' });
+    return { ok: true };
+  }),
   'admin.warehouses.list': proc([], z.object({}), async (ctx) => (await ctx.db.query('SELECT * FROM warehouses WHERE archived_at IS NULL ORDER BY is_default DESC, name')).map(toWarehouse)),
   'admin.warehouses.save': proc(
     [],

@@ -202,7 +202,8 @@
       "release_other": "{{count}} orders without stock sent to the depot",
       "livreur_one": "{{count}} order given to drivers: {{who}}",
       "livreur_other": "{{count}} orders given to drivers: {{who}}"
-    }
+    },
+    "toConfSettings": "Slow queue: Confirmation › Settings"
   },
   "tomorrow": "tomorrow",
   "off": "Delivery messages are stopped: no message is sent to customers.",
@@ -475,5 +476,16 @@
     "waNotValidated": "WhatsApp: text not yet approved by Meta",
     "waNotReceived": "WhatsApp not received",
     "waNotReceived1h": "WhatsApp not received after 1 h"
+  },
+  "cfgWhen": {
+    "created": "As soon as the order arrives",
+    "no_answer": "When the customer does not answer",
+    "confirmed": "When the order is confirmed",
+    "shipped": "When the parcel leaves",
+    "out_for_delivery": "When the courier goes out with it",
+    "stopdesk": "When it reaches the desk",
+    "failed": "When the delivery fails",
+    "returning": "When the parcel comes back",
+    "delivered": "When the parcel is delivered"
   }
 }

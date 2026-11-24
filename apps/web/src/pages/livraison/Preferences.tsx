@@ -47,8 +47,17 @@ function keepAdv(on: boolean) {
   }
 }
 
-export function Preferences() {
+/** The parts of the shop's Préférences; each now lives in the page it is about (owner's ask, 24 Nov 2026). */
+export type PrefPart = 'company' | 'private' | 'alerts' | 'stock';
+
+/**
+ * `parts`: only these parts, shown open (a page's « Réglages »: Suivi › its alerts, Partenaires › the company and the
+ * private delivery, Produits › the stock); the others keep their saved values. `embedded`: inside another card.
+ */
+export function Preferences({ parts, embedded = false }: { parts?: readonly PrefPart[]; embedded?: boolean } = {}) {
   const { t } = useTranslation();
+  const show = (k: PrefPart) => !parts || parts.includes(k);
+  const direct = !!parts;
   const q = useRpc('prefs.get', {});
   const companies = useRpc('admin.companies', {});
   const [adv, setAdv] = useState(readAdv);
@@ -120,19 +129,21 @@ export function Preferences() {
   ];
 
   return (
-    <div className="card pf">
-      <div className="pf-head">
-        <div className="pf-title">
-          <h2>{t('livraison.prefs.title')}</h2>
-          <p className="muted">{t('livraison.prefs.help')}</p>
+    <div className={embedded ? 'pf pf-in' : 'card pf'}>
+      {!embedded && (
+        <div className="pf-head">
+          <div className="pf-title">
+            <h2>{t('livraison.prefs.title')}</h2>
+            <p className="muted">{t('livraison.prefs.help')}</p>
+          </div>
+          <label className="pf-adv">
+            <span>{t('livraison.prefs.advanced')}</span>
+            <input type="checkbox" role="switch" className="pf-sw" checked={adv} onChange={flipAdv} />
+          </label>
         </div>
-        <label className="pf-adv">
-          <span>{t('livraison.prefs.advanced')}</span>
-          <input type="checkbox" role="switch" className="pf-sw" checked={adv} onChange={flipAdv} />
-        </label>
-      </div>
+      )}
 
-      {!adv ? (
+      {!adv && !direct ? (
         <>
           <span className={`pf-badge ${same(saved, rec) ? 'ok' : ''}`}>{t(same(saved, rec) ? 'livraison.prefs.isRecommended' : 'livraison.prefs.isCustom')}</span>
           <ul className="pf-sum">
@@ -155,6 +166,7 @@ export function Preferences() {
         </>
       ) : (
         <>
+          {show('company') && (
           <section className="pf-group">
             <h3>{t('livraison.prefs.gCompany')}</h3>
             <label className="pf-row">
@@ -183,7 +195,9 @@ export function Preferences() {
               <input type="checkbox" role="switch" className="pf-sw" checked={v.strictLock} onChange={(e) => set({ strictLock: e.target.checked })} />
             </label>
           </section>
+          )}
 
+          {show('private') && (
           <section className="pf-group">
             <h3>{t('livraison.prefs.gPrivate')}</h3>
             <label className="pf-row">
@@ -226,7 +240,9 @@ export function Preferences() {
               </div>
             )}
           </section>
+          )}
 
+          {show('alerts') && (
           <section className="pf-group" aria-labelledby="pf-al-h">
             <h3 id="pf-al-h">{t('livraison.prefs.alerts.title')}</h3>
             <p className="pf-lead">{t('livraison.prefs.alerts.hint')}</p>
@@ -378,7 +394,9 @@ export function Preferences() {
               ))}
             </div>
           </section>
+          )}
 
+          {show('stock') && (
           <section className="pf-group">
             <h3>{t('livraison.prefs.gStock')}</h3>
             <div className="pf-row">
@@ -402,8 +420,9 @@ export function Preferences() {
               </label>
             </div>
           </section>
+          )}
 
-          {!same(v, rec) && (
+          {!direct && !same(v, rec) && (
             <button type="button" className="btn ghost pf-reset" onClick={() => setDraft({ ...rec })}>
               <Icon name="history" />
               {t('livraison.prefs.reset')}

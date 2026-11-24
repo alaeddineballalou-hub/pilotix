@@ -17,7 +17,8 @@ export function useCanGive(): boolean {
 export type Sub = 'nouvelles' | 'attente' | 'confirmees' | 'livrees' | 'terminees';
 /** the page's tabs: the menu's list (packages/shared/src/menu.ts), shared with Utilisateurs › Rôles (no Livrées tab in
  *  Confirmation: removed on request) */
-export const SUBS: readonly Sub[] = MENU_TABS.confirmation;
+/** the lists' tabs (« Réglages » is not a list: ./Settings.tsx) */
+export const SUBS: readonly Sub[] = MENU_TABS.confirmation.filter((k): k is Exclude<(typeof MENU_TABS.confirmation)[number], 'reglages'> => k !== 'reglages');
 export const SUB_STATUSES: Record<Sub, ConfStatus[]> = {
   nouvelles: ['new'],
   attente: ['to_check', 'no_answer', 'busy', 'callback', 'postponed'],
