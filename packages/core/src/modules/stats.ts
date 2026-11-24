@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { iso, num } from '../db';
 import { bad, Ctx, forbidden, proc } from '../rpc';
 import { getSetting, setSetting, SettingsMap } from '../settings';
+import { teamCountsSql } from './carts';
 
 // ---------------------------------------------------------------- helpers
 export const AREAS = ['confirmation', 'depot', 'suivi', 'livreurs', 'sav'] as const;
@@ -167,7 +168,7 @@ export async function confirmationStats(ctx: Ctx, input: z.infer<typeof TeamsInp
       ? (
           await ctx.db.query(
             `SELECT id, agent_id AS uid, conf_status, follow_status, created_at, COALESCE(assigned_at, created_at) AS start FROM sales
-             WHERE created_at >= $1 AND created_at < $2 AND agent_id IS NOT NULL`,
+             WHERE created_at >= $1 AND created_at < $2 AND agent_id IS NOT NULL AND ${teamCountsSql()}`,
             [from, to],
           )
         ).map((r: any) => ({ id: num(r.id), uid: num(r.uid), conf: r.conf_status, follow: r.follow_status, created: Date.parse(r.created_at), start: Date.parse(r.start) }))
@@ -175,7 +176,7 @@ export async function confirmationStats(ctx: Ctx, input: z.infer<typeof TeamsInp
           await ctx.db.query(
             `SELECT o.id, e.user_id AS uid, o.conf_status, o.follow_status, o.created_at, COALESCE(o.assigned_at, o.created_at) AS start
              FROM (SELECT DISTINCT ON (order_id) order_id, user_id FROM order_events WHERE kind = 'conf_status' AND at >= $1 AND at < $2 AND user_id IS NOT NULL ORDER BY order_id, at DESC) e
-             JOIN sales o ON o.id = e.order_id`,
+             JOIN sales o ON o.id = e.order_id WHERE ${teamCountsSql('o.')}`,
             [from, to],
           )
         ).map((r: any) => ({ id: num(r.id), uid: num(r.uid), conf: r.conf_status, follow: r.follow_status, created: Date.parse(r.created_at), start: Date.parse(r.start) }));
@@ -544,7 +545,7 @@ export const statsProcs = {
           (SELECT count(*) FROM sales WHERE created_at >= $1 AND created_at < $2 AND conf_status = ANY($3))::int AS received_todo,
           (SELECT count(*) FROM sales WHERE confirmed_at >= $1 AND confirmed_at < $2 AND conf_status IN ('confirmed','no_stock'))::int AS confirmed,
           (SELECT count(DISTINCT e.order_id) FROM order_events e JOIN sales o ON o.id = e.order_id
-             WHERE e.kind = 'conf_status' AND e.at >= $1 AND e.at < $2 AND e.to_value = ANY($4) AND o.conf_status = ANY($4))::int AS cancelled,
+             WHERE e.kind = 'conf_status' AND e.at >= $1 AND e.at < $2 AND e.to_value = ANY($4) AND o.conf_status = ANY($4) AND ${teamCountsSql('o.')})::int AS cancelled,
           (SELECT count(*) FROM sales WHERE shipped_at >= $1 AND shipped_at < $2)::int AS shipped,
           (SELECT count(*) FROM sales WHERE shipped_at >= $1 AND shipped_at < $2 AND follow_status = ANY($5))::int AS shipped_road,
           (SELECT count(*) FROM sales WHERE delivered_at >= $1 AND delivered_at < $2 AND follow_status IN ('delivered','exchanged'))::int AS delivered,
@@ -583,8 +584,9 @@ export const statsProcs = {
       `WITH ev AS (
          SELECT DISTINCT ON (order_id, user_id) order_id, user_id, to_value FROM order_events
          WHERE kind = 'conf_status' AND at >= $1 AND at < $2 AND user_id IS NOT NULL ORDER BY order_id, user_id, at DESC),
-       t AS (SELECT user_id, count(*)::int AS treated, count(*) FILTER (WHERE to_value = ANY($3))::int AS confirmed,
-                    count(*) FILTER (WHERE to_value = ANY($4))::int AS lost FROM ev GROUP BY user_id),
+       t AS (SELECT ev.user_id, count(*)::int AS treated, count(*) FILTER (WHERE ev.to_value = ANY($3))::int AS confirmed,
+                    count(*) FILTER (WHERE ev.to_value = ANY($4))::int AS lost
+             FROM ev JOIN sales o ON o.id = ev.order_id WHERE ${teamCountsSql('o.', 'ev.to_value')} GROUP BY ev.user_id),
        d AS (SELECT agent_id AS user_id,
                     count(*) FILTER (WHERE delivered_at >= $1 AND delivered_at < $2 AND follow_status IN ('delivered','exchanged'))::int AS delivered,
                     count(*) FILTER (WHERE returned_at >= $1 AND returned_at < $2)::int AS returned

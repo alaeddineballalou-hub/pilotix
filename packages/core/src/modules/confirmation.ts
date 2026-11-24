@@ -11,7 +11,8 @@ import { HAS_GUIDE } from './guide';
 import { assignedProductIds } from './productscope';
 import { readMontage } from './montage';
 import { rotateTimes } from './assign';
-import { attackOf, type Lead, leadOf } from './leadkind';
+import { CART_CAME, cartLeftOut, teamCountsSql } from './carts';
+import { attackOf, CONFIRMED_LIKE, type Lead, leadOf } from './leadkind';
 import { reasonCode } from './pilotlearn';
 import { checkRules } from './pilotchecks';
 import { blackNumbers, shareBlacklist } from './sharedblacklist';
@@ -463,12 +464,14 @@ async function enCours(ctx: Ctx, i: KfInput) {
   const upd = i.basis === 'updated';
   const ST = [...CONF_SUBS.attente] as string[];
   const O = await ctx.db.query(`SELECT id, ref, conf_status, attempts, next_call_at, agent_id, created_at, total FROM sales WHERE conf_status = ANY($1)`, [ST]);
-  // orders settled on the period: confirmed, or cancelled by the client (not fake / duplicate / wrong number)
+  // orders settled on the period: confirmed, or cancelled by the client (not fake / duplicate / wrong number); an
+  // abandoned cart only once confirmed (leadkind.ts)
   const S = await ctx.db.query(
     upd
-      ? `SELECT o.agent_id, o.conf_status, o.attempts FROM sales o WHERE (o.conf_status = 'confirmed' AND o.confirmed_at >= $1 AND o.confirmed_at < $2)
-           OR (o.conf_status = 'cancelled' AND EXISTS (SELECT 1 FROM order_events e WHERE e.order_id = o.id AND e.kind = 'conf_status' AND e.to_value = 'cancelled' AND e.at >= $1 AND e.at < $2))`
-      : `SELECT agent_id, conf_status, attempts FROM sales WHERE conf_status IN ('confirmed', 'cancelled') AND created_at >= $1 AND created_at < $2`,
+      ? `SELECT o.agent_id, o.conf_status, o.attempts FROM sales o WHERE ((o.conf_status = 'confirmed' AND o.confirmed_at >= $1 AND o.confirmed_at < $2)
+           OR (o.conf_status = 'cancelled' AND EXISTS (SELECT 1 FROM order_events e WHERE e.order_id = o.id AND e.kind = 'conf_status' AND e.to_value = 'cancelled' AND e.at >= $1 AND e.at < $2)))
+           AND ${teamCountsSql('o.')}`
+      : `SELECT agent_id, conf_status, attempts FROM sales WHERE conf_status IN ('confirmed', 'cancelled') AND created_at >= $1 AND created_at < $2 AND ${teamCountsSql()}`,
     [isoT(R.a), isoT(R.b)],
   );
   const nx = (o: any) => (o.next_call_at ? Date.parse(iso(o.next_call_at)) : null);
@@ -559,9 +562,9 @@ async function confirmedKpis(ctx: Ctx, i: KfInput) {
     (
       await ctx.db.query(
         upd
-          ? `SELECT count(*)::int AS n FROM sales o WHERE o.conf_status = ANY($3) AND EXISTS
+          ? `SELECT count(*)::int AS n FROM sales o WHERE o.conf_status = ANY($3) AND ${teamCountsSql('o.')} AND EXISTS
               (SELECT 1 FROM order_events e WHERE e.order_id = o.id AND e.kind = 'conf_status' AND e.to_value = o.conf_status AND e.at >= $1 AND e.at < $2)`
-          : `SELECT count(*)::int AS n FROM sales WHERE conf_status = ANY($3) AND created_at >= $1 AND created_at < $2`,
+          : `SELECT count(*)::int AS n FROM sales WHERE conf_status = ANY($3) AND created_at >= $1 AND created_at < $2 AND ${teamCountsSql()}`,
         [isoT(R.a), isoT(R.b), CANCELLED_LIKE],
       )
     )[0]?.n,
@@ -641,20 +644,27 @@ async function overview(ctx: Ctx, i: KfInput) {
   const R = kfRange(now, i);
   const calls = await getSetting(ctx.db, 'calls');
   const col = i.basis === 'updated' ? 'updated_at' : 'created_at';
-  const O = await ctx.db.query(
-    `SELECT id, conf_status, follow_status, agent_id, created_at, total, has_upsell, upsell_value FROM sales WHERE ${col} >= $1 AND ${col} < $2`,
+  const all = await ctx.db.query(
+    `SELECT id, conf_status, follow_status, agent_id, created_at, total, has_upsell, upsell_value, came FROM sales WHERE ${col} >= $1 AND ${col} < $2`,
     [isoT(R.a), isoT(R.b)],
   );
+  // abandoned carts (leadkind.ts): on their own line; in the team's numbers only once confirmed
+  const cartRows = all.filter((o: any) => CART_CAME.includes(String(o.came)));
+  const cartsOk = cartRows.filter((o: any) => CONFIRMED_LIKE.includes(o.conf_status));
+  const carts = {
+    n: cartRows.length,
+    confirmed: cartsOk.length,
+    value: cartsOk.reduce((s: number, o: any) => s + num(o.total), 0),
+    pending: cartRows.filter((o: any) => leadOf(o.conf_status, null) === 'pending').length,
+  };
+  const O = all.filter((o: any) => !cartLeftOut(o.came, o.conf_status));
   const ids = O.map((o: any) => num(o.id));
   const last = new Map<number, { by: number | null; note: string | null }>();
   const touch = new Map<number, number>();
   const given = new Map<number, number>();
   const prods = new Map<number, { id: number; name: string }[]>();
-  /** orders Pilotix added from a form the client left without validating (« abandonnée ») */
-  const abandoned = new Set<number>();
   for (let k = 0; k < ids.length; k += 1000) {
     const part = ids.slice(k, k + 1000);
-    for (const r of await ctx.db.query(`SELECT DISTINCT order_id FROM landing_leads WHERE auto_order AND order_id = ANY($1)`, [part])) abandoned.add(num(r.order_id));
     // who settled the lead, and the reason written with it (« Changé d'avis — … »)
     for (const e of await ctx.db.query(
       `SELECT DISTINCT ON (order_id) order_id, user_id, note FROM order_events WHERE kind = 'conf_status' AND order_id = ANY($1) ORDER BY order_id, at DESC, id DESC`,
@@ -817,7 +827,9 @@ async function overview(ctx: Ctx, i: KfInput) {
     value: sum(() => true),
     pending: { n: pending, value: sum(is('pending')), fresh: count((o) => o.status === 'new' || o.status === 'to_check'), noAnswer: count((o) => o.status === 'no_answer' || o.status === 'busy'), later: count((o) => o.status === 'callback' || o.status === 'postponed') },
     confirmed: { n: conf, value: confValue, basket: conf ? Math.round(confValue / conf) : null },
-    refused: { n: refused, value: sum(is('refused')), reasons: [...RS.values()].sort((x, y) => y.n - x.n || y.value - x.value), abandoned: count((o) => o.lead === 'refused' && abandoned.has(o.id)) },
+    refused: { n: refused, value: sum(is('refused')), reasons: [...RS.values()].sort((x, y) => y.n - x.n || y.value - x.value) },
+    /** the abandoned carts of the period: the confirmed ones are in every number of this page, the others in none */
+    carts,
     attacks: {
       n: attacks,
       value: sum(is('attack')),

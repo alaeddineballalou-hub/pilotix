@@ -13,6 +13,7 @@ import { algiersDayStart, CONF_DONE_BAD, CONF_TODO, DoctorItem, DoctorLine, doct
 import { z } from 'zod';
 import { iso, num } from '../db';
 import { Ctx, proc } from '../rpc';
+import { teamCountsSql } from './carts';
 import { payAlerts } from './pay';
 import { allowedAreas } from './stats';
 
@@ -144,7 +145,7 @@ export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
   const rate = async (from: string, to: string) => {
     const r = await one(
       `SELECT count(*) FILTER (WHERE conf_status IN ('confirmed','no_stock'))::int AS ok, count(*) FILTER (WHERE conf_status = ANY($3))::int AS ko
-         FROM sales WHERE created_at >= $1 AND created_at < $2${confMine}`,
+         FROM sales WHERE created_at >= $1 AND created_at < $2 AND ${teamCountsSql()}${confMine}`,
       [from, to, CONF_DONE_BAD],
     );
     return { ok: num(r.ok), all: num(r.ok) + num(r.ko) };
@@ -176,7 +177,7 @@ export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
   const ag = await q(
     `SELECT o.agent_id AS id, p.name, count(*) FILTER (WHERE o.conf_status IN ('confirmed','no_stock'))::int AS ok, count(*) FILTER (WHERE o.conf_status = ANY($2))::int AS ko
        FROM sales o JOIN profiles p ON p.id = o.agent_id
-      WHERE o.created_at >= $1 AND o.agent_id IS NOT NULL GROUP BY o.agent_id, p.name`,
+      WHERE o.created_at >= $1 AND o.agent_id IS NOT NULL AND ${teamCountsSql('o.')} GROUP BY o.agent_id, p.name`,
     [at(7 * D), CONF_DONE_BAD],
   );
   const team = ratio(

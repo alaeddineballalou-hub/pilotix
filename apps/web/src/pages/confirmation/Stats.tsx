@@ -671,9 +671,9 @@ function OvLosses({ O }: { O: Ov }) {
         </span>
         <b className="ltr">{n(lost)}</b>
       </div>
-      {O.refused.abandoned > 0 && (
+      {O.carts.n > 0 && (
         <p className="px-ov-note">
-          <Icon name="flag" /> {t('confirmation.ov.abandoned', { a: n(O.refused.abandoned), n: n(O.refused.n) })}
+          <Icon name="cart" /> {t(O.carts.confirmed ? 'confirmation.ov.carts' : 'confirmation.ov.carts0', { n: n(O.carts.n), c: n(O.carts.confirmed), v: da(O.carts.value), x: n(O.carts.n - O.carts.confirmed) })}
         </p>
       )}
     </div>

@@ -4,6 +4,7 @@ import { Db, iso, num } from '../db';
 import { bad, Ctx, forbidden, notFound } from '../rpc';
 import type { Tenancy } from '../platform/tenancy';
 import type { Link } from './agencies';
+import { teamCountsSql } from './carts';
 
 export const json = (x: any): any => typeof x === 'string' ? JSON.parse(x) : x;
 export function agencyAdmin(ctx: Ctx) {
@@ -316,7 +317,7 @@ export async function agencyAgentScores(ctx:Ctx,month:string) {
           count(*) FILTER (WHERE conf_status='confirmed')::int AS confirmed,
           count(*) FILTER (WHERE conf_status='confirmed' AND follow_status IN ('delivered','exchanged'))::int AS delivered,
           count(*) FILTER (WHERE conf_status='confirmed' AND follow_status IN ('returned','returning','lost'))::int AS returned
-        FROM orders WHERE conf_agency_id=$1 AND agent_id IS NOT NULL AND created_at>=$2 AND created_at<$3 GROUP BY 1`,[ctx.shop!.id,from,to]);
+        FROM orders WHERE conf_agency_id=$1 AND agent_id IS NOT NULL AND created_at>=$2 AND created_at<$3 AND ${teamCountsSql()} GROUP BY 1`,[ctx.shop!.id,from,to]);
       for(const r of conf){const id=idOf.get(num(r.a));if(!id)continue;const a=get(id);a.received+=num(r.received);a.decided+=num(r.decided);a.confirmed+=num(r.confirmed);a.delivered+=num(r.delivered);a.returned+=num(r.returned)}
       const fol=await db.query(`SELECT follow_agent_id AS a, count(*)::int AS ended,
           count(*) FILTER (WHERE follow_status IN ('delivered','exchanged'))::int AS delivered

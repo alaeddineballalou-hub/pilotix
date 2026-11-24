@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { iso, num } from '../db';
 import { Ctx, proc } from '../rpc';
 import { getSetting } from '../settings';
+import { cartLeftOut } from './carts';
 import { REASON_SQL } from './orders';
 import { AREAS, confirmationStats, needArea, prevOf, Range, seesAll, teamViews, visibleTeams } from './stats';
 
@@ -169,7 +170,7 @@ async function countConfirmation(ctx: Ctx, r: R, ids: number[], detail: boolean)
   const P = [r.from, r.to, ids];
   // the last status each agent gave each order in the period: what they treated, confirmed, lost
   const dec = await ctx.db.query(
-    `SELECT DISTINCT ON (e.order_id, e.user_id) e.order_id AS o, e.user_id AS u, e.to_value AS s, ${dayOf('e.at')} AS d
+    `SELECT DISTINCT ON (e.order_id, e.user_id) e.order_id AS o, e.user_id AS u, e.to_value AS s, o.came, ${dayOf('e.at')} AS d
      FROM order_events e JOIN sales o ON o.id = e.order_id
      WHERE e.kind = 'conf_status' AND e.at >= $1 AND e.at < $2 AND e.user_id = ANY($3)
      ORDER BY e.order_id, e.user_id, e.at DESC`,
@@ -177,6 +178,8 @@ async function countConfirmation(ctx: Ctx, r: R, ids: number[], detail: boolean)
   );
   const cancelledBy = new Map<number, number>();
   for (const e of dec) {
+    // an abandoned cart counts only once this agent confirmed it (carts.ts)
+    if (cartLeftOut(e.came, e.s)) continue;
     const p = of(x, e.u);
     add(p, 'treated');
     if (CONFIRMED.includes(e.s)) {

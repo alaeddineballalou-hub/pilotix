@@ -3188,6 +3188,17 @@ export const landingProcs = {
           [cut],
         )
       )[0];
+      // what the abandoned carts became once orders (`came`: carts.ts): every one counts here, with the money they brought
+      const won = (
+        await ctx.db.query(
+          `SELECT count(*)::int AS orders,
+                  count(*) FILTER (WHERE conf_status IN ('confirmed','no_stock'))::int AS confirmed,
+                  COALESCE(sum(total) FILTER (WHERE conf_status IN ('confirmed','no_stock')), 0)::bigint AS confirmed_value,
+                  count(*) FILTER (WHERE follow_status IN ('delivered','exchanged'))::int AS delivered,
+                  COALESCE(sum(total) FILTER (WHERE follow_status IN ('delivered','exchanged')), 0)::bigint AS delivered_value
+           FROM sales WHERE came IN ('abandoned','recovered')`,
+        )
+      )[0];
       const rows = await ctx.db.query(
         `SELECT a.*, l.slug, p.name AS product_name, v.title AS variant_title, h.name AS handled_name, o.ref AS order_ref
          FROM landing_leads a LEFT JOIN landing_pages l ON l.id = a.landing_id LEFT JOIN products p ON p.id = a.product_id
@@ -3200,7 +3211,19 @@ export const landingProcs = {
         page: f.page,
         pageSize: f.pageSize,
         abandonAfterMin: s.abandonAfterMin,
-        stats: { abandoned: num(stats?.abandoned), converted: num(stats?.converted), recovered: num(stats?.recovered), dismissed: num(stats?.dismissed), value: num(stats?.value) },
+        stats: {
+          abandoned: num(stats?.abandoned),
+          converted: num(stats?.converted),
+          recovered: num(stats?.recovered),
+          dismissed: num(stats?.dismissed),
+          value: num(stats?.value),
+          /** the carts that became orders, confirmed (any later state), delivered: how many and how much */
+          orders: num(won?.orders),
+          confirmed: num(won?.confirmed),
+          confirmedValue: num(won?.confirmed_value),
+          delivered: num(won?.delivered),
+          deliveredValue: num(won?.delivered_value),
+        },
         rows: rows.map((r: any) => ({
           id: num(r.id),
           at: iso(r.at),

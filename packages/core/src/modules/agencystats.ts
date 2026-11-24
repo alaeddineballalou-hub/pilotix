@@ -13,6 +13,7 @@ import { Db, num } from '../db';
 import { bad, Ctx, forbidden, proc } from '../rpc';
 import { agencyEarnings, LINK_SQL, monthBounds, monthNow, toLink } from './agencies';
 import { ONLINE_MS } from './assign';
+import { cartLeftOut } from './carts';
 import { payRows, paySpace, termsOf } from './pay';
 import { prevOf, Range } from './stats';
 
@@ -131,7 +132,7 @@ async function figures(ctx: Ctx, r: R, opts: { mine?: Set<number>; detail: boole
       rows = await db.query(
         `SELECT o.id, o.agent_id, o.follow_agent_id, o.route_product_id, o.wilaya_id, o.conf_agency_id = $1 AS by_conf,
                 o.created_at, o.conf_status, o.follow_status, o.delivered_at, coalesce(o.returned_at, o.returning_at, o.updated_at) AS back_at,
-                o.has_upsell, o.total
+                o.has_upsell, o.total, o.came
            FROM sales o
           WHERE (o.conf_agency_id = $1 OR o.follow_agency_id = $1)
             AND ((o.conf_agency_id = $1 AND o.created_at >= $2 AND o.created_at < $3)
@@ -172,7 +173,8 @@ async function figures(ctx: Ctx, r: R, opts: { mine?: Set<number>; detail: boole
         if (alsoFollowAgent && follow !== null && (!opts.mine || opts.mine.has(follow))) add(followBy, follow, f);
       };
       // confirmation: the orders received in the period, as they stand now
-      if (o.by_conf && inR(o.created_at, r)) {
+      // (an abandoned cart only once confirmed: carts.ts)
+      if (o.by_conf && inR(o.created_at, r) && !cartLeftOut(o.came, o.conf_status)) {
         const st = String(o.conf_status);
         const k: keyof Line = CONFIRMED.includes(st) ? 'confirmed' : st === 'cancelled' ? 'cancelled' : INVALID.includes(st) ? 'invalid' : 'pending';
         each((l) => {

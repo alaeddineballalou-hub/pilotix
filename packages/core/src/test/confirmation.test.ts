@@ -138,7 +138,7 @@ test('statistics overview: managers only, every lead counted once, Leads quality
   assert.equal(ov.real, ov.confirmed.n + ov.refused.n);
   assert.equal(ov.attacks.fake + ov.attacks.wrong + ov.attacks.noAnswer, ov.attacks.n);
   assert.equal(ov.attacks.fakeValue + ov.attacks.wrongValue + ov.attacks.noAnswerValue, ov.attacks.value);
-  assert.ok(ov.refused.abandoned <= ov.refused.n);
+  assert.ok(ov.carts.confirmed <= ov.carts.n);
   assert.equal(ov.pending.fresh + ov.pending.noAnswer + ov.pending.later, ov.pending.n);
   assert.equal(ov.refused.reasons.reduce((s: number, r: any) => s + r.n, 0), ov.refused.n);
   assert.equal(ov.refused.reasons.reduce((s: number, r: any) => s + r.value, 0), ov.refused.value);
