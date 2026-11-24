@@ -1035,6 +1035,10 @@
       "d": "Les résultats d’appel que choisissent les agents",
       "s_one": "{{count}} statut",
       "s_other": "{{count}} statuts"
+    },
+    "notifs": {
+      "d": "Nouvelle commande, rappel, plus à vous, annulée : qui les reçoit, et quand le téléphone sonne",
+      "s": "{{on}} sur {{all}} allumées"
     }
   }
 }

@@ -1035,6 +1035,10 @@
       "d": "The call results the agents pick",
       "s_one": "{{count}} status",
       "s_other": "{{count}} statuses"
+    },
+    "notifs": {
+      "d": "New order, call-back, no longer yours, cancelled: who gets them, and when the phone rings",
+      "s": "{{on}} of {{all}} on"
     }
   }
 }

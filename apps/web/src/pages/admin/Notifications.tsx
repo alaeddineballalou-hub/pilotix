@@ -27,14 +27,19 @@ const plain = (s: string) => s.replace(/^\p{Extended_Pictographic}️?\s*/u, '')
 const same = (a: Rule, b: Rule) => a.on === b.on && a.phone === b.phone && a.who.join() === b.who.join() && [...a.people].sort().join() === [...b.people].sort().join();
 const hh = (h: number) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
 
-export function NotificationsCfg() {
+/**
+ * `kinds`: only these (a page's own, in its « Réglages »: Confirmation › its four, owner's ask of 24 Nov 2026, the same
+ * « Liste + détail » look); `embedded`: inside a page's card, whose title says what it is.
+ */
+export function NotificationsCfg({ kinds, embedded = false }: { kinds?: readonly Kind[]; embedded?: boolean } = {}) {
   const { t } = useTranslation();
   const q = useRpc('notify.get', {});
   const save = useAction('notify.set', { success: t('notifs.saved') });
   // a phone or a tablet: the list, then the chosen one (with a way back)
   const narrow = useMedia('(max-width: 1000px)');
   const grid = useRef<HTMLDivElement>(null);
-  const [sel, setSel] = useState<Kind | 'info'>('order');
+  const list = kinds ? ORDER.filter((k): k is Kind => k !== 'info' && kinds.includes(k)) : ORDER;
+  const [sel, setSel] = useState<Kind | 'info'>(list[0] ?? 'order');
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Partial<Record<Kind, Rule>>>({});
   const data = q.data;
@@ -73,7 +78,7 @@ export function NotificationsCfg() {
     <div className="px-nt">
       <div className="px-nt-head">
         <div>
-          <h2>{t('notifs.title')}</h2>
+          {!embedded && <h2>{t('notifs.title')}</h2>}
           <p className="muted">{t('notifs.help')}</p>
         </div>
         <div className="px-nt-actions">
@@ -98,7 +103,8 @@ export function NotificationsCfg() {
             <b>{t('notifs.hours')}</b>
             <small>{hours ? t('notifs.hoursText', { hours }) : t('notifs.hoursNone')}</small>
           </span>
-          <a className="px-nt-chip" href="#/reglages">
+          {/* the call slots are in Confirmation › Réglages › Appels */}
+          <a className="px-nt-chip" href="#/confirmation/reglages">
             {t('notifs.hoursEdit')}
           </a>
         </div>
@@ -117,7 +123,7 @@ export function NotificationsCfg() {
         {showList && (
           <div className="px-nt-list" role="list">
             <small className="px-nt-group">{t('notifs.groupPilotix')}</small>
-            {ORDER.map((k) => {
+            {list.map((k) => {
               const on = k === sel;
               const r = k === 'info' ? null : rules[k];
               return (

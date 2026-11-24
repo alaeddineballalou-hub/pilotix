@@ -14,9 +14,13 @@ import { Fold, SettingsPage } from '../../ui/PageSettings';
 import { Affectation } from '../admin/Affectation';
 import { CallsForm, Statuts } from '../admin/Statuts';
 import { CustomerMessagesCard } from '../admin/CustomerMessages';
+import { NotificationsCfg } from '../admin/Notifications';
 import { CaseSwitches, CONF_KINDS, useCasesOn } from '../notify/CaseSwitches';
 import { Automations } from '../notify/Automations';
 import { BlockSwitch } from './BlockSwitch';
+
+/** Confirmation's notifications in the bell: a new order, a call-back, an order taken away, an order cancelled. */
+const CONF_NOTIFS = ['order', 'callback', 'taken', 'cancelled'] as const;
 
 export function ConfSettings() {
   const { t } = useTranslation();
@@ -30,6 +34,8 @@ export function ConfSettings() {
   const msgs = useCasesOn(CONF_KINDS, admin);
   const auto = useRpc('auto.state', {}, { enabled: admin });
   const st = useRpc('admin.statuses.get', {}, { enabled: admin });
+  // its four notifications in the bell (they were only in Management › Notifications)
+  const nt = useRpc('notify.get', {}, { enabled: admin });
   const canBlock = !!block.data?.canSwitch;
   if (!admin && block.isLoading) return <Loading />;
 
@@ -43,6 +49,7 @@ export function ConfSettings() {
     .join(' · ');
   const queue = auto.data?.s.queue;
   const statuses = st.data ? activeStatuses(st.data, ['confirmation']) : null;
+  const notifsOn = nt.data ? CONF_NOTIFS.filter((k) => nt.data!.rules[k].on).length : null;
 
   return (
     <SettingsPage title={t('confirmation.cfg.title')}>
@@ -63,6 +70,11 @@ export function ConfSettings() {
           {/* the customer who does not answer: the agent's two messages (at the try chosen in « Appels », and before the cancel) */}
           <CustomerMessagesCard embedded />
           <WaTemplate />
+        </Fold>
+      )}
+      {admin && (
+        <Fold id="notifs" icon="bell" title={t('notifs.title')} desc={t('confirmation.cfg.notifs.d')} state={notifsOn === null ? null : t('confirmation.cfg.notifs.s', { on: notifsOn, all: CONF_NOTIFS.length })}>
+          <NotificationsCfg kinds={CONF_NOTIFS} embedded />
         </Fold>
       )}
       {admin && (
