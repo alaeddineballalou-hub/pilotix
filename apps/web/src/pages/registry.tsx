@@ -49,6 +49,7 @@ export const PAGES: Record<string, ComponentType<PageProps>> = {
   macaisse: P(() => import('./caisse'), 'MaCaisse'),
   // Point de vente: the boutique's counter, once an administrator turns it on (Management › Modules)
   pos: P(() => import('./pos'), 'Pos'),
+  rendezvous: P(() => import('./rdv'), 'Rendezvous'),
   livraison: P(() => import('./livraison'), 'Livraison'),
   utilisateurs: P(() => import('./admin'), 'Utilisateurs'),
   management: P(() => import('./admin'), 'Management'),

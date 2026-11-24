@@ -18,7 +18,7 @@ export const notFound = (m = 'Introuvable') => new AppError('not_found', m);
 
 export interface LiveEvent {
   /** inbox: a line in some people's bell (data: { to: told now, quiet: their line changed, no sound }) */
-  type: 'order' | 'orderNote' | 'orders' | 'presence' | 'chat' | 'sav' | 'stock' | 'settings' | 'inbox';
+  type: 'order' | 'orderNote' | 'orders' | 'presence' | 'chat' | 'sav' | 'stock' | 'settings' | 'inbox' | 'rdv';
   id?: number;
   data?: unknown;
   /** the boutique it happened in (set by the server: a person with several boutiques hears of all of them) */

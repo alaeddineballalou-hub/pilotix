@@ -230,3 +230,8 @@ html.ws-lock, html.ws-lock body { overflow: hidden; }
   .ws-lang button { padding: 0 3px; font-size: 13px; }
   .ws-top .btn.primary, .ws-top .btn.ws-done { padding: 0 12px; }
 }
+
+/* the Sessions block's note: where its sessions come from (Rendez-vous) */
+.ws-hintbox { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 12px 14px; border-radius: var(--sk-r-ctl, 14px); background: var(--sky-soft); color: var(--ink); font-size: 13.5px; line-height: 1.45; }
+.ws-hintbox .bji { width: 18px; height: 18px; flex: none; margin-top: 1px; color: var(--muted); }
+.ws-hintbox a { color: inherit; font-weight: 600; }

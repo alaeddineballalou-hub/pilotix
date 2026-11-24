@@ -4,6 +4,7 @@
 // Each product card opens the product's own landing page: its order form, pixel and fake-order check stay as they are.
 import {
   renderSite,
+  renderTicket,
   SITE_CORNER_KEYS,
   SITE_DESIGNS,
   SITE_FONT_KEYS,
@@ -29,6 +30,8 @@ import { getRaw, setRaw } from './admin';
 import { b64, followedRefs, landingIconUrl, productPhotoSets, readImgs, WHO } from './landing';
 import { landingSettings } from './landingquery';
 import { pageLinks } from './pagelinks';
+import { rdvTicket, siteSessions } from './rdv';
+import { modulesOf } from './shopmodules';
 
 const DRAFT = 'site.draft';
 const LIVE = 'site.live';
@@ -49,17 +52,18 @@ const Block = z.discriminatedUnion('type', [
     .object({
       ...B,
       type: z.literal('hero'),
-      layout: z.enum(['side', 'center']),
+      layout: z.enum(['side', 'center', 'plain']),
       title: Text(SITE_LIMITS.title),
       text: Text(SITE_LIMITS.text),
       button: Text(60),
-      link: z.enum(['products', 'whatsapp']),
+      link: z.enum(['products', 'whatsapp', 'sessions']),
       productId: z.number().int().positive().nullable(),
     })
     .strict(),
   z.object({ ...B, type: z.literal('trust'), items: z.array(z.object({ icon: z.enum(SITE_TRUST_ICONS), text: Text(80) }).strict()).max(SITE_LIMITS.items) }).strict(),
   z.object({ ...B, type: z.literal('best'), title: Text(SITE_LIMITS.title), count: z.number().int().min(1).max(SITE_LIMITS.count), oldPrice: z.boolean(), button: Text(60) }).strict(),
   z.object({ ...B, type: z.literal('products'), title: Text(SITE_LIMITS.title), button: Text(60) }).strict(),
+  z.object({ ...B, type: z.literal('sessions'), title: Text(SITE_LIMITS.title), text: Text(SITE_LIMITS.text), button: Text(60) }).strict(),
   z.object({ ...B, type: z.literal('why'), title: Text(SITE_LIMITS.title), points: z.array(Text(200)).max(SITE_LIMITS.items) }).strict(),
   z.object({ ...B, type: z.literal('faq'), title: Text(SITE_LIMITS.title), items: z.array(z.object({ q: Text(160), a: Text(SITE_LIMITS.text) }).strict()).max(SITE_LIMITS.items) }).strict(),
   z.object({ ...B, type: z.literal('whatsapp'), text: Text(80) }).strict(),
@@ -143,7 +147,14 @@ async function siteShop(db: Db, imgBase: string | null): Promise<SiteView['shop'
 }
 
 export async function siteView(ctx: Ctx, imgBase: string | null): Promise<Omit<SiteView, 'doc' | 'lang'>> {
-  return { shop: await siteShop(ctx.db, imgBase), products: await siteProducts(ctx.db, imgBase), best: await bestSellers(ctx.db, ctx.now()) };
+  return {
+    shop: await siteShop(ctx.db, imgBase),
+    products: await siteProducts(ctx.db, imgBase),
+    best: await bestSellers(ctx.db, ctx.now()),
+    // a service's sessions (Rendez-vous, when the boutique turned it on)
+    sessions: await siteSessions(ctx.db, ctx.now()),
+    rdv: (await modulesOf(ctx.db)).rdv,
+  };
 }
 
 const stored = (v: unknown): Stored | null => {
@@ -216,7 +227,19 @@ export const siteProcs = {
    */
   'site.html': proc(
     [],
-    z.object({ imgBase: z.string().max(500), base: z.string().max(500), url: z.string().max(600).optional(), lang: z.string().max(5).optional(), langHref: z.record(z.string().max(600)).optional() }),
+    z.object({
+      imgBase: z.string().max(500),
+      base: z.string().max(500),
+      url: z.string().max(600).optional(),
+      lang: z.string().max(5).optional(),
+      langHref: z.record(z.string().max(600)).optional(),
+      /** the Sessions block's form posts here (Rendez-vous); after a refused booking: why, and the session chosen */
+      bookUrl: z.string().max(600).optional(),
+      err: z.string().max(20).optional(),
+      pick: z.number().int().optional(),
+      /** a booking's ticket (/?billet=…) instead of the home */
+      ticket: z.string().max(64).optional(),
+    }),
     async (ctx, i) => {
       const live = await readLive(ctx.db);
       if (!live) return { html: null as string | null };
@@ -224,8 +247,10 @@ export const siteProcs = {
       const lang = (langs as string[]).includes(String(i.lang)) ? (i.lang as SiteLang) : langs[0];
       const v = await siteView(ctx, i.imgBase);
       const langHref = Object.fromEntries(Object.entries(i.langHref ?? {}).filter(([k]) => (langs as string[]).includes(k)));
+      const r = { mode: 'live' as const, base: i.base, url: i.url, langHref, year: new Date(ctx.now()).getFullYear(), now: ctx.now() };
+      if (i.ticket !== undefined) return { html: renderTicket({ doc: live.doc, lang, ...v }, await rdvTicket(ctx.db, i.ticket), r) as string | null };
       return {
-        html: renderSite({ doc: live.doc, lang, ...v }, { mode: 'live', base: i.base, url: i.url, langHref, year: new Date(ctx.now()).getFullYear() }) as string | null,
+        html: renderSite({ doc: live.doc, lang, ...v }, { ...r, ...(i.bookUrl ? { book: { action: i.bookUrl, err: i.err ?? null, pick: i.pick ?? null } } : {}) }) as string | null,
       };
     },
   ),

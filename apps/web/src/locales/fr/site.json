@@ -12,7 +12,8 @@
     "en": "EN"
   },
   "niche": {
-    "baby": "Bébé"
+    "baby": "Bébé",
+    "training": "Formation"
   },
   "home": {
     "title": "Le site de votre boutique",
@@ -42,7 +43,8 @@
     "use": "Prendre ce design",
     "replaceAsk": "Ce que vous avez changé sur le site sera perdu.",
     "replaceYes": "Oui, remplacer",
-    "back": "Retour"
+    "back": "Retour",
+    "allNiches": "Tous"
   },
   "bar": {
     "back": "Retour",
@@ -89,7 +91,8 @@
     "why": "Pourquoi nous",
     "faq": "Questions",
     "whatsapp": "Bouton WhatsApp",
-    "footer": "Bas de page"
+    "footer": "Bas de page",
+    "sessions": "Sessions"
   },
   "about": {
     "header": "Le logo, le nom de la boutique, les langues et le téléphone.",
@@ -100,7 +103,8 @@
     "why": "Les raisons d’acheter chez vous.",
     "faq": "Les questions des clients, avec vos réponses.",
     "whatsapp": "Un bouton pour vous écrire sur WhatsApp.",
-    "footer": "Le bas de la page : votre petit mot et vos contacts."
+    "footer": "Le bas de la page : votre petit mot et vos contacts.",
+    "sessions": "Vos sessions de Rendez-vous : les places restantes, et un formulaire pour réserver."
   },
   "theme": {
     "title": "Style",
@@ -155,7 +159,9 @@
   "hints": {
     "noProducts": "Pas encore de produit : mettez une landing page en ligne.",
     "noWhatsapp": "Ajoutez votre numéro WhatsApp dans Landing pages › Réglages.",
-    "hidden": "Cachée : les clients ne la voient pas"
+    "hidden": "Cachée : les clients ne la voient pas",
+    "noSessions": "Pas encore de session ouverte : ajoutez-en dans Rendez-vous › Sessions.",
+    "rdvOff": "Rendez-vous est éteint : un administrateur l’allume dans Management › Modules."
   },
   "ed": {
     "tip": "Touchez une partie de la page pour la changer.",
@@ -199,7 +205,14 @@
     "remove": "Supprimer",
     "sure": "Oui, supprimer",
     "done": "Terminé",
-    "removeAsk": "Supprimer cette section ?"
+    "removeAsk": "Supprimer cette section ?",
+    "plain": "Sans photo",
+    "toSessions": "Les sessions",
+    "barButton": "Bouton « réserver »",
+    "sessionsNote_one": "{{count}} session ouverte vient de Pilotix › Rendez-vous.",
+    "sessionsNote_other": "{{count}} sessions ouvertes viennent de Pilotix › Rendez-vous.",
+    "sessionsGo": "Gérer les sessions",
+    "modulesGo": "Ouvrir les modules"
   },
   "icons": {
     "cash": "Argent",

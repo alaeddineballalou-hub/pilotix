@@ -87,6 +87,8 @@ const ACTS: readonly ActIn[] = [
   { id: 'stock.guides', in: 'produits', roles: AGENTS },
   { id: 'pos.sell', in: 'pos', roles: ['depot'] },
   { id: 'pos.cancel', in: 'pos', roles: ['vendeur'] },
+  { id: 'rdv.handle', in: 'rendezvous', roles: ['confirmation'] },
+  { id: 'rdv.sessions', in: 'rendezvous', roles: ['vendeur'] },
   { id: 'caisse.add', in: 'macaisse', roles: ['confirmation', 'suivi', 'depot', 'agent_manager', 'vendeur'] },
   { id: 'caisse.transfer', in: 'macaisse', roles: ['confirmation', 'suivi', 'depot', 'agent_manager', 'vendeur'] },
   { id: 'pay.ask', in: 'macaisse', roles: ['confirmation', 'suivi', 'depot', 'agent_manager'] },

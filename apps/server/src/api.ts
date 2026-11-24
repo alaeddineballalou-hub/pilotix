@@ -881,16 +881,24 @@ class ApiController {
     const shop = intake(ref);
     if (!page) {
       // the boutique's website (Landing pages › Website) once it is published; else the simple list of its pages below.
-      // ?lang=fr / ?lang=en: the same page in another of the site's languages
+      // ?lang=fr / ?lang=en: the same page in another of the site's languages. A service's site (Rendez-vous): ?s=<id>
+      // chooses a session in the booking form, ?err=… says why the last booking was refused, ?billet=… is a ticket.
       const api = `${site}/api${ref.shop.primary ? '' : `/s/${ref.shop.slug}`}`;
-      const lang = /[?&]lang=(ar|fr|en)(?:&|$)/.exec(String(req.url ?? ''))?.[1];
+      const q = String(req.url ?? '');
+      const lang = /[?&]lang=(ar|fr|en)(?:&|$)/.exec(q)?.[1];
+      const billet = /[?&]billet=([a-f0-9]{32})(?:&|$)/.exec(q)?.[1];
+      const err = /[?&]err=(full|phone|name|closed|retry)(?:&|$)/.exec(q)?.[1];
+      const pick = Number(/[?&]s=(\d{1,12})(?:&|$)/.exec(q)?.[1]) || undefined;
+      const at = (l: string) => (billet ? `${site}/?billet=${billet}&lang=${l}` : `${site}/?lang=${l}`);
       const w: any = await this.core
         .call(shop, 'site.html', await this.core.systemSession(shop), {
-          imgBase: `${api}/lp/img/`, base: '/', url: `${site}/${lang ? `?lang=${lang}` : ''}`, ...(lang ? { lang } : {}),
-          langHref: { ar: `${site}/?lang=ar`, fr: `${site}/?lang=fr`, en: `${site}/?lang=en` },
+          imgBase: `${api}/lp/img/`, base: '/', url: billet ? `${site}/?billet=${billet}` : `${site}/${lang ? `?lang=${lang}` : ''}`, ...(lang ? { lang } : {}),
+          langHref: { ar: at('ar'), fr: at('fr'), en: at('en') },
+          bookUrl: `${api}/site/book`, ...(err ? { err } : {}), ...(pick ? { pick } : {}), ...(billet ? { ticket: billet } : {}),
         })
         .catch(() => null);
-      if (w?.html) return sendText(req, res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'public, max-age=60'), w.html);
+      // a ticket carries a person's name: never kept by a cache
+      if (w?.html) return sendText(req, res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', billet || err ? 'private, no-store' : 'public, max-age=60'), w.html);
     }
     if (!page || page === 'llms.txt') {
       const r: any = await this.core.call(shop, 'landing.llms', await this.core.systemSession(shop), { site, pagesBase: `${site}/` });
@@ -1927,6 +1935,40 @@ class ApiController {
     // count nowhere (the answer itself stays the same)
     if (team) res.header('Set-Cookie', TEAM_COOKIE);
     return { ok: true };
+  }
+
+  /**
+   * A booking from the website's Sessions block (Rendez-vous). A plain form (the live site has no script): the answer is a
+   * redirect, to the ticket (/?billet=…) or back to the form with the reason. A robot gets the home page and nothing is
+   * done: the hidden field filled, no time or a time too short, a post from another site; too many from one address wait.
+   */
+  @Public()
+  @Post(['site/book', 's/:shop/site/book'])
+  async siteBook(@Param('shop') shop: string | undefined, @Body() body: any, @Req() req: { ip?: string; headers: Record<string, string | undefined> }, @Res() res: any) {
+    const b = body && typeof body === 'object' ? body : {};
+    const lang = ['ar', 'fr', 'en'].includes(String(b.lang)) ? String(b.lang) : '';
+    const L = lang ? `&lang=${lang}` : '';
+    const go = (to: string) => res.status(303).header('Location', to).header('Cache-Control', 'no-store').send('');
+    const t = Number(b.t);
+    const age = Date.now() - t;
+    if (crossSite(req) || String(b.website ?? '') !== '' || !Number.isFinite(t) || age < 1500 || age > 7 * 86_400_000) return go('/');
+    const sessionId = Math.max(0, Math.trunc(Number(b.session)) || 0);
+    if (limitLanding(req.ip || 'unknown', 'book', 12)) return go(`/?err=retry&s=${sessionId}${L}#reserver`);
+    const ref = await this.core.fromParam(shop).then((r) => r && this.core.forPublic(r)).catch(() => null);
+    if (!ref || ref.shop.status !== 'active') return go('/');
+    const r = intake(ref);
+    const out: any = await this.core
+      .call(r, 'site.book', await this.core.systemSession(r), {
+        sessionId,
+        name: String(b.name ?? '').slice(0, 200),
+        phone: String(b.phone ?? '').slice(0, 40),
+        seats: Math.trunc(Number(b.seats)) || 1,
+        ...(lang ? { lang } : {}),
+        ip: core.expandIp(req.ip || '').slice(0, 80),
+      })
+      .catch(() => null);
+    if (out?.ok && out.token) return go(`/?billet=${out.token}${L}`);
+    return go(`/?err=${/^(full|phone|name|closed)$/.test(String(out?.reason)) ? out.reason : 'retry'}&s=${sessionId}${L}#reserver`);
   }
 
   /** Referral › Code promo: the page's « code » field (does it work, what it takes off). 20 checks per 10 minutes per address. */

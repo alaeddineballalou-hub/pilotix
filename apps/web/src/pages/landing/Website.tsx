@@ -16,6 +16,7 @@ import {
   SITE_TRUST_ICONS,
   siteFromDesign,
   siteMissing,
+  siteSampleSessions,
   siteText,
   SiteBlock,
   SiteBlockType,
@@ -45,7 +46,7 @@ const RAIL: [Exclude<Panel, 'block'>, string][] = [
   ['settings', 'settings'],
 ];
 const DESKTOP_W = 1280;
-const ICON_OF: Record<SiteBlockType, string> = { header: 'menu', hero: 'image', trust: 'checkcircle', best: 'trophy', products: 'grid', why: 'medal', faq: 'help', whatsapp: 'whatsapp', footer: 'layers' };
+const ICON_OF: Record<SiteBlockType, string> = { header: 'menu', hero: 'image', sessions: 'calendar', trust: 'checkcircle', best: 'trophy', products: 'grid', why: 'medal', faq: 'help', whatsapp: 'whatsapp', footer: 'layers' };
 const SITE = '#/landing/site';
 const newId = (taken: Set<string>) => {
   for (;;) {
@@ -182,9 +183,12 @@ function DesignPicker({ data, standalone, onDone }: { data: Data; standalone: bo
   const [pick, setPick] = useState<string>(data.draft?.design ?? data.designs[0]?.key ?? 'candy');
   const [busy, setBusy] = useState(false);
   const [sure, setSure] = useState(false);
+  const [niche, setNiche] = useState<string | null>(null);
+  // a training design shows three sample sessions while the boutique has none of its own (the picker only)
+  const view = useMemo(() => (data.view.sessions?.length ? data.view : { ...data.view, sessions: siteSampleSessions(Date.now(), langs[0]) }), [data.view, langs]);
   const html = useMemo(
-    () => Object.fromEntries(data.designs.map((d) => [d.key, renderSite({ doc: siteFromDesign(d.key, langs), lang: langs[0], ...data.view }, { mode: 'live', base: '#' })])),
-    [data.designs, data.view, langs],
+    () => Object.fromEntries(data.designs.map((d) => [d.key, renderSite({ doc: siteFromDesign(d.key, langs), lang: langs[0], ...view }, { mode: 'live', base: '#' })])),
+    [data.designs, view, langs],
   );
   const flip = (l: SiteLang) => setLangs((ls) => (ls.includes(l) ? (ls.length > 1 ? ls.filter((x) => x !== l) : ls) : [...ls, l]));
   const back = () => (history.length > 1 ? history.back() : (location.hash = SITE));
@@ -227,15 +231,22 @@ function DesignPicker({ data, standalone, onDone }: { data: Data; standalone: bo
         </div>
         <div className="ws-pick-row">
           <span className="lab">{t('site.pick.niche')}</span>
+          {niches.length > 1 && (
+            <button type="button" className={`ws-chip ${niche === null ? 'on' : ''}`} aria-pressed={niche === null} onClick={() => setNiche(null)}>
+              {t('site.pick.allNiches')} <b>{data.designs.length}</b>
+            </button>
+          )}
           {niches.map((n) => (
-            <span key={n} className="ws-chip on">
+            <button key={n} type="button" className={`ws-chip ${niche === n || niches.length === 1 ? 'on' : ''}`} aria-pressed={niche === n} onClick={() => setNiche(niche === n ? null : n)}>
               {t(`site.niche.${n}`, { defaultValue: n })} <b>{data.designs.filter((d) => d.niche === n).length}</b>
-            </span>
+            </button>
           ))}
           <span className="hint">{t('site.pick.more')}</span>
         </div>
         <div className="ws-designs" role="radiogroup" aria-label={t('site.pick.title')}>
-          {data.designs.map((d) => (
+          {data.designs
+            .filter((d) => !niche || d.niche === niche)
+            .map((d) => (
             <label key={d.key} className={`ws-design ${pick === d.key ? 'on' : ''}`}>
               <Scaled html={html[d.key]} title={d.name} />
               <span className="ws-design-n">
@@ -366,7 +377,10 @@ function SiteEditor({ data, draft }: { data: Data; draft: SiteDoc }) {
     return () => clearTimeout(tm);
   }, [doc]);
   const scrollY = useRef(0);
-  const hints = useMemo(() => ({ noProducts: t('site.hints.noProducts'), noWhatsapp: t('site.hints.noWhatsapp'), hidden: t('site.hints.hidden') }), [t]);
+  const hints = useMemo(
+    () => ({ noProducts: t('site.hints.noProducts'), noWhatsapp: t('site.hints.noWhatsapp'), hidden: t('site.hints.hidden'), noSessions: t(data.view.rdv ? 'site.hints.noSessions' : 'site.hints.rdvOff') }),
+    [t, data.view.rdv],
+  );
   const html = useMemo(
     () => renderSite({ doc: shown, lang, ...data.view }, { mode: 'edit', base: '#', selected: sel, hints, scrollY: scrollY.current }),
     [shown, lang, sel, data.view, hints],
@@ -595,7 +609,7 @@ function SiteEditor({ data, draft }: { data: Data; draft: SiteDoc }) {
               onDone={close}
             />
           ) : panel === 'add' ? (
-            <AddPanel onAdd={add} onClose={close} />
+            <AddPanel onAdd={add} onClose={close} rdv={!!data.view.rdv} />
           ) : panel === 'theme' ? (
             <ThemePanel doc={doc} onChange={(theme) => change((d) => ({ ...d, theme }))} onClose={close} />
           ) : panel === 'products' ? (
@@ -653,7 +667,7 @@ function PanelHead({ title, onClose, children }: { title: string; onClose: () =>
 }
 
 const blockLine = (b: SiteBlock, lang: SiteLang, langs: SiteLang[]) =>
-  b.type === 'hero' || b.type === 'best' || b.type === 'products' || b.type === 'why' || b.type === 'faq'
+  b.type === 'hero' || b.type === 'best' || b.type === 'products' || b.type === 'why' || b.type === 'faq' || b.type === 'sessions'
     ? siteText(b.title, lang, langs)
     : b.type === 'whatsapp' || b.type === 'footer'
       ? siteText(b.text, lang, langs)
@@ -685,14 +699,16 @@ function SectionsPanel({ doc, lang, onPick, onClose }: { doc: SiteDoc; lang: Sit
   );
 }
 
-function AddPanel({ onAdd, onClose }: { onAdd: (t: SiteBlockType) => void; onClose: () => void }) {
+function AddPanel({ onAdd, onClose, rdv }: { onAdd: (t: SiteBlockType) => void; onClose: () => void; rdv: boolean }) {
   const { t } = useTranslation();
+  // « Sessions » is a service's (Rendez-vous): shown once the boutique has turned Rendez-vous on
+  const types = SITE_BLOCK_TYPES.filter((k) => k !== 'sessions' || rdv);
   return (
     <div className="ws-panel">
       <PanelHead title={t('site.add.title')} onClose={onClose} />
       <p className="muted ws-note">{t('site.add.help')}</p>
       <ul className="ws-list">
-        {SITE_BLOCK_TYPES.map((k) => (
+        {types.map((k) => (
           <li key={k}>
             <button type="button" onClick={() => onAdd(k)}>
               <Icon name={ICON_OF[k]} />
@@ -995,7 +1011,7 @@ function BlockPanel({
           <div className="field">
             <span className="lab">{t('site.ed.layout')}</span>
             <div className="ws-seg wide">
-              {(['side', 'center'] as const).map((k) => (
+              {(['side', 'center', 'plain'] as const).map((k) => (
                 <button key={k} type="button" className={b.layout === k ? 'on' : ''} aria-pressed={b.layout === k} onClick={() => onChange({ layout: k })}>
                   {t(`site.ed.${k}`)}
                 </button>
@@ -1007,11 +1023,13 @@ function BlockPanel({
           {tf(t('site.ed.button'), b.button, (button) => onChange({ button }), 60)}
           <label className="field">
             <span className="lab">{t('site.ed.opens')}</span>
-            <select value={b.link} onChange={(e) => onChange({ link: e.target.value as 'products' | 'whatsapp' })}>
+            <select value={b.link} onChange={(e) => onChange({ link: e.target.value as 'products' | 'whatsapp' | 'sessions' })}>
               <option value="products">{t('site.ed.toProducts')}</option>
               <option value="whatsapp">{t('site.ed.toWhatsapp')}</option>
+              {(data.view.rdv || b.link === 'sessions') && <option value="sessions">{t('site.ed.toSessions')}</option>}
             </select>
           </label>
+          {b.layout !== 'plain' && (
           <label className="field">
             <span className="lab">{t('site.ed.picture')}</span>
             <select value={b.productId ?? ''} onChange={(e) => onChange({ productId: e.target.value ? Number(e.target.value) : null })}>
@@ -1023,6 +1041,22 @@ function BlockPanel({
               ))}
             </select>
           </label>
+          )}
+        </>
+      )}
+
+      {b.type === 'sessions' && (
+        <>
+          {tf(t('site.ed.title'), b.title, (title) => onChange({ title }), SITE_LIMITS.title)}
+          {tf(t('site.ed.text'), b.text, (text) => onChange({ text }), SITE_LIMITS.text, true)}
+          {tf(t('site.ed.barButton'), b.button, (button) => onChange({ button }), 60)}
+          <p className="ws-hintbox">
+            <Icon name="calendar" />
+            <span>
+              {data.view.rdv ? t('site.ed.sessionsNote', { count: data.view.sessions?.length ?? 0 }) : t('site.hints.rdvOff')}{' '}
+              <a href={data.view.rdv ? '#/rendezvous/sessions' : '#/management/modules'}>{t(data.view.rdv ? 'site.ed.sessionsGo' : 'site.ed.modulesGo')}</a>
+            </span>
+          </p>
         </>
       )}
 

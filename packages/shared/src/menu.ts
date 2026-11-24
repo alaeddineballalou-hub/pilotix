@@ -19,6 +19,8 @@ export const MENU_TABS = {
   sav: ['tickets', 'nouveau', 'attente', 'depot', 'livraison', 'livres', 'annules', 'satisfaction', 'stats', 'reglages'],
   produits: ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'prevision', 'lots', 'fabrication', 'achats', 'depots', 'reglages'],
   pos: ['vendre', 'ventes', 'cloture', 'reglages'],
+  // Rendez-vous: the bookings to call, confirmed (and at the door), cancelled; the sessions
+  rendezvous: ['attente', 'confirmes', 'annules', 'sessions'],
   marketing: ['publicite', 'strategies', 'formulaires', 'campagnes', 'catalogue', 'marketer'],
   caisse: ['overview', 'due', 'done', 'livreurs', 'journal', 'paie'],
   livraison: ['societes', 'api', 'livreurs'],
@@ -38,6 +40,8 @@ export type MenuCond =
   | 'livreur'
   /** the « Point de vente » module is on (Management › Modules) */
   | 'pos'
+  /** the « Rendez-vous » module is on (Management › Modules) */
+  | 'rdv'
   /** not the administrators (their own caisse is « Caisse ») */
   | 'notAdmin'
   /** a store's own space (not a partner's) */
@@ -149,6 +153,9 @@ export const STORE_MENU: MenuItem[] = [
   // Scanner left the menu (owner's ask, 24 Nov 2026: « we scan directly in the order »): its two scans are in Dépôt › « En
   // dispatch » and › « Retours »; the page stays for old links
   { id: 'scanner', icon: 'scanbar', roles: DEPOT, hidden: true },
+  // Rendez-vous: the sessions a service sells on its website (a training's seats), each booking called and confirmed by the
+  // confirmation team, once an administrator turns it on (Management › Modules)
+  { id: 'rendezvous', icon: 'calendar', roles: ['confirmation'], subs: MENU_TABS.rendezvous, cond: 'rdv', tabNames: { prefix: 'rdv.tabs' } },
   { id: 'sav', icon: 'headset', roles: AGENTS, subs: MENU_TABS.sav, tabRoles: { reglages: [] }, tabNames: { prefix: 'sav.views' } },
   { id: 'tournee', icon: 'navigation', roles: ['livreur'], cond: 'livreur' },
   // the agents see the products, the sales guides and the stock; the depot every tab
@@ -270,7 +277,7 @@ export const SPACES: Space[] = [
   { id: 'marketing', icon: 'megaphone', items: ['marketing', 'createur', 'social', 'influenceurs', 'parrainage', 'codepromo'], counts: ['posts'] },
   { id: 'sponsor', icon: 'trend', items: ['marketing', 'landing', 'spy', 'autochecks'], counts: ['landing'] },
   { id: 'cm', icon: 'chat', items: ['messages', 'cm', 'codepromo'], counts: ['msgs', 'cm'] },
-  { id: 'service', icon: 'phone', items: ['dashboard', 'confirmation', 'suivi', 'livrees', 'annulees', 'tout', 'sav', 'auto', 'assign', 'affectation', 'autochecks', 'automessages', 'autoreglages', 'clients', 'codepromo'], counts: ['conf', 'suivi', 'sav', 'notify'] },
+  { id: 'service', icon: 'phone', items: ['dashboard', 'confirmation', 'rendezvous', 'suivi', 'livrees', 'annulees', 'tout', 'sav', 'auto', 'assign', 'affectation', 'autochecks', 'automessages', 'autoreglages', 'clients', 'codepromo'], counts: ['conf', 'rdv', 'suivi', 'sav', 'notify'] },
   { id: 'depot', icon: 'package', items: ['dashboard', 'depot', 'scanner', 'produits', 'pos', 'tournee', 'livreurs'], counts: ['depot', 'lowStock'] },
   { id: 'finance', icon: 'wallet', items: ['caisse', 'macaisse'], counts: [] },
   { id: 'admin', icon: 'usercog', items: ['utilisateurs', 'management', 'reglages', 'livraison', 'agences', 'marketers', 'comptes'], counts: [] },

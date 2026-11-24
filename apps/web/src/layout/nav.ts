@@ -77,6 +77,7 @@ const COND: Record<MenuCond, (roles: Role[], isAdmin: boolean) => boolean> = {
   board: (r, admin) => !admin && !r.some((x) => x === 'vendeur' || x === 'agent_manager'),
   livreur: (r) => r.includes('livreur'),
   pos: () => moduleOn('pos'),
+  rdv: () => moduleOn('rdv'),
   notAdmin: (_r, admin) => !admin,
   store: () => storeOnly(),
   partners: () => partnersOn(),

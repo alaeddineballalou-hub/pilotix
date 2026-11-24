@@ -170,6 +170,10 @@
     },
     "partners": {
       "manage": "Gérer les influenceurs"
+    },
+    "rdv": {
+      "handle": "Appeler et confirmer les réservations",
+      "sessions": "Ajouter et changer les sessions"
     }
   },
   "actHelp": {
@@ -268,6 +272,10 @@
     },
     "partners": {
       "manage": "Ajouter, demander, retirer"
+    },
+    "rdv": {
+      "handle": "Confirmer, annuler, rappeler, noter qui est venu",
+      "sessions": "Les dates, les places et les prix"
     }
   },
   "changeOn": "{{who}} : {{what}} ajouté",

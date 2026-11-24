@@ -324,6 +324,11 @@ export const PROC_RIGHTS: Record<string, Need> = {
   'pos.close': 'act:pos.sell',
   'pos.clientNew': 'act:pos.sell',
   'pos.cancel': 'act:pos.cancel',
+  // Rendez-vous: a call's result, a booking taken by hand; the sessions (their days, seats and prices)
+  'rdv.set': 'act:rdv.handle',
+  'rdv.add': 'act:rdv.handle',
+  'rdv.sessionSave': 'act:rdv.sessions',
+  'rdv.sessionDelete': 'act:rdv.sessions',
   // Ma caisse
   'caisse.add': 'act:caisse.add',
   'caisse.transfer': 'act:caisse.transfer',
@@ -436,6 +441,7 @@ export const PROC_RIGHTS: Record<string, Need> = {
 const PAGE_PROCS: readonly (readonly [prefix: string, right: string | readonly string[], except?: readonly string[]])[] = [
   ['sav.', 'page:sav'],
   ['pos.', 'page:pos'],
+  ['rdv.', 'page:rendezvous'],
   ['spy.', 'page:spy'],
   ['createur.', 'page:createur'],
   // Pilot Content's planner, also used by Espace créateur

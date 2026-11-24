@@ -8,8 +8,8 @@ import { toast } from '../../ui/toast';
 import { Switch } from './bits';
 import './modules.css';
 
-const ICON: Record<ShopModule, string> = { pos: 'store' };
-const PAGE: Record<ShopModule, string> = { pos: '#/pos' };
+const ICON: Record<ShopModule, string> = { pos: 'store', rdv: 'calendar' };
+const PAGE: Record<ShopModule, string> = { pos: '#/pos', rdv: '#/rendezvous' };
 
 export function Modules() {
   const { t } = useTranslation();

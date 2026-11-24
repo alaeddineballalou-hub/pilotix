@@ -1,0 +1,152 @@
+{
+  "tabs": {
+    "attente": "To confirm",
+    "confirmes": "Confirmed",
+    "annules": "Cancelled",
+    "sessions": "Sessions"
+  },
+  "intro": {
+    "attente": "The seats booked on your website. Call each person to confirm.",
+    "confirmes": "The confirmed seats. On the day of the session, mark who came.",
+    "annules": "The cancelled bookings, and the numbers of your black list (kept apart: they take no seat)."
+  },
+  "search": "Name, phone or code",
+  "whichSession": "Which session",
+  "all": "All",
+  "emptyFilter": "Nobody here with this choice.",
+  "empty": {
+    "attente": "Nobody to call. New bookings from your website arrive here.",
+    "confirmes": "No confirmed seat yet.",
+    "annules": "No cancelled booking."
+  },
+  "st": {
+    "new": "New",
+    "no_answer": "No answer",
+    "callback": "Call back",
+    "confirmed": "Confirmed",
+    "cancelled": "Cancelled",
+    "present": "Came",
+    "absent": "Did not come",
+    "blocked": "Black list"
+  },
+  "noAnswerN": "No answer · {{n}}",
+  "callNow": "Call back now",
+  "callAt": "Call back {{when}}",
+  "confirm": "Confirm",
+  "call": "Call",
+  "callX": "Call {{name}}",
+  "whatsapp": "WhatsApp",
+  "waX": "WhatsApp {{name}}",
+  "more": "More actions",
+  "codeHelp": "The code the person shows at the door",
+  "act": {
+    "no_answer": "No answer",
+    "callback": "Call back later",
+    "cancel": "Cancel the booking",
+    "present": "Came",
+    "absent": "Did not come",
+    "reopen": "Back to confirm",
+    "note": "Write a note",
+    "move": "Change the session"
+  },
+  "done": {
+    "confirm": "Confirmed: {{name}}",
+    "no_answer": "Noted: no answer",
+    "callback": "Call back noted",
+    "cancel": "Booking cancelled",
+    "present": "{{name}} came",
+    "absent": "Noted: {{name}} did not come",
+    "reopen": "Back to confirm",
+    "note": "Note saved",
+    "move": "Session changed"
+  },
+  "wa_one": "Hello {{name}}, this is {{shop}}. You booked a seat for “{{title}}” on {{day}} at {{time}}, {{where}}. Can you confirm you are coming? Your code: {{code}}",
+  "wa_other": "Hello {{name}}, this is {{shop}}. You booked {{count}} seats for “{{title}}” on {{day}} at {{time}}, {{where}}. Can you confirm you are coming? Your code: {{code}}",
+  "ago": "{{d}} ago",
+  "seats_one": "{{count}} seat",
+  "seats_other": "{{count}} seats",
+  "upcoming": "Upcoming sessions",
+  "noUpcoming": "No upcoming session.",
+  "full": "Full",
+  "freeSeats_one": "{{count}} free seat",
+  "freeSeats_other": "{{count}} free seats",
+  "legend": {
+    "ok": "Confirmed",
+    "todo": "To confirm",
+    "free": "Free"
+  },
+  "fillLabel": "{{ok}} confirmed, {{todo}} to confirm, {{free}} free of {{seats}}",
+  "add": {
+    "title": "Add a booking",
+    "help": "Someone who called or came in: they take a seat like a booking from the website.",
+    "save": "Add",
+    "ok": "Booking added",
+    "confirmed": "Already confirmed",
+    "confirmedHint": "Otherwise it goes to “To confirm”."
+  },
+  "cb": {
+    "title": "Call {{name}} back when?",
+    "save": "Note the call back",
+    "in1h": "In 1 hour",
+    "in3h": "In 3 hours",
+    "tomorrow10": "Tomorrow morning",
+    "tomorrow18": "Tomorrow evening",
+    "other": "Another time"
+  },
+  "mv": {
+    "title": "Change {{name}}’s session",
+    "save": "Change"
+  },
+  "f": {
+    "session": "Session",
+    "seats": "Seats",
+    "fewer": "One seat less",
+    "more": "One seat more",
+    "name": "Name",
+    "phone": "Phone (mobile)"
+  },
+  "nt": {
+    "title": "Note about {{name}}",
+    "label": "Note",
+    "ph": "What the person said…"
+  },
+  "ses": {
+    "help": "Your sessions: the day, the place, the seats and the price. Your website shows the open ones (Landing pages › Website, the “Sessions” section).",
+    "add": "New session",
+    "editTitle": "Change the session",
+    "copyTitle": "The same session, another day",
+    "none": "No session yet. Add the first one: the day, the place, the seats and the price.",
+    "noneTeam": "No session yet: the owner adds them here.",
+    "pastTitle": "Past",
+    "past": "Past",
+    "closed": "Closed",
+    "openNow": "Open",
+    "free": "Free",
+    "nums": "{{taken}}/{{seats}} booked · {{ok}} confirmed · {{todo}} to confirm · {{free}} free",
+    "edit": "Change",
+    "copy": "Another day",
+    "remove": "Remove the session",
+    "removeAsk": "Remove this session? Nobody booked it.",
+    "removeAskBooked": "Remove this session? It leaves your website; its bookings stay put away with it.",
+    "removeYes": "Yes, remove",
+    "removed": "Session removed",
+    "archived": "Session removed, its bookings put away with it",
+    "saved": "Session saved",
+    "what": "What you teach",
+    "whatPh": "e.g. E-commerce from zero to the first sale",
+    "city": "City",
+    "cityPh": "e.g. Algiers",
+    "date": "Day",
+    "place": "Place",
+    "placePh": "Address, room…",
+    "start": "Start",
+    "end": "End",
+    "seats": "Seats",
+    "price": "Price (DA)",
+    "priceHint": "Paid on the day. 0: free.",
+    "note": "A word for the people",
+    "notePh": "e.g. bring your laptop",
+    "openLabel": "The website takes bookings",
+    "openHint": "Off: the session stays here, your website no longer shows it."
+  }
+}

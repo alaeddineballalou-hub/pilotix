@@ -12,7 +12,8 @@
     "en": "EN"
   },
   "niche": {
-    "baby": "Baby"
+    "baby": "Baby",
+    "training": "Training"
   },
   "home": {
     "title": "Your shop’s website",
@@ -42,7 +43,8 @@
     "use": "Use this design",
     "replaceAsk": "What you changed on the site will be lost.",
     "replaceYes": "Yes, replace",
-    "back": "Back"
+    "back": "Back",
+    "allNiches": "All"
   },
   "bar": {
     "back": "Back",
@@ -89,7 +91,8 @@
     "why": "Why us",
     "faq": "Questions",
     "whatsapp": "WhatsApp button",
-    "footer": "Footer"
+    "footer": "Footer",
+    "sessions": "Sessions"
   },
   "about": {
     "header": "The logo, the shop’s name, the languages and the phone.",
@@ -100,7 +103,8 @@
     "why": "The reasons to buy from you.",
     "faq": "Customers’ questions, with your answers.",
     "whatsapp": "A button to message you on WhatsApp.",
-    "footer": "The bottom of the page: your short note and contacts."
+    "footer": "The bottom of the page: your short note and contacts.",
+    "sessions": "Your sessions from Bookings: the seats left, and a form to book one."
   },
   "theme": {
     "title": "Style",
@@ -155,7 +159,9 @@
   "hints": {
     "noProducts": "No product yet: put a landing page online.",
     "noWhatsapp": "Add your WhatsApp number in Landing pages › Settings.",
-    "hidden": "Hidden: customers don’t see it"
+    "hidden": "Hidden: customers don’t see it",
+    "noSessions": "No open session yet: add some in Bookings › Sessions.",
+    "rdvOff": "Bookings is off: an administrator turns it on in Management › Modules."
   },
   "ed": {
     "tip": "Tap a part of the page to change it.",
@@ -199,7 +205,14 @@
     "remove": "Delete",
     "sure": "Yes, delete",
     "done": "Done",
-    "removeAsk": "Delete this section?"
+    "removeAsk": "Delete this section?",
+    "plain": "No photo",
+    "toSessions": "The sessions",
+    "barButton": "“Book” button",
+    "sessionsNote_one": "{{count}} open session comes from Pilotix › Bookings.",
+    "sessionsNote_other": "{{count}} open sessions come from Pilotix › Bookings.",
+    "sessionsGo": "Manage the sessions",
+    "modulesGo": "Open the modules"
   },
   "icons": {
     "cash": "Money",

@@ -22,15 +22,15 @@ test('off until an administrator turns it on in Management › Modules; only an 
   const admin = await as(EMAILS.admin);
   const karim = await as(EMAILS.depot);
   const vendeur = await as(EMAILS.vendeur);
-  assert.deepEqual(await call('modules.get', karim, {}), { pos: false });
+  assert.deepEqual(await call('modules.get', karim, {}), { pos: false, rdv: false });
   await assert.rejects(call('pos.state', admin, {}), /Point de vente est éteint/);
   await assert.rejects(call('pos.sell', admin, { lines: [{ variantId: 1, qty: 1 }], method: 'cash' }), /éteint/);
   await assert.rejects(call('pos.close', karim, { counted: 0 }), /éteint/);
   await assert.rejects(call('modules.set', karim, { module: 'pos', on: true }), /Accès refusé/);
   await assert.rejects(call('modules.set', vendeur, { module: 'pos', on: true }), /Accès refusé/);
   await assert.rejects(call('modules.set', admin, { module: 'gps', on: true }), /Champ invalide/);
-  assert.deepEqual(await call('modules.set', admin, { module: 'pos', on: true }), { pos: true });
-  assert.deepEqual(await call('modules.get', karim, {}), { pos: true });
+  assert.deepEqual(await call('modules.set', admin, { module: 'pos', on: true }), { pos: true, rdv: false });
+  assert.deepEqual(await call('modules.get', karim, {}), { pos: true, rdv: false });
   // off again: refused again, its sales and settings kept for the day it comes back
   await call('modules.set', admin, { module: 'pos', on: false });
   await assert.rejects(call('pos.state', karim, {}), /éteint/);
@@ -195,7 +195,7 @@ test('the counter of the preview opened in Claude: on, yesterday closed 100 DA s
   await seedPos(demo, NOW);
   await seedPos(demo, NOW);
   const admin = { ...(await asDemo(EMAILS.admin)), now: () => NOW };
-  assert.deepEqual(await call('modules.get', admin, {}), { pos: true });
+  assert.deepEqual(await call('modules.get', admin, {}), { pos: true, rdv: false });
   const d: any = await call('pos.drawer', admin, {});
   assert.equal(d.open.opening, 5000);
   assert.equal(d.open.who, 'Karim', 'who opened the drawer (its sales by payment are `by`)');

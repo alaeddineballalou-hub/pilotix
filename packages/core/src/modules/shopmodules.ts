@@ -20,7 +20,10 @@ export async function setModule(db: Db, m: ShopModule, on: boolean, userId?: num
 }
 
 /** What a module's action answers while the module is off. */
-const OFF: Record<ShopModule, string> = { pos: 'Le Point de vente est éteint : un administrateur l’allume dans Management › Modules' };
+const OFF: Record<ShopModule, string> = {
+  pos: 'Le Point de vente est éteint : un administrateur l’allume dans Management › Modules',
+  rdv: 'Les Rendez-vous sont éteints : un administrateur les allume dans Management › Modules',
+};
 export async function requireModule(db: Db, m: ShopModule) {
   if (!(await modulesOf(db))[m]) throw notFound(OFF[m]);
 }

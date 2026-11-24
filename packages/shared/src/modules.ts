@@ -3,5 +3,7 @@
 export const SHOP_MODULES = [
   // Point de vente: the boutique's counter (sell, the day's sales, the clôture)
   'pos',
+  // Rendez-vous: the sessions of a service (a training's dates and seats), booked on the website, confirmed by a call
+  'rdv',
 ] as const;
 export type ShopModule = (typeof SHOP_MODULES)[number];

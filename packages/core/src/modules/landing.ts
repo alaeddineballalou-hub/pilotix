@@ -914,7 +914,7 @@ export function ipWilaya(city: string, region: string): number | null {
 }
 
 /** an Algerian mobile number (05/06/07 + 8 digits) as typed, in Western or Arabic digits; null otherwise */
-const mobileOf = (raw: string): string | null => {
+export const mobileOf = (raw: string): string | null => {
   const d = arDigits(raw).replace(/[^\d+]/g, '').replace(/^(\+|00)213/, '0');
   return /^0?[567]\d{8}$/.test(d) ? normalizePhone(d) : null;
 };

@@ -57,6 +57,7 @@ export { boardCache } from './modules/board';
 export { pilotOn } from './modules/dellal';
 export { pushShopAdmins } from './modules/push';
 export { seedPos } from './modules/pos';
+export { seedRdv } from './modules/rdv';
 export { seedBlockDemo } from './modules/confblock';
 export type { PosSale, PosSettings } from './modules/pos';
 export { noteBadSignature, routeMeta, seedSocialPreview, socialApps, socialIgSecret, socialSecret } from './modules/social';

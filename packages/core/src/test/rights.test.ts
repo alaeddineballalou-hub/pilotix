@@ -30,7 +30,8 @@ test('the list: known ids, tabs under their page, the counts of a role', () => {
     if (d.extraFor) for (const r of d.extraFor) assert.ok(!byDefault(r, d), `${d.id}: « en plus » for ${r}, who has it already`);
   }
   const s = roleSummary('confirmation', NO_ROLE_RIGHTS);
-  assert.deepEqual([s.pages.on, s.pages.on === s.pages.of, s.acts.on === s.acts.of], [7, true, true]);
+  // (8 since Rendez-vous, 24 Nov 2026: its page is the confirmation team's, shown once the module is on)
+  assert.deepEqual([s.pages.on, s.pages.on === s.pages.of, s.acts.on === s.acts.of], [8, true, true]);
 });
 
 test('by default nobody loses anything: every action the server checks is inside its roles’ defaults', () => {

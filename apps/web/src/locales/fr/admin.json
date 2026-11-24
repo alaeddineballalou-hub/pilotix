@@ -923,6 +923,10 @@
     "pos": {
       "name": "Point de vente",
       "text": "Vendre au comptoir de votre boutique : produits en photos, ticket 80 mm, ventes du jour et clôture de caisse. Le stock sort du dépôt choisi, l’argent va dans « Caisse boutique »."
+    },
+    "rdv": {
+      "name": "Rendez-vous",
+      "text": "Pour une boutique qui vend un service, une formation d’abord : vos sessions (date, lieu, places, prix) sur votre site, les gens réservent une place, votre équipe les appelle pour confirmer. Chacun garde un billet avec un code à montrer à l’entrée."
     }
   },
   "cmsg": {

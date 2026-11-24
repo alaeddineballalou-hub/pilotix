@@ -1,0 +1,165 @@
+/* ===== Rendez-vous (pages/rdv): the bookings to call (design « A »), the sessions and their seats.
+   Built on the app's tokens (--surface, --line, --ink, --muted, --sky-soft, the Doux skin's --sk-*, the status colours
+   --c-ok-*, --c-warn-*, --c-bad-*, --c-info-*) so light, dark and Arabic (dir="rtl") follow the app. Scoped under .rdv. */
+.rdv {
+  --rdv-on-bg: var(--sk-tab-on-bg, #FFE9CC);
+  --rdv-on-ink: var(--sk-tab-on-ink, #6B3A00);
+  --rdv-ring: var(--c-accent-2, #F28B1E);
+  --rdv-ok: #1F9D57;
+  --rdv-todo: #F2B544;
+  --rdv-r: var(--sk-r, 22px);
+  --rdv-rc: var(--sk-r-ctl, 14px);
+  display: flex; flex-direction: column; gap: 16px; min-width: 0;
+}
+.rdv .bji { width: 18px; height: 18px; flex: none; }
+.rdv :focus-visible { outline: 2px solid var(--rdv-ring); outline-offset: 2px; }
+.rdv .ltr { direction: ltr; unicode-bidi: isolate; }
+.rdv .rdv-grow { flex: 1 1 auto; min-width: 0; }
+.rdv-wrap { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.rdv-h2 { margin: 10px 0 0; font-size: 16px; font-weight: 600; color: var(--muted); }
+
+/* ---------- the tools: what this list is, the search, « add » */
+.rdv-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rdv-intro { flex: 1 1 280px; margin: 0; font-size: 14px; line-height: 1.45; }
+.rdv-search { flex: 0 1 300px; display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 14px; box-sizing: border-box; border-radius: var(--rdv-rc); background: var(--surface); border: 1px solid var(--line); color: var(--muted); }
+.rdv-search:focus-within { border-color: var(--rdv-ring); }
+.rdv-search input { flex: 1; min-width: 0; height: 100%; border: 0 !important; background: transparent !important; box-shadow: none !important; outline: none; padding: 0 !important; color: var(--ink); font: inherit; font-size: 15px; }
+.rdv .rdv-search input:focus-visible { outline: none !important; }
+.rdv-tools .btn .bji { width: 18px; height: 18px; }
+
+/* ---------- the session chips */
+.rdv-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.rdv-chips::-webkit-scrollbar { display: none; }
+.rdv-chip { flex: none; height: 36px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.rdv-chip.on { background: var(--ink); border-color: var(--ink); color: var(--surface); font-weight: 600; }
+@media (hover: hover) { .rdv-chip:not(.on):hover { box-shadow: inset 0 0 0 1px var(--line); background: var(--sky-soft); } }
+
+/* ---------- the list and the sessions beside it */
+.rdv-cols { display: flex; gap: 18px; align-items: flex-start; }
+.rdv-list { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+
+/* ---------- a booking */
+.rdv-card { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; min-width: 0; }
+.rdv-card.due { box-shadow: inset 0 0 0 1.5px var(--c-bad-ink, #B42318); }
+.rdv-who { display: flex; align-items: center; gap: 14px; flex: 1 1 auto; min-width: 0; }
+.rdv-av { width: 42px; height: 42px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 14px; font-weight: 600; }
+.rdv-av.t-a { background: var(--c-info-tint, #E8EEF8); color: var(--c-info-ink, #2459D6); }
+.rdv-av.t-b { background: var(--rdv-on-bg); color: var(--rdv-on-ink); }
+.rdv-av.t-c { background: var(--c-ok-tint, #E3F5EA); color: var(--c-ok-ink, #137A3B); }
+.rdv-av.t-d { background: var(--sky-soft); color: var(--ink); }
+.rdv-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.rdv-nm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.rdv-nm b { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.rdv-meta { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rdv-codei { font-weight: 600; color: var(--ink); }
+.rdv-note { display: flex; align-items: flex-start; gap: 6px; margin: 2px 0 0; font-size: 13px; color: var(--ink); line-height: 1.4; }
+.rdv-note .bji { width: 15px; height: 15px; margin-top: 1px; color: var(--muted); }
+.rdv-ses { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 999px; background: var(--sky-soft); color: var(--ink); font-size: 13px; font-weight: 500; white-space: nowrap; }
+.rdv-ses .bji { width: 15px; height: 15px; color: var(--muted); }
+.rdv-acts { display: flex; align-items: center; gap: 8px; flex: none; flex-wrap: wrap; }
+.rdv-acts .btn { gap: 8px; }
+.rdv .btn.icon { width: 46px; min-width: 46px; padding: 0; justify-content: center; }
+.rdv-ok { background: var(--c-ok-tint, #E3F5EA); color: var(--c-ok-ink, #137A3B); border-color: transparent; font-weight: 600; }
+@media (hover: hover) { .rdv-ok:hover:not(:disabled) { background: #D3EEDD; } }
+.rdv-code { min-width: 78px; text-align: end; font-size: 13px; font-weight: 600; color: var(--muted); padding: 0 4px; }
+
+/* ---------- the pills */
+.rdv-pill { display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; background: var(--sky-soft); color: var(--ink); }
+.rdv-pill.ok { background: var(--c-ok-tint, #E3F5EA); color: var(--c-ok-ink, #137A3B); }
+.rdv-pill.warn { background: var(--c-warn-tint, #FFF2DA); color: var(--c-warn-ink, #8A5A00); }
+.rdv-pill.bad { background: var(--c-bad-tint, #FCE7E5); color: var(--c-bad-ink, #B42318); }
+.rdv-pill.info { background: var(--c-info-tint, #E8EEF8); color: var(--c-info-ink, #2459D6); }
+.rdv-pill.off { background: var(--sky-soft); color: var(--muted); }
+
+/* ---------- the menu (⋯) */
+.rdv-menu { display: flex; flex-direction: column; padding: 6px; }
+.rdv-menu button { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 10px; background: none; color: var(--ink); font: inherit; font-size: 14px; text-align: start; cursor: pointer; }
+.rdv-menu button .bji { width: 18px; height: 18px; color: var(--muted); }
+.rdv-menu button.bad, .rdv-menu button.bad .bji { color: var(--c-bad-ink, #B42318); }
+@media (hover: hover) { .rdv-menu button:hover { background: var(--sky-soft); } }
+.rdv-ask { margin: 6px 12px 8px; font-size: 13.5px; color: var(--muted); line-height: 1.45; }
+
+/* ---------- the sessions beside the list (computer) */
+.rdv-aside { width: 300px; flex: none; display: flex; flex-direction: column; gap: 12px; padding: 18px; position: sticky; top: 12px; }
+.rdv-aside h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.rdv-aside p { margin: 2px 0 0; font-size: 13px; }
+.rdv-fill { display: flex; flex-direction: column; gap: 7px; padding: 10px; margin: 0 -10px; border: 0; border-radius: 14px; background: none; color: var(--ink); font: inherit; text-align: start; cursor: pointer; }
+.rdv-fill.on { background: var(--rdv-on-bg); }
+@media (hover: hover) { .rdv-fill:not(.on):hover { background: var(--sky-soft); } }
+.rdv-fill-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; }
+.rdv-fill-h b { font-weight: 600; }
+.rdv-fill-s { font-size: 12.5px; }
+.rdv-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--sky-soft); box-shadow: inset 0 0 0 1px var(--line); }
+.rdv-bar i { display: block; height: 100%; }
+.rdv-bar i.ok { background: var(--rdv-ok); }
+.rdv-bar i.todo { background: var(--rdv-todo); }
+.rdv-legend { display: flex; gap: 14px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+.rdv-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.rdv-legend i { width: 10px; height: 10px; border-radius: 3px; background: var(--sky-soft); box-shadow: inset 0 0 0 1px var(--line); }
+.rdv-legend i.ok { background: var(--rdv-ok); box-shadow: none; }
+.rdv-legend i.todo { background: var(--rdv-todo); box-shadow: none; }
+
+/* ---------- the sessions tab */
+.rdv-sgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 14px; }
+.rdv-scard { display: flex; flex-direction: column; gap: 12px; padding: 18px; margin: 0; }
+.rdv-scard.past { opacity: .78; }
+.rdv-scard-h { display: flex; align-items: flex-start; gap: 12px; }
+.rdv-scard h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.rdv-scard-h p { margin: 2px 0 0; font-size: 13px; }
+.rdv-date { width: 52px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px 0; border-radius: 14px; background: var(--rdv-on-bg); color: var(--rdv-on-ink); }
+.rdv-date b { font-size: 20px; line-height: 1.1; font-weight: 700; }
+.rdv-date small { font-size: 12px; font-weight: 600; }
+.rdv-what { margin: 0; font-size: 14px; }
+.rdv-what b { font-weight: 600; }
+.rdv-nums { margin: -4px 0 0; font-size: 13px; }
+.rdv-scard .rdv-acts { margin-top: auto; flex-wrap: nowrap; }
+.rdv-scard .rdv-acts .btn:not(.icon) { flex: 0 1 auto; min-width: 0; padding: 0 14px; }
+.rdv-scard .rdv-acts .btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rdv-nowrap { white-space: nowrap; }
+
+/* ---------- the small forms */
+.rdv-form { display: flex; flex-direction: column; gap: 14px; }
+.rdv-form .field { display: flex; flex-direction: column; gap: 6px; margin: 0; min-width: 0; }
+.rdv-form .lab { font-size: 14px; font-weight: 500; }
+.rdv-form input:not([type="checkbox"]), .rdv-form select, .rdv-form textarea { width: 100%; box-sizing: border-box; min-height: 46px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--field, var(--surface)); color: var(--ink); font: inherit; font-size: 15px; }
+.rdv-form textarea { padding: 10px 14px; min-height: 80px; resize: vertical; line-height: 1.45; }
+.rdv-form .hint { font-size: 12.5px; color: var(--muted); }
+.rdv-help { margin: 0; font-size: 14px; }
+.rdv-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.rdv-line { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 12px 14px; border-radius: 14px; background: var(--sky-soft); }
+.rdv-line span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rdv-line b { font-size: 14px; font-weight: 600; }
+.rdv-line small { font-size: 12.5px; }
+.rdv-step { display: inline-flex; align-items: center; gap: 12px; }
+.rdv-step b { min-width: 28px; text-align: center; font-size: 18px; font-weight: 600; }
+.rdv-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.rdv-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); font: inherit; text-align: start; cursor: pointer; }
+.rdv-opt b { font-size: 14px; font-weight: 600; }
+.rdv-opt small { font-size: 12.5px; }
+.rdv-opt.on { background: var(--rdv-on-bg); border-color: var(--rdv-ring); box-shadow: inset 0 0 0 1px var(--rdv-ring); }
+.rdv-foot { display: flex; gap: 10px; justify-content: flex-end; width: 100%; }
+.rdv-dlg .modal { width: min(560px, 100%); }
+
+/* ---------- tablets: the sessions beside the list leave room */
+@media (max-width: 1180px) { .rdv-aside { display: none; } }
+@media (max-width: 1023px) { .rdv-long { display: none; } }
+
+/* ---------- phones: each booking a card, its three buttons at the thumb */
+@media (max-width: 760px) {
+  .rdv-tools { gap: 8px; }
+  .rdv-intro { flex-basis: 100%; }
+  .rdv-search { flex: 1 1 auto; }
+  .rdv-card { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px; border-radius: 20px; }
+  .rdv-who { align-items: flex-start; }
+  .rdv-ses { display: inline-flex; align-self: flex-start; }
+  .rdv-acts.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; }
+  .rdv-acts.grid .btn { width: auto; min-width: 0; padding: 0 8px; justify-content: center; }
+  .rdv-acts.grid .btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rdv-acts.grid .btn .bji { display: none; }
+  .rdv-meta { white-space: normal; }
+  .rdv-more { margin-inline-start: auto; }
+  .rdv-two { grid-template-columns: minmax(0, 1fr); }
+  .rdv-foot .btn { flex: 1; }
+  .rdv-scard .rdv-acts .btn:not(.icon) { padding: 0 12px; }
+  .rdv-scard .rdv-acts .btn:not(.icon) .bji { display: none; }
+}

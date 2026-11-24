@@ -83,6 +83,8 @@ export function useMenuCounts(seller: Seller | null = null, enabled = true) {
       // landing pages (marketers and agents only: undefined hides the badge): blocked + abandoned to handle, and for
       // marketers the products still without a page
       ...(c.landing ? { landing: c.landing.blocked + c.landing.abandoned + c.landing.noPage } : {}),
+      // Rendez-vous (a module): the bookings still to call
+      ...('rdv' in c && typeof c.rdv === 'number' ? { rdv: c.rdv } : {}),
     } as Record<string, number>;
   }, [q.data]);
 }
@@ -96,6 +98,7 @@ const ITEM_COUNT: Record<string, [string, string]> = {
   tournee: ['onRoad', 'nc-n'],
   produits: ['lowStock', 'nc-a'],
   landing: ['landing', 'nc-a'],
+  rendezvous: ['rdv', 'nc-n'],
   caisse: ['uncashed', 'nc-c'],
   livraison: ['toShip', 'nc-n'],
 };

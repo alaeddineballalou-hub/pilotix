@@ -1,0 +1,152 @@
+{
+  "tabs": {
+    "attente": "À confirmer",
+    "confirmes": "Confirmés",
+    "annules": "Annulés",
+    "sessions": "Sessions"
+  },
+  "intro": {
+    "attente": "Les places réservées sur votre site. Appelez chaque personne pour confirmer.",
+    "confirmes": "Les places confirmées. Le jour de la session, notez qui est venu.",
+    "annules": "Les réservations annulées, et les numéros de votre liste noire (gardés à part : ils ne prennent pas de place)."
+  },
+  "search": "Nom, téléphone ou code",
+  "whichSession": "Quelle session",
+  "all": "Toutes",
+  "emptyFilter": "Personne ici avec ce choix.",
+  "empty": {
+    "attente": "Personne à appeler. Les nouvelles réservations de votre site arrivent ici.",
+    "confirmes": "Pas encore de place confirmée.",
+    "annules": "Aucune réservation annulée."
+  },
+  "st": {
+    "new": "Nouveau",
+    "no_answer": "Pas de réponse",
+    "callback": "Rappeler",
+    "confirmed": "Confirmé",
+    "cancelled": "Annulé",
+    "present": "Présent",
+    "absent": "Absent",
+    "blocked": "Liste noire"
+  },
+  "noAnswerN": "Pas de réponse · {{n}}",
+  "callNow": "À rappeler maintenant",
+  "callAt": "Rappeler {{when}}",
+  "confirm": "Confirmer",
+  "call": "Appeler",
+  "callX": "Appeler {{name}}",
+  "whatsapp": "WhatsApp",
+  "waX": "WhatsApp à {{name}}",
+  "more": "Plus d’actions",
+  "codeHelp": "Le code que la personne montre à l’entrée",
+  "act": {
+    "no_answer": "Pas de réponse",
+    "callback": "Rappeler plus tard",
+    "cancel": "Annuler la réservation",
+    "present": "Présent",
+    "absent": "Absent",
+    "reopen": "Remettre à confirmer",
+    "note": "Écrire une note",
+    "move": "Changer de session"
+  },
+  "done": {
+    "confirm": "Confirmé : {{name}}",
+    "no_answer": "Noté : pas de réponse",
+    "callback": "Rappel noté",
+    "cancel": "Réservation annulée",
+    "present": "{{name}} est venu",
+    "absent": "Noté : {{name}} n’est pas venu",
+    "reopen": "Remis à confirmer",
+    "note": "Note enregistrée",
+    "move": "Session changée"
+  },
+  "wa_one": "Bonjour {{name}}, c’est {{shop}}. Vous avez réservé une place pour « {{title}} » le {{day}} à {{time}}, {{where}}. Pouvez-vous confirmer votre venue ? Votre code : {{code}}",
+  "wa_other": "Bonjour {{name}}, c’est {{shop}}. Vous avez réservé {{count}} places pour « {{title}} » le {{day}} à {{time}}, {{where}}. Pouvez-vous confirmer votre venue ? Votre code : {{code}}",
+  "ago": "il y a {{d}}",
+  "seats_one": "{{count}} place",
+  "seats_other": "{{count}} places",
+  "upcoming": "Sessions à venir",
+  "noUpcoming": "Pas de session à venir.",
+  "full": "Complet",
+  "freeSeats_one": "{{count}} place libre",
+  "freeSeats_other": "{{count}} places libres",
+  "legend": {
+    "ok": "Confirmés",
+    "todo": "À confirmer",
+    "free": "Libres"
+  },
+  "fillLabel": "{{ok}} confirmés, {{todo}} à confirmer, {{free}} libres sur {{seats}}",
+  "add": {
+    "title": "Ajouter une réservation",
+    "help": "Une personne qui a appelé ou qui est venue : elle prend une place comme une réservation du site.",
+    "save": "Ajouter",
+    "ok": "Réservation ajoutée",
+    "confirmed": "Déjà confirmée",
+    "confirmedHint": "Sinon elle arrive dans « À confirmer »."
+  },
+  "cb": {
+    "title": "Rappeler {{name}} quand ?",
+    "save": "Noter le rappel",
+    "in1h": "Dans 1 heure",
+    "in3h": "Dans 3 heures",
+    "tomorrow10": "Demain matin",
+    "tomorrow18": "Demain soir",
+    "other": "Autre moment"
+  },
+  "mv": {
+    "title": "Changer la session de {{name}}",
+    "save": "Changer"
+  },
+  "f": {
+    "session": "Session",
+    "seats": "Places",
+    "fewer": "Une place de moins",
+    "more": "Une place de plus",
+    "name": "Nom",
+    "phone": "Téléphone (mobile)"
+  },
+  "nt": {
+    "title": "Note sur {{name}}",
+    "label": "Note",
+    "ph": "Ce que la personne a dit…"
+  },
+  "ses": {
+    "help": "Vos sessions : le jour, le lieu, les places et le prix. Votre site montre celles qui sont ouvertes (Landing pages › Site web, la section « Sessions »).",
+    "add": "Nouvelle session",
+    "editTitle": "Modifier la session",
+    "copyTitle": "La même session, un autre jour",
+    "none": "Pas encore de session. Ajoutez la première : le jour, le lieu, les places et le prix.",
+    "noneTeam": "Pas encore de session : le propriétaire les ajoute ici.",
+    "pastTitle": "Passées",
+    "past": "Passée",
+    "closed": "Fermée",
+    "openNow": "Ouverte",
+    "free": "Gratuit",
+    "nums": "{{taken}}/{{seats}} réservées · {{ok}} confirmées · {{todo}} à confirmer · {{free}} libres",
+    "edit": "Modifier",
+    "copy": "Un autre jour",
+    "remove": "Retirer la session",
+    "removeAsk": "Retirer cette session ? Personne ne l’a réservée.",
+    "removeAskBooked": "Retirer cette session ? Elle quitte votre site ; ses réservations restent rangées avec elle.",
+    "removeYes": "Oui, retirer",
+    "removed": "Session retirée",
+    "archived": "Session retirée, ses réservations rangées avec elle",
+    "saved": "Session enregistrée",
+    "what": "Ce que vous enseignez",
+    "whatPh": "Ex. : E-commerce de zéro à la première vente",
+    "city": "Ville",
+    "cityPh": "Ex. : Alger",
+    "date": "Jour",
+    "place": "Lieu",
+    "placePh": "Adresse, salle…",
+    "start": "Début",
+    "end": "Fin",
+    "seats": "Places",
+    "price": "Prix (DA)",
+    "priceHint": "Payé le jour même. 0 : gratuit.",
+    "note": "Un mot pour les personnes",
+    "notePh": "Ex. : apportez votre ordinateur",
+    "openLabel": "Le site prend les réservations",
+    "openHint": "Éteint : la session reste ici, votre site ne la montre plus."
+  }
+}

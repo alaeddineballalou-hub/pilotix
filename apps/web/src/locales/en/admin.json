@@ -923,6 +923,10 @@
     "pos": {
       "name": "Point of sale",
       "text": "Sell at your shop’s counter: products as photos, 80 mm ticket, today’s sales and till closing. Stock leaves the chosen depot, money goes into “Shop till”."
+    },
+    "rdv": {
+      "name": "Bookings",
+      "text": "For a shop that sells a service, a training first: your sessions (date, place, seats, price) on your website, people book a seat and your team calls them to confirm. Each person keeps a ticket with a code to show at the door."
     }
   },
   "cmsg": {
