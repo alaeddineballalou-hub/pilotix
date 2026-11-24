@@ -32,7 +32,7 @@ import { CopyCode } from '../../ui/CopyCode';
 import { ScoreChip } from '../../ui/clientScore';
 import { useAllMode } from '../../layout/AllBoutiques';
 import { rightOn, tabOn } from '../../lib/rights';
-import { sourceName } from '../orders/AdSource';
+import { makerName, OriginChip } from '../orders/OrderPath';
 
 type Source = { id: number; name: string };
 type Row = NonNullable<ReturnType<typeof useList>['data']>['rows'][number] & { seller?: Source };
@@ -320,11 +320,12 @@ export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | 
           </>
         );
       case 'source':
-        return <span className="chip">{(r.utm && (sourceName(r.utm.utm_source) || r.utm.source)) || r.source || t('confirmation.direct')}</span>;
+        return <OriginChip o={r} />;
       case 'tracking':
         return <CopyCode code={trackOf(r)} />;
       case 'creator':
-        return r.creatorName ?? <span className="muted">{t('confirmation.site')}</span>;
+        // the customer, Dellal, Pilotix or the person who typed it (never the account Pilotix acts with)
+        return makerName(t, r);
       case 'channel':
         return t(`status.channel.${r.channel}`, { defaultValue: r.channel });
       case 'product':

@@ -2,6 +2,7 @@
 // Mirrors the original Pilotix model: two status tracks per order (confirmation, then livraison).
 
 import type { ClientLevel, ClientReason } from './clientscore';
+import type { OrderCame } from './origin';
 export * from './timers';
 export * from './geo';
 export * from './demo';
@@ -291,6 +292,10 @@ export interface Order {
   utm: Record<string, string> | null;
   /** the landing page the customer ordered on */
   landingId?: number | null;
+  /** how the order was made (origin.ts): a landing page's form, a chat with Dellal, a person who typed it… */
+  came?: OrderCame;
+  /** the person who made it (an order typed by someone), from created_by */
+  creatorName?: string | null;
   confStatus: ConfStatus;
   agentId: number | null;
   attempts: number;
@@ -505,3 +510,4 @@ export * from './menu';
 export * from './rights';
 export * from './pilotchecks';
 export * from './adcircle';
+export * from './origin';

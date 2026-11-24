@@ -1069,8 +1069,8 @@ export async function makeTestParcels(db: Db, userId: number | null) {
       const total = num(v.price) + 400;
       const r = await tx.query(
         `INSERT INTO orders (ref, created_at, created_by, customer_id, customer_name, phone, wilaya_id, commune, address, channel, conf_status, agent_id, confirmed_at, next_call_at,
-           follow_status, company_id, warehouse_id, tracking, subtotal, delivery_fee, total, prepared_at, shipped_at, delivered_at, returned_at, is_exchange, original_order_id, internal_note)
-         VALUES ($1,$2,$3,$4,$5,$6,16,'Bab Ezzouar','Cité test','autre',$7,$3,$8,$9,$10,$11,$12,$13,$14,400,$15,$16,$17,$18,$19,$20,$21,'Colis de test du scanner')
+           follow_status, company_id, warehouse_id, tracking, subtotal, delivery_fee, total, prepared_at, shipped_at, delivered_at, returned_at, is_exchange, original_order_id, internal_note, came)
+         VALUES ($1,$2,$3,$4,$5,$6,16,'Bab Ezzouar','Cité test','autre',$7,$3,$8,$9,$10,$11,$12,$13,$14,400,$15,$16,$17,$18,$19,$20,$21,'Colis de test du scanner','test')
          RETURNING id`,
         [ref, ago(30), userId, cid, name, phone, o.conf ?? 'confirmed', (o.conf ?? 'confirmed') === 'confirmed' ? ago(26) : null, o.conf === 'callback' ? ago(-3) : null,
           o.follow === undefined ? 'prepared' : o.follow, o.company === undefined ? own.id : o.company, wh, o.tracking ?? null, num(v.price), total,

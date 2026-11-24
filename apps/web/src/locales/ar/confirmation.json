@@ -77,7 +77,7 @@
   },
   "col": {
     "order": "الطلب",
-    "source": "مصدر UTM",
+    "source": "من أين",
     "tracking": "رقم التتبع",
     "creator": "أنشأه",
     "channel": "القناة",

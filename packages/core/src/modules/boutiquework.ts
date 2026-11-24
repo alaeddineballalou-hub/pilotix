@@ -74,7 +74,7 @@ export const OTHER_BOUTIQUE = new Set(
     'depot: cancelDone companies find pick receiveReturn resend unassign',
     'filters: options',
     'partners: orderRouting routeOrder',
-    'orders: assignAgent assignCompany cancelReport companyFees confirmCheck counts create delete deliveredReport duplicate events formData get lastChange list logCall lookups next note quote reasons setConf setFollow setSub setTracking sync uiMeta undo undoMany update',
+    'orders: assignAgent assignCompany cancelReport companyFees confirmCheck counts create delete deliveredReport duplicate events formData get lastChange list logCall lookups next note origin quote reasons setConf setFollow setSub setTracking sync uiMeta undo undoMany update',
     'parcel: action change changeCancel changeSync info',
     'pilot: get',
     'prefs: get',

@@ -9,6 +9,7 @@ import {
   CONF_TODO,
   ConfStatus,
   isAbandonedCheckout,
+  cameOf,
   FOLLOW_FINAL,
   FOLLOW_LOCKED,
   FOLLOW_STATUSES,
@@ -16,6 +17,7 @@ import {
   messageTry,
   normalizePhone,
   Order,
+  OrderCame,
   OrderEvent,
   OrderItem,
   OrderPay,
@@ -61,7 +63,7 @@ const ORDER_COLS = `o.*,
   (SELECT coalesce(json_agg(json_build_object('id', i.id, 'productId', i.product_id, 'variantId', i.variant_id, 'name', i.name,
      'variantTitle', i.variant_title, 'qty', i.qty, 'unitPrice', i.unit_price, 'purchasePrice', i.purchase_price, 'isUpsell', i.is_upsell, 'forProductId', i.for_product_id) ORDER BY i.id), '[]')
    FROM order_items i WHERE i.order_id = o.id) AS items_json,
-  ag.name AS agent_name, fa.name AS follow_agent_name, co.name AS company_name, lv.name AS livreur_name,
+  ag.name AS agent_name, fa.name AS follow_agent_name, co.name AS company_name, lv.name AS livreur_name, cr.name AS creator_name,
   CASE WHEN o.is_exchange THEN (SELECT k.ref FROM complaints k WHERE k.exchange_order_id = o.id ORDER BY k.id DESC LIMIT 1) END AS sav_ref,
   c.blacklisted AS c_blacklisted, c.delivered AS c_delivered, c.returned AS c_returned, c.stopdesk_only AS c_stopdesk, c.refusals AS c_refusals,
   (SELECT lk.phone FROM customers lk WHERE lk.id = o.looks_like_customer_id) AS looks_like_phone,
@@ -76,6 +78,7 @@ const ORDER_FROM = `FROM orders o
   LEFT JOIN profiles ag ON ag.id = o.agent_id
   LEFT JOIN profiles fa ON fa.id = o.follow_agent_id
   LEFT JOIN profiles lv ON lv.id = o.livreur_id
+  LEFT JOIN profiles cr ON cr.id = o.created_by
   LEFT JOIN delivery_companies co ON co.id = o.company_id`;
 
 export function toOrder(r: any): Order {
@@ -98,6 +101,8 @@ export function toOrder(r: any): Order {
     source: r.source,
     utm: r.utm,
     landingId: numOrNull(r.landing_id),
+    came: cameOf({ came: r.came, channel: r.channel, source: r.source, isExchange: !!r.is_exchange, landingId: numOrNull(r.landing_id) }),
+    creatorName: r.creator_name ?? null,
     confStatus: r.conf_status,
     agentId: numOrNull(r.agent_id),
     attempts: num(r.attempts),
@@ -743,6 +748,9 @@ export async function createOrder(
     sheet?: boolean;
     /** what made it, as its history says it in place of a name (otherwise found from where it came: autoSourceOf) */
     by?: string | null;
+    /** how it came (« Le chemin de la commande »): a landing page's form, a chat, the site… Not given: typed by a person
+     *  (an exchange parcel: from the SAV) */
+    came?: OrderCame;
   } = {},
 ): Promise<Order> {
   const phone = normalizePhone(input.phone);
@@ -757,6 +765,9 @@ export async function createOrder(
   }
   if (input.confirm && !input.isStopdesk && !String(input.commune ?? '').trim()) throw bad('Indiquez la commune avant de confirmer');
   const me = ctx.session.profile.id;
+  // how it came (« Le chemin de la commande »); who made it stays as it was (created_by, its history line: pay and
+  // statistics read them — the history shows where it came from instead, see autoSourceOf)
+  const came: OrderCame = opts.came ?? (input.isExchange ? 'exchange' : 'hand');
 
   // the other channels get the landing pages' anti-fraud check too (no browser signals): reasons in the note, and
   // what a landing page would block « À vérifier » when the order came by itself (worked out before the transaction:
@@ -852,15 +863,15 @@ export async function createOrder(
         `INSERT INTO orders (ref, created_by, customer_id, customer_name, phone, phone2, wilaya_id, commune, address, is_stopdesk, stopdesk_id, channel, source, utm,
            conf_status, agent_id, assigned_at, confirmed_at, follow_status, company_id, warehouse_id, subtotal, delivery_fee, discount, total,
            customer_note, delivery_note, internal_note, is_exchange, original_order_id, has_upsell, upsell_value, orig_items, orig_discount, conversation_id, landing_id, adset_id, looks_like_customer_id,
-           pilot_by, pilot_rule, pilot_why)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41) RETURNING id`,
+           pilot_by, pilot_rule, pilot_why, came)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42) RETURNING id`,
         [ref, me, cust.id, input.customerName, phone, phone2, input.wilayaId, input.commune, input.address, input.isStopdesk, input.stopdeskId ?? null,
           input.channel, input.source ?? null, input.utm ? JSON.stringify(input.utm) : null,
           conf, stamped || ownNew ? me : null, stamped || ownNew ? new Date(ctx.now()).toISOString() : null, stamped ? new Date(ctx.now()).toISOString() : null,
           confirmed ? 'to_prepare' : null, defCompany, wh?.id ?? null, priced.subtotal, fee, allDiscount, total,
           input.customerNote ?? null, input.deliveryNote ?? null, internalNote, input.isExchange, input.originalOrderId ?? null,
           up.value > 0, up.value, JSON.stringify(orig), input.discount, opts.conversationId ?? null, opts.landingId ?? null, opts.adsetId ?? null, look?.id ?? null,
-          pick.by, pick.rule, pick.why],
+          pick.by, pick.rule, pick.why, came],
       )
     )[0];
     const oid = num(row.id);
@@ -902,8 +913,8 @@ export async function createOrder(
   if (!order.isExchange && (order.confStatus === 'confirmed' || order.confStatus === 'no_stock')) await recordRiskConfirms(ctx, [order.id], me, db);
   // an order that came by itself (the shop's site, a conversation of Pilot Message): the people who confirm
   // hear of it, in this boutique and in their other ones (a landing page says it itself)
-  const came = !input.isExchange && !opts.landingId && (input.via === 'api' || !!opts.conversationId);
-  ctx.emit({ type: 'orders', ...(came ? { id: order.id, data: { created: { ref: order.ref, channel: order.channel, agency: order.confAgencyId ?? null } } } : {}) });
+  const byItself = !input.isExchange && !opts.landingId && (input.via === 'api' || !!opts.conversationId);
+  ctx.emit({ type: 'orders', ...(byItself ? { id: order.id, data: { created: { ref: order.ref, channel: order.channel, agency: order.confAgencyId ?? null } } } : {}) });
   // Affectation automatique: an order to call gets its agent at once (when the shop turned it on) — not inside the
   // caller's own transaction (a page left open, a restored order): the job every minute gives that one
   if (db === ctx.db && !input.isExchange) {
@@ -2281,7 +2292,7 @@ export const ordersProcs = {
     // an exchange leaves free (the customer only pays the delivery): it is made by the SAV (sav.exchange), from a real
     // ticket — never typed as a free order to anyone. Only the administrator may type one directly.
     if (i.isExchange && !ctx.session.isAdmin) throw forbidden('Un échange se fait depuis le SAV');
-    const o = await createOrder(ctx, { ...i, items: i.items.map((x) => ({ ...x, isUpsell: false })) }, ctx.db, { guard: i.via === 'api' ? 'check' : 'note' });
+    const o = await createOrder(ctx, { ...i, items: i.items.map((x) => ({ ...x, isUpsell: false })) }, ctx.db, { guard: i.via === 'api' ? 'check' : 'note', came: i.via === 'api' ? 'site' : 'hand' });
     await sendInPreview(ctx);
     return o;
   }),
@@ -2414,7 +2425,7 @@ export const ordersProcs = {
         items: o.items.map((i) => ({ productId: i.productId, variantId: i.variantId, qty: i.qty, unitPrice: i.unitPrice })),
         deliveryFee: o.deliveryFee, discount: o.discount, customerNote: o.customerNote, deliveryNote: o.deliveryNote,
         internalNote: `Copie de ${o.ref}`, confirm: false, isExchange: false,
-      });
+      }, ctx.db, { came: 'copy' });
       out.push(copy.id);
     }
     await sendInPreview(ctx);

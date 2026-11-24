@@ -27,6 +27,7 @@ import { agencyBellProcs } from './modules/agencybell';
 import { agencyAssignProcs } from './modules/agencyassign';
 import { agencyStatsProcs } from './modules/agencystats';
 import { undoProcs } from './modules/undo';
+import { originProcs } from './modules/origin';
 import { coverageProcs } from './modules/coverage';
 import { pushProcs } from './modules/push';
 import { inboxProcs } from './modules/inbox';
@@ -141,6 +142,7 @@ export const REGISTRY = {
   ...agencyBellProcs,
   ...agencyStatsProcs,
   ...undoProcs,
+  ...originProcs,
   ...photoShareProcs,
   ...coverageProcs,
   ...pushProcs,

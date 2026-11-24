@@ -19,6 +19,7 @@ import { toast } from '../../ui/toast';
 import { CONF_TONE } from '@pilotix/shared';
 import './phone.css';
 import { ScoreChip } from '../../ui/clientScore';
+import { OriginChip } from '../orders/OrderPath';
 
 /** a queue row: the order with its call countdown */
 type PRow = Order & { deadline?: Deadline | null; rotateAt?: number | null; seller?: { id: number; name: string } };
@@ -89,6 +90,8 @@ export function PhoneCards({ rows, empty, onOpen, pick, showAgent, rowKey }: { r
                   {namesOf(o.items)}
                   {vt ? ` · ${vt}` : ''}
                 </div>
+                {/* where it came from and who made it (the same chip as every list) */}
+                <OriginChip o={o} />
                 <div className="pxp-st">
                   <span className={`badge t-${o.confStatus === 'no_answer' ? 'mid' : CONF_TONE[o.confStatus] ?? 'off'}`}>{currentLabel(t, o.confStatus, o.attempts)}</span>
                   {/* a confirmed order: where its parcel is (À préparer, Préparée), as in the list's « Livraison » column */}

@@ -11,7 +11,7 @@ import { confLabel } from './shared';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import { CopyCode } from '../../ui/CopyCode';
 import { TrustFlags } from './TrustFlags';
-import { AdChip } from './AdSource';
+import { OriginChip } from './OrderPath';
 import { ScoreChip } from '../../ui/clientScore';
 
 /** Built-in columns, in the original order. */
@@ -122,8 +122,7 @@ export function OrderTable(p: OrderTableProps) {
             {o.possibleDuplicate && <span className="flag dup">{t('orders.flag.dup')}</span>}
             {o.blacklisted && <span className="flag">{t('orders.flag.black')}</span>}
             <TrustFlags o={o} />
-            {o.isExchange && <span className="chip">{t('orders.flag.exchange')}</span>}
-            <AdChip o={o} />
+            <OriginChip o={o} />
           </td>
         );
       case 'client':

@@ -4,7 +4,7 @@
 // courier's settings or a purchase price), in short lines an assistant reads well. The tools that change something
 // (`writes`) work only for the parts the person turned on for that link (Mon profil › Assistants IA › « Peut modifier »);
 // none of them deletes anything. The only one so far: add_product_photo.
-import { CONF_STATUSES, FOLLOW_STATUSES, WILAYAS } from '@pilotix/shared';
+import { CONF_STATUSES, FOLLOW_STATUSES, isPersonCame, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { AppError, bad } from './rpc';
 
@@ -251,6 +251,10 @@ export const MCP_TOOLS: McpTool[] = [
         pickup_at_desk: !!o.isStopdesk,
         channel: o.channel ?? null,
         source: text(o.source, 120),
+        // how it was made: form (the customer filled a landing page), meta_form, chat (Dellal), chat_auto, site, sheet,
+        // abandoned (Pilotix added an unsent form), recovered, restored, hand (a person typed it), exchange, copy, test
+        came: o.came ?? null,
+        made_by: isPersonCame(o.came) ? o.creatorName ?? null : null,
         products: (Array.isArray(o.items) ? o.items : []).map((x: any) => ({
           product_id: Number(x.productId),
           name: String(x.name ?? ''),

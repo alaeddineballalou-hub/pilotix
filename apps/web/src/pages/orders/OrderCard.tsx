@@ -26,7 +26,7 @@ import { CourierPanel } from '../suivi/CourierPanel';
 import { useIsPhone } from '../../lib/useMedia';
 import { TrustFlags } from './TrustFlags';
 import { AgencyRouting } from './AgencyRouting';
-import { AdSection } from './AdSource';
+import { PathSection, PilotixMark, pilotixLine } from './OrderPath';
 import { rightOn } from '../../lib/rights';
 
 /** Courier kinds with an API (send / label / status / cancel go through the delivery procedures). */
@@ -499,7 +499,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
         </div>
       </section>
 
-      <AdSection o={o} />
+      <PathSection o={o} />
 
       <section className="card">
         <h3>{t('orders.card.delivery')}</h3>
@@ -557,7 +557,20 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
                 <span className="t">{when(e.at)}</span>
                 <span>
                   {eventText(t, e, userName, companyName)}
-                  {e.userName && <span className="muted"> — {e.userName}</span>}
+                  {e.userName ? (
+                    <span className="muted"> — {e.userName}</span>
+                  ) : (
+                    // what Pilotix did by itself (a landing page, a webhook, the courier's statuses): its mark, never a person
+                    pilotixLine(e) && (
+                      <>
+                        <span className="muted"> — </span>
+                        <span className="muted px-by">
+                          <PilotixMark />
+                          {t('orders.path.maker.pilotix')}
+                        </span>
+                      </>
+                    )
+                  )}
                   {e.note && <div className="muted">{e.note}</div>}
                 </span>
               </li>

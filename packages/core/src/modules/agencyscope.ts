@@ -281,6 +281,7 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'orders.next': free,
   'orders.get': order('id'),
   'orders.events': order('id'),
+  'orders.origin': order('id'),
   'orders.update': order('id'),
   'orders.note': order('id'),
   'orders.logCall': order('id'),
@@ -380,6 +381,7 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
 const OWN_AGENT_GATES: Record<string, Gate> = {
   'orders.get': order('id'),
   'orders.events': order('id'),
+  'orders.origin': order('id'),
   'orders.update': order('id'),
   'orders.note': order('id'),
   'orders.logCall': order('id'),

@@ -155,8 +155,9 @@ html body .topbar .px-seller select { flex: 1; min-width: 0; min-height: 0; heig
    pill); a plan that still needs two lines is a rounded box, not a stretched pill */
 @media (max-width: 760px) { .tbl td.px-paytd { grid-column: 1 / -1; } }
 html[data-skin][data-theme] .px-paycell .chip { border-radius: 12px; }
-/* a small source pill in a narrow table column ends with « … » inside its own shape instead of being cut by the column */
-.tbl td.px-c-source .chip { display: inline-block; max-width: 100%; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; line-height: 22px; }
+/* Confirmation's « D’où vient » column: the order's chips (the ad, the place · who made it) sit in the cell's middle; a
+   long ad name ends with « … » inside its own chip (orders.css) instead of being cut by the column */
+.tbl td.px-c-source .px-ocs { margin: 0; }
 /* the order form on a phone: « Créer & marquer confirmé » on its own line on top, « Fermer » and « Créer la commande »
    side by side under it — every button's words on one line (they broke onto two lines, three in a row) */
 @media (max-width: 760px) {

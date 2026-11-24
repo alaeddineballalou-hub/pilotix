@@ -426,7 +426,7 @@ export async function processLead(ctx: Ctx, leadId: number, o: { force?: boolean
       },
       db,
       // typed by someone the shop has not verified: never renames a customer; the anti-fraud check as for a landing page
-      { untrusted: true, guard: 'check', adsetId: lead.adset_id ? String(lead.adset_id) : null },
+      { untrusted: true, guard: 'check', adsetId: lead.adset_id ? String(lead.adset_id) : null, came: 'meta_form' },
     );
     return await done('created', { orderId: order.id });
   } catch (e: any) {

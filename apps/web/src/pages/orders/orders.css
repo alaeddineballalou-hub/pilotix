@@ -85,6 +85,34 @@
 }
 .ad-copy { width: 28px; height: 28px; }
 
+/* « Le chemin de la commande » (OrderPath.tsx): the steps an order came by, joined by a line */
+.px-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.px-step { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 12px; padding-bottom: 14px; }
+.px-step:last-child { padding-bottom: 0; }
+.px-step:not(:last-child)::before { content: ''; position: absolute; inset-inline-start: 15px; top: 36px; bottom: 2px; width: 2px; border-radius: 2px; background: var(--line); }
+.px-dot { width: 32px; height: 32px; border-radius: 999px; background: var(--sky-soft); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; }
+.px-step:first-child .px-dot { background: var(--sk-tab-on-bg, #FFE9CC); color: var(--sk-tab-on-ink, #6B3A00); }
+.px-dot .bji { width: 16px; height: 16px; }
+.px-step-b { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding-top: 5px; min-width: 0; }
+.px-step-t { font-size: 14px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.px-step-s { font-size: 13px; line-height: 1.4; color: var(--c-muted, #5F6673); overflow-wrap: anywhere; }
+.muted-step .px-step-t { font-weight: 500; color: var(--c-muted, #5F6673); }
+.px-step-a { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-top: 4px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; text-decoration: none; cursor: pointer; }
+.px-step-a:hover { background: var(--sky-soft); }
+.px-step-a:focus-visible { outline: 2px solid var(--c-info-ink, #2459D6); outline-offset: 2px; }
+.px-step-a .bji { width: 15px; height: 15px; }
+.px-next { margin: 12px 0 0; font-size: 12.5px; color: var(--c-muted, #5F6673); }
+/* Pilotix's own mark: what Pilotix did by itself */
+.px-mk { display: inline-block; flex: none; vertical-align: -2px; border-radius: 22%; background: var(--sk-mark, var(--px-mark)) center / contain no-repeat; }
+.px-by { display: inline-flex; align-items: center; gap: 4px; }
+/* the chips of the lists: the ad, then the place · who made it (one under the other when narrow) */
+.px-ocs { display: inline-flex; flex-wrap: wrap; align-self: flex-start; align-items: center; gap: 4px; max-width: 100%; margin-top: 4px; vertical-align: middle; }
+.px-oc { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; height: 24px; margin: 0; padding: 0 8px; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; }
+.px-oc .bji { width: 13px; height: 13px; flex: none; }
+/* a very long ad or person name ends with « … » (the whole name is in the order's path and in the chip's tooltip) */
+.px-oc-w { min-width: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.px-oc-ad { background: var(--c-accent-tint); color: var(--c-accent-ink); }
+
 /* the order card › Livraison › Paiement: the step, then when and which payment */
 .px-pay { display: inline-flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; }
 .px-pay small { font-size: 12px; }

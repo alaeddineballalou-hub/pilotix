@@ -1134,7 +1134,7 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
           : `Commande prise par ${settings.name} (conversation #${conv.id})`,
         confirm: !v1 && settings.ordersTo === 'confirmed',
         isExchange: false,
-      }, ctx.db, { conversationId: conv.id, untrusted: conv.channel !== 'whatsapp', guard: 'check', adsetId: ad.adsetId, promoSoft: true }); // linked from the start: no "we received your order" into this very chat
+      }, ctx.db, { conversationId: conv.id, untrusted: conv.channel !== 'whatsapp', guard: 'check', adsetId: ad.adsetId, promoSoft: true, came: 'chat' }); // linked from the start: no "we received your order" into this very chat
       await sendInPreview(ctx);
       await ctx.db.query(
         `UPDATE conversations SET order_id = $2, orders_count = orders_count + 1, phone = COALESCE(phone, $3), customer_name = COALESCE(customer_name, $4),
@@ -2313,7 +2313,7 @@ async function autoOrderOf(ctx: Ctx, s: DellalSettings, row: any): Promise<{ ref
       },
       db,
       // the customer did not send it: no « we received your order » message
-      { conversationId: num(row.id), untrusted: row.channel !== 'whatsapp', guard: 'check', silent: true, adsetId: ad.adsetId },
+      { conversationId: num(row.id), untrusted: row.channel !== 'whatsapp', guard: 'check', silent: true, adsetId: ad.adsetId, came: 'chat_auto' },
     );
     // the shop's wilaya is only there for now: the order is not confirmed until someone asks him (confirmcheck.ts)
     if (!place) await db.query('UPDATE orders SET wilaya_guess = $2 WHERE id = $1', [o.id, wilayaId]);

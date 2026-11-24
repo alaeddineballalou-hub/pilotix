@@ -1415,7 +1415,7 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
         internalNote: review ? reviewNote(result) : null,
       },
       db,
-      { landingId: num(l.id), adsetId: adsetOf(i.utm), device: device || null, promoSoft: true },
+      { landingId: num(l.id), adsetId: adsetOf(i.utm), device: device || null, promoSoft: true, came: 'form' },
     );
     orderId = o.id;
     ref = o.ref;
@@ -1636,7 +1636,7 @@ async function convertLead(ctx: Ctx, db: Db, a: any, auto: boolean, warn: string
     },
     db,
     // no « we received your order » message: the customer did not send it, the agents call
-    { landingId: numOrNull(a.landing_id), adsetId: adsetOf(utm), silent: true, abandoned: true, device: a.device ? String(a.device) : null },
+    { landingId: numOrNull(a.landing_id), adsetId: adsetOf(utm), silent: true, abandoned: true, device: a.device ? String(a.device) : null, came: auto ? 'abandoned' : 'recovered' },
   );
   await db.query(
     `UPDATE landing_leads SET status = 'converted', order_id = $2, auto_order = $3, handled_by = $4, handled_at = now(), abandoned_at = COALESCE(abandoned_at, last_at), note = NULL WHERE id = $1`,
@@ -3119,7 +3119,7 @@ export const landingProcs = {
         },
         tx,
         // its page, and the person who let it through
-        { landingId: numOrNull(b.landing_id), adsetId: adsetOf(utm), by: `Page de vente${slug ? ` « ${slug} »` : ''} · restaurée par ${ctx.session.profile.name}` },
+        { landingId: numOrNull(b.landing_id), adsetId: adsetOf(utm), by: `Page de vente${slug ? ` « ${slug} »` : ''} · restaurée par ${ctx.session.profile.name}`, came: 'restored' },
       );
       await tx.query(`UPDATE landing_blocked SET status = 'restored', order_id = $2, handled_by = $3, handled_at = now() WHERE id = $1`, [id, order.id, ctx.session.profile.id]);
       await tx.query('UPDATE landing_submits SET order_id = $2 WHERE blocked_id = $1', [id, order.id]);

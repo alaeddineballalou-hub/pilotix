@@ -661,7 +661,7 @@ export const adminProcs = {
       confirm: false,
       isExchange: false,
       utm: { utm_campaign: 'simulation' },
-    });
+    }, ctx.db, { came: 'test' });
     await sendInPreview(ctx);
     return { id: o.id, ref: o.ref };
   }),
