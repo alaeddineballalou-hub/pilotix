@@ -520,7 +520,8 @@
     "offsite-backup": "Off-site copy of the backups (Backblaze)",
     "pilot-ai-night": "Pilot AI: the night learning",
     "pay-plan-alert": "Pay: people without a plan (morning notification)",
-    "doctor-watch": "Bug detector (robot, services, data)"
+    "doctor-watch": "Bug detector (robot, services, data)",
+    "noanswer-sweep": "Confirmation: orders over the limit of unanswered calls cancelled (no message)"
   },
   "errs": {
     "title": "Latest errors",

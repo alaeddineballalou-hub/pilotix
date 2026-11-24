@@ -520,7 +520,8 @@
     "offsite-backup": "Copie des sauvegardes hors du serveur (Backblaze)",
     "pilot-ai-night": "Pilot AI : apprentissage de la nuit",
     "pay-plan-alert": "Paie : personnes sans plan (notification du matin)",
-    "doctor-watch": "Détecteur de bugs (robot, services, données)"
+    "doctor-watch": "Détecteur de bugs (robot, services, données)",
+    "noanswer-sweep": "Confirmation : commandes au-dessus de la limite d’appels sans réponse annulées (sans message)"
   },
   "errs": {
     "title": "Dernières erreurs",
