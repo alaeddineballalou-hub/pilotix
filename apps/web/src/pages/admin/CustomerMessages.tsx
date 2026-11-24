@@ -103,7 +103,11 @@ export function CustomerMessagesCard() {
           {box('attempt', t('admin.cmsg.attempt', { n }))}
           {box('cancel', t('admin.cmsg.cancel'))}
         </div>
-        <p className="muted small cmx-note">{d.cancelAfterNoAnswer > 0 ? t('admin.cmsg.when', { n, x: d.cancelAfterNoAnswer }) : t('admin.cmsg.whenOff', { n })}</p>
+        <p className="muted small cmx-note">
+          {d.cancelAfterNoAnswer <= 0
+            ? t('admin.cmsg.whenOff', { n })
+            : t(n >= d.cancelAfterNoAnswer ? 'admin.cmsg.whenLate' : 'admin.cmsg.when', { n, x: d.cancelAfterNoAnswer })}
+        </p>
         <div className="row end">
           <button type="button" className="btn primary" disabled={save.isPending || !changed || empty} onClick={() => save.mutate({ attempt: v.attempt.trim(), cancel: v.cancel.trim() })}>
             {t('admin.cmsg.save')}

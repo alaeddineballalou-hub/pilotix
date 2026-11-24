@@ -940,6 +940,7 @@
     "chars": "{{n}} / {{max}}",
     "default": "Texte de départ",
     "when": "Tentative {{n}} sans réponse : l’agent envoie le 1er message. Tentative {{x}} : le message d’annulation avec le lien, puis la commande est annulée (« Pas de réponse », comptée comme une attaque, jamais contre l’équipe). Le lien va à la fin s’il n’est pas dans le texte.",
+    "whenLate": "La tentative du 1er message ({{n}}) n’arrive pas avant l’annulation ({{x}}) : à la tentative {{x}}, seul le message d’annulation avec le lien part. Le lien va à la fin s’il n’est pas dans le texte.",
     "whenOff": "Tentative {{n}} sans réponse : l’agent envoie le 1er message. L’annulation automatique est éteinte (« Annuler après combien d’appels sans réponse » = 0) : le message d’annulation ne part pas.",
     "save": "Enregistrer",
     "saved": "Messages enregistrés",

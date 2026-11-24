@@ -940,6 +940,7 @@
     "chars": "{{n}} / {{max}}",
     "default": "Starting text",
     "when": "Try {{n}} unanswered: the agent sends the 1st message. Try {{x}}: the cancellation message with the link, then the order is cancelled (« No answer », counted as an attack, never against the team). The link goes at the end when the text does not have it.",
+    "whenLate": "The 1st message’s try ({{n}}) does not come before the cancellation ({{x}}): at try {{x}}, only the cancellation message with the link goes. The link goes at the end when the text does not have it.",
     "whenOff": "Try {{n}} unanswered: the agent sends the 1st message. Automatic cancellation is off (« Cancel after how many unanswered calls » = 0): the cancellation message is not sent.",
     "save": "Save",
     "saved": "Messages saved",
