@@ -14,6 +14,7 @@ import { toast } from '../../ui/toast';
 import { Confirmation, Queue } from '../confirmation';
 import { Focus } from '../confirmation/Focus';
 import type { PageProps } from '../registry';
+import { Commandes, DoneScreen } from '../orders';
 import { Sav } from '../sav';
 import { List as SuiviList, Suivi } from '../suivi';
 
@@ -38,6 +39,25 @@ export function AgencySuivi(props: PageProps) {
       <AgentView tasks={[...work.tasks]}>
         <NotGiven task="suivi">
           {seller !== 'all' ? <Suivi key={seller} {...props} /> : props.sub === 'swap' || props.sub === 'reclamation' ? <PickSeller what={props.sub} /> : <AllSuivi {...props} />}
+        </NotGiven>
+      </AgentView>
+    </SellerScope>
+  );
+}
+
+/**
+ * « Livré », « Annulé », « Toutes les commandes » of an agency: the store's own Commandes screens (the same everywhere,
+ * owner's choice, 24 Nov 2026), on the agency's orders — each agent his own, its chiefs all of them; one seller's, or
+ * every seller's together.
+ */
+export function AgencyCommandes(props: PageProps) {
+  const seller = useSeller();
+  const work = useSellers();
+  return (
+    <SellerScope seller={seller}>
+      <AgentView tasks={[...work.tasks]}>
+        <NotGiven task="suivi">
+          <Commandes key={seller} {...props} sub={props.sub || 'tout'} />
         </NotGiven>
       </AgentView>
     </SellerScope>
@@ -205,11 +225,16 @@ export function AllSuivi({ sub, scope }: PageProps & { scope?: AllScope }) {
   return (
     <>
       <StageBar flow={false} items={(scope?.tabs ?? stepLinks(tab)).map((k) => ({ key: k, label: t(k === 'traites' && !scope ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`), href: `#/suivi/${k}`, count: k === 'reclamation' || k === 'swap' ? undefined : c?.[k as Tab] }))} current={tab} />
-      <SuiviList key={tab} tab={tab} combined={{
-        input: scope?.input, bar: scope?.bar,
-        chip: scope?.chip ?? <span className="chip agx-all-chip"><Icon name="store" /> {t('agency.pick.allShort')}</span>,
-        canWork: scope ? undefined : (id) => !!work.list.find((s) => s.id === id)?.tasks.includes('suivi'),
-      }} />
+      {tab === 'annules' ? (
+        // « Annulé » is the same screen everywhere (owner's choice, 24 Nov 2026), on its returns
+        <DoneScreen sub="annulees" start="back" />
+      ) : (
+        <SuiviList key={tab} tab={tab} combined={{
+          input: scope?.input, bar: scope?.bar,
+          chip: scope?.chip ?? <span className="chip agx-all-chip"><Icon name="store" /> {t('agency.pick.allShort')}</span>,
+          canWork: scope ? undefined : (id) => !!work.list.find((s) => s.id === id)?.tasks.includes('suivi'),
+        }} />
+      )}
     </>
   );
 }

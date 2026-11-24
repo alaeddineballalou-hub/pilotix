@@ -191,3 +191,9 @@ export function AgentView({ children, tasks }: { children: ReactNode; tasks?: re
   }, [s, tasks]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
+
+/** In a confirmation agency's space: its own pages, and a seller's screens opened from there (AgentView). */
+export function useInAgency(): boolean {
+  const s = useSession().session;
+  return s?.shop?.kind === 'agency' || !!s?.profile.agencyId;
+}

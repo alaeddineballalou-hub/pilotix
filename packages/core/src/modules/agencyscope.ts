@@ -3,7 +3,8 @@
 //   tasks: confirmation, suivi), with the confirmation and suivi screens — nothing else of the store.
 // - A marketer partner's person works inside the store only on the ads: the ad sets the store gave them, the products
 //   the store gave the marketer — never an order, a customer, the team or the money of the store.
-// - The store's own team works on the orders no agency handles; its managers and administrators see every order.
+// - The store's own team works on the orders no agency handles; its administrators see every order, its managers too —
+//   but their order lists (Commandes › Toutes les commandes, Livré, Annulé) show their team's orders (teamListSql).
 // - A partner's own space (its team, prices, sellers, payments) answers only the partner's own actions.
 import { AgencySellerWork, normalizePhone } from '@pilotix/shared';
 import { num } from '../db';
@@ -151,6 +152,27 @@ export function ownRowSql(ctx: Ctx, alias = 'o'): string {
 
 /** The orders an agency's agent or a store's confirmation agent may open ('' for everyone else). */
 export const rowScopeSql = (ctx: Ctx, alias = 'o') => agencyRowSql(ctx, alias) || ownRowSql(ctx, alias);
+
+/**
+ * A store's agent manager in the order lists (Commandes › Toutes les commandes, Livré, Annulé, their numbers and their
+ * reports): only his team's orders (the owner's choice, 24 Nov 2026: « only their team ») — the ones he or an agent of
+ * his team (Utilisateurs › Équipes) confirms or follows, and the ones he typed. He still gives out the free orders in
+ * Confirmation and opens any order he is sent to. '' for everyone else: the owner, the administrators and the dépôt keep
+ * every order, an agency's people and the store's own agents keep their own rule (rowScopeSql).
+ */
+export function teamListSql(ctx: Ctx, alias = 'o'): string {
+  const s = ctx.session;
+  if (s.isAdmin || agencyOf(ctx) !== null || !s.roles.includes('agent_manager') || s.roles.includes('vendeur') || s.roles.includes('depot')) return '';
+  const me = Number(s.profile.id);
+  // built into SQL: only a whole positive number goes there
+  if (!Number.isSafeInteger(me) || me <= 0) throw forbidden();
+  const team = `(SELECT a.v::bigint FROM settings s, jsonb_array_elements(CASE WHEN jsonb_typeof(s.value) = 'array' THEN s.value ELSE '[]'::jsonb END) t,
+    jsonb_array_elements_text(COALESCE(t->'agentIds', '[]'::jsonb)) a(v) WHERE s.key = 'teams' AND (t->>'managerId') = '${me}')`;
+  return `(${alias}.agent_id = ${me} OR ${alias}.follow_agent_id = ${me} OR ${alias}.created_by = ${me} OR ${alias}.agent_id IN ${team} OR ${alias}.follow_agent_id IN ${team})`;
+}
+
+/** The orders a person's order lists show: each one only his own (rowScopeSql), an agent manager his team's. */
+export const listScopeSql = (ctx: Ctx, alias = 'o') => rowScopeSql(ctx, alias) || teamListSql(ctx, alias);
 
 /** `sql` with one more condition (WHERE … AND cond), for queries written with a WHERE already or none. */
 export const andSql = (cond: string) => (cond ? ` AND ${cond}` : '');

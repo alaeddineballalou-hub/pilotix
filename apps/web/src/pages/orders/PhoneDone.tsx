@@ -5,14 +5,16 @@
 // On a computer the same screen is laid out wide: the road and the period across, the numbers in a column on the left
 // (they stay in view), the cards in a grid on the right; « Tableau » goes back to the big table.
 import { CONF_DONE_BAD, Order, SALES_CHANNELS, WILAYAS } from '@pilotix/shared';
+import { useQueries } from '@tanstack/react-query';
 import { ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Out } from '../../lib/backend';
+import { rpc, type Out } from '../../lib/backend';
 import { da, dayRange, n, pct, periodRange, when, wilaya, wilayaName } from '../../lib/format';
 import { namesOf } from '../../lib/items';
 import { openOrder } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
-import { useSession } from '../../lib/session';
+import { useScope } from '../../lib/seller';
+import { useInAgency, useSession } from '../../lib/session';
 import { store } from '../../lib/store';
 import { useIsPhone } from '../../lib/useMedia';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
@@ -20,6 +22,7 @@ import { ViewSwitch } from '../../ui/ViewSwitch';
 import { Seg, Sheet } from '../../ui/Sheet';
 import { useCounts } from './counts';
 import type { ListFilter } from './shared';
+import { useSwap } from './swapAction';
 import './phone.css';
 
 type DRep = Out<'orders.deliveredReport'>;
@@ -127,10 +130,14 @@ function useShow(f: PF, setF: (f: PF) => void) {
 }
 
 // ---------------------------------------------------------------- small parts
-/** The road of the orders: Confirmation › Dépôt › Suivi, then the two ends (Livré, Annulé). Counts of now. */
+/**
+ * The road of the orders: Confirmation › Dépôt › Suivi, then the two ends (Livré, Annulé). Counts of now. A confirmation
+ * agency has no Dépôt (the seller's), and its Suivi starts with the parcels on the road.
+ */
 function Road({ on }: { on: 'livrees' | 'annulees' }) {
   const { t } = useTranslation();
   const c = useCounts();
+  const agency = useInAgency();
   const step = (key: string, href: string, label: string, v: number | undefined, tone = '') => (
     <a key={key} href={href} className={`pxn-st${tone ? ` ${tone}` : ''}${on === key ? ' on' : ''}`} aria-current={on === key ? 'page' : undefined}>
       <small>{label}</small>
@@ -141,8 +148,8 @@ function Road({ on }: { on: 'livrees' | 'annulees' }) {
     <nav className="pxn-road" aria-label={t('orders.title')}>
       <div className="pxn-run">
         {step('confirmation', '#/confirmation', t('orders.kpi.confirmation'), c?.todo)}
-        {step('depot', '#/depot', t('orders.kpi.depot'), c?.depot)}
-        {step('suivi', '#/suivi', t('orders.kpi.suivi'), c?.suivi)}
+        {!agency && step('depot', '#/depot', t('orders.kpi.depot'), c?.depot)}
+        {step('suivi', agency ? '#/suivi/enlivraison' : '#/suivi', t('orders.kpi.suivi'), c?.suivi)}
       </div>
       <div className="pxn-end">
         {step('livrees', '#/commandes/livrees', t('orders.kpi.livre'), c?.delivered, 'ok')}
@@ -506,10 +513,14 @@ export function PhoneLivre({ onTable }: { onTable?: () => void }) {
   const per = usePeriod();
   const [f, setF] = useState<PF>(NO_F);
   const { ref, show } = useShow(f, setF);
-  const money = has('suivi', 'depot');
+  // the money (cashed, fees, net): the store's own team; not an agency (the seller's money), not every seller together
+  const agency = useInAgency();
+  const together = useScope() === 'all';
+  const money = has('suivi', 'depot') && !agency && !together;
   const rep = useRpc('orders.deliveredReport', per.range, { enabled: money });
   return (
-    <div className={`pxn${wide ? ' wide' : ''}`}>
+    // « solo »: no money on the left (a confirmation agent, an agency): the cards take the whole width on a computer
+    <div className={`pxn${wide ? ' wide' : ''}${money ? '' : ' solo'}`}>
       <div className="pxn-top">
         <Road on="livrees" />
         <PeriodBar per={per} />
@@ -727,7 +738,12 @@ export function PhoneAnnule({ onTable, start }: { onTable?: () => void; start?: 
   const [view, setView] = useState<'conf' | 'back'>(() => start ?? (store.get('orders-ph-view') === 'back' ? 'back' : 'conf'));
   const [f, setF] = useState<PF>(NO_F);
   const { ref, show } = useShow(f, setF);
-  const can = has('suivi', 'depot', 'agent_manager');
+  // why orders are lost (the report): the store's own team, one shop at a time (it holds the seller's return costs)
+  const agency = useInAgency();
+  const together = useScope() === 'all';
+  const can = has('suivi', 'depot', 'agent_manager') && !agency && !together;
+  // « Swap » on a parcel coming back, always (Suivi's rule): here too
+  const swap = useSwap();
   const rep = useRpc('orders.cancelReport', per.range, { enabled: can });
   const r = can ? rep.data : undefined;
   const nConf = useTotal(listInput('conf', per.range, NO_F, '', 1), !can);
@@ -773,9 +789,10 @@ export function PhoneAnnule({ onTable, start }: { onTable?: () => void; start?: 
           ))}
         </div>
         <div ref={ref} className="pxn-anchor pxn-main">
-          <PhoneList key={view} kind={view} title={view === 'conf' ? t('orders.cancelledConf') : t('orders.ph.listBack')} per={per} f={f} setF={setF} />
+          <PhoneList key={view} kind={view} title={view === 'conf' ? t('orders.cancelledConf') : t('orders.ph.listBack')} per={per} f={f} setF={setF} act={view === 'back' ? swap.button : undefined} />
         </div>
       </div>
+      {swap.dialogs}
     </div>
   );
 }
@@ -784,8 +801,13 @@ export function PhoneAnnule({ onTable, start }: { onTable?: () => void; start?: 
 type Company = Out<'orders.lookups'>['companies'][number];
 type Agent = Out<'users.list'>[number];
 
-function OrderRow({ o, kind, coKind, fee, why }: { o: Order; kind: Kind; coKind: string | null; fee?: number; why?: string | null }) {
+/** The seller of an order of a list over every seller (an agency's « Tous les vendeurs »). */
+const sellerOf = (o: Order) => (o as { seller?: { id: number; name: string } }).seller;
+
+function OrderRow({ o, kind, coKind, fee, why, act }: { o: Order; kind: Kind; coKind: string | null; fee?: number; why?: string | null; act?: ReactNode }) {
   const { t } = useTranslation();
+  const seller = sellerOf(o);
+  const open = () => openOrder(o.id, seller?.id);
   const date = kind === 'livre' ? o.deliveredAt : kind === 'back' ? o.returnedAt ?? o.updatedAt : o.updatedAt;
   const status =
     kind === 'livre' ? (
@@ -796,7 +818,8 @@ function OrderRow({ o, kind, coKind, fee, why }: { o: Order; kind: Kind; coKind:
       <span className={`pxn-pill ${o.followStatus === 'returned' ? 'bad' : 'wn'}`}>{t(`status.follow.${o.followStatus ?? 'returning'}`)}</span>
     );
   return (
-    <button type="button" className="pxn-o" onClick={() => openOrder(o.id)}>
+    // a card you tap to open the order; its own buttons (Swap) act without opening it
+    <div className="pxn-o" role="button" tabIndex={0} onClick={open} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), open())}>
       {kind === 'conf' ? <Who name={o.agentName} /> : <CoTag kind={coKind} name={o.companyName || o.livreurName} />}
       <span className="pxn-om">
         <span className="pxn-o1">
@@ -805,7 +828,7 @@ function OrderRow({ o, kind, coKind, fee, why }: { o: Order; kind: Kind; coKind:
         </span>
         <span className="pxn-o2">
           <span>
-            <span className="ltr">{o.ref}</span> · {wilayaName(o.wilayaId)} · {namesOf(o.items)}
+            <span className="ltr">{o.ref}</span> · {seller && <>{seller.name} · </>}{wilayaName(o.wilayaId)} · {namesOf(o.items)}
           </span>
           {fee ? <small>{t('orders.ph.fee', { v: da(fee) })}</small> : null}
         </span>
@@ -821,14 +844,53 @@ function OrderRow({ o, kind, coKind, fee, why }: { o: Order; kind: Kind; coKind:
             {when(date)}
           </small>
         </span>
+        {act && (
+          <span className="pxn-act" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+            {act}
+          </span>
+        )}
       </span>
-    </button>
+    </div>
   );
 }
 
-function PhoneList({ kind, title, per, f, setF }: { kind: Kind; title: string; per: Period; f: PF; setF: (f: PF) => void }) {
+/**
+ * Why each order was lost (Annulé: the customer's or the courier's reason). Asked of the shop of the list; with every
+ * seller together (an agency's « Tous les vendeurs »), of each seller for its own orders (ids repeat between shops).
+ */
+function useReasons(rows: Order[], kind: Kind, together: boolean): (o: Order) => string | null | undefined {
+  const of = kind === 'conf' ? ('conf' as const) : ('back' as const);
+  const on = kind !== 'livre' && rows.length > 0;
+  const one = useRpc('orders.reasons', { ids: rows.map((o) => o.id), of }, { enabled: on && !together });
+  const groups = new Map<number, number[]>();
+  if (together)
+    for (const o of rows) {
+      const s = sellerOf(o)?.id;
+      if (s) groups.set(s, [...(groups.get(s) ?? []), o.id]);
+    }
+  const sellers = [...groups.keys()];
+  const each = useQueries({
+    queries: sellers.map((seller) => ({
+      queryKey: ['orders.reasons', { ids: groups.get(seller)!, of }, { seller }],
+      queryFn: () => rpc('orders.reasons', { ids: groups.get(seller)!, of }, seller),
+      enabled: on && together,
+      staleTime: 60_000,
+    })),
+  });
+  return (o) => {
+    if (!together) return one.data?.[String(o.id)];
+    const i = sellers.indexOf(sellerOf(o)?.id ?? -1);
+    return i < 0 ? undefined : each[i]?.data?.[String(o.id)];
+  };
+}
+
+/** `act`: a card's own buttons (Annulé's returns: « Swap »). */
+function PhoneList({ kind, title, per, f, setF, act }: { kind: Kind; title: string; per: Period; f: PF; setF: (f: PF) => void; act?: (o: Order) => ReactNode }) {
   const { t } = useTranslation();
   const { has } = useSession();
+  // an agency's « Tous les vendeurs »: every seller's orders together (no shop's own companies or people to filter by)
+  const together = useScope() === 'all';
+  const agency = useInAgency();
   const hid = useId();
   const [q, setQ] = useState('');
   const dq = useDebounced(q.trim(), 300);
@@ -836,14 +898,15 @@ function PhoneList({ kind, title, per, f, setF }: { kind: Kind; title: string; p
   const [sheet, setSheet] = useState(false);
   const fk = JSON.stringify(f);
   useEffect(() => setSize(PAGE), [fk, dq, per.range.from, per.range.to, kind]);
-  const look = useRpc('orders.lookups', {}, { staleTime: 5 * 60_000 });
-  const agents = useRpc('users.list', { role: 'confirmation' }, { staleTime: 5 * 60_000 });
+  const look = useRpc('orders.lookups', {}, { staleTime: 5 * 60_000, enabled: !together });
+  const agents = useRpc('users.list', { role: 'confirmation' }, { staleTime: 5 * 60_000, enabled: !together });
   const list = useRpc('orders.list', listInput(kind, per.range, f, dq, size));
   const rows = list.data?.rows ?? [];
   const total = list.data?.total ?? 0;
   const ids = rows.map((o) => o.id);
-  const fees = useRpc('orders.companyFees', { ids }, { enabled: kind === 'livre' && ids.length > 0 && has('confirmation', 'suivi', 'depot') });
-  const why = useRpc('orders.reasons', { ids, of: kind === 'conf' ? 'conf' : 'back' }, { enabled: kind !== 'livre' && ids.length > 0 });
+  // the courier's fee of each parcel: the store's own team (the seller's money), one shop at a time
+  const fees = useRpc('orders.companyFees', { ids }, { enabled: kind === 'livre' && ids.length > 0 && has('confirmation', 'suivi', 'depot') && !agency && !together });
+  const why = useReasons(rows, kind, together);
   const companies: Company[] = look.data?.companies ?? [];
   const coKind = (id: number | null) => companies.find((c) => c.id === id)?.kind ?? null;
   const active = activeCount(f);
@@ -910,7 +973,7 @@ function PhoneList({ kind, title, per, f, setF }: { kind: Kind; title: string; p
         <ul className={`pxn-cards${list.isFetching && list.isPlaceholderData ? ' busy' : ''}`}>
           {rows.map((o) => (
             <li key={o.id}>
-              <OrderRow o={o} kind={kind} coKind={coKind(o.companyId)} fee={fees.data?.[String(o.id)]?.fee} why={why.data?.[String(o.id)]} />
+              <OrderRow o={o} kind={kind} coKind={coKind(o.companyId)} fee={fees.data?.[String(o.id)]?.fee} why={why(o)} act={act?.(o)} />
             </li>
           ))}
         </ul>
@@ -928,6 +991,7 @@ function PhoneList({ kind, title, per, f, setF }: { kind: Kind; title: string; p
           per={per}
           q={dq}
           f={f}
+          oneShop={!together}
           companies={companies}
           agents={agents.data ?? []}
           onClose={() => setSheet(false)}
@@ -941,7 +1005,8 @@ function PhoneList({ kind, title, per, f, setF }: { kind: Kind; title: string; p
   );
 }
 
-function FilterSheet({ kind, title, per, q, f, companies, agents, onClose, onApply }: { kind: Kind; title: string; per: Period; q: string; f: PF; companies: Company[]; agents: Agent[]; onClose: () => void; onApply: (f: PF) => void }) {
+/** `oneShop` false: every seller together — no shop's own companies or people to choose. */
+function FilterSheet({ kind, title, per, q, f, oneShop = true, companies, agents, onClose, onApply }: { kind: Kind; title: string; per: Period; q: string; f: PF; oneShop?: boolean; companies: Company[]; agents: Agent[]; onClose: () => void; onApply: (f: PF) => void }) {
   const { t } = useTranslation();
   const [d, setD] = useState<PF>(f);
   const set = (p: Partial<PF>) => setD({ ...d, ...p });
@@ -1019,7 +1084,7 @@ function FilterSheet({ kind, title, per, q, f, companies, agents, onClose, onApp
           </div>
         </fieldset>
       )}
-      {(kind !== 'conf' || cos.length > 0) && (
+      {oneShop && (kind !== 'conf' || cos.length > 0) && (
         <fieldset className="pxk-q">
           <legend>{t('orders.f.company')}</legend>
           <div className="pxk-chips">
@@ -1030,6 +1095,7 @@ function FilterSheet({ kind, title, per, q, f, companies, agents, onClose, onApp
         </fieldset>
       )}
       <div className="pxk-g2">
+        {oneShop && (
         <label>
           {t('orders.f.agent')}
           <select className="pxk-in" value={d.agent} onChange={(e) => set({ agent: e.target.value })}>
@@ -1042,6 +1108,7 @@ function FilterSheet({ kind, title, per, q, f, companies, agents, onClose, onApp
             <option value="none">{t('orders.ph.noAgent')}</option>
           </select>
         </label>
+        )}
         <label>
           {t('orders.f.wilaya')}
           <select className="pxk-in" value={d.wilaya} onChange={(e) => set({ wilaya: e.target.value })}>

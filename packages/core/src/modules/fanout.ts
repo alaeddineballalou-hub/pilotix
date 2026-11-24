@@ -123,7 +123,16 @@ const mkAll: Fan = {
   },
 };
 
+/** Commandes over several shops, in the order asked. */
+export const ORDERS_FAN: Fan = {
+  paged: { defaultSize: 50, max: 3000 },
+  input: (i) => ({ ...i, page: 1, pageSize: Math.min(3000, (i?.page ?? 1) * (i?.pageSize ?? 50)) }),
+  merge: (parts, i) => mergeRows(parts, ORDER_KEY[i?.sort ?? 'created_at'] ?? ORDER_KEY.created_at, i?.dir ?? 'desc', i?.page ?? 1, i?.pageSize ?? 50),
+};
+
 export const FANOUT: Record<string, Fan> = {
+  // Commandes › Toutes les commandes, Livré, Annulé of an agency's « Tous les vendeurs »: every seller's orders in one list
+  'orders.list': ORDERS_FAN,
   // Produits & stock › Guide de vente: every shop's products in one list, by name
   'catalog.guides': { merge: (parts) => mergeRows(parts, (r) => String(r.name).toLowerCase(), 'asc', 1, 3000) },
   'catalog.assigned': {
@@ -176,12 +185,6 @@ export const FANOUT: Record<string, Fan> = {
   },
 };
 
-/** Commandes over several shops, in the order asked. */
-export const ORDERS_FAN: Fan = {
-  paged: { defaultSize: 50, max: 3000 },
-  input: (i) => ({ ...i, page: 1, pageSize: Math.min(3000, (i?.page ?? 1) * (i?.pageSize ?? 50)) }),
-  merge: (parts, i) => mergeRows(parts, ORDER_KEY[i?.sort ?? 'created_at'] ?? ORDER_KEY.created_at, i?.dir ?? 'desc', i?.page ?? 1, i?.pageSize ?? 50),
-};
 
 /** Asks every shop, then puts the answers together; a shop that cannot answer is left out (none can: the first reason). */
 export async function fanOut(name: string, fan: Fan, raw: unknown, targets: Target[], run: Runner): Promise<unknown> {

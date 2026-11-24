@@ -261,6 +261,13 @@ function App() {
     go('#/confirmation/nouvelles', { replace: true });
     sub = 'nouvelles';
   }
+  // Suivi › Livrés left for the one « Livré » (Commandes › Livré, the same screen everywhere: owner's choice, 24 Nov
+  // 2026): an old link (an agency's menu, a bookmark) opens it
+  if (page === 'suivi' && sub === 'livres') {
+    go('#/commandes/livrees', { replace: true });
+    [page, sub] = ['commandes', 'livrees'];
+    rest = [];
+  }
   // Pilot Auto Assign's rules and the Préférences left Sociétés de livraison: an old link opens Pilot Automations › Auto Pilot Assign
   if (space === 'store' && page === 'livraison' && (sub === 'pilot' || sub === 'preferences')) {
     go('#/notify/assign', { replace: true });

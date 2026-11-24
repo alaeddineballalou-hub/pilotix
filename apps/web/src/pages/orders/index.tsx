@@ -5,9 +5,10 @@ import { lazy, ReactNode, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
 import { da, n, pct, syncProblems } from '../../lib/format';
-import { openOrderForm } from '../../lib/modals';
+import { openOrder, openOrderForm } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
-import { useSession } from '../../lib/session';
+import { useScope } from '../../lib/seller';
+import { useInAgency, useSession } from '../../lib/session';
 import { store } from '../../lib/store';
 import { Card, ErrorBox, Icon, Kpi, Kpis, Loading, Tabs } from '../../ui/kit';
 import { toast } from '../../ui/toast';
@@ -18,13 +19,13 @@ import { ExtraColumn, OrderColumn, OrderSort, OrderTable } from './OrderTable';
 import { ConfFilter, exportOrdersCsv, FollowFilter, ListFilter, printSlips, toListInput } from './shared';
 import './orders.css';
 import { useCounts } from './counts';
+import { useSwap } from './swapAction';
 import { useIsPhone } from '../../lib/useMedia';
 import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
 import { AgentFilter, CashedFilter, ClearFilters, DateFilters, LivreurFilter, ProductFilter, ReasonFilter, TeamFilter } from '../../ui/filters';
 import { PhoneAnnule, PhoneLivre } from './PhoneDone';
 import { useAllMode } from '../../layout/AllBoutiques';
-import { rightOn, tabOn } from '../../lib/rights';
-import { Suivi } from '../suivi';
+import { rightOn } from '../../lib/rights';
 
 export { OrderTable } from './OrderTable';
 export type { OrderColumn, ExtraColumn, OrderTableProps } from './OrderTable';
@@ -33,6 +34,7 @@ export type { OrderColumn, ExtraColumn, OrderTableProps } from './OrderTable';
 function HeaderKpis({ on }: { on?: 'livrees' | 'annulees' }) {
   const { t } = useTranslation();
   const c = useCounts();
+  const agency = useInAgency();
   const k = (key: string, href: string, label: string, v: number | undefined, s: string, tone?: string) => (
     <a key={key} className={`kpi${tone ? ` t-${tone}` : ''}${v === 0 ? ' px-zero' : ''}${on === key ? ' bjsv-on' : ''}`} href={href}>
       <span className="l">{label}</span>
@@ -47,8 +49,9 @@ function HeaderKpis({ on }: { on?: 'livrees' | 'annulees' }) {
       </div>
       <div className="kpis bjcm-k">
         {k('confirmation', '#/confirmation', t('orders.kpi.confirmation'), c?.todo, t('orders.kpi.confirmationS'), 'warn')}
-        {k('depot', '#/depot', t('orders.kpi.depot'), c?.depot, t('orders.kpi.depotS'))}
-        {k('suivi', '#/suivi', t('orders.kpi.suivi'), c?.suivi, t('orders.kpi.suiviS'))}
+        {/* a confirmation agency has no Dépôt (the seller's); its Suivi starts with the parcels on the road */}
+        {!agency && k('depot', '#/depot', t('orders.kpi.depot'), c?.depot, t('orders.kpi.depotS'))}
+        {k('suivi', agency ? '#/suivi/enlivraison' : '#/suivi', t('orders.kpi.suivi'), c?.suivi, t('orders.kpi.suiviS'))}
         {k('livrees', '#/commandes/livrees', t('orders.kpi.livre'), c?.delivered, t('orders.kpi.livreS', { pct: pct(c ? c.delivered / Math.max(1, c.all) : null) }), 'ok')}
         {k('annulees', '#/commandes/annulees', t('orders.kpi.annule'), c ? c.cancelledConf + c.back : undefined, t('orders.kpi.annuleS', { conf: c?.cancelledConf ?? 0, ret: c?.back ?? 0 }), 'bad')}
       </div>
@@ -114,11 +117,20 @@ interface ListProps {
 
 const ALL_FILTERS: FilterKey[] = ['search', 'conf', 'follow', 'company', 'wilaya', 'channel', 'agent', 'team', 'product', 'livreur', 'dates'];
 
+/** The seller of an order of a list over every seller (an agency's « Tous les vendeurs »), and its column (first). */
+const sellerOf = (o: Order) => (o as { seller?: { id: number; name: string } }).seller;
+const sellerColumn = (label: string): ExtraColumn => ({ key: 'seller', label, cell: (o) => <b>{sellerOf(o)?.name ?? '—'}</b> });
+
+/** The filters whose choices are one shop's own (its companies, people, products): not with every seller together. */
+const ONE_SHOP_FILTERS: FilterKey[] = ['company', 'agent', 'team', 'product', 'livreur'];
+
 export function OrderList(p: ListProps) {
   const { t } = useTranslation();
   const { has, session } = useSession();
   const qc = useQueryClient();
-  const show = p.show ?? ALL_FILTERS;
+  // an agency's « Tous les vendeurs »: every seller's orders in one list, each opened inside its store
+  const together = useScope() === 'all';
+  const show = (p.show ?? ALL_FILTERS).filter((k) => !together || !ONE_SHOP_FILTERS.includes(k));
   const [f, setF] = useState<Filters>(() => ({ ...NO_FILTERS, ...store.json<Partial<Filters>>(`orders-f-${p.id}`, {}), q: '' }));
   const [tab, setTab] = useState(p.tabs?.[0]?.value ?? '');
   const [open, setOpen] = useState(false);
@@ -138,7 +150,7 @@ export function OrderList(p: ListProps) {
   };
   useEffect(() => setPage(1), [p.q, tab]);
 
-  const look = useRpc('orders.lookups', {}, { staleTime: 5 * 60_000 });
+  const look = useRpc('orders.lookups', {}, { staleTime: 5 * 60_000, enabled: !together });
   const companies = look.data?.companies ?? [];
   const tabFilter = p.tabs?.find((x) => x.value === tab)?.filter ?? {};
   const q = (p.q ?? '').trim() || f.q.trim();
@@ -327,9 +339,11 @@ export function OrderList(p: ListProps) {
             setDir(d);
             setPage(1);
           }}
-          selectable
-          bulk={bulk}
+          selectable={!together}
+          bulk={together ? undefined : bulk}
           resetKey={resetKey}
+          lead={together ? sellerColumn(t('agency.pick.short')) : undefined}
+          onRow={together ? (o) => openOrder(o.id, sellerOf(o)?.id) : undefined}
         />
       )}
     </Card>
@@ -525,41 +539,33 @@ function useDeliveredExtra() {
 }
 
 // ---------------------------------------------------------------- pages
-/** « Commandes »: this boutique's, or every boutique's with « Toutes les boutiques ». */
+/**
+ * « Commandes »: this boutique's, or every boutique's with « Toutes les boutiques ». Livré, Annulé and Toutes les
+ * commandes are the same screens for everyone (owner's choice, 24 Nov 2026), in a confirmation agency too: only the
+ * orders change — each one sees his own, an agent manager his team's, the owner all of them (the server decides).
+ */
 export function Commandes(p: PageProps) {
   const all = useAllMode();
-  const { t } = useTranslation();
-  const { has } = useSession();
-  const sharedLivrees = p.sub === 'livrees' && has('confirmation', 'suivi') && rightOn('page:suivi') && tabOn('suivi', 'livres');
-  if (sharedLivrees && p.rest?.[0] !== 'bilan') {
-    return (
-      <>
-        <div className="px-vsw-row">
-          <a className="btn small" href="#/commandes/livrees/bilan"><Icon name="chart" /> {t('orders.bilan.title')}</a>
-        </div>
-        <Suivi sub="livres" />
-      </>
-    );
-  }
-  return (
-    <>
-      {sharedLivrees && (
-        <div className="px-vsw-row">
-          <a className="btn small" href="#/commandes/livrees"><Icon name="chevl" /> {t('orders.delivered')}</a>
-        </div>
-      )}
-      {all.on ? <Suspense fallback={<Loading />}><AllOrdersPage {...p} /></Suspense> : <CommandesOne {...p} />}
-    </>
-  );
+  return all.on ? <Suspense fallback={<Loading />}><AllOrdersPage {...p} /></Suspense> : <CommandesOne {...p} />;
 }
 const AllOrdersPage = lazy(() => import('../boutiques/all').then((m) => ({ default: m.BoutiquesOrders })));
 
 function CommandesOne({ sub }: PageProps) {
-  // Livré and Annulé: the stats you tap and the cards (phones; computers too, laid out wide), or the big table
+  return <DoneScreen sub={sub} />;
+}
+
+/**
+ * Livré and Annulé: the stats you tap and the cards (phones; computers too, laid out wide), or the big table; the other
+ * tabs, the big table. The one screen of Livré and of Annulé, wherever it opens (Commandes, Suivi › Annulés, an agency).
+ * `start`: Annulé opens on its returns (Suivi). Every seller together (an agency's « Tous les vendeurs »): the cards.
+ */
+export function DoneScreen({ sub, start }: { sub?: string; start?: 'conf' | 'back' }) {
   const phone = useIsPhone();
+  const together = useScope() === 'all';
   const [mode, setMode] = useViewMode('orders-done');
   const done = sub === 'livrees' || sub === 'annulees';
-  if (done && (phone || mode === 'cards')) return sub === 'livrees' ? <PhoneLivre onTable={() => setMode('table')} /> : <PhoneAnnule onTable={() => setMode('table')} />;
+  const toTable = together ? undefined : () => setMode('table');
+  if (done && (phone || mode === 'cards' || together)) return sub === 'livrees' ? <PhoneLivre onTable={toTable} /> : <PhoneAnnule onTable={toTable} start={start} />;
   return (
     <>
       {done && (
@@ -580,8 +586,12 @@ function CommandesDesk({ sub }: { sub?: string }) {
   const deliveredExtra = useDeliveredExtra();
   const [syncing, setSyncing] = useState(false);
   const qc = useQueryClient();
+  // a confirmation agency works on its sellers' orders: no new order, no sync with the companies, not the seller's money
+  const agency = useInAgency();
+  // « Swap » on a parcel coming back, always (Suivi's rule): in Annulé's returns too
+  const swap = useSwap();
 
-  const syncBtn = has('suivi', 'depot') && (
+  const syncBtn = !agency && has('suivi', 'depot') && (
     <button
       className="btn"
       disabled={syncing}
@@ -600,7 +610,7 @@ function CommandesDesk({ sub }: { sub?: string }) {
       {t('orders.sync')}
     </button>
   );
-  const newBtn = has('confirmation', 'suivi', 'depot') && rightOn('act:orders.create') && (
+  const newBtn = !agency && has('confirmation', 'suivi', 'depot') && rightOn('act:orders.create') && (
     <button className="btn primary" onClick={() => openOrderForm()}>
       {t('orders.plusNew')}
     </button>
@@ -610,13 +620,13 @@ function CommandesDesk({ sub }: { sub?: string }) {
     return (
       <>
         <HeaderKpis on="livrees" />
-        {has('suivi', 'depot') && <DeliveredReport />}
+        {!agency && has('suivi', 'depot') && <DeliveredReport />}
         <OrderList
           id="livrees"
           title={t('orders.delivered')}
           base={{ follow: ['delivered'], dateField: 'delivered_at' }}
           show={['search', 'conf', 'company', 'wilaya', 'channel', 'agent', 'team', 'product', 'livreur', 'cashed', 'dates']}
-          extra={deliveredExtra}
+          extra={agency ? undefined : deliveredExtra}
           defaultSort="delivered_at"
         />
       </>
@@ -627,12 +637,22 @@ function CommandesDesk({ sub }: { sub?: string }) {
       <>
         <HeaderKpis on="annulees" />
         <OrderList id="annulees-conf" title={t('orders.cancelledConf')} base={{ conf: CONF_DONE_BAD }} show={['search', 'follow', 'company', 'wilaya', 'channel', 'agent', 'team', 'product', 'reason', 'dates']} reasonOf="conf" />
-        <OrderList id="annulees-ret" title={t('orders.cancelledReturns')} base={{ follow: ['returning', 'returned'] }} show={['search', 'conf', 'company', 'wilaya', 'channel', 'agent', 'team', 'product', 'livreur', 'reason', 'dates']} reasonOf="back" defaultSort="updated_at" />
+        <OrderList
+          id="annulees-ret"
+          title={t('orders.cancelledReturns')}
+          base={{ follow: ['returning', 'returned'] }}
+          show={['search', 'conf', 'company', 'wilaya', 'channel', 'agent', 'team', 'product', 'livreur', 'reason', 'dates']}
+          reasonOf="back"
+          defaultSort="updated_at"
+          extra={swap.can ? () => [{ key: 'swap', label: t('suivi.act.swap'), cell: (o) => swap.button(o) }] : undefined}
+        />
+        {swap.dialogs}
       </>
     );
 
   // all orders
-  const F = c?.raw.follow ?? {};
+  // each status' tab counts the person's own orders (an agent manager: his team's), like the list below
+  const F = c?.follow ?? {};
   const tab = (s: FollowStatus) => ({ value: s, label: t(`status.follow.${s}`), count: F[s] ?? 0, filter: { follow: [s] } as Partial<ListFilter> });
   const tabs = [
     { value: 'all', label: t('orders.tabs.all'), count: c?.all, filter: {} },

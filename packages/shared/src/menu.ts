@@ -135,9 +135,11 @@ export const STORE_MENU: MenuItem[] = [
       { id: 'confirmation', href: '#/confirmation', count: 'conf', tone: 'nc-n', icon: 'phone', roles: ['confirmation'] },
       { id: 'depot', href: '#/depot', count: 'depot', tone: 'nc-a', icon: 'package', roles: ['depot'] },
       { id: 'suivi', href: '#/suivi', count: 'suivi', tone: 'nc-a', icon: 'route', roles: ['suivi', 'confirmation'] },
-      // these two lines open Commandes' tabs
+      // these three lines open Commandes' tabs; the same screens for everyone, each one seeing his own orders (an agent
+      // manager his team's), in a confirmation agency too (owner's choice, 24 Nov 2026)
       { id: 'livrees', href: '#/commandes/livrees', count: 'delivered', tone: 'nc-c', icon: 'checkcircle', tabOf: 'commandes' },
       { id: 'annulees', href: '#/commandes/annulees', count: 'cancelled', tone: '', icon: 'xcircle', tabOf: 'commandes' },
+      { id: 'tout', href: '#/commandes/tout', icon: 'list', tabOf: 'commandes' },
     ],
   },
   // its « Réglages » tab: the owners and the agent managers by default (each card inside keeps who may change it)
@@ -268,7 +270,7 @@ export const SPACES: Space[] = [
   { id: 'marketing', icon: 'megaphone', items: ['marketing', 'createur', 'social', 'influenceurs', 'parrainage', 'codepromo'], counts: ['posts'] },
   { id: 'sponsor', icon: 'trend', items: ['marketing', 'landing', 'spy', 'autochecks'], counts: ['landing'] },
   { id: 'cm', icon: 'chat', items: ['messages', 'cm', 'codepromo'], counts: ['msgs', 'cm'] },
-  { id: 'service', icon: 'phone', items: ['dashboard', 'confirmation', 'suivi', 'livrees', 'annulees', 'sav', 'auto', 'assign', 'affectation', 'autochecks', 'automessages', 'autoreglages', 'clients', 'codepromo'], counts: ['conf', 'suivi', 'sav', 'notify'] },
+  { id: 'service', icon: 'phone', items: ['dashboard', 'confirmation', 'suivi', 'livrees', 'annulees', 'tout', 'sav', 'auto', 'assign', 'affectation', 'autochecks', 'automessages', 'autoreglages', 'clients', 'codepromo'], counts: ['conf', 'suivi', 'sav', 'notify'] },
   { id: 'depot', icon: 'package', items: ['dashboard', 'depot', 'scanner', 'produits', 'pos', 'tournee', 'livreurs'], counts: ['depot', 'lowStock'] },
   { id: 'finance', icon: 'wallet', items: ['caisse', 'macaisse'], counts: [] },
   { id: 'admin', icon: 'usercog', items: ['utilisateurs', 'management', 'reglages', 'livraison', 'agences', 'marketers', 'comptes'], counts: [] },

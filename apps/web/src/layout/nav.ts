@@ -193,7 +193,7 @@ export const AGENCY_NAV: NavItem[] = [
     id: 'commandes',
     icon: 'list',
     roles: ['confirmation', 'suivi', 'agent_manager'],
-    pages: ['confirmation', 'suivi'],
+    pages: ['confirmation', 'suivi', 'commandes'],
     children: [
       // the parcel's way: confirmed → on the road with no problem → an alert (new, in progress, handled) → delivered → cancelled
       // a confirmation agent (or agency): Confirmation, En livraison, Livré, Annulé — to watch its orders move, no alert,
@@ -202,8 +202,11 @@ export const AGENCY_NAV: NavItem[] = [
       { id: 'confirmation', href: '#/confirmation', count: 'conf', tone: 'nc-n', icon: 'phone', roles: ['confirmation', 'agent_manager'] },
       { id: 'enlivraison', href: '#/suivi/enlivraison', icon: 'truck', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'suivi', subs: ['enlivraison', 'bloques'] } },
       { id: 'alertes', href: '#/suivi/alertes_new', count: 'suivi', tone: 'nc-a', icon: 'alert', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'suivi', subs: ['alertes', 'alertes_new', 'alertes_encours', 'traites', 'reclamation'] } },
-      { id: 'livrees', href: '#/suivi/livres', icon: 'checkcircle', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'suivi', subs: ['livres'] } },
-      { id: 'annulees', href: '#/suivi/annules', icon: 'xcircle', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'suivi', subs: ['annules', 'swap'] } },
+      // Livré, Annulé, Toutes les commandes: the store's own screens (Commandes), the agency's orders only — each agent
+      // his own, its chiefs all of them (owner's choice, 24 Nov 2026: the same screens everywhere)
+      { id: 'livrees', href: '#/commandes/livrees', count: 'delivered', tone: 'nc-c', icon: 'checkcircle', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'commandes', subs: ['livrees'] } },
+      { id: 'annulees', href: '#/commandes/annulees', count: 'cancelled', icon: 'xcircle', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'commandes', subs: ['annulees'] } },
+      { id: 'tout', href: '#/commandes/tout', icon: 'list', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'commandes', subs: ['tout', ''] } },
     ],
   },
   { id: 'confirmation', icon: 'phone', roles: ['confirmation', 'agent_manager'], subs: ['nouvelles', 'attente', 'confirmees'], flow: true, hidden: true },

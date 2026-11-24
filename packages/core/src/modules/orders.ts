@@ -44,7 +44,7 @@ import { type FollowMove, tellFollow, tellGiven, tellTaken } from './inbox';
 import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPreview } from './notify';
 import { landingCounts, landingSettings, onLandingConf, onLandingFollow, queueChatEvent, queueChatPurchase } from './landingquery';
 import { lowStockCount } from './stockquery';
-import { agencyLead, agencyOf, agencyRowSql, andSql, ownRowSql, queueSql, rowScopeSql } from './agencyscope';
+import { agencyLead, agencyOf, agencyRowSql, andSql, listScopeSql, ownRowSql, queueSql, rowScopeSql } from './agencyscope';
 import { settleTickets } from './tickets';
 import { addDepotAlert, alertsDepot, DepotChange, itemsText, mayHaveLabel } from './depotalerts';
 import { blockerText, checkLines, checkOrder, deliverCheck } from './confirmcheck';
@@ -371,14 +371,18 @@ export async function teamMembers(db: Db, teamId: string): Promise<number[]> {
   return t ? [...new Set([...(t.managerId ? [t.managerId] : []), ...t.agentIds])] : [];
 }
 
-export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' | 'follow' } = {}): Promise<Page<Order>> {
+/**
+ * `team`: the order lists people read (Commandes › Toutes les commandes, Livré, Annulé, the search): an agent manager
+ * sees his team's orders there (listScopeSql). The work lists (Suivi, Confirmation) keep their queues.
+ */
+export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' | 'follow'; team?: boolean } = {}): Promise<Page<Order>> {
   if (noOrderAccess(ctx)) return { rows: [], total: 0, page: f.page, pageSize: f.pageSize };
   const w = new Where();
   if (onlyOwnDeliveries(ctx)) w.add('o.livreur_id = ?', ctx.session.profile.id);
   // confirmation agencies: an agency's agent sees its agency's orders; a work list (confirmation, suivi) shows each
   // person the orders they work on (the store's own agents: those no agency handles)
   // the store's own confirmation agents: their own orders only (ownRowSql)
-  const scope = rowScopeSql(ctx);
+  const scope = opts.team ? listScopeSql(ctx) : rowScopeSql(ctx);
   if (scope) w.add(scope);
   const queue = opts.queue ? queueSql(ctx, opts.queue) : '';
   if (queue) w.add(queue);
@@ -1815,6 +1819,39 @@ export async function setFollow(
 export async function orderCounts(ctx: Ctx) {
   const own = onlyOwnDeliveries(ctx);
   const me = ctx.session.profile.id;
+  // Commandes › Toutes les commandes, Livré and Annulé (their lines in the menu, their numbers on top): the orders of the
+  // lists the person sees there — each one his own, an agent manager his team's (listScopeSql)
+  const listsOf = async (cond: string) => {
+    const r = (
+      await ctx.db.query(
+        `SELECT count(*)::int AS n,
+                count(*) FILTER (WHERE o.follow_status = 'delivered')::int AS delivered,
+                count(*) FILTER (WHERE o.conf_status = ANY($1))::int AS cancelled_conf,
+                count(*) FILTER (WHERE o.follow_status = 'returning')::int AS returning,
+                count(*) FILTER (WHERE o.follow_status = 'returned')::int AS returned,
+                count(*) FILTER (WHERE o.follow_status IN ('to_prepare','prepared'))::int AS depot,
+                count(*) FILTER (WHERE o.follow_status IN ('shipped','out_for_delivery','failed','alert','in_exchange'))::int AS road
+           FROM sales o WHERE true${andSql(cond)}${own ? ' AND o.livreur_id = $2' : ''}`,
+        own ? [CONF_DONE_BAD, me] : [CONF_DONE_BAD],
+      )
+    )[0];
+    // Toutes les commandes' tabs (À préparer, Expédiée, Livrée…): the same person's orders
+    const byFollow = await ctx.db.query<{ k: string; n: number }>(
+      `SELECT o.follow_status AS k, count(*)::int AS n FROM sales o WHERE o.follow_status IS NOT NULL${andSql(cond)}${own ? ' AND o.livreur_id = $1' : ''} GROUP BY 1`,
+      own ? [me] : [],
+    );
+    return {
+      all: num(r?.n),
+      delivered: num(r?.delivered),
+      cancelledConf: num(r?.cancelled_conf),
+      returning: num(r?.returning),
+      returned: num(r?.returned),
+      // the road's steps above Livré and Annulé (Dépôt, Suivi): the same person's orders
+      depot: num(r?.depot),
+      road: num(r?.road),
+      follow: Object.fromEntries(byFollow.map((x) => [x.k, num(x.n)])) as Record<string, number>,
+    };
+  };
   // a confirmation agency's agent: only the numbers of its agency's orders (nothing else of the store)
   const scope = agencyRowSql(ctx);
   if (scope) {
@@ -1836,6 +1873,7 @@ export async function orderCounts(ctx: Ctx) {
       ai: { messages: 0, cm: 0, notify: 0, posts: 0 },
       landing: undefined as Awaited<ReturnType<typeof landingCounts>> | undefined,
       all,
+      lists: await listsOf(listScopeSql(ctx)),
     };
   }
   // the confirmation numbers of the store's own agents: the orders no agency handles (their lists show those)
@@ -1884,7 +1922,7 @@ export async function orderCounts(ctx: Ctx) {
   const landing = hasRole(ctx.session, 'marketer', 'confirmation') ? await landingCounts(ctx.db, ctx.now()) : undefined;
   // only marketers make pages: an agent's badge counts the orders to handle, not the products without a page
   if (landing && !hasRole(ctx.session, 'marketer')) landing.noPage = 0;
-  return { conf: toObj(conf), follow: toObj(follow), sub: toObj(subs), lateCalls, sav, uncashed, tickets, lowStock, ai, landing, all: num((await ctx.db.query('SELECT count(*)::int n FROM sales'))[0]?.n) };
+  return { conf: toObj(conf), follow: toObj(follow), sub: toObj(subs), lateCalls, sav, uncashed, tickets, lowStock, ai, landing, all: num((await ctx.db.query('SELECT count(*)::int n FROM sales'))[0]?.n), lists: await listsOf(listScopeSql(ctx)) };
 }
 
 // ---------------------------------------------------------------- order form, fees and the delivered report
@@ -2024,9 +2062,9 @@ function orderExtraProcs() {
     }),
 
     /** "Bilan des livraisons": delivered in the period, cashed or not, courier fees, returns, net to receive — total and per company. */
-    'orders.deliveredReport': proc(['suivi', 'depot'], z.object({ from: dateStr, to: dateStr }), (ctx, i) => deliveredReport(ctx, i)),
+    'orders.deliveredReport': proc(['suivi', 'depot'], z.object({ from: dateStr, to: dateStr }), (ctx, i) => deliveredReport(ctx, i, 'sales', true)),
     /** Cancelled at the confirmation and returned parcels of a period: why, by whom, from which company, the cost. */
-    'orders.cancelReport': proc(['suivi', 'depot', 'agent_manager'], z.object({ from: dateStr, to: dateStr }), (ctx, i) => cancelReport(ctx, i)),
+    'orders.cancelReport': proc(['suivi', 'depot', 'agent_manager'], z.object({ from: dateStr, to: dateStr }), (ctx, i) => cancelReport(ctx, i, true)),
     /** The reason given for these orders: why they were cancelled at the confirmation (conf) or came back (back). */
     'orders.reasons': proc(null, z.object({ ids: z.array(id).max(500), of: z.enum(['conf', 'back']) }), async (ctx, i) => {
       const out: Record<string, string | null> = {};
@@ -2041,10 +2079,11 @@ function orderExtraProcs() {
 
 /** "Bilan des livraisons": delivered in the period, cashed or not, courier fees, returns, net to receive — total and per company.
  * Orders and SAV ticket parcels are counted apart (`sales` / `ticket_parcels`). */
-export async function deliveredReport(ctx: Ctx, i: { from: string; to: string }, view: 'sales' | 'ticket_parcels' = 'sales') {
+/** `team`: Commandes › Livré's numbers follow its list (an agent manager: his team's orders, listScopeSql). */
+export async function deliveredReport(ctx: Ctx, i: { from: string; to: string }, view: 'sales' | 'ticket_parcels' = 'sales', team = false) {
   const R = await companyRules(ctx.db);
   const base = `FROM ${view} o LEFT JOIN delivery_companies co ON co.id = o.company_id`;
-  const scope = andSql(rowScopeSql(ctx));
+  const scope = andSql(team ? listScopeSql(ctx) : rowScopeSql(ctx));
   const D = await ctx.db.query(`SELECT ${FEE_COLS} ${base} WHERE o.follow_status = 'delivered' AND o.delivered_at >= $1 AND o.delivered_at < $2${scope}`, [i.from, i.to]);
   const B = await ctx.db.query(
     `SELECT ${FEE_COLS} ${base} WHERE o.follow_status IN ('returning','returned') AND coalesce(o.returned_at, o.returning_at, o.updated_at) >= $1 AND coalesce(o.returned_at, o.returning_at, o.updated_at) < $2${scope}`,
@@ -2108,8 +2147,9 @@ function topReasons(rows: { reason: string | null }[]) {
 /** What was lost over a period: orders cancelled at the confirmation (their status, the reason given, by which agent,
  *  out of every order decided) and parcels coming back (why, from which company, what that costs, out of the parcels
  *  that arrived). A cancelled order counts on its last change, a return on its return (or its last change). */
-export async function cancelReport(ctx: Ctx, i: { from: string; to: string }) {
-  const scope = andSql(rowScopeSql(ctx));
+/** `team`: Commandes › Annulé's numbers follow its lists (an agent manager: his team's orders, listScopeSql). */
+export async function cancelReport(ctx: Ctx, i: { from: string; to: string }, team = false) {
+  const scope = andSql(team ? listScopeSql(ctx) : rowScopeSql(ctx));
   const C = await ctx.db.query(
     `SELECT o.conf_status AS s, o.total, o.agent_id, p.name AS agent, ${REASON_SQL.conf} AS reason
      FROM sales o LEFT JOIN profiles p ON p.id = o.agent_id
@@ -2152,7 +2192,7 @@ export async function cancelReport(ctx: Ctx, i: { from: string; to: string }) {
      FROM sales o WHERE o.follow_status IN ('returning','returned') AND coalesce(o.returned_at, o.returning_at, o.updated_at) >= $1 AND coalesce(o.returned_at, o.returning_at, o.updated_at) < $2${scope}`,
     [i.from, i.to],
   );
-  const d = await deliveredReport(ctx, i);
+  const d = await deliveredReport(ctx, i, 'sales', team);
   const companies = d.companies
     .filter((c) => c.returns > 0)
     .map((c) => ({ companyId: c.companyId, name: c.name, kind: c.kind, returns: c.returns, delivered: c.n, rate: rate(c.returns, c.n), fees: c.returnFees + c.returnOverweight }))
@@ -2203,7 +2243,7 @@ export async function saveOrderNote(ctx: Ctx, orderId: number, input: z.infer<ty
 export const ordersProcs = {
   ...orderExtraProcs(),
   'orders.list': proc(null, ListInput, async (ctx, f) => {
-    const p = await listOrders(ctx, f);
+    const p = await listOrders(ctx, f, { team: true });
     return { ...p, rows: await withClientScores(ctx, p.rows) };
   }),
   'orders.counts': proc(null, z.object({}), (ctx) => orderCounts(ctx)),

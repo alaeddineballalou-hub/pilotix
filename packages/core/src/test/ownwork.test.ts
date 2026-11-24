@@ -1,10 +1,11 @@
 // A store's own confirmation agent opens only his own orders and the customers of those orders (given to him, handled
-// or typed by him, the one « Commande suivante » gave him, the orders of his SAV tickets). The managers, the owner and
-// the administrators see every order; the suivi and the depot keep their whole lists. An agency's agent never opens
+// or typed by him, the one « Commande suivante » gave him, the orders of his SAV tickets). The owner and the
+// administrators see every order; the managers open any order, but their order lists (Commandes › Toutes les commandes,
+// Livré, Annulé) show their team's orders only; the suivi and the depot keep their whole lists. An agency's agent never opens
 // another customer of the store by mixing a customer id with the phone of one of the agency's customers.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
+import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, setSetting, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
 import { confirmSignup, loadShop, passwordFromLink, startSignup } from '../platform';
 
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
@@ -80,14 +81,34 @@ test('store agents open their own orders; managers supervise the store', async (
   // the search of the SAV and of the claims finds his own orders only
   assert.deepEqual(((await call('sav.findOrder', b, { q: oA.phone })) as any[]).length, 0);
   assert.deepEqual(((await call('sav.findOrder', b, { q: oB.phone })) as any[]).map((o) => o.id), [oB.id]);
-  // Managers supervise the store. Suivi sees orders assigned to that agent.
+  // Managers open any order and keep the store's customers. Suivi sees orders assigned to that agent.
   assert.equal(((await call('orders.get', M.ctx, { id: oA.id })) as any).id, oA.id);
-  assert.equal(((await call('orders.list', M.ctx, {})) as any).rows.length, 2);
   assert.equal(((await call('customers.list', M.ctx, {})) as any).rows.length, 2);
   await assert.rejects(call('orders.get', S.ctx, { id: oA.id }), /donnée à un autre agent/);
   await boss.db.query('UPDATE orders SET follow_agent_id=$2 WHERE id=$1', [oA.id, S.id]);
   assert.equal((await call('orders.get', S.ctx, { id: oA.id })).id, oA.id);
   await assert.rejects(call('orders.note', S.ctx, { id: oB.id, field: 'internal', note: 'Private' }), mine);
+  // The order lists (Commandes › Toutes les commandes, Livré, Annulé), their numbers and their reports: each one his own
+  // orders, a manager his team's (owner's choice, 24 Nov 2026: « only their team »), the owner every order.
+  assert.equal(((await call('orders.list', M.ctx, {})) as any).rows.length, 0);
+  assert.equal(((await call('orders.counts', M.ctx, {})) as any).lists.all, 0);
+  await setSetting(boss.db, 'teams', [{ id: 't1', name: 'Équipe A', managerId: M.id, agentIds: [A.id] }]);
+  assert.deepEqual(((await call('orders.list', M.ctx, {})) as any).rows.map((r: any) => r.id), [oA.id]);
+  assert.equal(((await call('orders.counts', M.ctx, {})) as any).lists.all, 1);
+  assert.equal(((await call('orders.list', boss, {})) as any).rows.length, 2);
+  assert.equal(((await call('orders.counts', boss, {})) as any).lists.all, 2);
+  assert.equal(((await call('orders.counts', b, {})) as any).lists.all, 1);
+  await boss.db.query(`UPDATE orders SET conf_status = 'cancelled', updated_at = now() WHERE id = ANY($1)`, [[oA.id, oB.id]]);
+  const day = { from: new Date(Date.now() - 86_400_000).toISOString(), to: new Date(Date.now() + 86_400_000).toISOString() };
+  assert.equal(((await call('orders.cancelReport', M.ctx, day)) as any).conf.n, 1);
+  assert.equal(((await call('orders.cancelReport', boss, day)) as any).conf.n, 2);
+  const mc: any = await call('orders.counts', M.ctx, {});
+  assert.equal(mc.lists.cancelledConf, 1);
+  // the work queues keep their rule: the manager still gives out the free orders in Confirmation
+  const free: any = await call('orders.create', boss, { customerName: 'Libre', phone: '0662999999', wilayaId: 16, commune: 'Kouba', address: 'Rue', items: [{ productId: (await boss.db.query('SELECT id FROM products LIMIT 1'))[0].id, variantId: null, qty: 1 }] });
+  const queue: any = await call('confirmation.list', M.ctx, { sub: 'nouvelles' });
+  assert.ok(queue.rows.some((r: any) => r.id === Number(free.id)));
+  assert.ok(!((await call('orders.list', M.ctx, {})) as any).rows.some((r: any) => r.id === Number(free.id)));
 });
 
 test('« Commande suivante », an order he typed and a SAV ticket given to him stay the agent\'s own; a free order only once his manager gives it', async () => {

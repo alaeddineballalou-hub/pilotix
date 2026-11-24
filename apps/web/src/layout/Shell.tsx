@@ -65,8 +65,10 @@ export function useMenuCounts(seller: Seller | null = null, enabled = true) {
       confirmees: sum(c.conf, ['confirmed', 'no_stock']),
       depot: sum(c.follow, ['to_prepare', 'prepared']) + tk.toShip,
       suivi: sum(c.follow, ['alert']),
-      delivered: c.follow.delivered ?? 0,
-      cancelled: sum(c.conf, CONF_DONE_BAD) + (c.follow.returned ?? 0),
+      // Livré, Annulé: the orders their lists show this person (each one his own, an agent manager his team's); Annulé
+      // counts what its screen counts: cancelled at the confirmation, and the parcels coming back or back
+      delivered: c.lists ? c.lists.delivered : c.follow.delivered ?? 0,
+      cancelled: c.lists ? c.lists.cancelledConf + c.lists.returning + c.lists.returned : sum(c.conf, CONF_DONE_BAD) + (c.follow.returned ?? 0),
       sav: c.sav,
       uncashed: c.uncashed + tk.uncashed,
       late: c.lateCalls,
@@ -498,7 +500,8 @@ const ALL_PAGES = new Set(['accueil', 'dashboard', 'commandes', 'confirmation', 
 /** A partner's pages that show one seller or all of them (the picker shows there). */
 const SELLER_PAGES: Record<'store' | 'agency' | 'marketer', Set<string>> = {
   store: new Set(),
-  agency: new Set(['accueil', 'analyse', 'dashboard', 'confirmation', 'suivi', 'sav', 'produits', 'facturation']),
+  // (« commandes »: Livré, Annulé, Toutes les commandes — the store's own screens on the agency's orders)
+  agency: new Set(['accueil', 'analyse', 'dashboard', 'commandes', 'confirmation', 'suivi', 'sav', 'produits', 'facturation']),
   marketer: new Set(['accueil', 'marketing', 'facturation']),
 };
 

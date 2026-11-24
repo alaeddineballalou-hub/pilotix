@@ -37,6 +37,7 @@ import type { In } from '../../lib/backend';
 import { useAllMode } from '../../layout/AllBoutiques';
 import { DemoCourier } from './DemoCourier';
 import { rightOn, tabOn } from '../../lib/rights';
+import { DoneScreen } from '../orders';
 
 const LIST_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'traites', 'bloques', 'livres', 'annules', 'swap'] as const;
 /** the alert lists: all of them, the new ones (nobody acted yet), the ones in progress */
@@ -87,6 +88,10 @@ function SuiviOne({ sub }: PageProps) {
       <SuiviBar tab={tab} />
       {tab === 'reclamation' ? (
         <Reclamation />
+      ) : tab === 'annules' ? (
+        // « Annulé » is the same screen everywhere (owner's choice, 24 Nov 2026): here on its returns, each parcel coming
+        // back with its « Swap »; each one sees his own orders
+        <DoneScreen sub="annulees" start="back" />
       ) : (
         <>
           <Head tab={tab} />

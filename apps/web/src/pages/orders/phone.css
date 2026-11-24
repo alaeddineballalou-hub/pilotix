@@ -230,3 +230,10 @@ button.pxn-tr:focus-visible { outline: 2px solid #F7A823; outline-offset: -2px; 
 .pxn.wide .pxn-find { max-width: 560px; }
 .pxn.wide .pxn-more { max-width: 420px; margin: 4px auto 0; }
 .pxn.wide > .pxn-top > .px-vsw { margin-inline-start: auto; }
+
+/* A card's own buttons (Annulé's returns: « Swap »): they act, they don't open the card. */
+.pxn-act { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); cursor: default; }
+/* Livré with no money on the left (a confirmation agent, an agency): the cards take the whole width on a computer. */
+.pxn.wide.solo { grid-template-columns: minmax(0, 1fr); }
+.pxn.wide.solo > .pxn-side { display: none; }
+.pxn.wide.solo .pxn-main { grid-column: 1; grid-row: auto; }
