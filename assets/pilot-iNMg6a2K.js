@@ -1,0 +1,1 @@
+const D=["ACTIVE","PAUSED","CAMPAIGN_PAUSED","ADSET_PAUSED","ARCHIVED","DELETED","IN_PROCESS","WITH_ISSUES","PENDING_REVIEW","DISAPPROVED","PREAPPROVED","PENDING_BILLING_INFO"];function P(E,I){if(!E)return"—";const e=E.toUpperCase();return D.includes(e)?I(`ads.st.${e.toLowerCase()}`):E.toLowerCase().replace(/_/g," ")}export{P as a};
