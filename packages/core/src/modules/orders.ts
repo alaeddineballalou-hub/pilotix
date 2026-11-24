@@ -1611,7 +1611,7 @@ export async function assignCompanies(ctx: Ctx, i: { ids: number[]; companyId: n
   return { ok: true };
 }
 
-export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, opts: { system?: boolean; courier?: boolean; expect?: Map<number, string | null> } = {}) {
+export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, opts: { system?: boolean; courier?: boolean; expect?: Map<number, string | null>; courierNotes?: ReadonlyMap<number, string> } = {}) {
   if (!canSetFollow(ctx.session.roles, input.status)) throw forbidden('Vous ne pouvez pas mettre ce statut de livraison');
   const me = ctx.session.profile.id;
   const own = onlyOwnDeliveries(ctx);
@@ -1714,7 +1714,7 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
       if (to === 'returned' && from !== 'returned' && !cur.returned_at) await tx.query('UPDATE customers SET returned = returned + 1 WHERE id = $1', [cur.customer_id]);
       // what the step replaces (« ↶ Annuler » puts it back) and whether the delivery company gave it (never undone here)
       const prev = { sub: cur.sub_status ?? null, fa: numOrNull(cur.follow_agent_id), lv: numOrNull(cur.livreur_id), tr: cur.tracking ?? null, cbh: !!cur.cancel_by_hand };
-      await addEvent(tx, oid, me, 'follow_status', from, to, [input.reason, input.note].filter(Boolean).join(' — ') || null, opts.courier ? { prev, courier: true } : { prev });
+      await addEvent(tx, oid, me, 'follow_status', from, to, [input.reason, opts.courierNotes?.get(oid) ?? input.note].filter(Boolean).join(' — ') || null, opts.courier ? { prev, courier: true } : { prev });
       if (to === 'cancelled' && from === 'to_prepare') await releasePicked(tx, oid);
       // cancelled while the depot holds it (packed, or a parcel already made at a courier): the depot's red alert
       if (to === 'cancelled' && from !== to && !opts.system && !cur.shipped_at && (from === 'prepared' || (from === 'to_prepare' && cur.tracking)) && alertsDepot(ctx, 'prepared'))

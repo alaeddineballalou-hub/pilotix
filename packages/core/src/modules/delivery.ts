@@ -443,6 +443,7 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
   }
   const defaults = ADAPTERS[c.kind]?.statuses ?? {};
   const byStatus = new Map<FollowStatus, number[]>();
+  const courierNotes = new Map<number, string>();
   let changed = 0;
   let feesChanged = 0;
   let weightRule: WeightRule | null = null;
@@ -508,7 +509,11 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
     if (p.sub_status === 'alert_traitee' && to && !SYNC_ENDS.includes(to) && a.status === p.ext_status) continue;
     // marked « En retour » by the Suivi: only the company's delivered or lost moves it (the depot receives the returns)
     if (p.follow_status === 'returning' && to !== 'delivered' && to !== 'lost') continue;
-    if (to && to !== p.follow_status) byStatus.set(to, [...(byStatus.get(to) ?? []), a.id]);
+    if (to && to !== p.follow_status) {
+      byStatus.set(to, [...(byStatus.get(to) ?? []), a.id]);
+      const original = a.status.trim().slice(0, 200);
+      if (original) courierNotes.set(a.id, `${c.name} : ${original}`);
+    }
   }
   const sys = asCourier(ctx);
   // each parcel moves only from the status it had when the company was asked (an agent may have changed it meanwhile:
@@ -516,7 +521,7 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
   const expect = new Map<number, string | null>(parcels.map((p: any) => [num(p.id), p.follow_status ?? null]));
   for (const [status, list] of byStatus) {
     // a new alert from the company is a new one (« à traiter » again)
-    changed += (await setFollow(sys, { ids: list, status, note: `Statut ${c.name}`, ...(status === 'alert' ? { subStatus: null } : {}) }, { system: true, courier: true, expect })).changed.length;
+    changed += (await setFollow(sys, { ids: list, status, note: `Statut ${c.name}`, ...(status === 'alert' ? { subStatus: null } : {}) }, { system: true, courier: true, expect, courierNotes })).changed.length;
   }
   // the mark goes with the parcels that left « En dispatch » (24 h passed, or the company's end: livré, retour…)
   await ctx.db.query(`UPDATE orders SET sub_status = NULL WHERE company_id = $1 AND sub_status = $2 AND follow_status IS DISTINCT FROM 'prepared'`, [c.id, SUB_TAKEN_UNSCANNED]);

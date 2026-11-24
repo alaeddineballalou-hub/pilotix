@@ -74,6 +74,33 @@ test('delivery.sync advances parcels on the road (demo)', async () => {
   assert.ok(after >= before);
 });
 
+test('courier sync keeps each parcel’s original wording in the order history', async () => {
+  const company = await companyId('zr');
+  const parcels = await db.query(`SELECT id FROM orders WHERE conf_status = 'new' AND tracking IS NULL ORDER BY id DESC LIMIT 2`);
+  assert.equal(parcels.length, 2);
+  await db.query(`UPDATE orders SET company_id = $1, conf_status = 'confirmed', follow_status = 'shipped',
+    tracking = 'ZR-HISTORY-' || id, shipped_at = now(), sub_status = NULL
+    WHERE id = ANY($2)`, [company, parcels.map(parcel => Number(parcel.id))]);
+  const labels = new Map([
+    [Number(parcels[0].id), 'Dispatch vers agence'],
+    [Number(parcels[1].id), 'Pris en charge par le livreur'],
+  ]);
+  const suivi = await as(EMAILS.suivi, {
+    courier: async (action: string) => action === 'track'
+      ? [...labels].map(([id, status]) => ({ id, status, mapped: 'out_for_delivery', at: null }))
+      : [],
+    meta: async () => null,
+    hashPassword: async (value: string) => value,
+  });
+  await call('delivery.sync', suivi, { companyId: company });
+  const events = await db.query(`SELECT DISTINCT ON (e.order_id) e.order_id, e.note, c.name
+    FROM order_events e JOIN orders o ON o.id = e.order_id JOIN delivery_companies c ON c.id = o.company_id
+    WHERE e.order_id = ANY($1) AND e.kind = 'follow_status' AND e.to_value = 'out_for_delivery'
+    ORDER BY e.order_id, e.id DESC`, [[...labels.keys()]]);
+  assert.equal(events.length, 2);
+  for (const event of events) assert.equal(event.note, `${event.name} : ${labels.get(Number(event.order_id))}`);
+});
+
 test('fees grid and status mapping', async () => {
   const admin = await as(EMAILS.admin);
   // a company with prices by API: they are its own, never typed here
