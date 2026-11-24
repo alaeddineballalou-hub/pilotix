@@ -1,4 +1,5 @@
 {
+  "attemptFinish": "Terminer",
   "cancellationMessageRequired": "Envoyez le message d’annulation au client",
   "cancelReorderText": "Votre commande a été annulée. Utilisez le lien ci-dessous quand vous souhaitez la réactiver.",
   "cancelReorderLink": "Le lien Réactiver ma commande est ajouté automatiquement.",

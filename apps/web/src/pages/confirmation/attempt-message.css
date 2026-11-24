@@ -1,0 +1,21 @@
+.attempt-message-lock {
+  position: fixed;
+  inset: 0;
+  width: min(calc(100% - 32px), 500px);
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-sizing: border-box;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 80px rgb(17 29 48 / 26%);
+}
+.attempt-message-lock::backdrop { background: rgb(17 29 48 / 52%); }
+.attempt-message-card { display: grid; gap: 16px; }
+.attempt-message-card label { display: grid; gap: 10px; }
+.attempt-message-card textarea { width: 100%; min-height: 120px; box-sizing: border-box; resize: vertical; }
+.attempt-message-channels { display: flex; justify-content: center; gap: 12px; }
+.attempt-message-channels .btn { display: inline-grid; place-items: center; width: 48px; height: 48px; padding: 0; }
+.attempt-message-channels img, .attempt-message-channels svg { width: 24px; height: 24px; }

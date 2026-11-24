@@ -224,7 +224,7 @@ export function PhoneOrder({ order, onClose, onDone }: { order: Order; onClose: 
       </header>
       <div className="pxp-ob" ref={body}>
         <GiveLine order={order} />
-        <Detail order={order} onDone={onDone} phone />
+        <Detail order={order} onDone={onDone} onMessageDone={onClose} phone />
       </div>
     </div>
   );

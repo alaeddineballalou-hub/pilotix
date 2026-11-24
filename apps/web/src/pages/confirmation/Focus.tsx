@@ -155,7 +155,7 @@ export function Focus({ initialId, onClose, onNext, seller, allSellers }: { init
           <p className="muted small">
             {items} · <span className="ltr">{da(o.total)}</span>
           </p>
-          <Detail order={o} />
+          <Detail order={o} onMessageDone={onClose} />
           <div className="statusbar">
             {CHOICES.filter(choiceAllowed).map((c) => (
               <button
@@ -168,7 +168,7 @@ export function Focus({ initialId, onClose, onNext, seller, allSellers }: { init
                     await change([o], ch, { onSaved: after });
                     return;
                   }
-                  if (await change([o], ch)) await after();
+                  if (await change([o], ch, { onMessageDone: onClose })) await after();
                 }}
               >
                 {c === 'try1' ? t('status.conf.no_answer') : choiceLabel(t, c, true)}

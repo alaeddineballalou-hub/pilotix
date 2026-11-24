@@ -15,7 +15,7 @@ import { askRisk, ScoreCard } from '../../ui/clientScore';
 import { dropActions, toast } from '../../ui/toast';
 import { Modal } from '../../ui/modal';
 import { toastUndo } from '../../lib/undo';
-import { AttemptMessage, finalAttempt, type OpenedMessage } from '../confirmation/AttemptMessage';
+import { AttemptMessageLock, finalAttempt } from '../confirmation/AttemptMessage';
 import { confLabel, printOrder, telHref, waHref } from './shared';
 import './orders.css';
 import { trackOf } from '../../lib/items';
@@ -716,7 +716,7 @@ function ActionPanel({ o, panel, busy, companies, onCancel, run, onSendAfter }: 
   });
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
-  const [sentVia, setSentVia] = useState<OpenedMessage | null>(null);
+  const [messageError, setMessageError] = useState('');
   const limits = useRpc('orders.uiMeta', {}, { staleTime: 60_000 });
   const [co, setCo] = useState<string>(o.companyId ? String(o.companyId) : '');
   const [sendNow, setSendNow] = useState(true);
@@ -739,6 +739,19 @@ function ActionPanel({ o, panel, busy, companies, onCancel, run, onSendAfter }: 
     const needsDate = CONF_NEEDS_DATE.includes(panel.status);
     const cancelling = panel.status === 'no_answer' && finalAttempt(o.attempts, limits.data?.cancelAfterNoAnswer ?? 0);
     const needsMessage = panel.status === 'no_answer' && (o.attempts === 2 || cancelling);
+    if (needsMessage && o.phone) return <AttemptMessageLock
+      phone={o.phone} orderId={o.id} message={note} onMessage={setNote} cancelling={cancelling} busy={busy} error={messageError}
+      onFinish={({ text, channel, reorderToken }) => {
+        setMessageError('');
+        void run(async () => {
+          try {
+            return await rpc('orders.setConf', { ids: [o.id], status: 'no_answer', note: text, messageSentVia: channel, reorderToken });
+          } catch (error) {
+            setMessageError(error instanceof Error ? error.message : t('common.error'));
+            throw error;
+          }
+        }, t('status.conf.no_answer'), true);
+      }} />;
     body = (
       <>
         {needsDate && (
@@ -756,20 +769,18 @@ function ActionPanel({ o, panel, busy, companies, onCancel, run, onSendAfter }: 
             </select>
           </Field>
         )}
-        {needsMessage
-          ? <AttemptMessage phone={o.phone} orderId={o.id} message={note} onMessage={setNote} onOpen={setSentVia} cancelling={cancelling} />
-          : <Field label={t('common.note')}>
-            <input value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} placeholder={needsDate ? t('orders.card.notePh') : t('orders.card.detail')} />
-          </Field>}
+        <Field label={t('common.note')}>
+          <input value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} placeholder={needsDate ? t('orders.card.notePh') : t('orders.card.detail')} />
+        </Field>
       </>
     );
     danger = !needsDate && !needsMessage;
-    okLabel = needsMessage ? t('common.confirm') : needsDate ? t('common.save') : t(`status.conf.${panel.status}`);
+    okLabel = needsDate ? t('common.save') : t(`status.conf.${panel.status}`);
     submit = () => {
       if (reasons.length && !reason) return toast(t('orders.card.cancelReason'), 'bad');
-      if (needsMessage && !sentVia) return toast(t('confirmation.attemptMessageRequired'), 'bad');
+      if (needsMessage) return toast(t('confirmation.attemptMessageOneOrder'), 'bad');
       const r = reason || (CONF_NEEDS_REASON.includes(panel.status) ? note.trim() || t(`status.conf.${panel.status}`) : null);
-      run(() => rpc('orders.setConf', { ids: [o.id], status: panel.status, nextCallAt: needsDate ? fromLocalInput(date) : null, reason: r, note: sentVia?.text ?? (reason ? note.trim() || null : null), messageSentVia: sentVia?.channel, reorderToken: sentVia?.reorderToken }), t(`status.conf.${panel.status}`), true);
+      run(() => rpc('orders.setConf', { ids: [o.id], status: panel.status, nextCallAt: needsDate ? fromLocalInput(date) : null, reason: r, note: reason ? note.trim() || null : null }), t(`status.conf.${panel.status}`), true);
     };
   } else if (panel.kind === 'follow') {
     title = `${t(`status.follow.${panel.status}`)} — ${o.ref}`;

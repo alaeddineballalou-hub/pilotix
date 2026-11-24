@@ -810,7 +810,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                         {op && (
                           <tr className="qdetail">
                             <td colSpan={cols.length + 3} className="wide">
-                              <Detail order={r} onDone={goNext} />
+                              <Detail order={r} onDone={goNext} onMessageDone={() => openOnly(null)} />
                             </td>
                           </tr>
                         )}

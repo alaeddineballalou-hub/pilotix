@@ -4,7 +4,7 @@ import { CANCEL_REASONS, communesOf, CONF_TODO, isAbandonedCheckout, normalizePh
 import { useQueryClient } from '@tanstack/react-query';
 import { rpc } from '../../lib/backend';
 import { defaultNext } from './shared';
-import { AttemptMessage, finalAttempt, type OpenedMessage } from './AttemptMessage';
+import { AttemptMessageLock, finalAttempt, type OpenedMessage } from './AttemptMessage';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -66,7 +66,9 @@ const key = (L: Line[]) => JSON.stringify(L.map((l) => [l.variantId, l.productId
 
 /** onDone: called after a status change, Confirmer or Enregistrer worked, so the list can move on to the next order. */
 /** phone: the order full screen on a phone — the customer first (name, phones, address editable), then delivery, products, the totals, and the Statut / Confirmer bar. */
-export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: number) => void; phone?: boolean }) {
+export function Detail({ order, onDone, onMessageDone, phone }: {
+  order: Order; onDone?: (id: number) => void; onMessageDone?: () => void; phone?: boolean;
+}) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const cat = useCatalog();
@@ -391,7 +393,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
       return false;
     }
   };
-  const run = async (fn: () => Promise<unknown>, okMsg: string, tone: 'ok' | 'bad' = 'ok', undoable = true) => {
+  const run = async (fn: () => Promise<unknown>, okMsg: string, tone: 'ok' | 'bad' = 'ok', undoable = true, after = () => onDone?.(order.id)) => {
     setErr('');
     setBusy(true);
     try {
@@ -405,7 +407,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
       else if (undoable) toastUndo(okMsg, [order.id], refresh, tone);
       else toast(okMsg, tone);
       refresh();
-      onDone?.(order.id);
+      after();
       return true;
     } catch (e: any) {
       setErr(e.message);
@@ -840,8 +842,8 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
           </div>
         )}
         </div>
-        <StatusMenu order={order} busy={busy} pending={pend} onPick={setPend}
-          onConfirmAttempt={(attempt) => run(attempt.fn, attempt.ok, attempt.tone)} />
+        <StatusMenu order={order} busy={busy} error={err} pending={pend} onPick={setPend}
+          onConfirmAttempt={(attempt) => run(attempt.fn, attempt.ok, attempt.tone, true, onMessageDone)} />
         {(!phone || canSave || order.confStatus === 'confirmed') && <button
           type="button"
           className={`qd6-savebtn ${canSave ? 'on' : ''}`}
@@ -919,22 +921,21 @@ interface Pend {
   fn: () => Promise<unknown>;
   ok: string;
 }
-function StatusMenu({ order, busy, pending, onPick, onConfirmAttempt }: {
-  order: Order; busy: boolean; pending: Pend | null; onPick: (p: Pend | null) => void;
+function StatusMenu({ order, busy, error, pending, onPick, onConfirmAttempt }: {
+  order: Order; busy: boolean; error: string; pending: Pend | null; onPick: (p: Pend | null) => void;
   onConfirmAttempt: (attempt: Pend) => Promise<boolean>;
 }) {
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>(null);
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
-  const [sentVia, setSentVia] = useState<OpenedMessage | null>(null);
   const limits = useRpc('orders.uiMeta', {}, { staleTime: 60_000 });
   const cancelling = finalAttempt(order.attempts, limits.data?.cancelAfterNoAnswer ?? 0);
   const needsMessage = order.attempts === 2 || cancelling;
   const [when, setWhen] = useState('');
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!step) return;
+    if (!step || step === 'try') return;
     const down = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setStep(null);
     const key = (e: KeyboardEvent) => e.key === 'Escape' && setStep(null);
     document.addEventListener('mousedown', down);
@@ -959,15 +960,18 @@ function StatusMenu({ order, busy, pending, onPick, onConfirmAttempt }: {
     }
     if (status === 'try') {
       if (needsMessage && !message) {
+        if (!order.phone) {
+          toast(t('confirmation.attemptMessageOneOrder'), 'bad');
+          return;
+        }
         setNote('');
-        setSentVia(null);
         setStep('try');
         return;
       }
       const txt = t('confirmation.try', { n: String(nextTry).padStart(2, '0') });
       const attempt: Pend = { status: 'try', label: txt, tone: 'ok', cls: 'c-mid', fn: () => rpc('confirmation.setTry', { ids: [order.id], n: nextTry, note: message?.text, messageSentVia: message?.channel, reorderToken: message?.reorderToken }), ok: `${order.ref} → ${txt}` };
       if (needsMessage) {
-        void onConfirmAttempt(attempt).then((saved) => { if (saved) { setStep(null); setNote(''); setSentVia(null); } });
+        void onConfirmAttempt(attempt).then((saved) => { if (saved) { setStep(null); setNote(''); } });
         return;
       }
       return done(attempt);
@@ -1019,15 +1023,8 @@ function StatusMenu({ order, busy, pending, onPick, onConfirmAttempt }: {
           )}
         </div>
       )}
-      {step === 'try' && (
-        <form className="qd6-ask" onSubmit={(event) => { event.preventDefault(); if (sentVia) direct('try', sentVia); }}>
-          <AttemptMessage phone={order.phone} orderId={order.id} message={note} onMessage={setNote} onOpen={setSentVia} cancelling={cancelling} />
-          <div className="qd6-acts">
-            <button type="button" className="btn small" onClick={() => setStep('menu')}>{t('common.back')}</button>
-            <button type="submit" className="btn small primary" disabled={busy || !sentVia}>{t('common.confirm')}</button>
-          </div>
-        </form>
-      )}
+      {step === 'try' && <AttemptMessageLock phone={order.phone} orderId={order.id} message={note} onMessage={setNote}
+        cancelling={cancelling} busy={busy} error={error} onFinish={(message) => direct('try', message)} />}
       {(step === 'cancelled' || step === 'postponed' || step === 'callback') && (
         <form
           className="qd6-ask"
