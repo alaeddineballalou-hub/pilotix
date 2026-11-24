@@ -66,7 +66,8 @@ test('a server made before 23 Nov: after the next update the agency alerts work 
 /**
  * Each step as the live server did it (the first 12 hex of the sha256 of its SQL). A new step goes at the end and gets
  * its line here; an old one never changes, since a server that did it already never runs it again. The only exception:
- * a step whose update stopped the server (never done there): fix it, and its line here.
+ * a step whose update stopped the server (never done there): fix it, its line here, and « db-step-fix: <its name> » in
+ * the commit message (the deploy refuses a changed line without it). The shops' steps: shopsteps.test.ts.
  */
 const DONE: [string, string][] = [
   ['p001_platform', '80018210ad4e'],

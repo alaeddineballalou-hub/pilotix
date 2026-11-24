@@ -7,7 +7,8 @@
 # then the latest main goes live only if it is the version he said yes to, Pilotix CI passed on it, and it is not
 # live yet. No yes = nothing goes live. (Until 11 Nov 2026 this ran by itself every night at 03:17: removed.)
 # Urgent only (the site is down, a fix cannot wait for the night), and only when the owner asks: Actions > Deploy to
-# the server > Run workflow with source=urgent (or `gh workflow run deploy.yml -f source=urgent`).
+# the server > Run workflow with source=urgent (or `gh workflow run deploy.yml -f source=urgent -f sha=<the version checked>`:
+# with sha, the run stops if main moved since).
 # Needs the secrets DEPLOY_HOST and DEPLOY_SSH_KEY, made by deploy/setup-github-deploy.sh on the server.
 # The key can run only deploy/update.sh on the server: nothing else, even if it leaked.
 name: Deploy to the server
@@ -21,7 +22,7 @@ on:
         options: [page, urgent]
         default: page
       sha:
-        description: 'source=page: the main version the owner said yes to (the run stops if main is not that version)'
+        description: 'the main version that was checked (page: the one the owner said yes to; urgent: the one you checked). The run stops if main is not that version'
         type: string
         default: ''
 
@@ -52,14 +53,16 @@ jobs:
           YES_SHA: ${{ inputs.sha }}
         run: |
           MAIN=$(gh api "repos/$REPO/commits/main" --jq .sha)
-          if [ "$SOURCE" = urgent ]; then
-            echo "Urgent deploy (asked by the owner): the latest main goes live (${MAIN:0:8})."
-            echo "sha=$MAIN" >> "$GITHUB_OUTPUT"
-            echo "go=yes" >> "$GITHUB_OUTPUT"
+          # the version that was checked (the owner's yes; for an urgent deploy, the one its starter checked): a push
+          # since then is not in what was checked, so nothing goes live (24 Nov 2026: an urgent deploy took two
+          # commits pushed meanwhile, their tests still running)
+          if [ -n "$YES_SHA" ] && [ "$MAIN" != "$YES_SHA" ]; then
+            echo "::warning title=Not updated::main (${MAIN:0:8}) is not the version that was checked (${YES_SHA:0:8}): something was pushed since. Nothing goes live."
+            echo "go=no" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if [ -z "$YES_SHA" ] || [ "$MAIN" != "$YES_SHA" ]; then
-            echo "::warning title=Not updated::main (${MAIN:0:8}) is not the version the owner said yes to (${YES_SHA:0:8}). Nothing goes live."
+          if [ "$SOURCE" != urgent ] && [ -z "$YES_SHA" ]; then
+            echo "::warning title=Not updated::no version said yes to. Nothing goes live."
             echo "go=no" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -74,6 +77,29 @@ jobs:
           done
           CI=$(gh run list -R "$REPO" --workflow build.yml --branch main --commit "$MAIN" --event push --limit 1 --json status,conclusion --jq '.[0] | "\(.status) \(.conclusion)"')
           echo "main: ${MAIN:0:8} · live: ${LIVE:0:8} · CI on main: ${CI:-none}"
+          # an old database step never changes: a server that did it never runs it again (24 Nov 2026, p003 and p005).
+          # Its pin (test/platformsteps.test.ts, test/shopsteps.test.ts) changed between live and main = refused, unless
+          # a commit says « db-step-fix: <step> » (a step whose update stopped the server, so never done there)
+          if [ -n "$LIVE" ] && [ "$LIVE" != "$MAIN" ]; then
+            CHANGED=$(gh api "repos/$REPO/compare/$LIVE...$MAIN" --jq '.files[] | select(.filename | test("^packages/core/src/test/(platform|shop)steps\\.test\\.ts$")) | (.patch // "NO PATCH")' | grep -E '^-[[:space:]]*\[|NO PATCH' || true)
+            if [ -n "$CHANGED" ]; then
+              if gh api "repos/$REPO/compare/$LIVE...$MAIN" --jq '.commits[].commit.message' | grep -q 'db-step-fix:'; then
+                echo "::warning title=Old database step fixed::an old step's pin changed, with « db-step-fix: » in a commit message: allowed."
+              else
+                echo "::error title=Old database step changed::an old step was edited between the live version and main, and the live server never runs an old step again. Put the change in a new step. Nothing goes live."
+                printf '%s\n' "$CHANGED" | head -n 10
+                echo "go=no" >> "$GITHUB_OUTPUT"
+                exit 1
+              fi
+            fi
+          fi
+          if [ "$SOURCE" = urgent ]; then
+            [ "$CI" = "completed success" ] || echo "::warning title=Tests not finished::Pilotix CI on ${MAIN:0:8}: ${CI:-no run}. Urgent: it goes live anyway."
+            echo "Urgent deploy (asked by the owner): ${MAIN:0:8} goes live."
+            echo "sha=$MAIN" >> "$GITHUB_OUTPUT"
+            echo "go=yes" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [ "$MAIN" = "$LIVE" ]; then
             echo "Nothing new tonight: the live version is the latest main."
             echo "go=no" >> "$GITHUB_OUTPUT"
