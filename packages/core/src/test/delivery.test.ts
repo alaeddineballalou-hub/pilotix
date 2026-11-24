@@ -6,6 +6,7 @@ import { fillJson } from '../couriers/custom';
 import { resolveStatus } from '../couriers/load';
 import { ADAPTERS } from '../couriers/adapters';
 import { bestMatch } from '../couriers/util';
+import { courierWordsAt } from '../modules/delivery';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -99,6 +100,100 @@ test('courier sync keeps each parcel’s original wording in the order history',
     ORDER BY e.order_id, e.id DESC`, [[...labels.keys()]]);
   assert.equal(events.length, 2);
   for (const event of events) assert.equal(event.note, `${event.name} : ${labels.get(Number(event.order_id))}`);
+});
+
+test('courierWordsAt: the company’s words at a moment of its journey', () => {
+  const t0 = Date.parse('2026-11-23T10:00:00Z');
+  const m = (min: number) => new Date(t0 + min * 60_000).toISOString();
+  const steps = [
+    { at: m(0), key: 'vers_wilaya', status: 'Vers wilaya', situations: [] },
+    { at: m(60), key: 'sortie_en_livraison', status: 'Sortie en livraison', situations: [] },
+    { at: m(120), key: 'echec_livraison', status: 'Échec de livraison', situations: [{ name: 'Client injoignable', at: m(121) }, { name: 'Reporté', at: m(200) }] },
+    { at: m(125), key: 'sortie_en_livraison', status: 'Sortie en livraison', situations: [] },
+  ];
+  const leadsTo = (words: string, key: string | null) => resolveStatus(ADAPTERS.zr.statuses, {}, { key: key ?? undefined, status: words });
+  const at = (min: number) => t0 + min * 60_000;
+  assert.equal(courierWordsAt(steps, at(30), 'shipped', leadsTo), 'Vers wilaya');
+  assert.equal(courierWordsAt(steps, at(65), 'out_for_delivery', leadsTo), 'Sortie en livraison');
+  // the situation added by then, not the later one
+  assert.equal(courierWordsAt(steps, at(123), 'failed', leadsTo), 'Échec de livraison · Client injoignable');
+  // the company moved again while the sync was writing the line: the status that led there
+  assert.equal(courierWordsAt(steps, at(127), 'failed', leadsTo), 'Échec de livraison · Client injoignable');
+  // no status leads there (ZR's « retour » is told apart from the status): the status of that moment
+  assert.equal(courierWordsAt(steps, at(30), 'returning', leadsTo), 'Vers wilaya');
+  // the journey starts after the line: not this parcel's status
+  assert.equal(courierWordsAt(steps, at(-30), 'shipped', leadsTo), null);
+});
+
+test('old « Statut ZR » history lines get the courier’s words of that moment (server sync, a few each run)', async () => {
+  const zrId = await companyId('zr');
+  const name = String((await db.query('SELECT name FROM delivery_companies WHERE id = $1', [zrId]))[0].name);
+  const old = `Statut ${name}`;
+  await db.query(`DELETE FROM settings WHERE key = 'courier_notes_filled'`);
+  const rows = await db.query(`SELECT id FROM orders WHERE conf_status = 'new' AND tracking IS NULL ORDER BY id DESC LIMIT 4`);
+  assert.equal(rows.length, 4);
+  const [a, gone, later, onlyOne] = rows.map((r: any) => Number(r.id));
+  await db.query(`UPDATE orders SET company_id = $1, conf_status = 'confirmed', follow_status = 'failed', tracking = 'ZR-OLD-' || id, ext_id = 'uuid-' || id, shipped_at = now() WHERE id = ANY($2)`, [
+    zrId,
+    [a, gone, later, onlyOne],
+  ]);
+  const now = Date.now();
+  const h = (hours: number) => new Date(now - hours * 3_600_000).toISOString();
+  const line = (orderId: number, at: string, from: string, to: string) =>
+    db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, note, data, at) VALUES ($1, NULL, 'follow_status', $2, $3, $4, '{"courier":true}', $5)`, [orderId, from, to, old, at]);
+  await line(a, h(5), 'prepared', 'shipped');
+  await line(a, h(3), 'shipped', 'out_for_delivery');
+  await line(a, h(1), 'out_for_delivery', 'failed');
+  await line(gone, h(2), 'prepared', 'shipped');
+  await line(later, h(2), 'prepared', 'shipped');
+  await line(onlyOne, h(4), 'prepared', 'shipped');
+  // a line an agent wrote by hand is never touched
+  await db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, note, at) VALUES ($1, NULL, 'follow_status', 'failed', 'alert', 'Client injoignable', $2)`, [a, h(0.5)]);
+  const journey = () => [
+    { at: new Date(now - 5.5 * 3_600_000).toISOString(), key: 'vers_wilaya', status: 'Vers wilaya', situations: [] },
+    { at: new Date(now - 3.2 * 3_600_000).toISOString(), key: 'sortie_en_livraison', status: 'Sortie en livraison', situations: [] },
+    { at: new Date(now - 1.1 * 3_600_000).toISOString(), key: 'echec_livraison', status: 'Échec de livraison', situations: [{ name: 'Client injoignable', at: new Date(now - 1.05 * 3_600_000).toISOString() }] },
+  ];
+  let laterUp = false;
+  const asked: number[] = [];
+  const server = {
+    courier: async (action: string, args: any) => {
+      if (action === 'track') return [];
+      if (action !== 'steps') throw new Error('pas dans ce test');
+      asked.push(args.item.id);
+      if (args.item.id === gone) throw Object.assign(new Error('ZR : introuvable'), { status: 404 });
+      if (args.item.id === later && !laterUp) throw Object.assign(new Error('ZR : erreur 502'), { status: 502 });
+      return journey();
+    },
+    meta: async () => null,
+    hashPassword: async (value: string) => value,
+  };
+  const admin = await as(EMAILS.admin, server as any);
+  const notes = async (orderId: number) => (await db.query(`SELECT note FROM order_events WHERE order_id = $1 AND kind = 'follow_status' ORDER BY at`, [orderId])).map((r: any) => r.note);
+  // an agent's « Actualiser » never does it (it stays quick)
+  await call('delivery.sync', admin, { fast: true });
+  assert.equal(asked.length, 0);
+  const r: any = await call('delivery.sync', admin, { fast: true, oldNotes: true });
+  assert.deepEqual(r.oldNotes, { filled: 4, notFound: 1, left: true });
+  assert.deepEqual((await notes(a)).slice(-4), [`${name} : Vers wilaya`, `${name} : Sortie en livraison`, `${name} : Échec de livraison · Client injoignable`, 'Client injoignable']);
+  assert.deepEqual(await notes(gone), [`${name} : statut non retrouvé`]);
+  assert.deepEqual(await notes(onlyOne), [`${name} : Vers wilaya`]);
+  // ZR did not answer for this one: asked again at the next run
+  assert.deepEqual(await notes(later), [old]);
+  assert.equal((await db.query(`SELECT data->>'noteTries' AS n FROM order_events WHERE order_id = $1 AND kind = 'follow_status'`, [later]))[0].n, '1');
+  laterUp = true;
+  const r2: any = await call('delivery.sync', admin, { fast: true, oldNotes: true });
+  assert.deepEqual(r2.oldNotes, { filled: 1, notFound: 0, left: true });
+  // 2 h ago ZR said « Sortie en livraison » (it led elsewhere, but it is what ZR said then)
+  assert.deepEqual(await notes(later), [`${name} : Sortie en livraison`]);
+  // nothing left: the search stops for good (one look at a mark, no question to ZR)
+  const r3: any = await call('delivery.sync', admin, { fast: true, oldNotes: true });
+  assert.deepEqual(r3.oldNotes, { filled: 0, notFound: 0, left: false });
+  const before = asked.length;
+  await db.query(`UPDATE order_events SET note = $2 WHERE order_id = $1 AND kind = 'follow_status'`, [onlyOne, old]);
+  const r4: any = await call('delivery.sync', admin, { fast: true, oldNotes: true });
+  assert.deepEqual(r4.oldNotes, { filled: 0, notFound: 0, left: false });
+  assert.equal(asked.length, before);
 });
 
 test('fees grid and status mapping', async () => {

@@ -80,7 +80,7 @@ type Args = {
  * payRequestDate {companyId, extId, date} · payRequestCancel {companyId, extId} ·
  * labels {companyId, items} (one file) · exchange {companyId, orderId, item: the original parcel} ·
  * bagCreate {companyId, items} · bagAdd {companyId, bag, items} · bagRemove {companyId, bag, item} · bags {companyId} ·
- * bagLabel {companyId, bag: its number} · bagDrop {companyId, bag} · parcel {companyId, item} ·
+ * bagLabel {companyId, bag: its number} · bagDrop {companyId, bag} · parcel {companyId, item} · steps {companyId, item} ·
  * change {companyId, orderId, change} · changeStates {companyId, extIds} · changeCancel {companyId, extId} · states / services {companyId} ·
  * webhookOn {companyId, url, key} · webhookOff / webhookGet {companyId, extId} ·
  * askReturn / retry / note {companyId, item, text}.
@@ -217,6 +217,11 @@ export async function runCourier(action: string, args: unknown, ctx: Ctx): Promi
       const ad = ADAPTERS[c.kind];
       if (!ad.parcel) throw new CourierError(`${c.name} : pas de détail du colis par API`);
       return ad.parcel(c, a.item!);
+    }
+    case 'steps': {
+      const ad = ADAPTERS[c.kind];
+      if (!ad.steps) throw new CourierError(`${c.name} : pas d’historique du colis par API`);
+      return ad.steps(c, a.item!);
     }
     case 'change': {
       const ad = ADAPTERS[c.kind];

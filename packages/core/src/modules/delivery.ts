@@ -10,7 +10,7 @@ import { fakeTracking, nextStep, word, zrWeighs } from '../couriers/demo';
 import { CARDS, KINDS } from '../couriers/kinds';
 import { keysOk, loadCompany, loadParcels, resolveStatus } from '../couriers/load';
 import { checkedInToday } from './livreur';
-import type { CourierCosts, Desk, ExchangeResult, FeeRow, LabelResult, PreviewResult, SendResult, TrackItem, TrackResult } from '../couriers/types';
+import type { CourierCosts, CourierStep, Desk, ExchangeResult, FeeRow, LabelResult, PreviewResult, SendResult, TrackItem, TrackResult } from '../couriers/types';
 import { Db, iso, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, notFound, proc, publicApi, takeActionLocks } from '../rpc';
 
@@ -511,8 +511,8 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
     if (p.follow_status === 'returning' && to !== 'delivered' && to !== 'lost') continue;
     if (to && to !== p.follow_status) {
       byStatus.set(to, [...(byStatus.get(to) ?? []), a.id]);
-      const original = a.status.trim().slice(0, 200);
-      if (original) courierNotes.set(a.id, `${c.name} : ${original}`);
+      // the history line always says what the company said (« ZR : Sortie en livraison »), never « Statut ZR » alone
+      courierNotes.set(a.id, courierNote(c.name, a.status || a.key));
     }
   }
   const sys = asCourier(ctx);
@@ -521,7 +521,7 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
   const expect = new Map<number, string | null>(parcels.map((p: any) => [num(p.id), p.follow_status ?? null]));
   for (const [status, list] of byStatus) {
     // a new alert from the company is a new one (« à traiter » again)
-    changed += (await setFollow(sys, { ids: list, status, note: `Statut ${c.name}`, ...(status === 'alert' ? { subStatus: null } : {}) }, { system: true, courier: true, expect, courierNotes })).changed.length;
+    changed += (await setFollow(sys, { ids: list, status, note: courierNote(c.name, null), ...(status === 'alert' ? { subStatus: null } : {}) }, { system: true, courier: true, expect, courierNotes })).changed.length;
   }
   // the mark goes with the parcels that left « En dispatch » (24 h passed, or the company's end: livré, retour…)
   await ctx.db.query(`UPDATE orders SET sub_status = NULL WHERE company_id = $1 AND sub_status = $2 AND follow_status IS DISTINCT FROM 'prepared'`, [c.id, SUB_TAKEN_UNSCANNED]);
@@ -562,6 +562,94 @@ const safeDate = (s: string | null | undefined) => {
   const t = Date.parse(s);
   return isFinite(t) ? new Date(t).toISOString() : null;
 };
+
+// ---------------------------------------------------------------- the company's own words in the history
+/** The note of a history line the company's status wrote: its own words (« ZR : Échec de livraison · Client
+ *  injoignable »); no words (never seen with ZR): « ZR : sans détail ». Never « Statut ZR » alone (the owner's rule,
+ *  24 Nov 2026). */
+export const courierNote = (company: string, words: string | null | undefined) => `${company} : ${(words ?? '').trim().slice(0, 200) || COURIER_NO_WORDS}`;
+const COURIER_NO_WORDS = 'sans détail';
+/** What the sync wrote before 24 Nov 2026 (« Statut ZR »): these lines get the company's words of that moment. */
+const OLD_COURIER_NOTE = (company: string) => `Statut ${company}`;
+/** Said in place of the words when the company no longer knows the parcel (or its journey starts later). */
+const COURIER_NOT_FOUND = 'statut non retrouvé';
+/** Once no old line is left in the shop, this mark stops the search. */
+const OLD_NOTES_DONE = 'courier_notes_filled';
+/** the company's clock and the server's may differ a little */
+const CLOCK_MARGIN_MS = 60_000;
+/** a line is written once the whole sync has read the company (up to a few minutes after it read this parcel) */
+const READ_MARGIN_MS = 10 * 60_000;
+
+/** The company's words for a parcel at `t` (a time), as the sync would have written them then: its status at that
+ *  moment — the last step of its journey (oldest first) at or before it — and the last situation added under that step
+ *  by then (« Échec de livraison · Client injoignable »). When that status does not lead to `to` (the parcel's status the
+ *  line wrote) but one a few minutes earlier does, that one is it (the company moved again while the sync was writing).
+ *  Null: the journey starts after `t` (another parcel). */
+export function courierWordsAt(steps: CourierStep[], t: number, to: string | null, leadsTo: (words: string, key: string | null) => string | null | undefined): string | null {
+  const before = steps.filter((s) => Date.parse(s.at) <= t + CLOCK_MARGIN_MS);
+  if (!before.length) return null;
+  const wordsOf = (s: CourierStep) => {
+    const sit = s.situations.filter((x) => !x.at || Date.parse(x.at) <= t + CLOCK_MARGIN_MS).pop();
+    return sit ? `${s.status} · ${sit.name}` : s.status;
+  };
+  const last = before[before.length - 1];
+  if (!to || leadsTo(wordsOf(last), last.key) === to) return wordsOf(last);
+  const earlier = [...before].reverse().find((s) => Date.parse(s.at) >= t - READ_MARGIN_MS && leadsTo(wordsOf(s), s.key) === to);
+  return wordsOf(earlier ?? last);
+}
+
+/** The history lines the sync wrote before 24 Nov 2026 said only « Statut ZR »: each gets the company's own words of
+ *  that moment, read from the parcel's journey at the company (ZR), like the lines written since. A few parcels at each
+ *  sync until none is left; a parcel the company no longer knows: « ZR : statut non retrouvé ». A parcel the company
+ *  could not answer for is asked again at the next syncs (3 times at most). */
+export async function fillOldCourierNotes(ctx: Ctx, list: CompanyRow[], max = 30) {
+  const out = { filled: 0, notFound: 0, left: false };
+  if (isDemo(ctx) || ctx.shop?.demo || (await ctx.db.query('SELECT 1 FROM settings WHERE key = $1', [OLD_NOTES_DONE])).length) return out;
+  for (const c of list.filter((x) => ADAPTERS[x.kind]?.steps)) {
+    const old = OLD_COURIER_NOTE(c.name);
+    const orders = await ctx.db.query(
+      `SELECT e.order_id, max(o.tracking) AS tracking, max(o.ext_id) AS ext_id, max(coalesce((e.data->>'noteTries')::int, 0)) AS tries
+       FROM order_events e JOIN orders o ON o.id = e.order_id
+       WHERE o.company_id = $1 AND o.tracking IS NOT NULL AND e.kind = 'follow_status' AND e.note = $2
+       GROUP BY e.order_id ORDER BY 4, e.order_id DESC LIMIT $3`,
+      [c.id, old, max],
+    );
+    if (!orders.length) continue;
+    out.left = true;
+    const lines = await ctx.db.query(`SELECT id, order_id, at, to_value FROM order_events WHERE order_id = ANY($1) AND kind = 'follow_status' AND note = $2 ORDER BY at`, [
+      orders.map((o: any) => num(o.order_id)),
+      old,
+    ]);
+    const defaults = ADAPTERS[c.kind]?.statuses ?? {};
+    const leadsTo = (words: string, key: string | null) => resolveStatus(defaults, c.statusMap, { key: key ?? undefined, status: words });
+    for (const o of orders) {
+      const mine = lines.filter((l: any) => num(l.order_id) === num(o.order_id));
+      let steps: CourierStep[] = [];
+      try {
+        steps = (await courierOf(ctx)('steps', { companyId: c.id, item: { id: num(o.order_id), tracking: o.tracking, extId: o.ext_id ?? null } }, ctx)) as CourierStep[];
+      } catch (e: any) {
+        const msg = String(e?.message ?? '');
+        // keys refused or too many calls: the rest waits for the next sync
+        if (e?.status === 429 || msg.includes('refuse les clés')) break;
+        // no answer (its server, the network): asked again at the next syncs, at most 3 times
+        if (e?.status !== 404 && !/introuvable/i.test(msg) && num(o.tries) < 2) {
+          await ctx.db.query(`UPDATE order_events SET data = coalesce(data, '{}'::jsonb) || jsonb_build_object('noteTries', $2::int) WHERE id = ANY($1)`, [mine.map((l: any) => num(l.id)), num(o.tries) + 1]);
+          continue;
+        }
+      }
+      for (const l of mine) {
+        const words = courierWordsAt(steps, new Date(l.at).getTime(), l.to_value ?? null, leadsTo);
+        await ctx.db.query('UPDATE order_events SET note = $2 WHERE id = $1 AND note = $3', [num(l.id), courierNote(c.name, words ?? COURIER_NOT_FOUND), old]);
+        if (words) out.filled++;
+        else out.notFound++;
+      }
+    }
+  }
+  // nothing left anywhere (the sync never writes « Statut … » again): the search stops for good
+  if (!out.left) await ctx.db.query(`INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [OLD_NOTES_DONE, JSON.stringify({ at: new Date(ctx.now()).toISOString() })]);
+  if (out.filled || out.notFound) ctx.emit({ type: 'orders' });
+  return out;
+}
 
 // ---------------------------------------------------------------- livreurs and their round
 async function livreursList(db: Db, now = Date.now()) {
@@ -1155,7 +1243,7 @@ export const deliveryProcs = {
   'delivery.send': proc(['depot', 'suivi'], z.object({ ids, companyId: id.optional() }), async (ctx, i) => sendOrders(ctx, i.ids, i.companyId ?? null)),
 
   /** Asks every courier with an API for the status of its parcels on the road and updates them. */
-  'delivery.sync': proc(['suivi', 'depot'], z.object({ companyId: id.optional(), fast: z.boolean().optional() }), async (ctx, i) => {
+  'delivery.sync': proc(['suivi', 'depot'], z.object({ companyId: id.optional(), fast: z.boolean().optional(), oldNotes: z.boolean().optional() }), async (ctx, i) => {
     // fast (every 5 minutes): the companies that tell Pilotix themselves (webhook on) are left to their webhook and
     // checked only in the full sync (every 30 minutes), in case a call was lost
     const list = (await companies(ctx.db)).filter(
@@ -1183,6 +1271,10 @@ export const deliveryProcs = {
     };
     await step('Demandes de modification', () => import('./parcels').then((m) => m.syncChanges(ctx)), null);
     await step('Sacs d’enlèvement', () => import('./pickup').then((m) => m.syncBags(ctx, i.companyId)), null);
+    // the server's sync only (never an agent's « Actualiser »): the old « Statut ZR » lines get ZR's words, a few each time
+    const oldNotes = i.oldNotes && !i.companyId && ctx.session.isAdmin
+      ? await step('Anciens statuts', async () => fillOldCourierNotes(ctx, (await companies(ctx.db)).filter((c) => c.active && KINDS[c.kind]?.api && c.hasKeys)), null)
+      : null;
     // the companies' payments (ZR): demande de paiement when money is ready, payments imported into the caisse
     // Suivi › Bloqués: a parcel still without news 2 days after it was « bloqué »: a claim to its company by itself
     if (!i.fast && !i.companyId && ctx.session.isAdmin) await step('Bloqués : réclamations', () => import('./suivi').then((m) => m.stuckAutoClaims(ctx)), null);
@@ -1194,6 +1286,7 @@ export const deliveryProcs = {
       failed: out.reduce((s, x) => s + (x.failed ?? 0), 0),
       payments,
       steps,
+      ...(oldNotes ? { oldNotes } : {}),
     };
   }),
 

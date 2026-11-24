@@ -280,6 +280,15 @@ export interface ParcelInfo {
   sms: { at: string; phone: string | null; message: string | null; status: string | null }[];
 }
 
+/** One status the courier gave a parcel, when (ISO, its own clock), with the situations added under it (ZR: « Client
+ *  injoignable »…). `status` is in its words, `key` its machine name when it has one. */
+export interface CourierStep {
+  at: string;
+  key: string | null;
+  status: string;
+  situations: { name: string; at: string | null }[];
+}
+
 /** A modification request for a parcel already sent (validated by the courier); a phone change is applied at once. */
 export interface ChangeInput {
   item: TrackItem;
@@ -347,6 +356,8 @@ export interface CourierAdapter {
   bags?: CourierBags;
   /** One parcel as the courier sees it: journey, SMS, livreur, return risk, what can still be changed. */
   parcel?(c: CourierCompany, item: TrackItem): Promise<ParcelInfo>;
+  /** The parcel's past statuses with their times, oldest first (to write the courier's own words in old history lines). */
+  steps?(c: CourierCompany, item: TrackItem): Promise<CourierStep[]>;
   /** Modification requests (price, home / stop desk, address, phone) and their answers. */
   change?(c: CourierCompany, i: ChangeInput, h: Helpers, p: Parcel | null): Promise<{ extId: string; approved: boolean | null; direct?: boolean }>;
   changeStates?(c: CourierCompany, extIds: string[]): Promise<ChangeState[]>;

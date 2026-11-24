@@ -98,10 +98,13 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     const tag = `[${ref.shop.slug}]`;
     if (name === 'courier-sync') {
       // every 5 minutes; the run at the top / half of the hour is the full one (webhook companies too)
-      const r: any = await call('delivery.sync', { fast: new Date().getMinutes() % 30 >= 5 });
+      // oldNotes: the history lines that said only « Statut ZR » get ZR's own words of that moment, a few at each run
+      const r: any = await call('delivery.sync', { fast: new Date().getMinutes() % 30 >= 5, oldNotes: true });
       // parcels the courier could not answer for, failed steps: in the server log, not lost
       const bad = [...(r?.companies ?? []).flatMap((c: any) => [...(c.error ? [`${c.company}: ${c.error}`] : []), ...(c.errors ?? []).map((e: any) => `${e.ref}: ${e.error}`)]), ...(r?.steps ?? []).map((s: any) => `${s.step}: ${s.error}`)];
       if (bad.length) new Logger('Courier sync').warn(`${tag} ${bad.length} problem(s): ${bad.slice(0, 20).join(' | ')}`);
+      const on = r?.oldNotes;
+      if (on?.filled || on?.notFound) new Logger('Courier sync').log(`${tag} old « Statut » history lines: ${on.filled} given the courier's words, ${on.notFound} not found at the courier`);
       return r;
     }
     // the last 3 days (Algeria time): yesterday's results are final only the next day

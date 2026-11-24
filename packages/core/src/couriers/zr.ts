@@ -13,7 +13,7 @@
 // BEST GUESS (check with real keys): the "state.name" values in STATUSES below come from ZR's dashboard wording;
 // unknown ones are shown as-is and can be mapped by hand with the "Statuts" button.
 import { cacheKeyOf } from './types';
-import type { BagAdded, BagInfo, ChangeInput, ChangeState, ClaimCategory, ClaimState, CourierAdapter, CourierBags, CourierCompany, Desk, FeeRow, Helpers, Parcel, ParcelInfo, TrackItem } from './types';
+import type { BagAdded, BagInfo, ChangeInput, ChangeState, ClaimCategory, ClaimState, CourierAdapter, CourierBags, CourierCompany, CourierStep, Desk, FeeRow, Helpers, Parcel, ParcelInfo, TrackItem } from './types';
 import { ASK_AGAIN_MS, baseUrl, bestMatch, CourierError, cut, http, intl, LIST_KEPT_MS, listClock, needKeys, sleep, timeUp } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
@@ -407,6 +407,33 @@ const bags: CourierBags = {
 };
 
 // ---------------------------------------------------------------- one parcel as ZR sees it
+/** Its past states, oldest first (GET /parcels/{id}/state-history): the words of each, as `track` writes them (the
+ *  state's description, its situations by name), so an old history line gets the same words a new one would. */
+async function parcelSteps(c: CourierCompany, it: TrackItem): Promise<CourierStep[]> {
+  needKeys(c, 'api_key', 'tenant');
+  const pid = encodeURIComponent(await parcelUuid(c, it));
+  const r = await http(c.name, url(c, `/parcels/${pid}/state-history`), { headers: h(c) });
+  return listOf(r)
+    .map((x): CourierStep => ({
+      at: zrIso(x.createdAt) ?? '',
+      key: x.newState && (x.newState.name || x.newState.code) ? String(x.newState.name || x.newState.code) : null,
+      status: String(x.newState?.description || x.newState?.name || x.newState?.code || ''),
+      situations: ((x.situations ?? []) as any[])
+        .map((s) => ({ name: String(s.situationName || s.situationDescription || ''), at: zrIso(s.createdAt) }))
+        .filter((s) => s.name)
+        .sort((a, b) => (a.at ?? '').localeCompare(b.at ?? '')),
+    }))
+    .filter((x) => x.at && x.status)
+    .sort((a, b) => a.at.localeCompare(b.at));
+}
+/** A ZR date as a full ISO time (UTC); one written without its time zone is taken as UTC, ZR's clock. Null: no date. */
+export function zrIso(v: unknown): string | null {
+  const s = v == null ? '' : String(v).trim();
+  if (!s) return null;
+  const t = Date.parse(/(Z|[+-]\d\d:?\d\d)$/i.test(s) || !/T\d/.test(s) ? s : `${s}Z`);
+  return Number.isFinite(t) ? new Date(t).toISOString() : null;
+}
+
 async function parcelInfo(c: CourierCompany, it: TrackItem): Promise<ParcelInfo> {
   needKeys(c, 'api_key', 'tenant');
   const p = await http(c.name, url(c, `/parcels/${encodeURIComponent(it.extId || it.tracking)}`), { headers: h(c) });
@@ -665,6 +692,7 @@ export const zr: CourierAdapter = {
   bags,
   webhook,
   parcel: parcelInfo,
+  steps: parcelSteps,
   change: changeRequest,
   changeStates,
   changeCancel,
