@@ -13,12 +13,19 @@
 //    turned into dinars with the rate of its month (fx_rates), or the latest earlier rate when the month has none; a
 //    dinar account's day counts in dinars as it is, and in dollars with that same rate. Any other currency is taken as
 //    dollars (Pilot AI › Comptes › « Tester » says so).
+//  - The ads count confirmed orders only (the owner's rule, 24 Nov 2026: « in ads we count the confirmed only »). Every
+//    order count the pages show (Confirmées, coût par confirmée, livrées sur confirmées, par jour, par mois) is the orders
+//    the team confirmed (confirmed, or confirmed waiting for stock), on the day the order came in, like Meta's Purchase.
+//    The leads (every order received) only make the ratio « Qualité des leads » (Pilot Checks Q2: confirmed ÷ real
+//    leads). `n` (received) stays for the rules that still read it (productAdvice, the ad sets' target).
 import { z } from 'zod';
 import { Db, isoOrNull, num } from '../db';
 import { bad, Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, setRaw } from './admin';
+import { leadOf } from './leadkind';
 import { knownKg, ruleFee, weightRuleOf, type WeightRule } from './courierfees';
+import { checkRules } from './pilotchecks';
 
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const Ym = z.string().regex(/^\d{4}-\d{2}$/);
@@ -230,6 +237,9 @@ const MONEY_COLS = `o.id, o.created_at, o.conf_status, o.follow_status, o.total,
             -- a return priced by the price list: the weight declared, for the company's « Surpoids » on the return
             CASE WHEN o.follow_status IN ('returned', 'lost') AND o.courier_fees->>'ret' IS NULL AND o.livreur_id IS NULL
                  THEN (SELECT COALESCE(sum(p.weight_kg * i.qty), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id) END AS ret_kg,
+            -- a cancel's last note: an attack (no answer after N calls, « n'a pas commandé ») or a real client's no
+            CASE WHEN o.conf_status = 'cancelled'
+                 THEN (SELECT e.note FROM order_events e WHERE e.order_id = o.id AND e.kind = 'conf_status' ORDER BY e.at DESC, e.id DESC LIMIT 1) END AS conf_note,
             o.courier_fees AS cf`;
 
 /** Orders by their first product, for some products, created in [from, to] (Algiers days). */
@@ -268,7 +278,12 @@ async function withReturnWeight(db: Db, rows: any[]) {
 
 // ---------------------------------------------------------------- money
 export interface Money {
-  n: number; // orders received
+  n: number; // orders received (leads): only the rules still read it, the pages count `c`
+  c: number; // confirmed (confirmed, or confirmed waiting for stock): what the ads count
+  /** cancelled by a real client: « Qualité des leads » = c ÷ (c + ref) */
+  ref: number;
+  /** attacks (fake, wrong number, no answer after N calls, « n'a pas commandé »): never a real lead, never the team */
+  att: number;
   d: number; // delivered
   r: number; // returned
   enRoute: number; // still on the road (not counted yet)
@@ -284,12 +299,20 @@ export interface Money {
   net: number;
 }
 
+/** An order the team confirmed (confirmed, or confirmed waiting for stock): what the ads count. A row of MONEY_COLS. */
+export const confirmedOrder = (o: { conf_status: unknown; conf_note?: string | null }) => leadOf(String(o.conf_status), o.conf_note ?? null) === 'confirmed';
+
 /** Profit of a set of orders, line by line (the original "Bénéfice réel · ligne par ligne"). share = fraction counted (marketer share). */
 export async function moneyOf(db: Db, orders: any[], pubDzd: number, share = 1): Promise<Money> {
   const plans = await getSetting(db, 'payPlans');
-  let n = 0, d = 0, r = 0, x = 0, enRoute = 0, qty = 0, rev = 0, achat = 0, liv = 0, conf = 0, ret = 0;
+  let n = 0, c = 0, ref = 0, att = 0, d = 0, r = 0, x = 0, enRoute = 0, qty = 0, rev = 0, achat = 0, liv = 0, conf = 0, ret = 0;
   for (const o of orders) {
     n++;
+    // what became of the lead (Confirmation › Statistiques' own rule): confirmed, refused by a real client, an attack
+    const lead = leadOf(String(o.conf_status), o.conf_note ?? null);
+    if (lead === 'confirmed') c++;
+    else if (lead === 'refused') ref++;
+    else if (lead === 'attack') att++;
     const fs = o.follow_status as string | null;
     if (fs === 'delivered' || fs === 'exchanged') {
       d++;
@@ -306,7 +329,7 @@ export async function moneyOf(db: Db, orders: any[], pubDzd: number, share = 1):
     } else if (fs && ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange', 'returning'].includes(fs)) enRoute++;
   }
   const k = (v: number) => Math.round(v * share);
-  const m = { n: k(n), d: k(d), r: k(r), x: k(x), enRoute: k(enRoute), qty: k(qty), rev: k(rev), achat: k(achat), liv: k(liv), conf: k(conf), ret: k(ret) };
+  const m = { n: k(n), c: k(c), ref: k(ref), att: k(att), d: k(d), r: k(r), x: k(x), enRoute: k(enRoute), qty: k(qty), rev: k(rev), achat: k(achat), liv: k(liv), conf: k(conf), ret: k(ret) };
   const avant = m.rev - m.achat - m.liv - m.conf - m.ret;
   const pub = Math.round(pubDzd);
   return { ...m, avant, pub, net: avant - pub };
@@ -510,8 +533,8 @@ async function overview(ctx: Ctx, i: z.infer<typeof Period>) {
     spendDzd: number;
     money: Money;
     advice: ReturnType<typeof productAdvice>;
-    /** what sold through the group's page, product by product (orders received, delivered) */
-    sold: { productId: number; name: string; n: number; d: number }[];
+    /** what sold through the group's page, product by product (orders received, confirmed, delivered) */
+    sold: { productId: number; name: string; n: number; c: number; d: number }[];
   }[] = [];
   const groupOrders = new Map<number, any[]>();
   const groupShare = new Map<number, number>();
@@ -542,10 +565,11 @@ async function overview(ctx: Ctx, i: z.infer<typeof Period>) {
       groupShare.set(g, share);
       const gl = groupOrders.get(g) ?? [];
       const m = await moneyOf(ctx.db, gl, mine.dzd, share);
-      const by = new Map<number, { n: number; d: number }>();
+      const by = new Map<number, { n: number; c: number; d: number }>();
       for (const o of gl) {
-        const x = by.get(num(o.product_id)) ?? { n: 0, d: 0 };
+        const x = by.get(num(o.product_id)) ?? { n: 0, c: 0, d: 0 };
         x.n++;
+        if (confirmedOrder(o)) x.c++;
         if (o.follow_status === 'delivered' || o.follow_status === 'exchanged') x.d++;
         by.set(num(o.product_id), x);
       }
@@ -561,9 +585,9 @@ async function overview(ctx: Ctx, i: z.infer<typeof Period>) {
         // no one price for a group: never « raise the price »
         advice: productAdvice(m, null),
         sold: [...by.entries()]
-          .map(([pid, x]) => ({ productId: pid, name: P.get(pid)?.name ?? `#${pid}`, n: Math.round(x.n * share), d: Math.round(x.d * share) }))
+          .map(([pid, x]) => ({ productId: pid, name: P.get(pid)?.name ?? `#${pid}`, n: Math.round(x.n * share), c: Math.round(x.c * share), d: Math.round(x.d * share) }))
           .filter((x) => x.n > 0)
-          .sort((a, b) => b.n - a.n),
+          .sort((a, b) => b.c - a.c || b.n - a.n),
       });
     }
     groupRows.sort((a, b) => b.spendUsd - a.spendUsd);
@@ -584,9 +608,9 @@ async function overview(ctx: Ctx, i: z.infer<typeof Period>) {
   const money: Money = [...tot, ...groupRows].reduce(
     (s, p) => {
       const m = p.money;
-      return { n: s.n + m.n, d: s.d + m.d, r: s.r + m.r, x: (s.x ?? 0) + (m.x ?? 0), enRoute: s.enRoute + m.enRoute, qty: s.qty + m.qty, rev: s.rev + m.rev, achat: s.achat + m.achat, liv: s.liv + m.liv, conf: s.conf + m.conf, ret: s.ret + m.ret, avant: s.avant + m.avant, pub: s.pub + m.pub, net: s.net + m.net };
+      return { n: s.n + m.n, c: s.c + m.c, ref: s.ref + m.ref, att: s.att + m.att, d: s.d + m.d, r: s.r + m.r, x: (s.x ?? 0) + (m.x ?? 0), enRoute: s.enRoute + m.enRoute, qty: s.qty + m.qty, rev: s.rev + m.rev, achat: s.achat + m.achat, liv: s.liv + m.liv, conf: s.conf + m.conf, ret: s.ret + m.ret, avant: s.avant + m.avant, pub: s.pub + m.pub, net: s.net + m.net };
     },
-    { n: 0, d: 0, r: 0, x: 0, enRoute: 0, qty: 0, rev: 0, achat: 0, liv: 0, conf: 0, ret: 0, avant: 0, pub: 0, net: 0 },
+    { n: 0, c: 0, ref: 0, att: 0, d: 0, r: 0, x: 0, enRoute: 0, qty: 0, rev: 0, achat: 0, liv: 0, conf: 0, ret: 0, avant: 0, pub: 0, net: 0 },
   );
   // spend of unlinked ad sets still counts as ads spend for the shop total (a group's ad sets are the group's)
   const unlinked = inPeriod.filter((r) => {
@@ -630,23 +654,27 @@ async function overview(ctx: Ctx, i: z.infer<typeof Period>) {
     .sort((a, b) => b.spendUsd - a.spendUsd);
 
   // day by day
-  const days: { day: string; spendUsd: number; spendDzd: number | null; impressions: number; clicks: number; purchases: number; orders: number }[] = [];
+  // (confirmed: the orders that came in that day and that the team confirmed, as Meta's Purchase counts them)
+  const days: { day: string; spendUsd: number; spendDzd: number | null; impressions: number; clicks: number; purchases: number; confirmed: number }[] = [];
   const shownSets = new Set(adsetRows.map((s) => s.id));
   for (let d = i.from; d <= i.to; d = addDays(d, 1)) {
     const rs = inPeriod.filter((r) => r.day === d && shownSets.has(r.adsetId));
     const t = sumDays(rs);
     const dz = rs.reduce((x, r) => x + (dzd(r) ?? 0), 0);
-    const onDay = (x: any) => new Date(new Date(x.created_at).getTime() + 3_600_000).toISOString().slice(0, 10) === d;
+    const onDay = (x: any) => confirmedOrder(x) && new Date(new Date(x.created_at).getTime() + 3_600_000).toISOString().slice(0, 10) === d;
     const o = orders.filter((x: any) => (!i.productId || num(x.product_id) === i.productId) && onDay(x));
     // the groups' orders that day (only on the whole page: myGroups is empty for one product)
     const go = [...groupOrders.entries()].reduce((s, [g, gl]) => s + gl.filter(onDay).length * (groupShare.get(g) ?? 0), 0);
     const sh = (o.length ? o.reduce((s: number, x: any) => s + shareOf(num(x.product_id)), 0) : 0) + go;
-    days.push({ day: d, spendUsd: t.spend, spendDzd: fxMissing ? null : Math.round(dz), impressions: t.imp, clicks: t.clicks, purchases: t.pur, orders: Math.round(sh) });
+    days.push({ day: d, spendUsd: t.spend, spendDzd: fxMissing ? null : Math.round(dz), impressions: t.imp, clicks: t.clicks, purchases: t.pur, confirmed: Math.round(sh) });
     if (days.length > 400) break;
   }
 
   const lastSync = await getRaw<{ at: string } | null>(ctx.db, SYNC_KEY, null);
   const meta = await getSetting(ctx.db, 'meta');
+  // « Qualité des leads » (confirmed ÷ real leads) is judged with Pilot Checks Q2, the owner's own limits; the ads keep
+  // its wait (so many real leads before judging)
+  const q2 = (await checkRules(ctx.db)).find((r) => r.id === 'Q2');
   return {
     from: i.from,
     to: i.to,
@@ -657,6 +685,7 @@ async function overview(ctx: Ctx, i: z.infer<typeof Period>) {
     syncWarning,
     fx: { rate: fx(i.to.slice(0, 7)), month: i.to.slice(0, 7), missing: fxMissing },
     totals: { spendUsd: totalUsd, ...money, unlinkedDzd, toScale: productRows.filter((p) => p.advice.k === 'scale').length },
+    leadsLimits: { good: q2?.g ?? 65, alert: q2?.v ?? 60, stop: q2?.s ?? 55, wait: q2?.wait ?? 30 },
     products: productRows,
     /** Lancer une pub › a group: one card per group (its spend and its page's orders are not in `products`) */
     groups: groupRows,
@@ -692,7 +721,8 @@ async function months(ctx: Ctx, to: string, marketerId: number | null) {
 const monthRow = (o: Awaited<ReturnType<typeof overview>>) => {
   const t = o.totals;
   const pur = o.adsets.reduce((s, a) => s + a.purchases, 0);
-  return { spendUsd: t.spendUsd, spendDzd: t.pub, metaCpa: div(t.spendUsd, pur), orders: t.n, delivered: t.d, rate: div(t.d, t.n), cpo: div(t.pub, t.n), cpd: div(t.pub, t.d), profit: t.net, fx: o.fx.rate };
+  // confirmed orders only (24 Nov 2026); a month closed before that keeps its old figures and shows « — » there
+  return { spendUsd: t.spendUsd, spendDzd: t.pub, metaCpa: div(t.spendUsd, pur), confirmed: t.c, delivered: t.d, rateC: div(t.d, t.c), cpc: div(t.pub, t.c), cpd: div(t.pub, t.d), profit: t.net, fx: o.fx.rate };
 };
 
 // ---------------------------------------------------------------- procedures

@@ -82,7 +82,7 @@
     "loose": "{{n}} ad(s) have no product yet: link them in the Pro view.",
     "spent": "Spent",
     "delivered": "Delivered",
-    "ofOrders": "of {{n}} orders",
+    "ofConfirmed": "of {{n}} confirmed",
     "costPer": "Cost / delivered",
     "limit": "limit {{v}}",
     "noLimit": "no limit yet",
@@ -92,7 +92,7 @@
     "group_one": "Group · {{count}} product",
     "group_other": "Group · {{count}} products",
     "sold": "Sold through the group page",
-    "soldN": "{{n}} orders · {{d}} delivered",
+    "soldN": "{{n}} confirmed · {{d}} delivered",
     "soldNone": "No order through its page yet."
   },
   "say": {
@@ -153,16 +153,16 @@
   "where": {
     "title": "Where the ads’ orders come from",
     "period": "Period",
-    "empty": "No order linked to an ad in this period.",
+    "empty": "No confirmed order linked to an ad in this period.",
     "wilaya": "Wilaya",
-    "orders": "Orders",
+    "confirmed": "Confirmed",
     "delivered": "Delivered",
     "rate": "Delivered %",
-    "hours": "Time of the orders",
-    "hoursLabel": "Orders by hour of the day",
+    "hours": "Time of the confirmed orders",
+    "hoursLabel": "Confirmed orders by the hour they came in",
     "goals": "By goal",
-    "goalOrders": "{{n}} orders · {{d}} delivered",
-    "note": "Only the orders that keep their ad’s id (sales page, Dellal, form) are counted here."
+    "goalOrders": "{{n}} confirmed · {{d}} delivered",
+    "note": "Only the confirmed orders that keep their ad’s id (sales page, Dellal, form) are counted here."
   },
   "launch": {
     "title": "Launch an ad",

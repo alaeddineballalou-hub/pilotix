@@ -11,6 +11,7 @@ import { HAS_GUIDE } from './guide';
 import { assignedProductIds } from './productscope';
 import { readMontage } from './montage';
 import { rotateTimes } from './assign';
+import { attackOf, type Lead, leadOf } from './leadkind';
 import { reasonCode } from './pilotlearn';
 import { checkRules } from './pilotchecks';
 import { blackNumbers, shareBlacklist } from './sharedblacklist';
@@ -619,9 +620,6 @@ async function confirmedKpis(ctx: Ctx, i: KfInput) {
 }
 
 // ---------------------------------------------------------------- Confirmation › Statistiques (one page)
-/** written by setConf (orders.ts) when the shop cancels after N calls with no answer: the same French words everywhere */
-const AUTO_NO_ANSWER = /Annulée automatiquement après \d+ appels sans réponse/;
-const CONFIRMED_LIKE = ['confirmed', 'no_stock'];
 /** pilotlearn's reason codes → the cancel reasons agents pick (CANCEL_REASONS); none → 'none' (no reason written) */
 const REASON_OF: Record<string, string> = { price: 'price', fee: 'fee', elsewhere: 'elsewhere', not_ordered: 'not_ordered', slow: 'too_long', mind: 'changed_mind' };
 export function cancelReason(note: string | null | undefined): string {
@@ -630,27 +628,8 @@ export function cancelReason(note: string | null | undefined): string {
   const code = reasonCode(note);
   return code === null ? 'none' : REASON_OF[code] ?? 'other';
 }
-type Lead = 'pending' | 'confirmed' | 'refused' | 'attack' | 'duplicate';
-/**
- * The kind of attack, or null. An attack is never the team's fault: a fake (also a cancel where the client says he never
- * ordered, or a competitor), a wrong number, or an order cancelled after N calls with no answer.
- */
-export function attackOf(status: string, note: string | null | undefined): 'fake' | 'wrong' | 'noAnswer' | null {
-  if (status === 'fake') return 'fake';
-  if (status === 'wrong_number') return 'wrong';
-  if (status !== 'cancelled') return null;
-  if (AUTO_NO_ANSWER.test(note ?? '')) return 'noAnswer';
-  const code = reasonCode(note);
-  return code === 'not_ordered' || code === 'competitor' ? 'fake' : null;
-}
-/** What became of a lead. */
-export function leadOf(status: string, note: string | null | undefined): Lead {
-  if (CONFIRMED_LIKE.includes(status)) return 'confirmed';
-  if (status === 'duplicate') return 'duplicate';
-  if (attackOf(status, note)) return 'attack';
-  if (status === 'cancelled') return 'refused';
-  return 'pending';
-}
+// what became of a lead (confirmed, refused, an attack…): leadkind.ts, shared with Publicité's « Qualité des leads »
+export { attackOf, leadOf };
 
 /**
  * Confirmation › Statistiques: everything about the leads of the period on one page.

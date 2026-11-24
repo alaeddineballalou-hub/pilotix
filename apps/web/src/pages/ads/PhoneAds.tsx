@@ -261,8 +261,13 @@ function Dash({ d, prev, label, onProd, onAdset, product }: { d: Ov; prev: Ov | 
   const imp = d.adsets.reduce((s, a) => s + a.impressions, 0);
   const clicks = d.adsets.reduce((s, a) => s + (a.ctr ?? 0) * a.impressions, 0);
   const days = Math.max(1, daysIn(d));
-  const cancelled = (m as { x?: number }).x ?? 0;
   const rate = div(m.d, m.d + m.r);
+  // « in ads we count the confirmed only » (24 Nov 2026): the leads only make Qualité des leads (confirmed ÷ real
+  // leads), judged with Pilot Checks Q2's limits once there are enough real leads
+  const L = d.leadsLimits;
+  const real = m.c + m.ref;
+  const lq = div(m.c, real);
+  const lqV = lq === null ? null : real < L.wait ? 'wait' : lq * 100 >= L.good ? 'bon' : lq * 100 >= L.alert ? 'moyen' : lq * 100 >= L.stop ? 'mauvais' : 'stop';
   return (
     <>
       {/* the verdict */}
@@ -318,19 +323,19 @@ function Dash({ d, prev, label, onProd, onAdset, product }: { d: Ov; prev: Ov | 
         <Icon name="package" /> {t('mkph.g.orders')}
       </div>
       <div className="pxm-kg">
-        <K l={t('mkph.k.received')} v={n(m.n)} s={t('mkph.k.perDay', { v: (m.n / days).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) })} />
+        <K l={t('mkph.k.confirmed')} v={n(m.c)} s={t('mkph.k.perDay', { v: (m.c / days).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) })} />
         <K l={t('mkph.k.delivered')} v={n(m.d)} s={t('mkph.k.pieces', { n: m.qty })} />
         <K l={t('mkph.k.rate')} v={pct(rate)} s={t('mkph.k.rateSub')} tone={rate === null ? '' : rate >= 0.6 ? 'g' : rate >= 0.45 ? 'o' : 'r'} />
         <K l={t('mkph.k.road')} v={n(m.enRoute)} s={t('mkph.k.roadSub')} />
-        <K l={t('mkph.k.returned')} v={n(m.r)} s={fxOk && m.ret ? `−${dz(m.ret)} DA` : pct(div(m.r, m.n))} tone={m.r ? 'r' : ''} />
-        <K l={t('mkph.k.cancelled')} v={n(cancelled)} s={pct(div(cancelled, m.n))} />
+        <K l={t('mkph.k.returned')} v={n(m.r)} s={fxOk && m.ret ? `−${dz(m.ret)} DA` : pct(div(m.r, m.c))} tone={m.r ? 'r' : ''} />
+        <K l={t('mkph.k.leadsQ')} v={pct(lq)} s={lqV ? t(`mkph.lq.${lqV}`) : ''} tone={lqV === 'bon' ? 'g' : lqV === 'moyen' ? 'o' : lqV === 'mauvais' || lqV === 'stop' ? 'r' : ''} />
       </div>
       <div className="pxm-lbl">
         <Icon name="coins" /> {t('mkph.g.money')}
       </div>
       <div className="pxm-kg">
         <K l={t('mkph.k.spend')} v={usd(m.spendUsd, 0)} s={fxOk ? `${dz(m.pub)} DA` : t('ads.kpi.noFx')} />
-        <K l={t('mkph.k.cpo')} v={fxOk ? dz(div(m.pub, m.n)) : '—'} s="DA" />
+        <K l={t('mkph.k.cpc')} v={fxOk ? dz(div(m.pub, m.c)) : '—'} s="DA" />
         <K l={t('mkph.k.cpd')} v={fxOk ? dz(cpd) : '—'} s={maxCpd !== null && fxOk ? t('mkph.k.cpdMax', { v: dz(maxCpd) }) : 'DA'} tone={cpd !== null && maxCpd !== null && fxOk ? (cpd > maxCpd ? 'r' : cpd > maxCpd * 0.7 ? 'o' : 'g') : ''} hl={cpd !== null && maxCpd !== null && fxOk && cpd > maxCpd} />
         <K l={t('mkph.k.before')} v={fxOk ? dz(m.avant) : '—'} s={m.d ? t('mkph.k.perDel', { v: dz(m.avant / m.d) }) : ''} tone={m.avant >= 0 ? 'g' : 'r'} />
         <K l={t('mkph.k.roas')} v={m.pub ? (m.rev / m.pub).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) : '—'} s={t('mkph.k.roasSub')} />
@@ -340,7 +345,7 @@ function Dash({ d, prev, label, onProd, onAdset, product }: { d: Ov; prev: Ov | 
         <Icon name="megaphone" /> {t('mkph.g.meta')}
       </div>
       <div className="pxm-kg">
-        <K l={t('mkph.k.purchases')} v={n(pur)} s={t('mkph.k.vsReal', { n: m.n })} />
+        <K l={t('mkph.k.purchases')} v={n(pur)} s={t('mkph.k.vsConfirmed', { n: m.c })} />
         <K l={t('mkph.k.cpa')} v={usd(div(m.spendUsd, pur))} s={fxOk && pur ? `${dz(m.pub / pur)} DA` : ''} />
         <K l={t('mkph.k.ctr')} v={pct(div(clicks, imp), 1)} s={t('mkph.k.ctrSub')} />
         <K l={t('mkph.k.cpm')} v={usd(imp ? (m.spendUsd / imp) * 1000 : null)} s={t('mkph.k.cpmSub')} />
@@ -457,8 +462,8 @@ function DaysChart({ d }: { d: Ov }) {
   const days = d.days.slice(-31);
   if (days.length < 2) return null;
   const maxS = Math.max(1, ...days.map((x) => x.spendUsd));
-  const maxO = Math.max(1, ...days.map((x) => x.orders));
-  const best = [...days].sort((a, b) => b.orders - a.orders)[0];
+  const maxO = Math.max(1, ...days.map((x) => x.confirmed));
+  const best = [...days].sort((a, b) => b.confirmed - a.confirmed)[0];
   return (
     <section className="pxs-sec">
       <h4>{t('mkph.days')}</h4>
@@ -467,15 +472,15 @@ function DaysChart({ d }: { d: Ov }) {
           <i className="s" /> {t('mkph.spend')}
         </span>
         <span>
-          <i className="o" /> {t('mkph.orders')}
+          <i className="o" /> {t('mkph.confirmed')}
         </span>
-        <span className="sp">{t('mkph.bestDay', { d: best.day.slice(8) + '/' + best.day.slice(5, 7), n: best.orders })}</span>
+        <span className="sp">{t('mkph.bestDay', { d: best.day.slice(8) + '/' + best.day.slice(5, 7), n: best.confirmed })}</span>
       </div>
       <div className="pxm-chart" aria-label={t('mkph.days')}>
         {days.map((x) => (
-          <span key={x.day} title={`${x.day} · ${usd(x.spendUsd)} · ${x.orders}`}>
+          <span key={x.day} title={`${x.day} · ${usd(x.spendUsd)} · ${x.confirmed}`}>
             <i className="s" style={{ height: `${(x.spendUsd / maxS) * 100}%` }} />
-            <i className="o" style={{ height: `${(x.orders / maxO) * 100}%` }} />
+            <i className="o" style={{ height: `${(x.confirmed / maxO) * 100}%` }} />
           </span>
         ))}
       </div>
@@ -556,7 +561,7 @@ function ProdCard({ p, onOpen }: { p: Prod; onOpen: () => void }) {
         <span>
           <small>{t('mkph.k.delivered')}</small>
           <b className="ltr">
-            {n(p.money.d)} / {n(p.money.n)}
+            {n(p.money.d)} / {n(p.money.c)}
           </b>
         </span>
         <span>

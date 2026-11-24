@@ -223,7 +223,7 @@ test('ads: an ad account Meta does not let Pilotix read this time keeps its save
 });
 
 test('ads rules: advice and diagnostics', () => {
-  const m = (n: number, d: number, avant: number, pub: number) => ({ n, d, r: 0, enRoute: 0, qty: d, rev: 0, achat: 0, liv: 0, conf: 0, ret: 0, avant, pub, net: avant - pub });
+  const m = (n: number, d: number, avant: number, pub: number) => ({ n, c: n, ref: 0, att: 0, d, r: 0, enRoute: 0, qty: d, rev: 0, achat: 0, liv: 0, conf: 0, ret: 0, avant, pub, net: avant - pub });
   assert.equal(productAdvice(m(10, 3, 10000, 1000), 3000).k, 'wait');
   assert.equal(productAdvice(m(40, 20, -500, 1000), 3000).k, 'loss');
   assert.equal(productAdvice(m(40, 20, 40000, 20000), 3000).k, 'scale');

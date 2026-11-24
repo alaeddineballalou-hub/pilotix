@@ -10,7 +10,7 @@ import { bad, Ctx, forbidden, notFound, proc, withActionLock } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, META_TOKEN_KEY, setRaw } from './admin';
 import { listPhones, listSwitches } from './landinglists';
-import { addDays, adsetDiagnostic, dayStart, fxTable, insights, isOwner, moneyOf, ordersOf, productAdvice, sumDays, syncMeta, visibleAdsets } from './ads';
+import { addDays, adsetDiagnostic, confirmedOrder, dayStart, fxTable, insights, isOwner, moneyOf, ordersOf, productAdvice, sumDays, syncMeta, visibleAdsets } from './ads';
 import {
   AUDIENCE_DEFAULT_ON,
   AUDIENCE_KINDS,
@@ -587,25 +587,27 @@ async function where(ctx: Ctx, from: string, to: string) {
        AND COALESCE(o.utm->>'adset_id', o.adset_id, (SELECT a.adset_id FROM ads a WHERE a.id = o.utm->>'ad_id')) = ANY($1)`,
     [ids, dayStart(from), dayStart(addDays(to, 1))],
   );
-  const no = (o: any) => ['cancelled', 'fake', 'wrong_number'].includes(o.conf_status) || o.follow_status === 'cancelled';
+  // the ads count confirmed orders only (24 Nov 2026): « confirmed » is what the page shows, `orders` (received) stays
   const del = (o: any) => o.follow_status === 'delivered' || o.follow_status === 'exchanged';
   const ret = (o: any) => o.follow_status === 'returned' || o.follow_status === 'lost';
   const W = new Map<number, { orders: number; confirmed: number; delivered: number; returned: number }>();
   const H = Array.from({ length: 24 }, () => ({ orders: 0, confirmed: 0 }));
-  const G = new Map<string, { orders: number; delivered: number }>();
+  const G = new Map<string, { orders: number; confirmed: number; delivered: number }>();
   for (const o of orders) {
+    const ok = confirmedOrder(o);
     const w = num(o.wilaya_id);
     const x = W.get(w) ?? { orders: 0, confirmed: 0, delivered: 0, returned: 0 };
     x.orders++;
-    if (!no(o)) x.confirmed++;
+    if (ok) x.confirmed++;
     if (del(o)) x.delivered++;
     if (ret(o)) x.returned++;
     W.set(w, x);
     const h = new Date(new Date(o.created_at).getTime() + 3_600_000).getUTCHours();
     H[h].orders++;
-    if (!no(o)) H[h].confirmed++;
-    const g = G.get(String(o.goal)) ?? { orders: 0, delivered: 0 };
+    if (ok) H[h].confirmed++;
+    const g = G.get(String(o.goal)) ?? { orders: 0, confirmed: 0, delivered: 0 };
     g.orders++;
+    if (ok) g.confirmed++;
     if (del(o)) g.delivered++;
     G.set(String(o.goal), g);
   }
@@ -614,9 +616,9 @@ async function where(ctx: Ctx, from: string, to: string) {
   const goalOf = new Map((await ctx.db.query(`SELECT id, COALESCE(goal, 'sales') AS goal FROM adsets WHERE id = ANY($1)`, [ids])).map((r: any) => [String(r.id), String(r.goal)]));
   const spendGoal = new Map<string, number>();
   for (const d of days) spendGoal.set(goalOf.get(d.adsetId) ?? 'sales', (spendGoal.get(goalOf.get(d.adsetId) ?? 'sales') ?? 0) + d.spendCents / 100);
-  const goals = [...new Set([...G.keys(), ...spendGoal.keys()])].map((g) => ({ goal: g, spendUsd: Math.round((spendGoal.get(g) ?? 0) * 100) / 100, orders: G.get(g)?.orders ?? 0, delivered: G.get(g)?.delivered ?? 0 }));
+  const goals = [...new Set([...G.keys(), ...spendGoal.keys()])].map((g) => ({ goal: g, spendUsd: Math.round((spendGoal.get(g) ?? 0) * 100) / 100, orders: G.get(g)?.orders ?? 0, confirmed: G.get(g)?.confirmed ?? 0, delivered: G.get(g)?.delivered ?? 0 }));
   return {
-    wilayas: [...W.entries()].map(([wilayaId, x]) => ({ wilayaId, ...x, rate: x.delivered + x.returned ? Math.round((x.delivered / (x.delivered + x.returned)) * 100) : null })).sort((a, b) => b.orders - a.orders),
+    wilayas: [...W.entries()].map(([wilayaId, x]) => ({ wilayaId, ...x, rate: x.delivered + x.returned ? Math.round((x.delivered / (x.delivered + x.returned)) * 100) : null })).sort((a, b) => b.confirmed - a.confirmed || b.orders - a.orders),
     hours: H.map((x, h) => ({ h, ...x })),
     goals: goals.sort((a, b) => b.spendUsd - a.spendUsd),
   };

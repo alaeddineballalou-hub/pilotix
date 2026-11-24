@@ -245,10 +245,10 @@ export function Publicite(_: Partial<PageProps> = {}) {
                       <tr>
                         <th>{t('ads.colProduct')}</th>
                         <th className="num">{t('ads.colSpend')}</th>
-                        <th className="num">{t('ads.colOrders')}</th>
+                        <th className="num">{t('ads.colConfirmed')}</th>
                         <th className="num">{t('ads.colDelivered')}</th>
                         <th className="num">{t('ads.colRate')}</th>
-                        <th className="num">{t('ads.colCpo')}</th>
+                        <th className="num">{t('ads.colCpc')}</th>
                         <th className="num">{t('ads.colCpd')}</th>
                         <th className="num">{t('ads.colProfit')}</th>
                         <th>{t('ads.colAdvice')}</th>
@@ -261,17 +261,17 @@ export function Publicite(_: Partial<PageProps> = {}) {
                           <td className="num" data-l={t('ads.colSpend')}>
                             {usd(p.spendUsd)}
                           </td>
-                          <td className="num" data-l={t('ads.colOrders')}>
-                            {n(p.money.n)}
+                          <td className="num" data-l={t('ads.colConfirmed')}>
+                            {n(p.money.c)}
                           </td>
                           <td className="num" data-l={t('ads.colDelivered')}>
                             {n(p.money.d)}
                           </td>
                           <td className="num" data-l={t('ads.colRate')}>
-                            {pct(p.money.n ? p.money.d / p.money.n : null)}
+                            {pct(p.money.c ? p.money.d / p.money.c : null)}
                           </td>
-                          <td className="num" data-l={t('ads.colCpo')}>
-                            {fxOk ? dz(p.money.n ? p.money.pub / p.money.n : null) : '—'}
+                          <td className="num" data-l={t('ads.colCpc')}>
+                            {fxOk ? dz(p.money.c ? p.money.pub / p.money.c : null) : '—'}
                           </td>
                           <td className="num" data-l={t('ads.colCpd')}>
                             {fxOk ? dz(p.money.d ? p.money.pub / p.money.d : null) : '—'}
@@ -355,9 +355,9 @@ function Kpis({ d, fxOk }: { d: Overview; fxOk: boolean }) {
   return (
     <div className="kpis" aria-label={t('ads.title')}>
       <K l={t('ads.kpi.spend')} v={usd(m.spendUsd)} s={fxOk ? dz(m.pub) : noFx} />
-      <K l={t('ads.kpi.orders')} v={n(m.n)} s={m.enRoute ? t('ads.kpi.ordersSub', { n: m.enRoute }) : ''} />
-      <K l={t('ads.kpi.delivered')} v={n(m.d)} s={t('ads.kpi.deliveredSub', { rate: pct(m.n ? m.d / m.n : null) })} />
-      <K l={t('ads.kpi.cpo')} v={fxOk ? dz(m.n ? m.pub / m.n : null) : '—'} />
+      <K l={t('ads.kpi.confirmed')} v={n(m.c)} s={m.enRoute ? t('ads.kpi.ordersSub', { n: m.enRoute }) : ''} />
+      <K l={t('ads.kpi.delivered')} v={n(m.d)} s={t('ads.kpi.deliveredSub', { rate: pct(m.c ? m.d / m.c : null) })} />
+      <K l={t('ads.kpi.cpc')} v={fxOk ? dz(m.c ? m.pub / m.c : null) : '—'} />
       <K l={t('ads.kpi.cpd')} v={fxOk ? dz(m.d ? m.pub / m.d : null) : '—'} cls="warn" />
       <K l={t('ads.kpi.scale')} v={n(m.toScale)} s={t('ads.kpi.scaleSub')} />
       <K l={t('ads.kpi.net')} v={fxOk ? dz(m.net) : '—'} s={fxOk ? (m.d ? t('ads.kpi.netSub', { per: dz(m.net / m.d) }) : '') : noFx} cls={`net wide ${m.net < 0 ? 'loss' : ''}`} />
@@ -434,7 +434,7 @@ function ProfitLines({ d, owner }: { d: Overview; owner: boolean }) {
         </table>
       </div>
       <p className="note">
-        {t('ads.plFoot', { from: d.from, to: d.to, n: m.n, enRoute: m.enRoute })} {!owner && t('ads.plShare')}
+        {t('ads.plFoot', { from: d.from, to: d.to, n: m.c, enRoute: m.enRoute })} {!owner && t('ads.plShare')}
       </p>
     </section>
   );
@@ -564,8 +564,8 @@ function DaysCard({ d, lang }: { d: Overview; lang: string }) {
               <th className="num">{t('ads.colImp')}</th>
               <th className="num">{t('ads.colClicks')}</th>
               <th className="num">{t('ads.colPurchases')}</th>
-              <th className="num">{t('ads.colOrders')}</th>
-              <th className="num">{t('ads.colCpo')}</th>
+              <th className="num">{t('ads.colConfirmed')}</th>
+              <th className="num">{t('ads.colCpc')}</th>
             </tr>
           </thead>
           <tbody>
@@ -587,11 +587,11 @@ function DaysCard({ d, lang }: { d: Overview; lang: string }) {
                 <td className="num" data-l={t('ads.colPurchases')}>
                   {n(x.purchases)}
                 </td>
-                <td className="num" data-l={t('ads.colOrders')}>
-                  {n(x.orders)}
+                <td className="num" data-l={t('ads.colConfirmed')}>
+                  {n(x.confirmed)}
                 </td>
-                <td className="num" data-l={t('ads.colCpo')}>
-                  {x.spendDzd !== null && x.orders ? dz(x.spendDzd / x.orders) : '—'}
+                <td className="num" data-l={t('ads.colCpc')}>
+                  {x.spendDzd !== null && x.confirmed ? dz(x.spendDzd / x.confirmed) : '—'}
                 </td>
               </tr>
             ))}
@@ -628,10 +628,10 @@ function MonthsCard({ to, marketerId, owner, who, lang, onOpen }: { to: string; 
                 <th>{t('ads.colMonth')}</th>
                 <th className="num">{t('ads.colSpend')}</th>
                 <th className="num">{t('ads.colMetaCpa')}</th>
-                <th className="num">{t('ads.colOrders')}</th>
+                <th className="num">{t('ads.colConfirmed')}</th>
                 <th className="num">{t('ads.colDelivered')}</th>
                 <th className="num">{t('ads.colRate')}</th>
-                <th className="num">{t('ads.colCpo')}</th>
+                <th className="num">{t('ads.colCpc')}</th>
                 <th className="num">{t('ads.colCpd')}</th>
                 <th className="num">{t('ads.colProfit')}</th>
                 <th />
@@ -647,17 +647,18 @@ function MonthsCard({ to, marketerId, owner, who, lang, onOpen }: { to: string; 
                   <td className="num" data-l={t('ads.colMetaCpa')}>
                     {usd(m.metaCpa)}
                   </td>
-                  <td className="num" data-l={t('ads.colOrders')}>
-                    {n(m.orders)}
+                  {/* confirmed orders only; a month closed before 24 Nov 2026 has none saved: « — » */}
+                  <td className="num" data-l={t('ads.colConfirmed')}>
+                    {n(m.confirmed)}
                   </td>
                   <td className="num" data-l={t('ads.colDelivered')}>
                     {n(m.delivered)}
                   </td>
                   <td className="num" data-l={t('ads.colRate')}>
-                    {pct(m.rate)}
+                    {pct(m.rateC)}
                   </td>
-                  <td className="num" data-l={t('ads.colCpo')}>
-                    {dz(m.cpo)}
+                  <td className="num" data-l={t('ads.colCpc')}>
+                    {dz(m.cpc)}
                   </td>
                   <td className="num" data-l={t('ads.colCpd')}>
                     {dz(m.cpd)}

@@ -9,6 +9,8 @@ import { call, Ctx, Db } from '../index';
 import { AppError } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { getRaw, setRaw } from '../modules/admin';
+import { moneyOf } from '../modules/ads';
+import { checkRules } from '../modules/pilotchecks';
 import { chatAdOf } from '../modules/dellal';
 import { demoCopy, launchNow, regionMatches } from '../modules/adslaunch';
 import { FAKE_EVENTS } from '../modules/landingquery';
@@ -389,6 +391,48 @@ test('Mes pubs: a group is one card; the orders through its page leave its produ
   assert.equal(one.groups.length, 0);
 });
 const num0 = (v: unknown) => Number(v ?? 0);
+
+test('the ads count confirmed orders only (24 Nov 2026): what each lead became, the cards, the days, the report', async () => {
+  // confirmed (or waiting for stock), a real client's no, an attack (never the team's), still to call
+  const plain = { follow_status: null, total: 0, delivery_cost: 0, has_upsell: false, achat: 0, qty: 0, return_fee: 0 };
+  const m = await moneyOf(
+    db,
+    [
+      { ...plain, conf_status: 'confirmed' },
+      { ...plain, conf_status: 'no_stock' },
+      { ...plain, conf_status: 'cancelled', conf_note: null },
+      { ...plain, conf_status: 'cancelled', conf_note: 'Annulée automatiquement après 3 appels sans réponse' },
+      { ...plain, conf_status: 'fake' },
+      { ...plain, conf_status: 'wrong_number' },
+      { ...plain, conf_status: 'new' },
+    ],
+    0,
+  );
+  assert.deepEqual([m.n, m.c, m.ref, m.att], [7, 2, 1, 3]);
+
+  const day = (ago: number) => new Date(Date.now() + 3_600_000 - ago * 86_400_000).toISOString().slice(0, 10);
+  const period = { from: day(13), to: day(0), productId: null, marketerId: null };
+  const ov: any = await call('ads.overview', await owner(), period);
+  const sum = (k: string) => [...ov.products, ...ov.groups].reduce((s: number, p: any) => s + p.money[k], 0);
+  assert.equal(ov.totals.c, sum('c'));
+  assert.ok(ov.totals.c > 0 && ov.totals.c <= ov.totals.n, `${ov.totals.c} confirmed of ${ov.totals.n}`);
+  assert.ok(ov.totals.c + ov.totals.ref + ov.totals.att <= ov.totals.n, 'the leads still to call count nowhere');
+  // day by day: the period's confirmed orders, each on the day it came in
+  assert.equal(ov.days.reduce((s: number, d: any) => s + d.confirmed, 0), ov.totals.c);
+  // a group's card: what its page sold, in confirmed orders
+  for (const g of ov.groups) assert.equal(g.sold.reduce((s: number, x: any) => s + x.c, 0), g.money.c);
+  // Qualité des leads is judged with Pilot Checks Q2, the owner's own limits
+  const q2 = (await checkRules(db)).find((r) => r.id === 'Q2')!;
+  assert.deepEqual(ov.leadsLimits, { good: q2.g, alert: q2.v, stop: q2.s, wait: q2.wait });
+  // the report by wilaya, hour and goal: confirmed orders, the wilayas with the most first
+  const w: any = await call('ads.report.where', await owner(), { from: period.from, to: period.to });
+  assert.ok(w.wilayas.some((x: any) => x.confirmed > 0));
+  for (const x of w.wilayas) assert.ok(x.confirmed <= x.orders);
+  const conf = w.wilayas.map((x: any) => x.confirmed);
+  assert.deepEqual(conf, [...conf].sort((a: number, b: number) => b - a));
+  assert.equal(w.hours.reduce((s: number, h: any) => s + h.confirmed, 0), conf.reduce((s: number, x: number) => s + x, 0));
+  assert.equal(w.goals.reduce((s: number, g: any) => s + g.confirmed, 0), conf.reduce((s: number, x: number) => s + x, 0));
+});
 
 test('audiences: nothing sent before the owner turns one on; the report by wilaya and hour', async () => {
   const a: any = await call('ads.aud.list', await mk(), {});

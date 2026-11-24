@@ -337,7 +337,7 @@ function PubCard({ row: p, sets, fxOk, objs, ctl, group }: { row: Pick<Prod, 'na
         <div>
           <span className="lab">{t('pilotads.simple.delivered')}</span>
           <b className="ltr">{n(m.d)}</b>
-          <small>{t('pilotads.simple.ofOrders', { n: m.n })}</small>
+          <small>{t('pilotads.simple.ofConfirmed', { n: m.c })}</small>
         </div>
         <div>
           <span className="lab">{t('pilotads.simple.costPer')}</span>
@@ -363,7 +363,7 @@ function PubCard({ row: p, sets, fxOk, objs, ctl, group }: { row: Pick<Prod, 'na
               {group.sold.slice(0, 6).map((x) => (
                 <li key={x.productId}>
                   <span>{x.name}</span>
-                  <b className="ltr">{t('pilotads.simple.soldN', { n: x.n, d: x.d })}</b>
+                  <b className="ltr">{t('pilotads.simple.soldN', { n: x.c, d: x.d })}</b>
                 </li>
               ))}
             </ul>
@@ -543,7 +543,9 @@ export function WhereCard() {
   const [days, setDays] = useState(30);
   const q = useRpc('ads.report.where', { from: algDay(-(days - 1)), to: algDay() });
   const d = q.data;
-  const top = Math.max(1, ...(d?.hours ?? []).map((h) => h.orders));
+  // the ads count confirmed orders only (24 Nov 2026): a wilaya with none is not shown
+  const wilayas = (d?.wilayas ?? []).filter((w) => w.confirmed > 0);
+  const top = Math.max(1, ...(d?.hours ?? []).map((h) => h.confirmed));
   return (
     <section className="card pa-where">
       <div className="card-head">
@@ -562,7 +564,7 @@ export function WhereCard() {
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
       ) : !d ? (
         <Loading />
-      ) : !d.wilayas.length ? (
+      ) : !wilayas.length ? (
         <Empty>{t('pilotads.where.empty')}</Empty>
       ) : (
         <div className="pa-where-grid">
@@ -571,17 +573,17 @@ export function WhereCard() {
               <thead>
                 <tr>
                   <th>{t('pilotads.where.wilaya')}</th>
-                  <th className="num">{t('pilotads.where.orders')}</th>
+                  <th className="num">{t('pilotads.where.confirmed')}</th>
                   <th className="num">{t('pilotads.where.delivered')}</th>
                   <th className="num">{t('pilotads.where.rate')}</th>
                 </tr>
               </thead>
               <tbody>
-                {d.wilayas.slice(0, 12).map((w) => (
+                {wilayas.slice(0, 12).map((w) => (
                   <tr key={w.wilayaId}>
                     <td data-l={t('pilotads.where.wilaya')}>{wilayaName(w.wilayaId)}</td>
-                    <td className="num" data-l={t('pilotads.where.orders')}>
-                      {n(w.orders)}
+                    <td className="num" data-l={t('pilotads.where.confirmed')}>
+                      {n(w.confirmed)}
                     </td>
                     <td className="num" data-l={t('pilotads.where.delivered')}>
                       {n(w.delivered)}
@@ -598,8 +600,8 @@ export function WhereCard() {
             <h3 className="pa-sub">{t('pilotads.where.hours')}</h3>
             <div className="pa-hours" role="img" aria-label={t('pilotads.where.hoursLabel')}>
               {d.hours.map((h) => (
-                <span key={h.h} title={`${h.h}h · ${h.orders}`}>
-                  <i style={{ height: `${Math.max(3, Math.round((h.orders / top) * 100))}%` }} />
+                <span key={h.h} title={`${h.h}h · ${h.confirmed}`}>
+                  <i style={{ height: `${Math.max(3, Math.round((h.confirmed / top) * 100))}%` }} />
                   {h.h % 6 === 0 && <em className="ltr">{h.h}h</em>}
                 </span>
               ))}
@@ -611,7 +613,7 @@ export function WhereCard() {
                   <tr key={g.goal}>
                     <td>{t(`pilotads.goal.${g.goal}.name`, { defaultValue: g.goal })}</td>
                     <td className="num ltr">{usd(g.spendUsd, 0)}</td>
-                    <td className="num">{t('pilotads.where.goalOrders', { n: g.orders, d: g.delivered })}</td>
+                    <td className="num">{t('pilotads.where.goalOrders', { n: g.confirmed, d: g.delivered })}</td>
                     <td className="num ltr">{g.delivered ? usd(g.spendUsd / g.delivered) : '—'}</td>
                   </tr>
                 ))}

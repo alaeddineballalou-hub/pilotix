@@ -82,7 +82,7 @@
     "loose": "{{n}} pub(s) n’ont pas encore de produit : reliez-les dans l’affichage Pro.",
     "spent": "Dépensé",
     "delivered": "Livrées",
-    "ofOrders": "sur {{n}} commandes",
+    "ofConfirmed": "sur {{n}} confirmées",
     "costPer": "Coût / livrée",
     "limit": "limite {{v}}",
     "noLimit": "pas encore de limite",
@@ -92,7 +92,7 @@
     "group_one": "Groupe · {{count}} produit",
     "group_other": "Groupe · {{count}} produits",
     "sold": "Vendu par la page du groupe",
-    "soldN": "{{n}} commandes · {{d}} livrées",
+    "soldN": "{{n}} confirmées · {{d}} livrées",
     "soldNone": "Pas encore de commande par sa page."
   },
   "say": {
@@ -153,16 +153,16 @@
   "where": {
     "title": "D’où viennent les commandes des pubs",
     "period": "Période",
-    "empty": "Aucune commande liée à une pub sur cette période.",
+    "empty": "Aucune commande confirmée liée à une pub sur cette période.",
     "wilaya": "Wilaya",
-    "orders": "Commandes",
+    "confirmed": "Confirmées",
     "delivered": "Livrées",
     "rate": "Livrées %",
-    "hours": "Heure des commandes",
-    "hoursLabel": "Commandes par heure de la journée",
+    "hours": "Heure des commandes confirmées",
+    "hoursLabel": "Commandes confirmées par heure où elles sont arrivées",
     "goals": "Par but",
-    "goalOrders": "{{n}} cmd · {{d}} livrées",
-    "note": "Seules les commandes qui gardent l’id de leur pub (page de vente, Dellal, formulaire) sont comptées ici."
+    "goalOrders": "{{n}} confirmées · {{d}} livrées",
+    "note": "Seules les commandes confirmées qui gardent l’id de leur pub (page de vente, Dellal, formulaire) sont comptées ici."
   },
   "launch": {
     "title": "Lancer une pub",
