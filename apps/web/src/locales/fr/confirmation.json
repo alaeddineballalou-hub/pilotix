@@ -1014,10 +1014,11 @@
         "no_answer": "Quand le client ne répond pas",
         "confirmed": "Quand la commande est confirmée"
       },
-      "texts": "Changer les textes (Pilot Automations › Messages)",
+      "texts": "Changer les textes",
       "saved": "Texte enregistré",
       "on": "« {{name}} » allumé",
-      "off": "« {{name}} » éteint"
+      "off": "« {{name}} » éteint",
+      "textsWhere": "Leurs textes sont encore dans Pilot Automations › Messages, avec ceux du Suivi."
     },
     "lente": {
       "t": "Alerte file lente",

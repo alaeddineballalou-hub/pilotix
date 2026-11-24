@@ -1014,10 +1014,11 @@
         "no_answer": "When the customer does not answer",
         "confirmed": "When the order is confirmed"
       },
-      "texts": "Change the texts (Pilot Automations › Messages)",
+      "texts": "Change the texts",
       "saved": "Text saved",
       "on": "“{{name}}” on",
-      "off": "“{{name}}” off"
+      "off": "“{{name}}” off",
+      "textsWhere": "Their texts are still in Pilot Automations › Messages, with Suivi’s."
     },
     "lente": {
       "t": "Slow queue alert",

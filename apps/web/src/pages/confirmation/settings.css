@@ -1,7 +1,10 @@
 /* Confirmation › Réglages (design 1 « Onglet », 24 Nov 2026) */
 
 /* the gear tab: apart at the end of the bar, kept in view while the bar scrolls (a phone), navy when open */
-.bjm-bar .bjm-p.bjm-cfg { margin-inline-start: auto; position: sticky; inset-inline-end: 0; z-index: 1; gap: 6px; border: 1px solid var(--line); background: var(--surface); }
+/* (above the bar's edge fade, with a soft glow of its own on the side the tabs slide under) */
+.bjm-bar .bjm-p.bjm-cfg { margin-inline-start: auto; position: sticky; inset-inline-end: 0; z-index: 3; gap: 6px; border: 1px solid var(--line); background: var(--surface); box-shadow: -16px 0 12px -4px var(--surface); }
+[dir="rtl"] .bjm-bar .bjm-p.bjm-cfg { box-shadow: 16px 0 12px -4px var(--surface); }
+@media (max-width: 600px) { .bjm-bar .bjm-p.bjm-cfg .bjm-l { display: none; } .bjm-bar .bjm-p.bjm-cfg { padding-inline: 11px; } }
 .bjm-bar .bjm-p.bjm-cfg .bji { width: 17px; height: 17px; }
 .bjm-bar .bjm-p.bjm-cfg.on, html[data-skin][data-theme] .bjm-bar .bjm-p.bjm-cfg.on, html[data-theme] .bjm-bar .bjm-p.bjm-cfg.on { background: var(--navy, #1B2A47) !important; border-color: var(--navy, #1B2A47) !important; color: #FFFFFF !important; }
 
@@ -23,9 +26,10 @@
 .cfs-ic .bji { width: 20px; height: 20px; }
 .cfs-fold.open .cfs-ic { background: #FFE9CC; color: #A4480A; }
 .cfs-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.cfs-tl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
 .cfs-t b { font-size: 16px; }
 .cfs-t small { color: var(--muted); font-size: 13px; font-weight: 400; }
-.cfs-state { flex: none; max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 12px; border-radius: 999px; background: color-mix(in srgb, var(--line) 70%, transparent); color: var(--ink, #1F2633); font-weight: 600; font-size: 13px; }
+.cfs-state { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 5px 12px; border-radius: 999px; background: color-mix(in srgb, var(--line) 70%, transparent); color: var(--ink, #1F2633); font-weight: 600; font-size: 13px; }
 .cfs-chev { flex: none; color: var(--muted); transition: transform .3s cubic-bezier(.16, 1, .3, 1); }
 .cfs-fold.open .cfs-chev { transform: rotate(180deg); }
 .cfs-body { padding: 16px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 16px; animation: cfs-in .3s cubic-bezier(.16, 1, .3, 1); }
@@ -46,12 +50,8 @@
 
 /* a phone: the state goes under the title */
 @media (max-width: 600px) {
-  .cfs-head { display: grid; grid-template-columns: 42px minmax(0, 1fr) 20px; column-gap: 12px; row-gap: 6px; padding: 12px 14px; }
-  .cfs-ic { grid-row: 1 / span 2; }
-  .cfs-t { grid-column: 2; grid-row: 1; }
+  .cfs-head { padding: 12px 14px; gap: 12px; }
   .cfs-t small { display: none; }
-  .cfs-chev { grid-column: 3; grid-row: 1; }
-  .cfs-state { grid-column: 2; grid-row: 2; justify-self: start; max-width: 100%; }
   .cfs-body { padding: 14px; }
 }
 @media (prefers-reduced-motion: reduce) {

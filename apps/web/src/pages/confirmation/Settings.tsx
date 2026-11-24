@@ -33,11 +33,14 @@ function Fold({ id, icon, title, desc, state, children }: { id: string; icon: Ic
         <span className="cfs-ic">
           <Icon name={icon} />
         </span>
+        {/* the state sits on the title row (it wraps under the title when there is no room) */}
         <span className="cfs-t">
-          <b>{title}</b>
+          <span className="cfs-tl">
+            <b>{title}</b>
+            {state ? <span className="cfs-state">{state}</span> : null}
+          </span>
           <small>{desc}</small>
         </span>
-        {state ? <span className="cfs-state">{state}</span> : null}
         <Icon name="chevron" className="cfs-chev" />
       </button>
       {open && (
@@ -175,6 +178,7 @@ function Messages() {
             ))}
           </ul>
         )}
+        <p className="muted small">{t('confirmation.cfg.msg.textsWhere')}</p>
         <a className="btn small cfs-link" href="#/notify/cas">
           {t('confirmation.cfg.msg.texts')}
         </a>

@@ -412,7 +412,7 @@ export function StageBar({ items: all, current: shown, flow = true, end }: { ite
         </span>
       ))}
       {cfg && (
-        <a className={`bjm-p bjm-cfg ${current === cfg.key ? 'on' : ''}`} href={cfg.href} aria-current={current === cfg.key ? 'page' : undefined} onClick={() => cfg.key !== shown && setPicked(cfg.key)}>
+        <a className={`bjm-p bjm-cfg ${current === cfg.key ? 'on' : ''}`} href={cfg.href} aria-label={cfg.label} title={cfg.label} aria-current={current === cfg.key ? 'page' : undefined} onClick={() => cfg.key !== shown && setPicked(cfg.key)}>
           <Icon name="settings" />
           <span className="bjm-l">{cfg.label}</span>
         </a>
