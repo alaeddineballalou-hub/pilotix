@@ -1,8 +1,8 @@
 import { phoneWa, withReactivationLink } from '@pilotix/shared';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRpc } from '../../lib/query';
-import { Icon } from '../../ui/kit';
+import { copyText, Icon } from '../../ui/kit';
 import whatsappLogo from '../../assets/brand/whatsapp-logo.svg';
 import './attempt-message.css';
 
@@ -13,13 +13,43 @@ export const finalAttempt = (attempts: number, limit: number) => limit > 0 && at
  *  already past it (from before the rule) is not asked again. */
 export const messageAttempt = (attempts: number, at: number) => attempts + 1 === at;
 
-export function AttemptMessage({ phone, orderId, message, onMessage, onOpen, cancelling }: {
+/** What the agent's last tap did: « ok » copied and the app opened, « again » copied the slow way (tap once more to open
+ *  the app), « fail » nothing copied (the app stayed closed). */
+type Copied = { state: 'ok' | 'again' | 'fail'; channel: MessageChannel; text: string };
+
+/** Copies the message inside the tap itself, before WhatsApp or the SMS app takes the screen: a page sent to the
+ *  background may no longer write to the clipboard. The old way (select, then « copy ») answers at once. The text is
+ *  selected inside the open window: a modal window makes the rest of the page unusable, its text too. */
+function copyNow(text: string, host: Element): boolean {
+  const span = document.createElement('span');
+  span.textContent = text;
+  span.style.cssText = 'position:fixed;top:0;left:0;white-space:pre-wrap;opacity:0;pointer-events:none;user-select:text;-webkit-user-select:text';
+  host.append(span);
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(span);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  let ok = false;
+  try {
+    ok = document.execCommand('copy');
+  } catch {
+    ok = false;
+  }
+  selection?.removeAllRanges();
+  span.remove();
+  return ok;
+}
+
+export function AttemptMessage({ phone, orderId, message, onMessage, onOpen, cancelling, back }: {
   phone?: string;
   orderId?: number;
   message: string;
   onMessage: (value: string) => void;
   onOpen: (value: OpenedMessage | null) => void;
   cancelling?: boolean;
+  /** The agent came back to Pilotix after the app opened (AttemptMessageLock): « Terminer » shows. */
+  back?: boolean;
 }) {
   const { t } = useTranslation();
   const [draft] = useState(() => globalThis.crypto.randomUUID());
@@ -34,11 +64,27 @@ export function AttemptMessage({ phone, orderId, message, onMessage, onOpen, can
   const body = encodeURIComponent(payload);
   const canOpen = !!body && (!cancelling || !!url);
   const open = (channel: MessageChannel) => onOpen({ channel, text: payload, reorderToken: cancelling ? tpl.data?.token ?? undefined : undefined });
+  const [copied, setCopied] = useState<Copied | null>(null);
+  // « Terminer » comes only once the message is copied: each tap copies it first, then opens the app (its link fills it
+  // in too); nothing copied = the app stays closed and the tap must be done again
+  const tap = (channel: MessageChannel) => (event: MouseEvent<HTMLAnchorElement>) => {
+    const slow = copied?.state === 'again' && copied.text === payload; // copied the slow way on the tap before
+    if (!copyNow(payload, event.currentTarget.closest('dialog') ?? document.body) && !slow) {
+      event.preventDefault();
+      setCopied({ state: 'fail', channel, text: payload });
+      void copyText(payload).then((ok) => setCopied((now) => (now?.text === payload ? { state: ok ? 'again' : 'fail', channel, text: payload } : now)));
+      return;
+    }
+    setCopied({ state: 'ok', channel, text: payload });
+    open(channel);
+  };
+  const status = copied?.text === payload ? (copied.state === 'ok' && back ? 'back' : copied.state) : null;
   return <>
     <label className="qd6-lab">
       {t(cancelling ? 'confirmation.cancellationMessageRequired' : 'confirmation.attemptMessageRequired', { n: meta.data?.messageAtTry ?? 3 })}
       <textarea className="qd6-in" dir="auto" rows={6} maxLength={cancelling ? 900 : 1000} value={message || defaultText} onChange={(event) => {
         onMessage(event.target.value);
+        setCopied(null);
         onOpen(null);
       }} />
     </label>
@@ -47,11 +93,14 @@ export function AttemptMessage({ phone, orderId, message, onMessage, onOpen, can
       {tpl.error && <button type="button" className="btn small" onClick={() => void tpl.refetch()}>{t('common.retry')}</button>}
       <div className="attempt-message-channels">
         {canOpen ? <a className="btn" href={`sms:${phone}?body=${body}`} aria-label="SMS"
-          onClick={() => open('sms')}><Icon name="message" /></a> : <button type="button" className="btn" disabled aria-label="SMS"><Icon name="message" /></button>}
+          onClick={tap('sms')}><Icon name="message" /></a> : <button type="button" className="btn" disabled aria-label="SMS"><Icon name="message" /></button>}
         {canOpen ? <a className="btn" href={`https://wa.me/${phoneWa(phone)}?text=${body}`} target="_blank" rel="noopener noreferrer"
-          aria-label="WhatsApp" onClick={() => open('whatsapp')}><img src={whatsappLogo} alt="" /></a>
+          aria-label="WhatsApp" onClick={tap('whatsapp')}><img src={whatsappLogo} alt="" /></a>
           : <button type="button" className="btn" disabled aria-label="WhatsApp"><img src={whatsappLogo} alt="" /></button>}
       </div>
+      {status && copied && <p role="status" className={`attempt-message-copy ${status}`}>
+        {t(`confirmation.attemptCopy.${status}`, { app: copied.channel === 'sms' ? 'SMS' : 'WhatsApp' })}
+      </p>}
     </> : <p className="muted">{t('confirmation.attemptMessageOneOrder')}</p>}
   </>;
 }
@@ -90,7 +139,7 @@ export function AttemptMessageLock({ busy, error, onFinish, ...props }: Omit<Par
       if (event.key === 'Escape') event.stopPropagation();
     }}>
     <form className="attempt-message-card" onSubmit={(event) => { event.preventDefault(); if (!busy && returned) onFinish(returned); }}>
-      <AttemptMessage {...props} onOpen={(entry) => {
+      <AttemptMessage {...props} back={!!returned} onOpen={(entry) => {
         opened.current = entry;
         left.current = false;
         setReturned(null);

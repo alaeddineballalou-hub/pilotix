@@ -1,5 +1,11 @@
 {
   "attemptFinish": "Finish",
+  "attemptCopy": {
+    "ok": "✓ Message copied. Send it to the client, then come back here.",
+    "back": "✓ Message copied · ✓ {{app}} opened",
+    "again": "✓ Message copied. Tap {{app}} again to open it.",
+    "fail": "Copying did not work. Tap {{app}} again."
+  },
   "cancellationMessageRequired": "Send the cancellation message to the client",
   "cancelReorderText": "Your order has been cancelled. Use the link below whenever you want to reactivate it.",
   "cancelReorderLink": "The Reactivate my order link is added automatically.",

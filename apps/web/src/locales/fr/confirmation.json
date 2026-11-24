@@ -1,5 +1,11 @@
 {
   "attemptFinish": "Terminer",
+  "attemptCopy": {
+    "ok": "✓ Message copié. Envoyez-le au client, puis revenez ici.",
+    "back": "✓ Message copié · ✓ {{app}} ouvert",
+    "again": "✓ Message copié. Touchez encore {{app}} pour l’ouvrir.",
+    "fail": "La copie n’a pas marché. Touchez encore {{app}}."
+  },
   "cancellationMessageRequired": "Envoyez le message d’annulation au client",
   "cancelReorderText": "Votre commande a été annulée. Utilisez le lien ci-dessous quand vous souhaitez la réactiver.",
   "cancelReorderLink": "Le lien Réactiver ma commande est ajouté automatiquement.",

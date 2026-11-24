@@ -19,3 +19,5 @@
 .attempt-message-channels { display: flex; justify-content: center; gap: 12px; }
 .attempt-message-channels .btn { display: inline-grid; place-items: center; width: 48px; height: 48px; padding: 0; }
 .attempt-message-channels img, .attempt-message-channels svg { width: 24px; height: 24px; }
+.attempt-message-copy { margin: 0; padding: 8px 12px; border-radius: 10px; font-size: 14px; line-height: 1.5; text-align: center; background: var(--ok-soft); color: var(--ok); }
+.attempt-message-copy.fail { background: var(--coral-soft); color: var(--coral); }
