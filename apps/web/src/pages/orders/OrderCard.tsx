@@ -15,6 +15,7 @@ import { askRisk, ScoreCard } from '../../ui/clientScore';
 import { dropActions, toast } from '../../ui/toast';
 import { Modal } from '../../ui/modal';
 import { toastUndo } from '../../lib/undo';
+import { AttemptMessage, finalAttempt, type OpenedMessage } from '../confirmation/AttemptMessage';
 import { confLabel, printOrder, telHref, waHref } from './shared';
 import './orders.css';
 import { trackOf } from '../../lib/items';
@@ -140,6 +141,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
   const { has, session } = useSession();
   const qc = useQueryClient();
   const look = useRpc('orders.lookups', {}, { staleTime: 5 * 60_000 });
+  const limits = useRpc('orders.uiMeta', {}, { staleTime: 60_000 });
   const users = useRpc('users.list', {}, { staleTime: 5 * 60_000 });
   const hist = useRpc('customers.history', { id: o.customerId }, { enabled: has('confirmation', 'suivi'), placeholderData: undefined });
   const [panel, setPanel] = useState<Panel>(null);
@@ -223,15 +225,15 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
             toast(t('orders.card.needAddress'), 'bad');
             return;
           }
-          if (CONF_NEEDS_DATE.includes(s) || CONF_NEEDS_REASON.includes(s)) setPanel({ kind: 'conf', status: s });
+          if (CONF_NEEDS_DATE.includes(s) || CONF_NEEDS_REASON.includes(s) || (s === 'no_answer' && (o.attempts === 2 || finalAttempt(o.attempts, limits.data?.cancelAfterNoAnswer ?? 0)))) setPanel({ kind: 'conf', status: s });
           else if (s === 'confirmed' || s === 'no_stock') askRisk(o).then((ok) => {
               if (ok) run(() => rpc('orders.setConf', { ids: [o.id], status: s }), t(`status.conf.${s}`), true);
             });
-          else run(() => rpc('orders.setConf', { ids: [o.id], status: s }), t(`status.conf.${s}`), true);
+          else run(() => rpc('orders.setConf', { ids: [o.id], status: s }), t(`status.conf.${s}`), s !== 'busy');
         }}
       >
         <option value="">{t('orders.card.changeConf')}</option>
-        {CONF_CHOICES.filter((s) => s !== o.confStatus && (rightOn('act:orders.cancel') || !CONF_DONE_BAD.includes(s))).map((s) => (
+        {CONF_CHOICES.filter((s) => (s !== o.confStatus || s === 'no_answer' || s === 'busy') && (rightOn('act:orders.cancel') || !CONF_DONE_BAD.includes(s))).map((s) => (
           <option key={s} value={s}>
             {t(`status.conf.${s}`)}
           </option>
@@ -591,6 +593,8 @@ export function eventText(t: (k: string, o?: any) => string, e: OrderEvent, user
   switch (e.kind) {
     case 'created':
       return t('orders.card.ev.created');
+    case 'call':
+      return e.toValue === 'busy' ? t('status.conf.busy') : t('orders.card.ev.call');
     case 'conf_status':
       return t('orders.card.ev.conf_status') + (e.fromValue ? `${conf(e.fromValue)} → ` : '') + conf(e.toValue);
     case 'follow_status':
@@ -712,6 +716,8 @@ function ActionPanel({ o, panel, busy, companies, onCancel, run, onSendAfter }: 
   });
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
+  const [sentVia, setSentVia] = useState<OpenedMessage | null>(null);
+  const limits = useRpc('orders.uiMeta', {}, { staleTime: 60_000 });
   const [co, setCo] = useState<string>(o.companyId ? String(o.companyId) : '');
   const [sendNow, setSendNow] = useState(true);
   const coKind = companies.find((c) => String(c.id) === co)?.kind;
@@ -731,6 +737,8 @@ function ActionPanel({ o, panel, busy, companies, onCancel, run, onSendAfter }: 
   if (panel.kind === 'conf') {
     title = `${t(`status.conf.${panel.status}`)} — ${o.ref}`;
     const needsDate = CONF_NEEDS_DATE.includes(panel.status);
+    const cancelling = panel.status === 'no_answer' && finalAttempt(o.attempts, limits.data?.cancelAfterNoAnswer ?? 0);
+    const needsMessage = panel.status === 'no_answer' && (o.attempts === 2 || cancelling);
     body = (
       <>
         {needsDate && (
@@ -748,17 +756,20 @@ function ActionPanel({ o, panel, busy, companies, onCancel, run, onSendAfter }: 
             </select>
           </Field>
         )}
-        <Field label={t('common.note')}>
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={needsDate ? t('orders.card.notePh') : t('orders.card.detail')} />
-        </Field>
+        {needsMessage
+          ? <AttemptMessage phone={o.phone} orderId={o.id} message={note} onMessage={setNote} onOpen={setSentVia} cancelling={cancelling} />
+          : <Field label={t('common.note')}>
+            <input value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} placeholder={needsDate ? t('orders.card.notePh') : t('orders.card.detail')} />
+          </Field>}
       </>
     );
-    danger = !needsDate;
-    okLabel = needsDate ? t('common.save') : t(`status.conf.${panel.status}`);
+    danger = !needsDate && !needsMessage;
+    okLabel = needsMessage ? t('common.confirm') : needsDate ? t('common.save') : t(`status.conf.${panel.status}`);
     submit = () => {
       if (reasons.length && !reason) return toast(t('orders.card.cancelReason'), 'bad');
+      if (needsMessage && !sentVia) return toast(t('confirmation.attemptMessageRequired'), 'bad');
       const r = reason || (CONF_NEEDS_REASON.includes(panel.status) ? note.trim() || t(`status.conf.${panel.status}`) : null);
-      run(() => rpc('orders.setConf', { ids: [o.id], status: panel.status, nextCallAt: needsDate ? fromLocalInput(date) : null, reason: r, note: reason ? note.trim() || null : null }), t(`status.conf.${panel.status}`), true);
+      run(() => rpc('orders.setConf', { ids: [o.id], status: panel.status, nextCallAt: needsDate ? fromLocalInput(date) : null, reason: r, note: sentVia?.text ?? (reason ? note.trim() || null : null), messageSentVia: sentVia?.channel, reorderToken: sentVia?.reorderToken }), t(`status.conf.${panel.status}`), true);
     };
   } else if (panel.kind === 'follow') {
     title = `${t(`status.follow.${panel.status}`)} — ${o.ref}`;

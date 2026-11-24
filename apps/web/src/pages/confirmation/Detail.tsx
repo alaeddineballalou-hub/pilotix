@@ -4,6 +4,7 @@ import { CANCEL_REASONS, communesOf, CONF_TODO, isAbandonedCheckout, normalizePh
 import { useQueryClient } from '@tanstack/react-query';
 import { rpc } from '../../lib/backend';
 import { defaultNext } from './shared';
+import { AttemptMessage, finalAttempt, type OpenedMessage } from './AttemptMessage';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -390,7 +391,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
       return false;
     }
   };
-  const run = async (fn: () => Promise<unknown>, okMsg: string, tone: 'ok' | 'bad' = 'ok') => {
+  const run = async (fn: () => Promise<unknown>, okMsg: string, tone: 'ok' | 'bad' = 'ok', undoable = true) => {
     setErr('');
     setBusy(true);
     try {
@@ -401,7 +402,8 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
       const refresh = () => qc.invalidateQueries();
       // a status change: « ↶ Annuler » in its message (8 s)
       if (auto) toastUndo(t('confirmation.autoCancelled', { ref: auto.ref, n: auto.attempts }), [order.id], refresh, 'bad');
-      else toastUndo(okMsg, [order.id], refresh, tone);
+      else if (undoable) toastUndo(okMsg, [order.id], refresh, tone);
+      else toast(okMsg, tone);
       refresh();
       onDone?.(order.id);
       return true;
@@ -838,13 +840,14 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
           </div>
         )}
         </div>
-        <StatusMenu order={order} busy={busy} pending={pend} onPick={setPend} />
+        <StatusMenu order={order} busy={busy} pending={pend} onPick={setPend}
+          onConfirmAttempt={(attempt) => run(attempt.fn, attempt.ok, attempt.tone)} />
         {(!phone || canSave || order.confStatus === 'confirmed') && <button
           type="button"
           className={`qd6-savebtn ${canSave ? 'on' : ''}`}
           disabled={busy || !canSave}
           title={canSave ? undefined : t('confirmation.d6.pickStatus')}
-          onClick={() => pend && run(pend.fn, pend.ok, pend.tone)}
+          onClick={() => pend && run(pend.fn, pend.ok, pend.tone, pend.status !== 'busy')}
         >
           <Icon name="check" />
           {t('common.save')}
@@ -904,7 +907,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
   );
 }
 
-type Step = null | 'menu' | 'cancelled' | 'postponed' | 'callback';
+type Step = null | 'menu' | 'cancelled' | 'postponed' | 'callback' | 'try';
 /** "Changer le statut": a small menu opening upwards; Annulée asks the reason, Reportée the date, Rappel the date and hour. */
 /** A status picked in the menu, waiting for Enregistrer. */
 interface Pend {
@@ -916,11 +919,18 @@ interface Pend {
   fn: () => Promise<unknown>;
   ok: string;
 }
-function StatusMenu({ order, busy, pending, onPick }: { order: Order; busy: boolean; pending: Pend | null; onPick: (p: Pend | null) => void }) {
+function StatusMenu({ order, busy, pending, onPick, onConfirmAttempt }: {
+  order: Order; busy: boolean; pending: Pend | null; onPick: (p: Pend | null) => void;
+  onConfirmAttempt: (attempt: Pend) => Promise<boolean>;
+}) {
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>(null);
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
+  const [sentVia, setSentVia] = useState<OpenedMessage | null>(null);
+  const limits = useRpc('orders.uiMeta', {}, { staleTime: 60_000 });
+  const cancelling = finalAttempt(order.attempts, limits.data?.cancelAfterNoAnswer ?? 0);
+  const needsMessage = order.attempts === 2 || cancelling;
   const [when, setWhen] = useState('');
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -941,15 +951,26 @@ function StatusMenu({ order, busy, pending, onPick }: { order: Order; busy: bool
     setNote('');
     setWhen(s === 'callback' ? defaultNext('callback') : defaultNext('postponed').slice(0, 10));
   };
-  const direct = (status: 'busy' | 'duplicate' | 'wrong_number' | 'fake' | 'competitor' | 'try') => {
+  const direct = (status: 'busy' | 'duplicate' | 'wrong_number' | 'fake' | 'competitor' | 'try', message?: OpenedMessage) => {
     if (status === 'competitor') {
       // a fake order placed by a competitor: the device that sent it is blocked for good (landing pages)
       const txt = t('status.fakeReason.competitor');
       return done({ status: 'fake', label: `${label('fake')} · ${txt}`, tone: 'bad', cls: 'c-off', fn: () => rpc('orders.setConf', { ids: [order.id], status: 'fake', reason: txt }), ok: `${order.ref} → ${txt}` });
     }
     if (status === 'try') {
+      if (needsMessage && !message) {
+        setNote('');
+        setSentVia(null);
+        setStep('try');
+        return;
+      }
       const txt = t('confirmation.try', { n: String(nextTry).padStart(2, '0') });
-      return done({ status: 'try', label: txt, tone: 'ok', cls: 'c-mid', fn: () => rpc('confirmation.setTry', { ids: [order.id], n: nextTry }), ok: `${order.ref} → ${txt}` });
+      const attempt: Pend = { status: 'try', label: txt, tone: 'ok', cls: 'c-mid', fn: () => rpc('confirmation.setTry', { ids: [order.id], n: nextTry, note: message?.text, messageSentVia: message?.channel, reorderToken: message?.reorderToken }), ok: `${order.ref} → ${txt}` };
+      if (needsMessage) {
+        void onConfirmAttempt(attempt).then((saved) => { if (saved) { setStep(null); setNote(''); setSentVia(null); } });
+        return;
+      }
+      return done(attempt);
     }
     const soft = status === 'busy' || status === 'duplicate';
     done({ status, label: label(status), tone: soft ? 'ok' : 'bad', cls: status === 'busy' ? 'c-mid' : 'c-off', fn: () => rpc('orders.setConf', { ids: [order.id], status, reason: status === 'wrong_number' || status === 'fake' ? label(status) : null }), ok: `${order.ref} → ${label(status)}` });
@@ -989,6 +1010,7 @@ function StatusMenu({ order, busy, pending, onPick }: { order: Order; busy: bool
             <>
               <div className="qd6-msep" />
               {item('ban', 'c-bad', label('cancelled'), t('confirmation.d6.reason'), () => pickAsk('cancelled'))}
+              {item('cart', 'c-bad', t('status.cancelReason.abandoned_cart'), null, () => { pickAsk('cancelled'); setReason('abandoned_cart'); })}
               {item('xcircle', 'c-off', label('wrong_number'), null, () => direct('wrong_number'))}
               {item('copy', 'c-off', label('duplicate'), null, () => direct('duplicate'))}
               {item('alert', 'c-off', label('fake'), null, () => direct('fake'))}
@@ -996,6 +1018,15 @@ function StatusMenu({ order, busy, pending, onPick }: { order: Order; busy: bool
             </>
           )}
         </div>
+      )}
+      {step === 'try' && (
+        <form className="qd6-ask" onSubmit={(event) => { event.preventDefault(); if (sentVia) direct('try', sentVia); }}>
+          <AttemptMessage phone={order.phone} orderId={order.id} message={note} onMessage={setNote} onOpen={setSentVia} cancelling={cancelling} />
+          <div className="qd6-acts">
+            <button type="button" className="btn small" onClick={() => setStep('menu')}>{t('common.back')}</button>
+            <button type="submit" className="btn small primary" disabled={busy || !sentVia}>{t('common.confirm')}</button>
+          </div>
+        </form>
       )}
       {(step === 'cancelled' || step === 'postponed' || step === 'callback') && (
         <form

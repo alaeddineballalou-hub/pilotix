@@ -277,6 +277,7 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'orders.logCall': order('id'),
   'orders.setSub': order('id'),
   'orders.setConf': order('ids'),
+  'orders.reorderLink': order('id'),
   'orders.setFollow': order('ids'),
   // « Attribuer »: the agency's chiefs give its orders to its agents
   'orders.assignAgent': give,

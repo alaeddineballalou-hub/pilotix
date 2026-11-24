@@ -435,6 +435,33 @@ class ApiController {
   }
 
   @Public()
+  @Get(['reorder/:id/:token', 's/:shop/reorder/:id/:token'])
+  reorderPage(@Param('token') token: string, @Res() res: any) {
+    const valid = /^[a-f0-9]{64}$/.test(token);
+    return res.code(valid ? 200 : 404).header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer')
+      .type('text/html; charset=utf-8').send(this.reorderHtml(valid ? null : 'هذا الرابط غير متاح.'));
+  }
+
+  @Public()
+  @Post(['reorder/:id/:token', 's/:shop/reorder/:id/:token'])
+  async reorder(@Param('shop') shop: string | undefined, @Param('id') id: string, @Param('token') token: string, @Res() res: any) {
+    const ref = await this.publicShop(shop);
+    const restored = await core.reactivateCancelledOrder(ref.db, Number(id), token);
+    if (restored) this.core.emitLive(ref.shop.id, { type: 'orders' });
+    return res.code(restored ? 200 : 410).header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer')
+      .type('text/html; charset=utf-8').send(this.reorderHtml(restored
+        ? 'تمت إعادة تفعيل طلبك. سنتواصل معك لتأكيده.'
+        : 'لم يعد بإمكانك إعادة تفعيل هذا الطلب عبر هذا الرابط.'));
+  }
+
+  private reorderHtml(message: string | null) {
+    return `<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+      <title>إعادة تفعيل طلبي</title><style>body{font:1rem/1.65 system-ui;color:#172340;background:#f4f2ef;margin:0;padding:24px}main{max-width:420px;margin:72px auto;background:white;border-radius:16px;padding:26px}button{background:#ff9b12;color:#172340;border:0;border-radius:12px;padding:12px 18px;font:inherit;font-weight:700}</style>
+      <main><h1>إعادة تفعيل طلبي</h1>${message ? `<p>${message}</p>` :
+        '<p>تم إلغاء طلبك. يمكنك إعادة تفعيله وسنتواصل معك لتأكيده.</p><form method="post" enctype="text/plain"><button type="submit">إعادة تفعيل طلبي</button></form>'}</main></html>`;
+  }
+
+  @Public()
   @Get('health')
   async health() {
     await this.core.t.platform.query('SELECT 1');

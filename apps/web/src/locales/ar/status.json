@@ -39,6 +39,7 @@
     "landing": "صفحة الهبوط"
   },
   "cancelReason": {
+    "abandoned_cart": "سلة متروكة",
     "price": "السعر مرتفع",
     "fee": "رسوم التوصيل مرتفعة",
     "elsewhere": "طلب من مكان آخر",

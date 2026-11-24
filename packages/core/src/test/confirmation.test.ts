@@ -177,7 +177,10 @@ test('statistics overview: a refusal is counted with its reason; « annulée aut
   await call('orders.setConf', admin, { ids: [Number(two[0].id)], status: 'cancelled', reason: 'Frais de livraison trop chers' });
   // no answer twice with « Annuler après 2 appels sans réponse »: cancelled by itself = an attack
   await db.query(`INSERT INTO settings (key, value) VALUES ('calls', $1::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify({ ...DEFAULT_CALL_SETTINGS, cancelAfterNoAnswer: 2 })]);
-  for (let k = 0; k < 2; k++) await call('orders.setConf', admin, { ids: [Number(two[1].id)], status: 'no_answer' });
+  const noAnswerId = Number(two[1].id);
+  await call('orders.setConf', admin, { ids: [noAnswerId], status: 'no_answer' });
+  const reopen = await call('orders.reorderLink', admin, { id: noAnswerId }) as { token: string; path: string };
+  await call('orders.setConf', admin, { ids: [noAnswerId], status: 'no_answer', messageSentVia: 'sms', reorderToken: reopen.token, note: `https://pilotix.online${reopen.path}` });
   // « N'a pas commandé »: the client never ordered = a fake
   await call('orders.setConf', admin, { ids: [Number(two[2].id)], status: 'cancelled', reason: "N'a pas commandé" });
   assert.equal((await db.query('SELECT conf_status FROM orders WHERE id = $1', [two[1].id]))[0].conf_status, 'cancelled');
@@ -193,12 +196,13 @@ test('statistics overview: a refusal is counted with its reason; « annulée aut
   assert.equal(after.leadsQuality, Math.round((after.confirmed.n * 100) / (after.confirmed.n + after.refused.n)));
 });
 
-test('Tentative 02 sets no_answer with two attempts; block blacklists the customer', async () => {
+test('successive unanswered calls advance one attempt each; block blacklists the customer', async () => {
   const ctx = await as(EMAILS.conf);
   // an agent sees only her own orders, given by her manager: « Commande suivante » gives her one
   const give = (await db.query(`SELECT id FROM orders WHERE conf_status = 'new' AND agent_id IS NULL ORDER BY id LIMIT 1`))[0].id;
   await db.query('UPDATE orders SET agent_id = $2, assigned_at = now() WHERE id = $1', [give, ctx.session.profile.id]);
   const o: any = await call('orders.next', ctx, {});
+  await call('confirmation.setTry', ctx, { ids: [o.id], n: 1 });
   await call('confirmation.setTry', ctx, { ids: [o.id], n: 2 });
   const cur: any = await call('orders.get', ctx, { id: o.id });
   assert.equal(cur.confStatus, 'no_answer');

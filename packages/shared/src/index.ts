@@ -99,7 +99,7 @@ export function canSetConf(roles: Role[]): boolean {
 export const FOLLOW_LOCKED: FollowStatus[] = ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange', 'delivered', 'returning', 'returned', 'exchanged', 'lost'];
 
 // ---------------------------------------------------------------- reasons and lists
-export const CANCEL_REASONS = ['price', 'fee', 'elsewhere', 'not_ordered', 'too_long', 'changed_mind', 'other'] as const;
+export const CANCEL_REASONS = ['price', 'fee', 'elsewhere', 'not_ordered', 'too_long', 'changed_mind', 'abandoned_cart', 'other'] as const;
 /** why an order is fake: « concurrent » (its label starts with 🕵️ in every language) marks the landing page's device for good */
 export const FAKE_REASONS = ['competitor', 'not_ordered', 'other'] as const;
 export const FAIL_REASONS = ['absent', 'no_answer', 'postponed_by_client', 'address', 'no_money', 'other'] as const;

@@ -183,9 +183,10 @@ export async function confirmationStats(ctx: Ctx, input: z.infer<typeof TeamsInp
   const perf = input.rateType === 'perf';
   const counted = base.filter((o) => !perf || (!['duplicate', 'wrong_number'].includes(o.conf) && (!CONF_TODO.includes(o.conf as any) || o.created < now - 15 * 86_400_000)));
 
-  // Status changes in the period (calls) and confirmations.
+  // Confirmation changes and logged busy calls in the period.
+  const callEvent = "(kind = 'conf_status' OR (kind = 'call' AND to_value = 'busy'))";
   const evs = (
-    await ctx.db.query(`SELECT order_id, user_id, at, to_value FROM order_events WHERE kind = 'conf_status' AND at >= $1 AND at < $2 AND user_id IS NOT NULL`, [from, to])
+    await ctx.db.query(`SELECT order_id, user_id, at, to_value FROM order_events WHERE ${callEvent} AND at >= $1 AND at < $2 AND user_id IS NOT NULL`, [from, to])
   ).map((r: any) => ({ order: num(r.order_id), uid: num(r.user_id), at: Date.parse(r.at), to: r.to_value as string }));
 
   // Live numbers (not by period).
@@ -197,21 +198,21 @@ export async function confirmationStats(ctx: Ctx, input: z.infer<typeof TeamsInp
   );
   const unassigned = num((await ctx.db.query(`SELECT count(*)::int AS n FROM sales WHERE agent_id IS NULL AND conf_status = 'new'`))[0]?.n);
 
-  // First call: the first status change after arrival / assignment.
+  // First call after arrival / assignment.
   const firstRows = counted.length
     ? await ctx.db.query(
         // an order's events never come before it (a week's margin): the months before are not read, nor even planned
-        `SELECT order_id, min(at) AS at FROM order_events WHERE kind = 'conf_status' AND order_id = ANY($1) AND at >= $2 GROUP BY order_id`,
+        `SELECT order_id, min(at) AS at FROM order_events WHERE ${callEvent} AND order_id = ANY($1) AND at >= $2 GROUP BY order_id`,
         [counted.map((o) => o.id), new Date(counted.reduce((m, o) => Math.min(m, o.created), Infinity) - 7 * 86_400_000).toISOString()],
       )
     : [];
   const firstAt = new Map(firstRows.map((r: any) => [num(r.order_id), Date.parse(r.at)]));
 
-  // Tries: after "no answer" / "busy" the next try is due in the next slot.
-  const tries = evs.filter((e) => e.to === 'no_answer' || e.to === 'busy');
+  // An unanswered attempt makes the next try due in the next slot.
+  const tries = evs.filter((e) => e.to === 'no_answer');
   const triesOrders = [...new Set(tries.map((e) => e.order))];
   const after = triesOrders.length
-    ? (await ctx.db.query(`SELECT order_id, at FROM order_events WHERE kind = 'conf_status' AND order_id = ANY($1) AND at >= $2 ORDER BY at`, [triesOrders, from])).map((r: any) => ({ order: num(r.order_id), at: Date.parse(r.at) }))
+    ? (await ctx.db.query(`SELECT order_id, at FROM order_events WHERE ${callEvent} AND order_id = ANY($1) AND at >= $2 ORDER BY at`, [triesOrders, from])).map((r: any) => ({ order: num(r.order_id), at: Date.parse(r.at) }))
     : [];
   const byOrder = new Map<number, number[]>();
   for (const a of after) (byOrder.get(a.order) ?? byOrder.set(a.order, []).get(a.order)!).push(a.at);

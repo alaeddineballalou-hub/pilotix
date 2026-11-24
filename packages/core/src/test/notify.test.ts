@@ -728,7 +728,7 @@ test('review: no sales follow-up to a customer who answered a delivery message',
 test('« appels sans réponse »: one message after the shop’s number of unanswered calls, once per order, off by default', async () => {
   const conf = await as(EMAILS.conf);
   const call3 = async (id: number, n: number) => {
-    for (let i = 0; i < n; i++) await call('orders.setConf', conf, { ids: [id], status: 'no_answer' });
+    for (let i = 0; i < n; i++) await call('orders.setConf', conf, { ids: [id], status: 'no_answer', note: 'Message laissé', messageSentVia: 'sms' });
   };
   const count = async (id: number) => (await notes(id)).filter((n: any) => n.kind === 'no_answer').length;
   // off by default: nothing, however many calls
@@ -738,19 +738,25 @@ test('« appels sans réponse »: one message after the shop’s number of unans
   const quiet = await newOrder(conf);
   await call3(quiet.id, 3);
   assert.equal(await count(quiet.id), 0);
-  // on: nothing after 2 calls, one message at the 3rd, no second one at the 4th
+  // Default threshold: the mandatory client message replaces the automatic notification.
   await save({ cases: { ...g.settings.cases, no_answer: true } });
   try {
     const o = await newOrder(conf);
     await call3(o.id, 2);
     assert.equal(await count(o.id), 0);
     await call3(o.id, 1);
-    const sent = (await notes(o.id)).filter((n: any) => n.kind === 'no_answer');
+    await call3(o.id, 1);
+    assert.equal(await count(o.id), 0);
+    // An earlier configured threshold can still send the automatic reminder.
+    await save({ noAnswerAfter: 2 });
+    const earlier = await newOrder(conf);
+    await call3(earlier.id, 2);
+    const sent = (await notes(earlier.id)).filter((n: any) => n.kind === 'no_answer');
     assert.equal(sent.length, 1);
     assert.ok(['queued', 'whatsapp', 'sms', 'manual'].includes(sent[0].status), sent[0].status);
-    assert.match(sent[0].body, new RegExp(`3ayatnalkom 3la la commande ta3kom ${o.ref}`));
-    await call3(o.id, 1);
-    assert.equal(await count(o.id), 1);
+    assert.match(sent[0].body, new RegExp(`3ayatnalkom 3la la commande ta3kom ${earlier.ref}`));
+    await call3(earlier.id, 1);
+    assert.equal(await count(earlier.id), 1);
     // the shop chose 1 call
     await save({ noAnswerAfter: 1 });
     const one = await newOrder(conf);

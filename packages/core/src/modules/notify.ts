@@ -398,7 +398,11 @@ export async function onOrderCreated(db: Db, row: { id: number; phone: string; c
  */
 export async function onConfChange(db: Db, nc: NotifyCtx, row: any, from: string | null, to: string, now: number, attempts = 0) {
   if (to === 'confirmed' && from !== 'confirmed') await queue(db, nc, row, 'confirmed', now);
-  else if (to === 'no_answer' && attempts >= Math.max(1, Math.round(Number(nc.s.noAnswerAfter) || 3))) await queue(db, nc, row, 'no_answer', now);
+  else if (to === 'no_answer' && nc.s.cases.no_answer && attempts >= Math.max(1, Math.round(Number(nc.s.noAnswerAfter) || 3))) {
+    const sent = await db.query(`SELECT 1 FROM order_events WHERE order_id = $1 AND kind = 'chat'
+      AND to_value = 'no_answer' AND from_value IN ('manual_whatsapp', 'manual_sms') LIMIT 1`, [row.id]);
+    if (!sent.length) await queue(db, nc, row, 'no_answer', now);
+  }
 }
 
 /**

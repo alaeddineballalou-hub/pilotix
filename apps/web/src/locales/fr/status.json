@@ -39,6 +39,7 @@
     "landing": "Landing page"
   },
   "cancelReason": {
+    "abandoned_cart": "Panier abandonné",
     "price": "Prix trop cher",
     "fee": "Frais de livraison trop chers",
     "elsewhere": "A commandé ailleurs",

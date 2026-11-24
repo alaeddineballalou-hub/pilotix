@@ -79,16 +79,16 @@ test('« pas de réponse » by mistake: the call is not counted any more; more t
   // the « ↶ » of the message right after a change: her own changes of the last minutes, many at once
   const a = await order();
   const b = await order();
-  await call('orders.setConf', samira, { ids: [a.id, b.id], status: 'busy' });
+  await call('orders.setConf', samira, { ids: [a.id, b.id], status: 'callback', nextCallAt: new Date(Date.now() + 3600000).toISOString() });
   const r: any = await call('orders.undoMany', samira, { ids: [a.id, b.id] });
   assert.deepEqual(r.done.sort(), [a.id, b.id].sort());
   assert.equal((await row(a.id)).conf_status, 'new');
   assert.equal((await row(b.id)).conf_status, 'new');
   // someone else's: refused
   await db.query('UPDATE orders SET agent_id = $2 WHERE id = $1', [a.id, rania.session.profile.id]);
-  await call('orders.setConf', rania, { ids: [a.id], status: 'busy' });
+  await call('orders.setConf', rania, { ids: [a.id], status: 'callback', nextCallAt: new Date(Date.now() + 3600000).toISOString() });
   await assert.rejects(call('orders.undoMany', samira, { ids: [a.id] }), /autre agent/);
-  assert.equal((await row(a.id)).conf_status, 'busy');
+  assert.equal((await row(a.id)).conf_status, 'callback');
 });
 
 test('cancelled by mistake: reopened as it was (confirmed, back to « À préparer »)', async () => {
@@ -280,15 +280,15 @@ test('prepared by mistake (« En dispatch »): back to « À préparer », its p
 
 test('the « ↶ » of an older message never undoes the change before the one already undone', async () => {
   const o = await order();
-  await call('orders.setConf', samira, { ids: [o.id], status: 'busy' });
+  await call('orders.setConf', samira, { ids: [o.id], status: 'callback', nextCallAt: new Date(Date.now() + 3600000).toISOString() });
   await call('orders.setConf', samira, { ids: [o.id], status: 'no_answer' });
   // the second change undone from the order's bar
   await undo(samira, o.id);
-  assert.equal((await row(o.id)).conf_status, 'busy');
-  // the message of the second change, still on screen, pressed: refused — « occupé » stays
+  assert.equal((await row(o.id)).conf_status, 'callback');
+  // the message of the second change, still on screen, pressed: refused — the callback stays
   await assert.rejects(call('orders.undoMany', samira, { ids: [o.id] }).then((r: any) => { if (r.refused.length) throw new Error(r.refused[0].why); }), /déjà annulé/);
   await assert.rejects(call('orders.undo', samira, { id: o.id }), /déjà annulé/);
-  assert.equal((await row(o.id)).conf_status, 'busy');
+  assert.equal((await row(o.id)).conf_status, 'callback');
   // the bar (the change shown, by its number) still can
   await undo(samira, o.id);
   assert.equal((await row(o.id)).conf_status, 'new');

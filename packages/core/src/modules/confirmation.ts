@@ -625,6 +625,8 @@ const CONFIRMED_LIKE = ['confirmed', 'no_stock'];
 /** pilotlearn's reason codes → the cancel reasons agents pick (CANCEL_REASONS); none → 'none' (no reason written) */
 const REASON_OF: Record<string, string> = { price: 'price', fee: 'fee', elsewhere: 'elsewhere', not_ordered: 'not_ordered', slow: 'too_long', mind: 'changed_mind' };
 export function cancelReason(note: string | null | undefined): string {
+  const label = note?.split(' — ', 1)[0].trim();
+  if (label && /^(panier abandonné|abandoned cart|سلة متروكة)$/iu.test(label)) return 'abandoned_cart';
   const code = reasonCode(note);
   return code === null ? 'none' : REASON_OF[code] ?? 'other';
 }
@@ -962,10 +964,11 @@ export const confirmationProcs = {
   }),
   /** For every screen: names of users and delivery companies (to write order history in words), and the WhatsApp message. */
   'orders.uiMeta': proc(null, z.object({}), async (ctx) => {
-    const [shop, people, companies] = await Promise.all([getSetting(ctx.db, 'shop'), ctx.db.query('SELECT id, name FROM profiles'), ctx.db.query('SELECT id, name FROM delivery_companies')]);
+    const [shop, people, companies, calls] = await Promise.all([getSetting(ctx.db, 'shop'), ctx.db.query('SELECT id, name FROM profiles'), ctx.db.query('SELECT id, name FROM delivery_companies'), getSetting(ctx.db, 'calls')]);
     return {
       shopName: shop.name,
       whatsappTemplate: shop.whatsappTemplate,
+      cancelAfterNoAnswer: calls.cancelAfterNoAnswer,
       names: Object.fromEntries([...people.map((p: any) => [String(p.id), p.name as string]), ...companies.map((c: any) => [`c${c.id}`, c.name as string])]) as Record<string, string>,
     };
   }),
@@ -1043,9 +1046,9 @@ export const confirmationProcs = {
   }),
 
   /** "Tentative 01/02/03": no answer, with the attempt number set. */
-  'confirmation.setTry': proc(['confirmation'], z.object({ ids, n: z.number().int().min(1).max(30), note: z.string().max(1000).nullable().optional() }), async (ctx, i) => {
+  'confirmation.setTry': proc(['confirmation'], z.object({ ids, n: z.number().int().min(1).max(30), note: z.string().max(1000).nullable().optional(), messageSentVia: ConfInput.shape.messageSentVia, reorderToken: ConfInput.shape.reorderToken }), async (ctx, i) => {
     // the number of this call, never lower than the calls already made + 1 (so « Annuler après N appels » can be reached)
-    return setConf(ctx, ConfInput.parse({ ids: i.ids, status: 'no_answer', note: i.note ?? null, tryN: i.n }));
+    return setConf(ctx, ConfInput.parse({ ids: i.ids, status: 'no_answer', note: i.note ?? null, messageSentVia: i.messageSentVia, reorderToken: i.reorderToken, tryN: i.n }));
   }),
 
   /** Blacklists the customers of these orders ("Bloquer le client"). */

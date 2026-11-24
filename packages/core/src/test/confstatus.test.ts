@@ -3,7 +3,8 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { DEFAULT_CALL_SETTINGS } from '@pilotix/shared';
-import { call, Ctx, Db } from '../index';
+import { call, Ctx, Db, reactivateCancelledOrder } from '../index';
+import { attackOf, cancelReason } from '../modules/confirmation';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -21,20 +22,42 @@ test('« Annuler après 5 appels »: the 5th unanswered call cancels the order, 
   await db.query(`INSERT INTO settings (key, value) VALUES ('calls', $1::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify({ ...DEFAULT_CALL_SETTINGS, cancelAfterNoAnswer: 5 })]);
   const id = await freeNew();
   for (let k = 1; k <= 4; k++) {
-    const r: any = await call('confirmation.setTry', admin, { ids: [id], n: Math.min(3, k) });
+    if (k === 3) {
+      await call('orders.setConf', admin, { ids: [id], status: 'busy' });
+      const current = await one('SELECT conf_status, attempts FROM orders WHERE id = $1', [id]);
+      assert.equal(current.conf_status, 'no_answer');
+      assert.equal(Number(current.attempts), 2);
+      assert.equal((await one("SELECT to_value FROM order_events WHERE order_id = $1 AND kind = 'call' ORDER BY id DESC LIMIT 1", [id])).to_value, 'busy');
+      await assert.rejects(call('confirmation.setTry', admin, { ids: [id], n: 3, note: 'Message écrit seulement' }), /confirmez l’envoi/);
+    }
+    const r: any = await call('confirmation.setTry', admin, { ids: [id], n: k === 1 ? 30 : k, note: k === 3 ? 'Message laissé au client' : null, messageSentVia: k === 3 ? 'whatsapp' : null });
     assert.deepEqual(r.autoCancelled, []);
     assert.equal(Number((await one('SELECT attempts FROM orders WHERE id = $1', [id])).attempts), k, 'the count goes on past 3');
   }
   // « Tentative 01 » by mistake on the 5th call: it still counts as the 5th
-  const r: any = await call('confirmation.setTry', admin, { ids: [id], n: 1 });
+  await assert.rejects(call('confirmation.setTry', admin, { ids: [id], n: 1 }), /message d’annulation/);
+  const link = await call('orders.reorderLink', admin, { id }) as { token: string; path: string };
+  assert.equal(await reactivateCancelledOrder(db, id, link.token), false);
+  const r: any = await call('confirmation.setTry', admin, { ids: [id], n: 1, messageSentVia: 'whatsapp', reorderToken: link.token, note: `Votre commande a été annulée. https://pilotix.online${link.path}` });
   assert.equal(r.autoCancelled.length, 1);
   assert.equal(r.autoCancelled[0].attempts, 5);
   assert.equal((await one('SELECT conf_status FROM orders WHERE id = $1', [id])).conf_status, 'cancelled');
+  const final = await one("SELECT note FROM order_events WHERE order_id = $1 AND kind = 'conf_status' ORDER BY id DESC LIMIT 1", [id]);
+  assert.match(final.note, /^Pas de réponse/);
+  assert.equal(attackOf('cancelled', final.note), 'noAnswer');
+  assert.equal((await one("SELECT from_value FROM order_events WHERE order_id = $1 AND kind = 'chat' AND note = 'Message laissé au client'", [id])).from_value, 'manual_whatsapp');
   // the plain « Pas de réponse » counts the same way
   const id2 = await freeNew();
-  for (let k = 1; k <= 4; k++) await call('orders.setConf', admin, { ids: [id2], status: 'no_answer' });
-  const r2: any = await call('orders.setConf', admin, { ids: [id2], status: 'no_answer' });
+  for (let k = 1; k <= 4; k++) await call('orders.setConf', admin, { ids: [id2], status: 'no_answer', note: k === 3 ? 'Message laissé' : null, messageSentVia: k === 3 ? 'sms' : null });
+  const second = await call('orders.reorderLink', admin, { id: id2 }) as { token: string; path: string };
+  const r2: any = await call('orders.setConf', admin, { ids: [id2], status: 'no_answer', messageSentVia: 'sms', reorderToken: second.token, note: `https://pilotix.online${second.path}` });
   assert.equal(r2.autoCancelled[0]?.id, id2);
+  assert.equal(await reactivateCancelledOrder(db, id2, link.token), false);
+  assert.equal(await reactivateCancelledOrder(db, id, link.token), true);
+  assert.equal(await reactivateCancelledOrder(db, id, link.token), false);
+  const reopened = await one('SELECT conf_status, attempts, next_call_at FROM orders WHERE id = $1', [id]);
+  assert.deepEqual([reopened.conf_status, Number(reopened.attempts), reopened.next_call_at], ['new', 0, null]);
+  assert.equal(cancelReason('Panier abandonné — Retour du client'), 'abandoned_cart');
   await db.query(`DELETE FROM settings WHERE key = 'calls'`);
 });
 

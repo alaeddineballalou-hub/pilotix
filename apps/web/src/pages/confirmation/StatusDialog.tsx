@@ -13,32 +13,42 @@ import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { toastUndo } from '../../lib/undo';
 import { choiceLabel, defaultNext, StatusChoice } from './shared';
+import { AttemptMessage, finalAttempt, type MessageChannel, type OpenedMessage } from './AttemptMessage';
+import { useRpc } from '../../lib/query';
 import './confirmation.css';
 
 interface Target {
   id: number;
   ref: string;
+  attempts?: number;
+  phone?: string;
 }
 interface Ask {
   rows: Target[];
   choice: StatusChoice;
   resolve: (ok: boolean) => void;
+  cancelling: boolean;
 }
+
+const needsAttemptMessage = (rows: Target[], choice: StatusChoice) =>
+  (choice === 'no_answer' || choice.startsWith('try')) && rows.some(({ attempts }) => attempts === 2);
+type ChangeDetails = { nextCallAt?: string; note?: string | null; reason?: string | null; messageSentVia?: MessageChannel | null; reorderToken?: string };
 
 /** Returns `change(rows, choice)` (resolves true when saved) and the dialog element to render. */
 export function useStatusChange() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [ask, setAsk] = useState<Ask | null>(null);
+  const limits = useRpc('orders.uiMeta', {}, { staleTime: 60_000 });
 
-  const apply = async (rows: Target[], choice: StatusChoice, extra: { nextCallAt?: string; note?: string | null; reason?: string | null } = {}) => {
+  const apply = async (rows: Target[], choice: StatusChoice, extra: ChangeDetails = {}) => {
     const ids = rows.map((r) => r.id);
     const refresh = () => qc.invalidateQueries();
     // the orders really changed (« ↶ Annuler » puts them back)
     let changed: number[] = ids;
     try {
       if (choice.startsWith('try')) {
-        const r = await rpc('confirmation.setTry', { ids, n: Number(choice.slice(3)), note: extra.note ?? null });
+        const r = await rpc('confirmation.setTry', { ids, n: Number(choice.slice(3)), note: extra.note ?? null, messageSentVia: extra.messageSentVia, reorderToken: extra.reorderToken });
         // « Annuler après N appels sans réponse »: say it was cancelled, not « Tentative 0N »
         if (r.autoCancelled.length) {
           const a = r.autoCancelled[0];
@@ -48,7 +58,7 @@ export function useStatusChange() {
         }
         changed = r.changed;
       } else {
-        const r = await rpc('orders.setConf', { ids, status: choice as ConfStatus, nextCallAt: extra.nextCallAt ?? null, note: extra.note ?? null, reason: extra.reason ?? null });
+        const r = await rpc('orders.setConf', { ids, status: choice as ConfStatus, nextCallAt: extra.nextCallAt ?? null, note: extra.note ?? null, reason: extra.reason ?? null, messageSentVia: extra.messageSentVia, reorderToken: extra.reorderToken });
         if (r.autoCancelled.length) {
           const a = r.autoCancelled[0];
           toastUndo(r.autoCancelled.length === 1 ? t('confirmation.autoCancelled', { ref: a.ref, n: a.attempts }) : t('confirmation.autoCancelledN', { n: r.autoCancelled.length }), r.changed, refresh, 'bad');
@@ -65,7 +75,9 @@ export function useStatusChange() {
         }
       }
       const label = choiceLabel(t, choice);
-      toastUndo(rows.length === 1 ? `${rows[0].ref} → ${label}` : t('confirmation.bulkDone', { n: rows.length, label }), changed, refresh, ['cancelled', 'fake', 'wrong_number'].includes(choice) ? 'bad' : 'ok');
+      const message = rows.length === 1 ? `${rows[0].ref} → ${label}` : t('confirmation.bulkDone', { n: rows.length, label });
+      if (choice === 'busy') toast(message, 'ok');
+      else toastUndo(message, changed, refresh, ['cancelled', 'fake', 'wrong_number'].includes(choice) ? 'bad' : 'ok');
       refresh();
       return true;
     } catch (e: any) {
@@ -87,7 +99,10 @@ export function useStatusChange() {
       });
       return Promise.resolve(false);
     }
-    if (choice === 'callback' || choice === 'postponed' || CONF_NEEDS_REASON.includes(choice as ConfStatus)) return new Promise((resolve) => setAsk({ rows, choice, resolve }));
+    const cancelling = (choice === 'no_answer' || choice.startsWith('try')) && rows.some(({ attempts }) =>
+      attempts !== undefined && finalAttempt(attempts, limits.data?.cancelAfterNoAnswer ?? 0));
+    if (choice === 'callback' || choice === 'postponed' || CONF_NEEDS_REASON.includes(choice as ConfStatus) || needsAttemptMessage(rows, choice) || cancelling)
+      return new Promise((resolve) => setAsk({ rows, choice, resolve, cancelling }));
     return apply(rows, choice);
   };
 
@@ -110,12 +125,14 @@ export function useStatusChange() {
   return { change, dialog };
 }
 
-function AskDialog({ ask, onClose, onSubmit }: { ask: Ask; onClose: () => void; onSubmit: (x: { nextCallAt?: string; note?: string | null; reason?: string | null }) => Promise<void> }) {
+function AskDialog({ ask, onClose, onSubmit }: { ask: Ask; onClose: () => void; onSubmit: (x: ChangeDetails) => Promise<void> }) {
   const { t } = useTranslation();
   const isDate = ask.choice === 'callback' || ask.choice === 'postponed';
+  const attemptMessage = needsAttemptMessage(ask.rows, ask.choice) || ask.cancelling;
   const [when, setWhen] = useState(isDate ? defaultNext(ask.choice as 'callback' | 'postponed') : '');
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
+  const [sentVia, setSentVia] = useState<OpenedMessage | null>(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const label = choiceLabel(t, ask.choice);
@@ -125,10 +142,13 @@ function AskDialog({ ask, onClose, onSubmit }: { ask: Ask; onClose: () => void; 
   const title = ask.rows.length === 1 ? `${label} — ${ask.rows[0].ref}` : t('confirmation.askTitleMany', { label, n: ask.rows.length });
   const submit = async () => {
     if (isDate && !when) return setErr(t('confirmation.ask.needDate'));
-    if (!isDate && !reason) return setErr(t('confirmation.ask.needReason'));
+    if (attemptMessage && !sentVia) return setErr(t('confirmation.attemptMessageRequired'));
+    if (!isDate && !attemptMessage && !reason) return setErr(t('confirmation.ask.needReason'));
     setBusy(true);
     const reasonText = reason ? t(`status.${fake ? 'fakeReason' : 'cancelReason'}.${reason}`) : null;
-    await onSubmit(isDate ? { nextCallAt: fromLocalInput(when), note: note.trim() || null } : { reason: reasonText, note: note.trim() || null });
+    await onSubmit(isDate ? { nextCallAt: fromLocalInput(when), note: note.trim() || null } : {
+      reason: reasonText, note: sentVia?.text ?? (note.trim() || null), messageSentVia: sentVia?.channel, reorderToken: sentVia?.reorderToken,
+    });
     setBusy(false);
   };
   return (
@@ -141,8 +161,8 @@ function AskDialog({ ask, onClose, onSubmit }: { ask: Ask; onClose: () => void; 
           <button type="button" className="btn" onClick={onClose}>
             {isDate ? t('common.cancel') : t('confirmation.ask.back')}
           </button>
-          <button type="button" className={`btn ${isDate ? 'primary' : 'danger'}`} disabled={busy} onClick={submit}>
-            {isDate ? t('common.save') : label}
+          <button type="button" className={`btn ${isDate || attemptMessage ? 'primary' : 'danger'}`} disabled={busy || (attemptMessage && !sentVia)} onClick={submit}>
+            {attemptMessage ? t('common.confirm') : isDate ? t('common.save') : label}
           </button>
         </>
       }
@@ -158,7 +178,7 @@ function AskDialog({ ask, onClose, onSubmit }: { ask: Ask; onClose: () => void; 
           <Field label={ask.choice === 'callback' ? t('confirmation.ask.callWhen') : t('confirmation.ask.postponeWhen')}>
             <input type="datetime-local" required value={when} onChange={(e) => (setWhen(e.target.value), setErr(''))} />
           </Field>
-        ) : (
+        ) : !attemptMessage && (
           <Field label={t('confirmation.ask.reason')}>
             <select required value={reason} onChange={(e) => (setReason(e.target.value), setErr(''))}>
               <option value="">{t('confirmation.ask.choose')}</option>
@@ -170,9 +190,11 @@ function AskDialog({ ask, onClose, onSubmit }: { ask: Ask; onClose: () => void; 
             </select>
           </Field>
         )}
-        <Field label={t('common.note')}>
-          <input value={note} placeholder={isDate ? t('confirmation.ask.notePh') : t('confirmation.ask.detailPh')} onChange={(e) => setNote(e.target.value)} />
-        </Field>
+        {attemptMessage
+          ? <AttemptMessage phone={ask.rows.length === 1 ? ask.rows[0].phone : undefined} orderId={ask.rows[0].id} message={note} onMessage={setNote} onOpen={setSentVia} cancelling={ask.cancelling} />
+          : <Field label={t('common.note')}>
+            <input value={note} maxLength={1000} placeholder={t(isDate ? 'confirmation.ask.notePh' : 'confirmation.ask.detailPh')} onChange={(e) => setNote(e.target.value)} />
+          </Field>}
         {err && <p className="form-err">{err}</p>}
         <button type="submit" hidden />
       </form>

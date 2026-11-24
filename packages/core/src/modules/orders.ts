@@ -1239,12 +1239,38 @@ export const ConfInput = z.object({
   ids,
   status: z.enum(CONF_STATUSES),
   note: z.string().max(1000).nullable().optional(),
+  messageSentVia: z.enum(['whatsapp', 'sms']).nullable().optional(),
+  reorderToken: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   reason: z.string().max(200).nullable().optional(),
   nextCallAt: dateStr.nullable().optional(),
   clientId: z.string().min(8).max(64).optional(),
-  /** « Tentative 0N »: the number of this call (never lower than the calls already made + 1) */
+  /** Requested attempt number from older clients. The next attempt is calculated from the saved count. */
   tryN: z.number().int().min(1).max(30).optional(),
 });
+
+const reorderHash = async (token: string) => Array.from(
+  new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))),
+  (byte) => byte.toString(16).padStart(2, '0'),
+).join('');
+
+/** A customer can restore only the latest cancellation carrying this one-time capability. */
+export async function reactivateCancelledOrder(db: Db, orderId: number, token: string): Promise<boolean> {
+  if (!Number.isSafeInteger(orderId) || orderId <= 0 || !/^[a-f0-9]{64}$/.test(token)) return false;
+  const hash = await reorderHash(token);
+  return db.tx(async (tx) => {
+    const order = (await tx.query('SELECT conf_status, shipped_at FROM orders WHERE id = $1 FOR UPDATE', [orderId]))[0];
+    if (order?.conf_status !== 'cancelled' || order.shipped_at) return false;
+    const event = (await tx.query(`SELECT data->>'reorderHash' AS hash FROM order_events WHERE order_id = $1
+      AND kind = 'conf_status' ORDER BY id DESC LIMIT 1`, [orderId]))[0];
+    if (event?.hash !== hash) return false;
+    await tx.query(`UPDATE orders SET conf_status = 'new', attempts = 0, next_call_at = NULL,
+      last_call_at = NULL, confirmed_at = NULL, follow_status = NULL, locked_by = NULL, locked_until = NULL,
+      assigned_at = CASE WHEN agent_id IS NULL THEN NULL ELSE now() END,
+      updated_at = now(), version = version + 1 WHERE id = $1`, [orderId]);
+    await addEvent(tx, orderId, null, 'conf_status', 'cancelled', 'new', 'Commande réactivée par le client');
+    return true;
+  });
+}
 
 async function alreadyApplied(db: Db, clientId: string | undefined, userId: number) {
   if (!clientId) return false;
@@ -1358,13 +1384,35 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
       if (cur.follow_status && !['to_prepare', 'prepared', 'cancelled'].includes(cur.follow_status) && input.status !== 'confirmed')
         throw bad('Commande déjà expédiée : changez plutôt le statut de livraison');
       let status = input.status;
+      if (!undo && status === 'busy') {
+        await tx.query('UPDATE orders SET last_call_at = $2, updated_at = now(), version = version + 1 WHERE id = $1', [oid, new Date(ctx.now()).toISOString()]);
+        await addEvent(tx, oid, me, 'call', null, 'busy', input.note?.trim() || null);
+        changed.push(oid);
+        continue;
+      }
       // (an undo never counts a call: the attempts go back to what they were)
-      const isCallFail = !undo && (status === 'no_answer' || status === 'busy');
-      const attempts = undo ? undo.attempts : isCallFail ? Math.max(num(cur.attempts) + 1, input.tryN ?? 0) : num(cur.attempts);
-      let note = input.note ?? null;
-      if (isCallFail && calls.cancelAfterNoAnswer > 0 && attempts >= calls.cancelAfterNoAnswer) {
+      const isCallFail = !undo && status === 'no_answer';
+      const attempts = undo ? undo.attempts : num(cur.attempts) + (isCallFail ? 1 : 0);
+      let note = input.note?.trim() || null;
+      let reopenHash: string | undefined;
+      const autoCancel = isCallFail && calls.cancelAfterNoAnswer > 0 && attempts >= calls.cancelAfterNoAnswer;
+      if (isCallFail && (attempts === 3 || autoCancel)) {
+        if (input.ids.length !== 1 || !note || !input.messageSentVia)
+          throw bad(autoCancel
+            ? 'Envoyez le message d’annulation au client et confirmez l’envoi avant d’annuler.'
+            : 'Envoyez le message au client et confirmez l’envoi pour enregistrer la tentative 3.');
+        await addEvent(tx, oid, me, 'chat', `manual_${input.messageSentVia}`, 'no_answer', note);
+        await tx.query(`UPDATE notifications SET status = 'skipped', error = 'Message envoyé par l’agent'
+          WHERE order_id = $1 AND kind = 'no_answer' AND status IN ('queued', 'manual', 'failed')`, [oid]);
+      }
+      if (autoCancel) {
+        if (!input.reorderToken || !note?.includes(`/reorder/${oid}/${input.reorderToken}`))
+          throw bad('Ajoutez le lien de réactivation au message d’annulation.');
+        reopenHash = await reorderHash(input.reorderToken);
+        if ((await tx.query(`SELECT 1 FROM order_events WHERE order_id = $1 AND data->>'reorderHash' = $2 LIMIT 1`, [oid, reopenHash])).length)
+          throw bad('Ouvrez un nouveau message pour générer un nouveau lien de réactivation.');
         status = 'cancelled';
-        note = `Annulée automatiquement après ${attempts} appels sans réponse`;
+        note = ['Pas de réponse', `Annulée automatiquement après ${attempts} appels sans réponse`, note].filter(Boolean).join(' — ');
         autoCancelled.push({ id: oid, ref: cur.ref, attempts });
       }
       // confirming (one or many at once): every product can go and we deliver there (also checked here, not only on
@@ -1414,7 +1462,10 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
         ],
       );
       // (what « ↶ Annuler » puts back: the calls counted and the next call's time before this change)
-      if (!undo) await addEvent(tx, oid, me, 'conf_status', cur.conf_status, status, [input.reason, note].filter(Boolean).join(' — ') || null, { att: num(cur.attempts), nca: cur.next_call_at ? iso(cur.next_call_at) : null });
+      if (!undo) await addEvent(tx, oid, me, 'conf_status', cur.conf_status, status, [input.reason, note].filter(Boolean).join(' — ') || null, {
+        att: num(cur.attempts), nca: cur.next_call_at ? iso(cur.next_call_at) : null,
+        ...(reopenHash ? { reorderHash: reopenHash } : {}),
+      });
       // it leaves the depot: cancelled, back to be called again, or « sans stock » (it waits for stock outside the depot)
       const leavesDepot =
         ['cancelled', 'duplicate', 'wrong_number', 'fake'].includes(status) || (((CONF_TODO as string[]).includes(status) || status === 'no_stock') && ['to_prepare', 'prepared'].includes(cur.follow_status));
@@ -2128,6 +2179,11 @@ export const ordersProcs = {
   }),
   'orders.update': proc(['confirmation', 'suivi', 'depot'], UpdateInput, (ctx, i) => updateOrder(ctx, i)),
   'orders.setConf': proc(['confirmation'], ConfInput, (ctx, i) => setConf(ctx, i)),
+  'orders.reorderLink': proc(['confirmation'], z.object({ id, draft: z.string().uuid().optional() }), async (ctx, { id }) => {
+    await getOrder(ctx, id);
+    const token = Array.from(globalThis.crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    return { token, path: `/api${ctx.shop?.slug ? `/s/${ctx.shop.slug}` : ''}/reorder/${id}/${token}` };
+  }),
   'orders.setFollow': proc(['suivi', 'depot', 'livreur'], FollowInput, (ctx, i) => setFollow(ctx, i)),
 
   'orders.assignAgent': proc(['agent_manager', 'vendeur', 'confirmation'], z.object({ ids, agentId: id.nullable() }), async (ctx, { ids, agentId }) => {
