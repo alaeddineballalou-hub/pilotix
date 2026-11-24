@@ -154,6 +154,24 @@ html[data-theme="dark"] .spy { --spy-or-3: #F7B955; --spy-fb: #6EA8FF; --spy-gol
 .spy-ring.ok { --c: #137A51; } .spy-ring.info { --c: #2459D6; } .spy-ring.mid { --c: #B07A00; } .spy-ring.off { --c: #8A93A3; }
 .spy-play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; border-radius: 50%; background: rgba(0, 0, 0, .5); display: grid; place-items: center; }
 .spy-play svg { width: 18px; height: 18px; fill: #fff; margin-left: 2px; }
+
+/* the ad's video, played in Pilotix (the ad page) */
+.spy-vid { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.spy-vid-cover { position: relative; }
+.spy-video { display: block; width: 100%; aspect-ratio: 4 / 5; border-radius: 14px; background: #000; object-fit: contain; }
+.spy-vid-play { position: absolute; inset: 0; margin: 0; padding: 0; border: 0; border-radius: 14px; background: transparent; cursor: pointer; display: grid; place-items: center; color: #fff; }
+.spy-vid-play svg { width: 64px; height: 64px; padding: 20px 17px 20px 23px; box-sizing: border-box; border-radius: 50%; background: rgba(0, 0, 0, .55); fill: #fff; transition: transform .15s ease, background-color .15s ease; }
+.spy-vid-play:hover svg { background: rgba(0, 0, 0, .75); transform: scale(1.06); }
+.spy-vid-play:focus-visible { outline: 3px solid var(--spy-or-3, #E8730C); outline-offset: 2px; }
+.spy-vid-wait { width: 44px; height: 44px; border-radius: 50%; border: 4px solid rgba(255, 255, 255, .35); border-top-color: #fff; animation: spy-vid-spin .8s linear infinite; }
+@keyframes spy-vid-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spy-vid-wait { animation: none; } .spy-vid-play svg { transition: none; } }
+.spy-vid-note { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+.spy-vid-note.kept { color: var(--ok); font-weight: 700; }
+.spy-vid-note .bji { width: 14px; height: 14px; vertical-align: -2px; }
+.spy-vid-note.off { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 9px 11px; border-radius: 10px; background: var(--sky-soft); color: inherit; }
+.spy-vid-note.off b { font-weight: 800; }
+.spy-vid-demo { color: var(--muted); font-weight: 600; }
 .spy-cr-bot { position: absolute; inset-inline: 8px; bottom: 8px; display: flex; justify-content: space-between; align-items: flex-end; gap: 6px; }
 .spy-pill { font-size: 12px; font-weight: 800; background: rgba(0, 0, 0, .6); color: #fff; padding: 3px 7px; border-radius: 7px; white-space: nowrap; }
 .spy-tag { background: #FFD23F; color: #1B1B1B; border-radius: 9px; padding: 3px 8px; font-weight: 800; font-size: 13px; line-height: 1.15; text-align: center; box-shadow: 0 3px 8px rgba(0, 0, 0, .25); white-space: nowrap; }
@@ -169,7 +187,7 @@ html[data-theme="dark"] .spy { --spy-or-3: #F7B955; --spy-fb: #6EA8FF; --spy-gol
 .spy-d-sub { margin-top: 6px; font-size: 12.5px; color: var(--muted); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .spy-d-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .spy-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-@media (max-width: 520px) { .spy-pair { grid-template-columns: minmax(0, 1fr); } .spy-pair .spy-cr.big { max-width: 320px; margin-inline: auto; } }
+@media (max-width: 520px) { .spy-pair { grid-template-columns: minmax(0, 1fr); } .spy-pair .spy-cr.big { max-width: 320px; margin-inline: auto; } .spy-pair .spy-vid { width: 100%; max-width: 320px; margin-inline: auto; } .spy-pair .spy-vid .spy-cr.big { max-width: none; } }
 .spy-pair-l { margin-bottom: 6px; display: flex; justify-content: space-between; gap: 6px; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .spy-pair-l a { display: inline-flex; gap: 3px; align-items: center; color: var(--spy-or-3); text-transform: none; letter-spacing: 0; font-size: 12px; text-decoration: none; }
 .spy-pair-l a .bji { width: 12px; height: 12px; }
@@ -188,6 +206,15 @@ html[data-theme="dark"] .spy { --spy-or-3: #F7B955; --spy-fb: #6EA8FF; --spy-gol
 .spy-site .badge .bji { width: 12px; height: 12px; vertical-align: -1px; }
 .spy-site-acts { display: flex; flex-wrap: wrap; gap: 6px; }
 .spy-site-hint { margin: 0; font-size: 12.5px; line-height: 1.45; }
+/* « Lire la page »: what the person's Chrome read on the page (delivery, offers, promises) */
+.spy-read { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 12px; background: var(--surface); }
+.spy-read-h { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--navy); }
+.spy-read-h .bji { width: 14px; height: 14px; }
+.spy-read p { margin: 0; font-size: 13px; }
+.spy-read-g { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: break-word; }
+.spy-read-k { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.spy-read .spy-read-g ul { padding-inline-start: 16px; }
+.spy-read small { font-size: 12px; }
 .spy-priceform { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1.5px dashed var(--line); border-radius: 12px; background: var(--surface); }
 .spy-priceform-row { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .spy-priceform-row label { font-size: 12px; font-weight: 700; color: var(--muted); }
@@ -328,3 +355,36 @@ html[data-theme="dark"] .spy { --spy-or-3: #F7B955; --spy-fb: #6EA8FF; --spy-gol
 .spy-steps .spy-dl { vertical-align: middle; margin-block: 2px; overflow-wrap: normal; }
 /* an older copy of the extension (before « Lire le prix de cette page »): how to put the new one in its place */
 .spy-ext-old { margin: 0; padding: 8px 10px; border-radius: 10px; background: var(--warn-soft); color: var(--ink); }
+
+/* tags: Identique (green), Ressemble (amber), the shop's own (blue); who put it (the AI: sparkles) */
+.spy-tag { display: inline-flex; align-items: center; gap: 3px; }
+.spy-tag .bji { width: 11px; height: 11px; }
+.spy-tag-same { background: var(--c-ok-tint); color: var(--c-ok-ink); }
+.spy-tag-like { background: var(--c-warn-tint); color: var(--c-warn-ink); }
+.spy-tag-own { background: var(--c-info-tint); color: var(--c-info-ink); }
+.spy-fchip-tag { display: inline-flex; align-items: center; gap: 4px; }
+.spy-fchip-tag .bji { width: 12px; height: 12px; }
+.spy-tagrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--surface); }
+.spy-tagrow-l { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.spy-tagrow-l .bji { width: 13px; height: 13px; }
+.spy-tagrow-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+.spy-tagbtn { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 11px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--raise); color: var(--ink); font-size: 13px; font-weight: 700; cursor: pointer; }
+.spy-tagbtn .bji { width: 13px; height: 13px; }
+.spy-tagbtn:hover:not(:disabled) { border-color: var(--navy); }
+.spy-tagbtn:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+.spy-tagbtn.on.spy-tagbtn-same { background: var(--c-ok-tint); border-color: var(--c-ok-line); color: var(--c-ok-ink); }
+.spy-tagbtn.on.spy-tagbtn-like { background: var(--c-warn-tint); border-color: var(--c-warn-line); color: var(--c-warn-ink); }
+.spy-tagbtn.on.spy-tagbtn-other { background: var(--c-bad-tint); border-color: var(--c-bad-line); color: var(--c-bad-ink); }
+.spy-tagbtn.on.spy-tagbtn-own { background: var(--c-info-tint); border-color: var(--c-info-ink); color: var(--c-info-ink); }
+.spy-tagrow-more { font-size: 12.5px; font-weight: 700; color: var(--spy-or-3); text-decoration: none; }
+.spy-tagrow > small { flex-basis: 100%; font-size: 12px; }
+/* AI Spy › Réglages › Mes tags */
+.spy-tagscard { display: flex; flex-direction: column; gap: 10px; }
+.spy-tagscard-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.spy-tagscard-list .spy-tagbtn { cursor: default; }
+.spy-tagx { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-inline-start: 2px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.spy-tagx:hover, .spy-tagx:focus-visible { background: color-mix(in srgb, currentColor 15%, transparent); outline: none; }
+.spy-tagx .bji { width: 12px; height: 12px; }
+.spy-tagscard-add { display: flex; gap: 6px; max-width: 420px; }
+.spy-tagscard-add input { flex: 1; min-width: 0; height: 36px; padding: 0 10px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--raise); color: var(--ink); font-size: 14px; }
+.spy-tagscard-add input:focus-visible { outline: 2px solid var(--navy); outline-offset: 1px; }

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Pilotix Spy",
-  "version": "1.1.0",
-  "description": "Trouve les pubs Facebook de vos concurrents dans la bibliothèque publicitaire publique, pour la page AI Spy de votre Pilotix.",
+  "name": "Pilotix",
+  "version": "2.0.0",
+  "description": "Pilotix dans votre Chrome : AI Spy (pubs Facebook des concurrents, prix de leurs sites), Envoyer photos et la fiche client sur WhatsApp Web, vos chiffres Pilotix dans le Gestionnaire de publicités.",
   "minimum_chrome_version": "116",
   "background": {
     "service_worker": "background.js",
@@ -10,7 +10,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Pilotix Spy",
+    "default_title": "Pilotix",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
@@ -23,9 +23,101 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["activeTab", "scripting", "storage", "tabs"],
-  "host_permissions": ["https://www.facebook.com/*", "https://web.facebook.com/*", "https://*.fbcdn.net/*"],
-  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://pilotix.online/*",
+        "https://direct.pilotix.online/*"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "whatsapp.js",
+        "wa-card.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.facebook.com/ads/library*",
+        "https://web.facebook.com/ads/library*"
+      ],
+      "js": [
+        "library.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://adsmanager.facebook.com/*",
+        "https://business.facebook.com/adsmanager/*"
+      ],
+      "js": [
+        "adsmanager.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "card.html",
+        "card.js",
+        "card.css",
+        "icons/icon32.png"
+      ],
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ]
+    },
+    {
+      "resources": [
+        "icons/icon32.png"
+      ],
+      "matches": [
+        "https://www.facebook.com/*",
+        "https://web.facebook.com/*"
+      ]
+    },
+    {
+      "resources": [
+        "adspanel.html",
+        "adspanel.js",
+        "adspanel.css",
+        "icons/icon32.png"
+      ],
+      "matches": [
+        "https://adsmanager.facebook.com/*",
+        "https://business.facebook.com/*"
+      ]
+    }
+  ],
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.facebook.com/*",
+    "https://web.facebook.com/*",
+    "https://*.fbcdn.net/*",
+    "https://web.whatsapp.com/*",
+    "https://pilotix.online/*",
+    "https://direct.pilotix.online/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   }

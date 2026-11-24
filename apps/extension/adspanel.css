@@ -1,0 +1,47 @@
+/* The list of the person's ads with Pilotix's numbers, in Ads Manager (same colours as the WhatsApp card). No
+   color-scheme: the frame stays see-through only with the same one as its iframe element. */
+:root { --bg: #fff; --surface: #f4f6fa; --text: #1b2a47; --muted: #5d6b85; --line: #dde2ec; --ok: #1f9d57; --warn: #c27c0e; --hot: #e8730c; --bad: #d6453d; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #1b2538; --surface: #232f46; --text: #e8ecf4; --muted: #9aa6bd; --line: #34415c; --ok: #3cc47a; --warn: #e6a53a; --hot: #f28b1e; --bad: #f0706a; }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: transparent; color: var(--text); font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; }
+body { width: max-content; padding: 2px 10px 14px; }
+[hidden] { display: none !important; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.pill { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px 0 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--text);
+  font: inherit; font-weight: 700; white-space: nowrap; cursor: pointer; box-shadow: 0 2px 7px rgba(11, 20, 38, .16); }
+.pill img { border-radius: 5px; }
+.pill .chev { color: var(--muted); font-size: 11px; }
+.pill.good { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+.pill.over { border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); color: var(--warn); }
+.pill.stop { border-color: var(--bad); background: var(--bad); color: #fff; }
+.pill.stop .chev { color: #fff; }
+.pill.off { color: var(--muted); }
+.panel { width: 400px; max-height: calc(100vh - 16px); overflow: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); box-shadow: 0 3px 9px rgba(11, 20, 38, .18); }
+header { position: sticky; top: 0; display: flex; align-items: center; gap: 9px; padding: 10px 10px 10px 12px; border-bottom: 1px solid var(--line); background: var(--bg); }
+header img { border-radius: 6px; }
+.who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.who b { font-size: 14px; }
+.who span { color: var(--muted); font-size: 12px; }
+select { height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: 12px; }
+button.icon { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); cursor: pointer; }
+.msg { margin: 8px 12px 0; font-size: 12.5px; }
+.msg:empty { display: none; }
+.msg.bad { color: var(--bad); }
+ul { list-style: none; margin: 0; padding: 10px 12px 4px; display: flex; flex-direction: column; gap: 7px; }
+li { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border: 1px solid var(--line); border-inline-start-width: 4px; border-radius: 10px; }
+li.good { border-inline-start-color: var(--ok); }
+li.over { border-inline-start-color: var(--warn); }
+li.alert { border-inline-start-color: var(--hot); }
+li.stop { border-inline-start-color: var(--bad); }
+.row { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lv { flex: none; font-size: 11.5px; font-weight: 800; color: var(--muted); }
+.lv.good { color: var(--ok); } .lv.over { color: var(--warn); } .lv.alert { color: var(--hot); } .lv.stop { color: var(--bad); }
+.nums { display: flex; flex-wrap: wrap; gap: 2px 12px; color: var(--muted); font-size: 12.5px; }
+.nums b { color: var(--text); font-size: 14px; }
+.money { display: flex; flex-direction: column; font-size: 12.5px; }
+.money span:first-child { font-weight: 700; }
+.foot { margin: 0; padding: 6px 12px 12px; color: var(--muted); font-size: 11.5px; }

@@ -97,6 +97,11 @@ export function readAdLibrary(max, text) {
 // ---------------------------------------------------------------- fromLibrary (port of packages/core/src/modules/spy.ts)
 const str = (v) => (typeof v === 'string' ? v : v === null || v === undefined ? '' : String(v));
 const num = (v) => (v === null || v === undefined ? 0 : Number(v));
+/** A link to a video on Facebook's own servers (https, *.fbcdn.net), else null (same rule as fbVideoUrl in the core). */
+export const fbVideoUrl = (v) => {
+  const s = str(v).trim();
+  return s.length <= 4000 && /^https:\/\/[a-z0-9.-]+\.fbcdn\.net\//i.test(s) ? s : null;
+};
 
 /**
  * One item of Facebook's library data (ad_archive_id, collation_count, start_date, snapshot{ body, link_url, images,
@@ -140,5 +145,7 @@ export function fromLibrary(r) {
     isVideo: !!(vid.video_sd_url || vid.video_hd_url || c0.video_sd_url || c0.video_hd_url || /VIDEO/i.test(str(s.display_format))),
     mediaUrl: media.slice(0, 4000) || null,
     media: null,
+    // the lighter file first (it starts faster on a phone, and Pilotix's copy takes less room)
+    videoUrl: fbVideoUrl(vid.video_sd_url) ?? fbVideoUrl(vid.video_hd_url) ?? fbVideoUrl(c0.video_sd_url) ?? fbVideoUrl(c0.video_hd_url),
   };
 }

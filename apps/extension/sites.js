@@ -1,5 +1,8 @@
-// Pilotix Spy: the Pilotix addresses where the extension's bridge (bridge.js) runs.
+// Pilotix extension: the Pilotix addresses where the extension's bridge (bridge.js) runs.
 // Shared by the popup and the service worker.
+
+/** Pilotix's own addresses: the bridge is always there (the manifest's content script), nothing to add. */
+export const BUILT_IN = ['https://pilotix.online', 'https://direct.pilotix.online'];
 
 /**
  * The origin of a Pilotix address typed by the user ("app.maboutique.dz", "https://app.maboutique.dz/admin",

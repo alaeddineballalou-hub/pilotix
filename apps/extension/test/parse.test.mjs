@@ -156,7 +156,17 @@ test('fromLibrary: video ad', () => {
     isVideo: true,
     mediaUrl: 'https://scontent.xx.fbcdn.net/v/t15/preview.jpg?x=1',
     media: null,
+    videoUrl: 'https://video.xx.fbcdn.net/v/sd.mp4',
   });
+});
+
+test('fromLibrary: the video link is kept only on Facebook’s servers, the lighter file first', () => {
+  const at = (videos) => fromLibrary({ ...videoItem, snapshot: { ...videoItem.snapshot, videos } }).videoUrl;
+  assert.equal(at([{ video_sd_url: 'https://video.xx.fbcdn.net/sd.mp4', video_hd_url: 'https://video.xx.fbcdn.net/hd.mp4' }]), 'https://video.xx.fbcdn.net/sd.mp4');
+  assert.equal(at([{ video_sd_url: null, video_hd_url: 'https://video.xx.fbcdn.net/hd.mp4' }]), 'https://video.xx.fbcdn.net/hd.mp4');
+  assert.equal(at([{ video_sd_url: 'https://evil.example/x.mp4' }]), null);
+  assert.equal(at([{ video_sd_url: 'http://video.xx.fbcdn.net/sd.mp4' }]), null);
+  assert.equal(at([]), null);
 });
 
 test('fromLibrary: image ad', () => {
@@ -177,6 +187,7 @@ test('fromLibrary: image ad', () => {
     isVideo: false,
     mediaUrl: 'https://scontent.xx.fbcdn.net/v/t39/resized.jpg',
     media: null,
+    videoUrl: null,
   });
 });
 

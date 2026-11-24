@@ -1,7 +1,8 @@
-// Pilotix WhatsApp — the add-on's worker. Asked by a Pilotix page (pilotix.js): download the products' photos from
-// Pilotix (its public photo copies only), open WhatsApp Web on the customer's chat (the tab already open, or a new
-// one), then have whatsapp.js paste the photos and the message there. The agent presses Enter: nothing is sent by
-// the add-on itself. It never reads WhatsApp's chats and talks to no other server.
+// Pilotix extension — Envoyer photos (Confirmation › a order › « Envoyer sur WhatsApp »), in the service worker
+// (imported by background.js). Asked by a Pilotix page through bridge.js: download the products' photos from Pilotix (its
+// public photo copies only), open WhatsApp Web on the customer's chat (the tab already open, or a new one), then have
+// whatsapp.js paste the photos and the message there. The agent presses Enter: nothing is sent by the extension itself.
+// (It was the « Pilotix WhatsApp » extension until 2.0.0.)
 const HOSTS = ['pilotix.online', 'direct.pilotix.online'];
 /** WhatsApp takes 30 photos at once */
 const MAX_PHOTOS = 30;

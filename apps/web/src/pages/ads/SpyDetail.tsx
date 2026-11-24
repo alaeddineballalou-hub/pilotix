@@ -4,7 +4,7 @@
 // protection wall: Pilotix never forces it) says so; its price can then be typed by hand, or read by the person's own
 // Chrome on the page they open (the Pilotix Spy extension's « Lire le prix de cette page »).
 import { webHref } from '../../lib/safeHref';
-import type { SpyAd } from '@pilotix/core';
+import type { SpyAd, SpyPageRead } from '@pilotix/core';
 import { useId, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, dateOnly, when } from '../../lib/format';
@@ -12,9 +12,10 @@ import { adUrl } from '../../lib/spyExtension';
 import { useAction } from '../../lib/query';
 import { Empty, Icon } from '../../ui/kit';
 import { toast } from '../../ui/toast';
-import { arLang, Creative, dayTone, linkIcon, platformsLabel, scoreTone, shortUrl, type View } from './spyShared';
+import { arLang, BASE_TAGS, Creative, dayTone, linkIcon, platformsLabel, scoreTone, shortUrl, useOwnTags, type View } from './spyShared';
+import { AdVideo } from './SpyVideo';
 
-export function SpyDetail({ ad, v }: { ad: SpyAd | null; v: View }) {
+export function SpyDetail({ ad, v, autoPlay = false }: { ad: SpyAd | null; v: View; autoPlay?: boolean }) {
   const { t } = useTranslation();
   const productId = v.product.id;
   const follow = useAction('spy.follow');
@@ -51,7 +52,6 @@ export function SpyDetail({ ad, v }: { ad: SpyAd | null; v: View }) {
             </span>
             <span className={`badge t-${dt.tone}`}>{t('spy.d.online', { n: ad.days, what: t(`spy.dayTone.${dt.k}`) })}</span>
             {!ad.active && <span className="badge t-bad">{t('spy.stopped')}</span>}
-            {ad.same === false && <span className="badge t-off">{t('spy.near')}</span>}
             {ad.platforms.length > 0 && <span className="ltr">{platformsLabel(ad.platforms)}</span>}
           </div>
         </div>
@@ -79,17 +79,19 @@ export function SpyDetail({ ad, v }: { ad: SpyAd | null; v: View }) {
         </div>
       </div>
 
+      {!ad.own && <TagPicker ad={ad} productId={productId} />}
+
       <div className="spy-pair">
         <div>
           <div className="spy-pair-l">
             <span>{ad.isVideo ? t('spy.d.adVideo') : t('spy.d.adImage')}</span>
             {real && (
               <a href={adUrl(ad.adId)} target="_blank" rel="noopener noreferrer">
-                {ad.isVideo ? t('spy.d.play') : t('spy.d.zoom')} <Icon name="external" />
+                {ad.isVideo ? t('spy.d.onFb') : t('spy.d.zoom')} <Icon name="external" />
               </a>
             )}
           </div>
-          <Creative ad={ad} big />
+          {ad.isVideo ? <AdVideo key={ad.gkey} ad={ad} autoPlay={autoPlay} real={real} /> : <Creative ad={ad} big />}
         </div>
         <div>
           <div className="spy-pair-l">
@@ -242,6 +244,7 @@ function SiteCard({ ad, productId }: { ad: SpyAd; productId: number }) {
             <span className="badge t-info">{platform}</span>
           </div>
         )}
+        {ad.pageRead && <PageRead r={ad.pageRead} />}
         <ul>
           {s?.title && <li dir="auto">{s.title}</li>}
           {s?.wilayas ? <li>{t('spy.site.wilayas', { n: s.wilayas })}</li> : null}
@@ -265,6 +268,100 @@ function SiteCard({ ad, productId }: { ad: SpyAd; productId: number }) {
           ))}
         {competitor && !typing && (!s?.ok || !robot) && <p className="note spy-site-hint">{t('spy.site.chromeHint')}</p>}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The ad's tag: Identique, Ressemble, Pas le même (it leaves the list, as « Pas pertinente »), or one of the shop's own
+ * tags (AI Spy › Réglages › Mes tags). The AI gives the first three from its reading; a person's choice stays.
+ */
+function TagPicker({ ad, productId }: { ad: SpyAd; productId: number }) {
+  const { t } = useTranslation();
+  const own = useOwnTags();
+  const set = useAction('spy.tag', { success: t('spy.tag.saved') });
+  const opts: { id: string; label: string }[] = [...BASE_TAGS.map((k) => ({ id: k, label: t(`spy.tag.${k}`) })), ...own];
+  return (
+    <div className="spy-tagrow" role="group" aria-labelledby={`spy-tag-${ad.gkey}`}>
+      <span className="spy-tagrow-l" id={`spy-tag-${ad.gkey}`}>
+        <Icon name="tag" /> {t('spy.tag.title')}
+      </span>
+      <div className="spy-tagrow-opts">
+        {opts.map((o) => {
+          const on = ad.tag === o.id;
+          return (
+            <button
+              key={o.id}
+              type="button"
+              className={`spy-tagbtn spy-tagbtn-${(BASE_TAGS as readonly string[]).includes(o.id) ? o.id : 'own'} ${on ? 'on' : ''}`}
+              aria-pressed={on}
+              disabled={set.isPending}
+              onClick={() => !on && set.mutate({ productId, gkey: ad.gkey, tag: o.id })}
+            >
+              {on && <Icon name={ad.tagBy === 'ai' ? 'sparkles' : 'check'} />}
+              {o.label}
+            </button>
+          );
+        })}
+        <a className="spy-tagrow-more" href="#/spy/reglages">
+          {t('spy.tag.mine')}
+        </a>
+      </div>
+      <small className="muted">{ad.tagBy === 'ai' ? t('spy.tag.byAi') : ad.tagBy === 'person' ? t('spy.tag.byYou') : t('spy.tag.none')}</small>
+    </div>
+  );
+}
+
+/** What a person's Chrome read on the page (the extension's « Lire la page »): its delivery, its offers, its promises. */
+function PageRead({ r }: { r: SpyPageRead }) {
+  const { t } = useTranslation();
+  // « Gratuite à Alger, 48 h » says it already: the word « Gratuite » is not written twice
+  const free = r.delivery === 0;
+  const fee = free ? t('spy.site.read.free') : r.delivery !== null ? da(r.delivery) : null;
+  const delivery = free && r.deliveryNote && /gratuit|offert|free|مجان/i.test(r.deliveryNote) ? r.deliveryNote : [fee, r.deliveryNote].filter(Boolean).join(' · ');
+  const empty = !delivery && !r.offers.length && !r.whyUs.length;
+  return (
+    <div className="spy-read">
+      <b className="spy-read-h">
+        <Icon name="eye" /> {t('spy.site.read.title')}
+      </b>
+      {empty ? (
+        <p className="muted">{t('spy.site.read.none')}</p>
+      ) : (
+        <>
+          {delivery && (
+            <div className="spy-read-g">
+              <span className="spy-read-k">{t('spy.site.read.delivery')}</span>
+              <span dir="auto">{delivery}</span>
+            </div>
+          )}
+          {r.offers.length > 0 && (
+            <div className="spy-read-g">
+              <span className="spy-read-k">{t('spy.site.read.offers')}</span>
+              <ul>
+                {r.offers.map((o) => (
+                  <li key={o}>
+                    <span dir="auto">{o}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {r.whyUs.length > 0 && (
+            <div className="spy-read-g">
+              <span className="spy-read-k">{t('spy.site.read.whyUs')}</span>
+              <ul>
+                {r.whyUs.map((w) => (
+                  <li key={w}>
+                    <span dir="auto">{w}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+      <small className="muted">{t(r.ai ? 'spy.site.read.byAi' : 'spy.site.read.by', { when: when(r.at) })}</small>
     </div>
   );
 }

@@ -116,6 +116,11 @@ export interface ServerHooks {
   media?: (action: 'finish' | 'remove', args: { id: number; key: string; ext: string; size?: number }) => Promise<unknown>;
   /** AI Spy: 'search' (ScrapeCreators / SearchAPI.io), 'media' (a competitor's picture), 'site' (a competitor's page). */
   spy?: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
+  /**
+   * AI Spy's copies of competitors' videos on the server's disk: 'keep' (Facebook's link, downloaded once → the copy's key,
+   * played at publicApi/lp/spyvid/<key>.mp4). Missing in the browser preview.
+   */
+  spyVideo?: (action: 'keep', args: { url: string }) => Promise<{ key: string; bytes: number }>;
   /** Cloudflare Turnstile: is this page token real (true / false), null when Cloudflare cannot be reached. */
   turnstile?: (secret: string, token: string, ip: string) => Promise<boolean | null>;
   /** Turnstile managed by the platform for every shop: the site key for a page on this host (null: none) */

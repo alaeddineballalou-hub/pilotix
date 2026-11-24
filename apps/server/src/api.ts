@@ -47,7 +47,7 @@ import type { Mail } from './mail';
 import { syncTurnstile } from './turnstile';
 import { robotGate } from './robot';
 import { doctorState } from './doctor';
-import { sendVideo, writePart } from './media';
+import { sendSpyVideo, sendVideo, writePart } from './media';
 
 /** the Pilotix icon (apps/web/public/icon.svg): the pages' tab icon when the shop has no logo */
 const PILOTIX_ICON_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><mask id='m' maskUnits='userSpaceOnUse' x='0' y='0' width='512' height='512'><rect width='512' height='512' rx='112' fill='#fff'/></mask><g mask='url(#m)'><rect width='512' height='512' fill='#1B2A47'/><path d='M0,250 C120,200 200,320 300,280 C380,248 440,230 512,250 V512 H0 Z' fill='#F7A823'/></g><path d='M146.00,296.00 C217.40,372.00 324.50,364.40 384.00,272.00 C324.50,319.18 217.40,326.78 146.00,296.00 Z' fill='#1B2A47'/><circle cx='186' cy='186' r='50' fill='#F7A823'/><path d='M290,186 H364' stroke='#F7A823' stroke-width='44' stroke-linecap='round' fill='none'/></svg>`;
@@ -1817,6 +1817,23 @@ class ApiController {
   }
 
   /**
+   * AI Spy: a competitor's video Pilotix keeps (the ads of a followed shop, the ads a person tagged), played in AI Spy:
+   * /lp/spyvid/<key>.mp4, with byte ranges. The random key keeps it unguessable; it never changes.
+   */
+  @Public()
+  @Get(['lp/spyvid/:file', 's/:shop/lp/spyvid/:file'])
+  async spyVideo(@Param('shop') shop: string | undefined, @Param('file') file: string, @Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
+    const m = file.match(/^([a-f0-9]{24})\.mp4$/);
+    if (!m) return res.status(404).send();
+    try {
+      const ref = intake(await this.publicShop(shop));
+      return await sendSpyVideo(ref.shop.schema, m[1], req.headers.range, res);
+    } catch {
+      return res.status(404).send();
+    }
+  }
+
+  /**
    * A planned post's photo (CM AI agent › Planner), downloaded by Meta when the post goes out: /lp/pic/<id>/<key>.jpg, and
    * /lp/pic/<id>/<key>-s.jpg its small copy (the calendar). The random key keeps it unguessable; it never changes.
    */
@@ -2400,6 +2417,7 @@ class ApiController {
     bg('pilot.run'); // Pilot Auto Assign: private orders waiting too long go to the backup company (in the background)
     bg('assign.run'); // Affectation automatique: the waiting orders and alerts get their agent (in the background)
     bg('spy.scan'); // AI Spy: the daily scan of competitors' ads, once a day (in the background)
+    bg('spy.videos'); // AI Spy: copies of the videos of followed shops and tagged ads, while Facebook's links work (in the background)
     bg('channels.sheet.syncAll'); // Google Sheets channels: new lines become orders (in the background)
     bg('leads.catchUp'); // Marketing › Formulaires: the ads' leads Meta did not send (in the background)
     bg('campaigns.run'); // Marketing › Campagnes: the WhatsApp offers due, at the shop's pace (in the background)

@@ -3,8 +3,8 @@
 // - the Pilotix app (mobile/…/WaSharePlugin.java): the message opens the chat (it makes it), then the photos go
 //   straight into that chat when the agent comes back to Pilotix;
 // - a phone's browser: the message opens the chat, then its share menu takes the photos (WhatsApp, then the customer);
-// - a computer: the Pilotix WhatsApp extension (apps/wa-extension) opens WhatsApp Web on the chat and pastes the photos
-//   with the message under them (a website alone cannot put files into WhatsApp Web);
+// - a computer: the Pilotix Chrome extension (apps/extension) opens WhatsApp Web on the chat and pastes the photos with
+//   the message under them (a website alone cannot put files into WhatsApp Web);
 // - an app made before WaShare: the message carries the photos' link, until it is updated.
 type Cap = { PluginHeaders?: { name: string }[]; nativePromise?: (plugin: string, method: string, options?: object) => Promise<unknown> };
 const cap = () => (window as unknown as { Capacitor?: Cap }).Capacitor;
@@ -76,10 +76,12 @@ export async function sharePhotoFiles(files: File[]): Promise<'shared' | 'cancel
   }
 }
 
-/** The extension's download (apps/wa-extension, zipped by the website's build). */
-export const EXT_ZIP = '/pilotix-whatsapp.zip';
-/** The Pilotix WhatsApp extension on this computer: its version (it marks the page), or null. */
-export const extVersion = () => document.documentElement.getAttribute('data-pilotix-wa');
+/** The extension's download (apps/extension, zipped by the website's build): « Pilotix », the same one as AI Spy's. */
+export const EXT_ZIP = '/pilotix.zip';
+/** « Pilotix » 2.0 and later (AI Spy and Envoyer photos in one) marks the page so; « Pilotix WhatsApp » 1.0 so. */
+const merged = () => document.documentElement.getAttribute('data-pilotix-ext');
+/** The extension on this computer: its version (it marks the page), or null. */
+export const extVersion = () => merged() ?? document.documentElement.getAttribute('data-pilotix-wa');
 /** Chrome, Edge and the browsers made like them take the extension; Firefox and Safari do not. */
 export const extBrowser = () => /Chrome\/|Chromium\/|Edg\//.test(navigator.userAgent) && !/Firefox\//.test(navigator.userAgent);
 
@@ -89,13 +91,17 @@ export type ExtResult = { ok: boolean; error?: string; detail?: string; photos?:
  * agent presses Enter. Answers once it is done there (or why not).
  */
 export function extSend(phone: string, text: string, photos: string[]): Promise<ExtResult> {
+  // « Pilotix » answers on its own names (lib/spyExtension.ts); an older « Pilotix WhatsApp » alone, on its names
+  const now = !!merged();
   return new Promise((ok) => {
     const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
     const done = (e: MessageEvent) => {
-      if (e.source !== window || e.data?.type !== 'pilotix-wa:result' || e.data.id !== id) return;
+      const d = e.data;
+      if (e.source !== window || !d || d.id !== id) return;
+      if (now ? d.source !== 'pilotix-ext' || d.type !== 'wa-result' : d.type !== 'pilotix-wa:result') return;
       window.removeEventListener('message', done);
       clearTimeout(timer);
-      const { type: _t, id: _i, ...r } = e.data as ExtResult & { type: string; id: string };
+      const { type: _t, id: _i, source: _s, ...r } = d as ExtResult & { type: string; id: string; source?: string };
       ok(r);
     };
     const timer = setTimeout(() => {
@@ -103,6 +109,6 @@ export function extSend(phone: string, text: string, photos: string[]): Promise<
       ok({ ok: false, error: 'timeout' });
     }, 150_000);
     window.addEventListener('message', done);
-    window.postMessage({ type: 'pilotix-wa:send', id, phone, text, photos }, location.origin);
+    window.postMessage(now ? { source: 'pilotix-page', type: 'wa-send', id, phone, text, photos } : { type: 'pilotix-wa:send', id, phone, text, photos }, location.origin);
   });
 }

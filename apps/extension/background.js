@@ -1,15 +1,24 @@
-// Pilotix Spy service worker.
-//  - Searches: the bridge on a Pilotix page (bridge.js) or the popup opens a port named 'pilotix-search' and sends
+// Pilotix extension — the service worker.
+//  - AI Spy searches: the bridge on a Pilotix page (bridge.js) or the popup opens a port named 'pilotix-search' and sends
 //    { type: 'search', query, country, max }. Searches run one at a time: Facebook's public Ad Library opens in a
 //    background tab, the ads are read from the page, the tab is closed, small pictures are made, and the port gets
 //    { type: 'progress', step } messages ('open' | 'read' | 'pictures'), then { type: 'result', count, ads } or
 //    { type: 'error', message }.
-//  - Pilotix addresses: the popup adds and removes them; each one gets bridge.js registered as a content script.
-//  - A competitor's price read by the popup on the page the user has open (« Lire le prix de cette page »): handed to
-//    the open Pilotix tabs (bridge.js), where the AI Spy page saves it and answers how many ads it went on.
-import { checkSearch, fromLibrary, libraryUrl, readAdLibrary } from './parse.js';
+//  - Pilotix addresses: pilotix.online and direct.pilotix.online always (the manifest's content script); the popup adds
+//    and removes others (a shop's own Pilotix server), each one gets bridge.js registered as a content script.
+//  - Asking Pilotix: a price the popup read on the user's open page, or an action another site's script needs (the
+//    customer card on WhatsApp Web, buttons on Facebook's ad library, numbers in Ads Manager), is handed to the open
+//    Pilotix tabs (bridge.js); the first Pilotix page that can do it answers.
+//  - Facebook's ad library (library.js): an ad tagged or its page followed there is read from the page's data here
+//    ('library-save') and kept in AI Spy by the open Pilotix tab.
+//  - Meta's Ads Manager (adsmanager.js, adspanel.html): Pilotix's numbers of each ad, asked like any other action.
+//  - Envoyer photos on WhatsApp Web: wa.js. The customer card on WhatsApp Web: wa-card.js puts card.html beside the
+//    chat; its quick replies come back here ('wa-insert') to go into that chat's message box.
+import { checkSearch, fbVideoUrl, fromLibrary, libraryUrl, readAdLibrary } from './parse.js';
 import { addPictures } from './pictures.js';
-import { SITES_KEY, originPattern, pilotixOrigin, scriptId } from './sites.js';
+import { BUILT_IN, SITES_KEY, originPattern, pilotixOrigin, scriptId } from './sites.js';
+import { PILOTIX_ACTIONS } from './actions.js';
+import './wa.js';
 
 const SEARCH_TIMEOUT = 75_000; // ms for a whole search
 const LOAD_TIMEOUT = 35_000; // ms waiting for the tab to load (then we try to read anyway)
@@ -207,7 +216,8 @@ async function senderAllowed(sender) {
   if (sender?.id !== chrome.runtime.id) return false;
   if (isExtensionPage(sender.url)) return true;
   try {
-    return (await storedSites()).includes(new URL(sender.url).origin);
+    const origin = new URL(sender.url).origin;
+    return BUILT_IN.includes(origin) || (await storedSites()).includes(origin);
   } catch {
     return false;
   }
@@ -299,6 +309,7 @@ async function injectIntoOpenTabs(origin) {
 const addSite = (input) =>
   locked(async () => {
     const origin = pilotixOrigin(input);
+    if (BUILT_IN.includes(origin)) return syncRegistrations(); // always there (the manifest)
     if (!(await chrome.permissions.contains({ origins: [originPattern(origin)] })))
       throw new Error('Chrome n’a pas donné l’accès à cette adresse. Cliquez sur Ajouter et acceptez la demande de Chrome.');
     const sites = await storedSites();
@@ -341,29 +352,151 @@ chrome.permissions.onRemoved.addListener(({ origins = [] }) => {
   for (const o of origins.map(originOfPattern).filter(Boolean)) forgetSite(o).catch(() => {});
 });
 
-// ---------------------------------------------------------------- a price read on the user's open page
+// ---------------------------------------------------------------- asking the open Pilotix page
+/** The Pilotix tabs open in this Chrome (built-in addresses and the ones the user added). */
+async function pilotixTabs() {
+  const sites = [...BUILT_IN, ...(await storedSites())];
+  return (await chrome.tabs.query({ url: sites.map(originPattern) })).filter((t) => t.id !== undefined);
+}
+
 /**
- * Hands a price the popup read to the Pilotix tabs open in this Chrome: the first AI Spy page that saves it answers
- * { saved } (the number of ads of that page). No Pilotix tab, or none with AI Spy open: a message saying what to do.
+ * Hands { type: 'site-price' | 'rpc', … } to the Pilotix tabs open here; the first page that does it answers. No Pilotix
+ * tab, or none able to answer (logged out, an old page): a message saying what to do.
  */
-async function sendSitePrice(msg) {
-  const price = Math.round(Number(msg?.price));
-  if (!Number.isFinite(price) || price < 100) throw new Error('Prix illisible.');
-  const oldPrice = msg?.oldPrice === null || msg?.oldPrice === undefined ? null : Math.round(Number(msg.oldPrice));
-  const sites = await storedSites();
-  if (!sites.length) throw new Error('Ajoutez d’abord l’adresse de votre Pilotix (plus bas).');
-  const tabs = (await chrome.tabs.query({ url: sites.map(originPattern) })).filter((t) => t.id !== undefined);
+async function askPilotix(msg) {
+  const tabs = await pilotixTabs();
   let refused = '';
   for (const t of tabs) {
-    const r = await chrome.tabs
-      .sendMessage(t.id, { type: 'site-price', url: String(msg?.url ?? '').slice(0, 2000), price, oldPrice: Number.isFinite(oldPrice) ? oldPrice : null, title: msg?.title ? String(msg.title).slice(0, 200) : null })
-      .catch(() => null);
-    if (r?.ok) return { saved: Number(r.saved) || 0 };
+    const r = await chrome.tabs.sendMessage(t.id, msg).catch(() => null);
+    if (r?.ok) return r;
     if (r?.message) refused = r.message;
   }
-  if (refused) throw new Error(`Pilotix a refusé le prix : ${refused}`);
-  throw new Error('Ouvrez AI Spy dans Pilotix (dans ce Chrome), puis cliquez encore.');
+  if (refused) throw new Error(refused);
+  throw new Error(tabs.length ? 'Pilotix n’a pas répondu : rechargez l’onglet Pilotix, puis réessayez.' : 'Ouvrez Pilotix dans ce Chrome (et connectez-vous), puis réessayez.');
 }
+
+/** A price the popup read on the user's open page (and what the page says, for « Lire la page »). */
+async function sendSitePrice(msg) {
+  const price = msg?.price === null || msg?.price === undefined ? null : Math.round(Number(msg.price));
+  if (price !== null && (!Number.isFinite(price) || price < 100)) throw new Error('Prix illisible.');
+  const oldPrice = msg?.oldPrice === null || msg?.oldPrice === undefined ? null : Math.round(Number(msg.oldPrice));
+  const page = msg?.page && typeof msg.page === 'object' ? { text: String(msg.page.text ?? '').slice(0, 8000) } : null;
+  if (price === null && !page) throw new Error('Aucun prix en DA sur cette page.');
+  const r = await askPilotix({
+    type: 'site-price',
+    url: String(msg?.url ?? '').slice(0, 2000),
+    price,
+    oldPrice: Number.isFinite(oldPrice) ? oldPrice : null,
+    title: msg?.title ? String(msg.title).slice(0, 200) : null,
+    page,
+  });
+  return { saved: Number(r.saved) || 0, read: r.read ?? null };
+}
+
+/** The site a message comes from: the tab's page (a content script there, or an extension frame inside it). */
+function siteOf(sender) {
+  try {
+    return new URL(sender.tab?.url || '').hostname;
+  } catch {
+    return '';
+  }
+}
+
+// Pilotix actions asked by the extension's pieces on other sites (WhatsApp Web, Facebook's ad library, Ads Manager):
+// only the actions listed in actions.js, only from the sites listed with them
+chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (sender.id !== chrome.runtime.id || msg?.kind !== 'pilotix') return false;
+  const action = Object.hasOwn(PILOTIX_ACTIONS, msg.name) ? PILOTIX_ACTIONS[msg.name] : null;
+  const host = siteOf(sender);
+  if (!action || !host || !action.from.includes(host)) {
+    reply({ ok: false, message: 'Action refusée.' });
+    return false;
+  }
+  askPilotix({ type: 'rpc', name: msg.name, input: msg.input ?? {} }).then(
+    (r) => reply({ ok: true, out: r.out ?? null }),
+    (e) => reply({ ok: false, message: String(e?.message ?? e) }),
+  );
+  return true; // the reply comes later
+});
+
+// ---------------------------------------------------------------- Facebook's ad library: an ad kept in AI Spy from there
+/** The ad as the library's own data has it (the page's data, else the page read again), else what its card shows. */
+async function libraryAd(tabId, adId, dom) {
+  const find = (page) => page?.items?.find((x) => String(x?.ad_archive_id ?? x?.adArchiveID ?? '') === adId) ?? null;
+  let item = null;
+  try {
+    const [r] = await chrome.scripting.executeScript({ target: { tabId }, func: readAdLibrary, args: [500, null] });
+    item = find(r?.result);
+    if (!item) {
+      const [h] = await chrome.scripting.executeScript({ target: { tabId }, func: pageHtml });
+      if (typeof h?.result === 'string' && h.result) item = find(readAdLibrary(500, h.result));
+    }
+  } catch {
+    item = null;
+  }
+  let ad = item ? fromLibrary(item) : null;
+  if (!ad) {
+    const d = dom && typeof dom === 'object' ? dom : {};
+    const text = (v, n) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null);
+    ad = {
+      id: adId,
+      pageName: text(d.pageName, 200) ?? 'Page Facebook',
+      pageUrl: text(d.pageUrl, 500),
+      body: text(d.body, 6000),
+      linkUrl: text(d.linkUrl, 3000),
+      mediaUrl: text(d.mediaUrl, 4000),
+      isVideo: !!d.isVideo,
+      videoUrl: fbVideoUrl(d.videoUrl),
+      active: true,
+    };
+  }
+  if (ad.mediaUrl && !ad.media) await addPictures([ad], Date.now() + 15_000, () => false).catch(() => {});
+  return ad;
+}
+
+chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (sender.id !== chrome.runtime.id || msg?.kind !== 'library-save') return false;
+  let path = '';
+  try {
+    path = new URL(sender.tab?.url || '').pathname;
+  } catch {
+    path = '';
+  }
+  const host = siteOf(sender);
+  const adId = String(msg.adId ?? '');
+  if (!['www.facebook.com', 'web.facebook.com'].includes(host) || !path.startsWith('/ads/library') || !/^\d{8,20}$/.test(adId) || sender.tab?.id === undefined) {
+    reply({ ok: false, message: 'Action refusée.' });
+    return false;
+  }
+  libraryAd(sender.tab.id, adId, msg.dom)
+    .then((ad) =>
+      askPilotix({
+        type: 'rpc',
+        name: 'spy.libraryAd',
+        input: { productId: Number(msg.productId), ad, tag: typeof msg.tag === 'string' ? msg.tag : null, ...(typeof msg.follow === 'boolean' ? { follow: msg.follow } : {}) },
+      }),
+    )
+    .then(
+      (r) => reply({ ok: true, out: r.out ?? null }),
+      (e) => reply({ ok: false, message: String(e?.message ?? e) }),
+    );
+  return true;
+});
+
+// A quick reply clicked in the customer card (card.html, the extension's own page in a frame on WhatsApp Web): into the
+// chat's message box of that tab (wa-card.js); the agent sends it
+chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (sender.id !== chrome.runtime.id || msg?.kind !== 'wa-insert' || typeof msg.text !== 'string') return false;
+  if (!isExtensionPage(sender.url) || siteOf(sender) !== 'web.whatsapp.com' || sender.tab?.id === undefined) {
+    reply({ ok: false });
+    return false;
+  }
+  chrome.tabs.sendMessage(sender.tab.id, { action: 'insert', text: msg.text.slice(0, 4000) }, { frameId: 0 }).then(
+    (r) => reply({ ok: !!r?.ok }),
+    () => reply({ ok: false }),
+  );
+  return true;
+});
 
 // Messages from the popup only (a Pilotix page cannot add or remove addresses).
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
@@ -373,6 +506,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     add: () => addSite(msg.origin),
     remove: () => removeSite(msg.origin),
     sitePrice: () => sendSitePrice(msg),
+    status: async () => ({ open: (await pilotixTabs()).length }),
   };
   const act = actions[msg?.type];
   if (!act) return false;
@@ -385,10 +519,21 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 
 // Each time the service worker starts (browser start, install, update, wake-up): registrations = stored list.
 locked(syncRegistrations).catch(() => {});
-// After an update or a reload, the open Pilotix pages get a fresh bridge (the old one is cut off from the worker).
-chrome.runtime.onInstalled.addListener(() =>
+// After an update or a reload, the open Pilotix pages get a fresh bridge (the old one is cut off from the worker), and
+// the open pages of the other sites their fresh scripts.
+chrome.runtime.onInstalled.addListener(({ reason }) =>
   locked(syncRegistrations)
-    .then((sites) => Promise.all(sites.map(injectIntoOpenTabs)))
+    .then((sites) => (reason === 'install' || reason === 'update' ? Promise.all([...BUILT_IN, ...sites].map(injectIntoOpenTabs)).then(refreshOtherSites) : null))
     .catch(() => {}),
 );
+
+/** The manifest's scripts for other sites, put again in their open tabs (each script ignores a second live copy). */
+async function refreshOtherSites() {
+  for (const cs of chrome.runtime.getManifest().content_scripts ?? []) {
+    if (cs.js?.includes('bridge.js')) continue;
+    const tabs = await chrome.tabs.query({ url: cs.matches }).catch(() => []);
+    for (const t of tabs)
+      if (t.id !== undefined) await chrome.scripting.executeScript({ target: { tabId: t.id }, files: cs.js }).catch(() => {});
+  }
+}
 chrome.runtime.onStartup.addListener(() => locked(syncRegistrations).catch(() => {}));

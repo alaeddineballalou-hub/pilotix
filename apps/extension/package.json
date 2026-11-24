@@ -1,11 +1,11 @@
 {
-  "name": "pilotix-spy-extension",
-  "version": "1.1.0",
+  "name": "pilotix-extension",
+  "version": "2.0.0",
   "private": true,
-  "description": "Pilotix Spy Chrome extension (Manifest V3). No build step: load this folder in chrome://extensions.",
+  "description": "Pilotix Chrome extension (Manifest V3): AI Spy, Envoyer photos on WhatsApp Web and « Lire la page ». No build step: load this folder in chrome://extensions.",
   "type": "module",
   "scripts": {
     "test": "node test/parse.test.mjs && node test/price.test.mjs",
-    "check": "node --check background.js && node --check parse.js && node --check pictures.js && node --check sites.js && node --check popup.js && node --check bridge.js && node --check price.js"
+    "check": "node --check background.js && node --check parse.js && node --check pictures.js && node --check sites.js && node --check popup.js && node --check bridge.js && node --check price.js && node --check wa.js && node --check whatsapp.js && node --check actions.js && node --check wa-card.js && node --check card.js && node --check library.js && node --check adsmanager.js && node --check adspanel.js"
   }
 }

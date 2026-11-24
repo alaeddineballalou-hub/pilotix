@@ -3,37 +3,55 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Pilotix Spy</title>
+    <title>Pilotix</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <header>
       <img src="icons/icon48.png" alt="" width="32" height="32" />
       <div class="brand">
-        <h1>Pilotix Spy</h1>
+        <h1>Pilotix</h1>
         <p id="version">Version —</p>
       </div>
       <span id="status" class="pill">…</span>
     </header>
+    <p id="openMsg" class="note" hidden>
+      Ouvrez Pilotix dans un onglet de ce Chrome (et connectez-vous) : l’extension passe par lui pour tout ce qu’elle montre ou enregistre.
+    </p>
 
     <section id="pageSec" hidden>
-      <h2>Prix de cette page</h2>
-      <p class="hint">Le site d’un concurrent que Pilotix n’a pas pu lire ? Votre Chrome lit le prix affiché ici et l’envoie à AI Spy.</p>
+      <h2>Lire cette page</h2>
+      <p class="hint">Le site d’un concurrent : votre Chrome lit son prix, ses offres, sa livraison et ce qu’il promet, et l’envoie à AI Spy.</p>
       <div class="row">
-        <button id="readPrice" type="button" class="primary">Lire le prix de cette page</button>
+        <button id="readPage" type="button" class="primary">Lire la page</button>
       </div>
-      <p id="priceMsg" class="msg" role="status"></p>
+      <p id="pageMsg" class="msg" role="status"></p>
+      <ul id="pageRead" class="read" hidden></ul>
     </section>
 
     <section>
-      <h2><label for="site">Adresse de votre Pilotix</label></h2>
-      <form id="add" autocomplete="off">
-        <input id="site" type="text" inputmode="url" spellcheck="false" placeholder="https://app.maboutique.dz" />
-        <button type="submit" class="primary">Ajouter</button>
-      </form>
-      <p id="siteMsg" class="msg" role="status"></p>
+      <h2>Ce que fait l’extension</h2>
+      <ul class="uses">
+        <li><b>AI Spy</b> cherche les pubs de vos concurrents dans la bibliothèque de pubs de Facebook.</li>
+        <li><b>Envoyer photos</b> colle les photos et le message dans la discussion WhatsApp Web du client.</li>
+        <li><b>Fiche client</b> sur WhatsApp Web : qui est ce numéro dans Pilotix (niveau, liste noire, commandes) et des réponses rapides du guide de vente.</li>
+        <li><b>Bibliothèque de pubs</b> de Facebook : sur chaque pub, son tag (Identique, Ressemble…) et « Suivre la boutique », pour AI Spy.</li>
+        <li><b>Gestionnaire de publicités</b> : à côté de chaque pub, ses commandes confirmées et livrées, le coût par confirmée et le bid limit.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Vos adresses Pilotix</h2>
       <ul id="sites"></ul>
-      <p id="noSite" class="empty" hidden>Aucune adresse. Ajoutez celle de votre Pilotix pour que la page AI Spy trouve l’extension.</p>
+      <details id="more">
+        <summary>Votre boutique a sa propre adresse Pilotix ?</summary>
+        <form id="add" autocomplete="off">
+          <label class="sr" for="site">Adresse de votre Pilotix</label>
+          <input id="site" type="text" inputmode="url" spellcheck="false" placeholder="https://app.maboutique.dz" />
+          <button type="submit" class="primary">Ajouter</button>
+        </form>
+      </details>
+      <p id="siteMsg" class="msg" role="status"></p>
     </section>
 
     <section>
@@ -49,14 +67,14 @@
     <section class="help">
       <h2>Comment ça marche</h2>
       <p>
-        Dans Pilotix, ouvrez <b>Marketing › AI Spy</b> et cliquez sur <b>Chercher</b>. L’extension ouvre la bibliothèque publicitaire de Facebook
-        dans un onglet en arrière-plan, lit les pubs publiques, ferme l’onglet et les donne à votre page Pilotix.
+        <b>AI Spy</b> : dans Pilotix, ouvrez <b>Marketing › AI Spy</b> et cliquez sur <b>Chercher</b>. L’extension ouvre la bibliothèque de pubs
+        de Facebook dans un onglet en arrière-plan, lit les pubs publiques, ferme l’onglet et les donne à votre page Pilotix.
       </p>
-      <p>Elle ne publie, n’aime et ne clique jamais rien. Si Facebook demande une connexion ou une vérification, ouvrez une fois facebook.com/ads/library dans Chrome.</p>
       <p>
-        <b>Prix de cette page</b> : quand le site d’un concurrent refuse les robots, ouvrez-le, cliquez sur l’icône Pilotix Spy puis sur
-        <b>Lire le prix de cette page</b>. Gardez AI Spy ouvert dans Pilotix : le prix arrive sur les pubs de cette page.
+        <b>Lire la page</b> : quand le site d’un concurrent refuse les robots, ouvrez-le, cliquez sur l’icône Pilotix puis sur <b>Lire la page</b>.
+        Ce que vous voyez arrive sur les pubs de cette page dans AI Spy.
       </p>
+      <p>Elle ne publie, n’aime et n’envoie jamais rien d’elle-même. Si Facebook demande une connexion ou une vérification, ouvrez une fois facebook.com/ads/library dans Chrome.</p>
     </section>
 
     <script type="module" src="popup.js"></script>

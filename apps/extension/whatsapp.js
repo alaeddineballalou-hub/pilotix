@@ -1,7 +1,18 @@
-// Pilotix WhatsApp — on WhatsApp Web. Asked by the add-on's worker (background.js): wait until WhatsApp Web has opened
+// Pilotix extension — Envoyer photos, on WhatsApp Web. Asked by the worker (wa.js): wait until WhatsApp Web has opened
 // the customer's chat, paste the photos into it (WhatsApp shows them, ready to send), then put the message under them.
-// The agent presses Enter: nothing is sent by the add-on, and nothing of WhatsApp is read or sent anywhere.
+// The agent presses Enter: nothing is sent by the extension, and nothing of WhatsApp is read or sent anywhere.
 (() => {
+  // After an update the old copy is cut off from the worker: a new copy takes over. While it is alive, a second
+  // injection does nothing (the photos would be pasted twice).
+  const alive = () => {
+    try {
+      return !!chrome.runtime?.id;
+    } catch {
+      return false;
+    }
+  };
+  if (globalThis.__pilotixWa?.alive?.()) return;
+  globalThis.__pilotixWa = { alive };
   /** how long WhatsApp Web may take to load and open the chat */
   const OPEN_MS = 90_000;
   const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
@@ -123,7 +134,7 @@
 
   chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (msg?.action !== 'attach') return false;
-    // a page from before the add-on opened this chat: the new one will answer
+    // a page from before the extension opened this chat: the new one will answer
     if (performance.timeOrigin < msg.startedAt - 50) {
       reply({ stale: true });
       return false;

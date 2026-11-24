@@ -29,6 +29,7 @@ import { store } from './lib/store';
 import { AGENCY_PAGES, MARKETER_PAGES, PAGES } from './pages/registry';
 import { Loading } from './ui/kit';
 import { Toasts } from './ui/toast';
+import { ExtBridgeHost } from './ui/ExtBridgeHost';
 import { installEdgeScroll } from './ui/edgeScroll';
 import { installEdgeFade } from './ui/edgeFade';
 import { installMotion } from './ui/motion';
@@ -369,6 +370,8 @@ createRoot(document.getElementById('root')!).render(
         <RiskAskHost />
         <Toasts />
         <AppUpdateHost />
+        {/* the Pilotix Chrome extension asks this page what needs Pilotix (lib/extBridge) */}
+        <ExtBridgeHost />
         {/* every <select> opens our own list (ui/SelectPicker) */}
         <SelectPicker />
       </SessionProvider>

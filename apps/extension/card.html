@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pilotix · Client</title>
+    <link rel="stylesheet" href="card.css" />
+  </head>
+  <body>
+    <button id="pill" type="button" class="pill" aria-expanded="false">
+      <img src="icons/icon32.png" alt="" width="18" height="18" />
+      <span id="pillText">Pilotix…</span>
+      <span class="chev" aria-hidden="true">▾</span>
+    </button>
+    <section id="card" class="card" hidden>
+      <header>
+        <img src="icons/icon32.png" alt="" width="24" height="24" />
+        <div class="who">
+          <b id="name">…</b>
+          <span id="phone" class="ltr"></span>
+        </div>
+        <button id="close" type="button" class="icon" aria-label="Réduire">▴</button>
+      </header>
+      <p id="msg" class="msg" role="status"></p>
+      <div id="body"></div>
+    </section>
+    <script type="module" src="card.js"></script>
+  </body>
+</html>

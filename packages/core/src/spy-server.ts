@@ -3,13 +3,14 @@
 //  - 'search' → { source, key, query, country, max }: one keyword in Facebook's Ad Library through ScrapeCreators or
 //    SearchAPI.io (both mirror Facebook's own library data); the key goes in a header, never in a URL
 //  - 'media'  → { url }: a competitor's picture as a data URL (Facebook's picture links expire after a few days)
+//  - videoFile(url): a competitor's video for Pilotix's own copy (called by the server's spyVideo hook, not through runSpy)
 //  - 'site'   → { url }: a competitor's page read once: shop builder, price, crossed price, order form (58 or 69 wilayas)
 //    never forced: the site's « no robots » rule (robots.txt) is followed, and a protection wall against robots (Cloudflare's
 //    check, DDoS-Guard…) is taken as a no: one try, nothing to get round it, the reason kept (SpySite.blocked)
 // Addresses come from ads (other people's data): only public http(s) hosts are fetched, never the server's own network.
 import { AppError, Ctx } from './rpc';
 import { publicFetch } from './publicfetch';
-import { builderOf, fromLibrary, pricesIn, RawAd, SpySearchResult, SpySite, SpySiteBlock } from './modules/spy';
+import { builderOf, fbVideoUrl, fromLibrary, pricesIn, RawAd, SpySearchResult, SpySite, SpySiteBlock } from './modules/spy';
 
 const UA = 'Mozilla/5.0 (Linux; Android 13; SM-A536B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36';
 const LABEL = { scrapecreators: 'ScrapeCreators', searchapi: 'SearchAPI.io' } as const;
@@ -281,6 +282,21 @@ async function site(a: { url: string }, ctx: Ctx): Promise<SpySite> {
     if (theirs.txt !== null && !robotsAllow(theirs.txt, final.pathname + final.search)) return no('robots');
   }
   return readSite(html, final.toString(), now);
+}
+
+/**
+ * A competitor's video, downloaded once from Facebook's servers (*.fbcdn.net only) for Pilotix's own copy: an mp4 of
+ * 60 MB at most, in 2 minutes at most. The server writes it on its disk (apps/server/src/media.ts).
+ */
+export async function videoFile(url: string): Promise<{ body: Uint8Array; type: string }> {
+  if (!fbVideoUrl(url)) throw new AppError('bad_request', 'Lien de vidéo refusé');
+  const res = await publicFetch(url, { headers: { 'User-Agent': UA, Accept: 'video/mp4,video/*;q=0.9,*/*;q=0.5' }, timeoutMs: 120_000, maxBytes: 60 * 1024 * 1024, maxRedirects: 3 }, 'Vidéo');
+  if (!res.ok) throw new AppError('bad_request', `Vidéo indisponible (${res.status})`);
+  const type = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+  if (!/^video\/(mp4|quicktime)$/.test(type)) throw new AppError('bad_request', 'Ce lien ne donne pas une vidéo');
+  const body = new Uint8Array(await res.arrayBuffer());
+  if (body.length < 10_000) throw new AppError('bad_request', 'Vidéo vide');
+  return { body, type };
 }
 
 export async function runSpy(action: string, args: unknown, ctx: Ctx): Promise<unknown> {

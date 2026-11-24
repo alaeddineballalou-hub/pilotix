@@ -2,6 +2,9 @@
 // until their post goes out (and a week more), never re-encoded. A video comes in pieces of the same size (the last one
 // smaller): a piece sent again (a weak line) replaces itself, a piece too far ahead is refused (the browser starts again
 // from what the server has). Meta and the editor read it through a public address, with byte ranges.
+// AI Spy's copies of competitors' videos (the shops a shop follows, the ads it tagged): MEDIA_DIR/<shop schema>/spy/<key>.mp4,
+// downloaded once from Facebook's servers while its link works, played in AI Spy through a public address.
+import { randomBytes } from 'crypto';
 import { createReadStream, promises as fs } from 'fs';
 import * as path from 'path';
 import * as core from '@pilotix/core';
@@ -60,13 +63,52 @@ export function mediaHooks(schema: string): NonNullable<core.ServerHooks['media'
   };
 }
 
+function spyFileOf(schema: string, key: string): string {
+  if (!SAFE.test(schema) || !/^[a-f0-9]{24}$/.test(key)) throw new core.AppError('bad_request', 'Vidéo inconnue');
+  return path.join(config.mediaDir, schema, 'spy', `${key}.mp4`);
+}
+
+/** The server-only part of the core that downloads a competitor's video (public addresses on Facebook's servers only). */
+function spyServer(): { videoFile: (url: string) => Promise<{ body: Uint8Array; type: string }> } | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require('@pilotix/core/dist/spy-server');
+  } catch {
+    return null;
+  }
+}
+
+/** AI Spy's copies of competitors' videos for one shop (core: ctx.server.spyVideo). */
+export function spyVideoHooks(schema: string): NonNullable<core.ServerHooks['spyVideo']> {
+  return async (action, a) => {
+    if (action !== 'keep') throw new core.AppError('bad_request', `Action inconnue : ${action}`);
+    const spy = spyServer();
+    if (!spy?.videoFile) throw new core.AppError('bad_request', 'AI Spy indisponible sur ce serveur');
+    const v = await spy.videoFile(a.url);
+    const key = randomBytes(12).toString('hex');
+    const file = spyFileOf(schema, key);
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(`${file}.part`, v.body);
+    await fs.rename(`${file}.part`, file);
+    return { key, bytes: v.body.length };
+  };
+}
+
 /** A whole video, or the byte range asked (Meta's downloads, the editor's player). */
 export async function sendVideo(schema: string, v: { id: number; key: string; ext: string; mime: string }, range: string | undefined, res: any): Promise<unknown> {
-  const file = fileOf(schema, v.id, v.key, v.ext);
+  return sendRange(fileOf(schema, v.id, v.key, v.ext), v.mime, range, res);
+}
+
+/** A competitor's video Pilotix keeps (AI Spy's player), whole or the byte range asked. */
+export async function sendSpyVideo(schema: string, key: string, range: string | undefined, res: any): Promise<unknown> {
+  return sendRange(spyFileOf(schema, key), 'video/mp4', range, res);
+}
+
+async function sendRange(file: string, mime: string, range: string | undefined, res: any): Promise<unknown> {
   const st = await fs.stat(file).catch(() => null);
   if (!st) return res.status(404).send();
   const size = st.size;
-  const head = (r: any) => r.header('Content-Type', v.mime).header('Accept-Ranges', 'bytes').header('Cache-Control', 'public, max-age=31536000, immutable');
+  const head = (r: any) => r.header('Content-Type', mime).header('Accept-Ranges', 'bytes').header('Cache-Control', 'public, max-age=31536000, immutable');
   const m = /^bytes=(\d*)-(\d*)$/.exec(String(range ?? '').trim());
   if (!m || (!m[1] && !m[2])) return head(res.status(200)).header('Content-Length', String(size)).send(createReadStream(file));
   let start = m[1] ? Number(m[1]) : Math.max(0, size - Number(m[2]));

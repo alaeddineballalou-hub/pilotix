@@ -2,10 +2,12 @@ import { CLIENT_LEVELS, CONF_DONE_BAD, normalizePhone, WILAYAS } from '@pilotix/
 import { z } from 'zod';
 import { ownRowSql, rowScopeSql } from './agencyscope';
 import { iso, isoOrNull, num, numOrNull, Where } from '../db';
-import { bad, notFound, proc } from '../rpc';
+import { bad, Ctx, notFound, proc } from '../rpc';
 import { addEvent } from './orders';
 import { CLIENT_FACT_COLS, ClientScore, scoresAll, scoresOf } from './clientscore';
 import { shareBlacklist } from './sharedblacklist';
+import { readGuide, toFill } from './guide';
+import { assignedProductIds } from './productscope';
 
 const id = z.number().int().positive();
 
@@ -108,6 +110,117 @@ const isoDay = (s: string | null | undefined) => {
 
 const WHO = ['confirmation', 'suivi'] as const;
 
+/** A customer's order, as the history lists it. */
+export interface CustomerOrder {
+  id: number;
+  ref: string;
+  createdAt: string;
+  total: number;
+  confStatus: string;
+  followStatus: string | null;
+  attempts: number;
+  itemsText: string;
+  variantsText: string;
+}
+
+/**
+ * A customer (by id or phone) with their orders, newest first; null when the number never ordered here. A confirmation
+ * agency's agent sees only the agency's own orders of this customer (the store's others are not its business); the
+ * store's own confirmation agent, his own orders of this customer.
+ */
+async function historyOf(ctx: Ctx, i: { id?: number; phone?: string }): Promise<{ customer: CustomerRow; orders: CustomerOrder[] } | null> {
+  let r: any;
+  if (i.id) r = (await ctx.db.query(`SELECT ${COLS} FROM customers c WHERE c.id = $1`, [i.id]))[0];
+  else if (i.phone) {
+    const p = normalizePhone(i.phone);
+    if (!p) throw bad('Numéro de téléphone algérien invalide');
+    r = (await ctx.db.query(`SELECT ${COLS} FROM customers c WHERE c.phone = $1`, [p]))[0];
+  } else throw bad('Indiquez le client');
+  if (!r) return null;
+  const scope = rowScopeSql(ctx);
+  const orders = await ctx.db.query(
+    `SELECT o.id, o.ref, o.created_at, o.total, o.conf_status, o.follow_status, o.attempts,
+       (SELECT string_agg(CASE WHEN i.qty > 1 THEN i.qty || ' × ' ELSE '' END || i.name, ' · ' ORDER BY i.id) FROM order_items i WHERE i.order_id = o.id) AS items_text,
+       (SELECT CASE WHEN bool_or(i.variant_title <> '') THEN string_agg(CASE WHEN i.variant_title <> '' THEN i.variant_title ELSE '—' END, ' · ' ORDER BY i.id) END FROM order_items i WHERE i.order_id = o.id) AS variants_text
+     FROM sales o WHERE (o.customer_id = $1 OR o.phone = $2)${scope ? ` AND ${scope}` : ''} ORDER BY o.created_at DESC LIMIT 100`,
+    [r.id, r.phone],
+  );
+  return {
+    customer: toCustomer(r, (await scoresOf(ctx, [r]))[0]),
+    orders: orders.map((o: any) => ({
+      id: num(o.id), ref: o.ref, createdAt: iso(o.created_at), total: num(o.total), confStatus: o.conf_status, followStatus: o.follow_status ?? null, attempts: num(o.attempts), itemsText: o.items_text ?? '', variantsText: o.variants_text ?? '',
+    })),
+  };
+}
+
+/** A quick reply of a product's sales guide: a question customers ask, or a hesitation, with the shop's answer. */
+export interface WaReply {
+  kind: 'doubt' | 'faq';
+  q: string;
+  a: string;
+}
+
+/** The Pilotix extension's card on WhatsApp Web (customers.waCard). */
+export interface WaCard {
+  /** the number as Pilotix writes it (0555…) */
+  phone: string;
+  /** null: this number never ordered here */
+  customer: CustomerRow | null;
+  /** their last orders (5 at most) */
+  orders: CustomerOrder[];
+  /** the product whose quick replies are shown (the one chosen, else the one of their last order with a guide) */
+  product: { id: number; name: string } | null;
+  /** the products with a sales guide this person may read, to choose from */
+  products: { id: number; name: string }[];
+  replies: WaReply[];
+  /** this person sees only their own customers (an agent): a number that is not one of them shows as unknown */
+  scoped: boolean;
+}
+
+/**
+ * The card of the chat open on WhatsApp Web (the Pilotix extension): who this number is in Pilotix (level, blacklist,
+ * last orders) and quick replies from the sales guide (hesitations first, then questions), only the answers written.
+ * An agent who sees only their own orders (an agency's, or the store's own confirmation agent) gets the customer only
+ * when one of their orders is that number's: any other number shows as unknown (whether it ordered elsewhere or not).
+ */
+async function waCard(ctx: Ctx, i: { phone: string; productId?: number }): Promise<WaCard> {
+  const phone = normalizePhone(i.phone);
+  if (!phone) throw bad('Numéro algérien invalide');
+  const scoped = !!rowScopeSql(ctx);
+  let h = await historyOf(ctx, { phone });
+  if (h && scoped && !h.orders.length) h = null;
+  const allowed = await assignedProductIds(ctx);
+  const products = (
+    await ctx.db.query(
+      `SELECT p.id, p.name FROM products p JOIN product_guides g ON g.product_id = p.id
+       WHERE p.archived_at IS NULL AND ($1::bigint[] IS NULL OR p.id = ANY($1)) ORDER BY p.name LIMIT 60`,
+      [allowed],
+    )
+  ).map((r: any) => ({ id: num(r.id), name: String(r.name) }));
+  const has = new Set(products.map((p) => p.id));
+  // the product chosen, else the newest of their orders' products that has a guide
+  let pid = i.productId && has.has(i.productId) ? i.productId : null;
+  if (!pid && h?.orders.length) {
+    const ids = h.orders.slice(0, 5).map((o) => o.id);
+    const rows = await ctx.db.query(`SELECT i.product_id FROM order_items i WHERE i.order_id = ANY($1) ORDER BY i.order_id DESC, i.id`, [ids]);
+    pid = rows.map((r: any) => num(r.product_id)).find((x: number) => has.has(x)) ?? null;
+  }
+  const g = pid ? await readGuide(ctx.db, pid) : null;
+  const real = (x: { q: string; a: string }) => !!x.q.trim() && !toFill(x.a);
+  const replies: WaReply[] = g
+    ? [...g.guide.doubts.filter(real).map((x) => ({ kind: 'doubt' as const, q: x.q, a: x.a })), ...g.guide.faq.filter(real).map((x) => ({ kind: 'faq' as const, q: x.q, a: x.a }))].slice(0, 16)
+    : [];
+  return {
+    phone,
+    customer: h?.customer ?? null,
+    orders: h?.orders.slice(0, 5) ?? [],
+    product: pid ? (products.find((p) => p.id === pid) ?? null) : null,
+    products,
+    replies,
+    scoped,
+  };
+}
+
 /** customers procedures: list, order history, blacklist. */
 export const customersProcs = {
   'customers.ping': proc(null, z.object({}), async () => ({ ok: true })),
@@ -154,31 +267,13 @@ export const customersProcs = {
 
   /** A customer (by id or phone) with their orders, newest first. */
   'customers.history': proc([...WHO], z.object({ id: id.optional(), phone: z.string().max(20).optional() }), async (ctx, i) => {
-    let r: any;
-    if (i.id) r = (await ctx.db.query(`SELECT ${COLS} FROM customers c WHERE c.id = $1`, [i.id]))[0];
-    else if (i.phone) {
-      const p = normalizePhone(i.phone);
-      if (!p) throw bad('Numéro de téléphone algérien invalide');
-      r = (await ctx.db.query(`SELECT ${COLS} FROM customers c WHERE c.phone = $1`, [p]))[0];
-    } else throw bad('Indiquez le client');
-    if (!r) throw notFound('Client introuvable');
-    // a confirmation agency's agent: only the agency's own orders of this customer (the store's others are not its
-    // business); the store's own confirmation agent: his own orders of this customer
-    const scope = rowScopeSql(ctx);
-    const orders = await ctx.db.query(
-      `SELECT o.id, o.ref, o.created_at, o.total, o.conf_status, o.follow_status, o.attempts,
-         (SELECT string_agg(CASE WHEN i.qty > 1 THEN i.qty || ' × ' ELSE '' END || i.name, ' · ' ORDER BY i.id) FROM order_items i WHERE i.order_id = o.id) AS items_text,
-         (SELECT CASE WHEN bool_or(i.variant_title <> '') THEN string_agg(CASE WHEN i.variant_title <> '' THEN i.variant_title ELSE '—' END, ' · ' ORDER BY i.id) END FROM order_items i WHERE i.order_id = o.id) AS variants_text
-       FROM sales o WHERE (o.customer_id = $1 OR o.phone = $2)${scope ? ` AND ${scope}` : ''} ORDER BY o.created_at DESC LIMIT 100`,
-      [r.id, r.phone],
-    );
-    return {
-      customer: toCustomer(r, (await scoresOf(ctx, [r]))[0]),
-      orders: orders.map((o: any) => ({
-        id: num(o.id), ref: o.ref, createdAt: iso(o.created_at), total: num(o.total), confStatus: o.conf_status, followStatus: o.follow_status ?? null, attempts: num(o.attempts), itemsText: o.items_text ?? '', variantsText: o.variants_text ?? '',
-      })),
-    };
+    const h = await historyOf(ctx, i);
+    if (!h) throw notFound('Client introuvable');
+    return h;
   }),
+
+  /** The Pilotix extension's card on WhatsApp Web: the customer of the chat open there, and quick replies. */
+  'customers.waCard': proc([...WHO], z.object({ phone: z.string().max(40), productId: id.optional() }), (ctx, i) => waCard(ctx, i)),
 
   /**
    * Clients › « Importer des clients » (admin): customers from another app WITH their history there (orders, delivered,

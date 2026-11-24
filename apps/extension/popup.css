@@ -1,4 +1,4 @@
-/* Pilotix Spy popup: system fonts, Pilotix colours (navy #1B2A47, orange #F7A823 → #F28B1E), light and dark. */
+/* Pilotix extension popup: system fonts, Pilotix colours (navy #1B2A47, orange #F7A823 → #F28B1E), light and dark. */
 :root {
   --bg: #ffffff;
   --surface: #f4f6fa;
@@ -234,4 +234,82 @@ li span {
 }
 .help b {
   color: var(--text);
+}
+
+.note {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--text);
+  font-size: 12px;
+}
+.note[hidden] {
+  display: none;
+}
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+li small {
+  flex: none;
+  color: var(--ok);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+ul.uses {
+  margin: 0;
+}
+ul.uses li {
+  display: block;
+  padding: 0;
+  border: 0;
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+ul.uses li b {
+  color: var(--text);
+}
+details {
+  margin-top: 8px;
+}
+summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+summary:hover {
+  color: var(--text);
+}
+details form {
+  margin-top: 8px;
+}
+ul.read {
+  margin: 6px 0 0;
+}
+ul.read[hidden] {
+  display: none;
+}
+ul.read li {
+  align-items: baseline;
+  padding: 5px 8px;
+  margin-top: 4px;
+  font-size: 12.5px;
+}
+ul.read li b {
+  flex: none;
+  width: 62px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+ul.read li span {
+  white-space: normal;
+  font-weight: 600;
 }

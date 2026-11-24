@@ -1,9 +1,10 @@
-// Pilotix Spy popup: the price of the page the user has open, the Pilotix addresses (add / remove) and a test search.
-// Address changes go to the service worker (chrome.runtime.sendMessage); the test search uses the same port
-// ('pilotix-search') as the Pilotix page's bridge. « Lire le prix de cette page » reads the open tab (Chrome's
-// activeTab: given by this click on the extension, for that tab only) and hands the price to the open Pilotix page.
+// Pilotix extension popup: « Lire la page » on a competitor's site, the Pilotix addresses (Pilotix's own are always
+// there; a shop's own server can be added) and a test search. Address changes go to the service worker
+// (chrome.runtime.sendMessage); the test search uses the same port ('pilotix-search') as the Pilotix page's bridge.
+// « Lire la page » reads the open tab (Chrome's activeTab: given by this click on the extension, for that tab only) and
+// hands what it shows to the open Pilotix page, which saves it on the ads of that page.
 import { pageData, priceOf, readablePage } from './price.js';
-import { originPattern, pilotixOrigin } from './sites.js';
+import { BUILT_IN, originPattern, pilotixOrigin } from './sites.js';
 
 const $ = (id) => document.getElementById(id);
 const STEPS = {
@@ -26,26 +27,39 @@ function status(text, kind) {
 }
 
 let testing = false;
+/** Pilotix open in a tab of this Chrome (the extension goes through it for everything it shows or saves) */
+let pilotixOpen = null;
+
+function showStatus() {
+  if (testing) return;
+  if (pilotixOpen === null) return status('…', '');
+  status(pilotixOpen ? 'Prête' : 'Ouvrez Pilotix', pilotixOpen ? 'ok' : 'warn');
+  $('openMsg').hidden = pilotixOpen;
+}
 
 function render(sites) {
-  const list = $('sites');
-  list.replaceChildren(
-    ...sites.map((origin) => {
-      const li = document.createElement('li');
-      const name = document.createElement('span');
-      name.textContent = origin;
-      name.title = origin;
+  const row = (origin, own) => {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    name.textContent = origin.replace(/^https:\/\//, '');
+    name.title = origin;
+    li.append(name);
+    if (own) {
+      const tag = document.createElement('small');
+      tag.textContent = 'toujours là';
+      li.append(tag);
+    } else {
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'small';
       remove.textContent = 'Retirer';
       remove.addEventListener('click', () => removeSite(origin, remove));
-      li.append(name, remove);
-      return li;
-    }),
-  );
-  $('noSite').hidden = sites.length > 0;
-  if (!testing) status(sites.length ? 'Prête' : 'À configurer', sites.length ? 'ok' : 'warn');
+      li.append(remove);
+    }
+    return li;
+  };
+  $('sites').replaceChildren(...BUILT_IN.map((o) => row(o, true)), ...sites.filter((o) => !BUILT_IN.includes(o)).map((o) => row(o, false)));
+  if (sites.some((o) => !BUILT_IN.includes(o))) $('more').open = true;
 }
 
 async function call(msg) {
@@ -57,9 +71,11 @@ async function call(msg) {
 async function refresh() {
   try {
     render((await call({ type: 'sites' })).sites);
+    pilotixOpen = (await call({ type: 'status' })).open > 0;
   } catch (e) {
     say($('siteMsg'), e.message, 'bad');
   }
+  showStatus();
 }
 
 // Ajouter: Chrome's permission question must start right in the click (user gesture), before anything async.
@@ -159,7 +175,7 @@ $('test').addEventListener('click', () => {
   port.postMessage({ type: 'search', query: 'poussette', country: 'DZ', max: 30 });
 });
 
-// ---------------------------------------------------------------- « Lire le prix de cette page »
+// ---------------------------------------------------------------- « Lire la page »
 const da = (n) => `${Math.round(n).toLocaleString('fr-FR').replace(/\u202f|\u00a0/g, ' ')} DA`;
 let pageTab = null;
 
@@ -167,7 +183,7 @@ async function findPage() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const sites = (await call({ type: 'sites' }).catch(() => ({ sites: [] }))).sites ?? [];
-    if (!tab?.id || !readablePage(tab.url, sites)) return;
+    if (!tab?.id || !readablePage(tab.url, [...BUILT_IN, ...sites])) return;
     pageTab = tab;
     $('pageSec').hidden = false;
   } catch {
@@ -175,25 +191,58 @@ async function findPage() {
   }
 }
 
-$('readPrice').addEventListener('click', async () => {
-  const button = $('readPrice');
-  const out = $('priceMsg');
+/** What Pilotix read on the page (offers, delivery, why buy there), as short lines under the message. */
+function showRead(read) {
+  const list = $('pageRead');
+  const lines = [];
+  if (read && typeof read === 'object') {
+    if (read.delivery === 0) lines.push(['Livraison', `gratuite${read.deliveryNote ? ` · ${read.deliveryNote}` : ''}`]);
+    else if (typeof read.delivery === 'number') lines.push(['Livraison', `${da(read.delivery)}${read.deliveryNote ? ` · ${read.deliveryNote}` : ''}`]);
+    else if (read.deliveryNote) lines.push(['Livraison', read.deliveryNote]);
+    for (const o of (Array.isArray(read.offers) ? read.offers : []).slice(0, 4)) lines.push(['Offre', String(o)]);
+    for (const w of (Array.isArray(read.whyUs) ? read.whyUs : []).slice(0, 4)) lines.push(['Promet', String(w)]);
+  }
+  list.replaceChildren(
+    ...lines.map(([k, v]) => {
+      const li = document.createElement('li');
+      const b = document.createElement('b');
+      b.textContent = k;
+      const t = document.createElement('span');
+      t.textContent = v;
+      li.append(b, t);
+      return li;
+    }),
+  );
+  list.hidden = lines.length === 0;
+}
+
+$('readPage').addEventListener('click', async () => {
+  const button = $('readPage');
+  const out = $('pageMsg');
   if (!pageTab) return;
   button.disabled = true;
+  showRead(null);
   say(out, 'Lecture de la page…');
   try {
     const [res] = await chrome.scripting.executeScript({ target: { tabId: pageTab.id }, func: pageData });
-    const found = priceOf(res?.result);
-    if (!found) {
-      say(out, 'Aucun prix en DA sur cette page. Ouvrez la page du produit, puis réessayez.', 'bad');
-      return;
-    }
-    const shown = found.oldPrice ? `${da(found.price)} (avant ${da(found.oldPrice)})` : da(found.price);
+    const data = res?.result;
+    if (!data || typeof data !== 'object') throw new Error('page vide');
+    const found = priceOf(data);
+    const shown = found ? (found.oldPrice ? `${da(found.price)} (avant ${da(found.oldPrice)})` : da(found.price)) : 'Pas de prix en DA';
     say(out, `${shown} · envoi à Pilotix…`);
-    const r = await chrome.runtime.sendMessage({ type: 'sitePrice', url: res.result.url, price: found.price, oldPrice: found.oldPrice, title: res.result.title });
-    if (!r?.ok) say(out, `${shown} lu. ${r?.message || 'L’extension ne répond pas.'}`, 'bad');
-    else if (r.saved > 0) say(out, `${shown} · envoyé à AI Spy (${r.saved === 1 ? '1 pub' : `${r.saved} pubs`}).`, 'ok');
-    else say(out, `${shown} lu, mais aucune pub de cette page dans AI Spy.`, 'bad');
+    const r = await chrome.runtime.sendMessage({
+      type: 'sitePrice',
+      url: data.url,
+      price: found?.price ?? null,
+      oldPrice: found?.oldPrice ?? null,
+      title: data.title,
+      page: { text: String(data.text || '').slice(0, 8000) },
+    });
+    if (!r?.ok) say(out, `${shown}. ${r?.message || 'L’extension ne répond pas.'}`, 'bad');
+    else if (r.saved > 0) {
+      say(out, `${shown} · envoyé à AI Spy (${r.saved === 1 ? '1 pub' : `${r.saved} pubs`}).`, 'ok');
+      showRead(r.read);
+    } else say(out, `${shown}, mais aucune pub de cette page dans AI Spy.`, 'bad');
   } catch (e) {
     say(out, `Chrome n’a pas laissé lire cette page : ${String(e?.message ?? e).slice(0, 160)}`, 'bad');
   } finally {

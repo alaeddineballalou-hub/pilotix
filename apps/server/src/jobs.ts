@@ -30,7 +30,8 @@ import { runWatch } from './watchers';
  *    alerts, the come-back offers, every minute
  *  - Landing pages: abandoned orders (list, Commandes, reminder) and Meta Conversions API events, every minute
  *  - Google Sheets sales channels: new lines become orders, every 2 minutes
- *  - AI Spy: competitors' Facebook ads (paid source), checked every hour, scanned once a day after the chosen hour
+ *  - AI Spy: competitors' Facebook ads (paid source), checked every hour, scanned once a day after the chosen hour; the
+ *    videos of followed shops and tagged ads copied while Facebook's links work, every 30 minutes
  *  - Formulaires: the leads of the ads' forms Meta did not send (and the forms list every 6 hours), every 10 minutes
  *  - Campagnes: the WhatsApp offers due, every minute (the shop's messages a day, never at night)
  *  - Pilot Ads: Pilote auto reads the ads' fresh numbers, suggests (or makes, within the owner's limits) one change per
@@ -72,6 +73,7 @@ const FEATURE: Record<string, string | null> = {
   // ZR pickup points, checked hourly.
   'desks-refresh': null,
   'spy-scan': 'marketing/spy',
+  'spy-videos': 'marketing/spy',
   'leads-catchup': 'marketing/formulaires',
   'campaigns-run': 'marketing/campagnes',
   'catalog-run': 'marketing/catalogue',
@@ -156,6 +158,11 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       return r;
     }
     if (name === 'spy-scan') return call('spy.scan');
+    if (name === 'spy-videos') {
+      const r: any = await call('spy.videos');
+      if (r?.failed) new Logger('AI Spy').warn(`${tag} ${r.failed} video(s) not copied (Facebook's link refused or too heavy)`);
+      return r;
+    }
     if (name === 'campaigns-run') return call('campaigns.run');
     if (name === 'catalog-run') return call('metacatalog.run');
     // Produits › « Prêt »: every product where its readiness says (not Ready: not sold; Ready again: back on sale)
@@ -320,6 +327,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     }
     await this.queue.add('sheets-sync', {}, { repeat: { every: SHEETS_EVERY }, jobId: 'sheets-sync', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('spy-scan', {}, { repeat: { pattern: '7 * * * *' }, jobId: 'spy-scan', removeOnComplete: 20, removeOnFail: 50 });
+    // AI Spy: Pilotix's copies of the videos of followed shops and tagged ads (Facebook's links stop working after some days)
+    await this.queue.add('spy-videos', {}, { repeat: { every: 30 * 60_000 }, jobId: 'spy-videos', removeOnComplete: 20, removeOnFail: 50 });
     // Marketing › Formulaires: the safety net of the ads' lead forms (a webhook Meta did not send)
     await this.queue.add('leads-catchup', {}, { repeat: { every: 10 * 60_000 }, jobId: 'leads-catchup', removeOnComplete: 20, removeOnFail: 50 });
     // Marketing › Campagnes: the WhatsApp offers due, a few each minute (the shop's messages a day, never at night)

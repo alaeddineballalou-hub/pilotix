@@ -12,17 +12,19 @@ import { rpc, type Out } from '../../lib/backend';
 import { da, n, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { store } from '../../lib/store';
-import { adLibraryUrl, detectExtension, extensionSearch, onSitePrice, type ExtStatus, type ExtStep } from '../../lib/spyExtension';
+import { adLibraryUrl, detectExtension, extensionSearch, type ExtStatus, type ExtStep } from '../../lib/spyExtension';
+import { setSpyScreen } from '../../lib/extBridge';
 import { copyText, Empty, ErrorBox, Icon, KpiBody, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import type { PageProps } from '../registry';
 import { SpyDetail } from './SpyDetail';
 import { ExtensionCard, SpySettingsView } from './SpySettings';
-import { arLang, Creative, dayTone, firstLine, isAr, LandLine, Rich, type View } from './spyShared';
+import { arLang, Creative, dayTone, firstLine, isAr, LandLine, Rich, TagChip, useOwnTags, useTagLabel, type OwnTag, type View } from './spyShared';
 import './spy.css';
 
-type Filters = { site: boolean; chat: boolean; video: boolean; hideOwn: boolean };
-const NO_FILTERS: Filters = { site: false, chat: false, video: false, hideOwn: false };
+/** the switches, and one tag (Identique, Ressemble, or one of the shop's own) */
+type Filters = { site: boolean; chat: boolean; video: boolean; hideOwn: boolean; tag: string | null };
+const NO_FILTERS: Filters = { site: false, chat: false, video: false, hideOwn: false, tag: null };
 const FILTERS = ['site', 'chat', 'video', 'hideOwn'] as const;
 const SORTS = ['score', 'days', 'copies', 'recent'] as const;
 type Sort = (typeof SORTS)[number];
@@ -202,6 +204,8 @@ function SpyMain() {
   // the previous product's data stays on screen while the next one loads: never show it under the new product
   const v = view.data && view.data.product.id === productId ? view.data : null;
   const [sel, setSel] = useState<string | null>(null);
+  // the ad clicked in the list: its video starts at once (not the ad shown first, nor one opened from an alert)
+  const [play, setPlay] = useState<string | null>(null);
   const [f, setF] = useState<Filters>(NO_FILTERS);
   const [sort, setSort] = useState<Sort>(() => {
     const s = store.get('spy-sort');
@@ -246,7 +250,12 @@ function SpyMain() {
   const shown = useMemo(() => {
     if (!v) return [];
     const keep = v.ads.filter(
-      (a) => (!f.site || a.linkType === 'site') && (!f.chat || a.linkType === 'messenger' || a.linkType === 'whatsapp') && (!f.video || a.isVideo) && (!f.hideOwn || !a.own),
+      (a) =>
+        (!f.site || a.linkType === 'site') &&
+        (!f.chat || a.linkType === 'messenger' || a.linkType === 'whatsapp') &&
+        (!f.video || a.isVideo) &&
+        (!f.hideOwn || !a.own) &&
+        (!f.tag || a.tag === f.tag),
     );
     const by: Record<Sort, (a: SpyAd, b: SpyAd) => number> = {
       score: (a, b) => b.score - a.score || b.days - a.days,
@@ -258,25 +267,17 @@ function SpyMain() {
   }, [v, f, sort]);
   const cur = shown.find((a) => a.gkey === sel) ?? shown[0] ?? null;
 
-  // a competitor's price read by the user's Chrome (the extension's « Lire le prix de cette page »): saved on the ads of
-  // that page; the ad on screen is used when the page's address matches none (a redirect, a short link)
-  const sitePrice = useAction('spy.sitePrice', { silent: true });
-  const onScreen = useRef<{ productId: number; gkey: string } | null>(null);
-  onScreen.current = cur && productId !== null ? { productId, gkey: cur.gkey } : null;
-  const saveSitePrice = useRef(sitePrice.mutateAsync);
-  saveSitePrice.current = sitePrice.mutateAsync;
-  useEffect(
-    () =>
-      onSitePrice(async (p) => {
-        const r = await saveSitePrice.current({ via: 'chrome', url: p.url, price: p.price, oldPrice: p.oldPrice, ...(onScreen.current ?? {}) });
-        toast(r.saved ? t('spy.site.chromeOk', { price: da(p.price), count: r.saved }) : t('spy.site.chromeNone', { price: da(p.price) }), r.saved ? 'ok' : 'info');
-        return r;
-      }),
-    [t],
-  );
+  // a competitor's page read by the user's Chrome (the extension's « Lire la page », ui/ExtBridgeHost): saved on the ads
+  // of that page; the ad on screen is used when the page's address matches none (a redirect, a short link)
+  const screenGkey = cur?.gkey ?? null;
+  useEffect(() => {
+    setSpyScreen(screenGkey && productId !== null ? { productId, gkey: screenGkey } : null);
+    return () => setSpyScreen(null);
+  }, [productId, screenGkey]);
 
   const select = (gkey: string) => {
     setSel(gkey);
+    setPlay(gkey);
     if (v && !shown.some((a) => a.gkey === gkey)) setF(NO_FILTERS);
     if (window.matchMedia('(max-width: 1180px)').matches) requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
@@ -298,7 +299,7 @@ function SpyMain() {
           <div className="spy-split">
             <Results v={v} shown={shown} cur={cur} f={f} setF={setF} sort={sort} setSort={setSort} onSelect={select} innerRef={resultsRef} />
             <div className="spy-detail" ref={detailRef}>
-              <SpyDetail ad={cur} v={v} />
+              <SpyDetail ad={cur} v={v} autoPlay={!!cur && play === cur.gkey} />
             </div>
           </div>
           <div className="spy-two">
@@ -635,7 +636,11 @@ function KpiRow({ v }: { v: View }) {
 // ---------------------------------------------------------------- the ads found
 function Results({ v, shown, cur, f, setF, sort, setSort, onSelect, innerRef }: { v: View; shown: SpyAd[]; cur: SpyAd | null; f: Filters; setF: Dispatch<SetStateAction<Filters>>; sort: Sort; setSort: (s: Sort) => void; onSelect: (gkey: string) => void; innerRef: RefObject<HTMLElement> }) {
   const { t } = useTranslation();
-  const toggle = (k: keyof Filters) =>
+  const own = useOwnTags();
+  const tagLabel = useTagLabel(own);
+  // the tags the ads here have (Identique, Ressemble, the shop's own), to filter by one
+  const tags = [...new Set(v.ads.map((a) => a.tag).filter((x): x is string => !!x && x !== 'other'))].sort((a, b) => order(a, own) - order(b, own));
+  const toggle = (k: (typeof FILTERS)[number]) =>
     setF((x) => {
       const on = !x[k];
       // « avec site » and « Messenger / WhatsApp » exclude each other
@@ -658,6 +663,11 @@ function Results({ v, shown, cur, f, setF, sort, setSort, onSelect, innerRef }: 
           {FILTERS.map((k) => (
             <button key={k} type="button" className={`spy-fchip ${f[k] ? 'on' : ''}`} aria-pressed={f[k]} onClick={() => toggle(k)}>
               {t(`spy.f.${k}`)}
+            </button>
+          ))}
+          {tags.map((k) => (
+            <button key={k} type="button" className={`spy-fchip spy-fchip-tag ${f.tag === k ? 'on' : ''}`} aria-pressed={f.tag === k} onClick={() => setF((x) => ({ ...x, tag: x.tag === k ? null : k }))}>
+              <Icon name="tag" /> {tagLabel(k)}
             </button>
           ))}
         </div>
@@ -689,7 +699,7 @@ function Results({ v, shown, cur, f, setF, sort, setSort, onSelect, innerRef }: 
       ) : (
         <div className="spy-grid">
           {shown.map((a) => (
-            <AdCard key={a.gkey} ad={a} sel={a.gkey === cur?.gkey} onClick={() => onSelect(a.gkey)} />
+            <AdCard key={a.gkey} ad={a} own={own} sel={a.gkey === cur?.gkey} onClick={() => onSelect(a.gkey)} />
           ))}
         </div>
       )}
@@ -698,7 +708,10 @@ function Results({ v, shown, cur, f, setF, sort, setSort, onSelect, innerRef }: 
   );
 }
 
-function AdCard({ ad, sel, onClick }: { ad: SpyAd; sel: boolean; onClick: () => void }) {
+/** Identique, Ressemble, then the shop's own tags in their order. */
+const order = (tag: string, own: OwnTag[]) => (tag === 'same' ? 0 : tag === 'like' ? 1 : 2 + Math.max(0, own.findIndex((o) => o.id === tag)));
+
+function AdCard({ ad, own, sel, onClick }: { ad: SpyAd; own: OwnTag[]; sel: boolean; onClick: () => void }) {
   const { t } = useTranslation();
   const d = dayTone(ad.days);
   const line = firstLine(ad);
@@ -717,7 +730,7 @@ function AdCard({ ad, sel, onClick }: { ad: SpyAd; sel: boolean; onClick: () => 
             <Icon name="clock" /> {t('spy.daysN', { n: n(ad.days) })}
           </span>
           {ad.own && <span className="badge spy-own">{t('spy.you')}</span>}
-          {ad.same === false && <span className="badge t-off">{t('spy.near')}</span>}
+          {!ad.own && <TagChip ad={ad} own={own} />}
           {!ad.active && <span className="badge t-bad">{t('spy.stopped')}</span>}
         </span>
         <LandLine ad={ad} />

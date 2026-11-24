@@ -466,3 +466,33 @@ test('the guide IS the product’s description (20 Nov 2026): its brief, sizes a
   await db.query('DELETE FROM product_guides WHERE product_id = $1', [thermo]);
   assert.equal(((await call('catalog.assigned', admin, { pageSize: 3000 })) as any).rows.find((r: any) => r.id === thermo).description, null);
 });
+
+test('the extension’s card on WhatsApp Web: who the number is, their last orders, the quick replies of their product', async () => {
+  const c = (await db.query(`SELECT c.phone FROM customers c JOIN orders o ON o.customer_id = c.id JOIN order_items i ON i.order_id = o.id WHERE i.product_id = $1 ORDER BY o.created_at DESC LIMIT 1`, [chair]))[0];
+  // WhatsApp gives the number with the country code
+  const card: any = await call('customers.waCard', admin, { phone: `213${String(c.phone).slice(1)}` });
+  assert.equal(card.phone, c.phone);
+  assert.ok(card.customer && card.orders.length >= 1 && card.orders.length <= 5);
+  assert.ok(card.product, 'the product of their last order that has a guide');
+  assert.ok(card.replies.length > 0 && card.replies.every((r: any) => r.q && r.a && r.a !== TO_FILL), 'only the answers written');
+  // the product chosen: its hesitations first, then its questions
+  const chosen: any = await call('customers.waCard', admin, { phone: c.phone, productId: chair });
+  assert.equal(chosen.product.id, chair);
+  const kinds = chosen.replies.map((r: any) => r.kind);
+  assert.deepEqual(kinds, [...kinds].sort((a: string, b: string) => (a === b ? 0 : a === 'doubt' ? -1 : 1)));
+  // a number that never ordered: no customer, the products to choose from
+  const fresh: any = await call('customers.waCard', admin, { phone: '+213 555 00 09 99' });
+  assert.deepEqual([fresh.customer, fresh.orders, fresh.product, fresh.replies], [null, [], null, []]);
+  assert.ok(fresh.products.some((p: any) => p.id === chair));
+  await assert.rejects(call('customers.waCard', admin, { phone: 'abc' }), /invalide/);
+  // an agent: the guides of their own products only, and a number that is not one of their customers shows as unknown
+  const own: any = await call('customers.waCard', conf, { phone: '0555000999' });
+  assert.deepEqual([own.products.map((p: any) => p.id), own.customer, own.scoped], [[chair], null, true]);
+  const mine = (await db.query(`SELECT phone FROM orders WHERE agent_id = $1 AND conf_agency_id IS NULL LIMIT 1`, [conf.session.profile.id]))[0];
+  if (mine) assert.ok(((await call('customers.waCard', conf, { phone: mine.phone })) as any).customer, 'one of their own customers');
+  const other = (await db.query(`SELECT c.phone FROM customers c WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id AND o.agent_id = $1) AND EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id) LIMIT 1`, [conf.session.profile.id]))[0];
+  assert.equal(((await call('customers.waCard', conf, { phone: other.phone })) as any).customer, null, 'another agent’s customer: unknown');
+  assert.equal(card.scoped, false);
+  // a delivery man: nothing
+  await assert.rejects(call('customers.waCard', await as(EMAILS.livreur), { phone: c.phone }), /Accès refusé/);
+});

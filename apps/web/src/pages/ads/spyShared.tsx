@@ -5,6 +5,7 @@ import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
 import { da } from '../../lib/format';
+import { useRpc } from '../../lib/query';
 import { Icon } from '../../ui/kit';
 
 export type View = Out<'spy.view'>;
@@ -92,7 +93,7 @@ const hueOf = (s: string) => {
  * The ad's picture with its score, copies and price. Without a picture (examples, or a picture not downloaded yet) a
  * mock is drawn: a gradient, the page's initial, the ad's first line and the price sticker.
  */
-export function Creative({ ad, big }: { ad: SpyAd; big?: boolean }) {
+export function Creative({ ad, big, noPlay }: { ad: SpyAd; big?: boolean; noPlay?: boolean }) {
   const { t } = useTranslation();
   const [broken, setBroken] = useState(false);
   const img = !!ad.media && !broken;
@@ -113,7 +114,7 @@ export function Creative({ ad, big }: { ad: SpyAd; big?: boolean }) {
           )}
         </span>
       )}
-      {img && ad.isVideo && (
+      {img && ad.isVideo && !noPlay && (
         <span className="spy-play" aria-hidden="true">
           <svg viewBox="0 0 24 24">
             <path d="M7 4l13 8-13 8z" />
@@ -163,6 +164,37 @@ export function LandLine({ ad }: { ad: SpyAd }) {
           {t('spy.land.noSite')} · <b>{t(`spy.link.${ad.linkType}`)}</b>
         </span>
       )}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------- tags
+/** A shop's own tag (AI Spy › Réglages › Mes tags). */
+export type OwnTag = { id: string; label: string };
+/** The three tags everyone has (the AI gives them too), in the order they are offered. */
+export const BASE_TAGS = ['same', 'like', 'other'] as const;
+
+/** The shop's own tags. */
+export function useOwnTags(): OwnTag[] {
+  return useRpc('spy.tags', {}, { staleTime: 60_000 }).data?.tags ?? [];
+}
+
+/** A tag in words: Identique, Ressemble, Pas le même, or the label of one of the shop's own. */
+export function useTagLabel(own: OwnTag[]) {
+  const { t } = useTranslation();
+  return (tag: string | null) => (!tag ? null : (BASE_TAGS as readonly string[]).includes(tag) ? t(`spy.tag.${tag}`) : (own.find((o) => o.id === tag)?.label ?? null));
+}
+
+/** An ad's tag on its card (« Pas le même » is out of the list anyway); who put it in the tooltip. */
+export function TagChip({ ad, own }: { ad: Pick<SpyAd, 'tag' | 'tagBy'>; own: OwnTag[] }) {
+  const { t } = useTranslation();
+  const label = useTagLabel(own)(ad.tag);
+  if (!label || ad.tag === 'other') return null;
+  const kind = ad.tag === 'same' || ad.tag === 'like' ? ad.tag : 'own';
+  return (
+    <span className={`badge spy-tag spy-tag-${kind}`} title={ad.tagBy === 'ai' ? t('spy.tag.byAi') : t('spy.tag.byYou')}>
+      {ad.tagBy === 'ai' && <Icon name="sparkles" />}
+      {label}
     </span>
   );
 }

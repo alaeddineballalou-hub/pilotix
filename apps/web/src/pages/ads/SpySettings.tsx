@@ -10,7 +10,7 @@ import type { Out } from '../../lib/backend';
 import { dateOnly, n } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
-import { detectExtension, SPY_EXT_VERSION, type ExtStatus } from '../../lib/spyExtension';
+import { detectExtension, EXT_VERSION, EXT_ZIP, type ExtStatus } from '../../lib/spyExtension';
 import { copyText, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { SaveBar } from '../ai/agent';
@@ -22,7 +22,6 @@ const isOwn = (s: SpySource): s is Paid => s === 'scrapecreators' || s === 'sear
 /** Pilotix's server (and its preview): the extension or « Recherche Pilotix »; a single shop: the extension or its own key */
 const sourcesOf = (platform: boolean): SpySource[] => (platform ? ['extension', 'pilotix'] : ['extension', 'scrapecreators', 'searchapi']);
 /** The extension's download from this website (apps/extension, zipped by the website's build: scripts/extension-zips.mjs). */
-const EXT_ZIP = '/pilotix-spy.zip';
 
 export function SpySettingsView() {
   const { t } = useTranslation();
@@ -41,8 +40,73 @@ export function SpySettingsView() {
         </div>
       </section>
       {q.isLoading ? <Loading /> : q.error || !q.data ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : <Form key={JSON.stringify([q.data.settings, q.data.keys])} data={q.data} />}
+      <TagsCard />
       <ExtensionCard />
     </div>
+  );
+}
+
+/** « Mes tags »: the shop's own tags for the ads, next to Identique, Ressemble and Pas le même (12 at most). */
+function TagsCard() {
+  const { t } = useTranslation();
+  const q = useRpc('spy.tags', {});
+  const [list, setList] = useState<{ id?: string; label: string }[] | null>(null);
+  const [draft, setDraft] = useState('');
+  const save = useAction('spy.tagsSave', { success: t('spy.tag.savedList'), onDone: () => setList(null) });
+  const tags = list ?? q.data?.tags ?? [];
+  const dirty = list !== null;
+  const add = () => {
+    const label = draft.trim().slice(0, 30);
+    if (!label || tags.some((x) => x.label.toLowerCase() === label.toLowerCase()) || tags.length >= 12) return;
+    setList([...tags, { label }]);
+    setDraft('');
+  };
+  return (
+    <section className="card spy-tagscard" aria-labelledby="spy-tags-h">
+      <div className="card-head">
+        <h2 id="spy-tags-h">
+          <Icon name="tag" /> {t('spy.tag.mine')}
+        </h2>
+      </div>
+      <p className="note">{t('spy.tag.mineHelp')}</p>
+      <div className="spy-tagscard-list">
+        {['same', 'like', 'other'].map((k) => (
+          <span key={k} className={`spy-tagbtn spy-tagbtn-${k} on`}>
+            {t(`spy.tag.${k}`)}
+          </span>
+        ))}
+        {tags.map((x, k) => (
+          <span key={x.id ?? `new${k}`} className="spy-tagbtn spy-tagbtn-own on">
+            {x.label}
+            <button type="button" className="spy-tagx" aria-label={t('spy.tag.remove', { tag: x.label })} onClick={() => setList(tags.filter((_, j) => j !== k))}>
+              <Icon name="x" />
+            </button>
+          </span>
+        ))}
+      </div>
+      <form
+        className="spy-tagscard-add"
+        onSubmit={(e) => {
+          e.preventDefault();
+          add();
+        }}
+      >
+        <input value={draft} maxLength={30} placeholder={t('spy.tag.newPh')} aria-label={t('spy.tag.new')} onChange={(e) => setDraft(e.target.value)} disabled={tags.length >= 12} />
+        <button type="submit" className="btn small" disabled={!draft.trim() || tags.length >= 12}>
+          <Icon name="plus" /> {t('spy.tag.add')}
+        </button>
+      </form>
+      {dirty && (
+        <div className="row">
+          <button type="button" className="btn small primary" disabled={save.isPending} onClick={() => save.mutate({ tags: tags.map((x) => (x.id ? { id: x.id, label: x.label } : { label: x.label })) })}>
+            {t('spy.tag.saveList')}
+          </button>
+          <button type="button" className="btn small ghost" onClick={() => setList(null)}>
+            {t('spy.site.cancel')}
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -262,6 +326,8 @@ function TestResult({ r }: { r: Out<'spy.settings.test'> }) {
 }
 
 /** « 1.0.0 » older than « 1.1.0 » (numbers compared part by part). */
+/** Pilotix's own addresses: the extension knows them already (apps/extension/sites.js BUILT_IN). */
+const BUILT_IN = ['https://pilotix.online', 'https://direct.pilotix.online'];
 const olderThan = (v: string, than: string) => {
   const a = v.split('.').map((x) => Number(x) || 0);
   const b = than.split('.').map((x) => Number(x) || 0);
@@ -279,8 +345,12 @@ export function ExtensionCard({ onClose }: { onClose?: () => void }) {
   };
   useEffect(check, []);
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  // an older copy works, without « Lire le prix de cette page » (1.1.0): its new folder replaces the old one
-  const old = !!st?.installed && olderThan(st.version ?? '1', SPY_EXT_VERSION);
+  // Pilotix's own addresses are in the extension already; a shop's own server is added in its popup
+  const own = !BUILT_IN.includes(origin);
+  // an older copy works, without « Lire la page » and the rest: the new folder « pilotix » replaces it
+  const old = !!st?.installed && olderThan(st.version ?? '1', EXT_VERSION);
+  // « Pilotix Spy » 1.x or « Pilotix WhatsApp » 1.0 still there next to « Pilotix »: they are removed
+  const both = !!st?.installed && !old && !!st.older;
   return (
     <section className="card spy-ext" aria-labelledby="spy-ext-h">
       <div className="card-head">
@@ -299,7 +369,8 @@ export function ExtensionCard({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
       <p className="note">{t('spy.ext.help')}</p>
-      {old && <p className="note spy-ext-old">{t('spy.ext.update', { v: SPY_EXT_VERSION })}</p>}
+      {old && <p className="note spy-ext-old">{t('spy.ext.update', { v: EXT_VERSION })}</p>}
+      {both && <p className="note spy-ext-old">{t('spy.ext.both')}</p>}
       <ol className="spy-steps">
         <li>
           {t('spy.ext.s1')}{' '}
@@ -311,15 +382,17 @@ export function ExtensionCard({ onClose }: { onClose?: () => void }) {
         <li>
           {t('spy.ext.s2a')} <code className="ltr">chrome://extensions</code> {t('spy.ext.s2b')}
         </li>
-        <li>
-          {t('spy.ext.s3')}{' '}
-          <span className="spy-origin">
-            <code className="ltr">{origin}</code>
-            <button type="button" className="spy-iconbtn" aria-label={t('spy.ext.copyOrigin')} onClick={async () => ((await copyText(origin)) ? toast(t('spy.copied'), 'ok') : toast(t('spy.copyFail'), 'bad'))}>
-              <Icon name="copy" />
-            </button>
-          </span>
-        </li>
+        {own && (
+          <li>
+            {t('spy.ext.s3')}{' '}
+            <span className="spy-origin">
+              <code className="ltr">{origin}</code>
+              <button type="button" className="spy-iconbtn" aria-label={t('spy.ext.copyOrigin')} onClick={async () => ((await copyText(origin)) ? toast(t('spy.copied'), 'ok') : toast(t('spy.copyFail'), 'bad'))}>
+                <Icon name="copy" />
+              </button>
+            </span>
+          </li>
+        )}
       </ol>
       <div className="row">
         <button type="button" className="btn small" onClick={check}>

@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, fromLibrary } from '../index';
-import { builderOf, groupKey, jsonIn, linkTypeOf, pricesIn, RawAd, sitePageKey, SpySite, spyScore } from '../modules/spy';
+import { builderOf, groupKey, jsonIn, linkExpiry, linkFresh, linkTypeOf, pageRules, pricesIn, RawAd, sitePageKey, SpySite, spyScore } from '../modules/spy';
 import type { REGISTRY } from '../registry';
 import { libraryItems, readSite, robotsAllow, runSpy, wallIn } from '../spy-server';
 import { EMAILS, setup } from './harness';
@@ -424,4 +424,187 @@ test('sites in a round: a wall is asked once, an earlier reading stays; a price 
   await c('spy.sitePrice', m, { via: 'hand', productId: cha, gkey: a.gkey, price: null });
   v = await c('spy.view', m, { productId: cha });
   assert.equal(v.ads.find((x) => x.gkey === a.gkey)!.manual, null);
+});
+
+test('« Lire la page »: the offers, the delivery and the promises of a page read by Chrome go on its ads', async () => {
+  // the simple rules (no AI): short lines that name them, French or Arabic
+  const r = pageRules('Poussette canne\n11 900 DA\nOffre : 2 achetées = 1 offerte\nالتوصيل مجاني لـ 58 ولاية\nGarantie 1 an\nالدفع عند الاستلام\nAjouter au panier');
+  assert.deepEqual(r.offers, ['Offre : 2 achetées = 1 offerte']);
+  assert.deepEqual([r.delivery, r.deliveryNote], [0, 'التوصيل مجاني لـ 58 ولاية']);
+  assert.deepEqual(r.whyUs, ['Garantie 1 an', 'الدفع عند الاستلام']);
+  assert.deepEqual([pageRules('Livraison : 400 DA partout').delivery, pageRules('Rien à dire ici').offers], [400, []]);
+
+  const cha = Number((await db.query(`SELECT id FROM products WHERE sku = 'PX-CHA'`))[0].id);
+  const ad = fromLibrary(item('820000001', 'Page Shop', 'Chaise pliante', { snapshot: { page_name: 'Page Shop', body: { text: 'Chaise pliante' }, link_url: 'https://page.shop-test.dz/chaise', cards: [] } })) as RawAd;
+  await c('spy.ingest', mk, { productId: cha, keyword: 'chaise pliante', count: 1, ads: [ad] });
+  const text = 'Chaise pliante\n8 500 DA\nPromo -20 % ce week-end\nLivraison 500 DA, 48 h\nQualité premium, garantie 2 ans';
+  // no AI: the rules; a price and the page together
+  const a = await c('spy.sitePrice', mk, { via: 'chrome', url: 'https://page.shop-test.dz/chaise', price: 8500, page: { text } });
+  assert.equal(a.saved, 1);
+  assert.deepEqual([a.read?.ai, a.read?.delivery, a.read?.offers, a.read?.whyUs], [false, 500, ['Promo -20 % ce week-end'], ['Qualité premium, garantie 2 ans']]);
+  let v = await c('spy.view', mk, { productId: cha });
+  let x = v.ads.find((y) => y.adId === '820000001')!;
+  assert.deepEqual([x.manual?.price, x.pageRead?.delivery, x.pageRead?.deliveryNote], [8500, 500, 'Livraison 500 DA, 48 h']);
+  // Claude (here the preview's page AI): its JSON; no price in DA on the page: the price stays
+  const pageAi: Ctx['dellalAi'] = async () => ({
+    content: [{ type: 'text', text: '{"offers":["Pack 2 chaises : 15 000 DA"],"delivery":0,"deliveryNote":"Gratuite partout","whyUs":["Garantie 2 ans","Inventé ? non"]}' }],
+    stop_reason: 'end_turn',
+  });
+  const b = await c('spy.sitePrice', { ...mk, dellalAi: pageAi }, { via: 'chrome', url: 'https://page.shop-test.dz/chaise/', price: null, page: { text } });
+  assert.deepEqual([b.saved, b.read?.ai, b.read?.delivery, b.read?.offers], [1, true, 0, ['Pack 2 chaises : 15 000 DA']]);
+  v = await c('spy.view', mk, { productId: cha });
+  x = v.ads.find((y) => y.adId === '820000001')!;
+  assert.deepEqual([x.manual?.price, x.pageRead?.ai, x.pageRead?.deliveryNote], [8500, true, 'Gratuite partout']);
+  // a page of no ad here: nothing read, nothing kept; nothing at all to read: refused
+  const none = await c('spy.sitePrice', mk, { via: 'chrome', url: 'https://other-test.dz/x', price: null, page: { text } });
+  assert.deepEqual(none, { saved: 0, read: null });
+  await assert.rejects(c('spy.sitePrice', mk, { via: 'chrome', url: 'https://page.shop-test.dz/chaise', price: null, page: { text: '  ' } }));
+});
+
+test('tags: the AI’s Identique / Ressemble / Pas le même, a person’s choice that stays, the shop’s own tags', async () => {
+  const lit = Number((await db.query(`SELECT id FROM products WHERE sku = 'PX-LIT'`))[0].id);
+  const ad = (id: string, page: string, text: string) => fromLibrary(item(id, page, text, { snapshot: { page_name: page, body: { text }, link_url: `https://${id}.shop-test.dz/lit`, cards: [] } })) as RawAd;
+  await c('spy.ingest', mk, { productId: lit, keyword: 'lit parapluie', count: 3, ads: [ad('830000001', 'Same Shop', 'Lit parapluie A'), ad('830000002', 'Near Shop', 'Lit cododo B'), ad('830000003', 'Other Shop', 'Poussette C')] });
+  // the AI reads them: same product, a close one, another product
+  const pageAi: Ctx['dellalAi'] = async (req) => {
+    const list = JSON.parse(String(req.messages[0].content).split('Pubs :\n')[1]);
+    const out = list.map((x: any) => ({ id: x.id, relevant: x.page !== 'Other Shop', same: x.page === 'Same Shop', hook: 'h', angle: 'a', offer: 'o', keep: 'k', weak: 'w', price: null }));
+    return { content: [{ type: 'text', text: JSON.stringify(out) }], stop_reason: 'end_turn' };
+  };
+  const withAi: Ctx = { ...mk, dellalAi: pageAi };
+  await c('spy.analyze', withAi, { productId: lit });
+  let v = await c('spy.view', mk, { productId: lit });
+  const by = (page: string) => v.ads.find((a) => a.pageName === page);
+  assert.deepEqual([by('Same Shop')?.tag, by('Same Shop')?.tagBy, by('Near Shop')?.tag], ['same', 'ai', 'like']);
+  assert.equal(by('Other Shop'), undefined, 'Pas le même: out of the list');
+  // a person changes it: kept, even when the AI reads the ad again
+  const near = by('Near Shop')!;
+  await c('spy.tag', mk, { productId: lit, gkey: near.gkey, tag: 'same' });
+  await db.query(`UPDATE spy_ads SET ai = NULL WHERE product_id = $1`, [lit]);
+  await c('spy.analyze', withAi, { productId: lit });
+  v = await c('spy.view', mk, { productId: lit });
+  assert.deepEqual([by('Near Shop')?.tag, by('Near Shop')?.tagBy, by('Near Shop')?.same], ['same', 'person', true]);
+  // the shop's own tags: one on an ad; taken out of the list, the ad gets the AI's again
+  const saved = await c('spy.tagsSave', mk, { tags: [{ label: 'Concurrent direct' }, { label: 'concurrent DIRECT' }, { label: 'À copier' }] });
+  assert.deepEqual(saved.tags.map((t) => t.label), ['Concurrent direct', 'À copier'], 'the same label once');
+  const mine = saved.tags[0].id;
+  await c('spy.tag', mk, { productId: lit, gkey: by('Same Shop')!.gkey, tag: mine });
+  v = await c('spy.view', mk, { productId: lit });
+  assert.deepEqual([by('Same Shop')?.tag, by('Same Shop')?.tagBy], [mine, 'person']);
+  await assert.rejects(c('spy.tag', mk, { productId: lit, gkey: by('Same Shop')!.gkey, tag: 't:nope' }), /inconnu/);
+  await c('spy.tagsSave', mk, { tags: [{ id: saved.tags[1].id, label: 'À copier' }] });
+  v = await c('spy.view', mk, { productId: lit });
+  assert.deepEqual([by('Same Shop')?.tag, by('Same Shop')?.tagBy], ['same', 'ai']);
+  // Pas le même by hand = « Pas pertinente »; brought back, no tag of a person
+  await c('spy.tag', mk, { productId: lit, gkey: near.gkey, tag: 'other' });
+  assert.ok((await c('spy.hidden', mk, { productId: lit })).some((a) => a.gkey === near.gkey));
+  await c('spy.hide', mk, { productId: lit, gkey: near.gkey, hidden: false });
+  v = await c('spy.view', mk, { productId: lit });
+  assert.equal(by('Near Shop')?.tagBy, 'ai');
+});
+
+test('Facebook’s ad library with the extension: an ad kept from there, with its tag, its page followed', async () => {
+  const lit = Number((await db.query(`SELECT id FROM products WHERE sku = 'PX-LIT'`))[0].id);
+  const raw = fromLibrary(item('840000001', 'Library Shop', 'Lit parapluie pliant 9900 DA', { page_id: 'p-lib-1', snapshot: { page_name: 'Library Shop', body: { text: 'Lit parapluie pliant 9900 DA' }, link_url: 'https://lib.shop-test.dz/lit', cards: [] } })) as RawAd;
+  let info = await c('spy.libraryInfo', mk, { adIds: ['840000001'] });
+  assert.ok(info.products.some((p) => p.id === lit));
+  assert.deepEqual(info.ads, []);
+  const r = await c('spy.libraryAd', mk, { productId: lit, ad: raw, tag: 'like', follow: true });
+  assert.deepEqual([r.added, r.tag, r.tagBy, r.followed], [true, 'like', 'person', true]);
+  info = await c('spy.libraryInfo', mk, { adIds: ['840000001', '999'] });
+  assert.deepEqual(info.ads.map((a) => [a.adId, a.productId, a.tag]), [['840000001', lit, 'like']]);
+  assert.ok(info.followed.some((f) => f.key === r.pageKey && f.name === 'Library Shop'));
+  assert.equal(info.ads[0].pageKey, r.pageKey);
+  const v = await c('spy.view', mk, { productId: lit });
+  const a = v.ads.find((x) => x.adId === '840000001')!;
+  assert.deepEqual([a.source, a.price, a.followed], ['library', 9900, true]);
+  // without a tag and without AI: kept, no tag yet; unfollowed
+  const r2 = await c('spy.libraryAd', mk, { productId: lit, ad: { ...raw, id: '840000002', body: 'Autre texte' }, follow: false });
+  assert.deepEqual([r2.tag, r2.followed], [null, false]);
+});
+
+test('videos: Facebook’s link plays while it works; Pilotix keeps a copy of the followed pages’ and the tagged ads’ videos', async () => {
+  const now = Date.now();
+  const DAY = 86_400_000;
+  const hex = (ms: number) => Math.floor(ms / 1000).toString(16).toUpperCase();
+  const link = (n: number, until: number) => `https://video.falg1-1.fna.fbcdn.net/v/t42.1790-2/v${n}.mp4?_nc_cat=1&oe=${hex(until)}&oh=00_x`;
+  const vid = (id: string, page: string, body: string, sd: string | null) =>
+    item(id, page, body, {
+      snapshot: { page_name: page, body: { text: body }, link_url: 'https://v.shop-test.dz/p', videos: [{ video_sd_url: sd, video_hd_url: 'https://evil.example/x.mp4', video_preview_image_url: 'https://scontent.fbcdn.net/p.jpg' }], cards: [] },
+    });
+  // the link: Facebook's servers only, the lighter file first; its « oe » part says when it stops working
+  assert.equal(fromLibrary(vid('850000001', 'Vid Shop', 'x', link(1, now + 5 * DAY)))!.videoUrl, link(1, now + 5 * DAY));
+  assert.equal(fromLibrary(vid('850000002', 'Vid Shop', 'x', null))!.videoUrl, null);
+  assert.equal(linkExpiry(link(1, 1_800_000_000_000)), 1_800_000_000_000);
+  assert.equal(linkFresh(link(1, now + 30 * 60_000), null, now), false);
+  assert.equal(linkFresh(link(1, now + 2 * 3_600_000), null, now), true);
+  assert.equal(linkFresh('https://video.fbcdn.net/v/x.mp4', now - DAY, now), true);
+  assert.equal(linkFresh('https://video.fbcdn.net/v/x.mp4', now - 6 * DAY, now), false);
+
+  // found by the extension: Facebook's link plays, no copy yet; an expired link plays nothing
+  const lit = Number((await db.query(`SELECT id FROM products WHERE sku = 'PX-LIT'`))[0].id);
+  const L = { tagged: link(2, now + 5 * DAY), followed: link(3, now + 5 * DAY), other: link(4, now + 5 * DAY), old: link(5, now - DAY) };
+  const ads = [
+    fromLibrary(vid('850000011', 'Vid Tagged', 'Lit parapluie vidéo A 9900 DA', L.tagged))!,
+    fromLibrary(vid('850000012', 'Vid Followed', 'Lit parapluie vidéo B 9900 DA', L.followed))!,
+    fromLibrary(vid('850000013', 'Vid Other', 'Lit parapluie vidéo C 9900 DA', L.other))!,
+    fromLibrary(vid('850000014', 'Vid Old', 'Lit parapluie vidéo D 9900 DA', L.old))!,
+  ];
+  await c('spy.ingest', mk, { productId: lit, keyword: 'lit vidéo', count: 4, ads });
+  let v = await c('spy.view', mk, { productId: lit });
+  const by = (page: string) => v.ads.find((x) => x.pageName === page)!;
+  assert.deepEqual([by('Vid Tagged').video, by('Vid Tagged').videoKept], [L.tagged, false]);
+  assert.deepEqual([by('Vid Old').isVideo, by('Vid Old').video], [true, null]);
+
+  // a person tags one, follows another page; the server's job copies those two videos, never the others
+  await c('spy.tag', mk, { productId: lit, gkey: by('Vid Tagged').gkey, tag: 'same' });
+  await c('spy.tag', mk, { productId: lit, gkey: by('Vid Old').gkey, tag: 'same' });
+  await c('spy.follow', mk, { pageKey: by('Vid Followed').pageKey, pageName: 'Vid Followed', productId: lit, on: true });
+  const kept: string[] = [];
+  let refuse = false;
+  const server: Ctx['server'] = {
+    courier: async () => null,
+    meta: async () => null,
+    hashPassword: async (p) => p,
+    publicApi: 'https://pilotix.test/api',
+    spyVideo: async (action, a) => {
+      assert.equal(action, 'keep');
+      if (refuse) throw new Error('Vidéo indisponible (403)');
+      kept.push(a.url);
+      return { key: String(kept.length).padStart(24, 'a'), bytes: 123_456 };
+    },
+  };
+  const a = await as(EMAILS.admin, server);
+  assert.deepEqual(await c('spy.videos', a, {}), { kept: 2, failed: 0 });
+  assert.deepEqual([...kept].sort(), [L.followed, L.tagged].sort());
+  v = await c('spy.view', a, { productId: lit });
+  assert.match(by('Vid Tagged').video ?? '', /^https:\/\/pilotix\.test\/api\/lp\/spyvid\/a{23}[12]\.mp4$/);
+  assert.deepEqual([by('Vid Tagged').videoKept, by('Vid Followed').videoKept, by('Vid Other').videoKept], [true, true, false]);
+  assert.equal(by('Vid Other').video, L.other);
+  // nothing more to copy: the expired link is not tried
+  assert.deepEqual(await c('spy.videos', a, {}), { kept: 0, failed: 0 });
+
+  // a link the server cannot download: 3 tries, then left alone until the ad is seen again with a new link
+  await c('spy.tag', mk, { productId: lit, gkey: by('Vid Other').gkey, tag: 'like' });
+  refuse = true;
+  for (let i = 0; i < 4; i++) await c('spy.videos', a, {});
+  const row = async (page: string) => (await db.query(`SELECT video_tries, video_copy FROM spy_ads WHERE product_id = $1 AND page_name = $2`, [lit, page]))[0];
+  assert.deepEqual([Number((await row('Vid Other')).video_tries), (await row('Vid Other')).video_copy], [3, null]);
+  assert.equal(Number((await row('Vid Old')).video_tries), 0);
+  refuse = false;
+  const again = link(6, now + 4 * DAY);
+  await c('spy.ingest', mk, { productId: lit, keyword: 'lit vidéo', count: 1, ads: [fromLibrary(vid('850000013', 'Vid Other', 'Lit parapluie vidéo C 9900 DA', again))!] });
+  assert.deepEqual(await c('spy.videos', a, {}), { kept: 1, failed: 0 });
+  assert.equal(kept.at(-1), again);
+  // the browser preview (no server): Facebook's link, never the copy's address
+  v = await c('spy.view', mk, { productId: lit });
+  assert.deepEqual([by('Vid Other').video, by('Vid Other').videoKept], [again, true]);
+});
+
+test('the demo: its video ads play the demo’s own films; the followed pages’ ones are kept', async () => {
+  const v = await c('spy.view', mk, { productId: pou });
+  const videos = v.ads.filter((a) => a.isVideo && a.source === 'demo');
+  assert.ok(videos.length >= 3);
+  assert.ok(videos.every((a) => a.video === 'demo://spy-video/pou'));
+  assert.deepEqual([...new Set(videos.filter((a) => a.videoKept).map((a) => a.pageName))], ['Bébé Confort DZ']);
 });

@@ -239,6 +239,12 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     tries: {},
   });
 
+  // the bid limit typed for each product in « Lancer une pub » (dinars): the Pilotix extension judges each ad's cost per
+  // confirmed order by it in Ads Manager
+  const limits: Record<string, number> = {};
+  for (const r of await db.query(`SELECT DISTINCT product_ids[1] AS p FROM adsets WHERE product_ids[1] IS NOT NULL`)) limits[String(num(r.p))] = 2200;
+  await setRaw(db, 'pilot_ads_bid_limits', limits);
+
   // Pilote auto's suggestions: its own rules on these numbers, as the job does every 15 minutes
   const admin = (await db.query('SELECT * FROM profiles WHERE id = $1', [users.admin]))[0];
   if (admin) await pilotRun({ db, session: makeSession(toProfile(admin)), now: () => now, emit: () => undefined });

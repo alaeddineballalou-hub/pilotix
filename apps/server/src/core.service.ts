@@ -8,7 +8,7 @@ import * as https from 'node:https';
 import { Pool, PoolClient } from 'pg';
 import { config } from './config';
 import { reachDomain } from './domainEcho';
-import { mediaHooks } from './media';
+import { mediaHooks, spyVideoHooks } from './media';
 import { payAlert } from './payalert';
 import { mailConfigured, sendMail } from './mail';
 import { pilotRestMail } from './mails';
@@ -548,8 +548,8 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
     const publicApi = config.publicUrl ? `${config.publicUrl}/api${s.primary ? '' : `/s/${s.slug}`}` : undefined;
     // shop #1 choosing the store's part of its links: no other shop may have that name
     const storeTaken = (store: string) => core.slugTakenByOther(this.t, store, s.id);
-    // the shop's videos on the server's disk (CM AI agent › Planner)
-    return { ...this.baseHooks, publicApi, storeTaken, media: mediaHooks(s.schema) };
+    // the shop's videos on the server's disk (CM AI agent › Planner; AI Spy's copies of competitors' videos)
+    return { ...this.baseHooks, publicApi, storeTaken, media: mediaHooks(s.schema), spyVideo: spyVideoHooks(s.schema) };
   }
 
   ctx(ref: ShopRef, session: Session, seller?: number | 'all'): Ctx {

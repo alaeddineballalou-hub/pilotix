@@ -2,7 +2,7 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const fs = require('fs');
 const OUT = `${__dirname}/shots`;
-const EXT = require('path').resolve(__dirname, '../../../apps/wa-extension');
+const EXT = require('path').resolve(__dirname, '../../../apps/extension');
 const VW = { width: 1440, height: 694 }, DPR = 1680 / 1440;
 (async () => {
   const pos = {};

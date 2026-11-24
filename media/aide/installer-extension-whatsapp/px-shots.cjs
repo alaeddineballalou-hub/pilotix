@@ -56,7 +56,7 @@ const pos = fs.existsSync(`${OUT}/px-pos.json`) ? JSON.parse(fs.readFileSync(`${
       await p.locator('.sph-wa').first().click();
       await p.waitForTimeout(1500);
       await p.screenshot({ path: `${OUT}/px-guide.png` });
-      await box(p, p.locator('a[href*="pilotix-whatsapp.zip"]'), 'download');
+      await box(p, p.locator('a[href*="pilotix.zip"]'), 'download');
       await box(p, p.locator('.sph-ext').locator('button', { hasText: 'chrome://extensions' }), 'chromeUrl');
       await box(p, p.locator('.sph-ext, .modal, .sheet').locator('button', { hasText: /Recharger/ }), 'reload');
     }

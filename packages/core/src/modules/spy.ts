@@ -13,7 +13,7 @@
 // The browser preview has seeded ads (seeds/spy.ts) and no network.
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
-import { bad, Ctx, notFound, proc } from '../rpc';
+import { bad, Ctx, notFound, proc, publicApi } from '../rpc';
 import { getRaw, setRaw } from './admin';
 import { AiRequest, AiResponse, aiKeyed, dellalSettings, PILOT_CHEAP_MODEL, pilotOn } from './dellal';
 import { spyPlatformConfig, spyPlatformTools, spySearchesToday, takeSpySearch } from '../platform/spykey';
@@ -108,12 +108,34 @@ export const RawAdSchema = z.object({
   cta: z.string().max(100).nullish(),
   isVideo: z.boolean().nullish(),
   mediaUrl: z.string().max(4000).nullish(),
+  /** Facebook's link to the ad's video (its own servers, *.fbcdn.net): it stops working after some days */
+  videoUrl: z.string().max(4000).nullish(),
   /** a small picture the extension already made (data:image/jpeg;base64,…) */
   media: z.string().max(600_000).nullish(),
 });
 export type RawAd = z.infer<typeof RawAdSchema>;
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : v === null || v === undefined ? '' : String(v));
+
+/** A link to a video on Facebook's own servers (https, *.fbcdn.net), else null: an ad's data never sends a player elsewhere. */
+export function fbVideoUrl(v: unknown): string | null {
+  const s = str(v).trim();
+  if (s.length > 4000 || !/^https:\/\/[a-z0-9.-]+\.fbcdn\.net\//i.test(s)) return null;
+  return s;
+}
+
+/** When Facebook's link to a file stops working: its « oe » part (seconds, written in hexadecimal); null when it has none. */
+export function linkExpiry(url: string): number | null {
+  const m = /[?&]oe=([0-9a-f]{6,10})(?:&|$)/i.exec(url);
+  return m ? parseInt(m[1], 16) * 1000 : null;
+}
+
+/** Facebook's link still works for a while (an hour at least); a link with no date: for the 5 days after it was seen. */
+export function linkFresh(url: string, seenAt: number | null, now: number): boolean {
+  const end = linkExpiry(url);
+  if (end !== null) return end > now + 3_600_000;
+  return seenAt !== null && now - seenAt < 5 * 86_400_000;
+}
 
 /**
  * One item of Facebook's library data (as the Ad Library page, ScrapeCreators and SearchAPI.io give it: ad_archive_id,
@@ -153,6 +175,8 @@ export function fromLibrary(r: any): RawAd | null {
     isVideo: !!(vid.video_sd_url || vid.video_hd_url || c0.video_sd_url || c0.video_hd_url || /VIDEO/i.test(str(s.display_format))),
     mediaUrl: media.slice(0, 4000) || null,
     media: null,
+    // the lighter file first (it starts faster on a phone, and a copy takes less room)
+    videoUrl: fbVideoUrl(vid.video_sd_url) ?? fbVideoUrl(vid.video_hd_url) ?? fbVideoUrl(c0.video_sd_url) ?? fbVideoUrl(c0.video_hd_url),
   };
 }
 
@@ -289,6 +313,20 @@ export interface SpyManualPrice {
   at: string;
   via: 'hand' | 'chrome';
 }
+/** What a person's Chrome read on a competitor's page beyond its price (the extension's « Lire la page »). */
+export interface SpyPageRead {
+  at: string;
+  /** the offers the page shows: packs, « 2 + 1 », a discount, a gift, free delivery… (short, in French) */
+  offers: string[];
+  /** its delivery price in DA: 0 = free, null = the page does not say */
+  delivery: number | null;
+  /** what it says about the delivery (time, wilayas, stop desk), in a few words */
+  deliveryNote: string | null;
+  /** why buy there, in its own words: a guarantee, the quality, payment on delivery, exchanges… (short, in French) */
+  whyUs: string[];
+  /** read by Claude (true) or by Pilotix's simple rules (false: no AI) */
+  ai: boolean;
+}
 export interface SpyAd {
   gkey: string;
   adId: string;
@@ -306,6 +344,10 @@ export interface SpyAd {
   platforms: string[];
   isVideo: boolean;
   media: string | null;
+  /** where its video plays: Pilotix's own copy, else Facebook's link while it works (null: none, or it has expired) */
+  video: string | null;
+  /** Pilotix keeps its own copy of the video (an ad of a followed shop, or one a person tagged) */
+  videoKept: boolean;
   copies: number;
   startedAt: string | null;
   firstSeen: string;
@@ -322,6 +364,12 @@ export interface SpyAd {
   site: SpySite | null;
   /** the price a person gave for its site (AI Spy › the ad › « Taper le prix », or the extension) */
   manual: SpyManualPrice | null;
+  /** its page's offers, delivery and promises, read by a person's Chrome (the extension's « Lire la page ») */
+  pageRead: SpyPageRead | null;
+  /** its tag: 'same' (Identique), 'like' (Ressemble), 'other' (Pas le même) or one of the shop's own tags ('t:…') */
+  tag: string | null;
+  /** who gave it: a person (kept), or the AI from its reading (null: not read yet) */
+  tagBy: 'person' | 'ai' | null;
   followed: boolean;
   score: number;
   scoreParts: ScorePart[];
@@ -359,7 +407,54 @@ export type SpyFinding =
 const DAY = 86_400_000;
 const pageKeyOf = (r: { page_id?: unknown; page_name?: unknown }) => str(r.page_id) || `n:${norm(str(r.page_name))}`;
 
-function rowToAd(r: any, now: number, followed: Set<string>, others: number): SpyAd {
+/** The three tags everyone has (the AI gives them too); a shop's own tags are 't:…'. */
+export const SPY_TAGS = ['same', 'like', 'other'] as const;
+/** A shop's own tag (AI Spy › Réglages › Mes tags). */
+export interface SpyOwnTag {
+  id: string;
+  label: string;
+}
+const OWN_TAGS = 'spy_tags';
+export const ownTags = async (db: Db) => (await getRaw<SpyOwnTag[]>(db, OWN_TAGS, [])).filter((t) => t && typeof t.id === 'string' && typeof t.label === 'string');
+
+/** An ad's tag: a person's, else the AI's from its reading (not the same kind of product / the same / a close one). */
+function tagOf(r: { tag?: unknown; relevant?: unknown; same?: unknown }): { tag: string | null; tagBy: 'person' | 'ai' | null } {
+  if (typeof r.tag === 'string' && r.tag) return { tag: r.tag, tagBy: 'person' };
+  const ai = r.relevant === false ? 'other' : r.same === true ? 'same' : r.same === false ? 'like' : null;
+  return { tag: ai, tagBy: ai ? 'ai' : null };
+}
+
+/**
+ * A person tags an ad: Identique and Ressemble keep it in the list (the same product, or a close one), Pas le même takes
+ * it out of the list, the score and the brief (as « Pas pertinente »), an own tag keeps it in the list. The AI never
+ * changes a person's tag.
+ */
+async function setTag(ctx: Ctx, productId: number, gkey: string, tag: string): Promise<void> {
+  if (!(SPY_TAGS as readonly string[]).includes(tag) && !(await ownTags(ctx.db)).some((t) => t.id === tag)) throw bad('Tag inconnu');
+  const relevant = tag === 'other' ? false : true;
+  const same = tag === 'same' ? true : tag === 'like' ? false : null;
+  const r = await ctx.db.query(
+    `UPDATE spy_ads SET tag = $3, relevant = $4, same = CASE WHEN $5::boolean IS NULL THEN same ELSE $5::boolean END WHERE product_id = $1 AND gkey = $2 RETURNING gkey`,
+    [productId, gkey, tag, relevant, same],
+  );
+  if (!r.length) throw notFound('Pub introuvable');
+  await ctx.db.query(`UPDATE spy_watch SET brief = NULL WHERE product_id = $1`, [productId]);
+}
+
+/**
+ * Where an ad's video plays: Pilotix's copy (the server's public address, /lp/spyvid/<key>.mp4), else Facebook's link while
+ * it still works, else nothing (the page offers Facebook's library instead). The demo's videos (demo://…) come with the app.
+ */
+function videoOf(r: any, now: number, api: string): string | null {
+  const copy = r.video_copy ? str(r.video_copy) : '';
+  if (api && /^[a-f0-9]{24}$/.test(copy)) return `${api}/lp/spyvid/${copy}.mp4`;
+  const url = r.video_url ? str(r.video_url) : '';
+  if (url.startsWith('demo://')) return url;
+  if (!fbVideoUrl(url)) return null;
+  return linkFresh(url, r.video_at ? Date.parse(iso(r.video_at)) : null, now) ? url : null;
+}
+
+function rowToAd(r: any, now: number, followed: Set<string>, others: number, api = ''): SpyAd {
   const startedAt = isoOrNull(r.started_at);
   const firstSeen = iso(r.first_seen);
   const days = Math.max(0, Math.round((now - Date.parse(startedAt ?? firstSeen)) / DAY));
@@ -389,6 +484,8 @@ function rowToAd(r: any, now: number, followed: Set<string>, others: number): Sp
     platforms,
     isVideo,
     media: r.media ?? null,
+    video: isVideo ? videoOf(r, now, api) : null,
+    videoKept: isVideo && !!r.video_copy,
     copies,
     startedAt,
     firstSeen,
@@ -404,6 +501,8 @@ function rowToAd(r: any, now: number, followed: Set<string>, others: number): Sp
     ai: (r.ai as SpyAi | null) ?? null,
     site: (r.site as SpySite | null) ?? null,
     manual,
+    pageRead: (r.page_read as SpyPageRead | null) ?? null,
+    ...tagOf(r),
     followed: followed.has(pageKey),
     score: sc.total,
     scoreParts: sc.parts,
@@ -419,6 +518,7 @@ async function productAds(ctx: Ctx, productId: number, opts: { hidden?: boolean 
   const rows = await ctx.db.query(`SELECT * FROM spy_ads WHERE product_id = $1 ${opts.hidden ? '' : 'AND relevant IS NOT FALSE'} ORDER BY last_seen DESC LIMIT 400`, [productId]);
   const now = ctx.now();
   const followed = await followedKeys(ctx.db);
+  const api = publicApi(ctx);
   // other sellers: competitors' pages with an ad online for 30 days or more, for this product
   const longPages = new Set<string>();
   for (const r of rows) {
@@ -429,7 +529,7 @@ async function productAds(ctx: Ctx, productId: number, opts: { hidden?: boolean 
   return rows
     .map((r: any) => {
       const others = longPages.size - (longPages.has(pageKeyOf(r)) ? 1 : 0);
-      return rowToAd(r, now, followed, others);
+      return rowToAd(r, now, followed, others, api);
     })
     .sort((a, b) => b.score - a.score || b.days - a.days);
 }
@@ -501,13 +601,15 @@ function ownMatcher(s: SpySettings, publicUrl?: string) {
 export async function ingestAds(ctx: Ctx, productId: number, source: string, keyword: string | null, raw: RawAd[]): Promise<Ingested> {
   const s = await spySettings(ctx.db);
   const isOwn = ownMatcher(s, ctx.server?.publicUrl);
-  const groups = new Map<string, { ad: RawAd; ids: string[]; copies: number; start: number | null; media: string | null }>();
+  const groups = new Map<string, { ad: RawAd; ids: string[]; copies: number; start: number | null; media: string | null; video: string | null }>();
   for (const a of raw.slice(0, 400)) {
     const k = groupKey(a);
     const g = groups.get(k);
     const start = a.startedAt ?? null;
-    if (!g) groups.set(k, { ad: a, ids: [a.id], copies: a.copies ?? 1, start, media: a.media ?? null });
+    const video = fbVideoUrl(a.videoUrl);
+    if (!g) groups.set(k, { ad: a, ids: [a.id], copies: a.copies ?? 1, start, media: a.media ?? null, video });
     else {
+      g.video = g.video ?? video;
       if (!g.ids.includes(a.id)) {
         g.ids.push(a.id);
         g.copies += a.copies ?? 1;
@@ -532,8 +634,8 @@ export async function ingestAds(ctx: Ctx, productId: number, source: string, key
     const ids = [...new Set([...(prev?.ad_ids ?? []), ...g.ids])].slice(0, 60);
     await ctx.db.query(
       `INSERT INTO spy_ads (product_id, gkey, ad_id, ad_ids, source, page_id, page_name, page_url, body, title, link_url, link_type, platform, cta, platforms,
-                            is_video, media, media_url, copies, started_at, first_seen, last_seen, active, own, keyword, price, old_price)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$21,true,$22,$23,$24,$25)
+                            is_video, media, media_url, copies, started_at, first_seen, last_seen, active, own, keyword, price, old_price, video_url, video_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$21,true,$22,$23,$24,$25,$26,CASE WHEN $26::text IS NULL THEN NULL ELSE $21::timestamptz END)
        ON CONFLICT (product_id, gkey) DO UPDATE SET
          ad_id = EXCLUDED.ad_id, ad_ids = EXCLUDED.ad_ids, source = EXCLUDED.source, page_url = COALESCE(EXCLUDED.page_url, spy_ads.page_url),
          body = EXCLUDED.body, title = EXCLUDED.title, link_url = EXCLUDED.link_url, link_type = EXCLUDED.link_type,
@@ -541,7 +643,10 @@ export async function ingestAds(ctx: Ctx, productId: number, source: string, key
          media = COALESCE(EXCLUDED.media, spy_ads.media), media_url = COALESCE(EXCLUDED.media_url, spy_ads.media_url),
          copies = GREATEST(EXCLUDED.copies, spy_ads.copies), started_at = LEAST(COALESCE(EXCLUDED.started_at, spy_ads.started_at), COALESCE(spy_ads.started_at, EXCLUDED.started_at)),
          last_seen = EXCLUDED.last_seen, active = true, own = EXCLUDED.own,
-         price = COALESCE(EXCLUDED.price, spy_ads.price), old_price = COALESCE(EXCLUDED.old_price, spy_ads.old_price)`,
+         price = COALESCE(EXCLUDED.price, spy_ads.price), old_price = COALESCE(EXCLUDED.old_price, spy_ads.old_price),
+         -- Facebook's newest link to the video (a new link: the copy may be tried again)
+         video_tries = CASE WHEN EXCLUDED.video_url IS NULL OR EXCLUDED.video_url = spy_ads.video_url THEN spy_ads.video_tries ELSE 0 END,
+         video_url = COALESCE(EXCLUDED.video_url, spy_ads.video_url), video_at = COALESCE(EXCLUDED.video_at, spy_ads.video_at)`,
       [
         productId,
         gkey,
@@ -568,6 +673,7 @@ export async function ingestAds(ctx: Ctx, productId: number, source: string, key
         keyword,
         pr.price,
         pr.old,
+        g.video,
       ],
     );
     out.gkeys.push(gkey);
@@ -596,6 +702,41 @@ async function finishSearch(ctx: Ctx, productId: number, since: string): Promise
     [productId, new Date(ctx.now()).toISOString()],
   );
   return { stopped: gone.length };
+}
+
+// ---------------------------------------------------------------- videos
+/**
+ * Pilotix's own copies of the videos the shop cares about: the ads of the shops it follows, and the ads a person tagged
+ * (anything but « Pas le même »). Made while Facebook's link still works, a few at a time (the scheduled job, every half
+ * hour or so), 3 tries per link; a new link (the ad seen again) starts again. Server only: the copies are files on its disk.
+ */
+async function keepVideos(ctx: Ctx, max = 6): Promise<{ kept: number; failed: number }> {
+  const keep = ctx.server?.spyVideo;
+  if (!keep) return { kept: 0, failed: 0 };
+  const now = ctx.now();
+  const followed = await followedKeys(ctx.db);
+  const rows = await ctx.db.query(
+    `SELECT product_id, gkey, page_id, page_name, tag, video_url, video_at FROM spy_ads
+     WHERE is_video AND video_url IS NOT NULL AND video_copy IS NULL AND video_tries < 3 AND NOT own AND relevant IS NOT FALSE
+     ORDER BY video_at DESC NULLS LAST LIMIT 400`,
+  );
+  const due = rows
+    .filter((r: any) => ((r.tag && r.tag !== 'other') || followed.has(pageKeyOf(r))) && !!fbVideoUrl(r.video_url) && linkFresh(str(r.video_url), r.video_at ? Date.parse(iso(r.video_at)) : null, now))
+    .slice(0, max);
+  let kept = 0;
+  let failed = 0;
+  for (const r of due) {
+    try {
+      const v = await keep('keep', { url: str(r.video_url) });
+      if (!/^[a-f0-9]{24}$/.test(v.key)) throw new Error('bad key');
+      await ctx.db.query(`UPDATE spy_ads SET video_copy = $3, video_tries = video_tries + 1 WHERE product_id = $1 AND gkey = $2`, [r.product_id, r.gkey, v.key]);
+      kept++;
+    } catch {
+      await ctx.db.query(`UPDATE spy_ads SET video_tries = video_tries + 1 WHERE product_id = $1 AND gkey = $2`, [r.product_id, r.gkey]);
+      failed++;
+    }
+  }
+  return { kept, failed };
 }
 
 // ---------------------------------------------------------------- Claude
@@ -668,7 +809,8 @@ async function analyze(ctx: Ctx, productId: number, max = 30): Promise<{ analyze
       if (!g) continue;
       const ai: SpyAi = { hook: str(o.hook).slice(0, 300), angle: str(o.angle).slice(0, 300), offer: str(o.offer).slice(0, 300), keep: str(o.keep).slice(0, 400), weak: str(o.weak).slice(0, 400) };
       const price = Number.isFinite(Number(o.price)) && Number(o.price) >= 300 ? Math.round(Number(o.price)) : null;
-      await ctx.db.query(`UPDATE spy_ads SET ai = $3, relevant = $4, same = $5, price = COALESCE(price, $6) WHERE product_id = $1 AND gkey = $2`, [
+      // a person's tag stays as they put it
+      await ctx.db.query(`UPDATE spy_ads SET ai = $3, relevant = CASE WHEN tag IS NULL THEN $4 ELSE relevant END, same = CASE WHEN tag IS NULL THEN $5 ELSE same END, price = COALESCE(price, $6) WHERE product_id = $1 AND gkey = $2`, [
         productId,
         str(g.gkey),
         JSON.stringify(ai),
@@ -848,23 +990,94 @@ const SitePriceInput = z.object({
   gkey: z.string().min(1).max(200).optional(),
   // Chrome: the address of the page the person had open
   url: z.string().max(2000).optional(),
-  // null: the price typed by hand is taken back
+  // null: the price typed by hand is taken back (Chrome: the page shows no price in DA, only its text is read)
   price: PriceInput.nullable(),
   oldPrice: PriceInput.nullable().default(null),
+  // Chrome (« Lire la page »): the text the page shows, for its offers, delivery and promises
+  page: z.object({ text: z.string().max(8000) }).optional(),
 });
+
+const PAGE_READER = `Tu lis la page d'un produit sur le site d'une boutique algérienne concurrente (paiement à la livraison).
+Réponds UNIQUEMENT avec un objet JSON :
+{"offers":["…"],"delivery":400,"deliveryNote":"…","whyUs":["…"]}
+- offers : les offres que la page montre (packs, 2 achetés = 1 offert, réduction, cadeau, livraison offerte…), 4 au plus, très courtes, en français
+- delivery : le prix de la livraison en DA écrit sur la page (0 si elle est gratuite, null si la page ne le dit pas)
+- deliveryNote : ce que la page dit de la livraison en quelques mots (délai, wilayas, bureau / stop desk), ou null
+- whyUs : pourquoi acheter chez eux selon la page (garantie, qualité, paiement à la livraison, échange…), 4 au plus, très courts, en français
+Rien d'inventé : seulement ce qui est écrit sur la page. Une liste vide quand la page ne dit rien.`;
+
+const OFFER_WORDS = /(offre|promo|réduction|reduction|remise|solde|cadeau|offert|gratuit|pack|عرض|عروض|تخفيض|تخفيضات|هدية|مجانا|مجاني|مجانًا|بروموسيون|\d\s*\+\s*\d|-\s*\d{1,2}\s*%|\d{1,2}\s*%\s*(?:de\s+)?(?:réduction|remise|off))/i;
+const WHY_WORDS = /(garantie|garanti|qualité|qualite|original|authentique|paiement à la livraison|payez à la livraison|à la réception|échange|echange|remboursement|satisfait|ضمان|مضمون|جودة|أصلي|اصلي|الدفع عند الاستلام|الدفع عند التسليم|الدفع بعد|استبدال|تبديل|إرجاع|ارجاع|استرجاع)/i;
+const DELIVERY_WORDS = /(livraison|livré|livre|expédition|توصيل|التوصيل|الشحن|شحن)/i;
+const FREE_WORDS = /(gratuite?|offerte?|free|مجاني|مجانا|مجانًا|بالمجان)/i;
+
+/** The page's offers, delivery and promises by simple rules (no AI): the short lines that name them. */
+export function pageRules(text: string): Omit<SpyPageRead, 'at' | 'ai'> {
+  const lines = String(text ?? '')
+    .split(/\n+/)
+    .map((l) => l.replace(/\s+/g, ' ').trim())
+    .filter((l) => l.length >= 3 && l.length <= 160);
+  const pick = (re: RegExp, not?: RegExp) => [...new Set(lines.filter((l) => re.test(l) && !(not && not.test(l))))].slice(0, 4).map((l) => l.slice(0, 120));
+  let delivery: number | null = null;
+  let deliveryNote: string | null = null;
+  for (const l of lines) {
+    if (!DELIVERY_WORDS.test(l)) continue;
+    if (FREE_WORDS.test(l)) {
+      delivery = 0;
+      deliveryNote = l.slice(0, 120);
+      break;
+    }
+    const m = /(\d{3,4})\s*(?:دج|د\.ج|DZD|DA|Da|da)(?![a-zA-Z])/.exec(l);
+    if (m && Number(m[1]) >= 100 && Number(m[1]) <= 3000) {
+      delivery = Number(m[1]);
+      deliveryNote = l.slice(0, 120);
+      break;
+    }
+    deliveryNote ??= l.slice(0, 120);
+  }
+  return { offers: pick(OFFER_WORDS, DELIVERY_WORDS), delivery, deliveryNote, whyUs: pick(WHY_WORDS) };
+}
+
+const shortList = (v: unknown) =>
+  (Array.isArray(v) ? v : [])
+    .map((x) => str(x).replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .slice(0, 4)
+    .map((x) => x.slice(0, 120));
+
+/** « Lire la page »: Claude reads the page's offers, delivery and promises (Haiku when Pilotix pays); the rules without AI. */
+async function readPage(ctx: Ctx, text: string, title: string | null): Promise<SpyPageRead> {
+  const at = new Date(ctx.now()).toISOString();
+  if (await aiOn(ctx)) {
+    const out = jsonIn<any>(await ask(ctx, PAGE_READER, `${title ? `Titre : ${title}\n\n` : ''}Page :\n${text.slice(0, 8000)}`, 600).catch(() => null));
+    if (out && typeof out === 'object' && !Array.isArray(out)) {
+      const d = out.delivery === null || out.delivery === undefined || out.delivery === '' ? null : Number(out.delivery);
+      return {
+        at,
+        offers: shortList(out.offers),
+        delivery: d !== null && Number.isFinite(d) && d >= 0 && d <= 5000 ? Math.round(d) : null,
+        deliveryNote: out.deliveryNote ? str(out.deliveryNote).slice(0, 120) : null,
+        whyUs: shortList(out.whyUs),
+        ai: true,
+      };
+    }
+  }
+  return { at, ...pageRules(text), ai: false };
+}
 
 /**
  * A competitor's price given by a person (the server could not read the site, or the person checked it): typed by
  * hand on an ad, or read by their own Chrome on the page they had open. It goes on every ad that sends to the same
  * page (other creatives, other products), and the server's later readings never overwrite it.
  */
-async function sitePrice(ctx: Ctx, i: z.output<typeof SitePriceInput>): Promise<{ saved: number }> {
+async function sitePrice(ctx: Ctx, i: z.output<typeof SitePriceInput>): Promise<{ saved: number; read: SpyPageRead | null }> {
   const chosen =
     i.productId && i.gkey ? ((await ctx.db.query(`SELECT product_id, gkey, link_url FROM spy_ads WHERE product_id = $1 AND gkey = $2`, [i.productId, i.gkey]))[0] ?? null) : null;
   if (i.via === 'hand' && !chosen) throw notFound('Pub introuvable');
   const key = i.via === 'hand' ? sitePageKey(chosen.link_url) : sitePageKey(i.url);
   if (i.via === 'chrome' && !key) throw bad('Adresse de la page invalide');
-  if (i.via === 'chrome' && i.price === null) throw bad('Prix manquant');
+  const text = i.via === 'chrome' ? (i.page?.text ?? '').trim() : '';
+  if (i.via === 'chrome' && i.price === null && !text) throw bad('Prix manquant');
   let match: { product_id: unknown; gkey: unknown }[] = [];
   if (key) {
     const siteHost = key.split('/')[0];
@@ -877,8 +1090,12 @@ async function sitePrice(ctx: Ctx, i: z.output<typeof SitePriceInput>): Promise<
   if (!match.length && i.via === 'hand') match = [chosen];
   const manual: SpyManualPrice | null =
     i.price === null ? null : { price: i.price, oldPrice: i.oldPrice !== null && i.oldPrice > i.price ? i.oldPrice : null, at: new Date(ctx.now()).toISOString(), via: i.via };
-  for (const m of match) await ctx.db.query(`UPDATE spy_ads SET manual = $3 WHERE product_id = $1 AND gkey = $2`, [m.product_id, m.gkey, manual ? JSON.stringify(manual) : null]);
-  return { saved: match.length };
+  // Chrome with no price in DA on the page: its price stays as it was, only what the page says is read
+  if (i.via === 'hand' || manual) for (const m of match) await ctx.db.query(`UPDATE spy_ads SET manual = $3 WHERE product_id = $1 AND gkey = $2`, [m.product_id, m.gkey, manual ? JSON.stringify(manual) : null]);
+  // what the page says (« Lire la page »): read once, only when it is the page of an ad here
+  const read = text && match.length ? await readPage(ctx, text, null) : null;
+  if (read) for (const m of match) await ctx.db.query(`UPDATE spy_ads SET page_read = $3 WHERE product_id = $1 AND gkey = $2`, [m.product_id, m.gkey, JSON.stringify(read)]);
+  return { saved: match.length, read };
 }
 
 /** One keyword with the first tool that answers: Pilotix's backup takes over when its main tool fails. */
@@ -1138,15 +1355,97 @@ export const spyProcs = {
 
   /** « Pas pertinente » (or back): the ad leaves the list, the score and the brief. */
   'spy.hide': proc(['marketer'], z.object({ productId: id, gkey: z.string().max(200), hidden: z.boolean() }), async (ctx, i) => {
-    await ctx.db.query(`UPDATE spy_ads SET relevant = $3 WHERE product_id = $1 AND gkey = $2`, [i.productId, i.gkey, !i.hidden]);
+    // « Pas pertinente » is the tag « Pas le même »; brought back, the ad is in the list again with no tag of a person
+    await ctx.db.query(`UPDATE spy_ads SET relevant = $3, tag = CASE WHEN $3 THEN NULL ELSE 'other' END WHERE product_id = $1 AND gkey = $2`, [i.productId, i.gkey, !i.hidden]);
     await ctx.db.query(`UPDATE spy_watch SET brief = NULL WHERE product_id = $1`, [i.productId]);
     return { ok: true };
   }),
 
-  /** Follow a competitor's page: alerts for its new ads, stopped ads and price changes. */
-  // a competitor's price given by a person: typed by hand on an ad, or read by their Chrome (the extension's popup)
+  // a competitor's price given by a person: typed by hand on an ad, or read by their Chrome (the extension's « Lire la
+  // page », with the page's offers, delivery and promises)
   'spy.sitePrice': proc(['marketer'], SitePriceInput, (ctx, i) => sitePrice(ctx, i)),
 
+  /** A person tags an ad (Identique, Ressemble, Pas le même, or one of the shop's own tags). */
+  'spy.tag': proc(['marketer'], z.object({ productId: id, gkey: z.string().min(1).max(200), tag: z.string().min(1).max(40) }), async (ctx, i) => {
+    await setTag(ctx, i.productId, i.gkey, i.tag);
+    return { ok: true };
+  }),
+
+  /** The shop's own tags. */
+  'spy.tags': proc(['marketer'], z.object({}), async (ctx) => ({ tags: await ownTags(ctx.db) })),
+
+  /** AI Spy › Réglages › Mes tags: the list as written (12 at most); an ad whose tag is taken out gets the AI's again. */
+  'spy.tagsSave': proc(['marketer'], z.object({ tags: z.array(z.object({ id: z.string().max(40).optional(), label: z.string().trim().min(1).max(30) })).max(12) }), async (ctx, i) => {
+    const before = await ownTags(ctx.db);
+    const seen = new Set<string>();
+    const tags: SpyOwnTag[] = [];
+    for (const t of i.tags) {
+      const key = t.label.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const id = t.id && before.some((b) => b.id === t.id) ? t.id : `t:${Date.now().toString(36)}${tags.length.toString(36)}`;
+      tags.push({ id, label: t.label });
+    }
+    await setRaw(ctx.db, OWN_TAGS, tags, ctx.session.profile.id);
+    const gone = before.filter((b) => !tags.some((t) => t.id === b.id)).map((b) => b.id);
+    if (gone.length) await ctx.db.query(`UPDATE spy_ads SET tag = NULL WHERE tag = ANY($1)`, [gone]);
+    return { tags };
+  }),
+
+  /**
+   * Facebook's ad library with the Pilotix extension: for the ads on screen, the products to choose from, the shop's own
+   * tags, the ads already in AI Spy (their product and tag) and the pages followed.
+   */
+  'spy.libraryInfo': proc(['marketer'], z.object({ adIds: z.array(z.string().min(3).max(40)).max(120) }), async (ctx, i) => {
+    const products = (
+      await ctx.db.query(
+        `SELECT p.id, p.name, (SELECT count(DISTINCT it.order_id) FROM order_items it JOIN orders o ON o.id = it.order_id WHERE it.product_id = p.id AND o.created_at >= $1) AS n
+         FROM products p WHERE p.active AND NOT p.is_service ORDER BY n DESC, p.name LIMIT 200`,
+        [new Date(ctx.now() - 30 * DAY).toISOString()],
+      )
+    ).map((r: any) => ({ id: num(r.id), name: str(r.name) }));
+    const rows = i.adIds.length
+      ? await ctx.db.query(
+          `SELECT a.product_id, a.gkey, a.ad_id, a.ad_ids, a.page_id, a.page_name, a.tag, a.relevant, a.same, p.name AS product FROM spy_ads a JOIN products p ON p.id = a.product_id WHERE a.ad_ids && $1::text[] OR a.ad_id = ANY($1)`,
+          [i.adIds],
+        )
+      : [];
+    const ads: { adId: string; productId: number; product: string; gkey: string; pageKey: string; tag: string | null; tagBy: 'person' | 'ai' | null }[] = [];
+    for (const r of rows)
+      for (const adId of i.adIds.filter((x) => x === str(r.ad_id) || (Array.isArray(r.ad_ids) && r.ad_ids.includes(x))))
+        ads.push({ adId, productId: num(r.product_id), product: str(r.product), gkey: str(r.gkey), pageKey: pageKeyOf(r), ...tagOf(r) });
+    // the pages followed, by key (an ad kept here) and by name (an ad not kept yet: the library shows its page's name)
+    const followed = (await ctx.db.query(`SELECT page_key, page_name FROM spy_follow`)).map((r: any) => ({ key: str(r.page_key), name: str(r.page_name) }));
+    return { products, tags: await ownTags(ctx.db), ads, followed };
+  }),
+
+  /**
+   * One ad of Facebook's ad library kept in AI Spy from the library itself (the extension's buttons): for the product
+   * chosen, with the person's tag (else the AI reads it now, when the shop has AI), and its page followed when asked.
+   */
+  'spy.libraryAd': proc(
+    ['marketer'],
+    z.object({ productId: id, ad: RawAdSchema, tag: z.string().min(1).max(40).nullable().default(null), follow: z.boolean().optional() }),
+    async (ctx, i) => {
+      await productRow(ctx.db, i.productId, ctx.now());
+      const r = await ingestAds(ctx, i.productId, 'library', null, [i.ad]);
+      const gkey = r.gkeys[0];
+      if (!gkey) throw bad('Pub illisible');
+      if (i.tag) await setTag(ctx, i.productId, gkey, i.tag);
+      else await analyze(ctx, i.productId, 5);
+      const pageKey = i.ad.pageId || `n:${norm(i.ad.pageName)}`;
+      if (i.follow === true)
+        await ctx.db.query(
+          `INSERT INTO spy_follow (page_key, page_name, product_id, created_by) VALUES ($1, $2, $3, $4) ON CONFLICT (page_key) DO UPDATE SET page_name = EXCLUDED.page_name`,
+          [pageKey, i.ad.pageName, i.productId, ctx.session.profile.id],
+        );
+      if (i.follow === false) await ctx.db.query(`DELETE FROM spy_follow WHERE page_key = $1`, [pageKey]);
+      const row = (await ctx.db.query(`SELECT tag, relevant, same FROM spy_ads WHERE product_id = $1 AND gkey = $2`, [i.productId, gkey]))[0];
+      return { gkey, pageKey, added: r.added > 0, ...tagOf(row ?? {}), followed: (await followedKeys(ctx.db)).has(pageKey) };
+    },
+  ),
+
+  /** Follow a competitor's page: alerts for its new ads, stopped ads and price changes. */
   'spy.follow': proc(['marketer'], z.object({ pageKey: z.string().min(1).max(200), pageName: z.string().max(200), productId: id.nullable(), on: z.boolean() }), async (ctx, i) => {
     if (i.on)
       await ctx.db.query(
@@ -1231,4 +1530,7 @@ export const spyProcs = {
 
   /** The daily scan (scheduled job, every hour: it runs once a day after the chosen hour). */
   'spy.scan': proc([], z.object({}), (ctx) => scan(ctx)),
+
+  /** Copies of the videos of followed shops and tagged ads, while Facebook's links work (scheduled job). */
+  'spy.videos': proc([], z.object({}), (ctx) => keepVideos(ctx)),
 };

@@ -331,6 +331,8 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'confirmation.setTry': order('ids'),
   'confirmation.block': order('ids'),
   'customers.history': customer,
+  // the Pilotix extension's card on WhatsApp Web: it shows only the agency's customers itself (others: as a new number)
+  'customers.waCard': free,
   'customers.setBlacklist': customer,
   'delivery.stopdesks': free,
   'sav.list': savRole,
@@ -475,6 +477,8 @@ export const MARKETER_AGENT_PROCS: Record<string, Gate> = {
   'ads.media.productPhoto': free,
   'ads.media.videoStart': free,
   'ads.media.videoDone': free,
+  // the Pilotix extension in Ads Manager: the numbers of their own ads (adsext.ts keeps to their ad sets)
+  'ads.extNumbers': free,
   'mk.overview': free,
   'mk.adset': free,
 };

@@ -1,12 +1,12 @@
-// The Pilotix Chrome extensions as the zips the website offers to download (apps/web/public, served at the site's root):
-// - apps/wa-extension → pilotix-whatsapp.zip (« Envoyer photos » on a computer)
-// - apps/extension → pilotix-spy.zip (AI Spy › Réglages: the ads of Facebook's ad library); its tests and package.json
-//   stay out, the shops only need the extension itself
-// Each zip has its files at the top. « Extraire tout » (Windows) and a Mac's unzip make the folder « pilotix-whatsapp » /
-// « pilotix-spy » from the zip's name, with manifest.json right inside it: the one folder Chrome loads. (A folder inside
-// the zip gave pilotix-whatsapp › pilotix-whatsapp on Windows, and Chrome refuses the outer one.)
-// Run by the website's build (apps/web: build, build:artifact), so the downloads are always these folders. No
-// dependency: a plain zip (deflate), the same bytes for the same files (fixed dates).
+// The Pilotix Chrome extension as the zip the website offers to download (apps/web/public, served at the site's root):
+// apps/extension → pilotix.zip (AI Spy, Envoyer photos on WhatsApp Web and the rest, in one extension since 2.0.0); its
+// tests and package.json stay out, the shops only need the extension itself. pilotix-whatsapp.zip and pilotix-spy.zip,
+// the two extensions it replaced, are the same zip: an old link or an old help page gives the new extension.
+// The zip has its files at the top. « Extraire tout » (Windows) and a Mac's unzip make the folder « pilotix » from the
+// zip's name, with manifest.json right inside it: the one folder Chrome loads. (A folder inside the zip gave
+// pilotix › pilotix on Windows, and Chrome refuses the outer one.)
+// Run by the website's build (apps/web: build, build:artifact), so the download is always this folder. No dependency:
+// a plain zip (deflate), the same bytes for the same files (fixed dates).
 import * as zlib from 'node:zlib';
 import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
@@ -33,10 +33,9 @@ const walk = (d) => readdirSync(d).sort().flatMap((n) => (statSync(join(d, n)).i
 const DOS_TIME = 0;
 const DOS_DATE = ((2026 - 1980) << 9) | (1 << 5) | 1;
 
-/** The folder `from` (from the repo's root) as apps/web/public/`name`, without the top-level files or folders in `skip`. */
-function zipFolder(from, name, skip = []) {
+/** The folder `from` (from the repo's root) as apps/web/public/`names[…]`, without the top-level files or folders in `skip`. */
+function zipFolder(from, names, skip = []) {
   const src = join(root, from);
-  const out = join(root, 'apps/web/public', name);
   const files = walk(src)
     .map((p) => ({ name: relative(src, p).split('\\').join('/'), data: readFileSync(p) }))
     .filter((f) => !skip.includes(f.name.split('/')[0]));
@@ -83,10 +82,13 @@ function zipFolder(from, name, skip = []) {
   end.writeUInt16LE(files.length, 10);
   end.writeUInt32LE(cd.length, 12);
   end.writeUInt32LE(offset, 16);
-  mkdirSync(dirname(out), { recursive: true });
-  writeFileSync(out, Buffer.concat([...parts, cd, end]));
-  console.log(`${name}: ${files.length} files`);
+  const zip = Buffer.concat([...parts, cd, end]);
+  for (const name of names) {
+    const out = join(root, 'apps/web/public', name);
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, zip);
+  }
+  console.log(`${names.join(', ')}: ${files.length} files`);
 }
 
-zipFolder('apps/wa-extension', 'pilotix-whatsapp.zip');
-zipFolder('apps/extension', 'pilotix-spy.zip', ['test', 'package.json']);
+zipFolder('apps/extension', ['pilotix.zip', 'pilotix-whatsapp.zip', 'pilotix-spy.zip'], ['test', 'package.json']);

@@ -1,26 +1,37 @@
-// The Pilotix Spy Chrome extension (apps/extension), seen from the app. The extension's small script on this page
-// (bridge.js, registered for the Pilotix address the user typed in the extension) answers window messages:
-//   page → extension  { source: 'pilotix-spy-page', id, type: 'ping' }
-//                     { source: 'pilotix-spy-page', id, type: 'search', query, country, max }
-//   extension → page  { source: 'pilotix-spy-ext', type: 'ready', version }            (when the page loads)
-//                     { source: 'pilotix-spy-ext', id, type: 'pong', version }
-//                     { source: 'pilotix-spy-ext', id, type: 'progress', step }        (step: 'open' | 'read' | 'pictures')
-//                     { source: 'pilotix-spy-ext', id, type: 'result', count, ads }    (ads: RawAd[], pictures included)
-//                     { source: 'pilotix-spy-ext', id, type: 'error', message }
-//                     { source: 'pilotix-spy-ext', id, type: 'site-price', url, price, oldPrice, title }
-//                         a competitor's price the user's Chrome read on the page they had open (the popup's « Lire le prix
-//                         de cette page »); this page saves it and answers
-//   page → extension  { source: 'pilotix-spy-page', id, type: 'site-price-done', ok, saved, message }
+// The Pilotix Chrome extension (apps/extension), seen from AI Spy. The extension's small script on this page
+// (bridge.js: always on pilotix.online and direct.pilotix.online, and on any other Pilotix address added in its popup)
+// answers window messages:
+//   page → extension  { source: 'pilotix-page', id, type: 'ping' }
+//                     { source: 'pilotix-page', id, type: 'search', query, country, max }
+//   extension → page  { source: 'pilotix-ext', type: 'ready', version }            (when the page loads)
+//                     { source: 'pilotix-ext', id, type: 'pong', version }
+//                     { source: 'pilotix-ext', id, type: 'progress', step }        (step: 'open' | 'read' | 'pictures')
+//                     { source: 'pilotix-ext', id, type: 'result', count, ads }    (ads: RawAd[], pictures included)
+//                     { source: 'pilotix-ext', id, type: 'error', message }
+// What the extension asks this page (a page read on a competitor's site, actions for its pieces on other sites):
+// lib/extBridge.ts. Since 2.0.0 the extension is « Pilotix » (AI Spy and Envoyer photos together) and marks the page
+// <html data-pilotix-ext="2.0.0">. The older « Pilotix Spy » (1.x) used the names 'pilotix-spy-page' / 'pilotix-spy-ext':
+// it is still answered, by those names, when it is the only one here.
 // The search runs in the user's own Chrome: it opens Facebook's public Ad Library in a background tab, reads the ads and
 // closes it (Facebook refuses these pages to a server, never to a browser).
 import type { RawAd } from '@pilotix/core';
 
-const PAGE = 'pilotix-spy-page';
-const EXT = 'pilotix-spy-ext';
+const NEW = { page: 'pilotix-page', ext: 'pilotix-ext' } as const;
+const OLD = { page: 'pilotix-spy-page', ext: 'pilotix-spy-ext' } as const;
+type Proto = typeof NEW | typeof OLD;
+
+/** The extension's newest version (apps/extension/manifest.json). */
+export const EXT_VERSION = '2.0.0';
+/** Its download, made by the website's build (scripts/extension-zips.mjs). */
+export const EXT_ZIP = '/pilotix.zip';
 
 export interface ExtStatus {
   installed: boolean;
   version: string | null;
+  /** an older extension of Pilotix is still on this Chrome next to it (« Pilotix Spy » 1.x, « Pilotix WhatsApp » 1.0) */
+  older?: boolean;
+  /** « Pilotix » loaded twice (from two folders): only the first acts */
+  twice?: boolean;
 }
 export interface ExtResult {
   count: number | null;
@@ -28,37 +39,68 @@ export interface ExtResult {
 }
 export type ExtStep = 'open' | 'read' | 'pictures';
 
+/** The merged extension marks the page from its first moment (document_start), or says « ready » when added later. */
+let announcedNew: string | null = null;
+let announcedOld: string | null = null;
+const marked = () => (typeof document !== 'undefined' ? document.documentElement.getAttribute('data-pilotix-ext') : null);
+const proto = (): Proto => (marked() || announcedNew ? NEW : OLD);
+/** « Pilotix Spy » 1.x or « Pilotix WhatsApp » 1.0 still installed */
+const olderHere = () => !!announcedOld || !!document.documentElement.getAttribute('data-pilotix-wa');
 let seq = 0;
 const nextId = () => `s${Date.now().toString(36)}${(seq++).toString(36)}`;
-let announced: string | null = null;
 if (typeof window !== 'undefined')
   window.addEventListener('message', (e) => {
-    if (e.source === window && e.data?.source === EXT && e.data.type === 'ready') announced = String(e.data.version ?? '1');
+    if (e.source !== window || e.data?.type !== 'ready') return;
+    if (e.data.source === NEW.ext) announcedNew = String(e.data.version ?? '2');
+    else if (e.data.source === OLD.ext) announcedOld = String(e.data.version ?? '1');
   });
 
 /** Is the extension on this page? (it answers a ping within the timeout) */
 export function detectExtension(timeoutMs = 700): Promise<ExtStatus> {
   if (typeof window === 'undefined') return Promise.resolve({ installed: false, version: null });
-  if (announced) return Promise.resolve({ installed: true, version: announced });
   return new Promise((resolve) => {
-    const id = nextId();
+    const ids = new Set<string>();
     const done = (s: ExtStatus) => {
       window.removeEventListener('message', on);
       clearTimeout(timer);
       resolve(s);
     };
+    const seen = { new: null as string | null, old: null as string | null, exts: new Set<string>() };
     const on = (e: MessageEvent) => {
-      if (e.source !== window || e.data?.source !== EXT) return;
-      if (e.data.type === 'ready' || (e.data.type === 'pong' && e.data.id === id)) done({ installed: true, version: String(e.data.version ?? '1') });
+      const d = e.data;
+      if (e.source !== window || (d?.source !== NEW.ext && d?.source !== OLD.ext)) return;
+      if (d.type !== 'ready' && !(d.type === 'pong' && ids.has(d.id))) return;
+      if (d.source === NEW.ext) {
+        seen.new = String(d.version ?? '2');
+        if (typeof d.ext === 'string') seen.exts.add(d.ext);
+      } else seen.old = String(d.version ?? '1');
     };
-    const timer = setTimeout(() => done({ installed: false, version: null }), timeoutMs);
+    // every copy answers within a moment: the merged one, a second copy of it, an older one
+    const timer = setTimeout(
+      () =>
+        done(
+          seen.new
+            ? { installed: true, version: seen.new, older: !!seen.old || olderHere(), twice: seen.exts.size > 1 }
+            : seen.old
+              ? { installed: true, version: seen.old }
+              : marked()
+                ? { installed: true, version: marked() }
+                : { installed: false, version: null },
+        ),
+      marked() || announcedNew ? Math.min(timeoutMs, 250) : timeoutMs,
+    );
     window.addEventListener('message', on);
-    window.postMessage({ source: PAGE, id, type: 'ping' }, window.location.origin);
+    for (const p of [NEW, OLD]) {
+      const id = nextId();
+      ids.add(id);
+      window.postMessage({ source: p.page, id, type: 'ping' }, window.location.origin);
+    }
   });
 }
 
 /** One keyword searched in Facebook's Ad Library by the user's Chrome (≈ 5–15 s with the pictures). */
 export function extensionSearch(query: string, opts: { country?: string; max?: number; onProgress?: (step: ExtStep) => void; signal?: AbortSignal; timeoutMs?: number } = {}): Promise<ExtResult> {
+  const p = proto();
   return new Promise((resolve, reject) => {
     const id = nextId();
     const finish = () => {
@@ -68,7 +110,7 @@ export function extensionSearch(query: string, opts: { country?: string; max?: n
     };
     const on = (e: MessageEvent) => {
       const d = e.data;
-      if (e.source !== window || d?.source !== EXT || d.id !== id) return;
+      if (e.source !== window || d?.source !== p.ext || d.id !== id) return;
       if (d.type === 'progress') opts.onProgress?.(d.step as ExtStep);
       else if (d.type === 'result') {
         finish();
@@ -88,43 +130,8 @@ export function extensionSearch(query: string, opts: { country?: string; max?: n
     }, opts.timeoutMs ?? 90_000);
     window.addEventListener('message', on);
     opts.signal?.addEventListener('abort', abort);
-    window.postMessage({ source: PAGE, id, type: 'search', query, country: opts.country ?? 'DZ', max: opts.max ?? 30 }, window.location.origin);
+    window.postMessage({ source: p.page, id, type: 'search', query, country: opts.country ?? 'DZ', max: opts.max ?? 30 }, window.location.origin);
   });
-}
-
-/** The extension's newest version (apps/extension/manifest.json): « Lire le prix de cette page » came with 1.1.0. */
-export const SPY_EXT_VERSION = '1.1.0';
-
-/** A competitor's price read by the user's own Chrome on the page they had open (the extension's popup). */
-export interface ExtSitePrice {
-  url: string;
-  price: number;
-  oldPrice: number | null;
-  title: string | null;
-}
-
-/**
- * Takes the prices the extension's popup reads (« Lire le prix de cette page ») while this page is open: `save` keeps
- * one and says on how many ads; the answer goes back to the popup. Returns the function that stops listening.
- */
-export function onSitePrice(save: (p: ExtSitePrice) => Promise<{ saved: number }>): () => void {
-  if (typeof window === 'undefined') return () => {};
-  const on = async (e: MessageEvent) => {
-    const d = e.data;
-    if (e.source !== window || d?.source !== EXT || d.type !== 'site-price' || typeof d.id !== 'string') return;
-    const price = Math.round(Number(d.price));
-    const old = d.oldPrice === null || d.oldPrice === undefined ? null : Math.round(Number(d.oldPrice));
-    const reply = (r: { ok: boolean; saved?: number; message?: string }) => window.postMessage({ source: PAGE, id: d.id, type: 'site-price-done', ...r }, window.location.origin);
-    if (!Number.isFinite(price) || price < 100 || typeof d.url !== 'string') return reply({ ok: false, message: 'Prix illisible' });
-    try {
-      const r = await save({ url: d.url.slice(0, 2000), price, oldPrice: old !== null && Number.isFinite(old) && old > price ? old : null, title: typeof d.title === 'string' ? d.title.slice(0, 200) : null });
-      reply({ ok: true, saved: r.saved });
-    } catch (err) {
-      reply({ ok: false, message: err instanceof Error ? err.message : String(err) });
-    }
-  };
-  window.addEventListener('message', on);
-  return () => window.removeEventListener('message', on);
 }
 
 /** Facebook's own Ad Library search for a keyword (Algeria, active ads), to open in a new tab. */

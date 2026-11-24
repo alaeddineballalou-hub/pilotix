@@ -16,7 +16,7 @@ add-on loaded); the Windows windows, the phone and WhatsApp Web are simple drawi
 |---|---|
 | `index.html` | the film: scenes, captions (« 1 Dans Pilotix : … »), camera, cursor, all timings |
 | `px-shots.cjs` | the Pilotix screenshots (demo build, Samira, 1440×694 at 1680 px wide) into `shots/` |
-| `ext-shots.cjs` | the `chrome://extensions` screenshots (French Chromium, the add-on from `apps/wa-extension`) into `shots/` |
+| `ext-shots.cjs` | the `chrome://extensions` screenshots (French Chromium, the add-on from `apps/extension`) into `shots/` |
 | `score.py` | the sound, made in code (soft chords, a chime per step, clicks, keys): `score.wav` |
 | `render.cjs` | renders one part of the film to MP4 (JPEG frames piped to ffmpeg) |
 | `frames.cjs` | a few still frames, to look at before rendering |

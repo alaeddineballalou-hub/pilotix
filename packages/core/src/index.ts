@@ -36,7 +36,7 @@ export { findBySku } from './modules/catalog';
 export { HD_MIN_WIDTH, READY_CHECKS, readinessOf, syncReadiness, type ReadyCheck } from './modules/readiness';
 export { photoPageHtml } from './modules/photoshare';
 export { fromLibrary } from './modules/spy';
-export type { RawAd, SpyAd, SpyBrief, SpyFinding, SpyKeyword, SpyProductRow, SpySettings, SpySite, SpySource, ScorePart } from './modules/spy';
+export type { RawAd, SpyAd, SpyBrief, SpyFinding, SpyKeyword, SpyProductRow, SpySettings, SpySite, SpySource, SpyPageRead, ScorePart } from './modules/spy';
 export { demoSnapshot, demoRestore } from './demoKeep';
 export type { DemoKeep } from './demoKeep';
 export type { PGliteLike } from './pglite';

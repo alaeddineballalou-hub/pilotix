@@ -53,6 +53,8 @@ interface DemoAd {
   site?: { price: number | null; oldPrice: number | null; wilayas: number | null; stopdesk: boolean; whatsapp: boolean; blocked?: 'robots' | 'wall' };
   /** a price a person gave (the server could not read the site): typed by hand, or read by their Chrome, `days` ago */
   manual?: { price: number; oldPrice: number | null; via: 'hand' | 'chrome'; days: number };
+  /** what their Chrome read on the page beyond the price (the extension's « Lire la page »), the same day */
+  pageRead?: { offers: string[]; delivery: number | null; deliveryNote: string | null; whyUs: string[] };
 }
 
 const ADS: DemoAd[] = [
@@ -64,7 +66,8 @@ const ADS: DemoAd[] = [
   { sku: 'PX-POU', glyph: 'pou', page: 'Kids Store 213', pageId: '900000000000102', days: 45, copies: 3, platforms: ['FACEBOOK', 'INSTAGRAM', 'MESSENGER'], video: true, price: 12900, head: 'خفيفة وتطلع بيها في الطرامواي',
     body: 'Poussette t9der t’tla3 biha f tobis w tramway 🚋\nخفيفة 6 كيلو برك، livraison 58 wilaya', link: 'https://kidsstore213.mylightfunnels.com/poussette', linkType: 'site', platform: 'LightFunnels', cta: 'Acheter', same: true, colors: ['#3B3B98', '#1B1464'],
     ai: { hook: 'Montée dans le tramway avec la poussette', angle: 'Légère pour les transports', offer: '12 900 DA', keep: 'Une situation de vie réelle (bus, tramway)', weak: 'Le prix n’apparaît pas dans la vidéo' },
-    site: { price: null, oldPrice: null, wilayas: null, stopdesk: false, whatsapp: false, blocked: 'wall' }, manual: { price: 12900, oldPrice: null, via: 'chrome', days: 1 } },
+    site: { price: null, oldPrice: null, wilayas: null, stopdesk: false, whatsapp: false, blocked: 'wall' }, manual: { price: 12900, oldPrice: null, via: 'chrome', days: 1 },
+    pageRead: { offers: ['2e poussette à -20 %', 'Ombrelle offerte'], delivery: 0, deliveryNote: 'Gratuite à Alger, 48 h', whyUs: ['Garantie 6 mois', 'Paiement à la livraison', 'Échange sous 7 jours'] } },
   { sku: 'PX-POU', glyph: 'pou', page: 'Maison Bébé Algérie', pageId: '900000000000103', days: 38, copies: 2, platforms: ['FACEBOOK', 'INSTAGRAM'], video: false, price: 13900, head: 'Poussette canne 6,2 kg',
     body: 'Poussette canne ultra-légère 6,2 kg, pliage compact ✅\n13 900 DA, livraison 58 wilayas, paiement à la livraison', link: 'https://maisonbebe-dz.myshopify.com/products/poussette-canne', linkType: 'site', platform: 'Shopify', cta: 'Voir l’offre', same: true, colors: ['#C05C7E', '#7A2E4C'],
     ai: { hook: 'Le poids précis (6,2 kg) en titre', angle: 'Légèreté en ville', offer: '13 900 DA', keep: 'Un chiffre précis rassure plus que « légère »', weak: 'Texte seulement en français' },
@@ -190,10 +193,11 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     // a site the server read yesterday, or one that turned it away (its « no robots » rule, a protection wall)
     const site = a.site ? { checkedAt: day(1), ok: !a.site.blocked, readAt: a.site.blocked ? null : day(1), platform: a.platform ?? null, title: null, ...a.site, blocked: a.site.blocked ?? null } : null;
     const manual = a.manual ? { price: a.manual.price, oldPrice: a.manual.oldPrice, via: a.manual.via, at: day(a.manual.days) } : null;
+    const pageRead = a.pageRead ? { at: day(a.manual?.days ?? 1), ...a.pageRead, ai: true } : null;
     await db.query(
       `INSERT INTO spy_ads (product_id, gkey, ad_id, ad_ids, source, page_id, page_name, body, link_url, link_type, platform, cta, platforms, is_video, media,
-                            copies, started_at, first_seen, last_seen, active, own, keyword, price, old_price, relevant, same, ai, site, manual)
-       VALUES ($1,$2,$3,$4,'demo',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,true,$19,$20,$21,$22,true,$23,$24,$25,$26) ON CONFLICT DO NOTHING`,
+                            copies, started_at, first_seen, last_seen, active, own, keyword, price, old_price, relevant, same, ai, site, manual, page_read)
+       VALUES ($1,$2,$3,$4,'demo',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,true,$19,$20,$21,$22,true,$23,$24,$25,$26,$27) ON CONFLICT DO NOTHING`,
       [
         productId,
         `${a.pageId}#demo${n}`,
@@ -221,6 +225,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
         JSON.stringify(a.ai),
         site ? JSON.stringify(site) : null,
         manual ? JSON.stringify(manual) : null,
+        pageRead ? JSON.stringify(pageRead) : null,
       ],
     );
   }
@@ -246,5 +251,17 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
        ($2, 'price', 'Bébé Confort DZ', $5, '{"from":14500,"to":12900}'),
        ($3, 'stopped', 'Prix Choc Bébé', $5, '{}')`,
     [day(6), day(1), day(3), pou, lit],
+  );
+  // the shop's own tag, on a competitor it watches closely (the AI's Identique / Ressemble on the others)
+  await db.query(`INSERT INTO settings (key, value) VALUES ('spy_tags', $1) ON CONFLICT (key) DO NOTHING`, [JSON.stringify([{ id: 't:demo1', label: 'Concurrent direct' }])]);
+  await db.query(`UPDATE spy_ads SET tag = 't:demo1' WHERE page_name = 'Prix Choc Bébé' AND tag IS NULL`);
+  // the videos: the demo's own short film of each product (it comes with the app), and Pilotix's copy for the ads of the
+  // followed pages and of the tagged ones, as the server keeps them
+  for (const [sku, productId] of ids) {
+    const glyph = ADS.find((a) => a.sku === sku)?.glyph;
+    if (glyph) await db.query(`UPDATE spy_ads SET video_url = $2, video_at = $3 WHERE product_id = $1 AND is_video AND source = 'demo'`, [productId, `demo://spy-video/${glyph}`, day(0)]);
+  }
+  await db.query(
+    `UPDATE spy_ads SET video_copy = 'demo' WHERE is_video AND source = 'demo' AND NOT own AND (page_id IN ('900000000000101', '900000000000104') OR (tag IS NOT NULL AND tag <> 'other'))`,
   );
 }

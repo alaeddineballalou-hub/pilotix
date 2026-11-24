@@ -38,6 +38,7 @@ export const JOB_EVERY: Record<string, number> = {
   'dellal-catchup': 3 * MIN,
   'dellal-followups': 15 * MIN,
   'spy-scan': H,
+  'spy-videos': 30 * MIN,
   'meta-sync': D,
   'demo-reset': D,
   'platform-reminders': D,
