@@ -1,9 +1,10 @@
-// Réglages: Boutique · Dépôts · Commandes du site web (webhook) · Mise à jour automatique des colis (cron) · Meta Ads · Score client ·
+// Réglages: Boutique · Dépôts (a line to Produits › Dépôts) · Commandes du site web (webhook) · Mise à jour automatique des colis (cron) · Meta Ads · Score client ·
 // and for the store's owner only (a multi-shop server): delete the store and all its data.
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { server, shopApi } from '../../lib/backend';
 import { useSession } from '../../lib/session';
+import { pageIsOn } from '../../lib/features';
 import { when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { Card, ErrorBox, Field, Help, Icon, Loading, copyText } from '../../ui/kit';
@@ -24,7 +25,9 @@ export function ReglagesPage() {
     <div className="settings-grid">
       <ShopCard s={s} />
       <StoreCodeCard />
-      <DepotsCard />
+      {/* the depots are managed in Produits & stock › Dépôts (add, change, hide, the stock of each: owner's choice, 25 Nov
+          2026, step 7 of his table); a plan without that tab keeps the card here (its depot's name and address) */}
+      {pageIsOn('produits', 'depots') ? <MovedDepotsCard /> : <DepotsCard />}
       {/* « Commandes du site web » is in Management › Canaux de vente now (owner's choice, 24 Nov 2026) */}
       <MovedWebCard />
       <CronCard cronKey={s.cron.key} last={s.lastSync} />
@@ -225,11 +228,23 @@ function DepotsCard() {
   );
 }
 
+/** « Dépôts »: in Produits & stock › Dépôts, with their stock and the transfers. */
+function MovedDepotsCard() {
+  const { t } = useTranslation();
+  return (
+    <Card title={t('admin.settings.depots')} className="set-moved">
+      <p className="muted small">
+        {t('admin.settings.movedDepots')} <a href="#/produits/depots">{t('admin.settings.movedDepotsLink')}</a>
+      </p>
+    </Card>
+  );
+}
+
 /** « Commandes du site web »: moved to Management › Canaux de vente (it is one more sales channel). */
 function MovedWebCard() {
   const { t } = useTranslation();
   return (
-    <Card title={t('admin.settings.web')}>
+    <Card title={t('admin.settings.web')} className="set-moved">
       <p className="muted small">
         {t('admin.settings.movedWeb')} <a href="#/management/canaux">{t('admin.settings.movedWebLink')}</a>
       </p>

@@ -551,7 +551,9 @@
     "movedSav": "Le numéro SAV est maintenant dans",
     "movedSavLink": "SAV › Réglages",
     "movedWeb": "Elle est maintenant dans",
-    "movedWebLink": "Management › Canaux de vente"
+    "movedWebLink": "Management › Canaux de vente",
+    "movedDepots": "Ils sont maintenant dans",
+    "movedDepotsLink": "Produits & stock › Dépôts"
   },
   "confirmYes": "Oui",
   "cancel": "Annuler",

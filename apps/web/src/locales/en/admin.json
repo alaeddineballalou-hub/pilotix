@@ -551,7 +551,9 @@
     "movedSav": "The after-sales number is now in",
     "movedSavLink": "After-sales › Settings",
     "movedWeb": "It is now in",
-    "movedWebLink": "Management › Sales channels"
+    "movedWebLink": "Management › Sales channels",
+    "movedDepots": "They are now in",
+    "movedDepotsLink": "Products & stock › Depots"
   },
   "confirmYes": "Yes",
   "cancel": "Cancel",
