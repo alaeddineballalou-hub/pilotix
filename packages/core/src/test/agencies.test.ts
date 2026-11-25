@@ -561,7 +561,8 @@ test('an agency works on several sellers: one at a time or all together, its peo
   assert.ok(combinedCatalog.rows.every((r: any) => !('cost' in r) && !('reserved' in r)));
   await assert.rejects(call('catalog.assigned', await ctxOf('nora@centre.dz', b.id), {}), /ne travaillez pas pour ce vendeur/);
   // Confirmation-only people can read delivery progress for the orders they confirm.
-  await a.db.query("UPDATE orders SET follow_status='shipped', shipped_at=now() WHERE id=$1", [va.id]);
+  // (taken_at: its company has it — En livraison only shows those, owner's rule 25 Nov 2026)
+  await a.db.query("UPDATE orders SET follow_status='shipped', shipped_at=now(), taken_at=now() WHERE id=$1", [va.id]);
   const road: any = await call('suivi.list', await ctxOf('nora@centre.dz', 'all'), { tab: 'enlivraison' });
   assert.deepEqual(road.rows.map((r: any) => [r.seller.id, r.id]), [[a.id, va.id]]);
   assert.equal(((await call('suivi.counts', await ctxOf('nora@centre.dz', 'all'), {})) as any).enlivraison, 1);

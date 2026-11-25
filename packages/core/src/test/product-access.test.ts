@@ -104,7 +104,8 @@ test('confirmation agents can read delivery progress without gaining follow-up m
   const ids: number[] = [];
   for (const [n, status] of [...active, 'delivered', 'returning', 'returned', 'cancelled'].entries()) {
     const order = await rpc(admin, 'orders.create', { customerName: 'Delivery scope', wilayaId: 16, commune: 'Kouba', address: 'x', phone: `06909091${String(n).padStart(2,'0')}`, items: [{ productId: a, variantId: va, qty: 1 }] });
-    await db.query("UPDATE orders SET conf_status='confirmed', follow_status=$2, shipped_at=now(), agent_id=$3, conf_agency_id=NULL, follow_agency_id=NULL, sub_status=CASE WHEN $2='out_for_delivery' THEN 'alert_traitee' ELSE NULL END WHERE id=$1", [order.id, status, conf.session.profile.id]);
+    // (taken_at: its company has it — En livraison only shows those, owner's rule 25 Nov 2026)
+    await db.query("UPDATE orders SET conf_status='confirmed', follow_status=$2, shipped_at=now(), taken_at=now(), agent_id=$3, conf_agency_id=NULL, follow_agency_id=NULL, sub_status=CASE WHEN $2='out_for_delivery' THEN 'alert_traitee' ELSE NULL END WHERE id=$1", [order.id, status, conf.session.profile.id]);
     if (active.includes(status)) ids.push(order.id);
   }
   const delivery = await rpc(conf, 'suivi.list', { tab: 'enlivraison', pageSize: 500 });
