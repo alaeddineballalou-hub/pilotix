@@ -209,4 +209,6 @@ html body .pager select.qsz { min-width: 112px; }
 .px-ph-hid { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; }
 .px-ph-hid .bji { width: 12px; height: 12px; flex: none; }
 .px-ph-hid .bji svg { width: 12px; height: 12px; }
-td .px-ph-hid { display: flex; margin-top: 2px; }
+td .px-ph-hid { display: flex; margin-top: 2px; white-space: normal; }
+/* the top search bar's results: legacy.css puts every icon of .pxs at the box's left */
+.pxs .px-ph-hid .bji { position: static; transform: none; color: inherit; }
