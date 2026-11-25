@@ -1968,8 +1968,9 @@ export async function orderCounts(ctx: Ctx) {
       lists: await listsOf(listScopeSql(ctx)),
     };
   }
-  // the confirmation numbers of the store's own agents: the orders no agency handles (their lists show those)
-  const q = queueSql(ctx, 'conf');
+  // the confirmation numbers of the store's own agents: the orders no agency handles (their lists show those); the
+  // Community manager's: her own orders still at the confirmation (she has no queue)
+  const q = cmOnly(ctx.session.roles) && !ctx.session.isAdmin ? listScopeSql(ctx) : queueSql(ctx, 'conf');
   const conf = await ctx.db.query<{ k: string; n: number }>(
     `SELECT conf_status AS k, count(*)::int AS n FROM sales o WHERE true${own ? ' AND livreur_id = $1' : ''}${andSql(q)} GROUP BY 1`,
     own ? [me] : [],

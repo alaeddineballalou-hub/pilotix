@@ -84,6 +84,9 @@ test('she sees the orders she typed; her agent manager sees them, another manage
   assert.deepEqual(listed.rows.map((r: any) => r.id), [mine.id]);
   assert.deepEqual((await call('orders.list', yacine, { ids: [mine.id] })).rows.map((r: any) => r.id), [mine.id]);
   assert.deepEqual((await call('orders.list', amel, { ids: [mine.id] })).rows.length, 0);
+  // the road above her lists counts her own orders still at the confirmation (she has no queue of her own)
+  const mineNew = Number((await db.query(`SELECT count(*)::int AS n FROM orders WHERE created_by = $1 AND conf_status = 'new' AND NOT is_exchange`, [linaId]))[0].n);
+  assert.equal((await call('orders.counts', lina, {})).conf.new, mineNew);
   // her team's confirmation boards do not list her (she never confirms)
   const meta = await call('stats.dashMeta', await as(EMAILS.vendeur), {});
   assert.ok(meta.agents.some((a: any) => a.id === linaId && a.cm === true && a.managerId === yacine.session.profile.id));
