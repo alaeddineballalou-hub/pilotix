@@ -17,7 +17,7 @@ import { expandRoles, personIs, ROLE_INCLUDES } from './index';
 import { MENU_PAGES, menuTabOf, TAB_LINES } from './menu';
 
 /** The roles whose rights are edited (the administrator has everything), and the agency agents' own line. */
-export const RIGHTS_ROLES = ['vendeur', 'agent_manager', 'confirmation', 'agence', 'suivi', 'depot', 'livreur', 'marketer'] as const;
+export const RIGHTS_ROLES = ['vendeur', 'agent_manager', 'confirmation', 'agence', 'suivi', 'depot', 'livreur', 'cm', 'marketer'] as const;
 export type RightsRole = (typeof RIGHTS_ROLES)[number];
 
 export type RightKind = 'page' | 'tab' | 'act' | 'x';
@@ -53,8 +53,8 @@ type ActIn = { id: string; in: string; roles: readonly RightsRole[]; noAgence?: 
  * button is not tied to its page on the server: the same action is used from several pages (an order card is everywhere).
  */
 const ACTS: readonly ActIn[] = [
-  // on the orders, wherever they are shown
-  { id: 'orders.create', in: 'orders', roles: AGENTS },
+  // on the orders, wherever they are shown (the Community manager: only an order of a chat or a call, orders.ts)
+  { id: 'orders.create', in: 'orders', roles: [...AGENTS, 'cm'] },
   { id: 'orders.customer', in: 'orders', roles: AGENTS },
   { id: 'orders.items', in: 'orders', roles: AGENTS },
   { id: 'orders.cancel', in: 'orders', roles: CONF },
@@ -92,8 +92,8 @@ const ACTS: readonly ActIn[] = [
   { id: 'caisse.add', in: 'macaisse', roles: ['confirmation', 'suivi', 'depot', 'agent_manager', 'vendeur'] },
   { id: 'caisse.transfer', in: 'macaisse', roles: ['confirmation', 'suivi', 'depot', 'agent_manager', 'vendeur'] },
   { id: 'pay.ask', in: 'macaisse', roles: ['confirmation', 'suivi', 'depot', 'agent_manager'] },
-  { id: 'dellal.reply', in: 'messages', roles: CONF },
-  { id: 'cm.reply', in: 'cm', roles: ['confirmation', 'marketer'] },
+  { id: 'dellal.reply', in: 'messages', roles: ['confirmation', 'cm'] },
+  { id: 'cm.reply', in: 'cm', roles: ['confirmation', 'marketer', 'cm'] },
   { id: 'social.publish', in: 'social', roles: ['marketer'] },
   { id: 'createur.ai', in: 'createur', roles: ['marketer'] },
   { id: 'spy.search', in: 'spy', roles: ['marketer'] },
@@ -177,7 +177,7 @@ export const NO_ROLE_RIGHTS: RoleRights = { roles: {}, people: {} };
  * role (an agent sees only his orders…), so it never starts from nothing. A seller and a marketer are never given to
  * anyone new, and the agency agents follow their own agency. Administrator templates always grant full access.
  */
-export const CUSTOM_BASES = ['agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'admin'] as const;
+export const CUSTOM_BASES = ['agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'cm', 'admin'] as const;
 export type CustomBase = (typeof CUSTOM_BASES)[number];
 export const isCustomBase = (r: string): r is CustomBase => (CUSTOM_BASES as readonly string[]).includes(r);
 

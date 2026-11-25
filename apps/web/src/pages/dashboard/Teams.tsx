@@ -1,4 +1,4 @@
-// Dashboard · Confirmation › Réglages des équipes: which manager each confirmation agent works with.
+// Dashboard · Confirmation › Réglages des équipes: which manager each confirmation agent (and Community manager) works with.
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
@@ -37,6 +37,8 @@ export function TeamEditor({ meta }: { meta: Meta }) {
                     <td className="wide px-cw" data-l={t('dashboard.editor.agent')}>
                       <div className="px-clamp">
                         <b>{a.name}</b>
+                        {/* a Community manager: her manager sees the orders of her chats and calls (owner's choice, 25 Nov 2026) */}
+                        {a.cm && <small className="muted"> · {t('roles.cm')}</small>}
                       </div>
                     </td>
                     <td className="wide px-cw" data-l={t('dashboard.editor.manager')}>

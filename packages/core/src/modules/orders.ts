@@ -2,6 +2,9 @@ import {
   API_COURIER_KINDS,
   canSetConf,
   canSetFollow,
+  CHAT_ORDER_CHANNEL,
+  CM_CHANNELS,
+  cmOnly,
   CONF_DONE_BAD,
   CONF_NEEDS_DATE,
   CONF_NEEDS_REASON,
@@ -179,10 +182,11 @@ const onlyOwnDeliveries = (ctx: Ctx) => {
   return !s.isAdmin && s.roles.includes('livreur') && !s.roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r));
 };
 
-/** Accounts with no order work at all (a marketer): they never read customers' names, phones or addresses. */
+/** Accounts with no order work at all (a marketer): they never read customers' names, phones or addresses. A Community
+ *  manager opens the orders she typed (agencyscope.ts: ownRowSql keeps her to them). */
 export const noOrderAccess = (ctx: Ctx) => {
   const s = ctx.session;
-  return !s.isAdmin && !s.roles.some((r) => ['confirmation', 'suivi', 'depot', 'livreur', 'agent_manager', 'vendeur'].includes(r));
+  return !s.isAdmin && !s.roles.some((r) => ['confirmation', 'suivi', 'depot', 'livreur', 'agent_manager', 'vendeur', 'cm'].includes(r));
 };
 
 /** A to-do order to call now ($n: the start of the current call slot): a callback whose time came, or — not called back
@@ -814,8 +818,9 @@ export async function createOrder(
     }
     if (input.discount > priced.maxDiscount) throw bad(`Remise trop élevée (maximum ${priced.maxDiscount} DA)`);
     // a lower unit price typed by an employee is a discount: together they stay within the products' maximum
-    // (prices worked out by Pilotix itself — a landing page, the AI seller — are already the shop's own prices)
-    if (!ctx.session.isAdmin && !opts.landingId && !opts.conversationId && priced.priceCut + input.discount > priced.maxDiscount)
+    // (prices worked out by Pilotix itself — a landing page, the AI seller — are already the shop's own prices; an order a
+    // person types in a chat is a person's)
+    if (!ctx.session.isAdmin && !opts.landingId && !(opts.conversationId && came !== 'hand') && priced.priceCut + input.discount > priced.maxDiscount)
       throw bad(`Prix trop bas : la baisse de prix et la remise dépassent la remise maximale (${priced.maxDiscount} DA)`);
     // the welcome code (Referral › Code promo): off the products' total, checked before (minimum order); the only discount
     // allowed above the products' maximum
@@ -903,17 +908,17 @@ export async function createOrder(
     // SAV exchange parcels stay with the store's team (they are not sales)
     if (!input.isExchange) await routeToAgencies(tx, oid, lines[0]?.productId, stamped);
     // an order that came by itself says where from (« Page de vente « velo-star » », « Dellal · Messenger »), never the
-    // account the server works with
+    // account the server works with; one a person typed in a chat (the Community manager) shows that person
     const made =
       opts.by ??
-      autoSourceOf({
+      (came === 'hand' && opts.conversationId != null ? null : autoSourceOf({
         landing: opts.landingId != null || !!opts.abandoned,
         chat: opts.conversationId != null,
         lead: !!(input.utm as Record<string, unknown> | null | undefined)?.leadgen_id,
         sheet: !!opts.sheet,
         site: input.via === 'api',
         source: input.source ?? null,
-      });
+      }));
     const by = made ? { by: made } : undefined;
     await addEvent(tx, oid, me, 'created', null, conf, input.isExchange ? `Échange de la commande #${input.originalOrderId}` : null, by);
     if (confirmed) await addEvent(tx, oid, me, 'follow_status', null, 'to_prepare', null, by);
@@ -971,6 +976,26 @@ export async function guardHands(ctx: Ctx, ids: number[], holderMay = false) {
 }
 
 export const UpdateInput = OrderInput.partial().omit({ confirm: true }).extend({ id, version: z.number().int().min(1).optional(), customerName: z.string().trim().max(120).optional() });
+
+/** « Nouvelle commande »: also from a chat of Pilot Message (its « Créer la commande »), the conversation it is typed in. */
+const CreateInput = OrderInput.extend({ conversationId: id.nullable().optional() });
+
+/**
+ * The chat of Pilot Message an order is typed in, for the people who work the chats (the sellers, the Community manager):
+ * its id, its channel as an order's, its source (« Chat Messenger · pub 1202… ») and the ad that started it.
+ */
+async function chatToOrder(ctx: Ctx, conversationId: number) {
+  if (!hasRole(ctx.session, 'confirmation', 'cm')) throw forbidden('Seules les personnes qui répondent aux messages créent la commande d’un chat');
+  const c = (await ctx.db.query(`SELECT id, channel, source FROM conversations WHERE id = $1 AND channel <> 'test'`, [conversationId]))[0];
+  if (!c) throw notFound('Conversation introuvable');
+  const channel = CHAT_ORDER_CHANNEL[String(c.channel)];
+  if (!channel) throw bad('Cette conversation ne peut pas donner une commande');
+  // the ad of a « send message » ad, as Dellal keeps it on its orders (dellal.ts: chatAdOf), read here without importing Dellal
+  const adId = String(c.source ?? '').match(/^pub (\d{6,30})\b/)?.[1] ?? null;
+  const adsetId = adId ? ((await ctx.db.query('SELECT adset_id FROM ads WHERE id = $1', [adId]))[0]?.adset_id ?? null) : null;
+  const utm = adId ? { utm_source: 'facebook', utm_medium: 'chat', ad_id: adId, ...(adsetId ? { adset_id: String(adsetId) } : {}) } : null;
+  return { id: num(c.id), channel, source: `Chat ${CHAT_NAMES[String(c.channel)] ?? c.channel}${c.source ? ` · ${String(c.source)}` : ''}`.slice(0, 120), utm, adsetId: adsetId ? String(adsetId) : null };
+}
 
 /**
  * The products and the remise of a change: the new lines, the subtotal, the remise — refused when the price cuts and
@@ -2047,7 +2072,7 @@ const FEE_COLS = `o.id, o.ref, o.total, o.delivery_fee, o.delivery_cost, o.couri
 function orderExtraProcs() {
   return {
     /** Everything the order form needs: products (variants, stock, packs, linked), companies, stop desks, settings. */
-    'orders.formData': proc(['confirmation', 'suivi', 'depot'], z.object({}), async (ctx) => {
+    'orders.formData': proc(['confirmation', 'suivi', 'depot', 'cm'], z.object({}), async (ctx) => {
       const allowed = await assignedProductIds(ctx);
       const prods = await ctx.db.query(`SELECT id, name, sku, price, fixed_price, max_discount, packs, linked, active, is_service, fee_grid, weight_kg, montage FROM products WHERE archived_at IS NULL${allowed ? ' AND id = ANY($1)' : ''} ORDER BY name`, allowed ? [allowed] : []);
       const vars = await ctx.db.query(
@@ -2097,7 +2122,7 @@ function orderExtraProcs() {
      * whether the company serves the wilaya, and the maximum discount for these products.
      */
     'orders.quote': proc(
-      ['confirmation', 'suivi', 'depot'],
+      ['confirmation', 'suivi', 'depot', 'cm'],
       z.object({ wilayaId: z.number().int().min(1).max(69).nullable(), isStopdesk: z.boolean().default(false), companyId: id.nullable().optional(), items: z.array(z.object({ productId: id, variantId: id.nullable().optional(), qty: z.number().int().min(1).max(999) })).max(50).default([]) }),
       async (ctx, i) => {
         const { fee, grid, weight, maxDiscount, unlimited } = await customerFee(ctx.db, i.wilayaId, i.isStopdesk, i.items);
@@ -2393,14 +2418,15 @@ export const ordersProcs = {
     // the line itself (since 24 Nov 2026), else found from the order (the older lines)
     const src = (
       await ctx.db.query(
-        `SELECT o.landing_id, o.conversation_id, o.source, o.utm, o.ext_order_id, c.name AS company,
+        `SELECT o.landing_id, o.conversation_id, o.came, o.source, o.utm, o.ext_order_id, c.name AS company,
            EXISTS (SELECT 1 FROM sheet_rows s WHERE s.order_id = o.id) AS sheet
          FROM orders o LEFT JOIN delivery_companies c ON c.id = o.company_id WHERE o.id = $1`,
         [id],
       )
     )[0];
     const utm = src && (typeof src.utm === 'string' ? JSON.parse(src.utm) : src.utm);
-    const made = src
+    // (an order a person typed in a chat — the Community manager's — is that person's, never Dellal's)
+    const made = src && !(src.came === 'hand' && src.conversation_id != null)
       ? autoSourceOf({ landing: src.landing_id != null, chat: src.conversation_id != null, lead: !!utm?.leadgen_id, sheet: !!src.sheet, site: src.ext_order_id != null, source: src.source })
       : null;
     const createdAt = rows.find((r: any) => r.kind === 'created')?.at;
@@ -2422,11 +2448,33 @@ export const ordersProcs = {
     );
   }),
   // the upsell is always counted by Pilotix: a mark sent by a screen is not taken (only Dellal, inside, marks what it sold in addition)
-  'orders.create': proc(['confirmation', 'suivi', 'depot'], OrderInput, async (ctx, i) => {
+  'orders.create': proc(['confirmation', 'suivi', 'depot', 'cm'], CreateInput, async (ctx, { conversationId, ...i }) => {
     // an exchange leaves free (the customer only pays the delivery): it is made by the SAV (sav.exchange), from a real
     // ticket — never typed as a free order to anyone. Only the administrator may type one directly.
     if (i.isExchange && !ctx.session.isAdmin) throw forbidden('Un échange se fait depuis le SAV');
-    const o = await createOrder(ctx, { ...i, items: i.items.map((x) => ({ ...x, isUpsell: false })) }, ctx.db, { guard: i.via === 'api' ? 'check' : 'note', came: i.via === 'api' ? 'site' : 'hand' });
+    // the Community manager (owner's choice, 25 Nov 2026): only the order of a chat or a call, and it goes the normal way —
+    // to the confirmation as « Nouvelle », its company chosen by Pilotix or the team
+    if (cmOnly(ctx.session.roles)) {
+      if (i.via) throw forbidden();
+      if (!CM_CHANNELS.includes(i.channel)) throw forbidden('Un community manager crée seulement la commande d’un chat ou d’un appel');
+      if (i.confirm) throw forbidden('La commande part à la confirmation : c’est un agent de confirmation qui la confirme');
+      if (i.companyId) throw forbidden('La société de livraison est choisie par Pilotix ou par l’équipe');
+    }
+    // typed in a chat of Pilot Message (« Créer la commande »): linked to it, like an order Dellal takes — the chat shows it,
+    // the ad that brought the customer counts it, Meta hears of it — with the chat's own channel
+    const chat = conversationId ? await chatToOrder(ctx, conversationId) : null;
+    const input = { ...i, items: i.items.map((x) => ({ ...x, isUpsell: false })), ...(chat ? { channel: chat.channel, source: chat.source, utm: chat.utm ?? i.utm ?? null } : {}) };
+    const o = await createOrder(ctx, input, ctx.db, {
+      guard: i.via === 'api' ? 'check' : 'note',
+      came: i.via === 'api' ? 'site' : 'hand',
+      ...(chat ? { conversationId: chat.id, adsetId: chat.adsetId } : {}),
+    });
+    if (chat)
+      await ctx.db.query(
+        `UPDATE conversations SET order_id = $2, orders_count = orders_count + 1, phone = COALESCE(phone, $3), customer_name = COALESCE(customer_name, $4),
+           customer_id = COALESCE(customer_id, (SELECT id FROM customers WHERE phone = $3)) WHERE id = $1`,
+        [chat.id, o.id, o.phone, o.customerName],
+      );
     await sendInPreview(ctx);
     return o;
   }),

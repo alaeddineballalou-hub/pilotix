@@ -1,5 +1,5 @@
 // "Nouvelle commande" / "Modifier la commande X" / "Échange pour X" — the .pxo order form of the original app.
-import { CONF_TODO, isAbandonedCheckout, communesOf, FOLLOW_LOCKED, normalizePhone, Order, origOf, SALES_CHANNELS, upsellOf, WILAYAS } from '@pilotix/shared';
+import { CM_CHANNELS, cmOnly, CONF_TODO, isAbandonedCheckout, communesOf, FOLLOW_LOCKED, normalizePhone, Order, origOf, SALES_CHANNELS, upsellOf, WILAYAS } from '@pilotix/shared';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PromoField, usePromoCheck } from './PromoField';
@@ -134,11 +134,16 @@ export default function OrderForm(p: OrderFormOpts & { onClose: () => void }) {
 
 function Form({ data, order, original, title, onClose, onSaved, prefill }: OrderFormOpts & { onClose: () => void; data: FormData; order?: Order; original?: Order; title: string }) {
   const { t, i18n } = useTranslation();
-  const { has } = useSession();
+  const { has, session } = useSession();
   const qc = useQueryClient();
+  // the Community manager (owner's choice, 25 Nov 2026): the order of a chat or a call only — its channel among those, no
+  // delivery company (Pilotix or the team chooses it), never confirmed here (the confirmation calls the customer)
+  const cm = !!session && !session.isAdmin && cmOnly(session.roles);
   const isEdit = !!order;
   const isExchange = !!original && !isEdit;
   const pre = (prefill ?? {}) as Record<string, any>;
+  // « Créer la commande » in a chat of Pilot Message: the order is that chat's (its channel too)
+  const chatId: number | null = typeof pre.conversationId === 'number' ? pre.conversationId : null;
   const base: Partial<Order> & Record<string, any> = order ?? (original ? { ...original, discount: 0 } : pre);
   const P = useMemo(() => new Map(data.products.map((x) => [x.id, x])), [data.products]);
   const V = useMemo(() => {
@@ -375,7 +380,7 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
       address: address.trim(),
       isStopdesk: desk,
       stopdeskId: desk && deskId !== '' ? deskId : null,
-      companyId: companyId === '' ? null : companyId,
+      companyId: cm || companyId === '' ? null : companyId,
       channel: channel as (typeof SALES_CHANNELS)[number],
       deliveryFee: fee === '' ? undefined : feeN,
       discount: disN,
@@ -408,7 +413,7 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
           deliveryNote: noteL.trim() || null,
           internalNote: (isExchange ? [noteT.trim(), `Échange de ${original!.ref}`].filter(Boolean).join(' · ') : noteT.trim()) || null,
         };
-        saved = await rpc('orders.create', { ...payload, ...notes, items, confirm, isExchange, originalOrderId: isExchange ? original!.id : null, source: (pre.source as string) ?? null });
+        saved = await rpc('orders.create', { ...payload, ...notes, items, confirm, isExchange, originalOrderId: isExchange ? original!.id : null, source: (pre.source as string) ?? null, ...(chatId ? { conversationId: chatId } : {}) });
         toast(confirm ? t('orders.form.savedConfirmed', { ref: saved.ref }) : t('orders.form.created', { ref: saved.ref }), 'ok');
       }
       qc.invalidateQueries();
@@ -471,8 +476,8 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
                 {!order && (
                   <label className="pxo-kv sel">
                     <b>{t('orders.form.source')}</b>
-                    <select value={channel} onChange={(e) => setChannel(e.target.value)} aria-label={t('orders.form.source')}>
-                      {SALES_CHANNELS.map((c) => (
+                    <select value={channel} onChange={(e) => setChannel(e.target.value)} aria-label={t('orders.form.source')} disabled={!!chatId}>
+                      {(cm ? CM_CHANNELS : SALES_CHANNELS).map((c) => (
                         <option key={c} value={c}>
                           {t(`status.channel.${c}`)}
                         </option>
@@ -815,7 +820,9 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
             <div className="pxo-g3">
               <Field label={t('orders.form.partner')}>
                 <select
-                  value={companyId}
+                  value={cm ? '' : companyId}
+                  disabled={cm}
+                  title={cm ? t('orders.form.cmNoCompany') : undefined}
                   onChange={(e) => {
                     const v = e.target.value ? Number(e.target.value) : '';
                     setCompanyId(v);

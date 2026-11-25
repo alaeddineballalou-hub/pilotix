@@ -1,5 +1,5 @@
 // Commandes (all orders, Livré, Annulé) and the hidden Livrées / Retournées pages — as in the original app.
-import { canSetFollow, CONF_DONE_BAD, CONF_STATUSES, CONF_TODO, FOLLOW_ON_ROAD, FOLLOW_STATUSES, FollowStatus, Order, SALES_CHANNELS, WILAYAS } from '@pilotix/shared';
+import { canSetFollow, cmOnly, CONF_DONE_BAD, CONF_STATUSES, CONF_TODO, FOLLOW_ON_ROAD, FOLLOW_STATUSES, FollowStatus, Order, SALES_CHANNELS, WILAYAS } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { lazy, ReactNode, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -651,6 +651,8 @@ function CommandesDesk({ sub }: { sub?: string }) {
   const qc = useQueryClient();
   // a confirmation agency works on its sellers' orders: no new order, no sync with the companies, not the seller's money
   const agency = useInAgency();
+  // the Community manager follows her orders: not the companies' fees, not the money
+  const cm = !!session && !session.isAdmin && cmOnly(session.roles);
   // « Swap » on a parcel coming back, always (Suivi's rule): in Annulé's returns too
   const swap = useSwap();
 
@@ -673,7 +675,7 @@ function CommandesDesk({ sub }: { sub?: string }) {
       {t('orders.sync')}
     </button>
   );
-  const newBtn = !agency && has('confirmation', 'suivi', 'depot') && rightOn('act:orders.create') && (
+  const newBtn = !agency && has('confirmation', 'suivi', 'depot', 'cm') && rightOn('act:orders.create') && (
     <button className="btn primary" onClick={() => openOrderForm()}>
       {t('orders.plusNew')}
     </button>
@@ -689,7 +691,7 @@ function CommandesDesk({ sub }: { sub?: string }) {
           title={t('orders.delivered')}
           base={{ follow: ['delivered'], dateField: 'delivered_at' }}
           show={['search', 'conf', 'company', 'wilaya', 'channel', 'agent', 'team', 'product', 'livreur', 'cashed', 'dates']}
-          extra={agency ? undefined : deliveredExtra}
+          extra={agency || cm ? undefined : deliveredExtra}
           defaultSort="delivered_at"
         />
       </>

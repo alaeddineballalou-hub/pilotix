@@ -2,6 +2,7 @@
   "hello": "Hello {{name}}",
   "livreurHint": "Your round is in “My round”.",
   "soon": "Your space is coming soon.",
+  "cmHint": "Answer the messages and comments here. An order from a chat: « Create the order » in the chat. From a call: « + New order » at the top.",
   "seeRound": "See my round",
   "now": "Right now",
   "toCall": "To call",

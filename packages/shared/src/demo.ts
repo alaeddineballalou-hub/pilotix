@@ -26,6 +26,8 @@ export const DEMO_ACCOUNTS = [
   { key: 'depot3', name: 'Bilal', email: 'bilal@demo.pilotix.dz', roles: ['depot'] },
   { key: 'marketer2', name: 'Sarah (Marketeuse)', email: 'sarah@demo.pilotix.dz', roles: ['marketer'] },
   { key: 'polyvalent', name: 'Riad (Confirmation et Suivi)', email: 'riad@demo.pilotix.dz', roles: ['confirmation', 'suivi'] },
+  // the Community manager (25 Nov 2026): Pilot Message, Pilot Comments, the orders of her chats and calls (in Yacine's team)
+  { key: 'cm', name: 'Lina (Community manager)', email: 'lina@demo.pilotix.dz', roles: ['cm'] },
 ] as const;
 
 /**

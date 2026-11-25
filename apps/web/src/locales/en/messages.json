@@ -70,7 +70,8 @@
     "assigned": "Handled by",
     "orders": "Orders",
     "noOrder": "No order yet.",
-    "byDellal": "Taken by {{name}}"
+    "byDellal": "Taken by {{name}}",
+    "createOrder": "Create the order"
   },
   "tester": {
     "title": "Try {{name}}",

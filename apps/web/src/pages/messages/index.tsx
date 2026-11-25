@@ -6,9 +6,10 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMenuCounts } from '../../layout/Shell';
 import { backend, serverUrl, shopApi } from '../../lib/backend';
-import { inAdWindow, staffWindow, UNSENT_BODY } from '@pilotix/shared';
+import { CHAT_ORDER_CHANNEL, inAdWindow, staffWindow, UNSENT_BODY } from '@pilotix/shared';
 import { da, n, shortWhen } from '../../lib/format';
-import { openOrder } from '../../lib/modals';
+import { openOrder, openOrderForm } from '../../lib/modals';
+import { rightOn } from '../../lib/rights';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { CopyCode } from '../../ui/CopyCode';
@@ -206,6 +207,7 @@ function ConvRow({ c, on, name, onClick }: { c: Conv; on: boolean; name: string;
 
 function Thread({ id, name, info, onInfo, onBack }: { id: number; name: string; info: boolean; onInfo: (v: boolean) => void; onBack: () => void }) {
   const { t } = useTranslation();
+  const { has } = useSession();
   const q = useRpc('dellal.conversation', { id }, { refetchInterval: 10_000 });
   const [body, setBody] = useState('');
   const reply = useAction('dellal.reply', { onDone: (r) => (setBody(''), r.sendError && toast(r.sendError, 'bad')) });
@@ -357,7 +359,30 @@ function Thread({ id, name, info, onInfo, onBack }: { id: number; name: string; 
             </>
           )}
         </dl>
-        <h4>{t('messages.side.orders')}</h4>
+        <div className="dl-side-orders-h">
+          <h4>{t('messages.side.orders')}</h4>
+          {/* the order the customer gives in this chat, typed by the person who answers (the Community manager): linked
+              to the chat, its channel the chat's; it goes to the confirmation like any order (owner's choice, 25 Nov 2026) */}
+          {c.channel !== 'test' && has('confirmation', 'cm') && rightOn('act:orders.create') && (
+            <button
+              type="button"
+              className="btn small ok"
+              onClick={() =>
+                openOrderForm({
+                  prefill: {
+                    customerName: c.customerName ?? '',
+                    phone: c.phone ?? '',
+                    channel: CHAT_ORDER_CHANNEL[c.channel] ?? 'facebook',
+                    conversationId: c.id,
+                  },
+                  onSaved: () => q.refetch(),
+                })
+              }
+            >
+              <Icon name="plus" /> {t('messages.side.createOrder')}
+            </button>
+          )}
+        </div>
         {!orders.length ? (
           <p className="muted small" style={{ margin: 0 }}>
             {t('messages.side.noOrder')}
@@ -368,7 +393,7 @@ function Thread({ id, name, info, onInfo, onBack }: { id: number; name: string; 
               <b className="ltr">{o.ref}</b>
               <span className="ltr">{da(o.total)}</span>
               <span>{o.followStatus ? <StatusBadge kind="follow" status={o.followStatus} /> : <StatusBadge kind="conf" status={o.confStatus} />}</span>
-              {o.id === c.orderId && (
+              {o.id === c.orderId && o.byDellal && (
                 <small>
                   <Icon name="sparkles" /> {t('messages.side.byDellal', { name })}
                 </small>

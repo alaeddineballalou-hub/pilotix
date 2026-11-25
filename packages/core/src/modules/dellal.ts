@@ -2456,7 +2456,8 @@ const inPreview = (ctx: Ctx) => !ctx.server && typeof (globalThis as { window?: 
 
 // ---------------------------------------------------------------- actions
 const id = z.number().int().positive();
-const SELLERS = ['confirmation'] as const;
+/** Who works the chats: the sellers (confirmation), and the Community manager (owner's choice, 25 Nov 2026). */
+const SELLERS = ['confirmation', 'cm'] as const;
 const me = (ctx: Ctx) => ctx.session.profile.id;
 
 async function messagesOf(db: Db, convId: number): Promise<ConvMessage[]> {
@@ -2573,9 +2574,9 @@ export const dellalProcs = {
     const conv = await getConv(ctx.db, id);
     if (conv.unread) await ctx.db.query('UPDATE conversations SET unread = 0 WHERE id = $1', [id]);
     const orders = conv.phone
-      ? await ctx.db.query(`SELECT id, ref, total, conf_status, follow_status, created_at FROM orders WHERE phone = $1 ORDER BY id DESC LIMIT 5`, [conv.phone])
+      ? await ctx.db.query(`SELECT id, ref, total, conf_status, follow_status, created_at, came FROM orders WHERE phone = $1 ORDER BY id DESC LIMIT 5`, [conv.phone])
       : conv.orderId
-        ? await ctx.db.query(`SELECT id, ref, total, conf_status, follow_status, created_at FROM orders WHERE id = $1`, [conv.orderId])
+        ? await ctx.db.query(`SELECT id, ref, total, conf_status, follow_status, created_at, came FROM orders WHERE id = $1`, [conv.orderId])
         : [];
     return {
       conversation: { ...conv, unread: 0 },
@@ -2583,7 +2584,8 @@ export const dellalProcs = {
       humanAgent: await humanAgentOn(ctx),
       messages: await messagesOf(ctx.db, id),
       customer: await customerSummary(ctx.db, conv.phone),
-      orders: orders.map((o: any) => ({ id: num(o.id), ref: o.ref, total: num(o.total), confStatus: o.conf_status, followStatus: o.follow_status, at: iso(o.created_at) })),
+      // (byDellal: taken by Dellal in a chat; one a person typed here — « Créer la commande » — is not)
+      orders: orders.map((o: any) => ({ id: num(o.id), ref: o.ref, total: num(o.total), confStatus: o.conf_status, followStatus: o.follow_status, at: iso(o.created_at), byDellal: o.came === 'chat' || o.came === 'chat_auto' })),
     };
   }),
 
@@ -2754,7 +2756,7 @@ export const dellalProcs = {
     const o = (await ctx.db.query(
       `SELECT count(*)::int AS orders, count(*) FILTER (WHERE follow_status = 'delivered')::int AS delivered,
               count(*) FILTER (WHERE conf_status = 'confirmed')::int AS confirmed, COALESCE(sum(total), 0)::bigint AS amount
-       FROM orders WHERE conversation_id IS NOT NULL AND created_at > now() - make_interval(days => $1)`,
+       FROM orders WHERE conversation_id IS NOT NULL AND came IS DISTINCT FROM 'hand' AND created_at > now() - make_interval(days => $1)`,
       [i.days],
     ))[0];
     const msgs = (await ctx.db.query(

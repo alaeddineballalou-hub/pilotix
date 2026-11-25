@@ -23,7 +23,9 @@ import type { OrigLine } from './upsell';
 import type { AgencySellerWork } from './agency';
 
 // ---------------------------------------------------------------- roles
-export const ROLES = ['admin', 'vendeur', 'agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'marketer', 'sav'] as const;
+// 'cm': the Community manager (owner's choice, 25 Nov 2026): Pilot Message and Pilot Comments only — she answers the
+// chats and the comments, and types the orders of a chat or a call (CM_CHANNELS), which then go the normal way
+export const ROLES = ['admin', 'vendeur', 'agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'marketer', 'sav', 'cm'] as const;
 export type Role = (typeof ROLES)[number];
 
 /** Roles that bring other roles with them. */
@@ -109,6 +111,16 @@ export const FAIL_REASONS = ['absent', 'no_answer', 'postponed_by_client', 'addr
 export const RETURN_REASONS = ['refused', 'unreachable', 'mismatch', 'wrong_address', 'cancelled_by_client', 'other'] as const;
 export const SALES_CHANNELS = ['site', 'facebook', 'instagram', 'tiktok', 'appel', 'whatsapp', 'autre', 'landing'] as const;
 export type SalesChannel = (typeof SALES_CHANNELS)[number];
+/** The channels a Community manager types an order from: a chat (Messenger is « facebook »), or a call. */
+export const CM_CHANNELS: readonly SalesChannel[] = ['facebook', 'instagram', 'whatsapp', 'tiktok', 'appel'];
+/** The order channel of a chat of Pilot Message (Messenger is « facebook »). */
+export const CHAT_ORDER_CHANNEL: Readonly<Record<string, SalesChannel>> = { whatsapp: 'whatsapp', messenger: 'facebook', instagram: 'instagram', tiktok: 'tiktok' };
+/**
+ * A Community manager and nothing more (her roles as the session has them, expanded): no confirmation, suivi or dépôt
+ * work, not a seller, a manager or an administrator. Her orders are only those of a chat or a call; she sees her own.
+ */
+export const cmOnly = (roles: readonly Role[]): boolean =>
+  roles.includes('cm') && !roles.some((r) => r === 'admin' || r === 'vendeur' || r === 'agent_manager' || r === 'confirmation' || r === 'suivi' || r === 'depot');
 
 export const COURIER_KINDS = ['own', 'zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'maystro', 'zimou', 'elogistia', 'ecom', 'mdm', 'near', 'custom', 'manual'] as const;
 export type CourierKind = (typeof COURIER_KINDS)[number];

@@ -267,6 +267,7 @@
     "delivery": "Livraison",
     "partner": "Partenaire de livraison",
     "later": "— Choisir plus tard —",
+    "cmNoCompany": "Pilotix ou l’équipe choisit la société de livraison",
     "byDefault": "(par défaut)",
     "type": "Type",
     "home": "Domicile",

@@ -71,13 +71,19 @@ async function confAgents(ctx: Ctx): Promise<{ id: number; name: string; roles: 
   return rows.map((r: any) => ({ id: num(r.id), name: r.name, roles: r.roles }));
 }
 
+/** The Community managers and nothing more: in a team for their manager to see their orders, never on its confirmation boards. */
+async function cmOnlyIds(ctx: Ctx): Promise<Set<number>> {
+  const rows = await ctx.db.query(`SELECT id FROM profiles WHERE 'cm' = ANY(roles) AND NOT (roles && $1::text[])`, [['admin', 'vendeur', 'agent_manager', 'confirmation', 'suivi', 'depot']]);
+  return new Set(rows.map((r: any) => num(r.id)));
+}
+
 /** Teams from the setting, each with its manager inside, plus "Sans manager" for the other agents (and anyone who confirmed in the period). */
 export async function teamViews(ctx: Ctx, extraAgents: number[] = []): Promise<TeamView[]> {
-  const [teams, agents, nm] = [await getSetting(ctx.db, 'teams'), await confAgents(ctx), await names(ctx)];
+  const [teams, agents, nm, cms] = [await getSetting(ctx.db, 'teams'), await confAgents(ctx), await names(ctx), await cmOnlyIds(ctx)];
   const out: TeamView[] = [];
   const seen = new Set<number>();
   for (const t of teams) {
-    const ids = [...new Set([...(t.managerId ? [t.managerId] : []), ...t.agentIds])].filter((id) => nm.has(id));
+    const ids = [...new Set([...(t.managerId ? [t.managerId] : []), ...t.agentIds])].filter((id) => nm.has(id) && !cms.has(id));
     ids.forEach((id) => seen.add(id));
     out.push({ id: t.id, name: t.name, managerId: t.managerId, managerName: t.managerId ? nm.get(t.managerId) ?? null : null, agentIds: ids });
   }
@@ -683,9 +689,14 @@ export const statsProcs = {
     const teams = await getSetting(ctx.db, 'teams');
     const managerOf = new Map<number, number | null>();
     for (const t of teams) for (const a of t.agentIds) managerOf.set(a, t.managerId);
-    const agents = (await confAgents(ctx))
+    const agents: { id: number; name: string; managerId: number | null; cm?: true }[] = (await confAgents(ctx))
       .filter((a) => !a.roles.includes('agent_manager') && !a.roles.includes('vendeur'))
       .map((a) => ({ id: a.id, name: a.name, managerId: managerOf.get(a.id) ?? null }));
+    // the Community managers too: their agent manager sees the orders of their chats and calls (owner's choice, 25 Nov 2026)
+    const cms = await cmOnlyIds(ctx);
+    if (cms.size)
+      for (const r of await ctx.db.query(`SELECT id, name FROM profiles WHERE active AND id = ANY($1) ORDER BY name`, [[...cms]]))
+        agents.push({ id: num(r.id), name: r.name as string, managerId: managerOf.get(num(r.id)) ?? null, cm: true });
     const scope = ctx.session.isAdmin ? await getSetting(ctx.db, 'mgrScope') : {};
     return { areas, seesAll: all, canEditTeams: all, canEditScope: ctx.session.isAdmin, managers, agents, scope };
   }),

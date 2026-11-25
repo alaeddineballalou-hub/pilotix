@@ -935,8 +935,8 @@ export async function sweepComments(ctx: Ctx): Promise<{ answered: number }> {
 
 // ---------------------------------------------------------------- actions
 const id = z.number().int().positive();
-/** Who works the comments: the sellers (confirmation) and the marketers (their ads). */
-const CM_ROLES = ['confirmation', 'marketer'] as const;
+/** Who works the comments: the sellers (confirmation), the marketers (their ads) and the Community manager. */
+const CM_ROLES = ['confirmation', 'marketer', 'cm'] as const;
 const me = (ctx: Ctx) => ctx.session.profile.id;
 
 const SettingsInput = z.object({

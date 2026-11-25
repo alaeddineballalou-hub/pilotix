@@ -22,6 +22,9 @@
 .dl-err { color: var(--coral); font-weight: 700; }
 
 /* the customer's orders, beside the conversation */
+/* the side panel's « Commandes » title with « + Créer la commande » (the order a person types in this chat) */
+.dl-side-orders-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.ai-side .dl-side-orders-h h4 { margin: 0; }
 .dl-order-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 8px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; text-align: start; cursor: pointer; }
 .dl-order-card b { font-size: 14px; }
 .dl-order-card > span:nth-child(2) { font-weight: 700; font-variant-numeric: tabular-nums; }

@@ -1,4 +1,4 @@
-import { type MenuCond, menuRight, onSpace, type Role, SPACE_ALWAYS, SPACES, type SpaceId, STORE_MENU } from '@pilotix/shared';
+import { cmOnly, type MenuCond, menuRight, onSpace, type Role, SPACE_ALWAYS, SPACES, type SpaceId, STORE_MENU } from '@pilotix/shared';
 import { backend } from '../lib/backend';
 import { currentShop, pageIsOn, pageIsSoon } from '../lib/features';
 import { moduleOn } from '../lib/modules';
@@ -160,6 +160,11 @@ export function homeFor(roles: Role[], isAdmin: boolean): string {
   if (!isAdmin && roles.includes('livreur') && !roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r)) && on('tournee')) return 'tournee';
   if (!isAdmin && roles.includes('confirmation') && !roles.includes('vendeur') && roles.length === 1 && on('confirmation')) return 'confirmation';
   if (isPlainAgent(roles, isAdmin) && on('dashboard')) return 'dashboard';
+  // the Community manager: her chats first, else the comments
+  if (!isAdmin && cmOnly(roles)) {
+    if (on('messages')) return 'messages';
+    if (on('cm')) return 'cm';
+  }
   return 'accueil';
 }
 

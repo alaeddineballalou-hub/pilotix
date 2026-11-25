@@ -103,6 +103,7 @@ export const ROLE_FR: Record<string, string> = {
   depot: 'Dépôt',
   livreur: 'Livreur',
   marketer: 'Marketeur',
+  cm: 'Community manager',
 };
 
 type SavedCustom = CustomRoles & { next: number };

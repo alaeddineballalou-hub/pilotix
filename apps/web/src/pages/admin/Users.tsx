@@ -49,7 +49,7 @@ const MARKETER_SUB_ROLE: Record<string, Role> = { marketeurs: 'marketer', admins
 const MARKETER_ROLES: Role[] = ['admin', 'marketer'];
 const ROLE_SUB: Partial<Record<Role, string>> = { admin: 'admins', confirmation: 'agents', agent_manager: 'managers' };
 /** Rôles table order, as in the original. */
-const ROLE_ORDER: Role[] = ['admin', 'vendeur', 'agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'marketer'];
+const ROLE_ORDER: Role[] = ['admin', 'vendeur', 'agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'cm', 'marketer'];
 /** Every page in menu order, with the hidden Livrées / Retournées pages of the original. */
 const PAGE_ORDER = ['accueil', 'dashboard', 'commandes', 'confirmation', 'depot', 'scanner', 'suivi', 'livrees', 'retournees', 'sav', 'tournee', 'produits', 'messages', 'cm', 'clients', 'marketing', 'caisse', 'macaisse', 'livraison', 'utilisateurs', 'management', 'reglages'];
 

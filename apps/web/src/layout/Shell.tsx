@@ -387,7 +387,8 @@ function WorkspaceShell({ page, sub, children, nav = NAV, space = 'store' }: She
             </button>
           )}
           {has('confirmation', 'suivi', 'depot') && <GlobalSearch />}
-          {has('confirmation', 'suivi', 'depot') && (
+          {/* the Community manager: « + Nouvelle commande » for a call (a chat's order: « Créer la commande » in the chat) */}
+          {has('confirmation', 'suivi', 'depot', 'cm') && (
             page === 'confirmation' && (!sub || sub === 'nouvelles' || sub === 'attente') && has('confirmation') ? (
               <button type="button" className="btn primary pxs-new pxs-next" title={t('confirmation.next').replace(/\s*[→←]\s*$/, '')} onClick={() => window.dispatchEvent(new Event('px:next-order'))}>
                 <span className="pxs-t">{t('confirmation.next').replace(/\s*[→←]\s*$/, '')}</span>

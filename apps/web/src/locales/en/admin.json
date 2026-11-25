@@ -39,7 +39,8 @@
       "suivi": "Follow parcels until delivery or return",
       "depot": "Prepare, ship, receive returns, manage stock",
       "livreur": "See their round, mark delivered / failed / returned",
-      "marketer": "Their ad sets and results (ads)"
+      "marketer": "Their ad sets and results (ads)",
+      "cm": "Answer messages and comments, create the orders of chats and calls"
     },
     "listTitle": {
       "admin": "Administrators",
@@ -49,7 +50,8 @@
       "suivi": "Tracking",
       "depot": "Warehouse",
       "livreur": "Delivery riders",
-      "marketer": "Marketers"
+      "marketer": "Marketers",
+      "cm": "Community managers"
     },
     "listHelp": "People with this role. Click a row to edit, deactivate or change the password.",
     "newBtn": {
@@ -60,7 +62,8 @@
       "suivi": "+ New tracking agent",
       "depot": "+ New warehouse agent",
       "livreur": "+ New rider",
-      "marketer": "+ New marketer"
+      "marketer": "+ New marketer",
+      "cm": "+ New community manager"
     },
     "colName": "Name",
     "colPhone": "Phone",

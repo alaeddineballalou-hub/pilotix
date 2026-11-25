@@ -130,10 +130,11 @@ function followMineSql(ctx: Ctx, alias: string, free = false): string {
 /** Roles that need to open orders across the store. */
 const WIDE_WORK = ['depot', 'livreur', 'agent_manager', 'vendeur'];
 
+/** A store's own agent (confirmation, suivi, SAV, or the Community manager — her orders are the ones she typed). */
 function storeAgentOnly(ctx: Ctx): boolean {
   const s = ctx.session;
   return !s.isAdmin && agencyOf(ctx) === null && !s.roles.some((r) => WIDE_WORK.includes(r))
-    && s.roles.some((r) => r === 'confirmation' || r === 'suivi' || r === 'sav');
+    && s.roles.some((r) => r === 'confirmation' || r === 'suivi' || r === 'sav' || r === 'cm');
 }
 
 /**
@@ -156,7 +157,8 @@ export const rowScopeSql = (ctx: Ctx, alias = 'o') => agencyRowSql(ctx, alias) |
 /**
  * A store's agent manager in the order lists (Commandes › Toutes les commandes, Livré, Annulé, their numbers and their
  * reports): only his team's orders (the owner's choice, 24 Nov 2026: « only their team ») — the ones he or an agent of
- * his team (Utilisateurs › Équipes) confirms or follows, and the ones he typed. He still gives out the free orders in
+ * his team (Dashboard › Composer les équipes) confirms or follows, and the ones he or one of them typed (a Community
+ * manager of his team: the orders of her chats and calls, owner's choice, 25 Nov 2026). He still gives out the free orders in
  * Confirmation and opens any order he is sent to. '' for everyone else: the owner, the administrators and the dépôt keep
  * every order, an agency's people and the store's own agents keep their own rule (rowScopeSql).
  */
@@ -168,7 +170,7 @@ export function teamListSql(ctx: Ctx, alias = 'o'): string {
   if (!Number.isSafeInteger(me) || me <= 0) throw forbidden();
   const team = `(SELECT a.v::bigint FROM settings s, jsonb_array_elements(CASE WHEN jsonb_typeof(s.value) = 'array' THEN s.value ELSE '[]'::jsonb END) t,
     jsonb_array_elements_text(COALESCE(t->'agentIds', '[]'::jsonb)) a(v) WHERE s.key = 'teams' AND (t->>'managerId') = '${me}')`;
-  return `(${alias}.agent_id = ${me} OR ${alias}.follow_agent_id = ${me} OR ${alias}.created_by = ${me} OR ${alias}.agent_id IN ${team} OR ${alias}.follow_agent_id IN ${team})`;
+  return `(${alias}.agent_id = ${me} OR ${alias}.follow_agent_id = ${me} OR ${alias}.created_by = ${me} OR ${alias}.agent_id IN ${team} OR ${alias}.follow_agent_id IN ${team} OR ${alias}.created_by IN ${team})`;
 }
 
 /** The orders a person's order lists show: each one only his own (rowScopeSql), an agent manager his team's. */

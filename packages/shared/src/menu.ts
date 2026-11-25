@@ -130,7 +130,8 @@ export const STORE_MENU: MenuItem[] = [
   {
     id: 'commandes',
     icon: 'list',
-    roles: AGENTS,
+    // the Community manager: Livré, Annulé and Tous, with her own orders only (an agent manager: his team's)
+    roles: [...AGENTS, 'cm'],
     subs: MENU_TABS.commandes,
     href: '#/commandes',
     pages: ['commandes', 'confirmation', 'depot', 'suivi', 'livrees', 'retournees'],
@@ -173,23 +174,24 @@ export const STORE_MENU: MenuItem[] = [
   },
   // Point de vente: the boutique's counter, once an administrator turns it on (Management › Modules)
   { id: 'pos', icon: 'store', roles: DEPOT, subs: MENU_TABS.pos, cond: 'pos', tabRoles: { reglages: ['vendeur'] }, tabNames: { prefix: 'pos.tabs' } },
-  // AI Pilot: the AI agents (the owner, the marketers; not the confirmation agents and their supervisors)
+  // AI Pilot: the AI agents (the owner, the marketers; not the confirmation agents and their supervisors). The Community
+  // manager: Pilot Message and Pilot Comments only (never Pilot Content, Espace créateur or AI Spy)
   {
     id: 'pilotai',
     icon: 'sparkles',
-    roles: ['vendeur', 'marketer'],
+    roles: ['vendeur', 'marketer', 'cm'],
     pages: ['messages', 'social', 'createur', 'cm', 'spy', 'comptes'],
     children: [
-      { id: 'messages', href: '#/messages', count: 'msgs', tone: 'nc-a', icon: 'chat', roles: ['vendeur'] },
+      { id: 'messages', href: '#/messages', count: 'msgs', tone: 'nc-a', icon: 'chat', roles: ['vendeur', 'cm'] },
       { id: 'social', href: '#/social', count: 'posts', tone: 'nc-a', icon: 'calendar', roles: ['marketer'] },
       { id: 'createur', href: '#/createur', icon: 'film', roles: ['marketer'] },
-      { id: 'cm', href: '#/cm', count: 'cm', tone: 'nc-a', icon: 'comments', roles: ['marketer'] },
+      { id: 'cm', href: '#/cm', count: 'cm', tone: 'nc-a', icon: 'comments', roles: ['marketer', 'cm'] },
       { id: 'spy', href: '#/spy', icon: 'eye', roles: ['marketer'] },
       { id: 'comptes', href: '#/comptes', icon: 'link', roles: [] },
     ],
   },
-  { id: 'messages', icon: 'chat', roles: ['vendeur'], hidden: true },
-  { id: 'cm', icon: 'comments', roles: ['marketer'], hidden: true },
+  { id: 'messages', icon: 'chat', roles: ['vendeur', 'cm'], hidden: true },
+  { id: 'cm', icon: 'comments', roles: ['marketer', 'cm'], hidden: true },
   { id: 'social', icon: 'calendar', roles: ['marketer'], hidden: true },
   { id: 'createur', icon: 'film', roles: ['marketer'], hidden: true },
   { id: 'spy', icon: 'eye', roles: ['marketer'], hidden: true },

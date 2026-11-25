@@ -54,7 +54,7 @@ test('a role made here: from a role its maker has, never more than its maker, se
   await assert.rejects(call('roles.custom.delete', amel, { id: junior }), /Seuls celui/);
   const all = await call('roles.custom.list', admin, {});
   assert.equal(all.roles.find((x: any) => x.id === junior)?.byName, 'Yacine');
-  assert.deepEqual(all.bases, ['agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'admin']);
+  assert.deepEqual(all.bases, ['agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'cm', 'admin']);
 
   // given by its maker only; the person needs the role it starts from
   await assert.rejects(call('users.update', amel, { id: S, customRole: junior }), /que vous avez faits/);

@@ -2,6 +2,7 @@
   "hello": "Bonjour {{name}}",
   "livreurHint": "Votre tournée est dans « Ma tournée ».",
   "soon": "Votre espace arrive bientôt.",
+  "cmHint": "Répondez aux messages et aux commentaires ici. La commande d’un chat : « Créer la commande » dans le chat. Celle d’un appel : « + Nouvelle commande » en haut.",
   "seeRound": "Voir ma tournée",
   "now": "Maintenant",
   "toCall": "À appeler",

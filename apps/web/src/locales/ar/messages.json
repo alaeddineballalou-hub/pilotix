@@ -70,7 +70,8 @@
     "assigned": "يتابعه",
     "orders": "الطلبات",
     "noOrder": "لا طلب بعد.",
-    "byDellal": "أخذه {{name}}"
+    "byDellal": "أخذه {{name}}",
+    "createOrder": "إنشاء الطلبية"
   },
   "tester": {
     "title": "تجربة {{name}}",

@@ -20,6 +20,8 @@ export async function assignedProductIds(ctx: Ctx): Promise<number[] | null> {
     );
     return rows.map((r) => num(r.id));
   }
+  // the store's Community manager sells in the chats like Dellal: the whole catalogue (never its purchase costs)
+  if (ctx.session.roles.includes('cm')) return null;
   if (!hasRole(ctx.session, 'confirmation', 'suivi')) return [];
   const config = (await getSetting(ctx.db, 'autoAssign')).agents?.[String(ctx.session.profile.id)];
   const explicit = config?.products;

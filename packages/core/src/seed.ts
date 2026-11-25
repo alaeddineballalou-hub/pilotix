@@ -113,6 +113,19 @@ async function bulkInsert(db: Db, table: string, cols: string[], rows: unknown[]
 
 const iso = (t: number) => new Date(t).toISOString();
 
+/** The Community manager's orders in the demo: some of the latest typed orders of a chat or a call become hers. */
+async function seedCmOrders(db: Db, cm: number) {
+  const ids = (
+    await db.query(
+      `SELECT id FROM orders WHERE channel IN ('facebook', 'instagram', 'whatsapp', 'appel') AND conversation_id IS NULL AND landing_id IS NULL
+         AND NOT is_exchange AND source IS NULL ORDER BY created_at DESC, id DESC LIMIT 14`,
+    )
+  ).map((r: any) => num(r.id));
+  if (!ids.length) return;
+  await db.query(`UPDATE orders SET created_by = $2, came = 'hand' WHERE id = ANY($1)`, [ids, cm]);
+  await db.query(`UPDATE order_events SET user_id = $2 WHERE kind = 'created' AND order_id = ANY($1)`, [ids, cm]);
+}
+
 /** Fills an empty database with a realistic shop: team, catalog, couriers, ~1,500 orders over 60 days. */
 export async function seedDemo(db: Db, opts: { orders?: number; now?: number; expanded?: boolean; lang?: Language } = {}) {
   const now = opts.now ?? Date.now();
@@ -124,11 +137,13 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
 
   // team
   const users: Record<string, number> = {};
-  const extraKeys = ['manager3', 'conf4', 'conf5', 'suivi2', 'suivi3', 'depot2', 'livreur3', 'admin2', 'vendeur2', 'conf6', 'depot3', 'marketer2', 'polyvalent'];
+  const extraKeys = ['manager3', 'conf4', 'conf5', 'suivi2', 'suivi3', 'depot2', 'livreur3', 'admin2', 'vendeur2', 'conf6', 'depot3', 'marketer2', 'polyvalent', 'cm'];
   for (const a of (expanded ? DEMO_ACCOUNTS : DEMO_ACCOUNTS.filter(a => !extraKeys.includes(a.key)))) {
+    // (the Community manager, added on 25 Nov 2026: a fixed number and time, so the demo's other random data stays the same)
+    const fixed = a.key === 'cm';
     const r = await db.query(
       `INSERT INTO profiles (name, email, phone, password_hash, roles, last_seen_at, presence) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [a.name, a.email, `06${String(Math.floor(rnd() * 1e8)).padStart(8, '0')}`, hash, a.roles, iso(now - rnd() * 3_600_000),
+      [a.name, a.email, fixed ? '0661020304' : `06${String(Math.floor(rnd() * 1e8)).padStart(8, '0')}`, hash, a.roles, iso(fixed ? now - 600_000 : now - rnd() * 3_600_000),
         a.key.startsWith('conf') || a.key === 'suivi' ? pick(['online', 'online', 'call', 'idle']) : 'offline'],
     );
     users[a.key] = num(r[0].id);
@@ -146,7 +161,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
   await setSetting(db, 'clientFees', { Standard: grid });
   await setSetting(db, 'shop', { ...DEFAULT_SETTINGS.shop, name: 'Pilotix Démo' });
   await setSetting(db, 'teams', [
-    { id: 't1', name: 'Équipe Yacine', managerId: users.manager1, agentIds: [users.conf1, users.conf2] },
+    { id: 't1', name: 'Équipe Yacine', managerId: users.manager1, agentIds: [users.conf1, users.conf2, ...(expanded && users.cm ? [users.cm] : [])] },
     { id: 't2', name: 'Équipe Amel', managerId: users.manager2, agentIds: [users.conf3] },
     ...(expanded ? [{ id: 't3', name: 'Équipe Mouna', managerId: users.manager3, agentIds: [users.conf4, users.conf5] }] : []),
   ]);
@@ -428,6 +443,8 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
   await seedReady(db, now, expanded);
   // the bell (top of every page): what the team was told this morning and yesterday (the full demo; the viewer's language)
   if (expanded) await seed_inbox(db, users, now, opts.lang ?? 'fr');
+  // the Community manager (the full demo): the orders she typed from her chats and calls, last (nothing above reads them)
+  if (expanded && users.cm) await seedCmOrders(db, users.cm);
 
   return { users, orders: N, todo: CONF_TODO.length };
 }

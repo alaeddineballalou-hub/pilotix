@@ -6,7 +6,8 @@
 import { lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, dayRange, n, pct } from '../../lib/format';
-import { featureIsOn } from '../../lib/features';
+import { featureIsOn, pageIsOn } from '../../lib/features';
+import { rightOn } from '../../lib/rights';
 import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { ErrorBox, Kpis, Loading, Trend } from '../../ui/kit';
@@ -35,16 +36,28 @@ export function Home(_: PageProps) {
   const s = session!;
   if (!has('confirmation', 'suivi', 'depot')) {
     const livreur = s.roles.includes('livreur');
+    // the Community manager: her two pages (each shown when her role and the shop's plan have it)
+    const cm = s.roles.includes('cm') && !livreur;
+    const cmPages = cm ? (['messages', 'cm'] as const).filter((p) => pageIsOn(p) && rightOn(`page:${p}`)) : [];
     return (
       <>
       <section className="card">
         <h2>{t('home.hello', { name: s.profile.name })}</h2>
-        <p className="muted">{livreur ? t('home.livreurHint') : t('home.soon')}</p>
+        <p className="muted">{livreur ? t('home.livreurHint') : cm ? t('home.cmHint') : t('home.soon')}</p>
         {livreur && (
           <div className="row">
             <a className="btn primary" href="#/tournee">
               {t('home.seeRound')}
             </a>
+          </div>
+        )}
+        {cmPages.length > 0 && (
+          <div className="row">
+            {cmPages.map((p, k) => (
+              <a key={p} className={`btn${k === 0 ? ' primary' : ''}`} href={`#/${p}`}>
+                {t(`nav.sub.${p}`)}
+              </a>
+            ))}
           </div>
         )}
       </section>

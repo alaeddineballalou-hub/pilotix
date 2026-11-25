@@ -39,7 +39,8 @@
       "suivi": "Suivre les colis jusqu’à la livraison ou au retour",
       "depot": "Préparer, expédier, recevoir les retours, gérer le stock",
       "livreur": "Voir sa tournée, marquer livré / échec / retour",
-      "marketer": "Ses ad sets et ses résultats (publicité)"
+      "marketer": "Ses ad sets et ses résultats (publicité)",
+      "cm": "Répondre aux messages et aux commentaires, créer les commandes des chats et des appels"
     },
     "listTitle": {
       "admin": "Administrateurs",
@@ -49,7 +50,8 @@
       "suivi": "Suivi",
       "depot": "Dépôt",
       "livreur": "Livreurs",
-      "marketer": "Marketeurs"
+      "marketer": "Marketeurs",
+      "cm": "Community managers"
     },
     "listHelp": "Les personnes qui ont ce rôle. Cliquez une ligne pour modifier, désactiver ou changer le mot de passe.",
     "newBtn": {
@@ -60,7 +62,8 @@
       "suivi": "+ Nouvel agent de suivi",
       "depot": "+ Nouvel agent de dépôt",
       "livreur": "+ Nouveau livreur",
-      "marketer": "+ Nouveau marketeur"
+      "marketer": "+ Nouveau marketeur",
+      "cm": "+ Nouveau community manager"
     },
     "colName": "Nom",
     "colPhone": "Téléphone",

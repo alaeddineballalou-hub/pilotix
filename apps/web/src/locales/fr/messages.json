@@ -70,7 +70,8 @@
     "assigned": "Suivi par",
     "orders": "Commandes",
     "noOrder": "Pas encore de commande.",
-    "byDellal": "Prise par {{name}}"
+    "byDellal": "Prise par {{name}}",
+    "createOrder": "Créer la commande"
   },
   "tester": {
     "title": "Tester {{name}}",

@@ -9,6 +9,7 @@ import { backend, Out, rpc } from '../../lib/backend';
 import { da, n, shortWhen, when } from '../../lib/format';
 import { openOrderForm } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
+import { rightOn } from '../../lib/rights';
 import { useSession } from '../../lib/session';
 import { Card, ErrorBox, Field, Icon, Kpi, Kpis, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
@@ -336,7 +337,7 @@ function CommentCard({ c, busy }: { c: Comment; busy: boolean }) {
             {t('cm.feed.ignore')}
           </button>
         )}
-        {c.phone && has('confirmation', 'suivi', 'depot') && (
+        {c.phone && has('confirmation', 'suivi', 'depot', 'cm') && rightOn('act:orders.create') && (
           <button
             type="button"
             className="btn small ok"
@@ -345,7 +346,7 @@ function CommentCard({ c, busy }: { c: Comment; busy: boolean }) {
                 prefill: {
                   customerName: c.authorName?.replace(/^@/, '') ?? '',
                   phone: c.phone,
-                  channel: c.channel === 'instagram' ? 'instagram' : 'facebook',
+                  channel: c.channel === 'instagram' ? 'instagram' : c.channel === 'tiktok' ? 'tiktok' : 'facebook',
                   items: c.post?.productId ? [{ productId: c.post.productId, qty: 1 }] : [],
                   internalNote: t('cm.feed.orderNote', { text: c.body.slice(0, 200) }),
                 },
