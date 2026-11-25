@@ -2,7 +2,10 @@
 // also holds Pilot Auto Assign's rules, livraison/Pilot.tsx, and the shop's Préférences, livraison/Preferences.tsx), and
 // the delivery messages sent to each customer about their order — received, confirmed, shipped, with the livreur, at the
 // desk, failed attempt, cancelled by the livreur, delivered — by WhatsApp first, by SMS when the number has no WhatsApp,
-// or to send by hand; the cases and their texts, a tester, the results and the settings (admin).
+// or to send by hand; the cases and their texts, a tester, the results and the settings (admin). Each page keeps its own
+// (owner's ask, 25 Nov 2026, step 5 of his table): the journal is Suivi's « Messages » tab, each case with its text is in
+// its page's « Réglages › Messages au client » (Confirmation: received, no answer, confirmed; Suivi: the rest), and how
+// they are sent, the tester and the results are cards of Suivi › Réglages (`embedded`).
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMenuCounts } from '../../layout/Shell';
@@ -145,7 +148,8 @@ function statusOf(m: Row, t: (k: string, o?: any) => string): { label: string; t
   }
 }
 
-function Feed({ admin }: { admin: boolean }) {
+/** The journal (and the messages to send by hand): Pilot Automations › Messages, and Suivi › Messages. */
+export function Feed({ admin, settingsHref = '#/notify/reglages' }: { admin: boolean; settingsHref?: string }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<FeedTab>('all');
   const [kind, setKind] = useState<Kind | ''>('');
@@ -156,7 +160,7 @@ function Feed({ admin }: { admin: boolean }) {
     <>
       {d && !d.enabled && (
         <div className="warnbox">
-          {t('notify.off')} {admin && <a href="#/notify/reglages">{t('notify.offLink')}</a>}
+          {t('notify.off')} {admin && <a href={settingsHref}>{t('notify.offLink')}</a>}
         </div>
       )}
       <div className="ai-feed">
@@ -369,20 +373,16 @@ function Flow() {
   );
 }
 
-function Cases({ admin }: { admin: boolean }) {
+/**
+ * The cases and their texts. `kinds`: only these; `embedded`: inside a page's « Messages au client » card — each case with
+ * its switch and its text, nothing else (the language, WhatsApp's validation: the card « Envoi des messages »).
+ */
+export function Cases({ admin, kinds, embedded = false }: { admin: boolean; kinds?: readonly Kind[]; embedded?: boolean }) {
   const { t } = useTranslation();
   const q = useRpc('notify.cases', {});
   const full = useRpc('notify.settings.get', {}, { enabled: admin });
   const [editing, setEditing] = useState<Kind | null>(null);
   const [saving, setSaving] = useState(false);
-  const submit = useAction('notify.templates.submit', {
-    onDone: (r) => {
-      const bad = r.results.filter((x) => !x.ok);
-      if (bad.length) toast(bad.map((x) => `${t(`notify.kind.${x.kind}`)} : ${x.message}`).join('\n'), 'bad');
-      else toast(r.results.length ? t('notify.cases.submitted', { count: r.results.length }) : t('notify.cases.nothingToSubmit'), 'ok');
-    },
-  });
-  const check = useAction('notify.templates.check', { success: t('notify.cases.checked') });
   if (q.isLoading) return <Loading />;
   if (q.error || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const d = q.data;
@@ -403,7 +403,22 @@ function Cases({ admin }: { admin: boolean }) {
       setSaving(false);
     }
   };
-  const waiting = d.cases.filter((c) => c.on && c.template?.status !== 'APPROVED').length;
+  const shown = kinds ? d.cases.filter((c) => kinds.includes(c.kind)) : d.cases;
+  const grid = (
+    <div className="nt-cases">
+      {shown.map((c) => (
+        <CaseCard key={c.kind} c={c} admin={admin} settings={settings} saving={saving} whatsapp={d.whatsapp} vars={d.vars as readonly string[]} editing={editing === c.kind} onEdit={(on) => setEditing(on ? c.kind : null)} save={save} />
+      ))}
+    </div>
+  );
+  if (embedded)
+    return (
+      <>
+        {!d.enabled && <div className="warnbox">{t('notify.off')}</div>}
+        {grid}
+        <p className="muted small">{t('notify.cases.example')}</p>
+      </>
+    );
   return (
     <>
       <Card title={t('notify.cases.how')} help={t('notify.cases.howHelp')}>
@@ -461,77 +476,102 @@ function Cases({ admin }: { admin: boolean }) {
           )
         }
       >
-        {admin && d.whatsapp && (
-          <div className="nt-meta">
-            <span className="muted small">{waiting ? t('notify.cases.metaWaiting', { count: waiting }) : t('notify.cases.metaAllOk')}</span>
-            <span className="row" style={{ gap: 6 }}>
-              <button type="button" className="btn small" disabled={submit.isPending} onClick={() => submit.mutate({})}>
-                <Icon name="send" /> {t('notify.cases.submit')}
-              </button>
-              <button type="button" className="btn small ghost" disabled={check.isPending} onClick={() => check.mutate({})}>
-                <Icon name="refresh" /> {t('notify.cases.check')}
-              </button>
-            </span>
-          </div>
-        )}
-        <div className="nt-cases">
-          {d.cases.map((c) => (
-            <div key={c.kind} className={`nt-case ${c.on ? '' : 'nt-off'}`}>
-              <div className="nt-case-h">
-                <span className={`nt-case-ic nt-k-${c.kind}`}>
-                  <Icon name={KIND_ICON[c.kind]} />
-                </span>
-                <span className="nt-case-t">
-                  <b>{t(`notify.kind.${c.kind}`)}</b>
-                  <small>{t(`notify.when.${c.kind}`)}</small>
-                </span>
-                {admin && settings ? (
-                  <label className="nt-toggle">
-                    <input type="checkbox" checked={c.on} disabled={saving} onChange={(e) => save({ cases: { ...settings.cases, [c.kind]: e.target.checked } })} />
-                    <span>{c.on ? t('notify.cases.on') : t('notify.cases.off')}</span>
-                  </label>
-                ) : (
-                  <span className={`cm-status ${c.on ? 'cm-ok' : 'cm-mute'}`}>{c.on ? t('notify.cases.on') : t('notify.cases.off')}</span>
-                )}
-              </div>
-              {editing === c.kind && settings ? (
-                <CaseEditor
-                  c={c}
-                  vars={d.vars as readonly string[]}
-                  onCancel={() => setEditing(null)}
-                  onSave={async (text) => {
-                    const lang = settings.lang;
-                    const texts = { ...(settings.texts ?? {}) } as Record<string, Record<string, string>>;
-                    texts[c.kind] = { ...(texts[c.kind] ?? {}), [lang]: text };
-                    if (await save({ texts }, t('notify.cases.textSaved'))) setEditing(null);
-                  }}
-                />
-              ) : (
-                <>
-                  <div className="nt-phone">
-                    <div className="nt-bubble" dir="auto">
-                      {c.example}
-                    </div>
-                  </div>
-                  <div className="nt-case-f">
-                    <span className="cm-by">{t('notify.msg.parts', { count: c.sms.parts })}</span>
-                    {c.sms.unicode && <span className="cm-by">{t('notify.msg.unicode')}</span>}
-                    {c.custom && <span className="cm-by">{t('notify.cases.custom')}</span>}
-                    <TemplatePill tpl={c.template} whatsapp={d.whatsapp} />
-                    {admin && settings && (
-                      <button type="button" className="btn small ghost nt-edit" onClick={() => setEditing(c.kind)}>
-                        <Icon name="pencil" /> {t('notify.cases.edit')}
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
-        </div>
+        {admin && <TemplateTools />}
+        {grid}
         <p className="muted small">{t('notify.cases.example')}</p>
       </Card>
     </>
+  );
+}
+
+type Settings = Out<'notify.settings.get'>['settings'];
+
+/** One case: its switch (admins), its text as the customer reads it, and « Modifier ». */
+function CaseCard(p: { c: Case; admin: boolean; settings?: Settings; saving: boolean; whatsapp: boolean; vars: readonly string[]; editing: boolean; onEdit: (on: boolean) => void; save: (patch: Partial<Settings>, ok?: string) => Promise<boolean | undefined> }) {
+  const { t } = useTranslation();
+  const { c, settings } = p;
+  return (
+    <div className={`nt-case ${c.on ? '' : 'nt-off'}`}>
+      <div className="nt-case-h">
+        <span className={`nt-case-ic nt-k-${c.kind}`}>
+          <Icon name={KIND_ICON[c.kind]} />
+        </span>
+        <span className="nt-case-t">
+          <b>{t(`notify.kind.${c.kind}`)}</b>
+          <small>{t(`notify.when.${c.kind}`)}</small>
+        </span>
+        {p.admin && settings ? (
+          <label className="nt-toggle">
+            <input type="checkbox" checked={c.on} disabled={p.saving} onChange={(e) => p.save({ cases: { ...settings.cases, [c.kind]: e.target.checked } })} />
+            <span>{c.on ? t('notify.cases.on') : t('notify.cases.off')}</span>
+          </label>
+        ) : (
+          <span className={`cm-status ${c.on ? 'cm-ok' : 'cm-mute'}`}>{c.on ? t('notify.cases.on') : t('notify.cases.off')}</span>
+        )}
+      </div>
+      {p.editing && settings ? (
+        <CaseEditor
+          c={c}
+          vars={p.vars}
+          onCancel={() => p.onEdit(false)}
+          onSave={async (text) => {
+            const lang = settings.lang;
+            const texts = { ...(settings.texts ?? {}) } as Record<string, Record<string, string>>;
+            texts[c.kind] = { ...(texts[c.kind] ?? {}), [lang]: text };
+            if (await p.save({ texts }, t('notify.cases.textSaved'))) p.onEdit(false);
+          }}
+        />
+      ) : (
+        <>
+          <div className="nt-phone">
+            <div className="nt-bubble" dir="auto">
+              {c.example}
+            </div>
+          </div>
+          <div className="nt-case-f">
+            <span className="cm-by">{t('notify.msg.parts', { count: c.sms.parts })}</span>
+            {c.sms.unicode && <span className="cm-by">{t('notify.msg.unicode')}</span>}
+            {c.custom && <span className="cm-by">{t('notify.cases.custom')}</span>}
+            <TemplatePill tpl={c.template} whatsapp={p.whatsapp} />
+            {p.admin && settings && (
+              <button type="button" className="btn small ghost nt-edit" onClick={() => p.onEdit(true)}>
+                <Icon name="pencil" /> {t('notify.cases.edit')}
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** WhatsApp's validation of the texts (administrators, when WhatsApp sends): how many wait, send them, check them. */
+export function TemplateTools() {
+  const { t } = useTranslation();
+  const q = useRpc('notify.cases', {});
+  const submit = useAction('notify.templates.submit', {
+    onDone: (r) => {
+      const bad = r.results.filter((x) => !x.ok);
+      if (bad.length) toast(bad.map((x) => `${t(`notify.kind.${x.kind}`)} : ${x.message}`).join('\n'), 'bad');
+      else toast(r.results.length ? t('notify.cases.submitted', { count: r.results.length }) : t('notify.cases.nothingToSubmit'), 'ok');
+    },
+  });
+  const check = useAction('notify.templates.check', { success: t('notify.cases.checked') });
+  const d = q.data;
+  if (!d?.whatsapp) return null;
+  const waiting = d.cases.filter((c) => c.on && c.template?.status !== 'APPROVED').length;
+  return (
+    <div className="nt-meta">
+      <span className="muted small">{waiting ? t('notify.cases.metaWaiting', { count: waiting }) : t('notify.cases.metaAllOk')}</span>
+      <span className="row" style={{ gap: 6 }}>
+        <button type="button" className="btn small" disabled={submit.isPending} onClick={() => submit.mutate({})}>
+          <Icon name="send" /> {t('notify.cases.submit')}
+        </button>
+        <button type="button" className="btn small ghost" disabled={check.isPending} onClick={() => check.mutate({})}>
+          <Icon name="refresh" /> {t('notify.cases.check')}
+        </button>
+      </span>
+    </div>
   );
 }
 
@@ -606,7 +646,7 @@ function CaseEditor({ c, vars, onSave, onCancel }: { c: Case; vars: readonly str
 }
 
 // ---------------------------------------------------------------- tester
-function Tester({ admin }: { admin: boolean }) {
+export function Tester({ admin, embedded = false }: { admin: boolean; embedded?: boolean }) {
   const { t } = useTranslation();
   const [kind, setKind] = useState<Kind>('shipped');
   const [ref, setRef] = useState('');
@@ -617,7 +657,7 @@ function Tester({ admin }: { admin: boolean }) {
   const test = useAction('notify.test', { onDone: setResult });
   const ok = /^(\+?213|0)?\s*[5-7](\s*\d){8}$/.test(phone.trim());
   return (
-    <Card title={t('notify.tester.title')}>
+    <Card title={embedded ? undefined : t('notify.tester.title')}>
       <div className="ai-try half">
         <div className="ai-try-in">
           <div className="ai-try-side">
@@ -691,14 +731,14 @@ function Tester({ admin }: { admin: boolean }) {
 }
 
 // ---------------------------------------------------------------- results
-function Results() {
+export function Results({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation();
   const [days, setDays] = useState(7);
   const q = useRpc('notify.stats', { days });
   const s = q.data;
   const max = Math.max(1, ...KINDS.map((k) => s?.byKind[k]?.sent ?? 0));
   return (
-    <Card title={t('notify.results.title')} actions={<PeriodSwitch value={days} onChange={setDays} />}>
+    <Card title={embedded ? undefined : t('notify.results.title')} actions={<PeriodSwitch value={days} onChange={setDays} />}>
       {q.isLoading ? (
         <Loading />
       ) : q.error || !s ? (
@@ -740,15 +780,18 @@ function Results() {
 }
 
 // ---------------------------------------------------------------- settings (admin)
-/** « Réglages des messages » (admins): also Suivi › Réglages › Messages au client. */
-export function NotifySettings() {
+/**
+ * « Réglages des messages » (admins): also Suivi › Réglages › Envoi des messages (`embedded`: WhatsApp's validation of
+ * the texts is there, the texts being in each page's « Messages au client »).
+ */
+export function NotifySettings({ embedded = false }: { embedded?: boolean } = {}) {
   const q = useRpc('notify.settings.get', {});
   if (q.isLoading) return <Loading />;
   if (q.error || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
-  return <SettingsForm key={JSON.stringify(q.data.settings)} data={q.data} />;
+  return <SettingsForm key={JSON.stringify(q.data.settings)} data={q.data} embedded={embedded} />;
 }
 
-function SettingsForm({ data }: { data: Out<'notify.settings.get'> }) {
+function SettingsForm({ data, embedded }: { data: Out<'notify.settings.get'>; embedded: boolean }) {
   const { t } = useTranslation();
   const [f, setF] = useState(data.settings);
   const [secret, setSecret] = useState('');
@@ -827,7 +870,7 @@ function SettingsForm({ data }: { data: Out<'notify.settings.get'> }) {
         <Field label={t('notify.settings.waba')} hint={t('notify.settings.wabaHint')}>
           <input className="ltr" inputMode="numeric" value={f.wabaId} maxLength={40} placeholder="102938475610293" onChange={(e) => set('wabaId', e.target.value.replace(/\D/g, ''))} />
         </Field>
-        <p className="muted small">{t('notify.settings.waTemplates')}</p>
+        {embedded ? <TemplateTools /> : <p className="muted small">{t('notify.settings.waTemplates')}</p>}
       </Card>
 
       <Card title={t('notify.settings.smsTitle')} help={t('notify.settings.smsHelp')}>

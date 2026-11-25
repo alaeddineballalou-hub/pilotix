@@ -1,13 +1,11 @@
-// The messages sent to the customer by themselves, switched on or off where they belong (owner's ask, 24 Nov 2026: each
-// page keeps its own settings): Confirmation › Réglages (received, no answer, confirmed), Suivi › Réglages (from shipped
-// to delivered). Their texts stay with all the messages (Pilot Automations › Messages › Cas) for now.
-import { useState } from 'react';
+// The messages sent to the customer by themselves, where they belong (owner's ask, 24 Nov 2026: each page keeps its own
+// settings): Confirmation › Réglages (received, no answer, confirmed), Suivi › Réglages (from shipped to delivered). Each
+// case shows its switch and its text together (step 5 of his table, 25 Nov: the texts left Pilot Automations › Cas); how
+// they are sent (WhatsApp, SMS, the language, the night) is Suivi › Réglages › « Envoi des messages », for all of them.
 import { useTranslation } from 'react-i18next';
-import { rpc } from '../../lib/backend';
 import { useRpc } from '../../lib/query';
-import { Loading } from '../../ui/kit';
-import { toast } from '../../ui/toast';
-import { Switch } from '../admin/bits';
+import { openFold } from '../../ui/PageSettings';
+import { Cases } from './index';
 
 export const CONF_KINDS = ['created', 'no_answer', 'confirmed'] as const;
 export const SUIVI_KINDS = ['shipped', 'out_for_delivery', 'stopdesk', 'failed', 'returning', 'delivered'] as const;
@@ -20,48 +18,25 @@ export function useCasesOn(kinds: readonly Kind[], enabled = true): number | nul
   return cases ? kinds.filter((k) => cases[k]).length : null;
 }
 
-export function CaseSwitches({ kinds }: { kinds: readonly Kind[] }) {
+/** `sendingHere`: the card « Envoi des messages » is on this page (Suivi): « Ouvrir » opens it; elsewhere, a link to it. */
+export function CaseSwitches({ kinds, sendingHere = false }: { kinds: readonly Kind[]; sendingHere?: boolean }) {
   const { t } = useTranslation();
-  const full = useRpc('notify.settings.get', {});
-  const [busy, setBusy] = useState(false);
-  const settings = full.data?.settings;
-  const cases = settings?.cases as Record<string, boolean> | undefined;
-  const flip = async (k: Kind, on: boolean) => {
-    if (!settings) return;
-    setBusy(true);
-    try {
-      await rpc('notify.settings.save', { ...settings, cases: { ...settings.cases, [k]: on } });
-      await full.refetch();
-      toast(t(on ? 'confirmation.cfg.msg.on' : 'confirmation.cfg.msg.off', { name: t(`notify.kind.${k}`) }), 'ok');
-    } catch (e: any) {
-      toast(e?.message ?? t('common.error'), 'bad');
-    } finally {
-      setBusy(false);
-    }
-  };
   return (
     <div className="cfs-sub">
       <h3>{t('confirmation.cfg.msg.auto')}</h3>
-      <p className="muted small">{t('confirmation.cfg.msg.autoHint')}</p>
-      {!cases ? (
-        <Loading />
-      ) : (
-        <ul className="cfs-list">
-          {kinds.map((k) => (
-            <li key={k}>
-              <span>
-                <b>{t(`notify.kind.${k}`)}</b>
-                <small>{t(`notify.cfgWhen.${k}`)}</small>
-              </span>
-              <Switch checked={!!cases[k]} disabled={busy} label={t(`notify.kind.${k}`)} onChange={(v) => flip(k, v)} />
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className="muted small">{t('confirmation.cfg.msg.textsWhere')}</p>
-      <a className="btn small cfs-link" href="#/notify/cas">
-        {t('confirmation.cfg.msg.texts')}
-      </a>
+      <p className="muted small">
+        {t('confirmation.cfg.msg.sendingWhere')}{' '}
+        {sendingHere ? (
+          <button type="button" className="cfs-lnk" onClick={() => openFold('envoi')}>
+            {t('confirmation.cfg.msg.sendingOpen')}
+          </button>
+        ) : (
+          <a className="cfs-lnk" href="#/suivi/reglages">
+            {t('confirmation.cfg.msg.sendingLink')}
+          </a>
+        )}
+      </p>
+      <Cases admin embedded kinds={kinds} />
     </div>
   );
 }

@@ -15,7 +15,9 @@ export const MENU_TABS = {
   // « Réglages » (owner's choice, 24 Nov 2026: each page keeps its own settings, design 1 « Onglet »): the last tab, apart
   confirmation: ['nouvelles', 'attente', 'confirmees', 'terminees', 'reglages'],
   depot: ['preparer', 'prepares', 'dispatchees', 'retours', 'reglages'],
-  suivi: ['enlivraison', 'alertes', 'traites', 'bloques', 'livres', 'annules', 'reclamation', 'swap', 'reglages'],
+  // « Messages »: the journal of the messages to the customer and the ones to send by hand (owner's choice, 25 Nov 2026: it
+  // left Pilot Automations; the suivi agents by default)
+  suivi: ['enlivraison', 'alertes', 'traites', 'bloques', 'livres', 'annules', 'reclamation', 'swap', 'messages', 'reglages'],
   sav: ['tickets', 'nouveau', 'attente', 'depot', 'livraison', 'livres', 'annules', 'satisfaction', 'stats', 'reglages'],
   produits: ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'prevision', 'lots', 'fabrication', 'achats', 'depots', 'reglages'],
   pos: ['vendre', 'ventes', 'cloture', 'reglages'],
@@ -149,7 +151,7 @@ export const STORE_MENU: MenuItem[] = [
   // its « Réglages » tab: the owners and the agent managers by default (each card inside keeps who may change it)
   { id: 'confirmation', icon: 'phone', roles: ['confirmation'], subs: MENU_TABS.confirmation, flow: true, hidden: true, tabRoles: { reglages: BOARDS }, tabNames: { prefix: 'confirmation.sub' } },
   { id: 'depot', icon: 'package', roles: DEPOT, subs: MENU_TABS.depot, flow: true, hidden: true, tabRoles: { reglages: [] }, tabNames: { prefix: 'depot.stage' } },
-  { id: 'suivi', icon: 'route', roles: ['suivi', 'confirmation'], subs: MENU_TABS.suivi, hidden: true, tabRoles: { reglages: BOARDS }, tabNames: { prefix: 'suivi.tabs' }, tabAlias: { alertes_new: 'alertes', alertes_encours: 'alertes' } },
+  { id: 'suivi', icon: 'route', roles: ['suivi', 'confirmation'], subs: MENU_TABS.suivi, hidden: true, tabRoles: { messages: ['suivi'], reglages: BOARDS }, tabNames: { prefix: 'suivi.tabs' }, tabAlias: { alertes_new: 'alertes', alertes_encours: 'alertes' } },
   // Scanner left the menu (owner's ask, 24 Nov 2026: « we scan directly in the order »): its two scans are in Dépôt › « En
   // dispatch » and › « Retours »; the page stays for old links
   { id: 'scanner', icon: 'scanbar', roles: DEPOT, hidden: true },

@@ -36,6 +36,8 @@
 .cfs-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .cfs-inline input { flex: 0 1 280px; min-width: 0; }
 .cfs-link { align-self: flex-start; }
+/* a link to another card of the page (or another page's), inside a sentence */
+.cfs-lnk { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
 .cfs-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .cfs-list li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
 .cfs-list li:first-child { border-top: 0; }

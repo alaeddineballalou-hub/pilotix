@@ -20,6 +20,7 @@
     "reclamation": "Claims",
     "swap": "Swap",
     "bloques": "Stuck",
+    "messages": "Messages",
     "reglages": "Settings"
   },
   "title": "Delivery follow-up",
@@ -693,8 +694,32 @@
     },
     "msg": {
       "t": "Messages to the customer",
-      "d": "Once the parcel has left, and how they are sent",
-      "how": "How the messages are sent"
+      "d": "Once the parcel has left: each message, on or off, with its text"
+    },
+    "envoi": {
+      "t": "Sending the messages",
+      "d": "WhatsApp, SMS, the language, the night: for every message to the customer",
+      "s": {
+        "off": "Stopped",
+        "wa_gateway": "WhatsApp then SMS",
+        "wa_manual": "WhatsApp then by hand",
+        "wa_off": "WhatsApp only",
+        "gateway": "SMS only",
+        "manual": "By hand",
+        "none": "Nothing is sent"
+      }
+    },
+    "tester": {
+      "t": "Test a message",
+      "d": "See a message with a real order, then send it to your number"
+    },
+    "res": {
+      "t": "Results",
+      "d": "Sent, read, replies, orders saved",
+      "s": "Sent in 7 days: {{n}}"
+    },
+    "notifs": {
+      "d": "Delivered, Coming back, Parcel alert: who gets them, and when the phone rings"
     },
     "statuts": {
       "t": "Statuses",

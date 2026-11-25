@@ -1018,17 +1018,15 @@
     },
     "msg": {
       "t": "Messages au client",
-      "d": "Les messages tout seuls, ceux du client qui ne répond pas, et le texte WhatsApp des agents",
+      "d": "Les messages tout seuls et leurs textes, ceux du client qui ne répond pas, et le texte WhatsApp des agents",
       "s_one": "{{count}} message actif",
       "s_other": "{{count}} messages actifs",
       "s0": "Aucun message",
       "auto": "Messages envoyés tout seuls",
-      "autoHint": "Par WhatsApp, ou par SMS si le numéro n’a pas WhatsApp.",
-      "texts": "Changer les textes",
-      "saved": "Texte enregistré",
-      "on": "« {{name}} » allumé",
-      "off": "« {{name}} » éteint",
-      "textsWhere": "Leurs textes sont encore dans Pilot Automations › Messages, avec ceux du Suivi."
+      "sendingWhere": "Comment ils partent (WhatsApp, SMS, la langue, la nuit) se règle pour tous les messages dans",
+      "sendingOpen": "« Envoi des messages »",
+      "sendingLink": "Suivi › Réglages › Envoi des messages",
+      "saved": "Texte enregistré"
     },
     "lente": {
       "t": "Alerte file lente",

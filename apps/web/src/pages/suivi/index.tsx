@@ -37,6 +37,9 @@ import type { In } from '../../lib/backend';
 import { useAllMode } from '../../layout/AllBoutiques';
 import { DemoCourier } from './DemoCourier';
 import { rightOn, tabOn } from '../../lib/rights';
+import { pageIsOn } from '../../lib/features';
+import { useMenuCounts } from '../../layout/Shell';
+import { Feed } from '../notify';
 import { DoneScreen } from '../orders';
 
 const LIST_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'traites', 'bloques', 'livres', 'annules', 'swap'] as const;
@@ -48,7 +51,9 @@ const useInAgency = () => {
 };
 const isAlertTab = (tab: string) => tab === 'alertes' || tab === 'alertes_new' || tab === 'alertes_encours';
 type ListTab = (typeof LIST_TABS)[number];
-type Sub = ListTab | 'reclamation';
+type Sub = ListTab | 'reclamation' | 'messages';
+/** the tabs that show orders (« Messages » shows the journal) */
+type ListSub = Exclude<Sub, 'messages'>;
 // The bar is drawn by hand (Alertes and its parts, an agency's steps), but its tabs are the menu's (MENU_TABS.suivi,
 // packages/shared/src/menu.ts, shared with Utilisateurs › Rôles): a tab added on one side only stops the build here.
 type MenuSuivi = (typeof MENU_TABS.suivi)[number];
@@ -69,7 +74,16 @@ const AllSuiviPage = lazy(() => import('../boutiques/all').then((m) => ({ defaul
 
 function SuiviOne({ sub }: PageProps) {
   const agency = useInAgency();
-  const { has } = useSession();
+  const { has, session } = useSession();
+  const msgsTab = useMessagesTab();
+  // « Messages »: the journal of the messages to the customer, and the ones to send by hand (it left Pilot Automations)
+  if (sub === 'messages' && msgsTab)
+    return (
+      <>
+        <SuiviBar tab="messages" />
+        <Feed admin={!!session?.isAdmin} settingsHref="#/suivi/reglages" />
+      </>
+    );
   // « Réglages »: every setting of Suivi (a store's own; an agency has its own settings page)
   if (sub === 'reglages' && !agency && tabOn('suivi', 'reglages'))
     return (
@@ -80,9 +94,9 @@ function SuiviOne({ sub }: PageProps) {
     );
   // the claims with couriers and the swaps: the store's suivi agents and the agencies (on their own orders)
   const tabs: readonly string[] = (!has('suivi') && !has('confirmation') ? LIST_TABS.filter((k) => k !== 'swap') : [...LIST_TABS, 'reclamation']).filter((k) => tabOn('suivi', k));
-  const asked: Sub = tabs.includes(sub ?? '') ? (sub as Sub) : 'enlivraison';
+  const asked: ListSub = tabs.includes(sub ?? '') ? (sub as ListSub) : 'enlivraison';
   // an agency's confirmation agent (no suivi): En livraison, Livré, Annulé — to watch its orders move (no alert, claim, swap)
-  const tab: Sub = agency && !has('suivi') && !['enlivraison', 'livres', 'annules', 'alertes', 'alertes_new', 'alertes_encours', 'swap', 'reclamation'].includes(asked) ? 'enlivraison' : asked;
+  const tab: ListSub = agency && !has('suivi') && !['enlivraison', 'livres', 'annules', 'alertes', 'alertes_new', 'alertes_encours', 'swap', 'reclamation'].includes(asked) ? 'enlivraison' : asked;
   return (
     <>
       <SuiviBar tab={tab} />
@@ -103,6 +117,16 @@ function SuiviOne({ sub }: PageProps) {
   );
 }
 
+/**
+ * Suivi's « Messages » tab: a store's (not an agency's), when its plan has the messages to the customer, for the suivi
+ * agents and the administrators (Utilisateurs › Rôles can give it to others; the server checks who reads the journal).
+ */
+function useMessagesTab() {
+  const agency = useInAgency();
+  const { has, session } = useSession();
+  return !agency && pageIsOn('notify') && tabOn('suivi', 'messages') && (!!session?.isAdmin || has('suivi'));
+}
+
 /** "Alertes › Traités | Annulés  Réclamation  Swap" — same markup as the original stage bar. */
 function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
   const { t } = useTranslation();
@@ -112,6 +136,9 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
   // administrator, or a person allowed to share the alerts (« Affectation »); a store's, not an agency's
   const cfg = !agency && tabOn('suivi', 'reglages') && (!!session?.isAdmin || !!session?.profile.canAffect);
   const c = useRpc('suivi.counts', {}, { refetchInterval: 60_000 }).data;
+  const msgsTab = useMessagesTab();
+  // the messages waiting to be sent by hand (the menu's count)
+  const toSend = useMenuCounts().notify;
   // a phone shows a few steps at a time: the current one is brought into view
   const bar = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -180,6 +207,7 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
       {item('traites', c?.traites ?? 0)}
       <span className="bjm-sep" aria-hidden="true" />
       {item('bloques', c?.bloquesTodo ?? 0, true)}
+      {msgsTab && item('messages', toSend, true)}
       {/* « Réglages »: apart at the end, with a gear (Utilisateurs › Rôles: the owners and the agent managers by default) */}
       {cfg && (
         <a className={`bjm-p bjm-cfg ${cfgOn ? 'on' : ''}`} href="#/suivi/reglages" aria-label={t('suivi.tabs.reglages')} title={t('suivi.tabs.reglages')} aria-current={cfgOn ? 'page' : undefined}>

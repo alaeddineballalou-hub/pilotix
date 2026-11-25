@@ -1018,17 +1018,15 @@
     },
     "msg": {
       "t": "Messages to the customer",
-      "d": "The automatic ones, the ones for a customer who does not answer, and the agents’ WhatsApp text",
+      "d": "The automatic ones and their texts, the ones for a customer who does not answer, and the agents’ WhatsApp text",
       "s_one": "{{count}} message on",
       "s_other": "{{count}} messages on",
       "s0": "No messages",
       "auto": "Messages sent automatically",
-      "autoHint": "By WhatsApp, or by SMS when the number has no WhatsApp.",
-      "texts": "Change the texts",
-      "saved": "Text saved",
-      "on": "“{{name}}” on",
-      "off": "“{{name}}” off",
-      "textsWhere": "Their texts are still in Pilot Automations › Messages, with Suivi’s."
+      "sendingWhere": "How they are sent (WhatsApp, SMS, the language, the night) is set for every message in",
+      "sendingOpen": "« Sending the messages »",
+      "sendingLink": "Follow-up › Settings › Sending the messages",
+      "saved": "Text saved"
     },
     "lente": {
       "t": "Slow queue alert",

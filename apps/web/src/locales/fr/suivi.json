@@ -20,6 +20,7 @@
     "reclamation": "Réclamation",
     "swap": "Swap",
     "bloques": "Bloqués",
+    "messages": "Messages",
     "reglages": "Réglages"
   },
   "title": "Suivi des livraisons",
@@ -693,8 +694,32 @@
     },
     "msg": {
       "t": "Messages au client",
-      "d": "Après l’envoi du colis, et comment ils partent",
-      "how": "Comment les messages partent"
+      "d": "Après l’envoi du colis : chaque message, allumé ou non, avec son texte"
+    },
+    "envoi": {
+      "t": "Envoi des messages",
+      "d": "WhatsApp, SMS, la langue, la nuit : pour tous les messages au client",
+      "s": {
+        "off": "Arrêtés",
+        "wa_gateway": "WhatsApp puis SMS",
+        "wa_manual": "WhatsApp puis à la main",
+        "wa_off": "WhatsApp seulement",
+        "gateway": "SMS seulement",
+        "manual": "À la main",
+        "none": "Rien ne part"
+      }
+    },
+    "tester": {
+      "t": "Tester un message",
+      "d": "Voir un message avec une vraie commande, puis l’envoyer à votre numéro"
+    },
+    "res": {
+      "t": "Résultats",
+      "d": "Envoyés, lus, réponses, commandes sauvées",
+      "s": "Envoyés en 7 j : {{n}}"
+    },
+    "notifs": {
+      "d": "Livrée, En retour, Alerte colis : qui les reçoit, et quand le téléphone sonne"
     },
     "statuts": {
       "t": "Statuts",
