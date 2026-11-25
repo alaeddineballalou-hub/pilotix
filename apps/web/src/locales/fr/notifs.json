@@ -31,7 +31,7 @@
   "turnOn": "Activer « {{what}} »",
   "kind": {
     "order": "Nouvelle commande",
-    "callback": "Rappel",
+    "callback": "C’est l’heure d’appeler",
     "delivered": "Livrée",
     "returned": "En retour",
     "cancelled": "Annulée",
@@ -43,7 +43,7 @@
   },
   "desc": {
     "order": "Une commande arrive et va à un agent.",
-    "callback": "L’heure de rappeler un client est arrivée.",
+    "callback": "Le chrono d’une commande devient vert : la tentative suivante (Occupé, Pas de réponse) ou le rappel prévu (À rappeler, Reportée).",
     "delivered": "Une commande confirmée est livrée.",
     "returned": "Le client a refusé : le colis revient.",
     "cancelled": "Une commande confirmée est annulée.",
@@ -68,7 +68,7 @@
   "roleDesc": {
     "agent": "Celui qui a confirmé la commande",
     "agent_order": "Celui qui doit l’appeler",
-    "agent_callback": "Celui qui doit rappeler",
+    "agent_callback": "Celui qui doit appeler : seulement ses commandes",
     "agent_taken": "Celui qui perd la commande",
     "agent_message": "Pendant la confirmation",
     "suivi": "Celui qui suit le colis",
@@ -105,7 +105,7 @@
     "message": "Bulles",
     "info": "Carillon"
   },
-  "sameRing": "La même sonnerie que « Rappel » et que l’écran bloqué. Elle ne change pas.",
+  "sameRing": "La même sonnerie que « C’est l’heure d’appeler » et que l’écran bloqué. Elle ne change pas.",
   "sameRingCb": "La même sonnerie que « Nouvelle commande ». Elle ne change pas.",
   "fixed": "Un son de Pilotix : il ne change pas.",
   "phone": "Téléphone, Pilotix fermé",

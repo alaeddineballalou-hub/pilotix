@@ -1,0 +1,240 @@
+{
+  "help": "Who gets each of the agency’s notifications, and when the phone rings. A notification about an order goes by itself to the agent who has that order.",
+  "hoursText": "The seller’s, for each order: his chrono decides",
+  "groupOrders": "Orders",
+  "groupAgency": "The agency",
+  "groupKpi": "Alerts on numbers",
+  "kind": {
+    "delegatedConfirmation": "New order for the agency",
+    "order": "Order given to an agent",
+    "due": "Time to call",
+    "delivered": "Delivered",
+    "returned": "Coming back",
+    "cancelled": "Cancelled",
+    "alert": "Parcel alert",
+    "delegatedFollow": "New parcel to follow",
+    "follow": "Parcel given to a follow-up agent",
+    "delegatedSav": "New after-sales ticket",
+    "sav": "After-sales ticket given to an agent",
+    "seller": "Sellers",
+    "payment": "Payments",
+    "team": "Team",
+    "access": "Seller access"
+  },
+  "desc": {
+    "delegatedConfirmation": "A seller sends an order to the agency, before it is given to an agent.",
+    "order": "An order is given to an agent: he has to call it.",
+    "due": "An order’s chrono turns green: it is time for the next try (Busy, No answer) or for the planned callback (Call back, Postponed).",
+    "delivered": "An order the agent confirmed is delivered.",
+    "returned": "The customer refused: the parcel is coming back.",
+    "cancelled": "A confirmed order is cancelled.",
+    "alert": "A parcel is on alert or its delivery failed.",
+    "delegatedFollow": "A seller sends an order’s follow-up to the agency.",
+    "follow": "A parcel on alert is given to a follow-up agent.",
+    "delegatedSav": "A seller sends an after-sales ticket to the agency.",
+    "sav": "An after-sales ticket is given to an agent.",
+    "seller": "A seller invites the agency, or accepts or declines its request.",
+    "payment": "A seller marks an invoice paid, or a payment is confirmed.",
+    "team": "Someone joins, leaves or changes role in the agency.",
+    "access": "A person’s sellers or products change."
+  },
+  "short": {
+    "_": {
+      "admin": "Admins",
+      "agent_manager": "Team leaders",
+      "confirmation": "Agent",
+      "suivi": "Follow-up",
+      "sav": "After-sales agent"
+    },
+    "delegatedConfirmation": {
+      "confirmation": "Confirmation agents"
+    },
+    "delegatedFollow": {
+      "suivi": "Follow-up agents"
+    },
+    "delegatedSav": {
+      "sav": "After-sales agents"
+    },
+    "access": {
+      "confirmation": "Confirmation",
+      "suivi": "Follow-up",
+      "sav": "After-sales"
+    }
+  },
+  "role": {
+    "_": {
+      "admin": "The agency’s admins",
+      "agent_manager": "The team leaders",
+      "confirmation": "The order’s agent",
+      "suivi": "The follow-up agent",
+      "sav": "The after-sales agent"
+    },
+    "delegatedConfirmation": {
+      "confirmation": "The confirmation agents"
+    },
+    "delegatedFollow": {
+      "suivi": "The follow-up agents"
+    },
+    "delegatedSav": {
+      "sav": "The after-sales agents"
+    },
+    "access": {
+      "confirmation": "A confirmation agent",
+      "suivi": "A follow-up agent",
+      "sav": "An after-sales agent"
+    }
+  },
+  "roleDesc": {
+    "_": {
+      "admin": "The agency’s administrators",
+      "agent_manager": "Those who lead a team",
+      "confirmation": "The one who has the order",
+      "suivi": "The one who follows the parcel",
+      "sav": "The one who has the ticket"
+    },
+    "order": {
+      "confirmation": "The one it is given to: he calls it",
+      "agent_manager": "A line when orders are given to their team",
+      "admin": "A line when orders are given to the team"
+    },
+    "due": {
+      "confirmation": "The one who has to call: only his orders",
+      "agent_manager": "A line when an agent of their team has to call",
+      "admin": "A line when an agent has to call"
+    },
+    "delivered": {
+      "confirmation": "The one who confirmed it"
+    },
+    "returned": {
+      "confirmation": "The one who confirmed it"
+    },
+    "cancelled": {
+      "confirmation": "The one who confirmed it"
+    },
+    "follow": {
+      "suivi": "The one the parcel is given to",
+      "agent_manager": "A line when parcels are given to their team",
+      "admin": "A line when parcels are given to the team"
+    },
+    "delegatedConfirmation": {
+      "confirmation": "Everyone who works for this seller"
+    },
+    "delegatedFollow": {
+      "suivi": "Everyone who follows this seller’s parcels"
+    },
+    "delegatedSav": {
+      "sav": "Everyone in this seller’s after-sales"
+    },
+    "sav": {
+      "sav": "The one the ticket is given to"
+    },
+    "access": {
+      "confirmation": "When their sellers or products change",
+      "suivi": "When their sellers or products change",
+      "sav": "When their sellers or products change"
+    }
+  },
+  "howOwn": "Only their own",
+  "peopleNote": "A person chosen by name only gets what concerns them: their orders, their team.",
+  "dueNote": "The time comes from the seller: his chrono follows his calling hours (Confirmation › Settings › Calls). The agency only chooses who hears it.",
+  "phoneWork": "The phone rings during the calling hours of the order’s seller. After that, the notification waits in the bell.",
+  "pvOwn": "The order’s agent",
+  "pvTeam": "The team leaders and the admins",
+  "pvAll": "What they see",
+  "sample": {
+    "delegatedConfirmation": {
+      "t": "New order sent to your agency for confirmation",
+      "b": "To give to an agent"
+    },
+    "order": {
+      "t": "Orders assigned to you",
+      "b": "3 new orders to call"
+    },
+    "due": {
+      "t": "Time to call",
+      "b": "PX1370 · Amina B."
+    },
+    "delivered": {
+      "t": "Order delivered",
+      "b": "PX1370"
+    },
+    "returned": {
+      "t": "Order coming back",
+      "b": "PX1370"
+    },
+    "cancelled": {
+      "t": "Order cancelled",
+      "b": "PX1370"
+    },
+    "alert": {
+      "t": "Delivery alert",
+      "b": "PX1370"
+    },
+    "delegatedFollow": {
+      "t": "New order sent to your agency for delivery follow-up",
+      "b": "To give to a follow-up agent"
+    },
+    "follow": {
+      "t": "Parcels assigned to you",
+      "b": "2 parcels to handle"
+    },
+    "delegatedSav": {
+      "t": "New after-sales ticket sent to your agency",
+      "b": "To give to an after-sales agent"
+    },
+    "sav": {
+      "t": "After-sales ticket assigned to you",
+      "b": "SAV-0003"
+    },
+    "seller": {
+      "t": "New seller invitation",
+      "b": "Baby joy DZ"
+    },
+    "payment": {
+      "t": "Seller marked an invoice as paid",
+      "b": "Baby joy DZ"
+    },
+    "team": {
+      "t": "Agency team updated",
+      "b": ""
+    },
+    "access": {
+      "t": "Your seller access changed",
+      "b": ""
+    }
+  },
+  "team": {
+    "order": {
+      "t": "Confirmation work assigned in your team",
+      "b": "3 orders for Samira"
+    },
+    "due": {
+      "t": "Orders to call now in your team",
+      "b": "Samira · 5 : PX1370, PX1371, PX1372, PX1373 +1"
+    },
+    "follow": {
+      "t": "Delivery follow-up work assigned in your team",
+      "b": "2 parcels for Nadia"
+    }
+  },
+  "kpiShort": "Alert from {{n}}",
+  "kpiDesc": {
+    "order": "The number of orders waiting for a call. An alert when it reaches the threshold.",
+    "follow": "The number of parcels on alert not handled yet. An alert when it reaches the threshold.",
+    "sav": "The number of after-sales tickets still open. An alert when it reaches the threshold."
+  },
+  "threshold": "Threshold",
+  "thresholdText": "An alert when the number reaches this figure: once, then again if it goes down and back up.",
+  "kpiRole": {
+    "admin": "The agency’s admins",
+    "agent_manager": "The team leaders",
+    "confirmation": "Each confirmation agent",
+    "suivi": "Each follow-up agent",
+    "sav": "Each after-sales agent"
+  },
+  "kpiRoleDesc": {
+    "lead": "The number for the whole agency",
+    "agent": "Only their own number"
+  },
+  "kpiWrong": "Set a threshold from 1 to 100,000 and tick at least one person."
+}

@@ -1,5 +1,5 @@
-import { num } from '../db';
-import { CONF_TODO, type AgencyTask } from '@pilotix/shared';
+import { Db, num } from '../db';
+import { CONF_TODO, slotAt, type AgencyTask } from '@pilotix/shared';
 import { z } from 'zod';
 import { bad, Ctx, forbidden, proc } from '../rpc';
 import { getSetting, setSetting } from '../settings';
@@ -28,6 +28,9 @@ const TITLES = {
   parcelAlert: { en: 'Delivery alert', fr: 'Alerte de livraison', ar: 'تنبيه التوصيل' },
   savAssigned: { en: 'After-sales ticket assigned to you', fr: 'Ticket SAV qui vous est affecté', ar: 'تذكرة خدمة ما بعد البيع أُسندت إليك' },
   follow: { en: 'Parcels assigned to you', fr: 'Colis qui vous sont affectés', ar: 'طرود أُسندت إليك' },
+  // the chrono of an order turns green (inbox.ts › dueRun): its agent, then his team leaders when the agency ticked them
+  due: { en: 'Time to call', fr: 'C’est l’heure d’appeler', ar: 'حان وقت الاتصال' },
+  teamDue: { en: 'Orders to call now in your team', fr: 'Commandes à appeler maintenant dans votre équipe', ar: 'طلبات يجب الاتصال بها الآن في فريقك' },
 };
 
 const ROLES = ['admin', 'agent_manager', 'confirmation', 'suivi', 'sav'] as const;
@@ -45,14 +48,95 @@ const DEFAULTS: Record<Group, readonly AgencyRole[]> = {
   ...ALLOWED, seller: ['admin'], payment: ['admin'], order: ['confirmation'], follow: ['suivi'],
   delegatedConfirmation: ['admin'], delegatedFollow: ['admin'], delegatedSav: ['admin'],
 };
-const GROUP: Record<keyof typeof TITLES, Group> = {
+const cleanRoles = (group: Group, roles: readonly string[]) => ALLOWED[group].filter((role) => roles.includes(role));
+
+// ---------------------------------------------------------------- Réglages › Notifications, one notification at a time
+/**
+ * The agency's notifications, each on its own line like the seller's Management › Notifications (owner's ask, 25 Nov
+ * 2026: « easy to understand and control, like the seller one »): on or off, who gets it (by role: the order's own
+ * agent, its Suivi agent, the team leaders, the administrators…), chosen people, and when the phones ring. A kind never
+ * saved here keeps what the older page saved for its group (agencyNotify, agencyNotifyPeople), else its default — the
+ * older « Suivi des commandes » group is now four: livrée, en retour, annulée, alerte.
+ */
+export const AGENCY_KINDS = [
+  'delegatedConfirmation', 'order', 'due', 'delivered', 'returned', 'cancelled', 'alert',
+  'delegatedFollow', 'follow', 'delegatedSav', 'sav', 'seller', 'payment', 'team', 'access',
+] as const;
+export type AgencyKind = (typeof AGENCY_KINDS)[number];
+export const AGENCY_PHONE = ['work', 'always', 'never'] as const;
+export type AgencyPhone = (typeof AGENCY_PHONE)[number];
+export interface AgencyRule {
+  on: boolean;
+  /** the roles told (the order's own people for an order's news: its agent, its Suivi agent) */
+  roles: AgencyRole[];
+  /** chosen people, told too (within what they can see) */
+  people: number[];
+  /** the phones, Pilotix closed: in the work hours (the seller's calling hours for his orders), always, never */
+  phone: AgencyPhone;
+}
+/** the older page's group of each kind (null: a new kind) */
+const GROUP_OF: Record<AgencyKind, Group | null> = {
+  delegatedConfirmation: 'delegatedConfirmation', order: 'order', due: null, delivered: 'orderUpdates', returned: 'orderUpdates',
+  cancelled: 'orderUpdates', alert: 'orderUpdates', delegatedFollow: 'delegatedFollow', follow: 'follow', delegatedSav: 'delegatedSav',
+  sav: 'sav', seller: 'seller', payment: 'payment', team: 'team', access: 'access',
+};
+/** who each kind can go to (a delivery alert: only the parcel's Suivi agent sees it) */
+export const AGENCY_CAN: Record<AgencyKind, readonly AgencyRole[]> = {
+  ...(Object.fromEntries(AGENCY_KINDS.map((k) => [k, GROUP_OF[k] ? ALLOWED[GROUP_OF[k]!] : []])) as Record<AgencyKind, readonly AgencyRole[]>),
+  due: ['confirmation', 'agent_manager', 'admin'],
+  alert: ['suivi'],
+};
+/** Pilotix's choice for each kind: its group's, and the time to call goes to the order's agent */
+const DEFAULT_ROLES: Record<AgencyKind, readonly AgencyRole[]> = {
+  ...(Object.fromEntries(AGENCY_KINDS.map((k) => [k, GROUP_OF[k] ? DEFAULTS[GROUP_OF[k]!] : []])) as Record<AgencyKind, readonly AgencyRole[]>),
+  due: ['confirmation'],
+  alert: ['suivi'],
+};
+/** the phones ring at any hour, as before this page (each kind can say « pendant le travail » or « jamais ») */
+export const AGENCY_DEFAULT_RULES = Object.fromEntries(
+  AGENCY_KINDS.map((k): [AgencyKind, AgencyRule] => [k, { on: true, roles: [...DEFAULT_ROLES[k]], people: [], phone: 'always' }]),
+) as Record<AgencyKind, AgencyRule>;
+/** the service a kind needs from a seller (not shown, not saved, before a seller gives it) */
+const SERVICE_OF: Partial<Record<AgencyKind, AgencyTask>> = {
+  delegatedConfirmation: 'confirmation', order: 'confirmation', due: 'confirmation', alert: 'suivi',
+  delegatedFollow: 'suivi', follow: 'suivi', delegatedSav: 'sav', sav: 'sav',
+};
+/** each notification's kind */
+const KIND_OF: Record<keyof typeof TITLES, AgencyKind> = {
   invitation: 'seller', invitationAccepted: 'seller', invitationRefused: 'seller', accepted: 'seller', refused: 'seller',
-  order: 'order', follow: 'follow', teamOrder: 'order', teamFollow: 'follow', savAssigned: 'sav', team: 'team', access: 'access', paid: 'payment', received: 'payment',
-  delegatedConfirmation: 'delegatedConfirmation', delegatedFollow: 'delegatedFollow', delegatedSav: 'delegatedSav',
-  delivered: 'orderUpdates', returned: 'orderUpdates', cancelled: 'orderUpdates', parcelAlert: 'orderUpdates',
+  order: 'order', teamOrder: 'order', follow: 'follow', teamFollow: 'follow', savAssigned: 'sav', team: 'team', access: 'access',
+  paid: 'payment', received: 'payment', delegatedConfirmation: 'delegatedConfirmation', delegatedFollow: 'delegatedFollow',
+  delegatedSav: 'delegatedSav', delivered: 'delivered', returned: 'returned', cancelled: 'cancelled', parcelAlert: 'alert',
+  due: 'due', teamDue: 'due',
 };
 
-const cleanRoles = (group: Group, roles: readonly string[]) => ALLOWED[group].filter((role) => roles.includes(role));
+const kindRoles = (kind: AgencyKind, roles: readonly unknown[]) => AGENCY_CAN[kind].filter((role) => roles.includes(role));
+const ids = (v: readonly unknown[]) => [...new Set(v.filter((x): x is number => Number.isSafeInteger(x) && (x as number) > 0))].slice(0, 100);
+
+/** One kind's rule: what this page saved, else what the older page saved for its group, else Pilotix's choice. */
+function ruleOf(kind: AgencyKind, saved: unknown, old: Record<string, string[]>, oldPeople: Record<string, number[]>): AgencyRule {
+  const group = GROUP_OF[kind];
+  const roles = kindRoles(kind, group && old[group] ? old[group] : DEFAULT_ROLES[kind]);
+  const people = group && Array.isArray(oldPeople[group]) ? ids(oldPeople[group]) : [];
+  // the older page turned a group off by ticking nobody
+  const base: AgencyRule = { on: roles.length > 0 || people.length > 0, roles, people, phone: 'always' };
+  if (!saved || typeof saved !== 'object') return base;
+  const v = saved as Partial<Record<keyof AgencyRule, unknown>>;
+  return {
+    on: typeof v.on === 'boolean' ? v.on : base.on,
+    roles: Array.isArray(v.roles) ? kindRoles(kind, v.roles) : base.roles,
+    people: Array.isArray(v.people) ? ids(v.people) : base.people,
+    phone: (AGENCY_PHONE as readonly unknown[]).includes(v.phone) ? (v.phone as AgencyPhone) : base.phone,
+  };
+}
+
+/** Every kind's rule of this agency (its own database). */
+export async function agencyRules(db: Db): Promise<Record<AgencyKind, AgencyRule>> {
+  const saved = await getSetting(db, 'agencyRules');
+  const old = await getSetting(db, 'agencyNotify');
+  const oldPeople = await getSetting(db, 'agencyNotifyPeople');
+  return Object.fromEntries(AGENCY_KINDS.map((k) => [k, ruleOf(k, saved[k], old, oldPeople)])) as Record<AgencyKind, AgencyRule>;
+}
 
 const SERVICE: Partial<Record<Group, AgencyTask>> = {
   order: 'confirmation', follow: 'suivi', sav: 'sav',
@@ -133,22 +217,94 @@ export const agencyBellProcs = {
         alerts[metric] = { threshold: rule.threshold, roles: [...new Set(rule.roles)], people: validatePeople(rule.people ?? [], kpiRoles(metric)) };
       } else delete alerts[metric];
     }
+    // (the groups saved here win over the one-by-one page's kinds of those groups: an older tab still saves its way)
+    const touched = new Set<string>([...Object.keys(rules), ...Object.keys(people ?? {})]);
+    const kinds = { ...await getSetting(ctx.db, 'agencyRules') };
+    for (const k of AGENCY_KINDS) if (GROUP_OF[k] && touched.has(GROUP_OF[k]!)) delete kinds[k];
     await ctx.db.tx(async (db) => {
       await setSetting(db, 'agencyNotify', saved, ctx.session.profile.id);
       if (people) await setSetting(db, 'agencyNotifyPeople', named, ctx.session.profile.id);
+      if (kpis) await setSetting(db, 'agencyKpis', alerts, ctx.session.profile.id);
+      if (touched.size) await setSetting(db, 'agencyRules', kinds, ctx.session.profile.id);
+    });
+    return { ok: true };
+  }),
+  /**
+   * Réglages › Notifications (the agency's administrators), one notification at a time like the seller's page: each
+   * kind the agency can get (a service's only once a seller gives it), its rule, Pilotix's choice, the people who can be
+   * chosen, and the alerts on numbers (KPI).
+   */
+  'agency.notify.get': proc([], z.object({}), async (ctx) => {
+    if (ctx.shop?.kind !== 'agency') throw forbidden();
+    const links = await agencyLinks(ctx);
+    const rules = await agencyRules(ctx.db);
+    const kpis = await getSetting(ctx.db, 'agencyKpis');
+    return {
+      kinds: AGENCY_KINDS.filter((k) => !SERVICE_OF[k] || hasService(links, SERVICE_OF[k]!))
+        .map((k) => ({ kind: k, can: [...AGENCY_CAN[k]], rule: rules[k], def: AGENCY_DEFAULT_RULES[k] })),
+      kpis: METRICS.filter((metric) => hasService(links, SERVICE[metric]!))
+        .map((metric) => ({ metric, allowed: kpiRoles(metric), rule: kpis[metric] ?? null })),
+      people: await agencyPeople(ctx),
+    };
+  }),
+  /** Saves the kinds sent (the others stay as they are) and the KPI alerts sent (null: off). */
+  'agency.notify.set': proc([], z.object({
+    rules: z.record(z.enum(AGENCY_KINDS), z.object({
+      on: z.boolean(),
+      roles: z.array(z.enum(ROLES)).max(ROLES.length),
+      people: PEOPLE,
+      phone: z.enum(AGENCY_PHONE),
+    })).optional(),
+    kpis: z.record(z.enum(METRICS), RULE.nullable()).optional(),
+  }), async (ctx, { rules, kpis }) => {
+    if (ctx.shop?.kind !== 'agency') throw forbidden();
+    const links = await agencyLinks(ctx);
+    const team = await agencyPeople(ctx);
+    const validatePeople = (list: number[], allowed: readonly AgencyRole[]) => {
+      if (list.some((id) => !team.some((person) => person.id === id && person.roles.some((role) => allowed.includes(role))))) {
+        throw bad('Destinataire incompatible avec cette notification');
+      }
+      return [...new Set(list)];
+    };
+    const saved = { ...await getSetting(ctx.db, 'agencyRules') };
+    for (const k of AGENCY_KINDS) {
+      const r = rules?.[k];
+      if (!r) continue;
+      if (r.roles.some((role) => !AGENCY_CAN[k].includes(role))) throw bad('Rôle incompatible avec cette notification');
+      if (r.on && (r.roles.length || r.people.length) && SERVICE_OF[k] && !hasService(links, SERVICE_OF[k]!)) throw bad('Ce service n’est pas confié à votre agence');
+      saved[k] = { on: r.on, roles: kindRoles(k, r.roles), people: validatePeople(r.people, AGENCY_CAN[k]), phone: r.phone };
+    }
+    const alerts = { ...await getSetting(ctx.db, 'agencyKpis') };
+    for (const metric of METRICS) if (kpis && Object.prototype.hasOwnProperty.call(kpis, metric)) {
+      const rule = kpis[metric];
+      if (rule) {
+        if (!hasService(links, SERVICE[metric]!)) throw bad('Ce service n’est pas confié à votre agence');
+        if (rule.roles.some((role) => !kpiRoles(metric).includes(role))) throw bad('Rôle incompatible avec ce service');
+        alerts[metric] = { threshold: rule.threshold, roles: [...new Set(rule.roles)], people: validatePeople(rule.people ?? [], kpiRoles(metric)) };
+      } else delete alerts[metric];
+    }
+    await ctx.db.tx(async (db) => {
+      if (rules) await setSetting(db, 'agencyRules', saved, ctx.session.profile.id);
       if (kpis) await setSetting(db, 'agencyKpis', alerts, ctx.session.profile.id);
     });
     return { ok: true };
   }),
 };
 
-/** Only active profiles in the agency that match its current role policy receive lines. */
+/**
+ * Only active profiles in the agency that match its current rule for this notification receive lines (Réglages ›
+ * Notifications: on or off, the roles, the chosen people), and their phones ring as the rule says: always, never, or in
+ * the work hours — the calling hours of the shop it comes from (a seller's for his orders: his chrono, never the
+ * agency's), the agency's own for its own news.
+ */
 export async function tellAgency(ctx: Ctx, agencyId: number, event: keyof typeof TITLES, url: string, options: {
   people?: readonly number[];
   body?: string;
   count?: number;
   except?: number;
   roles?: readonly AgencyRole[];
+  /** replaces the person's unread line with the same tag (the time to call: one line per slot) */
+  tag?: string;
 }): Promise<void> {
   try {
     const local = ctx.shop?.id === agencyId && ctx.shop.kind === 'agency';
@@ -158,11 +314,12 @@ export async function tellAgency(ctx: Ctx, agencyId: number, event: keyof typeof
     ))?.[0];
     if (!local && !target) return;
     const db = local ? ctx.db : ctx.t!.shop(String(target!.schema_name));
-    const group = GROUP[event];
-    const saved = await getSetting(db, 'agencyNotify');
-    const roles = cleanRoles(group, saved[group] ?? DEFAULTS[group]).filter((role) => !options.roles || options.roles.includes(role));
-    const named = (await getSetting(db, 'agencyNotifyPeople'))[group] ?? [];
-    const eligible = ALLOWED[group].filter((role) => !options.roles || options.roles.includes(role));
+    const kind = KIND_OF[event];
+    const rule = (await agencyRules(db))[kind];
+    if (!rule.on) return;
+    const roles = rule.roles.filter((role) => !options.roles || options.roles.includes(role));
+    const named = rule.people;
+    const eligible = AGENCY_CAN[kind].filter((role) => !options.roles || options.roles.includes(role));
     if (!roles.length && !named.length) return;
     const rows = await db.query(
       `SELECT id FROM profiles WHERE active AND agency_id IS NULL
@@ -170,7 +327,8 @@ export async function tellAgency(ctx: Ctx, agencyId: number, event: keyof typeof
         AND ($2::bigint[] IS NULL OR id = ANY($2))`,
       [roles, options.people ?? null, named, eligible],
     );
-    const kind: BellKind = event === 'follow' || event === 'parcelAlert' ? 'alert'
+    const bell: BellKind = event === 'due' || event === 'teamDue' ? 'callback'
+      : event === 'follow' || event === 'parcelAlert' ? 'alert'
       : event === 'order' || event === 'delivered' || event === 'returned' || event === 'cancelled' ? event : 'info';
     const destination = {
       ...ctx, db,
@@ -180,10 +338,13 @@ export async function tellAgency(ctx: Ctx, agencyId: number, event: keyof typeof
     const rung = await ringBell(
       destination,
       rows.map((p) => num(p.id)).filter((id) => id !== options.except),
-      (lang) => ({ kind, title: TITLES[event][lang], body: options.body ?? '', url }),
-      { count: options.count },
+      (lang) => ({ kind: bell, title: TITLES[event][lang], body: options.body ?? '', url, important: event === 'due' || undefined }),
+      { count: options.count, tag: options.tag },
     );
-    for (const { id, line } of rung) await pushOnly(destination, [id], { title: line.title, body: line.body, url, tag: `agency-${event}-${ctx.now()}-${id}` }).catch(() => 0);
+    const ring = rule.phone === 'always' || (rule.phone === 'work' && slotAt(ctx.now(), await getSetting(ctx.db, 'calls')).open);
+    if (ring)
+      for (const { id, line, quiet } of rung)
+        if (!quiet) await pushOnly(destination, [id], { title: line.title, body: line.body, url, tag: `agency-${event}-${ctx.now()}-${id}` }).catch(() => 0);
   } catch {
     // As with the seller bell, a notification failure cannot undo a completed business action.
   }
@@ -252,6 +413,42 @@ export async function tellAgencyOrderStatus(ctx: Ctx, orderId: number, event: Or
   for (const { agency, person, roles, body } of groups.values()) {
     await tellAgency(ctx, agency, event, `#/suivi/${STATUS_ROUTE[event]}`, { people: [person], roles, body });
   }
+}
+
+/**
+ * « C'est l'heure d'appeler » for an agency's agent (inbox.ts, the seller's run): the seller-side agent of orders whose
+ * chrono turned green — an unanswered order's next try (one line for all of them at the start of the slot) or a
+ * callback's time — told in his agency, and his team leaders too when the agency ticked them. The timing is the
+ * seller's (his calling hours, his chrono); who hears it is the agency's choice (Réglages › Notifications).
+ */
+export async function tellAgencyDue(ctx: Ctx, profile: number, orders: readonly { id: number; ref: string }[], tag: string, body: string) {
+  if (!ctx.t || !ctx.shop || (ctx.shop.kind ?? 'store') !== 'store' || !orders.length) return;
+  const row = (await ctx.db.query(
+    `SELECT p.agency_id, p.agency_profile_id, p.name FROM profiles p
+       JOIN platform.agency_links l ON l.agency_id = p.agency_id AND l.store_id = $2 AND l.status = 'active' AND l.tasks ? 'confirmation'
+      WHERE p.id = $1 AND p.active AND p.agency_id IS NOT NULL AND p.agency_profile_id IS NOT NULL`,
+    [profile, ctx.shop.id],
+  ))[0];
+  if (!row) return;
+  const agencyId = num(row.agency_id);
+  const person = num(row.agency_profile_id);
+  const url = '#/confirmation/attente';
+  await tellAgency(ctx, agencyId, 'due', url, { people: [person], roles: ['confirmation'], count: orders.length, body, tag });
+  // his team leaders (within the products they handle): one line per agent whose orders wait
+  const team = await ctx.db.query(
+    `SELECT p.agency_profile_id FROM profiles p
+      WHERE p.agency_id = $1 AND p.active AND p.id <> $2 AND p.agency_profile_id IS NOT NULL
+        AND (p.agency_products IS NULL OR EXISTS (SELECT 1 FROM orders o WHERE o.id = ANY($3) AND o.route_product_id = ANY(p.agency_products)))`,
+    [agencyId, profile, orders.map((o) => o.id)],
+  );
+  if (!team.length) return;
+  const who = String(row.name ?? '').trim();
+  await tellAgency(ctx, agencyId, 'teamDue', url, {
+    people: team.map((p) => num(p.agency_profile_id)),
+    roles: ['admin', 'agent_manager'],
+    body: [who, orders.length > 1 ? `${orders.length} : ${body}` : body].filter(Boolean).join(' · '),
+    tag: `${tag}-team-${person}`,
+  });
 }
 
 const DELEGATED = {

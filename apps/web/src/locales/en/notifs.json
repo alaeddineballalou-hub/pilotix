@@ -31,7 +31,7 @@
   "turnOn": "Turn on « {{what}} »",
   "kind": {
     "order": "New order",
-    "callback": "Callback",
+    "callback": "Time to call",
     "delivered": "Delivered",
     "returned": "Coming back",
     "cancelled": "Cancelled",
@@ -43,7 +43,7 @@
   },
   "desc": {
     "order": "An order arrives and goes to an agent.",
-    "callback": "It is time to call a customer back.",
+    "callback": "An order’s chrono turns green: the next try (Busy, No answer) or the planned callback (Call back, Postponed).",
     "delivered": "A confirmed order is delivered.",
     "returned": "The customer refused: the parcel comes back.",
     "cancelled": "A confirmed order is cancelled.",
@@ -68,7 +68,7 @@
   "roleDesc": {
     "agent": "The one who confirmed the order",
     "agent_order": "The one who has to call",
-    "agent_callback": "The one who has to call back",
+    "agent_callback": "The one who has to call: only his orders",
     "agent_taken": "The one who loses the order",
     "agent_message": "While it is being confirmed",
     "suivi": "The one who follows the parcel",
@@ -105,7 +105,7 @@
     "message": "Bubbles",
     "info": "Chime"
   },
-  "sameRing": "The same ring as « Callback » and the blocked screen. It does not change.",
+  "sameRing": "The same ring as « Time to call » and the blocked screen. It does not change.",
   "sameRingCb": "The same ring as « New order ». It does not change.",
   "fixed": "A Pilotix sound: it does not change.",
   "phone": "Phone, Pilotix closed",

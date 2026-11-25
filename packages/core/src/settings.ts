@@ -155,6 +155,11 @@ export interface SettingsMap {
   confBlock: { on: boolean; by: string | null; at: string | null };
   /** The notifications already sent for the new orders still waiting (order id → its agent, when, how many): kept only while they wait */
   confRings: Record<string, { a: number; at: number; n: number }>;
+  /**
+   * « C'est l'heure d'appeler » (inbox.ts › dueRun): the start of the last call slot whose tries were told (one line per
+   * agent at the start of each slot), and the agency agents' callbacks already told (tag → when), kept a few hours.
+   */
+  dueRings: { slot: number; calls: Record<string, number> };
   /** « Bloquer jusqu'à l'appel »: each agent's shift (profile id → minutes after midnight, Algiers), typed by the managers */
   confShifts: Record<string, { from: number; to: number }>;
   /**
@@ -164,6 +169,12 @@ export interface SettingsMap {
    */
   agencyNotify: Record<string, string[]>;
   agencyNotifyPeople: Record<string, number[]>;
+  /**
+   * The agency's Réglages › Notifications (agencybell.ts › agencyRules; owner's ask of 25 Nov 2026: « like the seller
+   * one »): each notification on or off, the roles and the people who get it, when the phones ring. A kind not saved
+   * here keeps what the older page saved for its group (agencyNotify, agencyNotifyPeople), else its default.
+   */
+  agencyRules: Record<string, { on?: boolean; roles?: string[]; people?: number[]; phone?: 'work' | 'always' | 'never' }>;
   agencyKpis: Record<string, { threshold: number; roles: string[]; people?: number[] }>;
   agencyKpiState: Record<string, boolean>;
   notify: Record<string, { on?: boolean; who?: string[]; people?: number[]; phone?: 'work' | 'always' | 'never' }>;
@@ -291,9 +302,11 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   depotAlerts: { to: [] },
   confBlock: { on: false, by: null, at: null },
   confRings: {},
+  dueRings: { slot: 0, calls: {} },
   confShifts: {},
   agencyNotify: {},
   agencyNotifyPeople: {},
+  agencyRules: {},
   agencyKpis: {},
   agencyKpiState: {},
   notify: {},

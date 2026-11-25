@@ -189,8 +189,8 @@ export function NotificationsCfg({ kinds, embedded = false, folds = [] }: { kind
   );
 }
 
-/** A switch (a real checkbox). */
-function Switch({ on, label, onChange }: { on: boolean; label: string; onChange: (v: boolean) => void }) {
+/** A switch (a real checkbox). Also the agency's Réglages › Notifications (pages/agency/Notifications.tsx). */
+export function Switch({ on, label, onChange }: { on: boolean; label: string; onChange: (v: boolean) => void }) {
   return (
     <label className="px-nt-sw" title={label}>
       <input type="checkbox" checked={on} aria-label={label} onChange={(e) => onChange(e.target.checked)} />
@@ -199,7 +199,7 @@ function Switch({ on, label, onChange }: { on: boolean; label: string; onChange:
   );
 }
 
-function Back({ onBack }: { onBack?: () => void }) {
+export function Back({ onBack }: { onBack?: () => void }) {
   const { t } = useTranslation();
   if (!onBack) return null;
   return (

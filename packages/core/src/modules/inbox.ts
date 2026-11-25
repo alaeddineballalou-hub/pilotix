@@ -1,6 +1,7 @@
 // The bell (owner's ask, 22 Nov 2026): « a notification for every one, about each order », at the top of every page, as
 // a pop-up with its own sound while Pilotix is open, and on the phone even when it is closed.
-// - an agent: a new order given to them (the auto split, a rotation, a manager), the time of a callback they set, their
+// - an agent: a new order given to them (the auto split, a rotation, a manager), the time of a callback they set, the
+//   start of the call slot where their unanswered orders' next try comes (their chrono turns green: dueRun), their
 //   order delivered (the cash sound), back or cancelled after they confirmed it, an order taken from them;
 // - Suivi: an alert or a failed delivery on a parcel they follow, a parcel on alert given to them;
 // - Dépôt: the orders to prepare, grouped (one line every 15 minutes at most, while the team works);
@@ -11,13 +12,13 @@
 // Management › Notifications (owner's ask, 22 Nov 2026) sets each kind: on or off, who gets it — the order's own person
 // in their words, the others (the manager, the owners, the depot, chosen people) in the third person, one line per kind
 // that grows while it is not read — and when the phones ring (notifyRules). The sounds stay Pilotix's own.
-import { algiersDayStart, CONF_TODO, Language, slotAt } from '@pilotix/shared';
+import { algiersDayStart, CONF_TODO, Language, nextDue, slotAt } from '@pilotix/shared';
 import { z } from 'zod';
-import { Db, num, numOrNull } from '../db';
+import { Db, iso, num, numOrNull } from '../db';
 import { Ctx, proc } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { BellKind, ringBell } from './bell';
-import { runAgencyKpis, tellAgencyAssignments, tellAgencyOrderStatus } from './agencybell';
+import { runAgencyKpis, tellAgencyAssignments, tellAgencyDue, tellAgencyOrderStatus } from './agencybell';
 import { canPush, pushOnly } from './push';
 
 // ---------------------------------------------------------------- the words (the person's language)
@@ -29,6 +30,9 @@ const W = {
   fromManager: { fr: 'Donnée par {who}', en: 'Given by {who}', ar: 'أسندها {who}' },
   callback: { fr: '📞 Rappeler {name} maintenant', en: '📞 Call {name} back now', ar: '📞 أعد الاتصال بـ{name} الآن' },
   callbackAt: { fr: '{ref} · rappel prévu à {time}', en: '{ref} · callback set for {time}', ar: '{ref} · موعد الاتصال {time}' },
+  // the chrono turned green: the next try of orders nobody answered (dueRun)
+  dueN: { fr: '📞 {n} commandes à appeler maintenant', en: '📞 {n} orders to call now', ar: '📞 طلبات يجب الاتصال بها الآن: {n}' },
+  dueTry: { fr: '{ref} · appel n° {n}', en: '{ref} · call no. {n}', ar: '{ref} · الاتصال رقم {n}' },
   delivered1: { fr: '💰 {ref} livrée', en: '💰 {ref} delivered', ar: '💰 تم توصيل {ref}' },
   deliveredN: { fr: '💰 {n} commandes livrées', en: '💰 {n} orders delivered', ar: '💰 طلبات تم توصيلها: {n}' },
   returned1: { fr: '↩️ {ref} en retour', en: '↩️ {ref} is coming back', ar: '↩️ {ref} في طريق الإرجاع' },
@@ -54,6 +58,7 @@ const W = {
   teamOrderN: { fr: '{n} commandes affectées', en: '{n} orders assigned', ar: 'تم إسناد {n} طلبات' },
   forWho: { fr: 'pour {who}', en: 'for {who}', ar: 'لـ{who}' },
   teamCallback: { fr: '📞 {who} doit rappeler {name}', en: '📞 {who} has to call {name} back', ar: '📞 على {who} أن يعيد الاتصال بـ{name}' },
+  teamDueN: { fr: '📞 {n} commandes à appeler dans l’équipe', en: '📞 {n} orders to call in the team', ar: '📞 طلبات يجب الاتصال بها في الفريق: {n}' },
   teamTaken1: { fr: '{ref} n’est plus à {who}', en: '{ref} is no longer {who}’s', ar: '{ref} لم يعد لـ{who}' },
   teamTakenN: { fr: '{n} commandes ont changé d’agent', en: '{n} orders changed agent', ar: 'طلبات غيّرت وكيلها: {n}' },
 } satisfies Record<string, Words>;
@@ -84,7 +89,7 @@ async function orderBits(db: Db, ids: number[]): Promise<Map<number, Bits>> {
   return new Map(rows.map((r: any) => [num(r.id), { id: num(r.id), ref: String(r.ref), name: String(r.customer_name ?? '').trim(), total: num(r.total), agent: numOrNull(r.agent_id), follow: numOrNull(r.follow_agent_id) }]));
 }
 const oneLine = (o: Bits, lang: Language) => [o.ref, o.name, o.total > 0 ? da(o.total, lang) : ''].filter(Boolean).join(' · ');
-const refList = (list: Bits[]) => list.slice(0, 4).map((o) => o.ref).join(', ') + (list.length > 4 ? ` +${list.length - 4}` : '');
+const refList = (list: readonly { ref: string }[]) => list.slice(0, 4).map((o) => o.ref).join(', ') + (list.length > 4 ? ` +${list.length - 4}` : '');
 async function namesOf(db: Db, ids: number[]): Promise<Map<number, string>> {
   if (!ids.length) return new Map();
   const rows = await db.query('SELECT id, name FROM profiles WHERE id = ANY($1)', [[...new Set(ids)]]);
@@ -457,17 +462,20 @@ export async function tellMessage(ctx: Ctx, m: { conversationId: number; phone: 
 }
 
 // ---------------------------------------------------------------- every minute (jobs.ts › inbox-run)
-/** A callback whose time came, the depot's orders to prepare, and the lines older than 30 days. */
+/**
+ * A callback whose time came, the start of a call slot (the unanswered orders' next try: dueRun), the depot's orders to
+ * prepare, and the lines older than 30 days.
+ */
 export async function inboxRun(ctx: Ctx) {
   const now = ctx.now();
   if (ctx.shop?.kind === 'agency') {
     await runAgencyKpis(ctx);
-    return { calls: 0, depot: 0, gone: await pruneInbox(ctx, now) };
+    return { calls: 0, due: 0, depot: 0, gone: await pruneInbox(ctx, now) };
   }
   let calls = 0;
   // the callbacks the agents set (« À rappeler », « Reporté »): told once when their time comes (up to 20 minutes late)
   const due = await ctx.db.query(
-    `SELECT o.id, o.ref, o.customer_name, o.agent_id, o.next_call_at FROM orders o
+    `SELECT o.id, o.ref, o.customer_name, o.agent_id, o.next_call_at, p.agency_id FROM orders o LEFT JOIN profiles p ON p.id = o.agent_id
       WHERE o.next_call_at <= $1::timestamptz AND o.next_call_at > $1::timestamptz - interval '20 minutes'
         AND o.agent_id IS NOT NULL AND o.conf_status IN ('callback', 'postponed')
         AND NOT EXISTS (SELECT 1 FROM inbox i WHERE i.tag = 'call-' || o.id::text || '-' || floor(extract(epoch FROM o.next_call_at))::bigint::text)
@@ -477,12 +485,24 @@ export async function inboxRun(ctx: Ctx) {
   const rule = (await notifyRules(ctx.db)).callback;
   const a = around(ctx);
   const agents = await namesOf(ctx.db, (due as any[]).map((r) => num(r.agent_id)));
-  for (const r of rule.on ? (due as any[]) : []) {
+  // an agency's agent hears it in his agency (its own rule): written here once (his line is not in this shop's bell)
+  const rings = await getSetting(ctx.db, 'dueRings');
+  const told: Record<string, number> = Object.fromEntries(Object.entries(rings.calls ?? {}).filter(([, at]) => at > now - 6 * 3_600_000));
+  let toldChanged = Object.keys(told).length !== Object.keys(rings.calls ?? {}).length;
+  for (const r of due as any[]) {
     const at = new Date(r.next_call_at).getTime();
     const agent = num(r.agent_id);
     const name = String(r.customer_name ?? '').trim() || String(r.ref);
     // each callback its own tag, the agent's line and the others': told once (the query above skips a tag already there)
     const base = { kind: 'callback' as const, tag: `call-${num(r.id)}-${Math.floor(at / 1000)}`, orderId: num(r.id), url: '#/confirmation/attente', phone: rule.phone };
+    if (r.agency_id) {
+      if (told[base.tag]) continue;
+      told[base.tag] = now;
+      toldChanged = true;
+      await tellAgencyDue(ctx, agent, [{ id: num(r.id), ref: String(r.ref) }], base.tag, `${r.ref} · ${name} · ${clock(at)}`).catch(() => {});
+      continue;
+    }
+    if (!rule.on) continue;
     if (selfOn(rule, 'agent'))
       calls += (await tell(ctx, [agent], { ...base, text: (lang) => ({ title: say('callback', lang, { name }), body: say('callbackAt', lang, { ref: String(r.ref), time: clock(at) }) }) })).length;
     const others = await othersOf(a, rule, { self: [agent], selfRole: 'agent' });
@@ -490,8 +510,84 @@ export async function inboxRun(ctx: Ctx) {
       await tell(ctx, others, { ...base, important: false, text: (lang) => ({ title: say('teamCallback', lang, { who: agents.get(agent) ?? '', name }), body: say('callbackAt', lang, { ref: String(r.ref), time: clock(at) }) }) })
     ).length;
   }
+  if (toldChanged) await setSetting(ctx.db, 'dueRings', { ...(await getSetting(ctx.db, 'dueRings')), calls: told });
+  const dueTold = await dueRun(ctx, now, rule);
   const depot = await depotRun(ctx, now);
-  return { calls, depot, gone: await pruneInbox(ctx, now) };
+  return { calls, due: dueTold, depot, gone: await pruneInbox(ctx, now) };
+}
+
+/**
+ * « C'est l'heure d'appeler » (owner's rule, 25 Nov 2026: « follow the chrono: when it's green it's time to call »): an
+ * order of « En cours » nobody answered (Occupé, Pas de réponse) gets one try per call slot of the seller's calling hours
+ * (Confirmation › Réglages › Appels: the seller's, never an agency's), and its chrono turns green when that slot starts
+ * (shared timers.ts › nextDue, as the chrono itself). Then its agent is told once: one line with all his orders whose try
+ * came, at the start of the slot — in its first 30 minutes only, so a server back later in the slot stays quiet; never
+ * at midnight (a slot from 00:00 is the whole day or the night: no team to wake). An agency's agent is told in his
+ * agency, by the agency's rule (agencybell.ts › tellAgencyDue).
+ */
+async function dueRun(ctx: Ctx, now: number, rule: NotifyRule): Promise<number> {
+  const calls = await getSetting(ctx.db, 'calls');
+  const sl = slotAt(now, calls);
+  if (!sl.open || now - sl.from > 30 * 60_000) return 0;
+  if ((calls.slots.find((x) => x.key === sl.key)?.from ?? 0) <= 0) return 0;
+  const rings = await getSetting(ctx.db, 'dueRings');
+  if ((rings.slot ?? 0) >= sl.from) return 0;
+  // written first: this slot is told once, even when a line below fails
+  await setSetting(ctx.db, 'dueRings', { ...rings, slot: sl.from });
+  const rows = await ctx.db.query(
+    `SELECT o.id, o.ref, o.customer_name, o.agent_id, o.attempts, o.last_call_at, o.created_at, p.agency_id
+       FROM orders o JOIN profiles p ON p.id = o.agent_id AND p.active
+      WHERE o.conf_status IN ('no_answer', 'busy') AND o.next_call_at IS NULL AND o.attempts > 0 AND o.attempts < $1
+      ORDER BY o.id LIMIT 5000`,
+    [calls.tries],
+  );
+  type Due = { id: number; ref: string; name: string; tries: number };
+  const mine = new Map<number, Due[]>();
+  const theirs = new Map<number, Due[]>();
+  for (const r of rows as any[]) {
+    const d = nextDue({ createdAt: iso(r.created_at), attempts: num(r.attempts), nextCallAt: null, lastCallAt: r.last_call_at ? iso(r.last_call_at) : null, done: false }, calls, now);
+    if (d.kind !== 'now') continue;
+    const to = r.agency_id ? theirs : mine;
+    const agent = num(r.agent_id);
+    to.set(agent, [...(to.get(agent) ?? []), { id: num(r.id), ref: String(r.ref), name: String(r.customer_name ?? '').trim(), tries: num(r.attempts) }]);
+  }
+  let n = 0;
+  const tag = `due-${sl.from}`;
+  for (const [agent, list] of theirs) {
+    const one = list.length === 1 ? list[0] : null;
+    await tellAgencyDue(ctx, agent, list, tag, one ? [one.ref, one.name].filter(Boolean).join(' · ') : refList(list)).catch(() => {});
+  }
+  if (!rule.on || !mine.size) return n;
+  const base = { kind: 'callback' as const, url: '#/confirmation/attente', phone: rule.phone, listWhenMany: true };
+  const a = around(ctx);
+  const names = await namesOf(ctx.db, [...mine.keys()]);
+  // the others (a manager, the owners, chosen people): one line each for all the agents they follow
+  const team = new Map<number, { n: number; who: string[] }>();
+  for (const [agent, list] of mine) {
+    const one = list.length === 1 ? list[0] : null;
+    if (selfOn(rule, 'agent'))
+      n += (
+        await tell(ctx, [agent], {
+          ...base,
+          tag,
+          count: list.length,
+          orderId: list[0].id,
+          text: (lang, k) =>
+            one && k === 1
+              ? { title: say('callback', lang, { name: one.name || one.ref }), body: say('dueTry', lang, { ref: one.ref, n: one.tries + 1 }) }
+              : { title: say('dueN', lang, { n: k }), body: refList(list) },
+        })
+      ).length;
+    for (const other of await othersOf(a, rule, { self: [agent], selfRole: 'agent' })) {
+      const t = team.get(other) ?? { n: 0, who: [] };
+      t.n += list.length;
+      t.who.push(`${names.get(agent) ?? ''} ${list.length}`.trim());
+      team.set(other, t);
+    }
+  }
+  for (const [other, t] of team)
+    n += (await tell(ctx, [other], { ...base, tag: `${tag}-team`, important: false, text: (lang) => ({ title: say('teamDueN', lang, { n: t.n }), body: t.who.join(' · ') }) })).length;
+  return n;
 }
 
 /** Expire old lines once an hour. */

@@ -1,0 +1,240 @@
+{
+  "help": "Qui reçoit chaque notification de l’agence, et quand le téléphone sonne. Une notification sur une commande va toute seule à l’agent qui a cette commande.",
+  "hoursText": "Celles du vendeur de chaque commande : son chrono décide",
+  "groupOrders": "Les commandes",
+  "groupAgency": "L’agence",
+  "groupKpi": "Alertes sur les chiffres",
+  "kind": {
+    "delegatedConfirmation": "Nouvelle commande pour l’agence",
+    "order": "Commande donnée à un agent",
+    "due": "C’est l’heure d’appeler",
+    "delivered": "Livrée",
+    "returned": "En retour",
+    "cancelled": "Annulée",
+    "alert": "Alerte colis",
+    "delegatedFollow": "Nouveau colis à suivre",
+    "follow": "Colis donné à un agent Suivi",
+    "delegatedSav": "Nouveau ticket SAV",
+    "sav": "Ticket SAV donné à un agent",
+    "seller": "Vendeurs",
+    "payment": "Paiements",
+    "team": "Équipe",
+    "access": "Accès aux vendeurs"
+  },
+  "desc": {
+    "delegatedConfirmation": "Un vendeur confie une commande à l’agence, avant qu’elle soit donnée à un agent.",
+    "order": "Une commande est donnée à un agent : il doit l’appeler.",
+    "due": "Le chrono d’une commande devient vert : c’est l’heure de la tentative suivante (Occupé, Pas de réponse) ou du rappel prévu (À rappeler, Reportée).",
+    "delivered": "Une commande que l’agent a confirmée est livrée.",
+    "returned": "Le client a refusé : le colis revient.",
+    "cancelled": "Une commande confirmée est annulée.",
+    "alert": "Un colis est en alerte ou en échec de livraison.",
+    "delegatedFollow": "Un vendeur confie le suivi d’une commande à l’agence.",
+    "follow": "Un colis en alerte est donné à un agent Suivi.",
+    "delegatedSav": "Un vendeur confie un ticket SAV à l’agence.",
+    "sav": "Un ticket SAV est donné à un agent.",
+    "seller": "Un vendeur invite l’agence, ou accepte ou refuse sa demande.",
+    "payment": "Un vendeur marque une facture payée, ou un paiement est confirmé.",
+    "team": "Quelqu’un arrive, part ou change de rôle dans l’agence.",
+    "access": "Les vendeurs ou les produits d’une personne changent."
+  },
+  "short": {
+    "_": {
+      "admin": "Admins",
+      "agent_manager": "Chefs d’équipe",
+      "confirmation": "Agent",
+      "suivi": "Suivi",
+      "sav": "Agent SAV"
+    },
+    "delegatedConfirmation": {
+      "confirmation": "Agents de confirmation"
+    },
+    "delegatedFollow": {
+      "suivi": "Agents du suivi"
+    },
+    "delegatedSav": {
+      "sav": "Agents SAV"
+    },
+    "access": {
+      "confirmation": "Confirmation",
+      "suivi": "Suivi",
+      "sav": "SAV"
+    }
+  },
+  "role": {
+    "_": {
+      "admin": "Les admins de l’agence",
+      "agent_manager": "Les chefs d’équipe",
+      "confirmation": "L’agent de la commande",
+      "suivi": "L’agent du suivi",
+      "sav": "L’agent SAV"
+    },
+    "delegatedConfirmation": {
+      "confirmation": "Les agents de confirmation"
+    },
+    "delegatedFollow": {
+      "suivi": "Les agents du suivi"
+    },
+    "delegatedSav": {
+      "sav": "Les agents SAV"
+    },
+    "access": {
+      "confirmation": "Un agent de confirmation",
+      "suivi": "Un agent du suivi",
+      "sav": "Un agent SAV"
+    }
+  },
+  "roleDesc": {
+    "_": {
+      "admin": "Les administrateurs de l’agence",
+      "agent_manager": "Ceux qui dirigent une équipe",
+      "confirmation": "Celui qui a la commande",
+      "suivi": "Celui qui suit le colis",
+      "sav": "Celui qui a le ticket"
+    },
+    "order": {
+      "confirmation": "Celui à qui on la donne : il l’appelle",
+      "agent_manager": "Une ligne quand on donne des commandes à leur équipe",
+      "admin": "Une ligne quand on donne des commandes à l’équipe"
+    },
+    "due": {
+      "confirmation": "Celui qui doit appeler : seulement ses commandes",
+      "agent_manager": "Une ligne quand un agent de leur équipe doit appeler",
+      "admin": "Une ligne quand un agent doit appeler"
+    },
+    "delivered": {
+      "confirmation": "Celui qui l’a confirmée"
+    },
+    "returned": {
+      "confirmation": "Celui qui l’a confirmée"
+    },
+    "cancelled": {
+      "confirmation": "Celui qui l’a confirmée"
+    },
+    "follow": {
+      "suivi": "Celui à qui on donne le colis",
+      "agent_manager": "Une ligne quand on donne des colis à leur équipe",
+      "admin": "Une ligne quand on donne des colis à l’équipe"
+    },
+    "delegatedConfirmation": {
+      "confirmation": "Tous ceux qui travaillent pour ce vendeur"
+    },
+    "delegatedFollow": {
+      "suivi": "Tous ceux qui suivent les colis de ce vendeur"
+    },
+    "delegatedSav": {
+      "sav": "Tous ceux du SAV de ce vendeur"
+    },
+    "sav": {
+      "sav": "Celui à qui on donne le ticket"
+    },
+    "access": {
+      "confirmation": "Quand ses vendeurs ou ses produits changent",
+      "suivi": "Quand ses vendeurs ou ses produits changent",
+      "sav": "Quand ses vendeurs ou ses produits changent"
+    }
+  },
+  "howOwn": "Seulement les siennes",
+  "peopleNote": "Une personne choisie par son nom ne reçoit que ce qui la concerne : ses commandes, son équipe.",
+  "dueNote": "L’heure vient du vendeur : son chrono suit ses heures d’appel (Confirmation › Réglages › Appels). L’agence choisit seulement qui l’entend.",
+  "phoneWork": "Le téléphone sonne pendant les heures d’appel du vendeur de la commande. Après, la notification attend dans la cloche.",
+  "pvOwn": "L’agent de la commande",
+  "pvTeam": "Les chefs d’équipe et les admins",
+  "pvAll": "Ce qu’ils voient",
+  "sample": {
+    "delegatedConfirmation": {
+      "t": "Nouvelle commande confiée à votre agence pour confirmation",
+      "b": "À donner à un agent"
+    },
+    "order": {
+      "t": "Commandes qui vous sont affectées",
+      "b": "3 nouvelles commandes à appeler"
+    },
+    "due": {
+      "t": "C’est l’heure d’appeler",
+      "b": "PX1370 · Amina B."
+    },
+    "delivered": {
+      "t": "Commande livrée",
+      "b": "PX1370"
+    },
+    "returned": {
+      "t": "Commande en retour",
+      "b": "PX1370"
+    },
+    "cancelled": {
+      "t": "Commande annulée",
+      "b": "PX1370"
+    },
+    "alert": {
+      "t": "Alerte de livraison",
+      "b": "PX1370"
+    },
+    "delegatedFollow": {
+      "t": "Nouvelle commande confiée à votre agence pour le suivi",
+      "b": "À donner à un agent Suivi"
+    },
+    "follow": {
+      "t": "Colis qui vous sont affectés",
+      "b": "2 colis à traiter"
+    },
+    "delegatedSav": {
+      "t": "Nouveau ticket SAV confié à votre agence",
+      "b": "À donner à un agent SAV"
+    },
+    "sav": {
+      "t": "Ticket SAV qui vous est affecté",
+      "b": "SAV-0003"
+    },
+    "seller": {
+      "t": "Nouvelle invitation vendeur",
+      "b": "Baby joy DZ"
+    },
+    "payment": {
+      "t": "Facture marquée payée par le vendeur",
+      "b": "Baby joy DZ"
+    },
+    "team": {
+      "t": "Équipe de l’agence mise à jour",
+      "b": ""
+    },
+    "access": {
+      "t": "Votre accès aux vendeurs a changé",
+      "b": ""
+    }
+  },
+  "team": {
+    "order": {
+      "t": "Commandes affectées à votre équipe de confirmation",
+      "b": "3 commandes pour Samira"
+    },
+    "due": {
+      "t": "Commandes à appeler maintenant dans votre équipe",
+      "b": "Samira · 5 : PX1370, PX1371, PX1372, PX1373 +1"
+    },
+    "follow": {
+      "t": "Colis affectés à votre équipe de suivi",
+      "b": "2 colis pour Nadia"
+    }
+  },
+  "kpiShort": "Alerte à partir de {{n}}",
+  "kpiDesc": {
+    "order": "Le nombre de commandes qui attendent un appel. Une alerte quand il atteint le seuil.",
+    "follow": "Le nombre de colis en alerte pas encore traités. Une alerte quand il atteint le seuil.",
+    "sav": "Le nombre de tickets SAV encore ouverts. Une alerte quand il atteint le seuil."
+  },
+  "threshold": "Seuil",
+  "thresholdText": "Une alerte quand le nombre atteint ce chiffre : une fois, puis encore s’il redescend et remonte.",
+  "kpiRole": {
+    "admin": "Les admins de l’agence",
+    "agent_manager": "Les chefs d’équipe",
+    "confirmation": "Chaque agent de confirmation",
+    "suivi": "Chaque agent du suivi",
+    "sav": "Chaque agent SAV"
+  },
+  "kpiRoleDesc": {
+    "lead": "Le nombre de toute l’agence",
+    "agent": "Seulement son nombre à lui"
+  },
+  "kpiWrong": "Mettez un seuil de 1 à 100 000 et cochez au moins une personne."
+}
