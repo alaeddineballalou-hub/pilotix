@@ -18,6 +18,7 @@ export * from './mp4';
 export * from './social';
 export * from './customerMessages';
 export * from './swap';
+export * from './lookup';
 import type { ShopInfo } from './features';
 import type { OrigLine } from './upsell';
 import type { AgencySellerWork } from './agency';

@@ -38,6 +38,13 @@ const variantsLine = (o: Order) =>
 function CallButton({ o, big }: { o: Order; big?: boolean }) {
   const { t } = useTranslation();
   const seller = useScope();
+  // 3 days after the order is over its number is hidden (oldphones.ts): a grey lock in the button's place, nothing to call
+  if (o.phoneHidden)
+    return (
+      <span className={`pxp-call pxp-locked${big ? ' big' : ''}`} role="img" aria-label={t('orders.phoneHidden')} title={t('orders.phoneHiddenS')}>
+        <Icon name="lock" />
+      </span>
+    );
   return (
     <AskCall phone={o.phone} className={`pxp-call${big ? ' big' : ''}`} label={`${t('confirmation.call')} ${o.customerName} ${o.phone}`} onCall={() => rpc('orders.logCall', { id: o.id }, seller).catch(() => {})}>
       <Icon name="phone" />

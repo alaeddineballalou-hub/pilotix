@@ -20,6 +20,9 @@
 .pxp-call { flex: none; width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--c-ok-fill); color: #fff !important; text-decoration: none; border: 0; padding: 0; cursor: pointer; font: inherit; }
 .pxp-call .bji, .pxp-call svg { width: 20px; height: 20px; }
 .pxp-call:active { filter: brightness(.92); }
+/* the number is hidden (3 days after the order is over): a grey lock, nothing to tap */
+.pxp-call.pxp-locked { background: var(--line); color: var(--muted) !important; cursor: default; }
+.pxp-call.pxp-locked:active { filter: none; }
 /* Confirmées: ✏️ « Modifier » and ✕ « Annuler » in place of the call button (the call is done), one above the other:
    the card keeps the width it had with the call button */
 .pxp-acts { flex: none; display: flex; flex-direction: column; gap: 8px; }

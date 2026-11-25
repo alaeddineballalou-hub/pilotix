@@ -6,6 +6,7 @@ import { da, wilaya, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { BulkBar, Card, ErrorBox, Icon, Loading, RemovableChip, StatusBadge, TicketTag } from '../../ui/kit';
+import { PhoneOf } from '../../ui/PhoneOf';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import { CopyCode } from '../../ui/CopyCode';
 import { Modal } from '../../ui/modal';
@@ -204,7 +205,7 @@ export function DepotOrderList({
         return (
           <td key={k} data-l={label[k]}>
             {o.customerName}
-            <small className="ltr">{o.phone}</small>
+            <PhoneOf o={o} small />
             {/* the address under the customer: on a narrow screen (compact lists), or when its column is not shown */}
             {(compact || !shown.includes('wilaya')) && (
               <small className={shown.includes('wilaya') ? 'px-dl-where' : undefined}>

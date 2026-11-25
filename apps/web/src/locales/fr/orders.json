@@ -36,14 +36,15 @@
   "lookup": {
     "placeholder": "Téléphone, PX…, suivi",
     "label": "Chercher une commande",
-    "info": "Tapez au moins 5 chiffres : un téléphone, une référence PX… ou un numéro de suivi. Le nom ne suffit pas.",
+    "info": "Tapez au moins 5 chiffres du téléphone, ou la référence entière (PX1374), ou le code de suivi entier. Le nom ne suffit pas.",
     "mine": "Vous trouvez seulement vos propres commandes.",
     "team": "Vous trouvez seulement les commandes de votre équipe.",
     "more_one": "Encore 1 chiffre",
     "more_other": "Encore {{count}} chiffres",
     "ok": "5 chiffres : c’est parti",
+    "okCode": "Référence ou code entier : c’est parti",
     "hidden": "La liste est cachée",
-    "hiddenS": "Cherchez une commande avec au moins 5 chiffres pour la voir ici.",
+    "hiddenS": "Cherchez une commande avec 5 chiffres du téléphone, sa référence ou son code de suivi pour la voir ici.",
     "results": "Résultats",
     "wide": "Vous trouvez toutes les commandes de la boutique."
   },

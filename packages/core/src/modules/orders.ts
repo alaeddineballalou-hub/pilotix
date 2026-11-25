@@ -12,6 +12,7 @@ import {
   CONF_TODO,
   ConfStatus,
   isAbandonedCheckout,
+  isLookupCode,
   cameOf,
   FOLLOW_FINAL,
   FOLLOW_LOCKED,
@@ -444,6 +445,9 @@ export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' 
     // a Meta id (ad, ad set, campaign: 12+ digits): the orders that came from it
     else if (/^\d{12,25}$/.test(q)) w.add("(o.utm->>'ad_id' = ? OR o.utm->>'adset_id' = ? OR o.utm->>'campaign_id' = ? OR o.adset_id = ?)", q, q, q, q);
     else if (digits.length >= 4 && digits.length === q.replace(/[\s+.-]/g, '').length) w.add("o.phone LIKE '%' || ? || '%'", digits.slice(-9));
+    // everyone but the seller and the admins: a whole reference or tracking code reaches an order of any age (oldphones.ts
+    // isLookup), so it is that code exactly, whatever its capitals, never a name (owner's choice « A », 25 Nov 2026)
+    else if (!seesEverything(ctx) && isLookupCode(q)) w.add('(upper(o.ref) = upper(?) OR upper(o.tracking) = upper(?) OR upper(o.own_tracking) = upper(?))', q, q, q);
     else w.add("(upper(o.ref) = upper(?) OR o.tracking = ? OR upper(o.own_tracking) = upper(?) OR o.customer_name ILIKE '%' || ? || '%')", q, q, q, q);
   }
   const nulls = f.sort === 'next_call_at' ? (f.dir === 'asc' ? 'NULLS FIRST' : 'NULLS LAST') : f.dir === 'desc' ? 'NULLS LAST' : 'NULLS FIRST';

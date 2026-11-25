@@ -1,5 +1,5 @@
 // Commandes (all orders, Livré, Annulé) and the hidden Livrées / Retournées pages — as in the original app.
-import { canSetFollow, cmOnly, CONF_DONE_BAD, CONF_STATUSES, CONF_TODO, FOLLOW_ON_ROAD, FOLLOW_STATUSES, FollowStatus, Order, SALES_CHANNELS, WILAYAS } from '@pilotix/shared';
+import { canSetFollow, cmOnly, CONF_DONE_BAD, CONF_STATUSES, CONF_TODO, FOLLOW_ON_ROAD, FOLLOW_STATUSES, FollowStatus, isLookupCode, LOOKUP_DIGITS, lookupDigits, Order, SALES_CHANNELS, WILAYAS } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { lazy, ReactNode, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +9,6 @@ import { openOrder, openOrderForm } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
 import { useScope } from '../../lib/seller';
 import { seesAll, useInAgency, useSession } from '../../lib/session';
-import { LOOKUP_DIGITS, lookupDigits } from '../../lib/lookup';
 import { store } from '../../lib/store';
 import { Card, ErrorBox, Icon, Kpi, Kpis, Loading, Tabs } from '../../ui/kit';
 import { toast } from '../../ui/toast';
@@ -79,17 +78,21 @@ function BigSearch({ value, onChange }: { value: string; onChange: (v: string) =
 
 
 /**
- * « Tous » for everyone but the seller and the admins (the owner's rule, 25 Nov 2026): no list and no numbers; typing at
- * least 5 digits (a phone, a PX reference, a tracking number — letters do not count) searches: an agent his own orders, a
- * manager his team's, the dépôt every order, whatever their status or date. The same in Suivi › Réclamation › Recherche
- * and « Toutes les boutiques » (`results`: the list of the found orders there).
+ * « Tous » for everyone but the seller and the admins (the owner's rule, 25 Nov 2026): no list and no numbers; at least
+ * 5 digits of a phone, or a whole reference or tracking code typed exactly (PX1374, 43-PCLONZDMHK-ZR), searches — a name
+ * never does (shared lookup.ts): an agent his own orders, a manager his team's, the dépôt every order, whatever their
+ * status or date. The same in Suivi › Réclamation › Recherche and « Toutes les boutiques » (`results`: the list of the
+ * found orders there).
  */
 export function LookupOnly({ actions, title, results, initial }: { actions?: ReactNode; title?: ReactNode; results?: (q: string) => ReactNode; initial?: string }) {
   const { t } = useTranslation();
   const { session } = useSession();
   const [q, setQ] = useState(initial ?? '');
   const digits = lookupDigits(q);
-  const ready = digits >= LOOKUP_DIGITS;
+  // a whole reference or tracking code opens it too: the shop's references have 4 digits, ZR's codes 2 (owner's choice
+  // « A », 25 Nov 2026; the server finds it only typed exactly)
+  const code = digits < LOOKUP_DIGITS && isLookupCode(q);
+  const ready = digits >= LOOKUP_DIGITS || code;
   const roles = session?.roles ?? [];
   // what the search reaches (the server's listScopeSql): the dépôt every order, a manager his team's, the others their own
   const reach = roles.includes('depot') ? 'wide' : roles.includes('agent_manager') || session?.profile.agencyLead ? 'team' : 'mine';
@@ -105,10 +108,10 @@ export function LookupOnly({ actions, title, results, initial }: { actions?: Rea
         <div className={`px-lk-meter${ready ? ' ok' : ''}`} aria-live="polite">
           <span className="px-lk-dots" aria-hidden="true">
             {Array.from({ length: LOOKUP_DIGITS }, (_, i) => (
-              <i key={i} className={i < digits ? 'on' : undefined} />
+              <i key={i} className={i < digits || code ? 'on' : undefined} />
             ))}
           </span>
-          <b>{ready ? t('orders.lookup.ok') : t('orders.lookup.more', { count: LOOKUP_DIGITS - digits })}</b>
+          <b>{code ? t('orders.lookup.okCode') : ready ? t('orders.lookup.ok') : t('orders.lookup.more', { count: LOOKUP_DIGITS - digits })}</b>
         </div>
         <p className="muted small bjf-info">
           {t('orders.lookup.info')} {t(`orders.lookup.${reach}`)}

@@ -20,6 +20,7 @@ import { useSession } from '../../lib/session';
 import { CopyCode } from '../../ui/CopyCode';
 import { Card, ErrorBox, Field, Icon, Kpi, Kpis, Loading } from '../../ui/kit';
 import { BrandLogo } from '../../ui/BrandLogo';
+import { PhoneOf } from '../../ui/PhoneOf';
 import { toast } from '../../ui/toast';
 import { AgentHeader, Filters, PeriodSwitch, SaveBar, SearchBox } from '../ai/agent';
 import { Pilot } from '../livraison/Pilot';
@@ -252,7 +253,7 @@ function MsgCard({ m }: { m: Row }) {
             <button type="button" className="linkbtn nt-ref" onClick={() => openOrder(m.orderId)}>
               {m.ref}
             </button>
-            <span className="ltr">{m.phone}</span>
+            <PhoneOf o={m} />
             <time dateTime={m.sentAt ?? m.at}>{when(m.sentAt ?? m.at)}</time>
           </small>
         </span>
@@ -302,12 +303,19 @@ function MsgCard({ m }: { m: Row }) {
         <footer className="cm-foot">
           {byHand && (
             <>
-              <a className="btn small nt-wa-btn" href={`https://wa.me/${intl(m.phone)}?text=${text}`} target="_blank" rel="noreferrer" onClick={() => setOpened('whatsapp')}>
-                <Icon name="whatsapp" /> {t('notify.msg.openWa')}
-              </a>
-              <a className="btn small" href={`sms:+${intl(m.phone)}?body=${text}`} onClick={() => setOpened('sms')}>
-                <Icon name="message" /> {t('notify.msg.openSms')}
-              </a>
+              {m.phone ? (
+                <>
+                  <a className="btn small nt-wa-btn" href={`https://wa.me/${intl(m.phone)}?text=${text}`} target="_blank" rel="noreferrer" onClick={() => setOpened('whatsapp')}>
+                    <Icon name="whatsapp" /> {t('notify.msg.openWa')}
+                  </a>
+                  <a className="btn small" href={`sms:+${intl(m.phone)}?body=${text}`} onClick={() => setOpened('sms')}>
+                    <Icon name="message" /> {t('notify.msg.openSms')}
+                  </a>
+                </>
+              ) : (
+                // 3 days after the order is over its number is hidden (oldphones.ts): nothing to open
+                <PhoneOf o={{ phone: m.phone, phoneHidden: true }} />
+              )}
               <button type="button" className={`btn small ${opened ? 'primary' : 'ok'}`} disabled={busy} onClick={() => mark.mutate({ id: m.id, via: opened ?? 'sms' })}>
                 <Icon name="check" /> {t('notify.msg.markSent')}
               </button>

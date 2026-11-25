@@ -7,6 +7,7 @@ import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { useIsPhone } from '../../lib/useMedia';
 import { Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
+import { PhoneOf } from '../../ui/PhoneOf';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { useSession } from '../../lib/session';
@@ -79,7 +80,7 @@ function NewClaimDesk(p: ClaimFormProps) {
             <span>{t('suivi.rec.tracking', { v: trackOf(o) || '—' })}</span>
             <span>{f.own ? o.livreurName : o.companyName || t('suivi.rec.noCompany')}</span>
             <span>{o.customerName}</span>
-            <span className="ltr">{o.phone}</span>
+            <PhoneOf o={o} />
             {o.followStatus && <span className="badge t-info">{t(`status.follow.${o.followStatus}`)}</span>}
           </div>
         )}

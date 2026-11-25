@@ -7,16 +7,15 @@
 //
 // It is the last boundary of every action's answer (index.ts run, like withoutPurchaseCosts): the lists, the order's
 // page, the searches, a customer's history, a number typed in a note, the assistants connected to Pilotix. The same people
-// see the finished orders of the last 30 days only in their lists (LIST_DAYS); older ones only by a search of 5 digits.
-import { CONF_DONE_BAD, normalizePhone } from '@pilotix/shared';
+// see the finished orders of the last 30 days only in their lists (LIST_DAYS); older ones only by a search of 5 digits
+// or a whole reference or tracking code (shared lookup.ts).
+import { CONF_DONE_BAD, lookupReady, normalizePhone } from '@pilotix/shared';
 import type { Ctx } from '../rpc';
 
 /** Days after an order is over before its customer's number is hidden. */
 export const PHONE_DAYS = 3;
 /** Days a finished order stays in the lists (Livré, Annulé, « Tous ») of everyone but the seller and the admins. */
 export const LIST_DAYS = 30;
-/** How many digits a search needs to reach the older orders (« Tous », the top search bar, Réclamation). */
-export const LOOKUP_DIGITS = 5;
 /** The tries of the satisfaction call of a SAV ticket (sav.ts SAT_MAX_TRIES: not imported, sav.ts reads orders.ts). */
 const SAT_TRIES = 3;
 
@@ -26,8 +25,9 @@ export const OVER_FOLLOW = ['delivered', 'exchanged', 'returning', 'returned', '
 /** The seller and the administrators see every number and every list, and export (the owner's rule, 25 Nov 2026). */
 export const seesEverything = (ctx: Ctx) => !ctx.session?.profile || ctx.session.isAdmin || ctx.session.roles.includes('vendeur');
 
-/** A search the 30 days do not limit: at least 5 digits (a phone, a PX reference, a tracking number). */
-export const isLookup = (q: string | null | undefined) => (q ?? '').replace(/\D/g, '').length >= LOOKUP_DIGITS;
+/** A search the 30 days do not limit: 5 digits of a phone, or a whole reference or tracking code (PX1374,
+ *  43-PCLONZDMHK-ZR) — orders.ts finds a code only typed exactly, never a name. */
+export const isLookup = (q: string | null | undefined) => lookupReady(q);
 
 const list = (xs: readonly string[]) => `'{${xs.join(',')}}'::text[]`;
 

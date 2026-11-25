@@ -7,6 +7,7 @@ import { da, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { ErrorBox, Loading, StatusBadge } from '../../ui/kit';
+import { PhoneOf } from '../../ui/PhoneOf';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { Faces, SatBadge } from './PhoneSav';
@@ -132,7 +133,7 @@ export function TicketModal({ id, onClose }: { id: number; onClose: () => void }
           </dd>
           <dt>{t('sav.t.client')}</dt>
           <dd>
-            {x.customerName ?? '—'} · <span className="ltr">{x.phone ?? ''}</span>
+            {x.customerName ?? '—'} · <PhoneOf o={x} />
           </dd>
           <dt>{t('sav.t.details')}</dt>
           <dd>{x.details || '—'}</dd>

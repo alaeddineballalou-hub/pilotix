@@ -10,6 +10,7 @@ import { useRpc } from '../../lib/query';
 import { useScope } from '../../lib/seller';
 import { telHref, waHref } from './shared';
 import { copyText, Icon } from '../../ui/kit';
+import { PhoneOf } from '../../ui/PhoneOf';
 import { toast } from '../../ui/toast';
 import { eventText } from '../orders/OrderCard';
 
@@ -99,11 +100,13 @@ export function HistoryButton({ orderId, refLabel, className, children, title }:
 }
 
 /** The phone number with two small icons beside it: call (logged on the order) and message (asks SMS or WhatsApp). */
-export function PhoneCell({ order }: { order: { id: number; ref: string; phone: string; customerName: string } }) {
+export function PhoneCell({ order }: { order: { id: number; ref: string; phone: string; customerName: string; phoneHidden?: boolean } }) {
   const { t } = useTranslation();
   const seller = useScope();
   const [btn, setBtn] = useState<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
+  // 3 days after the order is over the server sends no number (oldphones.ts): « Numéro caché », nothing to call
+  if (order.phoneHidden) return <PhoneOf o={order} />;
   return (
     <span className="px-ph" onClick={(e) => e.stopPropagation()}>
       <span className="qph ltr">{order.phone}</span>
@@ -250,6 +253,8 @@ export function CallMenu({ phone, anchor, onClose, onCall }: { phone: string; an
 export function AskCall({ phone, className, label, onCall, children }: { phone: string; className: string; label: string; onCall?: () => void; children: ReactNode }) {
   const [btn, setBtn] = useState<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
+  // no number (hidden 3 days after the order is over: oldphones.ts): no button that would call nobody
+  if (!phone?.trim()) return null;
   return (
     <>
       <button
@@ -275,6 +280,7 @@ export function AskCall({ phone, className, label, onCall, children }: { phone: 
 export function AskMsg({ order, ready, className, label, children }: { order: { ref: string; phone: string; customerName: string }; ready?: string; className: string; label: string; children: ReactNode }) {
   const [btn, setBtn] = useState<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
+  if (!order.phone?.trim()) return null;
   return (
     <>
       <button

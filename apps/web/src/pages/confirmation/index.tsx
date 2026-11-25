@@ -1080,7 +1080,8 @@ function Toolbar(p: {
           </span>
           <span className="qa-tx">{t('confirmation.tb.duplicate')}</span>
         </button>}
-        {one ? (
+        {/* a hidden number (3 days after the order is over: oldphones.ts) has nobody to write to */}
+        {one && one.phone ? (
           <a className="btn small qa-btn" aria-label={t('confirmation.tb.send')} title={t('confirmation.tb.send')} href={p.waHref(one)} target="_blank" rel="noopener">
             <span className="qa-ic">
               <Icon name="message" />
@@ -1088,7 +1089,7 @@ function Toolbar(p: {
             <span className="qa-tx">{t('confirmation.tb.send')}</span>
           </a>
         ) : (
-          <button type="button" className="btn small qa-btn" aria-label={t('confirmation.tb.send')} disabled title={tipOne}>
+          <button type="button" className="btn small qa-btn" aria-label={t('confirmation.tb.send')} disabled title={one ? t('orders.phoneHiddenS') : tipOne}>
             <span className="qa-ic">
               <Icon name="message" />
             </span>

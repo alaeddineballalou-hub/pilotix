@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { call, Ctx, login, migrate, migrateAll, pgliteTenancy, seedBase, shopCtx, shopStatus } from '../index';
 import { confirmSignup, loadShop, startSignup } from '../platform';
+import { isLookupCode, lookupReady } from '@pilotix/shared';
 import { HIDDEN_IN_TEXT } from '../modules/oldphones';
 
 const PW = 'Agent-Password-1';
@@ -139,4 +140,25 @@ test('finished orders: 30 days in the lists, older ones only by a search of 5 di
   // the seller sees all of them
   const all = (await listIds(boss, { follow: ['delivered'] })).map((r) => r.id);
   assert.ok(all.includes(older.id) && all.includes(recent.id));
+});
+
+test('a whole reference or tracking code finds an older order too, typed exactly; a name never does', async () => {
+  const { A, D, order } = await store();
+  const older = await order('delivered', 40);
+  // the real shop's references have 4 digits and ZR's codes 2 (owner's choice « A », 25 Nov 2026)
+  await A.ctx.db.query(`UPDATE orders SET ref = 'PX1374', tracking = '43-PCLONZDMHK-ZR' WHERE id = $1`, [older.id]);
+  for (const ctx of [A.ctx, D.ctx]) {
+    for (const q of ['PX1374', 'px1374', '43-PCLONZDMHK-ZR', '43-pclonzdmhk-zr']) {
+      const found = await listIds(ctx, { q });
+      assert.deepEqual(found.map((r) => [r.id, r.phone]), [[older.id, '']], `found by ${q}, its number hidden`);
+    }
+    // a piece of a code is not the code, and a name opens nothing older than 30 days
+    for (const q of ['PX137', 'PCLONZDMHK', '43-PCLONZDMHK', 'Client']) assert.ok(!(await listIds(ctx, { q })).some((r) => r.id === older.id), q);
+  }
+});
+
+test('the search rule shared by the screens and the server', () => {
+  for (const q of ['05551', '0555 12 34 56', 'PX1374', 'px13', '43-PCLONZDMHK-ZR', 'PXT1266412']) assert.ok(lookupReady(q), q);
+  for (const q of ['0555', 'Fatima', 'PX1', 'yal-LBWCBA', 'Ali 1234', '']) assert.ok(!lookupReady(q), q);
+  assert.equal(isLookupCode('0555123456'), false, 'a phone is digits, not a code');
 });

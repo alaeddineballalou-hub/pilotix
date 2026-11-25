@@ -10,6 +10,7 @@ import { useSession } from '../../lib/session';
 import { useScope } from '../../lib/seller';
 import { ChooseSavSeller, TicketScope, ticketKey, type TicketRowScope } from './scope';
 import { Empty, ErrorBox, Help, Icon, KpiBody, Loading, Pager, StageBar, StatusBadge } from '../../ui/kit';
+import { PhoneOf } from '../../ui/PhoneOf';
 import type { PageProps } from '../registry';
 import { NewTicketModal } from './NewTicket';
 import { PhoneSav } from './PhoneSav';
@@ -159,7 +160,7 @@ function SavDesktop({ sub }: PageProps) {
           <td key={c} data-l={colLabel[c]}>
             <b className="ltr">{x.orderRef ?? '—'}</b>
             <small>
-              {x.customerName} · <span className="ltr">{x.phone}</span>
+              {x.customerName} · <PhoneOf o={x} />
             </small>
           </td>
         );

@@ -14,6 +14,7 @@ import { Detail } from './Detail';
 import { choiceLabel, currentLabel, StatusChoice, telHref, waHref, choiceAllowed } from './shared';
 import { useStatusChange } from './StatusDialog';
 import { TrustFlags } from '../orders/TrustFlags';
+import { PhoneOf } from '../../ui/PhoneOf';
 import { ScoreChip } from '../../ui/clientScore';
 
 const CHOICES: StatusChoice[] = ['confirmed', 'try1', 'callback', 'postponed', 'no_stock', 'cancelled', 'wrong_number', 'fake', 'duplicate'];
@@ -123,13 +124,20 @@ export function Focus({ initialId, onClose, onNext, seller, allSellers }: { init
             </span>
           </div>
           <div className="row">
-            <span className="phone-big ltr">{o.phone}</span>
-            <a className="btn primary big" href={telHref(o.phone)} onClick={() => rpc('orders.logCall', { id: o.id }).catch(() => {})}>
-              {t('confirmation.call')}
-            </a>
-            <a className="btn big" href={waText} target="_blank" rel="noopener">
-              WhatsApp
-            </a>
+            {o.phoneHidden ? (
+              // 3 days after the order is over its number is hidden (oldphones.ts): nothing to call
+              <PhoneOf o={o} className="phone-big" />
+            ) : (
+              <>
+                <span className="phone-big ltr">{o.phone}</span>
+                <a className="btn primary big" href={telHref(o.phone)} onClick={() => rpc('orders.logCall', { id: o.id }).catch(() => {})}>
+                  {t('confirmation.call')}
+                </a>
+                <a className="btn big" href={waText} target="_blank" rel="noopener">
+                  WhatsApp
+                </a>
+              </>
+            )}
             {o.phone2 && (
               <a className="btn" href={telHref(o.phone2)}>
                 {t('confirmation.call')} <span className="ltr">{o.phone2}</span>

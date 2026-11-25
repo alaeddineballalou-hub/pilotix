@@ -5,6 +5,7 @@ import { da, when, wilaya } from '../../lib/format';
 import { openOrder, openOrderForm } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
 import { Empty, ErrorBox, Icon, Loading, Pager, StatusBadge } from '../../ui/kit';
+import { PhoneOf } from '../../ui/PhoneOf';
 import { ClaimsPanel } from './Claims';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import { productsText } from './common';
@@ -264,7 +265,7 @@ function SearchOrders() {
                       </td>
                       <td data-l={t('suivi.col.client')}>
                         {o.customerName}
-                        <small className="ltr">{o.phone}</small>
+                        <PhoneOf o={o} small />
                       </td>
                       <td data-l={t('suivi.col.address')}>
                         {wilaya(o.wilayaId)}

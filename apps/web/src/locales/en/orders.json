@@ -36,14 +36,15 @@
   "lookup": {
     "placeholder": "Phone, PX…, tracking",
     "label": "Search an order",
-    "info": "Type at least 5 digits: a phone, a PX… reference or a tracking number. A name is not enough.",
+    "info": "Type at least 5 digits of the phone, or the whole reference (PX1374), or the whole tracking code. A name is not enough.",
     "mine": "You only find your own orders.",
     "team": "You only find your team’s orders.",
     "more_one": "1 more digit",
     "more_other": "{{count}} more digits",
     "ok": "5 digits: searching",
+    "okCode": "Whole reference or code: searching",
     "hidden": "The list is hidden",
-    "hiddenS": "Search an order with at least 5 digits to see it here.",
+    "hiddenS": "Search an order with 5 digits of the phone, its reference or its tracking code to see it here.",
     "results": "Results",
     "wide": "You find every order of the shop."
   },

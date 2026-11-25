@@ -8,6 +8,7 @@ import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { Card, Empty, ErrorBox, Field, Icon, Loading, Pager, StatusBadge } from '../../ui/kit';
+import { PhoneOf } from '../../ui/PhoneOf';
 import { LevelPicker, ScoreCard, ScoreChip } from '../../ui/clientScore';
 import { Modal } from '../../ui/modal';
 import type { PageProps } from '../registry';
@@ -110,7 +111,7 @@ export function Clients(_: PageProps) {
                         <ScoreChip s={c.score} showNew />
                       </td>
                       <td data-l={t('clients.col.phone')}>
-                        <span className="ltr">{c.phone}</span>
+                        <PhoneOf o={c} />
                       </td>
                       <td data-l={t('clients.col.wilaya')}>{c.wilayaId ? wilayaName(c.wilayaId) : '—'}</td>
                       <td className="num" data-l={t('clients.col.orders')}>
@@ -227,7 +228,7 @@ function History({ id, onClose }: { id: number; onClose: () => void }) {
     </>
   );
   return (
-    <Modal title={c ? `${c.name} · ${c.phone}` : t('common.loading')} onClose={onClose} wide footer={footer}>
+    <Modal title={c ? (c.phone ? `${c.name} · ${c.phone}` : c.name) : t('common.loading')} onClose={onClose} wide footer={footer}>
       {h.error ? (
         <ErrorBox error={h.error} />
       ) : !h.data ? (

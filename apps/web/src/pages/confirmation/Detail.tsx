@@ -15,6 +15,7 @@ import { useAction, useRpc } from '../../lib/query';
 import { da, fromLocalInput, wilayaName } from '../../lib/format';
 import i18n from '../../lib/i18n';
 import { Icon, Loading, StatusBadge } from '../../ui/kit';
+import { PhoneOf } from '../../ui/PhoneOf';
 import { GuideButton } from '../depot/guide';
 import { Float } from '../../ui/Float';
 import { mayChangeCompany, pilotLine } from '../../lib/pilot';
@@ -431,14 +432,24 @@ export function Detail({ order, onDone, onMessageDone, phone }: {
               <small>{t('confirmation.ph.name')}</small>
               <input value={cName} maxLength={120} disabled={!editable} onChange={(e) => setCName(e.target.value)} />
             </label>
-            <label className="qd6-fld">
-              <small>{t('confirmation.ph.phone')}</small>
-              <input className="ltr" type="tel" inputMode="tel" value={cPhone} maxLength={20} disabled={!editable} onChange={(e) => setCPhone(e.target.value)} />
-            </label>
-            <label className="qd6-fld wide">
-              <small>{t('confirmation.ph.phone2')}</small>
-              <input className="ltr" type="tel" inputMode="tel" value={cPhone2} maxLength={20} placeholder={t('confirmation.ph.addPhone')} disabled={!editable} onChange={(e) => setCPhone2(e.target.value)} />
-            </label>
+            {order.phoneHidden ? (
+              // 3 days after the order is over its number is hidden (oldphones.ts): no empty box to fill, the server keeps it
+              <div className="qd6-fld">
+                <small>{t('confirmation.ph.phone')}</small>
+                <PhoneOf o={order} />
+              </div>
+            ) : (
+              <>
+                <label className="qd6-fld">
+                  <small>{t('confirmation.ph.phone')}</small>
+                  <input className="ltr" type="tel" inputMode="tel" value={cPhone} maxLength={20} disabled={!editable} onChange={(e) => setCPhone(e.target.value)} />
+                </label>
+                <label className="qd6-fld wide">
+                  <small>{t('confirmation.ph.phone2')}</small>
+                  <input className="ltr" type="tel" inputMode="tel" value={cPhone2} maxLength={20} placeholder={t('confirmation.ph.addPhone')} disabled={!editable} onChange={(e) => setCPhone2(e.target.value)} />
+                </label>
+              </>
+            )}
           </div>
         </section>
       )}
@@ -451,7 +462,7 @@ export function Detail({ order, onDone, onMessageDone, phone }: {
             </span>
             {/* two small round buttons, never cut: the photos to send, the order's history */}
             <span className="qd6-hacts">
-              <button type="button" className="qd6-hbtn qd6-photos" onClick={() => setPhotos(true)} disabled={!cat.data} title={t('confirmation.photos.btnHint')}>
+              <button type="button" className="qd6-hbtn qd6-photos" onClick={() => setPhotos(true)} disabled={!cat.data || !!order.phoneHidden} title={order.phoneHidden ? t('orders.phoneHiddenS') : t('confirmation.photos.btnHint')}>
                 <Icon name="image" /> {phone ? t('confirmation.photos.btnShort') : t('confirmation.photos.btn')}
               </button>
               <button type="button" className="qd6-hbtn qd6-hist" onClick={() => openOrder(order.id)} title={t('confirmation.d.history')}>

@@ -21,6 +21,7 @@ import { useSeesAll, useSession } from '../../lib/session';
 import { useIsPhone } from '../../lib/useMedia';
 import { CopyCode } from '../../ui/CopyCode';
 import { Card, Empty, ErrorBox, Icon, Kpis, Loading, StatusBadge, Tabs, Trend } from '../../ui/kit';
+import { PhoneOf } from '../../ui/PhoneOf';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { allCount, AllF, AllFields, AllKey, allScope, BoutiqueChips, BoutiqueTag, setAllOn, StackLogo, useAllFilters, useAllMode, useAllOptions, useShopFilter } from '../../layout/AllBoutiques';
@@ -668,7 +669,7 @@ function AllReceive() {
                     </td>
                     <td data-l={t('depot.cols.client')}>
                       {o.customerName}
-                      <small className="ltr">{o.phone}</small>
+                      <PhoneOf o={o} small />
                     </td>
                     <td className="wide" data-l={t('depot.cols.products')}>
                       {itemsLine(o)} <span className="muted ltr">· {da(o.total)}</span>

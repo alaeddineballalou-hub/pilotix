@@ -1,4 +1,4 @@
-import { CONF_DONE_BAD, CONF_TODO, Language, LANGUAGES, normalizePhone } from '@pilotix/shared';
+import { CONF_DONE_BAD, CONF_TODO, Language, LANGUAGES, LOOKUP_DIGITS, lookupDigits, lookupReady, normalizePhone } from '@pilotix/shared';
 import { useSwipeMenu } from './swipeMenu';
 import { lazy, ReactNode, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,7 +10,6 @@ import { useAction, useRpc, useRpcFor } from '../lib/query';
 import { Seller, setSeller, useSeller } from '../lib/seller';
 import { ownerGroups, useSellers } from '../lib/sellers';
 import { useSeesAll, useSession } from '../lib/session';
-import { LOOKUP_DIGITS, lookupDigits } from '../lib/lookup';
 import { PxLogo } from './PxLogo';
 import { PxMenuFace } from './PxMenuFace';
 import { chime, unlockAudio } from '../lib/sound';
@@ -18,6 +17,7 @@ import { store } from '../lib/store';
 import { toast } from '../ui/toast';
 import { Field, Icon, StageBar, TicketTag } from '../ui/kit';
 import { Modal } from '../ui/modal';
+import { PhoneOf } from '../ui/PhoneOf';
 import { canSee, canSeeChild, isSoonItem, isSoonLine, menuView, NAV, NavChild, NavItem, SpaceId } from './nav';
 import { useCanRules } from '../lib/pilot';
 import { AccountMenu } from './AccountMenu';
@@ -559,8 +559,8 @@ function SellerSwitch() {
 /** Top bar search: BJ…/PX…, phone, name, tracking — with a keyboard list. */
 function GlobalSearch() {
   const { t } = useTranslation();
-  // everyone but the seller and the admins: 5 digits (a phone, a PX reference, a tracking number), names do not count
-  // (owner's rule, 25 Nov 2026), like « Tous »
+  // everyone but the seller and the admins: 5 digits of a phone, or a whole reference or tracking code, never a name
+  // (owner's rules, 25 Nov 2026: shared lookup.ts), like « Tous »
   const lookup = !useSeesAll();
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
@@ -571,7 +571,7 @@ function GlobalSearch() {
     const id = setTimeout(() => setDebounced(q.trim()), 250);
     return () => clearTimeout(id);
   }, [q]);
-  const ready = lookup ? lookupDigits(debounced) >= LOOKUP_DIGITS : debounced.length >= 2;
+  const ready = lookup ? lookupReady(debounced) : debounced.length >= 2;
   const res = useRpc('orders.list', { q: debounced, pageSize: 8, tickets: 'include' }, { enabled: ready });
   const rows = ready ? res.data?.rows ?? [] : [];
   useEffect(() => {
@@ -619,7 +619,7 @@ function GlobalSearch() {
           {rows.length === 0 && <div className="muted small" style={{ padding: 10 }}>{res.isFetching ? t('common.loading') : t('shell.noResult')}</div>}
           {rows.map((o, i) => (
             <button key={o.id} type="button" role="option" aria-selected={i === sel} className={`pxs-it ${i === sel ? 'on' : ''}`} onMouseDown={(e) => e.preventDefault()} onClick={() => go(o.id)}>
-              <b className="ltr">{o.ref}</b> <TicketTag savRef={o.savRef} /> {o.customerName} <span className="muted ltr">{o.phone}</span>
+              <b className="ltr">{o.ref}</b> <TicketTag savRef={o.savRef} /> {o.customerName} <PhoneOf o={o} className="muted" />
               <span className="muted small"> · {when(o.createdAt)}</span>
             </button>
           ))}
