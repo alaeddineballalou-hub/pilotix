@@ -67,7 +67,7 @@ export function ClairCounters({ tab, counts, value, onPick }: { tab: ClairTab; c
 export function zrTone(text: string | null): 'blue' | 'orange' | 'red' {
   const r = (text ?? '').toLowerCase();
   if (/report|demain|nouvelle date|programm/.test(r)) return 'orange';
-  if (/erron|faux|fausse|injoign|r[ée]pond|absent|refus|annul|ferm|[ée]teint|introuvable|desservi|probl|endommag|perdu|retour|wrong|cancel/.test(r)) return 'red';
+  if (/erron|faux|fausse|incorrect|invalide|mauvais|injoign|r[ée]pond|absent|refus|annul|ferm|[ée]teint|introuvable|desservi|probl|endommag|perdu|retour|wrong|cancel/.test(r)) return 'red';
   return 'blue';
 }
 
@@ -297,7 +297,7 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
   };
   return (
     <div className="tbl-wrap svc-wrap">
-      <table className={`tbl svc-tbl svc-${tab}`}>
+      <table className={`tbl svc-tbl svt-${tab}`}>
         <thead>
           <tr>
             {cols.map((c) => (
@@ -352,7 +352,7 @@ export function ClairCards({ tab, rows, extra, reasonOf, h }: { tab: ClairTab; r
   const { t } = useTranslation();
   if (!rows.length) return <Empty>{t(`suivi.clair.empty.${tab}`)}</Empty>;
   return (
-    <ul className={`svc-cards svc-${tab}`}>
+    <ul className={`svc-cards svt-${tab}`}>
       {rows.map((o) => {
         const x = extra[o.id];
         const reason = reasonOf(o, x);
@@ -562,7 +562,7 @@ export function AlertPanel({ o, x, reason, statusOpen, onStatus, menu, onRelivre
     <div className="svc-panel" onClick={(e) => e.stopPropagation()}>
       <section className="svc-pl">
         <span className={`svc-pzr z-${zrTone(reason)}`}>
-          <Icon name="alert" /> {t('suivi.clair.zrSays', { co: o.companyName || o.livreurName || t('suivi.zr'), v: reason || t('suivi.clair.noNews') })}
+          <Icon name="alert" /> {!reason ? t('suivi.clair.noNews') : /^[A-Za-zÀ-ÿ]{2,12}\s?:/.test(reason) ? reason : t('suivi.clair.zrSays', { co: o.companyName || o.livreurName || t('suivi.zr'), v: reason })}
         </span>
         <Journey o={o} label={reason} />
         <AlertTodo o={o} x={x} reason={reason} onClaim={onClaim} />
@@ -591,7 +591,9 @@ export function AlertPanel({ o, x, reason, statusOpen, onStatus, menu, onRelivre
           </span>
           <span>
             <b>{namesOf(o.items)}</b>
-            <small>{variantsOf(o.items) || '—'} · ×{o.items.reduce((s, i) => s + i.qty, 0)}</small>
+            <small>
+              {variantsOf(o.items) ? `${variantsOf(o.items)} · ` : ''}×{o.items.reduce((s, i) => s + i.qty, 0)}
+            </small>
           </span>
           <b className="ltr">{da(o.total)}</b>
         </div>
