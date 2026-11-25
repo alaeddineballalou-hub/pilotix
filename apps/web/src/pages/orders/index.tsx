@@ -638,7 +638,8 @@ function MineConfirmed() {
         title={t('nav.sub.confirmees')}
         base={stage ? STAGE_BASE[stage] : CONFIRMED_BASE}
         show={['search', 'wilaya', 'dates']}
-        columns={['order', 'client', 'products', 'total', 'company']}
+        // (with the stage, five columns: a tablet shows them all)
+        columns={['order', 'client', 'products', 'total']}
         extra={() => [{ key: 'stage', label: t('orders.cmStage'), cell: (o) => <StageTag o={o} /> }]}
       />
     </>
@@ -745,7 +746,8 @@ function CommandesDesk({ sub }: { sub?: string }) {
         title={t('nav.sub.enroute')}
         base={{ follow: [...FOLLOW_ON_ROAD], pickedUp: true }}
         show={['search', 'company', 'wilaya', 'dates']}
-        columns={['order', 'client', 'products', 'total', 'follow', 'company']}
+        // (five columns: a tablet shows them all, the tracking number too)
+        columns={['order', 'client', 'products', 'follow', 'company']}
         defaultSort="shipped_at"
       />
     );
