@@ -420,6 +420,8 @@ export interface OrderEvent {
   undo?: { area: 'conf' | 'follow'; by: string | null; at: string } | null;
   /** a confirmation line made by « Occupé » on a « Nouvelle » / « À vérifier » order: the try it counted (« Occupé · Tentative 01 ») */
   busyTry?: number;
+  /** a « Rappel » (an action since 25 Nov 2026): the time the agent picked and the try the order stays on (« À rappeler · 18:00 · Tentative 02 ») */
+  callbackTry?: { at: string; n: number };
 }
 
 export interface Customer {

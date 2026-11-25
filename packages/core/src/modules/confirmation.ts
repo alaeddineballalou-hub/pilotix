@@ -223,6 +223,8 @@ export interface QueueRow extends Order {
   passed: string[];
   /** when it goes to another agent if nobody acts (Affectation › rotation), ms; null: it will not move */
   rotateAt: number | null;
+  /** its last call was « Occupé » (En cours says « Occupé » next to its tries) */
+  lastBusy: boolean;
 }
 
 const QueueInput = z.object({
@@ -389,12 +391,25 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
   // statuses passed
   const oids = page.rows.map((o) => o.id);
   const passedOf = new Map<number, string[]>();
-  if (oids.length)
-    // (a « Tentative 01 » made by « Occupé » shows « Occupé »: orders.ts › setConf)
-    for (const r of await ctx.db.query(`SELECT order_id, array_agg(CASE WHEN data->>'busy' = 'true' THEN 'busy' ELSE to_value END ORDER BY at, id) AS v FROM order_events WHERE kind = 'conf_status' AND order_id = ANY($1) GROUP BY 1`, [oids])) {
+  /** the last call was « Occupé » (an action since 25 Nov 2026: the order stays « Tentative 0N », its line says « Occupé ») */
+  const busyLast = new Set<number>();
+  if (oids.length) {
+    // (a « Tentative » made by « Occupé » shows « Occupé », one made by « Rappel » « À rappeler »: orders.ts › setConf)
+    for (const r of await ctx.db.query(
+      `SELECT order_id, array_agg(CASE WHEN data->>'busy' = 'true' THEN 'busy' WHEN data->>'callback' IS NOT NULL THEN 'callback' ELSE to_value END ORDER BY at, id) AS v
+         FROM order_events WHERE kind = 'conf_status' AND order_id = ANY($1) GROUP BY 1`,
+      [oids],
+    )) {
       const v: string[] = (Array.isArray(r.v) ? r.v : String(r.v ?? '').replace(/[{}]/g, '').split(',')).filter(Boolean);
       passedOf.set(num(r.order_id), v.filter((x, k) => k === 0 || v[k - 1] !== x));
     }
+    for (const r of await ctx.db.query(
+      `SELECT DISTINCT ON (order_id) order_id, kind, to_value, data->>'busy' AS busy FROM order_events
+        WHERE order_id = ANY($1) AND (kind = 'conf_status' OR (kind = 'call' AND to_value = 'busy')) ORDER BY order_id, at DESC, id DESC`,
+      [oids],
+    ))
+      if (r.kind === 'call' || r.busy === 'true' || r.to_value === 'busy') busyLast.add(num(r.order_id));
+  }
   const scored = scoredAll ? page.rows : await withClientScores(ctx, page.rows);
   const rot = queue ? await rotateTimes(ctx, 'conf', oids) : new Map<number, number>();
   const rows: QueueRow[] = scored.map((o) => ({
@@ -406,6 +421,7 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
     stock: o.items.some((it) => it.variantId) ? (o.items.every((it) => !it.variantId || (stockOf.get(it.variantId) ?? 0) >= it.qty) ? 'ok' : 'short') : null,
     passed: passedOf.get(o.id) ?? [],
     rotateAt: rot.get(o.id) ?? null,
+    lastBusy: busyLast.has(o.id),
   }));
   return { ...page, rows, assign, buckets, tries };
 }
@@ -720,7 +736,7 @@ async function overview(ctx: Ctx, i: KfInput) {
   const calls = await getSetting(ctx.db, 'calls');
   const col = i.basis === 'updated' ? 'updated_at' : 'created_at';
   const all = await ctx.db.query(
-    `SELECT id, conf_status, follow_status, agent_id, created_at, total, has_upsell, upsell_value, came FROM sales WHERE ${col} >= $1 AND ${col} < $2`,
+    `SELECT id, conf_status, follow_status, agent_id, created_at, total, has_upsell, upsell_value, came, next_call_at FROM sales WHERE ${col} >= $1 AND ${col} < $2`,
     [isoT(R.a), isoT(R.b)],
   );
   // abandoned carts (leadkind.ts): on their own line; in the team's numbers only once confirmed
@@ -784,6 +800,8 @@ async function overview(ctx: Ctx, i: KfInput) {
       upV: lead === 'confirmed' ? num(o.upsell_value) : 0,
       created,
       night: workStart(created, calls) > created,
+      // a « Tentative » waiting for its « Rappel » (an action since 25 Nov 2026): « Plus tard », not « Pas de réponse »
+      callback: !!o.next_call_at && ['no_answer', 'busy'].includes(status),
     };
   });
   type Row = (typeof L)[number];
@@ -900,7 +918,7 @@ async function overview(ctx: Ctx, i: KfInput) {
     limits: { good: q2?.g ?? 65, alert: q2?.v ?? 60, stop: q2?.s ?? 55, wait: q2?.wait ?? 30 },
     received: L.length,
     value: sum(() => true),
-    pending: { n: pending, value: sum(is('pending')), fresh: count((o) => o.status === 'new' || o.status === 'to_check'), noAnswer: count((o) => o.status === 'no_answer' || o.status === 'busy'), later: count((o) => o.status === 'callback' || o.status === 'postponed') },
+    pending: { n: pending, value: sum(is('pending')), fresh: count((o) => o.status === 'new' || o.status === 'to_check'), noAnswer: count((o) => (o.status === 'no_answer' || o.status === 'busy') && !o.callback), later: count((o) => o.status === 'callback' || o.status === 'postponed' || o.callback) },
     confirmed: { n: conf, value: confValue, basket: conf ? Math.round(confValue / conf) : null },
     refused: { n: refused, value: sum(is('refused')), reasons: [...RS.values()].sort((x, y) => y.n - x.n || y.value - x.value) },
     /** the abandoned carts of the period: the confirmed ones are in every number of this page, the others in none */
@@ -923,7 +941,7 @@ async function overview(ctx: Ctx, i: KfInput) {
     upsell: { orders: ups, rate: pc(ups, conf), value: L.reduce((s: number, o: Row) => s + o.upV, 0) },
     hours,
     slots: calls.slots.map((s: any) => ({ from: s.from, to: s.to })),
-    night: { n: count((o) => o.night), noAnswer: count((o) => o.night && (o.status === 'no_answer' || o.status === 'busy')), noAnswerAll: count((o) => o.status === 'no_answer' || o.status === 'busy') },
+    night: { n: count((o) => o.night), noAnswer: count((o) => o.night && (o.status === 'no_answer' || o.status === 'busy') && !o.callback), noAnswerAll: count((o) => (o.status === 'no_answer' || o.status === 'busy') && !o.callback) },
     /** « Annuler automatiquement après N appels sans réponse » (0: off) */
     cancelAfter: calls.cancelAfterNoAnswer,
     speed: {

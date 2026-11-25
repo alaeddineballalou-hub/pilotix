@@ -88,7 +88,9 @@ test('« pas de réponse » by mistake: the call is not counted any more; more t
   await db.query('UPDATE orders SET agent_id = $2 WHERE id = $1', [a.id, rania.session.profile.id]);
   await call('orders.setConf', rania, { ids: [a.id], status: 'callback', nextCallAt: new Date(Date.now() + 3600000).toISOString() });
   await assert.rejects(call('orders.undoMany', samira, { ids: [a.id] }), /autre agent/);
-  assert.equal((await row(a.id)).conf_status, 'callback');
+  // (« Rappel » is an action since 25 Nov 2026: a « Tentative » with its time)
+  assert.equal((await row(a.id)).conf_status, 'no_answer');
+  assert.ok((await row(a.id)).next_call_at, 'its call back stays');
 });
 
 test('cancelled by mistake: reopened as it was (confirmed, back to « À préparer »)', async () => {
@@ -282,13 +284,14 @@ test('the « ↶ » of an older message never undoes the change before the one a
   const o = await order();
   await call('orders.setConf', samira, { ids: [o.id], status: 'callback', nextCallAt: new Date(Date.now() + 3600000).toISOString() });
   await call('orders.setConf', samira, { ids: [o.id], status: 'no_answer' });
-  // the second change undone from the order's bar
+  // the second change undone from the order's bar: « Tentative 01 » with its call back again (« Rappel » is an action)
   await undo(samira, o.id);
-  assert.equal((await row(o.id)).conf_status, 'callback');
+  const back = await row(o.id);
+  assert.deepEqual([back.conf_status, Number(back.attempts), !!back.next_call_at], ['no_answer', 1, true]);
   // the message of the second change, still on screen, pressed: refused — the callback stays
   await assert.rejects(call('orders.undoMany', samira, { ids: [o.id] }).then((r: any) => { if (r.refused.length) throw new Error(r.refused[0].why); }), /déjà annulé/);
   await assert.rejects(call('orders.undo', samira, { id: o.id }), /déjà annulé/);
-  assert.equal((await row(o.id)).conf_status, 'callback');
+  assert.deepEqual([(await row(o.id)).conf_status, !!(await row(o.id)).next_call_at], ['no_answer', true]);
   // the bar (the change shown, by its number) still can
   await undo(samira, o.id);
   assert.equal((await row(o.id)).conf_status, 'new');

@@ -1140,6 +1140,12 @@
     "later": "لاحقًا",
     "postponed": "مؤجلة"
   },
+  "nextAct": {
+    "callback": "إعادة الاتصال {{when}}",
+    "postponed": "مؤجَّلة {{when}}",
+    "busy": "مشغول",
+    "late": "فات موعد إعادة الاتصال: اتصل الآن"
+  },
   "tries": {
     "title_one": "محاولة {{count}} من {{max}}",
     "title_other": "{{count}} محاولات من {{max}}"

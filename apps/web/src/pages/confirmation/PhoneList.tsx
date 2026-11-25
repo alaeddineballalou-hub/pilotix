@@ -24,10 +24,10 @@ import './phone.css';
 import { ScoreChip } from '../../ui/clientScore';
 import { OriginChip } from '../orders/OrderPath';
 import { StageTag } from './stages';
-import { TryDots } from './counters';
+import { NextAction, TryDots } from './counters';
 
 /** a queue row: the order with its call countdown */
-type PRow = Order & { deadline?: Deadline | null; rotateAt?: number | null; seller?: { id: number; name: string } };
+type PRow = Order & { deadline?: Deadline | null; rotateAt?: number | null; seller?: { id: number; name: string }; lastBusy?: boolean };
 
 const variantsLine = (o: Order) =>
   o.items
@@ -213,7 +213,10 @@ export function PhoneCards({ rows, empty, onOpen, pick, showAgent, rowKey, edit,
                   <OriginChip o={o} />
                   <div className="pxp-st">
                     {dots !== undefined ? (
-                      <TryDots made={o.attempts} max={dots} />
+                      <>
+                        <TryDots made={o.attempts} max={dots} />
+                        <NextAction status={o.confStatus} nextCallAt={o.nextCallAt} lastBusy={o.lastBusy} />
+                      </>
                     ) : (
                       <span className={`badge t-${o.confStatus === 'no_answer' ? 'mid' : CONF_TONE[o.confStatus] ?? 'off'}`}>{currentLabel(t, o.confStatus, o.attempts)}</span>
                     )}

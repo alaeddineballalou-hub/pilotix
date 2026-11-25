@@ -21,7 +21,8 @@ export type Sub = 'nouvelles' | 'attente' | 'confirmees' | 'livrees' | 'terminee
 export const SUBS: readonly Sub[] = MENU_TABS.confirmation.filter((k): k is Exclude<(typeof MENU_TABS.confirmation)[number], 'reglages'> => k !== 'reglages');
 export const SUB_STATUSES: Record<Sub, ConfStatus[]> = {
   nouvelles: ['new'],
-  attente: ['to_check', 'no_answer', 'busy', 'callback', 'postponed'],
+  // (« Occupé » and « À rappeler » are actions since 25 Nov 2026: such orders are a « Tentative », never these statuses)
+  attente: ['to_check', 'no_answer', 'postponed'],
   confirmees: ['confirmed', 'no_stock'],
   terminees: ['duplicate', 'wrong_number', 'fake'],
   livrees: ['confirmed'],

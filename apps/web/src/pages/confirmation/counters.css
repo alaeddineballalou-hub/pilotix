@@ -31,3 +31,13 @@ html[data-theme="dark"] .cfk2.info { background: color-mix(in srgb, #6E9CF0 16%,
 html[data-theme="dark"] .cfdots b { background: var(--line); }
 html[data-theme="dark"] .cfdots b.on { background: #F7A823; }
 html[data-theme="dark"] .cfdots small { color: var(--muted); }
+
+/* En cours: what happens next, after the dots (« Rappel 18:00 », « Reportée 27 nov. », « Occupé ») — the counters' colours */
+.cftries { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; row-gap: 4px; }
+.cfnext { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 600; line-height: 1.5; white-space: nowrap; }
+.cfnext.soon { background: #FFF0DC; color: #9A4B00; }
+.cfnext.late { background: #FCE7E5; color: #B42318; }
+.cfnext.off { background: #F1EEE9; color: #3B4250; }
+html[data-theme="dark"] .cfnext.soon { background: color-mix(in srgb, #F7A823 16%, transparent); color: #F7C46A; }
+html[data-theme="dark"] .cfnext.late { background: var(--coral-soft); color: var(--coral); }
+html[data-theme="dark"] .cfnext.off { background: color-mix(in srgb, var(--muted) 16%, transparent); color: var(--ink, #E6E9EF); }

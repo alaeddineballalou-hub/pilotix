@@ -1088,6 +1088,12 @@
     "later": "Later",
     "postponed": "Postponed"
   },
+  "nextAct": {
+    "callback": "Call back {{when}}",
+    "postponed": "Postponed {{when}}",
+    "busy": "Busy",
+    "late": "The call-back time has passed: call now"
+  },
   "tries": {
     "title_one": "{{count}} try out of {{max}}",
     "title_other": "{{count}} tries out of {{max}}"

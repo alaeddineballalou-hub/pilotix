@@ -88,13 +88,13 @@ test('« Occupé » again, or on an order already tried: its try number stays', 
   await call('orders.setConf', admin, { ids: [b], status: 'busy' });
   assert.deepEqual([(await row(b)).conf_status, Number((await row(b)).attempts)], ['no_answer', 2], '« Tentative 02 » stays « Tentative 02 »');
   assert.equal((await one(`SELECT to_value FROM order_events WHERE order_id = $1 ORDER BY id DESC LIMIT 1`, [b])).to_value, 'busy');
-  // « à rappeler »: it stays « à rappeler », at its time
+  // « Rappel » (an action since 25 Nov 2026): « Tentative 01 » at its time; an « Occupé » before that time keeps both
   const [c] = await freeNew(1);
   const when = new Date(Date.now() + 3 * 3_600_000).toISOString();
   await call('orders.setConf', admin, { ids: [c], status: 'callback', nextCallAt: when });
   await call('orders.setConf', admin, { ids: [c], status: 'busy' });
   const cb = await row(c);
-  assert.deepEqual([cb.conf_status, Number(cb.attempts), new Date(cb.next_call_at).toISOString()], ['callback', 0, when]);
+  assert.deepEqual([cb.conf_status, Number(cb.attempts), new Date(cb.next_call_at).toISOString()], ['no_answer', 1, when]);
 });
 
 test('« Occupé » on an « À vérifier » order: « Tentative 01 » too', async () => {

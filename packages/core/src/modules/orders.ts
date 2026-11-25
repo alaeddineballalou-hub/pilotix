@@ -1556,10 +1556,16 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
       let status = input.status;
       // « Occupé » (the owner's rule, 25 Nov 2026): a « Nouvelle » or « À vérifier » order becomes « Tentative 01 » — it
       // counts as one call, so the next call is in the next slot — with no message to the customer and no cancel. An
-      // order already tried (« Tentative 0N », « à rappeler »…) keeps its try number: only the call is written.
+      // order already tried (« Tentative 0N »…) keeps its try number: only the call is written. A call back whose time
+      // came (« Rappel ») is a normal try again: its next call is in the next slot (a « Reportée » keeps its date).
       const busyTry = !undo && status === 'busy' && (cur.conf_status === 'new' || cur.conf_status === 'to_check');
       if (!undo && status === 'busy' && !busyTry) {
-        await tx.query('UPDATE orders SET last_call_at = $2, updated_at = now(), version = version + 1 WHERE id = $1', [oid, new Date(ctx.now()).toISOString()]);
+        await tx.query(
+          `UPDATE orders SET last_call_at = $2,
+             next_call_at = CASE WHEN conf_status <> 'postponed' AND next_call_at <= $2::timestamptz THEN NULL ELSE next_call_at END,
+             updated_at = now(), version = version + 1 WHERE id = $1`,
+          [oid, new Date(ctx.now()).toISOString()],
+        );
         await addEvent(tx, oid, me, 'call', null, 'busy', input.note?.trim() || null);
         changed.push(oid);
         continue;
@@ -1568,9 +1574,22 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
         status = 'no_answer';
         busyTried.push(oid);
       }
+      // « Rappel » (the owner's rule, 25 Nov 2026 evening): an action, not a status. The order stays « Tentative 0N » (a
+      // « Nouvelle », an « À vérifier » or an order never tried becomes « Tentative 01 », like « Occupé »), the time the
+      // agent picked is its next call, nothing goes to the customer, and the 10-minute sweep never cancels an order
+      // waiting for its call back (noanswer.ts). The history says « À rappeler · <time> · Tentative 0N ».
+      const callbackTry = !undo && status === 'callback';
+      // (« ↶ Annuler » of a change made before that rule puts back « Occupé » / « À rappeler »: a « Tentative » now —
+      // « À rappeler » with its time, or now if it passed)
+      const oldBack = !!undo && (status === 'busy' || status === 'callback');
+      const backCallAt = oldBack && status === 'callback' ? new Date(ctx.now()).toISOString() : null;
+      if (callbackTry || oldBack) status = 'no_answer';
       // (an undo never counts a call: the attempts go back to what they were)
-      const isCallFail = !undo && status === 'no_answer';
-      const attempts = undo ? undo.attempts : num(cur.attempts) + (isCallFail ? 1 : 0);
+      const isCallFail = !undo && status === 'no_answer' && !callbackTry;
+      const untried = cur.conf_status === 'new' || cur.conf_status === 'to_check' || num(cur.attempts) === 0;
+      const attempts = undo
+        ? oldBack ? Math.max(1, undo.attempts) : undo.attempts
+        : callbackTry ? num(cur.attempts) + (untried ? 1 : 0) : num(cur.attempts) + (isCallFail ? 1 : 0);
       let note = input.note?.trim() || null;
       let reopenHash: string | undefined;
       const autoCancel = isCallFail && !busyTry && calls.cancelAfterNoAnswer > 0 && attempts >= calls.cancelAfterNoAnswer;
@@ -1639,9 +1658,14 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
            updated_at=now(), version=version+1
          WHERE id=$1`,
         [
-          oid, status, attempts, !undo && (isCallFail || stamped || CONF_NEEDS_DATE.includes(status)), nowIso,
-          // (undone back to « à rappeler » / « reportée »: to call now)
-          CONF_NEEDS_DATE.includes(status) ? (input.nextCallAt ?? (undo ? nowIso : null)) : null,
+          oid, status, attempts, !undo && (isCallFail || stamped || callbackTry || CONF_NEEDS_DATE.includes(status)), nowIso,
+          // « Rappel »: the time the agent picked. (Undone back to « reportée »: to call now; back to a « Tentative »: the
+          // call back it had before, if its time is still to come — or now for an « À rappeler » from before 26 Nov 2026.)
+          callbackTry
+            ? input.nextCallAt ?? null
+            : CONF_NEEDS_DATE.includes(status)
+              ? (input.nextCallAt ?? (undo ? nowIso : null))
+              : undo && status === 'no_answer' ? (input.nextCallAt ?? backCallAt) : null,
           numOrNull(cur.conf_agency_id) === agencyOf(ctx) ? me : null, confirmed, stamped, CONF_TODO, !!undo?.clearConfirmedAt,
         ],
       );
@@ -1651,7 +1675,13 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
         ...(reopenHash ? { reorderHash: reopenHash } : {}),
         // (the history says « Occupé · Tentative 01 »; the 10-minute sweep never cancels it: noanswer.ts)
         ...(busyTry ? { busy: true } : {}),
+        // (the history says « À rappeler · <time> · Tentative 0N »; the lists show « Rappel <time> »)
+        ...(callbackTry ? { callback: input.nextCallAt ?? null, tries: attempts } : {}),
       });
+      // « Rappel »: the customer answered — a « no answer » message still waiting for this order is not sent
+      if (callbackTry)
+        await tx.query(`UPDATE notifications SET status = 'skipped', error = 'Le client a demandé un rappel'
+          WHERE order_id = $1 AND kind = 'no_answer' AND status IN ('queued', 'manual', 'failed')`, [oid]);
       // it leaves the depot: cancelled, back to be called again, or « sans stock » (it waits for stock outside the depot)
       const leavesDepot =
         ['cancelled', 'duplicate', 'wrong_number', 'fake'].includes(status) || (((CONF_TODO as string[]).includes(status) || status === 'no_stock') && ['to_prepare', 'prepared'].includes(cur.follow_status));
@@ -1667,8 +1697,8 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
       if (!undo && ((CONF_TODO as string[]).includes(status) || status === 'no_stock') && ['to_prepare', 'prepared'].includes(cur.follow_status))
         await addEvent(tx, oid, me, 'follow_status', cur.follow_status, null);
       if (!undo) {
-        // (an « Occupé »: no message to the customer)
-        if (!busyTry) await onConfChange(tx, notify, cur, cur.conf_status, status, ctx.now(), attempts);
+        // (an « Occupé », a « Rappel »: no message to the customer)
+        if (!busyTry && !callbackTry) await onConfChange(tx, notify, cur, cur.conf_status, status, ctx.now(), attempts);
         // Meta: an order from a landing page, confirmed by a person, is a real sale (never a blocked or fake one)
         await onLandingConf(tx, landing, cur, cur.conf_status, status, ctx.now(), input.reason ?? null, me);
       } else {
@@ -2482,6 +2512,8 @@ export const ordersProcs = {
           id: num(r.id), orderId: num(r.order_id), at: iso(r.at), userId: by ? null : numOrNull(r.user_id), userName: by ?? r.user_name, kind: r.kind, fromValue: r.from_value, toValue: r.to_value, note: r.note,
           ...(d ? { undo: { area: d.area === 'follow' ? 'follow' : 'conf', by: d.by ?? null, at: d.at ? iso(d.at) : iso(r.at) } } : {}),
           ...(r.kind === 'conf_status' && data?.busy ? { busyTry: num(data.att) + 1 } : {}),
+          // (a « Rappel »: its time and the try it stays on — « À rappeler · 18:00 · Tentative 02 »)
+          ...(r.kind === 'conf_status' && data?.callback ? { callbackTry: { at: iso(data.callback), n: Math.max(1, num(data.tries)) } } : {}),
         };
       },
     );

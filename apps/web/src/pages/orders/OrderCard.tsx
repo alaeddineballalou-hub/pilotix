@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
-import { da, dateOnly, fromLocalInput, toLocalInput, when, wilaya } from '../../lib/format';
+import { callWhen, da, dateOnly, fromLocalInput, toLocalInput, when, wilaya } from '../../lib/format';
 import { closeModal, openOrder, openOrderForm } from '../../lib/modals';
 import { startTicketFor } from '../sav/NewTicket';
 import { useAction, useRpc } from '../../lib/query';
@@ -614,9 +614,14 @@ export function eventText(t: (k: string, o?: any) => string, e: OrderEvent, user
     case 'call':
       return e.toValue === 'busy' ? t('status.conf.busy') : t('orders.card.ev.call');
     case 'conf_status':
-      // (« Occupé » on a « Nouvelle » order: « Nouvelle → Occupé · Tentative 01 », not « Pas de réponse »)
+      // (« Occupé » on a « Nouvelle » order: « Nouvelle → Occupé · Tentative 01 », not « Pas de réponse »; a « Rappel »:
+      // « → À rappeler · demain 10:00 · Tentative 02 »)
       return t('orders.card.ev.conf_status') + (e.fromValue ? `${conf(e.fromValue)} → ` : '') +
-        (e.busyTry ? `${conf('busy')} · ${t('confirmation.try', { n: String(e.busyTry).padStart(2, '0') })}` : conf(e.toValue));
+        (e.busyTry
+          ? `${conf('busy')} · ${t('confirmation.try', { n: String(e.busyTry).padStart(2, '0') })}`
+          : e.callbackTry
+            ? `${conf('callback')} · ${callWhen(e.callbackTry.at)} · ${t('confirmation.try', { n: String(e.callbackTry.n).padStart(2, '0') })}`
+            : conf(e.toValue));
     case 'follow_status':
       return t('orders.card.ev.follow_status') + (e.fromValue ? `${fol(e.fromValue)} → ` : '') + fol(e.toValue);
     case 'assign':

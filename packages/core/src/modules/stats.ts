@@ -193,14 +193,16 @@ export async function confirmationStats(ctx: Ctx, input: z.infer<typeof TeamsInp
   // Confirmation changes and logged busy calls in the period.
   const callEvent = "(kind = 'conf_status' OR (kind = 'call' AND to_value = 'busy'))";
   const evs = (
-    await ctx.db.query(`SELECT order_id, user_id, at, to_value FROM order_events WHERE ${callEvent} AND at >= $1 AND at < $2 AND user_id IS NOT NULL`, [from, to])
+    // (a « Rappel » — a « Tentative » with a time since 25 Nov 2026 — is read as « À rappeler »: the customer answered)
+    await ctx.db.query(`SELECT order_id, user_id, at, CASE WHEN data->>'callback' IS NOT NULL THEN 'callback' ELSE to_value END AS to_value
+      FROM order_events WHERE ${callEvent} AND at >= $1 AND at < $2 AND user_id IS NOT NULL`, [from, to])
   ).map((r: any) => ({ order: num(r.order_id), uid: num(r.user_id), at: Date.parse(r.at), to: r.to_value as string }));
 
   // Live numbers (not by period).
   const live = await ctx.db.query(
     `SELECT agent_id AS uid, count(*) FILTER (WHERE conf_status = ANY($1))::int AS todo,
-            count(*) FILTER (WHERE conf_status IN ('callback','postponed') AND next_call_at < $2)::int AS late
-     FROM sales WHERE agent_id IS NOT NULL AND (conf_status = ANY($1) OR conf_status IN ('callback','postponed')) GROUP BY agent_id`,
+            count(*) FILTER (WHERE conf_status = ANY($1) AND next_call_at IS NOT NULL AND next_call_at < $2)::int AS late
+     FROM sales WHERE agent_id IS NOT NULL AND conf_status = ANY($1) GROUP BY agent_id`,
     [CONF_TODO, isoNow(ctx)],
   );
   const unassigned = num((await ctx.db.query(`SELECT count(*)::int AS n FROM sales WHERE agent_id IS NULL AND conf_status = 'new'`))[0]?.n);

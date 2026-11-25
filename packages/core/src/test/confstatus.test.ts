@@ -68,12 +68,13 @@ test('an order at the depot sent back to « À rappeler » leaves the depot and 
   const next = new Date(Date.now() + 3_600_000).toISOString();
   await call('orders.setConf', admin, { ids: [id], status: 'callback', nextCallAt: next });
   const cur = await one('SELECT conf_status, follow_status FROM orders WHERE id = $1', [id]);
-  assert.deepEqual([cur.conf_status, cur.follow_status], ['callback', null], 'out of the depot');
+  // (« Rappel » is an action since 25 Nov 2026: the order is a « Tentative » with its time)
+  assert.deepEqual([cur.conf_status, cur.follow_status], ['no_answer', null], 'out of the depot');
   // confirmed again: back to « À préparer »
   await call('orders.setConf', admin, { ids: [id], status: 'confirmed' });
   assert.equal((await one('SELECT follow_status FROM orders WHERE id = $1', [id])).follow_status, 'to_prepare');
   // even if a row says « to_prepare » with a status that is not confirmed, dispatch leaves it
-  await db.query(`UPDATE orders SET conf_status = 'callback' WHERE id = $1`, [id]);
+  await db.query(`UPDATE orders SET conf_status = 'no_answer' WHERE id = $1`, [id]);
   const res: any = await call('depot.dispatch', admin, { ids: [id] }).catch((e: any) => ({ error: e.message }));
   assert.notEqual((await one('SELECT follow_status FROM orders WHERE id = $1', [id])).follow_status, 'prepared', JSON.stringify(res));
 });

@@ -276,10 +276,15 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
       else if (age < 9) follow = f < 0.05 ? 'out_for_delivery' : f < 0.08 ? 'alert' : f < 0.12 ? 'returning' : f < 0.82 ? 'delivered' : f < 0.95 ? 'returned' : 'in_exchange';
       else follow = f < 0.8 ? 'delivered' : f < 0.95 ? 'returned' : f < 0.98 ? 'exchanged' : 'lost';
     }
+    // « Occupé » and « Rappel » are actions since 25 Nov 2026 (orders.ts › setConf): such an order is a « Tentative »
+    // whose last call was « Occupé », or that waits for its call back at its time (the same random draws as before)
+    const action = conf === 'busy' || conf === 'callback' ? conf : null;
     const agent = conf === 'new' && chance(0.5) ? null : pick(agents);
     const company = follow && follow !== 'to_prepare' ? (chance(0.12) ? own : chance(0.6) ? yal : zr) : follow ? yal : null;
     const livreur = company === own ? pick(expanded ? [users.livreur, users.livreur2, users.livreur3] : [users.livreur, users.livreur2]) : null;
-    const attempts = ['no_answer', 'busy'].includes(conf) ? 1 + Math.floor(rnd() * 2) : conf === 'confirmed' && chance(0.3) ? 1 : 0;
+    const attempts0 = ['no_answer', 'busy'].includes(conf) ? 1 + Math.floor(rnd() * 2) : conf === 'confirmed' && chance(0.3) ? 1 : 0;
+    /** a call back on an order never tried: « Tentative 01 », like in the app */
+    const attempts = action === 'callback' ? Math.max(1, attempts0) : attempts0;
     const tConfirm = created + (0.2 + rnd() * 6) * 3_600_000;
     const tPrep = tConfirm + (2 + rnd() * 16) * 3_600_000;
     const tShip = tPrep + (1 + rnd() * 12) * 3_600_000;
@@ -298,7 +303,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
       chance(0.1) ? `0${pick(['5', '6', '7'])}${String(Math.floor(rnd() * 1e8)).padStart(8, '0')}` : null,
       wilaya, pick(communes), chance(0.7) ? `Cité ${pick(['des Oliviers', '1er Novembre', 'El Amel', 'Les Pins', '500 Logements'])}, bât. ${1 + Math.floor(rnd() * 30)}` : '',
       isDesk, pick(['site', 'site', 'facebook', 'facebook', 'instagram', 'tiktok', 'whatsapp', 'appel']),
-      conf, agent, attempts, attempts ? iso(cap(created + rnd() * 5 * 3_600_000)) : null, nextCall, agent ? iso(created + 600_000) : null,
+      action ? 'no_answer' : conf, agent, attempts, attempts0 ? iso(cap(created + rnd() * 5 * 3_600_000)) : action === 'callback' ? iso(cap(created + 3_600_000)) : null, nextCall, agent ? iso(created + 600_000) : null,
       conf === 'confirmed' || conf === 'no_stock' ? iso(cap(tConfirm)) : null,
       follow, follow === 'alert' ? null : null, company, follow ? wh1 : null, livreur,
       shippedLike && company !== own ? fakeTracking(company === yal ? 'yalidine' : 'zr', `PX${1001 + i}`, 0) : null, // the courier's own number
@@ -310,8 +315,11 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
     ]);
     itemsByOrder.push(items.map((it) => [it.p.id, it.v.id, it.p.name, it.v.title, it.qty, it.p.price, it.p.cost, it.upsell]));
     const ev: unknown[][] = [[iso(created), null, 'created', null, 'new', null]];
-    if (attempts) ev.push([iso(cap(created + 1_800_000)), agent, 'conf_status', 'new', 'no_answer', null]);
-    if (conf !== 'new') ev.push([iso(cap(conf === 'confirmed' ? tConfirm : created + 3_600_000)), agent, 'conf_status', attempts ? 'no_answer' : 'new', conf, conf === 'cancelled' ? pick(['Prix trop cher', 'Frais de livraison trop chers', 'A commandé ailleurs', 'Changé d’avis']) : null]);
+    if (attempts0) ev.push([iso(cap(created + 1_800_000)), agent, 'conf_status', 'new', 'no_answer', null]);
+    if (action === 'busy') ev.push([iso(cap(created + 3_600_000)), agent, 'call', null, 'busy', null]);
+    else if (action === 'callback')
+      ev.push([iso(cap(created + 3_600_000)), agent, 'conf_status', attempts0 ? 'no_answer' : 'new', 'no_answer', null, JSON.stringify({ att: attempts0, nca: null, callback: nextCall, tries: attempts })]);
+    else if (conf !== 'new') ev.push([iso(cap(conf === 'confirmed' ? tConfirm : created + 3_600_000)), agent, 'conf_status', attempts ? 'no_answer' : 'new', conf, conf === 'cancelled' ? pick(['Prix trop cher', 'Frais de livraison trop chers', 'A commandé ailleurs', 'Changé d’avis']) : null]);
     const path: FollowStatus[] = [];
     if (follow) {
       const seq: FollowStatus[] = ['to_prepare', 'prepared', 'shipped', 'out_for_delivery'];
@@ -343,10 +351,10 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
   const eventRows: unknown[][] = [];
   inserted.forEach((o, k) => {
     for (const it of itemsByOrder[k]) itemRows.push([num(o.id), ...it]);
-    for (const e of eventsByOrder[k]) eventRows.push([num(o.id), ...e]);
+    for (const e of eventsByOrder[k]) eventRows.push([num(o.id), ...e.slice(0, 6), e[6] ?? null]);
   });
   await bulkInsert(db, 'order_items', ['order_id', 'product_id', 'variant_id', 'name', 'variant_title', 'qty', 'unit_price', 'purchase_price', 'is_upsell'], itemRows);
-  await bulkInsert(db, 'order_events', ['order_id', 'at', 'user_id', 'kind', 'from_value', 'to_value', 'note'], eventRows);
+  await bulkInsert(db, 'order_events', ['order_id', 'at', 'user_id', 'kind', 'from_value', 'to_value', 'note', 'data'], eventRows);
   await db.query(`SELECT setval('order_ref_seq', $1)`, [1001 + N]);
   for (const c of customers.values()) {
     await db.query('UPDATE customers SET orders=$2, delivered=$3, returned=$4, last_order_at=$5 WHERE id=$1', [c.id, c.orders, c.delivered, c.returned, iso(c.last)]);

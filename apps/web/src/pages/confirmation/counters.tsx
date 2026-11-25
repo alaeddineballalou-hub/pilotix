@@ -6,7 +6,7 @@
 //   « Sans stock » when there is one), the numbers of confirmation.counts › stages.
 // On a phone they replace the small « N en retard · N à traiter » badges.
 import { useTranslation } from 'react-i18next';
-import { n } from '../../lib/format';
+import { callWhen, dateTime, n } from '../../lib/format';
 import './counters.css';
 
 export type CounterTone = 'late' | 'soon' | 'ok' | 'off' | 'info';
@@ -30,6 +30,31 @@ export function Counters<K extends string>({ items, value, onChange, className }
       ))}
     </div>
   );
+}
+
+/**
+ * What happens next to an order of En cours (the owner's rule, 25 Nov 2026: its only status is its try, « Tentative
+ * 0N »; « Rappel » and « Occupé » are actions): « Rappel 18:00 » (red once its time passed: to call now), « Reportée 27
+ * nov. », « Occupé » (its last call). Nothing for a plain try: it comes back in the next call slot.
+ */
+export function NextAction({ status, nextCallAt, lastBusy }: { status: string; nextCallAt: string | null | undefined; lastBusy?: boolean }) {
+  const { t } = useTranslation();
+  if (nextCallAt) {
+    const postponed = status === 'postponed';
+    const late = Date.parse(nextCallAt) <= Date.now();
+    return (
+      <span className={`cfnext ${late ? 'late' : postponed ? 'off' : 'soon'}`} title={late ? t('confirmation.nextAct.late') : dateTime(nextCallAt)} data-g="conf-next">
+        {t(postponed ? 'confirmation.nextAct.postponed' : 'confirmation.nextAct.callback', { when: callWhen(nextCallAt, postponed) })}
+      </span>
+    );
+  }
+  if (lastBusy || status === 'busy')
+    return (
+      <span className="cfnext off" data-g="conf-next">
+        {t('confirmation.nextAct.busy')}
+      </span>
+    );
+  return null;
 }
 
 /** The tries of an order of En cours: one dot per try the shop allows (« annuler après N tentatives »), filled for

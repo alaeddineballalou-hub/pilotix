@@ -166,7 +166,9 @@ async function effectsOf(db: Db, o: any, act: Action): Promise<UndoEffect[]> {
       if (o.tracking && API_COURIERS.includes(String(o.company_kind ?? ''))) out.push({ k: 'courierCancel' });
     }
     if (!STAMPED.includes(was) && STAMPED.includes(back)) out.push({ k: 'toDepot' });
-    if (was === 'no_answer' || was === 'busy' || (ev.note ?? '').includes('Annulée automatiquement')) out.push({ k: 'call' });
+    // (a « Rappel » counts no call — except the « Tentative 01 » of an order never tried: orders.ts › setConf)
+    const rappelNoCall = !!ev.data?.callback && Number(ev.data?.tries) === Number(ev.data?.att);
+    if ((was === 'no_answer' && !rappelNoCall) || was === 'busy' || (ev.note ?? '').includes('Annulée automatiquement')) out.push({ k: 'call' });
   } else {
     for (const m of await db.query(`SELECT reason, sum(delta)::int AS n FROM stock_movements WHERE order_id = $1 AND created_at = $2::timestamptz AND reason IN ('shipped', 'returned') GROUP BY 1`, [o.id, at]))
       out.push(m.reason === 'shipped' ? { k: 'stockBack', n: -num(m.n) } : { k: 'stockOut', n: num(m.n) });

@@ -230,10 +230,11 @@ async function countConfirmation(ctx: Ctx, r: R, ids: number[], detail: boolean)
     add(p, 'triesMiss', a.triesMissed);
   }
   if (detail) {
-    // what they have to call now, and the callbacks already late
+    // what they have to call now, and the callbacks already late (« Rappel », « Reportée »: an order still to call with a
+    // time picked — a « Rappel » is a « Tentative » with a time since 25 Nov 2026)
     for (const q of await ctx.db.query(
       `SELECT agent_id AS u, count(*) FILTER (WHERE conf_status = ANY($2))::int AS todo,
-         count(*) FILTER (WHERE conf_status IN ('callback','postponed') AND next_call_at < $3)::int AS late
+         count(*) FILTER (WHERE next_call_at IS NOT NULL AND next_call_at < $3)::int AS late
        FROM sales WHERE agent_id = ANY($1) AND conf_status = ANY($2) GROUP BY 1`,
       [ids, CONF_TODO, new Date(ctx.now()).toISOString()],
     )) {

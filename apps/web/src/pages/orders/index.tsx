@@ -350,7 +350,8 @@ export function OrderList(p: ListProps) {
   );
   const confOpts: [string, string][] = [
     ['todo', t('orders.f.todo')],
-    ...CONF_STATUSES.filter((s) => s !== 'busy').map((s): [string, string] => [s, s === 'no_answer' ? t('orders.f.attempt') : t(`status.conf.${s}`)]),
+    // (« Occupé » and « À rappeler » are actions since 25 Nov 2026: those orders are a « Tentative »)
+    ...CONF_STATUSES.filter((s) => s !== 'busy' && s !== 'callback').map((s): [string, string] => [s, s === 'no_answer' ? t('orders.f.attempt') : t(`status.conf.${s}`)]),
   ];
   const followOpts: [string, string][] = [['prep', t('orders.f.prep')], ['active', t('orders.f.active')], ['back', t('orders.f.back')], ...FOLLOW_STATUSES.map((s): [string, string] => [s, t(`status.follow.${s}`)])];
 

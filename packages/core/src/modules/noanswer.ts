@@ -71,6 +71,9 @@ export async function cancelOverLimit(ctx: Ctx): Promise<{ cancelled: number; re
           -- (its last try is an « Occupé » on a « Nouvelle » order: never cancelled by itself — the owner's rule, 25 Nov 2026)
           AND COALESCE((SELECT e.data->>'busy' FROM order_events e WHERE e.order_id = orders.id AND e.kind = 'conf_status'
                          ORDER BY e.at DESC, e.id DESC LIMIT 1), '') <> 'true'
+          -- (it waits for its « Rappel », the time the customer asked for — an action since 25 Nov 2026: never cancelled by
+          -- itself before that call)
+          AND next_call_at IS NULL
         ORDER BY id LIMIT 500 FOR UPDATE SKIP LOCKED`,
       [UNANSWERED, limit],
     );

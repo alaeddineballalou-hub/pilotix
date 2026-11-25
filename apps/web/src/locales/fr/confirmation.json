@@ -1088,6 +1088,12 @@
     "later": "Plus tard",
     "postponed": "Reportées"
   },
+  "nextAct": {
+    "callback": "Rappel {{when}}",
+    "postponed": "Reportée {{when}}",
+    "busy": "Occupé",
+    "late": "L’heure du rappel est passée : à appeler maintenant"
+  },
   "tries": {
     "title_one": "{{count}} tentative sur {{max}}",
     "title_other": "{{count}} tentatives sur {{max}}"

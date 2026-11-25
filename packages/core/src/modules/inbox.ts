@@ -473,11 +473,12 @@ export async function inboxRun(ctx: Ctx) {
     return { calls: 0, due: 0, depot: 0, gone: await pruneInbox(ctx, now) };
   }
   let calls = 0;
-  // the callbacks the agents set (« À rappeler », « Reporté »): told once when their time comes (up to 20 minutes late)
+  // the callbacks the agents set (« Rappel » — a « Tentative » with a time since 25 Nov 2026 —, « Reporté »): told once
+  // when their time comes (up to 20 minutes late)
   const due = await ctx.db.query(
     `SELECT o.id, o.ref, o.customer_name, o.agent_id, o.next_call_at, p.agency_id FROM orders o LEFT JOIN profiles p ON p.id = o.agent_id
       WHERE o.next_call_at <= $1::timestamptz AND o.next_call_at > $1::timestamptz - interval '20 minutes'
-        AND o.agent_id IS NOT NULL AND o.conf_status IN ('callback', 'postponed')
+        AND o.agent_id IS NOT NULL AND o.conf_status IN ('no_answer', 'busy', 'callback', 'postponed')
         AND NOT EXISTS (SELECT 1 FROM inbox i WHERE i.tag = 'call-' || o.id::text || '-' || floor(extract(epoch FROM o.next_call_at))::bigint::text)
       ORDER BY o.next_call_at LIMIT 200`,
     [new Date(now).toISOString()],

@@ -44,6 +44,17 @@ export function when(iso: string | null | undefined): string {
 }
 /** "21:19" (Algiers time). */
 export const clock = (iso: string | null | undefined) => (iso ? df({ hour: '2-digit', minute: '2-digit' }).format(Date.parse(iso)) : '');
+/** A call back's time: "18:00" today, "demain 10:00", "hier 18:00", "27 nov. 10:00" (`day`: the day alone). */
+export function callWhen(iso: string | null | undefined, day = false): string {
+  if (!iso) return '';
+  const t = Date.parse(iso);
+  const now = Date.now();
+  const time = day ? '' : ` ${clock(iso)}`;
+  if (dayKey(t) === dayKey(now)) return day ? i18n.t('common.today') : clock(iso);
+  if (dayKey(t) === dayKey(now + 86_400_000)) return `${i18n.t('common.tomorrow')}${time}`;
+  if (dayKey(t) === dayKey(now - 86_400_000)) return `${i18n.t('common.yesterday')}${time}`;
+  return `${df({ day: 'numeric', month: 'short' }).format(t)}${time}`;
+}
 /** In a list: "21:19" today, "hier" yesterday, "18 oct." before. */
 export function shortWhen(iso: string | null | undefined): string {
   if (!iso) return '';

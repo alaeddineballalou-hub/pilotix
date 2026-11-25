@@ -26,7 +26,7 @@ import { HeldChip } from './hold';
 import { useIsPhone } from '../../lib/useMedia';
 import { CancelAskFor, notShipped, PhoneCards, PhoneOrder, PickBar, PickToggle } from './PhoneList';
 import { type ConfStage, StageTag, stageName } from './stages';
-import { type CounterItem, Counters, TryDots } from './counters';
+import { type CounterItem, Counters, NextAction, TryDots } from './counters';
 import { currentLabel, StatusChoice, Sub, SUB_STATUSES, SUB_TONE, SUBS, telHref, toneOf, useCanGive, waHref } from './shared';
 import { ConfirmedStatsPage, StatsSection } from './Stats';
 import { ConfSettings } from './Settings';
@@ -459,7 +459,13 @@ export function Queue({
           <span className="muted">—</span>
         );
       case 'tries':
-        return <TryDots made={r.attempts} max={list.data?.tries ?? 3} />;
+        // the try, then what happens next (« Rappel 18:00 », « Occupé »: actions, not statuses — 25 Nov 2026)
+        return (
+          <span className="cftries">
+            <TryDots made={r.attempts} max={list.data?.tries ?? 3} />
+            <NextAction status={r.confStatus} nextCallAt={r.nextCallAt} lastBusy={r.lastBusy} />
+          </span>
+        );
       case 'time':
         return <Spent iso={r.createdAt} />;
       case 'created':
@@ -772,7 +778,8 @@ export function Queue({
                   <option value="">{t(`confirmation.f.allSt.${sub}`)}</option>
                   {SUB_STATUSES[sub].map((s) => (
                     <option key={s} value={s}>
-                      {t(`status.conf.${s}`)}
+                      {/* (a « Tentative »: its only status while it waits — « Rappel » and « Occupé » are actions) */}
+                      {s === 'no_answer' ? t('orders.f.attempt') : t(`status.conf.${s}`)}
                     </option>
                   ))}
                 </select>
