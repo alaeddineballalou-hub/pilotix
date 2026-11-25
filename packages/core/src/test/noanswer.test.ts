@@ -148,19 +148,35 @@ test('the cancel message’s short link: the product’s main photo on its page,
   const main = Number((await photo(otherColour?.id ?? null, 0))[0].id);
   await photo(item.variant_id, 1);
 
+  // the shop's « Pourquoi nous » picture (Landing pages › Réglages): under the page's button
+  const whyId = Number((await db.query(`INSERT INTO landing_images (w, h, t160, w480, w960) VALUES (900, 1400, 'a', 'b', 'c') RETURNING id`))[0].id);
+  await call('landing.why.save', admin, { imageId: whyId, first: false });
+
   const msg: any = await call('orders.customerMessage', sys, { id, kind: 'cancel' });
   assert.equal(msg.url, `${api}/r/${msg.token}`, 'no own domain: the platform’s address, short too');
+  // the order at a glance in the text: its products, the delivery, the total, then the link
+  assert.match(msg.text, /التوصيل: /);
+  assert.match(msg.text, /الإجمالي: \d+ دج/);
+  // the photo that goes into the chat with the message: the main photo's 1080 px copy
+  assert.equal(msg.photo, jpeg);
+  assert.equal(asked[0].side, 1080);
   // its page, before the order is cancelled (WhatsApp reads it while the agent writes the message)
   const page: any = await call('orders.reorderPage', sys, { code: msg.token });
   assert.equal(page.found, true);
   assert.equal(page.photo, jpeg);
-  assert.equal(asked[0].side, 800, 'a light copy for WhatsApp');
-  assert.equal(asked[0].photos[0].src, `hd:${main}`, 'the product’s main photo (its first), never the colour’s');
+  assert.equal(asked[1].side, 800, 'a light copy for WhatsApp’s preview');
+  assert.ok(asked.every((a) => a.photos[0].src === `hd:${main}`), 'the product’s main photo (its first), never the colour’s');
+  assert.equal(page.why.src, `${api}/lp/img/${whyId}/480.webp`);
+  assert.match(page.why.srcset, /960\.webp 960w/);
+  assert.deepEqual([page.why.w, page.why.h], [900, 1400]);
   const html = reorderPageHtml(page);
   assert.ok(html.includes(`<meta property="og:image" content="${jpeg}">`), 'WhatsApp’s preview picture');
-  assert.ok(html.includes(`<img src="${jpeg}"`), 'the same photo on the page');
-  assert.ok(html.includes('<form method="post"'), 'its button');
+  assert.ok(html.includes(`<img class="main" src="${jpeg}"`), 'the same photo on the page');
+  assert.ok(html.indexOf('<form method="post"') > 0, 'its button');
+  assert.ok(html.indexOf('<img class="why"') > html.indexOf('</form>'), '« Pourquoi nous » under the button');
+  assert.ok(!reorderPageHtml({ message: 'تمت إعادة تفعيل طلبك.', why: page.why }).includes('class="why"'), 'not on the answer page');
   assert.ok(!reorderPageHtml({ photo: 'javascript:alert(1)' }).includes('javascript:'), 'only an https photo');
+  assert.ok(!reorderPageHtml({ why: { src: 'https://x.dz/a.webp', srcset: 'javascript:x 480w' } }).includes('javascript:'), 'only https pictures');
   assert.equal(((await call('orders.reorderPage', sys, { code: 'AAAAAAAAAA' })) as any).found, false);
   // only the system reads a page
   await assert.rejects(call('orders.reorderPage', await as(EMAILS.conf), { code: msg.token }));

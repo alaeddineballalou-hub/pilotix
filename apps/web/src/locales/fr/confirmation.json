@@ -9,6 +9,17 @@
   "cancellationMessageRequired": "Envoyez le message d’annulation au client",
   "cancelReorderText": "Votre commande a été annulée. Utilisez le lien ci-dessous quand vous souhaitez la réactiver.",
   "cancelReorderLink": "Le lien Réactiver ma commande est ajouté automatiquement.",
+  "cancelPhoto": {
+    "goes": "La photo principale du produit part avec le message.",
+    "share": "Envoyez le message, puis revenez ici : le bouton « Envoyer la photo » apparaît.",
+    "ext": "Sur ordinateur, la vraie photo part avec l’extension Pilotix. Sans elle, la photo s’affiche dans l’aperçu du lien.",
+    "install": "Installer l’extension",
+    "card": "La photo principale s’affiche dans l’aperçu du lien.",
+    "send": "Envoyer la photo",
+    "shared": "Photo envoyée · renvoyer",
+    "failed": "La photo n’a pas pu partir.",
+    "again": "La photo n’a pas pu partir : touchez encore WhatsApp pour envoyer le message avec son lien (la photo s’affiche dans son aperçu)."
+  },
   "attemptMessageRequired": "Envoyez un message au client pour la tentative {{n}}",
   "attemptMessageOneOrder": "Ouvrez une commande à la fois pour envoyer son message.",
   "sub": {

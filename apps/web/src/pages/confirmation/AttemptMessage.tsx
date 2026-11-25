@@ -1,12 +1,20 @@
 import { phoneWa, withReactivationLink } from '@pilotix/shared';
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRpc } from '../../lib/query';
+import { store } from '../../lib/store';
+import { EXT_ZIP, extSend, extVersion, photoFiles, sendMode, sharePhotoFiles, waApps, waChat, waPhotos } from '../../lib/waShare';
 import { copyText, Icon } from '../../ui/kit';
+import { toast } from '../../ui/toast';
 import whatsappLogo from '../../assets/brand/whatsapp-logo.svg';
 import './attempt-message.css';
 
 export type MessageChannel = 'whatsapp' | 'sms';
+/** how the cancel message's photo reaches the chat: pc the extension, app the Pilotix app, share a phone's share menu,
+ *  card only in the link's preview (no way on this device, or no photo) */
+type PhotoWay = 'pc' | 'app' | 'share' | 'card';
+/** the WhatsApp the agent uses in the Pilotix app (« Envoyer des photos » keeps the same choice) */
+const WA_APP_KEY = 'waApp';
 export type OpenedMessage = { channel: MessageChannel; text: string; reorderToken?: string };
 export const finalAttempt = (attempts: number, limit: number) => limit > 0 && attempts + 1 >= limit;
 /** This call is the try of the shop's first message (Management › Statuts › « Messages client », 3 at the start). An order
@@ -64,11 +72,95 @@ export function AttemptMessage({ phone, orderId, message, onMessage, onOpen, can
   const payload = cancelling && url ? withReactivationLink(text, url) : text;
   const body = encodeURIComponent(payload);
   const canOpen = !!body && (!cancelling || !!url);
+  const waHref = phone ? `https://wa.me/${phoneWa(phone)}?text=${body}` : '';
+
+  // the cancel message's photo: the product's main photo, into the chat with the message where this device can (the way
+  // « Envoyer des photos » sends: the extension on a computer, the Pilotix app, a phone's share menu), else only in the
+  // link's preview (the preview has its small picture: shown, nothing more)
+  const photo = cancelling ? (tpl.data?.photo ?? null) : null;
+  const realPhoto = photo && /^https:\/\//.test(photo) ? photo : null;
+  const mode = useMemo(sendMode, []);
+  const ext = useMemo(extVersion, []);
+  // the photo's way failed once (WhatsApp Web closed, no WhatsApp…): the next tap sends the message with its link
+  const [fallback, setFallback] = useState(false);
+  const way: PhotoWay = !realPhoto || fallback ? 'card' : mode === 'pc' ? (ext ? 'pc' : 'card') : mode === 'app' ? 'app' : mode === 'share' ? 'share' : 'card';
+  const [app, setApp] = useState<string | null>(null);
+  useEffect(() => {
+    if (way !== 'app') return;
+    let live = true;
+    void waApps().then((a) => {
+      if (!live) return;
+      const kept = store.get(WA_APP_KEY);
+      setApp(kept && a.includes(kept) ? kept : (a[0] ?? null));
+    });
+    return () => {
+      live = false;
+    };
+  }, [way]);
+  // a phone's browser: the photo fetched while the agent sends the message, for the share menu after
+  const files = useRef<Promise<File[] | null> | null>(null);
+  useEffect(() => {
+    if (way === 'share' && realPhoto && !files.current) files.current = photoFiles([realPhoto], 'photo').catch(() => null);
+  }, [way, realPhoto]);
+  const [shared, setShared] = useState<'todo' | 'busy' | 'done'>('todo');
+  // the app: the message opened the chat; when the agent comes back to Pilotix, the photo goes into it by itself (once)
+  const [armed, setArmed] = useState(false);
+  const photoGone = useRef(false);
+  useEffect(() => {
+    if (!armed || !realPhoto || !phone) return;
+    let away = document.visibilityState === 'hidden';
+    let timer = 0;
+    const seen = () => {
+      if (document.visibilityState === 'hidden') {
+        away = true;
+        return;
+      }
+      if (!away || photoGone.current) return;
+      away = false;
+      timer = window.setTimeout(() => {
+        photoGone.current = true;
+        void waPhotos(phoneWa(phone), [realPhoto], app).catch(() => toast(t('confirmation.cancelPhoto.failed'), 'bad', 6000));
+      }, 700);
+    };
+    document.addEventListener('visibilitychange', seen);
+    return () => {
+      document.removeEventListener('visibilitychange', seen);
+      window.clearTimeout(timer);
+    };
+  }, [armed, realPhoto, phone, app, t]);
+  /** the photo could not go: the next tap on WhatsApp sends the message with its link (its preview shows the photo) */
+  const linkOnly = () => {
+    setFallback(true);
+    toast(t('confirmation.cancelPhoto.again'), 'bad', 8000);
+  };
+  const sendWithPhoto = (): (() => void) | undefined => {
+    if (!phone || !realPhoto) return undefined;
+    if (way === 'pc') return () => void extSend(phoneWa(phone), payload, [realPhoto]).then((r) => !r.ok && linkOnly());
+    if (way === 'app') return () => void waChat(phoneWa(phone), payload, app).then(() => setArmed(true), linkOnly);
+    return undefined;
+  };
+  const sharePhoto = async () => {
+    if (!realPhoto) return;
+    setShared('busy');
+    try {
+      const f = await (files.current ??= photoFiles([realPhoto], 'photo').catch(() => null));
+      if (!f?.length) {
+        files.current = null;
+        throw new Error('photo');
+      }
+      setShared((await sharePhotoFiles(f)) === 'cancelled' ? 'todo' : 'done');
+    } catch {
+      setShared('todo');
+      toast(t('confirmation.cancelPhoto.failed'), 'bad', 6000);
+    }
+  };
+
   const open = (channel: MessageChannel) => onOpen({ channel, text: payload, reorderToken: cancelling ? tpl.data?.token ?? undefined : undefined });
   const [copied, setCopied] = useState<Copied | null>(null);
   // « Terminer » comes only once the message is copied: each tap copies it first, then opens the app (its link fills it
-  // in too); nothing copied = the app stays closed and the tap must be done again
-  const tap = (channel: MessageChannel) => (event: MouseEvent<HTMLAnchorElement>) => {
+  // in too); nothing copied = the app stays closed and the tap must be done again. `send`: the photo's way instead of
+  // the link (the extension, the Pilotix app)
+  const tap = (channel: MessageChannel, send?: () => void) => (event: MouseEvent<HTMLAnchorElement>) => {
     const slow = copied?.state === 'again' && copied.text === payload; // copied the slow way on the tap before
     if (!copyNow(payload, event.currentTarget.closest('dialog') ?? document.body) && !slow) {
       event.preventDefault();
@@ -78,8 +170,13 @@ export function AttemptMessage({ phone, orderId, message, onMessage, onOpen, can
     }
     setCopied({ state: 'ok', channel, text: payload });
     open(channel);
+    if (send) {
+      event.preventDefault();
+      send();
+    }
   };
   const status = copied?.text === payload ? (copied.state === 'ok' && back ? 'back' : copied.state) : null;
+  const photoNote = way === 'pc' || way === 'app' ? 'goes' : way === 'share' ? 'share' : realPhoto && mode === 'pc' && !ext ? 'ext' : 'card';
   return <>
     <label className="qd6-lab">
       {t(cancelling ? 'confirmation.cancellationMessageRequired' : 'confirmation.attemptMessageRequired', { n: meta.data?.messageAtTry ?? 3 })}
@@ -91,14 +188,25 @@ export function AttemptMessage({ phone, orderId, message, onMessage, onOpen, can
     </label>
     {phone ? <>
       {cancelling && <small>{t('confirmation.cancelReorderLink')}</small>}
+      {photo && <div className="attempt-message-photo">
+        <img src={photo} alt="" />
+        <small>
+          {t(`confirmation.cancelPhoto.${photoNote}`)}
+          {photoNote === 'ext' && <> <a href={EXT_ZIP} download>{t('confirmation.cancelPhoto.install')}</a></>}
+        </small>
+      </div>}
       {tpl.error && <button type="button" className="btn small" onClick={() => void tpl.refetch()}>{t('common.retry')}</button>}
       <div className="attempt-message-channels">
         {canOpen ? <a className="btn" href={`sms:${phone}?body=${body}`} aria-label="SMS"
           onClick={tap('sms')}><Icon name="message" /></a> : <button type="button" className="btn" disabled aria-label="SMS"><Icon name="message" /></button>}
-        {canOpen ? <a className="btn" href={`https://wa.me/${phoneWa(phone)}?text=${body}`} target="_blank" rel="noopener noreferrer"
-          aria-label="WhatsApp" onClick={tap('whatsapp')}><img src={whatsappLogo} alt="" /></a>
+        {canOpen ? <a className="btn" href={waHref} target="_blank" rel="noopener noreferrer"
+          aria-label="WhatsApp" onClick={tap('whatsapp', sendWithPhoto())}><img src={whatsappLogo} alt="" /></a>
           : <button type="button" className="btn" disabled aria-label="WhatsApp"><img src={whatsappLogo} alt="" /></button>}
       </div>
+      {way === 'share' && back && copied?.channel === 'whatsapp' && <button type="button" className={`btn${shared === 'done' ? '' : ' primary'} attempt-message-share`}
+        disabled={shared === 'busy'} onClick={() => void sharePhoto()}>
+        <Icon name="image" /> {t(shared === 'done' ? 'confirmation.cancelPhoto.shared' : 'confirmation.cancelPhoto.send')}
+      </button>}
       {status && copied && <p role="status" className={`attempt-message-copy ${status}`}>
         {t(`confirmation.attemptCopy.${status}`, { app: copied.channel === 'sms' ? 'SMS' : 'WhatsApp' })}
       </p>}

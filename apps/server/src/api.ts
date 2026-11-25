@@ -466,7 +466,8 @@ class ApiController {
   /**
    * The cancel message's short link (since 25 Nov 2026): https://<the shop's own domain>/r/<code> (Caddy sends it to
    * /api/domain/r/<code>), or on the platform's address /api/s/<store>/r/<code>. Its page shows the product's main
-   * photo, which WhatsApp shows in its preview; its button restores the order (only the latest cancellation's link).
+   * photo, which WhatsApp shows in its preview; its button restores the order (only the latest cancellation's link);
+   * under the button, the shop's « Pourquoi nous » picture.
    */
   @Public()
   @Get(['r/:code', 's/:shop/r/:code'])
@@ -507,9 +508,13 @@ class ApiController {
     // (the server failing for a moment: the page without its photo, its button still answers the truth)
     const p: any = await this.core.call(shop, 'orders.reorderPage', await this.core.systemSession(shop), { code }).catch(() => ({ found: true, photo: null, product: null }));
     if (!p?.found) return reorderHead(res.code(404)).send(core.reorderPageHtml({ message: REORDER_GONE }));
+    // on the shop's own domain, its pictures are read there too (the page never needs the platform's address)
     const base = config.publicUrl.replace(/\/+$/, '');
-    const photo = typeof p.photo === 'string' && site && base && p.photo.startsWith(`${base}/api/`) ? `${site}${p.photo.slice(base.length)}` : p.photo;
-    return reorderHead(res.code(200)).send(core.reorderPageHtml({ photo, product: p.product }));
+    const here = (u: unknown) => (typeof u === 'string' && site && base && u.startsWith(`${base}/api/`) ? `${site}${u.slice(base.length)}` : u);
+    const why = p.why && typeof p.why.src === 'string'
+      ? { ...p.why, src: here(p.why.src), srcset: typeof p.why.srcset === 'string' ? p.why.srcset.split(', ').map((x: string) => { const [u, w] = x.split(' '); return `${here(u)} ${w}`; }).join(', ') : undefined }
+      : null;
+    return reorderHead(res.code(200)).send(core.reorderPageHtml({ photo: here(p.photo) as string | null, product: p.product, why }));
   }
 
   private async reactivateShort(ref: ShopRef | null, code: string, res: any) {

@@ -21,3 +21,8 @@
 .attempt-message-channels img, .attempt-message-channels svg { width: 24px; height: 24px; }
 .attempt-message-copy { margin: 0; padding: 8px 12px; border-radius: 10px; font-size: 14px; line-height: 1.5; text-align: center; background: var(--ok-soft); color: var(--ok); }
 .attempt-message-copy.fail { background: var(--coral-soft); color: var(--coral); }
+/* the cancel message's photo: the product's main photo that goes with the message (or shows in the link's preview) */
+.attempt-message-photo { display: flex; align-items: center; gap: 12px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; }
+.attempt-message-photo img { flex: none; width: 56px; height: 56px; object-fit: cover; border-radius: 8px; background: var(--line); }
+.attempt-message-photo small { line-height: 1.45; }
+.attempt-message-share { justify-self: center; }

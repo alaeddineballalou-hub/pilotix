@@ -9,6 +9,17 @@
   "cancellationMessageRequired": "Send the cancellation message to the client",
   "cancelReorderText": "Your order has been cancelled. Use the link below whenever you want to reactivate it.",
   "cancelReorderLink": "The Reactivate my order link is added automatically.",
+  "cancelPhoto": {
+    "goes": "The product's main photo goes with the message.",
+    "share": "Send the message, then come back here: the « Send the photo » button appears.",
+    "ext": "On a computer, the real photo goes with the Pilotix extension. Without it, the photo shows in the link's preview.",
+    "install": "Install the extension",
+    "card": "The main photo shows in the link's preview.",
+    "send": "Send the photo",
+    "shared": "Photo sent · send again",
+    "failed": "The photo could not be sent.",
+    "again": "The photo could not be sent: tap WhatsApp again to send the message with its link (the photo shows in its preview)."
+  },
   "attemptMessageRequired": "Send the client a message for attempt {{n}}",
   "attemptMessageOneOrder": "Open one order at a time to send its message.",
   "sub": {

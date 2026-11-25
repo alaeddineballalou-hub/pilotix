@@ -23,7 +23,8 @@ export interface CustomerMessages {
 
 export const DEFAULT_CUSTOMER_MESSAGES: CustomerMessages = {
   attempt: 'مرحبًا {الاسم}، حاولنا الاتصال بك لتأكيد طلبك رقم {رقم_الطلب} من {المتجر}.\n{المنتجات}\nالتوصيل: {التوصيل} · الإجمالي: {الإجمالي}\nما الوقت المناسب للاتصال بك؟',
-  cancel: 'مرحبًا {الاسم}، تم إلغاء طلبك رقم {رقم_الطلب} لعدم الرد.\n{المنتجات}\nإذا أردت إعادة تفعيل طلبك، اضغط على الرابط التالي:\n{رابط_إعادة_التفعيل}',
+  // the order at a glance (owner, 25 Nov 2026): its products, the delivery and the total, then the link
+  cancel: 'مرحبًا {الاسم}، تم إلغاء طلبك رقم {رقم_الطلب} لعدم الرد.\n{المنتجات}\nالتوصيل: {التوصيل}\nالإجمالي: {الإجمالي}\nإذا أردت إعادة تفعيل طلبك، اضغط على الرابط التالي:\n{رابط_إعادة_التفعيل}',
 };
 
 export interface CustomerMessageOrder {
