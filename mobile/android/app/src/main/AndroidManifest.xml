@@ -25,6 +25,36 @@
 
         </activity>
 
+        <!-- the ring screen (RingActivity): over the locked screen, like a call, while a new order to call rings -->
+        <activity
+            android:name=".RingActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:taskAffinity="com.pilotix.app.ring"
+            android:theme="@style/RingTheme"
+            android:turnScreenOn="true" />
+
+        <!-- Pilotix's messages through Firebase, even when the app is closed (PilotixMessagingService) -->
+        <service
+            android:name=".PilotixMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <!-- a message that Firebase draws itself (none comes from Pilotix): Pilotix's face, orange, « Autres notifications » -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_pilotix" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/pilotix_orange_deep" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="pilotix_info" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -53,4 +83,7 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <!-- notifications (new orders, dépôt alerts…): Android 13+ asks the person when the app opens -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- the ring screen over the locked screen (« Bloquer jusqu'à l'appel »), and the ring's buzz -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 </manifest>

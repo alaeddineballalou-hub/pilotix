@@ -13,6 +13,7 @@ import { payAlert } from './payalert';
 import { mailConfigured, sendMail } from './mail';
 import { pilotRestMail } from './mails';
 import { turnstileCheck, turnstileSiteKey } from './turnstile';
+import { fcmHooks } from './fcm';
 import { push, pushKeys } from './push';
 
 const PATH = Symbol('pilotix.search_path');
@@ -231,6 +232,8 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
   readonly baseHooks: ServerHooks = {
     pushKeys,
     push,
+    // the Pilotix Android app's phones (Firebase), when this server has the key
+    ...fcmHooks(),
     // « Mes boutiques »: a shop's name, link or logo changed — every request sees it at once
     platformChanged: () => this.invalidate(),
     courier: async (action, args, ctx) => {

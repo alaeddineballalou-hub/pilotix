@@ -27,7 +27,7 @@ import { bad, Ctx, forbidden, hasRole, proc } from '../rpc';
 import { getSetting, setSetting, SettingsMap } from '../settings';
 import { agencyLead, agencyOf, andSql, queueSql } from './agencyscope';
 import { getOrder, withClientScores } from './orders';
-import { phoneSql, ringPhones } from './push';
+import { canPush, phoneSql, ringPhones } from './push';
 
 /** the phone rings again after this long while the order still waits for his call */
 export const RING_AGAIN_MS = 2 * 60_000;
@@ -110,6 +110,8 @@ function ringText(r: { id: unknown; ref: string; customer_name: string; wilaya_i
     alarm: true,
     // the phone's worker (sw.js): Pilotix open on its screen rings there itself, no notification on top
     conf: true,
+    // the Android app (PilotixMessagingService): its loud ring, even on a silent phone, over the locked screen
+    ring: true,
   };
 }
 
@@ -221,7 +223,7 @@ export const confBlockProcs = {
    */
   'confirmation.phoneTest': proc(['confirmation'], Endpoint, async (ctx, i) => {
     const phone = await myPhone(ctx, i.endpoint);
-    if (!ctx.server?.push) {
+    if (!canPush(ctx.server)) {
       // nothing can ring here: this « phone » is the demo's, it answers at once
       if (!phone)
         await ctx.db.query(
@@ -239,6 +241,8 @@ export const confBlockProcs = {
       tag: 'conf-test',
       url: '#/confirmation/nouvelles',
       alarm: true,
+      // the Android app: the same loud ring as a new order's
+      ring: true,
     });
     return { sent };
   }),

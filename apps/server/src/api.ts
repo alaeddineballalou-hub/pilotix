@@ -42,6 +42,7 @@ import { promises as dns } from 'node:dns';
 import { domainLookup } from './domainDns';
 import { domainEcho, echoNonceOk, reachDomain } from './domainEcho';
 import { referralSignupMail, signupConfirmMail, signupExistsMail, verifyMail } from './mails';
+import { fcmHooks } from './fcm';
 import { push as webPush, pushKeys as webPushKeys } from './push';
 import type { Mail } from './mail';
 import { syncTurnstile } from './turnstile';
@@ -1496,7 +1497,7 @@ class ApiController {
       const set = await core.platformSettings(this.core.t);
       const months = set.referral.on ? set.referral.months : 0;
       if (n.to) sendLater(referralSignupMail({ to: n.to, name: n.name, language: n.language, shop: n.shop, friend: n.friend, months }), 'Referral');
-      await core.pushShopAdmins(this.core.t, { push: webPush, pushKeys: webPushKeys }, n.referrerShopId, {
+      await core.pushShopAdmins(this.core.t, { push: webPush, pushKeys: webPushKeys, ...fcmHooks() }, n.referrerShopId, {
         title: '🎉 Parrainage',
         body: `« ${n.friend} » s’est inscrite avec votre lien${months ? ` : ${months} mois offert${months > 1 ? 's' : ''} à son premier paiement` : ''}.`,
         url: '#/parrainage',

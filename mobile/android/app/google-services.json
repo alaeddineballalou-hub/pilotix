@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1058405044820",
+    "project_id": "pilotix-d2d88",
+    "storage_bucket": "pilotix-d2d88.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1058405044820:android:c4a29e2abd7ddb5929d3c1",
+        "android_client_info": {
+          "package_name": "com.pilotix.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDRjKr0j6Y12sOldRfFxKDABZrpMu0vPbQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
 import { wilayaName } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
-import { enablePush, myEndpoint, phoneDevice, pushHere, pushTurnOn } from '../../lib/push';
+import { appPush, enablePush, myEndpoint, onPushConf, openAppSettings, phoneDevice, pushHere, pushTurnOn } from '../../lib/push';
 import { useRpc } from '../../lib/query';
 import { audioReady, ring, unlockAudio } from '../../lib/sound';
 import { useIsPhone } from '../../lib/useMedia';
@@ -36,17 +36,10 @@ export function NewOrderGate() {
   // while his phone is not ready, look more often: the computer opens as soon as the phone is done
   const q = useRpc('confirmation.blocking', {}, { refetchInterval: (x) => (x.state.data?.gate ? 4_000 : 15_000), refetchOnWindowFocus: true, retry: false });
   const b = q.data;
-  // the phone's worker (sw.js) got a ring while Pilotix is on its screen: look now, not in 15 s
+  // the phone's worker (sw.js) or the Pilotix app got a ring while Pilotix is on its screen: look now, not in 15 s
   const refetch = useRef(q.refetch);
   refetch.current = q.refetch;
-  useEffect(() => {
-    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
-    const fn = (e: MessageEvent) => {
-      if (e.data && e.data.type === 'px-conf') void refetch.current();
-    };
-    navigator.serviceWorker.addEventListener('message', fn);
-    return () => navigator.serviceWorker.removeEventListener('message', fn);
-  }, []);
+  useEffect(() => onPushConf(() => void refetch.current()), []);
   const [push, recheck] = usePushHere(phone && !!b?.on && !!b?.work);
   // outside his work time (his shift, else the calling hours): nothing
   if (!b?.on || !b.work) return null;
@@ -428,7 +421,12 @@ function PhoneSetup({ step, push, gate, shift, onPush, onDone }: { step: 'notif'
                   <li>{t(`${k}.notif.step2`)}</li>
                   <li>{t(`${k}.notif.step3`)}</li>
                 </ol>
-                <button type="button" className="nob-nt-on" onClick={() => onPush()}>
+                {appPush() && (
+                  <button type="button" className="nob-nt-on" onClick={() => void openAppSettings().catch(() => {})}>
+                    <Icon name="settings" /> {t(`${k}.notif.settings`)}
+                  </button>
+                )}
+                <button type="button" className={appPush() ? 'nob-nt-no' : 'nob-nt-on'} onClick={() => onPush()}>
                   <Icon name="check" /> {t(`${k}.notif.again`)}
                 </button>
               </>

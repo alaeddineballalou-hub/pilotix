@@ -45,7 +45,7 @@ on from the first step that isn't ✅.
 | 4 | GitHub builds the Android test app (`.github/workflows/mobile.yml`) | ✅ done 29 Oct 2026 (build ok, APK 4.2 MB, signed) |
 | 5 | Owner installs the test app on his phone and checks it | 🔨 30 Oct: doors ✅ (backup door opened by itself); bars fix in the next test |
 | 6 | One-tap calls (today a `tel:` link opens the phone's dialer with the number) | ⏭️ |
-| 7 | Notifications: the app asks for permission at start ✅ (30 Oct); sending them needs the owner's Firebase project → `google-services.json` | 🔨 |
+| 7 | Notifications through Firebase: the owner's project PILOTIX (`pilotix-d2d88`) ✅ 25 Nov; app + server + deploy built on `preview/app-firebase` (below) | 🔨 the owner's phone test |
 | 8 | Scanner: test the website's camera scanner in the app (camera permission is in) | ⏭️ |
 | 9 | The app updates itself (« Nouvelle version de l'app », one tap; « Mise à jour obligatoire » in the control room) | 🔨 9 Nov 2026: built; the fixed key is made by GitHub (DEPLOY_SSH_KEY); one last install by hand |
 | 10 | iPhone (`npx cap add ios`, Mac build on GitHub, Apple account) | ⏭️ |
@@ -116,6 +116,26 @@ on from the first step that isn't ✅.
   Debug »): the build signs through `PILOTIX_KEYSTORE` (app/build.gradle), and the step « The app's key » compares the
   app's certificate with the key's; if they differ, nothing is published.
 
+## Notifications (step 7, built 25 Nov 2026 on `preview/app-firebase`)
+
+- The owner's Firebase project **PILOTIX** (`pilotix-d2d88`), Android app `com.pilotix.app` « Pilotix Android »:
+  `mobile/android/app/google-services.json` is in the code (owner's choice 25 Nov: in the code, the key to be limited to
+  the notification APIs in Google Cloud › Credentials after the phone test; the same key is inside every app file anyway).
+- The server's key: GitHub secret `FIREBASE_SERVICE_ACCOUNT` (the owner pasted it; the leaked first key was deleted, the
+  live one is `ff867eb8…`). The Deploy button carries it to the server after each update (`deploy.yml` › « The Firebase
+  key on the server » → `deploy/update.sh secrets` → `deploy/.env › FIREBASE_SERVICE_ACCOUNT_B64`, the server restarts
+  only when it changed). The server: `apps/server/src/fcm.ts` (Google sign-in with the key, FCM HTTP v1).
+- A phone is saved like a browser's device: `push_subs.endpoint = fcm:<token>` (core `push.ts` › `appEndpoint`), so the
+  bell, its test, « Bloquer jusqu'à l'appel » (test ring, ack, gate) work alike. Messages are data only (`fcmMessage`).
+- The app (`PilotixPushPlugin`, `PilotixMessagingService`, `PushNotices`, `RingActivity`): three channels —
+  « Nouvelle commande à appeler » (`ring`: Pilotix's ring `res/raw/pilotix_ring.ogg` made from the website's ring, on
+  the ALARM sound so it rings on a silent phone, repeated until looked at or 110 s, the ring screen over the locked screen),
+  « Alertes importantes » (`alarm`), « Autres notifications ». `conf` with Pilotix on the screen: no notification, the page
+  is told (`px-conf`). Taps open the notification's page (also when the app was closed: kept until the page listens).
+  The ring stops when Pilotix comes on the screen. The website: `lib/push.ts` (`appPush`, `onPushOpen`, `onPushConf`).
+- **Not checked on a real phone yet** (no Android phone or emulator with Google Play services in the cloud): the ring on
+  a silent phone, through « Ne pas déranger », the ring screen over the locked screen, the sound's loudness.
+
 ## To test on the phone (things a website-in-an-app can get wrong)
 
 - **Google sign-in can't work inside the app** (Google blocks sign-in in apps' web views, and
@@ -145,6 +165,10 @@ on from the first step that isn't ✅.
   (his Play Console account covers it).
 
 ## Log
+
+- 25 Nov 2026, 00:00–02:00: the owner made the Firebase project (Claude in Chrome registered the Android app and
+  downloaded `google-services.json`); his key went to GitHub. Step 7 built on `preview/app-firebase` (app, server, deploy).
+  Next: the test app from that branch on his phone, then main + the night deploy, then limit the Firebase key.
 
 - 9 Nov 2026: step 9 built (owner chose « obligatoire » as a control room button). Next: owner adds the key, first
   fixed-key app, agents install it once by hand; then updates come through the app.

@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { backend, Out, rpc } from '../lib/backend';
 import { clock, dayLabel, sameDay } from '../lib/format';
 import { openOrder } from '../lib/modals';
-import { disableDevicePush, enablePush, enablePushSubscription, testDevicePush } from '../lib/push';
+import { disableDevicePush, enablePush, enablePushSubscription, onAppToken, onPushOpen, testDevicePush } from '../lib/push';
 import { useRpcFor } from '../lib/query';
 import { setSeller, useScope } from '../lib/seller';
 import { useSession } from '../lib/session';
@@ -136,18 +136,21 @@ export function Bell() {
     return () => window.clearTimeout(id);
   }, [pops]);
 
-  // a tap on a phone notification while Pilotix is open: its order (public/sw.js)
-  useEffect(() => {
-    if (!('serviceWorker' in navigator)) return;
-    const on = (e: MessageEvent) => {
-      const d = e.data as { type?: string; url?: string; order?: number | null } | null;
-      if (d?.type !== 'px-open') return;
-      if (d.order) openOrder(Number(d.order));
-      else if (typeof d.url === 'string' && d.url.startsWith('#/')) location.hash = d.url;
-    };
-    navigator.serviceWorker.addEventListener('message', on);
-    return () => navigator.serviceWorker.removeEventListener('message', on);
-  }, []);
+  // a tap on a phone notification while Pilotix is open (public/sw.js), or one that opened the Pilotix app: its order
+  useEffect(
+    () =>
+      onPushOpen((d) => {
+        const route = typeof d.url === 'string' && d.url.startsWith('#/') ? d.url : '';
+        // the app is one window: a notification of another boutique opens that boutique (sw.js opens a new window)
+        const ws = typeof d.workspace === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(d.workspace) ? d.workspace : '';
+        if (ws && location.pathname.split('/')[1] !== ws) return location.assign(`/${ws}/${route || '#/accueil'}`);
+        if (d.order) openOrder(Number(d.order));
+        else if (route) location.hash = route;
+      }),
+    [],
+  );
+  // the Pilotix app: Firebase gave this phone a new token, the server is told again (only when it was on)
+  useEffect(() => onAppToken(() => void enablePush(false).catch(() => {})), []);
 
   // the panel: closes on a tap outside, Escape, another page; asks this phone's state
   useEffect(() => {

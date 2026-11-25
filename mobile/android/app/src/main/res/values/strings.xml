@@ -4,4 +4,15 @@
     <string name="title_activity_main">Pilotix</string>
     <string name="package_name">com.pilotix.app</string>
     <string name="custom_url_scheme">com.pilotix.app</string>
+    <!-- notifications (PushNotices.java): the three kinds the phone's settings list, French first (FR / AR / EN like the
+         start page) -->
+    <string name="ch_ring">Nouvelle commande à appeler</string>
+    <string name="ch_ring_about">Sonne fort, même téléphone en silencieux, jusqu’à votre appel</string>
+    <string name="ch_alert">Alertes importantes</string>
+    <string name="ch_alert_about">Commande donnée, rappel, alerte du dépôt</string>
+    <string name="ch_info">Autres notifications</string>
+    <string name="ch_info_about">Le reste de la cloche Pilotix</string>
+    <!-- the ring screen (RingActivity) -->
+    <string name="ring_open">Ouvrir Pilotix</string>
+    <string name="ring_quiet">Couper le son</string>
 </resources>

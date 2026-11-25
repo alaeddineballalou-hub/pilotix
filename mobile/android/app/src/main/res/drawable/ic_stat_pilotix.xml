@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Pilotix face in the phone's top bar (notifications): Android draws it white, so the eye, the wink and the smile are
+     holes in the round face (the same shapes as the app icon, apps/web/public/favicon.svg). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M256,16A240,240 0,1 1,256,496A240,240 0,1 1,256,16Z M186,136A50,50 0,1 1,186,236A50,50 0,1 1,186,136Z M290,164H364A22,22 0,0 1,364,208H290A22,22 0,0 1,290,164Z M146,296C217.4,372 324.5,364.4 384,272C324.5,319.18 217.4,326.78 146,296Z" />
+</vector>

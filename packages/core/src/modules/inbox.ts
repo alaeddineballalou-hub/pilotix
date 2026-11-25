@@ -18,7 +18,7 @@ import { Ctx, proc } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { BellKind, ringBell } from './bell';
 import { runAgencyKpis, tellAgencyAssignments, tellAgencyOrderStatus } from './agencybell';
-import { pushOnly } from './push';
+import { canPush, pushOnly } from './push';
 
 // ---------------------------------------------------------------- the words (the person's language)
 type Words = Record<Language, string>;
@@ -231,7 +231,7 @@ export async function tell(ctx: Ctx, to: readonly (number | null | undefined)[],
     const rung = await ringBell(ctx, people, (lang, n) => ({ kind: t.kind, ...t.text(lang, n), url: t.url ?? null, orderId: t.listWhenMany && n > 1 ? null : t.orderId ?? null, important }), { tag: t.tag, count: t.count, silent: t.silent, groupForMs: t.groupForMs });
     const phone = t.silent ? 'never' : t.phone ?? 'work';
     const fresh = rung.filter((r) => !r.quiet);
-    if (fresh.length && phone !== 'never' && ctx.server?.push && (phone === 'always' || (await workNow(ctx))))
+    if (fresh.length && phone !== 'never' && canPush(ctx.server) && (phone === 'always' || (await workNow(ctx))))
       for (const r of fresh)
         await pushOnly(ctx, [r.id], { title: r.line.title, body: r.line.body, tag: t.tag ?? `${t.kind}-${r.id}-${ctx.now()}`, url: t.url ?? '#/accueil', alarm: important, kind: t.kind, order: t.orderId ?? null }).catch(() => 0);
     return rung.map((r) => r.id);

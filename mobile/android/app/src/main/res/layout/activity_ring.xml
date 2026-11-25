@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The ring screen (RingActivity): a new order to call, over the locked screen, while the phone rings. Navy and orange,
+     like Pilotix; the order's line is the notification's (« 📞 Nouvelle commande à appeler · PX… », the customer…). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/pilotix_navy"
+    android:fitsSystemWindows="true"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:paddingStart="28dp"
+    android:paddingTop="40dp"
+    android:paddingEnd="28dp"
+    android:paddingBottom="40dp">
+
+    <ImageView
+        android:id="@+id/ring_icon"
+        android:layout_width="104dp"
+        android:layout_height="104dp"
+        android:layout_marginBottom="32dp"
+        android:contentDescription="@null"
+        android:src="@mipmap/ic_launcher_round" />
+
+    <TextView
+        android:id="@+id/ring_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        android:gravity="center"
+        android:textColor="#FFFFFFFF"
+        android:textSize="24sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/ring_body"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="44dp"
+        android:gravity="center"
+        android:lineSpacingMultiplier="1.15"
+        android:textColor="#D9FFFFFF"
+        android:textSize="17sp" />
+
+    <Button
+        android:id="@+id/ring_open"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:background="@drawable/ring_open_button"
+        android:stateListAnimator="@null"
+        android:text="@string/ring_open"
+        android:textAllCaps="false"
+        android:textColor="@color/pilotix_navy"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <Button
+        android:id="@+id/ring_quiet"
+        android:layout_width="match_parent"
+        android:layout_height="54dp"
+        android:layout_marginTop="14dp"
+        android:background="@drawable/ring_quiet_button"
+        android:stateListAnimator="@null"
+        android:text="@string/ring_quiet"
+        android:textAllCaps="false"
+        android:textColor="#E6FFFFFF"
+        android:textSize="16sp" />
+</LinearLayout>

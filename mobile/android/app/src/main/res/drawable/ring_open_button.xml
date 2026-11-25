@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- « Ouvrir Pilotix » on the ring screen: the website's orange button (#F7A823 → #F28B1E), round corners -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="#33FFFFFF">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="16dp" />
+            <gradient
+                android:angle="315"
+                android:endColor="@color/pilotix_orange_deep"
+                android:startColor="@color/pilotix_orange" />
+        </shape>
+    </item>
+</ripple>

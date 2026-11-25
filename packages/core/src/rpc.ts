@@ -133,6 +133,11 @@ export interface ServerHooks {
   /** Web Push: a new key pair for the shop (once), and sending one notification to devices (gone: unsubscribed, to forget) */
   pushKeys?: () => { publicKey: string; privateKey: string };
   push?: (keys: { publicKey: string; privateKey: string }, subs: { endpoint: string; p256dh: string; auth: string }[], payload: Record<string, unknown>) => Promise<{ endpoint: string; ok: boolean; gone: boolean }[]>;
+  /**
+   * The Pilotix Android app's phones (Firebase): one message to each token (gone: the app is no longer there, to forget).
+   * Missing on a server without the Firebase key (deploy/.env › FIREBASE_SERVICE_ACCOUNT_B64) and in the browser preview.
+   */
+  fcm?: (tokens: string[], payload: Record<string, unknown>) => Promise<{ token: string; ok: boolean; gone: boolean }[]>;
   /** the server's public address (PUBLIC_URL): couriers call it back (webhooks) */
   publicUrl?: string;
   /** the landing pages' address in use (https://go.<domain> once it answers, else publicUrl) */

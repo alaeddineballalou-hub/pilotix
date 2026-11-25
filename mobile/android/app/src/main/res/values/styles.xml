@@ -24,4 +24,12 @@
         <item name="windowSplashScreenBackground">@color/pilotix_navy</item>
         <item name="android:windowBackground">@color/pilotix_navy</item>
     </style>
+
+    <!-- the ring screen (RingActivity): navy all over, over the locked screen -->
+    <style name="RingTheme" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/pilotix_navy</item>
+        <item name="android:statusBarColor">@color/pilotix_navy</item>
+        <item name="android:navigationBarColor">@color/pilotix_navy</item>
+        <item name="colorAccent">@color/pilotix_orange</item>
+    </style>
 </resources>

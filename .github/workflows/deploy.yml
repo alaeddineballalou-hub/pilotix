@@ -152,6 +152,24 @@ jobs:
           # (e-mail addresses are hidden in the run's log: anyone can read it while the code is public)
           ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=$CHECK -o ServerAliveInterval=30 "root@$HOST" "update $SHA" 2>&1 | sed -u -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/***@***/g' | tee "$RUNNER_TEMP/update.log"
 
+      # the Firebase key of the Pilotix Android app's notifications, from the GitHub secret FIREBASE_SERVICE_ACCOUNT (25 Nov
+      # 2026): sent on the SSH connection's input, never on a command line or in a log; the server writes it into
+      # deploy/.env and restarts only when it changed (deploy/update.sh › secrets). Right after the update, so the server
+      # already has the update.sh that knows « secrets ». Without the secret: nothing (the app phones get no notifications).
+      - name: The Firebase key on the server
+        continue-on-error: true
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          FIREBASE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE" ]; then
+            echo "No FIREBASE_SERVICE_ACCOUNT secret: the app phones get no notifications"
+            exit 0
+          fi
+          if [ -s ~/.ssh/known_hosts ]; then CHECK=yes; else CHECK=accept-new; fi
+          printf 'FIREBASE_SERVICE_ACCOUNT_B64=%s\n' "$(printf '%s' "$FIREBASE" | base64 -w0)" \
+            | ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=$CHECK -o ServerAliveInterval=30 "root@$HOST" secrets
+
       # the server could log in to its e-mail server (red here, but the deploy itself is done: see the line it wrote)
       - name: E-mails work on the server
         continue-on-error: true

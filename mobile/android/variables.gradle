@@ -13,4 +13,6 @@ ext {
     androidxJunitVersion = '1.3.0'
     androidxEspressoCoreVersion = '3.7.0'
     cordovaAndroidVersion = '14.0.1'
+    // the app's notifications (PilotixMessagingService): the version @capacitor/push-notifications 8.1.3 uses
+    firebaseMessagingVersion = '25.0.1'
 }

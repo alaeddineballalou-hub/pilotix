@@ -929,6 +929,7 @@
         "step2": "Notifications: Allow. Pick a loud sound if you like.",
         "step3": "Come back here and tap the button below.",
         "again": "Done",
+        "settings": "Open Pilotix settings",
         "unsupported": "This browser cannot ring. Open Pilotix in Chrome, then ⋮ › « Install app » (iPhone: Share › « Add to Home Screen »)."
       },
       "test": {

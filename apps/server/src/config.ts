@@ -84,6 +84,17 @@ export const config = {
   /** Optional: a GitHub token (no rights needed) for « Changements API » to read the open-source couriers' code more often. */
   githubToken: (process.env.GITHUB_TOKEN || '').trim(),
   /**
+   * The Firebase project's service account key (the Pilotix Android app's notifications: fcm.ts), as JSON text:
+   * FIREBASE_SERVICE_ACCOUNT_B64 (the key file in base64, put into deploy/.env by the Deploy button from the GitHub secret
+   * FIREBASE_SERVICE_ACCOUNT: deploy/update.sh › secrets), else FIREBASE_SERVICE_ACCOUNT (the JSON itself, a server set up
+   * by hand). Empty: no notifications to the app's phones.
+   */
+  firebaseServiceAccount: (() => {
+    const b64 = (process.env.FIREBASE_SERVICE_ACCOUNT_B64 || '').trim();
+    if (b64) return Buffer.from(b64, 'base64').toString('utf8').trim();
+    return (process.env.FIREBASE_SERVICE_ACCOUNT || '').trim();
+  })(),
+  /**
    * E-mails ("mot de passe oublié"). Any SMTP server: Gmail (smtp.gmail.com, 465, an app password), Microsoft 365
    * (smtp.office365.com, 587), Brevo (smtp-relay.brevo.com, 587)… MAIL_FROM: "Pilotix <contact@your-shop.dz>".
    */

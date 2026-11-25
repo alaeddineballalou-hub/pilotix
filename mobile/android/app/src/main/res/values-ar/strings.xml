@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="ch_ring">طلب جديد للاتصال</string>
+    <string name="ch_ring_about">يرنّ بقوة، حتى والهاتف صامت، إلى أن تتصل</string>
+    <string name="ch_alert">تنبيهات مهمة</string>
+    <string name="ch_alert_about">طلب مُسند إليك، إعادة اتصال، تنبيه المستودع</string>
+    <string name="ch_info">إشعارات أخرى</string>
+    <string name="ch_info_about">باقي إشعارات جرس Pilotix</string>
+    <string name="ring_open">افتح Pilotix</string>
+    <string name="ring_quiet">أوقف الرنين</string>
+</resources>

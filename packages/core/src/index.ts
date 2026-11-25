@@ -55,7 +55,7 @@ export { listPros, proByCode, computeProStats, STATS_HOURS } from './modules/pro
 export * as pilotLearn from './modules/pilotlearn';
 export { boardCache } from './modules/board';
 export { pilotOn } from './modules/dellal';
-export { pushShopAdmins } from './modules/push';
+export { appEndpoint, canPush, fcmGone, fcmMessage, pushShopAdmins } from './modules/push';
 export { seedPos } from './modules/pos';
 export { seedRdv } from './modules/rdv';
 export { seedBlockDemo } from './modules/confblock';

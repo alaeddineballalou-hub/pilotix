@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="ch_ring">New order to call</string>
+    <string name="ch_ring_about">Rings loud, even on a silent phone, until you call</string>
+    <string name="ch_alert">Important alerts</string>
+    <string name="ch_alert_about">An order given to you, a callback, a depot alert</string>
+    <string name="ch_info">Other notifications</string>
+    <string name="ch_info_about">The rest of the Pilotix bell</string>
+    <string name="ring_open">Open Pilotix</string>
+    <string name="ring_quiet">Silence</string>
+</resources>

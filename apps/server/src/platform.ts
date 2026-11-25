@@ -24,6 +24,7 @@ import { checkLogin, clearLogin, failedLogin, settleLogin } from './limits';
 import { couriers, runCheck, runCheckAll, testable, watchNow, watchRunning } from './courierWatch';
 import { mailConfigured, sendMail } from './mail';
 import { ownerMail, ReceiptData, receiptMail, staffCodeMail } from './mails';
+import { fcmHooks } from './fcm';
 import { push as webPush, pushKeys as webPushKeys } from './push';
 import { PUBLIC, Public } from './public';
 
@@ -257,7 +258,7 @@ export class PlatformController {
     // Referral: the free months were added — the referrer's admins see it on their phones too
     if (m.kind === 'reward')
       await core
-        .pushShopAdmins(this.core.t, { push: webPush, pushKeys: webPushKeys }, m.reward.referrerShopId, {
+        .pushShopAdmins(this.core.t, { push: webPush, pushKeys: webPushKeys, ...fcmHooks() }, m.reward.referrerShopId, {
           title: '🎁 Parrainage',
           body: `« ${m.reward.referred} » a payé : ${m.reward.months} mois gratuit${m.reward.months > 1 ? 's' : ''} ajouté${m.reward.months > 1 ? 's' : ''} à « ${m.reward.shop} ».`,
           url: '#/parrainage',

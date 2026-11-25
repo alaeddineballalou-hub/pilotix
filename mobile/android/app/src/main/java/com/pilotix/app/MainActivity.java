@@ -31,6 +31,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AppUpdatePlugin.class);
         // « Envoyer des photos »: the photos given to WhatsApp, in the customer's chat (website: lib/waShare)
         registerPlugin(WaSharePlugin.class);
+        // notifications through Firebase (website: lib/push), the ring of « Bloquer jusqu'à l'appel » and the taps on them
+        registerPlugin(PilotixPushPlugin.class);
         super.onCreate(savedInstanceState);
         keepPagesBetweenTheBars();
         if (

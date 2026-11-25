@@ -929,6 +929,7 @@
         "step2": "Notifications : Autoriser. Choisissez un son fort si vous voulez.",
         "step3": "Revenez ici et touchez le bouton ci-dessous.",
         "again": "C’est fait",
+        "settings": "Ouvrir les réglages de Pilotix",
         "unsupported": "Ce navigateur ne peut pas sonner. Ouvrez Pilotix dans Chrome puis ⋮ › « Installer l’application » (iPhone : Partager › « Sur l’écran d’accueil »)."
       },
       "test": {
