@@ -1,9 +1,23 @@
 /* Suivi · « Clair » (the owner's design 1): counters that filter, one line per parcel, the opened alert with « Statut »
    and « Relivrer ». Pilotix's look: navy and orange, soft and round. */
 
-/* ---- the filters on one line (computer) ---- */
-@media (min-width: 1101px) {
-  .svc-fwrap .filters { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); }
+/* ---- the filters (the design): a wide search, the wilaya, the product, the period, then « Filtres » ---- */
+.svc-fbar { position: relative; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 12px; }
+.svc-fs { flex: 1 1 240px; min-width: 0; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--field, var(--surface)); }
+.svc-fs:focus-within { border-color: var(--navy); }
+.svc-fs .bji { flex: none; width: 16px; height: 16px; color: var(--muted); }
+.svc-fs input { flex: 1; min-width: 0; height: 40px; border: 0 !important; outline: 0; background: transparent; padding: 0 !important; font: inherit; font-size: 14px; color: var(--ink); box-shadow: none !important; }
+.svc-fsel { flex: 0 1 180px; min-width: 120px; height: 42px; border-radius: 12px; }
+.svc-fd { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 42px; padding: 0 6px 0 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--field, var(--surface)); color: var(--muted); }
+.svc-fd .bji { width: 15px; height: 15px; }
+.svc-fd input { width: 128px; height: 38px; border: 0 !important; background: transparent; padding: 0 4px !important; font: inherit; font-size: 13px; color: var(--ink); box-shadow: none !important; }
+.svc-fmore { position: relative; flex: none; }
+.svc-fbtn { height: 42px; border-radius: 12px; }
+.svc-fpanel { position: absolute; z-index: 40; top: calc(100% + 6px); inset-inline-end: 0; width: min(560px, calc(100vw - 32px)); padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: 0 12px 32px rgba(27, 42, 71, .16); grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+@media (max-width: 760px) {
+  .svc-fmore { display: contents; }
+  .svc-fpanel { position: static; flex-basis: 100%; width: auto; box-shadow: none; grid-template-columns: minmax(0, 1fr); }
+  .svc-fpanel .more-f { grid-column: auto; }
 }
 
 /* ---- the three counters ---- */

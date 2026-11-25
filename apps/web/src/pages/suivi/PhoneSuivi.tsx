@@ -263,7 +263,7 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip, cl
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const key = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('dialog[open], .modal-wrap, .pxk-sheet') && closeRef.current();
+    const key = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('dialog[open], .modal-wrap, .pxk-sheet, .svc-menu') && closeRef.current();
     window.addEventListener('keydown', key);
     return () => {
       document.body.style.overflow = prev;

@@ -29,6 +29,8 @@ export interface NavChild {
   onlyIf?: (roles: Role[], isAdmin: boolean) => boolean;
   /** the line opens the tab of the same id of this page (Commandes › Livré) */
   tabOf?: string;
+  /** with tabOf: the page's other tabs this line also stands for (Commandes › En livraison: its old Bloqués) */
+  tabsToo?: string[];
 }
 
 export interface NavItem {

@@ -1,4 +1,4 @@
-import { MENU_TABS, type Order } from '@pilotix/shared';
+import { MENU_TABS, type Order, WILAYAS } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { lazy, ReactNode, Suspense, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,15 +31,12 @@ import { Traiter } from './Traiter';
 import { SuiviSettings } from './Settings';
 import { StuckChips, StuckDialog, type StuckInfo } from './Stuck';
 import { ScoreChip } from '../../ui/clientScore';
-import { AgentFilter, ClearFilters, CompanyFilter, DateFilters, dayIso, LivreurFilter, ProductFilter, WilayaFilter } from '../../ui/filters';
+import { AgentFilter, ClearFilters, CompanyFilter, DateFilters, dayIso, LivreurFilter, ProductFilter, useFilterOptions, WilayaFilter } from '../../ui/filters';
 import { useDebounced } from '../depot/OrderList';
 import type { In } from '../../lib/backend';
 import { useAllMode } from '../../layout/AllBoutiques';
 import { DemoCourier } from './DemoCourier';
 import { rightOn, tabOn } from '../../lib/rights';
-import { pageIsOn } from '../../lib/features';
-import { useMenuCounts } from '../../layout/Shell';
-import { Feed } from '../notify';
 import { AssignSwitch, type Assign } from '../../ui/AssignSwitch';
 import { DoneScreen } from '../orders';
 import { AlertPanel, ClairCards, ClairCounters, ClairTable, HistorySheet, isClairTab, RappelSheet, StatusMenu, type ClairHandlers, type ClairTab, type ClairX, type StatusKey } from './Clair';
@@ -53,7 +50,7 @@ const useInAgency = () => {
   return s?.shop?.kind === 'agency' || !!s?.profile.agencyId;
 };
 const isAlertTab = (tab: string) => tab === 'alertes' || tab === 'alertes_new' || tab === 'alertes_encours';
-/** the alert bar's lists (Suivi · Clair): Nouvelles alertes · En cours · Résolu · Swap · Réclamation */
+/** the menu « Suivi »'s row (Suivi · Clair): Nouvelles alertes · En cours · Résolu · Swap · Réclamation */
 const inAlertBar = (tab: string) => isAlertTab(tab) || ['resolus', 'reclamation', 'annules', 'swap'].includes(tab);
 type ListTab = (typeof LIST_TABS)[number];
 type Sub = ListTab | 'reclamation' | 'messages';
@@ -75,25 +72,24 @@ export function Suivi(p: PageProps) {
     </Suspense>
   );
 }
+/** An old address that now lives elsewhere: replaced at once (the back button does not return to it). */
+function GoTo({ href }: { href: string }) {
+  useEffect(() => location.replace(href), [href]);
+  return null;
+}
 const AllSuiviPage = lazy(() => import('../boutiques/all').then((m) => ({ default: m.BoutiquesSuivi })));
 
 function SuiviOne({ sub }: PageProps) {
+  const { t } = useTranslation();
   const agency = useInAgency();
-  const { has, session } = useSession();
-  const msgsTab = useMessagesTab();
-  // « Messages »: the journal of the messages to the customer, and the ones to send by hand (it left Pilot Automations)
-  if (sub === 'messages' && msgsTab)
-    return (
-      <>
-        <SuiviBar tab="messages" />
-        <Feed admin={!!session?.isAdmin} settingsHref="#/suivi/reglages" />
-      </>
-    );
+  const { has } = useSession();
+  // « Messages » left Suivi (the owner, 25 Nov 2026): it is Pilot Automations › Messages; the old address opens it
+  if (sub === 'messages' && !agency) return <GoTo href="#/notify/messages" />;
   // « Réglages »: every setting of Suivi (a store's own; an agency has its own settings page)
   if (sub === 'reglages' && !agency && tabOn('suivi', 'reglages'))
     return (
       <>
-        <SuiviBar tab="enlivraison" cfgOn />
+        <SuiviBar tab="alertes_new" cfgOn />
         <SuiviSettings />
       </>
     );
@@ -102,22 +98,40 @@ function SuiviOne({ sub }: PageProps) {
   const asked: ListSub = tabs.includes(sub ?? '') ? (sub as ListSub) : 'enlivraison';
   // an agency's confirmation agent (no suivi): En livraison, Livré, Annulé — to watch its orders move (no alert, claim, swap)
   const tab0: ListSub = agency && !has('suivi') && !['enlivraison', 'livres', 'annules', 'alertes', 'alertes_new', 'alertes_encours', 'resolus', 'swap', 'reclamation'].includes(asked) ? 'enlivraison' : asked;
-  // « Alertes » opens « Nouvelles alertes » (Suivi · Clair: the owner's design 1, 25 Nov 2026)
-  const tab: ListSub = tab0 === 'alertes' ? 'alertes_new' : tab0;
+  // « Alertes » opens « Nouvelles alertes » (Suivi · Clair: the owner's design 1, 25 Nov 2026). A store's old addresses
+  // (the owner, 25 Nov 2026): « Traités » (the handled alerts, now En cours › Attend ZR and Résolu) opens Résolu,
+  // « Bloqués » En livraison, « Swap » Annulés (the swaps are made there)
+  const OLD: Partial<Record<ListSub, ListSub>> = { alertes: 'alertes_new', traites: 'resolus', bloques: 'enlivraison', swap: 'annules' };
+  const tab: ListSub = tab0 === 'alertes' ? 'alertes_new' : agency ? tab0 : OLD[tab0] ?? tab0;
   return (
     <>
       <SuiviBar tab={tab} />
       {tab === 'reclamation' ? (
         <Reclamation />
-      ) : tab === 'annules' ? (
-        // « Annulé » is the same screen everywhere (owner's choice, 24 Nov 2026): here on its returns, each parcel coming
-        // back with its « Swap »; each one sees his own orders
+      ) : tab === 'annules' && agency ? (
+        // an agency: « Annulé » is the same screen as everywhere (owner's choice, 24 Nov 2026), on its returns
         <DoneScreen sub="annulees" start="back" />
+      ) : tab === 'annules' ? (
+        // a store's Suivi › Annulés (the owner, 25 Nov 2026): the parcels coming back and back, the ones a swap can take,
+        // Client annulé · ZR annulé · Tous, « Swap » on a line when a swap is possible; then the swapped ones
+        <>
+          <ClairList key={tab} tab="annules" />
+          <SwappedList />
+          <p className="svc-note">
+            <Icon name="info" /> {t('suivi.clair.confCancelled')} <a href="#/commandes/annulees">{t('suivi.clair.confCancelledGo')}</a>
+          </p>
+        </>
       ) : (
         isClairTab(tab) ? (
           <>
             <ClairList key={tab} tab={tab} />
             {tab === 'swap' && <SwappedList />}
+          </>
+        ) : !agency && tab === 'enlivraison' ? (
+          // the menu « En livraison »: one list of every parcel on the road, no Suivi tab over it (the owner, 25 Nov 2026)
+          <>
+            <Head tab={tab} />
+            <List key={tab} tab={tab} />
           </>
         ) : (
           <>
@@ -130,17 +144,7 @@ function SuiviOne({ sub }: PageProps) {
   );
 }
 
-/**
- * Suivi's « Messages » tab: a store's (not an agency's), when its plan has the messages to the customer, for the suivi
- * agents and the administrators (Utilisateurs › Rôles can give it to others; the server checks who reads the journal).
- */
-function useMessagesTab() {
-  const agency = useInAgency();
-  const { has, session } = useSession();
-  return !agency && pageIsOn('notify') && tabOn('suivi', 'messages') && (!!session?.isAdmin || has('suivi'));
-}
-
-/** "Alertes › Traités | Annulés  Réclamation  Swap" — same markup as the original stage bar. */
+/** The menu « Suivi »'s one row (Nouvelles alertes · En cours · Résolu · Annulés · Réclamation); an agency's steps. */
 function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
   const { t } = useTranslation();
   const agency = useInAgency();
@@ -149,9 +153,6 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
   // administrator, or a person allowed to share the alerts (« Affectation »); a store's, not an agency's
   const cfg = !agency && tabOn('suivi', 'reglages') && (!!session?.isAdmin || !!session?.profile.canAffect);
   const c = useRpc('suivi.counts', {}, { refetchInterval: 60_000 }).data;
-  const msgsTab = useMessagesTab();
-  // the messages to send by hand and the ones that failed these 3 days (the count Pilot Automations › Messages had)
-  const toSend = useMenuCounts().notify;
   // a phone shows a few steps at a time: the current one is brought into view
   const bar = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -166,7 +167,7 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
     if (b.left >= r.left + 8 && b.right <= right) return;
     el.scrollBy({ left: b.left + b.width / 2 - (r.left + (right - r.left) / 2) });
     // again once the counts are in: they widen the steps
-  }, [tab, c, toSend]);
+  }, [tab, c]);
   const active = (k: Sub) => !cfgOn && (tab === k || (k === 'alertes' && ['alertes_new', 'alertes_encours', 'resolus', 'reclamation', 'annules', 'swap'].includes(tab)));
   // (a tab taken from the role in Utilisateurs › Rôles is not drawn)
   const item = (k: Sub, count?: number, x = false, label?: string) => !tabOn('suivi', k) ? null : (
@@ -209,42 +210,29 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
       </nav>
     );
   }
-  const alerts = inAlertBar(tab);
-  return (
-    <>
-    <nav ref={bar} className="bjm-bar flow" aria-label="Étapes" data-g="suivi">
-      {item('enlivraison', c?.enlivraison ?? 0)}
-      <span className="bjm-ar" aria-hidden="true">
-        ›
-      </span>
-      {item('alertes', c?.alertes ?? 0)}
-      <span className="bjm-ar" aria-hidden="true">
-        ›
-      </span>
-      {item('traites', c?.traites ?? 0)}
-      <span className="bjm-sep" aria-hidden="true" />
-      {item('bloques', c?.bloquesTodo ?? 0, true)}
-      {msgsTab && item('messages', toSend, true)}
-      {/* « Réglages »: apart at the end, with a gear (Utilisateurs › Rôles: the owners and the agent managers by default) */}
-      {cfg && (
-        <a className={`bjm-p bjm-cfg ${cfgOn ? 'on' : ''}`} href="#/suivi/reglages" aria-label={t('suivi.tabs.reglages')} title={t('suivi.tabs.reglages')} aria-current={cfgOn ? 'page' : undefined}>
-          <Icon name="settings" />
-          <span className="bjm-l">{t('suivi.tabs.reglages')}</span>
-        </a>
-      )}
-    </nav>
-    {/* Suivi · Clair: Nouvelles alertes · En cours · Résolu (filled when the company delivers) · Swap · Réclamation */}
-    {alerts && !cfgOn && <nav className="bjm-bar flow" aria-label={t('suivi.tabs.alertes')} data-g="suivi-alertes">
-      {item('alertes_new', c?.alertes_new ?? 0, false, t('suivi.clair.tab.alertes_new'))}
-      {item('alertes_encours', c?.alertes_encours ?? 0, false, t('suivi.clair.tab.alertes_encours'))}
-      {item('resolus', c?.resolus ?? 0, false, t('suivi.clair.tab.resolus'))}
-      {(has('suivi') || has('confirmation')) && item('swap', c?.swap ?? 0, false, t('suivi.clair.tab.swap'))}
-      {(has('suivi') || has('confirmation')) && item('reclamation', c?.claims, true, t('suivi.clair.tab.reclamation'))}
-      <span className="bjm-sep" aria-hidden="true" />
-      {item('annules', c?.annules ?? 0)}
-    </nav>}
-    </>
+  const gear = cfg && (
+    <a className={`bjm-p bjm-cfg ${cfgOn ? 'on' : ''}`} href="#/suivi/reglages" aria-label={t('suivi.tabs.reglages')} title={t('suivi.tabs.reglages')} aria-current={cfgOn ? 'page' : undefined}>
+      <Icon name="settings" />
+      <span className="bjm-l">{t('suivi.tabs.reglages')}</span>
+    </a>
   );
+  // The owner (25 Nov 2026): the menu's « Suivi » shows only the alerts, the swaps and the réclamations; the menu's « En
+  // livraison » everything about the delivery. One row each, never mixed. (« Traités » became En cours › Attend ZR and
+  // Résolu; « Messages » is Pilot Automations › Messages: their addresses still open.)
+  if (inAlertBar(tab) || cfgOn)
+    return (
+      <nav ref={bar} className="bjm-bar flow" aria-label={t('suivi.tabs.alertes')} data-g="suivi-alertes">
+        {item('alertes_new', c?.alertes_new ?? 0, false, t('suivi.clair.tab.alertes_new'))}
+        {item('alertes_encours', c?.alertes_encours ?? 0, false, t('suivi.clair.tab.alertes_encours'))}
+        {item('resolus', c?.resolus ?? 0, false, t('suivi.clair.tab.resolus'))}
+        {item('annules', c?.annulesClair ?? 0, false, t('suivi.clair.tab.annules'))}
+        {(has('suivi') || has('confirmation')) && item('reclamation', c?.claims, true, t('suivi.clair.tab.reclamation'))}
+        {/* « Réglages »: apart at the end, with a gear (Utilisateurs › Rôles: the owners and the agent managers by default) */}
+        {gear}
+      </nav>
+    );
+  // the menu « En livraison » (and a store's other delivery lists): no Suivi tab row
+  return null;
 }
 
 function Head({ tab }: { tab: ListTab }) {
@@ -552,6 +540,87 @@ function SuiviFilters({ f, set, combined }: { f: SuiviF; set: (patch: Partial<Su
       <WilayaFilter value={f.wilaya} onChange={(v) => set({ wilaya: v })} />
       <DateFilters from={f.from} to={f.to} onChange={(v) => set(v)} />
       <ClearFilters on={on > 0} onClear={() => set({ ...NO_SF, q: f.q })} />
+    </div>
+  );
+}
+
+/**
+ * « Suivi · Clair » filters (the owner's design): on a computer one line without labels — a wide search, the wilaya, the
+ * product, the period — and « Filtres » (a small panel) for the agent, the company and the livreur; on a phone the
+ * search and « Filtres » only.
+ */
+function ClairFilters({ f, set, phone }: { f: SuiviF; set: (patch: Partial<SuiviF>) => void; phone: boolean }) {
+  const { t } = useTranslation();
+  const { session, has } = useSession();
+  const [open, setOpen] = useState(false);
+  const boss = !!session?.isAdmin || has('vendeur', 'agent_manager');
+  const opts = useFilterOptions();
+  const inPanel: (keyof SuiviF)[] = phone ? ['fagent', 'product', 'variant', 'company', 'livreur', 'wilaya', 'from', 'to'] : ['fagent', 'variant', 'company', 'livreur'];
+  const on = inPanel.filter((k) => f[k]).length;
+  const anyOn = (Object.keys(NO_SF) as (keyof SuiviF)[]).some((k) => k !== 'q' && f[k]);
+  const variants = opts?.products.find((p) => String(p.id) === f.product)?.variants ?? [];
+  return (
+    <div className="svc-fbar">
+      <label className="svc-fs">
+        <Icon name="search" />
+        <input type="search" aria-label={t('filters.searchPh')} placeholder={t('filters.searchPh')} value={f.q} onChange={(e) => set({ q: e.target.value })} />
+      </label>
+      {!phone && (
+        <>
+          <select className="svc-fsel" aria-label={t('filters.wilaya')} value={f.wilaya} onChange={(e) => set({ wilaya: e.target.value })}>
+            <option value="">{t('suivi.clair.f.allWilayas')}</option>
+            {WILAYAS.map((_, i) => (
+              <option key={i + 1} value={i + 1}>
+                {wilayaName(i + 1)}
+              </option>
+            ))}
+          </select>
+          <select className="svc-fsel" aria-label={t('filters.product')} value={f.product} onChange={(e) => set({ product: e.target.value, variant: '' })}>
+            <option value="">{t('filters.allProducts')}</option>
+            {(opts?.products ?? []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.active ? p.name : `${p.name} ${t('filters.off')}`}
+              </option>
+            ))}
+          </select>
+          <span className="svc-fd">
+            <Icon name="calendar" />
+            <input type="date" aria-label={t('filters.from')} title={t('filters.from')} value={f.from} max={f.to || undefined} onChange={(e) => set({ from: e.target.value })} />
+            <span aria-hidden="true">→</span>
+            <input type="date" aria-label={t('filters.to')} title={t('filters.to')} value={f.to} min={f.from || undefined} onChange={(e) => set({ to: e.target.value })} />
+          </span>
+        </>
+      )}
+      <span className="svc-fmore">
+        <button type="button" className={`px-fbtn svc-fbtn${on ? ' on' : ''}`} aria-expanded={open} onClick={() => setOpen(!open)}>
+          <Icon name="sliders" /> {t('filters.toggle')}
+          {on > 0 && <b className="ltr">{on}</b>}
+        </button>
+        {open && (
+          <div className="filters open svc-fpanel">
+            {phone && <WilayaFilter value={f.wilaya} onChange={(v) => set({ wilaya: v })} />}
+            {phone && <ProductFilter product={f.product} variant={f.variant} onChange={(v) => set(v)} />}
+            {phone && <DateFilters from={f.from} to={f.to} onChange={(v) => set(v)} />}
+            {!phone && !!variants.length && (
+              <label className="field more-f">
+                <span className="lab">{t('filters.variant')}</span>
+                <select value={f.variant} onChange={(e) => set({ variant: e.target.value })}>
+                  <option value="">{t('filters.allF')}</option>
+                  {variants.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {boss && <AgentFilter kind="follow" value={f.fagent} onChange={(v) => set({ fagent: v })} />}
+            <CompanyFilter value={f.company} onChange={(v) => set({ company: v })} />
+            <LivreurFilter value={f.livreur} onChange={(v) => set({ livreur: v })} />
+            <ClearFilters on={anyOn} onClear={() => set({ ...NO_SF, q: f.q })} />
+          </div>
+        )}
+      </span>
     </div>
   );
 }
@@ -958,11 +1027,10 @@ function ClairList({ tab }: { tab: ClairTab }) {
           </button>
         )}
       </div>
-      <div className="svc-fwrap">
-        <SuiviFilters f={f} set={setFilter} />
-      </div>
-      {!agency && <DemoCourier rows={rows} />}
-      <ClairCounters tab={tab} counts={q.data?.buckets} value={bucket} onPick={setBucket} />
+      {/* a phone: the counters first, under the title (seen without scrolling); a computer: as the design, under the filters */}
+      {phone && <ClairCounters tab={tab} counts={q.data?.buckets} value={bucket} onPick={setBucket} />}
+      <ClairFilters f={f} set={setFilter} phone={phone} />
+      {!phone && <ClairCounters tab={tab} counts={q.data?.buckets} value={bucket} onPick={setBucket} />}
       {q.isLoading ? (
         <Loading />
       ) : q.error ? (
@@ -1000,6 +1068,8 @@ function ClairList({ tab }: { tab: ClairTab }) {
         </button>
       )}
       {q.data && <Pager page={page} pageSize={100} total={q.data.total} onPage={setPage} />}
+      {/* the demo's carrier simulation: after the list (the counters and the lines come first) */}
+      {!agency && <DemoCourier rows={rows} />}
       {phone && opened && working && (
         <ParcelPage
           o={opened}

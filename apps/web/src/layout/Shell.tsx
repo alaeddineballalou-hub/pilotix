@@ -243,9 +243,9 @@ function WorkspaceShell({ page, sub, children, nav = NAV, space = 'store' }: She
     const c = n.children?.find((x) => x.id === id);
     if (c?.match) return page === c.match.page && c.match.subs.includes(sub ?? '');
     // a line that opens another page's tab (Commandes › En livraison: Suivi's tab)
-    if (c?.tabOf && c.tabOf !== n.id) return page === c.tabOf && sub === id;
-    // a page's own line (Suivi), but not on a tab another line of the group opens (« En livraison »)
-    if (id === page) return !n.children?.some((x) => x.tabOf === page && x.id === sub);
+    if (c?.tabOf && c.tabOf !== n.id) return page === c.tabOf && (sub === id || !!c.tabsToo?.includes(sub ?? ''));
+    // a page's own line (Suivi), but not on a tab another line of the group opens (« En livraison », its Bloqués, Annulés)
+    if (id === page) return !n.children?.some((x) => x.tabOf === page && (x.id === sub || !!x.tabsToo?.includes(sub ?? '')));
     return page === n.id && sub === id;
   };
   // each group remembers whether it is open (Commandes keeps its old key)

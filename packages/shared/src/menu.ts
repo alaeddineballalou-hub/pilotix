@@ -75,6 +75,8 @@ export interface MenuLine {
   cond?: MenuCond;
   /** the line opens the tab of the same id of this page (Commandes › Livré: #/commandes/livrees): it is that tab */
   tabOf?: string;
+  /** with tabOf: the page's other tabs this line also stands for (Commandes › En livraison: Bloqués, Annulés) */
+  tabsToo?: string[];
 }
 
 /** A line of the menu: a page, or a group of lines (Commandes, AI Pilot…). */
@@ -150,7 +152,7 @@ export const STORE_MENU: MenuItem[] = [
     children: [
       { id: 'confirmation', href: '#/confirmation', count: 'conf', tone: 'nc-n', icon: 'phone', roles: ['confirmation'] },
       { id: 'depot', href: '#/depot', count: 'depot', tone: 'nc-a', icon: 'package', roles: ['depot'] },
-      { id: 'enlivraison', href: '#/suivi/enlivraison', icon: 'truck', roles: ['suivi', 'confirmation'], tabOf: 'suivi', plan: ['suivi', 'enlivraison'] },
+      { id: 'enlivraison', href: '#/suivi/enlivraison', icon: 'truck', roles: ['suivi', 'confirmation'], tabOf: 'suivi', tabsToo: ['bloques', 'livres'], plan: ['suivi', 'enlivraison'] },
       { id: 'suivi', href: '#/suivi/alertes', count: 'suivi', tone: 'nc-a', icon: 'route', roles: ['suivi', 'confirmation'] },
       // the Community manager follows her orders (owner's yes, 25 Nov 2026): her Confirmées (where each one is in the
       // dépôt) and her parcels En livraison, read-only — Commandes' tabs, the work pages stay the agents'

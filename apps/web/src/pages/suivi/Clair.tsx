@@ -18,7 +18,7 @@ import { AlertTodo, CoBadge, Journey, tipKey, type PExtra } from './PhoneSuivi';
 import { namesOf, variantsOf } from '../../lib/items';
 import './clair.css';
 
-export const CLAIR_TABS = ['alertes_new', 'alertes_encours', 'resolus', 'swap'] as const;
+export const CLAIR_TABS = ['alertes_new', 'alertes_encours', 'resolus', 'swap', 'annules'] as const;
 export type ClairTab = (typeof CLAIR_TABS)[number];
 export const isClairTab = (t: string): t is ClairTab => (CLAIR_TABS as readonly string[]).includes(t);
 /** the three counters of each list, in order ('all': the whole list) */
@@ -27,12 +27,14 @@ export const CLAIR_BUCKETS: Record<ClairTab, readonly string[]> = {
   alertes_encours: ['call', 'later', 'zr'],
   resolus: ['today', 'yesterday', 'all'],
   swap: ['client', 'zr', 'all'],
+  annules: ['client', 'zr', 'all'],
 };
 const TONE: Record<ClairTab, Record<string, string>> = {
   alertes_new: { late: 'late', soon: 'soon', ok: 'ok' },
   alertes_encours: { call: 'late', later: 'soon', zr: 'off' },
   resolus: { today: 'ok', yesterday: 'ok', all: 'off' },
   swap: { client: 'late', zr: 'late', all: 'off' },
+  annules: { client: 'late', zr: 'late', all: 'off' },
 };
 
 export type ClairX = PExtra & {
@@ -278,7 +280,7 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
       case 'since':
         return (
           <span className="muted" dir="auto">
-            {sinceText(t, tab === 'swap' ? o.updatedAt : x?.last?.at ?? o.updatedAt)}
+            {sinceText(t, tab === 'swap' || tab === 'annules' ? o.updatedAt : x?.last?.at ?? o.updatedAt)}
           </span>
         );
       case 'delivered':
@@ -306,7 +308,7 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
           </span>
         );
       case 'act':
-        if (tab === 'swap') return h.canSwap(o) ? <SwapBtn onClick={() => h.onSwap(o)} /> : null;
+        if (tab === 'swap' || tab === 'annules') return h.canSwap(o) ? <SwapBtn onClick={() => h.onSwap(o)} /> : null;
         if (tab === 'alertes_encours' && x?.bucket === 'zr')
           return (
             <span className="svc-wait" title={t('suivi.clair.waitZr', { co: o.companyName || t('suivi.zr') })}>
@@ -395,7 +397,7 @@ export function ClairCards({ tab, rows, extra, reasonOf, h }: { tab: ClairTab; r
         const reason = reasonOf(o, x);
         const fx = tab === 'alertes_new' ? fixOf(reason) : null;
         const right =
-          tab === 'swap' ? (
+          tab === 'swap' || tab === 'annules' ? (
             h.canSwap(o) ? <SwapBtn onClick={() => h.onSwap(o)} /> : null
           ) : tab === 'resolus' ? null : tab === 'alertes_encours' && x?.bucket === 'zr' ? (
             <span className="svc-wait">
@@ -421,7 +423,7 @@ export function ClairCards({ tab, rows, extra, reasonOf, h }: { tab: ClairTab; r
                     {sinceText(t, x?.last?.at ?? o.updatedAt)}
                   </span>
                 )}
-                {(tab === 'resolus' || tab === 'swap') && <b className="svc-amt ltr">{da(o.total)}</b>}
+                {(tab === 'resolus' || tab === 'swap' || tab === 'annules') && <b className="svc-amt ltr">{da(o.total)}</b>}
               </div>
               {tab === 'alertes_new' && (
                 <div className="svc-card-s" onClick={(e) => e.stopPropagation()}>
@@ -447,7 +449,7 @@ export function ClairCards({ tab, rows, extra, reasonOf, h }: { tab: ClairTab; r
                   )}
                 </div>
               )}
-              {tab === 'swap' && (
+              {(tab === 'swap' || tab === 'annules') && (
                 <div className="svc-card-s">
                   <span className="svc-last svc-why z-red">
                     <i aria-hidden="true" />
