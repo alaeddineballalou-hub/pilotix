@@ -267,6 +267,7 @@ export const PROC_RIGHTS: Record<string, Need> = {
   // Suivi
   'suivi.list': (i) => suiviTab(i.tab),
   'suivi.treat': 'act:suivi.treat',
+  'suivi.callResult': 'act:suivi.treat',
   'suivi.resolve': 'act:suivi.treat',
   'suivi.act': 'act:suivi.treat',
   'suivi.next': 'act:suivi.treat',

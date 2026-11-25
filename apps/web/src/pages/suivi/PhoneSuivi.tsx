@@ -64,7 +64,7 @@ export function CoBadge({ o, x }: { o: Order; x?: PExtra }) {
   );
 }
 
-function Journey({ o, label }: { o: Order; label: string | null }) {
+export function Journey({ o, label }: { o: Order; label: string | null }) {
   const { t } = useTranslation();
   const s = stageOf(o);
   const steps = [t('suivi.ph.shipped'), t('suivi.ph.onRoad'), s.stop ? label || t(`status.follow.${o.followStatus}`) : t('suivi.ph.attempt'), t('suivi.ph.delivered')];
@@ -165,7 +165,7 @@ export function ClockChip({ c }: { c?: AlertClock | null }) {
 }
 
 /** What to do for this alert, from the courier's words. */
-function tipKey(reason: string | null): string {
+export function tipKey(reason: string | null): string {
   const r = (reason ?? '').toLowerCase();
   if (/bureau|stop ?desk|agence/.test(r)) return 'desk';
   if (/commune|desservi|zone/.test(r)) return 'zone';
@@ -177,7 +177,47 @@ function tipKey(reason: string | null): string {
 }
 
 /** At ZR the fix is one tap: the alert's tip opens the right request (or the réclamation to deliver again). */
-const TIP_FIX: Record<string, { change?: ChangeKind; claim?: boolean }> = { number: { change: 'phone' }, desk: { change: 'delivery' }, zone: { change: 'delivery' }, address: { change: 'address' }, absent: { claim: true } };
+export const TIP_FIX: Record<string, { change?: ChangeKind; claim?: boolean }> = { number: { change: 'phone' }, desk: { change: 'delivery' }, zone: { change: 'delivery' }, address: { change: 'address' }, absent: { claim: true } };
+
+/** « À faire »: what to do for this alert, from the courier's words, and at ZR the fix in one tap (a modification
+ *  request, or the réclamation to deliver again). Used by the phone's parcel page and by Suivi · Clair's opened alert. */
+export function AlertTodo({ o, x, reason, onClaim }: { o: Order; x?: PExtra; reason: string | null; onClaim?: () => void }) {
+  const { t } = useTranslation();
+  const [change, setChange] = useState<ChangeKind | null | false>(false);
+  const zr = useParcelInfo(o, x?.companyKind === 'zr').data;
+  if (o.followStatus !== 'alert') return null;
+  const tk = tipKey(reason);
+  const co = o.companyName || o.livreurName || '';
+  const fix = zr?.info ? TIP_FIX[tk] : undefined;
+  const fixOk = fix?.claim || (fix?.change && (fix.change === 'phone' ? zr?.info?.canChangePhone : zr?.info?.canModify && !zr.info.pendingChange));
+  return (
+    <>
+      <div className={`pxs-tip${fix && fixOk ? ' act' : ''}`}>
+        <p>
+          <span aria-hidden="true">💡</span> <b>{t('suivi.ph.todo')}</b> {t(`suivi.ph.tip.${tk}`, { co })}
+        </p>
+        {fix && fixOk && (!fix.claim || onClaim) && (
+          <button type="button" className="pxs-fix" onClick={() => (fix.claim ? onClaim?.() : setChange(fix.change!))}>
+            <Icon name={fix.claim ? 'send' : fix.change === 'phone' ? 'phone' : fix.change === 'address' ? 'navigation' : 'building'} />
+            {t(`suivi.ph.fix.${tk}`, { co })}
+          </button>
+        )}
+      </div>
+      {change !== false && <ChangeSheet o={o} kind={change} onClose={() => setChange(false)} />}
+    </>
+  );
+}
+
+/** Suivi · Clair's way on the opened alert (phone): call and WhatsApp in the header, the chips with « Historique », and
+ *  at the bottom « Statut » (its menu above it) and « Relivrer ». */
+export interface ClairPage {
+  statusLabel: string;
+  menuOpen: boolean;
+  onStatus: () => void;
+  menu: ReactNode;
+  onRelivrer?: () => void;
+  onHistory: () => void;
+}
 
 export interface ParcelAction {
   key: string;
@@ -186,7 +226,7 @@ export interface ParcelAction {
   run: () => void;
 }
 
-export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: { o: Order; x?: PExtra; reason: string | null; actions: ParcelAction[]; onClaim?: () => void; onClose: () => void; onSkip?: () => void }) {
+export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip, clair }: { o: Order; x?: PExtra; reason: string | null; actions: ParcelAction[]; onClaim?: () => void; onClose: () => void; onSkip?: () => void; clair?: ClairPage }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const meta = useRpc('orders.uiMeta', {}, { staleTime: 5 * 60_000 });
@@ -283,14 +323,30 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: 
             {t('suivi.skipNext')}
           </button>
         )}
-        <CoBadge o={o} x={x} />
+        {clair && !o.phoneHidden ? (
+          <span className="svc-hd-act">
+            <AskCall phone={o.phone} className="svc-ib call" label={`${t('suivi.act.call')} ${o.customerName} ${o.phone}`} onCall={() => rpc('orders.logCall', { id: o.id }).then(() => qc.invalidateQueries(), () => {})}>
+              <Icon name="phone" />
+            </AskCall>
+            <AskMsg order={o} ready={waText} className="svc-ib wa" label={`${t('suivi.ph.message')} ${o.phone}`}>
+              <Icon name="message" />
+            </AskMsg>
+          </span>
+        ) : (
+          <CoBadge o={o} x={x} />
+        )}
       </header>
-      {((x?.clock && o.followStatus === 'alert') || x?.stuck) && (
+      {(((x?.clock && o.followStatus === 'alert') || x?.stuck) || clair) && (
         <div className="pxs-clkbar">
-          <StuckChips s={x.stuck} />
-          <ClockChip c={x.clock} />
-          <TriesChip tr={x.tries} />
+          <StuckChips s={x?.stuck} />
+          <ClockChip c={x?.clock} />
+          <TriesChip tr={x?.tries} />
           {o.followStatus === 'alert' && <RotateChip at={x?.rotateAt} />}
+          {clair && (
+            <button type="button" className="sv-clock svc-histchip" onClick={clair.onHistory}>
+              <Icon name="history" /> {t('suivi.clair.history')}
+            </button>
+          )}
         </div>
       )}
 
@@ -305,23 +361,11 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: 
             </span>
           )}
           <Journey o={o} label={reason} />
-          {o.followStatus === 'alert' && (
-            <div className={`pxs-tip${fix && fixOk ? ' act' : ''}`}>
-              <p>
-                <span aria-hidden="true">💡</span> <b>{t('suivi.ph.todo')}</b> {t(`suivi.ph.tip.${tk}`, { co })}
-              </p>
-              {fix && fixOk && (!fix.claim || onClaim) && (
-                <button type="button" className="pxs-fix" onClick={() => (fix.claim ? onClaim?.() : setChange(fix.change!))}>
-                  <Icon name={fix.claim ? 'send' : fix.change === 'phone' ? 'phone' : fix.change === 'address' ? 'navigation' : 'building'} />
-                  {t(`suivi.ph.fix.${tk}`, { co })}
-                </button>
-              )}
-            </div>
-          )}
+          <AlertTodo o={o} x={x} reason={reason} onClaim={onClaim} />
         </section>
 
         {/* 3 days after the order is over its number is hidden (only the seller and the admins): no call, no message */}
-        {!o.phoneHidden && <div className="pxs-cm">
+        {!o.phoneHidden && !clair && <div className="pxs-cm">
           {/* both ask first, phone or WhatsApp / SMS or WhatsApp, like Confirmation */}
           <AskCall phone={o.phone} className="pxs-call" label={`${t('suivi.act.call')} ${o.customerName} ${o.phone}`} onCall={() => rpc('orders.logCall', { id: o.id }).then(() => qc.invalidateQueries(), () => {})}>
             <Icon name="phone" /> {t('suivi.act.call')}
@@ -444,8 +488,8 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: 
         )}
 
         <OrderNotes key={o.id} order={o} />
-        {/* the journey and the notes, newest first */}
-        {section(
+        {/* the journey and the notes, newest first (Suivi · Clair: the « Historique » chip) */}
+        {!clair && section(
           <>
             <Icon name="history" /> {t('suivi.ph.journey')}
           </>,
@@ -472,7 +516,20 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: 
         )}
       </div>
 
-      {/* always there: the actions, then the note field */}
+      {/* Suivi · Clair: « Statut » (its menu above) and « Relivrer »; else always there: the actions, then the note field */}
+      {clair ? (
+        <div className="pxs-bar svc-pbar">
+          {clair.menuOpen && clair.menu}
+          <button type="button" className="svc-stat" aria-haspopup="menu" aria-expanded={clair.menuOpen} onClick={clair.onStatus}>
+            {clair.statusLabel} <Icon name="chevron" />
+          </button>
+          {clair.onRelivrer && (
+            <button type="button" className="svc-reliv" onClick={clair.onRelivrer}>
+              <Icon name="refresh" /> {t('suivi.clair.relivrer')}
+            </button>
+          )}
+        </div>
+      ) : (
       <div className="pxs-bar">
         {actions.length > 0 && (
           <div className="pxs-acts">
@@ -496,6 +553,7 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: 
           </button>
         </form>
       </div>
+      )}
       {change !== false && <ChangeSheet o={o} kind={change} onClose={() => setChange(false)} />}
       {send && claim && target && <SendModal claim={claim} order={o} target={target} shop={shop} again onClose={() => setSend(false)} />}
       {remindApi && claim && <RemindApiModal c={claim} onClose={() => setRemindApi(false)} />}

@@ -13,6 +13,7 @@
     "alertes": "Alertes",
     "alertes_new": "Nouvelles alertes",
     "alertes_encours": "Alertes en cours",
+    "resolus": "Résolu",
     "traites": "Traités",
     "traitesAlert": "Alertes traitées",
     "livres": "Livrés",
@@ -751,5 +752,114 @@
     "no": "Garder",
     "done": "Swap annulé",
     "why": "Swap fait dans Pilotix seul (pas chez la société) : il peut être annulé."
+  },
+  "clair": {
+    "tab": {
+      "alertes_new": "Nouvelles alertes",
+      "alertes_encours": "En cours",
+      "resolus": "Résolu",
+      "swap": "Swap",
+      "reclamation": "Réclamation"
+    },
+    "counters": "Compteurs (ce sont aussi des filtres)",
+    "k": {
+      "alertes_new": {
+        "late": "En retard",
+        "soon": "À appeler vite",
+        "ok": "À temps"
+      },
+      "alertes_encours": {
+        "call": "À rappeler",
+        "later": "Plus tard",
+        "zr": "Attend ZR"
+      },
+      "resolus": {
+        "today": "Aujourd’hui",
+        "yesterday": "Hier",
+        "all": "30 jours"
+      },
+      "swap": {
+        "client": "Client annulé",
+        "zr": "ZR annulé",
+        "all": "Tous"
+      }
+    },
+    "noNews": "Pas encore de nouvelle",
+    "histOf": "Historique · {{ref}}",
+    "histSub": "Tout ce qui est arrivé au colis, du plus récent au plus ancien",
+    "history": "Historique",
+    "histAll": "Tout l’historique",
+    "hours": "{{n}} h",
+    "days": "{{n}} j",
+    "yesterday": "Hier",
+    "today": "aujourd’hui",
+    "last": {
+      "no_answer": "Pas de réponse",
+      "busy": "Occupé",
+      "called": "Appelé",
+      "callback": "Rappel demandé",
+      "relivrer": "Relivrer demandé",
+      "claim": "Réclamation envoyée",
+      "lost": "Perdu"
+    },
+    "fix": {
+      "number": "Corriger le n°",
+      "commune": "Corriger la commune"
+    },
+    "empty": {
+      "alertes_new": "Aucune nouvelle alerte. Tout est pris en main.",
+      "alertes_encours": "Aucune alerte en cours.",
+      "resolus": "Rien de résolu ces 30 jours.",
+      "swap": "Aucun colis à swapper."
+    },
+    "amount": "Montant",
+    "zr": "Statut ZR",
+    "time": "Temps",
+    "lastCol": "Dernier résultat",
+    "calls": "Appels",
+    "since": "Depuis",
+    "delivered": "Livré",
+    "savedBy": "Sauvé par",
+    "problem": "Le problème qu’il y avait",
+    "why": "Pourquoi",
+    "cancelClient": "Client annule",
+    "cancelZr": "ZR : {{v}}",
+    "cancelled": "annulé",
+    "waitZr": "Attend {{co}}",
+    "waitZrShort": "Attend ZR",
+    "recall": "Rappeler",
+    "resolvedNote": "Résolu se remplit tout seul quand ZR livre une alerte. Rien à faire ici.",
+    "deliveredAt": "Livré {{v}}",
+    "menu": {
+      "no_answer": "Pas de réponse",
+      "busy": "Occupé",
+      "callback": "Rappel",
+      "claim": "Réclamation",
+      "cancel": "Client annule",
+      "callN": "appel {{n}} / {{need}}",
+      "callbackSub": "date et heure",
+      "claimSub": "à {{co}}",
+      "cancelSub": "va dans Swap"
+    },
+    "status": "Statut",
+    "change": "Changer le statut",
+    "curNew": "Nouvelle alerte",
+    "curWork": "En cours",
+    "curWait": "Attend ZR",
+    "relivrer": "Relivrer",
+    "relivrerTitle": "Relivrer · {{ref}}",
+    "zrSays": "{{co}} : {{v}}",
+    "lateBy": "en retard de {{v}}",
+    "rappel": {
+      "title": "Rappeler le client",
+      "day": "Jour",
+      "time": "Heure",
+      "ok": "Enregistrer le rappel"
+    },
+    "done": {
+      "no_answer": "{{ref}} : pas de réponse, appel compté",
+      "busy": "{{ref}} : occupé, appel compté",
+      "cancel": "{{ref}} : le client annule, il part dans Swap"
+    }
   }
 }

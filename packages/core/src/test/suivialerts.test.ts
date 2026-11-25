@@ -384,5 +384,6 @@ test('Alertes: « Nouvelles alertes » (nobody acted since it came) and « Alert
   assert.ok(!(await ids('alertes_new')).includes(id));
   assert.ok((await ids('alertes_encours')).includes(id));
   const c: any = await call('suivi.counts', suivi, {});
-  assert.equal(c.alertes_new + c.alertes_encours, c.alertes);
+  // En cours also holds the treated alerts waiting for the company (« Attend ZR », Suivi · Clair, 25 Nov 2026)
+  assert.equal(c.alertes_new + c.alertes_encours, c.alertes + c.traites);
 });

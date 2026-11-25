@@ -19,16 +19,17 @@ import './traiter.css';
 
 type Outcome = 'resolved' | 'lost';
 
-export function Traiter({ o, reason, tries, own, onClose }: { o: Order; reason: string | null; tries?: AlertTries | null; own?: boolean; onClose: () => void }) {
+/** `start`: open straight on « Résolu » (Suivi · Clair's « Relivrer »: the company is asked to deliver again). */
+export function Traiter({ o, reason, tries, own, onClose, start }: { o: Order; reason: string | null; tries?: AlertTries | null; own?: boolean; onClose: () => void; start?: Outcome }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const motifs = useRpc('suivi.motifs', {}, { staleTime: 5 * 60_000 }).data;
   const { target, shop, api } = useTarget(o, !!own);
-  const [out, setOut] = useState<Outcome | null>(null);
+  const [out, setOut] = useState<Outcome | null>(start ?? null);
   const [motif, setMotif] = useState('');
   const [date, setDate] = useState('');
   const [note, setNote] = useState('');
-  const [relance, setRelance] = useState(false);
+  const [relance, setRelance] = useState(start === 'resolved');
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState<SentClaim | null>(null);
   const list = (out && motifs ? motifs[out] : []).filter((m) => m.on);
@@ -68,12 +69,12 @@ export function Traiter({ o, reason, tries, own, onClose }: { o: Order; reason: 
   return (
     <Modal
       sheet
-      title={t('suivi.tr.title', { ref: o.ref })}
+      title={start === 'resolved' ? t('suivi.clair.relivrerTitle', { ref: o.ref }) : t('suivi.tr.title', { ref: o.ref })}
       onClose={onClose}
       footer={
         <>
-          <button type="button" className="btn ghost" onClick={out ? () => (setOut(null), setMotif('')) : onClose}>
-            {out ? t('common.back') : t('common.cancel')}
+          <button type="button" className="btn ghost" onClick={out && !start ? () => (setOut(null), setMotif('')) : onClose}>
+            {out && !start ? t('common.back') : t('common.cancel')}
           </button>
           {out && (
             <button type="button" className={`btn ${out === 'lost' ? 'danger' : 'primary'}`} disabled={!ready || busy} onClick={go}>
