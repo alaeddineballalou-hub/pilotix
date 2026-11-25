@@ -117,8 +117,10 @@ test('confirming needs the commune (home delivery), also outside the screen', as
 test('« Commande suivante »: two agents at the same moment never get the same customer', async () => {
   const a = await as(EMAILS.conf);
   const b = await as(EMAILS.conf2);
+  // each agent makes an order, so each has one never called (an order goes to the agent who made it): the demo's other
+  // orders may all be tried already in this call slot (from 04:26 to 09:00 the slot is still yesterday evening's)
   await newOrder(a);
-  await newOrder(a);
+  await newOrder(b);
   const [x, y]: any[] = await Promise.all([call('orders.next', a, {}), call('orders.next', b, {})]);
   assert.ok(x.id && y.id);
   assert.notEqual(x.id, y.id);
