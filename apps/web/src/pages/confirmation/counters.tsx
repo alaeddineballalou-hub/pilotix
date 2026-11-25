@@ -2,8 +2,8 @@
 // those orders (it stays highlighted), a tap again shows them all; the numbers stay the whole list's.
 // - Nouvelles « En retard · À appeler vite · À temps », En cours « À rappeler · Plus tard · Reportées »: counted by the
 //   server over the whole list with its search, filters and switch (confirmation.list › buckets).
-// - Confirmées: where the orders are in the dépôt (« À préparer · En dispatch · Dispatchées », and « Sans stock » when
-//   there is one), the numbers of confirmation.counts › stages.
+// - Confirmées: where the orders are in the dépôt, in the owner's words (« À préparer · Préparées · Parties », and
+//   « Sans stock » when there is one), the numbers of confirmation.counts › stages.
 // On a phone they replace the small « N en retard · N à traiter » badges.
 import { useTranslation } from 'react-i18next';
 import { n } from '../../lib/format';

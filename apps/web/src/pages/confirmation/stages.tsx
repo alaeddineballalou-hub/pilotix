@@ -1,7 +1,8 @@
-// Confirmation › Confirmées: where each confirmed order is in the dépôt — sans stock › à préparer › en dispatch ›
-// dispatchées (handed over, its company has not taken it yet), the Dépôt's words for the last two. Read-only: a stage only filters
+// Confirmation › Confirmées: where each confirmed order is in the dépôt — sans stock › à préparer › préparées ›
+// parties (handed over, its company has not taken it yet), the owner's words (the Dépôt's pages say « En dispatch »,
+// « Dispatchées »). Read-only: a stage only filters
 // the list. Once the company has the parcel it leaves Confirmées for Commandes › En livraison (the owner's ask, 25 Nov 2026).
-import { CONF_TONE, FOLLOW_TONE, menuTabName, type Order } from '@pilotix/shared';
+import { CONF_TONE, FOLLOW_TONE, type Order } from '@pilotix/shared';
 import { useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StatusBadge } from '../../ui/kit';
@@ -19,13 +20,14 @@ export function confStage(o: Pick<Order, 'confStatus' | 'followStatus'>): ConfSt
   return null;
 }
 
-/** A stage's name: the bar's (« Dispatchées »), or one order's (« Dispatchée »). « À préparer » (not the Dépôt's « En
- *  préparation »): the word the agents know, and it fits the list's « Livraison » column. */
+/** A stage's name: the counters' (« Préparées »), or one order's (« Préparée »). The owner's words for Confirmées
+ *  (his design, 25 Nov 2026): « À préparer · Préparées · Parties », so the box and the line say the same; the Dépôt's
+ *  own pages keep theirs (« En dispatch », « Dispatchées »). */
 export function stageName(t: (k: string) => string, k: ConfStage, one = false): string {
   if (k === 'nostock') return t('confirmation.stages.nostock');
   if (k === 'preparer') return t('status.follow.to_prepare');
-  if (k === 'dispatchees' && one) return t('confirmation.stages.dispatchee');
-  return t(menuTabName('depot', k));
+  if (k === 'prepares') return t(one ? 'confirmation.stages.prepare' : 'confirmation.stages.prepares');
+  return t(one ? 'confirmation.stages.dispatchee' : 'confirmation.stages.dispatchees');
 }
 
 const TONE: Record<ConfStage, string> = { nostock: CONF_TONE.no_stock, preparer: FOLLOW_TONE.to_prepare, prepares: FOLLOW_TONE.prepared, dispatchees: FOLLOW_TONE.shipped };

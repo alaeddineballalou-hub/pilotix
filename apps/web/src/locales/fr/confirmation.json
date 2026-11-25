@@ -916,7 +916,10 @@
     "label": "Où en sont les commandes confirmées",
     "all": "Toutes",
     "nostock": "Sans stock",
-    "dispatchee": "Dispatchée"
+    "prepares": "Préparées",
+    "prepare": "Préparée",
+    "dispatchees": "Parties",
+    "dispatchee": "Partie"
   },
   "nob": {
     "title": "Nouvelle commande",

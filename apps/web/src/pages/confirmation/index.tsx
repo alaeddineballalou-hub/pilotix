@@ -488,7 +488,7 @@ export function Queue({
       case 'follow':
         return (
           <>
-            {/* Confirmées: its stage in the dépôt (Sans stock, À préparer, En dispatch, Dispatchée) */}
+            {/* Confirmées: its stage in the dépôt (Sans stock, À préparer, Préparée, Partie: the words of its counters) */}
             {sub === 'confirmees' ? <StageTag o={r} /> : <StatusBadge kind="follow" status={r.followStatus} sub={r.subStatus} />}
             {r.companyName && (
               <small>

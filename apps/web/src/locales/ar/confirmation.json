@@ -960,7 +960,10 @@
     "label": "أين وصلت الطلبات المؤكَّدة",
     "all": "الكل",
     "nostock": "دون مخزون",
-    "dispatchee": "تم تسليمها"
+    "prepares": "مجهّزة",
+    "prepare": "مجهّزة",
+    "dispatchees": "خرجت",
+    "dispatchee": "خرجت"
   },
   "nob": {
     "title": "طلب جديد",

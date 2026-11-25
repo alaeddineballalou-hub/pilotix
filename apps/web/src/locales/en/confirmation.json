@@ -916,7 +916,10 @@
     "label": "Where the confirmed orders are",
     "all": "All",
     "nostock": "No stock",
-    "dispatchee": "Dispatched"
+    "prepares": "Prepared",
+    "prepare": "Prepared",
+    "dispatchees": "Sent",
+    "dispatchee": "Sent"
   },
   "nob": {
     "title": "New order",
