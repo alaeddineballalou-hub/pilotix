@@ -1148,8 +1148,10 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
     if (!phone) throw bad('Numéro de téléphone algérien invalide');
     // the depot still holds this order: what it looked like before (for the red alert of the depot)
     const depotWatch = alertsDepot(ctx, cur.follow_status);
+    // its products before the change (the problems report reads who changed what: modules/faults.ts)
+    const oldItems = itemsText(await tx.query('SELECT name, variant_title, qty FROM order_items WHERE order_id = $1 ORDER BY id', [input.id]));
     const before = depotWatch
-      ? { items: itemsText(await tx.query('SELECT name, variant_title, qty FROM order_items WHERE order_id = $1 ORDER BY id', [input.id])), company: cur.company_id ? ((await tx.query('SELECT name FROM delivery_companies WHERE id = $1', [cur.company_id]))[0]?.name ?? '') : '' }
+      ? { items: oldItems, company: cur.company_id ? ((await tx.query('SELECT name FROM delivery_companies WHERE id = $1', [cur.company_id]))[0]?.name ?? '') : '' }
       : null;
     // a bureau delivery needs its bureau (stop desk); going back home forgets it
     const abandoned = isAbandonedCheckout(cur.source) && CONF_TODO.includes(cur.conf_status);
@@ -1258,6 +1260,21 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
     const moneyNote = newTotal !== num(cur.total) ? `Total ${num(cur.total)} → ${newTotal} DA (remise ${num(cur.discount)} → ${discount}, livraison ${num(cur.delivery_fee)} → ${fee})` : null;
     await addEvent(tx, input.id, ctx.session.profile.id, 'edit', moneyNote ? String(num(cur.total)) : null, moneyNote ? String(newTotal) : null, moneyNote);
     const after = await getOrder(ctx, input.id, tx);
+    // what this change touched, kept with it in the history: who wrote the commune, the address, the phone or the
+    // products last decides who is responsible when they were wrong (modules/faults.ts, the owner's rule, 25 Nov 2026)
+    const touched = [
+      String(cur.wilaya_id ?? '') !== String(after.wilayaId ?? '') || String(cur.commune ?? '').trim() !== String(after.commune ?? '').trim() ? 'place' : '',
+      !!cur.is_stopdesk !== !!after.isStopdesk || String(cur.stopdesk_id ?? '') !== String(after.stopdeskId ?? '') ? 'desk' : '',
+      String(cur.address ?? '').trim() !== String(after.address ?? '').trim() ? 'address' : '',
+      String(cur.phone ?? '') !== String(after.phone ?? '') ? 'phone' : '',
+      oldItems !== itemsText(after.items) ? 'items' : '',
+    ].filter(Boolean);
+    if (touched.length)
+      await tx.query(
+        `UPDATE order_events SET data = coalesce(data, '{}'::jsonb) || jsonb_build_object('fields', $2::jsonb)
+         WHERE order_id = $1 AND kind = 'edit' AND id = (SELECT max(id) FROM order_events WHERE order_id = $1 AND kind = 'edit')`,
+        [input.id, JSON.stringify(touched)],
+      );
     if (before) {
       const place = (o: { wilayaId: number; commune: string; isStopdesk: boolean; stopdeskName?: string | null }) => `${String(o.wilayaId).padStart(2, '0')} · ${o.commune}${o.isStopdesk ? ` · bureau${o.stopdeskName ? ` ${o.stopdeskName}` : ''}` : ''}`;
       const was = { wilayaId: num(cur.wilaya_id), commune: String(cur.commune ?? ''), isStopdesk: !!cur.is_stopdesk, stopdeskName: cur.stopdesk_id ? ((await tx.query('SELECT name FROM stopdesks WHERE id = $1', [cur.stopdesk_id]))[0]?.name ?? null) : null };
@@ -2034,7 +2051,7 @@ interface CompanyRule {
   perKg: number;
   onReturn: boolean;
 }
-async function companyRules(db: Db): Promise<{ fees: Map<string, CompanyRule>; over: Map<number, { freeKg: number; perKg: number; onReturn: boolean }>; ruled: Set<number> }> {
+export async function companyRules(db: Db): Promise<{ fees: Map<string, CompanyRule>; over: Map<number, { freeKg: number; perKg: number; onReturn: boolean }>; ruled: Set<number> }> {
   const comps = await db.query('SELECT id, kind, config FROM delivery_companies');
   const over = new Map<number, { freeKg: number; perKg: number; onReturn: boolean }>();
   // the companies whose « Surpoids » is decided (typed, ZR's own, our livreurs): the Bilan does not ask for them
@@ -2051,7 +2068,7 @@ async function companyRules(db: Db): Promise<{ fees: Map<string, CompanyRule>; o
   }
   return { fees, over, ruled };
 }
-function parcelFees(o: any, R: Awaited<ReturnType<typeof companyRules>>) {
+export function parcelFees(o: any, R: Awaited<ReturnType<typeof companyRules>>) {
   if (!o.company_id) return { liv: 0, ret: 0, extra: 0, extraRet: 0, kg: Number(o.kg) || 0, fromTariff: false, fromApi: false };
   const f = R.fees.get(`${num(o.company_id)}:${num(o.wilaya_id)}`);
   const rule = R.over.get(num(o.company_id)) ?? { freeKg: 0, perKg: 0, onReturn: true };
@@ -2071,7 +2088,7 @@ function parcelFees(o: any, R: Awaited<ReturnType<typeof companyRules>>) {
   const liv = base ?? Math.max(0, (num(o.delivery_cost) || num(o.delivery_fee)) - (num(o.delivery_cost) ? extra : 0));
   return { liv, ret: f?.ret ?? 0, extra, extraRet: rule.onReturn ? extra : 0, kg, fromTariff: base !== null, fromApi: false };
 }
-const FEE_COLS = `o.id, o.ref, o.total, o.delivery_fee, o.delivery_cost, o.courier_fees, o.company_id, o.wilaya_id, o.is_stopdesk, o.cashed, co.name AS company, co.kind AS company_kind,
+export const FEE_COLS = `o.id, o.ref, o.total, o.delivery_fee, o.delivery_cost, o.courier_fees, o.company_id, o.wilaya_id, o.is_stopdesk, o.cashed, co.name AS company, co.kind AS company_kind,
   (SELECT coalesce(sum(p.weight_kg * i.qty), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id) AS kg`;
 
 function orderExtraProcs() {

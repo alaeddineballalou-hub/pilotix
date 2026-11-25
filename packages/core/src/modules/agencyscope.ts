@@ -401,6 +401,19 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'suivi.claimUpdate': claim('id'),
   'parcel.info': order('orderId'),
   'parcel.changeSync': order('orderId'),
+  // the problems report (modules/faults.ts): each one sees what his place lets him see (the procedure decides)
+  'faults.summary': free,
+  'faults.forOrders': order('ids'),
+  'faults.mine': free,
+  'faults.contest': free,
+  'faults.order': async (ctx, i) => {
+    await order('orderId')(ctx, i);
+    await ticket('ticketId')(ctx, i);
+  },
+  'faults.report': async (ctx, i) => {
+    await order('orderId')(ctx, i);
+    await ticket('ticketId')(ctx, i);
+  },
 };
 
 /**

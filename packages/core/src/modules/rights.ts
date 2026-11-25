@@ -258,6 +258,10 @@ export const PROC_RIGHTS: Record<string, Need> = {
   'delivery.send': 'act:orders.send',
   'delivery.cancel': 'act:orders.parcelCancel',
   'confirmation.photoShare': 'act:conf.photos',
+  // the problems report (faults.ts): Commandes › Annulé's « Qui est responsable » and its list; the depot's own tab
+  'faults.summary': 'tab:commandes/annulees',
+  'faults.forOrders': 'tab:commandes/annulees',
+  'faults.depot': 'tab:depot/erreurs',
   // Confirmation's tabs (« Livrées » is Commandes' tab)
   'confirmation.list': (i) => (typeof i.sub === 'string' ? (i.sub === 'livrees' ? 'tab:commandes/livrees' : `tab:confirmation/${i.sub}`) : null),
   // Suivi

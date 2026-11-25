@@ -23,7 +23,7 @@ export type DepotStageCounts = Partial<Record<DepotStage, number>> & { prepAlert
  * Each stage with what waits there (drawn here rather than with <StageBar>: it needs the ⟶ arrow and the red « end »
  * stage of the original). A phone shows two or three stages at a time: the current one is brought into view.
  */
-export function DepotStageBar({ stage, counts, phone, cfgOn = false }: { stage: DepotStage; counts?: DepotStageCounts; phone?: boolean; cfgOn?: boolean }) {
+export function DepotStageBar({ stage, counts, phone, cfgOn = false, noErrors = false }: { stage: DepotStage; counts?: DepotStageCounts; phone?: boolean; cfgOn?: boolean; noErrors?: boolean }) {
   const { t } = useTranslation();
   const bar = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
@@ -37,16 +37,18 @@ export function DepotStageBar({ stage, counts, phone, cfgOn = false }: { stage: 
   }, [stage]);
   return (
     <nav ref={bar} className="bjm-bar flow" aria-label={t('depot.title')} data-g="depot">
-      {DEPOT_STAGES.filter((k) => tabOn('depot', k)).map((k, i) => (
+      {DEPOT_STAGES.filter((k) => tabOn('depot', k) && !(noErrors && k === 'erreurs')).map((k, i) => (
         <span key={k} style={{ display: 'contents' }}>
-          {i > 0 && (
+          {/* « Erreurs de livraison » is not a step of the parcels: apart, after a line */}
+          {i > 0 && k === 'erreurs' && <span className="bjm-sep" aria-hidden="true" />}
+          {i > 0 && k !== 'erreurs' && (
             <span className={`bjm-ar ${k === 'retours' ? 'bjm-ar2' : ''}`} aria-hidden="true">
               {k === 'retours' ? '⟶' : '›'}
             </span>
           )}
           <a className={`bjm-p ${stage === k && !cfgOn ? 'on' : ''} ${k === 'retours' ? 'end' : ''}`} href={`#/depot/${k}`} aria-current={stage === k && !cfgOn ? 'page' : undefined}>
             <span className="bjm-l">{phone && k === 'preparer' ? t('depot.ph.stage') : t(menuTabName('depot', k))}</span>
-            {counts && <b className={`bjm-n ltr${k === 'prepares' && counts.prepAlerts ? ' bad' : ''}`}>{counts[k] ?? 0}</b>}
+            {counts && k !== 'erreurs' && <b className={`bjm-n ltr${k === 'prepares' && counts.prepAlerts ? ' bad' : ''}`}>{counts[k] ?? 0}</b>}
           </a>
         </span>
       ))}

@@ -70,6 +70,7 @@ import { pickupProcs } from './modules/pickup';
 import { parcelsProcs } from './modules/parcels';
 import { ordersProcs } from './modules/orders';
 import { savProcs } from './modules/sav';
+import { faultsProcs } from './modules/faults';
 import { sheetsProcs } from './modules/sheets';
 import { spyProcs } from './modules/spy';
 import { leadsProcs } from './modules/leads';
@@ -126,6 +127,7 @@ export const REGISTRY = {
   ...clientScoreProcs,
   ...suiviProcs,
   ...savProcs,
+  ...faultsProcs,
   ...deliveryProcs,
   ...cashProcs,
   ...caissesProcs,

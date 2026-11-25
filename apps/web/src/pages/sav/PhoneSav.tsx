@@ -32,6 +32,7 @@ import './phone.css';
 import { FiltersPanel } from '../../ui/filters';
 import { useSavFilters } from './filters';
 import { tabOn } from '../../lib/rights';
+import { SignalFault } from '../faults/FaultSheet';
 
 type Stage = 'todo' | 'depot' | 'livraison' | 'satisfaction' | 'termines';
 type Owner = 'me' | 'none' | 'all';
@@ -781,6 +782,8 @@ function TicketPage({ id, onClose, onOpen }: { id: number; onClose: () => void; 
             <Icon name={TYPE_ICON[x.type] ?? 'help'} /> {t(`sav.type.${x.type}`)}
           </h4>
           <blockquote className="pxv-quote">{x.details || '—'}</blockquote>
+          {/* what went wrong, for the problems report (Pilotix decides who is responsible) */}
+          {order && <SignalFault ticketId={x.id} />}
           {order && <OrderNotes key={order.id} order={order} ticketId={x.id} />}
         </section>
 

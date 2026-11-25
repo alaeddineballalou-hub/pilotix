@@ -19,6 +19,7 @@ import { seed as seed_delivery, seedZrFees } from './seeds/delivery';
 import { seed as seed_zr } from './seeds/zr';
 import { seed as seed_cash } from './seeds/cash';
 import { seed as seed_pay } from './seeds/pay';
+import { seed as seed_faults } from './seeds/faults';
 import { seed as seed_admin } from './seeds/admin';
 import { seed as seed_ads } from './seeds/ads';
 import { seed as seed_dellal, seedPhotoChat, seedSizeChart } from './seeds/dellal';
@@ -442,6 +443,8 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
   await seed_promo(db, users, now);
   // agent pay last: it reads the delivered and prepared orders the seeds above wrote (and their first quantities)
   await seed_pay(db, users, now);
+  // who is responsible for the returns (reads the returns, their events and the agents above)
+  await seed_faults(db, users, now);
   // Montage: the travel cot can be mounted (the shop's list: Alger, Blida, Boumerdès, Tipaza); the stroller in Alger only
   await db.query(`UPDATE products SET montage = $2 WHERE sku = $1`, ['PX-LIT', JSON.stringify({ price: 1500, cost: 600, wilayas: null })]);
   await db.query(`UPDATE products SET montage = $2 WHERE sku = $1`, ['PX-POU', JSON.stringify({ price: 800, cost: 300, wilayas: [16] })]);

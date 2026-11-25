@@ -537,3 +537,4 @@ export * from './rights';
 export * from './pilotchecks';
 export * from './adcircle';
 export * from './origin';
+export * from './faults';

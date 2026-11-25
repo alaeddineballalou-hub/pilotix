@@ -12,6 +12,7 @@ import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { Faces, SatBadge } from './PhoneSav';
 import { useStaff } from './staff';
+import { SignalFault } from '../faults/FaultSheet';
 
 type Kind = (typeof EXCHANGE_KINDS)[number];
 
@@ -93,6 +94,11 @@ export function TicketModal({ id, onClose }: { id: number; onClose: () => void }
         ) : openT ? (
           <p className="muted small">{t('sav.t.noOrder')}</p>
         ) : null}
+        {order && (
+          <div className="row" style={{ gap: 8 }}>
+            <SignalFault ticketId={x.id} />
+          </div>
+        )}
         {order && <OrderNotes key={order.id} order={order} ticketId={x.id} />}
         {x.satisfaction ? (
           <div className="row" style={{ gap: 8, alignItems: 'flex-start' }}>

@@ -496,7 +496,7 @@ function ByName({ id, name }: { id: number; name: string }) {
 // ---------------------------------------------------------------- Dépôt
 type DepotN = { preparer: number; prepares: number; dispatchees: number; retours: number; noStock: number; noStockLate: number; prepAlerts: number };
 type DepotAll = DepotN & { byBoutique?: (DepotN & { id: number; name: string })[] };
-type DepotCol = DepotStage | 'noStock';
+type DepotCol = Exclude<DepotStage, 'erreurs'> | 'noStock';
 
 /** « Par boutique »: what waits at each stage in each boutique; « Ouvrir » goes to that boutique's Dépôt. */
 function DepotByBoutique({ c, error, retry, stage }: { c?: DepotAll; error: Error | null; retry: () => void; stage: DepotStage }) {
@@ -504,7 +504,8 @@ function DepotByBoutique({ c, error, retry, stage }: { c?: DepotAll; error: Erro
   const ob = useOpenBoutique();
   const rows = c?.byBoutique ?? [];
   const left = useLeftOut(c ? rows : undefined);
-  const cols: { k: DepotCol; label: string }[] = [...DEPOT_STAGES.map((k) => ({ k: k as DepotCol, label: t(`depot.stage.${k}`) })), { k: 'noStock', label: t('depot.ns.tab') }];
+  // « Erreurs de livraison » is one boutique's page (its own problems report), not a count of every boutique
+  const cols: { k: DepotCol; label: string }[] = [...DEPOT_STAGES.filter((k) => k !== 'erreurs').map((k) => ({ k: k as DepotCol, label: t(`depot.stage.${k}`) })), { k: 'noStock', label: t('depot.ns.tab') }];
   const cls = (k: DepotCol) => `num${k === stage ? ' bq-on' : ''}`;
   // « En dispatch »: refused by the company, to cancel by hand, waiting over 24 h; « Sans stock »: waiting too long
   const cell = (r: DepotN, k: DepotCol) => {
@@ -883,7 +884,7 @@ export function BoutiquesDepot({ sub }: PageProps) {
   const show: AllKey[] = ['product', 'company', 'livreur', 'wilaya', 'dates'];
   return (
     <>
-      <DepotStageBar stage={stage} counts={c} phone={phone} />
+      <DepotStageBar stage={stage} counts={c} phone={phone} noErrors />
       <DepotByBoutique c={c} error={q.error} retry={() => void q.refetch()} stage={stage} />
       <p className="muted small bq-note">{t('boutiques.all.depotNote')}</p>
       {stage === 'preparer' && (

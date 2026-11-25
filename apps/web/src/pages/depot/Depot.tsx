@@ -24,6 +24,7 @@ import { depotStage, DepotStageBar } from './StageNav';
 import { DepotSettings } from './Settings';
 import { tabOn } from '../../lib/rights';
 import { useAllMode } from '../../layout/AllBoutiques';
+import { DepotErrors } from '../faults/DepotErrors';
 
 /** « Dépôt »: this boutique's, or every boutique's with « Toutes les boutiques ». */
 export function Depot(p: PageProps) {
@@ -57,17 +58,18 @@ function DepotOne({ sub }: PageProps) {
     <>
       <DepotStageBar stage={stage} counts={counts.data} phone={phone} />
       {/* the first stage is always cards (picking by variant); the switch is for the other stages */}
-      {!phone && stage !== 'preparer' && (
+      {!phone && stage !== 'preparer' && stage !== 'erreurs' && (
         <div className="px-vsw-row">
           <ViewSwitch mode={mode} onChange={setMode} />
         </div>
       )}
-      <div className={(cards || stage === 'preparer') && !phone ? 'px-wide' : undefined}>
+      <div className={(cards || stage === 'preparer' || stage === 'erreurs') && !phone ? 'px-wide' : undefined}>
         {stage === 'preparer' && <PhonePrep />}
         {stage === 'prepares' && <DispatchAlerts />}
         {stage === 'prepares' && (cards ? <PhoneDispatch /> : <Prepares />)}
         {stage === 'dispatchees' && (cards ? <PhoneRoad stage="dispatchees" /> : <Dispatchees />)}
         {stage === 'retours' && (cards ? <PhoneReturns /> : <Retours />)}
+        {stage === 'erreurs' && <DepotErrors />}
       </div>
     </>
   );

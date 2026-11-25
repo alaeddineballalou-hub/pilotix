@@ -24,6 +24,7 @@ import { Seg, Sheet } from '../../ui/Sheet';
 import { useCounts } from './counts';
 import type { ListFilter } from './shared';
 import { useSwap } from './swapAction';
+import { Responsible, RespLine, useFaults, type Shown } from '../faults/Responsible';
 import './phone.css';
 
 type DRep = Out<'orders.deliveredReport'>;
@@ -784,6 +785,8 @@ export function PhoneAnnule({ onTable, start }: { onTable?: () => void; start?: 
       </div>
       <div id="pxn-vp" role="tabpanel" aria-labelledby={`pxn-v-${view}`} className="pxn-vp">
         <div className="pxn-side">
+        {/* who is responsible for the returns (the chiefs and the managers; the procedure says who sees what) */}
+        {view === 'back' && !together && <Responsible range={per.range} label={per.label} />}
         {can &&
           (rep.error ? (
             <ErrorBox error={rep.error} onRetry={() => rep.refetch()} />
@@ -813,7 +816,7 @@ type Agent = Out<'users.list'>[number];
 /** The seller of an order of a list over every seller (an agency's « Tous les vendeurs »). */
 const sellerOf = (o: Order) => (o as { seller?: { id: number; name: string } }).seller;
 
-function OrderRow({ o, kind, coKind, fee, why, act }: { o: Order; kind: Kind; coKind: string | null; fee?: number; why?: string | null; act?: ReactNode }) {
+function OrderRow({ o, kind, coKind, fee, why, act, resp }: { o: Order; kind: Kind; coKind: string | null; fee?: number; why?: string | null; act?: ReactNode; resp?: Shown }) {
   const { t } = useTranslation();
   const seller = sellerOf(o);
   const open = () => openOrder(o.id, seller?.id);
@@ -846,6 +849,7 @@ function OrderRow({ o, kind, coKind, fee, why, act }: { o: Order; kind: Kind; co
             {t('orders.ph.quote', { v: why })}
           </span>
         )}
+        {resp && <RespLine s={resp} orderId={o.id} />}
         <span className="pxn-o3">
           {status}
           <small>
@@ -918,6 +922,8 @@ function PhoneList({ kind, title, per, f, setF, act }: { kind: Kind; title: stri
   // the courier's fee of each parcel: the store's own team (the seller's money), one shop at a time
   const fees = useRpc('orders.companyFees', { ids }, { enabled: kind === 'livre' && ids.length > 0 && has('confirmation', 'suivi', 'depot') && !agency && !together });
   const why = useReasons(rows, kind, together);
+  // the responsible of each return (one seller at a time)
+  const resp = useFaults(rows.map((o) => o.id), kind === 'back' && !together);
   const companies: Company[] = look.data?.companies ?? [];
   const coKind = (id: number | null) => companies.find((c) => c.id === id)?.kind ?? null;
   const active = activeCount(f);
@@ -985,7 +991,7 @@ function PhoneList({ kind, title, per, f, setF, act }: { kind: Kind; title: stri
         <ul className={`pxn-cards${list.isFetching && list.isPlaceholderData ? ' busy' : ''}`}>
           {rows.map((o) => (
             <li key={o.id}>
-              <OrderRow o={o} kind={kind} coKind={coKind(o.companyId)} fee={fees.data?.[String(o.id)]?.fee} why={why(o)} act={act?.(o)} />
+              <OrderRow o={o} kind={kind} coKind={coKind(o.companyId)} fee={fees.data?.[String(o.id)]?.fee} why={why(o)} act={act?.(o)} resp={resp(o.id)} />
             </li>
           ))}
         </ul>

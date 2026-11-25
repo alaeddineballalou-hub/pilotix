@@ -28,6 +28,9 @@ export const FREE_ACTIONS: readonly string[] = [
   'coverage.refresh', 'coverage.refreshDesks', 'coverage.toFix',
   'customers.history', 'customers.list', 'customers.ping', 'customers.shareInfo', 'customers.waCard',
   'delivery.companies', 'delivery.demoScenario', 'delivery.fees', 'delivery.feesInfo', 'delivery.icons', 'delivery.label',
+  // the problems report: one's own errors, « Pas moi » on one's own line, saying what happened (from several pages),
+  // the seller's decision (faults.ts checks each)
+  'faults.contest', 'faults.decide', 'faults.mine', 'faults.order', 'faults.report',
   'delivery.labels', 'delivery.livreurs', 'delivery.overweight', 'delivery.routeSheet', 'delivery.stopdesks',
   'delivery.sync', 'delivery.tournee',
   'dellal.conversation', 'dellal.inbox', 'dellal.lahja.add', 'dellal.lahja.list', 'dellal.lahja.remove',

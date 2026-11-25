@@ -14,7 +14,8 @@ export const MENU_TABS = {
   commandes: ['tout', 'livrees', 'annulees'],
   // « Réglages » (owner's choice, 24 Nov 2026: each page keeps its own settings, design 1 « Onglet »): the last tab, apart
   confirmation: ['nouvelles', 'attente', 'confirmees', 'terminees', 'reglages'],
-  depot: ['preparer', 'prepares', 'dispatchees', 'retours', 'reglages'],
+  // « Erreurs de livraison »: the depot's errors (the problems report, owner's request 25 Nov 2026), apart after the steps
+  depot: ['preparer', 'prepares', 'dispatchees', 'retours', 'erreurs', 'reglages'],
   // « Messages »: the journal of the messages to the customer and the ones to send by hand (owner's choice, 25 Nov 2026: it
   // left Pilot Automations; the suivi agents by default)
   suivi: ['enlivraison', 'alertes', 'traites', 'bloques', 'livres', 'annules', 'reclamation', 'swap', 'messages', 'reglages'],

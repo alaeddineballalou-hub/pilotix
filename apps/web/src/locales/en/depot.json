@@ -6,6 +6,7 @@
     "dispatchees": "Dispatched",
     "enlivraison": "Out for delivery",
     "retours": "Returns / Exchanges",
+    "erreurs": "Delivery errors",
     "reglages": "Settings"
   },
   "picking": {

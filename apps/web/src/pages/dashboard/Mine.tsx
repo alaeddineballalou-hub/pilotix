@@ -17,6 +17,7 @@ import { delivTone, KpiBox, prevRangeOf } from './util';
 import { ShopDoctor } from './Doctor';
 import { LivCard, Now } from '../home/cards';
 import { NoPlanAlert } from '../caisse/NoPlanAlert';
+import { MyFaults } from '../faults/MyFaults';
 import './board/board.css';
 
 type R = { from: string; to: string };
@@ -44,6 +45,8 @@ export function MyDashboard() {
       {works && <NoPlanAlert admins={false} />}
       {works && featureIsOn('dashboard/doctor') && <ShopDoctor fold />}
       {works && <Now />}
+      {/* his own errors (the problems report): never anyone else's */}
+      {works && <MyFaults range={per.range} />}
       {works && <MyDay range={per.range} />}
       {works && roles.includes('suivi') && <LivCard range={per.range} />}
       {has('livreur') && roles.includes('livreur') && <MyLivreur range={per.range} />}
