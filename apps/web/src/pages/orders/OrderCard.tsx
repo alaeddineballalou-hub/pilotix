@@ -29,6 +29,7 @@ import { TrustFlags } from './TrustFlags';
 import { AgencyRouting } from './AgencyRouting';
 import { PathSection, PilotixMark, pilotixLine } from './OrderPath';
 import { rightOn } from '../../lib/rights';
+import { PhoneOf } from '../../ui/PhoneOf';
 
 /** Courier kinds with an API (send / label / status / cancel go through the delivery procedures). */
 export const API_KINDS: readonly string[] = API_COURIER_KINDS;
@@ -413,15 +414,23 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
 
       <section className="card">
         <h3>{t('orders.card.client')}</h3>
-        <div className="phone-row">
-          <span className="phone-big ltr">{o.phone}</span>
-          <a className="btn small primary" href={telHref(o.phone)} onClick={() => has('confirmation', 'suivi') && rpc('orders.logCall', { id: o.id }).catch(() => {})}>
-            {t('orders.card.call')}
-          </a>
-          <a className="btn small" href={wa} target="_blank" rel="noopener noreferrer">
-            {t('orders.card.message')}
-          </a>
-        </div>
+        {o.phoneHidden ? (
+          // 3 days after the order is over, only the seller and the admins see the number (owner, 25 Nov 2026)
+          <div className="phone-row">
+            <PhoneOf o={o} className="phone-big" />
+            <span className="muted small">{t('orders.phoneHiddenS')}</span>
+          </div>
+        ) : (
+          <div className="phone-row">
+            <span className="phone-big ltr">{o.phone}</span>
+            <a className="btn small primary" href={telHref(o.phone)} onClick={() => has('confirmation', 'suivi') && rpc('orders.logCall', { id: o.id }).catch(() => {})}>
+              {t('orders.card.call')}
+            </a>
+            <a className="btn small" href={wa} target="_blank" rel="noopener noreferrer">
+              {t('orders.card.message')}
+            </a>
+          </div>
+        )}
         {o.phone2 && (
           <div className="phone-row">
             <span className="ltr">{o.phone2}</span>

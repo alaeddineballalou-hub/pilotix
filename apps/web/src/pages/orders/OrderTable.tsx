@@ -14,6 +14,7 @@ import { TrustFlags } from './TrustFlags';
 import { OriginChip } from './OrderPath';
 import { ScoreChip } from '../../ui/clientScore';
 import { TableColumnMenu, useTableColumns } from '../../ui/ColumnMenu';
+import { PhoneOf } from '../../ui/PhoneOf';
 
 /** Built-in columns, in the original order. */
 export type OrderColumn = 'order' | 'client' | 'score' | 'address' | 'products' | 'variant' | 'total' | 'conf' | 'follow' | 'company' | 'agent' | 'fagent' | 'phone' | 'wilaya' | 'since';
@@ -163,7 +164,7 @@ export function OrderTable(p: OrderTableProps) {
             {o.customerName}
             {/* the score has its own column here (sortable); a screen without it shows it next to the name */}
             {o.clientScore && !cols.includes('score') && <ScoreChip s={o.clientScore} short />}
-            <small className="ltr">{o.phone}</small>
+            <PhoneOf o={o} small />
           </td>
         );
       case 'score':
@@ -176,7 +177,7 @@ export function OrderTable(p: OrderTableProps) {
       case 'phone':
         return (
           <td key={c} data-l={label[c]}>
-            <span className="ltr">{o.phone}</span>
+            <PhoneOf o={o} />
           </td>
         );
       case 'address':

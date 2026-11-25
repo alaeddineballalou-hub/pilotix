@@ -43,6 +43,14 @@ interface SessionState {
 const Ctx = createContext<SessionState>(null as unknown as SessionState);
 export const useSession = () => useContext(Ctx);
 
+/**
+ * The seller and the administrators see every order list, every number and export; the others search « Tous » with
+ * 5 digits, see the finished orders of the last 30 days and no number 3 days after an order is over (owner, 25 Nov 2026;
+ * the server's own rule: packages/core/src/modules/oldphones.ts).
+ */
+export const seesAll = (s: Session | null | undefined) => !!s && (s.isAdmin || s.roles.includes('vendeur'));
+export const useSeesAll = () => seesAll(useContext(Ctx).session);
+
 /** The session as the browser keeps it for offline use. */
 function keep(s: Session | null) {
   store.set('session', s ? JSON.stringify(s) : null);

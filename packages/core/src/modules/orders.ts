@@ -57,6 +57,7 @@ import { companyLock, pilotMayRun, pilotPick, setPick, type Pick } from './pilot
 import { apiFees, courierFeesOf, declaredKg, feesByApi, knownKg, ruleFee, swapAtSql, swapFeeSql, weightRuleOf, weightRuleSet, wholeKg } from './courierfees';
 import { assignedProductIds, seesPurchaseCosts } from './productscope';
 import { checkMontageLines, MONTAGE_SKU, montageProductId, readMontage, shopMontageWilayas } from './montage';
+import { daysAgo, isLookup, LIST_DAYS, phoneHiddenFor, recentSql, seesEverything } from './oldphones';
 
 export const STOPDESK_NOTE = '🏬 Ce client a refusé 2 colis : livraison au bureau (stop-desk) uniquement. Proposez-lui le stop-desk le plus proche.';
 
@@ -442,13 +443,20 @@ export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' 
     else w.add("(upper(o.ref) = upper(?) OR o.tracking = ? OR upper(o.own_tracking) = upper(?) OR o.customer_name ILIKE '%' || ? || '%')", q, q, q, q);
   }
   const nulls = f.sort === 'next_call_at' ? (f.dir === 'asc' ? 'NULLS FIRST' : 'NULLS LAST') : f.dir === 'desc' ? 'NULLS LAST' : 'NULLS FIRST';
+  // everyone but the seller and the admins: the finished orders (delivered, cancelled, back) of the last 30 days only
+  // in the list; older ones by a search of 5 digits — a phone, a PX reference, a tracking number. Their numbers stay
+  // whole: `totalAll` counts every order of the filter, whatever its age (owner's rules, 25 Nov 2026)
+  const recent = !seesEverything(ctx) && !isLookup(f.q) && !f.ids?.length;
+  const all = recent ? { sql: w.sql, params: [...w.params] } : null;
+  if (recent) w.add(recentSql(), daysAgo(ctx, LIST_DAYS));
   const total = num((await ctx.db.query(`SELECT count(*)::int AS n FROM orders o ${w.sql}`, w.params))[0]?.n);
+  const whole = all ? { totalAll: num((await ctx.db.query(`SELECT count(*)::int AS n FROM orders o ${all.sql}`, all.params))[0]?.n) } : {};
   if (f.sort === 'score' && !onlyOwnDeliveries(ctx)) {
     // the score is not a column: the page's ids sorted by it in the database, then the orders read
     const pick = await orderIdsByScore(ctx, w.sql, w.params, f.dir, f.pageSize, (f.page - 1) * f.pageSize);
     const got = pick.length ? await ctx.db.query(`SELECT ${ORDER_COLS} ${ORDER_FROM} WHERE o.id = ANY($1::bigint[])`, [pick]) : [];
     const by = new Map(got.map((r: any) => [num(r.id), r]));
-    return { rows: pick.filter((x) => by.has(x)).map((x) => toOrder(by.get(x))), total, page: f.page, pageSize: f.pageSize };
+    return { rows: pick.filter((x) => by.has(x)).map((x) => toOrder(by.get(x))), total, ...whole, page: f.page, pageSize: f.pageSize };
   }
   const limit = w.p(f.pageSize);
   const offset = w.p((f.page - 1) * f.pageSize);
@@ -457,7 +465,7 @@ export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' 
   const never = col === 'created_at' || col === 'updated_at';
   const rows = await ctx.db.query(`SELECT ${ORDER_COLS} ${ORDER_FROM} ${w.sql} ORDER BY o.${col} ${f.dir}${never ? '' : ` ${nulls}`}, o.id DESC LIMIT ${limit} OFFSET ${offset}`, w.params);
   const list = rows.map(toOrder);
-  return { rows: onlyOwnDeliveries(ctx) ? list.map(hideCustomer) : list, total, page: f.page, pageSize: f.pageSize };
+  return { rows: onlyOwnDeliveries(ctx) ? list.map(hideCustomer) : list, total, ...whole, page: f.page, pageSize: f.pageSize };
 }
 
 // ---------------------------------------------------------------- writing
@@ -1879,6 +1887,7 @@ export async function orderCounts(ctx: Ctx) {
   const me = ctx.session.profile.id;
   // Commandes › Toutes les commandes, Livré and Annulé (their lines in the menu, their numbers on top): the orders of the
   // lists the person sees there — each one his own, an agent manager his team's (listScopeSql)
+  // whole numbers for everyone, the old finished orders too: only the lists stop at 30 days (owner, 25 Nov 2026)
   const listsOf = async (cond: string) => {
     const r = (
       await ctx.db.query(
@@ -2421,7 +2430,15 @@ export const ordersProcs = {
     await sendInPreview(ctx);
     return o;
   }),
-  'orders.update': proc(['confirmation', 'suivi', 'depot'], UpdateInput, (ctx, i) => updateOrder(ctx, i)),
+  'orders.update': proc(['confirmation', 'suivi', 'depot'], UpdateInput, async (ctx, i) => {
+    // a number hidden from this person (3 days after the order is over: oldphones.ts) comes back empty from the screen:
+    // the order keeps its own numbers, never wiped by a form saved without them
+    if (i.phone !== undefined || i.phone2 !== undefined) {
+      const cur = (await ctx.db.query<{ phone: string }>('SELECT phone FROM orders WHERE id = $1', [i.id]))[0];
+      if (cur && (await phoneHiddenFor(ctx, cur.phone))) i = { ...i, phone: undefined, phone2: undefined };
+    }
+    return updateOrder(ctx, i);
+  }),
   'orders.setConf': proc(['confirmation'], ConfInput, (ctx, i) => setConf(ctx, i)),
   'orders.reorderLink': proc(['confirmation'], z.object({ id, draft: z.string().uuid().optional() }), async (ctx, { id }) => {
     await getOrder(ctx, id);

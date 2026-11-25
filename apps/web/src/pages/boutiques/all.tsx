@@ -17,7 +17,7 @@ import { trackOf } from '../../lib/items';
 import { openOrder } from '../../lib/modals';
 import { useRpcFor } from '../../lib/query';
 import { SellerScope } from '../../lib/seller';
-import { useSession } from '../../lib/session';
+import { useSeesAll, useSession } from '../../lib/session';
 import { useIsPhone } from '../../lib/useMedia';
 import { CopyCode } from '../../ui/CopyCode';
 import { Card, Empty, ErrorBox, Icon, Kpis, Loading, StatusBadge, Tabs, Trend } from '../../ui/kit';
@@ -33,6 +33,7 @@ import { itemsLine, useDebounced } from '../depot/OrderList';
 import { DEPOT_STAGES, DepotStage, depotStage, DepotStageBar } from '../depot/StageNav';
 import { bigOf, VariantPill } from '../depot/VariantPill';
 import { OrderTable, type OrderSort } from '../orders/OrderTable';
+import { LookupOnly } from '../orders';
 import { ListFilter, toListInput } from '../orders/shared';
 import type { PageProps } from '../registry';
 import '../dashboard/board/board.css';
@@ -288,13 +289,14 @@ function AllCounts({ on }: { on?: 'livrees' | 'annulees' }) {
 }
 
 /** One list of every boutique kept: its filters, its tabs, each order with its boutique (opened inside it). */
-function AllOrderList({ id, title, base, show, reasonOf, defaultSort = 'created_at', defaultDir = 'desc', tabs }: { id: string; title: string; base?: Partial<ListFilter>; show: AllKey[]; reasonOf?: 'conf' | 'back'; defaultSort?: OrderSort; defaultDir?: 'asc' | 'desc'; tabs?: boolean }) {
+function AllOrderList({ id, title, base, show, reasonOf, defaultSort = 'created_at', defaultDir = 'desc', tabs, fixedQ }: { id: string; title: string; base?: Partial<ListFilter>; show: AllKey[]; reasonOf?: 'conf' | 'back'; defaultSort?: OrderSort; defaultDir?: 'asc' | 'desc'; tabs?: boolean; fixedQ?: string }) {
   const { t } = useTranslation();
   const kept = useShopFilter();
   const opts = useAllOptions();
   const [f, set, clear] = useAllFilters(`orders-${id}`);
   const [q, setQ] = useState('');
-  const dq = useDebounced(q.trim());
+  // « Tous » searched with 5 digits (everyone but the seller and the admins): the search comes from above
+  const dq = useDebounced((fixedQ ?? q).trim());
   const [tab, setTab] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(50);
@@ -321,7 +323,7 @@ function AllOrderList({ id, title, base, show, reasonOf, defaultSort = 'created_
   return (
     <Card title={title} actions={<AllChip />}>
       {tabList && <Tabs value={tab} onChange={setTab} items={tabList.map((x) => ({ value: x.value, label: x.label, count: x.count }))} />}
-      <AllBar f={f} set={set} clear={clear} show={show} reasonOf={reasonOf} search={{ value: q, onChange: setQ }} chips={false} />
+      {(fixedQ === undefined || show.length > 0) && <AllBar f={f} set={set} clear={clear} show={show} reasonOf={reasonOf} search={fixedQ === undefined ? { value: q, onChange: setQ } : undefined} chips={false} />}
       {list.error ? (
         <ErrorBox error={list.error} onRetry={() => list.refetch()} />
       ) : (
@@ -348,6 +350,7 @@ function AllOrderList({ id, title, base, show, reasonOf, defaultSort = 'created_
 
 export function BoutiquesOrders({ sub }: PageProps) {
   const { t } = useTranslation();
+  const seesAllNow = useSeesAll();
   const base: AllKey[] = ['agent', 'team', 'product', 'company', 'livreur', 'wilaya', 'channel', 'dates'];
   if (sub === 'livrees')
     return (
@@ -364,6 +367,8 @@ export function BoutiquesOrders({ sub }: PageProps) {
         <AllOrderList id="annulees-ret" title={t('orders.cancelledReturns')} base={{ follow: ['returning', 'returned'] }} show={[...base, 'reason']} reasonOf="back" defaultSort="updated_at" />
       </>
     );
+  // « Tous »: everyone but the seller and the admins searches it with 5 digits, no list (owner, 25 Nov 2026)
+  if (!seesAllNow) return <LookupOnly results={(q) => <AllOrderList id="tout-lookup" title={t('orders.lookup.results')} show={[]} fixedQ={q} />} />;
   return (
     <>
       <AllCounts />

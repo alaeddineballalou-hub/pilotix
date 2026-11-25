@@ -239,7 +239,7 @@
     },
     "searchPh": "Customer name, phone, ref. PX…, tracking number",
     "searchInfo": "Claims desk: type a name, a phone number (even part of it), a PX… reference or a tracking number. All orders are searched, whatever their status or date. Click an order to see its full history.",
-    "allOrders": "All orders",
+    "allOrders": "All",
     "results": "{{count}} results",
     "companiesTitle": "Claims to the couriers",
     "companiesHelp": "ZR Express: the claim is created directly in your ZR account, and its answer comes back here (Refresh answers). Yalidine, NOEST… have no API for claims: Pilotix prepares the full message (tracking, ref., customer, problem) and sends it by WhatsApp or e-mail to their customer service. Each claim stays here until answered; after 48 h without answer it turns red: remind in one click.",

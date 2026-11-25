@@ -239,7 +239,7 @@
     },
     "searchPh": "Nom du client, téléphone, réf. PX…, n° de suivi",
     "searchInfo": "Service réclamation : tapez un nom, un numéro de téléphone (même une partie), une référence PX… ou un numéro de suivi. Toutes les commandes sont cherchées, quel que soit leur statut ou leur date. Cliquez sur une commande pour voir tout son historique.",
-    "allOrders": "Toutes les commandes",
+    "allOrders": "Tous",
     "results": "{{count}} résultats",
     "companiesTitle": "Réclamations aux sociétés de livraison",
     "companiesHelp": "ZR Express : la réclamation est créée directement dans votre espace ZR, et sa réponse revient ici (Actualiser les réponses). Yalidine, NOEST… n’ont pas d’API pour les réclamations : Pilotix prépare le message complet (n° de suivi, réf., client, problème) et l’envoie par WhatsApp ou e-mail au service client. Chaque réclamation reste ici jusqu’à la réponse ; après 48 h sans réponse elle passe en rouge : relancez en un clic.",

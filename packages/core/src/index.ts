@@ -10,6 +10,7 @@ import { stopAgentPlan } from './modules/planledger';
 import { requireAssignedProducts, seesPurchaseCosts, withoutPurchaseCosts } from './modules/productscope';
 import { can, rightsGate } from './modules/rights';
 import { READY_TOUCH, syncReadiness } from './modules/readiness';
+import { withoutOldPhones } from './modules/oldphones';
 
 export * from './db';
 export * from './rpc';
@@ -76,7 +77,9 @@ const run = async (ctx: Ctx, name: string, input: unknown) => {
   });
   // Produits › « Prêt »: a change that can make a product ready (or not) puts every product back where it belongs
   if (READY_TOUCH.has(name)) await syncReadiness(ctx);
-  return seesPurchaseCosts(ctx) && (await can(ctx, 'act:costs')) ? out : withoutPurchaseCosts(out);
+  const shown = seesPurchaseCosts(ctx) && (await can(ctx, 'act:costs')) ? out : withoutPurchaseCosts(out);
+  // the customers' numbers 3 days after their orders are over: only the seller and the admins (owner, 25 Nov 2026)
+  return withoutOldPhones(ctx, shown);
 };
 
 /** Runs one named action for the logged-in user, with role checks, input validation and the agencies' limits. */

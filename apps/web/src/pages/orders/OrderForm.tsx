@@ -16,6 +16,7 @@ import { toast } from '../../ui/toast';
 import './orders.css';
 import { askRisk } from '../../ui/clientScore';
 import { rightOn } from '../../lib/rights';
+import { PhoneOf } from '../../ui/PhoneOf';
 
 type FormData = Out<'orders.formData'>;
 type Product = FormData['products'][number];
@@ -157,6 +158,9 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
 
   // ---- state
   const [name, setName] = useState<string>(pendingAbandoned && base.customerName === 'Client' ? '' : (base.customerName ?? ''));
+  // 3 days after the order is over its number is hidden from this person (only the seller and the admins see it): the
+  // form keeps it out — nothing to check, nothing sent, the order keeps its numbers (owner, 25 Nov 2026)
+  const phoneHidden = !!order?.phoneHidden;
   const [phone, setPhone] = useState<string>(base.phone ?? '');
   const [phone2, setPhone2] = useState<string>(base.phone2 ?? '');
   const [show2, setShow2] = useState<boolean>(!!base.phone2);
@@ -325,8 +329,8 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
   // ---- validate and save
   const validate = (strict: boolean): string | null => {
     if ((strict || !pendingAbandoned) && (name.trim().length < 2 || (abandoned && name.trim() === 'Client'))) return t('orders.form.eName');
-    if (!normalizePhone(phone)) return t('orders.form.ePhone');
-    if (show2 && phone2.trim() && !normalizePhone(phone2)) return t('orders.form.ePhone');
+    if (!phoneHidden && !normalizePhone(phone)) return t('orders.form.ePhone');
+    if (!phoneHidden && show2 && phone2.trim() && !normalizePhone(phone2)) return t('orders.form.ePhone');
     if ((strict || !pendingAbandoned) && wil === '') return t('orders.form.eWilaya');
     if (!lines.some((x) => x.productId)) return t('orders.form.eNoProduct');
     if (lines.some((x) => !x.productId || (!x.variantId && (strict || !pendingAbandoned)))) return t('orders.form.eEmptyLine');
@@ -385,6 +389,8 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
           id: order!.id,
           version: order!.version,
           ...payload,
+          // a hidden number is never sent back: the order keeps its own
+          ...(phoneHidden ? { phone: undefined, phone2: undefined } : {}),
           ...(pendingAbandoned && wil === '' ? { wilayaId: undefined } : {}),
           ...(locked ? {} : { items }),
         });
@@ -501,9 +507,13 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
               </Field>
               <div className="pxo-ph">
                 <Field label={t('orders.form.phone')}>
-                  <input className="ltr" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t('orders.form.phonePh')} inputMode="tel" autoComplete="off" required />
+                  {phoneHidden ? (
+                    <PhoneOf o={{ phone: '', phoneHidden: true }} />
+                  ) : (
+                    <input className="ltr" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t('orders.form.phonePh')} inputMode="tel" autoComplete="off" required />
+                  )}
                 </Field>
-                {!show2 && (
+                {!show2 && !phoneHidden && (
                   <button type="button" className="linkish pxo-t2b" onClick={() => setShow2(true)}>
                     {t('orders.form.addPhone2')}
                   </button>

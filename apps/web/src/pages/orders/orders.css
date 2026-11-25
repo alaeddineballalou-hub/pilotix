@@ -125,3 +125,16 @@
 /* the company weighed it heavier than declared */
 .px-heavier { display: inline-flex; align-items: center; gap: 5px; margin-top: 3px; padding: 2px 8px; border-radius: 8px; font-size: 12px; font-weight: 700; color: var(--c-warn-ink, #8A5A00); background: var(--c-warn-tint, #FFF2DA); width: fit-content; }
 .px-heavier svg { width: 14px; height: 14px; flex: none; }
+
+/* « Tous » for everyone but the seller and the admins (owner's rule, 25 Nov 2026): the search alone, 5 digits to start */
+.px-lk-meter { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.px-lk-meter b { font-weight: 800; }
+.px-lk-meter.ok b { color: var(--c-ok-ink); }
+.px-lk-dots { display: inline-flex; gap: 6px; }
+.px-lk-dots i { width: 11px; height: 11px; border-radius: 50%; background: var(--line); transition: background .2s ease, transform .2s ease; }
+.px-lk-dots i.on { background: var(--c-accent-grad); transform: scale(1.12); }
+.px-lk-meter.ok .px-lk-dots i { background: var(--c-ok-line); transform: none; }
+.px-lk-hidden { display: grid; justify-items: center; text-align: center; gap: 8px; padding: 40px 16px; }
+.px-lk-lock { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 18px; background: var(--c-accent-tint); color: var(--c-accent-ink); font-size: 26px; }
+.px-lk-hidden b { font-size: 16px; }
+@media (prefers-reduced-motion: reduce) { .px-lk-dots i { transition: none; } }

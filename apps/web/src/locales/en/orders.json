@@ -2,7 +2,7 @@
   "new": "New order",
   "plusNew": "+ New order",
   "title": "Orders",
-  "allOrders": "All orders",
+  "allOrders": "All",
   "delivered": "Delivered",
   "returned": "Returned",
   "cancelledConf": "Cancelled at confirmation",
@@ -33,6 +33,22 @@
     "label": "Search an order",
     "info": "Customer service: type a name, a phone number (even part of it), a PX… reference or a tracking number. All orders are searched, whatever their status or date. Click an order to see its whole history."
   },
+  "lookup": {
+    "placeholder": "Phone, PX…, tracking",
+    "label": "Search an order",
+    "info": "Type at least 5 digits: a phone, a PX… reference or a tracking number. A name is not enough.",
+    "mine": "You only find your own orders.",
+    "team": "You only find your team’s orders.",
+    "more_one": "1 more digit",
+    "more_other": "{{count}} more digits",
+    "ok": "5 digits: searching",
+    "hidden": "The list is hidden",
+    "hiddenS": "Search an order with at least 5 digits to see it here.",
+    "results": "Results",
+    "wide": "You find every order of the shop."
+  },
+  "phoneHidden": "Number hidden",
+  "phoneHiddenS": "3 days after delivery or cancellation, only the seller and the admin see the number.",
   "f": {
     "search": "Search",
     "searchPh": "Name, phone, ref. PX…, tracking no.",
@@ -530,7 +546,9 @@
     "recvOne": "To receive from {{name}}",
     "searchPh": "Name, phone, PX…",
     "lSwaps_one": "Swap fees · {{count}} swap",
-    "lSwaps_other": "Swap fees · {{count}} swaps"
+    "lSwaps_other": "Swap fees · {{count}} swaps",
+    "recentOnly_one": "The list shows the last 30 days: 1 older order can be found with 5 digits in « All ».",
+    "recentOnly_other": "The list shows the last 30 days: {{count}} older orders can be found with 5 digits in « All »."
   },
   "ad": {
     "title": "Ad (where the order came from)",

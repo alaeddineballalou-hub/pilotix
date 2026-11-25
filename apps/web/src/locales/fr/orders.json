@@ -2,7 +2,7 @@
   "new": "Nouvelle commande",
   "plusNew": "+ Nouvelle commande",
   "title": "Commandes",
-  "allOrders": "Toutes les commandes",
+  "allOrders": "Tous",
   "delivered": "Livrées",
   "returned": "Retournées",
   "cancelledConf": "Annulées à la confirmation",
@@ -33,6 +33,22 @@
     "label": "Rechercher une commande",
     "info": "Service réclamation : tapez un nom, un numéro de téléphone (même une partie), une référence PX… ou un numéro de suivi. Toutes les commandes sont cherchées, quel que soit leur statut ou leur date. Cliquez sur une commande pour voir tout son historique."
   },
+  "lookup": {
+    "placeholder": "Téléphone, PX…, suivi",
+    "label": "Chercher une commande",
+    "info": "Tapez au moins 5 chiffres : un téléphone, une référence PX… ou un numéro de suivi. Le nom ne suffit pas.",
+    "mine": "Vous trouvez seulement vos propres commandes.",
+    "team": "Vous trouvez seulement les commandes de votre équipe.",
+    "more_one": "Encore 1 chiffre",
+    "more_other": "Encore {{count}} chiffres",
+    "ok": "5 chiffres : c’est parti",
+    "hidden": "La liste est cachée",
+    "hiddenS": "Cherchez une commande avec au moins 5 chiffres pour la voir ici.",
+    "results": "Résultats",
+    "wide": "Vous trouvez toutes les commandes de la boutique."
+  },
+  "phoneHidden": "Numéro caché",
+  "phoneHiddenS": "3 jours après la livraison ou l’annulation, seuls le vendeur et l’admin voient le numéro.",
   "f": {
     "search": "Recherche",
     "searchPh": "Nom, téléphone, réf. PX…, n° de suivi",
@@ -530,7 +546,9 @@
     "recvOne": "À recevoir de {{name}}",
     "searchPh": "Nom, téléphone, PX…",
     "lSwaps_one": "Frais de swap · {{count}} swap",
-    "lSwaps_other": "Frais de swap · {{count}} swaps"
+    "lSwaps_other": "Frais de swap · {{count}} swaps",
+    "recentOnly_one": "La liste montre les 30 derniers jours : 1 commande plus ancienne se trouve avec 5 chiffres dans « Tous ».",
+    "recentOnly_other": "La liste montre les 30 derniers jours : {{count}} commandes plus anciennes se trouvent avec 5 chiffres dans « Tous »."
   },
   "ad": {
     "title": "Publicité (d’où vient la commande)",

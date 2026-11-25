@@ -204,3 +204,9 @@ html body .pager select.qsz { min-width: 112px; }
 .bjm-bar .bjm-p.bjm-cfg .bji { width: 17px; height: 17px; }
 .bjm-bar .bjm-p.bjm-cfg.on, html[data-skin][data-theme] .bjm-bar .bjm-p.bjm-cfg.on, html[data-theme] .bjm-bar .bjm-p.bjm-cfg.on { background: var(--navy, #1B2A47) !important; border-color: var(--navy, #1B2A47) !important; color: #FFFFFF !important; }
 
+
+/* « Numéro caché »: 3 days after an order is over, only the seller and the admins see the customer's number (25 Nov 2026) */
+.px-ph-hid { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.px-ph-hid .bji { width: 12px; height: 12px; flex: none; }
+.px-ph-hid .bji svg { width: 12px; height: 12px; }
+td .px-ph-hid { display: flex; margin-top: 2px; }

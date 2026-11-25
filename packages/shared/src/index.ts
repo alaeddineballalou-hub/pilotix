@@ -358,6 +358,8 @@ export interface Order {
   customerRefusals?: number;
   /** a refuser this new number looks like (same device, or same name + commune) */
   looksLikePhone?: string | null;
+  /** the customer's number is hidden from this person: 3 days after the order is over, only the seller and the admins see it */
+  phoneHidden?: boolean;
   /** the customer's score out of 100 (what the protection knows about this number), in the lists and an order's page */
   clientScore?: { score: number; level: ClientLevel; reasons: ClientReason[] } | null;
   /** the order card: where the money of a delivered parcel is (see OrderPay) */
@@ -479,6 +481,9 @@ export interface Complaint {
 export interface Page<T> {
   rows: T[];
   total: number;
+  /** the orders lists of everyone but the seller and the admins: every order of the filter, the old finished ones too
+   *  (`total`: the ones the list shows, 30 days) — their numbers stay whole (owner, 25 Nov 2026) */
+  totalAll?: number;
   page: number;
   pageSize: number;
 }

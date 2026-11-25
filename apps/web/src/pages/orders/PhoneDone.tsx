@@ -733,7 +733,9 @@ function BackStats({ r, label, f, show }: { r: CRep['returns']; label: string | 
 
 /** How many orders the list would show (for someone who cannot see the stats). */
 function useTotal(input: ListFilter, enabled: boolean) {
-  return useRpc('orders.list', { ...input, pageSize: 1 }, { enabled }).data?.total;
+  // the whole number (totalAll: the old finished orders too, owner 25 Nov 2026), not only the 30 days the list shows
+  const d = useRpc('orders.list', { ...input, pageSize: 1 }, { enabled }).data;
+  return d?.totalAll ?? d?.total;
 }
 
 /** `start`: the tab open first (the old « Retournées » page opens on the returns); otherwise the last one used. */
@@ -910,6 +912,8 @@ function PhoneList({ kind, title, per, f, setF, act }: { kind: Kind; title: stri
   const list = useRpc('orders.list', listInput(kind, per.range, f, dq, size));
   const rows = list.data?.rows ?? [];
   const total = list.data?.total ?? 0;
+  // everyone but the seller and the admins: the number counts the whole period, the list its last 30 days
+  const whole = list.data?.totalAll ?? total;
   const ids = rows.map((o) => o.id);
   // the courier's fee of each parcel: the store's own team (the seller's money), one shop at a time
   const fees = useRpc('orders.companyFees', { ids }, { enabled: kind === 'livre' && ids.length > 0 && has('confirmation', 'suivi', 'depot') && !agency && !together });
@@ -934,9 +938,10 @@ function PhoneList({ kind, title, per, f, setF, act }: { kind: Kind; title: stri
       <header className="pxn-lh">
         <h3 id={hid}>{title}</h3>
         <span>
-          <b className="ltr">{list.data ? n(total) : '…'}</b> · {dq ? t('orders.ph.allDates') : per.label ?? t('orders.ph.per.sinceStart')}
+          <b className="ltr">{list.data ? n(whole) : '…'}</b> · {dq ? t('orders.ph.allDates') : per.label ?? t('orders.ph.per.sinceStart')}
         </span>
       </header>
+      {whole > total && <p className="pxn-note pxn-recent">{t('orders.ph.recentOnly', { count: whole - total })}</p>}
       <div className="pxn-find">
         <label className="pxn-q">
           <Icon name="search" />

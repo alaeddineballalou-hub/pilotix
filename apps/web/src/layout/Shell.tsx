@@ -9,7 +9,8 @@ import { openOrder, openOrderForm } from '../lib/modals';
 import { useAction, useRpc, useRpcFor } from '../lib/query';
 import { Seller, setSeller, useSeller } from '../lib/seller';
 import { ownerGroups, useSellers } from '../lib/sellers';
-import { useSession } from '../lib/session';
+import { useSeesAll, useSession } from '../lib/session';
+import { LOOKUP_DIGITS, lookupDigits } from '../lib/lookup';
 import { PxLogo } from './PxLogo';
 import { PxMenuFace } from './PxMenuFace';
 import { chime, unlockAudio } from '../lib/sound';
@@ -553,6 +554,9 @@ function SellerSwitch() {
 /** Top bar search: BJ…/PX…, phone, name, tracking — with a keyboard list. */
 function GlobalSearch() {
   const { t } = useTranslation();
+  // everyone but the seller and the admins: 5 digits (a phone, a PX reference, a tracking number), names do not count
+  // (owner's rule, 25 Nov 2026), like « Tous »
+  const lookup = !useSeesAll();
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const [sel, setSel] = useState(0);
@@ -562,8 +566,9 @@ function GlobalSearch() {
     const id = setTimeout(() => setDebounced(q.trim()), 250);
     return () => clearTimeout(id);
   }, [q]);
-  const res = useRpc('orders.list', { q: debounced, pageSize: 8, tickets: 'include' }, { enabled: debounced.length >= 2 });
-  const rows = debounced.length >= 2 ? res.data?.rows ?? [] : [];
+  const ready = lookup ? lookupDigits(debounced) >= LOOKUP_DIGITS : debounced.length >= 2;
+  const res = useRpc('orders.list', { q: debounced, pageSize: 8, tickets: 'include' }, { enabled: ready });
+  const rows = ready ? res.data?.rows ?? [] : [];
   useEffect(() => {
     const close = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
     document.addEventListener('click', close);
@@ -580,8 +585,8 @@ function GlobalSearch() {
       <input
         type="search"
         className="pxs-in"
-        placeholder={t('shell.search')}
-        aria-label={t('shell.search')}
+        placeholder={t(lookup ? 'shell.searchLookup' : 'shell.search')}
+        aria-label={t(lookup ? 'shell.searchLookup' : 'shell.search')}
         autoComplete="off"
         value={q}
         onChange={(e) => {
@@ -597,7 +602,14 @@ function GlobalSearch() {
           else if (e.key === 'Escape') setOpen(false);
         }}
       />
-      {open && debounced.length >= 2 && (
+      {open && lookup && debounced.length > 0 && !ready && (
+        <div className="pxs-res" role="status">
+          <div className="muted small" style={{ padding: 10 }}>
+            {t('orders.lookup.more', { count: LOOKUP_DIGITS - lookupDigits(debounced) })} · {t('shell.searchLookupHint')}
+          </div>
+        </div>
+      )}
+      {open && ready && (
         <div className="pxs-res" role="listbox">
           {rows.length === 0 && <div className="muted small" style={{ padding: 10 }}>{res.isFetching ? t('common.loading') : t('shell.noResult')}</div>}
           {rows.map((o, i) => (

@@ -8,7 +8,8 @@ import { da, n, pct, syncProblems } from '../../lib/format';
 import { openOrder, openOrderForm } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
 import { useScope } from '../../lib/seller';
-import { useInAgency, useSession } from '../../lib/session';
+import { seesAll, useInAgency, useSession } from '../../lib/session';
+import { LOOKUP_DIGITS, lookupDigits } from '../../lib/lookup';
 import { store } from '../../lib/store';
 import { Card, ErrorBox, Icon, Kpi, Kpis, Loading, Tabs } from '../../ui/kit';
 import { toast } from '../../ui/toast';
@@ -73,6 +74,62 @@ function BigSearch({ value, onChange }: { value: string; onChange: (v: string) =
       </div>
       <p className="muted small bjf-info">{t('orders.find.info')}</p>
     </div>
+  );
+}
+
+
+/**
+ * « Tous » for everyone but the seller and the admins (the owner's rule, 25 Nov 2026): no list and no numbers; typing at
+ * least 5 digits (a phone, a PX reference, a tracking number — letters do not count) searches: an agent his own orders, a
+ * manager his team's, the dépôt every order, whatever their status or date. The same in Suivi › Réclamation › Recherche
+ * and « Toutes les boutiques » (`results`: the list of the found orders there).
+ */
+export function LookupOnly({ actions, title, results, initial }: { actions?: ReactNode; title?: ReactNode; results?: (q: string) => ReactNode; initial?: string }) {
+  const { t } = useTranslation();
+  const { session } = useSession();
+  const [q, setQ] = useState(initial ?? '');
+  const digits = lookupDigits(q);
+  const ready = digits >= LOOKUP_DIGITS;
+  const roles = session?.roles ?? [];
+  // what the search reaches (the server's listScopeSql): the dépôt every order, a manager his team's, the others their own
+  const reach = roles.includes('depot') ? 'wide' : roles.includes('agent_manager') || session?.profile.agencyLead ? 'team' : 'mine';
+  return (
+    <>
+      <Card title={title ?? t('orders.allOrders')} actions={actions} className="bjf px-lk">
+        <div className="bjf-row">
+          <span className="bjf-ic" aria-hidden="true">
+            <Icon name="search" />
+          </span>
+          <input type="search" className="bjf-in" placeholder={t('orders.lookup.placeholder')} aria-label={t('orders.lookup.label')} autoComplete="off" enterKeyHint="search" inputMode="search" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <div className={`px-lk-meter${ready ? ' ok' : ''}`} aria-live="polite">
+          <span className="px-lk-dots" aria-hidden="true">
+            {Array.from({ length: LOOKUP_DIGITS }, (_, i) => (
+              <i key={i} className={i < digits ? 'on' : undefined} />
+            ))}
+          </span>
+          <b>{ready ? t('orders.lookup.ok') : t('orders.lookup.more', { count: LOOKUP_DIGITS - digits })}</b>
+        </div>
+        <p className="muted small bjf-info">
+          {t('orders.lookup.info')} {t(`orders.lookup.${reach}`)}
+        </p>
+      </Card>
+      {ready ? (
+        results ? (
+          results(q.trim())
+        ) : (
+          <OrderList id="tout-lookup" title={t('orders.lookup.results')} q={q.trim()} show={[]} />
+        )
+      ) : (
+        <div className="card px-lk-hidden">
+          <span className="px-lk-lock" aria-hidden="true">
+            <Icon name="lock" />
+          </span>
+          <b>{t('orders.lookup.hidden')}</b>
+          <span className="muted small">{t('orders.lookup.hiddenS')}</span>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -262,7 +319,8 @@ export function OrderList(p: ListProps) {
       >
         {t('orders.bulk.print')}
       </button>
-      {rightOn('act:orders.export') && (
+      {/* export: the seller and the admins only (owner, 25 Nov 2026) */}
+      {rightOn('act:orders.export') && seesAll(session) && (
         <button className="btn small" onClick={() => exportOrdersCsv(t, sel)}>
           {t('orders.bulk.export')}
         </button>
@@ -292,7 +350,8 @@ export function OrderList(p: ListProps) {
   return (
     <Card title={p.title} actions={p.headActions}>
       {p.tabs && <Tabs value={tab} onChange={setTab} items={p.tabs.map((x) => ({ value: x.value, label: x.label, count: x.count }))} />}
-      <div className={`filters${open ? ' open' : ''}`}>
+      {/* no filter at all (« Tous » searched by an agent): no filter bar */}
+      <div className={`filters${open ? ' open' : ''}`} hidden={show.length === 0}>
         {show.includes('search') && (
           <label className="field search-f" hidden={p.q !== undefined}>
             <span className="lab">{t('orders.f.search')}</span>
@@ -584,7 +643,7 @@ export function DoneScreen({ sub, start }: { sub?: string; start?: 'conf' | 'bac
 
 function CommandesDesk({ sub }: { sub?: string }) {
   const { t } = useTranslation();
-  const { has } = useSession();
+  const { has, session } = useSession();
   const [q, setQ] = useState('');
   const c = useCounts();
   const deliveredExtra = useDeliveredExtra();
@@ -652,6 +711,19 @@ function CommandesDesk({ sub }: { sub?: string }) {
         />
         {swap.dialogs}
       </>
+    );
+
+  // « Tous »: the seller and the admins see everything; the others only search it, from 5 digits (owner's rule, 25 Nov 2026)
+  if (!seesAll(session))
+    return (
+      <LookupOnly
+        actions={
+          <>
+            {syncBtn}
+            {newBtn}
+          </>
+        }
+      />
     );
 
   // all orders

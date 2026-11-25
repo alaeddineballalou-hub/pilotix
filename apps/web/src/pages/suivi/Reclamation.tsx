@@ -11,12 +11,16 @@ import { productsText } from './common';
 import { CopyCode } from '../../ui/CopyCode';
 import { useIsPhone } from '../../lib/useMedia';
 import { PhoneClaims } from './PhoneClaims';
+import { LookupOnly } from '../orders';
+import { useSeesAll } from '../../lib/session';
 
 type RTab = 'search' | 'companies' | 'livreurs';
 
 export function Reclamation() {
   const { t } = useTranslation();
   const phone = useIsPhone();
+  // everyone but the seller and the admins: « Recherche » works like « Tous » (5 digits, no list; owner, 25 Nov 2026)
+  const seesAllNow = useSeesAll();
   // a phone opens on the claims to the couriers (the inbox); a computer on the search
   const [tab, setTab] = useState<RTab>(() => {
     const first: RTab = window.matchMedia('(max-width: 760px)').matches ? 'companies' : 'search';
@@ -61,8 +65,36 @@ export function Reclamation() {
           ))}
         </div>
       )}
-      {tab === 'search' ? <SearchOrders /> : phone ? <PhoneClaims target={tab === 'companies' ? 'company' : 'livreur'} /> : <ClaimsPanel target={tab === 'companies' ? 'company' : 'livreur'} />}
+      {tab === 'search' ? seesAllNow ? <SearchOrders /> : <SearchLookup /> : phone ? <PhoneClaims target={tab === 'companies' ? 'company' : 'livreur'} /> : <ClaimsPanel target={tab === 'companies' ? 'company' : 'livreur'} />}
     </>
+  );
+}
+
+/** The order SAV handed over (its reference or phone), read once. */
+function handedOver(): string {
+  try {
+    const v = sessionStorage.getItem('px-rec-q') ?? '';
+    sessionStorage.removeItem('px-rec-q');
+    return v;
+  } catch {
+    return '';
+  }
+}
+
+/** « Recherche » for everyone but the seller and the admins: the search of « Tous » (5 digits), no list. */
+function SearchLookup() {
+  const { t } = useTranslation();
+  const [initial] = useState(handedOver);
+  return (
+    <LookupOnly
+      title={t('suivi.rec.allOrders')}
+      initial={initial}
+      actions={
+        <button className="btn primary" onClick={() => openOrderForm({})}>
+          {t('suivi.rec.newOrder')}
+        </button>
+      }
+    />
   );
 }
 
@@ -70,15 +102,7 @@ export function Reclamation() {
 function SearchOrders() {
   const { t } = useTranslation();
   // SAV hands over an order not delivered yet (no SAV before delivery: it is a réclamation)
-  const [q, setQ] = useState(() => {
-    try {
-      const v = sessionStorage.getItem('px-rec-q') ?? '';
-      sessionStorage.removeItem('px-rec-q');
-      return v;
-    } catch {
-      return '';
-    }
-  });
+  const [q, setQ] = useState(handedOver);
   const [deb, setDeb] = useState(q);
   const [f, setF] = useState({ conf: '', follow: '', company: '', wilaya: '', channel: '', agent: '', from: '', to: '' });
   const [page, setPage] = useState(1);

@@ -26,6 +26,7 @@ import './phone.css';
 import { ChangeKind, ChangeSheet, CourierPanel, useParcelInfo } from './CourierPanel';
 import { useBackLayer } from '../../lib/backLayer';
 import { ScoreChip } from '../../ui/clientScore';
+import { PhoneOf } from '../../ui/PhoneOf';
 
 export type AlertClock = { kind: 'call' | 'solve'; dueAt: string; left: number; state: 'ok' | 'soon' | 'late' };
 export type PExtra = { rotateAt?: number | null; stuck?: import('./Stuck').StuckInfo | null; motif?: { outcome: 'resolved' | 'lost'; label: string } | null; clock?: AlertClock | null; tries?: AlertTries | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
@@ -319,7 +320,8 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: 
           )}
         </section>
 
-        <div className="pxs-cm">
+        {/* 3 days after the order is over its number is hidden (only the seller and the admins): no call, no message */}
+        {!o.phoneHidden && <div className="pxs-cm">
           {/* both ask first, phone or WhatsApp / SMS or WhatsApp, like Confirmation */}
           <AskCall phone={o.phone} className="pxs-call" label={`${t('suivi.act.call')} ${o.customerName} ${o.phone}`} onCall={() => rpc('orders.logCall', { id: o.id }).then(() => qc.invalidateQueries(), () => {})}>
             <Icon name="phone" /> {t('suivi.act.call')}
@@ -327,7 +329,7 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: 
           <AskMsg order={o} ready={waText} className="pxs-wa" label={`${t('suivi.ph.message')} ${o.phone}`}>
             <Icon name="message" /> {t('suivi.ph.message')}
           </AskMsg>
-        </div>
+        </div>}
 
         {/* the réclamation: the open one with Relancer / Réglée, or a way to make one */}
         {claim ? (
@@ -420,7 +422,7 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: 
               <div>
                 <small>{t('suivi.col.client')}</small>
                 <b>{o.customerName}</b>
-                <span className="ltr">{o.phone}</span>
+                <PhoneOf o={o} />
               </div>
               <div>
                 <small>{o.isStopdesk ? t('suivi.ph.desk') : t('suivi.ph.home')}</small>

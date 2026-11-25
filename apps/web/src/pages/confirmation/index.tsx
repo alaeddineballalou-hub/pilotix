@@ -9,7 +9,7 @@ import { da, dateTime, n, when, wilaya, wilayaName } from '../../lib/format';
 import { openOrderForm } from '../../lib/modals';
 import { useRpc, useRpcFor } from '../../lib/query';
 import { SellerScope } from '../../lib/seller';
-import { useSession } from '../../lib/session';
+import { seesAll as seesEveryOrder, useSession } from '../../lib/session';
 import { store } from '../../lib/store';
 import { ErrorBox, Field, Help, Icon, Loading, Pager, RemovableChip, SortTh, StageBar, StatusBadge } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
@@ -231,6 +231,7 @@ export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | 
   const [blockAsk, setBlockAsk] = useState<Row[] | null>(null);
   const [delAsk, setDelAsk] = useState<Row[] | null>(null);
   const { session } = useSession();
+  const seesAllNow = seesEveryOrder(session);
   useEffect(() => {
     const id = setTimeout(() => (setQd(q.trim()), setPage(1)), 350);
     return () => clearTimeout(id);
@@ -596,7 +597,8 @@ export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | 
               onToggle={() => setPanel(panel === 'c' ? null : 'c')}
             />
             <TabletColsButton more={tcols.more} all={tcols.all} toggle={tcols.toggle} />
-            {rightOn('act:orders.export') && (
+            {/* export: the seller and the admins only (owner, 25 Nov 2026) */}
+            {rightOn('act:orders.export') && seesAllNow && (
               <button type="button" className="px-qb px-qb-dl" title={t('common.export')} aria-label={t('common.export')} onClick={doExport}>
                 <Icon name="download" />
               </button>

@@ -103,7 +103,8 @@ test('orders.deliveredReport and companyFees add up', async () => {
   const agent = await as(EMAILS.suivi);
   const myReport = await call('orders.deliveredReport', agent, { from, to });
   const myOrders = await call('orders.list', agent, { from, to, follow: ['delivered'], dateField: 'delivered_at', pageSize: 1 });
-  assert.equal(myReport.total.n, myOrders.total);
+  // his list shows the last 30 days; its whole number (totalAll) is his report's (oldphones.ts, 25 Nov 2026)
+  assert.equal(myReport.total.n, myOrders.totalAll ?? myOrders.total);
   assert.ok(myReport.total.n < r.total.n);
   await assert.rejects(call('orders.deliveredReport', await as(EMAILS.conf), { from, to }), /Accès refusé/);
 });
