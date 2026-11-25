@@ -592,10 +592,12 @@
     "toCheck": "To check",
     "verify": "Check",
     "unverify": "Remove the check",
+    "unverifyText": "Its agents stop at once in every store (they are logged out). New orders no longer go to it: they stay with the stores’ teams. Its orders in progress stay with it, each with its agent, and start again when you check it again.",
+    "unverifyTitle": "Remove the check of {{name}}?",
     "suspend": "Suspend",
     "reactivate": "Reactivate",
     "suspendTitle": "Suspend {{name}}?",
-    "suspendText": "Its agents stop at once in every store; orders not confirmed yet go back to the stores’ teams.",
+    "suspendText": "Its agents stop at once in every store. Its orders in progress stay with it, each with its agent, and start again when you reactivate it; meanwhile new orders go to the stores’ teams.",
     "reason": "Reason (for the journal)",
     "saved": "Saved",
     "none": "No agency yet."
@@ -607,7 +609,8 @@
     "agency": "Marketer",
     "verified": "Checked",
     "none": "No marketer yet.",
-    "suspendText": "Their team stops at once in every store; their ad sets stay with the stores."
+    "suspendText": "Their team stops at once in every store; their ad sets stay with the stores.",
+    "unverifyText": "Their team stops at once in every store (logged out). Their ad sets stay with the stores."
   },
   "kind": {
     "agency": "confirmation agency",

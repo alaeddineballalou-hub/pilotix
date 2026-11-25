@@ -592,10 +592,12 @@
     "toCheck": "À vérifier",
     "verify": "Vérifier",
     "unverify": "Retirer la vérification",
+    "unverifyText": "Ses agents s’arrêtent tout de suite dans toutes les boutiques (ils sont déconnectés). Les nouvelles commandes ne vont plus chez elle : elles restent aux équipes des boutiques. Ses commandes en cours restent chez elle, chacune avec son agent, et reprennent quand vous la vérifiez de nouveau.",
+    "unverifyTitle": "Retirer la vérification de {{name}} ?",
     "suspend": "Suspendre",
     "reactivate": "Réactiver",
     "suspendTitle": "Suspendre {{name}} ?",
-    "suspendText": "Ses agents s’arrêtent tout de suite dans toutes les boutiques ; les commandes pas encore confirmées reviennent aux équipes des boutiques.",
+    "suspendText": "Ses agents s’arrêtent tout de suite dans toutes les boutiques. Ses commandes en cours restent chez elle, chacune avec son agent, et reprennent quand vous la réactivez ; en attendant, les nouvelles commandes vont aux équipes des boutiques.",
     "reason": "Raison (pour le journal)",
     "saved": "Enregistré",
     "none": "Pas encore d’agence."
@@ -607,7 +609,8 @@
     "agency": "Marketer",
     "verified": "Vérifié",
     "none": "Pas encore de marketer.",
-    "suspendText": "Son équipe s’arrête tout de suite dans toutes les boutiques ; ses ad sets restent aux boutiques."
+    "suspendText": "Son équipe s’arrête tout de suite dans toutes les boutiques ; ses ad sets restent aux boutiques.",
+    "unverifyText": "Son équipe s’arrête tout de suite dans toutes les boutiques (elle est déconnectée). Ses ad sets restent aux boutiques."
   },
   "kind": {
     "agency": "agence de confirmation",

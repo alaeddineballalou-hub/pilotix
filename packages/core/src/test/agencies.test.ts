@@ -400,10 +400,12 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   assert.deepEqual([o4.confAgencyId, o4.followAgencyId], [ag.id, ag2.id]);
   assert.deepEqual([o5.confAgencyId, o5.followAgencyId], [ag2.id, ag2.id]);
 
-  // Pilotix suspends the first agency: Nora stops at once, its unconfirmed orders go back to the store's team
+  // Pilotix suspends the first agency: Nora stops at once; its orders wait with it (the owner's rule, 25 Nov 2026)
+  const waiting = Number((await shop.db.query('SELECT count(*)::int AS n FROM orders WHERE conf_agency_id = $1 AND conf_status = $2', [ag.id, 'new']))[0].n);
+  assert.ok(waiting > 0);
   await p('p.shops.setStatus', { id: ag.id, status: 'suspended', reason: 'test' });
   await assert.rejects(login(shop.db, 'nora@agence.dz', PW), /désactivé/);
-  assert.equal(Number((await shop.db.query('SELECT count(*)::int AS n FROM orders WHERE conf_agency_id = $1 AND conf_status = $2', [ag.id, 'new']))[0].n), 0);
+  assert.equal(Number((await shop.db.query('SELECT count(*)::int AS n FROM orders WHERE conf_agency_id = $1 AND conf_status = $2', [ag.id, 'new']))[0].n), waiting);
   // the confirmed one stays counted for the agency (it gets paid when it is delivered)
   assert.equal(Number((await shop.db.query('SELECT conf_agency_id FROM orders WHERE id = $1', [o1.id]))[0].conf_agency_id), ag.id);
   // new Vélo orders: the other agency has every product now

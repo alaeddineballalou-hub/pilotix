@@ -141,6 +141,8 @@ export interface Link {
   storeSchema: string;
   /** the agency may work: not suspended, checked by Pilotix */
   agencyOk: boolean;
+  /** the agency is closed for good (archived, deleted): its orders go back to the stores */
+  agencyGone: boolean;
   /** the store still exists */
   storeOk: boolean;
 }
@@ -170,6 +172,7 @@ export function toLink(r: any): Link {
     agencySchema: r.a_schema,
     storeSchema: r.s_schema,
     agencyOk: r.a_status === 'active' && !!r.a_verified,
+    agencyGone: r.a_status === 'archived' || r.a_status === 'deleted',
     storeOk: r.s_status !== 'archived' && r.s_status !== 'deleted',
   };
 }
@@ -391,9 +394,14 @@ async function syncAgencyLink(db: Db, L: Link, people: AgencyPerson[], on: boole
   }
   // the others of this agency: closed now (their sessions end)
   await db.query('UPDATE profiles SET active = false, token_version = token_version + 1 WHERE agency_id = $1 AND active AND NOT (lower(email) = ANY($2))', [A, [...want.keys()]]);
-  // orders of a task it no longer does: back to the store's team
-  for (const task of AGENCY_TASKS) if (!tasks.includes(task)) await releaseOrders(db, A, task);
-  await releaseStuck(db, A);
+  // The agency's orders are the agency's, never one person's (the owner's rule, 25 Nov 2026): they go back to the
+  // store's team only when the contract no longer has their task (it ended, or the store took that task back) or the
+  // agency is closed for good (archived). A new owner, Pilotix taking back its « Vérifier » or suspending the agency
+  // moves none of them: its people stop at once, and each order waits with its agent until they come back.
+  const kept = L.info.status === 'active' && !L.agencyGone ? L.info.tasks : [];
+  for (const task of AGENCY_TASKS) if (!kept.includes(task)) await releaseOrders(db, A, task);
+  // the orders of someone who left its team (or lost the product) go to its queue — never while the whole agency is stopped
+  if (on) await releaseStuck(db, A);
   return problems;
 }
 

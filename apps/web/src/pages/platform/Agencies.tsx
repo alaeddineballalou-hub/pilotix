@@ -20,6 +20,8 @@ export function Agencies({ staff, kind = 'agency' }: { staff: Staff; kind?: 'age
   const verify = usePAction('p.agencies.verify', { success: t('platform.ag.saved') });
   const status = usePAction('p.shops.setStatus', { success: t('platform.ag.saved') });
   const [suspend, setSuspend] = useState<{ id: number; name: string } | null>(null);
+  // « Retirer la vérification » says first what it does (the owner's ask, 25 Nov 2026: one click had stopped THE CLOSER)
+  const [unverify, setUnverify] = useState<{ id: number; name: string } | null>(null);
   const [pro, setPro] = useState<{ id: number; name: string; verified: boolean } | null>(null);
   const [owner, setOwner] = useState<OwnerTarget | null>(null);
   const stopPro = usePAction('p.pro.stop', { success: t('platform.pro.stopped') });
@@ -125,7 +127,12 @@ export function Agencies({ staff, kind = 'agency' }: { staff: Staff; kind?: 'age
                     )}
                     <td className="agx-row-act">
                       {manager && a.status === 'active' && (
-                        <button type="button" className={`btn small ${a.verifiedAt ? '' : 'primary'}`} disabled={verify.isPending} onClick={() => verify.mutate({ id: a.id, verified: !a.verifiedAt })}>
+                        <button
+                          type="button"
+                          className={`btn small ${a.verifiedAt ? '' : 'primary'}`}
+                          disabled={verify.isPending}
+                          onClick={() => (a.verifiedAt ? setUnverify({ id: a.id, name: a.name }) : verify.mutate({ id: a.id, verified: true }))}
+                        >
                           {a.verifiedAt ? t('platform.ag.unverify') : t('platform.ag.verify')}
                         </button>
                       )}
@@ -153,6 +160,24 @@ export function Agencies({ staff, kind = 'agency' }: { staff: Staff; kind?: 'age
       </Card>
       {pro && <ProModal m={pro} onClose={() => setPro(null)} />}
       {owner && <OwnerModal s={owner} onClose={() => setOwner(null)} />}
+      {unverify && (
+        <Modal
+          title={t('platform.ag.unverifyTitle', { name: unverify.name })}
+          onClose={() => setUnverify(null)}
+          footer={
+            <>
+              <button type="button" className="btn" onClick={() => setUnverify(null)}>
+                {t('common.cancel')}
+              </button>
+              <button type="button" className="btn danger" disabled={verify.isPending} onClick={() => verify.mutate({ id: unverify.id, verified: false }, { onSuccess: () => setUnverify(null) })}>
+                {t('platform.ag.unverify')}
+              </button>
+            </>
+          }
+        >
+          <p>{tk('unverifyText')}</p>
+        </Modal>
+      )}
       {suspend && (
         <Modal
           title={t('platform.ag.suspendTitle', { name: suspend.name })}
