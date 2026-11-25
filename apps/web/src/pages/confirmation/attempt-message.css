@@ -26,3 +26,7 @@
 .attempt-message-photo img { flex: none; width: 56px; height: 56px; object-fit: cover; border-radius: 8px; background: var(--line); }
 .attempt-message-photo small { line-height: 1.45; }
 .attempt-message-share { justify-self: center; }
+/* the first message on a computer without the Pilotix extension: locked until it is there (owner, 25 Nov 2026) */
+.attempt-message-ext { display: grid; justify-items: start; gap: 10px; padding: 12px; border-radius: 12px; background: var(--warn-soft); color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); }
+.attempt-message-ext > p { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 14px; font-weight: 600; line-height: 1.5; }
+.attempt-message-ext > p svg { flex: none; width: 18px; height: 18px; margin-top: 2px; }

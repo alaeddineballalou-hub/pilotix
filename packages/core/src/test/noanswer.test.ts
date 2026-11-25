@@ -166,6 +166,12 @@ test('the cancel message’s short link: the product’s main photo on its page,
   assert.equal(page.photo, jpeg);
   assert.equal(asked[1].side, 800, 'a light copy for WhatsApp’s preview');
   assert.ok(asked.every((a) => a.photos[0].src === `hd:${main}`), 'the product’s main photo (its first), never the colour’s');
+  // the first message (« tentative 3 ») carries the same photo, with no link (owner, 25 Nov 2026)
+  const first: any = await call('orders.customerMessage', sys, { id, kind: 'attempt' });
+  assert.equal(first.photo, jpeg);
+  assert.deepEqual([first.token, first.url, first.path], [null, null, null]);
+  assert.equal(asked[2].side, 1080);
+  assert.equal(asked[2].photos[0].src, `hd:${main}`);
   assert.equal(page.why.src, `${api}/lp/img/${whyId}/480.webp`);
   assert.match(page.why.srcset, /960\.webp 960w/);
   assert.deepEqual([page.why.w, page.why.h], [900, 1400]);

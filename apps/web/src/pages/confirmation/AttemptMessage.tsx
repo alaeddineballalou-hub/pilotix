@@ -1,17 +1,20 @@
 import { phoneWa, withReactivationLink } from '@pilotix/shared';
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { DEMO_ONLY } from '../../lib/backend';
 import { useRpc } from '../../lib/query';
 import { store } from '../../lib/store';
 import { EXT_ZIP, extSend, extVersion, photoFiles, sendMode, sharePhotoFiles, waApps, waChat, waPhotos } from '../../lib/waShare';
 import { copyText, Icon } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import whatsappLogo from '../../assets/brand/whatsapp-logo.svg';
+import { ExtInstall } from './ExtInstall';
 import './attempt-message.css';
 
 export type MessageChannel = 'whatsapp' | 'sms';
-/** how the cancel message's photo reaches the chat: pc the extension, app the Pilotix app, share a phone's share menu,
- *  card only in the link's preview (no way on this device, or no photo) */
+/** how the message's photo reaches the chat: pc the extension, app the Pilotix app, share a phone's share menu, card not
+ *  in the chat (no way on this device, or no photo): the cancel message's is in its link's preview, the first message
+ *  goes without it */
 type PhotoWay = 'pc' | 'app' | 'share' | 'card';
 /** the WhatsApp the agent uses in the Pilotix app (« Envoyer des photos » keeps the same choice) */
 const WA_APP_KEY = 'waApp';
@@ -20,6 +23,20 @@ export const finalAttempt = (attempts: number, limit: number) => limit > 0 && at
 /** This call is the try of the shop's first message (Management › Statuts › « Messages client », 3 at the start). An order
  *  already past it (from before the rule) is not asked again. */
 export const messageAttempt = (attempts: number, at: number) => attempts + 1 === at;
+
+/** The extension's version, kept up to date: installed while Pilotix is open, it puts its bridge in the open Pilotix
+ *  tabs, which marks the page (apps/extension/background.js › onInstalled), so a locked message opens by itself. */
+function useExtVersion() {
+  const [version, setVersion] = useState(extVersion);
+  useEffect(() => {
+    const look = () => setVersion(extVersion());
+    const watch = new MutationObserver(look);
+    watch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-pilotix-ext', 'data-pilotix-wa'] });
+    look();
+    return () => watch.disconnect();
+  }, []);
+  return version;
+}
 
 /** What the agent's last tap did: « ok » copied and the app opened, « again » copied the slow way (tap once more to open
  *  the app), « fail » nothing copied (the app stayed closed). */
@@ -71,17 +88,32 @@ export function AttemptMessage({ phone, orderId, message, onMessage, onOpen, can
   // the agent may change the words: the link always goes (on a line of its own at the end when he took it out)
   const payload = cancelling && url ? withReactivationLink(text, url) : text;
   const body = encodeURIComponent(payload);
-  const canOpen = !!body && (!cancelling || !!url);
-  const waHref = phone ? `https://wa.me/${phoneWa(phone)}?text=${body}` : '';
 
-  // the cancel message's photo: the product's main photo, into the chat with the message where this device can (the way
-  // « Envoyer des photos » sends: the extension on a computer, the Pilotix app, a phone's share menu), else only in the
-  // link's preview (the preview has its small picture: shown, nothing more)
-  const photo = cancelling ? (tpl.data?.photo ?? null) : null;
-  const realPhoto = photo && /^https:\/\//.test(photo) ? photo : null;
+  // the message's photo: the product's main photo, into the chat with the message where this device can (the way
+  // « Envoyer des photos » sends: the extension on a computer, the Pilotix app, a phone's share menu); else the cancel
+  // message's is only in its link's preview (the preview has its small picture: shown, nothing more). The first message
+  // too since 25 Nov 2026 (owner: « the same picture need to be send in attempt 3 »): on a computer it is locked until
+  // the extension is there (« he should install it before being able to send message »).
+  const photo = tpl.data?.photo ?? null;
+  // (the preview has no public address: its small picture counts as the photo there, so it shows what the site does)
+  const realPhoto = photo && (DEMO_ONLY || /^https:\/\//.test(photo)) ? photo : null;
   const mode = useMemo(sendMode, []);
-  const ext = useMemo(extVersion, []);
-  // the photo's way failed once (WhatsApp Web closed, no WhatsApp…): the next tap sends the message with its link
+  const ext = useExtVersion();
+  const needExt = !cancelling && mode === 'pc' && !ext;
+  const [guide, setGuide] = useState(false);
+  // the extension came while the message was locked: say so once
+  const wasLocked = useRef(false);
+  useEffect(() => {
+    if (needExt) wasLocked.current = true;
+    else if (wasLocked.current) {
+      wasLocked.current = false;
+      toast(t('confirmation.attemptPhoto.ready'), 'ok', 5000);
+    }
+  }, [needExt, t]);
+  const canOpen = !!body && (!cancelling || !!url) && !needExt;
+  const waHref = phone ? `https://wa.me/${phoneWa(phone)}?text=${body}` : '';
+  // the photo's way failed once (WhatsApp Web closed, no WhatsApp…): the next tap sends the message without it (the
+  // cancel one with its link)
   const [fallback, setFallback] = useState(false);
   const way: PhotoWay = !realPhoto || fallback ? 'card' : mode === 'pc' ? (ext ? 'pc' : 'card') : mode === 'app' ? 'app' : mode === 'share' ? 'share' : 'card';
   const [app, setApp] = useState<string | null>(null);
@@ -128,10 +160,11 @@ export function AttemptMessage({ phone, orderId, message, onMessage, onOpen, can
       window.clearTimeout(timer);
     };
   }, [armed, realPhoto, phone, app, t]);
-  /** the photo could not go: the next tap on WhatsApp sends the message with its link (its preview shows the photo) */
+  /** the photo could not go: the next tap on WhatsApp sends the message alone (the cancel one with its link, whose
+   *  preview shows the photo) */
   const linkOnly = () => {
     setFallback(true);
-    toast(t('confirmation.cancelPhoto.again'), 'bad', 8000);
+    toast(t(cancelling ? 'confirmation.cancelPhoto.again' : 'confirmation.attemptPhoto.again'), 'bad', 8000);
   };
   const sendWithPhoto = (): (() => void) | undefined => {
     if (!phone || !realPhoto) return undefined;
@@ -176,7 +209,7 @@ export function AttemptMessage({ phone, orderId, message, onMessage, onOpen, can
     }
   };
   const status = copied?.text === payload ? (copied.state === 'ok' && back ? 'back' : copied.state) : null;
-  const photoNote = way === 'pc' || way === 'app' ? 'goes' : way === 'share' ? 'share' : realPhoto && mode === 'pc' && !ext ? 'ext' : 'card';
+  const photoNote = way === 'pc' || way === 'app' || needExt ? 'goes' : way === 'share' ? 'share' : !cancelling ? 'alone' : realPhoto && mode === 'pc' && !ext ? 'ext' : 'card';
   return <>
     <label className="qd6-lab">
       {t(cancelling ? 'confirmation.cancellationMessageRequired' : 'confirmation.attemptMessageRequired', { n: meta.data?.messageAtTry ?? 3 })}
@@ -191,10 +224,22 @@ export function AttemptMessage({ phone, orderId, message, onMessage, onOpen, can
       {photo && <div className="attempt-message-photo">
         <img src={photo} alt="" />
         <small>
-          {t(`confirmation.cancelPhoto.${photoNote}`)}
+          {t(photoNote === 'alone' ? 'confirmation.attemptPhoto.alone' : `confirmation.cancelPhoto.${photoNote}`)}
           {photoNote === 'ext' && <> <a href={EXT_ZIP} download>{t('confirmation.cancelPhoto.install')}</a></>}
         </small>
       </div>}
+      {needExt && <div className="attempt-message-ext" role="alert">
+        <p><Icon name="lock" /> <span>{t('confirmation.attemptPhoto.lock')}</span></p>
+        {!guide && <button type="button" className="btn small primary" onClick={() => setGuide(true)}>
+          <Icon name="download" /> {t('confirmation.photos.installExt')}
+        </button>}
+      </div>}
+      {needExt && guide && <ExtInstall why={t('confirmation.attemptPhoto.why')} last={<>
+        <span>{t('confirmation.attemptPhoto.last')}</span>
+        <button type="button" className="btn small" onClick={() => window.location.reload()}>
+          <Icon name="refresh" /> {t('confirmation.photos.extReload')}
+        </button>
+      </>} />}
       {tpl.error && <button type="button" className="btn small" onClick={() => void tpl.refetch()}>{t('common.retry')}</button>}
       <div className="attempt-message-channels">
         {canOpen ? <a className="btn" href={`sms:${phone}?body=${body}`} aria-label="SMS"

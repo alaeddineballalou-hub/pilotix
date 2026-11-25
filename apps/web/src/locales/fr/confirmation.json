@@ -20,6 +20,14 @@
     "failed": "La photo n’a pas pu partir.",
     "again": "La photo n’a pas pu partir : touchez encore WhatsApp pour envoyer le message avec son lien (la photo s’affiche dans son aperçu)."
   },
+  "attemptPhoto": {
+    "lock": "Installez l’extension Pilotix pour envoyer ce message : c’est elle qui met la photo du produit dans la discussion du client.",
+    "why": "Sur un ordinateur, WhatsApp Web n’accepte pas les photos venant d’un site. Cette petite extension pour Chrome met la photo du produit dans la discussion du client, avec le message. À faire une fois par ordinateur.",
+    "last": "Revenez ici : le message se débloque tout seul. Sinon, rechargez Pilotix.",
+    "ready": "Extension installée : vous pouvez envoyer le message.",
+    "alone": "Sur cet appareil, le message part sans la photo.",
+    "again": "La photo n’a pas pu partir : touchez encore WhatsApp pour envoyer le message sans elle."
+  },
   "attemptMessageRequired": "Envoyez un message au client pour la tentative {{n}}",
   "attemptMessageOneOrder": "Ouvrez une commande à la fois pour envoyer son message.",
   "sub": {
@@ -118,7 +126,8 @@
     "passed": "Historique",
     "variant": "Variante",
     "fagent": "Agent suivi",
-    "chrono": "Chrono"
+    "chrono": "Chrono",
+    "tries": "Tentatives"
   },
   "f": {
     "wilaya": "Wilaya",
@@ -460,7 +469,12 @@
     "appliedAll": "Préréglage « {{name}} » utilisé par toute l’équipe",
     "team": "Équipe",
     "noteAdmin": "Le préréglage que vous choisissez va à toute l’équipe. Ensuite, chacun peut cocher ses colonnes.",
-    "noteUser": "Cochez les colonnes que vous voulez voir : elles sont à vous. Un nouveau préréglage de l’administrateur les remplace."
+    "noteUser": "Cochez les colonnes que vous voulez voir : elles sont à vous. Un nouveau préréglage de l’administrateur les remplace.",
+    "noteAgency": "Le préréglage que vous choisissez va à toute l’équipe de l’agence, chez tous vos vendeurs. Ensuite, chacun peut cocher ses colonnes.",
+    "noteAgencyUser": "Cochez les colonnes que vous voulez voir : elles sont à vous. Un nouveau préréglage de l’agence les remplace.",
+    "savedAgency": "Préréglage « {{name}} » enregistré et utilisé par toute l’équipe de l’agence",
+    "applyAgency": "Utiliser ce préréglage pour toute l’équipe de l’agence",
+    "byAgency": "Choisi par l’agence pour son équipe"
   },
   "hist": {
     "title": "Historique de {{ref}}",
@@ -915,7 +929,10 @@
     "label": "Où en sont les commandes confirmées",
     "all": "Toutes",
     "nostock": "Sans stock",
-    "dispatchee": "Dispatchée"
+    "prepares": "Préparées",
+    "prepare": "Préparée",
+    "dispatchees": "Parties",
+    "dispatchee": "Partie"
   },
   "nob": {
     "title": "Nouvelle commande",
@@ -1061,5 +1078,18 @@
       "d": "Nouvelle commande, rappel, plus à vous, annulée : qui les reçoit, et quand le téléphone sonne",
       "s": "{{on}} sur {{all}} allumées"
     }
+  },
+  "counters": {
+    "label": "Compteurs : un appui montre seulement ces commandes, un autre appui les montre toutes",
+    "late": "En retard",
+    "soon": "À appeler vite",
+    "ontime": "À temps",
+    "now": "À rappeler",
+    "later": "Plus tard",
+    "postponed": "Reportées"
+  },
+  "tries": {
+    "title_one": "{{count}} tentative sur {{max}}",
+    "title_other": "{{count}} tentatives sur {{max}}"
   }
 }

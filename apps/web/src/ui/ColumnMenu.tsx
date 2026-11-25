@@ -3,17 +3,40 @@ import { useQueryClient } from '@tanstack/react-query';
 import { store } from '../lib/store';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../lib/backend';
-import { useRpc } from '../lib/query';
+import { useRpcFor } from '../lib/query';
+import { useScope } from '../lib/seller';
 import { useSession } from '../lib/session';
 import { useUiPrefs } from '../lib/ui';
 import { Icon } from './kit';
 import { toast } from './toast';
 
 /**
+ * Where a list's column presets live and who leads them. A store: its own presets, led by its administrator. A
+ * confirmation agency's space (one seller picked or « Tous les vendeurs »): the agency's own presets, asked of the
+ * agency itself, led by its chief and its chefs d'équipe for the agency's team only; the seller's own team never sees
+ * them, and the agency never sees the seller's (owner's choice, 25 Nov 2026; the server: confirmation.ts › presetLead).
+ */
+function usePresetPlace() {
+  const { session } = useSession();
+  const scope = useScope();
+  const agency = session?.shop?.kind === 'agency';
+  return {
+    agency,
+    /** where the presets are read: the agency itself (null), or the list's own store */
+    seller: agency ? null : scope,
+    /** where they are changed: the agency itself (null), or, as any action, the store of what is open (undefined) */
+    to: agency ? null : undefined,
+    /** saves and deletes presets, and the one he picks goes to his whole team */
+    lead: !!session?.isAdmin || (agency && !!session?.profile.agencyLead),
+  };
+}
+
+/**
  * The column picker of every order list (Confirmation, Suivi, Dépôt, Livré, Annulé, Toutes les commandes, SAV), for every
  * user (owner's choice, 25 Nov 2026): each one ticks the columns he wants to see, saved with his account. The presets are
- * shared and never edited: an admin saves and deletes them, and the one he picks goes to the whole team at once (it
- * replaces everyone's columns); anyone else picks one for himself, on all his lists.
+ * shared and never edited: a lead saves and deletes them, and the one he picks goes to his whole team at once (it
+ * replaces everyone's columns); anyone else picks one for himself, on all his lists. The lead: a store's administrator;
+ * in a confirmation agency's space, its chief and its chefs d'équipe, with the agency's own presets (usePresetPlace).
  */
 export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset, open, onToggle, order, onOrder, presetId, teamId, presetShows, onPreset, widthsSet, onResetWidths }: {
   cols: { k: K; label: string }[];
@@ -38,9 +61,9 @@ export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset,
   onOrder?: (o: K[]) => void;
 }) {
   const { t } = useTranslation();
-  const { session } = useSession();
-  const admin = !!session?.isAdmin;
-  const presets = useRpc('confirmation.colPresets', {}, { staleTime: 60_000 });
+  // admin: the one who leads the presets (a store's administrator; an agency's chief and chefs d'équipe)
+  const { agency, seller, to, lead: admin } = usePresetPlace();
+  const presets = useRpcFor(seller, 'confirmation.colPresets', {}, { staleTime: 60_000 });
   const qc = useQueryClient();
   const [pName, setPName] = useState('');
   const listed = order ? order.map((k) => cols.find((c) => c.k === k)!).filter(Boolean) : cols;
@@ -52,9 +75,9 @@ export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset,
     if (!name) return;
     try {
       // the columns ticked, and every column this list has: elsewhere the preset decides only the columns it saw here
-      await rpc('confirmation.addColPreset', { name, cols: listed.filter((c) => visible.has(c.k)).map((c) => presetCol(c.k)), all: listed.map((c) => presetCol(c.k)) });
+      await rpc('confirmation.addColPreset', { name, cols: listed.filter((c) => visible.has(c.k)).map((c) => presetCol(c.k)), all: listed.map((c) => presetCol(c.k)) }, to);
       setPName('');
-      toast(t('confirmation.presets.savedAll', { name }), 'ok');
+      toast(t(agency ? 'confirmation.presets.savedAgency' : 'confirmation.presets.savedAll', { name }), 'ok');
       presets.refetch();
       qc.invalidateQueries({ queryKey: ['confirmation.colActive'] });
     } catch (e: any) {
@@ -63,7 +86,7 @@ export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset,
   };
   const del = async (id: string) => {
     try {
-      await rpc('confirmation.deleteColPreset', { id });
+      await rpc('confirmation.deleteColPreset', { id }, to);
       toast(t('confirmation.presets.deleted'), 'ok');
       presets.refetch();
       qc.invalidateQueries({ queryKey: ['confirmation.colActive'] });
@@ -89,7 +112,7 @@ export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset,
                   <button
                     type="button"
                     className="px-pre-go"
-                    title={admin ? t('confirmation.presets.applyAll') : t('confirmation.presets.applyMine')}
+                    title={admin ? t(agency ? 'confirmation.presets.applyAgency' : 'confirmation.presets.applyAll') : t('confirmation.presets.applyMine')}
                     aria-label={t('confirmation.presets.apply', { name: p.name })}
                     aria-pressed={on}
                     disabled={!n}
@@ -103,7 +126,7 @@ export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset,
                     <Icon name="lock" />
                     <span>{p.name}</span>
                     {teamId === p.id && (
-                      <em className="px-pre-team" title={t('confirmation.presets.byAdmin')}>
+                      <em className="px-pre-team" title={t(agency ? 'confirmation.presets.byAgency' : 'confirmation.presets.byAdmin')}>
                         {t('confirmation.presets.team')}
                       </em>
                     )}
@@ -131,7 +154,9 @@ export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset,
                 </button>
               </form>
             )}
-            <div className="px-pre-note">{admin ? t('confirmation.presets.noteAdmin') : t('confirmation.presets.noteUser')}</div>
+            <div className="px-pre-note">
+              {agency ? t(admin ? 'confirmation.presets.noteAgency' : 'confirmation.presets.noteAgencyUser') : t(admin ? 'confirmation.presets.noteAdmin' : 'confirmation.presets.noteUser')}
+            </div>
           </div>
           <div className="px-pre-h">{t('confirmation.presets.cols')}</div>
           {listed.map((c) => (
@@ -237,8 +262,10 @@ export function useTableColumns<K extends string>(table: string, all: K[], opts:
   const { t } = useTranslation();
   const { session } = useSession();
   const admin = !!session?.isAdmin;
-  const presets = useRpc('confirmation.colPresets', {}, { staleTime: 60_000 });
-  const activeQ = useRpc('confirmation.colActive', {}, { staleTime: 60_000 });
+  // the presets of the team: the store's, or in an agency's space the agency's own, led by its chief and chefs d'équipe
+  const place = usePresetPlace();
+  const presets = useRpcFor(place.seller, 'confirmation.colPresets', {}, { staleTime: 60_000 });
+  const activeQ = useRpcFor(place.seller, 'confirmation.colActive', {}, { staleTime: 60_000 });
   const defaults = (opts.defaults ?? all).filter((k) => all.includes(k));
   // this user's own columns for this list (and the order saved with them before order had its own key)
   const saved = prefs.get<{ cols: K[]; order: K[]; at: number }>(`cols.t.${table}`);
@@ -285,12 +312,12 @@ export function useTableColumns<K extends string>(table: string, all: K[], opts:
     setOrder: (o: K[]) => prefs.set(`cols.o.${table}`, o),
     /** "Tout afficher" */
     reset: () => prefs.set(`cols.t.${table}`, { cols: [...all], order, at: Date.now() }),
-    /** a preset picked: for me on all my lists; an admin's also goes to the whole team */
+    /** a preset picked: for me on all my lists; a lead's (store admin, agency chief or chef d'équipe) also goes to his whole team */
     applyPreset: async (id: string) => {
       prefs.set('cols.p', { id, at: Date.now() });
-      if (!admin) return;
+      if (!place.lead) return;
       try {
-        await rpc('confirmation.setColActive', { id });
+        await rpc('confirmation.setColActive', { id }, place.to);
         await qc.invalidateQueries({ queryKey: ['confirmation.colActive'] });
         toast(t('confirmation.presets.appliedAll', { name: find(id)?.name ?? '' }), 'ok');
       } catch (e: any) {

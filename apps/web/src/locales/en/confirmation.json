@@ -20,6 +20,14 @@
     "failed": "The photo could not be sent.",
     "again": "The photo could not be sent: tap WhatsApp again to send the message with its link (the photo shows in its preview)."
   },
+  "attemptPhoto": {
+    "lock": "Install the Pilotix extension to send this message: it puts the product's photo in the customer's chat.",
+    "why": "On a computer, WhatsApp Web takes no photos from a website. This small Chrome extension puts the product's photo in the customer's chat, with the message. Once per computer.",
+    "last": "Come back here: the message unlocks by itself. If not, reload Pilotix.",
+    "ready": "Extension installed: you can send the message.",
+    "alone": "On this device, the message goes without the photo.",
+    "again": "The photo could not be sent: tap WhatsApp again to send the message without it."
+  },
   "attemptMessageRequired": "Send the client a message for attempt {{n}}",
   "attemptMessageOneOrder": "Open one order at a time to send its message.",
   "sub": {
@@ -118,7 +126,8 @@
     "passed": "History",
     "variant": "Variant",
     "fagent": "Follow-up agent",
-    "chrono": "Chrono"
+    "chrono": "Chrono",
+    "tries": "Tries"
   },
   "f": {
     "wilaya": "Wilaya",
@@ -460,7 +469,12 @@
     "appliedAll": "Preset “{{name}}” now used by the whole team",
     "team": "Team",
     "noteAdmin": "The preset you pick goes to the whole team. Then everyone can tick their own columns.",
-    "noteUser": "Tick the columns you want to see: they are yours. A new preset from the admin replaces them."
+    "noteUser": "Tick the columns you want to see: they are yours. A new preset from the admin replaces them.",
+    "noteAgency": "The preset you pick goes to the whole agency team, for all your sellers. Then everyone can tick their own columns.",
+    "noteAgencyUser": "Tick the columns you want to see: they are yours. A new preset from the agency replaces them.",
+    "savedAgency": "Preset “{{name}}” saved and used by the whole agency team",
+    "applyAgency": "Use this preset for the whole agency team",
+    "byAgency": "Chosen by the agency for its team"
   },
   "hist": {
     "title": "History of {{ref}}",
@@ -915,7 +929,10 @@
     "label": "Where the confirmed orders are",
     "all": "All",
     "nostock": "No stock",
-    "dispatchee": "Dispatched"
+    "prepares": "Prepared",
+    "prepare": "Prepared",
+    "dispatchees": "Sent",
+    "dispatchee": "Sent"
   },
   "nob": {
     "title": "New order",
@@ -1061,5 +1078,18 @@
       "d": "New order, call-back, no longer yours, cancelled: who gets them, and when the phone rings",
       "s": "{{on}} of {{all}} on"
     }
+  },
+  "counters": {
+    "label": "Counters: one tap shows only those orders, another tap shows them all",
+    "late": "Late",
+    "soon": "Call soon",
+    "ontime": "On time",
+    "now": "Call back",
+    "later": "Later",
+    "postponed": "Postponed"
+  },
+  "tries": {
+    "title_one": "{{count}} try out of {{max}}",
+    "title_other": "{{count}} tries out of {{max}}"
   }
 }

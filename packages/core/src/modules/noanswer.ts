@@ -10,6 +10,8 @@
 //   and under it the shop's « Pourquoi nous » picture. The main photo also goes into the chat with the message, the
 //   way « Envoyer des photos » sends (the Pilotix app, a phone's share menu, the Chrome extension on a computer).
 //   The older long links (/reorder/<order>/<64 hex>) keep working.
+//   The first message carries the same photo since 25 Nov 2026 (owner: « the same picture need to be send in attempt
+//   3 »), with no link: on a computer it is sent only through the extension (AttemptMessage.tsx locks it until then).
 // - An order already at N unanswered tries or more and still waiting for a call (an order from before this rule, or N
 //   lowered by the shop) is cancelled by itself, with no message and no link (cancelOverLimit): when the shop saves N,
 //   and every 10 minutes (the job « noanswer-sweep »). It reads like the cancel of the Nth call: « Pas de réponse », an
@@ -119,7 +121,7 @@ async function newReorderLink(ctx: Ctx, orderId: number) {
 
 /** The JPEG copy WhatsApp's preview reads: 800 px at most (light: WhatsApp shows no picture above 300 KB on some phones). */
 export const REORDER_PHOTO_SIDE = 800;
-/** The photo that goes into the chat with the cancel message: the copy « Envoyer des photos » sends (1080 px). */
+/** The photo that goes into the chat with the customer's messages: the copy « Envoyer des photos » sends (1080 px). */
 export const CHAT_PHOTO_SIDE = 1080;
 
 /** The order's first product (a service last), by the name the order gave it. */
@@ -148,9 +150,9 @@ async function mainPhotoLink(ctx: Ctx, productId: number, side: number): Promise
   return Array.isArray(r?.urls) && typeof r.urls[0] === 'string' ? r.urls[0] : null;
 }
 
-/** The photo that goes with the cancel message (the agent's screen sends it into the chat where it can, else it is
- *  only in the link's preview). */
-async function cancelPhoto(ctx: Ctx, orderId: number): Promise<string | null> {
+/** The photo that goes with both messages: the agent's screen sends it into the chat where it can; else the cancel
+ *  message's is only in its link's preview, and the first message goes without it (a phone that cannot share files). */
+async function messagePhoto(ctx: Ctx, orderId: number): Promise<string | null> {
   const item = await firstProduct(ctx.db, orderId);
   return item ? mainPhotoLink(ctx, item.id, CHAT_PHOTO_SIDE) : null;
 }
@@ -233,7 +235,8 @@ export const noAnswerProcs = {
    * One order's message as the agent sends it; before a cancel, with a new one-time reactivation link: `url` the short
    * link (the shop's own domain, else the platform's address; null in the preview), `path` the same on the platform's
    * address (an older screen puts the site's address in front of it), and `photo` the product's main photo that goes
-   * into the chat with the message (owner, 25 Nov 2026: « image in message »; in the preview its small picture).
+   * into the chat with the message (owner, 25 Nov 2026: « image in message »; in the preview its small picture). The
+   * first message has the same `photo`, and no link.
    */
   'orders.customerMessage': proc(['confirmation'], z.object({ id, kind: z.enum(['attempt', 'cancel']), draft: z.string().uuid().optional() }), async (ctx, i) => {
     await getOrder(ctx, i.id);
@@ -241,8 +244,8 @@ export const noAnswerProcs = {
     const values = customerMessageValues(order);
     // (the first message has no link: a {رابط_إعادة_التفعيل} written there is left out)
     const text = fillCustomerMessage(texts[i.kind] || DEFAULT_CUSTOMER_MESSAGES[i.kind], i.kind === 'attempt' ? { ...values, [REACTIVATION_VAR]: '' } : values);
-    if (i.kind === 'attempt') return { text, token: null, path: null, url: null, photo: null };
-    const [link, photo] = await Promise.all([newReorderLink(ctx, i.id), cancelPhoto(ctx, i.id)]);
+    if (i.kind === 'attempt') return { text, token: null, path: null, url: null, photo: await messagePhoto(ctx, i.id) };
+    const [link, photo] = await Promise.all([newReorderLink(ctx, i.id), messagePhoto(ctx, i.id)]);
     return { text, token: link.code, path: link.path, url: link.url, photo };
   }),
   /** The short link's page, for its public address (apps/server): read by the server only (admin = the system). */
