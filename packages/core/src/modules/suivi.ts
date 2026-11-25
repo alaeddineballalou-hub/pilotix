@@ -9,7 +9,7 @@ import { getPrefs } from './prefs';
 import { rotateTimes } from './assign';
 import { cancelParcel, swapFees } from './delivery';
 import { addEvent, FollowInput, getOrder, listOrders, ListInput, releasePicked, setFollow, withClientScores } from './orders';
-import { agencyOf, agencyRowSql, andSql, queueSql, rowScopeSql } from './agencyscope';
+import { agencyLead, agencyOf, agencyRowSql, andSql, queueSql, rowScopeSql } from './agencyscope';
 import { findOrders } from './sav';
 import { applyTrust, DRIVER_CLAIMS } from './trust';
 import { KINDS } from '../couriers/kinds';
@@ -1039,6 +1039,8 @@ const ListSuivi = z.object({
   wilayaId: ListInput.shape.wilayaId,
   from: z.string().min(10).max(40).optional(),
   to: z.string().min(10).max(40).optional(),
+  /** the managers' « Toutes / Non affectées / Affectées » on the alerts: nobody has it yet, or a suivi agent does */
+  assigned: z.enum(['free', 'given']).optional(),
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(500).default(300),
 });
@@ -1200,27 +1202,36 @@ export const suiviProcs = {
   'suivi.counts': proc(['suivi', 'confirmation'], z.object({}), (ctx) => suiviCounts(ctx)),
 
   'suivi.list': proc(['suivi', 'confirmation'], ListSuivi, async (ctx, i) => {
+    // « Toutes / Non affectées / Affectées » on the alerts (the owner's ask, 25 Nov 2026), with its numbers: for the
+    // owner, the agent managers and a confirmation agency's chiefs — never a suivi agent
+    const boss = (i.tab === 'alertes' || i.tab === 'alertes_new' || i.tab === 'alertes_encours') && (ctx.session.isAdmin || hasRole(ctx.session, 'agent_manager', 'vendeur') || agencyLead(ctx));
+    const empty = { rows: [], total: 0, page: 1, pageSize: i.pageSize ?? 50, extra: {}, assign: boss ? { free: 0, given: 0 } : null };
     const stuck = i.tab === 'bloques' ? await stuckParcels(ctx) : null;
-    if (stuck && !stuck.size) return { rows: [], total: 0, page: 1, pageSize: i.pageSize ?? 50, extra: {} };
+    if (stuck && !stuck.size) return empty;
     // new alerts (nobody acted since it came) / alerts in progress (someone called, wrote a note…)
     const split = i.tab === 'alertes_new' || i.tab === 'alertes_encours' ? await alertSplit(ctx) : null;
     const splitIds = split ? (i.tab === 'alertes_new' ? split.fresh : split.working) : null;
-    if (splitIds && !splitIds.length) return { rows: [], total: 0, page: 1, pageSize: i.pageSize ?? 50, extra: {} };
+    if (splitIds && !splitIds.length) return empty;
     const swapIds = i.tab === 'swap' ? await swappableIds(ctx) : null;
-    if (swapIds && !swapIds.length) return { rows: [], total: 0, page: 1, pageSize: i.pageSize ?? 50, extra: {} };
+    if (swapIds && !swapIds.length) return empty;
     const ids = stuck ? [...stuck.keys()].slice(0, 500) : splitIds ? splitIds.slice(0, 500) : swapIds ? swapIds.slice(0, 500) : null;
     const tf = tabFilter(i.tab, ctx.now(), agencyOf(ctx) !== null && hasRole(ctx.session, 'suivi'));
-    const page = await listOrders(ctx, ListInput.parse({ ...tf, ...suiviFilters(i, tf), ...(ids ? { ids } : {}), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: readQueue(ctx) });
+    const base: Partial<ListInput> = { ...tf, ...suiviFilters(i, tf), ...(ids ? { ids } : {}), q: i.q };
+    const who = (side: 'free' | 'given') => ({ followAgentId: side === 'free' ? ('none' as const) : ('any' as const) });
+    const page = await listOrders(ctx, ListInput.parse({ ...base, ...(i.assigned ? who(i.assigned) : {}), page: i.page, pageSize: i.pageSize }), { queue: readQueue(ctx) });
+    // the switch's numbers: this list (its search and filters, not its agent filter) with nobody on it / someone
+    const count = async (side: 'free' | 'given') => (await listOrders(ctx, ListInput.parse({ ...base, ...who(side), page: 1, pageSize: 1 }), { queue: readQueue(ctx) })).total;
+    const assign = boss ? { free: await count('free'), given: await count('given') } : null;
     if (stuck) {
       const ex = await extras(ctx, page.rows, ctx.now());
       for (const o of page.rows) if (ex[o.id]) ex[o.id].stuck = stuck.get(o.id) ?? null;
       // the longest without news first
       const rows = await withClientScores(ctx, [...page.rows].sort((a, b) => (stuck.get(b.id)?.days ?? 0) - (stuck.get(a.id)?.days ?? 0)));
-      return { ...page, rows, extra: ex };
+      return { ...page, rows, extra: ex, assign };
     }
     // the swap list only shows parcels that really left (still with the courier or the livreur)
     const rows = await withClientScores(ctx, i.tab === 'swap' ? page.rows.filter((o) => o.shippedAt) : page.rows);
-    return { ...page, rows, extra: await extras(ctx, rows, ctx.now()) };
+    return { ...page, rows, extra: await extras(ctx, rows, ctx.now()), assign };
   }),
 
   /** "Traiter" an alert: what was done, new date, note → back on the road with sub-status alert_traitee. */

@@ -53,6 +53,12 @@ export function mergeRows(parts: Part[], key: Key, dir: 'asc' | 'desc', page: nu
   return { rows: rows.slice((page - 1) * pageSize, page * pageSize), total, page, pageSize };
 }
 
+/** « Non affectées / Affectées » over every shop (null when no shop counted them: the switch is not shown) */
+function sumAssign(parts: Part[]): { free: number; given: number } | null {
+  const got = parts.map((p) => p.out?.assign).filter((a): a is { free: unknown; given: unknown } => !!a);
+  return got.length ? { free: got.reduce((n, a) => n + num(a.free), 0), given: got.reduce((n, a) => n + num(a.given), 0) } : null;
+}
+
 const CONF_KEY: Record<string, Key> = {
   deadline: (r) => {
     const d = r.deadline;
@@ -192,7 +198,7 @@ export const FANOUT: Record<string, Fan> = {
       let sort: string = i?.sort ?? def.sort;
       if (sort === 'deadline' && sub !== 'nouvelles' && sub !== 'attente') sort = 'created_at';
       const dir = i?.dir ?? (i?.sort ? (i.sort === 'total' || i.sort === 'score' ? 'desc' : 'asc') : def.dir);
-      return mergeRows(parts, CONF_KEY[sort] ?? CONF_KEY.created_at, dir, i?.page ?? 1, i?.pageSize ?? 50);
+      return { ...mergeRows(parts, CONF_KEY[sort] ?? CONF_KEY.created_at, dir, i?.page ?? 1, i?.pageSize ?? 50), assign: sumAssign(parts) };
     },
   },
   'suivi.list': {
@@ -202,7 +208,7 @@ export const FANOUT: Record<string, Fan> = {
       const o = SUIVI_SORT[i?.tab] ?? SUIVI_SORT.alertes;
       // each row carries its shop's extra details (ids repeat from one shop to another)
       const out = mergeRows(parts, o.key, o.dir, i?.page ?? 1, i?.pageSize ?? 300, (r, p) => ({ ...r, extra: p.out?.extra?.[r.id] ?? null }));
-      return { ...out, extra: {} };
+      return { ...out, extra: {}, assign: sumAssign(parts) };
     },
   },
 };

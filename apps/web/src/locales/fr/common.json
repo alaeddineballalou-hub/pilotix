@@ -107,5 +107,11 @@
   },
   "pageCrashed": "Cette page a eu un problème. L’équipe Pilotix est prévenue automatiquement.",
   "settingsWho": "Seuls les admins et les rôles choisis voient cet onglet (Utilisateurs › Rôles).",
-  "settingsNothing": "Rien à régler ici pour votre rôle."
+  "settingsNothing": "Rien à régler ici pour votre rôle.",
+  "assign": {
+    "label": "Affectation",
+    "all": "Toutes",
+    "free": "Non affectées",
+    "given": "Affectées"
+  }
 }

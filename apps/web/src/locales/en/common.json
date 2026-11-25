@@ -107,5 +107,11 @@
   },
   "pageCrashed": "This page ran into a problem. The Pilotix team has been told automatically.",
   "settingsWho": "Only admins and the roles you choose see this tab (Users › Roles).",
-  "settingsNothing": "Nothing to set here for your role."
+  "settingsNothing": "Nothing to set here for your role.",
+  "assign": {
+    "label": "Assignment",
+    "all": "All",
+    "free": "Unassigned",
+    "given": "Assigned"
+  }
 }

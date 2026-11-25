@@ -1512,6 +1512,18 @@ html body .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #C97A0E; 
 .px-vsw button.on { background: var(--navy); color: var(--on-navy); }
 .px-vsw button:focus-visible { outline: 2px solid #F7A823; outline-offset: 2px; }
 .px-vsw-row { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+/* « Toutes / Non affectées / Affectées » (ui/AssignSwitch, the managers' switch of Confirmation and Suivi): beside the
+   list's title when its head has room, else on its own line under the title and its buttons; a phone: the whole width */
+.px-ahead { container-type: inline-size; }
+.px-assign { display: flex; flex: 0 1 auto; min-width: 0; margin-inline-end: auto; }
+.px-assign .px-vsw button { white-space: nowrap; }
+.px-assign-n { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: inline-grid; place-items: center; font-size: 11.5px; font-weight: 800; background: var(--sky-soft); color: var(--navy); font-variant-numeric: tabular-nums; }
+.px-assign .px-vsw button.on .px-assign-n { background: var(--on-navy, #fff); color: var(--navy); }
+@container (max-width: 1080px) { .px-assign { order: 3; flex-basis: 100%; margin: 2px 0 0; } }
+@media (max-width: 760px) {
+  .px-assign .px-vsw { display: flex; width: 100%; }
+  .px-assign .px-vsw button { flex: auto; justify-content: center; padding: 0 6px; gap: 5px; font-size: 12.5px; }
+}
 
 /* ===== computers: the phone screens laid out wide (.px-wide around PhonePrep / PhoneStages / ParcelCards / PhoneSav /
    PhoneCaisse). The cards of a list sit side by side; the bars a phone keeps at the bottom of the screen stay at the

@@ -40,6 +40,7 @@ import { rightOn, tabOn } from '../../lib/rights';
 import { pageIsOn } from '../../lib/features';
 import { useMenuCounts } from '../../layout/Shell';
 import { Feed } from '../notify';
+import { AssignSwitch, type Assign } from '../../ui/AssignSwitch';
 import { DoneScreen } from '../orders';
 
 const LIST_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'traites', 'bloques', 'livres', 'annules', 'swap'] as const;
@@ -544,7 +545,7 @@ export type CombinedSuivi = { input?: Record<string, unknown>; bar?: ReactNode; 
 export function List({ tab, combined }: { tab: ListTab; combined?: CombinedSuivi }) {
   const { t } = useTranslation();
   const agency = useInAgency();
-  const { has } = useSession();
+  const { has, session } = useSession();
   const canFollow = has('suivi');
   const qc = useQueryClient();
   const canTreat = (o: ParcelRow) => canFollow && (!o.seller || !combined?.canWork || combined.canWork(o.seller.id));
@@ -552,8 +553,13 @@ export function List({ tab, combined }: { tab: ListTab; combined?: CombinedSuivi
   // Utilisateurs › Rôles: « Traiter les alertes » (treat, back to alert, stuck parcels)
   const treats = rightOn('act:suivi.treat');
   const [page, setPage] = useState(1);
+  // « Toutes / Non affectées / Affectées » on the alerts (ui/AssignSwitch): the owner, the agent managers, an agency's
+  // chiefs; never a suivi agent. It starts on « Toutes »; the « Agent suivi » filter and it never fight
+  const showAssign = isAlertTab(tab) && (has('vendeur', 'agent_manager') || !!session?.profile.agencyLead);
+  const [assign, setAssignState] = useState<Assign>('all');
   const [f, setF] = useState<SuiviF>(() => ({ ...NO_SF, ...store.json<Partial<SuiviF>>('suivi-f', {}), q: '' }));
   const setFilter = (patch: Partial<SuiviF>) => {
+    if (patch.fagent) setAssignState('all');
     setF((x) => {
       const nx = { ...x, ...patch };
       const { q: _q, ...keep } = nx;
@@ -566,7 +572,12 @@ export function List({ tab, combined }: { tab: ListTab; combined?: CombinedSuivi
   const scopeKey = JSON.stringify(combined?.input ?? {});
   useEffect(() => setPage(1), [scopeKey]);
   const agencyFilters = combined ? { ...NO_SF, q: f.q, wilaya: f.wilaya, from: f.from, to: f.to } : f;
-  const q = useRpc('suivi.list', { tab, page, pageSize: 100, ...suiviInput(agencyFilters, dq), ...combined?.input });
+  const setAssign = (v: Assign) => {
+    setAssignState(v);
+    if (v !== 'all' && f.fagent) setFilter({ fagent: '' });
+    setPage(1);
+  };
+  const q = useRpc('suivi.list', { tab, page, pageSize: 100, ...suiviInput(agencyFilters, dq), ...(showAssign && assign !== 'all' ? { assigned: assign } : {}), ...combined?.input });
   const [dlg, setDlg] = useState<Dialog>(null);
   const act = useAction('suivi.act');
   // phones: journey cards; a tap opens the parcel full screen. Computers: the same cards, the parcel in a side panel
@@ -670,8 +681,9 @@ export function List({ tab, combined }: { tab: ListTab; combined?: CombinedSuivi
 
   return (
     <div className={`card${cards && !phone ? ' px-wide' : ''}`}>
-      <div className="card-head">
+      <div className={`card-head${showAssign ? ' px-ahead' : ''}`}>
         <h2>{tab === 'swap' ? t('suivi.toSwap') : t(`suivi.tabs.${tab}`)}</h2>
+        {showAssign && <AssignSwitch value={assign} onChange={setAssign} counts={q.data?.assign} />}
         {combined?.chip}
         <span className="muted small">{q.data ? t('suivi.parcels', { count: q.data.rows.length }) : ''}</span>
         {!combined && canFollow && (isAlertTab(tab) || tab === 'bloques') && !cards && !!q.data?.rows.length && (

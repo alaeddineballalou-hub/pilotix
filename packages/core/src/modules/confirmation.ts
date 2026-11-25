@@ -212,7 +212,9 @@ const QueueInput = z.object({
   status: z.enum(CONF_STATUSES).optional(),
   q: z.string().max(100).optional(),
   wilayaId: z.number().int().min(1).max(69).optional(),
-  agentId: z.union([id, z.literal('none')]).optional(),
+  agentId: z.union([id, z.literal('none'), z.literal('any')]).optional(),
+  /** the managers' « Toutes / Non affectées / Affectées » (Nouvelles, En cours): no agent yet, or given to one */
+  assigned: z.enum(['free', 'given']).optional(),
   /** a team from the settings: its manager and its agents */
   teamId: z.string().max(40).optional(),
   productId: id.optional(),
@@ -252,9 +254,12 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
   const byDeadline = sort === 'deadline';
   const byScore = sort === 'score';
   const dir = i.dir ?? (i.sort ? (i.sort === 'total' || i.sort === 'score' ? 'desc' : 'asc') : def.dir);
-  // sorted or filtered by something the database does not hold (the countdown, the score): the whole list (3000 at
-  // most), sorted here, then the page cut
-  const whole = byDeadline || byScore || !!i.level;
+  // « Toutes / Non affectées / Affectées » (the owner's ask, 25 Nov 2026): the managers' switch in Nouvelles and En
+  // cours — the owner, the agent managers, a confirmation agency's chiefs; never a plain agent (he has his own orders)
+  const split = queue && (ctx.session.isAdmin || isManager(ctx) || agencyLead(ctx));
+  // sorted or filtered by something the database does not hold (the countdown, the score), or split in two: the whole
+  // list (3000 at most), sorted here, then the page cut
+  const whole = byDeadline || byScore || !!i.level || split || !!i.assigned;
   const base = byDeadline || byScore ? (queue ? 'deadline' : def.sort === 'deadline' ? 'created_at' : def.sort) : sort;
   const found = await listOrders(ctx, {
     conf: i.status ? [i.status] : [...allowed],
@@ -281,6 +286,8 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
   }
   let page = found;
   let scoredAll = false;
+  /** the switch's numbers: orders of this list (its search and filters) with no agent yet / given to one */
+  let assign: { free: number; given: number } | null = null;
   if (whole) {
     let all = [...found.rows];
     if (base === 'deadline') {
@@ -303,7 +310,9 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
         all = all.map((o, k) => ({ o, k })).sort((a, b) => (rank(b.o) - rank(a.o)) * (dir === 'asc' ? -1 : 1) || a.k - b.k).map((x) => x.o);
       }
     }
-    page = { ...found, total: i.level ? all.length : found.total, page: i.page, pageSize: i.pageSize, rows: all.slice((i.page - 1) * i.pageSize, i.page * i.pageSize) };
+    if (split) assign = { free: all.filter((o) => !o.agentId).length, given: all.filter((o) => !!o.agentId).length };
+    if (i.assigned) all = all.filter((o) => (i.assigned === 'free' ? !o.agentId : !!o.agentId));
+    page = { ...found, total: i.level || i.assigned ? all.length : found.total, page: i.page, pageSize: i.pageSize, rows: all.slice((i.page - 1) * i.pageSize, i.page * i.pageSize) };
   }
   const vids = [...new Set(page.rows.flatMap((o) => o.items.map((it) => it.variantId).filter((v): v is number => !!v)))];
   const skuOf = new Map<number, string>();
@@ -333,7 +342,7 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
     passed: passedOf.get(o.id) ?? [],
     rotateAt: rot.get(o.id) ?? null,
   }));
-  return { ...page, rows };
+  return { ...page, rows, assign };
 }
 
 // ---------------------------------------------------------------- KPI blocks

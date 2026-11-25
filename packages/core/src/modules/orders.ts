@@ -332,13 +332,14 @@ export const ListInput = z.object({
   taken: z.boolean().optional(),
   q: z.string().max(100).optional(),
   wilayaId: z.number().int().min(1).max(69).optional(),
-  agentId: z.union([id, z.literal('none')]).optional(),
+  /** none: no confirmation agent yet · any: given to an agent, whoever it is (« Non affectées / Affectées ») */
+  agentId: z.union([id, z.literal('none'), z.literal('any')]).optional(),
   /** orders handled by any of these agents (a team) */
   agentIds: z.array(id).max(500).optional(),
   /** orders of a team of Utilisateurs › Équipes (its manager and its agents) */
   teamId: z.string().max(40).optional(),
-  /** the suivi agent of the order; none: nobody yet */
-  followAgentId: z.union([id, z.literal('none')]).optional(),
+  /** the suivi agent of the order; none: nobody yet · any: someone has it */
+  followAgentId: z.union([id, z.literal('none'), z.literal('any')]).optional(),
   /** orders that contain this product (and this variant of it) */
   productId: id.optional(),
   variantId: id.optional(),
@@ -403,10 +404,12 @@ export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' 
   else if (f.taken === true) w.add('o.taken_at IS NOT NULL');
   if (f.wilayaId) w.add('o.wilaya_id = ?', f.wilayaId);
   if (f.agentId === 'none') w.add('o.agent_id IS NULL');
+  else if (f.agentId === 'any') w.add('o.agent_id IS NOT NULL');
   else if (f.agentId) w.add('o.agent_id = ?', f.agentId);
   if (f.agentIds) w.add('o.agent_id = ANY(?)', f.agentIds);
   if (f.teamId) w.add('o.agent_id = ANY(?)', await teamMembers(ctx.db, f.teamId));
   if (f.followAgentId === 'none') w.add('o.follow_agent_id IS NULL');
+  else if (f.followAgentId === 'any') w.add('o.follow_agent_id IS NOT NULL');
   else if (f.followAgentId) w.add('o.follow_agent_id = ?', f.followAgentId);
   if (f.variantId) w.add('EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.variant_id = ?)', f.variantId);
   else if (f.productId) w.add('EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.product_id = ?)', f.productId);

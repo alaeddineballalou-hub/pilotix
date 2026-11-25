@@ -33,6 +33,7 @@ import { ScoreChip } from '../../ui/clientScore';
 import { useAllMode } from '../../layout/AllBoutiques';
 import { rightOn, tabOn } from '../../lib/rights';
 import { makerName, OriginChip } from '../orders/OrderPath';
+import { AssignSwitch, assignedInput, type Assign } from '../../ui/AssignSwitch';
 
 type Source = { id: number; name: string };
 type Row = NonNullable<ReturnType<typeof useList>['data']>['rows'][number] & { seller?: Source };
@@ -102,10 +103,10 @@ const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
  */
 const CONF_USEFUL = ['chrono', 'name', 'phone', 'product', 'source', 'status', 'wilaya', 'order', 'total'];
 
-function useList(sub: Sub, input: { q: string; f: Filters; sort: SortKey; dir: 'asc' | 'desc'; page: number; size: number }, scope?: Record<string, unknown>) {
+function useList(sub: Sub, input: { q: string; f: Filters; sort: SortKey; dir: 'asc' | 'desc'; page: number; size: number; assigned?: 'free' | 'given' }, scope?: Record<string, unknown>) {
   return useRpc(
     'confirmation.list',
-    { sub, q: input.q || undefined, ...input.f, status: (input.f.status as any) || undefined, sort: input.sort, dir: input.dir, page: input.page, pageSize: input.size, ...scope },
+    { sub, q: input.q || undefined, ...input.f, status: (input.f.status as any) || undefined, assigned: input.assigned, sort: input.sort, dir: input.dir, page: input.page, pageSize: input.size, ...scope },
     { refetchInterval: 60_000 },
   );
 }
@@ -236,7 +237,16 @@ export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | 
   }, [q]);
   const scopeKey = JSON.stringify(combined?.input ?? {});
   useEffect(() => setPage(1), [scopeKey]);
-  const list = useList(sub, { q: qd, f, sort, dir, page, size }, combined?.input);
+  // « Toutes / Non affectées / Affectées »: the managers' switch in Nouvelles and En cours (ui/AssignSwitch); it starts
+  // on « Toutes » each time, and the « Agent » filter and it never fight (picking one clears the other)
+  const showAssign = manager && (sub === 'nouvelles' || sub === 'attente');
+  const [side, setSideState] = useState<Assign>('all');
+  const setSide = (v: Assign) => {
+    setSideState(v);
+    if (v !== 'all') setF((cur) => (cur.agentId === undefined ? cur : { ...cur, agentId: undefined }));
+    setPage(1);
+  };
+  const list = useList(sub, { q: qd, f, sort, dir, page, size, assigned: showAssign ? assignedInput(side) : undefined }, combined?.input);
   const rows: Row[] = list.data?.rows ?? [];
   useEffect(() => {
     const ids = new Set(rows.map(rowKey));
@@ -499,11 +509,12 @@ export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | 
       {focus !== null && <Focus initialId={focus === 'ask' ? null : focus} onClose={() => setFocus(null)} />}
       {/* « px-full »: the page around this table takes the whole width of the screen (styles/legacy.css) */}
       <div className={`card qcard px-full px-d-${dens}`}>
-        <div className="card-head px-qhead">
+        <div className={`card-head px-qhead${showAssign ? ' px-ahead' : ''}`}>
           <h2>
             {title} <span className={`badge t-${SUB_TONE[sub]} ltr`}>{n(list.data?.total ?? 0)}</span>
             <Help text={t(`confirmation.help.${sub}`)} label={title} />
           </h2>
+          {showAssign && <AssignSwitch value={side} onChange={setSide} counts={list.data?.assign} />}
           <div className="row">
             {combined?.chip}
             {!combined && has('confirmation') && !session?.profile.agencyId && rightOn('act:orders.create') && (
@@ -617,7 +628,13 @@ export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | 
               </select>
             </Field>
             <Field label={t('confirmation.col.agent')}>
-              <select value={f.agentId ?? ''} onChange={(e) => setFilter({ agentId: e.target.value === 'none' ? 'none' : e.target.value ? Number(e.target.value) : undefined })}>
+              <select
+                value={f.agentId ?? ''}
+                onChange={(e) => {
+                  if (e.target.value) setSideState('all');
+                  setFilter({ agentId: e.target.value === 'none' ? 'none' : e.target.value ? Number(e.target.value) : undefined });
+                }}
+              >
                 <option value="">{t('common.all')}</option>
                 <option value="none">{t('confirmation.noAgent')}</option>
                 {meta.data?.agents.map((a) => (
