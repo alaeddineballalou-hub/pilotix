@@ -58,3 +58,24 @@ test('Confirmées: one stage at a time, its number the same as the list', async 
   const none: any = await call('confirmation.list', admin, { sub: 'confirmees', stage: 'nostock', status: 'confirmed' });
   assert.equal(none.total, 0);
 });
+
+test('En livraison: only the parcels their company has; the road numbers agree (owner’s rule, 25 Nov 2026)', async () => {
+  const admin = await as(EMAILS.admin);
+  const [taken, handed] = (await db.query(`SELECT id FROM sales WHERE conf_status = 'confirmed' AND follow_status = 'to_prepare' ORDER BY id DESC LIMIT 2`)).map((r) => Number(r.id));
+  assert.ok(taken && handed);
+  await db.query(`UPDATE orders SET follow_status = 'shipped', shipped_at = now(), taken_at = now() WHERE id = $1`, [taken]);
+  await db.query(`UPDATE orders SET follow_status = 'shipped', shipped_at = now(), taken_at = NULL WHERE id = $1`, [handed]);
+  const refOf = async (id: number) => String((await db.query('SELECT ref FROM orders WHERE id = $1', [id]))[0].ref);
+  const found = async (id: number) => ((await call('suivi.list', admin, { tab: 'enlivraison', q: await refOf(id), pageSize: 50 })) as any).rows.map((x: any) => Number(x.id)).includes(id);
+  assert.ok(await found(taken), 'a parcel its company has is En livraison');
+  assert.ok(!(await found(handed)), 'a parcel handed over and not taken yet is not (it is in Dispatchées)');
+  const onRoad = `follow_status IN ('shipped','out_for_delivery','failed','alert','in_exchange') AND NOT (follow_status = 'shipped' AND taken_at IS NULL)`;
+  const n = Number((await db.query(`SELECT count(*)::int AS n FROM sales WHERE ${onRoad}`))[0].n);
+  const sc: any = await call('suivi.counts', admin, {});
+  assert.equal(sc.enlivraison, n, 'the tab’s number');
+  // Commandes' road: the handed-over parcel still counts at the dépôt, not on the road
+  const oc: any = await call('orders.counts', admin, {});
+  const depot = Number((await db.query(`SELECT count(*)::int AS n FROM sales WHERE follow_status IN ('to_prepare','prepared') OR (follow_status = 'shipped' AND taken_at IS NULL)`))[0].n);
+  assert.equal(oc.lists.road, n);
+  assert.equal(oc.lists.depot, depot);
+});

@@ -41,6 +41,8 @@
     "confirmation": "Confirmation",
     "depot": "Depot",
     "enlivraison": "Out for delivery",
+    "confirmees": "Confirmed",
+    "enroute": "Out for delivery",
     "alertes": "Alerts",
     "suivi": "Follow-up",
     "livrees": "Delivered",

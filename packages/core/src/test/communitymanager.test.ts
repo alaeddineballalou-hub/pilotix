@@ -41,7 +41,7 @@ before(async () => {
 
 test('her role: Pilot Message, Pilot Comments and her orders — never posting, the confirmation or the rest', () => {
   const r = rightsOf({ id: 1, roles: ['cm'] }, NO_ROLE_RIGHTS);
-  for (const id of ['page:messages', 'page:cm', 'act:dellal.reply', 'act:cm.reply', 'act:orders.create', 'page:commandes', 'tab:commandes/livrees', 'tab:commandes/annulees', 'tab:commandes/tout'])
+  for (const id of ['page:messages', 'page:cm', 'act:dellal.reply', 'act:cm.reply', 'act:orders.create', 'page:commandes', 'tab:commandes/confirmees', 'tab:commandes/enroute', 'tab:commandes/livrees', 'tab:commandes/annulees', 'tab:commandes/tout'])
     assert.ok(r.has(id), `${id}: hers by default`);
   for (const id of ['page:social', 'page:createur', 'page:spy', 'page:comptes', 'page:confirmation', 'page:suivi', 'page:depot', 'page:sav', 'page:clients', 'page:produits', 'page:marketing', 'page:landing', 'act:social.publish', 'act:orders.cancel', 'act:orders.items', 'act:orders.customer', 'act:costs'])
     assert.ok(!r.has(id), `${id}: never hers`);
@@ -123,4 +123,32 @@ test('the owner can take her « Nouvelle commande » away (Utilisateurs › Rôl
   await call('rights.save', admin, { roles: saved.roles, people: saved.people });
   forgetRights(db);
   assert.equal((await call('orders.create', lina, order({ channel: 'facebook' }))).confStatus, 'new');
+});
+
+test('she follows her orders: her Confirmées at each stage of the dépôt, then En livraison — read-only (owner’s yes, 25 Nov 2026)', async () => {
+  // the agents' lines stay theirs: Commandes › Confirmées and En livraison are hers only
+  for (const role of ['confirmation', 'suivi', 'agent_manager', 'depot'] as const) {
+    const r = rightsOf({ id: 1, roles: [role] }, NO_ROLE_RIGHTS);
+    assert.ok(!r.has('tab:commandes/confirmees') && !r.has('tab:commandes/enroute'), role);
+  }
+  const mk = async () => (await call('orders.create', nour, order({ channel: 'facebook' }))) as any;
+  const [toPrep, handed, taken, waiting] = [await mk(), await mk(), await mk(), await mk()];
+  await db.query(`UPDATE orders SET conf_status = 'confirmed', follow_status = 'to_prepare' WHERE id = $1`, [toPrep.id]);
+  await db.query(`UPDATE orders SET conf_status = 'confirmed', follow_status = 'shipped', shipped_at = now(), taken_at = NULL WHERE id = $1`, [handed.id]);
+  await db.query(`UPDATE orders SET conf_status = 'confirmed', follow_status = 'shipped', shipped_at = now(), taken_at = now() WHERE id = $1`, [taken.id]);
+  const confirmed = { conf: ['confirmed', 'no_stock'], follow: ['none', 'to_prepare', 'prepared', 'shipped'], taken: false };
+  const theirs = async (f: Record<string, unknown>) => ((await call('orders.list', nour, { ...f, pageSize: 3000 })) as any).rows.map((x: any) => Number(x.id));
+  const conf = await theirs(confirmed);
+  assert.deepEqual(conf.sort(), [toPrep.id, handed.id].sort(), 'Confirmées: hers, until the company has the parcel');
+  assert.deepEqual(await theirs({ conf: ['confirmed', 'no_stock'], follow: ['shipped'], taken: false }), [handed.id], 'Dispatchées');
+  assert.deepEqual(await theirs({ follow: ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange'], pickedUp: true }), [taken.id], 'En livraison');
+  assert.ok(!conf.includes(waiting.id), 'still at the confirmation: not in Confirmées');
+  // her lines' numbers: her own orders only
+  const c: any = await call('orders.counts', nour, {});
+  assert.equal(c.lists.confirmees, 2);
+  assert.deepEqual(c.lists.stages, { nostock: 0, preparer: 1, prepares: 0, dispatchees: 1 });
+  assert.equal(c.lists.road, 1);
+  // the agents' work lists stay closed to her
+  await assert.rejects(call('confirmation.list', nour, { sub: 'confirmees' }), (e: any) => e.code === 'forbidden');
+  await assert.rejects(call('suivi.list', nour, { tab: 'enlivraison' }), (e: any) => e.code === 'forbidden');
 });

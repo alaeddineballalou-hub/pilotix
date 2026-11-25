@@ -68,6 +68,9 @@ export function useMenuCounts(seller: Seller | null = null, enabled = true) {
       suivi: sum(c.follow, ['alert']),
       // Livré, Annulé: the orders their lists show this person (each one his own, an agent manager his team's); Annulé
       // counts what its screen counts: cancelled at the confirmation, and the parcels coming back or back
+      // the Community manager's Confirmées and En livraison (her own orders: the lists' numbers)
+      mineConfirmed: c.lists?.confirmees ?? 0,
+      mineRoad: c.lists?.road ?? 0,
       delivered: c.lists ? c.lists.delivered : c.follow.delivered ?? 0,
       cancelled: c.lists ? c.lists.cancelledConf + c.lists.returning + c.lists.returned : sum(c.conf, CONF_DONE_BAD) + (c.follow.returned ?? 0),
       sav: c.sav,

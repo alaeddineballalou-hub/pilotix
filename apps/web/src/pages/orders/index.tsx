@@ -26,6 +26,7 @@ import { AgentFilter, CashedFilter, ClearFilters, DateFilters, LivreurFilter, Pr
 import { PhoneAnnule, PhoneLivre } from './PhoneDone';
 import { useAllMode } from '../../layout/AllBoutiques';
 import { rightOn } from '../../lib/rights';
+import { type ConfStage, ConfirmedStages, StageTag } from '../confirmation/stages';
 
 export { OrderTable } from './OrderTable';
 export type { OrderColumn, ExtraColumn, OrderTableProps } from './OrderTable';
@@ -35,6 +36,9 @@ function HeaderKpis({ on }: { on?: 'livrees' | 'annulees' }) {
   const { t } = useTranslation();
   const c = useCounts();
   const agency = useInAgency();
+  const { session } = useSession();
+  // the Community manager has no Dépôt or Suivi: her own Confirmées and En livraison
+  const cm = !!session && !session.isAdmin && cmOnly(session.roles);
   const k = (key: string, href: string, label: string, v: number | undefined, s: string, tone?: string) => (
     <a key={key} className={`kpi${tone ? ` t-${tone}` : ''}${v === 0 ? ' px-zero' : ''}${on === key ? ' bjsv-on' : ''}`} href={href}>
       <span className="l">{label}</span>
@@ -50,8 +54,8 @@ function HeaderKpis({ on }: { on?: 'livrees' | 'annulees' }) {
       <div className="kpis bjcm-k">
         {k('confirmation', '#/confirmation', t('orders.kpi.confirmation'), c?.todo, t('orders.kpi.confirmationS'), 'warn')}
         {/* a confirmation agency has no Dépôt (the seller's); its Suivi starts with the parcels on the road */}
-        {!agency && k('depot', '#/depot', t('orders.kpi.depot'), c?.depot, t('orders.kpi.depotS'))}
-        {k('suivi', agency ? '#/suivi/enlivraison' : '#/suivi', t('orders.kpi.suivi'), c?.suivi, t('orders.kpi.suiviS'))}
+        {!agency && k('depot', cm ? '#/commandes/confirmees' : '#/depot', t('orders.kpi.depot'), c?.depot, t('orders.kpi.depotS'))}
+        {k('suivi', cm ? '#/commandes/enroute' : agency ? '#/suivi/enlivraison' : '#/suivi', t('orders.kpi.suivi'), c?.suivi, t('orders.kpi.suiviS'))}
         {k('livrees', '#/commandes/livrees', t('orders.kpi.livre'), c?.delivered, t('orders.kpi.livreS', { pct: pct(c ? c.delivered / Math.max(1, c.all) : null) }), 'ok')}
         {k('annulees', '#/commandes/annulees', t('orders.kpi.annule'), c ? c.cancelledConf + c.back : undefined, t('orders.kpi.annuleS', { conf: c?.cancelledConf ?? 0, ret: c?.back ?? 0 }), 'bad')}
       </div>
@@ -610,6 +614,37 @@ function useDeliveredExtra() {
  * commandes are the same screens for everyone (owner's choice, 24 Nov 2026), in a confirmation agency too: only the
  * orders change — each one sees his own, an agent manager his team's, the owner all of them (the server decides).
  */
+/** Confirmées, all or one stage: the confirmed orders their company does not have yet (Confirmation › Confirmées' rule). */
+const CONFIRMED_BASE: Partial<ListFilter> = { conf: ['confirmed', 'no_stock'], follow: ['none', 'to_prepare', 'prepared', 'shipped'], taken: false };
+const STAGE_BASE: Record<ConfStage, Partial<ListFilter>> = {
+  nostock: { conf: ['no_stock'], follow: ['none'] },
+  preparer: { conf: ['confirmed'], follow: ['to_prepare'] },
+  prepares: { conf: ['confirmed', 'no_stock'], follow: ['prepared'] },
+  dispatchees: { conf: ['confirmed', 'no_stock'], follow: ['shipped'], taken: false },
+};
+
+/** The Community manager's Confirmées: the stage bar of Confirmation › Confirmées over her own orders, read-only. */
+function MineConfirmed() {
+  const { t } = useTranslation();
+  const c = useCounts();
+  const [stage, setStage] = useState<ConfStage | null>(null);
+  const l = c?.raw.lists;
+  return (
+    <>
+      <ConfirmedStages stage={stage} onChange={setStage} counts={l?.stages} total={l?.confirmees} />
+      <OrderList
+        key={stage ?? 'all'}
+        id="cm-confirmees"
+        title={t('nav.sub.confirmees')}
+        base={stage ? STAGE_BASE[stage] : CONFIRMED_BASE}
+        show={['search', 'wilaya', 'dates']}
+        columns={['order', 'client', 'products', 'total', 'company']}
+        extra={() => [{ key: 'stage', label: t('orders.cmStage'), cell: (o) => <StageTag o={o} /> }]}
+      />
+    </>
+  );
+}
+
 export function Commandes(p: PageProps) {
   const all = useAllMode();
   return all.on ? <Suspense fallback={<Loading />}><AllOrdersPage {...p} /></Suspense> : <CommandesOne {...p} />;
@@ -698,6 +733,21 @@ function CommandesDesk({ sub }: { sub?: string }) {
           defaultSort="delivered_at"
         />
       </>
+    );
+
+  // the Community manager follows her orders (owner's yes, 25 Nov 2026), read-only: where each confirmed one is in the dépôt
+  // (the stages of Confirmation › Confirmées), then her parcels their company has (Suivi › En livraison's rule)
+  if (sub === 'confirmees') return <MineConfirmed />;
+  if (sub === 'enroute')
+    return (
+      <OrderList
+        id="cm-enroute"
+        title={t('nav.sub.enroute')}
+        base={{ follow: [...FOLLOW_ON_ROAD], pickedUp: true }}
+        show={['search', 'company', 'wilaya', 'dates']}
+        columns={['order', 'client', 'products', 'total', 'follow', 'company']}
+        defaultSort="shipped_at"
+      />
     );
 
   if (sub === 'annulees')

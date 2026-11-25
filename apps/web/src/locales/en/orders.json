@@ -33,6 +33,7 @@
     "label": "Search an order",
     "info": "Customer service: type a name, a phone number (even part of it), a PX… reference or a tracking number. All orders are searched, whatever their status or date. Click an order to see its whole history."
   },
+  "cmStage": "Stage",
   "lookup": {
     "placeholder": "Phone, PX…, tracking",
     "label": "Search an order",

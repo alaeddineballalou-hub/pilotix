@@ -11,7 +11,8 @@ import type { Role } from './index';
 /** Each page's tabs, in order (the pages' tab bars use these lists; their names are in `tabNames`). */
 export const MENU_TABS = {
   dashboard: ['overview', 'confirmation', 'depot', 'suivi', 'livreurs', 'sav'],
-  commandes: ['tout', 'livrees', 'annulees'],
+  // confirmees, enroute: the Community manager's own Confirmées and En livraison (her orders, read-only)
+  commandes: ['tout', 'livrees', 'annulees', 'confirmees', 'enroute'],
   // « Réglages » (owner's choice, 24 Nov 2026: each page keeps its own settings, design 1 « Onglet »): the last tab, apart
   confirmation: ['nouvelles', 'attente', 'confirmees', 'terminees', 'reglages'],
   // « Erreurs de livraison »: the depot's errors (the problems report, owner's request 25 Nov 2026), apart after the steps
@@ -50,7 +51,9 @@ export type MenuCond =
   /** a store's own space (not a partner's) */
   | 'store'
   /** the partners pages (a multi-shop server, the in-browser demo) */
-  | 'partners';
+  | 'partners'
+  /** a Community manager who has no other work role (not the administrators) */
+  | 'cmOnly';
 
 /** A group's line (Commandes › Confirmation…). */
 export interface MenuLine {
@@ -131,14 +134,16 @@ export const STORE_MENU: MenuItem[] = [
   {
     id: 'commandes',
     icon: 'list',
-    // the Community manager: Livré, Annulé and Tous, with her own orders only (an agent manager: his team's)
+    // the Community manager: Confirmées, En livraison, Livré, Annulé and Tous, with her own orders only (an agent manager: his
+    // team's)
     roles: [...AGENTS, 'cm'],
     subs: MENU_TABS.commandes,
     href: '#/commandes',
     pages: ['commandes', 'confirmation', 'depot', 'suivi', 'livrees', 'retournees'],
     ownPage: true,
     pageName: 'orders.allOrders',
-    tabNames: { each: { tout: 'orders.tabs.all', livrees: 'nav.sub.livrees', annulees: 'nav.sub.annulees' } },
+    tabRoles: { confirmees: ['cm'], enroute: ['cm'] },
+    tabNames: { each: { tout: 'orders.tabs.all', livrees: 'nav.sub.livrees', annulees: 'nav.sub.annulees', confirmees: 'nav.sub.confirmees', enroute: 'nav.sub.enroute' } },
     // the order's way (owner's ask, 25 Nov 2026): Confirmation (its « Confirmées » tab shows where each confirmed order is in
     // the depot) › Dépôt (only the admins, the seller and the depot agents) › En livraison (the company has it) › Suivi ›
     // Livré or Annulé › Tous
@@ -147,6 +152,10 @@ export const STORE_MENU: MenuItem[] = [
       { id: 'depot', href: '#/depot', count: 'depot', tone: 'nc-a', icon: 'package', roles: ['depot'] },
       { id: 'enlivraison', href: '#/suivi/enlivraison', icon: 'truck', roles: ['suivi', 'confirmation'], tabOf: 'suivi', plan: ['suivi', 'enlivraison'] },
       { id: 'suivi', href: '#/suivi/alertes', count: 'suivi', tone: 'nc-a', icon: 'route', roles: ['suivi', 'confirmation'] },
+      // the Community manager follows her orders (owner's yes, 25 Nov 2026): her Confirmées (where each one is in the
+      // dépôt) and her parcels En livraison, read-only — Commandes' tabs, the work pages stay the agents'
+      { id: 'confirmees', href: '#/commandes/confirmees', count: 'mineConfirmed', tone: 'nc-a', icon: 'package', tabOf: 'commandes', cond: 'cmOnly' },
+      { id: 'enroute', href: '#/commandes/enroute', count: 'mineRoad', tone: '', icon: 'truck', tabOf: 'commandes', cond: 'cmOnly' },
       // these three lines open Commandes' tabs; the same screens for everyone, each one seeing his own orders (an agent
       // manager his team's), in a confirmation agency too (owner's choice, 24 Nov 2026)
       { id: 'livrees', href: '#/commandes/livrees', count: 'delivered', tone: 'nc-c', icon: 'checkcircle', tabOf: 'commandes' },
@@ -285,8 +294,8 @@ export const SPACE_ALWAYS = ['accueil', 'aide'];
 export const SPACES: Space[] = [
   { id: 'marketing', icon: 'megaphone', items: ['marketing', 'createur', 'social', 'influenceurs', 'parrainage', 'codepromo'], counts: ['posts'] },
   { id: 'sponsor', icon: 'trend', items: ['marketing', 'landing', 'spy', 'autochecks'], counts: ['landing'] },
-  { id: 'cm', icon: 'chat', items: ['messages', 'cm', 'codepromo'], counts: ['msgs', 'cm'] },
-  { id: 'service', icon: 'phone', items: ['dashboard', 'confirmation', 'rendezvous', 'enlivraison', 'suivi', 'livrees', 'annulees', 'tout', 'sav', 'auto', 'assign', 'affectation', 'autochecks', 'automessages', 'autoreglages', 'clients', 'codepromo'], counts: ['conf', 'rdv', 'suivi', 'sav', 'notify'] },
+  { id: 'cm', icon: 'chat', items: ['messages', 'cm', 'confirmees', 'enroute', 'codepromo'], counts: ['msgs', 'cm'] },
+  { id: 'service', icon: 'phone', items: ['dashboard', 'confirmation', 'rendezvous', 'enlivraison', 'suivi', 'confirmees', 'enroute', 'livrees', 'annulees', 'tout', 'sav', 'auto', 'assign', 'affectation', 'autochecks', 'automessages', 'autoreglages', 'clients', 'codepromo'], counts: ['conf', 'rdv', 'suivi', 'sav', 'notify'] },
   { id: 'depot', icon: 'package', items: ['dashboard', 'depot', 'scanner', 'produits', 'pos', 'tournee', 'livreurs'], counts: ['depot', 'lowStock'] },
   { id: 'finance', icon: 'wallet', items: ['caisse', 'macaisse'], counts: [] },
   { id: 'admin', icon: 'usercog', items: ['utilisateurs', 'management', 'reglages', 'livraison', 'agences', 'marketers', 'comptes'], counts: [] },

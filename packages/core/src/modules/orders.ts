@@ -330,12 +330,18 @@ const reasonOf = (kind: 'conf_status' | 'follow_status', to: string) =>
 /** why an order was cancelled at the confirmation (its current status) / why its parcel came back */
 export const REASON_SQL = { conf: reasonOf('conf_status', 'o.conf_status'), back: reasonOf('follow_status', "'returning'") };
 
+/** A parcel its delivery company has, or not handed over at all: not « handed over and not taken yet » (Dispatchées). */
+export const PICKED_UP_SQL = (alias = 'o') => `NOT (COALESCE(${alias}.follow_status, '') = 'shipped' AND ${alias}.taken_at IS NULL)`;
+
 export const ListInput = z.object({
   conf: z.array(z.enum(CONF_STATUSES)).max(50).optional(),
   follow: z.array(z.enum([...FOLLOW_STATUSES, 'none'] as const)).max(50).optional(),
   /** has its delivery company said it has the parcel (« Confirmé au bureau », « Vers wilaya »… anything after « Prêt à
    *  expédier »)? false: Dépôt › Dispatchées, handed over and not taken yet (the owner's rule, 22 Nov 2026) */
   taken: z.boolean().optional(),
+  /** En livraison (the owner's rule, 25 Nov 2026): only the parcels their company has — one handed over and not taken
+   *  yet is still in Dispatchées (Dépôt, Confirmation › Confirmées), not on the road */
+  pickedUp: z.boolean().optional(),
   q: z.string().max(100).optional(),
   wilayaId: z.number().int().min(1).max(69).optional(),
   /** none: no confirmation agent yet · any: given to an agent, whoever it is (« Non affectées / Affectées ») */
@@ -408,6 +414,7 @@ export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' 
   }
   if (f.taken === false) w.add('o.taken_at IS NULL');
   else if (f.taken === true) w.add('o.taken_at IS NOT NULL');
+  if (f.pickedUp) w.add(PICKED_UP_SQL('o'));
   if (f.wilayaId) w.add('o.wilaya_id = ?', f.wilayaId);
   if (f.agentId === 'none') w.add('o.agent_id IS NULL');
   else if (f.agentId === 'any') w.add('o.agent_id IS NOT NULL');
@@ -1942,8 +1949,13 @@ export async function orderCounts(ctx: Ctx) {
                 count(*) FILTER (WHERE o.conf_status = ANY($1))::int AS cancelled_conf,
                 count(*) FILTER (WHERE o.follow_status = 'returning')::int AS returning,
                 count(*) FILTER (WHERE o.follow_status = 'returned')::int AS returned,
-                count(*) FILTER (WHERE o.follow_status IN ('to_prepare','prepared'))::int AS depot,
-                count(*) FILTER (WHERE o.follow_status IN ('shipped','out_for_delivery','failed','alert','in_exchange'))::int AS road
+                count(*) FILTER (WHERE o.follow_status IN ('to_prepare','prepared') OR NOT ${PICKED_UP_SQL('o')})::int AS depot,
+                count(*) FILTER (WHERE o.follow_status IN ('shipped','out_for_delivery','failed','alert','in_exchange') AND ${PICKED_UP_SQL('o')})::int AS road,
+                count(*) FILTER (WHERE o.conf_status IN ('confirmed','no_stock') AND (o.follow_status IS NULL OR o.follow_status IN ('to_prepare','prepared') OR NOT ${PICKED_UP_SQL('o')}))::int AS confirmees,
+                count(*) FILTER (WHERE o.conf_status = 'no_stock' AND o.follow_status IS NULL)::int AS st_nostock,
+                count(*) FILTER (WHERE o.conf_status = 'confirmed' AND o.follow_status = 'to_prepare')::int AS st_preparer,
+                count(*) FILTER (WHERE o.conf_status IN ('confirmed','no_stock') AND o.follow_status = 'prepared')::int AS st_prepares,
+                count(*) FILTER (WHERE o.conf_status IN ('confirmed','no_stock') AND NOT ${PICKED_UP_SQL('o')})::int AS st_dispatchees
            FROM sales o WHERE true${andSql(cond)}${own ? ' AND o.livreur_id = $2' : ''}`,
         own ? [CONF_DONE_BAD, me] : [CONF_DONE_BAD],
       )
@@ -1959,9 +1971,14 @@ export async function orderCounts(ctx: Ctx) {
       cancelledConf: num(r?.cancelled_conf),
       returning: num(r?.returning),
       returned: num(r?.returned),
-      // the road's steps above Livré and Annulé (Dépôt, Suivi): the same person's orders
+      // the road's steps above Livré and Annulé (Dépôt, Suivi): the same person's orders — a parcel handed over and not
+      // taken yet by its company is still at the dépôt (Dispatchées), on the road once the company has it
       depot: num(r?.depot),
       road: num(r?.road),
+      /** Confirmation › Confirmées: the confirmed orders their company does not have yet, and at each stage of the dépôt
+       *  (the Community manager's Confirmées) */
+      confirmees: num(r?.confirmees),
+      stages: { nostock: num(r?.st_nostock), preparer: num(r?.st_preparer), prepares: num(r?.st_prepares), dispatchees: num(r?.st_dispatchees) },
       follow: Object.fromEntries(byFollow.map((x) => [x.k, num(x.n)])) as Record<string, number>,
     };
   };

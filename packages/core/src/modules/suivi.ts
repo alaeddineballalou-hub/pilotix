@@ -8,7 +8,7 @@ import { addWorkMinutes, workMinutes } from '@pilotix/shared';
 import { getPrefs } from './prefs';
 import { rotateTimes } from './assign';
 import { cancelParcel, swapFees } from './delivery';
-import { addEvent, FollowInput, getOrder, listOrders, ListInput, releasePicked, setFollow, withClientScores } from './orders';
+import { addEvent, FollowInput, getOrder, listOrders, ListInput, PICKED_UP_SQL, releasePicked, setFollow, withClientScores } from './orders';
 import { agencyLead, agencyOf, agencyRowSql, andSql, queueSql, rowScopeSql } from './agencyscope';
 import { findOrders } from './sav';
 import { applyTrust, DRIVER_CLAIMS } from './trust';
@@ -42,7 +42,9 @@ function tabFilter(tab: SuiviTab, now: number, agency = false): Partial<ListInpu
     case 'enlivraison':
       // an agency's suivi agent: only the parcels with no problem — one flagged as an alert moves to its « Alertes »;
       // its confirmation agent (no Alertes) sees every parcel of its orders on the road
-      return { follow: agency ? IN_DELIVERY.filter((s) => s !== 'alert') : [...IN_DELIVERY], sort: 'shipped_at', dir: 'asc' };
+      // only the parcels their company has (the owner's rule, 25 Nov 2026): one handed over and not taken yet is still in
+      // Dispatchées (Dépôt, Confirmation › Confirmées)
+      return { follow: agency ? IN_DELIVERY.filter((s) => s !== 'alert') : [...IN_DELIVERY], pickedUp: true, sort: 'shipped_at', dir: 'asc' };
     case 'bloques':
       // the ids come from stuckParcels (see suivi.list)
       return { follow: ['shipped', 'out_for_delivery', 'failed', 'in_exchange'], sort: 'shipped_at', dir: 'asc' };
@@ -207,7 +209,7 @@ export async function suiviCounts(ctx: Ctx) {
   const r = (
     await ctx.db.query(
       `SELECT
-         count(*) FILTER (WHERE follow_status IN (${onRoad}))::int AS enlivraison,
+         count(*) FILTER (WHERE follow_status IN (${onRoad}) AND ${PICKED_UP_SQL('o')})::int AS enlivraison,
          count(*) FILTER (WHERE follow_status = 'alert')::int AS alertes,
          count(*) FILTER (WHERE sub_status = 'alert_traitee' AND follow_status IN ('out_for_delivery','shipped','failed'))::int AS traites,
          count(*) FILTER (WHERE follow_status = 'delivered' AND delivered_at >= $1)::int AS livres,

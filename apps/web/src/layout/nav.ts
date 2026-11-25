@@ -81,6 +81,7 @@ const COND: Record<MenuCond, (roles: Role[], isAdmin: boolean) => boolean> = {
   notAdmin: (_r, admin) => !admin,
   store: () => storeOnly(),
   partners: () => partnersOn(),
+  cmOnly: (r, admin) => !admin && cmOnly(r),
 };
 
 /**

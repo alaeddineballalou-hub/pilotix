@@ -33,6 +33,7 @@
     "label": "Rechercher une commande",
     "info": "Service réclamation : tapez un nom, un numéro de téléphone (même une partie), une référence PX… ou un numéro de suivi. Toutes les commandes sont cherchées, quel que soit leur statut ou leur date. Cliquez sur une commande pour voir tout son historique."
   },
+  "cmStage": "Étape",
   "lookup": {
     "placeholder": "Téléphone, PX…, suivi",
     "label": "Chercher une commande",
