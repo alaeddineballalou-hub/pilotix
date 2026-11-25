@@ -167,8 +167,22 @@ const allowTitles = ['fr', 'en', 'ar'].map((l) => {
 });
 
 // ---------------------------------------------------------------- Firebase: the « Tester la sonnerie » message
+/** The Firebase key from GitHub's secret, checked without ever showing a piece of it (this repository is public). */
+function firebaseKey() {
+  let sa = null;
+  try {
+    sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT ?? '');
+  } catch {
+    /* said below, without the text */
+  }
+  if (sa?.type !== 'service_account' || !sa.project_id || !sa.client_email || !sa.private_key) {
+    throw new Error("the Firebase key in GitHub (secret FIREBASE_SERVICE_ACCOUNT) is not Google's whole JSON file (from « { » to « } »)");
+  }
+  return sa;
+}
+
 async function sendRing(token) {
-  const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  const sa = firebaseKey();
   const now = Math.floor(Date.now() / 1000);
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
   const head = b64({ alg: 'RS256', typ: 'JWT', kid: sa.private_key_id });
@@ -210,8 +224,14 @@ async function main() {
   // « Autoriser cette source » for Pilotix: the person does it once in Android's settings
   sh(`appops set ${PKG} REQUEST_INSTALL_PACKAGES allow`);
   start();
+  note(`WebView: ${sh('dumpsys webviewupdate').match(/Current WebView package \(name, version\): \(([^)]*)\)/)?.[1] ?? '?'}`);
   await until('Pilotix opens in the app', pilotixOpen, 150_000, 2000);
   ok(`Pilotix opened in the app (${await js('location.host')})`);
+  // the page must reach the app (Capacitor's bridge): the updater, the ring and WhatsApp all go through it
+  const bridge = await until('Pilotix drawn', () => js(`document.querySelector('#root')?.childElementCount ? (window.Capacitor ? 'yes' : 'no') : ''`), 60_000, 2000).catch(() => 'not drawn');
+  if (bridge === 'yes') ok('The page talks to the app (Capacitor bridge)');
+  else if (bridge === 'no') bad('The page cannot talk to the app: no Capacitor bridge on this page');
+  else bad('Pilotix did not draw on this phone (its WebView is too old?)');
   await sleep(2500);
   shot('old-app');
 
@@ -223,6 +243,10 @@ async function main() {
     shot('offer');
   } catch (e) {
     bad(`${e.message} · the server says: ${String(await js("fetch('/api/app').then(r => r.text())").catch((x) => x.message)).slice(0, 300)}`);
+  }
+  if (offered && !(await js('!!window.Capacitor'))) {
+    bad('Pilotix offers « Nouvelle app à installer » (a download by hand): without the bridge it cannot see the app, so it cannot update it');
+    offered = '';
   }
   let after = before;
   if (offered) {
@@ -319,9 +343,10 @@ async function main() {
   start();
   ws = null;
   await until('the new app opens Pilotix', pilotixOpen, 150_000, 2000);
-  const info = await js(`window.Capacitor.nativePromise('AppUpdate', 'info')`);
-  if (expect && Number(info?.build) !== expect) bad(`The app says version ${info?.build}, not ${expect}`);
-  else ok(`The new app runs: version ${info?.build} (${info?.version})`);
+  const info = await js(`window.Capacitor ? window.Capacitor.nativePromise('AppUpdate', 'info') : null`);
+  if (!info) bad(`The new app (version ${build()}): the page cannot talk to the app (no Capacitor bridge)`);
+  else if (expect && Number(info.build) !== expect) bad(`The app says version ${info.build}, not ${expect}`);
+  else ok(`The new app runs: version ${info.build} (${info.version})`);
   await sleep(20_000); // the page asks the server 8 s after it opens
   const again = await sheetText().catch(() => '');
   if (again) bad(`The offer came back after the update: « ${again.slice(0, 120)} »`);
@@ -338,7 +363,7 @@ async function main() {
       st = await until(
         "this phone's Firebase address",
         async () => {
-          const r = await js(`window.Capacitor.nativePromise('PilotixPush', 'enable', { ask: false })`, 60_000);
+          const r = await js(`window.Capacitor ? window.Capacitor.nativePromise('PilotixPush', 'enable', { ask: false }) : { error: 'no Capacitor bridge on the page' }`, 60_000);
           if (r?.token) return r;
           throw new Error(r?.error || r?.state || 'no answer');
         },
@@ -364,8 +389,9 @@ async function main() {
         bad(e.message);
         shot('no-ring');
       }
+      // a notification really posted on the ring channel (the channel itself is listed even with none)
       const notes = sh('dumpsys notification --noredact');
-      if (/pilotix_ring/.test(notes)) ok('Ring notification on the loud channel « pilotix_ring »');
+      if (/NotificationRecord\([^\n]*pkg=com\.pilotix\.app[^\n]*channel=pilotix_ring/.test(notes)) ok('Ring notification on the loud channel « pilotix_ring »');
       else bad('No notification on the ring channel');
       sh('input keyevent 224');
       sh('svc power stayon true');
