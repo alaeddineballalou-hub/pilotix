@@ -807,7 +807,7 @@ export function Detail({ order, onDone, onMessageDone, phone }: {
           className={`qd6-savebtn ${canSave ? 'on' : ''}`}
           disabled={busy || !canSave}
           title={canSave ? undefined : t('confirmation.d6.pickStatus')}
-          onClick={() => pend && run(pend.fn, pend.ok, pend.tone, pend.status !== 'busy')}
+          onClick={() => pend && run(pend.fn, pend.ok, pend.tone, pend.status !== 'busy' || freshTry(order))}
         >
           <Icon name="check" />
           {t('common.save')}
@@ -870,6 +870,9 @@ export function Detail({ order, onDone, onMessageDone, phone }: {
 type Step = null | 'menu' | 'cancelled' | 'postponed' | 'callback' | 'try';
 /** "Changer le statut": a small menu opening upwards; Annulée asks the reason, Reportée the date, Rappel the date and hour. */
 /** A status picked in the menu, waiting for Enregistrer. */
+/** « Occupé » makes this order « Tentative 01 » (a « Nouvelle » or « À vérifier » one); on the others it only writes the call. */
+const freshTry = (o: Order) => o.confStatus === 'new' || o.confStatus === 'to_check';
+
 interface Pend {
   /** the status it leads to ('try' = one more call attempt) */
   status: string;
@@ -935,7 +938,10 @@ function StatusMenu({ order, busy, error, pending, onPick, onConfirmAttempt }: {
       return done(attempt);
     }
     const soft = status === 'busy' || status === 'duplicate';
-    done({ status, label: label(status), tone: soft ? 'ok' : 'bad', cls: status === 'busy' ? 'c-mid' : 'c-off', fn: () => rpc('orders.setConf', { ids: [order.id], status, reason: status === 'wrong_number' || status === 'fake' ? label(status) : null }), ok: `${order.ref} → ${label(status)}` });
+    // « Occupé » on a « Nouvelle » / « À vérifier » order: it becomes « Tentative 01 » (it counts as one call). The
+    // status button keeps « Occupé » (the menu said « tentative 1 »); the message once saved says both.
+    const shown = status === 'busy' && freshTry(order) ? `${label('busy')} · ${t('confirmation.try', { n: String(nextTry).padStart(2, '0') })}` : label(status);
+    done({ status, label: label(status), tone: soft ? 'ok' : 'bad', cls: status === 'busy' ? 'c-mid' : 'c-off', fn: () => rpc('orders.setConf', { ids: [order.id], status, reason: status === 'wrong_number' || status === 'fake' ? label(status) : null }), ok: `${order.ref} → ${shown}` });
   };
   const submitAsk = async () => {
     if (step === 'cancelled') {
@@ -964,7 +970,7 @@ function StatusMenu({ order, busy, error, pending, onPick, onConfirmAttempt }: {
       {step === 'menu' && (
         <div className="qd6-mini" role="menu">
           {item('phoneoff', 'c-mid', label('no_answer'), t('confirmation.d6.attempt', { n: nextTry }), () => direct('try'))}
-          {item('phone', 'c-mid', label('busy'), null, () => direct('busy'))}
+          {item('phone', 'c-mid', label('busy'), freshTry(order) ? t('confirmation.d6.attempt', { n: nextTry }) : null, () => direct('busy'))}
           {item('timer', 'c-info', t('confirmation.d6.callback'), t('confirmation.d6.dateHour'), () => pickAsk('callback'))}
           {item('calendar', 'c-info', label('postponed'), t('confirmation.d6.date'), () => pickAsk('postponed'))}
           {/* Utilisateurs › Rôles: « Annuler une commande » (cancel, wrong number, duplicate, fake) */}

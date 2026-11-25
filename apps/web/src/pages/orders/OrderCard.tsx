@@ -605,7 +605,9 @@ export function eventText(t: (k: string, o?: any) => string, e: OrderEvent, user
     case 'call':
       return e.toValue === 'busy' ? t('status.conf.busy') : t('orders.card.ev.call');
     case 'conf_status':
-      return t('orders.card.ev.conf_status') + (e.fromValue ? `${conf(e.fromValue)} → ` : '') + conf(e.toValue);
+      // (« Occupé » on a « Nouvelle » order: « Nouvelle → Occupé · Tentative 01 », not « Pas de réponse »)
+      return t('orders.card.ev.conf_status') + (e.fromValue ? `${conf(e.fromValue)} → ` : '') +
+        (e.busyTry ? `${conf('busy')} · ${t('confirmation.try', { n: String(e.busyTry).padStart(2, '0') })}` : conf(e.toValue));
     case 'follow_status':
       return t('orders.card.ev.follow_status') + (e.fromValue ? `${fol(e.fromValue)} → ` : '') + fol(e.toValue);
     case 'assign':

@@ -316,7 +316,8 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
   const oids = page.rows.map((o) => o.id);
   const passedOf = new Map<number, string[]>();
   if (oids.length)
-    for (const r of await ctx.db.query(`SELECT order_id, array_agg(to_value ORDER BY at, id) AS v FROM order_events WHERE kind = 'conf_status' AND order_id = ANY($1) GROUP BY 1`, [oids])) {
+    // (a « Tentative 01 » made by « Occupé » shows « Occupé »: orders.ts › setConf)
+    for (const r of await ctx.db.query(`SELECT order_id, array_agg(CASE WHEN data->>'busy' = 'true' THEN 'busy' ELSE to_value END ORDER BY at, id) AS v FROM order_events WHERE kind = 'conf_status' AND order_id = ANY($1) GROUP BY 1`, [oids])) {
       const v: string[] = (Array.isArray(r.v) ? r.v : String(r.v ?? '').replace(/[{}]/g, '').split(',')).filter(Boolean);
       passedOf.set(num(r.order_id), v.filter((x, k) => k === 0 || v[k - 1] !== x));
     }

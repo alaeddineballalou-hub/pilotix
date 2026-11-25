@@ -1428,6 +1428,8 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
   const fresh: number[] = [];
   /** cancelled by themselves: « Annuler automatiquement après N appels sans réponse » (Réglages › Boutique) */
   const autoCancelled: { id: number; ref: string; attempts: number }[] = [];
+  /** « Occupé » on a « Nouvelle » / « À vérifier » order: now « Tentative 01 » (« ↶ Annuler » puts it back) */
+  const busyTried: number[] = [];
   await ctx.db.tx(async (tx) => {
     if (await alreadyApplied(tx, input.clientId, me)) return;
     const notify = await notifyContext(tx);
@@ -1456,20 +1458,28 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
       if (cur.follow_status && !['to_prepare', 'prepared', 'cancelled'].includes(cur.follow_status) && input.status !== 'confirmed')
         throw bad('Commande déjà expédiée : changez plutôt le statut de livraison');
       let status = input.status;
-      if (!undo && status === 'busy') {
+      // « Occupé » (the owner's rule, 25 Nov 2026): a « Nouvelle » or « À vérifier » order becomes « Tentative 01 » — it
+      // counts as one call, so the next call is in the next slot — with no message to the customer and no cancel. An
+      // order already tried (« Tentative 0N », « à rappeler »…) keeps its try number: only the call is written.
+      const busyTry = !undo && status === 'busy' && (cur.conf_status === 'new' || cur.conf_status === 'to_check');
+      if (!undo && status === 'busy' && !busyTry) {
         await tx.query('UPDATE orders SET last_call_at = $2, updated_at = now(), version = version + 1 WHERE id = $1', [oid, new Date(ctx.now()).toISOString()]);
         await addEvent(tx, oid, me, 'call', null, 'busy', input.note?.trim() || null);
         changed.push(oid);
         continue;
+      }
+      if (busyTry) {
+        status = 'no_answer';
+        busyTried.push(oid);
       }
       // (an undo never counts a call: the attempts go back to what they were)
       const isCallFail = !undo && status === 'no_answer';
       const attempts = undo ? undo.attempts : num(cur.attempts) + (isCallFail ? 1 : 0);
       let note = input.note?.trim() || null;
       let reopenHash: string | undefined;
-      const autoCancel = isCallFail && calls.cancelAfterNoAnswer > 0 && attempts >= calls.cancelAfterNoAnswer;
+      const autoCancel = isCallFail && !busyTry && calls.cancelAfterNoAnswer > 0 && attempts >= calls.cancelAfterNoAnswer;
       // (exactly that try: an order already past it, from before the rule, is not asked again)
-      if (isCallFail && (attempts === messageAt || autoCancel)) {
+      if (isCallFail && !busyTry && (attempts === messageAt || autoCancel)) {
         if (input.ids.length !== 1 || !note || !input.messageSentVia)
           throw bad(autoCancel
             ? 'Envoyez le message d’annulation au client et confirmez l’envoi avant d’annuler.'
@@ -1538,6 +1548,8 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
       if (!undo) await addEvent(tx, oid, me, 'conf_status', cur.conf_status, status, [input.reason, note].filter(Boolean).join(' — ') || null, {
         att: num(cur.attempts), nca: cur.next_call_at ? iso(cur.next_call_at) : null,
         ...(reopenHash ? { reorderHash: reopenHash } : {}),
+        // (the history says « Occupé · Tentative 01 »; the 10-minute sweep never cancels it: noanswer.ts)
+        ...(busyTry ? { busy: true } : {}),
       });
       // it leaves the depot: cancelled, back to be called again, or « sans stock » (it waits for stock outside the depot)
       const leavesDepot =
@@ -1554,7 +1566,8 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
       if (!undo && ((CONF_TODO as string[]).includes(status) || status === 'no_stock') && ['to_prepare', 'prepared'].includes(cur.follow_status))
         await addEvent(tx, oid, me, 'follow_status', cur.follow_status, null);
       if (!undo) {
-        await onConfChange(tx, notify, cur, cur.conf_status, status, ctx.now(), attempts);
+        // (an « Occupé »: no message to the customer)
+        if (!busyTry) await onConfChange(tx, notify, cur, cur.conf_status, status, ctx.now(), attempts);
         // Meta: an order from a landing page, confirmed by a person, is a real sale (never a blocked or fake one)
         await onLandingConf(tx, landing, cur, cur.conf_status, status, ctx.now(), input.reason ?? null, me);
       } else {
@@ -1583,7 +1596,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
   if (!undo) await recordRiskConfirms(ctx, fresh.filter((x) => changed.includes(x)), me);
   await sendInPreview(ctx);
   ctx.emit({ type: 'orders', orderIds: changed });
-  return { changed, noStock, blocked, autoCancelled };
+  return { changed, noStock, blocked, autoCancelled, busyTried };
 }
 
 export const FollowInput = z.object({
@@ -2354,6 +2367,7 @@ export const ordersProcs = {
         return {
           id: num(r.id), orderId: num(r.order_id), at: iso(r.at), userId: by ? null : numOrNull(r.user_id), userName: by ?? r.user_name, kind: r.kind, fromValue: r.from_value, toValue: r.to_value, note: r.note,
           ...(d ? { undo: { area: d.area === 'follow' ? 'follow' : 'conf', by: d.by ?? null, at: d.at ? iso(d.at) : iso(r.at) } } : {}),
+          ...(r.kind === 'conf_status' && data?.busy ? { busyTry: num(data.att) + 1 } : {}),
         };
       },
     );

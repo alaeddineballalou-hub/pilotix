@@ -403,6 +403,8 @@ export interface OrderEvent {
   note: string | null;
   /** « undo »: which status (confirmation or delivery) went back, who had made the change and when */
   undo?: { area: 'conf' | 'follow'; by: string | null; at: string } | null;
+  /** a confirmation line made by « Occupé » on a « Nouvelle » / « À vérifier » order: the try it counted (« Occupé · Tentative 01 ») */
+  busyTry?: number;
 }
 
 export interface Customer {
