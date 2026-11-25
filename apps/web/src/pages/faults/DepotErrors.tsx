@@ -64,7 +64,7 @@ export function DepotErrors() {
                 <span className="pxfa-t" aria-hidden="true">
                   <i style={{ width: `${Math.max(4, (p.n / pTop) * 100)}%` }} />
                 </span>
-                <span className="ltr">{p.of ? t('faults.depot.of', { n: p.n, of: p.of, v: pct(p.n / p.of, 1) }) : n(p.n)}</span>
+                <span className={p.of ? undefined : 'ltr'}>{p.of ? t('faults.depot.of', { n: p.n, of: p.of, v: pct(p.n / p.of, 1) }) : n(p.n)}</span>
               </div>
             ))}
           </div>
@@ -76,7 +76,8 @@ export function DepotErrors() {
                 <Icon name="flag" />
                 {w.order?.ref} · {w.who ?? t('faults.team.depot')} · {t('faults.contest.button')}
               </b>
-              {w.contestNote && <q>« {w.contestNote} »</q>}
+              {/* the person's own words, in their own direction (a French note in Arabic) */}
+              {w.contestNote && <q><bdi>« {w.contestNote} »</bdi></q>}
               <span className="pxfa-note">{t('faults.depot.sentToSeller')}</span>
             </div>
           ))}

@@ -32,7 +32,7 @@ function Card({ d, label }: { d: Sum; label: string | null }) {
   const zero = all.filter((x) => !x.n);
   const [open, setOpen] = useState<string | null>(() => (d.scope === 'all' ? teams[0]?.team ?? null : null));
   const [deciding, setDeciding] = useState(false);
-  const max = Math.max(1, d.client.n, ...teams.map((x) => x.n));
+  const max = Math.max(1, d.client.n, d.unknown, ...teams.map((x) => x.n));
   const share = (v: number) => pct(d.returns ? v / d.returns : null);
   return (
     <section className="pxn-card pxfa-card" aria-labelledby="pxfa-h">
@@ -75,7 +75,7 @@ function Card({ d, label }: { d: Sum; label: string | null }) {
                       {x.people ? (
                         x.people.length > 0 && (
                           <div>
-                            <h5>{t('faults.card.who')}</h5>
+                            <h5>{x.people.some((p) => p.of) ? t('faults.card.who') : t('faults.card.whoPlain')}</h5>
                             {x.people.map((p) => {
                               const top = Math.max(1, ...x.people!.map((y) => y.n));
                               return (
@@ -117,16 +117,22 @@ function Card({ d, label }: { d: Sum; label: string | null }) {
               <b className="ltr">{n(d.client.n)}</b>
               <small className="ltr">{share(d.client.n)}</small>
             </div>
+            {/* nobody said yet what happened: not a fault of anyone yet (not « Pas notre faute ») */}
             {d.unknown > 0 && (
-              <div className="pxfa-r static">
-                <span className="pxfa-n">
-                  <Icon name="help" />
-                  {t('faults.team.unknown')}
-                </span>
-                <small style={{ textAlign: 'start' }}>{t('faults.card.unknownSub')}</small>
-                <b className="ltr">{n(d.unknown)}</b>
-                <small className="ltr">{share(d.unknown)}</small>
-              </div>
+              <>
+                <p className="pxfa-sep">{t('faults.card.notKnown')}</p>
+                <div className="pxfa-r static" title={t('faults.card.unknownSub')}>
+                  <span className="pxfa-n">
+                    <Icon name="help" />
+                    {t('faults.team.unknown')}
+                  </span>
+                  <span className="pxfa-t" aria-hidden="true">
+                    <i className="c" style={{ width: `${Math.max(3, (d.unknown / max) * 100)}%` }} />
+                  </span>
+                  <b className="ltr">{n(d.unknown)}</b>
+                  <small className="ltr">{share(d.unknown)}</small>
+                </div>
+              </>
             )}
           </div>
           {d.waiting.length > 0 && (
@@ -166,7 +172,7 @@ export function RespLine({ s, orderId }: { s: Shown; orderId: number }) {
       <TeamChip team={s.team} who={s.who} mine={s.mine} />
       {s.contested && (
         <span className="pxfa-flag">
-          <Icon name="flag" /> {t('faults.contest.button')}
+          <Icon name="flag" /> {t('faults.contest.waiting')}
         </span>
       )}
       {s.team === 'unknown' && can && (

@@ -122,7 +122,7 @@ export function DecideSheet({ list, canDecide, onClose }: { list: Waiting[]; can
             </p>
             {w.note && (
               <q>
-                {w.by ? t('faults.decide.says', { who: w.by }) : ''} « {w.note} »
+                {w.by ? t('faults.decide.says', { who: w.by }) : ''} <bdi>« {w.note} »</bdi>
               </q>
             )}
             {canDecide && (
