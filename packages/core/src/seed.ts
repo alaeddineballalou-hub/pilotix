@@ -113,12 +113,20 @@ async function bulkInsert(db: Db, table: string, cols: string[], rows: unknown[]
 
 const iso = (t: number) => new Date(t).toISOString();
 
-/** The Community manager's orders in the demo: some of the latest typed orders of a chat or a call become hers. */
-async function seedCmOrders(db: Db, cm: number) {
+/**
+ * The Community manager's orders in the demo: typed orders of a chat or a call of these last weeks become hers — some
+ * delivered, some cancelled or back, some on their way, some still to call — so each of her lists shows some.
+ */
+async function seedCmOrders(db: Db, cm: number, now: number) {
+  const base = `channel IN ('facebook', 'instagram', 'whatsapp', 'appel') AND conversation_id IS NULL AND landing_id IS NULL AND NOT is_exchange
+    AND source IS NULL AND created_at > $1::timestamptz - interval '24 days'`;
   const ids = (
     await db.query(
-      `SELECT id FROM orders WHERE channel IN ('facebook', 'instagram', 'whatsapp', 'appel') AND conversation_id IS NULL AND landing_id IS NULL
-         AND NOT is_exchange AND source IS NULL ORDER BY created_at DESC, id DESC LIMIT 14`,
+      `(SELECT id FROM orders WHERE ${base} AND follow_status = 'delivered' ORDER BY created_at DESC, id DESC LIMIT 6)
+       UNION ALL (SELECT id FROM orders WHERE ${base} AND (conf_status = 'cancelled' OR follow_status IN ('returning', 'returned')) ORDER BY created_at DESC, id DESC LIMIT 3)
+       UNION ALL (SELECT id FROM orders WHERE ${base} AND follow_status IN ('to_prepare', 'prepared', 'shipped', 'out_for_delivery') ORDER BY created_at DESC, id DESC LIMIT 3)
+       UNION ALL (SELECT id FROM orders WHERE ${base} AND follow_status IS NULL AND conf_status IN ('new', 'no_answer', 'busy', 'callback') ORDER BY created_at DESC, id DESC LIMIT 3)`,
+      [iso(now)],
     )
   ).map((r: any) => num(r.id));
   if (!ids.length) return;
@@ -444,7 +452,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
   // the bell (top of every page): what the team was told this morning and yesterday (the full demo; the viewer's language)
   if (expanded) await seed_inbox(db, users, now, opts.lang ?? 'fr');
   // the Community manager (the full demo): the orders she typed from her chats and calls, last (nothing above reads them)
-  if (expanded && users.cm) await seedCmOrders(db, users.cm);
+  if (expanded && users.cm) await seedCmOrders(db, users.cm, now);
 
   return { users, orders: N, todo: CONF_TODO.length };
 }
