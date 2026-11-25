@@ -44,6 +44,9 @@
 .cfs-list li > span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .cfs-list small { color: var(--muted); font-size: 13px; }
 .cfs-body .aa-in, .cfs-body .bjp-in { margin: 0; }
+/* a card put inside a part (Tester, Résultats, Envoi des messages…): no second line right under the part's own (the
+   nested cards' top rule, legacy.css, has an id in its :not(): this one needs one too to win) */
+.page .cfs-fold .cfs-body > .card.card:first-child:not(#cfs-none) { border-top: 0 !important; padding-top: 0 !important; }
 
 /* a phone: the state goes under the title */
 @media (max-width: 600px) {

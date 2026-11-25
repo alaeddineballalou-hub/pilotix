@@ -137,7 +137,7 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
   const cfg = !agency && tabOn('suivi', 'reglages') && (!!session?.isAdmin || !!session?.profile.canAffect);
   const c = useRpc('suivi.counts', {}, { refetchInterval: 60_000 }).data;
   const msgsTab = useMessagesTab();
-  // the messages waiting to be sent by hand (the menu's count)
+  // the messages to send by hand and the ones that failed these 3 days (the count Pilot Automations › Messages had)
   const toSend = useMenuCounts().notify;
   // a phone shows a few steps at a time: the current one is brought into view
   const bar = useRef<HTMLElement>(null);
@@ -147,9 +147,13 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
     if (!el || !on || el.scrollWidth <= el.clientWidth + 1) return;
     const r = el.getBoundingClientRect();
     const b = on.getBoundingClientRect();
-    if (b.left >= r.left + 8 && b.right <= r.right - 8) return;
-    el.scrollBy({ left: b.left + b.width / 2 - (r.left + r.width / 2) });
-  }, [tab]);
+    // the gear « Réglages » stays at the end, over the steps: the step must show before it (« Messages », the last one)
+    const gear = el.querySelector<HTMLElement>('.bjm-cfg');
+    const right = r.right - (gear ? gear.getBoundingClientRect().width : 0) - 8;
+    if (b.left >= r.left + 8 && b.right <= right) return;
+    el.scrollBy({ left: b.left + b.width / 2 - (r.left + (right - r.left) / 2) });
+    // again once the counts are in: they widen the steps
+  }, [tab, c, toSend]);
   const active = (k: Sub) => !cfgOn && (tab === k || (k === 'alertes' && ['alertes_new', 'alertes_encours', 'reclamation', 'annules', 'swap'].includes(tab)));
   // (a tab taken from the role in Utilisateurs › Rôles is not drawn)
   const item = (k: Sub, count?: number, x = false) => !tabOn('suivi', k) ? null : (
