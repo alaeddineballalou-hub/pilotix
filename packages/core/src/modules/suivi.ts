@@ -20,9 +20,10 @@ import { itemsKey, SWAP_API_KINDS, SWAP_SAME_WILAYA_ONLY, swapWayOf, WILAYAS } f
 
 const id = z.number().int().positive();
 
-// alertes_new / alertes_encours: the alerts nobody acted on yet, and those someone is working on (a call, a note…, or
-// treated and waiting for the company: « Attend ZR »); resolus: the alerts the company then delivered (30 days) — the
-// owner's way, 25 Nov 2026: Nouvelles alertes → En cours → Résolu (only when delivered) or Swap
+// alertes_new / alertes_encours: the alerts nobody acted on yet, and those someone is working on (a call, a call back, a
+// réclamation…); resolus: the alerts the company then delivered (30 days) — the owner's way, 25 Nov 2026: Nouvelles
+// alertes → En cours → (« Relivrer »: back on the road, out of En cours) → Résolu when delivered; cancelled again by the
+// company: a new alert (to do); cancelled: Annulés, where a swap is made
 export const SUIVI_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'bloques', 'traites', 'livres', 'annules', 'swap', 'swapped', 'resolus'] as const;
 export type SuiviTab = (typeof SUIVI_TABS)[number];
 /** Where a parcel can be swapped from: it is still with the courier or the livreur. */
@@ -54,8 +55,8 @@ function tabFilter(tab: SuiviTab, now: number, agency = false): Partial<ListInpu
     case 'alertes_new':
       return { follow: ['alert'], sort: 'updated_at', dir: 'asc' };
     case 'alertes_encours':
-      // the alerts someone works on, and the treated ones back on the road (« Attend ZR »): the ids come from suivi.list
-      return { follow: ['alert', 'out_for_delivery', 'shipped', 'failed'], sort: 'updated_at', dir: 'asc' };
+      // the alerts someone works on (the ids come from suivi.list); one relivrée is back on the road: no longer here
+      return { follow: ['alert'], sort: 'updated_at', dir: 'asc' };
     case 'resolus':
       // the ids come from resolvedIds (suivi.list): delivered after an alert, these 30 days
       return { follow: ['delivered'], dateField: 'delivered_at', from: new Date(now - 30 * DAY).toISOString(), sort: 'delivered_at', dir: 'desc' };
@@ -200,8 +201,6 @@ async function extras(ctx: Ctx, orders: Order[], now = ctx.now()): Promise<Recor
   return out;
 }
 
-/** The parcels « Swap » can take now: through its company's API while it allows it (ZR: the customer cancelled or never
- *  answered, the parcel still at its destination), else a parcel coming back (another company, our livreurs). */
 /**
  * Suivi › Annulés: the parcels coming back (all) and back (since `from`, 30 days by default), and the ones a swap can
  * still take — what « Annulé › Retours » listed, with Swap's.
@@ -210,13 +209,15 @@ async function annulesIds(ctx: Ctx, from?: string | null, to?: string | null): P
   const since = from ?? new Date(ctx.now() - 30 * DAY).toISOString();
   const back = await ctx.db.query(
     `SELECT o.id FROM sales o WHERE o.shipped_at IS NOT NULL AND (o.follow_status = 'returning'
-        OR (o.follow_status = 'returned' AND coalesce(o.back_at, o.updated_at) >= $1${to ? ' AND coalesce(o.back_at, o.updated_at) < $2' : ''}))${andSql(queueSql(ctx, readQueue(ctx)))}
-      ORDER BY coalesce(o.back_at, o.updated_at) DESC LIMIT 1500`,
+        OR (o.follow_status = 'returned' AND coalesce(o.returned_at, o.returning_at, o.updated_at) >= $1${to ? ' AND coalesce(o.returned_at, o.returning_at, o.updated_at) < $2' : ''}))${andSql(queueSql(ctx, readQueue(ctx)))}
+      ORDER BY coalesce(o.returned_at, o.returning_at, o.updated_at) DESC LIMIT 1500`,
     to ? [since, to] : [since],
   );
   return [...new Set([...(await swappableIds(ctx)), ...back.map((r: any) => num(r.id))])];
 }
 
+/** The parcels « Swap » can take now: through its company's API while it allows it (ZR: the customer cancelled or never
+ *  answered, the parcel still at its destination), else a parcel coming back (another company, our livreurs). */
 async function swappableIds(ctx: Ctx): Promise<number[]> {
   const rows = await ctx.db.query(
     `SELECT o.id, o.follow_status, o.ext_status, o.shipped_at, c.kind FROM sales o LEFT JOIN delivery_companies c ON c.id = o.company_id
@@ -264,8 +265,8 @@ export async function suiviCounts(ctx: Ctx) {
     enlivraison: num(r.enlivraison),
     alertes: num(r.alertes),
     alertes_new: alertesNew,
-    // in progress: someone acted on it, or it was treated and waits for the company (« Attend ZR »)
-    alertes_encours: Math.max(0, num(r.alertes) - alertesNew) + num(r.traites),
+    // in progress: an alert someone acted on (one relivrée is back on the road: En livraison, then Résolu when delivered)
+    alertes_encours: Math.max(0, num(r.alertes) - alertesNew),
     traites: num(r.traites),
     resolus,
     annulesClair,
@@ -1260,13 +1261,6 @@ export interface ClairExtra {
   bucket: string;
 }
 
-/** The treated alerts back on the road (waiting for the company to deliver): En cours › « Attend ZR ». */
-async function treatedIds(ctx: Ctx): Promise<number[]> {
-  return (
-    await ctx.db.query(`SELECT o.id FROM orders o WHERE o.sub_status = 'alert_traitee' AND o.follow_status IN ('out_for_delivery','shipped','failed')${andSql(queueSql(ctx, readQueue(ctx)))}`)
-  ).map((x: any) => num(x.id));
-}
-
 /** Résolu: the parcels the company delivered after an alert, these 30 days. Nobody presses anything: it fills itself. */
 async function resolvedIds(ctx: Ctx): Promise<number[]> {
   return (
@@ -1329,7 +1323,8 @@ async function clairExtras(ctx: Ctx, tab: ClairTab, rows: Order[], ex: Record<nu
     let bucket = 'all';
     if (tab === 'alertes_new') bucket = x?.clock?.state ?? 'ok';
     else if (tab === 'alertes_encours')
-      bucket = o.followStatus !== 'alert' || last?.key === 'claim' ? 'zr' : callbackAt && Date.parse(callbackAt) > now ? 'later' : 'call';
+      // « Attend ZR »: a réclamation sent and still open (the parcel stays an alert until the company delivers or returns it)
+      bucket = last?.key === 'claim' ? 'zr' : callbackAt && Date.parse(callbackAt) > now ? 'later' : 'call';
     else if (tab === 'resolus') {
       const d = o.deliveredAt ? Date.parse(o.deliveredAt) : 0;
       bucket = d >= today ? 'today' : d >= today - DAY ? 'yesterday' : 'older';
@@ -1367,7 +1362,7 @@ export const suiviProcs = {
       const zero = Object.fromEntries(SUIVI_BUCKETS[tab].map((k) => [k, 0]));
       const split = tab === 'alertes_new' || tab === 'alertes_encours' ? await alertSplit(ctx) : null;
       const all =
-        tab === 'alertes_new' ? split!.fresh : tab === 'alertes_encours' ? [...split!.working, ...(await treatedIds(ctx))] : tab === 'resolus' ? await resolvedIds(ctx) : tab === 'annules' ? await annulesIds(ctx, i.from, i.to) : await swappableIds(ctx);
+        tab === 'alertes_new' ? split!.fresh : tab === 'alertes_encours' ? split!.working : tab === 'resolus' ? await resolvedIds(ctx) : tab === 'annules' ? await annulesIds(ctx, i.from, i.to) : await swappableIds(ctx);
       if (!all.length) return { ...empty, buckets: zero };
       const tf = tabFilter(tab, ctx.now(), agencyOf(ctx) !== null && hasRole(ctx.session, 'suivi'));
       const base: Partial<ListInput> = { ...tf, ...suiviFilters(i, tf), ids: all.slice(0, 500), q: i.q };
@@ -1378,7 +1373,7 @@ export const suiviProcs = {
       const now = ctx.now();
       let rows = tab === 'swap' || tab === 'annules' ? found.rows.filter((o) => o.shippedAt) : found.rows;
       const ex = await extras(ctx, rows, now);
-      // En cours: the calls count on every line (○○○ 0/6 as on Confirmation), a treated parcel's too (calls since its alert)
+      // En cours: the calls count on every line (○○○ 0/6 as on Confirmation: calls since the alert)
       if (tab === 'alertes_encours') {
         const more = rows.filter((o) => ex[o.id] && !ex[o.id].tries).map((o) => o.id);
         for (const [id, tr] of await alertTries(ctx.db, more, now)) ex[id].tries = tr;

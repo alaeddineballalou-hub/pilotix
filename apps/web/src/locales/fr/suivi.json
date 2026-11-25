@@ -827,8 +827,11 @@
     "amount": "Montant",
     "zr": "Statut ZR",
     "time": "Temps",
-    "lastCol": "Dernier résultat",
-    "calls": "Appels",
+    "triesCol": "Statut interne",
+    "next": {
+      "callback": "Rappel {{when}}",
+      "late": "L’heure du rappel est passée : à appeler maintenant"
+    },
     "since": "Depuis",
     "delivered": "Livré",
     "savedBy": "Sauvé par",
@@ -850,7 +853,7 @@
       "callN": "appel {{n}} / {{need}}",
       "callbackSub": "date et heure",
       "claimSub": "à {{co}}",
-      "cancelSub": "va dans Swap"
+      "cancelSub": "va dans Annulés"
     },
     "status": "Statut",
     "change": "Changer le statut",
@@ -870,7 +873,7 @@
     "done": {
       "no_answer": "{{ref}} : pas de réponse, appel compté",
       "busy": "{{ref}} : occupé, appel compté",
-      "cancel": "{{ref}} : le client annule, il part dans Swap"
+      "cancel": "{{ref}} : le client annule, il part dans Annulés"
     }
   }
 }

@@ -2,11 +2,13 @@
 // Résolu, Swap — one line per parcel with its company's small icon, the company's status in colour (a tap opens the
 // history), three counters on top that are filters too, buttons only when there is something to do, and the alert
 // opened like Confirmation's order: « Statut » (Pas de réponse, Occupé, Rappel, Réclamation, Client annule) and
-// « Relivrer ». Résolu fills itself when the company delivers (no button); a cancelled alert goes to Swap.
+// « Relivrer ». En cours shows the tries like Confirmation (dots, then what comes next); « Relivrer » puts the parcel
+// back on the road (out of En cours), Résolu fills itself when the company delivers (no button), a cancelled parcel is
+// in Annulés (with « Swap »).
 import type { Order } from '@pilotix/shared';
 import { Fragment, type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { da, when, wilayaName } from '../../lib/format';
+import { callWhen, da, when, wilayaName } from '../../lib/format';
 import { useRpc } from '../../lib/query';
 import { Empty, Icon } from '../../ui/kit';
 import { Sheet } from '../../ui/Sheet';
@@ -144,14 +146,6 @@ function sinceText(t: (k: string, o?: any) => string, iso: string | null | undef
   if (m < 24 * 60) return t('suivi.clair.hours', { n: Math.floor(m / 60) });
   return t('suivi.clair.days', { n: Math.floor(m / 1440) });
 }
-/** « 14:30 » today, « 26/11 14:30 » another day. */
-function hm(iso: string) {
-  const d = new Date(iso);
-  const p = (n: number) => String(n).padStart(2, '0');
-  const today = new Date();
-  const same = d.toDateString() === today.toDateString();
-  return `${same ? '' : `${p(d.getDate())}/${p(d.getMonth() + 1)} `}${p(d.getHours())}:${p(d.getMinutes())}`;
-}
 /** Résolu › « Livré »: « 10:12 » today, « Hier », else « 23/11 ». */
 function deliveredText(t: (k: string) => string, iso: string | null | undefined) {
   if (!iso) return '—';
@@ -165,22 +159,27 @@ function deliveredText(t: (k: string) => string, iso: string | null | undefined)
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}`;
 }
 
-/** En cours › « Dernier résultat »: what was done last, in colour. */
-function LastResult({ x }: { x?: ClairX }) {
+/**
+ * En cours › « Statut interne » (the owner, 25 Nov 2026: like Confirmation's « Tentatives »): the calls as dots and
+ * « 2/6 », then what comes next under them — « Rappel 16:00 » (red once its time passed: to call now), « Pas de
+ * réponse », « Occupé », « Réclamation envoyée ».
+ */
+export function TriesCell({ x }: { x?: ClairX }) {
   const { t } = useTranslation();
   const l = x?.last;
-  if (!l) return <span className="muted">—</span>;
-  const tone = l.key === 'no_answer' || l.key === 'busy' || l.key === 'lost' ? 'orange' : l.key === 'relivrer' || l.key === 'claim' ? 'green' : 'blue';
-  // the call-back hour is in the action column (« 🕐 16:00 »), not twice on the line
-  const day = l.key === 'relivrer' ? (hm(l.at).split(' ')[0].includes('/') ? hm(l.at).split(' ')[0] : t('suivi.clair.today')) : '';
-  // the day goes under the words when the column is narrow (tablet), never « Relivrer / demandé / 24/11 »
-  return (
-    <span className={`svc-last z-${tone}`}>
-      <span>
-        <i aria-hidden="true" />
-        {t(`suivi.clair.last.${l.key}`)}
+  let chip: ReactNode = null;
+  if (l?.key === 'callback' && x?.callbackAt) {
+    const late = Date.parse(x.callbackAt) <= Date.now();
+    chip = (
+      <span className={`svc-next ${late ? 'late' : 'soon'}`} title={late ? t('suivi.clair.next.late') : when(x.callbackAt)}>
+        {t('suivi.clair.next.callback', { when: callWhen(x.callbackAt) })}
       </span>
-      {day && <small dir="auto">{day}</small>}
+    );
+  } else if (l) chip = <span className={`svc-next ${l.key === 'claim' ? 'info' : 'off'}`}>{t(`suivi.clair.last.${l.key}`)}</span>;
+  return (
+    <span className="svc-tries">
+      <CallDots tr={x?.tries} />
+      {chip}
     </span>
   );
 }
@@ -224,7 +223,7 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
     tab === 'alertes_new'
       ? [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'wilaya', l: t('suivi.col.wilaya'), cls: 'svc-hide-tb' }, { k: 'product', l: t('suivi.col.products'), cls: 'svc-hide-tb' }, { k: 'amount', l: t('suivi.clair.amount'), cls: 'num svc-hide-tb' }, { k: 'zr', l: t('suivi.clair.zr') }, { k: 'time', l: t('suivi.clair.time'), cls: 'num' }, { k: 'act', l: '' }]
       : tab === 'alertes_encours'
-        ? [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'zr', l: t('suivi.clair.zr') }, { k: 'last', l: t('suivi.clair.lastCol') }, { k: 'calls', l: t('suivi.clair.calls') }, { k: 'since', l: t('suivi.clair.since'), cls: 'num svc-hide-tb' }, { k: 'act', l: '' }]
+        ? [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'zr', l: t('suivi.clair.zr') }, { k: 'tries', l: t('suivi.clair.triesCol') }, { k: 'since', l: t('suivi.clair.since'), cls: 'num svc-hide-tb' }, { k: 'act', l: '' }]
         : tab === 'resolus'
           ? [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'product', l: t('suivi.col.products'), cls: 'svc-hide-tb' }, { k: 'amount', l: t('suivi.clair.amount'), cls: 'num' }, { k: 'delivered', l: t('suivi.clair.delivered') }, { k: 'saved', l: t('suivi.clair.savedBy') }, { k: 'problem', l: t('suivi.clair.problem'), cls: 'svc-hide-tb' }]
           : [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'product', l: t('suivi.col.products'), cls: 'svc-hide-tb' }, { k: 'amount', l: t('suivi.clair.amount'), cls: 'num' }, { k: 'why', l: t('suivi.clair.why') }, { k: 'since', l: t('suivi.clair.since'), cls: 'num svc-hide-tb' }, { k: 'act', l: '' }];
@@ -273,10 +272,8 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
       }
       case 'time':
         return <ClockText x={x} />;
-      case 'last':
-        return <LastResult x={x} />;
-      case 'calls':
-        return <CallDots tr={x?.tries} />;
+      case 'tries':
+        return <TriesCell x={x} />;
       case 'since':
         return (
           <span className="muted" dir="auto">
@@ -316,15 +313,10 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
               <span className="svc-ws">{t('suivi.clair.waitZrShort')}</span>
             </span>
           );
-        if (tab === 'alertes_encours' && x?.bucket === 'later' && x.callbackAt)
-          return (
-            <span className="svc-wait t">
-              <Icon name="clock" /> <span className="ltr">{hm(x.callbackAt)}</span>
-            </span>
-          );
+        // (a call back not due yet: its hour is in « Statut interne », the buttons stay for a customer who calls early)
         return (
           <span className="svc-acts">
-            {tab === 'alertes_encours' && <b className="svc-recall">{t('suivi.clair.recall')}</b>}
+            {tab === 'alertes_encours' && x?.bucket === 'call' && <b className="svc-recall">{t('suivi.clair.recall')}</b>}
             <CallMsg o={o} />
           </span>
         );
@@ -403,10 +395,6 @@ export function ClairCards({ tab, rows, extra, reasonOf, h }: { tab: ClairTab; r
             <span className="svc-wait">
               <Icon name="hourglass" /> {t('suivi.clair.waitZrShort')}
             </span>
-          ) : tab === 'alertes_encours' && x?.bucket === 'later' && x.callbackAt ? (
-            <span className="svc-wait t">
-              <Icon name="clock" /> <span className="ltr">{hm(x.callbackAt)}</span>
-            </span>
           ) : (
             <CallMsg o={o} />
           );
@@ -432,8 +420,7 @@ export function ClairCards({ tab, rows, extra, reasonOf, h }: { tab: ClairTab; r
               )}
               {tab === 'alertes_encours' && (
                 <div className="svc-card-s">
-                  <LastResult x={x} />
-                  {x?.tries && <CallDots tr={x.tries} />}
+                  <TriesCell x={x} />
                 </div>
               )}
               {tab === 'resolus' && (

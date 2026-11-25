@@ -13,7 +13,7 @@ import { seed as seed_stats } from './seeds/stats';
 import { seed as seed_catalog } from './seeds/catalog';
 import { seed as seed_stock } from './seeds/stock';
 import { seed as seed_customers } from './seeds/customers';
-import { seed as seed_suivi, seedSwaps } from './seeds/suivi';
+import { seed as seed_suivi, seedSuiviWork, seedSwaps } from './seeds/suivi';
 import { seed as seed_sav } from './seeds/sav';
 import { seed as seed_delivery, seedZrFees } from './seeds/delivery';
 import { seed as seed_zr } from './seeds/zr';
@@ -450,6 +450,8 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
   // Pilot Automations: what it did these last days (it reads the demo's orders, ads and customers)
   await seed_automations(db, users, now);
   if (expanded) await seedSwaps(db, now);
+  // Suivi › En cours (alerts being called) and Résolu (relivrées, then delivered): last, on the couriers' final data
+  await seedSuiviWork(db, users, now);
   // Referral › Code promo: the welcome codes (reads the posts, ads and orders above)
   await seed_promo(db, users, now);
   // agent pay last: it reads the delivered and prepared orders the seeds above wrote (and their first quantities)

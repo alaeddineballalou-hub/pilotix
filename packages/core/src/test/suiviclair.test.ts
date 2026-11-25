@@ -1,6 +1,7 @@
 // Suivi · « Clair » (the owner's design 1, 25 Nov 2026): the counters over each alert list (and the filter they make),
-// « Pas de réponse » / « Occupé » = one call each, « Rappel » = « Plus tard », a treated alert waits for the company in
-// En cours, Résolu fills itself when the company delivers, « Client annule » sends the parcel back (Swap).
+// « Pas de réponse » / « Occupé » = one call each, « Rappel » = « Plus tard », a réclamation sent = « Attend ZR »;
+// « Relivrer » sends the parcel back on the road (out of En cours), Résolu fills itself when the company delivers, a new
+// alert from the company is a new alert to do, « Client annule » sends the parcel back (Annulés, where Swap is).
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
@@ -76,17 +77,33 @@ test('« Rappel » at a day and hour: « Plus tard » until then', async () => {
   assert.equal(l.extra[id].callbackAt, at);
 });
 
-test('a treated alert waits for the company in En cours (« Attend ZR »); delivered, it is in Résolu', async () => {
+test('a réclamation sent on an alert: En cours › « Attend ZR » until the company answers', async () => {
+  const kind = (await db.query(`SELECT kind FROM delivery_companies WHERE kind <> 'own' ORDER BY id LIMIT 1`))[0]?.kind;
+  const id = await freshAlert(kind);
+  await call('suivi.callResult', suivi, { id, result: 'no_answer' });
+  const c: any = await call('suivi.claimCreate', suivi, { orderId: id, reason: 'other', message: 'Merci de rappeler le client', viaApi: false });
+  await db.query(`UPDATE claims SET created_at = now() + interval '2 minutes' WHERE id = $1`, [c.id]);
+  const l = await list('alertes_encours', { bucket: 'zr' });
+  assert.ok(l.rows.some((r: any) => r.id === id), '« Attend ZR »');
+  assert.equal(l.extra[id].last.key, 'claim');
+  assert.ok(l.extra[id].tries.done >= 1, 'its calls still show');
+});
+
+test('« Relivrer »: back on the road, out of En cours; delivered, it is in Résolu', async () => {
   const id = await freshAlert();
+  await call('suivi.callResult', suivi, { id, result: 'busy' });
+  assert.ok((await ids('alertes_encours')).includes(id));
   const motifs: any = await call('suivi.motifs', suivi, {});
   const m = motifs.resolved.find((x: any) => x.on && !x.date) ?? motifs.resolved.find((x: any) => x.on);
   const date = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
   await call('suivi.resolve', suivi, { id, outcome: 'resolved', motif: m.key, date: m.date ? date : null, relance: false });
-  const l = await list('alertes_encours', { bucket: 'zr' });
-  assert.ok(l.rows.some((r: any) => r.id === id), 'treated: « Attend ZR »');
-  assert.equal(l.extra[id].last.key, 'relivrer');
+  assert.equal((await db.query('SELECT follow_status FROM orders WHERE id = $1', [id]))[0].follow_status, 'out_for_delivery');
+  assert.ok(!(await ids('alertes_encours')).includes(id), 'relivrée: no longer in En cours');
+  assert.ok(!(await ids('alertes_new')).includes(id));
   const c: any = await call('suivi.counts', suivi, {});
-  assert.equal(c.alertes_new + c.alertes_encours, c.alertes + c.traites);
+  // the two lists hold every alert, nothing else
+  assert.equal(c.alertes_new + c.alertes_encours, c.alertes);
+  assert.equal((await list('alertes_encours')).total, c.alertes_encours);
   // the company delivers it: Résolu, today, saved by the suivi agent — nobody pressed anything
   await db.query(`UPDATE orders SET follow_status = 'delivered', delivered_at = now(), sub_status = NULL WHERE id = $1`, [id]);
   await db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, at) SELECT $1, NULL, 'follow_status', 'out_for_delivery', 'delivered', max(at) + interval '1 minute' FROM order_events WHERE order_id = $1`, [id]);
@@ -96,6 +113,25 @@ test('a treated alert waits for the company in En cours (« Attend ZR »); deliv
   assert.equal(r.extra[id].savedBy, suivi.session.profile.name);
   assert.equal(r.buckets.all, r.total);
   assert.ok((await ids('resolus', { bucket: 'today' })).includes(id));
+  assert.ok(!(await ids('alertes_encours')).includes(id));
+});
+
+test('relivrée, then the company cancels it again: a new alert to do (Nouvelles alertes), its tries from zero', async () => {
+  const id = await freshAlert();
+  await call('suivi.callResult', suivi, { id, result: 'no_answer' });
+  const motifs: any = await call('suivi.motifs', suivi, {});
+  const m = motifs.resolved.find((x: any) => x.on && !x.date) ?? motifs.resolved.find((x: any) => x.on);
+  const date = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  await call('suivi.resolve', suivi, { id, outcome: 'resolved', motif: m.key, date: m.date ? date : null, relance: false });
+  // the company's news: « Commande annulée » (the sync writes it with nobody's name)
+  await db.query(`UPDATE orders SET follow_status = 'alert', sub_status = NULL WHERE id = $1`, [id]);
+  await db.query(
+    `INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, note, at) SELECT $1, NULL, 'follow_status', 'out_for_delivery', 'alert', 'Commande annulée', max(at) + interval '1 minute' FROM order_events WHERE order_id = $1`,
+    [id],
+  );
+  const l = await list('alertes_new');
+  assert.ok(l.rows.some((r: any) => r.id === id), 'a new alert');
+  assert.equal(l.extra[id].tries.done, 0);
   assert.ok(!(await ids('alertes_encours')).includes(id));
 });
 
@@ -110,4 +146,9 @@ test('« Client annule »: the parcel goes back; with a company that swaps by ha
   assert.equal(s.extra[id].bucket, 'client');
   assert.equal(s.buckets.all, s.total);
   assert.ok((await ids('swap', { bucket: 'client' })).includes(id));
+  // Suivi › Annulés: the same parcel, « Client annulé », with its Swap
+  const a = await list('annules');
+  assert.ok(a.rows.some((r: any) => r.id === id), 'in Annulés');
+  assert.equal(a.extra[id].cancelBy, 'client');
+  assert.ok((await ids('annules', { bucket: 'client' })).includes(id));
 });

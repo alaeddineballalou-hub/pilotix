@@ -827,8 +827,11 @@
     "amount": "Amount",
     "zr": "ZR status",
     "time": "Time",
-    "lastCol": "Last result",
-    "calls": "Calls",
+    "triesCol": "Internal status",
+    "next": {
+      "callback": "Call back {{when}}",
+      "late": "The call-back time has passed: call now"
+    },
     "since": "Since",
     "delivered": "Delivered",
     "savedBy": "Saved by",
@@ -850,7 +853,7 @@
       "callN": "call {{n}} / {{need}}",
       "callbackSub": "day and time",
       "claimSub": "to {{co}}",
-      "cancelSub": "goes to Swap"
+      "cancelSub": "goes to Cancelled"
     },
     "status": "Status",
     "change": "Change the status",
@@ -870,7 +873,7 @@
     "done": {
       "no_answer": "{{ref}}: no answer, call counted",
       "busy": "{{ref}}: busy, call counted",
-      "cancel": "{{ref}}: the customer cancels, it goes to Swap"
+      "cancel": "{{ref}}: the customer cancels, it goes to Cancelled"
     }
   }
 }

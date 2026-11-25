@@ -85,6 +85,20 @@
 .svc-dots i.on { background: #F28B1E; }
 .svc-dots small { margin-inline-start: 6px; font-size: 12px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
 [data-theme='dark'] .svc-dots i { background: rgba(255, 255, 255, .16); }
+/* En cours › « Statut interne »: the dots, then what comes next under them (Confirmation's « Tentatives » colours) */
+.svc-tries { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.svc-next { display: inline-block; max-width: 100%; box-sizing: border-box; border-radius: 10px; padding: 2px 9px; font-size: 12px; font-weight: 600; line-height: 1.45; white-space: normal; }
+.svc-next.soon { background: #FFF0DC; color: #9A4B00; }
+.svc-next.late { background: #FCE7E5; color: #B42318; }
+.svc-next.off { background: #F1EEE9; color: #3B4250; }
+.svc-next.info { background: #E8EEF8; color: #2459D6; }
+[data-theme='dark'] .svc-next.soon { background: rgba(247, 168, 35, .16); color: #F7C46A; }
+[data-theme='dark'] .svc-next.late { background: rgba(240, 68, 56, .16); color: #FDA29B; }
+[data-theme='dark'] .svc-next.off { background: rgba(255, 255, 255, .07); color: var(--ink); }
+[data-theme='dark'] .svc-next.info { background: rgba(110, 156, 240, .16); color: #9DBBE8; }
+.svc-tbl td.svc-c-tries { min-width: 150px; }
+/* a phone's card: the dots and the chip side by side */
+.svc-card-s .svc-tries { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px; row-gap: 4px; }
 
 /* the buttons of a line */
 .svc-acts { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
@@ -210,6 +224,7 @@
   .svc-tbl .svc-cli b { white-space: normal; }
   .svc-tbl td.svc-c-zr .svc-zr span { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .svc-tbl td.svc-c-zr { min-width: 150px; }
+  .svc-tbl td.svc-c-tries { min-width: 128px; }
   .svc-zr { max-width: 250px; }
   .svc-panel { grid-template-columns: 1fr; }
 }
