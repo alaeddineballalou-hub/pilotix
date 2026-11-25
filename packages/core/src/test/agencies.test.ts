@@ -633,8 +633,9 @@ test('an agency works on several sellers: one at a time or all together, its peo
   ]);
   await assert.rejects(call('agency.billing', await ctxOf('ali@centre.dz'), {}), /Accès refusé/);
   // A merged page after the seller's 500-row limit must still contain all its parcels.
-  await a.db.query(`INSERT INTO orders (ref, customer_id, customer_name, phone, wilaya_id, conf_status, follow_status, conf_agency_id, route_product_id, shipped_at)
-    SELECT 'PAGE' || n::text, o.customer_id, o.customer_name, o.phone, o.wilaya_id, 'new', 'shipped', $2, $3, now() + n * interval '1 second'
+  // (taken_at: their company has them — En livraison only shows those, owner's rule 25 Nov 2026)
+  await a.db.query(`INSERT INTO orders (ref, customer_id, customer_name, phone, wilaya_id, conf_status, follow_status, conf_agency_id, route_product_id, shipped_at, taken_at)
+    SELECT 'PAGE' || n::text, o.customer_id, o.customer_name, o.phone, o.wilaya_id, 'new', 'shipped', $2, $3, now() + n * interval '1 second', now()
     FROM orders o CROSS JOIN generate_series(1,505) n WHERE o.id=$1`, [pa.id, ag.id, a.products.POUS]);
   const finalPage: any = await call('suivi.list', { ...chief, seller: 'all' }, { tab: 'enlivraison', page: 6, pageSize: 100 });
   assert.equal(finalPage.total, 505); assert.equal(finalPage.rows.length, 5);
