@@ -22,9 +22,9 @@ export function Reclamation() {
   const phone = useIsPhone();
   // everyone but the seller and the admins: « Recherche » works like « Tous » (5 digits, no list; owner, 25 Nov 2026)
   const seesAllNow = useSeesAll();
-  // a phone opens on the claims to the couriers (the inbox); a computer on the search
+  // every screen opens on the réclamations to the couriers (the tab's number counts them), the search last
   const [tab, setTab] = useState<RTab>(() => {
-    const first: RTab = window.matchMedia('(max-width: 760px)').matches ? 'companies' : 'search';
+    const first: RTab = 'companies';
     try {
       return (sessionStorage.getItem('px-rec-tab') as RTab) || first;
     } catch {
@@ -58,7 +58,7 @@ export function Reclamation() {
         </div>
       ) : (
         <div className="bjp-tabs bjr-tabs" role="tablist">
-          {(['search', 'companies', 'livreurs'] as const).map((k) => (
+          {(['companies', 'livreurs', 'search'] as const).map((k) => (
             <button key={k} type="button" role="tab" aria-selected={tab === k} className={`tab${tab === k ? ' on' : ''}`} onClick={() => choose(k)}>
               {t(`suivi.rec.tabs.${k}`)}
               {k !== 'search' && <b className="bjr-n ltr">{(k === 'companies' ? comp : liv) || ''}</b>}

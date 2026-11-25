@@ -39,6 +39,7 @@
   },
   "help": {
     "enlivraison": "All parcels in active delivery, including alerts and treated alerts. The Alerts tab contains only parcels in alert.",
+    "enlivraisonStore": "Every parcel its company has taken and not delivered yet, alerts included. Alerts are handled in Suivi.",
     "enlivraisonAgency": "Parcels on the road with no problem. As soon as a parcel is flagged as an alert, it moves to « Alerts ».",
     "alertes": "Parcels flagged by the delivery company or the livreur (the statuses chosen in Preferences › Suivi alerts). Call the customer, then “Treat” or “Customer cancels”.",
     "alertes_new": "Alerts nobody has worked on yet: call the customer.",

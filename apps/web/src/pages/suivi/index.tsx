@@ -79,8 +79,10 @@ function GoTo({ href }: { href: string }) {
 }
 const AllSuiviPage = lazy(() => import('../boutiques/all').then((m) => ({ default: m.BoutiquesSuivi })));
 
-function SuiviOne({ sub }: PageProps) {
+function SuiviOne({ sub: asked0 }: PageProps) {
   const { t } = useTranslation();
+  // « alertes-encours » is « alertes_encours » (the Deploy page's « Essayer » links carry dashes, never « _ »)
+  const sub = asked0?.replace(/-/g, '_');
   const agency = useInAgency();
   const { has } = useSession();
   // « Messages » left Suivi (the owner, 25 Nov 2026): it is Pilot Automations › Messages; the old address opens it
@@ -128,11 +130,9 @@ function SuiviOne({ sub }: PageProps) {
             {tab === 'swap' && <SwappedList />}
           </>
         ) : !agency && tab === 'enlivraison' ? (
-          // the menu « En livraison »: one list of every parcel on the road, no Suivi tab over it (the owner, 25 Nov 2026)
-          <>
-            <Head tab={tab} />
-            <List key={tab} tab={tab} />
-          </>
+          // the menu « En livraison »: one list of every parcel on the road, no Suivi tab or counter over it (the owner,
+          // 25 Nov 2026); its title, « Actualiser » and one sentence are in the list's own head
+          <List key={tab} tab={tab} />
         ) : (
           <>
             <Head tab={tab} />
@@ -235,12 +235,10 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
   return null;
 }
 
-function Head({ tab }: { tab: ListTab }) {
+/** « Actualiser »: asks the delivery companies for their news (the demo simulates them). */
+function SyncButton() {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const agency = useInAgency();
-  const { has } = useSession();
-  const c = useRpc('suivi.counts', {}).data;
   const [busy, setBusy] = useState(false);
   const sync = async () => {
     setBusy(true);
@@ -257,6 +255,18 @@ function Head({ tab }: { tab: ListTab }) {
       setBusy(false);
     }
   };
+  return (
+    <button className="btn" onClick={sync} disabled={busy}>
+      <Icon name="refresh" /> {t('suivi.sync')}
+    </button>
+  );
+}
+
+function Head({ tab }: { tab: ListTab }) {
+  const { t } = useTranslation();
+  const agency = useInAgency();
+  const { has } = useSession();
+  const c = useRpc('suivi.counts', {}).data;
   const kpis: [ListTab, 'warn' | ''][] = [
     ['enlivraison', ''],
     ['alertes', c?.alertes ? 'warn' : ''],
@@ -269,11 +279,7 @@ function Head({ tab }: { tab: ListTab }) {
     <div className="card">
       <div className="card-head">
         <h2>{t('suivi.title')}</h2>
-        {!agency && has('suivi') && (
-          <button className="btn" onClick={sync} disabled={busy}>
-            <Icon name="refresh" /> {t('suivi.sync')}
-          </button>
-        )}
+        {!agency && has('suivi') && <SyncButton />}
       </div>
       <div className="kpis bjsv-kpis">
         {kpis.map(([k, tone]) => (
@@ -775,8 +781,10 @@ export function List({ tab, combined }: { tab: ListTab; combined?: CombinedSuivi
             {tab === 'bloques' ? t('suivi.stuck.next') : t('suivi.ph.next')} <Icon name="chevr" />
           </button>
         )}
+        {!agency && !combined && tab === 'enlivraison' && canFollow && <SyncButton />}
         {!phone && <ViewSwitch mode={mode} onChange={setMode} />}
       </div>
+      {!agency && !combined && tab === 'enlivraison' && <p className="muted small sv-help">{t('suivi.help.enlivraisonStore')}</p>}
       {combined?.bar}
       <SuiviFilters f={agencyFilters} set={setFilter} combined={!!combined} />
       {!agency && !combined && <DemoCourier rows={q.data?.rows ?? []} />}

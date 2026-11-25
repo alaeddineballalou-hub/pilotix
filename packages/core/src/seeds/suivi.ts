@@ -175,8 +175,13 @@ export async function seedSuiviWork(db: Db, users: Record<string, number>, now: 
       await call(id, at(26 * H), me, 'no_answer');
       await call(id, at(3 * H), me, 'busy');
     } else if (k === 2) {
+      // called back later today in the working hours (9:00–19:00), else at 14:00 the next working morning's day
+      const later = half(now + 2.5 * H);
+      const hourOf = (t: number) => new Date(t + H).getUTCHours();
+      const today0 = algiersDayStart(now);
+      const when = hourOf(later) >= 9 && hourOf(later) < 19 && later < today0 + DAY ? later : now < today0 + 9 * H ? today0 + 11 * H : today0 + DAY + 14 * H;
       await call(id, at(5 * H), me, 'no_answer');
-      await rappel(id, at(5 * H - 2 * M), me, half(now + 2.5 * H));
+      await rappel(id, at(5 * H - 2 * M), me, when);
     } else if (k === 3) {
       // its call-back time passed 35 minutes ago: back in « À rappeler », in red
       await call(id, at(3 * H), me, 'no_answer');
