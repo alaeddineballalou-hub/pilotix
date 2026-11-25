@@ -596,7 +596,7 @@
   },
   "robot": {
     "title": "Test robot",
-    "help": "Every 10 minutes it does the main work in the demo shop (lists, counters, home page numbers, a test order created then deleted) and opens the site and its server, like a real person. With no demo shop, it only reads a real shop (never a test order).",
+    "help": "Every 10 minutes it does the main work in a real shop, only reading (lists, counters, home page numbers, never a test order), and opens the site and its server, like a real person.",
     "run": "Run the tests",
     "running": "Running…",
     "done": "Tests done",

@@ -411,19 +411,17 @@ function demoReport(hidden: Record<string, 'solve' | 'ignore'> = {}): ServerDoct
       job('dellal-followups', 15 * 60_000, 'ok', 9),
       job('spy-scan', 60 * 60_000, 'ok', 31),
       job('meta-sync', 86_400_000, 'ok', 600),
-      job('demo-reset', 86_400_000, 'ok', 1100),
       job('turnstile-sync', 30 * 60_000, 'ok', 12),
     ],
     robot: {
       at: ago(4),
-      shop: 'demo',
+      shop: 'boutique',
       steps: [
         { name: 'site', label: 'Site', ok: true, ms: 182 },
         { name: 'api', label: 'API', ok: true, ms: 41 },
         { name: 'orders.list', label: 'Liste', ok: true, ms: 230 },
         { name: 'orders.counts', label: 'Compteurs', ok: true, ms: 95 },
         { name: 'stats.overview', label: 'Accueil', ok: true, ms: 6120 },
-        { name: 'orders.create', label: 'Commande', ok: true, ms: 410 },
       ],
     },
     turnstile: {

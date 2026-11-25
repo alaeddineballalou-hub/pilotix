@@ -47,7 +47,6 @@ import { runWatch } from './watchers';
  *    Pilotix (then every 5 minutes, 6 times at most), every 30 seconds
  *  - the bell: a callback whose time came is told to its agent, the depot its new orders to prepare, every minute
  *  - Couverture: the tariffs and bureaus of the companies with an API imported again, every night
- *  - the demo shop starts again from fresh demo data every night
  *  - Pilot AI: every night, the chats of the shops that share them (personal data removed) teach Dellal (one Message Batch)
  * A job whose feature is not in a shop's plan is skipped for that shop.
  */
@@ -242,14 +241,6 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
           void this.pilotNight();
           return { started: true };
         }
-        if (job.name === 'demo-reset') {
-          for (const s of await core.loadShops(this.core.t))
-            if (s.demo && !s.primary && s.status === 'active') {
-              await core.resetDemoShop(this.core.t, s.id).catch((e) => this.log.warn(`demo reset: ${e.message}`));
-              this.core.invalidate();
-            }
-          return null;
-        }
         // one run of a job at a time: a slow one (courier sync) never runs twice, and never holds the others up
         if (this.running.has(job.name)) return { skipped: 'still running' };
         this.running.add(job.name);
@@ -294,6 +285,13 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       for (const r of await this.queue.getRepeatableJobs()) if (r.name === 'courier-sync' && Number(r.every) !== 5 * 60_000) await this.queue.removeRepeatableByKey(r.key);
     } catch (e) {
       this.log.warn(`courier-sync: old timer not removed (${(e as Error).message})`);
+    }
+    // the demo shop's nightly refill is gone (25 Nov 2026: the demo lives only in the Pilotix artifact): Redis keeps its
+    // old repeat timer, removed here
+    try {
+      for (const r of await this.queue.getRepeatableJobs()) if (r.name === 'demo-reset') await this.queue.removeRepeatableByKey(r.key);
+    } catch (e) {
+      this.log.warn(`demo-reset: old timer not removed (${(e as Error).message})`);
     }
     await this.queue.add('courier-sync', {}, { repeat: { every: 5 * 60_000 }, jobId: 'courier-sync', removeOnComplete: 50, removeOnFail: 100 });
     await this.queue.add('meta-sync', {}, { repeat: { pattern: '30 4 * * *' }, jobId: 'meta-sync', removeOnComplete: 20, removeOnFail: 50 });
@@ -344,8 +342,6 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('offsite-backup', {}, { repeat: { every: 30 * 60_000 }, jobId: 'offsite-backup', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('fraud-reputation', {}, { repeat: { every: 30 * 60_000 }, jobId: 'fraud-reputation', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('partitions', {}, { repeat: { pattern: '0 3 1 * *' }, jobId: 'partitions', removeOnComplete: 10 });
-    // 03:40 UTC = 04:40 in Algeria: nobody is visiting the demo
-    await this.queue.add('demo-reset', {}, { repeat: { pattern: '40 3 * * *' }, jobId: 'demo-reset', removeOnComplete: 10, removeOnFail: 20 });
     // 02:30 in Algeria: Dellal learns from the day's chats while nobody is buying; the coach finds the lessons in the morning
     await this.queue.add('pilot-ai-night', {}, { repeat: { pattern: '30 2 * * *', tz: 'Africa/Algiers' }, jobId: 'pilot-ai-night', removeOnComplete: 20, removeOnFail: 50 });
     // every morning at 08:00 in Algeria (what the control room's settings say), whatever the server's time zone

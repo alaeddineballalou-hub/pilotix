@@ -109,6 +109,8 @@ export function auditText(t: TFunction, a: AuditRow): string {
       return t('platform.log.demoCreate');
     case 'demo.reset':
       return t('platform.log.demoReset');
+    case 'demo.removed':
+      return t('platform.log.demoRemoved');
     // Sociétés de livraison: test keys, a company removed / put back, « Changements API »
     case 'couriers.keys':
     case 'couriers.keysCleared':

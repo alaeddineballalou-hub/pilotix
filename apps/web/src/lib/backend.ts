@@ -216,10 +216,6 @@ export const publisherName = (d: LegalInfo, lang: string) => (lang.startsWith('a
 export const publicPros = () => authRequest<{ pros: import('@pilotix/shared').ProCard[] }>('/pro');
 export const publicPro = (code: string) => authRequest<import('@pilotix/shared').ProCard>(`/pro/${encodeURIComponent(code)}`);
 
-/** The server's demo shop (its button on the login page), when Pilotix turned it on. */
-export const serverDemo = () =>
-  authRequest<{ available: boolean; accounts: { key: string; name: string; role: string }[] }>('/auth/demo').catch(() => ({ available: false, accounts: [] as { key: string; name: string; role: string }[] }));
-
 /**
  * The address of the shop's public links (webhooks, landing pages, given to customers and other services):
  * <server>/api, plus /s/<shop> for every shop but the server owner's.
@@ -393,13 +389,6 @@ class RemoteBackend implements Backend {
     } catch {
       return false;
     }
-  }
-  /** Opens the server's demo shop as one of its accounts. */
-  async demo(key: string) {
-    const r = await this.req<{ token: string; session: Session }>('/auth/demo', { key });
-    this.keep(r.token);
-    this.connect();
-    return r.session;
   }
   async resume() {
     if (!this.token) return null;
@@ -646,28 +635,30 @@ class DemoBackend implements Backend {
 export const DEMO_AVAILABLE = import.meta.env.VITE_DEMO === '1';
 /** In the preview build (no server) the demo is the only backend. */
 export const DEMO_ONLY = import.meta.env.VITE_DEMO_ONLY === '1';
+/**
+ * The in-browser demo exists only in the demo builds: the Pilotix artifact in Claude (and GitHub Pages' preview). The
+ * live site (pilotix.online) carries none of it — no demo engine, no made-up data, no demo accounts (25 Nov 2026): every
+ * use of DemoBackend sits behind this constant, so the live build leaves it out.
+ */
+export const DEMO_BUILD = DEMO_ONLY || DEMO_AVAILABLE;
 
 const remote = new RemoteBackend();
 let demo: DemoBackend | null = null;
-export let backend: Backend = DEMO_ONLY || (DEMO_AVAILABLE && store.get('mode') === 'demo') ? (demo = new DemoBackend()) : remote;
+export let backend: Backend = DEMO_BUILD && (DEMO_ONLY || store.get('mode') === 'demo') ? (demo = new DemoBackend()) : remote;
 
 export function switchDemo(on: boolean) {
+  if (!DEMO_BUILD) return backend;
   store.set('mode', on ? 'demo' : null);
   backend = on ? (demo ??= new DemoBackend()) : remote;
   return backend;
 }
 /** The demo running in this browser: no server, so nothing leaves it (no notification rings). */
-export const inBrowserDemo = () => backend instanceof DemoBackend;
+export const inBrowserDemo = () => DEMO_BUILD && backend.kind === 'demo';
 export const onDemoProgress = (fn: (m: string) => void) => {
-  if (backend instanceof DemoBackend) backend.progress = fn;
+  if (DEMO_BUILD && backend instanceof DemoBackend) backend.progress = fn;
 };
 export const setOnUnauthorized = (fn: () => void) => (remote.onUnauthorized = fn);
 export const setOnLocked = (fn: () => void) => (remote.onLocked = fn);
-/** The server's demo shop, opened from the login page. */
-export function loginServerDemo(key: string) {
-  switchDemo(false);
-  return remote.demo(key);
-}
 /** The server (several stores, sign-up, « Contacter Pilotix »): its own calls. */
 export const server = remote;
 
@@ -688,15 +679,15 @@ const onServer = () => {
 const DEMO_IP = '203.0.113.10';
 const demoProof = (d: string) => ({ name: `_pilotix.${d}`, value: 'pilotix-demo-0000' });
 let demoDomain: DomainState = { domain: 'ma-boutique.dz', status: 'ok', ips: [DEMO_IP], proof: demoProof('ma-boutique.dz'), host: 'pilotix.online' };
-export const domainGet = (): Promise<DomainState> => (backend === remote ? remote.request<DomainState>('/shop/domain/get') : Promise.resolve({ ...demoDomain }));
+export const domainGet = (): Promise<DomainState> => (!DEMO_BUILD || backend === remote ? remote.request<DomainState>('/shop/domain/get') : Promise.resolve({ ...demoDomain }));
 export const domainSet = (domain: string | null): Promise<DomainState> => {
-  if (backend === remote) return remote.request<DomainState>('/shop/domain', { domain });
+  if (!DEMO_BUILD || backend === remote) return remote.request<DomainState>('/shop/domain', { domain });
   demoDomain = domain ? { ...demoDomain, domain, status: domain === demoDomain.domain ? demoDomain.status : 'pending', proof: demoProof(domain) } : { ...demoDomain, domain: null, status: 'none', proof: null };
   return Promise.resolve({ ...demoDomain });
 };
 /** « Vérifier »: the TXT proof, then the site opened in HTTPS through the domain (Cloudflare or not); `why` = what failed */
 export const domainCheck = () =>
-  backend === remote
+  !DEMO_BUILD || backend === remote
     ? remote.request<{ ok: boolean; found: string[]; proof?: boolean; https?: boolean; why?: string }>('/shop/domain/check')
     : Promise.resolve({ ok: demoDomain.status === 'ok', found: [] as string[], proof: demoDomain.status === 'ok', https: demoDomain.status === 'ok', why: undefined as string | undefined });
 
@@ -720,8 +711,8 @@ export function rpc<N extends ProcName>(name: N, input: In<N>, seller?: Seller |
 export const sendClientReport = (items: ClientReport[]) => onServer().request('/client-report', { items });
 
 // The browser demo only (data made up, in this page): its actions reachable from the console, to try a scenario fast
-// (e.g. change an order as the owner, then open the depot). Never on a real server.
-if (typeof window !== 'undefined')
+// (e.g. change an order as the owner, then open the depot). Never on a real server (not even in its build).
+if (DEMO_BUILD && typeof window !== 'undefined')
   (window as unknown as { pxDemo?: unknown }).pxDemo = (name: ProcName, input: unknown) => {
     if (backend.kind !== 'demo') throw new Error('demo only');
     return backend.call(name, input as never);

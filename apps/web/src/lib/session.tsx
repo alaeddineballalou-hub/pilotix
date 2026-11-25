@@ -1,7 +1,7 @@
 import type { Role, Session } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { backend, isPhone, isPick, LoginResult, loginServerDemo, PhoneInfo, PickInfo, rpc, server, setOnLocked, setOnUnauthorized } from './backend';
+import { backend, isPhone, isPick, LoginResult, PhoneInfo, PickInfo, rpc, server, setOnLocked, setOnUnauthorized } from './backend';
 import { allOnRaw } from './allMode';
 import { setShop } from './features';
 import { setRights } from './rights';
@@ -30,8 +30,6 @@ interface SessionState {
   enter: (s: Session) => void;
   /** another store of the same person, without the password again */
   switchStore: (shop: number) => Promise<void>;
-  /** opens the server's demo shop as one of its accounts */
-  loginDemo: (key: string) => Promise<void>;
   logout: () => void;
   /** Reload my profile (after I change my name or picture). */
   refresh: () => Promise<void>;
@@ -160,7 +158,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   };
   // the server, or the in-browser demo (its owner's three boutiques)
   const switchStore = async (shop: number) => enter(await backend.switchStore(shop));
-  const loginDemo = async (key: string) => enter(await loginServerDemo(key));
 
   const has = (...roles: Role[]) => !!session && (session.isAdmin || roles.some((r) => session.roles.includes(r)));
 
@@ -168,7 +165,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={{ session, ready, picker, phoneStep, afterLogin, login, loginSocial, pick, cancelPick: () => {
         setPicker(null);
         setPhoneStep(null);
-      }, showPicker: setPicker, enter, switchStore, loginDemo, logout, refresh, has, me: session?.profile.id ?? 0 }}>{children}</Ctx.Provider>
+      }, showPicker: setPicker, enter, switchStore, logout, refresh, has, me: session?.profile.id ?? 0 }}>{children}</Ctx.Provider>
   );
 }
 

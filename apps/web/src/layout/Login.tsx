@@ -1,7 +1,7 @@
 import { DEMO_ACCOUNTS, DEMO_PARTNER_ACCOUNTS, DEMO_PASSWORD } from '@pilotix/shared';
 import { FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BACKUP_DOOR, backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, forgotAvailable, onDemoProgress, requestPasswordReset, serverDemo, serverUrl, setServerUrl, signupInfo, switchDemo } from '../lib/backend';
+import { BACKUP_DOOR, backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, forgotAvailable, onDemoProgress, requestPasswordReset, serverUrl, setServerUrl, signupInfo, switchDemo } from '../lib/backend';
 import { useMcpAsked } from '../lib/mcpAsk';
 import { useSession } from '../lib/session';
 import { AuthShell, AuthTabs, AuthTitle, PasswordInput } from './AuthShell';
@@ -10,7 +10,7 @@ import { SocialButtons } from './SocialButtons';
 
 export function Login() {
   const { t } = useTranslation();
-  const { login, loginDemo } = useSession();
+  const { login } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [server, setServer] = useState(serverUrl());
@@ -23,8 +23,6 @@ export function Login() {
   const [forgot, setForgot] = useState(false);
   const [sent, setSent] = useState(false);
 
-  // the server's demo shop (Pilotix turned its button on): a few of its accounts
-  const [srvDemo, setSrvDemo] = useState<{ key: string; name: string; role: string }[]>([]);
   // « Créer ma boutique » when Pilotix opened sign-ups
   const [canSignup, setCanSignup] = useState(false);
   // an AI assistant sent the person here to be linked (layout/McpAuthorize): said above the form, no picture on phones
@@ -36,23 +34,10 @@ export function Login() {
     let on = true;
     forgotAvailable().then((ok) => on && setCanReset(ok));
     signupInfo().then((r) => on && setCanSignup(r.open));
-    serverDemo().then((d) => on && d.available && setSrvDemo(d.accounts.filter((a) => ['admin', 'vendeur', 'manager1', 'conf1', 'conf4', 'suivi', 'suivi2', 'depot', 'depot2', 'livreur', 'livreur3', 'marketer'].includes(a.key))));
     return () => {
       on = false;
     };
   }, []);
-
-  async function tryServerDemo(key: string) {
-    setError('');
-    setBusy(`demo:${key}`);
-    try {
-      await loginDemo(key);
-    } catch (err: any) {
-      setError(err?.message || t('common.error'));
-    } finally {
-      setBusy(null);
-    }
-  }
 
   async function sendReset(e: FormEvent) {
     e.preventDefault();
@@ -169,20 +154,7 @@ export function Login() {
             {t('auth.newQ')} <a href="#/inscription">{t('auth.startTrial')}</a>
           </p>
         )}
-        {!DEMO_ONLY && srvDemo.length > 0 && (
-          <div className="demo-accounts">
-            <p className="small">
-              <b>{t('login.demoServer')}</b> — {t('login.demoServerText')}
-            </p>
-            <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
-              {srvDemo.map((a) => (
-                <button key={a.key} type="button" className="btn small" disabled={!!busy} onClick={() => tryServerDemo(a.key)}>
-                  {busy === `demo:${a.key}` ? '…' : t(`roles.${a.role}`)}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* the in-browser demo: only in the demo builds (the Pilotix artifact), never on pilotix.online (25 Nov 2026) */}
         {(DEMO_AVAILABLE || DEMO_ONLY) && (
           <>
             <div className="pxa-sep">{t('auth.orDemo')}</div>

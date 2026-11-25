@@ -92,8 +92,9 @@ r = await get(`/domain-check?domain=direct.${new URL(SITE).hostname}`);
 check(r.status === 200, 'the backup door (direct.<site>, without Cloudflare) may get its HTTPS certificate', r.status);
 r = await get('/llms.txt');
 check(r.status === 200 && /^# /.test(r.text), 'llms.txt for AI assistants', r.text.slice(0, 80));
+// the demo lives only in the Pilotix artifact (25 Nov 2026): the live site has no demo door any more
 r = await get('/auth/demo');
-check(r.status === 200 && typeof r.data?.available === 'boolean', 'the demo button’s info', r.data);
+check(r.status === 404, 'no demo door on the live site (the demo is only in the Pilotix artifact)', r.status);
 
 // the website: this version's app
 r = await get(`${SITE}/`);

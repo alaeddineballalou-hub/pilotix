@@ -59,7 +59,7 @@ import {
   storeReferrals,
   takeDueReminders,
 } from '../platform';
-import { bootstrapPlatform, platformSettings, setPlatformSetting, syncPrimaryStore } from '../platform/shops';
+import { bootstrapPlatform, platformSettings, provisionShop, removeDemoShops, setPlatformSetting, syncPrimaryStore } from '../platform/shops';
 import { getSetting, setSetting } from '../settings';
 
 /** a new team member's phone (required, one per person) */
@@ -816,22 +816,34 @@ test('staff roles, plans, settings', async () => {
   assert.equal(d.counts.trial, 1);
 });
 
-test('the demo shop: fake data, reset to the start, its accounts not in the login index', async () => {
+test('the old demo shop goes away for good: its data, its logins, its button setting; the other stores keep theirs', async () => {
   const { t, p } = await server();
-  const r = await p('p.demo.create');
-  const s = (await loadShop(t, { id: r.id }))!;
-  assert.equal(s.demo, true);
-  assert.equal(s.neverExpires, true);
-  const n0 = (await t.shop(s.schema).query('SELECT count(*)::int AS n FROM orders'))[0].n;
-  assert.ok(n0 > 100);
-  assert.equal(await shopIdOfEmail(t, 'admin@demo.pilotix.dz'), null);
-  await t.shop(s.schema).query(`UPDATE orders SET customer_name = 'Visiteur' WHERE id IN (SELECT id FROM orders ORDER BY id LIMIT 50)`);
-  await p('p.demo.reset');
-  assert.equal((await t.shop(s.schema).query('SELECT count(*)::int AS n FROM orders'))[0].n, n0);
-  assert.equal((await t.shop(s.schema).query(`SELECT count(*)::int AS n FROM orders WHERE customer_name = 'Visiteur'`))[0].n, 0);
-  await assert.rejects(p('p.demo.create'), /existe déjà/);
-  const g = await p('p.demo.get');
-  assert.equal(g.shop.id, s.id);
+  // a « Boutique démo » made from the control room before 25 Nov 2026 (the demo lives only in the Pilotix artifact now)
+  const s = await provisionShop(t, { name: 'Boutique démo', slug: 'demo', planId: null, trialDays: 0, owner: { name: 'Démo', email: 'owner@demo-shop.dz' }, password: 'Demo-Owner-1' });
+  await t.platform.query('UPDATE platform.shops SET is_demo = true, never_expires = true WHERE id = $1', [s.id]);
+  const demo = t.shop(s.schema);
+  await demo.query(`INSERT INTO products (name, sku, price) VALUES ('Produit démo', 'DEMO1', 1000), ('Autre démo', 'DEMO2', 2000)`);
+  await setPlatformSetting(t, 'demo' as any, { public: true } as any);
+  const count = async (db: typeof demo, table: string) => (await db.query(`SELECT count(*)::int AS n FROM ${table}`))[0].n as number;
+  assert.equal(await count(demo, 'products'), 2);
+  assert.ok((await count(demo, 'profiles')) >= 1);
+  assert.equal(await shopIdOfEmail(t, 'owner@demo-shop.dz'), s.id);
+  const mainBefore = await count(t.shop('public'), 'products');
+
+  assert.equal(await removeDemoShops(t), 1);
+  const gone = (await loadShop(t, { id: s.id }))!;
+  assert.equal(gone.status, 'deleted');
+  assert.equal(gone.slug, `deleted-${s.id}`);
+  assert.equal(await count(t.shop(s.schema), 'products'), 0);
+  assert.equal(await count(t.shop(s.schema), 'profiles'), 0);
+  assert.equal(await shopIdOfEmail(t, 'owner@demo-shop.dz'), null);
+  assert.equal(await count(t.shop('public'), 'products'), mainBefore);
+  assert.ok((await t.platform.query(`SELECT 1 FROM platform.audit WHERE action = 'demo.removed' AND shop_id = $1`, [s.id])).length);
+  // at the next start there is nothing left to do
+  assert.equal(await removeDemoShops(t), 0);
+  // no demo setting, no demo page in the control room any more
+  assert.equal('demo' in (await platformSettings(t)), false);
+  for (const name of ['p.demo.get', 'p.demo.create', 'p.demo.reset']) await assert.rejects(p(name), /Action inconnue/);
 });
 
 test('sign-up without a store: only the account; the first store, added inside, keeps the phone and the referral', async () => {

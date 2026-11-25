@@ -27,7 +27,7 @@ import {
 import { APP_FILTER, Reflector, REQUEST } from '@nestjs/core';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import * as core from '@pilotix/core';
-import { DEMO_ACCOUNTS, DEMO_PASSWORD, maskPhone, normalizePhone, ProCard, Session } from '@pilotix/shared';
+import { maskPhone, normalizePhone, ProCard, Session } from '@pilotix/shared';
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { brotliCompressSync, constants as zlibConst, gzipSync } from 'node:zlib';
 import { z } from 'zod';
@@ -666,8 +666,9 @@ class ApiController {
     let acc: core.Account | null;
     try {
       acc = await core.checkAccountPassword(this.core.t, email, b.data.password);
-      // the demo accounts of shop #1 on old installs and test servers (no account of their own): the shop's own check,
-      // as before. Never on a live server: the demo password is public, and the demo button opens its own demo shop.
+      // the demo accounts of shop #1 on test servers (no account of their own: GitHub's checks, npm run seed:demo): the
+      // shop's own check, as before. Never on a live server: the demo password is public (the demo lives only in the
+      // Pilotix artifact, 25 Nov 2026).
       if (!acc && core.NO_ACCOUNT.test(email) && demoShortcutOn()) {
         const ref = await this.core.primary();
         const session = await core.login(ref.db, email, b.data.password);
@@ -995,34 +996,6 @@ class ApiController {
     const shop = intake(ref);
     const r: any = await this.core.call(shop, 'landing.llms', await this.core.systemSession(shop), { site: this.core.landingBase() });
     return sendText(req, res.status(200).header('Content-Type', 'text/plain; charset=utf-8').header('Cache-Control', 'public, max-age=3600'), r.text);
-  }
-
-  /** The demo shop's button on the login page: shown when Pilotix turned it on. */
-  @Public()
-  @Get('auth/demo')
-  async demoInfo() {
-    const ref = (await this.core.settings()).demo.public ? await this.demoShop() : null;
-    return { available: !!ref, accounts: ref ? DEMO_ACCOUNTS.map((a) => ({ key: a.key, name: a.name, role: a.roles[0] })) : [] };
-  }
-
-  /** Opens the demo shop as one of its accounts (fake data; nothing leaves the server). */
-  @Public()
-  @Post('auth/demo')
-  async demoLogin(@Body() body: any, @Req() req: { ip?: string }) {
-    const ipKey = `demo:${ipOf(req)}`;
-    checkLogin(ipKey, 30);
-    failedLogin(ipKey);
-    const acc = DEMO_ACCOUNTS.find((a) => a.key === String(body?.key ?? ''));
-    if (!acc) throw new core.AppError('bad_request', 'Compte démo inconnu');
-    const ref = (await this.core.settings()).demo.public ? await this.demoShop() : null;
-    if (!ref) throw new core.AppError('not_found', 'Démo indisponible');
-    const session = await core.login(ref.db, acc.email, DEMO_PASSWORD);
-    return { token: await this.signShop(ref, session.profile.id), session: await this.core.withShop(session, ref) };
-  }
-
-  private async demoShop(): Promise<ShopRef | null> {
-    const s = (await core.loadShops(this.core.t)).find((x) => x.demo && !x.primary && x.status === 'active');
-    return s ? this.core.shop({ id: s.id }) : null;
   }
 
   // ---------------------------------------------------------------- passwords: one account, every store

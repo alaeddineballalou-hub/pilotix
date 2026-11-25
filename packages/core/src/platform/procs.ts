@@ -1,7 +1,7 @@
 // The control room's actions (Pilotix staff only): shops, trials, payments, plans and their menus, staff, settings,
-// the journal, sign-ups, messages from stores and the demo shop. Same shape as the shops' actions (input checked, roles
+// the journal, sign-ups and messages from stores. Same shape as the shops' actions (input checked, roles
 // checked), own registry. Pilotix never sees what is inside a store: only its numbers (accounts, livreurs, orders).
-import { cleanSoon, DEMO_ACCOUNTS, FEATURE_KEYS, normalizeAccountPhone, passwordProblem } from '@pilotix/shared';
+import { cleanSoon, FEATURE_KEYS, normalizeAccountPhone, passwordProblem } from '@pilotix/shared';
 import bcrypt from 'bcryptjs';
 import { z, ZodTypeAny } from 'zod';
 import { Db, isoOrNull, num, numOrNull } from '../db';
@@ -28,15 +28,12 @@ import {
   mainShopOf,
   sellerShops,
   sellerUsage,
-  freeSlug,
   loadPlans,
   loadShop,
   loadShops,
-  makePassword,
   platformSettings,
   PlatformSettings,
   provisionShop,
-  resetDemoShop,
   setPlatformSetting,
   Shop,
   shopFeatures,
@@ -49,7 +46,6 @@ import {
   slugify,
   slugOk,
   NAME_RESERVED,
-  SYSTEM_PLAN,
   toPlan,
 } from './shops';
 import type { Tenancy } from './tenancy';
@@ -1171,7 +1167,6 @@ export const PLATFORM_REGISTRY = {
         })
         .optional(),
       notice: z.object({ text: z.string().max(400), tone: z.enum(['info', 'warn']), until: IsoDate.nullable() }).optional(),
-      demo: z.object({ public: z.boolean() }).optional(),
       signup: z.object({ open: z.boolean(), maxStores: z.number().int().min(1).max(100) }).optional(),
       reminders: z.object({ on: z.boolean(), daysBefore: z.number().int().min(1).max(30) }).optional(),
       referral: z.object({ on: z.boolean(), months: z.number().int().min(0).max(12) }).optional(),
@@ -1205,7 +1200,7 @@ export const PLATFORM_REGISTRY = {
         }
         i.payment = { ...i.payment, alert: cleanPayAlert({ numbers, template: a?.template ?? before.template, lang: a?.lang ?? before.lang }) };
       }
-      for (const k of ['trial', 'payment', 'notice', 'demo', 'signup', 'reminders', 'referral', 'security', 'company', 'legal', 'login', 'social', 'pro', 'soon', 'door'] as const) if (i[k]) await setPlatformSetting(ctx.t, k, i[k] as any);
+      for (const k of ['trial', 'payment', 'notice', 'signup', 'reminders', 'referral', 'security', 'company', 'legal', 'login', 'social', 'pro', 'soon', 'door'] as const) if (i[k]) await setPlatformSetting(ctx.t, k, i[k] as any);
       await audit(ctx, 'settings.save', null, { keys: Object.keys(i) });
       return platformSettings(ctx.t);
     },
@@ -1274,34 +1269,6 @@ export const PLATFORM_REGISTRY = {
         .map((x) => ({ id: x.id, name: x.name, bytes: bySchema.get(x.schema) ?? 0 }))
         .sort((a, b) => b.bytes - a.bytes),
     };
-  }),
-
-  // ---------------------------------------------------------------- the demo shop
-  'p.demo.get': pproc(ALL, z.object({}), async (ctx) => {
-    const set = await platformSettings(ctx.t);
-    const s = (await loadShops(ctx.t)).find((x) => x.demo && !x.primary && x.status !== 'archived') ?? null;
-    return {
-      shop: s ? { id: s.id, slug: s.slug, name: s.name, resetAt: s.resetAt, lastActiveAt: s.lastActiveAt, usage: await usage(ctx, s) } : null,
-      public: set.demo.public,
-      accounts: DEMO_ACCOUNTS.map((a) => ({ key: a.key, name: a.name, email: a.email, role: a.roles[0] })),
-    };
-  }),
-
-  'p.demo.create': pproc(MANAGERS, z.object({}), async (ctx) => {
-    if ((await loadShops(ctx.t)).some((x) => x.demo && !x.primary && x.status !== 'archived')) throw bad('La boutique démo existe déjà');
-    const plans = await loadPlans(ctx.t);
-    const plan = plans.find((p) => p.code === 'business') ?? plans.find((p) => p.code === SYSTEM_PLAN) ?? null;
-    const s = await provisionShop(ctx.t, { name: 'Boutique démo', slug: await freeSlug(ctx.t, 'demo'), planId: plan?.id ?? null, trialDays: 0, owner: { name: 'Démo', email: 'admin@demo.pilotix.dz' }, password: makePassword(), demo: true, createdBy: ctx.staff.id, now: ctx.now() });
-    await audit(ctx, 'demo.create', s.id, {});
-    return { id: s.id };
-  }),
-
-  'p.demo.reset': pproc(MANAGERS, z.object({}), async (ctx) => {
-    const s = (await loadShops(ctx.t)).find((x) => x.demo && !x.primary && x.status !== 'archived');
-    if (!s) throw notFound('Pas de boutique démo');
-    await resetDemoShop(ctx.t, s.id, ctx.now());
-    await audit(ctx, 'demo.reset', s.id, {});
-    return { ok: true };
   }),
 
   // ---------------------------------------------------------------- Pilot AI (Dellal's learning): settings, the coach, books

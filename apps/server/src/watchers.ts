@@ -79,8 +79,9 @@ const version = () =>
 
 // ---------------------------------------------------------------- the test robot
 /**
- * Where the robot works: the demo shop (reset every night), where it may also make and delete a test order; without
- * one, the first active store, where it only reads (it never writes in a real shop).
+ * Where the robot works: the first active store, where it only reads (it never writes in a real shop). An old demo shop
+ * (reset every night, where it also made and deleted a test order) no longer exists on any server since 25 Nov 2026:
+ * the demo lives only in the Pilotix artifact.
  */
 async function robotShop(
   c: CoreService,

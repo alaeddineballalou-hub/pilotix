@@ -30,6 +30,14 @@ async function main() {
     const applied = await core.migrateAll(t);
     const done = Object.entries(applied).filter(([, v]) => v.length);
     console.log(done.length ? done.map(([k, v]) => `${k}: ${v.join(', ')}`).join('\n') : 'Database is up to date.');
+    // the old « Boutique démo » goes away for good, with all its made-up data (25 Nov 2026: the demo lives only in the
+    // Pilotix artifact). Nothing to do once it is gone; a problem here never stops the server from starting.
+    try {
+      const gone = await core.removeDemoShops(t);
+      if (gone) console.log(`Demo shop removed (${gone}).`);
+    } catch (e) {
+      console.error(`Demo shop not removed: ${(e as Error).message}`);
+    }
   }
   await pool.end();
 }

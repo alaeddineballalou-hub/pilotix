@@ -2,7 +2,6 @@
 // several shops, each in its own PostgreSQL schema (see packages/core/src/platform); the public links below also exist
 // as /api/s/<shop>/… for every shop but the first (the old links without /s/… lead to shop #1).
 //   POST /api/auth/login            → { token, session } (the e-mail tells which shop)
-//   GET|POST /api/auth/demo         → the demo shop's button on the login page
 //   POST /api/platform/…            → the control room (Pilotix staff: shops, trials, payments, plans), see platform.ts
 //   POST /api/rpc/:name             → runs one core action for the logged-in user (role checks in the core)
 //   POST /api/hooks/orders/:channel → orders from a website / store (key in ?key= or x-webhook-key)

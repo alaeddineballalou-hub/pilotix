@@ -170,6 +170,8 @@ function useTryLink(ready: boolean): boolean {
   }, [link, ready]);
   return !!link;
 }
+/** pilotix.online has no demo, so no « Essayer » link to follow: the live build leaves this out (25 Nov 2026). */
+const useTryLinkHere: (ready: boolean) => boolean = DEMO_ONLY ? useTryLink : () => false;
 
 function App() {
   const { session, ready, picker, phoneStep } = useSession();
@@ -182,7 +184,7 @@ function App() {
   // the demo only: an « Essayer » link of the Deploy page logs in with its demo account and opens its page. The page
   // changes as a transition (useRoute), a moment after the login ends: until the address shown here is the page's, the
   // link is still on its way (else « #essayer-… » would be read as an unknown page and sent to the home page)
-  const onWay = useTryLink(ready);
+  const onWay = useTryLinkHere(ready);
   const trying = onWay || (DEMO_ONLY && !!readTryLink(`#${parts.join('/')}`));
   // an AI assistant (Claude, ChatGPT) sent the person here to be linked to their account (lib/mcpAsk): the « Autoriser »
   // page comes once they are logged in (the login page says why they are asked to sign in: McpLoginNote)

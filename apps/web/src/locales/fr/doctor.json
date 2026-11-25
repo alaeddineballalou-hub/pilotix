@@ -596,7 +596,7 @@
   },
   "robot": {
     "title": "Robot de test",
-    "help": "Toutes les 10 minutes, il fait le travail principal dans la boutique de démo (listes, compteurs, chiffres de l’Accueil, une commande test créée puis supprimée) et ouvre le site et son serveur, comme une vraie personne. Sans boutique de démo, il lit seulement une vraie boutique (jamais de commande test).",
+    "help": "Toutes les 10 minutes, il fait le travail principal dans une vraie boutique en lisant seulement (listes, compteurs, chiffres de l’Accueil, jamais de commande test) et ouvre le site et son serveur, comme une vraie personne.",
     "run": "Lancer les tests",
     "running": "Tests en cours…",
     "done": "Tests terminés",

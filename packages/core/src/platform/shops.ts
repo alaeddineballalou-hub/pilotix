@@ -1,13 +1,12 @@
-// Shops of a multi-shop server: reading them, their subscription state, creating one (its own schema), the demo shop,
-// and the first start (the server owner's shop becomes shop #1, its first admin the platform owner).
+// Shops of a multi-shop server: reading them, their subscription state, creating one (its own schema), removing the old
+// demo shop (25 Nov 2026: the demo lives only in the Pilotix artifact, never on a server), and the first start (the server owner's shop becomes shop #1, its first admin the platform owner).
 import { AgencyPrices, APP_PAGES, cleanSoon, CODE_PREFIX, effectiveFeatures, featureOn, isFeatureKey, isPartnerKind, PartnerKind, pricesOfKind, PUBLIC_ROOTS, ShopInfo, ShopKind, ShopState } from '@pilotix/shared';
 import { Db, isoOrNull, migrate, num, numOrNull, TENANTIZE_SQL } from '../db';
 import type { ShopCtx } from '../rpc';
 import { sealPlatformSetting } from '../secretbox';
 import { landingSettings, landingStore, STORE_RESERVED } from '../modules/landingquery';
 import { hashPassword } from '../modules/users';
-import { seedBase, seedDemo } from '../seed';
-import { seedPilotDemo } from '../seeds/pilot';
+import { seedBase } from '../seed';
 import { DEFAULT_SETTINGS, setSetting } from '../settings';
 import { backfillAccounts, ensureAccount, ownedStores } from './accounts';
 import { ensureLoginTrigger, migratePlatform } from './schema';
@@ -240,8 +239,6 @@ export interface PlatformSettings {
   payment: { text: string; phone: string; whatsapp: string; alert: PayAlertSettings };
   /** a message shown to every shop until `until` (empty = none) */
   notice: { text: string; tone: 'info' | 'warn'; until: string | null };
-  /** the demo shop: its button on the login page */
-  demo: { public: boolean };
   /** « Créer ma boutique » on the login page; stores one person may own (each account can have its own number) */
   signup: { open: boolean; maxStores: number };
   /** e-mails to the store's owner before the trial / the paid period ends, and when the store locks */
@@ -298,7 +295,6 @@ export const PLATFORM_DEFAULTS: PlatformSettings = {
   trial: { days: 14, graceDays: 3, planCode: 'pro' },
   payment: { text: '', phone: '', whatsapp: '', alert: PAY_ALERT_DEFAULTS },
   notice: { text: '', tone: 'info', until: null },
-  demo: { public: false },
   signup: { open: true, maxStores: 3 },
   reminders: { on: true, daysBefore: 3 },
   referral: { on: true, months: 1 },
@@ -559,7 +555,6 @@ export interface NewShop {
   verified?: boolean;
   city?: string | null;
   notes?: string;
-  demo?: boolean;
   createdBy?: number | null;
   /** made by its owner from the sign-up page */
   selfSignup?: boolean;
@@ -599,8 +594,8 @@ export async function freePublicCode(t: Tenancy, kind: ShopKind): Promise<string
 
 /**
  * A new shop: its row, its own schema with every table, its owner (an account: new, or the one this e-mail already has)
- * as first administrator and its default depot (the demo shop: the demo data instead). Undone completely if any step
- * fails.
+ * as first administrator and its default depot. Undone completely if any step fails. Never a demo shop: the demo lives
+ * only in the Pilotix artifact (in the browser).
  */
 export async function provisionShop(t: Tenancy, n: NewShop): Promise<Shop> {
   const email = n.owner.email.trim().toLowerCase();
@@ -617,7 +612,7 @@ export async function provisionShop(t: Tenancy, n: NewShop): Promise<Shop> {
       `WITH n AS (SELECT nextval(pg_get_serial_sequence('platform.shops', 'id'))::int AS id)
        INSERT INTO platform.shops (id, slug, name, schema_name, plan_id, trial_ends_at, never_expires, is_demo, owner_name, owner_email, owner_phone, city, notes, created_by, self_signup, referred_by, signup_ip, kind)
        SELECT n.id, $1, $2, 'shop_' || n.id, $3, $4, $5 OR $15 <> 'store', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15 FROM n RETURNING id, schema_name`,
-      [slug, n.name.trim(), partner ? null : n.planId, partner ? null : trialEnds, !!n.demo, n.owner.name.trim(), email, n.owner.phone?.trim() || null, n.city?.trim() || null, n.notes ?? '', n.createdBy ?? null, !!n.selfSignup, n.referredBy ?? null, n.signupIp ?? null, kind],
+      [slug, n.name.trim(), partner ? null : n.planId, partner ? null : trialEnds, false, n.owner.name.trim(), email, n.owner.phone?.trim() || null, n.city?.trim() || null, n.notes ?? '', n.createdBy ?? null, !!n.selfSignup, n.referredBy ?? null, n.signupIp ?? null, kind],
     )
   )[0];
   const id = num(row.id);
@@ -627,38 +622,28 @@ export async function provisionShop(t: Tenancy, n: NewShop): Promise<Shop> {
     if (!(await isShared(t))) await t.exec('platform', `CREATE SCHEMA ${schema}`);
     await migrateShop(t, schema);
     const db = t.shop(schema);
-    if (n.demo) await fillDemo(db, n.name.trim(), now);
-    else {
-      // the owner's account first: an e-mail already known keeps its own password
-      const hash = n.passwordHash !== undefined ? n.passwordHash : n.password ? await hashPassword(n.password) : null;
-      // a password chosen by the person who proved the e-mail (a sign-up) is their own
-      const { account } = await ensureAccount(t, { email, name: n.owner.name, language: n.owner.language, passwordHash: hash, verified: n.verified, passwordBy: n.verified && hash ? 'self' : null });
-      await seedBase(db, { email, password: `${makePassword()}-${makePassword()}`, name: n.owner.name.trim() || undefined });
-      const own = (await t.platform.query('SELECT password_hash FROM platform.accounts WHERE id = $1', [account.id]))[0]?.password_hash as string | null;
-      if (own) await db.query('UPDATE profiles SET password_hash = $2 WHERE email = $1', [email, own]);
-      if (n.owner.language) await db.query('UPDATE profiles SET language = $2 WHERE email = $1', [email, n.owner.language]);
-      await setSetting(db, 'shop', { ...DEFAULT_SETTINGS.shop, name: n.name.trim() });
-      await t.platform.query('UPDATE platform.shops SET owner_account_id = $2, referral_code = $3, public_code = $4 WHERE id = $1', [
-        id,
-        account.id,
-        partner ? null : await freeReferralCode(t),
-        await freePublicCode(t, kind),
-      ]);
-    }
+    // the owner's account first: an e-mail already known keeps its own password
+    const hash = n.passwordHash !== undefined ? n.passwordHash : n.password ? await hashPassword(n.password) : null;
+    // a password chosen by the person who proved the e-mail (a sign-up) is their own
+    const { account } = await ensureAccount(t, { email, name: n.owner.name, language: n.owner.language, passwordHash: hash, verified: n.verified, passwordBy: n.verified && hash ? 'self' : null });
+    await seedBase(db, { email, password: `${makePassword()}-${makePassword()}`, name: n.owner.name.trim() || undefined });
+    const own = (await t.platform.query('SELECT password_hash FROM platform.accounts WHERE id = $1', [account.id]))[0]?.password_hash as string | null;
+    if (own) await db.query('UPDATE profiles SET password_hash = $2 WHERE email = $1', [email, own]);
+    if (n.owner.language) await db.query('UPDATE profiles SET language = $2 WHERE email = $1', [email, n.owner.language]);
+    await setSetting(db, 'shop', { ...DEFAULT_SETTINGS.shop, name: n.name.trim() });
+    await t.platform.query('UPDATE platform.shops SET owner_account_id = $2, referral_code = $3, public_code = $4 WHERE id = $1', [
+      id,
+      account.id,
+      partner ? null : await freeReferralCode(t),
+      await freePublicCode(t, kind),
+    ]);
     await setShopStore(db, slug);
-    if (n.demo) await t.platform.query('UPDATE platform.shops SET reset_at = now() WHERE id = $1', [id]);
   } catch (e) {
     await dropShopData(t, id, schema).catch(() => {});
     await t.platform.query('DELETE FROM platform.shops WHERE id = $1', [id]).catch(() => {});
     throw e;
   }
   return (await loadShop(t, { id }))!;
-}
-
-async function fillDemo(db: Db, name: string, now: number) {
-  await seedDemo(db, { orders: 2400, now, expanded: true });
-  await seedPilotDemo(db);
-  await setSetting(db, 'shop', { ...DEFAULT_SETTINGS.shop, name });
 }
 
 /**
@@ -688,16 +673,31 @@ export async function dropShopData(t: Tenancy, id: number, schema: string) {
   await t.exec('platform', `DROP SCHEMA IF EXISTS ${schema} CASCADE`);
 }
 
-/** The demo shop starts again from fresh demo data (every change made by visitors is gone). */
-export async function resetDemoShop(t: Tenancy, id: number, now = Date.now()): Promise<void> {
-  const s = await loadShop(t, { id });
-  if (!s || !s.demo || s.primary) throw new Error('Not a demo shop');
-  await dropShopData(t, s.id, s.schema);
-  if (!(await isShared(t))) await t.exec('platform', `CREATE SCHEMA ${s.schema}`);
-  await migrateShop(t, s.schema);
-  await fillDemo(t.shop(s.schema), s.name, now);
-  await setShopStore(t.shop(s.schema), s.slug);
-  await t.platform.query('UPDATE platform.shops SET reset_at = now() WHERE id = $1', [s.id]);
+/**
+ * The old demo shop of a server (« Boutique démo », made from the control room until 25 Nov 2026) goes away for good:
+ * its data (orders, people, products…), its logins and its links, as a store deleted by its owner; its row stays,
+ * marked deleted, for the journal. The demo lives only in the Pilotix artifact now (in the browser, never on a server).
+ * Safe to call at every start: once it is gone there is nothing to do. Returns how many were removed.
+ */
+export async function removeDemoShops(t: Tenancy): Promise<number> {
+  const rows = await t.platform.query<{ id: unknown; schema_name: string; slug: string; name: string }>(
+    `SELECT id, schema_name, slug, name FROM platform.shops WHERE is_demo AND NOT primary_shop AND status <> 'deleted' ORDER BY id`,
+  );
+  for (const r of rows) {
+    const id = num(r.id);
+    await dropShopData(t, id, r.schema_name);
+    await t.platform.query(
+      `UPDATE platform.shops SET status = 'deleted', deleted_at = now(), slug = 'deleted-' || id, referral_code = NULL, status_reason = 'Boutique démo retirée : la démo vit seulement dans l’artifact Pilotix' WHERE id = $1`,
+      [id],
+    );
+    // its old link names are free again (no old address leads to it)
+    await t.platform.query('DELETE FROM platform.shop_old_slugs WHERE shop_id = $1', [id]);
+    await t.platform.query(`INSERT INTO platform.audit (staff_id, staff_name, shop_id, action, details) VALUES (NULL, 'Pilotix', $1, 'demo.removed', $2)`, [
+      id,
+      JSON.stringify({ name: r.name, slug: r.slug }),
+    ]);
+  }
+  return rows.length;
 }
 
 /**

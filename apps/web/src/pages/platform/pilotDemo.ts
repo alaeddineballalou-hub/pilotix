@@ -3,6 +3,7 @@
 import type { UseQueryOptions } from '@tanstack/react-query';
 import { createContext, useContext, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { DEMO_ONLY } from '../../lib/backend';
 import { PIn, PName, POut, prpc, usePAction, usePRpc } from '../../lib/platform';
 import { toast } from '../../ui/toast';
 
@@ -13,7 +14,9 @@ type Q<N extends PName> = { data: POut<N> | undefined; isLoading: boolean; isFet
 
 /** usePRpc, or the example in the preview */
 export function usePilotRpc<N extends PName>(name: N, input: PIn<N>, opts: Partial<UseQueryOptions<POut<N>, Error>> = {}): Q<N> {
-  const demo = useContext(PilotDemo);
+  const here = useContext(PilotDemo);
+  // the example exists only in the demo build (the Pilotix artifact): the live site never carries it
+  const demo = DEMO_ONLY && here;
   const q = usePRpc(name, input, { ...opts, enabled: !demo && (opts.enabled ?? true) });
   const key = JSON.stringify(input ?? {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -23,7 +26,9 @@ export function usePilotRpc<N extends PName>(name: N, input: PIn<N>, opts: Parti
 
 /** usePAction, or « nothing is saved » in the preview */
 export function usePilotAction<N extends PName>(name: N, opts: Parameters<typeof usePAction<N>>[1] = {}) {
-  const demo = useContext(PilotDemo);
+  const here = useContext(PilotDemo);
+  // the example exists only in the demo build (the Pilotix artifact): the live site never carries it
+  const demo = DEMO_ONLY && here;
   const { t } = useTranslation();
   const m = usePAction(name, opts);
   return demo ? ({ ...m, mutate: () => toast(t('platform.pilot.demo.noSave'), 'info'), isPending: false } as typeof m) : m;
@@ -31,7 +36,9 @@ export function usePilotAction<N extends PName>(name: N, opts: Parameters<typeof
 
 /** one call (the instruction book's download), or the example */
 export function usePilotCall() {
-  const demo = useContext(PilotDemo);
+  const here = useContext(PilotDemo);
+  // the example exists only in the demo build (the Pilotix artifact): the live site never carries it
+  const demo = DEMO_ONLY && here;
   return <N extends PName>(name: N, input: PIn<N>): Promise<POut<N>> => (demo ? Promise.resolve(demoAnswer(name, input) as POut<N>) : prpc(name, input));
 }
 
@@ -55,7 +62,8 @@ function noise(...k: (string | number)[]) {
   return (h >>> 0) / 4294967296;
 }
 
-const SHOPS = [
+// (pure: the live build leaves the example out when nothing uses it)
+const SHOPS = /* @__PURE__ */ [
   { id: 1, name: 'Boutique Alaeddine', slug: 'boutique', base: 46, lift: 1.06, products: [['Montre Atlas', 0.31], ['Sac Lina', 0.22], ['Parfum Yasmine', 0.18], ['Ensemble Sahara', 0.16], ['Lunettes Oasis', 0.13]] as [string, number][] },
   { id: 7, name: 'Bijoux Oran', slug: 'bijoux-oran', base: 27, lift: 0.94, products: [['Bague Cœur', 0.41], ['Collier Perle', 0.34], ['Bracelet Fatima', 0.25]] as [string, number][] },
   { id: 12, name: 'Maison Sétif', slug: 'maison-setif', base: 14, lift: 0.88, products: [['Couette Sétif', 0.46], ['Rideaux Andalous', 0.31], ['Tapis Hodna', 0.23]] as [string, number][] },
@@ -715,7 +723,7 @@ function vocabTry(text: string) {
 }
 
 /** Pilotix's own lessons, as the server offers them (pilotexamdata.ts) */
-const PILOTIX_DEMO = [
+const PILOTIX_DEMO = /* @__PURE__ */ [
   ['closing', "Keep the chat in order: answer the customer's question first, add one useful benefit, then ask one single question to move forward. Never skip a step and never ask several questions at once.", 'Garder la conversation en ordre : répondre d’abord à sa question, un seul avantage utile, puis une seule question pour avancer. Ne jamais sauter une étape ni poser plusieurs questions à la fois.'],
   ['product', 'When the customer asks for a photo or another colour, send the real photos with the photo tool instead of talking about them, then ask which colour they like.', 'Le client demande une photo ou une autre couleur : envoyer les vraies photos avec l’outil des photos plutôt que d’en parler, puis demander quelle couleur lui plaît.'],
   ['product', 'When the customer sends a photo of a product, first name the product it shows; when you are unsure, offer the closest products and ask which one they mean.', 'Le client envoie la photo d’un produit : nommer d’abord le produit qu’elle montre ; si ce n’est pas sûr, proposer les produits les plus proches et demander lequel.'],

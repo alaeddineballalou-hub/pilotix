@@ -4,12 +4,14 @@
 import type { SpyAd } from '@pilotix/core';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { DEMO_BUILD } from '../../lib/backend';
 import { adUrl } from '../../lib/spyExtension';
 import { Icon } from '../../ui/kit';
 import { Creative } from './spyShared';
 
-/** The demo's own videos (demo://spy-video/<product>): a separate file, loaded only when one plays. */
+/** The demo's own videos (demo://spy-video/<product>): a separate file, loaded only when one plays (demo builds only). */
 async function demoVideo(src: string): Promise<string | null> {
+  if (!DEMO_BUILD) return null;
   const k = /^demo:\/\/spy-video\/([a-z]+)$/.exec(src)?.[1];
   if (!k) return null;
   const m = await import('./spyDemoVideos');

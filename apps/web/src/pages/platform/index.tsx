@@ -15,7 +15,6 @@ import { can } from './bits';
 import { Agencies } from './Agencies';
 import { CouriersPage } from './Couriers';
 import { Dashboard } from './Dashboard';
-import { Demo } from './Demo';
 import { DoctorPage } from './Doctor';
 import { HealthPage } from './Health';
 import { Journal } from './Journal';
@@ -50,7 +49,6 @@ const SECTIONS: Section[] = [
   { id: 'payments', icon: 'coins', roles: ['owner', 'manager'] },
   { id: 'plans', icon: 'layers' },
   { id: 'credits', icon: 'zap', roles: ['owner', 'manager'] },
-  { id: 'demo', icon: 'sparkles' },
   { id: 'health', icon: 'archive', roles: ['owner', 'manager'] },
   { id: 'staff', icon: 'users', roles: ['owner'] },
   { id: 'journal', icon: 'history', roles: ['owner', 'manager'] },
@@ -222,7 +220,6 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
   else if (cur === 'health') page = <HealthPage owner={staff.role === 'owner'} />;
   else if (cur === 'plans') page = <Plans staff={staff} />;
   else if (cur === 'credits') page = <CreditsPage staff={staff} />;
-  else if (cur === 'demo') page = <Demo staff={staff} />;
   else if (cur === 'staff') page = <StaffPage staff={staff} />;
   else if (cur === 'journal') page = <Journal />;
   else if (cur === 'settings') page = <Settings staff={staff} />;

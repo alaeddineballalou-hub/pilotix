@@ -23,8 +23,6 @@
   "resetShort": "The password must have at least 8 characters",
   "resetMismatch": "The two passwords are not the same",
   "resetDone": "Done! Your password is changed. Log in with the new one.",
-  "demoServer": "Try the demo",
-  "demoServerText": "a sample shop with made-up data. Pick a role:",
   "noAccount": "No account yet?",
   "createStore": "Create my store",
   "terms": "Terms of use and privacy",

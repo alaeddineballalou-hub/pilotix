@@ -1,6 +1,7 @@
 // The platform's settings: free trial and grace days, « Bientôt » (features closed for now), sign-ups (open, stores per person), reminders e-mailed before the
 // end, the referral reward, the control room's two-step login, the automatic backup door, how shops pay you (and the
-// receipts' header), a message to every shop, the terms of use and privacy page, the demo button.
+// receipts' header), a message to every shop, the terms of use and privacy page. (No demo button any more: the demo lives
+// only in the Pilotix artifact, 25 Nov 2026.)
 import type { ShopInfo } from '@pilotix/shared';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -154,14 +155,6 @@ export function Settings({ staff }: { staff: Staff }) {
               <input disabled={!owner} dir="ltr" maxLength={200} value={f.social?.googleClientId ?? ''} onChange={(e) => setF({ ...f, social: { googleClientId: e.target.value.trim(), facebookAppId: '' } })} placeholder="1234567890-abc.apps.googleusercontent.com" />
             </Field>
           </div>
-        </Card>
-        <Card title={t('platform.set.demoTitle')} help={t('platform.set.demoHelp')}>
-          <label className="check">
-            <input disabled={!owner} type="checkbox" checked={f.demo.public} onChange={(e) => setF({ ...f, demo: { public: e.target.checked } })} /> {t('platform.set.demoPublic')}
-          </label>
-          <p className="small muted">
-            <a href="#/platform/demo">{t('platform.set.demoLink')}</a>
-          </p>
         </Card>
       </div>
       <Card title={t('platform.set.payTitle')} help={t('platform.set.payHelp')}>

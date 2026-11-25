@@ -40,7 +40,6 @@ export const JOB_EVERY: Record<string, number> = {
   'spy-scan': H,
   'spy-videos': 30 * MIN,
   'meta-sync': D,
-  'demo-reset': D,
   'platform-reminders': D,
   'courier-watch': D,
   'turnstile-sync': 30 * MIN,
