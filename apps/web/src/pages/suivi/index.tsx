@@ -42,8 +42,10 @@ import { useMenuCounts } from '../../layout/Shell';
 import { Feed } from '../notify';
 import { AssignSwitch, type Assign } from '../../ui/AssignSwitch';
 import { DoneScreen } from '../orders';
+import { AlertPanel, ClairCards, ClairCounters, ClairTable, HistorySheet, isClairTab, RappelSheet, StatusMenu, type ClairHandlers, type ClairTab, type ClairX, type StatusKey } from './Clair';
+import { FaultSheet } from '../faults/FaultSheet';
 
-const LIST_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'traites', 'bloques', 'livres', 'annules', 'swap'] as const;
+const LIST_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'resolus', 'traites', 'bloques', 'livres', 'annules', 'swap'] as const;
 /** the alert lists: all of them, the new ones (nobody acted yet), the ones in progress */
 /** in a confirmation agency's space (its agents, its chief) */
 const useInAgency = () => {
@@ -51,6 +53,8 @@ const useInAgency = () => {
   return s?.shop?.kind === 'agency' || !!s?.profile.agencyId;
 };
 const isAlertTab = (tab: string) => tab === 'alertes' || tab === 'alertes_new' || tab === 'alertes_encours';
+/** the alert bar's lists (Suivi · Clair): Nouvelles alertes · En cours · Résolu · Swap · Réclamation */
+const inAlertBar = (tab: string) => isAlertTab(tab) || ['resolus', 'reclamation', 'annules', 'swap'].includes(tab);
 type ListTab = (typeof LIST_TABS)[number];
 type Sub = ListTab | 'reclamation' | 'messages';
 /** the tabs that show orders (« Messages » shows the journal) */
@@ -58,7 +62,7 @@ type ListSub = Exclude<Sub, 'messages'>;
 // The bar is drawn by hand (Alertes and its parts, an agency's steps), but its tabs are the menu's (MENU_TABS.suivi,
 // packages/shared/src/menu.ts, shared with Utilisateurs › Rôles): a tab added on one side only stops the build here.
 type MenuSuivi = (typeof MENU_TABS.suivi)[number];
-const sameTabs: [Exclude<MenuSuivi, Sub | 'reglages'>, Exclude<Sub, MenuSuivi | 'alertes_new' | 'alertes_encours'>] extends [never, never] ? true : false = true;
+const sameTabs: [Exclude<MenuSuivi, Sub | 'reglages'>, Exclude<Sub, MenuSuivi | 'alertes_new' | 'alertes_encours' | 'resolus'>] extends [never, never] ? true : false = true;
 void sameTabs;
 
 /** « Suivi »: this boutique's, or every boutique's with « Toutes les boutiques ». */
@@ -97,7 +101,9 @@ function SuiviOne({ sub }: PageProps) {
   const tabs: readonly string[] = (!has('suivi') && !has('confirmation') ? LIST_TABS.filter((k) => k !== 'swap') : [...LIST_TABS, 'reclamation']).filter((k) => tabOn('suivi', k));
   const asked: ListSub = tabs.includes(sub ?? '') ? (sub as ListSub) : 'enlivraison';
   // an agency's confirmation agent (no suivi): En livraison, Livré, Annulé — to watch its orders move (no alert, claim, swap)
-  const tab: ListSub = agency && !has('suivi') && !['enlivraison', 'livres', 'annules', 'alertes', 'alertes_new', 'alertes_encours', 'swap', 'reclamation'].includes(asked) ? 'enlivraison' : asked;
+  const tab0: ListSub = agency && !has('suivi') && !['enlivraison', 'livres', 'annules', 'alertes', 'alertes_new', 'alertes_encours', 'resolus', 'swap', 'reclamation'].includes(asked) ? 'enlivraison' : asked;
+  // « Alertes » opens « Nouvelles alertes » (Suivi · Clair: the owner's design 1, 25 Nov 2026)
+  const tab: ListSub = tab0 === 'alertes' ? 'alertes_new' : tab0;
   return (
     <>
       <SuiviBar tab={tab} />
@@ -108,11 +114,17 @@ function SuiviOne({ sub }: PageProps) {
         // back with its « Swap »; each one sees his own orders
         <DoneScreen sub="annulees" start="back" />
       ) : (
-        <>
-          <Head tab={tab} />
-          <List key={tab} tab={tab} />
-          {tab === 'swap' && <SwappedList />}
-        </>
+        isClairTab(tab) ? (
+          <>
+            <ClairList key={tab} tab={tab} />
+            {tab === 'swap' && <SwappedList />}
+          </>
+        ) : (
+          <>
+            <Head tab={tab} />
+            <List key={tab} tab={tab} />
+          </>
+        )
       )}
     </>
   );
@@ -155,17 +167,17 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
     el.scrollBy({ left: b.left + b.width / 2 - (r.left + (right - r.left) / 2) });
     // again once the counts are in: they widen the steps
   }, [tab, c, toSend]);
-  const active = (k: Sub) => !cfgOn && (tab === k || (k === 'alertes' && ['alertes_new', 'alertes_encours', 'reclamation', 'annules', 'swap'].includes(tab)));
+  const active = (k: Sub) => !cfgOn && (tab === k || (k === 'alertes' && ['alertes_new', 'alertes_encours', 'resolus', 'reclamation', 'annules', 'swap'].includes(tab)));
   // (a tab taken from the role in Utilisateurs › Rôles is not drawn)
-  const item = (k: Sub, count?: number, x = false) => !tabOn('suivi', k) ? null : (
+  const item = (k: Sub, count?: number, x = false, label?: string) => !tabOn('suivi', k) ? null : (
     <a className={`bjm-p ${active(k) ? 'on' : ''} ${x ? 'x' : ''}`} href={`#/suivi/${k}`} data-k={k} aria-current={tab === k ? 'page' : active(k) ? 'location' : undefined}>
-      <span className="bjm-l">{t(agency && k === 'traites' ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`)}</span>
+      <span className="bjm-l">{label ?? t(agency && k === 'traites' ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`)}</span>
       {count !== undefined && <b className="bjm-n ltr">{count}</b>}
     </a>
   );
   // a confirmation agency: the tabs of the step chosen in its menu (En livraison · Alertes · Livré · Annulé)
   if (agency) {
-    const step = ['alertes', 'alertes_new', 'alertes_encours', 'traites', 'reclamation'].includes(tab) ? 'alert' : tab === 'bloques' || tab === 'enlivraison' ? 'road' : tab;
+    const step = ['alertes', 'alertes_new', 'alertes_encours', 'resolus', 'traites', 'reclamation'].includes(tab) ? 'alert' : tab === 'bloques' || tab === 'enlivraison' ? 'road' : tab;
     return (
       <nav ref={bar} className="bjm-bar flow" aria-label="Étapes" data-g="suivi">
         {step === 'alert' ? (
@@ -197,7 +209,7 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
       </nav>
     );
   }
-  const alerts = isAlertTab(tab) || ['traites', 'reclamation', 'annules', 'swap'].includes(tab);
+  const alerts = inAlertBar(tab);
   return (
     <>
     <nav ref={bar} className="bjm-bar flow" aria-label="Étapes" data-g="suivi">
@@ -221,12 +233,15 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
         </a>
       )}
     </nav>
+    {/* Suivi · Clair: Nouvelles alertes · En cours · Résolu (filled when the company delivers) · Swap · Réclamation */}
     {alerts && !cfgOn && <nav className="bjm-bar flow" aria-label={t('suivi.tabs.alertes')} data-g="suivi-alertes">
-      {item('alertes_new', c?.alertes_new ?? 0)}
-      {item('alertes_encours', c?.alertes_encours ?? 0)}
-      {(has('suivi') || has('confirmation')) && item('reclamation', c?.claims, true)}
+      {item('alertes_new', c?.alertes_new ?? 0, false, t('suivi.clair.tab.alertes_new'))}
+      {item('alertes_encours', c?.alertes_encours ?? 0, false, t('suivi.clair.tab.alertes_encours'))}
+      {item('resolus', c?.resolus ?? 0, false, t('suivi.clair.tab.resolus'))}
+      {(has('suivi') || has('confirmation')) && item('swap', c?.swap ?? 0, false, t('suivi.clair.tab.swap'))}
+      {(has('suivi') || has('confirmation')) && item('reclamation', c?.claims, true, t('suivi.clair.tab.reclamation'))}
+      <span className="bjm-sep" aria-hidden="true" />
       {item('annules', c?.annules ?? 0)}
-      {(has('suivi') || has('confirmation')) && (tab === 'annules' || tab === 'swap') && item('swap', c?.swap ?? 0, true)}
     </nav>}
     </>
   );
@@ -807,6 +822,228 @@ export function List({ tab, combined }: { tab: ListTab; combined?: CombinedSuivi
       {dlg?.kind === 'swap' && <ParcelScope order={dlg.o}><SwapModal o={dlg.o} onClose={() => setDlg(null)} onDone={(data) => setDlg({ kind: 'sheet', data: { ...data, fresh: true }, seller: dlg.o.seller })} /></ParcelScope>}
       {dlg?.kind === 'sheet' && (dlg.seller ? <SellerScope seller={dlg.seller.id}><SwapSheetModal {...dlg.data} onClose={() => setDlg(null)} /></SellerScope> : <SwapSheetModal {...dlg.data} onClose={() => setDlg(null)} />)}
       {dlg?.kind === 'claim' && <NewClaimModal pre={dlg.o} toLivreur={dlg.toLivreur} reason="relivrer" details={reasonOf(dlg.o, extraOf(dlg.o, extra)) ? t('suivi.rec.alertDetails', { v: reasonOf(dlg.o, extraOf(dlg.o, extra)) }) : ''} onClose={() => setDlg(null)} />}
+    </div>
+  );
+}
+
+type CDialog =
+  | { kind: 'treat'; o: ParcelRow; start?: 'resolved' }
+  | { kind: 'claim'; o: ParcelRow; toLivreur: boolean }
+  | { kind: 'swap'; o: ParcelRow }
+  | { kind: 'sheet'; data: SwapResult & { fresh?: boolean } }
+  | { kind: 'rappel'; o: ParcelRow }
+  | { kind: 'fault'; o: ParcelRow }
+  | { kind: 'hist'; o: ParcelRow }
+  | null;
+
+/**
+ * Suivi · « Clair » (the owner's design 1, 25 Nov 2026): Nouvelles alertes · En cours · Résolu · Swap. Three counters on
+ * top that filter, one line per parcel (a card on a phone), the alert opened under its line (a page on a phone) with
+ * « Statut » and « Relivrer ». Résolu fills itself when the company delivers; « Client annule » sends it to Swap.
+ */
+function ClairList({ tab }: { tab: ClairTab }) {
+  const { t } = useTranslation();
+  const agency = useInAgency();
+  const { has, session } = useSession();
+  const qc = useQueryClient();
+  const canFollow = has('suivi');
+  const canHandle = canFollow || has('confirmation');
+  const treats = rightOn('act:suivi.treat');
+  const phone = useIsPhone();
+  const [page, setPage] = useState(1);
+  const [bucket, setBucketState] = useState<string | null>(null);
+  const setBucket = (k: string | null) => (setBucketState(k), setPage(1));
+  const working = tab === 'alertes_new' || tab === 'alertes_encours';
+  const showAssign = working && (has('vendeur', 'agent_manager') || !!session?.profile.agencyLead);
+  const [assign, setAssignState] = useState<Assign>('all');
+  const [f, setF] = useState<SuiviF>(() => ({ ...NO_SF, ...store.json<Partial<SuiviF>>('suivi-f', {}), q: '' }));
+  const setFilter = (patch: Partial<SuiviF>) => {
+    if (patch.fagent) setAssignState('all');
+    setF((x) => {
+      const nx = { ...x, ...patch };
+      const { q: _q, ...keep } = nx;
+      store.set('suivi-f', JSON.stringify(keep));
+      return nx;
+    });
+    setPage(1);
+  };
+  const dq = useDebounced(f.q);
+  const setAssign = (v: Assign) => {
+    setAssignState(v);
+    if (v !== 'all' && f.fagent) setFilter({ fagent: '' });
+    setPage(1);
+  };
+  const q = useRpc('suivi.list', { tab, page, pageSize: 100, ...suiviInput(f, dq), ...(showAssign && assign !== 'all' ? { assigned: assign } : {}), ...(bucket ? { bucket: bucket as any } : {}) });
+  const rows = (q.data?.rows ?? []) as ParcelRow[];
+  const extra = (q.data?.extra ?? {}) as Record<number, ClairX>;
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const [menu, setMenu] = useState(false);
+  const [dlg, setDlg] = useState<CDialog>(null);
+  const opened = rows.find((r) => parcelKey(r) === openKey) ?? null;
+  // « Alerte suivante »: the most urgent alert, taken (15 minutes) by this agent (as before)
+  const [focus, setFocus] = useState<{ id: number; x: Extra | null } | null>(null);
+  const [nexting, setNexting] = useState(false);
+  const skip = useRef<number[]>([]);
+  const nextAlert = async () => {
+    setNexting(true);
+    try {
+      const r = await rpc('suivi.next', { skip: skip.current.slice(-200), release: focus?.id ?? null });
+      if (!r.id) {
+        setFocus(null);
+        toast(t('suivi.nextNone'), 'ok');
+        return;
+      }
+      skip.current.push(r.id);
+      setFocus({ id: r.id, x: (r.extra as Extra | null) ?? null });
+    } catch (e: any) {
+      toast(e?.message ?? String(e), 'bad');
+    } finally {
+      setNexting(false);
+    }
+  };
+  const closeFocus = () => {
+    if (focus) rpc('suivi.release', { id: focus.id }).catch(() => {});
+    setFocus(null);
+    skip.current = [];
+  };
+  const works = canFollow && treats;
+  const h: ClairHandlers = {
+    onOpen: (o) => {
+      if (!working) return openOrder(o.id, o.seller?.id);
+      setMenu(false);
+      setOpenKey((k) => (k === parcelKey(o) ? null : parcelKey(o)));
+    },
+    onSwap: (o) => setDlg({ kind: 'swap', o }),
+    canSwap: (o) => canHandle && !!o.swapWay && rightOn('act:suivi.swap'),
+    canWork: () => works,
+  };
+  const pick = async (o: ParcelRow, k: StatusKey) => {
+    if (k === 'no_answer' || k === 'busy') {
+      try {
+        await rpc('suivi.callResult', { id: o.id, result: k });
+        toast(t(`suivi.clair.done.${k}`, { ref: o.ref }), 'ok');
+        void qc.invalidateQueries();
+      } catch (e: any) {
+        toast(e?.message ?? String(e), 'bad');
+      }
+      return;
+    }
+    if (k === 'callback') return setDlg({ kind: 'rappel', o });
+    if (k === 'claim') return setDlg({ kind: 'claim', o, toLivreur: extra[o.id]?.companyKind === 'own' });
+    setDlg({ kind: 'fault', o });
+  };
+  // « Client annule »: the problems report first (who is responsible; no photo, the customer never had it), then Swap
+  const cancelClient = (o: ParcelRow) =>
+    rpc('suivi.act', { id: o.id, action: 'cancel', by: 'client' }).then(
+      () => {
+        toast(t('suivi.clair.done.cancel', { ref: o.ref }), 'ok');
+        setOpenKey(null);
+        void qc.invalidateQueries();
+      },
+      (e) => toast(e.message, 'bad'),
+    );
+  const menuFor = (o: ParcelRow) => <StatusMenu o={o} x={extra[o.id]} onPick={(k) => void pick(o, k)} onClose={() => setMenu(false)} />;
+  const relivrer = (o: ParcelRow) => (works && o.followStatus === 'alert' ? () => setDlg({ kind: 'treat', o, start: 'resolved' }) : undefined);
+  const claimOf = (o: ParcelRow) => (agency || !canHandle || !rightOn('act:suivi.claim') ? undefined : () => setDlg({ kind: 'claim', o, toLivreur: extra[o.id]?.companyKind === 'own' }));
+  const title = t(`suivi.clair.tab.${tab}`);
+  return (
+    <div className="card">
+      <div className={`card-head${showAssign ? ' px-ahead' : ''}`}>
+        <h2>{title}</h2>
+        {showAssign && <AssignSwitch value={assign} onChange={setAssign} counts={q.data?.assign} />}
+        <span className="muted small">{q.data ? t('suivi.parcels', { count: q.data.total }) : ''}</span>
+        {canFollow && working && !phone && !!rows.length && (
+          <button type="button" className="btn primary sv-next" disabled={nexting} onClick={nextAlert}>
+            {t('suivi.ph.next')} <Icon name="chevr" />
+          </button>
+        )}
+      </div>
+      <SuiviFilters f={f} set={setFilter} />
+      {!agency && <DemoCourier rows={rows} />}
+      <ClairCounters tab={tab} counts={q.data?.buckets} value={bucket} onPick={setBucket} />
+      {q.isLoading ? (
+        <Loading />
+      ) : q.error ? (
+        <ErrorBox error={q.error} onRetry={() => q.refetch()} />
+      ) : phone ? (
+        <ClairCards tab={tab} rows={rows} extra={extra} reasonOf={reasonOf} h={h} />
+      ) : (
+        <ClairTable
+          tab={tab}
+          rows={rows}
+          extra={extra}
+          reasonOf={reasonOf}
+          openKey={openKey}
+          h={h}
+          open={(o) =>
+            o.followStatus === 'alert' || extra[o.id]?.bucket === 'zr' ? (
+              <AlertPanel
+                o={o}
+                x={extra[o.id]}
+                reason={reasonOf(o, extra[o.id])}
+                statusOpen={menu}
+                onStatus={() => setMenu((v) => !v)}
+                menu={works ? menuFor(o) : null}
+                onRelivrer={relivrer(o)}
+                onClaim={claimOf(o)}
+              />
+            ) : null
+          }
+        />
+      )}
+      {phone && canFollow && working && rows.length > 0 && (
+        <button type="button" className="pxp-next" disabled={nexting} onClick={nextAlert}>
+          {t('suivi.ph.next')}
+          <Icon name="chevr" />
+        </button>
+      )}
+      {q.data && <Pager page={page} pageSize={100} total={q.data.total} onPage={setPage} />}
+      {phone && opened && working && (
+        <ParcelPage
+          o={opened}
+          x={extra[opened.id]}
+          reason={reasonOf(opened, extra[opened.id])}
+          actions={[]}
+          onClaim={claimOf(opened)}
+          onClose={() => (setOpenKey(null), setMenu(false))}
+          clair={
+            works
+              ? { statusLabel: t('suivi.clair.status'), menuOpen: menu, onStatus: () => setMenu((v) => !v), menu: menuFor(opened), onRelivrer: relivrer(opened), onHistory: () => setDlg({ kind: 'hist', o: opened }) }
+              : { statusLabel: t('suivi.clair.status'), menuOpen: false, onStatus: () => {}, menu: null, onHistory: () => setDlg({ kind: 'hist', o: opened }) }
+          }
+        />
+      )}
+      {focus && (
+        <FocusAlert
+          kind="alert"
+          id={focus.id}
+          x={extra[focus.id] ?? focus.x}
+          onLeft={nextAlert}
+          onClose={closeFocus}
+          actions={(o) => (treats ? [{ key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o: o as ParcelRow }) }] : []) as ParcelAction[]}
+          onClaim={agency || !rightOn('act:suivi.claim') ? undefined : (o) => setDlg({ kind: 'claim', o: o as ParcelRow, toLivreur: focus.x?.companyKind === 'own' })}
+        />
+      )}
+      {dlg?.kind === 'treat' && (
+        <Traiter o={dlg.o} reason={reasonOf(dlg.o, extra[dlg.o.id])} tries={extra[dlg.o.id]?.tries} own={extra[dlg.o.id]?.companyKind === 'own'} start={dlg.start} onClose={() => setDlg(null)} />
+      )}
+      {dlg?.kind === 'rappel' && <RappelSheet o={dlg.o} onClose={() => setDlg(null)} />}
+      {dlg?.kind === 'hist' && <HistorySheet o={dlg.o} onClose={() => setDlg(null)} />}
+      {dlg?.kind === 'fault' && (
+        <FaultSheet
+          orderId={dlg.o.id}
+          moment="swap"
+          cancel
+          onClose={() => setDlg(null)}
+          onDone={() => {
+            const o = dlg.o;
+            void cancelClient(o);
+          }}
+        />
+      )}
+      {dlg?.kind === 'swap' && <SwapModal o={dlg.o} onClose={() => setDlg(null)} onDone={(data) => setDlg({ kind: 'sheet', data: { ...data, fresh: true } })} />}
+      {dlg?.kind === 'sheet' && <SwapSheetModal {...dlg.data} onClose={() => setDlg(null)} />}
+      {dlg?.kind === 'claim' && <NewClaimModal pre={dlg.o} toLivreur={dlg.toLivreur} reason="relivrer" details={reasonOf(dlg.o, extra[dlg.o.id]) ? t('suivi.rec.alertDetails', { v: reasonOf(dlg.o, extra[dlg.o.id]) }) : ''} onClose={() => setDlg(null)} />}
     </div>
   );
 }

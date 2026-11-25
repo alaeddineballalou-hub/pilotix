@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, forbidden, hasRole, notFound, proc, withActionLock } from '../rpc';
 import { getSetting, setSetting } from '../settings';
-import { addWorkMinutes, workMinutes } from '@pilotix/shared';
+import { addWorkMinutes, algiersDayStart, workMinutes } from '@pilotix/shared';
 import { getPrefs } from './prefs';
 import { rotateTimes } from './assign';
 import { cancelParcel, swapFees } from './delivery';
@@ -20,8 +20,10 @@ import { itemsKey, SWAP_API_KINDS, SWAP_SAME_WILAYA_ONLY, swapWayOf, WILAYAS } f
 
 const id = z.number().int().positive();
 
-// alertes_new / alertes_encours: the alerts nobody acted on yet, and those someone is working on (a call, a note…)
-export const SUIVI_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'bloques', 'traites', 'livres', 'annules', 'swap', 'swapped'] as const;
+// alertes_new / alertes_encours: the alerts nobody acted on yet, and those someone is working on (a call, a note…, or
+// treated and waiting for the company: « Attend ZR »); resolus: the alerts the company then delivered (30 days) — the
+// owner's way, 25 Nov 2026: Nouvelles alertes → En cours → Résolu (only when delivered) or Swap
+export const SUIVI_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'bloques', 'traites', 'livres', 'annules', 'swap', 'swapped', 'resolus'] as const;
 export type SuiviTab = (typeof SUIVI_TABS)[number];
 /** Where a parcel can be swapped from: it is still with the courier or the livreur. */
 export const SWAP_FROM = ['returning', 'failed', 'alert', 'out_for_delivery', 'shipped'] as const;
@@ -50,8 +52,13 @@ function tabFilter(tab: SuiviTab, now: number, agency = false): Partial<ListInpu
       return { follow: ['shipped', 'out_for_delivery', 'failed', 'in_exchange'], sort: 'shipped_at', dir: 'asc' };
     case 'alertes':
     case 'alertes_new':
-    case 'alertes_encours':
       return { follow: ['alert'], sort: 'updated_at', dir: 'asc' };
+    case 'alertes_encours':
+      // the alerts someone works on, and the treated ones back on the road (« Attend ZR »): the ids come from suivi.list
+      return { follow: ['alert', 'out_for_delivery', 'shipped', 'failed'], sort: 'updated_at', dir: 'asc' };
+    case 'resolus':
+      // the ids come from resolvedIds (suivi.list): delivered after an alert, these 30 days
+      return { follow: ['delivered'], dateField: 'delivered_at', from: new Date(now - 30 * DAY).toISOString(), sort: 'delivered_at', dir: 'desc' };
     case 'traites':
       return { follow: ['out_for_delivery', 'shipped', 'failed'], subStatus: 'alert_traitee', sort: 'updated_at', dir: 'desc' };
     case 'livres':
@@ -229,6 +236,7 @@ export async function suiviCounts(ctx: Ctx) {
   const lateSolve = [...clocks.values()].filter((c) => c.kind === 'solve' && c.state === 'late').length;
   const alertesNew = [...clocks.values()].filter((c) => c.kind === 'call').length;
   const stuckAll = await stuckParcels(ctx);
+  const resolus = (await resolvedIds(ctx)).length;
   return {
     bloques: stuckAll.size,
     bloquesTodo: [...stuckAll.values()].filter((x) => !x.handled).length,
@@ -237,8 +245,10 @@ export async function suiviCounts(ctx: Ctx) {
     enlivraison: num(r.enlivraison),
     alertes: num(r.alertes),
     alertes_new: alertesNew,
-    alertes_encours: Math.max(0, num(r.alertes) - alertesNew),
+    // in progress: someone acted on it, or it was treated and waits for the company (« Attend ZR »)
+    alertes_encours: Math.max(0, num(r.alertes) - alertesNew) + num(r.traites),
     traites: num(r.traites),
+    resolus,
     livres: num(r.livres),
     annules: num(r.returning) + num(r.swapped),
     swap: (await swappableIds(ctx)).length,
@@ -1043,6 +1053,8 @@ const ListSuivi = z.object({
   to: z.string().min(10).max(40).optional(),
   /** the managers' « Toutes / Non affectées / Affectées » on the alerts: nobody has it yet, or a suivi agent does */
   assigned: z.enum(['free', 'given']).optional(),
+  /** « Suivi · Clair »: one counter only (late, soon, ok · call, later, zr · today, yesterday · client, zr; all: none) */
+  bucket: z.enum(['late', 'soon', 'ok', 'call', 'later', 'zr', 'today', 'yesterday', 'client', 'all']).optional(),
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(500).default(300),
 });
@@ -1059,6 +1071,7 @@ const SUIVI_DATE: Record<SuiviTab, ListInput['dateField']> = {
   annules: 'back_at',
   swap: 'back_at',
   swapped: 'updated_at',
+  resolus: 'delivered_at',
 };
 
 /** The filters chosen on the list, as orders.list reads them (the tab's own period stays unless a date is chosen). */
@@ -1200,6 +1213,124 @@ async function alertSplit(ctx: Ctx): Promise<{ fresh: number[]; working: number[
   return { fresh, working: ids.filter((id: number) => !fresh.includes(id)) };
 }
 
+// ---------------------------------------------------------------- « Suivi · Clair » (the owner's design 1, 25 Nov 2026)
+/** The lists of the alert bar, each with its three counters (they are filters too); 'all' counts the whole list. */
+export const CLAIR_TABS = ['alertes_new', 'alertes_encours', 'resolus', 'swap'] as const;
+export type ClairTab = (typeof CLAIR_TABS)[number];
+export const SUIVI_BUCKETS: Record<ClairTab, readonly string[]> = {
+  alertes_new: ['late', 'soon', 'ok'],
+  alertes_encours: ['call', 'later', 'zr'],
+  resolus: ['today', 'yesterday', 'all'],
+  swap: ['client', 'zr', 'all'],
+};
+const isClair = (t: string): t is ClairTab => (CLAIR_TABS as readonly string[]).includes(t);
+
+/** What an alert's line says besides the usual (SuiviRowExtra). */
+export interface ClairExtra {
+  /** the last thing done on the alert (En cours › « Dernier résultat ») */
+  last: { key: 'no_answer' | 'busy' | 'called' | 'callback' | 'relivrer' | 'claim' | 'lost'; at: string; note: string | null } | null;
+  /** the call back asked with « Rappel », when it is the last thing done */
+  callbackAt: string | null;
+  /** Résolu: the person who last worked on the alert (« Sauvé par ») */
+  savedBy: string | null;
+  /** Swap: the customer cancelled (« Client annule », someone in Pilotix) or the company did */
+  cancelBy: 'client' | 'zr' | null;
+  /** which counter the line is in */
+  bucket: string;
+}
+
+/** The treated alerts back on the road (waiting for the company to deliver): En cours › « Attend ZR ». */
+async function treatedIds(ctx: Ctx): Promise<number[]> {
+  return (
+    await ctx.db.query(`SELECT o.id FROM orders o WHERE o.sub_status = 'alert_traitee' AND o.follow_status IN ('out_for_delivery','shipped','failed')${andSql(queueSql(ctx, readQueue(ctx)))}`)
+  ).map((x: any) => num(x.id));
+}
+
+/** Résolu: the parcels the company delivered after an alert, these 30 days. Nobody presses anything: it fills itself. */
+async function resolvedIds(ctx: Ctx): Promise<number[]> {
+  return (
+    await ctx.db.query(
+      `SELECT o.id FROM orders o WHERE o.follow_status = 'delivered' AND o.delivered_at >= $1
+         AND EXISTS (SELECT 1 FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert')${andSql(queueSql(ctx, readQueue(ctx)))}
+       ORDER BY o.delivered_at DESC LIMIT 500`,
+      [new Date(ctx.now() - 30 * DAY).toISOString()],
+    )
+  ).map((x: any) => num(x.id));
+}
+
+/** The line of each alert: the last thing done, the call back, who saved it, who cancelled, its counter. */
+async function clairExtras(ctx: Ctx, tab: ClairTab, rows: Order[], ex: Record<number, SuiviRowExtra>, now: number): Promise<Record<number, ClairExtra>> {
+  const out: Record<number, ClairExtra> = {};
+  if (!rows.length) return out;
+  const ids = rows.map((o) => o.id);
+  const alertAt = new Map<number, number>();
+  for (const r of await ctx.db.query(`SELECT e.order_id, max(e.at) AS at FROM order_events e WHERE e.order_id = ANY($1) AND e.kind = 'follow_status' AND e.to_value = 'alert' GROUP BY 1`, [ids]))
+    alertAt.set(num(r.order_id), Date.parse(iso(r.at)));
+  // the last thing a person did on it since it became an alert: a call (and how it went), a call back, a treatment
+  const lastOf = new Map<number, any>();
+  for (const r of await ctx.db.query(
+    `SELECT DISTINCT ON (e.order_id) e.order_id, e.kind, e.from_value, e.to_value, e.note, e.data, e.at, p.name AS who
+       FROM order_events e LEFT JOIN profiles p ON p.id = e.user_id
+      WHERE e.order_id = ANY($1) AND e.user_id IS NOT NULL
+        AND (e.kind IN ('call', 'suivi_motif') OR (e.kind = 'sub_status' AND e.to_value = 'alert_traitee') OR (e.kind = 'note' AND e.to_value = 'suivi_rappel'))
+      ORDER BY e.order_id, e.at DESC, e.id DESC`,
+    [ids],
+  ))
+    lastOf.set(num(r.order_id), r);
+  // Swap: the last turn back of the parcel, made by a person in Pilotix (« Client annule ») or by the company's news
+  const backBy = new Map<number, boolean>();
+  if (tab === 'swap')
+    for (const r of await ctx.db.query(
+      `SELECT DISTINCT ON (e.order_id) e.order_id, e.user_id FROM order_events e
+        WHERE e.order_id = ANY($1) AND e.kind = 'follow_status' AND e.to_value IN ('returning', 'cancelled') ORDER BY e.order_id, e.at DESC, e.id DESC`,
+      [ids],
+    ))
+      backBy.set(num(r.order_id), r.user_id != null);
+  const today = algiersDayStart(now);
+  for (const o of rows) {
+    const x = ex[o.id];
+    const since = alertAt.get(o.id) ?? 0;
+    const r = lastOf.get(o.id);
+    const at = r ? Date.parse(iso(r.at)) : 0;
+    let last: ClairExtra['last'] = null;
+    let callbackAt: string | null = null;
+    if (r && at >= since) {
+      const data = typeof r.data === 'string' ? JSON.parse(r.data) : r.data;
+      const key: NonNullable<ClairExtra['last']>['key'] =
+        r.kind === 'call' ? (r.to_value === 'no_answer' ? 'no_answer' : r.to_value === 'busy' ? 'busy' : 'called') : r.kind === 'note' ? 'callback' : r.kind === 'suivi_motif' && r.from_value === 'lost' ? 'lost' : 'relivrer';
+      last = { key, at: iso(r.at), note: r.note ?? null };
+      if (key === 'callback' && data?.at) callbackAt = String(data.at);
+    }
+    // a réclamation sent after the last thing done (and still open): « Réclamation envoyée »
+    const c = x?.claim;
+    if (c && !['resolved', 'lost'].includes(c.status) && Date.parse(c.createdAt) >= since && (!last || Date.parse(c.createdAt) > Date.parse(last.at)))
+      last = { key: 'claim', at: c.createdAt, note: null };
+    let bucket = 'all';
+    if (tab === 'alertes_new') bucket = x?.clock?.state ?? 'ok';
+    else if (tab === 'alertes_encours')
+      bucket = o.followStatus !== 'alert' || last?.key === 'claim' ? 'zr' : callbackAt && Date.parse(callbackAt) > now ? 'later' : 'call';
+    else if (tab === 'resolus') {
+      const d = o.deliveredAt ? Date.parse(o.deliveredAt) : 0;
+      bucket = d >= today ? 'today' : d >= today - DAY ? 'yesterday' : 'older';
+    } else bucket = backBy.get(o.id) ? 'client' : 'zr';
+    out[o.id] = {
+      last,
+      callbackAt,
+      savedBy: tab === 'resolus' ? (r?.who as string | null) ?? o.followAgentName ?? null : null,
+      cancelBy: tab === 'swap' ? (backBy.get(o.id) ? 'client' : 'zr') : null,
+      bucket,
+    };
+  }
+  return out;
+}
+
+/** The three counters of a list (with its search and filters): 'all' is the whole list. */
+function countBuckets(tab: ClairTab, rows: Order[], cx: Record<number, ClairExtra>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const k of SUIVI_BUCKETS[tab]) out[k] = k === 'all' ? rows.length : rows.filter((o) => cx[o.id]?.bucket === k).length;
+  return out;
+}
+
 export const suiviProcs = {
   'suivi.counts': proc(['suivi', 'confirmation'], z.object({}), (ctx) => suiviCounts(ctx)),
 
@@ -1207,16 +1338,45 @@ export const suiviProcs = {
     // « Toutes / Non affectées / Affectées » on the alerts (the owner's ask, 25 Nov 2026), with its numbers: for the
     // owner, the agent managers and a confirmation agency's chiefs — never a suivi agent
     const boss = (i.tab === 'alertes' || i.tab === 'alertes_new' || i.tab === 'alertes_encours') && (ctx.session.isAdmin || hasRole(ctx.session, 'agent_manager', 'vendeur') || agencyLead(ctx));
-    const empty = { rows: [], total: 0, page: 1, pageSize: i.pageSize ?? 50, extra: {}, assign: boss ? { free: 0, given: 0 } : null };
+    const empty = { rows: [] as Order[], total: 0, page: 1, pageSize: i.pageSize ?? 50, extra: {} as Record<number, SuiviRowExtra & Partial<ClairExtra>>, assign: boss ? { free: 0, given: 0 } : null, buckets: null as Record<string, number> | null };
+    // « Suivi · Clair »: the four lists of the alert bar, each with its counters over the whole list (search and filters
+    // too), the line's last result, its counter, and the most urgent first
+    if (isClair(i.tab)) {
+      const tab = i.tab;
+      const zero = Object.fromEntries(SUIVI_BUCKETS[tab].map((k) => [k, 0]));
+      const split = tab === 'alertes_new' || tab === 'alertes_encours' ? await alertSplit(ctx) : null;
+      const all =
+        tab === 'alertes_new' ? split!.fresh : tab === 'alertes_encours' ? [...split!.working, ...(await treatedIds(ctx))] : tab === 'resolus' ? await resolvedIds(ctx) : await swappableIds(ctx);
+      if (!all.length) return { ...empty, buckets: zero };
+      const tf = tabFilter(tab, ctx.now(), agencyOf(ctx) !== null && hasRole(ctx.session, 'suivi'));
+      const base: Partial<ListInput> = { ...tf, ...suiviFilters(i, tf), ids: all.slice(0, 500), q: i.q };
+      const who = (side: 'free' | 'given') => ({ followAgentId: side === 'free' ? ('none' as const) : ('any' as const) });
+      const found = await listOrders(ctx, ListInput.parse({ ...base, ...(i.assigned ? who(i.assigned) : {}), page: 1, pageSize: 500 }), { queue: readQueue(ctx) });
+      const count = async (side: 'free' | 'given') => (await listOrders(ctx, ListInput.parse({ ...base, ...who(side), page: 1, pageSize: 1 }), { queue: readQueue(ctx) })).total;
+      const assign = boss ? { free: await count('free'), given: await count('given') } : null;
+      const now = ctx.now();
+      let rows = tab === 'swap' ? found.rows.filter((o) => o.shippedAt) : found.rows;
+      const ex = await extras(ctx, rows, now);
+      const cx = await clairExtras(ctx, tab, rows, ex, now);
+      const buckets = countBuckets(tab, rows, cx);
+      if (i.bucket && i.bucket !== 'all') rows = rows.filter((o) => cx[o.id]?.bucket === i.bucket);
+      // the most urgent first: a new alert by its clock; in progress, the ones to call, then the call backs, then ZR's
+      if (tab === 'alertes_new') rows = [...rows].sort((a, b) => (ex[a.id]?.clock?.left ?? 1e9) - (ex[b.id]?.clock?.left ?? 1e9) || a.id - b.id);
+      if (tab === 'alertes_encours') {
+        const rank = (o: Order) => ['call', 'later', 'zr'].indexOf(cx[o.id]?.bucket ?? 'zr');
+        const when = (o: Order) => (cx[o.id]?.callbackAt ? Date.parse(cx[o.id]!.callbackAt!) : Date.parse(o.updatedAt));
+        rows = [...rows].sort((a, b) => rank(a) - rank(b) || when(a) - when(b) || a.id - b.id);
+      }
+      const total = rows.length;
+      const pageRows = await withClientScores(ctx, rows.slice((i.page - 1) * i.pageSize, i.page * i.pageSize));
+      const extra: Record<number, SuiviRowExtra & Partial<ClairExtra>> = {};
+      for (const o of pageRows) extra[o.id] = { ...ex[o.id], ...cx[o.id] };
+      return { rows: pageRows, total, page: i.page, pageSize: i.pageSize, extra, assign, buckets };
+    }
     const stuck = i.tab === 'bloques' ? await stuckParcels(ctx) : null;
     if (stuck && !stuck.size) return empty;
-    // new alerts (nobody acted since it came) / alerts in progress (someone called, wrote a note…)
-    const split = i.tab === 'alertes_new' || i.tab === 'alertes_encours' ? await alertSplit(ctx) : null;
-    const splitIds = split ? (i.tab === 'alertes_new' ? split.fresh : split.working) : null;
-    if (splitIds && !splitIds.length) return empty;
-    const swapIds = i.tab === 'swap' ? await swappableIds(ctx) : null;
-    if (swapIds && !swapIds.length) return empty;
-    const ids = stuck ? [...stuck.keys()].slice(0, 500) : splitIds ? splitIds.slice(0, 500) : swapIds ? swapIds.slice(0, 500) : null;
+    // (the new alerts, the ones in progress, Résolu and Swap: the Clair lists above)
+    const ids = stuck ? [...stuck.keys()].slice(0, 500) : null;
     const tf = tabFilter(i.tab, ctx.now(), agencyOf(ctx) !== null && hasRole(ctx.session, 'suivi'));
     const base: Partial<ListInput> = { ...tf, ...suiviFilters(i, tf), ...(ids ? { ids } : {}), q: i.q };
     const who = (side: 'free' | 'given') => ({ followAgentId: side === 'free' ? ('none' as const) : ('any' as const) });
@@ -1229,12 +1389,37 @@ export const suiviProcs = {
       for (const o of page.rows) if (ex[o.id]) ex[o.id].stuck = stuck.get(o.id) ?? null;
       // the longest without news first
       const rows = await withClientScores(ctx, [...page.rows].sort((a, b) => (stuck.get(b.id)?.days ?? 0) - (stuck.get(a.id)?.days ?? 0)));
-      return { ...page, rows, extra: ex, assign };
+      return { ...page, rows, extra: ex as Record<number, SuiviRowExtra & Partial<ClairExtra>>, assign, buckets: null as Record<string, number> | null };
     }
-    // the swap list only shows parcels that really left (still with the courier or the livreur)
-    const rows = await withClientScores(ctx, i.tab === 'swap' ? page.rows.filter((o) => o.shippedAt) : page.rows);
-    return { ...page, rows, extra: await extras(ctx, rows, ctx.now()), assign };
+    const rows = await withClientScores(ctx, page.rows);
+    return { ...page, rows, extra: (await extras(ctx, rows, ctx.now())) as Record<number, SuiviRowExtra & Partial<ClairExtra>>, assign, buckets: null as Record<string, number> | null };
   }),
+
+  /**
+   * « Statut » on an alert (Suivi · Clair): « Pas de réponse » and « Occupé » are one call each (they count as a try, as
+   * Préférences › Appels du Suivi says), « Rappel » is a call back at a day and hour (« Plus tard » until then). The alert
+   * moves to En cours (someone acted on it).
+   */
+  'suivi.callResult': proc(
+    ['suivi'],
+    z.object({ id, result: z.enum(['no_answer', 'busy', 'callback']), at: z.string().max(40).nullable().optional() }),
+    async (ctx, i) => {
+      const cur = await getOrder(ctx, i.id);
+      if (cur.followStatus !== 'alert') throw bad(`${cur.ref} n’est pas en alerte`);
+      await notLockedByOther(ctx, i.id);
+      const me = ctx.session.profile.id;
+      if (i.result === 'callback') {
+        const at = i.at ? Date.parse(i.at) : NaN;
+        if (!Number.isFinite(at) || at < ctx.now() - 5 * 60_000) throw bad('Choisissez le jour et l’heure du rappel');
+        const d = new Date(at + 3_600_000); // Algiers
+        const p2 = (n: number) => String(n).padStart(2, '0');
+        const txt = `Rappel le ${p2(d.getUTCDate())}/${p2(d.getUTCMonth() + 1)} à ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}`;
+        await addEvent(ctx.db, i.id, me, 'note', null, 'suivi_rappel', txt, { at: new Date(at).toISOString() });
+      } else await addEvent(ctx.db, i.id, me, 'call', null, i.result, i.result === 'busy' ? 'Occupé' : 'Pas de réponse', { result: i.result });
+      ctx.emit({ type: 'order', id: i.id });
+      return { ok: true };
+    },
+  ),
 
   /** "Traiter" an alert: what was done, new date, note → back on the road with sub-status alert_traitee. */
   'suivi.treat': proc(['suivi'], z.object({ id, what: z.enum(TREAT_WHAT), date: z.string().max(20).nullable().optional(), note: z.string().max(1000).nullable().optional() }), async (ctx, i) => {

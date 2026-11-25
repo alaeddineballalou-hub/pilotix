@@ -13,6 +13,7 @@
     "alertes": "Alerts",
     "alertes_new": "New alerts",
     "alertes_encours": "Alerts in progress",
+    "resolus": "Solved",
     "traites": "Handled",
     "traitesAlert": "Handled alerts",
     "livres": "Delivered",
@@ -751,5 +752,114 @@
     "no": "Keep it",
     "done": "Swap undone",
     "why": "Swap made in Pilotix alone (not at the company): it can be undone."
+  },
+  "clair": {
+    "tab": {
+      "alertes_new": "New alerts",
+      "alertes_encours": "In progress",
+      "resolus": "Solved",
+      "swap": "Swap",
+      "reclamation": "Claims"
+    },
+    "counters": "Counters (they are filters too)",
+    "k": {
+      "alertes_new": {
+        "late": "Late",
+        "soon": "Call soon",
+        "ok": "On time"
+      },
+      "alertes_encours": {
+        "call": "To call back",
+        "later": "Later",
+        "zr": "Waiting for ZR"
+      },
+      "resolus": {
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "all": "30 days"
+      },
+      "swap": {
+        "client": "Customer cancelled",
+        "zr": "ZR cancelled",
+        "all": "All"
+      }
+    },
+    "noNews": "No news yet",
+    "histOf": "History · {{ref}}",
+    "histSub": "Everything that happened to the parcel, newest first",
+    "history": "History",
+    "histAll": "Full history",
+    "hours": "{{n}} h",
+    "days": "{{n}} d",
+    "yesterday": "Yesterday",
+    "today": "today",
+    "last": {
+      "no_answer": "No answer",
+      "busy": "Busy",
+      "called": "Called",
+      "callback": "Call back asked",
+      "relivrer": "Redelivery asked",
+      "claim": "Claim sent",
+      "lost": "Lost"
+    },
+    "fix": {
+      "number": "Fix the number",
+      "commune": "Fix the commune"
+    },
+    "empty": {
+      "alertes_new": "No new alert. Everything is being handled.",
+      "alertes_encours": "No alert in progress.",
+      "resolus": "Nothing solved these 30 days.",
+      "swap": "No parcel to swap."
+    },
+    "amount": "Amount",
+    "zr": "ZR status",
+    "time": "Time",
+    "lastCol": "Last result",
+    "calls": "Calls",
+    "since": "Since",
+    "delivered": "Delivered",
+    "savedBy": "Saved by",
+    "problem": "The problem it had",
+    "why": "Why",
+    "cancelClient": "Customer cancels",
+    "cancelZr": "ZR: {{v}}",
+    "cancelled": "cancelled",
+    "waitZr": "Waiting for {{co}}",
+    "waitZrShort": "Waiting for ZR",
+    "recall": "Call back",
+    "resolvedNote": "Solved fills itself when ZR delivers an alert. Nothing to do here.",
+    "deliveredAt": "Delivered {{v}}",
+    "menu": {
+      "no_answer": "No answer",
+      "busy": "Busy",
+      "callback": "Call back",
+      "claim": "Claim",
+      "cancel": "Customer cancels",
+      "callN": "call {{n}} / {{need}}",
+      "callbackSub": "day and time",
+      "claimSub": "to {{co}}",
+      "cancelSub": "goes to Swap"
+    },
+    "status": "Status",
+    "change": "Change the status",
+    "curNew": "New alert",
+    "curWork": "In progress",
+    "curWait": "Waiting for ZR",
+    "relivrer": "Deliver again",
+    "relivrerTitle": "Deliver again · {{ref}}",
+    "zrSays": "{{co}}: {{v}}",
+    "lateBy": "late by {{v}}",
+    "rappel": {
+      "title": "Call the customer back",
+      "day": "Day",
+      "time": "Time",
+      "ok": "Save the call back"
+    },
+    "done": {
+      "no_answer": "{{ref}}: no answer, call counted",
+      "busy": "{{ref}}: busy, call counted",
+      "cancel": "{{ref}}: the customer cancels, it goes to Swap"
+    }
   }
 }
