@@ -138,10 +138,14 @@ export const STORE_MENU: MenuItem[] = [
     ownPage: true,
     pageName: 'orders.allOrders',
     tabNames: { each: { tout: 'orders.tabs.all', livrees: 'nav.sub.livrees', annulees: 'nav.sub.annulees' } },
+    // the order's way (owner's ask, 25 Nov 2026): Confirmation (its « Confirmées » tab shows where each confirmed order is in
+    // the depot) › Dépôt (only the admins, the seller and the depot agents) › En livraison (the company has it) › Suivi ›
+    // Livré or Annulé › Tous
     children: [
       { id: 'confirmation', href: '#/confirmation', count: 'conf', tone: 'nc-n', icon: 'phone', roles: ['confirmation'] },
       { id: 'depot', href: '#/depot', count: 'depot', tone: 'nc-a', icon: 'package', roles: ['depot'] },
-      { id: 'suivi', href: '#/suivi', count: 'suivi', tone: 'nc-a', icon: 'route', roles: ['suivi', 'confirmation'] },
+      { id: 'enlivraison', href: '#/suivi/enlivraison', icon: 'truck', roles: ['suivi', 'confirmation'], tabOf: 'suivi', plan: ['suivi', 'enlivraison'] },
+      { id: 'suivi', href: '#/suivi/alertes', count: 'suivi', tone: 'nc-a', icon: 'route', roles: ['suivi', 'confirmation'] },
       // these three lines open Commandes' tabs; the same screens for everyone, each one seeing his own orders (an agent
       // manager his team's), in a confirmation agency too (owner's choice, 24 Nov 2026)
       { id: 'livrees', href: '#/commandes/livrees', count: 'delivered', tone: 'nc-c', icon: 'checkcircle', tabOf: 'commandes' },
@@ -281,7 +285,7 @@ export const SPACES: Space[] = [
   { id: 'marketing', icon: 'megaphone', items: ['marketing', 'createur', 'social', 'influenceurs', 'parrainage', 'codepromo'], counts: ['posts'] },
   { id: 'sponsor', icon: 'trend', items: ['marketing', 'landing', 'spy', 'autochecks'], counts: ['landing'] },
   { id: 'cm', icon: 'chat', items: ['messages', 'cm', 'codepromo'], counts: ['msgs', 'cm'] },
-  { id: 'service', icon: 'phone', items: ['dashboard', 'confirmation', 'rendezvous', 'suivi', 'livrees', 'annulees', 'tout', 'sav', 'auto', 'assign', 'affectation', 'autochecks', 'automessages', 'autoreglages', 'clients', 'codepromo'], counts: ['conf', 'rdv', 'suivi', 'sav', 'notify'] },
+  { id: 'service', icon: 'phone', items: ['dashboard', 'confirmation', 'rendezvous', 'enlivraison', 'suivi', 'livrees', 'annulees', 'tout', 'sav', 'auto', 'assign', 'affectation', 'autochecks', 'automessages', 'autoreglages', 'clients', 'codepromo'], counts: ['conf', 'rdv', 'suivi', 'sav', 'notify'] },
   { id: 'depot', icon: 'package', items: ['dashboard', 'depot', 'scanner', 'produits', 'pos', 'tournee', 'livreurs'], counts: ['depot', 'lowStock'] },
   { id: 'finance', icon: 'wallet', items: ['caisse', 'macaisse'], counts: [] },
   { id: 'admin', icon: 'usercog', items: ['utilisateurs', 'management', 'reglages', 'livraison', 'agences', 'marketers', 'comptes'], counts: [] },

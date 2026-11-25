@@ -239,7 +239,11 @@ function WorkspaceShell({ page, sub, children, nav = NAV, space = 'store' }: She
   const childOn = (n: NavItem, id: string) => {
     const c = n.children?.find((x) => x.id === id);
     if (c?.match) return page === c.match.page && c.match.subs.includes(sub ?? '');
-    return id === page || (page === n.id && sub === id);
+    // a line that opens another page's tab (Commandes › En livraison: Suivi's tab)
+    if (c?.tabOf && c.tabOf !== n.id) return page === c.tabOf && sub === id;
+    // a page's own line (Suivi), but not on a tab another line of the group opens (« En livraison »)
+    if (id === page) return !n.children?.some((x) => x.tabOf === page && x.id === sub);
+    return page === n.id && sub === id;
   };
   // each group remembers whether it is open (Commandes keeps its old key)
   const grpKey = (id: string) => (id === 'commandes' ? 'cmdgrp' : `grp-${id}`);

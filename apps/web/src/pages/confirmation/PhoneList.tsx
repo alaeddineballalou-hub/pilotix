@@ -23,6 +23,7 @@ import { CONF_TONE } from '@pilotix/shared';
 import './phone.css';
 import { ScoreChip } from '../../ui/clientScore';
 import { OriginChip } from '../orders/OrderPath';
+import { StageTag } from './stages';
 
 /** a queue row: the order with its call countdown */
 type PRow = Order & { deadline?: Deadline | null; rotateAt?: number | null; seller?: { id: number; name: string } };
@@ -161,7 +162,7 @@ function CancelAsk({ o, onClose }: { o: PRow; onClose: () => void }) {
  * instead of opening it. `showAgent`: each card says who has the order (or « Libre »). `edit` (Confirmées): ✏️ and ✕ in
  * place of the call button.
  */
-export function PhoneCards({ rows, empty, onOpen, pick, showAgent, rowKey, edit }: { rows: PRow[]; empty: string; onOpen: (id: string) => void; pick?: { picked: Set<string>; toggle: (id: string) => void }; showAgent?: boolean; rowKey: (row: PRow) => string; edit?: boolean }) {
+export function PhoneCards({ rows, empty, onOpen, pick, showAgent, rowKey, edit, stages }: { rows: PRow[]; empty: string; onOpen: (id: string) => void; pick?: { picked: Set<string>; toggle: (id: string) => void }; showAgent?: boolean; rowKey: (row: PRow) => string; edit?: boolean; stages?: boolean }) {
   const { t } = useTranslation();
   // the order whose ✕ was pressed: its question opens over the list (outside the card, so nothing in it opens the card)
   const [cancelling, setCancelling] = useState<PRow | null>(null);
@@ -204,8 +205,9 @@ export function PhoneCards({ rows, empty, onOpen, pick, showAgent, rowKey, edit 
                   <OriginChip o={o} />
                   <div className="pxp-st">
                     <span className={`badge t-${o.confStatus === 'no_answer' ? 'mid' : CONF_TONE[o.confStatus] ?? 'off'}`}>{currentLabel(t, o.confStatus, o.attempts)}</span>
-                    {/* a confirmed order: where its parcel is (À préparer, Préparée), as in the list's « Livraison » column */}
-                    {o.confStatus === 'confirmed' && o.followStatus && <StatusBadge kind="follow" status={o.followStatus} sub={o.subStatus} />}
+                    {/* a confirmed order: where its parcel is, as in the list's « Livraison » column (Confirmées: the
+                        Dépôt's stage — Sans stock, En préparation, En dispatch, Dispatchée) */}
+                    {stages ? o.followStatus && <StageTag o={o} /> : o.confStatus === 'confirmed' && o.followStatus && <StatusBadge kind="follow" status={o.followStatus} sub={o.subStatus} />}
                     {o.attempts > 0 && <small>{t('confirmation.focus.calls', { n: o.attempts })}</small>}
                     <RotateChip at={o.rotateAt} />
                     {showAgent && <AgentTag name={o.agentName} />}

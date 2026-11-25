@@ -911,6 +911,12 @@
     "list": "Liste",
     "stats": "Statistiques"
   },
+  "stages": {
+    "label": "Où en sont les commandes confirmées",
+    "all": "Toutes",
+    "nostock": "Sans stock",
+    "dispatchee": "Dispatchée"
+  },
   "nob": {
     "title": "Nouvelle commande",
     "since": "Reçue il y a {{d}}",

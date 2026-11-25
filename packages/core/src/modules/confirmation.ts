@@ -28,11 +28,21 @@ export const CONF_SUBS = {
 } as const satisfies Record<string, readonly ConfStatus[]>;
 export type ConfSub = keyof typeof CONF_SUBS;
 const SUB = z.enum(['nouvelles', 'attente', 'confirmees', 'terminees', 'livrees']);
-/** « Confirmées »: the confirmed orders the courier does not have yet (not in the dépôt yet, « À préparer », « Préparée »:
- *  an agent can still cancel them, and the dépôt is alerted for a printed label). Once the dépôt hands the parcel to its
- *  courier it leaves this list: it is in Suivi › En livraison. */
-const NOT_SENT = ['none', 'to_prepare', 'prepared'] as const;
-const NOT_SENT_SQL = "(follow_status IS NULL OR follow_status IN ('to_prepare', 'prepared'))";
+/** « Confirmées »: the confirmed orders their delivery company does not have yet, with where each one is (the owner's ask,
+ *  25 Nov 2026): not in the dépôt yet (sans stock), « En préparation », « En dispatch », « Dispatchées » (handed over, not
+ *  taken yet). An agent can still cancel the ones not sent; the dépôt is alerted for a printed label. Once the company has
+ *  the parcel (taken_at) it leaves this list: it is in Commandes › En livraison. */
+const NOT_SENT = ['none', 'to_prepare', 'prepared', 'shipped'] as const;
+const NOT_SENT_SQL = "(follow_status IS NULL OR follow_status IN ('to_prepare', 'prepared') OR (follow_status = 'shipped' AND taken_at IS NULL))";
+/** Confirmées' stages, the Dépôt's words: sans stock › en préparation › en dispatch › dispatchées */
+export const CONF_STAGES = ['nostock', 'preparer', 'prepares', 'dispatchees'] as const;
+export type ConfStage = (typeof CONF_STAGES)[number];
+const STAGE_WHERE: Record<ConfStage, { conf?: ConfStatus[]; follow: ('none' | 'to_prepare' | 'prepared' | 'shipped')[] }> = {
+  nostock: { conf: ['no_stock'], follow: ['none'] },
+  preparer: { conf: ['confirmed'], follow: ['to_prepare'] },
+  prepares: { follow: ['prepared'] },
+  dispatchees: { follow: ['shipped'] },
+};
 const id = z.number().int().positive();
 const ids = z.array(id).min(1).max(500);
 const MIN = 60_000;
@@ -210,6 +220,8 @@ export interface QueueRow extends Order {
 const QueueInput = z.object({
   sub: SUB,
   status: z.enum(CONF_STATUSES).optional(),
+  /** Confirmées: one stage only (where the order is in the dépôt) */
+  stage: z.enum(CONF_STAGES).optional(),
   q: z.string().max(100).optional(),
   wilayaId: z.number().int().min(1).max(69).optional(),
   agentId: z.union([id, z.literal('none'), z.literal('any')]).optional(),
@@ -261,9 +273,15 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
   // list (3000 at most), sorted here, then the page cut
   const whole = byDeadline || byScore || !!i.level || split || !!i.assigned;
   const base = byDeadline || byScore ? (queue ? 'deadline' : def.sort === 'deadline' ? 'created_at' : def.sort) : sort;
+  const stage = i.sub === 'confirmees' && i.stage ? STAGE_WHERE[i.stage] : null;
+  const conf = (i.status ? [i.status] : [...allowed]).filter((s) => !stage?.conf || stage.conf.includes(s));
+  // (a status and a stage that never meet: « Confirmée » and « Sans stock »)
+  if (!conf.length) return { rows: [] as QueueRow[], total: 0, page: i.page, pageSize: i.pageSize, assign: null };
   const found = await listOrders(ctx, {
-    conf: i.status ? [i.status] : [...allowed],
-    follow: i.sub === 'livrees' ? ['delivered'] : i.sub === 'confirmees' ? [...NOT_SENT] : undefined,
+    conf,
+    follow: i.sub === 'livrees' ? ['delivered'] : stage ? stage.follow : i.sub === 'confirmees' ? [...NOT_SENT] : undefined,
+    // Confirmées: until the delivery company has the parcel
+    taken: i.sub === 'confirmees' ? false : undefined,
     q: i.q,
     wilayaId: i.wilayaId,
     agentId: i.sub === 'livrees' && !ctx.session.isAdmin && !isManager(ctx) && !agencyLead(ctx) ? ctx.session.profile.id : i.agentId,
@@ -998,8 +1016,19 @@ export const confirmationProcs = {
     const sum = (s: readonly string[]) => s.reduce((t, k) => t + (by[k] ?? 0), 0);
     const all = ctx.session.isAdmin || isManager(ctx) || agencyLead(ctx);
     const dl = (await ctx.db.query(`SELECT count(*)::int AS n FROM sales o WHERE conf_status = 'confirmed' AND follow_status = 'delivered'${all ? '' : ' AND agent_id = $1'}${q}`, all ? [] : [ctx.session.profile.id]))[0];
-    const cf = (await ctx.db.query(`SELECT count(*)::int AS n FROM sales o WHERE conf_status = ANY($1) AND ${NOT_SENT_SQL}${q}`, [[...CONF_SUBS.confirmees]]))[0];
-    return { nouvelles: sum(CONF_SUBS.nouvelles), attente: sum(CONF_SUBS.attente), confirmees: num(cf?.n), terminees: sum(CONF_SUBS.terminees), livrees: num(dl?.n) };
+    // Confirmées, and how many at each stage of the dépôt (the stage bar)
+    const st = await ctx.db.query(
+      `SELECT CASE WHEN follow_status IS NULL AND conf_status = 'no_stock' THEN 'nostock'
+                   WHEN follow_status = 'to_prepare' AND conf_status = 'confirmed' THEN 'preparer'
+                   WHEN follow_status = 'prepared' THEN 'prepares'
+                   WHEN follow_status = 'shipped' THEN 'dispatchees' END AS k, count(*)::int AS n
+         FROM sales o WHERE conf_status = ANY($1) AND ${NOT_SENT_SQL}${q} GROUP BY 1`,
+      [[...CONF_SUBS.confirmees]],
+    );
+    const at = Object.fromEntries(st.map((r: any) => [r.k ?? '', num(r.n)]));
+    const stages = Object.fromEntries(CONF_STAGES.map((k) => [k, at[k] ?? 0])) as Record<ConfStage, number>;
+    const confirmees = st.reduce((t: number, r: any) => t + num(r.n), 0);
+    return { nouvelles: sum(CONF_SUBS.nouvelles), attente: sum(CONF_SUBS.attente), confirmees, terminees: sum(CONF_SUBS.terminees), livrees: num(dl?.n), stages };
   }),
 
   /** One page of a confirmation list, with SKUs, creator and call deadline per row. */

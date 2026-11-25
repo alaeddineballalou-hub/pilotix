@@ -25,6 +25,7 @@ import { Focus } from './Focus';
 import { HeldChip } from './hold';
 import { useIsPhone } from '../../lib/useMedia';
 import { CancelAskFor, notShipped, PhoneCards, PhoneOrder, PickBar, PickToggle } from './PhoneList';
+import { type ConfStage, ConfirmedStages, StageTag } from './stages';
 import { currentLabel, StatusChoice, Sub, SUB_STATUSES, SUB_TONE, SUBS, telHref, toneOf, useCanGive, waHref } from './shared';
 import { ConfirmedStatsPage, StatsSection } from './Stats';
 import { ConfSettings } from './Settings';
@@ -103,10 +104,10 @@ const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
  */
 const CONF_USEFUL = ['chrono', 'name', 'phone', 'product', 'source', 'status', 'wilaya', 'order', 'total'];
 
-function useList(sub: Sub, input: { q: string; f: Filters; sort: SortKey; dir: 'asc' | 'desc'; page: number; size: number; assigned?: 'free' | 'given' }, scope?: Record<string, unknown>) {
+function useList(sub: Sub, input: { q: string; f: Filters; sort: SortKey; dir: 'asc' | 'desc'; page: number; size: number; assigned?: 'free' | 'given'; stage?: ConfStage | null }, scope?: Record<string, unknown>) {
   return useRpc(
     'confirmation.list',
-    { sub, q: input.q || undefined, ...input.f, status: (input.f.status as any) || undefined, assigned: input.assigned, sort: input.sort, dir: input.dir, page: input.page, pageSize: input.size, ...scope },
+    { sub, q: input.q || undefined, ...input.f, status: (input.f.status as any) || undefined, assigned: input.assigned, stage: (sub === 'confirmees' && input.stage) || undefined, sort: input.sort, dir: input.dir, page: input.page, pageSize: input.size, ...scope },
     { refetchInterval: 60_000 },
   );
 }
@@ -158,6 +159,9 @@ function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
     setCviewState(v);
     store.set('conf-confirmees-view', v === 'stats' ? v : null);
   };
+  // Confirmées: one stage of the dépôt at a time (« Toutes » when none)
+  const [stage, setStage] = useState<ConfStage | null>(null);
+  const stages = <ConfirmedStages stage={stage} onChange={setStage} counts={c?.stages} total={c?.confirmees} />;
   // « Réglages »: every setting of Confirmation (« Bloquer l'agent jusqu'à l'appel » is there now, in « Appels »)
   if (rawSub === 'reglages' && cfg)
     return (
@@ -173,19 +177,27 @@ function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
         // managers: « Confirmées » is the list (as for the agents) or its statistics, the choice kept on this device
         <>
           <ConfirmedView view={cview} onChange={setCview} />
-          {cview === 'stats' ? <ConfirmedStatsPage /> : <Queue key={sub} sub={sub} focusId={focusId} />}
+          {cview === 'stats' ? (
+            <ConfirmedStatsPage />
+          ) : (
+            <>
+              {stages}
+              <Queue key={sub} sub={sub} focusId={focusId} stage={stage} />
+            </>
+          )}
         </>
       ) : (
         <>
           {manager && !phone && <StatsSection sub={sub} />}
-          <Queue key={sub} sub={sub} focusId={focusId} />
+          {sub === 'confirmees' && stages}
+          <Queue key={sub} sub={sub} focusId={focusId} stage={sub === 'confirmees' ? stage : null} />
         </>
       )}
     </>
   );
 }
 
-export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | null; combined?: CombinedConfirmation }) {
+export function Queue({ sub, focusId, combined, stage = null }: { sub: Sub; focusId: number | null; combined?: CombinedConfirmation; stage?: ConfStage | null }) {
   const phone = useIsPhone();
   const { t } = useTranslation();
   const { has } = useSession();
@@ -237,7 +249,7 @@ export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | 
     return () => clearTimeout(id);
   }, [q]);
   const scopeKey = JSON.stringify(combined?.input ?? {});
-  useEffect(() => setPage(1), [scopeKey]);
+  useEffect(() => setPage(1), [scopeKey, stage]);
   // « Toutes / Non affectées / Affectées »: the managers' switch in Nouvelles and En cours (ui/AssignSwitch); it starts
   // on « Toutes » each time, and the « Agent » filter and it never fight (picking one clears the other)
   const showAssign = manager && (sub === 'nouvelles' || sub === 'attente');
@@ -247,7 +259,7 @@ export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | 
     if (v !== 'all') setF((cur) => (cur.agentId === undefined ? cur : { ...cur, agentId: undefined }));
     setPage(1);
   };
-  const list = useList(sub, { q: qd, f, sort, dir, page, size, assigned: showAssign ? assignedInput(side) : undefined }, combined?.input);
+  const list = useList(sub, { q: qd, f, sort, dir, page, size, assigned: showAssign ? assignedInput(side) : undefined, stage }, combined?.input);
   const rows: Row[] = list.data?.rows ?? [];
   useEffect(() => {
     const ids = new Set(rows.map(rowKey));
@@ -423,7 +435,8 @@ export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | 
       case 'follow':
         return (
           <>
-            <StatusBadge kind="follow" status={r.followStatus} sub={r.subStatus} />
+            {/* Confirmées: its stage in the dépôt, the Dépôt's words (Sans stock, En préparation, En dispatch, Dispatchée) */}
+            {sub === 'confirmees' ? <StageTag o={r} /> : <StatusBadge kind="follow" status={r.followStatus} sub={r.subStatus} />}
             {r.companyName && (
               <small>
                 {r.companyName}
@@ -763,6 +776,7 @@ export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | 
                   showAgent={manager}
                   rowKey={rowKey}
                   edit={sub === 'confirmees'}
+                  stages={sub === 'confirmees'}
                 />
                 {canNext && !picking && (
                   <button type="button" className="pxp-next" onClick={() => goNext([...open].pop())}>
