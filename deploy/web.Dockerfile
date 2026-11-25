@@ -7,7 +7,10 @@ COPY . .
 RUN npm ci --ignore-scripts --no-audit --no-fund
 ARG DOMAIN
 ENV VITE_API_URL=https://${DOMAIN} VITE_BASE=/ VITE_DEMO=0
-RUN npm run build -w @pilotix/web
+# No type check here: Pilotix CI checks the types on GitHub, and deploy.yml only puts live a version whose CI is green.
+# Checking them again on the server ran out of memory (« JavaScript heap out of memory », 25 Nov 2026: two deploys
+# failed) while the running app shares the same machine.
+RUN npm run build:server -w @pilotix/web
 
 FROM caddy:2-alpine
 COPY deploy/Caddyfile /etc/caddy/Caddyfile

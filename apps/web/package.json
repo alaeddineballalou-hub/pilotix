@@ -9,7 +9,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",
     "cap:sync": "cap sync",
-    "build:artifact": "node ../../scripts/extension-zips.mjs && tsc -p tsconfig.json --noEmit && vite build --mode artifact"
+    "build:artifact": "node ../../scripts/extension-zips.mjs && tsc -p tsconfig.json --noEmit && vite build --mode artifact",
+    "build:server": "node ../../scripts/extension-zips.mjs && vite build"
   },
   "dependencies": {
     "@capacitor/android": "7.6.10",
