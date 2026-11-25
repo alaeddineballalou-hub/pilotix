@@ -116,7 +116,8 @@ const iso = (t: number) => new Date(t).toISOString();
 
 /**
  * The Community manager's orders in the demo: typed orders of a chat or a call of these last weeks become hers — some
- * delivered, some cancelled or back, some on their way, some still to call — so each of her lists shows some.
+ * delivered, some cancelled or back, some at the dépôt (one handed over, not taken yet), some on the road with their
+ * company, some still to call — so each of her lists shows some (Confirmées and En livraison too).
  */
 async function seedCmOrders(db: Db, cm: number, now: number) {
   const base = `channel IN ('facebook', 'instagram', 'whatsapp', 'appel') AND conversation_id IS NULL AND landing_id IS NULL AND NOT is_exchange
@@ -125,7 +126,9 @@ async function seedCmOrders(db: Db, cm: number, now: number) {
     await db.query(
       `(SELECT id FROM orders WHERE ${base} AND follow_status = 'delivered' ORDER BY created_at DESC, id DESC LIMIT 6)
        UNION ALL (SELECT id FROM orders WHERE ${base} AND (conf_status = 'cancelled' OR follow_status IN ('returning', 'returned')) ORDER BY created_at DESC, id DESC LIMIT 3)
-       UNION ALL (SELECT id FROM orders WHERE ${base} AND follow_status IN ('to_prepare', 'prepared', 'shipped', 'out_for_delivery') ORDER BY created_at DESC, id DESC LIMIT 3)
+       UNION ALL (SELECT id FROM orders WHERE ${base} AND follow_status IN ('to_prepare', 'prepared') ORDER BY created_at DESC, id DESC LIMIT 2)
+       UNION ALL (SELECT id FROM orders WHERE ${base} AND follow_status = 'shipped' AND taken_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1)
+       UNION ALL (SELECT id FROM orders WHERE ${base} AND follow_status IN ('shipped', 'out_for_delivery') AND taken_at IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT 2)
        UNION ALL (SELECT id FROM orders WHERE ${base} AND follow_status IS NULL AND conf_status IN ('new', 'no_answer', 'busy', 'callback') ORDER BY created_at DESC, id DESC LIMIT 3)`,
       [iso(now)],
     )
