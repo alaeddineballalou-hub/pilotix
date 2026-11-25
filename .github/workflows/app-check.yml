@@ -1,0 +1,105 @@
+name: App check (test phone)
+
+# Pilotix's phone app on a test Android phone (GitHub's emulator), checked the way a person uses it, with nobody there
+# (owner's ask, 25 Nov 2026): the app the phones have now, Pilotix's « Nouvelle version » offer, « Mettre à jour »,
+# Android's « Update », the new version really installed, it opens without a crash and asks no more, then a real
+# Firebase ring on the locked phone. Two phones: an older Android, and a recent one with Google Play (Play Protect).
+# Pictures of every step: the run's « phone-check-android-… » files, and the branch artifact-app-check-<android>.
+# The steps themselves: .github/scripts/phone-check.mjs
+on:
+  push:
+    branches: ['preview/app-check']
+  workflow_dispatch:
+    inputs:
+      old_build:
+        description: 'The app installed first: its build number (Pilotix app workflow)'
+        default: '31'
+
+permissions:
+  contents: write # the pictures' branch
+  actions: read # the old app, from its own build
+
+concurrency:
+  group: app-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phone:
+    name: Test phone · Android ${{ matrix.android }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - android: '11'
+            api: 30
+            image: google_apis
+          - android: '14'
+            api: 34
+            image: google_apis_playstore
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PHONE_NAME: Test phone · Android ${{ matrix.android }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: The two apps (the phones' one and the new one)
+        env:
+          OLD: ${{ inputs.old_build || '31' }}
+        run: |
+          ID=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/mobile.yml/runs?per_page=100" --jq ".workflow_runs[] | select(.run_number == $OLD) | .id" | head -1)
+          [ -n "$ID" ] || { echo "::error::build $OLD of the Pilotix app not found"; exit 1; }
+          gh run download "$ID" -n pilotix-android-test -D "$RUNNER_TEMP/old"
+          curl -fLsS --retry 3 "https://github.com/$GITHUB_REPOSITORY/releases/download/app-test/pilotix-test.apk" -o "$RUNNER_TEMP/new.apk"
+          curl -fLsS --retry 3 "https://github.com/$GITHUB_REPOSITORY/releases/download/app-test/app-version.json" -o "$RUNNER_TEMP/card.json"
+          ls -l "$RUNNER_TEMP/old" "$RUNNER_TEMP/new.apk"; cat "$RUNNER_TEMP/card.json"
+          echo "EXPECT=$(node -p "require(process.env.RUNNER_TEMP + '/card.json').build")" >> "$GITHUB_ENV"
+      - name: Test phone, then the check
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          # GitHub's way to let the emulator use the processor's virtualisation (KVM), as mobile.yml
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo chmod 666 /dev/kvm
+          IMG='system-images;android-${{ matrix.api }};${{ matrix.image }};x86_64'
+          SDK="$ANDROID_HOME/cmdline-tools/latest/bin"
+          yes | "$SDK/sdkmanager" --licenses >/dev/null || true
+          "$SDK/sdkmanager" 'platform-tools' 'emulator' "$IMG" >/dev/null
+          echo no | "$SDK/avdmanager" create avd -n phone -k "$IMG" -d pixel_5 --force
+          LOG="$RUNNER_TEMP/emulator.log"
+          "$ANDROID_HOME/emulator/emulator" -avd phone -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -memory 3072 -cores 2 >"$LOG" 2>&1 &
+          trap 'adb emu kill >/dev/null 2>&1 || true' EXIT
+          booted() { [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; }
+          for i in $(seq 1 144); do
+            if booted; then echo "the test phone started in about $((i * 5)) s"; break; fi
+            if ! pgrep -f 'avd phone' >/dev/null; then echo "::error::the Android emulator stopped by itself"; tail -40 "$LOG"; exit 1; fi
+            sleep 5
+          done
+          if ! booted; then echo "::error::the Android emulator did not start in 12 minutes"; tail -60 "$LOG"; exit 1; fi
+          for i in $(seq 1 30); do adb shell pm path android >/dev/null 2>&1 && break; sleep 2; done
+          sleep 20 # the home screen and Google's services settle
+          node .github/scripts/phone-check.mjs --old "$RUNNER_TEMP/old/pilotix-test.apk" --new "$RUNNER_TEMP/new.apk" --expect "$EXPECT" --out "$RUNNER_TEMP/shots"
+      - name: Pictures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phone-check-android-${{ matrix.android }}
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
+      # the same pictures on a branch: Claude reads them with git (its session cannot open the run's files)
+      - name: Pictures for Claude
+        if: always()
+        run: |
+          cd "$RUNNER_TEMP/shots" 2>/dev/null || exit 0
+          git init -q -b pictures .
+          git add -A
+          git -c user.name='Pilotix CI' -c user.email='ci@users.noreply.github.com' commit -qm "Test phone Android ${{ matrix.android }} from ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/artifact-app-check-${{ matrix.api }}"
