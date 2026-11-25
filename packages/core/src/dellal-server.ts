@@ -891,7 +891,8 @@ async function smsHooks(ctx: Ctx, a: { url: string }) {
  *  - 'waTemplate' / 'waTemplates' / 'waCreateTemplate' / 'sms' / 'smsHooks' → Pilot Automations
  *  - 'media' → a customer's photo (WhatsApp media id or Meta's link): its bytes for Pilot AI, and a small copy
  *  - 'photos' → { channel, externalId, accountId, photos }: the product photos Dellal picked, sent as JPEG
- *  - 'photoLinks' → { photos }: « Envoyer des photos » (Confirmation): each photo's public JPEG copy (its link, or null)
+ *  - 'photoLinks' → { photos, side? }: « Envoyer des photos » (Confirmation), the reactivation link's photo (side 800):
+ *    each photo's public JPEG copy (its link, or null)
  *  - 'profile' → { channel, externalId }: a Messenger or Instagram customer's name from Meta ({ name: null } if none)
  */
 export async function runDellal(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
@@ -923,7 +924,7 @@ export async function runDellal(action: string, args: unknown, ctx: Ctx): Promis
   if (action === 'studioCheck') return studioCheck(ctx, args as StudioCheckArgs);
   if (action === 'media') return readMedia(ctx, args as MediaArgs);
   if (action === 'photos') return sendPhotos(ctx, args as PhotosArgs);
-  if (action === 'photoLinks') return photoLinks(ctx, args as { photos: PhotosArgs['photos'] });
+  if (action === 'photoLinks') return photoLinks(ctx, args as { photos: PhotosArgs['photos']; side?: number });
   if (action === 'landingHd') return landingHd(ctx, args as { key: string | null; data: string | null; width: number });
   if (action === 'catchUp') return catchUpMeta(args as CatchUpArgs);
   if (action === 'igRefresh') return igRefresh(String((args as any)?.token ?? ''));
@@ -1409,8 +1410,9 @@ async function readMedia(ctx: Ctx, a: MediaArgs): Promise<{ ok: true; mime: stri
  * A product photo as a JPEG at a public address (Meta downloads it to send it): made once per picture (sharp, up to
  * 1080 px), kept in dellal_photos with a random key (unguessable), copies nobody used for a month removed.
  */
-async function jpegFile(ctx: Ctx, p: PhotosArgs['photos'][number]): Promise<{ id: number; key: string }> {
-  const src = String(p.src ?? '').slice(0, 200);
+async function jpegFile(ctx: Ctx, p: PhotosArgs['photos'][number], side = 1080): Promise<{ id: number; key: string }> {
+  // a smaller copy (the reactivation link's preview: 800 px) is its own picture
+  const src = side === 1080 ? String(p.src ?? '').slice(0, 200) : `${String(p.src ?? '').slice(0, 190)}:s${side}`;
   const have = (await ctx.db.query('SELECT id, key FROM dellal_photos WHERE src = $1', [src]))[0];
   if (have) {
     await ctx.db.query('UPDATE dellal_photos SET used_at = now() WHERE id = $1', [have.id]);
@@ -1432,7 +1434,7 @@ async function jpegFile(ctx: Ctx, p: PhotosArgs['photos'][number]): Promise<{ id
   } else throw new AppError('bad_request', 'Photo vide');
   const type = svg ? 'image/svg+xml' : sniffImage(bytes);
   if (!type) throw new AppError('bad_request', 'Ce fichier n’est pas une photo');
-  let out = await toJpeg(bytes, 1080, 85);
+  let out = await toJpeg(bytes, side, side < 1080 ? 80 : 85);
   let mime = 'image/jpeg';
   if (!out) {
     // without sharp: a JPEG or a PNG goes as it is (WhatsApp, Messenger and Instagram take both), a WebP cannot
@@ -1521,9 +1523,11 @@ async function sendPhotos(ctx: Ctx, a: PhotosArgs): Promise<{ ok: boolean; sent:
  * « Envoyer des photos » (Confirmation): each photo as a public JPEG copy (the same picture is made once; an HD one is
  * fetched from the bucket that one time). A photo that fails gives null: the others still go.
  */
-async function photoLinks(ctx: Ctx, a: { photos: PhotosArgs['photos'] }): Promise<{ urls: (string | null)[]; errors: string[] }> {
+async function photoLinks(ctx: Ctx, a: { photos: PhotosArgs['photos']; side?: number }): Promise<{ urls: (string | null)[]; errors: string[] }> {
   const base = publicApi(ctx);
   const photos = Array.isArray(a?.photos) ? a.photos.slice(0, 40) : [];
+  // 1080 px (« Envoyer des photos »), or 800 px: the reactivation link's preview (noanswer.ts › reorderPage)
+  const side = a?.side === 800 ? 800 : 1080;
   const urls: (string | null)[] = [];
   const errors: string[] = [];
   if (!base) return { urls: photos.map(() => null), errors: ['Adresse publique du serveur manquante (PUBLIC_URL) : les photos ne peuvent pas partir.'] };
@@ -1531,7 +1535,7 @@ async function photoLinks(ctx: Ctx, a: { photos: PhotosArgs['photos'] }): Promis
   for (const p of photos) {
     try {
       if (p.key && !bucket) throw new AppError('bad_request', 'Photo HD : le stockage des photos n’est plus configuré sur ce serveur.');
-      const f = await jpegFile(ctx, p.key ? { ...p, url: await presign(bucket!, 'GET', String(p.key), 600) } : p);
+      const f = await jpegFile(ctx, p.key ? { ...p, url: await presign(bucket!, 'GET', String(p.key), 600) } : p, side);
       urls.push(`${base}/lp/dp/${f.id}/${f.key}.jpg`);
     } catch (e: any) {
       urls.push(null);

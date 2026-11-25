@@ -6,10 +6,12 @@ import { before, test } from 'node:test';
 import { DEFAULT_CALL_SETTINGS, DEFAULT_CUSTOMER_MESSAGES, fillCustomerMessage, withReactivationLink } from '@pilotix/shared';
 import { call, Ctx, Db } from '../index';
 import { attackOf } from '../modules/confirmation';
+import { reorderPageHtml } from '../modules/noanswer';
+import { reactivateByCode, reorderHash } from '../modules/orders';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
-let as: (email: string) => Promise<Ctx>;
+let as: (email: string, server?: Ctx['server']) => Promise<Ctx>;
 
 before(async () => {
   ({ db, as } = await setup(160));
@@ -55,8 +57,11 @@ test('the shop’s texts, with the order’s values; the cancel one carries the 
   const mine: any = await call('orders.customerMessage', admin, { id, kind: 'attempt' });
   assert.ok(mine.text.endsWith(o.ref));
   const cancel: any = await call('orders.customerMessage', admin, { id, kind: 'cancel' });
-  assert.match(cancel.token, /^[a-f0-9]{64}$/);
-  assert.ok(cancel.path.endsWith(`/reorder/${id}/${cancel.token}`));
+  // the short link (25 Nov 2026): 10 letters and digits, kept as its sha256 with its order
+  assert.match(cancel.token, /^[A-Za-z0-9]{10}$/);
+  assert.ok(cancel.path.endsWith(`/r/${cancel.token}`));
+  assert.equal(cancel.url, null, 'no public address here (the preview): the screen puts its own in front of the path');
+  assert.equal(Number((await one('SELECT order_id FROM reorder_links WHERE hash = $1', [await reorderHash(cancel.token)])).order_id), id);
   // a text without {رابط_إعادة_التفعيل}: the link goes on a line of its own at the end
   const url = `https://pilotix.online${cancel.path}`;
   assert.equal(withReactivationLink(cancel.text, url), `${cancel.text}\n${url}`);
@@ -110,5 +115,77 @@ test('orders already at the limit or above are cancelled with no message, when t
   await assert.rejects(call('orders.setConf', admin, { ids: [under], status: 'no_answer' }), /message d’annulation/);
   // the saved settings keep the first message's try
   assert.equal(((await call('orders.uiMeta', admin, {})) as any).messageAtTry, 3);
+  await db.query(`DELETE FROM settings WHERE key = 'calls'`);
+});
+
+test('the cancel message’s short link: the product’s main photo on its page, the order restored by the link sent only', async () => {
+  const asked: any[] = [];
+  const api = 'https://pilotix.online/api/s/boutique';
+  const jpeg = `${api}/lp/dp/7/abcdefabcdefabcdefabcdef.jpg`;
+  // the server: the shop's public address and its JPEG copies (dellal-server.ts › photoLinks)
+  const server = {
+    publicApi: api,
+    dellal: async (action: string, args: any) => {
+      if (action !== 'photoLinks') return {};
+      asked.push(args);
+      return { urls: [jpeg], errors: [] };
+    },
+  } as any;
+  // (the server's hooks only where the link and its page are made: the rest as in the other tests)
+  const sys = await as(EMAILS.admin, server);
+  const admin = await as(EMAILS.admin);
+  const [id] = await freeNew(1);
+  const other = Number((await one('SELECT id FROM orders WHERE id <> $1 ORDER BY id LIMIT 1', [id])).id);
+  await calls({ cancelAfterNoAnswer: 2 });
+  await call('orders.setConf', admin, { ids: [id], status: 'no_answer' });
+  // the product's photos: its first one is of another colour than the one ordered, the ordered colour's comes second
+  const item = await one('SELECT product_id, variant_id FROM order_items WHERE order_id = $1 ORDER BY id LIMIT 1', [id]);
+  const pid = Number(item.product_id);
+  const otherColour = await one('SELECT id FROM product_variants WHERE product_id = $1 AND id IS DISTINCT FROM $2 ORDER BY id LIMIT 1', [pid, item.variant_id]);
+  await db.query('DELETE FROM product_photos WHERE product_id = $1', [pid]);
+  const photo = (v: unknown, pos: number) =>
+    db.query(`INSERT INTO product_photos (product_id, variant_id, kind, store, data, thumb, position) VALUES ($1, $2, 'photo', 'local', $3, $4, $5) RETURNING id`, [pid, v, `/9j/${pos}`, 'data:,', pos]);
+  const main = Number((await photo(otherColour?.id ?? null, 0))[0].id);
+  await photo(item.variant_id, 1);
+
+  const msg: any = await call('orders.customerMessage', sys, { id, kind: 'cancel' });
+  assert.equal(msg.url, `${api}/r/${msg.token}`, 'no own domain: the platform’s address, short too');
+  // its page, before the order is cancelled (WhatsApp reads it while the agent writes the message)
+  const page: any = await call('orders.reorderPage', sys, { code: msg.token });
+  assert.equal(page.found, true);
+  assert.equal(page.photo, jpeg);
+  assert.equal(asked[0].side, 800, 'a light copy for WhatsApp');
+  assert.equal(asked[0].photos[0].src, `hd:${main}`, 'the product’s main photo (its first), never the colour’s');
+  const html = reorderPageHtml(page);
+  assert.ok(html.includes(`<meta property="og:image" content="${jpeg}">`), 'WhatsApp’s preview picture');
+  assert.ok(html.includes(`<img src="${jpeg}"`), 'the same photo on the page');
+  assert.ok(html.includes('<form method="post"'), 'its button');
+  assert.ok(!reorderPageHtml({ photo: 'javascript:alert(1)' }).includes('javascript:'), 'only an https photo');
+  assert.equal(((await call('orders.reorderPage', sys, { code: 'AAAAAAAAAA' })) as any).found, false);
+  // only the system reads a page
+  await assert.rejects(call('orders.reorderPage', await as(EMAILS.conf), { code: msg.token }));
+  // not cancelled yet: the link restores nothing
+  assert.equal(await reactivateByCode(db, msg.token), false);
+  // another order's link, or the message without its link: refused, nothing changes
+  const otherMsg: any = await call('orders.customerMessage', sys, { id: other, kind: 'cancel' });
+  await assert.rejects(call('orders.setConf', admin, { ids: [id], status: 'no_answer', messageSentVia: 'whatsapp', reorderToken: otherMsg.token, note: withReactivationLink(msg.text, otherMsg.url) }), /nouveau lien/);
+  await assert.rejects(call('orders.setConf', admin, { ids: [id], status: 'no_answer', messageSentVia: 'whatsapp', reorderToken: msg.token, note: msg.text }), /lien de réactivation/);
+  assert.equal(Number((await one('SELECT attempts FROM orders WHERE id = $1', [id])).attempts), 1);
+  // sent: cancelled, and the link is the one sent
+  const r: any = await call('orders.setConf', admin, { ids: [id], status: 'no_answer', messageSentVia: 'whatsapp', reorderToken: msg.token, note: withReactivationLink(msg.text, msg.url) });
+  assert.equal(r.autoCancelled[0]?.id, id);
+  assert.ok((await one('SELECT sent_at FROM reorder_links WHERE hash = $1', [await reorderHash(msg.token)])).sent_at);
+  // a message opened again after the cancel (never sent) does not restore it; the one sent does, once
+  const later: any = await call('orders.customerMessage', sys, { id, kind: 'cancel' });
+  assert.equal(await reactivateByCode(db, later.token), false);
+  assert.equal(await reactivateByCode(db, 'not-a-code'), false);
+  assert.equal(await reactivateByCode(db, msg.token), true);
+  assert.equal(await reactivateByCode(db, msg.token), false);
+  assert.equal((await one('SELECT conf_status FROM orders WHERE id = $1', [id])).conf_status, 'new');
+  // a link never sent goes after 2 days, the one sent stays
+  await db.query(`UPDATE reorder_links SET created_at = now() - interval '3 days'`);
+  await call('orders.customerMessage', admin, { id: other, kind: 'cancel' });
+  const left = async (code: string) => Number((await one('SELECT count(*)::int AS n FROM reorder_links WHERE hash = $1', [await reorderHash(code)])).n);
+  assert.deepEqual([await left(msg.token), await left(later.token), await left(otherMsg.token)], [1, 0, 0]);
   await db.query(`DELETE FROM settings WHERE key = 'calls'`);
 });

@@ -161,6 +161,23 @@ export async function productPhotos(
   return pick.slice(0, Math.max(1, o.max)).map(({ rank: _r, order: _o, hd: _h, ...p }) => p);
 }
 
+/**
+ * The product's main picture as Pilotix shows it (lists, orders, depot): its first photo (Produits › a product › Photos,
+ * whatever colour it is of: hdphotos.ts), else its own photo, else its pages' first photo of no colour. Never the colour
+ * an order asked for (owner, 25 Nov 2026: « product main photo, not variant color »). null: the product has none.
+ */
+export async function mainProductPhoto(db: Db, productId: number): Promise<PhotoSrc | null> {
+  const first = (await db.query(`SELECT id, store, key, data, thumb, mini FROM product_photos WHERE product_id = $1 AND kind = 'photo' ORDER BY position, id LIMIT 1`, [productId]).catch(() => []))[0];
+  const hd = first ? hdPhoto(first, 'send', null) : null;
+  if (hd) return hd;
+  const prod = (await db.query('SELECT photo FROM products WHERE id = $1', [productId]))[0];
+  const d = fromDataUrl(prod?.photo);
+  if (d) return { src: `pp:${productId}:${shortHash(d.data)}`, mime: d.mime, data: d.data, url: null, thumb: `data:${d.mime};base64,${d.data}`, variantId: null };
+  const url = httpsUrl(prod?.photo);
+  if (url) return { src: `url:${shortHash(url)}`, mime: 'image/jpeg', data: null, url, thumb: url, variantId: null };
+  return (await productPhotos(db, productId, { variantId: null, size: 'send', max: 6 })).find((p) => p.variantId === null) ?? null;
+}
+
 /** The pictures of a sales guide's answer (their ids, in the answer's order), ready to be sent. */
 export async function guidePhotos(db: Db, productId: number, ids: number[]): Promise<PhotoSrc[]> {
   if (!ids.length) return [];

@@ -1310,7 +1310,8 @@ export const ConfInput = z.object({
   status: z.enum(CONF_STATUSES),
   note: z.string().max(1000).nullable().optional(),
   messageSentVia: z.enum(['whatsapp', 'sms']).nullable().optional(),
-  reorderToken: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  /** the cancel message's link: its short code (/r/<code>, since 25 Nov 2026) or an older long token (/reorder/<id>/<64 hex>) */
+  reorderToken: z.string().regex(/^(?:[a-f0-9]{64}|[A-Za-z0-9]{10})$/).optional(),
   reason: z.string().max(200).nullable().optional(),
   nextCallAt: dateStr.nullable().optional(),
   clientId: z.string().min(8).max(64).optional(),
@@ -1318,15 +1319,46 @@ export const ConfInput = z.object({
   tryN: z.number().int().min(1).max(30).optional(),
 });
 
-const reorderHash = async (token: string) => Array.from(
+export const reorderHash = async (token: string) => Array.from(
   new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))),
   (byte) => byte.toString(16).padStart(2, '0'),
 ).join('');
 
-/** A customer can restore only the latest cancellation carrying this one-time capability. */
+/**
+ * The cancel message's short link (owner, 25 Nov 2026: « use small link »): https://<the shop's domain>/r/<code>, 10
+ * letters and digits (59 bits: never guessed). reorder_links keeps its sha256 and its order (migrations/136).
+ */
+export const REORDER_CODE_RE = /^[A-Za-z0-9]{10}$/;
+const CODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+export function newReorderCode(): string {
+  let code = '';
+  while (code.length < 10) {
+    // (a byte above 247 is drawn again: each of the 62 characters keeps the same chance)
+    for (const b of globalThis.crypto.getRandomValues(new Uint8Array(16))) if (b < 248 && code.length < 10) code += CODE_CHARS[b % 62];
+  }
+  return code;
+}
+
+/** The order of a short link's code (null: no such link). */
+export async function reorderLinkOrder(db: Db, code: string): Promise<number | null> {
+  if (!REORDER_CODE_RE.test(code)) return null;
+  const r = (await db.query('SELECT order_id FROM reorder_links WHERE hash = $1', [await reorderHash(code)]))[0];
+  return r ? num(r.order_id) : null;
+}
+
+/** A customer can restore only the latest cancellation carrying this one-time capability (an older long link). */
 export async function reactivateCancelledOrder(db: Db, orderId: number, token: string): Promise<boolean> {
   if (!Number.isSafeInteger(orderId) || orderId <= 0 || !/^[a-f0-9]{64}$/.test(token)) return false;
-  const hash = await reorderHash(token);
+  return reactivateWith(db, orderId, await reorderHash(token));
+}
+
+/** The short link (/r/<code>): its order, then the same rule (only the latest cancellation's link restores it). */
+export async function reactivateByCode(db: Db, code: string): Promise<boolean> {
+  const orderId = await reorderLinkOrder(db, code);
+  return orderId ? reactivateWith(db, orderId, await reorderHash(code)) : false;
+}
+
+async function reactivateWith(db: Db, orderId: number, hash: string): Promise<boolean> {
   return db.tx(async (tx) => {
     const order = (await tx.query('SELECT conf_status, shipped_at FROM orders WHERE id = $1 FOR UPDATE', [orderId]))[0];
     if (order?.conf_status !== 'cancelled' || order.shipped_at) return false;
@@ -1489,11 +1521,16 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: 
           WHERE order_id = $1 AND kind = 'no_answer' AND status IN ('queued', 'manual', 'failed')`, [oid]);
       }
       if (autoCancel) {
-        if (!input.reorderToken || !note?.includes(`/reorder/${oid}/${input.reorderToken}`))
+        // the short link (/r/<code>, made for this order) or an older long one (/reorder/<order>/<token>)
+        const short = !!input.reorderToken && REORDER_CODE_RE.test(input.reorderToken);
+        if (!input.reorderToken || !note?.includes(short ? `/r/${input.reorderToken}` : `/reorder/${oid}/${input.reorderToken}`))
           throw bad('Ajoutez le lien de réactivation au message d’annulation.');
         reopenHash = await reorderHash(input.reorderToken);
+        if (short && (await reorderLinkOrder(tx, input.reorderToken)) !== oid)
+          throw bad('Ouvrez un nouveau message pour générer un nouveau lien de réactivation.');
         if ((await tx.query(`SELECT 1 FROM order_events WHERE order_id = $1 AND data->>'reorderHash' = $2 LIMIT 1`, [oid, reopenHash])).length)
           throw bad('Ouvrez un nouveau message pour générer un nouveau lien de réactivation.');
+        if (short) await tx.query('UPDATE reorder_links SET sent_at = now() WHERE hash = $1', [reopenHash]);
         status = 'cancelled';
         note = ['Pas de réponse', `Annulée automatiquement après ${attempts} appels sans réponse`, note].filter(Boolean).join(' — ');
         autoCancelled.push({ id: oid, ref: cur.ref, attempts });

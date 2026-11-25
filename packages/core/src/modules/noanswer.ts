@@ -4,7 +4,10 @@
 //   tentative », 3 at the start), and the cancel one, with the reactivation link, at « Annuler après N appels sans
 //   réponse ».
 // - orders.customerMessage: one order's text, as the agent sends it from his own WhatsApp or SMS (before a cancel, with
-//   a one-time reactivation link: the customer opens it and the order comes back « Nouvelle »).
+//   a one-time reactivation link: the customer opens it and the order comes back « Nouvelle »). Since 25 Nov 2026 a
+//   short link on the shop's own domain (https://babyjoydz.net/r/<10 letters>, like its pages' links: Réglages ›
+//   « Liens des pages »), whose page shows the product's main photo (WhatsApp shows it in its preview). The older long
+//   links (/reorder/<order>/<64 hex>) keep working.
 // - An order already at N unanswered tries or more and still waiting for a call (an order from before this rule, or N
 //   lowered by the shop) is cancelled by itself, with no message and no link (cancelOverLimit): when the shop saves N,
 //   and every 10 minutes (the job « noanswer-sweep »). It reads like the cancel of the Nth call: « Pas de réponse », an
@@ -15,11 +18,13 @@ import {
 } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, num } from '../db';
-import { Ctx, notFound, proc } from '../rpc';
+import { Ctx, notFound, proc, publicApi } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { tellAgencyOrderStatus } from './agencybell';
+import { mainProductPhoto } from './dellalphotos';
 import { firstName } from './notify';
-import { addEvent, getOrder } from './orders';
+import { addEvent, getOrder, newReorderCode, reorderHash, reorderLinkOrder } from './orders';
+import { pageLinks } from './pagelinks';
 
 const id = z.number().int().positive();
 /** A call nobody answered leaves the order « Pas de réponse » (or « Occupé », counted as a try before 24 Nov 2026). */
@@ -88,6 +93,75 @@ export async function cancelOverLimit(ctx: Ctx): Promise<{ cancelled: number; re
 
 const Text = z.string().trim().min(1).max(CUSTOMER_MESSAGE_MAX);
 
+/**
+ * Where a short link lives: the shop's own domain while its page links use it (ready, still reaching the server, not
+ * switched to Pilotix's address: pagelinks.ts), else the platform's address. null: no public address (the preview: the
+ * agent's screen puts its own in front of `path`).
+ */
+export async function reorderUrl(ctx: Ctx, code: string): Promise<string | null> {
+  const links = await pageLinks(ctx).catch(() => null);
+  if (links?.usesOwn && links.ownPrefix) return `${links.ownPrefix}r/${code}`;
+  const api = publicApi(ctx);
+  return api ? `${api}/r/${code}` : null;
+}
+
+/** A new short link for this order's cancel message (one each time the message opens; one never sent goes in 2 days). */
+async function newReorderLink(ctx: Ctx, orderId: number) {
+  const code = newReorderCode();
+  await ctx.db.query(`DELETE FROM reorder_links WHERE sent_at IS NULL AND created_at < now() - interval '2 days'`);
+  await ctx.db.query('INSERT INTO reorder_links (hash, order_id) VALUES ($1, $2)', [await reorderHash(code), orderId]);
+  return { code, path: `/api${ctx.shop?.slug ? `/s/${ctx.shop.slug}` : ''}/r/${code}`, url: await reorderUrl(ctx, code) };
+}
+
+/** The JPEG copy WhatsApp's preview reads: 800 px at most (light: WhatsApp shows no picture above 300 KB on some phones). */
+export const REORDER_PHOTO_SIDE = 800;
+
+/**
+ * A short link's page (the server's, public): its order's first product, by name, and its main photo (never its
+ * colour's: dellalphotos.ts › mainProductPhoto) as a public JPEG copy. Never the customer, the order or a price. Read
+ * when WhatsApp makes its preview, before the order is cancelled: the link only has to exist.
+ */
+export async function reorderPage(ctx: Ctx, code: string): Promise<{ found: boolean; photo: string | null; product: string | null }> {
+  const orderId = await reorderLinkOrder(ctx.db, code);
+  if (!orderId) return { found: false, photo: null, product: null };
+  const item = (
+    await ctx.db.query(
+      `SELECT i.product_id, i.name FROM order_items i LEFT JOIN products p ON p.id = i.product_id
+        WHERE i.order_id = $1 ORDER BY coalesce(p.is_service, false), i.id LIMIT 1`,
+      [orderId],
+    )
+  )[0];
+  if (!item) return { found: true, photo: null, product: null };
+  const product = String(item.name ?? '').trim() || null;
+  const src = await mainProductPhoto(ctx.db, num(item.product_id)).catch(() => null);
+  if (!src || !ctx.server?.dellal || !publicApi(ctx)) return { found: true, photo: null, product };
+  // a photo that cannot be made: the page without it (the button still works)
+  const r: any = await ctx.server.dellal('photoLinks', { photos: [src], side: REORDER_PHOTO_SIDE }, ctx).catch(() => null);
+  const photo = Array.isArray(r?.urls) && typeof r.urls[0] === 'string' ? r.urls[0] : null;
+  return { found: true, photo, product };
+}
+
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+/** only our own photos' addresses go in the page (https, nothing that leaves the attribute) */
+const safeUrl = (u: unknown) => (typeof u === 'string' && /^https:\/\/[^\s"'<>]{8,1900}$/i.test(u) ? u : null);
+
+/**
+ * The reactivation link's page (short and long links alike). `message`: an answer (restored, a link that no longer
+ * works) in place of the button. `photo`: the product's main photo, above the title, and WhatsApp's preview picture
+ * (og:image). Plain HTML: nothing runs; the button posts to the same address.
+ */
+export function reorderPageHtml(p: { message?: string | null; photo?: string | null; product?: string | null } = {}): string {
+  const photo = safeUrl(p.photo);
+  const product = String(p.product ?? '').trim();
+  const og = photo
+    ? `<meta property="og:type" content="website"><meta property="og:title" content="إعادة تفعيل طلبي"><meta property="og:image" content="${esc(photo)}"><meta property="og:image:secure_url" content="${esc(photo)}"><meta property="og:image:type" content="image/jpeg">${product ? `<meta property="og:image:alt" content="${esc(product)}">` : ''}<meta name="twitter:card" content="summary_large_image">`
+    : '';
+  return `<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex, nofollow">
+      <title>إعادة تفعيل طلبي</title>${og}<style>body{font:1rem/1.65 system-ui;color:#172340;background:#f4f2ef;margin:0;padding:24px}main{max-width:420px;margin:${photo ? 'clamp(0px,5vh,48px)' : '72px'} auto;background:white;border-radius:16px;padding:26px}img{display:block;width:100%;height:auto;max-height:min(420px,46vh);object-fit:contain;border-radius:12px;margin:0 0 6px;background:#f4f2ef}button{background:#ff9b12;color:#172340;border:0;border-radius:12px;padding:12px 18px;font:inherit;font-weight:700}</style>
+      <main>${photo ? `<img src="${esc(photo)}" alt="${esc(product)}">` : ''}<h1>إعادة تفعيل طلبي</h1>${p.message ? `<p>${esc(p.message)}</p>` :
+        '<p>تم إلغاء طلبك. يمكنك إعادة تفعيله وسنتواصل معك لتأكيده.</p><form method="post" enctype="text/plain"><button type="submit">إعادة تفعيل طلبي</button></form>'}</main></html>`;
+}
+
 export const noAnswerProcs = {
   /** Management › Statuts › « Messages client »: the two texts, the tries they go at and the shop's name (the preview). */
   'confirmation.messages.get': proc([], z.object({}), async (ctx) => {
@@ -106,17 +180,23 @@ export const noAnswerProcs = {
     ctx.emit({ type: 'settings' });
     return { ok: true };
   }),
-  /** One order's message as the agent sends it; before a cancel, with a new one-time reactivation link. */
+  /**
+   * One order's message as the agent sends it; before a cancel, with a new one-time reactivation link: `url` the short
+   * link (the shop's own domain, else the platform's address; null in the preview), `path` the same on the platform's
+   * address (an older screen puts the site's address in front of it).
+   */
   'orders.customerMessage': proc(['confirmation'], z.object({ id, kind: z.enum(['attempt', 'cancel']), draft: z.string().uuid().optional() }), async (ctx, i) => {
     await getOrder(ctx, i.id);
     const [texts, order] = await Promise.all([getSetting(ctx.db, 'customerMessages'), customerMessageOrder(ctx.db, i.id)]);
     const values = customerMessageValues(order);
     // (the first message has no link: a {رابط_إعادة_التفعيل} written there is left out)
     const text = fillCustomerMessage(texts[i.kind] || DEFAULT_CUSTOMER_MESSAGES[i.kind], i.kind === 'attempt' ? { ...values, [REACTIVATION_VAR]: '' } : values);
-    if (i.kind === 'attempt') return { text, token: null, path: null };
-    const token = Array.from(globalThis.crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, '0')).join('');
-    return { text, token, path: `/api${ctx.shop?.slug ? `/s/${ctx.shop.slug}` : ''}/reorder/${i.id}/${token}` };
+    if (i.kind === 'attempt') return { text, token: null, path: null, url: null };
+    const link = await newReorderLink(ctx, i.id);
+    return { text, token: link.code, path: link.path, url: link.url };
   }),
+  /** The short link's page, for its public address (apps/server): read by the server only (admin = the system). */
+  'orders.reorderPage': proc([], z.object({ code: z.string().max(20) }), (ctx, i) => reorderPage(ctx, i.code)),
   /** The job « noanswer-sweep » (every 10 minutes): the orders over the shop's limit, cancelled with no message. */
   'confirmation.noAnswerSweep': proc([], z.object({}), (ctx) => cancelOverLimit(ctx)),
 };

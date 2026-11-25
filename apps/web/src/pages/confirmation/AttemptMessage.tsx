@@ -54,9 +54,10 @@ export function AttemptMessage({ phone, orderId, message, onMessage, onOpen, can
   const { t } = useTranslation();
   const [draft] = useState(() => globalThis.crypto.randomUUID());
   const meta = useRpc('orders.uiMeta', {}, { staleTime: 60_000 });
-  // the shop's text with this order's values (« Messages client »); before a cancel, with a new one-time link
+  // the shop's text with this order's values (« Messages client »); before a cancel, with a new one-time link: the short
+  // one on the shop's own domain (babyjoydz.net/r/…), else on the site's address (the preview: this page's)
   const tpl = useRpc('orders.customerMessage', { id: orderId ?? 0, kind: cancelling ? 'cancel' : 'attempt', draft }, { enabled: !!orderId && !!phone, staleTime: Infinity });
-  const url = cancelling && tpl.data?.path ? new URL(tpl.data.path, window.location.origin).href : '';
+  const url = !cancelling ? '' : tpl.data?.url || (tpl.data?.path ? new URL(tpl.data.path, window.location.origin).href : '');
   const defaultText = tpl.data ? (cancelling ? (url ? withReactivationLink(tpl.data.text, url) : '') : tpl.data.text) : '';
   const text = message.trim() || defaultText;
   // the agent may change the words: the link always goes (on a line of its own at the end when he took it out)

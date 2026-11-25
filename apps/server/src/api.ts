@@ -335,6 +335,17 @@ const hostOf = (req: { headers: Record<string, string | undefined> }) =>
     .trim()
     .toLowerCase()
     .replace(/:\d+$/, '');
+/** The reactivation link's page: never kept by a cache, never indexed, nothing runs (its photo and its own button only). */
+const reorderHead = (res: any) =>
+  res
+    .header('Cache-Control', 'no-store')
+    .header('Referrer-Policy', 'no-referrer')
+    .header('X-Robots-Tag', 'noindex, nofollow')
+    .header('Content-Security-Policy', "default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+    .type('text/html; charset=utf-8');
+const REORDER_GONE = 'هذا الرابط غير متاح.';
+const REORDER_DONE = 'تمت إعادة تفعيل طلبك. سنتواصل معك لتأكيده.';
+const REORDER_USED = 'لم يعد بإمكانك إعادة تفعيل هذا الطلب عبر هذا الرابط.';
 /** What follows the path of a request (?fbclid=…): kept when a page moves. */
 const queryOf = (req: { url?: string }) => {
   const q = String(req.url ?? '').indexOf('?');
@@ -435,12 +446,12 @@ class ApiController {
     return this.core.forPublic(ref);
   }
 
+  /** An older long link of the cancel message (before 25 Nov 2026): /reorder/<order>/<64 hex>. It keeps working. */
   @Public()
   @Get(['reorder/:id/:token', 's/:shop/reorder/:id/:token'])
   reorderPage(@Param('token') token: string, @Res() res: any) {
     const valid = /^[a-f0-9]{64}$/.test(token);
-    return res.code(valid ? 200 : 404).header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer')
-      .type('text/html; charset=utf-8').send(this.reorderHtml(valid ? null : 'هذا الرابط غير متاح.'));
+    return reorderHead(res.code(valid ? 200 : 404)).send(core.reorderPageHtml({ message: valid ? null : REORDER_GONE }));
   }
 
   @Public()
@@ -449,17 +460,62 @@ class ApiController {
     const ref = await this.publicShop(shop);
     const restored = await core.reactivateCancelledOrder(ref.db, Number(id), token);
     if (restored) this.core.emitLive(ref.shop.id, { type: 'orders' });
-    return res.code(restored ? 200 : 410).header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer')
-      .type('text/html; charset=utf-8').send(this.reorderHtml(restored
-        ? 'تمت إعادة تفعيل طلبك. سنتواصل معك لتأكيده.'
-        : 'لم يعد بإمكانك إعادة تفعيل هذا الطلب عبر هذا الرابط.'));
+    return reorderHead(res.code(restored ? 200 : 410)).send(core.reorderPageHtml({ message: restored ? REORDER_DONE : REORDER_USED }));
   }
 
-  private reorderHtml(message: string | null) {
-    return `<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-      <title>إعادة تفعيل طلبي</title><style>body{font:1rem/1.65 system-ui;color:#172340;background:#f4f2ef;margin:0;padding:24px}main{max-width:420px;margin:72px auto;background:white;border-radius:16px;padding:26px}button{background:#ff9b12;color:#172340;border:0;border-radius:12px;padding:12px 18px;font:inherit;font-weight:700}</style>
-      <main><h1>إعادة تفعيل طلبي</h1>${message ? `<p>${message}</p>` :
-        '<p>تم إلغاء طلبك. يمكنك إعادة تفعيله وسنتواصل معك لتأكيده.</p><form method="post" enctype="text/plain"><button type="submit">إعادة تفعيل طلبي</button></form>'}</main></html>`;
+  /**
+   * The cancel message's short link (since 25 Nov 2026): https://<the shop's own domain>/r/<code> (Caddy sends it to
+   * /api/domain/r/<code>), or on the platform's address /api/s/<store>/r/<code>. Its page shows the product's main
+   * photo, which WhatsApp shows in its preview; its button restores the order (only the latest cancellation's link).
+   */
+  @Public()
+  @Get(['r/:code', 's/:shop/r/:code'])
+  async reorderShortPage(@Param('shop') shop: string | undefined, @Param('code') code: string, @Res() res: any) {
+    return this.sendReorderPage(await this.publicShop(shop).catch(() => null), code, res, null);
+  }
+
+  @Public()
+  @Post(['r/:code', 's/:shop/r/:code'])
+  async reorderShort(@Param('shop') shop: string | undefined, @Param('code') code: string, @Res() res: any) {
+    return this.reactivateShort(await this.publicShop(shop).catch(() => null), code, res);
+  }
+
+  @Public()
+  @Get('domain/r/:code')
+  async domainReorderPage(@Param('code') code: string, @Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
+    const host = hostOf(req);
+    return this.sendReorderPage(await this.ownDomainShop(host), code, res, host ? `https://${host}` : null);
+  }
+
+  @Public()
+  @Post('domain/r/:code')
+  async domainReorder(@Param('code') code: string, @Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
+    return this.reactivateShort(await this.ownDomainShop(hostOf(req)), code, res);
+  }
+
+  /** The active shop whose own domain (ready) this is, on the customers' connections; null: none. */
+  private async ownDomainShop(host: string): Promise<ShopRef | null> {
+    const id = host ? await core.shopIdByDomain(this.core.t, host).catch(() => null) : null;
+    const ref = id ? await this.core.shop({ id }) : null;
+    return ref && ref.shop.status === 'active' ? this.core.forPublic(ref) : null;
+  }
+
+  /** `site`: the shop's own domain the page was opened on: its photo is read there too (never the platform's address). */
+  private async sendReorderPage(ref: ShopRef | null, code: string, res: any, site: string | null) {
+    if (!ref || !core.REORDER_CODE_RE.test(code)) return reorderHead(res.code(404)).send(core.reorderPageHtml({ message: REORDER_GONE }));
+    const shop = intake(ref);
+    // (the server failing for a moment: the page without its photo, its button still answers the truth)
+    const p: any = await this.core.call(shop, 'orders.reorderPage', await this.core.systemSession(shop), { code }).catch(() => ({ found: true, photo: null, product: null }));
+    if (!p?.found) return reorderHead(res.code(404)).send(core.reorderPageHtml({ message: REORDER_GONE }));
+    const base = config.publicUrl.replace(/\/+$/, '');
+    const photo = typeof p.photo === 'string' && site && base && p.photo.startsWith(`${base}/api/`) ? `${site}${p.photo.slice(base.length)}` : p.photo;
+    return reorderHead(res.code(200)).send(core.reorderPageHtml({ photo, product: p.product }));
+  }
+
+  private async reactivateShort(ref: ShopRef | null, code: string, res: any) {
+    const restored = !!ref && (await core.reactivateByCode(ref.db, code));
+    if (ref && restored) this.core.emitLive(ref.shop.id, { type: 'orders' });
+    return reorderHead(res.code(restored ? 200 : 410)).send(core.reorderPageHtml({ message: restored ? REORDER_DONE : REORDER_USED }));
   }
 
   @Public()
