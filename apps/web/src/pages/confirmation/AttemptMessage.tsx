@@ -1,6 +1,7 @@
 import { phoneWa, withReactivationLink } from '@pilotix/shared';
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { DEMO_ONLY } from '../../lib/backend';
 import { useRpc } from '../../lib/query';
 import { store } from '../../lib/store';
 import { EXT_ZIP, extSend, extVersion, photoFiles, sendMode, sharePhotoFiles, waApps, waChat, waPhotos } from '../../lib/waShare';
@@ -94,7 +95,8 @@ export function AttemptMessage({ phone, orderId, message, onMessage, onOpen, can
   // too since 25 Nov 2026 (owner: « the same picture need to be send in attempt 3 »): on a computer it is locked until
   // the extension is there (« he should install it before being able to send message »).
   const photo = tpl.data?.photo ?? null;
-  const realPhoto = photo && /^https:\/\//.test(photo) ? photo : null;
+  // (the preview has no public address: its small picture counts as the photo there, so it shows what the site does)
+  const realPhoto = photo && (DEMO_ONLY || /^https:\/\//.test(photo)) ? photo : null;
   const mode = useMemo(sendMode, []);
   const ext = useExtVersion();
   const needExt = !cancelling && mode === 'pc' && !ext;
