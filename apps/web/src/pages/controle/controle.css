@@ -1,0 +1,107 @@
+/* ===== Contrôle (pages/controle): the depot, Pilotix and each delivery company in agreement, each company alone.
+   Built on the app's tokens (--surface, --line, --ink, --muted, --sky-soft, the Doux skin's --sk-*, the status colours
+   --c-ok-*, --c-warn-*, --c-bad-*, --c-info-*) so light, dark and Arabic (dir="rtl") follow the app. Scoped under .ctl. */
+.ctl {
+  --ctl-r: var(--sk-r, 22px);
+  --ctl-rc: var(--sk-r-ctl, 14px);
+  --ctl-ring: var(--c-accent-2, #F28B1E);
+  display: flex; flex-direction: column; gap: 16px; min-width: 0;
+}
+.ctl .bji { width: 18px; height: 18px; flex: none; }
+.ctl :focus-visible { outline: 2px solid var(--ctl-ring); outline-offset: 2px; }
+.ctl .ltr { direction: ltr; unicode-bidi: isolate; }
+.ctl-grow { flex: 1 1 auto; min-width: 0; }
+.ctl-wrap { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ctl-h3 { margin: 6px 0 0; font-size: 16px; font-weight: 600; color: var(--muted); }
+
+/* ---------- the verdict: all in agreement, or how many to fix */
+.ctl-hero { display: flex; align-items: flex-start; gap: 16px; padding: 18px 20px; border-radius: var(--ctl-r); background: var(--surface); border: 1px solid var(--line); }
+.ctl-hero.is-ok { background: var(--c-ok-tint, #E7F6EC); border-color: transparent; }
+.ctl-hero.is-bad { background: var(--c-warn-tint, #FFF4E0); border-color: transparent; }
+.ctl-hero-mark { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--surface); }
+.ctl-hero.is-ok .ctl-hero-mark { color: var(--c-ok-ink, #1F7A45); }
+.ctl-hero.is-bad .ctl-hero-mark { color: var(--c-warn-ink, #8A5300); }
+.ctl .ctl-hero-mark .bji { width: 26px; height: 26px; }
+.ctl-hero-t { margin: 0; font-size: 22px; line-height: 1.2; font-weight: 700; color: var(--ink); }
+.ctl-hero-text { margin: 6px 0 0; font-size: 14px; line-height: 1.45; color: var(--ink); max-width: 72ch; }
+.ctl-hero-meta { margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); }
+.ctl-run { flex: none; }
+
+/* ---------- one card per company */
+.ctl-cos { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.ctl-co { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: var(--ctl-r); background: var(--surface); border: 1px solid var(--line); cursor: pointer; min-width: 0; color: var(--ink); }
+.ctl-co.on { box-shadow: 0 0 0 2px var(--ctl-ring); border-color: transparent; }
+@media (hover: hover) { .ctl-co:not(.on):hover { background: var(--sky-soft); } }
+.ctl-co-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ctl-co-ic { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; flex: none; background: var(--sky-soft); font-size: 13px; font-weight: 700; color: var(--ink); overflow: hidden; }
+.ctl-co-ic.has-ic, .ctl-chip-ic.has-ic, .ctl-cm-ic.has-ic { background: #fff; box-shadow: inset 0 0 0 1px var(--line); }
+.ctl-co-ic img, .ctl-chip-ic img, .ctl-cm-ic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ctl-co-name { flex: 1 1 auto; min-width: 0; font-size: 16px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctl-pill { flex: none; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.ctl-pill.is-ok { background: var(--c-ok-tint); color: var(--c-ok-ink); }
+.ctl-pill.is-warn { background: var(--c-warn-tint); color: var(--c-warn-ink); }
+.ctl-pill.is-bad { background: var(--c-bad-tint); color: var(--c-bad-ink); }
+.ctl-areas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.ctl-area { display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: var(--ctl-rc); background: var(--sky-soft); font-size: 13px; min-width: 0; color: var(--muted); }
+.ctl .ctl-area .bji { width: 16px; height: 16px; }
+.ctl-area-n { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctl-area b { color: var(--c-ok-ink); font-weight: 700; }
+.ctl-area.has { background: var(--c-warn-tint); color: var(--c-warn-ink); }
+.ctl-area.has b { color: var(--c-warn-ink); }
+.ctl-co-foot { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--muted); }
+.ctl-bad { color: var(--c-bad-ink); font-weight: 600; }
+.ctl-money { color: var(--ink); font-weight: 600; }
+
+/* ---------- an area's tools: each company's chip, « À régler / Vus / Réglés » */
+.ctl-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.ctl-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; min-width: 0; flex: 1 1 auto; padding: 2px; }
+.ctl-chips::-webkit-scrollbar { display: none; }
+.ctl-chip { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding-block: 0; padding-inline: 6px 14px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: 14px; cursor: pointer; white-space: nowrap; color: var(--ink); flex: none; }
+.ctl-chip:first-child { padding-inline-start: 14px; }
+.ctl-chip b { font-weight: 700; color: var(--muted); }
+.ctl-chip.on { background: var(--sk-tab-on-bg, #FFE9CC); color: var(--sk-tab-on-ink, #6B3A00); border-color: transparent; }
+.ctl-chip.on b { color: inherit; }
+.ctl-chip-ic { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--sky-soft); font-size: 11px; font-weight: 700; overflow: hidden; flex: none; }
+@media (hover: hover) { .ctl-chip:not(.on):hover { background: var(--sky-soft); } }
+.ctl-seg { display: inline-flex; padding: 4px; gap: 4px; border-radius: var(--ctl-rc); background: var(--sky-soft); flex: none; }
+.ctl-seg button { all: unset; box-sizing: border-box; height: 34px; padding: 0 14px; border-radius: calc(var(--ctl-rc) - 4px); font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; }
+.ctl-seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
+
+/* ---------- a problem: what disagrees, who acts, what to do, what Pilotix did */
+.ctl-list { display: flex; flex-direction: column; gap: 10px; }
+.ctl-card { display: flex; align-items: flex-start; gap: 14px; padding: 14px 16px; border-radius: var(--ctl-r); background: var(--surface); border: 1px solid var(--line); min-width: 0; }
+.ctl-card-ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex: none; background: var(--c-warn-tint); color: var(--c-warn-ink); }
+.ctl-card.is-argent .ctl-card-ic { background: var(--c-info-tint); color: var(--c-info-ink); }
+.ctl-card.is-statuts .ctl-card-ic { background: var(--c-bad-tint); color: var(--c-bad-ink); }
+.ctl-card.is-closed .ctl-card-ic { background: var(--c-ok-tint); color: var(--c-ok-ink); }
+.ctl-card-t { margin: 0; font-size: 15.5px; line-height: 1.35; font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+.ctl-card-meta { margin: 6px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13px; color: var(--muted); }
+.ctl-ref { font-weight: 600; color: var(--ink); }
+.ctl-cm { display: inline-flex; align-items: center; gap: 6px; }
+.ctl-cm-ic { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; background: var(--sky-soft); font-size: 9px; font-weight: 700; overflow: hidden; flex: none; }
+.ctl-who { padding: 2px 8px; border-radius: 999px; background: var(--sky-soft); color: var(--ink); font-weight: 600; font-size: 12px; }
+.ctl-card-do { margin: 8px 0 0; font-size: 14px; line-height: 1.45; color: var(--ink); }
+.ctl-did { margin: 8px 0 0; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: var(--c-ok-tint); color: var(--c-ok-ink); }
+.ctl .ctl-did .bji { width: 15px; height: 15px; }
+.ctl-did.is-seen { background: var(--sky-soft); color: var(--muted); }
+.ctl-card-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.ctl-amount { font-size: 14px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.ctl-amount.is-money { font-size: 17px; font-weight: 700; color: var(--ink); }
+.ctl-card-acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.ctl-card-acts .btn { white-space: nowrap; }
+.ctl-more { align-self: center; }
+
+/* ---------- a phone */
+@media (max-width: 720px) {
+  .ctl-hero { flex-wrap: wrap; padding: 16px; gap: 12px; }
+  .ctl-hero-mark { width: 40px; height: 40px; }
+  .ctl-hero-t { font-size: 19px; }
+  .ctl-run { width: 100%; justify-content: center; }
+  .ctl-cos { grid-template-columns: minmax(0, 1fr); }
+  .ctl-tools { flex-direction: column; align-items: stretch; }
+  .ctl-seg { align-self: stretch; }
+  .ctl-seg button { flex: 1 1 0; }
+  .ctl-card { flex-wrap: wrap; padding: 14px; gap: 12px; }
+  .ctl-card-side { flex: 1 1 100%; flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .ctl-card-acts { justify-content: flex-start; }
+}

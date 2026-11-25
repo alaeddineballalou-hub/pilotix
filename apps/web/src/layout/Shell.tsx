@@ -85,6 +85,8 @@ export function useMenuCounts(seller: Seller | null = null, enabled = true) {
       ...(c.landing ? { landing: c.landing.blocked + c.landing.abandoned + c.landing.noPage } : {}),
       // Rendez-vous (a module): the bookings still to call
       ...('rdv' in c && typeof c.rdv === 'number' ? { rdv: c.rdv } : {}),
+      // Contrôle: the problems open between the depot, Pilotix and the delivery companies (money ones for those who see them)
+      ...('controle' in c && typeof c.controle === 'number' ? { controle: c.controle } : {}),
     } as Record<string, number>;
   }, [q.data]);
 }
@@ -99,6 +101,7 @@ const ITEM_COUNT: Record<string, [string, string]> = {
   produits: ['lowStock', 'nc-a'],
   landing: ['landing', 'nc-a'],
   rendezvous: ['rdv', 'nc-n'],
+  controle: ['controle', 'nc-a'],
   caisse: ['uncashed', 'nc-c'],
   livraison: ['toShip', 'nc-n'],
 };

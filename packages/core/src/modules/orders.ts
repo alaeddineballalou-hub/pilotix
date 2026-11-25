@@ -44,6 +44,7 @@ import { type FollowMove, tellFollow, tellGiven, tellTaken } from './inbox';
 import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPreview } from './notify';
 import { landingCounts, landingSettings, onLandingConf, onLandingFollow, queueChatEvent, queueChatPurchase } from './landingquery';
 import { rdvMenuCount } from './rdv';
+import { leakMenuCount } from './leaks';
 import { lowStockCount } from './stockquery';
 import { agencyLead, agencyOf, agencyRowSql, andSql, listScopeSql, ownRowSql, queueSql, rowScopeSql } from './agencyscope';
 import { settleTickets } from './tickets';
@@ -1925,7 +1926,8 @@ export async function orderCounts(ctx: Ctx) {
   if (landing && !hasRole(ctx.session, 'marketer')) landing.noPage = 0;
   // Rendez-vous (a module): the bookings still to call, for the people who see the page
   const rdv = await rdvMenuCount(ctx);
-  return { conf: toObj(conf), follow: toObj(follow), sub: toObj(subs), lateCalls, sav, uncashed, tickets, lowStock, ai, landing, ...(rdv === undefined ? {} : { rdv }), all: num((await ctx.db.query('SELECT count(*)::int n FROM sales'))[0]?.n), lists: await listsOf(listScopeSql(ctx)) };
+  const controle = await leakMenuCount(ctx);
+  return { conf: toObj(conf), follow: toObj(follow), sub: toObj(subs), lateCalls, sav, uncashed, tickets, lowStock, ai, landing, ...(rdv === undefined ? {} : { rdv }), ...(controle === undefined ? {} : { controle }), all: num((await ctx.db.query('SELECT count(*)::int n FROM sales'))[0]?.n), lists: await listsOf(listScopeSql(ctx)) };
 }
 
 // ---------------------------------------------------------------- order form, fees and the delivered report

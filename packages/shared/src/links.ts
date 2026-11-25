@@ -57,6 +57,8 @@ export const APP_PAGES = [
   'pos',
   // Rendez-vous (a module too: the bookings of a service's sessions)
   'rendezvous',
+  // Contrôle: the depot, Pilotix and the delivery companies in agreement
+  'controle',
   'livraison',
   'utilisateurs',
   'management',

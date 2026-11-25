@@ -58,6 +58,7 @@ export { pilotOn } from './modules/dellal';
 export { appEndpoint, canPush, fcmGone, fcmMessage, pushShopAdmins } from './modules/push';
 export { seedPos } from './modules/pos';
 export { seedRdv } from './modules/rdv';
+export { seedLeaks } from './modules/leaks';
 export { seedBlockDemo } from './modules/confblock';
 export type { PosSale, PosSettings } from './modules/pos';
 export { noteBadSignature, routeMeta, seedSocialPreview, socialApps, socialIgSecret, socialSecret } from './modules/social';

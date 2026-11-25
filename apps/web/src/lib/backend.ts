@@ -486,6 +486,9 @@ class DemoBackend implements Backend {
         if (import.meta.env.VITE_DEMO_ONLY === '1') await core.seedPos(db);
         // and Rendez-vous turned on: a training's three sessions and their bookings (the designs of 24 Nov 2026)
         if (import.meta.env.VITE_DEMO_ONLY === '1') await core.seedRdv(db);
+        // and Contrôle: the demo's parcels made true (scanned out, the companies' words read), then one of each problem on
+        // ZR, Yalidine and our livreurs (the designs of 25 Nov 2026)
+        await core.seedLeaks(db);
         // the preview opened in Claude: « Bloquer jusqu'à l'appel » on, Rania has two new orders to call (her « Essayer » link)
         if (import.meta.env.VITE_DEMO_ONLY === '1') await core.seedBlockDemo(db);
         // the demo database is rebuilt on every reload: put back the column presets and screen choices kept in this browser

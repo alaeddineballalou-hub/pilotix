@@ -442,6 +442,7 @@ const PAGE_PROCS: readonly (readonly [prefix: string, right: string | readonly s
   ['sav.', 'page:sav'],
   ['pos.', 'page:pos'],
   ['rdv.', 'page:rendezvous'],
+  ['leaks.', 'page:controle'],
   ['spy.', 'page:spy'],
   ['createur.', 'page:createur'],
   // Pilot Content's planner, also used by Espace créateur

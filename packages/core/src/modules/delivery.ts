@@ -402,7 +402,7 @@ async function demoCosts(ctx: Ctx, companyId: number, ids: number[], weighed: bo
 async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario?: FollowStatus) {
   if (scenario && (ctx.server || (ctx.shop && !ctx.shop.demo))) throw forbidden('Simulation réservée à la démo');
   const parcels = await ctx.db.query(
-    `SELECT id, ref, tracking, ext_id, follow_status, sub_status, ext_status, taken_at FROM orders
+    `SELECT id, ref, tracking, ext_id, follow_status, sub_status, ext_status, taken_at, ext_meaning, ext_meaning_of FROM orders
      WHERE company_id = $1 AND tracking IS NOT NULL AND follow_status = ANY($2) ${onlyIds ? 'AND id = ANY($3)' : ''} ORDER BY ext_status_at NULLS FIRST LIMIT 2000`,
     onlyIds ? [c.id, SYNCABLE, onlyIds] : [c.id, SYNCABLE],
   );
@@ -476,6 +476,11 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
       await ctx.db.query('UPDATE orders SET ext_status=$2, ext_status_at=COALESCE($3::timestamptz, now()), updated_at=now() WHERE id=$1', [a.id, a.status.slice(0, 200), safeDate(a.at)]);
       changed++;
     }
+    // Contrôle reads what these words mean for Pilotix (a status, '' known but changes nothing, '?' unknown), kept with the
+    // words it was read for: words Pilotix does not know, or a « livré » it did not follow, are found without asking again
+    const meaning = to === undefined ? '?' : (to ?? '');
+    if (meaning !== (p.ext_meaning ?? null) || a.status.slice(0, 200) !== (p.ext_meaning_of ?? null))
+      await ctx.db.query('UPDATE orders SET ext_meaning=$2, ext_meaning_of=$3 WHERE id=$1', [a.id, meaning, a.status.slice(0, 200)]);
     // The company has the parcel as soon as it says anything after « handed over » (ZR: « Confirmé au bureau »,
     // « Dispatch », « Vers wilaya »… anything after « Prêt à expédier »): it leaves Dépôt › Dispatchées, with or without
     // a pickup bag (the owner's rule, 22 Nov 2026). Kept once, the first time; a parcel the company took before the
@@ -1319,6 +1324,8 @@ export const deliveryProcs = {
     // Suivi › Bloqués: a parcel still without news 2 days after it was « bloqué »: a claim to its company by itself
     if (!i.fast && !i.companyId && ctx.session.isAdmin) await step('Bloqués : réclamations', () => import('./suivi').then((m) => m.stuckAutoClaims(ctx)), null);
     const payments = i.companyId || !ctx.session.isAdmin ? [] : await step('Paiements des sociétés', () => import('./courierpay').then((m) => m.payRunAll(ctx)), [] as any[]);
+    // Contrôle: the depot, Pilotix and each company compared (each one alone), after their news and payments came in
+    const control = i.fast || i.companyId || !ctx.session.isAdmin ? null : await step('Contrôle', () => import('./leaks').then((m) => m.leakRun(ctx, list.map((c, n) => ({ companyId: c.id, error: out[n]?.error ?? null })))), null);
     return {
       companies: out,
       checked: out.reduce((s, x) => s + x.checked, 0),
@@ -1326,6 +1333,7 @@ export const deliveryProcs = {
       failed: out.reduce((s, x) => s + (x.failed ?? 0), 0),
       payments,
       steps,
+      ...(control ? { control } : {}),
       ...(oldNotes ? { oldNotes } : {}),
     };
   }),

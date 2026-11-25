@@ -21,6 +21,9 @@ export const MENU_TABS = {
   pos: ['vendre', 'ventes', 'cloture', 'reglages'],
   // Rendez-vous: the bookings to call, confirmed (and at the door), cancelled; the sessions
   rendezvous: ['attente', 'confirmes', 'annules', 'sessions'],
+  // Contrôle: the depot, Pilotix and each delivery company in agreement (each company alone): the overview, then where
+  // they disagree — money (the owners), returns, dispatch, statuses
+  controle: ['apercu', 'argent', 'retours', 'dispatch', 'statuts'],
   marketing: ['publicite', 'strategies', 'formulaires', 'campagnes', 'catalogue', 'marketer'],
   caisse: ['overview', 'due', 'done', 'livreurs', 'journal', 'paie'],
   livraison: ['societes', 'api', 'livreurs'],
@@ -157,6 +160,9 @@ export const STORE_MENU: MenuItem[] = [
   // confirmation team, once an administrator turns it on (Management › Modules)
   { id: 'rendezvous', icon: 'calendar', roles: ['confirmation'], subs: MENU_TABS.rendezvous, cond: 'rdv', tabNames: { prefix: 'rdv.tabs' } },
   { id: 'sav', icon: 'headset', roles: AGENTS, subs: MENU_TABS.sav, tabRoles: { reglages: [] }, tabNames: { prefix: 'sav.views' } },
+  // Contrôle (owner's ask, 25 Nov 2026): what the depot, Pilotix and each company disagree on, found every 30 minutes;
+  // its money tab for the owners (and the roles given it in Utilisateurs › Rôles)
+  { id: 'controle', icon: 'checkcircle', roles: ['suivi', 'depot'], subs: MENU_TABS.controle, tabRoles: { argent: [] }, tabNames: { prefix: 'ctl.tabs' } },
   { id: 'tournee', icon: 'navigation', roles: ['livreur'], cond: 'livreur' },
   // the agents see the products, the sales guides and the stock; the depot every tab
   {
@@ -277,9 +283,9 @@ export const SPACES: Space[] = [
   { id: 'marketing', icon: 'megaphone', items: ['marketing', 'createur', 'social', 'influenceurs', 'parrainage', 'codepromo'], counts: ['posts'] },
   { id: 'sponsor', icon: 'trend', items: ['marketing', 'landing', 'spy', 'autochecks'], counts: ['landing'] },
   { id: 'cm', icon: 'chat', items: ['messages', 'cm', 'codepromo'], counts: ['msgs', 'cm'] },
-  { id: 'service', icon: 'phone', items: ['dashboard', 'confirmation', 'rendezvous', 'suivi', 'livrees', 'annulees', 'tout', 'sav', 'auto', 'assign', 'affectation', 'autochecks', 'automessages', 'autoreglages', 'clients', 'codepromo'], counts: ['conf', 'rdv', 'suivi', 'sav', 'notify'] },
-  { id: 'depot', icon: 'package', items: ['dashboard', 'depot', 'scanner', 'produits', 'pos', 'tournee', 'livreurs'], counts: ['depot', 'lowStock'] },
-  { id: 'finance', icon: 'wallet', items: ['caisse', 'macaisse'], counts: [] },
+  { id: 'service', icon: 'phone', items: ['dashboard', 'confirmation', 'rendezvous', 'suivi', 'controle', 'livrees', 'annulees', 'tout', 'sav', 'auto', 'assign', 'affectation', 'autochecks', 'automessages', 'autoreglages', 'clients', 'codepromo'], counts: ['conf', 'rdv', 'suivi', 'sav', 'notify', 'controle'] },
+  { id: 'depot', icon: 'package', items: ['dashboard', 'depot', 'controle', 'scanner', 'produits', 'pos', 'tournee', 'livreurs'], counts: ['depot', 'lowStock', 'controle'] },
+  { id: 'finance', icon: 'wallet', items: ['caisse', 'controle', 'macaisse'], counts: ['controle'] },
   { id: 'admin', icon: 'usercog', items: ['utilisateurs', 'management', 'reglages', 'livraison', 'agences', 'marketers', 'comptes'], counts: [] },
 ];
 /** Is this menu item or group line on the screen? */
