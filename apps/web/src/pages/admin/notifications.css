@@ -151,7 +151,7 @@
 
 /* the agency's alerts on numbers (pages/agency/Notifications.tsx): the threshold */
 .px-nt-numrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-.px-nt-num { width: 120px; min-height: 44px; font-size: 16px; font-weight: 700; }
+.px-nt .px-nt-numrow input.px-nt-num { flex: none; width: 120px; min-height: 44px; font-size: 16px; font-weight: 700; }
 
 .px-nt-reset { align-self: flex-start; min-height: 44px; padding: 0; border: 0; background: none; color: var(--c-info-ink); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
 .px-nt-links { display: flex; flex-wrap: wrap; gap: 10px; }
