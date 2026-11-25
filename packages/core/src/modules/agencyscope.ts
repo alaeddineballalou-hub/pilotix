@@ -324,9 +324,7 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'orders.companyFees': order('ids'),
   'orders.sync': (ctx, i) => ownOrders(ctx, nums(Array.isArray(i?.actions) ? i.actions.map((a: any) => a?.id) : [])),
   'confirmation.meta': free,
-  'confirmation.colPresets': free,
-  'confirmation.colActive': free,
-  'confirmation.setColActive': free,
+  // (the column presets are the agency's own, never the store's: AGENCY_COL_PRESETS, in the agency's space)
   'confirmation.counts': free,
   'confirmation.list': free,
   'confirmation.catalog': free,
@@ -532,6 +530,13 @@ const MANAGEMENT_PROCS = new Set(['management.plans', 'management.planSave', 'ma
 const AGENCY_INBOX = new Set(['inbox.list', 'inbox.read', 'inbox.readAll', 'inbox.run', 'push.key', 'push.subscribe', 'push.unsubscribe', 'push.test']);
 /** What a partner's own space answers (its own team and account; the rest are the agency.* actions). */
 const AGENCY_SPACE = new Set(['me.get', 'me.language', 'me.password', 'me.ui', 'me.setUi', 'me.update', 'me.seen', 'me.delete', 'management.myBonuses', 'users.list', 'users.create', 'users.update', 'users.phoneCheck', 'admin.users.resetPassword', 'boutiques.list', 'boutiques.slugCheck', 'boutiques.save']);
+/**
+ * A confirmation agency's own column presets (owner's choice, 25 Nov 2026): kept in the agency's space, whatever seller
+ * is picked at the top of the page (« Tous les vendeurs » too). Its chief and its chefs d'équipe save them and put one in
+ * use for the agency's team (confirmation.ts: presetLead); a seller's own team never sees them, and the agency's people
+ * never see the seller's.
+ */
+const AGENCY_COL_PRESETS = new Set(['confirmation.colPresets', 'confirmation.addColPreset', 'confirmation.deleteColPreset', 'confirmation.colActive', 'confirmation.setColActive']);
 
 /**
  * Checked before every action: a partner's space (agency, marketer) runs only its own actions; an agency's agent inside
@@ -547,6 +552,7 @@ export async function agencyGate(name: string, ctx: Ctx, input: unknown): Promis
     if (kind === 'agency' && MANAGEMENT_PROCS.has(name)) return;
     // an agency pays its people with the agent pay (Facturation › Paie, « Mes gains »)
     if (kind === 'agency' && name.startsWith('pay.')) return;
+    if (kind === 'agency' && AGENCY_COL_PRESETS.has(name)) return;
     if (sellerProcsOf(kind).has(name)) throw bad('Choisissez un vendeur en haut de la page');
     throw forbidden(kind === 'agency' ? 'Pas dans l’espace d’une agence' : 'Pas dans l’espace d’un marketer');
   }

@@ -51,6 +51,14 @@ const DAY = 86_400_000;
 /** Managers see the team: statistics, assign / remove agents. */
 export const isManager = (ctx: Ctx) => hasRole(ctx.session, 'agent_manager', 'vendeur');
 
+/**
+ * Who saves, deletes and puts in use the column presets of his team: a store's administrator, for the store's team; in
+ * a confirmation agency's own space, its chief and its chefs d'équipe, for the agency's team only, in every seller and
+ * in « Tous les vendeurs » (owner's choice, 25 Nov 2026). Inside a seller's store an agency's people stay agents: the
+ * store's presets are the store's team's, never theirs to change.
+ */
+export const presetLead = (ctx: Ctx) => ctx.session.isAdmin || (ctx.shop?.kind === 'agency' && hasRole(ctx.session, 'agent_manager'));
+
 // ---------------------------------------------------------------- call deadlines
 /** The countdown shown on a row: t = deadline, m = first call / end of slot / start of the next slot (then e = its end). */
 export interface Deadline {
@@ -996,13 +1004,14 @@ export const confirmationProcs = {
 
   /** Counts of the stage bar. */
   /**
-   * Column presets of every order list: everyone reads them and picks one for himself; only an admin adds or deletes,
-   * and the one he saves or picks goes to every team; a saved preset is never changed. `all`: every column of the list
-   * it was saved in (elsewhere it decides only those, the other columns keep their default).
+   * Column presets of every order list: everyone reads them and picks one for himself; only a preset lead (presetLead:
+   * a store's admin; in a confirmation agency's own space, its chief and its chefs d'équipe) adds or deletes, and the
+   * one he saves or picks goes to his whole team; a saved preset is never changed. `all`: every column of the list it
+   * was saved in (elsewhere it decides only those, the other columns keep their default).
    */
   'confirmation.colPresets': proc(null, z.object({}), async (ctx) => getSetting(ctx.db, 'colPresets')),
   'confirmation.addColPreset': proc(['confirmation'], z.object({ name: z.string().trim().min(1).max(40), cols: z.array(z.string().max(30)).min(1).max(40), all: z.array(z.string().max(30)).max(60).optional() }), async (ctx, i) => {
-    if (!ctx.session.isAdmin) throw forbidden();
+    if (!presetLead(ctx)) throw forbidden();
     const list = await getSetting(ctx.db, 'colPresets');
     if (list.some((p) => p.name.toLowerCase() === i.name.toLowerCase())) throw bad('Un préréglage porte déjà ce nom');
     if (list.length >= 30) throw bad('30 préréglages au maximum');
@@ -1022,19 +1031,19 @@ export const confirmationProcs = {
     return preset;
   }),
   'confirmation.deleteColPreset': proc(['confirmation'], z.object({ id: z.string().max(40) }), async (ctx, { id }) => {
-    if (!ctx.session.isAdmin) throw forbidden();
+    if (!presetLead(ctx)) throw forbidden();
     const list = await getSetting(ctx.db, 'colPresets');
     await setSetting(ctx.db, 'colPresets', list.filter((p) => p.id !== id), ctx.session.profile.id);
     if ((await getSetting(ctx.db, 'colPresetActive'))?.id === id) await setSetting(ctx.db, 'colPresetActive', null, ctx.session.profile.id);
     return { ok: true };
   }),
   /**
-   * The preset the admin put in use for every team (null: none). It replaces the columns each user chose before it;
-   * anyone can tick his own again after. Everyone reads it; only an admin sets it.
+   * The preset a lead put in use for his whole team (null: none). It replaces the columns each user chose before it;
+   * anyone can tick his own again after. Everyone reads it; only a preset lead sets it.
    */
   'confirmation.colActive': proc(null, z.object({}), async (ctx) => getSetting(ctx.db, 'colPresetActive')),
   'confirmation.setColActive': proc(null, z.object({ id: z.string().max(40).nullable() }), async (ctx, { id }) => {
-    if (!ctx.session.isAdmin) throw forbidden();
+    if (!presetLead(ctx)) throw forbidden();
     if (id && !(await getSetting(ctx.db, 'colPresets')).some((p) => p.id === id)) throw bad('Préréglage introuvable');
     const v = id ? { id, at: ctx.now(), by: ctx.session.profile.name } : null;
     await setSetting(ctx.db, 'colPresetActive', v, ctx.session.profile.id);

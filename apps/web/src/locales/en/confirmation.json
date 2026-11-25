@@ -469,7 +469,12 @@
     "appliedAll": "Preset “{{name}}” now used by the whole team",
     "team": "Team",
     "noteAdmin": "The preset you pick goes to the whole team. Then everyone can tick their own columns.",
-    "noteUser": "Tick the columns you want to see: they are yours. A new preset from the admin replaces them."
+    "noteUser": "Tick the columns you want to see: they are yours. A new preset from the admin replaces them.",
+    "noteAgency": "The preset you pick goes to the whole agency team, for all your sellers. Then everyone can tick their own columns.",
+    "noteAgencyUser": "Tick the columns you want to see: they are yours. A new preset from the agency replaces them.",
+    "savedAgency": "Preset “{{name}}” saved and used by the whole agency team",
+    "applyAgency": "Use this preset for the whole agency team",
+    "byAgency": "Chosen by the agency for its team"
   },
   "hist": {
     "title": "History of {{ref}}",

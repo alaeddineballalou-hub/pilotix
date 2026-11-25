@@ -469,7 +469,12 @@
     "appliedAll": "Préréglage « {{name}} » utilisé par toute l’équipe",
     "team": "Équipe",
     "noteAdmin": "Le préréglage que vous choisissez va à toute l’équipe. Ensuite, chacun peut cocher ses colonnes.",
-    "noteUser": "Cochez les colonnes que vous voulez voir : elles sont à vous. Un nouveau préréglage de l’administrateur les remplace."
+    "noteUser": "Cochez les colonnes que vous voulez voir : elles sont à vous. Un nouveau préréglage de l’administrateur les remplace.",
+    "noteAgency": "Le préréglage que vous choisissez va à toute l’équipe de l’agence, chez tous vos vendeurs. Ensuite, chacun peut cocher ses colonnes.",
+    "noteAgencyUser": "Cochez les colonnes que vous voulez voir : elles sont à vous. Un nouveau préréglage de l’agence les remplace.",
+    "savedAgency": "Préréglage « {{name}} » enregistré et utilisé par toute l’équipe de l’agence",
+    "applyAgency": "Utiliser ce préréglage pour toute l’équipe de l’agence",
+    "byAgency": "Choisi par l’agence pour son équipe"
   },
   "hist": {
     "title": "Historique de {{ref}}",
