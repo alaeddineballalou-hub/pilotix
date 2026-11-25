@@ -3,7 +3,7 @@
 
 /* ---- the filters on one line (computer) ---- */
 @media (min-width: 1101px) {
-  .svc-fwrap .filters { grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); }
+  .svc-fwrap .filters { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); }
 }
 
 /* ---- the three counters ---- */
@@ -39,7 +39,7 @@
 .svc-zrc { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
 /* the company's status (a tap = its history) */
-.svc-zr { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; max-width: 100%; cursor: pointer; font-size: 13px; font-weight: 700; line-height: 1.3; border-radius: 8px; padding: 2px 4px; margin: -2px -4px; }
+.svc-zr { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; max-width: calc(100% + 8px); cursor: pointer; font-size: 13px; font-weight: 700; line-height: 1.3; border-radius: 8px; padding: 2px 4px; margin: -2px -4px; }
 .svc-zr span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .svc-zr .bji { width: 13px; height: 13px; color: var(--muted); flex: none; }
 .svc-zr:hover, .svc-zr.on { background: var(--sky-soft, #EEF3FB); }
@@ -52,7 +52,10 @@
 [data-theme='dark'] .z-orange { color: #FDB022; }
 [data-theme='dark'] .z-red { color: #FDA29B; }
 [data-theme='dark'] .z-green { color: #6CE9A6; }
-.svc-last { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
+.svc-last { display: inline-flex; align-items: center; flex-wrap: wrap; column-gap: 6px; row-gap: 1px; font-size: 13px; font-weight: 700; }
+.svc-last > span { white-space: nowrap; }
+.svc-last small { font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.svc-ws { display: none; }
 .svc-fixb { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px; background: #FFF0DC; color: #9A4B00; font-size: 12px; font-weight: 800; cursor: pointer; white-space: nowrap; }
 .svc-fixb .bji { width: 13px; height: 13px; }
 
@@ -97,6 +100,7 @@
 /* ---- the opened alert under its line ---- */
 .svc-tbl tr.svc-open > td { padding: 0 10px 14px; background: #FFF8EC; }
 [data-theme='dark'] .svc-tbl tr.svc-open > td { background: rgba(247, 168, 35, .06); }
+.svc-openin { width: 0; min-width: 100%; }
 .svc-panel { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 12px; cursor: default; }
 .svc-pl, .svc-pr { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
 .svc-pzr { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 800; background: #FCE7E5; }
@@ -162,12 +166,17 @@
 .svc-card-s .svc-zr { flex: 1 1 auto; min-width: 0; }
 .svc-card-s .svc-zr span { white-space: normal; }
 .svc-card-r { flex: none; display: flex; align-items: center; }
+.svc-card .svc-name { font-size: 14px; }
+.svc-card .svc-clk, .svc-card .svc-amt { font-size: 12.5px; }
 
 /* ---- the phone's opened alert (PhoneSuivi › ParcelPage, Clair's way) ---- */
 .svc-hd-act { display: inline-flex; gap: 6px; flex: none; }
 .svc-hd-act .svc-ib { width: 38px; height: 38px; border-radius: 12px; background: #12A150; border-color: #12A150; color: #fff; }
 .svc-hd-act .svc-ib.wa { background: #25D366; border-color: #25D366; }
-.svc-histchip { all: unset; box-sizing: border-box; cursor: pointer; }
+.sv-clock.svc-histchip { border: 0; font-family: inherit; cursor: pointer; background: #F1EEE9; color: #3B4250; }
+[data-theme='dark'] .sv-clock.svc-histchip { background: rgba(255, 255, 255, .08); color: var(--ink); }
+/* the stop under the red dot: two lines at most (the red box above says it whole) */
+.pxs-page .pxs-jt .al, .svc-panel .pxs-jt .al { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .pxs-bar.svc-pbar { flex-direction: row; align-items: center; gap: 10px; }
 .pxs-bar.svc-pbar .svc-stat { flex: 1; justify-content: center; height: 46px; border-radius: 14px; }
 .pxs-bar.svc-pbar .svc-reliv { flex: 1.3; height: 46px; border-radius: 14px; }
@@ -176,7 +185,10 @@
 /* ---- sizes ---- */
 @media (max-width: 1100px) {
   .svc-hide-tb { display: none; }
-  .svc-tbl td.svc-c-zr { min-width: 190px; }
+  .svc-tbl .svc-wl { display: none; }
+  .svc-tbl .svc-ws { display: inline; }
+  .svc-tbl .svc-last small { flex-basis: 100%; padding-inline-start: 14px; }
+  .svc-tbl td.svc-c-zr { min-width: 150px; }
   .svc-zr { max-width: 250px; }
   .svc-panel { grid-template-columns: 1fr; }
 }

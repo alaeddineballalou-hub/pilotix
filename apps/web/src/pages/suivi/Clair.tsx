@@ -4,7 +4,7 @@
 // opened like Confirmation's order: « Statut » (Pas de réponse, Occupé, Rappel, Réclamation, Client annule) and
 // « Relivrer ». Résolu fills itself when the company delivers (no button); a cancelled alert goes to Swap.
 import type { Order } from '@pilotix/shared';
-import { Fragment, type ReactNode, useState } from 'react';
+import { Fragment, type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, when, wilayaName } from '../../lib/format';
 import { useRpc } from '../../lib/query';
@@ -84,6 +84,26 @@ export function ZrStatus({ o, text }: { o: Order; text: string | null }) {
   );
 }
 
+/** The company's words with its name in front, once (« ZR : Commande annulée », never « ZR : ZR : … »). */
+function coSays(t: (k: string, o?: Record<string, unknown>) => string, o: Order, v: string) {
+  return /^[A-Za-zÀ-ÿ]{2,12}\s?:/.test(v) ? v : t('suivi.clair.zrSays', { co: o.companyName || o.livreurName || t('suivi.zr'), v });
+}
+
+/** Nothing in the tab; « Résolu » still says how it fills (the owner: nothing to do there). */
+function ClairEmpty({ tab }: { tab: ClairTab }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <Empty>{t(`suivi.clair.empty.${tab}`)}</Empty>
+      {tab === 'resolus' && (
+        <p className="svc-note">
+          <Icon name="info" /> {t('suivi.clair.resolvedNote')}
+        </p>
+      )}
+    </>
+  );
+}
+
 /** The calls on an alert in dots, then « 2/6 » (Préférences › Appels du Suivi). */
 export function CallDots({ tr }: { tr?: { done: number; need: number } | null }) {
   const { t } = useTranslation();
@@ -107,7 +127,12 @@ function ClockText({ x }: { x?: ClairX }) {
   const c = x?.clock;
   if (!c) return <span className="muted">—</span>;
   const m = Math.abs(c.left);
-  return <b className={`svc-clk ${c.state} ltr`}>{c.state === 'late' ? `+${fmtMin(t, m)}` : fmtMin(t, m)}</b>;
+  // dir auto, not ltr: Arabic « 52 سا 54 » keeps its order (ltr showed « 52 54 سا »)
+  return (
+    <b className={`svc-clk ${c.state}`} dir="auto">
+      {c.state === 'late' ? `+${fmtMin(t, m)}` : fmtMin(t, m)}
+    </b>
+  );
 }
 /** « 2 h », « 1 j » since a moment. */
 function sinceText(t: (k: string, o?: any) => string, iso: string | null | undefined) {
@@ -144,12 +169,13 @@ function LastResult({ x }: { x?: ClairX }) {
   const l = x?.last;
   if (!l) return <span className="muted">—</span>;
   const tone = l.key === 'no_answer' || l.key === 'busy' || l.key === 'lost' ? 'orange' : l.key === 'relivrer' || l.key === 'claim' ? 'green' : 'blue';
-  const day = l.key === 'relivrer' ? ` · ${hm(l.at).split(' ')[0].includes('/') ? hm(l.at).split(' ')[0] : t('suivi.clair.today')}` : l.key === 'callback' && x?.callbackAt ? ` · ${hm(x.callbackAt)}` : '';
+  const day = l.key === 'relivrer' ? (hm(l.at).split(' ')[0].includes('/') ? hm(l.at).split(' ')[0] : t('suivi.clair.today')) : l.key === 'callback' && x?.callbackAt ? hm(x.callbackAt) : '';
+  // the day goes under the words when the column is narrow (tablet), never « Relivrer / demandé / 24/11 »
   return (
     <span className={`svc-last z-${tone}`}>
       <i aria-hidden="true" />
-      {t(`suivi.clair.last.${l.key}`)}
-      {day}
+      <span>{t(`suivi.clair.last.${l.key}`)}</span>
+      {day && <small dir="auto">{day}</small>}
     </span>
   );
 }
@@ -187,13 +213,13 @@ export function CallMsg({ o }: { o: Order }) {
 /** The table of the four lists (tablet, computer); a line opens under itself (`open` draws it). */
 export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { tab: ClairTab; rows: ClairRow[]; extra: Record<number, ClairX>; reasonOf: (o: Order, x?: ClairX) => string | null; openKey: string | null; open: (o: ClairRow) => ReactNode; h: ClairHandlers }) {
   const { t } = useTranslation();
-  if (!rows.length) return <Empty>{t(`suivi.clair.empty.${tab}`)}</Empty>;
+  if (!rows.length) return <ClairEmpty tab={tab} />;
   const key = (o: ClairRow) => `${o.seller?.id ?? 0}:${o.id}`;
   const cols: { k: string; l: string; cls?: string }[] =
     tab === 'alertes_new'
       ? [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'wilaya', l: t('suivi.col.wilaya'), cls: 'svc-hide-tb' }, { k: 'product', l: t('suivi.col.products'), cls: 'svc-hide-tb' }, { k: 'amount', l: t('suivi.clair.amount'), cls: 'num svc-hide-tb' }, { k: 'zr', l: t('suivi.clair.zr') }, { k: 'time', l: t('suivi.clair.time'), cls: 'num' }, { k: 'act', l: '' }]
       : tab === 'alertes_encours'
-        ? [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'zr', l: t('suivi.clair.zr') }, { k: 'last', l: t('suivi.clair.lastCol') }, { k: 'calls', l: t('suivi.clair.calls') }, { k: 'since', l: t('suivi.clair.since'), cls: 'num' }, { k: 'act', l: '' }]
+        ? [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'zr', l: t('suivi.clair.zr') }, { k: 'last', l: t('suivi.clair.lastCol') }, { k: 'calls', l: t('suivi.clair.calls') }, { k: 'since', l: t('suivi.clair.since'), cls: 'num svc-hide-tb' }, { k: 'act', l: '' }]
         : tab === 'resolus'
           ? [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'product', l: t('suivi.col.products'), cls: 'svc-hide-tb' }, { k: 'amount', l: t('suivi.clair.amount'), cls: 'num' }, { k: 'delivered', l: t('suivi.clair.delivered') }, { k: 'saved', l: t('suivi.clair.savedBy') }, { k: 'problem', l: t('suivi.clair.problem'), cls: 'svc-hide-tb' }]
           : [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'product', l: t('suivi.col.products'), cls: 'svc-hide-tb' }, { k: 'amount', l: t('suivi.clair.amount'), cls: 'num' }, { k: 'why', l: t('suivi.clair.why') }, { k: 'since', l: t('suivi.clair.since'), cls: 'num svc-hide-tb' }, { k: 'act', l: '' }];
@@ -247,11 +273,15 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
       case 'calls':
         return <CallDots tr={x?.tries} />;
       case 'since':
-        return <span className="muted ltr">{sinceText(t, tab === 'swap' ? o.updatedAt : x?.last?.at ?? o.updatedAt)}</span>;
+        return (
+          <span className="muted" dir="auto">
+            {sinceText(t, tab === 'swap' ? o.updatedAt : x?.last?.at ?? o.updatedAt)}
+          </span>
+        );
       case 'delivered':
         return (
           <span className="svc-dlv">
-            <Icon name="checkcircle" /> <span className="ltr">{deliveredText(t, o.deliveredAt)}</span>
+            <Icon name="checkcircle" /> <span dir="auto">{deliveredText(t, o.deliveredAt)}</span>
           </span>
         );
       case 'saved':
@@ -269,15 +299,16 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
         return (
           <span className="svc-last z-red">
             <i aria-hidden="true" />
-            {x?.cancelBy === 'client' ? t('suivi.clair.cancelClient') : t('suivi.clair.cancelZr', { v: reason || t('suivi.clair.cancelled') })}
+            {x?.cancelBy === 'client' ? t('suivi.clair.cancelClient') : coSays(t, o, reason || t('suivi.clair.cancelled'))}
           </span>
         );
       case 'act':
         if (tab === 'swap') return h.canSwap(o) ? <SwapBtn onClick={() => h.onSwap(o)} /> : null;
         if (tab === 'alertes_encours' && x?.bucket === 'zr')
           return (
-            <span className="svc-wait">
-              <Icon name="hourglass" /> {t('suivi.clair.waitZr', { co: o.companyName || t('suivi.zr') })}
+            <span className="svc-wait" title={t('suivi.clair.waitZr', { co: o.companyName || t('suivi.zr') })}>
+              <Icon name="hourglass" /> <span className="svc-wl">{t('suivi.clair.waitZr', { co: o.companyName || t('suivi.zr') })}</span>
+              <span className="svc-ws">{t('suivi.clair.waitZrShort')}</span>
             </span>
           );
         if (tab === 'alertes_encours' && x?.bucket === 'later' && x.callbackAt)
@@ -321,7 +352,10 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
                 </tr>
                 {on && (
                   <tr className="svc-open">
-                    <td colSpan={cols.length}>{open(o)}</td>
+                    <td colSpan={cols.length}>
+                      {/* width 0 + min-width 100 %: the opened alert fills the row without moving the columns */}
+                      <div className="svc-openin">{open(o)}</div>
+                    </td>
                   </tr>
                 )}
               </Fragment>
@@ -342,7 +376,7 @@ function SwapBtn({ onClick }: { onClick: () => void }) {
   const { t } = useTranslation();
   return (
     <button type="button" className="svc-swap" onClick={(e) => (e.stopPropagation(), onClick())}>
-      <Icon name="swap" /> {t('suivi.act.swap')}
+      <Icon name="swap" /> {t('suivi.clair.tab.swap')}
     </button>
   );
 }
@@ -350,7 +384,7 @@ function SwapBtn({ onClick }: { onClick: () => void }) {
 /** The phone's lines: a card each, the buttons on the right. */
 export function ClairCards({ tab, rows, extra, reasonOf, h }: { tab: ClairTab; rows: ClairRow[]; extra: Record<number, ClairX>; reasonOf: (o: Order, x?: ClairX) => string | null; h: ClairHandlers }) {
   const { t } = useTranslation();
-  if (!rows.length) return <Empty>{t(`suivi.clair.empty.${tab}`)}</Empty>;
+  if (!rows.length) return <ClairEmpty tab={tab} />;
   return (
     <ul className={`svc-cards svt-${tab}`}>
       {rows.map((o) => {
@@ -379,7 +413,11 @@ export function ClairCards({ tab, rows, extra, reasonOf, h }: { tab: ClairTab; r
                 <b className="svc-name">{o.customerName}</b>
                 {tab === 'alertes_new' && <ClockText x={x} />}
                 {tab === 'alertes_encours' && x?.bucket === 'call' && <b className="svc-recall">{t('suivi.clair.recall')}</b>}
-                {tab === 'alertes_encours' && x?.bucket !== 'call' && <span className="muted small ltr">{sinceText(t, x?.last?.at ?? o.updatedAt)}</span>}
+                {tab === 'alertes_encours' && x?.bucket !== 'call' && (
+                  <span className="muted small" dir="auto">
+                    {sinceText(t, x?.last?.at ?? o.updatedAt)}
+                  </span>
+                )}
                 {(tab === 'resolus' || tab === 'swap') && <b className="svc-amt ltr">{da(o.total)}</b>}
               </div>
               {tab === 'alertes_new' && (
@@ -390,7 +428,7 @@ export function ClairCards({ tab, rows, extra, reasonOf, h }: { tab: ClairTab; r
               {tab === 'alertes_encours' && (
                 <div className="svc-card-s">
                   <LastResult x={x} />
-                  <CallDots tr={x?.tries} />
+                  {x?.tries && <CallDots tr={x.tries} />}
                 </div>
               )}
               {tab === 'resolus' && (
@@ -410,7 +448,7 @@ export function ClairCards({ tab, rows, extra, reasonOf, h }: { tab: ClairTab; r
                 <div className="svc-card-s">
                   <span className="svc-last z-red">
                     <i aria-hidden="true" />
-                    {x?.cancelBy === 'client' ? t('suivi.clair.cancelClient') : t('suivi.clair.cancelZr', { v: reason || t('suivi.clair.cancelled') })}
+                    {x?.cancelBy === 'client' ? t('suivi.clair.cancelClient') : coSays(t, o, reason || t('suivi.clair.cancelled'))}
                   </span>
                   <span className="muted small svc-clamp">{namesOf(o.items)}</span>
                 </div>
@@ -446,6 +484,11 @@ export function StatusMenu({ o, x, onPick, onClose }: { o: Order; x?: ClairX; on
     { k: 'claim', icon: 'copy', sub: t('suivi.clair.menu.claimSub', { co: o.companyName || t('suivi.zr') }) },
     { k: 'cancel', icon: 'xcircle', tone: 'rd', sub: t('suivi.clair.menu.cancelSub') },
   ].filter((it) => o.followStatus === 'alert' || it.k === 'claim' || it.k === 'cancel') as { k: StatusKey; icon: string; tone?: string; sub: string }[];
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', k);
+    return () => window.removeEventListener('keydown', k);
+  }, [onClose]);
   return (
     <>
       <div className="svc-menu-bg" onClick={onClose} />
@@ -562,7 +605,7 @@ export function AlertPanel({ o, x, reason, statusOpen, onStatus, menu, onRelivre
     <div className="svc-panel" onClick={(e) => e.stopPropagation()}>
       <section className="svc-pl">
         <span className={`svc-pzr z-${zrTone(reason)}`}>
-          <Icon name="alert" /> {!reason ? t('suivi.clair.noNews') : /^[A-Za-zÀ-ÿ]{2,12}\s?:/.test(reason) ? reason : t('suivi.clair.zrSays', { co: o.companyName || o.livreurName || t('suivi.zr'), v: reason })}
+          <Icon name="alert" /> {!reason ? t('suivi.clair.noNews') : coSays(t, o, reason)}
         </span>
         <Journey o={o} label={reason} />
         <AlertTodo o={o} x={x} reason={reason} onClaim={onClaim} />
@@ -592,7 +635,7 @@ export function AlertPanel({ o, x, reason, statusOpen, onStatus, menu, onRelivre
           <span>
             <b>{namesOf(o.items)}</b>
             <small>
-              {variantsOf(o.items) ? `${variantsOf(o.items)} · ` : ''}×{o.items.reduce((s, i) => s + i.qty, 0)}
+              {o.items.some((i) => i.variantTitle) ? `${variantsOf(o.items)} · ` : ''}×{o.items.reduce((s, i) => s + i.qty, 0)}
             </small>
           </span>
           <b className="ltr">{da(o.total)}</b>

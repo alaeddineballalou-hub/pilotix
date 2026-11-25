@@ -150,16 +150,17 @@ export function ParcelCards({ rows, extra, reasonOf, empty, onOpen, act }: { row
 }
 
 /** « Appeler · 1 h 20 » / « Régler · 5 h » / « En retard · 40 min »: the alert's clock, in working time. */
-export function ClockChip({ c }: { c?: AlertClock | null }) {
+export function ClockChip({ c, short }: { c?: AlertClock | null; short?: boolean }) {
   const { t } = useTranslation();
   if (!c) return null;
   const m = Math.abs(c.left);
   const dur = m >= 60 ? t('suivi.clock.h', { h: Math.floor(m / 60), m: String(Math.round(m % 60)).padStart(2, '0') }) : t('suivi.clock.m', { m: Math.max(1, Math.round(m)) });
-  const what = c.state === 'late' ? t(`suivi.clock.late_${c.kind}`) : t(`suivi.clock.${c.kind}`);
+  // Suivi « Clair » (short): « En retard · 1 h 10 », so the three chips stay on one line of a phone
+  const what = c.state === 'late' ? (short ? t('suivi.clair.k.alertes_new.late') : t(`suivi.clock.late_${c.kind}`)) : t(`suivi.clock.${c.kind}`);
   return (
     <span className={`sv-clock ${c.state}`} title={t(`suivi.clock.tip_${c.kind}`)}>
       <Icon name="clock" />
-      {what} · <span className="ltr">{dur}</span>
+      {what} · <span dir="auto">{dur}</span>
     </span>
   );
 }
@@ -339,7 +340,7 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip, cl
       {(((x?.clock && o.followStatus === 'alert') || x?.stuck) || clair) && (
         <div className="pxs-clkbar">
           <StuckChips s={x?.stuck} />
-          <ClockChip c={x?.clock} />
+          <ClockChip c={x?.clock} short={!!clair} />
           <TriesChip tr={x?.tries} />
           {o.followStatus === 'alert' && <RotateChip at={x?.rotateAt} />}
           {clair && (
