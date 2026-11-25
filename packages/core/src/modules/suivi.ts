@@ -611,6 +611,11 @@ export interface Claim {
   extError: string | null;
   /** the courier takes réclamations through its API */
   viaApi: boolean;
+  /** no réclamation API, but the courier takes notes on a parcel (EcoTrack, NOEST, Zimou): the réclamation goes there as a note */
+  noteApi: boolean;
+  /** only in the answer of the call that made the réclamation: its note went to the courier, or the courier's refusal */
+  noteSent?: boolean;
+  noteError?: string | null;
   /** 'courier': made in the courier's own app (ZR) and brought into Pilotix; 'pilotix': made here */
   origin: 'pilotix' | 'courier';
   /** the courier's category it is in, in the courier's words (ZR: « Relancer un colis ») */
@@ -632,6 +637,11 @@ interface ClaimNote {
 }
 
 const claimRef = (n: number) => `REC-${String(n).padStart(4, '0')}`;
+/** A courier with no réclamation API that takes notes on a parcel (EcoTrack, NOEST, Zimou): réclamations go there as notes. */
+const takesClaimNotes = (kind: unknown) => {
+  const k = KINDS[kind as CourierKind];
+  return !!k?.note && !k.claims;
+};
 const CLAIM_SELECT = `SELECT c.*, o.ref AS order_ref, o.tracking, o.customer_name, o.phone, o.follow_agent_id, co.name AS company_name, co.kind AS company_kind, lv.name AS livreur_name, lv.phone AS livreur_phone, cb.name AS created_by_name
   FROM claims c LEFT JOIN orders o ON o.id = c.order_id LEFT JOIN delivery_companies co ON co.id = c.company_id
   LEFT JOIN profiles lv ON lv.id = c.livreur_id LEFT JOIN profiles cb ON cb.id = c.created_by`;
@@ -683,6 +693,7 @@ function toClaim(r: any, now = Date.now()): Claim {
     extAnswer: r.ext_answer ?? null,
     extError: r.ext_error ?? null,
     viaApi: r.livreur_id == null && !!KINDS[r.company_kind as CourierKind]?.claims,
+    noteApi: r.livreur_id == null && takesClaimNotes(r.company_kind),
     origin: r.ext_origin === 'courier' ? 'courier' : 'pilotix',
     extCategory: r.ext_category ?? null,
     extClosed: !!r.ext_closed,
@@ -772,6 +783,54 @@ async function pushClaim(ctx: Ctx, cid: number, categoryId: string | null): Prom
   if (error && cur.reason === 'relivrer') await relanceRefused(ctx, cur.orderId, error);
   ctx.emit({ type: 'order', id: cur.orderId ?? undefined });
   return getClaim(ctx.db, cid);
+}
+
+// ---------------------------------------------------------------- claims as a note (EcoTrack, NOEST, Zimou)
+/** EcoTrack and NOEST keep 255 characters of a note (Zimou more): the whole note fits in the smallest. */
+export const CLAIM_NOTE_MAX = 255;
+
+/** The note a réclamation sends to the courier: its number, the problem, then the details (cut to fit, never the start). */
+export function claimNoteText(ref: string, reason: string, details: string): string {
+  const what = REASON_FR[reason] ?? reason;
+  const head = `Réclamation ${ref} — ${what}`;
+  const d = details.replace(/\s+/g, ' ').trim().replace(/[\s.!?…]+$/, '');
+  if (!d || d === what) return head.slice(0, CLAIM_NOTE_MAX);
+  const room = CLAIM_NOTE_MAX - head.length - 3;
+  if (room < 10) return head.slice(0, CLAIM_NOTE_MAX);
+  return `${head} : ${d.length > room ? `${d.slice(0, room - 1).trimEnd()}…` : d}`;
+}
+
+/**
+ * A courier without a réclamation API that takes notes on a parcel (EcoTrack, NOEST, Zimou): the saved réclamation also
+ * goes there as a note on the parcel (owner, 25 Nov 2026: the control room said so, the button did not). Never throws: a
+ * refusal is written in the réclamation's history and the message can still go by WhatsApp / e-mail.
+ */
+async function noteClaim(ctx: Ctx, cid: number): Promise<Claim> {
+  const cur = await getClaim(ctx.db, cid);
+  if (!cur.noteApi || !cur.companyId || !cur.orderId) return cur;
+  const o = (await ctx.db.query('SELECT id, tracking, ext_id FROM orders WHERE id = $1', [cur.orderId]))[0];
+  if (!o?.tracking) return cur;
+  const me = ctx.session.profile.id;
+  const nowIso = new Date(ctx.now()).toISOString();
+  const text = claimNoteText(cur.ref, cur.reason, cur.details);
+  let error: string | null = null;
+  try {
+    // the demo has no server: nothing leaves, the note is taken as sent
+    if (ctx.server) await ctx.server.courier('note', { companyId: cur.companyId, item: { id: num(o.id), tracking: o.tracking, extId: o.ext_id ?? null }, text }, ctx);
+  } catch (e: any) {
+    error = String(e?.message ?? 'Erreur').slice(0, 300);
+  }
+  const name = cur.companyName ?? 'La société';
+  const line = error ? `${name} n’a pas pris la note : ${error}` : `Note envoyée à ${name} sur le colis (API) : ${text}`;
+  // sent: the 48 h wait for an answer starts now, and the first WhatsApp / e-mail after it is not a relance
+  await ctx.db.query(
+    `UPDATE claims SET notes = $2, channel = CASE WHEN $3 THEN 'note' ELSE channel END,
+       sent_at = CASE WHEN $3 THEN COALESCE(sent_at, $4::timestamptz) ELSE sent_at END, updated_at = $4::timestamptz WHERE id = $1`,
+    [cid, JSON.stringify([...cur.notes, { at: nowIso, userId: me, text: line.slice(0, 1000), status: null }]), !error, nowIso],
+  );
+  await addEvent(ctx.db, cur.orderId, me, 'note', null, 'event', `Réclamation ${cur.ref} : ${line}`.slice(0, 300));
+  ctx.emit({ type: 'order', id: cur.orderId });
+  return { ...(await getClaim(ctx.db, cid)), noteSent: !error, noteError: error };
 }
 
 /** Settings kept for the courier's réclamations: the shop's own account at the courier (per company, learned from the
@@ -1067,6 +1126,8 @@ const ClaimCreate = z.object({
   /** courier with a claim API (ZR): send it there right away, in this category (null = chosen from the reason) */
   viaApi: z.boolean().default(true),
   categoryId: z.string().max(100).nullable().optional(),
+  /** courier without a claim API that takes notes on a parcel (EcoTrack, NOEST, Zimou): it also goes there as a note */
+  note: z.boolean().default(true),
 });
 
 const ClaimUpdate = z.object({
@@ -1171,6 +1232,7 @@ async function createClaim(ctx: Ctx, i: z.infer<typeof ClaimCreate>): Promise<Cl
   ctx.emit({ type: 'order', id: o.id });
   const made = await getClaim(ctx.db, cid);
   if (made.viaApi && i.viaApi && o.tracking) return pushClaim(ctx, cid, i.categoryId ?? null);
+  if (made.noteApi && i.note && o.tracking) return noteClaim(ctx, cid);
   return made;
 }
 
@@ -1779,7 +1841,7 @@ export const suiviProcs = {
       companies: comps.map((c: any) => {
         const cfg = (typeof c.config === 'string' ? JSON.parse(c.config) : c.config) ?? {};
         const k = cfg.claim ?? {};
-        return { id: num(c.id), name: c.name as string, kind: c.kind as string, api: !!KINDS[c.kind as CourierKind]?.claims, wa: (k.wa as string) || null, email: (k.email as string) || null, phone: (k.phone as string) || null, portal: (k.portal as string) || null };
+        return { id: num(c.id), name: c.name as string, kind: c.kind as string, api: !!KINDS[c.kind as CourierKind]?.claims, note: takesClaimNotes(c.kind), wa: (k.wa as string) || null, email: (k.email as string) || null, phone: (k.phone as string) || null, portal: (k.portal as string) || null };
       }),
       livreurs: livreurs.map((l: any) => ({ id: num(l.id), name: l.name as string, phone: (l.phone as string) ?? null, companyId: numOrNull(l.livreur_company_id) })),
     };
@@ -1859,7 +1921,8 @@ export const suiviProcs = {
     const me = ctx.session.profile.id;
     const nowIso = new Date(ctx.now()).toISOString();
     const parts: string[] = [];
-    if (i.sentVia) parts.push(`${cur.sentAt ? 'Relance' : 'Envoyée'} (${VIA_FR[i.sentVia]})`);
+    // only its note went to the company so far (EcoTrack, NOEST, Zimou): this first message is not a relance
+    if (i.sentVia) parts.push(`${cur.sentAt && cur.channel !== 'note' ? 'Relance' : 'Envoyée'} (${VIA_FR[i.sentVia]})`);
     if (i.status && i.status !== cur.status) parts.push(CLAIM_STATUS_FR[i.status]);
     if (i.note?.trim()) parts.push(i.note.trim());
     if (!parts.length && !i.message) return cur;

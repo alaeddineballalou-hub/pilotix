@@ -26,6 +26,8 @@ export interface ClaimCompany {
   kind: string;
   /** takes réclamations through its API (ZR): Pilotix creates them there directly */
   api?: boolean;
+  /** no réclamation API but notes on a parcel (EcoTrack, NOEST, Zimou): a réclamation also goes there as a note */
+  note?: boolean;
   wa: string | null;
   email: string | null;
   phone: string | null;

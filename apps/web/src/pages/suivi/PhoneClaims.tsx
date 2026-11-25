@@ -56,7 +56,7 @@ export function ClaimSheet(p: ClaimFormProps) {
             <Icon name={api ? 'send' : 'message'} className="flip" />
             {busy && api ? t('suivi.rec.apiSending', { name }) : api ? t('suivi.rec.apiSend', { name }) : t('suivi.rec.prepare')}
           </button>
-          {o && <p className="pxk-fnote">{api ? t('suivi.rec.apiHelp', { name }) : t('suivi.rec.ph.footMsg')}</p>}
+          {o && <p className="pxk-fnote">{api ? t('suivi.rec.apiHelp', { name }) : f.note ? t('suivi.rec.noteHelp', { name }) : t('suivi.rec.ph.footMsg')}</p>}
         </>
       }
     >
@@ -196,6 +196,17 @@ export function SendSheet(p: { claim: SentClaim; order: Order | null; target: Ta
           <button type="button" className="pxk-chip" style={{ marginTop: 8 }} disabled={f.push.isPending} onClick={() => f.push.mutate({ id: claim.id })}>
             <Icon name="refresh" /> {t('suivi.rec.apiRetry', { name: target.name })}
           </button>
+        </div>
+      )}
+      {claim.noteSent && !f.done && (
+        <p className="pxk-okb">
+          <Icon name="check" /> {t('suivi.rec.noteDone', { name: target.name })}
+        </p>
+      )}
+      {!!claim.noteError && (
+        <div className="pxk-bad">
+          <b>{t('suivi.rec.noteFailed', { name: target.name })}</b>
+          <div>{claim.noteError}</div>
         </div>
       )}
       {f.done ? (
@@ -432,7 +443,7 @@ export function PhoneClaims({ target }: { target: 'company' | 'livreur' }) {
       {dlg?.kind === 'new' && <ClaimSheet toLivreur={target === 'livreur'} onClose={() => setDlg(null)} />}
       {dlg?.kind === 'remindApi' && <RemindSheet c={dlg.c} onClose={() => setDlg(null)} />}
       {dlg?.kind === 'answer' && <AnswerSheet c={dlg.c} name={nameOf(dlg.c)} onClose={() => setDlg(null)} />}
-      {dlg?.kind === 'send' && <SendSheet claim={dlg.c} order={dlg.order} target={targetOf(dlg.c)} shop={contacts?.shopName ?? ''} again={!!dlg.c.sentAt} onClose={() => setDlg(null)} />}
+      {dlg?.kind === 'send' && <SendSheet claim={dlg.c} order={dlg.order} target={targetOf(dlg.c)} shop={contacts?.shopName ?? ''} again={!!dlg.c.sentAt && dlg.c.channel !== 'note'} onClose={() => setDlg(null)} />}
     </div>
   );
 }

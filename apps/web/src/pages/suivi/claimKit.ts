@@ -32,6 +32,9 @@ export interface SentClaim {
   extRef?: string | null;
   extError?: string | null;
   companyName?: string | null;
+  /** EcoTrack, NOEST, Zimou: the réclamation also went to the company as a note on the parcel, or its refusal */
+  noteSent?: boolean;
+  noteError?: string | null;
 }
 
 export interface ClaimRow {
@@ -54,6 +57,8 @@ export interface ClaimRow {
   createdAt: string;
   updatedAt: string;
   sentAt: string | null;
+  /** how it went last: 'note' = only its note went to the company (the next WhatsApp is its first message, not a relance) */
+  channel?: string;
   viaApi: boolean;
   extId: string | null;
   extRef: string | null;
@@ -71,17 +76,19 @@ export interface ClaimRow {
 /** Closed here (« Résolue » or « Perdue ») while the courier still works on it. */
 export const stillOpenThere = (c: ClaimRow) => !!c.extId && (c.status === 'resolved' || c.status === 'lost') && c.extClosed === false;
 
-/** Who receives the claim of an order: its courier's claim desk, or our own livreur. */
+/** Who receives the claim of an order: its courier's claim desk, or our own livreur. `note`: it also goes to the
+ *  courier as a note on the parcel (EcoTrack, NOEST, Zimou). */
 export function useTarget(o: Order | null, toLivreur: boolean) {
   const c = useRpc('suivi.contacts', {}).data;
-  if (!o || !c) return { target: null as Target | null, shop: c?.shopName ?? '', own: false, api: false, ready: !!c };
+  if (!o || !c) return { target: null as Target | null, shop: c?.shopName ?? '', own: false, api: false, note: false, ready: !!c };
   const comp = c.companies.find((x: ClaimCompany) => x.id === o.companyId);
   const own = toLivreur || comp?.kind === 'own';
   if (own) {
     const lv = c.livreurs.find((l: { id: number }) => l.id === o.livreurId);
-    return { target: { name: lv?.name ?? o.livreurName ?? '—', wa: lv?.phone ?? null, email: null, phone: lv?.phone ?? null }, shop: c.shopName, own, api: false, ready: true };
+    return { target: { name: lv?.name ?? o.livreurName ?? '—', wa: lv?.phone ?? null, email: null, phone: lv?.phone ?? null }, shop: c.shopName, own, api: false, note: false, ready: true };
   }
-  return { target: comp ? { name: comp.name, wa: comp.wa, email: comp.email, phone: comp.phone } : null, shop: c.shopName, own, api: !!comp?.api && !!trackOf(o), ready: true };
+  const tracked = !!trackOf(o);
+  return { target: comp ? { name: comp.name, wa: comp.wa, email: comp.email, phone: comp.phone } : null, shop: c.shopName, own, api: !!comp?.api && tracked, note: !!comp?.note && tracked, ready: true };
 }
 
 export interface ClaimFormProps {
@@ -103,7 +110,7 @@ export function useClaimForm({ pre, toLivreur = false, reason = 'late', details 
   const [err, setErr] = useState('');
   const [made, setMade] = useState<SentClaim | null>(null);
   const [cat, setCat] = useState('');
-  const { target, shop, own, api, ready } = useTarget(o, toLivreur);
+  const { target, shop, own, api, note, ready } = useTarget(o, toLivreur);
   const cats = useRpc('suivi.claimCategories', { companyId: o?.companyId ?? 0 }, { enabled: api && !!o?.companyId, staleTime: 600_000 });
   useEffect(() => {
     const h = setTimeout(() => setDeb(q.trim()), 250);
@@ -154,6 +161,7 @@ export function useClaimForm({ pre, toLivreur = false, reason = 'late', details 
     shop,
     own,
     api,
+    note,
     create,
     prepare,
   };

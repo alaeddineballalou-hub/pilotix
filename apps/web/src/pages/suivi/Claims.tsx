@@ -112,6 +112,7 @@ function NewClaimDesk(p: ClaimFormProps) {
           <textarea value={f.det} placeholder={t('suivi.rec.detailsPh')} onChange={(e) => f.setDet(e.target.value)} />
         </label>
         {api && <p className="muted small">{t('suivi.rec.apiHelp', { name: target?.name ?? '' })}</p>}
+        {f.note && <p className="muted small">{t('suivi.rec.noteHelp', { name: target?.name ?? '' })}</p>}
         {f.err && <p className="form-err">{f.err}</p>}
       </div>
     </Modal>
@@ -152,6 +153,17 @@ function SendDesk(p: SendProps) {
                 {t('suivi.rec.apiRetry', { name: target.name })}
               </button>
             </div>
+          </div>
+        )}
+        {claim.noteSent && (
+          <div className="okbox">
+            <Icon name="check" /> {t('suivi.rec.noteDone', { name: target.name })}
+          </div>
+        )}
+        {!!claim.noteError && (
+          <div className="warnbox">
+            <b>{t('suivi.rec.noteFailed', { name: target.name })}</b>
+            <div className="small">{claim.noteError}</div>
           </div>
         )}
         <p className="muted small">{t('suivi.rec.sendHelp', { name: target.name })}</p>
@@ -481,7 +493,7 @@ export function ClaimsPanel({ target }: { target: 'company' | 'livreur' }) {
       {dlg?.kind === 'new' && <NewClaimModal toLivreur={target === 'livreur'} onClose={() => setDlg(null)} />}
       {dlg?.kind === 'remindApi' && <RemindApiModal c={dlg.c} onClose={() => setDlg(null)} />}
       {dlg?.kind === 'answer' && <AnswerModal c={dlg.c} name={nameOf(dlg.c)} onClose={() => setDlg(null)} />}
-      {dlg?.kind === 'send' && <SendModal claim={dlg.c} order={dlg.order} target={targetOf(dlg.c)} shop={contacts?.shopName ?? ''} again={!!dlg.c.sentAt} onClose={() => setDlg(null)} />}
+      {dlg?.kind === 'send' && <SendModal claim={dlg.c} order={dlg.order} target={targetOf(dlg.c)} shop={contacts?.shopName ?? ''} again={!!dlg.c.sentAt && dlg.c.channel !== 'note'} onClose={() => setDlg(null)} />}
     </>
   );
 }

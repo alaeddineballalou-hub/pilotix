@@ -54,14 +54,14 @@ const MISSING: Partial<Record<CourierKind, Partial<Record<CourierFeature, string
     webhook: '',
   },
   ecotrack: {
-    claim: 'Pas d’API de réclamation chez EcoTrack : Pilotix envoie une note à la société à la place.',
+    claim: 'Pas d’API de réclamation chez EcoTrack : Pilotix envoie la réclamation en note sur le colis, à la place (WhatsApp reste possible).',
     retry: 'Pas d’API pour une nouvelle tentative.',
     webhook: 'Pas de webhook chez EcoTrack : Pilotix demande les statuts toutes les 5 minutes (limite : 50 appels / minute).',
     payments: 'Pas d’API de versements : seulement les statuts « encaissé / payé ».',
     desks: 'Les bureaux sont choisis par commune (code postal), pas de liste.',
   },
   noest: {
-    claim: 'Pas d’API de réclamation chez NOEST : Pilotix envoie une note à la place.',
+    claim: 'Pas d’API de réclamation chez NOEST : Pilotix envoie la réclamation en note sur le colis, à la place (WhatsApp reste possible).',
     webhook: 'Pas de webhook chez NOEST : Pilotix demande les statuts toutes les 5 minutes.',
     payments: 'Pas d’API de versements : seulement le statut « versement ».',
     swap: 'Échange envoyé avec type_id = 2 : à vérifier avec de vraies clés.',
@@ -78,7 +78,7 @@ const MISSING: Partial<Record<CourierKind, Partial<Record<CourierFeature, string
     webhook: '',
   },
   zimou: {
-    claim: 'Pas d’API de réclamation chez Zimou.',
+    claim: 'Pas d’API de réclamation chez Zimou : Pilotix envoie la réclamation en note sur le colis, à la place (WhatsApp reste possible).',
     swap: 'Pas d’échange par API chez Zimou.',
     retry: 'Pas d’API pour une nouvelle tentative.',
     webhook: 'Pas de webhook chez Zimou : Pilotix demande les statuts toutes les 5 minutes.',
