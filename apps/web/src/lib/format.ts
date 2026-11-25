@@ -49,7 +49,8 @@ export function callWhen(iso: string | null | undefined, day = false): string {
   if (!iso) return '';
   const t = Date.parse(iso);
   const now = Date.now();
-  const time = day ? '' : ` ${clock(iso)}`;
+  // (the day and its time stay on one line)
+  const time = day ? '' : `\u00a0${clock(iso)}`;
   if (dayKey(t) === dayKey(now)) return day ? i18n.t('common.today') : clock(iso);
   if (dayKey(t) === dayKey(now + 86_400_000)) return `${i18n.t('common.tomorrow')}${time}`;
   if (dayKey(t) === dayKey(now - 86_400_000)) return `${i18n.t('common.yesterday')}${time}`;

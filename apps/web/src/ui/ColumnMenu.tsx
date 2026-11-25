@@ -491,12 +491,14 @@ const COL_MAX = 600;
 const MIN_W: Record<string, number> = {
   order: 92, source: 182, tracking: 112, creator: 76, channel: 76, product: 90, sku: 76, chrono: 96, name: 92, phone: 104, wilaya: 92, commune: 92,
   agent: 106, fagent: 106, total: 84, time: 88, created: 84, stock: 72, desk: 72, passed: 100, confirmed: 84, follow: 96, next: 88, status: 128, since: 72,
+  // En cours: the tries (dots) and what happens next (« Rappel demain 10:00 ») under them
+  tries: 136,
 };
 /** Each column's comfortable width (px): used when the card has room; with less room, every column gives up the same part of its spare width. */
 const NAT_W: Record<string, number> = {
   order: 100, source: 200, tracking: 130, creator: 96, channel: 92, product: 210, variant: 130, sku: 120, chrono: 110, name: 150, phone: 170,
   wilaya: 110, commune: 110, agent: 112, fagent: 104, total: 100, time: 118, created: 132, stock: 98, desk: 92, passed: 98, confirmed: 132,
-  follow: 130, next: 130, status: 140, since: 96,
+  follow: 130, next: 130, status: 140, since: 96, tries: 152,
 };
 /**
  * Smallest a column may get when the card is short of room (px; otherwise 80% of its minimum): long values then end with "…".
@@ -505,9 +507,9 @@ const NAT_W: Record<string, number> = {
 // agent / fagent: the name chip turns into « ✕ Retirer » on hover, which needs this room.
 // source: « Le chemin de la commande »'s chips (the ad, the place · who made it) stay readable
 // follow: its badge's longest word stays whole (« Dispatchée », « Expédiée »)
-const HARD_W: Record<string, number> = { phone: 104, chrono: 94, total: 84, status: 108, order: 84, agent: 104, fagent: 104, tracking: 108, passed: 96, source: 182, follow: 92 };
+const HARD_W: Record<string, number> = { phone: 104, chrono: 94, total: 84, status: 108, order: 84, agent: 104, fagent: 104, tracking: 108, passed: 96, source: 182, follow: 92, tries: 112 };
 /** Columns showing a pill, a badge or buttons: their size does not follow the row size (compact, normal, large). The widths above are for normal rows (14 px text). */
-const PILL_K = new Set(['status', 'chrono', 'agent', 'fagent', 'stock', 'desk', 'since', 'phone', 'source']);
+const PILL_K = new Set(['status', 'chrono', 'agent', 'fagent', 'stock', 'desk', 'since', 'phone', 'source', 'tries']);
 /** Text columns: on a wide screen they get the room left over. */
 const TEXT_K = new Set(['product', 'variant', 'name', 'wilaya', 'commune', 'source', 'creator', 'follow']);
 /** Width of the small columns that are never resized (expand, tick box, row buttons) until their content is measured (px). */
