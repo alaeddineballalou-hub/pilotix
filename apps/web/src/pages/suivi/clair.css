@@ -52,8 +52,10 @@
 [data-theme='dark'] .z-orange { color: #FDB022; }
 [data-theme='dark'] .z-red { color: #FDA29B; }
 [data-theme='dark'] .z-green { color: #6CE9A6; }
-.svc-last { display: inline-flex; align-items: center; flex-wrap: wrap; column-gap: 6px; row-gap: 1px; font-size: 13px; font-weight: 700; }
+.svc-last { display: inline-flex; align-items: center; column-gap: 6px; row-gap: 1px; font-size: 13px; font-weight: 700; }
 .svc-last > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+/* the Swap reason: the dot stays beside the words, the words wrap */
+.svc-last.svc-why { flex-wrap: nowrap; }
 .svc-last small { font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; }
 .svc-ws { display: none; }
 .svc-fixb { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px; background: #FFF0DC; color: #9A4B00; font-size: 12px; font-weight: 800; cursor: pointer; white-space: nowrap; }
@@ -188,9 +190,10 @@
   .svc-hide-tb { display: none; }
   .svc-tbl .svc-wl { display: none; }
   .svc-tbl .svc-ws { display: inline; }
+  .svc-last { flex-wrap: wrap; }
   .svc-tbl .svc-last small { flex-basis: 100%; padding-inline-start: 14px; }
   /* a tablet: long names and the company's words go on two lines rather than push the buttons out */
-  .svc-tbl .svc-cli b { white-space: normal; overflow-wrap: anywhere; }
+  .svc-tbl .svc-cli b { white-space: normal; }
   .svc-tbl td.svc-c-zr .svc-zr span { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .svc-tbl td.svc-c-zr { min-width: 150px; }
   .svc-zr { max-width: 250px; }

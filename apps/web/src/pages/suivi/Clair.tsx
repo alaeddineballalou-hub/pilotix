@@ -169,7 +169,8 @@ function LastResult({ x }: { x?: ClairX }) {
   const l = x?.last;
   if (!l) return <span className="muted">—</span>;
   const tone = l.key === 'no_answer' || l.key === 'busy' || l.key === 'lost' ? 'orange' : l.key === 'relivrer' || l.key === 'claim' ? 'green' : 'blue';
-  const day = l.key === 'relivrer' ? (hm(l.at).split(' ')[0].includes('/') ? hm(l.at).split(' ')[0] : t('suivi.clair.today')) : l.key === 'callback' && x?.callbackAt ? hm(x.callbackAt) : '';
+  // the call-back hour is in the action column (« 🕐 16:00 »), not twice on the line
+  const day = l.key === 'relivrer' ? (hm(l.at).split(' ')[0].includes('/') ? hm(l.at).split(' ')[0] : t('suivi.clair.today')) : '';
   // the day goes under the words when the column is narrow (tablet), never « Relivrer / demandé / 24/11 »
   return (
     <span className={`svc-last z-${tone}`}>
@@ -299,7 +300,7 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
         return <span className="svc-clamp muted">{x?.alertReason || reason || '—'}</span>;
       case 'why':
         return (
-          <span className="svc-last z-red">
+          <span className="svc-last svc-why z-red">
             <i aria-hidden="true" />
             {x?.cancelBy === 'client' ? t('suivi.clair.cancelClient') : coSays(t, o, reason || t('suivi.clair.cancelled'))}
           </span>
@@ -448,7 +449,7 @@ export function ClairCards({ tab, rows, extra, reasonOf, h }: { tab: ClairTab; r
               )}
               {tab === 'swap' && (
                 <div className="svc-card-s">
-                  <span className="svc-last z-red">
+                  <span className="svc-last svc-why z-red">
                     <i aria-hidden="true" />
                     {x?.cancelBy === 'client' ? t('suivi.clair.cancelClient') : coSays(t, o, reason || t('suivi.clair.cancelled'))}
                   </span>
