@@ -171,9 +171,12 @@ export interface SettingsMap {
   stockBatches: { on: boolean; warnDays: number };
   /** Management › Stock: « Fabrication » (recipes and makings in Produits & stock), off by default */
   stockMaking: { on: boolean };
-  /** Order-list column presets: saved by an admin, shared with everyone, never edited (only deleted by an admin) */
-  colPresets: { id: string; name: string; cols: string[]; by: string; at: string }[];
-  /** The preset every team uses (set by an admin; only an admin changes the columns) */
+  /**
+   * Order-list column presets: saved by an admin, shared with everyone, never edited (only deleted by an admin). `all`:
+   * every column of the list it was saved in (presets saved before 25 Nov 2026 have none).
+   */
+  colPresets: { id: string; name: string; cols: string[]; all?: string[]; by: string; at: string }[];
+  /** The preset an admin put in use for every team (it replaces the columns each user chose before it) */
   colPresetActive: { id: string; at: number; by: string } | null;
   /**
    * Management › Livreur: the messages a livreur sends a customer in one tap (WhatsApp or SMS) from « Ma tournée ».

@@ -24,7 +24,13 @@ export async function demoRestore(db: Db, keep: DemoKeep | null | undefined) {
   if (!keep || typeof keep !== 'object') return;
   if (Array.isArray(keep.colPresets)) {
     const ok = keep.colPresets.filter(
-      (p: any) => p && typeof p.id === 'string' && typeof p.name === 'string' && Array.isArray(p.cols) && p.cols.every((c: unknown) => typeof c === 'string'),
+      (p: any) =>
+        p &&
+        typeof p.id === 'string' &&
+        typeof p.name === 'string' &&
+        Array.isArray(p.cols) &&
+        p.cols.every((c: unknown) => typeof c === 'string') &&
+        (p.all === undefined || (Array.isArray(p.all) && p.all.every((c: unknown) => typeof c === 'string'))),
     ) as any[];
     await setSetting(db, 'colPresets', ok.slice(0, 30));
     const a: any = keep.colPresetActive;

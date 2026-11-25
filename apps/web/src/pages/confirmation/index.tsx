@@ -575,8 +575,9 @@ export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | 
               onChange={tc.setVisible}
               onReset={tc.reset}
               presetId={tc.presetId}
+              teamId={tc.teamId}
+              presetShows={tc.presetShows}
               onPreset={tc.applyPreset}
-              locked={tc.locked}
               widthsSet={Object.keys(tc.widths).length > 0}
               onResetWidths={tc.resetWidths}
               open={panel === 'c'}

@@ -763,9 +763,11 @@ html body .qcard .qacts .qa-info > .linkish { display: inline-flex; align-items:
 .px-hist-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .px-hist-note { margin-top: 4px; font-size: 12px; padding: 6px 8px; border-radius: 8px; background: var(--sky-soft, #eef2f8); }
 [dir="rtl"] .px-hist-list li:not(:last-child)::before { left: auto; right: 6px; }
-/* Suivi: the column menu above the table, on the right */
+/* Suivi, Dépôt, Commandes (Livré, Annulé…), SAV: the column menu above the table, on the right */
 .px-scols { display: flex; justify-content: flex-end; margin: 0 0 8px; }
 .px-scols .px-qpop { z-index: 40; }
+/* its dropdown opens towards the page, never past the screen's edge (phones too) */
+@media (max-width: 760px) { .px-scols .px-qpop { inset-inline-start: auto; inset-inline-end: 0; max-width: calc(100vw - 32px); } }
 /* message menu: SMS or WhatsApp, with the ready message */
 .px-ph-i { border: 0; cursor: pointer; font: inherit; }
 .px-ph-i.on { background: var(--q-accent, #F7A823); color: var(--c-on-accent); }
@@ -1383,8 +1385,11 @@ html body .qd6-fee.ro:hover { border-color: var(--line); }
 .px-rz:hover::after, .px-rz.on::after { top: 8%; bottom: 8%; background: #F7A823 !important; }
 body.px-resizing, body.px-resizing * { cursor: col-resize !important; user-select: none !important; }
 .tbl thead th.px-w { overflow: hidden; text-overflow: ellipsis; }
-/* the column menu for users who can only reorder */
+/* the column menu: who the presets are for (the admin's go to the whole team, the others' to the person) */
 .px-pre-note { margin: 4px 2px 6px; padding: 8px 10px; border-radius: 9px; background: var(--sky-soft, #eef2f8); color: var(--muted); font-size: 12px; line-height: 1.4; }
+/* the preset the admin put in use for the team */
+.px-pre-team { flex: none; font-style: normal; font-size: 11px; font-weight: 800; line-height: 1.5; padding: 0 7px; border-radius: 999px; color: var(--px-navy, #1B2A47); background: color-mix(in srgb, var(--q-accent, #F7A823) 24%, transparent); }
+[data-theme="dark"] .px-pre-team { color: #fff; }
 [data-theme="dark"] .px-pre-note { background: rgba(255, 255, 255, .05); }
 .px-pre-go:disabled { cursor: default; }
 .px-pre-it.on .px-pre-go:disabled { opacity: 1; }

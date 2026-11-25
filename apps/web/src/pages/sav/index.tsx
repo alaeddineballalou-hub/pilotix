@@ -18,6 +18,11 @@ import { useSavFilters } from './filters';
 import { TicketModal } from './Ticket';
 import { tabOn } from '../../lib/rights';
 import { SavSettings } from './Settings';
+import { TableColumnMenu, useTableColumns } from '../../ui/ColumnMenu';
+
+/** The columns of the SAV list (its own names: a preset made in an order list leaves them as they are). */
+const SAV_COLS = ['no', 'sorder', 'problem', 'wish', 'tstatus', 'depot', 'owner', 'age'] as const;
+type SavCol = (typeof SAV_COLS)[number];
 
 /** the page's tabs: the menu's list (packages/shared/src/menu.ts), shared with Utilisateurs › Rôles */
 const VIEWS = MENU_TABS.sav;
@@ -125,6 +130,90 @@ function SavDesktop({ sub }: PageProps) {
   const list = useRpc('sav.list', { view: apiView, q: deb || undefined, page, ...(combined ? {} : sfl.input) });
   const rows: TicketRowScope[] = list.data?.rows ?? [];
   const k = kp.data;
+  // the columns each user sees (the column menu of every list)
+  const tc = useTableColumns<SavCol>('sav', [...SAV_COLS]);
+  const [colMenu, setColMenu] = useState(false);
+  const shown = tc.order.filter((c) => tc.visible.has(c));
+  const colLabel: Record<SavCol, string> = {
+    no: t('sav.col.no'),
+    sorder: t('sav.col.order'),
+    problem: t('sav.col.problem'),
+    wish: t('sav.col.wish'),
+    tstatus: t('sav.col.ticket'),
+    depot: t('sav.col.depot'),
+    owner: t('sav.col.owner'),
+    age: t('sav.col.since'),
+  };
+  const cell = (c: SavCol, x: TicketRowScope) => {
+    switch (c) {
+      case 'no':
+        return (
+          <td key={c} data-l={colLabel[c]}>
+            <b className="ltr">{x.ref}</b>
+            {x.seller && <small>{x.seller.name}</small>}
+            <small>{when(x.createdAt)}</small>
+          </td>
+        );
+      case 'sorder':
+        return (
+          <td key={c} data-l={colLabel[c]}>
+            <b className="ltr">{x.orderRef ?? '—'}</b>
+            <small>
+              {x.customerName} · <span className="ltr">{x.phone}</span>
+            </small>
+          </td>
+        );
+      case 'problem':
+        return (
+          <td key={c} className="wide px-cw" data-l={colLabel[c]} title={`${t(`sav.type.${x.type}`)} — ${x.details}`}>
+            <div className="px-clamp">
+              {t(`sav.type.${x.type}`)}
+              {x.details && <small>{x.details}</small>}
+            </div>
+          </td>
+        );
+      case 'wish':
+        return (
+          <td key={c} data-l={colLabel[c]}>
+            {x.wish ? t(`sav.wish.${x.wish}`) : '—'}
+          </td>
+        );
+      case 'tstatus':
+        return (
+          <td key={c} data-l={colLabel[c]}>
+            <StatusBadge kind="sav" status={x.status} />
+          </td>
+        );
+      case 'depot':
+        return (
+          <td key={c} data-l={colLabel[c]} onClick={(e) => x.exchangeOrderId && (e.stopPropagation(), openOrder(x.exchangeOrderId))}>
+            {x.exchangeOrderId ? (
+              <>
+                <StatusBadge kind="follow" status={x.exchangeFollow} />
+                <small className="ltr">{x.exchangeRef}</small>
+              </>
+            ) : (
+              <small>{t('sav.notTreated')}</small>
+            )}
+          </td>
+        );
+      case 'owner':
+        return (
+          <td key={c} data-l={colLabel[c]}>
+            {x.assignedName ?? '—'}
+          </td>
+        );
+      case 'age': {
+        const active = x.status === 'open' || x.status === 'progress';
+        const age = (x.resolvedAt ? Date.parse(x.resolvedAt) : Date.now()) - Date.parse(x.createdAt);
+        return (
+          <td key={c} className="num" data-l={colLabel[c]}>
+            <span className={`badge ${active && age > 48 * 3_600_000 ? 't-bad' : 't-off'} ltr`}>{dur(age)}</span>
+          </td>
+        );
+      }
+    }
+  };
   const closeNew = () => {
     setCreating(false);
     if (view === 'nouveau') location.hash = '#/sav/tickets';
@@ -198,6 +287,11 @@ function SavDesktop({ sub }: PageProps) {
               </button>
             </div>
           </div>
+          {!list.isLoading && !list.error && (
+            <div className="px-scols">
+              <TableColumnMenu tc={tc} cols={SAV_COLS.map((c) => ({ k: c, label: colLabel[c] }))} open={colMenu} onToggle={() => setColMenu((v) => !v)} />
+            </div>
+          )}
           {list.isLoading ? (
             <Loading />
           ) : list.error ? (
@@ -209,59 +303,19 @@ function SavDesktop({ sub }: PageProps) {
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>{t('sav.col.no')}</th>
-                    <th>{t('sav.col.order')}</th>
-                    <th>{t('sav.col.problem')}</th>
-                    <th>{t('sav.col.wish')}</th>
-                    <th>{t('sav.col.ticket')}</th>
-                    <th>{t('sav.col.depot')}</th>
-                    <th>{t('sav.col.owner')}</th>
-                    <th className="num">{t('sav.col.since')}</th>
+                    {shown.map((c) => (
+                      <th key={c} className={c === 'age' ? 'num' : undefined}>
+                        {colLabel[c]}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((x) => {
-                    const active = x.status === 'open' || x.status === 'progress';
-                    const age = (x.resolvedAt ? Date.parse(x.resolvedAt) : Date.now()) - Date.parse(x.createdAt);
-                    return (
-                      <tr key={ticketKey(x)} className="clickable" onClick={() => setOpen(x)}>
-                        <td data-l={t('sav.col.no')}>
-                          <b className="ltr">{x.ref}</b>{x.seller && <small>{x.seller.name}</small>}
-                          <small>{when(x.createdAt)}</small>
-                        </td>
-                        <td data-l={t('sav.col.order')}>
-                          <b className="ltr">{x.orderRef ?? '—'}</b>
-                          <small>
-                            {x.customerName} · <span className="ltr">{x.phone}</span>
-                          </small>
-                        </td>
-                        <td className="wide px-cw" data-l={t('sav.col.problem')} title={`${t(`sav.type.${x.type}`)} — ${x.details}`}>
-                          <div className="px-clamp">
-                            {t(`sav.type.${x.type}`)}
-                            {x.details && <small>{x.details}</small>}
-                          </div>
-                        </td>
-                        <td data-l={t('sav.col.wish')}>{x.wish ? t(`sav.wish.${x.wish}`) : '—'}</td>
-                        <td data-l={t('sav.col.ticket')}>
-                          <StatusBadge kind="sav" status={x.status} />
-                        </td>
-                        <td data-l={t('sav.col.depot')} onClick={(e) => x.exchangeOrderId && (e.stopPropagation(), openOrder(x.exchangeOrderId))}>
-                          {x.exchangeOrderId ? (
-                            <>
-                              <StatusBadge kind="follow" status={x.exchangeFollow} />
-                              <small className="ltr">{x.exchangeRef}</small>
-                            </>
-                          ) : (
-                            <small>{t('sav.notTreated')}</small>
-                          )}
-                        </td>
-                        <td data-l={t('sav.col.owner')}>{x.assignedName ?? '—'}</td>
-                        <td className="num" data-l={t('sav.col.since')}>
-                          <span className={`badge ${active && age > 48 * 3_600_000 ? 't-bad' : 't-off'} ltr`}>{dur(age)}</span>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {rows.map((x) => (
+                    <tr key={ticketKey(x)} className="clickable" onClick={() => setOpen(x)}>
+                      {shown.map((c) => cell(c, x))}
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

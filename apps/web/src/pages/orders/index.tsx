@@ -331,6 +331,7 @@ export function OrderList(p: ListProps) {
           }}
           loading={list.isLoading}
           columns={p.columns}
+          table={`orders-${p.id}`}
           extra={extra}
           sort={sort}
           dir={dir}
@@ -644,7 +645,7 @@ function CommandesDesk({ sub }: { sub?: string }) {
           show={['search', 'conf', 'company', 'wilaya', 'channel', 'agent', 'team', 'product', 'livreur', 'reason', 'dates']}
           reasonOf="back"
           defaultSort="updated_at"
-          extra={swap.can ? () => [{ key: 'swap', label: t('suivi.act.swap'), cell: (o) => swap.button(o) }] : undefined}
+          extra={swap.can ? () => [{ key: 'swap', label: t('suivi.act.swap'), cell: (o) => swap.button(o), fixed: true }] : undefined}
         />
         {swap.dialogs}
       </>

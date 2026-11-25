@@ -234,6 +234,7 @@ function Prepares() {
     <>
       <ScanCard mode="dispatch" />
       <DepotOrderList
+        id="prepares"
         title={t('depot.lists.prepares')}
         follow={['prepared']}
         sort="updated_at"
@@ -259,6 +260,7 @@ function Dispatchees() {
   return (
     <>
       <DepotOrderList
+        id="dispatchees"
         title={t('depot.lists.dispatchees')}
         help={t('depot.help.dispatchees')}
         follow={['shipped']}
@@ -270,6 +272,7 @@ function Dispatchees() {
         bulk={(ids, clear) => <BagBulk ids={ids} done={clear} />}
         extra={[
           {
+            key: 'handed',
             label: t('depot.cols.handedSince'),
             num: true,
             cell: (o) => {
@@ -296,6 +299,7 @@ function Retours() {
       {/* the return scan (it was Scanner › « Retour / Échange »): douchette, camera or the code typed */}
       <ScanCard mode="back" />
       <DepotOrderList
+        id="returning"
         title={t('depot.lists.returning')}
         follow={['returning']}
         confirmedOnly={false}
@@ -304,7 +308,7 @@ function Retours() {
         compact
         actions={(o) => <ReceiveButton o={o} />}
       />
-      <DepotOrderList title={t('depot.lists.exchange')} follow={['in_exchange']} confirmedOnly={false} sort="updated_at" hide={['conf', 'follow']} compact />
+      <DepotOrderList id="exchange" title={t('depot.lists.exchange')} follow={['in_exchange']} confirmedOnly={false} sort="updated_at" hide={['conf', 'follow']} compact />
     </>
   );
 }

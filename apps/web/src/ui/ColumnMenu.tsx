@@ -10,19 +10,23 @@ import { Icon } from './kit';
 import { toast } from './toast';
 
 /**
- * Column picker with the shared, locked presets. The same presets show in Confirmation and Suivi:
- * a preset keeps the columns a table has and ignores the others.
+ * The column picker of every order list (Confirmation, Suivi, Dépôt, Livré, Annulé, Toutes les commandes, SAV), for every
+ * user (owner's choice, 25 Nov 2026): each one ticks the columns he wants to see, saved with his account. The presets are
+ * shared and never edited: an admin saves and deletes them, and the one he picks goes to the whole team at once (it
+ * replaces everyone's columns); anyone else picks one for himself, on all his lists.
  */
-export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset, open, onToggle, order, onOrder, presetId, onPreset, locked, widthsSet, onResetWidths }: {
+export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset, open, onToggle, order, onOrder, presetId, teamId, presetShows, onPreset, widthsSet, onResetWidths }: {
   cols: { k: K; label: string }[];
-  /** only an admin shows or hides columns: the others only reorder them */
-  locked?: boolean;
   /** this user resized columns: offer to go back to the automatic widths */
   widthsSet?: boolean;
   onResetWidths?: () => void;
-  /** the preset in use for this list (it stays until the user changes the columns) */
+  /** the preset this list shows (until the user ticks his columns again) */
   presetId?: string | null;
-  /** choosing a preset: saved with the account and used by every list */
+  /** the preset the admin put in use for the whole team (its « Équipe » tag) */
+  teamId?: string | null;
+  /** how many columns a preset shows in this list (0: it has none of them, it is not used here) */
+  presetShows?: (id: string) => number;
+  /** picking a preset: an admin's goes to the whole team, anyone else's to himself (every list) */
   onPreset?: (id: string) => void;
   visible: Set<K>;
   onChange: (s: Set<K>) => void;
@@ -35,17 +39,20 @@ export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset,
 }) {
   const { t } = useTranslation();
   const { session } = useSession();
+  const admin = !!session?.isAdmin;
   const presets = useRpc('confirmation.colPresets', {}, { staleTime: 60_000 });
   const qc = useQueryClient();
   const [pName, setPName] = useState('');
-  const has = (k: string): k is K => cols.some((c) => c.k === k);
-  const listed = (order ? order.map((k) => cols.find((c) => c.k === k)!).filter(Boolean) : cols).filter((c) => !locked || visible.has(c.k));
+  const listed = order ? order.map((k) => cols.find((c) => c.k === k)!).filter(Boolean) : cols;
   const drag = order && onOrder ? colDrag(order, onOrder) : null;
+  // without the list's own count: the preset's columns this list has
+  const shows = (p: Preset) => (presetShows ? presetShows(p.id) : p.cols.filter((c) => cols.some((x) => presetCol(x.k) === c)).length);
   const add = async () => {
     const name = pName.trim();
     if (!name) return;
     try {
-      await rpc('confirmation.addColPreset', { name, cols: listed.filter((c) => visible.has(c.k)).map((c) => c.k) });
+      // the columns ticked, and every column this list has: elsewhere the preset decides only the columns it saw here
+      await rpc('confirmation.addColPreset', { name, cols: listed.filter((c) => visible.has(c.k)).map((c) => presetCol(c.k)), all: listed.map((c) => presetCol(c.k)) });
       setPName('');
       toast(t('confirmation.presets.savedAll', { name }), 'ok');
       presets.refetch();
@@ -74,18 +81,35 @@ export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset,
           <div className="px-pre">
             <div className="px-pre-h">{t('confirmation.presets.title')}</div>
             {(presets.data ?? []).length === 0 && <div className="px-pre-none">{t('confirmation.presets.none')}</div>}
-            {locked && <div className="px-pre-note">{t('confirmation.presets.lockedNote')}</div>}
             {(presets.data ?? []).map((p) => {
-              const keep = p.cols.filter(has);
-              const on = onPreset ? presetId === p.id : keep.length > 0 && keep.length === visible.size && keep.every((k) => visible.has(k));
+              const n = shows(p);
+              const on = presetId === p.id;
               return (
                 <div key={p.id} className={`px-pre-it ${on ? 'on' : ''}`}>
-                  <button type="button" className="px-pre-go" title={locked ? t('confirmation.presets.byAdmin') : t('confirmation.presets.applyAll')} aria-label={t('confirmation.presets.apply', { name: p.name })} disabled={!keep.length || locked} onClick={() => (onPreset ? onPreset(p.id) : (onChange(new Set(keep)), order && onOrder?.([...keep, ...order.filter((k) => !keep.includes(k))])))}>
+                  <button
+                    type="button"
+                    className="px-pre-go"
+                    title={admin ? t('confirmation.presets.applyAll') : t('confirmation.presets.applyMine')}
+                    aria-label={t('confirmation.presets.apply', { name: p.name })}
+                    aria-pressed={on}
+                    disabled={!n}
+                    onClick={() => {
+                      if (onPreset) return onPreset(p.id);
+                      const keep = cols.filter((c) => p.cols.includes(presetCol(c.k))).map((c) => c.k);
+                      onChange(new Set(keep));
+                      if (order) onOrder?.([...keep, ...order.filter((k) => !keep.includes(k))]);
+                    }}
+                  >
                     <Icon name="lock" />
                     <span>{p.name}</span>
-                    <small>{keep.length}</small>
+                    {teamId === p.id && (
+                      <em className="px-pre-team" title={t('confirmation.presets.byAdmin')}>
+                        {t('confirmation.presets.team')}
+                      </em>
+                    )}
+                    <small>{n}</small>
                   </button>
-                  {session?.isAdmin && (
+                  {admin && (
                     <button type="button" className="px-pre-del" title={t('confirmation.presets.del', { name: p.name })} aria-label={t('confirmation.presets.del', { name: p.name })} onClick={() => del(p.id)}>
                       <Icon name="trash" />
                     </button>
@@ -93,7 +117,7 @@ export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset,
                 </div>
               );
             })}
-            {session?.isAdmin && (
+            {admin && (
               <form
                 className="px-pre-new"
                 onSubmit={(e) => {
@@ -107,32 +131,29 @@ export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset,
                 </button>
               </form>
             )}
+            <div className="px-pre-note">{admin ? t('confirmation.presets.noteAdmin') : t('confirmation.presets.noteUser')}</div>
           </div>
-          <div className="px-pre-h">{locked ? t('confirmation.presets.colsOrder') : t('confirmation.presets.cols')}</div>
+          <div className="px-pre-h">{t('confirmation.presets.cols')}</div>
           {listed.map((c) => (
             <label key={c.k} className={`px-qpop-it ${drag ? 'px-drag' : ''}`} {...(drag ? drag(c.k) : {})}>
               {drag && <Icon name="grip" className="px-grip" />}
               <span>{c.label}</span>
-              {!locked && (
-                <input
-                  type="checkbox"
-                  checked={visible.has(c.k)}
-                  onChange={(e) => {
-                    const s2 = new Set(visible);
-                    if (e.target.checked) s2.add(c.k);
-                    else s2.delete(c.k);
-                    onChange(s2);
-                  }}
-                />
-              )}
+              <input
+                type="checkbox"
+                checked={visible.has(c.k)}
+                onChange={(e) => {
+                  const s2 = new Set(visible);
+                  if (e.target.checked) s2.add(c.k);
+                  else s2.delete(c.k);
+                  onChange(s2);
+                }}
+              />
             </label>
           ))}
           <div className="px-qpop-acts">
-            {!locked && (
-              <button type="button" className="btn small ghost" onClick={onReset}>
-                {t('common.showAll')}
-              </button>
-            )}
+            <button type="button" className="btn small ghost" onClick={onReset}>
+              {t('common.showAll')}
+            </button>
             {widthsSet && onResetWidths && (
               <button type="button" className="btn small ghost" onClick={onResetWidths}>
                 {t('confirmation.presets.resetWidths')}
@@ -142,6 +163,26 @@ export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset,
         </div>
       )}
     </span>
+  );
+}
+
+/** The menu of a list using useTableColumns (the button, its dropdown and the shared presets). */
+export function TableColumnMenu<K extends string>({ tc, cols, open, onToggle }: { tc: TableColumns<K>; cols: { k: K; label: string }[]; open: boolean; onToggle: () => void }) {
+  return (
+    <ColumnMenu
+      cols={cols}
+      order={tc.order}
+      onOrder={tc.setOrder}
+      visible={tc.visible}
+      onChange={tc.setVisible}
+      onReset={tc.reset}
+      presetId={tc.presetId}
+      teamId={tc.teamId}
+      presetShows={tc.presetShows}
+      onPreset={tc.applyPreset}
+      open={open}
+      onToggle={onToggle}
+    />
   );
 }
 
@@ -156,50 +197,102 @@ function fixOrder<K extends string>(o: readonly K[] | null | undefined, all: rea
   return out;
 }
 
+/** The same column under another name in some lists, so a preset carries over (Commandes' « Client » is « name » elsewhere). */
+const SAME_COL: Record<string, string> = { client: 'name', products: 'product', address: 'wilaya', company: 'tracking' };
+/** A column's name in the presets. */
+const presetCol = (k: string) => SAME_COL[k] ?? k;
+/**
+ * A preset saved before presets remembered their columns was made in Confirmation or Suivi (the only lists with the
+ * menu then): it decides these columns, in those lists only.
+ */
+const OLD_SEEN = new Set(['order', 'source', 'tracking', 'creator', 'channel', 'product', 'variant', 'sku', 'chrono', 'name', 'phone', 'wilaya', 'commune', 'agent', 'fagent', 'total', 'time', 'created', 'stock', 'desk', 'passed', 'confirmed', 'follow', 'next', 'status', 'since']);
+const OLD_LISTS = /^(conf-|suivi$)/;
+type Preset = { id: string; name: string; cols: string[]; all?: string[] };
+
+/**
+ * The columns a preset shows in one list: those it saw where it was saved show if it kept them; this list's other
+ * columns keep their default. null: none of the preset's columns is in this list (it is not used here).
+ */
+function presetView<K extends string>(p: Preset, table: string, all: readonly K[], defaults: readonly K[]): Set<K> | null {
+  const seen = p.all?.length ? new Set(p.all) : OLD_LISTS.test(table) ? OLD_SEEN : null;
+  if (!seen) return null;
+  const kept = new Set(p.cols);
+  if (!all.some((k) => kept.has(presetCol(k)))) return null;
+  return new Set(all.filter((k) => (seen.has(presetCol(k)) ? kept.has(presetCol(k)) : defaults.includes(k))));
+}
+
+export type TableColumns<K extends string> = ReturnType<typeof useTableColumns<K>>;
+
 /**
  * The columns of one list.
- * - Which columns show: the preset an admin put in use for every team (or the default columns). Only an admin changes them.
+ * - Which columns show: each user's own choice, saved with his account (owner's choice, 25 Nov 2026: every user chooses
+ *   what he sees). A preset the admin puts in use goes to the whole team at once and replaces the columns chosen before
+ *   it; anyone can then tick his own again. The newest wins: the team's preset, the preset this user picked for himself
+ *   (on all his lists), or his own columns for this list.
  * - Their order and width: each user's own, saved with the account (they stay after a reload and on every device).
- * An admin's own column choice and the preset in use: the newest of the two wins on the admin's screen.
  */
 export function useTableColumns<K extends string>(table: string, all: K[], opts: { defaults?: K[]; legacy?: () => { cols?: K[] | null; order?: K[] | null } | null } = {}) {
   const prefs = useUiPrefs();
   const qc = useQueryClient();
+  const { t } = useTranslation();
   const { session } = useSession();
   const admin = !!session?.isAdmin;
   const presets = useRpc('confirmation.colPresets', {}, { staleTime: 60_000 });
   const activeQ = useRpc('confirmation.colActive', {}, { staleTime: 60_000 });
-  const defaults = opts.defaults ?? all;
-  // an admin's own choice of columns (and the order saved with it before order had its own key)
-  const own = prefs.get<{ cols: K[]; order: K[]; at: number }>(`cols.t.${table}`);
+  const defaults = (opts.defaults ?? all).filter((k) => all.includes(k));
+  // this user's own columns for this list (and the order saved with them before order had its own key)
+  const saved = prefs.get<{ cols: K[]; order: K[]; at: number }>(`cols.t.${table}`);
   const savedOrder = prefs.get<K[]>(`cols.o.${table}`);
   // choices made before they were saved with the account (this browser only)
-  const legacy = useMemo(() => (own || savedOrder ? null : opts.legacy?.() ?? null), [table, !!own, !!savedOrder]); // eslint-disable-line react-hooks/exhaustive-deps
-  const active = activeQ.data ?? null;
-  const preset = active ? presets.data?.find((p) => p.id === active.id) : undefined;
-  const keep = preset ? (preset.cols.filter((k) => all.includes(k as K)) as K[]) : [];
-  const adminOwn = admin ? own ?? (legacy?.cols ? { cols: legacy.cols, order: legacy.order ?? all, at: 0 } : null) : null;
-  const usePreset = keep.length > 0 && (!adminOwn || active!.at >= adminOwn.at);
-  const visible = new Set<K>(usePreset ? keep : adminOwn ? adminOwn.cols.filter((k) => all.includes(k)) : defaults);
+  const legacy = useMemo(() => (saved || savedOrder ? null : opts.legacy?.() ?? null), [table, !!saved, !!savedOrder]); // eslint-disable-line react-hooks/exhaustive-deps
+  // (the columns kept in this browser then were an admin's: only an admin chose them)
+  const own = saved ?? (admin && legacy?.cols ? { cols: legacy.cols, order: legacy.order ?? all, at: 0 } : null);
+  const list: Preset[] = presets.data ?? [];
+  const find = (id?: string | null) => (id ? list.find((p) => p.id === id) : undefined);
+  const team = activeQ.data ?? null;
+  const picked = prefs.get<{ id: string; at: number }>('cols.p');
+  // the team's preset and the one this user picked: the newest of those that have columns in this list
+  const best = [
+    { p: find(team?.id), at: team?.at ?? 0 },
+    { p: find(picked?.id), at: picked?.at ?? 0 },
+  ]
+    .map((c) => ({ ...c, view: c.p ? presetView(c.p, table, all, defaults) : null }))
+    .filter((c): c is { p: Preset; at: number; view: Set<K> } => !!c.view)
+    .sort((a, b) => b.at - a.at)[0];
+  // a preset put in use after my own columns wins, my columns ticked after it win
+  const usePreset = !!best && (!own || best.at >= own.at);
+  // a column added to the list since my choice: shown if it is shown by default
+  const visible: Set<K> = best && usePreset ? best.view : new Set(own ? all.filter((k) => (own.order.includes(k) ? own.cols.includes(k) : defaults.includes(k))) : defaults);
   const mine = savedOrder ?? own?.order ?? legacy?.order ?? null;
-  const order = mine ? fixOrder(mine, all) : usePreset ? [...keep, ...all.filter((k) => !keep.includes(k))] : [...all];
+  // a preset's order: its columns first, as they were when it was saved
+  const first = best && usePreset ? [...new Set(best.p.cols.flatMap((c) => all.filter((k) => presetCol(k) === c)))] : [];
+  const order = mine ? fixOrder(mine, all) : [...first, ...all.filter((k) => !first.includes(k))];
   const widths: Record<string, number> = prefs.get<Record<string, number>>(`cols.w.${table}`) ?? {};
   return {
     visible,
     order,
-    /** only an admin shows or hides columns */
-    locked: !admin,
-    presetId: keep.length ? preset!.id : null,
-    setVisible: (s: Set<K>) => admin && prefs.set(`cols.t.${table}`, { cols: order.filter((k) => s.has(k)), order, at: Date.now() }),
+    /** the preset this list shows (none once the user ticked his own columns after it) */
+    presetId: best && usePreset ? best.p.id : null,
+    /** the preset the admin put in use for the whole team */
+    teamId: find(team?.id) ? team!.id : null,
+    /** how many columns a preset shows in this list (0: none of its columns is here) */
+    presetShows: (id: string) => {
+      const p = find(id);
+      return p ? (presetView(p, table, all, defaults)?.size ?? 0) : 0;
+    },
+    /** the columns this user ticks (every user, saved with his account) */
+    setVisible: (s: Set<K>) => prefs.set(`cols.t.${table}`, { cols: order.filter((k) => s.has(k)), order, at: Date.now() }),
     setOrder: (o: K[]) => prefs.set(`cols.o.${table}`, o),
-    /** "Tout afficher" (admin) */
-    reset: () => admin && prefs.set(`cols.t.${table}`, { cols: [...all], order, at: Date.now() }),
-    /** an admin puts a preset in use for every team */
+    /** "Tout afficher" */
+    reset: () => prefs.set(`cols.t.${table}`, { cols: [...all], order, at: Date.now() }),
+    /** a preset picked: for me on all my lists; an admin's also goes to the whole team */
     applyPreset: async (id: string) => {
+      prefs.set('cols.p', { id, at: Date.now() });
       if (!admin) return;
       try {
         await rpc('confirmation.setColActive', { id });
         await qc.invalidateQueries({ queryKey: ['confirmation.colActive'] });
+        toast(t('confirmation.presets.appliedAll', { name: find(id)?.name ?? '' }), 'ok');
       } catch (e: any) {
         toast(e.message, 'bad');
       }

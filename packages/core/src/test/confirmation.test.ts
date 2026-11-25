@@ -245,6 +245,20 @@ test('list rows carry stock availability and statuses passed; admin can delete o
   await assert.rejects(call('orders.delete', admin, { ids: [Number(shipped.id)] }), /historique de livraison/);
 });
 
+test('a column preset keeps every column of the list it was saved in (an older screen sends none)', async () => {
+  const { as } = await setup(20);
+  const admin = await as(EMAILS.admin);
+  const conf = await as(EMAILS.conf);
+  // the ticked columns are among them, each once
+  const p: any = await call('confirmation.addColPreset', admin, { name: 'Dépôt', cols: ['order', 'name'], all: ['order', 'partner', 'partner', 'total'] });
+  assert.deepEqual(p.all, ['order', 'partner', 'total', 'name']);
+  assert.deepEqual(((await call('confirmation.colPresets', conf, {})) as any)[0].all, ['order', 'partner', 'total', 'name']);
+  const old: any = await call('confirmation.addColPreset', admin, { name: 'Ancien', cols: ['order'] });
+  assert.equal(old.all, undefined);
+  // only an admin saves one, as before
+  await assert.rejects(call('confirmation.addColPreset', conf, { name: 'X', cols: ['name'], all: ['name'] }), /refus/i);
+});
+
 test('column presets: admin adds and deletes, others only read, names are unique, no edit', async () => {
   const { as } = await setup(20);
   const admin = await as(EMAILS.admin);

@@ -333,6 +333,7 @@ function AllOrderList({ id, title, base, show, reasonOf, defaultSort = 'created_
           onPage={setPage}
           onSize={(s) => (setSize(s), setPage(1))}
           loading={list.isLoading}
+          table={`all-orders-${id}`}
           lead={{ key: 'boutique', label: t('boutiques.all.col'), cell: (o) => <BoutiqueTag id={(o as Row<Order>).seller.id} name={(o as Row<Order>).seller.name} /> }}
           sort={sort}
           dir={dir}

@@ -444,7 +444,12 @@
     "byAdmin": "Choisi par l’administrateur",
     "lockedNote": "Les colonnes affichées sont choisies par l’administrateur pour toutes les équipes. Vous pouvez changer leur ordre (glisser) et leur largeur (bord de l’en-tête).",
     "colsOrder": "Ordre des colonnes",
-    "resetWidths": "Largeurs automatiques"
+    "resetWidths": "Largeurs automatiques",
+    "applyMine": "Utiliser ce préréglage pour moi, sur toutes mes listes",
+    "appliedAll": "Préréglage « {{name}} » utilisé par toute l’équipe",
+    "team": "Équipe",
+    "noteAdmin": "Le préréglage que vous choisissez va à toute l’équipe. Ensuite, chacun peut cocher ses colonnes.",
+    "noteUser": "Cochez les colonnes que vous voulez voir : elles sont à vous. Un nouveau préréglage de l’administrateur les remplace."
   },
   "hist": {
     "title": "Historique de {{ref}}",

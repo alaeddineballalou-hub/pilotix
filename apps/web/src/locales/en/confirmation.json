@@ -444,7 +444,12 @@
     "byAdmin": "Chosen by the admin",
     "lockedNote": "The columns shown are chosen by the admin for every team. You can change their order (drag) and width (header edge).",
     "colsOrder": "Column order",
-    "resetWidths": "Automatic widths"
+    "resetWidths": "Automatic widths",
+    "applyMine": "Use this preset for me, on all my lists",
+    "appliedAll": "Preset “{{name}}” now used by the whole team",
+    "team": "Team",
+    "noteAdmin": "The preset you pick goes to the whole team. Then everyone can tick their own columns.",
+    "noteUser": "Tick the columns you want to see: they are yours. A new preset from the admin replaces them."
   },
   "hist": {
     "title": "History of {{ref}}",

@@ -12,8 +12,11 @@ import { Modal } from '../../ui/modal';
 import { stateOf, useCouriers } from './Labels';
 import './stages.css';
 import { useDepotFilters } from './filters';
+import { TableColumnMenu, useTableColumns } from '../../ui/ColumnMenu';
 
 export interface ExtraCol {
+  /** its name in the column menu (each user's columns are saved with his account) */
+  key: string;
   label: string;
   num?: boolean;
   cell: (o: Order) => ReactNode;
@@ -57,8 +60,10 @@ export function useDebounced<T>(v: T, ms = 300): T {
  * so the columns that matter there (the partner, how long the parcel has waited, the button) fit on a laptop.
  * `labels` (En dispatch): a parcel whose company has an API shows « Suivi en attente » until the company gives its
  * number (the Pilotix one would be replaced); `top` goes above the filters (the labels bar).
+ * Every user chooses the columns he sees (the column menu, as in every order list); `id` names the list's choice.
  */
 export function DepotOrderList({
+  id,
   title,
   help,
   follow,
@@ -73,6 +78,8 @@ export function DepotOrderList({
   top,
   taken,
 }: {
+  /** the list, for the column menu (« prepares », « dispatchees »…) */
+  id: string;
   title: string;
   help?: string;
   follow: FollowStatus[];
@@ -132,7 +139,157 @@ export function DepotOrderList({
   const clear = () => setSel(new Set());
   const showConf = !hide.includes('conf');
   const showFollow = !hide.includes('follow');
-  const cols = 7 + (compact ? 0 : 2) + (showConf ? 1 : 0) + (showFollow ? 1 : 0);
+  // the list's columns (`compact`: the variant goes with its product, no agent), then the screen's own
+  const keys = [
+    'order',
+    'name',
+    'wilaya',
+    'product',
+    ...(compact ? [] : ['variant']),
+    'total',
+    ...(showConf ? ['conf'] : []),
+    ...(showFollow ? ['follow'] : []),
+    'partner',
+    ...(compact ? [] : ['agent']),
+    ...extra.map((c) => c.key),
+  ];
+  const tc = useTableColumns<string>(`depot-${id}`, keys);
+  const [menu, setMenu] = useState(false);
+  const shown = tc.order.filter((k) => keys.includes(k) && tc.visible.has(k));
+  const xOf = (k: string) => extra.find((c) => c.key === k);
+  const label: Record<string, string> = {
+    order: t('depot.cols.order'),
+    name: t('depot.cols.client'),
+    wilaya: t('depot.cols.address'),
+    product: t('depot.cols.products'),
+    variant: t('depot.cols.variant'),
+    total: t('depot.cols.total'),
+    conf: t('depot.cols.conf'),
+    follow: t('depot.cols.follow'),
+    partner: t('depot.cols.company'),
+    agent: t('depot.cols.agent'),
+  };
+  const th = (k: string) => {
+    const x = xOf(k);
+    if (x)
+      return (
+        <th key={k} className={`${x.num ? 'num' : ''} ${compact ? 'px-dl-x' : ''}`}>
+          {x.label}
+        </th>
+      );
+    const cls = k === 'wilaya' ? (compact ? 'px-dl-addr' : undefined) : k === 'product' ? 'wide' : k === 'total' ? `num ${compact ? 'px-dl-tot' : ''}` : k === 'agent' ? 'hide-m' : undefined;
+    return (
+      <th key={k} className={cls}>
+        {label[k]}
+      </th>
+    );
+  };
+  const td = (k: string, o: Order): ReactNode => {
+    const x = xOf(k);
+    if (x)
+      return (
+        <td key={k} className={x.num ? 'num' : undefined} data-l={x.label}>
+          {x.cell(o)}
+        </td>
+      );
+    switch (k) {
+      case 'order':
+        return (
+          <td key={k} data-l={label[k]}>
+            <b className="ltr">{o.ref}</b> <TicketTag savRef={o.savRef} />
+            <small>{when(o.createdAt)}</small>
+          </td>
+        );
+      case 'name':
+        return (
+          <td key={k} data-l={label[k]}>
+            {o.customerName}
+            <small className="ltr">{o.phone}</small>
+            {/* the address under the customer: on a narrow screen (compact lists), or when its column is not shown */}
+            {(compact || !shown.includes('wilaya')) && (
+              <small className={shown.includes('wilaya') ? 'px-dl-where' : undefined}>
+                {wilaya(o.wilayaId)}
+                {o.commune ? ` · ${o.commune}` : ''}
+              </small>
+            )}
+          </td>
+        );
+      case 'wilaya':
+        return (
+          <td key={k} className={compact ? 'px-dl-addr' : undefined} data-l={label[k]}>
+            {wilaya(o.wilayaId)}
+            <small>{o.commune}</small>
+          </td>
+        );
+      case 'product':
+        return (
+          <td key={k} className="wide px-cw" data-l={label[k]}>
+            <div className="px-clamp">{compact ? <ItemsCell o={o} /> : namesOf(o.items)}</div>
+            {compact && shown.includes('total') && <small className="px-dl-sum ltr">{da(o.total)}</small>}
+          </td>
+        );
+      case 'variant':
+        return (
+          <td key={k} data-l={label[k]}>
+            <div className="px-clamp">{variantsOf(o.items)}</div>
+          </td>
+        );
+      case 'total':
+        return (
+          <td key={k} className={`num ltr ${compact ? 'px-dl-tot' : ''}`} data-l={label[k]}>
+            {da(o.total)}
+          </td>
+        );
+      case 'conf':
+        return (
+          <td key={k} data-l={label[k]}>
+            <StatusBadge kind="conf" status={o.confStatus} />
+          </td>
+        );
+      case 'follow':
+        return (
+          <td key={k} data-l={label[k]}>
+            <StatusBadge kind="follow" status={o.followStatus} />
+          </td>
+        );
+      case 'partner':
+        return (
+          <td key={k} data-l={label[k]}>
+            <RemovableChip
+              name={o.companyName}
+              removeLabel={t('depot.removePartner')}
+              disabled={unCompany.isPending || unDispatch.isPending}
+              onRemove={
+                o.followStatus === 'to_prepare'
+                  ? () => unCompany.mutate({ ids: [o.id], companyId: null, livreurId: null })
+                  : o.followStatus === 'prepared'
+                    ? () => (atCompany(o) ? setAsk(o) : unDispatch.mutate({ id: o.id }))
+                    : undefined
+              }
+            />
+            {waiting(o) ? (
+              <small className="px-wait">
+                <Icon name="clock" /> {t('depot.labels.waiting')}
+              </small>
+            ) : (
+              <CopyCode code={trackOf(o) || o.ref} small />
+            )}
+            {o.followStatus === 'prepared' && o.subStatus === SUB_TAKEN_UNSCANNED && (
+              <small className="px-taken">
+                <Icon name="alert" /> {t('depot.labels.courierTook', { name: o.companyName || t('depot.filters.company') })}
+              </small>
+            )}
+          </td>
+        );
+      case 'agent':
+        return (
+          <td key={k} className="hide-m" data-l={label[k]}>
+            {o.agentName ?? '—'}
+          </td>
+        );
+    }
+    return null;
+  };
 
   return (
     <Card title={title} help={help}>
@@ -157,130 +314,46 @@ export function DepotOrderList({
       ) : list.error ? (
         <ErrorBox error={list.error} onRetry={() => list.refetch()} />
       ) : (
-        <div className={`tbl-wrap ${compact ? 'px-dlw' : ''}`}>
-          <table className={`tbl ${compact ? 'px-dl' : ''}`}>
-            <thead>
-              <tr>
-                <th className="ck">
-                  <input type="checkbox" aria-label={t('depot.selectAll')} checked={allOn} onChange={() => setSel(allOn ? new Set() : new Set(rows.map((o) => o.id)))} />
-                </th>
-                <th>{t('depot.cols.order')}</th>
-                <th>{t('depot.cols.client')}</th>
-                <th className={compact ? 'px-dl-addr' : undefined}>{t('depot.cols.address')}</th>
-                <th className="wide">{t('depot.cols.products')}</th>
-                {!compact && <th>{t('depot.cols.variant')}</th>}
-                <th className={`num ${compact ? 'px-dl-tot' : ''}`}>{t('depot.cols.total')}</th>
-                {showConf && <th>{t('depot.cols.conf')}</th>}
-                {showFollow && <th>{t('depot.cols.follow')}</th>}
-                <th>{t('depot.cols.company')}</th>
-                {!compact && <th className="hide-m">{t('depot.cols.agent')}</th>}
-                {extra.map((c) => (
-                  <th key={c.label} className={`${c.num ? 'num' : ''} ${compact ? 'px-dl-x' : ''}`}>
-                    {c.label}
-                  </th>
-                ))}
-                {actions && <th className="px-act" />}
-              </tr>
-            </thead>
-            <tbody>
-              {!rows.length && (
+        <>
+          <div className="px-scols">
+            <TableColumnMenu tc={tc} cols={keys.map((k) => ({ k, label: xOf(k)?.label ?? label[k] }))} open={menu} onToggle={() => setMenu((v) => !v)} />
+          </div>
+          <div className={`tbl-wrap ${compact ? 'px-dlw' : ''}`}>
+            <table className={`tbl ${compact ? 'px-dl' : ''}`}>
+              <thead>
                 <tr>
-                  <td colSpan={cols + extra.length + (actions ? 1 : 0)} className="muted" style={{ textAlign: 'center', padding: 24 }}>
-                    {t('depot.empty')}
-                  </td>
+                  <th className="ck">
+                    <input type="checkbox" aria-label={t('depot.selectAll')} checked={allOn} onChange={() => setSel(allOn ? new Set() : new Set(rows.map((o) => o.id)))} />
+                  </th>
+                  {shown.map(th)}
+                  {actions && <th className="px-act" />}
                 </tr>
-              )}
-              {rows.map((o) => (
-                <tr key={o.id} className="clickable" onClick={() => openOrder(o.id)}>
-                  <td className="ck" onClick={(e) => e.stopPropagation()}>
-                    <input type="checkbox" aria-label={t('depot.select')} checked={sel.has(o.id)} onChange={() => toggle(o.id)} />
-                  </td>
-                  <td data-l={t('depot.cols.order')}>
-                    <b className="ltr">{o.ref}</b> <TicketTag savRef={o.savRef} />
-                    <small>{when(o.createdAt)}</small>
-                  </td>
-                  <td data-l={t('depot.cols.client')}>
-                    {o.customerName}
-                    <small className="ltr">{o.phone}</small>
-                    {compact && (
-                      <small className="px-dl-where">
-                        {wilaya(o.wilayaId)}
-                        {o.commune ? ` · ${o.commune}` : ''}
-                      </small>
+              </thead>
+              <tbody>
+                {!rows.length && (
+                  <tr>
+                    <td colSpan={1 + shown.length + (actions ? 1 : 0)} className="muted" style={{ textAlign: 'center', padding: 24 }}>
+                      {t('depot.empty')}
+                    </td>
+                  </tr>
+                )}
+                {rows.map((o) => (
+                  <tr key={o.id} className="clickable" onClick={() => openOrder(o.id)}>
+                    <td className="ck" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" aria-label={t('depot.select')} checked={sel.has(o.id)} onChange={() => toggle(o.id)} />
+                    </td>
+                    {shown.map((k) => td(k, o))}
+                    {actions && (
+                      <td className="px-act" data-l="" onClick={(e) => e.stopPropagation()}>
+                        {actions(o)}
+                      </td>
                     )}
-                  </td>
-                  <td className={compact ? 'px-dl-addr' : undefined} data-l={t('depot.cols.address')}>
-                    {wilaya(o.wilayaId)}
-                    <small>{o.commune}</small>
-                  </td>
-                  <td className="wide px-cw" data-l={t('depot.cols.products')}>
-                    <div className="px-clamp">{compact ? <ItemsCell o={o} /> : namesOf(o.items)}</div>
-                    {compact && <small className="px-dl-sum ltr">{da(o.total)}</small>}
-                  </td>
-                  {!compact && (
-                    <td data-l={t('depot.cols.variant')}>
-                      <div className="px-clamp">{variantsOf(o.items)}</div>
-                    </td>
-                  )}
-                  <td className={`num ltr ${compact ? 'px-dl-tot' : ''}`} data-l={t('depot.cols.total')}>
-                    {da(o.total)}
-                  </td>
-                  {showConf && (
-                    <td data-l={t('depot.cols.conf')}>
-                      <StatusBadge kind="conf" status={o.confStatus} />
-                    </td>
-                  )}
-                  {showFollow && (
-                    <td data-l={t('depot.cols.follow')}>
-                      <StatusBadge kind="follow" status={o.followStatus} />
-                    </td>
-                  )}
-                  <td data-l={t('depot.cols.company')}>
-                    <RemovableChip
-                      name={o.companyName}
-                      removeLabel={t('depot.removePartner')}
-                      disabled={unCompany.isPending || unDispatch.isPending}
-                      onRemove={
-                        o.followStatus === 'to_prepare'
-                          ? () => unCompany.mutate({ ids: [o.id], companyId: null, livreurId: null })
-                          : o.followStatus === 'prepared'
-                            ? () => (atCompany(o) ? setAsk(o) : unDispatch.mutate({ id: o.id }))
-                            : undefined
-                      }
-                    />
-                    {waiting(o) ? (
-                      <small className="px-wait">
-                        <Icon name="clock" /> {t('depot.labels.waiting')}
-                      </small>
-                    ) : (
-                      <CopyCode code={trackOf(o) || o.ref} small />
-                    )}
-                    {o.followStatus === 'prepared' && o.subStatus === SUB_TAKEN_UNSCANNED && (
-                      <small className="px-taken">
-                        <Icon name="alert" /> {t('depot.labels.courierTook', { name: o.companyName || t('depot.filters.company') })}
-                      </small>
-                    )}
-                  </td>
-                  {!compact && (
-                    <td className="hide-m" data-l={t('depot.cols.agent')}>
-                      {o.agentName ?? '—'}
-                    </td>
-                  )}
-                  {extra.map((c) => (
-                    <td key={c.label} className={c.num ? 'num' : undefined} data-l={c.label}>
-                      {c.cell(o)}
-                    </td>
-                  ))}
-                  {actions && (
-                    <td className="px-act" data-l="" onClick={(e) => e.stopPropagation()}>
-                      {actions(o)}
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
       <div className="pager">
         <span className="muted">{t('depot.results', { count: total })}</span>

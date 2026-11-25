@@ -13,6 +13,7 @@ import { CopyCode } from '../../ui/CopyCode';
 import { TrustFlags } from './TrustFlags';
 import { OriginChip } from './OrderPath';
 import { ScoreChip } from '../../ui/clientScore';
+import { TableColumnMenu, useTableColumns } from '../../ui/ColumnMenu';
 
 /** Built-in columns, in the original order. */
 export type OrderColumn = 'order' | 'client' | 'score' | 'address' | 'products' | 'variant' | 'total' | 'conf' | 'follow' | 'company' | 'agent' | 'fagent' | 'phone' | 'wilaya' | 'since';
@@ -31,6 +32,8 @@ export interface ExtraColumn {
   num?: boolean;
   cell: (o: Order) => ReactNode;
   sort?: OrderSort;
+  /** buttons (« Swap »): always shown, at the end, not in the column menu */
+  fixed?: boolean;
 }
 
 export interface OrderTableProps {
@@ -42,6 +45,11 @@ export interface OrderTableProps {
   onSize?: (s: number) => void;
   loading?: boolean;
   columns?: OrderColumn[];
+  /**
+   * The list's name for the column menu (each user's columns, saved with his account, and the team's presets): the
+   * columns to show, their order. Without it, every column shows.
+   */
+  table?: string;
   /** extra columns added after the built-in ones */
   extra?: ExtraColumn[];
   /** a column before the built-in ones (« Toutes les boutiques »: the order's boutique) */
@@ -65,7 +73,15 @@ export function OrderTable(p: OrderTableProps) {
   const canFollow = has('suivi');
   const unAgent = useAction('orders.assignAgent', { success: t('confirmation.unassigned', { n: 1 }) });
   const unFollow = useAction('suivi.unassign', { success: (o) => t('suivi.agentRemoved', { ref: o.ref }) });
-  const cols = p.columns ?? DEFAULT_COLUMNS;
+  const builtIn = p.columns ?? DEFAULT_COLUMNS;
+  const movable = (p.extra ?? []).filter((x) => !x.fixed);
+  const keys: string[] = [...builtIn, ...movable.map((x) => x.key)];
+  const tc = useTableColumns<string>(p.table ?? 'orders', keys);
+  const [menu, setMenu] = useState(false);
+  // the columns shown, in this user's order (the built-in ones and the screen's own)
+  const shown = p.table ? tc.order.filter((k) => keys.includes(k) && tc.visible.has(k)) : keys;
+  const cols = shown.filter((k): k is OrderColumn => (builtIn as string[]).includes(k));
+  const xOf = (k: string) => movable.find((x) => x.key === k);
   const [sel, setSel] = useState<Map<number, Order>>(new Map());
   useEffect(() => setSel(new Map()), [p.resetKey]);
   const rows = p.rows ?? [];
@@ -111,6 +127,22 @@ export function OrderTable(p: OrderTableProps) {
       </th>
     );
   };
+
+  const xTh = (x: ExtraColumn) =>
+    x.sort && p.onSort && p.sort ? (
+      <SortTh key={x.key} k={x.sort} sort={p.sort} dir={p.dir ?? 'desc'} onSort={sortBy} num={x.num}>
+        {x.label}
+      </SortTh>
+    ) : (
+      <th key={x.key} className={x.num ? 'num' : undefined}>
+        {x.label}
+      </th>
+    );
+  const xTd = (x: ExtraColumn, o: Order) => (
+    <td key={x.key} className={x.num ? 'num' : undefined} data-l={x.label}>
+      {x.cell(o)}
+    </td>
+  );
 
   const cell = (c: OrderColumn, o: Order): ReactNode => {
     switch (c) {
@@ -223,6 +255,11 @@ export function OrderTable(p: OrderTableProps) {
   const ids = [...sel.keys()];
   return (
     <div>
+      {p.table && (
+        <div className="px-scols">
+          <TableColumnMenu tc={tc} cols={keys.map((k) => ({ k, label: xOf(k)?.label ?? label[k as OrderColumn] }))} open={menu} onToggle={() => setMenu((v) => !v)} />
+        </div>
+      )}
       {rows.length === 0 ? (
         <Empty>{p.empty ?? t('orders.empty')}</Empty>
       ) : (
@@ -236,18 +273,11 @@ export function OrderTable(p: OrderTableProps) {
                   </th>
                 )}
                 {p.lead && <th key={p.lead.key}>{p.lead.label}</th>}
-                {cols.map(th)}
-                {p.extra?.map((x) =>
-                  x.sort && p.onSort && p.sort ? (
-                    <SortTh key={x.key} k={x.sort} sort={p.sort} dir={p.dir ?? 'desc'} onSort={sortBy} num={x.num}>
-                      {x.label}
-                    </SortTh>
-                  ) : (
-                    <th key={x.key} className={x.num ? 'num' : undefined}>
-                      {x.label}
-                    </th>
-                  ),
-                )}
+                {shown.map((k) => {
+                  const x = xOf(k);
+                  return x ? xTh(x) : th(k as OrderColumn);
+                })}
+                {p.extra?.filter((x) => x.fixed).map(xTh)}
               </tr>
             </thead>
             <tbody>
@@ -265,12 +295,11 @@ export function OrderTable(p: OrderTableProps) {
                         {p.lead.cell(o)}
                       </td>
                     )}
-                    {cols.map((c) => cell(c, o))}
-                    {p.extra?.map((x) => (
-                      <td key={x.key} className={x.num ? 'num' : undefined} data-l={x.label}>
-                        {x.cell(o)}
-                      </td>
-                    ))}
+                    {shown.map((k) => {
+                      const x = xOf(k);
+                      return x ? xTd(x, o) : cell(k as OrderColumn, o);
+                    })}
+                    {p.extra?.filter((x) => x.fixed).map((x) => xTd(x, o))}
                   </tr>
                 );
               })}

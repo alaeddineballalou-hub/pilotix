@@ -924,14 +924,27 @@ export const confirmationProcs = {
   }),
 
   /** Counts of the stage bar. */
-  /** Column presets: everyone reads them; only an admin adds or deletes; a saved preset is never changed. */
+  /**
+   * Column presets of every order list: everyone reads them and picks one for himself; only an admin adds or deletes,
+   * and the one he saves or picks goes to every team; a saved preset is never changed. `all`: every column of the list
+   * it was saved in (elsewhere it decides only those, the other columns keep their default).
+   */
   'confirmation.colPresets': proc(null, z.object({}), async (ctx) => getSetting(ctx.db, 'colPresets')),
-  'confirmation.addColPreset': proc(['confirmation'], z.object({ name: z.string().trim().min(1).max(40), cols: z.array(z.string().max(30)).min(1).max(40) }), async (ctx, i) => {
+  'confirmation.addColPreset': proc(['confirmation'], z.object({ name: z.string().trim().min(1).max(40), cols: z.array(z.string().max(30)).min(1).max(40), all: z.array(z.string().max(30)).max(60).optional() }), async (ctx, i) => {
     if (!ctx.session.isAdmin) throw forbidden();
     const list = await getSetting(ctx.db, 'colPresets');
     if (list.some((p) => p.name.toLowerCase() === i.name.toLowerCase())) throw bad('Un préréglage porte déjà ce nom');
     if (list.length >= 30) throw bad('30 préréglages au maximum');
-    const preset = { id: `p${ctx.now().toString(36)}`, name: i.name, cols: [...new Set(i.cols)], by: ctx.session.profile.name, at: new Date(ctx.now()).toISOString() };
+    const cols = [...new Set(i.cols)];
+    const preset = {
+      id: `p${ctx.now().toString(36)}`,
+      name: i.name,
+      cols,
+      // the list's columns, with the ones kept (an older screen sends none: the preset then decides its own columns only)
+      ...(i.all?.length ? { all: [...new Set([...i.all, ...cols])] } : {}),
+      by: ctx.session.profile.name,
+      at: new Date(ctx.now()).toISOString(),
+    };
     await setSetting(ctx.db, 'colPresets', [...list, preset], ctx.session.profile.id);
     // a saved preset is used by every team at once
     await setSetting(ctx.db, 'colPresetActive', { id: preset.id, at: ctx.now(), by: ctx.session.profile.name }, ctx.session.profile.id);
@@ -944,7 +957,10 @@ export const confirmationProcs = {
     if ((await getSetting(ctx.db, 'colPresetActive'))?.id === id) await setSetting(ctx.db, 'colPresetActive', null, ctx.session.profile.id);
     return { ok: true };
   }),
-  /** The preset every team uses (null: the default columns). Everyone reads it; only an admin sets it. */
+  /**
+   * The preset the admin put in use for every team (null: none). It replaces the columns each user chose before it;
+   * anyone can tick his own again after. Everyone reads it; only an admin sets it.
+   */
   'confirmation.colActive': proc(null, z.object({}), async (ctx) => getSetting(ctx.db, 'colPresetActive')),
   'confirmation.setColActive': proc(null, z.object({ id: z.string().max(40).nullable() }), async (ctx, { id }) => {
     if (!ctx.session.isAdmin) throw forbidden();
