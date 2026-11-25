@@ -1,11 +1,18 @@
 {
-  "tabs": { "apercu": "Aperçu", "argent": "Argent", "retours": "Retours", "dispatch": "Dispatch", "statuts": "Statuts" },
+  "tabs": {
+    "apercu": "Aperçu",
+    "argent": "Argent",
+    "retours": "Retours",
+    "dispatch": "Dispatch",
+    "statuts": "Statuts"
+  },
   "hero": {
     "ok": "Tout est d’accord",
     "bad_one": "{{count}} problème à régler",
     "bad_other": "{{count}} problèmes à régler",
     "text": "Le dépôt, Pilotix et chaque société de livraison sont comparés toutes les 30 minutes, colis par colis et dinar par dinar. Chaque société seule, avec ses propres délais.",
     "last": "Dernier contrôle il y a {{when}}",
+    "now": "Contrôlé à l’instant",
     "never": "Pas encore contrôlé",
     "agreed_one": "{{count}} réglé tout seul (24 h)",
     "agreed_other": "{{count}} réglés tout seuls (24 h)",
@@ -32,42 +39,126 @@
   "problemsAll": "Les problèmes",
   "problemsOf": "Les problèmes de {{name}}",
   "seeAll": "Voir tout",
-  "state": { "open": "À régler", "seen": "Vus", "closed": "Réglés (7 jours)" },
+  "state": {
+    "open": "À régler",
+    "seen": "Vus",
+    "closed": "Réglés (7 jours)"
+  },
   "empty": {
     "open": "Rien à régler ici : tout est d’accord.",
     "seen": "Aucun problème mis de côté.",
     "closed": "Rien de réglé ces 7 derniers jours."
   },
-  "who": { "depot": "Dépôt", "suivi": "Suivi", "owner": "Patron" },
+  "who": {
+    "depot": "Dépôt",
+    "suivi": "Suivi",
+    "owner": "Patron"
+  },
   "whoLine": "Qui : {{who}}",
   "since": "depuis {{when}}",
-  "did": { "alert": "Pilotix l’a mis dans Suivi › Alertes" },
+  "did": {
+    "alert": "Pilotix l’a mis dans Suivi › Alertes"
+  },
   "closedAuto": "Réglé tout seul",
   "closedBy": "Réglé par {{name}}",
   "seenBy": "Vu par {{name}}",
-  "act": { "open": "Ouvrir la commande", "seen": "C’est vu", "unseen": "Remettre", "received": "Reçu au dépôt", "receivedDone": "Retour reçu : c’est noté dans l’historique", "seenDone": "Mis de côté" },
+  "act": {
+    "open": "Ouvrir la commande",
+    "seen": "C’est vu",
+    "unseen": "Remettre",
+    "received": "Reçu au dépôt",
+    "receivedDone": "Retour reçu : c’est noté dans l’historique",
+    "seenDone": "Mis de côté"
+  },
   "parcelOf": "Colis de {{amount}}",
   "k": {
-    "no_tracking": { "t": "Préparé, sans numéro de {{co}}", "do": "Renvoyez-le à {{co}} depuis Dépôt › En dispatch." },
-    "out_not_taken": { "t": "Sorti du dépôt, {{co}} ne l’a jamais pris", "do": "Cherchez le colis (au dépôt, chez le livreur de {{co}}) et demandez à {{co}}." },
-    "taken_not_scanned": { "t": "{{co}} l’a pris sans le scan du dépôt", "do": "Vérifiez qu’il est bien parti, puis « C’est vu ». Scannez toujours un colis avant de le donner." },
-    "cancelled_but_out": { "t": "Annulée, mais le colis n’est pas revenu", "do": "Demandez le retour à {{co}}, puis scannez-le dans Dépôt › Retours." },
-    "stop_words": { "t": "{{co}} dit « {{words}} », Pilotix disait « En livraison »", "do": "Appelez le client : le colis ne sera pas livré tel quel." },
-    "unknown_words": { "t": "Mot de {{co}} inconnu : « {{words}} »", "do": "Dites à Pilotix ce que ce mot veut dire (Livraison › Sociétés › Statuts)." },
-    "delivered_not_in_pilotix": { "t": "{{co}} dit livré, Pilotix ne l’a pas suivi", "do": "Ouvrez la commande et vérifiez son statut." },
-    "delivered_but_returning": { "t": "Livré dans Pilotix, mais {{co}} dit « {{words}} »", "do": "Vérifiez avec {{co}} : livré ou en retour ? Son argent n’est pas venu." },
-    "lost_at_company": { "t": "{{co}} dit que le colis est perdu", "do": "Faites une réclamation à {{co}} pour être remboursé." },
-    "alert_late": { "t": "Alerte pas traitée", "do": "Traitez-la dans Suivi › Alertes." },
-    "sync_down": { "t": "{{co}} ne répond plus à Pilotix", "do": "Ses colis ne bougent plus dans Pilotix. Vérifiez sa clé API (Livraison › API)." },
-    "return_not_scanned": { "t": "{{co}} dit l’avoir rendu, le dépôt ne l’a pas scanné", "do": "Cherchez-le au dépôt et scannez-le (Dépôt › Retours), ou réclamez-le à {{co}}.", "stock": "Pilotix l’a déjà remis en stock." },
-    "return_stalled": { "t": "En retour depuis trop longtemps", "do": "Réclamez-le à {{co}}." },
-    "return_but_delivered": { "t": "Retour scanné au dépôt, mais {{co}} dit livré", "do": "Le bon colis a été scanné ? Demandez à {{co}}." },
-    "not_paid": { "t": "Livré, argent pas reçu", "livreur": "Livré par notre livreur, argent pas remis", "do": "Demandez le paiement à {{co}}, ou encaissez-le dans Caisse.", "doLivreur": "Récupérez l’argent chez le livreur (Caisse › Livreurs)." },
-    "payout_waiting": { "t": "Paiement {{ref}} prêt chez {{co}}, pas récupéré", "do": "Récupérez-le, puis « Reçu » dans Caisse." },
-    "payout_not_in_caisse": { "t": "Paiement {{ref}} remis par {{co}}, pas dans une caisse", "removed": "Paiement {{ref}} de {{co}} retiré de la caisse", "do": "Mettez-le dans une caisse (Caisse › Paiements)." },
-    "paid_unknown": { "t": "{{co}} a payé un colis inconnu : {{tracking}}", "do": "Demandez à {{co}} : un colis fait hors de Pilotix, ou celui d’une autre boutique ?" },
-    "paid_wrong_amount": { "t": "Payé {{paid}} au lieu de {{want}}", "do": "Réclamez la différence à {{co}}." },
-    "paid_twice": { "t": "Payé deux fois ({{first}} et {{ref}})", "do": "{{co}} va le reprendre : gardez cet argent de côté." },
-    "paid_but_back": { "t": "Payé par {{co}}, mais le colis est au dépôt", "do": "Prévenez {{co}} avant qu’il le reprenne." }
+    "no_tracking": {
+      "t": "Préparé, sans numéro de {{co}}",
+      "do": "Renvoyez-le à {{co}} depuis Dépôt › En dispatch."
+    },
+    "out_not_taken": {
+      "t": "Sorti du dépôt, {{co}} ne l’a jamais pris",
+      "do": "Cherchez le colis (au dépôt, chez le livreur de {{co}}) et demandez à {{co}}."
+    },
+    "taken_not_scanned": {
+      "t": "{{co}} l’a pris sans le scan du dépôt",
+      "do": "Vérifiez qu’il est bien parti, puis « C’est vu ». Scannez toujours un colis avant de le donner."
+    },
+    "cancelled_but_out": {
+      "t": "Annulée, mais le colis n’est pas revenu",
+      "do": "Demandez le retour à {{co}}, puis scannez-le dans Dépôt › Retours."
+    },
+    "stop_words": {
+      "t": "{{co}} dit « {{words}} », Pilotix disait « En livraison »",
+      "do": "Appelez le client : le colis ne sera pas livré tel quel."
+    },
+    "unknown_words": {
+      "t": "Mot de {{co}} inconnu : « {{words}} »",
+      "do": "Dites à Pilotix ce que ce mot veut dire (Livraison › Sociétés › Statuts)."
+    },
+    "delivered_not_in_pilotix": {
+      "t": "{{co}} dit livré, Pilotix ne l’a pas suivi",
+      "do": "Ouvrez la commande et vérifiez son statut."
+    },
+    "delivered_but_returning": {
+      "t": "Livré dans Pilotix, mais {{co}} dit « {{words}} »",
+      "do": "Vérifiez avec {{co}} : livré ou en retour ? Son argent n’est pas venu."
+    },
+    "lost_at_company": {
+      "t": "{{co}} dit que le colis est perdu",
+      "do": "Faites une réclamation à {{co}} pour être remboursé."
+    },
+    "alert_late": {
+      "t": "Alerte pas traitée",
+      "do": "Traitez-la dans Suivi › Alertes."
+    },
+    "sync_down": {
+      "t": "{{co}} ne répond plus à Pilotix",
+      "do": "Ses colis ne bougent plus dans Pilotix. Vérifiez sa clé API (Livraison › API)."
+    },
+    "return_not_scanned": {
+      "t": "{{co}} dit l’avoir rendu, le dépôt ne l’a pas scanné",
+      "do": "Cherchez-le au dépôt et scannez-le (Dépôt › Retours), ou réclamez-le à {{co}}.",
+      "stock": "Pilotix l’a déjà remis en stock."
+    },
+    "return_stalled": {
+      "t": "En retour depuis trop longtemps",
+      "do": "Réclamez-le à {{co}}."
+    },
+    "return_but_delivered": {
+      "t": "Retour scanné au dépôt, mais {{co}} dit livré",
+      "do": "Le bon colis a été scanné ? Demandez à {{co}}."
+    },
+    "not_paid": {
+      "t": "Livré, argent pas reçu",
+      "livreur": "Livré par notre livreur, argent pas remis",
+      "do": "Demandez le paiement à {{co}}, ou encaissez-le dans Caisse.",
+      "doLivreur": "Récupérez l’argent chez le livreur (Caisse › Livreurs)."
+    },
+    "payout_waiting": {
+      "t": "Paiement {{ref}} prêt chez {{co}}, pas récupéré",
+      "do": "Récupérez-le, puis « Reçu » dans Caisse."
+    },
+    "payout_not_in_caisse": {
+      "t": "Paiement {{ref}} remis par {{co}}, pas dans une caisse",
+      "removed": "Paiement {{ref}} de {{co}} retiré de la caisse",
+      "do": "Mettez-le dans une caisse (Caisse › Paiements)."
+    },
+    "paid_unknown": {
+      "t": "{{co}} a payé un colis inconnu : {{tracking}}",
+      "do": "Demandez à {{co}} : un colis fait hors de Pilotix, ou celui d’une autre boutique ?"
+    },
+    "paid_wrong_amount": {
+      "t": "Payé {{paid}} au lieu de {{want}}",
+      "do": "Réclamez la différence à {{co}}."
+    },
+    "paid_twice": {
+      "t": "Payé deux fois ({{first}} et {{ref}})",
+      "do": "{{co}} va le reprendre : gardez cet argent de côté."
+    },
+    "paid_but_back": {
+      "t": "Payé par {{co}}, mais le colis est au dépôt",
+      "do": "Prévenez {{co}} avant qu’il le reprenne."
+    }
   }
 }

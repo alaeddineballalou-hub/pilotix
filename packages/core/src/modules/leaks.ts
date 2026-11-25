@@ -276,6 +276,13 @@ function noAgency(ctx: Ctx) {
 }
 const seesMoney = (ctx: Ctx) => can(ctx, 'tab:controle/argent');
 const STATES = ['open', 'seen', 'closed'] as const;
+/** The order of the list: what is losing money or a parcel right now first, what only needs a look last. */
+const RANK: Record<LeakKind, number> = {
+  stop_words: 1, sync_down: 2, paid_wrong_amount: 3, paid_but_back: 3, payout_not_in_caisse: 3, return_not_scanned: 4, out_not_taken: 4,
+  delivered_but_returning: 4, lost_at_company: 4, cancelled_but_out: 5, not_paid: 5, payout_waiting: 5, paid_unknown: 6, paid_twice: 6,
+  return_stalled: 6, return_but_delivered: 6, delivered_not_in_pilotix: 6, unknown_words: 6, no_tracking: 7, taken_not_scanned: 8, alert_late: 9,
+};
+const RANK_SQL = `CASE k.kind ${Object.entries(RANK).map(([k, n]) => `WHEN '${k}' THEN ${n}`).join(' ')} ELSE 10 END`;
 
 async function overview(ctx: Ctx) {
   noAgency(ctx);
@@ -290,8 +297,9 @@ async function overview(ctx: Ctx) {
   );
   const cases = await ctx.db.query(`SELECT company_id, area, kind, amount, dismissed_at FROM leak_cases WHERE closed_at IS NULL ${money ? '' : `AND area <> 'argent'`}`);
   const today = await ctx.db.query(
-    `SELECT count(*) FILTER (WHERE closed_by = 'auto') AS agreed, count(*) FILTER (WHERE action IS NOT NULL) AS acted FROM leak_cases
-     WHERE closed_at > $1::timestamptz - interval '24 hours' ${money ? '' : `AND area <> 'argent'`}`,
+    `SELECT count(*) FILTER (WHERE closed_by = 'auto' AND closed_at > $1::timestamptz - interval '24 hours') AS agreed,
+            count(*) FILTER (WHERE action IS NOT NULL AND first_seen > $1::timestamptz - interval '24 hours') AS acted FROM leak_cases
+     WHERE (closed_at IS NULL OR closed_at > $1::timestamptz - interval '24 hours') ${money ? '' : `AND area <> 'argent'`}`,
     [at(ctx)],
   );
   const zero = () => Object.fromEntries(LEAK_AREAS.map((a) => [a, 0])) as Record<LeakArea, number>;
@@ -349,7 +357,7 @@ async function list(ctx: Ctx, i: z.infer<typeof ListIn>) {
     `SELECT k.*, c.name AS company_name, c.kind AS company_kind, o.ref, o.customer_name, o.phone, o.tracking, o.follow_status, o.total, o.ext_status,
        p.ref AS pay_ref, p.amount AS pay_amount
      FROM leak_cases k LEFT JOIN delivery_companies c ON c.id = k.company_id LEFT JOIN orders o ON o.id = k.order_id LEFT JOIN courier_payments p ON p.id = k.payment_id
-     WHERE ${where.join(' AND ')} ORDER BY ${i.state === 'closed' ? 'k.closed_at DESC' : 'k.amount DESC, k.since NULLS LAST, k.id'} LIMIT 300`,
+     WHERE ${where.join(' AND ')} ORDER BY ${i.state === 'closed' ? 'k.closed_at DESC' : `${RANK_SQL}, k.amount DESC, k.since NULLS LAST, k.id`} LIMIT 300`,
     i.state === 'closed' ? [at(ctx)] : [],
   );
   return {
@@ -482,7 +490,7 @@ export async function seedLeaks(db: Ctx['db'], now = Date.now()) {
     await db.query(`UPDATE order_events SET at = $2 WHERE order_id = $1 AND note = 'scan dispatch'`, [e.id, t(50)]);
   }
   // Yalidine: delivered 16 days ago, its money never came
-  const f = await pick(`SELECT id FROM orders WHERE company_id = $1 AND follow_status = 'delivered' AND total > 0`, [yal]);
+  const f = await pick(`SELECT id FROM orders WHERE company_id = $1 AND follow_status = 'delivered' AND total > 2500`, [yal]);
   if (f) await set(f.id, `cashed = false, cashed_at = NULL, delivered_at = $2`, [t(24 * 16)]);
   // our livreurs: delivered three days ago, the cash still with the livreur
   const g = own ? await pick(`SELECT id FROM orders WHERE company_id = $1 AND follow_status = 'delivered' AND total > 0`, [own]) : null;

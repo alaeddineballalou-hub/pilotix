@@ -70,7 +70,7 @@ function Overview({ ov }: { ov: Ov }) {
           <h2 className="ctl-hero-t">{ov.open ? t('ctl.hero.bad', { count: ov.open }) : t('ctl.hero.ok')}</h2>
           <p className="ctl-hero-text">{t('ctl.hero.text')}</p>
           <p className="ctl-hero-meta">
-            <span>{ov.lastRun ? t('ctl.hero.last', { when: since(ov.lastRun.at) }) : t('ctl.hero.never')}</span>
+            <span>{!ov.lastRun ? t('ctl.hero.never') : Date.now() - Date.parse(ov.lastRun.at) < 60_000 ? t('ctl.hero.now') : t('ctl.hero.last', { when: since(ov.lastRun.at) })}</span>
             <span>{t('ctl.hero.agreed', { count: ov.agreedToday })}</span>
             <span>{t('ctl.hero.acted', { count: ov.actedToday })}</span>
           </p>
@@ -154,9 +154,9 @@ function Area({ area, ov }: { area: LeakArea; ov: Ov }) {
             </button>
           ))}
         </div>
-        <div className="ctl-seg" role="tablist">
+        <div className="ctl-seg" role="group">
           {STATES.map((s) => (
-            <button key={s} type="button" role="tab" aria-selected={state === s} className={state === s ? 'on' : ''} onClick={() => setState(s)}>
+            <button key={s} type="button" aria-pressed={state === s} className={state === s ? 'on' : ''} onClick={() => setState(s)}>
               {t(`ctl.state.${s}`)}
             </button>
           ))}

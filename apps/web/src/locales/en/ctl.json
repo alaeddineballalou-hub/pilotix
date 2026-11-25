@@ -1,11 +1,18 @@
 {
-  "tabs": { "apercu": "Overview", "argent": "Money", "retours": "Returns", "dispatch": "Dispatch", "statuts": "Statuses" },
+  "tabs": {
+    "apercu": "Overview",
+    "argent": "Money",
+    "retours": "Returns",
+    "dispatch": "Dispatch",
+    "statuts": "Statuses"
+  },
   "hero": {
     "ok": "Everything matches",
     "bad_one": "{{count}} problem to fix",
     "bad_other": "{{count}} problems to fix",
     "text": "The depot, Pilotix and each delivery company are compared every 30 minutes, parcel by parcel and dinar by dinar. Each company alone, with its own delays.",
     "last": "Last check {{when}} ago",
+    "now": "Checked just now",
     "never": "Not checked yet",
     "agreed_one": "{{count}} fixed by itself (24 h)",
     "agreed_other": "{{count}} fixed by themselves (24 h)",
@@ -32,42 +39,126 @@
   "problemsAll": "The problems",
   "problemsOf": "{{name}}’s problems",
   "seeAll": "See all",
-  "state": { "open": "To fix", "seen": "Seen", "closed": "Fixed (7 days)" },
+  "state": {
+    "open": "To fix",
+    "seen": "Seen",
+    "closed": "Fixed (7 days)"
+  },
   "empty": {
     "open": "Nothing to fix here: everything matches.",
     "seen": "No problem set aside.",
     "closed": "Nothing fixed in the last 7 days."
   },
-  "who": { "depot": "Depot", "suivi": "Follow-up", "owner": "Owner" },
+  "who": {
+    "depot": "Depot",
+    "suivi": "Follow-up",
+    "owner": "Owner"
+  },
   "whoLine": "Who: {{who}}",
   "since": "for {{when}}",
-  "did": { "alert": "Pilotix put it in Follow-up › Alerts" },
+  "did": {
+    "alert": "Pilotix put it in Follow-up › Alerts"
+  },
   "closedAuto": "Fixed by itself",
   "closedBy": "Fixed by {{name}}",
   "seenBy": "Seen by {{name}}",
-  "act": { "open": "Open the order", "seen": "Seen", "unseen": "Put back", "received": "Received at the depot", "receivedDone": "Return received: written in its history", "seenDone": "Set aside" },
+  "act": {
+    "open": "Open the order",
+    "seen": "Seen",
+    "unseen": "Put back",
+    "received": "Received at the depot",
+    "receivedDone": "Return received: written in its history",
+    "seenDone": "Set aside"
+  },
   "parcelOf": "Parcel of {{amount}}",
   "k": {
-    "no_tracking": { "t": "Packed, no {{co}} number", "do": "Send it to {{co}} again from Depot › In dispatch." },
-    "out_not_taken": { "t": "Left the depot, {{co}} never took it", "do": "Look for the parcel (at the depot, with {{co}}’s driver) and ask {{co}}." },
-    "taken_not_scanned": { "t": "{{co}} took it without the depot’s scan", "do": "Check it really left, then « Seen ». Always scan a parcel before handing it over." },
-    "cancelled_but_out": { "t": "Cancelled, but the parcel did not come back", "do": "Ask {{co}} for the return, then scan it in Depot › Returns." },
-    "stop_words": { "t": "{{co}} says « {{words}} », Pilotix said « Out for delivery »", "do": "Call the customer: the parcel will not be delivered as it is." },
-    "unknown_words": { "t": "Unknown {{co}} words: « {{words}} »", "do": "Tell Pilotix what these words mean (Delivery › Companies › Statuses)." },
-    "delivered_not_in_pilotix": { "t": "{{co}} says delivered, Pilotix did not follow", "do": "Open the order and check its status." },
-    "delivered_but_returning": { "t": "Delivered in Pilotix, but {{co}} says « {{words}} »", "do": "Check with {{co}}: delivered or coming back? Its money did not come." },
-    "lost_at_company": { "t": "{{co}} says the parcel is lost", "do": "Make a claim to {{co}} to be paid back." },
-    "alert_late": { "t": "Alert not handled", "do": "Handle it in Follow-up › Alerts." },
-    "sync_down": { "t": "{{co}} does not answer Pilotix any more", "do": "Its parcels no longer move in Pilotix. Check its API key (Delivery › API)." },
-    "return_not_scanned": { "t": "{{co}} says it gave it back, the depot never scanned it", "do": "Find it at the depot and scan it (Depot › Returns), or claim it from {{co}}.", "stock": "Pilotix already put it back in stock." },
-    "return_stalled": { "t": "Coming back for too long", "do": "Claim it from {{co}}." },
-    "return_but_delivered": { "t": "Return scanned at the depot, but {{co}} says delivered", "do": "Was the right parcel scanned? Ask {{co}}." },
-    "not_paid": { "t": "Delivered, money not received", "livreur": "Delivered by our driver, money not handed in", "do": "Ask {{co}} for the payment, or receive it in Cash.", "doLivreur": "Collect the money from the driver (Cash › Drivers)." },
-    "payout_waiting": { "t": "Payment {{ref}} ready at {{co}}, not picked up", "do": "Pick it up, then « Received » in Cash." },
-    "payout_not_in_caisse": { "t": "Payment {{ref}} handed over by {{co}}, not in a cash box", "removed": "{{co}}’s payment {{ref}} taken out of the cash box", "do": "Put it in a cash box (Cash › Payments)." },
-    "paid_unknown": { "t": "{{co}} paid an unknown parcel: {{tracking}}", "do": "Ask {{co}}: a parcel made outside Pilotix, or another shop’s?" },
-    "paid_wrong_amount": { "t": "Paid {{paid}} instead of {{want}}", "do": "Claim the difference from {{co}}." },
-    "paid_twice": { "t": "Paid twice ({{first}} and {{ref}})", "do": "{{co}} will take it back: keep this money aside." },
-    "paid_but_back": { "t": "Paid by {{co}}, but the parcel is at the depot", "do": "Tell {{co}} before it takes it back." }
+    "no_tracking": {
+      "t": "Packed, no {{co}} number",
+      "do": "Send it to {{co}} again from Depot › In dispatch."
+    },
+    "out_not_taken": {
+      "t": "Left the depot, {{co}} never took it",
+      "do": "Look for the parcel (at the depot, with {{co}}’s driver) and ask {{co}}."
+    },
+    "taken_not_scanned": {
+      "t": "{{co}} took it without the depot’s scan",
+      "do": "Check it really left, then « Seen ». Always scan a parcel before handing it over."
+    },
+    "cancelled_but_out": {
+      "t": "Cancelled, but the parcel did not come back",
+      "do": "Ask {{co}} for the return, then scan it in Depot › Returns."
+    },
+    "stop_words": {
+      "t": "{{co}} says « {{words}} », Pilotix said « Out for delivery »",
+      "do": "Call the customer: the parcel will not be delivered as it is."
+    },
+    "unknown_words": {
+      "t": "Unknown {{co}} words: « {{words}} »",
+      "do": "Tell Pilotix what these words mean (Delivery › Companies › Statuses)."
+    },
+    "delivered_not_in_pilotix": {
+      "t": "{{co}} says delivered, Pilotix did not follow",
+      "do": "Open the order and check its status."
+    },
+    "delivered_but_returning": {
+      "t": "Delivered in Pilotix, but {{co}} says « {{words}} »",
+      "do": "Check with {{co}}: delivered or coming back? Its money did not come."
+    },
+    "lost_at_company": {
+      "t": "{{co}} says the parcel is lost",
+      "do": "Make a claim to {{co}} to be paid back."
+    },
+    "alert_late": {
+      "t": "Alert not handled",
+      "do": "Handle it in Follow-up › Alerts."
+    },
+    "sync_down": {
+      "t": "{{co}} does not answer Pilotix any more",
+      "do": "Its parcels no longer move in Pilotix. Check its API key (Delivery › API)."
+    },
+    "return_not_scanned": {
+      "t": "{{co}} says it gave it back, the depot never scanned it",
+      "do": "Find it at the depot and scan it (Depot › Returns), or claim it from {{co}}.",
+      "stock": "Pilotix already put it back in stock."
+    },
+    "return_stalled": {
+      "t": "Coming back for too long",
+      "do": "Claim it from {{co}}."
+    },
+    "return_but_delivered": {
+      "t": "Return scanned at the depot, but {{co}} says delivered",
+      "do": "Was the right parcel scanned? Ask {{co}}."
+    },
+    "not_paid": {
+      "t": "Delivered, money not received",
+      "livreur": "Delivered by our driver, money not handed in",
+      "do": "Ask {{co}} for the payment, or receive it in Cash.",
+      "doLivreur": "Collect the money from the driver (Cash › Drivers)."
+    },
+    "payout_waiting": {
+      "t": "Payment {{ref}} ready at {{co}}, not picked up",
+      "do": "Pick it up, then « Received » in Cash."
+    },
+    "payout_not_in_caisse": {
+      "t": "Payment {{ref}} handed over by {{co}}, not in a cash box",
+      "removed": "{{co}}’s payment {{ref}} taken out of the cash box",
+      "do": "Put it in a cash box (Cash › Payments)."
+    },
+    "paid_unknown": {
+      "t": "{{co}} paid an unknown parcel: {{tracking}}",
+      "do": "Ask {{co}}: a parcel made outside Pilotix, or another shop’s?"
+    },
+    "paid_wrong_amount": {
+      "t": "Paid {{paid}} instead of {{want}}",
+      "do": "Claim the difference from {{co}}."
+    },
+    "paid_twice": {
+      "t": "Paid twice ({{first}} and {{ref}})",
+      "do": "{{co}} will take it back: keep this money aside."
+    },
+    "paid_but_back": {
+      "t": "Paid by {{co}}, but the parcel is at the depot",
+      "do": "Tell {{co}} before it takes it back."
+    }
   }
 }

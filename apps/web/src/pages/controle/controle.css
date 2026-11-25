@@ -74,6 +74,7 @@
 .ctl-card.is-argent .ctl-card-ic { background: var(--c-info-tint); color: var(--c-info-ink); }
 .ctl-card.is-statuts .ctl-card-ic { background: var(--c-bad-tint); color: var(--c-bad-ink); }
 .ctl-card.is-closed .ctl-card-ic { background: var(--c-ok-tint); color: var(--c-ok-ink); }
+.ctl-card > .ctl-grow { flex: 1 1 0; }
 .ctl-card-t { margin: 0; font-size: 15.5px; line-height: 1.35; font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
 .ctl-card-meta { margin: 6px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13px; color: var(--muted); }
 .ctl-ref { font-weight: 600; color: var(--ink); }
@@ -96,12 +97,15 @@
   .ctl-hero { flex-wrap: wrap; padding: 16px; gap: 12px; }
   .ctl-hero-mark { width: 40px; height: 40px; }
   .ctl-hero-t { font-size: 19px; }
+  .ctl-hero-text { display: none; }
   .ctl-run { width: 100%; justify-content: center; }
   .ctl-cos { grid-template-columns: minmax(0, 1fr); }
-  .ctl-tools { flex-direction: column; align-items: stretch; }
+  .ctl-tools { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
+  .ctl-chips { flex: none; max-width: 100%; }
   .ctl-seg { align-self: stretch; }
   .ctl-seg button { flex: 1 1 0; }
-  .ctl-card { flex-wrap: wrap; padding: 14px; gap: 12px; }
+  .ctl-card { flex-wrap: wrap; padding: 14px; gap: 10px 12px; }
+  .ctl-card-ic { width: 34px; height: 34px; border-radius: 10px; }
   .ctl-card-side { flex: 1 1 100%; flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; }
   .ctl-card-acts { justify-content: flex-start; }
 }
