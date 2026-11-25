@@ -225,6 +225,14 @@ export async function seedSuiviWork(db: Db, users: Record<string, number>, now: 
     await ev(num(o.id), now - ago, null, 'follow_status', o.follow_status, 'alert', why, { courier: true });
   }
 
+  // ---- Annulés: a delivery company's return is its own news, written with nobody's name as the couriers' sync does
+  // (« ZR annulé » with its words); our livreurs' and the Suivi's own « Client annule » keep their person
+  await db.query(
+    `UPDATE order_events e SET user_id = NULL FROM orders o JOIN delivery_companies co ON co.id = o.company_id
+      WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'returning' AND co.kind <> 'own'
+        AND coalesce(e.note, '') NOT LIKE '%(suivi)%' AND coalesce(e.note, '') NOT LIKE 'Annulé trop tôt%' AND coalesce(e.note, '') NOT LIKE 'Traité%'`,
+  );
+
   // ---- Résolu: alerts relivrées, then delivered by the company — three today, two yesterday, four older
   const dayStart = algiersDayStart(now);
   const sinceToday = now - dayStart;

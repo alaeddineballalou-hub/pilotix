@@ -1257,6 +1257,8 @@ export interface ClairExtra {
   savedBy: string | null;
   /** Swap: the customer cancelled (« Client annule », someone in Pilotix) or the company did */
   cancelBy: 'client' | 'zr' | null;
+  /** Annulés: what was said when the parcel turned back (the company's words, « Refusé par le client »…) */
+  backWhy: string | null;
   /** which counter the line is in */
   bucket: string;
 }
@@ -1294,13 +1296,16 @@ async function clairExtras(ctx: Ctx, tab: ClairTab, rows: Order[], ex: Record<nu
     lastOf.set(num(r.order_id), r);
   // Swap: the last turn back of the parcel, made by a person in Pilotix (« Client annule ») or by the company's news
   const backBy = new Map<number, boolean>();
+  const backWhy = new Map<number, string>();
   if (tab === 'swap' || tab === 'annules')
     for (const r of await ctx.db.query(
-      `SELECT DISTINCT ON (e.order_id) e.order_id, e.user_id FROM order_events e
+      `SELECT DISTINCT ON (e.order_id) e.order_id, e.user_id, e.note FROM order_events e
         WHERE e.order_id = ANY($1) AND e.kind = 'follow_status' AND e.to_value IN ('returning', 'cancelled') ORDER BY e.order_id, e.at DESC, e.id DESC`,
       [ids],
-    ))
+    )) {
       backBy.set(num(r.order_id), r.user_id != null);
+      if (r.note) backWhy.set(num(r.order_id), String(r.note));
+    }
   const today = algiersDayStart(now);
   for (const o of rows) {
     const x = ex[o.id];
@@ -1334,6 +1339,7 @@ async function clairExtras(ctx: Ctx, tab: ClairTab, rows: Order[], ex: Record<nu
       callbackAt,
       savedBy: tab === 'resolus' ? (r?.who as string | null) ?? o.followAgentName ?? null : null,
       cancelBy: tab === 'swap' || tab === 'annules' ? (backBy.get(o.id) ? 'client' : 'zr') : null,
+      backWhy: backWhy.get(o.id) ?? null,
       bucket,
     };
   }

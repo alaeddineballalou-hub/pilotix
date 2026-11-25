@@ -44,6 +44,7 @@ export type ClairX = PExtra & {
   callbackAt?: string | null;
   savedBy?: string | null;
   cancelBy?: 'client' | 'zr' | null;
+  backWhy?: string | null;
   bucket?: string;
 };
 export type ClairRow = Order & { seller?: { id: number; name: string } };
@@ -88,9 +89,10 @@ export function ZrStatus({ o, text }: { o: Order; text: string | null }) {
   );
 }
 
-/** The company's words with its name in front, once (« ZR : Commande annulée », never « ZR : ZR : … »). */
+/** The company's words with its name in front, once (« ZR : Commande annulée », never « ZR Express : ZR Express : … »). */
 function coSays(t: (k: string, o?: Record<string, unknown>) => string, o: Order, v: string) {
-  return /^[A-Za-zÀ-ÿ]{2,12}\s?:/.test(v) ? v : t('suivi.clair.zrSays', { co: o.companyName || o.livreurName || t('suivi.zr'), v });
+  const co = o.companyName || o.livreurName || t('suivi.zr');
+  return /^[A-Za-zÀ-ÿ]{2,12}\s?:/.test(v) || v.toLowerCase().startsWith(co.toLowerCase()) ? v : t('suivi.clair.zrSays', { co, v });
 }
 
 /** Nothing in the tab; « Résolu » still says how it fills (the owner: nothing to do there). */
@@ -301,7 +303,7 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
         return (
           <span className="svc-last svc-why z-red">
             <i aria-hidden="true" />
-            {x?.cancelBy === 'client' ? t('suivi.clair.cancelClient') : coSays(t, o, reason || t('suivi.clair.cancelled'))}
+            {x?.cancelBy === 'client' ? t('suivi.clair.cancelClient') : coSays(t, o, x?.backWhy || reason || t('suivi.clair.cancelled'))}
           </span>
         );
       case 'act':
@@ -440,7 +442,7 @@ export function ClairCards({ tab, rows, extra, reasonOf, h }: { tab: ClairTab; r
                 <div className="svc-card-s">
                   <span className="svc-last svc-why z-red">
                     <i aria-hidden="true" />
-                    {x?.cancelBy === 'client' ? t('suivi.clair.cancelClient') : coSays(t, o, reason || t('suivi.clair.cancelled'))}
+                    {x?.cancelBy === 'client' ? t('suivi.clair.cancelClient') : coSays(t, o, x?.backWhy || reason || t('suivi.clair.cancelled'))}
                   </span>
                   <span className="muted small svc-clamp">{namesOf(o.items)}</span>
                 </div>

@@ -256,7 +256,7 @@ function SyncButton() {
     }
   };
   return (
-    <button className="btn" onClick={sync} disabled={busy}>
+    <button className="btn sv-sync" onClick={sync} disabled={busy}>
       <Icon name="refresh" /> {t('suivi.sync')}
     </button>
   );
