@@ -2,7 +2,7 @@
 // picked most, or a subject — then answers the one question the reason needs. Pilotix decides WHO (modules/faults.ts):
 // the agent never picks a team. Before delivery (Suivi, a return) the customer only saw the product at the door: no
 // photo, the depot checks the parcel when it comes back. After delivery (a SAV ticket) the customer's photo.
-import { FAULT_ASK, FAULT_FREQUENT, FAULT_GROUPS, FAULT_SEEN, type FaultMoment, type FaultPickReason } from '@pilotix/shared';
+import { FAULT_ASK, FAULT_FREQUENT, FAULT_FREQUENT_SAV, FAULT_GROUPS, FAULT_SEEN, type FaultMoment, type FaultPickReason } from '@pilotix/shared';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAction, useRpc } from '../../lib/query';
@@ -84,7 +84,7 @@ export function FaultSheet({ orderId, ticketId, moment, cancel, onClose, onDone 
       onClose={onClose}
       footer={
         reason ? (
-          <button type="button" className="pxf-go" disabled={!ready || save.isPending} onClick={send}>
+          <button type="button" className="pxfa-go" disabled={!ready || save.isPending} onClick={send}>
             <Icon name="check" /> {t('faults.sheet.save')}
           </button>
         ) : undefined
@@ -95,47 +95,47 @@ export function FaultSheet({ orderId, ticketId, moment, cancel, onClose, onDone 
       ) : !o.data ? (
         <Loading />
       ) : o.data.decided ? (
-        <p className="pxf-note">{t('faults.sheet.decided')}</p>
+        <p className="pxfa-note">{t('faults.sheet.decided')}</p>
       ) : !reason ? (
-        <div className="pxf-sheet">
-          <label className="pxf-search">
+        <div className="pxfa-sheet">
+          <label className="pxfa-search">
             <Icon name="search" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('faults.sheet.search')} aria-label={t('faults.sheet.search')} />
           </label>
           {q.trim() ? (
-            <div className="pxf-chips">
+            <div className="pxfa-chips">
               {found.map((r) => (
-                <button key={r} type="button" className="pxf-c" onClick={() => pick(r)}>
+                <button key={r} type="button" className="pxfa-c" onClick={() => pick(r)}>
                   {label(r)}
                 </button>
               ))}
-              {!found.length && <p className="pxf-note">{t('faults.sheet.nothing')}</p>}
+              {!found.length && <p className="pxfa-note">{t('faults.sheet.nothing')}</p>}
             </div>
           ) : (
             <>
-              <p className="pxf-gl">{t('faults.sheet.frequent')}</p>
-              <div className="pxf-chips">
-                {FAULT_FREQUENT.map((r) => (
-                  <button key={r} type="button" className="pxf-c" onClick={() => pick(r)}>
+              <p className="pxfa-gl">{t('faults.sheet.frequent')}</p>
+              <div className="pxfa-chips">
+                {(sav ? FAULT_FREQUENT_SAV : FAULT_FREQUENT).map((r) => (
+                  <button key={r} type="button" className="pxfa-c" onClick={() => pick(r)}>
                     {label(r)}
                   </button>
                 ))}
               </div>
-              <p className="pxf-gl">{t('faults.sheet.all')}</p>
+              <p className="pxfa-gl">{t('faults.sheet.all')}</p>
               <div>
                 {FAULT_GROUPS.map((g) => (
                   <div key={g.key}>
-                    <button type="button" className={`pxf-acc ${group === g.key ? 'open' : ''}`} aria-expanded={group === g.key} onClick={() => setGroup(group === g.key ? null : g.key)}>
+                    <button type="button" className={`pxfa-acc ${group === g.key ? 'open' : ''}`} aria-expanded={group === g.key} onClick={() => setGroup(group === g.key ? null : g.key)}>
                       <Icon name={GROUP_ICON[g.key]} />
                       {t(`faults.group.${g.key}`)}
                       <small>{t('faults.sheet.count', { n: g.reasons.length })}</small>
                       <Icon name={group === g.key ? 'chevron' : 'chevr'} />
                     </button>
                     {group === g.key && (
-                      <div className="pxf-accb">
-                        <div className="pxf-chips">
+                      <div className="pxfa-accb">
+                        <div className="pxfa-chips">
                           {g.reasons.map((r) => (
-                            <button key={r} type="button" className="pxf-c" onClick={() => pick(r as FaultPickReason)}>
+                            <button key={r} type="button" className="pxfa-c" onClick={() => pick(r as FaultPickReason)}>
                               {label(r)}
                             </button>
                           ))}
@@ -149,12 +149,12 @@ export function FaultSheet({ orderId, ticketId, moment, cancel, onClose, onDone 
           )}
         </div>
       ) : (
-        <div className="pxf-sheet">
-          <button type="button" className="pxf-back" onClick={() => setReason(null)}>
+        <div className="pxfa-sheet">
+          <button type="button" className="pxfa-back" onClick={() => setReason(null)}>
             <Icon name="chevl" /> {t('faults.sheet.back')}
           </button>
           {(ask || seen) && o.data.product && (
-            <div className="pxf-ord">
+            <div className="pxfa-ord">
               <Icon name="package" />
               <span>
                 <b>{o.data.product}</b>
@@ -171,13 +171,13 @@ export function FaultSheet({ orderId, ticketId, moment, cancel, onClose, onDone 
           )}
           {ask === 'variant' && (
             <>
-              <p className="pxf-q">{sav ? t('faults.sheet.askVariantGot') : t('faults.sheet.askVariantSeen')}</p>
-              <div className="pxf-chips">
+              <p className="pxfa-q">{sav ? t('faults.sheet.askVariantGot') : t('faults.sheet.askVariantSeen')}</p>
+              <div className="pxfa-chips">
                 {o.data.variants.map((v) => (
                   <button
                     key={v}
                     type="button"
-                    className={`pxf-c ${!typed && variant === v ? 'on' : ''}`}
+                    className={`pxfa-c ${!typed && variant === v ? 'on' : ''}`}
                     onClick={() => {
                       setTyped(false);
                       setVariant(v);
@@ -188,7 +188,7 @@ export function FaultSheet({ orderId, ticketId, moment, cancel, onClose, onDone 
                 ))}
                 <button
                   type="button"
-                  className={`pxf-c ${typed ? 'on' : ''}`}
+                  className={`pxfa-c ${typed ? 'on' : ''}`}
                   onClick={() => {
                     setTyped(true);
                     setVariant('');
@@ -197,23 +197,23 @@ export function FaultSheet({ orderId, ticketId, moment, cancel, onClose, onDone 
                   {t('faults.sheet.other')}
                 </button>
               </div>
-              {typed && <input className="pxf-in" value={variant} maxLength={120} autoFocus placeholder={t('faults.sheet.typeVariant')} onChange={(e) => setVariant(e.target.value)} />}
+              {typed && <input className="pxfa-in" value={variant} maxLength={120} autoFocus placeholder={t('faults.sheet.typeVariant')} onChange={(e) => setVariant(e.target.value)} />}
             </>
           )}
           {ask === 'qty' && (
             <>
-              <p className="pxf-q">{t('faults.sheet.askQty')}</p>
-              <input className="pxf-in" inputMode="numeric" value={qty} maxLength={3} onChange={(e) => setQty(e.target.value.replace(/\D/g, ''))} style={{ maxWidth: 120 }} />
+              <p className="pxfa-q">{t('faults.sheet.askQty')}</p>
+              <input className="pxfa-in" inputMode="numeric" value={qty} maxLength={3} onChange={(e) => setQty(e.target.value.replace(/\D/g, ''))} style={{ maxWidth: 120 }} />
             </>
           )}
           {(ask === 'sealed' || ask === 'packed') && (
             <>
-              <p className="pxf-q">{ask === 'sealed' ? t('faults.sheet.askSealed') : t('faults.sheet.askPacked')}</p>
-              <div className="pxf-chips">
-                <button type="button" className={`pxf-c ${yes === true ? 'on' : ''}`} onClick={() => setYes(true)}>
+              <p className="pxfa-q">{ask === 'sealed' ? t('faults.sheet.askSealed') : t('faults.sheet.askPacked')}</p>
+              <div className="pxfa-chips">
+                <button type="button" className={`pxfa-c ${yes === true ? 'on' : ''}`} onClick={() => setYes(true)}>
                   {t('faults.sheet.yes')}
                 </button>
-                <button type="button" className={`pxf-c ${yes === false ? 'on' : ''}`} onClick={() => setYes(false)}>
+                <button type="button" className={`pxfa-c ${yes === false ? 'on' : ''}`} onClick={() => setYes(false)}>
                   {t('faults.sheet.no')}
                 </button>
               </div>
@@ -221,34 +221,34 @@ export function FaultSheet({ orderId, ticketId, moment, cancel, onClose, onDone 
           )}
           {seen && sav && (
             <>
-              <p className="pxf-q">
+              <p className="pxfa-q">
                 {t('faults.sheet.photo')}
                 <small>{t('faults.sheet.photoNeeded')}</small>
               </p>
               {photo && (
-                <div className="pxf-photo">
+                <div className="pxfa-photo">
                   <img src={photo} alt="" />
                   <span>{t('faults.sheet.photoOk')}</span>
                   <Icon name="check" />
                 </div>
               )}
-              <label className="pxf-add">
+              <label className="pxfa-add">
                 <Icon name="camera" /> {photo ? t('faults.sheet.changePhoto') : t('faults.sheet.addPhoto')}
                 <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && shrink(e.target.files[0]).then(setPhoto)} />
               </label>
             </>
           )}
           {seen && !sav && (
-            <p className="pxf-info blue">
+            <p className="pxfa-info blue">
               <Icon name="package" /> {t('faults.sheet.noPhoto')}
             </p>
           )}
-          <p className="pxf-q">
+          <p className="pxfa-q">
             {t('faults.sheet.note')}
             <small>{t('faults.sheet.optional')}</small>
           </p>
-          <textarea className="pxf-in" value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} />
-          <p className="pxf-info">
+          <textarea className="pxfa-in" value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} />
+          <p className="pxfa-info">
             <Icon name="settings" /> {t('faults.sheet.who')}
           </p>
         </div>
@@ -289,7 +289,7 @@ export function SignalFault({ ticketId }: { ticketId: number }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" className="pxf-mini" onClick={() => setOpen(true)}>
+      <button type="button" className="pxfa-mini" onClick={() => setOpen(true)}>
         <Icon name="flag" /> {t('faults.signal')}
       </button>
       {open && <FaultSheet ticketId={ticketId} moment="sav" onClose={() => setOpen(false)} />}

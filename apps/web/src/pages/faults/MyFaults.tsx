@@ -18,13 +18,13 @@ export function MyFaults({ range }: { range: { from: string; to: string } }) {
   if (!d) return null;
   const list = all ? d.list : d.list.slice(0, 3);
   return (
-    <section className="tb-card tb-myc pxn-card pxf-card" aria-labelledby="pxf-mh">
+    <section className="tb-card tb-myc pxn-card pxfa-card" aria-labelledby="pxfa-mh">
       <header className="pxn-h">
-        <h3 id="pxf-mh">
+        <h3 id="pxfa-mh">
           <Icon name="flag" /> {t('faults.mine.title')}
         </h3>
       </header>
-      <div className="pxf-two">
+      <div className="pxfa-two">
         <div>
           <b className="ltr">{n(d.n)}</b>
           <small>{d.rate !== null ? t('faults.mine.rate', { v: pct(d.rate, 1) }) : t('faults.mine.count')}</small>
@@ -34,7 +34,7 @@ export function MyFaults({ range }: { range: { from: string; to: string } }) {
           <small>{t('faults.mine.team')}</small>
         </div>
       </div>
-      <p className="pxf-note">
+      <p className="pxfa-note">
         <Icon name="lock" /> {t('faults.mine.note')}
       </p>
       {d.n === 0 ? (
@@ -42,7 +42,7 @@ export function MyFaults({ range }: { range: { from: string; to: string } }) {
       ) : (
         <div>
           {list.map((x) => (
-            <div key={x.id} className="pxf-li" role="button" tabIndex={0} onClick={() => openOrder(x.orderId)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), openOrder(x.orderId))}>
+            <div key={x.id} className="pxfa-li" role="button" tabIndex={0} onClick={() => openOrder(x.orderId)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), openOrder(x.orderId))}>
               <b>
                 <span className="ltr">{x.order?.ref}</span> · {x.order?.customer}
               </b>
@@ -56,7 +56,7 @@ export function MyFaults({ range }: { range: { from: string; to: string } }) {
             </div>
           ))}
           {d.list.length > 3 && (
-            <button type="button" className="pxf-more" onClick={() => setAll(!all)}>
+            <button type="button" className="pxfa-more" onClick={() => setAll(!all)}>
               {all ? t('faults.mine.less') : t('faults.mine.all', { n: d.list.length })}
             </button>
           )}

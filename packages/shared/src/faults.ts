@@ -77,8 +77,10 @@ export const FAULT_FIXED: Partial<Record<FaultReason, FaultTeam>> = {
  *  the parcel was only opened at the door) no photo, the depot checks the parcel when it comes back. */
 export const FAULT_SEEN = new Set<FaultReason>(['wrong_variant', 'wrong_qty', 'wrong_item', 'missing_part', 'broken', 'not_working', 'bad_quality', 'size_wrong']);
 
-/** The reasons agents pick most, shown first. */
+/** The reasons agents pick most, shown first: a parcel not taken (Suivi, a return)… */
 export const FAULT_FREQUENT: FaultPickReason[] = ['changed_mind', 'no_money', 'wrong_commune', 'wrong_variant', 'fake_absent', 'elsewhere'];
+/** …and after delivery (SAV): the parcel is in the customer's hands */
+export const FAULT_FREQUENT_SAV: FaultPickReason[] = ['wrong_variant', 'missing_part', 'broken', 'bad_quality', 'not_working', 'wrong_qty'];
 
 /** A shop's Suivi « Perdu » motifs (Réglages › Motifs) as a reason. A motif of its own: « Autre ». */
 export const FAULT_OF_SUIVI_MOTIF: Record<string, FaultReason> = {

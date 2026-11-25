@@ -27,7 +27,7 @@ export function TeamChip({ team, who, mine }: { team: string; who?: string | nul
   const { t } = useTranslation();
   const k = team as FaultTeam;
   return (
-    <span className={`pxf-chip ${k === 'client' ? 'client' : k === 'unknown' ? 'unknown' : ''} ${mine ? 'me' : ''}`}>
+    <span className={`pxfa-chip ${k === 'client' ? 'client' : k === 'unknown' ? 'unknown' : ''} ${mine ? 'me' : ''}`}>
       <Icon name={TEAM_ICON[k] ?? 'help'} />
       {t(`faults.team.${k}`)}
       {mine ? ` · ${t('faults.me')}` : who ? ` · ${who}` : ''}
@@ -47,15 +47,15 @@ export function ContestSheet({ id, onClose }: { id: number; onClose: () => void 
       title={t('faults.contest.title')}
       onClose={onClose}
       footer={
-        <button type="button" className="pxf-go" disabled={!ok || send.isPending} onClick={() => send.mutate({ id, note: note.trim() })}>
+        <button type="button" className="pxfa-go" disabled={!ok || send.isPending} onClick={() => send.mutate({ id, note: note.trim() })}>
           <Icon name="send" /> {t('faults.contest.send')}
         </button>
       }
     >
-      <div className="pxf-sheet">
-        <p className="pxf-q">{t('faults.contest.why')}</p>
-        <textarea className="pxf-in" value={note} maxLength={500} placeholder={t('faults.contest.placeholder')} onChange={(e) => setNote(e.target.value)} />
-        <p className="pxf-note">
+      <div className="pxfa-sheet">
+        <p className="pxfa-q">{t('faults.contest.why')}</p>
+        <textarea className="pxfa-in" value={note} maxLength={500} placeholder={t('faults.contest.placeholder')} onChange={(e) => setNote(e.target.value)} />
+        <p className="pxfa-note">
           <Icon name="lock" /> {t('faults.contest.who')}
         </p>
       </div>
@@ -69,7 +69,7 @@ export function ContestButton({ id, sent }: { id: number; sent: boolean }) {
   const [open, setOpen] = useState(false);
   if (sent)
     return (
-      <span className="pxf-mini sent">
+      <span className="pxfa-mini sent">
         <Icon name="flag" /> {t('faults.contest.sent')}
       </span>
     );
@@ -77,7 +77,7 @@ export function ContestButton({ id, sent }: { id: number; sent: boolean }) {
     <>
       <button
         type="button"
-        className="pxf-mini"
+        className="pxfa-mini"
         onClick={(e) => {
           e.stopPropagation();
           setOpen(true);
@@ -107,10 +107,10 @@ export function DecideSheet({ list, canDecide, onClose }: { list: Waiting[]; can
   const [moving, setMoving] = useState<number | null>(null);
   return (
     <Modal sheet title={t('faults.decide.title')} onClose={onClose}>
-      <div className="pxf-sheet">
-        {!list.length && <p className="pxf-note">{t('faults.decide.empty')}</p>}
+      <div className="pxfa-sheet">
+        {!list.length && <p className="pxfa-note">{t('faults.decide.empty')}</p>}
         {list.map((w) => (
-          <div key={w.id} className="pxf-w">
+          <div key={w.id} className="pxfa-w">
             <b>
               <Icon name="flag" />
               {w.order?.ref ?? ''} · {t(`faults.team.${w.team}`)}
@@ -126,22 +126,22 @@ export function DecideSheet({ list, canDecide, onClose }: { list: Waiting[]; can
               </q>
             )}
             {canDecide && (
-              <div className="pxf-acts">
-                <button type="button" className="pxf-mini k" disabled={decide.isPending} onClick={() => decide.mutate({ id: w.id, action: 'keep' })}>
+              <div className="pxfa-acts">
+                <button type="button" className="pxfa-mini k" disabled={decide.isPending} onClick={() => decide.mutate({ id: w.id, action: 'keep' })}>
                   {t('faults.decide.keep', { team: t(`faults.team.${w.team}`) })}
                 </button>
-                <button type="button" className="pxf-mini" onClick={() => setMoving(moving === w.id ? null : w.id)}>
+                <button type="button" className="pxfa-mini" onClick={() => setMoving(moving === w.id ? null : w.id)}>
                   {t('faults.decide.change')}
                 </button>
-                <button type="button" className="pxf-mini" disabled={decide.isPending} onClick={() => decide.mutate({ id: w.id, action: 'none' })}>
+                <button type="button" className="pxfa-mini" disabled={decide.isPending} onClick={() => decide.mutate({ id: w.id, action: 'none' })}>
                   {t('faults.decide.none')}
                 </button>
               </div>
             )}
             {canDecide && moving === w.id && (
-              <div className="pxf-chips">
+              <div className="pxfa-chips">
                 {FAULT_TEAMS.filter((k) => k !== w.team && k !== 'client' && k !== 'unknown').map((k) => (
-                  <button key={k} type="button" className="pxf-c" onClick={() => decide.mutate({ id: w.id, action: 'team', team: k }, { onSuccess: () => setMoving(null) })}>
+                  <button key={k} type="button" className="pxfa-c" onClick={() => decide.mutate({ id: w.id, action: 'team', team: k }, { onSuccess: () => setMoving(null) })}>
                     <Icon name={TEAM_ICON[k]} /> {t(`faults.team.${k}`)}
                   </button>
                 ))}
@@ -149,7 +149,7 @@ export function DecideSheet({ list, canDecide, onClose }: { list: Waiting[]; can
             )}
           </div>
         ))}
-        {!canDecide && list.length > 0 && <p className="pxf-note">{t('faults.decide.seller')}</p>}
+        {!canDecide && list.length > 0 && <p className="pxfa-note">{t('faults.decide.seller')}</p>}
       </div>
     </Modal>
   );

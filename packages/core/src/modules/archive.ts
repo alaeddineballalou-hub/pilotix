@@ -31,6 +31,11 @@ export const USER_REFS: readonly Ref[] = [
   ['orders', 'livreur_id', 'orders'],
   ['orders', 'locked_by', 'orders'],
   ['order_events', 'user_id', 'orders'],
+  // the problems report (modules/faults.ts): who is responsible, who said it, who said « Pas moi », who decided
+  ['order_faults', 'person_id', 'orders'],
+  ['order_faults', 'reported_by', 'orders'],
+  ['order_faults', 'contest_by', 'orders'],
+  ['order_faults', 'decided_by', 'orders'],
   ['applied_actions', 'user_id', 'orders'],
   ['stock_movements', 'user_id', 'stock'],
   ['purchases', 'created_by', 'stock'],

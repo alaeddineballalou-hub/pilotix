@@ -11,15 +11,16 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   const back = (await db.query(`SELECT id FROM orders WHERE follow_status IN ('returning','returned') AND NOT is_exchange ORDER BY id`)).map((r: any) => num(r.id));
   await ensureFaults(db, back);
   const depot = users.depot ?? null;
-  // the depot sent another colour than the order's: the depot checked the parcel when it came back
+  // the depot sent another colour than the order's: the depot checked the parcel when it came back (the latest returns
+  // whose product did not match, so this month shows them)
   const swaps = await db.query(
-    `SELECT f.id, f.order_id FROM order_faults f WHERE f.team IN ('unknown', 'client') ORDER BY f.order_id LIMIT 6`,
+    `SELECT f.id, f.order_id FROM order_faults f WHERE f.team IN ('unknown', 'client') ORDER BY (f.reason = 'not_matching') DESC, f.at DESC, f.id LIMIT 6`,
   );
   for (const [k, r] of swaps.entries()) {
     if (k > 3) break;
     await db.query(`UPDATE order_faults SET reason = 'wrong_variant', team = 'depot', person_id = $2, person_label = NULL, answers = $3, reported_by = $4 WHERE id = $1`, [
       r.id,
-      depot,
+      k % 2 ? users.depot2 ?? depot : depot,
       JSON.stringify({ variant: k % 2 ? 'Gris' : 'Bleu' }),
       users.suivi ?? null,
     ]);
@@ -43,9 +44,9 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
       users.vendeur ?? null,
       at(5),
     ]);
-  // « Pas moi »: the depot says it took the right colour; an agent says the customer gave that commune himself
-  const d = (await db.query(`SELECT id FROM order_faults WHERE team = 'depot' AND moment <> 'sav' ORDER BY id LIMIT 1`))[0];
-  if (d && depot) await db.query(`UPDATE order_faults SET contest_by = $2, contest_note = $3, contest_at = $4 WHERE id = $1`, [d.id, depot, 'J’ai pris la bonne couleur, voir le scan du colis.', at(1)]);
-  const c = (await db.query(`SELECT id, person_id FROM order_faults WHERE team = 'confirmation' AND person_id IS NOT NULL ORDER BY id LIMIT 1`))[0];
-  if (c) await db.query(`UPDATE order_faults SET contest_by = $2, contest_note = $3, contest_at = $4 WHERE id = $1`, [c.id, c.person_id, 'Le client m’a donné cette commune lui-même.', at(2)]);
+  // « Pas moi »: the depot says it took the right colour; an agent says the customer gave that address himself
+  const d = (await db.query(`SELECT id, person_id FROM order_faults WHERE team = 'depot' AND moment <> 'sav' AND person_id IS NOT NULL ORDER BY at DESC, id LIMIT 1`))[0];
+  if (d) await db.query(`UPDATE order_faults SET contest_by = $2, contest_note = $3, contest_at = $4 WHERE id = $1`, [d.id, d.person_id, 'J’ai pris la bonne couleur, voir le scan du colis.', at(1)]);
+  const c = (await db.query(`SELECT id, person_id FROM order_faults WHERE team = 'confirmation' AND person_id IS NOT NULL ORDER BY at DESC, id LIMIT 1`))[0];
+  if (c) await db.query(`UPDATE order_faults SET contest_by = $2, contest_note = $3, contest_at = $4 WHERE id = $1`, [c.id, c.person_id, 'Le client m’a donné ces informations lui-même.', at(2)]);
 }

@@ -24,27 +24,27 @@ export function DepotErrors() {
   const pTop = Math.max(1, ...people.map((p) => p.n));
   const waiting = d.list.filter((x) => x.contested);
   return (
-    <div className="pxf-dp">
-      <section className="pxn-card pxf-card" aria-labelledby="pxf-dh">
+    <div className="pxfa-dp">
+      <section className="pxn-card pxfa-card" aria-labelledby="pxfa-dh">
         <header className="pxn-h">
-          <h3 id="pxf-dh">{boss ? t('faults.depot.title') : t('faults.depot.mine')}</h3>
+          <h3 id="pxfa-dh">{boss ? t('faults.depot.title') : t('faults.depot.mine')}</h3>
           <span>{t('faults.depot.month')}</span>
         </header>
-        <div className="pxf-big">
+        <div className="pxfa-big">
           <b className="ltr">{n(d.n)}</b>
-          <span>{boss ? t('faults.depot.count', { v: da(d.cost) }) : d.mineRate !== null ? t('faults.depot.mineRate', { v: pct(d.mineRate, 1) }) : t('faults.depot.countMine')}</span>
+          <span>{boss ? t('faults.depot.count', { count: d.n, v: da(d.cost) }) : d.mineRate !== null ? t('faults.depot.mineRate', { count: d.n, v: pct(d.mineRate, 1) }) : t('faults.depot.countMine', { count: d.n })}</span>
         </div>
-        <p className="pxf-sub">{t('faults.depot.sub', { ret: d.returns, sav: d.sav })}</p>
+        <p className="pxfa-sub">{t('faults.depot.sub', { ret: t('faults.depot.ret', { count: d.returns }), sav: t('faults.depot.sav', { count: d.sav }) })}</p>
         {d.n === 0 ? (
           <p className="pxn-empty">{t('faults.depot.none')}</p>
         ) : (
-          <div className="pxf-rows">
+          <div className="pxfa-rows">
             {d.reasons.map((r, i) => (
-              <div key={r.reason} className={`pxf-r static`} style={{ gridTemplateColumns: '1fr 90px 30px', borderTopColor: i ? undefined : 'transparent' }}>
-                <span className="pxf-n" style={{ fontWeight: 600 }}>
+              <div key={r.reason} className={`pxfa-r static`} style={{ gridTemplateColumns: '1fr 90px 30px', borderTopColor: i ? undefined : 'transparent' }}>
+                <span className="pxfa-n" style={{ fontWeight: 600 }}>
                   {t(`faults.reason.${r.reason}`)}
                 </span>
-                <span className="pxf-t" aria-hidden="true">
+                <span className="pxfa-t" aria-hidden="true">
                   <i style={{ width: `${Math.max(4, (r.n / top) * 100)}%` }} />
                 </span>
                 <b className="ltr">{n(r.n)}</b>
@@ -59,9 +59,9 @@ export function DepotErrors() {
               <span>{t('faults.depot.whoSub')}</span>
             </header>
             {people.map((p) => (
-              <div key={p.name} className="pxf-p" style={{ gridTemplateColumns: 'minmax(56px, 96px) 1fr auto', minHeight: 28 }}>
+              <div key={p.name} className="pxfa-p" style={{ gridTemplateColumns: 'minmax(56px, 96px) 1fr auto', minHeight: 28 }}>
                 <span>{p.name}</span>
-                <span className="pxf-t" aria-hidden="true">
+                <span className="pxfa-t" aria-hidden="true">
                   <i style={{ width: `${Math.max(4, (p.n / pTop) * 100)}%` }} />
                 </span>
                 <span className="ltr">{p.of ? t('faults.depot.of', { n: p.n, of: p.of, v: pct(p.n / p.of, 1) }) : n(p.n)}</span>
@@ -71,22 +71,22 @@ export function DepotErrors() {
         )}
         {boss &&
           waiting.map((w) => (
-            <div key={w.id} className="pxf-w">
+            <div key={w.id} className="pxfa-w">
               <b>
                 <Icon name="flag" />
                 {w.order?.ref} · {w.who ?? t('faults.team.depot')} · {t('faults.contest.button')}
               </b>
               {w.contestNote && <q>« {w.contestNote} »</q>}
-              <span className="pxf-note">{t('faults.depot.sentToSeller')}</span>
+              <span className="pxfa-note">{t('faults.depot.sentToSeller')}</span>
             </div>
           ))}
-        <p className="pxf-note">
+        <p className="pxfa-note">
           <Icon name="lock" /> {boss ? t('faults.depot.noteTeam') : t('faults.depot.noteMine')}
         </p>
       </section>
-      <div className="pxf-ecs">
+      <div className="pxfa-ecs">
         {d.list.map((x) => (
-          <div key={x.id} className="pxf-ec" role="button" tabIndex={0} onClick={() => openOrder(x.orderId)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), openOrder(x.orderId))}>
+          <div key={x.id} className="pxfa-ec" role="button" tabIndex={0} onClick={() => openOrder(x.orderId)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), openOrder(x.orderId))}>
             <span className="l1">
               <CoChip companyId={x.order?.companyId} kind={x.order?.companyKind} className={`pxn-co k-${x.order?.companyKind || 'other'}`} role="img" aria-label={x.order?.company ?? '—'}>
                 {(x.order?.company ?? '').slice(0, 2).toUpperCase() || '—'}
@@ -101,9 +101,9 @@ export function DepotErrors() {
               « {t(`faults.reason.${x.reason}`)} »
             </span>
             <span className="l3">
-              <span className={`pxf-pill ${x.moment}`}>{t(`faults.moment.${x.moment}`)}</span>
+              <span className={`pxfa-pill ${x.moment}`}>{t(`faults.moment.${x.moment}`)}</span>
               {boss && x.who && (
-                <span className="pxf-chip">
+                <span className="pxfa-chip">
                   <Icon name="package" /> {t('faults.depot.preparedBy', { who: x.who })}
                 </span>
               )}

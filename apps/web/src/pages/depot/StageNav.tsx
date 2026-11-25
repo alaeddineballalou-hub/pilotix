@@ -34,7 +34,8 @@ export function DepotStageBar({ stage, counts, phone, cfgOn = false, noErrors = 
     const b = on.getBoundingClientRect();
     if (b.left >= r.left + 8 && b.right <= r.right - 8) return;
     el.scrollBy({ left: b.left + b.width / 2 - (r.left + r.width / 2) });
-  }, [stage]);
+    // again once the counts are there: they widen the stages before it (the last one, « Erreurs », left the screen)
+  }, [stage, !!counts]);
   return (
     <nav ref={bar} className="bjm-bar flow" aria-label={t('depot.title')} data-g="depot">
       {DEPOT_STAGES.filter((k) => tabOn('depot', k) && !(noErrors && k === 'erreurs')).map((k, i) => (

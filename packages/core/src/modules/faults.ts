@@ -34,7 +34,7 @@ import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
-import { agencyLead, andSql, rowScopeSql } from './agencyscope';
+import { agencyLead, andSql, listScopeSql, rowScopeSql } from './agencyscope';
 import { companyRules, FEE_COLS, noOrderAccess, parcelFees } from './orders';
 
 const id = z.number().int().positive();
@@ -293,10 +293,11 @@ export async function ensureFaults(db: Db, ids: number[]) {
   }
 }
 
-/** The returns of a period (the Retours of Commandes › Annulé), in the user's scope. */
+/** The returns of a period (the Retours of Commandes › Annulé), in the user's scope: the same orders as his list (an
+ *  agent manager: his team's, listScopeSql), so the card's numbers match the page's. */
 async function returnsOf(ctx: Ctx, from: string, to: string): Promise<number[]> {
   return (
-    await ctx.db.query(`SELECT o.id FROM sales o WHERE ${RETURNS} AND ${BACK_AT} >= $1 AND ${BACK_AT} < $2${andSql(rowScopeSql(ctx))}`, [from, to])
+    await ctx.db.query(`SELECT o.id FROM sales o WHERE ${RETURNS} AND ${BACK_AT} >= $1 AND ${BACK_AT} < $2${andSql(listScopeSql(ctx))}`, [from, to])
   ).map((r: any) => num(r.id));
 }
 
@@ -449,7 +450,13 @@ export const faultsProcs = {
     const client = rows.filter((r) => r.team === 'client');
     const unknown = rows.filter((r) => r.team === 'unknown');
     // « Pas moi » waiting: every one for the chiefs (they decide), his teams' ones for a manager
-    const waits = (await ctx.db.query('SELECT * FROM order_faults WHERE contest_at IS NOT NULL AND decided_at IS NULL ORDER BY contest_at DESC LIMIT 50')).map(toRow).filter((r) => s.all || s.teams.has(r.team));
+    const waits = (
+      await ctx.db.query(
+        `SELECT f.* FROM order_faults f JOIN orders o ON o.id = f.order_id WHERE f.contest_at IS NOT NULL AND f.decided_at IS NULL${andSql(listScopeSql(ctx))} ORDER BY f.contest_at DESC LIMIT 50`,
+      )
+    )
+      .map(toRow)
+      .filter((r) => s.all || s.teams.has(r.team));
     const wNames = await namesOf(ctx.db, [...waits.map((r) => r.person_id), ...waits.map((r) => r.contest_by)]);
     const wOrders = await ordersOf(ctx.db, waits.map((r) => r.order_id));
     return {
