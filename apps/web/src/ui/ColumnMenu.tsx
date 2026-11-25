@@ -477,7 +477,8 @@ const NAT_W: Record<string, number> = {
  */
 // agent / fagent: the name chip turns into « ✕ Retirer » on hover, which needs this room.
 // source: « Le chemin de la commande »'s chips (the ad, the place · who made it) stay readable
-const HARD_W: Record<string, number> = { phone: 104, chrono: 94, total: 84, status: 108, order: 84, agent: 104, fagent: 104, tracking: 108, passed: 96, source: 182 };
+// follow: its badge's longest word stays whole (« Dispatchée », « Expédiée »)
+const HARD_W: Record<string, number> = { phone: 104, chrono: 94, total: 84, status: 108, order: 84, agent: 104, fagent: 104, tracking: 108, passed: 96, source: 182, follow: 92 };
 /** Columns showing a pill, a badge or buttons: their size does not follow the row size (compact, normal, large). The widths above are for normal rows (14 px text). */
 const PILL_K = new Set(['status', 'chrono', 'agent', 'fagent', 'stock', 'desk', 'since', 'phone', 'source']);
 /** Text columns: on a wide screen they get the room left over. */
