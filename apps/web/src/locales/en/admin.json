@@ -366,8 +366,9 @@
     "sizeIn": "price: {{name}}",
     "noProducts": "No products.",
     "savTab": "SAV tickets",
-    "savTabSub": "exchange prices",
-    "savHelp": "Delivery price the customer pays for a SAV exchange, per wilaya. It is suggested on every ticket and can still be changed when the exchange is made."
+    "savHelp": "Delivery price the customer pays for a SAV exchange, per wilaya. It is suggested on every ticket and can still be changed when the exchange is made.",
+    "savMoved": "The price of an after-sales exchange is now set in",
+    "savMovedLink": "After-sales › Settings"
   },
   "channels": {
     "addTitle": "Add a channel",

@@ -1,4 +1,5 @@
 // Management → Prix de livraison: named client price grids per wilaya (Domicile / Bureau), default grid, products per grid.
+// The price of a SAV exchange left for SAV › Réglages (owner's choice, 25 Nov 2026, step 6 of his table): `SavFees`.
 import { WILAYAS } from '@pilotix/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +15,6 @@ export function Prix() {
   const { t } = useTranslation();
   const q = useRpc('admin.fees.get', {});
   const [cur, setCur] = useState<string | null>(null);
-  const [savTab, setSavTab] = useState(false);
   const [form, setForm] = useState<'new' | 'rename' | null>(null);
   const [prods, setProds] = useState(false);
   const createFirst = useAction('admin.fees.saveGrid', { success: t('admin.fees.saved') });
@@ -35,12 +35,18 @@ export function Prix() {
       )}
     </div>
   );
+  const moved = (
+    <p className="muted small px-fees-moved">
+      {t('admin.fees.savMoved')} <a href="#/sav/reglages">{t('admin.fees.savMovedLink')}</a>
+    </p>
+  );
   if (q.isLoading) return <Loading />;
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   if (!names.length || !name)
     return (
       <div className="card">
         {head}
+        {moved}
         <div className="bjg-empty">
           <p>{t('admin.fees.empty')}</p>
           <button type="button" className="btn primary" disabled={createFirst.isPending} onClick={() => createFirst.mutate({ name: 'Standard' })}>
@@ -57,9 +63,10 @@ export function Prix() {
     <>
       <div className="card">
         {head}
+        {moved}
         <div className="bjg-tabs" role="tablist">
           {names.map((g) => (
-            <button key={g} type="button" role="tab" aria-selected={!savTab && g === name} className={`bjg-tab ${!savTab && g === name ? 'on' : ''}`} onClick={() => (setCur(g), setSavTab(false))}>
+            <button key={g} type="button" role="tab" aria-selected={g === name} className={`bjg-tab ${g === name ? 'on' : ''}`} onClick={() => setCur(g)}>
               <span>
                 {g} {g === q.data!.defaultGrid && <span className="bjg-def">{t('admin.fees.default')}</span>}
               </span>
@@ -69,26 +76,29 @@ export function Prix() {
               </small>
             </button>
           ))}
-          <button type="button" role="tab" aria-selected={savTab} className={`bjg-tab px-sav-tab ${savTab ? 'on' : ''}`} onClick={() => setSavTab(true)}>
-            <span>{t('admin.fees.savTab')}</span>
-            <small>{t('admin.fees.savTabSub')}</small>
-          </button>
           <button type="button" className="bjg-tab bjg-add" onClick={() => setForm('new')}>
             {t('admin.fees.add')}
           </button>
         </div>
-        {savTab ? (
-          <>
-            <p className="muted small" style={{ margin: '0 0 10px' }}>{t('admin.fees.savHelp')}</p>
-            <GridEditor key="__sav" name={t('admin.fees.savTab')} grid={q.data!.savFees ?? {}} isDefault={false} sav onRename={() => {}} onProducts={() => {}} onDeleted={() => {}} />
-          </>
-        ) : (
-          <GridEditor key={name} name={name} grid={grids[name]} isDefault={name === q.data!.defaultGrid} onRename={() => setForm('rename')} onProducts={() => setProds(true)} onDeleted={() => setCur(null)} />
-        )}
+        <GridEditor key={name} name={name} grid={grids[name]} isDefault={name === q.data!.defaultGrid} onRename={() => setForm('rename')} onProducts={() => setProds(true)} onDeleted={() => setCur(null)} />
       </div>
       {form && <GridForm mode={form} name={name} names={names} onClose={() => setForm(null)} onDone={(n) => setCur(n)} />}
       {prods && <ProductsForm name={name} products={products} defaultGrid={q.data!.defaultGrid} onClose={() => setProds(false)} />}
     </>
+  );
+}
+
+/** The delivery price the customer pays for a SAV exchange, per wilaya (SAV › Réglages › « Prix d’un échange »). */
+export function SavFees() {
+  const { t } = useTranslation();
+  const q = useRpc('admin.fees.get', {});
+  if (q.isLoading) return <Loading />;
+  if (q.error || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
+  return (
+    <div className="cfs-sub">
+      <p className="muted small">{t('admin.fees.savHelp')}</p>
+      <GridEditor key="__sav" name={t('admin.fees.savTab')} grid={q.data.savFees ?? {}} isDefault={false} sav onRename={() => {}} onProducts={() => {}} onDeleted={() => {}} />
+    </div>
   );
 }
 

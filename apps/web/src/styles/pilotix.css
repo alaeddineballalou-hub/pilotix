@@ -241,8 +241,8 @@ button.kpi.on { box-shadow: 0 0 0 2px var(--navy); }
 .px-swaptag { display: inline-flex; align-items: center; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 800; line-height: 18px; letter-spacing: .02em; white-space: nowrap; vertical-align: middle;
   background: var(--sky-soft, #EEF2F8); color: var(--navy, #1B2A47); border: 1px solid color-mix(in srgb, var(--navy, #1B2A47) 35%, transparent); }
 .px-tk-card { border-inline-start: 4px solid var(--px-orange, #F7A823) !important; }
-.bjg-tab.px-sav-tab { border-color: color-mix(in srgb, var(--px-orange, #F7A823) 60%, transparent); }
-.bjg-tab.px-sav-tab.on { border-color: var(--px-orange, #F7A823); background: color-mix(in srgb, var(--px-orange, #F7A823) 12%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--px-orange, #F7A823) 30%, transparent); }
+/* Management › Prix de livraison: where the price of a SAV exchange went (SAV › Réglages, 25 Nov 2026) */
+.px-fees-moved { margin: -4px 0 10px; }
 
 /* Gestion › Prix de livraison › « Produits avec le prix … »: a product's sizes, each may take this price (« par taille ») */
 .px-feeprods { display: flex; flex-direction: column; }

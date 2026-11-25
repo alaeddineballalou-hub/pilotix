@@ -1,10 +1,13 @@
 // SAV › Réglages (owner's ask, 24 Nov 2026: each page keeps its own settings; design 1 « Onglet »): the SAV phone number
-// (it was in Réglages › Boutique) and the SAV statuses (ui/PageSettings). Administrators (the server checks it too).
+// (it was in Réglages › Boutique), the price of an exchange (it was in Management › Prix de livraison › Tickets SAV; step 6
+// of his table, 25 Nov) and the SAV statuses (ui/PageSettings). Administrators (the server checks it too).
+import { WILAYAS } from '@pilotix/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { Fold, SettingsPage } from '../../ui/PageSettings';
+import { SavFees } from '../admin/Prix';
 import { Statuts } from '../admin/Statuts';
 import { activeStatuses } from '../confirmation/Settings';
 
@@ -15,11 +18,19 @@ export function SavSettings() {
   const st = useRpc('admin.statuses.get', {}, { enabled: admin });
   const statuses = st.data ? activeStatuses(st.data, ['sav']) : null;
   const phone = shop.data?.shop.savPhone;
+  const fees = useRpc('admin.fees.get', {}, { enabled: admin }).data;
+  // the wilayas that have an exchange price
+  const priced = fees ? Object.values(fees.savFees ?? {}).filter((r) => r.home || r.desk).length : null;
   return (
     <SettingsPage title={t('sav.cfg.title')}>
       {admin && (
         <Fold id="phone" icon="phone" title={t('admin.settings.savPhone')} desc={t('sav.cfg.phone')} state={shop.data ? phone || t('sav.cfg.none') : null}>
           <SavPhone />
+        </Fold>
+      )}
+      {admin && (
+        <Fold id="prix" icon="truck" title={t('sav.cfg.prix.t')} desc={t('sav.cfg.prix.d')} state={priced === null ? null : priced ? t('sav.cfg.prix.s', { n: priced, all: WILAYAS.length }) : t('sav.cfg.prix.none')}>
+          <SavFees />
         </Fold>
       )}
       {admin && (

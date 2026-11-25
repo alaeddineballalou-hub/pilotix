@@ -366,8 +366,9 @@
     "sizeIn": "prix : {{name}}",
     "noProducts": "Aucun produit.",
     "savTab": "Tickets SAV",
-    "savTabSub": "prix des échanges",
-    "savHelp": "Prix de livraison payé par le client pour un échange SAV, par wilaya. Il est proposé sur chaque ticket et reste modifiable au moment de l’échange."
+    "savHelp": "Prix de livraison payé par le client pour un échange SAV, par wilaya. Il est proposé sur chaque ticket et reste modifiable au moment de l’échange.",
+    "savMoved": "Le prix d’un échange SAV se règle maintenant dans",
+    "savMovedLink": "SAV › Réglages"
   },
   "channels": {
     "addTitle": "Ajouter un canal",

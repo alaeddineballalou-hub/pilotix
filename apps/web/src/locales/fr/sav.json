@@ -333,6 +333,12 @@
   "cfg": {
     "title": "Réglages du SAV",
     "phone": "Le numéro imprimé sur les étiquettes des colis",
+    "prix": {
+      "t": "Prix d’un échange",
+      "d": "Le prix de livraison payé par le client pour un échange, par wilaya",
+      "s": "{{n}} / {{all}} wilayas",
+      "none": "Pas encore de prix"
+    },
     "none": "Pas de numéro",
     "statuts": "Les statuts des tickets SAV"
   }
