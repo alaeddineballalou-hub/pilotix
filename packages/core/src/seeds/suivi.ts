@@ -121,10 +121,10 @@ export async function seedSwaps(db: Db, now: number): Promise<void> {
 }
 
 /**
- * Suivi › En cours and Résolu as a real day looks (the owner, 25 Nov 2026), on the demo's suivi agents (Nadia first,
- * whose « Essayer » opens Suivi): alerts being called — no answer, busy, a call back later today or tomorrow, one whose
- * call-back time has passed, a réclamation waiting for the company — and alerts that were relivrées and then delivered
- * (Résolu: today, yesterday, older, « Sauvé par »). Runs last, once the couriers' and the swaps' data are in.
+ * Suivi › En cours as a real day looks (the owner, 25 Nov 2026), on the demo's suivi agents (Nadia first, whose
+ * « Essayer » opens Suivi): alerts being called — no answer, busy, a call back later today or tomorrow, one whose
+ * call-back time has passed, a réclamation waiting for the company — four fresh alerts, and the companies' returns as
+ * theirs. Runs last, once the couriers' and the swaps' data are in (Résolu: seedSuiviResolved).
  */
 export async function seedSuiviWork(db: Db, users: Record<string, number>, now: number): Promise<void> {
   const agents = [users.suivi, users.suivi2, users.suivi3].filter((id): id is number => Number.isInteger(id));
@@ -232,8 +232,23 @@ export async function seedSuiviWork(db: Db, users: Record<string, number>, now: 
       WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'returning' AND co.kind <> 'own'
         AND coalesce(e.note, '') NOT LIKE '%(suivi)%' AND coalesce(e.note, '') NOT LIKE 'Annulé trop tôt%' AND coalesce(e.note, '') NOT LIKE 'Traité%'`,
   );
+}
 
-  // ---- Résolu: alerts relivrées, then delivered by the company — three today, two yesterday, four older
+/**
+ * Suivi › Résolu as a real day looks (the owner, 25 Nov 2026): alerts that were relivrées and then delivered — three
+ * today, two yesterday, four older — « Sauvé par » Nadia (and Meriem). Runs right after the couriers' data, before the
+ * cash, the day reports and the pay read the delivered parcels.
+ */
+export async function seedSuiviResolved(db: Db, users: Record<string, number>, now: number): Promise<void> {
+  const agents = [users.suivi, users.suivi2, users.suivi3].filter((id): id is number => Number.isInteger(id));
+  if (!agents.length) return;
+  const H = 3_600_000;
+  const M = 60_000;
+  const DAY = 24 * H;
+  const ev = (orderId: number, at: number, userId: number | null, kind: string, from: string | null, to: string | null, note: string | null, data?: unknown) =>
+    db.query(`INSERT INTO order_events (order_id, at, user_id, kind, from_value, to_value, note, data) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, [orderId, iso(at), userId, kind, from, to, note, data === undefined ? null : JSON.stringify(data)]);
+  const call = (orderId: number, at: number, userId: number, result: 'no_answer' | 'busy' | null) =>
+    ev(orderId, at, userId, 'call', null, result, result === 'busy' ? 'Occupé' : result === 'no_answer' ? 'Pas de réponse' : null, result ? { result } : undefined);
   const dayStart = algiersDayStart(now);
   const sinceToday = now - dayStart;
   const todayAt = [0.3, 1.4, 2.6].map((h) => (sinceToday >= 4 * H ? now - h * H : dayStart + sinceToday * (0.8 - h * 0.2)));
@@ -273,4 +288,3 @@ export async function seedSuiviWork(db: Db, users: Record<string, number>, now: 
     await ev(p.id, relivrer, me, 'sub_status', null, 'alert_traitee', label);
   }
 }
-
