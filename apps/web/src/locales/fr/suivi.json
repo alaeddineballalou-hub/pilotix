@@ -659,6 +659,7 @@
     "lostDone": "{{ref}} : traité, perdu",
     "sentApi": "Relance envoyée à {{name}} ({{n}})",
     "claimFail": "La relance n’est pas partie : {{msg}}",
+    "relanceBack": "{{co}} refuse la relance : {{msg}}. Le colis revient dans Nouvelles alertes.",
     "dateNeeded": "Nouvelle date (obligatoire pour ce motif)",
     "okSolved": "Marquer résolu",
     "swapT": "Avant le retour : swapper ?",

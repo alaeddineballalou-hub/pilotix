@@ -51,6 +51,11 @@ export function Traiter({ o, reason, tries, own, onClose, start }: { o: Order; r
         toast(t('suivi.tr.lostDone', { ref: o.ref }), 'ok');
         return onClose();
       }
+      // the company refused the relance at once: the parcel is an alert again, in Nouvelles alertes
+      if (r.back) {
+        toast(t('suivi.tr.relanceBack', { co: o.companyName || t('suivi.zr'), msg: r.claimError ?? '' }), 'bad');
+        return onClose();
+      }
       if (r.claimError) toast(t('suivi.tr.claimFail', { msg: r.claimError }), 'bad');
       const c = r.claim as SentClaim | null;
       if (c && !c.extId && target) return setSent(c);

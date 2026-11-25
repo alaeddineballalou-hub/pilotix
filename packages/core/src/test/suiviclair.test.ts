@@ -1,18 +1,19 @@
 // Suivi · « Clair » (the owner's design 1, 25 Nov 2026): the counters over each alert list (and the filter they make),
 // « Pas de réponse » / « Occupé » = one call each, « Rappel » = « Plus tard », a réclamation sent = « Attend ZR »;
 // « Relivrer » sends the parcel back on the road (out of En cours), Résolu fills itself when the company delivers, a new
-// alert from the company is a new alert to do, « Client annule » sends the parcel back (Annulés, where Swap is).
+// alert from the company is a new alert to do, and so is a « Relivrer » the company refuses; « Client annule » sends
+// the parcel back (Annulés, where Swap is).
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
-let as: (email: string) => Promise<Ctx>;
+let as: (email: string, server?: Ctx['server']) => Promise<Ctx>;
 let suivi: Ctx;
 
 before(async () => {
-  ({ db, as } = await setup(120));
+  ({ db, as } = await setup(240));
   suivi = await as(EMAILS.suivi);
 });
 
@@ -26,8 +27,9 @@ async function freshAlert(kind?: string): Promise<number> {
   // (hers: a suivi agent's lists are her own parcels and nobody's)
   await db.query(`UPDATE orders SET follow_status = 'alert', sub_status = NULL, follow_agent_id = $2${co ? ', company_id = $3' : ''} WHERE id = $1`, co ? [id, suivi.session.profile.id, co] : [id, suivi.session.profile.id]);
   await db.query(
+    // (just now: some demo events are planned for later, and what the test does next comes after it)
     `INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, note, at)
-     SELECT $1, NULL, 'follow_status', 'shipped', 'alert', 'Numéro erroné', coalesce(max(at), now()) + interval '1 minute' FROM order_events WHERE order_id = $1`,
+     VALUES ($1, NULL, 'follow_status', 'shipped', 'alert', 'Numéro erroné', now() - interval '1 second')`,
     [id],
   );
   return id;
@@ -133,6 +135,47 @@ test('relivrée, then the company cancels it again: a new alert to do (Nouvelles
   assert.ok(l.rows.some((r: any) => r.id === id), 'a new alert');
   assert.equal(l.extra[id].tries.done, 0);
   assert.ok(!(await ids('alertes_encours')).includes(id));
+});
+
+test('ZR refuses « Relivrer » at once (its API says no): the parcel is an alert again, in Nouvelles alertes', async () => {
+  const id = await freshAlert('zr');
+  await db.query(`UPDATE orders SET tracking = coalesce(tracking, 'ZR-REFUS-' || id) WHERE id = $1`, [id]);
+  await call('suivi.callResult', suivi, { id, result: 'no_answer' });
+  // ZR's API answers no to the réclamation « relancer »
+  const refusing = await as(EMAILS.suivi, { courier: async () => { throw new Error('Colis déjà clôturé chez ZR'); } } as any);
+  const motifs: any = await call('suivi.motifs', suivi, {});
+  const m = motifs.resolved.find((x: any) => x.on && !x.date) ?? motifs.resolved.find((x: any) => x.on);
+  const date = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  const r: any = await call('suivi.resolve', refusing, { id, outcome: 'resolved', motif: m.key, date: m.date ? date : null, relance: true });
+  assert.equal(r.back, true, 'the screen is told it came back');
+  assert.match(r.claimError, /clôturé/);
+  assert.equal((await db.query('SELECT follow_status FROM orders WHERE id = $1', [id]))[0].follow_status, 'alert');
+  const l = await list('alertes_new');
+  assert.ok(l.rows.some((x: any) => x.id === id), 'a new alert to do');
+  assert.match(l.extra[id].alertReason, /Relance refusée — Colis déjà clôturé/);
+  assert.equal(l.extra[id].tries.done, 0, 'its calls start again');
+  assert.ok(!(await ids('alertes_encours')).includes(id));
+});
+
+test('a « Relivrer » réclamation marked « Perdue » (the company said no): the parcel is an alert again', async () => {
+  const kind = (await db.query(`SELECT kind FROM delivery_companies WHERE kind NOT IN ('zr', 'own') ORDER BY id LIMIT 1`))[0]?.kind;
+  const id = await freshAlert(kind);
+  await call('suivi.callResult', suivi, { id, result: 'busy' });
+  const motifs: any = await call('suivi.motifs', suivi, {});
+  const m = motifs.resolved.find((x: any) => x.on && !x.date) ?? motifs.resolved.find((x: any) => x.on);
+  const date = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  await call('suivi.resolve', suivi, { id, outcome: 'resolved', motif: m.key, date: m.date ? date : null, relance: false });
+  assert.equal((await db.query('SELECT follow_status FROM orders WHERE id = $1', [id]))[0].follow_status, 'out_for_delivery');
+  const c: any = await call('suivi.claimCreate', suivi, { orderId: id, reason: 'relivrer', message: 'Merci de relivrer le colis', viaApi: false });
+  await call('suivi.claimUpdate', suivi, { id: c.id, status: 'lost', note: 'La société refuse de relivrer' });
+  assert.equal((await db.query('SELECT follow_status FROM orders WHERE id = $1', [id]))[0].follow_status, 'alert');
+  const l = await list('alertes_new');
+  assert.ok(l.rows.some((x: any) => x.id === id), 'a new alert to do');
+  assert.match(l.extra[id].alertReason, /Relance refusée — La société refuse de relivrer/);
+  // another réclamation lost on a parcel already an alert, or delivered: nothing moves
+  const c2: any = await call('suivi.claimCreate', suivi, { orderId: id, reason: 'late', message: 'Colis en retard', viaApi: false });
+  await call('suivi.claimUpdate', suivi, { id: c2.id, status: 'lost' });
+  assert.equal((await db.query('SELECT follow_status FROM orders WHERE id = $1', [id]))[0].follow_status, 'alert');
 });
 
 test('« Client annule »: the parcel goes back; with a company that swaps by hand it is in Swap, « Client annulé »', async () => {

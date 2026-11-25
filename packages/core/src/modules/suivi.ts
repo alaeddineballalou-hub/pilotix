@@ -718,6 +718,24 @@ const DEMO_CAT_OF: Record<string, string> = {
   address: 'demo-autre', damaged: 'demo-endommage', money: 'demo-acc-encaissement', noreturn: 'demo-retour', other: 'demo-autre',
 };
 
+/**
+ * The company refused a « Relivrer » (its API said no, or it closed the réclamation as refused): the parcel, back on the
+ * road after its treatment, is an alert again — Nouvelles alertes, its calls from zero — saying « <company> : Relance
+ * refusée » (the owner's choice, 25 Nov 2026). A parcel delivered, coming back or already an alert is left as it is.
+ */
+async function relanceRefused(ctx: Ctx, orderId: number | null, why: string | null): Promise<boolean> {
+  if (!orderId) return false;
+  const o = (await ctx.db.query(`SELECT o.follow_status, o.sub_status, co.name FROM orders o LEFT JOIN delivery_companies co ON co.id = o.company_id WHERE o.id = $1`, [orderId]))[0];
+  if (!o || o.sub_status !== 'alert_traitee' || !['out_for_delivery', 'shipped', 'failed'].includes(o.follow_status)) return false;
+  const company = (o.name as string | null) ?? 'La société';
+  const note = `${company} : Relance refusée${why?.trim() ? ` — ${why.trim()}` : ''}`.slice(0, 300);
+  // the company's answer, not a person's choice: written as its news (whoever's action brought it)
+  const sys: Ctx = { ...ctx, session: { ...ctx.session, roles: [...ctx.session.roles, 'admin'], isAdmin: true } };
+  await setFollow(sys, FollowInput.parse({ ids: [orderId], status: 'alert', subStatus: null, note }), { system: true, courier: true, by: company, expect: new Map([[orderId, o.follow_status]]) });
+  ctx.emit({ type: 'order', id: orderId });
+  return true;
+}
+
 /** Sends a saved claim to the courier's API. Never throws: a refusal is kept on the claim (ext_error) and in its history. */
 async function pushClaim(ctx: Ctx, cid: number, categoryId: string | null): Promise<Claim> {
   const cur = await getClaim(ctx.db, cid);
@@ -750,6 +768,8 @@ async function pushClaim(ctx: Ctx, cid: number, categoryId: string | null): Prom
     [cid, JSON.stringify(notes), sent?.extId ?? null, sent?.extRef ?? null, sent?.status ?? null, error, nowIso, sent?.category ?? null],
   );
   if (cur.orderId) await addEvent(ctx.db, cur.orderId, me, 'note', null, 'event', `Réclamation ${cur.ref} : ${text}`.slice(0, 300));
+  // the company refused « Relivrer » at once: an alert again
+  if (error && cur.reason === 'relivrer') await relanceRefused(ctx, cur.orderId, error);
   ctx.emit({ type: 'order', id: cur.orderId ?? undefined });
   return getClaim(ctx.db, cid);
 }
@@ -903,7 +923,7 @@ async function syncClaims(ctx: Ctx, onlyId?: number) {
   const errors: string[] = [];
   const added = onlyId ? 0 : await importCourierClaims(ctx, errors);
   const rows = await ctx.db.query(
-    `SELECT c.id, c.company_id, c.ext_id, c.ext_status, c.ext_answer, c.ext_closed, c.sent_at, c.notes, c.order_id, c.status, co.name AS company_name FROM claims c
+    `SELECT c.id, c.company_id, c.ext_id, c.ext_status, c.ext_answer, c.ext_closed, c.sent_at, c.notes, c.order_id, c.status, c.reason, co.name AS company_name FROM claims c
      LEFT JOIN delivery_companies co ON co.id = c.company_id
      WHERE c.ext_id IS NOT NULL AND (c.status NOT IN ${CLAIM_DONE} OR NOT c.ext_closed) ${onlyId ? 'AND c.id = $1' : ''} ORDER BY c.updated_at LIMIT 200`,
     onlyId ? [onlyId] : [],
@@ -978,6 +998,8 @@ async function syncClaims(ctx: Ctx, onlyId?: number) {
         [r.id, st.status || r.ext_status, answer, status, JSON.stringify(notes), nowIso, closed],
       );
       if (r.order_id && parts.length) await addEvent(ctx.db, num(r.order_id), null, 'note', null, 'event', `Réclamation ${claimRef(num(r.id))} : ${parts.join(' · ')}`.slice(0, 300));
+      // a « Relivrer » the company refused: the parcel is an alert again
+      if (status === 'lost' && r.status !== 'lost' && r.reason === 'relivrer') await relanceRefused(ctx, numOrNull(r.order_id), answer ?? st.status ?? null);
     }
   }
   if (changed) ctx.emit({ type: 'orders' });
@@ -1590,6 +1612,7 @@ export const suiviProcs = {
         await addEvent(ctx.db, i.id, me, 'suivi_motif', 'resolved', m.key, m.fr);
         let claim: Claim | null = null;
         let claimError: string | null = null;
+        let back = false;
         if (i.relance && cur.companyId) {
           try {
             const own = (await ctx.db.query('SELECT kind FROM delivery_companies WHERE id = $1', [cur.companyId]))[0]?.kind === 'own';
@@ -1599,9 +1622,14 @@ export const suiviProcs = {
           } catch (e) {
             claimError = (e as Error).message ?? 'Erreur';
           }
+          // the company refused the relance at once: the parcel is already an alert again (Nouvelles alertes)
+          if (claim?.extError) {
+            claimError = claim.extError;
+            back = (await getOrder(ctx, i.id)).followStatus === 'alert';
+          }
         }
         ctx.emit({ type: 'order', id: i.id });
-        return { order: await getOrder(ctx, i.id), claim, claimError, swap: null };
+        return { order: await getOrder(ctx, i.id), claim, claimError, swap: null, back };
       }
       const tr = (await alertTries(ctx.db, [i.id], ctx.now())).get(i.id);
       const enough = !!tr && tr.done >= tr.need;
@@ -1610,7 +1638,7 @@ export const suiviProcs = {
       if (i.swapTo) {
         await addEvent(ctx.db, i.id, me, 'suivi_motif', 'lost', m.key, m.fr);
         const swap = await swapParcel(ctx, i.id, i.swapTo, [`Traité · Perdu · ${m.fr}`, early ? 'annulé trop tôt' : '', note].filter(Boolean).join(' — '));
-        return { order: await getOrder(ctx, i.id), claim: null, claimError: null, swap };
+        return { order: await getOrder(ctx, i.id), claim: null, claimError: null, swap, back: false };
       }
       await setFollow(
         ctx,
@@ -1623,7 +1651,7 @@ export const suiviProcs = {
       );
       await addEvent(ctx.db, i.id, me, 'suivi_motif', 'lost', m.key, m.fr);
       ctx.emit({ type: 'order', id: i.id });
-      return { order: await getOrder(ctx, i.id), claim: null, claimError: null, swap: null };
+      return { order: await getOrder(ctx, i.id), claim: null, claimError: null, swap: null, back: false };
     },
   ),
 
@@ -1845,6 +1873,8 @@ export const suiviProcs = {
       [i.id, status, JSON.stringify(notes), i.message ?? null, i.sentVia ?? null, !!i.sentVia, nowIso],
     );
     if (cur.orderId && parts.length) await addEvent(ctx.db, cur.orderId, me, 'note', null, 'event', `Réclamation ${cur.ref} : ${parts.join(' · ')}`.slice(0, 300));
+    // « Perdue » on a « Relivrer » (the company said no): the parcel is an alert again
+    if (i.status === 'lost' && cur.status !== 'lost' && cur.reason === 'relivrer') await relanceRefused(ctx, cur.orderId, i.note?.trim() || null);
     ctx.emit({ type: 'order', id: cur.orderId ?? undefined });
     return getClaim(ctx.db, i.id);
   }),

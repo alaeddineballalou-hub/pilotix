@@ -659,6 +659,7 @@
     "lostDone": "{{ref}}: treated, lost",
     "sentApi": "Relaunch sent to {{name}} ({{n}})",
     "claimFail": "The relaunch was not sent: {{msg}}",
+    "relanceBack": "{{co}} refused the relaunch: {{msg}}. The parcel is back in New alerts.",
     "dateNeeded": "New date (required for this motif)",
     "okSolved": "Mark solved",
     "swapT": "Before the return: swap?",
