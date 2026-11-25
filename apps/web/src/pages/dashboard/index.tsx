@@ -12,7 +12,6 @@ import { ErrorBox, Help, Icon, Loading } from '../../ui/kit';
 import type { PageProps } from '../registry';
 import { Board } from './board/Board';
 import { LivreursArea } from './Livreurs';
-import { TeamEditor } from './Teams';
 import { Overview } from './Overview';
 import { MyDashboard } from './Mine';
 import { useSession } from '../../lib/session';
@@ -69,10 +68,10 @@ function TeamDashboard({ sub }: PageProps) {
           extra={(range) => (
             <>
               <RiskConfirmStats range={range} />
-              {(m.canEditTeams || m.canEditScope) && (
+              {/* « Composer les équipes » moved to Utilisateurs › Agent managers (the owner's choice, 25 Nov 2026) */}
+              {m.canEditScope && (
                 <Fold icon="usercog" title={t('dashboard.tb.settings')} sub={t('dashboard.tb.settingsSub')}>
-                  {m.canEditTeams && <TeamEditor meta={m} />}
-                  {m.canEditScope && <ScopeCard meta={m} />}
+                  <ScopeCard meta={m} />
                 </Fold>
               )}
             </>

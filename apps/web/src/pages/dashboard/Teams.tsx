@@ -1,4 +1,5 @@
-// Dashboard · Confirmation › Réglages des équipes: which manager each confirmation agent (and Community manager) works with.
+// « Composer les équipes »: which manager each confirmation agent (and Community manager) works with. Shown in Utilisateurs ›
+// Agent managers (admin/Users.tsx), the owner's choice, 25 Nov 2026 (it was in Dashboard › Confirmation › Réglages).
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';

@@ -13,6 +13,7 @@ import { Card, copyText, Empty, ErrorBox, Field, Icon, Loading, StageBar } from 
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { ConfirmButton } from './bits';
+import { TeamEditor } from '../dashboard/Teams';
 import { RoleRightsPage } from './RoleRights';
 import { CustomRolePage, DeleteRoleButton, NewRoleModal } from './CustomRole';
 import './rolerights.css';
@@ -120,13 +121,29 @@ export function UsersPage({ sub, rest, agency }: { sub?: string; rest?: string[]
       ) : editing ? (
         <RoleRightsPage role={editing} />
       ) : cur.role ? (
-        <RoleList role={cur.role} onNew={() => setForm({ user: null, role: cur.role })} onEdit={(u) => setForm({ user: u, role: cur.role })} />
+        <>
+          <RoleList role={cur.role} onNew={() => setForm({ user: null, role: cur.role })} onEdit={(u) => setForm({ user: u, role: cur.role })} />
+          {cur.role === 'agent_manager' && <ManagersTeams />}
+        </>
       ) : (
         <RolesTable onNew={() => setForm({ user: null, role: null })} />
       )}
       {form && <UserForm user={form.user} role={form.role} onClose={() => setForm(null)} />}
     </>
   );
+}
+
+/**
+ * Utilisateurs › Agent managers: « Composer les équipes », which agent manager each confirmation agent (and Community
+ * manager) works with — the owner and the administrators (the owner's choice, 25 Nov 2026: it was in Dashboard ›
+ * Confirmation, which owners and managers no longer open).
+ */
+function ManagersTeams() {
+  const { session, has } = useSession();
+  const can = !!session?.isAdmin || has('vendeur');
+  const meta = useRpc('stats.dashMeta', {}, { enabled: can });
+  if (!can || !meta.data?.canEditTeams) return null;
+  return <TeamEditor meta={meta.data} />;
 }
 
 /** A role's name: a partner names its own (Chef d'agence, Superviseur, Agent de confirmation, Marketeur…). */
