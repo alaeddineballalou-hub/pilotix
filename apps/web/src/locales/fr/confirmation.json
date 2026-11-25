@@ -20,6 +20,14 @@
     "failed": "La photo n’a pas pu partir.",
     "again": "La photo n’a pas pu partir : touchez encore WhatsApp pour envoyer le message avec son lien (la photo s’affiche dans son aperçu)."
   },
+  "attemptPhoto": {
+    "lock": "Installez l’extension Pilotix pour envoyer ce message : c’est elle qui met la photo du produit dans la discussion du client.",
+    "why": "Sur un ordinateur, WhatsApp Web n’accepte pas les photos venant d’un site. Cette petite extension pour Chrome met la photo du produit dans la discussion du client, avec le message. À faire une fois par ordinateur.",
+    "last": "Revenez ici : le message se débloque tout seul. Sinon, rechargez Pilotix.",
+    "ready": "Extension installée : vous pouvez envoyer le message.",
+    "alone": "Sur cet appareil, le message part sans la photo.",
+    "again": "La photo n’a pas pu partir : touchez encore WhatsApp pour envoyer le message sans elle."
+  },
   "attemptMessageRequired": "Envoyez un message au client pour la tentative {{n}}",
   "attemptMessageOneOrder": "Ouvrez une commande à la fois pour envoyer son message.",
   "sub": {
