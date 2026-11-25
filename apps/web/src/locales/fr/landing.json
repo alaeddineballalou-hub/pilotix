@@ -272,6 +272,8 @@
     "kValueSub": "produits laissés en route",
     "kConfirmed": "Confirmées",
     "kConfirmedSub": "{{v}} · sur {{n}} paniers devenus commandes",
+    "kDelivered": "Livrées",
+    "kDeliveredSub": "sur {{n}} confirmées",
     "kSaved": "Argent sauvé",
     "kSavedSub": "{{n}} livrées au client",
     "fTodo": "À traiter",

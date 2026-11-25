@@ -292,6 +292,8 @@
     "kValueSub": "منتجات متروكة",
     "kConfirmed": "مؤكدة",
     "kConfirmedSub": "{{v}} · من {{n}} سلة صارت طلبات",
+    "kDelivered": "مسلَّمة",
+    "kDeliveredSub": "من {{n}} مؤكدة",
     "kSaved": "المال المسترجع",
     "kSavedSub": "{{n}} تم توصيلها للعميل",
     "fTodo": "للمعالجة",

@@ -32,6 +32,7 @@ export function Abandoned() {
         <Kpi label={t('landing.ab.kRecovered')} value={n(s?.recovered)} sub={t('landing.ab.kRecoveredSub')} icon="undo" />
         <Kpi label={t('landing.ab.kValue')} value={da(s?.value ?? 0)} sub={t('landing.ab.kValueSub')} icon="coins" />
         <Kpi label={t('landing.ab.kConfirmed')} value={n(s?.confirmed)} sub={t('landing.ab.kConfirmedSub', { v: da(s?.confirmedValue ?? 0), n: n(s?.orders) })} icon="checkcircle" tone={s?.confirmed ? 'ok' : undefined} />
+        <Kpi label={t('landing.ab.kDelivered')} value={n(s?.delivered)} sub={t('landing.ab.kDeliveredSub', { n: n(s?.confirmed) })} icon="truck" tone={s?.delivered ? 'ok' : undefined} />
         <Kpi label={t('landing.ab.kSaved')} value={da(s?.deliveredValue ?? 0)} sub={t('landing.ab.kSavedSub', { n: n(s?.delivered) })} icon="wallet" tone={s?.deliveredValue ? 'ok' : undefined} />
       </Kpis>
       <section className="card pd-card">

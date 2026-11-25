@@ -272,6 +272,8 @@
     "kValueSub": "products left behind",
     "kConfirmed": "Confirmed",
     "kConfirmedSub": "{{v}} · of {{n}} carts turned into orders",
+    "kDelivered": "Delivered",
+    "kDeliveredSub": "of {{n}} confirmed",
     "kSaved": "Money saved",
     "kSavedSub": "{{n}} delivered to the client",
     "fTodo": "To handle",
