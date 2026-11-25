@@ -9,7 +9,7 @@ import { getPrefs } from './prefs';
 import { rotateTimes } from './assign';
 import { cancelParcel, swapFees } from './delivery';
 import { addEvent, FollowInput, getOrder, listOrders, ListInput, releasePicked, setFollow, withClientScores } from './orders';
-import { agencyOf, andSql, queueSql, rowScopeSql } from './agencyscope';
+import { agencyOf, agencyRowSql, andSql, queueSql, rowScopeSql } from './agencyscope';
 import { findOrders } from './sav';
 import { applyTrust, DRIVER_CLAIMS } from './trust';
 import { KINDS } from '../couriers/kinds';
@@ -257,6 +257,10 @@ const itemsText = (o: Order) => o.items.map((i) => `${i.qty} × ${i.name}${i.var
 /** Only an order that asks for exactly what is in the parcel can take it: the same products, variants and quantities —
  *  the parcel is never opened (owner's rule, 24 Nov 2026: « other variant never show it »). */
 const sameParcel = (a: Order, b: Order) => itemsKey(a.items) === itemsKey(b.items);
+/** A suivi agent gives a parcel to any waiting order of the shop, not only the orders given to him (the owner's choice,
+ *  25 Nov 2026); an agency's agent: the agency's own orders only. Everyone else: the usual rule. */
+const swapAccess = (ctx: Ctx) => (hasRole(ctx.session, 'suivi') ? ('swap' as const) : undefined);
+const swapScopeSql = (ctx: Ctx) => (swapAccess(ctx) ? agencyRowSql(ctx) : rowScopeSql(ctx));
 
 async function swapCandidates(ctx: Ctx, fromId: number, q?: string) {
   const from = await getOrder(ctx, fromId);
@@ -267,19 +271,19 @@ async function swapCandidates(ctx: Ctx, fromId: number, q?: string) {
   let rows: Order[];
   if (q?.trim()) {
     // an agency's agent: only the agency's own orders get its parcels
-    rows = await findOrders(ctx, q.trim(), 30, (w) => w.add(`o.conf_status = 'confirmed' AND (o.follow_status IS NULL OR o.follow_status IN ('to_prepare','prepared')) AND o.shipped_at IS NULL${andSql(rowScopeSql(ctx))}`));
+    rows = await findOrders(ctx, q.trim(), 30, (w) => w.add(`o.conf_status = 'confirmed' AND (o.follow_status IS NULL OR o.follow_status IN ('to_prepare','prepared')) AND o.shipped_at IS NULL${andSql(swapScopeSql(ctx))}`), undefined, swapAccess(ctx));
   } else {
     // confirmed orders still at the depot with the parcel's products and nothing else: the same wilaya first
     const ids = await ctx.db.query(
       `SELECT o.id FROM sales o
        WHERE o.conf_status = 'confirmed' AND (o.follow_status IS NULL OR o.follow_status IN ('to_prepare','prepared')) AND o.shipped_at IS NULL AND o.id <> $1
          AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.product_id = ANY($2))
-         AND NOT EXISTS (SELECT 1 FROM order_items j WHERE j.order_id = o.id AND NOT (j.product_id = ANY($2)))${andSql(rowScopeSql(ctx))}
+         AND NOT EXISTS (SELECT 1 FROM order_items j WHERE j.order_id = o.id AND NOT (j.product_id = ANY($2)))${andSql(swapScopeSql(ctx))}
        ORDER BY (o.wilaya_id = $3) DESC, o.confirmed_at ASC LIMIT 150`,
       [fromId, products, from.wilayaId],
     );
     rows = [];
-    for (const r of ids) rows.push(await getOrder(ctx, num(r.id)));
+    for (const r of ids) rows.push(await getOrder(ctx, num(r.id), ctx.db, swapAccess(ctx)));
   }
   // a stop-desk order takes the parcel only at a bureau of the parcel's company (the parcel goes there)
   const deskIds = [...new Set(rows.filter((x) => x.isStopdesk && x.stopdeskId).map((x) => x.stopdeskId!))];
@@ -339,7 +343,7 @@ export async function swapParcel(ctx: Ctx, fromId: number, toId: number, note?: 
   const me = ctx.session.profile.id;
   // one swap at a time per parcel: a double click never sends (and pays) the same swap twice at its company
   return withActionLock(ctx.db, `swap:${fromId}`, me, 'Un swap est déjà en cours pour ce colis', async () => {
-    const [fa, fb] = [await getOrder(ctx, fromId), await getOrder(ctx, toId)];
+    const [fa, fb] = [await getOrder(ctx, fromId), await getOrder(ctx, toId, ctx.db, swapAccess(ctx))];
     // the parcel must still be with the company (or the livreur), the order confirmed and still at the depot — checked
     // before anything is asked to the company
     if (!fa.shippedAt || !(SWAP_FROM as readonly string[]).includes(fa.followStatus ?? '')) throw bad(`${fa.ref} : le colis n’est pas chez la société ou le livreur`);
@@ -347,7 +351,8 @@ export async function swapParcel(ctx: Ctx, fromId: number, toId: number, note?: 
     if (fb.shippedAt || !(fb.followStatus === null || ['to_prepare', 'prepared'].includes(fb.followStatus))) throw bad(`${fb.ref} : déjà expédiée`);
     if (!sameParcel(fa, fb)) throw bad(`${fb.ref} ne demande pas exactement les mêmes produits que le colis de ${fa.ref} (${itemsText(fa)}) : choisissez une commande identique`);
     const head = await swapHead(ctx.db, fromId);
-    // what the company takes to give its parcel to another customer (same wilaya or another): on the new order's cost
+    // what the company takes to give its parcel to another customer (same wilaya or another): counted on the order whose
+    // customer did not take it, like a return fee (the owner's rule, 25 Nov 2026) — never on the new order's cost
     const sameWilaya = fa.wilayaId === fb.wilayaId;
     const sw = head.companyId ? await swapFees(ctx, head.companyId) : null;
     const swapFee = (sw ? (sameWilaya ? sw.same : sw.other) : null) ?? 0;
@@ -403,12 +408,14 @@ export async function swapParcel(ctx: Ctx, fromId: number, toId: number, note?: 
       const nowIso = new Date(ctx.now()).toISOString();
       // what the depot had already picked for B goes back on the shelf (B leaves with A's parcel)
       if (B.follow_status === 'to_prepare') await releasePicked(tx, num(B.id));
-      // The parcel (and its stock, already out of the depot) goes to B: no new stock out for B, no return for A.
+      // The parcel (and its stock, already out of the depot) goes to B: no new stock out for B, no return for A. B is
+      // followed like any parcel on the road: by its own suivi agent, else by the one who followed A (the same team)
+      const fAgent = numOrNull(B.follow_agent_id) ?? (numOrNull(A.follow_agency_id) === numOrNull(B.follow_agency_id) ? numOrNull(A.follow_agent_id) : null);
       await tx.query(
         `UPDATE orders SET company_id=$2, delivery_cost=$3, tracking=$4, ext_id=$5, label_url=$6, ext_status=NULL, ext_status_at=NULL, taken_at=NULL,
            warehouse_id=COALESCE($7, warehouse_id), livreur_id=$8, follow_status='out_for_delivery', sub_status='livraison_swappe',
-           prepared_at=COALESCE(prepared_at, $9::timestamptz), shipped_at=$9::timestamptz, updated_at=now(), version=version+1 WHERE id=$1`,
-        [B.id, A.company_id, (num(A.delivery_cost) || num(B.delivery_cost)) + swapFee, sent?.tracking ?? A.tracking, sent?.parcelExtId ?? A.ext_id, sent ? null : A.label_url, A.warehouse_id, A.livreur_id, nowIso],
+           prepared_at=COALESCE(prepared_at, $9::timestamptz), shipped_at=$9::timestamptz, follow_agent_id=$10, updated_at=now(), version=version+1 WHERE id=$1`,
+        [B.id, A.company_id, num(A.delivery_cost) || num(B.delivery_cost), sent?.tracking ?? A.tracking, sent?.parcelExtId ?? A.ext_id, sent ? null : A.label_url, A.warehouse_id, A.livreur_id, nowIso, fAgent],
       );
       await tx.query(
         `UPDATE orders SET follow_status='cancelled', sub_status='annule_swappe', tracking=NULL, ext_id=NULL, label_url=NULL, ext_status=NULL, ext_status_at=NULL, taken_at=NULL,
@@ -418,18 +425,20 @@ export async function swapParcel(ctx: Ctx, fromId: number, toId: number, note?: 
       const n = note ? ` · ${note}` : '';
       const atCo = sent ? ` · fait chez ${head.companyName} par API` : '';
       const viaApi = !!sent;
-      await addEvent(tx, num(A.id), me, 'follow_status', A.follow_status, 'cancelled', `Colis swappé vers ${B.ref}${atCo}${n}`, { swap_to: num(B.id), tracking: A.tracking, via_api: viaApi, swap_ext: sent?.extId ?? null });
+      // A keeps the swap fee (its own swap step), counted like a return fee everywhere a return fee counts
+      const fee = swapFee ? ` · frais d’échange ${swapFee} DA (${sameWilaya ? 'même wilaya' : 'autre wilaya'}), comptés sur ${A.ref} comme un retour` : '';
+      await addEvent(tx, num(A.id), me, 'follow_status', A.follow_status, 'cancelled', `Colis swappé vers ${B.ref}${atCo}${fee}${n}`, { swap_to: num(B.id), tracking: A.tracking, via_api: viaApi, swap_ext: sent?.extId ?? null, swap_fee: swapFee, swap_same: sameWilaya });
       await addEvent(tx, num(A.id), me, 'sub_status', A.sub_status, 'annule_swappe', null);
       const was = B.follow_status === 'prepared' ? ' · était En dispatch (emballée) : colis à défaire' : ' · retirée de En préparation';
-      const fee = swapFee ? ` · frais d’échange ${swapFee} DA (${sameWilaya ? 'même wilaya' : 'autre wilaya'})` : '';
       const newNo = sent && sent.tracking !== A.tracking ? ` · nouveau n° ${sent.tracking}` : '';
       // B's place before the swap: « Annuler le swap » puts it back (only a swap Pilotix made alone, never one made at ZR)
-      const prev = { follow: B.follow_status ?? null, company: numOrNull(B.company_id), cost: num(B.delivery_cost), prepared: B.prepared_at ? iso(B.prepared_at) : null, warehouse: numOrNull(B.warehouse_id), livreur: numOrNull(B.livreur_id) };
-      await addEvent(tx, num(B.id), me, 'follow_status', B.follow_status, 'out_for_delivery', `Colis swappé depuis ${A.ref} (${A.tracking ?? '—'})${atCo}${newNo}${was}${fee}${n}`, { swap_from: num(A.id), tracking: A.tracking, swap_fee: swapFee, via_api: viaApi, swap_ext: sent?.extId ?? null, prev });
+      const prev = { follow: B.follow_status ?? null, company: numOrNull(B.company_id), cost: num(B.delivery_cost), prepared: B.prepared_at ? iso(B.prepared_at) : null, warehouse: numOrNull(B.warehouse_id), livreur: numOrNull(B.livreur_id), fagent: numOrNull(B.follow_agent_id) };
+      // (`fee_on`: the swap fee is A's — B's cost stays its normal delivery price)
+      await addEvent(tx, num(B.id), me, 'follow_status', B.follow_status, 'out_for_delivery', `Colis swappé depuis ${A.ref} (${A.tracking ?? '—'})${atCo}${newNo}${was}${n}`, { swap_from: num(A.id), tracking: A.tracking, swap_fee: swapFee, fee_on: 'from', via_api: viaApi, swap_ext: sent?.extId ?? null, prev });
       await addEvent(tx, num(B.id), me, 'sub_status', B.sub_status, 'livraison_swappe', null);
       return {
-        from: await getOrder(ctx, num(A.id), tx),
-        to: await getOrder(ctx, num(B.id), tx),
+        from: await getOrder(ctx, num(A.id), tx, swapAccess(ctx)),
+        to: await getOrder(ctx, num(B.id), tx, swapAccess(ctx)),
         oldTracking: (A.tracking as string | null) ?? null,
         wasPrepared: B.follow_status === 'prepared',
         oldTotal: num(A.total),
@@ -459,9 +468,9 @@ export async function unswapParcel(ctx: Ctx, orderId: number) {
   if (!mine) throw bad('Pas de swap sur cette commande');
   const fromId = mine.swap_from ? num(mine.swap_from) : orderId;
   const toId = mine.swap_to ? num(mine.swap_to) : orderId;
-  await getOrder(ctx, fromId);
-  await getOrder(ctx, toId);
-  const got = (await swapsOf(toId)).find((d: any) => num(d.swap_from) === fromId) as { tracking?: string | null; swap_fee?: number; via_api?: boolean; prev?: any } | undefined;
+  await getOrder(ctx, fromId, ctx.db, swapAccess(ctx));
+  await getOrder(ctx, toId, ctx.db, swapAccess(ctx));
+  const got = (await swapsOf(toId)).find((d: any) => num(d.swap_from) === fromId) as { tracking?: string | null; swap_fee?: number; fee_on?: string; via_api?: boolean; prev?: any } | undefined;
   if (got?.via_api) throw bad('Swap fait chez la société par API : elle l’a appliqué et ne l’annule pas. Changez le colis chez elle si besoin.');
   return withActionLock(ctx.db, `swap:${fromId}`, me, 'Un swap est déjà en cours pour ce colis', async () => {
     const res = await ctx.db.tx(async (tx) => {
@@ -483,15 +492,18 @@ export async function unswapParcel(ctx: Ctx, orderId: number) {
            updated_at=now(), version=version+1 WHERE id=$1`,
         [A.id, B.company_id, B.tracking, B.ext_id, B.label_url, B.ext_status, B.ext_status_at, aWas],
       );
-      // B back at the depot, to be prepared again with its own products (its stock never left: the parcel was A's)
+      // B back at the depot, to be prepared again with its own products (its stock never left: the parcel was A's), with
+      // its own suivi agent again; a swap made before 25 Nov 2026 had its fee in B's cost: taken off
+      const fagentBack = prev && 'fagent' in prev;
       await tx.query(
         `UPDATE orders SET follow_status='to_prepare', sub_status=NULL, tracking=NULL, ext_id=NULL, label_url=NULL, ext_status=NULL, ext_status_at=NULL, taken_at=NULL,
-           shipped_at=NULL, prepared_at=$2::timestamptz, company_id=COALESCE($3, company_id), delivery_cost=$4, livreur_id=$5, updated_at=now(), version=version+1 WHERE id=$1`,
-        [B.id, prev && prev.follow === 'prepared' ? prev.prepared : null, prev ? prev.company : null, prev ? num(prev.cost) : Math.max(0, num(B.delivery_cost) - num(got?.swap_fee)), prev ? prev.livreur : null],
+           shipped_at=NULL, prepared_at=$2::timestamptz, company_id=COALESCE($3, company_id), delivery_cost=$4, livreur_id=$5,
+           follow_agent_id=CASE WHEN $6 THEN $7::bigint ELSE follow_agent_id END, updated_at=now(), version=version+1 WHERE id=$1`,
+        [B.id, prev && prev.follow === 'prepared' ? prev.prepared : null, prev ? prev.company : null, prev ? num(prev.cost) : Math.max(0, num(B.delivery_cost) - (got?.fee_on === 'from' ? 0 : num(got?.swap_fee))), prev ? prev.livreur : null, fagentBack, fagentBack ? numOrNull(prev.fagent) : null],
       );
       await addEvent(tx, num(A.id), me, 'follow_status', 'cancelled', aWas, `Swap annulé : le colis ${B.tracking} revient à ${A.ref}`, { unswap: num(B.id) });
       await addEvent(tx, num(B.id), me, 'follow_status', B.follow_status, 'to_prepare', `Swap annulé : le colis de ${A.ref} n’est plus pour cette commande — à préparer avec son propre colis`, { unswap: num(A.id) });
-      return { from: await getOrder(ctx, num(A.id), tx), to: await getOrder(ctx, num(B.id), tx) };
+      return { from: await getOrder(ctx, num(A.id), tx, swapAccess(ctx)), to: await getOrder(ctx, num(B.id), tx, swapAccess(ctx)) };
     });
     ctx.emit({ type: 'orders' });
     return res;
@@ -509,7 +521,7 @@ async function swapTarget(ctx: Ctx, fromId: number) {
   });
   if (!ev) throw notFound(`${from.ref} : commande qui a reçu le colis introuvable`);
   const d = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
-  const to = await getOrder(ctx, num(d.swap_to));
+  const to = await getOrder(ctx, num(d.swap_to), ctx.db, swapAccess(ctx));
   const kind = to.companyId ? (await ctx.db.query('SELECT kind FROM delivery_companies WHERE id=$1', [to.companyId]))[0]?.kind ?? null : null;
   // the company's swap fee, kept on the receiving order's own step
   const got = (await ctx.db.query(`SELECT data FROM order_events WHERE order_id = $1 AND kind = 'follow_status' AND data IS NOT NULL ORDER BY at DESC, id DESC LIMIT 40`, [to.id]))

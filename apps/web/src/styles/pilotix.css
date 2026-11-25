@@ -236,6 +236,10 @@ button.kpi.on { box-shadow: 0 0 0 2px var(--navy); }
 .px-ticket { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 800; white-space: nowrap; vertical-align: middle;
   background: color-mix(in srgb, var(--px-orange, #F7A823) 18%, transparent); color: #8a5a00; border: 1px solid color-mix(in srgb, var(--px-orange, #F7A823) 55%, transparent); }
 [data-theme="dark"] .px-ticket { color: #ffd27a; }
+/* Swap: the two orders of a swap carry a small « Swap » tag next to their delivery status (lists, cards, phone). */
+.px-st-swap { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; vertical-align: middle; }
+.px-swaptag { display: inline-flex; align-items: center; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 800; line-height: 18px; letter-spacing: .02em; white-space: nowrap; vertical-align: middle;
+  background: var(--sky-soft, #EEF2F8); color: var(--navy, #1B2A47); border: 1px solid color-mix(in srgb, var(--navy, #1B2A47) 35%, transparent); }
 .px-tk-card { border-inline-start: 4px solid var(--px-orange, #F7A823) !important; }
 .bjg-tab.px-sav-tab { border-color: color-mix(in srgb, var(--px-orange, #F7A823) 60%, transparent); }
 .bjg-tab.px-sav-tab.on { border-color: var(--px-orange, #F7A823); background: color-mix(in srgb, var(--px-orange, #F7A823) 12%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--px-orange, #F7A823) 30%, transparent); }

@@ -33,7 +33,8 @@
     "conf": "Confirmation",
     "ret": "Retours ({{n}})",
     "pub": "Pub ({{v}})",
-    "net": "Bénéfice net"
+    "net": "Bénéfice net",
+    "retSw": "Retours ({{n}}) + swaps ({{s}})"
   },
   "g": {
     "orders": "Commandes",

@@ -112,7 +112,7 @@ export function Focus({ initialId, onClose, onNext, seller, allSellers }: { init
             <span className="ord-ref ltr">{o.ref}</span>
             <StatusBadge kind="conf" status={o.confStatus} />
             {o.confStatus === 'no_answer' && <span className="badge t-mid">{currentLabel(t, o.confStatus, o.attempts)}</span>}
-            {o.followStatus && <StatusBadge kind="follow" status={o.followStatus} />}
+            {o.followStatus && <StatusBadge kind="follow" status={o.followStatus} sub={o.subStatus} />}
             {o.possibleDuplicate && <span className="flag dup">{t('confirmation.dup')}</span>}
             {o.blacklisted && <span className="flag">{t('confirmation.blacklist')}</span>}
             <TrustFlags o={o} />

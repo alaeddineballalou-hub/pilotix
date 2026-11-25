@@ -60,6 +60,19 @@ export function weightFee(kg: number | null | undefined, r: WeightRule): number 
 /** The weight Pilotix declares to the courier for a parcel: its products' weight, whole kilos, at least 1 kg. */
 export const declaredKg = (productsKg: unknown) => Math.max(1, Math.round(Number(productsKg) || 0));
 
+/** The swap step of a parcel given to another customer (« Annulé · swappé »): its fee and its time, SQL on an order `o`. */
+const swapStepSql = (o: string, col: string) =>
+  `(SELECT ${col} FROM order_events e WHERE e.order_id = ${o}.id AND e.kind = 'follow_status' AND e.data->>'swap_to' IS NOT NULL ORDER BY e.at DESC, e.id DESC LIMIT 1)`;
+/**
+ * The swap fee of a parcel its company gave to another customer (« Annulé · swappé »): counted on this order — its
+ * customer did not take the parcel — like a return fee (the owner's rule, 25 Nov 2026), from its own swap step. A swap
+ * made before had its fee on the order that got the parcel: 0 here. SQL on an orders row (alias `o`).
+ */
+export const swapFeeSql = (o = 'o') =>
+  `CASE WHEN ${o}.follow_status = 'cancelled' AND ${o}.sub_status = 'annule_swappe' THEN COALESCE(${swapStepSql(o, `(e.data->>'swap_fee')::numeric`)}, 0) ELSE 0 END`;
+/** When that swap was made (SQL, null for an order never swapped away). */
+export const swapAtSql = (o = 'o') => `CASE WHEN ${o}.follow_status = 'cancelled' AND ${o}.sub_status = 'annule_swappe' THEN ${swapStepSql(o, 'e.at')} END`;
+
 /** orders.courier_fees */
 export interface CourierFees {
   delivery: number | null;

@@ -59,6 +59,19 @@ function blacklistToast(t: (k: string, o?: any) => string, r: { shared?: string[
 function CourierFeesRow({ o }: { o: Order }) {
   const { t } = useTranslation();
   const f = o.courierFees!;
+  // its parcel given to another customer: the company's swap fee, counted on this order like a return fee
+  if (f.swap)
+    return (
+      <>
+        <dt>{t('orders.card.courierFees', { name: o.companyName ?? '' })}</dt>
+        <dd>
+          <span className="px-cfees">
+            <b className="ltr">{da(f.swap.fee)}</b>
+            <small className="muted">{t(f.swap.same ? 'orders.card.feesSwapSame' : 'orders.card.feesSwapOther')}</small>
+          </span>
+        </dd>
+      </>
+    );
   const back = o.followStatus === 'returning' || o.followStatus === 'returned';
   const base = back ? f.ret : f.delivery;
   if (base === null) return null;
@@ -114,7 +127,7 @@ export default function OrderCard({ id, onClose }: { id: number; onClose: () => 
                 <div className="ord-head">
                   <span className="ord-ref ltr">{o.ref}</span>
                   <span className={`badge t-${o.confStatus === 'no_answer' ? 'mid' : CONF_TONE[o.confStatus]}`}>{confLabel(t, o)}</span>
-                  {o.followStatus ? <StatusBadge kind="follow" status={o.followStatus} /> : <span className="muted">—</span>}
+                  {o.followStatus ? <StatusBadge kind="follow" status={o.followStatus} sub={o.subStatus} /> : <span className="muted">—</span>}
                   {o.possibleDuplicate && <span className="flag dup">{t('orders.flag.dup')}</span>}
                   {o.blacklisted && <span className="flag">{t('orders.flag.black')}</span>}
             <TrustFlags o={o} />

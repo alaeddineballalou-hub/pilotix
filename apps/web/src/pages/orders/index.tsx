@@ -380,7 +380,9 @@ function DeliveredReport() {
   const lm1 = ymd(new Date(d0.getFullYear(), d0.getMonth(), 0));
   const d30 = ymd(new Date(d0.getTime() - 30 * 86_400_000));
   const T = r.data?.total;
-  const fees = T ? T.fees + T.overweight + T.returnFees + T.returnOverweight : 0;
+  // (a parcel given to another customer by a swap: its swap fee, like a return fee)
+  const fees = T ? T.fees + T.overweight + T.returnFees + T.returnOverweight + T.swapFees : 0;
+  const swapsS = (m: { swaps: number; swapFees: number }) => (m.swaps ? t('orders.bilan.swapsS', { count: m.swaps, v: da(m.swapFees) }) : '');
   const notes = T && (
     <>
       {T.noTariff > 0 && <p className="muted small">{t('orders.bilan.noTariff', { n: T.noTariff })}</p>}
@@ -428,7 +430,7 @@ function DeliveredReport() {
             <Kpi label={t('orders.bilan.cashed')} value={da(T.cashed)} sub={t('orders.bilan.cashedS', { n: n(T.cashedN) })} />
             <Kpi label={t('orders.bilan.uncashed')} value={da(T.uncashed)} sub={t('orders.bilan.uncashedS', { n: n(T.uncashedN) })} tone={T.uncashed ? 'warn' : undefined} />
             <Kpi label={t('orders.bilan.fees')} value={da(T.fees + T.overweight)} sub={T.overweight ? t('orders.bilan.feesOver', { v: da(T.overweight) }) : t('orders.bilan.feesS')} />
-            <Kpi label={t('orders.bilan.ret')} value={da(T.returnFees + T.returnOverweight)} sub={t('orders.bilan.retS', { n: n(T.returns) })} tone={T.returns ? 'bad' : undefined} />
+            <Kpi label={t('orders.bilan.ret')} value={da(T.returnFees + T.returnOverweight + T.swapFees)} sub={[t('orders.bilan.retS', { n: n(T.returns) }), swapsS(T)].filter(Boolean).join(' · ')} tone={T.returns || T.swaps ? 'bad' : undefined} />
             <Kpi label={t('orders.bilan.net')} value={da(T.amount - fees)} sub={t('orders.bilan.netS')} tone={T.amount - fees < 0 ? 'bad' : 'ok'} />
             <Kpi label={t('orders.bilan.recv')} value={da(T.netToReceive)} sub={t('orders.bilan.recvS')} tone={T.netToReceive < 0 ? 'bad' : undefined} />
           </Kpis>
@@ -483,6 +485,7 @@ function DeliveredReport() {
                       <td className="num" data-l={t('orders.bilan.colRet')}>
                         {n(m.returns)}
                         <small className="ltr">{da(m.returnFees)}</small>
+                        {m.swaps > 0 && <small>{swapsS(m)}</small>}
                       </td>
                       <td className="num" data-l={t('orders.bilan.colNet')}>
                         <b className="ltr">{da(m.netToReceive)}</b>

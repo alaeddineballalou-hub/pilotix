@@ -16,7 +16,7 @@ import { trackOf } from '../../lib/items';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { CopyCode } from '../../ui/CopyCode';
-import { ErrorBox, Help, Icon, Loading } from '../../ui/kit';
+import { ErrorBox, Help, Icon, Loading, SwapTag } from '../../ui/kit';
 import { Filters, SearchBox } from '../ai/agent';
 import { CoBadge } from '../suivi/PhoneSuivi';
 import { useDebounced } from './OrderList';
@@ -75,7 +75,7 @@ function Parcel({ o, badge, children, waiting }: { o: Order; badge?: ReactNode; 
         <span className="pxt-id">
           <b>
             <span className="ltr">{o.ref}</span> · {wilayaName(o.wilayaId)}
-            {o.savRef && <span className="pxd-sav">{t('depot.ph.savTag')}</span>}
+            {o.savRef && <span className="pxd-sav">{t('depot.ph.savTag')}</span>} <SwapTag sub={o.subStatus} />
           </b>
           <small>
             {o.customerName}

@@ -165,13 +165,13 @@
     "ret": "Frais de retour",
     "retS": "{{n}} retours",
     "net": "Net (livré − frais)",
-    "netS": "après livraison, retours et surpoids",
+    "netS": "après livraison, retours, swaps et surpoids",
     "recv": "Net à recevoir",
-    "recvS": "non encaissé − ses frais − frais de retour",
+    "recvS": "non encaissé − ses frais − frais de retour et de swap",
     "noTariff": "⚠ {{n}} colis sans tarif pour leur wilaya : frais repris de la commande. Complétez Sociétés de livraison → Tarifs.",
     "noRule": "Surpoids pas réglé pour : {{list}} (Sociétés de livraison → Tarifs → Surpoids).",
-    "how": "Frais calculés tout seuls : tarif de la société pour la wilaya (domicile ou stop desk), tarif retour, et surpoids = chaque kg au-delà du poids inclus × prix par kg (poids des produits dans Produits & stock).",
-    "howCompany": "« Encaissé par la société » = ce que les clients ont payé à la société ou au livreur. « Net à recevoir » = non encaissé − frais de livraison et surpoids de ces colis − frais de retour de la période.",
+    "how": "Frais calculés tout seuls : tarif de la société pour la wilaya (domicile ou stop desk), tarif retour, frais de swap (colis donné à un autre client, compté comme un retour), et surpoids = chaque kg au-delà du poids inclus × prix par kg (poids des produits dans Produits & stock).",
+    "howCompany": "« Encaissé par la société » = ce que les clients ont payé à la société ou au livreur. « Net à recevoir » = non encaissé − frais de livraison et surpoids de ces colis − frais de retour et de swap de la période.",
     "colCompany": "Société",
     "colN": "Livrés",
     "colAmount": "Encaissé par la société",
@@ -184,7 +184,9 @@
     "parcels": "{{n}} colis",
     "livreur": "livreur",
     "none": "Aucun colis livré sur cette période.",
-    "noCompanyName": "Sans société"
+    "noCompanyName": "Sans société",
+    "swapsS_one": "{{count}} swap · {{v}}",
+    "swapsS_other": "{{count}} swaps · {{v}}"
   },
   "form": {
     "titleNew": "Nouvelle commande",
@@ -416,7 +418,9 @@
     "deleteT": "Supprimer {{ref}} ?",
     "deleteAsk": "Elle disparaît pour de bon, avec son historique. Seulement une commande qui n’est pas partie, sans ticket SAV ni réclamation.",
     "deleteOk": "Oui, supprimer",
-    "deleted": "Commande supprimée"
+    "deleted": "Commande supprimée",
+    "feesSwapSame": "frais de swap (même wilaya), comptés comme un retour",
+    "feesSwapOther": "frais de swap (autre wilaya), comptés comme un retour"
   },
   "ph": {
     "per": {
@@ -446,7 +450,7 @@
     "lReturns_other": "Frais de retour · {{count}} retours",
     "lNet": "Net",
     "recv": "À recevoir des sociétés",
-    "recvS": "non encaissé − ses frais − frais de retour",
+    "recvS": "non encaissé − ses frais − frais de retour et de swap",
     "byCompany": "Par société",
     "inDa": "montants en DA",
     "colCompany": "Société",
@@ -524,7 +528,9 @@
       "amount": "Montant"
     },
     "recvOne": "À recevoir de {{name}}",
-    "searchPh": "Nom, téléphone, PX…"
+    "searchPh": "Nom, téléphone, PX…",
+    "lSwaps_one": "Frais de swap · {{count}} swap",
+    "lSwaps_other": "Frais de swap · {{count}} swaps"
   },
   "ad": {
     "title": "Publicité (d’où vient la commande)",
@@ -672,5 +678,10 @@
     "waiting": "pas encore donné (suivre la page)",
     "eBad": "Le code promo ne marche pas pour cette commande : corrigez-le ou videz le champ."
   },
-  "awareness": "Awareness"
+  "awareness": "Awareness",
+  "swapTag": {
+    "label": "Swap",
+    "inT": "Colis reçu par swap : il était pour un autre client",
+    "outT": "Colis donné à un autre client par swap : ses frais de swap comptent ici, comme un retour"
+  }
 }

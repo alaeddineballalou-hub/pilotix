@@ -404,7 +404,7 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Parcel
       case 'status':
         return (
           <>
-            <StatusBadge kind="follow" status={o.followStatus} />
+            <StatusBadge kind="follow" status={o.followStatus} sub={o.subStatus} />
             {extraOf(o, extra)?.motif && <MotifChip m={extraOf(o, extra)!.motif} />}
           </>
         );

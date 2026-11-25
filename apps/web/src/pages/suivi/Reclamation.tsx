@@ -261,7 +261,7 @@ function SearchOrders() {
                       <td data-l={t('suivi.col.agent')}>{o.agentName ?? '—'}</td>
                       <td data-l={t('suivi.col.fagent')}>{o.followAgentName ?? '—'}</td>
                       <td data-l={t('suivi.col.delivery')}>
-                        <StatusBadge kind="follow" status={o.followStatus} />
+                        <StatusBadge kind="follow" status={o.followStatus} sub={o.subStatus} />
                       </td>
                       <td data-l={t('suivi.col.tracking')}>
                         <CopyCode code={trackOf(o)} />

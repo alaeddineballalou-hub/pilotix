@@ -312,7 +312,8 @@ function Ledger({ rep, label, f, show }: { rep: DRep; label: string | null; f: P
   const { t } = useTranslation();
   const T = rep.total;
   const fees = T.fees + T.overweight;
-  const ret = T.returnFees + T.returnOverweight;
+  // (a parcel given to another customer by a swap: its swap fee, like a return fee)
+  const ret = T.returnFees + T.returnOverweight + T.swapFees;
   const share = T.amount ? T.cashed / T.amount : 0;
   return (
     <section className="pxn-card pxn-led" aria-labelledby="pxn-led-h">
@@ -363,6 +364,7 @@ function Ledger({ rep, label, f, show }: { rep: DRep; label: string | null; f: P
               {t('orders.ph.lReturns', { count: T.returns })}
               <Icon name="chevr" />
             </a>
+            {T.swaps > 0 && <small>{t('orders.bilan.swapsS', { count: T.swaps, v: da(T.swapFees) })}</small>}
           </dt>
           <dd className="ltr">− {da(ret)}</dd>
         </div>
@@ -490,6 +492,7 @@ function CompanySheet({ m, name, label, onClose, onShow }: { m: Agg; name: strin
         {line(t('orders.ph.lFees'), `− ${da(m.fees)}`, 'm')}
         {m.overweight + m.returnOverweight > 0 && line(t('orders.ph.cOver'), `− ${da(m.overweight + m.returnOverweight)}`, 'm')}
         {line(t('orders.ph.lReturns', { count: m.returns }), `− ${da(m.returnFees)}`, 'm')}
+        {m.swaps > 0 && line(t('orders.ph.lSwaps', { count: m.swaps }), `− ${da(m.swapFees)}`, 'm')}
       </dl>
       <div className="pxn-recv st">
         <span>
@@ -672,7 +675,10 @@ function BackStats({ r, label, f, show }: { r: CRep['returns']; label: string | 
             <Bars total={r.n} items={reasons} />
             <dl className="pxn-lines">
               <div className="m">
-                <dt>{t('orders.ph.cost')}</dt>
+                <dt>
+                  {t('orders.ph.cost')}
+                  {r.swaps > 0 && <small>{t('orders.bilan.swapsS', { count: r.swaps, v: da(r.swapFees) })}</small>}
+                </dt>
                 <dd className="ltr">− {da(r.fees)}</dd>
               </div>
               <div>

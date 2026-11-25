@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
 import { da, when, wilayaName } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
-import { Icon } from '../../ui/kit';
+import { Icon, SwapTag } from '../../ui/kit';
 import { CoChip } from '../../ui/CoIcon';
 import { Sheet, Tiles } from '../../ui/Sheet';
 import { Modal } from '../../ui/modal';
@@ -106,6 +106,7 @@ export function ParcelCards({ rows, extra, reasonOf, empty, onOpen, act }: { row
             <div className="pxs-card" role="button" tabIndex={0} onClick={() => onOpen(o)} onKeyDown={(e) => e.key === 'Enter' && onOpen(o)}>
               <div className="pxs-top">
                 <b className="pxp-name">{o.customerName}</b>
+                <SwapTag sub={o.subStatus} />
                 {o.clientScore && <ScoreChip s={o.clientScore} short />}
                 <CoBadge o={o} x={x} />
               </div>

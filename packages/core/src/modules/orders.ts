@@ -54,7 +54,7 @@ import { releaseNoStock } from './nostock';
 import { checkPromo, normCode, PROMO_REASON, takePromo } from './promo';
 import { applyTrust, lookAlikeNote, lookAlikeOf } from './trust';
 import { companyLock, pilotMayRun, pilotPick, setPick, type Pick } from './pilot';
-import { apiFees, courierFeesOf, declaredKg, feesByApi, knownKg, ruleFee, weightRuleOf, weightRuleSet, wholeKg } from './courierfees';
+import { apiFees, courierFeesOf, declaredKg, feesByApi, knownKg, ruleFee, swapAtSql, swapFeeSql, weightRuleOf, weightRuleSet, wholeKg } from './courierfees';
 import { assignedProductIds, seesPurchaseCosts } from './productscope';
 import { checkMontageLines, MONTAGE_SKU, montageProductId, readMontage, shopMontageWilayas } from './montage';
 
@@ -245,15 +245,16 @@ export async function payOf(db: Db, o: Order): Promise<OrderPay | null> {
   return { step: 'waiting', at: null, ref: null };
 }
 
-export async function getOrder(ctx: Ctx, id: number, db: Db = ctx.db, access?: 'sav'): Promise<Order> {
+export async function getOrder(ctx: Ctx, id: number, db: Db = ctx.db, access?: 'sav' | 'swap'): Promise<Order> {
   const sav = access === 'sav' && agencyOf(ctx) !== null && ctx.session.roles.includes('sav');
   if (!sav && noOrderAccess(ctx)) throw forbidden();
   const r = (await db.query(`SELECT ${ORDER_COLS} ${ORDER_FROM} WHERE o.id = $1`, [id]))[0];
   if (!r) throw notFound('Commande introuvable');
   const o = toOrder(r);
   if (onlyOwnDeliveries(ctx) && o.livreurId !== ctx.session.profile.id) throw forbidden();
-  // A store agent can open orders assigned to them, held by them or linked to their SAV work.
-  const own = ownRowSql(ctx);
+  // A store agent can open orders assigned to them, held by them or linked to their SAV work — and a suivi agent, for a
+  // swap, any order of the shop that can take the parcel (the owner's choice, 25 Nov 2026; an agency's: its own only)
+  const own = access === 'swap' && hasRole(ctx.session, 'suivi') ? '' : ownRowSql(ctx);
   if (own && !(await db.query(`SELECT 1 FROM orders o WHERE o.id = $1 AND ${own}`, [id])).length) throw forbidden('Cette commande est donnée à un autre agent');
   // a confirmation agency's agent: only the orders the store gives the agency, for their tasks
   const ag = agencyOf(ctx);
@@ -2095,8 +2096,16 @@ export async function deliveredReport(ctx: Ctx, i: { from: string; to: string },
     `SELECT ${FEE_COLS} ${base} WHERE o.follow_status IN ('returning','returned') AND coalesce(o.returned_at, o.returning_at, o.updated_at) >= $1 AND coalesce(o.returned_at, o.returning_at, o.updated_at) < $2${scope}`,
     [i.from, i.to],
   );
-  type Agg = { companyId: number | null; name: string; kind: string | null; n: number; amount: number; cashed: number; cashedN: number; uncashed: number; uncashedN: number; fees: number; overweight: number; returns: number; returnFees: number; returnOverweight: number; netToReceive: number; noTariff: number };
-  const empty = (companyId: number | null, name: string, kind: string | null): Agg => ({ companyId, name, kind, n: 0, amount: 0, cashed: 0, cashedN: 0, uncashed: 0, uncashedN: 0, fees: 0, overweight: 0, returns: 0, returnFees: 0, returnOverweight: 0, netToReceive: 0, noTariff: 0 });
+  // the parcels their company gave to another customer in the period: their swap fee, like a return fee (the owner's
+  // rule, 25 Nov 2026), on the order whose customer did not take it
+  const S = await ctx.db.query(
+    `SELECT * FROM (SELECT ${FEE_COLS}, ${swapFeeSql()} AS swap_fee, ${swapAtSql()} AS swap_at ${base}
+       WHERE o.follow_status = 'cancelled' AND o.sub_status = 'annule_swappe'${scope}) s
+     WHERE s.swap_fee > 0 AND s.swap_at >= $1 AND s.swap_at < $2`,
+    [i.from, i.to],
+  );
+  type Agg = { companyId: number | null; name: string; kind: string | null; n: number; amount: number; cashed: number; cashedN: number; uncashed: number; uncashedN: number; fees: number; overweight: number; returns: number; returnFees: number; returnOverweight: number; swaps: number; swapFees: number; netToReceive: number; noTariff: number };
+  const empty = (companyId: number | null, name: string, kind: string | null): Agg => ({ companyId, name, kind, n: 0, amount: 0, cashed: 0, cashedN: 0, uncashed: 0, uncashedN: 0, fees: 0, overweight: 0, returns: 0, returnFees: 0, returnOverweight: 0, swaps: 0, swapFees: 0, netToReceive: 0, noTariff: 0 });
   const M = new Map<number, Agg>();
   const T = empty(null, 'Total', null);
   const noRule = new Set<string>();
@@ -2132,6 +2141,14 @@ export async function deliveredReport(ctx: Ctx, i: { from: string; to: string },
       z.returnFees += x.ret;
       z.returnOverweight += x.extraRet;
       z.netToReceive -= x.ret + x.extraRet;
+    }
+  }
+  for (const o of S) {
+    const fee = num(o.swap_fee);
+    for (const z of [g(o), T]) {
+      z.swaps++;
+      z.swapFees += fee;
+      z.netToReceive -= fee;
     }
   }
   return { total: T, companies: [...M.values()].sort((a, b) => b.amount - a.amount), noOverweightRule: [...noRule] };
@@ -2199,9 +2216,10 @@ export async function cancelReport(ctx: Ctx, i: { from: string; to: string }, te
     [i.from, i.to],
   );
   const d = await deliveredReport(ctx, i, 'sales', team);
+  // (what they cost: their return fees, and the swap fees of the parcels given to another customer, like a return)
   const companies = d.companies
-    .filter((c) => c.returns > 0)
-    .map((c) => ({ companyId: c.companyId, name: c.name, kind: c.kind, returns: c.returns, delivered: c.n, rate: rate(c.returns, c.n), fees: c.returnFees + c.returnOverweight }))
+    .filter((c) => c.returns > 0 || c.swaps > 0)
+    .map((c) => ({ companyId: c.companyId, name: c.name, kind: c.kind, returns: c.returns, delivered: c.n, rate: rate(c.returns, c.n), fees: c.returnFees + c.returnOverweight + c.swapFees, swaps: c.swaps, swapFees: c.swapFees }))
     .sort((a, b) => b.returns - a.returns);
   return {
     conf: { n: C.length, amount, confirmed, rate: rate(C.length, confirmed), byStatus, reasons: topReasons(C as any), agents },
@@ -2210,7 +2228,9 @@ export async function cancelReport(ctx: Ctx, i: { from: string; to: string }, te
       returning: B.filter((r: any) => r.s === 'returning').length,
       returned: B.filter((r: any) => r.s === 'returned').length,
       amount: B.reduce((s: number, r: any) => s + num(r.total), 0),
-      fees: d.total.returnFees + d.total.returnOverweight,
+      fees: d.total.returnFees + d.total.returnOverweight + d.total.swapFees,
+      swaps: d.total.swaps,
+      swapFees: d.total.swapFees,
       delivered: d.total.n,
       rate: rate(B.length, d.total.n),
       reasons: topReasons(B as any),
@@ -2279,6 +2299,11 @@ export const ordersProcs = {
         const w = ruleFee(row.kind, rule, knownKg(row.courier_fees));
         courierFees = { delivery: num(row.is_stopdesk ? row.desk : row.home), ret: num(row.return_fee), weight: w, weightRet: rule.onReturn ? w : 0, kg: found, declaredKg: declaredKg(row.kg), exact: false, byRule: true };
       }
+    }
+    // its parcel given to another customer: what the company takes is its swap fee, counted here like a return fee
+    if (o.followStatus === 'cancelled' && o.subStatus === 'annule_swappe') {
+      const sw = (await ctx.db.query(`SELECT ${swapFeeSql()} AS fee, (SELECT e.data->>'swap_same' FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.data->>'swap_to' IS NOT NULL ORDER BY e.at DESC, e.id DESC LIMIT 1) AS same FROM orders o WHERE o.id = $1`, [id]))[0];
+      if (num(sw?.fee) > 0) courierFees = { delivery: null, ret: null, weight: 0, weightRet: 0, kg: null, declaredKg: declaredKg(row?.kg), exact: false, swap: { fee: num(sw.fee), same: sw.same === 'true' } };
     }
     return { ...o, pay: await payOf(ctx.db, o), courierFees };
   }),

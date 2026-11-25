@@ -1,9 +1,11 @@
 // API Integration: a company's prices come from its API (locked, taken again, « changed » counted), swap fees (ZR's by
-// API, else 50 / 100 DA or typed) put on the order that gets a swapped parcel, a company's « Alertes » statuses, and the
+// API, else 50 / 100 DA or typed) counted on the order whose customer did not take the parcel, like a return fee (owner,
+// 25 Nov 2026: « include swap fees everywhere as return »), a company's « Alertes » statuses, and the
 // order card's payment step (not received → the company has it → paid, to pick up → received).
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
+import { moneyOf, moneyRows } from '../modules/ads';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -58,8 +60,9 @@ test('swap fees: ZR by its API (locked), others 50 / 100 DA or typed, none for o
   await assert.rejects(call('delivery.saveSwapFees', await as(EMAILS.suivi), { companyId: yal, same: 1, other: 2 }), /Accès refusé/);
 });
 
-test('a swapped parcel: the swap fee is on the cost of the order that gets it', async () => {
+test('a swapped parcel: its swap fee counts on the order whose customer did not take it, like a return fee', async () => {
   const suivi = await as(EMAILS.suivi);
+  const admin = await as(EMAILS.admin);
   const zr = await companyId('zr');
   // (not one of ZR's southern wilayas: those swap only inside the wilaya; a home delivery: no bureau of another company)
   const a = (await db.query(`SELECT id, wilaya_id FROM orders WHERE follow_status = 'returning' AND shipped_at IS NOT NULL AND tracking IS NOT NULL AND NOT (wilaya_id = ANY('{1,8,11,30,32,45,49,52,53,54,58}'::int[])) ORDER BY id LIMIT 1`))[0];
@@ -73,10 +76,26 @@ test('a swapped parcel: the swap fee is on the cost of the order that gets it', 
      SELECT $2, product_id, variant_id, name, variant_title, qty, unit_price, purchase_price, is_upsell, for_product_id FROM order_items WHERE order_id = $1`,
     [a.id, b.id],
   );
+  const day = { from: new Date(Date.now() - 86_400_000).toISOString(), to: new Date(Date.now() + 86_400_000).toISOString() };
+  const before: any = await call('orders.deliveredReport', admin, day);
   const r: any = await call('suivi.swap', suivi, { fromId: Number(a.id), toId: Number(b.id) });
-  assert.equal(r.to.deliveryCost, 400 + 100, 'another wilaya: 100 DA more');
-  const ev = (await db.query(`SELECT note FROM order_events WHERE order_id = $1 AND kind = 'follow_status' ORDER BY id DESC LIMIT 1`, [b.id]))[0];
-  assert.match(ev.note, /frais d’échange 100 DA \(autre wilaya\)/);
+  assert.equal(r.swapFee, 100, 'another wilaya: 100 DA');
+  assert.equal(r.to.deliveryCost, 400, 'the new order keeps its own delivery price');
+  const ev = (await db.query(`SELECT note FROM order_events WHERE order_id = $1 AND kind = 'follow_status' ORDER BY id DESC LIMIT 1`, [a.id]))[0];
+  assert.match(ev.note, /frais d’échange 100 DA \(autre wilaya\), comptés sur PX\d+ comme un retour/);
+  // the old order's card: what the company takes for the swap
+  const card: any = await call('orders.get', admin, { id: Number(a.id) });
+  assert.deepEqual(card.courierFees?.swap, { fee: 100, same: false });
+  // its profit (products, ads, campaigns): in the returns' money, never a return
+  const m = await moneyOf(db, await moneyRows(db, 'o.id = $1', [Number(a.id)]), 0);
+  assert.deepEqual([m.ret, m.sw, m.r, m.x], [100, 1, 0, 1]);
+  // the Bilan des livraisons: with the returns' fees, out of what the company owes
+  const after: any = await call('orders.deliveredReport', admin, day);
+  assert.equal(after.total.swaps - before.total.swaps, 1);
+  assert.equal(after.total.swapFees - before.total.swapFees, 100);
+  assert.equal(before.total.netToReceive - after.total.netToReceive, 100);
+  const back: any = await call('orders.cancelReport', admin, day);
+  assert.ok(back.returns.swapFees >= 100 && back.returns.fees >= back.returns.swapFees);
 });
 
 test('a company’s « Alertes »: one or many of its statuses send the order to Suivi › Alertes', async () => {

@@ -300,7 +300,7 @@ function Dash({ d, prev, label, onProd, onAdset, product }: { d: Ov; prev: Ov | 
               [t('mkph.wf.achat'), -m.achat, 'n'],
               [t('mkph.wf.liv'), -m.liv, 'n'],
               [t('mkph.wf.conf'), -m.conf, 'n'],
-              [t('mkph.wf.ret', { n: m.r }), -m.ret, 'o'],
+              [m.sw ? t('mkph.wf.retSw', { n: m.r, s: m.sw }) : t('mkph.wf.ret', { n: m.r }), -m.ret, 'o'],
               [t('mkph.wf.pub', { v: usd(m.spendUsd, 0) }), -m.pub, 'r'],
             ] as [string, number, string][]
           ).map(([l, v, c]) => (

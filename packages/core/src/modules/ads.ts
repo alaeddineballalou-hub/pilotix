@@ -24,7 +24,7 @@ import { bad, Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, setRaw } from './admin';
 import { leadOf } from './leadkind';
-import { knownKg, ruleFee, weightRuleOf, type WeightRule } from './courierfees';
+import { knownKg, ruleFee, swapFeeSql, weightRuleOf, type WeightRule } from './courierfees';
 import { checkRules } from './pilotchecks';
 
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -240,6 +240,8 @@ const MONEY_COLS = `o.id, o.created_at, o.conf_status, o.follow_status, o.total,
             -- a cancel's last note: an attack (no answer after N calls, « n'a pas commandé ») or a real client's no
             CASE WHEN o.conf_status = 'cancelled'
                  THEN (SELECT e.note FROM order_events e WHERE e.order_id = o.id AND e.kind = 'conf_status' ORDER BY e.at DESC, e.id DESC LIMIT 1) END AS conf_note,
+            -- a parcel its company gave to another customer: its swap fee, counted here like a return fee
+            ${swapFeeSql()} AS swap_fee,
             o.courier_fees AS cf`;
 
 /** Orders by their first product, for some products, created in [from, to] (Algiers days). */
@@ -288,6 +290,8 @@ export interface Money {
   r: number; // returned
   enRoute: number; // still on the road (not counted yet)
   x?: number; // cancelled (by the customer or as fake / wrong number)
+  /** parcels their company gave to another customer (swap): their swap fee is in `ret`, like a return fee */
+  sw?: number;
   qty: number;
   rev: number;
   achat: number;
@@ -305,7 +309,7 @@ export const confirmedOrder = (o: { conf_status: unknown; conf_note?: string | n
 /** Profit of a set of orders, line by line (the original "Bénéfice réel · ligne par ligne"). share = fraction counted (marketer share). */
 export async function moneyOf(db: Db, orders: any[], pubDzd: number, share = 1): Promise<Money> {
   const plans = await getSetting(db, 'payPlans');
-  let n = 0, c = 0, ref = 0, att = 0, d = 0, r = 0, x = 0, enRoute = 0, qty = 0, rev = 0, achat = 0, liv = 0, conf = 0, ret = 0;
+  let n = 0, c = 0, ref = 0, att = 0, d = 0, r = 0, x = 0, sw = 0, enRoute = 0, qty = 0, rev = 0, achat = 0, liv = 0, conf = 0, ret = 0;
   for (const o of orders) {
     n++;
     // what became of the lead (Confirmation › Statistiques' own rule): confirmed, refused by a real client, an attack
@@ -326,10 +330,15 @@ export async function moneyOf(db: Db, orders: any[], pubDzd: number, share = 1):
       ret += num(o.return_fee);
     } else if (fs === 'cancelled' || ['cancelled', 'fake', 'wrong_number'].includes(o.conf_status)) {
       x++;
+      // its parcel given to another customer: the swap fee, like a return fee (the owner's rule, 25 Nov 2026)
+      if (num(o.swap_fee) > 0) {
+        sw++;
+        ret += num(o.swap_fee);
+      }
     } else if (fs && ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange', 'returning'].includes(fs)) enRoute++;
   }
   const k = (v: number) => Math.round(v * share);
-  const m = { n: k(n), c: k(c), ref: k(ref), att: k(att), d: k(d), r: k(r), x: k(x), enRoute: k(enRoute), qty: k(qty), rev: k(rev), achat: k(achat), liv: k(liv), conf: k(conf), ret: k(ret) };
+  const m = { n: k(n), c: k(c), ref: k(ref), att: k(att), d: k(d), r: k(r), x: k(x), sw: k(sw), enRoute: k(enRoute), qty: k(qty), rev: k(rev), achat: k(achat), liv: k(liv), conf: k(conf), ret: k(ret) };
   const avant = m.rev - m.achat - m.liv - m.conf - m.ret;
   const pub = Math.round(pubDzd);
   return { ...m, avant, pub, net: avant - pub };
@@ -608,9 +617,9 @@ async function overview(ctx: Ctx, i: z.infer<typeof Period>) {
   const money: Money = [...tot, ...groupRows].reduce(
     (s, p) => {
       const m = p.money;
-      return { n: s.n + m.n, c: s.c + m.c, ref: s.ref + m.ref, att: s.att + m.att, d: s.d + m.d, r: s.r + m.r, x: (s.x ?? 0) + (m.x ?? 0), enRoute: s.enRoute + m.enRoute, qty: s.qty + m.qty, rev: s.rev + m.rev, achat: s.achat + m.achat, liv: s.liv + m.liv, conf: s.conf + m.conf, ret: s.ret + m.ret, avant: s.avant + m.avant, pub: s.pub + m.pub, net: s.net + m.net };
+      return { n: s.n + m.n, c: s.c + m.c, ref: s.ref + m.ref, att: s.att + m.att, d: s.d + m.d, r: s.r + m.r, x: (s.x ?? 0) + (m.x ?? 0), sw: (s.sw ?? 0) + (m.sw ?? 0), enRoute: s.enRoute + m.enRoute, qty: s.qty + m.qty, rev: s.rev + m.rev, achat: s.achat + m.achat, liv: s.liv + m.liv, conf: s.conf + m.conf, ret: s.ret + m.ret, avant: s.avant + m.avant, pub: s.pub + m.pub, net: s.net + m.net };
     },
-    { n: 0, c: 0, ref: 0, att: 0, d: 0, r: 0, x: 0, enRoute: 0, qty: 0, rev: 0, achat: 0, liv: 0, conf: 0, ret: 0, avant: 0, pub: 0, net: 0 },
+    { n: 0, c: 0, ref: 0, att: 0, d: 0, r: 0, x: 0, sw: 0, enRoute: 0, qty: 0, rev: 0, achat: 0, liv: 0, conf: 0, ret: 0, avant: 0, pub: 0, net: 0 },
   );
   // spend of unlinked ad sets still counts as ads spend for the shop total (a group's ad sets are the group's)
   const unlinked = inPeriod.filter((r) => {

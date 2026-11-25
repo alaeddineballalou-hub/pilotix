@@ -9,6 +9,12 @@ export const SWAP_SAME_WILAYA_ONLY: readonly number[] = [1, 8, 11, 30, 32, 45, 4
 /** The delivery companies whose API makes the swap itself (ZR's « parcel-modification-requests/swap »). */
 export const SWAP_API_KINDS: readonly string[] = ['zr'];
 
+/** The two orders of a swap, by their delivery sub-status: the one that got the parcel (« En livraison ») and the one
+ *  whose customer did not take it (« Annulé », its swap fee counted like a return fee). Both show a small « Swap » tag. */
+export const SUB_SWAP_IN = 'livraison_swappe';
+export const SUB_SWAP_OUT = 'annule_swappe';
+export const isSwapSub = (sub: string | null | undefined) => sub === SUB_SWAP_IN || sub === SUB_SWAP_OUT;
+
 const plain = (s: unknown) =>
   String(s ?? '')
     .toLowerCase()

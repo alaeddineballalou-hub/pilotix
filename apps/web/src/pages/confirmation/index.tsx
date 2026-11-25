@@ -412,7 +412,7 @@ export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | 
       case 'follow':
         return (
           <>
-            <StatusBadge kind="follow" status={r.followStatus} />
+            <StatusBadge kind="follow" status={r.followStatus} sub={r.subStatus} />
             {r.companyName && (
               <small>
                 {r.companyName}

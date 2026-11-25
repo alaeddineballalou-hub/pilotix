@@ -197,6 +197,27 @@ test('swap at ZR (server): one click through ZR’s swap API, its new number kep
   assert.deepEqual(after, before);
 });
 
+test('a suivi agent: every waiting order of the shop in his swap list (not only his own), then the parcel in his « En livraison » with « Swap »', async () => {
+  const nadia = await as(EMAILS.suivi);
+  const me = Number(nadia.session.profile.id);
+  const a = await cancelledAtZr(19);
+  await db.query('UPDATE orders SET follow_agent_id = $2 WHERE id = $1', [a, me]);
+  const b = await waiting(19, a);
+  // b: nobody's yet — never given to him, typed by someone else
+  await db.query('UPDATE orders SET agent_id = NULL, follow_agent_id = NULL, created_by = NULL, locked_by = NULL, locked_until = NULL WHERE id = $1', [b]);
+  await assert.rejects(call('orders.get', nadia, { id: b }), /autre agent/);
+  const got: any = await call('suivi.swapCandidates', nadia, { fromId: a });
+  assert.ok(got.rows.some((x: any) => x.id === b), 'in his swap list');
+  const phone = (await db.query('SELECT phone FROM orders WHERE id = $1', [b]))[0].phone;
+  const found: any = await call('suivi.swapCandidates', nadia, { fromId: a, q: phone });
+  assert.ok(found.rows.some((x: any) => x.id === b), 'and found by its phone');
+  const r: any = await call('suivi.swap', nadia, { fromId: a, toId: b });
+  assert.deepEqual([r.to.followStatus, r.to.subStatus, r.to.followAgentId], ['out_for_delivery', 'livraison_swappe', me], 'followed by him, with its « Swap » tag');
+  assert.equal(r.from.subStatus, 'annule_swappe');
+  const road: any = await call('suivi.list', nadia, { tab: 'enlivraison', pageSize: 500 });
+  assert.ok(road.rows.some((x: any) => x.id === b), 'in his « En livraison »');
+});
+
 test('a swap Pilotix made alone (no swap API) can be undone: the parcel back to its order, the other one back to prepare', async () => {
   const admin = await as(EMAILS.admin);
   const ya = await companyId('yalidine');
@@ -205,9 +226,13 @@ test('a swap Pilotix made alone (no swap API) can be undone: the parcel back to 
   used.add(a);
   await db.query(`UPDATE orders SET company_id = $2, follow_status = 'returning', sub_status = NULL, tracking = 'YAL-UNDO-1', ext_id = NULL, cashed = false WHERE id = $1`, [a, ya]);
   const b = await waiting(16, a);
+  const fa = Number((await db.query(`SELECT id FROM profiles WHERE email = $1`, [EMAILS.suivi]))[0].id);
+  await db.query('UPDATE orders SET follow_agent_id = $2 WHERE id = $1', [a, fa]);
+  await db.query('UPDATE orders SET follow_agent_id = NULL WHERE id = $1', [b]);
   const swapped: any = await call('suivi.swap', admin, { fromId: a, toId: b });
   assert.equal(swapped.viaApi, false);
   assert.equal(swapped.to.tracking, 'YAL-UNDO-1');
+  assert.equal(swapped.to.followAgentId, fa, 'the parcel stays with the suivi agent who followed it');
   const last: any = await call('orders.lastChange', admin, { id: b });
   assert.equal(last.why, 'swap');
   assert.equal(last.swapUndo, true);
@@ -218,6 +243,7 @@ test('a swap Pilotix made alone (no swap API) can be undone: the parcel back to 
   assert.equal(back.to.tracking, null);
   assert.equal(back.to.followStatus, 'to_prepare');
   assert.equal(back.to.shippedAt, null, 'its own stock never left: it leaves with its own parcel');
+  assert.equal(back.to.followAgentId, null, 'its own suivi agent again (nobody yet)');
   await assert.rejects(call('suivi.unswap', admin, { id: a }), /rien à annuler/);
 });
 

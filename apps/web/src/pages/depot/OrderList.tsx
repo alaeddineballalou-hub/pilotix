@@ -249,7 +249,7 @@ export function DepotOrderList({
       case 'follow':
         return (
           <td key={k} data-l={label[k]}>
-            <StatusBadge kind="follow" status={o.followStatus} />
+            <StatusBadge kind="follow" status={o.followStatus} sub={o.subStatus} />
           </td>
         );
       case 'partner':

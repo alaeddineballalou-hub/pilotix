@@ -407,7 +407,8 @@ function ProfitLines({ d, owner }: { d: Overview; owner: boolean }) {
     [t('ads.plRows.achat', { qty: m.qty }), '', -m.achat],
     [t('ads.plRows.liv', { d: m.d }), '', -m.liv],
     [t('ads.plRows.conf', { d: m.d }), '', -m.conf],
-    [t('ads.plRows.ret', { r: m.r }), '', -m.ret],
+    // (with the swap fees of the parcels given to another customer, like a return)
+    [m.sw ? t('ads.plRows.retSw', { r: m.r, s: m.sw }) : t('ads.plRows.ret', { r: m.r }), '', -m.ret],
     [t('ads.plRows.avant'), per(m.avant), m.avant, 'sub'],
     [t('ads.plRows.pub'), t('ads.plRows.pubDetail', { usd: usd(m.spendUsd) }), -m.pub],
     [t('ads.plRows.net'), per(m.net), m.net, 'tot'],

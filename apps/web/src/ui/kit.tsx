@@ -1,5 +1,5 @@
 // Pilotix UI kit — same markup and class names as the original app, so its stylesheet applies unchanged.
-import { CONF_TONE, ConfStatus, FOLLOW_TONE, FollowStatus, SAV_TONE, SavStatus, Tone } from '@pilotix/shared';
+import { CONF_TONE, ConfStatus, FOLLOW_TONE, FollowStatus, isSwapSub, SAV_TONE, SavStatus, SUB_SWAP_IN, Tone } from '@pilotix/shared';
 import { ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -155,11 +155,31 @@ export function TicketTag({ savRef }: { savRef: string | null | undefined }) {
   return <span className="px-ticket ltr">{t('sav.tag', { ref: savRef })}</span>;
 }
 
-export function StatusBadge({ kind, status }: { kind: 'conf' | 'follow' | 'sav'; status: string | null | undefined }) {
+/** The two orders of a swap: a small « Swap » tag next to their delivery status, everywhere they show (the owner's choice,
+ *  25 Nov 2026) — the one that got the parcel (« En livraison »), the one whose customer did not take it (« Annulé »). */
+export function SwapTag({ sub }: { sub: string | null | undefined }) {
+  const { t } = useTranslation();
+  if (!isSwapSub(sub)) return null;
+  return (
+    <span className="px-swaptag" title={t(sub === SUB_SWAP_IN ? 'orders.swapTag.inT' : 'orders.swapTag.outT')}>
+      {t('orders.swapTag.label')}
+    </span>
+  );
+}
+
+/** `sub`: the order's delivery sub-status — a swapped parcel gets its « Swap » tag next to the status. */
+export function StatusBadge({ kind, status, sub }: { kind: 'conf' | 'follow' | 'sav'; status: string | null | undefined; sub?: string | null }) {
   const { t } = useTranslation();
   if (!status) return <span className="muted">—</span>;
   const tone: Tone = kind === 'conf' ? CONF_TONE[status as ConfStatus] : kind === 'follow' ? FOLLOW_TONE[status as FollowStatus] : SAV_TONE[status as SavStatus];
-  return <span className={`badge t-${tone ?? 'off'}`}>{t(`${kind === 'sav' ? 'sav.status' : kind === 'conf' ? 'status.conf' : 'status.follow'}.${status}`, { defaultValue: status })}</span>;
+  const badge = <span className={`badge t-${tone ?? 'off'}`}>{t(`${kind === 'sav' ? 'sav.status' : kind === 'conf' ? 'status.conf' : 'status.follow'}.${status}`, { defaultValue: status })}</span>;
+  if (kind !== 'follow' || !isSwapSub(sub)) return badge;
+  return (
+    <span className="px-st-swap">
+      {badge}
+      <SwapTag sub={sub} />
+    </span>
+  );
 }
 
 /** The coloured status pill that is also a select (confirmation queue). */

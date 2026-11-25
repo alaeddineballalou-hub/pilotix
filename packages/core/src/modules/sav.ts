@@ -5,7 +5,7 @@ import { EXCHANGE_KINDS, SAV_STATUSES, SAV_TYPES, SAV_WISHES } from '@pilotix/sh
 import type { Order, Page } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
-import { bad, Ctx, forbidden, notFound, proc, withActionLock } from '../rpc';
+import { bad, Ctx, forbidden, hasRole, notFound, proc, withActionLock } from '../rpc';
 import { addEvent, createOrder, deliveredReport, getOrder, OrderNoteInput, saveOrderNote } from './orders';
 import { agencyLead, agencyOf, ownRowSql, ownTicketSql } from './agencyscope';
 import { savFee } from '../settings';
@@ -478,14 +478,14 @@ async function createExchangeLocked(ctx: Ctx, input: z.infer<typeof ExchangeInpu
 }
 
 /** Orders by partial ref (PX12…), partial phone, tracking or name — newest first. */
-export async function findOrders(ctx: Ctx, q: string, limit = 8, extra?: (w: Where) => void, orderBy = 'o.created_at DESC', access?: 'sav'): Promise<Order[]> {
+export async function findOrders(ctx: Ctx, q: string, limit = 8, extra?: (w: Where) => void, orderBy = 'o.created_at DESC', access?: 'sav' | 'swap'): Promise<Order[]> {
   const w = new Where();
   const digits = q.replace(/\D/g, '');
   if (digits.length >= 4 && digits.length === q.replace(/[\s+.-]/g, '').length) w.add(`(o.phone LIKE '%' || ? || '%' OR o.phone2 LIKE '%' || ? || '%' OR o.tracking ILIKE '%' || ? || '%')`, digits.slice(-9), digits.slice(-9), digits);
   else w.add(`(upper(o.ref) LIKE upper(?) || '%' OR o.tracking ILIKE ? || '%' OR o.customer_name ILIKE '%' || ? || '%')`, q.trim(), q.trim(), q.trim());
   extra?.(w);
-  // the store's own confirmation agent finds only his own orders
-  const own = ownRowSql(ctx);
+  // the store's own confirmation agent finds only his own orders (a suivi agent's swap: any of the shop, getOrder)
+  const own = access === 'swap' && hasRole(ctx.session, 'suivi') ? '' : ownRowSql(ctx);
   if (own) w.add(own);
   const rows = await ctx.db.query(`SELECT o.id FROM sales o ${w.sql} ORDER BY ${orderBy} LIMIT ${w.p(limit)}`, w.params);
   const out: Order[] = [];
@@ -588,11 +588,12 @@ export async function savStats(ctx: Ctx, from: string, to: string) {
       feesPaid: num(p.fees_paid),
       diffPaid: num(p.diff_paid),
       courierFees: money.total.fees + money.total.overweight,
-      returnFees: money.total.returnFees + money.total.returnOverweight,
+      // (a parcel given to another customer by a swap: its swap fee, like a return fee)
+      returnFees: money.total.returnFees + money.total.returnOverweight + money.total.swapFees,
       cashed: money.total.cashed,
       uncashed: money.total.uncashed,
       netToReceive: money.total.netToReceive,
-      result: money.total.amount - (money.total.fees + money.total.overweight) - (money.total.returnFees + money.total.returnOverweight),
+      result: money.total.amount - (money.total.fees + money.total.overweight) - (money.total.returnFees + money.total.returnOverweight + money.total.swapFees),
     },
     satisfaction: {
       n: satN,
@@ -603,7 +604,7 @@ export async function savStats(ctx: Ctx, from: string, to: string) {
       ends: satEnd.map((r: any) => ({ key: r.k as string, n: num(r.n), rate: num(r.n) ? num(r.ok) / num(r.n) : 0 })),
       unhappy: satReasons.map((r: any) => ({ ref: r.ref as string, satisfaction: num(r.satisfaction), note: (r.satisfaction_note as string) ?? '', at: iso(r.satisfaction_at), customerName: (r.customer_name as string) ?? '' })),
     },
-    companies: money.companies.map((c) => ({ companyId: c.companyId, name: c.name, delivered: c.n, returns: c.returns, amount: c.amount, fees: c.fees + c.overweight + c.returnFees + c.returnOverweight })),
+    companies: money.companies.map((c) => ({ companyId: c.companyId, name: c.name, delivered: c.n, returns: c.returns, amount: c.amount, fees: c.fees + c.overweight + c.returnFees + c.returnOverweight + c.swapFees })),
   };
 }
 

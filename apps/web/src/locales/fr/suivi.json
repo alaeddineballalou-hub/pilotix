@@ -229,7 +229,7 @@
     "apiTo": "Nouveau client : {{name}} · {{phone}}",
     "apiWhere": "Adresse : {{place}}",
     "apiTotal": "À encaisser : {{v}}",
-    "apiFee": "Frais de swap {{company}} : {{v}}"
+    "apiFee": "Frais de swap {{company}} : {{v}} · comptés sur {{ref}}, comme un retour"
   },
   "rec": {
     "tabs": {

@@ -90,9 +90,10 @@
     "pub": "Publicité",
     "net": "Bénéfice net",
     "perDelivered": "{{v}} par livrée",
-    "pubDetail": "{{usd}} × taux du mois"
+    "pubDetail": "{{usd}} × taux du mois",
+    "retSw": "Retours ({{r}} colis) + swaps ({{s}})"
   },
-  "plFoot": "Commandes créées du {{from}} au {{to}} dont c’est le produit commandé au départ ({{n}} confirmées). Confirmation : plan de paie des agents. Retours : frais de retour de la société. {{enRoute}} colis en route pas encore comptés.",
+  "plFoot": "Commandes créées du {{from}} au {{to}} dont c’est le produit commandé au départ ({{n}} confirmées). Confirmation : plan de paie des agents. Retours : frais de retour de la société, et frais de swap d’un colis donné à un autre client. {{enRoute}} colis en route pas encore comptés.",
   "plShare": "Votre part : les commandes du produit sont partagées selon la dépense de chaque marketeur.",
   "adsets": "Ad sets",
   "adsetsMine": "Mes ad sets",

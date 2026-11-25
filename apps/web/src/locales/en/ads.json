@@ -90,9 +90,10 @@
     "pub": "Ads",
     "net": "Net profit",
     "perDelivered": "{{v}} per delivered",
-    "pubDetail": "{{usd}} × month rate"
+    "pubDetail": "{{usd}} × month rate",
+    "retSw": "Returns ({{r}} parcels) + swaps ({{s}})"
   },
-  "plFoot": "Orders created from {{from}} to {{to}} where this is the product first ordered ({{n}} confirmed). Confirmation: agents' pay plan. Returns: courier return fees. {{enRoute}} parcels on the road not counted yet.",
+  "plFoot": "Orders created from {{from}} to {{to}} where this is the product first ordered ({{n}} confirmed). Confirmation: agents' pay plan. Returns: courier return fees, and the swap fee of a parcel given to another customer. {{enRoute}} parcels on the road not counted yet.",
   "plShare": "Your share: the product's orders are shared by each marketer's spend.",
   "adsets": "Ad sets",
   "adsetsMine": "My ad sets",

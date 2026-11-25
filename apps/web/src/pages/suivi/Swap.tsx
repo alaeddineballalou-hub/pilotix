@@ -125,7 +125,7 @@ function SwapDoneDesk({ from, to, wasPrepared, swapFee, onClose }: CopyProps) {
         <li>{t('suivi.sheet.apiTo', { name: to.customerName, phone: to.phone })}</li>
         <li>{t('suivi.sheet.apiWhere', { place: [wilayaName(to.wilayaId), to.commune].filter(Boolean).join(' · ') })}</li>
         <li>{t('suivi.sheet.apiTotal', { v: da(to.total) })}</li>
-        {!!swapFee && <li>{t('suivi.sheet.apiFee', { company: to.companyName ?? '', v: da(swapFee) })}</li>}
+        {!!swapFee && <li>{t('suivi.sheet.apiFee', { company: to.companyName ?? '', v: da(swapFee), ref: from.ref })}</li>}
       </ul>
       {wasPrepared !== undefined && (
         <p className={wasPrepared ? 'badbox' : 'warnbox'}>

@@ -221,7 +221,7 @@ export function OrderTable(p: OrderTableProps) {
       case 'follow':
         return (
           <td key={c} data-l={label[c]}>
-            <StatusBadge kind="follow" status={o.followStatus} />
+            <StatusBadge kind="follow" status={o.followStatus} sub={o.subStatus} />
           </td>
         );
       case 'company':

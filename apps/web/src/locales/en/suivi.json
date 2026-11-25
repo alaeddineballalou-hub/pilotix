@@ -229,7 +229,7 @@
     "apiTo": "New customer: {{name}} · {{phone}}",
     "apiWhere": "Address: {{place}}",
     "apiTotal": "To collect: {{v}}",
-    "apiFee": "{{company}} swap fee: {{v}}"
+    "apiFee": "{{company}} swap fee: {{v}} · counted on {{ref}}, like a return"
   },
   "rec": {
     "tabs": {

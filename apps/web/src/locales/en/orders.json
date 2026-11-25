@@ -165,13 +165,13 @@
     "ret": "Return fees",
     "retS": "{{n}} returns",
     "net": "Net (delivered − fees)",
-    "netS": "after delivery, returns and overweight",
+    "netS": "after delivery, returns, swaps and overweight",
     "recv": "Net to receive",
-    "recvS": "not cashed − its fees − return fees",
+    "recvS": "not cashed − its fees − return and swap fees",
     "noTariff": "⚠ {{n}} parcels without a price for their wilaya: fee taken from the order. Complete Delivery companies → Prices.",
     "noRule": "Overweight not set for: {{list}} (Delivery companies → Rates → Overweight).",
-    "how": "Fees computed automatically: the courier price for the wilaya (home or stop desk), return price, and overweight = each kg above the included weight × price per kg (product weights in Products & stock).",
-    "howCompany": "“Cashed by the courier” = what customers paid to the courier or driver. “Net to receive” = not cashed − delivery fees and overweight of these parcels − return fees of the period.",
+    "how": "Fees computed automatically: the courier price for the wilaya (home or stop desk), return price, swap fee (a parcel given to another customer, counted like a return), and overweight = each kg above the included weight × price per kg (product weights in Products & stock).",
+    "howCompany": "“Cashed by the courier” = what customers paid to the courier or driver. “Net to receive” = not cashed − delivery fees and overweight of these parcels − return and swap fees of the period.",
     "colCompany": "Company",
     "colN": "Delivered",
     "colAmount": "Cashed by the courier",
@@ -184,7 +184,9 @@
     "parcels": "{{n}} parcels",
     "livreur": "driver",
     "none": "No parcel delivered in this period.",
-    "noCompanyName": "No company"
+    "noCompanyName": "No company",
+    "swapsS_one": "{{count}} swap · {{v}}",
+    "swapsS_other": "{{count}} swaps · {{v}}"
   },
   "form": {
     "titleNew": "New order",
@@ -416,7 +418,9 @@
     "deleteT": "Delete {{ref}}?",
     "deleteAsk": "It goes for good, with its history. Only an order that has not left, with no after-sales ticket or claim.",
     "deleteOk": "Yes, delete",
-    "deleted": "Order deleted"
+    "deleted": "Order deleted",
+    "feesSwapSame": "swap fee (same wilaya), counted like a return",
+    "feesSwapOther": "swap fee (another wilaya), counted like a return"
   },
   "ph": {
     "per": {
@@ -446,7 +450,7 @@
     "lReturns_other": "Return fees · {{count}} returns",
     "lNet": "Net",
     "recv": "To receive from the companies",
-    "recvS": "not cashed − its fees − return fees",
+    "recvS": "not cashed − its fees − return and swap fees",
     "byCompany": "By company",
     "inDa": "amounts in DA",
     "colCompany": "Company",
@@ -524,7 +528,9 @@
       "amount": "Amount"
     },
     "recvOne": "To receive from {{name}}",
-    "searchPh": "Name, phone, PX…"
+    "searchPh": "Name, phone, PX…",
+    "lSwaps_one": "Swap fees · {{count}} swap",
+    "lSwaps_other": "Swap fees · {{count}} swaps"
   },
   "ad": {
     "title": "Ad (where the order came from)",
@@ -672,5 +678,10 @@
     "waiting": "not given yet (follow the page)",
     "eBad": "The promo code does not work for this order: fix it or clear the field."
   },
-  "awareness": "Awareness"
+  "awareness": "Awareness",
+  "swapTag": {
+    "label": "Swap",
+    "inT": "Parcel received by a swap: it was for another customer",
+    "outT": "Parcel given to another customer by a swap: its swap fee counts here, like a return"
+  }
 }

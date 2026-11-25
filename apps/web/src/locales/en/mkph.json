@@ -33,7 +33,8 @@
     "conf": "Confirmation",
     "ret": "Returns ({{n}})",
     "pub": "Ads ({{v}})",
-    "net": "Net profit"
+    "net": "Net profit",
+    "retSw": "Returns ({{n}}) + swaps ({{s}})"
   },
   "g": {
     "orders": "Orders",
