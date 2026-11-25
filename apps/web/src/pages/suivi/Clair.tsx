@@ -173,8 +173,10 @@ function LastResult({ x }: { x?: ClairX }) {
   // the day goes under the words when the column is narrow (tablet), never « Relivrer / demandé / 24/11 »
   return (
     <span className={`svc-last z-${tone}`}>
-      <i aria-hidden="true" />
-      <span>{t(`suivi.clair.last.${l.key}`)}</span>
+      <span>
+        <i aria-hidden="true" />
+        {t(`suivi.clair.last.${l.key}`)}
+      </span>
       {day && <small dir="auto">{day}</small>}
     </span>
   );
@@ -531,6 +533,7 @@ export function RappelSheet({ o, onClose }: { o: Order; onClose: () => void }) {
   };
   return (
     <Sheet
+      className="svc-sheet"
       title={t('suivi.clair.rappel.title')}
       sub={`${o.ref} · ${o.customerName}`}
       onClose={onClose}
@@ -565,7 +568,7 @@ export function HistorySheet({ o, onClose }: { o: Order; onClose: () => void }) 
   const company = (v: string | null) => (v ? names.get(`c${v}`) ?? v : '—');
   const list = ev.data ? [...ev.data].reverse() : [];
   return (
-    <Sheet title={t('suivi.clair.histOf', { ref: o.ref })} sub={t('suivi.clair.histSub')} onClose={onClose} tall>
+    <Sheet className="svc-sheet" title={t('suivi.clair.histOf', { ref: o.ref })} sub={t('suivi.clair.histSub')} onClose={onClose} tall>
       {!ev.data ? (
         <p className="muted small">…</p>
       ) : (
@@ -609,23 +612,6 @@ export function AlertPanel({ o, x, reason, statusOpen, onStatus, menu, onRelivre
         </span>
         <Journey o={o} label={reason} />
         <AlertTodo o={o} x={x} reason={reason} onClaim={onClaim} />
-        <div className="svc-pbar">
-          {statusOpen && menu}
-          <button type="button" className="svc-stat" aria-haspopup="menu" aria-expanded={statusOpen} onClick={onStatus}>
-            <Icon name="menu" /> {t('suivi.clair.change')}
-            <span className="svc-cur">{t(o.followStatus === 'alert' ? (x?.last ? 'suivi.clair.curWork' : 'suivi.clair.curNew') : 'suivi.clair.curWait')}</span>
-            <Icon name="chevron" />
-          </button>
-          {onRelivrer && (
-            <button type="button" className="svc-reliv pc" onClick={onRelivrer}>
-              <Icon name="refresh" /> {t('suivi.clair.relivrer')}
-            </button>
-          )}
-          <small className="svc-pinfo">
-            {x?.tries ? t('suivi.tries.count', { done: x.tries.done, need: x.tries.need }) : ''}
-            {late ? ` · ${t('suivi.clair.lateBy', { v: late })}` : ''}
-          </small>
-        </div>
       </section>
       <section className="svc-pr">
         <div className="svc-prod">
@@ -675,6 +661,23 @@ export function AlertPanel({ o, x, reason, statusOpen, onStatus, menu, onRelivre
           </HistoryButton>
         </div>
       </section>
+      <div className="svc-pbar">
+        {statusOpen && menu}
+        <button type="button" className="svc-stat" aria-haspopup="menu" aria-expanded={statusOpen} onClick={onStatus}>
+          <Icon name="menu" /> {t('suivi.clair.change')}
+          <span className="svc-cur">{t(o.followStatus === 'alert' ? (x?.last ? 'suivi.clair.curWork' : 'suivi.clair.curNew') : 'suivi.clair.curWait')}</span>
+          <Icon name="chevron" />
+        </button>
+        {onRelivrer && (
+          <button type="button" className="svc-reliv pc" onClick={onRelivrer}>
+            <Icon name="refresh" /> {t('suivi.clair.relivrer')}
+          </button>
+        )}
+        <small className="svc-pinfo">
+          {x?.tries ? t('suivi.tries.count', { done: x.tries.done, need: x.tries.need }) : ''}
+          {late ? ` · ${t('suivi.clair.lateBy', { v: late })}` : ''}
+        </small>
+      </div>
     </div>
   );
 }
