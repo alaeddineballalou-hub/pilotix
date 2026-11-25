@@ -408,14 +408,18 @@ export function StageBar({ items: all, current: shown, flow = true, end }: { ite
   const [picked, setPicked] = useState<string | null>(null);
   useEffect(() => setPicked(null), [shown]);
   const current = picked ?? shown;
-  // a bar wider than the screen (a phone): the current stage is brought into view, not left behind the edge
+  // a bar wider than the screen (a phone): the current stage is brought into view, not left behind the edge — again once
+  // the numbers are in (they widen the stages and pushed it out)
+  const nums = items.map((it) => it.count ?? '').join();
   useEffect(() => {
     const b = bar.current;
     const on = b?.querySelector<HTMLElement>('.bjm-p.on');
     if (b && on && b.scrollWidth > b.clientWidth + 1) {
-      on.scrollIntoView({ block: 'nearest', inline: 'center' });
+      const r = b.getBoundingClientRect();
+      const o = on.getBoundingClientRect();
+      if (o.left < r.left + 8 || o.right > r.right - 8) b.scrollBy({ left: o.left + o.width / 2 - (r.left + r.width / 2) });
     }
-  }, [current]);
+  }, [current, nums]);
   return (
     <nav ref={bar} className={`bjm-bar ${flow ? 'flow' : ''}`} aria-label="Étapes">
       {items.map((it, i) => (

@@ -169,6 +169,5 @@ html:not([data-theme="dark"]) .px-dr-pop { background: #FFFFFF; }
 .px-ov-words dd { margin: 3px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
 
 /* Confirmées' stages (stages.tsx): the Dépôt's stage pills, as buttons that filter the list (read-only) */
-.cf-stages { margin-top: 10px; }
 .cf-stages :where(button.bjm-p) { border: 0; background: transparent; font-family: inherit; line-height: inherit; cursor: pointer; }
 .cf-stages button.bjm-p:focus-visible { outline: 2px solid var(--px-orange, var(--navy)); outline-offset: 2px; }

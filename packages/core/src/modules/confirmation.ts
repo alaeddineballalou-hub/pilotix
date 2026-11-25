@@ -29,7 +29,7 @@ export const CONF_SUBS = {
 export type ConfSub = keyof typeof CONF_SUBS;
 const SUB = z.enum(['nouvelles', 'attente', 'confirmees', 'terminees', 'livrees']);
 /** « Confirmées »: the confirmed orders their delivery company does not have yet, with where each one is (the owner's ask,
- *  25 Nov 2026): not in the dépôt yet (sans stock), « En préparation », « En dispatch », « Dispatchées » (handed over, not
+ *  25 Nov 2026): not in the dépôt yet (sans stock), « À préparer », « En dispatch », « Dispatchées » (handed over, not
  *  taken yet). An agent can still cancel the ones not sent; the dépôt is alerted for a printed label. Once the company has
  *  the parcel (taken_at) it leaves this list: it is in Commandes › En livraison. */
 const NOT_SENT = ['none', 'to_prepare', 'prepared', 'shipped'] as const;

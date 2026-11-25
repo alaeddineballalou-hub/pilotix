@@ -206,7 +206,7 @@ export function PhoneCards({ rows, empty, onOpen, pick, showAgent, rowKey, edit,
                   <div className="pxp-st">
                     <span className={`badge t-${o.confStatus === 'no_answer' ? 'mid' : CONF_TONE[o.confStatus] ?? 'off'}`}>{currentLabel(t, o.confStatus, o.attempts)}</span>
                     {/* a confirmed order: where its parcel is, as in the list's « Livraison » column (Confirmées: the
-                        Dépôt's stage — Sans stock, En préparation, En dispatch, Dispatchée) */}
+                        stage in the dépôt — Sans stock, À préparer, En dispatch, Dispatchée) */}
                     {stages ? o.followStatus && <StageTag o={o} /> : o.confStatus === 'confirmed' && o.followStatus && <StatusBadge kind="follow" status={o.followStatus} sub={o.subStatus} />}
                     {o.attempts > 0 && <small>{t('confirmation.focus.calls', { n: o.attempts })}</small>}
                     <RotateChip at={o.rotateAt} />

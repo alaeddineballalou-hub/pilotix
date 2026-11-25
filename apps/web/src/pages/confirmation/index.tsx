@@ -268,7 +268,8 @@ export function Queue({ sub, focusId, combined, stage = null }: { sub: Sub; focu
 
   const { order, setOrder } = tc;
   // on a tablet: the 6 columns an agent calls with, « +N colonnes » shows the others (ui/tabletCols)
-  const tcols = useTabletCols(order.map((k) => COLS.find((c) => c.k === k)!).filter((c) => c && visible.has(c.k)), (c) => c.k, CONF_USEFUL);
+  // (Confirmées: where each order is in the dépôt — the « Livraison » column — before the rest)
+  const tcols = useTabletCols(order.map((k) => COLS.find((c) => c.k === k)!).filter((c) => c && visible.has(c.k)), (c) => c.k, sub === 'confirmees' ? ['follow', ...CONF_USEFUL] : CONF_USEFUL);
   const cols = tcols.cols;
   const drag = colDrag(order, setOrder);
   // column widths: each user's own
@@ -435,7 +436,7 @@ export function Queue({ sub, focusId, combined, stage = null }: { sub: Sub; focu
       case 'follow':
         return (
           <>
-            {/* Confirmées: its stage in the dépôt, the Dépôt's words (Sans stock, En préparation, En dispatch, Dispatchée) */}
+            {/* Confirmées: its stage in the dépôt (Sans stock, À préparer, En dispatch, Dispatchée) */}
             {sub === 'confirmees' ? <StageTag o={r} /> : <StatusBadge kind="follow" status={r.followStatus} sub={r.subStatus} />}
             {r.companyName && (
               <small>
