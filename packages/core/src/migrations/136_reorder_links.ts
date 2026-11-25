@@ -5,12 +5,33 @@
 // reads the page for its preview before the order is cancelled). The cancellation still keeps the link it went with
 // (order_events › reorderHash): only that one restores the order. `sent_at`: the message went with this link; a link
 // never sent is removed after 2 days.
+// On the live server (shared tables), orders' key is already (shop_id, id): the link to the order is made with shop_id
+// there (like 123_inbox). A fresh or older database still has the original key, which tenantization converts later.
 export default `
 CREATE TABLE IF NOT EXISTS reorder_links (
   hash text PRIMARY KEY,
-  order_id bigint NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  order_id bigint NOT NULL,
   sent_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+DO $reorder$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'reorder_links'::regclass AND conname = 'reorder_links_order_id_fkey'
+  ) THEN
+    IF EXISTS (
+      SELECT 1 FROM pg_attribute
+      WHERE attrelid = 'orders'::regclass AND attname = 'shop_id' AND NOT attisdropped
+    ) THEN
+      ALTER TABLE reorder_links ADD COLUMN IF NOT EXISTS shop_id integer NOT NULL DEFAULT public.px_shop_id();
+      ALTER TABLE reorder_links ADD CONSTRAINT reorder_links_order_id_fkey
+        FOREIGN KEY (shop_id, order_id) REFERENCES orders(shop_id, id) ON DELETE CASCADE;
+    ELSE
+      ALTER TABLE reorder_links ADD CONSTRAINT reorder_links_order_id_fkey
+        FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE;
+    END IF;
+  END IF;
+END $reorder$;
 CREATE INDEX IF NOT EXISTS reorder_links_created ON reorder_links (created_at);
 `;

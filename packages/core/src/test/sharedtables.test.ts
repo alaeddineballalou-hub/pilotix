@@ -32,6 +32,15 @@ test('startup upgrades a shared database from before the notification inbox', as
     assert.deepEqual(rows, [{
       definition: 'FOREIGN KEY (shop_id, profile_id) REFERENCES profiles(shop_id, id) ON DELETE CASCADE',
     }]);
+    // the cancel message's short links (136): their order, found with its shop
+    const links = await pg.query<{ definition: string }>(`
+      SELECT pg_get_constraintdef(oid) AS definition
+      FROM pg_constraint WHERE conrelid = 'public.reorder_links'::regclass AND contype IN ('f', 'p') ORDER BY contype
+    `);
+    assert.deepEqual(links.rows, [
+      { definition: 'FOREIGN KEY (shop_id, order_id) REFERENCES orders(shop_id, id) ON DELETE CASCADE' },
+      { definition: 'PRIMARY KEY (shop_id, hash)' },
+    ]);
   } finally {
     await pg.close();
   }
