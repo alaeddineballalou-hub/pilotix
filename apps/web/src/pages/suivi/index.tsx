@@ -958,7 +958,9 @@ function ClairList({ tab }: { tab: ClairTab }) {
           </button>
         )}
       </div>
-      <SuiviFilters f={f} set={setFilter} />
+      <div className="svc-fwrap">
+        <SuiviFilters f={f} set={setFilter} />
+      </div>
       {!agency && <DemoCourier rows={rows} />}
       <ClairCounters tab={tab} counts={q.data?.buckets} value={bucket} onPick={setBucket} />
       {q.isLoading ? (

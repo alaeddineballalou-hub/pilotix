@@ -1,6 +1,11 @@
 /* Suivi · « Clair » (the owner's design 1): counters that filter, one line per parcel, the opened alert with « Statut »
    and « Relivrer ». Pilotix's look: navy and orange, soft and round. */
 
+/* ---- the filters on one line (computer) ---- */
+@media (min-width: 1101px) {
+  .svc-fwrap .filters { grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); }
+}
+
 /* ---- the three counters ---- */
 .svk { display: grid; grid-template-columns: repeat(3, minmax(0, 200px)); gap: 8px; margin: 4px 0 12px; }
 .svk-c { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 1px; padding: 9px 12px; border-radius: 16px; border: 1.5px solid transparent; cursor: pointer; text-align: start; }
@@ -85,6 +90,9 @@
 .svc-note .bji { width: 14px; height: 14px; }
 .svc-c-act { text-align: end; }
 .svc-c-time, .svc-c-since, .svc-c-amount { white-space: nowrap; }
+/* the company's words get room (a short status reads whole) */
+.svc-tbl td.svc-c-zr { min-width: 230px; }
+.svc-tbl td.svc-c-why { min-width: 170px; }
 
 /* ---- the opened alert under its line ---- */
 .svc-tbl tr.svc-open > td { padding: 0 10px 14px; background: #FFF8EC; }
@@ -150,7 +158,8 @@
 .svc-card-t { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
 .svc-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; }
 .svc-amt { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.svc-card-s { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; max-width: 100%; }
+.svc-card-s { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; width: 100%; }
+.svc-card-s .svc-zr { flex: 1 1 auto; min-width: 0; }
 .svc-card-s .svc-zr span { white-space: normal; }
 .svc-card-r { flex: none; display: flex; align-items: center; }
 
@@ -167,6 +176,8 @@
 /* ---- sizes ---- */
 @media (max-width: 1100px) {
   .svc-hide-tb { display: none; }
+  .svc-tbl td.svc-c-zr { min-width: 190px; }
+  .svc-zr { max-width: 250px; }
   .svc-panel { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
