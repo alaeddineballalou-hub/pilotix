@@ -585,6 +585,8 @@ input.bjf-in { height: 54px !important; font-size: 18px; font-weight: 600; borde
 .topbar .icon-btn:last-child { margin-left: auto; }
 .topbar .menu-btn { display: none; }
 .page { padding: 18px; display: flex; flex-direction: column; gap: 16px; max-width: 1400px; width: 100%; margin: 0 auto; }
+/* a big work table (Confirmation's list, store and agency): no 1400px limit, the page always takes the whole width (owner, 25 Nov 2026) */
+.page:has(> .px-full) { max-width: none; }
 .scrim { display: none; }
 @media (max-width: 900px) {
   .shell { grid-template-columns: minmax(0, 1fr); }

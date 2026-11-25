@@ -497,7 +497,8 @@ export function Queue({ sub, focusId, combined }: { sub: Sub; focusId: number | 
     <>
       {showCombinedFocus && combined?.next(() => setShowCombinedFocus(false))}
       {focus !== null && <Focus initialId={focus === 'ask' ? null : focus} onClose={() => setFocus(null)} />}
-      <div className={`card qcard px-d-${dens}`}>
+      {/* « px-full »: the page around this table takes the whole width of the screen (styles/legacy.css) */}
+      <div className={`card qcard px-full px-d-${dens}`}>
         <div className="card-head px-qhead">
           <h2>
             {title} <span className={`badge t-${SUB_TONE[sub]} ltr`}>{n(list.data?.total ?? 0)}</span>
