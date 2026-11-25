@@ -557,26 +557,30 @@ export const usersProcs = {
  * followed go back to the queues (else nobody would ever see them — the others only see their own and the free ones).
  */
 export async function releaseWork(ctx: Ctx, profileId: number, active: boolean, roles: Role[], had: Role[]) {
+  await releaseWorkIn(ctx.db, ctx.session.profile.id, profileId, active, roles, had);
+}
+
+/** releaseWork in a shop's database; `me`: who did it (null: Pilotix's team, from the control room). */
+export async function releaseWorkIn(db: Db, me: number | null, profileId: number, active: boolean, roles: Role[], had: Role[]) {
   const r = expandRoles(roles);
   const h = expandRoles(had);
-  const me = ctx.session.profile.id;
   // (only what changed: a manager edited keeps the orders he holds)
   if (h.includes('confirmation') && (!active || !r.includes('confirmation'))) {
-    const rows = await ctx.db.query(
+    const rows = await db.query(
       `UPDATE orders SET agent_id = NULL, assigned_at = NULL, locked_by = NULL, locked_until = NULL, updated_at = now()
         WHERE agent_id = $1 AND conf_status = ANY($2) AND shipped_at IS NULL RETURNING id`,
       [profileId, CONF_TODO],
     );
-    for (const o of rows) await ctx.db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, note) VALUES ($1, $2, 'note', NULL, 'event', 'Rendue à la file : son agent ne travaille plus ici')`, [o.id, me]);
+    for (const o of rows) await db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, note) VALUES ($1, $2, 'note', NULL, 'event', 'Rendue à la file : son agent ne travaille plus ici')`, [o.id, me]);
   }
   if (h.includes('suivi') && (!active || !r.includes('suivi'))) {
-    const rows = await ctx.db.query(
+    const rows = await db.query(
       `UPDATE orders SET follow_agent_id = NULL, locked_by = CASE WHEN locked_by = $1 THEN NULL ELSE locked_by END,
           locked_until = CASE WHEN locked_by = $1 THEN NULL ELSE locked_until END, updated_at = now()
         WHERE follow_agent_id = $1 AND follow_status IN ('shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange') RETURNING id`,
       [profileId],
     );
-    for (const o of rows) await ctx.db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, note) VALUES ($1, $2, 'note', NULL, 'event', 'Rendue à la file : son agent de suivi ne travaille plus ici')`, [o.id, me]);
+    for (const o of rows) await db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, note) VALUES ($1, $2, 'note', NULL, 'event', 'Rendue à la file : son agent de suivi ne travaille plus ici')`, [o.id, me]);
   }
-  if (!active) await ctx.db.query('UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE locked_by = $1', [profileId]);
+  if (!active) await db.query('UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE locked_by = $1', [profileId]);
 }

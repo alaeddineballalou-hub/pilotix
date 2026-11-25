@@ -295,6 +295,7 @@
   "log": {
     "shopCreate": "Boutique créée (formule {{plan}}, essai {{days}} j)",
     "shopUpdate": "Modifié : {{fields}}",
+    "shopOwner": "Propriétaire changé : {{from}} → {{to}}",
     "shopSuspend": "Suspendue{{reason}}",
     "shopReactivate": "Réactivée",
     "shopArchive": "Archivée{{reason}}",
@@ -545,6 +546,23 @@
     "maxStoresHint": "Il en a {{n}}. Vide = le nombre de sa formule ({{def}}).",
     "none": "Pas de compte propriétaire.",
     "privacy": "Par respect de sa vie privée, vous voyez seulement des chiffres : vous ne pouvez ni entrer dans sa boutique ni voir ses données. Vous pouvez la suspendre."
+  },
+  "newOwner": {
+    "open": "Changer",
+    "go": "Changer le propriétaire",
+    "title": "Changer le propriétaire · {{name}}",
+    "now": "Propriétaire actuel",
+    "nobody": "Pas de propriétaire",
+    "email": "E-mail du nouveau propriétaire",
+    "same": "C’est déjà l’e-mail du propriétaire",
+    "name": "Son nom",
+    "nameHint": "Vide : le nom de son compte Pilotix",
+    "phone": "Son téléphone",
+    "lossStore": "{{who}} perd tout accès à « {{shop}} » tout de suite : ses connexions se ferment et ses commandes en cours retournent à l’équipe.",
+    "lossPartner": "{{who}} perd tout accès à « {{shop}} » tout de suite, chez ses vendeurs aussi : ses connexions se ferment et ses commandes en cours retournent à l’équipe.",
+    "google": "Aucun e-mail n’est envoyé : {{email}} se connecte avec « Continuer avec Google » (ou « Mot de passe oublié »).",
+    "theEmail": "le nouvel e-mail",
+    "done": "« {{name}} » appartient maintenant à {{email}}"
   },
   "ref": {
     "title": "Parrainage",

@@ -8,6 +8,7 @@ import { Staff, usePAction, usePRpc } from '../../lib/platform';
 import { Card, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { can, Empty } from './bits';
+import { OwnerButton, OwnerModal, OwnerTarget } from './OwnerModal';
 import '../agency/agency.css';
 
 export function Agencies({ staff, kind = 'agency' }: { staff: Staff; kind?: 'agency' | 'marketer' }) {
@@ -20,6 +21,7 @@ export function Agencies({ staff, kind = 'agency' }: { staff: Staff; kind?: 'age
   const status = usePAction('p.shops.setStatus', { success: t('platform.ag.saved') });
   const [suspend, setSuspend] = useState<{ id: number; name: string } | null>(null);
   const [pro, setPro] = useState<{ id: number; name: string; verified: boolean } | null>(null);
+  const [owner, setOwner] = useState<OwnerTarget | null>(null);
   const stopPro = usePAction('p.pro.stop', { success: t('platform.pro.stopped') });
   const [reason, setReason] = useState('');
   const manager = can(staff, 'manager');
@@ -79,6 +81,7 @@ export function Agencies({ staff, kind = 'agency' }: { staff: Staff; kind?: 'age
                         {a.owner.email}
                         {a.owner.phone ? ` · ${a.owner.phone}` : ''}
                       </small>
+                      {manager && <OwnerButton onClick={() => setOwner({ id: a.id, name: a.name, kind: a.kind, owner: a.owner })} />}
                     </td>
                     <td className="ltr">
                       {t('platform.ag.links', { active: a.activeLinks, pending: a.pendingLinks })}
@@ -149,6 +152,7 @@ export function Agencies({ staff, kind = 'agency' }: { staff: Staff; kind?: 'age
         )}
       </Card>
       {pro && <ProModal m={pro} onClose={() => setPro(null)} />}
+      {owner && <OwnerModal s={owner} onClose={() => setOwner(null)} />}
       {suspend && (
         <Modal
           title={t('platform.ag.suspendTitle', { name: suspend.name })}

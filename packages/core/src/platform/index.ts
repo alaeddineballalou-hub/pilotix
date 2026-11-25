@@ -4,6 +4,7 @@ export * from './shared';
 export * from './schema';
 export * from './shops';
 export * from './accounts';
+export * from './owner';
 export * from './phone';
 export * from './signup';
 export * from './support';

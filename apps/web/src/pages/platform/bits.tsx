@@ -67,6 +67,8 @@ export function auditText(t: TFunction, a: AuditRow): string {
       return t('platform.log.shopInvite', { email: d.email ?? '' });
     case 'shop.ownerStores':
       return t('platform.log.ownerStores', { n: d.maxStores ?? '∞' });
+    case 'shop.owner':
+      return t('platform.log.shopOwner', { from: d.from ?? '—', to: d.to ?? '' });
     case 'payment.receipt':
       return t('platform.log.receipt', { no: d.receipt ?? '', email: d.to ?? '' });
     case 'referral.reward':

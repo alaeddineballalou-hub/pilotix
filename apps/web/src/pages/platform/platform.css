@@ -94,6 +94,16 @@
 .pp-link { border: 0 !important; background: none !important; color: var(--coral) !important; padding: 0 4px !important; text-decoration: underline; }
 .pp-warn { margin: 10px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-weight: 700; font-size: 13px; }
 
+/* « Changer le propriétaire » (OwnerModal.tsx) */
+.pp-owner-btn { margin-top: 6px; white-space: nowrap; }
+.pp-owner-move { display: flex; justify-content: flex-start; margin: 4px 0 2px; }
+.pp-owner-move .pp-owner-btn { margin-top: 0; }
+.pp-creds dd .pp-owner-now { display: block; color: var(--muted); font-size: 13px; word-break: normal; overflow-wrap: anywhere; }
+.pp-loss, .pp-owner-google { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 0; line-height: 1.45; }
+.pp-loss { padding: 10px 12px; border-radius: 12px; background: var(--coral-soft); color: var(--coral); font-weight: 700; font-size: 13px; }
+.pp-owner-google { color: var(--muted); }
+.pp-loss .bji, .pp-owner-google .bji { flex: none; margin-top: 1px; }
+
 /* usage tiles */
 .pp-use { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 8px; }
 .pp-use > div { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 12px; background: var(--raise); border: 1px solid var(--line); }

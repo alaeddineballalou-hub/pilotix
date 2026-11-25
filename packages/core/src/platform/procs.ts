@@ -15,6 +15,7 @@ import { protectionStats } from './reputation';
 import { latestApp } from './appUpdate';
 import { syncAgency } from '../modules/agencies';
 import { SLUG_LOCKED } from '../modules/boutiques';
+import { moveOwner } from './owner';
 import { accountByEmail, accountById, dropForeignPassword, foreignPassword, makeAccountToken, sha256Hex } from './accounts';
 import { rewardReferrer, ReferralReward } from './reminders';
 import { staffReply, staffSetStatus, staffThread, staffThreads, staffUnread } from './support';
@@ -277,6 +278,8 @@ function shopRow(s: Shop, set: PlatformSettings, now: number) {
     id: s.id,
     slug: s.slug,
     name: s.name,
+    /** a store, or a partner's space (an agency, a marketer) */
+    kind: s.kind,
     primary: s.primary,
     demo: s.demo,
     status: s.status,
@@ -713,6 +716,21 @@ export const PLATFORM_REGISTRY = {
       await ctx.t.platform.query(`UPDATE platform.shops SET ${sets.join(', ')} WHERE id = $1`, vals);
       await audit(ctx, 'shop.update', s.id, changes);
       return { ok: true };
+    },
+  ),
+
+  /**
+   * « Changer le propriétaire »: a store, an agency or a marketer's space moves to another e-mail, and the owner before
+   * loses every access to it at once (platform/owner.ts). Nothing is sent: the new owner enters with Google.
+   */
+  'p.shops.setOwner': pproc(
+    MANAGERS,
+    z.object({ id: Id, email: z.string().trim().max(200), name: z.string().trim().max(80).nullable().optional(), phone: z.string().trim().max(30).nullable().optional() }),
+    async (ctx, i) => {
+      const s = await needShop(ctx, i.id);
+      const r = await moveOwner(ctx.t, s, i);
+      await audit(ctx, 'shop.owner', s.id, { from: r.from, to: r.to, name: r.name, created: r.created, promoted: r.promoted, passwordDropped: r.passwordDropped });
+      return { ok: true as const, ...r };
     },
   ),
 

@@ -10,6 +10,7 @@ import { Card, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { auditText, can, Empty, StateBadge } from './bits';
 import { FeatureTree, useSoon } from './FeatureTree';
+import { OwnerButton, OwnerModal } from './OwnerModal';
 import { PaymentModal } from './Shops';
 
 type Detail = POut<'p.shops.get'>;
@@ -377,6 +378,9 @@ function Owner({ s, manager }: { s: Detail; manager: boolean }) {
   const save = usePAction('p.shops.update', { success: t('platform.saved') });
   const [max, setMax] = useState(a?.maxStores === null || a?.maxStores === undefined ? '' : String(a.maxStores));
   useEffect(() => setMax(a?.maxStores === null || a?.maxStores === undefined ? '' : String(a.maxStores)), [a?.maxStores]);
+  const [move, setMove] = useState(false);
+  // « Changer le propriétaire »: never the server's own shop, the demo, nor a store its owner deleted
+  const movable = manager && !s.primary && !s.demo && s.status !== 'deleted';
   return (
     <Card title={t('platform.owner.title')} help={t('platform.owner.help')}>
       {a ? (
@@ -410,6 +414,12 @@ function Owner({ s, manager }: { s: Detail; manager: boolean }) {
       ) : (
         <Empty>{t('platform.owner.none')}</Empty>
       )}
+      {movable && (
+        <div className="pp-owner-move">
+          <OwnerButton long onClick={() => setMove(true)} />
+        </div>
+      )}
+      {move && <OwnerModal s={{ id: s.id, name: s.name, kind: s.kind, owner: { name: s.owner.name, email: a?.email ?? s.owner.email, phone: s.owner.phone } }} onClose={() => setMove(false)} />}
       <p className="small muted pp-privacy">
         <Icon name="shield" /> {t('platform.owner.privacy')}
       </p>

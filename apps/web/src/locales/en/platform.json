@@ -295,6 +295,7 @@
   "log": {
     "shopCreate": "Shop created ({{plan}} plan, {{days}}-day trial)",
     "shopUpdate": "Changed: {{fields}}",
+    "shopOwner": "Owner changed: {{from}} → {{to}}",
     "shopSuspend": "Suspended{{reason}}",
     "shopReactivate": "Reactivated",
     "shopArchive": "Archived{{reason}}",
@@ -545,6 +546,23 @@
     "maxStoresHint": "They have {{n}}. Empty = their plan’s number ({{def}}).",
     "none": "No owner account.",
     "privacy": "To respect their privacy, you only see numbers: you can’t enter their store or see their data. You can suspend it."
+  },
+  "newOwner": {
+    "open": "Change",
+    "go": "Change the owner",
+    "title": "Change the owner · {{name}}",
+    "now": "Current owner",
+    "nobody": "No owner",
+    "email": "New owner’s e-mail",
+    "same": "This is already the owner’s e-mail",
+    "name": "Their name",
+    "nameHint": "Empty: the name of their Pilotix account",
+    "phone": "Their phone",
+    "lossStore": "{{who}} loses all access to « {{shop}} » at once: their sessions end and their open orders go back to the team.",
+    "lossPartner": "{{who}} loses all access to « {{shop}} » at once, at its sellers too: their sessions end and their open orders go back to the team.",
+    "google": "No e-mail is sent: {{email}} signs in with « Continue with Google » (or « Forgot password »).",
+    "theEmail": "the new e-mail",
+    "done": "« {{name}} » now belongs to {{email}}"
   },
   "ref": {
     "title": "Referral",
