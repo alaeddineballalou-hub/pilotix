@@ -13,7 +13,7 @@
 // BEST GUESS (check with real keys): the "state.name" values in STATUSES below come from ZR's dashboard wording;
 // unknown ones are shown as-is and can be mapped by hand with the "Statuts" button.
 import { cacheKeyOf } from './types';
-import type { BagAdded, BagInfo, ChangeInput, ChangeState, ClaimCategory, ClaimState, CourierAdapter, CourierBags, CourierCompany, CourierStep, Desk, FeeRow, Helpers, Parcel, ParcelInfo, SwapInput, SwapSent, TrackItem } from './types';
+import type { BagAdded, BagInfo, ChangeInput, ChangeState, ClaimCategory, ClaimFound, ClaimMessage, ClaimState, CourierAdapter, CourierBags, CourierCompany, CourierStep, Desk, FeeRow, Helpers, Parcel, ParcelInfo, SwapInput, SwapSent, TrackItem } from './types';
 import { ASK_AGAIN_MS, baseUrl, bestMatch, CourierError, cut, http, intl, LIST_KEPT_MS, listClock, needKeys, sleep, timeUp } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
@@ -158,17 +158,20 @@ async function communeFees(c: CourierCompany, rows: Map<number, FeeRow>, local: 
   fill(home, feeOf(home, answers));
 }
 
-/** Words of our reasons that should find ZR's category (when the user did not choose one). */
+/** Words of our reasons that find ZR's category when the user did not choose one. ZR's own 12 (read in its app,
+ *  25 Nov 2026): Accélération de la commande, Accélération d'encaissement, Annulation de la commande, Autre, Colis
+ *  endommagé, Colis perdu, Demande de retour, Demande d'information, Mise à jour des situations, Relancer un colis,
+ *  Reporter un colis, Retard de livraison. Without accents, in order of preference. */
 const REASON_HINTS: Record<string, string[]> = {
-  relivrer: ['relivraison', 'nouvelle tentative', 'livraison'],
-  late: ['retard', 'delai', 'livraison'],
-  nocall: ['appel', 'injoignable', 'livreur'],
-  fakedeliv: ['faux', 'livre', 'statut'],
-  fakeret: ['faux', 'retour', 'statut'],
+  relivrer: ['relancer un colis', 'reporter un colis', 'relivraison'],
+  late: ['retard de livraison', 'acceleration de la commande', 'retard'],
+  nocall: ['relancer un colis', 'appel'],
+  fakedeliv: ['mise a jour des situations', 'situation', 'statut'],
+  fakeret: ['mise a jour des situations', 'situation', 'statut'],
   address: ['adresse', 'modification'],
-  damaged: ['endommage', 'casse', 'abime'],
-  money: ['paiement', 'versement', 'argent', 'encaissement'],
-  noreturn: ['retour', 'non recu'],
+  damaged: ['colis endommage', 'endommage'],
+  money: ["acceleration d'encaissement", 'encaissement', 'paiement'],
+  noreturn: ['demande de retour', 'retour'],
   other: ['autre'],
 };
 
@@ -278,7 +281,38 @@ const payments: NonNullable<CourierAdapter['payments']> = {
   },
 };
 
-const RESOLVED = /(r[ée]solu|r[ée]gl|cl[ôo]tur|ferm[ée]|closed|resolved|termin[ée])/i;
+// ZR's own claim workflow (read in its app, 25 Nov 2026): « En attente de traitement » → « Réclamation en traitement » →
+// « Traitée » (its end: no step after it, but ZR does not lock it). ZR has no « refused » state.
+const RESOLVED = /(r[ée]solu|r[ée]gl|cl[ôo]tur|ferm[ée]|closed|resolved|termin[ée]|\btrait[ée]e\b)/i;
+/** A claim ZR closed without giving us what we asked (« Perdue » in Pilotix, never « Résolue »). */
+const REFUSED = /(rejet|refus|non[ -]?fond|infond|sans suite|irrecevable|rejected|declined)/i;
+
+/** Where a ZR claim stands from its state: open, or closed (locked) as solved or as refused. */
+export function claimEnd(state: any): { status: string; closed: boolean; resolved: boolean; refused: boolean } {
+  const name = String(state?.name || '');
+  const status = String(state?.description || name);
+  const refused = REFUSED.test(name) || REFUSED.test(status);
+  const closed = !!state?.isLocked || refused || RESOLVED.test(name) || RESOLVED.test(status);
+  return { status, closed, resolved: closed && !refused, refused };
+}
+
+/** ZR's comments on a claim, oldest first: its team's answers and the shop's own messages (from Pilotix or ZR's app). */
+async function claimMessages(c: CourierCompany, id: string): Promise<ClaimMessage[]> {
+  const out: ClaimMessage[] = [];
+  for (let n = 1; n <= 5; n++) {
+    const r = await http(c.name, url(c, `/claim-comments/${encodeURIComponent(id)}/search`), { method: 'POST', headers: h(c), json: { claimId: id, pageNumber: n, pageSize: 100 } });
+    for (const x of (r?.items ?? []) as any[]) {
+      const text = String(x.content ?? '').trim();
+      if (!text) continue;
+      out.push({ id: String(x.id ?? `${id}:${x.createdAt ?? out.length}`), at: x.createdAt ?? null, by: x.modifiedBy?.fullName ? String(x.modifiedBy.fullName) : null, byId: x.modifiedBy?.id ? String(x.modifiedBy.id) : null, text });
+    }
+    if (!r?.hasNext) break;
+  }
+  return out.sort((a, b) => String(a.at ?? '').localeCompare(String(b.at ?? '')));
+}
+
+/** A short number for a ZR claim with no parcel number (ZR gives no number of its own: the start of its id). */
+const claimNo = (id: string) => String(id).slice(0, 8).toUpperCase();
 
 // ---------------------------------------------------------------- parcels: body, ids, addresses
 /** Where ZR delivers: a stop desk (its hub) or a home address (wilaya and commune as ZR territories). */
@@ -873,9 +907,10 @@ export const zr: CourierAdapter = {
     const cats = await loadClaimCats(c);
     let categoryId = i.categoryId && cats.some((x) => x.id === i.categoryId) ? i.categoryId : null;
     if (!categoryId) {
-      const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      const exact = bestMatch(i.reasonText, cats.map((x) => x.name));
-      const hit = exact ? cats.find((x) => x.name === exact) : (REASON_HINTS[i.reason] ?? []).map((w) => cats.find((x) => norm(x.name).includes(w))).find(Boolean);
+      const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[’`]/g, "'").toLowerCase().trim();
+      const hinted = (REASON_HINTS[i.reason] ?? []).map((w) => cats.find((x) => norm(x.name).includes(w))).find(Boolean);
+      const loose = bestMatch(i.reasonText, cats.map((x) => x.name));
+      const hit = hinted ?? (loose ? cats.find((x) => x.name === loose) : undefined);
       categoryId = (hit ?? cats.find((x) => /autre|other/i.test(x.name)) ?? cats[0])?.id ?? null;
     }
     if (!categoryId) throw new CourierError('ZR n’a pas de catégorie de réclamation : vérifiez votre espace ZR');
@@ -896,15 +931,18 @@ export const zr: CourierAdapter = {
     let status: string | null = null;
     try {
       const g = await http(c.name, url(c, `/claims/${encodeURIComponent(id)}`), { method: 'POST', headers: h(c), json: { claimId: id } });
-      status = g?.state?.description || g?.state?.name || null;
+      status = claimEnd(g?.state).status || null;
     } catch {
       /* the claim exists; its state comes with the next refresh */
     }
-    return { extId: String(id), extRef: String(id).slice(0, 8).toUpperCase(), status };
+    // ZR's app lists a réclamation by its parcel's number (it has no number of its own); its category, in ZR's words
+    return { extId: String(id), extRef: i.item.tracking || claimNo(String(id)), status, category: cats.find((x) => x.id === categoryId)?.name?.trim() || null };
   },
   async claimComment(c, extId, text) {
     needKeys(c, 'api_key', 'tenant');
-    await http(c.name, url(c, `/claim-comments/${encodeURIComponent(extId)}`), { method: 'PATCH', headers: h(c), json: { claimId: extId, comment: cut(text, 2000) } });
+    const r = await http(c.name, url(c, `/claim-comments/${encodeURIComponent(extId)}`), { method: 'PATCH', headers: h(c), json: { claimId: extId, comment: cut(text, 2000) } });
+    // ZR's id for the comment: Pilotix knows it as its own when it reads the conversation back
+    return r?.id ? String(r.id) : typeof r === 'string' && r.trim() ? r.trim() : null;
   },
   async claimStates(c, ids) {
     needKeys(c, 'api_key', 'tenant');
@@ -918,20 +956,49 @@ export const zr: CourierAdapter = {
         if (String(e.message).includes('refuse les clés') || e.status === 429) throw e;
         continue;
       }
-      const name = String(g?.state?.name || '');
-      const words = String(g?.state?.description || name);
-      if (!words) continue;
-      let answer: string | null = null;
+      const end = claimEnd(g?.state);
+      if (!end.status) continue;
+      let messages: ClaimMessage[] | undefined;
       try {
-        const cm = await http(c.name, url(c, `/claim-comments/${encodeURIComponent(id)}/search`), { method: 'POST', headers: h(c), json: { claimId: id, pageNumber: 1, pageSize: 100 } });
-        const list = ((cm?.items ?? []) as any[]).filter((x) => String(x.content ?? '').trim());
-        const last = list.sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? ''))).pop();
-        answer = last ? `${last.modifiedBy?.fullName ? `${last.modifiedBy.fullName} : ` : ''}${String(last.content).trim()}` : null;
+        messages = await claimMessages(c, id);
       } catch {
-        /* comments are a bonus */
+        /* the conversation comes with a later refresh */
       }
-      // a locked state is the end of ZR's workflow (solved / closed)
-      out.push({ extId: id, status: words, resolved: !!g?.state?.isLocked || RESOLVED.test(name) || RESOLVED.test(words), at: g?.lastModifiedAt ?? null, answer });
+      const last = messages?.[messages.length - 1];
+      out.push({ extId: id, ...end, at: g?.lastModifiedAt ?? null, answer: last ? `${last.by ? `${last.by} : ` : ''}${last.text}` : null, messages });
+    }
+    return out;
+  },
+  async claimList(c, since) {
+    needKeys(c, 'api_key', 'tenant');
+    const out: ClaimFound[] = [];
+    const from = since ? Date.parse(since) : NaN;
+    // newest first; 5 pages of 100 at most at each refresh (older ones were brought in before)
+    for (let n = 1; n <= 5; n++) {
+      if (timeUp()) break;
+      const r = await http(c.name, url(c, '/claims/search'), { method: 'POST', headers: h(c), json: { keyword: '', pageNumber: n, pageSize: 100, orderBy: ['createdAt desc'] } });
+      const items = (r?.items ?? []) as any[];
+      let older = false;
+      for (const x of items) {
+        if (!x?.id) continue;
+        if (Number.isFinite(from) && x.createdAt && Date.parse(x.createdAt) < from) {
+          older = true;
+          continue;
+        }
+        const end = claimEnd(x.state);
+        out.push({
+          extId: String(x.id),
+          extRef: x.parcel?.trackingNumber ? String(x.parcel.trackingNumber) : claimNo(String(x.id)),
+          category: String(x.category?.name || x.category?.nameEnglish || x.category?.nameArabic || '').trim() || null,
+          title: x.title ? String(x.title) : null,
+          description: x.description ? String(x.description) : null,
+          tracking: x.parcel?.trackingNumber ? String(x.parcel.trackingNumber) : null,
+          parcelExtId: x.parcel?.id ? String(x.parcel.id) : null,
+          createdAt: x.createdAt ?? null,
+          ...end,
+        });
+      }
+      if (older || !r?.hasNext || !items.length) break;
     }
     return out;
   },

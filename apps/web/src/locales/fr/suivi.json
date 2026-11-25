@@ -369,6 +369,10 @@
     "apiRemindHelp": "Le message est ajouté comme commentaire sur la réclamation dans votre espace {{name}}.",
     "apiReminded": "Relance envoyée à {{name}}",
     "apiLastAnswer": "Dernière réponse de {{name}}",
+    "apiAt": "Chez {{name}}",
+    "fromCourier": "Créée dans l’espace {{name}}",
+    "stillOpen": "Encore ouverte chez {{name}}",
+    "stillOpenTip": "Fermée ici, mais {{name}} travaille encore dessus : Pilotix suit sa réponse jusqu’à ce que {{name}} la ferme.",
     "ph": {
       "title": "Réclamation à {{name}}",
       "titleLivreur": "Message à {{name}}",

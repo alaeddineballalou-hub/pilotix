@@ -50,7 +50,7 @@ export interface ClaimRow {
   stage?: 'wait' | 'answered' | 'relancer' | 'manager' | 'done';
   pushes?: number;
   dueAt?: string;
-  notes: { at: string; text: string; status?: string | null }[];
+  notes: { at: string; text: string; status?: string | null; ext?: { id: string | null; by?: string | null; mine: boolean } }[];
   createdAt: string;
   updatedAt: string;
   sentAt: string | null;
@@ -60,7 +60,16 @@ export interface ClaimRow {
   extStatus: string | null;
   extAnswer: string | null;
   extError: string | null;
+  /** 'courier': made in the courier's own app (ZR) and brought into Pilotix */
+  origin?: 'pilotix' | 'courier';
+  /** the courier's category, in its words (ZR: « Relancer un colis ») */
+  extCategory?: string | null;
+  /** the courier's work on it is over (solved or refused) */
+  extClosed?: boolean;
 }
+
+/** Closed here (« Résolue » or « Perdue ») while the courier still works on it. */
+export const stillOpenThere = (c: ClaimRow) => !!c.extId && (c.status === 'resolved' || c.status === 'lost') && c.extClosed === false;
 
 /** Who receives the claim of an order: its courier's claim desk, or our own livreur. */
 export function useTarget(o: Order | null, toLivreur: boolean) {

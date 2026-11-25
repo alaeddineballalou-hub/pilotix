@@ -369,6 +369,10 @@
     "apiRemindHelp": "The message is added as a comment on the claim in your {{name}} account.",
     "apiReminded": "Follow-up sent to {{name}}",
     "apiLastAnswer": "Last answer from {{name}}",
+    "apiAt": "At {{name}}",
+    "fromCourier": "Made in the {{name}} app",
+    "stillOpen": "Still open at {{name}}",
+    "stillOpenTip": "Closed here, but {{name}} is still working on it: Pilotix keeps reading its answer until {{name}} closes it.",
     "ph": {
       "title": "Claim to {{name}}",
       "titleLivreur": "Message to {{name}}",

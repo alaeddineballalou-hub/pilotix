@@ -13,8 +13,8 @@ import { agencyOf, agencyRowSql, andSql, queueSql, rowScopeSql } from './agencys
 import { findOrders } from './sav';
 import { applyTrust, DRIVER_CLAIMS } from './trust';
 import { KINDS } from '../couriers/kinds';
-import { demoClaimState } from '../couriers/demo';
-import type { ClaimCategory, ClaimSent, ClaimState, ParcelInfo, SwapSent } from '../couriers/types';
+import { demoClaimFound, demoClaimState } from '../couriers/demo';
+import type { ClaimCategory, ClaimFound, ClaimMessage, ClaimSent, ClaimState, ParcelInfo, SwapSent } from '../couriers/types';
 import type { CourierKind } from '@pilotix/shared';
 import { itemsKey, SWAP_API_KINDS, SWAP_SAME_WILAYA_ONLY, swapWayOf, WILAYAS } from '@pilotix/shared';
 
@@ -578,20 +578,43 @@ export interface Claim {
   extError: string | null;
   /** the courier takes réclamations through its API */
   viaApi: boolean;
+  /** 'courier': made in the courier's own app (ZR) and brought into Pilotix; 'pilotix': made here */
+  origin: 'pilotix' | 'courier';
+  /** the courier's category it is in, in the courier's words (ZR: « Relancer un colis ») */
+  extCategory: string | null;
+  /** the courier's work on it is over (solved or refused): one closed here while still open there says so */
+  extClosed: boolean;
+  /** the agent who follows the parcel: a réclamation made in the courier's app is his to follow */
+  followAgentId: number | null;
+}
+
+/** A line of a réclamation's history. `ext`: a message of the courier's conversation (its team's answers, or the shop's
+ *  own messages: sent from Pilotix or written in the courier's app), kept once by the courier's id for it. */
+interface ClaimNote {
+  at: string;
+  userId: number | null;
+  text: string;
+  status?: string | null;
+  ext?: { id: string | null; by?: string | null; byId?: string | null; mine: boolean };
 }
 
 const claimRef = (n: number) => `REC-${String(n).padStart(4, '0')}`;
-const CLAIM_SELECT = `SELECT c.*, o.ref AS order_ref, o.tracking, o.customer_name, o.phone, co.name AS company_name, co.kind AS company_kind, lv.name AS livreur_name, lv.phone AS livreur_phone, cb.name AS created_by_name
+const CLAIM_SELECT = `SELECT c.*, o.ref AS order_ref, o.tracking, o.customer_name, o.phone, o.follow_agent_id, co.name AS company_name, co.kind AS company_kind, lv.name AS livreur_name, lv.phone AS livreur_phone, cb.name AS created_by_name
   FROM claims c LEFT JOIN orders o ON o.id = c.order_id LEFT JOIN delivery_companies co ON co.id = c.company_id
   LEFT JOIN profiles lv ON lv.id = c.livreur_id LEFT JOIN profiles cb ON cb.id = c.created_by`;
 
 function toClaim(r: any, now = Date.now()): Claim {
-  const notes = typeof r.notes === 'string' ? JSON.parse(r.notes) : r.notes ?? [];
-  const relances = (notes as { at: string; text: string }[]).filter((n) => /^Relance/.test(n.text ?? ''));
-  const last = Math.max(Date.parse(iso(r.sent_at ?? r.created_at)), ...relances.map((n) => Date.parse(n.at)).filter((x) => !Number.isNaN(x)));
+  const notes: ClaimNote[] = typeof r.notes === 'string' ? JSON.parse(r.notes) : r.notes ?? [];
+  // our follow-ups: relances from Pilotix, and the shop's own messages written in the courier's app
+  const relances = notes.filter((n) => /^Relance/.test(n.text ?? '') || n.ext?.mine);
+  const time = (n: ClaimNote) => Date.parse(n.at);
+  const last = Math.max(Date.parse(iso(r.sent_at ?? r.created_at)), ...relances.map(time).filter((x) => !Number.isNaN(x)));
   const due = last + CLAIM_WAIT_H * 3_600_000;
   const done = r.status === 'resolved' || r.status === 'lost';
-  const answered = !!(r.ext_answer && String(r.ext_answer).trim());
+  // the courier answered when its team wrote after our last message (never our own messages read back from it); a
+  // réclamation whose conversation was not read yet keeps the courier's last answer as before
+  const theirs = notes.filter((n) => n.ext && !n.ext.mine).map(time).filter((x) => !Number.isNaN(x));
+  const answered = theirs.length ? Math.max(...theirs) > last : !notes.some((n) => n.ext) && !!(r.ext_answer && String(r.ext_answer).trim());
   const stage: ClaimStage = done ? 'done' : answered ? 'answered' : now < due ? 'wait' : relances.length >= CLAIM_PUSHES ? 'manager' : 'relancer';
   return {
     stage,
@@ -627,6 +650,10 @@ function toClaim(r: any, now = Date.now()): Claim {
     extAnswer: r.ext_answer ?? null,
     extError: r.ext_error ?? null,
     viaApi: r.livreur_id == null && !!KINDS[r.company_kind as CourierKind]?.claims,
+    origin: r.ext_origin === 'courier' ? 'courier' : 'pilotix',
+    extCategory: r.ext_category ?? null,
+    extClosed: !!r.ext_closed,
+    followAgentId: numOrNull(r.follow_agent_id),
   };
 }
 
@@ -637,16 +664,26 @@ const REASON_FR: Record<string, string> = {
   noreturn: 'Retour non reçu', other: 'Autre',
 };
 
+/** ZR's own 12 categories (read in its app, 25 Nov 2026), for the demo. */
 const DEMO_CATS: ClaimCategory[] = [
-  { id: 'demo-retard', name: 'Retard de livraison' },
-  { id: 'demo-relivraison', name: 'Demande de relivraison' },
-  { id: 'demo-statut', name: 'Statut erroné' },
-  { id: 'demo-endommage', name: 'Colis endommagé' },
-  { id: 'demo-adresse', name: 'Modification d’adresse' },
-  { id: 'demo-paiement', name: 'Paiement / versement' },
-  { id: 'demo-retour', name: 'Retour non reçu' },
+  { id: 'demo-acc-commande', name: 'Accélération de la commande' },
+  { id: 'demo-acc-encaissement', name: 'Accélération d’encaissement' },
+  { id: 'demo-annulation', name: 'Annulation de la commande' },
   { id: 'demo-autre', name: 'Autre' },
+  { id: 'demo-endommage', name: 'Colis endommagé' },
+  { id: 'demo-perdu', name: 'Colis perdu' },
+  { id: 'demo-retour', name: 'Demande de retour' },
+  { id: 'demo-information', name: 'Demande d’information' },
+  { id: 'demo-situations', name: 'Mise à jour des situations' },
+  { id: 'demo-relancer', name: 'Relancer un colis' },
+  { id: 'demo-reporter', name: 'Reporter un colis' },
+  { id: 'demo-retard', name: 'Retard de livraison' },
 ];
+/** The demo's ZR category for each of our reasons (as ZR's API chooses it when nobody picks one). */
+const DEMO_CAT_OF: Record<string, string> = {
+  relivrer: 'demo-relancer', late: 'demo-retard', nocall: 'demo-relancer', fakedeliv: 'demo-situations', fakeret: 'demo-situations',
+  address: 'demo-autre', damaged: 'demo-endommage', money: 'demo-acc-encaissement', noreturn: 'demo-retour', other: 'demo-autre',
+};
 
 /** Sends a saved claim to the courier's API. Never throws: a refusal is kept on the claim (ext_error) and in its history. */
 async function pushClaim(ctx: Ctx, cid: number, categoryId: string | null): Promise<Claim> {
@@ -662,7 +699,10 @@ async function pushClaim(ctx: Ctx, cid: number, categoryId: string | null): Prom
   let sent: ClaimSent | null = null;
   let error: string | null = null;
   try {
-    if (!ctx.server) sent = { extId: `demo-${cid}`, extRef: `D${String(1000000 + cid)}`, status: 'Nouvelle' };
+    if (!ctx.server) {
+      const cat = DEMO_CATS.find((x) => x.id === (categoryId ?? DEMO_CAT_OF[cur.reason] ?? 'demo-autre'));
+      sent = { extId: `demo-${cid}`, extRef: o.tracking, status: 'En attente de traitement', category: cat?.name ?? null };
+    }
     else
       sent = (await ctx.server.courier('claim', { companyId: cur.companyId, claim: { ref: cur.ref, item: { id: num(o.id), tracking: o.tracking, extId: o.ext_id ?? null }, reason: cur.reason, reasonText, categoryId, description } }, ctx)) as ClaimSent;
   } catch (e: any) {
@@ -671,66 +711,244 @@ async function pushClaim(ctx: Ctx, cid: number, categoryId: string | null): Prom
   const text = sent ? `Envoyée à ${cur.companyName ?? 'la société'} (API)${sent.extRef ? ` · n° ${sent.extRef}` : ''}` : `${cur.companyName ?? 'La société'} refuse : ${error}`;
   const notes = [...cur.notes, { at: nowIso, userId: me, text, status: null }];
   await ctx.db.query(
-    `UPDATE claims SET notes = $2, ext_id = $3, ext_ref = $4, ext_status = $5, ext_error = $6,
+    `UPDATE claims SET notes = $2, ext_id = $3, ext_ref = $4, ext_status = $5, ext_error = $6, ext_category = COALESCE($8, ext_category),
        channel = CASE WHEN $3::text IS NULL THEN channel ELSE 'api' END,
        sent_at = CASE WHEN $3::text IS NULL THEN sent_at ELSE COALESCE(sent_at, $7::timestamptz) END, updated_at = $7::timestamptz WHERE id = $1`,
-    [cid, JSON.stringify(notes), sent?.extId ?? null, sent?.extRef ?? null, sent?.status ?? null, error, nowIso],
+    [cid, JSON.stringify(notes), sent?.extId ?? null, sent?.extRef ?? null, sent?.status ?? null, error, nowIso, sent?.category ?? null],
   );
   if (cur.orderId) await addEvent(ctx.db, cur.orderId, me, 'note', null, 'event', `Réclamation ${cur.ref} : ${text}`.slice(0, 300));
   ctx.emit({ type: 'order', id: cur.orderId ?? undefined });
   return getClaim(ctx.db, cid);
 }
 
-/** Reads back the state of the open claims sent through an API; a closed one becomes "Réglée", ZR's answer goes in the history. */
-async function syncClaims(ctx: Ctx, onlyId?: number) {
-  const rows = await ctx.db.query(
-    `SELECT c.id, c.company_id, c.ext_id, c.ext_status, c.ext_answer, c.sent_at, c.notes, c.order_id, c.status FROM claims c
-     WHERE c.ext_id IS NOT NULL AND c.status NOT IN ${CLAIM_DONE} ${onlyId ? 'AND c.id = $1' : ''} ORDER BY c.updated_at LIMIT 200`,
-    onlyId ? [onlyId] : [],
-  );
-  let changed = 0;
-  let checked = 0;
-  const errors: string[] = [];
-  const byCompany = new Map<number, any[]>();
-  for (const r of rows) byCompany.set(num(r.company_id), [...(byCompany.get(num(r.company_id)) ?? []), r]);
-  const nowIso = new Date(ctx.now()).toISOString();
+/** Settings kept for the courier's réclamations: the shop's own account at the courier (per company, learned from the
+ *  messages Pilotix sent), the ones deleted here (never brought in again) and where the last look for new ones stopped. */
+const MINE_KEY = (companyId: number) => `claims_ext_mine_${companyId}`;
+const GONE_KEY = 'claims_ext_gone';
+const SEEN_KEY = (companyId: number) => `claims_ext_seen_${companyId}`;
+/** each look goes back 2 days before the last one (a réclamation made while the last look was running is not missed) */
+const SEEN_MARGIN_MS = 2 * 86_400_000;
+
+async function readJson(db: Db, key: string): Promise<any> {
+  const v = (await db.query('SELECT value FROM settings WHERE key = $1', [key]))[0]?.value;
+  return typeof v === 'string' ? JSON.parse(v) : v ?? null;
+}
+async function writeJson(db: Db, key: string, value: unknown) {
+  await db.query(`INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [key, JSON.stringify(value)]);
+}
+
+/** Our reason for a réclamation made in the courier's app, from its category (« Autre » when nothing fits). ZR's own 12,
+ *  read in its app on 25 Nov 2026: Accélération de la commande → late, Accélération d'encaissement → money, Colis
+ *  endommagé → damaged, Demande de retour → noreturn, Relancer / Reporter un colis → relivrer, Retard de livraison →
+ *  late; Annulation de la commande, Colis perdu, Demande d'information, Mise à jour des situations, Autre → other (its
+ *  own words stay on the réclamation). */
+function reasonOfCategory(words: string): (typeof CLAIM_REASONS)[number] {
+  const w = words.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const by: [(typeof CLAIM_REASONS)[number], RegExp][] = [
+    ['money', /encaissement|paiement|versement|argent|montant/],
+    ['late', /acceleration de la commande|retard|delai|bloque/],
+    ['relivrer', /relancer|reporter|relivr|nouvelle tentative/],
+    ['damaged', /endommag|casse|abim/],
+    ['noreturn', /demande de retour|retour (non|pas) (recu|rendu)/],
+    ['address', /adresse/],
+    ['nocall', /appel|injoignable/],
+  ];
+  return by.find(([, re]) => re.test(w))?.[0] ?? 'other';
+}
+
+/** Brings into Pilotix the réclamations made in the courier's own app (ZR), so Pilotix shows the same ones as the courier:
+ *  each on its order (found by the parcel's number), its words, the courier's state. Never one deleted here. */
+async function importCourierClaims(ctx: Ctx, errors: string[]): Promise<number> {
+  const kinds = Object.entries(KINDS).filter(([, k]) => k.claims).map(([kind]) => kind);
+  const cos = await ctx.db.query(`SELECT id, name, kind FROM delivery_companies WHERE active AND kind = ANY($1) ORDER BY id`, [kinds]);
   const expanded = !ctx.server && (await ctx.db.query(`SELECT value FROM settings WHERE key = 'demoExpanded'`))[0]?.value === true;
-  for (const [companyId, list] of byCompany) {
-    let states: ClaimState[] = [];
-    if (!ctx.server) states = list.map((r) => expanded ? demoClaimState(r.ext_id, num(r.id), r.sent_at ? iso(r.sent_at) : null, ctx.now()) : { extId: r.ext_id, status: r.ext_status || 'Nouvelle', resolved: false });
-    else
+  const gone = new Set<string>(((await readJson(ctx.db, GONE_KEY)) ?? []) as string[]);
+  const nowIso = new Date(ctx.now()).toISOString();
+  let added = 0;
+  for (const co of cos) {
+    const companyId = num(co.id);
+    const seen = await readJson(ctx.db, SEEN_KEY(companyId));
+    const since = seen?.at ? new Date(Date.parse(seen.at) - SEEN_MARGIN_MS).toISOString() : null;
+    let found: ClaimFound[] = [];
+    if (!ctx.server) {
+      if (!expanded) continue;
+      // the demo: two of its ZR parcels on the road have a réclamation made in ZR's app (chosen once, then always the same)
+      const key = `claims_demo_zr_${companyId}`;
+      let ids: number[] = (await readJson(ctx.db, key)) ?? [];
+      if (!ids.length) {
+        ids = (
+          await ctx.db.query(`SELECT id FROM orders WHERE company_id = $1 AND tracking IS NOT NULL AND shipped_at IS NOT NULL AND follow_status IN ('shipped', 'out_for_delivery', 'alert', 'failed') ORDER BY id DESC LIMIT 2`, [companyId])
+        ).map((o: any) => num(o.id));
+        await writeJson(ctx.db, key, ids);
+      }
+      const os = await ctx.db.query(`SELECT id, tracking, shipped_at FROM orders WHERE id = ANY($1) AND tracking IS NOT NULL AND shipped_at IS NOT NULL ORDER BY id`, [ids]);
+      found = os.map((o: any) => demoClaimFound(num(o.id), String(o.tracking), iso(o.shipped_at), ctx.now()));
+    } else
       try {
-        states = (await ctx.server.courier('claimStates', { companyId, extIds: list.map((r) => r.ext_id) }, ctx)) as ClaimState[];
+        found = (await ctx.server.courier('claimList', { companyId, since }, ctx)) as ClaimFound[];
       } catch (e: any) {
         errors.push(String(e?.message ?? 'Erreur'));
         continue;
       }
-    for (const st of states) {
-      const r = list.find((x) => x.ext_id === st.extId);
-      if (!r) continue;
+    const known = new Set<string>(
+      (await ctx.db.query('SELECT ext_id FROM claims WHERE company_id = $1 AND ext_id = ANY($2)', [companyId, found.map((f) => f.extId)])).map((r: any) => String(r.ext_id)),
+    );
+    for (const f of found) {
+      if (known.has(f.extId) || gone.has(`${companyId}:${f.extId}`)) continue;
+      known.add(f.extId);
+      const o = (
+        await ctx.db.query(
+          `SELECT id FROM orders WHERE company_id = $1 AND ((tracking IS NOT NULL AND tracking = $2) OR (ext_id IS NOT NULL AND ext_id = $3)) ORDER BY id DESC LIMIT 1`,
+          [companyId, f.tracking ?? '', f.parcelExtId ?? ''],
+        )
+      )[0];
+      // only a parcel Pilotix knows (owner's choice, 25 Nov 2026): the ones from before Pilotix stay at ZR only
+      if (!o) continue;
+      const at = f.createdAt && !Number.isNaN(Date.parse(f.createdAt)) ? new Date(f.createdAt).toISOString() : nowIso;
+      // ZR's names can end with a space (« Reporter un colis »)
+      const category = f.category?.trim() || null;
+      const words = category || f.title || '';
+      const status = f.closed ? (f.refused ? 'lost' : 'resolved') : 'waiting';
+      const notes: ClaimNote[] = [{ at, userId: null, text: `Créée dans l’espace ${co.name}${category ? ` · ${category}` : ''}`, status: null }];
+      if (f.closed) notes.push({ at: nowIso, userId: null, text: `Statut ${co.name} : ${f.status} · ${CLAIM_STATUS_FR[status]}`, status });
+      const r = (
+        await ctx.db.query(
+          `INSERT INTO claims (order_id, company_id, livreur_id, reason, details, message, channel, status, created_by, notes, created_at, updated_at, sent_at, resolved_at,
+             ext_id, ext_ref, ext_status, ext_origin, ext_category, ext_closed, ext_synced_at)
+           VALUES ($1, $2, NULL, $3, $4, $5, 'api', $6, NULL, $7, $8::timestamptz, $9::timestamptz, $8::timestamptz, CASE WHEN $6 = 'resolved' THEN $9::timestamptz END,
+             $10, $11, $12, 'courier', $13, $14, $9::timestamptz) RETURNING id`,
+          [
+            num(o.id),
+            companyId,
+            reasonOfCategory(words),
+            (f.description || f.title || f.category || '').slice(0, 1000),
+            (f.description || f.title || '').slice(0, 4000),
+            status,
+            JSON.stringify(notes),
+            at,
+            nowIso,
+            f.extId,
+            f.extRef,
+            f.status,
+            category,
+            f.closed,
+          ],
+        )
+      )[0];
+      added++;
+      await addEvent(ctx.db, num(o.id), null, 'note', null, 'event', `Réclamation ${claimRef(num(r.id))} créée dans l’espace ${co.name}${category ? ` : ${category}` : ''}`.slice(0, 300));
+    }
+    await writeJson(ctx.db, SEEN_KEY(companyId), { at: nowIso });
+  }
+  return added;
+}
+
+/** Which messages of the courier's conversations are the shop's own: the ones Pilotix sent (their ids, else their text),
+ *  then every message from the same account at the courier (the shop also writes in the courier's app with it). */
+function mineOf(list: { notes: ClaimNote[] }[], states: ClaimState[], known: string[]) {
+  const ids = new Set<string>();
+  const texts = new Set<string>();
+  const norm = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+  for (const r of list)
+    for (const n of r.notes) {
+      // a message Pilotix sent: « Relance envoyée à ZR (API) : … » (also those sent before their id was kept)
+      if (n.userId == null || !(n.ext?.mine || /^Relance/.test(n.text ?? ''))) continue;
+      if (n.ext?.id) ids.add(n.ext.id);
+      const sent = /\(API\) : ([\s\S]*)$/.exec(n.text ?? '')?.[1];
+      if (sent) texts.add(norm(sent));
+    }
+  const authors = new Set<string>(known);
+  for (const st of states) for (const m of st.messages ?? []) if (m.byId && (ids.has(m.id) || texts.has(norm(m.text)))) authors.add(m.byId);
+  return { authors, mine: (m: ClaimMessage) => ids.has(m.id) || texts.has(norm(m.text)) || (!!m.byId && authors.has(m.byId)) };
+}
+
+/** Reads back from the courier (ZR) its réclamations: the ones made in its own app come in, and each one followed here
+ *  gets the courier's state and its whole conversation (its team's answers; the shop's own messages are never taken for
+ *  an answer). Closed by the courier: « Résolue », or « Perdue » when it refused. One closed here while the courier still
+ *  works on it keeps being read, so it shows that it is still open there. */
+async function syncClaims(ctx: Ctx, onlyId?: number) {
+  const errors: string[] = [];
+  const added = onlyId ? 0 : await importCourierClaims(ctx, errors);
+  const rows = await ctx.db.query(
+    `SELECT c.id, c.company_id, c.ext_id, c.ext_status, c.ext_answer, c.ext_closed, c.sent_at, c.notes, c.order_id, c.status, co.name AS company_name FROM claims c
+     LEFT JOIN delivery_companies co ON co.id = c.company_id
+     WHERE c.ext_id IS NOT NULL AND (c.status NOT IN ${CLAIM_DONE} OR NOT c.ext_closed) ${onlyId ? 'AND c.id = $1' : ''} ORDER BY c.updated_at LIMIT 200`,
+    onlyId ? [onlyId] : [],
+  );
+  let changed = added;
+  let checked = 0;
+  const byCompany = new Map<number, any[]>();
+  for (const r of rows) {
+    r.notes = typeof r.notes === 'string' ? JSON.parse(r.notes) : r.notes ?? [];
+    byCompany.set(num(r.company_id), [...(byCompany.get(num(r.company_id)) ?? []), r]);
+  }
+  const nowIso = new Date(ctx.now()).toISOString();
+  const expanded = !ctx.server && (await ctx.db.query(`SELECT value FROM settings WHERE key = 'demoExpanded'`))[0]?.value === true;
+  for (const [companyId, list] of byCompany) {
+    const name = String(list[0].company_name ?? 'La société');
+    let states: ClaimState[] = [];
+    if (!ctx.server) states = list.map((r) => expanded ? demoClaimState(r.ext_id, num(r.id), r.sent_at ? iso(r.sent_at) : null, ctx.now()) : { extId: r.ext_id, status: r.ext_status || 'Nouvelle', resolved: false });
+    else
+      try {
+        states = (await ctx.server.courier('claimStates', { companyId, extIds: [...new Set(list.map((r) => String(r.ext_id)))] }, ctx)) as ClaimState[];
+      } catch (e: any) {
+        errors.push(String(e?.message ?? 'Erreur'));
+        continue;
+      }
+    const knownMine: string[] = (await readJson(ctx.db, MINE_KEY(companyId))) ?? [];
+    // the demo: the shop's account at its fake ZR
+    if (!ctx.server && expanded && !knownMine.includes('demo-shop')) knownMine.push('demo-shop');
+    const { authors, mine } = mineOf(list, states, knownMine);
+    if (authors.size !== knownMine.length) await writeJson(ctx.db, MINE_KEY(companyId), [...authors]);
+    for (const r of list) {
+      const st = states.find((x) => x.extId === r.ext_id);
+      if (!st) continue;
       checked++;
-      const notes = typeof r.notes === 'string' ? JSON.parse(r.notes) : r.notes ?? [];
+      const notes: ClaimNote[] = r.notes;
       const parts: string[] = [];
-      if (st.status && st.status !== r.ext_status) parts.push(`Statut ZR : ${st.status}`);
-      if (st.answer && st.answer !== r.ext_answer) parts.push(`Réponse : ${st.answer}`);
-      const status = st.resolved ? 'resolved' : r.status;
-      if (!parts.length && status === r.status) {
+      // the conversation: each message once, in its own time; ours are kept apart from the courier's answers
+      let answer: string | null = null;
+      for (const m of st.messages ?? []) {
+        const ours = mine(m);
+        if (!ours) answer = `${m.by ? `${m.by} : ` : ''}${m.text}`;
+        // already in the history: read before, or one Pilotix sent itself (its relance line)
+        const had = notes.find((n) => (n.ext?.id && n.ext.id === m.id) || (ours && n.userId != null && !n.ext?.id && /^Relance/.test(n.text ?? '') && n.text.trim().endsWith(m.text.trim())));
+        if (had) {
+          if (!had.ext?.id) had.ext = { ...(had.ext ?? { mine: true }), id: m.id, mine: true };
+          continue;
+        }
+        notes.push({
+          at: m.at && !Number.isNaN(Date.parse(m.at)) ? new Date(m.at).toISOString() : nowIso,
+          userId: null,
+          text: ours ? `Vous, dans l’espace ${name} : ${m.text}` : `${name}${m.by ? ` (${m.by})` : ''} : ${m.text}`,
+          status: null,
+          ext: { id: m.id, by: m.by, byId: m.byId, mine: ours },
+        });
+        parts.push(ours ? 'message de la boutique' : `réponse de ${name}`);
+      }
+      if (st.messages === undefined) answer = st.answer ?? null;
+      const closed = !!(st.closed ?? st.resolved);
+      if (st.status && st.status !== r.ext_status) parts.push(`Statut ${name} : ${st.status}`);
+      // closed by the courier while still open here: « Résolue », or « Perdue » when it refused
+      const open = r.status !== 'resolved' && r.status !== 'lost';
+      const status = open && closed ? (st.refused ? 'lost' : 'resolved') : r.status;
+      if (!parts.length && status === r.status && closed === !!r.ext_closed && (answer ?? null) === (r.ext_answer ?? null)) {
         await ctx.db.query('UPDATE claims SET ext_synced_at = $2 WHERE id = $1', [r.id, nowIso]);
         continue;
       }
       changed++;
-      if (status !== r.status) parts.push(CLAIM_STATUS_FR[status]);
-      notes.push({ at: nowIso, userId: null, text: parts.join(' · '), status: status !== r.status ? status : null });
+      notes.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+      if (status !== r.status) notes.push({ at: nowIso, userId: null, text: `Fermée par ${name} : ${CLAIM_STATUS_FR[status]}`, status });
       await ctx.db.query(
-        `UPDATE claims SET ext_status = $2, ext_answer = COALESCE($3, ext_answer), status = $4, notes = $5, ext_synced_at = $6::timestamptz, updated_at = $6::timestamptz,
+        `UPDATE claims SET ext_status = $2, ext_answer = $3, status = $4, notes = $5, ext_closed = $7, ext_synced_at = $6::timestamptz, updated_at = $6::timestamptz,
            resolved_at = CASE WHEN $4 = 'resolved' THEN COALESCE(resolved_at, $6::timestamptz) ELSE resolved_at END WHERE id = $1`,
-        [r.id, st.status, st.answer ?? null, status, JSON.stringify(notes), nowIso],
+        [r.id, st.status || r.ext_status, answer, status, JSON.stringify(notes), nowIso, closed],
       );
-      if (r.order_id) await addEvent(ctx.db, num(r.order_id), null, 'note', null, 'event', `Réclamation ${claimRef(num(r.id))} : ${parts.join(' · ')}`.slice(0, 300));
+      if (r.order_id && parts.length) await addEvent(ctx.db, num(r.order_id), null, 'note', null, 'event', `Réclamation ${claimRef(num(r.id))} : ${parts.join(' · ')}`.slice(0, 300));
     }
   }
   if (changed) ctx.emit({ type: 'orders' });
-  return { checked, changed, errors };
+  return { checked, changed, added, errors };
 }
 
 async function getClaim(db: Db, cid: number) {
@@ -764,7 +982,8 @@ async function listClaims(ctx: Ctx, f: z.infer<typeof ClaimsInput>): Promise<Pag
   // the stages are worked out from the open claims: « À relancer » (the agent's own), « Manager »
   const me = ctx.session.profile.id;
   const open = (await ctx.db.query(`${CLAIM_SELECT} ${base ? `${base} AND` : 'WHERE'} c.status NOT IN ${CLAIM_DONE} ORDER BY c.created_at`, w.params)).map((r: any) => toClaim(r, ctx.now()));
-  const mine = (c: Claim) => c.createdBy === me || ctx.session.isAdmin;
+  // a réclamation made in the courier's app belongs to the agent who follows the parcel
+  const mine = (c: Claim) => c.createdBy === me || (c.createdBy == null && c.origin === 'courier' && c.followAgentId === me) || ctx.session.isAdmin;
   counts.todo = open.filter((c) => c.stage === 'relancer' && mine(c)).length;
   counts.answered = open.filter((c) => c.stage === 'answered').length;
   counts.manager = open.filter((c) => c.stage === 'manager').length;
@@ -1363,12 +1582,13 @@ export const suiviProcs = {
   'suivi.claimRemind': proc(['suivi', 'confirmation', 'depot'], z.object({ id, text: z.string().trim().min(1).max(2000) }), async (ctx, i) => {
     const cur = await getClaim(ctx.db, i.id);
     if (!cur.extId || !cur.companyId) throw bad(`${cur.ref} n’a pas été créée chez la société par l’API`);
-    if (ctx.server) await ctx.server.courier('claimComment', { companyId: cur.companyId, extId: cur.extId, text: i.text }, ctx);
+    // ZR's id for the message: read back with the conversation, it is known as the shop's own (never as ZR's answer)
+    const sent = ctx.server ? ((await ctx.server.courier('claimComment', { companyId: cur.companyId, extId: cur.extId, text: i.text }, ctx)) as { extId?: string | null } | null) : null;
     const me = ctx.session.profile.id;
     const nowIso = new Date(ctx.now()).toISOString();
     const status = cur.status === 'waiting' ? 'still_waiting' : cur.status;
     const text = `Relance envoyée à ${cur.companyName ?? 'la société'} (API) : ${i.text}`.slice(0, 1000);
-    await ctx.db.query(`UPDATE claims SET notes = $2, status = $3, updated_at = $4::timestamptz WHERE id = $1`, [i.id, JSON.stringify([...cur.notes, { at: nowIso, userId: me, text, status: status !== cur.status ? status : null }]), status, nowIso]);
+    await ctx.db.query(`UPDATE claims SET notes = $2, status = $3, updated_at = $4::timestamptz WHERE id = $1`, [i.id, JSON.stringify([...cur.notes, { at: nowIso, userId: me, text, status: status !== cur.status ? status : null, ext: { id: sent?.extId ?? null, mine: true } }]), status, nowIso]);
     if (cur.orderId) await addEvent(ctx.db, cur.orderId, me, 'note', null, 'event', `Réclamation ${cur.ref} : ${text}`.slice(0, 300));
     ctx.emit({ type: 'order', id: cur.orderId ?? undefined });
     return getClaim(ctx.db, i.id);
@@ -1409,6 +1629,11 @@ export const suiviProcs = {
     if (!ctx.session.isAdmin) throw bad('Seul un administrateur peut supprimer une réclamation');
     const cur = await getClaim(ctx.db, i.id);
     await ctx.db.query('DELETE FROM claims WHERE id = $1', [i.id]);
+    // still at the courier: never brought back in from there
+    if (cur.extId && cur.companyId) {
+      const gone: string[] = (await readJson(ctx.db, GONE_KEY)) ?? [];
+      await writeJson(ctx.db, GONE_KEY, [...gone, `${cur.companyId}:${cur.extId}`].slice(-5000));
+    }
     if (cur.orderId) await addEvent(ctx.db, cur.orderId, ctx.session.profile.id, 'note', null, 'event', `Réclamation ${cur.ref} supprimée (dans Pilotix seulement)`);
     ctx.emit({ type: 'order', id: cur.orderId ?? undefined });
     return { ok: true };

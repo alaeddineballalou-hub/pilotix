@@ -13,7 +13,7 @@ import { useSession } from '../../lib/session';
 import { ConfirmButton } from '../admin/bits';
 import { ClaimCompany, waLink } from './common';
 import { trackOf } from '../../lib/items';
-import { CLAIM_REASONS, ClaimFormProps, ClaimRow, Reason, SentClaim, STATUS_TONE, Target, useClaimForm, useSendClaim } from './claimKit';
+import { CLAIM_REASONS, ClaimFormProps, ClaimRow, Reason, SentClaim, STATUS_TONE, stillOpenThere, Target, useClaimForm, useSendClaim } from './claimKit';
 import { AnswerSheet, ClaimSheet, RemindSheet, SendSheet } from './PhoneClaims';
 
 export { CLAIM_REASONS, useTarget } from './claimKit';
@@ -431,10 +431,17 @@ export function ClaimsPanel({ target }: { target: 'company' | 'livreur' }) {
                       <td data-l={t('suivi.rec.col.sent')}>
                         {c.sentAt ? <span className={late(c) ? 'bjr-late' : undefined}>{since(c.dueAt ? new Date(Date.parse(c.dueAt) - 48 * 3_600_000).toISOString() : c.updatedAt)}</span> : <span className="muted small">{t('suivi.rec.notSent')}</span>}
                         {c.extId ? (
-                          <small className="bjr-api" title={c.extAnswer ?? undefined}>
-                            {t('suivi.rec.apiNo', { name: c.companyName ?? '', n: c.extRef || '✓' })}
-                            {c.extStatus && ` · ${c.extStatus}`}
-                          </small>
+                          <>
+                            <small className="bjr-api" title={c.extAnswer ?? undefined}>
+                              {[c.extCategory, c.extStatus].filter(Boolean).join(' · ') || t('suivi.rec.apiAt', { name: c.companyName ?? '' })}
+                            </small>
+                            {c.origin === 'courier' && <small className="bjr-api from">{t('suivi.rec.fromCourier', { name: c.companyName ?? '' })}</small>}
+                            {stillOpenThere(c) && (
+                              <small className="bjr-api warn" title={t('suivi.rec.stillOpenTip', { name: c.companyName ?? '' })}>
+                                {t('suivi.rec.stillOpen', { name: c.companyName ?? '' })}
+                              </small>
+                            )}
+                          </>
                         ) : (
                           c.viaApi && c.extError && <small className="bjr-api bad" title={c.extError}>{t('suivi.rec.apiRefusedShort', { name: c.companyName ?? '' })}</small>
                         )}

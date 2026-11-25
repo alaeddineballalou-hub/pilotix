@@ -15,7 +15,7 @@ import { Icon, Loading } from '../../ui/kit';
 import { CoChip } from '../../ui/CoIcon';
 import { Options, Seg, Sheet } from '../../ui/Sheet';
 import { toast } from '../../ui/toast';
-import { CLAIM_REASONS, ClaimFormProps, ClaimRow, REASON_ICON, SentClaim, Target, useClaimForm, useSendClaim } from './claimKit';
+import { CLAIM_REASONS, ClaimFormProps, ClaimRow, REASON_ICON, SentClaim, stillOpenThere, Target, useClaimForm, useSendClaim } from './claimKit';
 import { ClaimCompany, waLink } from './common';
 import { ChangeSheet, useParcelInfo } from './CourierPanel';
 
@@ -225,7 +225,7 @@ export function RemindSheet({ c, onClose }: { c: ClaimRow; onClose: () => void }
       sub={
         <>
           <span className="ltr">{c.orderRef ?? '—'}</span> · <span className="ltr">{trackOf(c) || '—'}</span>
-          {c.extRef ? ` · ${t('suivi.rec.apiNo', { name, n: c.extRef })}` : ''}
+          {c.extCategory ? ` · ${c.extCategory}` : ''}
         </>
       }
       onClose={onClose}
@@ -397,10 +397,9 @@ export function PhoneClaims({ target }: { target: 'company' | 'livreur' }) {
                 </button>
                 {c.extId ? (
                   <div className="pxr-zr">
-                    <b>
-                      {t('suivi.rec.apiNo', { name, n: c.extRef || '✓' })}
-                      {c.extStatus ? ` · ${c.extStatus}` : ''}
-                    </b>
+                    <b>{[t('suivi.rec.apiAt', { name }), c.extCategory, c.extStatus].filter(Boolean).join(' · ')}</b>
+                    {c.origin === 'courier' && <small className="from">{t('suivi.rec.fromCourier', { name })}</small>}
+                    {stillOpenThere(c) && <small className="warn">{t('suivi.rec.stillOpen', { name })}</small>}
                     {c.extAnswer && <q dir="auto">{c.extAnswer}</q>}
                   </div>
                 ) : (

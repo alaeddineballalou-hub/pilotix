@@ -63,6 +63,8 @@ type Args = {
   extIds?: string[];
   extId?: string;
   text?: string;
+  /** claimList: back to this time (ISO) */
+  since?: string | null;
   /** a pickup bag: its courier id (add, remove, drop) or its number (label) */
   bag?: string;
   change?: ChangeInput;
@@ -76,6 +78,7 @@ type Args = {
  * Actions: send {companyId, ids} · track {companyId, items} · label {companyId, item} · cancel {companyId, item} ·
  * fees {companyId} · stopdesks {companyId} · test {companyId} · preview {companyId, orderId} ·
  * claim {companyId, claim} · claimCategories {companyId} · claimStates {companyId, extIds} · claimComment {companyId, extId, text} ·
+ * claimList {companyId, since} (the courier's claims, also those made in its own app) ·
  * payBalance / payRequests / payments {companyId} · payRequest {companyId, date} · payLines / payAccept {companyId, extId} ·
  * payRequestDate {companyId, extId, date} · payRequestCancel {companyId, extId} ·
  * labels {companyId, items} (one file) · exchange {companyId, orderId, item: the original parcel} ·
@@ -151,12 +154,16 @@ export async function runCourier(action: string, args: unknown, ctx: Ctx): Promi
     case 'claimComment': {
       const ad = ADAPTERS[c.kind];
       if (!ad.claimComment) throw new CourierError(`${c.name} : pas de relance par API`);
-      await ad.claimComment(c, a.extId!, a.text ?? '');
-      return { ok: true };
+      // the courier's id for the message: Pilotix recognises it as its own when it reads the conversation back
+      return { ok: true, extId: (await ad.claimComment(c, a.extId!, a.text ?? '')) ?? null };
     }
     case 'claimStates': {
       const ad = ADAPTERS[c.kind];
       return ad.claimStates ? ad.claimStates(c, a.extIds ?? []) : [];
+    }
+    case 'claimList': {
+      const ad = ADAPTERS[c.kind];
+      return ad.claimList ? ad.claimList(c, a.since ?? null) : [];
     }
     case 'preview': {
       const p = (await loadParcels(ctx.db, [a.orderId!]))[0];

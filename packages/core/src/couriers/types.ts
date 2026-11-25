@@ -151,9 +151,23 @@ export interface ClaimCategory {
 
 export interface ClaimSent {
   extId: string;
-  /** the courier's claim number, shown to the user */
+  /** the courier's reference for the claim, shown to the user (ZR: the parcel's number, as its app lists them) */
   extRef: string | null;
   status: string | null;
+  /** the courier's category it went into, in the courier's words */
+  category?: string | null;
+}
+
+/** One message on a claim at the courier (ZR: a comment), written by the courier's team or by the shop. */
+export interface ClaimMessage {
+  /** the courier's id for this message */
+  id: string;
+  at: string | null;
+  /** who wrote it, as the courier names that person */
+  by: string | null;
+  /** the courier's id for that person (the shop's own messages all come from the shop's account) */
+  byId: string | null;
+  text: string;
 }
 
 export interface ClaimState {
@@ -162,9 +176,34 @@ export interface ClaimState {
   status: string;
   /** the courier closed / solved it */
   resolved: boolean;
+  /** the courier closed it as refused (ZR: a closed state saying « rejetée », « non fondée »…): « Perdue » here */
+  refused?: boolean;
+  /** the courier's work on it is over (ZR: a locked state), solved or refused */
+  closed?: boolean;
   at?: string | null;
   /** the courier's last answer (comment), if any */
   answer?: string | null;
+  /** every message on it, oldest first (the courier's answers and the shop's own messages) */
+  messages?: ClaimMessage[];
+}
+
+/** A claim as the courier keeps it: made from Pilotix or in the courier's own app (to bring the second kind in). */
+export interface ClaimFound {
+  extId: string;
+  /** the courier's number for it, as its app shows it */
+  extRef: string | null;
+  /** the courier's category, in words */
+  category: string | null;
+  title: string | null;
+  description: string | null;
+  /** the parcel it is about: its tracking number and the courier's id for it */
+  tracking: string | null;
+  parcelExtId: string | null;
+  createdAt: string | null;
+  status: string;
+  closed: boolean;
+  resolved: boolean;
+  refused: boolean;
 }
 
 /** The courier's money: what it holds for us, payment requests, and the payments it made (with their parcels). */
@@ -364,8 +403,11 @@ export interface CourierAdapter {
   claimCategories?(c: CourierCompany): Promise<ClaimCategory[]>;
   claim?(c: CourierCompany, i: ClaimInput): Promise<ClaimSent>;
   claimStates?(c: CourierCompany, extIds: string[]): Promise<ClaimState[]>;
-  /** adds a message (follow-up) to a claim at the courier */
-  claimComment?(c: CourierCompany, extId: string, text: string): Promise<void>;
+  /** The courier's claims, newest first, back to `since` (ISO time; null: its recent ones): also those made in its own
+   *  app, so Pilotix shows the same réclamations as the courier. */
+  claimList?(c: CourierCompany, since: string | null): Promise<ClaimFound[]>;
+  /** adds a message (follow-up) to a claim at the courier; the courier's id for that message when it gives one */
+  claimComment?(c: CourierCompany, extId: string, text: string): Promise<string | null>;
   /** Payments through the courier API (balance, payment requests, payments and their parcels). */
   payments?: CourierPayments;
   /** Pickup bags (sacs de ramassage) through the courier API. */

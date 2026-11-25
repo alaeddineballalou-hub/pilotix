@@ -369,6 +369,10 @@
     "apiRemindHelp": "تُضاف الرسالة كتعليق على الشكوى في حسابك لدى {{name}}.",
     "apiReminded": "تم إرسال التذكير إلى {{name}}",
     "apiLastAnswer": "آخر رد من {{name}}",
+    "apiAt": "عند {{name}}",
+    "fromCourier": "أُنشئت في تطبيق {{name}}",
+    "stillOpen": "ما زالت مفتوحة عند {{name}}",
+    "stillOpenTip": "أُغلقت هنا، لكن {{name}} ما زالت تعمل عليها: يتابع Pilotix ردها حتى تغلقها {{name}}.",
     "ph": {
       "title": "شكوى إلى {{name}}",
       "titleLivreur": "رسالة إلى {{name}}",
