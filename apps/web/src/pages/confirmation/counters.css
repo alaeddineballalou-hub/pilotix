@@ -1,0 +1,33 @@
+/* Confirmation: the counters over each list (counters.tsx) and the tries as dots — the owner's design of 25 Nov 2026
+   (« cfk »: never the app's « .kpis », whose own rules win over these). Light: the approved colours; dark: the theme's. */
+.cfk { display: grid; grid-template-columns: repeat(3, minmax(0, 200px)); gap: 8px; margin: 4px 0 12px; }
+.cfk.n4 { grid-template-columns: repeat(4, minmax(0, 180px)); }
+.cfk2 { all: unset; box-sizing: border-box; border-radius: 16px; padding: 9px 12px; display: flex; flex-direction: column; gap: 1px; min-width: 0; border: 1.5px solid transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: border-color .15s, box-shadow .15s; }
+.cfk2 b { font-size: 22px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.cfk2 small { font-size: 12px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.cfk2:focus-visible { outline: 2px solid #F7A823; outline-offset: 2px; }
+.cfk2.on { border-color: currentColor; box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 18%, transparent); }
+.cfk2.late { background: #FCE7E5; color: #B42318; }
+.cfk2.soon { background: #FFF0DC; color: #9A4B00; }
+.cfk2.ok { background: #E3F5EA; color: #137A3B; }
+.cfk2.off { background: #F1EEE9; color: #3B4250; }
+.cfk2.info { background: #E8EEF8; color: #2459D6; }
+html[data-theme="dark"] .cfk2.late { background: var(--coral-soft); color: var(--coral); }
+html[data-theme="dark"] .cfk2.soon { background: color-mix(in srgb, #F7A823 16%, transparent); color: #F7C46A; }
+html[data-theme="dark"] .cfk2.ok { background: var(--ok-soft); color: var(--ok); }
+html[data-theme="dark"] .cfk2.off { background: color-mix(in srgb, var(--muted) 16%, transparent); color: var(--ink, #E6E9EF); }
+html[data-theme="dark"] .cfk2.info { background: color-mix(in srgb, #6E9CF0 16%, transparent); color: #9DBBE8; }
+/* a phone: the three side by side, the width of the screen */
+.pxp-cfk.cfk, .cfk.ph { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 6px 0 10px; }
+.pxp-cfk.cfk.n4 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.pxp-cfk.cfk.n4 .cfk2 { padding: 8px 9px; }
+@media (max-width: 380px) { .pxp-cfk .cfk2 { padding: 8px 9px; } .pxp-cfk .cfk2 b { font-size: 20px; } }
+
+/* En cours: the tries as dots (one per try the shop allows), then « 2/5 » */
+.cfdots { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.cfdots b { width: 8px; height: 8px; border-radius: 50%; background: #E3DDD4; flex: none; }
+.cfdots b.on { background: #F28B1E; }
+.cfdots small { margin-inline-start: 6px; font-size: 12px; color: #5F6673; font-weight: 600; font-variant-numeric: tabular-nums; }
+html[data-theme="dark"] .cfdots b { background: var(--line); }
+html[data-theme="dark"] .cfdots b.on { background: #F7A823; }
+html[data-theme="dark"] .cfdots small { color: var(--muted); }

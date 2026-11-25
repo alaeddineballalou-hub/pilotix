@@ -25,7 +25,8 @@ import { Focus } from './Focus';
 import { HeldChip } from './hold';
 import { useIsPhone } from '../../lib/useMedia';
 import { CancelAskFor, notShipped, PhoneCards, PhoneOrder, PickBar, PickToggle } from './PhoneList';
-import { type ConfStage, ConfirmedStages, StageTag } from './stages';
+import { type ConfStage, StageTag, stageName } from './stages';
+import { type CounterItem, Counters, TryDots } from './counters';
 import { currentLabel, StatusChoice, Sub, SUB_STATUSES, SUB_TONE, SUBS, telHref, toneOf, useCanGive, waHref } from './shared';
 import { ConfirmedStatsPage, StatsSection } from './Stats';
 import { ConfSettings } from './Settings';
@@ -48,7 +49,7 @@ export type CombinedConfirmation = {
   agency: boolean;
 };
 type SortKey = 'created_at' | 'confirmed_at' | 'next_call_at' | 'total' | 'customer_name' | 'deadline' | 'score';
-type ColKey = 'order' | 'source' | 'tracking' | 'creator' | 'channel' | 'product' | 'variant' | 'sku' | 'chrono' | 'name' | 'phone' | 'wilaya' | 'commune' | 'agent' | 'fagent' | 'total' | 'time' | 'created' | 'stock' | 'desk' | 'passed' | 'confirmed' | 'follow' | 'next' | 'status';
+type ColKey = 'order' | 'source' | 'tracking' | 'creator' | 'channel' | 'product' | 'variant' | 'sku' | 'chrono' | 'tries' | 'name' | 'phone' | 'wilaya' | 'commune' | 'agent' | 'fagent' | 'total' | 'time' | 'created' | 'stock' | 'desk' | 'passed' | 'confirmed' | 'follow' | 'next' | 'status';
 interface Filters {
   wilayaId?: number;
   agentId?: number | 'none';
@@ -80,6 +81,8 @@ const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
   { k: 'variant' },
   { k: 'sku' },
   ...(sub === 'nouvelles' || sub === 'attente' ? [{ k: 'chrono' as const, sort: 'deadline' as const }] : []),
+  // En cours: the tries as dots right after the chrono, in place of the « Statut » column (the owner's design, 25 Nov 2026)
+  ...(sub === 'attente' ? [{ k: 'tries' as const }] : []),
   { k: 'name', sort: 'customer_name' },
   // Confirmées: where the parcel is (À préparer, Préparée) right after the client
   ...(sub === 'confirmees' || sub === 'livrees' ? [{ k: 'follow' as const }] : []),
@@ -95,7 +98,7 @@ const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
   { k: 'desk' },
   { k: 'passed' },
   ...(sub === 'confirmees' || sub === 'livrees' ? [{ k: 'confirmed' as const, sort: 'confirmed_at' as const }] : [{ k: 'next' as const, sort: 'next_call_at' as const }]),
-  { k: 'status' },
+  ...(sub === 'attente' ? [] : [{ k: 'status' as const }]),
 ];
 
 /**
@@ -103,11 +106,27 @@ const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
  * vient » took Wilaya's place (the owner's choice, 24 Nov 2026): Wilaya is one tap away, behind « +N colonnes ».
  */
 const CONF_USEFUL = ['chrono', 'name', 'phone', 'product', 'source', 'status', 'wilaya', 'order', 'total'];
+/** En cours on a tablet: the tries right after the chrono (its « Statut » is gone) */
+const CONF_USEFUL_WAIT = ['chrono', 'tries', 'name', 'phone', 'product', 'source', 'wilaya', 'order', 'total'];
+type Bucket = 'late' | 'soon' | 'ontime' | 'now' | 'later' | 'postponed';
+/** the counters of Nouvelles and En cours, in the order of the design, with their colour */
+const BUCKETS: Partial<Record<Sub, { k: Bucket; tone: CounterItem<Bucket>['tone'] }[]>> = {
+  nouvelles: [
+    { k: 'late', tone: 'late' },
+    { k: 'soon', tone: 'soon' },
+    { k: 'ontime', tone: 'ok' },
+  ],
+  attente: [
+    { k: 'now', tone: 'late' },
+    { k: 'later', tone: 'soon' },
+    { k: 'postponed', tone: 'off' },
+  ],
+};
 
-function useList(sub: Sub, input: { q: string; f: Filters; sort: SortKey; dir: 'asc' | 'desc'; page: number; size: number; assigned?: 'free' | 'given'; stage?: ConfStage | null }, scope?: Record<string, unknown>) {
+function useList(sub: Sub, input: { q: string; f: Filters; sort: SortKey; dir: 'asc' | 'desc'; page: number; size: number; assigned?: 'free' | 'given'; stage?: ConfStage | null; bucket?: Bucket | null }, scope?: Record<string, unknown>) {
   return useRpc(
     'confirmation.list',
-    { sub, q: input.q || undefined, ...input.f, status: (input.f.status as any) || undefined, assigned: input.assigned, stage: (sub === 'confirmees' && input.stage) || undefined, sort: input.sort, dir: input.dir, page: input.page, pageSize: input.size, ...scope },
+    { sub, q: input.q || undefined, ...input.f, status: (input.f.status as any) || undefined, assigned: input.assigned, stage: (sub === 'confirmees' && input.stage) || undefined, bucket: input.bucket || undefined, sort: input.sort, dir: input.dir, page: input.page, pageSize: input.size, ...scope },
     { refetchInterval: 60_000 },
   );
 }
@@ -159,9 +178,9 @@ function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
     setCviewState(v);
     store.set('conf-confirmees-view', v === 'stats' ? v : null);
   };
-  // Confirmées: one stage of the dépôt at a time (« Toutes » when none)
+  // Confirmées: one stage of the dépôt at a time (all when none) — its counters over the list (Queue › stageCtl)
   const [stage, setStage] = useState<ConfStage | null>(null);
-  const stages = <ConfirmedStages stage={stage} onChange={setStage} counts={c?.stages} total={c?.confirmees} />;
+  const stageCtl = { counts: c?.stages, onChange: setStage };
   // « Réglages »: every setting of Confirmation (« Bloquer l'agent jusqu'à l'appel » is there now, in « Appels »)
   if (rawSub === 'reglages' && cfg)
     return (
@@ -180,24 +199,33 @@ function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
           {cview === 'stats' ? (
             <ConfirmedStatsPage />
           ) : (
-            <>
-              {stages}
-              <Queue key={sub} sub={sub} focusId={focusId} stage={stage} />
-            </>
+            <Queue key={sub} sub={sub} focusId={focusId} stage={stage} stageCtl={stageCtl} />
           )}
         </>
       ) : (
         <>
           {manager && !phone && <StatsSection sub={sub} />}
-          {sub === 'confirmees' && stages}
-          <Queue key={sub} sub={sub} focusId={focusId} stage={sub === 'confirmees' ? stage : null} />
+          <Queue key={sub} sub={sub} focusId={focusId} stage={sub === 'confirmees' ? stage : null} stageCtl={sub === 'confirmees' ? stageCtl : undefined} />
         </>
       )}
     </>
   );
 }
 
-export function Queue({ sub, focusId, combined, stage = null }: { sub: Sub; focusId: number | null; combined?: CombinedConfirmation; stage?: ConfStage | null }) {
+export function Queue({
+  sub,
+  focusId,
+  combined,
+  stage = null,
+  stageCtl,
+}: {
+  sub: Sub;
+  focusId: number | null;
+  combined?: CombinedConfirmation;
+  stage?: ConfStage | null;
+  /** Confirmées: its counters are the dépôt's stages (the page keeps which one is on) */
+  stageCtl?: { counts?: Partial<Record<ConfStage, number>>; onChange: (s: ConfStage | null) => void };
+}) {
   const phone = useIsPhone();
   const { t } = useTranslation();
   const { has } = useSession();
@@ -259,8 +287,30 @@ export function Queue({ sub, focusId, combined, stage = null }: { sub: Sub; focu
     if (v !== 'all') setF((cur) => (cur.agentId === undefined ? cur : { ...cur, agentId: undefined }));
     setPage(1);
   };
-  const list = useList(sub, { q: qd, f, sort, dir, page, size, assigned: showAssign ? assignedInput(side) : undefined, stage }, combined?.input);
+  // the counters over Nouvelles and En cours: one on = only its orders (the server counts and filters the whole list)
+  const [bucket, setBucketState] = useState<Bucket | null>(null);
+  const setBucket = (v: Bucket | null) => {
+    setBucketState(v);
+    setPage(1);
+  };
+  const list = useList(sub, { q: qd, f, sort, dir, page, size, assigned: showAssign ? assignedInput(side) : undefined, stage, bucket: BUCKETS[sub] ? bucket : null }, combined?.input);
   const rows: Row[] = list.data?.rows ?? [];
+  // the counters over the list (the owner's design, 25 Nov 2026): Nouvelles and En cours counted by the server over the
+  // whole list, Confirmées the dépôt's stages (« Sans stock » only when there is one)
+  const counterItems: CounterItem<string>[] = (() => {
+    if (stageCtl) {
+      const c = stageCtl.counts;
+      if (!c) return [];
+      const tone: Record<ConfStage, CounterItem<string>['tone']> = { nostock: 'late', preparer: 'soon', prepares: 'info', dispatchees: 'ok' };
+      const ks: ConfStage[] = [...((c.nostock ?? 0) > 0 || stage === 'nostock' ? ['nostock' as const] : []), 'preparer', 'prepares', 'dispatchees'];
+      return ks.map((k) => ({ k, n: c[k] ?? 0, tone: tone[k], label: stageName(t, k) }));
+    }
+    const b = list.data?.buckets;
+    const def = BUCKETS[sub];
+    if (!def || !b) return [];
+    return def.map((x) => ({ k: x.k, n: b[x.k] ?? 0, tone: x.tone, label: t(`confirmation.counters.${x.k}`) }));
+  })();
+  const counters = <Counters items={counterItems} value={stageCtl ? stage : bucket} onChange={(k) => (stageCtl ? stageCtl.onChange(k as ConfStage | null) : setBucket(k as Bucket | null))} className={phone ? 'pxp-cfk' : undefined} />;
   useEffect(() => {
     const ids = new Set(rows.map(rowKey));
     setSel((s) => new Set([...s].filter((x) => ids.has(x))));
@@ -269,7 +319,7 @@ export function Queue({ sub, focusId, combined, stage = null }: { sub: Sub; focu
   const { order, setOrder } = tc;
   // on a tablet: the 6 columns an agent calls with, « +N colonnes » shows the others (ui/tabletCols)
   // (Confirmées: where each order is in the dépôt — the « Livraison » column — before the rest)
-  const tcols = useTabletCols(order.map((k) => COLS.find((c) => c.k === k)!).filter((c) => c && visible.has(c.k)), (c) => c.k, sub === 'confirmees' ? ['follow', ...CONF_USEFUL] : CONF_USEFUL);
+  const tcols = useTabletCols(order.map((k) => COLS.find((c) => c.k === k)!).filter((c) => c && visible.has(c.k)), (c) => c.k, sub === 'confirmees' ? ['follow', ...CONF_USEFUL] : sub === 'attente' ? CONF_USEFUL_WAIT : CONF_USEFUL);
   const cols = tcols.cols;
   const drag = colDrag(order, setOrder);
   // column widths: each user's own
@@ -408,6 +458,8 @@ export function Queue({ sub, focusId, combined, stage = null }: { sub: Sub; focu
         ) : (
           <span className="muted">—</span>
         );
+      case 'tries':
+        return <TryDots made={r.attempts} max={list.data?.tries ?? 3} />;
       case 'time':
         return <Spent iso={r.createdAt} />;
       case 'created':
@@ -739,6 +791,7 @@ export function Queue({ sub, focusId, combined, stage = null }: { sub: Sub; focu
             )}
           </div>
         )}
+        {counters}
         {list.error ? (
           <ErrorBox error={list.error} onRetry={() => list.refetch()} />
         ) : !list.data ? (
@@ -747,28 +800,21 @@ export function Queue({ sub, focusId, combined, stage = null }: { sub: Sub; focu
           <>
             {phone ? (
               <>
-                {(() => {
-                  const now = Date.now();
-                  const late = rows.filter((r) => r.deadline && r.deadline.t < now).length;
-                  return (
-                    <div className="pxp-sum">
-                      {late > 0 && <span className="badge t-bad">{t('confirmation.ph.late', { n: late })}</span>}
-                      <span className="badge t-warn">{t('confirmation.ph.queue', { n: list.data.total })}</span>
-                      {/* « Assigner » several orders at once (the managers, the owner, an agency's chiefs) */}
-                      {manager && (picking || rows.length > 0) && (
-                        <PickToggle
-                          on={picking}
-                          allOn={allOn}
-                          onToggle={() => {
-                            setPicking((v) => !v);
-                            setSel(new Set());
-                          }}
-                          onAll={() => setSel(allOn ? new Set() : new Set(rows.map(rowKey)))}
-                        />
-                      )}
-                    </div>
-                  );
-                })()}
+                {/* the counters above replace the small « N en retard · N à traiter » badges; « Assigner » several
+                    orders at once stays (the managers, the owner, an agency's chiefs) */}
+                {manager && (picking || rows.length > 0) && (
+                  <div className="pxp-sum">
+                    <PickToggle
+                      on={picking}
+                      allOn={allOn}
+                      onToggle={() => {
+                        setPicking((v) => !v);
+                        setSel(new Set());
+                      }}
+                      onAll={() => setSel(allOn ? new Set() : new Set(rows.map(rowKey)))}
+                    />
+                  </div>
+                )}
                 <PhoneCards
                   rows={rows}
                   empty={canNext && !seesAll ? t('confirmation.mineEmpty') : t('confirmation.ph.empty')}
@@ -778,6 +824,7 @@ export function Queue({ sub, focusId, combined, stage = null }: { sub: Sub; focu
                   rowKey={rowKey}
                   edit={sub === 'confirmees'}
                   stages={sub === 'confirmees'}
+                  dots={sub === 'attente' ? list.data.tries ?? 3 : undefined}
                 />
                 {canNext && !picking && (
                   <button type="button" className="pxp-next" onClick={() => goNext([...open].pop())}>

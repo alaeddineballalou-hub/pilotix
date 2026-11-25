@@ -227,6 +227,8 @@ const QueueInput = z.object({
   agentId: z.union([id, z.literal('none'), z.literal('any')]).optional(),
   /** the managers' « Toutes / Non affectées / Affectées » (Nouvelles, En cours): no agent yet, or given to one */
   assigned: z.enum(['free', 'given']).optional(),
+  /** one of the counters over the list (QUEUE_BUCKETS): only those orders */
+  bucket: z.enum(['late', 'soon', 'ontime', 'now', 'later', 'postponed']).optional(),
   /** a team from the settings: its manager and its agents */
   teamId: z.string().max(40).optional(),
   productId: id.optional(),
@@ -252,6 +254,29 @@ export const DEFAULT_SORT: Record<ConfSub, { sort: 'created_at' | 'confirmed_at'
   livrees: { sort: 'confirmed_at', dir: 'desc' },
 };
 
+// ---------------------------------------------------------------- the counters over the lists
+/**
+ * The counters at the top of Nouvelles and En cours (the owner's design, 25 Nov 2026); each is a filter too.
+ * - Nouvelles: « En retard » (its first call is past due: the row's chrono shows + in red, the banner's « en retard »),
+ *   « À appeler vite » (due in the next 30 minutes), « À temps » (later, or the next call slot).
+ * - En cours: « Reportées » (the customer asked for another day), « Plus tard » (a time to come: a callback, the next
+ *   slot), « À rappeler » (due now or late, a missed try too).
+ */
+export const QUEUE_BUCKETS = { nouvelles: ['late', 'soon', 'ontime'], attente: ['now', 'later', 'postponed'] } as const;
+export type QueueBucket = (typeof QUEUE_BUCKETS)[keyof typeof QUEUE_BUCKETS][number];
+const SOON = 30 * MIN;
+export function bucketOf(sub: 'nouvelles' | 'attente', o: { confStatus: string }, d: DueInfo | undefined, now: number): QueueBucket {
+  if (sub === 'nouvelles') {
+    const dl = d?.deadline;
+    // 'start': the clock starts at a later slot (nothing to do before)
+    if (!dl || dl.m === 'start') return 'ontime';
+    if (dl.t < now) return 'late';
+    return dl.t - now <= SOON ? 'soon' : 'ontime';
+  }
+  if (o.confStatus === 'postponed') return 'postponed';
+  return d && (d.kind === 'later' || d.kind === 'first_next') ? 'later' : 'now';
+}
+
 /** The people of a team (its manager and agents); an unknown team matches nobody. */
 const teamAgents = (ctx: Ctx, teamId: string) => teamMembers(ctx.db, teamId);
 
@@ -271,12 +296,13 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
   const split = queue && (ctx.session.isAdmin || isManager(ctx) || agencyLead(ctx));
   // sorted or filtered by something the database does not hold (the countdown, the score), or split in two: the whole
   // list (3000 at most), sorted here, then the page cut
-  const whole = byDeadline || byScore || !!i.level || split || !!i.assigned;
+  // (Nouvelles and En cours: always, their counters count the whole list)
+  const whole = queue || byDeadline || byScore || !!i.level || split || !!i.assigned;
   const base = byDeadline || byScore ? (queue ? 'deadline' : def.sort === 'deadline' ? 'created_at' : def.sort) : sort;
   const stage = i.sub === 'confirmees' && i.stage ? STAGE_WHERE[i.stage] : null;
   const conf = (i.status ? [i.status] : [...allowed]).filter((s) => !stage?.conf || stage.conf.includes(s));
   // (a status and a stage that never meet: « Confirmée » and « Sans stock »)
-  if (!conf.length) return { rows: [] as QueueRow[], total: 0, page: i.page, pageSize: i.pageSize, assign: null };
+  if (!conf.length) return { rows: [] as QueueRow[], total: 0, page: i.page, pageSize: i.pageSize, assign: null, buckets: null, tries: null };
   const found = await listOrders(ctx, {
     conf,
     follow: i.sub === 'livrees' ? ['delivered'] : stage ? stage.follow : i.sub === 'confirmees' ? [...NOT_SENT] : undefined,
@@ -298,14 +324,19 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
     pageSize: whole ? 3000 : i.pageSize,
   }, { queue: 'conf' });
   let due = new Map<number, DueInfo>();
+  /** the shop's « annuler après N tentatives » (the dots of En cours) */
+  let tries: number | null = null;
   if (queue) {
     const calls = await getSetting(ctx.db, 'calls');
+    tries = calls.tries;
     due = computeDue(await loadTodo(ctx.db, queueSql(ctx, 'conf')), calls, ctx.now());
   }
   let page = found;
   let scoredAll = false;
   /** the switch's numbers: orders of this list (its search and filters) with no agent yet / given to one */
   let assign: { free: number; given: number } | null = null;
+  /** the counters over the list (its search, filters and switch), before one of them filters it */
+  let buckets: Partial<Record<QueueBucket, number>> | null = null;
   if (whole) {
     let all = [...found.rows];
     if (base === 'deadline') {
@@ -330,7 +361,15 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
     }
     if (split) assign = { free: all.filter((o) => !o.agentId).length, given: all.filter((o) => !!o.agentId).length };
     if (i.assigned) all = all.filter((o) => (i.assigned === 'free' ? !o.agentId : !!o.agentId));
-    page = { ...found, total: i.level || i.assigned ? all.length : found.total, page: i.page, pageSize: i.pageSize, rows: all.slice((i.page - 1) * i.pageSize, i.page * i.pageSize) };
+    if (i.sub === 'nouvelles' || i.sub === 'attente') {
+      const sub = i.sub;
+      const now = ctx.now();
+      const of = new Map(all.map((o) => [o.id, bucketOf(sub, o, due.get(o.id), now)] as const));
+      buckets = Object.fromEntries(QUEUE_BUCKETS[sub].map((k) => [k, 0]));
+      for (const k of of.values()) buckets[k] = (buckets[k] ?? 0) + 1;
+      if (i.bucket) all = all.filter((o) => of.get(o.id) === i.bucket);
+    }
+    page = { ...found, total: i.level || i.assigned || i.bucket ? all.length : found.total, page: i.page, pageSize: i.pageSize, rows: all.slice((i.page - 1) * i.pageSize, i.page * i.pageSize) };
   }
   const vids = [...new Set(page.rows.flatMap((o) => o.items.map((it) => it.variantId).filter((v): v is number => !!v)))];
   const skuOf = new Map<number, string>();
@@ -360,7 +399,7 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
     passed: passedOf.get(o.id) ?? [],
     rotateAt: rot.get(o.id) ?? null,
   }));
-  return { ...page, rows, assign };
+  return { ...page, rows, assign, buckets, tries };
 }
 
 // ---------------------------------------------------------------- KPI blocks
@@ -906,10 +945,14 @@ async function banner(ctx: Ctx) {
   const forMe = (x: (typeof L)[number]) => !x.o.agentId || x.o.agentId === me;
   const mine = L.filter((x) => x.o.agentId === me);
   const late = mine.filter((x) => x.d.kind === 'missed').length;
-  const nowN = mine.filter((x) => x.d.kind === 'now').length;
-  const fresh = L.filter((x) => forMe(x) && (x.d.kind === 'first_late' || x.d.kind === 'first_due')).length;
-  const night = L.filter((x) => forMe(x) && x.d.kind === 'first_next').length;
-  const firstLate = L.filter((x) => forMe(x) && x.d.kind === 'first_late').length;
+  // « nouvelles commandes » and their « en retard »: Nouvelles' own orders, so the banner and Nouvelles' « En retard »
+  // counter say the same number (an order « À vérifier » never called is in En cours: a try to make there)
+  const isNew = (x: (typeof L)[number]) => x.o.status === 'new';
+  const nowN = mine.filter((x) => (x.d.kind === 'now' && !isNew(x)) || (!isNew(x) && (x.d.kind === 'first_late' || x.d.kind === 'first_due'))).length;
+  const fresh = L.filter((x) => isNew(x) && forMe(x) && (x.d.kind === 'first_late' || x.d.kind === 'first_due' || x.d.kind === 'now')).length;
+  const night = L.filter((x) => isNew(x) && forMe(x) && x.d.kind === 'first_next').length;
+  // (the very rule of Nouvelles' « En retard » counter: bucketOf)
+  const firstLate = L.filter((x) => isNew(x) && forMe(x) && bucketOf('nouvelles', { confStatus: 'new' }, x.d, now) === 'late').length;
   const cands = L.filter((x) => forMe(x) && x.d.deadline && ['first_late', 'first_due', 'first_next', 'now', 'missed'].includes(x.d.kind)).sort((a, b) => {
     const A = a.d.deadline!.t;
     const B = b.d.deadline!.t;

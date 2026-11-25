@@ -118,7 +118,8 @@
     "passed": "Historique",
     "variant": "Variante",
     "fagent": "Agent suivi",
-    "chrono": "Chrono"
+    "chrono": "Chrono",
+    "tries": "Tentatives"
   },
   "f": {
     "wilaya": "Wilaya",
@@ -1061,5 +1062,18 @@
       "d": "Nouvelle commande, rappel, plus à vous, annulée : qui les reçoit, et quand le téléphone sonne",
       "s": "{{on}} sur {{all}} allumées"
     }
+  },
+  "counters": {
+    "label": "Compteurs : un appui montre seulement ces commandes, un autre appui les montre toutes",
+    "late": "En retard",
+    "soon": "À appeler vite",
+    "ontime": "À temps",
+    "now": "À rappeler",
+    "later": "Plus tard",
+    "postponed": "Reportées"
+  },
+  "tries": {
+    "title_one": "{{count}} tentative sur {{max}}",
+    "title_other": "{{count}} tentatives sur {{max}}"
   }
 }

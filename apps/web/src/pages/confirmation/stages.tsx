@@ -21,7 +21,7 @@ export function confStage(o: Pick<Order, 'confStatus' | 'followStatus'>): ConfSt
 
 /** A stage's name: the bar's (« Dispatchées »), or one order's (« Dispatchée »). « À préparer » (not the Dépôt's « En
  *  préparation »): the word the agents know, and it fits the list's « Livraison » column. */
-function stageName(t: (k: string) => string, k: ConfStage, one = false): string {
+export function stageName(t: (k: string) => string, k: ConfStage, one = false): string {
   if (k === 'nostock') return t('confirmation.stages.nostock');
   if (k === 'preparer') return t('status.follow.to_prepare');
   if (k === 'dispatchees' && one) return t('confirmation.stages.dispatchee');

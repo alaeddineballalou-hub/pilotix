@@ -118,7 +118,8 @@
     "passed": "History",
     "variant": "Variant",
     "fagent": "Follow-up agent",
-    "chrono": "Chrono"
+    "chrono": "Chrono",
+    "tries": "Tries"
   },
   "f": {
     "wilaya": "Wilaya",
@@ -1061,5 +1062,18 @@
       "d": "New order, call-back, no longer yours, cancelled: who gets them, and when the phone rings",
       "s": "{{on}} of {{all}} on"
     }
+  },
+  "counters": {
+    "label": "Counters: one tap shows only those orders, another tap shows them all",
+    "late": "Late",
+    "soon": "Call soon",
+    "ontime": "On time",
+    "now": "Call back",
+    "later": "Later",
+    "postponed": "Postponed"
+  },
+  "tries": {
+    "title_one": "{{count}} try out of {{max}}",
+    "title_other": "{{count}} tries out of {{max}}"
   }
 }
