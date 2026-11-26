@@ -831,7 +831,8 @@
     "by": "Commande prise par {{name}} : vous pouvez seulement la regarder.",
     "other": "Cette commande n’est pas à vous : vous pouvez seulement la regarder.",
     "chip": "🔒 {{name}}",
-    "mgr": "{{name}} est sur cette commande en ce moment. Vous pouvez quand même la changer."
+    "mgr": "{{name}} est sur cette commande en ce moment. Vous pouvez quand même la changer.",
+    "agency": "Cette commande est à l’agence {{name}}. Vous pouvez quand même la changer, ou la reprendre (« Assigner un agent »)."
   },
   "mineEmpty": "Aucune commande à vous ici. Votre manager vous donne les commandes à appeler.",
   "autoCancelled": "{{ref}} annulée automatiquement : {{n}} appels sans réponse",

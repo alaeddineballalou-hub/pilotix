@@ -27,6 +27,7 @@ import './check.css';
 import './photos.css';
 import { askRisk } from '../../ui/clientScore';
 import { useHold, useMayOverrideHold } from './hold';
+import { useAgentName } from '../../lib/agentName';
 import { rightOn } from '../../lib/rights';
 
 interface Line {
@@ -80,6 +81,9 @@ export function Detail({ order, onDone, onMessageDone, phone }: {
   const heldBy = useHold(order);
   /** whoever is above the agents may still act on it (to unblock it): a store's managers and owner, an agency's chiefs */
   const mgrHold = useMayOverrideHold();
+  /** the store's side: an order of its agency names the agency, never its agent (owner's rule, 26 Nov 2026) */
+  const atAgency = useAgentName().confAgency(order);
+  const heldName = atAgency ?? heldBy;
   const initial = useMemo<Line[]>(() => order.items.map((i) => ({ productId: i.productId, variantId: i.variantId, name: i.name, variantTitle: i.variantTitle, qty: i.qty, unitPrice: i.unitPrice, isUpsell: i.isUpsell, forProductId: i.forProductId ?? null })), [order]);
   const [L, setL] = useState<Line[]>(initial);
   /** the pictures of the cart's products */
@@ -420,7 +424,7 @@ export function Detail({ order, onDone, onMessageDone, phone }: {
     <div className={`qd2-main qd3 qd5 qd6${phone ? ' qd6-ph' : ''}`}>
       {heldBy !== null && (
         <p className="warnbox qd6-held" role="status">
-          🔒 {t(mgrHold ? 'confirmation.hold.mgr' : heldBy ? 'confirmation.hold.by' : 'confirmation.hold.other', { name: heldBy || '?' })}
+          🔒 {t(atAgency && mgrHold ? 'confirmation.hold.agency' : mgrHold ? 'confirmation.hold.mgr' : heldBy ? 'confirmation.hold.by' : 'confirmation.hold.other', { name: heldName || '?' })}
         </p>
       )}
       <div className="qd6-grid">

@@ -831,7 +831,8 @@
     "by": "Taken by {{name}}: you can only look at it.",
     "other": "This order is not yours: you can only look at it.",
     "chip": "🔒 {{name}}",
-    "mgr": "{{name}} is on this order right now. You can still change it."
+    "mgr": "{{name}} is on this order right now. You can still change it.",
+    "agency": "This order is with the agency {{name}}. You can still change it, or take it back (« Assign an agent »)."
   },
   "mineEmpty": "No order of yours here. Your manager gives you the orders to call.",
   "autoCancelled": "{{ref}} cancelled automatically: {{n}} unanswered calls",

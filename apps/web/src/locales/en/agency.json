@@ -96,7 +96,7 @@
     "marketing": "Ads"
   },
   "taskHelp": {
-    "sav": "Handle after-sales tickets and exchanges for delegated products.",
+    "sav": "Handle the after-sales tickets and exchanges of its orders (your sales pages' ones).",
     "confirmation": "Call the customers and confirm the orders",
     "suivi": "Follow the parcels until they are delivered",
     "marketing": "Run the ads of the products given"

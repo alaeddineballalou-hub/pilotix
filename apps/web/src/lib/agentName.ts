@@ -21,7 +21,7 @@ export function useAgentName() {
     /** the store's side (the agency's agents are hidden there) */
     storeSide,
     /** the agency holding the order's confirmation, for the store's side (null: its own team) */
-    confAgency: (o: Who) => (storeSide && o.confAgencyId ? agency(o.confAgencyId) : null),
+    confAgency: (o: Pick<Order, 'confAgencyId'>) => (storeSide && o.confAgencyId ? agency(o.confAgencyId) : null),
     /** the name for the confirmation (null: nobody yet) */
     conf: (o: Who) => (storeSide && o.confAgencyId ? agency(o.confAgencyId) : (o.agentName ?? null)),
     /** the name for the suivi (null: nobody yet) */

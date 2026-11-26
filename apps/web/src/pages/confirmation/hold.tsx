@@ -5,6 +5,7 @@
 import { CONF_TODO, Order } from '@pilotix/shared';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAgentName } from '../../lib/agentName';
 import { rpc } from '../../lib/backend';
 import { useScope } from '../../lib/seller';
 import { useSession } from '../../lib/session';
@@ -55,13 +56,15 @@ export function useMayOverrideHold(): boolean {
   return has('agent_manager', 'vendeur') || !!session?.profile.agencyLead;
 }
 
-/** In a list: « 🔒 Samira » next to the customer, when another agent has the order open. */
-export function HeldChip({ o }: { o: Pick<Order, 'lockedBy'> }) {
+/** In a list: « 🔒 Samira » next to the customer, when another agent has the order open (the store's side: the agency's
+ *  name, never its agent's — owner's rule, 26 Nov 2026). */
+export function HeldChip({ o }: { o: Pick<Order, 'lockedBy' | 'confAgencyId'> }) {
   const { me } = useSession();
   const mgr = useMayOverrideHold();
+  const who = useAgentName();
   const { t } = useTranslation();
   if (!o.lockedBy || o.lockedBy.id === me) return null;
-  const name = o.lockedBy.name || '?';
+  const name = who.confAgency(o) ?? (o.lockedBy.name || '?');
   return (
     <span className="badge t-warn px-held" title={t(mgr ? 'confirmation.hold.mgr' : 'confirmation.hold.by', { name })}>
       {t('confirmation.hold.chip', { name })}
