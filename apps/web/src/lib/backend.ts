@@ -312,9 +312,9 @@ class RemoteBackend implements Backend {
     if ('session' in r && 'token' in r && !('pick' in r)) return this.enterWith(r as { token: string; session: Session });
     return r as PickInfo | PhoneInfo | PhoneSent;
   }
-  /** Google: its token, checked by the server; a new person gets an account. */
-  async socialLogin(provider: 'google', token: string, language?: string): Promise<LoginResult> {
-    const r = await this.req<{ token: string; session: Session } | PickInfo | PhoneInfo>('/auth/social', { provider, token, language });
+  /** Google: its proof, checked by the server ('access': the plain button's window); a new person gets an account. */
+  async socialLogin(provider: 'google', token: string, language?: string, kind: 'id' | 'access' = 'id'): Promise<LoginResult> {
+    const r = await this.req<{ token: string; session: Session } | PickInfo | PhoneInfo>('/auth/social', { provider, token, kind, language });
     return 'pick' in r || 'phone' in r ? r : this.enterWith(r);
   }
   /** The store chosen in the picker. */

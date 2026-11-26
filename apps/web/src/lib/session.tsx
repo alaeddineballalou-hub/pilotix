@@ -20,7 +20,7 @@ interface SessionState {
   afterLogin: (r: LoginResult) => void;
   login: (email: string, password: string) => Promise<void>;
   /** with Google (its token) */
-  loginSocial: (provider: 'google', token: string) => Promise<void>;
+  loginSocial: (provider: 'google', token: string, kind?: 'id' | 'access') => Promise<void>;
   /** the store chosen in the picker */
   pick: (shop: number) => Promise<void>;
   cancelPick: () => void;
@@ -151,7 +151,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     } else enter(r);
   };
   const login = async (email: string, password: string) => afterLogin(await backend.login(email, password));
-  const loginSocial = async (provider: 'google', token: string) => afterLogin(await server.socialLogin(provider, token, store.get('lang') || undefined));
+  const loginSocial = async (provider: 'google', token: string, kind: 'id' | 'access' = 'id') => afterLogin(await server.socialLogin(provider, token, store.get('lang') || undefined, kind));
   const pick = async (shop: number) => {
     if (!picker) return;
     enter(await server.pick(picker.ticket, shop));

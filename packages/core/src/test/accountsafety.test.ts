@@ -1,7 +1,8 @@
 // Accounts cannot be taken by a store's admin: a team member's e-mail never becomes someone else's Pilotix account, a
 // known person keeps their own password (and with none yet, nothing the admin typed opens it), and a password a store's
-// admin chose opens that seller's stores only — never a store the person creates, and it goes when the person proves
-// their e-mail with Google. Only a link sent to the e-mail makes a password the person's own.
+// admin chose opens that seller's stores only — never a store the person creates. When the person proves their e-mail
+// with Google it stays only for someone who works for that seller alone (an agent), else it goes. Only a link sent to
+// the e-mail makes a password the person's own.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { call, Ctx, login, makeSession, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, profileById, seedBase, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
@@ -141,7 +142,7 @@ test('adding a known person to a team never sets their password', async () => {
   void pat;
 });
 
-test('a password a store’s admin chose: that seller’s stores only, never a store of the person, gone with Google', async () => {
+test('a password a store’s admin chose: that seller’s stores only, never a store of the person, gone with Google when another seller has them too', async () => {
   const { t, p } = await server();
   const eve = await selfSeller(t, 'eve@evil.dz', 'Evil Shop');
   const karim = await selfSeller(t, 'karim@shop.dz', 'Karim Shop');
@@ -180,6 +181,46 @@ test('a password a store’s admin chose: that seller’s stores only, never a s
   const shop = await addStore(t, (await accountByEmail(t, 'future@gmail.com'))!, { name: 'Future Shop' });
   assert.ok(shop.id);
   void p;
+});
+
+test('an agent of one seller presses « Continuer avec Google »: the password the seller chose keeps working', async () => {
+  const { t } = await server();
+  const sami = await selfSeller(t, 'sami@shop.dz', 'Sami Shop');
+  const samiAcc = (await accountByEmail(t, 'sami@shop.dz'))!;
+  // a second boutique of the same seller, the agent works in both
+  await t.platform.query('UPDATE platform.accounts SET max_stores = 5 WHERE id = $1', [samiAcc.id]);
+  const second = await addStore(t, (await accountByEmail(t, 'sami@shop.dz'))!, { name: 'Sami Deux' });
+  const sami2 = await as(t, second.id, 'sami@shop.dz', PW);
+  const nariPhone = tph();
+  await serverRpc(t, sami.ctx, 'users.create', { name: 'Nari', email: 'nari@gmail.com', phone: nariPhone, roles: ['confirmation'], password: 'Sami-Chose-123' });
+  await serverRpc(t, sami2, 'users.create', { name: 'Nari', email: 'nari@gmail.com', phone: nariPhone, roles: ['confirmation'], password: 'Other-Typed-123' });
+  // Google proves the e-mail: the password stays (the team's usual way in), only that seller's boutiques
+  const g = await socialAccount(t, { email: 'nari@gmail.com', name: 'Nari' });
+  assert.deepEqual([g.account.hasPassword, g.account.passwordBy, g.account.passwordOwner, g.account.verified], [true, 'admin', samiAcc.id, true]);
+  assert.ok(await checkAccountPassword(t, 'nari@gmail.com', 'Sami-Chose-123'));
+  assert.ok(await login(sami.ctx.db, 'nari@gmail.com', 'Sami-Chose-123'));
+  assert.ok(await login(sami2.db, 'nari@gmail.com', 'Sami-Chose-123'));
+  assert.equal(await passwordOpens(t, g.account, sami.id), true);
+  assert.equal(await passwordOpens(t, g.account, second.id), true);
+  // never a store of her own with it: her own password first
+  await assert.rejects(addStore(t, (await accountByEmail(t, 'nari@gmail.com'))!, { name: 'Nari Shop' }), /OWN_PASSWORD/);
+  // a second « Continuer avec Google »: still there
+  assert.equal((await socialAccount(t, { email: 'nari@gmail.com', name: 'Nari' })).account.hasPassword, true);
+  // another seller takes her too: the next Google proof removes it (it would stop her at that seller's door)
+  const karim = await selfSeller(t, 'karim@shop.dz', 'Karim Shop');
+  await serverRpc(t, karim.ctx, 'users.create', { name: 'Nari', email: 'nari@gmail.com', phone: nariPhone, roles: ['confirmation'], password: 'Karim-Typed-123' });
+  const g2 = await socialAccount(t, { email: 'nari@gmail.com', name: 'Nari' });
+  assert.deepEqual([g2.account.hasPassword, g2.account.passwordBy], [false, null]);
+  assert.equal(await checkAccountPassword(t, 'nari@gmail.com', 'Sami-Chose-123'), null);
+});
+
+test('Google never keeps a password the person chose before proving the e-mail (someone else may have typed it)', async () => {
+  const { t } = await server();
+  // a sign-up started with this e-mail and a password, never confirmed: the account exists, unproven
+  await t.platform.query(`INSERT INTO platform.accounts (email, name, password_hash, password_by) VALUES ('lina@gmail.com', 'Lina', $1, 'self')`, [await hashPassword('Squat-Pass-123')]);
+  const g = await socialAccount(t, { email: 'lina@gmail.com', name: 'Lina' });
+  assert.deepEqual([g.account.hasPassword, g.account.verified], [false, true]);
+  assert.equal(await checkAccountPassword(t, 'lina@gmail.com', 'Squat-Pass-123'), null);
 });
 
 test('the control room never reuses a password someone else may know: the owner is invited', async () => {

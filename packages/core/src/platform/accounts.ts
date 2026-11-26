@@ -4,8 +4,10 @@
 // Who may set a password: the person (Mon profil, « Mot de passe oublié », an invitation link); a store's admin only for
 // someone who works in that store alone and is not its owner.
 // A password a store's admin chose (a new team member, a password given by the admin) is not the person's own: it opens
-// the stores of that seller only (password_by 'admin', password_owner), never a store the person creates, and it goes
-// when the person proves their e-mail with Google. Only a link sent to the e-mail makes a password the person's own.
+// the stores of that seller only (password_by 'admin', password_owner), never a store the person creates. When the
+// person proves their e-mail with Google it stays only if they work for that seller alone and own nothing (an agent:
+// the team's usual password keeps working, 26 Nov 2026), else it goes (adminPasswordStays). Only a link sent to the
+// e-mail makes a password the person's own.
 import bcrypt from 'bcryptjs';
 import { isoOrNull, num, numOrNull } from '../db';
 import { hashPassword } from '../modules/users';
@@ -113,6 +115,33 @@ export async function dropForeignPassword(t: Tenancy, accountId: number): Promis
 
 /** Its password may be known by someone else than the person (see dropForeignPassword). */
 export const foreignPassword = (a: Account) => a.hasPassword && (a.passwordBy === 'admin' || !a.verified);
+
+/**
+ * Google just proved the e-mail of someone whose password a store's admin chose: does that password stay? Yes when the
+ * person works for that seller alone (the seller's stores, or the seller's own agency) and owns nothing: it opened that
+ * seller's stores only and still does (passwordOpens), and no store of their own is ever made with it (addStore:
+ * OWN_PASSWORD). An agent who once pressed « Continuer avec Google » keeps the password the team gave them (26 Nov
+ * 2026: it was deleted, the agent kept typing it, and the login locked). Anyone else: it goes, as before.
+ */
+export async function adminPasswordStays(t: Tenancy, acc: Account): Promise<boolean> {
+  if (!acc.hasPassword || acc.passwordBy !== 'admin' || acc.passwordOwner === null) return false;
+  const ownerOf = async (shopId: number) => numOrNull((await t.platform.query('SELECT owner_account_id FROM platform.shops WHERE id = $1', [shopId]))[0]?.owner_account_id);
+  // every store the person has a place in (closed places too: opened again, they would be another seller's door)
+  const rows = await t.platform.query(
+    `SELECT s.owner_account_id, s.schema_name FROM platform.logins l JOIN platform.shops s ON s.id = l.shop_id WHERE l.email = $1 AND s.status <> 'deleted'`,
+    [normEmail(acc.email)],
+  );
+  for (const r of rows as any[]) {
+    if (numOrNull(r.owner_account_id) === acc.passwordOwner) continue;
+    // an agency's agent inside a store the agency works for: still the agency's own person
+    const p = (await t.shop(r.schema_name).query('SELECT agency_id FROM profiles WHERE lower(email) = $1', [normEmail(acc.email)]).catch(() => []))[0];
+    const agency = numOrNull(p?.agency_id);
+    if (agency !== null && (await ownerOf(agency)) === acc.passwordOwner) continue;
+    return false;
+  }
+  const owns = await t.platform.query(`SELECT 1 FROM platform.shops WHERE owner_account_id = $1 AND status <> 'deleted' LIMIT 1`, [acc.id]);
+  return owns.length === 0;
+}
 
 let dummy: Promise<string> | null = null;
 const dummyHash = () => (dummy ??= bcrypt.hash('not-a-real-password', 12));

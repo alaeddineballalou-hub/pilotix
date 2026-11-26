@@ -102,10 +102,25 @@
 .pxa-kind .hint { line-height: 1.45; }
 /* the tabs first, then the trial badge, then the title */
 .pxa-form > .pxa-tabs { order: -2; }
-/* « Continuer avec Google »: Google's own button (SocialButtons.tsx) */
+/* « Continuer avec Google » (SocialButtons.tsx): Pilotix's own plain button in Google's sign-in look (white, grey
+   edge, the four-colour G, Roboto medium 14 px, 40 px high), never a name or a photo on it */
 .pxa-social { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
-.pxa-g { display: flex; justify-content: center; min-height: 44px; }
-.pxa-g > div { max-width: 100%; }
+.pxa-g { display: flex; justify-content: center; align-items: center; min-height: 44px; }
+.pxa-gbtn { position: relative; overflow: hidden; display: block; width: 100%; max-width: 400px; height: 40px; padding: 0 12px;
+  background: #fff; border: 1px solid #747775; border-radius: 4px; color: #1f1f1f; cursor: pointer;
+  font: 500 14px/20px Roboto, Arial, sans-serif; letter-spacing: .25px; white-space: nowrap; text-align: center;
+  -webkit-appearance: none; appearance: none; -webkit-user-select: none; user-select: none;
+  transition: background-color .218s, border-color .218s, box-shadow .218s; }
+.pxa-gbtn::after { content: ''; position: absolute; inset: 0; background: #303030; opacity: 0; transition: opacity .218s; pointer-events: none; }
+.pxa-gbtn:not(:disabled):hover { box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .3), 0 1px 3px 1px rgba(60, 64, 67, .15); }
+.pxa-gbtn:not(:disabled):hover::after { opacity: .08; }
+.pxa-gbtn:not(:disabled):active::after, .pxa-gbtn:not(:disabled):focus-visible::after { opacity: .12; }
+.pxa-gbtn:focus-visible { outline: 2px solid #1a73e8; outline-offset: 2px; }
+.pxa-gbtn:disabled { cursor: default; background: #ffffff61; border-color: #1f1f1f1f; }
+.pxa-gbtn:disabled .pxa-gbtn-in { opacity: .38; }
+.pxa-gbtn-in { display: flex; align-items: center; justify-content: center; gap: 12px; height: 100%; }
+.pxa-gbtn-in svg { display: block; width: 20px; height: 20px; flex: none; }
+.pxa-gbtn-txt { overflow: hidden; text-overflow: ellipsis; }
 .pxa-social-wait { text-align: center; margin: 0; }
 .pxa-social .pxa-sep { margin-top: 2px; }
 .px-otp{font-size:26px;letter-spacing:.45em;text-align:center;font-variant-numeric:tabular-nums}

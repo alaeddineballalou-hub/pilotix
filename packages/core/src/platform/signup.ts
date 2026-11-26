@@ -9,6 +9,7 @@ import { AppError, bad, forbidden, notFound } from '../rpc';
 import {
   Account,
   accountByEmail,
+  adminPasswordStays,
   checkAccountPassword,
   completedResets,
   dropForeignPassword,
@@ -272,8 +273,9 @@ export async function socialAccount(t: Tenancy, p: { email: string; name: string
   let acc = await accountByEmail(t, email);
   let created = false;
   // a password someone else may know (a store's admin chose it, or it was set before the e-mail was ever proven): it
-  // goes now that the person proves the e-mail is theirs (« Mot de passe oublié » gives them their own)
-  if (acc && foreignPassword(acc)) acc = (await dropForeignPassword(t, acc.id)) ?? acc;
+  // goes now that the person proves the e-mail is theirs (« Mot de passe oublié » gives them their own) — except the
+  // password the seller they work for alone chose (an agent): it stays, still opening that seller's stores only
+  if (acc && foreignPassword(acc) && !(await adminPasswordStays(t, acc))) acc = (await dropForeignPassword(t, acc.id)) ?? acc;
   if (!acc) {
     const set = await platformSettings(t);
     if (!set.signup.open) throw bad('Les inscriptions sont fermées pour le moment. Écrivez à Pilotix.');

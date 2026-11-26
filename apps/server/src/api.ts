@@ -365,25 +365,15 @@ const PhoneBody = z.object({ ticket: z.string().max(4000), phone: z.string().tri
 const ForgotBody = z.object({ email: z.string().email().max(200) });
 const ResetBody = z.object({ token: z.string().max(220), password: z.string().max(200) });
 const TokenBody = z.object({ token: z.string().max(220) });
-const SocialBody = z.object({ provider: z.enum(['google']), token: z.string().min(20).max(4000), language: z.enum(['fr', 'en', 'ar']).optional() });
+/** `kind`: 'access' from Pilotix's own plain button (Google's window), 'id' (or none) from Google's old button */
+const SocialBody = z.object({ provider: z.enum(['google']), token: z.string().min(20).max(4000), kind: z.enum(['id', 'access']).optional(), language: z.enum(['fr', 'en', 'ar']).optional() });
 
 /**
- * Who Google says this is: their proven e-mail and name, from the token their button gave the page (checked
- * here with Google / Facebook, and that it was made for Pilotix's own app). null: not a valid token for this app.
+ * Who Google says this is: their proven e-mail and name, from the proof the button gave the page (checked here with
+ * Google, and that it was made for Pilotix's own app: core › googleIdentity). null: not a valid proof for this app.
  */
-async function socialIdentity(provider: 'google', token: string, set: core.PlatformSettings): Promise<{ email: string; name: string } | null> {
-  const get = async (url: string) => {
-    const res = await fetch(url, { signal: AbortSignal.timeout(8_000) }).catch(() => null);
-    return res?.ok ? ((await res.json().catch(() => null)) as any) : null;
-  };
-  if (provider === 'google') {
-    const id = set.social.googleClientId.trim();
-    if (!id) return null;
-    const j = await get(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token)}`);
-    if (!j || j.aud !== id || !['accounts.google.com', 'https://accounts.google.com'].includes(j.iss)) return null;
-    if (!(j.email_verified === true || j.email_verified === 'true') || !j.email) return null;
-    return { email: String(j.email), name: String(j.name || '') };
-  }
+async function socialIdentity(provider: 'google', token: string, set: core.PlatformSettings, kind: core.GoogleProof = 'id'): Promise<{ email: string; name: string } | null> {
+  if (provider === 'google') return core.googleIdentity(token, kind, set.social.googleClientId);
   return null;
 }
 
@@ -704,7 +694,7 @@ class ApiController {
     const b = SocialBody.safeParse(body);
     if (!b.success) throw new core.AppError('bad_request', 'Connexion refusée');
     const set = await this.core.settings();
-    const who = await socialIdentity(b.data.provider, b.data.token, set);
+    const who = await socialIdentity(b.data.provider, b.data.token, set, b.data.kind ?? 'id');
     if (!who) {
       failedLogin(ipKey);
       throw new core.AppError('unauthorized', 'Google n’a pas confirmé ce compte. Réessayez.');

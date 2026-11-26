@@ -7,6 +7,7 @@ export * from './accounts';
 export * from './owner';
 export * from './phone';
 export * from './signup';
+export * from './google';
 export * from './support';
 export * from './reminders';
 export * from './procs';
