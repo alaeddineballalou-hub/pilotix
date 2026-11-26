@@ -33,7 +33,7 @@
     "title": "À recevoir",
     "empty": "Tout l’argent des colis livrés est reçu.",
     "kpiSub": "{{count}} colis · encaissé par eux {{amount}}",
-    "note": "Montant net estimé : ce que le client a payé moins les frais de la société (pour vos livreurs : tout le montant).",
+    "note": "Montant net : ce que le client a payé moins tout ce que la société prend — livraison, surpoids, retours, swaps et échanges SAV (pour vos livreurs : tout le montant).",
     "groupTitle": "{{name}} — {{count}} colis",
     "received_btn": "Argent reçu",
     "confirm": "Vous avez reçu {{amount}} de {{name}} pour {{count}} colis ?",

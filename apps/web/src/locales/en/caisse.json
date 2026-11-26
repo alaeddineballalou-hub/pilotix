@@ -33,7 +33,7 @@
     "title": "To receive",
     "empty": "All the money of delivered parcels has been received.",
     "kpiSub": "{{count}} parcels · collected by them {{amount}}",
-    "note": "Estimated net: what the customer paid minus the company fee (for your own couriers: the whole amount).",
+    "note": "Net amount: what the customer paid minus all the company takes — delivery, weight fee, returns, swaps and SAV exchanges (for your own couriers: the whole amount).",
     "groupTitle": "{{name}} — {{count}} parcels",
     "received_btn": "Money received",
     "confirm": "Did you receive {{amount}} from {{name}} for {{count}} parcels?",
