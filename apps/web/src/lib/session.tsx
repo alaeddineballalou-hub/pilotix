@@ -4,7 +4,7 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, 
 import { backend, isPhone, isPick, LoginResult, PhoneInfo, PickInfo, rpc, server, setOnLocked, setOnUnauthorized } from './backend';
 import { allOnRaw } from './allMode';
 import { setShop } from './features';
-import { setRights } from './rights';
+import { setOwnRoles, setRights } from './rights';
 import { applyLanguage } from './i18n';
 import { setRouteShop } from './route';
 import { store } from './store';
@@ -65,6 +65,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setShop(s?.shop);
     // the person's rights in this boutique (Utilisateurs › Rôles): the menu, the tabs and the buttons follow them
     setRights(s?.rights);
+    setOwnRoles(s?.roles, s?.profile.roles);
     // the app's links and the address name this boutique (pilotix.online/<boutique>/…)
     setRouteShop(s?.shop?.slug);
     setSessionState(s);

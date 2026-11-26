@@ -2,7 +2,7 @@ import { cmOnly, type MenuCond, menuRight, onSpace, type Role, SPACE_ALWAYS, SPA
 import { backend } from '../lib/backend';
 import { currentShop, pageIsOn, pageIsSoon } from '../lib/features';
 import { moduleOn } from '../lib/modules';
-import { rightOn } from '../lib/rights';
+import { ownRoles, rightOn } from '../lib/rights';
 
 /**
  * The menu, as in the original Pilotix (final layout): sub-pages appear as a stage bar inside the page,
@@ -83,7 +83,8 @@ const COND: Record<MenuCond, (roles: Role[], isAdmin: boolean) => boolean> = {
   notAdmin: (_r, admin) => !admin,
   store: () => storeOnly(),
   partners: () => partnersOn(),
-  cmOnly: (r, admin) => !admin && cmOnly(r),
+  // her own roles (her role includes Confirmation): a confirmation agent who is also a CM keeps the agents' lines
+  cmOnly: (r, admin) => !admin && cmOnly(ownRoles(r)),
 };
 
 /**
