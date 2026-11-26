@@ -281,6 +281,8 @@ export const PROC_RIGHTS: Record<string, Need> = {
   'suivi.claimSync': 'act:suivi.claim',
   'suivi.swap': 'act:suivi.swap',
   'suivi.unswap': 'act:suivi.swap',
+  // read one parcel again now (« J’ai fait le swap dans ZR »): may put a swap made at ZR on its order
+  'delivery.syncOne': 'act:suivi.swap',
   'parcel.change': 'act:suivi.parcel',
   'parcel.changeCancel': 'act:suivi.parcel',
   'parcel.action': 'act:suivi.parcel',

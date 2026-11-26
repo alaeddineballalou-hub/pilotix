@@ -10,6 +10,7 @@ import { trackOf } from '../../lib/items';
 import { SwapCopySheet, SwapPickSheet } from './PhoneSwap';
 import { Cand, SwapResult, useCopyFields, useSwapPick } from './swapKit';
 import { UnswapButton } from './Unswap';
+import { SwapZrSpace } from './SwapZrSpace';
 
 export type { SwapResult } from './swapKit';
 
@@ -98,6 +99,8 @@ function SwapDesk({ o, onClose, onDone }: PickProps) {
         <input type="search" aria-label={t('suivi.swapM.searchPh')} value={f.q} placeholder={t('suivi.swapM.searchPh')} autoComplete="off" onChange={(e) => f.setQ(e.target.value)} />
         {f.deb.length >= 2 && <div className="bjsv-cands">{f.found.isFetching && !f.found.data ? <Loading /> : f.foundRows.length ? f.foundRows.map(opt) : <p className="muted small">{t('suivi.swapM.noFound')}</p>}</div>}
         {f.err && <p className="form-err">{f.err}</p>}
+        {f.error && <p className="badbox">{f.error}</p>}
+        {f.refused && f.pick && <SwapZrSpace o={o} to={f.pick} onCaught={onClose} />}
       </div>
     </Modal>
   );

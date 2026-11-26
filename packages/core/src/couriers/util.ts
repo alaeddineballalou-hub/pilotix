@@ -4,6 +4,8 @@ import { AppError } from '../rpc';
 import { assertPublicAddress, publicFetch } from '../publicfetch';
 
 export class CourierError extends AppError {
+  /** the company refused the keys (401 / 403): its own answer, as it said it (shown as it is when it matters) */
+  refused?: { status: number; words: string };
   constructor(message: string, public status = 400) {
     super('bad_request', message);
   }
@@ -153,7 +155,13 @@ export async function http(who: string, url: string, o: HttpOpts = {}, retried =
   } catch {
     /* keep text */
   }
-  if (res.status === 401 || res.status === 403) throw new CourierError(`${who} refuse les clés API (${errText(data) || res.status}). Vérifiez-les dans Sociétés de livraison.`);
+  if (res.status === 401 || res.status === 403) {
+    // its words: its answer, else what its « WWW-Authenticate » says (an empty 401 often says why only there)
+    const words = (errText(data) || String(res.headers.get('www-authenticate') ?? '').trim()).slice(0, 300);
+    const err = new CourierError(`${who} refuse les clés API (${words || res.status}). Vérifiez-les dans Sociétés de livraison.`);
+    err.refused = { status: res.status, words };
+    throw err;
+  }
   if (res.status === 429) throw new CourierError(`${who} : trop de demandes, réessayez dans une minute`, 429);
   if (!res.ok) {
     // the courier's whole answer goes to the server log: what the user sees is short, this shows everything

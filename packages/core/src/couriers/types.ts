@@ -96,6 +96,23 @@ export interface TrackResult {
   costs?: CourierCosts;
   /** the courier could not answer for this parcel (not found, error): reported, the parcel is left as it is */
   error?: string;
+  /** the courier says this parcel was swapped (ZR: its « swap » count): who it goes to now, as the courier has it — a swap
+   *  made in its own space is put on the right order by the sync */
+  swapped?: CourierSwapSeen;
+}
+
+/** A swap the courier made (in its own space, or by its API), as its parcel says now. */
+export interface CourierSwapSeen {
+  count: number;
+  at: string | null;
+  /** the customer it goes to now: name and phones as the courier has them */
+  name: string | null;
+  phones: string[];
+  /** what it collects now */
+  amount: number | null;
+  /** its number now (a courier may give a swapped parcel a new one) and its own id */
+  tracking: string | null;
+  extId: string | null;
 }
 
 export interface FeeRow {

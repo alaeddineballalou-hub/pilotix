@@ -12,6 +12,7 @@ import { productsText, swapText } from './common';
 import { useParcelInfo } from './CourierPanel';
 import { Cand, SwapResult, useCopyFields, useSwapPick } from './swapKit';
 import { UnswapButton } from './Unswap';
+import { SwapZrSpace } from './SwapZrSpace';
 
 export function SwapPickSheet({ o, onClose, onDone }: { o: Order; onClose: () => void; onDone: (r: SwapResult) => void }) {
   const { t } = useTranslation();
@@ -124,6 +125,8 @@ export function SwapPickSheet({ o, onClose, onDone }: { o: Order; onClose: () =>
           )}
         </fieldset>
       )}
+      {f.error && <p className="pxk-bad">{f.error}</p>}
+      {f.refused && f.pick && <SwapZrSpace o={o} to={f.pick} onCaught={onClose} />}
     </Sheet>
   );
 }

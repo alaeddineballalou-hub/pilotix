@@ -2,7 +2,7 @@
 // own livreurs and their round ("Ma tournée"). Courier APIs run on the server only (ctx.server.courier → couriers/index.ts);
 // in the browser preview every courier answer is simulated.
 import { sealDeep, sealString } from '../secretbox';
-import { COURIER_KINDS, CourierKind, courierCardOf, FOLLOW_ON_ROAD, FollowStatus, Order, Session, SUB_TAKEN_UNSCANNED, WILAYAS } from '@pilotix/shared';
+import { COURIER_KINDS, CourierKind, courierCardOf, FOLLOW_ON_ROAD, FollowStatus, itemsKey, normalizePhone, Order, Session, SUB_TAKEN_UNSCANNED, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { ADAPTERS } from '../couriers/adapters';
 import { DEFAULT_TEMPLATE, PLACEHOLDERS, checkTemplate, custom } from '../couriers/custom';
@@ -10,7 +10,7 @@ import { fakeTracking, nextStep, word, zrWeighs } from '../couriers/demo';
 import { CARDS, KINDS } from '../couriers/kinds';
 import { keysOk, loadCompany, loadParcels, resolveStatus } from '../couriers/load';
 import { checkedInToday } from './livreur';
-import type { CourierCosts, CourierStep, Desk, ExchangeResult, FeeRow, LabelResult, PreviewResult, SendResult, TrackItem, TrackResult } from '../couriers/types';
+import type { CourierCosts, CourierStep, CourierSwapSeen, Desk, ExchangeResult, FeeRow, LabelResult, PreviewResult, SendResult, TrackItem, TrackResult } from '../couriers/types';
 import { Db, iso, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, notFound, proc, publicApi, takeActionLocks } from '../rpc';
 
@@ -25,6 +25,7 @@ import { removedCouriers } from '../platform/courierWatch';
 import { addEvent, getOrder, listOrders, setFollow } from './orders';
 import { recipients } from './depotalerts';
 import { sendPush } from './push';
+import { SWAP_FROM, writeSwap } from './swapwrite';
 import { apiFees, companyWeightRule, courierFeesOf, declaredKg, feesByApi, knownKg, ruleFee, saveCourierFees, saveCourierWeight, weightRuleOf, weightRuleSet, wholeKg, type WeightRule } from './courierfees';
 
 const id = z.number().int().positive();
@@ -451,12 +452,24 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
   const errors: { ref: string; error: string }[] = [];
   /** parcels the company just took before the depot's scan (the depot is told once, below) */
   const taken: string[] = [];
+  /** swaps made in the company's own space, put on their new customer's order (« PX1329 → PX1392 ») */
+  const swaps: string[] = [];
   for (const a of answers) {
     const p = parcels.find((x: any) => num(x.id) === a.id);
     if (!p) continue;
     if (a.error) {
       errors.push({ ref: p.ref, error: a.error });
       continue;
+    }
+    // swapped in the company's own space (ZR › « Swaps »): the parcel goes to its new customer's order, its statuses and
+    // prices are read there from now on (the next read)
+    if (a.swapped && !endedIds.has(a.id)) {
+      const moved = await catchSwapSeen(ctx, c, a.id, a.swapped);
+      if (moved) {
+        swaps.push(moved);
+        changed++;
+        continue;
+      }
     }
     // The scenario picker supplies an already mapped status; ordinary sync still honors the shop's courier mapping.
     const to = scenario ?? resolveStatus(defaults, c.statusMap, a, ADAPTERS[c.kind]?.situations);
@@ -536,7 +549,85 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
       url: '#/depot/prepares',
     }).catch(() => 0);
   }
-  return { company: c.name, checked: parcels.length, changed, fees: feesChanged, failed: errors.length, errors: errors.slice(0, 20) };
+  return { company: c.name, checked: parcels.length, changed, fees: feesChanged, failed: errors.length, errors: errors.slice(0, 20), ...(swaps.length ? { swaps } : {}) };
+}
+
+// ---------------------------------------------------------------- swaps made in the company's own space
+/**
+ * A swap made in the company's own space, seen when Pilotix reads the parcel: it now goes to another customer (ZR gives
+ * its swap to its own site only, not to API keys — read 26 Nov 2026 — so a swap is made in ZR › « Swaps »). Pilotix finds
+ * that customer's order — confirmed, still at the depot, asking for exactly the parcel's products (the owner's rule: the
+ * parcel is never opened) — and puts the parcel on it, like « Swap » does, its own parcel at the company cancelled first.
+ * None found: said once on the order, looked for again at each read (an order made or fixed later is caught then).
+ * Returns « PX1329 → PX1392 », or null.
+ */
+export async function catchSwapSeen(ctx: Ctx, c: CompanyRow, aId: number, seen: CourierSwapSeen): Promise<string | null> {
+  const A0 = (await ctx.db.query('SELECT id, ref, phone, phone2, follow_status, shipped_at, wilaya_id FROM orders WHERE id = $1', [aId]))[0];
+  if (!A0?.shipped_at || !(SWAP_FROM as readonly string[]).includes(A0.follow_status ?? '')) return null;
+  const phones = [...new Set(seen.phones.map((x) => normalizePhone(x)).filter((x): x is string => !!x))];
+  // still its own customer (the parcel Pilotix already gave this order, or no number read): nothing to do
+  if (!phones.length || phones.includes(A0.phone) || (!!A0.phone2 && phones.includes(A0.phone2))) return null;
+  const who = [seen.name, phones.join(' / ')].filter(Boolean).join(' · ');
+  const key = phones.join(',');
+  // said once per new customer (the parcel is read again and again)
+  const say = async (k: string, text: string) => {
+    const had = (await ctx.db.query(`SELECT 1 FROM order_events WHERE order_id = $1 AND kind = 'note' AND data->>'swap_seen' = $2 LIMIT 1`, [aId, k]))[0];
+    if (!had) await addEvent(ctx.db, aId, null, 'note', null, 'event', text, { swap_seen: k });
+  };
+  // that customer's orders waiting at the depot: the same wilaya first, the oldest first
+  const rows = await ctx.db.query(
+    `SELECT o.id FROM sales o WHERE o.id <> $1 AND o.conf_status = 'confirmed' AND o.shipped_at IS NULL
+       AND (o.follow_status IS NULL OR o.follow_status IN ('to_prepare','prepared')) AND (o.phone = ANY($2) OR o.phone2 = ANY($2))
+     ORDER BY (o.wilaya_id = $3) DESC, o.confirmed_at ASC NULLS LAST, o.id ASC LIMIT 20`,
+    [aId, phones, num(A0.wilaya_id)],
+  );
+  if (!rows.length) {
+    await say(key, `${c.name} : colis swappé dans son espace vers ${who} — aucune commande confirmée en attente à ce numéro. Créez-la avec les mêmes produits : Pilotix lui donnera le colis tout seul.`);
+    return null;
+  }
+  const ids = [aId, ...rows.map((r: any) => num(r.id))];
+  const lines = await ctx.db.query('SELECT order_id, product_id, variant_id, qty FROM order_items WHERE order_id = ANY($1)', [ids]);
+  const keyOf = (id: number) => itemsKey(lines.filter((l: any) => num(l.order_id) === id).map((l: any) => ({ productId: num(l.product_id), variantId: numOrNull(l.variant_id), qty: num(l.qty) })));
+  const want = keyOf(aId);
+  const bId = rows.map((r: any) => num(r.id)).find((id: number) => keyOf(id) === want);
+  if (!bId) {
+    await say(key, `${c.name} : colis swappé dans son espace vers ${who} — sa commande ne demande pas exactement les produits du colis. Corrigez-la (les mêmes produits) : Pilotix lui donnera le colis tout seul.`);
+    return null;
+  }
+  // its own parcel already made at the company (packed, label printed): cancelled there first — else the company would
+  // still pick it up and bill it (two parcels for one customer); refused there: said, nothing moves
+  const own = (await ctx.db.query('SELECT ref, tracking FROM orders WHERE id = $1', [bId]))[0];
+  if (own?.tracking) {
+    try {
+      await cancelParcel(ctx, bId);
+    } catch (e: any) {
+      await say(`${key}:own`, `${c.name} : colis swappé dans son espace vers ${own.ref}, mais son propre colis ${own.tracking} n’a pas pu être annulé (${e?.message ?? 'refusé'}). Annulez-le : Pilotix fera le reste tout seul.`);
+      return null;
+    }
+  }
+  const sw = await swapFees(ctx, c.id);
+  const done = await ctx.db.tx(async (tx) => {
+    const A = (await tx.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [aId]))[0];
+    const B = (await tx.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [bId]))[0];
+    // checked again under the lock: someone may have moved one of them meanwhile
+    if (!A?.shipped_at || !(SWAP_FROM as readonly string[]).includes(A.follow_status ?? '')) return null;
+    if (!B || B.conf_status !== 'confirmed' || B.shipped_at || !(B.follow_status === null || ['to_prepare', 'prepared'].includes(B.follow_status))) return null;
+    const sameWilaya = num(A.wilaya_id) === num(B.wilaya_id);
+    const total = Math.round(num(B.total));
+    await writeSwap(tx, A, B, {
+      me: null,
+      sent: { extId: null, parcelExtId: seen.extId ?? (A.ext_id as string | null) ?? null, tracking: seen.tracking ?? String(A.tracking) },
+      how: ` · fait dans l’espace ${c.name}, vu par Pilotix`,
+      swapFee: (sameWilaya ? sw.same : sw.other) ?? 0,
+      sameWilaya,
+      // what the company collects now is what it was told in its space: said when it is not the order's amount
+      warn: seen.amount !== null && seen.amount !== total ? `${c.name} encaissera ${seen.amount} DA, la commande dit ${total} DA` : null,
+      nowIso: new Date(ctx.now()).toISOString(),
+      extra: { seen_at_company: true },
+    });
+    return `${A.ref} → ${B.ref}`;
+  });
+  return done;
 }
 /** Does the company's answer say it has the parcel? Any word but its « before pickup » ones — those that change nothing
  *  (ZR: « Commande reçue » … « Prêt à expédier », its own « Annulé »), « À préparer », « Préparé » or « Annulé » — and
@@ -1328,6 +1419,19 @@ export const deliveryProcs = {
       steps,
       ...(oldNotes ? { oldNotes } : {}),
     };
+  }),
+
+  /** One parcel read again from its company now (« J’ai fait le swap dans ZR »): its status, and a swap made in the
+   *  company's own space put on its new customer's order at once (`swaps`: « PX1329 → PX1392 »). */
+  'delivery.syncOne': proc(['suivi', 'confirmation', 'depot'], z.object({ orderId: id }), async (ctx, { orderId }) => {
+    const o = await getOrder(ctx, orderId);
+    if (!o.companyId || !o.tracking) throw bad(`${o.ref} : pas de colis chez une société`);
+    const c = await companyOr404(ctx.db, o.companyId);
+    if (!KINDS[c.kind]?.api || isDemo(ctx)) return { changed: 0, swaps: [] as string[] };
+    const r = (await syncCompany(ctx, c, [orderId])) as { changed: number; errors?: { ref: string; error: string }[]; swaps?: string[] };
+    if (r.changed) ctx.emit({ type: 'orders' });
+    if (r.errors?.[0]) throw bad(r.errors[0].error);
+    return { changed: r.changed, swaps: r.swaps ?? [] };
   }),
 
   /** The courier's label for one parcel: a link or a PDF (base64). null = print our own slip. */

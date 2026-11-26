@@ -183,7 +183,28 @@
     "apiNo": "{{company}} n’accepte plus de swap pour ce colis : seulement en « Ne répond pas 3 » ou « Commande annulée », avant son retour, 2 fois au plus.",
     "southOnly": "Colis dans une wilaya du Sud : {{company}} le swappe seulement dans la même wilaya.",
     "submitApi": "Swapper chez {{company}}",
-    "sending": "Envoi à {{company}}…"
+    "sending": "Envoi à {{company}}…",
+    "zr": {
+      "how": "ZR refuse ce swap à la clé de Pilotix : faites-le dans ZR › « Swaps ». Cherchez le colis {{tracking}}, cliquez « Créer un swap » et tapez :",
+      "desk": "Livraison au bureau : choisissez dans ZR le même bureau que la commande.",
+      "f": {
+        "old": "N° de suivi du colis",
+        "name": "Nom du client",
+        "phone": "Téléphone 1",
+        "phone2": "Téléphone 2",
+        "wilaya": "Wilaya",
+        "commune": "Commune",
+        "address": "Adresse",
+        "total": "Montant à encaisser (DA)"
+      },
+      "copy": "Copier : {{label}}",
+      "open": "Ouvrir ZR › Swaps",
+      "done": "J’ai fait le swap dans ZR",
+      "checking": "Pilotix lit le colis chez ZR…",
+      "notYet": "ZR ne montre pas encore ce swap. Vérifiez que le téléphone tapé dans ZR est celui de {{ref}}, attendez une minute et réessayez.",
+      "after": "Pas obligé de revenir ici : Pilotix lit les colis ZR toutes les 30 minutes et met ce colis sur {{ref}} tout seul.",
+      "caught": "Swap repris de ZR : {{what}}"
+    }
   },
   "sheet": {
     "title": "Colis swappé",

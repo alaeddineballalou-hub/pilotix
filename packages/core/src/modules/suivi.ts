@@ -8,9 +8,10 @@ import { addWorkMinutes, algiersDayStart, workMinutes } from '@pilotix/shared';
 import { getPrefs } from './prefs';
 import { rotateTimes } from './assign';
 import { cancelParcel, swapFees } from './delivery';
-import { addEvent, FollowInput, getOrder, listOrders, ListInput, PICKED_UP_SQL, releasePicked, setFollow, withClientScores } from './orders';
+import { addEvent, FollowInput, getOrder, listOrders, ListInput, PICKED_UP_SQL, setFollow, withClientScores } from './orders';
 import { agencyLead, agencyOf, agencyRowSql, andSql, queueSql, rowScopeSql } from './agencyscope';
 import { findOrders } from './sav';
+import { SWAP_FROM, writeSwap } from './swapwrite';
 import { applyTrust, DRIVER_CLAIMS } from './trust';
 import { KINDS } from '../couriers/kinds';
 import { demoClaimFound, demoClaimState } from '../couriers/demo';
@@ -26,8 +27,8 @@ const id = z.number().int().positive();
 // company: a new alert (to do); cancelled: Annulés, where a swap is made
 export const SUIVI_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'bloques', 'traites', 'livres', 'annules', 'swap', 'swapped', 'resolus'] as const;
 export type SuiviTab = (typeof SUIVI_TABS)[number];
-/** Where a parcel can be swapped from: it is still with the courier or the livreur. */
-export const SWAP_FROM = ['returning', 'failed', 'alert', 'out_for_delivery', 'shipped'] as const;
+/** Where a parcel can be swapped from: it is still with the courier or the livreur (kept with the swap's writing). */
+export { SWAP_FROM };
 export const CLAIM_STATUSES = ['waiting', 'still_waiting', 'resolved', 'lost'] as const;
 /** a claim is over: « Résolue » (money or parcel back) or « Perdue » (refused, or never answered) */
 const CLAIM_DONE = `('resolved', 'lost')`;
@@ -438,37 +439,8 @@ export async function swapParcel(ctx: Ctx, fromId: number, toId: number, note?: 
         if (B.conf_status !== 'confirmed') throw bad(`${B.ref} : la commande n’est pas confirmée`);
         if (B.shipped_at || !(B.follow_status === null || ['to_prepare', 'prepared'].includes(B.follow_status))) throw bad(`${B.ref} : déjà expédiée`);
       }
-      const nowIso = new Date(ctx.now()).toISOString();
-      // what the depot had already picked for B goes back on the shelf (B leaves with A's parcel)
-      if (B.follow_status === 'to_prepare') await releasePicked(tx, num(B.id));
-      // The parcel (and its stock, already out of the depot) goes to B: no new stock out for B, no return for A. B is
-      // followed like any parcel on the road: by its own suivi agent, else by the one who followed A (the same team)
-      const fAgent = numOrNull(B.follow_agent_id) ?? (numOrNull(A.follow_agency_id) === numOrNull(B.follow_agency_id) ? numOrNull(A.follow_agent_id) : null);
-      await tx.query(
-        `UPDATE orders SET company_id=$2, delivery_cost=$3, tracking=$4, ext_id=$5, label_url=$6, ext_status=NULL, ext_status_at=NULL, taken_at=NULL,
-           warehouse_id=COALESCE($7, warehouse_id), livreur_id=$8, follow_status='out_for_delivery', sub_status='livraison_swappe',
-           prepared_at=COALESCE(prepared_at, $9::timestamptz), shipped_at=$9::timestamptz, follow_agent_id=$10, updated_at=now(), version=version+1 WHERE id=$1`,
-        [B.id, A.company_id, num(A.delivery_cost) || num(B.delivery_cost), sent?.tracking ?? A.tracking, sent?.parcelExtId ?? A.ext_id, sent ? null : A.label_url, A.warehouse_id, A.livreur_id, nowIso, fAgent],
-      );
-      await tx.query(
-        `UPDATE orders SET follow_status='cancelled', sub_status='annule_swappe', tracking=NULL, ext_id=NULL, label_url=NULL, ext_status=NULL, ext_status_at=NULL, taken_at=NULL,
-           updated_at=now(), version=version+1 WHERE id=$1`,
-        [A.id],
-      );
-      const n = note ? ` · ${note}` : '';
-      const atCo = sent ? ` · fait chez ${head.companyName} par API` : '';
       const viaApi = !!sent;
-      // A keeps the swap fee (its own swap step), counted like a return fee everywhere a return fee counts
-      const fee = swapFee ? ` · frais d’échange ${swapFee} DA (${sameWilaya ? 'même wilaya' : 'autre wilaya'}), comptés sur ${A.ref} comme un retour` : '';
-      await addEvent(tx, num(A.id), me, 'follow_status', A.follow_status, 'cancelled', `Colis swappé vers ${B.ref}${atCo}${fee}${n}`, { swap_to: num(B.id), tracking: A.tracking, via_api: viaApi, swap_ext: sent?.extId ?? null, swap_fee: swapFee, swap_same: sameWilaya });
-      await addEvent(tx, num(A.id), me, 'sub_status', A.sub_status, 'annule_swappe', null);
-      const was = B.follow_status === 'prepared' ? ' · était En dispatch (emballée) : colis à défaire' : ' · retirée de En préparation';
-      const newNo = sent && sent.tracking !== A.tracking ? ` · nouveau n° ${sent.tracking}` : '';
-      // B's place before the swap: « Annuler le swap » puts it back (only a swap Pilotix made alone, never one made at ZR)
-      const prev = { follow: B.follow_status ?? null, company: numOrNull(B.company_id), cost: num(B.delivery_cost), prepared: B.prepared_at ? iso(B.prepared_at) : null, warehouse: numOrNull(B.warehouse_id), livreur: numOrNull(B.livreur_id), fagent: numOrNull(B.follow_agent_id) };
-      // (`fee_on`: the swap fee is A's — B's cost stays its normal delivery price)
-      await addEvent(tx, num(B.id), me, 'follow_status', B.follow_status, 'out_for_delivery', `Colis swappé depuis ${A.ref} (${A.tracking ?? '—'})${atCo}${newNo}${was}${n}`, { swap_from: num(A.id), tracking: A.tracking, swap_fee: swapFee, fee_on: 'from', via_api: viaApi, swap_ext: sent?.extId ?? null, prev });
-      await addEvent(tx, num(B.id), me, 'sub_status', B.sub_status, 'livraison_swappe', null);
+      await writeSwap(tx, A, B, { me, sent, how: sent ? ` · fait chez ${head.companyName} par API` : '', swapFee, sameWilaya, note, nowIso: new Date(ctx.now()).toISOString() });
       return {
         from: await getOrder(ctx, num(A.id), tx, swapAccess(ctx)),
         to: await getOrder(ctx, num(B.id), tx, swapAccess(ctx)),
@@ -503,8 +475,13 @@ export async function unswapParcel(ctx: Ctx, orderId: number) {
   const toId = mine.swap_to ? num(mine.swap_to) : orderId;
   await getOrder(ctx, fromId, ctx.db, swapAccess(ctx));
   await getOrder(ctx, toId, ctx.db, swapAccess(ctx));
-  const got = (await swapsOf(toId)).find((d: any) => num(d.swap_from) === fromId) as { tracking?: string | null; swap_fee?: number; fee_on?: string; via_api?: boolean; prev?: any } | undefined;
-  if (got?.via_api) throw bad('Swap fait chez la société par API : elle l’a appliqué et ne l’annule pas. Changez le colis chez elle si besoin.');
+  const got = (await swapsOf(toId)).find((d: any) => num(d.swap_from) === fromId) as { tracking?: string | null; swap_fee?: number; fee_on?: string; via_api?: boolean; seen_at_company?: boolean; prev?: any } | undefined;
+  if (got?.via_api)
+    throw bad(
+      got.seen_at_company
+        ? 'Swap fait dans l’espace de la société : elle l’a appliqué et ne l’annule pas. Changez le colis chez elle si besoin.'
+        : 'Swap fait chez la société par API : elle l’a appliqué et ne l’annule pas. Changez le colis chez elle si besoin.',
+    );
   return withActionLock(ctx.db, `swap:${fromId}`, me, 'Un swap est déjà en cours pour ce colis', async () => {
     const res = await ctx.db.tx(async (tx) => {
       const A = (await tx.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [fromId]))[0];

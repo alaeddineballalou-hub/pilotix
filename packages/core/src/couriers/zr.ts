@@ -13,7 +13,7 @@
 // BEST GUESS (check with real keys): the "state.name" values in STATUSES below come from ZR's dashboard wording;
 // unknown ones are shown as-is and can be mapped by hand with the "Statuts" button.
 import { cacheKeyOf } from './types';
-import type { BagAdded, BagInfo, ChangeInput, ChangeState, ClaimCategory, ClaimFound, ClaimMessage, ClaimState, CourierAdapter, CourierBags, CourierCompany, CourierStep, Desk, FeeRow, Helpers, Parcel, ParcelInfo, SwapInput, SwapSent, TrackItem } from './types';
+import type { BagAdded, BagInfo, ChangeInput, ChangeState, ClaimCategory, ClaimFound, ClaimMessage, ClaimState, CourierAdapter, CourierBags, CourierCompany, CourierStep, CourierSwapSeen, Desk, FeeRow, Helpers, Parcel, ParcelInfo, SwapInput, SwapSent, TrackItem } from './types';
 import { ASK_AGAIN_MS, baseUrl, bestMatch, CourierError, cut, http, intl, LIST_KEPT_MS, listClock, needKeys, sleep, timeUp } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
@@ -753,34 +753,85 @@ async function swapParcel(c: CourierCompany, i: SwapInput, helpers: Helpers): Pr
     amount: Math.round(p.total),
   };
   if (hubId) body.hubId = hubId;
-  let r: any;
-  try {
-    r = await http(c.name, url(c, SWAP_PATH), { method: 'POST', headers: h(c), json: body });
-  } catch (e: any) {
-    // the keys work for everything else: say that ZR refuses this one action with them (the swap is then done in ZR's space)
-    if (String(e?.message).includes('refuse les clés')) throw new CourierError('ZR refuse le swap par API avec cette clé : faites ce swap dans l’espace ZR (menu « Swaps »)');
-    throw e;
-  }
+  const r = await swapPost(c, body);
   const id = r?.id || (typeof r === 'string' ? r : null);
   // made: its tracking number read back (ZR may give the parcel a new one), the old one kept if ZR does not answer
   const after = await http(c.name, url(c, `/parcels/${encodeURIComponent(String(cur.id))}`), { headers: h(c) }).catch(() => null);
   return { extId: id ? String(id) : null, parcelExtId: String(cur.id), tracking: String(after?.trackingNumber || cur.trackingNumber || i.item.tracking) };
 }
 
+/**
+ * ZR reads a key two ways: « X-Api-Key » (the one its documentation gives) and « Authorization: Bearer » (the way its
+ * own site sends its logins). Its swap is not in the list of addresses its keys may use (its « Jetons API » page, read
+ * 26 Nov 2026: modifications and phone changes are, swaps are not), and the first way is refused there: the second is
+ * tried at once. Both refused: ZR's own answer is said, word for word, so it can be shown to ZR.
+ */
+const hBearer = (c: CourierCompany) => ({ Authorization: `Bearer ${String(c.secret.api_key ?? '').trim()}`, 'X-Tenant': String(c.secret.tenant ?? '').trim() });
+/** ZR's answer to a refused key, as it said it (« 403 · Forbidden », « 401 · Bearer error="invalid_token" »…). */
+const zrRefusal = (e: any) => (e?.refused ? [String(e.refused.status), e.refused.words].filter(Boolean).join(' · ') : String(e?.message ?? ''));
+/** What the swap window says when ZR refuses both ways: what to do now (the swap made in ZR's space is caught by itself). */
+export const SWAP_REFUSED = 'ZR refuse le swap demandé avec la clé API de Pilotix : ZR ne donne pas encore le swap aux clés API. Faites ce swap dans l’espace ZR (menu « Swaps ») : Pilotix le voit tout seul et met le colis sur la commande de ce client.';
+
+async function swapPost(c: CourierCompany, body: Record<string, unknown>): Promise<any> {
+  try {
+    return await http(c.name, url(c, SWAP_PATH), { method: 'POST', headers: h(c), json: body });
+  } catch (e: any) {
+    if (!e?.refused) throw e;
+    try {
+      return await http(c.name, url(c, SWAP_PATH), { method: 'POST', headers: hBearer(c), json: body });
+    } catch (e2: any) {
+      if (!e2?.refused) throw e2;
+      const first = zrRefusal(e);
+      const second = zrRefusal(e2);
+      throw new CourierError(`${SWAP_REFUSED} (réponse de ZR : ${first}${second && second !== first ? ` ; en « Bearer » : ${second}` : ''})`);
+    }
+  }
+}
+
+/** A parcel ZR swapped (its « swap » count, by its API or in its own « Swaps » page): who it goes to now, for the sync.
+ *  Nothing for a parcel never swapped. */
+export function swapSeen(r: any): { swapped?: CourierSwapSeen } {
+  const count = numOf(r?.swap?.count ?? 0);
+  if (!(count > 0)) return {};
+  const ph = r?.customer?.phone ?? {};
+  const phones = [ph.number1, ph.number2, ph.number3].map((x) => String(x ?? '').trim()).filter(Boolean);
+  return {
+    swapped: {
+      count,
+      at: zrIso(r?.swap?.swappedAt),
+      name: r?.customer?.name ? String(r.customer.name) : null,
+      phones,
+      amount: r?.amount == null ? null : numOf(r.amount),
+      tracking: r?.trackingNumber ? String(r.trackingNumber) : null,
+      extId: r?.id ? String(r.id) : null,
+    },
+  };
+}
+
 /** « Tester »: whether ZR takes the swap from Pilotix with these keys — asked for a parcel that does not exist, so nothing
- *  is ever swapped: ZR looking for it means it accepts the keys for swaps. */
+ *  is ever swapped: ZR looking for it means it accepts the keys for swaps. Both of ZR's ways are asked; its words said. */
 async function swapReady(c: CourierCompany): Promise<string> {
   const none = '00000000-0000-0000-0000-000000000000';
-  try {
-    await http(c.name, url(c, SWAP_PATH), { method: 'POST', headers: h(c), json: { parcelId: none, phone: { number1: '+213550000000' }, deliveryType: 'home', deliveryAddress: { cityTerritoryId: none, districtTerritoryId: none, street: '-' }, amount: 0 } });
-    return 'Swap par API : prêt.';
-  } catch (e: any) {
+  const body = { parcelId: none, phone: { number1: '+213550000000' }, deliveryType: 'home', deliveryAddress: { cityTerritoryId: none, districtTerritoryId: none, street: '-' }, amount: 0 };
+  const ask = async (headers: Record<string, string>) => {
+    try {
+      await http(c.name, url(c, SWAP_PATH), { method: 'POST', headers, json: body });
+      return null;
+    } catch (e: any) {
+      return e;
+    }
+  };
+  const verdict = (e: any, how: string) => {
     const m = String(e?.message ?? '');
-    if (m.includes('refuse les clés')) return 'Swap par API : ZR le refuse avec cette clé (faites les swaps dans l’espace ZR).';
-    if (/erreur 404$|erreur 405$/.test(m)) return 'Swap par API : adresse inconnue chez ZR (faites les swaps dans l’espace ZR).';
+    if (/erreur 404$|erreur 405$/.test(m)) return 'Swap par API : adresse inconnue chez ZR (faites les swaps dans l’espace ZR : Pilotix les voit tout seul).';
     if (/trop de demandes|erreur 5\d\d$/.test(m)) return 'Swap par API : ZR ne répond pas maintenant, réessayez.';
-    return 'Swap par API : prêt.';
-  }
+    return `Swap par API : prêt${how}.`;
+  };
+  const e1 = await ask(h(c));
+  if (!e1?.refused) return verdict(e1, '');
+  const e2 = await ask(hBearer(c));
+  if (!e2?.refused) return verdict(e2, ' (clé lue en « Bearer »)');
+  return `Swap par API : ZR refuse la clé Pilotix (réponse de ZR : ${zrRefusal(e1)}). Faites les swaps dans l’espace ZR (menu « Swaps ») : Pilotix les voit tout seul et met chaque colis sur la commande de son nouveau client.`;
 }
 
 export const zr: CourierAdapter = {
@@ -862,7 +913,7 @@ export const zr: CourierAdapter = {
       if (!key) continue;
       const situation = r.situation && (r.situation.name || r.situation.description);
       const mapped = STATUSES[key];
-      out.push({ id: it.id, key, status: (r.state.description || key) + (situation ? ` · ${situation}` : ''), at: r.lastStateUpdateAt ?? null, mapped: r.isReturn && mapped !== 'returned' ? ('returning' as const) : undefined, costs: costsOf(r) });
+      out.push({ id: it.id, key, status: (r.state.description || key) + (situation ? ` · ${situation}` : ''), at: r.lastStateUpdateAt ?? null, mapped: r.isReturn && mapped !== 'returned' ? ('returning' as const) : undefined, costs: costsOf(r), ...swapSeen(r) });
     }
     return out;
   },

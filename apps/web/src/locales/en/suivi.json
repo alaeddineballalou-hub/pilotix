@@ -183,7 +183,28 @@
     "apiNo": "{{company}} no longer takes a swap for this parcel: only in « Ne répond pas 3 » or « Commande annulée », before its return, twice at most.",
     "southOnly": "Parcel in a southern wilaya: {{company}} swaps it only inside the same wilaya.",
     "submitApi": "Swap at {{company}}",
-    "sending": "Sending to {{company}}…"
+    "sending": "Sending to {{company}}…",
+    "zr": {
+      "how": "ZR refuses this swap to Pilotix's key: do it in ZR › « Swaps ». Search parcel {{tracking}}, click « Créer un swap » and type:",
+      "desk": "Office delivery: choose in ZR the same office as the order.",
+      "f": {
+        "old": "Parcel tracking number",
+        "name": "Customer name",
+        "phone": "Phone 1",
+        "phone2": "Phone 2",
+        "wilaya": "Wilaya",
+        "commune": "Commune",
+        "address": "Address",
+        "total": "Amount to collect (DA)"
+      },
+      "copy": "Copy: {{label}}",
+      "open": "Open ZR › Swaps",
+      "done": "I made the swap in ZR",
+      "checking": "Pilotix is reading the parcel at ZR…",
+      "notYet": "ZR does not show this swap yet. Check that the phone typed in ZR is {{ref}}'s, wait a minute and try again.",
+      "after": "No need to come back: Pilotix reads ZR's parcels every 30 minutes and puts this parcel on {{ref}} by itself.",
+      "caught": "Swap taken from ZR: {{what}}"
+    }
   },
   "sheet": {
     "title": "Parcel swapped",

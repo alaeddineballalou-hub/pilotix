@@ -276,3 +276,107 @@ test('ZR’s swap API: the new customer, phones, address and amount in one call;
   await assert.rejects(zr.swap!(c, { item: { id: 1, tracking: '12-OLD-ZR', extId: 'uuid-1' }, to }, helpers), /ZR refuse le swap/);
   assert.ok(!seen.some((x) => x.path.endsWith('/swap')));
 });
+
+test('ZR refuses its swap to « X-Api-Key »: asked again with « Bearer »; both refused, ZR’s own words are said, and the « Tester » says it', async () => {
+  const c: CourierCompany = { id: 1, name: 'ZR', kind: 'zr', secret: { api_key: 'k-123', tenant: 't' }, settings: {}, statusMap: {}, shop: { name: 'Test', fromWilayaId: 16, fromWilaya: 'Alger' }, cacheKey: 'swap-test-2' } as CourierCompany;
+  const to = { id: 9, ref: 'PX9', customer_name: 'Islam', phone: '0558361171', phone2: null, wilaya_id: 40, wilaya: 'Khenchela', wilaya_ar: 'خنشلة', commune: 'Bouhmama', address: 'Bouhmama', is_stopdesk: false, stopdesk_ext_id: null, stopdesk_name: null, stopdesk_commune: null, stopdesk_wilaya_id: null, total: 3050, subtotal: 2300, delivery_fee: 950, products: '1 × Pouf (Beige)', items: [], pieces: 1, weight: 1, delivery_note: '', is_exchange: false, tracking: null, ext_id: null, retry: false } as Parcel;
+  const seen: { path: string; headers: Record<string, string> }[] = [];
+  let bearerOk = false;
+  globalThis.fetch = (async (u: string, o: any = {}) => {
+    const path = String(u).replace(/^.*\/api\/v1/, '');
+    const headers = (o.headers ?? {}) as Record<string, string>;
+    seen.push({ path, headers });
+    const json = (x: unknown, status = 200) => new Response(JSON.stringify(x), { status, headers: { 'Content-Type': 'application/json' } });
+    if (path.startsWith('/parcels/')) return json({ id: 'uuid-1', trackingNumber: '12-OLD-ZR', state: { name: 'sortie_en_livraison', description: 'Sortie en livraison' }, situation: { name: 'Commande annulée' }, swap: { count: 0, isEligibleForSwap: true } });
+    if (path === '/territories/search') return json({ items: [{ id: 'w40', code: 40, level: 'wilaya', name: 'Khenchela' }, { id: 'c1', parentId: 'w40', level: 'commune', name: 'Bouhmama', nameArabic: 'بوحمامة' }], hasNext: false });
+    if (path.endsWith('/swap')) {
+      // ZR's swap: its own site's logins only — the key in « X-Api-Key » is refused
+      if (headers['X-Api-Key']) return json({ title: 'Forbidden', status: 403, detail: 'Accès refusé' }, 403);
+      if (bearerOk) return json({ id: 'swap-b' });
+      return new Response('', { status: 401, headers: { 'WWW-Authenticate': 'Bearer error="invalid_token"' } });
+    }
+    return json({}, 404);
+  }) as typeof fetch;
+  const item = { id: 1, tracking: '12-OLD-ZR', extId: 'uuid-1' };
+  await assert.rejects(zr.swap!(c, { item, to }, helpers), (e: any) => {
+    assert.match(e.message, /Faites ce swap dans l’espace ZR \(menu « Swaps »\)/);
+    assert.match(e.message, /réponse de ZR : 403 · /, 'ZR’s own answer, word for word');
+    assert.match(e.message, /en « Bearer » : 401 · Bearer error="invalid_token"/);
+    return true;
+  });
+  const tries = seen.filter((x) => x.path.endsWith('/swap'));
+  assert.equal(tries.length, 2, 'the two ways, once each');
+  assert.equal(tries[1].headers.Authorization, 'Bearer k-123');
+  assert.ok(!('X-Api-Key' in tries[1].headers));
+  assert.match((await zr.test!(c)).message, /Swap par API : ZR refuse la clé Pilotix \(réponse de ZR : 403/);
+  // ZR reads the key in « Bearer »: the swap is made
+  bearerOk = true;
+  seen.length = 0;
+  const sent = await zr.swap!(c, { item, to }, helpers);
+  assert.deepEqual(sent, { extId: 'swap-b', parcelExtId: 'uuid-1', tracking: '12-OLD-ZR' });
+  assert.match((await zr.test!(c)).message, /Swap par API : prêt \(clé lue en « Bearer »\)/);
+});
+
+test('ZR’s parcel read by the sync says when it was swapped, who it goes to now and its number', () => {
+  const { swapSeen } = require('../couriers/zr') as typeof import('../couriers/zr');
+  assert.deepEqual(swapSeen({ id: 'u1', swap: { count: 0 } }), {});
+  assert.deepEqual(swapSeen({ id: 'u1', trackingNumber: '19-NEW-ZR', amount: 3050, swap: { count: 1, swappedAt: '2026-11-26T00:10:00' }, customer: { name: 'Ishak', phone: { number1: '+213795901063', number2: '' } } }), {
+    swapped: { count: 1, at: '2026-11-26T00:10:00.000Z', name: 'Ishak', phones: ['+213795901063'], amount: 3050, tracking: '19-NEW-ZR', extId: 'u1' },
+  });
+});
+
+test('a swap made in ZR › « Swaps »: the sync puts the parcel on its new customer’s order by itself (its own parcel cancelled first); nobody waiting: said once', async () => {
+  const zrId = await companyId('zr');
+  const asked: [string, any][] = [];
+  let phones: string[] = [];
+  let amount = 0;
+  const server = {
+    courier: async (action: string, args: any) => {
+      asked.push([action, args]);
+      if (action === 'services') return [{ key: 'swapSameCity', price: 50 }, { key: 'swapOtherCity', price: 100 }];
+      if (action === 'track')
+        return args.items.map((it: any) => ({ id: it.id, key: 'sortie_en_livraison', status: 'Sortie en livraison · Commande annulée', at: null, swapped: { count: 1, at: null, name: 'Nouveau client', phones, amount, tracking: '19-SWAPPED-ZR', extId: it.extId } }));
+      return null;
+    },
+    meta: async () => null,
+    hashPassword: async (s: string) => s,
+    publicUrl: 'https://pilotix.example',
+  } as unknown as Ctx['server'];
+  const admin = await as(EMAILS.admin, server);
+  const a = await cancelledAtZr(19);
+  const b = await waiting(19, a);
+  const other = await waiting(19, a);
+  // b: packed already, its own parcel made at ZR (cancelled there first); its number is the one typed in ZR
+  await db.query(`UPDATE orders SET phone = '0661000777', phone2 = NULL, follow_status = 'prepared', company_id = $2, tracking = 'OWN-PARCEL-1', ext_id = NULL WHERE id = $1`, [b, zrId]);
+  await db.query(`UPDATE orders SET phone = '0661000888', phone2 = NULL WHERE id = $1`, [other]);
+  const refs = Object.fromEntries((await db.query('SELECT id, ref, total FROM orders WHERE id = ANY($1)', [[a, b]])).map((x: any) => [Number(x.id), x]));
+  phones = ['+213661000777'];
+  amount = Math.round(Number(refs[b].total)) + 100;
+  const r: any = await call('delivery.syncOne', admin, { orderId: a });
+  assert.deepEqual(r.swaps, [`${refs[a].ref} → ${refs[b].ref}`]);
+  assert.ok(asked.some(([x, args]) => x === 'cancel' && args.item.tracking === 'OWN-PARCEL-1'), 'b’s own parcel cancelled at ZR first');
+  const row = async (id: number) => (await db.query('SELECT follow_status, sub_status, tracking, ext_id FROM orders WHERE id = $1', [id]))[0];
+  assert.deepEqual(await row(a), { follow_status: 'cancelled', sub_status: 'annule_swappe', tracking: null, ext_id: null });
+  assert.deepEqual(await row(b), { follow_status: 'out_for_delivery', sub_status: 'livraison_swappe', tracking: '19-SWAPPED-ZR', ext_id: `zr-uuid-${a}` });
+  assert.equal((await row(other)).follow_status, 'to_prepare', 'another number: never chosen');
+  const ev = (await db.query(`SELECT note, data FROM order_events WHERE order_id = $1 AND kind = 'follow_status' ORDER BY id DESC LIMIT 1`, [b]))[0];
+  assert.match(ev.note, /fait dans l’espace ZR[^,·]*, vu par Pilotix · nouveau n° 19-SWAPPED-ZR · était En dispatch/);
+  assert.match(ev.note, new RegExp(`ZR[^·]* encaissera ${amount} DA, la commande dit ${amount - 100} DA`));
+  assert.equal(ev.data.via_api, true);
+  assert.equal(ev.data.seen_at_company, true);
+  await assert.rejects(call('suivi.unswap', admin, { id: b }), /espace de la société/);
+  // nobody waiting at the number typed in ZR: said once on the order, nothing moves
+  const a2 = await cancelledAtZr(19);
+  phones = ['+213661000999'];
+  await call('delivery.syncOne', admin, { orderId: a2 });
+  await call('delivery.syncOne', admin, { orderId: a2 });
+  assert.equal((await row(a2)).follow_status, 'alert');
+  const notes = await db.query(`SELECT note FROM order_events WHERE order_id = $1 AND kind = 'note' AND data->>'swap_seen' IS NOT NULL`, [a2]);
+  assert.equal(notes.length, 1, 'said once');
+  assert.match(notes[0].note, /aucune commande confirmée en attente à ce numéro/);
+  // still its own customer (the parcel Pilotix gave it): nothing happens
+  const own = (await db.query('SELECT phone FROM orders WHERE id = $1', [a2]))[0].phone;
+  phones = [`+213${String(own).slice(1)}`];
+  const again: any = await call('delivery.syncOne', admin, { orderId: a2 });
+  assert.deepEqual(again.swaps, []);
+});

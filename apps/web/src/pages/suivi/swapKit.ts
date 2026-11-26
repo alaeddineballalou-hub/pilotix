@@ -29,7 +29,8 @@ export function useSwapPick(o: Order, onDone: (r: SwapResult) => void) {
   const sug = useRpc('suivi.swapCandidates', { fromId: o.id });
   const meta = (sug.data ?? null) as { viaApi?: boolean; company?: string | null; sameWilayaOnly?: boolean; courier?: SwapCourier | null } | null;
   const found = useRpc('suivi.swapCandidates', { fromId: o.id, q: deb }, { enabled: deb.length >= 2 });
-  const swap = useAction('suivi.swap', { onDone: (r) => onDone(r as SwapResult) });
+  // its refusal is shown in the window itself (a toast goes away before it is read)
+  const swap = useAction('suivi.swap', { silent: true, onDone: (r) => onDone(r as SwapResult) });
   return {
     q,
     setQ,
@@ -49,6 +50,10 @@ export function useSwapPick(o: Order, onDone: (r: SwapResult) => void) {
     courier: meta?.courier ?? null,
     /** ZR said it does not take a swap of this parcel any more */
     closed: !!meta?.courier && !meta.courier.eligible,
+    /** the company's answer when the swap failed (ZR's own words), shown in the window */
+    error: swap.error?.message ?? '',
+    /** ZR refused Pilotix's key for its swap: it is made in ZR › « Swaps » (Pilotix then sees it by itself) */
+    refused: !!swap.error && /« Swaps »/.test(swap.error.message),
     submit: () => (pick ? swap.mutate({ fromId: o.id, toId: pick.id }) : setErr(t('suivi.swapM.pick'))),
   };
 }
