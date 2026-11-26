@@ -6,6 +6,7 @@ import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
 import { DEFAULT_CALL_SETTINGS } from '@pilotix/shared';
 import { rotateTimes } from '../modules/assign';
+import { createOrder } from '../modules/orders';
 import { setSetting } from '../settings';
 import { EMAILS, setup } from './harness';
 
@@ -34,8 +35,15 @@ before(async () => {
 });
 
 let n = 0;
+// a new order that came by itself (the shop's site): the Affectation gives it — one a person types stays his (routing.ts,
+// owner's rule 26 Nov 2026)
 const order = async () =>
-  (await call('orders.create', admin, { customerName: `Client Rot ${++n}`, phone: `0671${String(200000 + n).slice(-6)}`, wilayaId: 16, commune: 'Kouba', address: 'Rue 1', items: [{ ...X, qty: 1 }] })) as any;
+  (await createOrder(
+    admin,
+    { customerName: `Client Rot ${++n}`, phone: `0671${String(200000 + n).slice(-6)}`, wilayaId: 16, commune: 'Kouba', address: 'Rue 1', isStopdesk: false, channel: 'appel', items: [{ ...X, qty: 1 }], discount: 0, confirm: false, isExchange: false } as any,
+    admin.db,
+    { came: 'site' },
+  )) as any;
 const online = (who: number[]) => db.query(`UPDATE profiles SET last_seen_at = now(), presence = 'online' WHERE id = ANY($1)`, [who]);
 const offline = (who: number[]) => db.query(`UPDATE profiles SET last_seen_at = now() - interval '2 hours' WHERE id = ANY($1)`, [who]);
 const rot = (r: object) => ({ on: true, statuses: ['new', 'no_answer', 'busy'], minutes: 30, noCall: true, toLeadAfter: 2, setStatus: '', target: null, ...r });
