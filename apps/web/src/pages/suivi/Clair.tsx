@@ -10,7 +10,7 @@ import { Fragment, type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { callWhen, da, when, wilayaName } from '../../lib/format';
 import { useRpc } from '../../lib/query';
-import { Empty, Icon } from '../../ui/kit';
+import { Empty, Icon, RemovableChip } from '../../ui/kit';
 import { Sheet } from '../../ui/Sheet';
 import { AskCall, AskMsg, HistoryButton } from '../confirmation/History';
 import { rpc } from '../../lib/backend';
@@ -193,6 +193,16 @@ export function TriesCell({ x }: { x?: ClairX }) {
 /** How a list is drawn: an error of Erreurs like a new alert (its fix button, its clock). */
 export const drawnAs = (tab: ClairTab): ClairTab => (tab === 'erreurs' ? 'alertes_new' : tab);
 
+/** « Attribuer » (the owner, 26 Nov 2026: like Confirmation's): a manager ticks alerts to give them to a suivi agent;
+ *  the line shows its agent, with ✕ to take it back. */
+export interface ClairPick {
+  picked: ReadonlySet<string>;
+  toggle: (o: ClairRow) => void;
+  all: (on: boolean) => void;
+  removeAgent?: (o: ClairRow) => void;
+}
+export const clairKey = (o: ClairRow) => `${o.seller?.id ?? 0}:${o.id}`;
+
 export function fixOf(reason: string | null): 'number' | 'commune' | null {
   const k = tipKey(reason);
   return k === 'number' ? 'number' : k === 'zone' ? 'commune' : null;
@@ -223,7 +233,7 @@ export function CallMsg({ o }: { o: Order }) {
 }
 
 /** The table of the four lists (tablet, computer); a line opens under itself (`open` draws it). */
-export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { tab: ClairTab; rows: ClairRow[]; extra: Record<number, ClairX>; reasonOf: (o: Order, x?: ClairX) => string | null; openKey: string | null; open: (o: ClairRow) => ReactNode; h: ClairHandlers }) {
+export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h, pick }: { tab: ClairTab; rows: ClairRow[]; extra: Record<number, ClairX>; reasonOf: (o: Order, x?: ClairX) => string | null; openKey: string | null; open: (o: ClairRow) => ReactNode; h: ClairHandlers; pick?: ClairPick }) {
   const { t } = useTranslation();
   if (!rows.length) return <ClairEmpty tab={tab} />;
   const key = (o: ClairRow) => `${o.seller?.id ?? 0}:${o.id}`;
@@ -238,6 +248,8 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
           ? [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'product', l: t('suivi.col.products'), cls: 'svc-hide-tb' }, { k: 'amount', l: t('suivi.clair.amount'), cls: 'num' }, { k: 'delivered', l: t('suivi.clair.delivered') }, { k: 'saved', l: t('suivi.clair.savedBy') }, { k: 'problem', l: t('suivi.clair.problem'), cls: 'svc-hide-tb' }]
           : [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'product', l: t('suivi.col.products'), cls: 'svc-hide-tb' }, { k: 'amount', l: t('suivi.clair.amount'), cls: 'num' }, { k: 'why', l: t('suivi.clair.why') }, { k: 'since', l: t('suivi.clair.since'), cls: 'num svc-hide-tb' }, { k: 'act', l: '' }];
   const opens = v === 'alertes_new' || v === 'alertes_encours';
+  // a manager's list: who has the alert, after the customer
+  if (pick) cols.splice(2, 0, { k: 'fagent', l: t('suivi.col.fagent') });
   const cell = (o: ClairRow, k: string): ReactNode => {
     const x = extra[o.id];
     const reason = reasonOf(o, x);
@@ -263,6 +275,14 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
         );
       case 'wilaya':
         return wilayaName(o.wilayaId);
+      case 'fagent':
+        return o.followAgentName ? (
+          <span onClick={(e) => e.stopPropagation()}>
+            <RemovableChip name={o.followAgentName} removeLabel={t('suivi.removeAgent')} onRemove={pick?.removeAgent ? () => pick.removeAgent!(o) : undefined} />
+          </span>
+        ) : (
+          <span className="muted">{t('suivi.give.nobody')}</span>
+        );
       case 'product':
         return <span className="svc-clamp">{namesOf(o.items)}</span>;
       case 'amount':
@@ -338,6 +358,11 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
       <table className={`tbl svc-tbl svt-${tab}`}>
         <thead>
           <tr>
+            {pick && (
+              <th className="ck svc-c-ck">
+                <input type="checkbox" aria-label={t('suivi.give.all')} checked={rows.length > 0 && rows.every((o) => pick.picked.has(clairKey(o)))} onChange={(e) => pick.all(e.target.checked)} />
+              </th>
+            )}
             {cols.map((c) => (
               <th key={c.k} className={`svc-c-${c.k} ${c.cls ?? ''}`}>
                 {c.l}
@@ -350,7 +375,12 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
             const on = openKey === key(o);
             return (
               <Fragment key={key(o)}>
-                <tr className={`clickable${on ? ' svc-on' : ''}`} onClick={() => h.onOpen(o)}>
+                <tr className={`clickable${on ? ' svc-on' : ''}${pick?.picked.has(key(o)) ? ' sel' : ''}`} onClick={() => h.onOpen(o)}>
+                  {pick && (
+                    <td className="ck svc-c-ck" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" aria-label={t('suivi.give.one', { ref: o.ref })} checked={pick.picked.has(key(o))} onChange={() => pick.toggle(o)} />
+                    </td>
+                  )}
                   {cols.map((c) => (
                     <td key={c.k} className={`svc-c-${c.k} ${c.cls ?? ''}`} data-l={c.l}>
                       {cell(o, c.k)}
@@ -359,7 +389,7 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
                 </tr>
                 {on && (
                   <tr className="svc-open">
-                    <td colSpan={cols.length}>
+                    <td colSpan={cols.length + (pick ? 1 : 0)}>
                       {/* width 0 + min-width 100 %: the opened alert fills the row without moving the columns */}
                       <div className="svc-openin">{open(o)}</div>
                     </td>
@@ -379,6 +409,64 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
   );
 }
 
+/** The computer's bar over a manager's alerts (the owner, 26 Nov 2026: like Confirmation's): the ticked alerts to a suivi
+ *  agent, or back to nobody. */
+export function GiveBar({ rows, agents, onGive, onClear }: { rows: ClairRow[]; agents: { id: number; name: string }[]; onGive: (rows: ClairRow[], agentId: number | null) => void; onClear: () => void }) {
+  const { t } = useTranslation();
+  const n = rows.length;
+  const none = n === 0;
+  const tip = t('confirmation.tb.tipNone');
+  return (
+    <div className="qacts svc-give" role="toolbar" aria-label={t('suivi.give.bar')}>
+      <span className={`qa-info ${n ? 'on' : ''}`}>
+        {n ? t('confirmation.tb.selected', { count: n }) : t('confirmation.tb.none')}
+        {n > 0 && (
+          <button type="button" className="linkish" onClick={onClear}>
+            {t('common.unselect')}
+          </button>
+        )}
+      </span>
+      <span className="qa-grp">
+        <label className={`btn small qa-btn qa-wrap ${none ? 'is-dis' : ''}`} title={none ? tip : t('confirmation.tb.assign')}>
+          <span className="qa-ic">
+            <Icon name="userplus" />
+          </span>
+          <select
+            className="qa-sel"
+            aria-label={t('confirmation.tb.assign')}
+            disabled={none}
+            value=""
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              if (v) onGive(rows, v);
+            }}
+          >
+            <option value="">{t('confirmation.tb.assign')}</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="btn small qa-btn qa-danger"
+          aria-label={t('confirmation.tb.removeAgent')}
+          disabled={none || !rows.some((o) => o.followAgentId)}
+          title={none ? tip : t('confirmation.tb.removeAgent')}
+          onClick={() => onGive(rows, null)}
+        >
+          <span className="qa-ic">
+            <Icon name="userminus" />
+          </span>
+          <span className="qa-tx">{t('confirmation.tb.removeAgent')}</span>
+        </button>
+      </span>
+    </div>
+  );
+}
+
 function SwapBtn({ onClick }: { onClick: () => void }) {
   const { t } = useTranslation();
   return (
@@ -389,7 +477,7 @@ function SwapBtn({ onClick }: { onClick: () => void }) {
 }
 
 /** The phone's lines: a card each, the buttons on the right. */
-export function ClairCards({ tab, rows, extra, reasonOf, h }: { tab: ClairTab; rows: ClairRow[]; extra: Record<number, ClairX>; reasonOf: (o: Order, x?: ClairX) => string | null; h: ClairHandlers }) {
+export function ClairCards({ tab, rows, extra, reasonOf, h, pick }: { tab: ClairTab; rows: ClairRow[]; extra: Record<number, ClairX>; reasonOf: (o: Order, x?: ClairX) => string | null; h: ClairHandlers; pick?: ClairPick }) {
   const { t } = useTranslation();
   if (!rows.length) return <ClairEmpty tab={tab} />;
   // an error (Erreurs) is drawn like a new alert: its fix button, its clock
@@ -411,7 +499,8 @@ export function ClairCards({ tab, rows, extra, reasonOf, h }: { tab: ClairTab; r
             <CallMsg o={o} />
           );
         return (
-          <li key={`${o.seller?.id ?? 0}:${o.id}`} className="svc-card" onClick={() => h.onOpen(o)}>
+          <li key={`${o.seller?.id ?? 0}:${o.id}`} className={`svc-card${pick ? ' svc-pick' : ''}${pick?.picked.has(clairKey(o)) ? ' sel' : ''}`} onClick={() => (pick ? pick.toggle(o) : h.onOpen(o))}>
+            {pick && <input type="checkbox" className="svc-ck" aria-label={t('suivi.give.one', { ref: o.ref })} checked={pick.picked.has(clairKey(o))} onChange={() => pick.toggle(o)} onClick={(e) => e.stopPropagation()} />}
             <div className="svc-card-m">
               <div className="svc-card-t">
                 <CoBadge o={o} x={x} />

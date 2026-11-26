@@ -1004,5 +1004,23 @@
       "t3": "عند المحاولة الثالثة",
       "cancel": "عند الإلغاء"
     }
+  },
+  "give": {
+    "bar": "إعطاء التنبيهات لوكيل",
+    "all": "تحديد الكل",
+    "one": "تحديد {{ref}}",
+    "nobody": "غير مُسندة",
+    "done_zero": "{{count}} تنبيه أُعطي لـ {{name}}",
+    "done_one": "{{count}} تنبيه أُعطي لـ {{name}}",
+    "done_two": "{{count}} تنبيه أُعطي لـ {{name}}",
+    "done_few": "{{count}} تنبيه أُعطي لـ {{name}}",
+    "done_many": "{{count}} تنبيه أُعطي لـ {{name}}",
+    "done_other": "{{count}} تنبيه أُعطي لـ {{name}}",
+    "undone_zero": "أُزيل الوكيل من {{count}} تنبيه",
+    "undone_one": "أُزيل الوكيل من {{count}} تنبيه",
+    "undone_two": "أُزيل الوكيل من {{count}} تنبيه",
+    "undone_few": "أُزيل الوكيل من {{count}} تنبيه",
+    "undone_many": "أُزيل الوكيل من {{count}} تنبيه",
+    "undone_other": "أُزيل الوكيل من {{count}} تنبيه"
   }
 }

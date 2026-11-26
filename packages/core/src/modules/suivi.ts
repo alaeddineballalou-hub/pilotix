@@ -17,6 +17,7 @@ import { KINDS } from '../couriers/kinds';
 import { demoClaimFound, demoClaimState } from '../couriers/demo';
 import { SUB_ERREUR } from '../couriers/alertstart';
 import { ACTED_KINDS_SQL, alertTouchedSql } from './alerttouch';
+import { tellGiven, tellTaken } from './inbox';
 import type { ClaimCategory, ClaimFound, ClaimMessage, ClaimSent, ClaimState, ParcelInfo, SwapSent } from '../couriers/types';
 import type { CourierKind } from '@pilotix/shared';
 import { itemsKey, SWAP_API_KINDS, SWAP_SAME_WILAYA_ONLY, swapWayOf, WILAYAS } from '@pilotix/shared';
@@ -1778,6 +1779,42 @@ export const suiviProcs = {
   'suivi.release': proc(['suivi'], z.object({ id }), async (ctx, i) => {
     await ctx.db.query('UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE id = $1 AND follow_agency_id IS NOT DISTINCT FROM $4::integer AND (locked_by = $2 OR $3)', [i.id, ctx.session.profile.id, ctx.session.isAdmin, agencyOf(ctx)]);
     return { ok: true };
+  }),
+
+  /** « Attribuer » in Suivi (the owner, 26 Nov 2026: « like the one in Confirmation », in Nouvelles alertes and En cours):
+   *  a manager gives the chosen alerts to a suivi agent of his team, or takes them back (null). Giving is not acting on
+   *  the alert: it stays where it is (« assign » is not one of the actions that move an alert to En cours). */
+  'suivi.assign': proc(['agent_manager', 'vendeur', 'suivi', 'confirmation'], z.object({ ids: z.array(id).min(1).max(500), agentId: id.nullable() }), async (ctx, { ids, agentId }) => {
+    const manager = ctx.session.isAdmin || hasRole(ctx.session, 'agent_manager', 'vendeur') || agencyLead(ctx);
+    if (!manager) throw forbidden('Seul un manager donne les alertes à un agent');
+    const agency = agencyOf(ctx);
+    if (agentId !== null) {
+      const p = (await ctx.db.query('SELECT roles, agency_id, active FROM profiles WHERE id = $1', [agentId]))[0];
+      if (!p || !p.active || numOrNull(p.agency_id) !== agency) throw forbidden('L’affectation est réservée à l’équipe qui gère le suivi');
+      const roles: string[] = Array.isArray(p.roles) ? p.roles : String(p.roles ?? '').replace(/[{}]/g, '').split(',');
+      if (!roles.some((r) => ['suivi', 'vendeur', 'admin'].includes(r))) throw bad('Cette personne ne fait pas le suivi');
+    }
+    const given = new Map<number, number[]>();
+    const taken = new Map<number, { id: number; to: number | null }[]>();
+    const me = ctx.session.profile.id;
+    await ctx.db.tx(async (tx) => {
+      for (const oid of ids) {
+        const cur = (await tx.query('SELECT follow_agent_id, follow_agency_id FROM orders WHERE id = $1 FOR UPDATE', [oid]))[0];
+        if (!cur) continue;
+        if (numOrNull(cur.follow_agency_id) !== agency) throw forbidden('L’affectation est réservée à l’équipe qui gère le suivi');
+        const was = numOrNull(cur.follow_agent_id);
+        if (was === agentId) continue;
+        // the lock of « Alerte suivante » goes too: the new agent can work it at once
+        await tx.query('UPDATE orders SET follow_agent_id = $2, locked_by = NULL, locked_until = NULL, updated_at = now() WHERE id = $1', [oid, agentId]);
+        await addEvent(tx, oid, me, 'assign', was ? String(was) : null, agentId ? String(agentId) : null, 'Suivi', { area: 'follow' });
+        if (agentId) given.set(agentId, [...(given.get(agentId) ?? []), oid]);
+        if (was) taken.set(was, [...(taken.get(was) ?? []), { id: oid, to: agentId }]);
+      }
+    });
+    ctx.emit({ type: 'orders' });
+    if (given.size) await tellGiven(ctx, 'follow', given, { by: me }).catch(() => {});
+    if (taken.size) await tellTaken(ctx, taken, { by: me, area: 'follow' }).catch(() => {});
+    return { ok: true, n: given.size ? [...given.values()].flat().length : [...taken.values()].flat().length };
   }),
 
   'suivi.unassign': proc(['suivi'], z.object({ id }), async (ctx, { id: oid }) => {

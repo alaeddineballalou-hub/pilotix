@@ -988,5 +988,15 @@
       "t3": "À la 3e tentative",
       "cancel": "À l’annulation"
     }
+  },
+  "give": {
+    "bar": "Donner les alertes à un agent",
+    "all": "Tout cocher",
+    "one": "Cocher {{ref}}",
+    "nobody": "Non affectée",
+    "done_one": "{{count}} alerte donnée à {{name}}",
+    "done_other": "{{count}} alertes données à {{name}}",
+    "undone_one": "Agent retiré de {{count}} alerte",
+    "undone_other": "Agent retiré de {{count}} alertes"
   }
 }

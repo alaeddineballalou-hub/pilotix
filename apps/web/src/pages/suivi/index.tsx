@@ -40,7 +40,8 @@ import { DemoCourier } from './DemoCourier';
 import { rightOn, tabOn } from '../../lib/rights';
 import { AssignSwitch, type Assign } from '../../ui/AssignSwitch';
 import { DoneScreen } from '../orders';
-import { AlertPanel, ClairCards, ClairCounters, ClairTable, HistorySheet, isClairTab, RappelSheet, StatusMenu, type ClairHandlers, type ClairTab, type ClairX, type StatusKey } from './Clair';
+import { AlertPanel, ClairCards, ClairCounters, ClairTable, clairKey, GiveBar, HistorySheet, isClairTab, RappelSheet, StatusMenu, type ClairHandlers, type ClairPick, type ClairTab, type ClairX, type StatusKey } from './Clair';
+import { PickBar, PickToggle } from '../confirmation/PhoneList';
 import { FaultSheet } from '../faults/FaultSheet';
 
 const LIST_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'erreurs', 'resolus', 'traites', 'bloques', 'livres', 'annules', 'swap'] as const;
@@ -939,6 +940,12 @@ function ClairList({ tab }: { tab: ClairTab }) {
   const setBucket = (k: string | null) => (setBucketState(k), setPage(1));
   const working = tab === 'alertes_new' || tab === 'alertes_encours' || tab === 'erreurs';
   const showAssign = working && (has('vendeur', 'agent_manager') || !!session?.profile.agencyLead);
+  // « Attribuer » (the owner, 26 Nov 2026: like Confirmation's, in Nouvelles alertes and En cours): the managers tick
+  // alerts and give them to a suivi agent (a phone: « Sélectionner », then the bar at the bottom)
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [picking, setPicking] = useState(false);
+  const fo = useFilterOptions();
+  const giveTo = (fo?.agents ?? []).filter((a) => a.active && a.roles.some((r) => ['suivi', 'vendeur', 'admin'].includes(r))).map((a) => ({ id: a.id, name: a.name }));
   const [assign, setAssignState] = useState<Assign>('all');
   const [f, setF] = useState<SuiviF>(() => ({ ...NO_SF, ...store.json<Partial<SuiviF>>('suivi-f', {}), q: '' }));
   const setFilter = (patch: Partial<SuiviF>) => {
@@ -960,6 +967,35 @@ function ClairList({ tab }: { tab: ClairTab }) {
   const q = useRpc('suivi.list', { tab, page, pageSize: 100, ...suiviInput(f, dq), ...(showAssign && assign !== 'all' ? { assigned: assign } : {}), ...(bucket ? { bucket: bucket as any } : {}) });
   const rows = (q.data?.rows ?? []) as ParcelRow[];
   const extra = (q.data?.extra ?? {}) as Record<number, ClairX>;
+  const picked = rows.filter((o) => sel.has(clairKey(o)));
+  const give = async (rs: ParcelRow[], agentId: number | null) => {
+    try {
+      // « Toutes les boutiques »: each boutique gives its own alerts
+      const bySeller = new Map<number | undefined, number[]>();
+      for (const o of rs) bySeller.set(o.seller?.id, [...(bySeller.get(o.seller?.id) ?? []), o.id]);
+      for (const [seller, ids] of bySeller) await rpc('suivi.assign', { ids, agentId }, seller);
+      const name = giveTo.find((a) => a.id === agentId)?.name ?? '';
+      toast(agentId ? t('suivi.give.done', { count: rs.length, name }) : t('suivi.give.undone', { count: rs.length }), 'ok');
+      setSel(new Set());
+      setPicking(false);
+      void qc.invalidateQueries();
+    } catch (e: any) {
+      toast(e?.message ?? String(e), 'bad');
+    }
+  };
+  const pickOf: ClairPick | undefined = showAssign && (!phone || picking)
+    ? {
+        picked: sel,
+        toggle: (o) => setSel((s0) => {
+          const s1 = new Set(s0);
+          if (s1.has(clairKey(o))) s1.delete(clairKey(o));
+          else s1.add(clairKey(o));
+          return s1;
+        }),
+        all: (on) => setSel(on ? new Set(rows.map(clairKey)) : new Set()),
+        removeAgent: (o) => void give([o as ParcelRow], null),
+      }
+    : undefined;
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   const [dlg, setDlg] = useState<CDialog>(null);
@@ -1046,12 +1082,26 @@ function ClairList({ tab }: { tab: ClairTab }) {
       {phone && <ClairCounters tab={tab} counts={q.data?.buckets} value={bucket} onPick={setBucket} />}
       <ClairFilters f={f} set={setFilter} phone={phone} />
       {!phone && <ClairCounters tab={tab} counts={q.data?.buckets} value={bucket} onPick={setBucket} />}
+      {phone && showAssign && (picking || rows.length > 0) && (
+        <div className="pxp-sum">
+          <PickToggle
+            on={picking}
+            allOn={rows.length > 0 && rows.every((o) => sel.has(clairKey(o)))}
+            onToggle={() => {
+              setPicking((v) => !v);
+              setSel(new Set());
+            }}
+            onAll={() => setSel(rows.every((o) => sel.has(clairKey(o))) ? new Set() : new Set(rows.map(clairKey)))}
+          />
+        </div>
+      )}
+      {!phone && showAssign && rows.length > 0 && <GiveBar rows={picked} agents={giveTo} onGive={(rs, id) => void give(rs as ParcelRow[], id)} onClear={() => setSel(new Set())} />}
       {q.isLoading ? (
         <Loading />
       ) : q.error ? (
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
       ) : phone ? (
-        <ClairCards tab={tab} rows={rows} extra={extra} reasonOf={reasonOf} h={h} />
+        <ClairCards tab={tab} rows={rows} extra={extra} reasonOf={reasonOf} h={h} pick={pickOf} />
       ) : (
         <ClairTable
           tab={tab}
@@ -1060,6 +1110,7 @@ function ClairList({ tab }: { tab: ClairTab }) {
           reasonOf={reasonOf}
           openKey={openKey}
           h={h}
+          pick={pickOf}
           open={(o) =>
             o.followStatus === 'alert' || extra[o.id]?.bucket === 'zr' ? (
               <AlertPanel
@@ -1076,7 +1127,15 @@ function ClairList({ tab }: { tab: ClairTab }) {
           }
         />
       )}
-      {phone && canFollow && working && rows.length > 0 && (
+      {phone && picking && (
+        <PickBar
+          n={picked.length}
+          options={giveTo.map((a) => ({ value: String(a.id), label: a.name }))}
+          anyAgent={picked.some((o) => o.followAgentId)}
+          onGive={(v) => give(picked, v ? Number(v) : null)}
+        />
+      )}
+      {phone && canFollow && working && rows.length > 0 && !picking && (
         <button type="button" className="pxp-next" disabled={nexting} onClick={nextAlert}>
           {t('suivi.ph.next')}
           <Icon name="chevr" />

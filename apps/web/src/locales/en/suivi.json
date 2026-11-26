@@ -988,5 +988,15 @@
       "t3": "At the 3rd try",
       "cancel": "At the cancel"
     }
+  },
+  "give": {
+    "bar": "Give the alerts to an agent",
+    "all": "Tick all",
+    "one": "Tick {{ref}}",
+    "nobody": "Not assigned",
+    "done_one": "{{count}} alert given to {{name}}",
+    "done_other": "{{count}} alerts given to {{name}}",
+    "undone_one": "Agent removed from {{count}} alert",
+    "undone_other": "Agent removed from {{count}} alerts"
   }
 }

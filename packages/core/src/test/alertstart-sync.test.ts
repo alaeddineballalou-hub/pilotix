@@ -143,3 +143,18 @@ test('each company\'s words for the table « Ce que votre choix veut dire chez c
   assert.ok(!yal.problems.includes('Alerte résolue') && !yal.problems.includes('Débloqué'));
   await assert.rejects(call('delivery.alertWords', await as(EMAILS.suivi), {}), 'admin only');
 });
+
+test('« Attribuer » in Suivi: a manager gives alerts to a suivi agent; giving is not working on the alert', async () => {
+  const [m] = await onRoad(1);
+  await db.query('UPDATE orders SET follow_agent_id = NULL WHERE id = $1', [m]);
+  await sync([[m, 'sortie_en_livraison', 'Sortie en livraison · Ne répond pas 2']]);
+  assert.equal((await st(m)).follow_status, 'alert');
+  const agentOf = async () => (await db.query('SELECT follow_agent_id FROM orders WHERE id = $1', [m]))[0].follow_agent_id;
+  await call('suivi.assign', admin, { ids: [m], agentId: me });
+  assert.equal(Number(await agentOf()), me);
+  assert.ok((await listIds('alertes_new')).includes(m), 'still a new alert: giving it is not acting on it');
+  await assert.rejects(call('suivi.assign', await as(EMAILS.suivi), { ids: [m], agentId: null }), 'an agent does not give alerts');
+  await assert.rejects(call('suivi.assign', admin, { ids: [m], agentId: (await as(EMAILS.depot)).session.profile.id }), 'only the suivi team');
+  await call('suivi.assign', admin, { ids: [m], agentId: null });
+  assert.equal(await agentOf(), null);
+});

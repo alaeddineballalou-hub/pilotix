@@ -250,3 +250,10 @@
 /* the phone page's chips (En retard · Appels · Historique) on one line */
 .pxs-page .pxs-clkbar:has(.svc-histchip) { gap: 5px; padding-inline: 8px; }
 .pxs-page .pxs-clkbar:has(.svc-histchip) .sv-clock { padding: 3px 8px; }
+
+/* « Attribuer » (the owner, 26 Nov 2026: like Confirmation's): a manager ticks alerts and gives them to a suivi agent */
+.svc-c-ck { width: 40px; }
+.svc-tbl tr.sel > td { background: var(--px-orange-soft); }
+.svc-give { margin: 0 0 10px; }
+.svc-card .svc-ck { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--px-orange); }
+.svc-card.sel { border-color: var(--px-orange); background: var(--px-orange-soft); }
