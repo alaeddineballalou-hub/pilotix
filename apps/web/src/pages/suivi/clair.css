@@ -257,3 +257,5 @@
 .svc-give { margin: 0 0 10px; }
 .svc-card .svc-ck { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--px-orange); }
 .svc-card.sel { border-color: var(--px-orange); background: var(--px-orange-soft); }
+.svc-cli-t { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.svc-cli-t small { font-size: 12px; }

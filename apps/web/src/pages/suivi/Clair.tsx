@@ -248,8 +248,6 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h, pick 
           ? [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'product', l: t('suivi.col.products'), cls: 'svc-hide-tb' }, { k: 'amount', l: t('suivi.clair.amount'), cls: 'num' }, { k: 'delivered', l: t('suivi.clair.delivered') }, { k: 'saved', l: t('suivi.clair.savedBy') }, { k: 'problem', l: t('suivi.clair.problem'), cls: 'svc-hide-tb' }]
           : [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'product', l: t('suivi.col.products'), cls: 'svc-hide-tb' }, { k: 'amount', l: t('suivi.clair.amount'), cls: 'num' }, { k: 'why', l: t('suivi.clair.why') }, { k: 'since', l: t('suivi.clair.since'), cls: 'num svc-hide-tb' }, { k: 'act', l: '' }];
   const opens = v === 'alertes_new' || v === 'alertes_encours';
-  // a manager's list: who has the alert, after the customer
-  if (pick) cols.splice(2, 0, { k: 'fagent', l: t('suivi.col.fagent') });
   const cell = (o: ClairRow, k: string): ReactNode => {
     const x = extra[o.id];
     const reason = reasonOf(o, x);
@@ -270,19 +268,25 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h, pick 
         return (
           <span className="svc-cli">
             <CoBadge o={o} x={x} />
-            <b>{o.customerName}</b>
+            {pick ? (
+              // a manager's list: who has the alert, under the customer (✕ takes it back)
+              <span className="svc-cli-t">
+                <b>{o.customerName}</b>
+                {o.followAgentName ? (
+                  <span className="svc-agent" onClick={(e) => e.stopPropagation()}>
+                    <RemovableChip name={o.followAgentName} removeLabel={t('suivi.removeAgent')} onRemove={pick.removeAgent ? () => pick.removeAgent!(o) : undefined} />
+                  </span>
+                ) : (
+                  <small className="muted">{t('suivi.give.nobody')}</small>
+                )}
+              </span>
+            ) : (
+              <b>{o.customerName}</b>
+            )}
           </span>
         );
       case 'wilaya':
         return wilayaName(o.wilayaId);
-      case 'fagent':
-        return o.followAgentName ? (
-          <span onClick={(e) => e.stopPropagation()}>
-            <RemovableChip name={o.followAgentName} removeLabel={t('suivi.removeAgent')} onRemove={pick?.removeAgent ? () => pick.removeAgent!(o) : undefined} />
-          </span>
-        ) : (
-          <span className="muted">{t('suivi.give.nobody')}</span>
-        );
       case 'product':
         return <span className="svc-clamp">{namesOf(o.items)}</span>;
       case 'amount':

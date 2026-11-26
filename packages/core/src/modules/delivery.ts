@@ -629,7 +629,7 @@ function alertWordsOf(kind: CourierKind) {
     } else if (ROAD_MEANING.includes(meaning)) problems.push(w);
   }
   // the words that say « a try failed » first (« Tentative échouée » before « En attente »)
-  const tryLike = (w: string) => (/tentative|echou|échou|non livr|attempt|appel/i.test(w) ? 0 : 1);
+  const tryLike = (w: string) => (/echou|échou|non livr|attempt|appel sans/i.test(w) ? 0 : /tentative/i.test(w) ? 1 : 2);
   tries.sort((a, b) => tryLike(a) - tryLike(b));
   const own = SITUATION_WORDS[kind];
   return {
