@@ -880,7 +880,7 @@
     "waitZr": "Attend {{co}}",
     "waitZrShort": "Attend ZR",
     "recall": "Rappeler",
-    "resolvedNote": "Résolu se remplit tout seul quand ZR livre une alerte. Rien à faire ici.",
+    "resolvedNote": "Résolu se remplit tout seul : une alerte renvoyée avec « Relivrer », puis livrée par la société. Restée « En cours » puis livrée : un simple « Livré ». Rien à faire ici.",
     "deliveredAt": "Livré {{v}}",
     "menu": {
       "no_answer": "Pas de réponse",

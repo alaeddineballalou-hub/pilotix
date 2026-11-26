@@ -1,10 +1,11 @@
 // « Quand une alerte commence » on ZR's real answers (the owner, 26 Nov 2026): the advised start is the 2nd failed try,
 // a cancel always makes an alert, « Commune erronée » goes to Suivi › Erreurs, a status once ticked for Alertes
-// (« Reportée ») no longer makes one. Résolu only holds the alerts someone took; only they are paid (to who took them).
+// (« Reportée ») no longer makes one. Résolu only holds the alerts sent back on the road with « Relivrer », then
+// delivered; only they are paid (to who pressed it).
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
-import { alertTakerSql, alertTouchedSql } from '../modules/alerttouch';
+import { alertTouchedSql, relivreSql, relivreurSql } from '../modules/alerttouch';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -29,7 +30,7 @@ async function onRoad(n: number): Promise<number[]> {
   const ids = rows.map((r: any) => Number(r.id));
   await db.query(
     `UPDATE orders SET company_id = $2, follow_status = 'out_for_delivery', sub_status = NULL, tracking = 'ZR-AS-' || id, shipped_at = now() - interval '1 day',
-       taken_at = now() - interval '1 day', livreur_id = NULL, follow_agent_id = $3, locked_by = NULL, ext_status = 'Sortie en livraison' WHERE id = ANY($1)`,
+       taken_at = now() - interval '1 day', delivered_at = NULL, returning_at = NULL, returned_at = NULL, livreur_id = NULL, follow_agent_id = $3, locked_by = NULL, ext_status = 'Sortie en livraison' WHERE id = ANY($1)`,
     [ids, zr, me],
   );
   return ids;
@@ -102,32 +103,42 @@ test('« only at the cancel », problems with the alerts', async () => {
   await call('prefs.setAlertStart', admin, { start: 't2', problems: 'errors' });
 });
 
-test('Résolu: only an alert someone took; « Sauvé par » and the suivi pay go to who took it', async () => {
-  const [h, k] = await onRoad(2);
-  await sync([
-    [h, 'sortie_en_livraison', 'Sortie en livraison · Ne répond pas 2'],
-    [k, 'sortie_en_livraison', 'Sortie en livraison · Ne répond pas 2'],
-  ]);
-  assert.equal((await st(h)).follow_status, 'alert');
-  // the agent calls the customer of k (moved to « En cours »); nobody touches h
+test('Résolu and the suivi pay: only an alert sent back with « Relivrer », then delivered (kept « En cours »: a plain « Livré »)', async () => {
+  const [h, k, r, x] = await onRoad(4);
+  const pause = () => new Promise((res) => setTimeout(res, 25));
+  const two = 'Sortie en livraison · Ne répond pas 2';
+  await sync([h, k, r, x].map((id) => [id, 'sortie_en_livraison', two] as [number, string, string]));
+  for (const id of [h, k, r, x]) assert.equal((await st(id)).follow_status, 'alert');
+  await pause();
+  // k: the agent calls, no answer, and it stays « En cours »; r and x: he reaches the customer and presses « Relivrer »;
+  // nobody touches h
   await db.query(`INSERT INTO order_events (order_id, at, user_id, kind, from_value, to_value, note) VALUES ($1, now(), $2, 'call', NULL, 'no_answer', 'Appel')`, [k, me]);
-  assert.ok((await listIds('alertes_encours')).includes(k));
-  await new Promise((r) => setTimeout(r, 20));
-  await sync([
-    [h, 'livre', 'Livré'],
-    [k, 'livre', 'Livré'],
-  ]);
-  assert.equal((await st(h)).follow_status, 'delivered');
+  const agent = await as(EMAILS.suivi);
+  for (const id of [r, x]) await call('suivi.resolve', agent, { id, outcome: 'resolved', motif: 'reached', relance: false });
+  assert.equal((await st(r)).follow_status, 'out_for_delivery');
+  await pause();
+  // x fails again: an alert again, and nobody presses « Relivrer » this time
+  await sync([[x, 'sortie_en_livraison', 'Sortie en livraison · Ne répond pas 3']]);
+  assert.equal((await st(x)).follow_status, 'alert');
+  await pause();
+  await sync([h, k, r, x].map((id) => [id, 'livre', 'Livré'] as [number, string, string]));
+  for (const id of [h, k, r, x]) assert.equal((await st(id)).follow_status, 'delivered');
   const resolus = await listIds('resolus');
-  assert.ok(resolus.includes(k), 'taken, then delivered: Résolu');
+  assert.ok(resolus.includes(r), '« Relivrer », then delivered: Résolu');
+  assert.ok(!resolus.includes(k), 'kept « En cours », then delivered: a plain « Livré »');
   assert.ok(!resolus.includes(h), 'nobody touched it: a plain « Livré »');
-  const who = async (id: number) => (await db.query(`SELECT ${alertTouchedSql('o')} AS touched, ${alertTakerSql('o')} AS taker FROM orders o WHERE o.id = $1`, [id]))[0];
-  const kw = await who(k);
-  assert.equal(kw.touched, true);
-  assert.equal(Number(kw.taker), me);
-  const hw = await who(h);
-  assert.equal(hw.touched, false);
-  assert.equal(hw.taker, null);
+  assert.ok(!resolus.includes(x), 'its last alert stayed without « Relivrer »: a plain « Livré »');
+  // « Sauvé par » on the Résolu line: who pressed « Relivrer »
+  const res = (await call('suivi.list', agent, { tab: 'resolus', page: 1, pageSize: 300 })) as any;
+  const myName = String((await db.query('SELECT name FROM profiles WHERE id = $1', [me]))[0].name);
+  assert.equal(res.extra[r]?.savedBy, myName, '« Sauvé par » shows who pressed « Relivrer »');
+  // the pay: to who pressed « Relivrer »; nobody for the others; k is not « ignorée » (worked on), h can be
+  const who = async (id: number) => (await db.query(`SELECT ${alertTouchedSql('o')} AS touched, ${relivreSql('o')} AS back, ${relivreurSql('o')} AS paid FROM orders o WHERE o.id = $1`, [id]))[0];
+  const [hw, kw, rw, xw] = [await who(h), await who(k), await who(r), await who(x)];
+  assert.equal(Number(rw.paid), me);
+  assert.deepEqual([rw.back, kw.back, hw.back, xw.back], [true, false, false, false]);
+  assert.deepEqual([kw.paid, hw.paid, xw.paid], [null, null, null]);
+  assert.deepEqual([kw.touched, hw.touched], [true, false], 'the company\'s own news (the sync ran as the agent) is not someone working on it');
 });
 
 test('each company\'s words for the table « Ce que votre choix veut dire chez chaque société »', async () => {

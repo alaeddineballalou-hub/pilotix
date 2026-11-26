@@ -16,7 +16,7 @@ import { applyTrust, DRIVER_CLAIMS } from './trust';
 import { KINDS } from '../couriers/kinds';
 import { demoClaimFound, demoClaimState } from '../couriers/demo';
 import { SUB_ERREUR } from '../couriers/alertstart';
-import { ACTED_KINDS_SQL, alertTouchedSql } from './alerttouch';
+import { ACTED_KINDS_SQL, relivreSql, relivreurSql } from './alerttouch';
 import { tellGiven, tellTaken } from './inbox';
 import type { ClaimCategory, ClaimFound, ClaimMessage, ClaimSent, ClaimState, ParcelInfo, SwapSent } from '../couriers/types';
 import type { CourierKind } from '@pilotix/shared';
@@ -1345,15 +1345,16 @@ export interface ClairExtra {
   bucket: string;
 }
 
-/** Résolu: the parcels the company delivered after an alert someone took (moved to « En cours »), these 30 days. Nobody
- *  presses anything: it fills itself. An alert nobody touched, then delivered, is a plain « Livré » (the owner, 26 Nov
- *  2026: « the only one that goes to Sauvé is the one we at least moved to En cours »). */
+/** Résolu: the parcels the company delivered after a suivi agent sent their last alert back on the road with
+ *  « Relivrer », these 30 days. Nobody presses anything here: it fills itself. An alert only worked on (kept « En
+ *  cours »: calls, a réclamation) or nobody touched, then delivered, is a plain « Livré » (the owner, 26 Nov 2026: « if
+ *  it kept on En cours then delivered, it means he did not solve it »; a réclamation does not count). */
 async function resolvedIds(ctx: Ctx): Promise<number[]> {
   return (
     await ctx.db.query(
       `SELECT o.id FROM orders o WHERE o.follow_status = 'delivered' AND o.delivered_at >= $1
          AND EXISTS (SELECT 1 FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert')
-         AND ${alertTouchedSql('o')}${andSql(queueSql(ctx, readQueue(ctx)))}
+         AND ${relivreSql('o')}${andSql(queueSql(ctx, readQueue(ctx)))}
        ORDER BY o.delivered_at DESC LIMIT 500`,
       [new Date(ctx.now() - 30 * DAY).toISOString()],
     )
@@ -1391,6 +1392,11 @@ async function clairExtras(ctx: Ctx, tab: ClairTab, rows: Order[], ex: Record<nu
       backBy.set(num(r.order_id), r.user_id != null);
       if (r.note) backWhy.set(num(r.order_id), String(r.note));
     }
+  // Résolu: who sent it back on the road (« Relivrer »), the one paid for it
+  const saver = new Map<number, string>();
+  if (tab === 'resolus')
+    for (const r of await ctx.db.query(`SELECT o.id, p.name FROM orders o JOIN profiles p ON p.id = ${relivreurSql('o')} WHERE o.id = ANY($1)`, [ids]))
+      saver.set(num(r.id), String(r.name));
   const today = algiersDayStart(now);
   for (const o of rows) {
     const x = ex[o.id];
@@ -1422,8 +1428,8 @@ async function clairExtras(ctx: Ctx, tab: ClairTab, rows: Order[], ex: Record<nu
     out[o.id] = {
       last,
       callbackAt,
-      // the person who worked on it; never the agent's name for an alert he did not touch (those are not in Résolu)
-      savedBy: tab === 'resolus' ? (r?.who as string | null) ?? null : null,
+      // the person who pressed « Relivrer » (only those alerts are in Résolu), never the agent's name by default
+      savedBy: tab === 'resolus' ? (saver.get(o.id) ?? null) : null,
       cancelBy: tab === 'swap' || tab === 'annules' ? (backBy.get(o.id) ? 'client' : 'zr') : null,
       backWhy: backWhy.get(o.id) ?? null,
       bucket,

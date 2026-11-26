@@ -880,7 +880,7 @@
     "waitZr": "Waiting for {{co}}",
     "waitZrShort": "Waiting for ZR",
     "recall": "Call back",
-    "resolvedNote": "Solved fills itself when ZR delivers an alert. Nothing to do here.",
+    "resolvedNote": "Solved fills itself: an alert sent back with « Deliver again », then delivered by the company. Kept « In progress », then delivered: a plain delivery. Nothing to do here.",
     "deliveredAt": "Delivered {{v}}",
     "menu": {
       "no_answer": "No answer",
