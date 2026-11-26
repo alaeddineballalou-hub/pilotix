@@ -1423,7 +1423,7 @@ export const deliveryProcs = {
 
   /** One parcel read again from its company now (« J’ai fait le swap dans ZR »): its status, and a swap made in the
    *  company's own space put on its new customer's order at once (`swaps`: « PX1329 → PX1392 »). */
-  'delivery.syncOne': proc(['suivi', 'confirmation', 'depot'], z.object({ orderId: id }), async (ctx, { orderId }) => {
+  'delivery.syncOne': proc(['suivi', 'confirmation'], z.object({ orderId: id }), async (ctx, { orderId }) => {
     const o = await getOrder(ctx, orderId);
     if (!o.companyId || !o.tracking) throw bad(`${o.ref} : pas de colis chez une société`);
     const c = await companyOr404(ctx.db, o.companyId);
