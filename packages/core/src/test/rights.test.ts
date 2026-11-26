@@ -41,8 +41,10 @@ test('by default nobody loses anything: every action the server checks is inside
   for (const name of Object.keys(reg)) {
     const roles = reg[name].roles;
     if (roles !== null && roles.length === 0) continue; // administrators only
-    // every role that passes the action's role check (its own roles and the roles it includes: a vendeur is an agent too)
-    const callers = RIGHTS_ROLES.filter((r) => roles === null || expandRoles([r === 'agence' ? 'confirmation' : (r as Role)]).some((x) => roles.includes(x)));
+    // every role that passes the action's role check (its own roles and the roles it includes: a vendeur is an agent too).
+    // The community manager: what was hers; from Confirmation (26 Nov 2026) only that page and the work on her order
+    // there, never the confirmation agents' other pages (shared rights.ts › cmTakes; communitymanager.test.ts)
+    const callers = RIGHTS_ROLES.filter((r) => roles === null || (r === 'cm' ? (['cm'] as Role[]) : expandRoles([r === 'agence' ? 'confirmation' : (r as Role)])).some((x) => roles.includes(x)));
     for (const r of callers) {
       // a few inputs (tabs, endings…); an agent never gives an order to someone else (orders.assignAgent refuses it)
       const inputs = [

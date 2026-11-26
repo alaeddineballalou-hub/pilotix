@@ -223,9 +223,19 @@ function withIncluded(r: RightsRole): RightsRole[] {
   return [r, ...((ROLE_INCLUDES[r as Role] ?? []) as RightsRole[])];
 }
 
+/**
+ * What a community manager takes from Confirmation (her role includes it so that she confirms the orders she makes from
+ * her chats herself, owner's rule 26 Nov 2026): that page and the work on her order there (the client, the products, the
+ * delivery company, a cancel). Never the confirmation agents' other pages (Tableau de bord, Suivi, SAV, Rendez-vous,
+ * Produits & stock, Ma caisse) nor their other buttons: she works the messages and the comments, nothing else.
+ */
+const CM_ORDER_WORK = new Set(['act:orders.customer', 'act:orders.items', 'act:orders.cancel', 'act:orders.company']);
+const cmTakes = (d: RightDef) => d.id === 'page:confirmation' || d.in === 'confirmation' || CM_ORDER_WORK.has(d.id);
+
 /** Does this role have this right by default? */
 export function byDefault(role: RightsRole, d: RightDef): boolean {
   if (d.roles === null) return true;
+  if (role === 'cm') return d.roles.includes('cm') || (d.roles.includes('confirmation') && cmTakes(d));
   return withIncluded(role).some((x) => d.roles!.includes(x) || (x === 'agence' && !d.noAgence && d.roles!.includes('confirmation')));
 }
 /** May this role get it en plus? */

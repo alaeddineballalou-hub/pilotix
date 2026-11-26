@@ -43,11 +43,11 @@ test('her role: Pilot Message, Pilot Comments, her orders and their confirmation
   const r = rightsOf({ id: 1, roles: ['cm'] }, NO_ROLE_RIGHTS);
   for (const id of ['page:messages', 'page:cm', 'act:dellal.reply', 'act:cm.reply', 'act:orders.create', 'page:commandes', 'tab:commandes/confirmees', 'tab:commandes/enroute', 'tab:commandes/livrees', 'tab:commandes/annulees', 'tab:commandes/tout', 'page:confirmation'])
     assert.ok(r.has(id), `${id}: hers by default`);
-  // she confirms her own orders (owner's choice, 26 Nov 2026): her role brings what a confirmation agent has
-  for (const id of rightsOf({ id: 2, roles: ['confirmation'] }, NO_ROLE_RIGHTS)) assert.ok(r.has(id), `${id}: a confirmation agent's, hers too`);
-  // (the owner takes away from her role, in Utilisateurs › Rôles, what a confirmation agent has and he does not want her
-  // to have: Suivi, SAV, Produits…)
-  for (const id of ['page:social', 'page:createur', 'page:spy', 'page:comptes', 'page:depot', 'page:clients', 'page:marketing', 'page:landing', 'act:social.publish', 'act:costs'])
+  // she confirms her own orders (owner's choice, 26 Nov 2026): Confirmation and the work on her order there
+  for (const id of ['tab:confirmation/nouvelles', 'tab:confirmation/attente', 'tab:confirmation/confirmees', 'tab:confirmation/terminees', 'act:conf.photos', 'act:orders.customer', 'act:orders.items', 'act:orders.cancel', 'act:orders.company'])
+    assert.ok(r.has(id), `${id}: hers, to confirm her orders`);
+  // nothing else of a confirmation agent's (« she works the messages and the comments, nothing else »)
+  for (const id of ['page:social', 'page:createur', 'page:spy', 'page:comptes', 'page:dashboard', 'page:suivi', 'page:depot', 'page:sav', 'page:rendezvous', 'page:clients', 'page:produits', 'page:macaisse', 'page:marketing', 'page:landing', 'tab:confirmation/reglages', 'act:social.publish', 'act:costs', 'act:orders.export', 'act:orders.blacklist', 'act:caisse.add', 'act:pay.ask', 'act:sav.create', 'act:suivi.claim', 'act:notify.send', 'act:landing.protect'])
     assert.ok(!r.has(id), `${id}: never hers`);
 });
 
@@ -156,10 +156,11 @@ test('she follows her orders: her Confirmées at each stage of the dépôt, then
   assert.equal(c.lists.confirmees, 2);
   assert.deepEqual(c.lists.stages, { nostock: 0, preparer: 1, prepares: 0, dispatchees: 1 });
   assert.equal(c.lists.road, 1);
-  // since 26 Nov 2026 she confirms her own orders: Confirmation and En livraison open to her, with her own orders only
+  // since 26 Nov 2026 she confirms her own orders: Confirmation opens to her, with her own orders only
   const own = new Set([toPrep.id, handed.id, taken.id, waiting.id]);
   const listed = ((await call('confirmation.list', nour, { sub: 'confirmees' })) as any).rows.map((x: any) => Number(x.id));
   assert.ok(listed.length > 0 && listed.every((id: number) => own.has(id)), 'Confirmation › Confirmées: hers only');
-  const road = ((await call('suivi.list', nour, { tab: 'enlivraison' })) as any).rows.map((x: any) => Number(x.id));
-  assert.ok(road.every((id: number) => own.has(id)), 'En livraison: hers only');
+  // the confirmation agents' other pages stay closed (her « En livraison » is Commandes' line above)
+  for (const [name, input] of [['suivi.list', { tab: 'enlivraison' }], ['sav.list', {}], ['rdv.list', { list: 'attente' }]] as const)
+    await assert.rejects(call(name, nour, input), (e: any) => e.code === 'forbidden', name);
 });

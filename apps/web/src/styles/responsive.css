@@ -88,8 +88,9 @@ html, body { overflow-x: clip; }
 .tbl.px-fixed td .px-copy { min-width: 0; }
 /* status words wrap onto two lines rather than losing their end ("Retour en cours", "Confirmée sans stock") */
 .tbl.px-fixed td .badge:not(.px-rmchip):not(.px-rmchip-s), .tbl.px-fixed td .px-histcell { max-width: 100%; white-space: normal; height: auto; min-height: 22px; line-height: 1.2; padding-block: 3px; text-align: center; overflow-wrap: normal; word-break: normal; }
-/* the agency's name too (« Rapide Call Center » on two lines, never « Rapide… »); a very long name: two lines then « … » */
-.tbl.px-fixed td .badge.px-agchip:not(.px-rmchip) { text-align: start; border-radius: 11px; }
-.tbl.px-fixed td .px-agchip-n { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+/* the agency's name too, whole on up to three lines (« Rapide Call Center » in the 106 px agent column, never « Rapide… »);
+   longer than that: « … » and the whole name on hover */
+.tbl.px-fixed td .badge.px-agchip:not(.px-rmchip) { text-align: start; border-radius: 11px; padding-inline: 8px; }
+.tbl.px-fixed td .px-agchip-n { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; }
 /* stronger than the older "buttons in table cells wrap" rule */
 html body .tbl td.px-act > .btn, html body .tbl td.px-act > select { white-space: nowrap !important; }
