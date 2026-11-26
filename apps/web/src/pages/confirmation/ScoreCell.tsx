@@ -1,7 +1,7 @@
 // Confirmation › « Score client » (the owner's choice 1 « Pastilles », 26 Nov 2026): the customer's score in its pill
-// (« Nouveau » while nothing is known about the number) and, under it, a tag that says whether the order is a form the
-// customer left without sending it (« Abandonnée », Landing pages › Abandonnées) or not. The phone cards show the same
-// two side by side.
+// (a new customer: the score he starts with, grey, and « Nouveau » — the owner's choice C) and, under it, a tag that says
+// whether the order is a form the customer left without sending it (« Abandonnée », Landing pages › Abandonnées) or not.
+// The phone cards show the same two side by side.
 import { cameOf, type ClientLevel } from '@pilotix/shared';
 import { useTranslation } from 'react-i18next';
 import { ScoreChip } from '../../ui/clientScore';
@@ -25,9 +25,16 @@ export function ScoreCell({ o, row }: { o: CameOf & { clientScore?: { score: num
       {s && s.level !== 'new' ? (
         <ScoreChip s={s} short />
       ) : (
-        // nothing known yet: the word, not a number (a new customer starts at 60, which would read like « Fiable »)
+        // nothing known about the number yet: the score it starts with (60 unless the shop changed it), grey and with the
+        // word « Nouveau », so it never reads like a « Fiable » earned with delivered parcels (no score at all: the word)
         <span className="cs-chip short cs-new cf-sc-new" title={`${t('clients.score.level.new')} — ${t('clients.score.help')}`}>
-          {t('clients.score.level.new')}
+          {s && (
+            <>
+              <b className="ltr">{s.score}</b>
+              <small className="ltr">/100</small>
+            </>
+          )}
+          <span>{t('clients.score.level.new')}</span>
         </span>
       )}
       <span className={`cf-cart ${ab ? 'yes' : 'no'}`} title={ab ? t('confirmation.abandon.yesHelp') : t('confirmation.abandon.noHelp')}>

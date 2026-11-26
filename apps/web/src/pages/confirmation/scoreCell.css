@@ -2,7 +2,8 @@
    the « Abandonnée » / « Non abandonnée » tag under it */
 .cf-sc { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 0; }
 .cf-sc .cs-chip.short { margin: 0; }
-.cf-sc .cs-chip.cf-sc-new { font-weight: 700; }
+/* a new customer: « 60/100 Nouveau » (the word alone when there is no score at all) */
+.cf-sc .cs-chip.cf-sc-new > span:only-child { margin: 0; }
 .cf-cart { display: inline-flex; align-items: center; gap: 4px; height: 21px; padding: 0 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700; line-height: 1; white-space: nowrap; }
 .cf-cart .bji { width: 12px; height: 12px; vertical-align: 0; }
 /* an abandoned form: purple (no level of the score uses it) */
