@@ -207,7 +207,11 @@ const payments: NonNullable<CourierAdapter['payments']> = {
   async balance(c) {
     needKeys(c, 'api_key', 'tenant');
     const r = await http(c.name, url(c, '/supplier-payment/supplier-balance'), { headers: h(c) });
-    return { paid: numOf(r?.totalAmountPaid), ready: numOf(r?.totalAmountReadyToBePaid), delivered: numOf(r?.totalAmountDelivered), notReady: numOf(r?.totalAmountNotReadyCashed) + numOf(r?.totalAmountReadyToBeCashed) };
+    // ZR's app (25 Nov 2026): « Solde prêt » = totalAmountReadyToBeCashed, the money it holds for us that we can ask for
+    // (Pilotix asks for it by itself when it is above 0); « Paiements en attente de récupération » =
+    // totalAmountReadyToBePaid, payments ZR already made that wait at its office (they show on their own, « à récupérer »).
+    // Until then Pilotix read the second one as « Prêt à payer »: it showed 0 and never asked.
+    return { paid: numOf(r?.totalAmountPaid), ready: numOf(r?.totalAmountReadyToBeCashed), delivered: numOf(r?.totalAmountDelivered), notReady: numOf(r?.totalAmountNotReadyCashed) };
   },
   async requests(c) {
     needKeys(c, 'api_key', 'tenant');

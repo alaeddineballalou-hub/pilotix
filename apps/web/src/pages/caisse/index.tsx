@@ -15,6 +15,7 @@ import { useIsPhone } from '../../lib/useMedia';
 import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
 import { PhoneCaisse } from './PhoneCaisse';
 import { CaisseJournal, CaisseOverview } from './Overview';
+import { CompanyReceipt, GapChip, receiptOf, RowPrices } from './CompanyReceipt';
 import { PaieBoard } from './PaieBoard';
 export { MaCaisse, MesGains } from './MaPaie';
 import { CopyCode } from '../../ui/CopyCode';
@@ -191,11 +192,13 @@ function GroupCard({ g, ticket }: { g: Group; ticket?: boolean }) {
   const [confirm, setConfirm] = useState(false);
   const receive = useAction('cash.receive', { success: (r) => t('caisse.due.received', { count: r.orders }), onDone: () => (setSel(new Set()), setConfirm(false)) });
   const chosen = g.orders.filter((o) => sel.has(o.id));
-  const sum = chosen.reduce((s, o) => s + o.net, 0);
+  // a delivery company's card: its SAV exchanges and the fees of its returns and swaps come out with the money received
+  const rc = receiptOf(g, chosen);
+  const sum = rc.net;
   const csv = () =>
     downloadCsv(`caisse-${g.name.replace(/[^\w-]+/g, '_')}`, [
-      [t('caisse.col.order'), t('caisse.col.tracking'), t('caisse.col.delivered'), t('caisse.col.customer'), t('caisse.col.phone'), t('caisse.col.wilaya'), t('caisse.col.commune'), t('caisse.col.products'), t('caisse.col.variant'), t('caisse.col.paid'), t('caisse.col.fee'), t('caisse.col.net')],
-      ...(chosen.length ? chosen : g.orders).map((o) => [o.ref, o.tracking, dateTime(o.deliveredAt), o.customerName, o.phone, wilayaName(o.wilayaId), o.commune, o.products, o.variants, o.total, o.deliveryCost, o.net]),
+      [t('caisse.col.order'), t('caisse.col.tracking'), t('caisse.col.delivered'), t('caisse.col.customer'), t('caisse.col.phone'), t('caisse.col.wilaya'), t('caisse.col.commune'), t('caisse.col.products'), t('caisse.col.variant'), t('caisse.col.paid'), t('caisse.col.clientDelivery'), t('caisse.col.fee'), t('caisse.col.weight'), t('caisse.col.gap'), t('caisse.col.net')],
+      ...(chosen.length ? chosen : g.orders).map((o) => [o.ref, o.tracking, dateTime(o.deliveredAt), o.customerName, o.phone, wilayaName(o.wilayaId), o.commune, o.products, o.variants, o.total, o.clientDelivery, o.deliveryCost, o.weight, o.clientDelivery - o.deliveryCost, o.net]),
     ]);
   return (
     <div className="card" id={`cash-${g.key}`}>
@@ -213,15 +216,20 @@ function GroupCard({ g, ticket }: { g: Group; ticket?: boolean }) {
       </div>
       {confirm && (
         <div className="card" role="alertdialog" style={{ background: 'var(--raise)' }}>
-          <p>{t('caisse.due.confirm', { count: chosen.length, amount: da(sum), name: g.name })}</p>
+          <p>{t('caisse.due.confirm', { count: rc.count, amount: da(sum), name: g.name })}</p>
           <div className="row">
-            <button className="btn ok" disabled={receive.isPending} onClick={() => receive.mutate({ ids: chosen.map((o) => o.id) })}>
+            <button className="btn ok" disabled={receive.isPending} onClick={() => receive.mutate({ ids: rc.ids, fees: rc.fees })}>
               {t('caisse.due.confirmBtn')}
             </button>
             <button className="btn" onClick={() => setConfirm(false)}>
               {t('common.cancel')}
             </button>
           </div>
+        </div>
+      )}
+      {g.extra && (
+        <div className="pxk-rcw">
+          <CompanyReceipt g={g} chosen={chosen.length ? chosen : g.orders} />
         </div>
       )}
       <div className="tbl-wrap">
@@ -237,6 +245,7 @@ function GroupCard({ g, ticket }: { g: Group; ticket?: boolean }) {
               <th className="wide">{t('caisse.col.products')}</th>
                   <th>{t('caisse.col.variant')}</th>
               <th className="num">{t('caisse.col.paid')}</th>
+              {g.extra && <th className="num">{t('caisse.col.gap')}</th>}
               <th className="num">{t('caisse.col.net')}</th>
             </tr>
           </thead>
@@ -275,6 +284,11 @@ function GroupCard({ g, ticket }: { g: Group; ticket?: boolean }) {
                 <td className="num" data-l={t('caisse.col.paid')}>
                   {da(o.total)}
                 </td>
+                {g.extra && (
+                  <td className="num" data-l={t('caisse.col.gap')}>
+                    <small className="muted"><RowPrices g={g} o={o} /></small> <GapChip o={o} />
+                  </td>
+                )}
                 <td className="num" data-l={t('caisse.col.net')}>
                   <b>{da(o.net)}</b>
                 </td>

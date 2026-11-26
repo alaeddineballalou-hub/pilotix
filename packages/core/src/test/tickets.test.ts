@@ -61,12 +61,20 @@ test('sav.stats: tickets, parcels and money of their own', async () => {
   assert.equal(s.money.collected, paid);
 });
 
-test('caisse: ticket money is a separate line', async () => {
+// (26 Nov 2026: a delivery company's card holds all the money it holds, as it counts it — its SAV exchange parcels too)
+test('caisse: ticket money is never in the orders; a delivery company’s SAV parcels are on its card, our livreurs’ apart', async () => {
   const due: any = await call('cash.due', await as(EMAILS.admin), {});
   assert.ok(due.groups.every((g: any) => g.orders.every((o: any) => !o.ticket)));
   assert.ok(due.tickets.groups.every((g: any) => g.key.startsWith('t') && g.orders.every((o: any) => o.ticket && o.total > 0)));
-  const owed = (await db.query(`SELECT count(*)::int AS n FROM orders WHERE is_exchange AND follow_status = 'delivered' AND NOT cashed AND total > 0`))[0].n;
-  assert.equal(due.tickets.count, owed);
+  const rows = await db.query(
+    `SELECT o.id, o.total, o.livreur_id, o.company_id, c.kind FROM orders o LEFT JOIN delivery_companies c ON c.id = o.company_id
+     WHERE o.is_exchange AND o.follow_status IN ('delivered', 'exchanged') AND NOT o.cashed`,
+  );
+  const onCard = rows.filter((o: any) => !o.livreur_id && o.company_id && o.kind !== 'own');
+  const apart = rows.filter((o: any) => !onCard.includes(o) && Number(o.total) > 0);
+  assert.equal(due.tickets.count, apart.length);
+  const cardIds = due.groups.flatMap((g: any) => g.extra?.exchanges.ids ?? []);
+  assert.deepEqual([...cardIds].sort(), onCard.map((o: any) => Number(o.id)).sort());
 });
 
 test('SAV tariff: suggested on the ticket, editable by admin', async () => {

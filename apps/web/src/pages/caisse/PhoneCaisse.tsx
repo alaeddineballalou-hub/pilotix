@@ -18,6 +18,7 @@ import '../suivi/phone.css';
 import '../sav/phone.css';
 import './phone.css';
 import { CaisseSettings, kindIcon } from './CaisseSettings';
+import { CompanyReceipt, GapChip, receiptOf, RowPrices } from './CompanyReceipt';
 
 const CATS = ['fuel', 'packing', 'salary', 'rent', 'ads', 'repair', 'other'] as const;
 type Kind = 'expense' | 'income' | 'transfer';
@@ -330,8 +331,8 @@ function CompanyPage({ gkey, onClose }: { gkey: string; onClose: () => void }) {
   const recv = useAction('cash.receive', { success: t('caisse.ph.received'), onDone: onClose });
   const orders = g?.orders ?? [];
   const chosen = orders.filter((o) => !off.has(o.id));
-  const net = chosen.reduce((s, o) => s + o.net, 0);
-  const collected = chosen.reduce((s, o) => s + o.total, 0);
+  // what the company holds for us as it counts it: the parcels ticked, its SAV exchanges, the fees of its returns and swaps
+  const rc = g ? receiptOf(g, chosen) : null;
   const toggle = (id: number) => setOff((s) => (s.has(id) ? new Set([...s].filter((x) => x !== id)) : new Set([...s, id])));
   return (
     <Page
@@ -343,8 +344,8 @@ function CompanyPage({ gkey, onClose }: { gkey: string; onClose: () => void }) {
         g && (
           <>
             <IntoPick value={into} onChange={setInto} label={t('caisse.ph.receivedInto')} />
-            <button type="button" className="pxv-btn gr big" disabled={!chosen.length || recv.isPending} onClick={() => recv.mutate({ ids: chosen.map((o) => o.id), into: into as 'main' })}>
-              <Icon name="check" /> {t('caisse.ph.receiveBtn', { v: da(net) })}
+            <button type="button" className="pxv-btn gr big" disabled={!rc?.ids.length || recv.isPending} onClick={() => rc && recv.mutate({ ids: rc.ids, fees: rc.fees, into: into as 'main' })}>
+              <Icon name="check" /> {t('caisse.ph.receiveBtn', { v: da(rc?.net ?? 0) })}
             </button>
           </>
         )
@@ -355,25 +356,15 @@ function CompanyPage({ gkey, onClose }: { gkey: string; onClose: () => void }) {
         q.error ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : <Loading />
       ) : (
         <>
-          <div className="pxk-k3">
-            <div>
-              <small>{t('caisse.ph.collectedBy', { name: g.name })}</small>
-              <b className="ltr">{da(collected)}</b>
-            </div>
-            <div>
-              <small>{t('caisse.ph.fees')}</small>
-              <b className="ltr bad">−{da(collected - net)}</b>
-            </div>
-            <div>
-              <small>{t('caisse.ph.netToGet')}</small>
-              <b className="ltr">{da(net)}</b>
-            </div>
-          </div>
+          <CompanyReceipt g={g} chosen={chosen} />
+          {orders.length > 0 && (
           <button type="button" className="pxk-all sticky" onClick={() => setOff(off.size ? new Set() : new Set(orders.map((o) => o.id)))}>
             <span className={`pxv-ck${!off.size ? ' on' : ''}`}>{!off.size && <Icon name="check" />}</span>
             <b>{t('caisse.ph.all', { n: orders.length })}</b>
             <small>{t('caisse.ph.oldestFirst')}</small>
           </button>
+          )}
+          {orders.length > 0 && (
           <ul className="pxk-grp">
             {orders.map((o) => (
               <li key={o.id}>
@@ -382,15 +373,19 @@ function CompanyPage({ gkey, onClose }: { gkey: string; onClose: () => void }) {
                   <span className="pxk-rm">
                     <b>{o.customerName}</b>
                     <small>
-                      <span className="ltr">{o.ref}</span> · {t('caisse.ph.deliveredAgo', { d: o.deliveredAt ? when(o.deliveredAt) : '—' })}
+                      <span className="ltr">{o.ref}</span> · <RowPrices g={g} o={o} />
                       {days(o.deliveredAt) && days(o.deliveredAt)! >= 15 ? ` · ${days(o.deliveredAt)} j` : ''}
                     </small>
                   </span>
-                  <b className="ltr pxk-amt">{n0(o.net)}</b>
+                  <span className="pxk-amc">
+                    <b className="ltr pxk-amt">{n0(o.net)}</b>
+                    <GapChip o={o} />
+                  </span>
                 </button>
               </li>
             ))}
           </ul>
+          )}
         </>
       )}
     </Page>

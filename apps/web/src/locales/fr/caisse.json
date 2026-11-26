@@ -24,7 +24,10 @@
     "receivedAt": "Reçu le",
     "company": "Société",
     "amount": "Montant",
-    "variant": "Variante"
+    "variant": "Variante",
+    "clientDelivery": "Livraison client",
+    "weight": "Surpoids",
+    "gap": "Écart livraison"
   },
   "due": {
     "title": "À recevoir",
@@ -90,7 +93,7 @@
   },
   "tickets": {
     "title": "Tickets SAV — à recevoir",
-    "help": "L’argent des colis d’échange SAV (frais de livraison et différences de prix) est séparé de celui des commandes. Les échanges gratuits n’apparaissent pas ici.",
+    "help": "L’argent des colis d’échange SAV de vos livreurs (frais de livraison et différences de prix) est séparé de celui des commandes. Ceux envoyés avec une société de livraison sont sur sa carte. Les échanges gratuits n’apparaissent pas ici.",
     "empty": "Aucun argent de ticket à recevoir.",
     "groupTitle": "Tickets · {{name}} — {{count}} colis",
     "badge": "Tickets SAV"
@@ -348,5 +351,17 @@
       "exchanges": "Échanges",
       "rate": "Taux livr."
     }
+  },
+  "rc": {
+    "collected": "Encaissé par {{name}} ({{n}})",
+    "delivery": "Livraison ({{n}})",
+    "weight": "surpoids",
+    "returns": "Retours ({{n}})",
+    "swaps": "Swaps ({{n}})",
+    "exchanges": "Échanges ({{n}})",
+    "net": "Net à recevoir",
+    "gap": "Écart livraison · clients {{c}} vs {{name}} {{z}}",
+    "row": "client {{c}} · {{name}} {{z}}",
+    "help": "Ce que {{name}} a encaissé, moins tout ce qu’elle prend : son prix de livraison, son surpoids (au-delà de 5 kg), ses retours, ses swaps et ses échanges SAV. Les frais d’un retour ou d’un swap sortent une seule fois : avec « Argent reçu », ou dans le paiement de {{name}}."
   }
 }

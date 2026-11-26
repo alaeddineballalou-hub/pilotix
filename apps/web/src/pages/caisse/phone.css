@@ -47,6 +47,29 @@
 .pxk-k3 b.ok { color: var(--c-ok-ink); }
 .pxk-k3 b.bad { color: var(--c-bad-ink); }
 
+/* a delivery company's money as it counts it (the owner's design 1 « Reçu », 26 Nov 2026) */
+.pxk-rc { border-radius: 14px; border: 1px solid var(--line); background: var(--surface); padding: 10px 14px; display: flex; flex-direction: column; font-size: 14px; color: var(--ink); }
+.pxk-rc .ln { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 3px 0; }
+.pxk-rc .ln > span { min-width: 0; }
+.pxk-rc .ln b { font-weight: 900; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pxk-rc .sb { display: flex; justify-content: space-between; gap: 12px; padding: 0 0 4px 14px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pxk-rc .bad { color: var(--c-bad-ink); }
+.pxk-rc .z, .pxk-rc .z b, .pxk-rc .z .bad { color: color-mix(in srgb, var(--muted) 62%, var(--surface)); }
+.pxk-rc .z b { font-weight: 700; }
+.pxk-rc .tot { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; border-top: 1px dashed color-mix(in srgb, var(--muted) 35%, var(--surface)); margin-top: 6px; padding-top: 8px; font-size: 15.5px; }
+.pxk-rc .tot b { font-weight: 900; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pxk-gap { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); padding: 9px 14px; font-size: 12.5px; color: var(--muted); }
+.pxk-gap > span { min-width: 0; }
+.pxk-gap b { flex: none; font-size: 14.5px; font-weight: 900; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pxk-gap b.ok { color: var(--c-ok-ink); }
+.pxk-gap b.bad { color: var(--c-bad-ink); }
+.pxk-amc { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.pxk-chip { display: inline-block; font-size: 11.5px; font-weight: 900; line-height: 1.5; padding: 0 8px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 14%, var(--surface)); color: var(--muted); font-variant-numeric: tabular-nums; }
+.pxk-chip.ok { background: var(--c-ok-tint); color: var(--c-ok-ink); }
+.pxk-chip.bad { background: var(--c-bad-tint); color: var(--c-bad-ink); }
+/* computers (the « À recevoir » table): the receipt above the parcels */
+.pxk-rcw { display: grid; grid-template-columns: minmax(0, 460px); gap: 8px; margin: 4px 0 14px; }
+
 .pxk-ob { display: flex; flex-direction: column; gap: 10px; }
 .pxk-ob.bar { padding-bottom: 150px; }
 /* a flex column must not squeeze its lists (the parcels of a company were cut to nothing) */

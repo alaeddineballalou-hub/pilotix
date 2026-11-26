@@ -24,7 +24,10 @@
     "receivedAt": "Received on",
     "company": "Company",
     "amount": "Amount",
-    "variant": "Variant"
+    "variant": "Variant",
+    "clientDelivery": "Client delivery",
+    "weight": "Weight fee",
+    "gap": "Delivery gap"
   },
   "due": {
     "title": "To receive",
@@ -90,7 +93,7 @@
   },
   "tickets": {
     "title": "SAV tickets — to receive",
-    "help": "Money from SAV exchange parcels (delivery fees and price differences) is kept apart from order money. Free exchanges are not listed here.",
+    "help": "Money from SAV exchange parcels of your own livreurs (delivery fees and price differences) is kept apart from order money. Those sent with a delivery company are on its card. Free exchanges are not listed here.",
     "empty": "No ticket money to receive.",
     "groupTitle": "Tickets · {{name}} — {{count}} parcels",
     "badge": "SAV tickets"
@@ -348,5 +351,17 @@
       "exchanges": "Exchanges",
       "rate": "Delivery rate"
     }
+  },
+  "rc": {
+    "collected": "Collected by {{name}} ({{n}})",
+    "delivery": "Delivery ({{n}})",
+    "weight": "weight",
+    "returns": "Returns ({{n}})",
+    "swaps": "Swaps ({{n}})",
+    "exchanges": "Exchanges ({{n}})",
+    "net": "Net to receive",
+    "gap": "Delivery gap · clients {{c}} vs {{name}} {{z}}",
+    "row": "client {{c}} · {{name}} {{z}}",
+    "help": "What {{name}} collected, minus all it takes: its delivery price, its weight fee (above 5 kg), its returns, its swaps and its SAV exchanges. Each return or swap fee comes out once: with « Money received », or in {{name}}'s own payment."
   }
 }

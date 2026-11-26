@@ -10,7 +10,7 @@ import type { PayBalance, PayLine, PayRequest, PayStatement } from '../couriers/
 import { iso, isoOrNull, num } from '../db';
 import { bad, Ctx, notFound, proc, withActionLock } from '../rpc';
 import { CAISSE_KEY_RE, CaisseKey, caisseLabelOf, checkCaisse, receive } from './cash';
-import { setFollow } from './orders';
+import { addEvent, setFollow } from './orders';
 import { applyPayFees } from './courierfees';
 
 const isDemo = (ctx: Ctx) => !ctx.server;
@@ -198,12 +198,36 @@ async function importPaymentTx(ctx: Ctx, payId: number, into: string) {
   // what the company took on each parcel (its prices, its weight fee): exact on the orders before they are received
   await applyPayFees(ctx.db, companyId, lines, new Date(ctx.now()).toISOString());
   const tracks = [...new Set(lines.filter((l) => l.tracking && l.amount > 0).map((l) => l.tracking!))];
-  const orders = tracks.length ? await ctx.db.query('SELECT id, tracking, follow_status, cashed FROM orders WHERE company_id = $1 AND tracking = ANY($2) FOR UPDATE', [companyId, tracks]) : [];
+  const orders = tracks.length ? await ctx.db.query('SELECT id, tracking, follow_status, cashed, fee_taken, fee_payment_id FROM orders WHERE company_id = $1 AND tracking = ANY($2) FOR UPDATE', [companyId, tracks]) : [];
   const unpaid = orders.filter((o: any) => !o.cashed);
   // parcels already received by hand: their part of this payment is already in a caisse
   const cashedTracks = new Set(orders.filter((o: any) => o.cashed).map((o: any) => String(o.tracking)));
   const already = lines.filter((l) => l.tracking && l.amount > 0 && cashedTracks.has(l.tracking)).reduce((s, l) => s + Math.round(num(l.amount)), 0);
-  const net = Math.max(0, num(p.amount) - already);
+  // The returns and swaps whose fee the company took in this payment: a return has its own line, a swap's fee is on the
+  // line of the parcel it gave to another customer. A fee an « Argent reçu » already took by hand is in a caisse already
+  // (out of it): this payment gives it back, so it never comes out twice. The others are taken here, once.
+  const allTracks = [...new Set(lines.filter((l) => l.tracking).map((l) => l.tracking!))];
+  const retTracks = allTracks.filter((t) => !tracks.includes(t));
+  const feeRows = allTracks.length
+    ? await ctx.db.query(
+        `SELECT o.id, o.follow_status, o.fee_taken_at, o.fee_taken, o.fee_payment_id, s.swap_to
+         FROM orders o LEFT JOIN LATERAL (SELECT (e.data->>'swap_to')::bigint AS swap_to, e.data->>'tracking' AS swap_tracking FROM order_events e
+             WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.data->>'swap_to' IS NOT NULL ORDER BY e.at DESC, e.id DESC LIMIT 1) s ON true
+         WHERE o.company_id = $1 AND ((o.follow_status IN ('returning', 'returned') AND o.tracking = ANY($2))
+            OR (o.follow_status = 'cancelled' AND o.sub_status = 'annule_swappe' AND (s.swap_tracking = ANY($3) OR s.swap_to = ANY($4))))
+         FOR UPDATE OF o`,
+        [companyId, retTracks, allTracks, orders.map((o: any) => num(o.id))],
+      )
+    : [];
+  const byHand = (o: any) => o.fee_taken !== null && o.fee_taken !== undefined && !o.fee_payment_id;
+  const cashedIds = new Set(orders.filter((o: any) => o.cashed).map((o: any) => num(o.id)));
+  // (a swap whose parcel was received by hand: that parcel's line holds the swap fee already)
+  const feesByHand =
+    feeRows.filter((o: any) => byHand(o) && !(o.follow_status === 'cancelled' && cashedIds.has(num(o.swap_to)))).reduce((s: number, o: any) => s + num(o.fee_taken), 0) +
+    // « En retour » parcels the company delivered after all: the return fee taken by hand comes back
+    orders.filter((o: any) => byHand(o)).reduce((s: number, o: any) => s + num(o.fee_taken), 0);
+  const feeTake = feeRows.filter((o: any) => !o.fee_taken_at).map((o: any) => num(o.id));
+  const net = Math.max(0, num(p.amount) - already + feesByHand);
   // ZR paid them: they were delivered, even if its status did not reach us yet
   // (« En retour » too: marked so by the Suivi, the company delivered it after all and paid it)
   const late = unpaid.filter((o: any) => o.follow_status !== 'delivered' && ([...FOLLOW_ON_ROAD, 'failed', 'alert', 'returning'] as string[]).includes(o.follow_status)).map((o: any) => num(o.id));
@@ -212,7 +236,8 @@ async function importPaymentTx(ctx: Ctx, payId: number, into: string) {
     await setFollow(sys(ctx), { ids: late, status: 'delivered', note: `Payé par la société (paiement ${p.ref ?? p.ext_id})` } as any, { system: true, courier: true, by });
   }
   const ids = unpaid.filter((o: any) => o.follow_status === 'delivered' || o.follow_status === 'exchanged' || late.includes(num(o.id))).map((o: any) => num(o.id));
-  const note = `Paiement ${p.ref ?? String(p.ext_id).slice(0, 8)}${already ? ` (dont ${already} DA déjà reçus à la main)` : ''}`;
+  const byHandNote = [already ? `dont ${already} DA déjà reçus à la main` : '', feesByHand ? `${feesByHand} DA de frais de retour déjà sortis à la main` : ''].filter(Boolean).join(', ');
+  const note = `Paiement ${p.ref ?? String(p.ext_id).slice(0, 8)}${byHandNote ? ` (${byHandNote})` : ''}`;
   let handoverId: number | null = null;
   let moveId: number | null = null;
   if (ids.length) {
@@ -222,12 +247,17 @@ async function importPaymentTx(ctx: Ctx, payId: number, into: string) {
     const m = await ctx.db.query(`INSERT INTO cash_moves (caisse, amount, kind, note, created_by) VALUES ($1,$2,'income',$3,$4) RETURNING id`, [into, net, note, ctx.session.profile.id]);
     moveId = num(m[0].id);
   }
+  // the fees the company took in this payment: taken, once (cancelling its versement puts them back to take)
+  if (feeTake.length) {
+    await ctx.db.query('UPDATE orders SET fee_taken_at = now(), fee_taken = NULL, fee_payment_id = $2, fee_handover_id = $3 WHERE id = ANY($1)', [feeTake, payId, handoverId]);
+    for (const o of feeTake) await addEvent(ctx.db, o, null, 'note', null, 'event', `Frais de retour pris par la société dans son paiement ${p.ref ?? String(p.ext_id).slice(0, 8)}`);
+  }
   await ctx.db.query(
     'UPDATE courier_payments SET handover_id=$2, move_id=$3, caisse=$4, matched=$5, unmatched=$6, imported_at=now(), imported_by=$7 WHERE id=$1',
     [payId, handoverId, moveId, into, ids.length, tracks.length - orders.length, ctx.session.profile.id],
   );
   ctx.emit({ type: 'orders' });
-  return { handoverId, moveId, matched: ids.length, alreadyCashed: already };
+  return { handoverId, moveId, matched: ids.length, alreadyCashed: already, feesByHand, feesTaken: feeTake.length };
 }
 
 const caisseLabel = (ctx: Ctx, key: string | null) => caisseLabelOf(ctx.db, key);

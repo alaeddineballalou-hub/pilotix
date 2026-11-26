@@ -5,7 +5,8 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
-import { addEvent } from './orders';
+import { apiFees, feesByApi, swapFeeSql } from './courierfees';
+import { addEvent, companyRules, FEE_COLS, parcelFees } from './orders';
 import { livreurOnly } from './delivery';
 
 const id = z.number().int().positive();
@@ -25,6 +26,10 @@ export interface CashOrder {
   variants: string;
   total: number;
   deliveryCost: number;
+  /** the courier's weight fee inside `deliveryCost` (its own number: ZR's API), 0 when it says none */
+  weight: number;
+  /** what the customer paid for the delivery (inside `total`): « client 550 · ZR 500 » */
+  clientDelivery: number;
   net: number;
   companyId: number | null;
   companyName: string | null;
@@ -42,7 +47,7 @@ export interface CashOrder {
   savRef: string | null;
 }
 
-const COLS = `o.id, o.ref, COALESCE(o.tracking, o.own_tracking) AS tracking, o.delivered_at, o.customer_name, o.phone, o.wilaya_id, o.commune, o.total, o.delivery_cost, o.company_id,
+const COLS = `o.id, o.ref, COALESCE(o.tracking, o.own_tracking) AS tracking, o.delivered_at, o.customer_name, o.phone, o.wilaya_id, o.commune, o.total, o.delivery_cost, o.delivery_fee, o.courier_fees, o.company_id,
   o.livreur_id, o.cashed, o.cashed_at, o.handover_id, o.follow_status, o.address, o.is_exchange,
   CASE WHEN o.is_exchange THEN (SELECT k.ref FROM complaints k WHERE k.exchange_order_id = o.id ORDER BY k.id DESC LIMIT 1) END AS sav_ref, c.name AS company_name, c.kind AS company_kind, lv.name AS livreur_name,
   (SELECT string_agg(CASE WHEN i.qty > 1 THEN i.qty || ' × ' ELSE '' END || i.name, ' + ' ORDER BY i.id)
@@ -61,6 +66,9 @@ function toCash(r: any, pay: Pay): CashOrder {
   const total = num(r.total);
   // our own livreurs hand over the whole amount (their share is paid separately); couriers keep their fee
   const cost = own ? 0 : num(r.delivery_cost);
+  // the weight fee the courier counts on it (ZR's API), already inside its cost
+  const api = !own && feesByApi(r.company_kind) ? apiFees(r.courier_fees) : null;
+  const weight = api ? Math.min(cost, Math.max(0, Math.round(num(api.weight)))) : 0;
   return {
     id: num(r.id),
     ref: r.ref,
@@ -74,6 +82,8 @@ function toCash(r: any, pay: Pay): CashOrder {
     variants: r.variants ?? '',
     total,
     deliveryCost: cost,
+    weight,
+    clientDelivery: num(r.delivery_fee),
     net: total - cost,
     companyId: numOrNull(r.company_id),
     companyName: r.company_name ?? null,
@@ -91,6 +101,58 @@ function toCash(r: any, pay: Pay): CashOrder {
 }
 
 const payOf = async (db: Db): Promise<Pay> => (await getSetting(db, 'payPlans')).livreur;
+
+/** A parcel that did not reach its customer and whose courier fee has not come out of the company's money yet. */
+export interface FeeWait {
+  id: number;
+  ref: string;
+  tracking: string | null;
+  companyId: number;
+  companyName: string;
+  companyKind: string | null;
+  /** « En retour » / « Retourné », or given to another customer (« Annulé · swappé ») */
+  kind: 'return' | 'swap';
+  /** return price, or swap fee */
+  fee: number;
+  /** the weight fee on the return (ZR: 50 DA a kg above 5 kg) */
+  weight: number;
+  takenAt: string | null;
+}
+// (a function: orders.ts may not be loaded yet when this module is)
+const feeWaitSql = () => `SELECT ${FEE_COLS}, o.follow_status, o.sub_status, o.fee_taken_at, COALESCE(o.tracking, o.own_tracking) AS trk, ${swapFeeSql()} AS swap_fee
+  FROM orders o LEFT JOIN delivery_companies co ON co.id = o.company_id
+  WHERE o.company_id IS NOT NULL AND co.kind <> 'own' AND o.livreur_id IS NULL
+    AND (o.follow_status IN ('returning', 'returned') OR (o.follow_status = 'cancelled' AND o.sub_status = 'annule_swappe'))`;
+function feeWait(r: any, R: Awaited<ReturnType<typeof companyRules>>): FeeWait {
+  const swap = r.follow_status === 'cancelled';
+  const x = swap ? null : parcelFees(r, R);
+  return {
+    id: num(r.id),
+    ref: r.ref,
+    tracking: r.trk ?? null,
+    companyId: num(r.company_id),
+    companyName: r.company ?? '',
+    companyKind: r.company_kind ?? null,
+    kind: swap ? 'swap' : 'return',
+    fee: Math.round(swap ? num(r.swap_fee) : x!.ret),
+    weight: Math.round(swap ? 0 : x!.extraRet),
+    takenAt: isoOrNull(r.fee_taken_at),
+  };
+}
+/** What a company card's SAV exchanges, returns and swaps add to its money: the exchanges' money in, every fee out. */
+export function extraNet(x: { exchanges: { collected: number; price: number; weight: number }; returns: { fee: number; weight: number }; swaps: { fee: number } } | null) {
+  return x ? x.exchanges.collected - x.exchanges.price - x.exchanges.weight - x.returns.fee - x.returns.weight - x.swaps.fee : 0;
+}
+/**
+ * The courier fees still to take (the owner's request, 26 Nov 2026: the ZR card shows what ZR shows): each return's
+ * return price + its weight fee, each parcel given to another customer its swap fee — the company takes them from the
+ * money it pays. Each one comes out once (`fee_taken_at`): with an « Argent reçu », or with the company's payment.
+ */
+export async function feesToTake(db: Db): Promise<FeeWait[]> {
+  const R = await companyRules(db);
+  const rows = await db.query(`${feeWaitSql()} AND o.fee_taken_at IS NULL ORDER BY o.id`);
+  return rows.map((r: any) => feeWait(r, R)).filter((f) => f.fee + f.weight > 0);
+}
 
 /** A caisse: 'main' (the owner's), 'bank', 'u<profile id>' (an employee's) or 'c<id>' (one the owner created). */
 export const CaisseKey = z.string().regex(/^(main|bank|u\d+|c\d+)$/);
@@ -121,12 +183,14 @@ export async function caisseLabelOf(db: Db, key: string | null): Promise<string 
 
 /** Marks orders as cashed and records one versement per company / livreur, into the caisse that received the money. */
 /** `fix`: the courier's own figure for the money paid (its statement): one versement whose net is that amount. */
-export async function receive(ctx: Ctx, orderIds: number[], note: string | null, livreurShare: boolean, into = 'main', fix?: { net: number }) {
+/** `feeIds`: returns and swaps whose courier fee comes out of this money (« Argent reçu » of a company's card), once. */
+export async function receive(ctx: Ctx, orderIds: number[], note: string | null, livreurShare: boolean, into = 'main', fix?: { net: number }, feeIds: number[] = []) {
   await checkCaisse(ctx.db, into);
   const pay = await payOf(ctx.db);
   const me = ctx.session.profile.id;
   if (!orderIds.length) throw bad('Aucune commande à encaisser');
-  if (new Set(orderIds).size !== orderIds.length) throw bad('Une commande est sélectionnée plusieurs fois');
+  if (new Set([...orderIds, ...feeIds]).size !== orderIds.length + feeIds.length) throw bad('Une commande est sélectionnée plusieurs fois');
+  if (feeIds.length && (fix || livreurShare)) throw bad('Les frais de retour sortent seulement avec l’argent d’une société');
   const created: number[] = [];
   await ctx.db.tx(async (tx) => {
     const rows = (await tx.query(`SELECT ${COLS} ${FROM} WHERE o.id = ANY($1) FOR UPDATE OF o`, [orderIds])).map((r: any) => toCash(r, pay));
@@ -141,17 +205,42 @@ export async function receive(ctx: Ctx, orderIds: number[], note: string | null,
       const k = fix ? 'all' : `${r.ticket ? 't' : ''}${r.livreurId ? `l${r.livreurId}` : `c${r.companyId ?? 0}`}`;
       groups.set(k, [...(groups.get(k) ?? []), r]);
     }
-    for (const list of groups.values()) {
+    // the fees of returns and swaps: each one once, with the money of its own company (its orders' versement, else its
+    // SAV exchange parcels')
+    const fees = new Map<string, FeeWait[]>();
+    if (feeIds.length) {
+      const R = await companyRules(tx);
+      const found = (await tx.query(`${feeWaitSql()} AND o.id = ANY($1) ORDER BY o.id FOR UPDATE OF o`, [feeIds])).map((r: any) => feeWait(r, R));
+      if (found.length !== feeIds.length) {
+        const ref = (await tx.query('SELECT ref FROM orders WHERE id = ANY($1) AND NOT (id = ANY($2)) LIMIT 1', [feeIds, found.map((f) => f.id)]))[0]?.ref;
+        throw bad(ref ? `${ref} n’est ni un retour ni un swap d’une société` : 'Un retour est introuvable');
+      }
+      for (const f of found) {
+        if (f.takenAt) throw bad(`${f.ref} : ses frais de retour sont déjà sortis`);
+        const k = groups.has(`c${f.companyId}`) ? `c${f.companyId}` : groups.has(`tc${f.companyId}`) ? `tc${f.companyId}` : null;
+        if (!k) throw bad(`${f.ref} : ses frais sortent avec l’argent de ${f.companyName || 'sa société'}`);
+        fees.set(k, [...(fees.get(k) ?? []), f]);
+      }
+    }
+    for (const [k, list] of groups) {
       const collected = list.reduce((s, o) => s + o.total, 0);
-      const fees = fix ? collected - fix.net : livreurShare || list[0].livreurId ? list.reduce((s, o) => s + o.share, 0) : list.reduce((s, o) => s + o.deliveryCost, 0);
+      const mine = fees.get(k) ?? [];
+      const taken = mine.reduce((s, f) => s + f.fee + f.weight, 0);
+      const fee = fix ? collected - fix.net : livreurShare || list[0].livreurId ? list.reduce((s, o) => s + o.share, 0) : list.reduce((s, o) => s + o.deliveryCost, 0) + taken;
+      const swaps = mine.filter((f) => f.kind === 'swap').length;
+      const what = mine.length ? `Frais de ${[mine.length - swaps ? `${mine.length - swaps} retour${mine.length - swaps > 1 ? 's' : ''}` : '', swaps ? `${swaps} swap${swaps > 1 ? 's' : ''}` : ''].filter(Boolean).join(' et ')} : ${taken} DA` : '';
       const h = await tx.query(
         'INSERT INTO cash_handovers (company_id, livreur_id, orders, collected, fees, net, note, created_by, received_into) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
-        [list[0].companyId, list[0].livreurId, list.map((o) => o.id), collected, fees, collected - fees, note, me, into],
+        [list[0].companyId, list[0].livreurId, list.map((o) => o.id), collected, fee, collected - fee, [note, what].filter(Boolean).join(' · ') || null, me, into],
       );
       const hid = num(h[0].id);
       created.push(hid);
       await tx.query('UPDATE orders SET cashed = true, cashed_at = now(), handover_id = $2, updated_at = now() WHERE id = ANY($1)', [list.map((o) => o.id), hid]);
       for (const o of list) await addEvent(tx, o.id, me, 'cashed', null, 'cashed', `Argent reçu (versement n° ${hid})`);
+      for (const f of mine) {
+        await tx.query('UPDATE orders SET fee_taken_at = now(), fee_taken = $2, fee_handover_id = $3, fee_payment_id = NULL WHERE id = $1', [f.id, f.fee + f.weight, hid]);
+        await addEvent(tx, f.id, me, 'note', null, 'event', `Frais ${f.kind === 'swap' ? 'du swap' : 'de retour'} ${f.fee + f.weight} DA sortis de l’argent reçu (versement n° ${hid})`);
+      }
     }
   });
   ctx.emit({ type: 'orders' });
@@ -281,27 +370,70 @@ export const cashProcs = {
   'cash.due': proc([], z.object({}), async (ctx) => {
     const pay = await payOf(ctx.db);
     const rows = (await ctx.db.query(`SELECT ${COLS} ${FROM} WHERE o.follow_status IN ('delivered', 'exchanged') AND NOT o.cashed ORDER BY o.delivered_at ASC NULLS FIRST, o.id`)).map((r: any) => toCash(r, pay));
-    // orders and SAV tickets are counted apart: a ticket parcel with nothing to collect (free exchange) is not money to receive
-    const build = (list: CashOrder[], prefix: string) => {
-      const groups = new Map<string, { key: string; companyId: number | null; livreurId: number | null; name: string; kind: string | null; orders: CashOrder[] }>();
+    // A delivery company's card holds all the money it holds for us, as it counts it (the owner's request, 26 Nov 2026):
+    // its delivered orders, its SAV exchange parcels (their money and its fees on them), and the fees it takes for its
+    // returns and its swaps — each one once. Our own livreurs' SAV parcels stay apart (« Tickets SAV »).
+    const onCard = (o: CashOrder) => !o.livreurId && !!o.companyId && o.companyKind !== 'own';
+    const waits = await feesToTake(ctx.db);
+    type Extra = {
+      exchanges: { n: number; collected: number; price: number; weight: number; ids: number[] };
+      returns: { n: number; fee: number; weight: number; ids: number[] };
+      swaps: { n: number; fee: number; ids: number[] };
+    };
+    type G = { key: string; companyId: number | null; livreurId: number | null; name: string; kind: string | null; orders: CashOrder[]; extra: Extra | null };
+    const blank = (): Extra => ({ exchanges: { n: 0, collected: 0, price: 0, weight: 0, ids: [] }, returns: { n: 0, fee: 0, weight: 0, ids: [] }, swaps: { n: 0, fee: 0, ids: [] } });
+    const build = (list: CashOrder[], prefix: string, cards?: { exchanges: CashOrder[]; waits: FeeWait[] }) => {
+      const groups = new Map<string, G>();
       for (const o of list) {
         const key = `${prefix}${o.livreurId ? `l${o.livreurId}` : `c${o.companyId ?? 0}`}`;
         if (!groups.has(key))
-          groups.set(key, { key, companyId: o.companyId, livreurId: o.livreurId, name: o.livreurId ? `${o.livreurName ?? '?'}${o.companyName ? ` · ${o.companyName}` : ''}` : o.companyName ?? 'Sans société', kind: o.companyKind, orders: [] });
+          groups.set(key, { key, companyId: o.companyId, livreurId: o.livreurId, name: o.livreurId ? `${o.livreurName ?? '?'}${o.companyName ? ` · ${o.companyName}` : ''}` : o.companyName ?? 'Sans société', kind: o.companyKind, orders: [], extra: null });
         groups.get(key)!.orders.push(o);
+      }
+      if (cards) {
+        const card = (companyId: number, name: string, kind: string | null) => {
+          const key = `${prefix}c${companyId}`;
+          if (!groups.has(key)) groups.set(key, { key, companyId, livreurId: null, name, kind, orders: [], extra: null });
+          const g = groups.get(key)!;
+          g.extra ??= blank();
+          return g.extra;
+        };
+        for (const g of groups.values()) if (g.companyId && !g.livreurId && g.kind !== 'own') g.extra ??= blank();
+        for (const o of cards.exchanges) {
+          const x = card(o.companyId!, o.companyName ?? 'Sans société', o.companyKind).exchanges;
+          x.n++;
+          x.collected += o.total;
+          x.price += o.deliveryCost - o.weight;
+          x.weight += o.weight;
+          x.ids.push(o.id);
+        }
+        for (const f of cards.waits) {
+          const x = card(f.companyId, f.companyName || 'Sans société', f.companyKind);
+          if (f.kind === 'swap') {
+            x.swaps.n++;
+            x.swaps.fee += f.fee;
+            x.swaps.ids.push(f.id);
+          } else {
+            x.returns.n++;
+            x.returns.fee += f.fee;
+            x.returns.weight += f.weight;
+            x.returns.ids.push(f.id);
+          }
+        }
       }
       const out = [...groups.values()].map((g) => ({
         ...g,
         count: g.orders.length,
         collected: g.orders.reduce((s, o) => s + o.total, 0),
-        net: g.orders.reduce((s, o) => s + o.net, 0),
+        net: g.orders.reduce((s, o) => s + o.net, 0) + extraNet(g.extra),
       }));
       out.sort((a, b) => b.net - a.net);
       return out;
     };
     const orders = rows.filter((o) => !o.ticket);
-    const tickets = rows.filter((o) => o.ticket && o.total > 0);
-    const groups = build(orders, '');
+    // SAV tickets of our own livreurs are counted apart: a ticket parcel with nothing to collect (free exchange) is not money to receive
+    const tickets = rows.filter((o) => o.ticket && !onCard(o) && o.total > 0);
+    const groups = build(orders, '', { exchanges: rows.filter((o) => o.ticket && onCard(o)), waits });
     const ticketGroups = build(tickets, 't');
     return {
       groups,
@@ -311,8 +443,9 @@ export const cashProcs = {
     };
   }),
 
-  /** "Argent reçu": one versement per company / livreur, orders marked cashed. */
-  'cash.receive': proc([], z.object({ ids, note: z.string().max(300).nullable().optional(), into: CaisseKey.default('main') }), async (ctx, i) => receive(ctx, i.ids, i.note ?? null, false, i.into)),
+  /** "Argent reçu": one versement per company / livreur, orders marked cashed; `fees`: the returns and swaps whose
+   *  courier fee comes out of this money (the company's card sends the ones it shows). */
+  'cash.receive': proc([], z.object({ ids, note: z.string().max(300).nullable().optional(), into: CaisseKey.default('main'), fees: z.array(id).max(3000).optional() }), async (ctx, i) => receive(ctx, i.ids, i.note ?? null, false, i.into, undefined, i.fees ?? [])),
 
   /** "Déjà reçu": versements (not cancelled) with their orders. */
   'cash.history': proc([], z.object({ from: dateStr.optional(), to: dateStr.optional(), companyId: z.number().int().positive().optional(), livreurId: z.number().int().positive().optional(), limit: z.number().int().min(1).max(500).default(100) }), async (ctx, i) => {
@@ -358,6 +491,9 @@ export const cashProcs = {
       const oids = (h.orders ?? []).map(num);
       await tx.query('UPDATE orders SET cashed=false, cashed_at=NULL, handover_id=NULL, updated_at=now() WHERE handover_id=$1 OR (id = ANY($2) AND handover_id IS NULL)', [handoverId, oids]);
       for (const o of oids) await addEvent(tx, o, ctx.session.profile.id, 'cashed', 'cashed', null, `Versement n° ${handoverId} annulé`);
+      // the return and swap fees it took wait again for the next money received
+      const back = await tx.query('UPDATE orders SET fee_taken_at = NULL, fee_taken = NULL, fee_handover_id = NULL, fee_payment_id = NULL WHERE fee_handover_id = $1 RETURNING id', [handoverId]);
+      for (const o of back) await addEvent(tx, num(o.id), ctx.session.profile.id, 'note', null, 'event', `Versement n° ${handoverId} annulé : ses frais de retour sortiront avec le prochain argent reçu`);
     });
     ctx.emit({ type: 'orders' });
     return { ok: true };

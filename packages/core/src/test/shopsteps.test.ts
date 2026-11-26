@@ -154,6 +154,7 @@ const DONE: [string, string][] = [
   ['136_reorder_links', 'd580b92fb5b1'],
   ['137_order_faults', '25e475ffb859'],
   ['138_rappel_action', 'bbb33624e353'],
+  ['139_fee_taken', 'e8e0cf61a84c'],
 ];
 
 test('the old shop steps never change: a change to the shops’ tables is a new step at the end', () => {
