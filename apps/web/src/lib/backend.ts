@@ -449,6 +449,8 @@ class DemoBackend implements Backend {
   /** the demo owner's two other boutiques (« Mes boutiques »), made once, a few seconds after the app opens */
   private boutiques: Promise<void> | null = null;
   private boutiquesSoon = false;
+  /** the demo's agency is being made in the background (the seller's « Assigner un agent », its orders' chips) */
+  private partnersSoon = false;
   progress: (msg: string) => void = () => {};
 
   private boot() {
@@ -593,6 +595,12 @@ class DemoBackend implements Backend {
     if (!this.session) throw new ApiError(401, 'Session expirée');
     const s = this.session;
     if ((this.space && this.space.shop.kind !== 'store') || NEEDS_PARTNERS.test(String(name))) await this.withPartners();
+    // the seller's agency on his orders and in « Assigner un agent » (owner's rule, 26 Nov 2026): the first time a screen
+    // asks, the demo makes its agency a few seconds later, then the screens read again — the page is not slowed down
+    else if (!this.partners && !this.partnersSoon && /^(orders\.agencyNames|confirmation\.meta)$/.test(String(name))) {
+      this.partnersSoon = true;
+      window.setTimeout(() => void this.withPartners().then(() => this.listeners.forEach((l) => l({ type: 'orders' }))), 1500);
+    }
     // « Mes boutiques »: the demo owner's other boutiques. The first list (the menu, as the app opens) shows this boutique
     // alone and has them made a few seconds later, so the first page is not slowed down.
     if (String(name).startsWith('boutiques.')) {

@@ -5,7 +5,7 @@
 // per task in a boutique.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
+import { call, Ctx, getSetting, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, setSetting, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
 import { confirmSignup, loadShop, passwordFromLink, startSignup } from '../platform';
 import { createOrder } from '../modules/orders';
 
@@ -87,6 +87,9 @@ test('the person who types an order keeps it; a landing page’s goes to the age
   const [samiaId, linaId, adminId] = [await here('samia@oran.dz'), await here('lina@oran.dz'), await here('karim@oran.dz')];
   const samia = await as(t, shop.id, 'samia@oran.dz', PW);
   const lina = await as(t, shop.id, 'lina@oran.dz', PW);
+  // Samia works on both products (Affectation): she may type their orders
+  const cfg: any = await getSetting(shop.db, 'autoAssign');
+  await setSetting(shop.db, 'autoAssign', { ...cfg, agents: { ...(cfg.agents ?? {}), [String(samiaId)]: { ...(cfg.agents?.[String(samiaId)] ?? {}), products: [shop.products.VELO, shop.products.POUS] } } });
   // the agency works on every product: the store's choice of products is no longer kept for an agency
   const link = (await call('partners.home', admin, {}) as any).links.find((l: any) => l.id === linkId);
   assert.equal(link.products, null);

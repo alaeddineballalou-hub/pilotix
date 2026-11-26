@@ -45,7 +45,9 @@ test('her role: Pilot Message, Pilot Comments, her orders and their confirmation
     assert.ok(r.has(id), `${id}: hers by default`);
   // she confirms her own orders (owner's choice, 26 Nov 2026): her role brings what a confirmation agent has
   for (const id of rightsOf({ id: 2, roles: ['confirmation'] }, NO_ROLE_RIGHTS)) assert.ok(r.has(id), `${id}: a confirmation agent's, hers too`);
-  for (const id of ['page:social', 'page:createur', 'page:spy', 'page:comptes', 'page:depot', 'page:clients', 'page:produits', 'page:marketing', 'page:landing', 'act:social.publish', 'act:costs'])
+  // (the owner takes away from her role, in Utilisateurs › Rôles, what a confirmation agent has and he does not want her
+  // to have: Suivi, SAV, Produits…)
+  for (const id of ['page:social', 'page:createur', 'page:spy', 'page:comptes', 'page:depot', 'page:clients', 'page:marketing', 'page:landing', 'act:social.publish', 'act:costs'])
     assert.ok(!r.has(id), `${id}: never hers`);
 });
 
