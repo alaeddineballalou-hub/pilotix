@@ -42,7 +42,9 @@ const PLAIN_SQL = `p.active AND p.agency_id IS NULL AND 'confirmation' = ANY(p.r
 /** A store's own plain confirmation agent: blocked (not a manager, the owner nor an administrator; not an agency's person). */
 export function plainAgent(ctx: Ctx): boolean {
   const s = ctx.session;
-  if (s.isAdmin || !s.roles.includes('confirmation')) return false;
+  // his own roles: a community manager confirms the orders she makes from her chats (her role includes Confirmation),
+  // nothing is given to her to ring for, and her chats stay open on her computer (26 Nov 2026)
+  if (s.isAdmin || !s.profile.roles.includes('confirmation')) return false;
   if (s.roles.includes('agent_manager') || s.roles.includes('vendeur')) return false;
   return agencyOf(ctx) === null && !agencyLead(ctx);
 }

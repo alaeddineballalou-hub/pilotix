@@ -136,6 +136,8 @@ async function seedCmOrders(db: Db, cm: number, now: number) {
   if (!ids.length) return;
   await db.query(`UPDATE orders SET created_by = $2, came = 'hand' WHERE id = ANY($1)`, [ids, cm]);
   await db.query(`UPDATE order_events SET user_id = $2 WHERE kind = 'created' AND order_id = ANY($1)`, [ids, cm]);
+  // the ones still to call stay hers: she confirms her own orders (owner's choice, 26 Nov 2026)
+  await db.query(`UPDATE orders SET agent_id = $2, assigned_at = created_at WHERE id = ANY($1) AND follow_status IS NULL AND conf_status = ANY($3)`, [ids, cm, ['new', 'no_answer', 'busy', 'callback']]);
 }
 
 /** Fills an empty database with a realistic shop: team, catalog, couriers, ~1,500 orders over 60 days. */

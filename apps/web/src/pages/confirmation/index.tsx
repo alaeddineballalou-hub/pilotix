@@ -485,7 +485,7 @@ export function Queue({
         return r.agentId ? <RemovableChip name={r.agentName ?? '—'} removeLabel={t('confirmation.removeAgent')} onRemove={manager ? () => assign([r], null) : undefined} /> : <span className="muted">—</span>;
       }
       case 'fagent':
-        return <RemovableChip name={who.follow(r)} />;
+        return who.storeSide && r.followAgencyId ? <AgencyChip name={who.follow(r)!} /> : <RemovableChip name={who.follow(r)} />;
       case 'total':
         return <span className="ltr">{da(r.total)}</span>;
       case 'chrono':

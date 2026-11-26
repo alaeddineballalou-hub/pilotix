@@ -472,8 +472,9 @@ function WorkspaceShell({ page, sub, children, nav = NAV, space = 'store' }: She
             <AgentBanner />
           </Suspense>
         )}
-        {/* a store's plain confirmation agent (never a manager, the owner nor an administrator): the server says when */}
-        {!partner && !isAdmin && roles.includes('confirmation') && !roles.includes('agent_manager') && !roles.includes('vendeur') && (
+        {/* a store's plain confirmation agent (never a manager, the owner, an administrator nor a community manager
+            whose role only includes Confirmation): the server says when */}
+        {!partner && !isAdmin && session!.profile.roles.includes('confirmation') && !roles.includes('agent_manager') && !roles.includes('vendeur') && (
           <Suspense fallback={null}>
             <NewOrderGate />
           </Suspense>

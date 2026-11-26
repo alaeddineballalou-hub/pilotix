@@ -6,8 +6,8 @@
 // outside his work time. Only the managers switch it and type the shifts.
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
-import { algiersHour, DEFAULT_CALL_SETTINGS } from '@pilotix/shared';
-import { call, Ctx, Db, getSetting, setSetting } from '../index';
+import { algiersHour, DEFAULT_CALL_SETTINGS, DEMO_PASSWORD } from '@pilotix/shared';
+import { call, Ctx, Db, getSetting, hashPassword, setSetting } from '../index';
 import { RING_AGAIN_MS } from '../modules/confblock';
 import { EMAILS, setup } from './harness';
 
@@ -218,4 +218,20 @@ test('a new order rings her phone at once, then every 2 minutes until « Appeler
   assert.deepEqual(await getSetting(db, 'confRings'), {});
   assert.equal(await run(), 0);
   assert.equal((await blocking(EMAILS.conf)).order, null);
+});
+
+test('a community manager is never blocked: she confirms the orders she makes from her chats, her computer stays open', async () => {
+  const yacine = await as(EMAILS.manager);
+  await call('confirmation.blockSet', yacine, { on: true });
+  const hash = await hashPassword(DEMO_PASSWORD);
+  const lina = Number((await db.query(`INSERT INTO profiles (name, email, phone, password_hash, roles) VALUES ('Lina', 'lina.block@demo.pilotix.dz', '0661999101', $1, '{cm}') RETURNING id`, [hash]))[0].id);
+  const id = Number((await db.query(`SELECT id FROM orders WHERE conf_status = 'new' AND agent_id IS NULL AND conf_agency_id IS NULL AND NOT is_exchange ORDER BY id LIMIT 1`))[0].id);
+  await db.query('UPDATE orders SET agent_id = $2, assigned_at = now(), locked_by = NULL, locked_until = NULL WHERE id = $1', [id, lina]);
+  const b = await blocking('lina.block@demo.pilotix.dz');
+  assert.equal(b.on, false, 'no phone gate for her');
+  assert.equal(b.gate, null);
+  assert.equal(b.order, null, 'nothing rings for an order she made herself');
+  // her role includes Confirmation: she sees her own orders there
+  assert.ok((await as('lina.block@demo.pilotix.dz')).session.roles.includes('confirmation'));
+  await call('confirmation.blockSet', yacine, { on: false });
 });
