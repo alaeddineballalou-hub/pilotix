@@ -32,6 +32,7 @@ import { ConfirmedStatsPage, StatsSection } from './Stats';
 import { ConfSettings } from './Settings';
 import { CopyCode } from '../../ui/CopyCode';
 import { ScoreChip } from '../../ui/clientScore';
+import { ScoreCell } from './ScoreCell';
 import { useAllMode } from '../../layout/AllBoutiques';
 import { rightOn, tabOn } from '../../lib/rights';
 import { makerName, OriginChip } from '../orders/OrderPath';
@@ -49,7 +50,7 @@ export type CombinedConfirmation = {
   agency: boolean;
 };
 type SortKey = 'created_at' | 'confirmed_at' | 'next_call_at' | 'total' | 'customer_name' | 'deadline' | 'score';
-type ColKey = 'order' | 'source' | 'tracking' | 'creator' | 'channel' | 'product' | 'variant' | 'sku' | 'chrono' | 'tries' | 'name' | 'phone' | 'wilaya' | 'commune' | 'agent' | 'fagent' | 'total' | 'time' | 'created' | 'stock' | 'desk' | 'passed' | 'confirmed' | 'follow' | 'next' | 'status';
+type ColKey = 'order' | 'source' | 'tracking' | 'creator' | 'channel' | 'product' | 'variant' | 'sku' | 'chrono' | 'tries' | 'name' | 'score' | 'phone' | 'wilaya' | 'commune' | 'agent' | 'fagent' | 'total' | 'time' | 'created' | 'stock' | 'desk' | 'passed' | 'confirmed' | 'follow' | 'next' | 'status';
 interface Filters {
   wilayaId?: number;
   agentId?: number | 'none';
@@ -84,6 +85,8 @@ const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
   // En cours: the tries as dots right after the chrono, in place of the « Statut » column (the owner's design, 25 Nov 2026)
   ...(sub === 'attente' ? [{ k: 'tries' as const }] : []),
   { k: 'name', sort: 'customer_name' },
+  // « Score client »: the score, and under it whether the order is an abandoned form (the owner's choice 1, 26 Nov 2026)
+  { k: 'score', sort: 'score' },
   // Confirmées: where the parcel is (À préparer, Préparée) right after the client
   ...(sub === 'confirmees' || sub === 'livrees' ? [{ k: 'follow' as const }] : []),
   { k: 'phone' },
@@ -104,10 +107,12 @@ const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
 /**
  * The columns a confirmation agent works with, most useful first (a tablet shows the first 6 the table has). « D'où
  * vient » took Wilaya's place (the owner's choice, 24 Nov 2026): Wilaya is one tap away, behind « +N colonnes ».
+ * « Score client » sits right after the client (26 Nov 2026): the sixth column goes behind « +N colonnes » (Statut in
+ * Nouvelles and Confirmées, « D'où vient » in En cours).
  */
-const CONF_USEFUL = ['chrono', 'name', 'phone', 'product', 'source', 'status', 'wilaya', 'order', 'total'];
+const CONF_USEFUL = ['chrono', 'name', 'score', 'phone', 'product', 'source', 'status', 'wilaya', 'order', 'total'];
 /** En cours on a tablet: the tries right after the chrono (its « Statut » is gone) */
-const CONF_USEFUL_WAIT = ['chrono', 'tries', 'name', 'phone', 'product', 'source', 'wilaya', 'order', 'total'];
+const CONF_USEFUL_WAIT = ['chrono', 'tries', 'name', 'score', 'phone', 'product', 'source', 'wilaya', 'order', 'total'];
 type Bucket = 'late' | 'soon' | 'ontime' | 'now' | 'later' | 'postponed';
 /** the counters of Nouvelles and En cours, in the order of the design, with their colour */
 const BUCKETS: Partial<Record<Sub, { k: Bucket; tone: CounterItem<Bucket>['tone'] }[]>> = {
@@ -248,6 +253,8 @@ export function Queue({
         let cols = store.json<ColKey[] | null>(colsKey, null);
         // the Chrono column came later: show it in older column choices (unless it was hidden since)
         if (cols && COLS.some((c) => c.k === 'chrono') && !cols.includes('chrono') && !store.get(`${colsKey}-chrono`)) cols = [...cols, 'chrono'];
+        // « Score client » came later still: those choices were made without it
+        if (cols && !cols.includes('score')) cols = [...cols, 'score'];
         return { cols, order: store.json<ColKey[] | null>(`conf-order-${sub}`, null) };
       },
     },
@@ -321,6 +328,8 @@ export function Queue({
   // (Confirmées: where each order is in the dépôt — the « Livraison » column — before the rest)
   const tcols = useTabletCols(order.map((k) => COLS.find((c) => c.k === k)!).filter((c) => c && visible.has(c.k)), (c) => c.k, sub === 'confirmees' ? ['follow', ...CONF_USEFUL] : sub === 'attente' ? CONF_USEFUL_WAIT : CONF_USEFUL);
   const cols = tcols.cols;
+  // « Score client » drawn: the score leaves the « Client » cell (it shows there again when the column is hidden)
+  const scoreCol = cols.some((c) => c.k === 'score');
   const drag = colDrag(order, setOrder);
   // column widths: each user's own
   const wkeys = ['_exp', '_ck', ...cols.map((c) => c.k), '_act'];
@@ -432,11 +441,13 @@ export function Queue({
           <>
             <b>{r.customerName}</b>
             <HeldChip o={r} />
-            {r.clientScore && <ScoreChip s={r.clientScore} short />}
+            {r.clientScore && !scoreCol && <ScoreChip s={r.clientScore} short />}
             {r.possibleDuplicate && <span className="flag dup">{t('confirmation.dup')}</span>}
             {r.blacklisted && <span className="flag">{t('confirmation.blacklist')}</span>}
           </>
         );
+      case 'score':
+        return <ScoreCell o={r} />;
       case 'phone':
         return <PhoneCell order={r} />;
       case 'wilaya':

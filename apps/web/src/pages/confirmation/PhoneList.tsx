@@ -21,7 +21,7 @@ import { toastUndo } from '../../lib/undo';
 import { rightOn } from '../../lib/rights';
 import { CONF_TONE } from '@pilotix/shared';
 import './phone.css';
-import { ScoreChip } from '../../ui/clientScore';
+import { ScoreCell } from './ScoreCell';
 import { OriginChip } from '../orders/OrderPath';
 import { StageTag } from './stages';
 import { NextAction, TryDots } from './counters';
@@ -199,9 +199,10 @@ export function PhoneCards({ rows, empty, onOpen, pick, showAgent, rowKey, edit,
                   <div className="pxp-top">
                     <b className="pxp-name">{o.customerName}</b>
                     <HeldChip o={o} />
-                    {o.clientScore && <ScoreChip s={o.clientScore} short />}
                     {o.deadline && <Countdown d={o.deadline} short />}
                   </div>
+                  {/* « Score client » as in the table: the score, then « Abandonnée » or « Non abandonnée » */}
+                  <ScoreCell o={o} row />
                   <div className="pxp-meta">
                     <span className="ltr">{o.ref}</span> · {o.seller && <>{o.seller.name} · </>}{wilayaName(o.wilayaId)} · <b className="ltr">{da(o.total)}</b>
                   </div>

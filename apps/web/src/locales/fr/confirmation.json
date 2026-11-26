@@ -110,6 +110,7 @@
     "product": "Produit",
     "sku": "SKU",
     "name": "Client",
+    "score": "Score client",
     "phone": "Téléphone",
     "wilaya": "Wilaya",
     "commune": "Commune",
@@ -128,6 +129,12 @@
     "fagent": "Agent suivi",
     "chrono": "Chrono",
     "tries": "Tentatives"
+  },
+  "abandon": {
+    "yes": "Abandonnée",
+    "no": "Non abandonnée",
+    "yesHelp": "Commande abandonnée : le client a laissé son numéro sur la landing page sans envoyer le formulaire.",
+    "noHelp": "Pas une commande abandonnée."
   },
   "f": {
     "wilaya": "Wilaya",
