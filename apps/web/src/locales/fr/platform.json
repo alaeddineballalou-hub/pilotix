@@ -445,7 +445,7 @@
     "socialTitle": "Connexion Google",
     "socialHelp": "Collez ici votre ID client Google : le bouton « Continuer avec Google » apparaît alors sur les pages de connexion et d’inscription. Laissez vide pour le cacher.",
     "socialGoogle": "Google — ID client OAuth",
-    "socialGoogleHint": "Google Cloud Console → Identifiants → ID client OAuth « Application Web ». Origine JavaScript autorisée : {{site}}",
+    "socialGoogleHint": "Google Cloud Console → Identifiants → ID client OAuth « Application Web ». Origines JavaScript autorisées : {{site}} et {{direct}} (la porte de secours)",
     "alertTitle": "Prévenir sur WhatsApp quand une boutique paie",
     "alertHelp": "Quand une boutique envoie « J’ai payé », le numéro WhatsApp de Pilotix (celui du code d’inscription) envoie un message avec la photo du reçu à ces numéros.",
     "alertNumbers": "Numéros à prévenir",

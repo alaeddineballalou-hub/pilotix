@@ -445,7 +445,7 @@
     "socialTitle": "Google sign-in",
     "socialHelp": "Paste your Google client ID here: the “Continue with Google” button then shows on the sign-in and sign-up pages. Leave empty to hide it.",
     "socialGoogle": "Google — OAuth client ID",
-    "socialGoogleHint": "Google Cloud Console → Credentials → OAuth client ID “Web application”. Authorized JavaScript origin: {{site}}",
+    "socialGoogleHint": "Google Cloud Console → Credentials → OAuth client ID “Web application”. Authorized JavaScript origins: {{site}} and {{direct}} (the backup door)",
     "alertTitle": "Tell us on WhatsApp when a store pays",
     "alertHelp": "When a store sends “I paid”, Pilotix’s WhatsApp number (the one of the sign-up code) sends a message with the receipt photo to these numbers.",
     "alertNumbers": "Numbers to tell",

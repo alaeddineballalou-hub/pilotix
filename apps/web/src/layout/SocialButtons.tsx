@@ -3,7 +3,7 @@
 // gives a token, the server checks it with Google.
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BACKUP_DOOR, DEMO_ONLY, serverUrl, signupInfo } from '../lib/backend';
+import { DEMO_ONLY, serverUrl, signupInfo } from '../lib/backend';
 import { useSession } from '../lib/session';
 
 declare global {
@@ -44,8 +44,9 @@ export function SocialButtons({ mode, kind, onError }: { mode: 'login' | 'signup
   const lang = (i18n.language || 'fr').slice(0, 2);
 
   useEffect(() => {
-    // the backup door (direct.<platform>): Google only accepts the platform's own address, so e-mail and password there
-    if (DEMO_ONLY || BACKUP_DOOR || !serverUrl()) return;
+    // the backup door (direct.<platform>) too (owner's ask, 26 Nov 2026): Google accepts it once https://direct.<platform>
+    // is in the Google client's « Authorised JavaScript origins », next to the platform's own address
+    if (DEMO_ONLY || !serverUrl()) return;
     let on = true;
     signupInfo().then((r) => on && setIds({ google: r.googleClientId || '' }));
     return () => {

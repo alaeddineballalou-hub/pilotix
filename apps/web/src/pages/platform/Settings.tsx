@@ -151,7 +151,7 @@ export function Settings({ staff }: { staff: Staff }) {
         </Card>
         <Card title={t('platform.set.socialTitle')} help={t('platform.set.socialHelp')}>
           <div className="pp-form">
-            <Field label={t('platform.set.socialGoogle')} hint={t('platform.set.socialGoogleHint', { site: location.origin })}>
+            <Field label={t('platform.set.socialGoogle')} hint={t('platform.set.socialGoogleHint', { site: `${location.protocol}//${location.host.replace(/^(www|direct)\./, '')}`, direct: `https://direct.${location.host.replace(/^(www|direct)\./, '')}` })}>
               <input disabled={!owner} dir="ltr" maxLength={200} value={f.social?.googleClientId ?? ''} onChange={(e) => setF({ ...f, social: { googleClientId: e.target.value.trim(), facebookAppId: '' } })} placeholder="1234567890-abc.apps.googleusercontent.com" />
             </Field>
           </div>

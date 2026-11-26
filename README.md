@@ -121,7 +121,7 @@ When Cloudflare's road from a country is cut (the site times out there while the
 `https://direct.<domain>`: the same app and server, reached straight, without Cloudflare. Setup, once: in Cloudflare › DNS,
 add an **A** record named `direct` with the server's address (the same as the main record) and **DNS only** (grey cloud).
 Caddy makes its certificate at the first visit (the server allows that one name, `domain-check`); the app opened there talks
-to that same address (`BACKUP_DOOR` in `apps/web/src/lib/backend.ts`); Google sign-in is hidden there (e-mail and password).
+to that same address (`BACKUP_DOOR` in `apps/web/src/lib/backend.ts`); Google sign-in works there too once `https://direct.<domain>` is in the Google client's « Authorised JavaScript origins » (Google Cloud › Google Auth Platform › Clients › « pilotix site »), next to the main address.
 The record shows the server's address publicly, as a shop's own domain already does.
 
 **Automatic** (Control room › Réglages › « Porte de secours automatique », on by default): nobody has to know the

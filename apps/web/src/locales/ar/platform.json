@@ -485,7 +485,7 @@
     "socialTitle": "الدخول بـ Google",
     "socialHelp": "الصق هنا معرّف عميل Google: يظهر بعدها زر «المتابعة بـ Google» في صفحتَي الدخول والتسجيل. اتركه فارغًا لإخفائه.",
     "socialGoogle": "Google — معرّف عميل OAuth",
-    "socialGoogleHint": "Google Cloud Console ← Credentials ← OAuth client ID من نوع «Web application». المصدر المسموح: {{site}}",
+    "socialGoogleHint": "Google Cloud Console ← Credentials ← OAuth client ID من نوع «Web application». المصادر المسموحة: {{site}} و {{direct}} (الباب الاحتياطي)",
     "alertTitle": "أخبرنا على واتساب عندما يدفع متجر",
     "alertHelp": "عندما يرسل متجر «دفعت»، يرسل رقم واتساب Pilotix (رقم رمز التسجيل) رسالة مع صورة الوصل إلى هذه الأرقام.",
     "alertNumbers": "الأرقام التي نخبرها",
