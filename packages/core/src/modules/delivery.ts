@@ -622,9 +622,15 @@ function alertWordsOf(kind: CourierKind) {
     if (ev.kind === 'try') {
       if (ev.n !== null) numbered ??= w.replace(/\d+/, '{n}');
       else tries.push(w);
-    } else if (ev.kind === 'cancel') (ROAD_MEANING.includes(meaning) ? cancels : cancelsBack).push(w);
-    else if (ROAD_MEANING.includes(meaning)) problems.push(w);
+    } else if (ev.kind === 'cancel') {
+      // a cancel said on the way makes an alert; one that is already the company's return goes to Annulés
+      if (ROAD_MEANING.includes(meaning)) cancels.push(w);
+      else if (meaning === 'returning' || meaning === 'returned') cancelsBack.push(w);
+    } else if (ROAD_MEANING.includes(meaning)) problems.push(w);
   }
+  // the words that say « a try failed » first (« Tentative échouée » before « En attente »)
+  const tryLike = (w: string) => (/tentative|echou|échou|non livr|attempt|appel/i.test(w) ? 0 : 1);
+  tries.sort((a, b) => tryLike(a) - tryLike(b));
   const own = SITUATION_WORDS[kind];
   return {
     numbered: own?.numbered ?? numbered,

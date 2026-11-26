@@ -53,7 +53,7 @@ export function AlertStart() {
   // what the choice means at a company: its numbered try, the tries Pilotix counts, or only its cancel
   const whenOf = (r: Row): [string, string] => {
     if (n === null) return [t('suivi.as.atCancel'), t('suivi.as.noneBefore')];
-    if (r.numbered) return [quote(r.numbered.replace('{n}', String(n))), t('suivi.as.byCo', { co: r.label })];
+    if (r.numbered) return [quote(r.numbered.replace('{n}', String(n))), t('suivi.as.byCo', { co: r.label.replace(/\s*\(.*\)\s*/, '') })];
     if (r.tries.length) return [t('suivi.as.nthTry', { nth: t(`suivi.as.nth.${n}`), word: r.tries[0] }), t('suivi.as.byPilotix')];
     return [t('suivi.as.atCancel'), t('suivi.as.noTries')];
   };
