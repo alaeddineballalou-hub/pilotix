@@ -9,5 +9,3 @@
 /* an abandoned form: purple (no level of the score uses it) */
 .cf-cart.yes { background: var(--c-mk-tint); color: var(--c-mk-ink); }
 .cf-cart.no { background: var(--raise); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
-/* the phone cards: the pill and the tag side by side, on their own line under the name */
-.cf-sc.row { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 6px; }

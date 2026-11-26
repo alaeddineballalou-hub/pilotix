@@ -1,7 +1,7 @@
 // Confirmation › « Score client » (the owner's choice 1 « Pastilles », 26 Nov 2026): the customer's score in its pill
 // (a new customer: the score he starts with, grey, and « Nouveau » — the owner's choice C) and, under it, a tag that says
 // whether the order is a form the customer left without sending it (« Abandonnée », Landing pages › Abandonnées) or not.
-// The phone cards show the same two side by side.
+// The phone cards show the same, under the name.
 import { cameOf, type ClientLevel } from '@pilotix/shared';
 import { useTranslation } from 'react-i18next';
 import { ScoreChip } from '../../ui/clientScore';
@@ -16,12 +16,12 @@ export const isAbandoned = (o: CameOf): boolean => {
   return c === 'abandoned' || c === 'recovered';
 };
 
-export function ScoreCell({ o, row }: { o: CameOf & { clientScore?: { score: number; level: ClientLevel } | null }; row?: boolean }) {
+export function ScoreCell({ o }: { o: CameOf & { clientScore?: { score: number; level: ClientLevel } | null } }) {
   const { t } = useTranslation();
   const s = o.clientScore;
   const ab = isAbandoned(o);
   return (
-    <span className={`cf-sc${row ? ' row' : ''}`}>
+    <span className="cf-sc">
       {s && s.level !== 'new' ? (
         <ScoreChip s={s} short />
       ) : (

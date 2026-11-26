@@ -201,8 +201,9 @@ export function PhoneCards({ rows, empty, onOpen, pick, showAgent, rowKey, edit,
                     <HeldChip o={o} />
                     {o.deadline && <Countdown d={o.deadline} short />}
                   </div>
-                  {/* « Score client » as in the table: the score, then « Abandonnée » or « Non abandonnée » */}
-                  <ScoreCell o={o} row />
+                  {/* « Score client » as in the table: the score, and « Abandonnée » or « Non abandonnée » under it (side by side
+                      they did not fit a 360–390 px phone with the call button: some cards took one line, others two) */}
+                  <ScoreCell o={o} />
                   <div className="pxp-meta">
                     <span className="ltr">{o.ref}</span> · {o.seller && <>{o.seller.name} · </>}{wilayaName(o.wilayaId)} · <b className="ltr">{da(o.total)}</b>
                   </div>
