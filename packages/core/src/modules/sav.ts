@@ -240,6 +240,16 @@ async function listTickets(ctx: Ctx, f: z.infer<typeof ListInput>): Promise<Page
   return { rows: rows.map(toTicket), total, page: f.page, pageSize: f.pageSize, counts: { todo: num(c.todo), all: num(c.all), mine: num(oc.mine), nobody: num(oc.nobody), view: num(oc.n) } };
 }
 
+/**
+ * The menu's SAV number: the open tickets this person's SAV page shows (its « À traiter ») — a store's agent her own,
+ * an agency's SAV agent his own (its chiefs every one of the agency's), the owner, the managers and the dépôt every
+ * one (owner's ask, 26 Nov 2026: each agent's number counts only her tickets).
+ */
+export async function savMenuCount(ctx: Ctx): Promise<number> {
+  const scope = savTicketScope(ctx);
+  return num((await ctx.db.query(`SELECT count(*)::int AS n FROM complaints c WHERE ${ACTIVE}${scope ? ` AND ${scope}` : ''}`))[0]?.n);
+}
+
 export async function getTicket(db: Db, tid: number): Promise<SavTicket> {
   const r = (await db.query(`${SELECT} WHERE c.id = $1`, [tid]))[0];
   if (!r) throw notFound('Ticket introuvable');

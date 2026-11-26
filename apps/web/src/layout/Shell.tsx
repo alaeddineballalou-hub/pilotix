@@ -65,7 +65,8 @@ export function useMenuCounts(seller: Seller | null = null, enabled = true) {
       attente: sum(c.conf, CONF_TODO.filter((k) => k !== 'new')),
       confirmees: sum(c.conf, ['confirmed', 'no_stock']),
       depot: sum(c.follow, ['to_prepare', 'prepared']) + tk.toShip,
-      suivi: sum(c.follow, ['alert']),
+      // Suivi and SAV: what the person's own pages show — an agent only hers (a server older than `alerts`: the shop's)
+      suivi: c.alerts ?? sum(c.follow, ['alert']),
       // Livré, Annulé: the orders their lists show this person (each one his own, an agent manager his team's); Annulé
       // counts what its screen counts: cancelled at the confirmation, and the parcels coming back or back
       // the Community manager's Confirmées and En livraison (her own orders: the lists' numbers)

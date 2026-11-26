@@ -9,7 +9,7 @@ import { getPrefs } from './prefs';
 import { rotateTimes } from './assign';
 import { cancelParcel, swapFees } from './delivery';
 import { addEvent, FollowInput, getOrder, listOrders, ListInput, PICKED_UP_SQL, setFollow, withClientScores } from './orders';
-import { agencyLead, agencyOf, agencyRowSql, andSql, queueSql, rowScopeSql } from './agencyscope';
+import { agencyLead, agencyOf, agencyRowSql, andSql, queueSql, rowScopeSql, suiviQueue } from './agencyscope';
 import { findOrders } from './sav';
 import { SWAP_FROM, writeSwap } from './swapwrite';
 import { applyTrust, DRIVER_CLAIMS } from './trust';
@@ -38,7 +38,7 @@ export const TREAT_WHAT = ['date', 'adresse', 'injoignable', 'autre'] as const;
 const DAY = 86_400_000;
 // The delivery overview includes every active parcel; Alertes remains its strict alert-only subset.
 const IN_DELIVERY = ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange'] as const;
-const readQueue = (ctx: Ctx) => hasRole(ctx.session, 'suivi') ? 'follow' as const : 'conf' as const;
+const readQueue = suiviQueue;
 
 /** Filters of each Suivi tab, expressed with the orders list. */
 function tabFilter(tab: SuiviTab, now: number, agency = false): Partial<ListInput> {

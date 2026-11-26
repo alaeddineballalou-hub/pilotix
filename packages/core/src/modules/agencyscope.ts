@@ -98,6 +98,12 @@ export function queueSql(ctx: Ctx, task: 'conf' | 'follow', alias = 'o', opts: {
 }
 
 /**
+ * The queue the Suivi page reads: a suivi agent the alerts given to him, anyone else the alerts of the orders he
+ * confirms (an agent manager his team's and the free ones, the owner every one). The menu's Suivi number uses it too.
+ */
+export const suiviQueue = (ctx: Ctx) => (hasRole(ctx.session, 'suivi') ? ('follow' as const) : ('conf' as const));
+
+/**
  * Who sees which orders in Confirmation:
  * - the owner (Vendeur) and the administrators: every order of the shop ('');
  * - an agent manager: the orders of his team's agents and his own, and the orders no agent has yet (to give them out),

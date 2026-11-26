@@ -50,7 +50,7 @@ import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPrev
 import { landingCounts, landingSettings, onLandingConf, onLandingFollow, queueChatEvent, queueChatPurchase } from './landingquery';
 import { rdvMenuCount } from './rdv';
 import { lowStockCount } from './stockquery';
-import { agencyLead, agencyOf, agencyRowSql, andSql, listScopeSql, ownRowSql, queueSql, rowScopeSql } from './agencyscope';
+import { agencyLead, agencyOf, agencyRowSql, andSql, listScopeSql, ownRowSql, queueSql, rowScopeSql, suiviQueue } from './agencyscope';
 import { settleTickets } from './tickets';
 import { addDepotAlert, alertsDepot, DepotChange, itemsText, mayHaveLabel } from './depotalerts';
 import { blockerText, checkLines, checkOrder, deliverCheck } from './confirmcheck';
@@ -1965,6 +1965,17 @@ export async function setFollow(
 }
 
 // ---------------------------------------------------------------- counts for the menu and tabs
+/**
+ * The menu's Suivi number: the alerts this person's Suivi page shows (Nouvelles alertes + En cours) — an agent the ones
+ * given to her, an agent manager his team's and the free ones, the owner every one (owner's ask, 26 Nov 2026: « only
+ * the number assigned to her »).
+ */
+async function menuAlerts(ctx: Ctx) {
+  return num((await ctx.db.query(`SELECT count(*)::int AS n FROM orders o WHERE o.follow_status = 'alert'${andSql(queueSql(ctx, suiviQueue(ctx)))}`))[0]?.n);
+}
+/** The menu's SAV number: the open tickets this person's SAV page shows (sav.ts, which needs this file: read when used). */
+const menuSav = async (ctx: Ctx) => (await import('./sav')).savMenuCount(ctx);
+
 export async function orderCounts(ctx: Ctx) {
   const own = onlyOwnDeliveries(ctx);
   const me = ctx.session.profile.id;
@@ -2026,7 +2037,9 @@ export async function orderCounts(ctx: Ctx) {
       follow: obj(follow),
       sub: obj(subs),
       lateCalls: late,
-      sav: 0,
+      // the menu's Suivi and SAV numbers: what the person's own pages show
+      alerts: await menuAlerts(ctx),
+      sav: await menuSav(ctx),
       uncashed: 0,
       tickets: { toShip: 0, prepared: 0, onRoad: 0, uncashed: 0 },
       lowStock: 0,
@@ -2050,7 +2063,9 @@ export async function orderCounts(ctx: Ctx) {
   const lateCalls = num(
     (await ctx.db.query(`SELECT count(*)::int AS n FROM sales o WHERE conf_status = ANY($1) AND next_call_at IS NOT NULL AND next_call_at <= now()${andSql(q)}`, [CONF_TODO]))[0]?.n,
   );
-  const sav = num((await ctx.db.query(`SELECT count(*)::int AS n FROM complaints WHERE status IN ('open','progress')`))[0]?.n);
+  // the menu's Suivi and SAV numbers: what the person's own pages show (an agent only hers, never the whole shop's)
+  const alerts = await menuAlerts(ctx);
+  const sav = await menuSav(ctx);
   const uncashed = num((await ctx.db.query(`SELECT count(*)::int AS n FROM sales WHERE follow_status='delivered' AND NOT cashed`))[0]?.n);
   const subs = await ctx.db.query<{ k: string; n: number }>(`SELECT sub_status AS k, count(*)::int AS n FROM sales WHERE sub_status IS NOT NULL GROUP BY 1`);
   const lowStock = seesPurchaseCosts(ctx) ? await lowStockCount(ctx.db) : 0;
@@ -2085,7 +2100,7 @@ export async function orderCounts(ctx: Ctx) {
   if (landing && !hasRole(ctx.session, 'marketer')) landing.noPage = 0;
   // Rendez-vous (a module): the bookings still to call, for the people who see the page
   const rdv = await rdvMenuCount(ctx);
-  return { conf: toObj(conf), follow: toObj(follow), sub: toObj(subs), lateCalls, sav, uncashed, tickets, lowStock, ai, landing, ...(rdv === undefined ? {} : { rdv }), all: num((await ctx.db.query('SELECT count(*)::int n FROM sales'))[0]?.n), lists: await listsOf(listScopeSql(ctx)) };
+  return { conf: toObj(conf), follow: toObj(follow), sub: toObj(subs), lateCalls, alerts, sav, uncashed, tickets, lowStock, ai, landing, ...(rdv === undefined ? {} : { rdv }), all: num((await ctx.db.query('SELECT count(*)::int n FROM sales'))[0]?.n), lists: await listsOf(listScopeSql(ctx)) };
 }
 
 // ---------------------------------------------------------------- order form, fees and the delivered report
