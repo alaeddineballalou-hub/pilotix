@@ -275,6 +275,10 @@ export const PROC_RIGHTS: Record<string, Need> = {
   'suivi.next': 'act:suivi.treat',
   'suivi.release': 'act:suivi.treat',
   'suivi.unassign': 'act:suivi.treat',
+  // Suivi › « Attribuer » (alerts given to a suivi agent, or taken back): the same right as giving orders, for the
+  // store's managers; an agency's chief and chefs d'équipe give their agency's alerts without it, and a plain agent never
+  // gives (suivi.assign refuses him: it checks who and to whom)
+  'suivi.assign': (_i, ctx) => (!agencyLead(ctx) && ctx.session.roles.some((r) => r === 'agent_manager' || r === 'vendeur') ? 'act:orders.give' : null),
   'suivi.stuckDone': 'act:suivi.treat',
   'suivi.claimCreate': 'act:suivi.claim',
   'suivi.claimPush': 'act:suivi.claim',
