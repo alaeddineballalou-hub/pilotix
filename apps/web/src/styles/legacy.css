@@ -590,9 +590,11 @@ input.bjf-in { height: 54px !important; font-size: 18px; font-weight: 600; borde
 .scrim { display: none; }
 @media (max-width: 900px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
-  .side { position: fixed; z-index: 20; left: 0; top: 0; width: 270px; transform: translateX(-105%); transition: transform .2s; box-shadow: 0 0 30px rgba(0,0,0,.25); }
+  /* the open menu and its shade sit above the page's own floating buttons (« Alerte suivante », « Commande suivante »,
+     the dépôt's bar, the tournée's button: z-index 30), still under the windows and popups (40 and more) (owner, 26 Nov 2026) */
+  .side { position: fixed; z-index: 36; left: 0; top: 0; width: 270px; transform: translateX(-105%); transition: transform .2s; box-shadow: 0 0 30px rgba(0,0,0,.25); }
   body.nav-open .side { transform: none; }
-  body.nav-open .scrim { display: block; position: fixed; inset: 0; z-index: 15; background: rgba(0,0,0,.35); }
+  body.nav-open .scrim { display: block; position: fixed; inset: 0; z-index: 35; background: rgba(0,0,0,.35); }
   .topbar .menu-btn { display: inline-flex; }
   .page { padding: 12px 16px; gap: 12px; }
 }

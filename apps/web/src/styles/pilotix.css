@@ -1962,7 +1962,7 @@ html[data-theme="dark"] .topbar .px-lang-sel option { background: #16202B; color
   .side { transition: transform .28s cubic-bezier(.22, 1, .36, 1); will-change: transform; }
   .scrim { transition: opacity .28s ease; }
   body.nav-drag .side { transition: none; }
-  body.nav-drag .scrim { display: block; position: fixed; inset: 0; z-index: 15; background: rgba(0,0,0,.35); opacity: var(--nav-p, 0); transition: none; }
+  body.nav-drag .scrim { display: block; position: fixed; inset: 0; z-index: 35; background: rgba(0,0,0,.35); opacity: var(--nav-p, 0); transition: none; }
 }
 
 /* The team screens dropdown (Écrans) at the top of a store's menu; hidden when the sidebar is folded. */
