@@ -64,11 +64,15 @@
 .pxk-gap b.ok { color: var(--c-ok-ink); }
 .pxk-gap b.bad { color: var(--c-bad-ink); }
 .pxk-amc { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
-.pxk-chip { display: inline-block; font-size: 11.5px; font-weight: 900; line-height: 1.5; padding: 0 8px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 14%, var(--surface)); color: var(--muted); font-variant-numeric: tabular-nums; }
-.pxk-chip.ok { background: var(--c-ok-tint); color: var(--c-ok-ink); }
-.pxk-chip.bad { background: var(--c-bad-tint); color: var(--c-bad-ink); }
+.pxk-gapc { display: inline-block; font-size: 11.5px; font-weight: 900; line-height: 1.5; padding: 0 8px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 14%, var(--surface)); color: var(--muted); font-variant-numeric: tabular-nums; }
+.pxk-gapc.ok { background: var(--c-ok-tint); color: var(--c-ok-ink); }
+.pxk-gapc.bad { background: var(--c-bad-tint); color: var(--c-bad-ink); }
+.pxk-rcbox { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; align-items: start; }
+/* wide screens: the receipt keeps a readable width, the delivery gap beside it */
+@media (min-width: 1000px) { .pxk-rcbox { grid-template-columns: minmax(0, 560px) minmax(0, 1fr); } }
 /* computers (the « À recevoir » table): the receipt above the parcels */
-.pxk-rcw { display: grid; grid-template-columns: minmax(0, 460px); gap: 8px; margin: 4px 0 14px; }
+.pxk-rcw { max-width: 520px; margin: 4px 0 14px; }
+.pxk-rcw .pxk-rcbox { grid-template-columns: minmax(0, 1fr); }
 
 .pxk-ob { display: flex; flex-direction: column; gap: 10px; }
 .pxk-ob.bar { padding-bottom: 150px; }

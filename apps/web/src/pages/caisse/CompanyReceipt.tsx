@@ -37,7 +37,7 @@ export function receiptOf(g: DueGroup, chosen: DueOrder[]) {
 /** What the customer paid for the delivery against what the company took on it (+50: we earn, −150: we pay). */
 export function GapChip({ o }: { o: DueOrder }) {
   const v = o.clientDelivery - o.deliveryCost;
-  return <span className={`ltr pxk-chip${v > 0 ? ' ok' : v < 0 ? ' bad' : ''}`}>{signed(v)}</span>;
+  return <span className={`ltr pxk-gapc${v > 0 ? ' ok' : v < 0 ? ' bad' : ''}`}>{signed(v)}</span>;
 }
 
 /** « client 550 · ZR 500 » */
@@ -66,7 +66,7 @@ export function CompanyReceipt({ g, chosen }: { g: DueGroup; chosen: DueOrder[] 
     </>
   );
   return (
-    <>
+    <div className="pxk-rcbox">
       <div className="pxk-rc" title={t('caisse.rc.help', { name: g.name })}>
         <div className="ln">
           <span>{t('caisse.rc.collected', { name: g.name, n: r.count })}</span>
@@ -91,6 +91,6 @@ export function CompanyReceipt({ g, chosen }: { g: DueGroup; chosen: DueOrder[] 
           <b className={`ltr${r.gap > 0 ? ' ok' : r.gap < 0 ? ' bad' : ''}`}>{signed(r.gap)}</b>
         </div>
       )}
-    </>
+    </div>
   );
 }
