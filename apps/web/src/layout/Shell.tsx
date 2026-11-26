@@ -1,4 +1,4 @@
-import { CONF_DONE_BAD, CONF_TODO, Language, LANGUAGES, LOOKUP_DIGITS, lookupDigits, lookupReady, normalizePhone } from '@pilotix/shared';
+import { cmOnly, CONF_DONE_BAD, CONF_TODO, Language, LANGUAGES, LOOKUP_DIGITS, lookupDigits, lookupReady, normalizePhone } from '@pilotix/shared';
 import { useSwipeMenu } from './swipeMenu';
 import { lazy, ReactNode, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -178,6 +178,8 @@ function WorkspaceShell({ page, sub, children, nav = NAV, space = 'store' }: She
       backend.onEvent((e) => {
         const c = (e.data as { created?: { ref: string; channel: string; agency?: number | null } } | undefined)?.created;
         if (space === 'agency' || e.type !== 'orders' || !c || !(isAdmin || roles.includes('confirmation')) || store.get('lp-sound') === 'off') return;
+        // a Community manager answers the chats: she confirms her own orders only, not every new one
+        if (!isAdmin && cmOnly(session!.profile.roles)) return;
         const other = e.shop !== undefined && session!.shop?.id !== undefined && e.shop !== session!.shop.id;
         // a confirmation agency's agent hears only of its agency's orders; the store's own agents of theirs
         const agency = session!.profile.agencyId ?? null;

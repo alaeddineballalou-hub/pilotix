@@ -190,9 +190,10 @@ export function ProductPicker({ products, value, onChange, taken, kind }: { prod
   );
 }
 
-/** The products given to an agency, in words. */
+/** The products given to a marketer, in words; an agency's orders (owner's rule, 26 Nov 2026: by channel, not product). */
 function ProductsText({ l, products }: { l: AgencyLinkInfo; products: Product[] }) {
   const { t } = useTranslation();
+  if (l.kind === 'agency') return <>{t('agency.store.landingOrders')}</>;
   if (l.products === null) return <>{t('agency.allProducts')}</>;
   const names = products.filter((p) => l.products!.includes(p.id)).map((p) => p.name);
   return <>{names.length > 3 ? t('agency.nProducts', { count: names.length }) : names.join(', ') || t('agency.nProducts', { count: l.products.length })}</>;
@@ -257,9 +258,14 @@ function FindAgency({ products, links, kind }: { products: Product[]; links: Age
                   <TaskPicker value={tasks} onChange={setTasks} />
                 </Field>
               )}
-              <Field label={t('agency.store.productsGiven')}>
-                <ProductPicker products={products} value={chosen} onChange={setChosen} taken={takenBy(links, null, tasks, kind)} kind={kind} />
-              </Field>
+              {kind === 'agency' ? (
+                // an agency gets the landing pages' orders, every product (routing.ts): nothing to choose
+                <p className="agx-note">{t('agency.store.channelRule')}</p>
+              ) : (
+                <Field label={t('agency.store.productsGiven')}>
+                  <ProductPicker products={products} value={chosen} onChange={setChosen} taken={takenBy(links, null, tasks, kind)} kind={kind} />
+                </Field>
+              )}
               <div className="row agx-actions">
                 <button type="button" className="btn" onClick={() => setFound(null)}>
                   {t('common.cancel')}
@@ -267,8 +273,8 @@ function FindAgency({ products, links, kind }: { products: Product[]; links: Age
                 <button
                   type="button"
                   className="btn primary"
-                  disabled={!tasks.length || (chosen !== null && !chosen.length) || !found.agency.priced || ask.isPending}
-                  onClick={() => ask.mutate({ agencyId: found.agency.id, tasks, products: chosen })}
+                  disabled={!tasks.length || (kind !== 'agency' && chosen !== null && !chosen.length) || !found.agency.priced || ask.isPending}
+                  onClick={() => ask.mutate({ agencyId: found.agency.id, tasks, products: kind === 'agency' ? null : chosen })}
                 >
                   <Icon name="send" /> {t('agency.sendRequest')}
                 </button>
@@ -329,9 +335,14 @@ function WorkModal({ l, products, links, accept, onClose }: { l: AgencyLinkInfo;
           <TaskPicker value={tasks} onChange={setTasks} />
         </Field>
       )}
-      <Field label={t('agency.store.productsGiven')}>
-        <ProductPicker products={products} value={chosen} onChange={setChosen} taken={takenBy(links, l.id, tasks, l.kind)} kind={l.kind} />
-      </Field>
+      {l.kind === 'agency' ? (
+        // an agency gets the landing pages' orders, every product (routing.ts): nothing to choose
+        <p className="agx-note">{t('agency.store.channelRule')}</p>
+      ) : (
+        <Field label={t('agency.store.productsGiven')}>
+          <ProductPicker products={products} value={chosen} onChange={setChosen} taken={takenBy(links, l.id, tasks, l.kind)} kind={l.kind} />
+        </Field>
+      )}
       {l.kind === 'agency' && <fieldset className="agx-sub">
         <legend>{t('agency.alerts.toAgency')}</legend>
         {tasks.map((task) => <label key={task} className="row">

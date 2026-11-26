@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
+import { createOrder } from '../modules/orders';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -25,8 +26,15 @@ before(async () => {
 });
 
 let n = 0;
+// a new order that came by itself (the shop's site): the Affectation gives it — one a person types stays his (routing.ts,
+// owner's rule 26 Nov 2026)
 const order = async (phone?: string, extra: object = {}) =>
-  (await call('orders.create', admin, { customerName: `Client Auto ${++n}`, phone: phone ?? `0670${String(100000 + n).slice(-6)}`, wilayaId: 16, commune: 'Kouba', address: 'Rue 1', items: [{ ...X, qty: 1 }], ...extra })) as any;
+  (await createOrder(
+    admin,
+    { customerName: `Client Auto ${++n}`, phone: phone ?? `0670${String(100000 + n).slice(-6)}`, wilayaId: 16, commune: 'Kouba', address: 'Rue 1', isStopdesk: false, channel: 'appel', items: [{ ...X, qty: 1 }], discount: 0, confirm: false, isExchange: false, ...extra } as any,
+    admin.db,
+    { came: 'site' },
+  )) as any;
 const online = (who: number[], presence = 'online') => db.query(`UPDATE profiles SET last_seen_at = now(), presence = $2 WHERE id = ANY($1)`, [who, presence]);
 const offline = (who: number[], min = 30) => db.query(`UPDATE profiles SET last_seen_at = now() - make_interval(mins => $2) WHERE id = ANY($1)`, [who, min]);
 const save = (conf: object, extra: object = {}) => call('assign.set', admin, { ...base, conf: { ...base.conf, ...conf }, ...extra });

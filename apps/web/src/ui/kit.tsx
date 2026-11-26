@@ -149,6 +149,17 @@ export function RemovableChip({ name, onRemove, removeLabel, disabled }: { name:
   );
 }
 
+/** An order the store's confirmation agency works on, as the seller sees it: the agency's name, never its agent (owner's
+ *  rule, 26 Nov 2026). */
+export function AgencyChip({ name }: { name: string }) {
+  return (
+    <span className="badge t-warn px-agchip" title={name}>
+      <Icon name="briefcase" />
+      <span className="px-agchip-n">{name}</span>
+    </span>
+  );
+}
+
 export function TicketTag({ savRef }: { savRef: string | null | undefined }) {
   const { t } = useTranslation();
   if (!savRef) return null;

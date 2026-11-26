@@ -73,7 +73,8 @@ export async function seedDemoPartners(t: Tenancy, opts: { now?: number } = {}):
   await run(chiefA, 'agency.prices', { prices: AGENCY_PRICES });
   await run(chiefM, 'agency.prices', { prices: MARKETER_PRICES });
 
-  // the products: the agency confirms and follows the small items, the marketer runs the ads of the big ones
+  // the products: the marketer runs the ads of the big ones; the agency's past orders are the small items' (its new ones
+  // come by channel: every landing page's order, routing.ts — the products it is given are no longer read)
   const pid = async (sku: string) => num((await sdb.query('SELECT id FROM products WHERE sku = $1', [sku]))[0].id);
   const forAgency = [await pid('PX-BIB'), await pid('PX-THE'), await pid('PX-BOD')];
   const forMarketer = [await pid('PX-LIT'), await pid('PX-CHA'), await pid('PX-TAP')];
@@ -91,7 +92,8 @@ export async function seedDemoPartners(t: Tenancy, opts: { now?: number } = {}):
   const agencyLink = await linkOf(agency, chiefA, ['confirmation', 'suivi', 'sav'], forAgency);
   const marketerLink = await linkOf(marketer, chiefM, ['marketing'], forMarketer);
 
-  // the agency's orders: those of its products since the contract, confirmed by its agents, followed by its suivi
+  // the agency's orders so far: the small items' since the contract (made before the channel rule, they keep their side),
+  // confirmed by its agents, followed by its suivi
   const people = async (partnerId: number) =>
     (await sdb.query('SELECT id, roles FROM profiles WHERE agency_id = $1 AND active ORDER BY id', [partnerId])).map((r: any) => ({ id: num(r.id), roles: r.roles as string[] }));
   const agents = await people(agency.id);

@@ -60,6 +60,7 @@ import { applyTrust, lookAlikeNote, lookAlikeOf } from './trust';
 import { companyLock, pilotMayRun, pilotPick, setPick, type Pick } from './pilot';
 import { apiFees, courierFeesOf, declaredKg, feesByApi, knownKg, ruleFee, swapAtSql, swapFeeSql, weightRuleOf, weightRuleSet, wholeKg } from './courierfees';
 import { assignedProductIds, seesPurchaseCosts } from './productscope';
+import { followConfSide, LANDING_CAME, newOrderWork } from './routing';
 import { checkMontageLines, MONTAGE_SKU, montageProductId, readMontage, shopMontageWilayas } from './montage';
 import { daysAgo, isLookup, LIST_DAYS, phoneHiddenFor, recentSql, seesEverything } from './oldphones';
 
@@ -686,29 +687,6 @@ function upsellFor(isExchange: boolean, orig: OrigLine[], origDiscount: number, 
   return isExchange ? { value: 0, flags: lines.map(() => false) } : upsellOf(orig, origDiscount, lines, discount);
 }
 
-/**
- * The confirmation agencies a new order goes to, by its first product: the agency the store gave that product, else
- * the one that has « every product » (none: the store's own team). An order that arrives confirmed has nothing left to
- * confirm: only its suivi can go to an agency.
- */
-async function routeToAgencies(db: Db, orderId: number, productId: number | undefined, confirmed: boolean) {
-  if (!productId) return;
-  const rows = await db.query('SELECT agency_id, task FROM agency_routes WHERE product_id = $1 OR product_id IS NULL ORDER BY (product_id IS NULL), task', [productId]);
-  if (!rows.length) return;
-  const pick = (task: string) => {
-    const r = rows.find((x: any) => x.task === task);
-    return r ? num(r.agency_id) : null;
-  };
-  const conf = confirmed ? null : pick('confirmation');
-  const follow = pick('suivi');
-  if (conf !== null || follow !== null) await db.query(
-    `UPDATE orders SET conf_agency_id = $2, follow_agency_id = $3, route_product_id = $4,
-      agent_id = CASE WHEN $2::integer IS NULL THEN agent_id ELSE NULL END,
-      assigned_at = CASE WHEN $2::integer IS NULL THEN assigned_at ELSE NULL END WHERE id = $1`,
-    [orderId, conf, follow, productId],
-  );
-}
-
 /** Units the depot already took for an order that no longer needs them go back to the depot by themselves: the
  *  picking pool, used first by the next « J'ai pris » of that product (a cancelled order, products changed). */
 async function toPickPool(db: Db, units: { productId: number; variantId: number | null; qty: number }[]) {
@@ -889,8 +867,14 @@ export async function createOrder(
     const confirmed = conf === 'confirmed';
     // « sans stock » is confirmed too (by this person, now): it only waits for stock before the depot
     const stamped = confirmed || conf === 'no_stock';
-    // a confirmation agent's own new order (a customer who called him) is his: nobody else would give it to him
-    const ownNew = ctx.session.roles.includes('confirmation') && !mayOverrideHold(ctx) && ctx.session.profile.agencyId == null;
+    // who works it (routing.ts, owner's rule 26 Nov 2026): the person who typed it keeps it; one that came by itself goes
+    // by its channel (a landing page's to the confirmation agency, a chat's to the person in charge of the chat). An
+    // exchange parcel of the SAV stays with the store's team, its own agent's when he made it.
+    const work = input.isExchange
+      ? null
+      : await newOrderWork(tx, ctx, { came, conversationId: opts.conversationId ?? null, stamped, landing: LANDING_CAME.includes(came) || opts.landingId != null || !!opts.abandoned });
+    const ownNew = !work && ctx.session.roles.includes('confirmation') && !mayOverrideHold(ctx) && ctx.session.profile.agencyId == null;
+    const agentId = work ? work.agentId : stamped || ownNew ? me : null;
     const ref = (await tx.query(`SELECT 'PX' || nextval('order_ref_seq') AS r`))[0].r;
     const wh = (await tx.query('SELECT id FROM warehouses WHERE active ORDER BY is_default DESC, id LIMIT 1'))[0];
     const defCompany = pick.companyId;
@@ -903,7 +887,7 @@ export async function createOrder(
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42) RETURNING id`,
         [ref, me, cust.id, input.customerName, phone, phone2, input.wilayaId, input.commune, input.address, input.isStopdesk, input.stopdeskId ?? null,
           input.channel, input.source ?? null, input.utm ? JSON.stringify(input.utm) : null,
-          conf, stamped || ownNew ? me : null, stamped || ownNew ? new Date(ctx.now()).toISOString() : null, stamped ? new Date(ctx.now()).toISOString() : null,
+          conf, agentId, agentId ? new Date(ctx.now()).toISOString() : null, stamped ? new Date(ctx.now()).toISOString() : null,
           confirmed ? 'to_prepare' : null, defCompany, wh?.id ?? null, priced.subtotal, fee, allDiscount, total,
           input.customerNote ?? null, input.deliveryNote ?? null, internalNote, input.isExchange, input.originalOrderId ?? null,
           up.value > 0, up.value, JSON.stringify(orig), input.discount, opts.conversationId ?? null, opts.landingId ?? null, opts.adsetId ?? null, look?.id ?? null,
@@ -916,8 +900,9 @@ export async function createOrder(
       await tx.query('UPDATE orders SET promo_code = $2, promo_discount = $3, awareness = true WHERE id = $1', [oid, promo.code, promo.discount]);
     }
     await insertItems(tx, oid, lines);
-    // SAV exchange parcels stay with the store's team (they are not sales)
-    if (!input.isExchange) await routeToAgencies(tx, oid, lines[0]?.productId, stamped);
+    // its agency, for the confirmation and the suivi (routing.ts)
+    if (work && (work.confAgencyId !== null || work.followAgencyId !== null))
+      await tx.query('UPDATE orders SET conf_agency_id = $2, follow_agency_id = $3, route_product_id = $4 WHERE id = $1', [oid, work.confAgencyId, work.followAgencyId, lines[0]?.productId ?? null]);
     // an order that came by itself says where from (« Page de vente « velo-star » », « Dellal · Messenger »), never the
     // account the server works with; one a person typed in a chat (the Community manager) shows that person
     const made =
@@ -2049,9 +2034,9 @@ export async function orderCounts(ctx: Ctx) {
       lists: await listsOf(listScopeSql(ctx)),
     };
   }
-  // the confirmation numbers of the store's own agents: the orders no agency handles (their lists show those); the
-  // Community manager's: her own orders still at the confirmation (she has no queue)
-  const q = cmOnly(ctx.session.roles) && !ctx.session.isAdmin ? listScopeSql(ctx) : queueSql(ctx, 'conf');
+  // the confirmation numbers of the store's own agents: the orders no agency handles (their lists show those) — the
+  // Community manager's too: she confirms her own orders (owner's choice, 26 Nov 2026), they are her queue
+  const q = queueSql(ctx, 'conf');
   const conf = await ctx.db.query<{ k: string; n: number }>(
     `SELECT conf_status AS k, count(*)::int AS n FROM sales o WHERE true${own ? ' AND livreur_id = $1' : ''}${andSql(q)} GROUP BY 1`,
     own ? [me] : [],
@@ -2538,12 +2523,13 @@ export const ordersProcs = {
     // an exchange leaves free (the customer only pays the delivery): it is made by the SAV (sav.exchange), from a real
     // ticket — never typed as a free order to anyone. Only the administrator may type one directly.
     if (i.isExchange && !ctx.session.isAdmin) throw forbidden('Un échange se fait depuis le SAV');
-    // the Community manager (owner's choice, 25 Nov 2026): only the order of a chat or a call, and it goes the normal way —
-    // to the confirmation as « Nouvelle », its company chosen by Pilotix or the team
-    if (cmOnly(ctx.session.roles)) {
+    // the Community manager (owner's choice, 25 Nov 2026): only the order of a chat or a call, its company chosen by Pilotix
+    // or the team. It stays hers and she confirms it herself (26 Nov 2026), from Confirmation after her call — never
+    // « Confirmer » while typing it. (Her own roles: the session's include the confirmation.)
+    if (cmOnly(ctx.session.profile.roles)) {
       if (i.via) throw forbidden();
       if (!CM_CHANNELS.includes(i.channel)) throw forbidden('Un community manager crée seulement la commande d’un chat ou d’un appel');
-      if (i.confirm) throw forbidden('La commande part à la confirmation : c’est un agent de confirmation qui la confirme');
+      if (i.confirm) throw forbidden('Confirmez la commande depuis Confirmation, après votre appel au client');
       if (i.companyId) throw forbidden('La société de livraison est choisie par Pilotix ou par l’équipe');
     }
     // typed in a chat of Pilot Message (« Créer la commande »): linked to it, like an order Dellal takes — the chat shows it,
@@ -2589,15 +2575,26 @@ export const ordersProcs = {
     const given = new Map<number, number[]>();
     const taken = new Map<number, { id: number; to: number | null }[]>();
     const agency = agencyOf(ctx);
+    // the seller takes an order back from his confirmation agency by giving it to one of his own people (owner's rule,
+    // 26 Nov 2026: he never sees nor picks the agency's agents); « Désassigner » leaves the agency's orders with it
+    const takesBack = agency === null && hasRole(ctx.session, 'vendeur');
+    const back: number[] = [];
     await ctx.db.tx(async (tx) => {
       if (agentId !== null) {
         const target = (await tx.query('SELECT agency_id FROM profiles WHERE id = $1 AND active', [agentId]))[0];
         if (!target || numOrNull(target.agency_id) !== agency) throw forbidden('L’affectation est réservée à l’équipe qui gère la confirmation');
       }
       for (const oid of ids) {
-        const cur = (await tx.query('SELECT ref, agent_id, shipped_at, conf_agency_id FROM orders WHERE id=$1 FOR UPDATE', [oid]))[0];
+        const cur = (await tx.query('SELECT ref, agent_id, shipped_at, conf_agency_id, conf_status FROM orders WHERE id=$1 FOR UPDATE', [oid]))[0];
         if (!cur) continue;
-        if (numOrNull(cur.conf_agency_id) !== agency) throw forbidden('L’affectation est réservée à l’équipe qui gère la confirmation');
+        if (numOrNull(cur.conf_agency_id) !== agency) {
+          if (!takesBack || cur.conf_agency_id == null) throw forbidden('L’affectation est réservée à l’équipe qui gère la confirmation');
+          if (agentId === null) continue;
+          if (!(CONF_TODO as string[]).includes(cur.conf_status)) throw bad(`${cur.ref} est déjà traitée par l’agence : elle y reste`);
+          await tx.query('UPDATE orders SET conf_agency_id = NULL, locked_by = NULL, locked_until = NULL, version = version + 1 WHERE id = $1', [oid]);
+          await addEvent(tx, oid, ctx.session.profile.id, 'note', String(cur.conf_agency_id), null, 'Équipe responsable : confirmation');
+          back.push(oid);
+        }
         if (!manager && cur.agent_id && num(cur.agent_id) !== ctx.session.profile.id) throw forbidden();
         // an agent never takes an order nobody has: his manager gives it (an agency's agent: his agency's chiefs)
         if (!manager && !cur.agent_id) throw forbidden('Votre manager vous donne les commandes');
@@ -2610,12 +2607,55 @@ export const ordersProcs = {
         if (agentId) given.set(agentId, [...(given.get(agentId) ?? []), oid]);
         if (was) taken.set(was, [...(taken.get(was) ?? []), { id: oid, to: agentId }]);
       }
+      // taken back: its suivi comes back with it (routing.ts)
+      await followConfSide(tx, back);
     });
     ctx.emit({ type: 'orders' });
     const by = ctx.session.profile.id;
     if (given.size) await tellGiven(ctx, 'conf', given, { by }).catch(() => {});
     if (taken.size) await tellTaken(ctx, taken, { by }).catch(() => {});
     return { ok: true };
+  }),
+
+  /**
+   * « Assigner un agent » › the agency (owner's rule, 26 Nov 2026): the seller gives orders still to confirm to his
+   * confirmation agency — the agency, never one of its agents (its chiefs or its Répartition give them out). He takes them
+   * back by giving them to one of his own people (orders.assignAgent).
+   */
+  'orders.giveAgency': proc(['vendeur'], z.object({ ids, agencyId: id }), async (ctx, { ids, agencyId }) => {
+    if (agencyOf(ctx) !== null) throw forbidden();
+    if (!(await ctx.db.query(`SELECT 1 FROM agency_routes WHERE task = 'confirmation' AND agency_id = $1 LIMIT 1`, [agencyId])).length)
+      throw bad('Cette agence ne fait pas la confirmation de votre boutique');
+    const me = ctx.session.profile.id;
+    const moved: number[] = [];
+    const taken = new Map<number, { id: number; to: number | null }[]>();
+    await ctx.db.tx(async (tx) => {
+      for (const oid of ids) {
+        const cur = (await tx.query('SELECT ref, agent_id, conf_status, conf_agency_id, is_exchange FROM orders WHERE id = $1 FOR UPDATE', [oid]))[0];
+        if (!cur || cur.is_exchange || numOrNull(cur.conf_agency_id) === agencyId) continue;
+        if (!(CONF_TODO as string[]).includes(cur.conf_status)) throw bad(`${cur.ref} n’est plus à confirmer`);
+        await tx.query(
+          `UPDATE orders SET conf_agency_id = $2, agent_id = NULL, assigned_at = NULL, locked_by = NULL, locked_until = NULL,
+             route_product_id = COALESCE(route_product_id, (SELECT product_id FROM order_items WHERE order_id = $1 ORDER BY id LIMIT 1)),
+             updated_at = now(), version = version + 1 WHERE id = $1`,
+          [oid, agencyId],
+        );
+        await addEvent(tx, oid, me, 'note', cur.conf_agency_id == null ? null : String(cur.conf_agency_id), String(agencyId), 'Équipe responsable : confirmation');
+        const was = numOrNull(cur.agent_id);
+        if (was) taken.set(was, [...(taken.get(was) ?? []), { id: oid, to: null }]);
+        moved.push(oid);
+      }
+      // its suivi follows (routing.ts)
+      await followConfSide(tx, moved);
+    });
+    if (!moved.length) return { given: 0 };
+    ctx.emit({ type: 'orders' });
+    if (taken.size) await tellTaken(ctx, taken, { by: me }).catch(() => {});
+    for (const oid of moved) {
+      await tellDelegated(ctx, agencyId, 'confirmation', oid).catch(() => {});
+      await assignNow(ctx, 'conf', oid);
+    }
+    return { given: moved.length };
   }),
 
   'orders.assignCompany': proc(['depot', 'suivi', 'confirmation'], z.object({ ids, companyId: id.nullable(), livreurId: id.nullable().optional() }), (ctx, i) => assignCompanies(ctx, i)),

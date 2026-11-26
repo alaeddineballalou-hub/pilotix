@@ -25,6 +25,7 @@ import { ScoreCell } from './ScoreCell';
 import { OriginChip } from '../orders/OrderPath';
 import { StageTag } from './stages';
 import { NextAction, TryDots } from './counters';
+import { useAgentName } from '../../lib/agentName';
 
 /** a queue row: the order with its call countdown */
 type PRow = Order & { deadline?: Deadline | null; rotateAt?: number | null; seller?: { id: number; name: string }; lastBusy?: boolean };
@@ -171,6 +172,8 @@ function CancelAsk({ o, onClose }: { o: PRow; onClose: () => void }) {
  * place of the call button.
  */
 export function PhoneCards({ rows, empty, onOpen, pick, showAgent, rowKey, edit, stages, dots }: { rows: PRow[]; empty: string; onOpen: (id: string) => void; pick?: { picked: Set<string>; toggle: (id: string) => void }; showAgent?: boolean; rowKey: (row: PRow) => string; edit?: boolean; stages?: boolean; /** En cours: the tries as dots (the shop's « annuler après N tentatives ») in place of the status */ dots?: number }) {
+  // the seller sees his agency on its orders, never its agents
+  const who = useAgentName();
   const { t } = useTranslation();
   // the order whose ✕ was pressed: its question opens over the list (outside the card, so nothing in it opens the card)
   const [cancelling, setCancelling] = useState<PRow | null>(null);
@@ -227,7 +230,7 @@ export function PhoneCards({ rows, empty, onOpen, pick, showAgent, rowKey, edit,
                     {stages ? o.followStatus && <StageTag o={o} /> : o.confStatus === 'confirmed' && o.followStatus && <StatusBadge kind="follow" status={o.followStatus} sub={o.subStatus} />}
                     {o.attempts > 0 && dots === undefined && <small>{t('confirmation.focus.calls', { n: o.attempts })}</small>}
                     <RotateChip at={o.rotateAt} />
-                    {showAgent && <AgentTag name={o.agentName} />}
+                    {showAgent && <AgentTag name={who.conf(o)} agency={!!who.confAgency(o)} />}
                   </div>
                 </div>
                 {/* ticking: no call (or ✕) by mistake */}
@@ -245,11 +248,11 @@ export function PhoneCards({ rows, empty, onOpen, pick, showAgent, rowKey, edit,
 }
 
 /** Who has the order, on a phone card (managers, the owner, an agency's chiefs): his name, or « Libre ». */
-export function AgentTag({ name }: { name?: string | null }) {
+export function AgentTag({ name, agency = false }: { name?: string | null; /** the store's confirmation agency has it */ agency?: boolean }) {
   const { t } = useTranslation();
   return (
-    <span className={`pxp-ag${name ? '' : ' free'}`}>
-      <Icon name="user" />
+    <span className={`pxp-ag${name ? '' : ' free'}${agency ? ' is-agency' : ''}`}>
+      <Icon name={agency ? 'briefcase' : 'user'} />
       <span>{name || t('confirmation.ph.free')}</span>
     </span>
   );
@@ -390,16 +393,31 @@ function GivePick({ order }: { order: Order }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const meta = useRpc('confirmation.meta', {}, { staleTime: 5 * 60_000 });
+  const who = useAgentName();
   const [busy, setBusy] = useState(false);
   const agents = meta.data?.agents ?? [];
-  const cur = order.agentId ?? null;
-  const give = async (to: number | null) => {
-    if (to === cur || busy) return;
+  // the seller's agency (owner's rule, 26 Nov 2026): one line; its orders show it, never its agent
+  const agencies = meta.data?.agencies ?? [];
+  const atAgency = who.storeSide && order.confAgencyId ? order.confAgencyId : null;
+  const cur = atAgency !== null ? `a${atAgency}` : order.agentId != null ? String(order.agentId) : '';
+  const give = async (value: string) => {
+    if (value === cur || busy) return;
     setBusy(true);
     try {
-      await rpc('orders.assignAgent', { ids: [order.id], agentId: to });
-      const name = agents.find((a) => a.id === to)?.name;
-      toast(to ? t('confirmation.assigned', { n: 1, name }) : t('confirmation.unassigned', { n: 1 }), 'ok');
+      if (value.startsWith('a')) {
+        const agencyId = Number(value.slice(1));
+        await rpc('orders.giveAgency', { ids: [order.id], agencyId });
+        toast(t('confirmation.givenAgency', { n: 1, name: agencies.find((a) => a.id === agencyId)?.name ?? '' }), 'ok');
+      } else {
+        const to = value ? Number(value) : null;
+        if (to === null && atAgency !== null) {
+          toast(t('confirmation.agencyKeeps'), 'bad');
+          return;
+        }
+        await rpc('orders.assignAgent', { ids: [order.id], agentId: to });
+        const name = agents.find((a) => a.id === to)?.name;
+        toast(to ? t('confirmation.assigned', { n: 1, name }) : t('confirmation.unassigned', { n: 1 }), 'ok');
+      }
       qc.invalidateQueries();
     } catch (e: any) {
       toast(e?.message ?? t('common.error'), 'bad');
@@ -409,16 +427,36 @@ function GivePick({ order }: { order: Order }) {
   };
   return (
     <label className="pxp-give">
-      <Icon name="userplus" />
+      <Icon name={atAgency !== null ? 'briefcase' : 'userplus'} />
       <span>{t('confirmation.ph.agent')}</span>
-      <select value={cur ?? ''} disabled={busy || !meta.data} aria-label={t('confirmation.tb.assign')} onChange={(e) => void give(e.target.value ? Number(e.target.value) : null)}>
+      <select value={cur} disabled={busy || !meta.data} aria-label={t('confirmation.tb.assign')} onChange={(e) => void give(e.target.value)}>
         <option value="">{t('confirmation.ph.nobody')}</option>
-        {cur !== null && !agents.some((a) => a.id === cur) && <option value={cur}>{order.agentName ?? '—'}</option>}
-        {agents.map((a) => (
-          <option key={a.id} value={a.id}>
-            {a.name}
-          </option>
-        ))}
+        {atAgency !== null && !agencies.some((a) => a.id === atAgency) && <option value={cur}>{who.conf(order) ?? '—'}</option>}
+        {atAgency === null && order.agentId != null && !agents.some((a) => a.id === order.agentId) && <option value={cur}>{order.agentName ?? '—'}</option>}
+        {agencies.length > 0 && (
+          <optgroup label={t('confirmation.tb.agencyGroup')}>
+            {agencies.map((a) => (
+              <option key={`a${a.id}`} value={`a${a.id}`}>
+                {a.name}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        {agencies.length > 0 ? (
+          <optgroup label={t('confirmation.tb.teamGroup')}>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </optgroup>
+        ) : (
+          agents.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))
+        )}
       </select>
     </label>
   );

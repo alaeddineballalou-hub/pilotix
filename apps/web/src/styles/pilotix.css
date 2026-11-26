@@ -1484,6 +1484,10 @@ html body .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #C97A0E; 
 
 /* Removable name chip: the name; on hover it turns red and says "Retirer", a click removes it. */
 .px-rmchip, .px-rmchip-s { max-width: 150px; }
+/* an order the store's confirmation agency works on: the agency's name with its briefcase (never its agent) */
+.badge.px-agchip { display: inline-flex; align-items: center; gap: 5px; max-width: 150px; font-weight: 800; }
+.px-agchip .bji { width: 13px; height: 13px; flex: none; }
+.px-agchip-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .px-rmchip-s { overflow: hidden; text-overflow: ellipsis; display: inline-block; line-height: 22px; }
 .px-rmchip { min-width: 6.6em; flex: none; display: inline-grid; align-items: center; border: 1px solid transparent; cursor: pointer; font: inherit; font-size: 12px; font-weight: 800; transition: background .12s, color .12s, border-color .12s; }
 .px-rmchip > span { grid-area: 1 / 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }

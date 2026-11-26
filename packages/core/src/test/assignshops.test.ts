@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
 import { loadShop, passwordFromLink } from '../platform';
+import { createOrder } from '../modules/orders';
 
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
 const PW = 'Boutique-Password-1';
@@ -63,7 +64,9 @@ test('one agent in two boutiques of the same owner: one maximum, and only his bo
   const cfg = g.cfg;
   await call('assign.set', owner, { ...cfg, conf: { ...cfg.conf, mode: 'load', max: 2 } });
   const pA = Number((await A.db.query('SELECT id FROM products LIMIT 1'))[0].id);
-  const mk = (ph: string) => call('orders.create', owner, { customerName: 'Client A', phone: ph, wilayaId: 16, commune: 'Kouba', address: 'Rue', items: [{ productId: pA, variantId: null, qty: 1 }] }) as Promise<any>;
+  // a new order that came by itself (the shop's site): the Affectation gives it (one the owner types stays his)
+  const mk = (ph: string) =>
+    createOrder(owner, { customerName: 'Client A', phone: ph, wilayaId: 16, commune: 'Kouba', address: 'Rue', isStopdesk: false, channel: 'appel', items: [{ productId: pA, variantId: null, qty: 1 }], discount: 0, confirm: false, isExchange: false } as any, owner.db, { came: 'site' }) as Promise<any>;
   assert.equal((await mk('0770000011')).agentId, null, 'at her maximum with the orders of the other boutique');
 
   // she works for B only from now: written in both boutiques

@@ -6,6 +6,7 @@ import { da, wilaya, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { BulkBar, Card, ErrorBox, Icon, Loading, RemovableChip, StatusBadge, TicketTag } from '../../ui/kit';
+import { useAgentName } from '../../lib/agentName';
 import { PhoneOf } from '../../ui/PhoneOf';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import { CopyCode } from '../../ui/CopyCode';
@@ -97,6 +98,8 @@ export function DepotOrderList({
   top?: ReactNode;
 }) {
   const { t } = useTranslation();
+  // the seller sees his agency on its orders, never its agents
+  const who = useAgentName();
   const unCompany = useAction('orders.assignCompany', { success: t('depot.partnerRemoved') });
   const unDispatch = useAction('depot.unassign', { success: (o) => t('depot.removed', { ref: o.ref }) });
   const couriers = useCouriers();
@@ -285,7 +288,7 @@ export function DepotOrderList({
       case 'agent':
         return (
           <td key={k} className="hide-m" data-l={label[k]}>
-            {o.agentName ?? '—'}
+            {who.conf(o) ?? '—'}
           </td>
         );
     }

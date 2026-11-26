@@ -11,10 +11,11 @@ export async function assignedProductIds(ctx: Ctx): Promise<number[] | null> {
   if (seesPurchaseCosts(ctx)) return null;
   const agency = agencyOf(ctx);
   if (agency !== null) {
+    // an agency works on every product of the tasks it does (its orders come by channel: routing.ts), within the
+    // products its chief gave this person
     const rows = await ctx.db.query(
       `SELECT p.id FROM products p WHERE p.archived_at IS NULL
-       AND EXISTS (SELECT 1 FROM agency_routes r WHERE r.agency_id = $1 AND r.task = ANY($2)
-         AND (r.product_id IS NULL OR r.product_id = p.id))
+       AND EXISTS (SELECT 1 FROM agency_routes r WHERE r.agency_id = $1 AND r.task = ANY($2))
        AND ($3::bigint[] IS NULL OR p.id = ANY($3))`,
       [agency, ctx.session.roles, ctx.session.profile.agencyProducts ?? null],
     );

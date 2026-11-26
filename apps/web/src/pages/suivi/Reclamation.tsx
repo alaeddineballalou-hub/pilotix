@@ -2,6 +2,7 @@ import { CONF_STATUSES, CONF_TODO, FOLLOW_STATUSES, SALES_CHANNELS, WILAYAS } fr
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, when, wilaya } from '../../lib/format';
+import { useAgentName } from '../../lib/agentName';
 import { openOrder, openOrderForm } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
 import { Empty, ErrorBox, Icon, Loading, Pager, StatusBadge } from '../../ui/kit';
@@ -102,6 +103,8 @@ function SearchLookup() {
 /** "Rechercher une commande": every order, any status or date. */
 function SearchOrders() {
   const { t } = useTranslation();
+  // the seller sees his agency on its orders, never its agents
+  const who = useAgentName();
   // SAV hands over an order not delivered yet (no SAV before delivery: it is a réclamation)
   const [q, setQ] = useState(handedOver);
   const [deb, setDeb] = useState(q);
@@ -283,8 +286,8 @@ function SearchOrders() {
                       <td data-l={t('suivi.col.conf')}>
                         <StatusBadge kind="conf" status={o.confStatus} />
                       </td>
-                      <td data-l={t('suivi.col.agent')}>{o.agentName ?? '—'}</td>
-                      <td data-l={t('suivi.col.fagent')}>{o.followAgentName ?? '—'}</td>
+                      <td data-l={t('suivi.col.agent')}>{who.conf(o) ?? '—'}</td>
+                      <td data-l={t('suivi.col.fagent')}>{who.follow(o) ?? '—'}</td>
                       <td data-l={t('suivi.col.delivery')}>
                         <StatusBadge kind="follow" status={o.followStatus} sub={o.subStatus} />
                       </td>

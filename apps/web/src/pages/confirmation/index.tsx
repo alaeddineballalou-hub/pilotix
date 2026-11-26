@@ -11,7 +11,8 @@ import { useRpc, useRpcFor } from '../../lib/query';
 import { SellerScope } from '../../lib/seller';
 import { seesAll as seesEveryOrder, useSession } from '../../lib/session';
 import { store } from '../../lib/store';
-import { ErrorBox, Field, Help, Icon, Loading, Pager, RemovableChip, SortTh, StageBar, StatusBadge } from '../../ui/kit';
+import { AgencyChip, ErrorBox, Field, Help, Icon, Loading, Pager, RemovableChip, SortTh, StageBar, StatusBadge } from '../../ui/kit';
+import { useAgentName } from '../../lib/agentName';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { colDrag, ColumnMenu, DensitySwitch, useDensity, useResizable, useTableColumns } from '../../ui/ColumnMenu';
@@ -239,6 +240,8 @@ export function Queue({
   const canGive = useCanGive();
   const manager = canGive && (!combined || combined.agency);
   const meta = useRpc('confirmation.meta', {}, { enabled: !combined, staleTime: 5 * 60_000 });
+  // who works each order (the seller sees his agency, never its agents)
+  const who = useAgentName();
   const catalog = useRpc('confirmation.catalog', {}, { enabled: !combined, staleTime: 5 * 60_000 });
   const agencyPeople = useRpcFor(null, 'agency.givePeople', {}, { enabled: !!combined?.agency && manager });
   const options = combined ? (agencyPeople.data ?? []).map((p, i) => ({ id: i + 1, name: p.name })) : meta.data?.agents ?? [];
@@ -348,6 +351,18 @@ export function Queue({
     setSort((cur) => (cur.sort === k ? { sort: k, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { sort: k, dir: k === 'total' ? 'desc' : 'asc' }));
     setPage(1);
   };
+  // the seller's confirmation agency, one line of « Assigner un agent » (owner's rule, 26 Nov 2026)
+  const agencies = combined ? [] : (meta.data?.agencies ?? []);
+  const giveAgency = async (rs: Row[], agencyId: number) => {
+    try {
+      const r = await rpc('orders.giveAgency', { ids: rs.map((x) => x.id), agencyId });
+      toast(t('confirmation.givenAgency', { n: r.given, name: agencies.find((a) => a.id === agencyId)?.name ?? '' }), 'ok');
+      setSel(new Set());
+      qc.invalidateQueries();
+    } catch (e: any) {
+      toast(e.message, 'bad');
+    }
+  };
   const assign = async (rs: Row[], agentId: number | null) => {
     try {
       if (combined) {
@@ -360,7 +375,16 @@ export function Queue({
           }
           await rpc('orders.assignAgent', { ids: rs.filter((r) => r.seller?.id === seller).map((r) => r.id), agentId: person?.at[seller] ?? null }, seller);
         }
-      } else await rpc('orders.assignAgent', { ids: rs.map((r) => r.id), agentId });
+      } else {
+        // « Désassigner » leaves the agency's orders with it: the seller takes them back by giving them to his people
+        const mine = agentId === null && who.storeSide ? rs.filter((r) => !r.confAgencyId) : rs;
+        if (!mine.length) {
+          toast(t('confirmation.agencyKeeps'), 'bad');
+          return;
+        }
+        await rpc('orders.assignAgent', { ids: mine.map((r) => r.id), agentId });
+        rs = mine;
+      }
       const name = options.find((a) => a.id === agentId)?.name;
       toast(agentId ? t('confirmation.assigned', { n: rs.length, name }) : t('confirmation.unassigned', { n: rs.length }), 'ok');
       setSel(new Set());
@@ -395,7 +419,7 @@ export function Queue({
           o.followStatus ? t(`status.follow.${o.followStatus}`) : '',
           o.companyName ?? '',
           trackOf(o),
-          o.agentName ?? '',
+          who.conf(o) ?? '',
           o.deliveryNote ?? '',
         ]),
       ]);
@@ -454,10 +478,14 @@ export function Queue({
         return wilayaName(r.wilayaId);
       case 'commune':
         return r.commune || '—';
-      case 'agent':
+      case 'agent': {
+        // the seller never sees his agency's agents: its orders show the agency (taken back from « Assigner un agent »)
+        const ag = who.confAgency(r);
+        if (ag) return <AgencyChip name={ag} />;
         return r.agentId ? <RemovableChip name={r.agentName ?? '—'} removeLabel={t('confirmation.removeAgent')} onRemove={manager ? () => assign([r], null) : undefined} /> : <span className="muted">—</span>;
+      }
       case 'fagent':
-        return <RemovableChip name={r.followAgentName} />;
+        return <RemovableChip name={who.follow(r)} />;
       case 'total':
         return <span className="ltr">{da(r.total)}</span>;
       case 'chrono':
@@ -620,9 +648,11 @@ export function Queue({
           rows={selected}
           manager={manager}
           agents={options}
+          agencies={agencies}
           waHref={wa}
           onClear={() => setSel(new Set())}
           onAssign={assign}
+          onGiveAgency={giveAgency}
           onBlock={combined ? undefined : () => setBlockAsk(selected)}
           onDelete={!combined && session?.isAdmin ? () => setDelAsk(selected) : undefined}
           // a confirmation agency's agent does not make orders in the store
@@ -853,9 +883,10 @@ export function Queue({
                 {picking && (
                   <PickBar
                     n={selected.length}
-                    options={options.map((a) => ({ value: String(a.id), label: a.name }))}
-                    anyAgent={selected.some((r) => r.agentId)}
-                    onGive={(v) => assign(selected, v ? Number(v) : null)}
+                    // the seller's agency first (its orders go to the agency, never to one of its agents), then his team
+                    options={[...agencies.map((a) => ({ value: `a${a.id}`, label: a.name })), ...options.map((a) => ({ value: String(a.id), label: a.name }))]}
+                    anyAgent={selected.some((r) => r.agentId && !who.confAgency(r))}
+                    onGive={(v) => (v?.startsWith('a') ? giveAgency(selected, Number(v.slice(1))) : assign(selected, v ? Number(v) : null))}
                   />
                 )}
                 {(() => {
@@ -1068,6 +1099,9 @@ function Toolbar(p: {
   waHref: (r: Row) => string;
   onClear: () => void;
   onAssign: (rows: Row[], id: number | null) => void;
+  /** the seller's confirmation agency (« The Closer »): its orders go to it, never to one of its agents */
+  agencies?: { id: number; name: string }[];
+  onGiveAgency?: (rows: Row[], agencyId: number) => void;
   onBlock?: () => void;
   onDelete?: () => void;
   onDuplicate?: () => void;
@@ -1116,16 +1150,41 @@ function Toolbar(p: {
               disabled={none}
               value=""
               onChange={(e) => {
-                const v = Number(e.target.value);
+                const raw = e.target.value;
+                if (raw.startsWith('a')) {
+                  const ag = Number(raw.slice(1));
+                  if (ag) p.onGiveAgency?.(p.rows, ag);
+                  return;
+                }
+                const v = Number(raw);
                 if (v) p.onAssign(p.rows, v);
               }}
             >
               <option value="">{t('confirmation.tb.assign')}</option>
-              {p.agents.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
+              {p.agencies?.length ? (
+                <>
+                  <optgroup label={t('confirmation.tb.agencyGroup')}>
+                    {p.agencies.map((a) => (
+                      <option key={`a${a.id}`} value={`a${a.id}`}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label={t('confirmation.tb.teamGroup')}>
+                    {p.agents.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                </>
+              ) : (
+                p.agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))
+              )}
             </select>
           </label>
         )}

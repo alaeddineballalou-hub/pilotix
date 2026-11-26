@@ -83,18 +83,25 @@ test('nested order responses never disclose line purchase prices to agents', asy
   await assert.rejects(rpc(conf, 'orders.update', { id: order.id, items: [{ productId: b, qty: 1 }] }), forbidden);
 });
 
-test('agency contract and person product scopes intersect, including stale or revoked assignments', async () => {
-  await db.query("INSERT INTO agency_routes (agency_id,task,product_id) VALUES (900,'confirmation',$1),(900,'confirmation',$2)", [a, b]);
+test('an agency works on every product of its tasks, its people on the products its chief gives them; none once revoked', async () => {
+  // (owner's rule, 26 Nov 2026: an agency's orders come by channel, not product — routing.ts; an old product route counts
+  // as the task)
+  await db.query("INSERT INTO agency_routes (agency_id,task,product_id) VALUES (900,'confirmation',$1)", [a]);
   const agent: Ctx = { ...conf, session: makeSession({ ...conf.session.profile, agencyId: 900, agencyProducts: [b, c] }) };
-  assert.deepEqual((await rpc(agent, 'catalog.assigned')).rows.map((p: any) => p.id), [b]);
-  assert.deepEqual((await rpc(agent, 'confirmation.catalog')).map((p: any) => p.id), [b]);
-  assert.deepEqual((await rpc(agent, 'orders.formData')).products.map((p: any) => p.id), [b]);
-  await assert.rejects(rpc(agent, 'orders.quote', { wilayaId: 16, items: [{ productId: c, qty: 1 }] }), forbidden);
+  const sorted = (ids: number[]) => [...ids].sort((x, y) => x - y);
+  assert.deepEqual(sorted((await rpc(agent, 'catalog.assigned')).rows.map((p: any) => p.id)), sorted([b, c]));
+  assert.deepEqual(sorted((await rpc(agent, 'confirmation.catalog')).map((p: any) => p.id)), sorted([b, c]));
+  assert.deepEqual(sorted((await rpc(agent, 'orders.formData')).products.map((p: any) => p.id)), sorted([b, c]));
+  await assert.rejects(rpc(agent, 'orders.quote', { wilayaId: 16, items: [{ productId: a, qty: 1 }] }), forbidden);
   await assert.rejects(rpc(agent, 'catalog.movements', {}), forbidden);
+  // its chief (no person scope): the whole catalogue
   const lead = { ...agent, session: makeSession({ ...agent.session.profile, agencyProducts: null }) };
-  assert.deepEqual((await rpc(lead, 'catalog.assigned')).rows.map((p: any) => p.id).sort((x: number, y: number) => x-y), [a, b]);
-  await db.query('DELETE FROM agency_routes WHERE agency_id=900 AND product_id=$1', [b]);
+  const all = Number((await db.query('SELECT count(*)::int AS n FROM products WHERE archived_at IS NULL'))[0].n);
+  assert.equal((await rpc(lead, 'catalog.assigned', { pageSize: 500 })).total, all);
+  // the task taken back: nothing at all
+  await db.query('DELETE FROM agency_routes WHERE agency_id=900');
   assert.equal((await rpc(agent, 'catalog.assigned')).total, 0);
+  assert.equal((await rpc(lead, 'catalog.assigned')).total, 0);
   const none = { ...agent, session: makeSession({ ...agent.session.profile, agencyProducts: [] }) };
   assert.equal((await rpc(none, 'catalog.assigned')).total, 0);
 });

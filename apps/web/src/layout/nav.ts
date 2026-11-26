@@ -157,17 +157,18 @@ export function lineFor(nav: NavItem[], page: string, sub: string | undefined): 
   return null;
 }
 
-/** Where a user lands when the address doesn't match a page they can see. */
-export function homeFor(roles: Role[], isAdmin: boolean): string {
+/** Where a user lands when the address doesn't match a page they can see (`own`: the person's own roles, not expanded). */
+export function homeFor(roles: Role[], isAdmin: boolean, own: Role[] = roles): string {
   const on = (page: string) => pageIsOn(page) && rightOn(menuRight(page));
   if (!isAdmin && roles.includes('livreur') && !roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r)) && on('tournee')) return 'tournee';
-  if (!isAdmin && roles.includes('confirmation') && !roles.includes('vendeur') && roles.length === 1 && on('confirmation')) return 'confirmation';
-  if (isPlainAgent(roles, isAdmin) && on('dashboard')) return 'dashboard';
-  // the Community manager: her chats first, else the comments
-  if (!isAdmin && cmOnly(roles)) {
+  // the Community manager: her chats first, else the comments (her role brings the confirmation of her own orders, so
+  // only her own roles tell her from a confirmation agent)
+  if (!isAdmin && cmOnly(own)) {
     if (on('messages')) return 'messages';
     if (on('cm')) return 'cm';
   }
+  if (!isAdmin && roles.includes('confirmation') && !roles.includes('vendeur') && roles.length === 1 && on('confirmation')) return 'confirmation';
+  if (isPlainAgent(roles, isAdmin) && on('dashboard')) return 'dashboard';
   return 'accueil';
 }
 

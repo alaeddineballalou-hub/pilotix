@@ -13,6 +13,7 @@ import { da, dayRange, n, pct, periodRange, when, wilaya, wilayaName } from '../
 import { namesOf } from '../../lib/items';
 import { openOrder } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
+import { useAgentName } from '../../lib/agentName';
 import { useScope } from '../../lib/seller';
 import { useInAgency, useSession } from '../../lib/session';
 import { store } from '../../lib/store';
@@ -818,6 +819,8 @@ const sellerOf = (o: Order) => (o as { seller?: { id: number; name: string } }).
 
 function OrderRow({ o, kind, coKind, fee, why, act, resp }: { o: Order; kind: Kind; coKind: string | null; fee?: number; why?: string | null; act?: ReactNode; resp?: Shown }) {
   const { t } = useTranslation();
+  // the seller sees his agency on its orders, never its agents
+  const who = useAgentName();
   const seller = sellerOf(o);
   const open = () => openOrder(o.id, seller?.id);
   const date = kind === 'livre' ? o.deliveredAt : kind === 'back' ? o.returnedAt ?? o.updatedAt : o.updatedAt;
@@ -832,7 +835,7 @@ function OrderRow({ o, kind, coKind, fee, why, act, resp }: { o: Order; kind: Ki
   return (
     // a card you tap to open the order; its own buttons (Swap) act without opening it
     <div className="pxn-o" role="button" tabIndex={0} onClick={open} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), open())}>
-      {kind === 'conf' ? <Who name={o.agentName} /> : <CoTag companyId={o.companyId} kind={coKind} name={o.companyName || o.livreurName} />}
+      {kind === 'conf' ? <Who name={who.conf(o)} /> : <CoTag companyId={o.companyId} kind={coKind} name={o.companyName || o.livreurName} />}
       <span className="pxn-om">
         <span className="pxn-o1">
           <b>{o.customerName}</b>
@@ -853,7 +856,7 @@ function OrderRow({ o, kind, coKind, fee, why, act, resp }: { o: Order; kind: Ki
         <span className="pxn-o3">
           {status}
           <small>
-            {kind === 'conf' && o.agentName ? `${o.agentName} · ` : ''}
+            {kind === 'conf' && who.conf(o) ? `${who.conf(o)} · ` : ''}
             {when(date)}
           </small>
         </span>

@@ -10,8 +10,10 @@
 //   amount) and its month counts its ad sets (marketers.ts).
 //
 // - Only the agency sets its prices. A change waits for the store's yes; the old prices stay until then.
-// - Only the store chooses what it gives: the tasks (confirmation, suivi) and its products (all of them: also the new
-//   ones). An order goes by its first product; products given to nobody stay with the store's own team.
+// - Only the store chooses what it gives: the tasks (confirmation, suivi, SAV). An agency's orders come by channel, not by
+//   product (owner's rule, 26 Nov 2026, routing.ts): every landing page's order goes to the boutique's confirmation
+//   agency; an order a person typed stays that person's. One agency per task in a boutique (clash). A marketer still
+//   gets products.
 // - The agency's chief picks the agents who work for each store: they get an account inside the store that opens only
 //   the agency's orders, with the confirmation and suivi screens (see agencyscope.ts).
 // - Pilotix counts each month's numbers; the agency asks to be paid, the store pays outside Pilotix and says so, the
@@ -39,6 +41,7 @@ import { addEvent } from './orders';
 import { assignNow } from './assign';
 import { tellAgency, tellDelegated } from './agencybell';
 import { routedSav } from './sav';
+import { followConfSide } from './routing';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { can } from './rights';
@@ -162,7 +165,8 @@ export function toLink(r: any): Link {
       tasks: kind === 'marketer' ? ['marketing'] : tasksOf(r.tasks).filter((k) => k !== 'marketing'),
       prices: cleanPrices(json(r.prices), kind),
       pricesNew: r.prices_new ? cleanPrices(json(r.prices_new), kind) : null,
-      products: productsOf(r.products),
+      // an agency works on every product (its orders come by channel: routing.ts); a marketer on the products given
+      products: kind === 'marketer' ? productsOf(r.products) : null,
       agents: [],
       createdAt: iso(r.created_at),
       startedAt: isoOrNull(r.started_at),
@@ -267,10 +271,11 @@ async function checkProducts(db: Db, products: number[] | null): Promise<number[
 }
 
 /**
- * Two agencies never get the same product for the same task (one may have « every product », the others named
- * products: those go to them). Returns why not, or null.
+ * One agency per task in a boutique (owner's rule, 26 Nov 2026): every landing page's order goes to its confirmation
+ * agency, and Suivi and SAV follow the side that confirmed (routing.ts) — two agencies on one task could not share
+ * them. Returns why not, or null.
  */
-async function clash(t: Tenancy, db: Db, storeId: number, exceptId: number, tasks: AgencyTask[], products: number[] | null, kind: PartnerKind = 'agency'): Promise<string | null> {
+async function clash(t: Tenancy, _db: Db, storeId: number, exceptId: number, tasks: AgencyTask[], _products: number[] | null, kind: PartnerKind = 'agency'): Promise<string | null> {
   // marketers share products: each one is judged on its own ad sets
   if (kind === 'marketer') return null;
   const others = (await t.platform.query(`${LINK_SQL} WHERE l.store_id = $1 AND l.status = 'active' AND l.id <> $2 AND a.kind = 'agency'`, [storeId, exceptId])).map(toLink);
@@ -278,16 +283,29 @@ async function clash(t: Tenancy, db: Db, storeId: number, exceptId: number, task
     const both = tasks.filter((k) => o.info.tasks.includes(k));
     if (!both.length) continue;
     const what = both.map((k) => TASK_FR[k]).join(' et ');
-    if (products === null && o.info.products === null) return `${o.info.agency.name} a déjà tous les produits pour la ${what}. Donnez des produits précis à l’une des deux agences.`;
-    if (products && o.info.products) {
-      const same = products.filter((p) => o.info.products!.includes(p));
-      if (same.length) {
-        const names = await productNames(db, same);
-        return `Déjà confié${same.length > 1 ? 's' : ''} à ${o.info.agency.name} pour la ${what} : ${same.map((p) => names.get(p) ?? `#${p}`).join(', ')}`;
-      }
-    }
+    return `${o.info.agency.name} fait déjà la ${what} de cette boutique : une seule agence par service. Retirez-lui ce service d’abord.`;
   }
   return null;
+}
+
+/**
+ * The agencies doing the confirmation of the store (its « Assigner un agent » menu: the seller gives orders to the agency,
+ * never to one of its agents). [] in a partner's space, the demo shop or a single-shop server.
+ */
+export async function confirmationAgencies(ctx: Ctx): Promise<{ id: number; name: string }[]> {
+  if (!ctx.t || !ctx.shop || ctx.shop.kind === 'agency' || ctx.shop.kind === 'marketer') return [];
+  const links = (await ctx.t.platform.query(`${LINK_SQL} WHERE l.store_id = $1 AND l.status = 'active' AND a.kind = 'agency' ORDER BY a.name`, [ctx.shop.id])).map(toLink);
+  return links.filter((L) => L.agencyOk && L.info.tasks.includes('confirmation')).map((L) => ({ id: L.info.agency.id, name: L.info.agency.name }));
+}
+
+/** The names of the store's agencies, for its screens (an agency's order shows the agency, never its agent). */
+export async function agencyNames(ctx: Ctx): Promise<{ id: number; name: string }[]> {
+  if (!ctx.t || !ctx.shop || ctx.shop.kind === 'agency' || ctx.shop.kind === 'marketer') return [];
+  const rows = await ctx.t.platform.query(
+    `SELECT DISTINCT a.id, a.name FROM platform.agency_links l JOIN platform.shops a ON a.id = l.agency_id WHERE l.store_id = $1 AND a.kind = 'agency' ORDER BY a.name`,
+    [ctx.shop.id],
+  );
+  return rows.map((r: any) => ({ id: num(r.id), name: String(r.name ?? '') }));
 }
 
 /**
@@ -318,16 +336,18 @@ async function releaseOrders(db: Db, agencyId: number, task: AgencyTask) {
   const theirs = '(SELECT id FROM profiles WHERE agency_id = $1)';
   if (task === 'sav') {
     await db.query(`UPDATE complaints SET sav_agency_id = NULL, assigned_to = NULL WHERE sav_agency_id = $1`, [agencyId]);
-  } else if (task === 'confirmation')
-    await db.query(
+  } else if (task === 'confirmation') {
+    const back = await db.query(
       `UPDATE orders SET conf_agency_id = NULL,
          agent_id = CASE WHEN agent_id IN ${theirs} THEN NULL ELSE agent_id END,
          assigned_at = CASE WHEN agent_id IN ${theirs} THEN NULL ELSE assigned_at END,
          locked_by = CASE WHEN locked_by IN ${theirs} THEN NULL ELSE locked_by END
-       WHERE conf_agency_id = $1 AND conf_status = ANY($2)`,
+       WHERE conf_agency_id = $1 AND conf_status = ANY($2) RETURNING id`,
       [agencyId, CONF_TODO],
     );
-  else
+    // their suivi comes back with them (routing.ts)
+    await followConfSide(db, back.map((r: any) => num(r.id)));
+  } else
     await db.query(
       `UPDATE orders SET follow_agency_id = NULL, follow_agent_id = CASE WHEN follow_agent_id IN ${theirs} THEN NULL ELSE follow_agent_id END
        WHERE follow_agency_id = $1 AND (follow_status IS NULL OR NOT (follow_status = ANY($2)))`,
@@ -846,6 +866,9 @@ export const agencyProcs = {
   }),
 
   // ---------------------------------------------------------------- the store's side (« Partenaires »: agencies, marketers)
+  /** The store's agencies by name: its screens show « The Closer » on an agency's order, never the agency's agent. */
+  'orders.agencyNames': proc(null, z.object({}), async (ctx) => agencyNames(ctx)),
+
   'partners.orderRouting': proc([], z.object({ orderId: Id }), async (ctx, { orderId }) => {
     const { t, id } = asStore(ctx);
     const order = await routingOrder(ctx.db, orderId);
@@ -873,6 +896,8 @@ export const agencyProcs = {
         const fields = i.task === 'confirmation' ? 'conf_agency_id = $2, agent_id = NULL, assigned_at = NULL' : 'follow_agency_id = $2, follow_agent_id = NULL';
         await db.query(`UPDATE orders SET ${fields}, route_product_id = COALESCE(route_product_id, (SELECT product_id FROM order_items WHERE order_id = $1 ORDER BY id LIMIT 1)),
           locked_by = NULL, locked_until = NULL, updated_at = now(), version = version + 1 WHERE id = $1`, [i.orderId, i.agencyId]);
+        // the suivi follows the side that confirms (routing.ts)
+        if (i.task === 'confirmation') await followConfSide(db, [i.orderId]);
       }
       await addEvent(db, i.orderId, ctx.session.profile.id, 'note', previous?.toString() ?? null, i.agencyId?.toString() ?? null, `Équipe responsable : ${TASK_FR[i.task]}`);
       return true;
@@ -923,7 +948,8 @@ export const agencyProcs = {
     if (!ag.verified) throw bad(`${who} n’est pas encore ${ag.kind === 'marketer' ? 'vérifié' : 'vérifiée'} par Pilotix`);
     if (!ag.prices || !hasPrice(ag.prices)) throw bad(`${who} n’a pas encore écrit ses prix`);
     const tasks = tasksFor(ag.kind, i.tasks);
-    const products = await checkProducts(ctx.db, i.products);
+    // an agency gets no products: its orders come by channel (routing.ts); a marketer the products given
+    const products = ag.kind === 'marketer' ? await checkProducts(ctx.db, i.products) : null;
     const why = await clash(t, ctx.db, id, 0, tasks, products, ag.kind);
     if (why) throw bad(why);
     try {
@@ -954,7 +980,7 @@ export const agencyProcs = {
     }
     if (!L.agencyOk) throw bad(L.info.kind === 'marketer' ? 'Ce marketer ne peut pas travailler pour le moment' : 'Cette agence ne peut pas travailler pour le moment');
     const tasks = tasksFor(L.info.kind, i.tasks ?? L.info.tasks);
-    const products = await checkProducts(ctx.db, i.products === undefined ? null : i.products);
+    const products = L.info.kind === 'marketer' ? await checkProducts(ctx.db, i.products === undefined ? null : i.products) : null;
     const why = await clash(t, ctx.db, id, L.info.id, tasks, products, L.info.kind);
     if (why) throw bad(why);
     await t.shop(L.agencySchema).tx(async db=>{
@@ -975,14 +1001,14 @@ export const agencyProcs = {
     return { ok: true };
   }),
 
-  /** What the store gives the agency (tasks, products): new orders follow at once. */
+  /** What the store gives the partner (an agency its tasks, a marketer its products too): new orders follow at once. */
   'partners.setWork': proc([], z.object({ id: Id, tasks: Tasks, products: Products, agencyAlerts: z.array(z.enum(ALL_TASKS)).max(3).optional() }), async (ctx, i) => {
     const { t, id } = asStore(ctx);
     const L = await storeLink(t, id, i.id);
     const editable = L.info.status === 'active' || (L.info.status === 'pending' && L.info.requestedBy === 'store');
     if (!editable) throw bad('Ce lien ne change plus');
     const tasks = tasksFor(L.info.kind, i.tasks);
-    const products = await checkProducts(ctx.db, i.products);
+    const products = L.info.kind === 'marketer' ? await checkProducts(ctx.db, i.products) : null;
     const why = await clash(t, ctx.db, id, L.info.id, tasks, products, L.info.kind);
     if (why) throw bad(why);
     await t.platform.query('UPDATE platform.agency_links SET tasks = $2, products = $3, agency_alerts = $4 WHERE id = $1', [L.info.id, JSON.stringify(tasks), products === null ? null : JSON.stringify(products), JSON.stringify(tasks.filter((task) => task !== 'marketing' && (i.agencyAlerts ?? L.info.agencyAlerts)?.includes(task)))]);

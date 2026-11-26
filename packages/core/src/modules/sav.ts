@@ -11,18 +11,23 @@ import { agencyLead, agencyOf, ownRowSql, ownTicketSql } from './agencyscope';
 import { savFee } from '../settings';
 import { tellAgency, tellDelegated } from './agencybell';
 import { settleTickets } from './tickets';
+import { sideSql } from './routing';
 
 const id = z.number().int().positive();
 const SAV_ROLES = ['confirmation', 'suivi', 'depot', 'sav'] as const;
 
 const originalProduct = (order: string) => `(SELECT product_id FROM order_items WHERE order_id = ${order} ORDER BY id LIMIT 1)`;
-const savRouteFor = (product: string) => `(SELECT agency_id FROM agency_routes WHERE task = 'sav'
-  AND (product_id = ${product} OR product_id IS NULL)
-  ORDER BY product_id NULLS LAST LIMIT 1)`;
+/** Does this agency do the SAV of the store ($n: the agency)? It does it on every product (routing.ts). */
+const doesSav = (agency: string) => `EXISTS (SELECT 1 FROM agency_routes WHERE task = 'sav' AND agency_id = ${agency})`;
+/**
+ * The agency doing the SAV of an order: the seller's own choice for this order (0: his own team), else the side that
+ * confirmed it (owner's rule, 26 Nov 2026, routing.ts: an agency doing the SAV of the orders it confirmed; one doing the
+ * SAV without the confirmation, of the landing pages' orders). The product no longer decides.
+ */
 export const routedSav = (order: string) => `(SELECT CASE
   WHEN sav_order.sav_agency_override = 0 THEN NULL
   WHEN EXISTS (SELECT 1 FROM agency_routes r WHERE r.task = 'sav' AND r.agency_id = sav_order.sav_agency_override) THEN sav_order.sav_agency_override
-  ELSE ${savRouteFor(originalProduct('sav_order.id'))}
+  ELSE ${sideSql('sav', 'sav_order')}
   END FROM orders sav_order WHERE sav_order.id = ${order})`;
 
 function savProductScope(ctx: Ctx, order: string) {
@@ -36,7 +41,7 @@ function savTicketScope(ctx: Ctx) {
   const me = Number(ctx.session.profile.id);
   const own = agencyLead(ctx) ? '' : ` AND (c.assigned_to = ${me} OR (c.assigned_to IS NULL AND c.created_by = ${me}))`;
   return ctx.session.roles.includes('sav')
-    ? `c.sav_agency_id = ${agency} AND ${routedSav('c.order_id')} = ${agency}${savProductScope(ctx, 'c.order_id')}${own}`
+    ? `c.sav_agency_id = ${agency} AND ${doesSav(String(agency))}${savProductScope(ctx, 'c.order_id')}${own}`
     : 'false';
 }
 
@@ -415,8 +420,7 @@ async function createExchangeLocked(ctx: Ctx, input: z.infer<typeof ExchangeInpu
       if (!pid) throw bad('Choisissez le nouveau produit');
       const agency = agencyOf(ctx);
       const allowed = ctx.session.profile.agencyProducts;
-      if (agency !== null && pid !== it.productId && ((allowed && !allowed.includes(pid)) ||
-        numOrNull((await ctx.db.query(`SELECT ${savRouteFor('$1::bigint')} AS agency`, [pid]))[0]?.agency) !== agency))
+      if (agency !== null && pid !== it.productId && allowed && !allowed.includes(pid))
         throw forbidden('Ce produit n’est pas confié à votre agence pour le SAV');
       if (input.kind === 'variant' && (!vid || vid === it.variantId)) throw bad('Choisissez une autre couleur / taille');
       const p = (await ctx.db.query('SELECT p.price, v.price AS vprice FROM products p LEFT JOIN product_variants v ON v.id = $2 WHERE p.id = $1', [pid, vid]))[0];
@@ -652,7 +656,7 @@ export const savProcs = {
   'sav.catalog': proc([...SAV_ROLES], z.object({}), async (ctx) => {
     const agency = agencyOf(ctx);
     const products = ctx.session.profile.agencyProducts ?? null;
-    const scope = agency === null ? '' : ` AND ${savRouteFor('p.id')} = $1 AND ($2::bigint[] IS NULL OR p.id = ANY($2))`;
+    const scope = agency === null ? '' : ` AND ${doesSav('$1')} AND ($2::bigint[] IS NULL OR p.id = ANY($2))`;
     const rows = await ctx.db.query(
       `SELECT v.id AS variant_id, v.title, p.id AS product_id, p.name, COALESCE(v.price, p.price) AS price FROM product_variants v JOIN products p ON p.id = v.product_id
        WHERE p.active AND v.active AND NOT p.is_service${scope} ORDER BY p.name, v.id`,

@@ -245,7 +245,7 @@ function App() {
     );
   const pages = space === 'agency' ? AGENCY_PAGES : space === 'marketer' ? MARKETER_PAGES : PAGES;
   // an agency's agent who leads no one has no Accueil: his Dashboard is his home
-  const homeOf = () => (space === 'agency' && isPlainAgent(session.roles, session.isAdmin) ? 'dashboard' : space !== 'store' ? 'accueil' : homeFor(session.roles, session.isAdmin));
+  const homeOf = () => (space === 'agency' && isPlainAgent(session.roles, session.isAdmin) ? 'dashboard' : space !== 'store' ? 'accueil' : homeFor(session.roles, session.isAdmin, session.profile.roles));
   let [page, sub, ...rest]: (string | undefined)[] = parts;
   if (page && ALIASES[page] && space === 'store') [page, sub] = [ALIASES[page][0], ALIASES[page][1] ?? sub];
   const moved = space === 'agency' ? agencyMoved(page, sub, rest) : null;

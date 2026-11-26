@@ -50,7 +50,8 @@ async function store() {
   const order = async (agentId: number | null) => {
     const phone = `0662${String(++n).padStart(6, '0')}`;
     const o: any = await call('orders.create', boss, { customerName: `Client ${n}`, phone, wilayaId: 16, commune: 'Kouba', address: 'Rue', items: [{ productId: pid, variantId: null, qty: 1 }] });
-    if (agentId) await boss.db.query('UPDATE orders SET agent_id = $1 WHERE id = $2', [agentId, o.id]);
+    // (one the owner types is his own since 26 Nov 2026, routing.ts: the test gives it, or leaves it free)
+    await boss.db.query('UPDATE orders SET agent_id = $1 WHERE id = $2', [agentId, o.id]);
     return { id: Number(o.id), phone, customerId: Number(o.customerId) };
   };
   return { t, shopId, boss, pid, A, B, M, S, order };
@@ -106,6 +107,8 @@ test('store agents open their own orders; managers supervise the store', async (
   assert.equal(mc.lists.cancelledConf, 1);
   // the work queues keep their rule: the manager still gives out the free orders in Confirmation
   const free: any = await call('orders.create', boss, { customerName: 'Libre', phone: '0662999999', wilayaId: 16, commune: 'Kouba', address: 'Rue', items: [{ productId: (await boss.db.query('SELECT id FROM products LIMIT 1'))[0].id, variantId: null, qty: 1 }] });
+  // nobody's yet, as an order that came by itself (one the owner types is his own: routing.ts)
+  await boss.db.query('UPDATE orders SET agent_id = NULL WHERE id = $1', [free.id]);
   const queue: any = await call('confirmation.list', M.ctx, { sub: 'nouvelles' });
   assert.ok(queue.rows.some((r: any) => r.id === Number(free.id)));
   assert.ok(!((await call('orders.list', M.ctx, {})) as any).rows.some((r: any) => r.id === Number(free.id)));
@@ -172,7 +175,9 @@ test('an agency agent never opens another customer of the store with the phone o
   const order = (pid: number, phone: string, name: string) => call('orders.create', admin, { customerName: name, phone, wilayaId: 31, commune: 'Oran', items: [{ productId: pid, variantId: null, qty: 1 }] }) as Promise<any>;
   const o1 = await order(prod.VELO, '0661000001', 'Agency Client');
   const o2 = await order(prod.POUS, '0661000002', 'Store Only Client');
-  assert.equal(o1.confAgencyId, ag.id);
+  // the seller gives o1 to his agency (an order he types stays his own: routing.ts, 26 Nov 2026)
+  await call('orders.giveAgency', admin, { ids: [o1.id], agencyId: ag.id });
+  assert.equal(((await call('orders.get', admin, { id: o1.id })) as any).confAgencyId, ag.id);
   assert.equal(o2.confAgencyId, null);
   const n: Ctx = { ...(await as(t, ag.id, 'nora@agence.dz', PW)), seller: shop.id };
   // a plain agent of the agency works on the orders given to her (the chief gives o1 to Nora)

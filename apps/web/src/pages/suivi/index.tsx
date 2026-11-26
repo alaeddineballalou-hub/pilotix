@@ -8,7 +8,8 @@ import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { SellerScope } from '../../lib/seller';
-import { Empty, ErrorBox, Icon, Loading, Pager, RemovableChip, StatusBadge } from '../../ui/kit';
+import { AgencyChip, Empty, ErrorBox, Icon, Loading, Pager, RemovableChip, StatusBadge } from '../../ui/kit';
+import { useAgentName } from '../../lib/agentName';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import type { PageProps } from '../registry';
@@ -323,6 +324,8 @@ function ParcelScope({ order, children, ambient = true }: { order: ParcelRow; ch
 /** The table shared by every Suivi list, with the column menu and the shared presets. */
 export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: ParcelRow[]; actions?: (o: ParcelRow) => ReactNode; empty: string; extra?: Record<number, Extra> }) {
   const { t } = useTranslation();
+  // the seller sees his agency on its orders, never its agents
+  const who = useAgentName();
   const { has } = useSession();
   const qc = useQueryClient();
   const unFollow = useAction('suivi.unassign', { success: (o) => t('suivi.agentRemoved', { ref: o.ref }) });
@@ -386,8 +389,9 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Parcel
           </>
         );
       case 'agent':
-        return <RemovableChip name={o.agentName} />;
+        return who.confAgency(o) ? <AgencyChip name={who.confAgency(o)!} /> : <RemovableChip name={o.agentName} />;
       case 'fagent':
+        if (who.storeSide && o.followAgencyId) return <AgencyChip name={who.follow(o)!} />;
         return <RemovableChip name={o.followAgentName} removeLabel={t('suivi.removeAgent')} disabled={unFollow.isPending} onRemove={has('suivi') ? () => {
           if (o.seller) void rpc('suivi.unassign', { id: o.id }, o.seller.id).then(() => qc.invalidateQueries(), (e) => toast(e.message, 'bad'));
           else unFollow.mutate({ id: o.id });

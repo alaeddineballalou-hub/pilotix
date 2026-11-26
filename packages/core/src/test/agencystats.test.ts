@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import { cleanCode, DEFAULT_MANAGEMENT_PLAN } from '@pilotix/shared';
 import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
 import { confirmSignup, loadShop, membershipsOf, passwordFromLink, startSignup, storeChoices } from '../platform';
+import { createOrder } from '../modules/orders';
 import { computePayroll } from '../modules/admin';
 
 /** a new team member's phone (required, one per person) */
@@ -56,8 +57,10 @@ async function agency(t: Tenancy, name: string, email: string) {
 }
 
 const PRICES = { perConfirmed: 0, perDelivered: 150, perUpsell: 50, monthly: 0, bonusRate: { min: 70, amount: 20 }, bonusVolume: { above: 0, amount: 0 } };
+// an order a landing page sent: it goes to the store's confirmation agency by its channel, whatever its product (routing.ts,
+// owner's rule 26 Nov 2026) — one a person types stays that person's
 const order = (ctx: Ctx, productId: number, phone: string) =>
-  call('orders.create', ctx, { customerName: 'Client', phone, wilayaId: 31, commune: 'Oran', items: [{ productId, variantId: null, qty: 1 }] }) as Promise<any>;
+  createOrder(ctx, { customerName: 'Client', phone, wilayaId: 31, commune: 'Oran', address: '', isStopdesk: false, channel: 'landing', items: [{ productId, variantId: null, qty: 1 }], discount: 0, confirm: false, isExchange: false } as any, ctx.db, { came: 'form' }) as Promise<any>;
 
 
 
@@ -77,11 +80,11 @@ test('agency Dashboard and Analyse: its orders only, the team for the chief, an 
   const inStore = async (email: string) => Number((await shop.db.query('SELECT id FROM profiles WHERE email = $1', [email]))[0].id);
   const [noraS, linaS] = [await inStore('nora@agence.dz'), await inStore('lina@agence.dz')];
 
-  // three orders for the agency (Vélo), one the store keeps (Poussette)
+  // three orders for the agency (from a landing page), one the store keeps (the seller typed it)
   const o1 = await order(admin, shop.products.VELO, '0661000201');
   const o2 = await order(admin, shop.products.VELO, '0661000202');
   const o3 = await order(admin, shop.products.VELO, '0661000203');
-  await order(admin, shop.products.POUS, '0661000204');
+  await call('orders.create', admin, { customerName: 'Client', phone: '0661000204', wilayaId: 31, commune: 'Oran', items: [{ productId: shop.products.POUS, variantId: null, qty: 1 }] });
   // Nora confirmed o1 (delivered since, with an upsell); Lina cancelled o2; o3 waits for someone
   await shop.db.query(`UPDATE orders SET agent_id = $2, conf_status = 'confirmed', confirmed_at = now(), follow_status = 'delivered', delivered_at = now(), has_upsell = true, total = 12000 WHERE id = $1`, [o1.id, noraS]);
   await shop.db.query(`UPDATE orders SET agent_id = $2, conf_status = 'cancelled' WHERE id = $1`, [o2.id, linaS]);

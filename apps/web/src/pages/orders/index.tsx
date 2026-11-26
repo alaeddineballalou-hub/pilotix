@@ -38,7 +38,7 @@ function HeaderKpis({ on }: { on?: 'livrees' | 'annulees' }) {
   const agency = useInAgency();
   const { session } = useSession();
   // the Community manager has no Dépôt or Suivi: her own Confirmées and En livraison
-  const cm = !!session && !session.isAdmin && cmOnly(session.roles);
+  const cm = !!session && !session.isAdmin && cmOnly(session.profile.roles);
   const k = (key: string, href: string, label: string, v: number | undefined, s: string, tone?: string) => (
     <a key={key} className={`kpi${tone ? ` t-${tone}` : ''}${v === 0 ? ' px-zero' : ''}${on === key ? ' bjsv-on' : ''}`} href={href}>
       <span className="l">{label}</span>
@@ -692,7 +692,7 @@ function CommandesDesk({ sub }: { sub?: string }) {
   // a confirmation agency works on its sellers' orders: no new order, no sync with the companies, not the seller's money
   const agency = useInAgency();
   // the Community manager follows her orders: not the companies' fees, not the money
-  const cm = !!session && !session.isAdmin && cmOnly(session.roles);
+  const cm = !!session && !session.isAdmin && cmOnly(session.profile.roles);
   // « Swap » on a parcel coming back, always (Suivi's rule): in Annulé's returns too
   const swap = useSwap();
 

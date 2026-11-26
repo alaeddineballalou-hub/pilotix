@@ -16,6 +16,7 @@ import { attackOf, CONFIRMED_LIKE, type Lead, leadOf } from './leadkind';
 import { reasonCode } from './pilotlearn';
 import { checkRules } from './pilotchecks';
 import { blackNumbers, shareBlacklist } from './sharedblacklist';
+import { confirmationAgencies } from './agencies';
 
 // ---------------------------------------------------------------- sub-pages
 export const CONF_SUBS = {
@@ -1006,7 +1007,9 @@ export const confirmationProcs = {
       getSetting(ctx.db, 'shop'),
       getSetting(ctx.db, 'calls'),
       agency === null
-        ? ctx.db.query(`SELECT id, name FROM profiles WHERE active AND roles && '{confirmation,agent_manager,vendeur,admin}'::text[] ORDER BY name`)
+        ? // the store's own people (its Community managers too: they confirm their own orders) — never an agency's
+          // agents: the seller gives an order to the agency itself (owner's rule, 26 Nov 2026)
+          ctx.db.query(`SELECT id, name FROM profiles WHERE active AND agency_id IS NULL AND roles && '{confirmation,agent_manager,vendeur,admin,cm}'::text[] ORDER BY name`)
         : // an agency's people: its own confirmation agents here, never the store's team (its chiefs give them its orders)
           ctx.db.query(`SELECT id, name FROM profiles WHERE active AND agency_id = $1 AND 'confirmation' = ANY(roles) ORDER BY name`, [agency]),
     ]);
@@ -1015,6 +1018,8 @@ export const confirmationProcs = {
       whatsappTemplate: shop.whatsappTemplate,
       calls,
       agents: agents.map((a: any) => ({ id: num(a.id), name: a.name as string })),
+      // the seller's « Assigner un agent »: his confirmation agency, as one line (orders.giveAgency)
+      agencies: agency === null && hasRole(ctx.session, 'vendeur') ? await confirmationAgencies(ctx).catch(() => []) : [],
       teams: (await getSetting(ctx.db, 'teams')).map((t) => ({ id: t.id, name: t.name })),
       manager: isManager(ctx) || agencyLead(ctx),
     };

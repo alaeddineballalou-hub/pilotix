@@ -27,6 +27,7 @@ import { CourierPanel } from '../suivi/CourierPanel';
 import { useIsPhone } from '../../lib/useMedia';
 import { TrustFlags } from './TrustFlags';
 import { AgencyRouting } from './AgencyRouting';
+import { useAgentName } from '../../lib/agentName';
 import { PathSection, PilotixMark, pilotixLine } from './OrderPath';
 import { rightOn } from '../../lib/rights';
 import { PhoneOf } from '../../ui/PhoneOf';
@@ -109,6 +110,8 @@ const PAY_TONE = { waiting: 'off', collected: 'info', ready: 'warn', received: '
 
 export default function OrderCard({ id, onClose }: { id: number; onClose: () => void }) {
   const { t } = useTranslation();
+  // the seller sees his agency on its orders, never its agents
+  const who = useAgentName();
   const q = useRpc('orders.get', { id }, { placeholderData: undefined });
   const ev = useRpc('orders.events', { id }, { placeholderData: undefined });
   useEffect(() => {
@@ -136,7 +139,7 @@ export default function OrderCard({ id, onClose }: { id: number; onClose: () => 
                 <div className="muted small">
                   {t('orders.card.created', { when: when(o.createdAt) })} · {t(`status.channel.${o.channel}`)}
                   {o.awareness && <span className="badge t-warn" title={o.promoCode ?? ''}> 🎁 {t('orders.awareness')}{o.promoCode ? ` · ${o.promoCode}` : ''}</span>}
-                  {o.agentName ? ` · ${t('orders.card.agent', { name: o.agentName })}` : ''}
+                  {who.conf(o) ? ` · ${t('orders.card.agent', { name: who.conf(o) })}` : ''}
                 </div>
               </>
             )}

@@ -8,6 +8,7 @@ import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCal
 import { confirmSignup, loadShop, membershipsOf, passwordFromLink, startSignup, storeChoices } from '../platform';
 import { computePayroll } from '../modules/admin';
 import { rotateTimes } from '../modules/assign';
+import { createOrder } from '../modules/orders';
 
 /** a new team member's phone (required, one per person) */
 let phoneN = 0;
@@ -57,8 +58,12 @@ async function agency(t: Tenancy, name: string, email: string) {
 }
 
 const PRICES = { perConfirmed: 0, perDelivered: 150, perUpsell: 50, monthly: 0, bonusRate: { min: 70, amount: 20 }, bonusVolume: { above: 0, amount: 0 } };
-const order = (ctx: Ctx, productId: number, phone: string) =>
-  call('orders.create', ctx, { customerName: 'Client', phone, wilayaId: 31, commune: 'Oran', items: [{ productId, variantId: null, qty: 1 }] }) as Promise<any>;
+// orders that came by themselves (routing.ts, owner's rule 26 Nov 2026): a landing page's goes to the agency (any product),
+// the shop's site's stays with the store's team, nobody's yet — one a person types stays that person's
+const came = (ctx: Ctx, productId: number, phone: string, how: 'form' | 'site') =>
+  createOrder(ctx, { customerName: 'Client', phone, wilayaId: 31, commune: 'Oran', address: '', isStopdesk: false, channel: how === 'form' ? 'landing' : 'site', items: [{ productId, variantId: null, qty: 1 }], discount: 0, confirm: false, isExchange: false } as any, ctx.db, { came: how }) as Promise<any>;
+const order = (ctx: Ctx, productId: number, phone: string) => came(ctx, productId, phone, 'form');
+const storeOrder = (ctx: Ctx, productId: number, phone: string) => came(ctx, productId, phone, 'site');
 
 
 test('the agency own Affectation: its orders in a store go to its own agents (on line in its space), the store orders stay with the store', async () => {
@@ -96,7 +101,7 @@ test('the agency own Affectation: its orders in a store go to its own agents (on
   const o1 = await order(admin, shop.products.VELO, '0661000101');
   assert.equal(o1.agentId, noraS, 'a new agency order goes to its agent at once');
   // the store's own order is not the agency's business (the store is on Manuel)
-  const o2 = await order(admin, shop.products.POUS, '0661000102');
+  const o2 = await storeOrder(admin, shop.products.POUS, '0661000102');
   assert.equal(o2.agentId, null);
   // Lina out of the split, Nora too: it waits
   await call('agency.assign.set', chief, { ...g.cfg, conf: { ...g.cfg.conf, mode: 'turn', max: 0 }, agents: { [nora.id]: { out: true, weight: 1, channels: [], products: [], from: null, to: null, langs: [], senior: false, shops: [], woman: false } } });
@@ -152,7 +157,7 @@ test('the agency own rotation: a late agency order goes to its chosen agent (her
   assert.equal(Number(ev[0].from_value), noraS);
 
   // the store's own orders never move with the agency's rotation (the store is on Manuel)
-  const own = await order(admin, shop.products.POUS, '0661000201');
+  const own = await storeOrder(admin, shop.products.POUS, '0661000201');
   await shop.db.query(`UPDATE orders SET agent_id = $2, assigned_at = now() - interval '3 hours' WHERE id = $1`, [own.id, noraS]);
   await call('agency.assign.run', chief, {});
   assert.equal(await agentOf(own.id), noraS);

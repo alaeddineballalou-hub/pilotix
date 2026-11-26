@@ -9,6 +9,7 @@ import { attachProfile, confirmSignup, loadShop, membershipsOf, passwordFromLink
 import { computePayroll } from '../modules/admin';
 import { tellFollow } from '../modules/inbox';
 import { pushOnly } from '../modules/push';
+import { createOrder } from '../modules/orders';
 
 /** a new team member's phone (required, one per person) */
 let phoneN = 0;
@@ -60,6 +61,10 @@ async function agency(t: Tenancy, name: string, email: string) {
 const PRICES = { perConfirmed: 0, perDelivered: 150, perUpsell: 50, monthly: 0, bonusRate: { min: 70, amount: 20 }, bonusVolume: { above: 0, amount: 0 } };
 const order = (ctx: Ctx, productId: number, phone: string) =>
   call('orders.create', ctx, { customerName: 'Client', phone, wilayaId: 31, commune: 'Oran', items: [{ productId, variantId: null, qty: 1 }] }) as Promise<any>;
+// an order a landing page sent: it goes to the store's confirmation agency by its channel, whatever its product (routing.ts,
+// owner's rule 26 Nov 2026) — one a person types stays that person's
+const pageOrder = (ctx: Ctx, productId: number, phone: string) =>
+  createOrder(ctx, { customerName: 'Client', phone, wilayaId: 31, commune: 'Oran', address: '', isStopdesk: false, channel: 'landing', items: [{ productId, variantId: null, qty: 1 }], discount: 0, confirm: false, isExchange: false } as any, ctx.db, { came: 'form' }) as Promise<any>;
 
 test('delegated SAV separates seller routing from agency assignment, role notifications and KPI alerts', async () => {
   const { t, p } = await server();
@@ -118,7 +123,8 @@ test('delegated SAV separates seller routing from agency assignment, role notifi
   assert.equal((await inbox(agent)).items.length, 0, 'the device test does not add a demo notification to the inbox');
   const agentAtSeller = { ...agent, seller: shop.id };
   const mapped = Number((await shop.db.query('SELECT id FROM profiles WHERE agency_id = $1 AND agency_profile_id = $2', [ag.id, agent.session.profile.id]))[0].id);
-  const delegated = await order(seller, shop.products.VELO, '0661800001');
+  // an agency doing the SAV without the confirmation: the landing pages' orders (routing.ts)
+  const delegated = await pageOrder(seller, shop.products.VELO, '0661800001');
   const own = await order(seller, shop.products.POUS, '0661800002');
   const makeTicket = (ctx: Ctx, orderId: number) => call('sav.create', ctx, { orderId, type: 'defect', details: 'Test SAV' }) as Promise<{ id: number }>;
   const ticket = await makeTicket(seller, delegated.id);
@@ -274,8 +280,9 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   const nh: any = await call('agency.home', noraAgency, {});
   assert.deepEqual([nh.lead, nh.links.length, nh.agency.prices], [false, 0, null]);
 
-  // orders go by their first product: the Vélo to the agency, the Poussette stays with the store's team
-  const o1 = await order(admin, shop.products.VELO, '0661000001');
+  // orders come by channel, not product (routing.ts, 26 Nov 2026): a landing page's goes to the agency, the one the seller
+  // types stays his own
+  const o1 = await pageOrder(admin, shop.products.VELO, '0661000001');
   const o2 = await order(admin, shop.products.POUS, '0661000002');
   assert.equal(o1.confAgencyId, ag.id);
   assert.equal(o2.confAgencyId, null);
@@ -292,7 +299,9 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   await assert.rejects(call('orders.get', n, { id: o1.id }), /ne vous est pas donnée/);
   const noraHere = Number((await shop.db.query(`SELECT id FROM profiles WHERE email = 'nora@agence.dz'`))[0].id);
   await assert.rejects(call('orders.assignAgent', admin, { ids: [o1.id], agentId: noraHere }), /équipe qui gère la confirmation/);
-  await assert.rejects(call('orders.assignAgent', admin, { ids: [o1.id], agentId: null }), /équipe qui gère la confirmation/);
+  // the seller's « Désassigner » leaves the agency's order with it (he takes it back by giving it to one of his people)
+  await call('orders.assignAgent', admin, { ids: [o1.id], agentId: null });
+  assert.equal((await call('orders.get', admin, { id: o1.id }) as { confAgencyId: number | null }).confAgencyId, ag.id);
   const sellerRules = await call('notify.get', admin, {}) as { rules: Record<string, object> };
   await call('notify.set', admin, { rules: { order: { ...sellerRules.rules.order, on: false } } });
   await call('orders.assignAgent', { ...chief, seller: shop.id }, { ids: [o1.id], agentId: noraHere });
@@ -335,7 +344,7 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   // the store's own agent: the orders no agency handles
   await call('users.create', admin, { phone: tph(), name: 'Samia', email: 'samia@oran.dz', password: PW, roles: ['confirmation'] });
   const own = await as(t, shop.id, 'samia@oran.dz', PW);
-  const o3 = await order(admin, shop.products.VELO, '0661000003');
+  const o3 = await pageOrder(admin, shop.products.VELO, '0661000003');
   // she sees only the orders given to her (none yet): « Commande suivante » gives her nothing until the owner gives
   // her the free one no agency handles
   assert.deepEqual(((await call('confirmation.list', own, { sub: 'nouvelles' })) as any).rows.map((o: any) => o.id), []);
@@ -385,7 +394,8 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   await call('partners.acceptPrices', admin, { id: linkId });
   assert.deepEqual([((await call('partners.link', admin, { id: linkId })) as any).link.prices.perDelivered], [200]);
 
-  // a second agency: never the same product for the same task; « every product » for the rest
+  // a second agency: one agency per task in a boutique (routing.ts) — the confirmation stays Agence Rapide's; the other
+  // does the suivi without the confirmation: it follows the landing pages' orders
   const ag2 = await agency(t, 'Call Center Sétif', 'lina@setif.dz');
   await p('p.agencies.verify', { id: ag2.id, verified: true });
   const chief2 = await as(t, ag2.id, 'lina@setif.dz', PW);
@@ -393,12 +403,12 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   assert.deepEqual(await call('inbox.read', chief2, { ids: [invitation.id] }), { read: 0 });
   await call('agency.prices', chief2, { prices: { ...PRICES, perConfirmed: 40, perDelivered: 0 } });
   const req2: any = await call('agency.request', chief2, { storeId: shop.id, tasks: ['confirmation', 'suivi'] });
-  await assert.rejects(call('partners.answer', admin, { id: req2.id, accept: true, products: [shop.products.VELO] }), /Déjà confié à Agence Rapide pour la confirmation : Vélo/);
-  await call('partners.answer', admin, { id: req2.id, accept: true, products: null });
-  const o4 = await order(admin, shop.products.VELO, '0661000004');
-  const o5 = await order(admin, shop.products.CASQ, '0661000005');
+  await assert.rejects(call('partners.answer', admin, { id: req2.id, accept: true }), /Agence Rapide fait déjà la confirmation de cette boutique/);
+  await call('partners.answer', admin, { id: req2.id, accept: true, tasks: ['suivi'] });
+  const o4 = await pageOrder(admin, shop.products.VELO, '0661000004');
+  const o5 = await pageOrder(admin, shop.products.CASQ, '0661000005');
   assert.deepEqual([o4.confAgencyId, o4.followAgencyId], [ag.id, ag2.id]);
-  assert.deepEqual([o5.confAgencyId, o5.followAgencyId], [ag2.id, ag2.id]);
+  assert.deepEqual([o5.confAgencyId, o5.followAgencyId], [ag.id, ag2.id]);
 
   // Pilotix suspends the first agency: Nora stops at once; its orders wait with it (the owner's rule, 25 Nov 2026)
   const waiting = Number((await shop.db.query('SELECT count(*)::int AS n FROM orders WHERE conf_agency_id = $1 AND conf_status = $2', [ag.id, 'new']))[0].n);
@@ -408,11 +418,11 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   assert.equal(Number((await shop.db.query('SELECT count(*)::int AS n FROM orders WHERE conf_agency_id = $1 AND conf_status = $2', [ag.id, 'new']))[0].n), waiting);
   // the confirmed one stays counted for the agency (it gets paid when it is delivered)
   assert.equal(Number((await shop.db.query('SELECT conf_agency_id FROM orders WHERE id = $1', [o1.id]))[0].conf_agency_id), ag.id);
-  // new Vélo orders: the other agency has every product now
-  assert.equal((await order(admin, shop.products.VELO, '0661000006')).confAgencyId, ag2.id);
+  // while it is stopped, new landing pages' orders stay with the store's team (the other agency does not confirm)
+  assert.equal((await pageOrder(admin, shop.products.VELO, '0661000006')).confAgencyId, null);
   await p('p.shops.setStatus', { id: ag.id, status: 'active' });
   assert.equal((await shop.db.query(`SELECT active FROM profiles WHERE email = 'nora@agence.dz'`))[0].active, true);
-  assert.equal((await order(admin, shop.products.VELO, '0661000007')).confAgencyId, ag.id);
+  assert.equal((await pageOrder(admin, shop.products.VELO, '0661000007')).confAgencyId, ag.id);
 
   // the agency closes Nora's account in its team: she stops in the store too
   const noraAg = Number((await t.shop(ag.schema).query(`SELECT id FROM profiles WHERE email = 'nora@agence.dz'`))[0].id);
@@ -460,12 +470,13 @@ test('an agency asks a store: its prices for that store; the store chooses what 
     { title: 'Demande de collaboration refusée', body: 'Boutique Alger' },
   ]);
   const d: any = await call('partners.link', admin, { id: r2.id });
-  assert.deepEqual([d.link.status, d.link.prices.monthly, d.link.products], ['active', 20000, [shop.products.VELO, shop.products.CASQ]]);
+  // an agency gets every product (its orders come by channel: routing.ts), whatever the store ticked
+  assert.deepEqual([d.link.status, d.link.prices.monthly, d.link.products], ['active', 20000, null]);
   // the fixed amount counts in the month it works
   assert.equal(d.bill.total, 20000);
   // the store changes what it gives at any time: suivi too, every product
   await call('partners.setWork', admin, { id: r2.id, tasks: ['confirmation', 'suivi'], products: null });
-  const o = await order(admin, shop.products.POUS, '0662000001');
+  const o = await pageOrder(admin, shop.products.POUS, '0662000001');
   assert.deepEqual([o.confAgencyId, o.followAgencyId], [ag.id, ag.id]);
   // the agency ends it: the store's own team gets the order back
   await call('agency.end', chief, { id: r2.id });
@@ -512,22 +523,22 @@ test('an agency works on several sellers: one at a time or all together, its peo
   await call('agency.answer', chief, { id: lb.id, accept: true });
 
   // Utilisateurs: Nora works for seller A on the Vélo only; Ali for every seller; Lina for seller B only
-  await assert.rejects(call('users.create', chief, { phone: tph(), name: 'Nora', email: 'nora@centre.dz', password: PW, roles: ['confirmation'], sellers: [{ store: a.id, products: [a.products.CASQ] }] }), /pas confié/);
   const nora: any = await call('users.create', chief, { phone: tph(), name: 'Nora', email: 'nora@centre.dz', password: PW, roles: ['confirmation'], sellers: [{ store: a.id, products: [a.products.VELO] }] });
   await call('users.create', chief, { phone: tph(), name: 'Ali', email: 'ali@centre.dz', password: PW, roles: ['confirmation'] });
   const lina: any = await call('users.create', chief, { phone: tph(), name: 'Lina', email: 'lina@centre.dz', password: PW, roles: ['confirmation', 'suivi'], sellers: [{ store: b.id, products: null }] });
   assert.deepEqual(nora.agencySellers, [{ store: a.id, products: [a.products.VELO] }]);
-  assert.deepEqual(((await call('agency.products', chief, { store: a.id })) as any[]).map((x) => x.name), ['Poussette', 'Vélo']);
+  // every product of each seller (an agency's orders come by channel: routing.ts)
+  assert.deepEqual(((await call('agency.products', chief, { store: a.id })) as any[]).map((x) => x.name), ['Casque', 'Poussette', 'Vélo']);
   assert.deepEqual(((await call('agency.products', chief, { store: b.id })) as any[]).map((x) => x.name), ['Casque', 'Poussette', 'Vélo']);
   const home: any = await call('agency.home', chief, {});
   const agentsOf = (store: number) => home.links.find((l: any) => l.store.id === store).agents.map((x: any) => x.name);
   assert.deepEqual([agentsOf(a.id), agentsOf(b.id)], [['Ali', 'Nora', 'Samir'], ['Ali', 'Lina', 'Samir']]);
 
-  const va = await order(adminA, a.products.VELO, '0663000001');
-  const pa = await order(adminA, a.products.POUS, '0663000002');
-  const cb = await order(adminB, b.products.CASQ, '0663000003');
+  const va = await pageOrder(adminA, a.products.VELO, '0663000001');
+  const pa = await pageOrder(adminA, a.products.POUS, '0663000002');
+  const cb = await pageOrder(adminB, b.products.CASQ, '0663000003');
   await new Promise((r) => setTimeout(r, 5));
-  const vb = await order(adminB, b.products.VELO, '0663000004');
+  const vb = await pageOrder(adminB, b.products.VELO, '0663000004');
   assert.deepEqual([va.confAgencyId, pa.confAgencyId, cb.confAgencyId, vb.confAgencyId], [ag.id, ag.id, ag.id, ag.id]);
 
   const ctxOf = async (email: string, seller?: number | 'all'): Promise<Ctx> => ({ ...(await as(t, ag.id, email, PW)), ...(seller !== undefined ? { seller } : {}) });
@@ -558,7 +569,7 @@ test('an agency works on several sellers: one at a time or all together, its peo
   const noraCatalog: any = await call('catalog.assigned', await ctxOf('nora@centre.dz', 'all'), {});
   assert.deepEqual(noraCatalog.rows.map((r: any) => [r.seller.id, r.id]), [[a.id, a.products.VELO]]);
   const combinedCatalog: any = await call('catalog.assigned', { ...chief, seller: 'all' }, { pageSize: 2, page: 2 });
-  assert.equal(combinedCatalog.total, 5);
+  assert.equal(combinedCatalog.total, 6);
   assert.equal(combinedCatalog.rows.length, 2);
   assert.ok(combinedCatalog.rows.every((r: any) => !('cost' in r) && !('reserved' in r)));
   await assert.rejects(call('catalog.assigned', await ctxOf('nora@centre.dz', b.id), {}), /ne travaillez pas pour ce vendeur/);

@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
 import { confirmSignup, loadShop, passwordFromLink, startSignup } from '../platform';
+import { createOrder } from '../modules/orders';
 
 let phoneN = 0;
 const tph = () => `072${String(++phoneN).padStart(7, '0')}`;
@@ -49,8 +50,10 @@ async function agency(t: Tenancy, name: string, email: string) {
   return { id: made.shop.id as number, schema: made.shop.schema as string };
 }
 
+// an order a landing page sent: it goes to the store's confirmation agency by its channel, whatever its product (routing.ts,
+// owner's rule 26 Nov 2026) — one a person types stays that person's
 const order = (ctx: Ctx, productId: number, phone: string) =>
-  call('orders.create', ctx, { customerName: 'Client', phone, wilayaId: 31, commune: 'Oran', items: [{ productId, variantId: null, qty: 1 }] }) as Promise<any>;
+  createOrder(ctx, { customerName: 'Client', phone, wilayaId: 31, commune: 'Oran', address: '', isStopdesk: false, channel: 'landing', items: [{ productId, variantId: null, qty: 1 }], discount: 0, confirm: false, isExchange: false } as any, ctx.db, { came: 'form' }) as Promise<any>;
 const ids = (out: any) => out.rows.map((o: any) => o.id);
 
 test('an agency: its chief and chefs d’équipe give its orders to its agents; a plain agent sees only his own', async () => {

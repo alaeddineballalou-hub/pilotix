@@ -296,8 +296,9 @@ test('the size guide (a product with a « Taille » option) and Vente en plus (p
 
 test('a confirmation agency writes the guides of the products it works on, and only those', async () => {
   const bib = Number((await db.query(`SELECT id FROM products WHERE sku = 'PX-BIB'`))[0].id);
-  await db.query(`INSERT INTO agency_routes (agency_id, task, product_id) VALUES (900, 'confirmation', $1), (900, 'confirmation', $2)`, [chair, bib]);
-  const agency: Ctx = { ...conf, session: makeSession({ ...conf.session.profile, agencyId: 900, agencyProducts: null, roles: ['confirmation'] } as any) };
+  await db.query(`INSERT INTO agency_routes (agency_id, task, product_id) VALUES (900, 'confirmation', NULL)`);
+  // the agency works on every product (routing.ts); this person of it, on the two its chief gave her
+  const agency: Ctx = { ...conf, session: makeSession({ ...conf.session.profile, agencyId: 900, agencyProducts: [chair, bib], roles: ['confirmation'] } as any) };
   assert.deepEqual(((await call('catalog.guides', agency, {})) as any).rows.map((r: any) => r.id).sort((a: number, b: number) => a - b), [chair, bib].sort((a, b) => a - b));
   const facts: any = await call('catalog.guideFacts', agency, { id: bib });
   assert.equal(facts.name, 'Biberon anti-colique 260 ml');

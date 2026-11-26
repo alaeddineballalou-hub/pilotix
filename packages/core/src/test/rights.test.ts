@@ -76,7 +76,9 @@ test('the old ticks become the first rights, as Pilotix read them for each role'
     const cc = Object.fromEntries(kinds.map((k, i) => [k, !!(mask & (1 << i))])) as Record<(typeof kinds)[number], boolean>;
     const rb = Object.fromEntries(kinds.map((k, i) => [k, !!((15 - mask) & (1 << i))])) as Record<(typeof kinds)[number], boolean>;
     const rr = rightsFromOldTicks({ changeCompany: cc, rulesBy: rb, people: [] });
-    for (const r of RIGHTS_ROLES) {
+    // the Community manager came after the old ticks were read (25 Nov 2026): no tick ever named her (since 26 Nov her
+    // role brings the confirmation of her own orders, which those ticks never meant)
+    for (const r of RIGHTS_ROLES.filter((x) => x !== 'cm')) {
       const roles = expandRoles([r === 'agence' ? 'confirmation' : (r as Role)]);
       const s = { isAdmin: false, roles, profile: { canAssign: false, agencyId: r === 'agence' ? 3 : null } };
       const set = rightsOf({ id: 9, roles: [r === 'agence' ? 'confirmation' : (r as Role)], agencyId: r === 'agence' ? 3 : null }, rr);

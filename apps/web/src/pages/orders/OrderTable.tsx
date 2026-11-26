@@ -4,7 +4,8 @@ import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, when, wilaya, wilayaName } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
-import { BulkBar, Empty, Loading, Pager, RemovableChip, SortTh, StatusBadge } from '../../ui/kit';
+import { AgencyChip, BulkBar, Empty, Loading, Pager, RemovableChip, SortTh, StatusBadge } from '../../ui/kit';
+import { useAgentName } from '../../lib/agentName';
 import { useAction } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { confLabel } from './shared';
@@ -69,6 +70,8 @@ export interface OrderTableProps {
 
 export function OrderTable(p: OrderTableProps) {
   const { t } = useTranslation();
+  // the seller sees his agency on its orders, never its agents
+  const who = useAgentName();
   const { has } = useSession();
   const canAgent = has('agent_manager', 'vendeur');
   const canFollow = has('suivi');
@@ -234,13 +237,13 @@ export function OrderTable(p: OrderTableProps) {
       case 'agent':
         return (
           <td key={c} className="hide-m" data-l={label[c]}>
-            <RemovableChip name={o.agentName} removeLabel={t('confirmation.removeAgent')} disabled={unAgent.isPending} onRemove={canAgent ? () => unAgent.mutate({ ids: [o.id], agentId: null }) : undefined} />
+            {who.confAgency(o) ? <AgencyChip name={who.confAgency(o)!} /> : <RemovableChip name={o.agentName} removeLabel={t('confirmation.removeAgent')} disabled={unAgent.isPending} onRemove={canAgent ? () => unAgent.mutate({ ids: [o.id], agentId: null }) : undefined} />}
           </td>
         );
       case 'fagent':
         return (
           <td key={c} className="hide-m" data-l={label[c]}>
-            <RemovableChip name={o.followAgentName} removeLabel={t('suivi.removeAgent')} disabled={unFollow.isPending} onRemove={canFollow ? () => unFollow.mutate({ id: o.id }) : undefined} />
+            {who.storeSide && o.followAgencyId ? <AgencyChip name={who.follow(o)!} /> : <RemovableChip name={o.followAgentName} removeLabel={t('suivi.removeAgent')} disabled={unFollow.isPending} onRemove={canFollow ? () => unFollow.mutate({ id: o.id }) : undefined} />}
           </td>
         );
       case 'since':

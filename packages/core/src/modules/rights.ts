@@ -254,6 +254,8 @@ export const PROC_RIGHTS: Record<string, Need> = {
   // a confirmation agency's chief and its chefs d'équipe give the agency's orders to its own agents: the agency decides
   // that, not the store's « Rôles » (agencyscope.ts checks who and to whom)
   'orders.assignAgent': (i, ctx) => (i.agentId !== ctx.session.profile.id && !agencyLead(ctx) ? 'act:orders.give' : null),
+  // the seller gives orders to his confirmation agency (« Assigner un agent » › the agency)
+  'orders.giveAgency': 'act:orders.give',
   'customers.setBlacklist': 'act:orders.blacklist',
   'delivery.send': 'act:orders.send',
   'delivery.cancel': 'act:orders.parcelCancel',

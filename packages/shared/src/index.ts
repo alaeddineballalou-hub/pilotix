@@ -24,8 +24,9 @@ import type { OrigLine } from './upsell';
 import type { AgencySellerWork } from './agency';
 
 // ---------------------------------------------------------------- roles
-// 'cm': the Community manager (owner's choice, 25 Nov 2026): Pilot Message and Pilot Comments only — she answers the
-// chats and the comments, and types the orders of a chat or a call (CM_CHANNELS), which then go the normal way
+// 'cm': the Community manager (owner's choice, 25 Nov 2026): Pilot Message and Pilot Comments — she answers the chats and
+// the comments, and types the orders of a chat or a call (CM_CHANNELS). They stay hers and she confirms them herself
+// (26 Nov 2026), with the confirmation agent's screens on her own orders only: the role brings the confirmation.
 export const ROLES = ['admin', 'vendeur', 'agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'marketer', 'sav', 'cm'] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -33,6 +34,7 @@ export type Role = (typeof ROLES)[number];
 export const ROLE_INCLUDES: Partial<Record<Role, Role[]>> = {
   vendeur: ['confirmation', 'suivi', 'depot', 'marketer'],
   agent_manager: ['confirmation'],
+  cm: ['confirmation'],
 };
 
 /** All roles a user effectively has (own roles + what they include). */
@@ -117,8 +119,10 @@ export const CM_CHANNELS: readonly SalesChannel[] = ['facebook', 'instagram', 'w
 /** The order channel of a chat of Pilot Message (Messenger is « facebook »). */
 export const CHAT_ORDER_CHANNEL: Readonly<Record<string, SalesChannel>> = { whatsapp: 'whatsapp', messenger: 'facebook', instagram: 'instagram', tiktok: 'tiktok' };
 /**
- * A Community manager and nothing more (her roles as the session has them, expanded): no confirmation, suivi or dépôt
- * work, not a seller, a manager or an administrator. Her orders are only those of a chat or a call; she sees her own.
+ * A Community manager and nothing more — pass her OWN roles (`profile.roles`), not the expanded ones: the role brings the
+ * confirmation (she confirms her own orders), so only her own roles tell her from a confirmation agent who is also a
+ * Community manager. No confirmation, suivi or dépôt work of her own, not a seller, a manager or an administrator: her
+ * orders are only those of a chat or a call; she sees her own.
  */
 export const cmOnly = (roles: readonly Role[]): boolean =>
   roles.includes('cm') && !roles.some((r) => r === 'admin' || r === 'vendeur' || r === 'agent_manager' || r === 'confirmation' || r === 'suivi' || r === 'depot');

@@ -39,11 +39,13 @@ before(async () => {
   item = { productId: Number(p.id), variantId: p.vid === null ? null : Number(p.vid), qty: 1 };
 });
 
-test('her role: Pilot Message, Pilot Comments and her orders — never posting, the confirmation or the rest', () => {
+test('her role: Pilot Message, Pilot Comments, her orders and their confirmation — never posting or the rest', () => {
   const r = rightsOf({ id: 1, roles: ['cm'] }, NO_ROLE_RIGHTS);
-  for (const id of ['page:messages', 'page:cm', 'act:dellal.reply', 'act:cm.reply', 'act:orders.create', 'page:commandes', 'tab:commandes/confirmees', 'tab:commandes/enroute', 'tab:commandes/livrees', 'tab:commandes/annulees', 'tab:commandes/tout'])
+  for (const id of ['page:messages', 'page:cm', 'act:dellal.reply', 'act:cm.reply', 'act:orders.create', 'page:commandes', 'tab:commandes/confirmees', 'tab:commandes/enroute', 'tab:commandes/livrees', 'tab:commandes/annulees', 'tab:commandes/tout', 'page:confirmation'])
     assert.ok(r.has(id), `${id}: hers by default`);
-  for (const id of ['page:social', 'page:createur', 'page:spy', 'page:comptes', 'page:confirmation', 'page:suivi', 'page:depot', 'page:sav', 'page:clients', 'page:produits', 'page:marketing', 'page:landing', 'act:social.publish', 'act:orders.cancel', 'act:orders.items', 'act:orders.customer', 'act:costs'])
+  // she confirms her own orders (owner's choice, 26 Nov 2026): her role brings what a confirmation agent has
+  for (const id of rightsOf({ id: 2, roles: ['confirmation'] }, NO_ROLE_RIGHTS)) assert.ok(r.has(id), `${id}: a confirmation agent's, hers too`);
+  for (const id of ['page:social', 'page:createur', 'page:spy', 'page:comptes', 'page:depot', 'page:clients', 'page:produits', 'page:marketing', 'page:landing', 'act:social.publish', 'act:costs'])
     assert.ok(!r.has(id), `${id}: never hers`);
 });
 
@@ -54,7 +56,7 @@ test('she answers the chats and the comments, and never posts', async () => {
   await assert.rejects(call('dellal.settings.get', lina, {}), (e: any) => e.code === 'forbidden');
 });
 
-test('the order of a chat or a call goes to the confirmation as « Nouvelle »; nothing else', async () => {
+test('the order of a chat or a call stays hers as « Nouvelle »: she confirms it herself, never while typing it', async () => {
   const o: any = await call('orders.create', lina, order({ channel: 'instagram' }));
   assert.equal(o.confStatus, 'new');
   assert.equal(o.channel, 'instagram');
@@ -64,13 +66,17 @@ test('the order of a chat or a call goes to the confirmation as « Nouvelle »; 
   assert.equal(call1.channel, 'appel');
   for (const channel of ['site', 'landing', 'autre'])
     await assert.rejects(call('orders.create', lina, order({ channel })), /chat ou d’un appel/, channel);
-  await assert.rejects(call('orders.create', lina, order({ channel: 'facebook', confirm: true })), /confirmation/);
+  await assert.rejects(call('orders.create', lina, order({ channel: 'facebook', confirm: true })), /après votre appel/);
   const company = Number((await db.query('SELECT id FROM delivery_companies WHERE active ORDER BY id LIMIT 1'))[0].id);
   await assert.rejects(call('orders.create', lina, order({ channel: 'facebook', companyId: company })), /société de livraison/);
   await assert.rejects(call('orders.create', lina, order({ channel: 'facebook', isExchange: true })), /SAV/);
-  // she never confirms, changes or cancels an order
-  await assert.rejects(call('orders.setConf', lina, { ids: [o.id], status: 'confirmed' }), (e: any) => e.code === 'forbidden');
-  await assert.rejects(call('orders.update', lina, { id: o.id, address: 'Ailleurs' }), (e: any) => e.code === 'forbidden');
+  // it stays hers (owner's choice, 26 Nov 2026): she works it in Confirmation — her own orders only
+  assert.equal(o.agentId, linaId);
+  await call('orders.setConf', lina, { ids: [o.id], status: 'no_answer' });
+  await call('orders.update', lina, { id: o.id, address: 'Ailleurs' });
+  const other = Number((await db.query('SELECT id FROM orders WHERE created_by IS DISTINCT FROM $1 AND agent_id IS DISTINCT FROM $1 ORDER BY id LIMIT 1', [linaId]))[0].id);
+  await assert.rejects(call('orders.setConf', lina, { ids: [other], status: 'no_answer' }), (e: any) => e.code === 'forbidden');
+  await assert.rejects(call('orders.update', lina, { id: other, address: 'Ailleurs' }), (e: any) => e.code === 'forbidden');
 });
 
 test('she sees the orders she typed; her agent manager sees them, another manager does not', async () => {
@@ -84,10 +90,10 @@ test('she sees the orders she typed; her agent manager sees them, another manage
   assert.deepEqual(listed.rows.map((r: any) => r.id), [mine.id]);
   assert.deepEqual((await call('orders.list', yacine, { ids: [mine.id] })).rows.map((r: any) => r.id), [mine.id]);
   assert.deepEqual((await call('orders.list', amel, { ids: [mine.id] })).rows.length, 0);
-  // the road above her lists counts her own orders still at the confirmation (she has no queue of her own)
-  const mineNew = Number((await db.query(`SELECT count(*)::int AS n FROM orders WHERE created_by = $1 AND conf_status = 'new' AND NOT is_exchange`, [linaId]))[0].n);
+  // her confirmation numbers: her own queue (the orders she keeps, 26 Nov 2026)
+  const mineNew = Number((await db.query(`SELECT count(*)::int AS n FROM orders WHERE agent_id = $1 AND conf_status = 'new' AND NOT is_exchange`, [linaId]))[0].n);
   assert.equal((await call('orders.counts', lina, {})).conf.new, mineNew);
-  // her team's confirmation boards do not list her (she never confirms)
+  // her team's boards show her as their Community manager
   const meta = await call('stats.dashMeta', await as(EMAILS.vendeur), {});
   assert.ok(meta.agents.some((a: any) => a.id === linaId && a.cm === true && a.managerId === yacine.session.profile.id));
 });
@@ -148,7 +154,10 @@ test('she follows her orders: her Confirmées at each stage of the dépôt, then
   assert.equal(c.lists.confirmees, 2);
   assert.deepEqual(c.lists.stages, { nostock: 0, preparer: 1, prepares: 0, dispatchees: 1 });
   assert.equal(c.lists.road, 1);
-  // the agents' work lists stay closed to her
-  await assert.rejects(call('confirmation.list', nour, { sub: 'confirmees' }), (e: any) => e.code === 'forbidden');
-  await assert.rejects(call('suivi.list', nour, { tab: 'enlivraison' }), (e: any) => e.code === 'forbidden');
+  // since 26 Nov 2026 she confirms her own orders: Confirmation and En livraison open to her, with her own orders only
+  const own = new Set([toPrep.id, handed.id, taken.id, waiting.id]);
+  const listed = ((await call('confirmation.list', nour, { sub: 'confirmees' })) as any).rows.map((x: any) => Number(x.id));
+  assert.ok(listed.length > 0 && listed.every((id: number) => own.has(id)), 'Confirmation › Confirmées: hers only');
+  const road = ((await call('suivi.list', nour, { tab: 'enlivraison' })) as any).rows.map((x: any) => Number(x.id));
+  assert.ok(road.every((id: number) => own.has(id)), 'En livraison: hers only');
 });

@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
 import { attachProfile, confirmSignup, loadShop, passwordFromLink, startSignup } from '../platform';
+import { createOrder } from '../modules/orders';
 
 let phoneN = 0;
 const tph = () => `072${String(++phoneN).padStart(7, '0')}`;
@@ -55,8 +56,9 @@ test('a new owner, « Vérifier » taken back, a suspension: the agency keeps it
   const agent: any = await call('users.create', chief, { phone: tph(), name: 'Belkis', email: 'belkis@closer.dz', password: PW, roles: ['confirmation'] });
   await attachProfile(t, ag.shop.schema, agent.id);
 
+  // a landing page's order: the agency's by its channel (routing.ts, owner's rule 26 Nov 2026)
   const newOrder = async (phone: string) =>
-    (await call('orders.create', seller, { customerName: 'Client', phone, wilayaId: 31, commune: 'Oran', items: [{ productId: product, variantId: null, qty: 1 }] })) as { id: number; confAgencyId: number | null };
+    (await createOrder(seller, { customerName: 'Client', phone, wilayaId: 31, commune: 'Oran', address: '', isStopdesk: false, channel: 'landing', items: [{ productId: product, variantId: null, qty: 1 }], discount: 0, confirm: false, isExchange: false } as any, seller.db, { came: 'form' })) as unknown as { id: number; confAgencyId: number | null };
   const o1 = await newOrder('0661000001');
   const o2 = await newOrder('0661000002');
   const free = await newOrder('0661000003');

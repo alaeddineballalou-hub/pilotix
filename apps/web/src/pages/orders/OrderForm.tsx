@@ -137,8 +137,9 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
   const { has, session } = useSession();
   const qc = useQueryClient();
   // the Community manager (owner's choice, 25 Nov 2026): the order of a chat or a call only — its channel among those, no
-  // delivery company (Pilotix or the team chooses it), never confirmed here (the confirmation calls the customer)
-  const cm = !!session && !session.isAdmin && cmOnly(session.roles);
+  // delivery company (Pilotix or the team chooses it), never confirmed while typing it: it stays hers and she confirms it
+  // from Confirmation after her call (26 Nov 2026). Her own roles: her role brings the confirmation.
+  const cm = !!session && !session.isAdmin && cmOnly(session.profile.roles);
   const isEdit = !!order;
   const isExchange = !!original && !isEdit;
   const pre = (prefill ?? {}) as Record<string, any>;
