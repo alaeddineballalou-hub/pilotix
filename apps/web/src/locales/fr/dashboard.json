@@ -601,6 +601,11 @@
           "l": "Alertes de plus de 24 h",
           "h": "Alertes de plus de 24 h, maintenant.",
           "s": "maintenant"
+        },
+        "ignored": {
+          "l": "Alertes ignorées",
+          "h": "Alertes que personne n’a prises avant la fin du délai du 1er appel, finies sur la période (livrées par chance, ou revenues).",
+          "s": "alertes"
         }
       },
       "depot": {

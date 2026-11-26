@@ -43,14 +43,14 @@ import { DoneScreen } from '../orders';
 import { AlertPanel, ClairCards, ClairCounters, ClairTable, HistorySheet, isClairTab, RappelSheet, StatusMenu, type ClairHandlers, type ClairTab, type ClairX, type StatusKey } from './Clair';
 import { FaultSheet } from '../faults/FaultSheet';
 
-const LIST_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'resolus', 'traites', 'bloques', 'livres', 'annules', 'swap'] as const;
+const LIST_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'erreurs', 'resolus', 'traites', 'bloques', 'livres', 'annules', 'swap'] as const;
 /** the alert lists: all of them, the new ones (nobody acted yet), the ones in progress */
 /** in a confirmation agency's space (its agents, its chief) */
 const useInAgency = () => {
   const s = useSession().session;
   return s?.shop?.kind === 'agency' || !!s?.profile.agencyId;
 };
-const isAlertTab = (tab: string) => tab === 'alertes' || tab === 'alertes_new' || tab === 'alertes_encours';
+const isAlertTab = (tab: string) => tab === 'alertes' || tab === 'alertes_new' || tab === 'alertes_encours' || tab === 'erreurs';
 /** the menu « Suivi »'s row (Suivi · Clair): Nouvelles alertes · En cours · Résolu · Swap · Réclamation */
 const inAlertBar = (tab: string) => isAlertTab(tab) || ['resolus', 'reclamation', 'annules', 'swap'].includes(tab);
 type ListTab = (typeof LIST_TABS)[number];
@@ -60,7 +60,7 @@ type ListSub = Exclude<Sub, 'messages'>;
 // The bar is drawn by hand (Alertes and its parts, an agency's steps), but its tabs are the menu's (MENU_TABS.suivi,
 // packages/shared/src/menu.ts, shared with Utilisateurs › Rôles): a tab added on one side only stops the build here.
 type MenuSuivi = (typeof MENU_TABS.suivi)[number];
-const sameTabs: [Exclude<MenuSuivi, Sub | 'reglages'>, Exclude<Sub, MenuSuivi | 'alertes_new' | 'alertes_encours' | 'resolus'>] extends [never, never] ? true : false = true;
+const sameTabs: [Exclude<MenuSuivi, Sub | 'reglages'>, Exclude<Sub, MenuSuivi | 'alertes_new' | 'alertes_encours' | 'erreurs' | 'resolus'>] extends [never, never] ? true : false = true;
 void sameTabs;
 
 /** « Suivi »: this boutique's, or every boutique's with « Toutes les boutiques ». */
@@ -100,7 +100,7 @@ function SuiviOne({ sub: asked0 }: PageProps) {
   const tabs: readonly string[] = (!has('suivi') && !has('confirmation') ? LIST_TABS.filter((k) => k !== 'swap') : [...LIST_TABS, 'reclamation']).filter((k) => tabOn('suivi', k));
   const asked: ListSub = tabs.includes(sub ?? '') ? (sub as ListSub) : 'enlivraison';
   // an agency's confirmation agent (no suivi): En livraison, Livré, Annulé — to watch its orders move (no alert, claim, swap)
-  const tab0: ListSub = agency && !has('suivi') && !['enlivraison', 'livres', 'annules', 'alertes', 'alertes_new', 'alertes_encours', 'resolus', 'swap', 'reclamation'].includes(asked) ? 'enlivraison' : asked;
+  const tab0: ListSub = agency && !has('suivi') && !['enlivraison', 'livres', 'annules', 'alertes', 'alertes_new', 'alertes_encours', 'erreurs', 'resolus', 'swap', 'reclamation'].includes(asked) ? 'enlivraison' : asked;
   // « Alertes » opens « Nouvelles alertes » (Suivi · Clair: the owner's design 1, 25 Nov 2026). A store's old addresses
   // (the owner, 25 Nov 2026): « Traités » (the handled alerts, now En cours › Attend ZR and Résolu) opens Résolu,
   // « Bloqués » En livraison, « Swap » Annulés (the swaps are made there)
@@ -169,7 +169,7 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
     el.scrollBy({ left: b.left + b.width / 2 - (r.left + (right - r.left) / 2) });
     // again once the counts are in: they widen the steps
   }, [tab, c]);
-  const active = (k: Sub) => !cfgOn && (tab === k || (k === 'alertes' && ['alertes_new', 'alertes_encours', 'resolus', 'reclamation', 'annules', 'swap'].includes(tab)));
+  const active = (k: Sub) => !cfgOn && (tab === k || (k === 'alertes' && ['alertes_new', 'alertes_encours', 'erreurs', 'resolus', 'reclamation', 'annules', 'swap'].includes(tab)));
   // (a tab taken from the role in Utilisateurs › Rôles is not drawn)
   const item = (k: Sub, count?: number, x = false, label?: string) => !tabOn('suivi', k) ? null : (
     <a className={`bjm-p ${active(k) ? 'on' : ''} ${x ? 'x' : ''}`} href={`#/suivi/${k}`} data-k={k} aria-current={tab === k ? 'page' : active(k) ? 'location' : undefined}>
@@ -179,7 +179,7 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
   );
   // a confirmation agency: the tabs of the step chosen in its menu (En livraison · Alertes · Livré · Annulé)
   if (agency) {
-    const step = ['alertes', 'alertes_new', 'alertes_encours', 'resolus', 'traites', 'reclamation'].includes(tab) ? 'alert' : tab === 'bloques' || tab === 'enlivraison' ? 'road' : tab;
+    const step = ['alertes', 'alertes_new', 'alertes_encours', 'erreurs', 'resolus', 'traites', 'reclamation'].includes(tab) ? 'alert' : tab === 'bloques' || tab === 'enlivraison' ? 'road' : tab;
     return (
       <nav ref={bar} className="bjm-bar flow" aria-label="Étapes" data-g="suivi">
         {step === 'alert' ? (
@@ -187,6 +187,7 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
             {item('alertes_new', c?.alertes_new ?? 0)}
             <span className="bjm-ar" aria-hidden="true">›</span>
             {item('alertes_encours', c?.alertes_encours ?? 0)}
+            {!!c?.erreursTab && item('erreurs', c?.erreurs ?? 0)}
             <span className="bjm-ar" aria-hidden="true">›</span>
             {item('traites', c?.traites ?? 0)}
             <span className="bjm-sep" aria-hidden="true" />
@@ -225,6 +226,8 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
       <nav ref={bar} className="bjm-bar flow" aria-label={t('suivi.tabs.alertes')} data-g="suivi-alertes">
         {item('alertes_new', c?.alertes_new ?? 0, false, t('suivi.clair.tab.alertes_new'))}
         {item('alertes_encours', c?.alertes_encours ?? 0, false, t('suivi.clair.tab.alertes_encours'))}
+        {/* « Erreurs »: the problems to fix, on their own (Suivi › Réglages › « Quand une alerte commence ») */}
+        {!!c?.erreursTab && item('erreurs', c?.erreurs ?? 0, false, t('suivi.clair.tab.erreurs'))}
         {item('resolus', c?.resolus ?? 0, false, t('suivi.clair.tab.resolus'))}
         {item('annules', c?.annulesClair ?? 0, false, t('suivi.clair.tab.annules'))}
         {(has('suivi') || has('confirmation')) && item('reclamation', c?.claims, true, t('suivi.clair.tab.reclamation'))}
@@ -934,7 +937,7 @@ function ClairList({ tab }: { tab: ClairTab }) {
   const [page, setPage] = useState(1);
   const [bucket, setBucketState] = useState<string | null>(null);
   const setBucket = (k: string | null) => (setBucketState(k), setPage(1));
-  const working = tab === 'alertes_new' || tab === 'alertes_encours';
+  const working = tab === 'alertes_new' || tab === 'alertes_encours' || tab === 'erreurs';
   const showAssign = working && (has('vendeur', 'agent_manager') || !!session?.profile.agencyLead);
   const [assign, setAssignState] = useState<Assign>('all');
   const [f, setF] = useState<SuiviF>(() => ({ ...NO_SF, ...store.json<Partial<SuiviF>>('suivi-f', {}), q: '' }));

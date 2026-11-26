@@ -23,6 +23,7 @@ import { getRaw, setRaw } from './admin';
 import { caisseChoices } from './caisses';
 import { caisseLabelOf, CaisseKey, checkCaisse } from './cash';
 import { sendPush } from './push';
+import { alertTakerSql, hadAlertSql } from './alerttouch';
 
 const STAFF = ['confirmation', 'suivi', 'depot', 'agent_manager'] as const;
 export const PAY_CALENDAR_KEY = 'payCalendar';
@@ -30,6 +31,9 @@ export const PAY_ACOMPTE_KEY = 'payAcompte';
 const Id = z.number().int().positive();
 const Money = z.number().int().min(1).max(10_000_000);
 const PAID = ['delivered', 'exchanged'];
+/** Suivi pay on alerts (the owner, 26 Nov 2026): only an alert someone took is paid, to that person — from the next pay
+ *  month, so a month already worked is never counted again another way */
+export const ALERT_PAY_FROM = '2026-12-01T00:00:00+01:00';
 
 // ---------------------------------------------------------------- a confirmation agency's pay
 // An agency's people work on its sellers' orders, in each seller's own store (where they have a profile of their own,
@@ -261,14 +265,17 @@ export async function payRows(db: Db, personId: number, terms: PayTerm[], from: 
       }
     }
   }
-  // suivi: the parcels he followed that were delivered (no follow-up agent: whoever set « Livré »)
+  // suivi: the parcels he followed that were delivered (no follow-up agent: whoever set « Livré »). A parcel that was an
+  // alert (delivered from ALERT_PAY_FROM): paid only when someone took the alert (moved it to « En cours »), to the person
+  // who took it; an alert nobody touched pays nobody (the owner, 26 Nov 2026: « he pays only what he touched »)
   if (tasks.has('suivi')) {
     const os = await src.db.query(
       `SELECT o.id, o.ref, o.delivered_at, o.orig_items, ${ITEMS}
          FROM sales o
         WHERE o.follow_status = ANY($4) AND o.delivered_at >= $2 AND o.delivered_at < $3 AND ($5::bigint IS NULL OR o.follow_agency_id = $5)
-          AND (o.follow_agent_id = ANY($1) OR (o.follow_agent_id IS NULL AND (SELECT e.user_id FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'delivered' ORDER BY e.at DESC LIMIT 1) = ANY($1)))`,
-      [src.ids, F, T, PAID, src.agency],
+          AND (CASE WHEN o.delivered_at >= $6::timestamptz AND ${hadAlertSql('o')} THEN ${alertTakerSql('o')} = ANY($1)
+                    ELSE (o.follow_agent_id = ANY($1) OR (o.follow_agent_id IS NULL AND (SELECT e.user_id FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'delivered' ORDER BY e.at DESC LIMIT 1) = ANY($1))) END)`,
+      [src.ids, F, T, PAID, src.agency, ALERT_PAY_FROM],
     );
     for (const o of os) {
       const at = Date.parse(iso(o.delivered_at));

@@ -387,7 +387,9 @@
       "clockHint": "The same for every company and your livreurs. In working hours (your call slots): nights do not count.",
       "first": "1st call within",
       "solve": "Solved within",
-      "clockSum": "1st call within {{first}} h, solved within {{solve}} h"
+      "clockSum": "1st call within {{first}} h, solved within {{solve}} h",
+      "moved": "When a parcel becomes an alert, for all companies:",
+      "movedGo": "Suivi › Settings › “When an alert starts”"
     }
   },
   "pilot": {

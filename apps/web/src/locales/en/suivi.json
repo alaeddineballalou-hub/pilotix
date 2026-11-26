@@ -22,7 +22,8 @@
     "swap": "Swap",
     "bloques": "Stuck",
     "messages": "Messages",
-    "reglages": "Settings"
+    "reglages": "Settings",
+    "erreurs": "Errors"
   },
   "title": "Delivery follow-up",
   "sync": "Update from the couriers",
@@ -764,6 +765,10 @@
     "statuts": {
       "t": "Statuses",
       "d": "The parcels’ statuses and the « Traiter » reasons"
+    },
+    "quand": {
+      "t": "When an alert starts",
+      "d": "The try at which a parcel becomes an alert, for all your delivery companies"
     }
   },
   "unswap": {
@@ -791,7 +796,8 @@
       "alertes_encours": "In progress",
       "resolus": "Solved",
       "swap": "Swap",
-      "reclamation": "Claims"
+      "reclamation": "Claims",
+      "erreurs": "Errors"
     },
     "counters": "Counters (they are filters too)",
     "k": {
@@ -819,6 +825,11 @@
         "client": "Customer cancelled",
         "zr": "ZR cancelled",
         "all": "All"
+      },
+      "erreurs": {
+        "late": "Late",
+        "soon": "Call soon",
+        "ok": "On time"
       }
     },
     "noNews": "No news yet",
@@ -848,7 +859,8 @@
       "alertes_new": "No new alert. Everything is being handled.",
       "alertes_encours": "No alert in progress.",
       "resolus": "Nothing solved these 30 days.",
-      "swap": "No parcel to swap."
+      "swap": "No parcel to swap.",
+      "erreurs": "No error to fix."
     },
     "amount": "Amount",
     "zr": "ZR status",
@@ -900,6 +912,81 @@
       "no_answer": "{{ref}}: no answer, call counted",
       "busy": "{{ref}}: busy, call counted",
       "cancel": "{{ref}}: the customer cancels, it goes to Cancelled"
+    }
+  },
+  "as": {
+    "becomes": "A parcel becomes an alert…",
+    "opt": {
+      "t1": {
+        "t": "From the 1st try",
+        "d": "The earliest, and the most alerts",
+        "e": "1st failed try"
+      },
+      "t2": {
+        "t": "At the 2nd try",
+        "d": "Time to call before the last try",
+        "e": "2nd failed try"
+      },
+      "t3": {
+        "t": "At the 3rd try",
+        "d": "Last chance before the cancel",
+        "e": "3rd failed try"
+      },
+      "cancel": {
+        "t": "Only at the cancel",
+        "d": "The fewest alerts, but the customer has already said no",
+        "e": "The customer cancels"
+      }
+    },
+    "advised": "Advised",
+    "lock": "A cancel always makes an alert",
+    "lockHint": "The customer can cancel at the 1st visit, without 3 tries.",
+    "cosT": "What your choice means at each company",
+    "cosD": "Each company has its own words: Pilotix sorts them into your choice by itself.",
+    "scope": {
+      "mine": "Your companies ({{n}})",
+      "all": "All ({{n}})"
+    },
+    "col": {
+      "co": "Company",
+      "when": "Becomes an alert at…",
+      "whenShort": "Alert at",
+      "cancel": "Cancel (always an alert)",
+      "cancelShort": "Cancel",
+      "problems": "Problems"
+    },
+    "atCancel": "At the cancel",
+    "noneBefore": "no alert before",
+    "byCo": "number given by {{co}}",
+    "byPilotix": "counted by Pilotix",
+    "noTries": "this company does not give its tries",
+    "nthTry": "{{nth}} “{{word}}”",
+    "nth": {
+      "1": "1st",
+      "2": "2nd",
+      "3": "3rd"
+    },
+    "cancelBack": "{{words}}: straight return, in “Cancelled”",
+    "noProblem": "No problem word",
+    "connected": "Connected",
+    "tested": "Only ZR’s words were checked on a real account. The other companies’ words come from Pilotix and are not tested yet.",
+    "pbT": "Problems",
+    "pbD": "The words of the “Problems” column: wrong commune, parcel blocked or suspended…",
+    "pb": {
+      "alert": {
+        "t": "As an alert",
+        "d": "With the other Suivi alerts"
+      },
+      "errors": {
+        "t": "In “Errors”",
+        "d": "A tab of their own, to fix them"
+      }
+    },
+    "state": {
+      "t1": "From the 1st try",
+      "t2": "At the 2nd try",
+      "t3": "At the 3rd try",
+      "cancel": "At the cancel"
     }
   }
 }

@@ -17,6 +17,7 @@ import { activeStatuses } from '../confirmation/Settings';
 import { Preferences } from '../livraison/Preferences';
 import { CaseSwitches, SUIVI_KINDS, useCasesOn } from '../notify/CaseSwitches';
 import { NotifySettings, Results, Tester } from '../notify';
+import { AlertStart } from './AlertStart';
 
 const SUIVI_NOTIFS = ['delivered', 'returned', 'alert'] as const;
 
@@ -43,6 +44,12 @@ export function SuiviSettings() {
       {affect && (
         <Fold id="qui" icon="users" title={t('suivi.cfg.qui.t')} desc={t('suivi.cfg.qui.d')} state={mode ? t(`admin.aa.mode.${mode}`) : null}>
           <Affectation areas={['follow']} embedded />
+        </Fold>
+      )}
+      {admin && (
+        // « Quand une alerte commence » (the owner's design 1 « Cartes », 26 Nov 2026): one choice for every company
+        <Fold id="quand" icon="alert" title={t('suivi.cfg.quand.t')} desc={t('suivi.cfg.quand.d')} state={p ? t(`suivi.as.state.${p.suiviAlertStart}`) : null}>
+          <AlertStart />
         </Fold>
       )}
       {admin && (

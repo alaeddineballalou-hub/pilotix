@@ -5,9 +5,8 @@ import { FAIL_REASONS, RETURN_REASONS } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { rpc, type Out } from '../../lib/backend';
+import type { Out } from '../../lib/backend';
 import { useAction, useRpc } from '../../lib/query';
-import { useSession } from '../../lib/session';
 import { toast } from '../../ui/toast';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
 import './prefs.css';
@@ -16,20 +15,6 @@ type Prefs = Out<'prefs.get'>['prefs'];
 const ADV_KEY = 'px-prefs-advanced';
 /** what the livreur can say on a parcel he did not deliver (« failed:no_answer », « returning:refused »…) */
 const LIVREUR_SAYS = [...FAIL_REASONS.map((r) => `failed:${r}`), ...RETURN_REASONS.map((r) => `returning:${r}`)];
-type CoAlerts = Out<'delivery.alertStatuses'>;
-/** One chip per name: a company can give the same status under its key and its words (« En livraison » twice) */
-function chipsOf(c: CoAlerts[number]) {
-  const by = new Map<string, { label: string; keys: string[]; parcels: number }>();
-  for (const x of c.statuses) {
-    const label = x.label || x.status;
-    const k = label.toLowerCase();
-    const g = by.get(k) ?? { label, keys: [], parcels: 0 };
-    g.keys.push(x.status);
-    g.parcels += x.parcels;
-    by.set(k, g);
-  }
-  return [...by.values()];
-}
 
 const same = (a: Prefs, b: Prefs) => JSON.stringify(a) === JSON.stringify(b);
 function readAdv(): boolean {
@@ -63,10 +48,8 @@ export function Preferences({ parts, embedded = false }: { parts?: readonly Pref
   const [adv, setAdv] = useState(readAdv);
   const [draft, setDraft] = useState<Prefs | null>(null);
   const save = useAction('prefs.set', { silent: true });
-  // Alertes du Suivi: each delivery company's statuses that send a parcel to Suivi › Alertes (saved with the rest)
-  const isAdmin = !!useSession().session?.isAdmin;
-  const alerts = useRpc('delivery.alertStatuses', {}, { enabled: isAdmin });
-  const [coDraft, setCoDraft] = useState<Record<number, string[]>>({});
+  // (the delivery companies' statuses that sent a parcel to Alertes: « Quand une alerte commence » decides now, the
+  // owner's choice of 26 Nov 2026 — Suivi › Réglages)
   const [busy, setBusy] = useState(false);
   const qc = useQueryClient();
   if (q.isLoading) return <Loading />;
@@ -74,15 +57,11 @@ export function Preferences({ parts, embedded = false }: { parts?: readonly Pref
   const saved = q.data.prefs;
   const rec = q.data.recommended;
   const v = draft ?? saved;
-  const coSaved = (c: CoAlerts[number]) => c.statuses.filter((x) => x.alert).map((x) => x.status);
-  const coOn = (c: CoAlerts[number]) => coDraft[c.companyId] ?? coSaved(c);
-  const coChanged = (alerts.data ?? []).filter((c) => coDraft[c.companyId] && JSON.stringify([...coDraft[c.companyId]].sort()) !== JSON.stringify([...coSaved(c)].sort()));
-  const dirty = !same(v, saved) || coChanged.length > 0;
-  const cancel = () => (setDraft(null), setCoDraft({}));
+  const dirty = !same(v, saved);
+  const cancel = () => setDraft(null);
   const saveAll = async () => {
     setBusy(true);
     try {
-      for (const c of coChanged) await rpc('delivery.saveAlertStatuses', { companyId: c.companyId, alert: coDraft[c.companyId] });
       if (!same(v, saved)) await save.mutateAsync(v);
       toast(t('livraison.prefs.saved'), 'ok');
       cancel();
@@ -98,10 +77,7 @@ export function Preferences({ parts, embedded = false }: { parts?: readonly Pref
     const [st, r] = k.split(':');
     return t(`status.${st === 'failed' ? 'failReason' : 'returnReason'}.${r}`);
   };
-  const alertSum = [
-    ...(alerts.data ?? []).filter((c) => c.statuses.length).map((c) => `${c.name} : ${chipsOf(c).filter((x) => x.keys.some((k) => coOn(c).includes(k))).length}`),
-    `${t('livraison.prefs.alerts.private')} : ${v.livreurAlerts.length}`,
-  ].join(' · ');
+  const alertSum = `${t('livraison.prefs.alerts.private')} : ${v.livreurAlerts.length}`;
   const clockSum = `${t('livraison.prefs.alerts.clockSum', { first: v.suiviClock.firstHours, solve: v.suiviClock.solveHours })} · ${t('suivi.tries.sum', { n: v.suiviTries.calls, gap: v.suiviTries.gapMinutes })} · ${t('suivi.stuckPref.sum', { n: v.suiviStuck.days })}`;
   const set = (p: Partial<Prefs>) => setDraft({ ...v, ...p });
   const backups = (companies.data ?? []).filter((c) => c.active && c.kind !== 'own');
@@ -336,38 +312,10 @@ export function Preferences({ parts, embedded = false }: { parts?: readonly Pref
                 </label>
               </span>
             </div>
-            {!isAdmin ? null : alerts.isLoading ? (
-              <Loading />
-            ) : alerts.error ? (
-              <ErrorBox error={alerts.error} onRetry={() => alerts.refetch()} />
-            ) : (
-              (alerts.data ?? []).map((c) => (
-                <div key={c.companyId} className="pf-row pf-col">
-                  <span className="pf-text">
-                    <b>
-                      <Icon name="truck" /> {c.name}
-                    </b>
-                    <small>{c.statuses.length ? t('livraison.prefs.alerts.coHint', { count: chipsOf(c).filter((x) => x.keys.some((k) => coOn(c).includes(k))).length }) : t('livraison.prefs.alerts.none')}</small>
-                  </span>
-                  {c.statuses.length > 0 && (
-                    <div className="pf-chips pf-chips-s" role="group" aria-label={c.name}>
-                      {chipsOf(c).map((x) => {
-                        const on = x.keys.some((k) => coOn(c).includes(k));
-                        const next = on ? coOn(c).filter((k) => !x.keys.includes(k)) : [...coOn(c), ...x.keys];
-                        return (
-                          <label key={x.keys[0]} className={`pf-chip ${on ? 'on' : ''}`}>
-                            <input type="checkbox" checked={on} onChange={() => setCoDraft({ ...coDraft, [c.companyId]: next })} />
-                            <Icon name="checkcircle" />
-                            {x.label}
-                            {x.parcels > 0 && <small className="pf-n ltr">{x.parcels}</small>}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
+            <p className="pf-open">
+              <Icon name="info" /> {t('livraison.prefs.alerts.moved')}{' '}
+              <a href="#/suivi/reglages">{t('livraison.prefs.alerts.movedGo')}</a>
+            </p>
             <div className="pf-row pf-col">
               <span className="pf-text">
                 <b>

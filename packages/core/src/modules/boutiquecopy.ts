@@ -41,7 +41,7 @@ const ALL_KEYS = [...new Set(Object.values(PART_KEYS).flat())];
 
 /** The parts of `prefs` that belong to the delivery companies (the rest is Suivi's and the depot's rules). */
 const PREFS_COURIERS = ['manualDefault', 'changeCompany', 'strictLock', 'rulesBy', 'privateBackup', 'livreurAlerts'] as const;
-const PREFS_WORK = ['noStockDays', 'suiviClock', 'suiviTries', 'suiviStuck'] as const;
+const PREFS_WORK = ['noStockDays', 'suiviClock', 'suiviTries', 'suiviStuck', 'suiviAlertStart', 'suiviProblems'] as const;
 /** Pilot Message: how it talks and works (not whether it is on, nor the Page / Instagram / WhatsApp it answers on). */
 const DELLAL_FIELDS = ['version', 'name', 'tone', 'languages', 'ordersTo', 'model', 'allowDiscount', 'followUpHours', 'followUps', 'nightReplies', 'notes', 'handoffTopics', 'servicePhone', 'darijaPrefer', 'darijaAvoid'];
 /** Messages to customers: the texts and when they leave (not the WhatsApp account, its approved templates, the SMS phone). */

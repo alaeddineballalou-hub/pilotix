@@ -76,7 +76,7 @@ export const AREAS: Record<AreaKey, AreaDef> = {
   suivi: {
     volume: 'outcomes',
     pulse: ['deliveryRate', 'treatMs', 'savedRate', 'outcomes'],
-    cols: ['outcomes', 'deliveryRate', 'treated', 'treatMs', 'savedRate', 'calls', 'alertsNow'],
+    cols: ['outcomes', 'deliveryRate', 'treated', 'treatMs', 'savedRate', 'ignored', 'calls', 'alertsNow'],
     card: ['deliveryRate', 'treatMs', 'alertsNow'],
     metrics: Object.fromEntries(
       [
@@ -85,6 +85,8 @@ export const AREAS: Record<AreaKey, AreaDef> = {
         m('treated', 'n', 'up'),
         m('treatMs', 'dur', 'down', { target: [4 * H, 24 * H], coach: true, min: 3 }),
         m('savedRate', 'pct', 'up', { target: [0.6, 0.4], coach: true, min: 3 }),
+        // an alert nobody took before its first-call deadline (the owner, 26 Nov 2026): « ignorée », even when delivered
+        m('ignored', 'n', 'down'),
         m('calls', 'n', 'up'),
         m('alertsNow', 'n', 'down', { live: true }),
         m('alertsOld', 'n', 'down', { live: true }),

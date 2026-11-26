@@ -22,7 +22,8 @@
     "swap": "Swap",
     "bloques": "Bloqués",
     "messages": "Messages",
-    "reglages": "Réglages"
+    "reglages": "Réglages",
+    "erreurs": "Erreurs"
   },
   "title": "Suivi des livraisons",
   "sync": "Mettre à jour depuis les sociétés",
@@ -764,6 +765,10 @@
     "statuts": {
       "t": "Statuts",
       "d": "Les statuts des colis et les motifs de « Traiter »"
+    },
+    "quand": {
+      "t": "Quand une alerte commence",
+      "d": "La tentative où un colis devient une alerte, pour toutes vos sociétés de livraison"
     }
   },
   "unswap": {
@@ -791,7 +796,8 @@
       "alertes_encours": "En cours",
       "resolus": "Résolu",
       "swap": "Swap",
-      "reclamation": "Réclamation"
+      "reclamation": "Réclamation",
+      "erreurs": "Erreurs"
     },
     "counters": "Compteurs (ce sont aussi des filtres)",
     "k": {
@@ -819,6 +825,11 @@
         "client": "Client annulé",
         "zr": "ZR annulé",
         "all": "Tous"
+      },
+      "erreurs": {
+        "late": "En retard",
+        "soon": "À appeler vite",
+        "ok": "À temps"
       }
     },
     "noNews": "Pas encore de nouvelle",
@@ -848,7 +859,8 @@
       "alertes_new": "Aucune nouvelle alerte. Tout est pris en main.",
       "alertes_encours": "Aucune alerte en cours.",
       "resolus": "Rien de résolu ces 30 jours.",
-      "swap": "Aucun colis à swapper."
+      "swap": "Aucun colis à swapper.",
+      "erreurs": "Aucune erreur à corriger."
     },
     "amount": "Montant",
     "zr": "Statut ZR",
@@ -900,6 +912,81 @@
       "no_answer": "{{ref}} : pas de réponse, appel compté",
       "busy": "{{ref}} : occupé, appel compté",
       "cancel": "{{ref}} : le client annule, il part dans Annulés"
+    }
+  },
+  "as": {
+    "becomes": "Un colis devient une alerte…",
+    "opt": {
+      "t1": {
+        "t": "Dès la 1re tentative",
+        "d": "Le plus tôt, et le plus d’alertes",
+        "e": "1re tentative ratée"
+      },
+      "t2": {
+        "t": "À la 2e tentative",
+        "d": "Le temps d’appeler avant la dernière tentative",
+        "e": "2e tentative ratée"
+      },
+      "t3": {
+        "t": "À la 3e tentative",
+        "d": "Dernière chance avant l’annulation",
+        "e": "3e tentative ratée"
+      },
+      "cancel": {
+        "t": "Seulement à l’annulation",
+        "d": "Le moins d’alertes, mais le client a déjà dit non",
+        "e": "Le client annule"
+      }
+    },
+    "advised": "Conseillé",
+    "lock": "Une annulation fait toujours une alerte",
+    "lockHint": "Le client peut annuler dès la 1re visite, sans 3 tentatives.",
+    "cosT": "Ce que votre choix veut dire chez chaque société",
+    "cosD": "Chaque société a ses propres mots : Pilotix les range tout seul dans votre choix.",
+    "scope": {
+      "mine": "Vos sociétés ({{n}})",
+      "all": "Toutes ({{n}})"
+    },
+    "col": {
+      "co": "Société",
+      "when": "Devient une alerte à…",
+      "whenShort": "Alerte à",
+      "cancel": "Annulation (toujours une alerte)",
+      "cancelShort": "Annulation",
+      "problems": "Problèmes"
+    },
+    "atCancel": "À l’annulation",
+    "noneBefore": "aucune alerte avant",
+    "byCo": "n° donné par {{co}}",
+    "byPilotix": "compté par Pilotix",
+    "noTries": "cette société ne donne pas ses tentatives",
+    "nthTry": "{{nth}} « {{word}} »",
+    "nth": {
+      "1": "1re",
+      "2": "2e",
+      "3": "3e"
+    },
+    "cancelBack": "{{words}} : retour direct, dans « Annulés »",
+    "noProblem": "Aucun mot de problème",
+    "connected": "Connectée",
+    "tested": "Seuls les mots de ZR ont été vérifiés sur un vrai compte. Ceux des autres sociétés viennent de Pilotix et n’ont pas encore été testés.",
+    "pbT": "Problèmes",
+    "pbD": "Les mots de la colonne « Problèmes » : commune erronée, colis bloqué ou suspendu…",
+    "pb": {
+      "alert": {
+        "t": "En alerte",
+        "d": "Avec les autres alertes du Suivi"
+      },
+      "errors": {
+        "t": "Dans « Erreurs »",
+        "d": "Un onglet à part, pour les corriger"
+      }
+    },
+    "state": {
+      "t1": "Dès la 1re tentative",
+      "t2": "À la 2e tentative",
+      "t3": "À la 3e tentative",
+      "cancel": "À l’annulation"
     }
   }
 }

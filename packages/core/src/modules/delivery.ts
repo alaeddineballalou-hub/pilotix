@@ -9,6 +9,8 @@ import { DEFAULT_TEMPLATE, PLACEHOLDERS, checkTemplate, custom } from '../courie
 import { fakeTracking, nextStep, word, zrWeighs } from '../couriers/demo';
 import { CARDS, KINDS } from '../couriers/kinds';
 import { keysOk, loadCompany, loadParcels, resolveStatus } from '../couriers/load';
+import { courierEvent, decideAlert, ordinalFr, SUB_ERREUR } from '../couriers/alertstart';
+import { getPrefs } from './prefs';
 import { checkedInToday } from './livreur';
 import type { CourierCosts, CourierStep, CourierSwapSeen, Desk, ExchangeResult, FeeRow, LabelResult, PreviewResult, SendResult, TrackItem, TrackResult } from '../couriers/types';
 import { Db, iso, num, numOrNull } from '../db';
@@ -454,6 +456,13 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
   const taken: string[] = [];
   /** swaps made in the company's own space, put on their new customer's order (« PX1329 → PX1392 ») */
   const swaps: string[] = [];
+  // Suivi › Réglages › « Quand une alerte commence » (the owner, 26 Nov 2026): on the companies' real answers, the try
+  // where an alert starts and where a problem goes decide — not the statuses once ticked in « Alertes du Suivi »
+  const pr = !isDemo(ctx) && !scenario ? await getPrefs(ctx.db) : null;
+  const ownPlain: Record<string, string> = Object.fromEntries(Object.entries((c.statusMap ?? {}) as Record<string, string>).filter(([, v]) => v !== 'alert'));
+  const triesSeen = pr ? await courierTriesSeen(ctx.db, answers.map((x) => x.id)) : new Map<number, number>();
+  /** new alerts that are problems to fix (Suivi › Erreurs) */
+  const problemAlerts: number[] = [];
   for (const a of answers) {
     const p = parcels.find((x: any) => num(x.id) === a.id);
     if (!p) continue;
@@ -472,7 +481,7 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
       }
     }
     // The scenario picker supplies an already mapped status; ordinary sync still honors the shop's courier mapping.
-    const to = scenario ?? resolveStatus(defaults, c.statusMap, a, ADAPTERS[c.kind]?.situations);
+    let to = scenario ?? resolveStatus(defaults, c.statusMap, a, ADAPTERS[c.kind]?.situations);
     // what the company charges for it (its prices, the weight it counted): counted instead of the price list
     // (a company without its prices by API only says the weight it found: its « Surpoids » counts on that weight)
     // its own prices for the parcel (delivery, return — 0 for a free return) come first, like ZR's; with only a weight,
@@ -484,6 +493,32 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
     if (endedIds.has(a.id)) {
       await ctx.db.query(`UPDATE orders SET courier_fees = coalesce(courier_fees, '{}'::jsonb) || '{"final":true}'::jsonb WHERE id = $1`, [a.id]);
       continue;
+    }
+    // « Quand une alerte commence »: a failed try before the chosen one, or a status that is no try, no cancel and no
+    // problem, is never an alert; the chosen try and a cancel are; a problem is one of Suivi › Erreurs
+    let problem = false;
+    if (pr) {
+      const fresh = a.status !== p.ext_status;
+      const d = decideAlert({
+        to,
+        plain: resolveStatus(defaults, ownPlain, a),
+        status: a.status || a.key || '',
+        start: pr.suiviAlertStart,
+        problems: pr.suiviProblems,
+        seen: triesSeen.get(a.id) ?? 0,
+        fresh,
+      });
+      to = d.to;
+      problem = d.problem;
+      // a company that does not number its tries: Pilotix counts each new one (its history says « 2e tentative ratée »)
+      if (fresh && d.event?.kind === 'try' && d.event.n === null && d.tryN)
+        await addEvent(ctx.db, a.id, null, 'note', null, 'event', `${c.name} : ${ordinalFr(d.tryN)} tentative ratée`, { courierTry: d.tryN });
+      // a problem of Suivi › Erreurs that becomes a real alert: the customer cancelled, or the chosen try came
+      if (fresh && p.follow_status === 'alert' && p.sub_status === SUB_ERREUR && to === 'alert' && !problem) {
+        await ctx.db.query(`UPDATE orders SET sub_status = NULL, updated_at = now() WHERE id = $1 AND follow_status = 'alert' AND sub_status = $2`, [a.id, SUB_ERREUR]);
+        await addEvent(ctx.db, a.id, null, 'note', null, 'event', `${courierNote(c.name, a.status || a.key)} : ce n’est plus une erreur, c’est une alerte`);
+        changed++;
+      }
     }
     if (a.status !== p.ext_status) {
       await ctx.db.query('UPDATE orders SET ext_status=$2, ext_status_at=COALESCE($3::timestamptz, now()), updated_at=now() WHERE id=$1', [a.id, a.status.slice(0, 200), safeDate(a.at)]);
@@ -523,7 +558,8 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
     // marked « En retour » by the Suivi: only the company's delivered or lost moves it (the depot receives the returns)
     if (p.follow_status === 'returning' && to !== 'delivered' && to !== 'lost') continue;
     if (to && to !== p.follow_status) {
-      byStatus.set(to, [...(byStatus.get(to) ?? []), a.id]);
+      if (to === 'alert' && problem) problemAlerts.push(a.id);
+      else byStatus.set(to, [...(byStatus.get(to) ?? []), a.id]);
       // the history line always says what the company said (« ZR : Sortie en livraison »), never « Statut ZR » alone
       courierNotes.set(a.id, courierNote(c.name, a.status || a.key));
     }
@@ -536,6 +572,9 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
     // a new alert from the company is a new one (« à traiter » again)
     changed += (await setFollow(sys, { ids: list, status, note: courierNote(c.name, null), ...(status === 'alert' ? { subStatus: null } : {}) }, { system: true, courier: true, by: c.name, expect, courierNotes })).changed.length;
   }
+  // a problem to fix (« Commune erronée », « Bloqué »…): an alert of its own, in Suivi › Erreurs
+  if (problemAlerts.length)
+    changed += (await setFollow(sys, { ids: problemAlerts, status: 'alert', note: courierNote(c.name, null), subStatus: SUB_ERREUR }, { system: true, courier: true, by: c.name, expect, courierNotes })).changed.length;
   // the mark goes with the parcels that left « En dispatch » (24 h passed, or the company's end: livré, retour…)
   await ctx.db.query(`UPDATE orders SET sub_status = NULL WHERE company_id = $1 AND sub_status = $2 AND follow_status IS DISTINCT FROM 'prepared'`, [c.id, SUB_TAKEN_UNSCANNED]);
   // the depot manager (Management › Alertes dépôt; nobody chosen: every depot agent) gets one notification on the phone
@@ -550,6 +589,61 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
     }).catch(() => 0);
   }
   return { company: c.name, checked: parcels.length, changed, fees: feesChanged, failed: errors.length, errors: errors.slice(0, 20), ...(swaps.length ? { swaps } : {}) };
+}
+
+/** ZR's situations are not statuses: its own words for a try, a cancel and a problem (read on a real account, 26 Nov 2026) */
+const SITUATION_WORDS: Partial<Record<CourierKind, { numbered: string; cancels: string[]; problems: string[] }>> = {
+  zr: { numbered: 'Ne répond pas {n}', cancels: ['Commande annulée'], problems: ['Commune erronée'] },
+};
+const ROAD_MEANING: (FollowStatus | null | undefined)[] = [undefined, 'shipped', 'out_for_delivery', 'failed', 'alert'];
+/** A company's words for « Quand une alerte commence »: its numbered try (« Ne répond pas {n} »), the tries Pilotix counts,
+ *  the cancels that make an alert (said while the parcel is on its way) and those that are already its return, its problems. */
+function alertWordsOf(kind: CourierKind) {
+  const st = ADAPTERS[kind]?.statuses ?? {};
+  // a company's ids (« non_livre », « colis_suspendu ») read as words; each word once, codes (« 31 ») left out
+  const shown = (k: string) => (/^[0-9a-z_]+$/i.test(k) && k.includes('_') ? (k.charAt(0).toUpperCase() + k.slice(1).toLowerCase()).replace(/_/g, ' ') : k);
+  const seen = new Set<string>();
+  const words: [string, FollowStatus | null][] = [];
+  for (const k of Object.keys(st)) {
+    const w = shown(k);
+    const key = w.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (/^\d+$/.test(k) || /^[0-9a-z]+$/.test(k) || seen.has(key)) continue;
+    seen.add(key);
+    words.push([w, st[k] ?? null]);
+  }
+  let numbered: string | null = null;
+  const tries: string[] = [];
+  const cancels: string[] = [];
+  const cancelsBack: string[] = [];
+  const problems: string[] = [];
+  for (const [w, meaning] of words) {
+    const ev = courierEvent(w, meaning);
+    if (!ev) continue;
+    if (ev.kind === 'try') {
+      if (ev.n !== null) numbered ??= w.replace(/\d+/, '{n}');
+      else tries.push(w);
+    } else if (ev.kind === 'cancel') (ROAD_MEANING.includes(meaning) ? cancels : cancelsBack).push(w);
+    else if (ROAD_MEANING.includes(meaning)) problems.push(w);
+  }
+  const own = SITUATION_WORDS[kind];
+  return {
+    numbered: own?.numbered ?? numbered,
+    tries: own ? [] : tries.slice(0, 3),
+    cancels: [...(own?.cancels ?? []), ...cancels].slice(0, 3),
+    cancelsBack: own ? [] : cancelsBack.slice(0, 2),
+    problems: [...(own?.problems ?? []), ...problems].slice(0, 4),
+  };
+}
+
+/** The failed tries Pilotix counted on each parcel (a company that does not number its tries; « Quand une alerte commence »). */
+async function courierTriesSeen(db: Db, ids: number[]): Promise<Map<number, number>> {
+  if (!ids.length) return new Map();
+  const rows = await db.query(
+    `SELECT order_id, max((data->>'courierTry')::int) AS n FROM order_events
+      WHERE order_id = ANY($1) AND kind = 'note' AND user_id IS NULL AND data ? 'courierTry' GROUP BY 1`,
+    [ids],
+  );
+  return new Map(rows.map((r: any) => [num(r.order_id), num(r.n)]));
 }
 
 // ---------------------------------------------------------------- swaps made in the company's own space
@@ -1220,6 +1314,15 @@ export const deliveryProcs = {
   'delivery.statuses': proc([], z.object({ companyId: id }), (ctx, { companyId }) => companyStatuses(ctx, companyId)),
 
   /** Préférences › Alertes du Suivi: each delivery company's statuses that can send a parcel to Suivi › Alertes, ticked when they do. */
+  /** Suivi › Réglages › « Quand une alerte commence »: each delivery company's own words for a failed try, a cancel and a
+   *  problem (from its statuses in Pilotix), and the shop's own companies (« Vos sociétés »). */
+  'delivery.alertWords': proc([], z.object({}), async (ctx) => {
+    const cos = await ctx.db.query(`SELECT DISTINCT kind FROM delivery_companies WHERE active AND kind NOT IN ('own', 'manual', 'custom')`);
+    const mine = new Set(cos.map((r: any) => String(r.kind)));
+    const kinds = (Object.keys(ADAPTERS) as CourierKind[]).filter((k) => !['own', 'manual', 'custom'].includes(k));
+    return kinds.map((k) => ({ kind: k, label: KINDS[k]?.label ?? k, mine: mine.has(k), ...alertWordsOf(k) })).sort((a, b) => Number(b.mine) - Number(a.mine));
+  }),
+
   'delivery.alertStatuses': proc([], z.object({}), async (ctx) => {
     const cos = await ctx.db.query(`SELECT id, name FROM delivery_companies WHERE active AND kind NOT IN ('own') ORDER BY name`);
     const out = [];

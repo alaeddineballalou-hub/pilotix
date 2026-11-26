@@ -601,6 +601,11 @@
           "l": "Alerts over 24 h",
           "h": "Alerts older than 24 h, now.",
           "s": "now"
+        },
+        "ignored": {
+          "l": "Ignored alerts",
+          "h": "Alerts nobody took before the end of the first-call deadline, ended in the period (delivered by luck, or back).",
+          "s": "alerts"
         }
       },
       "depot": {

@@ -225,6 +225,22 @@ export async function seedSuiviWork(db: Db, users: Record<string, number>, now: 
     await ev(num(o.id), now - ago, null, 'follow_status', o.follow_status, 'alert', why, { courier: true });
   }
 
+  // ---- Erreurs (« Quand une alerte commence », the owner, 26 Nov 2026): two problems to fix, on their own — the commune
+  // written is not where the customer is — Nadia's
+  const wrong = await db.query(
+    `SELECT o.id, o.follow_status, co.name AS co FROM orders o JOIN delivery_companies co ON co.id = o.company_id
+      WHERE o.follow_status = 'out_for_delivery' AND o.sub_status IS NULL AND o.shipped_at IS NOT NULL
+        AND o.locked_by IS NULL AND NOT o.is_exchange AND co.kind <> 'own'
+        AND NOT EXISTS (SELECT 1 FROM claims c WHERE c.order_id = o.id)
+      ORDER BY (co.kind = 'zr') DESC, o.shipped_at, o.id LIMIT 2`,
+  );
+  for (const [k, o] of wrong.entries()) {
+    const ago = [35 * M, 3 * H][k];
+    const why = 'Sortie en livraison · Commune erronée';
+    await db.query(`UPDATE orders SET follow_status = 'alert', sub_status = 'alert_erreur', ext_status = $2, ext_status_at = $3, follow_agent_id = $4, updated_at = $3 WHERE id = $1`, [num(o.id), why, iso(now - ago), users.suivi]);
+    await ev(num(o.id), now - ago, null, 'follow_status', o.follow_status, 'alert', `${o.co} : ${why}`, { courier: true });
+  }
+
   // ---- Annulés: a delivery company's return is its own news, written with nobody's name as the couriers' sync does
   // (« ZR annulé » with its words); our livreurs' and the Suivi's own « Client annule » keep their person
   await db.query(

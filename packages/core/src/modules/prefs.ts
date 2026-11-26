@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { Db } from '../db';
 import { bad, proc } from '../rpc';
 import { DEFAULT_SETTINGS, getSetting, setSetting, SettingsMap } from '../settings';
+import { ALERT_STARTS, PROBLEMS_GO } from '../couriers/alertstart';
 
 export type Prefs = SettingsMap['prefs'];
 export const RECOMMENDED_PREFS: Prefs = DEFAULT_SETTINGS.prefs;
@@ -36,6 +37,9 @@ const prefsIn = z.object({
   suiviTries: z.object({ calls: z.number().int().min(1).max(10), gapMinutes: z.number().int().min(0).max(1440) }),
   suiviClock: z.object({ firstHours: z.number().min(0.25).max(48), solveHours: z.number().min(1).max(168) }),
   livreurAlerts: z.array(z.string().regex(/^(failed|returning):[a-z_]+$/)).max(20),
+  // Suivi › Réglages › « Quand une alerte commence » has its own card (prefs.setAlertStart): kept when not sent
+  suiviAlertStart: z.enum(ALERT_STARTS).optional(),
+  suiviProblems: z.enum(PROBLEMS_GO).optional(),
 });
 
 export const prefsProcs = {
@@ -51,7 +55,20 @@ export const prefsProcs = {
       if (!c[0]) throw bad('Société de livraison introuvable.');
       if (c[0].kind === 'own') throw bad('La société de secours doit être une société de livraison, pas vos livreurs.');
     }
-    await setSetting(ctx.db, 'prefs', { ...i, privateBackup: { ...b, companyId: b.companyId ?? null } }, ctx.session.profile.id);
+    const cur = await getPrefs(ctx.db);
+    await setSetting(
+      ctx.db,
+      'prefs',
+      { ...i, privateBackup: { ...b, companyId: b.companyId ?? null }, suiviAlertStart: i.suiviAlertStart ?? cur.suiviAlertStart, suiviProblems: i.suiviProblems ?? cur.suiviProblems },
+      ctx.session.profile.id,
+    );
+    return { ok: true };
+  }),
+
+  /** Admin only: Suivi › Réglages › « Quand une alerte commence » — the try where an alert starts, where problems go. */
+  'prefs.setAlertStart': proc([], z.object({ start: z.enum(ALERT_STARTS), problems: z.enum(PROBLEMS_GO) }), async (ctx, i) => {
+    const cur = await getPrefs(ctx.db);
+    await setSetting(ctx.db, 'prefs', { ...cur, suiviAlertStart: i.start, suiviProblems: i.problems }, ctx.session.profile.id);
     return { ok: true };
   }),
 };

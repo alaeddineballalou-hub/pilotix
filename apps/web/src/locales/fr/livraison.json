@@ -387,7 +387,9 @@
       "clockHint": "Pareil pour toutes les sociétés et vos livreurs. En heures de travail (vos créneaux d’appel) : la nuit ne compte pas.",
       "first": "1er appel en",
       "solve": "Réglée en",
-      "clockSum": "1er appel en {{first}} h, réglée en {{solve}} h"
+      "clockSum": "1er appel en {{first}} h, réglée en {{solve}} h",
+      "moved": "Quand un colis devient une alerte, pour toutes les sociétés :",
+      "movedGo": "Suivi › Réglages › « Quand une alerte commence »"
     }
   },
   "pilot": {

@@ -20,13 +20,15 @@ import { AlertTodo, CoBadge, Journey, tipKey, type PExtra } from './PhoneSuivi';
 import { namesOf, variantsOf } from '../../lib/items';
 import './clair.css';
 
-export const CLAIR_TABS = ['alertes_new', 'alertes_encours', 'resolus', 'swap', 'annules'] as const;
+// erreurs: the problems to fix on their own (« Quand une alerte commence », the owner, 26 Nov 2026), drawn like the new alerts
+export const CLAIR_TABS = ['alertes_new', 'alertes_encours', 'erreurs', 'resolus', 'swap', 'annules'] as const;
 export type ClairTab = (typeof CLAIR_TABS)[number];
 export const isClairTab = (t: string): t is ClairTab => (CLAIR_TABS as readonly string[]).includes(t);
 /** the three counters of each list, in order ('all': the whole list) */
 export const CLAIR_BUCKETS: Record<ClairTab, readonly string[]> = {
   alertes_new: ['late', 'soon', 'ok'],
   alertes_encours: ['call', 'later', 'zr'],
+  erreurs: ['late', 'soon', 'ok'],
   resolus: ['today', 'yesterday', 'all'],
   swap: ['client', 'zr', 'all'],
   annules: ['client', 'zr', 'all'],
@@ -34,6 +36,7 @@ export const CLAIR_BUCKETS: Record<ClairTab, readonly string[]> = {
 const TONE: Record<ClairTab, Record<string, string>> = {
   alertes_new: { late: 'late', soon: 'soon', ok: 'ok' },
   alertes_encours: { call: 'late', later: 'soon', zr: 'off' },
+  erreurs: { late: 'late', soon: 'soon', ok: 'ok' },
   resolus: { today: 'ok', yesterday: 'ok', all: 'off' },
   swap: { client: 'late', zr: 'late', all: 'off' },
   annules: { client: 'late', zr: 'late', all: 'off' },
@@ -187,6 +190,9 @@ export function TriesCell({ x }: { x?: ClairX }) {
 }
 
 /** What the company asks to fix (a wrong number, a wrong commune): the third button of a line. */
+/** How a list is drawn: an error of Erreurs like a new alert (its fix button, its clock). */
+export const drawnAs = (tab: ClairTab): ClairTab => (tab === 'erreurs' ? 'alertes_new' : tab);
+
 export function fixOf(reason: string | null): 'number' | 'commune' | null {
   const k = tipKey(reason);
   return k === 'number' ? 'number' : k === 'zone' ? 'commune' : null;
@@ -221,15 +227,17 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
   const { t } = useTranslation();
   if (!rows.length) return <ClairEmpty tab={tab} />;
   const key = (o: ClairRow) => `${o.seller?.id ?? 0}:${o.id}`;
+  // an error (Erreurs) is drawn like a new alert: its fix button, its clock
+  const v = drawnAs(tab);
   const cols: { k: string; l: string; cls?: string }[] =
-    tab === 'alertes_new'
+    v === 'alertes_new'
       ? [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'wilaya', l: t('suivi.col.wilaya'), cls: 'svc-hide-tb' }, { k: 'product', l: t('suivi.col.products'), cls: 'svc-hide-tb' }, { k: 'amount', l: t('suivi.clair.amount'), cls: 'num svc-hide-tb' }, { k: 'zr', l: t('suivi.clair.zr') }, { k: 'time', l: t('suivi.clair.time'), cls: 'num' }, { k: 'act', l: '' }]
       : tab === 'alertes_encours'
         ? [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'zr', l: t('suivi.clair.zr') }, { k: 'tries', l: t('suivi.clair.triesCol') }, { k: 'since', l: t('suivi.clair.since'), cls: 'num svc-hide-tb' }, { k: 'act', l: '' }]
         : tab === 'resolus'
           ? [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'product', l: t('suivi.col.products'), cls: 'svc-hide-tb' }, { k: 'amount', l: t('suivi.clair.amount'), cls: 'num' }, { k: 'delivered', l: t('suivi.clair.delivered') }, { k: 'saved', l: t('suivi.clair.savedBy') }, { k: 'problem', l: t('suivi.clair.problem'), cls: 'svc-hide-tb' }]
           : [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'product', l: t('suivi.col.products'), cls: 'svc-hide-tb' }, { k: 'amount', l: t('suivi.clair.amount'), cls: 'num' }, { k: 'why', l: t('suivi.clair.why') }, { k: 'since', l: t('suivi.clair.since'), cls: 'num svc-hide-tb' }, { k: 'act', l: '' }];
-  const opens = tab === 'alertes_new' || tab === 'alertes_encours';
+  const opens = v === 'alertes_new' || v === 'alertes_encours';
   const cell = (o: ClairRow, k: string): ReactNode => {
     const x = extra[o.id];
     const reason = reasonOf(o, x);
@@ -260,7 +268,7 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h }: { t
       case 'amount':
         return <span className="ltr">{da(o.total)}</span>;
       case 'zr': {
-        const fx = tab === 'alertes_new' ? fixOf(reason) : null;
+        const fx = v === 'alertes_new' ? fixOf(reason) : null;
         return (
           <span className="svc-zrc">
             <ZrStatus o={o} text={reason} />
@@ -384,12 +392,14 @@ function SwapBtn({ onClick }: { onClick: () => void }) {
 export function ClairCards({ tab, rows, extra, reasonOf, h }: { tab: ClairTab; rows: ClairRow[]; extra: Record<number, ClairX>; reasonOf: (o: Order, x?: ClairX) => string | null; h: ClairHandlers }) {
   const { t } = useTranslation();
   if (!rows.length) return <ClairEmpty tab={tab} />;
+  // an error (Erreurs) is drawn like a new alert: its fix button, its clock
+  const v = drawnAs(tab);
   return (
-    <ul className={`svc-cards svt-${tab}`}>
+    <ul className={`svc-cards svt-${v}`}>
       {rows.map((o) => {
         const x = extra[o.id];
         const reason = reasonOf(o, x);
-        const fx = tab === 'alertes_new' ? fixOf(reason) : null;
+        const fx = v === 'alertes_new' ? fixOf(reason) : null;
         const right =
           tab === 'swap' || tab === 'annules' ? (
             h.canSwap(o) ? <SwapBtn onClick={() => h.onSwap(o)} /> : null
@@ -406,7 +416,7 @@ export function ClairCards({ tab, rows, extra, reasonOf, h }: { tab: ClairTab; r
               <div className="svc-card-t">
                 <CoBadge o={o} x={x} />
                 <b className="svc-name">{o.customerName}</b>
-                {tab === 'alertes_new' && <ClockText x={x} />}
+                {v === 'alertes_new' && <ClockText x={x} />}
                 {tab === 'alertes_encours' && x?.bucket === 'call' && <b className="svc-recall">{t('suivi.clair.recall')}</b>}
                 {tab === 'alertes_encours' && x?.bucket !== 'call' && (
                   <span className="muted small" dir="auto">
@@ -415,7 +425,7 @@ export function ClairCards({ tab, rows, extra, reasonOf, h }: { tab: ClairTab; r
                 )}
                 {(tab === 'resolus' || tab === 'swap' || tab === 'annules') && <b className="svc-amt ltr">{da(o.total)}</b>}
               </div>
-              {tab === 'alertes_new' && (
+              {v === 'alertes_new' && (
                 <div className="svc-card-s" onClick={(e) => e.stopPropagation()}>
                   <ZrStatus o={o} text={reason} />
                 </div>

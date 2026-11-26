@@ -1,12 +1,14 @@
 // Team boards (Dashboard › Confirmation, Suivi, Dépôt, Livreurs, SAV, and the Accueil): for a period, each member's
 // numbers next to the team's and to the period before, day by day, the reasons given, and what is late right now — so a
 // manager sees where the team stands, who needs help and on what; and an agent sees their own day next to the team's.
-import { CONF_TODO, FOLLOW_ON_ROAD, nextDue } from '@pilotix/shared';
+import { addWorkMinutes, CONF_TODO, FOLLOW_ON_ROAD, nextDue } from '@pilotix/shared';
 import { z } from 'zod';
 import { iso, num } from '../db';
 import { Ctx, proc } from '../rpc';
 import { getSetting } from '../settings';
 import { cartLeftOut } from './carts';
+import { alertTouchedSql, firstAlertSql, hadAlertSql } from './alerttouch';
+import { getPrefs } from './prefs';
 import { REASON_SQL } from './orders';
 import { AREAS, confirmationStats, needArea, prevOf, Range, seesAll, teamViews, visibleTeams } from './stats';
 
@@ -116,6 +118,7 @@ const FINISH: Record<Area, (p: Parts) => V> = {
     rate(v, 'deliveryRate', C(p, 'delivered'), C(p, 'delivered') + C(p, 'returned'));
     v.treatMs = median(p.ms.treatMs ?? []);
     rate(v, 'savedRate', C(p, 'saved'), C(p, 'saved') + C(p, 'lost'));
+    v.ignored = C(p, 'ignored');
     v.alertsNow = C(p, 'alertsNow');
     v.alertsOld = C(p, 'alertsOld');
     return v;
@@ -281,6 +284,24 @@ async function countSuivi(ctx: Ctx, r: R, detail: boolean): Promise<Count> {
     if (q.alert_at) push(p, 'treatMs', Math.max(0, Date.parse(iso(q.at)) - Date.parse(iso(q.alert_at))));
     if (DONE.includes(q.st)) add(p, 'saved');
     else if ([...BACK, 'cancelled', 'lost'].includes(q.st)) add(p, 'lost');
+  }
+  // « ignorées » (the owner, 26 Nov 2026): an alert nobody took before its first-call deadline, ended in the period
+  // (delivered — luck, not work — or back), in the score of the agent the parcel belongs to
+  const end = 'coalesce(o.delivered_at, o.returned_at, o.returning_at, o.updated_at)';
+  const quiet = await ctx.db.query(
+    `SELECT o.follow_agent_id AS u, ${firstAlertSql('o')} AS alert_at, ${end} AS end_at
+       FROM sales o
+      WHERE o.follow_status = ANY($3) AND ${end} >= $1 AND ${end} < $2 AND ${hadAlertSql('o')} AND NOT ${alertTouchedSql('o')}`,
+    [...P, [...DONE, ...BACK]],
+  );
+  if (quiet.length) {
+    const calls = await getSetting(ctx.db, 'calls');
+    const firstHours = (await getPrefs(ctx.db)).suiviClock.firstHours;
+    for (const q of quiet) {
+      if (!q.alert_at || !q.end_at) continue;
+      const due = addWorkMinutes(Date.parse(iso(q.alert_at)), firstHours * 60, calls);
+      if (Date.parse(iso(q.end_at)) > due) add(of(x, q.u), 'ignored');
+    }
   }
   // calls to customers whose parcel had already left (the confirmation's calls are not the suivi's)
   for (const q of await ctx.db.query(

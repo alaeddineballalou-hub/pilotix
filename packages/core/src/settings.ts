@@ -236,6 +236,13 @@ export interface SettingsMap {
     suiviTries: { calls: number; gapMinutes: number };
     /** Suivi › Bloqués: a parcel with no new status for `days` days; 2 days later, a claim by itself (companies with an API) */
     suiviStuck: { days: number };
+    /** Suivi › Réglages › « Quand une alerte commence » (the owner, 26 Nov 2026), one choice for every delivery company: a
+     *  parcel becomes an alert at its 1st, 2nd or 3rd failed try, or only when the customer cancels (a cancel always makes
+     *  one) — couriers/alertstart.ts */
+    suiviAlertStart: 't1' | 't2' | 't3' | 'cancel';
+    /** where a company's « problem » words go (« Commune erronée », « Bloqué », « Suspendu »…): Suivi › Erreurs, or with
+     *  the other alerts */
+    suiviProblems: 'errors' | 'alert';
   };
   /** Réglages › Score client: the points of the customer's score out of 100 (shared/clientscore.ts) */
   clientScore: ScoreRules;
@@ -359,6 +366,9 @@ export const DEFAULT_SETTINGS: SettingsMap = {
     suiviClock: { firstHours: 2, solveHours: 24 },
     suiviTries: { calls: 3, gapMinutes: 60 },
     suiviStuck: { days: 3 },
+    // the owner's advised start (26 Nov 2026): the 2nd failed try leaves time to call before the last one
+    suiviAlertStart: 't2',
+    suiviProblems: 'errors',
   },
   clientScore: DEFAULT_SCORE_RULES,
   automations: {
