@@ -535,7 +535,17 @@ async function changeRequest(c: CourierCompany, i: ChangeInput, helpers: Helpers
   const parcelId = String(cur.id);
   // A parcel ZR has not locked yet (not picked up) is changed DIRECTLY: ZR refuses a request for it
   // (« … is not in a locked state and can be modified directly »). Instant, and it uses none of the parcel's changes.
-  if (cur.state?.isLocked === false) return changeDirect(c, i, helpers, p, cur);
+  if (cur.state?.isLocked === false) {
+    try {
+      return await changeDirect(c, i, helpers, p, cur);
+    } catch (e: any) {
+      // ZR's state can say « not locked » for a parcel it has locked (out for delivery, « Commune erronée »: PX1312,
+      // 27 Nov 2026): its direct change then answers « … is in a locked state and cannot be modified ». A modification
+      // request instead, as for any locked parcel.
+      if (/is in a locked state|cannot be modified/i.test(String(e?.message))) return changeByRequest(c, i, helpers, p, cur);
+      throw e;
+    }
+  }
   try {
     return await changeByRequest(c, i, helpers, p, cur);
   } catch (e: any) {

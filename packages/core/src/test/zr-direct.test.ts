@@ -112,3 +112,66 @@ test('ZR clearly refuses (wrong address…): no search, the refusal is shown', a
   await assert.rejects(zr.create!(c, { ...parcel, is_stopdesk: true, stopdesk_ext_id: 'h-1' }, {} as any), /Adresse invalide/);
   assert.ok(!calls.some((x) => x.startsWith('GET /parcels/search')));
 });
+
+// ---------------------------------------------------------------- ZR says « not locked », its change says « locked »
+// PX1312 (27 Nov 2026): out for delivery, « Commune erronée »; ZR's state said isLocked: false, so Pilotix changed it
+// directly and ZR answered « … is in a locked state and cannot be modified ». A modification request instead.
+function fakeLockedLiar() {
+  const calls: string[] = [];
+  const bodies: Record<string, any> = {};
+  globalThis.fetch = (async (u: string, o: any) => {
+    const m = `${o?.method ?? 'GET'} ${String(u).replace(/^.*\/api\/v1/, '')}`;
+    calls.push(m);
+    if (o?.body) bodies[m] = JSON.parse(o.body);
+    const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json' } });
+    if (m === 'GET /parcels/p-1') return json({ id: 'p-1', state: { name: 'En livraison', isLocked: false }, customer: { name: 'Ali' }, deliveryAddress: { cityTerritoryId: 'w-52', districtTerritoryId: 'd-1', street: 'x' } });
+    if (m.startsWith('PATCH /parcels/p-1/')) return json({ detail: 'The parcel with the identifier p-1 is in a locked state and cannot be modified' }, 400);
+    if (m === 'POST /hubs/search') return json({ items: [{ id: 'h-1', name: 'Hub Beni Abbes 52', address: { cityTerritoryId: 'w-52', districtTerritoryId: 'd-2' } }], hasNext: false, totalPages: 1 });
+    if (m === 'POST /parcel-modification-requests') return json({ id: 'req-9' });
+    return json({});
+  }) as typeof fetch;
+  return { calls, bodies };
+}
+
+test('ZR says « not locked » but refuses the direct change as « locked »: a modification request, waiting for ZR', async () => {
+  const { calls } = fakeLockedLiar();
+  const r: any = await zr.change!(c, { item, kind: 'amount', amount: 3400 }, {} as any, null);
+  assert.equal(r.approved, null);
+  assert.equal(r.extId, 'req-9');
+  assert.ok(!r.direct, 'not shown as « Modifié directement »');
+  assert.deepEqual(calls, ['GET /parcels/p-1', 'PATCH /parcels/p-1/amount', 'POST /parcel-modification-requests']);
+});
+
+test('the same for Domicile → Stop desk: the request carries the stop desk (pickup-point) and its hub', async () => {
+  const { calls, bodies } = fakeLockedLiar();
+  const r: any = await zr.change!(c, { item, kind: 'delivery', stopdesk: true, hubExtId: 'h-1', wilayaId: 52, commune: 'Beni-Abbes' }, {} as any, parcel);
+  assert.equal(r.approved, null);
+  assert.equal(r.extId, 'req-9');
+  assert.ok(calls.includes('PATCH /parcels/p-1/deliveryAddress'));
+  const req = bodies['POST /parcel-modification-requests'];
+  assert.equal(req.deliveryType, 'pickup-point');
+  assert.equal(req.hubId, 'h-1');
+  assert.equal(req.parcelId, 'p-1');
+});
+
+test('another refusal of the direct change is shown as it is (no request sent)', async () => {
+  const calls: string[] = [];
+  globalThis.fetch = (async (u: string, o: any) => {
+    const m = `${o?.method ?? 'GET'} ${String(u).replace(/^.*\/api\/v1/, '')}`;
+    calls.push(m);
+    const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json' } });
+    if (m === 'GET /parcels/p-1') return json({ id: 'p-1', state: { name: 'x', isLocked: false }, customer: { name: 'Ali' } });
+    if (m === 'PATCH /parcels/p-1/amount') return json({ detail: 'Amount must be positive' }, 400);
+    return json({});
+  }) as typeof fetch;
+  await assert.rejects(zr.change!(c, { item, kind: 'amount', amount: 3400 }, {} as any, null), /Amount must be positive/);
+  assert.ok(!calls.some((x) => x.includes('modification-requests')));
+});
+
+test('« Pas encore enlevé » never shown for a ZR parcel ZR already has (taken_at)', async () => {
+  const { takenNotDirect } = await import('../modules/parcels');
+  const info = { direct: true, canModify: true };
+  assert.equal(takenNotDirect({ kind: 'zr', taken_at: '2026-11-24T15:54:00Z' }, info).direct, false);
+  assert.equal(takenNotDirect({ kind: 'zr', taken_at: null }, info).direct, true, 'not taken yet: still direct');
+  assert.equal(takenNotDirect({ kind: 'yalidine', taken_at: '2026-11-24T15:54:00Z' }, info).direct, true, 'other companies unchanged');
+});

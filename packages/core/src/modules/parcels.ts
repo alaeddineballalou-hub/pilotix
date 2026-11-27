@@ -65,7 +65,7 @@ async function parcelOf(db: Db, orderId: number) {
   const o = (
     await db.query(
       `SELECT o.id, o.ref, o.tracking, o.ext_id, o.ext_status, o.ext_status_at, o.follow_status, o.company_id, o.phone, o.phone2, o.wilaya_id, o.commune,
-         o.address, o.is_stopdesk, o.stopdesk_id, o.subtotal, o.delivery_fee, o.discount, o.total, o.shipped_at, o.created_at, o.customer_name,
+         o.address, o.is_stopdesk, o.stopdesk_id, o.subtotal, o.delivery_fee, o.discount, o.total, o.shipped_at, o.taken_at, o.created_at, o.customer_name,
          c.kind, c.name AS company_name, c.credentials, sd.name AS sd_name, sd.ext_id AS sd_ext
        FROM orders o LEFT JOIN delivery_companies c ON c.id = o.company_id LEFT JOIN stopdesks sd ON sd.id = o.stopdesk_id WHERE o.id = $1`,
       [orderId],
@@ -75,6 +75,11 @@ async function parcelOf(db: Db, orderId: number) {
   return o;
 }
 const servesFrom = (o: any) => !!o.tracking && !!o.company_id && !!(KINDS[o.kind as CourierKind]?.zr || KINDS[o.kind as CourierKind]?.parcel);
+/** ZR's state can say « not locked » for a parcel it already has (out for delivery, « Commune erronée »: PX1312,
+ *  27 Nov 2026): once ZR said it has the parcel (taken_at), never « Pas encore enlevé » — a change then goes as a
+ *  modification request (couriers/zr.ts › changeRequest), with its quota shown. */
+export const takenNotDirect = <T extends { direct?: boolean }>(o: { kind?: unknown; taken_at?: unknown }, info: T): T =>
+  info.direct && o.taken_at && KINDS[o.kind as CourierKind]?.zr ? { ...info, direct: false } : info;
 /** What else can be done from Pilotix with this parcel's courier (buttons of the parcel page). */
 const capsOf = (o: any) => {
   const k = o.kind ? KINDS[o.kind as CourierKind] : undefined;
@@ -396,10 +401,10 @@ export const parcelsProcs = {
     const base = { companyId: numOrNull(o.company_id), companyName: (o.company_name as string | null) ?? null, returnTracking: (back?.tracking as string | undefined) ?? null, changes, caps: capsOf(o) };
     if (!servesFrom(o)) return { ...base, supported: false, info: null as ParcelInfo | null, returnInfo: null as ReturnLeg | null, error: null as string | null };
     const returnInfo = back ? await returnLeg(ctx, o, back) : null;
-    if (isDemo(ctx)) return { ...base, supported: true, info: await demoInfo(ctx.db, o), returnInfo, error: null };
+    if (isDemo(ctx)) return { ...base, supported: true, info: takenNotDirect(o, await demoInfo(ctx.db, o)), returnInfo, error: null };
     try {
       const info = (await courier(ctx, 'parcel', { companyId: num(o.company_id), item: { id: num(o.id), tracking: o.tracking, extId: o.ext_id ?? null } })) as ParcelInfo;
-      return { ...base, supported: true, info, returnInfo, error: null };
+      return { ...base, supported: true, info: takenNotDirect(o, info), returnInfo, error: null };
     } catch (e: any) {
       return { ...base, supported: true, info: null, returnInfo, error: (e?.message as string) ?? 'Erreur' };
     }
