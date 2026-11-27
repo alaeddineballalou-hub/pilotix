@@ -16,6 +16,7 @@ import { config } from './config';
 import type { CoreService } from './core.service';
 import { turnstileStatus } from './turnstile';
 import { readSamples, robotReport, watchItems } from './watchers';
+import { listCuts } from './cuts';
 
 const MIN = 60_000;
 const H = 60 * MIN;
@@ -516,5 +517,7 @@ export async function serverDoctor(core: CoreService, opts: { raw?: boolean } = 
     muted,
     ...(ts ? { turnstile: ts } : {}),
     robot: robotReport(),
+    // the cuts seen on people's screens, each with where the road was cut (cuts.ts)
+    cuts: await listCuts(core).catch(() => []),
   };
 }

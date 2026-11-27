@@ -612,5 +612,43 @@
       "stats.overview": "Chiffres de l’Accueil",
       "orders.create": "Créer une commande (test)"
     }
+  },
+  "cuts": {
+    "title": "Coupures",
+    "help": "Quand Pilotix ne répond plus sur l'écran de quelqu'un, l'écran teste lui-même chaque route à ce moment-là, et le serveur ajoute son fournisseur internet. Ainsi chaque coupure dit où la route était coupée.",
+    "sub": "Où la route est coupée, à chaque coupure vue par l'équipe.",
+    "week": "Les 7 derniers jours",
+    "n": {
+      "isp": "Fournisseur bloque",
+      "server": "Serveur",
+      "device": "Internet de l'agent"
+    },
+    "none": "Aucune coupure vue ces 14 derniers jours.",
+    "all": "Tout voir ({{count}})",
+    "less": "Voir moins",
+    "ispUnknown": "Fournisseur inconnu",
+    "viaDoor": "porte de secours",
+    "dev": {
+      "phone": "téléphone",
+      "computer": "ordinateur"
+    },
+    "road": {
+      "edge": "Pilotix via Cloudflare",
+      "cf": "cloudflare.com",
+      "direct": "Porte directe",
+      "net": "Internet"
+    },
+    "v": {
+      "isp_cloudflare": "{{isp}} bloque Cloudflare",
+      "isp_pilotix": "{{isp}} bloque l'adresse de Pilotix",
+      "server": "Le serveur ne répond pas",
+      "cf_to_server": "Cloudflare n'arrive pas au serveur",
+      "international": "Routes vers l'étranger coupées",
+      "both": "Adresse de Pilotix et porte directe coupées",
+      "offline": "Plus d'internet sur l'appareil",
+      "ok": "Revenu avant le test",
+      "unknown": "Pas testé"
+    },
+    "to": "→"
   }
 }

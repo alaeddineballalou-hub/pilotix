@@ -9,15 +9,27 @@
  *   ended, and whether the device itself had lost internet or had internet but could not reach Pilotix (owner's ask,
  *   14 Nov 2026: cuts seen in Algeria while the server and Cloudflare were fine).
  * - the backup door (« porte de secours », lib/door): each move to it and back, with why.
+ * A cut and a move to the backup door also carry the road test (lib/roads, 27 Nov 2026): which roads still answered from
+ * this screen at that moment, so the owner sees where the road was cut (Control room › Doctor › Coupures).
  * The same problem is told once per 10 minutes per screen; at most 10 a send, every 20 s; nothing in the demo.
  */
+import { isAppPage, isPublicRoot, roadVerdict, type RoadTest } from '@pilotix/shared';
+
 type Kind = 'error' | 'loop' | 'slow' | 'cut' | 'door';
 export interface ClientReport {
   kind: Kind;
   page: string;
   message: string;
   device: 'phone' | 'computer';
+  /** a cut or a move to the backup door: what still answered from this screen (lib/roads) */
+  roads?: RoadTest;
+  /** a cut: when it started and ended on this screen (ms) */
+  start?: number;
+  end?: number;
 }
+
+/** What a report may carry besides its sentence. */
+export type ReportExtra = Pick<ClientReport, 'roads' | 'start' | 'end'>;
 
 const QUIET_MS = 10 * 60_000;
 const LOOP_WINDOW_MS = 10_000;
@@ -30,7 +42,17 @@ const told = new Map<string, number>();
 const calls = new Map<string, number[]>();
 let sender: ((items: ClientReport[]) => Promise<unknown>) | null = null;
 
-const page = () => (location.hash.replace(/^#\/?/, '').split(/[/?]/)[0] || 'accueil').slice(0, 40);
+/**
+ * The page on this screen: « #/<page>/… » in the preview, the real address on the site (pilotix.online/<boutique>/<page>/…:
+ * lib/route), where the address has no « # » (before 27 Nov 2026 every report from the site said « accueil »).
+ */
+function page(): string {
+  const h = location.hash.replace(/^#\/?/, '');
+  if (h && !h.startsWith('porte=')) return (h.split(/[/?]/)[0] || 'accueil').slice(0, 40);
+  const p = location.pathname.split('/').filter(Boolean);
+  const w = p.length && !isAppPage(p[0]) && !isPublicRoot(p[0]) ? p[1] : p[0];
+  return (w || 'accueil').slice(0, 40);
+}
 const device = (): 'phone' | 'computer' => (typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches ? 'phone' : 'computer');
 
 /** Noise that is not Pilotix's: browser extensions, the resize-observer warning, a phone without network. */
@@ -42,7 +64,7 @@ function noise(message: string, stack = ''): boolean {
   );
 }
 
-export function report(kind: Kind, message: string) {
+export function report(kind: Kind, message: string, extra?: ReportExtra) {
   message = message.replace(/\s+/g, ' ').trim().slice(0, 300);
   if (!message) return;
   const p = page();
@@ -51,7 +73,7 @@ export function report(kind: Kind, message: string) {
   if (now - (told.get(key) ?? 0) < QUIET_MS) return;
   told.set(key, now);
   if (told.size > 300) for (const [k, t] of told) if (now - t > QUIET_MS) told.delete(k);
-  if (queue.length < 30) queue.push({ kind, page: p, message, device: device() });
+  if (queue.length < 30) queue.push({ kind, page: p, message, device: device(), ...extra });
 }
 
 /** Every action asked (lib/backend's rpc): counts it for the loop check, and reports a slow one. */
@@ -116,7 +138,7 @@ export const NET_FAIL = 'px:netfail';
 /** A cut shorter than this is not told (one lost request on a moving phone is not a cut). */
 export const CUT_MIN_MS = 10_000;
 const PROBE_MS = 15_000;
-let cut: { start: number; why: string; offline: boolean; probe: string; timer: ReturnType<typeof setInterval> | null } | null = null;
+let cut: { start: number; why: string; offline: boolean; probe: string; timer: ReturnType<typeof setInterval> | null; roads: RoadTest | null } | null = null;
 
 const hms = (t: number) => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 function lasted(ms: number): string {
@@ -137,7 +159,7 @@ export function noteNetFail(why: string, probe: string) {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(NET_FAIL));
   if (typeof navigator !== 'undefined' && navigator.onLine === false && cut) cut.offline = true;
   if (cut) return;
-  cut = { start: Date.now(), why, offline: typeof navigator !== 'undefined' && navigator.onLine === false, probe, timer: null };
+  cut = { start: Date.now(), why, offline: typeof navigator !== 'undefined' && navigator.onLine === false, probe, timer: null, roads: null };
   cut.timer = setInterval(() => {
     if (!cut) return;
     if (navigator.onLine === false) cut.offline = true;
@@ -147,6 +169,15 @@ export function noteNetFail(why: string, probe: string) {
       })
       .catch(() => {});
   }, PROBE_MS);
+}
+
+/**
+ * The road test during the cut in progress (lib/door runs it on the live site). The first one that saw something cut is
+ * kept: a later one may only see the end of the cut.
+ */
+export function noteRoads(roads: RoadTest) {
+  if (!cut) return;
+  if (!cut.roads || roadVerdict(cut.roads) === 'ok') cut.roads = roads;
 }
 
 /** The server answered: a cut in progress is over (told when it lasted 10 s or more). */
@@ -160,7 +191,7 @@ export function noteNetOk() {
   const where = c.offline ? "l'appareil n'avait plus internet" : 'internet marchait, Pilotix ne répondait pas';
   const message = `Coupure de ${lasted(end - c.start)} (${hms(c.start)} → ${hms(end)}) · ${where} · ${c.why} · ${connection()}`;
   // every cut is told (no 10-minute quiet: each one is a fact with its own time), at most 30 waiting
-  if (queue.length < 30) queue.push({ kind: 'cut', page: page(), message: message.slice(0, 300), device: device() });
+  if (queue.length < 30) queue.push({ kind: 'cut', page: page(), message: message.slice(0, 300), device: device(), start: c.start, end, ...(c.roads ? { roads: c.roads } : {}) });
 }
 
 /** Tests only. */

@@ -48,6 +48,7 @@ import type { Mail } from './mail';
 import { syncTurnstile } from './turnstile';
 import { robotGate } from './robot';
 import { doctorState } from './doctor';
+import { recordCut } from './cuts';
 import { sendSpyVideo, sendVideo, writePart } from './media';
 
 /** the Pilotix icon (apps/web/public/icon.svg): the pages' tab icon when the shop has no logo */
@@ -116,6 +117,10 @@ const ClientReports = z.object({
         page: z.string().max(40),
         message: z.string().min(1).max(300),
         device: z.enum(['phone', 'computer']),
+        // a cut or a move to the backup door: what still answered from the screen (web lib/roads) and when
+        roads: z.object({ edge: z.boolean().nullable(), cf: z.boolean().nullable(), direct: z.boolean().nullable(), net: z.boolean().nullable(), app: z.boolean().nullable() }).optional(),
+        start: z.number().optional(),
+        end: z.number().optional(),
       }),
     )
     .min(1)
@@ -870,6 +875,11 @@ class ApiController {
       const what = r.kind === 'loop' ? 'Boucle' : r.kind === 'slow' ? 'Lent' : r.kind === 'cut' ? 'Coupure' : r.kind === 'door' ? 'Porte de secours' : 'Erreur';
       const source = r.kind === 'cut' ? 'Navigateur · coupures' : r.kind === 'door' ? 'Navigateur · porte de secours' : `Navigateur · ${r.page}`;
       doctorState.record(r.kind === 'error' || r.kind === 'loop' ? 'error' : 'warn', source, `[${req.shop.shop.slug}] ${what} : ${r.message} (${role}, ${r.device === 'phone' ? 'téléphone' : 'ordinateur'})`);
+      // Doctor › Coupures: a cut that ended, or the opening of the backup door (a cut that began), with its internet company
+      if ((r.kind === 'cut' || r.kind === 'door') && r.start !== undefined) {
+        const seen = { start: r.start, end: r.kind === 'cut' ? (r.end ?? null) : null, shop: req.shop.shop.slug, device: r.device, page: r.page, roads: r.roads ?? null, via: r.kind };
+        void recordCut(this.core, seen, req.ip).catch(() => null);
+      }
     }
     return { ok: true };
   }

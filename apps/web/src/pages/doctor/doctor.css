@@ -315,3 +315,32 @@
 /* Co-Pilot before the first order: the two steps that bring it, no score */
 .dr-cock-empty .dr-empty-go { margin-top: 10px; gap: 8px; flex-wrap: wrap; }
 .dr-cock-noscore b { opacity: 0.45; }
+
+/* Coupures (27 Nov 2026): each cut a screen saw, the roads tested from it at that moment and where it was cut */
+.dr-cuts-n { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0 4px; }
+.dr-cuts-n > div { background: var(--raise); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; min-width: 0; }
+.dr-cuts-n small { display: block; color: var(--muted); font-size: 12px; line-height: 1.25; overflow-wrap: anywhere; }
+.dr-cuts-n b { font-size: 20px; }
+.dr-cuts-n b.dr-n-bad { color: var(--c-bad-ink); }
+.dr-cut-list { list-style: none; margin: 10px 0 8px; padding: 0; }
+.dr-cut-list > li { padding: 12px 0; border-top: 1px solid var(--line); }
+.dr-cut-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.dr-cut-when { min-width: 0; }
+.dr-cut-when b { font-size: 14px; }
+.dr-cut-when small { display: block; margin-top: 2px; }
+.dr-cut-v { flex: none; max-width: 55%; font-size: 13px; font-weight: 600; line-height: 1.3; padding: 5px 11px; border-radius: 999px; text-align: center; }
+.dr-cut-bad { background: var(--c-bad-tint); color: var(--c-bad-ink); }
+.dr-cut-warn { background: var(--c-warn-tint); color: var(--c-warn-ink); }
+.dr-cut-off { background: var(--raise); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.dr-cut-roads { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.dr-road { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
+.dr-road .bji svg { width: 14px; height: 14px; }
+.dr-road-ok .bji { color: var(--c-ok-ink); }
+.dr-road-no .bji { color: var(--c-bad-ink); }
+.dr-road-na { color: var(--muted); }
+@media (max-width: 560px) {
+  .dr-cut-top { flex-direction: column; gap: 6px; }
+  .dr-cut-v { max-width: 100%; text-align: start; }
+  .dr-cuts-n > div { padding: 8px 10px; }
+  .dr-cuts-n b { font-size: 18px; }
+}

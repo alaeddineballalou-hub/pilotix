@@ -2,6 +2,7 @@
 //   - Pilotix Doctor (each shop, Dashboard › Doctor): the shop's business — stock, orders waiting, returns, agents, cash.
 //   - Doctor (Pilotix's control room): the server, the database, background jobs, errors in the code, silent shops.
 // Both answer with the same items; the app writes the sentences (doctor.c.<id> in the locales).
+import type { DoctorCut } from './roads';
 
 /** bad = act today · warn = look soon · ok = checked, fine · info = nothing to judge yet */
 export type DoctorLevel = 'bad' | 'warn' | 'ok' | 'info';
@@ -104,6 +105,8 @@ export interface ServerDoctorReport {
   robot?: { at: string; shop: string | null; steps: { name: string; label: string; ok: boolean; ms: number; error?: string; skipped?: boolean }[] } | null;
   /** Cloudflare Turnstile kept by Pilotix for every shop: how full the free plan is */
   turnstile?: DoctorTurnstile;
+  /** the cuts seen on people's screens, each with where the road was cut (shared/roads; the last 14 days, newest first) */
+  cuts?: DoctorCut[];
 }
 
 export interface DoctorTurnstile {

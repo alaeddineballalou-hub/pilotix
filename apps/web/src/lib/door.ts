@@ -12,11 +12,15 @@
 //   a while, or 2 minutes untouched — never with something typed or a window open.
 // Every move is told to Control room › Doctor (lib/watch « door »). Not in the phone app (mobile/www/door.js does the
 // same there), not in the preview (its look-alike only: demoDoor), not in development.
+// The road test (lib/roads, 27 Nov 2026): at every cut, on both addresses and whether the switch is on or off, which roads
+// still answer from here; it goes with the cut, and with the move through the door (#porte=…&rt=oxoon), to Doctor.
 import i18n from './i18n';
+import { parseRoadCode, roadCode, type RoadTest } from '@pilotix/shared';
 import { BACKUP_DOOR, DEMO_ONLY, FIXED_SERVER, server, serverUrl } from './backend';
+import { serverAnswers, testRoads } from './roads';
 import { PATHS, ROUTE_EVENT } from './route';
 import { store } from './store';
-import { NET_FAIL, report } from './watch';
+import { NET_FAIL, noteRoads, report } from './watch';
 import { toast } from '../ui/toast';
 
 export interface DoorView {
@@ -61,21 +65,6 @@ export const mainOrigin = () => (mainHost() ? `https://${mainHost()}` : '');
 /** https://direct.pilotix.online */
 export const directOrigin = () => (mainHost() ? `https://direct.${mainHost()}` : '');
 
-/** Does this address's server say it is well, within `ms`? (Cloudflare's own error pages do not count.) */
-async function answers(origin: string, ms: number): Promise<boolean> {
-  if (!origin) return false;
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), ms);
-  try {
-    const r = await fetch(`${origin}/api/health?door=${Date.now()}`, { cache: 'no-store', credentials: 'omit', signal: ac.signal });
-    return r.ok;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 const decode = (s: string) => {
   try {
     return decodeURIComponent(s);
@@ -97,6 +86,7 @@ export async function arriveThroughDoor(): Promise<void> {
   if (!FIXED_SERVER || DEMO_ONLY) return;
   const args = new URLSearchParams(m[2].replace(/^&/, ''));
   const par = args.get('par');
+  const roads = parseRoadCode(args.get('rt'));
   const ticket = decode(m[1] ?? '');
   const entered = ticket ? await server.enterThroughDoor(ticket) : false;
   if (BACKUP_DOOR) {
@@ -109,6 +99,8 @@ export async function arriveThroughDoor(): Promise<void> {
     report(
       'door',
       `Porte de secours ouverte ${par === 'app' ? 'pendant le travail' : "à l'ouverture de Pilotix"} (${mainHost()} ne répondait pas) · ${entered ? 'toujours connecté' : ticket ? 'connexion à refaire (ticket refusé)' : 'pas connecté'}`,
+      // a cut that began (Doctor › Coupures): with the road test when the app made the move (#…&rt=), none from the keeper's page
+      { start: Date.now(), ...(roads ? { roads } : {}) },
     );
   } else if (par === 'retour') {
     const min = Number(args.get('min') || 0);
@@ -121,6 +113,7 @@ export async function arriveThroughDoor(): Promise<void> {
 export function startDoor() {
   if (!LIVE) return;
   watchTyping();
+  window.addEventListener(NET_FAIL, () => void checkRoads());
   if (BACKUP_DOOR) wayBack();
   else void keepDoor();
 }
@@ -173,6 +166,15 @@ async function tellKeeper(on: boolean) {
   }
 }
 
+/** The last road test from this screen (lib/roads): kept with the cut in progress, and carried through the door. */
+let lastRoads: RoadTest | null = null;
+async function checkRoads(fresh = false): Promise<RoadTest> {
+  const roads = await testRoads(mainOrigin(), directOrigin(), { fresh });
+  lastRoads = roads;
+  noteRoads(roads);
+  return roads;
+}
+
 let checking = false;
 let lastCheck = 0;
 let stayUntil = 0;
@@ -183,8 +185,9 @@ async function roadFailed() {
   checking = true;
   lastCheck = now;
   try {
-    const [main, direct] = await Promise.all([answers(mainOrigin(), 4000), answers(directOrigin(), 8000)]);
-    if (!main && direct) set({ offer: busy() ? 'ask' : 'auto' });
+    // the road test (main: Pilotix through Cloudflare up to the server, 4 s; the backup door: 8 s)
+    const roads = await checkRoads(true);
+    if (roads.app === false && roads.direct === true) set({ offer: busy() ? 'ask' : 'auto' });
   } finally {
     checking = false;
   }
@@ -203,7 +206,7 @@ export async function moveToBackupDoor() {
   leaving = true;
   const to = directOrigin();
   const ticket = await server.doorTicket(to);
-  location.replace(`${to}${location.pathname}${location.search}#porte=${encodeURIComponent(ticket ?? '')}&par=app`);
+  location.replace(`${to}${location.pathname}${location.search}#porte=${encodeURIComponent(ticket ?? '')}&par=app${lastRoads ? `&rt=${roadCode(lastRoads)}` : ''}`);
 }
 
 // ---------------------------------------------------------------- the backup door: the way back
@@ -213,7 +216,7 @@ function wayBack() {
   let hiddenAt = 0;
   const check = async () => {
     if (document.visibilityState !== 'visible' || leaving) return;
-    const up = await answers(mainOrigin(), 6000);
+    const up = await serverAnswers(mainOrigin(), 6000);
     ok = up ? ok + 1 : 0;
     if (ok >= 2 !== view.mainBack) set({ mainBack: ok >= 2 });
   };

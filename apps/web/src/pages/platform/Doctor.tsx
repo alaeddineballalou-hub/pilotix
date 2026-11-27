@@ -1,11 +1,11 @@
 // Control room › Doctor: the health of the Pilotix server — machine, database, background jobs, errors in the code,
 // shops that went silent, settings. Looks again every 15 seconds and when you come back to the page (no button). In the preview (no server) it shows an example.
-import type { DoctorItem, DoctorTurnstile, ServerDoctorReport } from '@pilotix/shared';
-import { doctorScore, doctorSort } from '@pilotix/shared';
+import type { DoctorCut, DoctorItem, DoctorTurnstile, RoadVerdict, ServerDoctorReport } from '@pilotix/shared';
+import { doctorScore, doctorSort, roadTone } from '@pilotix/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { dur, n, shortWhen } from '../../lib/format';
+import { clock, dur, n, shortWhen, when } from '../../lib/format';
 import { doctorDismiss, doctorWatch, serverDoctor, turnstileSync } from '../../lib/platform';
 import { Card, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
@@ -90,6 +90,7 @@ export function DoctorPage({ demo, owner }: { demo?: boolean; owner?: boolean })
         </span>
       </div>
       <DoctorList items={r.items} onAction={busy ? undefined : (id, kind) => act(id, kind)} />
+      {r.cuts && <Cuts cuts={r.cuts} />}
       <Card
         title={t('doctor.robot.title')}
         badge={
@@ -334,6 +335,96 @@ const DEMO_ACTIONS: Record<string, ('solve' | 'ignore')[]> = {
   diskSoon: ['solve', 'ignore'],
 };
 
+// ---------------------------------------------------------------- Coupures (27 Nov 2026)
+/** The roads shown on each cut, in this order (shared/roads: « app » is in the verdict only). */
+const ROADS = ['edge', 'cf', 'direct', 'net'] as const;
+/** What each counter adds up (the last 7 days). */
+const CUT_GROUPS: { key: string; verdicts: RoadVerdict[]; bad?: boolean }[] = [
+  { key: 'isp', verdicts: ['isp_cloudflare', 'isp_pilotix', 'international', 'both'], bad: true },
+  { key: 'server', verdicts: ['server', 'cf_to_server'] },
+  { key: 'device', verdicts: ['offline'] },
+];
+const SHOWN = 6;
+const lasted = (ms: number) => (ms < 60_000 ? `${Math.max(1, Math.round(ms / 1000))} s` : dur(ms));
+
+/**
+ * Control room › Doctor › Coupures: every cut a screen of the team saw, where the road was cut (the screen tested each
+ * road at that moment: web lib/roads) and the person's internet company (the server: cuts.ts). Newest first.
+ */
+function Cuts({ cuts }: { cuts: DoctorCut[] }) {
+  const { t } = useTranslation();
+  const [all, setAll] = useState(false);
+  const week = cuts.filter((c) => Date.now() - Date.parse(c.at) < 7 * 86_400_000);
+  return (
+    <Card className="dr-cuts" title={t('doctor.cuts.title')} help={t('doctor.cuts.help')} badge={cuts.length ? <span className="pp-count">{cuts.length}</span> : undefined}>
+      <p className="muted small">{t('doctor.cuts.sub')}</p>
+      <div className="dr-cuts-n" aria-label={t('doctor.cuts.week')}>
+        {CUT_GROUPS.map((g) => {
+          const count = week.filter((c) => g.verdicts.includes(c.verdict)).length;
+          return (
+            <div key={g.key}>
+              <small>{t(`doctor.cuts.n.${g.key}`)}</small>
+              <b className={g.bad && count ? 'dr-n-bad' : ''}>{count}</b>
+            </div>
+          );
+        })}
+      </div>
+      <small className="muted">{t('doctor.cuts.week')}</small>
+      {cuts.length ? (
+        <ul className="dr-cut-list">
+          {(all ? cuts : cuts.slice(0, SHOWN)).map((c) => (
+            <CutRow key={`${c.at}|${c.shop}|${c.page}|${c.via}`} c={c} />
+          ))}
+        </ul>
+      ) : (
+        <p className="muted">
+          <Icon name="checkcircle" /> {t('doctor.cuts.none')}
+        </p>
+      )}
+      {cuts.length > SHOWN && (
+        <button type="button" className="btn small" onClick={() => setAll(!all)}>
+          {all ? t('doctor.cuts.less') : t('doctor.cuts.all', { count: cuts.length })}
+        </button>
+      )}
+    </Card>
+  );
+}
+
+function CutRow({ c }: { c: DoctorCut }) {
+  const { t } = useTranslation();
+  const isp = c.isp ?? t('doctor.cuts.ispUnknown');
+  // the page as the menu names it (« Dépôt »), else as it was told
+  const page = c.page ? t(`nav.${c.page}`, { defaultValue: c.page.charAt(0).toUpperCase() + c.page.slice(1) }) : '';
+  return (
+    <li>
+      <div className="dr-cut-top">
+        <div className="dr-cut-when">
+          <b>
+            {when(c.at)}
+            {c.endAt && <> {t('doctor.cuts.to')} {clock(c.endAt)}</>}
+          </b>
+          {c.endAt && <span className="muted"> · {lasted(Date.parse(c.endAt) - Date.parse(c.at))}</span>}
+          <small className="muted">
+            {[isp, t(`doctor.cuts.dev.${c.device}`), page, c.shop, c.via === 'door' ? t('doctor.cuts.viaDoor') : null].filter(Boolean).join(' · ')}
+          </small>
+        </div>
+        <span className={`dr-cut-v dr-cut-${roadTone(c.verdict)}`}>{t(`doctor.cuts.v.${c.verdict}`, { isp })}</span>
+      </div>
+      <div className="dr-cut-roads">
+        {ROADS.map((k) => {
+          const v = c.roads[k];
+          return (
+            <span key={k} className={`dr-road ${v === true ? 'dr-road-ok' : v === false ? 'dr-road-no' : 'dr-road-na'}`}>
+              <Icon name={v === true ? 'check' : v === false ? 'xcircle' : 'help'} />
+              {t(`doctor.cuts.road.${k}`)}
+            </span>
+          );
+        })}
+      </div>
+    </li>
+  );
+}
+
 function demoReport(hidden: Record<string, 'solve' | 'ignore'> = {}): ServerDoctorReport {
   const now = Date.now();
   const ago = (min: number) => new Date(now - min * 60_000).toISOString();
@@ -441,10 +532,26 @@ function demoReport(hidden: Record<string, 'solve' | 'ignore'> = {}): ServerDoct
       lastError: null,
     },
     muted,
+    cuts: demoCuts(now),
     errors: [
       { at: ago(3), level: 'error', source: 'Courier sync', shop: 'boutique-amine', message: 'ZR: 401 Unauthorized (token expired)', count: 28 },
       { at: ago(17), level: 'error', source: 'API', shop: null, message: 'TypeError: Cannot read properties of undefined (reading "wilaya")\n    at orderForm (orders.js:412:18)', count: 9 },
       { at: ago(48), level: 'warn', source: 'Sheets sync', shop: 'maison-sara', message: 'Commandes site: 3 ligne(s) refusée(s)', count: 4 },
     ],
   };
+}
+
+/** The preview's cuts (no server): one of each kind the owner meets. */
+function demoCuts(now: number): DoctorCut[] {
+  const at = (min: number) => new Date(now - min * 60_000).toISOString();
+  const roads = (code: string) => {
+    const [edge, cf, direct, net, app] = [...code].map((x) => (x === 'o' ? true : x === 'x' ? false : null));
+    return { edge, cf, direct, net, app };
+  };
+  return [
+    { at: at(38), endAt: at(35), shop: 'boutique', isp: 'Mobilis', device: 'phone', page: 'confirmation', roads: roads('xxoox'), verdict: 'isp_cloudflare', via: 'cut' },
+    { at: at(190), endAt: null, shop: 'boutique', isp: 'Djezzy', device: 'phone', page: 'suivi', roads: roads('xooox'), verdict: 'isp_pilotix', via: 'door' },
+    { at: at(26 * 60), endAt: at(26 * 60 - 4), shop: 'maison-sara', isp: 'Algérie Télécom', device: 'computer', page: 'depot', roads: roads('ooxox'), verdict: 'server', via: 'cut' },
+    { at: at(50 * 60), endAt: at(50 * 60 - 2), shop: 'boutique', isp: 'Ooredoo', device: 'phone', page: 'confirmation', roads: roads('xxxxx'), verdict: 'offline', via: 'cut' },
+  ];
 }

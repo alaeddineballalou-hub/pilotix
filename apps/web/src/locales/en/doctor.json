@@ -612,5 +612,43 @@
       "stats.overview": "Home page numbers",
       "orders.create": "Create an order (test)"
     }
+  },
+  "cuts": {
+    "title": "Cuts",
+    "help": "When Pilotix stops answering on someone's screen, the screen itself tests each road at that moment, and the server adds their internet company. So every cut says where the road was cut.",
+    "sub": "Where the road is cut, for every cut the team saw.",
+    "week": "The last 7 days",
+    "n": {
+      "isp": "Provider blocks",
+      "server": "Server",
+      "device": "Agent's internet"
+    },
+    "none": "No cut seen in the last 14 days.",
+    "all": "See all ({{count}})",
+    "less": "See less",
+    "ispUnknown": "Unknown provider",
+    "viaDoor": "backup door",
+    "dev": {
+      "phone": "phone",
+      "computer": "computer"
+    },
+    "road": {
+      "edge": "Pilotix via Cloudflare",
+      "cf": "cloudflare.com",
+      "direct": "Direct door",
+      "net": "Internet"
+    },
+    "v": {
+      "isp_cloudflare": "{{isp}} blocks Cloudflare",
+      "isp_pilotix": "{{isp}} blocks Pilotix's address",
+      "server": "The server isn't answering",
+      "cf_to_server": "Cloudflare can't reach the server",
+      "international": "Roads abroad are cut",
+      "both": "Pilotix's address and the direct door are cut",
+      "offline": "No internet on the device",
+      "ok": "Back before the test",
+      "unknown": "Not tested"
+    },
+    "to": "→"
   }
 }
