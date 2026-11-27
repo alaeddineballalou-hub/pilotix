@@ -40,8 +40,10 @@ html[data-skin="doux"][data-theme="dark"] {
   --sk-th-bg: #20232A; --sk-th-ink: #B5BCC8; --sk-row-hover: #22262E;
   --sk-tab-on-bg: #3A2E14; --sk-tab-on-ink: #FFD08A;
 }
-/* every digit the same width (Rubik's are not by default): prices in a list line up, counters and timers keep still */
-html[data-skin="doux"] body { font-size: 16px; font-variant-numeric: tabular-nums; }
+/* Rubik has real same-width digits: the ~200 rules that ask for them (font-variant-numeric: tabular-nums: tables,
+   counters, prices, timers) now get them (Readex Pro had none). Never on the whole page: Rubik's tabular set also
+   widens « ( ) », which would space every bracket in running text. */
+html[data-skin="doux"] body { font-size: 16px; }
 @media (min-width: 901px) { html[data-skin="doux"] .shell:not(.px-folded) { --side: 256px; } }
 html[data-skin="doux"][lang="ar"] { --f: "Pilotix Sans", system-ui, sans-serif; --f-display: "Pilotix Sans", system-ui, sans-serif; --f-body: "Pilotix Sans", system-ui, sans-serif; }
 
