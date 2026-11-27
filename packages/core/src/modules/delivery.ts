@@ -516,6 +516,8 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
   const corrections = new Map<number, [FollowStatus, FollowStatus]>();
   /** Suivi › Erreurs the company no longer says: they leave the tab once moved */
   const errorGoneIds = new Set<number>();
+  /** …of them, the ones out for delivery again with the old problem still written next to the status */
+  const outAgainIds = new Set<number>();
   for (const a of answers) {
     const p = parcels.find((x: any) => num(x.id) === a.id);
     if (!p) continue;
@@ -552,11 +554,24 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
     // « Quand une alerte commence »: a failed try before the chosen one, or a status that is no try, no cancel and no
     // problem, is never an alert; the chosen try and a cancel are; a problem is one of Suivi › Erreurs
     let problem = false;
+    /** out for delivery again after its problem was written (wentOutAgain): no longer an error */
+    let outAgain = false;
     if (pr) {
+      const plain = resolveStatus(defaults, ownPlain, a);
+      let words = a.status || a.key || '';
+      // ZR keeps writing an old problem next to its new status (PX1312: « Confirmé au bureau · Commune erronée », then
+      // « En livraison · Commune erronée » three minutes later): the parcel went out for delivery again after the problem
+      // was written, so it is no error any more (the owner, 27 Nov 2026: « whenever it is out for delivery again we
+      // remove it from Erreurs »). Written again while it is out (its status did not change since): still an error.
+      const sit = (a.status ?? '').split(' · ').slice(1).join(' · ');
+      if (sit && plain === 'out_for_delivery' && courierEvent(sit, null)?.kind === 'problem' && (await wentOutAgain(ctx.db, a.id, sit, a.at))) {
+        outAgain = true;
+        words = (a.status ?? '').split(' · ')[0];
+      }
       const d = decideAlert({
         to,
-        plain: resolveStatus(defaults, ownPlain, a),
-        status: a.status || a.key || '',
+        plain,
+        status: words,
         start: pr.suiviAlertStart,
         problems: pr.suiviProblems,
         seen: triesSeen.get(a.id) ?? 0,
@@ -611,8 +626,9 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
     // Suivi › Erreurs (the owner, 27 Nov 2026): the company no longer says the problem (« Commune erronée » gone, the
     // parcel back on its way): the error leaves the tab by itself and the parcel follows the company again — never
     // « Résolu » (only « Relivrer » then delivered is)
-    const errorGone = !!pr && fresh && p.follow_status === 'alert' && p.sub_status === SUB_ERREUR && !problem && !!to && BACK_ON_ROAD.includes(to);
+    const errorGone = !!pr && (fresh || outAgain) && p.follow_status === 'alert' && p.sub_status === SUB_ERREUR && !problem && !!to && BACK_ON_ROAD.includes(to);
     if (errorGone) errorGoneIds.add(a.id);
+    if (errorGone && outAgain) outAgainIds.add(a.id);
     // Suivi's own work (an alert raised or handled, an exchange in progress) is not undone by the courier's
     // « en livraison » / « vers wilaya »: only an end (livré, retour, perdu…) moves such a parcel.
     if (MANUAL_HOLD.includes(p.follow_status) && to && !SYNC_ENDS.includes(to) && !errorGone) continue;
@@ -653,7 +669,19 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
   // Suivi › Erreurs the company no longer says: back on their way, their mark goes (the parcel leaves the tab)
   const gone = [...errorGoneIds].filter((id) => moved.has(id));
   if (gone.length) await ctx.db.query(`UPDATE orders SET sub_status = NULL WHERE id = ANY($1) AND sub_status = $2 AND follow_status <> 'alert'`, [gone, SUB_ERREUR]);
-  for (const id of gone) await addEvent(ctx.db, id, null, 'note', null, 'event', `${c.name} ne signale plus d’erreur : le colis quitte « Erreurs » et suit de nouveau ${c.name}`, { errorGone: true });
+  for (const id of gone)
+    await addEvent(
+      ctx.db,
+      id,
+      null,
+      'note',
+      null,
+      'event',
+      outAgainIds.has(id)
+        ? `${c.name} a remis le colis en livraison après l’erreur : il quitte « Erreurs » et suit de nouveau ${c.name}`
+        : `${c.name} ne signale plus d’erreur : le colis quitte « Erreurs » et suit de nouveau ${c.name}`,
+      { errorGone: true, ...(outAgainIds.has(id) ? { outAgain: true } : {}) },
+    );
   // the company corrected a status it gave: said in the order's history
   for (const [id, [from, to]] of corrections)
     if (moved.has(id)) await addEvent(ctx.db, id, null, 'note', null, 'event', `Correction de ${c.name} : « ${FOLLOW_FR[from]} » → « ${FOLLOW_FR[to]} »`, { courierFix: { from, to } });
@@ -830,6 +858,34 @@ async function takenLongAgo(ctx: Ctx, orderId: number) {
   )[0]?.at;
   return !!at && ctx.now() - new Date(at).getTime() >= TAKEN_WAIT_MS;
 }
+/**
+ * The parcel went out for delivery again after its problem was written (PX1312, 26 Nov 2026: ZR « Confirmé au bureau ·
+ * Commune erronée » at 10:32, « En livraison · Commune erronée » at 10:35): the company's status (`at`, ZR's
+ * « lastStateUpdateAt ») started after the first history line with that problem in its latest run. No time, or no such
+ * line: not known, so it stays an error.
+ */
+async function wentOutAgain(db: Db, orderId: number, sit: string, at: string | null | undefined): Promise<boolean> {
+  const since = utcDate(at);
+  if (!since) return false;
+  const r = (
+    await db.query(
+      `SELECT min(e.at) AS first FROM order_events e
+        WHERE e.order_id = $1 AND e.kind = 'follow_status' AND e.data->>'courier' = 'true' AND strpos(coalesce(e.note, ''), $2) > 0
+          AND e.at > coalesce((SELECT max(x.at) FROM order_events x
+                                WHERE x.order_id = $1 AND x.kind = 'follow_status' AND x.data->>'courier' = 'true' AND strpos(coalesce(x.note, ''), $2) = 0),
+                              '-infinity'::timestamptz)`,
+      [orderId, ` · ${sit}`],
+    )
+  )[0];
+  return !!r?.first && Date.parse(since) > Date.parse(iso(r.first));
+}
+/** A company's time; one written without its time zone is taken as UTC (ZR's clock). */
+const utcDate = (s: string | null | undefined) => {
+  const v = (s ?? '').trim();
+  if (!v) return null;
+  const t = Date.parse(/([zZ]|[+-]\d\d:?\d\d)$/.test(v) || !/\d\d:\d\d/.test(v) ? v : `${v}Z`);
+  return isFinite(t) ? new Date(t).toISOString() : null;
+};
 const safeDate = (s: string | null | undefined) => {
   if (!s) return null;
   const t = Date.parse(s);

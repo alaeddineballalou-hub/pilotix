@@ -156,7 +156,7 @@ const DONE: [string, string][] = [
   ['138_rappel_action', 'bbb33624e353'],
   ['139_fee_taken', 'e8e0cf61a84c'],
   ['140_ad_links', '7e100a44992a'],
-  ['141_pay_takebacks', 'f0d3ab17c4e1'],
+  ['141_pay_takebacks', 'af4da06ccadc'],
 ];
 
 test('the old shop steps never change: a change to the shops’ tables is a new step at the end', () => {

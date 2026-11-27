@@ -4,10 +4,12 @@
 // agent, else whoever set « Livré », else the one who pressed « Relivrer » on its alert) and when it stopped (`at`). The
 // pay (modules/pay.ts) reads it: a person already paid for that delivery gets it back as a minus line in the period of
 // `at`; nobody paid yet: nothing here counts (the order simply leaves the pay).
+// On the live server (shared tables), tenantization adds shop_id to this table and to its keys, like every other (no
+// link to orders: there its key is (shop_id, id)).
 export default `
 CREATE TABLE IF NOT EXISTS pay_takebacks (
-  id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  order_id     bigint      NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  id           bigserial   PRIMARY KEY,
+  order_id     bigint      NOT NULL,
   delivered_at timestamptz NOT NULL,
   suivi_by     bigint,
   at           timestamptz NOT NULL DEFAULT now()

@@ -222,6 +222,22 @@ test('parcel at ZR (preview): home → stop desk, applied once ZR accepts; a req
   assert.equal((await order(oid)).is_stopdesk, true);
 });
 
+test('« Livraison » kept at Domicile (PX1312): the same place says « rien à changer », another commune goes as an address change', async () => {
+  const { id: oid } = await zrOnRoad();
+  await db.query(`UPDATE parcel_changes SET status = 'cancelled' WHERE order_id = $1 AND status = 'pending'`, [oid]);
+  const suivi = await as(EMAILS.suivi);
+  const o = (await db.query('SELECT wilaya_id, commune, address FROM orders WHERE id = $1', [oid]))[0];
+  const place = { orderId: oid, kind: 'delivery', stopdesk: false, wilayaId: Number(o.wilaya_id), address: String(o.address ?? '') };
+  // nothing changes: said plainly, never « livré » (read as « delivered » on PX1312)
+  await assert.rejects(call('parcel.change', suivi, { ...place, commune: String(o.commune ?? '') }), (e: any) => /Il va déjà à domicile, à cette adresse : rien à changer/.test(e.message) && !/livr/.test(e.message));
+  // another commune (a « Commune erronée » to fix): sent, as an address change
+  const ch: any = await call('parcel.change', suivi, { ...place, commune: 'Timoudi' });
+  assert.equal(ch.kind, 'address');
+  assert.equal(ch.status, 'pending');
+  assert.equal(ch.new.commune, 'Timoudi');
+  await call('parcel.changeCancel', suivi, { id: ch.id });
+});
+
 test('parcel at ZR (server): the request goes to ZR, its refusal is kept and the order stays the same', async () => {
   const { id: oid, zr } = await zrOnRoad();
   const calls: Calls = [];

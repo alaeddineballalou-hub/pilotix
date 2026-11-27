@@ -341,6 +341,8 @@ async function requestChange(ctx: Ctx, i: z.infer<typeof ChangeIn>) {
   };
   const next: ChangeValues = {};
   const input: ChangeInput = { item: { id: num(o.id), tracking: o.tracking, extId: o.ext_id ?? null }, kind: i.kind };
+  /** what is sent (« Livraison » kept at Domicile with another commune: an address change) */
+  let kind: ChangeKind = i.kind;
   if (i.kind === 'amount') {
     if (i.amount == null) throw bad('Le nouveau montant manque');
     if (i.amount === num(o.total)) throw bad('C’est déjà le montant à encaisser');
@@ -367,14 +369,23 @@ async function requestChange(ctx: Ctx, i: z.infer<typeof ChangeIn>) {
       Object.assign(input, { stopdesk: false, wilayaId: i.wilayaId, commune: i.commune, address: i.address ?? '' });
     }
     if (i.amount != null && i.amount !== num(o.total)) next.amount = input.amount = i.amount;
-    if (i.kind === 'delivery' && !!o.is_stopdesk === stopdesk && (!stopdesk || num(o.stopdesk_id) === next.stopdeskId)) throw bad(stopdesk ? 'C’est déjà ce bureau' : 'Le colis est déjà livré à domicile');
+    if (i.kind === 'delivery' && stopdesk && !!o.is_stopdesk && num(o.stopdesk_id) === next.stopdeskId) throw bad('C’est déjà ce bureau : rien à changer');
+    // Domicile → Domicile from « Livraison »: another commune or address (a « Commune erronée » to fix) is an address
+    // change; the very same place, nothing to send — said plainly (it said « Le colis est déjà livré à domicile », read as
+    // « delivered » on PX1312, the owner, 27 Nov 2026)
+    if (i.kind === 'delivery' && !stopdesk && !o.is_stopdesk) {
+      const same = (a: unknown, b: unknown) => String(a ?? '').trim().replace(/\s+/g, ' ').toLowerCase() === String(b ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+      const samePlace = num(o.wilaya_id) === next.wilayaId && same(o.commune, next.commune) && same(o.address, next.address);
+      if (samePlace && next.amount === undefined) throw bad('Il va déjà à domicile, à cette adresse : rien à changer. Pour corriger la commune, changez-la ici.');
+      kind = input.kind = samePlace ? 'amount' : 'address';
+    }
   }
   let extId: string | null = null;
   let approved: boolean | null = null;
   let direct = false;
   if (isDemo(ctx)) {
     extId = `demo-change-${Date.now()}`;
-    approved = i.kind === 'phone' ? true : null;
+    approved = kind === 'phone' ? true : null;
   } else {
     const r = (await courier(ctx, 'change', { companyId: num(o.company_id), orderId: num(o.id), change: input })) as { extId: string; approved: boolean | null; direct?: boolean };
     extId = r.extId;
@@ -383,10 +394,10 @@ async function requestChange(ctx: Ctx, i: z.infer<typeof ChangeIn>) {
   }
   const ins = await ctx.db.query(
     `INSERT INTO parcel_changes (order_id, company_id, ext_id, kind, old, new, status, note, created_by, decided_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-    [o.id, o.company_id, extId, i.kind, JSON.stringify(old), JSON.stringify(next), approved ? 'approved' : 'pending', i.note ?? null, ctx.session.profile.id, approved ? new Date().toISOString() : null],
+    [o.id, o.company_id, extId, kind, JSON.stringify(old), JSON.stringify(kind === 'amount' ? { amount: next.amount } : next), approved ? 'approved' : 'pending', i.note ?? null, ctx.session.profile.id, approved ? new Date().toISOString() : null],
   );
   const row = { ...ins[0], company_name: o.company_name };
-  await addEvent(ctx.db, num(o.id), ctx.session.profile.id, 'note', null, null, `${direct ? `Modifié directement chez ${o.company_name} (colis pas encore enlevé)` : `Demande de modification envoyée à ${o.company_name}`} : ${describe(i.kind, old, next)}${i.note ? ` (${i.note})` : ''}`);
+  await addEvent(ctx.db, num(o.id), ctx.session.profile.id, 'note', null, null, `${direct ? `Modifié directement chez ${o.company_name} (colis pas encore enlevé)` : `Demande de modification envoyée à ${o.company_name}`} : ${describe(kind, old, next)}${i.note ? ` (${i.note})` : ''}`);
   if (approved) await applyChange(ctx, row);
   ctx.emit({ type: 'order', id: num(o.id) });
   return toChange((await ctx.db.query(`${CHANGES_SQL} WHERE ch.id = $1`, [row.id]))[0]);

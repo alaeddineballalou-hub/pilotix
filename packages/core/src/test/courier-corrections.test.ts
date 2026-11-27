@@ -35,15 +35,15 @@ async function parcels(n: number, status: string, words: string): Promise<number
   );
   return ids;
 }
-/** ZR's answers: [order, key, words] */
-const zrSays = (words: [number, string, string][]) =>
+/** ZR's answers: [order, key, words, when its status started (ZR's « lastStateUpdateAt »)] */
+const zrSays = (words: [number, string, string, string?][]) =>
   as(EMAILS.suivi, {
-    courier: async (action: string) => (action === 'track' ? words.map(([id, key, status]) => ({ id, key, status, at: null })) : []),
+    courier: async (action: string) => (action === 'track' ? words.map(([id, key, status, at]) => ({ id, key, status, at: at ?? null })) : []),
     meta: async () => null,
     hashPassword: async (v: string) => v,
   } as any);
 /** the sync every 30 minutes (the full one) */
-const sync = async (words: [number, string, string][]) => call('delivery.sync', await zrSays(words), { companyId: zr });
+const sync = async (words: [number, string, string, string?][]) => call('delivery.sync', await zrSays(words), { companyId: zr });
 const st = async (id: number) => (await db.query('SELECT follow_status, sub_status FROM orders WHERE id = $1', [id]))[0];
 const notes = async (id: number) => (await db.query(`SELECT note FROM order_events WHERE order_id = $1 AND kind = 'note' ORDER BY at, id`, [id])).map((r: any) => String(r.note));
 const listIds = async (tab: string) => (((await call('suivi.list', await as(EMAILS.suivi), { tab, page: 1, pageSize: 300 })) as any).rows as any[]).map((r) => Number(r.id));
@@ -57,6 +57,35 @@ test('Suivi › Erreurs: ZR no longer says « Commune erronée »: the parcel le
   assert.deepEqual(await st(a), { follow_status: 'out_for_delivery', sub_status: null });
   assert.ok(!(await listIds('erreurs')).includes(a));
   assert.ok((await notes(a)).some((n) => /ne signale plus d’erreur : le colis quitte « Erreurs »/.test(n)), JSON.stringify(await notes(a)));
+});
+
+test('ZR puts an « Erreur » out for delivery again with the old « Commune erronée » still written (PX1312): it leaves « Erreurs »', async () => {
+  const [a] = await parcels(1, 'out_for_delivery', 'En livraison');
+  // back at its office, the office writes the problem
+  await sync([[a, 'confirme_au_bureau', 'Confirmé au bureau · Commune erronée']]);
+  assert.deepEqual(await st(a), { follow_status: 'alert', sub_status: 'alert_erreur' });
+  // minutes later ZR puts it out for delivery again, the old problem still next to its status
+  const out = new Date(Date.now() + 1000).toISOString();
+  await sync([[a, 'en_livraison', 'En livraison · Commune erronée', out]]);
+  assert.deepEqual(await st(a), { follow_status: 'out_for_delivery', sub_status: null });
+  assert.ok(!(await listIds('erreurs')).includes(a));
+  assert.ok((await notes(a)).some((n) => /a remis le colis en livraison après l’erreur : il quitte « Erreurs »/.test(n)), JSON.stringify(await notes(a)));
+  // read again: it stays on its way (never back and forth)
+  await sync([[a, 'en_livraison', 'En livraison · Commune erronée', out]]);
+  assert.deepEqual(await st(a), { follow_status: 'out_for_delivery', sub_status: null });
+});
+
+test('« Commune erronée » written while the parcel is out stays an error; out again later (ZR\'s new status), it leaves', async () => {
+  const [b] = await parcels(1, 'out_for_delivery', 'Sortie en livraison');
+  // it went out three hours ago, the livreur wrote the problem since
+  const morning = new Date(Date.now() - 3 * 3_600_000).toISOString();
+  await sync([[b, 'sortie_en_livraison', 'Sortie en livraison · Commune erronée', morning]]);
+  assert.deepEqual(await st(b), { follow_status: 'alert', sub_status: 'alert_erreur' });
+  await sync([[b, 'sortie_en_livraison', 'Sortie en livraison · Commune erronée', morning]]);
+  assert.deepEqual(await st(b), { follow_status: 'alert', sub_status: 'alert_erreur' }, 'its status did not change since: still an error');
+  // the next run: ZR puts it out again (a new status time), the problem still written
+  await sync([[b, 'sortie_en_livraison', 'Sortie en livraison · Commune erronée', new Date(Date.now() + 1000).toISOString()]]);
+  assert.deepEqual(await st(b), { follow_status: 'out_for_delivery', sub_status: null });
 });
 
 test('the error read again with the same words stays in « Erreurs »', async () => {
