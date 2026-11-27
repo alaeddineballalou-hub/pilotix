@@ -664,6 +664,8 @@ async function nouvellesStats(ctx: Ctx) {
     prev: sum(W1),
     live: { waiting: waiting.length, late: waiting.filter((w) => w.late).length, noAgent: waiting.filter((w) => w.agentId === null).length },
     agents,
+    /** the agent table's « Équipe » line: every call of those agents added up (an agency's calls are not in it) */
+    agentsTotal: sumOf(today, 0),
     director,
     perAgent,
     teams,

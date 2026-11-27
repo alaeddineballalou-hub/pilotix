@@ -189,7 +189,7 @@ function NvBody({ D }: { D: Nv }) {
 /** Each agent today: the same numbers as the team; the team line adds up every call (never an average of agents). */
 function NvAgents({ D }: { D: Nv }) {
   const { t } = useTranslation();
-  const T = D.today;
+  const T = D.agentsTotal;
   const teamRe = pOf(T.reached, T.called);
   const teamCv = pOf(T.converted, T.called);
   const cols = ['cCalled', 'cUnder5', 'cMedian', 'cOnTime', 'cReached', 'cConverted', 'cLate'] as const;
@@ -245,7 +245,7 @@ function NvAgents({ D }: { D: Nv }) {
             <tfoot>
               <tr>
                 <td data-l={t('confirmation.col.agent')}><b>{t('confirmation.nv.teamRow')}</b></td>
-                {row({ ...T, late: D.agents.reduce((s, a) => s + a.late, 0) }, true)}
+                {row({ ...D.agentsTotal, late: D.agents.reduce((s, a) => s + a.late, 0) }, true)}
               </tr>
             </tfoot>
           )}
