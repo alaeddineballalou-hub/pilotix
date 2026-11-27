@@ -23,7 +23,6 @@ import { ErrorBox, Icon, Loading } from '../../ui/kit';
 import { CoChip } from '../../ui/CoIcon';
 import { ViewSwitch } from '../../ui/ViewSwitch';
 import { Seg, Sheet } from '../../ui/Sheet';
-import { useCounts } from './counts';
 import type { ListFilter } from './shared';
 import { useSwap } from './swapAction';
 import { Responsible, RespLine, useFaults, type Shown } from '../faults/Responsible';
@@ -136,12 +135,16 @@ function useShow(f: PF, setF: (f: PF) => void) {
 // ---------------------------------------------------------------- small parts
 /**
  * « Terminé » (owner's choice, 27 Nov 2026): Livré and Annulé are one line of the menu, and these two big tiles — the
- * old « Commandes » card's (Tableau) — sit at the top of both screens to go from one to the other in one tap. Counts of
- * now (each one his own orders, a manager his team's); a tile the person's role does not open is not shown.
+ * old « Commandes » card's (Tableau) — sit at the top of both screens to go from one to the other in one tap. Their
+ * numbers are the chosen period's, the same as the page under them (owner's choice, 27 Nov 2026): the parcels delivered,
+ * and the orders lost at the confirmation or come back — each one his own orders, a manager his team's, an agency its
+ * own. A tile the person's role does not open is not shown.
  */
-function DoneTiles({ on }: { on: 'livrees' | 'annulees' }) {
+function DoneTiles({ on, per }: { on: 'livrees' | 'annulees'; per: Period }) {
   const { t } = useTranslation();
-  const c = useCounts();
+  const r = useRpc('orders.cancelReport', per.range).data;
+  const delivered = r?.returns.delivered;
+  const shipped = r ? r.returns.delivered + r.returns.n : 0;
   const tile = (key: 'livrees' | 'annulees', icon: string, label: string, v: number | undefined, s: string, tone: 'ok' | 'bad') =>
     tabOn('commandes', key) ? (
       <a key={key} className={`${tone}${on === key ? ' on' : ''}`} href={`#/commandes/${key}`} aria-current={on === key ? 'page' : undefined}>
@@ -154,8 +157,8 @@ function DoneTiles({ on }: { on: 'livrees' | 'annulees' }) {
     ) : null;
   return (
     <nav className="pxn-ends" aria-label={t('nav.sub.termine')}>
-      {tile('livrees', 'checkcircle', t('orders.kpi.livre'), c?.delivered, t('orders.kpi.livreS', { pct: pct(c ? c.delivered / Math.max(1, c.all) : null) }), 'ok')}
-      {tile('annulees', 'xcircle', t('orders.kpi.annule'), c ? c.cancelledConf + c.back : undefined, t('orders.kpi.annuleS', { conf: c?.cancelledConf ?? 0, ret: c?.back ?? 0 }), 'bad')}
+      {tile('livrees', 'checkcircle', t('orders.kpi.livre'), delivered, t('orders.kpi.livreRate', { pct: pct(r && shipped ? r.returns.delivered / shipped : null) }), 'ok')}
+      {tile('annulees', 'xcircle', t('orders.kpi.annule'), r ? r.conf.n + r.returns.n : undefined, t('orders.kpi.annuleS', { conf: r?.conf.n ?? 0, ret: r?.returns.n ?? 0 }), 'bad')}
     </nav>
   );
 }
@@ -525,7 +528,7 @@ export function PhoneLivre({ onTable }: { onTable?: () => void }) {
     // « solo »: no money on the left (a confirmation agent, an agency): the cards take the whole width on a computer
     <div className={`pxn${wide ? ' wide' : ''}${money ? '' : ' solo'}`}>
       <div className="pxn-top">
-        <DoneTiles on="livrees" />
+        <DoneTiles on="livrees" per={per} />
         <PeriodBar per={per} />
         {wide && onTable && <ViewSwitch mode="cards" onChange={(m) => m === 'table' && onTable()} />}
       </div>
@@ -773,7 +776,7 @@ export function PhoneAnnule({ onTable, start }: { onTable?: () => void; start?: 
   return (
     <div className={`pxn${wide ? ' wide' : ''}`}>
       <div className="pxn-top">
-        <DoneTiles on="annulees" />
+        <DoneTiles on="annulees" per={per} />
         <PeriodBar per={per} />
         {wide && onTable && <ViewSwitch mode="cards" onChange={(m) => m === 'table' && onTable()} />}
       </div>

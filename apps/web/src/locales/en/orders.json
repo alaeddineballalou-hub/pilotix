@@ -16,6 +16,7 @@
     "suiviS": "on the way with the courier / driver",
     "livre": "Delivered",
     "livreS": "{{pct}} of total",
+    "livreRate": "delivery rate {{pct}}",
     "annule": "Cancelled",
     "annuleS": "{{conf}} at confirmation · {{ret}} returns",
     "help": "Confirmation = to call (new and in progress). Depot = confirmed, being prepared or dispatched. Tracking = handed to the courier or driver, on the way. Delivered = delivered to the customer. Cancelled = cancelled at confirmation, and parcels returning or returned.",

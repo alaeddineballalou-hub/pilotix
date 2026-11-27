@@ -16,6 +16,7 @@
     "suiviS": "en route chez la société / le livreur",
     "livre": "Livré",
     "livreS": "{{pct}} du total",
+    "livreRate": "taux de livraison {{pct}}",
     "annule": "Annulé",
     "annuleS": "{{conf}} à la confirmation · {{ret}} retours",
     "help": "Confirmation = à appeler (nouvelles et en cours). Dépôt = confirmées, en préparation ou en dispatch. Suivi = remises à la société ou au livreur, en route. Livré = livrées au client. Annulé = annulées à la confirmation, et colis en retour ou revenus.",
