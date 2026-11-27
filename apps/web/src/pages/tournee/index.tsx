@@ -193,7 +193,7 @@ function ParcelCard({ o, shop, actions, fix }: { o: Order; shop: { name: string;
       ) : actions || fix === 'delivered' ? (
         <>
           <div className="statusbar">
-            {fix === 'delivered' && <b className="small">{t('tournee.fix.notDelivered')}</b>}
+            {fix === 'delivered' && <b className="small" style={{ alignSelf: 'center' }}>{t('tournee.fix.notDelivered')}</b>}
             {actions && !focus && (
               <button className="btn" disabled={set.isPending} onClick={() => go('out_for_delivery')}>
                 {t('tournee.onTheWay')}
