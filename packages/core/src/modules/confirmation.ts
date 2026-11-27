@@ -552,29 +552,41 @@ export interface NvTeam extends NvSum {
   /** agents who made a first call today (null: an agency — its agents stay private) */
   agents: number | null;
   late: number;
+  /** orders waiting for a first call that no agent has yet (null: a team of the store — those orders belong to no team) */
+  unassigned: number | null;
 }
 
 /**
- * Nouvelles › Statistiques (the owner's design, 27 Nov 2026): today only, live, no filters. The first calls made today
- * (by status change) and the orders that came in today; the same numbers yesterday at the same hour (the arrows); what
- * waits right now; one line per agent. The store's owner and administrators also get each team side by side — his own
- * teams, and each confirmation agency as one line whose agents stay private — and the load per agent.
+ * Nouvelles › Statistiques, as the owner's sketches (27 Nov 2026, « Agent manager view » and « Teams director view »):
+ * today only, live, no filters. The first calls made today (by status change) and the orders that came in today; the
+ * same numbers yesterday at the same hour (the arrows); what waits right now; one line per agent. The store's owner and
+ * administrators get all the teams together and each team side by side — his own teams, and each confirmation agency as
+ * one line whose agents stay private — and the load per agent; `team` (one of his teams): that team's manager view.
  */
-async function nouvellesStats(ctx: Ctx) {
+async function nouvellesStats(ctx: Ctx, i: { team?: string } = {}) {
   const now = ctx.now();
   const calls = await getSetting(ctx.db, 'calls');
   const day = algiersDayStart(now);
+  const director = (ctx.session.isAdmin || ctx.session.roles.includes('vendeur')) && agencyOf(ctx) === null;
+  const T = director ? await getSetting(ctx.db, 'teams') : [];
+  // a team opened by the director: what its manager sees (his agents' orders and the ones no agent has yet)
+  const opened = director && i.team ? T.find((t) => `t${t.id}` === i.team) ?? null : null;
+  const membersOf = (t: (typeof T)[number]) => new Set<number>([...(t.managerId ? [t.managerId] : []), ...t.agentIds]);
+  const mine = opened ? membersOf(opened) : null;
+  const inView = (agentId: number | null, agencyId: number | null) => !mine || (agencyId === null && (agentId === null || mine.has(agentId)));
   const rows = await ctx.db.query(
     `SELECT id, created_at, assigned_at, agent_id, conf_status, conf_agency_id FROM sales
       WHERE (created_at >= $1 OR conf_status IN ('new','to_check'))${statsSql(ctx, 'sales')}`,
     [isoT(day - 3 * DAY)],
   );
-  const all = rows.map((r: any) => {
-    const created = Date.parse(iso(r.created_at));
-    const assigned = r.agent_id && r.assigned_at ? Date.parse(iso(r.assigned_at)) : null;
-    const r0 = assigned && assigned > created ? assigned : created;
-    return { id: num(r.id), agentId: numOrNull(r.agent_id), agencyId: numOrNull(r.conf_agency_id), created, r: r0, s: workStart(r0, calls), status: r.conf_status as ConfStatus };
-  });
+  const all = rows
+    .map((r: any) => {
+      const created = Date.parse(iso(r.created_at));
+      const assigned = r.agent_id && r.assigned_at ? Date.parse(iso(r.assigned_at)) : null;
+      const r0 = assigned && assigned > created ? assigned : created;
+      return { id: num(r.id), agentId: numOrNull(r.agent_id), agencyId: numOrNull(r.conf_agency_id), created, r: r0, s: workStart(r0, calls), status: r.conf_status as ConfStatus };
+    })
+    .filter((o) => inView(o.agentId, o.agencyId));
   const agencyOfOrder = new Map(all.map((o) => [o.id, o.agencyId]));
   // each order's first call: the first change of its confirmation status made by a person (not a duplicate mark)
   const first = new Map<number, { at: number; by: number; to: string }>();
@@ -620,13 +632,16 @@ async function nouvellesStats(ctx: Ctx) {
     };
   };
   const inW = (w: { a: number; b: number }, t: number) => t >= w.a && t < w.b;
-  const sum = (w: { a: number; b: number }, keep: (c: Call) => boolean = () => true, keepO: (o: Ord) => boolean = () => true) =>
-    sumOf(made.filter((c) => inW(w, c.at) && keep(c)), all.filter((o) => inW(w, o.created) && o.status !== 'duplicate' && keepO(o)).length);
+  const newIn = (w: { a: number; b: number }, keepO: (o: Ord) => boolean = () => true) => all.filter((o) => inW(w, o.created) && o.status !== 'duplicate' && keepO(o)).length;
+  const sum = (w: { a: number; b: number }) => sumOf(made.filter((c) => inW(w, c.at)), newIn(w));
   // what waits right now (the orders never called yet)
   const todo = await loadTodo(ctx.db, queueSql(ctx, 'conf'));
   const waitingRows = todo.filter((o) => (o.status === 'new' || o.status === 'to_check') && o.attempts === 0 && !o.nextCallAt && !first.has(o.id));
   const dueW = computeDue(waitingRows, calls, now);
-  const waiting = waitingRows.map((o) => ({ agentId: o.agentId, agencyId: agencyOfOrder.get(o.id) ?? null, late: now > (dueW.get(o.id)!.at ?? o.start) }));
+  const waiting = waitingRows
+    .map((o) => ({ agentId: o.agentId, agencyId: agencyOfOrder.get(o.id) ?? null, late: now > (dueW.get(o.id)!.at ?? o.start) }))
+    .filter((w) => inView(w.agentId, w.agencyId));
+  const live = { waiting: waiting.length, late: waiting.filter((w) => w.late).length, noAgent: waiting.filter((w) => w.agentId === null).length };
   // one line per agent: the store's own agents (an agency's agents stay private: never a line here)
   const who = await names(ctx.db);
   const today = made.filter((c) => inW(W0, c.at) && c.agencyId === null);
@@ -637,38 +652,79 @@ async function nouvellesStats(ctx: Ctx) {
       return { id, name: who.get(id) ?? '—', called: x.called, under5: x.under5, onTime: x.onTime, median: x.median, reached: x.reached, converted: x.converted, late: waiting.filter((w) => w.late && w.agentId === id).length };
     })
     .sort((a, b) => b.called - a.called || a.name.localeCompare(b.name));
-  // the store's owner and administrators: each team side by side, and the load per agent
-  const director = (ctx.session.isAdmin || ctx.session.roles.includes('vendeur')) && agencyOf(ctx) === null;
+  // the store's owner and administrators (not inside one of his teams): each team side by side, the load per agent
+  const dir = director && !opened;
   let teams: NvTeam[] | null = null;
+  let allTeams: NvTeam | null = null;
   let perAgent: { orders: number; agents: number } | null = null;
-  if (director) {
+  let perAgentPrev: { orders: number; agents: number } | null = null;
+  if (dir) {
+    // the load: the store's own new orders ÷ its agents who made a first call (now, and yesterday at the same hour)
+    const load = (w: { a: number; b: number }) => ({
+      orders: newIn(w, (o) => o.agencyId === null),
+      agents: new Set(made.filter((c) => inW(w, c.at) && c.agencyId === null).map((c) => c.by)).size,
+    });
+    perAgent = load(W0);
+    perAgentPrev = load(W1);
     const own = new Set(today.map((c) => c.by));
-    perAgent = { orders: all.filter((o) => inW(W0, o.created) && o.status !== 'duplicate' && o.agencyId === null).length, agents: own.size };
-    const T = await getSetting(ctx.db, 'teams');
     const A = await agencyNames(ctx);
-    teams = [
+    const built = [
       ...T.map((t) => {
-        const m = new Set<number>([...(t.managerId ? [t.managerId] : []), ...t.agentIds]);
-        const s = sum(W0, (c) => c.agencyId === null && m.has(c.by), (o) => o.agencyId === null && o.agentId !== null && m.has(o.agentId));
-        return { key: `t${t.id}`, kind: 'team' as const, name: t.name, ...s, agents: [...own].filter((id) => m.has(id)).length, late: waiting.filter((w) => w.late && w.agencyId === null && w.agentId !== null && m.has(w.agentId)).length };
+        const m = membersOf(t);
+        const cs = made.filter((c) => inW(W0, c.at) && c.agencyId === null && m.has(c.by));
+        const row: NvTeam = {
+          key: `t${t.id}`,
+          kind: 'team',
+          name: t.name,
+          ...sumOf(cs, newIn(W0, (o) => o.agencyId === null && o.agentId !== null && m.has(o.agentId))),
+          agents: [...own].filter((id) => m.has(id)).length,
+          late: waiting.filter((w) => w.late && w.agencyId === null && w.agentId !== null && m.has(w.agentId)).length,
+          unassigned: null,
+        };
+        return { row, cs };
       }),
       ...A.map((a) => {
-        const s = sum(W0, (c) => c.agencyId === a.id, (o) => o.agencyId === a.id);
-        return { key: `a${a.id}`, kind: 'agency' as const, name: a.name, ...s, agents: null, late: waiting.filter((w) => w.late && w.agencyId === a.id).length };
+        const cs = made.filter((c) => inW(W0, c.at) && c.agencyId === a.id);
+        const row: NvTeam = {
+          key: `a${a.id}`,
+          kind: 'agency',
+          name: a.name,
+          ...sumOf(cs, newIn(W0, (o) => o.agencyId === a.id)),
+          agents: null,
+          late: waiting.filter((w) => w.late && w.agencyId === a.id).length,
+          unassigned: waiting.filter((w) => w.agencyId === a.id && w.agentId === null).length,
+        };
+        return { row, cs };
       }),
-    ].filter((x) => x.kind === 'team' || x.received || x.called);
+    ].filter((x) => x.row.kind === 'team' || x.row.received || x.row.called);
+    teams = built.map((x) => x.row);
+    // « Toutes les équipes »: the lines above added up (every call once), never an average of the teams
+    const union = [...new Set(built.flatMap((x) => x.cs))];
+    allTeams = {
+      key: 'all',
+      kind: 'team',
+      name: '',
+      ...sumOf(union, teams.reduce((s, r) => s + r.received, 0)),
+      agents: teams.reduce((s, r) => s + (r.agents ?? 0), 0),
+      late: teams.reduce((s, r) => s + r.late, 0),
+      unassigned: live.noAgent,
+    };
   }
   return {
     firstMinutes: calls.firstMinutes,
     today: sum(W0),
     prev: sum(W1),
-    live: { waiting: waiting.length, late: waiting.filter((w) => w.late).length, noAgent: waiting.filter((w) => w.agentId === null).length },
+    live,
     agents,
     /** the agent table's « Équipe » line: every call of those agents added up (an agency's calls are not in it) */
     agentsTotal: sumOf(today, 0),
-    director,
+    director: dir,
+    /** the team the director opened (its manager view), or null */
+    team: opened ? { key: `t${opened.id}`, name: opened.name } : null,
     perAgent,
+    perAgentPrev,
     teams,
+    allTeams,
   };
 }
 
@@ -1396,7 +1452,7 @@ export const confirmationProcs = {
   // ---- statistics (managers)
   'confirmation.firstCall': proc([...MGR], KfInput, (ctx, i) => firstCall(ctx, i)),
   /** Nouvelles › Statistiques: today only, live, no filters (the owner's design, 27 Nov 2026). */
-  'confirmation.nouvelles': proc([...MGR], z.object({}), (ctx) => nouvellesStats(ctx)),
+  'confirmation.nouvelles': proc([...MGR], z.object({ team: z.string().max(40).optional() }), (ctx, i) => nouvellesStats(ctx, i)),
   'confirmation.period': proc([...MGR], KfInput, (ctx, i) => periodNew(ctx, i)),
   'confirmation.delivery': proc([...MGR], KfInput.extend({ on: z.enum(['created', 'confirmed']).default('created') }), (ctx, i) => deliveryPerf(ctx, i)),
   'confirmation.enCours': proc([...MGR], KfInput, (ctx, i) => enCours(ctx, i)),

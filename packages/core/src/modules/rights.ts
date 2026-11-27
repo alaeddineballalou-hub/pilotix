@@ -441,6 +441,7 @@ export const PROC_RIGHTS: Record<string, Need> = {
   'stats.dashLivreurs': 'tab:dashboard/livreurs',
   'stats.dashSav': 'tab:dashboard/sav',
   'confirmation.firstCall': 'tab:dashboard/confirmation',
+  'confirmation.nouvelles': 'tab:dashboard/confirmation',
   'confirmation.period': 'tab:dashboard/confirmation',
   'confirmation.delivery': 'tab:dashboard/confirmation',
   'confirmation.enCours': 'tab:dashboard/confirmation',

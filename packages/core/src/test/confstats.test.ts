@@ -66,4 +66,20 @@ test('Nouvelles › Statistiques: today only, the team adds up its agents, a man
   const owner: any = await call('confirmation.nouvelles', await at(EMAILS.vendeur, now), {});
   const mgr: any = await call('confirmation.nouvelles', await at(EMAILS.manager, now), {});
   assert.ok(mgr.today.called <= owner.today.called, 'a manager counts his team only');
+  // « Toutes les équipes » adds the lines up; a store team has no « Non assignées » of its own
+  assert.equal(owner.allTeams.called, owner.teams.reduce((n: number, r: any) => n + r.called, 0));
+  assert.equal(owner.allTeams.received, owner.teams.reduce((n: number, r: any) => n + r.received, 0));
+  for (const r of owner.teams) if (r.kind === 'team') assert.equal(r.unassigned, null);
+  // a team opened by the owner: its manager view (no team table), never more than all the teams
+  const first = owner.teams.find((r: any) => r.kind === 'team');
+  if (first) {
+    const one: any = await call('confirmation.nouvelles', await at(EMAILS.vendeur, now), { team: first.key });
+    assert.equal(one.director, false);
+    assert.equal(one.teams, null);
+    assert.equal(one.team.key, first.key);
+    assert.ok(one.today.called <= owner.today.called);
+  }
+  // a manager cannot open another team
+  const other: any = await call('confirmation.nouvelles', await at(EMAILS.manager, now), { team: 't999' });
+  assert.equal(other.team, null);
 });
