@@ -2,8 +2,9 @@
 //
 // Each ad set is made by a marketer (adsets.marketer_id). It is judged on its WHOLE life (from its first day of results):
 //  - its share of a product's orders, each month = its Meta purchases on that product ÷ the purchases of every ad set
-//    selling that product that month (spend when nobody has a purchase). An ad set selling several products counts
-//    1 / (number of products) of its purchases on each;
+//    selling that product that month (spend when nobody has a purchase). An ad set selling several products counts on
+//    each the purchases (and spend) of its ads that send people to that product's page (adlinks.ts; the owner's choice,
+//    27 Nov 2026, as in Publicité); its ads with no known page share theirs equally between its products, as before;
 //  - its money = that share of the product's real profit (moneyOf: delivered sales − purchase − delivery − confirmation − returns)
 //    minus its own ad spend, each month at that month's dollar rate;
 //  - marge produit = delivered sales − delivery − purchase price (what the product leaves before ads and team);
@@ -26,6 +27,7 @@ import { Db, isoOrNull, num } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { getRaw, setRaw } from './admin';
 import { addDays, adsetDiagnostic, adsetInScope, adsProcs, DayRow, fxTable, insights, isOwner, moneyOf, ordersOf, partnerLead, sumDays } from './ads';
+import { adMonthParts, productShares } from './adlinks';
 
 const RULES_KEY = 'mk_rules';
 export interface MkRules {
@@ -153,6 +155,15 @@ export async function mkCompute(db: Db, now: number, keep?: (s: SetRow) => boole
     partnerId: r.partner_id === null || r.partner_id === undefined ? null : num(r.partner_id),
   }));
   const rows = await insights(db, sets.map((s) => s.id), start, today);
+  // each ad set's months ad by ad: what of its purchases and spend went to each of its products (adlinks.ts)
+  const parts = await adMonthParts(db, sets.map((s) => s.id), start, today);
+  const shareMemo = new Map<string, Map<number, number>>();
+  const shareOf = (id: string, ym: string, pid: number, k: 'cents' | 'purchases') => {
+    const key = `${id}|${ym}|${k}`;
+    let m = shareMemo.get(key);
+    if (!m) shareMemo.set(key, (m = productShares(S.get(id)?.productIds ?? [], (parts.get(`${id}|${ym}`) ?? []).map((x) => ({ productId: x.productId, cents: x[k] })))));
+    return m.get(pid) ?? 0;
+  };
   const products = new Map((await db.query('SELECT id, name FROM products')).map((p: any) => [num(p.id), p.name as string]));
   const prices = new Map((await db.query('SELECT profile_id, price FROM marketer_prices')).map((r: any) => [num(r.profile_id), num(r.price)]));
   const forced = new Map((await db.query('SELECT adset_id, st FROM mk_results')).map((r: any) => [String(r.adset_id), r.st as MkResult]));
@@ -206,8 +217,9 @@ export async function mkCompute(db: Db, now: number, keep?: (s: SetRow) => boole
     const prodSets = new Map<number, string[]>();
     for (const id of m.keys()) for (const pid of S.get(id)?.productIds ?? []) (prodSets.get(pid) ?? prodSets.set(pid, []).get(pid)!).push(id);
     for (const [pid, ids] of prodSets) {
-      const w = (id: string) => (tot.get(id)?.pur ?? 0) / (S.get(id)!.productIds.length || 1);
-      const ws = (id: string) => (tot.get(id)?.usd ?? 0) / (S.get(id)!.productIds.length || 1);
+      // its purchases (spend) on this product: those of its ads sending people to its page, by each ad
+      const w = (id: string) => (tot.get(id)?.pur ?? 0) * shareOf(id, ym, pid, 'purchases');
+      const ws = (id: string) => (tot.get(id)?.usd ?? 0) * shareOf(id, ym, pid, 'cents');
       const P = ids.reduce((s, id) => s + w(id), 0);
       const SP = ids.reduce((s, id) => s + ws(id), 0);
       const list = ordersBy.get(`${pid}|${ym}`) ?? [];

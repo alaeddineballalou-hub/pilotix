@@ -6,6 +6,7 @@ import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
 import { linkAdsets, productShares, slugOfLink, type ShopAddress } from '../modules/adlinks';
 import { landingStore } from '../modules/landingquery';
+import { mkCompute } from '../modules/marketers';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -156,4 +157,42 @@ test('« Leads »: every order of the product, its abandoned carts in it', async
   assert.ok(row.money.n >= carts, 'the carts are among the leads');
   assert.ok(row.money.n > row.money.c, 'more leads than confirmed');
   assert.equal(ov.totals.cart >= carts, true);
+});
+
+test('Marketer: an ad set selling two products counts each ad’s purchases for its own product', async () => {
+  const sac = await pid('PX-SAC');
+  const lit = await pid('PX-LIT');
+  // M1 sells the bag and the travel cot (9 purchases on the bag's ad, 1 on the cot's); M2 sells the cot (1 purchase)
+  await db.query(`INSERT INTO adsets (id, name, campaign, product_ids, status) VALUES ('990000005', 'SCALE — deux produits', 'SCALE', '{}', 'PAUSED'), ('990000006', 'TEST — lit', 'TEST', $1, 'PAUSED')`, [[lit]]);
+  await linkAdsets(db, [
+    { id: '990000051', adsetId: '990000005', name: 'Sac', link: `https://babyjoydz.net/${await slugOf(sac)}` },
+    { id: '990000052', adsetId: '990000005', name: 'Lit', link: `https://babyjoydz.net/${await slugOf(lit)}` },
+  ], addr);
+  await db.query(`INSERT INTO ads (id, adset_id, name) VALUES ('990000061', '990000006', 'Lit test')`);
+  const day = '2025-02-10';
+  await db.query(
+    `INSERT INTO ad_insights (day, adset_id, spend_cents, impressions, reach, clicks, lpv, purchases, video_3s, thruplays)
+     VALUES ($1, '990000005', 2000, 1000, 800, 20, 15, 10, 0, 0), ($1, '990000006', 500, 400, 300, 5, 4, 1, 0, 0)`,
+    [day],
+  );
+  await db.query(
+    `INSERT INTO ad_daily (day, ad_id, adset_id, spend_cents, impressions, reach, clicks, lpv, purchases, video_3s, thruplays)
+     VALUES ($1, '990000051', '990000005', 1500, 700, 600, 15, 10, 9, 0, 0), ($1, '990000052', '990000005', 500, 300, 200, 5, 5, 1, 0, 0),
+            ($1, '990000061', '990000006', 500, 400, 300, 5, 4, 1, 0, 0)`,
+    [day],
+  );
+  // two orders of the travel cot that month
+  await db.query(
+    `UPDATE orders SET created_at = '2025-02-10T10:00:00Z' WHERE id IN (
+       SELECT o.id FROM orders o WHERE NOT o.is_exchange AND o.conf_status <> 'duplicate'
+          AND (SELECT i.product_id FROM order_items i WHERE i.order_id = o.id ORDER BY i.is_upsell, i.id LIMIT 1) = $1
+        ORDER BY o.id LIMIT 2)`,
+    [lit],
+  );
+  const r = await mkCompute(db, Date.now(), (x) => x.id === '990000005' || x.id === '990000006');
+  const m1 = r.rows.find((x) => x.id === '990000005')!;
+  const m2 = r.rows.find((x) => x.id === '990000006')!;
+  // the cot's 2 orders: 1 purchase each side on the cot, so half each (equal parts of M1's 10 purchases would give it 5 of 6)
+  assert.ok(Math.abs(m1.n - 1) < 1e-9, `M1: ${m1.n}`);
+  assert.ok(Math.abs(m2.n - 1) < 1e-9, `M2: ${m2.n}`);
 });

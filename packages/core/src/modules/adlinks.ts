@@ -250,3 +250,25 @@ export async function adDaySpend(db: Db, adsetIds: string[], from: string, to: s
   }
   return out;
 }
+
+/**
+ * Each ad set's months, ad by ad: `${adsetId}|${ym}` → its ads' spend (cents, the ad account's money) and Meta purchases,
+ * with the product of each ad's page (ads with the same product together). Marketing › Marketer shares an ad set's
+ * purchases (or spend) between its products with productShares, as Publicité does its spend.
+ */
+export async function adMonthParts(db: Db, adsetIds: string[], from: string, to: string): Promise<Map<string, { productId: number | null; cents: number; purchases: number }[]>> {
+  const out = new Map<string, { productId: number | null; cents: number; purchases: number }[]>();
+  if (!adsetIds.length) return out;
+  const rows = await db.query(
+    `SELECT d.adset_id, to_char(d.day, 'YYYY-MM') AS ym, a.link_product_id, sum(d.spend_cents)::bigint AS cents, sum(d.purchases)::bigint AS pur
+       FROM ad_daily d LEFT JOIN ads a ON a.id = d.ad_id
+      WHERE d.adset_id = ANY($1) AND d.day BETWEEN $2 AND $3
+      GROUP BY 1, 2, 3`,
+    [adsetIds, from, to],
+  );
+  for (const r of rows) {
+    const k = `${String(r.adset_id)}|${String(r.ym)}`;
+    (out.get(k) ?? out.set(k, []).get(k)!).push({ productId: r.link_product_id === null || r.link_product_id === undefined ? null : num(r.link_product_id), cents: num(r.cents), purchases: num(r.pur) });
+  }
+  return out;
+}
