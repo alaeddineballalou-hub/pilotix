@@ -45,6 +45,13 @@ export function PhoneTournee({ d, livreurId, self, onPrint }: { d: Data; livreur
   const { t } = useTranslation();
   const [cur, setCur] = useState<number | null>(null);
   const [pickupOpen, setPickupOpen] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
+  /** « Pas livrée ? » on a « Livrée » not handed over yet (a tap by mistake) */
+  const [fix, setFix] = useState<Order | null>(null);
+  /** « Livrée finalement » on a refused parcel he still has (the customer took it after all) */
+  const [late, setLate] = useState<Order | null>(null);
+  const qc = useQueryClient();
+  const lateSet = useAction('orders.setFollow', { onDone: (r) => (toastUndo(r.changed.length ? t('tournee.saved') : t('tournee.noChange'), r.changed, () => qc.invalidateQueries()), setLate(null)) });
   const [chat, setChat] = useState(false);
   const [seen, setSeen] = useState(seenAt);
   const msgs = useRpc('cash.chat', { livreurId, limit: 100 }, { refetchInterval: 20_000 });
@@ -139,11 +146,59 @@ export function PhoneTournee({ d, livreurId, self, onPrint }: { d: Data; livreur
                   </span>
                   <span className={`ms-tag ${o.isExchange ? 'ex' : 'ret'}`}>{o.isExchange ? t('tournee.ms.tagExchange') : t('tournee.ms.tagReturn')}</span>
                 </span>
+                {!o.isExchange && o.followStatus === 'returning' && (
+                  <span className="pxt-fixrow">
+                    <button type="button" className="pxt-fix ok" onClick={() => setLate(o)}>
+                      <Icon name="check" /> {t('tournee.fix.deliveredAfterAll')}
+                    </button>
+                  </span>
+                )}
               </li>
             ))}
           </ul>
           <p className="ms-hint">{t('tournee.ms.backHint')}</p>
         </section>
+      )}
+
+      {(d.delivered ?? []).length > 0 && (
+        <section className="pxt-pick">
+          <button type="button" className="pxt-pickh" aria-expanded={doneOpen} onClick={() => setDoneOpen((v) => !v)}>
+            <Icon name="checkcircle" />
+            <b>{t('tournee.fix.title', { count: d.delivered.length })}</b>
+            <Icon name={doneOpen ? 'chevron' : 'chevr'} />
+          </button>
+          {doneOpen && (
+            <>
+              <ul className="pxt-rows">
+                {d.delivered.map((o) => (
+                  <li key={o.id}>
+                    <span className="pxt-row">
+                      <span className="pxt-rm">
+                        <b>
+                          <span className="ltr">{o.ref}</span> · {o.customerName}
+                        </b>
+                        <small>{[o.commune, da(o.total)].filter(Boolean).join(' · ')}</small>
+                      </span>
+                      <button type="button" className="pxt-fix" onClick={() => setFix(o)}>
+                        {t('tournee.fix.notDelivered')}
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="ms-hint">{t('tournee.fix.hint')}</p>
+            </>
+          )}
+        </section>
+      )}
+      {fix && <NotDelivered o={fix} onClose={() => setFix(null)} />}
+      {late && (
+        <ConfirmDelivery
+          o={late}
+          busy={lateSet.isPending}
+          onClose={() => setLate(null)}
+          onConfirm={() => lateSet.mutate({ ids: [late.id], status: 'delivered', reason: t('tournee.fix.deliveredAfterAll'), note: null, clientId: `tr-${late.id}-delivered-${Date.now()}` })}
+        />
       )}
 
       {d.pickup.length > 0 && (

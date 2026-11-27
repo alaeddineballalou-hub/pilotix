@@ -138,3 +138,10 @@ a.pxv-btn { display: flex; align-items: center; justify-content: center; gap: 8p
 .pxt-confirm .pxv-help { margin: 0; text-align: center; line-height: 1.5; }
 .pxt-confirm-cancel { width: 100%; min-height: 44px; }
 @media (prefers-reduced-motion: reduce) { .pxt-hold.is-holding .pxt-hold-progress { animation: none; } }
+
+/* « Pas livrée ? » on a « Livrée » not handed over yet, « Livrée finalement » on a refused parcel (a tap by mistake) */
+.pxt-rows .pxt-fix { all: unset; box-sizing: border-box; flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; border: 1px solid #F5C6C2; background: var(--surface); color: var(--c-bad-ink); font-size: 13px; font-weight: 800; white-space: nowrap; cursor: pointer; }
+.pxt-rows .pxt-fix.ok { border-color: var(--c-ok-line); background: var(--c-ok-tint); color: var(--c-ok-ink); }
+.pxt-rows .pxt-fix .bji { width: 15px; height: 15px; }
+.pxt-rows .pxt-fix:active { background: #FFF8F0; }
+.pxt-fixrow { display: flex; justify-content: flex-end; padding: 0 12px 12px; }

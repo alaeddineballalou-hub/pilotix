@@ -121,5 +121,15 @@
     "saving": "Saving…",
     "release": "Release to cancel.",
     "cashNote": "This does not settle the cash in the register."
+  },
+  "fix": {
+    "title_one": "{{count}} delivered, not handed in yet",
+    "title_other": "{{count}} delivered, not handed in yet",
+    "notDelivered": "Not delivered?",
+    "deliveredAfterAll": "Delivered after all",
+    "confirmLate": "Yes, delivered after all",
+    "hint": "Until the money is handed in, you can correct a mistake. The office sees every correction.",
+    "backTitle_one": "{{count}} refused parcel to bring back",
+    "backTitle_other": "{{count}} refused parcels to bring back"
   }
 }

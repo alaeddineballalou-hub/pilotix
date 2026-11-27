@@ -1738,6 +1738,13 @@ const LEFT_DEPOT: FollowStatus[] = ['shipped', 'out_for_delivery', 'failed', 'al
  * - a final status (livrée, retournée, échangée, perdue, annulée) is only changed by admin / suivi, with a reason;
  * - a parcel that has left the depot cannot go back to « À préparer » / « Préparée » (admin only).
  */
+/** A livreur's own « Livrée », not cashed yet, put back « Pas livrée » / « Retour au dépôt » by him (a tap by mistake). */
+export function livreurFix(ctx: Ctx, cur: any, to: FollowStatus): boolean {
+  const s = ctx.session;
+  // (« alert »: what he said goes to Suivi › Alertes first, Préférences › livreurAlerts)
+  return cur.follow_status === 'delivered' && !cur.cashed && (to === 'failed' || to === 'returning' || to === 'alert') && s.roles.includes('livreur') && numOrNull(cur.livreur_id) === s.profile.id;
+}
+
 export function followBlock(ctx: Ctx, cur: any, to: FollowStatus, hasReason: boolean): string | null {
   const from: FollowStatus | null = cur.follow_status;
   if (!from || from === to) return null;
@@ -1745,6 +1752,9 @@ export function followBlock(ctx: Ctx, cur: any, to: FollowStatus, hasReason: boo
   const office = s.isAdmin || s.roles.includes('suivi');
   // (« Échangée » keeps the money: a cashed delivered order can become it)
   if (from === 'delivered' && cur.cashed && to !== 'exchanged') return `${cur.ref} est livrée et déjà encaissée : annulez d’abord le versement`;
+  // the livreur carrying it corrects his own « Livrée » (a tap by mistake), until his versement (cashed, above): back
+  // « Pas livrée » or « Retour au dépôt », always with a reason (the owner, 27 Nov 2026)
+  if (livreurFix(ctx, cur, to)) return hasReason ? null : `${cur.ref} : indiquez pourquoi elle n’est pas livrée`;
   if (FOLLOW_FINAL.includes(from) && from !== 'cancelled') {
     if (!office) return `${cur.ref} est terminée (${from}) : seul le suivi ou un administrateur peut la changer`;
     if (!hasReason) return `${cur.ref} est terminée : indiquez la raison du changement`;
@@ -1857,6 +1867,7 @@ export async function setFollow(
       if ((to === 'failed' || to === 'returning') && input.reasonKey && livreurAlerts?.includes(`${to}:${input.reasonKey}`))
         if ((await tx.query('SELECT kind FROM delivery_companies WHERE id = $1', [cur.company_id]))[0]?.kind === 'own') to = 'alert';
       const block = followBlock(ctx, cur, to, !!(input.reason || input.note));
+      const fixed = !block && livreurFix(ctx, cur, to);
       if (block) {
         // the courier sync / payment import skips such parcels instead of failing the whole batch
         if (opts.system) continue;
@@ -1922,6 +1933,8 @@ export async function setFollow(
       // what the step replaces (« ↶ Annuler » puts it back) and whether the delivery company gave it (never undone here)
       const prev = { sub: cur.sub_status ?? null, fa: numOrNull(cur.follow_agent_id), lv: numOrNull(cur.livreur_id), tr: cur.tracking ?? null, cbh: !!cur.cancel_by_hand };
       await addEvent(tx, oid, me, 'follow_status', from, to, [input.reason, opts.courierNotes?.get(oid) ?? input.note].filter(Boolean).join(' — ') || null, opts.courier ? { prev, courier: true, ...(opts.by ? { by: opts.by } : {}) } : { prev });
+      // the livreur corrected his own « Livrée » (a tap by mistake): said plainly in the history
+      if (fixed) await addEvent(tx, oid, me, 'note', null, 'event', `Correction du livreur : pas livrée finalement${input.reason ? ` (${input.reason})` : ''}`, { livreurFix: true });
       if (to === 'cancelled' && from === 'to_prepare') await releasePicked(tx, oid);
       // cancelled while the depot holds it (packed, or a parcel already made at a courier): the depot's red alert
       if (to === 'cancelled' && from !== to && !opts.system && !cur.shipped_at && (from === 'prepared' || (from === 'to_prepare' && cur.tracking)) && alertsDepot(ctx, 'prepared'))

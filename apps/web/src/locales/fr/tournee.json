@@ -121,5 +121,15 @@
     "saving": "Enregistrement…",
     "release": "Relâchez pour annuler.",
     "cashNote": "Ce statut ne valide pas le versement en caisse."
+  },
+  "fix": {
+    "title_one": "{{count}} livrée, pas encore versée",
+    "title_other": "{{count}} livrées, pas encore versées",
+    "notDelivered": "Pas livrée ?",
+    "deliveredAfterAll": "Livrée finalement",
+    "confirmLate": "Oui, livrée finalement",
+    "hint": "Tant que l’argent n’est pas versé, tu peux corriger une erreur. Le bureau voit chaque correction.",
+    "backTitle_one": "{{count}} colis refusé à ramener",
+    "backTitle_other": "{{count}} colis refusés à ramener"
   }
 }

@@ -39,6 +39,8 @@ export function Tournee(_: PageProps) {
   if (!self && !livreurs.data?.length) return <Empty>{t('tournee.noLivreur')}</Empty>;
   const d = q.data;
   const all = d ? [...d.toDeliver, ...d.pickup] : [];
+  /** refused parcels he still has (not exchanges): « Livrée finalement » if the customer took it after all */
+  const refused = (d?.toReturn ?? []).filter((o) => !o.isExchange && o.followStatus === 'returning');
 
   return (
     <>
@@ -99,6 +101,19 @@ export function Tournee(_: PageProps) {
           {d.pickup.map((o) => (
             <ParcelCard key={o.id} o={o} shop={d.shop} />
           ))}
+          {refused.length > 0 && <h2>{t('tournee.fix.backTitle', { count: refused.length })}</h2>}
+          {refused.map((o) => (
+            <ParcelCard key={o.id} o={o} shop={d.shop} fix="returning" />
+          ))}
+          {(d.delivered ?? []).length > 0 && (
+            <>
+              <h2>{t('tournee.fix.title', { count: d.delivered.length })}</h2>
+              <p className="muted small">{t('tournee.fix.hint')}</p>
+              {d.delivered.map((o) => (
+                <ParcelCard key={o.id} o={o} shop={d.shop} fix="delivered" />
+              ))}
+            </>
+          )}
         </div>
       ) : null}
         </>
@@ -107,9 +122,12 @@ export function Tournee(_: PageProps) {
   );
 }
 
-function ParcelCard({ o, shop, actions }: { o: Order; shop: { name: string; whatsappTemplate: string }; actions?: boolean }) {
+/** `fix`: a « Livrée » not handed over yet (« Pas livrée ? »: Échec / Retour, a tap by mistake), or a refused parcel he
+ *  still has (« Livrée finalement »: the customer took it after all). */
+function ParcelCard({ o, shop, actions, fix }: { o: Order; shop: { name: string; whatsappTemplate: string }; actions?: boolean; fix?: 'delivered' | 'returning' }) {
   const { t } = useTranslation();
   const [ask, setAsk] = useState<null | 'failed' | 'returning'>(null);
+  const [late, setLate] = useState(false);
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
   const qc = useQueryClient();
@@ -155,17 +173,37 @@ function ParcelCard({ o, shop, actions }: { o: Order; shop: { name: string; what
           </a>
         )}
       </div>
-      {actions ? (
+      {fix === 'returning' ? (
+        <div className="statusbar">
+          {late ? (
+            <>
+              <button className="btn ok big" disabled={set.isPending} onClick={() => go('delivered', t('tournee.fix.deliveredAfterAll'))}>
+                <Icon name="check" /> {t('tournee.fix.confirmLate')}
+              </button>
+              <button className="btn" onClick={() => setLate(false)}>
+                {t('common.cancel')}
+              </button>
+            </>
+          ) : (
+            <button className="btn ok" onClick={() => setLate(true)}>
+              <Icon name="check" /> {t('tournee.fix.deliveredAfterAll')}
+            </button>
+          )}
+        </div>
+      ) : actions || fix === 'delivered' ? (
         <>
           <div className="statusbar">
-            {!focus && (
+            {fix === 'delivered' && <b className="small">{t('tournee.fix.notDelivered')}</b>}
+            {actions && !focus && (
               <button className="btn" disabled={set.isPending} onClick={() => go('out_for_delivery')}>
                 {t('tournee.onTheWay')}
               </button>
             )}
-            <button className="btn ok big" disabled={set.isPending} onClick={() => go('delivered')}>
-              <Icon name="check" /> {t('tournee.delivered')}
-            </button>
+            {actions && (
+              <button className="btn ok big" disabled={set.isPending} onClick={() => go('delivered')}>
+                <Icon name="check" /> {t('tournee.delivered')}
+              </button>
+            )}
             <button className={`btn warn ${ask === 'failed' ? 'on' : ''}`} onClick={() => (setAsk(ask === 'failed' ? null : 'failed'), setReason(''))}>
               {t('tournee.failed')}
             </button>

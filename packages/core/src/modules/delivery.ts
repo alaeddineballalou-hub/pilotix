@@ -1000,6 +1000,13 @@ async function tournee(ctx: Ctx, livreurId: number) {
     [livreurId, new Date(ctx.now() - 30 * 86_400_000).toISOString()],
   );
   const toReturn = await Promise.all(back.map((r: any) => getOrder(ctx, num(r.id))));
+  // his « Livrée » not handed over yet (not cashed): a tap by mistake can still be corrected, until his versement
+  const done = await ctx.db.query(
+    `SELECT o.id FROM orders o WHERE o.livreur_id = $1 AND o.follow_status = 'delivered' AND NOT o.cashed AND NOT o.is_exchange
+      AND o.delivered_at > $2::timestamptz ORDER BY o.delivered_at DESC LIMIT 50`,
+    [livreurId, new Date(ctx.now() - 30 * 86_400_000).toISOString()],
+  );
+  const delivered = await Promise.all(done.map((r: any) => getOrder(ctx, num(r.id))));
   const messages = await getSetting(ctx.db, 'livreurMessages');
   const today = await ctx.db.query(
     `SELECT count(*)::int AS n, coalesce(sum(total),0)::int AS amount FROM orders
@@ -1020,6 +1027,8 @@ async function tournee(ctx: Ctx, livreurId: number) {
     checkedInAt,
     /** to bring back to the depot: parcels going back, old products of exchanges */
     toReturn,
+    /** his « Livrée » not handed over yet: « Pas livrée ? » corrects a tap by mistake (newest first) */
+    delivered,
     /** parcels in his hands: to deliver + to bring back */
     inHand: toDeliver.length + toReturn.length,
     /** Management › Livreur: the one-tap messages */
