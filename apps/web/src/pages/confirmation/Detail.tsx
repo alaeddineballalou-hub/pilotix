@@ -3,9 +3,9 @@
 import { CANCEL_REASONS, communesOf, CONF_TODO, isAbandonedCheckout, normalizePhone, FOLLOW_LOCKED, Order, origOf, upsellOf, WILAYAS, WILAYAS_AR } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { rpc } from '../../lib/backend';
-import { defaultNext } from './shared';
+import { defaultNext, useBarSlot } from './shared';
 import { AttemptMessageLock, finalAttempt, messageAttempt, type OpenedMessage } from './AttemptMessage';
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { PromoField, usePromoCheck } from '../orders/PromoField';
@@ -782,6 +782,7 @@ export function Detail({ order, onDone, onMessageDone, phone }: {
       </aside>
       </div>
       </div>
+      <BarPlace phone={phone}>
       <div className="qd6-bar">
         <div className="qd6-bl">
         {(dirty || pend) && (
@@ -842,6 +843,7 @@ export function Detail({ order, onDone, onMessageDone, phone }: {
           </>
         )}
       </div>
+      </BarPlace>
       {geoPick === 'wil' && (
         <PickList
           anchor={wilRef}
@@ -880,6 +882,17 @@ export function Detail({ order, onDone, onMessageDone, phone }: {
       )}
     </div>
   );
+}
+
+/**
+ * The bar (Statut + Confirmer la commande). On a phone's opened order it goes under the scrolling part, in the place the
+ * order's screen keeps for it (shared.ts › BarSlot: an iPhone left PX1434 half drawn with the bar fixed inside the
+ * scrolling part, 27 Nov 2026); anywhere else it stays in the editor. Its box keeps the editor's classes and width rules.
+ */
+function BarPlace({ phone, children }: { phone?: boolean; children: ReactNode }) {
+  const slot = useBarSlot();
+  if (!phone || slot === undefined) return <>{children}</>;
+  return slot ? createPortal(<div className="qd6 qd6-ph">{children}</div>, slot) : null;
 }
 
 type Step = null | 'menu' | 'cancelled' | 'postponed' | 'callback' | 'try';

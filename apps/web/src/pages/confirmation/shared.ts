@@ -4,6 +4,16 @@ import { store } from '../../lib/store';
 import { toLocalInput } from '../../lib/format';
 import { rightOn } from '../../lib/rights';
 import { useSession } from '../../lib/session';
+import { createContext, useContext } from 'react';
+
+/**
+ * The opened order on a phone (PhoneOrder): where its bar (Statut + Confirmer la commande) goes — under the scrolling
+ * part, never fixed inside it. With the bar fixed inside the scrolling part, an iPhone (all its browsers use Safari's
+ * engine) left an opened order half drawn: PX1434, 27 Nov 2026. undefined: no such place (the bar stays in the editor);
+ * null: the place is not on the screen yet (no bar for that instant).
+ */
+export const BarSlot = createContext<HTMLElement | null | undefined>(undefined);
+export const useBarSlot = () => useContext(BarSlot);
 
 /**
  * « Attribuer »: may this person give orders to agents? A store's owner, administrators and agent managers; a

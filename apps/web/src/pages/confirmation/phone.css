@@ -66,7 +66,16 @@
 /* the call / message choice is open */
 .pxp-call.on, .pxp-wa.on { box-shadow: 0 0 0 3px var(--q-accent, #F7A823); }
 .pxp-wa .bji { width: 20px; height: 20px; }
-.pxp-ob { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px 12px 120px; overscroll-behavior: contain; }
+/* no « -webkit-overflow-scrolling: touch » (removed 27 Nov 2026): today's iPhones scroll smoothly without it, and it is
+   a known cause of parts of a page not being drawn on an iPhone (PX1434 opened half drawn) */
+.pxp-ob { flex: 1; overflow-y: auto; padding: 12px 12px 120px; overscroll-behavior: contain; }
+/* the opened order's bar (Statut + Confirmer la commande) sits UNDER the scrolling part, not fixed inside it (shared.ts ›
+   BarSlot): the scrolling part ends above the bar, so it needs no room for it at its end */
+.pxp-ob.pxp-ob-bar { padding-bottom: 24px; }
+.pxp-obar { flex: none; position: relative; z-index: 61; }
+/* its box keeps what the editor gives it: the width rules (container qd6) and the editor's text size (pilotix.css › .qd3.qd5) */
+.pxp-obar > .qd6 { display: block; container: qd6 / inline-size; font-size: 14px; }
+.pxp-obar .qd6.qd6-ph .qd6-bar { position: relative; inset: auto; z-index: auto; }
 /* « Attribuer » at the top of the opened order (managers, the owner, an agency's chiefs): the agent, one tap to change */
 .pxp-give { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding-block: 8px; padding-inline: 12px 8px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: 0 1px 2px rgba(27, 42, 71, .04); }
 .pxp-give > .bji { flex: none; width: 18px; height: 18px; color: var(--muted); }

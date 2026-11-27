@@ -10,7 +10,7 @@ import { namesOf } from '../../lib/items';
 import { Icon, StatusBadge } from '../../ui/kit';
 import { Countdown, Deadline, RotateChip } from './Countdown';
 import { Detail } from './Detail';
-import { currentLabel, useCanGive } from './shared';
+import { BarSlot, currentLabel, useCanGive } from './shared';
 import { AskCall, AskMsg } from './History';
 import { rpc } from '../../lib/backend';
 import { useRpc } from '../../lib/query';
@@ -353,6 +353,8 @@ export function PhoneOrder({ order, onClose, onDone }: { order: Order; onClose: 
   useEffect(() => {
     body.current?.scrollTo({ top: 0 });
   }, [order.id]);
+  // the bar (Statut + Confirmer la commande) goes under the scrolling part, never fixed inside it (shared.ts › BarSlot)
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   return (
     <div className="pxp-order" role="dialog" aria-modal="true" aria-label={`${order.ref} · ${order.customerName}`}>
       <header className="pxp-oh">
@@ -371,10 +373,13 @@ export function PhoneOrder({ order, onClose, onDone }: { order: Order; onClose: 
         <CallButton o={order} big />
         <MsgButton o={order} />
       </header>
-      <div className="pxp-ob" ref={body}>
+      <div className="pxp-ob pxp-ob-bar" ref={body}>
         <GiveLine order={order} />
-        <Detail order={order} onDone={onDone} onMessageDone={onClose} phone />
+        <BarSlot.Provider value={slot}>
+          <Detail order={order} onDone={onDone} onMessageDone={onClose} phone />
+        </BarSlot.Provider>
       </div>
+      <div className="pxp-obar" ref={setSlot} />
     </div>
   );
 }
