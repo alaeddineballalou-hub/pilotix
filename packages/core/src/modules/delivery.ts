@@ -43,6 +43,29 @@ const SYNCABLE: FollowStatus[] = ['prepared', ...FOLLOW_ON_ROAD, 'returning'];
 const MANUAL_HOLD: FollowStatus[] = ['alert', 'in_exchange'];
 /** Courier statuses that still move a parcel held by the suivi. */
 const SYNC_ENDS: FollowStatus[] = ['delivered', 'returning', 'returned', 'exchanged', 'lost'];
+/** The company's ordinary « on its way » statuses (a correction can send a parcel back to them). */
+const BACK_ON_ROAD: FollowStatus[] = ['shipped', 'out_for_delivery', 'failed'];
+
+// ---------------------------------------------------------------- finished parcels a company may still correct
+// The owner, 27 Nov 2026 (« sometimes the livreur taps Livré by mistake, then cancels »): a finished parcel is still
+// followed until its company pays it — « Livrée » until its money is in a caisse (cashed), « Annulée » after it left
+// until it is back at the depot (returned_at) or the company took its return fee (fee_taken_at). The company's correction
+// is followed (Livrée → Annulée / En retour / back on the road, Annulée → Livrée…) and written in the order's history.
+// WATCH_DAYS: a safety net, for a parcel nobody ever marks paid (counted from the company's last news).
+const WATCH_DAYS = 45;
+/** Parcels read per company in each full sync (every 30 minutes), in turn by id: a webhook brings the others at once. */
+const WATCH_BATCH = 400;
+const WATCH_SQL = `((o.follow_status = 'delivered' AND NOT o.cashed)
+  OR (o.follow_status = 'cancelled' AND o.shipped_at IS NOT NULL AND o.returned_at IS NULL AND o.fee_taken_at IS NULL))`;
+/** Where a finished parcel may go when its company corrects it (never back to the depot's own steps). */
+const CORRECTED_TO: Partial<Record<FollowStatus, FollowStatus[]>> = {
+  delivered: [...BACK_ON_ROAD, 'alert', 'returning', 'returned', 'cancelled'],
+  cancelled: [...BACK_ON_ROAD, 'alert', 'delivered', 'returning', 'returned'],
+};
+const FOLLOW_FR: Record<FollowStatus, string> = {
+  to_prepare: 'À préparer', prepared: 'Préparée', shipped: 'Expédiée', out_for_delivery: 'En livraison', failed: 'Reportée / échec', alert: 'Alerte',
+  in_exchange: 'En échange', delivered: 'Livrée', returning: 'Retour en cours', returned: 'Retournée', exchanged: 'Échangée', lost: 'Perdue', cancelled: 'Annulée',
+};
 
 export interface CompanyRow {
   id: number;
@@ -402,13 +425,37 @@ async function demoCosts(ctx: Ctx, companyId: number, ids: number[], weighed: bo
 }
 
 // ---------------------------------------------------------------- status sync
-async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario?: FollowStatus) {
+/** A company's finished parcels it has not paid yet (WATCH_SQL), its last news under WATCH_DAYS old: these ids, or the
+ *  next WATCH_BATCH in turn (a cursor per company in the settings, back to the start once all were read). */
+async function watchedParcels(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
+  const since = new Date(ctx.now() - WATCH_DAYS * 86_400_000).toISOString();
+  const base = `SELECT o.id, o.ref, o.tracking, o.ext_id, o.follow_status, o.sub_status, o.ext_status, o.taken_at FROM orders o
+     WHERE o.company_id = $1 AND o.tracking IS NOT NULL AND o.livreur_id IS NULL AND ${WATCH_SQL} AND coalesce(o.ext_status_at, o.updated_at) > $2::timestamptz`;
+  if (onlyIds) return ctx.db.query(`${base} AND o.id = ANY($3)`, [c.id, since, onlyIds]);
+  const key = `watchCursor:${c.id}`;
+  const after = num((await ctx.db.query('SELECT value FROM settings WHERE key = $1', [key]))[0]?.value ?? 0);
+  const rows = await ctx.db.query(`${base} AND o.id > $3 ORDER BY o.id LIMIT ${WATCH_BATCH}`, [c.id, since, after]);
+  const next = rows.length < WATCH_BATCH ? 0 : num(rows[rows.length - 1].id);
+  await ctx.db.query(`INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [key, JSON.stringify(next)]);
+  return rows;
+}
+
+/** `full`: the sync every 30 minutes (not the fast one every 5): it also reads, in turn, the finished parcels the company
+ *  has not paid yet (WATCH_SQL); a webhook or a single parcel (`onlyIds`) reads them at once. */
+async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario?: FollowStatus, full = false) {
   if (scenario && (ctx.server || (ctx.shop && !ctx.shop.demo))) throw forbidden('Simulation réservée à la démo');
+  // by_courier: an « En retour » the company itself gave (not the Suivi's): the company may correct it
   const parcels = await ctx.db.query(
-    `SELECT id, ref, tracking, ext_id, follow_status, sub_status, ext_status, taken_at FROM orders
-     WHERE company_id = $1 AND tracking IS NOT NULL AND follow_status = ANY($2) ${onlyIds ? 'AND id = ANY($3)' : ''} ORDER BY ext_status_at NULLS FIRST LIMIT 2000`,
+    `SELECT o.id, o.ref, o.tracking, o.ext_id, o.follow_status, o.sub_status, o.ext_status, o.taken_at,
+       CASE WHEN o.follow_status = 'returning' THEN (SELECT coalesce(e.data->>'courier', '') = 'true' FROM order_events e
+         WHERE e.order_id = o.id AND e.kind = 'follow_status' ORDER BY e.at DESC, e.id DESC LIMIT 1) END AS by_courier
+       FROM orders o
+     WHERE o.company_id = $1 AND o.tracking IS NOT NULL AND o.follow_status = ANY($2) ${onlyIds ? 'AND o.id = ANY($3)' : ''} ORDER BY o.ext_status_at NULLS FIRST LIMIT 2000`,
     onlyIds ? [c.id, SYNCABLE, onlyIds] : [c.id, SYNCABLE],
   );
+  // finished parcels not paid yet (WATCH_SQL): the company may still correct them
+  const watched = scenario || c.kind === 'own' || (!full && !onlyIds) ? [] : await watchedParcels(ctx, c, onlyIds);
+  const watchIds = new Set(watched.map((p: any) => num(p.id)));
   // parcels just finished (delivered, returned, swapped): asked once more for the weight the company found — that is the
   // one it charges (Pilotix never counts the products' weight); their status is left alone
   const ended =
@@ -423,6 +470,8 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
         );
   const endedIds = new Set(ended.map((p: any) => num(p.id)));
   parcels.push(...ended);
+  // (a delivered parcel can be both: read once for its weight, and followed for a correction)
+  for (const w of watched) if (!endedIds.has(num(w.id))) parcels.push(w);
   if (!parcels.length) return { company: c.name, checked: 0, changed: 0, fees: 0 };
   let answers: TrackResult[];
   if (isDemo(ctx)) {
@@ -463,6 +512,10 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
   const triesSeen = pr ? await courierTriesSeen(ctx.db, answers.map((x) => x.id)) : new Map<number, number>();
   /** new alerts that are problems to fix (Suivi › Erreurs) */
   const problemAlerts: number[] = [];
+  /** the company's corrections (a finished parcel, its own « En retour »): from → to, said in the history once moved */
+  const corrections = new Map<number, [FollowStatus, FollowStatus]>();
+  /** Suivi › Erreurs the company no longer says: they leave the tab once moved */
+  const errorGoneIds = new Set<number>();
   for (const a of answers) {
     const p = parcels.find((x: any) => num(x.id) === a.id);
     if (!p) continue;
@@ -472,7 +525,7 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
     }
     // swapped in the company's own space (ZR › « Swaps »): the parcel goes to its new customer's order, its statuses and
     // prices are read there from now on (the next read)
-    if (a.swapped && !endedIds.has(a.id)) {
+    if (a.swapped && !endedIds.has(a.id) && !watchIds.has(a.id)) {
       const moved = await catchSwapSeen(ctx, c, a.id, a.swapped);
       if (moved) {
         swaps.push(moved);
@@ -489,16 +542,17 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
     const priced = !!a.costs && (feesByApi(c.kind) || a.costs.delivery !== null || a.costs.ret !== null);
     if (priced && (await saveCourierFees(ctx.db, a.id, a.costs!, 'track', await rule(), new Date(ctx.now()).toISOString()))) feesChanged++;
     else if (!priced && a.costs?.kg && (await saveCourierWeight(ctx.db, a.id, c.kind, await rule(), a.costs.kg, new Date(ctx.now()).toISOString()))) feesChanged++;
-    // a finished parcel: only its weight (read once)
+    // a finished parcel: only its weight (read once) — and, not paid yet, the company's correction (WATCH_SQL, below)
     if (endedIds.has(a.id)) {
       await ctx.db.query(`UPDATE orders SET courier_fees = coalesce(courier_fees, '{}'::jsonb) || '{"final":true}'::jsonb WHERE id = $1`, [a.id]);
-      continue;
+      if (!watchIds.has(a.id)) continue;
     }
+    // the company says something new about the parcel (not the same words read again)
+    const fresh = a.status !== p.ext_status;
     // « Quand une alerte commence »: a failed try before the chosen one, or a status that is no try, no cancel and no
     // problem, is never an alert; the chosen try and a cancel are; a problem is one of Suivi › Erreurs
     let problem = false;
     if (pr) {
-      const fresh = a.status !== p.ext_status;
       const d = decideAlert({
         to,
         plain: resolveStatus(defaults, ownPlain, a),
@@ -548,15 +602,29 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
       if (!(await takenLongAgo(ctx, a.id))) continue;
       await addEvent(ctx.db, a.id, null, 'note', null, 'event', `Pas scanné au dépôt 24 h après que ${c.name} l’a pris : il suit maintenant son statut`);
     }
+    // a finished parcel the company has not paid (WATCH_SQL): only its correction moves it (CORRECTED_TO), said in its
+    // history below — never the same words read again
+    if (watchIds.has(a.id)) {
+      if (!fresh || !to || to === p.follow_status || !CORRECTED_TO[p.follow_status as FollowStatus]?.includes(to)) continue;
+      corrections.set(a.id, [p.follow_status, to]);
+    }
+    // Suivi › Erreurs (the owner, 27 Nov 2026): the company no longer says the problem (« Commune erronée » gone, the
+    // parcel back on its way): the error leaves the tab by itself and the parcel follows the company again — never
+    // « Résolu » (only « Relivrer » then delivered is)
+    const errorGone = !!pr && fresh && p.follow_status === 'alert' && p.sub_status === SUB_ERREUR && !problem && !!to && BACK_ON_ROAD.includes(to);
+    if (errorGone) errorGoneIds.add(a.id);
     // Suivi's own work (an alert raised or handled, an exchange in progress) is not undone by the courier's
     // « en livraison » / « vers wilaya »: only an end (livré, retour, perdu…) moves such a parcel.
-    if (MANUAL_HOLD.includes(p.follow_status) && to && !SYNC_ENDS.includes(to)) continue;
+    if (MANUAL_HOLD.includes(p.follow_status) && to && !SYNC_ENDS.includes(to) && !errorGone) continue;
     // a treated alert is not put back to « en route » by the courier, but a new failed attempt or alert still comes in —
     // a new word from the company, not the same status read again (it would raise the treated alert again and again)
     if (p.sub_status === 'alert_traitee' && (to === 'shipped' || to === 'out_for_delivery')) continue;
     if (p.sub_status === 'alert_traitee' && to && !SYNC_ENDS.includes(to) && a.status === p.ext_status) continue;
-    // marked « En retour » by the Suivi: only the company's delivered or lost moves it (the depot receives the returns)
-    if (p.follow_status === 'returning' && to !== 'delivered' && to !== 'lost') continue;
+    // marked « En retour » by the Suivi: only the company's delivered or lost moves it (the depot receives the returns);
+    // one the company gave itself, it may correct: its new word puts the parcel back on its way (the owner, 27 Nov 2026)
+    const returnFixed = p.follow_status === 'returning' && p.by_courier === true && fresh && !!to && BACK_ON_ROAD.includes(to);
+    if (returnFixed) corrections.set(a.id, ['returning', to!]);
+    if (p.follow_status === 'returning' && to !== 'delivered' && to !== 'lost' && !returnFixed) continue;
     if (to && to !== p.follow_status) {
       if (to === 'alert' && problem) problemAlerts.push(a.id);
       else byStatus.set(to, [...(byStatus.get(to) ?? []), a.id]);
@@ -568,13 +636,27 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[], scenario
   // each parcel moves only from the status it had when the company was asked (an agent may have changed it meanwhile:
   // an alert raised, a swap — never overwritten by an older answer)
   const expect = new Map<number, string | null>(parcels.map((p: any) => [num(p.id), p.follow_status ?? null]));
+  /** the parcels that really moved (an agent may have changed one meanwhile) */
+  const moved = new Set<number>();
   for (const [status, list] of byStatus) {
     // a new alert from the company is a new one (« à traiter » again)
-    changed += (await setFollow(sys, { ids: list, status, note: courierNote(c.name, null), ...(status === 'alert' ? { subStatus: null } : {}) }, { system: true, courier: true, by: c.name, expect, courierNotes })).changed.length;
+    const r = await setFollow(sys, { ids: list, status, note: courierNote(c.name, null), ...(status === 'alert' ? { subStatus: null } : {}) }, { system: true, courier: true, by: c.name, expect, courierNotes });
+    changed += r.changed.length;
+    for (const id of r.changed) moved.add(id);
   }
   // a problem to fix (« Commune erronée », « Bloqué »…): an alert of its own, in Suivi › Erreurs
-  if (problemAlerts.length)
-    changed += (await setFollow(sys, { ids: problemAlerts, status: 'alert', note: courierNote(c.name, null), subStatus: SUB_ERREUR }, { system: true, courier: true, by: c.name, expect, courierNotes })).changed.length;
+  if (problemAlerts.length) {
+    const r = await setFollow(sys, { ids: problemAlerts, status: 'alert', note: courierNote(c.name, null), subStatus: SUB_ERREUR }, { system: true, courier: true, by: c.name, expect, courierNotes });
+    changed += r.changed.length;
+    for (const id of r.changed) moved.add(id);
+  }
+  // Suivi › Erreurs the company no longer says: back on their way, their mark goes (the parcel leaves the tab)
+  const gone = [...errorGoneIds].filter((id) => moved.has(id));
+  if (gone.length) await ctx.db.query(`UPDATE orders SET sub_status = NULL WHERE id = ANY($1) AND sub_status = $2 AND follow_status <> 'alert'`, [gone, SUB_ERREUR]);
+  for (const id of gone) await addEvent(ctx.db, id, null, 'note', null, 'event', `${c.name} ne signale plus d’erreur : le colis quitte « Erreurs » et suit de nouveau ${c.name}`, { errorGone: true });
+  // the company corrected a status it gave: said in the order's history
+  for (const [id, [from, to]] of corrections)
+    if (moved.has(id)) await addEvent(ctx.db, id, null, 'note', null, 'event', `Correction de ${c.name} : « ${FOLLOW_FR[from]} » → « ${FOLLOW_FR[to]} »`, { courierFix: { from, to } });
   // the mark goes with the parcels that left « En dispatch » (24 h passed, or the company's end: livré, retour…)
   await ctx.db.query(`UPDATE orders SET sub_status = NULL WHERE company_id = $1 AND sub_status = $2 AND follow_status IS DISTINCT FROM 'prepared'`, [c.id, SUB_TAKEN_UNSCANNED]);
   // the depot manager (Management › Alertes dépôt; nobody chosen: every depot agent) gets one notification on the phone
@@ -1492,7 +1574,7 @@ export const deliveryProcs = {
     const out: { company: string; checked: number; changed: number; failed?: number; errors?: { ref: string; error: string }[]; error?: string }[] = [];
     for (const c of list) {
       try {
-        out.push(await syncCompany(ctx, c));
+        out.push(await syncCompany(ctx, c, undefined, undefined, !i.fast));
       } catch (e: any) {
         out.push({ company: c.name, checked: 0, changed: 0, error: e?.message ?? 'Erreur' });
       }
