@@ -228,7 +228,13 @@ const mkAll: Fan = {
 export const ORDERS_FAN: Fan = {
   paged: { defaultSize: 50, max: 3000 },
   input: (i) => ({ ...i, page: 1, pageSize: Math.min(3000, (i?.page ?? 1) * (i?.pageSize ?? 50)) }),
-  merge: (parts, i) => mergeRows(parts, ORDER_KEY[i?.sort ?? 'created_at'] ?? ORDER_KEY.created_at, i?.dir ?? 'desc', i?.page ?? 1, i?.pageSize ?? 50),
+  merge: (parts, i) => {
+    const out = mergeRows(parts, ORDER_KEY[i?.sort ?? 'created_at'] ?? ORDER_KEY.created_at, i?.dir ?? 'desc', i?.page ?? 1, i?.pageSize ?? 50);
+    // Terminé's whole number (`totalAll`: the old finished orders too, not only the 30 days the list shows; left out
+    // until 27 Nov 2026): a shop that does not count it (the seller sees every order) gives its own total
+    const whole = parts.some((p) => p.out?.totalAll !== undefined);
+    return whole ? { ...out, totalAll: parts.reduce((n, p) => n + num(p.out?.totalAll ?? p.out?.total), 0) } : out;
+  },
 };
 
 /**
