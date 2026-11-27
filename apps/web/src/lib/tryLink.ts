@@ -6,9 +6,10 @@
 //   #essayer-<account>                      logs in, then the account's home page
 //   #essayer-<account>---<page>--<sub>…     logs in, then #/<page>/<sub>…  (« -- » stands for « / »)
 //   #essayer-<account>-porte---<page>…      the same, seen as through the backup door (its chip and message: lib/door)
-// <account> = a demo account's key (admin, vendeur, conf1, manager1, agence…) or its first name (samira, yacine, nadia…).
+// <account> = a demo account's key (admin, vendeur, conf1, manager1, agence…) or its first name (samira, yacine, nadia…);
+// the demo agency's and marketer's people too (nora, yasmine, ali, bouzid, leila, nadir, selma).
 // Example: #essayer-samira---confirmation--attente → Samira (Confirmation), on Confirmation › En attente.
-import { DEMO_ACCOUNTS, DEMO_PARTNER_ACCOUNTS } from '@pilotix/shared';
+import { DEMO_ACCOUNTS, DEMO_AGENCY_TEAM, DEMO_MARKETER_TEAM, DEMO_PARTNER_ACCOUNTS } from '@pilotix/shared';
 import { DEMO_ONLY } from './backend';
 
 export type TryLink = { email: string; route: string | null; door?: boolean };
@@ -22,7 +23,7 @@ export function readTryLink(hash: string = location.hash): TryLink | null {
   const m = /^#essayer-([a-z0-9]+)(-porte)?(?:---([a-z0-9-]+))?$/i.exec(hash || '');
   if (!m) return null;
   const who = plain(m[1]);
-  const all = [...DEMO_ACCOUNTS, ...DEMO_PARTNER_ACCOUNTS] as readonly { key: string; name: string; email: string }[];
+  const all = [...DEMO_ACCOUNTS, ...DEMO_PARTNER_ACCOUNTS, ...DEMO_AGENCY_TEAM, ...DEMO_MARKETER_TEAM] as readonly { key: string; name: string; email: string }[];
   const acc = all.find((a) => a.key === who) || all.find((a) => firstName(a.name) === who);
   if (!acc) return null;
   const route = m[3]

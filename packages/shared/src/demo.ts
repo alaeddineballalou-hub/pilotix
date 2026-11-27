@@ -38,3 +38,25 @@ export const DEMO_PARTNER_ACCOUNTS = [
   { key: 'agence', kind: 'agency', name: 'Samir Benali', email: 'agence@demo.pilotix.dz', shop: 'Rapide Call Center' },
   { key: 'mkpartner', kind: 'marketer', name: 'Nassim Belaid', email: 'marketer@demo.pilotix.dz', shop: 'Nassim Ads' },
 ] as const;
+
+/** A person of a demo partner's team (invented), opened with the demo password like everyone. */
+export interface DemoTeamPerson {
+  /** the « Essayer » link's account (lib/tryLink): #essayer-nora---commandes--livrees */
+  key: string;
+  name: string;
+  email: string;
+  roles: string[];
+}
+/** The demo agency's people: its agents work for its two sellers (« Tous les vendeurs »). */
+export const DEMO_AGENCY_TEAM: readonly DemoTeamPerson[] = [
+  { key: 'nora', name: 'Nora Hamdi', email: 'nora.agence@demo.pilotix.dz', roles: ['confirmation'] },
+  { key: 'yasmine', name: 'Yasmine Kaci', email: 'yasmine.agence@demo.pilotix.dz', roles: ['confirmation'] },
+  { key: 'ali', name: 'Ali Mansouri', email: 'ali.agence@demo.pilotix.dz', roles: ['suivi'] },
+  { key: 'bouzid', name: 'Riad Bouzid', email: 'riad.agence@demo.pilotix.dz', roles: ['agent_manager'] },
+  { key: 'leila', name: 'Leïla Mansouri', email: 'leila.agence@demo.pilotix.dz', roles: ['sav'] },
+];
+/** The demo marketer's people. */
+export const DEMO_MARKETER_TEAM: readonly DemoTeamPerson[] = [
+  { key: 'nadir', name: 'Nadir Ferhat', email: 'nadir.mk@demo.pilotix.dz', roles: ['marketer'] },
+  { key: 'selma', name: 'Selma Kaci', email: 'selma.mk@demo.pilotix.dz', roles: ['marketer'] },
+];
